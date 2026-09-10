@@ -65,8 +65,9 @@ Phase 0 不實作以下項目：
 | UI | Tailwind CSS、shadcn/ui；原 UI 選型以 Base UI 為預設方向 |
 | Canonical database | MariaDB 10.11 |
 | 身分 | Local / Mock Identity Provider，後續 Company SSO adapter |
+| Internal IDs | Application 產生 UUIDv7；MariaDB 使用 native `UUID` type（16-byte storage） |
 
-除 MariaDB 10.11 外，本規格不新增套件版本鎖定、ORM、測試框架或部署平台選型；這些屬於後續 implementation plan 的落地細節，不改變本文件的架構契約。
+除 MariaDB 10.11 外，本規格不新增 ORM、測試框架或部署平台選型；這些屬於後續 implementation plan 的落地細節，不改變本文件的架構契約。所有 Hub 內部 stable IDs（User、Source、SourceEntry、TreeNode、Document、Revision、Asset、SyncRun）採同一 UUIDv7 contract；不使用 path、title、hash 或 database auto-increment 冒充 domain identity。MariaDB 10.11 已提供 native `UUID` type，因此本基線不使用 `CHAR(36)`，也不要求 application 手動維護 `BINARY(16)` byte layout。
 
 ### 3.2 分層與依賴
 
@@ -98,7 +99,7 @@ Next.js pages / routes / server actions
 
 部署上是一個 Next.js application；程式內以 module 與 layer 分工，不透過跨服務 HTTP 切開同一個 transaction。Domain 不依賴 Next.js、React、SQL、SSO token、MCP 或來源掃描程式。
 
-Web adapter 負責接收請求、取得可信 identity、呼叫 application service 與呈現結果。不得在頁面直接操作 ORM／資料庫來取代 application service。UI error boundary 不負責資料回滾；回滾由 application transaction 邊界處理。
+Web adapter 負責接收請求、取得可信 identity、建立 `CallerContext`、呼叫 application service 與呈現結果。不得在頁面直接操作 ORM／資料庫來取代 application service。UI error boundary 不負責資料回滾；回滾由 application transaction 邊界處理。
 
 MariaDB 是 Hub 內 canonical state 的儲存位置。`SOURCE_MANAGED` 表示外部來源控制內容與 hierarchy 的更新權；它不表示 Web 或未來 Agent 應繞過 Hub 直接讀取外部 folder。
 
@@ -167,6 +168,8 @@ Ownership 儲存在 Source，Document 透過 `source_id` 取得有效 ownership�
 
 Revision 建立後 immutable，不原地修改或覆寫舊內容。新的 title／Markdown／metadata 狀態以新 revision 表達，再更新 Document 的 `current_revision_id`。內容比較必須涵蓋三者，不能只比較 Markdown 而漏掉標題或 metadata；path／parent／position 不列入版本內容。Hash 的序列化與計算實作由 implementation plan／匯入設計落地。
 
+SOURCE_MANAGED 的 `title` resolution 不在 Phase 0 決定。來源 filename/path 不自動等於 canonical Knowledge title；Phase 2 ingestion design 必須明確定義 frontmatter、Markdown heading、filename 等候選來源的優先序、缺值 fallback 與衝突裁決。Phase 0–1 只定義「一旦 canonical title 改變，就屬於 Revision content change」。
+
 ### 4.5 Lifecycle
 
 Knowledge lifecycle 只有 `ACTIVE` 與 `ARCHIVED`。對話中的「missing」描述來源缺檔，不新增 `MISSING` 或 `DELETED` lifecycle enum。
@@ -174,6 +177,10 @@ Knowledge lifecycle 只有 `ACTIVE` 與 `ARCHIVED`。對話中的「missing」�
 來源文件消失或 Hub-managed 文件被刪除時採 archive；保留 Document、Revision 與來源 mapping，不 hard delete。預設 Tree 與未來搜尋／MCP query 排除 archived 文件；歷史與引用仍可保留。
 
 同一 SourceEntry 再次出現時，恢復原 Document 為 `ACTIVE` 並沿用 Document ID。若版本內容改變才新增 revision；內容相同只 restore。相關 Tree／mapping 狀態與 Document 必須一致更新。
+
+所有可進入 `ARCHIVED` 的 canonical entity（KnowledgeSource、SourceEntry、KnowledgeTreeNode、KnowledgeDocument）必須保存 lifecycle provenance：`updated_by`、`archived_by nullable`、`archived_at nullable`。Archive 時同交易寫入 status、`updated_by`、`archived_by`、`archived_at`；restore 時 status 回到 ACTIVE、`updated_by` 更新為本次 actor，並清空目前狀態的 `archived_by`／`archived_at`。這些欄位描述「目前 archive 狀態」的 provenance，不取代完整歷史 audit log；多次 archive/restore 的 append-only audit history 留給 Phase 3 Governance 設計。
+
+Phase 0–2 的 actor 仍是可信 `UserIdentity`，欄位透過 user FK 保存。現在不引入 `actor_kind` 或 polymorphic actor reference；Agent write、service account 或 system actor 若日後成為需求，再在其對應 phase 設計 Principal/Actor model。
 
 ### 4.6 Assets
 
@@ -188,15 +195,15 @@ Phase 0 migration 至少建立以下八張表。以下是已確認的邏輯欄�
 | Table / Owner | 最小欄位 | 責任與限制 |
 | --- | --- | --- |
 | `users` / identity | `id` PK、`emp_id` UNIQUE、`name`、`org_code` | 最小本地使用者資料；供建立者與操作紀錄引用，不保存 SSO token |
-| `knowledge_sources` / sources | `id`、`name`、`org_code`、`source_type`、`ownership`、`status`、`sync_version`、`created_by`、`created_at`、`updated_at` | Source 定義、單一 org 歸屬、更新權與同步版本 |
-| `source_entries` / sources | `id`、`source_id`、`external_id` nullable、`source_path`、`entry_type`、`content_hash`、`document_id` nullable、`status`、`first_seen_at`、`last_seen_at` | 來源 identity／locator 與 Document mapping；Folder entry 可沒有 Document |
-| `knowledge_tree_nodes` / knowledge | `id`、`source_id`、`parent_id` nullable、`node_type`、`name`、`document_id` nullable、`position`、`status` | Source 內 hierarchy；`node_type` 為 `FOLDER` 或 `DOCUMENT` |
-| `knowledge_documents` / knowledge | `id`、`source_id`、`current_revision_id`、`status`、`created_by`、`created_at`、`updated_at` | 穩定文件身分與 current revision pointer；不存 Markdown 或 path |
+| `knowledge_sources` / sources | `id`、`name`、`org_code`、`source_type`、`ownership`、`status`、`sync_version`、`created_by`、`updated_by`、`archived_by` nullable、`archived_at` nullable、`created_at`、`updated_at` | Source 定義、單一 org 歸屬、更新權、同步版本與目前 lifecycle provenance |
+| `source_entries` / sources | `id`、`source_id`、`external_id` nullable、`source_path`、`entry_type`、`content_hash`、`document_id` nullable、`status`、`updated_by`、`archived_by` nullable、`archived_at` nullable、`first_seen_at`、`last_seen_at` | 來源 identity／locator、Document mapping 與目前 lifecycle provenance；Folder entry 可沒有 Document |
+| `knowledge_tree_nodes` / knowledge | `id`、`source_id`、`parent_id` nullable、`node_type`、`name`、`document_id` nullable、`position`、`status`、`updated_by`、`archived_by` nullable、`archived_at` nullable | Source 內 hierarchy 與目前 lifecycle provenance；`node_type` 為 `FOLDER` 或 `DOCUMENT` |
+| `knowledge_documents` / knowledge | `id`、`source_id`、`current_revision_id`、`status`、`created_by`、`updated_by`、`archived_by` nullable、`archived_at` nullable、`created_at`、`updated_at` | 穩定文件身分、current revision pointer 與目前 lifecycle provenance；不存 Markdown 或 path |
 | `knowledge_revisions` / knowledge | `id`、`document_id`、`revision_no`、`title`、`markdown`、`metadata`、`content_hash`、`created_by`、`created_at` | 不可變內容版本與 provenance |
 | `knowledge_assets` / sources | `id`、`source_id`、`source_path`、`mime_type`、`content_hash`、`metadata`、`created_at` | 僅資產 metadata/reference；來源未提供的可選 metadata 不應阻塞模型 |
 | `sync_runs` / sources | `id`、`source_id`、`triggered_by`、`based_on_version`、`result_version`、`status`、`summary`、`started_at`、`completed_at` | 同步操作紀錄；Phase 0 建 schema，Phase 2 接完整流程 |
 
-`knowledge_revisions.metadata` 可使用 MariaDB JSON 欄位保存 frontmatter 等非核心資料；source、status、ownership、revision reference 等重要 domain 欄位維持明確關聯欄位。Phase 0 不新增 organizations、publishing、ACL、vector、MCP 或 memory tables。
+所有上表 Hub internal ID 欄位使用相同 UUID contract，MariaDB 欄位型別使用 native `UUID`。`knowledge_revisions.metadata` 可使用 MariaDB JSON 欄位保存 frontmatter 等非核心資料；source、status、ownership、revision reference 等重要 domain 欄位維持明確關聯欄位。Phase 0 不新增 organizations、publishing、ACL、vector、MCP 或 memory tables。
 
 Source、SourceEntry、TreeNode 與 Document 的 lifecycle status 採 `ACTIVE / ARCHIVED`。`sync_runs.status` 是另一個操作結果維度，採 `PREVIEWED / APPLIED / FAILED`，不表示新增 Knowledge lifecycle。
 
@@ -209,11 +216,13 @@ Source、SourceEntry、TreeNode 與 Document 的 lifecycle status 採 `ACTIVE / 
 | Revision 必須屬於既有 Document | 外鍵與 integration test |
 | `current_revision_id` 必須指向同一 Document 的 Revision | 同文件關聯約束與 repository transaction 驗證；僅驗證 revision 存在並不足夠 |
 | 同文件 revision 編號不可重複 | `(document_id, revision_no)` 唯一性與測試 |
+| 每個 Document 在 Knowledge Tree 只有一個 DOCUMENT node | `knowledge_tree_nodes.document_id` 對非 NULL 值建立 UNIQUE protection；integration test 嘗試建立第二個 node 必須失敗 |
 | `DOCUMENT` TreeNode 必須有 Document reference | node type／reference constraint 與測試 |
 | `FOLDER` TreeNode 有 name 且沒有 Document reference | node type／reference constraint 與測試 |
 | Tree、mapping 與被引用 Document 的 Source 一致 | 關聯一致性檢查及 integration test；不可用 Tree move 暗中改變文件 Source |
 | Tree parent 在同一 Source，hierarchy 不形成循環 | repository／domain validation 與測試 |
 | 同一已識別來源 identity 不產生重複 mapping | Source 範圍內唯一性保護與 integration test；不以全域 path/hash 等同 identity |
+| Lifecycle 變更可追溯目前 actor/time | lifecycle-bearing row 的 status 與 `updated_by`／`archived_by`／`archived_at` 在同 transaction 更新；restore 清空目前 archive provenance |
 | Revision immutable | Domain／repository 不提供覆寫舊版本操作；以行為測試保護 |
 | 操作失敗不留下部分 canonical state | 同一 transaction 與 rollback integration test |
 
@@ -249,9 +258,9 @@ src/
 
 這是責任布局，不要求每項操作各自建立一個檔案。Phase 0 不建立空的 `publishing/`、`retrieval/`、`agent/` 或 `memory/` module。
 
-### 6.1 Identity
+### 6.1 Identity 與 CallerContext
 
-只負責「目前呼叫者是誰」，不承擔 Knowledge 授權政策。
+Identity 只負責「目前呼叫者是誰」，不承擔 Knowledge 授權政策。
 
 ```ts
 type UserIdentity = {
@@ -261,12 +270,18 @@ type UserIdentity = {
   org_code: string;
 };
 
+type CallerContext = {
+  identity: UserIdentity;
+};
+
 interface IdentityProvider {
   getCurrentIdentity(): Promise<UserIdentity>;
 }
 ```
 
 `id` 為 Hub 內部穩定使用者 ID；`emp_id` 為員工工號；`name` 為姓名；`org_code` 為組織代碼。Local provider 建立／更新最小 `users` 資料，外部開發由 server 提供測試身分。
+
+Web／其他 transport adapter 透過 `IdentityProvider` 取得可信 identity 後建立 `CallerContext`，再把它作為 application service 的顯式第一參數。Application Core 不從 UI payload 讀 caller，也不依賴 ambient/global request identity。Phase 0 的 `CallerContext` 只含 `identity`；Phase 3 可以在不改所有 service method 形狀的前提下，擴充 policy input 或由 policy service 取得 governance context。
 
 未來公司 adapter 驗證 SSO token 後映射為相同四欄位並同步本地最小資料。其餘 module 不接觸 token 格式、SSO SDK 或 provider 細節。身分無法取得時回報失敗，不以客戶端傳入的工號／org 取代可信身分。完整企業登入與治理仍是後續工作。
 
@@ -275,9 +290,14 @@ interface IdentityProvider {
 負責 Document、Revision、Tree 與 lifecycle；提供可獨立於 Web 呼叫的 application operations，例如：
 
 ```text
-getDocument / getCurrentRevision / listTree
-createHubManagedDocument / createRevision
-moveTreeNode / archiveDocument / restoreDocument
+getDocument(caller, ...)
+getCurrentRevision(caller, ...)
+listTree(caller, ...)
+createHubManagedDocument(caller, ...)
+createRevision(caller, ...)
+moveTreeNode(caller, ...)
+archiveDocument(caller, ...)
+restoreDocument(caller, ...)
 ```
 
 這些是能力邊界，不是本文件指定的完整 HTTP endpoints。Phase 0 實作驗證 foundation 所需的最小操作與規則，Phase 1 再完成核心產品行為。
@@ -294,22 +314,25 @@ Source sync 必須經 Knowledge application operations 更新文件／revision�
 
 ```text
 SourceSyncApplicationService
+  ├── CallerContext
   ├── Knowledge application operations
   ├── SourceRepository / SourceEntry mapping
   └── SyncRun recording
        └── 同一個 canonical-state transaction
 ```
 
-### 6.4 Repository 與 transaction ports
+### 6.4 Repository、transaction ports 與 isolation
 
 Knowledge 的 document／revision／tree repositories 與 Sources 的 repositories，由 MariaDB infrastructure 實作。Application 決定交易邊界；參與同一次操作的 repositories 與 Knowledge operations 共用該交易，不能各自提前 commit。
+
+Canonical Knowledge mutation transaction 統一使用 **READ COMMITTED** isolation。MariaDB UoW 必須在 transaction 開始前設定本次 transaction isolation，之後才進入 begin → callback → assertions → commit。Source／Document 的 `SELECT ... FOR UPDATE` locking read 仍是 concurrency correctness 的必要部分；READ COMMITTED 的選擇避免依賴「locking read 一定必須是 transaction 第一個 statement」這種容易被 refactor 破壞的隱性前提。
 
 Repository boundary 用於隔離 SQL、便於測試與清楚管理 transaction；不建立同時支援 MongoDB／PostgreSQL／MariaDB 的通用資料庫抽象。
 
 ### 6.5 依賴方向
 
 ```text
-Identity ──► caller context ──► Application Services
+Identity ──► CallerContext ──► Application Services
 Sources ──► Knowledge
 
 未來：
@@ -324,18 +347,20 @@ Knowledge 不反向依賴 Sources ingestion、Publishing、MCP 或 Elasticsearch
 
 ### 7.1 Hub-managed 建立與修改
 
-建立基本文件是一個 atomic operation：
+建立基本文件是一個 READ COMMITTED atomic operation：
 
 ```text
+SET TRANSACTION ISOLATION LEVEL READ COMMITTED
 BEGIN
+  lock Source / validate policy
   create KnowledgeDocument
   create immutable KnowledgeRevision R1
-  create DOCUMENT TreeNode
   set current_revision_id = R1
+  create DOCUMENT TreeNode
 COMMIT
 ```
 
-任一步失敗全部 rollback，不留下孤兒 Document、Revision 或 TreeNode。內容修改時，新 Revision 的寫入與 current pointer 更新也在同一 transaction。Archive／restore／hierarchy 操作對其涉及的 canonical records 一致更新。
+任一步失敗全部 rollback，不留下孤兒 Document、Revision 或 TreeNode。內容修改時，新 Revision 的寫入與 current pointer 更新也在同一 transaction。Archive／restore／hierarchy 操作對其涉及的 canonical records 與 lifecycle provenance 一致更新。
 
 ### 7.2 Folder Sync 契約：Phase 2 實作
 
@@ -353,7 +378,7 @@ Select Folder（不是 ZIP）
 
 「第一次上傳建立 Source」不代表選完 folder 立即寫入 Knowledge。Preview 可攜帶擬建立的 Source 資料；第一份正式 Source 與其知識資料應在 Confirm 後的 Apply 邊界建立，避免 Preview 留下半套 canonical state。這是 Preview 不修改正式資料原則的一致性釐清，不增加新來源流程。
 
-Markdown 解析成 Knowledge；Folder 表達 hierarchy；assets 僅記 metadata/reference。掃描、解析及 snapshot 準備在 Apply 交易之前完成。
+Markdown 解析成 Knowledge；Folder 表達 hierarchy；assets 僅記 metadata/reference。掃描、解析及 snapshot 準備在 Apply 交易之前完成。SOURCE_MANAGED 的 canonical title resolution（frontmatter／heading／filename 的優先序與衝突）也在 Phase 2 parser/import design 中定義，不由 Phase 0 推定。
 
 Preview 列出預計 `NEW / UPDATED / MOVED / RENAMED / ARCHIVED / UNCHANGED` 變更，MVP 不要求複雜 diff editor。Restore 是同一 entry 重現的 lifecycle 效果，Preview 必須顯示此效果，不默默建立新文件。
 
@@ -390,10 +415,11 @@ current Source.sync_version == Preview.based_on_version
 ### 7.5 Atomic Apply 與 SyncRun
 
 ```text
+SET TRANSACTION ISOLATION LEVEL READ COMMITTED
 BEGIN
   validate / guard Source version
   apply confirmed creates / content changes / hierarchy changes
-  apply archives / restores
+  apply archives / restores + lifecycle provenance
   update SourceEntry mapping and asset metadata as required
   advance Source.sync_version
   record SyncRun APPLIED with result_version
@@ -457,11 +483,12 @@ local MariaDB transaction → commit
 - Path rename／move／reorder 不產生 revision；title／Markdown／knowledge metadata 修改會產生 revision。
 - 相同版本內容不產生 revision；舊 Revision 不被修改。
 - SOURCE_MANAGED 拒絕 Hub 編輯；HUB_MANAGED 允許以新 revision 更新內容。
-- ACTIVE／ARCHIVED 的預設可見性與 archive／restore 規則。
+- ACTIVE／ARCHIVED 的預設可見性與 archive／restore 規則，以及目前 `archived_by`／`archived_at` provenance。
 - 已識別為同一 SourceEntry 的重現沿用 Document ID，內容不同才新增 revision。
-- Tree node type、Document reference 與有效 hierarchy 規則。
+- Tree node type、Document reference、one-document-one-treenode 與有效 hierarchy 規則。
+- Public application read/write contract 顯式接收 `CallerContext`，不從 input payload 取得 caller。
 
-重現與 ownership 測試可用已建立 mapping／source policy 的 fixtures；不要求 Phase 0 寫出 Folder scanner 或 rename detection engine。
+重現與 ownership 測試可用已建立 mapping／source policy 的 fixtures；不要求 Phase 0 寫出 Folder scanner、title resolution 或 rename detection engine。
 
 ### 8.2 MariaDB 10.11 integration tests
 
@@ -469,16 +496,18 @@ local MariaDB transaction → commit
 
 | 測試 | 必須證明 |
 | --- | --- |
-| 空 DB migration | 八張核心表與必要約束可以建立 |
+| 空 DB migration | 八張核心表、native UUID 欄位與必要約束可以建立 |
 | Document + Revision + TreeNode 建立 | 全部成功才提交，成功時 current pointer 合法 |
 | 逐步注入失敗 | 建立流程任一步失敗均不留孤兒資料 |
 | Revision pointer | 不存在或屬於其他 Document 的 revision 無法成為 current |
+| Document Tree uniqueness | 同一 Document 的第二個 DOCUMENT TreeNode 被 DB/application 拒絕 |
 | 唯一性與 mapping | 同文件 revision_no、同一已識別來源 identity 不會重複配置 |
-| Archive／restore | history／mapping 保留，相關 lifecycle 一致 |
+| Archive／restore | history／mapping 保留，相關 lifecycle 與 provenance 一致 |
+| READ COMMITTED + row locks | 兩連線下的 Tree/revision concurrency 不依賴舊 consistent-read snapshot；Source／Document lock 後驗證最新 committed state |
 | Source version 競爭 | 兩個相同 base version 的競爭交易最多一個成功，另一個不留 writes |
 | 多項 canonical writes 的回滾 | 共用 transaction 的跨 repository 變更全部回滾；version 不前進 |
 
-Phase 0 以 transaction fixtures 驗證未來 Sync 所依賴的原子性與 version guard；完整差異計算、Preview 儲存、首次 folder 建立與 FAILED run 流程的端到端驗證在 Phase 2 完成。
+Phase 0 以 transaction fixtures 驗證未來 Sync 所依賴的原子性與 version guard；完整差異計算、Preview 儲存、Title Resolution、首次 folder 建立與 FAILED run 流程的端到端驗證在 Phase 2 完成。
 
 ### 8.3 Small E2E smoke
 
@@ -489,11 +518,11 @@ Open Knowledge Hub
   → Browse its Source / Folder / Document tree
 ```
 
-這個最小流程驗證 Web → application services → repositories → MariaDB 確實接通。基本表單或最小內容輸入已足夠，不為 smoke flow 引入 rich editor、單篇上傳產品流程、drag and drop 或搜尋引擎。
+這個最小流程驗證 Web → trusted CallerContext → application services → repositories → MariaDB 確實接通。基本表單或最小內容輸入已足夠，不為 smoke flow 引入 rich editor、單篇上傳產品流程、drag and drop 或搜尋引擎。
 
 ### 8.4 後續階段追加測試
 
-Phase 1 擴充核心與完整 Tree 行為；Phase 2 驗證 folder scanning、mapping 歧義、Preview／Confirm 內容綁定、到期、首次建立、diff、全量 rollback、FAILED run、重複同步 NOOP 與完整 Folder Upload E2E。後續 authoring、publishing、MCP 與 retrieval 各自沿用本階段 invariants。
+Phase 1 擴充核心與完整 Tree 行為；Phase 2 驗證 folder scanning、Title Resolution、mapping 歧義、Preview／Confirm 內容綁定、到期、首次建立、diff、全量 rollback、FAILED run、重複同步 NOOP 與完整 Folder Upload E2E。後續 authoring、publishing、MCP 與 retrieval 各自沿用本階段 invariants。
 
 ## 9. Phase 0 Definition of Done
 
@@ -503,14 +532,14 @@ Phase 1 擴充核心與完整 Tree 行為；Phase 2 驗證 folder scanning、map
 | --- | --- |
 | Architecture | Next.js modular monolith 可啟動；TypeScript／Tailwind／shadcn/ui 基線可用；不引入排除依賴 |
 | Module boundaries | identity／knowledge／sources 責任明確；Domain、Application、Infrastructure 分層；Web 不直接改 DB；不建未來空模組 |
-| Identity | 四欄位 UserIdentity 與 IdentityProvider contract 可用；Local provider 支援外部開發；application 不依賴 token 細節 |
-| Database | Local MariaDB 10.11 可啟動；migration 可從空 DB 建出八張核心表與必要約束 |
-| Domain representation | org → source → tree、兩種 ownership、stable Document ID、immutable Revision、SourceEntry、兩態 lifecycle 與 metadata-only assets 都有 schema／domain 表達 |
-| Transactions | 最小建立、revision 更新與相關 lifecycle 操作有正確交易邊界；跨 repository 共用 transaction 可用 |
+| Identity | 四欄位 UserIdentity、CallerContext 與 IdentityProvider contract 可用；Local provider 支援外部開發；application 不依賴 token 細節 |
+| Database | Local MariaDB 10.11 可啟動；migration 可從空 DB 建出八張核心表、native UUID IDs 與必要約束 |
+| Domain representation | org → source → tree、兩種 ownership、stable Document ID、immutable Revision、SourceEntry、兩態 lifecycle／provenance 與 metadata-only assets 都有 schema／domain 表達 |
+| Transactions | canonical mutation 使用 READ COMMITTED；最小建立、revision 更新與相關 lifecycle 操作有正確交易邊界；跨 repository 共用 transaction 可用 |
 | Sync foundation | Source.sync_version 與 SyncRun schema 存在；optimistic guard 的競爭與 rollback 測試通過；未要求完整 Folder Sync |
-| Integrity | 同文件 current revision、node type/reference、mapping 唯一性等約束與測試成立；MVP 不暴露 hard delete |
+| Integrity | 同文件 current revision、one-document-one-treenode、node type/reference、mapping 唯一性等約束與測試成立；MVP 不暴露 hard delete |
 | Testing | 本規格 Phase 0 unit、MariaDB integration 與 small E2E smoke 可執行且通過 |
-| Agent readiness | Application services 可由非 Web caller 呼叫；日後 MCP 可重用 core/query 規則而不依賴 page/component；Phase 0 沒有 MCP implementation |
+| Agent readiness | Application services 可由非 Web caller 透過 CallerContext 呼叫；日後 MCP 可重用 core/query 規則而不依賴 page/component；Phase 0 沒有 MCP implementation 或 Agent actor model |
 | Handoff | 實作結果可對照本 spec 提供驗證證據，沒有把後續功能誤報為 Phase 0 已完成 |
 
 ## 10. Future Phase Interfaces
@@ -519,17 +548,17 @@ Phase 1 擴充核心與完整 Tree 行為；Phase 2 驗證 folder scanning、map
 
 | Phase | 延續的工作 | Phase 0 提供的接點與限制 |
 | --- | --- | --- |
-| 1 — Knowledge Core & Tree | 完整核心操作、Tree 與版本能力 | Document／Revision／Tree repositories、stable IDs、lifecycle invariants |
-| 2 — Knowledge Source Import & Sync | Generic Markdown Folder adapter、scan／snapshot／mapping／diff／preview／apply | Sources → Knowledge application operations；SourceEntry、assets metadata、SyncRun、source version 與共用 transaction；folder upload 非 ZIP |
-| 3 — Identity & Basic Governance | 基本 owner／access policy，之後接公司 SSO | UserIdentity 四欄位與 IdentityProvider；Source 的 org 歸屬；身分解析與授權分離 |
-| 4 — Discovery & Read API | Keyword／metadata search、filter、document／revision read | Knowledge query application boundary；current revision、archive filtering 與 caller context 共用 |
+| 1 — Knowledge Core & Tree | 完整核心操作、Tree 與版本能力 | Document／Revision／Tree repositories、stable UUIDv7 IDs、CallerContext、lifecycle invariants |
+| 2 — Knowledge Source Import & Sync | Generic Markdown Folder adapter、scan／snapshot／mapping／diff／preview／apply、Title Resolution | Sources → Knowledge application operations；SourceEntry、assets metadata、SyncRun、source version 與共用 transaction；folder upload 非 ZIP；filename/path 不自動冒充 canonical title |
+| 3 — Identity & Basic Governance | 基本 owner／access policy，之後接公司 SSO | UserIdentity 四欄位、既有 CallerContext 與 IdentityProvider；Phase 3 補 policy/governance，不重新發明 caller method shape |
+| 4 — Discovery & Read API | Keyword／metadata search、filter、document／revision read | Knowledge query application boundary；current revision、archive filtering 與 CallerContext 共用 |
 | 5 — Human Authoring | 單篇 upload、Web editor 與完整 revision 流程 | HUB_MANAGED 可寫、SOURCE_MANAGED 唯讀；內容更新產生 immutable revision |
 | 6 — tKMS Publishing | 獨立 Publishing Tree、外部 mapping 與發布流程 | 引用穩定 Knowledge ID／Revision；Publishing Tree 不改變 Knowledge Tree；外部操作在 DB commit 後 |
-| 7 — Agent & MCP Access | MCP adapter 與 Agent access | 透過同一 application/query services；不繞過身分、存取與 archived filtering |
+| 7 — Agent & MCP Access | MCP adapter、Agent caller 與必要 Principal/Actor 擴充 | 透過同一 application/query services 與 CallerContext；不繞過身分、存取與 archived filtering；若需要 Agent write 再設計 actor_kind/principal，不回改 Phase 0 user FK 猜測未來需求 |
 | 8 — Semantic & Hybrid Retrieval | Chunking、embedding、derived indexes、hybrid search | MariaDB Knowledge 仍為 canonical；retrieval backend 於此階段選型，核心不依賴索引技術 |
 | 9 — Agent Memory & Knowledge Relations | Memory、relations、context 與 promotion | 獨立 domain 透過穩定文件／revision reference 連接；Agent Memory 不直接等於正式 Knowledge |
 
-Phase 2 必須在自己的設計中落實無 stable external ID 的匹配／歧義處理、parser／hash 正規化、preview 儲存與有效期限、首次來源與既有來源的流程細節。這些是明確屬於 Phase 2 的設計責任，不以未確認答案冒充本次已核准決策，也不阻塞 Phase 0 foundation 的驗收。
+Phase 2 必須在自己的設計中落實無 stable external ID 的匹配／歧義處理、Title Resolution、parser／hash 正規化、preview 儲存與有效期限、首次來源與既有來源的流程細節。這些是明確屬於 Phase 2 的設計責任，不以未確認答案冒充本次已核准決策，也不阻塞 Phase 0 foundation 的驗收。
 
 ## 11. Architecture Decision Records
 
@@ -569,7 +598,7 @@ Phase 2 必須在自己的設計中落實無 stable external ID 的匹配／歧�
 
 - **Context：** 檔案移動與內容更新有不同語意，引用不能隨 path 改變。
 - **Decision：** Tree 管位置、Document 管 stable identity、Revision 保存 immutable title／Markdown／metadata。
-- **Consequences：** Folder 不是空文件；path rename／move 不產生 revision，title 修改會產生 revision。
+- **Consequences：** Folder 不是空文件；path rename／move 不產生 revision，title 修改會產生 revision；來源 title 如何解析由 Phase 2 決定。
 
 ### ADR-007 — SourceEntry 保存來源 mapping
 
@@ -577,11 +606,11 @@ Phase 2 必須在自己的設計中落實無 stable external ID 的匹配／歧�
 - **Decision：** 優先使用外部 stable ID；否則由 Hub 維護 SourceEntry mapping；path 是 locator。
 - **Consequences：** 不要求 generator 提供指定 frontmatter ID；具體 fallback 演算法由 Phase 2 定義。
 
-### ADR-008 — Archive-only lifecycle
+### ADR-008 — Archive-only lifecycle + current provenance
 
-- **Context：** 來源缺檔可能是暫時的，文件引用與 revision history 必須保留。
-- **Decision：** 使用 ACTIVE／ARCHIVED；MVP 不 hard delete；同 entry 重現恢復原 Document ID。
-- **Consequences：** 預設查詢排除 archived；restore 只有內容改變才建立 revision。
+- **Context：** 來源缺檔可能是暫時的，文件引用與 revision history 必須保留；archive 是 MVP 的刪除語意，必須可追溯目前 actor/time。
+- **Decision：** 使用 ACTIVE／ARCHIVED；MVP 不 hard delete；同 entry 重現恢復原 Document ID；lifecycle-bearing canonical entity 保存 `updated_by`、`archived_by`、`archived_at`。
+- **Consequences：** 預設查詢排除 archived；restore 只有內容改變才建立 revision；完整多次 lifecycle audit history 留給 Phase 3。
 
 ### ADR-009 — Metadata-only assets
 
@@ -601,23 +630,41 @@ Phase 2 必須在自己的設計中落實無 stable external ID 的匹配／歧�
 - **Decision：** 以 sync_version 驗證 base version；整次 Apply 在單一 transaction；失敗全部 rollback，另記 FAILED。
 - **Consequences：** 不 partial success、不 merge；相同內容不新增 revision；成功操作的 source version 與內容 revision 是不同計數。
 
-### ADR-012 — 最小 Identity 與未來 SSO Adapter
+### ADR-012 — 最小 Identity、CallerContext 與未來 SSO Adapter
 
-- **Context：** 外部 MVP 開發不能依賴公司 SSO 環境。
-- **Decision：** UserIdentity 固定為 id、emp_id、name、org_code；使用 Local／Mock provider，未來 SSO 映射至同一 contract。
-- **Consequences：** Core 不解析 token；不新增完整企業身分或授權平台。
+- **Context：** 外部 MVP 開發不能依賴公司 SSO 環境，但 read/write service 需要穩定 caller-aware contract。
+- **Decision：** UserIdentity 固定為 id、emp_id、name、org_code；使用 Local／Mock provider；transport 建立顯式 `CallerContext` 並作為 application service 第一參數；未來 SSO 映射至同一 identity contract。
+- **Consequences：** Core 不解析 token，也不依賴 ambient request identity；Phase 3 可增加 governance policy 而不大改 service signatures。
 
 ### ADR-013 — Human 與 Agent 共用 Application Core
 
 - **Context：** 未來 MCP 需要取得同一份 Knowledge 與一致的 query／policy 行為。
 - **Decision：** Knowledge 不依賴 Web／MCP；Sources 單向寫入 core，未來 Publishing／Retrieval／Agent 經 application services 接入。
-- **Consequences：** 不建立平行資料存取邏輯；Phase 0 不實作 MCP 或未來空模組。
+- **Consequences：** 不建立平行資料存取邏輯；Phase 0 不實作 MCP、Agent actor model 或未來空模組。
 
 ### ADR-014 — 外部副作用隔離於 DB Transaction
 
 - **Context：** MariaDB rollback 無法撤回外部發布或索引更新。
 - **Decision：** 先提交 local state，再執行 explicit／background 外部操作並保存結果。
 - **Consequences：** Phase 0 不引入 tKMS、index worker、queue 或 outbox implementation。
+
+### ADR-015 — UUIDv7 + MariaDB native UUID
+
+- **Context：** `CHAR(36)` random UUID 會放大 InnoDB PK/secondary-index footprint，且 random key locality 較差；目前尚未建表，調整成本最低。
+- **Decision：** Application 產生 UUIDv7；MariaDB 10.11 使用 native `UUID` type。
+- **Consequences：** 所有 internal ID/FK 型別一致，不手動管理 BINARY byte order，也不依賴 DB-side UUIDv7 function。
+
+### ADR-016 — READ COMMITTED canonical transactions
+
+- **Context：** Tree/revision concurrency 依賴 locking reads，不能讓 correctness 建立在 REPEATABLE READ 舊 consistent snapshot 的隱性操作順序上。
+- **Decision：** canonical Knowledge/Sources mutation UoW 使用 READ COMMITTED，並保留 Source/Document `FOR UPDATE` locks。
+- **Consequences：** tests 必須用兩條真實 MariaDB connection 驗證 lock 後讀到最新 committed state；不能以 mock 或單連線替代。
+
+### ADR-017 — One Document, One Knowledge TreeNode
+
+- **Context：** Stable Document identity 若可同時出現在多個 DOCUMENT TreeNode，move、archive 與 SourceEntry mapping 語意會不唯一。
+- **Decision：** `knowledge_tree_nodes.document_id` 對非 NULL 值建立 UNIQUE protection。
+- **Consequences：** Folder 的 NULL 不受限制；Document move 更新同一 node，不刪除再建立第二個 node。
 
 ## 12. Self-review 與決策追溯
 
@@ -627,19 +674,24 @@ Phase 2 必須在自己的設計中落實無 stable external ID 的匹配／歧�
 | --- | --- |
 | 未定占位內容 | 無空白待填段落；未核准的實作選型明確交由 implementation plan 或相應 Phase，未偽裝成已決策 |
 | 舊架構矛盾 | 新規格採已確認 stack，不沿用舊 HRKM Refine 依賴；早期 PostgreSQL／Elasticsearch 建議不列為 Phase 0 決策 |
-| Rename 與 title | 明確區分 hierarchy rename 與版本化 title 修改 |
+| Rename 與 title | 明確區分 hierarchy rename 與版本化 title 修改；SOURCE_MANAGED Title Resolution 明確交由 Phase 2 |
 | Ownership 儲存 | Source 為 ownership 單一來源，Document 不重複保存另一份值 |
 | SOURCE_MANAGED 唯讀 | 區分 Hub 編輯與受控同步更新，application 層執行規則 |
+| Caller boundary | UserIdentity 保持四欄位；CallerContext 顯式傳入 application service，Phase 3 再補 governance policy |
+| Actor model | Phase 0–2 lifecycle/created refs 仍指向 user；不提前引入 actor_kind/polymorphic FK |
+| ID storage | UUIDv7 + MariaDB native UUID；不使用 CHAR(36) random UUID |
+| Transaction isolation | Canonical mutation 明訂 READ COMMITTED，並保留 Source/Document row lock |
+| Tree uniqueness | one-document-one-treenode 提前成為 Phase 0 DB invariant |
+| Lifecycle provenance | ACTIVE/ARCHIVED 保持兩態；目前 archive actor/time 以 lifecycle fields 保存，完整 event history 留 Phase 3 |
 | Preview 唯讀與 PREVIEWED 紀錄 | 區分 canonical state 與流程紀錄；首次 Source 不在選 folder 時留下半套正式資料 |
 | FAILED 與 rollback | FAILED 紀錄在主交易回滾後另存，不依靠被回滾交易 |
 | NOOP 與 sync_version | NOOP 指內容／Tree／archive 無變更；成功 Apply 仍保存 run 並遞增來源版本 |
 | Schema 與階段範圍 | sync_runs schema 在 Phase 0，完整操作流程在 Phase 2；preview contract 不強制新增 table |
-| Lifecycle | ACTIVE／ARCHIVED 為知識狀態；SyncRun 三態是操作狀態，missing 不是第三種 lifecycle |
 | SourceEntry 身分 | 不把 path/hash 當作穩定文件 ID，不宣稱無 ID 的自動匹配已解決 |
 | Module direction | 外鍵／ownership policy 資料與 Sources ingestion 實作依賴分開，Knowledge 不反向依賴同步引擎 |
 | Assets | metadata/reference 與 binary serving 明確分開，不暗中引入 filesystem storage |
 | 測試與 DoD | Phase 0 以 domain／transaction fixtures 與最小 smoke 驗收，不要求完整 authoring 或 sync UI |
-| 範圍擴張 | 沒有新增 SSO、ACL 平台、ZIP、editor、publishing、MCP、search/vector、memory、queue 或 hard delete implementation |
+| 範圍擴張 | 沒有新增 SSO、ACL 平台、ZIP、editor、publishing、MCP、search/vector、memory、queue、Agent actor model 或 hard delete implementation |
 
 ### 12.2 決策來源對照
 
@@ -648,14 +700,15 @@ Phase 2 必須在自己的設計中落實無 stable external ID 的匹配／歧�
 | 已確認討論 | 本規格位置 |
 | --- | --- |
 | MariaDB 10.11、Next.js modular monolith、使用 shadcn | §3；ADR-001～003 |
+| UUIDv7、native UUID 與 transaction isolation clarification | §3.1、§6.4、§7；ADR-015～016 |
 | Organization → Sources、單一 org owner、手動文件也有 Source | §4.1、§5；ADR-004 |
 | Folder 唯讀、單篇上傳／Web 建立可編輯 | §4.2；ADR-005 |
-| Tree／Document／Revision、SourceEntry、title／Markdown／metadata 版本化 | §4.3～4.4、§5；ADR-006～007 |
-| 不 hard delete、同 entry 重現沿用 ID、只保存 asset metadata | §4.5～4.6；ADR-008～009 |
+| Tree／Document／Revision、SourceEntry、title／Markdown／metadata 版本化 | §4.3～4.4、§5；ADR-006～007、017 |
+| 不 hard delete、同 entry 重現沿用 ID、lifecycle provenance、只保存 asset metadata | §4.5～4.6；ADR-008～009 |
 | Folder 非 ZIP、首次來源命名、後續選 source、強制 Preview | §7.2～7.3；ADR-010 |
-| Application / Module Boundary 確認 | §6；ADR-013 |
-| Transaction / Error Boundary + Sync Safety Baseline 確認 | §7；ADR-011、014 |
+| Application / Module Boundary、CallerContext | §6；ADR-012～013 |
+| Transaction / Error Boundary + Sync Safety Baseline | §7；ADR-011、014、016 |
 | Identity 精簡為四欄位、外部 mock、公司後補 SSO | §6.1；ADR-012 |
-| Testing Strategy + Definition of Done，最後回覆 okay | §8～9 |
+| Testing Strategy + Definition of Done | §8～9 |
 
 本次完成的是上述決策的 Markdown Design Spec 與 self-review。後續 Implementation Plan 應依本規格拆解工作與驗證步驟，不把文件完成等同 Phase 0 程式實作完成。

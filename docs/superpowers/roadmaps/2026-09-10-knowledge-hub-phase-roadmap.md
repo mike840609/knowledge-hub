@@ -5,10 +5,10 @@
 | 日期 | 2026-09-10 |
 | 文件定位 | 各階段目標、主要交付、完成後的能力與範圍邊界 |
 | 決策依據 | 原對話「KM 各階段實作規劃 - 全部重做」與 [Phase 0 Design Spec](../specs/2026-09-10-phase-0-foundation-architecture-design.md) 的 Future Phase Interfaces |
-| 目前狀態 | Phase 0 spec／plan 已完成；所有 Phase 的程式實作尚未開始 |
+| 目前狀態 | Phase 0 spec／plan、Phase 1 design 已完成；Phase 1 implementation plan 已產出於 PR，程式實作依階段進行 |
 | 專案入口 | [README](../../../README.md) |
 
-本路線圖整理已確認的階段方向，不將 Phase 1–9 的目標冒充已完成詳細設計。每一階段仍需自己的 design spec、implementation plan 與實際驗收證據。本文件不設定未確認的期限、投入人力或未來技術選型。
+本路線圖整理已確認的階段方向，不將尚未完成詳細設計的 future phase 目標冒充已驗證結論。每一階段仍需自己的 design spec、implementation plan 與實際驗收證據。本文件不設定未確認的期限、投入人力或未來技術選型。
 
 ## 1. 產品目標與共同原則
 
@@ -18,14 +18,17 @@
 
 - `org_code → KnowledgeSource → Folder / Document Tree`；每個 Source 一個 org owner，每份 Document 都有 Source。
 - Source、Tree、Document、Revision 各自有清楚責任；穩定 Document ID 不依賴 path 或外部系統 ID。
-- `title / markdown / knowledge metadata` 版本化，Revision immutable；hierarchy move／檔名 rename 不產生內容版本。
+- Hub internal IDs 使用 application-generated UUIDv7，MariaDB 10.11 使用 native `UUID` storage。
+- `title / markdown / knowledge metadata` 版本化，Revision immutable；hierarchy move／檔名 rename 不產生內容版本；SOURCE_MANAGED title 如何從來源解析由 Phase 2 定義。
 - Folder Sync 為 SOURCE_MANAGED，Hub 唯讀；單篇匯入與 Web 建立為 HUB_MANAGED，可建立新 revision。
-- Lifecycle 僅 ACTIVE／ARCHIVED；不 hard delete，同一 entry 重現沿用原 Document ID。
+- Lifecycle 僅 ACTIVE／ARCHIVED；不 hard delete，同一 entry 重現沿用原 Document ID；目前 archive actor/time 有 provenance，完整 audit history 留治理階段。
+- Public application read/write services 顯式接收可信 `CallerContext`；完整 access policy 在 Phase 3 補上。
+- Canonical Knowledge/Sources mutation 使用 READ COMMITTED transaction，並保留必要的 Source/Document row locks。
 - Folder Upload 直接選取整個 folder，不使用 ZIP；先 Preview、再 Confirm、最後 transactional Apply。
 - Assets MVP 只存 metadata/reference；不承諾 binary storage 或圖片／附件 serving。
 - 身分 contract 固定為 `{id, emp_id, name, org_code}`，外部開發使用 local/mock provider；SSO 在公司環境再補。
 - MariaDB 10.11 保存 canonical Knowledge；未來搜尋索引是 derived data。
-- Human Web 與 Agent 共用 application services；MCP 是接入層，Agent Memory 是獨立 domain。
+- Human Web 與 Agent 共用 application services；MCP 是接入層，Agent Memory 是獨立 domain。Phase 0–2 不提前建立 `actor_kind` / Agent Principal model。
 
 ## 2. 階段總覽
 
@@ -34,8 +37,8 @@
 | 0 | Foundation & Architecture | 可測試、可擴充的架構與資料基礎 | 新專案與確認的設計 |
 | 1 | Knowledge Core & Tree | 完整的 Knowledge identity、revision、lifecycle 與 Tree | Phase 0 |
 | 2 | Knowledge Source Import & Sync | 可靠地將來源 folder 同步為 Hub Knowledge | Phase 1 core、Phase 0 sync safety |
-| 3 | Identity & Basic Governance | 最小且共用的 owner／access boundary | Phase 0 identity、Phase 1–2 資料來源 |
-| 4 | Discovery & Read API | 人與 Agent 可共用的讀取／搜尋服務 | Phase 1 core、Phase 3 governance |
+| 3 | Identity & Basic Governance | 最小且共用的 owner／access boundary | Phase 0 CallerContext、Phase 1–2 資料來源 |
+| 4 | Discovery & Read API | 人與 Agent 可共用的讀取／搜尋服務 | Phase 1 query boundary、Phase 3 governance |
 | 5 | Human Authoring | 人可在 Hub 上傳／建立／編輯知識 | Phase 1 revisions、Phase 3 governance |
 | 6 | tKMS Publishing | 將知識重新編排並發布至外部目的地 | Core／read／governance／authoring 能力 |
 | 7 | Agent & MCP Access | Agent 可依身分安全讀取 Knowledge | Phase 3 governance、Phase 4 read services |
@@ -55,12 +58,14 @@
 - Next.js、React、TypeScript、Tailwind、shadcn/ui 與本地 MariaDB 10.11 基線。
 - `identity`、`knowledge`、`sources` 三個 module，明確分離 domain／application／infrastructure。
 - 八張核心表：users、knowledge_sources、source_entries、knowledge_tree_nodes、knowledge_documents、knowledge_revisions、knowledge_assets、sync_runs。
-- 四欄位 Local Identity、repository／transaction ports、資料約束、source sync_version guard。
+- Application-generated UUIDv7 + MariaDB native UUID internal ID contract。
+- 四欄位 Local Identity、顯式 CallerContext、repository／READ COMMITTED transaction ports、資料約束、source sync_version guard。
+- one-document-one-TreeNode constraint 與 ACTIVE／ARCHIVED current lifecycle provenance。
 - Unit、真實 MariaDB integration 與最小 create/read/Tree smoke flow。
 
-**完成後的能力：** 可啟動本地系統，用 local identity 建立並讀取基本 Hub-managed 文件，透過 Tree 找到它，並以測試證明 foundation 的一致性。
+**完成後的能力：** 可啟動本地系統，用 local identity 建立 trusted CallerContext，建立並讀取基本 Hub-managed 文件，透過 Tree 找到它，並以測試證明 foundation 的一致性。
 
-**範圍邊界：** 不完成 Folder Sync、rich editor、publishing、MCP、embedding 或公司 SSO；不建立未來空模組。最小 smoke flow 不等於完整 Phase 1／5 產品。
+**範圍邊界：** 不完成 Folder Sync、Title Resolution、rich editor、publishing、MCP、embedding、Agent actor model 或公司 SSO；不建立未來空模組。最小 smoke flow 不等於完整 Phase 1／5 產品。
 
 詳細文件：[Design Spec](../specs/2026-09-10-phase-0-foundation-architecture-design.md)、[Implementation Plan](../plans/2026-09-10-phase-0-foundation-implementation.md)。
 
@@ -72,12 +77,14 @@
 
 - KnowledgeSource、Document、Revision、TreeNode 與 SourceEntry 的核心服務及關聯行為。
 - org → Source → Folder／Document Tree；Folder 不偽裝成文章。
-- Stable Document ID、current revision resolution、title／Markdown／metadata 的內容模型。
-- Archive／restore、預設 archived filtering，以及 hierarchy 與 content change 的分離。
+- Stable UUIDv7 Document ID、current revision resolution、title／Markdown／metadata 的內容模型。
+- SourceEntry → TreeNode stable mapping。
+- Archive／restore、目前 lifecycle provenance、預設 archived filtering，以及 hierarchy 與 content change 的分離。
+- Caller-aware read/write services 與 READ COMMITTED concurrency protection。
 
 **完成後的能力：** 系統能真正保存與瀏覽知識，移動或更改來源位置後仍可用同一 Document ID 引用；版本歷史與生命週期保持一致。
 
-**範圍邊界：** 沿用 Phase 0 基礎，不重建 identity 或 schema 架構；完整外部 folder ingestion 留在 Phase 2，完整人工作者介面留在 Phase 5。
+**範圍邊界：** 沿用 Phase 0 基礎，不重建 identity 或 foundation schema；完整外部 folder ingestion 與 Title Resolution 留在 Phase 2，完整人工作者介面留在 Phase 5。
 
 ### Phase 2 — Knowledge Source Import & Sync
 
@@ -87,6 +94,7 @@
 
 - 直接選取整個 folder，保留 relative paths；不使用 ZIP、不綁特定 Wiki generator。
 - Generic folder adapter、scan／parse、snapshot、SourceEntry mapping 與內容比較。
+- **Title Resolution**：明確定義 canonical title 從 frontmatter、Markdown heading、filename 等來源的優先序、缺值 fallback 與衝突裁決；filename/path 不直接冒充 Knowledge title。
 - 第一次建立 Source，folder name 作可修改的預設名稱；之後明確選取既有 source_id。
 - Preview 顯示新增、更新、移動、改名、archive、unchanged 與 restore 的效果；Confirm 後才 Apply。
 - Preview snapshot 綁定／到期、optimistic sync_version、同交易更新 Knowledge／Tree／mapping／run，以及失敗全數 rollback。
@@ -95,22 +103,23 @@
 
 **完成後的能力：** 使用者上傳團隊的 Markdown folder，檢視變更、確認後在 Hub 瀏覽同步結果；後續更新不破壞文件引用與 revision history。
 
-**範圍邊界：** Folder 結果在 Hub 唯讀，不做雙向同步、Markdown merge、partial success 或 binary storage。沒有 external stable ID 時的匹配／歧義規則、parser/hash 正規化與 Preview 保存方式，需在本階段詳細設計中落實，不能靠 path/hash 直接冒充文件 identity。
+**範圍邊界：** Folder 結果在 Hub 唯讀，不做雙向同步、Markdown merge、partial success 或 binary storage。沒有 external stable ID 時的匹配／歧義規則、Title Resolution、parser/hash 正規化與 Preview 保存方式，需在本階段詳細設計中落實，不能靠 path/hash/filename 直接冒充文件 identity 或 canonical title。
 
 ### Phase 3 — Identity & Basic Governance
 
-**目標：** 在已有 Local Identity 與 org 歸屬上，落實一致的基本 caller、owner 與 access boundary。
+**目標：** 在已有 Local Identity、顯式 CallerContext 與 org 歸屬上，落實一致的基本 caller、owner 與 access policy。
 
 主要交付：
 
-- Application services 共用的可信 caller context 與基本存取檢查。
+- 沿用 Phase 0 已存在的可信 CallerContext，加入基本存取檢查；不重新修改全部 service method shape。
 - org_code owner boundary、必要的操作來源／操作者引用。
 - 身分解析與 Knowledge 授權責任分離。
-- 保留 Company SSO adapter 替換 local provider 的契約；仍為 id、emp_id、name、org_code 四欄位。
+- Lifecycle / mutation 的完整 audit history 若有需求，以 append-only event/audit model 補充；不以 Phase 0 current provenance 冒充完整歷史。
+- 保留 Company SSO adapter 替換 local provider 的契約；UserIdentity 仍為 id、emp_id、name、org_code 四欄位。
 
 **完成後的能力：** Web 與未來 Agent 都能沿用相同的基本存取規則；替換身分來源不必修改 Knowledge Core。
 
-**範圍邊界：** 不重建公司登入平台，不把同 org 視為當然擁有所有文件權限。外部 MVP 不以公司 SSO 可用為前提；完整 Team membership、複雜 ACL、跨 org 分享、企業 mapping 與進階 audit 由後續需求再展開。
+**範圍邊界：** 不重建公司登入平台，不把同 org 視為當然擁有所有文件權限。外部 MVP 不以公司 SSO 可用為前提；完整 Team membership、複雜 ACL、跨 org 分享、企業 mapping 與進階 audit 由需求再展開。
 
 ### Phase 4 — Discovery & Read API
 
@@ -121,11 +130,12 @@
 - Knowledge query／read application services。
 - Keyword／metadata search 與條件篩選。
 - Source／Tree query、Document read、current／指定 revision read。
-- 查詢路徑共用 caller context、存取判斷與 archived filtering。
+- 查詢路徑共用 CallerContext、存取判斷與 archived filtering。
+- 評估 keyword retrieval backend 是否維持 MariaDB native capability，或需要獨立 search engine；這是 Phase 4 design 的技術決策，不由 roadmap 預先定案。
 
 **完成後的能力：** 使用者能搜尋並讀取符合條件的知識；未來 MCP 可直接接上相同服務，不另寫 SQL 或一套文件查詢規則。
 
-**範圍邊界：** 先完成一般 keyword／metadata discovery，不要求 embedding、vector 或 Elasticsearch。外部 HTTP API 的細節由本階段設計，核心介面不依賴特定 transport。
+**範圍邊界：** Phase 4 聚焦 keyword／metadata discovery 與共用 query boundary。是否需要 Elasticsearch 或其他 keyword search backend 由 Phase 4 design 重新評估，roadmap 不把「不需要」視為已驗證結論。Embedding／vector／semantic-hybrid retrieval 原則上仍屬 Phase 8；若後續證據需要調整 phase boundary，必須另立 ADR，而不是由本路線圖隱式改動。
 
 ### Phase 5 — Human Authoring
 
@@ -166,10 +176,11 @@
 - MCP adapter／server 與可信 Agent caller context 的接入。
 - 以 search/get knowledge 為核心的最小讀取能力。
 - 重用基本存取政策、revision resolution、archived filtering 與來源資訊。
+- 若本階段或之後真的出現 Agent write / service account / system actor 需求，再設計 Principal/Actor model；不要求回頭把 Phase 0 的所有 user FK 先改成 polymorphic `actor_kind`。
 
 **完成後的能力：** Agent 可以查找與讀取授權的組織知識，引用穩定文件／版本，而不必直接查 DB 或依賴 Web UI。
 
-**範圍邊界：** MCP 不另建 Knowledge datastore，不繞過治理，也不在此階段順帶實作 Agent Memory。具體 Agent credential／protocol payload 在本階段定義，不預先擴張 Phase 0 的 UserIdentity 欄位。
+**範圍邊界：** MCP 不另建 Knowledge datastore，不繞過治理，也不在此階段順帶實作 Agent Memory。具體 Agent credential／protocol payload 與可能的 actor model 在本階段依真實需求定義，不預先擴張 Phase 0 的 UserIdentity 欄位。
 
 ### Phase 8 — Semantic & Hybrid Retrieval
 
@@ -180,11 +191,11 @@
 - 依 revision 內容進行 chunking、embedding 與 derived indexing。
 - 語意及混合查詢、ranking 與 filter 的組合。
 - 非同步索引更新、重建與 canonical Knowledge 的一致性處理。
-- 在本階段選擇適用的 retrieval backend。
+- 在本階段選擇適用的 semantic/hybrid retrieval backend。
 
 **完成後的能力：** 人與 Agent 可以用語意找到相關知識，沿用既有 query boundary，而不是重新整合另一套文件服務。
 
-**範圍邊界：** MariaDB Knowledge 仍是 canonical source；索引失效或重建不改變 Document ID、Revision、Source 或授權資料。此路線圖不預先指定 Elasticsearch、MariaDB Vector 或其他向量引擎。
+**範圍邊界：** MariaDB Knowledge 仍是 canonical source；索引失效或重建不改變 Document ID、Revision、Source 或授權資料。此路線圖不預先指定 Elasticsearch、MariaDB Vector 或其他向量引擎；Phase 4 是否使用 Elasticsearch 作 keyword backend 與本階段是否使用某個 semantic backend 是兩個不同決策。
 
 ### Phase 9 — Agent Memory & Knowledge Relations
 
@@ -199,13 +210,13 @@
 
 **完成後的能力：** Agent 的長期工作經驗可被整理與關聯，經治理後有機會成為正式知識，而非每次任務都重新開始。
 
-**範圍邊界：** Agent Memory 不自動等於公司正式 Knowledge；具體 memory schema、relation types 與 promotion 規則在此階段設計，不提前塞進 Phase 0 的 knowledge_documents。
+**範圍邊界：** Agent Memory 不自動等於正式 Knowledge；具體 memory schema、relation types 與 promotion 規則在此階段設計，不提前塞進 Phase 0 的 knowledge_documents。
 
 ## 4. 里程碑
 
 | 里程碑 | 階段 | 可以展示的結果 |
 | --- | --- | --- |
-| M1：第一個可用的來源知識流程 | Phase 0–2 | 團隊 Markdown folder → Preview／Confirm → Hub Knowledge → Tree／Document |
+| M1：第一個可用的來源知識流程 | Phase 0–2 | 團隊 Markdown folder → Parse/Title Resolution → Preview／Confirm → Hub Knowledge → Tree／Document |
 | M2：人可查找與維護知識 | Phase 3–5 | 基本治理＋Discovery＋單篇上傳／Web authoring |
 | M3：外部發布 | Phase 6 | Knowledge 重新編排為 Publishing Tree 並發布到 tKMS |
 | M4：Agent 使用與記憶 | Phase 7–9 | MCP read access → semantic/hybrid retrieval → governed Agent Memory／relations |
@@ -216,8 +227,8 @@ M1 使用 local/mock identity 驗證產品流程，不表示公司正式 SSO 與
 
 | Phase | 目標文件 | 詳細 Design Spec | Implementation Plan | 實作／驗收 |
 | --- | --- | --- | --- | --- |
-| 0 | 本路線圖 | [已完成](../specs/2026-09-10-phase-0-foundation-architecture-design.md) | [已完成](../plans/2026-09-10-phase-0-foundation-implementation.md) | 尚未開始 |
-| 1 | 本路線圖 | 尚未產出 | 尚未產出 | 尚未開始 |
+| 0 | 本路線圖 | [已完成](../specs/2026-09-10-phase-0-foundation-architecture-design.md) | [已完成](../plans/2026-09-10-phase-0-foundation-implementation.md) | 依實作 branch 進行 |
+| 1 | 本路線圖 | [已完成](../specs/2026-09-10-phase-1-knowledge-core-tree-design.md) | 已產出，待 PR 合併 | 尚未開始 |
 | 2 | 本路線圖 | 尚未產出 | 尚未產出 | 尚未開始 |
 | 3 | 本路線圖 | 尚未產出 | 尚未產出 | 尚未開始 |
 | 4 | 本路線圖 | 尚未產出 | 尚未產出 | 尚未開始 |
@@ -229,4 +240,4 @@ M1 使用 local/mock identity 驗證產品流程，不表示公司正式 SSO 與
 
 各階段詳細設計確認後保存於 `docs/superpowers/specs/`，實作計畫保存於 `docs/superpowers/plans/`；實際測試與驗收證據產生後保存於 `docs/superpowers/verification/`。本目標路線圖放在 `docs/superpowers/roadmaps/`，由專案 README 統一導引。
 
-更新 roadmap 時需同步檢查對應 spec／plan，避免兩套不同的 ownership、lifecycle、phase scope 或技術基線。路線圖列出的 future goals 不推翻已確認的 Phase 0 design。
+更新 roadmap 時需同步檢查對應 spec／plan，避免兩套不同的 ownership、lifecycle、phase scope 或技術基線。路線圖列出的 future goals 不推翻已確認的 Phase 0 design；尚未完成該 Phase design 的技術選型不得被當作已驗證結論。
