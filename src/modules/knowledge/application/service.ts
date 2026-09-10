@@ -11,8 +11,8 @@ import { applySourceManagedMutation, archiveSourceManagedDocument, type Controll
 import { assertActiveDocumentPlacement, assertActiveFolderAncestry } from "./tree-validation";
 import type { HubKnowledgeCommandService } from "./hub-knowledge-command-service";
 
-/** Temporary Task 4 delegation target. Removed with service.ts in Task 9. */
-export type HubCommandDelegate = Pick<HubKnowledgeCommandService, "createDocument" | "createRevision">;
+/** Temporary Task 4–5 delegation target. Removed with service.ts in Task 9. */
+export type HubCommandDelegate = Pick<HubKnowledgeCommandService, "createDocument" | "createRevision" | "createFolder" | "renameFolder" | "moveTreeNode" | "reorderTreeNode">;
 
 export type CreateDocumentInput = ContentInput & { sourceId: string; parentId?: string | null };
 export type RevisionResult = { documentId: string; revisionId: string; revisionNo: number; changed: boolean };
@@ -185,6 +185,12 @@ export class KnowledgeApplicationService implements ControlledKnowledgeOperation
   }
 
   async moveTreeNode(caller: CallerContext, nodeId: string, parentId: string | null): Promise<void> {
+    if (this.hub) {
+      const current = await this.unitOfWork.run(async (repositories) => repositories.tree.findById(nodeId));
+      if (!current) throw new TreeNodeNotFoundError();
+      await this.hub.moveTreeNode(caller, { nodeId, newParentId: parentId, newPosition: current.position });
+      return;
+    }
     await this.unitOfWork.run(async (repositories) => {
       await repositories.users.upsertIdentity(caller.identity);
       const existing = await repositories.tree.findById(nodeId);
@@ -204,6 +210,10 @@ export class KnowledgeApplicationService implements ControlledKnowledgeOperation
   }
 
   async renameFolder(caller: CallerContext, nodeId: string, name: string): Promise<void> {
+    if (this.hub) {
+      await this.hub.renameFolder(caller, { nodeId, name });
+      return;
+    }
     if (!name) throw new ValidationError("Folder name must be a non-empty string.");
     await this.unitOfWork.run(async (repositories) => {
       await repositories.users.upsertIdentity(caller.identity);
@@ -218,6 +228,10 @@ export class KnowledgeApplicationService implements ControlledKnowledgeOperation
   }
 
   async reorderNode(caller: CallerContext, nodeId: string, position: number): Promise<void> {
+    if (this.hub) {
+      await this.hub.reorderTreeNode(caller, { nodeId, newPosition: position });
+      return;
+    }
     if (!Number.isSafeInteger(position) || position < 0) throw new ValidationError("Tree position must be a non-negative integer.");
     await this.unitOfWork.run(async (repositories) => {
       await repositories.users.upsertIdentity(caller.identity);

@@ -8,7 +8,7 @@ import type { Migration } from "@/infrastructure/database/mariadb/migrations/typ
 import { migrations } from "@/infrastructure/database/mariadb/migrations";
 import { KnowledgeApplicationService } from "@/modules/knowledge/application/service";
 import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
-import { IdentityError, RevisionConflictError, SourceReadOnlyError } from "@/modules/knowledge/domain/errors";
+import { IdentityError, CrossSourceMoveError, RevisionConflictError, SourceReadOnlyError } from "@/modules/knowledge/domain/errors";
 import type { SourcePolicy } from "@/modules/knowledge/domain/source-policy";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "@/modules/knowledge/ports/unit-of-work";
 import { createDocumentFixture, createDocumentForAnySource, createEntryFixture, createSourceFixture, ensureUser, fixtureCaller, fixtureIdentity, secondFixtureIdentity } from "../fixtures/knowledge";
@@ -154,7 +154,7 @@ describe("Knowledge application transactions", () => {
     expect(treeBefore.flatMap((item) => item.children).some((item) => item.documentId === created.documentId && item.name === "Renamed article")).toBe(true);
     const secondFolderId = "0199f000-0000-7000-8000-000000000999";
     await new MariaDbUnitOfWork(pool).run(async ({ tree }) => tree.insert({ id: secondFolderId, sourceId: fixture.source.id, parentId: null, nodeType: "FOLDER", name: "Second Folder", documentId: null, position: 1, status: "ACTIVE", updatedBy: fixtureIdentity.id, archivedBy: null, archivedAt: null }));
-    await service.moveTreeNode(caller, (await new MariaDbUnitOfWork(pool).run(async ({ tree }) => (await tree.listBySource(fixture.source.id)).find((item) => item.documentId === created.documentId)))!.id, secondFolderId);
+    await hub.moveTreeNode(caller, { nodeId: (await new MariaDbUnitOfWork(pool).run(async ({ tree }) => (await tree.listBySource(fixture.source.id)).find((item) => item.documentId === created.documentId)))!.id, newParentId: secondFolderId, newPosition: 0 });
     await service.archiveDocument(caller, created.documentId);
     const archivedRows = await pool.query<{ document_status: string; document_updated_by: string; document_archived_by: string; document_archived_at: Date | null; tree_status: string; tree_updated_by: string; tree_archived_by: string; tree_archived_at: Date | null }[]>(
       `SELECT d.status AS document_status, d.updated_by AS document_updated_by, d.archived_by AS document_archived_by, d.archived_at AS document_archived_at,
@@ -205,9 +205,9 @@ describe("Knowledge application transactions", () => {
       () => hub.createRevision(caller, { documentId: document.documentId, expectedCurrentRevisionId: document.revisionId, title: "no", markdown: "no", metadata: {} }),
       () => service.archiveDocument(caller, document.documentId),
       () => service.restoreDocument(caller, document.documentId),
-      () => service.moveTreeNode(caller, tree!.id, null),
-      () => service.renameFolder(caller, fixture.folderId, "no"),
-      () => service.reorderNode(caller, fixture.folderId, 2),
+      () => hub.moveTreeNode(caller, { nodeId: tree!.id, newParentId: null, newPosition: 0 }),
+      () => hub.renameFolder(caller, { nodeId: fixture.folderId, name: "no" }),
+      () => hub.reorderTreeNode(caller, { nodeId: fixture.folderId, newPosition: 2 }),
     ];
     for (const run of operations) {
       const error = await run().then(
@@ -260,19 +260,19 @@ describe("Knowledge application transactions", () => {
     let secondReached!: () => void;
     const firstLock = new Promise<void>((resolve) => { firstLocked = resolve; });
     const secondLockAttempt = new Promise<void>((resolve) => { secondReached = resolve; });
-    const serviceA = new KnowledgeApplicationService(withSourceLockHook(new MariaDbUnitOfWork(pool), async (_sourceId, lock) => {
+    const serviceA = new HubKnowledgeCommandServiceImpl(withSourceLockHook(new MariaDbUnitOfWork(pool), async (_sourceId, lock) => {
       const source = await lock();
       firstLocked();
       await secondLockAttempt;
       return source;
     }));
-    const serviceB = new KnowledgeApplicationService(withSourceLockHook(new MariaDbUnitOfWork(pool), async (_sourceId, lock) => {
+    const serviceB = new HubKnowledgeCommandServiceImpl(withSourceLockHook(new MariaDbUnitOfWork(pool), async (_sourceId, lock) => {
       secondReached();
       return lock();
     }));
-    const moveA = serviceA.moveTreeNode(fixtureCaller(), fixture.folderId, folderB);
+    const moveA = serviceA.moveTreeNode(fixtureCaller(), { nodeId: fixture.folderId, newParentId: folderB, newPosition: 0 });
     await firstLock;
-    const moveB = serviceB.moveTreeNode(fixtureCaller(secondFixtureIdentity), folderB, fixture.folderId);
+    const moveB = serviceB.moveTreeNode(fixtureCaller(secondFixtureIdentity), { nodeId: folderB, newParentId: fixture.folderId, newPosition: 0 });
     const moves = await Promise.allSettled([moveA, moveB]);
     expect(moves.filter((result) => result.status === "fulfilled")).toHaveLength(1);
     const nodes = await new MariaDbUnitOfWork(pool).run(async ({ tree }) => tree.listBySource(fixture.source.id));
@@ -306,7 +306,7 @@ describe("Knowledge application transactions", () => {
     const hub = new HubKnowledgeCommandServiceImpl(new MariaDbUnitOfWork(pool));
     const caller = fixtureCaller();
     await expect(hub.createDocument(caller, { sourceId: first.source.id, parentId: nested, title: "No", markdown: "No", metadata: {} })).rejects.toThrow();
-    await expect(service.moveTreeNode(caller, nested, second.folderId)).rejects.toThrow();
+    await expect(hub.moveTreeNode(caller, { nodeId: nested, newParentId: second.folderId, newPosition: 0 })).rejects.toBeInstanceOf(CrossSourceMoveError);
     const document = await createDocumentForAnySource(pool, first.source.id, first.folderId);
     await service.archiveDocument(caller, document.documentId);
     await new MariaDbUnitOfWork(pool).run(async ({ tree }) => tree.updateParent((await tree.listBySource(first.source.id)).find((node) => node.documentId === document.documentId)!.id, nested, fixtureIdentity.id));
