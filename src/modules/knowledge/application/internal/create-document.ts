@@ -1,9 +1,11 @@
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import { fingerprintRevisionContent, type RevisionContentInput } from "../../domain/content";
-import { SourceArchivedError, SourceNotFoundError, SourceReadOnlyError, ValidationError } from "../../domain/errors";
+import { SourceArchivedError, SourceNotFoundError, SourceReadOnlyError } from "../../domain/errors";
+import { normalizeTreePosition } from "../../domain/tree-rules";
 import type { KnowledgeRepositories } from "../../ports/unit-of-work";
 import { assertActiveFolderAncestry } from "../tree-validation";
+import { placeNodeAtIndex } from "./tree-transaction";
 
 export type CreateHubDocumentInput = RevisionContentInput & {
   sourceId: string;
@@ -30,14 +32,13 @@ export async function createDocumentInTransaction(
   await repositories.workspaceAccess.requireMembership(caller, source.workspaceId);
   if (source.status !== "ACTIVE") throw new SourceArchivedError();
   if (source.ownership !== "HUB_MANAGED") throw new SourceReadOnlyError();
-  let position = 0;
+  let position: number | undefined;
   if (input.position !== undefined) {
-    if (!Number.isSafeInteger(input.position) || input.position < 0) {
-      throw new ValidationError("Tree position must be a non-negative integer.");
-    }
-    position = input.position;
+    position = normalizeTreePosition(input.position);
   }
   if (input.parentId !== null) await assertActiveFolderAncestry(repositories, source.id, input.parentId);
+  const siblings = (await repositories.tree.listBySource(source.id)).filter((node) => node.parentId === input.parentId);
+  const index = position === undefined ? siblings.length : Math.min(position, siblings.length);
   const { normalized: content, contentHash } = fingerprintRevisionContent(input);
   const now = new Date();
   const documentId = uuidv7();
@@ -55,9 +56,10 @@ export async function createDocumentInTransaction(
   await repositories.documents.setCurrentRevision(documentId, revisionId, caller.identity.id);
   await repositories.tree.insert({
     id: treeNodeId, sourceId: source.id, parentId: input.parentId, nodeType: "DOCUMENT",
-    name: null, documentId, position, status: "ACTIVE",
+    name: null, documentId, position: index, status: "ACTIVE",
     updatedBy: caller.identity.id, archivedBy: null, archivedAt: null,
   });
+  await placeNodeAtIndex(repositories, source.id, treeNodeId, input.parentId, index, caller.identity.id);
   await repositories.documents.assertComplete(documentId);
   return { documentId, revisionId, treeNodeId };
 }

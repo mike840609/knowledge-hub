@@ -13,7 +13,8 @@ import type { SourcePolicy } from "../../domain/source-policy";
 /**
  * Shared Tree mutation preamble (plan §6): trusted CallerContext → resolve
  * and lock Source on this connection → transaction-scoped Workspace access →
- * Source ACTIVE + HUB_MANAGED. No writes happen before authorization; every
+ * Source ACTIVE + HUB_MANAGED. No knowledge writes happen before authorization
+ * (caller identity provisioning is not a knowledge write); every
  * hierarchy decision below re-reads the latest locked state, because READ
  * COMMITTED never relies on a pre-lock read for the final mutation.
  */

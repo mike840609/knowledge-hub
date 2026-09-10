@@ -153,6 +153,27 @@ describe("hub tree creation", () => {
     await expect(service.createFolder(callerFromIdentity(owner), { sourceId: fixture.archivedSourceId, parentId: null, name: "No" })).rejects.toBeInstanceOf(SourceArchivedError);
     await expect(service.createFolder(callerFromIdentity(outsider), { sourceId: fixture.sourceId, parentId: null, name: "No" })).rejects.toBeInstanceOf(WorkspaceAccessDeniedError);
   });
+
+  it("keeps sibling positions contiguous across mixed document and folder creation", async () => {
+    const fixture = await setupTreeFixture();
+    const service = hub();
+    const caller = callerFromIdentity(owner);
+    const folderA = await service.createFolder(caller, { sourceId: fixture.sourceId, parentId: fixture.rootFolderId, name: "A" });
+    const docOne = await service.createDocument(caller, {
+      sourceId: fixture.sourceId, parentId: fixture.rootFolderId, title: "One", markdown: "body", metadata: {},
+    });
+    const folderB = await service.createFolder(caller, { sourceId: fixture.sourceId, parentId: fixture.rootFolderId, name: "B" });
+    const docZero = await service.createDocument(caller, {
+      sourceId: fixture.sourceId, parentId: fixture.rootFolderId, title: "Zero", markdown: "body", metadata: {}, position: 0,
+    });
+    const siblings = await new MariaDbUnitOfWork(pool).run(async (repositories) =>
+      (await repositories.tree.listBySource(fixture.sourceId))
+        .filter((node) => node.parentId === fixture.rootFolderId)
+        .sort((left, right) => left.position - right.position),
+    );
+    expect(siblings.map((node) => node.position)).toEqual([0, 1, 2, 3]);
+    expect(siblings.map((node) => node.id)).toEqual([docZero.treeNodeId, folderA.treeNodeId, docOne.treeNodeId, folderB.treeNodeId]);
+  });
 });
 
 describe("hub folder rename", () => {
