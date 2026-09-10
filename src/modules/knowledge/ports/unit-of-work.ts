@@ -3,9 +3,7 @@ import type { DocumentRepository } from "./document-repository";
 import type { RevisionRepository } from "./revision-repository";
 import type { SourcePolicyPort } from "./source-policy";
 import type { TreeRepository } from "./tree-repository";
-import type { WorkspaceRepository } from "@/modules/workspaces/ports/workspace-repository";
 import type { WorkspaceAccessPolicy } from "@/modules/workspaces/ports/workspace-access-policy";
-import type { WorkspaceMembershipRepository } from "@/modules/workspaces/ports/workspace-membership-repository";
 
 export type KnowledgeRepositories = {
   users: UserRepository;
@@ -13,8 +11,6 @@ export type KnowledgeRepositories = {
   revisions: RevisionRepository;
   tree: TreeRepository;
   sourcePolicy: SourcePolicyPort;
-  workspaces: WorkspaceRepository;
-  workspaceMemberships: WorkspaceMembershipRepository;
   workspaceAccess: WorkspaceAccessPolicy;
 };
 

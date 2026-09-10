@@ -1,12 +1,6 @@
-export class DomainError extends Error {
-  readonly code: string;
+import { DomainError } from "@/shared/domain/errors";
 
-  constructor(code: string, message: string) {
-    super(message);
-    this.name = "DomainError";
-    this.code = code;
-  }
-}
+export { DomainError };
 
 export class ValidationError extends DomainError {
   constructor(message: string) {
@@ -47,13 +41,5 @@ export class IdentityError extends DomainError {
   constructor(message: string) {
     super("IDENTITY_ERROR", message);
     this.name = "IdentityError";
-  }
-}
-
-/** The caller is not a member of the resource's Workspace. */
-export class WorkspaceAccessDeniedError extends DomainError {
-  constructor(message = "You do not have access to this Workspace.") {
-    super("WORKSPACE_ACCESS_DENIED", message);
-    this.name = "WorkspaceAccessDeniedError";
   }
 }

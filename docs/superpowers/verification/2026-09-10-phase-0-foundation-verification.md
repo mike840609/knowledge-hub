@@ -18,13 +18,17 @@ Date: 2026-09-10 (Asia/Taipei)
 | `npm run typecheck` | PASS | strict TypeScript check completed with no diagnostics |
 | `npm run lint` | PASS | ESLint completed with zero errors |
 | `npm run test:unit` | PASS | 4 files, 12 tests |
-| `npm run test:integration` | PASS | isolated MariaDB 10.11 database; 3 files, 21 tests |
+| `npm run test:integration` | PASS | isolated MariaDB 10.11 database; 3 files, 22 tests |
 | `npm run build` | PASS | Next.js production build completed |
 | `npm run test:e2e` | PASS | isolated database and production server; Chromium smoke 1/1 |
 
-The integration suites use two real database connections for source-version races, test commit and rollback outcomes, verify migration ledger diagnostics including unknown-manifest rejection, required lifecycle actor columns, Workspace membership and direct UUID access boundaries, same-document current-revision constraints, ownership guards, lifecycle filtering, concurrent tree moves, revision allocation, mapping reappearance, atomic rollback, and metadata-only assets. The browser smoke creates a document in the seeded Workspace, reloads its stable URL, and reaches it again through the source tree while forged identity fields are ignored.
+The integration suites use two real database connections for source-version races, READ COMMITTED isolation semantics (transaction A performs a normal read, transaction B commits a newer `sync_version`, transaction A's subsequent `SELECT ... FOR UPDATE` observes the latest committed value), test commit and rollback outcomes, verify migration ledger diagnostics including unknown-manifest rejection, required lifecycle actor columns, Workspace membership and direct UUID access boundaries, same-document current-revision constraints, ownership guards, lifecycle filtering, concurrent tree moves, revision allocation, mapping reappearance, atomic rollback, and metadata-only assets. Constraint negative tests isolate a single invariant per case (valid `updated_by`, only the targeted CHECK / UNIQUE / FK violated). Knowledge and Sources authorize through the transaction-scoped `WorkspaceAccessPolicy` built from the same-connection membership repository; no nested transactions. The browser smoke creates a document in the seeded Workspace, reloads its stable URL, and reaches it again through the source tree while forged identity fields are ignored.
 
 During final verification, the first browser assertion tried to assert visibility on an HTML `<option>`, which Playwright correctly reports as hidden. The check was changed to assert the selected Workspace value/text while retaining the same user-visible flow; the rerun passed.
+
+## Refresh (review follow-ups)
+
+Re-verified after the review fixes: transaction-scoped `WorkspaceAccessPolicy` (Knowledge/Sources share the same-connection policy, `KnowledgeRepositories` narrowed to `workspaceAccess`), isolated constraint negative tests, the new READ COMMITTED semantics test, `WorkspaceAccessDeniedError` ownership moved to the Workspaces module with `DomainError` shared, identity wording corrected to provider-pure plus application-boundary sync, and the Source-selector contract relaxed to Source navigation. Validation re-run on the PR head: typecheck, lint, unit (4 files, 12 tests), integration (3 files, 22 tests), build, E2E smoke (1/1), `db:migrate` (up to date), `db:seed` twice with local identity enabled, and `git diff --check` clean. Exact head SHA is recorded in the PR description.
 
 ## Delivered boundary
 

@@ -3,7 +3,7 @@ import type { Workspace } from "../domain/workspace";
 import type { WorkspaceAccessPolicy } from "../ports/workspace-access-policy";
 import type { WorkspaceMembershipRepository } from "../ports/workspace-membership-repository";
 import type { WorkspaceUnitOfWork } from "../ports/unit-of-work";
-import { WorkspaceAccessDeniedError } from "@/modules/knowledge/domain/errors";
+import { WorkspaceAccessDeniedError } from "../domain/errors";
 
 export class WorkspaceQueryService {
   constructor(private readonly unitOfWork: WorkspaceUnitOfWork) {}

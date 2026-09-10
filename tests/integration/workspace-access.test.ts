@@ -8,7 +8,7 @@ import { SourceApplicationService } from "@/modules/sources/application/source-v
 import { WorkspaceQueryService } from "@/modules/workspaces/application/workspace-query-service";
 import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 import type { UserIdentity } from "@/modules/identity/domain/user-identity";
-import { WorkspaceAccessDeniedError } from "@/modules/knowledge/domain/errors";
+import { WorkspaceAccessDeniedError } from "@/modules/workspaces/domain/errors";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 
 let pool: Pool;
