@@ -9,6 +9,7 @@ export type SourceEntry = {
   entryType: SourceEntryType;
   contentHash: string | null;
   documentId: string | null;
+  treeNodeId: string | null;
   status: "ACTIVE" | "ARCHIVED";
   updatedBy: string;
   archivedBy: string | null;

@@ -44,7 +44,7 @@ describe("MariaDB schema and migrations", () => {
     const rows = await pool.query<{ table_name: string }[]>("SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name IN ('users','workspaces','workspace_memberships','knowledge_sources','source_entries','knowledge_tree_nodes','knowledge_documents','knowledge_revisions','knowledge_assets','sync_runs')");
     expect(rows.map((row) => row.table_name).sort()).toEqual(["knowledge_assets", "knowledge_documents", "knowledge_revisions", "knowledge_sources", "knowledge_tree_nodes", "source_entries", "sync_runs", "users", "workspace_memberships", "workspaces"]);
     const ledger = await pool.query<{ state: string }[]>("SELECT state FROM schema_migrations ORDER BY version");
-    expect(ledger).toEqual([{ state: "APPLIED" }, { state: "APPLIED" }, { state: "APPLIED" }]);
+    expect(ledger).toEqual([{ state: "APPLIED" }, { state: "APPLIED" }, { state: "APPLIED" }, { state: "APPLIED" }, { state: "APPLIED" }]);
   });
 
   it("records DDL failure and refuses unfinished/checksum-mismatched migrations", async () => {
@@ -108,11 +108,25 @@ describe("MariaDB schema and migrations", () => {
     const firstDoc = await createDocumentFixture(pool, first.source.id, first.folderId);
     const secondDoc = await createDocumentFixture(pool, first.source.id, first.folderId);
     const crossSourceDoc = await createDocumentFixture(pool, second.source.id, second.folderId);
+    const nodeIdFor = async (sourceId: string, documentId: string): Promise<string> => {
+      const rows = await pool.query<{ id: unknown }[]>("SELECT id FROM knowledge_tree_nodes WHERE source_id = ? AND document_id = ?", [sourceId, documentId]);
+      return String(rows[0].id);
+    };
+    const firstNode = await nodeIdFor(first.source.id, firstDoc.documentId);
+    const secondNode = await nodeIdFor(first.source.id, secondDoc.documentId);
+    const crossSourceNode = await nodeIdFor(second.source.id, crossSourceDoc.documentId);
     await createEntryFixture(pool, first.source.id, firstDoc.documentId, "same-external");
-    await expect(pool.query("INSERT INTO source_entries (id, source_id, external_id, source_path, entry_type, content_hash, document_id, status, updated_by) VALUES (UUID(), ?, 'same-external', 'other.md', 'DOCUMENT', NULL, ?, 'ACTIVE', ?)", [first.source.id, secondDoc.documentId, fixtureIdentity.id])).rejects.toBeTruthy();
+    await expect(pool.query("INSERT INTO source_entries (id, source_id, external_id, source_path, entry_type, content_hash, document_id, tree_node_id, status, updated_by) VALUES (UUID(), ?, 'same-external', 'other.md', 'DOCUMENT', NULL, ?, ?, 'ACTIVE', ?)", [first.source.id, secondDoc.documentId, secondNode, fixtureIdentity.id])).rejects.toBeTruthy();
     await createEntryFixture(pool, first.source.id, secondDoc.documentId, "different-external");
-    await pool.query("INSERT INTO source_entries (id, source_id, external_id, source_path, entry_type, content_hash, document_id, status, updated_by) VALUES (UUID(), ?, 'same-external', 'other.md', 'DOCUMENT', NULL, ?, 'ACTIVE', ?)", [second.source.id, crossSourceDoc.documentId, fixtureIdentity.id]);
-    await pool.query("INSERT INTO source_entries (id, source_id, external_id, source_path, entry_type, content_hash, document_id, status, updated_by) VALUES (UUID(), ?, NULL, 'folder-a', 'FOLDER', NULL, NULL, 'ACTIVE', ?), (UUID(), ?, NULL, 'folder-b', 'FOLDER', NULL, NULL, 'ACTIVE', ?)", [first.source.id, fixtureIdentity.id, first.source.id, fixtureIdentity.id]);
+    await pool.query("INSERT INTO source_entries (id, source_id, external_id, source_path, entry_type, content_hash, document_id, tree_node_id, status, updated_by) VALUES (UUID(), ?, 'same-external', 'other.md', 'DOCUMENT', NULL, ?, ?, 'ACTIVE', ?)", [second.source.id, crossSourceDoc.documentId, crossSourceNode, fixtureIdentity.id]);
+    const extraFolderA = "0199f000-0000-7000-8000-000000000981";
+    const extraFolderB = "0199f000-0000-7000-8000-000000000982";
+    await new MariaDbUnitOfWork(pool).run(async ({ tree }) => {
+      await tree.insert({ id: extraFolderA, sourceId: first.source.id, parentId: null, nodeType: "FOLDER", name: "Extra A", documentId: null, position: 1, status: "ACTIVE", updatedBy: fixtureIdentity.id, archivedBy: null, archivedAt: null });
+      await tree.insert({ id: extraFolderB, sourceId: first.source.id, parentId: null, nodeType: "FOLDER", name: "Extra B", documentId: null, position: 2, status: "ACTIVE", updatedBy: fixtureIdentity.id, archivedBy: null, archivedAt: null });
+    });
+    await pool.query("INSERT INTO source_entries (id, source_id, external_id, source_path, entry_type, content_hash, document_id, tree_node_id, status, updated_by) VALUES (UUID(), ?, NULL, 'folder-a', 'FOLDER', NULL, NULL, ?, 'ACTIVE', ?), (UUID(), ?, NULL, 'folder-b', 'FOLDER', NULL, NULL, ?, 'ACTIVE', ?)", [first.source.id, extraFolderA, fixtureIdentity.id, first.source.id, extraFolderB, fixtureIdentity.id]);
+    expect(firstNode).not.toBe(secondNode);
   });
 
   it("keeps assets metadata-only", async () => {

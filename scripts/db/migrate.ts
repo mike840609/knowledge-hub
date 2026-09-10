@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
-import mariadb, { type Pool } from "mariadb";
+import mariadb, { type Pool, type PoolConnection } from "mariadb";
 import { adminDatabaseConfig, databaseConfig } from "@/infrastructure/database/mariadb/config";
 import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
 import { migrations } from "@/infrastructure/database/mariadb/migrations";
-import type { Migration } from "@/infrastructure/database/mariadb/migrations/types";
+import type { Migration, MigrationReadConnection } from "@/infrastructure/database/mariadb/migrations/types";
 
 export type IsolatedDatabaseHandle = { kind: "test" | "e2e"; databaseName: string; ownershipToken: string };
 const activeDatabaseHandles = new Map<string, IsolatedDatabaseHandle>();
@@ -25,7 +25,35 @@ export async function ensureMigrationLedger(pool: Pool): Promise<void> {
   ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
 }
 
-export async function runMigrations(pool: Pool, items: readonly Migration[] = migrations): Promise<void> {
+const READ_ONLY_STATEMENT = /^\s*(SELECT|SHOW|DESCRIBE|DESC|EXPLAIN)\b/i;
+
+function asReadOnly(connection: PoolConnection): MigrationReadConnection {
+  return {
+    query: async <T>(sql: string, params?: unknown[]): Promise<T> => {
+      if (!READ_ONLY_STATEMENT.test(sql)) {
+        throw new Error("Migration pre-apply hooks accept read-only queries (SELECT/SHOW/DESCRIBE/EXPLAIN) only.");
+      }
+      return connection.query(sql, params) as Promise<T>;
+    },
+  };
+}
+
+export type MigrateOptions = { to?: number };
+
+function resolveTarget(items: readonly Migration[], appliedVersions: number[], to: number | undefined): number | undefined {
+  if (to === undefined) return undefined;
+  if (!Number.isInteger(to) || to <= 0) throw new Error(`Invalid migration target: ${String(to)}. Expected a positive migration version.`);
+  if (!items.some((migration) => migration.version === to)) {
+    throw new Error(`Migration target ${to} is not a known migration version.`);
+  }
+  const above = appliedVersions.filter((version) => version > to);
+  if (above.length > 0) {
+    throw new Error(`Migration target ${to} is below already-applied migration ${Math.min(...above)}; explicit DDL/ledger repair is required instead of a target downgrade.`);
+  }
+  return to;
+}
+
+export async function runMigrations(pool: Pool, items: readonly Migration[] = migrations, options: MigrateOptions = {}): Promise<void> {
   await ensureMigrationLedger(pool);
   const connection = await pool.getConnection();
   const lockName = "hcm_km_schema_migrations";
@@ -41,8 +69,10 @@ export async function runMigrations(pool: Pool, items: readonly Migration[] = mi
       if (!expectedVersions.has(Number(row.version))) throw new Error(`Database contains migration ${row.version}, which is not present in the current migration manifest.`);
       if (row.state !== "APPLIED") throw new Error(`Migration ${row.version} is recorded as ${row.state}; rebuild the disposable database or repair it explicitly before continuing.`);
     }
+    const target = resolveTarget(items, applied.map((row) => Number(row.version)), options.to);
+    const executable = target === undefined ? items : items.filter((migration) => migration.version <= target);
     const appliedByVersion = new Map(applied.map((row) => [Number(row.version), row]));
-    for (const migration of items) {
+    for (const migration of executable) {
       const existing = appliedByVersion.get(migration.version);
       const expectedChecksum = checksum(migration);
       if (existing) {
@@ -54,6 +84,7 @@ export async function runMigrations(pool: Pool, items: readonly Migration[] = mi
       }
       const higherApplied = applied.some((row) => Number(row.version) > migration.version);
       if (higherApplied) throw new Error(`Migration ${migration.version} is missing while a later migration is recorded.`);
+      if (migration.beforeApply) await migration.beforeApply(asReadOnly(connection));
       await connection.query(
         "INSERT INTO schema_migrations (version, name, checksum, state, error_message, started_at, applied_at) VALUES (?, ?, ?, 'RUNNING', NULL, CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6))",
         [migration.version, migration.name, expectedChecksum],
@@ -73,12 +104,47 @@ export async function runMigrations(pool: Pool, items: readonly Migration[] = mi
   }
 }
 
+const MIGRATE_HELP = `Usage: npm run db:migrate [-- --to <version>] [--help]
+
+Applies the committed migration manifest in version order under the schema
+migration lock. The ledger is always validated against the full manifest;
+--to only limits how far forward this run executes.
+
+  --to <version>   Apply pending migrations up to and including <version>.
+                   Targets below an already-applied version are rejected;
+                   downgrades require explicit DDL/ledger repair, never a
+                   target flag. Unknown versions are rejected.
+
+Phase 1 populated-upgrade runbook (stop canonical writes + back up first,
+hold write quiescence through the final step):
+
+  npm run db:migrate -- --to 4
+  npx tsx scripts/db/backfill-source-tree-mapping.ts --mapping /path/to/verified-mapping.json --dry-run
+  npx tsx scripts/db/backfill-source-tree-mapping.ts --mapping /path/to/verified-mapping.json --apply
+  npm run db:migrate -- --to 5
+
+An untargeted run on a populated database safely stops at the 005 readiness
+gate (004 stays APPLIED, 005 gets no ledger row); backfill, then rerun.
+DDL failures keep the FAILED/RUNNING ledger diagnostics: repair the schema
+explicitly and clear only the affected ledger row — never edit checksums.
+`;
+
 async function main(): Promise<void> {
+  const args = process.argv.slice(2);
+  if (args.includes("--help") || args.includes("-h")) {
+    console.log(MIGRATE_HELP);
+    return;
+  }
+  const toIndex = args.indexOf("--to");
+  const to = toIndex === -1 ? undefined : Number(args[toIndex + 1]);
+  if (toIndex !== -1 && (args[toIndex + 1] === undefined || !Number.isInteger(to))) {
+    throw new Error("Invalid --to value. Expected: npm run db:migrate -- --to <version>.");
+  }
   const kind = process.env.KM_MIGRATION_TARGET === "test" ? "test" : process.env.KM_MIGRATION_TARGET === "e2e" ? "e2e" : "dev";
   const pool = createDatabasePool(databaseConfig(kind));
   try {
-    await runMigrations(pool);
-    console.log(`Migrations are up to date for ${databaseConfig(kind).database}.`);
+    await runMigrations(pool, migrations, { to });
+    console.log(`Migrations are up to date for ${databaseConfig(kind).database}${to === undefined ? "" : ` (target ${to})`}.`);
   } finally {
     await pool.end();
   }

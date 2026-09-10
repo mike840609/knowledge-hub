@@ -68,7 +68,18 @@ export async function createDocumentForAnySource(pool: Pool, sourceId: string, f
 export async function createEntryFixture(pool: Pool, sourceId: string, documentId: string, externalId = `external-${uuidv7()}`, contentHash: string | null = null) {
   const entryId = uuidv7();
   await new MariaDbUnitOfWork(pool).run(async (repositories) => {
-    await repositories.entries.insert({ id: entryId, sourceId, externalId, sourcePath: "docs/fixture.md", entryType: "DOCUMENT", contentHash, documentId, status: "ACTIVE", updatedBy: fixtureIdentity.id, archivedBy: null, archivedAt: null, firstSeenAt: new Date(), lastSeenAt: new Date() });
+    const nodes = await pool.query<{ id: unknown }[]>("SELECT id FROM knowledge_tree_nodes WHERE source_id = ? AND document_id = ?", [sourceId, documentId]);
+    if (nodes.length !== 1) throw new Error(`Cannot create a mapped DOCUMENT entry without exactly one tree node for document ${documentId}.`);
+    await repositories.entries.insert({ id: entryId, sourceId, externalId, sourcePath: "docs/fixture.md", entryType: "DOCUMENT", contentHash, documentId, treeNodeId: String(nodes[0].id), status: "ACTIVE", updatedBy: fixtureIdentity.id, archivedBy: null, archivedAt: null, firstSeenAt: new Date(), lastSeenAt: new Date() });
   });
   return { entryId, externalId };
+}
+
+export async function createFolderEntryFixture(pool: Pool, sourceId: string, treeNodeId: string, sourcePath = `docs/folder-${uuidv7()}`) {
+  const entryId = uuidv7();
+  const now = new Date();
+  await new MariaDbUnitOfWork(pool).run(async (repositories) => {
+    await repositories.entries.insert({ id: entryId, sourceId, externalId: null, sourcePath, entryType: "FOLDER", contentHash: null, documentId: null, treeNodeId, status: "ACTIVE", updatedBy: fixtureIdentity.id, archivedBy: null, archivedAt: null, firstSeenAt: now, lastSeenAt: now });
+  });
+  return { entryId };
 }

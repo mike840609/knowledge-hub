@@ -8,6 +8,7 @@ function mapEntry(row: DbRow): SourceEntry {
     id: String(row.id), sourceId: String(row.source_id), externalId: row.external_id === null ? null : String(row.external_id),
     sourcePath: String(row.source_path), entryType: String(row.entry_type) as SourceEntryType,
     contentHash: row.content_hash === null ? null : String(row.content_hash), documentId: row.document_id === null ? null : String(row.document_id),
+    treeNodeId: row.tree_node_id === null || row.tree_node_id === undefined ? null : String(row.tree_node_id),
     status: String(row.status) as "ACTIVE" | "ARCHIVED", updatedBy: asRequiredString(row.updated_by, "source entry updated_by"),
     archivedBy: row.archived_by === null ? null : String(row.archived_by), archivedAt: row.archived_at === null ? null : asDate(row.archived_at),
     firstSeenAt: asDate(row.first_seen_at), lastSeenAt: asDate(row.last_seen_at),
@@ -29,16 +30,16 @@ export class MariaDbEntryRepository implements EntryRepository {
 
   async insert(entry: SourceEntry): Promise<void> {
     await this.connection.query(
-      `INSERT INTO source_entries (id, source_id, external_id, source_path, entry_type, content_hash, document_id, status, updated_by, archived_by, archived_at, first_seen_at, last_seen_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [entry.id, entry.sourceId, entry.externalId, entry.sourcePath, entry.entryType, entry.contentHash, entry.documentId, entry.status, entry.updatedBy, entry.archivedBy, entry.archivedAt, entry.firstSeenAt, entry.lastSeenAt],
+      `INSERT INTO source_entries (id, source_id, external_id, source_path, entry_type, content_hash, document_id, tree_node_id, status, updated_by, archived_by, archived_at, first_seen_at, last_seen_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [entry.id, entry.sourceId, entry.externalId, entry.sourcePath, entry.entryType, entry.contentHash, entry.documentId, entry.treeNodeId, entry.status, entry.updatedBy, entry.archivedBy, entry.archivedAt, entry.firstSeenAt, entry.lastSeenAt],
     );
   }
 
   async update(entry: SourceEntry): Promise<void> {
     await this.connection.query(
-      `UPDATE source_entries SET external_id = ?, source_path = ?, entry_type = ?, content_hash = ?, document_id = ?, status = ?, updated_by = ?, archived_by = ?, archived_at = ?, last_seen_at = ? WHERE id = ?`,
-      [entry.externalId, entry.sourcePath, entry.entryType, entry.contentHash, entry.documentId, entry.status, entry.updatedBy, entry.archivedBy, entry.archivedAt, entry.lastSeenAt, entry.id],
+      `UPDATE source_entries SET external_id = ?, source_path = ?, entry_type = ?, content_hash = ?, document_id = ?, tree_node_id = ?, status = ?, updated_by = ?, archived_by = ?, archived_at = ?, last_seen_at = ? WHERE id = ?`,
+      [entry.externalId, entry.sourcePath, entry.entryType, entry.contentHash, entry.documentId, entry.treeNodeId, entry.status, entry.updatedBy, entry.archivedBy, entry.archivedAt, entry.lastSeenAt, entry.id],
     );
   }
 }
