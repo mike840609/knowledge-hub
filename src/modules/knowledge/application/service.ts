@@ -1,6 +1,7 @@
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { uuidv7 } from "@/shared/ids/uuidv7";
-import { contentFingerprint, normalizeContent, sameContent, type ContentInput } from "../domain/content";
+import { fingerprintRevisionContent, type ContentInput } from "../domain/content";
+import { isRevisionContentUnchanged } from "../domain/revision";
 import { DocumentNotFoundError, IntegrityViolationError, SourceArchivedError, SourceNotFoundError, SourceReadOnlyError, TreeCycleError, InvalidParentError, TreeNodeNotFoundError, ValidationError } from "../domain/errors";
 import type { KnowledgeDocument } from "../domain/document";
 import type { KnowledgeRevision } from "../domain/revision";
@@ -67,7 +68,7 @@ export class KnowledgeApplicationService implements ControlledKnowledgeOperation
   constructor(unitOfWork: KnowledgeUnitOfWork) { this.unitOfWork = unitOfWork; }
 
   async createHubManagedDocument(caller: CallerContext, input: CreateDocumentInput): Promise<{ documentId: string; revisionId: string }> {
-    const content = normalizeContent(input);
+    const { normalized: content, contentHash } = fingerprintRevisionContent(input);
     return this.unitOfWork.run(async (repositories) => {
       await repositories.users.upsertIdentity(caller.identity);
       const source = requireHubSource(await requireSourceAccess(repositories, caller, input.sourceId, true));
@@ -76,7 +77,7 @@ export class KnowledgeApplicationService implements ControlledKnowledgeOperation
       const documentId = uuidv7();
       const revisionId = uuidv7();
       await repositories.documents.insertDraft({ id: documentId, sourceId: source.id, currentRevisionId: null, status: "ACTIVE", createdBy: caller.identity.id, updatedBy: caller.identity.id, archivedBy: null, archivedAt: null, createdAt: now, updatedAt: now });
-      await repositories.revisions.insert({ id: revisionId, documentId, revisionNo: 1, ...content, contentHash: contentFingerprint(content), createdBy: caller.identity.id, createdAt: now });
+      await repositories.revisions.insert({ id: revisionId, documentId, revisionNo: 1, ...content, contentHash, createdBy: caller.identity.id, createdAt: now });
       await repositories.documents.setCurrentRevision(documentId, revisionId, caller.identity.id);
       await repositories.tree.insert({ id: uuidv7(), sourceId: source.id, parentId: input.parentId ?? null, nodeType: "DOCUMENT", name: null, documentId, position: 0, status: "ACTIVE", updatedBy: caller.identity.id, archivedBy: null, archivedAt: null });
       await repositories.documents.assertComplete(documentId);
@@ -112,7 +113,7 @@ export class KnowledgeApplicationService implements ControlledKnowledgeOperation
   }
 
   async createRevision(caller: CallerContext, documentId: string, input: ContentInput): Promise<RevisionResult> {
-    const content = normalizeContent(input);
+    const { normalized: content, contentHash } = fingerprintRevisionContent(input);
     return this.unitOfWork.run(async (repositories) => {
       await repositories.users.upsertIdentity(caller.identity);
       const existing = await repositories.documents.findById(documentId);
@@ -122,10 +123,10 @@ export class KnowledgeApplicationService implements ControlledKnowledgeOperation
       if (!document) throw new DocumentNotFoundError();
       const current = await repositories.revisions.findCurrent(document.id);
       if (!current) throw new IntegrityViolationError("Document current revision is missing.");
-      if (sameContent(current, content)) return { documentId, revisionId: current.id, revisionNo: current.revisionNo, changed: false };
+      if (isRevisionContentUnchanged(current, input)) return { documentId, revisionId: current.id, revisionNo: current.revisionNo, changed: false };
       const revisionId = uuidv7();
       const revisionNo = await repositories.revisions.nextRevisionNumber(document.id);
-      await repositories.revisions.insert({ id: revisionId, documentId, revisionNo, ...content, contentHash: contentFingerprint(content), createdBy: caller.identity.id, createdAt: new Date() });
+      await repositories.revisions.insert({ id: revisionId, documentId, revisionNo, ...content, contentHash, createdBy: caller.identity.id, createdAt: new Date() });
       await repositories.documents.setCurrentRevision(document.id, revisionId, caller.identity.id);
       await repositories.documents.assertComplete(document.id);
       return { documentId, revisionId, revisionNo, changed: true };

@@ -1,5 +1,6 @@
 import { uuidv7 } from "@/shared/ids/uuidv7";
-import { contentFingerprint, normalizeContent, sameContent, type ContentInput } from "../domain/content";
+import { fingerprintRevisionContent, type ContentInput } from "../domain/content";
+import { isRevisionContentUnchanged } from "../domain/revision";
 import { DocumentNotFoundError, IntegrityError, IntegrityViolationError } from "../domain/errors";
 import type { KnowledgeRepositories } from "../ports/unit-of-work";
 import { assertActiveDocumentPlacement } from "./tree-validation";
@@ -35,18 +36,18 @@ export async function applySourceManagedMutation(
   }
   const document = await repositories.documents.lockById(input.documentId);
   if (!document) throw new DocumentNotFoundError();
-  const content = normalizeContent(input.content);
+  const { normalized: content, contentHash } = fingerprintRevisionContent(input.content);
   const current = await repositories.revisions.findCurrent(document.id);
   if (!current) throw new IntegrityViolationError("Document has no current revision.");
   let revisionId = current.id;
   let revisionNo = current.revisionNo;
-  const changed = !sameContent(current, content);
+  const changed = !isRevisionContentUnchanged(current, input.content);
   if (changed) {
     revisionId = uuidv7();
     revisionNo = await repositories.revisions.nextRevisionNumber(document.id);
     await repositories.revisions.insert({
       id: revisionId, documentId: document.id, revisionNo, ...content,
-      contentHash: contentFingerprint(content), createdBy: input.callerId, createdAt: new Date(),
+      contentHash, createdBy: input.callerId, createdAt: new Date(),
     });
       await repositories.documents.setCurrentRevision(document.id, revisionId, input.callerId);
   }

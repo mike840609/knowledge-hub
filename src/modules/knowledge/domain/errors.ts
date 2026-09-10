@@ -37,7 +37,7 @@ export class IntegrityError extends DomainError {
  * keep matching while codes distinguish title/metadata causes.
  */
 export class KnowledgeError extends ValidationError {
-  constructor(code: string, message: string) {
+  constructor(code: string, message: string = code) {
     super(message, code);
     this.name = "KnowledgeError";
   }

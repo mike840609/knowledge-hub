@@ -4,5 +4,6 @@ export interface RevisionRepository {
   insert(revision: KnowledgeRevision): Promise<void>;
   findById(id: string): Promise<KnowledgeRevision | null>;
   findCurrent(documentId: string): Promise<KnowledgeRevision | null>;
+  listByDocument(documentId: string): Promise<KnowledgeRevision[]>;
   nextRevisionNumber(documentId: string): Promise<number>;
 }
