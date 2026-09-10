@@ -4,19 +4,19 @@
 | --- | --- |
 | 文件日期 | 2026-09-10 |
 | 文件類型 | Design Spec；不包含 Implementation Plan |
-| 決策狀態 | 彙整原對話已確認的 Phase 0 設計決策 |
+| 決策狀態 | Approved Design；已整合 Workspace access-boundary correction |
 | 交付狀態 | 文件完成並經自我審查；不代表系統已實作或通過驗收 |
-| 決策來源 | [KM 各階段實作規劃 - 全部重做](chatgpt-conversation://6a990399-5d14-83e9-8e46-8091dce556fd) 與本次規格產出要求 |
+| 決策來源 | [KM 各階段實作規劃 - 全部重做](chatgpt-conversation://6a990399-5d14-83e9-8e46-8091dce556fd) 與 [Workspace Access Boundary Amendment](2026-09-10-workspace-access-boundary-amendment.md) |
 
 ## 1. 文件效力與範圍
 
-本規格定義新版 Knowledge Hub 的 Phase 0 foundation，供後續實作計畫與各階段設計引用。內容以原對話最後確認的決策為準，不沿用舊 HRKM 的 Refine CMS 架構或依賴清單，也不把對話中曾討論但已被取代的候選方案視為決策。
+本規格定義新版 Knowledge Hub 的 Phase 0 foundation，供後續實作計畫與各階段設計引用。2026-09-10 architecture review 已把原本以 `org_code` 作 Knowledge 上層 scope 的設計修正為 **Workspace access boundary**；本文件已直接整合該修正，因此本文是 Phase 0 current canonical contract，不需要由實作者自行把舊 org/source 段落與 amendment 拼接。
 
-Phase 0 交付可啟動、可測試的 Next.js modular monolith 基礎：技術骨架、三個核心模組、最小身分介面、核心 schema、repository 與 transaction 邊界、domain invariants，以及最小建立／讀取／Tree 瀏覽 smoke flow。完整 Knowledge 功能在 Phase 1 展開，完整 Folder Sync 在 Phase 2 實作。
+Phase 0 交付可啟動、可測試的 Next.js modular monolith 基礎：技術骨架、四個核心模組、最小身分介面、Workspace access foundation、核心 schema、repository 與 transaction 邊界、domain invariants，以及最小建立／讀取／Workspace → Source → Tree 瀏覽 smoke flow。完整 Knowledge 功能在 Phase 1 展開，完整 Folder Sync 在 Phase 2 實作。
 
 本文件區分三種內容：
 
-- **Phase 0 必須交付**：骨架、schema、domain representation、基礎 application services、安全機制與測試。
+- **Phase 0 必須交付**：骨架、schema、domain representation、Workspace membership foundation、基礎 application services、安全機制與測試。
 - **後續階段必須遵守的契約**：例如 Folder Sync 的 Preview → Confirm → Apply；現在定義規則，不提前完成產品功能。
 - **一致性釐清**：把已確認規則的必要含義寫清楚，例如文章標題修改屬於內容版本，以及失敗紀錄不能依賴已回滾的交易。這些不是新增產品功能。
 
@@ -25,11 +25,12 @@ Phase 0 交付可啟動、可測試的 Next.js modular monolith 基礎：技術�
 ### 2.1 目標
 
 1. 建立 source-agnostic Knowledge Hub，接受各團隊不同 LLM Wiki／一般 Markdown folder 來源，不綁定 Obsidian 或特定 generator。
-2. 以 `org_code → KnowledgeSource → Folder / Document Tree` 表達治理歸屬與瀏覽結構。
-3. 分離 Source、Tree、Document identity 與 Revision，確保路徑改變不破壞文件引用。
-4. 讓 Human Web、未來 API 與 MCP 共用 application services，核心不依賴 UI 或接入協定。
-5. 以 MariaDB transaction、關聯約束與測試保護 canonical Knowledge 的一致性。
-6. 外部開發只依賴 local/mock identity，未來以公司 SSO adapter 替換身分來源。
+2. 以 `Workspace → KnowledgeSource → Folder / Document Tree` 表達 Knowledge container、來源與瀏覽結構；`User.org_code` 只保留為公司 organization identity attribute。
+3. 以 `WorkspaceMembership` 建立最小 access foundation，使跨 org collaboration 合法、同 org 不自動取得 Knowledge access。
+4. 分離 Source、Tree、Document identity 與 Revision，確保路徑改變不破壞文件引用。
+5. 讓 Human Web、未來 API 與 MCP 共用 application services，核心不依賴 UI 或接入協定。
+6. 以 MariaDB transaction、關聯約束與測試保護 canonical Knowledge 的一致性。
+7. 外部開發只依賴 local/mock identity，未來以公司 SSO adapter 替換身分來源。
 
 ### 2.2 非目標
 
@@ -41,12 +42,13 @@ Phase 0 不實作以下項目：
 | ZIP 匯入 | 已排除於 Folder Sync MVP；使用直接選取整個 folder |
 | 完整文件管理與 Tree 產品功能 | Phase 1；Phase 0 僅提供驗證 foundation 的最小流程 |
 | 完整單篇上傳、Web authoring 與 rich Markdown editor | Phase 5；Phase 0 定義可編輯規則並驗證最小建立／revision 行為 |
+| Workspace provisioning／rename／archive／restore 管理 UI | Phase 3；Phase 0 只建立最小 Workspace schema、seed 與 membership guard |
+| 完整 Workspace roles/capabilities、membership administration、Team/SSO Group mapping、granular ACL | Phase 3；Phase 0 只建立 membership foundation |
 | tKMS API、Publishing Tree 與發布流程 | Phase 6 |
 | MCP server / tools / transport | Phase 7 |
 | Embedding、Vector DB、Elasticsearch、語意／混合搜尋 | Phase 8；Phase 0 不選定未來 retrieval backend |
 | Agent Memory、Knowledge Relations、Context Bundles | Phase 9 |
-| 公司 SSO 整合 | 進入公司環境後補；不得阻塞外部 MVP |
-| 完整 Team membership、複雜 ACL、跨組織分享 | 後續治理設計；Phase 0 保留身分與 org 邊界 |
+| 公司 SSO 整合 | 進入公司環境後補；正式 company multi-user governance 由 Phase 3 完成 |
 | Binary asset storage | 不保存至 MariaDB、local filesystem 或 object storage；只存 metadata/reference |
 | Hard delete | MVP 不提供 |
 | 雙向同步、Markdown merge、partial sync success | MVP 不提供 |
@@ -65,9 +67,10 @@ Phase 0 不實作以下項目：
 | UI | Tailwind CSS、shadcn/ui；原 UI 選型以 Base UI 為預設方向 |
 | Canonical database | MariaDB 10.11 |
 | 身分 | Local / Mock Identity Provider，後續 Company SSO adapter |
+| Knowledge access scope | Workspace + WorkspaceMembership |
 | Internal IDs | Application 產生 UUIDv7；MariaDB 使用 native `UUID` type（16-byte storage） |
 
-除 MariaDB 10.11 外，本規格不新增 ORM、測試框架或部署平台選型；這些屬於後續 implementation plan 的落地細節，不改變本文件的架構契約。所有 Hub 內部 stable IDs（User、Source、SourceEntry、TreeNode、Document、Revision、Asset、SyncRun）採同一 UUIDv7 contract；不使用 path、title、hash 或 database auto-increment 冒充 domain identity。MariaDB 10.11 已提供 native `UUID` type，因此本基線不使用 `CHAR(36)`，也不要求 application 手動維護 `BINARY(16)` byte layout。
+除 MariaDB 10.11 外，本規格不新增 ORM、測試框架或部署平台選型；這些屬於後續 implementation plan 的落地細節，不改變本文件的架構契約。所有 Hub 內部 stable entity IDs（User、Workspace、Source、SourceEntry、TreeNode、Document、Revision、Asset、SyncRun）採同一 UUIDv7 contract；`WorkspaceMembership` 是 association，使用 `(workspace_id, user_id)` composite key，不要求額外 UUID。不得使用 path、title、hash 或 database auto-increment 冒充 domain identity。MariaDB 10.11 已提供 native `UUID` type，因此本基線不使用 `CHAR(36)`，也不要求 application 手動維護 `BINARY(16)` byte layout。
 
 ### 3.2 分層與依賴
 
@@ -82,51 +85,65 @@ Next.js pages / routes / server actions
               ▼
        Application Services
               │
-       ┌──────┴──────┐
-       ▼             ▼
-    Sources ────► Knowledge
-       │             │
-       └──────┬──────┘
-              ▼
-      Domain + repository ports
-              ▲
-              │ implemented by
-      MariaDB infrastructure
-              │
-              ▼
-         MariaDB 10.11
+       ┌──────┼──────────┐
+       ▼      ▼          ▼
+ Workspaces  Sources ──► Knowledge
+       │      │          │
+       └──────┴────┬─────┘
+                   ▼
+         Domain + repository ports
+                   ▲
+                   │ implemented by
+          MariaDB infrastructure
+                   │
+                   ▼
+              MariaDB 10.11
 ```
 
 部署上是一個 Next.js application；程式內以 module 與 layer 分工，不透過跨服務 HTTP 切開同一個 transaction。Domain 不依賴 Next.js、React、SQL、SSO token、MCP 或來源掃描程式。
 
-Web adapter 負責接收請求、取得可信 identity、建立 `CallerContext`、呼叫 application service 與呈現結果。不得在頁面直接操作 ORM／資料庫來取代 application service。UI error boundary 不負責資料回滾；回滾由 application transaction 邊界處理。
+Web adapter 負責接收請求、取得可信 identity、建立 `CallerContext`、呼叫 application service 與呈現結果。不得在頁面直接操作 ORM／資料庫來取代 application service。UI 的 Workspace selector 只代表 navigation state，不是 authorization evidence；resource operation 必須由 application service 反查 authoritative Source → Workspace relationship 再執行 policy。UI error boundary 不負責資料回滾；回滾由 application transaction 邊界處理。
 
-MariaDB 是 Hub 內 canonical state 的儲存位置。`SOURCE_MANAGED` 表示外部來源控制內容與 hierarchy 的更新權；它不表示 Web 或未來 Agent 應繞過 Hub 直接讀取外部 folder。
+MariaDB 是 Hub 內 canonical state 的儲存位置。`SOURCE_MANAGED` 表示外部來源控制內容與 hierarchy 的更新權；它不表示 Web 或未來 Agent 應繞過 Hub 直接讀取外部 folder，也不等於 caller 的 access policy。
 
 ## 4. 核心 Domain 規則
 
-### 4.1 組織、來源與樹
+### 4.1 User、Workspace、來源與樹
 
 ```text
-Organization (org_code)
-  └── KnowledgeSource
-        ├── SourceEntry ─────────────────────┐
-        ├── KnowledgeAsset metadata         │
-        └── KnowledgeTreeNode               │
-              ├── FOLDER                    │
-              └── DOCUMENT ─────────────────┤
-                                            ▼
-                                    KnowledgeDocument
-                                            │
-                                            ▼
-                                    KnowledgeRevision
+User
+├── emp_id
+├── name
+└── org_code                     ← company organization identity attribute
+
+User
+  └── WorkspaceMembership
+          │
+          ▼
+      Workspace                  ← Knowledge container + basic access scope
+          │
+          └── KnowledgeSource
+                ├── SourceEntry ─────────────────────┐
+                ├── KnowledgeAsset metadata         │
+                └── KnowledgeTreeNode               │
+                      ├── FOLDER                    │
+                      └── DOCUMENT ─────────────────┤
+                                                    ▼
+                                            KnowledgeDocument
+                                                    │
+                                                    ▼
+                                            KnowledgeRevision
 ```
 
-- 每個 Source 只有一個 `org_code` owner；一個 org 可以有多個 Source。不建立 multi-owner source。
+- 一個 User 可以屬於多個 Workspace；一個 Workspace 可以包含不同 `org_code` 的 User。
+- `User.org_code` 描述公司組織歸屬，不直接作 Knowledge allow/deny predicate；same org 不自動 allow，cross org 不自動 deny。
+- 每個 Source 必須且只屬於一個 `workspace_id`；一個 Workspace 可以有多個 Source。
+- Phase 0 不要求 Workspace 綁定單一 owner org。若未來治理需要 accountable org/team，Phase 3 再設計 metadata，且不得把治理 metadata 當 authorization shortcut。
 - 每份 Document 必須且只屬於一個 Source，包括單篇上傳與 Web 建立的文件。
+- Document 不重複保存 `workspace_id`；其 scope 由 `Document → Source → Workspace` 推導。
 - Folder 是純 hierarchy node，不建立假的空白 KnowledgeDocument。
+- Source 本身仍是該 Source 的 logical Tree root；Workspace 不是 synthetic Tree folder。
 - Tree 表達位置；Document 表達穩定身分；Revision 表達內容版本。
-- `org_code` 是歸屬／治理邊界，不等於「同 org 自動可讀全部文件」的授權政策。完整存取規則由後續治理階段定義。
 
 ### 4.2 Source type 與 ownership
 
@@ -136,7 +153,7 @@ Organization (org_code)
 | `FILE_UPLOAD` | `HUB_MANAGED` | 單篇匯入後由 Hub 管理，可編輯並建立 revision；原檔不再持續控制內容 |
 | `HUB` | `HUB_MANAGED` | Web 建立的文件由 Hub 管理，可編輯並建立 revision |
 
-Ownership 儲存在 Source，Document 透過 `source_id` 取得有效 ownership，不另維護一份可能互相衝突的 document ownership。
+Ownership 儲存在 Source，Document 透過 `source_id` 取得有效 ownership，不另維護一份可能互相衝突的 document ownership。Workspace access 與 Source ownership 是兩個獨立判斷：前者回答 caller 能否進入該 Knowledge scope，後者回答內容由外部來源或 Hub 控制更新。
 
 `SOURCE_MANAGED` 的唯讀規則必須在 application service 強制執行，不能只隱藏 UI 按鈕。一般 Hub 編輯、rename、move 或刪除操作不得修改來源鏡像；同步流程可以透過受控的 Knowledge application operations 更新、archive 或 restore。
 
@@ -144,7 +161,7 @@ Ownership 儲存在 Source，Document 透過 `source_id` 取得有效 ownership�
 
 ### 4.3 穩定 ID 與 SourceEntry
 
-`KnowledgeDocument.id` 不依賴檔名、path、TreeNode ID、generator ID 或外部發布系統 ID。既有文件在 rename、move、revision、archive／restore 後保留原 ID。
+`KnowledgeDocument.id` 不依賴檔名、path、TreeNode ID、Workspace ID、generator ID 或外部發布系統 ID。既有文件在 rename、move、revision、archive／restore 後保留原 ID。
 
 `SourceEntry` 保存來源 entry 與 Document 的 mapping：來源有 stable `external_id` 時優先使用；沒有時由 Hub 維護 mapping。`source_path` 只是 locator，不能直接作為 Document ID。來源不必具有特定 frontmatter ID，也不能要求所有 generator 使用同一種格式。
 
@@ -180,6 +197,8 @@ Knowledge lifecycle 只有 `ACTIVE` 與 `ARCHIVED`。對話中的「missing」�
 
 所有可進入 `ARCHIVED` 的 canonical entity（KnowledgeSource、SourceEntry、KnowledgeTreeNode、KnowledgeDocument）必須保存 lifecycle provenance：`updated_by`、`archived_by nullable`、`archived_at nullable`。Archive 時同交易寫入 status、`updated_by`、`archived_by`、`archived_at`；restore 時 status 回到 ACTIVE、`updated_by` 更新為本次 actor，並清空目前狀態的 `archived_by`／`archived_at`。這些欄位描述「目前 archive 狀態」的 provenance，不取代完整歷史 audit log；多次 archive/restore 的 append-only audit history 留給 Phase 3 Governance 設計。
 
+Workspace 自身的 lifecycle 不在 Phase 0 定義。Phase 3 必須明確設計 Workspace create/provision、rename、archive/restore 與 administration semantics；MVP 不提供 Workspace hard delete。
+
 Phase 0–2 的 actor 仍是可信 `UserIdentity`，欄位透過 user FK 保存。現在不引入 `actor_kind` 或 polymorphic actor reference；Agent write、service account 或 system actor 若日後成為需求，再在其對應 phase 設計 Principal/Actor model。
 
 ### 4.6 Assets
@@ -190,20 +209,22 @@ Phase 0／Phase 2 MVP 不持久保存圖片、附件 binary 或整份上傳 fold
 
 ## 5. Domain Model 與 Table Boundaries
 
-Phase 0 migration 至少建立以下八張表。以下是已確認的邏輯欄位與責任，不是完整 SQL DDL；實體型別、索引名稱與 migration 順序由 implementation plan 決定。
+Phase 0 migration 至少建立以下十張 domain tables。以下是已確認的邏輯欄位與責任，不是完整 SQL DDL；實體型別、索引名稱與 migration 順序由 implementation plan 決定。
 
 | Table / Owner | 最小欄位 | 責任與限制 |
 | --- | --- | --- |
-| `users` / identity | `id` PK、`emp_id` UNIQUE、`name`、`org_code` | 最小本地使用者資料；供建立者與操作紀錄引用，不保存 SSO token |
-| `knowledge_sources` / sources | `id`、`name`、`org_code`、`source_type`、`ownership`、`status`、`sync_version`、`created_by`、`updated_by`、`archived_by` nullable、`archived_at` nullable、`created_at`、`updated_at` | Source 定義、單一 org 歸屬、更新權、同步版本與目前 lifecycle provenance |
+| `users` / identity | `id` PK、`emp_id` UNIQUE、`name`、`org_code` | 最小本地使用者資料；org_code 為 identity attribute；供建立者與操作紀錄引用，不保存 SSO token |
+| `workspaces` / workspaces | `id`、`name`、`created_at`、`updated_at` | Knowledge container 與 basic access scope；Phase 0 不強制 owner org、slug、完整 lifecycle 或 role model |
+| `workspace_memberships` / workspaces | `workspace_id`、`user_id`、`created_at`；PK `(workspace_id, user_id)` | Phase 0 basic membership association；完整 roles/capabilities 與 administration 留 Phase 3 |
+| `knowledge_sources` / sources | `id`、`name`、`workspace_id`、`source_type`、`ownership`、`status`、`sync_version`、`created_by`、`updated_by`、`archived_by` nullable、`archived_at` nullable、`created_at`、`updated_at` | Source 定義、單一 Workspace scope、更新權、同步版本與目前 lifecycle provenance |
 | `source_entries` / sources | `id`、`source_id`、`external_id` nullable、`source_path`、`entry_type`、`content_hash`、`document_id` nullable、`status`、`updated_by`、`archived_by` nullable、`archived_at` nullable、`first_seen_at`、`last_seen_at` | 來源 identity／locator、Document mapping 與目前 lifecycle provenance；Folder entry 可沒有 Document |
 | `knowledge_tree_nodes` / knowledge | `id`、`source_id`、`parent_id` nullable、`node_type`、`name`、`document_id` nullable、`position`、`status`、`updated_by`、`archived_by` nullable、`archived_at` nullable | Source 內 hierarchy 與目前 lifecycle provenance；`node_type` 為 `FOLDER` 或 `DOCUMENT` |
-| `knowledge_documents` / knowledge | `id`、`source_id`、`current_revision_id`、`status`、`created_by`、`updated_by`、`archived_by` nullable、`archived_at` nullable、`created_at`、`updated_at` | 穩定文件身分、current revision pointer 與目前 lifecycle provenance；不存 Markdown 或 path |
+| `knowledge_documents` / knowledge | `id`、`source_id`、`current_revision_id`、`status`、`created_by`、`updated_by`、`archived_by` nullable、`archived_at` nullable、`created_at`、`updated_at` | 穩定文件身分、current revision pointer 與目前 lifecycle provenance；不存 Markdown、path 或 workspace_id |
 | `knowledge_revisions` / knowledge | `id`、`document_id`、`revision_no`、`title`、`markdown`、`metadata`、`content_hash`、`created_by`、`created_at` | 不可變內容版本與 provenance |
 | `knowledge_assets` / sources | `id`、`source_id`、`source_path`、`mime_type`、`content_hash`、`metadata`、`created_at` | 僅資產 metadata/reference；來源未提供的可選 metadata 不應阻塞模型 |
 | `sync_runs` / sources | `id`、`source_id`、`triggered_by`、`based_on_version`、`result_version`、`status`、`summary`、`started_at`、`completed_at` | 同步操作紀錄；Phase 0 建 schema，Phase 2 接完整流程 |
 
-所有上表 Hub internal ID 欄位使用相同 UUID contract，MariaDB 欄位型別使用 native `UUID`。`knowledge_revisions.metadata` 可使用 MariaDB JSON 欄位保存 frontmatter 等非核心資料；source、status、ownership、revision reference 等重要 domain 欄位維持明確關聯欄位。Phase 0 不新增 organizations、publishing、ACL、vector、MCP 或 memory tables。
+所有上表 Hub internal entity ID 欄位使用相同 UUID contract，MariaDB 欄位型別使用 native `UUID`；WorkspaceMembership 使用 composite association key。`knowledge_revisions.metadata` 可使用 MariaDB JSON 欄位保存 frontmatter 等非核心資料；workspace/source/status/ownership/revision reference 等重要 domain 欄位維持明確關聯欄位。Phase 0 不新增 organizations、publishing、granular ACL、vector、MCP 或 memory tables。
 
 Source、SourceEntry、TreeNode 與 Document 的 lifecycle status 採 `ACTIVE / ARCHIVED`。`sync_runs.status` 是另一個操作結果維度，採 `PREVIEWED / APPLIED / FAILED`，不表示新增 Knowledge lifecycle。
 
@@ -211,8 +232,10 @@ Source、SourceEntry、TreeNode 與 Document 的 lifecycle status 採 `ACTIVE / 
 
 | Invariant | 保護方式與驗收要求 |
 | --- | --- |
+| 每個 Source 恰有一個既有 Workspace | `knowledge_sources.workspace_id` 必填 FK 與 integration test |
+| WorkspaceMembership 不重複 | PK/UNIQUE `(workspace_id, user_id)`；同 user 可加入多個 Workspace |
+| same org 不自動 access / cross org membership 可 access | application policy + integration fixtures；不得以 org equality shortcut |
 | 每個 Document 恰有一個既有 Source | 必填 reference、外鍵與 integration test |
-| 每個 Source 恰有一個 org owner | 必填單值 `org_code`；不設 multi-owner mapping |
 | Revision 必須屬於既有 Document | 外鍵與 integration test |
 | `current_revision_id` 必須指向同一 Document 的 Revision | 同文件關聯約束與 repository transaction 驗證；僅驗證 revision 存在並不足夠 |
 | 同文件 revision 編號不可重複 | `(document_id, revision_no)` 唯一性與測試 |
@@ -225,6 +248,7 @@ Source、SourceEntry、TreeNode 與 Document 的 lifecycle status 採 `ACTIVE / 
 | Lifecycle 變更可追溯目前 actor/time | lifecycle-bearing row 的 status 與 `updated_by`／`archived_by`／`archived_at` 在同 transaction 更新；restore 清空目前 archive provenance |
 | Revision immutable | Domain／repository 不提供覆寫舊版本操作；以行為測試保護 |
 | 操作失敗不留下部分 canonical state | 同一 transaction 與 rollback integration test |
+| Resource ID 不能繞過 Workspace policy | read/write service 必須從 authoritative relationship 反查 Workspace 再做 access check |
 
 資料庫可表達的關聯／唯一性／欄位規則應以 constraint 保護；跨資料列的 hierarchy 或流程規則仍需要 domain／application 驗證及測試，不能只依賴 UI。
 
@@ -240,6 +264,10 @@ src/
 │   └── knowledge/             # Knowledge presentation
 ├── modules/
 │   ├── identity/
+│   │   ├── domain/
+│   │   ├── application/
+│   │   └── ports/
+│   ├── workspaces/
 │   │   ├── domain/
 │   │   ├── application/
 │   │   └── ports/
@@ -279,11 +307,24 @@ interface IdentityProvider {
 }
 ```
 
-`id` 為 Hub 內部穩定使用者 ID；`emp_id` 為員工工號；`name` 為姓名；`org_code` 為組織代碼。Local provider 建立／更新最小 `users` 資料，外部開發由 server 提供測試身分。
+`id` 為 Hub 內部穩定使用者 ID；`emp_id` 為員工工號；`name` 為姓名；`org_code` 為公司組織代碼。`org_code` 不直接回答 caller 可以讀寫哪些 Workspace。Local provider 建立／更新最小 `users` 資料，外部開發由 server 提供測試身分。
 
-Web／其他 transport adapter 透過 `IdentityProvider` 取得可信 identity 後建立 `CallerContext`，再把它作為 application service 的顯式第一參數。Application Core 不從 UI payload 讀 caller，也不依賴 ambient/global request identity。Phase 0 的 `CallerContext` 只含 `identity`；Phase 3 可以在不改所有 service method 形狀的前提下，擴充 policy input 或由 policy service 取得 governance context。
+Web／其他 transport adapter 透過 `IdentityProvider` 取得可信 identity 後建立 `CallerContext`，再把它作為 application service 的顯式第一參數。Application Core 不從 UI payload 讀 caller，也不依賴 ambient/global request identity。CallerContext 不固定攜帶單一 `workspace_id`，因為同一 caller 可以存取多個 Workspace。
 
 未來公司 adapter 驗證 SSO token 後映射為相同四欄位並同步本地最小資料。其餘 module 不接觸 token 格式、SSO SDK 或 provider 細節。身分無法取得時回報失敗，不以客戶端傳入的工號／org 取代可信身分。完整企業登入與治理仍是後續工作。
+
+### 6.1A Workspaces
+
+Workspaces module 負責 Phase 0 的最小 `Workspace` / `WorkspaceMembership` domain representation、repository 與 access-policy port。至少提供：
+
+```text
+listWorkspaces(caller)
+requireMembership(caller, workspaceId)
+```
+
+Phase 0 policy 只表示 local/mock MVP 的 membership guard，不宣稱已完成 production role/capability authorization。Phase 3 必須在相同 resource boundary 上補 Workspace provisioning/lifecycle、membership administration、roles/capabilities、Team/SSO Group mapping、必要的 granular policy 與 audit。
+
+Knowledge/Source operation 不應相信 caller 額外提供的 workspaceId 作授權證明。對既有 resource 的操作由 resource relationship 解析 `Source.workspace_id` 再呼叫 Workspace policy。
 
 ### 6.2 Knowledge
 
@@ -304,17 +345,18 @@ restoreDocument(caller, ...)
 
 Knowledge 不知道 Folder 如何掃描、LLM Wiki 格式、tKMS API、MCP protocol、Elasticsearch 或 Company SSO。它透過 repository ports 讀寫資料，不把 SQL 散布於 application services。
 
-Knowledge 需要判斷 Source ownership 時，使用由可信 application／repository boundary 取得的 source policy 資料；不能信任 UI 自行宣稱可編輯，也不能因此反向依賴 Sources 的掃描／同步實作。跨模組外鍵是資料完整性關係，不代表反向程式依賴。
+Knowledge operation 必須在 resource scope 解析後通過 Workspace access policy，再判斷 Source ownership/lifecycle。不能信任 UI 自行宣稱 workspace/ownership/editability，也不能因此反向依賴 Sources 的掃描／同步實作。跨模組外鍵是資料完整性關係，不代表反向程式依賴。
 
 ### 6.3 Sources
 
 負責 KnowledgeSource、SourceEntry、asset metadata 與 SyncRun。後續 Phase 2 的 scanner、snapshot、diff、preview 與 apply orchestration 放在 Sources 邊界內。
 
-Source sync 必須經 Knowledge application operations 更新文件／revision／Tree／lifecycle，不能直接繞過 Knowledge 規則修改其資料表。Sources 自己管理 SourceEntry 與 Source 同步狀態。
+KnowledgeSource 必須保存 `workspace_id`；Sources 負責解析 Source 所屬 Workspace，但不得把普通 sync/rename/move 當成 Workspace transfer。Source sync 必須先通過 target Source 所屬 Workspace policy，再經 Knowledge application operations 更新文件／revision／Tree／lifecycle，不能直接繞過 Knowledge 規則修改其資料表。Sources 自己管理 SourceEntry 與 Source 同步狀態。
 
 ```text
 SourceSyncApplicationService
   ├── CallerContext
+  ├── Workspace access policy
   ├── Knowledge application operations
   ├── SourceRepository / SourceEntry mapping
   └── SyncRun recording
@@ -323,7 +365,7 @@ SourceSyncApplicationService
 
 ### 6.4 Repository、transaction ports 與 isolation
 
-Knowledge 的 document／revision／tree repositories 與 Sources 的 repositories，由 MariaDB infrastructure 實作。Application 決定交易邊界；參與同一次操作的 repositories 與 Knowledge operations 共用該交易，不能各自提前 commit。
+Knowledge 的 document／revision／tree repositories、Workspaces repositories/policy，以及 Sources repositories，由 MariaDB infrastructure 實作。Application 決定交易邊界；參與同一次 canonical mutation 的 repositories 與 Knowledge operations 共用該交易，不能各自提前 commit。
 
 Canonical Knowledge mutation transaction 統一使用 **READ COMMITTED** isolation。MariaDB UoW 必須在 transaction 開始前設定本次 transaction isolation，之後才進入 begin → callback → assertions → commit。Source／Document 的 `SELECT ... FOR UPDATE` locking read 仍是 concurrency correctness 的必要部分；READ COMMITTED 的選擇避免依賴「locking read 一定必須是 transaction 第一個 statement」這種容易被 refactor 破壞的隱性前提。
 
@@ -333,6 +375,7 @@ Repository boundary 用於隔離 SQL、便於測試與清楚管理 transaction�
 
 ```text
 Identity ──► CallerContext ──► Application Services
+Workspaces ──► Workspace access policy / queries
 Sources ──► Knowledge
 
 未來：
@@ -341,7 +384,7 @@ Retrieval  ──► Knowledge
 Agent      ──► Knowledge / Retrieval
 ```
 
-Knowledge 不反向依賴 Sources ingestion、Publishing、MCP 或 Elasticsearch。未來 adapter 必須共用文件查詢、current revision resolution、archive filtering 與授權邊界，不重寫平行的一套 Knowledge 邏輯。
+Knowledge 不反向依賴 Sources ingestion、Publishing、MCP 或 Elasticsearch。未來 adapter 必須共用文件查詢、current revision resolution、archive filtering 與 Workspace 授權邊界，不重寫平行的一套 Knowledge 邏輯。
 
 ## 7. Transactions、Errors 與 Sync Safety
 
@@ -350,9 +393,11 @@ Knowledge 不反向依賴 Sources ingestion、Publishing、MCP 或 Elasticsearch
 建立基本文件是一個 READ COMMITTED atomic operation：
 
 ```text
+resolve Source → Workspace
+require Workspace membership/access
 SET TRANSACTION ISOLATION LEVEL READ COMMITTED
 BEGIN
-  lock Source / validate policy
+  lock Source / validate source policy
   create KnowledgeDocument
   create immutable KnowledgeRevision R1
   set current_revision_id = R1
@@ -365,22 +410,23 @@ COMMIT
 ### 7.2 Folder Sync 契約：Phase 2 實作
 
 ```text
-Select Folder（不是 ZIP）
+Select Workspace
+  → Select Folder（不是 ZIP）
   → Scan / Parse，保留 relative paths
   → Build Snapshot
-  → Compare with selected Source
   → Preview
   → User Confirm
+  → Create Source in selected Workspace or validate existing Source
   → Version validation + Transaction Apply
 ```
 
-第一次上傳建立新的 KnowledgeSource；folder 名稱只作預設顯示名稱，可修改。後續同步必須由使用者明確選擇既有 `source_id`，不得只用 folder 名稱自動選來源。
+第一次上傳由使用者明確選擇一個可存取 Workspace，再建立新的 KnowledgeSource；folder 名稱只作預設顯示名稱，可修改。後續同步必須由使用者明確選擇既有 `source_id`，Workspace 由既有 Source relationship 決定，不得透過 sync 另外提供 `target_workspace_id` 偷做 transfer。
 
 「第一次上傳建立 Source」不代表選完 folder 立即寫入 Knowledge。Preview 可攜帶擬建立的 Source 資料；第一份正式 Source 與其知識資料應在 Confirm 後的 Apply 邊界建立，避免 Preview 留下半套 canonical state。這是 Preview 不修改正式資料原則的一致性釐清，不增加新來源流程。
 
 Markdown 解析成 Knowledge；Folder 表達 hierarchy；assets 僅記 metadata/reference。掃描、解析及 snapshot 準備在 Apply 交易之前完成。SOURCE_MANAGED 的 canonical title resolution（frontmatter／heading／filename 的優先序與衝突）也在 Phase 2 parser/import design 中定義，不由 Phase 0 推定。
 
-Preview 列出預計 `NEW / UPDATED / MOVED / RENAMED / ARCHIVED / UNCHANGED` 變更，MVP 不要求複雜 diff editor。Restore 是同一 entry 重現的 lifecycle 效果，Preview 必須顯示此效果，不默默建立新文件。
+Preview 列出預計 `NEW / UPDATED / MOVED / RENAMED / ARCHIVED / RESTORED / UNCHANGED` 變更，MVP 不要求複雜 diff editor。Restore 是同一 entry 重現的 lifecycle 效果，Preview 必須顯示此效果，不默默建立新文件。
 
 ### 7.3 Preview 唯讀與確認資料
 
@@ -396,7 +442,7 @@ expires_at
 
 Preview 不建立 Revision、不 archive Document、不 move Tree、不修改 SourceEntry，也不增加 `sync_version`。`PREVIEWED` 操作紀錄與暫存 preview 是流程資料；保存這些不代表允許修改 canonical Knowledge。
 
-`sync_preview` 在此是邏輯資料契約，不是 Phase 0 必須額外建立的第九張 table。新 Source 尚無已提交版本時，不能冒用既有 Source 的 version 驗證流程；Phase 2 分別處理首次建立與既有 Source 同步。
+`sync_preview` 在此是邏輯資料契約，不是 Phase 0 必須額外建立的第十一張 table。新 Source 尚無已提交版本時，不能冒用既有 Source 的 version 驗證流程；Phase 2 分別處理首次建立與既有 Source 同步。
 
 Confirm 必須對應使用者看過的 snapshot 與 changes。`snapshot_hash` 表達該內容綁定；不能以另一份上傳內容替換已確認的變更。Preview 過期即拒絕並要求重新產生；保存方式、有效期限數值與傳輸機制在 Phase 2 設計，不是 Phase 0 的功能前置依賴。
 
@@ -415,6 +461,7 @@ current Source.sync_version == Preview.based_on_version
 ### 7.5 Atomic Apply 與 SyncRun
 
 ```text
+require Workspace access for Source.workspace_id
 SET TRANSACTION ISOLATION LEVEL READ COMMITTED
 BEGIN
   validate / guard Source version
@@ -451,6 +498,7 @@ COMMIT
 | 錯誤情境 | 必須行為 |
 | --- | --- |
 | 身分取得失敗 | 不執行需要呼叫者的操作；回報身分錯誤 |
+| Workspace membership/access 不成立 | 拒絕操作，不洩漏該 Workspace 下 Source/Document 內容 |
 | Document / Source 不存在或 reference 不合法 | 拒絕操作，不留下部分資料 |
 | Hub 嘗試修改 SOURCE_MANAGED 文件／hierarchy | Application 拒絕；不能只依賴 UI 唯讀 |
 | Preview 過期、內容不符或 Source version 已變 | 不 Apply；提示重新 Preview |
@@ -487,6 +535,7 @@ local MariaDB transaction → commit
 - 已識別為同一 SourceEntry 的重現沿用 Document ID，內容不同才新增 revision。
 - Tree node type、Document reference、one-document-one-treenode 與有效 hierarchy 規則。
 - Public application read/write contract 顯式接收 `CallerContext`，不從 input payload 取得 caller。
+- Workspace access 與 Source ownership 分離；`org_code` 不作 allow/deny shortcut。
 
 重現與 ownership 測試可用已建立 mapping／source policy 的 fixtures；不要求 Phase 0 寫出 Folder scanner、title resolution 或 rename detection engine。
 
@@ -496,7 +545,9 @@ local MariaDB transaction → commit
 
 | 測試 | 必須證明 |
 | --- | --- |
-| 空 DB migration | 八張核心表、native UUID 欄位與必要約束可以建立 |
+| 空 DB migration | 十張 domain tables、native UUID 欄位與必要約束可以建立 |
+| Workspace membership | 同 user 可加入多 Workspace；cross-org member 可存取；same-org non-member 被拒絕 |
+| Source Workspace scope | Source 無有效 workspace_id 不能存在；resource UUID 不繞過 Workspace policy |
 | Document + Revision + TreeNode 建立 | 全部成功才提交，成功時 current pointer 合法 |
 | 逐步注入失敗 | 建立流程任一步失敗均不留孤兒資料 |
 | Revision pointer | 不存在或屬於其他 Document 的 revision 無法成為 current |
@@ -514,15 +565,18 @@ Phase 0 以 transaction fixtures 驗證未來 Sync 所依賴的原子性與 vers
 ```text
 Open Knowledge Hub
   → Local identity available
+  → list caller-visible Workspaces
+  → select Workspace
+  → select Source
   → Create / read one basic HUB_MANAGED document
-  → Browse its Source / Folder / Document tree
+  → Browse its Folder / Document tree
 ```
 
-這個最小流程驗證 Web → trusted CallerContext → application services → repositories → MariaDB 確實接通。基本表單或最小內容輸入已足夠，不為 smoke flow 引入 rich editor、單篇上傳產品流程、drag and drop 或搜尋引擎。
+這個最小流程驗證 Web → trusted CallerContext → Workspace policy → application services → repositories → MariaDB 確實接通。基本表單或最小內容輸入已足夠，不為 smoke flow 引入 rich editor、單篇上傳產品流程、drag and drop 或搜尋引擎。
 
 ### 8.4 後續階段追加測試
 
-Phase 1 擴充核心與完整 Tree 行為；Phase 2 驗證 folder scanning、Title Resolution、mapping 歧義、Preview／Confirm 內容綁定、到期、首次建立、diff、全量 rollback、FAILED run、重複同步 NOOP 與完整 Folder Upload E2E。後續 authoring、publishing、MCP 與 retrieval 各自沿用本階段 invariants。
+Phase 1 擴充核心與完整 Tree 行為；Phase 2 驗證 folder scanning、Title Resolution、mapping 歧義、Preview／Confirm 內容綁定、到期、首次建立、diff、全量 rollback、FAILED run、重複同步 NOOP 與完整 Folder Upload E2E。Phase 3 補 production Workspace lifecycle/administration、role/capability、Team/SSO mapping 與 audit tests。後續 authoring、publishing、MCP 與 retrieval 各自沿用本階段 invariants。
 
 ## 9. Phase 0 Definition of Done
 
@@ -531,16 +585,17 @@ Phase 1 擴充核心與完整 Tree 行為；Phase 2 驗證 folder scanning、Tit
 | 類別 | 全部滿足才算完成 |
 | --- | --- |
 | Architecture | Next.js modular monolith 可啟動；TypeScript／Tailwind／shadcn/ui 基線可用；不引入排除依賴 |
-| Module boundaries | identity／knowledge／sources 責任明確；Domain、Application、Infrastructure 分層；Web 不直接改 DB；不建未來空模組 |
-| Identity | 四欄位 UserIdentity、CallerContext 與 IdentityProvider contract 可用；Local provider 支援外部開發；application 不依賴 token 細節 |
-| Database | Local MariaDB 10.11 可啟動；migration 可從空 DB 建出八張核心表、native UUID IDs 與必要約束 |
-| Domain representation | org → source → tree、兩種 ownership、stable Document ID、immutable Revision、SourceEntry、兩態 lifecycle／provenance 與 metadata-only assets 都有 schema／domain 表達 |
+| Module boundaries | identity／workspaces／knowledge／sources 責任明確；Domain、Application、Infrastructure 分層；Web 不直接改 DB；不建未來空模組 |
+| Identity | 四欄位 UserIdentity、CallerContext 與 IdentityProvider contract 可用；Local provider 支援外部開發；org_code 只作 identity attribute；application 不依賴 token 細節 |
+| Workspace foundation | workspaces / workspace_memberships schema 與 repository/policy 可用；cross-org member allow、same-org non-member deny、multi-workspace user 與 direct-resource bypass 測試成立 |
+| Database | Local MariaDB 10.11 可啟動；migration 可從空 DB 建出十張 domain tables、native UUID IDs 與必要約束 |
+| Domain representation | Workspace → Source → Tree、兩種 ownership、stable Document ID、immutable Revision、SourceEntry、兩態 lifecycle／provenance 與 metadata-only assets 都有 schema／domain 表達 |
 | Transactions | canonical mutation 使用 READ COMMITTED；最小建立、revision 更新與相關 lifecycle 操作有正確交易邊界；跨 repository 共用 transaction 可用 |
 | Sync foundation | Source.sync_version 與 SyncRun schema 存在；optimistic guard 的競爭與 rollback 測試通過；未要求完整 Folder Sync |
 | Integrity | 同文件 current revision、one-document-one-treenode、node type/reference、mapping 唯一性等約束與測試成立；MVP 不暴露 hard delete |
 | Testing | 本規格 Phase 0 unit、MariaDB integration 與 small E2E smoke 可執行且通過 |
-| Agent readiness | Application services 可由非 Web caller 透過 CallerContext 呼叫；日後 MCP 可重用 core/query 規則而不依賴 page/component；Phase 0 沒有 MCP implementation 或 Agent actor model |
-| Handoff | 實作結果可對照本 spec 提供驗證證據，沒有把後續功能誤報為 Phase 0 已完成 |
+| Agent readiness | Application services 可由非 Web caller 透過 CallerContext 呼叫；日後 MCP 可重用 core/query/Workspace policy 而不依賴 page/component；Phase 0 沒有 MCP implementation 或 Agent actor model |
+| Handoff | 實作結果可對照本 spec 提供驗證證據，沒有把 Phase 3 production governance 或後續功能誤報為 Phase 0 已完成 |
 
 ## 10. Future Phase Interfaces
 
@@ -548,21 +603,21 @@ Phase 1 擴充核心與完整 Tree 行為；Phase 2 驗證 folder scanning、Tit
 
 | Phase | 延續的工作 | Phase 0 提供的接點與限制 |
 | --- | --- | --- |
-| 1 — Knowledge Core & Tree | 完整核心操作、Tree 與版本能力 | Document／Revision／Tree repositories、stable UUIDv7 IDs、CallerContext、lifecycle invariants |
-| 2 — Knowledge Source Import & Sync | Generic Markdown Folder adapter、scan／snapshot／mapping／diff／preview／apply、Title Resolution | Sources → Knowledge application operations；SourceEntry、assets metadata、SyncRun、source version 與共用 transaction；folder upload 非 ZIP；filename/path 不自動冒充 canonical title |
-| 3 — Identity & Basic Governance | 基本 owner／access policy，之後接公司 SSO | UserIdentity 四欄位、既有 CallerContext 與 IdentityProvider；Phase 3 補 policy/governance，不重新發明 caller method shape |
-| 4 — Discovery & Read API | Keyword／metadata search、filter、document／revision read | Knowledge query application boundary；current revision、archive filtering 與 CallerContext 共用 |
-| 5 — Human Authoring | 單篇 upload、Web editor 與完整 revision 流程 | HUB_MANAGED 可寫、SOURCE_MANAGED 唯讀；內容更新產生 immutable revision |
-| 6 — tKMS Publishing | 獨立 Publishing Tree、外部 mapping 與發布流程 | 引用穩定 Knowledge ID／Revision；Publishing Tree 不改變 Knowledge Tree；外部操作在 DB commit 後 |
-| 7 — Agent & MCP Access | MCP adapter、Agent caller 與必要 Principal/Actor 擴充 | 透過同一 application/query services 與 CallerContext；不繞過身分、存取與 archived filtering；若需要 Agent write 再設計 actor_kind/principal，不回改 Phase 0 user FK 猜測未來需求 |
-| 8 — Semantic & Hybrid Retrieval | Chunking、embedding、derived indexes、hybrid search | MariaDB Knowledge 仍為 canonical；retrieval backend 於此階段選型，核心不依賴索引技術 |
-| 9 — Agent Memory & Knowledge Relations | Memory、relations、context 與 promotion | 獨立 domain 透過穩定文件／revision reference 連接；Agent Memory 不直接等於正式 Knowledge |
+| 1 — Knowledge Core & Tree | 完整核心操作、Tree 與版本能力 | Workspace/Membership foundation、Document／Revision／Tree repositories、stable UUIDv7 IDs、CallerContext、lifecycle invariants |
+| 2 — Knowledge Source Import & Sync | Generic Markdown Folder adapter、scan／snapshot／mapping／diff／preview／apply、Title Resolution | Select target Workspace for new Source；Sources → Knowledge application operations；SourceEntry、assets metadata、SyncRun、source version 與共用 transaction；folder upload 非 ZIP；filename/path 不自動冒充 canonical title |
+| 3 — Identity & Basic Governance | Workspace provisioning/create、rename、archive/restore、membership administration、roles/capabilities、Team/SSO Group mapping、必要 policy/audit 與公司 SSO | UserIdentity 四欄位、既有 CallerContext、Workspace/Membership foundation 與 policy port；Phase 3 不重新把 org_code 變成 Knowledge ACL；MVP 不提供 Workspace hard delete |
+| 4 — Discovery & Read API | Keyword／metadata search、filter、document／revision read | Workspace-aware Knowledge query application boundary；current revision、archive filtering 與 CallerContext 共用 |
+| 5 — Human Authoring | 單篇 upload、Web editor 與完整 revision 流程 | Workspace capability + HUB_MANAGED 可寫、SOURCE_MANAGED 唯讀；內容更新產生 immutable revision |
+| 6 — tKMS Publishing | 獨立 Publishing Tree、外部 mapping 與發布流程 | 引用穩定 Knowledge ID／Revision並驗證來源 Workspace policy；Publishing Tree scope 由 Phase 6 設計 |
+| 7 — Agent & MCP Access | MCP adapter、Agent caller 與必要 Principal/Actor 擴充 | 透過同一 application/query services、CallerContext 與 Workspace policy；不接受任意 workspace_id/org_code 當授權證明；若需要 Agent write 再設計 Principal |
+| 8 — Semantic & Hybrid Retrieval | Chunking、embedding、derived indexes、hybrid search | MariaDB Knowledge + Workspace governance 仍為 canonical；retrieval backend 於此階段選型，核心不依賴索引技術 |
+| 9 — Agent Memory & Knowledge Relations | Memory、relations、context 與 promotion | 獨立 domain 透過穩定文件／revision reference 連接；Agent Memory scope 不自動等同 Workspace |
 
 Phase 2 必須在自己的設計中落實無 stable external ID 的匹配／歧義處理、Title Resolution、parser／hash 正規化、preview 儲存與有效期限、首次來源與既有來源的流程細節。這些是明確屬於 Phase 2 的設計責任，不以未確認答案冒充本次已核准決策，也不阻塞 Phase 0 foundation 的驗收。
 
 ## 11. Architecture Decision Records
 
-以下 ADR 均彙整已接受決策；ADR-001～003 保留原對話編號，其餘為本文件整理索引。
+以下 ADR 均彙整已接受決策；ADR-001～003 保留原對話編號，其餘為本文件整理索引。Workspace access-boundary correction 已直接整合到 ADR-004；詳細變更歷史可見 Workspace amendment 的 ADR-018。
 
 ### ADR-001 — MariaDB 10.11 為 canonical datastore
 
@@ -582,11 +637,11 @@ Phase 2 必須在自己的設計中落實無 stable external ID 的匹配／歧�
 - **Decision：** 使用 React、TypeScript、Tailwind CSS、shadcn/ui；原選型以 Base UI 為預設方向，元件按需加入。
 - **Consequences：** 不延續 Refine／Outline 架構，不預裝 Redux、Tiptap、dnd-kit 或整套 dashboard template。
 
-### ADR-004 — Source-agnostic 與 org/source 邊界
+### ADR-004 — Source-agnostic 與 Workspace/Source 邊界（revised by ADR-018）
 
-- **Context：** 不同團隊使用不同 LLM Wiki generator。
-- **Decision：** `org_code → KnowledgeSource → Folder / Document Tree`；每 Source 單一 org owner，每 Document 都有 Source。
-- **Consequences：** 不綁 Obsidian 格式、不做 multi-owner；跨 org 分享由後續 access policy 處理。
+- **Context：** 不同團隊使用不同 LLM Wiki generator，且跨公司組織的專案成員可能需要共同存取同一批 Knowledge。
+- **Decision：** `User.org_code` 保留為 identity attribute；Knowledge hierarchy 使用 `Workspace → KnowledgeSource → Folder / Document Tree`；WorkspaceMembership 建立 basic access scope；每 Source 單一 Workspace，每 Document 都有 Source。
+- **Consequences：** 不綁 Obsidian 格式；same org 不自動授權、cross org 不自動拒絕；Source content ownership 與 Workspace access 分離；完整 Workspace lifecycle/roles/governance 留 Phase 3。
 
 ### ADR-005 — 明確區分 Source-managed 與 Hub-managed
 
@@ -610,7 +665,7 @@ Phase 2 必須在自己的設計中落實無 stable external ID 的匹配／歧�
 
 - **Context：** 來源缺檔可能是暫時的，文件引用與 revision history 必須保留；archive 是 MVP 的刪除語意，必須可追溯目前 actor/time。
 - **Decision：** 使用 ACTIVE／ARCHIVED；MVP 不 hard delete；同 entry 重現恢復原 Document ID；lifecycle-bearing canonical entity 保存 `updated_by`、`archived_by`、`archived_at`。
-- **Consequences：** 預設查詢排除 archived；restore 只有內容改變才建立 revision；完整多次 lifecycle audit history 留給 Phase 3。
+- **Consequences：** 預設查詢排除 archived；restore 只有內容改變才建立 revision；完整多次 lifecycle audit history留 Phase 3。Workspace lifecycle 另由 Phase 3 明確設計。
 
 ### ADR-009 — Metadata-only assets
 
@@ -621,8 +676,8 @@ Phase 2 必須在自己的設計中落實無 stable external ID 的匹配／歧�
 ### ADR-010 — Folder Upload 與強制 Preview／Confirm
 
 - **Context：** 同步會新增、修改、搬移或 archive 多筆資料，不能選完 folder 就直接改寫。
-- **Decision：** 直接選取整個 folder，不用 ZIP；首次建立 Source，後續明確選既有 Source；一律 Preview → Confirm → Apply。
-- **Consequences：** Preview 不改 canonical Knowledge；Phase 0 定契約，Phase 2 完成匯入／同步。
+- **Decision：** 直接選取整個 folder，不用 ZIP；首次先選 Workspace 再建立 Source，後續明確選既有 Source；一律 Preview → Confirm → Apply。
+- **Consequences：** Preview 不改 canonical Knowledge；Source 是 Tree root；sync 不提供隱式 Workspace transfer；Phase 0 定契約，Phase 2 完成匯入／同步。
 
 ### ADR-011 — Atomic Sync 與 Optimistic Source Version
 
@@ -634,12 +689,12 @@ Phase 2 必須在自己的設計中落實無 stable external ID 的匹配／歧�
 
 - **Context：** 外部 MVP 開發不能依賴公司 SSO 環境，但 read/write service 需要穩定 caller-aware contract。
 - **Decision：** UserIdentity 固定為 id、emp_id、name、org_code；使用 Local／Mock provider；transport 建立顯式 `CallerContext` 並作為 application service 第一參數；未來 SSO 映射至同一 identity contract。
-- **Consequences：** Core 不解析 token，也不依賴 ambient request identity；Phase 3 可增加 governance policy 而不大改 service signatures。
+- **Consequences：** Core 不解析 token，也不依賴 ambient request identity；org_code 不作 Knowledge ACL；Workspace policy 使用 resource scope；Phase 3 增加 production governance 而不大改 caller signature。
 
 ### ADR-013 — Human 與 Agent 共用 Application Core
 
 - **Context：** 未來 MCP 需要取得同一份 Knowledge 與一致的 query／policy 行為。
-- **Decision：** Knowledge 不依賴 Web／MCP；Sources 單向寫入 core，未來 Publishing／Retrieval／Agent 經 application services 接入。
+- **Decision：** Knowledge 不依賴 Web／MCP；Sources 單向寫入 core，未來 Publishing／Retrieval／Agent 經 application services 接入並共用 Workspace policy。
 - **Consequences：** 不建立平行資料存取邏輯；Phase 0 不實作 MCP、Agent actor model 或未來空模組。
 
 ### ADR-014 — 外部副作用隔離於 DB Transaction
@@ -652,7 +707,7 @@ Phase 2 必須在自己的設計中落實無 stable external ID 的匹配／歧�
 
 - **Context：** `CHAR(36)` random UUID 會放大 InnoDB PK/secondary-index footprint，且 random key locality 較差；目前尚未建表，調整成本最低。
 - **Decision：** Application 產生 UUIDv7；MariaDB 10.11 使用 native `UUID` type。
-- **Consequences：** 所有 internal ID/FK 型別一致，不手動管理 BINARY byte order，也不依賴 DB-side UUIDv7 function。
+- **Consequences：** 所有 stable entity ID/FK 型別一致，不手動管理 BINARY byte order，也不依賴 DB-side UUIDv7 function。WorkspaceMembership 為 association composite key。
 
 ### ADR-016 — READ COMMITTED canonical transactions
 
@@ -672,12 +727,15 @@ Phase 2 必須在自己的設計中落實無 stable external ID 的匹配／歧�
 
 | 審查面向 | 結果與已完成釐清 |
 | --- | --- |
+| Workspace canonical truth | 本 spec 已直接使用 Workspace → Source → Tree；不再要求讀者以 amendment 覆蓋本文 active org/source contract |
+| Organization responsibility | `org_code` 僅是 User identity / governance input；same org != allow，cross org != deny |
+| Workspace lifecycle owner | Phase 3 明確負責 provisioning/create、rename、archive/restore、membership/role administration；Phase 0 只建 foundation |
 | 未定占位內容 | 無空白待填段落；未核准的實作選型明確交由 implementation plan 或相應 Phase，未偽裝成已決策 |
 | 舊架構矛盾 | 新規格採已確認 stack，不沿用舊 HRKM Refine 依賴；早期 PostgreSQL／Elasticsearch 建議不列為 Phase 0 決策 |
 | Rename 與 title | 明確區分 hierarchy rename 與版本化 title 修改；SOURCE_MANAGED Title Resolution 明確交由 Phase 2 |
-| Ownership 儲存 | Source 為 ownership 單一來源，Document 不重複保存另一份值 |
+| Ownership 儲存 | Source 為 content ownership 單一來源，Document 不重複保存；Source workspace scope 與 ownership 分離 |
 | SOURCE_MANAGED 唯讀 | 區分 Hub 編輯與受控同步更新，application 層執行規則 |
-| Caller boundary | UserIdentity 保持四欄位；CallerContext 顯式傳入 application service，Phase 3 再補 governance policy |
+| Caller boundary | UserIdentity 保持四欄位；CallerContext 顯式傳入 application service，Workspace policy 依 resource scope 驗證 |
 | Actor model | Phase 0–2 lifecycle/created refs 仍指向 user；不提前引入 actor_kind/polymorphic FK |
 | ID storage | UUIDv7 + MariaDB native UUID；不使用 CHAR(36) random UUID |
 | Transaction isolation | Canonical mutation 明訂 READ COMMITTED，並保留 Source/Document row lock |
@@ -686,29 +744,29 @@ Phase 2 必須在自己的設計中落實無 stable external ID 的匹配／歧�
 | Preview 唯讀與 PREVIEWED 紀錄 | 區分 canonical state 與流程紀錄；首次 Source 不在選 folder 時留下半套正式資料 |
 | FAILED 與 rollback | FAILED 紀錄在主交易回滾後另存，不依靠被回滾交易 |
 | NOOP 與 sync_version | NOOP 指內容／Tree／archive 無變更；成功 Apply 仍保存 run 並遞增來源版本 |
-| Schema 與階段範圍 | sync_runs schema 在 Phase 0，完整操作流程在 Phase 2；preview contract 不強制新增 table |
+| Schema 與階段範圍 | 十張 domain tables；sync_runs schema 在 Phase 0，完整操作流程在 Phase 2；preview contract 不強制新增 table |
 | SourceEntry 身分 | 不把 path/hash 當作穩定文件 ID，不宣稱無 ID 的自動匹配已解決 |
-| Module direction | 外鍵／ownership policy 資料與 Sources ingestion 實作依賴分開，Knowledge 不反向依賴同步引擎 |
+| Module direction | Workspaces/Source scope、ownership policy 資料與 Sources ingestion 實作依賴分開，Knowledge 不反向依賴同步引擎 |
 | Assets | metadata/reference 與 binary serving 明確分開，不暗中引入 filesystem storage |
-| 測試與 DoD | Phase 0 以 domain／transaction fixtures 與最小 smoke 驗收，不要求完整 authoring 或 sync UI |
-| 範圍擴張 | 沒有新增 SSO、ACL 平台、ZIP、editor、publishing、MCP、search/vector、memory、queue、Agent actor model 或 hard delete implementation |
+| 測試與 DoD | Phase 0 以 domain／Workspace access／transaction fixtures 與最小 smoke 驗收，不要求完整 governance、authoring 或 sync UI |
+| 範圍擴張 | 沒有新增 SSO、完整 ACL 平台、ZIP、editor、publishing、MCP、search/vector、memory、queue、Agent actor model 或 hard delete implementation |
 
 ### 12.2 決策來源對照
 
-以下對照均可在文件開頭連結的原對話查閱：
+以下對照均可在文件開頭連結的原對話與 Workspace amendment 查閱：
 
 | 已確認討論 | 本規格位置 |
 | --- | --- |
 | MariaDB 10.11、Next.js modular monolith、使用 shadcn | §3；ADR-001～003 |
 | UUIDv7、native UUID 與 transaction isolation clarification | §3.1、§6.4、§7；ADR-015～016 |
-| Organization → Sources、單一 org owner、手動文件也有 Source | §4.1、§5；ADR-004 |
+| Organization identity 與 Workspace access boundary、cross-org collaboration | §4.1、§5、§6.1A；ADR-004/018 |
 | Folder 唯讀、單篇上傳／Web 建立可編輯 | §4.2；ADR-005 |
 | Tree／Document／Revision、SourceEntry、title／Markdown／metadata 版本化 | §4.3～4.4、§5；ADR-006～007、017 |
 | 不 hard delete、同 entry 重現沿用 ID、lifecycle provenance、只保存 asset metadata | §4.5～4.6；ADR-008～009 |
-| Folder 非 ZIP、首次來源命名、後續選 source、強制 Preview | §7.2～7.3；ADR-010 |
-| Application / Module Boundary、CallerContext | §6；ADR-012～013 |
+| Folder 非 ZIP、首次選 Workspace/建立 Source、後續選 source、強制 Preview | §7.2～7.3；ADR-010 |
+| Application / Module Boundary、CallerContext、Workspace policy | §6；ADR-012～013、018 |
 | Transaction / Error Boundary + Sync Safety Baseline | §7；ADR-011、014、016 |
 | Identity 精簡為四欄位、外部 mock、公司後補 SSO | §6.1；ADR-012 |
 | Testing Strategy + Definition of Done | §8～9 |
 
-本次完成的是上述決策的 Markdown Design Spec 與 self-review。後續 Implementation Plan 應依本規格拆解工作與驗證步驟，不把文件完成等同 Phase 0 程式實作完成。
+本次完成的是上述決策的 current canonical Markdown Design Spec 與 self-review。後續 Implementation Plan 應依本規格拆解工作與驗證步驟，不把文件完成等同 Phase 0 程式實作完成。
