@@ -28,6 +28,16 @@ export class MariaDbEntryRepository implements EntryRepository {
     return rows[0] ? mapEntry(rows[0]) : null;
   }
 
+  async findByDocumentId(documentId: string): Promise<SourceEntry | null> {
+    const rows = await this.connection.query<DbRow[]>("SELECT * FROM source_entries WHERE document_id = ?", [documentId]);
+    return rows[0] ? mapEntry(rows[0]) : null;
+  }
+
+  async findByTreeNodeId(treeNodeId: string): Promise<SourceEntry | null> {
+    const rows = await this.connection.query<DbRow[]>("SELECT * FROM source_entries WHERE tree_node_id = ?", [treeNodeId]);
+    return rows[0] ? mapEntry(rows[0]) : null;
+  }
+
   async insert(entry: SourceEntry): Promise<void> {
     await this.connection.query(
       `INSERT INTO source_entries (id, source_id, external_id, source_path, entry_type, content_hash, document_id, tree_node_id, status, updated_by, archived_by, archived_at, first_seen_at, last_seen_at)

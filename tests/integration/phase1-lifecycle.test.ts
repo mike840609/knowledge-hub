@@ -99,7 +99,7 @@ function lifecycleServices() {
   return {
     hub: new HubKnowledgeCommandServiceImpl(unitOfWork),
     knowledge,
-    sources: new SourceApplicationService(unitOfWork, knowledge),
+    sources: new SourceApplicationService(unitOfWork),
   };
 }
 

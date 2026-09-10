@@ -48,7 +48,6 @@ describe("Workspace access boundary", () => {
     expect((await workspaceQuery.listWorkspaces(bobCaller)).map((workspace) => workspace.id)).toEqual(expect.arrayContaining([workspaceX, workspaceY]));
     expect(await workspaceQuery.listWorkspaces(carolCaller)).toEqual([]);
 
-    const aliceKnowledge = new KnowledgeApplicationService(uow);
     const bobKnowledge = new KnowledgeApplicationService(uow);
     const hub = new HubKnowledgeCommandServiceImpl(uow);
     const created = await hub.createDocument(aliceCaller, { sourceId, parentId: folderId, title: "Shared", markdown: "body", metadata: {} });
@@ -59,7 +58,7 @@ describe("Workspace access boundary", () => {
     await expect(carolKnowledge.getDocument(carolCaller, created.documentId)).rejects.toBeInstanceOf(WorkspaceAccessDeniedError);
     await expect(carolKnowledge.listTree(carolCaller, sourceId)).rejects.toBeInstanceOf(WorkspaceAccessDeniedError);
 
-    const sourceService = new SourceApplicationService(uow, aliceKnowledge);
+    const sourceService = new SourceApplicationService(uow);
     expect(await sourceService.listSources(bobCaller, workspaceX)).toHaveLength(1);
     await expect(sourceService.listSources(carolCaller, workspaceX)).rejects.toBeInstanceOf(WorkspaceAccessDeniedError);
   });

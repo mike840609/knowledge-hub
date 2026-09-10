@@ -1,13 +1,14 @@
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
-import { VersionConflictError, SourceNotFoundError, NotFoundError } from "@/modules/knowledge/domain/errors";
+import { IntegrityViolationError, VersionConflictError, SourceNotFoundError, NotFoundError, SourceEntryConflictError } from "@/modules/knowledge/domain/errors";
 import type { ContentInput } from "@/modules/knowledge/domain/content";
 import { contentFingerprint } from "@/modules/knowledge/domain/content";
-import type { ControlledKnowledgeOperations } from "@/modules/knowledge/application/mutations";
 import type { SourceUnitOfWork } from "../ports/unit-of-work";
 import type { SourceEntry } from "../domain/source-entry";
 import type { KnowledgeAsset } from "../domain/asset";
 import type { KnowledgeSource } from "../domain/source";
+import { bindSourceProjection } from "./source-knowledge-projection-service";
+import { archiveSourceEntry, updateSourceLocator } from "./source-entry-mapping-service";
 
 export type KnownSourceApplyInput = {
   sourceId: string;
@@ -37,11 +38,9 @@ export interface SourceLifecycleCommands {
 
 export class SourceApplicationService implements SourceLifecycleCommands {
   private readonly unitOfWork: SourceUnitOfWork;
-  private readonly knowledge: ControlledKnowledgeOperations;
 
-  constructor(unitOfWork: SourceUnitOfWork, knowledge: ControlledKnowledgeOperations) {
+  constructor(unitOfWork: SourceUnitOfWork) {
     this.unitOfWork = unitOfWork;
-    this.knowledge = knowledge;
   }
 
   async listSources(caller: CallerContext, workspaceId?: string): Promise<KnowledgeSource[]> {
@@ -68,10 +67,22 @@ export class SourceApplicationService implements SourceLifecycleCommands {
         await repositories.workspaceAccess.requireMembership(caller, source.workspaceId);
         const resultVersion = await repositories.sources.guardAndAdvanceVersion(input.sourceId, input.basedOnVersion, caller.identity.id);
         if (resultVersion === null) throw new VersionConflictError();
+        const stored = await repositories.entries.findById(input.entryId);
+        if (!stored || stored.sourceId !== input.sourceId || stored.documentId !== input.documentId) throw new NotFoundError("Known SourceEntry mapping was not found.");
+        const projection = bindSourceProjection(repositories, { id: source.id, workspaceId: source.workspaceId });
+        if (input.restore) {
+          await projection.restoreProjectedDocument(caller, input.documentId);
+        }
+        const current = await repositories.revisions.findCurrent(input.documentId);
+        if (!current) throw new IntegrityViolationError("Document current revision is missing.");
+        const knowledgeResult = await projection.projectRevision(caller, { documentId: input.documentId, expectedCurrentRevisionId: current.id, ...input.content });
+        if (input.failurePoint === "knowledge") throw new Error("Injected source apply failure after Knowledge mutation.");
         const entry = await repositories.entries.findById(input.entryId);
         if (!entry || entry.sourceId !== input.sourceId || entry.documentId !== input.documentId) throw new NotFoundError("Known SourceEntry mapping was not found.");
-        const knowledgeResult = await this.knowledge.applySourceManagedMutation(repositories, { documentId: input.documentId, content: input.content, callerId: caller.identity.id, restore: input.restore });
-        if (input.failurePoint === "knowledge") throw new Error("Injected source apply failure after Knowledge mutation.");
+        if (input.externalId !== null && input.externalId !== entry.externalId) {
+          const conflicting = await repositories.entries.findByExternalId(input.sourceId, input.externalId);
+          if (conflicting && conflicting.id !== entry.id) throw new SourceEntryConflictError();
+        }
         const now = new Date();
         const desiredEntry: SourceEntry = {
           ...entry,
@@ -114,8 +125,10 @@ export class SourceApplicationService implements SourceLifecycleCommands {
         if (resultVersion === null) throw new VersionConflictError();
         const entry = await repositories.entries.findById(input.entryId);
         if (!entry || entry.sourceId !== input.sourceId || entry.documentId !== input.documentId) throw new NotFoundError("Known SourceEntry mapping was not found.");
-        await this.knowledge.archiveSourceManagedDocument(repositories, input.documentId, caller.identity.id);
-        await repositories.entries.update({ ...entry, sourcePath: input.sourcePath, status: "ARCHIVED", updatedBy: caller.identity.id, archivedBy: caller.identity.id, archivedAt: new Date(), lastSeenAt: new Date() });
+        const projection = bindSourceProjection(repositories, { id: source.id, workspaceId: source.workspaceId });
+        await projection.archiveProjectedDocument(caller, input.documentId);
+        await archiveSourceEntry(repositories, caller, input.sourceId, input.entryId);
+        await updateSourceLocator(repositories, caller, input.sourceId, input.entryId, input.sourcePath, entry.contentHash);
         const now = new Date();
         await repositories.syncRuns.insert({ id: runId, sourceId: input.sourceId, triggeredBy: caller.identity.id, basedOnVersion: input.basedOnVersion, resultVersion, status: "APPLIED", summary: input.summary ?? { archived: true }, startedAt: now, completedAt: new Date() });
         return { runId, resultVersion };

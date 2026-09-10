@@ -4,7 +4,6 @@ import { databaseConfig } from "@/infrastructure/database/mariadb/config";
 import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
 import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction";
 import { MariaDbSourceRepository } from "@/infrastructure/database/mariadb/repositories/sources";
-import { KnowledgeApplicationService } from "@/modules/knowledge/application/service";
 import { SourceApplicationService } from "@/modules/sources/application/source-version-guard";
 import { VersionConflictError } from "@/modules/knowledge/domain/errors";
 import { contentFingerprint } from "@/modules/knowledge/domain/content";
@@ -17,7 +16,7 @@ afterAll(async () => { await pool.end(); });
 
 function sourceService(identity = fixtureIdentity) {
   const uow = new MariaDbUnitOfWork(pool);
-  const service = new SourceApplicationService(uow, new KnowledgeApplicationService(uow));
+  const service = new SourceApplicationService(uow);
   const caller = fixtureCaller(identity);
   return {
     listSources: (workspaceId?: string) => service.listSources(caller, workspaceId),

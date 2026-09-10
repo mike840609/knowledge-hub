@@ -68,7 +68,7 @@ export async function restoreFolderInTransaction(
       updatedBy: caller.identity.id,
       archivedBy: null,
       archivedAt: null,
-      lastSeenAt: new Date(),
+      lastSeenAt: linked.lastSeenAt,
     });
   }
 }

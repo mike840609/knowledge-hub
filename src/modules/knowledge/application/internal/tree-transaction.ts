@@ -1,5 +1,6 @@
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import {
+  HubManagedOperationRequiredError,
   SourceArchivedError,
   SourceNotFoundError,
   SourceReadOnlyError,
@@ -23,12 +24,39 @@ export async function requireHubManagedSource(
   caller: CallerContext,
   sourceId: string,
 ): Promise<SourcePolicy> {
+  return requireOwnedSource(repositories, caller, sourceId, "HUB_MANAGED");
+}
+
+/**
+  * Source projection preamble (spec §15.3, plan §6): same ordering as the Hub
+  * path — trusted CallerContext → resolve and lock Source on this connection
+  * → transaction-scoped Workspace access → Source ACTIVE + SOURCE_MANAGED.
+  * HUB_MANAGED sources are rejected with HUB_MANAGED_OPERATION_REQUIRED; no
+  * force/bypass/isSync escape flag exists.
+  */
+export async function requireSourceManagedSource(
+  repositories: KnowledgeRepositories,
+  caller: CallerContext,
+  sourceId: string,
+): Promise<SourcePolicy> {
+  return requireOwnedSource(repositories, caller, sourceId, "SOURCE_MANAGED");
+}
+
+async function requireOwnedSource(
+  repositories: KnowledgeRepositories,
+  caller: CallerContext,
+  sourceId: string,
+  ownership: "HUB_MANAGED" | "SOURCE_MANAGED",
+): Promise<SourcePolicy> {
   await repositories.users.upsertIdentity(caller.identity);
   const source = await repositories.sourcePolicy.lockById(sourceId);
   if (!source) throw new SourceNotFoundError();
   await repositories.workspaceAccess.requireMembership(caller, source.workspaceId);
   if (source.status !== "ACTIVE") throw new SourceArchivedError();
-  if (source.ownership !== "HUB_MANAGED") throw new SourceReadOnlyError();
+  if (source.ownership !== ownership) {
+    if (ownership === "HUB_MANAGED") throw new SourceReadOnlyError();
+    throw new HubManagedOperationRequiredError();
+  }
   return source;
 }
 

@@ -7,7 +7,6 @@ import type { KnowledgeDocument } from "../domain/document";
 import type { KnowledgeRevision } from "../domain/revision";
 import type { KnowledgeTreeNode } from "../domain/tree-node";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "../ports/unit-of-work";
-import { applySourceManagedMutation, archiveSourceManagedDocument, type ControlledKnowledgeOperations, type SourceManagedMutation } from "./mutations";
 import { assertActiveDocumentPlacement, assertActiveFolderAncestry } from "./tree-validation";
 import type { HubKnowledgeCommandService } from "./hub-knowledge-command-service";
 
@@ -66,7 +65,7 @@ function buildTree(nodes: Awaited<ReturnType<KnowledgeRepositories["tree"]["list
   return byParent.get(null) ?? [];
 }
 
-export class KnowledgeApplicationService implements ControlledKnowledgeOperations {
+export class KnowledgeApplicationService {
   private readonly unitOfWork: KnowledgeUnitOfWork;
   private readonly hub?: HubCommandDelegate;
 
@@ -248,13 +247,5 @@ export class KnowledgeApplicationService implements ControlledKnowledgeOperation
       requireHubSource(await requireSourceAccess(repositories, caller, existing.sourceId, true));
       await repositories.tree.updatePosition(nodeId, position, caller.identity.id);
     });
-  }
-
-  applySourceManagedMutation(repositories: KnowledgeRepositories, input: SourceManagedMutation): Promise<RevisionResult> {
-    return applySourceManagedMutation(repositories, input);
-  }
-
-  archiveSourceManagedDocument(repositories: KnowledgeRepositories, documentId: string, actorId: string): Promise<void> {
-    return archiveSourceManagedDocument(repositories, documentId, actorId);
   }
 }

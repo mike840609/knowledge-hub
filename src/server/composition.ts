@@ -21,7 +21,7 @@ function buildServices(databasePool: Pool) {
   const identityProvider = new LocalIdentityProvider();
   const hub = new HubKnowledgeCommandServiceImpl(unitOfWork);
   const knowledge = new KnowledgeApplicationService(unitOfWork, hub);
-  const sources = new SourceApplicationService(unitOfWork, knowledge);
+  const sources = new SourceApplicationService(unitOfWork);
   const workspaces = new WorkspaceQueryService(unitOfWork);
   return { identityProvider, unitOfWork, knowledge, hub, sources, workspaces };
 }
