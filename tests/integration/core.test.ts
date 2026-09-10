@@ -183,13 +183,23 @@ describe("Knowledge application transactions", () => {
     const document = await createDocumentForAnySource(pool, fixture.source.id, fixture.folderId);
     const service = new KnowledgeApplicationService(new MariaDbUnitOfWork(pool));
     const caller = fixtureCaller();
-    await expect(service.createRevision(caller, document.documentId, { title: "no", markdown: "no", metadata: {} })).rejects.toBeInstanceOf(SourceReadOnlyError);
-    await expect(service.archiveDocument(caller, document.documentId)).rejects.toBeInstanceOf(SourceReadOnlyError);
-    await expect(service.restoreDocument(caller, document.documentId)).rejects.toBeInstanceOf(SourceReadOnlyError);
     const tree = await new MariaDbUnitOfWork(pool).run(async ({ tree }) => (await tree.listBySource(fixture.source.id)).find((item) => item.documentId === document.documentId));
-    await expect(service.moveTreeNode(caller, tree!.id, null)).rejects.toBeInstanceOf(SourceReadOnlyError);
-    await expect(service.renameFolder(caller, fixture.folderId, "no")).rejects.toBeInstanceOf(SourceReadOnlyError);
-    await expect(service.reorderNode(caller, fixture.folderId, 2)).rejects.toBeInstanceOf(SourceReadOnlyError);
+    const operations: Array<() => Promise<unknown>> = [
+      () => service.createRevision(caller, document.documentId, { title: "no", markdown: "no", metadata: {} }),
+      () => service.archiveDocument(caller, document.documentId),
+      () => service.restoreDocument(caller, document.documentId),
+      () => service.moveTreeNode(caller, tree!.id, null),
+      () => service.renameFolder(caller, fixture.folderId, "no"),
+      () => service.reorderNode(caller, fixture.folderId, 2),
+    ];
+    for (const run of operations) {
+      const error = await run().then(
+        (): null => null,
+        (caught: unknown) => caught,
+      );
+      expect(error).toBeInstanceOf(SourceReadOnlyError);
+      expect((error as SourceReadOnlyError).code).toBe("SOURCE_MANAGED_READ_ONLY");
+    }
   });
 
   it("prevents identity id/employee collisions and keeps the existing user", async () => {

@@ -1,4 +1,4 @@
-import { IntegrityError } from "@/modules/knowledge/domain/errors";
+import { IntegrityViolationError } from "@/modules/knowledge/domain/errors";
 import type { KnowledgeDocument } from "@/modules/knowledge/domain/document";
 import type { DocumentRepository } from "@/modules/knowledge/ports/document-repository";
 import type { QueryConnection, DbRow } from "./shared";
@@ -17,7 +17,7 @@ export class MariaDbDocumentRepository implements DocumentRepository {
   constructor(private readonly connection: QueryConnection) {}
 
   async insertDraft(document: KnowledgeDocument): Promise<void> {
-    if (document.currentRevisionId !== null) throw new IntegrityError("A document draft must not have a current revision.");
+    if (document.currentRevisionId !== null) throw new IntegrityViolationError("A document draft must not have a current revision.");
     await this.connection.query(
       `INSERT INTO knowledge_documents (id, source_id, current_revision_id, status, created_by, updated_by, archived_by, archived_at, created_at, updated_at)
        VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)`,
@@ -40,7 +40,7 @@ export class MariaDbDocumentRepository implements DocumentRepository {
       "UPDATE knowledge_documents SET current_revision_id = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP(6) WHERE id = ?",
       [revisionId, updatedBy, documentId],
     );
-    if (affectedRows(result) !== 1) throw new IntegrityError("Document current revision could not be updated.");
+    if (affectedRows(result) !== 1) throw new IntegrityViolationError("Document current revision could not be updated.");
   }
 
   async assertComplete(documentId: string): Promise<void> {
@@ -53,7 +53,7 @@ export class MariaDbDocumentRepository implements DocumentRepository {
     );
     const row = rows[0];
     if (!row || row.current_revision_id === null || String(row.revision_document_id) !== documentId) {
-      throw new IntegrityError("A committed Knowledge document must have a current revision belonging to itself.");
+      throw new IntegrityViolationError("A committed Knowledge document must have a current revision belonging to itself.");
     }
   }
 
@@ -64,6 +64,6 @@ export class MariaDbDocumentRepository implements DocumentRepository {
       "UPDATE knowledge_documents SET status = ?, updated_by = ?, archived_by = ?, archived_at = ?, updated_at = CURRENT_TIMESTAMP(6) WHERE id = ?",
       [status, actorId, archivedBy, archivedAt, documentId],
     );
-    if (affectedRows(result) !== 1) throw new IntegrityError("Document lifecycle could not be updated.");
+    if (affectedRows(result) !== 1) throw new IntegrityViolationError("Document lifecycle could not be updated.");
   }
 }

@@ -1,4 +1,4 @@
-import { IntegrityError } from "@/modules/knowledge/domain/errors";
+import { IntegrityError, IntegrityViolationError } from "@/modules/knowledge/domain/errors";
 import type { DatabaseConnection } from "../pool";
 
 export type DbRow = Record<string, unknown>;
@@ -40,7 +40,7 @@ export function mapDatabaseError(error: unknown): Error {
   const message = error instanceof Error ? error.message : "Database operation failed.";
   const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
   if (["ER_DUP_ENTRY", "ER_NO_REFERENCED_ROW_2", "ER_ROW_IS_REFERENCED_2", "ER_CHECK_CONSTRAINT_VIOLATED", "ER_NO_REFERENCED_ROW"].includes(code)) {
-    return new IntegrityError("The requested data violates a Knowledge Hub integrity constraint.");
+    return new IntegrityViolationError();
   }
   const wrapped = new Error("Database operation failed.");
   wrapped.cause = { code, message };

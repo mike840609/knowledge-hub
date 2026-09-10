@@ -1,4 +1,4 @@
-import { NotFoundError } from "@/modules/knowledge/domain/errors";
+import { SourceNotFoundError } from "@/modules/knowledge/domain/errors";
 import type { SourceOwnership, SourceType } from "@/modules/knowledge/domain/source-policy";
 import type { KnowledgeSource } from "@/modules/sources/domain/source";
 import type { SourceRepository } from "@/modules/sources/ports/source-repository";
@@ -53,7 +53,7 @@ export class MariaDbSourceRepository implements SourceRepository {
     );
     if (affectedRows(result) !== 1) return null;
     const source = await this.findById(sourceId);
-    if (!source) throw new NotFoundError("Knowledge source was not found after version guard.");
+    if (!source) throw new SourceNotFoundError("Knowledge source was not found after version guard.");
     return source.syncVersion;
   }
 }

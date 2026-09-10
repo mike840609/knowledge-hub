@@ -6,6 +6,7 @@ import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction
 import { MariaDbSourceRepository } from "@/infrastructure/database/mariadb/repositories/sources";
 import { KnowledgeApplicationService } from "@/modules/knowledge/application/service";
 import { SourceApplicationService } from "@/modules/sources/application/source-version-guard";
+import { VersionConflictError } from "@/modules/knowledge/domain/errors";
 import { contentFingerprint } from "@/modules/knowledge/domain/content";
 import { createDocumentForAnySource, createEntryFixture, createSourceFixture, fixtureCaller, fixtureIdentity, secondFixtureIdentity } from "../fixtures/knowledge";
 import { uuidv7 } from "@/shared/ids/uuidv7";
@@ -167,7 +168,12 @@ describe("SourceEntry and source version safety", () => {
     expect(await pool.query("SELECT * FROM knowledge_tree_nodes WHERE source_id = ? ORDER BY id", [fixture.source.id])).toEqual(beforeTree);
     expect(await pool.query("SELECT * FROM knowledge_revisions WHERE document_id = ? ORDER BY revision_no", [document.documentId])).toEqual(beforeRevisions);
     expect(await pool.query<{ status: string; result_version: number }[]>("SELECT status, result_version FROM sync_runs WHERE id = ?", [result.runId])).toEqual([{ status: "APPLIED", result_version: 1 }]);
-    await expect(sourceService().applyKnownEntry({ sourceId: fixture.source.id, basedOnVersion: 0, entryId: entry.entryId, documentId: document.documentId, externalId: entry.externalId, sourcePath: "docs/fixture.md", content })).rejects.toThrow();
+    const stale = await sourceService().applyKnownEntry({ sourceId: fixture.source.id, basedOnVersion: 0, entryId: entry.entryId, documentId: document.documentId, externalId: entry.externalId, sourcePath: "docs/fixture.md", content }).then(
+      (): null => null,
+      (caught: unknown) => caught,
+    );
+    expect(stale).toBeInstanceOf(VersionConflictError);
+    expect((stale as VersionConflictError).code).toBe("VERSION_CONFLICT");
   });
 
   it("restores a known mapping with the same Document ID and versions changed content once", async () => {
