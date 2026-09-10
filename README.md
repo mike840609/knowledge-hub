@@ -19,6 +19,7 @@ Repository 目前沒有 `package.json`、應用程式骨架、資料庫 migratio
 | [Phase 0–9 目標與路線圖](docs/superpowers/roadmaps/2026-09-10-knowledge-hub-phase-roadmap.md) | 了解各階段要達成什麼、交付範圍與里程碑 |
 | [Phase 0 Foundation & Architecture Design](docs/superpowers/specs/2026-09-10-phase-0-foundation-architecture-design.md) | 已確認架構、領域模型、交易安全、驗收條件與 ADR |
 | [Phase 0 Implementation Plan](docs/superpowers/plans/2026-09-10-phase-0-foundation-implementation.md) | 10 個實作任務、21 個行為驗收案例與執行依賴 |
+| [設計審查：Critical / High](docs/superpowers/reviews/2026-09-10-design-review-critical-high.md) | 對現有設計文件的獨立審查意見；尚未併入既有規格 |
 
 閱讀順序建議：路線圖 → Phase 0 設計規格 → Phase 0 實作計畫。下一個執行起點是實作計畫的 **T01：建立 Next.js 與工具骨架**。
 
@@ -86,7 +87,8 @@ README.md
 docs/superpowers/
 ├── roadmaps/      # 各 Phase 目標與里程碑
 ├── specs/         # 各 Phase 已確認的設計規格
-└── plans/         # 各 Phase 實作任務與驗證方式
+├── plans/         # 各 Phase 實作任務與驗證方式
+└── reviews/       # 設計審查意見；未併入規格前不視為決策
 ```
 
 實際執行驗收後，將結果放入 `docs/superpowers/verification/`；目前尚無驗收紀錄。各 Phase 的詳細 spec／plan 依進度產出，不以路線圖取代完整設計。
