@@ -4,6 +4,7 @@ import { databaseConfig } from "@/infrastructure/database/mariadb/config";
 import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
 import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction";
 import { KnowledgeApplicationService } from "@/modules/knowledge/application/service";
+import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
 import { SourceApplicationService } from "@/modules/sources/application/source-version-guard";
 import { WorkspaceQueryService } from "@/modules/workspaces/application/workspace-query-service";
 import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
@@ -49,7 +50,8 @@ describe("Workspace access boundary", () => {
 
     const aliceKnowledge = new KnowledgeApplicationService(uow);
     const bobKnowledge = new KnowledgeApplicationService(uow);
-    const created = await aliceKnowledge.createHubManagedDocument(aliceCaller, { sourceId, parentId: folderId, title: "Shared", markdown: "body", metadata: {} });
+    const hub = new HubKnowledgeCommandServiceImpl(uow);
+    const created = await hub.createDocument(aliceCaller, { sourceId, parentId: folderId, title: "Shared", markdown: "body", metadata: {} });
     await expect(bobKnowledge.getDocument(bobCaller, created.documentId)).resolves.toMatchObject({ document: { id: created.documentId } });
     await expect(bobKnowledge.listTree(bobCaller, sourceId)).resolves.toHaveLength(1);
 

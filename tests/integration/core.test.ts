@@ -7,7 +7,8 @@ import { runMigrations } from "../../scripts/db/migrate";
 import type { Migration } from "@/infrastructure/database/mariadb/migrations/types";
 import { migrations } from "@/infrastructure/database/mariadb/migrations";
 import { KnowledgeApplicationService } from "@/modules/knowledge/application/service";
-import { IdentityError, SourceReadOnlyError } from "@/modules/knowledge/domain/errors";
+import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
+import { IdentityError, RevisionConflictError, SourceReadOnlyError } from "@/modules/knowledge/domain/errors";
 import type { SourcePolicy } from "@/modules/knowledge/domain/source-policy";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "@/modules/knowledge/ports/unit-of-work";
 import { createDocumentFixture, createDocumentForAnySource, createEntryFixture, createSourceFixture, ensureUser, fixtureCaller, fixtureIdentity, secondFixtureIdentity } from "../fixtures/knowledge";
@@ -140,13 +141,14 @@ describe("Knowledge application transactions", () => {
   it("creates, reads, revises, moves, archives, and restores with stable identity", async () => {
     const fixture = await createSourceFixture(pool);
     const service = new KnowledgeApplicationService(new MariaDbUnitOfWork(pool));
+    const hub = new HubKnowledgeCommandServiceImpl(new MariaDbUnitOfWork(pool));
     const caller = fixtureCaller();
-    const created = await service.createHubManagedDocument(caller, { sourceId: fixture.source.id, parentId: fixture.folderId, title: "Initial", markdown: "body", metadata: { a: 1 } });
-    const noChange = await service.createRevision(caller, created.documentId, { title: "Initial", markdown: "body", metadata: { a: 1 } });
+    const created = await hub.createDocument(caller, { sourceId: fixture.source.id, parentId: fixture.folderId, title: "Initial", markdown: "body", metadata: { a: 1 } });
+    const noChange = await hub.createRevision(caller, { documentId: created.documentId, expectedCurrentRevisionId: created.revisionId, title: "Initial", markdown: "body", metadata: { a: 1 } });
     expect(noChange.changed).toBe(false);
-    const titleChange = await service.createRevision(caller, created.documentId, { title: "Renamed article", markdown: "body", metadata: { a: 1 } });
+    const titleChange = await hub.createRevision(caller, { documentId: created.documentId, expectedCurrentRevisionId: created.revisionId, title: "Renamed article", markdown: "body", metadata: { a: 1 } });
     expect(titleChange.changed).toBe(true);
-    const metadataChange = await service.createRevision(caller, created.documentId, { title: "Renamed article", markdown: "body", metadata: { a: 2 } });
+    const metadataChange = await hub.createRevision(caller, { documentId: created.documentId, expectedCurrentRevisionId: titleChange.revisionId, title: "Renamed article", markdown: "body", metadata: { a: 2 } });
     expect(metadataChange.revisionNo).toBe(3);
     const treeBefore = await service.listTree(caller, fixture.source.id);
     expect(treeBefore.flatMap((item) => item.children).some((item) => item.documentId === created.documentId && item.name === "Renamed article")).toBe(true);
@@ -196,10 +198,11 @@ describe("Knowledge application transactions", () => {
     const fixture = await createSourceFixture(pool, { managed: true });
     const document = await createDocumentForAnySource(pool, fixture.source.id, fixture.folderId);
     const service = new KnowledgeApplicationService(new MariaDbUnitOfWork(pool));
+    const hub = new HubKnowledgeCommandServiceImpl(new MariaDbUnitOfWork(pool));
     const caller = fixtureCaller();
     const tree = await new MariaDbUnitOfWork(pool).run(async ({ tree }) => (await tree.listBySource(fixture.source.id)).find((item) => item.documentId === document.documentId));
     const operations: Array<() => Promise<unknown>> = [
-      () => service.createRevision(caller, document.documentId, { title: "no", markdown: "no", metadata: {} }),
+      () => hub.createRevision(caller, { documentId: document.documentId, expectedCurrentRevisionId: document.revisionId, title: "no", markdown: "no", metadata: {} }),
       () => service.archiveDocument(caller, document.documentId),
       () => service.restoreDocument(caller, document.documentId),
       () => service.moveTreeNode(caller, tree!.id, null),
@@ -277,10 +280,20 @@ describe("Knowledge application transactions", () => {
     expect(nodes.some((node) => node.id === fixture.folderId && node.parentId === folderB && nodes.find((other) => other.id === folderB)?.parentId === fixture.folderId)).toBe(false);
 
     const doc = await createDocumentFixture(pool, fixture.source.id, fixture.folderId);
-    const revisionServiceA = new KnowledgeApplicationService(new MariaDbUnitOfWork(pool));
-    const revisionServiceB = new KnowledgeApplicationService(new MariaDbUnitOfWork(pool));
-    const revisions = await Promise.all([revisionServiceA.createRevision(fixtureCaller(), doc.documentId, { title: "A", markdown: "A", metadata: {} }), revisionServiceB.createRevision(fixtureCaller(secondFixtureIdentity), doc.documentId, { title: "B", markdown: "B", metadata: {} })]);
-    expect(new Set(revisions.map((revision) => revision.revisionNo))).toEqual(new Set([2, 3]));
+    const revisionServiceA = new HubKnowledgeCommandServiceImpl(new MariaDbUnitOfWork(pool));
+    const revisionServiceB = new HubKnowledgeCommandServiceImpl(new MariaDbUnitOfWork(pool));
+    const revisions = await Promise.allSettled([
+      revisionServiceA.createRevision(fixtureCaller(), { documentId: doc.documentId, expectedCurrentRevisionId: doc.revisionId, title: "A", markdown: "A", metadata: {} }),
+      revisionServiceB.createRevision(fixtureCaller(secondFixtureIdentity), { documentId: doc.documentId, expectedCurrentRevisionId: doc.revisionId, title: "B", markdown: "B", metadata: {} }),
+    ]);
+    const fulfilled = revisions.filter((result): result is PromiseFulfilledResult<{ revisionId: string; revisionNo: number; changed: boolean }> => result.status === "fulfilled");
+    const rejected = revisions.filter((result): result is PromiseRejectedResult => result.status === "rejected");
+    expect(fulfilled).toHaveLength(1);
+    expect(fulfilled[0]?.value.revisionNo).toBe(2);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]?.reason).toBeInstanceOf(RevisionConflictError);
+    const finalRevisions = await new MariaDbUnitOfWork(pool).run((repositories) => repositories.revisions.listByDocument(doc.documentId));
+    expect(finalRevisions.map((revision) => revision.revisionNo)).toEqual([1, 2]);
   });
 
   it("rejects archived or cross-source ancestors and does not reparent on restore", async () => {
@@ -290,8 +303,9 @@ describe("Knowledge application transactions", () => {
     await new MariaDbUnitOfWork(pool).run(async ({ tree }) => tree.insert({ id: nested, sourceId: first.source.id, parentId: first.folderId, nodeType: "FOLDER", name: "Nested", documentId: null, position: 1, status: "ACTIVE", updatedBy: fixtureIdentity.id, archivedBy: null, archivedAt: null }));
     await pool.query("UPDATE knowledge_tree_nodes SET status = 'ARCHIVED', updated_by = ?, archived_by = ?, archived_at = CURRENT_TIMESTAMP(6) WHERE id = ?", [fixtureIdentity.id, fixtureIdentity.id, first.folderId]);
     const service = new KnowledgeApplicationService(new MariaDbUnitOfWork(pool));
+    const hub = new HubKnowledgeCommandServiceImpl(new MariaDbUnitOfWork(pool));
     const caller = fixtureCaller();
-    await expect(service.createHubManagedDocument(caller, { sourceId: first.source.id, parentId: nested, title: "No", markdown: "No", metadata: {} })).rejects.toThrow();
+    await expect(hub.createDocument(caller, { sourceId: first.source.id, parentId: nested, title: "No", markdown: "No", metadata: {} })).rejects.toThrow();
     await expect(service.moveTreeNode(caller, nested, second.folderId)).rejects.toThrow();
     const document = await createDocumentForAnySource(pool, first.source.id, first.folderId);
     await service.archiveDocument(caller, document.documentId);

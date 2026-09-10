@@ -5,7 +5,10 @@ export async function assertActiveFolderAncestry(repositories: KnowledgeReposito
   const nodes = await repositories.tree.listBySource(sourceId);
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const folder = byId.get(folderId);
-  if (!folder) throw new TreeNodeNotFoundError("Parent folder was not found.");
+  if (!folder) {
+    if (await repositories.tree.findById(folderId)) throw new InvalidParentError();
+    throw new TreeNodeNotFoundError("Parent folder was not found.");
+  }
   if (folder.sourceId !== sourceId || folder.nodeType !== "FOLDER" || folder.status !== "ACTIVE") throw new InvalidParentError();
   const seen = new Set<string>();
   let cursor: string | null = folder.parentId;

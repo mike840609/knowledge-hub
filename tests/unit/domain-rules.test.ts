@@ -20,7 +20,7 @@ import {
   VersionConflictError,
 } from "@/modules/knowledge/domain/errors";
 import { WorkspaceAccessDeniedError, WorkspaceNotFoundError } from "@/modules/workspaces/domain/errors";
-import { KnowledgeApplicationService } from "@/modules/knowledge/application/service";
+import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "@/modules/knowledge/ports/unit-of-work";
 import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 
@@ -50,8 +50,8 @@ describe("foundation domain rules", () => {
         tree: {},
       } as unknown as KnowledgeRepositories;
     const fakeUow: KnowledgeUnitOfWork = { run: async (work) => work(fakeRepositories) };
-    const service = new KnowledgeApplicationService(fakeUow);
-    const error = await service.createRevision(caller, "d", { title: "new", markdown: "m", metadata: {} }).then(
+    const hub = new HubKnowledgeCommandServiceImpl(fakeUow);
+    const error = await hub.createRevision(caller, { documentId: "d", expectedCurrentRevisionId: "r", title: "new", markdown: "m", metadata: {} }).then(
       (): null => null,
       (caught: unknown) => caught,
     );

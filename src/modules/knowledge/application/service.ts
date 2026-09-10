@@ -9,6 +9,10 @@ import type { KnowledgeTreeNode } from "../domain/tree-node";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "../ports/unit-of-work";
 import { applySourceManagedMutation, archiveSourceManagedDocument, type ControlledKnowledgeOperations, type SourceManagedMutation } from "./mutations";
 import { assertActiveDocumentPlacement, assertActiveFolderAncestry } from "./tree-validation";
+import type { HubKnowledgeCommandService } from "./hub-knowledge-command-service";
+
+/** Temporary Task 4 delegation target. Removed with service.ts in Task 9. */
+export type HubCommandDelegate = Pick<HubKnowledgeCommandService, "createDocument" | "createRevision">;
 
 export type CreateDocumentInput = ContentInput & { sourceId: string; parentId?: string | null };
 export type RevisionResult = { documentId: string; revisionId: string; revisionNo: number; changed: boolean };
@@ -64,10 +68,21 @@ function buildTree(nodes: Awaited<ReturnType<KnowledgeRepositories["tree"]["list
 
 export class KnowledgeApplicationService implements ControlledKnowledgeOperations {
   private readonly unitOfWork: KnowledgeUnitOfWork;
+  private readonly hub?: HubCommandDelegate;
 
-  constructor(unitOfWork: KnowledgeUnitOfWork) { this.unitOfWork = unitOfWork; }
+  constructor(unitOfWork: KnowledgeUnitOfWork, hub?: HubCommandDelegate) {
+    this.unitOfWork = unitOfWork;
+    this.hub = hub;
+  }
 
   async createHubManagedDocument(caller: CallerContext, input: CreateDocumentInput): Promise<{ documentId: string; revisionId: string }> {
+    if (this.hub) {
+      const created = await this.hub.createDocument(caller, {
+        sourceId: input.sourceId, parentId: input.parentId ?? null,
+        title: input.title, markdown: input.markdown, metadata: input.metadata,
+      });
+      return { documentId: created.documentId, revisionId: created.revisionId };
+    }
     const { normalized: content, contentHash } = fingerprintRevisionContent(input);
     return this.unitOfWork.run(async (repositories) => {
       await repositories.users.upsertIdentity(caller.identity);
@@ -113,6 +128,15 @@ export class KnowledgeApplicationService implements ControlledKnowledgeOperation
   }
 
   async createRevision(caller: CallerContext, documentId: string, input: ContentInput): Promise<RevisionResult> {
+    if (this.hub) {
+      const current = await this.getCurrentRevision(caller, documentId);
+      if (!current) throw new DocumentNotFoundError();
+      const revised = await this.hub.createRevision(caller, {
+        documentId, expectedCurrentRevisionId: current.id,
+        title: input.title, markdown: input.markdown, metadata: input.metadata,
+      });
+      return { documentId, revisionId: revised.revisionId, revisionNo: revised.revisionNo, changed: revised.changed };
+    }
     const { normalized: content, contentHash } = fingerprintRevisionContent(input);
     return this.unitOfWork.run(async (repositories) => {
       await repositories.users.upsertIdentity(caller.identity);

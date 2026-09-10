@@ -4,6 +4,7 @@ import { databaseConfig } from "@/infrastructure/database/mariadb/config";
 import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
 import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction";
 import { KnowledgeApplicationService } from "@/modules/knowledge/application/service";
+import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
 import { SourceApplicationService } from "@/modules/sources/application/source-version-guard";
 import { WorkspaceQueryService } from "@/modules/workspaces/application/workspace-query-service";
 
@@ -18,10 +19,11 @@ function getPool(): Pool {
 function buildServices(databasePool: Pool) {
   const unitOfWork = new MariaDbUnitOfWork(databasePool);
   const identityProvider = new LocalIdentityProvider();
-  const knowledge = new KnowledgeApplicationService(unitOfWork);
+  const hub = new HubKnowledgeCommandServiceImpl(unitOfWork);
+  const knowledge = new KnowledgeApplicationService(unitOfWork, hub);
   const sources = new SourceApplicationService(unitOfWork, knowledge);
   const workspaces = new WorkspaceQueryService(unitOfWork);
-  return { identityProvider, unitOfWork, knowledge, sources, workspaces };
+  return { identityProvider, unitOfWork, knowledge, hub, sources, workspaces };
 }
 
 export function applicationServices() {

@@ -2,7 +2,7 @@ import type { Pool } from "mariadb";
 import type { UserIdentity } from "@/modules/identity/domain/user-identity";
 import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction";
-import { KnowledgeApplicationService } from "@/modules/knowledge/application/service";
+import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
 import { contentFingerprint } from "@/modules/knowledge/domain/content";
 import type { KnowledgeSource } from "@/modules/sources/domain/source";
 import { uuidv7 } from "@/shared/ids/uuidv7";
@@ -44,8 +44,8 @@ export async function createSourceFixture(pool: Pool, options: { managed?: boole
 
 export async function createDocumentFixture(pool: Pool, sourceId: string, folderId: string, identity = fixtureIdentity) {
   await ensureUser(pool, identity);
-  const service = new KnowledgeApplicationService(new MariaDbUnitOfWork(pool));
-  return service.createHubManagedDocument(callerFromIdentity(identity), { sourceId, parentId: folderId, title: "Fixture Document", markdown: "fixture body", metadata: { fixture: true } });
+  const hub = new HubKnowledgeCommandServiceImpl(new MariaDbUnitOfWork(pool));
+  return hub.createDocument(callerFromIdentity(identity), { sourceId, parentId: folderId, title: "Fixture Document", markdown: "fixture body", metadata: { fixture: true } });
 }
 
 export async function createDocumentForAnySource(pool: Pool, sourceId: string, folderId: string, identity = fixtureIdentity) {
