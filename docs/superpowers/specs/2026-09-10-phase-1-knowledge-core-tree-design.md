@@ -299,7 +299,7 @@ Hub-native documents 可以沒有 SourceEntry。SourceEntry 是 source mapping�
 2. 固定 migration `004-phase-1-tree-mapping.ts` 只新增 nullable `tree_node_id UUID`，不含環境資料。擴充 runner 的 target-version 選項，載入完整 manifest 驗證既有 ledger，但只執行到指定版本；不得截短 manifest，否則會誤判較新已套用版本為 unknown。target 低於已套用版本時清楚拒絕，不 rollback。
 3. 同一獨立 script 以參數化 SQL 在一個 DML transaction 回填；輸入不進 migration manifest、statements 或 checksum。已正確回填的 row 為 NOOP；既有不一致 mapping 拒絕，不覆寫。執行與 dry-run 都重新驗證全體 mapping，失敗整次 DML rollback。
 4. 固定 migration `005-phase-1-tree-mapping-constraints.ts` 收緊 `tree_node_id NOT NULL`，加 same-source FK、`UNIQUE(source_id, tree_node_id)`。DOCUMENT equality 由 `(document_id, tree_node_id)` FK → TreeNode `(document_id, id)` 保護，明確新增對應 `UNIQUE(document_id, id)` 作 referenced key；保留原 `UNIQUE(document_id)`，兩者用途不同。Folder 的 document_id=NULL 使此 FK 不檢查該組，因此 Folder entry 必須指向 FOLDER node 由 application assertion 驗證；preflight 同樣驗證所有既有 rows。entry type/document null shape 由既有 CHECK 保護。
-5. Runner 在寫入 005 的 RUNNING ledger 前，執行固定的唯讀 mapping-readiness gate（非 operator 資料、非動態 statements）。不完整即退出，005 ledger 不新增，補完回填後可重跑。普通 migrate 不得自動跳過回填或直接將未就緒的 005 記 FAILED。空 DB 以同一份 004／005 manifest 執行，gate 自然通過。
+5. Migration 型別增加 optional `beforeApply` hook（固定程式碼、接收 runner 同一 connection 的唯讀 query contract）；005 掛載 mapping-readiness hook，runner 在 migration lock 內、寫入 RUNNING ledger 前呼叫。checksum 仍只 hash statements，hook 不接受 operator input、不寫資料、不產生動態 manifest。執行固定的唯讀 mapping-readiness gate（非 operator 資料、非動態 statements）。不完整即退出，005 ledger 不新增，補完回填後可重跑。普通 migrate 不得自動跳過回填或直接將未就緒的 005 記 FAILED。空 DB 以同一份 004／005 manifest 執行，gate 自然通過。
 
 預定命令（須在 Task 2 實作 CLI 支援後才能執行）：
 
@@ -309,6 +309,9 @@ npx tsx scripts/db/backfill-source-tree-mapping.ts --mapping /path/to/verified-m
 npx tsx scripts/db/backfill-source-tree-mapping.ts --mapping /path/to/verified-mapping.json --apply
 npm run db:migrate -- --to 5
 ```
+
+
+若 populated DB 尚有待回填 entries，直接執行無參數 `npm run db:migrate` 會先完成 004，再由 005 gate 安全停止；004 保持 APPLIED、005 不產生 ledger row。這是預期且可恢復的停點：執行回填後重跑即可，不需修 checksum 或 ledger。沒有待回填 entries 時可直接通過。測試需涵蓋此無參數路徑。
 
 步驟 1 在首次 DDL 前也可執行同一 dry-run；script 支援欄位尚不存在的盤點狀態。沒有 Folder entries 時提供空對照即可。backfill script 的資料交易不宣稱涵蓋 DDL；DDL 中斷沿用 FAILED/RUNNING 診斷與明確修復程序，不能盲目重跑或修改已套用 checksum。
 
@@ -884,6 +887,8 @@ getAncestors(caller, nodeId, includeArchived = false)
 Phase 1 尚未實作 production roles/capabilities，但 Workspace membership foundation 已是 application contract 的必要檢查；Phase 3 在相同 resource/policy boundary 上補 production governance。
 
 這些 application services不依賴 React、HTTP、MCP 或 scanner，也不從 ambient/global request state自行取得 caller。Phase 4 HTTP Read API 與 Phase 7 MCP 可直接 reuse。
+
+Source listing 統一由 KnowledgeQueryService 提供 required workspaceId + includeArchived contract。Task 8 將 SourceApplicationService.listSources 的所有 consumers（含 Knowledge page）遷入後移除舊 application 方法；repository 新增 workspace-scoped archived-aware 查詢，保留的 active-only helper 只能委派到同一實作。不得留下兩條語意不同的公開 listing 路徑。
 
 ### 22.1 Missing／archived query contract
 

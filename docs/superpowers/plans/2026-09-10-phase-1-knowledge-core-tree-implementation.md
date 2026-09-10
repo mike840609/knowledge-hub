@@ -341,18 +341,16 @@ Document TreeNode uniqueness already exists
 lifecycle-bearing rows have updated_by / archived_by / archived_at
 ```
 
-- [ ] **Step 3a: Define and track errors and consumer migration**
+- [ ] **Step 3a: Complete error foundations against the existing services**
 
-Task 1 owns this checklist; execute consumer cutover alongside Tasks 4–9 as replacement services become available, and close it before Task 10. Implement §5 target codes before dependent commands. Keep existing SourceReadOnlyError class identity with new SOURCE_MANAGED_READ_ONLY code, preserving instanceof consumers; retain ValidationError/NotFoundError/IntegrityError as compatible bases and add precise subclasses for targeted Knowledge failures. New KnowledgeError used by candidate validation must be defined under the shared DomainError hierarchy. Keep IDENTITY_ERROR and source VERSION_CONFLICT unchanged; add distinct REVISION_CONFLICT. WorkspaceAccessDeniedError remains in Workspaces; WORKSPACE_NOT_FOUND is added there. No global string replacement of unrelated errors.
+Complete this step within Task 1 using the existing Phase 0 services. Define §5 error classes/codes and migrate existing applicable error sites; codes for operations not yet present are wired and behavior-tested by the task introducing that operation. Do not change service signatures or remove existing services in Task 1. Keep existing SourceReadOnlyError class identity with new SOURCE_MANAGED_READ_ONLY code, preserving instanceof consumers; retain ValidationError/NotFoundError/IntegrityError as compatible bases and add precise subclasses for targeted Knowledge failures. New KnowledgeError used by candidate validation must be defined under the shared DomainError hierarchy. Keep IDENTITY_ERROR and source VERSION_CONFLICT unchanged; add distinct REVISION_CONFLICT. WorkspaceAccessDeniedError remains in Workspaces; WORKSPACE_NOT_FOUND is added there. No global string replacement of unrelated errors.
 
-- [ ] Map old NOT_FOUND sites to resource-specific not-found subclasses, VALIDATION_ERROR sites to the declared semantic validation codes, INTEGRITY_ERROR Knowledge integrity sites to INTEGRITY_VIOLATION, and SOURCE_READ_ONLY to SOURCE_MANAGED_READ_ONLY while preserving the class above. Implement the remaining §5 codes at their owning operations; update DB error mapping only where semantics are known.
+- [ ] Map old NOT_FOUND sites to resource-specific not-found subclasses, VALIDATION_ERROR sites to the declared semantic validation codes, INTEGRITY_ERROR Knowledge integrity sites to INTEGRITY_VIOLATION, and SOURCE_READ_ONLY to SOURCE_MANAGED_READ_ONLY while preserving the class above. Define remaining §5 codes now; Tasks 4–8 wire them to newly introduced operations; update DB error mapping only where semantics are known.
 - [ ] Update class/code assertions in `tests/integration/core.test.ts`, `tests/unit/domain-rules.test.ts` and all affected tests. Verify preserved Identity/source-version errors and new revision-conflict distinction.
-- [ ] Migrate positional createRevision/renameFolder/moveTreeNode/reorderNode calls to §3 object inputs and new names; update all source, fixture, unit/integration and composition consumers found by repository search. Task 9 removes `src/app/knowledge/actions.ts` creation action instead of retaining its obsolete call.
-- [ ] Split `src/modules/knowledge/application/service.ts` into the listed command/query/projection boundaries, update `src/server/composition.ts` and SourceApplicationService wiring, then remove old service.ts once no consumers remain. Retain shared `mutations.ts` internals as appropriate; do not keep two public mutation implementations. Typecheck and search must show no obsolete class/method imports.
 
 - [ ] **Step 3b: Add compile-time contract tests for §3**
 
-Create `tests/unit/phase1-contracts.test.ts` that imports Workspace/Knowledge service types and instantiates typed stubs. Ensure caller is a distinct first argument and cannot be smuggled inside input types.
+Create `tests/unit/phase1-contracts.test.ts` that imports standalone Workspace/Knowledge interface declarations and instantiates typed stubs; no not-yet-created service implementation imports are required. Ensure caller is a distinct first argument and cannot be smuggled inside input types.
 
 - [ ] **Step 4: Run typecheck and existing tests**
 
@@ -384,10 +382,11 @@ The current `scripts/test/integration.ts` does not forward CLI filters. Commands
 - [ ] Implement fixed 004 nullable-column DDL; no injected mapping data or generated per-environment statements.
 - [ ] Implement independent backfill script with dry-run/apply, parameterized SQL, all-or-nothing DML, idempotent matching rows, and rejection of conflicting existing mapping. Hold write quiescence through upgrade.
 - [ ] Implement fixed 005 NOT NULL, same-source FK, entry→node uniqueness, and DOCUMENT `(document_id, tree_node_id)` FK using the additional referenced `(document_id, id)` unique key. Preserve existing single-document uniqueness. Folder target node type is an explicit application assertion; test wrong-type writes through commands and preflight.
-- [ ] Add fixed read-only 005 readiness gate to runner before RUNNING ledger insertion: incomplete mapping blocks without FAILED/RUNNING pollution. Empty schema passes. Do not dynamically alter migration statements.
+- [ ] Extend Migration with optional fixed-code `beforeApply` hook receiving the runner connection via a read-query-only contract; attach it to 005 and invoke under the migration lock before RUNNING ledger insertion. Keep checksum hashing only statements; hook has no operator input, writes or dynamic SQL manifest generation. Add hook-order/failure/no-ledger tests. Add the 005 readiness gate: incomplete mapping blocks without FAILED/RUNNING pollution. Empty schema passes. Do not dynamically alter migration statements.
 - [ ] Update entry types, repositories, writers, seeds and fixtures for required mapping.
 - [ ] Test populated 001–003 → 004 → script → 005, archived rows, explicit Folder/empty mapping, preflight zero changes, DML rollback, script rerun, blocked-005 recovery, unchanged checksums on full migrate rerun, and DDL interrupted-state diagnostics.
 - [ ] Run the fresh DB suite with the exact same committed manifest as populated-upgrade tests; no environment-dependent 004. Run `npm run test:integration`.
+- [ ] Test and document untargeted migrate on pending populated data: 004 becomes APPLIED, 005 gate exits without a ledger row; backfill then rerun succeeds without ledger repair. A DB without pending entries may proceed directly.
 - [ ] Document target-version commands, backup/quiescence, script input validation and explicit DDL/ledger repair. Do not claim DDL rollback or silently repair checksums.
 
 ---
@@ -449,6 +448,7 @@ caller
 - [ ] Implement `createDocument(caller,input)` inside one READ COMMITTED transaction including Workspace access check.
 - [ ] Add stale revision conflict test.
 - [ ] Implement `createRevision` with authoritative Document→Source→Workspace resolution, Workspace access, HUB_MANAGED/ACTIVE validation, Document lock, expected revision check, canonicalization, NOOP, N+1 insert/pointer update.
+- [ ] Migrate createHubManagedDocument/createRevision consumers in tests and fixtures to Hub commands and §3 object inputs; update composition. Keep a temporary delegating adapter for consumers scheduled in later tasks so this task typechecks; no duplicate mutation implementation. Wire the new-operation error codes defined in Task 1.
 - [ ] Run tests and commit `feat: add hub knowledge command service`.
 
 ---
@@ -477,6 +477,7 @@ Rules: parent FOLDER/ACTIVE/same Source, no self/descendant cycle, no cross-Sour
 - [ ] Implement Source-level serialization and transaction-scoped Workspace access in §6 order; no writes before authorization.
 - [ ] Implement contiguous sibling ordering using `ORDER BY position,id`; no LexoRank/fractional indexing.
 - [ ] Add two-connection cycle/lock-refresh tests.
+- [ ] Migrate renameFolder/moveTreeNode/reorderNode positional callers to §3 command names/object inputs in unit/integration tests and fixtures; update temporary delegates and precise error assertions.
 - [ ] Run tests and commit `feat: complete safe knowledge tree mutations`.
 
 ---
@@ -485,12 +486,13 @@ Rules: parent FOLDER/ACTIVE/same Source, no self/descendant cycle, no cross-Sour
 
 **Files:** lifecycle internals, Hub command service, repositories, `phase1-lifecycle.test.ts`, access tests.
 
-All lifecycle operations first resolve Workspace and require access. Workspace lifecycle itself is not implemented in Phase 1.
+All lifecycle operations follow §6: BEGIN READ COMMITTED → resolve Source → lock Source → transaction-scoped membership check → resource locks and lifecycle validation → writes. Workspace lifecycle itself is not implemented in Phase 1.
 
 - [ ] Document archive/restore tests: Document + TreeNode + linked SourceEntry atomic status/provenance, revisions/current pointer unchanged, stable ID.
 - [ ] Folder lifecycle tests: empty folder archive, `FOLDER_NOT_EMPTY`, no cascade, active parent/source requirement.
 - [ ] Source lifecycle tests: SourceApplicationService implements SourceLifecycleCommands for both ownership types; same-transaction access/Source lock, visibility gate, provenance and unchanged descendant statuses.
 - [ ] Access tests: unauthorized callers cannot archive/restore resource by UUID.
+- [ ] Migrate lifecycle consumers/tests to the Hub/Source lifecycle boundaries and wire their precise error codes.
 - [ ] Implement lifecycle transactions; do not create append-only audit subsystem in Phase 1.
 - [ ] Run tests and commit `feat: add knowledge lifecycle operations`.
 
@@ -527,7 +529,7 @@ CallerContext
 - [ ] Bind internal projection commands to the caller's existing SourceRepositories transaction and authorized Source in composition; never call a nested UoW/commit or expose repositories/authority through Web inputs. Retain explicit CallerContext and verify each command targets the bound Source.
 - [ ] Create projected object and required SourceEntry mapping in the same transaction; preallocated sourceEntryId does not require a preexisting committed mapping. Return only after all mapping invariants hold.
 - [ ] Implement projected Folder rename/archive/restore with TreeNode + Entry provenance in the same transaction, no active-child cascade, and ancestor-first restore.
-- [ ] Adapt existing SourceApplicationService/ControlledKnowledgeOperations wiring rather than keeping a second mutation path. Keep sync_version, assets, APPLIED run and all commands in the shared transaction; FAILED run remains a separate post-rollback write.
+- [ ] Migrate SourceApplicationService/ControlledKnowledgeOperations consumers and composition to the transaction-bound projection interface, updating source-safety fixtures/tests and precise errors. Adapt existing wiring rather than keeping a second mutation path. Keep sync_version, assets, APPLIED run and all commands in the shared transaction; FAILED run remains a separate post-rollback write.
 - [ ] Inject failure after multiple Document/Folder projections and mapping/asset/version writes, before APPLIED commit; verify every canonical write rolls back, source version is unchanged, no nested connection is acquired, and FAILED can be recorded separately.
 - [ ] Run tests and commit `feat: add source mapping and projection boundary`.
 
@@ -535,10 +537,14 @@ CallerContext
 
 ### Task 8: Implement Workspace-Aware KnowledgeQueryService and Read Models
 
-**Files:** `knowledge-query-service.ts`, workspace query service as needed, read repository methods, `phase1-read-model.test.ts`, lifecycle/tree/access integration tests.
+**Files:** `knowledge-query-service.ts`, `src/modules/sources/application/source-version-guard.ts`, `src/modules/sources/ports/source-repository.ts`, `src/infrastructure/database/mariadb/repositories/sources.ts`, `src/server/composition.ts`, `src/app/knowledge/page.tsx`, workspace query service as needed, read repository methods, `phase1-read-model.test.ts`, lifecycle/tree/access integration tests.
 
 **Produces:** `WorkspaceQueryService.listWorkspaces(caller)` and §3 KnowledgeQueryService.
 
+- [ ] Make KnowledgeQueryService the single public Source-list query. Add repository `findByWorkspaceId(workspaceId, { includeArchived })` with ACTIVE-only default; adapt any retained findActiveByWorkspaceId internal wrapper to delegate with false.
+- [ ] Move all SourceApplicationService.listSources consumers, including `src/app/knowledge/page.tsx:24`, to KnowledgeQueryService.listSources with required authorized workspaceId. Remove the old optional-workspace application method after migration; no parallel query semantics. Update composition, source/workspace tests and fixtures; callers needing several Workspaces explicitly enumerate authorized Workspaces.
+- [ ] Test active-only default, includeArchived true, mandatory Workspace scope, unauthorized Workspace rejection, and Browser archived-source listing.
+- [ ] Migrate old KnowledgeApplicationService query consumers/view shapes to the query boundary; wire not-found codes and keep only temporary delegation needed until Task 9.
 - [ ] Read-model unit tests: Folder label from TreeNode.name, Document label from current Revision.title, no duplicated title truth.
 - [ ] Workspace access integration tests:
 
@@ -581,6 +587,7 @@ Query Master
 - [ ] Add direct unauthorized URL case with no title/snippet leak.
 - [ ] Map explicit query not-found errors to Next notFound() in `src/app/knowledge/[documentId]/page.tsx`; remove the obsolete null branch. Preserve access-denial behavior, and add direct missing/archived URL E2E checks.
 - [ ] Implement server adapter: resolve trusted identity, build CallerContext, call WorkspaceQueryService/KnowledgeQueryService; no SQL, no caller identity from URL/form.
+- [ ] Finish consumer cutover: remove `src/modules/knowledge/application/service.ts` and any temporary compatibility adapter once all callers use the new boundaries. Retain shared mutations.ts internals as needed. Search source/tests for obsolete service imports and positional calls, including SourceApplicationService.listSources; typecheck and regression must pass.
 - [ ] Implement minimal UI. Do not add Tiptap or new HTML renderer solely for Phase 1.
 - [ ] Run build/E2E and commit `feat: add workspace-scoped knowledge browser`.
 
@@ -791,4 +798,4 @@ Two supported modes:
 1. **Subagent-Driven:** use `superpowers:subagent-driven-development`; dispatch a fresh implementation subagent per Task 1–10 and review spec compliance plus code quality between tasks.
 2. **Inline Execution:** use `superpowers:executing-plans`; execute tasks sequentially in one isolated worktree with review checkpoints.
 
-Do not start Task 2 before Task 1 proves the real Phase 0 foundation is green. Phase 1 does not create/manage Workspaces; Phase 3 owns Workspace provisioning/create, rename, archive/restore, membership administration, roles/capabilities, Team/SSO Group mapping, production policy/audit, and Company SSO.
+Task 2 requires Task 1 Steps 1–5 completed: original baseline/inventory, existing-service error foundations (3a), standalone interface tests (3b), post-change typecheck/unit/integration (4), and recorded completion (5). No Task 1 checklist remains open until later tasks. Consumer migration belongs to Tasks 4–9 as explicitly assigned, with final removal in Task 9. This same gate applies to both execution modes. Phase 1 does not create/manage Workspaces; Phase 3 owns Workspace provisioning/create, rename, archive/restore, membership administration, roles/capabilities, Team/SSO Group mapping, production policy/audit, and Company SSO.
