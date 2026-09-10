@@ -4,11 +4,15 @@
 | --- | --- |
 | 日期 | 2026-09-10 |
 | 文件定位 | 各階段目標、主要交付、完成後的能力與範圍邊界 |
-| 決策依據 | 原對話「KM 各階段實作規劃 - 全部重做」與 [Phase 0 Design Spec](../specs/2026-09-10-phase-0-foundation-architecture-design.md) 的 Future Phase Interfaces |
-| 目前狀態 | Phase 0 spec／plan、Phase 1 design 已完成；Phase 1 implementation plan 已產出於 PR，程式實作依階段進行 |
+| 決策依據 | 原對話「KM 各階段實作規劃 - 全部重做」、[Phase 0 Design Spec](../specs/2026-09-10-phase-0-foundation-architecture-design.md) 與 [Workspace Access Boundary Amendment](../specs/2026-09-10-workspace-access-boundary-amendment.md) |
+| 目前狀態 | Phase 0／1 design 與 implementation plan 已完成；Workspace access-boundary correction 已補入 normative amendment；程式實作依階段進行 |
 | 專案入口 | [README](../../../README.md) |
 
 本路線圖整理已確認的階段方向，不將尚未完成詳細設計的 future phase 目標冒充已驗證結論。每一階段仍需自己的 design spec、implementation plan 與實際驗收證據。本文件不設定未確認的期限、投入人力或未來技術選型。
+
+2026-09-10 architecture review 修正了一個 foundation 假設：**Organization 不再是 Knowledge access boundary；Workspace 才是 Knowledge container 與基本 access scope。** `User.org_code` 仍保留作公司 identity attribute，跨 org access 由 WorkspaceMembership / 後續 policy 決定。
+
+若既有 Phase 0／1 文件中的 org/source 關係與 Workspace Amendment 衝突，以 amendment 為準；Revision、Tree、SourceEntry、lifecycle、transaction、sync safety 等不衝突內容繼續有效。
 
 ## 1. 產品目標與共同原則
 
@@ -16,33 +20,37 @@
 
 所有階段都必須保留下列原則：
 
-- `org_code → KnowledgeSource → Folder / Document Tree`；每個 Source 一個 org owner，每份 Document 都有 Source。
-- Source、Tree、Document、Revision 各自有清楚責任；穩定 Document ID 不依賴 path 或外部系統 ID。
+- `Workspace → KnowledgeSource → Folder / Document Tree`；每個 Source 必須屬於一個 Workspace，每份 Document 都有 Source。
+- `User.org_code` 是 identity / organization attribute，不直接授權 Knowledge；same-org 不自動 allow，cross-org 不自動 deny。
+- WorkspaceMembership 是 Phase 0 的基本 access foundation；完整角色、Team／SSO Group mapping、granular policy 在 Phase 3 設計。
+- `Workspace.owner_org_code` 只保存主要治理組織 metadata，不作 membership substitute。
+- Source、Tree、Document、Revision 各自有清楚責任；穩定 Document ID 不依賴 path、Workspace 或外部系統 ID。
+- Source 本身仍是 Tree root；Workspace 不是 synthetic Tree folder。
 - Hub internal IDs 使用 application-generated UUIDv7，MariaDB 10.11 使用 native `UUID` storage。
 - `title / markdown / knowledge metadata` 版本化，Revision immutable；hierarchy move／檔名 rename 不產生內容版本；SOURCE_MANAGED title 如何從來源解析由 Phase 2 定義。
 - Folder Sync 為 SOURCE_MANAGED，Hub 唯讀；單篇匯入與 Web 建立為 HUB_MANAGED，可建立新 revision。
 - Lifecycle 僅 ACTIVE／ARCHIVED；不 hard delete，同一 entry 重現沿用原 Document ID；目前 archive actor/time 有 provenance，完整 audit history 留治理階段。
-- Public application read/write services 顯式接收可信 `CallerContext`；完整 access policy 在 Phase 3 補上。
+- Public application read/write services 顯式接收可信 `CallerContext`；resource operation 必須解析其 Workspace scope，不信任 UI 宣稱的 workspace/org。
 - Canonical Knowledge/Sources mutation 使用 READ COMMITTED transaction，並保留必要的 Source/Document row locks。
 - Folder Upload 直接選取整個 folder，不使用 ZIP；先 Preview、再 Confirm、最後 transactional Apply。
 - Assets MVP 只存 metadata/reference；不承諾 binary storage 或圖片／附件 serving。
 - 身分 contract 固定為 `{id, emp_id, name, org_code}`，外部開發使用 local/mock provider；SSO 在公司環境再補。
-- MariaDB 10.11 保存 canonical Knowledge；未來搜尋索引是 derived data。
+- MariaDB 10.11 保存 canonical Knowledge；未來搜尋索引是 derived data，必須遵守相同 Workspace scope。
 - Human Web 與 Agent 共用 application services；MCP 是接入層，Agent Memory 是獨立 domain。Phase 0–2 不提前建立 `actor_kind` / Agent Principal model。
 
 ## 2. 階段總覽
 
 | Phase | 名稱 | 核心目標 | 主要接續基礎 |
 | --- | --- | --- | --- |
-| 0 | Foundation & Architecture | 可測試、可擴充的架構與資料基礎 | 新專案與確認的設計 |
-| 1 | Knowledge Core & Tree | 完整的 Knowledge identity、revision、lifecycle 與 Tree | Phase 0 |
-| 2 | Knowledge Source Import & Sync | 可靠地將來源 folder 同步為 Hub Knowledge | Phase 1 core、Phase 0 sync safety |
-| 3 | Identity & Basic Governance | 最小且共用的 owner／access boundary | Phase 0 CallerContext、Phase 1–2 資料來源 |
-| 4 | Discovery & Read API | 人與 Agent 可共用的讀取／搜尋服務 | Phase 1 query boundary、Phase 3 governance |
+| 0 | Foundation & Architecture | 可測試、可擴充的架構、Workspace access foundation 與資料基礎 | 新專案與確認的設計 |
+| 1 | Knowledge Core & Tree | 完整的 Knowledge identity、revision、lifecycle 與 Workspace-scoped Tree browsing | Phase 0 |
+| 2 | Knowledge Source Import & Sync | 在 Workspace 內可靠地將來源 folder 同步為 Hub Knowledge | Phase 1 core、Phase 0 sync safety |
+| 3 | Identity & Basic Governance | 在 WorkspaceMembership 上建立 role／企業 mapping／治理政策 | Phase 0 Workspace/CallerContext、Phase 1–2 resource model |
+| 4 | Discovery & Read API | 人與 Agent 可共用的 Workspace-aware 讀取／搜尋服務 | Phase 1 query boundary、Phase 3 governance |
 | 5 | Human Authoring | 人可在 Hub 上傳／建立／編輯知識 | Phase 1 revisions、Phase 3 governance |
-| 6 | tKMS Publishing | 將知識重新編排並發布至外部目的地 | Core／read／governance／authoring 能力 |
-| 7 | Agent & MCP Access | Agent 可依身分安全讀取 Knowledge | Phase 3 governance、Phase 4 read services |
-| 8 | Semantic & Hybrid Retrieval | 語意與 keyword 結合的 retrieval | Phase 4 query boundary、穩定 revision 資料 |
+| 6 | tKMS Publishing | 將 Workspace Knowledge 重新編排並發布至外部目的地 | Core／read／governance／authoring 能力 |
+| 7 | Agent & MCP Access | Agent 可依相同 Workspace policy 安全讀取 Knowledge | Phase 3 governance、Phase 4 read services |
+| 8 | Semantic & Hybrid Retrieval | Workspace-aware 語意與 keyword 結合 retrieval | Phase 4 query boundary、穩定 revision 資料 |
 | 9 | Agent Memory & Knowledge Relations | 受治理的長期記憶、知識關聯與 context | Core／governance／Agent／retrieval 基礎 |
 
 交付順序維持 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9。「主要接續基礎」說明技術依賴，不表示所有前一階段功能都必然是下一階段的架構依賴。
@@ -51,151 +59,164 @@
 
 ### Phase 0 — Foundation & Architecture
 
-**目標：** 建立後續工作可沿用的模組化單體架構、核心 schema、身分與交易邊界。
+**目標：** 建立後續工作可沿用的模組化單體架構、Workspace access foundation、核心 schema、身分與交易邊界。
 
 主要交付：
 
 - Next.js、React、TypeScript、Tailwind、shadcn/ui 與本地 MariaDB 10.11 基線。
-- `identity`、`knowledge`、`sources` 三個 module，明確分離 domain／application／infrastructure。
-- 八張核心表：users、knowledge_sources、source_entries、knowledge_tree_nodes、knowledge_documents、knowledge_revisions、knowledge_assets、sync_runs。
+- `identity`、`workspaces`、`knowledge`、`sources` 四個 module，明確分離 domain／application／infrastructure。
+- 十張 domain tables：`users`、`workspaces`、`workspace_memberships`、`knowledge_sources`、`source_entries`、`knowledge_tree_nodes`、`knowledge_documents`、`knowledge_revisions`、`knowledge_assets`、`sync_runs`。
+- `knowledge_sources.workspace_id` 作為 Source scope truth；Source 不再以 `org_code` 作 authorization ownership。
 - Application-generated UUIDv7 + MariaDB native UUID internal ID contract。
-- 四欄位 Local Identity、顯式 CallerContext、repository／READ COMMITTED transaction ports、資料約束、source sync_version guard。
+- 四欄位 Local Identity、顯式 CallerContext、Workspace membership guard、repository／READ COMMITTED transaction ports、資料約束、source sync_version guard。
 - one-document-one-TreeNode constraint 與 ACTIVE／ARCHIVED current lifecycle provenance。
-- Unit、真實 MariaDB integration 與最小 create/read/Tree smoke flow。
+- Cross-org member allow、same-org non-member deny，以及 Unit／真實 MariaDB integration／最小 Workspace → Source → Tree smoke flow。
 
-**完成後的能力：** 可啟動本地系統，用 local identity 建立 trusted CallerContext，建立並讀取基本 Hub-managed 文件，透過 Tree 找到它，並以測試證明 foundation 的一致性。
+**完成後的能力：** 可啟動本地系統，用 local identity 建立 trusted CallerContext，列出 caller 可存取的 Workspace，在其中建立／讀取基本 Hub-managed 文件並透過 Source Tree 找到它；cross-org membership 與 non-member denial 有 foundation-level 測試證據。
 
-**範圍邊界：** 不完成 Folder Sync、Title Resolution、rich editor、publishing、MCP、embedding、Agent actor model 或公司 SSO；不建立未來空模組。最小 smoke flow 不等於完整 Phase 1／5 產品。
+**範圍邊界：** 不完成完整 Workspace role management、Team／SSO Group mapping、granular ACL、Folder Sync、Title Resolution、rich editor、publishing、MCP、embedding、Agent actor model 或公司 SSO；不建立未來空模組。Phase 0 membership guard 不是最終企業 governance。
 
-詳細文件：[Design Spec](../specs/2026-09-10-phase-0-foundation-architecture-design.md)、[Implementation Plan](../plans/2026-09-10-phase-0-foundation-implementation.md)。
+詳細文件：[Phase 0 Design Spec](../specs/2026-09-10-phase-0-foundation-architecture-design.md)、[Workspace Access Boundary Amendment](../specs/2026-09-10-workspace-access-boundary-amendment.md)、[Phase 0 Implementation Plan](../plans/2026-09-10-phase-0-foundation-implementation.md)、[Workspace Implementation Amendment](../plans/2026-09-10-workspace-foundation-implementation-amendment.md)。
 
 ### Phase 1 — Knowledge Core & Tree
 
-**目標：** 完整保存有穩定身分與不可變內容版本的 Knowledge，提供可靠的來源樹狀瀏覽與生命週期操作。
+**目標：** 完整保存有穩定身分與不可變內容版本的 Knowledge，提供可靠的 Workspace → Source → Tree 瀏覽與生命週期操作。
 
 主要交付：
 
 - KnowledgeSource、Document、Revision、TreeNode 與 SourceEntry 的核心服務及關聯行為。
-- org → Source → Folder／Document Tree；Folder 不偽裝成文章。
+- `Workspace → Source → Folder / Document Tree`；Folder 不偽裝成文章，Source 仍是 Tree root。
+- `Workspace selector → Source selector → Tree → Document / Revision` 的 read-only browser。
 - Stable UUIDv7 Document ID、current revision resolution、title／Markdown／metadata 的內容模型。
 - SourceEntry → TreeNode stable mapping。
 - Archive／restore、目前 lifecycle provenance、預設 archived filtering，以及 hierarchy 與 content change 的分離。
-- Caller-aware read/write services 與 READ COMMITTED concurrency protection。
+- Caller-aware read/write services；每個 resource operation 沿用 Workspace membership/policy boundary。
+- READ COMMITTED concurrency protection。
 
-**完成後的能力：** 系統能真正保存與瀏覽知識，移動或更改來源位置後仍可用同一 Document ID 引用；版本歷史與生命週期保持一致。
+**完成後的能力：** 系統能真正保存與瀏覽知識，使用者只看到可存取 Workspace；移動或更改來源位置後仍可用同一 Document ID 引用，版本歷史與生命週期保持一致。
 
-**範圍邊界：** 沿用 Phase 0 基礎，不重建 identity 或 foundation schema；完整外部 folder ingestion 與 Title Resolution 留在 Phase 2，完整人工作者介面留在 Phase 5。
+**範圍邊界：** 沿用 Phase 0 Workspace foundation，不在 Phase 1 建完整 membership management／roles；完整外部 folder ingestion 與 Title Resolution 留 Phase 2，完整 human authoring 留 Phase 5。
+
+詳細文件：[Phase 1 Design](../specs/2026-09-10-phase-1-knowledge-core-tree-design.md)、[Phase 1 Plan](../plans/2026-09-10-phase-1-knowledge-core-tree-implementation.md)。兩者的 org/source 或 eight-table 舊語句依 Workspace Amendment 校正。
 
 ### Phase 2 — Knowledge Source Import & Sync
 
-**目標：** 讓各團隊透過通用 Markdown folder 匯入與更新知識，保留來源身分與 hierarchy，避免錯誤覆蓋及部分同步。
+**目標：** 讓各團隊透過通用 Markdown folder，在有權存取的 Workspace 內建立／更新 Knowledge Source，保留來源身分與 hierarchy，避免錯誤覆蓋及部分同步。
 
 主要交付：
 
-- 直接選取整個 folder，保留 relative paths；不使用 ZIP、不綁特定 Wiki generator。
+- 首次 Import 明確選擇 target Workspace，再直接選取整個 folder；保留 relative paths，不使用 ZIP、不綁特定 Wiki generator。
 - Generic folder adapter、scan／parse、snapshot、SourceEntry mapping 與內容比較。
 - **Title Resolution**：明確定義 canonical title 從 frontmatter、Markdown heading、filename 等來源的優先序、缺值 fallback 與衝突裁決；filename/path 不直接冒充 Knowledge title。
-- 第一次建立 Source，folder name 作可修改的預設名稱；之後明確選取既有 source_id。
+- 第一次建立 Source：`workspace_id` 必填，folder name 作可修改的預設名稱；Source 本身成為 Tree root。
+- 更新既有 Source：明確指定 `source_id`，Workspace 由該 Source 決定；同步不能順便將 Source 移到別的 Workspace。
 - Preview 顯示新增、更新、移動、改名、archive、unchanged 與 restore 的效果；Confirm 後才 Apply。
 - Preview snapshot 綁定／到期、optimistic sync_version、同交易更新 Knowledge／Tree／mapping／run，以及失敗全數 rollback。
 - 來源消失時 archive；同 entry 重現恢復原 ID；相同內容重複同步不產生 revision。
 - Asset metadata/reference 與 SyncRun history。
 
-**完成後的能力：** 使用者上傳團隊的 Markdown folder，檢視變更、確認後在 Hub 瀏覽同步結果；後續更新不破壞文件引用與 revision history。
+**完成後的能力：** 使用者在可存取 Workspace 上傳團隊 Markdown folder，檢視變更、確認後在 Hub 瀏覽同步結果；後續更新不破壞文件引用與 revision history。
 
-**範圍邊界：** Folder 結果在 Hub 唯讀，不做雙向同步、Markdown merge、partial success 或 binary storage。沒有 external stable ID 時的匹配／歧義規則、Title Resolution、parser/hash 正規化與 Preview 保存方式，需在本階段詳細設計中落實，不能靠 path/hash/filename 直接冒充文件 identity 或 canonical title。
+**範圍邊界：** Folder 結果在 Hub 唯讀，不做雙向同步、Markdown merge、partial success、binary storage 或 Source transfer。Source 不可被掛進另一個 Source 的 arbitrary Knowledge location。
 
 ### Phase 3 — Identity & Basic Governance
 
-**目標：** 在已有 Local Identity、顯式 CallerContext 與 org 歸屬上，落實一致的基本 caller、owner 與 access policy。
+**目標：** 在 Phase 0 已存在的可信 CallerContext、Workspace 與 WorkspaceMembership 上，落實角色、企業群組／Team mapping、必要的存取政策與治理。
 
 主要交付：
 
-- 沿用 Phase 0 已存在的可信 CallerContext，加入基本存取檢查；不重新修改全部 service method shape。
-- org_code owner boundary、必要的操作來源／操作者引用。
-- 身分解析與 Knowledge 授權責任分離。
+- 沿用 Phase 0 CallerContext 與 membership foundation，不重新修改全部 service method shape。
+- 定義 Workspace role / capability model；是否採 VIEWER／EDITOR／PUBLISHER／ADMIN 由本階段詳細設計確認。
+- 評估 Team membership、Company SSO Group → Workspace mapping 與 membership lifecycle。
+- 視需求評估 Source-level／Document-level override，不預設一定需要複雜 ACL。
+- 身分解析與 Knowledge 授權責任分離；`User.org_code` 不直接作 allow/deny predicate。
 - Lifecycle / mutation 的完整 audit history 若有需求，以 append-only event/audit model 補充；不以 Phase 0 current provenance 冒充完整歷史。
 - 保留 Company SSO adapter 替換 local provider 的契約；UserIdentity 仍為 id、emp_id、name、org_code 四欄位。
 
-**完成後的能力：** Web 與未來 Agent 都能沿用相同的基本存取規則；替換身分來源不必修改 Knowledge Core。
+**完成後的能力：** Web 與未來 Agent 都能沿用同一 Workspace governance policy；組織不同的人可依 membership／role 共用專案知識，組織相同也不會因此自動越權。
 
-**範圍邊界：** 不重建公司登入平台，不把同 org 視為當然擁有所有文件權限。外部 MVP 不以公司 SSO 可用為前提；完整 Team membership、複雜 ACL、跨 org 分享、企業 mapping 與進階 audit 由需求再展開。
+**範圍邊界：** 不重建公司登入平台，不使用 `same org = allow` 或 `cross org = deny` shortcut。外部 MVP 不以公司 SSO 可用為前提；複雜企業 policy 只在有實際需求時加入。
 
 ### Phase 4 — Discovery & Read API
 
-**目標：** 讓已保存的知識容易被查找，建立人與 Agent 可共用的讀取入口。
+**目標：** 讓已保存的知識容易被查找，建立人與 Agent 可共用、Workspace-aware 的讀取入口。
 
 主要交付：
 
 - Knowledge query／read application services。
 - Keyword／metadata search 與條件篩選。
-- Source／Tree query、Document read、current／指定 revision read。
-- 查詢路徑共用 CallerContext、存取判斷與 archived filtering。
+- Workspace／Source／Tree query、Document read、current／指定 revision read。
+- 查詢路徑共用 CallerContext、Workspace policy、archived filtering。
+- Search / index query 必須限制在 caller 可存取 Workspace；derived index 不成為 authorization truth。
 - 評估 keyword retrieval backend 是否維持 MariaDB native capability，或需要獨立 search engine；這是 Phase 4 design 的技術決策，不由 roadmap 預先定案。
 
-**完成後的能力：** 使用者能搜尋並讀取符合條件的知識；未來 MCP 可直接接上相同服務，不另寫 SQL 或一套文件查詢規則。
+**完成後的能力：** 使用者能搜尋並讀取有權限的 Workspace knowledge；未來 MCP 可直接接上相同服務，不另寫 SQL 或一套文件查詢／ACL 規則。
 
-**範圍邊界：** Phase 4 聚焦 keyword／metadata discovery 與共用 query boundary。是否需要 Elasticsearch 或其他 keyword search backend 由 Phase 4 design 重新評估，roadmap 不把「不需要」視為已驗證結論。Embedding／vector／semantic-hybrid retrieval 原則上仍屬 Phase 8；若後續證據需要調整 phase boundary，必須另立 ADR，而不是由本路線圖隱式改動。
+**範圍邊界：** Phase 4 聚焦 keyword／metadata discovery 與共用 query boundary。Embedding／vector／semantic-hybrid retrieval 原則上仍屬 Phase 8；若後續證據需要調整 phase boundary，必須另立 ADR。
 
 ### Phase 5 — Human Authoring
 
-**目標：** 讓人可以直接在 Hub 補充與修訂知識，同時維持來源 ownership 與不可變 revision。
+**目標：** 讓人可以直接在有權限的 Workspace 補充與修訂知識，同時維持 Source ownership 與不可變 revision。
 
 主要交付：
 
 - 單篇文件上傳、Web 建立及編輯流程。
 - HUB_MANAGED 的 title／Markdown／metadata 編輯與 revision 保存。
 - SOURCE_MANAGED 的唯讀呈現與 application guard。
+- Workspace role/capability 與 authoring permission 結合。
 - 作者操作所需的內容輸入介面及編輯衝突處理。
 
-**完成後的能力：** 使用者不依賴外部 Wiki，也能在 Hub 維護 FAQ、meeting notes 或手動文件；已同步 folder 不會被 Web 修改破壞。
+**完成後的能力：** 使用者不依賴外部 Wiki，也能在授權 Workspace 維護 FAQ、meeting notes 或手動文件；已同步 folder 不會被 Web 修改破壞。
 
-**範圍邊界：** 單篇 upload 是一次性匯入，不自動覆蓋同名的 folder 文件。Editor 技術在需求清楚時選擇，Phase 0 不預裝 Tiptap；不因此引入雙向同步或 source ownership 自動轉換。
+**範圍邊界：** 單篇 upload 是一次性匯入，不自動覆蓋同名 folder 文件。Editor 技術在需求清楚時選擇；不因此引入雙向同步或 source ownership 自動轉換。
 
 ### Phase 6 — tKMS Publishing
 
-**目標：** 讓 HR／發布者依外部發佈需求重新編排 Knowledge，發布至 tKMS。
+**目標：** 讓 HR／發布者在 Workspace scope 內依外部發佈需求重新編排 Knowledge，發布至 tKMS。
 
 主要交付：
 
-- 獨立 Publishing Tree，引用穩定 Document／Revision。
+- Workspace-scoped 獨立 Publishing Tree，引用穩定 Document／Revision。
 - tKMS Space／Page mapping 與編排操作。
+- Publisher capability / policy 與 Publishing access。
 - Publishing preview／diff、發布／同步、結果紀錄與 retry 流程。
 - tKMS adapter，local transaction 與外部副作用分離。
 
 **完成後的能力：** 同一份 Knowledge 可以用不同於來源 Tree 的結構發布，並追蹤外部結果；不需複製一套 canonical Knowledge。
 
-**範圍邊界：** Knowledge Tree 不等於 Publishing Tree；tKMS 是目的地，不決定 Knowledge identity 或 current revision。拖曳技術在本階段需要時再加入；DB rollback 不被視為可以撤回外部 API 副作用。
+**範圍邊界：** Knowledge Tree 不等於 Publishing Tree；tKMS 是目的地，不決定 Knowledge identity、Workspace membership 或 current revision。DB rollback 不被視為可以撤回外部 API 副作用。
 
 ### Phase 7 — Agent & MCP Access
 
-**目標：** 讓 Agent 經 MCP 使用與人相同的 Knowledge Core 與 read services。
+**目標：** 讓 Agent 經 MCP 使用與人相同的 Knowledge Core、read services 與 Workspace policy。
 
 主要交付：
 
 - MCP adapter／server 與可信 Agent caller context 的接入。
 - 以 search/get knowledge 為核心的最小讀取能力。
-- 重用基本存取政策、revision resolution、archived filtering 與來源資訊。
-- 若本階段或之後真的出現 Agent write / service account / system actor 需求，再設計 Principal/Actor model；不要求回頭把 Phase 0 的所有 user FK 先改成 polymorphic `actor_kind`。
+- 重用 Workspace policy、revision resolution、archived filtering 與來源資訊。
+- Agent 不得以傳入任意 `org_code` / `workspace_id` 作授權證明。
+- 若真的出現 Agent write / service account / system actor 需求，再設計 Principal/Actor model；不要求回頭把 Phase 0 的所有 user FK 先改成 polymorphic `actor_kind`。
 
-**完成後的能力：** Agent 可以查找與讀取授權的組織知識，引用穩定文件／版本，而不必直接查 DB 或依賴 Web UI。
+**完成後的能力：** Agent 可以查找與讀取授權 Workspace 的組織知識，引用穩定文件／版本，而不必直接查 DB 或依賴 Web UI。
 
-**範圍邊界：** MCP 不另建 Knowledge datastore，不繞過治理，也不在此階段順帶實作 Agent Memory。具體 Agent credential／protocol payload 與可能的 actor model 在本階段依真實需求定義，不預先擴張 Phase 0 的 UserIdentity 欄位。
+**範圍邊界：** MCP 不另建 Knowledge datastore、不另建一套 org-based ACL，也不在此階段順帶實作 Agent Memory。具體 Agent credential／protocol payload 與可能的 actor model在本階段依真實需求定義。
 
 ### Phase 8 — Semantic & Hybrid Retrieval
 
-**目標：** 在既有 discovery 基礎上加入語意搜尋，結合 keyword 與 semantic retrieval。
+**目標：** 在既有 discovery 基礎上加入語意搜尋，結合 keyword 與 semantic retrieval，同時維持 Workspace authorization scope。
 
 主要交付：
 
 - 依 revision 內容進行 chunking、embedding 與 derived indexing。
+- Derived index 保存足以做 Workspace filtering 的 scope metadata。
 - 語意及混合查詢、ranking 與 filter 的組合。
 - 非同步索引更新、重建與 canonical Knowledge 的一致性處理。
 - 在本階段選擇適用的 semantic/hybrid retrieval backend。
 
-**完成後的能力：** 人與 Agent 可以用語意找到相關知識，沿用既有 query boundary，而不是重新整合另一套文件服務。
+**完成後的能力：** 人與 Agent 可以用語意找到自己有權限的知識，沿用既有 query boundary，而不是重新整合另一套文件服務。
 
-**範圍邊界：** MariaDB Knowledge 仍是 canonical source；索引失效或重建不改變 Document ID、Revision、Source 或授權資料。此路線圖不預先指定 Elasticsearch、MariaDB Vector 或其他向量引擎；Phase 4 是否使用 Elasticsearch 作 keyword backend 與本階段是否使用某個 semantic backend 是兩個不同決策。
+**範圍邊界：** MariaDB Knowledge / Workspace governance 仍是 canonical truth；索引失效或重建不改變 Document ID、Revision、Source 或授權資料。本路線圖不預先指定 Elasticsearch、MariaDB Vector 或其他向量引擎。
 
 ### Phase 9 — Agent Memory & Knowledge Relations
 
@@ -207,28 +228,30 @@
 - Knowledge relations、Context Bundles 與 memory consolidation。
 - Memory → Knowledge 的 promotion 流程與必要的人員審核。
 - 穩定 Document／Revision references 與來源追溯。
+- Memory scope 另行明確設計，不因 Knowledge 使用 Workspace 就自動假設全部 memory 為 workspace-global。
 
 **完成後的能力：** Agent 的長期工作經驗可被整理與關聯，經治理後有機會成為正式知識，而非每次任務都重新開始。
 
-**範圍邊界：** Agent Memory 不自動等於正式 Knowledge；具體 memory schema、relation types 與 promotion 規則在此階段設計，不提前塞進 Phase 0 的 knowledge_documents。
+**範圍邊界：** Agent Memory 不自動等於正式 Knowledge；具體 memory schema、relation types、scope 與 promotion 規則在此階段設計，不提前塞進 Phase 0 的 knowledge_documents。
 
 ## 4. 里程碑
 
 | 里程碑 | 階段 | 可以展示的結果 |
 | --- | --- | --- |
-| M1：第一個可用的來源知識流程 | Phase 0–2 | 團隊 Markdown folder → Parse/Title Resolution → Preview／Confirm → Hub Knowledge → Tree／Document |
-| M2：人可查找與維護知識 | Phase 3–5 | 基本治理＋Discovery＋單篇上傳／Web authoring |
-| M3：外部發布 | Phase 6 | Knowledge 重新編排為 Publishing Tree 並發布到 tKMS |
-| M4：Agent 使用與記憶 | Phase 7–9 | MCP read access → semantic/hybrid retrieval → governed Agent Memory／relations |
+| M1：第一個可用的來源知識流程 | Phase 0–2 | Workspace → 團隊 Markdown folder → Parse/Title Resolution → Preview／Confirm → Source → Tree／Document |
+| M2：人可查找與維護知識 | Phase 3–5 | Workspace governance＋Discovery＋單篇上傳／Web authoring |
+| M3：外部發布 | Phase 6 | Workspace Knowledge 重新編排為 Publishing Tree 並發布到 tKMS |
+| M4：Agent 使用與記憶 | Phase 7–9 | MCP Workspace-scoped read access → semantic/hybrid retrieval → governed Agent Memory／relations |
 
-M1 使用 local/mock identity 驗證產品流程，不表示公司正式 SSO 與治理已完成。每個里程碑只在其相關實作與驗收完成後標記完成，不以文件產出取代功能驗收。
+M1 使用 local/mock identity + WorkspaceMembership 驗證產品流程，不表示公司正式 SSO、企業角色與治理已完成。每個里程碑只在相關實作與驗收完成後標記完成，不以文件產出取代功能驗收。
 
 ## 5. 文件進度與存放位置
 
 | Phase | 目標文件 | 詳細 Design Spec | Implementation Plan | 實作／驗收 |
 | --- | --- | --- | --- | --- |
-| 0 | 本路線圖 | [已完成](../specs/2026-09-10-phase-0-foundation-architecture-design.md) | [已完成](../plans/2026-09-10-phase-0-foundation-implementation.md) | 依實作 branch 進行 |
-| 1 | 本路線圖 | [已完成](../specs/2026-09-10-phase-1-knowledge-core-tree-design.md) | 已產出，待 PR 合併 | 尚未開始 |
+| Foundation correction | 本路線圖 | [Workspace Access Amendment](../specs/2026-09-10-workspace-access-boundary-amendment.md) | [Workspace Implementation Amendment](../plans/2026-09-10-workspace-foundation-implementation-amendment.md) | 文件修正；程式依 Phase 0 落地 |
+| 0 | 本路線圖 | [已完成](../specs/2026-09-10-phase-0-foundation-architecture-design.md)，access-boundary 依 amendment | [已完成](../plans/2026-09-10-phase-0-foundation-implementation.md)，Workspace 工作依 amendment | 依實作 branch 進行 |
+| 1 | 本路線圖 | [已完成](../specs/2026-09-10-phase-1-knowledge-core-tree-design.md)，Workspace flow 依 amendment | [已完成](../plans/2026-09-10-phase-1-knowledge-core-tree-implementation.md)，繼承 Workspace foundation | 尚未開始／依 Phase 0 狀態 |
 | 2 | 本路線圖 | 尚未產出 | 尚未產出 | 尚未開始 |
 | 3 | 本路線圖 | 尚未產出 | 尚未產出 | 尚未開始 |
 | 4 | 本路線圖 | 尚未產出 | 尚未產出 | 尚未開始 |
@@ -240,4 +263,4 @@ M1 使用 local/mock identity 驗證產品流程，不表示公司正式 SSO 與
 
 各階段詳細設計確認後保存於 `docs/superpowers/specs/`，實作計畫保存於 `docs/superpowers/plans/`；實際測試與驗收證據產生後保存於 `docs/superpowers/verification/`。本目標路線圖放在 `docs/superpowers/roadmaps/`，由專案 README 統一導引。
 
-更新 roadmap 時需同步檢查對應 spec／plan，避免兩套不同的 ownership、lifecycle、phase scope 或技術基線。路線圖列出的 future goals 不推翻已確認的 Phase 0 design；尚未完成該 Phase design 的技術選型不得被當作已驗證結論。
+更新 roadmap 時需同步檢查對應 spec／plan／amendment，避免兩套不同的 Workspace access、ownership、lifecycle、phase scope 或技術基線。尚未完成該 Phase design 的技術選型不得被當作已驗證結論。
