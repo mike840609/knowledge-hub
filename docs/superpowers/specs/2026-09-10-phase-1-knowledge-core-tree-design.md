@@ -291,6 +291,32 @@ tree_node.document_id = source_entry.document_id
 
 Hub-native documents 可以沒有 SourceEntry。SourceEntry 是 source mapping，不是 Knowledge identity。
 
+### 5.3 Phase 0 資料升級
+
+升級分成固定 DDL、獨立資料回填、固定約束三段；001–003 與其 checksum 不變，不以清空資料作為一般升級路徑。
+
+1. 停止 canonical writes、備份。獨立 `scripts/db/backfill-source-tree-mapping.ts` 先以 dry-run 盤點 ACTIVE／ARCHIVED entries。DOCUMENT 以 `(source_id, document_id)` 對應唯一既有 DOCUMENT node；FOLDER 由 operator 提供 JSON entry ID → existing Folder TreeNode ID 對照。驗證完整性、同 Source、型別、document 相等與 node 不重複；不猜 path/name/hash，不建立替代 node。錯配 preflight 不改資料或 schema。
+2. 固定 migration `004-phase-1-tree-mapping.ts` 只新增 nullable `tree_node_id UUID`，不含環境資料。擴充 runner 的 target-version 選項，載入完整 manifest 驗證既有 ledger，但只執行到指定版本；不得截短 manifest，否則會誤判較新已套用版本為 unknown。target 低於已套用版本時清楚拒絕，不 rollback。
+3. 同一獨立 script 以參數化 SQL 在一個 DML transaction 回填；輸入不進 migration manifest、statements 或 checksum。已正確回填的 row 為 NOOP；既有不一致 mapping 拒絕，不覆寫。執行與 dry-run 都重新驗證全體 mapping，失敗整次 DML rollback。
+4. 固定 migration `005-phase-1-tree-mapping-constraints.ts` 收緊 `tree_node_id NOT NULL`，加 same-source FK、`UNIQUE(source_id, tree_node_id)`。DOCUMENT equality 由 `(document_id, tree_node_id)` FK → TreeNode `(document_id, id)` 保護，明確新增對應 `UNIQUE(document_id, id)` 作 referenced key；保留原 `UNIQUE(document_id)`，兩者用途不同。Folder 的 document_id=NULL 使此 FK 不檢查該組，因此 Folder entry 必須指向 FOLDER node 由 application assertion 驗證；preflight 同樣驗證所有既有 rows。entry type/document null shape 由既有 CHECK 保護。
+5. Migration 型別增加 optional `beforeApply` hook（固定程式碼、接收 runner 同一 connection 的唯讀 query contract）；005 掛載 mapping-readiness hook，runner 在 migration lock 內、寫入 RUNNING ledger 前呼叫。checksum 仍只 hash statements，hook 不接受 operator input、不寫資料、不產生動態 manifest。執行固定的唯讀 mapping-readiness gate（非 operator 資料、非動態 statements）。不完整即退出，005 ledger 不新增，補完回填後可重跑。普通 migrate 不得自動跳過回填或直接將未就緒的 005 記 FAILED。空 DB 以同一份 004／005 manifest 執行，gate 自然通過。
+
+預定命令（須在 Task 2 實作 CLI 支援後才能執行）：
+
+```sh
+npm run db:migrate -- --to 4
+npx tsx scripts/db/backfill-source-tree-mapping.ts --mapping /path/to/verified-mapping.json --dry-run
+npx tsx scripts/db/backfill-source-tree-mapping.ts --mapping /path/to/verified-mapping.json --apply
+npm run db:migrate -- --to 5
+```
+
+
+若 populated DB 尚有待回填 entries，直接執行無參數 `npm run db:migrate` 會先完成 004，再由 005 gate 安全停止；004 保持 APPLIED、005 不產生 ledger row。這是預期且可恢復的停點：執行回填後重跑即可，不需修 checksum 或 ledger。沒有待回填 entries 時可直接通過。測試需涵蓋此無參數路徑。
+
+步驟 1 在首次 DDL 前也可執行同一 dry-run；script 支援欄位尚不存在的盤點狀態。沒有 Folder entries 時提供空對照即可。backfill script 的資料交易不宣稱涵蓋 DDL；DDL 中斷沿用 FAILED/RUNNING 診斷與明確修復程序，不能盲目重跑或修改已套用 checksum。
+
+驗收：populated 001–003 → 004 → backfill → 005、archived rows、Folder 對照、preflight 零修改、backfill rollback／重跑、005 gate 不污染 ledger、全量 migrate 重跑 checksum 相同、空 DB 與 populated DB 使用完全相同 manifest，以及 DDL 中斷診斷。所有 fixtures／seed／writers 提供 tree_node_id。
+
 ## 6. Tree Invariants
 
 ### 6.1 Document TreeNode
@@ -422,7 +448,7 @@ Phase 1 不引入 Fractional indexing、LexoRank 或 CRDT。Move / reorder trans
 
 Tree mutation 採 Source-level serialization，且 canonical mutation UoW 繼承 Phase 0 的 **READ COMMITTED** isolation。
 
-完成 Workspace access check 後，修改 hierarchy 前：
+在 READ COMMITTED UoW 內解析 Source 後先取得 Source lock，再以同 connection 的 WorkspaceAccessPolicy 完成 access check，最後驗證 hierarchy 並寫入：
 
 ```sql
 SELECT ...
@@ -440,7 +466,7 @@ A: folder1 → folder2
 B: folder2 → folder1
 ```
 
-兩個 concurrent requests 分別驗證通過，最後形成 cycle。不同 Source 仍可平行操作。
+兩個 concurrent requests 分別驗證通過，最後形成 cycle。不同 Source 仍可平行操作。先 lock 後 membership check 沿用 Phase 0；代價是未授權 caller 也可能短暫持有 Source lock。檢查與失敗 rollback 必須立即完成，不在其中等待外部 I/O；Source lock 不等於 membership lock，也不宣稱解決未來 membership revocation concurrency。
 
 ## 10. Revision Model
 
@@ -467,15 +493,17 @@ Revision 建立後 immutable。`created_by` 在 Phase 0–2 仍指向可信 User
 流程：
 
 ```text
-resolve Document → Source → Workspace
-require Workspace access
 SET TRANSACTION ISOLATION LEVEL READ COMMITTED
 BEGIN
-
+resolve Document → Source → Workspace on this connection
+lock Source
+require transaction-scoped Workspace access
+validate Source ownership/ACTIVE and Document ACTIVE
 lock Document
+validate expectedCurrentRevisionId
 read current revision
 normalize candidate content
-compare candidate content hash
+compare canonical payloads using §13.1 compatibility rule
 
 if unchanged:
     return current revision
@@ -555,17 +583,26 @@ metadata
 
 不把 Markdown formatter 或語意 normalization 放進 hash。因此純格式差異仍可能形成不同內容；Phase 1 不做 semantic deduplication。
 
+### 13.1 舊 Revision 與 hash 相容
+
+Phase 0 的 `contentFingerprint` 是未加前綴的 SHA-256；title 與 Markdown 原樣保存。Phase 1 不重寫歷史 revision 的內容、hash、ID 或 revision number，也不直接用舊 stored hash 與新 hash 判定變更。
+
+更新時先在 Document lock 內驗證 expected current revision，candidate 使用嚴格 normalization（trim 後 title 必須非空）；stored revision 使用獨立 comparison normalization：trim title、CRLF→LF、排序 metadata，但不對舊 title 施加 non-empty 驗證。比較兩者 canonical payload。相同即回傳原 revision（包含其原 stored hash），不寫 revision，也不偷偷更新顯示內容。不同才建立採新 hash contract 的 N+1。舊 whitespace-only title 是 Phase 0 合法資料：read/history 保留原樣；stored comparison payload 的 title 可為空字串，因此能與合法 candidate 比較並形成新 revision，不得讓舊資料無法被修正。
+
+SourceEntry.content_hash 不作跨版本 NOOP 或 identity 判斷依據；既有值保留，受控同步成功後才更新成 candidate 的新 fingerprint。Phase 2 比較內容沿用此 core comparator，不以不同 hash 演算法造成假變更。
+
+驗收必須用 Phase 0 encoder 建立 fixture：一般相同內容、title 外側空白、CRLF、metadata key order 均能正確 NOOP；真正內容修改產生 N+1；舊 whitespace-only title 可讀且可修正；歷史 rows byte-stable。
+
 ## 14. Document Creation
 
 Hub-managed document：
 
 ```text
-resolve Source → Workspace
-validate CallerContext
-require Workspace access
-
+validate trusted CallerContext
 SET TRANSACTION ISOLATION LEVEL READ COMMITTED
 BEGIN
+resolve and lock Source → Workspace
+require transaction-scoped Workspace access
 validate Source ACTIVE + HUB_MANAGED
 validate parent
 create Document with UUIDv7 ID
@@ -640,6 +677,14 @@ source.ownership == SOURCE_MANAGED
 
 此 interface 為 internal application boundary，不由 Web API 直接 expose。Phase 2 orchestration 傳入的是已由可信 transport/application boundary 建立的 CallerContext，不是 source folder 自帶的 actor identity。
 
+### 15.3 Transaction-scoped projection
+
+Sources orchestration 擁有整次 Apply 的 SourceUnitOfWork。於同一 connection 取得 Source lock、解析 Workspace 並通過 transaction-scoped WorkspaceAccessPolicy 後，建立綁定該 transaction 的 projection commands；commands 不另開 UoW、不 commit、不接受 Web 傳入 repository 或 authority token。每次 command 的 resource 必須屬於已授權 Source，並重新驗證 ownership/lifecycle。
+
+Document／Folder projection 與 SourceEntry mapping 在同交易建立，sourceEntryId 可以預先配置但不是已存在 mapping 的要求。回傳前 mapping 必須完整，不能留下半成品 committed entry。同一 Apply 的所有 projection、mapping、assets、sync_version 與 APPLIED run 一起 commit／rollback；FAILED run 在 rollback 後另存。Phase 1 以多筆 transaction fixture 驗證，完整 sync 產品流程仍屬 Phase 2。
+
+Source projection 同時提供 renameProjectedFolder、archiveProjectedFolder、restoreProjectedFolder；Folder archive 採無 ACTIVE children 規則，Phase 2 可在同交易由葉至根 archive。restore 由祖先至子節點恢復，驗證完整 ACTIVE ancestry。Folder mapping 與 TreeNode lifecycle/provenance 同交易更新。
+
 ## 16. 禁止 Force Flag
 
 不設計：
@@ -680,12 +725,11 @@ Workspace lifecycle 不在 Phase 1 實作；Phase 3 明確負責 Workspace provi
 ## 18. Archive Document
 
 ```text
-resolve Document → Source → Workspace
-require Workspace access
-
 SET TRANSACTION ISOLATION LEVEL READ COMMITTED
 BEGIN
+resolve Document → Source → Workspace
 lock Source
+require transaction-scoped Workspace access
 lock Document
 
 Document.status = ARCHIVED
@@ -708,11 +752,12 @@ Revision 不動。
 ## 19. Restore Document
 
 ```text
-resolve Document → Source → Workspace
-require Workspace access
-
 SET TRANSACTION ISOLATION LEVEL READ COMMITTED
 BEGIN
+resolve Document → Source → Workspace
+lock Source
+require transaction-scoped Workspace access
+lock Document
 validate source ACTIVE
 validate parent folder ACTIVE
 
@@ -790,6 +835,8 @@ KnowledgeSource.archived_at = null
 
 原本 child lifecycle 保留原值。因此 Source archive 是 container visibility gate，不是大量 child lifecycle update，也不是 Workspace lifecycle。
 
+Source lifecycle 由 Sources application service 提供 `archiveSource(caller, sourceId)`／`restoreSource(caller, sourceId)`，適用兩種 ownership；這是 container 操作，不允許藉此改寫 SOURCE_MANAGED 內容。同 transaction 的 Workspace policy 與 Source lock 為必要條件。此階段沒有 Source lifecycle Web controls。
+
 ## 22. Read Application Services
 
 Phase 1 提供顯式 caller-aware read contract。
@@ -829,9 +876,10 @@ getDocument(
   includeArchived = false
 )
 
-getCurrentRevision(caller, documentId)
-getRevision(caller, documentId, revisionNo)
-listRevisions(caller, documentId)
+getCurrentRevision(caller, documentId, includeArchived = false)
+getRevision(caller, documentId, revisionNo, includeArchived = false)
+listRevisions(caller, documentId, includeArchived = false)
+getAncestors(caller, nodeId, includeArchived = false)
 ```
 
 `listSources` 的 workspaceId 是 query scope；server 必須驗證 caller access。`getSource / listTree / getDocument / revision reads` 不把 client 額外提供的 workspaceId 當 proof，而是從 resource relationship 解析 Workspace 再做 policy check。
@@ -839,6 +887,14 @@ listRevisions(caller, documentId)
 Phase 1 尚未實作 production roles/capabilities，但 Workspace membership foundation 已是 application contract 的必要檢查；Phase 3 在相同 resource/policy boundary 上補 production governance。
 
 這些 application services不依賴 React、HTTP、MCP 或 scanner，也不從 ambient/global request state自行取得 caller。Phase 4 HTTP Read API 與 Phase 7 MCP 可直接 reuse。
+
+Source listing 統一由 KnowledgeQueryService 提供 required workspaceId + includeArchived contract。Task 8 將 SourceApplicationService.listSources 的所有 consumers（含 Knowledge page）遷入後移除舊 application 方法；repository 新增 workspace-scoped archived-aware 查詢，保留的 active-only helper 只能委派到同一實作。不得留下兩條語意不同的公開 listing 路徑。
+
+### 22.1 Missing／archived query contract
+
+`getSource`、`getDocument`、`getCurrentRevision`、`getRevision` 與 `getAncestors` 採非 nullable 回傳：不存在或被預設 archived filtering 隱藏時，分別拋 SOURCE_NOT_FOUND、DOCUMENT_NOT_FOUND、REVISION_NOT_FOUND 或 TREE_NODE_NOT_FOUND。revision lookup 先驗證 Document 存在且可見，Document 不可見回 DOCUMENT_NOT_FOUND；Document 可見但指定 revision 不存在才回 REVISION_NOT_FOUND。listRevisions 對不可見 Document 同樣拋 DOCUMENT_NOT_FOUND，其他合法空集合回 []。已存在但無 Workspace membership 的資源仍由 WorkspaceAccessDeniedError 拒絕。
+
+Browser adapter 明確將 not-found codes 轉成 Next `notFound()`，不再依靠 `if (!view)`；access denial 沿用不洩漏內容的既有處理，不能把所有例外都吞成 404。Core 不 import Next。此變更須同步更新 Phase 0 null assertions、view shape 及所有 query consumers。
 
 ## 23. Tree Read Model
 
@@ -907,6 +963,12 @@ Phase 1 提供 read-only Knowledge Browser：
 - Sync。
 
 這讓 Phase 1 可以實際驗證 Knowledge Core 與 Workspace-scoped read path，但不提前做 Phase 3/5。
+
+### 24.1 Phase 0 smoke flow 銜接
+
+Phase 1 正式 Browser 移除 Phase 0 create form 與其 Web mutation action，application 建立文件能力保留給測試與未來 authoring。Phase 0 原 E2E 不原封不動保留：改以 application fixture 建立文件，驗證 stable URL、reload 與 Tree navigation；caller spoofing 由 application／可信 identity adapter 測試保留，並驗證 Browser 無 mutation controls／入口。
+
+Task 1 執行原 Phase 0 baseline；Phase 1 最終驗收保留其 domain/access/transaction guarantees，使用更新後的唯讀 E2E。不可同時要求原建立表單 E2E 通過與 Browser 沒有建立表單。
 
 ## 25. SourceEntry Core
 
@@ -986,6 +1048,8 @@ INVALID_METADATA
 
 UI / HTTP adapter 再自行 mapping presentation / status code。Core 不回 transport-specific HTTP status、toast message 或 SQL driver error。
 
+錯誤遷移由 plan Task 1 統一負責：完整路徑為 `src/modules/knowledge/domain/errors.ts`、`src/modules/workspaces/domain/errors.ts`、`src/shared/domain/errors.ts`。保留 DomainError、WorkspaceAccessDeniedError 的責任邊界；新 semantic codes 不代表把 source sync VERSION_CONFLICT 改成 revision conflict。
+
 ## 28. Revision Concurrency
 
 Phase 5 未來編輯時需要避免 lost update，因此 Phase 1 command contract 預留：
@@ -1004,7 +1068,7 @@ createRevision(caller, {
 
 ## 29. Transaction Boundaries
 
-以下操作必須在 **READ COMMITTED** 下 atomic；所有參與的 repository 使用同一 MariaDB connection。Workspace access 必須在 mutation execution 前依 authoritative resource scope 驗證；UI state 不取代 policy。
+以下操作必須在 **READ COMMITTED** 下 atomic；所有參與的 repository 與 WorkspaceAccessPolicy 使用同一 MariaDB connection；BEGIN 後解析 authoritative scope 並檢查 membership，任何 transaction 外的 preflight 都不能取代此檢查。Workspace access 必須在 mutation execution 前依 authoritative resource scope 驗證；UI state 不取代 policy。
 
 ### 29.1 Create Document
 
@@ -1047,7 +1111,7 @@ affected sibling positions
 
 ## 30. Default Archived Filtering
 
-預設 `includeArchived = false`，適用 `listSources`、`listTree`、`getDocument`。Historical explicit lookup 可以 `includeArchived = true`，但仍不得繞過 Workspace access。
+預設 `includeArchived = false`，適用 `listSources`、`listTree`、`getDocument`。Revision reads 與 getAncestors 同樣預設排除 archived scope；Historical explicit lookup 可以 `includeArchived = true`，但仍不得繞過 Workspace access。
 
 未來 Search、MCP 與 Agent 都必須沿用相同 default，並透過 CallerContext + Workspace policy 進入 application query boundary。
 
