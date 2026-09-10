@@ -1,0 +1,9 @@
+import type { KnowledgeSource } from "../domain/source";
+
+export interface SourceRepository {
+  findById(sourceId: string): Promise<KnowledgeSource | null>;
+  findActiveByWorkspaceId(workspaceId: string): Promise<KnowledgeSource[]>;
+  lockById(sourceId: string): Promise<KnowledgeSource | null>;
+  insert(source: KnowledgeSource): Promise<void>;
+  guardAndAdvanceVersion(sourceId: string, basedOnVersion: number, actorId: string): Promise<number | null>;
+}

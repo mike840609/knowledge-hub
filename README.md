@@ -8,7 +8,7 @@ Knowledge Hub 採用自建 Knowledge Core，不綁定 Obsidian、特定 Wiki gen
 
 更新日期：2026-09-10。
 
-目前 repository 以 **design / implementation plan** 為主。Phase 0／1 canonical design、implementation plan 與 Phase 0–9 roadmap 已建立；實際 application／migration／test 完成狀態以對應 implementation branch 與 `docs/superpowers/verification/` 的 fresh evidence 為準。文件內列出的命令與測試案例是實作契約，不代表尚未執行的項目已通過。
+`phase-0-foundation` 已完成 Phase 0 application、migration、integration fixtures 與最小 Web flow；實際檢查結果記錄於 [`docs/superpowers/verification/`](docs/superpowers/verification/)。Phase 1–9 仍以 canonical design / implementation plan 為主，文件內列出的尚未執行命令與測試案例不代表已交付。
 
 2026-09-10 architecture review 已把 Workspace access-boundary correction **直接整合進 Phase 0/1 canonical spec 與 plan**：`org_code` 保留為使用者公司組織屬性，但 **Workspace 才是 Knowledge container 與基本存取邊界**。不同 org 的使用者可以透過 WorkspaceMembership 共用同一 Workspace；同 org 也不代表自動取得 Workspace 內容。
 

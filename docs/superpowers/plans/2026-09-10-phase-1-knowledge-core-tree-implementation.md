@@ -109,7 +109,7 @@ src/modules/sources/
 
 src/infrastructure/database/mariadb/
 ├── migrations/
-│   └── 003-phase-1-tree-mapping.ts
+│   └── 004-phase-1-tree-mapping.ts
 └── repositories/
     ├── documents.ts
     ├── revisions.ts
@@ -333,7 +333,7 @@ git commit -m "chore: align phase 1 knowledge contracts"
 
 ### Task 2: Add Phase 1 SourceEntry→TreeNode Schema Refinement
 
-**Files:** create `src/infrastructure/database/mariadb/migrations/003-phase-1-tree-mapping.ts`; modify migration registry; test `tests/integration/phase1-schema.test.ts`.
+**Files:** create `src/infrastructure/database/mariadb/migrations/004-phase-1-tree-mapping.ts`; modify migration registry; test `tests/integration/phase1-schema.test.ts`.
 
 **Consumes:** Phase 0 ten-table schema, native UUID IDs, Workspace-scoped Source, existing one-document-one-TreeNode constraint.
 
@@ -361,7 +361,7 @@ Additional mapping protection:
 
 - [ ] Write failing schema integration tests, including same-source mapping and Workspace-scoped Source baseline.
 - [ ] Run `npm run test:integration -- phase1-schema` and verify failures are only missing Phase 1 mapping.
-- [ ] Implement forward-only migration 003.
+- [ ] Implement forward-only migration 004.
 - [ ] Recreate fresh integration DB; run phase1-schema and all integration suites.
 - [ ] Commit `feat: add source entry tree mapping`.
 
@@ -699,7 +699,7 @@ Phase 1 is complete only when all are evidenced:
 
 - [ ] Phase 0 verification still passes, including Workspace/Membership, Source.workspace_id, UUIDv7/native UUID, CallerContext, READ COMMITTED, provenance, Tree uniqueness.
 - [ ] Cross-org member allow, same-org non-member deny, multi-Workspace caller, and direct-resource bypass protection pass integration/E2E tests.
-- [ ] Migration 003 safely adds SourceEntry→TreeNode mapping without duplicating Phase 0 Tree uniqueness.
+- [ ] Migration 004 safely adds SourceEntry→TreeNode mapping without duplicating Phase 0 Tree uniqueness.
 - [ ] Revision canonicalization/hash matches approved spec; Title Resolution remains Phase 2.
 - [ ] Revisions are immutable and identical content is a NOOP.
 - [ ] `expectedCurrentRevisionId` protects stale revision writes.

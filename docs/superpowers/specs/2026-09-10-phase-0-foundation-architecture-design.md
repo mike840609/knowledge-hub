@@ -307,11 +307,11 @@ interface IdentityProvider {
 }
 ```
 
-`id` 為 Hub 內部穩定使用者 ID；`emp_id` 為員工工號；`name` 為姓名；`org_code` 為公司組織代碼。`org_code` 不直接回答 caller 可以讀寫哪些 Workspace。Local provider 建立／更新最小 `users` 資料，外部開發由 server 提供測試身分。
+`id` 為 Hub 內部穩定使用者 ID；`emp_id` 為員工工號；`name` 為姓名；`org_code` 為公司組織代碼。`org_code` 不直接回答 caller 可以讀寫哪些 Workspace。Local / Mock Identity Provider 只負責提供可信的 `UserIdentity`，本身不直接依賴 `UserRepository` 或 MariaDB；application boundary 在執行 caller-aware operation 時確保最小 `users` record 已同步到 canonical database。外部開發由 server 提供測試身分。
 
 Web／其他 transport adapter 透過 `IdentityProvider` 取得可信 identity 後建立 `CallerContext`，再把它作為 application service 的顯式第一參數。Application Core 不從 UI payload 讀 caller，也不依賴 ambient/global request identity。CallerContext 不固定攜帶單一 `workspace_id`，因為同一 caller 可以存取多個 Workspace。
 
-未來公司 adapter 驗證 SSO token 後映射為相同四欄位並同步本地最小資料。其餘 module 不接觸 token 格式、SSO SDK 或 provider 細節。身分無法取得時回報失敗，不以客戶端傳入的工號／org 取代可信身分。完整企業登入與治理仍是後續工作。
+未來公司 adapter 驗證 SSO token 後映射為相同四欄位，再由 application boundary 同步本地最小資料。其餘 module 不接觸 token 格式、SSO SDK 或 provider 細節。身分無法取得時回報失敗，不以客戶端傳入的工號／org 取代可信身分。完整企業登入與治理仍是後續工作。
 
 ### 6.1A Workspaces
 
