@@ -62,6 +62,13 @@ export class MariaDbTreeRepository implements TreeRepository {
     if (affectedRows(result) !== 1) throw new Error("Tree position could not be updated.");
   }
 
+  async updateStatus(nodeId: string, status: "ACTIVE" | "ARCHIVED", actorId: string): Promise<void> {
+    const archivedBy = status === "ARCHIVED" ? actorId : null;
+    const archivedAt = status === "ARCHIVED" ? new Date() : null;
+    const result = await this.connection.query("UPDATE knowledge_tree_nodes SET status = ?, updated_by = ?, archived_by = ?, archived_at = ? WHERE id = ?", [status, actorId, archivedBy, archivedAt, nodeId]);
+    if (affectedRows(result) !== 1) throw new Error("Tree node lifecycle could not be updated.");
+  }
+
   async updateStatusForDocument(documentId: string, status: "ACTIVE" | "ARCHIVED", actorId: string): Promise<void> {
     const archivedBy = status === "ARCHIVED" ? actorId : null;
     const archivedAt = status === "ARCHIVED" ? new Date() : null;

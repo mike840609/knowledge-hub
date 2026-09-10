@@ -1,5 +1,6 @@
 import type { UserRepository } from "@/modules/identity/ports/user-repository";
 import type { DocumentRepository } from "./document-repository";
+import type { LinkedEntryRepository } from "./linked-entry";
 import type { RevisionRepository } from "./revision-repository";
 import type { SourcePolicyPort } from "./source-policy";
 import type { TreeRepository } from "./tree-repository";
@@ -10,6 +11,7 @@ export type KnowledgeRepositories = {
   documents: DocumentRepository;
   revisions: RevisionRepository;
   tree: TreeRepository;
+  linkedEntries: LinkedEntryRepository;
   sourcePolicy: SourcePolicyPort;
   workspaceAccess: WorkspaceAccessPolicy;
 };

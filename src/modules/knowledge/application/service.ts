@@ -11,8 +11,8 @@ import { applySourceManagedMutation, archiveSourceManagedDocument, type Controll
 import { assertActiveDocumentPlacement, assertActiveFolderAncestry } from "./tree-validation";
 import type { HubKnowledgeCommandService } from "./hub-knowledge-command-service";
 
-/** Temporary Task 4–5 delegation target. Removed with service.ts in Task 9. */
-export type HubCommandDelegate = Pick<HubKnowledgeCommandService, "createDocument" | "createRevision" | "createFolder" | "renameFolder" | "moveTreeNode" | "reorderTreeNode">;
+/** Temporary Task 4–6 delegation target. Removed with service.ts in Task 9. */
+export type HubCommandDelegate = Pick<HubKnowledgeCommandService, "createDocument" | "createRevision" | "createFolder" | "renameFolder" | "moveTreeNode" | "reorderTreeNode" | "archiveDocument" | "restoreDocument" | "archiveFolder" | "restoreFolder">;
 
 export type CreateDocumentInput = ContentInput & { sourceId: string; parentId?: string | null };
 export type RevisionResult = { documentId: string; revisionId: string; revisionNo: number; changed: boolean };
@@ -158,6 +158,10 @@ export class KnowledgeApplicationService implements ControlledKnowledgeOperation
   }
 
   async archiveDocument(caller: CallerContext, documentId: string): Promise<void> {
+    if (this.hub) {
+      await this.hub.archiveDocument(caller, documentId);
+      return;
+    }
     await this.unitOfWork.run(async (repositories) => {
       await repositories.users.upsertIdentity(caller.identity);
       const existing = await repositories.documents.findById(documentId);
@@ -171,6 +175,10 @@ export class KnowledgeApplicationService implements ControlledKnowledgeOperation
   }
 
   async restoreDocument(caller: CallerContext, documentId: string): Promise<void> {
+    if (this.hub) {
+      await this.hub.restoreDocument(caller, documentId);
+      return;
+    }
     await this.unitOfWork.run(async (repositories) => {
       await repositories.users.upsertIdentity(caller.identity);
       const existing = await repositories.documents.findById(documentId);

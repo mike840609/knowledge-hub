@@ -24,7 +24,18 @@ export type KnownSourceApplyInput = {
   failurePoint?: "knowledge" | "entry" | "asset" | "run";
 };
 
-export class SourceApplicationService {
+/**
+ * Phase 1 Source container lifecycle contract (plan §3, verbatim). Archive is
+ * a visibility gate for both ownerships: only the Source row changes status
+ * and provenance, descendants keep their lifecycle values. This is a
+ * container operation and never rewrites SOURCE_MANAGED content.
+ */
+export interface SourceLifecycleCommands {
+  archiveSource(caller: CallerContext, sourceId: string): Promise<void>;
+  restoreSource(caller: CallerContext, sourceId: string): Promise<void>;
+}
+
+export class SourceApplicationService implements SourceLifecycleCommands {
   private readonly unitOfWork: SourceUnitOfWork;
   private readonly knowledge: ControlledKnowledgeOperations;
 
@@ -113,6 +124,25 @@ export class SourceApplicationService {
       try { await this.recordFailedRun({ id: runId, caller, sourceId: input.sourceId, basedOnVersion: input.basedOnVersion, summary: { ...(input.summary ?? {}), failure: true } }); } catch { /* Preserve original failure. */ }
       throw error;
     }
+  }
+
+  async archiveSource(caller: CallerContext, sourceId: string): Promise<void> {
+    await this.setSourceStatus(caller, sourceId, "ARCHIVED");
+  }
+
+  async restoreSource(caller: CallerContext, sourceId: string): Promise<void> {
+    await this.setSourceStatus(caller, sourceId, "ACTIVE");
+  }
+
+  private async setSourceStatus(caller: CallerContext, sourceId: string, status: "ACTIVE" | "ARCHIVED"): Promise<void> {
+    await this.unitOfWork.run(async (repositories) => {
+      await repositories.users.upsertIdentity(caller.identity);
+      const source = await repositories.sources.lockById(sourceId);
+      if (!source) throw new SourceNotFoundError();
+      await repositories.workspaceAccess.requireMembership(caller, source.workspaceId);
+      if (source.status === status) return;
+      await repositories.sources.updateStatus(sourceId, status, caller.identity.id);
+    });
   }
 
   async recordFailedRun(input: { id?: string; sourceId: string; caller: CallerContext; basedOnVersion: number; summary: Record<string, unknown> }): Promise<string> {

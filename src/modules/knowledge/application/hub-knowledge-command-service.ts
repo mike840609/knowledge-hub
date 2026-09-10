@@ -6,6 +6,8 @@ import { createRevisionInTransaction, type CreateRevisionInput } from "./interna
 import { moveTreeNodeInTransaction } from "./internal/move-tree-node";
 import { renameFolderInTransaction } from "./internal/rename-folder";
 import { reorderTreeNodeInTransaction } from "./internal/reorder-tree-node";
+import { archiveDocumentInTransaction, restoreDocumentInTransaction } from "./internal/set-document-lifecycle";
+import { archiveFolderInTransaction, restoreFolderInTransaction } from "./internal/set-folder-lifecycle";
 
 export type { CreateHubDocumentInput, CreateRevisionInput };
 
@@ -16,9 +18,8 @@ export type MoveTreeNodeInput = {
 };
 
 /**
- * Phase 1 shared Hub command contract (plan §3, verbatim). Tasks 4–5 implement
- * document/revision/tree operations; Task 6 adds lifecycle operations on the
- * implementation below.
+ * Phase 1 shared Hub command contract (plan §3, verbatim). Document, revision,
+ * tree, and lifecycle operations are all implemented on the class below.
  */
 export interface HubKnowledgeCommandService {
   createDocument(caller: CallerContext, input: CreateHubDocumentInput): Promise<{ documentId: string; revisionId: string; treeNodeId: string }>;
@@ -41,8 +42,11 @@ export interface HubKnowledgeCommandService {
  * Caller identity comes only from the explicit first parameter; command
  * payloads cannot carry caller or workspace authorization evidence, and no
  * force/bypass/isSync escape flag exists.
+ *
+ * Lifecycle operations additionally update the linked SourceEntry in the same
+ * transaction when one exists, through the Knowledge linked-entry port.
  */
-export class HubKnowledgeCommandServiceImpl implements Omit<HubKnowledgeCommandService, "archiveDocument" | "restoreDocument" | "archiveFolder" | "restoreFolder"> {
+export class HubKnowledgeCommandServiceImpl implements HubKnowledgeCommandService {
   private readonly unitOfWork: KnowledgeUnitOfWork;
 
   constructor(unitOfWork: KnowledgeUnitOfWork) {
@@ -80,5 +84,21 @@ export class HubKnowledgeCommandServiceImpl implements Omit<HubKnowledgeCommandS
 
   async reorderTreeNode(caller: CallerContext, input: { nodeId: string; newPosition: number }): Promise<void> {
     return this.unitOfWork.run((repositories) => reorderTreeNodeInTransaction(repositories, caller, input));
+  }
+
+  async archiveDocument(caller: CallerContext, documentId: string): Promise<void> {
+    return this.unitOfWork.run((repositories) => archiveDocumentInTransaction(repositories, caller, documentId));
+  }
+
+  async restoreDocument(caller: CallerContext, documentId: string): Promise<void> {
+    return this.unitOfWork.run((repositories) => restoreDocumentInTransaction(repositories, caller, documentId));
+  }
+
+  async archiveFolder(caller: CallerContext, treeNodeId: string): Promise<void> {
+    return this.unitOfWork.run((repositories) => archiveFolderInTransaction(repositories, caller, treeNodeId));
+  }
+
+  async restoreFolder(caller: CallerContext, treeNodeId: string): Promise<void> {
+    return this.unitOfWork.run((repositories) => restoreFolderInTransaction(repositories, caller, treeNodeId));
   }
 }

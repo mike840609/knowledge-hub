@@ -1,4 +1,4 @@
-import { SourceNotFoundError } from "@/modules/knowledge/domain/errors";
+import { IntegrityViolationError, SourceNotFoundError } from "@/modules/knowledge/domain/errors";
 import type { SourceOwnership, SourceType } from "@/modules/knowledge/domain/source-policy";
 import type { KnowledgeSource } from "@/modules/sources/domain/source";
 import type { SourceRepository } from "@/modules/sources/ports/source-repository";
@@ -41,6 +41,16 @@ export class MariaDbSourceRepository implements SourceRepository {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [source.id, source.name, source.workspaceId, source.sourceType, source.ownership, source.status, source.syncVersion, source.createdBy, source.updatedBy, source.archivedBy, source.archivedAt, source.createdAt, source.updatedAt],
     );
+  }
+
+  async updateStatus(sourceId: string, status: "ACTIVE" | "ARCHIVED", actorId: string): Promise<void> {
+    const archivedBy = status === "ARCHIVED" ? actorId : null;
+    const archivedAt = status === "ARCHIVED" ? new Date() : null;
+    const result = await this.connection.query(
+      "UPDATE knowledge_sources SET status = ?, updated_by = ?, archived_by = ?, archived_at = ?, updated_at = CURRENT_TIMESTAMP(6) WHERE id = ?",
+      [status, actorId, archivedBy, archivedAt, sourceId],
+    );
+    if (affectedRows(result) !== 1) throw new IntegrityViolationError("Source lifecycle could not be updated.");
   }
 
   async guardAndAdvanceVersion(sourceId: string, basedOnVersion: number, actorId: string): Promise<number | null> {

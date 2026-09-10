@@ -155,7 +155,7 @@ describe("Knowledge application transactions", () => {
     const secondFolderId = "0199f000-0000-7000-8000-000000000999";
     await new MariaDbUnitOfWork(pool).run(async ({ tree }) => tree.insert({ id: secondFolderId, sourceId: fixture.source.id, parentId: null, nodeType: "FOLDER", name: "Second Folder", documentId: null, position: 1, status: "ACTIVE", updatedBy: fixtureIdentity.id, archivedBy: null, archivedAt: null }));
     await hub.moveTreeNode(caller, { nodeId: (await new MariaDbUnitOfWork(pool).run(async ({ tree }) => (await tree.listBySource(fixture.source.id)).find((item) => item.documentId === created.documentId)))!.id, newParentId: secondFolderId, newPosition: 0 });
-    await service.archiveDocument(caller, created.documentId);
+    await hub.archiveDocument(caller, created.documentId);
     const archivedRows = await pool.query<{ document_status: string; document_updated_by: string; document_archived_by: string; document_archived_at: Date | null; tree_status: string; tree_updated_by: string; tree_archived_by: string; tree_archived_at: Date | null }[]>(
       `SELECT d.status AS document_status, d.updated_by AS document_updated_by, d.archived_by AS document_archived_by, d.archived_at AS document_archived_at,
               n.status AS tree_status, n.updated_by AS tree_updated_by, n.archived_by AS tree_archived_by, n.archived_at AS tree_archived_at
@@ -167,7 +167,7 @@ describe("Knowledge application transactions", () => {
     expect(archivedRows[0].tree_archived_at).not.toBeNull();
     expect(await service.getDocument(caller, created.documentId)).toBeNull();
     expect((await service.listTree(caller, fixture.source.id)).flatMap((item) => item.children).some((item) => item.documentId === created.documentId)).toBe(false);
-    await service.restoreDocument(caller, created.documentId);
+    await hub.restoreDocument(caller, created.documentId);
     const restoredRows = await pool.query<{ document_status: string; document_updated_by: string; document_archived_by: string | null; document_archived_at: Date | null; tree_status: string; tree_updated_by: string; tree_archived_by: string | null; tree_archived_at: Date | null }[]>(
       `SELECT d.status AS document_status, d.updated_by AS document_updated_by, d.archived_by AS document_archived_by, d.archived_at AS document_archived_at,
               n.status AS tree_status, n.updated_by AS tree_updated_by, n.archived_by AS tree_archived_by, n.archived_at AS tree_archived_at
@@ -197,14 +197,15 @@ describe("Knowledge application transactions", () => {
   it("rejects every general Hub mutation against a SOURCE_MANAGED source", async () => {
     const fixture = await createSourceFixture(pool, { managed: true });
     const document = await createDocumentForAnySource(pool, fixture.source.id, fixture.folderId);
-    const service = new KnowledgeApplicationService(new MariaDbUnitOfWork(pool));
     const hub = new HubKnowledgeCommandServiceImpl(new MariaDbUnitOfWork(pool));
     const caller = fixtureCaller();
     const tree = await new MariaDbUnitOfWork(pool).run(async ({ tree }) => (await tree.listBySource(fixture.source.id)).find((item) => item.documentId === document.documentId));
     const operations: Array<() => Promise<unknown>> = [
       () => hub.createRevision(caller, { documentId: document.documentId, expectedCurrentRevisionId: document.revisionId, title: "no", markdown: "no", metadata: {} }),
-      () => service.archiveDocument(caller, document.documentId),
-      () => service.restoreDocument(caller, document.documentId),
+      () => hub.archiveDocument(caller, document.documentId),
+      () => hub.restoreDocument(caller, document.documentId),
+      () => hub.archiveFolder(caller, fixture.folderId),
+      () => hub.restoreFolder(caller, fixture.folderId),
       () => hub.moveTreeNode(caller, { nodeId: tree!.id, newParentId: null, newPosition: 0 }),
       () => hub.renameFolder(caller, { nodeId: fixture.folderId, name: "no" }),
       () => hub.reorderTreeNode(caller, { nodeId: fixture.folderId, newPosition: 2 }),
@@ -302,15 +303,14 @@ describe("Knowledge application transactions", () => {
     const nested = "0199f000-0000-7000-8000-000000000992";
     await new MariaDbUnitOfWork(pool).run(async ({ tree }) => tree.insert({ id: nested, sourceId: first.source.id, parentId: first.folderId, nodeType: "FOLDER", name: "Nested", documentId: null, position: 1, status: "ACTIVE", updatedBy: fixtureIdentity.id, archivedBy: null, archivedAt: null }));
     await pool.query("UPDATE knowledge_tree_nodes SET status = 'ARCHIVED', updated_by = ?, archived_by = ?, archived_at = CURRENT_TIMESTAMP(6) WHERE id = ?", [fixtureIdentity.id, fixtureIdentity.id, first.folderId]);
-    const service = new KnowledgeApplicationService(new MariaDbUnitOfWork(pool));
     const hub = new HubKnowledgeCommandServiceImpl(new MariaDbUnitOfWork(pool));
     const caller = fixtureCaller();
     await expect(hub.createDocument(caller, { sourceId: first.source.id, parentId: nested, title: "No", markdown: "No", metadata: {} })).rejects.toThrow();
     await expect(hub.moveTreeNode(caller, { nodeId: nested, newParentId: second.folderId, newPosition: 0 })).rejects.toBeInstanceOf(CrossSourceMoveError);
     const document = await createDocumentForAnySource(pool, first.source.id, first.folderId);
-    await service.archiveDocument(caller, document.documentId);
+    await hub.archiveDocument(caller, document.documentId);
     await new MariaDbUnitOfWork(pool).run(async ({ tree }) => tree.updateParent((await tree.listBySource(first.source.id)).find((node) => node.documentId === document.documentId)!.id, nested, fixtureIdentity.id));
-    await expect(service.restoreDocument(caller, document.documentId)).rejects.toThrow();
+    await expect(hub.restoreDocument(caller, document.documentId)).rejects.toThrow();
   });
 
   it("runs the fixed development seed twice without duplicates in an isolated database", async () => {
