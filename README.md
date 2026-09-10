@@ -1,4 +1,4 @@
-# TSMC Knowledge Hub
+# Knowledge Hub
 
 讓各團隊將自己的 LLM Wiki／Markdown folder 整合為可供人與 Agent 共用的組織知識，並在後續階段由 HR／發布者重新編排、發布至 tKMS。
 

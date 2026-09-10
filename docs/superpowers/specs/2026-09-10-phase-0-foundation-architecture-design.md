@@ -1,4 +1,4 @@
-# TSMC Knowledge Hub — Phase 0 Foundation & Architecture Design
+# Knowledge Hub — Phase 0 Foundation & Architecture Design
 
 | 項目 | 內容 |
 | --- | --- |
@@ -10,7 +10,7 @@
 
 ## 1. 文件效力與範圍
 
-本規格定義新版 TSMC Knowledge Hub 的 Phase 0 foundation，供後續實作計畫與各階段設計引用。內容以原對話最後確認的決策為準，不沿用舊 HRKM 的 Refine CMS 架構或依賴清單，也不把對話中曾討論但已被取代的候選方案視為決策。
+本規格定義新版 Knowledge Hub 的 Phase 0 foundation，供後續實作計畫與各階段設計引用。內容以原對話最後確認的決策為準，不沿用舊 HRKM 的 Refine CMS 架構或依賴清單，也不把對話中曾討論但已被取代的候選方案視為決策。
 
 Phase 0 交付可啟動、可測試的 Next.js modular monolith 基礎：技術骨架、三個核心模組、最小身分介面、核心 schema、repository 與 transaction 邊界、domain invariants，以及最小建立／讀取／Tree 瀏覽 smoke flow。完整 Knowledge 功能在 Phase 1 展開，完整 Folder Sync 在 Phase 2 實作。
 

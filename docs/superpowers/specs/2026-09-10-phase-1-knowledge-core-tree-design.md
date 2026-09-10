@@ -1,4 +1,4 @@
-# TSMC Knowledge Hub — Phase 1 Knowledge Core & Tree Design
+# Knowledge Hub — Phase 1 Knowledge Core & Tree Design
 
 | 項目 | 內容 |
 | --- | --- |

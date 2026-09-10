@@ -1,4 +1,4 @@
-# TSMC Knowledge Hub — Phase 0–9 目標與路線圖
+# Knowledge Hub — Phase 0–9 目標與路線圖
 
 | 項目 | 內容 |
 | --- | --- |

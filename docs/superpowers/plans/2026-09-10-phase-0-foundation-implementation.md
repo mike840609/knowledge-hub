@@ -1,4 +1,4 @@
-# TSMC Knowledge Hub — Phase 0 Foundation Implementation Plan
+# Knowledge Hub — Phase 0 Foundation Implementation Plan
 
 | 項目 | 內容 |
 | --- | --- |
@@ -209,7 +209,7 @@ DDL 會造成 implicit commit，所以 canonical-state rollback 的測試不能�
 1. 依序建立 users → sources → documents → revisions → tree／entries／assets／runs；第二個 migration 補上 current-revision 複合 FK。
 2. 完整保存 spec 最小欄位；Source sync_version 預設 0，Document／Tree／Entry／Source lifecycle 僅 ACTIVE／ARCHIVED。
 3. SyncRun 允許 PREVIEWED／FAILED 的 `result_version` 為 null；APPLIED 必須有完成時間與有效 result version；不加入額外 Knowledge lifecycle。
-4. 為 Source tree、current document lookup、source entry external identity 與 revision history 加必要索引，不預建 full-text/vector index。
+4. 為 Source tree、current document lookup、source entry external identity 與 revision history加必要索引，不預建 full-text/vector index。
 5. 依 §4.2 加上複合 FK、CHECK、UNIQUE，直接嘗試非法 SQL 寫入來測 constraint，不只測 application validation。
 
 驗證：從空 DB 完整 migration；兩個 org／source fixtures；錯誤 source reference、錯誤 current revision、重複 revision_no／external identity、FOLDER 帶 document_id、DOCUMENT 無 reference 均失敗。相同 external_id 可在不同 Source 出現；多筆 null external_id 可存在；asset table 沒有 binary storage 欄位。
