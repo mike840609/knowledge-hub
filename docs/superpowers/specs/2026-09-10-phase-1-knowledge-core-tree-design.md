@@ -5,36 +5,42 @@
 | 日期 | 2026-09-10 |
 | Phase | 1 |
 | 名稱 | Knowledge Core & Tree |
-| 狀態 | Approved Design；已對齊 Phase 0 pre-implementation contract clarifications |
+| 狀態 | Approved Design；已整合 Phase 0 Workspace foundation |
 | 前置 | Phase 0 Foundation & Architecture |
 | 後續 | Phase 2 Knowledge Source Import & Sync |
 
 ## 1. Goal
 
-Phase 1 的目標是讓 Knowledge Hub 擁有一套完整、可靠且不依賴 ingestion、Web UI 或 MCP 的 Knowledge Core。
+Phase 1 的目標是讓 Knowledge Hub 擁有一套完整、可靠且不依賴 ingestion、Web UI 或 MCP 的 Knowledge Core，同時繼承 Phase 0 已建立的 Workspace access foundation。
 
 完成後系統必須能保證：
 
 ```text
-org_code
-  └── KnowledgeSource
-       └── Knowledge Tree
-            ├── Folder
-            └── Document
-                 └── immutable Revisions
+User
+  └── WorkspaceMembership
+          ↓
+      Workspace
+          └── KnowledgeSource
+               └── Knowledge Tree
+                    ├── Folder
+                    └── Document
+                         └── immutable Revisions
 ```
 
 其中：
 
+- `User.org_code` = 公司組織 identity attribute，不直接作 Knowledge ACL。
+- Workspace = Knowledge container + basic access scope。
+- WorkspaceMembership = Phase 0–2 local/mock access foundation。
+- Source = source scope、content ownership 與來源邊界；每個 Source 只屬一個 Workspace。
 - Tree = 文件目前位於哪裡。
 - Document = 文件穩定 identity。
 - Revision = 文件內容版本。
 - SourceEntry = 外部來源 identity 與 Hub object 的 mapping。
-- Source = ownership 與來源邊界。
 
-Document ID 不因 rename、move、archive、restore 或 revision 而改變。
+Document ID 不因 rename、move、archive、restore、Workspace navigation state 或 revision 而改變。Document 不重複保存 `workspace_id`；其 scope 由 `Document → Source → Workspace` 推導。
 
-Phase 1 繼承 Phase 0 已固定的 foundation contracts：application-generated UUIDv7 + MariaDB native `UUID`、顯式 `CallerContext`、canonical mutation 的 `READ COMMITTED` transaction、lifecycle current provenance，以及 one-document-one-TreeNode uniqueness。Phase 1 不重新發明這些規則，只完成完整 Knowledge behavior。
+Phase 1 繼承 Phase 0 已固定的 foundation contracts：Workspace/WorkspaceMembership、`knowledge_sources.workspace_id`、application-generated UUIDv7 + MariaDB native `UUID`、顯式 `CallerContext`、canonical mutation 的 `READ COMMITTED` transaction、lifecycle current provenance，以及 one-document-one-TreeNode uniqueness。Phase 1 不重新發明這些規則，只完成完整 Knowledge behavior。
 
 ## 2. Phase 1 Scope
 
@@ -42,7 +48,7 @@ Phase 1 繼承 Phase 0 已固定的 foundation contracts：application-generated
 
 Phase 1 完成：
 
-- KnowledgeSource core behavior。
+- KnowledgeSource core behavior，且 Source scope 為 Workspace。
 - KnowledgeDocument lifecycle。
 - Immutable KnowledgeRevision。
 - Knowledge Tree。
@@ -55,10 +61,11 @@ Phase 1 完成：
 - Current revision resolution。
 - Archived filtering。
 - SOURCE_MANAGED / HUB_MANAGED mutation guard。
+- Workspace membership foundation 在 read/write application services 的一致套用。
 - Transactional invariants。
 - Concurrency protection。
 - Caller-aware read/write application services。
-- Read-only Knowledge Browser。
+- Read-only Knowledge Browser：Workspace → Source → Tree → Document/Revision。
 
 ### 2.2 Out of Scope
 
@@ -70,18 +77,19 @@ Phase 1 不做：
 - Diff algorithm。
 - Rename detection algorithm。
 - SOURCE_MANAGED Title Resolution / Markdown parser。
+- Workspace provisioning/create/rename/archive/restore 管理 UI。
+- Workspace roles/capabilities、membership administration、Team/SSO Group mapping、granular ACL。
 - Rich text editor。
 - Web authoring。
 - Keyword search。
 - Embedding / vector search。
-- ACL。
 - Company SSO。
 - tKMS publishing。
 - MCP。
 - Agent actor / Principal model。
 - Agent Memory。
 
-以上能力分別留在 Phase 2 之後的對應階段。
+Workspace administration 與 production governance 屬 Phase 3；Phase 1 只 consume Phase 0 membership foundation。
 
 ## 3. Architecture Decision
 
@@ -104,13 +112,16 @@ Sync Service
 直接修改 Knowledge tables
 ```
 
-這會讓 Folder Sync 繞過 Knowledge invariants，因此不採用。
+這會讓 Folder Sync 繞過 Knowledge invariants與 Workspace policy，因此不採用。
 
 ### 3.2 Option B — Domain Commands + Mutation Authority Separation
 
 採用：
 
 ```text
+                    Workspace Access Policy
+                             │
+                             ▼
                     Knowledge Core
                          │
         ┌────────────────┴────────────────┐
@@ -126,6 +137,7 @@ Phase 5 Web Authoring             Phase 2 Folder Sync
 
 ```text
 CallerContext
+Workspace scope/policy
 Document
 Revision
 Tree
@@ -143,6 +155,8 @@ READ COMMITTED Transactions
 Phase 2 因此形成：
 
 ```text
+Authorized Workspace
+ ↓
 Folder
  ↓
 Scanner
@@ -161,39 +175,42 @@ Knowledge Core
 ## 4. Core Domain Model
 
 ```text
-KnowledgeSource
+Workspace
 │
-├── SourceEntry
-│
-└── KnowledgeTreeNode
-     │
-     ├── FOLDER
-     │
-     └── DOCUMENT
-           │
-           └── KnowledgeDocument
-                │
-                ├── Revision 1
-                ├── Revision 2
-                └── Revision N ← current_revision_id
+└── KnowledgeSource
+    │
+    ├── SourceEntry
+    │
+    └── KnowledgeTreeNode
+         │
+         ├── FOLDER
+         │
+         └── DOCUMENT
+               │
+               └── KnowledgeDocument
+                    │
+                    ├── Revision 1
+                    ├── Revision 2
+                    └── Revision N ← current_revision_id
 ```
 
-Source 本身就是 Tree root，不建立 synthetic root folder。
+Source 本身就是其 Tree root，不建立 synthetic root folder；Workspace 是 Source container，不是 TreeNode。
 
 例如：
 
 ```text
-Query Master                     ← KnowledgeSource
-├── Architecture                 ← Folder TreeNode
-│   ├── Overview.md              ← Document TreeNode
-│   └── Database.md
-└── Runbooks
-    └── Deployment.md
+Workspace: Query Master
+└── Source: Obsidian Wiki
+    ├── Architecture
+    │   ├── Overview.md
+    │   └── Database.md
+    └── Runbooks
+        └── Deployment.md
 ```
 
 ## 5. Schema Refinement
 
-Phase 0 的八張核心表繼續保留，並已要求所有 internal IDs 使用 MariaDB native `UUID`、Document TreeNode uniqueness 以及 lifecycle provenance。Phase 1 不重做 foundation schema，只補 SourceEntry 對 TreeNode 的必要 stable mapping。
+Phase 0 的十張 domain tables 繼續保留：原八張 Knowledge/Source tables加上 `workspaces` 與 `workspace_memberships`。所有 stable entity IDs 使用 MariaDB native `UUID`，`knowledge_sources.workspace_id` 是 Source authoritative Workspace scope，Document TreeNode uniqueness 與 lifecycle provenance 已是 foundation。Phase 1 不重做 foundation schema，只補 SourceEntry 對 TreeNode 的必要 stable mapping。
 
 ### 5.1 SourceEntry 增加 `tree_node_id`
 
@@ -353,9 +370,11 @@ restoreFolder(caller, ...)
 getAncestors(caller, ...)
 ```
 
-所有 Tree mutation 必須驗證：
+所有 Tree operation 必須驗證：
 
 - caller 來自可信 `CallerContext`。
+- Source 存在並解析出 authoritative `workspace_id`。
+- caller 通過該 Workspace 的 foundation access policy。
 - parent 存在。
 - parent 是 FOLDER。
 - parent ACTIVE。
@@ -363,6 +382,7 @@ getAncestors(caller, ...)
 - node 不可移到自己下面。
 - node 不可移到 descendant。
 - Document 不可跨 Source move。
+- Tree operation 不可改變 Source 的 Workspace。
 
 因此以下操作禁止：
 
@@ -372,7 +392,15 @@ Source A / Document X
 Source B
 ```
 
-若未來需要跨 Source 搬移，必須設計明確 migration / transfer 流程，不能把一般 tree move 當 source transfer。
+以及：
+
+```text
+Source A @ Workspace X
+    ↓ ordinary move/sync
+Workspace Y
+```
+
+若未來需要跨 Source 或跨 Workspace 搬移，必須設計明確 migration / transfer 流程，不能把一般 tree move 當 source transfer。
 
 ## 8. Tree Ordering
 
@@ -388,19 +416,13 @@ Sibling query：
 ORDER BY position, id
 ```
 
-Phase 1 不引入：
-
-- Fractional indexing。
-- LexoRank。
-- CRDT。
-
-Move / reorder transaction 內重算受影響 sibling positions。
+Phase 1 不引入 Fractional indexing、LexoRank 或 CRDT。Move / reorder transaction 內重算受影響 sibling positions。
 
 ## 9. Tree Concurrency
 
 Tree mutation 採 Source-level serialization，且 canonical mutation UoW 繼承 Phase 0 的 **READ COMMITTED** isolation。
 
-修改 hierarchy 前：
+完成 Workspace access check 後，修改 hierarchy 前：
 
 ```sql
 SELECT ...
@@ -418,9 +440,7 @@ A: folder1 → folder2
 B: folder2 → folder1
 ```
 
-兩個 concurrent requests 分別驗證通過，最後形成 cycle。
-
-不同 Source 仍可平行操作。
+兩個 concurrent requests 分別驗證通過，最後形成 cycle。不同 Source 仍可平行操作。
 
 ## 10. Revision Model
 
@@ -440,53 +460,33 @@ created_at
 
 Revision 建立後 immutable。`created_by` 在 Phase 0–2 仍指向可信 User identity；Phase 1 不提前改成 `actor_kind + actor_id` polymorphic model。若未來 Agent 被允許寫入 canonical Knowledge，再由對應 phase 設計 Principal/Actor model。
 
-不存在：
-
-```text
-updateRevision()
-```
-
-只有：
-
-```text
-createRevision()
-```
+不存在 `updateRevision()`；只有 `createRevision()`。
 
 ## 11. Revision Creation
 
 流程：
 
 ```text
+resolve Document → Source → Workspace
+require Workspace access
 SET TRANSACTION ISOLATION LEVEL READ COMMITTED
 BEGIN
 
 lock Document
-
 read current revision
-
 normalize candidate content
-
 compare candidate content hash
 
 if unchanged:
     return current revision
 
 insert Revision N+1
-
 update Document.current_revision_id
 
 COMMIT
 ```
 
-兩個 concurrent writers 不會建立相同 `revision_no`。
-
-DB 同時保留：
-
-```text
-UNIQUE(document_id, revision_no)
-```
-
-作為資料庫層保護。
+兩個 concurrent writers 不會建立相同 `revision_no`。DB 同時保留 `UNIQUE(document_id, revision_no)` 作為資料庫層保護。
 
 ## 12. Revision Content Boundary
 
@@ -506,6 +506,7 @@ filename
 parent folder
 position
 source locator
+workspace navigation state
 archive status
 ```
 
@@ -524,8 +525,6 @@ archive status
 ## 13. Content Hash
 
 Phase 1 固定 hash contract，避免 Phase 2 自行發明。
-
-建議：
 
 ```text
 SHA-256(
@@ -554,48 +553,42 @@ metadata
 → recursively sort keys
 ```
 
-不把 Markdown formatter 或語意 normalization 放進 hash。
-
-因此純格式差異仍可能形成不同內容；Phase 1 不做 semantic deduplication。
+不把 Markdown formatter 或語意 normalization 放進 hash。因此純格式差異仍可能形成不同內容；Phase 1 不做 semantic deduplication。
 
 ## 14. Document Creation
 
 Hub-managed document：
 
 ```text
+resolve Source → Workspace
+validate CallerContext
+require Workspace access
+
 SET TRANSACTION ISOLATION LEVEL READ COMMITTED
 BEGIN
-
-validate CallerContext
-validate Source
-validate HUB_MANAGED
+validate Source ACTIVE + HUB_MANAGED
 validate parent
-
 create Document with UUIDv7 ID
-
 create Revision #1
-
 create DOCUMENT TreeNode
-
 set Document.current_revision_id
-
 COMMIT
 ```
 
-必須 atomic。
-
-不存在 committed：
-
-```text
-Document
-└── current_revision_id = null
-```
-
-的完成狀態。
+必須 atomic。不存在 committed `Document.current_revision_id = null` 的完成狀態。
 
 ## 15. Mutation Authority
 
-這是 Phase 1 最重要的 boundary。Public application services 都顯式接收 `CallerContext`；caller 不可由 command payload、form、query 或 `force` flag 指定。
+這是 Phase 1 最重要的 boundary。Public application services 都顯式接收 `CallerContext`；caller 不可由 command payload、form、query、org_code、workspace selector 或 `force` flag 指定。
+
+所有 Hub/Source mutation 都先完成：
+
+```text
+resource/source
+  → Source.workspace_id
+  → Workspace access policy
+  → Source ownership/lifecycle authority
+```
 
 ### 15.1 Hub Commands
 
@@ -614,7 +607,7 @@ archiveDocument(caller, documentId)
 restoreDocument(caller, documentId)
 ```
 
-但必須：
+但必須同時滿足 Workspace access，且：
 
 ```text
 source.ownership == HUB_MANAGED
@@ -639,7 +632,7 @@ archiveProjectedDocument(caller, documentId)
 restoreProjectedDocument(caller, documentId)
 ```
 
-但必須：
+但必須同時滿足 Source Workspace access，且：
 
 ```text
 source.ownership == SOURCE_MANAGED
@@ -652,9 +645,7 @@ source.ownership == SOURCE_MANAGED
 不設計：
 
 ```ts
-updateDocument({
-  force: true
-})
+updateDocument({ force: true })
 ```
 
 或：
@@ -663,7 +654,7 @@ updateDocument({
 bypassOwnership: true
 ```
 
-Mutation authority 由不同 application interface 表達，避免未來 Web / Agent 誤用繞過 ownership rule。
+Mutation authority 由不同 application interface 表達，避免未來 Web / Agent 誤用繞過 ownership rule。也不得接受 `workspaceId`/`org_code` 作為「已授權」證明。
 
 ## 17. Lifecycle
 
@@ -684,12 +675,16 @@ TRASHED
 
 Phase 1 延續 Phase 0 的 current lifecycle provenance：Source、SourceEntry、TreeNode、Document 的 lifecycle transition 同交易維護 `updated_by`、`archived_by`、`archived_at`。這些欄位不提供完整多次 archive/restore event history；完整 append-only audit 留 Phase 3。
 
+Workspace lifecycle 不在 Phase 1 實作；Phase 3 明確負責 Workspace provision/create、rename、archive/restore 與 administration semantics。Workspace MVP 不 hard delete。
+
 ## 18. Archive Document
 
 ```text
+resolve Document → Source → Workspace
+require Workspace access
+
 SET TRANSACTION ISOLATION LEVEL READ COMMITTED
 BEGIN
-
 lock Source
 lock Document
 
@@ -713,9 +708,11 @@ Revision 不動。
 ## 19. Restore Document
 
 ```text
+resolve Document → Source → Workspace
+require Workspace access
+
 SET TRANSACTION ISOLATION LEVEL READ COMMITTED
 BEGIN
-
 validate source ACTIVE
 validate parent folder ACTIVE
 
@@ -750,7 +747,7 @@ Hub command：
 archiveFolder(caller, treeNodeId)
 ```
 
-只允許 archive 沒有 ACTIVE children 的 folder。成功時該 Folder TreeNode 同交易更新 status 與 lifecycle provenance。
+先由 TreeNode → Source → Workspace 做 access check，只允許 archive 沒有 ACTIVE children 的 folder。成功時該 Folder TreeNode 同交易更新 status 與 lifecycle provenance。
 
 如果仍有 children：
 
@@ -758,20 +755,11 @@ archiveFolder(caller, treeNodeId)
 FOLDER_NOT_EMPTY
 ```
 
-Phase 2 Folder Sync 若整個 subtree 消失，會明確對 snapshot 中每個 entry 執行 batch lifecycle transition。
-
-如此避免：
-
-```text
-archive folder
-→ 偷偷 archive 300 documents
-```
-
-的隱性 side effect。
-
-Phase 5 若需要「刪除整個 folder」UX，再另外設計 explicit cascade preview。
+Phase 2 Folder Sync 若整個 subtree 消失，會明確對 snapshot 中每個 entry 執行 batch lifecycle transition。Phase 5 若需要「刪除整個 folder」UX，再另外設計 explicit cascade preview。
 
 ## 21. Source Lifecycle
+
+Source lifecycle operation 先由 `Source.workspace_id` 執行 Workspace access check。
 
 Archive Source：
 
@@ -800,17 +788,26 @@ KnowledgeSource.archived_by = null
 KnowledgeSource.archived_at = null
 ```
 
-原本 child lifecycle 保留原值。
-
-因此 Source archive 是 container visibility gate，不是大量 child lifecycle update。
+原本 child lifecycle 保留原值。因此 Source archive 是 container visibility gate，不是大量 child lifecycle update，也不是 Workspace lifecycle。
 
 ## 22. Read Application Services
 
-Phase 1 提供顯式 caller-aware read contract：
+Phase 1 提供顯式 caller-aware read contract。
+
+Workspace query：
+
+```text
+listWorkspaces(caller)
+```
+
+只回 caller 可見 Workspace。
+
+Knowledge query：
 
 ```text
 listSources(
   caller,
+  workspaceId,
   includeArchived = false
 )
 
@@ -833,23 +830,15 @@ getDocument(
 )
 
 getCurrentRevision(caller, documentId)
-
 getRevision(caller, documentId, revisionNo)
-
 listRevisions(caller, documentId)
 ```
 
-Phase 1 尚未實作完整 ACL，但 caller 仍是 application contract 的必要輸入；Phase 3 在相同 method shape 上補 owner/access policy，而不是再改一輪所有 query signatures。
+`listSources` 的 workspaceId 是 query scope；server 必須驗證 caller access。`getSource / listTree / getDocument / revision reads` 不把 client 額外提供的 workspaceId 當 proof，而是從 resource relationship 解析 Workspace 再做 policy check。
 
-這些 application services：
+Phase 1 尚未實作 production roles/capabilities，但 Workspace membership foundation 已是 application contract 的必要檢查；Phase 3 在相同 resource/policy boundary 上補 production governance。
 
-- 不依賴 React。
-- 不依賴 HTTP。
-- 不依賴 MCP。
-- 不依賴 scanner。
-- 不從 ambient/global request state 自行取得 caller。
-
-Phase 4 HTTP Read API 與 Phase 7 MCP 可直接 reuse。
+這些 application services不依賴 React、HTTP、MCP 或 scanner，也不從 ambient/global request state自行取得 caller。Phase 4 HTTP Read API 與 Phase 7 MCP 可直接 reuse。
 
 ## 23. Tree Read Model
 
@@ -879,40 +868,30 @@ type KnowledgeTreeItem =
     };
 ```
 
-Document：
-
-```text
-label = current revision title
-```
-
-Folder：
-
-```text
-label = TreeNode.name
-```
-
-所有 ID 在 application surface 以標準 UUID string 表達；storage layer 使用 MariaDB native `UUID`。
+Document：`label = current revision title`；Folder：`label = TreeNode.name`。所有 ID 在 application surface 以標準 UUID string 表達；storage layer 使用 MariaDB native `UUID`。
 
 ## 24. Phase 1 Minimal UI
 
-Phase 1 可以提供一個 read-only Knowledge Browser。
+Phase 1 提供 read-only Knowledge Browser：
 
 ```text
-┌─────────────────────────────────────────────┐
-│ Source: Query Master                        │
-├───────────────┬─────────────────────────────┤
-│ Architecture  │ Database Architecture       │
-│ ├ Overview    │                             │
-│ ├ Database ◀  │ markdown rendered content   │
-│               │                             │
-│ Runbooks      │ Revision: #4                │
-│ └ Deployment  │ Updated: ...                │
-└───────────────┴─────────────────────────────┘
+┌───────────────────────────────────────────────────────┐
+│ Workspace: Query Master ▼                             │
+│ Source: Obsidian Wiki ▼                               │
+├─────────────────┬─────────────────────────────────────┤
+│ Architecture    │ Database Architecture               │
+│ ├ Overview      │                                     │
+│ ├ Database ◀    │ markdown rendered content           │
+│                 │                                     │
+│ Runbooks        │ Revision: #4                        │
+│ └ Deployment    │ Updated: ...                        │
+└─────────────────┴─────────────────────────────────────┘
 ```
 
 支援：
 
-- Source selector。
+- Workspace selector，只顯示 caller-authorized Workspace。
+- Source selector，只顯示目前 Workspace 下的可見 Sources。
 - Folder tree。
 - Document viewer。
 - Revision history。
@@ -920,13 +899,14 @@ Phase 1 可以提供一個 read-only Knowledge Browser。
 
 不支援：
 
+- Workspace create/rename/archive/member management。
 - Edit。
 - Upload。
 - Drag & Drop。
 - Delete。
 - Sync。
 
-這讓 Phase 1 可以實際驗證 Knowledge Core，但不提前做 Phase 5。
+這讓 Phase 1 可以實際驗證 Knowledge Core 與 Workspace-scoped read path，但不提前做 Phase 3/5。
 
 ## 25. SourceEntry Core
 
@@ -934,15 +914,10 @@ Phase 1 完成 mapping primitives：
 
 ```text
 createSourceEntryMapping()
-
 getSourceEntry()
-
 resolveByExternalId()
-
 updateSourceLocator()
-
 archiveSourceEntry()
-
 restoreSourceEntry()
 ```
 
@@ -980,11 +955,11 @@ Document.id → Hub identity
 
 ## 27. Error Model
 
-Phase 1 統一 domain / application errors。
-
-至少：
+Phase 1 統一 domain / application errors。至少：
 
 ```text
+WORKSPACE_NOT_FOUND
+WORKSPACE_ACCESS_DENIED
 SOURCE_NOT_FOUND
 DOCUMENT_NOT_FOUND
 REVISION_NOT_FOUND
@@ -1009,9 +984,7 @@ INVALID_TITLE
 INVALID_METADATA
 ```
 
-UI / HTTP adapter 再自行 mapping presentation / status code。
-
-Core 不回 transport-specific 的 HTTP status 或 toast message。
+UI / HTTP adapter 再自行 mapping presentation / status code。Core 不回 transport-specific HTTP status、toast message 或 SQL driver error。
 
 ## 28. Revision Concurrency
 
@@ -1027,29 +1000,16 @@ createRevision(caller, {
 })
 ```
 
-如果：
-
-```text
-expectedCurrentRevisionId
-!=
-actualCurrentRevisionId
-```
-
-回：
-
-```text
-REVISION_CONFLICT
-```
-
-這是 Core correctness，不是 Phase 5 UI feature；Phase 2 sync 也能 reuse。
+如果 `expectedCurrentRevisionId != actualCurrentRevisionId`，回 `REVISION_CONFLICT`。這是 Core correctness，不是 Phase 5 UI feature；Phase 2 sync 也能 reuse。
 
 ## 29. Transaction Boundaries
 
-以下操作必須在 **READ COMMITTED** 下 atomic；所有參與的 repository 使用同一 MariaDB connection。
+以下操作必須在 **READ COMMITTED** 下 atomic；所有參與的 repository 使用同一 MariaDB connection。Workspace access 必須在 mutation execution 前依 authoritative resource scope 驗證；UI state 不取代 policy。
 
 ### 29.1 Create Document
 
 ```text
+Workspace access
 Document
 Revision
 TreeNode
@@ -1059,6 +1019,7 @@ current revision pointer
 ### 29.2 Create Revision
 
 ```text
+Workspace access
 Revision
 current revision pointer
 ```
@@ -1066,6 +1027,7 @@ current revision pointer
 ### 29.3 Archive / Restore
 
 ```text
+Workspace access
 Document
 TreeNode
 SourceEntry
@@ -1075,75 +1037,69 @@ lifecycle provenance
 ### 29.4 Tree Move
 
 ```text
+Workspace access
 source lock
 node
 affected sibling positions
 ```
 
-任何失敗：
-
-```text
-ROLLBACK ALL
-```
-
-READ COMMITTED 不取代 Source/Document locking read；兩者共同構成 Phase 1 concurrency contract。
+任何 canonical mutation 失敗：`ROLLBACK ALL`。READ COMMITTED 不取代 Source/Document locking read；兩者共同構成 Phase 1 concurrency contract。
 
 ## 30. Default Archived Filtering
 
-預設：
+預設 `includeArchived = false`，適用 `listSources`、`listTree`、`getDocument`。Historical explicit lookup 可以 `includeArchived = true`，但仍不得繞過 Workspace access。
 
-```text
-includeArchived = false
-```
-
-適用：
-
-```text
-listSources
-listTree
-getDocument
-```
-
-Historical explicit lookup 可以：
-
-```text
-includeArchived = true
-```
-
-未來 Search、MCP 與 Agent 都必須沿用相同 default，並透過 CallerContext 進入 application query boundary。
+未來 Search、MCP 與 Agent 都必須沿用相同 default，並透過 CallerContext + Workspace policy 進入 application query boundary。
 
 ## 31. Core Invariants
 
 Phase 1 完成後必須保證：
 
-1. Document 永遠屬於一個 Source。
-2. Document ID 為 UUIDv7 stable identity，不受 hierarchy 變更影響。
-3. Revision immutable。
-4. current revision 一定屬於該 Document。
-5. Revision number 單調增加且唯一。
-6. 相同內容不建立 duplicate revision。
-7. 一個 Document 只有一個 Knowledge TreeNode，DB uniqueness 已從 Phase 0 保護。
-8. Folder 不建立 fake Document。
-9. Document node title 來自 current Revision。
-10. Tree parent 必須同 Source。
-11. Tree 不可形成 cycle。
-12. Document 不可跨 Source move。
-13. SOURCE_MANAGED 不接受 Hub mutation。
-14. Source mutation 不可由 public `force` bypass。
-15. Archive 不 hard delete，且目前 archive actor/time 可追溯。
-16. Restore 沿用原 Document ID 並清除目前 archive provenance。
-17. SourceEntry mapping 不因 path rename 自動換 identity。
-18. Tree / Document / SourceEntry lifecycle transactionally consistent。
-19. Canonical mutation 使用 READ COMMITTED + explicit row locks，不散落 SQL。
-20. Public read/write services 顯式接收 CallerContext。
-21. Web / future MCP 共用相同 application services。
-22. Phase 1 不提前建立 Agent actor_kind / Principal model。
+1. 每個 Source 永遠屬於一個 Workspace。
+2. `User.org_code` 不作 Knowledge authorization shortcut。
+3. Cross-org WorkspaceMembership 合法；same-org non-member 不自動 access。
+4. Resource ID / UI Workspace selection 不能繞過 Workspace policy。
+5. Document 永遠屬於一個 Source，workspace scope 由 Source 推導。
+6. Document ID 為 UUIDv7 stable identity，不受 hierarchy 變更影響。
+7. Revision immutable。
+8. current revision 一定屬於該 Document。
+9. Revision number 單調增加且唯一。
+10. 相同內容不建立 duplicate revision。
+11. 一個 Document 只有一個 Knowledge TreeNode，DB uniqueness 已從 Phase 0 保護。
+12. Folder 不建立 fake Document。
+13. Document node title 來自 current Revision。
+14. Tree parent 必須同 Source。
+15. Tree 不可形成 cycle。
+16. Document 不可跨 Source move。
+17. 普通 Tree/Sync operation 不可改變 Source Workspace。
+18. SOURCE_MANAGED 不接受 Hub mutation。
+19. Source mutation 不可由 public `force` bypass。
+20. Archive 不 hard delete，且目前 archive actor/time 可追溯。
+21. Restore 沿用原 Document ID 並清除目前 archive provenance。
+22. SourceEntry mapping 不因 path rename 自動換 identity。
+23. Tree / Document / SourceEntry lifecycle transactionally consistent。
+24. Canonical mutation 使用 READ COMMITTED + explicit row locks，不散落 SQL。
+25. Public read/write services 顯式接收 CallerContext。
+26. Web / future MCP 共用相同 application services + Workspace policy。
+27. Phase 1 不提前建立 Workspace administration、production role model 或 Agent actor_kind / Principal model。
 
 ## 32. Acceptance Tests
 
 Phase 1 至少覆蓋以下核心 scenario。
 
-### 32.1 Revision
+### 32.1 Workspace / Caller
+
+```text
+✓ listWorkspaces only returns caller memberships
+✓ cross-org user with membership can browse shared Workspace
+✓ same-org non-member cannot browse Workspace
+✓ one caller can switch between multiple authorized Workspaces
+✓ direct source/document UUID does not bypass Workspace policy
+✓ caller cannot be overridden by input payload
+✓ UI workspace selection is not authorization evidence
+```
+
+### 32.2 Revision
 
 ```text
 ✓ create document creates R1
@@ -1157,7 +1113,7 @@ Phase 1 至少覆蓋以下核心 scenario。
 ✓ old revision remains unchanged
 ```
 
-### 32.2 Tree
+### 32.3 Tree
 
 ```text
 ✓ folder can contain folder
@@ -1174,7 +1130,7 @@ Phase 1 至少覆蓋以下核心 scenario。
 ✓ lock waiter validates against latest committed state under READ COMMITTED
 ```
 
-### 32.3 Lifecycle
+### 32.4 Lifecycle
 
 ```text
 ✓ archive keeps revision history
@@ -1188,19 +1144,17 @@ Phase 1 至少覆蓋以下核心 scenario。
 ✓ archived Source hidden by default
 ```
 
-### 32.4 Ownership / Caller
+### 32.5 Ownership / Mutation Authority
 
 ```text
-✓ Hub command works for HUB_MANAGED
+✓ Hub command works for HUB_MANAGED after Workspace access
 ✓ Hub command rejects SOURCE_MANAGED
-✓ source projection works for SOURCE_MANAGED
+✓ source projection works for SOURCE_MANAGED after Workspace access
 ✓ source projection rejects HUB_MANAGED
-✓ public query/command receives CallerContext explicitly
-✓ caller cannot be overridden by input payload
 ✓ no force/bypass path exists
 ```
 
-### 32.5 Mapping
+### 32.6 Mapping
 
 ```text
 ✓ Folder SourceEntry maps to stable TreeNode
@@ -1214,11 +1168,11 @@ Phase 1 至少覆蓋以下核心 scenario。
 
 Phase 1 完成後，Phase 2 不再決定：
 
+- Workspace access foundation 如何進入 application boundary。
 - Document 如何產生 revision。
-- Archive 如何執行與記錄目前 provenance。
-- Restore 如何執行。
+- Archive/Restore 如何執行與保存 current provenance。
 - Tree move 如何執行。
-- Ownership 如何限制。
+- Source content ownership 如何限制。
 - CallerContext 如何進入 application boundary。
 - Document identity 如何保存。
 - Duplicate revision 如何避免。
@@ -1226,6 +1180,8 @@ Phase 1 完成後，Phase 2 不再決定：
 Phase 2 只負責：
 
 ```text
+Select authorized Workspace for new Source
+ ↓
 Folder
  ↓
 Scan
@@ -1242,12 +1198,12 @@ Preview
  ↓
 Confirm
  ↓
-Source Projection Commands
+Create Source(workspace_id) + Source Projection Commands
 ```
 
-也就是：
+更新既有 Source 時只指定 `source_id`；Workspace 從 Source relationship 決定，sync 不提供 target Workspace override。
 
-> Phase 2 決定「這次來源發生什麼改變、來源內容如何解析成 canonical candidate」，Phase 1 決定「這些改變如何安全地成為 Knowledge」。
+也就是：Phase 2 決定「這次來源發生什麼改變、來源內容如何解析成 canonical candidate」，Phase 1 決定「這些改變如何在授權 Workspace scope 下安全地成為 Knowledge」。
 
 ## 34. Definition of Done
 
@@ -1255,6 +1211,10 @@ Phase 1 完成的判斷不是「Tree UI 看得到」，而是以下流程全部�
 
 ```text
 CallerContext
+ ↓
+Authorized Workspace
+ ↓
+Source
  ↓
 Create
  ↓
@@ -1275,13 +1235,13 @@ Restore
 same Document ID + same history
 ```
 
-並且 SOURCE_MANAGED 已經存在正式、安全的 internal mutation boundary，足以讓 Phase 2 接入。
+並且 SOURCE_MANAGED 已存在正式、安全的 internal mutation boundary，足以讓 Phase 2 接入。Phase 1 不聲稱公司 production governance 已完成；正式 multi-user governance 需要 Phase 3。
 
 ## 35. ADR Summary
 
 ### ADR-P1-01 — Source as Tree Root
 
-KnowledgeSource 本身作為 Tree root，不建立 synthetic folder。
+KnowledgeSource 本身作為 Tree root，不建立 synthetic folder；Workspace 是 Source container，不是 Tree node。
 
 ### ADR-P1-02 — One Document, One TreeNode
 
@@ -1297,7 +1257,7 @@ Document node label 來自 current Revision title，不複製 title 到 Tree；S
 
 ### ADR-P1-05 — Mutation Authority Separation
 
-Hub mutation 與 Source projection 使用不同 application interfaces，不提供 bypass flag。
+Hub mutation 與 Source projection 使用不同 application interfaces，不提供 bypass flag；兩者都必須先通過 Workspace policy。
 
 ### ADR-P1-06 — Source-level Tree Lock + READ COMMITTED
 
@@ -1319,9 +1279,9 @@ Folder archive 不隱式 cascade；bulk lifecycle 由 caller 明確描述；curr
 
 Source archive 是 visibility gate，不 cascade 修改全部 Knowledge records。
 
-### ADR-P1-11 — CallerContext Is Explicit
+### ADR-P1-11 — CallerContext + Workspace Scope Are Explicit
 
-Public Knowledge read/write services 以 CallerContext 作顯式第一參數。Phase 3 在此 boundary 補 governance policy，不重做 service shape。
+Public Knowledge read/write services 以 CallerContext 作顯式第一參數，resource 透過 Source → Workspace 解析 access scope；Phase 3 在此 policy boundary 補 production governance。
 
 ### ADR-P1-12 — No Premature Agent Actor Model
 
@@ -1336,37 +1296,43 @@ Phase 0–2 provenance 仍引用 user identity；Phase 1 不引入 `actor_kind`�
                     CallerContext
                             │
                             ▼
-                  Application Services
-                            │
-            ┌───────────────┴────────────────┐
-            │                                │
- HubKnowledgeCommandService       SourceKnowledgeProjectionService
-      HUB_MANAGED                    SOURCE_MANAGED
-            │                                │
-            └───────────────┬────────────────┘
-                            ▼
-                    Knowledge Domain
-             ┌──────────────┼───────────────┐
-             │              │               │
-          Document       Revision          Tree
-             │              │               │
-             └──────────────┼───────────────┘
-                            │
-                 Lifecycle + Provenance
-                            │
-                            ▼
-                    Repository Ports
-                            │
-                            ▼
-              READ COMMITTED MariaDB 10.11
-                  native UUID storage
+                    Workspaces Module
+              ┌─────────────┴──────────────┐
+              │                            │
+       listWorkspaces()            WorkspaceAccessPolicy
+                                           │
+                                           ▼
+                                  Application Services
+                                           │
+                       ┌───────────────────┴────────────────────┐
+                       │                                        │
+            HubKnowledgeCommandService            SourceKnowledgeProjectionService
+                 HUB_MANAGED                            SOURCE_MANAGED
+                       │                                        │
+                       └───────────────────┬────────────────────┘
+                                           ▼
+                                   Knowledge Domain
+                          ┌──────────────┼───────────────┐
+                          │              │               │
+                       Document       Revision          Tree
+                          │              │               │
+                          └──────────────┼───────────────┘
+                                         │
+                              Lifecycle + Provenance
+                                         │
+                                         ▼
+                                 Repository Ports
+                                         │
+                                         ▼
+                           READ COMMITTED MariaDB 10.11
+                               native UUID storage
 
-Sources Module
- ├─ KnowledgeSource
- ├─ SourceEntry
- └─ future Phase 2 Sync
-         │
-         └──────────► SourceKnowledgeProjectionService
+Workspace
+ └─ KnowledgeSource
+      ├─ SourceEntry
+      └─ future Phase 2 Sync
+              │
+              └──────────► SourceKnowledgeProjectionService
 ```
 
-這是 Phase 1 的正式 architecture boundary。Phase 2 的 scanner、Title Resolution、snapshot、matching、diff、preview 與 apply orchestration 必須建立在這個 boundary 之上，而不是直接修改 canonical Knowledge tables。
+這是 Phase 1 的正式 architecture boundary。Phase 2 的 scanner、Title Resolution、snapshot、matching、diff、preview 與 apply orchestration 必須建立在這個 boundary 之上，而不是直接修改 canonical Knowledge tables。Phase 3 再補 Workspace provisioning/lifecycle、roles/capabilities、membership administration 與 enterprise mapping；不需要把 `org_code` 重新拉回 Knowledge access boundary。
