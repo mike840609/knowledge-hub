@@ -6,6 +6,7 @@
 | 文件定位 | 對現有設計文件的獨立審查；只列 Critical 與 High，不重寫既有決策 |
 | 審查對象 | [Phase 0 Design Spec](../specs/2026-09-10-phase-0-foundation-architecture-design.md)、[Phase 0 Implementation Plan](../plans/2026-09-10-phase-0-foundation-implementation.md)、[Phase 1 Design Spec](../specs/2026-09-10-phase-1-knowledge-core-tree-design.md)、[Phase 0–9 Roadmap](../roadmaps/2026-09-10-knowledge-hub-phase-roadmap.md) |
 | 審查基準 | 文件內部一致性、MariaDB 10.11 的實際行為、跨 Phase 契約是否成立、HR 知識平台的治理需求 |
+| 審查版本 | `main` @ `de1e120`；該 commit 上的 README 與四份設計文件全文，無其他分支或 PR 內容 |
 | 狀態 | 審查意見；未修改任何已核准設計。每項需由設計擁有者決定接受、改寫或明確拒絕 |
 
 本審查不評論文件品質。現有四份文件在範圍控制、ownership 邊界、交易原子性與「不把未決定當已決定」這幾點上寫得相當嚴謹，下列問題都是在那個基礎上仍會實際造成損害的缺口。
@@ -14,7 +15,7 @@
 
 | ID | 嚴重度 | 主題 | 最早爆炸的階段 | 現在修的成本 |
 | --- | --- | --- | --- | --- |
-| C1 | Critical | 中文內容的 keyword search 與 MariaDB 全文檢索不相容 | Phase 4 | 低（改 roadmap 前提） |
+| C1 | Critical（已延後） | 中文內容的 keyword search 與 MariaDB 全文檢索不相容 | Phase 4 | 低（改 roadmap 前提） |
 | C2 | Critical | Document `title` 的來源未定義，與「rename 不產生 revision」直接衝突 | Phase 2 | 低（補一節規則） |
 | C3 | Critical | 全量 Apply 單一交易沒有規模上限；Preview→Apply 的內容保管未定 | Phase 2 | 中（要改契約） |
 | C4 | Critical | Archive／Restore／Move 沒有 actor 與時間紀錄，但 archive 就是本系統的刪除 | Phase 1 | 低（現在加欄位） |
@@ -32,11 +33,15 @@
 | H12 | High | `source_path TEXT` 無法索引，Phase 2 比對沒有索引路徑 | Phase 2 | 低 |
 | H13 | High | Phase 0 缺 one-document-one-treenode 唯一約束 | Phase 1 | 低 |
 
-C1、C2、C4、H1、H2、H4、H10、H13 建議在 T01 開工前定案，成本幾乎為零；其餘可在對應 Phase 的 design spec 內處理，但必須在 roadmap 留下明確標記。
+C2、C4、H1、H2、H4、H10、H13 建議在 T01 開工前定案，成本幾乎為零；其餘可在對應 Phase 的 design spec 內處理，但必須在 roadmap 留下明確標記。
+
+**C1 經設計擁有者決定延後處理（2026-09-10）**，保留在本文件內供 Phase 4 設計時取用，不列入開工前待辦。延後本身沒有技術風險：它只影響 Phase 4 的可交付範圍，不影響 Phase 0–2 的 schema 或契約。唯一要注意的是 roadmap Phase 4 目前仍寫著「不要求 embedding、vector 或 Elasticsearch」，在重新評估之前那句話不應被當成已驗證的結論。
 
 ## 2. Critical
 
 ### C1 — 中文內容的 keyword search 與 MariaDB 全文檢索不相容，Phase 4 目標目前不可達
+
+> **狀態：已延後（2026-09-10）。** 設計擁有者決定在 Phase 4 設計時再一併調整。以下分析保留原樣，T01 前不需要行動。
 
 **現況：** Roadmap Phase 4 明確承諾「先完成一般 keyword／metadata discovery，不要求 embedding、vector 或 Elasticsearch」，並把語意搜尋整段推到 Phase 8。ADR-001 同時決定 canonical datastore 為 MariaDB 10.11，且 Phase 0「不引入 Elasticsearch」。
 
@@ -332,9 +337,9 @@ Implementation plan §4.2 選擇 `source_path` 為 `TEXT`。同一節又說「`s
 
 **開工前（T01 之前，成本接近零）：** C2、C4、H1、H2、H4、H10、H13。這七項全部是定義與欄位層級的決定，一旦 T03 建表或 Phase 1 固定 service 簽名，成本就跳一個級距。
 
-**Phase 0 spec 修訂：** C1（改 roadmap Phase 4 的前提）、C3（補 Source 規模上限與 staging 的定位）、H3（明訂交易擁有者）、H6、H11、H12。
+**Phase 0 spec 修訂：** C3（補 Source 規模上限與 staging 的定位）、H3（明訂交易擁有者）、H6、H11、H12。
 
-**列入對應 Phase 的設計責任並在 roadmap 標記：** H5（Phase 2）、H7（Phase 4／8）、H8（Phase 5）、H9（Phase 3）。
+**列入對應 Phase 的設計責任並在 roadmap 標記：** C1（Phase 4，已決定延後）、H5（Phase 2）、H7（Phase 4／8）、H8（Phase 5）、H9（Phase 3）。
 
 ## 5. 審查中確認沒有問題的部分
 
