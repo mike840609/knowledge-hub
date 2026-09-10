@@ -122,7 +122,8 @@ src/modules/sources/
 
 src/infrastructure/database/mariadb/
 ├── migrations/
-│   └── 004-phase-1-tree-mapping.ts
+│   ├── 004-phase-1-tree-mapping.ts
+│   └── 005-phase-1-tree-mapping-constraints.ts
 └── repositories/
     ├── documents.ts
     ├── revisions.ts
@@ -289,7 +290,6 @@ export interface SourceLifecycleCommands {
 }
 
 export interface KnowledgeQueryService {
-  getAncestors(caller: CallerContext, nodeId: string, input?: { includeArchived?: boolean }): Promise<KnowledgeTreeItem[]>;
   listSources(caller: CallerContext, workspaceId: string, input?: { includeArchived?: boolean }): Promise<SourceView[]>;
   getSource(caller: CallerContext, sourceId: string, input?: { includeArchived?: boolean }): Promise<SourceView>;
   listTree(caller: CallerContext, sourceId: string, input?: { includeArchived?: boolean }): Promise<KnowledgeTreeItem[]>;
@@ -297,6 +297,7 @@ export interface KnowledgeQueryService {
   getCurrentRevision(caller: CallerContext, documentId: string, input?: { includeArchived?: boolean }): Promise<KnowledgeRevisionView>;
   getRevision(caller: CallerContext, documentId: string, revisionNo: number, input?: { includeArchived?: boolean }): Promise<KnowledgeRevisionView>;
   listRevisions(caller: CallerContext, documentId: string, input?: { includeArchived?: boolean }): Promise<KnowledgeRevisionView[]>;
+  getAncestors(caller: CallerContext, nodeId: string, input?: { includeArchived?: boolean }): Promise<KnowledgeTreeItem[]>;
 }
 ```
 
@@ -340,7 +341,16 @@ Document TreeNode uniqueness already exists
 lifecycle-bearing rows have updated_by / archived_by / archived_at
 ```
 
-- [ ] **Step 3: Add compile-time contract tests for §3**
+- [ ] **Step 3a: Define and track errors and consumer migration**
+
+Task 1 owns this checklist; execute consumer cutover alongside Tasks 4–9 as replacement services become available, and close it before Task 10. Implement §5 target codes before dependent commands. Keep existing SourceReadOnlyError class identity with new SOURCE_MANAGED_READ_ONLY code, preserving instanceof consumers; retain ValidationError/NotFoundError/IntegrityError as compatible bases and add precise subclasses for targeted Knowledge failures. New KnowledgeError used by candidate validation must be defined under the shared DomainError hierarchy. Keep IDENTITY_ERROR and source VERSION_CONFLICT unchanged; add distinct REVISION_CONFLICT. WorkspaceAccessDeniedError remains in Workspaces; WORKSPACE_NOT_FOUND is added there. No global string replacement of unrelated errors.
+
+- [ ] Map old NOT_FOUND sites to resource-specific not-found subclasses, VALIDATION_ERROR sites to the declared semantic validation codes, INTEGRITY_ERROR Knowledge integrity sites to INTEGRITY_VIOLATION, and SOURCE_READ_ONLY to SOURCE_MANAGED_READ_ONLY while preserving the class above. Implement the remaining §5 codes at their owning operations; update DB error mapping only where semantics are known.
+- [ ] Update class/code assertions in `tests/integration/core.test.ts`, `tests/unit/domain-rules.test.ts` and all affected tests. Verify preserved Identity/source-version errors and new revision-conflict distinction.
+- [ ] Migrate positional createRevision/renameFolder/moveTreeNode/reorderNode calls to §3 object inputs and new names; update all source, fixture, unit/integration and composition consumers found by repository search. Task 9 removes `src/app/knowledge/actions.ts` creation action instead of retaining its obsolete call.
+- [ ] Split `src/modules/knowledge/application/service.ts` into the listed command/query/projection boundaries, update `src/server/composition.ts` and SourceApplicationService wiring, then remove old service.ts once no consumers remain. Retain shared `mutations.ts` internals as appropriate; do not keep two public mutation implementations. Typecheck and search must show no obsolete class/method imports.
+
+- [ ] **Step 3b: Add compile-time contract tests for §3**
 
 Create `tests/unit/phase1-contracts.test.ts` that imports Workspace/Knowledge service types and instantiates typed stubs. Ensure caller is a distinct first argument and cannot be smuggled inside input types.
 
@@ -365,41 +375,20 @@ The current `scripts/test/integration.ts` does not forward CLI filters. Commands
 
 ### Task 2: Add Phase 1 SourceEntry→TreeNode Schema Refinement
 
-**Files:** create `src/infrastructure/database/mariadb/migrations/004-phase-1-tree-mapping.ts`; modify migration registry; test `tests/integration/phase1-schema.test.ts`.
+**Files:** migrations `004-phase-1-tree-mapping.ts`, `005-phase-1-tree-mapping-constraints.ts`, migration registry, `scripts/db/migrate.ts`, new `scripts/db/backfill-source-tree-mapping.ts`, entry repositories/types/writers/fixtures, `tests/integration/phase1-schema.test.ts` and migration-runner tests.
 
-**Consumes:** Phase 0 ten-table schema, native UUID IDs, Workspace-scoped Source, existing one-document-one-TreeNode constraint.
+**Contract:** spec §5.3 is authoritative. Operator mappings never enter manifest statements or checksum. 004 expands schema, an independent parameterized DML script backfills, 005 tightens constraints.
 
-Schema change:
-
-```sql
-ALTER TABLE source_entries
-  ADD COLUMN tree_node_id UUID NULL;
-
-ALTER TABLE source_entries
-  ADD CONSTRAINT fk_source_entries_tree_node_same_source
-  FOREIGN KEY (source_id, tree_node_id)
-  REFERENCES knowledge_tree_nodes(source_id, id);
-```
-
-Do not recreate Phase 0 `UNIQUE(knowledge_tree_nodes.document_id)`.
-
-Additional mapping protection:
-
-- FOLDER requires `tree_node_id` and null `document_id`.
-- DOCUMENT requires both `tree_node_id` and `document_id`.
-- SourceEntry Document mapping and Tree node mapping reference the same Source.
-- DOCUMENT mapping's TreeNode points to the same Document; enforce in DB where representable and application/integration validation otherwise.
-- Mapping does not rely on `source_path` or `content_hash` uniqueness.
-
-- [ ] Write failing schema integration tests, including same-source mapping and Workspace-scoped Source baseline.
-- [ ] Run `npm run test:integration` and verify failures are only missing Phase 1 mapping.
-- [ ] Add read-only populated-data preflight and explicit Folder entry→node mapping input; see spec §5.3. Reject missing/ambiguous/wrong-type/cross-source/duplicate mappings before DDL.
-- [ ] Implement forward-only migration 004: add nullable column, backfill DOCUMENT by stable document ID and FOLDER by validated explicit mapping, then require mapping and enforce same-source/type consistency and unique entry→node mapping. Never infer identity from path/hash.
-- [ ] Integrate preflight with the existing statement-based migration runner; preserve 001–003 checksums. Document write quiescence, backup, DDL partial-failure diagnostics and explicit ledger repair; do not promise transactional DDL rollback.
-- [ ] Update entry types, repositories, existing writers, seeds and fixtures for required tree_node_id.
-- [ ] Test populated 001–003 upgrade including archived rows, no-Folder and explicit-Folder cases, rejected preflight with zero changes, post-upgrade rerun, and interrupted migration diagnostics. Preserve IDs/content/history/provenance.
-- [ ] Recreate fresh integration DB; run phase1-schema and all integration suites.
-- [ ] Commit `feat: add source entry tree mapping`.
+- [ ] Implement `--to` CLI and runner target-version support: validate ledger against full manifest, execute only versions up to target, reject targets below applied versions. Preserve 001–003 checksums.
+- [ ] Add read-only preflight with operator JSON Folder mapping and deterministic Document mapping. Support pre-004 schema; reject incomplete/wrong-type/cross-source/duplicate mappings without writes.
+- [ ] Implement fixed 004 nullable-column DDL; no injected mapping data or generated per-environment statements.
+- [ ] Implement independent backfill script with dry-run/apply, parameterized SQL, all-or-nothing DML, idempotent matching rows, and rejection of conflicting existing mapping. Hold write quiescence through upgrade.
+- [ ] Implement fixed 005 NOT NULL, same-source FK, entry→node uniqueness, and DOCUMENT `(document_id, tree_node_id)` FK using the additional referenced `(document_id, id)` unique key. Preserve existing single-document uniqueness. Folder target node type is an explicit application assertion; test wrong-type writes through commands and preflight.
+- [ ] Add fixed read-only 005 readiness gate to runner before RUNNING ledger insertion: incomplete mapping blocks without FAILED/RUNNING pollution. Empty schema passes. Do not dynamically alter migration statements.
+- [ ] Update entry types, repositories, writers, seeds and fixtures for required mapping.
+- [ ] Test populated 001–003 → 004 → script → 005, archived rows, explicit Folder/empty mapping, preflight zero changes, DML rollback, script rerun, blocked-005 recovery, unchanged checksums on full migrate rerun, and DDL interrupted-state diagnostics.
+- [ ] Run the fresh DB suite with the exact same committed manifest as populated-upgrade tests; no environment-dependent 004. Run `npm run test:integration`.
+- [ ] Document target-version commands, backup/quiescence, script input validation and explicit DDL/ledger repair. Do not claim DDL rollback or silently repair checksums.
 
 ---
 
@@ -410,6 +399,7 @@ Additional mapping protection:
 Canonical content:
 
 ```ts
+// Candidate-only validator. Never pass a stored legacy row through this function.
 export function normalizeRevisionContent(input: RevisionContentInput): RevisionContentInput {
   const title = input.title.trim();
   if (!title) throw new KnowledgeError("INVALID_TITLE");
@@ -431,7 +421,7 @@ const contentHash = createHash("sha256").update(payload, "utf8").digest("hex");
 
 - [ ] Write failing unit tests: title trim/non-empty, CRLF→LF, recursive object-key sorting, array order, metadata/title/body-only changes, invalid JSON values.
 - [ ] Run `npm run test:unit -- phase1-content` and observe expected failure.
-- [ ] Implement canonicalization/fingerprinting and spec §13.1 legacy comparator. Compare canonical payloads after stale-current validation, never old stored hash versus new hash. Preserve all historical revision fields; return the existing revision on canonical NOOP.
+- [ ] Implement a separate stored-side comparison normalizer permitting empty trimmed legacy title; candidate-only normalization retains non-empty validation. Implement canonicalization/fingerprinting and spec §13.1 legacy comparator. Compare canonical payloads after stale-current validation, never old stored hash versus new hash. Preserve all historical revision fields; return the existing revision on canonical NOOP.
 - [ ] Add Phase 0-encoded fixtures for plain equal content, title trim, CRLF, metadata order, real changes, and legacy whitespace-only title read/correction. Do not rewrite old revisions or SourceEntry hashes in a bulk migration; update entry fingerprint only during successful controlled apply.
 - [ ] Write failing integration tests for R1/current pointer, identical NOOP, changed R2, byte-stable R1, unique revision numbers, no update/delete API.
 - [ ] Implement immutable repository methods only: insert/read/list/current.
@@ -447,8 +437,6 @@ Every operation path:
 
 ```text
 caller
-→ load Source/resource
-→ Source.workspace_id
 → BEGIN READ COMMITTED
 → resolve/lock Source on this connection
 → transaction-scoped WorkspaceAccessPolicy
@@ -562,6 +550,7 @@ known unauthorized source/document UUID → rejected without content leak
 ```
 
 - [ ] Archived filtering integration tests: `listSources(caller, workspaceId)` excludes archived Source; Tree/Document default hidden; `includeArchived:true` still requires Workspace access; revisions preserve history.
+- [ ] Adopt spec §22.1 non-nullable/not-found contract: replace old null assertions and adapt all query view-shape consumers; test nonexistent, archived-hidden and explicit archived reads separately.
 - [ ] Implement Query Service with no React/Next imports, no raw SQL outside repositories, no ambient identity lookup.
 - [ ] Add non-Web caller test using trusted CallerContext.
 - [ ] Run tests and commit `feat: add workspace-aware knowledge query service`.
@@ -590,6 +579,7 @@ Query Master
 
 - [ ] Write failing Playwright flow: caller-visible Workspace selector, Source selector, Tree navigation, stable `/knowledge/<documentId>` URL, current markdown/title, revision history, archived toggle, no mutation/admin controls.
 - [ ] Add direct unauthorized URL case with no title/snippet leak.
+- [ ] Map explicit query not-found errors to Next notFound() in `src/app/knowledge/[documentId]/page.tsx`; remove the obsolete null branch. Preserve access-denial behavior, and add direct missing/archived URL E2E checks.
 - [ ] Implement server adapter: resolve trusted identity, build CallerContext, call WorkspaceQueryService/KnowledgeQueryService; no SQL, no caller identity from URL/form.
 - [ ] Implement minimal UI. Do not add Tiptap or new HTML renderer solely for Phase 1.
 - [ ] Run build/E2E and commit `feat: add workspace-scoped knowledge browser`.
@@ -685,15 +675,17 @@ no Workspace administration or Agent Principal model in Phase 1
 | P1-A36 | browser navigation | Workspace→Source→Tree, stable Document URL/current revision/history | T9 |
 | P1-A37 | browser mutation/admin controls | absent in Phase 1 | T9 |
 | P1-A38 | full regression | unit/integration/build/E2E all pass | T10 |
-| P1-A39 | populated Phase 0 schema upgrade | IDs/history preserved, all mappings valid; preflight failure makes no changes | T2 |
+| P1-A39 | populated Phase 0 schema upgrade | fixed 004/005 checksum, target stop, script rollback/rerun, readiness gate recovery, IDs/history preserved | T2 |
 | P1-A40 | Phase 0 hash compatibility | canonical equal content NOOP; old revision bytes unchanged; invalid legacy title can be corrected | T3, T4 |
 | P1-A41 | multi-command projection failure | one connection, all canonical writes/version roll back; separate FAILED recording | T7 |
 | P1-A42 | complete Folder/Source contracts | rename/ancestors/projected lifecycle and both Source ownership lifecycle paths covered | T5–T8 |
 | P1-A43 | archived revision history | default hidden; explicit includeArchived still checks Workspace membership | T8, T9 |
+| P1-A44 | error and consumer migration | precise codes, preserved class/source-version behavior, no obsolete service imports | T1, T4–T9 |
+| P1-A45 | non-nullable query cutover | missing/hidden resource errors mapped to Browser notFound; access denial preserved | T8, T9 |
 
 ## 5. Required Error Codes
 
-Keep a stable small set at the owning domain/application boundary. Reuse `workspaces/domain/errors.ts` for Workspace errors and `shared/domain/errors.ts` for DomainError; do not move Workspace policy errors into Knowledge merely to match this list:
+Keep a stable small set at the owning domain/application boundary. Reuse `src/modules/workspaces/domain/errors.ts` for Workspace errors and `src/shared/domain/errors.ts` for DomainError; do not move Workspace policy errors into Knowledge merely to match this list:
 
 ```text
 WORKSPACE_NOT_FOUND
@@ -740,6 +732,8 @@ Canonical mutation setup/order:
 
 Transaction-external preflight never substitutes for the in-transaction policy check. Projection is bound to the already-open Source UoW (spec §15.3), including multi-command rollback.
 
+Source-lock-before-membership preserves Phase 0 ordering but lets an unauthorized caller briefly hold that lock; fail and roll back promptly with no external I/O. It does not lock membership or establish production revocation guarantees.
+
 When multiple Documents must be locked in a future operation, lock in consistent ascending order. Tree ancestry checks run after Source lock. Revision stale-current checks run after Document lock. Never rely on a pre-lock read for the final mutation decision. READ COMMITTED does not replace explicit row locks.
 
 ## 7. Phase 1 Definition of Done
@@ -748,7 +742,7 @@ Phase 1 is complete only when all are evidenced:
 
 - [ ] Phase 0 domain/access/transaction guarantees still pass with the intentionally migrated read-only E2E (spec §24.1), including Workspace/Membership, Source.workspace_id, UUIDv7/native UUID, CallerContext, READ COMMITTED, provenance, Tree uniqueness.
 - [ ] Cross-org member allow, same-org non-member deny, multi-Workspace caller, and direct-resource bypass protection pass integration/E2E tests.
-- [ ] Migration 004 safely upgrades populated Phase 0 data with explicit Folder mapping, preflight and failure diagnostics, without duplicating Phase 0 Tree uniqueness.
+- [ ] 004 → independent backfill → 005 safely upgrades populated Phase 0 data with explicit Folder mapping, preflight and failure diagnostics, without duplicating Phase 0 Tree uniqueness.
 - [ ] Revision canonicalization/hash matches approved spec; Title Resolution remains Phase 2.
 - [ ] Revisions are immutable and identical canonical content is a NOOP across Phase 0/new hash formats; legacy rows remain unchanged.
 - [ ] `expectedCurrentRevisionId` protects stale revision writes.
@@ -770,7 +764,7 @@ Phase 1 is complete only when all are evidenced:
 ### Spec coverage
 
 - Workspace foundation: Task 1 verifies current Phase 0 Workspace contract; Tasks 4–9 enforce access at application/browser boundaries.
-- Schema refinement: Task 2 adds only `SourceEntry.tree_node_id` and preserves the Phase 0 ten-table foundation.
+- Schema refinement: Task 2 adds SourceEntry mapping with fixed 004/005 DDL and independent backfill and preserves the Phase 0 ten-table foundation.
 - Revision model/content hash/concurrency: Tasks 3–4.
 - Hub vs Source mutation authority + Workspace access: Tasks 4 and 7.
 - Tree operations/order/source lock/isolation/cycle prevention: Task 5.

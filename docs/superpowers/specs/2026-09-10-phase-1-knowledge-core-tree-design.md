@@ -293,15 +293,26 @@ Hub-native documents 可以沒有 SourceEntry。SourceEntry 是 source mapping�
 
 ### 5.3 Phase 0 資料升級
 
-Migration 004 必須同時支援空 DB 與已套用 001–003 的 populated DB，不修改既有 migration/checksum，不以清空資料作為一般升級路徑。
+升級分成固定 DDL、獨立資料回填、固定約束三段；001–003 與其 checksum 不變，不以清空資料作為一般升級路徑。
 
-1. 停止 canonical writes，備份並盤點所有 ACTIVE／ARCHIVED SourceEntry；先做唯讀 preflight。
-2. DOCUMENT entry 以 `(source_id, document_id)` 對應既有唯一 DOCUMENT TreeNode，保留所有 IDs 與 lifecycle。找不到或型別不符即阻止升級。
-3. FOLDER entry 沒有可靠的既有 stable link；必須提供明確的 entry ID → existing Folder TreeNode ID 對照並驗證同 Source、型別與唯一性。不可僅以 path/name/hash 自動猜測，不可為通過 migration 建立替代 Folder。沒有 Folder entries 時此步自然為空。
-4. Preflight 全部通過後新增 nullable UUID 欄位、回填，再啟用 required mapping 的 CHECK／NOT NULL、same-source FK 及 `UNIQUE(source_id, tree_node_id)`。DOCUMENT entry 的 document 必須與 TreeNode.document_id 一致；DB 可表達部分以 constraint 保護，其餘在同交易 application assertion 驗證。
-5. Migration ledger、DDL 中斷診斷與明確修復流程沿用現有 runner；MariaDB DDL 不宣稱可整批 transaction rollback。失敗時保持停止 writes，確認實際 schema 與 ledger 後再修復，不能盲目重跑或改舊 checksum。
+1. 停止 canonical writes、備份。獨立 `scripts/db/backfill-source-tree-mapping.ts` 先以 dry-run 盤點 ACTIVE／ARCHIVED entries。DOCUMENT 以 `(source_id, document_id)` 對應唯一既有 DOCUMENT node；FOLDER 由 operator 提供 JSON entry ID → existing Folder TreeNode ID 對照。驗證完整性、同 Source、型別、document 相等與 node 不重複；不猜 path/name/hash，不建立替代 node。錯配 preflight 不改資料或 schema。
+2. 固定 migration `004-phase-1-tree-mapping.ts` 只新增 nullable `tree_node_id UUID`，不含環境資料。擴充 runner 的 target-version 選項，載入完整 manifest 驗證既有 ledger，但只執行到指定版本；不得截短 manifest，否則會誤判較新已套用版本為 unknown。target 低於已套用版本時清楚拒絕，不 rollback。
+3. 同一獨立 script 以參數化 SQL 在一個 DML transaction 回填；輸入不進 migration manifest、statements 或 checksum。已正確回填的 row 為 NOOP；既有不一致 mapping 拒絕，不覆寫。執行與 dry-run 都重新驗證全體 mapping，失敗整次 DML rollback。
+4. 固定 migration `005-phase-1-tree-mapping-constraints.ts` 收緊 `tree_node_id NOT NULL`，加 same-source FK、`UNIQUE(source_id, tree_node_id)`。DOCUMENT equality 由 `(document_id, tree_node_id)` FK → TreeNode `(document_id, id)` 保護，明確新增對應 `UNIQUE(document_id, id)` 作 referenced key；保留原 `UNIQUE(document_id)`，兩者用途不同。Folder 的 document_id=NULL 使此 FK 不檢查該組，因此 Folder entry 必須指向 FOLDER node 由 application assertion 驗證；preflight 同樣驗證所有既有 rows。entry type/document null shape 由既有 CHECK 保護。
+5. Runner 在寫入 005 的 RUNNING ledger 前，執行固定的唯讀 mapping-readiness gate（非 operator 資料、非動態 statements）。不完整即退出，005 ledger 不新增，補完回填後可重跑。普通 migrate 不得自動跳過回填或直接將未就緒的 005 記 FAILED。空 DB 以同一份 004／005 manifest 執行，gate 自然通過。
 
-驗收包含 populated 001–003 → 004、archived mappings、Folder 明確對照、錯配 preflight 零修改、完整升級後重跑，以及中途失敗診斷。既有 fixtures／seed／SourceEntry writers 同步提供 tree_node_id。
+預定命令（須在 Task 2 實作 CLI 支援後才能執行）：
+
+```sh
+npm run db:migrate -- --to 4
+npx tsx scripts/db/backfill-source-tree-mapping.ts --mapping /path/to/verified-mapping.json --dry-run
+npx tsx scripts/db/backfill-source-tree-mapping.ts --mapping /path/to/verified-mapping.json --apply
+npm run db:migrate -- --to 5
+```
+
+步驟 1 在首次 DDL 前也可執行同一 dry-run；script 支援欄位尚不存在的盤點狀態。沒有 Folder entries 時提供空對照即可。backfill script 的資料交易不宣稱涵蓋 DDL；DDL 中斷沿用 FAILED/RUNNING 診斷與明確修復程序，不能盲目重跑或修改已套用 checksum。
+
+驗收：populated 001–003 → 004 → backfill → 005、archived rows、Folder 對照、preflight 零修改、backfill rollback／重跑、005 gate 不污染 ledger、全量 migrate 重跑 checksum 相同、空 DB 與 populated DB 使用完全相同 manifest，以及 DDL 中斷診斷。所有 fixtures／seed／writers 提供 tree_node_id。
 
 ## 6. Tree Invariants
 
@@ -452,7 +463,7 @@ A: folder1 → folder2
 B: folder2 → folder1
 ```
 
-兩個 concurrent requests 分別驗證通過，最後形成 cycle。不同 Source 仍可平行操作。
+兩個 concurrent requests 分別驗證通過，最後形成 cycle。不同 Source 仍可平行操作。先 lock 後 membership check 沿用 Phase 0；代價是未授權 caller 也可能短暫持有 Source lock。檢查與失敗 rollback 必須立即完成，不在其中等待外部 I/O；Source lock 不等於 membership lock，也不宣稱解決未來 membership revocation concurrency。
 
 ## 10. Revision Model
 
@@ -573,7 +584,7 @@ metadata
 
 Phase 0 的 `contentFingerprint` 是未加前綴的 SHA-256；title 與 Markdown 原樣保存。Phase 1 不重寫歷史 revision 的內容、hash、ID 或 revision number，也不直接用舊 stored hash 與新 hash 判定變更。
 
-更新時先在 Document lock 內驗證 expected current revision，再比較目前 revision 與 candidate 經 Phase 1 normalization 的 canonical payload。相同即回傳原 revision（包含其原 stored hash），不寫 revision，也不偷偷更新顯示內容。不同才建立採新 hash contract 的 N+1。舊 whitespace-only title 是 Phase 0 合法資料：read/history 保留原樣；它不能通過新 title validation，因此合法非空的新 title 必須形成新 revision，不得讓舊資料無法被修正。
+更新時先在 Document lock 內驗證 expected current revision，candidate 使用嚴格 normalization（trim 後 title 必須非空）；stored revision 使用獨立 comparison normalization：trim title、CRLF→LF、排序 metadata，但不對舊 title 施加 non-empty 驗證。比較兩者 canonical payload。相同即回傳原 revision（包含其原 stored hash），不寫 revision，也不偷偷更新顯示內容。不同才建立採新 hash contract 的 N+1。舊 whitespace-only title 是 Phase 0 合法資料：read/history 保留原樣；stored comparison payload 的 title 可為空字串，因此能與合法 candidate 比較並形成新 revision，不得讓舊資料無法被修正。
 
 SourceEntry.content_hash 不作跨版本 NOOP 或 identity 判斷依據；既有值保留，受控同步成功後才更新成 candidate 的新 fingerprint。Phase 2 比較內容沿用此 core comparator，不以不同 hash 演算法造成假變更。
 
@@ -874,6 +885,12 @@ Phase 1 尚未實作 production roles/capabilities，但 Workspace membership fo
 
 這些 application services不依賴 React、HTTP、MCP 或 scanner，也不從 ambient/global request state自行取得 caller。Phase 4 HTTP Read API 與 Phase 7 MCP 可直接 reuse。
 
+### 22.1 Missing／archived query contract
+
+`getSource`、`getDocument`、`getCurrentRevision`、`getRevision` 與 `getAncestors` 採非 nullable 回傳：不存在或被預設 archived filtering 隱藏時，分別拋 SOURCE_NOT_FOUND、DOCUMENT_NOT_FOUND、REVISION_NOT_FOUND 或 TREE_NODE_NOT_FOUND。revision lookup 先驗證 Document 存在且可見，Document 不可見回 DOCUMENT_NOT_FOUND；Document 可見但指定 revision 不存在才回 REVISION_NOT_FOUND。listRevisions 對不可見 Document 同樣拋 DOCUMENT_NOT_FOUND，其他合法空集合回 []。已存在但無 Workspace membership 的資源仍由 WorkspaceAccessDeniedError 拒絕。
+
+Browser adapter 明確將 not-found codes 轉成 Next `notFound()`，不再依靠 `if (!view)`；access denial 沿用不洩漏內容的既有處理，不能把所有例外都吞成 404。Core 不 import Next。此變更須同步更新 Phase 0 null assertions、view shape 及所有 query consumers。
+
 ## 23. Tree Read Model
 
 UI 不直接拿 DB rows。
@@ -1025,6 +1042,8 @@ INVALID_METADATA
 ```
 
 UI / HTTP adapter 再自行 mapping presentation / status code。Core 不回 transport-specific HTTP status、toast message 或 SQL driver error。
+
+錯誤遷移由 plan Task 1 統一負責：完整路徑為 `src/modules/knowledge/domain/errors.ts`、`src/modules/workspaces/domain/errors.ts`、`src/shared/domain/errors.ts`。保留 DomainError、WorkspaceAccessDeniedError 的責任邊界；新 semantic codes 不代表把 source sync VERSION_CONFLICT 改成 revision conflict。
 
 ## 28. Revision Concurrency
 
