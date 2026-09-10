@@ -1,0 +1,23 @@
+name: hcm-km-phase0
+
+services:
+  mariadb:
+    image: mariadb:10.11
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: hcm_km_root
+      MARIADB_DATABASE: hcm_km_dev
+      MARIADB_USER: hcm_km
+      MARIADB_PASSWORD: hcm_km_dev
+    ports:
+      - "127.0.0.1:3307:3306"
+    volumes:
+      - hcm_km_mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  hcm_km_mariadb_data:
