@@ -5,6 +5,7 @@ import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
 import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction";
 import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
 import {
+  CrossSourceMoveError,
   DocumentNotFoundError,
   FolderNotEmptyError,
   HubManagedOperationRequiredError,
@@ -354,6 +355,70 @@ describe("source projection authority", () => {
       expect(restoredChildEntry).toMatchObject({ status: "ACTIVE", archivedBy: null, archivedAt: null });
       expect(restoredChildEntry?.lastSeenAt.getTime()).toBe(archivedChildSeenAt);
     });
+  });
+
+  it("moves projected nodes with hierarchy-only changes and rejects unauthorized or cross-source moves", async () => {
+    const scope = await setupMappingScope();
+    const other = await setupMappingScope();
+    const caller = callerFromIdentity(owner);
+    const created = await new MariaDbUnitOfWork(pool).run(async (repositories) => {
+      const projection = bindSourceProjection(repositories, { id: scope.managedSourceId, workspaceId: scope.workspaceId });
+      const target = await projection.projectFolder(caller, {
+        sourceId: scope.managedSourceId,
+        mapping: { sourceEntryId: uuidv7(), externalId: null, sourcePath: "docs/move-target" },
+        parentId: scope.managedFolderId, name: "Target",
+      });
+      const movable = await projection.projectFolder(caller, {
+        sourceId: scope.managedSourceId,
+        mapping: { sourceEntryId: uuidv7(), externalId: null, sourcePath: "docs/move-me" },
+        parentId: scope.managedFolderId, name: "Movable",
+      });
+      const document = await projection.projectDocument(caller, {
+        sourceId: scope.managedSourceId, parentId: movable.treeNodeId,
+        title: "Movable Doc", markdown: "movable", metadata: {},
+        mapping: { sourceEntryId: uuidv7(), externalId: `move-doc-${uuidv7()}`, sourcePath: "docs/move-me/note.md" },
+      });
+      return { targetId: target.treeNodeId, folderId: movable.treeNodeId, ...document };
+    });
+    await new MariaDbUnitOfWork(pool).run(async (repositories) => {
+      const projection = bindSourceProjection(repositories, { id: scope.managedSourceId, workspaceId: scope.workspaceId });
+      await projection.moveProjectedNode(caller, { nodeId: created.folderId, newParentId: created.targetId, newPosition: 0 });
+      expect(await repositories.tree.lockById(created.folderId)).toMatchObject({
+        parentId: created.targetId, position: 0, sourceId: scope.managedSourceId,
+      });
+      await projection.moveProjectedNode(caller, { nodeId: created.treeNodeId, newParentId: created.targetId, newPosition: 0 });
+      expect(await repositories.tree.lockById(created.treeNodeId)).toMatchObject({
+        parentId: created.targetId, position: 0, documentId: created.documentId,
+      });
+      expect(await repositories.documents.lockById(created.documentId)).toMatchObject({
+        id: created.documentId, sourceId: scope.managedSourceId, currentRevisionId: created.revisionId, status: "ACTIVE",
+      });
+      expect(await repositories.revisions.findCurrent(created.documentId)).toMatchObject({
+        id: created.revisionId, title: "Movable Doc",
+      });
+      expect(await repositories.entries.findByDocumentId(created.documentId)).toMatchObject({
+        treeNodeId: created.treeNodeId, sourcePath: "docs/move-me/note.md", status: "ACTIVE",
+      });
+    });
+    const settled = await new MariaDbUnitOfWork(pool).run(async (repositories) => ({
+      folder: await repositories.tree.lockById(created.folderId),
+      documentNode: await repositories.tree.lockById(created.treeNodeId),
+    }));
+    await new MariaDbUnitOfWork(pool).run(async (repositories) => {
+      const projection = bindSourceProjection(repositories, { id: scope.managedSourceId, workspaceId: scope.workspaceId });
+      await expect(projection.moveProjectedNode(callerFromIdentity(outsider), {
+        nodeId: created.folderId, newParentId: scope.managedFolderId, newPosition: 0,
+      })).rejects.toBeInstanceOf(WorkspaceAccessDeniedError);
+      await expect(projection.moveProjectedNode(caller, {
+        nodeId: created.folderId, newParentId: other.managedFolderId, newPosition: 0,
+      })).rejects.toBeInstanceOf(CrossSourceMoveError);
+    });
+    const after = await new MariaDbUnitOfWork(pool).run(async (repositories) => ({
+      folder: await repositories.tree.lockById(created.folderId),
+      documentNode: await repositories.tree.lockById(created.treeNodeId),
+    }));
+    expect(after.folder).toMatchObject({ parentId: settled.folder?.parentId, position: settled.folder?.position });
+    expect(after.documentNode).toMatchObject({ parentId: settled.documentNode?.parentId, position: settled.documentNode?.position });
   });
 
   it("archives and restores projected documents with entry provenance and stable revisions", async () => {
