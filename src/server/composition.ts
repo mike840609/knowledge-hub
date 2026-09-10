@@ -5,7 +5,7 @@ import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
 import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction";
 import { KnowledgeApplicationService } from "@/modules/knowledge/application/service";
 import { SourceApplicationService } from "@/modules/sources/application/source-version-guard";
-import { WorkspaceQueryService, WorkspaceMembershipPolicy } from "@/modules/workspaces/application/workspace-query-service";
+import { WorkspaceQueryService } from "@/modules/workspaces/application/workspace-query-service";
 
 let pool: Pool | undefined;
 let services: ReturnType<typeof buildServices> | undefined;
@@ -21,8 +21,7 @@ function buildServices(databasePool: Pool) {
   const knowledge = new KnowledgeApplicationService(unitOfWork);
   const sources = new SourceApplicationService(unitOfWork, knowledge);
   const workspaces = new WorkspaceQueryService(unitOfWork);
-  const workspacePolicy = new WorkspaceMembershipPolicy(unitOfWork);
-  return { identityProvider, unitOfWork, knowledge, sources, workspaces, workspacePolicy };
+  return { identityProvider, unitOfWork, knowledge, sources, workspaces };
 }
 
 export function applicationServices() {

@@ -25,6 +25,7 @@ describe("foundation domain rules", () => {
     const fakeRepositories = {
         users: { upsertIdentity: async () => undefined },
         workspaceMemberships: { find: async () => ({ workspaceId: "w", userId: "u", createdAt: new Date() }) },
+        workspaceAccess: { requireMembership: async () => undefined },
         documents: { findById: async () => ({ id: "d", sourceId: "s" }), lockById: async () => ({ id: "d", sourceId: "s" }) },
         sourcePolicy: { lockById: async () => ({ id: "s", workspaceId: "w", sourceType: "FOLDER_SYNC", ownership: "SOURCE_MANAGED", status: "ACTIVE", syncVersion: 0 }), findById: async () => ({ id: "s", workspaceId: "w", sourceType: "FOLDER_SYNC", ownership: "SOURCE_MANAGED", status: "ACTIVE", syncVersion: 0 }) },
         revisions: { findCurrent: async () => ({ id: "r", documentId: "d", revisionNo: 1, title: "t", markdown: "m", metadata: {}, contentHash: "h", createdBy: "u", createdAt: new Date() }), insert: async () => calls.push("insert"), nextRevisionNumber: async () => 2 },

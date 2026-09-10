@@ -38,7 +38,7 @@ describe("Workspace access boundary", () => {
       await repositories.tree.insert({ id: folderId, sourceId, parentId: null, nodeType: "FOLDER", name: "Shared Folder", documentId: null, position: 0, status: "ACTIVE", updatedBy: alice.id, archivedBy: null, archivedAt: null });
     });
     await expect(pool.query("INSERT INTO workspace_memberships (workspace_id, user_id) VALUES (?, ?)", [workspaceX, alice.id])).rejects.toBeTruthy();
-    await expect(pool.query("INSERT INTO knowledge_sources (id, name, workspace_id, source_type, ownership, status, sync_version, created_by) VALUES (?, 'Invalid', ?, 'HUB', 'HUB_MANAGED', 'ACTIVE', 0, ?)", [uuidv7(), uuidv7(), alice.id])).rejects.toBeTruthy();
+    await expect(pool.query("INSERT INTO knowledge_sources (id, name, workspace_id, source_type, ownership, status, sync_version, created_by, updated_by) VALUES (?, 'Invalid', ?, 'HUB', 'HUB_MANAGED', 'ACTIVE', 0, ?, ?)", [uuidv7(), uuidv7(), alice.id, alice.id])).rejects.toBeTruthy();
 
     const aliceCaller = callerFromIdentity(alice);
     const bobCaller = callerFromIdentity(bob);

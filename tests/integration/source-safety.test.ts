@@ -81,6 +81,33 @@ describe("SourceEntry and source version safety", () => {
     expect(Number((await pool.query<{ sync_version: number }[]>("SELECT sync_version FROM knowledge_sources WHERE id = ?", [rolledBack.source.id]))[0].sync_version)).toBe(1);
   });
 
+  it("locking read observes latest committed state under READ COMMITTED", async () => {
+    const fixture = await createSourceFixture(pool, { managed: true });
+    const first = await pool.getConnection();
+    const second = await pool.getConnection();
+    try {
+      const firstConnectionId = Number((await first.query<{ connection_id: number }[]>("SELECT CONNECTION_ID() AS connection_id"))[0].connection_id);
+      const secondConnectionId = Number((await second.query<{ connection_id: number }[]>("SELECT CONNECTION_ID() AS connection_id"))[0].connection_id);
+      expect(firstConnectionId).not.toBe(secondConnectionId);
+      await first.query("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
+      await first.beginTransaction();
+      const before = await first.query<{ sync_version: number }[]>("SELECT sync_version FROM knowledge_sources WHERE id = ?", [fixture.source.id]);
+      expect(Number(before[0].sync_version)).toBe(0);
+      await second.beginTransaction();
+      await second.query("UPDATE knowledge_sources SET sync_version = 1 WHERE id = ?", [fixture.source.id]);
+      await second.commit();
+      const locked = await first.query<{ sync_version: number }[]>("SELECT sync_version FROM knowledge_sources WHERE id = ? FOR UPDATE", [fixture.source.id]);
+      expect(Number(locked[0].sync_version)).toBe(1);
+      await first.rollback();
+      expect(Number((await pool.query<{ sync_version: number }[]>("SELECT sync_version FROM knowledge_sources WHERE id = ?", [fixture.source.id]))[0].sync_version)).toBe(1);
+    } finally {
+      try { await first.rollback(); } catch { /* best effort */ }
+      try { await second.rollback(); } catch { /* best effort */ }
+      first.release();
+      second.release();
+    }
+  });
+
   it("rolls back Knowledge, mapping, asset, version, Tree, and APPLIED records at every apply failure point", async () => {
     for (const failurePoint of ["knowledge", "entry", "asset", "run"] as const) {
       const fixture = await createSourceFixture(pool, { managed: true });

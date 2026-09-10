@@ -4,6 +4,7 @@ import type { RevisionRepository } from "./revision-repository";
 import type { SourcePolicyPort } from "./source-policy";
 import type { TreeRepository } from "./tree-repository";
 import type { WorkspaceRepository } from "@/modules/workspaces/ports/workspace-repository";
+import type { WorkspaceAccessPolicy } from "@/modules/workspaces/ports/workspace-access-policy";
 import type { WorkspaceMembershipRepository } from "@/modules/workspaces/ports/workspace-membership-repository";
 
 export type KnowledgeRepositories = {
@@ -14,6 +15,7 @@ export type KnowledgeRepositories = {
   sourcePolicy: SourcePolicyPort;
   workspaces: WorkspaceRepository;
   workspaceMemberships: WorkspaceMembershipRepository;
+  workspaceAccess: WorkspaceAccessPolicy;
 };
 
 export interface KnowledgeUnitOfWork {

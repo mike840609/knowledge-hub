@@ -1,7 +1,7 @@
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import { contentFingerprint, normalizeContent, sameContent, type ContentInput } from "../domain/content";
-import { IntegrityError, NotFoundError, SourceReadOnlyError, ValidationError, WorkspaceAccessDeniedError } from "../domain/errors";
+import { IntegrityError, NotFoundError, SourceReadOnlyError, ValidationError } from "../domain/errors";
 import type { KnowledgeDocument } from "../domain/document";
 import type { KnowledgeRevision } from "../domain/revision";
 import type { KnowledgeTreeNode } from "../domain/tree-node";
@@ -32,8 +32,7 @@ async function requireSource(repositories: KnowledgeRepositories, sourceId: stri
 
 async function requireSourceAccess(repositories: KnowledgeRepositories, caller: CallerContext, sourceId: string, lock = false) {
   const source = await requireSource(repositories, sourceId, lock);
-  const membership = await repositories.workspaceMemberships.find(source.workspaceId, caller.identity.id);
-  if (!membership) throw new WorkspaceAccessDeniedError();
+  await repositories.workspaceAccess.requireMembership(caller, source.workspaceId);
   return source;
 }
 

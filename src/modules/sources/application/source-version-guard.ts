@@ -1,6 +1,6 @@
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
-import { VersionConflictError, NotFoundError, WorkspaceAccessDeniedError } from "@/modules/knowledge/domain/errors";
+import { VersionConflictError, NotFoundError } from "@/modules/knowledge/domain/errors";
 import type { ContentInput } from "@/modules/knowledge/domain/content";
 import { contentFingerprint } from "@/modules/knowledge/domain/content";
 import type { ControlledKnowledgeOperations } from "@/modules/knowledge/application/mutations";
@@ -38,7 +38,7 @@ export class SourceApplicationService {
     return this.unitOfWork.run(async (repositories) => {
       await repositories.users.upsertIdentity(trustedCaller.identity);
       if (workspaceId) {
-        await requireWorkspaceMember(repositories, trustedCaller, workspaceId);
+        await repositories.workspaceAccess.requireMembership(trustedCaller, workspaceId);
         return repositories.sources.findActiveByWorkspaceId(workspaceId);
       }
       const workspaces = await repositories.workspaces.listForUser(trustedCaller.identity.id);
@@ -54,7 +54,7 @@ export class SourceApplicationService {
         await repositories.users.upsertIdentity(caller.identity);
         const source = await repositories.sources.lockById(input.sourceId);
         if (!source) throw new NotFoundError("The requested Knowledge source was not found.");
-        await requireWorkspaceMember(repositories, caller, source.workspaceId);
+        await repositories.workspaceAccess.requireMembership(caller, source.workspaceId);
         const resultVersion = await repositories.sources.guardAndAdvanceVersion(input.sourceId, input.basedOnVersion, caller.identity.id);
         if (resultVersion === null) throw new VersionConflictError();
         const entry = await repositories.entries.findById(input.entryId);
@@ -98,7 +98,7 @@ export class SourceApplicationService {
         await repositories.users.upsertIdentity(caller.identity);
         const source = await repositories.sources.lockById(input.sourceId);
         if (!source) throw new NotFoundError("The requested Knowledge source was not found.");
-        await requireWorkspaceMember(repositories, caller, source.workspaceId);
+        await repositories.workspaceAccess.requireMembership(caller, source.workspaceId);
         const resultVersion = await repositories.sources.guardAndAdvanceVersion(input.sourceId, input.basedOnVersion, caller.identity.id);
         if (resultVersion === null) throw new VersionConflictError();
         const entry = await repositories.entries.findById(input.entryId);
@@ -121,13 +121,9 @@ export class SourceApplicationService {
       await repositories.users.upsertIdentity(input.caller.identity);
       const source = await repositories.sources.findById(input.sourceId);
       if (!source) throw new NotFoundError("The requested Knowledge source was not found.");
-      await requireWorkspaceMember(repositories, input.caller, source.workspaceId);
+      await repositories.workspaceAccess.requireMembership(input.caller, source.workspaceId);
       await repositories.syncRuns.insert({ id, sourceId: input.sourceId, triggeredBy: input.caller.identity.id, basedOnVersion: input.basedOnVersion, resultVersion: null, status: "FAILED", summary: input.summary, startedAt: new Date(), completedAt: new Date() });
     });
     return id;
   }
-}
-
-async function requireWorkspaceMember(repositories: { workspaceMemberships: { find(workspaceId: string, userId: string): Promise<unknown> } }, caller: CallerContext, workspaceId: string): Promise<void> {
-  if (!(await repositories.workspaceMemberships.find(workspaceId, caller.identity.id))) throw new WorkspaceAccessDeniedError();
 }

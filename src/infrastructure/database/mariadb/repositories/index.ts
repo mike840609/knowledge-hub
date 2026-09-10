@@ -10,6 +10,7 @@ import { MariaDbAssetRepository } from "./assets";
 import { MariaDbSyncRunRepository } from "./sync-runs";
 import { MariaDbWorkspaceRepository } from "./workspaces";
 import { MariaDbWorkspaceMembershipRepository } from "./workspace-memberships";
+import { WorkspaceMembershipPolicy } from "@/modules/workspaces/application/workspace-query-service";
 import type { SourceRepositories } from "@/modules/sources/ports/unit-of-work";
 
 export function createRepositories(connection: DatabaseConnection): SourceRepositories {
@@ -20,9 +21,10 @@ export function createRepositories(connection: DatabaseConnection): SourceReposi
   const tree = new MariaDbTreeRepository(connection);
   const workspaces = new MariaDbWorkspaceRepository(connection);
   const workspaceMemberships = new MariaDbWorkspaceMembershipRepository(connection);
+  const workspaceAccess = new WorkspaceMembershipPolicy(workspaceMemberships);
   return {
     users,
     sources, entries: new MariaDbEntryRepository(connection), assets: new MariaDbAssetRepository(connection), syncRuns: new MariaDbSyncRunRepository(connection),
-    documents, revisions, tree, sourcePolicy: new MariaDbSourcePolicyRepository(sources), workspaces, workspaceMemberships,
+    documents, revisions, tree, sourcePolicy: new MariaDbSourcePolicyRepository(sources), workspaces, workspaceMemberships, workspaceAccess,
   };
 }

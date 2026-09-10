@@ -85,9 +85,9 @@ describe("MariaDB schema and migrations", () => {
     await expect(pool.query("UPDATE knowledge_documents SET current_revision_id = ? WHERE id = ?", [docB.revisionId, docA.documentId])).rejects.toBeTruthy();
     const unchanged = await pool.query<{ current_revision_id: string }[]>("SELECT current_revision_id FROM knowledge_documents WHERE id = ?", [docA.documentId]);
     expect(String(unchanged[0].current_revision_id)).toBe(docA.revisionId);
-    await expect(pool.query("INSERT INTO knowledge_tree_nodes (id, source_id, parent_id, node_type, name, document_id, position, status) VALUES (UUID(), ?, NULL, 'FOLDER', NULL, NULL, 0, 'ACTIVE')", [hubA.source.id])).rejects.toBeTruthy();
-    await expect(pool.query("INSERT INTO knowledge_tree_nodes (id, source_id, parent_id, node_type, name, document_id, position, status) VALUES (UUID(), ?, NULL, 'DOCUMENT', NULL, NULL, 0, 'ACTIVE')", [hubA.source.id])).rejects.toBeTruthy();
-    await expect(pool.query("INSERT INTO knowledge_tree_nodes (id, source_id, parent_id, node_type, name, document_id, position, status) VALUES (UUID(), ?, NULL, 'DOCUMENT', NULL, ?, 0, 'ACTIVE')", [hubA.source.id, docA.documentId])).rejects.toBeTruthy();
+    await expect(pool.query("INSERT INTO knowledge_tree_nodes (id, source_id, parent_id, node_type, name, document_id, position, status, updated_by) VALUES (UUID(), ?, NULL, 'FOLDER', NULL, NULL, 0, 'ACTIVE', ?)", [hubA.source.id, fixtureIdentity.id])).rejects.toBeTruthy();
+    await expect(pool.query("INSERT INTO knowledge_tree_nodes (id, source_id, parent_id, node_type, name, document_id, position, status, updated_by) VALUES (UUID(), ?, NULL, 'DOCUMENT', NULL, NULL, 0, 'ACTIVE', ?)", [hubA.source.id, fixtureIdentity.id])).rejects.toBeTruthy();
+    await expect(pool.query("INSERT INTO knowledge_tree_nodes (id, source_id, parent_id, node_type, name, document_id, position, status, updated_by) VALUES (UUID(), ?, NULL, 'DOCUMENT', NULL, ?, 0, 'ACTIVE', ?)", [hubA.source.id, docA.documentId, fixtureIdentity.id])).rejects.toBeTruthy();
     const sourceColumns = await pool.query<{ column_name: string }[]>("SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'knowledge_sources'");
     expect(sourceColumns.map((column) => column.column_name)).toContain("workspace_id");
     expect(sourceColumns.map((column) => column.column_name)).not.toContain("org_code");

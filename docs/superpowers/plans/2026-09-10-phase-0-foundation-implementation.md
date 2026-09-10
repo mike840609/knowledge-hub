@@ -18,7 +18,7 @@
 
 ### 1.1 驗收邊界
 
-- 最小 Web flow 需要 Workspace selector、Source selector、基本 title／Markdown 輸入、文件讀取與可展開的 Tree。
+- 最小 Web flow 需要 Workspace selector、Workspace 內可辨識且可操作的 Source navigation（Source cards 清單即視為合規，不強制 dropdown 式 Source selector）、基本 title／Markdown 輸入、文件讀取與可展開的 Tree。
 - Workspace selector 只顯示 `listWorkspaces(caller)` 結果；UI 選擇不是 authorization evidence，resource operation 仍由 application 反查 Source → Workspace 做 policy check。
 - Revision 更新、archive／restore、hierarchy mutation 在 application 層與測試中驗證；本階段不需要完整管理 UI。
 - SourceEntry、KnowledgeAsset、SyncRun 建 schema 與必要 repositories；使用 fixtures 驗證 mapping 與 transaction，不建 Folder scanner、parser、Title Resolution、diff engine 或 Sync UI。
@@ -381,7 +381,7 @@ src/app/knowledge/[documentId]/page.tsx
 src/app/knowledge/actions.ts
 src/app/knowledge/error.tsx
 src/app/knowledge/not-found.tsx
-src/components/knowledge/{workspace-selector,source-selector,knowledge-tree,create-document-form,document-viewer}.tsx
+src/components/knowledge/{workspace-selector,source-navigation,knowledge-tree,create-document-form,document-viewer}.tsx
 src/components/ui/{button,input,textarea,label}.tsx
 playwright.config.ts
 scripts/test/e2e.ts
@@ -390,7 +390,7 @@ tests/e2e/knowledge-smoke.spec.ts
 
 工作：
 
-1. Knowledge 畫面顯示當前 Local Identity、Workspace selector → Source selector → Folder／Document Tree，以及 Hub Source 的基本新增表單。
+1. Knowledge 畫面顯示當前 Local Identity、Workspace selector → Source navigation（例如 Source cards 清單；dropdown Source selector 為選配，不強制）→ Folder／Document Tree，以及 Hub Source 的基本新增表單。
 2. Workspace selector 只來自 `listWorkspaces(caller)`；切換後重新查該 Workspace Sources。未知/未授權 Workspace 不顯示且 direct URL/server action 仍重新驗證。
 3. Form 只收 source／parent／title／Markdown 等內容欄位；server action 以 IdentityProvider 建 CallerContext 後呼叫 application service，不能把 UI 顯示的 workspace/org/ownership 當安全檢查。
 4. Create 成功後由 adapter 導航到 stable UUID document URL；重新整理仍讀到同一文件與 current revision。
@@ -404,7 +404,8 @@ tests/e2e/knowledge-smoke.spec.ts
 open Knowledge Hub → see configured Local Identity
   → list caller-visible Workspaces
   → select Workspace
-  → select Source / expand Folder
+  → view caller-accessible Sources
+  → select or interact with target Source / expand Folder
   → create document
   → stable document URL
   → reload → same ID/title/content
@@ -492,7 +493,7 @@ Test DB 名稱採受限制的 `hcm_km_test_...`／`hcm_km_e2e_...`，runner 同�
 | A18 | 對 archived 或不同 Source parent 操作 | 拒絕無效結構；不偷偷 reparent／改 Source | T07 |
 | A19 | concurrent moves 可能合成 cycle | Source lock 與 ancestry validation 阻止非法結果 | T07 |
 | A20 | Local identity + 偽造前端 emp_id／org | server 建立的 CallerContext 仍使用設定的可信測試身分 | T06 |
-| A21 | 頁面建立後重新整理／Tree 導航 | 同一 stable URL／Document ID／current revision | T09 |
+| A21 | Workspace 內 Source navigation＋頁面建立後重新整理／Tree 導航 | Workspace selector＋可辨識可操作的 Source navigation（Source cards 清單合規，不強制 dropdown selector）呈現 caller 可存取 Sources；同一 stable URL／Document ID／current revision | T09 |
 | A22 | 直接 non-Web 呼叫 application | 以 CallerContext + Workspace policy 呼叫，不需 React／Next runtime | T07、T10 |
 | A23 | Asset metadata 寫入與讀取 | 保存 path／metadata，沒有 binary storage／serving | T03、T05 |
 | A24 | 建立 Source 未提供有效 `workspace_id` | FK/application 拒絕 | T03、T07 |
@@ -516,7 +517,7 @@ Test DB 名稱採受限制的 `hcm_km_test_...`／`hcm_km_e2e_...`，runner 同�
 - [x] T06：Local identity 四欄位、Workspace/Membership seed 與 cross-org fixtures 可用，無前端身分信任捷徑。
 - [x] T07：最小 caller-aware application create/read/revision/lifecycle/hierarchy 行為通過。
 - [x] T08：Mapping／reappearance／source version race／atomicity／Workspace guard 通過。
-- [x] T09：Workspace → Source → Tree 最小 Web flow 與 Chromium smoke 通過。
+- [x] T09：Workspace → Source navigation → Tree 最小 Web flow（Source cards 清單視為合規 navigation，不強制 dropdown selector）與 Chromium smoke 通過。
 - [x] T10：驗收紀錄完整、scope／dependency review 通過。
 
 | 後續階段 | 本次交付接點 | 仍留在後續階段的工作 |
