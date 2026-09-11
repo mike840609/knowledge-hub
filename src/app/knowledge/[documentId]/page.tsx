@@ -12,8 +12,9 @@ export default async function DocumentPage({ params, searchParams }: { params: P
   const includeArchived = query?.includeArchived === "true";
   let revisionNo: number | undefined;
   if (query?.revision !== undefined) {
-    const parsed = Number.parseInt(query.revision, 10);
-    if (!Number.isInteger(parsed) || parsed < 1) notFound();
+    if (!/^[0-9]+$/.test(query.revision)) notFound();
+    const parsed = Number(query.revision);
+    if (!Number.isSafeInteger(parsed) || parsed < 1) notFound();
     revisionNo = parsed;
   }
   try {
