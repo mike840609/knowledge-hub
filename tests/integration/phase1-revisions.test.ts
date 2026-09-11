@@ -7,7 +7,7 @@ import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction
 import { MariaDbRevisionRepository } from "@/infrastructure/database/mariadb/repositories/revisions";
 import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
 import { RevisionConflictError } from "@/modules/knowledge/domain/errors";
-import { KnowledgeApplicationService } from "@/modules/knowledge/application/service";
+import { KnowledgeQueryServiceImpl } from "@/modules/knowledge/application/knowledge-query-service";
 import { revisionContentHash, normalizeRevisionContent, type KnowledgeMetadata } from "@/modules/knowledge/domain/content";
 import { disposeIsolatedDatabase, provisionIsolatedDatabase } from "../../scripts/db/test-database";
 import { runMigrations, type IsolatedDatabaseHandle } from "../../scripts/db/migrate";
@@ -86,7 +86,7 @@ async function readRevisionRow(revisionId: string) {
 describe("immutable knowledge revisions", () => {
   it("creates R1 and resolves it as the current revision", async () => {
     const { source, folderId } = await createSourceFixture(pool);
-    const service = new KnowledgeApplicationService(new MariaDbUnitOfWork(pool));
+    const queries = new KnowledgeQueryServiceImpl(new MariaDbUnitOfWork(pool));
     const hub = new HubKnowledgeCommandServiceImpl(new MariaDbUnitOfWork(pool));
     const { documentId, revisionId } = await hub.createDocument(fixtureCaller(), {
       sourceId: source.id,
@@ -95,9 +95,9 @@ describe("immutable knowledge revisions", () => {
       markdown: "body",
       metadata: {},
     });
-    const current = await service.getCurrentRevision(fixtureCaller(), documentId);
-    expect(current?.id).toBe(revisionId);
-    expect(current?.revisionNo).toBe(1);
+    const current = await queries.getCurrentRevision(fixtureCaller(), documentId);
+    expect(current.id).toBe(revisionId);
+    expect(current.revisionNo).toBe(1);
     const listed = await new MariaDbUnitOfWork(pool).run((repositories) => repositories.revisions.listByDocument(documentId));
     expect(listed.map((revision) => revision.revisionNo)).toEqual([1]);
   });
@@ -128,7 +128,7 @@ describe("immutable knowledge revisions", () => {
 
   it("creates R2 on real change while leaving R1 byte-stable", async () => {
     const { source, folderId } = await createSourceFixture(pool);
-    const service = new KnowledgeApplicationService(new MariaDbUnitOfWork(pool));
+    const queries = new KnowledgeQueryServiceImpl(new MariaDbUnitOfWork(pool));
     const hub = new HubKnowledgeCommandServiceImpl(new MariaDbUnitOfWork(pool));
     const created = await hub.createDocument(fixtureCaller(), {
       sourceId: source.id,
@@ -147,8 +147,8 @@ describe("immutable knowledge revisions", () => {
     });
     expect(result.changed).toBe(true);
     expect(result.revisionNo).toBe(2);
-    const current = await service.getCurrentRevision(fixtureCaller(), created.documentId);
-    expect(current?.id).toBe(result.revisionId);
+    const current = await queries.getCurrentRevision(fixtureCaller(), created.documentId);
+    expect(current.id).toBe(result.revisionId);
     expect(await readRevisionRow(created.revisionId)).toEqual(before);
     const listed = await new MariaDbUnitOfWork(pool).run((repositories) => repositories.revisions.listByDocument(created.documentId));
     expect(listed.map((revision) => revision.revisionNo)).toEqual([1, 2]);
@@ -203,7 +203,7 @@ describe("immutable knowledge revisions", () => {
 
   it("reads a Phase 0 legacy row as-is and corrects a whitespace-only legacy title", async () => {
     const { source, folderId } = await createSourceFixture(pool);
-    const service = new KnowledgeApplicationService(new MariaDbUnitOfWork(pool));
+    const queries = new KnowledgeQueryServiceImpl(new MariaDbUnitOfWork(pool));
     const hub = new HubKnowledgeCommandServiceImpl(new MariaDbUnitOfWork(pool));
     const legacy = await insertLegacyDocument({
       sourceId: source.id,
@@ -212,8 +212,8 @@ describe("immutable knowledge revisions", () => {
       markdown: "legacy\r\nbody",
       metadata: { b: 2, a: 1 },
     });
-    const current = await service.getCurrentRevision(fixtureCaller(), legacy.documentId);
-    expect(current?.title).toBe("   ");
+    const current = await queries.getCurrentRevision(fixtureCaller(), legacy.documentId);
+    expect(current.title).toBe("   ");
     const before = await readRevisionRow(legacy.revisionId);
     const result = await hub.createRevision(fixtureCaller(), {
       documentId: legacy.documentId, expectedCurrentRevisionId: legacy.revisionId,

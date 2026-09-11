@@ -26,8 +26,8 @@ import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 
 describe("foundation domain rules", () => {
   it("keeps source ownership separate from source type", () => {
-    expect(isHubManaged({ id: "s", workspaceId: "w", sourceType: "HUB", ownership: "HUB_MANAGED", status: "ACTIVE", syncVersion: 0 })).toBe(true);
-    expect(isHubManaged({ id: "s", workspaceId: "w", sourceType: "FOLDER_SYNC", ownership: "SOURCE_MANAGED", status: "ACTIVE", syncVersion: 0 })).toBe(false);
+    expect(isHubManaged({ id: "s", workspaceId: "w", name: "Source", sourceType: "HUB", ownership: "HUB_MANAGED", status: "ACTIVE", syncVersion: 0 })).toBe(true);
+    expect(isHubManaged({ id: "s", workspaceId: "w", name: "Source", sourceType: "FOLDER_SYNC", ownership: "SOURCE_MANAGED", status: "ACTIVE", syncVersion: 0 })).toBe(false);
   });
 
   it("requires folder/document tree shapes", () => {
@@ -45,7 +45,7 @@ describe("foundation domain rules", () => {
         workspaceMemberships: { find: async () => ({ workspaceId: "w", userId: "u", createdAt: new Date() }) },
         workspaceAccess: { requireMembership: async () => undefined },
         documents: { findById: async () => ({ id: "d", sourceId: "s" }), lockById: async () => ({ id: "d", sourceId: "s" }) },
-        sourcePolicy: { lockById: async () => ({ id: "s", workspaceId: "w", sourceType: "FOLDER_SYNC", ownership: "SOURCE_MANAGED", status: "ACTIVE", syncVersion: 0 }), findById: async () => ({ id: "s", workspaceId: "w", sourceType: "FOLDER_SYNC", ownership: "SOURCE_MANAGED", status: "ACTIVE", syncVersion: 0 }) },
+        sourcePolicy: { lockById: async () => ({ id: "s", workspaceId: "w", name: "Source", sourceType: "FOLDER_SYNC", ownership: "SOURCE_MANAGED", status: "ACTIVE", syncVersion: 0 }), findById: async () => ({ id: "s", workspaceId: "w", name: "Source", sourceType: "FOLDER_SYNC", ownership: "SOURCE_MANAGED", status: "ACTIVE", syncVersion: 0 }) },
         revisions: { findCurrent: async () => ({ id: "r", documentId: "d", revisionNo: 1, title: "t", markdown: "m", metadata: {}, contentHash: "h", createdBy: "u", createdAt: new Date() }), insert: async () => calls.push("insert"), nextRevisionNumber: async () => 2 },
         tree: {},
       } as unknown as KnowledgeRepositories;

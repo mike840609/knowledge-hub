@@ -25,9 +25,15 @@ export class MariaDbSourceRepository implements SourceRepository {
     return rows[0] ? mapSource(rows[0]) : null;
   }
 
-  async findActiveByWorkspaceId(workspaceId: string): Promise<KnowledgeSource[]> {
-    const rows = await this.connection.query<DbRow[]>("SELECT * FROM knowledge_sources WHERE workspace_id = ? AND status = 'ACTIVE' ORDER BY name, id", [workspaceId]);
+  async findByWorkspaceId(workspaceId: string, options: { includeArchived?: boolean } = {}): Promise<KnowledgeSource[]> {
+    const rows = options.includeArchived
+      ? await this.connection.query<DbRow[]>("SELECT * FROM knowledge_sources WHERE workspace_id = ? ORDER BY name, id", [workspaceId])
+      : await this.connection.query<DbRow[]>("SELECT * FROM knowledge_sources WHERE workspace_id = ? AND status = 'ACTIVE' ORDER BY name, id", [workspaceId]);
     return rows.map(mapSource);
+  }
+
+  async findActiveByWorkspaceId(workspaceId: string): Promise<KnowledgeSource[]> {
+    return this.findByWorkspaceId(workspaceId, { includeArchived: false });
   }
 
   async lockById(sourceId: string): Promise<KnowledgeSource | null> {

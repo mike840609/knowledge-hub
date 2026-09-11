@@ -1,6 +1,6 @@
 import type { KnowledgeTreeNode } from "../domain/tree-node";
 
-export type TreeViewNode = KnowledgeTreeNode & { title: string | null; documentStatus: "ACTIVE" | "ARCHIVED" | null };
+export type TreeViewNode = KnowledgeTreeNode & { title: string | null; documentStatus: "ACTIVE" | "ARCHIVED" | null; currentRevisionId: string | null };
 
 export interface TreeRepository {
   insert(node: KnowledgeTreeNode): Promise<void>;

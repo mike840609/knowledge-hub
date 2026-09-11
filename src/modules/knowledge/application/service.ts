@@ -3,8 +3,6 @@ import { uuidv7 } from "@/shared/ids/uuidv7";
 import { fingerprintRevisionContent, type ContentInput } from "../domain/content";
 import { isRevisionContentUnchanged } from "../domain/revision";
 import { DocumentNotFoundError, IntegrityViolationError, SourceArchivedError, SourceNotFoundError, SourceReadOnlyError, TreeCycleError, InvalidParentError, TreeNodeNotFoundError, ValidationError } from "../domain/errors";
-import type { KnowledgeDocument } from "../domain/document";
-import type { KnowledgeRevision } from "../domain/revision";
 import type { KnowledgeTreeNode } from "../domain/tree-node";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "../ports/unit-of-work";
 import { assertActiveDocumentPlacement, assertActiveFolderAncestry } from "./tree-validation";
@@ -15,12 +13,6 @@ export type HubCommandDelegate = Pick<HubKnowledgeCommandService, "createDocumen
 
 export type CreateDocumentInput = ContentInput & { sourceId: string; parentId?: string | null };
 export type RevisionResult = { documentId: string; revisionId: string; revisionNo: number; changed: boolean };
-export type DocumentView = {
-  document: KnowledgeDocument;
-  revision: KnowledgeRevision;
-  source: { id: string; workspaceId: string; ownership: string; sourceType: string };
-};
-export type TreeItem = { id: string; nodeType: "FOLDER" | "DOCUMENT"; name: string; documentId: string | null; children: TreeItem[] };
 
 function requireHubSource(source: Awaited<ReturnType<typeof requireSource>>) {
   if (source.status !== "ACTIVE") throw new SourceArchivedError();
@@ -44,25 +36,6 @@ function requireFolderParent(parent: KnowledgeTreeNode | null, sourceId: string)
   if (!parent || parent.sourceId !== sourceId || parent.nodeType !== "FOLDER" || parent.status !== "ACTIVE") {
     throw new InvalidParentError();
   }
-}
-
-function buildTree(nodes: Awaited<ReturnType<KnowledgeRepositories["tree"]["listBySource"]>>): TreeItem[] {
-  const byParent = new Map<string | null, TreeItem[]>();
-  const byId = new Map<string, TreeItem>();
-  for (const node of nodes) {
-    if (node.status !== "ACTIVE" || node.documentStatus === "ARCHIVED") continue;
-    const name = node.nodeType === "FOLDER" ? node.name : node.title;
-    if (!name || (node.nodeType === "DOCUMENT" && !node.documentId)) continue;
-    const item: TreeItem = { id: node.id, nodeType: node.nodeType, name, documentId: node.documentId, children: [] };
-    byId.set(node.id, item);
-    const siblings = byParent.get(node.parentId) ?? [];
-    siblings.push(item);
-    byParent.set(node.parentId, siblings);
-  }
-  for (const node of nodes) {
-    if (node.parentId && byId.has(node.parentId) && byId.has(node.id)) byId.get(node.parentId)?.children.push(byId.get(node.id)!);
-  }
-  return byParent.get(null) ?? [];
 }
 
 export class KnowledgeApplicationService {
@@ -99,36 +72,9 @@ export class KnowledgeApplicationService {
     });
   }
 
-  async getDocument(caller: CallerContext, documentId: string, options: { includeArchived?: boolean } = {}): Promise<DocumentView | null> {
-    return this.unitOfWork.run(async (repositories) => {
-      await repositories.users.upsertIdentity(caller.identity);
-      const document = await repositories.documents.findById(documentId);
-      if (!document) return null;
-      const source = await requireSourceAccess(repositories, caller, document.sourceId);
-      if ((!options.includeArchived && document.status !== "ACTIVE") || (!options.includeArchived && source.status !== "ACTIVE")) return null;
-      const revision = await repositories.revisions.findCurrent(document.id);
-      if (!revision) throw new IntegrityViolationError("Document current revision is missing.");
-      return { document, revision, source: { id: source.id, workspaceId: source.workspaceId, ownership: source.ownership, sourceType: source.sourceType } };
-    });
-  }
-
-  async getCurrentRevision(caller: CallerContext, documentId: string, options: { includeArchived?: boolean } = {}): Promise<KnowledgeRevision | null> {
-    const view = await this.getDocument(caller, documentId, options);
-    return view?.revision ?? null;
-  }
-
-  async listTree(caller: CallerContext, sourceId: string): Promise<TreeItem[]> {
-    return this.unitOfWork.run(async (repositories) => {
-      await repositories.users.upsertIdentity(caller.identity);
-      const source = await requireSourceAccess(repositories, caller, sourceId);
-      if (source.status !== "ACTIVE") return [];
-      return buildTree(await repositories.tree.listBySource(sourceId));
-    });
-  }
-
   async createRevision(caller: CallerContext, documentId: string, input: ContentInput): Promise<RevisionResult> {
     if (this.hub) {
-      const current = await this.getCurrentRevision(caller, documentId);
+      const current = await this.unitOfWork.run(async (repositories) => repositories.revisions.findCurrent(documentId));
       if (!current) throw new DocumentNotFoundError();
       const revised = await this.hub.createRevision(caller, {
         documentId, expectedCurrentRevisionId: current.id,

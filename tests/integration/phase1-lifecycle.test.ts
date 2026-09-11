@@ -4,7 +4,7 @@ import { databaseConfig } from "@/infrastructure/database/mariadb/config";
 import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
 import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction";
 import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
-import { KnowledgeApplicationService } from "@/modules/knowledge/application/service";
+import { KnowledgeQueryServiceImpl } from "@/modules/knowledge/application/knowledge-query-service";
 import { SourceApplicationService } from "@/modules/sources/application/source-version-guard";
 import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 import type { UserIdentity } from "@/modules/identity/domain/user-identity";
@@ -95,10 +95,10 @@ async function setupLifecycleScope(): Promise<LifecycleScope> {
 
 function lifecycleServices() {
   const unitOfWork = new MariaDbUnitOfWork(pool);
-  const knowledge = new KnowledgeApplicationService(unitOfWork);
+  const queries = new KnowledgeQueryServiceImpl(unitOfWork);
   return {
     hub: new HubKnowledgeCommandServiceImpl(unitOfWork),
-    knowledge,
+    queries,
     sources: new SourceApplicationService(unitOfWork),
   };
 }
@@ -208,7 +208,7 @@ function expectActiveCleared(row: LifecycleRow | undefined, actorId: string) {
 describe("document lifecycle", () => {
   it("archives and restores Document, TreeNode, and linked SourceEntry atomically with history intact", async () => {
     const scope = await setupLifecycleScope();
-    const { hub, knowledge } = lifecycleServices();
+    const { hub, queries } = lifecycleServices();
     const caller = callerFromIdentity(owner);
     const created = await hub.createDocument(caller, {
       sourceId: scope.hubSourceId, parentId: scope.hubFolderId,
@@ -224,7 +224,7 @@ describe("document lifecycle", () => {
     expectArchivedBy(await readDocumentEntry(created.documentId), owner.id);
     expect(await readRevisionFingerprint(created.documentId)).toEqual(revisionsBefore);
     expect((await readDocumentRow(created.documentId))?.current_revision_id).toBe(pointerBefore);
-    expect(await knowledge.getDocument(caller, created.documentId)).toBeNull();
+    await expect(queries.getDocument(caller, created.documentId)).rejects.toBeInstanceOf(DocumentNotFoundError);
 
     await hub.restoreDocument(caller, created.documentId);
     expectActiveCleared(await readDocumentRow(created.documentId), owner.id);
@@ -234,7 +234,7 @@ describe("document lifecycle", () => {
     const restored = await readDocumentRow(created.documentId);
     expect(restored?.id).toBe(created.documentId);
     expect(restored?.current_revision_id).toBe(pointerBefore);
-    expect((await knowledge.getDocument(caller, created.documentId))?.document.id).toBe(created.documentId);
+    expect((await queries.getDocument(caller, created.documentId)).documentId).toBe(created.documentId);
   });
 
   it("treats repeat archive and restore as provenance-preserving NOOPs", async () => {
@@ -376,7 +376,7 @@ describe("folder lifecycle", () => {
 describe("source lifecycle", () => {
   it("archives and restores both ownerships as a visibility gate with descendants unchanged", async () => {
     const scope = await setupLifecycleScope();
-    const { hub, knowledge, sources } = lifecycleServices();
+    const { hub, queries, sources } = lifecycleServices();
     const caller = callerFromIdentity(owner);
     const hubDoc = await hub.createDocument(caller, {
       sourceId: scope.hubSourceId, parentId: scope.hubFolderId,
@@ -394,15 +394,15 @@ describe("source lifecycle", () => {
     expect((await readDocumentEntry(hubDoc.documentId))?.status).toBe("ACTIVE");
     expect((await readDocumentRow(managed.documentId))?.status).toBe("ACTIVE");
     expect((await readDocumentNode(managed.documentId))?.status).toBe("ACTIVE");
-    expect(await knowledge.getDocument(caller, hubDoc.documentId)).toBeNull();
-    expect(await knowledge.listTree(caller, scope.hubSourceId)).toEqual([]);
+    await expect(queries.getDocument(caller, hubDoc.documentId)).rejects.toBeInstanceOf(DocumentNotFoundError);
+    expect(await queries.listTree(caller, scope.hubSourceId)).toEqual([]);
 
     for (const sourceId of [scope.hubSourceId, scope.managedSourceId]) {
       await sources.restoreSource(caller, sourceId);
       expectActiveCleared(await readSourceRow(sourceId), owner.id);
     }
     expect((await readDocumentRow(hubDoc.documentId))?.status).toBe("ACTIVE");
-    expect((await knowledge.getDocument(caller, hubDoc.documentId))?.document.id).toBe(hubDoc.documentId);
+    expect((await queries.getDocument(caller, hubDoc.documentId)).documentId).toBe(hubDoc.documentId);
   });
 
   it("treats repeat source archive and restore as NOOPs", async () => {

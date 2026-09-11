@@ -19,7 +19,6 @@ function sourceService(identity = fixtureIdentity) {
   const service = new SourceApplicationService(uow);
   const caller = fixtureCaller(identity);
   return {
-    listSources: (workspaceId?: string) => service.listSources(caller, workspaceId),
     applyKnownEntry: (input: Parameters<SourceApplicationService["applyKnownEntry"]>[1]) => service.applyKnownEntry(caller, input),
     archiveKnownEntry: (input: Parameters<SourceApplicationService["archiveKnownEntry"]>[1]) => service.archiveKnownEntry(caller, input),
   };

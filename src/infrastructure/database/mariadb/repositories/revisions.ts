@@ -37,6 +37,14 @@ export class MariaDbRevisionRepository implements RevisionRepository {
     return rows[0] ? mapRevision(rows[0]) : null;
   }
 
+  async findByRevisionNo(documentId: string, revisionNo: number): Promise<KnowledgeRevision | null> {
+    const rows = await this.connection.query<DbRow[]>(
+      "SELECT * FROM knowledge_revisions WHERE document_id = ? AND revision_no = ?",
+      [documentId, revisionNo],
+    );
+    return rows[0] ? mapRevision(rows[0]) : null;
+  }
+
   async listByDocument(documentId: string): Promise<KnowledgeRevision[]> {
     const rows = await this.connection.query<DbRow[]>(
       "SELECT * FROM knowledge_revisions WHERE document_id = ? ORDER BY revision_no ASC",

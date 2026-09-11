@@ -6,7 +6,6 @@ import { contentFingerprint } from "@/modules/knowledge/domain/content";
 import type { SourceUnitOfWork } from "../ports/unit-of-work";
 import type { SourceEntry } from "../domain/source-entry";
 import type { KnowledgeAsset } from "../domain/asset";
-import type { KnowledgeSource } from "../domain/source";
 import { bindSourceProjection } from "./source-knowledge-projection-service";
 import { archiveSourceEntry, updateSourceLocator } from "./source-entry-mapping-service";
 
@@ -41,20 +40,6 @@ export class SourceApplicationService implements SourceLifecycleCommands {
 
   constructor(unitOfWork: SourceUnitOfWork) {
     this.unitOfWork = unitOfWork;
-  }
-
-  async listSources(caller: CallerContext, workspaceId?: string): Promise<KnowledgeSource[]> {
-    const trustedCaller = caller;
-    return this.unitOfWork.run(async (repositories) => {
-      await repositories.users.upsertIdentity(trustedCaller.identity);
-      if (workspaceId) {
-        await repositories.workspaceAccess.requireMembership(trustedCaller, workspaceId);
-        return repositories.sources.findActiveByWorkspaceId(workspaceId);
-      }
-      const workspaces = await repositories.workspaces.listForUser(trustedCaller.identity.id);
-      const sources = await Promise.all(workspaces.map((workspace) => repositories.sources.findActiveByWorkspaceId(workspace.id)));
-      return sources.flat().sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
-    });
   }
 
   async applyKnownEntry(caller: CallerContext, input: KnownSourceApplyInput): Promise<{ runId: string; resultVersion: number; changed: boolean }> {

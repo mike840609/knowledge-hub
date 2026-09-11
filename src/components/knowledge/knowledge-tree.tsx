@@ -1,20 +1,38 @@
 import Link from "next/link";
-import type { TreeItem } from "@/modules/knowledge/application/service";
+import type { KnowledgeTreeItem } from "@/modules/knowledge/application/knowledge-query-service";
 
-function TreeBranch({ item }: { item: TreeItem }) {
-  if (item.nodeType === "DOCUMENT") {
-    return <li className="py-1 pl-5 text-sm"><Link className="text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-accent" href={`/knowledge/${item.documentId}`}>{item.name}</Link></li>;
+type TreeNode = { item: KnowledgeTreeItem; children: TreeNode[] };
+
+function nest(items: KnowledgeTreeItem[]): TreeNode[] {
+  const nodes = new Map<string, TreeNode>();
+  for (const item of items) nodes.set(item.id, { item, children: [] });
+  const roots: TreeNode[] = [];
+  for (const node of nodes.values()) {
+    const parent = node.item.parentId ? nodes.get(node.item.parentId) : undefined;
+    if (parent) parent.children.push(node);
+    else roots.push(node);
+  }
+  const byPosition = (left: TreeNode, right: TreeNode) => left.item.position - right.item.position || (left.item.id < right.item.id ? -1 : 1);
+  for (const node of nodes.values()) node.children.sort(byPosition);
+  return roots.sort(byPosition);
+}
+
+function TreeBranch({ node }: { node: TreeNode }) {
+  const { item } = node;
+  if (item.type === "document") {
+    return <li className="py-1 pl-5 text-sm"><Link className="text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-accent" href={`/knowledge/${item.documentId}`}>{item.label}</Link></li>;
   }
   return (
     <li className="py-1">
       <details open>
-        <summary className="cursor-pointer rounded px-2 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-accent">{item.name}</summary>
-        {item.children.length > 0 ? <ul className="ml-3 border-l border-slate-200 pl-2">{item.children.map((child) => <TreeBranch key={child.id} item={child} />)}</ul> : <p className="py-2 pl-5 text-xs text-slate-400">No documents yet.</p>}
+        <summary className="cursor-pointer rounded px-2 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-accent">{item.label}</summary>
+        {node.children.length > 0 ? <ul className="ml-3 border-l border-slate-200 pl-2">{node.children.map((child) => <TreeBranch key={child.item.id} node={child} />)}</ul> : <p className="py-2 pl-5 text-xs text-slate-400">No documents yet.</p>}
       </details>
     </li>
   );
 }
 
-export function KnowledgeTree({ items }: { items: TreeItem[] }) {
-  return items.length > 0 ? <ul className="space-y-1">{items.map((item) => <TreeBranch key={item.id} item={item} />)}</ul> : <p className="text-sm text-slate-500">This source has no active tree nodes.</p>;
+export function KnowledgeTree({ items }: { items: KnowledgeTreeItem[] }) {
+  const roots = nest(items);
+  return roots.length > 0 ? <ul className="space-y-1">{roots.map((node) => <TreeBranch key={node.item.id} node={node} />)}</ul> : <p className="text-sm text-slate-500">This source has no active tree nodes.</p>;
 }
