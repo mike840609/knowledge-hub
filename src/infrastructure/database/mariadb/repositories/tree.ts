@@ -36,7 +36,7 @@ export class MariaDbTreeRepository implements TreeRepository {
 
   async listBySource(sourceId: string): Promise<TreeViewNode[]> {
     const rows = await this.connection.query<DbRow[]>(
-      `SELECT n.*, r.title AS title, d.status AS document_status
+      `SELECT n.*, r.title AS title, d.status AS document_status, d.current_revision_id AS document_current_revision_id
        FROM knowledge_tree_nodes n
        LEFT JOIN knowledge_documents d ON d.id = n.document_id AND d.source_id = n.source_id
        LEFT JOIN knowledge_revisions r ON r.id = d.current_revision_id AND r.document_id = d.id
@@ -44,7 +44,7 @@ export class MariaDbTreeRepository implements TreeRepository {
        WHERE n.source_id = ? ORDER BY COALESCE(n.parent_id, ''), n.position, n.id`,
       [sourceId],
     );
-    return rows.map((row) => ({ ...mapNode(row), title: row.title === null ? null : String(row.title), documentStatus: row.document_status === null ? null : String(row.document_status) as "ACTIVE" | "ARCHIVED" }));
+    return rows.map((row) => ({ ...mapNode(row), title: row.title === null ? null : String(row.title), documentStatus: row.document_status === null ? null : String(row.document_status) as "ACTIVE" | "ARCHIVED", currentRevisionId: row.document_current_revision_id === null || row.document_current_revision_id === undefined ? null : String(row.document_current_revision_id) }));
   }
 
   async updateParent(nodeId: string, parentId: string | null, actorId: string): Promise<void> {
@@ -60,6 +60,13 @@ export class MariaDbTreeRepository implements TreeRepository {
   async updatePosition(nodeId: string, position: number, actorId: string): Promise<void> {
     const result = await this.connection.query("UPDATE knowledge_tree_nodes SET position = ?, updated_by = ? WHERE id = ?", [position, actorId, nodeId]);
     if (affectedRows(result) !== 1) throw new Error("Tree position could not be updated.");
+  }
+
+  async updateStatus(nodeId: string, status: "ACTIVE" | "ARCHIVED", actorId: string): Promise<void> {
+    const archivedBy = status === "ARCHIVED" ? actorId : null;
+    const archivedAt = status === "ARCHIVED" ? new Date() : null;
+    const result = await this.connection.query("UPDATE knowledge_tree_nodes SET status = ?, updated_by = ?, archived_by = ?, archived_at = ? WHERE id = ?", [status, actorId, archivedBy, archivedAt, nodeId]);
+    if (affectedRows(result) !== 1) throw new Error("Tree node lifecycle could not be updated.");
   }
 
   async updateStatusForDocument(documentId: string, status: "ACTIVE" | "ARCHIVED", actorId: string): Promise<void> {

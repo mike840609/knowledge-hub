@@ -7,3 +7,11 @@ export class WorkspaceAccessDeniedError extends DomainError {
     this.name = "WorkspaceAccessDeniedError";
   }
 }
+
+/** The requested Workspace does not exist or is hidden from the caller. */
+export class WorkspaceNotFoundError extends DomainError {
+  constructor(message = "The requested Workspace was not found.") {
+    super("WORKSPACE_NOT_FOUND", message);
+    this.name = "WorkspaceNotFoundError";
+  }
+}

@@ -4,9 +4,9 @@ import { databaseConfig } from "@/infrastructure/database/mariadb/config";
 import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
 import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction";
 import { MariaDbSourceRepository } from "@/infrastructure/database/mariadb/repositories/sources";
-import { KnowledgeApplicationService } from "@/modules/knowledge/application/service";
 import { SourceApplicationService } from "@/modules/sources/application/source-version-guard";
-import { contentFingerprint } from "@/modules/knowledge/domain/content";
+import { VersionConflictError } from "@/modules/knowledge/domain/errors";
+import { contentFingerprint, fingerprintRevisionContent } from "@/modules/knowledge/domain/content";
 import { createDocumentForAnySource, createEntryFixture, createSourceFixture, fixtureCaller, fixtureIdentity, secondFixtureIdentity } from "../fixtures/knowledge";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 
@@ -16,10 +16,9 @@ afterAll(async () => { await pool.end(); });
 
 function sourceService(identity = fixtureIdentity) {
   const uow = new MariaDbUnitOfWork(pool);
-  const service = new SourceApplicationService(uow, new KnowledgeApplicationService(uow));
+  const service = new SourceApplicationService(uow);
   const caller = fixtureCaller(identity);
   return {
-    listSources: (workspaceId?: string) => service.listSources(caller, workspaceId),
     applyKnownEntry: (input: Parameters<SourceApplicationService["applyKnownEntry"]>[1]) => service.applyKnownEntry(caller, input),
     archiveKnownEntry: (input: Parameters<SourceApplicationService["archiveKnownEntry"]>[1]) => service.archiveKnownEntry(caller, input),
   };
@@ -157,7 +156,7 @@ describe("SourceEntry and source version safety", () => {
     const fixture = await createSourceFixture(pool, { managed: true });
     const document = await createDocumentForAnySource(pool, fixture.source.id, fixture.folderId);
     const content = { title: "Fixture Document", markdown: "fixture body", metadata: { fixture: true } };
-    const entry = await createEntryFixture(pool, fixture.source.id, document.documentId, "unchanged-external", contentFingerprint(content));
+    const entry = await createEntryFixture(pool, fixture.source.id, document.documentId, "unchanged-external", fingerprintRevisionContent(content).contentHash);
     const beforeEntry = await pool.query("SELECT * FROM source_entries WHERE id = ?", [entry.entryId]);
     const beforeTree = await pool.query("SELECT * FROM knowledge_tree_nodes WHERE source_id = ? ORDER BY id", [fixture.source.id]);
     const beforeRevisions = await pool.query("SELECT * FROM knowledge_revisions WHERE document_id = ? ORDER BY revision_no", [document.documentId]);
@@ -167,7 +166,12 @@ describe("SourceEntry and source version safety", () => {
     expect(await pool.query("SELECT * FROM knowledge_tree_nodes WHERE source_id = ? ORDER BY id", [fixture.source.id])).toEqual(beforeTree);
     expect(await pool.query("SELECT * FROM knowledge_revisions WHERE document_id = ? ORDER BY revision_no", [document.documentId])).toEqual(beforeRevisions);
     expect(await pool.query<{ status: string; result_version: number }[]>("SELECT status, result_version FROM sync_runs WHERE id = ?", [result.runId])).toEqual([{ status: "APPLIED", result_version: 1 }]);
-    await expect(sourceService().applyKnownEntry({ sourceId: fixture.source.id, basedOnVersion: 0, entryId: entry.entryId, documentId: document.documentId, externalId: entry.externalId, sourcePath: "docs/fixture.md", content })).rejects.toThrow();
+    const stale = await sourceService().applyKnownEntry({ sourceId: fixture.source.id, basedOnVersion: 0, entryId: entry.entryId, documentId: document.documentId, externalId: entry.externalId, sourcePath: "docs/fixture.md", content }).then(
+      (): null => null,
+      (caught: unknown) => caught,
+    );
+    expect(stale).toBeInstanceOf(VersionConflictError);
+    expect((stale as VersionConflictError).code).toBe("VERSION_CONFLICT");
   });
 
   it("restores a known mapping with the same Document ID and versions changed content once", async () => {

@@ -7,6 +7,7 @@ export type SourceOwnership = (typeof SOURCE_OWNERSHIPS)[number];
 export type SourcePolicy = {
   id: string;
   workspaceId: string;
+  name: string;
   sourceType: SourceType;
   ownership: SourceOwnership;
   status: "ACTIVE" | "ARCHIVED";

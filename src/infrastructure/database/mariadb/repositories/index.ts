@@ -6,6 +6,7 @@ import { MariaDbDocumentRepository } from "./documents";
 import { MariaDbRevisionRepository } from "./revisions";
 import { MariaDbTreeRepository } from "./tree";
 import { MariaDbEntryRepository } from "./entries";
+import { MariaDbLinkedEntryRepository } from "./linked-entries";
 import { MariaDbAssetRepository } from "./assets";
 import { MariaDbSyncRunRepository } from "./sync-runs";
 import { MariaDbWorkspaceRepository } from "./workspaces";
@@ -25,6 +26,6 @@ export function createRepositories(connection: DatabaseConnection): SourceReposi
   return {
     users,
     sources, entries: new MariaDbEntryRepository(connection), assets: new MariaDbAssetRepository(connection), syncRuns: new MariaDbSyncRunRepository(connection),
-    documents, revisions, tree, sourcePolicy: new MariaDbSourcePolicyRepository(sources), workspaces, workspaceMemberships, workspaceAccess,
+    documents, revisions, tree, linkedEntries: new MariaDbLinkedEntryRepository(connection), sourcePolicy: new MariaDbSourcePolicyRepository(sources), workspaces, workspaceMemberships, workspaceAccess,
   };
 }

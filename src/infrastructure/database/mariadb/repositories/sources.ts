@@ -1,4 +1,4 @@
-import { NotFoundError } from "@/modules/knowledge/domain/errors";
+import { IntegrityViolationError, SourceNotFoundError } from "@/modules/knowledge/domain/errors";
 import type { SourceOwnership, SourceType } from "@/modules/knowledge/domain/source-policy";
 import type { KnowledgeSource } from "@/modules/sources/domain/source";
 import type { SourceRepository } from "@/modules/sources/ports/source-repository";
@@ -25,9 +25,15 @@ export class MariaDbSourceRepository implements SourceRepository {
     return rows[0] ? mapSource(rows[0]) : null;
   }
 
-  async findActiveByWorkspaceId(workspaceId: string): Promise<KnowledgeSource[]> {
-    const rows = await this.connection.query<DbRow[]>("SELECT * FROM knowledge_sources WHERE workspace_id = ? AND status = 'ACTIVE' ORDER BY name, id", [workspaceId]);
+  async findByWorkspaceId(workspaceId: string, options: { includeArchived?: boolean } = {}): Promise<KnowledgeSource[]> {
+    const rows = options.includeArchived
+      ? await this.connection.query<DbRow[]>("SELECT * FROM knowledge_sources WHERE workspace_id = ? ORDER BY name, id", [workspaceId])
+      : await this.connection.query<DbRow[]>("SELECT * FROM knowledge_sources WHERE workspace_id = ? AND status = 'ACTIVE' ORDER BY name, id", [workspaceId]);
     return rows.map(mapSource);
+  }
+
+  async findActiveByWorkspaceId(workspaceId: string): Promise<KnowledgeSource[]> {
+    return this.findByWorkspaceId(workspaceId, { includeArchived: false });
   }
 
   async lockById(sourceId: string): Promise<KnowledgeSource | null> {
@@ -43,6 +49,16 @@ export class MariaDbSourceRepository implements SourceRepository {
     );
   }
 
+  async updateStatus(sourceId: string, status: "ACTIVE" | "ARCHIVED", actorId: string): Promise<void> {
+    const archivedBy = status === "ARCHIVED" ? actorId : null;
+    const archivedAt = status === "ARCHIVED" ? new Date() : null;
+    const result = await this.connection.query(
+      "UPDATE knowledge_sources SET status = ?, updated_by = ?, archived_by = ?, archived_at = ?, updated_at = CURRENT_TIMESTAMP(6) WHERE id = ?",
+      [status, actorId, archivedBy, archivedAt, sourceId],
+    );
+    if (affectedRows(result) !== 1) throw new IntegrityViolationError("Source lifecycle could not be updated.");
+  }
+
   async guardAndAdvanceVersion(sourceId: string, basedOnVersion: number, actorId: string): Promise<number | null> {
     const result = await this.connection.query(
       `UPDATE knowledge_sources
@@ -53,7 +69,7 @@ export class MariaDbSourceRepository implements SourceRepository {
     );
     if (affectedRows(result) !== 1) return null;
     const source = await this.findById(sourceId);
-    if (!source) throw new NotFoundError("Knowledge source was not found after version guard.");
+    if (!source) throw new SourceNotFoundError("Knowledge source was not found after version guard.");
     return source.syncVersion;
   }
 }

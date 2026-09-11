@@ -1,6 +1,6 @@
 import type { KnowledgeTreeNode } from "../domain/tree-node";
 
-export type TreeViewNode = KnowledgeTreeNode & { title: string | null; documentStatus: "ACTIVE" | "ARCHIVED" | null };
+export type TreeViewNode = KnowledgeTreeNode & { title: string | null; documentStatus: "ACTIVE" | "ARCHIVED" | null; currentRevisionId: string | null };
 
 export interface TreeRepository {
   insert(node: KnowledgeTreeNode): Promise<void>;
@@ -10,6 +10,7 @@ export interface TreeRepository {
   updateParent(nodeId: string, parentId: string | null, actorId: string): Promise<void>;
   updateName(nodeId: string, name: string, actorId: string): Promise<void>;
   updatePosition(nodeId: string, position: number, actorId: string): Promise<void>;
+  updateStatus(nodeId: string, status: "ACTIVE" | "ARCHIVED", actorId: string): Promise<void>;
   updateStatusForDocument(documentId: string, status: "ACTIVE" | "ARCHIVED", actorId: string): Promise<void>;
   hasDescendant(nodeId: string, possibleDescendantId: string): Promise<boolean>;
 }

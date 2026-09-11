@@ -3,8 +3,8 @@ import type { Pool } from "mariadb";
 import { databaseConfig } from "@/infrastructure/database/mariadb/config";
 import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
 import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction";
-import { KnowledgeApplicationService } from "@/modules/knowledge/application/service";
-import { SourceApplicationService } from "@/modules/sources/application/source-version-guard";
+import { KnowledgeQueryServiceImpl } from "@/modules/knowledge/application/knowledge-query-service";
+import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
 import { WorkspaceQueryService } from "@/modules/workspaces/application/workspace-query-service";
 import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 import type { UserIdentity } from "@/modules/identity/domain/user-identity";
@@ -47,19 +47,18 @@ describe("Workspace access boundary", () => {
     expect((await workspaceQuery.listWorkspaces(bobCaller)).map((workspace) => workspace.id)).toEqual(expect.arrayContaining([workspaceX, workspaceY]));
     expect(await workspaceQuery.listWorkspaces(carolCaller)).toEqual([]);
 
-    const aliceKnowledge = new KnowledgeApplicationService(uow);
-    const bobKnowledge = new KnowledgeApplicationService(uow);
-    const created = await aliceKnowledge.createHubManagedDocument(aliceCaller, { sourceId, parentId: folderId, title: "Shared", markdown: "body", metadata: {} });
-    await expect(bobKnowledge.getDocument(bobCaller, created.documentId)).resolves.toMatchObject({ document: { id: created.documentId } });
-    await expect(bobKnowledge.listTree(bobCaller, sourceId)).resolves.toHaveLength(1);
+    const bobQueries = new KnowledgeQueryServiceImpl(uow);
+    const hub = new HubKnowledgeCommandServiceImpl(uow);
+    const created = await hub.createDocument(aliceCaller, { sourceId, parentId: folderId, title: "Shared", markdown: "body", metadata: {} });
+    await expect(bobQueries.getDocument(bobCaller, created.documentId)).resolves.toMatchObject({ documentId: created.documentId });
+    await expect(bobQueries.listTree(bobCaller, sourceId)).resolves.toHaveLength(2);
 
-    const carolKnowledge = new KnowledgeApplicationService(uow);
-    await expect(carolKnowledge.getDocument(carolCaller, created.documentId)).rejects.toBeInstanceOf(WorkspaceAccessDeniedError);
-    await expect(carolKnowledge.listTree(carolCaller, sourceId)).rejects.toBeInstanceOf(WorkspaceAccessDeniedError);
+    const carolQueries = new KnowledgeQueryServiceImpl(uow);
+    await expect(carolQueries.getDocument(carolCaller, created.documentId)).rejects.toBeInstanceOf(WorkspaceAccessDeniedError);
+    await expect(carolQueries.listTree(carolCaller, sourceId)).rejects.toBeInstanceOf(WorkspaceAccessDeniedError);
 
-    const sourceService = new SourceApplicationService(uow, aliceKnowledge);
-    expect(await sourceService.listSources(bobCaller, workspaceX)).toHaveLength(1);
-    await expect(sourceService.listSources(carolCaller, workspaceX)).rejects.toBeInstanceOf(WorkspaceAccessDeniedError);
+    expect(await bobQueries.listSources(bobCaller, workspaceX)).toHaveLength(1);
+    await expect(carolQueries.listSources(carolCaller, workspaceX)).rejects.toBeInstanceOf(WorkspaceAccessDeniedError);
   });
 
   it("keeps Workspace membership when a user's org identity changes", async () => {

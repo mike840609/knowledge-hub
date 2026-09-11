@@ -1,13 +1,14 @@
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
-import { VersionConflictError, NotFoundError } from "@/modules/knowledge/domain/errors";
+import { IntegrityViolationError, VersionConflictError, SourceNotFoundError, NotFoundError, SourceEntryConflictError } from "@/modules/knowledge/domain/errors";
 import type { ContentInput } from "@/modules/knowledge/domain/content";
-import { contentFingerprint } from "@/modules/knowledge/domain/content";
-import type { ControlledKnowledgeOperations } from "@/modules/knowledge/application/mutations";
+import { fingerprintRevisionContent } from "@/modules/knowledge/domain/content";
 import type { SourceUnitOfWork } from "../ports/unit-of-work";
 import type { SourceEntry } from "../domain/source-entry";
 import type { KnowledgeAsset } from "../domain/asset";
-import type { KnowledgeSource } from "../domain/source";
+import { bindSourceProjection } from "./source-knowledge-projection-service";
+import { requireSourceManagedSource } from "@/modules/knowledge/application/internal/tree-transaction";
+import { archiveSourceEntry, updateSourceLocator } from "./source-entry-mapping-service";
 
 export type KnownSourceApplyInput = {
   sourceId: string;
@@ -24,27 +25,22 @@ export type KnownSourceApplyInput = {
   failurePoint?: "knowledge" | "entry" | "asset" | "run";
 };
 
-export class SourceApplicationService {
+/**
+ * Phase 1 Source container lifecycle contract (plan §3, verbatim). Archive is
+ * a visibility gate for both ownerships: only the Source row changes status
+ * and provenance, descendants keep their lifecycle values. This is a
+ * container operation and never rewrites SOURCE_MANAGED content.
+ */
+export interface SourceLifecycleCommands {
+  archiveSource(caller: CallerContext, sourceId: string): Promise<void>;
+  restoreSource(caller: CallerContext, sourceId: string): Promise<void>;
+}
+
+export class SourceApplicationService implements SourceLifecycleCommands {
   private readonly unitOfWork: SourceUnitOfWork;
-  private readonly knowledge: ControlledKnowledgeOperations;
 
-  constructor(unitOfWork: SourceUnitOfWork, knowledge: ControlledKnowledgeOperations) {
+  constructor(unitOfWork: SourceUnitOfWork) {
     this.unitOfWork = unitOfWork;
-    this.knowledge = knowledge;
-  }
-
-  async listSources(caller: CallerContext, workspaceId?: string): Promise<KnowledgeSource[]> {
-    const trustedCaller = caller;
-    return this.unitOfWork.run(async (repositories) => {
-      await repositories.users.upsertIdentity(trustedCaller.identity);
-      if (workspaceId) {
-        await repositories.workspaceAccess.requireMembership(trustedCaller, workspaceId);
-        return repositories.sources.findActiveByWorkspaceId(workspaceId);
-      }
-      const workspaces = await repositories.workspaces.listForUser(trustedCaller.identity.id);
-      const sources = await Promise.all(workspaces.map((workspace) => repositories.sources.findActiveByWorkspaceId(workspace.id)));
-      return sources.flat().sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
-    });
   }
 
   async applyKnownEntry(caller: CallerContext, input: KnownSourceApplyInput): Promise<{ runId: string; resultVersion: number; changed: boolean }> {
@@ -53,20 +49,33 @@ export class SourceApplicationService {
       return await this.unitOfWork.run(async (repositories) => {
         await repositories.users.upsertIdentity(caller.identity);
         const source = await repositories.sources.lockById(input.sourceId);
-        if (!source) throw new NotFoundError("The requested Knowledge source was not found.");
+        if (!source) throw new SourceNotFoundError();
         await repositories.workspaceAccess.requireMembership(caller, source.workspaceId);
+        await requireSourceManagedSource(repositories, caller, input.sourceId);
+        const projection = bindSourceProjection(repositories, { id: source.id, workspaceId: source.workspaceId });
         const resultVersion = await repositories.sources.guardAndAdvanceVersion(input.sourceId, input.basedOnVersion, caller.identity.id);
         if (resultVersion === null) throw new VersionConflictError();
+        const stored = await repositories.entries.findById(input.entryId);
+        if (!stored || stored.sourceId !== input.sourceId || stored.documentId !== input.documentId) throw new NotFoundError("Known SourceEntry mapping was not found.");
+        if (input.restore) {
+          await projection.restoreProjectedDocument(caller, input.documentId);
+        }
+        const current = await repositories.revisions.findCurrent(input.documentId);
+        if (!current) throw new IntegrityViolationError("Document current revision is missing.");
+        const knowledgeResult = await projection.projectRevision(caller, { documentId: input.documentId, expectedCurrentRevisionId: current.id, ...input.content });
+        if (input.failurePoint === "knowledge") throw new Error("Injected source apply failure after Knowledge mutation.");
         const entry = await repositories.entries.findById(input.entryId);
         if (!entry || entry.sourceId !== input.sourceId || entry.documentId !== input.documentId) throw new NotFoundError("Known SourceEntry mapping was not found.");
-        const knowledgeResult = await this.knowledge.applySourceManagedMutation(repositories, { documentId: input.documentId, content: input.content, callerId: caller.identity.id, restore: input.restore });
-        if (input.failurePoint === "knowledge") throw new Error("Injected source apply failure after Knowledge mutation.");
+        if (input.externalId !== null && input.externalId !== entry.externalId) {
+          const conflicting = await repositories.entries.findByExternalId(input.sourceId, input.externalId);
+          if (conflicting && conflicting.id !== entry.id) throw new SourceEntryConflictError();
+        }
         const now = new Date();
         const desiredEntry: SourceEntry = {
           ...entry,
           externalId: input.externalId,
           sourcePath: input.sourcePath,
-          contentHash: contentFingerprint(input.content),
+          contentHash: fingerprintRevisionContent(input.content).contentHash,
           status: input.restore ? "ACTIVE" : entry.status,
           updatedBy: caller.identity.id,
           archivedBy: input.restore ? null : entry.archivedBy ?? null,
@@ -97,14 +106,17 @@ export class SourceApplicationService {
       return await this.unitOfWork.run(async (repositories) => {
         await repositories.users.upsertIdentity(caller.identity);
         const source = await repositories.sources.lockById(input.sourceId);
-        if (!source) throw new NotFoundError("The requested Knowledge source was not found.");
+        if (!source) throw new SourceNotFoundError();
         await repositories.workspaceAccess.requireMembership(caller, source.workspaceId);
+        await requireSourceManagedSource(repositories, caller, input.sourceId);
+        const projection = bindSourceProjection(repositories, { id: source.id, workspaceId: source.workspaceId });
         const resultVersion = await repositories.sources.guardAndAdvanceVersion(input.sourceId, input.basedOnVersion, caller.identity.id);
         if (resultVersion === null) throw new VersionConflictError();
         const entry = await repositories.entries.findById(input.entryId);
         if (!entry || entry.sourceId !== input.sourceId || entry.documentId !== input.documentId) throw new NotFoundError("Known SourceEntry mapping was not found.");
-        await this.knowledge.archiveSourceManagedDocument(repositories, input.documentId, caller.identity.id);
-        await repositories.entries.update({ ...entry, sourcePath: input.sourcePath, status: "ARCHIVED", updatedBy: caller.identity.id, archivedBy: caller.identity.id, archivedAt: new Date(), lastSeenAt: new Date() });
+        await projection.archiveProjectedDocument(caller, input.documentId);
+        await archiveSourceEntry(repositories, caller, input.sourceId, input.entryId);
+        await updateSourceLocator(repositories, caller, input.sourceId, input.entryId, input.sourcePath, entry.contentHash);
         const now = new Date();
         await repositories.syncRuns.insert({ id: runId, sourceId: input.sourceId, triggeredBy: caller.identity.id, basedOnVersion: input.basedOnVersion, resultVersion, status: "APPLIED", summary: input.summary ?? { archived: true }, startedAt: now, completedAt: new Date() });
         return { runId, resultVersion };
@@ -115,12 +127,31 @@ export class SourceApplicationService {
     }
   }
 
+  async archiveSource(caller: CallerContext, sourceId: string): Promise<void> {
+    await this.setSourceStatus(caller, sourceId, "ARCHIVED");
+  }
+
+  async restoreSource(caller: CallerContext, sourceId: string): Promise<void> {
+    await this.setSourceStatus(caller, sourceId, "ACTIVE");
+  }
+
+  private async setSourceStatus(caller: CallerContext, sourceId: string, status: "ACTIVE" | "ARCHIVED"): Promise<void> {
+    await this.unitOfWork.run(async (repositories) => {
+      await repositories.users.upsertIdentity(caller.identity);
+      const source = await repositories.sources.lockById(sourceId);
+      if (!source) throw new SourceNotFoundError();
+      await repositories.workspaceAccess.requireMembership(caller, source.workspaceId);
+      if (source.status === status) return;
+      await repositories.sources.updateStatus(sourceId, status, caller.identity.id);
+    });
+  }
+
   async recordFailedRun(input: { id?: string; sourceId: string; caller: CallerContext; basedOnVersion: number; summary: Record<string, unknown> }): Promise<string> {
     const id = input.id ?? uuidv7();
     await this.unitOfWork.run(async (repositories) => {
       await repositories.users.upsertIdentity(input.caller.identity);
       const source = await repositories.sources.findById(input.sourceId);
-      if (!source) throw new NotFoundError("The requested Knowledge source was not found.");
+      if (!source) throw new SourceNotFoundError();
       await repositories.workspaceAccess.requireMembership(input.caller, source.workspaceId);
       await repositories.syncRuns.insert({ id, sourceId: input.sourceId, triggeredBy: input.caller.identity.id, basedOnVersion: input.basedOnVersion, resultVersion: null, status: "FAILED", summary: input.summary, startedAt: new Date(), completedAt: new Date() });
     });
