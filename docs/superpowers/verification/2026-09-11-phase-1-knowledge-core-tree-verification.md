@@ -2,7 +2,9 @@
 
 Date: 2026-09-11 (Asia/Taipei)
 
-Code HEAD verified: `d12c307` (`feat: add workspace-scoped knowledge browser`, Task 9 close).
+Code HEAD verified: `7d09536` (post-PR-review fixes on top of Task 10:
+`e66b822` PR6 blockers + `3060776` P2 fingerprint/history + strict revision
+param validation).
 No production-code changes were made or needed during Task 10; this is a docs-only
 acceptance task on top of Task 9. Any docs-commit SHA after this run is recorded in
 `.superpowers/sdd/2026-09-10-phase-1-knowledge-core-tree-implementation/task-10-report.md`.
@@ -25,9 +27,9 @@ acceptance task on top of Task 9. Any docs-commit SHA after this run is recorded
 | `npm run typecheck` | PASS | strict TypeScript check, no diagnostics |
 | `npm run lint` | PASS | ESLint, zero errors |
 | `npm run test:unit` | PASS | 8 files, 47 tests |
-| `npm run test:integration` | PASS | isolated MariaDB 10.11 databases; 13 files, 109 tests |
+| `npm run test:integration` | PASS | isolated MariaDB 10.11 databases; 13 files, 111 tests |
 | `npm run build` | PASS | Next.js production build (`/`, `/knowledge`, `/knowledge/[documentId]`) |
-| `npm run test:e2e` | PASS | isolated database + production server; Chromium 5/5 |
+| `npm run test:e2e` | PASS | isolated database + production server; 8 E2E tests (5 browser + archived-source active-doc + 2 revision-history) |
 
 Nothing was UNVERIFIED: the MariaDB test host and Chromium were both available,
 so every gate ran for real. Missing DB/browser would have been recorded as
@@ -47,7 +49,7 @@ UNVERIFIED, not passed — that fallback was not needed.
 The concurrency runs used a temporary isolated-DB runner that was deleted
 afterwards; no runner or test code was changed.
 
-## Architecture-boundary audit (all hold at `d12c307`)
+## Architecture-boundary audit (all hold at `7d09536`)
 
 - `src/modules/workspaces/` is present (`application`, `domain`, `ports`).
 - Knowledge/Sources sources contain no `org_code` access-ownership logic
@@ -104,13 +106,16 @@ binary storage|createWorkspace|addMember` return zero non-test matches.
   archive (Task 8 fix, covered by test).
 - Query services work outside React/Next runtime (non-Web caller test).
 
-## E2E result (Chromium 5/5)
+## E2E result (8/8)
 
 1. Workspace → Source → Tree browse, stable Document URL, current revision + history.
 2. Workspace selector switches to SWFP.
 3. Archived documents revealed only with the archived toggle.
 4. Missing document URL → not-found.
 5. Direct unauthorized document URL → denial with zero title/snippet leak.
+6. Active doc under archived Source stays readable in archived mode (`archived-source-active-doc`).
+7. Historical revision selection shows old content (`revision-history`, `?revision=1`).
+8. Unknown revision number → not-found (`revision-history`, `?revision=999`).
 
 ## Phase 2 handoff confirmation
 
@@ -141,9 +146,11 @@ Phase 3 as the deployment gate.
   multi-workspace caller, no-membership denial vault) is seeded and verified.
 - **T8:** two Info notes accepted as-is; the ancestors source-archive gate was
   fixed with a regression test.
-- **T7 HUB-ordering note:** known-entry HUB apply surfaces `VERSION_CONFLICT`
-  before the ownership check — a future task may reorder to check
-  ownership/active first.
+- **T7 HUB-ordering note (RESOLVED in `e66b822`):** known-entry HUB apply
+  surfaced `VERSION_CONFLICT` before the ownership check; authority/lifecycle
+  validation now runs before version advance, HUB_MANAGED + stale version
+  surfaces `HUB_MANAGED_OPERATION_REQUIRED` (pinned in
+  `phase1-source-mapping`).
 - **T6 convention note:** `restoreFolder` bumps `lastSeenAt` while
   `restoreDocument` preserves it — pick one convention (recommend preserve)
   when implementing projected folder restore.
