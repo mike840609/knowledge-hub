@@ -2,7 +2,7 @@ import { uuidv7 } from "@/shared/ids/uuidv7";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { IntegrityViolationError, VersionConflictError, SourceNotFoundError, NotFoundError, SourceEntryConflictError } from "@/modules/knowledge/domain/errors";
 import type { ContentInput } from "@/modules/knowledge/domain/content";
-import { contentFingerprint } from "@/modules/knowledge/domain/content";
+import { fingerprintRevisionContent } from "@/modules/knowledge/domain/content";
 import type { SourceUnitOfWork } from "../ports/unit-of-work";
 import type { SourceEntry } from "../domain/source-entry";
 import type { KnowledgeAsset } from "../domain/asset";
@@ -75,7 +75,7 @@ export class SourceApplicationService implements SourceLifecycleCommands {
           ...entry,
           externalId: input.externalId,
           sourcePath: input.sourcePath,
-          contentHash: contentFingerprint(input.content),
+          contentHash: fingerprintRevisionContent(input.content).contentHash,
           status: input.restore ? "ACTIVE" : entry.status,
           updatedBy: caller.identity.id,
           archivedBy: input.restore ? null : entry.archivedBy ?? null,

@@ -6,7 +6,7 @@ import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction
 import { MariaDbSourceRepository } from "@/infrastructure/database/mariadb/repositories/sources";
 import { SourceApplicationService } from "@/modules/sources/application/source-version-guard";
 import { VersionConflictError } from "@/modules/knowledge/domain/errors";
-import { contentFingerprint } from "@/modules/knowledge/domain/content";
+import { contentFingerprint, fingerprintRevisionContent } from "@/modules/knowledge/domain/content";
 import { createDocumentForAnySource, createEntryFixture, createSourceFixture, fixtureCaller, fixtureIdentity, secondFixtureIdentity } from "../fixtures/knowledge";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 
@@ -156,7 +156,7 @@ describe("SourceEntry and source version safety", () => {
     const fixture = await createSourceFixture(pool, { managed: true });
     const document = await createDocumentForAnySource(pool, fixture.source.id, fixture.folderId);
     const content = { title: "Fixture Document", markdown: "fixture body", metadata: { fixture: true } };
-    const entry = await createEntryFixture(pool, fixture.source.id, document.documentId, "unchanged-external", contentFingerprint(content));
+    const entry = await createEntryFixture(pool, fixture.source.id, document.documentId, "unchanged-external", fingerprintRevisionContent(content).contentHash);
     const beforeEntry = await pool.query("SELECT * FROM source_entries WHERE id = ?", [entry.entryId]);
     const beforeTree = await pool.query("SELECT * FROM knowledge_tree_nodes WHERE source_id = ? ORDER BY id", [fixture.source.id]);
     const beforeRevisions = await pool.query("SELECT * FROM knowledge_revisions WHERE document_id = ? ORDER BY revision_no", [document.documentId]);

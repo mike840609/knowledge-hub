@@ -27,6 +27,7 @@ import {
   updateSourceLocator,
 } from "@/modules/sources/application/source-entry-mapping-service";
 import { SourceApplicationService } from "@/modules/sources/application/source-version-guard";
+import { contentFingerprint, fingerprintRevisionContent } from "@/modules/knowledge/domain/content";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import { disposeIsolatedDatabase, provisionIsolatedDatabase } from "../../scripts/db/test-database";
 import { runMigrations, type IsolatedDatabaseHandle } from "../../scripts/db/migrate";
@@ -558,5 +559,73 @@ describe("source projection authority", () => {
       externalId: null, sourcePath: "docs/managed-apply.md",
     });
     expect(archived.resultVersion).toBe(2);
+  });
+});
+
+describe("source entry fingerprint on successful apply (spec 13.1)", () => {
+  it("stores the candidate new Phase 1 fingerprint after a legacy to new-format successful apply", async () => {
+    const scope = await setupMappingScope();
+    const caller = callerFromIdentity(owner);
+    const original = { title: "Doc", markdown: "v1", metadata: {} };
+    const managed = await new MariaDbUnitOfWork(pool).run(async (repositories) => {
+      const projection = bindSourceProjection(repositories, { id: scope.managedSourceId, workspaceId: scope.workspaceId });
+      return projection.projectDocument(caller, {
+        sourceId: scope.managedSourceId, parentId: scope.managedFolderId,
+        ...original,
+        mapping: { sourceEntryId: uuidv7(), externalId: `fingerprint-${uuidv7()}`, sourcePath: "docs/fingerprint.md" },
+      });
+    });
+    const managedEntryId = (await pool.query<{ id: string }[]>("SELECT id FROM source_entries WHERE tree_node_id = ?", [managed.treeNodeId]))[0].id;
+    const revisionBefore = await new MariaDbUnitOfWork(pool).run((repositories) => repositories.revisions.findCurrent(managed.documentId));
+    const legacyHash = contentFingerprint(original);
+    expect(revisionBefore?.contentHash).not.toBe(legacyHash);
+    await pool.query("UPDATE source_entries SET content_hash = ? WHERE id = ?", [legacyHash, managedEntryId]);
+    const candidate = { title: "  Doc  ", markdown: "v2\r\nline", metadata: {} };
+    const expectedEntryHash = fingerprintRevisionContent(candidate).contentHash;
+    expect(expectedEntryHash).not.toBe(legacyHash);
+    const service = new SourceApplicationService(new MariaDbUnitOfWork(pool));
+    const applied = await service.applyKnownEntry(caller, {
+      sourceId: scope.managedSourceId, basedOnVersion: 0, entryId: managedEntryId, documentId: managed.documentId,
+      externalId: null, sourcePath: "docs/fingerprint.md", content: candidate,
+    });
+    expect(applied).toMatchObject({ resultVersion: 1, changed: true });
+    const entryRows = await pool.query<{ content_hash: string }[]>("SELECT content_hash FROM source_entries WHERE id = ?", [managedEntryId]);
+    expect(entryRows[0].content_hash).toBe(expectedEntryHash);
+    const current = await new MariaDbUnitOfWork(pool).run((repositories) => repositories.revisions.findCurrent(managed.documentId));
+    expect(current?.contentHash).toBe(expectedEntryHash);
+    expect(current).toMatchObject({ title: "Doc", markdown: "v2\nline", revisionNo: 2 });
+    const history = await pool.query<{ revision_no: number; title: string; markdown: string; content_hash: string }[]>(
+      "SELECT revision_no, title, markdown, content_hash FROM knowledge_revisions WHERE document_id = ? ORDER BY revision_no",
+      [managed.documentId],
+    );
+    expect(history).toHaveLength(2);
+    expect(history[0]).toMatchObject({ revision_no: 1, title: original.title, markdown: original.markdown, content_hash: revisionBefore?.contentHash });
+  });
+
+  it("keeps the entry hash stable on a canonical noop apply", async () => {
+    const scope = await setupMappingScope();
+    const caller = callerFromIdentity(owner);
+    const content = { title: "Stable", markdown: "steady body", metadata: {} };
+    const managed = await new MariaDbUnitOfWork(pool).run(async (repositories) => {
+      const projection = bindSourceProjection(repositories, { id: scope.managedSourceId, workspaceId: scope.workspaceId });
+      return projection.projectDocument(caller, {
+        sourceId: scope.managedSourceId, parentId: scope.managedFolderId,
+        ...content,
+        mapping: { sourceEntryId: uuidv7(), externalId: `noop-${uuidv7()}`, sourcePath: "docs/noop.md" },
+      });
+    });
+    const managedEntryId = (await pool.query<{ id: string }[]>("SELECT id FROM source_entries WHERE tree_node_id = ?", [managed.treeNodeId]))[0].id;
+    const beforeEntry = await pool.query<{ content_hash: string }[]>("SELECT content_hash FROM source_entries WHERE id = ?", [managedEntryId]);
+    expect(beforeEntry[0].content_hash).toBe(fingerprintRevisionContent(content).contentHash);
+    const service = new SourceApplicationService(new MariaDbUnitOfWork(pool));
+    const result = await service.applyKnownEntry(caller, {
+      sourceId: scope.managedSourceId, basedOnVersion: 0, entryId: managedEntryId, documentId: managed.documentId,
+      externalId: null, sourcePath: "docs/noop.md", content,
+    });
+    expect(result).toMatchObject({ resultVersion: 1, changed: false });
+    const afterEntry = await pool.query<{ content_hash: string }[]>("SELECT content_hash FROM source_entries WHERE id = ?", [managedEntryId]);
+    expect(afterEntry[0].content_hash).toBe(beforeEntry[0].content_hash);
+    const revisionCount = await pool.query<{ count: number }[]>("SELECT COUNT(*) AS count FROM knowledge_revisions WHERE document_id = ?", [managed.documentId]);
+    expect(Number(revisionCount[0].count)).toBe(1);
   });
 });

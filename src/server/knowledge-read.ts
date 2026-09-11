@@ -56,10 +56,13 @@ export async function getKnowledgeBrowserModel(input: {
   };
 }
 
-export async function getKnowledgeDocumentModel(documentId: string, input: { includeArchived?: boolean } = {}) {
+export async function getKnowledgeDocumentModel(documentId: string, input: { includeArchived?: boolean; revisionNo?: number } = {}) {
   const services = applicationServices();
   const caller = callerFromIdentity(await getCurrentIdentity(services.identityProvider));
   const view = await services.queries.getDocument(caller, documentId, { includeArchived: input.includeArchived });
   const revisions = await services.queries.listRevisions(caller, documentId, { includeArchived: input.includeArchived });
-  return { view, revisions };
+  const selectedRevision = input.revisionNo === undefined
+    ? view.currentRevision
+    : await services.queries.getRevision(caller, documentId, input.revisionNo, { includeArchived: input.includeArchived });
+  return { view, revisions, selectedRevision };
 }
