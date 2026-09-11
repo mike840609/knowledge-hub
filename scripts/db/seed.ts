@@ -22,9 +22,13 @@ export const BROWSER_FIXTURE_IDS = {
   obsidianWikiSource: "0199f100-0000-7000-8000-000000000101",
   swfpSource: "0199f100-0000-7000-8000-000000000102",
   restrictedSource: "0199f100-0000-7000-8000-000000000103",
+  archivedWikiSource: "0199f100-0000-7000-8000-000000000104",
   secretDocument: "0199f100-0000-7000-8000-000000000201",
   secretRevision: "0199f100-0000-7000-8000-000000000202",
   secretNode: "0199f100-0000-7000-8000-000000000203",
+  archivedActiveDocument: "0199f100-0000-7000-8000-000000000204",
+  archivedActiveRevision: "0199f100-0000-7000-8000-000000000205",
+  archivedActiveNode: "0199f100-0000-7000-8000-000000000206",
 };
 
 /** Mirrored literally in tests/e2e/knowledge-browser.spec.ts (Playwright cannot resolve `@/` aliases). */
@@ -40,6 +44,9 @@ export const BROWSER_FIXTURES = {
   swfpBody: "Onboarding notes for the SWFP workspace.",
   secretTitle: "Restricted Secret Plan",
   secretBody: "restricted-secret-body-9f31",
+  archivedSourceName: "Retired Wiki",
+  archivedActiveTitle: "Still Readable",
+  archivedActiveBody: "Active notes inside an archived source stay readable with the archived flag.",
 };
 
 async function ensureWorkspace(repositories: SourceRepositories, id: string, name: string, now: Date): Promise<void> {
@@ -121,6 +128,38 @@ async function seedBrowserFixtures(pool: ReturnType<typeof createDatabasePool>, 
       title: BROWSER_FIXTURES.swfpTitle, markdown: BROWSER_FIXTURES.swfpBody, metadata: {},
     });
   }
+  // Archived Source + ACTIVE child doc stays readable only with includeArchived=true.
+  await unitOfWork.run(async (repositories) => {
+    const existing = await repositories.sources.findById(BROWSER_FIXTURE_IDS.archivedWikiSource);
+    if (!existing) {
+      await repositories.sources.insert({
+        id: BROWSER_FIXTURE_IDS.archivedWikiSource, name: BROWSER_FIXTURES.archivedSourceName,
+        workspaceId: BROWSER_FIXTURE_IDS.queryMasterWorkspace, sourceType: "HUB", ownership: "HUB_MANAGED",
+        status: "ARCHIVED", syncVersion: 0, createdBy: identity.id, updatedBy: identity.id,
+        archivedBy: identity.id, archivedAt: now, createdAt: now, updatedAt: now,
+      });
+    } else if (existing.status !== "ARCHIVED") {
+      await repositories.sources.updateStatus(BROWSER_FIXTURE_IDS.archivedWikiSource, "ARCHIVED", identity.id);
+    }
+    if (!(await repositories.documents.findById(BROWSER_FIXTURE_IDS.archivedActiveDocument))) {
+      const content = { title: BROWSER_FIXTURES.archivedActiveTitle, markdown: BROWSER_FIXTURES.archivedActiveBody, metadata: {} };
+      await repositories.documents.insertDraft({
+        id: BROWSER_FIXTURE_IDS.archivedActiveDocument, sourceId: BROWSER_FIXTURE_IDS.archivedWikiSource, currentRevisionId: null,
+        status: "ACTIVE", createdBy: identity.id, updatedBy: identity.id, archivedBy: null, archivedAt: null, createdAt: now, updatedAt: now,
+      });
+      await repositories.revisions.insert({
+        id: BROWSER_FIXTURE_IDS.archivedActiveRevision, documentId: BROWSER_FIXTURE_IDS.archivedActiveDocument, revisionNo: 1,
+        ...content, contentHash: contentFingerprint(content), createdBy: identity.id, createdAt: now,
+      });
+      await repositories.documents.setCurrentRevision(BROWSER_FIXTURE_IDS.archivedActiveDocument, BROWSER_FIXTURE_IDS.archivedActiveRevision, identity.id);
+      await repositories.tree.insert({
+        id: BROWSER_FIXTURE_IDS.archivedActiveNode, sourceId: BROWSER_FIXTURE_IDS.archivedWikiSource, parentId: null,
+        nodeType: "DOCUMENT", name: null, documentId: BROWSER_FIXTURE_IDS.archivedActiveDocument, position: 0,
+        status: "ACTIVE", updatedBy: identity.id, archivedBy: null, archivedAt: null,
+      });
+      await repositories.documents.assertComplete(BROWSER_FIXTURE_IDS.archivedActiveDocument);
+    }
+  });
 }
 
 export async function seedDevelopmentDatabase(): Promise<void> {

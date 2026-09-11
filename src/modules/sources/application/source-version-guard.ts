@@ -7,6 +7,7 @@ import type { SourceUnitOfWork } from "../ports/unit-of-work";
 import type { SourceEntry } from "../domain/source-entry";
 import type { KnowledgeAsset } from "../domain/asset";
 import { bindSourceProjection } from "./source-knowledge-projection-service";
+import { requireSourceManagedSource } from "@/modules/knowledge/application/internal/tree-transaction";
 import { archiveSourceEntry, updateSourceLocator } from "./source-entry-mapping-service";
 
 export type KnownSourceApplyInput = {
@@ -50,11 +51,12 @@ export class SourceApplicationService implements SourceLifecycleCommands {
         const source = await repositories.sources.lockById(input.sourceId);
         if (!source) throw new SourceNotFoundError();
         await repositories.workspaceAccess.requireMembership(caller, source.workspaceId);
+        await requireSourceManagedSource(repositories, caller, input.sourceId);
+        const projection = bindSourceProjection(repositories, { id: source.id, workspaceId: source.workspaceId });
         const resultVersion = await repositories.sources.guardAndAdvanceVersion(input.sourceId, input.basedOnVersion, caller.identity.id);
         if (resultVersion === null) throw new VersionConflictError();
         const stored = await repositories.entries.findById(input.entryId);
         if (!stored || stored.sourceId !== input.sourceId || stored.documentId !== input.documentId) throw new NotFoundError("Known SourceEntry mapping was not found.");
-        const projection = bindSourceProjection(repositories, { id: source.id, workspaceId: source.workspaceId });
         if (input.restore) {
           await projection.restoreProjectedDocument(caller, input.documentId);
         }
@@ -106,11 +108,12 @@ export class SourceApplicationService implements SourceLifecycleCommands {
         const source = await repositories.sources.lockById(input.sourceId);
         if (!source) throw new SourceNotFoundError();
         await repositories.workspaceAccess.requireMembership(caller, source.workspaceId);
+        await requireSourceManagedSource(repositories, caller, input.sourceId);
+        const projection = bindSourceProjection(repositories, { id: source.id, workspaceId: source.workspaceId });
         const resultVersion = await repositories.sources.guardAndAdvanceVersion(input.sourceId, input.basedOnVersion, caller.identity.id);
         if (resultVersion === null) throw new VersionConflictError();
         const entry = await repositories.entries.findById(input.entryId);
         if (!entry || entry.sourceId !== input.sourceId || entry.documentId !== input.documentId) throw new NotFoundError("Known SourceEntry mapping was not found.");
-        const projection = bindSourceProjection(repositories, { id: source.id, workspaceId: source.workspaceId });
         await projection.archiveProjectedDocument(caller, input.documentId);
         await archiveSourceEntry(repositories, caller, input.sourceId, input.entryId);
         await updateSourceLocator(repositories, caller, input.sourceId, input.entryId, input.sourcePath, entry.contentHash);

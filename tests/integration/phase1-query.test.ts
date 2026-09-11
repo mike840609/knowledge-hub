@@ -202,7 +202,7 @@ describe("knowledge query archived filtering", () => {
     const { queries, sources } = queryServices();
     const member = callerFromIdentity(hrMember);
     await sources.archiveSource(member, scope.sourceX);
-    expect(await queries.getAncestors(member, scope.documentNodeId)).toEqual([]);
+    await expect(queries.getAncestors(member, scope.documentNodeId)).rejects.toMatchObject({ code: "TREE_NODE_NOT_FOUND" });
     const chain = await queries.getAncestors(member, scope.documentNodeId, { includeArchived: true });
     expect(chain.map((item) => item.id)).toEqual([scope.folderX, scope.childFolderId]);
   });

@@ -209,7 +209,7 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
       if (!node) throw new TreeNodeNotFoundError();
       const policy = await requireSourcePolicy(repositories, node.sourceId);
       await repositories.workspaceAccess.requireMembership(caller, policy.workspaceId);
-      if (!includeArchived && policy.status !== "ACTIVE") return [];
+      if (!includeArchived && policy.status !== "ACTIVE") throw new TreeNodeNotFoundError();
       if (!includeArchived && node.status !== "ACTIVE") throw new TreeNodeNotFoundError();
       const chain = collectAncestors(await repositories.tree.listBySource(node.sourceId), nodeId);
       return chain.flatMap((ancestor) => {

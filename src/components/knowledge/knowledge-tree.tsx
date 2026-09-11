@@ -20,7 +20,7 @@ function nest(items: KnowledgeTreeItem[]): TreeNode[] {
 function TreeBranch({ node, includeArchived }: { node: TreeNode; includeArchived: boolean }) {
   const { item } = node;
   if (item.type === "document") {
-    const href = includeArchived && item.status === "ARCHIVED" ? `/knowledge/${item.documentId}?includeArchived=true` : `/knowledge/${item.documentId}`;
+    const href = includeArchived ? `/knowledge/${item.documentId}?includeArchived=true` : `/knowledge/${item.documentId}`;
     return <li className="py-1 pl-5 text-sm"><Link className="text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-accent" href={href}>{item.label}</Link></li>;
   }
   return (

@@ -13,7 +13,6 @@ import {
   InvalidSourceMappingError,
   SourceEntryConflictError,
   TreeNodeNotFoundError,
-  VersionConflictError,
 } from "@/modules/knowledge/domain/errors";
 import { WorkspaceAccessDeniedError } from "@/modules/workspaces/domain/errors";
 import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
@@ -529,8 +528,17 @@ describe("source projection authority", () => {
       (): null => null,
       (caught: unknown) => caught,
     );
-    expect(hubApply).toBeInstanceOf(VersionConflictError);
-    expect((hubApply as VersionConflictError).code).toBe("VERSION_CONFLICT");
+    expect(hubApply).toBeInstanceOf(HubManagedOperationRequiredError);
+    expect((hubApply as HubManagedOperationRequiredError).code).toBe("HUB_MANAGED_OPERATION_REQUIRED");
+    const hubStaleApply = await service.applyKnownEntry(caller, {
+      sourceId: scope.hubSourceId, basedOnVersion: 999, entryId: hubEntryId, documentId: hubDoc.documentId,
+      externalId: null, sourcePath: "docs/hub.md", content: { title: "Hub Doc", markdown: "changed", metadata: {} },
+    }).then(
+      (): null => null,
+      (caught: unknown) => caught,
+    );
+    expect(hubStaleApply).toBeInstanceOf(HubManagedOperationRequiredError);
+    expect((hubStaleApply as HubManagedOperationRequiredError).code).toBe("HUB_MANAGED_OPERATION_REQUIRED");
     const managed = await new MariaDbUnitOfWork(pool).run(async (repositories) => {
       const projection = bindSourceProjection(repositories, { id: scope.managedSourceId, workspaceId: scope.workspaceId });
       return projection.projectDocument(caller, {
