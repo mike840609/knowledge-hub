@@ -4,62 +4,61 @@
 
 **Goal:** Build the Phase 2 whole-folder Markdown import and re-sync flow from raw browser folder input through immutable Preview to one atomic `SOURCE_MANAGED` canonical Apply.
 
-**Architecture:** Keep ingestion inside the existing Sources module. Browser input becomes a persisted staging snapshot, server-side parsing produces canonical entries, a pure reconciler produces a persisted deterministic `FolderImportPlan`, and `ApplyFolderImportService` executes that plan through the existing Phase 1 transaction-bound projection/mapping primitives inside one `READ COMMITTED` Source transaction. The Web layer remains an adapter: identity comes from the trusted provider, `/knowledge` launches import/sync, and `/knowledge/imports/[snapshotId]` renders the persisted Preview.
+**Architecture:** Keep ingestion inside the existing Sources module. Browser input becomes a persisted staging snapshot; server-side parsing creates canonical staging entries; a pure reconciler produces a persisted deterministic `FolderImportPlan`; `ApplyFolderImportService` executes only that persisted plan through existing Phase 1 transaction-bound projection/mapping primitives inside one `READ COMMITTED` Source transaction. The Web layer remains an adapter: identity comes from the trusted provider, `/knowledge` launches import/sync, and `/knowledge/imports/[snapshotId]` renders persisted Preview state.
 
-**Tech Stack:** Next.js 15.5, React 19, TypeScript 5.7 strict mode, MariaDB 10.11/native UUID, `mariadb`, Vitest, Playwright, npm/package-lock, `yaml`, `mdast-util-from-markdown`, `mdast-util-to-string`, existing shadcn/base-ui components and Tailwind.
+**Tech Stack:** Next.js 15.5, React 19, TypeScript 5.7 strict mode, MariaDB/native UUID, `mariadb`, Vitest, Playwright, npm/package-lock, `yaml`, `mdast-util-from-markdown`, `mdast-util-to-string`, existing Base UI/shadcn-style components and Tailwind.
 
 **Spec:** `docs/superpowers/specs/2026-09-12-phase-2-knowledge-source-import-sync-design.md`
 
 ## Global Constraints
 
 - Node engine remains `>=20.9.0 <25`; use npm and commit `package-lock.json`.
-- MariaDB remains canonical storage and existing UUIDv7/application-generated IDs remain the stable-ID contract.
-- Phase 2 only implements Knowledge Source Import & Sync; production SSO, Workspace administration, MCP, search/embedding, Agent Memory, watchers, bidirectional sync, merge editing, and binary storage remain out of scope.
+- MariaDB remains canonical storage and stable entity IDs remain application-generated UUIDv7 stored in MariaDB native `UUID`.
+- Phase 2 only implements Knowledge Source Import & Sync. Production SSO, Workspace administration, MCP, search/embedding, Agent Memory, watchers, bidirectional sync, merge editing, and binary storage remain out of scope.
 - Source folder is authority for `SOURCE_MANAGED` content. Hub Preview never edits source-managed Markdown.
 - Scanner/parser/finalizer may write staging only; canonical Knowledge mutations occur only in Apply.
 - READY snapshots and their persisted plans are immutable. Apply never re-reads the local folder, reparses upload bytes, or re-runs reconciliation.
 - Generic Markdown adapter never infers `external_id` from frontmatter `id`, `uuid`, `slug`, or similar fields.
-- Markdown canonical content is `resolved title + body Markdown without frontmatter + canonical metadata`.
+- Canonical Markdown content is `resolved title + body Markdown without YAML frontmatter + canonical metadata`.
 - Reconciliation fingerprint is `body Markdown + canonical metadata`, intentionally excluding resolved title.
-- Identity matching order is external ID, exact normalized path, unique unmatched reconciliation fingerprint, then new identity. Ambiguity is never guessed.
+- Document identity matching order is external ID, exact normalized path, unique unmatched reconciliation fingerprint, then new identity. Ambiguity is never guessed.
 - Generic folder identity is exact normalized folder path only. Empty directories are not preserved.
 - Assets are current metadata/reference projection only; binary bytes are not stored and asset rename/move is not inferred by hash.
-- Existing-source Apply locks snapshot then Source and keeps `READ COMMITTED`; no Redis/distributed lock or force apply is introduced.
+- Existing-source Apply locks snapshot then Source and keeps `READ COMMITTED`; no Redis/distributed lock or Force Apply is introduced.
 - One successful Confirm, including an all-UNCHANGED no-op sync, advances `sync_version` exactly once and writes exactly one APPLIED SyncRun.
 - Blocking diagnostics prevent Apply; warnings do not. Partial canonical success is forbidden.
-- Snapshot access is creator-private and every mutating operation re-checks current Workspace membership.
-- Default import limits are exactly: 20,000 manifest entries; 2 KiB normalized UTF-8 path; 5 MiB per Markdown file; 256 MiB total Markdown; 256 KiB parsed metadata per document; 20 files / 10 MiB per upload batch; 3 BUILDING snapshots/user; 10 READY snapshots/user.
+- Snapshot access is creator-private and every read/upload/finalize/apply re-checks current Workspace membership.
+- Default import limits are exactly: 20,000 manifest entries; 2 KiB normalized UTF-8 path; 5 MiB per Markdown file; 256 MiB total Markdown; 256 KiB parsed metadata per document; 20 files / 10 MiB per upload batch; 3 active BUILDING snapshots/user; 10 active READY snapshots/user.
 - Default retention is exactly: BUILDING 2 hours; READY 30 minutes after finalize; STALE 24 hours; APPLIED 24 hours.
-- Implementation follows TDD. Do not expose test-only fault injection through HTTP or UI.
+- Implementation follows TDD. Test-only fault injection must never be reachable from server/HTTP/UI code.
 
 ---
 
-## File Structure to Lock In Before Coding
-
-Create or modify these responsibility-focused files. Do not collapse the import pipeline into `source-version-guard.ts` or a single route component.
+## File Structure
 
 ```text
 src/modules/sources/
 ├─ adapters/
-│  └─ generic-markdown-folder-adapter.ts      # safe UTF-8/frontmatter/AST parsing
+│  └─ generic-markdown-folder-adapter.ts
 ├─ domain/
-│  ├─ import-errors.ts                        # stable Phase 2 domain error codes
-│  ├─ import-diagnostic.ts                    # WARNING/BLOCKING diagnostic shape
-│  ├─ import-limits.ts                        # exact defaults + limit type
-│  ├─ import-path.ts                          # normalization, ignore rules, path hash
-│  ├─ import-snapshot.ts                      # manifest/staging/preview domain types
-│  ├─ import-plan.ts                          # persisted action-plan contract
-│  ├─ import-reconciler.ts                    # pure deterministic reconciliation
-│  ├─ import-title.ts                         # title resolution
-│  └─ reconciliation-fingerprint.ts           # body+metadata identity fingerprint
+│  ├─ import-errors.ts
+│  ├─ import-diagnostic.ts
+│  ├─ import-limits.ts
+│  ├─ import-path.ts
+│  ├─ import-snapshot.ts
+│  ├─ import-title.ts
+│  ├─ reconciliation-fingerprint.ts
+│  ├─ import-plan.ts
+│  └─ import-reconciler.ts
 ├─ application/
-│  ├─ create-folder-import.ts                 # initial/resync BUILDING session creation
-│  ├─ upload-folder-import-entries.ts         # raw-byte idempotent Markdown upload
-│  ├─ reconcile-import-snapshot.ts            # load canonical state + pure reconcile
-│  ├─ finalize-folder-import.ts               # BUILDING -> READY
-│  ├─ source-import-plan-executor.ts           # execute persisted plan in open UoW
-│  ├─ apply-folder-import.ts                  # lock/version/SyncRun atomic orchestration
-│  └─ cleanup-folder-imports.ts               # bounded staging cleanup
+│  ├─ create-folder-import.ts
+│  ├─ upload-folder-import-entries.ts
+│  ├─ reconcile-import-snapshot.ts
+│  ├─ finalize-folder-import.ts
+│  ├─ get-folder-import-preview.ts
+│  ├─ source-import-plan-executor.ts
+│  ├─ apply-folder-import.ts
+│  └─ cleanup-folder-imports.ts
 └─ ports/
    ├─ import-snapshot-repository.ts
    ├─ import-snapshot-entry-repository.ts
@@ -129,7 +128,7 @@ tests/
 
 ---
 
-### Task 1: Generic Markdown Adapter and Pure Import Primitives
+### Task 1: Safe Generic Markdown Adapter and Import Primitives
 
 **Files:**
 - Modify: `package.json`
@@ -145,27 +144,21 @@ tests/
 - Test: `tests/unit/phase2-import-parser.test.ts`
 
 **Interfaces:**
-- Consumes: `KnowledgeMetadata`, `canonicalizeJsonObject()`, and `fingerprintRevisionContent()` from `src/modules/knowledge/domain/content.ts`.
-- Produces:
 
 ```ts
-export type ImportSeverity = "WARNING" | "BLOCKING";
-
 export type ImportDiagnostic = {
   code: string;
-  severity: ImportSeverity;
+  severity: "WARNING" | "BLOCKING";
   sourcePath: string | null;
   message: string;
   details?: Record<string, unknown>;
 };
 
-export type ImportTitleSource = "FRONTMATTER" | "H1" | "FILENAME";
-
 export type ParsedMarkdownEntry = {
   sourcePath: string;
   externalId: null;
   resolvedTitle: string;
-  titleSource: ImportTitleSource;
+  titleSource: "FRONTMATTER" | "H1" | "FILENAME";
   markdown: string;
   metadata: KnowledgeMetadata;
   revisionContentHash: string;
@@ -181,7 +174,7 @@ export function parseGenericMarkdownText(input: { sourcePath: string; text: stri
 export function fingerprintReconciliationContent(input: { markdown: string; metadata: KnowledgeMetadata }): string;
 ```
 
-- [ ] **Step 1: Install the parser dependencies and write the failing parser/path/fingerprint tests**
+- [ ] **Step 1: Install parser dependencies and write failing tests**
 
 Run:
 
@@ -189,91 +182,75 @@ Run:
 npm install yaml mdast-util-from-markdown mdast-util-to-string
 ```
 
-Create `tests/unit/phase2-import-parser.test.ts` with focused tests that pin every parser contract before implementation:
+Create `tests/unit/phase2-import-parser.test.ts`:
 
 ```ts
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { decodeUtf8Markdown, parseGenericMarkdownText } from "@/modules/sources/adapters/generic-markdown-folder-adapter";
-import { normalizeImportPath, isIgnoredImportPath } from "@/modules/sources/domain/import-path";
-import { fingerprintReconciliationContent } from "@/modules/sources/domain/reconciliation-fingerprint";
+import { isIgnoredImportPath, normalizeImportPath } from "@/modules/sources/domain/import-path";
 
-function sha256(value: string): string {
-  return createHash("sha256").update(value, "utf8").digest("hex");
-}
+const hash = (value: string) => createHash("sha256").update(value, "utf8").digest("hex");
 
-describe("Phase 2 import path rules", () => {
-  it("normalizes separators and dot segments but preserves case", () => {
+describe("Phase 2 import path", () => {
+  it("normalizes separators/dot segments and preserves case", () => {
     expect(normalizeImportPath("Docs\\./K8s/Ingress.MD").sourcePath).toBe("Docs/K8s/Ingress.MD");
   });
 
-  it("rejects root escape, absolute paths, NUL, and control characters", () => {
-    for (const path of ["../secret.md", "/etc/passwd", "C:\\secret.md", "a\u0000b.md", "a\u001fb.md", "a\u007fb.md"]) {
-      expect(() => normalizeImportPath(path)).toThrowError(expect.objectContaining({ code: "INVALID_SOURCE_PATH" }));
+  it("rejects unsafe relative/absolute/control-character paths", () => {
+    for (const value of ["../x.md", "/x.md", "C:\\x.md", "a\u0000b.md", "a\u001fb.md", "a\u007fb.md"]) {
+      expect(() => normalizeImportPath(value)).toThrowError(expect.objectContaining({ code: "INVALID_SOURCE_PATH" }));
     }
   });
 
-  it("ignores fixed hidden/system paths", () => {
-    for (const path of [".git/config", ".obsidian/app.json", "node_modules/a.md", "docs/.cache/a.md", ".DS_Store", "Thumbs.db"]) {
-      expect(isIgnoredImportPath(path)).toBe(true);
+  it("ignores fixed system and hidden paths", () => {
+    for (const value of [".git/config", ".obsidian/app.json", "node_modules/a.md", "docs/.cache/a.md", ".DS_Store", "Thumbs.db"]) {
+      expect(isIgnoredImportPath(value)).toBe(true);
     }
-    expect(isIgnoredImportPath("docs/visible.md")).toBe(false);
+    expect(isIgnoredImportPath("docs/a.md")).toBe(false);
   });
 });
 
-describe("Phase 2 Markdown parsing", () => {
-  it("accepts UTF-8 BOM and rejects invalid UTF-8", () => {
+describe("Phase 2 Markdown adapter", () => {
+  it("accepts BOM and rejects invalid UTF-8", () => {
     expect(decodeUtf8Markdown(new Uint8Array([0xef, 0xbb, 0xbf, 0x23, 0x20, 0x41]))).toBe("# A");
     expect(() => decodeUtf8Markdown(new Uint8Array([0xc3, 0x28]))).toThrowError(expect.objectContaining({ code: "INVALID_MARKDOWN_ENCODING" }));
   });
 
-  it("uses frontmatter title, stores body separately, and warns on H1 conflict", () => {
+  it("separates frontmatter, prefers frontmatter title, and warns on H1 conflict", () => {
     const text = "---\ntitle: Canonical\ntags: [b, a]\n---\n# Different\n\nBody\n";
-    const parsed = parseGenericMarkdownText({ sourcePath: "docs/a.md", text, sourceFileHash: sha256(text) });
-    expect(parsed.resolvedTitle).toBe("Canonical");
-    expect(parsed.titleSource).toBe("FRONTMATTER");
-    expect(parsed.markdown).toBe("# Different\n\nBody\n");
-    expect(parsed.metadata).toEqual({ tags: ["b", "a"], title: "Canonical" });
-    expect(parsed.diagnostics.map((item) => item.code)).toContain("TITLE_CONFLICT");
+    const result = parseGenericMarkdownText({ sourcePath: "docs/a.md", text, sourceFileHash: hash(text) });
+    expect(result.resolvedTitle).toBe("Canonical");
+    expect(result.markdown).toBe("# Different\n\nBody\n");
+    expect(result.metadata).toEqual({ tags: ["b", "a"], title: "Canonical" });
+    expect(result.diagnostics.map((item) => item.code)).toContain("TITLE_CONFLICT");
   });
 
-  it("uses the first real H1 and ignores fenced-code pseudo headings", () => {
-    const text = "```md\n# Fake\n```\n\n# Real Heading\n";
-    const parsed = parseGenericMarkdownText({ sourcePath: "docs/a.md", text, sourceFileHash: sha256(text) });
-    expect(parsed.resolvedTitle).toBe("Real Heading");
-    expect(parsed.titleSource).toBe("H1");
+  it("uses the first real H1 instead of fenced-code text", () => {
+    const text = "```md\n# Fake\n```\n\n# Real\n";
+    expect(parseGenericMarkdownText({ sourcePath: "a.md", text, sourceFileHash: hash(text) }).resolvedTitle).toBe("Real");
   });
 
-  it("falls back to the filename stem without prettifying", () => {
-    const text = "No heading\n";
-    const parsed = parseGenericMarkdownText({ sourcePath: "docs/k8s-ingress.md", text, sourceFileHash: sha256(text) });
-    expect(parsed.resolvedTitle).toBe("k8s-ingress");
-    expect(parsed.titleSource).toBe("FILENAME");
-  });
-
-  it("keeps reconciliation fingerprint stable across filename-derived title rename", () => {
-    const left = parseGenericMarkdownText({ sourcePath: "foo.md", text: "body\n", sourceFileHash: sha256("body\n") });
-    const right = parseGenericMarkdownText({ sourcePath: "bar.md", text: "body\n", sourceFileHash: sha256("body\n") });
+  it("keeps reconciliation fingerprint stable when filename-derived title changes", () => {
+    const left = parseGenericMarkdownText({ sourcePath: "foo.md", text: "body\n", sourceFileHash: hash("body\n") });
+    const right = parseGenericMarkdownText({ sourcePath: "bar.md", text: "body\n", sourceFileHash: hash("body\n") });
     expect(left.reconciliationFingerprint).toBe(right.reconciliationFingerprint);
     expect(left.revisionContentHash).not.toBe(right.revisionContentHash);
-    expect(fingerprintReconciliationContent({ markdown: left.markdown, metadata: left.metadata })).toBe(left.reconciliationFingerprint);
   });
 });
 ```
 
-- [ ] **Step 2: Run the tests and verify the new imports/functions do not exist yet**
-
-Run:
+- [ ] **Step 2: Run the failing test**
 
 ```bash
 npm run test:unit -- tests/unit/phase2-import-parser.test.ts
 ```
 
-Expected: FAIL because the Phase 2 domain/adapter modules are not defined.
+Expected: FAIL because the Phase 2 modules do not exist.
 
-- [ ] **Step 3: Implement the pure import errors, limits, path rules, title resolution, fingerprints, and adapter**
+- [ ] **Step 3: Implement errors, limits, normalization, title resolution, fingerprints, and parser**
 
-Create `src/modules/sources/domain/import-errors.ts`:
+`src/modules/sources/domain/import-errors.ts`:
 
 ```ts
 import { DomainError } from "@/shared/domain/errors";
@@ -285,26 +262,10 @@ export class SourceImportError extends DomainError {
   }
 }
 
-export function importError(code: string, message: string): SourceImportError {
-  return new SourceImportError(code, message);
-}
+export const importError = (code: string, message: string) => new SourceImportError(code, message);
 ```
 
-Create `src/modules/sources/domain/import-diagnostic.ts`:
-
-```ts
-export type ImportSeverity = "WARNING" | "BLOCKING";
-
-export type ImportDiagnostic = {
-  code: string;
-  severity: ImportSeverity;
-  sourcePath: string | null;
-  message: string;
-  details?: Record<string, unknown>;
-};
-```
-
-Create `src/modules/sources/domain/import-limits.ts`:
+`src/modules/sources/domain/import-limits.ts`:
 
 ```ts
 export type ImportLimits = {
@@ -332,7 +293,7 @@ export const DEFAULT_IMPORT_LIMITS: ImportLimits = {
 };
 ```
 
-Create `src/modules/sources/domain/import-path.ts` with a SHA-256 helper and strict normalization. The Windows-drive check must run before converting backslashes so `C:\\x` cannot become a relative-looking `C:/x`:
+`src/modules/sources/domain/import-path.ts`:
 
 ```ts
 import { createHash } from "node:crypto";
@@ -341,13 +302,16 @@ import { importError } from "./import-errors";
 const CONTROL = /[\u0000-\u001f\u007f]/u;
 const WINDOWS_ABSOLUTE = /^[A-Za-z]:[\\/]/u;
 
+export function compareImportText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 export function normalizeImportPath(rawPath: string): { sourcePath: string; sourcePathHash: string } {
-  if (!rawPath || CONTROL.test(rawPath) || rawPath.startsWith("/") || WINDOWS_ABSOLUTE.test(rawPath)) {
+  if (!rawPath || rawPath.startsWith("/") || WINDOWS_ABSOLUTE.test(rawPath) || CONTROL.test(rawPath)) {
     throw importError("INVALID_SOURCE_PATH", "Source paths must be safe relative paths.");
   }
-  const parts = rawPath.replace(/\\/g, "/").split("/");
   const normalized: string[] = [];
-  for (const part of parts) {
+  for (const part of rawPath.replace(/\\/g, "/").split("/")) {
     if (part === "" || part === ".") continue;
     if (part === "..") throw importError("INVALID_SOURCE_PATH", "Source paths cannot escape the selected folder.");
     normalized.push(part);
@@ -359,158 +323,48 @@ export function normalizeImportPath(rawPath: string): { sourcePath: string; sour
 
 export function isIgnoredImportPath(sourcePath: string): boolean {
   const parts = sourcePath.replace(/\\/g, "/").split("/").filter(Boolean);
-  if (parts.some((part) => part.startsWith("."))) return true;
-  if (parts.includes("node_modules")) return true;
-  const leaf = parts.at(-1);
-  return leaf === ".DS_Store" || leaf === "Thumbs.db";
+  return parts.some((part) => part.startsWith(".")) || parts.includes("node_modules") || parts.at(-1) === "Thumbs.db";
 }
 ```
 
-Create `src/modules/sources/domain/reconciliation-fingerprint.ts`:
+`src/modules/sources/domain/reconciliation-fingerprint.ts`:
 
 ```ts
 import { createHash } from "node:crypto";
 import { canonicalizeJsonObject, type KnowledgeMetadata } from "@/modules/knowledge/domain/content";
 
-const PREFIX = "knowledge-import-reconcile:v1";
-
 export function fingerprintReconciliationContent(input: { markdown: string; metadata: KnowledgeMetadata }): string {
-  const payload = JSON.stringify({
-    markdown: input.markdown.replace(/\r\n/g, "\n"),
-    metadata: canonicalizeJsonObject(input.metadata),
-  });
-  return createHash("sha256").update(`${PREFIX}\0${payload}`, "utf8").digest("hex");
+  const payload = JSON.stringify({ markdown: input.markdown.replace(/\r\n/g, "\n"), metadata: canonicalizeJsonObject(input.metadata) });
+  return createHash("sha256").update(`knowledge-import-reconcile:v1\0${payload}`, "utf8").digest("hex");
 }
 ```
 
-Create `src/modules/sources/domain/import-title.ts` with the approved priority and warning semantics:
+`src/modules/sources/domain/import-title.ts`:
 
 ```ts
 import type { ImportDiagnostic } from "./import-diagnostic";
-
-export type ImportTitleSource = "FRONTMATTER" | "H1" | "FILENAME";
-
-export function resolveImportTitle(input: {
-  sourcePath: string;
-  frontmatterTitle: unknown;
-  firstH1: string | null;
-}): { title: string; source: ImportTitleSource; diagnostics: ImportDiagnostic[] } {
-  const diagnostics: ImportDiagnostic[] = [];
-  const frontmatterTitle = typeof input.frontmatterTitle === "string" ? input.frontmatterTitle.trim() : "";
-  if (input.frontmatterTitle !== undefined && !frontmatterTitle) {
-    diagnostics.push({ code: "INVALID_FRONTMATTER_TITLE", severity: "WARNING", sourcePath: input.sourcePath, message: "frontmatter.title must be a non-empty string; falling back." });
-  }
-  const h1 = input.firstH1?.trim() || null;
-  if (frontmatterTitle) {
-    if (h1 && h1 !== frontmatterTitle) diagnostics.push({ code: "TITLE_CONFLICT", severity: "WARNING", sourcePath: input.sourcePath, message: "frontmatter.title differs from the first H1; frontmatter.title wins.", details: { frontmatterTitle, h1 } });
-    return { title: frontmatterTitle, source: "FRONTMATTER", diagnostics };
-  }
-  if (h1) return { title: h1, source: "H1", diagnostics };
-  const filename = input.sourcePath.split("/").at(-1) ?? "";
-  const stem = filename.replace(/\.(?:md|markdown)$/iu, "").trim();
-  if (!stem) throw importError("INVALID_TITLE", "Markdown file could not resolve a non-empty title.");
-  return { title: stem, source: "FILENAME", diagnostics };
-}
-
 import { importError } from "./import-errors";
-```
 
-Create `src/modules/sources/domain/import-snapshot.ts` with the shared parser/staging types:
-
-```ts
-import type { KnowledgeMetadata } from "@/modules/knowledge/domain/content";
-import type { ImportDiagnostic } from "./import-diagnostic";
-import type { ImportTitleSource } from "./import-title";
-
-export type ImportSnapshotState = "BUILDING" | "READY" | "APPLIED" | "STALE";
-export type ImportEntryType = "DOCUMENT" | "ASSET";
-export type ImportUploadStatus = "PENDING" | "RECEIVED";
-
-export type ParsedMarkdownEntry = {
-  sourcePath: string;
-  externalId: null;
-  resolvedTitle: string;
-  titleSource: ImportTitleSource;
-  markdown: string;
-  metadata: KnowledgeMetadata;
-  revisionContentHash: string;
-  reconciliationFingerprint: string;
-  sourceFileHash: string;
-  diagnostics: ImportDiagnostic[];
-};
-```
-
-Create `src/modules/sources/adapters/generic-markdown-folder-adapter.ts`. Split frontmatter only when the document begins with a `---` delimiter, parse YAML to a plain JSON-compatible object, use Markdown AST for H1, and never resolve links or includes:
-
-```ts
-import { createHash } from "node:crypto";
-import { fromMarkdown } from "mdast-util-from-markdown";
-import { toString } from "mdast-util-to-string";
-import { parseDocument } from "yaml";
-import { canonicalizeJsonObject, fingerprintRevisionContent, type KnowledgeMetadata } from "@/modules/knowledge/domain/content";
-import { importError } from "@/modules/sources/domain/import-errors";
-import { resolveImportTitle } from "@/modules/sources/domain/import-title";
-import { fingerprintReconciliationContent } from "@/modules/sources/domain/reconciliation-fingerprint";
-import type { ParsedMarkdownEntry } from "@/modules/sources/domain/import-snapshot";
-
-export function decodeUtf8Markdown(bytes: Uint8Array): string {
-  try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(bytes).replace(/^\ufeff/u, "");
-  } catch {
-    throw importError("INVALID_MARKDOWN_ENCODING", "Markdown must be valid UTF-8 or UTF-8 with BOM.");
+export function resolveImportTitle(input: { sourcePath: string; frontmatterTitle: unknown; firstH1: string | null }) {
+  const diagnostics: ImportDiagnostic[] = [];
+  const fm = typeof input.frontmatterTitle === "string" ? input.frontmatterTitle.trim() : "";
+  if (input.frontmatterTitle !== undefined && !fm) diagnostics.push({ code: "INVALID_FRONTMATTER_TITLE", severity: "WARNING", sourcePath: input.sourcePath, message: "frontmatter.title must be a non-empty string; falling back." });
+  const h1 = input.firstH1?.trim() || null;
+  if (fm) {
+    if (h1 && h1 !== fm) diagnostics.push({ code: "TITLE_CONFLICT", severity: "WARNING", sourcePath: input.sourcePath, message: "frontmatter.title differs from the first H1; frontmatter.title wins.", details: { frontmatterTitle: fm, h1 } });
+    return { title: fm, source: "FRONTMATTER" as const, diagnostics };
   }
-}
-
-function splitFrontmatter(text: string): { body: string; metadata: KnowledgeMetadata } {
-  if (!text.startsWith("---\n") && !text.startsWith("---\r\n")) return { body: text, metadata: {} };
-  const normalized = text.replace(/\r\n/g, "\n");
-  const closing = normalized.indexOf("\n---\n", 4);
-  if (closing < 0) throw importError("INVALID_FRONTMATTER", "Frontmatter opening delimiter is missing a closing delimiter.");
-  const yamlText = normalized.slice(4, closing);
-  const document = parseDocument(yamlText, { prettyErrors: false, strict: true, uniqueKeys: true });
-  if (document.errors.length > 0) throw importError("INVALID_FRONTMATTER", document.errors[0].message);
-  const value = document.toJS({ maxAliasCount: 50 });
-  if (value === null || typeof value !== "object" || Array.isArray(value)) throw importError("FRONTMATTER_NOT_OBJECT", "Frontmatter root must be an object.");
-  return { body: normalized.slice(closing + 5), metadata: canonicalizeJsonObject(value as Record<string, unknown>) };
-}
-
-function firstH1(markdown: string): string | null {
-  const root = fromMarkdown(markdown);
-  for (const node of root.children) {
-    if (node.type === "heading" && node.depth === 1) {
-      const text = toString(node).trim();
-      if (text) return text;
-    }
-  }
-  return null;
-}
-
-export function parseGenericMarkdownText(input: { sourcePath: string; text: string; sourceFileHash: string }): ParsedMarkdownEntry {
-  const { body, metadata } = splitFrontmatter(input.text);
-  const title = resolveImportTitle({ sourcePath: input.sourcePath, frontmatterTitle: metadata.title, firstH1: firstH1(body) });
-  const content = fingerprintRevisionContent({ title: title.title, markdown: body, metadata });
-  return {
-    sourcePath: input.sourcePath,
-    externalId: null,
-    resolvedTitle: content.normalized.title,
-    titleSource: title.source,
-    markdown: content.normalized.markdown,
-    metadata: content.normalized.metadata,
-    revisionContentHash: content.contentHash,
-    reconciliationFingerprint: fingerprintReconciliationContent({ markdown: content.normalized.markdown, metadata: content.normalized.metadata }),
-    sourceFileHash: input.sourceFileHash,
-    diagnostics: title.diagnostics,
-  };
-}
-
-export function sourceFileHash(bytes: Uint8Array): string {
-  return createHash("sha256").update(bytes).digest("hex");
+  if (h1) return { title: h1, source: "H1" as const, diagnostics };
+  const filename = input.sourcePath.split("/").at(-1) ?? "";
+  const title = filename.replace(/\.(?:md|markdown)$/iu, "").trim();
+  if (!title) throw importError("INVALID_TITLE", "Markdown file could not resolve a non-empty title.");
+  return { title, source: "FILENAME" as const, diagnostics };
 }
 ```
 
-- [ ] **Step 4: Run parser unit tests, full unit tests, typecheck, and lint**
+`generic-markdown-folder-adapter.ts` must use `TextDecoder("utf-8", { fatal: true })`, `yaml.parseDocument(..., { strict: true, uniqueKeys: true })`, `document.toJS({ maxAliasCount: 50 })`, and `fromMarkdown()` + `toString()` for the first actual depth-1 heading. Frontmatter root must be a plain object; malformed/non-object frontmatter throws `INVALID_FRONTMATTER`/`FRONTMATTER_NOT_OBJECT`. The returned metadata is canonicalized with `canonicalizeJsonObject()`. Generate `revisionContentHash` with `fingerprintRevisionContent()` and reconciliation fingerprint with `fingerprintReconciliationContent()`. Do not fetch links, resolve `file://`, execute tags, or read filesystem includes.
 
-Run:
+- [ ] **Step 4: Run focused and full static/unit checks**
 
 ```bash
 npm run test:unit -- tests/unit/phase2-import-parser.test.ts
@@ -519,7 +373,7 @@ npm run typecheck
 npm run lint
 ```
 
-Expected: all PASS.
+Expected: PASS.
 
 - [ ] **Step 5: Commit Task 1**
 
@@ -530,7 +384,7 @@ git commit -m "feat: add phase 2 import parser primitives"
 
 ---
 
-### Task 2: Pure Deterministic Reconciler and Persisted Action-Plan Contract
+### Task 2: Deterministic Reconciler and Serializable Action Plan
 
 **Files:**
 - Create: `src/modules/sources/domain/import-plan.ts`
@@ -538,128 +392,8 @@ git commit -m "feat: add phase 2 import parser primitives"
 - Test: `tests/unit/phase2-reconciler.test.ts`
 
 **Interfaces:**
-- Consumes: normalized READY snapshot entries from Task 1.
-- Produces:
 
 ```ts
-export type CanonicalImportState = {
-  documents: CanonicalDocumentState[];
-  folders: CanonicalFolderState[];
-  assets: CanonicalAssetState[];
-};
-
-export type ReadyImportContent = {
-  documents: ReadyImportDocument[];
-  assets: ReadyImportAsset[];
-};
-
-export type FolderImportPlan = {
-  planVersion: "phase2:v1";
-  sourceBinding: { workspaceId: string; sourceId: string | null; basedOnVersion: number | null };
-  folders: { create: CreateFolderAction[]; restore: RestoreFolderAction[]; archive: ArchiveFolderAction[] };
-  documents: {
-    create: CreateDocumentAction[];
-    restore: RestoreDocumentAction[];
-    move: MoveDocumentAction[];
-    revise: ReviseDocumentAction[];
-    archive: ArchiveDocumentAction[];
-    updateLocator: UpdateLocatorAction[];
-  };
-  assets: { upsert: UpsertAssetAction[]; remove: RemoveAssetAction[] };
-  preview: ImportPreviewChange[];
-  summary: ImportDiffSummary;
-};
-
-export function reconcileFolderImport(snapshot: ReadyImportContent, current: CanonicalImportState): FolderImportPlan;
-```
-
-New entity UUIDs are deliberately absent from `FolderImportPlan`; only stable existing IDs may appear.
-
-- [ ] **Step 1: Write the failing decision-table and determinism tests**
-
-Create `tests/unit/phase2-reconciler.test.ts` using small object builders. Pin same-path update, unique-fingerprint rename/move, ambiguity, archive/restore, folder path-only identity, asset path-only identity, and deterministic output:
-
-```ts
-import { describe, expect, it } from "vitest";
-import { reconcileFolderImport } from "@/modules/sources/domain/import-reconciler";
-import type { CanonicalImportState, ReadyImportContent } from "@/modules/sources/domain/import-plan";
-
-const binding = { workspaceId: "0199f500-0000-7000-8000-000000000001", sourceId: "0199f500-0000-7000-8000-000000000002", basedOnVersion: 7 };
-
-function snapshotDocument(path: string, fingerprint: string, contentHash = fingerprint) {
-  return { sourcePath: path, externalId: null, title: path.split("/").at(-1)!.replace(/\.md$/u, ""), markdown: "body", metadata: {}, revisionContentHash: contentHash, reconciliationFingerprint: fingerprint, diagnostics: [] as const };
-}
-
-function currentDocument(path: string, fingerprint: string, status: "ACTIVE" | "ARCHIVED" = "ACTIVE") {
-  return {
-    entryId: `entry-${path}`,
-    documentId: `doc-${path}`,
-    treeNodeId: `node-${path}`,
-    externalId: null,
-    sourcePath: path,
-    status,
-    currentRevision: { id: `rev-${path}`, title: path, markdown: "body", metadata: {}, contentHash: fingerprint },
-    reconciliationFingerprint: fingerprint,
-  };
-}
-
-function reconcile(documents: ReadyImportContent["documents"], currentDocuments: CanonicalImportState["documents"]) {
-  return reconcileFolderImport({ sourceBinding: binding, documents, assets: [] }, { documents: currentDocuments, folders: [], assets: [] });
-}
-
-describe("Phase 2 reconciler", () => {
-  it("matches exact path before fingerprint and emits UPDATE only for changed canonical content", () => {
-    const plan = reconcile([snapshotDocument("docs/a.md", "fp-a", "new-hash")], [currentDocument("docs/a.md", "old-fp")]);
-    expect(plan.documents.create).toHaveLength(0);
-    expect(plan.documents.revise).toHaveLength(1);
-  });
-
-  it("preserves identity for one unmatched fingerprint rename", () => {
-    const plan = reconcile([snapshotDocument("guide/a.md", "same")], [currentDocument("docs/a.md", "same")]);
-    expect(plan.documents.create).toHaveLength(0);
-    expect(plan.documents.move).toEqual([expect.objectContaining({ fromPath: "docs/a.md", toPath: "guide/a.md" })]);
-  });
-
-  it("does not guess when two unmatched candidates share the fingerprint", () => {
-    const plan = reconcile([snapshotDocument("guide/c.md", "same")], [currentDocument("a.md", "same"), currentDocument("b.md", "same")]);
-    expect(plan.documents.create).toHaveLength(1);
-    expect(plan.documents.archive).toHaveLength(2);
-    expect(plan.preview.flatMap((item) => item.diagnostics).map((item) => item.code)).toContain("AMBIGUOUS_IDENTITY");
-  });
-
-  it("restores the same IDs when an archived exact-path document reappears", () => {
-    const plan = reconcile([snapshotDocument("docs/a.md", "same")], [currentDocument("docs/a.md", "same", "ARCHIVED")]);
-    expect(plan.documents.restore).toEqual([expect.objectContaining({ documentId: "doc-docs/a.md", entryId: "entry-docs/a.md" })]);
-  });
-
-  it("is deterministic", () => {
-    const input = [snapshotDocument("z.md", "z"), snapshotDocument("a.md", "a")];
-    const state = [currentDocument("z.md", "z"), currentDocument("old.md", "old")];
-    expect(reconcile(input, state)).toEqual(reconcile(input, state));
-  });
-});
-```
-
-- [ ] **Step 2: Run the reconciler tests and verify failure**
-
-Run:
-
-```bash
-npm run test:unit -- tests/unit/phase2-reconciler.test.ts
-```
-
-Expected: FAIL because plan/reconciler modules are missing.
-
-- [ ] **Step 3: Define the action-plan types and implement four-pass matching with O(n) lookup maps**
-
-Create `src/modules/sources/domain/import-plan.ts`. Use serializable data only; use `parentPath` and `desiredPosition` so the executor can resolve newly created folders without preallocating IDs:
-
-```ts
-import type { KnowledgeMetadata } from "@/modules/knowledge/domain/content";
-import type { ImportDiagnostic } from "./import-diagnostic";
-
-export type RevisionPayload = { title: string; markdown: string; metadata: KnowledgeMetadata; contentHash: string };
-
 export type ReadyImportDocument = {
   sourcePath: string;
   externalId: string | null;
@@ -674,7 +408,7 @@ export type ReadyImportDocument = {
 export type ReadyImportAsset = {
   sourcePath: string;
   sourcePathHash: string;
-  contentHash: string | null;
+  contentHash: string;
   mimeType: string | null;
   metadata: Record<string, unknown>;
   diagnostics: ImportDiagnostic[];
@@ -701,24 +435,6 @@ export type CanonicalFolderState = { entryId: string; treeNodeId: string; source
 export type CanonicalAssetState = { id: string; sourcePath: string; sourcePathHash: string; contentHash: string | null; mimeType: string | null; metadata: Record<string, unknown> };
 export type CanonicalImportState = { documents: CanonicalDocumentState[]; folders: CanonicalFolderState[]; assets: CanonicalAssetState[] };
 
-export type ImportPreviewChange = {
-  kind: "DOCUMENT" | "FOLDER" | "ASSET";
-  sourcePath: string;
-  previousPath: string | null;
-  labels: ("ADDED" | "UPDATED" | "MOVED" | "RENAMED" | "ARCHIVED" | "RESTORED" | "UNCHANGED")[];
-  diagnostics: ImportDiagnostic[];
-};
-
-export type ImportDiffSummary = {
-  documents: Record<"added" | "updated" | "moved" | "renamed" | "archived" | "restored" | "unchanged", number>;
-  folders: Record<"added" | "archived" | "restored", number>;
-  assets: Record<"added" | "updated" | "removed" | "unchanged", number>;
-  warnings: number;
-  blockers: number;
-  affectedDocuments: number;
-  changed: boolean;
-};
-
 export type FolderImportPlan = {
   planVersion: "phase2:v1";
   sourceBinding: ReadyImportContent["sourceBinding"];
@@ -736,92 +452,109 @@ export type FolderImportPlan = {
     updateLocator: { entryId: string; sourcePath: string; contentHash: string }[];
   };
   assets: {
-    upsert: { sourcePath: string; sourcePathHash: string; mimeType: string | null; contentHash: string | null; metadata: Record<string, unknown> }[];
+    upsert: { sourcePath: string; sourcePathHash: string; mimeType: string | null; contentHash: string; metadata: Record<string, unknown> }[];
     remove: { assetId: string; sourcePath: string }[];
   };
+  ordering: { nodeKey: string; parentPath: string | null; position: number }[];
   preview: ImportPreviewChange[];
   summary: ImportDiffSummary;
 };
+
+export function reconcileFolderImport(snapshot: ReadyImportContent, current: CanonicalImportState): FolderImportPlan;
 ```
 
-Create `src/modules/sources/domain/import-reconciler.ts` with these algorithmic rules:
+`nodeKey` is a stable plan-local key: existing nodes use `tree:<treeNodeId>`; new folder nodes use `folder:<sourcePath>`; new documents use `document:<sourcePath>`. It never becomes a canonical ID.
+
+- [ ] **Step 1: Write failing reconciler decision-table tests**
+
+Create `tests/unit/phase2-reconciler.test.ts` covering exact path UPDATE, unique-fingerprint move/rename, ambiguous duplicate content, restore same IDs, asset path-only matching, folder path-only identity, external-id/path contradiction, and deterministic repeated output. Include:
 
 ```ts
-import { isSameRevisionContent } from "@/modules/knowledge/domain/content";
-import type { CanonicalDocumentState, CanonicalImportState, FolderImportPlan, ReadyImportContent, ReadyImportDocument } from "./import-plan";
+it("does not guess ambiguous fingerprint identity", () => {
+  const plan = reconcileFolderImport(snapshotWith("guide/c.md", "same"), canonicalWith([doc("a.md", "same"), doc("b.md", "same")]));
+  expect(plan.documents.create).toHaveLength(1);
+  expect(plan.documents.archive).toHaveLength(2);
+  expect(plan.preview.flatMap((item) => item.diagnostics).map((item) => item.code)).toContain("AMBIGUOUS_IDENTITY");
+});
 
-function parentPath(path: string): string | null {
-  const at = path.lastIndexOf("/");
-  return at < 0 ? null : path.slice(0, at);
-}
+it("keeps a restored document on the same IDs", () => {
+  const plan = reconcileFolderImport(snapshotWith("docs/a.md", "same"), canonicalWith([doc("docs/a.md", "same", "ARCHIVED")]));
+  expect(plan.documents.restore).toEqual([expect.objectContaining({ entryId: "entry:docs/a.md", documentId: "doc:docs/a.md", treeNodeId: "node:docs/a.md" })]);
+});
 
-function basename(path: string): string {
-  return path.split("/").at(-1)!;
-}
+it("blocks external-id/path contradiction", () => {
+  expect(() => reconcileFolderImport(snapshotWithExternalId("a.md", "X"), canonicalWithExternalConflict())).toThrowError(expect.objectContaining({ code: "IDENTITY_CONFLICT" }));
+});
+```
 
-function deriveFolders(snapshot: ReadyImportContent): string[] {
-  const folders = new Set<string>();
-  for (const entry of [...snapshot.documents, ...snapshot.assets]) {
-    const parts = entry.sourcePath.split("/");
-    parts.pop();
-    let cursor = "";
-    for (const part of parts) {
-      cursor = cursor ? `${cursor}/${part}` : part;
-      folders.add(cursor);
-    }
-  }
-  return [...folders].sort((a, b) => a.localeCompare(b, "en", { sensitivity: "variant" }));
-}
+Define the local `snapshotWith`, `doc`, `canonicalWith`, `snapshotWithExternalId`, and `canonicalWithExternalConflict` builders in the same test file; each builder returns the exact Task 2 interfaces above and uses deterministic string IDs.
 
-function sameRevision(current: CanonicalDocumentState, incoming: ReadyImportDocument): boolean {
-  return isSameRevisionContent(current.currentRevision, { title: incoming.title, markdown: incoming.markdown, metadata: incoming.metadata });
-}
+- [ ] **Step 2: Run the failing test**
 
-export function reconcileFolderImport(snapshot: ReadyImportContent, current: CanonicalImportState): FolderImportPlan {
-  const byExternalId = new Map(current.documents.filter((item) => item.externalId !== null).map((item) => [item.externalId!, item]));
-  const byPath = new Map(current.documents.map((item) => [item.sourcePath, item]));
-  const byFingerprint = new Map<string, CanonicalDocumentState[]>();
-  for (const item of current.documents) {
-    const candidates = byFingerprint.get(item.reconciliationFingerprint) ?? [];
-    candidates.push(item);
-    byFingerprint.set(item.reconciliationFingerprint, candidates);
-  }
-  const matched = new Set<string>();
-  const ambiguous = new Map<string, string[]>();
-  const match = (incoming: ReadyImportDocument): CanonicalDocumentState | null => {
-    if (incoming.externalId !== null) {
-      const external = byExternalId.get(incoming.externalId);
-      const path = byPath.get(incoming.sourcePath);
-      if (external && path && external.entryId !== path.entryId) throw new Error("IDENTITY_CONFLICT");
-      if (external && !matched.has(external.entryId)) return external;
-    }
-    const exact = byPath.get(incoming.sourcePath);
-    if (exact && !matched.has(exact.entryId)) return exact;
-    const candidates = (byFingerprint.get(incoming.reconciliationFingerprint) ?? []).filter((item) => !matched.has(item.entryId));
-    if (candidates.length === 1) return candidates[0];
-    if (candidates.length > 1) ambiguous.set(incoming.sourcePath, candidates.map((item) => item.sourcePath).sort());
-    return null;
-  };
+```bash
+npm run test:unit -- tests/unit/phase2-reconciler.test.ts
+```
 
-  const plan = emptyPlan(snapshot.sourceBinding);
-  const desiredFolders = deriveFolders(snapshot);
-  reconcileFolders(plan, desiredFolders, current.folders);
-  for (const incoming of [...snapshot.documents].sort((a, b) => a.sourcePath.localeCompare(b.sourcePath))) {
-    const existing = match(incoming);
-    reconcileDocument(plan, incoming, existing, matched, ambiguous.get(incoming.sourcePath) ?? [], sameRevision);
-  }
-  archiveUnmatchedDocuments(plan, current.documents, matched);
-  reconcileAssets(plan, snapshot.assets, current.assets);
-  finalizePreviewSummary(plan);
-  return plan;
+Expected: FAIL because plan/reconciler modules are missing.
+
+- [ ] **Step 3: Implement four-pass matching and deterministic desired ordering**
+
+Use exact binary-like text ordering from Task 1, never locale-sensitive ordering:
+
+```ts
+const orderedDocuments = [...snapshot.documents].sort((a, b) => compareImportText(a.sourcePath, b.sourcePath));
+```
+
+Build O(n) lookup maps:
+
+```ts
+const byExternalId = new Map(current.documents.filter((item) => item.externalId !== null).map((item) => [item.externalId!, item]));
+const byPath = new Map(current.documents.map((item) => [item.sourcePath, item]));
+const byFingerprint = new Map<string, CanonicalDocumentState[]>();
+for (const item of current.documents) {
+  const values = byFingerprint.get(item.reconciliationFingerprint) ?? [];
+  values.push(item);
+  byFingerprint.set(item.reconciliationFingerprint, values);
 }
 ```
 
-Implement `emptyPlan`, `reconcileFolders`, `reconcileDocument`, `archiveUnmatchedDocuments`, `reconcileAssets`, and `finalizePreviewSummary` in the same file with no time/random/DB access. `reconcileDocument` must mark an existing `entryId` immediately when matched, emit restore before revise for archived entries, and derive MOVED vs RENAMED from parent/basename changes. `reconcileFolders` must only match exact path and archive obsolete folders deepest-first. `reconcileAssets` must match path only.
+Matching must be exactly:
 
-- [ ] **Step 4: Run reconciler tests plus all unit tests**
+```ts
+function matchDocument(incoming: ReadyImportDocument): CanonicalDocumentState | null {
+  if (incoming.externalId !== null) {
+    const external = byExternalId.get(incoming.externalId);
+    const path = byPath.get(incoming.sourcePath);
+    if (external && path && external.entryId !== path.entryId) throw importError("IDENTITY_CONFLICT", "External identity and source path resolve to different documents.");
+    if (external && !matched.has(external.entryId)) return external;
+  }
+  const exact = byPath.get(incoming.sourcePath);
+  if (exact && !matched.has(exact.entryId)) return exact;
+  const candidates = (byFingerprint.get(incoming.reconciliationFingerprint) ?? []).filter((item) => !matched.has(item.entryId));
+  if (candidates.length === 1) return candidates[0];
+  if (candidates.length > 1) ambiguous.set(incoming.sourcePath, candidates.map((item) => item.sourcePath).sort(compareImportText));
+  return null;
+}
+```
 
-Run:
+Derive required folders from document+asset parent segments. Folder reconciliation only matches exact path. Sort folder restore/create by depth ascending then `compareImportText`; archive by depth descending then `compareImportText`.
+
+For each parent group, derive one final active ordering: folders first, then documents; within each category sort the child basename with `compareImportText`. Emit `ordering` positions from 0..N-1. New entities are represented by plan-local `nodeKey`, never UUID.
+
+A matched document may emit several actions. Rules are exact:
+
+```text
+ARCHIVED existing -> restore
+parent path changed -> move + MOVED label
+basename changed -> RENAMED label
+canonical title/markdown/metadata changed -> revise + UPDATED label
+path changed or content hash changed -> updateLocator
+no lifecycle/path/content change -> UNCHANGED only
+```
+
+Unmatched active existing documents archive. Unmatched archived existing documents remain archived and do not emit another archive. Assets match path only: same path+same payload unchanged; same path+changed payload upsert UPDATED; new path upsert ADDED; missing old path remove. Same asset hash at a different path remains remove+add.
+
+- [ ] **Step 4: Run unit/static checks**
 
 ```bash
 npm run test:unit -- tests/unit/phase2-reconciler.test.ts
@@ -840,7 +573,7 @@ git commit -m "feat: add deterministic folder import reconciler"
 
 ---
 
-### Task 3: MariaDB Staging Schema, Asset Projection Schema, and Repository Ports
+### Task 3: Staging/Asset Migrations and MariaDB Repository Contracts
 
 **Files:**
 - Create: `src/infrastructure/database/mariadb/migrations/006-phase-2-import-staging.ts`
@@ -853,6 +586,7 @@ git commit -m "feat: add deterministic folder import reconciler"
 - Modify: `src/modules/sources/ports/asset-repository.ts`
 - Modify: `src/modules/sources/ports/unit-of-work.ts`
 - Modify: `src/modules/sources/domain/asset.ts`
+- Modify: `src/modules/sources/domain/import-snapshot.ts`
 - Create: `src/infrastructure/database/mariadb/repositories/import-snapshots.ts`
 - Create: `src/infrastructure/database/mariadb/repositories/import-snapshot-entries.ts`
 - Create: `src/infrastructure/database/mariadb/repositories/import-canonical-state.ts`
@@ -861,20 +595,18 @@ git commit -m "feat: add deterministic folder import reconciler"
 - Test: `tests/integration/phase2-import-schema.test.ts`
 
 **Interfaces:**
-- Consumes: Task 2 `CanonicalImportState` and `FolderImportPlan`.
-- Produces repository contracts used by all later application services:
 
 ```ts
 export interface ImportSnapshotRepository {
   insert(snapshot: ImportSnapshot): Promise<void>;
   findById(snapshotId: string): Promise<ImportSnapshot | null>;
   lockById(snapshotId: string): Promise<ImportSnapshot | null>;
-  countByCreatorAndState(creatorId: string, state: "BUILDING" | "READY"): Promise<number>;
+  countActiveByCreatorAndState(creatorId: string, state: "BUILDING" | "READY", now: Date): Promise<number>;
   markReady(input: MarkImportSnapshotReadyInput): Promise<void>;
   markApplied(input: { snapshotId: string; sourceId: string; resultVersion: number; appliedAt: Date }): Promise<void>;
   markStale(input: { snapshotId: string; staleAt: Date }): Promise<void>;
   listCleanupCandidates(now: Date, limit: number): Promise<string[]>;
-  deleteById(snapshotId: string): Promise<void>;
+  deleteIfCleanupEligible(snapshotId: string, now: Date): Promise<boolean>;
 }
 
 export interface ImportSnapshotEntryRepository {
@@ -890,230 +622,65 @@ export interface ImportCanonicalStateRepository {
 }
 ```
 
-- [ ] **Step 1: Write failing migration/repository integration tests**
+- [ ] **Step 1: Write failing migration/repository tests**
 
-Create `tests/integration/phase2-import-schema.test.ts`. Provision an isolated DB exactly like existing Phase 1 integration tests, run migrations, and assert the staging tables/checks/indexes plus asset upsert semantics:
+Create `tests/integration/phase2-import-schema.test.ts` using the existing isolated MariaDB pattern. Assert migrations 6/7 apply, required columns/indexes exist, snapshot binding constraints reject invalid shapes, entry rows cascade on snapshot deletion, and `AssetRepository.upsertByPath()` preserves row ID while updating current projection values.
+
+Key assertions:
 
 ```ts
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { Pool } from "mariadb";
-import { databaseConfig } from "@/infrastructure/database/mariadb/config";
-import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
-import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction";
-import { runMigrations } from "../../scripts/db/migrate";
-import { disposeIsolatedDatabase, provisionIsolatedDatabase } from "../../scripts/db/test-database";
-
-let pool: Pool;
-let handle: Awaited<ReturnType<typeof provisionIsolatedDatabase>>;
-
-beforeAll(async () => {
-  handle = await provisionIsolatedDatabase("test");
-  process.env.KM_TEST_DB_NAME = handle.databaseName;
-  pool = createDatabasePool(databaseConfig("test"));
-  await runMigrations(pool);
-});
-
-afterAll(async () => {
-  await pool.end();
-  await disposeIsolatedDatabase(handle);
-});
-
-describe("Phase 2 schema", () => {
-  it("applies migrations 006 and 007", async () => {
-    const rows = await pool.query<{ version: number; state: string }[]>("SELECT version, state FROM schema_migrations WHERE version IN (6,7) ORDER BY version");
-    expect(rows.map((row) => [Number(row.version), row.state])).toEqual([[6, "APPLIED"], [7, "APPLIED"]]);
-  });
-
-  it("enforces snapshot binding and one normalized path per snapshot", async () => {
-    const columns = await pool.query<{ COLUMN_NAME: string }[]>("SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'source_import_snapshots'");
-    expect(columns.map((row) => row.COLUMN_NAME)).toContain("plan_hash");
-    const indexes = await pool.query<{ INDEX_NAME: string }[]>("SHOW INDEX FROM source_import_snapshot_entries");
-    expect(indexes.map((row) => row.INDEX_NAME)).toContain("uq_import_entries_snapshot_path_hash");
-  });
-
-  it("supports source-scoped asset projection upsert and removal", async () => {
-    const unitOfWork = new MariaDbUnitOfWork(pool);
-    expect(typeof unitOfWork.run).toBe("function");
-  });
-});
+expect((await pool.query<{ version: number; state: string }[]>("SELECT version, state FROM schema_migrations WHERE version IN (6,7) ORDER BY version")).map((row) => [Number(row.version), row.state])).toEqual([[6, "APPLIED"], [7, "APPLIED"]]);
+expect((await pool.query<{ INDEX_NAME: string }[]>("SHOW INDEX FROM source_import_snapshot_entries")).map((row) => row.INDEX_NAME)).toContain("uq_import_entries_snapshot_path_hash");
 ```
 
-Add a second test that creates a user/workspace/source, inserts a `knowledge_assets` row through the upgraded `AssetRepository`, calls `upsertByPath`, verifies the same ID remains while hash/metadata update, then calls `deleteById`.
-
-- [ ] **Step 2: Run the schema test and verify migrations/repositories are missing**
-
-Run:
+- [ ] **Step 2: Run the failing integration test**
 
 ```bash
 npx vitest run --config vitest.integration.config.ts tests/integration/phase2-import-schema.test.ts
 ```
 
-Expected: FAIL before migration 006 and repository methods exist.
+Expected: FAIL because migration/repository surfaces do not exist.
 
-- [ ] **Step 3: Add migration 006 and the staging domain/repository contracts**
+- [ ] **Step 3: Add migration 006 and staging domain types**
 
-Define the staging domain models in `src/modules/sources/domain/import-snapshot.ts` by extending the Task 1 file:
+Add `ImportSnapshot`, `ImportSnapshotEntry`, `FinalizedImportSnapshotEntry`, and `MarkImportSnapshotReadyInput` to `import-snapshot.ts` with the fields approved in the spec. The database tables must use native `UUID`, binary collation for paths/hashes, JSON validity checks, `ON DELETE CASCADE` only from snapshot to staging entry, and these exact indexes:
 
-```ts
-import type { FolderImportPlan, ImportDiffSummary } from "./import-plan";
-
-export type ImportSnapshot = {
-  id: string;
-  workspaceId: string;
-  sourceId: string | null;
-  basedOnVersion: number | null;
-  createdBy: string;
-  rootName: string;
-  proposedSourceName: string | null;
-  adapterType: "GENERIC_MARKDOWN_FOLDER";
-  adapterVersion: "phase2:v1";
-  planVersion: "phase2:v1";
-  state: ImportSnapshotState;
-  manifestHash: string;
-  snapshotHash: string | null;
-  planHash: string | null;
-  hasBlockers: boolean;
-  summary: ImportDiffSummary | null;
-  plan: FolderImportPlan | null;
-  createdAt: Date;
-  finalizedAt: Date | null;
-  expiresAt: Date;
-  appliedAt: Date | null;
-  staleAt: Date | null;
-  resultSourceId: string | null;
-  resultVersion: number | null;
-};
-
-export type ImportSnapshotEntry = {
-  id: string;
-  snapshotId: string;
-  uploadKey: string;
-  clientRelativePath: string;
-  sourcePath: string | null;
-  sourcePathHash: string | null;
-  entryType: ImportEntryType;
-  uploadStatus: ImportUploadStatus;
-  declaredSize: number;
-  sourceFileHash: string | null;
-  rawMarkdown: string | null;
-  resolvedTitle: string | null;
-  titleSource: ImportTitleSource | null;
-  markdown: string | null;
-  metadata: KnowledgeMetadata | null;
-  revisionContentHash: string | null;
-  reconciliationFingerprint: string | null;
-  mimeType: string | null;
-  assetContentHash: string | null;
-  assetSize: number | null;
-  assetLastModified: Date | null;
-  diagnostics: ImportDiagnostic[];
-  previewChange: Record<string, unknown> | null;
-};
-
-export type FinalizedImportSnapshotEntry = ImportSnapshotEntry & { uploadStatus: "RECEIVED"; rawMarkdown: null };
-export type MarkImportSnapshotReadyInput = {
-  snapshotId: string;
-  snapshotHash: string;
-  planHash: string;
-  summary: ImportDiffSummary;
-  plan: FolderImportPlan;
-  hasBlockers: boolean;
-  finalizedAt: Date;
-  expiresAt: Date;
-};
+```text
+idx_import_snapshots_creator_state(created_by, state)
+idx_import_snapshots_source_created(source_id, created_at)
+idx_import_snapshots_workspace_created(workspace_id, created_at)
+idx_import_snapshots_state_expires(state, expires_at)
+uq_import_entries_snapshot_upload(snapshot_id, upload_key)
+uq_import_entries_snapshot_path_hash(snapshot_id, source_path_hash)
+idx_import_entries_snapshot_upload(snapshot_id, upload_status)
 ```
 
-Create migration `006-phase-2-import-staging.ts` with two InnoDB tables. Use native `UUID`, binary collation for paths/hashes, JSON validity checks, and the approved binding/state checks. The migration must include these named constraints/indexes so tests can assert them:
+The binding check must enforce:
 
-```ts
-import type { Migration } from "./types";
-
-export const phase2ImportStagingMigration: Migration = {
-  version: 6,
-  name: "phase-2-import-staging",
-  statements: [
-    `CREATE TABLE source_import_snapshots (
-      id UUID NOT NULL,
-      workspace_id UUID NOT NULL,
-      source_id UUID NULL,
-      based_on_version INT UNSIGNED NULL,
-      created_by UUID NOT NULL,
-      root_name VARCHAR(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
-      proposed_source_name VARCHAR(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL,
-      adapter_type VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-      adapter_version VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-      plan_version VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-      state VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-      manifest_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-      snapshot_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,
-      plan_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,
-      has_blockers BOOLEAN NOT NULL DEFAULT FALSE,
-      summary JSON NULL,
-      plan JSON NULL,
-      created_at DATETIME(6) NOT NULL,
-      finalized_at DATETIME(6) NULL,
-      expires_at DATETIME(6) NOT NULL,
-      applied_at DATETIME(6) NULL,
-      stale_at DATETIME(6) NULL,
-      result_source_id UUID NULL,
-      result_version INT UNSIGNED NULL,
-      PRIMARY KEY (id),
-      CONSTRAINT fk_import_snapshot_workspace FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
-      CONSTRAINT fk_import_snapshot_source FOREIGN KEY (source_id) REFERENCES knowledge_sources(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
-      CONSTRAINT fk_import_snapshot_creator FOREIGN KEY (created_by) REFERENCES users(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
-      CONSTRAINT fk_import_snapshot_result_source FOREIGN KEY (result_source_id) REFERENCES knowledge_sources(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
-      CONSTRAINT ck_import_snapshot_state CHECK (state IN ('BUILDING','READY','APPLIED','STALE')),
-      CONSTRAINT ck_import_snapshot_binding CHECK ((source_id IS NULL AND based_on_version IS NULL AND proposed_source_name IS NOT NULL) OR (source_id IS NOT NULL AND based_on_version IS NOT NULL AND proposed_source_name IS NULL)),
-      CONSTRAINT ck_import_snapshot_json CHECK ((summary IS NULL OR JSON_VALID(summary)) AND (plan IS NULL OR JSON_VALID(plan))),
-      KEY idx_import_snapshots_creator_state (created_by, state),
-      KEY idx_import_snapshots_source_created (source_id, created_at),
-      KEY idx_import_snapshots_workspace_created (workspace_id, created_at),
-      KEY idx_import_snapshots_state_expires (state, expires_at)
-    ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-    `CREATE TABLE source_import_snapshot_entries (
-      id UUID NOT NULL,
-      snapshot_id UUID NOT NULL,
-      upload_key VARCHAR(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
-      client_relative_path TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
-      source_path TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL,
-      source_path_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,
-      entry_type VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-      upload_status VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-      declared_size BIGINT UNSIGNED NOT NULL,
-      source_file_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,
-      raw_markdown LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL,
-      resolved_title VARCHAR(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL,
-      title_source VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NULL,
-      markdown LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL,
-      metadata JSON NULL,
-      revision_content_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,
-      reconciliation_fingerprint CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,
-      mime_type VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL,
-      asset_content_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,
-      asset_size BIGINT UNSIGNED NULL,
-      asset_last_modified DATETIME(6) NULL,
-      diagnostics JSON NOT NULL,
-      preview_change JSON NULL,
-      PRIMARY KEY (id),
-      CONSTRAINT fk_import_entry_snapshot FOREIGN KEY (snapshot_id) REFERENCES source_import_snapshots(id) ON UPDATE RESTRICT ON DELETE CASCADE,
-      CONSTRAINT ck_import_entry_type CHECK (entry_type IN ('DOCUMENT','ASSET')),
-      CONSTRAINT ck_import_entry_upload_status CHECK (upload_status IN ('PENDING','RECEIVED')),
-      CONSTRAINT ck_import_entry_json CHECK (JSON_VALID(diagnostics) AND (metadata IS NULL OR JSON_VALID(metadata)) AND (preview_change IS NULL OR JSON_VALID(preview_change))),
-      CONSTRAINT uq_import_entries_snapshot_upload UNIQUE (snapshot_id, upload_key),
-      CONSTRAINT uq_import_entries_snapshot_path_hash UNIQUE (snapshot_id, source_path_hash),
-      KEY idx_import_entries_snapshot_upload (snapshot_id, upload_status)
-    ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-  ],
-};
+```text
+initial: source_id NULL, based_on_version NULL, proposed_source_name NOT NULL
+resync:  source_id NOT NULL, based_on_version NOT NULL, proposed_source_name NULL
 ```
 
-Create the three repository interfaces with the signatures in this task header, add them to `SourceRepositories`, implement MariaDB mappers using `asDate`, `asNumber`, and `asJsonObject`, and register them in `createRepositories()`.
+`source_path_hash` remains nullable. This is required so invalid/colliding entries can still be persisted in a READY blocker Preview without violating the unique index. Finalizer sets `source_path_hash = NULL` on every entry involved in `PATH_COLLISION`; only valid unique normalized paths receive a hash.
 
-`MariaDbImportCanonicalStateRepository.load(sourceId)` must use bounded queries, not per-document N+1 calls: one SourceEntry/Document/Revision/Tree join for document+folder mappings and one asset query, then compute each current document reconciliation fingerprint in memory using Task 1.
+- [ ] **Step 4: Add repository implementations and one bounded canonical-state loader**
 
-- [ ] **Step 4: Add migration 007 and upgrade AssetRepository to current-projection operations**
+Add the three ports above to `SourceRepositories` and `createRepositories()`. `MariaDbImportCanonicalStateRepository.load(sourceId)` must use bounded queries: one SourceEntry/Document/current-Revision/Tree join plus one asset query. Do not call `findCurrent()` once per document. Compute each current document reconciliation fingerprint in memory from current Revision markdown+metadata.
 
-Add fields to `KnowledgeAsset`:
+Repository state-transition writes must be conditional:
+
+```sql
+UPDATE source_import_snapshots
+SET state = 'READY', snapshot_hash = ?, plan_hash = ?, summary = ?, plan = ?, has_blockers = ?, finalized_at = ?, expires_at = ?
+WHERE id = ? AND state = 'BUILDING'
+```
+
+Use affected-row checks so READY/APPLIED/STALE rows cannot be mutated back into another state.
+
+- [ ] **Step 5: Add migration 007 and upgrade AssetRepository**
+
+Change `KnowledgeAsset` and port:
 
 ```ts
 export type KnowledgeAsset = {
@@ -1127,11 +694,7 @@ export type KnowledgeAsset = {
   createdAt: Date;
   updatedAt: Date;
 };
-```
 
-Change the port to:
-
-```ts
 export interface AssetRepository {
   insert(asset: KnowledgeAsset): Promise<void>;
   findById(assetId: string): Promise<KnowledgeAsset | null>;
@@ -1141,51 +704,20 @@ export interface AssetRepository {
 }
 ```
 
-Create `asset-projection-validation.ts` so migration 007 refuses populated upgrades containing a non-canonical or duplicate normalized asset path:
+Before migration 007, read all existing assets and require every `source_path` already equals `normalizeImportPath(source_path).sourcePath`; also reject duplicate normalized paths per Source. Then run fixed migration statements:
 
-```ts
-import type { MigrationReadConnection } from "./migrations/types";
-import { normalizeImportPath } from "@/modules/sources/domain/import-path";
-
-export async function checkAssetProjectionReadiness(connection: MigrationReadConnection): Promise<void> {
-  const rows = await connection.query<{ id: string; source_id: string; source_path: string }[]>("SELECT id, source_id, source_path FROM knowledge_assets ORDER BY source_id, id");
-  const seen = new Set<string>();
-  for (const row of rows) {
-    const normalized = normalizeImportPath(row.source_path).sourcePath;
-    if (normalized !== row.source_path) throw new Error(`Asset ${row.id} has a non-canonical source_path; repair it before migration 007.`);
-    const key = `${row.source_id}\0${normalized}`;
-    if (seen.has(key)) throw new Error(`Duplicate asset source_path in source ${row.source_id}; repair it before migration 007.`);
-    seen.add(key);
-  }
-}
+```sql
+ALTER TABLE knowledge_assets ADD COLUMN source_path_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL;
+ALTER TABLE knowledge_assets ADD COLUMN updated_at DATETIME(6) NULL;
+UPDATE knowledge_assets SET source_path_hash = LOWER(SHA2(source_path, 256)), updated_at = created_at WHERE source_path_hash IS NULL OR updated_at IS NULL;
+ALTER TABLE knowledge_assets MODIFY source_path_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL;
+ALTER TABLE knowledge_assets MODIFY updated_at DATETIME(6) NOT NULL;
+ALTER TABLE knowledge_assets ADD CONSTRAINT uq_assets_source_path_hash UNIQUE (source_id, source_path_hash);
 ```
 
-Migration 007 then performs a fixed backfill and uniqueness constraint:
+`upsertByPath()` uses `INSERT ... ON DUPLICATE KEY UPDATE` and must preserve the existing row ID while updating path/hash/MIME/content/metadata/updated_at.
 
-```ts
-import type { Migration } from "./types";
-import { checkAssetProjectionReadiness } from "../asset-projection-validation";
-
-export const phase2AssetProjectionMigration: Migration = {
-  version: 7,
-  name: "phase-2-asset-projection",
-  statements: [
-    "ALTER TABLE knowledge_assets ADD COLUMN source_path_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL",
-    "ALTER TABLE knowledge_assets ADD COLUMN updated_at DATETIME(6) NULL",
-    "UPDATE knowledge_assets SET source_path_hash = LOWER(SHA2(source_path, 256)), updated_at = created_at WHERE source_path_hash IS NULL OR updated_at IS NULL",
-    "ALTER TABLE knowledge_assets MODIFY source_path_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL",
-    "ALTER TABLE knowledge_assets MODIFY updated_at DATETIME(6) NOT NULL",
-    "ALTER TABLE knowledge_assets ADD CONSTRAINT uq_assets_source_path_hash UNIQUE (source_id, source_path_hash)",
-  ],
-  beforeApply: checkAssetProjectionReadiness,
-};
-```
-
-Append migrations 6 and 7 to `migrations/index.ts` in version order. Implement `upsertByPath` using `INSERT ... ON DUPLICATE KEY UPDATE` while preserving the existing row ID with `id = id` and updating path/hash/mime/content/metadata/updated_at.
-
-- [ ] **Step 5: Run schema integration test, all integration tests, and commit**
-
-Run:
+- [ ] **Step 6: Run focused/full integration/static checks**
 
 ```bash
 npx vitest run --config vitest.integration.config.ts tests/integration/phase2-import-schema.test.ts
@@ -1196,7 +728,7 @@ npm run lint
 
 Expected: PASS.
 
-Commit:
+- [ ] **Step 7: Commit Task 3**
 
 ```bash
 git add src/infrastructure/database/mariadb src/modules/sources/domain/asset.ts src/modules/sources/domain/import-snapshot.ts src/modules/sources/ports tests/integration/phase2-import-schema.test.ts
@@ -1205,7 +737,7 @@ git commit -m "feat: add phase 2 import staging persistence"
 
 ---
 
-### Task 4: BUILDING Import Sessions, Manifest Validation, Limits, and Raw-Byte Upload
+### Task 4: BUILDING Session Creation, Manifest Authority, Limits, and Raw-Byte Upload
 
 **Files:**
 - Create: `src/server/import-config.ts`
@@ -1215,13 +747,11 @@ git commit -m "feat: add phase 2 import staging persistence"
 - Test: `tests/integration/phase2-import-session.test.ts`
 
 **Interfaces:**
-- Consumes: Task 3 staging repositories and Task 1 byte decoder/path/limit types.
-- Produces:
 
 ```ts
 export type ImportManifestEntry =
   | { uploadKey: string; relativePath: string; kind: "MARKDOWN"; size: number }
-  | { uploadKey: string; relativePath: string; kind: "ASSET"; size: number; contentHash: string | null; mimeType: string | null; lastModified: Date | null };
+  | { uploadKey: string; relativePath: string; kind: "ASSET"; size: number; contentHash: string; mimeType: string | null; lastModified: Date | null };
 
 export class CreateFolderImportService {
   createInitial(caller: CallerContext, input: { workspaceId: string; sourceName: string; rootName: string; manifest: ImportManifestEntry[] }): Promise<{ snapshotId: string; state: "BUILDING"; expiresAt: Date }>;
@@ -1233,120 +763,60 @@ export class UploadFolderImportEntriesService {
 }
 ```
 
-- [ ] **Step 1: Write failing integration tests for authorization, session limits, manifest shape, and upload idempotency**
+- [ ] **Step 1: Write failing session/upload integration tests**
 
-Create `tests/integration/phase2-import-session.test.ts` using the existing isolated MariaDB style. Cover these exact cases:
+Create `tests/integration/phase2-import-session.test.ts`. Cover:
 
-```ts
-it("creates an initial BUILDING snapshot bound to a workspace without creating a Source", async () => {
-  const result = await service.createInitial(caller, {
-    workspaceId,
-    sourceName: "Team Wiki",
-    rootName: "team-wiki",
-    manifest: [{ uploadKey: "f1", relativePath: "README.md", kind: "MARKDOWN", size: 4 }],
-  });
-  expect(result.state).toBe("BUILDING");
-  expect(await countSources(pool, workspaceId)).toBe(0);
-});
-
-it("creates resync snapshot from server-derived workspace/version and rejects HUB_MANAGED source", async () => {
-  const result = await service.createResync(caller, { sourceId: managedSourceId, rootName: "wiki", manifest: [] });
-  const snapshot = await readSnapshot(pool, result.snapshotId);
-  expect(snapshot.workspace_id).toBe(workspaceId);
-  expect(Number(snapshot.based_on_version)).toBe(7);
-  await expect(service.createResync(caller, { sourceId: hubSourceId, rootName: "wiki", manifest: [] })).rejects.toMatchObject({ code: "SOURCE_NOT_SOURCE_MANAGED" });
-});
-
-it("retries identical Markdown bytes idempotently and rejects different bytes for the same uploadKey", async () => {
-  const bytes = new TextEncoder().encode("# A\n");
-  expect((await uploader.upload(caller, { snapshotId, entries: [{ uploadKey: "f1", bytes }] })).accepted).toBe(1);
-  expect((await uploader.upload(caller, { snapshotId, entries: [{ uploadKey: "f1", bytes }] })).idempotent).toBe(1);
-  await expect(uploader.upload(caller, { snapshotId, entries: [{ uploadKey: "f1", bytes: new TextEncoder().encode("# B\n") }] })).rejects.toMatchObject({ code: "UPLOAD_ENTRY_CONFLICT" });
-});
-
-it("records invalid UTF-8 as a blocking diagnostic without persisting invalid text", async () => {
-  const result = await uploader.upload(caller, { snapshotId, entries: [{ uploadKey: "f1", bytes: new Uint8Array([0xc3, 0x28]) }] });
-  expect(result.diagnostics).toEqual([expect.objectContaining({ code: "INVALID_MARKDOWN_ENCODING", severity: "BLOCKING" })]);
-});
+```text
+initial session creates BUILDING snapshot but no Source
+resync derives Workspace and based_on_version from Source
+HUB_MANAGED or ARCHIVED Source rejects
+nonmember rejects
+another user cannot upload to creator snapshot
+expired snapshot rejects upload
+4th active BUILDING snapshot rejects with IMPORT_SESSION_LIMIT
+11th active READY snapshot rejects with IMPORT_SESSION_LIMIT
+expired BUILDING/READY rows do not count against active quota
+manifest >20,000 rejects
+Markdown >5 MiB rejects
+Markdown total >256 MiB rejects
+upload batch >20 files or >10 MiB rejects
+same uploadKey + same bytes is idempotent
+same uploadKey + different bytes is UPLOAD_ENTRY_CONFLICT
+invalid UTF-8 is stored as RECEIVED with BLOCKING diagnostic and no raw text
 ```
 
-Also test: non-member cannot create/read/upload; other user cannot upload to creator snapshot; >3 BUILDING sessions rejects with `IMPORT_SESSION_LIMIT`; manifest >20,000 entries rejects; file/total/request size limits reject before storing bytes.
-
-- [ ] **Step 2: Run the session test and verify failure**
-
-Run:
+- [ ] **Step 2: Run the failing test**
 
 ```bash
 npx vitest run --config vitest.integration.config.ts tests/integration/phase2-import-session.test.ts
 ```
 
-Expected: FAIL because application services/config are missing.
+Expected: FAIL because services/config are missing.
 
-- [ ] **Step 3: Implement import config, deterministic manifest hashing, session creation, and upload**
+- [ ] **Step 3: Implement exact import configuration and authoritative manifest classification**
 
-Create `src/server/import-config.ts` with exact defaults and optional integer overrides:
+`import-config.ts` reads positive integer overrides for the nine approved limits and defaults to `DEFAULT_IMPORT_LIMITS`. Add those nine variables to `.env.example` with exact default numbers.
+
+At session creation, `kind` is a client hint only. Server classification is authoritative:
 
 ```ts
-import { DEFAULT_IMPORT_LIMITS, type ImportLimits } from "@/modules/sources/domain/import-limits";
-
-function positiveInt(name: string, fallback: number): number {
-  const raw = process.env[name];
-  if (raw === undefined) return fallback;
-  const value = Number(raw);
-  if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`${name} must be a positive integer.`);
-  return value;
-}
-
-export function importLimits(): ImportLimits {
-  return {
-    maxManifestEntries: positiveInt("KM_IMPORT_MAX_MANIFEST_ENTRIES", DEFAULT_IMPORT_LIMITS.maxManifestEntries),
-    maxPathBytes: positiveInt("KM_IMPORT_MAX_PATH_BYTES", DEFAULT_IMPORT_LIMITS.maxPathBytes),
-    maxMarkdownFileBytes: positiveInt("KM_IMPORT_MAX_MARKDOWN_FILE_BYTES", DEFAULT_IMPORT_LIMITS.maxMarkdownFileBytes),
-    maxMarkdownTotalBytes: positiveInt("KM_IMPORT_MAX_MARKDOWN_TOTAL_BYTES", DEFAULT_IMPORT_LIMITS.maxMarkdownTotalBytes),
-    maxMetadataBytes: positiveInt("KM_IMPORT_MAX_METADATA_BYTES", DEFAULT_IMPORT_LIMITS.maxMetadataBytes),
-    maxUploadBatchFiles: positiveInt("KM_IMPORT_MAX_UPLOAD_BATCH_FILES", DEFAULT_IMPORT_LIMITS.maxUploadBatchFiles),
-    maxUploadBatchBytes: positiveInt("KM_IMPORT_MAX_UPLOAD_BATCH_BYTES", DEFAULT_IMPORT_LIMITS.maxUploadBatchBytes),
-    maxBuildingSnapshotsPerUser: positiveInt("KM_IMPORT_MAX_BUILDING_PER_USER", DEFAULT_IMPORT_LIMITS.maxBuildingSnapshotsPerUser),
-    maxReadySnapshotsPerUser: positiveInt("KM_IMPORT_MAX_READY_PER_USER", DEFAULT_IMPORT_LIMITS.maxReadySnapshotsPerUser),
-  };
+function classify(relativePath: string): "DOCUMENT" | "ASSET" {
+  return /\.(?:md|markdown)$/iu.test(relativePath) ? "DOCUMENT" : "ASSET";
 }
 ```
 
-Document the nine variables in `.env.example` using the exact numeric defaults.
+If client says ASSET for `a.md`, persist it as DOCUMENT/PENDING and require raw Markdown upload. If client says MARKDOWN for `a.png`, persist it as ASSET/RECEIVED and require asset hash metadata. Do not trust client classification to bypass parsing.
 
-Create `CreateFolderImportService`. Both methods must:
+Validate `sourceName.trim()` and `rootName.trim()` are nonempty and at most 512 UTF-8 characters/bytes as appropriate for their DB columns. Validate unique `uploadKey` and unique raw relative path in the manifest. Sort manifest deterministically with `compareImportText(relativePath)` then `compareImportText(uploadKey)` before hashing canonical JSON.
 
-```ts
-const now = new Date();
-const expiresAt = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-```
+Both session methods must upsert trusted caller identity, re-check Workspace membership, and use `countActiveByCreatorAndState(..., now)` for quotas. BUILDING `expiresAt` is exactly `now + 2h`. `createResync()` loads Source server-side and accepts no Workspace/version argument.
 
-Then upsert caller identity, check current Workspace membership, enforce creator BUILDING/READY quotas, validate manifest entry uniqueness/limits, sort manifest by `relativePath` then `uploadKey`, hash the canonical JSON, insert one BUILDING snapshot, and insert manifest entries. Asset rows start as `RECEIVED`; Markdown rows start as `PENDING`. `createResync` must load Source server-side and reject non-ACTIVE/non-`SOURCE_MANAGED`/non-`FOLDER_SYNC` without accepting a workspace/version parameter.
+- [ ] **Step 4: Implement raw-byte upload idempotency and invalid-encoding blocker persistence**
 
-Create `UploadFolderImportEntriesService`. Before reading/storing entries, load snapshot, require creator equality, current Workspace membership, `BUILDING`, non-expired state, and batch file/byte limits. For each upload key:
+Before storing a batch: lock/read snapshot, require creator equality, current Workspace membership, BUILDING, unexpired state, and batch limits. For each DOCUMENT upload compute SHA-256 over raw bytes. If already RECEIVED, same hash is idempotent and different hash throws `UPLOAD_ENTRY_CONFLICT`. Decode with Task 1 fatal UTF-8 decoder. On `INVALID_MARKDOWN_ENCODING`, mark RECEIVED with `rawMarkdown = null`, hash, and one BLOCKING diagnostic so Finalize can still produce a blocker Preview.
 
-```ts
-const hash = sourceFileHash(input.bytes);
-if (existing.uploadStatus === "RECEIVED") {
-  if (existing.sourceFileHash === hash) return "IDEMPOTENT";
-  throw importError("UPLOAD_ENTRY_CONFLICT", "The same uploadKey was retried with different bytes.");
-}
-try {
-  const rawMarkdown = decodeUtf8Markdown(input.bytes);
-  await repositories.importSnapshotEntries.markMarkdownReceived({ entryId: existing.id, rawMarkdown, sourceFileHash: hash, diagnostics: [] });
-} catch (error) {
-  if (error instanceof SourceImportError && error.code === "INVALID_MARKDOWN_ENCODING") {
-    const diagnostic = { code: error.code, severity: "BLOCKING" as const, sourcePath: existing.clientRelativePath, message: error.message };
-    await repositories.importSnapshotEntries.markMarkdownReceived({ entryId: existing.id, rawMarkdown: null, sourceFileHash: hash, diagnostics: [diagnostic] });
-    return "ACCEPTED_WITH_BLOCKER";
-  }
-  throw error;
-}
-```
-
-- [ ] **Step 4: Run focused/full integration tests and static checks**
-
-Run:
+- [ ] **Step 5: Run focused/full integration/static checks**
 
 ```bash
 npx vitest run --config vitest.integration.config.ts tests/integration/phase2-import-session.test.ts
@@ -1357,7 +827,7 @@ npm run lint
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit Task 4**
+- [ ] **Step 6: Commit Task 4**
 
 ```bash
 git add .env.example src/server/import-config.ts src/modules/sources/application/create-folder-import.ts src/modules/sources/application/upload-folder-import-entries.ts tests/integration/phase2-import-session.test.ts
@@ -1374,8 +844,6 @@ git commit -m "feat: add staged folder import sessions"
 - Test: `tests/integration/phase2-import-finalize.test.ts`
 
 **Interfaces:**
-- Consumes: Task 4 BUILDING snapshot rows; Task 1 parser; Task 2 reconciler; Task 3 canonical-state repository.
-- Produces:
 
 ```ts
 export type ImportPreview = {
@@ -1398,118 +866,61 @@ export class FinalizeFolderImportService {
 
 - [ ] **Step 1: Write failing finalize integration tests**
 
-Create `tests/integration/phase2-import-finalize.test.ts`. Cover:
+Cover these exact outcomes:
 
-```ts
-it("finalizes a complete upload into READY with persisted plan/hash and clears raw Markdown", async () => {
-  const preview = await finalizer.finalize(caller, snapshotId);
-  expect(preview.state).toBe("READY");
-  expect(preview.hasBlockers).toBe(false);
-  const persisted = await readSnapshot(pool, snapshotId);
-  expect(persisted.snapshot_hash).toMatch(/^[0-9a-f]{64}$/u);
-  expect(persisted.plan_hash).toMatch(/^[0-9a-f]{64}$/u);
-  expect(persisted.plan).not.toBeNull();
-  expect((await readEntries(pool, snapshotId)).every((entry) => entry.raw_markdown === null)).toBe(true);
-});
-
-it("keeps malformed frontmatter as READY with blocker and disables future Apply", async () => {
-  const preview = await finalizer.finalize(caller, malformedSnapshotId);
-  expect(preview.state).toBe("READY");
-  expect(preview.hasBlockers).toBe(true);
-  expect(preview.changes.flatMap((item) => item.diagnostics).map((item) => item.code)).toContain("INVALID_FRONTMATTER");
-});
-
-it("blocks normalized path collision", async () => {
-  const preview = await finalizer.finalize(caller, collisionSnapshotId);
-  expect(preview.hasBlockers).toBe(true);
-  expect(preview.changes.flatMap((item) => item.diagnostics).map((item) => item.code)).toContain("PATH_COLLISION");
-});
+```text
+complete valid snapshot -> READY, plan/hash persisted, raw_markdown cleared
+incomplete Markdown upload -> UPLOAD_INCOMPLETE and remains BUILDING
+malformed frontmatter -> READY + blocker
+invalid UTF-8 from Task 4 -> READY + blocker
+TITLE_CONFLICT -> warning only
+normalized duplicate path -> READY + PATH_COLLISION blocker
+ignored paths omitted from plan
+empty directories never appear because folders derive from included files
+existing Source Preview emits move/update/archive/restore correctly
+READY Finalize retry returns persisted Preview without mutation
 ```
 
-Also cover incomplete upload = `UPLOAD_INCOMPLETE` while remaining BUILDING; title conflict = warning only; ignored paths excluded; no empty folder nodes in plan; existing source Preview correctly emits move/archive/restore; finalizing READY again returns the persisted Preview without mutating it.
+For collision case, assert both colliding staging rows have `source_path_hash IS NULL` after Finalize, proving the blocker can persist without violating `uq_import_entries_snapshot_path_hash`.
 
-- [ ] **Step 2: Run finalize tests and verify failure**
-
-Run:
+- [ ] **Step 2: Run the failing test**
 
 ```bash
 npx vitest run --config vitest.integration.config.ts tests/integration/phase2-import-finalize.test.ts
 ```
 
-Expected: FAIL because finalization services are missing.
+Expected: FAIL because finalizer is missing.
 
-- [ ] **Step 3: Implement canonical finalization, diagnostics, snapshot hash, plan hash, and READY transition**
+- [ ] **Step 3: Implement finalization pipeline**
 
-Create `reconcile-import-snapshot.ts` as the only application helper allowed to load canonical reconciliation state:
+Inside one short staging UoW:
 
-```ts
-import type { SourceRepositories } from "../ports/unit-of-work";
-import type { ReadyImportContent } from "../domain/import-plan";
-import { reconcileFolderImport } from "../domain/import-reconciler";
-
-export async function reconcileImportSnapshot(repositories: SourceRepositories, content: ReadyImportContent) {
-  const current = content.sourceBinding.sourceId === null
-    ? { documents: [], folders: [], assets: [] }
-    : await repositories.importCanonicalState.load(content.sourceBinding.sourceId);
-  return reconcileFolderImport(content, current);
-}
+```text
+lock snapshot
+verify creator + current Workspace membership + BUILDING + not expired
+load all manifest entries
+require every DOCUMENT upload_status=RECEIVED
+normalize paths and server ignore rules
+collect normalized-path groups before writing source_path_hash
+for groups with >1 entry: attach PATH_COLLISION to every member and leave source_path_hash NULL
+parse valid Markdown rows; parser/title errors become BLOCKING diagnostics
+validate metadata JSON UTF-8 byte length <=256 KiB
+canonicalize Asset rows from source-provided hash/size/MIME/lastModified
+build ReadyImportContent from only nonignored, nonblocking canonical entries
+load canonical Source state once and reconcile
+merge diagnostics into Preview/summary
+persist finalized rows with rawMarkdown=NULL
+persist FolderImportPlan + snapshotHash + planHash
+BUILDING -> READY and set expiresAt=finalizedAt+30m
 ```
 
-Create `FinalizeFolderImportService.finalize()`. Inside one short staging UoW:
+Use deterministic SHA-256 over canonical JSON. Every list included in the hash must first sort paths with `compareImportText`; do not use `localeCompare`.
 
-1. lock snapshot and verify creator, membership, BUILDING, unexpired;
-2. load all manifest entries;
-3. require all Markdown rows `RECEIVED` (invalid UTF-8 rows count as RECEIVED with blocker diagnostic);
-4. normalize all nonignored paths and reject duplicate normalized hashes as `PATH_COLLISION` diagnostics;
-5. parse valid Markdown rows with `parseGenericMarkdownText`; catch parser/title errors and convert them to BLOCKING diagnostics instead of failing the whole Preview;
-6. validate `JSON.stringify(metadata)` byte length against 256 KiB;
-7. canonicalize Asset rows with normalized path and source-provided metadata;
-8. build `ReadyImportContent`, load current state once, and reconcile;
-9. merge parser/path/reconciler diagnostics into preview changes and summary;
-10. compute deterministic hashes from canonical JSON sorted by path;
-11. replace finalized entry rows, setting `rawMarkdown: null`;
-12. mark snapshot READY with `expiresAt = finalizedAt + 30 minutes`.
+The snapshot hash input is exactly target binding + adapter type/version + proposed source name + canonicalized entry fields required for Apply. `planHash = SHA256(JSON.stringify(plan))` after the reconciler has emitted deterministic ordering.
 
-Use one helper for deterministic SHA-256:
+If current canonical Source state itself contains duplicate current SourceEntry paths, produce one BLOCKING `CANONICAL_SOURCE_PATH_CONFLICT` diagnostic and do not guess an entry identity.
 
-```ts
-import { createHash } from "node:crypto";
-
-function canonicalHash(value: unknown): string {
-  return createHash("sha256").update(JSON.stringify(value), "utf8").digest("hex");
-}
-```
-
-Snapshot hash input must be exactly:
-
-```ts
-const snapshotHashInput = {
-  adapterType: snapshot.adapterType,
-  adapterVersion: snapshot.adapterVersion,
-  workspaceId: snapshot.workspaceId,
-  sourceId: snapshot.sourceId,
-  basedOnVersion: snapshot.basedOnVersion,
-  proposedSourceName: snapshot.proposedSourceName,
-  entries: finalizedEntries
-    .filter((entry) => entry.sourcePath !== null)
-    .sort((left, right) => left.sourcePath!.localeCompare(right.sourcePath!))
-    .map((entry) => ({
-      sourcePath: entry.sourcePath,
-      entryType: entry.entryType,
-      revisionContentHash: entry.revisionContentHash,
-      reconciliationFingerprint: entry.reconciliationFingerprint,
-      assetContentHash: entry.assetContentHash,
-      resolvedTitle: entry.resolvedTitle,
-      metadata: entry.metadata,
-    })),
-};
-```
-
-`planHash = canonicalHash(plan)`. READY rows must never be reparsed or overwritten.
-
-- [ ] **Step 4: Run finalize, parser, reconciler, and full integration suites**
-
-Run:
+- [ ] **Step 4: Run focused/unit/full integration checks**
 
 ```bash
 npx vitest run --config vitest.integration.config.ts tests/integration/phase2-import-finalize.test.ts
@@ -1529,7 +940,7 @@ git commit -m "feat: finalize immutable import previews"
 
 ---
 
-### Task 6: Atomic Whole-Snapshot Apply, Stable Identity, Rollback, and Concurrency
+### Task 6: Atomic Whole-Snapshot Apply, Rollback, Stable Identity, and Concurrency
 
 **Files:**
 - Create: `src/modules/sources/application/source-import-plan-executor.ts`
@@ -1539,22 +950,16 @@ git commit -m "feat: finalize immutable import previews"
 - Test: `tests/integration/phase2-import-concurrency.test.ts`
 
 **Interfaces:**
-- Consumes: persisted `FolderImportPlan`, Task 3 UoW, existing `bindSourceProjection()`, SourceEntry mapping primitives.
-- Produces:
 
 ```ts
 export type ApplyFolderImportResult =
-  | { kind: "APPLIED"; sourceId: string; resultVersion: number; runId: string; alreadyApplied: boolean }
+  | { kind: "APPLIED"; sourceId: string; resultVersion: number; runId: string | null; alreadyApplied: boolean }
   | { kind: "VERSION_CONFLICT"; sourceId: string; currentVersion: number };
 
 export class ApplyFolderImportService {
   apply(caller: CallerContext, snapshotId: string): Promise<ApplyFolderImportResult>;
 }
-```
 
-`source-import-plan-executor.ts` exports:
-
-```ts
 export async function executeFolderImportPlan(
   repositories: SourceRepositories,
   caller: CallerContext,
@@ -1564,72 +969,34 @@ export async function executeFolderImportPlan(
 ): Promise<void>;
 ```
 
-The optional failure point is only accepted by direct application-service tests; it is never wired into server/HTTP functions.
-
 - [ ] **Step 1: Write failing apply/rollback/stable-ID tests**
 
-Create `tests/integration/phase2-import-apply.test.ts`. Cover first import, existing sync, no-op, archive/restore, assets, and rollback:
+Cover:
 
-```ts
-it("creates Source only on first Confirm and commits version 1 with one APPLIED run", async () => {
-  const result = await apply.apply(caller, readyInitialSnapshotId);
-  expect(result).toMatchObject({ kind: "APPLIED", resultVersion: 1, alreadyApplied: false });
-  expect(await countSources(pool, workspaceId)).toBe(1);
-  expect(await countAppliedRuns(pool, result.kind === "APPLIED" ? result.sourceId : "")).toBe(1);
-});
-
-it("advances version exactly once for a many-document sync", async () => {
-  const result = await apply.apply(caller, readyExistingSnapshotId);
-  expect(result).toMatchObject({ kind: "APPLIED", resultVersion: 8 });
-  expect(await sourceVersion(pool, sourceId)).toBe(8);
-  expect(await countAppliedRuns(pool, sourceId)).toBe(1);
-});
-
-it("advances version on all-UNCHANGED no-op without creating revisions", async () => {
-  const before = await countRevisions(pool, sourceId);
-  const result = await apply.apply(caller, readyNoopSnapshotId);
-  expect(result).toMatchObject({ kind: "APPLIED", resultVersion: 8 });
-  expect(await countRevisions(pool, sourceId)).toBe(before);
-});
-
-it("archives then restores the same SourceEntry/Document/TreeNode IDs", async () => {
-  const original = await idsForPath(pool, sourceId, "docs/a.md");
-  await apply.apply(caller, snapshotWithoutA);
-  await apply.apply(caller, snapshotWithARestored);
-  expect(await idsForPath(pool, sourceId, "docs/a.md")).toEqual(original);
-});
+```text
+initial Confirm creates Source only inside Apply and commits version 1 + one APPLIED run
+existing sync with many entries advances version once + one APPLIED run
+all-UNCHANGED no-op advances version once and creates no Revision
+archive/restore reuses same SourceEntry/Document/TreeNode IDs
+filename-fallback rename preserves Document ID but creates new Revision title
+asset update keeps projection row identity at same path
+failure injected after folders/documents/revisions/assets/before-run fully rolls back canonical state/version
+initial failure leaves no Source and no SyncRun
+existing unexpected failure leaves snapshot READY and records FAILED run only after rollback
 ```
 
-Add parameterized failure-point tests. For each `folders`, `documents`, `revisions`, `assets`, `before-run`, capture canonical table counts/version before Apply, expect rejection, then assert Source/Document/Revision/Tree/SourceEntry/Asset/version state is identical to before. For initial import failure, assert Source count is still zero.
+- [ ] **Step 2: Write failing concurrency tests**
 
-- [ ] **Step 2: Write failing concurrency tests for stale previews and double Apply**
+Cover:
 
-Create `tests/integration/phase2-import-concurrency.test.ts`:
-
-```ts
-it("commits STALE plus FAILED SyncRun on expected version conflict without canonical mutation", async () => {
-  const first = await apply.apply(caller, snapshotA);
-  expect(first.kind).toBe("APPLIED");
-  const before = await canonicalFingerprint(pool, sourceId);
-  const second = await apply.apply(caller, snapshotB);
-  expect(second).toMatchObject({ kind: "VERSION_CONFLICT", currentVersion: 8 });
-  expect(await snapshotState(pool, snapshotB)).toBe("STALE");
-  expect(await latestRunStatus(pool, sourceId)).toBe("FAILED");
-  expect(await canonicalFingerprint(pool, sourceId)).toBe(before);
-});
-
-it("serializes double Apply and returns idempotent success on the second request", async () => {
-  const [left, right] = await Promise.all([apply.apply(caller, snapshotId), apply.apply(caller, snapshotId)]);
-  expect([left, right].filter((item) => item.kind === "APPLIED")).toHaveLength(2);
-  expect([left, right].filter((item) => item.kind === "APPLIED" && item.alreadyApplied === false)).toHaveLength(1);
-  expect(await sourceVersion(pool, sourceId)).toBe(8);
-  expect(await countAppliedRuns(pool, sourceId)).toBe(1);
-});
+```text
+A/B snapshots both based_on=7; A applies ->8; B commits STALE+FAILED run and returns VERSION_CONFLICT without Knowledge mutation
+parallel double Apply on same snapshot results in exactly one canonical mutation/run/version advance; second result is alreadyApplied=true
+membership removed after Preview causes Apply denial and no canonical mutation
+HUB_MANAGED/ARCHIVED Source cannot be applied even if snapshot exists
 ```
 
-- [ ] **Step 3: Run both suites and verify failure**
-
-Run:
+- [ ] **Step 3: Run the failing tests**
 
 ```bash
 npx vitest run --config vitest.integration.config.ts tests/integration/phase2-import-apply.test.ts tests/integration/phase2-import-concurrency.test.ts
@@ -1637,87 +1004,66 @@ npx vitest run --config vitest.integration.config.ts tests/integration/phase2-im
 
 Expected: FAIL because batch Apply does not exist.
 
-- [ ] **Step 4: Add one Source-managed batch ordering primitive and implement plan execution**
+- [ ] **Step 4: Add Source-managed batch ordering primitive and execute persisted plan**
 
-Extend `SourceKnowledgeProjectionService` with one focused batch ordering primitive instead of letting the orchestrator update tree rows directly:
-
-```ts
-normalizeProjectedOrdering(
-  caller: CallerContext,
-  input: { nodeId: string; parentId: string | null; position: number }[],
-): Promise<void>;
-```
-
-Implementation must call `requireBoundSource()` once, verify every listed node belongs to the bound Source and has the expected parent, then call `repositories.tree.updatePosition()` only for changed positions. This keeps canonical tree writes behind Source projection authority while avoiding N calls to `moveProjectedNode()` just for ordering.
-
-Implement `executeFolderImportPlan()` in deterministic order:
+Extend `SourceKnowledgeProjectionService`:
 
 ```ts
-const projection = bindSourceProjection(repositories, { id: source.id, workspaceId: source.workspaceId });
-const nodes = await repositories.tree.listBySource(source.id);
-const folderIdByPath = new Map<string, string>();
-for (const folder of plan.folders.restore) folderIdByPath.set(folder.sourcePath, folder.treeNodeId);
-for (const folder of plan.folders.create) {
-  const parentId = folder.parentPath === null ? null : folderIdByPath.get(folder.parentPath) ?? null;
-  const created = await projection.projectFolder(caller, {
-    sourceId: source.id,
-    parentId,
-    name: folder.name,
-    position: folder.desiredPosition,
-    mapping: { sourceEntryId: uuidv7(), externalId: null, sourcePath: folder.sourcePath },
-  });
-  folderIdByPath.set(folder.sourcePath, created.treeNodeId);
-}
+normalizeProjectedOrdering(caller: CallerContext, input: { nodeId: string; parentId: string | null; position: number }[]): Promise<void>;
 ```
 
-Before the loop, seed `folderIdByPath` with all current exact-path folder mappings from `repositories.importCanonicalState.load(source.id)`, then restore folders top-down. Continue with create docs, restore docs, moves, revisions, locator updates, assets, document archives, asset removals, folder archives deepest-first, and `normalizeProjectedOrdering` last. Use the current revision ID from the plan for optimistic revision creation. For new docs, use `uuidv7()` only for `sourceEntryId`; `projectDocument` generates Document/Revision/Tree IDs itself.
+Its implementation calls `requireBoundSource()` once, verifies every listed node belongs to the bound Source and still has the expected parent, then changes only differing positions through `repositories.tree.updatePosition()`.
 
-Assets must use `upsertByPath` with a newly generated UUID only for truly new paths; if `find/list` shows an existing path, pass its existing ID so row identity remains stable.
+`executeFolderImportPlan()` must execute in this order:
 
-- [ ] **Step 5: Implement `ApplyFolderImportService` with snapshot->Source lock ordering and expected-conflict commit semantics**
-
-The existing-source path must return `VERSION_CONFLICT` from inside the UoW instead of throwing before STALE/FAILED commit:
-
-```ts
-const result = await this.unitOfWork.run(async (repositories) => {
-  await repositories.users.upsertIdentity(caller.identity);
-  const snapshot = await repositories.importSnapshots.lockById(snapshotId);
-  requireApplyableSnapshot(snapshot, caller);
-  if (snapshot.state === "APPLIED") {
-    return { kind: "APPLIED" as const, sourceId: snapshot.resultSourceId!, resultVersion: snapshot.resultVersion!, runId: "", alreadyApplied: true };
-  }
-  if (snapshot.sourceId !== null) {
-    const source = await repositories.sources.lockById(snapshot.sourceId);
-    if (!source) throw importError("IMPORT_SNAPSHOT_NOT_FOUND", "Import snapshot target is unavailable.");
-    await repositories.workspaceAccess.requireMembership(caller, source.workspaceId);
-    if (source.status !== "ACTIVE") throw importError("SOURCE_NOT_ACTIVE", "Source is not active.");
-    if (source.ownership !== "SOURCE_MANAGED" || source.sourceType !== "FOLDER_SYNC") throw importError("SOURCE_NOT_SOURCE_MANAGED", "Folder sync requires an active SOURCE_MANAGED FOLDER_SYNC source.");
-    if (source.syncVersion !== snapshot.basedOnVersion) {
-      const now = new Date();
-      await repositories.importSnapshots.markStale({ snapshotId, staleAt: now });
-      await repositories.syncRuns.insert({ id: uuidv7(), sourceId: source.id, triggeredBy: caller.identity.id, basedOnVersion: snapshot.basedOnVersion!, resultVersion: null, status: "FAILED", summary: { snapshotId, snapshotHash: snapshot.snapshotHash, failureCode: "SOURCE_VERSION_CONFLICT" }, startedAt: now, completedAt: now });
-      return { kind: "VERSION_CONFLICT" as const, sourceId: source.id, currentVersion: source.syncVersion };
-    }
-    const resultVersion = await repositories.sources.guardAndAdvanceVersion(source.id, snapshot.basedOnVersion!, caller.identity.id);
-    if (resultVersion === null) throw new Error("Locked source version guard unexpectedly failed.");
-    await executeFolderImportPlan(repositories, caller, source, snapshot.plan!, this.testOptions);
-    const runId = uuidv7();
-    const now = new Date();
-    await repositories.syncRuns.insert({ id: runId, sourceId: source.id, triggeredBy: caller.identity.id, basedOnVersion: snapshot.basedOnVersion!, resultVersion, status: "APPLIED", summary: { snapshotId, snapshotHash: snapshot.snapshotHash, counts: snapshot.summary, changed: snapshot.summary!.changed }, startedAt: now, completedAt: now });
-    await repositories.importSnapshots.markApplied({ snapshotId, sourceId: source.id, resultVersion, appliedAt: now });
-    return { kind: "APPLIED" as const, sourceId: source.id, resultVersion, runId, alreadyApplied: false };
-  }
-  return this.applyInitialInTransaction(repositories, caller, snapshot);
-});
+```text
+restore folders top-down
+create folders top-down
+create documents
+restore documents
+move existing documents
+create changed revisions
+update SourceEntry locators/content hashes
+upsert assets
+archive missing documents
+remove stale asset rows
+archive obsolete folders bottom-up
+resolve plan-local nodeKey -> actual TreeNode ID and normalize final ordering
 ```
 
-`applyInitialInTransaction()` must re-check Workspace membership, create one `FOLDER_SYNC/SOURCE_MANAGED/ACTIVE` Source at version 0 using `proposedSourceName`, execute the plan, call `guardAndAdvanceVersion(sourceId, 0, actor)` to produce version 1, insert APPLIED SyncRun, and mark snapshot APPLIED in the same transaction.
+Seed a `folderIdByPath` map from `ImportCanonicalStateRepository.load(source.id)`. New folder/document UUIDs are generated only in this transaction. New SourceEntry IDs use `uuidv7()`; existing entity IDs from the plan are reused. `projectDocument`, `projectFolder`, `projectRevision`, move/archive/restore primitives remain the mutation authority.
 
-Outside the UoW, catch unexpected failures. Only if the snapshot targeted an already-existing Source, open a separate UoW and insert one FAILED run with `failureCode: "IMPORT_APPLY_FAILED"`; do not change snapshot READY state. Do not write a FAILED run for failed initial import.
+For `ordering`, resolve:
 
-- [ ] **Step 6: Run focused tests, full integration suite, and commit**
+```text
+tree:<id> -> existing TreeNode ID
+folder:<sourcePath> -> TreeNode ID created/restored for that folder path
+document:<sourcePath> -> TreeNode ID created for that new document path
+```
 
-Run:
+Then pass concrete `{nodeId,parentId,position}` rows to `normalizeProjectedOrdering()`.
+
+- [ ] **Step 5: Implement Apply with accessible-snapshot check before state handling**
+
+Inside the UoW, lock snapshot first. Then always verify creator equality and current Workspace membership. State handling is exact:
+
+```text
+APPLIED -> return idempotent APPLIED with resultSourceId/resultVersion, runId=null; no new write
+STALE -> throw IMPORT_SNAPSHOT_STALE
+READY but expired -> throw IMPORT_SNAPSHOT_EXPIRED
+READY with blockers -> throw IMPORT_SNAPSHOT_NOT_READY
+BUILDING -> throw IMPORT_SNAPSHOT_NOT_READY
+```
+
+For existing Source, lock Source second and re-check ACTIVE + `SOURCE_MANAGED/FOLDER_SYNC`. If current version differs from `basedOnVersion`, in the same transaction mark snapshot STALE and insert FAILED SyncRun with `failureCode=SOURCE_VERSION_CONFLICT`; return `{kind:"VERSION_CONFLICT"}` so the UoW commits. HTTP maps it to 409 later.
+
+If versions match, call `guardAndAdvanceVersion()` exactly once, execute persisted plan, insert exactly one APPLIED SyncRun, and mark snapshot APPLIED in the same transaction. The version change rolls back automatically if any later step fails.
+
+For initial import, re-check Workspace membership, create one `FOLDER_SYNC/SOURCE_MANAGED/ACTIVE` Source at version 0, execute plan, advance 0->1 exactly once, insert APPLIED SyncRun `(based=0,result=1)`, and mark snapshot APPLIED in the same transaction.
+
+Outside the UoW, unexpected existing-source failure may open a separate UoW to insert FAILED run with `IMPORT_APPLY_FAILED`; snapshot stays READY. Failed initial import never creates phantom Source/SyncRun.
+
+- [ ] **Step 6: Run focused and full regression checks**
 
 ```bash
 npx vitest run --config vitest.integration.config.ts tests/integration/phase2-import-apply.test.ts tests/integration/phase2-import-concurrency.test.ts
@@ -1729,7 +1075,7 @@ npm run lint
 
 Expected: PASS.
 
-Commit:
+- [ ] **Step 7: Commit Task 6**
 
 ```bash
 git add src/modules/sources/application/source-import-plan-executor.ts src/modules/sources/application/apply-folder-import.ts src/modules/sources/application/source-knowledge-projection-service.ts tests/integration/phase2-import-apply.test.ts tests/integration/phase2-import-concurrency.test.ts
@@ -1738,87 +1084,66 @@ git commit -m "feat: apply folder imports atomically"
 
 ---
 
-### Task 7: Staging Cleanup and Retention Safety
+### Task 7: Creator-Private Preview Read Service and Staging Cleanup
 
 **Files:**
+- Create: `src/modules/sources/application/get-folder-import-preview.ts`
 - Create: `src/modules/sources/application/cleanup-folder-imports.ts`
 - Create: `scripts/db/cleanup-import-snapshots.ts`
 - Test: `tests/integration/phase2-import-cleanup.test.ts`
 
 **Interfaces:**
-- Consumes: `ImportSnapshotRepository.listCleanupCandidates()` and creator-independent infrastructure execution.
-- Produces:
 
 ```ts
+export class GetFolderImportPreviewService {
+  get(caller: CallerContext, snapshotId: string): Promise<ImportPreview>;
+}
+
 export class CleanupFolderImportsService {
   cleanup(input?: { now?: Date; batchSize?: number }): Promise<{ deleted: number }>;
 }
 ```
 
-- [ ] **Step 1: Write the failing cleanup lifecycle test**
+- [ ] **Step 1: Write failing preview-access and cleanup tests**
 
-Create snapshots representing expired BUILDING, expired READY, STALE older than 24h, APPLIED older than 24h, and fresh READY. Create child staging entries for each. The test must assert only eligible snapshots/children disappear while canonical Source/Revision/SyncRun rows remain unchanged.
+Cover:
 
-```ts
-it("physically deletes only expired staging rows and cascades entries", async () => {
-  const result = await cleanup.cleanup({ now, batchSize: 100 });
-  expect(result.deleted).toBe(4);
-  expect(await stagingExists(pool, freshReadyId)).toBe(true);
-  expect(await stagingEntryCount(pool, expiredReadyId)).toBe(0);
-  expect(await canonicalCounts(pool)).toEqual(beforeCanonicalCounts);
-});
+```text
+creator + current member can read READY/APPLIED/STALE Preview
+same-Workspace different user gets hidden/not-found semantics
+creator who lost membership cannot read Preview
+expired READY is returned as derived expired state/error suitable for UI
+expired BUILDING/READY, STALE older than 24h, APPLIED older than 24h are cleanup candidates
+fresh READY remains
+snapshot deletion cascades staging entries only
+canonical Source/Revision/SyncRun counts remain unchanged
 ```
 
-- [ ] **Step 2: Run test and verify failure**
-
-Run:
+- [ ] **Step 2: Run failing test**
 
 ```bash
 npx vitest run --config vitest.integration.config.ts tests/integration/phase2-import-cleanup.test.ts
 ```
 
-Expected: FAIL because cleanup service/script are missing.
+Expected: FAIL because read/cleanup services are missing.
 
-- [ ] **Step 3: Implement bounded conditional cleanup**
+- [ ] **Step 3: Implement preview read authorization and derived expiry**
 
-`ImportSnapshotRepository.listCleanupCandidates(now, limit)` must select only:
+`GetFolderImportPreviewService.get()` loads snapshot, returns hidden not-found when snapshot missing or creator differs, re-checks Workspace membership, requires persisted summary+plan for READY/APPLIED/STALE, and maps `plan.preview` into `ImportPreview`. Do not return raw staging Markdown or full frontmatter serialization.
+
+- [ ] **Step 4: Implement bounded conditional cleanup**
+
+`listCleanupCandidates(now, limit)` selects only:
 
 ```text
-BUILDING or READY with expires_at <= now
-STALE with stale_at <= now - 24h
-APPLIED with applied_at <= now - 24h
+BUILDING or READY where expires_at <= now
+STALE where stale_at <= now - 24h
+APPLIED where applied_at <= now - 24h
 ```
 
-Return at most `limit` IDs. `deleteById()` must be a conditional DELETE that repeats the same eligibility rule under the transaction, so an Apply that row-locks/updates a snapshot cannot be deleted between selection and mutation.
+`deleteIfCleanupEligible(id, now)` repeats the same predicate in the DELETE statement so selection cannot race an Apply. Cleanup service clamps batch size to 1..500 and defaults to 200. Script creates pool/UoW, runs one batch, prints only deleted count, and closes pool in `finally`.
 
-Implement service:
-
-```ts
-export class CleanupFolderImportsService {
-  constructor(private readonly unitOfWork: SourceUnitOfWork) {}
-
-  async cleanup(input: { now?: Date; batchSize?: number } = {}): Promise<{ deleted: number }> {
-    const now = input.now ?? new Date();
-    const batchSize = Math.min(Math.max(input.batchSize ?? 200, 1), 500);
-    return this.unitOfWork.run(async (repositories) => {
-      const ids = await repositories.importSnapshots.listCleanupCandidates(now, batchSize);
-      let deleted = 0;
-      for (const id of ids) {
-        deleted += await repositories.importSnapshots.deleteIfCleanupEligible(id, now) ? 1 : 0;
-      }
-      return { deleted };
-    });
-  }
-}
-```
-
-Add `deleteIfCleanupEligible(snapshotId, now): Promise<boolean>` to the port rather than exposing unsafe unconditional cleanup deletion.
-
-Create `scripts/db/cleanup-import-snapshots.ts` to instantiate the dev pool/UoW, run one bounded cleanup batch, print only the deleted count, and close the pool in `finally`.
-
-- [ ] **Step 4: Run cleanup/full integration tests and commit**
-
-Run:
+- [ ] **Step 5: Run integration/static checks**
 
 ```bash
 npx vitest run --config vitest.integration.config.ts tests/integration/phase2-import-cleanup.test.ts
@@ -1828,16 +1153,16 @@ npm run typecheck
 
 Expected: PASS.
 
-Commit:
+- [ ] **Step 6: Commit Task 7**
 
 ```bash
-git add src/modules/sources/application/cleanup-folder-imports.ts scripts/db/cleanup-import-snapshots.ts tests/integration/phase2-import-cleanup.test.ts src/modules/sources/ports/import-snapshot-repository.ts src/infrastructure/database/mariadb/repositories/import-snapshots.ts
-git commit -m "feat: add import staging cleanup"
+git add src/modules/sources/application/get-folder-import-preview.ts src/modules/sources/application/cleanup-folder-imports.ts scripts/db/cleanup-import-snapshots.ts tests/integration/phase2-import-cleanup.test.ts src/modules/sources/ports/import-snapshot-repository.ts src/infrastructure/database/mariadb/repositories/import-snapshots.ts
+git commit -m "feat: add import preview reads and cleanup"
 ```
 
 ---
 
-### Task 8: Trusted Server Adapter and Next.js Import APIs
+### Task 8: Trusted Server Adapter and Next.js API Routes
 
 **Files:**
 - Modify: `src/server/composition.ts`
@@ -1852,135 +1177,68 @@ git commit -m "feat: add import staging cleanup"
 - Test: `tests/unit/phase2-import-http.test.ts`
 
 **Interfaces:**
-- Consumes: Task 4/5/6 application services and the existing trusted `IdentityProvider`.
-- Produces JSON API contracts from the approved spec. HTTP never accepts actor IDs, Workspace overrides for resync, Source overrides for snapshot Apply, diff plans, or version overrides.
-
-- [ ] **Step 1: Write failing HTTP error-mapping and request-shape unit tests**
-
-Create `tests/unit/phase2-import-http.test.ts`:
 
 ```ts
-import { describe, expect, it } from "vitest";
-import { DomainError } from "@/shared/domain/errors";
-import { toHttpError } from "@/server/http-error-response";
-
-it("maps hidden access/not-found errors to non-enumerating 404", () => {
-  for (const code of ["WORKSPACE_ACCESS_DENIED", "WORKSPACE_NOT_FOUND", "SOURCE_NOT_FOUND", "IMPORT_SNAPSHOT_NOT_FOUND"]) {
-    expect(toHttpError(new DomainError(code, "hidden")).status).toBe(404);
-  }
-});
-
-it("maps stale/version conflict to 409 and retryable database activity to 409", () => {
-  expect(toHttpError(new DomainError("SOURCE_VERSION_CONFLICT", "stale")).status).toBe(409);
-  expect(toHttpError(new DomainError("IMPORT_APPLY_RETRYABLE", "retry")).status).toBe(409);
-});
-
-it("maps validation/import-limit errors to 400", () => {
-  expect(toHttpError(new DomainError("UPLOAD_INCOMPLETE", "incomplete")).status).toBe(400);
-  expect(toHttpError(new DomainError("IMPORT_SESSION_LIMIT", "limit")).status).toBe(400);
-});
+export async function createInitialSourceImport(workspaceId: string, input: InitialImportRequest): Promise<CreateImportResult>;
+export async function createSourceResync(sourceId: string, input: ResyncRequest): Promise<CreateImportResult>;
+export async function uploadSourceImportEntries(snapshotId: string, entries: { uploadKey: string; bytes: Uint8Array }[]): Promise<UploadImportResult>;
+export async function finalizeSourceImport(snapshotId: string): Promise<ImportPreview>;
+export async function getSourceImportPreview(snapshotId: string): Promise<ImportPreview>;
+export async function applySourceImport(snapshotId: string): Promise<ApplyFolderImportResult>;
 ```
 
-- [ ] **Step 2: Run unit test and verify failure**
+Every function obtains trusted identity through existing `IdentityProvider` + `callerFromIdentity`; no actor/workspace override is accepted.
 
-Run:
+- [ ] **Step 1: Write failing HTTP mapping tests**
+
+`tests/unit/phase2-import-http.test.ts` must assert:
+
+```text
+WORKSPACE_ACCESS_DENIED / WORKSPACE_NOT_FOUND / SOURCE_NOT_FOUND / IMPORT_SNAPSHOT_NOT_FOUND -> non-enumerating 404 NOT_FOUND
+SOURCE_VERSION_CONFLICT / IMPORT_SNAPSHOT_STALE / IMPORT_APPLY_RETRYABLE -> 409
+IMPORT_SESSION_LIMIT / UPLOAD_INCOMPLETE / INVALID_* -> 400
+unknown error -> 500 INTERNAL_ERROR without internal message
+```
+
+- [ ] **Step 2: Run failing HTTP test**
 
 ```bash
 npm run test:unit -- tests/unit/phase2-import-http.test.ts
 ```
 
-Expected: FAIL because HTTP adapter does not exist.
+Expected: FAIL because adapter/routes do not exist.
 
-- [ ] **Step 3: Wire services through composition and implement trusted server functions**
+- [ ] **Step 3: Wire all Phase 2 application services into `composition.ts` and `source-imports.ts`**
 
-Extend `buildServices()`:
-
-```ts
-const importLimitsConfig = importLimits();
-const importSessions = new CreateFolderImportService(unitOfWork, importLimitsConfig);
-const importUploads = new UploadFolderImportEntriesService(unitOfWork, importLimitsConfig);
-const importFinalize = new FinalizeFolderImportService(unitOfWork, importLimitsConfig);
-const importApply = new ApplyFolderImportService(unitOfWork);
-const importCleanup = new CleanupFolderImportsService(unitOfWork);
-return { identityProvider, unitOfWork, hub, queries, sources, workspaces, importSessions, importUploads, importFinalize, importApply, importCleanup };
-```
-
-Create `src/server/source-imports.ts` using the same trusted identity pattern as `knowledge-read.ts`:
+Use the same identity flow as `knowledge-read.ts`:
 
 ```ts
-import { getCurrentIdentity } from "@/modules/identity/application/get-current-identity";
-import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
-import { applicationServices } from "./composition";
-
-async function caller() {
-  const services = applicationServices();
-  return callerFromIdentity(await getCurrentIdentity(services.identityProvider));
-}
-
-export async function createInitialSourceImport(workspaceId: string, input: InitialImportRequest) {
-  const services = applicationServices();
-  return services.importSessions.createInitial(await caller(), { workspaceId, ...input });
-}
-
-export async function createSourceResync(sourceId: string, input: ResyncRequest) {
-  const services = applicationServices();
-  return services.importSessions.createResync(await caller(), { sourceId, ...input });
-}
+const services = applicationServices();
+const identity = await getCurrentIdentity(services.identityProvider);
+const caller = callerFromIdentity(identity);
+return services.importPreview.get(caller, snapshotId);
 ```
 
-Add corresponding `uploadSourceImportEntries`, `finalizeSourceImport`, `getSourceImportPreview`, and `applySourceImport` functions. `getSourceImportPreview` must call an application read method that enforces creator equality + current Workspace membership before returning the persisted READY/APPLIED/STALE preview.
+Composition must instantiate `CreateFolderImportService`, `UploadFolderImportEntriesService`, `FinalizeFolderImportService`, `GetFolderImportPreviewService`, `ApplyFolderImportService`, and `CleanupFolderImportsService` from the shared `MariaDbUnitOfWork`.
 
-Create `http-error-response.ts`:
+- [ ] **Step 4: Implement JSON routes and bounded multipart upload**
 
-```ts
-import { DomainError } from "@/shared/domain/errors";
+Next.js 15 dynamic params use `Promise<{...}>`. Create-session routes call the initial/resync server functions. GET snapshot calls preview read service. Finalize/Apply use empty POST bodies.
 
-export function toHttpError(error: unknown): { status: number; body: { error: { code: string; message: string; details?: Record<string, unknown> } } } {
-  if (!(error instanceof DomainError)) return { status: 500, body: { error: { code: "INTERNAL_ERROR", message: "The request could not be completed." } } };
-  const hidden = new Set(["WORKSPACE_ACCESS_DENIED", "WORKSPACE_NOT_FOUND", "SOURCE_NOT_FOUND", "IMPORT_SNAPSHOT_NOT_FOUND"]);
-  if (hidden.has(error.code)) return { status: 404, body: { error: { code: "NOT_FOUND", message: "The requested resource was not found." } } };
-  const conflict = new Set(["SOURCE_VERSION_CONFLICT", "IMPORT_SNAPSHOT_STALE", "IMPORT_APPLY_RETRYABLE"]);
-  const status = conflict.has(error.code) ? 409 : error.code.endsWith("NOT_FOUND") ? 404 : 400;
-  return { status, body: { error: { code: error.code, message: error.message } } };
-}
+Before `request.json()` or `request.formData()`, reject a declared `Content-Length` larger than the applicable configured limit plus 1 MiB framing allowance. Application limits are still authoritative after parsing, but this prevents obviously oversized bodies from being materialized first.
+
+Upload multipart contract is exact:
+
+```text
+field "entries": JSON array [{"uploadKey":"f1","field":"file-0"}]
+field "file-0": File bytes
 ```
 
-- [ ] **Step 4: Implement six route handlers with bounded JSON/multipart parsing**
+Reject duplicate mapping field names, missing `File`, duplicate uploadKey, and non-array metadata before application call.
 
-For Next.js 15 dynamic route handlers use Promise params:
+Apply route maps `{kind:"VERSION_CONFLICT"}` to 409 `SOURCE_VERSION_CONFLICT`; both fresh and idempotent APPLIED results return 200.
 
-```ts
-export async function POST(request: Request, context: { params: Promise<{ workspaceId: string }> }) {
-  const { workspaceId } = await context.params;
-  try {
-    const body = await request.json() as InitialImportRequest;
-    return Response.json(await createInitialSourceImport(workspaceId, body), { status: 201 });
-  } catch (error) {
-    const mapped = toHttpError(error);
-    return Response.json(mapped.body, { status: mapped.status });
-  }
-}
-```
-
-The upload endpoint accepts `multipart/form-data` with one JSON field named `entries`:
-
-```json
-[{"uploadKey":"f1","field":"file-0"},{"uploadKey":"f2","field":"file-1"}]
-```
-
-and matching `File` parts `file-0`, `file-1`. Convert each `File.arrayBuffer()` to `Uint8Array`, then call the upload application service. Reject duplicate/missing field names before calling application code.
-
-`POST /apply` converts an application `{ kind: "VERSION_CONFLICT" }` result into:
-
-```ts
-return Response.json({ error: { code: "SOURCE_VERSION_CONFLICT", message: "The source changed after this preview was created.", details: { currentVersion: result.currentVersion } } }, { status: 409 });
-```
-
-APPLIED and idempotent APPLIED both return 200.
-
-- [ ] **Step 5: Run HTTP/unit/static/full integration checks and commit**
-
-Run:
+- [ ] **Step 5: Run HTTP/unit/integration/static checks**
 
 ```bash
 npm run test:unit -- tests/unit/phase2-import-http.test.ts
@@ -1992,7 +1250,7 @@ npm run lint
 
 Expected: PASS.
 
-Commit:
+- [ ] **Step 6: Commit Task 8**
 
 ```bash
 git add src/server src/app/api tests/unit/phase2-import-http.test.ts
@@ -2001,7 +1259,7 @@ git commit -m "feat: expose source import APIs"
 
 ---
 
-### Task 9: Knowledge Browser Import/Sync Launcher and Preview UX
+### Task 9: `/knowledge` Import/Sync Launcher and Persisted Preview UX
 
 **Files:**
 - Modify: `src/modules/knowledge/application/knowledge-query-service.ts`
@@ -2013,10 +1271,8 @@ git commit -m "feat: expose source import APIs"
 - Modify: `src/server/source-imports.ts`
 
 **Interfaces:**
-- Consumes: Task 8 APIs and existing `/knowledge` Workspace/Source browser model.
-- Produces one human flow: choose folder -> uploading/analyzing -> review persisted Preview -> Apply -> return to Source tree.
 
-Extend `SourceView` so the launcher can decide whether Sync is allowed and display current version:
+Extend `SourceView`:
 
 ```ts
 export type SourceView = {
@@ -2030,20 +1286,7 @@ export type SourceView = {
 };
 ```
 
-- [ ] **Step 1: Add SourceView fields and verify existing browser tests still pass**
-
-Modify `toSourceView()` to return `sourceType` and `syncVersion`. Run:
-
-```bash
-npm run test:unit
-npx vitest run --config vitest.integration.config.ts tests/integration/phase1-query.test.ts
-```
-
-Expected: PASS; no behavior regression.
-
-- [ ] **Step 2: Implement a client launcher with an explicit discriminated-union state machine**
-
-Create `source-import-launcher.tsx` as a client component. Use this state shape rather than boolean flags:
+Client launcher state:
 
 ```ts
 type ImportUiState =
@@ -2054,91 +1297,44 @@ type ImportUiState =
   | { kind: "ERROR"; code: string; message: string };
 ```
 
-Props:
+- [ ] **Step 1: Extend SourceView and run existing Knowledge Browser tests**
+
+`toSourceView()` returns `sourceType` and `syncVersion` from existing SourcePolicy. Run:
+
+```bash
+npm run test:unit
+npx vitest run --config vitest.integration.config.ts tests/integration/phase1-query.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step 2: Implement client folder launcher with deterministic manifest and batching**
+
+Render `Import folder` for selected Workspace and `Sync folder` only for selected active `SOURCE_MANAGED/FOLDER_SYNC` Source. Directory input is `multiple` and receives `webkitdirectory` via ref attribute.
+
+When selected, sort files using a raw comparator:
 
 ```ts
-type SourceImportLauncherProps = {
-  workspaceId: string;
-  workspaceName: string;
-  selectedSource: SourceView | null;
-};
+const ordered = [...files].sort((a, b) => {
+  const left = a.webkitRelativePath || a.name;
+  const right = b.webkitRelativePath || b.name;
+  return left < right ? -1 : left > right ? 1 : 0;
+});
 ```
 
-Render `Import folder` for any selected Workspace and `Sync folder` only when the selected Source is active `SOURCE_MANAGED/FOLDER_SYNC`. The folder input is `multiple` and gets `webkitdirectory` using a ref effect:
+Derive root folder from first relative-path segment. Source name defaults to root name and is editable before session creation only. Build client hint manifest, but server remains authoritative about document-vs-asset classification. Hash every asset with Web Crypto SHA-256 before create-session request. Upload only files whose paths end `.md`/`.markdown` in batches satisfying both max 20 files and max 10 MiB; each batch uses Task 8 multipart contract. Finalize after uploads, then route to `/knowledge/imports/${snapshotId}`.
 
-```ts
-const inputRef = useRef<HTMLInputElement>(null);
-useEffect(() => {
-  inputRef.current?.setAttribute("webkitdirectory", "");
-}, []);
-```
+- [ ] **Step 3: Integrate launcher into `/knowledge`**
 
-When files are selected, sort by `webkitRelativePath || name`. Derive root name from the first path segment. Classify `.md`/`.markdown` case-insensitively as Markdown; all other files are Asset manifest rows. Hash Asset bytes client-side only for asset metadata:
+Pass currently selected Workspace and Source to `SourceImportLauncher`. Do not add identity/employee/org controls. Existing Workspace/Source browsing remains intact.
 
-```ts
-async function browserSha256(file: File): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-```
+- [ ] **Step 4: Implement server-rendered Preview and client Apply actions**
 
-Create session first, then upload only Markdown in batches of at most 20 files and at most 10 MiB. Each batch sends the Task 8 multipart mapping. Finalize and `router.push(`/knowledge/imports/${snapshotId}`)` only after all batches succeed. Source name defaults to root folder and is editable only before session creation.
+`/knowledge/imports/[snapshotId]/page.tsx` calls trusted `getSourceImportPreview(snapshotId)`. Preview displays target, based version, expiry, Document/Folder/Asset counters, warning/blocker counts, and change rows. Filters are `Changed`, `Added`, `Updated`, `Moved`, `Archived`, `Warnings`, `All`; UNCHANGED appears only under All.
 
-- [ ] **Step 3: Integrate launcher into `/knowledge` without changing existing navigation semantics**
+Apply button is disabled for blockers, derived expiry, STALE, or APPLIED. On 409 `SOURCE_VERSION_CONFLICT`, show stale message and `Choose folder again`; never render Force Apply. On successful Apply, route back to `/knowledge?workspaceId=<workspace>&sourceId=<resultSource>`.
 
-In `page.tsx`, derive the selected source from `model.sources` and render the launcher next to the current Workspace controls only when a Workspace is selected:
-
-```tsx
-{model.selectedWorkspaceId ? (
-  <SourceImportLauncher
-    workspaceId={model.selectedWorkspaceId}
-    workspaceName={model.workspaces.find((item) => item.id === model.selectedWorkspaceId)?.name ?? "Workspace"}
-    selectedSource={model.sources.find((item) => item.id === model.selectedSourceId) ?? null}
-  />
-) : null}
-```
-
-Do not add actor/employee/org inputs.
-
-- [ ] **Step 4: Implement the persisted Preview page and Apply actions**
-
-Create server `getSourceImportPreviewModel(snapshotId)` in `source-imports.ts` using trusted identity. Create `src/app/knowledge/imports/[snapshotId]/page.tsx`:
-
-```tsx
-export const dynamic = "force-dynamic";
-
-export default async function ImportPreviewPage({ params }: { params: Promise<{ snapshotId: string }> }) {
-  const { snapshotId } = await params;
-  const preview = await getSourceImportPreviewModel(snapshotId);
-  return <SourceImportPreview preview={preview} />;
-}
-```
-
-`SourceImportPreview` renders target Workspace/Source/new Source, based-on version, expiry, Document/Folder/Asset counters, warning/blocker counts, and changed entries. Use simple filter buttons: `Changed`, `Added`, `Updated`, `Moved`, `Archived`, `Warnings`, `All`. Unchanged entries are only shown under All.
-
-`SourceImportPreviewActions` is a client component. Disable Apply when `hasBlockers`, expired, STALE, or APPLIED. On Apply:
-
-```ts
-const response = await fetch(`/api/source-imports/${snapshotId}/apply`, { method: "POST" });
-const payload = await response.json();
-if (response.status === 409 && payload.error?.code === "SOURCE_VERSION_CONFLICT") {
-  setState({ kind: "STALE" });
-  router.refresh();
-  return;
-}
-if (!response.ok) {
-  setState({ kind: "ERROR", message: payload.error?.message ?? "Sync failed." });
-  return;
-}
-router.push(`/knowledge?workspaceId=${workspaceId}&sourceId=${payload.sourceId}`);
-router.refresh();
-```
-
-Show `Choose folder again` for blockers/expired/stale. Do not render Force Apply or edit controls for source-managed content.
-
-- [ ] **Step 5: Build and manually verify the compile-time Web boundary**
-
-Run:
+- [ ] **Step 5: Compile/build check**
 
 ```bash
 npm run typecheck
@@ -2157,7 +1353,7 @@ git commit -m "feat: add folder import preview workflow"
 
 ---
 
-### Task 10: End-to-End Fixtures, Performance Smoke, Documentation, and Full Regression Gate
+### Task 10: Fixtures, E2E Acceptance, Performance Smoke, and Documentation
 
 **Files:**
 - Create: `tests/fixtures/import/basic-v1/README.md`
@@ -2180,44 +1376,11 @@ git commit -m "feat: add folder import preview workflow"
 - Modify: `tests/unit/phase2-reconciler.test.ts`
 - Modify: `README.md`
 
-**Interfaces:**
-- Consumes: the complete Phase 2 UI/API/application stack.
-- Produces: executable acceptance evidence for the approved spec and a 1,000-document in-memory reconciler smoke test.
+- [ ] **Step 1: Add semantic fixtures**
 
-- [ ] **Step 1: Add deterministic semantic fixtures**
+`basic-v1` contains unchanged README, Architecture v1, Runbook, and asset `diagram.txt`. `basic-v2` keeps README unchanged, moves Architecture to `platform/architecture.md` and changes body to v2, removes Runbook, adds `docs/new-guide.md`, and changes `diagram.txt`. This produces UNCHANGED + MOVED/UPDATED + ARCHIVED + ADDED + asset UPDATED in one resync.
 
-Use these exact fixture semantics:
-
-`basic-v1/README.md`:
-
-```md
----
-title: Team Wiki
----
-# Team Wiki
-
-Welcome to the team wiki.
-```
-
-`basic-v1/docs/architecture.md`:
-
-```md
-# Architecture
-
-Architecture v1.
-```
-
-`basic-v1/docs/runbook.md`:
-
-```md
-# Runbook
-
-Operational runbook.
-```
-
-`basic-v2/README.md` keeps identical content. Move `docs/architecture.md` to `platform/architecture.md` and change body to `Architecture v2.` so Preview must show MOVED + UPDATED. Omit `docs/runbook.md` so it becomes ARCHIVED. Add `docs/new-guide.md` so it becomes ADDED. Change `images/diagram.txt` content so Asset is UPDATED.
-
-`malformed-frontmatter/broken.md`:
+`malformed-frontmatter/broken.md` is exactly:
 
 ```md
 ---
@@ -2226,100 +1389,45 @@ title: [broken
 # Broken
 ```
 
-`duplicate-content/a.md` and `b.md` must contain exactly the same body and metadata so reconciliation ambiguity can be tested without relying on filename title in the fingerprint.
+`duplicate-content/a.md` and `b.md` have exactly identical body+metadata so fingerprint ambiguity is deterministic.
 
-- [ ] **Step 2: Write the failing Playwright acceptance scenarios**
+- [ ] **Step 2: Write Playwright acceptance tests**
 
-Create `tests/e2e/source-import.spec.ts`. Use directory upload against the `webkitdirectory` input. Cover four approved flows:
+Create four flows in `tests/e2e/source-import.spec.ts`:
 
-```ts
-import { expect, test } from "@playwright/test";
-import path from "node:path";
-
-const fixtures = path.resolve(process.cwd(), "tests/fixtures/import");
-
-test("imports a new folder through Preview and opens the created source", async ({ page }) => {
-  await page.goto("/knowledge");
-  await page.getByLabel("Choose a workspace").selectOption({ label: "Query Master" });
-  await page.getByRole("button", { name: "Apply" }).click();
-  await page.getByRole("button", { name: "Import folder" }).click();
-  await page.getByLabel("Knowledge folder").setInputFiles(path.join(fixtures, "basic-v1"));
-  await page.getByRole("button", { name: "Scan & Preview" }).click();
-  await expect(page).toHaveURL(/\/knowledge\/imports\/[0-9a-f-]+$/u);
-  await expect(page.getByText("Added", { exact: false })).toBeVisible();
-  await page.getByRole("button", { name: "Apply changes" }).click();
-  await expect(page).toHaveURL(/\/knowledge\?workspaceId=.*sourceId=/u);
-  await expect(page.getByRole("heading", { name: "Team Wiki" })).toBeVisible();
-});
-
-test("resyncs v1 to v2 with move, update, add, archive, and asset update", async ({ page }) => {
-  await importFixtureAsNewSource(page, "basic-v1", "Query Master");
-  await page.getByRole("button", { name: "Sync folder" }).click();
-  await page.getByLabel("Knowledge folder").setInputFiles(path.join(fixtures, "basic-v2"));
-  await page.getByRole("button", { name: "Scan & Preview" }).click();
-  await expect(page.getByText("Moved", { exact: false })).toBeVisible();
-  await expect(page.getByText("Updated", { exact: false })).toBeVisible();
-  await expect(page.getByText("Archived", { exact: false })).toBeVisible();
-  await page.getByRole("button", { name: "Apply changes" }).click();
-  await expect(page.getByRole("link", { name: "Architecture" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "New Guide" })).toBeVisible();
-});
-
-test("shows malformed frontmatter blocker and disables Apply", async ({ page }) => {
-  await openInitialImport(page, "malformed-frontmatter", "Query Master");
-  await expect(page.getByText("INVALID_FRONTMATTER", { exact: false })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Apply changes" })).toBeDisabled();
-});
-
-test("shows stale preview after another snapshot wins", async ({ page, request }) => {
-  const snapshotId = await createReadyPreviewFromUi(page, "basic-v1", "Query Master");
-  await advanceSameSourceWithSecondPreview(request, page, "basic-v2");
-  await page.goto(`/knowledge/imports/${snapshotId}`);
-  await page.getByRole("button", { name: "Apply changes" }).click();
-  await expect(page.getByText("source changed", { exact: false })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Force apply" })).toHaveCount(0);
-});
+```text
+1. Query Master -> Import folder basic-v1 -> Preview Added -> Apply -> created SOURCE_MANAGED Source visible
+2. Import basic-v1 -> Sync folder basic-v2 -> Preview Moved/Updated/Archived/Added -> Apply -> tree reflects v2
+3. Import malformed-frontmatter -> INVALID_FRONTMATTER visible -> Apply disabled
+4. Create old Preview, apply a second Preview for same Source, then Apply old Preview -> stale message; Force Apply absent
 ```
 
-Implement the named helpers in the same test file with explicit UI/API calls; do not create a second test framework.
+Use Playwright directory upload on the `webkitdirectory` input. Helpers in the same file must drive real UI/API; do not bypass application logic with direct DB mutations except when a test specifically needs to establish concurrent version state that cannot be achieved through the UI without duplicating unrelated setup.
 
-- [ ] **Step 3: Add the 1,000-document pure reconciler smoke test**
+- [ ] **Step 3: Add 1,000-document pure reconciler smoke test**
 
-Append to `tests/unit/phase2-reconciler.test.ts`:
+Append:
 
 ```ts
-it("reconciles 1,000 documents with lookup-map semantics", () => {
+it("reconciles 1,000 documents with lookup-map matching", () => {
   const documents = Array.from({ length: 1000 }, (_, index) => snapshotDocument(`docs/${String(index).padStart(4, "0")}.md`, `fp-${index}`));
-  const current: CanonicalImportState = { documents: [], folders: [], assets: [] };
-  const plan = reconcileFolderImport({ sourceBinding: binding, documents, assets: [] }, current);
+  const plan = reconcileFolderImport({ sourceBinding: binding, documents, assets: [] }, { documents: [], folders: [], assets: [] });
   expect(plan.documents.create).toHaveLength(1000);
   expect(plan.summary.documents.added).toBe(1000);
 });
 ```
 
-Do not add a brittle millisecond threshold; the existing unit-test timeout is the smoke bound. The implementation must continue using Map-based external/path/fingerprint lookups rather than nested full scans.
+No brittle millisecond threshold. The implementation must retain Map-based matching and no nested full scans.
 
-- [ ] **Step 4: Update README with Phase 2 usage and boundaries**
+- [ ] **Step 4: Update README**
 
-Add one concise Phase 2 section explaining:
-
-```text
-1. Open /knowledge and choose a Workspace.
-2. Import folder for a new SOURCE_MANAGED source, or select an existing SOURCE_MANAGED/FOLDER_SYNC source and choose Sync folder.
-3. Review the immutable Preview; warnings may proceed, blockers require fixing the local source and rescanning.
-4. Apply atomically. The Source folder remains authoritative; Hub does not edit source-managed Markdown.
-5. Assets are metadata-only in Phase 2; binary storage is not included.
-```
-
-Also list the optional `KM_IMPORT_*` environment overrides already documented in `.env.example`, and state that cleanup can run with:
+Document Phase 2 user flow, source-managed authority, blocker/warning behavior, metadata-only assets, optional `KM_IMPORT_*` limits, and cleanup command:
 
 ```bash
 npx tsx scripts/db/cleanup-import-snapshots.ts
 ```
 
-- [ ] **Step 5: Run the complete acceptance/regression gate**
-
-Run in this order:
+- [ ] **Step 5: Run final acceptance gate**
 
 ```bash
 npm run lint
@@ -2332,7 +1440,7 @@ npm run test:e2e
 
 Expected: every command exits 0. Do not claim Phase 2 complete if any command is skipped or failing.
 
-- [ ] **Step 6: Commit the acceptance fixtures/tests/docs**
+- [ ] **Step 6: Commit Task 10**
 
 ```bash
 git add tests/fixtures/import tests/e2e/source-import.spec.ts tests/unit/phase2-reconciler.test.ts README.md
@@ -2343,27 +1451,28 @@ git commit -m "test: cover phase 2 source import workflow"
 
 ## Final Implementation Review Checklist
 
-Before opening/merging the Phase 2 implementation PR, verify all of these directly against the approved spec:
-
-- [ ] Initial Preview does not create a Source; first successful Confirm creates Source and version 1 atomically.
+- [ ] Initial Preview creates no Source; first successful Confirm creates Source and version 1 atomically.
 - [ ] Existing resync receives only Source scope; Workspace/version are server-derived.
+- [ ] Server, not client `kind`, is authoritative for Markdown-vs-Asset classification.
 - [ ] Browser sends raw Markdown File bytes; server performs fatal UTF-8 validation.
-- [ ] YAML frontmatter is metadata, not part of canonical `Revision.markdown`.
+- [ ] YAML frontmatter becomes metadata and is absent from canonical `Revision.markdown`.
 - [ ] H1 extraction uses Markdown AST, not regex.
 - [ ] Generic adapter always emits `externalId: null`.
 - [ ] Revision fingerprint includes title; reconciliation fingerprint excludes title.
-- [ ] Reconciler matching order and ambiguous-identity behavior match the spec exactly.
+- [ ] Reconciler matching order/ambiguity behavior matches spec exactly.
+- [ ] All deterministic ordering uses binary-like string comparison, not locale-dependent comparison.
 - [ ] Folder rename is old Archived + new Added; no subtree inference exists.
 - [ ] Asset projection has no lifecycle/revision/history and stores no binary.
-- [ ] Finalize persists immutable READY snapshot + server plan + hashes and clears raw staging Markdown.
+- [ ] PATH_COLLISION is representable as READY blocker because colliding staging rows keep `source_path_hash=NULL`.
+- [ ] Finalize persists immutable READY snapshot + plan + hashes and clears raw staging Markdown.
 - [ ] Apply executes persisted plan only and never reparses/reconciles.
 - [ ] Snapshot lock precedes Source lock in every Apply path.
 - [ ] Successful no-op sync advances `sync_version` once and writes one APPLIED run with `changed=false`.
 - [ ] Version conflict commits STALE + FAILED run and returns HTTP 409 without Knowledge mutation.
-- [ ] Double Apply produces one real mutation/run/version advance and one idempotent success.
+- [ ] Double Apply creates one actual mutation/run/version advance and one idempotent success with `runId=null`.
 - [ ] Unexpected existing-source failure rolls back canonical data and leaves snapshot retryable READY.
 - [ ] Unexpected initial-import failure leaves no Source and no phantom SyncRun.
-- [ ] Creator-private snapshot access and current Workspace membership are enforced at upload/finalize/read/apply time.
-- [ ] No Force Apply, actor override, Workspace transfer, filesystem include, outbound fetch, or shell/file-path execution surface exists.
+- [ ] Creator-private snapshot access/current Workspace membership are enforced on read/upload/finalize/apply.
+- [ ] No Force Apply, actor override, Workspace transfer, filesystem include, outbound fetch, or shell/filesystem source-path execution exists.
 - [ ] Cleanup only physically deletes staging rows; canonical history remains intact.
 - [ ] Full lint/typecheck/unit/integration/build/E2E gate passes.
