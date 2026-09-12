@@ -8,7 +8,12 @@ import type { ImportPreview } from "@/modules/sources/application/reconcile-impo
 export function SourceImportPreviewActions({ preview }: { preview: ImportPreview }) {
   const router = useRouter();
   const [state, setState] = useState<{ kind: "IDLE" } | { kind: "APPLYING" } | { kind: "ERROR"; code: string; message: string }>({ kind: "IDLE" });
-  const disabled = preview.hasBlockers || preview.expired || preview.state === "STALE" || preview.state === "APPLIED";
+  const [versionConflict, setVersionConflict] = useState(false);
+  const effectiveState = versionConflict ? "STALE" : preview.state;
+  const disabled = preview.hasBlockers || preview.expired || effectiveState === "STALE" || effectiveState === "APPLIED";
+  const resyncHref = preview.sourceId
+    ? `/knowledge?workspaceId=${preview.workspaceId}&sourceId=${preview.sourceId}`
+    : `/knowledge?workspaceId=${preview.workspaceId}`;
 
   async function apply(): Promise<void> {
     setState({ kind: "APPLYING" });
@@ -16,6 +21,7 @@ export function SourceImportPreviewActions({ preview }: { preview: ImportPreview
       const response = await fetch(`/api/source-imports/${preview.snapshotId}/apply`, { method: "POST" });
       const body = await response.json().catch(() => null);
       if (response.status === 409) {
+        setVersionConflict(true);
         setState({ kind: "ERROR", code: "SOURCE_VERSION_CONFLICT", message: "The source changed after this preview was created. Choose the folder again for a fresh preview." });
         return;
       }
@@ -48,10 +54,10 @@ export function SourceImportPreviewActions({ preview }: { preview: ImportPreview
         >
           {state.kind === "APPLYING" ? "Applying…" : "Confirm and apply"}
         </button>
-        <Link className="text-sm font-medium text-accent" href={`/knowledge?workspaceId=${preview.workspaceId}`}>Choose folder again</Link>
+        <Link className="text-sm font-medium text-accent" href={resyncHref}>Choose folder again</Link>
       </div>
-      {preview.state === "STALE" ? <p className="mt-2 text-sm text-red-700">This preview is stale: the source changed after it was created. There is no Force Apply — create a fresh preview.</p> : null}
-      {preview.state === "APPLIED" ? <p className="mt-2 text-sm text-slate-600">This preview was already applied.</p> : null}
+      {effectiveState === "STALE" ? <p className="mt-2 text-sm text-red-700">This preview is stale: the source changed after it was created. There is no Force Apply — create a fresh preview.</p> : null}
+      {effectiveState === "APPLIED" ? <p className="mt-2 text-sm text-slate-600">This preview was already applied.</p> : null}
       {state.kind === "ERROR" ? <p role="alert" className="mt-2 text-sm text-red-700">{state.code}: {state.message}</p> : null}
     </div>
   );
