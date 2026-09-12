@@ -798,7 +798,9 @@ normalizeProjectedOrdering(caller: CallerContext, input: { nodeId: string; paren
 
 It calls `requireBoundSource()` once, verifies every node belongs to bound Source and expected parent, and updates only differing positions.
 
-Plan execution order is exact: restore folders top-down; create folders top-down; create docs; restore docs; move docs; create changed revisions; update SourceEntry locators/hashes; upsert assets; archive missing docs; remove stale assets; archive obsolete folders bottom-up; resolve plan-local node keys to TreeNode IDs and normalize final sibling positions. New UUIDs are generated only here; existing IDs from plan are reused. Canonical mutations continue through `bindSourceProjection()` and SourceEntry primitives.
+Plan execution order is exact: restore folders top-down; create folders top-down; create docs; restore docs; move docs; create changed revisions; update SourceEntry locators/hashes; upsert assets; archive missing docs; remove stale assets; archive obsolete folders bottom-up; resolve plan-local node keys to TreeNode IDs and normalize final sibling positions. Documents that are both restored and moved (RESTORED + MOVED) take a combined restore-into-target-parent step instead of plain restore-before-move: the archived node may sit below an archived old parent, so placement is validated against the target parent only, keeping the active-ancestry invariant without ever exposing an active document below archived ancestry. New UUIDs are generated only here; existing IDs from plan are reused. Canonical mutations continue through `bindSourceProjection()` and SourceEntry primitives.
+
+Deviation note (Task 6 review): the batch `normalizeProjectedOrdering()` projection API specified above was not added. The executor resolves plan-local node keys to TreeNode IDs and verifies each ordering target in place — expected parent match, then per-node position update only when it differs — which keeps the same no-silent-reparent guarantee with fewer moving parts.
 
 - [ ] **Step 5: Implement Apply state/locking/version semantics**
 
@@ -1025,7 +1027,7 @@ git commit -m "feat: add folder import preview workflow"
 
 - [ ] **Step 1: Add deterministic fixtures**
 
-`basic-v1`: unchanged README, Architecture v1, Runbook, asset `diagram.txt`. `basic-v2`: same README; move Architecture to `platform/architecture.md` and change body to v2; remove Runbook; add `docs/new-guide.md`; change asset content. This yields UNCHANGED + MOVED/UPDATED + ARCHIVED + ADDED + asset UPDATED.
+`basic-v1`: unchanged README, Architecture v1, Runbook, asset `diagram.txt`. `basic-v2`: same README; move Architecture to `platform/architecture.md` keeping the body byte-identical so reconciliation conservatively reports MOVED; change the `guide.md` body at its stable path (UPDATED); remove Runbook (ARCHIVED); add `docs/new-guide.md` (ADDED); change asset content (UPDATED). This yields UNCHANGED + MOVED + UPDATED + ARCHIVED + ADDED + asset UPDATED. Deliberate deviation from the earlier draft wording (which moved Architecture with a changed body): a moved file with a changed body fingerprints differently and must surface as ADDED + ARCHIVED instead of a guessed MOVED, so the MOVED case keeps the body byte-identical and the UPDATED case covers the body change.
 
 Malformed frontmatter fixture exactly:
 
