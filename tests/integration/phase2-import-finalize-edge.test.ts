@@ -6,6 +6,7 @@ import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction
 import { CreateFolderImportService, type ImportManifestEntry } from "@/modules/sources/application/create-folder-import";
 import { UploadFolderImportEntriesService } from "@/modules/sources/application/upload-folder-import-entries";
 import { FinalizeFolderImportService } from "@/modules/sources/application/finalize-folder-import";
+import { ApplyFolderImportService } from "@/modules/sources/application/apply-folder-import";
 import { DEFAULT_IMPORT_LIMITS } from "@/modules/sources/domain/import-limits";
 import { createDocumentForAnySource, createEntryFixture, createSourceFixture, fixtureCaller, fixtureIdentity } from "../fixtures/knowledge";
 
@@ -26,6 +27,7 @@ function services() {
     create: new CreateFolderImportService(uow, { limits: DEFAULT_IMPORT_LIMITS, now: clock }),
     upload: new UploadFolderImportEntriesService(uow, { limits: DEFAULT_IMPORT_LIMITS, now: clock }),
     finalize: new FinalizeFolderImportService(uow, { limits: DEFAULT_IMPORT_LIMITS, now: clock }),
+    apply: new ApplyFolderImportService(uow, { now: clock }),
   };
 }
 
@@ -76,8 +78,7 @@ describe("Phase 2 import finalization edge contracts", () => {
     expect(parsed.documents.restore).toEqual(expect.arrayContaining([expect.objectContaining({ entryId: entry.entryId, documentId: document.documentId })]));
   });
 
-  it("converts duplicate canonical SourceEntry paths into a blocking READY Preview without guessing identity", async () => {
-    const fixture = await createSourceFixture(pool, { managed: true });
+  it("converts duplicate canonical SourceEntry paths into a blocking READY Preview without guessing identity", async () => {    const fixture = await createSourceFixture(pool, { managed: true });
     const first = await createDocumentForAnySource(pool, fixture.source.id, fixture.folderId);
     const second = await createDocumentForAnySource(pool, fixture.source.id, fixture.folderId);
     const firstEntry = await createEntryFixture(pool, fixture.source.id, first.documentId, "first");
@@ -89,5 +90,27 @@ describe("Phase 2 import finalization edge contracts", () => {
     expect(preview.hasBlockers).toBe(true);
     expect(preview.changes.flatMap((change) => change.diagnostics).map((diagnostic) => diagnostic.code)).toContain("CANONICAL_SOURCE_PATH_CONFLICT");
     expect(preview.summary.changed).toBe(false);
+  });
+
+  it("surfaces a blank folder name as a READY blocker with its sourcePath instead of failing Apply", async () => {
+    const fixture = await createSourceFixture(pool);
+    const bytes = new TextEncoder().encode("# Title\n");
+    const { create, upload, finalize, apply } = services();
+    const session = await create.createInitial(fixtureCaller(), {
+      workspaceId: fixture.workspaceId,
+      sourceName: "Blank Folder",
+      rootName: "wiki",
+      manifest: [markdown("m1", " /a.md", bytes)],
+    });
+    await upload.upload(fixtureCaller(), { snapshotId: session.snapshotId, entries: [{ uploadKey: "m1", bytes }] });
+    const preview = await finalize.finalize(fixtureCaller(), session.snapshotId);
+    expect(preview.state).toBe("READY");
+    expect(preview.hasBlockers).toBe(true);
+    const blocker = preview.changes.flatMap((change) => change.diagnostics).find((diagnostic) => diagnostic.code === "INVALID_FOLDER_NAME");
+    expect(blocker?.severity).toBe("BLOCKING");
+    expect(blocker?.sourcePath).toBe(" ");
+
+    await expect(apply.apply(fixtureCaller(), session.snapshotId)).rejects.toMatchObject({ code: "IMPORT_SNAPSHOT_BLOCKED" });
+    expect(await pool.query("SELECT id FROM knowledge_sources WHERE workspace_id=? AND source_type='FOLDER_SYNC'", [fixture.workspaceId])).toHaveLength(0);
   });
 });

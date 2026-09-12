@@ -511,6 +511,27 @@ function applyCrossTypePathRules(
   }
 }
 
+/**
+ * Materialized folder name guard (design §10/§16).
+ *
+ * Canonical projection validates every folder name with the same rule
+ * (`normalizeFolderName`: non-empty after trimming) at Apply time. Validate
+ * here so an input-detectable name surfaces as a READY blocker with its
+ * sourcePath instead of failing Apply after a no-blocker Preview.
+ */
+function applyFolderNameRules(plan: FolderImportPlan, desiredFolders: string[]): void {
+  for (const sourcePath of desiredFolders) {
+    const name = basename(sourcePath);
+    if (name.trim().length > 0) continue;
+    attachPreviewBlocker(plan, "FOLDER", sourcePath, {
+      code: "INVALID_FOLDER_NAME",
+      severity: "BLOCKING",
+      sourcePath,
+      message: `Folder "${sourcePath}" has an invalid name: folder names must be non-empty after trimming.`,
+    });
+  }
+}
+
 function summarize(plan: FolderImportPlan): void {
   const summary = emptySummary();
 
@@ -556,6 +577,7 @@ export function reconcileFolderImport(snapshot: ReadyImportContent, current: Can
   reconcileAssets(plan, snapshot.assets, current.assets);
   buildOrdering(plan, snapshot, desiredFolders, currentFoldersByPath, documentMatches);
   applyCrossTypePathRules(plan, snapshot, current, desiredFolders);
+  applyFolderNameRules(plan, desiredFolders);
   summarize(plan);
   return plan;
 }

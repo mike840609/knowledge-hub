@@ -292,4 +292,13 @@ describe("Phase 2 folder import reconciliation", () => {
     expect(plan.preview.find((item) => item.kind === "DOCUMENT")?.labels).toEqual(["UNCHANGED"]);
     expect(plan.summary.blockers).toBe(0);
   });
+
+  it("blocks a materialized folder name that canonical projection would reject", () => {
+    const plan = reconcileFolderImport(snapshot([incomingDocument(" /a.md", "space")]), canonical());
+
+    const blockers = plan.preview.flatMap((item) => item.diagnostics).filter((item) => item.severity === "BLOCKING");
+    expect(blockers.map((item) => item.code)).toContain("INVALID_FOLDER_NAME");
+    expect(blockers.find((item) => item.code === "INVALID_FOLDER_NAME")?.sourcePath).toBe(" ");
+    expect(plan.summary.blockers).toBeGreaterThan(0);
+  });
 });
