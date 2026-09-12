@@ -39,6 +39,8 @@ function hasBlocker(diagnostics: readonly ImportDiagnostic[]): boolean {
   return diagnostics.some((diagnostic) => diagnostic.severity === "BLOCKING");
 }
 
+const MAX_RESOLVED_TITLE_CHARS = 512;
+
 function normalizeEntries(entries: ImportSnapshotEntry[]): NormalizedEntry[] {
   return entries.map((staged) => {
     const diagnostics = [...staged.diagnostics];
@@ -169,11 +171,15 @@ export class FinalizeFolderImportService {
               if (new TextEncoder().encode(JSON.stringify(parsed.metadata)).byteLength > this.limits.maxMetadataBytes) {
                 diagnostics.push(blocker("METADATA_TOO_LARGE", entry.sourcePath, "Parsed frontmatter metadata exceeds the configured byte limit."));
               }
+              const titleTooLong = Array.from(parsed.resolvedTitle).length > MAX_RESOLVED_TITLE_CHARS;
+              if (titleTooLong) {
+                diagnostics.push(blocker("TITLE_TOO_LONG", entry.sourcePath, `Resolved title exceeds the ${MAX_RESOLVED_TITLE_CHARS}-character storage limit; shorten the frontmatter title or H1.`));
+              }
               entry.diagnostics = diagnostics;
               row = {
                 ...row,
-                resolvedTitle: parsed.resolvedTitle,
-                titleSource: parsed.titleSource,
+                resolvedTitle: titleTooLong ? null : parsed.resolvedTitle,
+                titleSource: titleTooLong ? null : parsed.titleSource,
                 markdown: parsed.markdown,
                 metadata: parsed.metadata,
                 revisionContentHash: parsed.revisionContentHash,

@@ -194,4 +194,26 @@ describe("Phase 2 import finalization", () => {
     expect(states.filter((row) => row.state === "READY")).toHaveLength(10);
     expect(states.filter((row) => row.state === "BUILDING").map((row) => row.id).sort()).toEqual([snapshotIds[1], snapshotIds[2]].sort());
   });
+
+  it("turns an overlong resolved title into a READY blocker without failing finalization", async () => {
+    const bad = new TextEncoder().encode(`# ${"a".repeat(513)}\n\nbody\n`);
+    const good = new TextEncoder().encode("# Good\n\nbody\n");
+    const { session, finalize } = await initialSession([
+      { uploadKey: "bad", path: "bad.md", bytes: bad },
+      { uploadKey: "good", path: "good.md", bytes: good },
+    ]);
+    const preview = await finalize.finalize(fixtureCaller(), session.snapshotId);
+    expect(preview.state).toBe("READY");
+    expect(preview.hasBlockers).toBe(true);
+    expect(preview.changes.flatMap((change) => change.diagnostics).map((diagnostic) => diagnostic.code)).toContain("TITLE_TOO_LONG");
+    expect(preview.summary.documents.added).toBe(1);
+    const rows = await pool.query<{ client_relative_path: string; resolved_title: string | null }[]>(
+      "SELECT client_relative_path,resolved_title FROM source_import_snapshot_entries WHERE snapshot_id=? ORDER BY client_relative_path",
+      [session.snapshotId],
+    );
+    expect(rows).toEqual([
+      { client_relative_path: "bad.md", resolved_title: null },
+      { client_relative_path: "good.md", resolved_title: "Good" },
+    ]);
+  });
 });
