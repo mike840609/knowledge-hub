@@ -53,6 +53,32 @@ async function readyResync(sourceId: string, path = "docs/readme.md", text = "# 
   return session.snapshotId;
 }
 
+async function readyResyncFiles(sourceId: string, files: { path: string; text: string }[]) {
+  const { create, upload, finalize } = services();
+  const manifest = files.map((file, index) => {
+    const bytes = new TextEncoder().encode(file.text);
+    return { manifest: { uploadKey: `f${index}`, relativePath: file.path, kind: "MARKDOWN", size: bytes.byteLength } as ImportManifestEntry, bytes };
+  });
+  const session = await create.createResync(fixtureCaller(), { sourceId, rootName: "wiki", manifest: manifest.map((entry) => entry.manifest) });
+  await upload.upload(fixtureCaller(), { snapshotId: session.snapshotId, entries: manifest.map((entry, index) => ({ uploadKey: `f${index}`, bytes: entry.bytes })) });
+  const preview = await finalize.finalize(fixtureCaller(), session.snapshotId);
+  return { snapshotId: session.snapshotId, preview };
+}
+
+async function readyInitialFiles(workspaceId: string, files: { path: string; text: string }[]) {
+  const { create, upload, finalize, apply } = services();
+  const manifest = files.map((file, index) => {
+    const bytes = new TextEncoder().encode(file.text);
+    return { manifest: { uploadKey: `f${index}`, relativePath: file.path, kind: "MARKDOWN", size: bytes.byteLength } as ImportManifestEntry, bytes };
+  });
+  const session = await create.createInitial(fixtureCaller(), { workspaceId, sourceName: "Imported Wiki", rootName: "wiki", manifest: manifest.map((entry) => entry.manifest) });
+  await upload.upload(fixtureCaller(), { snapshotId: session.snapshotId, entries: manifest.map((entry, index) => ({ uploadKey: `f${index}`, bytes: entry.bytes })) });
+  await finalize.finalize(fixtureCaller(), session.snapshotId);
+  const result = await apply.apply(fixtureCaller(), session.snapshotId);
+  if (result.kind !== "APPLIED") throw new Error("expected initial APPLIED");
+  return result.sourceId;
+}
+
 describe("Phase 2 folder import Apply", () => {
   it("creates an initial SOURCE_MANAGED Source atomically at version 1 with one APPLIED SyncRun", async () => {
     const fixture = await createSourceFixture(pool);
@@ -111,5 +137,45 @@ describe("Phase 2 folder import Apply", () => {
     expect((await pool.query<{ state:string }[]>("SELECT state FROM source_import_snapshots WHERE id=?", [secondId]))[0].state).toBe("STALE");
     expect(Number((await pool.query<{ count:unknown }[]>("SELECT COUNT(*) AS count FROM knowledge_revisions r JOIN knowledge_documents d ON d.id=r.document_id WHERE d.source_id=?", [initial.sourceId]))[0].count)).toBe(revisionCount);
     expect(await pool.query("SELECT id FROM sync_runs WHERE source_id=? AND status='FAILED'", [initial.sourceId])).toHaveLength(1);
+  });
+
+  it("applies RESTORED+MOVED when the old parent folder is archived", async () => {
+    const fixture = await createSourceFixture(pool);
+    const movedBody = "# Archived Move\n\nsame body\n";
+    const sourceId = await readyInitialFiles(fixture.workspaceId, [
+      { path: "old/a.md", text: movedBody },
+      { path: "keep.md", text: "# Keep\n\nkeep body\n" },
+    ]);
+    const before = (await pool.query<{ id: string }[]>("SELECT id FROM knowledge_documents WHERE source_id=?", [sourceId]));
+    expect(before).toHaveLength(2);
+    const movedDocumentId = String((await pool.query<{ document_id: string }[]>(
+      "SELECT e.document_id FROM source_entries e WHERE e.source_id=? AND e.source_path=?", [sourceId, "old/a.md"],
+    ))[0].document_id);
+
+    const archived = await readyResyncFiles(sourceId, [{ path: "keep.md", text: "# Keep\n\nkeep body\n" }]);
+    const archivedApply = await services().apply.apply(fixtureCaller(), archived.snapshotId);
+    expect(archivedApply).toMatchObject({ kind: "APPLIED", resultVersion: 2 });
+    expect((await pool.query<{ status: string }[]>("SELECT status FROM knowledge_documents WHERE id=?", [movedDocumentId]))[0].status).toBe("ARCHIVED");
+
+    const revived = await readyResyncFiles(sourceId, [
+      { path: "new/a.md", text: movedBody },
+      { path: "keep.md", text: "# Keep\n\nkeep body\n" },
+    ]);
+    expect(revived.preview.hasBlockers).toBe(false);
+    const movedChange = revived.preview.changes.find((change) => change.sourcePath === "new/a.md");
+    expect(movedChange?.labels).toContain("RESTORED");
+    expect(movedChange?.labels).toContain("MOVED");
+
+    const result = await services().apply.apply(fixtureCaller(), revived.snapshotId);
+    expect(result).toMatchObject({ kind: "APPLIED", resultVersion: 3, alreadyApplied: false });
+
+    expect((await pool.query<{ status: string }[]>("SELECT status FROM knowledge_documents WHERE id=?", [movedDocumentId]))[0].status).toBe("ACTIVE");
+    const entry = (await pool.query<{ source_path: string; status: string }[]>("SELECT source_path,status FROM source_entries WHERE source_id=? AND document_id=?", [sourceId, movedDocumentId]))[0];
+    expect(entry).toMatchObject({ source_path: "new/a.md", status: "ACTIVE" });
+    const node = (await pool.query<{ status: string; parent_id: string | null }[]>("SELECT status,parent_id FROM knowledge_tree_nodes WHERE source_id=? AND document_id=?", [sourceId, movedDocumentId]))[0];
+    expect(node.status).toBe("ACTIVE");
+    const parent = (await pool.query<{ name: string | null; status: string }[]>("SELECT name,status FROM knowledge_tree_nodes WHERE id=?", [node.parent_id]))[0];
+    expect(parent.status).toBe("ACTIVE");
+    expect((await pool.query<{ status: string }[]>("SELECT status FROM source_entries WHERE source_id=? AND source_path=?", [sourceId, "old"]))[0].status).toBe("ARCHIVED");
   });
 });

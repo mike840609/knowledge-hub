@@ -43,6 +43,8 @@ export async function executeFolderImportPlan(
   const current = await repositories.importCanonicalState.load(source.id);
   const folderNodeByPath = new Map(current.folders.map((folder) => [folder.sourcePath, folder.treeNodeId]));
   const createdNodeByKey = new Map<string, string>();
+  const moveByTreeNodeId = new Map(plan.documents.move.map((action) => [action.treeNodeId, action]));
+  const handledMoveNodeIds = new Set<string>();
   const assetsByPath = new Map((await repositories.assets.listBySourceId(source.id)).map((asset) => [asset.sourcePath, asset]));
 
   for (const action of plan.folders.restore) {
@@ -81,9 +83,18 @@ export async function executeFolderImportPlan(
     createdNodeByKey.set(`document:${action.sourcePath}`, projected.treeNodeId);
   }
   for (const action of plan.documents.restore) {
+    const move = moveByTreeNodeId.get(action.treeNodeId);
+    if (move) {
+      const parentId = move.parentPath === null ? null : folderNodeByPath.get(move.parentPath);
+      if (move.parentPath !== null && !parentId) throw importError("IMPORT_PLAN_PARENT_MISSING", `Moved document parent ${move.parentPath} is unavailable.`);
+      await projection.restoreProjectedDocumentToParent(caller, { documentId: action.documentId, newParentId: parentId ?? null, newPosition: move.desiredPosition });
+      handledMoveNodeIds.add(action.treeNodeId);
+      continue;
+    }
     await projection.restoreProjectedDocument(caller, action.documentId);
   }
   for (const action of plan.documents.move) {
+    if (handledMoveNodeIds.has(action.treeNodeId)) continue;
     const parentId = action.parentPath === null ? null : folderNodeByPath.get(action.parentPath);
     if (action.parentPath !== null && !parentId) throw importError("IMPORT_PLAN_PARENT_MISSING", `Moved document parent ${action.parentPath} is unavailable.`);
     await projection.moveProjectedNode(caller, { nodeId: action.treeNodeId, newParentId: parentId ?? null, newPosition: action.desiredPosition });
