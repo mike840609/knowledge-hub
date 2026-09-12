@@ -16,8 +16,10 @@ export type SourceView = {
   id: string;
   workspaceId: string;
   name: string;
+  sourceType: "FOLDER_SYNC" | "FILE_UPLOAD" | "HUB";
   status: "ACTIVE" | "ARCHIVED";
   ownership: "SOURCE_MANAGED" | "HUB_MANAGED";
+  syncVersion: number;
 };
 
 export type KnowledgeTreeItem =
@@ -82,8 +84,10 @@ function toSourceView(policy: SourcePolicy): SourceView {
     id: policy.id,
     workspaceId: policy.workspaceId,
     name: policy.name,
+    sourceType: policy.sourceType,
     status: policy.status,
     ownership: policy.ownership,
+    syncVersion: policy.syncVersion,
   };
 }
 
