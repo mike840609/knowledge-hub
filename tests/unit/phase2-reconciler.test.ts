@@ -243,4 +243,53 @@ describe("Phase 2 folder import reconciliation", () => {
     expect(plan.documents.create).toHaveLength(1000);
     expect(plan.summary.documents.added).toBe(1000);
   });
+
+  it("blocks a file replaced by a folder at the same source path", () => {
+    const existing = currentDocument("guide.md", "old");
+    const plan = reconcileFolderImport(
+      snapshot([incomingDocument("guide.md/child.md", "new")]),
+      canonical({ documents: [existing] }),
+    );
+
+    const blockers = plan.preview.flatMap((item) => item.diagnostics).filter((item) => item.severity === "BLOCKING");
+    expect(blockers.map((item) => item.code)).toContain("SOURCE_PATH_TYPE_CONFLICT");
+    expect(blockers.find((item) => item.code === "SOURCE_PATH_TYPE_CONFLICT")?.sourcePath).toBe("guide.md");
+    expect(plan.summary.blockers).toBeGreaterThan(0);
+  });
+
+  it("blocks a folder replaced by a file at the same source path", () => {
+    const existing = currentDocument("guide.md/child.md", "same");
+    const plan = reconcileFolderImport(
+      snapshot([incomingDocument("guide.md", "other")]),
+      canonical({ documents: [existing], folders: [currentFolder("guide.md")] }),
+    );
+
+    const blockers = plan.preview.flatMap((item) => item.diagnostics).filter((item) => item.severity === "BLOCKING");
+    expect(blockers.map((item) => item.code)).toContain("SOURCE_PATH_TYPE_CONFLICT");
+    expect(blockers.find((item) => item.code === "SOURCE_PATH_TYPE_CONFLICT")?.sourcePath).toBe("guide.md");
+    expect(plan.summary.blockers).toBeGreaterThan(0);
+  });
+
+  it("blocks a snapshot that uses one path as both document and folder", () => {
+    const plan = reconcileFolderImport(
+      snapshot([incomingDocument("a.md", "one"), incomingDocument("a.md/b.md", "two")]),
+      canonical(),
+    );
+
+    const blockers = plan.preview.flatMap((item) => item.diagnostics).filter((item) => item.severity === "BLOCKING");
+    expect(blockers.map((item) => item.code)).toContain("SOURCE_PATH_TYPE_CONFLICT");
+    expect(plan.summary.blockers).toBeGreaterThan(0);
+  });
+
+  it("leaves an identical resync without cross-type blockers", () => {
+    const existing = currentDocument("docs/a.md", "same");
+    const plan = reconcileFolderImport(
+      snapshot([incomingDocument("docs/a.md", "same")]),
+      canonical({ documents: [existing], folders: [currentFolder("docs")] }),
+    );
+
+    expect(plan.preview.flatMap((item) => item.diagnostics)).toHaveLength(0);
+    expect(plan.preview.find((item) => item.kind === "DOCUMENT")?.labels).toEqual(["UNCHANGED"]);
+    expect(plan.summary.blockers).toBe(0);
+  });
 });

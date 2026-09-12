@@ -1,6 +1,7 @@
 import { canonicalizeJsonObject, isSameRevisionContent } from "@/modules/knowledge/domain/content";
 import { importError } from "./import-errors";
 import { compareImportText } from "./import-path";
+import type { ImportDiagnostic } from "./import-diagnostic";
 import type {
   CanonicalAssetState,
   CanonicalDocumentState,
@@ -443,6 +444,73 @@ function buildOrdering(
   }
 }
 
+function attachPreviewBlocker(plan: FolderImportPlan, kind: ImportPreviewChange["kind"], sourcePath: string, diagnostic: ImportDiagnostic): void {
+  const existing = plan.preview.find((change) => change.kind === kind && change.sourcePath === sourcePath);
+  if (existing) {
+    existing.diagnostics.push(diagnostic);
+    return;
+  }
+  plan.preview.push({ kind, sourcePath, previousPath: null, labels: [], diagnostics: [diagnostic] });
+}
+
+/**
+ * Cross-entry-type path replacement guard (design §6.1/§9).
+ *
+ * Canonical `source_entries` rows keep archived history, and the canonical
+ * loader rejects any duplicate `source_path` across archived and active rows
+ * of any entry type. A file↔folder replacement at the same path would commit
+ * exactly such a state (archived DOCUMENT + active FOLDER, or vice versa),
+ * which no later sync could load again. Block the replacement at Preview
+ * instead of applying a state the loader cannot accept.
+ */
+function applyCrossTypePathRules(
+  plan: FolderImportPlan,
+  snapshot: ReadyImportContent,
+  current: CanonicalImportState,
+  desiredFolders: string[],
+): void {
+  const currentDocumentPaths = new Set(current.documents.map((document) => document.sourcePath));
+  const currentFolderPaths = new Set(current.folders.map((folder) => folder.sourcePath));
+  const incomingDocumentPaths = new Set(snapshot.documents.map((document) => document.sourcePath));
+  const desiredFolderPaths = new Set(desiredFolders);
+
+  for (const sourcePath of desiredFolders) {
+    if (incomingDocumentPaths.has(sourcePath)) {
+      const diagnostic: ImportDiagnostic = {
+        code: "SOURCE_PATH_TYPE_CONFLICT",
+        severity: "BLOCKING",
+        sourcePath,
+        message: `Source path "${sourcePath}" cannot be both a document and a folder in the same import.`,
+      };
+      attachPreviewBlocker(plan, "FOLDER", sourcePath, { ...diagnostic });
+      attachPreviewBlocker(plan, "DOCUMENT", sourcePath, { ...diagnostic });
+      continue;
+    }
+    if (currentDocumentPaths.has(sourcePath)) {
+      const diagnostic: ImportDiagnostic = {
+        code: "SOURCE_PATH_TYPE_CONFLICT",
+        severity: "BLOCKING",
+        sourcePath,
+        message: `Source path "${sourcePath}" is a document in the current source and cannot be replaced by a folder in one import.`,
+      };
+      attachPreviewBlocker(plan, "FOLDER", sourcePath, { ...diagnostic });
+      attachPreviewBlocker(plan, "DOCUMENT", sourcePath, { ...diagnostic });
+    }
+  }
+
+  for (const document of snapshot.documents) {
+    if (desiredFolderPaths.has(document.sourcePath) || !currentFolderPaths.has(document.sourcePath)) continue;
+    const diagnostic: ImportDiagnostic = {
+      code: "SOURCE_PATH_TYPE_CONFLICT",
+      severity: "BLOCKING",
+      sourcePath: document.sourcePath,
+      message: `Source path "${document.sourcePath}" is a folder in the current source and cannot be replaced by a document in one import.`,
+    };
+    attachPreviewBlocker(plan, "DOCUMENT", document.sourcePath, { ...diagnostic });
+    attachPreviewBlocker(plan, "FOLDER", document.sourcePath, { ...diagnostic });
+  }
+}
+
 function summarize(plan: FolderImportPlan): void {
   const summary = emptySummary();
 
@@ -487,6 +555,7 @@ export function reconcileFolderImport(snapshot: ReadyImportContent, current: Can
   const documentMatches = reconcileDocuments(plan, snapshot.documents, current.documents);
   reconcileAssets(plan, snapshot.assets, current.assets);
   buildOrdering(plan, snapshot, desiredFolders, currentFoldersByPath, documentMatches);
+  applyCrossTypePathRules(plan, snapshot, current, desiredFolders);
   summarize(plan);
   return plan;
 }

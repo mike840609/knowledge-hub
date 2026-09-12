@@ -178,4 +178,50 @@ describe("Phase 2 folder import Apply", () => {
     expect(parent.status).toBe("ACTIVE");
     expect((await pool.query<{ status: string }[]>("SELECT status FROM source_entries WHERE source_id=? AND source_path=?", [sourceId, "old"]))[0].status).toBe("ARCHIVED");
   });
+
+  it("blocks a file replaced by a folder at Preview and refuses Apply without touching canonical state", async () => {
+    const fixture = await createSourceFixture(pool);
+    const initialId = await readyInitial(fixture.workspaceId, "guide.md", "# Guide\n");
+    const initial = await services().apply.apply(fixtureCaller(), initialId);
+    if (initial.kind !== "APPLIED") throw new Error("expected APPLIED");
+
+    const replacement = await readyResyncFiles(initial.sourceId, [{ path: "guide.md/child.md", text: "# Child\n" }]);
+    expect(replacement.preview.hasBlockers).toBe(true);
+    const blocker = replacement.preview.changes.flatMap((change) => change.diagnostics).find((diagnostic) => diagnostic.code === "SOURCE_PATH_TYPE_CONFLICT");
+    expect(blocker?.severity).toBe("BLOCKING");
+    expect(blocker?.sourcePath).toBe("guide.md");
+
+    await expect(services().apply.apply(fixtureCaller(), replacement.snapshotId)).rejects.toMatchObject({ code: "IMPORT_SNAPSHOT_BLOCKED" });
+    expect((await pool.query<{ sync_version: number }[]>("SELECT sync_version FROM knowledge_sources WHERE id=?", [initial.sourceId]))[0].sync_version).toBe(1);
+    expect(await pool.query<{ source_path: string; entry_type: string; status: string }[]>(
+      "SELECT source_path,entry_type,status FROM source_entries WHERE source_id=? ORDER BY source_path",
+      [initial.sourceId],
+    )).toEqual([{ source_path: "guide.md", entry_type: "DOCUMENT", status: "ACTIVE" }]);
+  });
+
+  it("blocks a folder replaced by a file at Preview and refuses Apply without touching canonical state", async () => {
+    const fixture = await createSourceFixture(pool);
+    const sourceId = await readyInitialFiles(fixture.workspaceId, [{ path: "guide.md/child.md", text: "# Child\n" }]);
+
+    const replacement = await readyResyncFiles(sourceId, [{ path: "guide.md", text: "# Guide\n" }]);
+    expect(replacement.preview.hasBlockers).toBe(true);
+    const blocker = replacement.preview.changes.flatMap((change) => change.diagnostics).find((diagnostic) => diagnostic.code === "SOURCE_PATH_TYPE_CONFLICT");
+    expect(blocker?.severity).toBe("BLOCKING");
+    expect(blocker?.sourcePath).toBe("guide.md");
+
+    await expect(services().apply.apply(fixtureCaller(), replacement.snapshotId)).rejects.toMatchObject({ code: "IMPORT_SNAPSHOT_BLOCKED" });
+    expect((await pool.query<{ sync_version: number }[]>("SELECT sync_version FROM knowledge_sources WHERE id=?", [sourceId]))[0].sync_version).toBe(1);
+  });
+
+  it("applies a clean second no-op sync after the same content is resubmitted", async () => {
+    const fixture = await createSourceFixture(pool);
+    const initialId = await readyInitial(fixture.workspaceId, "guide.md", "# Guide\n");
+    const initial = await services().apply.apply(fixtureCaller(), initialId);
+    if (initial.kind !== "APPLIED") throw new Error("expected APPLIED");
+
+    const resync = await readyResyncFiles(initial.sourceId, [{ path: "guide.md", text: "# Guide\n" }]);
+    expect(resync.preview.hasBlockers).toBe(false);
+    const result = await services().apply.apply(fixtureCaller(), resync.snapshotId);
+    expect(result).toMatchObject({ kind: "APPLIED", resultVersion: 2, alreadyApplied: false });
+  });
 });
