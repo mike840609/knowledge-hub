@@ -12,6 +12,9 @@ test("selects a historical revision and shows its old content", async ({ page })
   await page.goto("/knowledge");
   await page.getByLabel("Choose a workspace").selectOption({ label: "Query Master" });
   await page.getByRole("button", { name: "Apply" }).click();
+  // Seed-source scope: import E2E sources reuse the "Architecture" title.
+  await page.getByLabel("Choose a source").selectOption({ label: "Obsidian Wiki" });
+  await page.getByRole("button", { name: "Apply" }).click();
 
   const tree = page.getByRole("region", { name: "Your source tree" });
   await tree.getByRole("link", { name: ARCHITECTURE_TITLE, exact: true }).click();
@@ -41,6 +44,8 @@ test("selects a historical revision and shows its old content", async ({ page })
 test("shows not-found for an unknown revision number", async ({ page }) => {
   await page.goto("/knowledge");
   await page.getByLabel("Choose a workspace").selectOption({ label: "Query Master" });
+  await page.getByRole("button", { name: "Apply" }).click();
+  await page.getByLabel("Choose a source").selectOption({ label: "Obsidian Wiki" });
   await page.getByRole("button", { name: "Apply" }).click();
 
   const tree = page.getByRole("region", { name: "Your source tree" });
