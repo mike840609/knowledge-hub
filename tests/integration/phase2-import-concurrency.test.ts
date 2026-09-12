@@ -3,6 +3,7 @@ import type { Pool } from "mariadb";
 import { databaseConfig } from "@/infrastructure/database/mariadb/config";
 import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
 import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction";
+import { creatorQuotaLockName } from "@/infrastructure/database/mariadb/repositories/import-snapshots";
 import { CreateFolderImportService, type ImportManifestEntry } from "@/modules/sources/application/create-folder-import";
 import { UploadFolderImportEntriesService } from "@/modules/sources/application/upload-folder-import-entries";
 import { FinalizeFolderImportService } from "@/modules/sources/application/finalize-folder-import";
@@ -59,6 +60,66 @@ async function readyResync(sourceId: string, path: string, text: string, assetHa
   await upload.upload(fixtureCaller(), { snapshotId: session.snapshotId, entries: [{ uploadKey: "m1", bytes }] });
   await finalize.finalize(fixtureCaller(), session.snapshotId);
   return session.snapshotId;
+}
+
+type CommitGate = { armed: boolean; entered: { promise: Promise<void>; resolve: () => void }; release: { promise: Promise<void>; resolve: () => void } };
+
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((runner) => {
+    resolve = runner;
+  });
+  return { promise, resolve };
+}
+
+function commitBarrierPool(inner: Pool, gate: CommitGate): Pool {
+  return new Proxy(inner, {
+    get(target, property, receiver) {
+      if (property === "getConnection") {
+        return async () => {
+          const connection = await target.getConnection();
+          const commit = connection.commit.bind(connection);
+          connection.commit = async () => {
+            if (gate.armed) {
+              gate.entered.resolve();
+              await gate.release.promise;
+            }
+            return commit();
+          };
+          return connection;
+        };
+      }
+      const value = Reflect.get(target, property, receiver);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
+async function buildingCount(): Promise<number> {
+  return Number((await pool.query<{ count: unknown }[]>(
+    "SELECT COUNT(*) AS count FROM source_import_snapshots WHERE created_by=? AND state='BUILDING' AND expires_at>?",
+    [fixtureCaller().identity.id, now],
+  ))[0].count);
+}
+
+async function readyCount(): Promise<number> {
+  return Number((await pool.query<{ count: unknown }[]>(
+    "SELECT COUNT(*) AS count FROM source_import_snapshots WHERE created_by=? AND state='READY' AND expires_at>?",
+    [fixtureCaller().identity.id, now],
+  ))[0].count);
+}
+
+async function quotaLockHeld(): Promise<boolean> {
+  const lockName = creatorQuotaLockName(fixtureCaller().identity.id);
+  const connection = await pool.getConnection();
+  try {
+    const rows = await connection.query<{ acquired: unknown }[]>("SELECT GET_LOCK(?, 0) AS acquired", [lockName]);
+    const acquired = Number(rows[0]?.acquired ?? 0);
+    if (acquired === 1) await connection.query("SELECT RELEASE_LOCK(?)", [lockName]);
+    return acquired === 0;
+  } finally {
+    connection.release();
+  }
 }
 
 describe("Phase 2 Apply concurrency and rollback", () => {
@@ -148,5 +209,88 @@ describe("Phase 2 Apply concurrency and rollback", () => {
     await pool.query("UPDATE knowledge_sources SET status='ARCHIVED', archived_by=?, archived_at=?, updated_by=? WHERE id=?", [fixtureIdentity.id, now, fixtureIdentity.id, good.sourceId]);
     await expect(stack().apply.apply(fixtureCaller(), resyncId)).rejects.toMatchObject({ code:"SOURCE_IMPORT_NOT_ALLOWED" });
     expect((await pool.query<{ sync_version:number }[]>("SELECT sync_version FROM knowledge_sources WHERE id=?", [good.sourceId]))[0].sync_version).toBe(1);
+  });
+
+  it("holds the BUILDING quota lock across commit so a concurrent create cannot use the release window", async () => {
+    const fixture = await createSourceFixture(pool);
+    const plain = stack();
+    const bytes = (name: string) => new TextEncoder().encode(`# ${name}\n`);
+    await plain.create.createInitial(fixtureCaller(), {
+      workspaceId: fixture.workspaceId, sourceName: "Quota One", rootName: "q1",
+      manifest: [markdown("m1", "a.md", bytes("one"))],
+    });
+    await plain.create.createInitial(fixtureCaller(), {
+      workspaceId: fixture.workspaceId, sourceName: "Quota Two", rootName: "q2",
+      manifest: [markdown("m1", "b.md", bytes("two"))],
+    });
+
+    const gate: CommitGate = { armed: true, entered: deferred(), release: deferred() };
+    const gatedCreate = new CreateFolderImportService(new MariaDbUnitOfWork(commitBarrierPool(pool, gate)), {
+      limits: DEFAULT_IMPORT_LIMITS, now: clock,
+    });
+    const third = gatedCreate.createInitial(fixtureCaller(), {
+      workspaceId: fixture.workspaceId, sourceName: "Quota Three", rootName: "q3",
+      manifest: [markdown("m1", "c.md", bytes("three"))],
+    });
+    await gate.entered.promise;
+    expect(await buildingCount()).toBe(2);
+    expect(await quotaLockHeld()).toBe(true);
+
+    gate.armed = false;
+    gate.release.resolve();
+    await expect(third).resolves.toMatchObject({ state: "BUILDING" });
+    expect(await quotaLockHeld()).toBe(false);
+
+    await expect(plain.create.createInitial(fixtureCaller(), {
+      workspaceId: fixture.workspaceId, sourceName: "Quota Four", rootName: "q4",
+      manifest: [markdown("m1", "d.md", bytes("four"))],
+    })).rejects.toMatchObject({ code: "IMPORT_BUILDING_QUOTA_EXCEEDED" });
+    expect(await buildingCount()).toBe(3);
+  });
+
+  it("holds the READY quota lock across commit so a concurrent finalize cannot use the release window", async () => {
+    const fixture = await createSourceFixture(pool);
+    const plain = stack();
+    for (let index = 0; index < 9; index += 1) {
+      const bytes = new TextEncoder().encode(`# Ready ${index}\n`);
+      const session = await plain.create.createInitial(fixtureCaller(), {
+        workspaceId: fixture.workspaceId, sourceName: `Ready ${index}`, rootName: `ready-${index}`,
+        manifest: [markdown("m1", `ready-${index}.md`, bytes)],
+      });
+      await plain.upload.upload(fixtureCaller(), { snapshotId: session.snapshotId, entries: [{ uploadKey: "m1", bytes }] });
+      await plain.finalize.finalize(fixtureCaller(), session.snapshotId);
+    }
+    expect(await readyCount()).toBe(9);
+
+    const firstBytes = new TextEncoder().encode("# Tenth\n");
+    const firstSession = await plain.create.createInitial(fixtureCaller(), {
+      workspaceId: fixture.workspaceId, sourceName: "Tenth", rootName: "tenth",
+      manifest: [markdown("m1", "tenth.md", firstBytes)],
+    });
+    await plain.upload.upload(fixtureCaller(), { snapshotId: firstSession.snapshotId, entries: [{ uploadKey: "m1", bytes: firstBytes }] });
+    const secondBytes = new TextEncoder().encode("# Eleventh\n");
+    const secondSession = await plain.create.createInitial(fixtureCaller(), {
+      workspaceId: fixture.workspaceId, sourceName: "Eleventh", rootName: "eleventh",
+      manifest: [markdown("m1", "eleventh.md", secondBytes)],
+    });
+    await plain.upload.upload(fixtureCaller(), { snapshotId: secondSession.snapshotId, entries: [{ uploadKey: "m1", bytes: secondBytes }] });
+
+    const gate: CommitGate = { armed: true, entered: deferred(), release: deferred() };
+    const gatedFinalize = new FinalizeFolderImportService(new MariaDbUnitOfWork(commitBarrierPool(pool, gate)), {
+      limits: DEFAULT_IMPORT_LIMITS, now: clock,
+    });
+    const tenth = gatedFinalize.finalize(fixtureCaller(), firstSession.snapshotId);
+    await gate.entered.promise;
+    expect(await readyCount()).toBe(9);
+    expect(await quotaLockHeld()).toBe(true);
+
+    gate.armed = false;
+    gate.release.resolve();
+    const preview = await tenth;
+    expect(preview.hasBlockers).toBe(false);
+    expect(await quotaLockHeld()).toBe(false);
+
+    await expect(plain.finalize.finalize(fixtureCaller(), secondSession.snapshotId)).rejects.toMatchObject({ code: "IMPORT_READY_QUOTA_EXCEEDED" });
+    expect(await readyCount()).toBe(10);
   });
 });

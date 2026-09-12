@@ -24,4 +24,15 @@ export type SourceRepositories = KnowledgeRepositories & {
 
 export interface SourceUnitOfWork {
   run<T>(work: (repositories: SourceRepositories) => Promise<T>): Promise<T>;
+  /**
+   * Serializes import quota checks per creator across the full transaction.
+   * The creator lock is acquired on the backing connection before the
+   * transaction begins and released only after commit/rollback, so a
+   * concurrent quota check cannot pass on still-uncommitted state.
+   */
+  runWithCreatorQuotaLock<T>(
+    creatorId: string,
+    timeoutSeconds: number,
+    work: (repositories: SourceRepositories) => Promise<T>,
+  ): Promise<T>;
 }

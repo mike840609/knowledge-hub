@@ -38,6 +38,10 @@ function mapSnapshot(row: DbRow): ImportSnapshot {
   };
 }
 
+export function creatorQuotaLockName(creatorId: string): string {
+  return `km_import_quota_${creatorId}`;
+}
+
 export class MariaDbImportSnapshotRepository implements ImportSnapshotRepository {
   constructor(private readonly connection: QueryConnection) {}
 
@@ -75,15 +79,6 @@ export class MariaDbImportSnapshotRepository implements ImportSnapshotRepository
       [creatorId, state, now],
     );
     return Number(rows[0]?.count ?? 0);
-  }
-
-  async acquireCreatorQuotaLock(creatorId: string, timeoutSeconds: number): Promise<boolean> {
-    const rows = await this.connection.query<{ acquired: unknown }[]>("SELECT GET_LOCK(?, ?) AS acquired", [`km_import_quota_${creatorId}`, timeoutSeconds]);
-    return Number(rows[0]?.acquired ?? 0) === 1;
-  }
-
-  async releaseCreatorQuotaLock(creatorId: string): Promise<void> {
-    await this.connection.query("SELECT RELEASE_LOCK(?)", [`km_import_quota_${creatorId}`]);
   }
 
   async markReady(input: MarkImportSnapshotReadyInput): Promise<void> {
