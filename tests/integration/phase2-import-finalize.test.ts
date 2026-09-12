@@ -7,7 +7,8 @@ import { CreateFolderImportService, type ImportManifestEntry } from "@/modules/s
 import { UploadFolderImportEntriesService } from "@/modules/sources/application/upload-folder-import-entries";
 import { FinalizeFolderImportService } from "@/modules/sources/application/finalize-folder-import";
 import { DEFAULT_IMPORT_LIMITS } from "@/modules/sources/domain/import-limits";
-import { createDocumentForAnySource, createEntryFixture, createSourceFixture, fixtureCaller } from "../fixtures/knowledge";
+import { createDocumentForAnySource, createEntryFixture, createSourceFixture, fixtureCaller, fixtureIdentity } from "../fixtures/knowledge";
+import { uuidv7 } from "@/shared/ids/uuidv7";
 
 let pool: Pool;
 const now = new Date("2026-09-12T12:00:00.000Z");
@@ -31,6 +32,18 @@ function services() {
 
 function markdownEntry(uploadKey: string, relativePath: string, bytes: Uint8Array): ImportManifestEntry {
   return { uploadKey, relativePath, kind: "MARKDOWN", size: bytes.byteLength };
+}
+
+async function insertReadySnapshot(workspaceId: string): Promise<string> {
+  const id = uuidv7();
+  const summary = { documents: { added: 0, updated: 0, moved: 0, renamed: 0, archived: 0, restored: 0, unchanged: 0 }, folders: { added: 0, archived: 0, restored: 0 }, assets: { added: 0, updated: 0, removed: 0, unchanged: 0 }, warnings: 0, blockers: 0, affectedDocuments: 0, changed: false };
+  const plan = { planVersion: "phase2:v1", sourceBinding: { workspaceId, sourceId: null, basedOnVersion: null }, folders: { create: [], restore: [], archive: [] }, documents: { create: [], restore: [], move: [], revise: [], archive: [], updateLocator: [] }, assets: { upsert: [], remove: [] }, ordering: [], preview: [], summary };
+  await pool.query(
+    `INSERT INTO source_import_snapshots (id,workspace_id,source_id,based_on_version,created_by,root_name,proposed_source_name,adapter_type,adapter_version,plan_version,state,manifest_hash,snapshot_hash,plan_hash,has_blockers,summary,plan,created_at,finalized_at,expires_at)
+     VALUES (?, ?, NULL, NULL, ?, 'wiki', 'Wiki', 'GENERIC_MARKDOWN_FOLDER', 'phase2:v1', 'phase2:v1', 'READY', ?, ?, ?, FALSE, ?, ?, ?, ?, ?)`,
+    [id, workspaceId, fixtureIdentity.id, "a".repeat(64), "b".repeat(64), "c".repeat(64), JSON.stringify(summary), JSON.stringify(plan), now, now, new Date(now.getTime() + 30 * 60_000)],
+  );
+  return id;
 }
 
 async function initialSession(files: { uploadKey: string; path: string; bytes: Uint8Array }[]) {
@@ -157,5 +170,28 @@ describe("Phase 2 import finalization", () => {
     expect(renamed?.previousPath).toBe("docs/old.md");
     expect(renamed?.labels).toEqual(expect.arrayContaining(["RENAMED", "UPDATED"]));
     expect(preview.changes.find((change) => change.sourcePath === "docs/missing.md")?.labels).toContain("ARCHIVED");
+  });
+
+  it("refuses to finalize beyond the READY quota and keeps overflow snapshots BUILDING", async () => {
+    const fixture = await createSourceFixture(pool);
+    const { create, upload, finalize } = services();
+    for (let index = 0; index < 9; index += 1) await insertReadySnapshot(fixture.workspaceId);
+    const snapshotIds: string[] = [];
+    for (let index = 0; index < 3; index += 1) {
+      const bytes = new TextEncoder().encode(`# Quota ${index}\n\nbody ${index}\n`);
+      const session = await create.createInitial(fixtureCaller(), {
+        workspaceId: fixture.workspaceId, sourceName: `Quota ${index}`, rootName: "wiki",
+        manifest: [markdownEntry(`q${index}`, `quota${index}.md`, bytes)],
+      });
+      await upload.upload(fixtureCaller(), { snapshotId: session.snapshotId, entries: [{ uploadKey: `q${index}`, bytes }] });
+      snapshotIds.push(session.snapshotId);
+    }
+    const first = await finalize.finalize(fixtureCaller(), snapshotIds[0]);
+    expect(first.state).toBe("READY");
+    await expect(finalize.finalize(fixtureCaller(), snapshotIds[1])).rejects.toMatchObject({ code: "IMPORT_READY_QUOTA_EXCEEDED" });
+    await expect(finalize.finalize(fixtureCaller(), snapshotIds[2])).rejects.toMatchObject({ code: "IMPORT_READY_QUOTA_EXCEEDED" });
+    const states = await pool.query<{ id: string; state: string }[]>("SELECT id,state FROM source_import_snapshots WHERE created_by=? ORDER BY created_at", [fixtureIdentity.id]);
+    expect(states.filter((row) => row.state === "READY")).toHaveLength(10);
+    expect(states.filter((row) => row.state === "BUILDING").map((row) => row.id).sort()).toEqual([snapshotIds[1], snapshotIds[2]].sort());
   });
 });

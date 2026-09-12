@@ -77,6 +77,15 @@ export class MariaDbImportSnapshotRepository implements ImportSnapshotRepository
     return Number(rows[0]?.count ?? 0);
   }
 
+  async acquireCreatorQuotaLock(creatorId: string, timeoutSeconds: number): Promise<boolean> {
+    const rows = await this.connection.query<{ acquired: unknown }[]>("SELECT GET_LOCK(?, ?) AS acquired", [`km_import_quota_${creatorId}`, timeoutSeconds]);
+    return Number(rows[0]?.acquired ?? 0) === 1;
+  }
+
+  async releaseCreatorQuotaLock(creatorId: string): Promise<void> {
+    await this.connection.query("SELECT RELEASE_LOCK(?)", [`km_import_quota_${creatorId}`]);
+  }
+
   async markReady(input: MarkImportSnapshotReadyInput): Promise<void> {
     const result = await this.connection.query(
       `UPDATE source_import_snapshots SET state='READY', snapshot_hash=?, plan_hash=?, summary=?, plan=?, has_blockers=?, finalized_at=?, expires_at=?

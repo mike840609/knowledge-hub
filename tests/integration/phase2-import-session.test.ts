@@ -156,4 +156,21 @@ describe("Phase 2 BUILDING import sessions", () => {
     await pool.query("UPDATE source_import_snapshots SET expires_at=? WHERE id=?", [new Date(now.getTime()-1),created.snapshotId]);
     await expect(upload.upload(fixtureCaller(), { snapshotId:created.snapshotId,entries:[{uploadKey:"m1",bytes:new TextEncoder().encode("# hi")}] })).rejects.toMatchObject({ code:"IMPORT_SNAPSHOT_EXPIRED" });
   });
+
+  it("serializes concurrent session creation per creator within the BUILDING quota", async () => {
+    const fixture = await createSourceFixture(pool);
+    const create = services().create;
+    const attempts = await Promise.allSettled(Array.from({ length: 5 }, (_, index) => create.createInitial(fixtureCaller(), {
+      workspaceId: fixture.workspaceId, sourceName: `Race ${index}`, rootName: "wiki", manifest: markdownManifest(`race${index}.md`),
+    })));
+    const fulfilled = attempts.filter((attempt) => attempt.status === "fulfilled");
+    const rejected = attempts.filter((attempt) => attempt.status === "rejected");
+    expect(fulfilled).toHaveLength(DEFAULT_IMPORT_LIMITS.maxBuildingSnapshotsPerUser);
+    expect(rejected).toHaveLength(5 - DEFAULT_IMPORT_LIMITS.maxBuildingSnapshotsPerUser);
+    for (const outcome of rejected) {
+      expect((outcome as PromiseRejectedResult).reason).toMatchObject({ code: "IMPORT_BUILDING_QUOTA_EXCEEDED" });
+    }
+    const building = Number((await pool.query<{ count: unknown }[]>("SELECT COUNT(*) AS count FROM source_import_snapshots WHERE created_by=? AND state='BUILDING'", [fixtureIdentity.id]))[0].count);
+    expect(building).toBe(DEFAULT_IMPORT_LIMITS.maxBuildingSnapshotsPerUser);
+  });
 });

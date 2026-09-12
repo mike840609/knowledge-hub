@@ -124,6 +124,7 @@ export class FinalizeFolderImportService {
   private readonly limits: ImportLimits;
   private readonly now: () => Date;
   private readonly readyTtlMs: number;
+  private readonly quotaLockTimeoutSeconds = 10;
 
   constructor(private readonly uow: SourceUnitOfWork, options: Options = {}) {
     this.limits = options.limits ?? DEFAULT_IMPORT_LIMITS;
@@ -134,6 +135,10 @@ export class FinalizeFolderImportService {
   async finalize(caller: CallerContext, snapshotId: string): Promise<ImportPreview> {
     const now = this.now();
     return this.uow.run(async (repositories) => {
+      if (!(await repositories.importSnapshots.acquireCreatorQuotaLock(caller.identity.id, this.quotaLockTimeoutSeconds))) {
+        throw importError("IMPORT_APPLY_RETRYABLE", "Import quota could not be checked; retry the request.");
+      }
+      try {
       const snapshot = await repositories.importSnapshots.lockById(snapshotId);
       if (!snapshot || snapshot.createdBy !== caller.identity.id) throw importError("IMPORT_SNAPSHOT_NOT_FOUND", "Import snapshot was not found.");
       await repositories.workspaceAccess.requireMembership(caller, snapshot.workspaceId);
@@ -255,6 +260,11 @@ export class FinalizeFolderImportService {
       const expiresAt = new Date(now.getTime() + this.readyTtlMs);
       const hasBlockers = plan.summary.blockers > 0;
 
+      const activeReady = await repositories.importSnapshots.countActiveByCreatorAndState(caller.identity.id, "READY", now);
+      if (activeReady >= this.limits.maxReadySnapshotsPerUser) {
+        throw importError("IMPORT_READY_QUOTA_EXCEEDED", "Too many active READY import snapshots.");
+      }
+
       await repositories.importSnapshotEntries.replaceFinalizedEntries(snapshot.id, persistedEntries);
       await repositories.importSnapshots.markReady({
         snapshotId: snapshot.id,
@@ -279,6 +289,9 @@ export class FinalizeFolderImportService {
         expiresAt,
       };
       return previewFromSnapshot(ready, now);
+      } finally {
+        await repositories.importSnapshots.releaseCreatorQuotaLock(caller.identity.id);
+      }
     });
   }
 }

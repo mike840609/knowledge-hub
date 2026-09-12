@@ -107,6 +107,7 @@ export class CreateFolderImportService {
   private readonly limits: ImportLimits;
   private readonly now: () => Date;
   private readonly buildingTtlMs: number;
+  private readonly quotaLockTimeoutSeconds = 10;
 
   constructor(private readonly uow: SourceUnitOfWork, options: Options = {}) {
     this.limits = options.limits ?? DEFAULT_IMPORT_LIMITS;
@@ -140,10 +141,17 @@ export class CreateFolderImportService {
       resultSourceId: null, resultVersion: null,
     };
     await this.uow.run(async (repositories) => {
-      await repositories.workspaceAccess.requireMembership(caller, input.workspaceId);
-      await this.assertQuota(repositories, caller, now);
-      await repositories.importSnapshots.insert(snapshot);
-      await repositories.importSnapshotEntries.insertMany(stagingEntries(snapshotId, input.manifest));
+      if (!(await repositories.importSnapshots.acquireCreatorQuotaLock(caller.identity.id, this.quotaLockTimeoutSeconds))) {
+        throw importError("IMPORT_APPLY_RETRYABLE", "Import quota could not be checked; retry the request.");
+      }
+      try {
+        await repositories.workspaceAccess.requireMembership(caller, input.workspaceId);
+        await this.assertQuota(repositories, caller, now);
+        await repositories.importSnapshots.insert(snapshot);
+        await repositories.importSnapshotEntries.insertMany(stagingEntries(snapshotId, input.manifest));
+      } finally {
+        await repositories.importSnapshots.releaseCreatorQuotaLock(caller.identity.id);
+      }
     });
     return { snapshotId, state: "BUILDING", expiresAt };
   }

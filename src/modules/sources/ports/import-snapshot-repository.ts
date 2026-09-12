@@ -17,6 +17,8 @@ export interface ImportSnapshotRepository {
   findById(snapshotId: string): Promise<ImportSnapshot | null>;
   lockById(snapshotId: string): Promise<ImportSnapshot | null>;
   countActiveByCreatorAndState(creatorId: string, state: "BUILDING" | "READY", now: Date): Promise<number>;
+  acquireCreatorQuotaLock(creatorId: string, timeoutSeconds: number): Promise<boolean>;
+  releaseCreatorQuotaLock(creatorId: string): Promise<void>;
   markReady(input: MarkImportSnapshotReadyInput): Promise<void>;
   markApplied(input: { snapshotId: string; sourceId: string; resultVersion: number; appliedAt: Date }): Promise<void>;
   markStale(input: { snapshotId: string; staleAt: Date }): Promise<void>;
