@@ -236,4 +236,11 @@ describe("Phase 2 folder import reconciliation", () => {
 
     expect(reconcileFolderImport(content, state)).toEqual(reconcileFolderImport(content, state));
   });
+
+  it("reconciles 1,000 documents with lookup-map matching", () => {
+    const documents = Array.from({ length: 1000 }, (_, index) => incomingDocument(`docs/${String(index).padStart(4, "0")}.md`, `fp-${index}`));
+    const plan = reconcileFolderImport({ sourceBinding: binding, documents, assets: [] }, { documents: [], folders: [], assets: [] });
+    expect(plan.documents.create).toHaveLength(1000);
+    expect(plan.summary.documents.added).toBe(1000);
+  });
 });
