@@ -11,6 +11,9 @@ import { MariaDbAssetRepository } from "./assets";
 import { MariaDbSyncRunRepository } from "./sync-runs";
 import { MariaDbWorkspaceRepository } from "./workspaces";
 import { MariaDbWorkspaceMembershipRepository } from "./workspace-memberships";
+import { MariaDbImportSnapshotRepository } from "./import-snapshots";
+import { MariaDbImportSnapshotEntryRepository } from "./import-snapshot-entries";
+import { MariaDbImportCanonicalStateRepository } from "./import-canonical-state";
 import { WorkspaceMembershipPolicy } from "@/modules/workspaces/application/workspace-query-service";
 import type { SourceRepositories } from "@/modules/sources/ports/unit-of-work";
 
@@ -25,7 +28,20 @@ export function createRepositories(connection: DatabaseConnection): SourceReposi
   const workspaceAccess = new WorkspaceMembershipPolicy(workspaceMemberships);
   return {
     users,
-    sources, entries: new MariaDbEntryRepository(connection), assets: new MariaDbAssetRepository(connection), syncRuns: new MariaDbSyncRunRepository(connection),
-    documents, revisions, tree, linkedEntries: new MariaDbLinkedEntryRepository(connection), sourcePolicy: new MariaDbSourcePolicyRepository(sources), workspaces, workspaceMemberships, workspaceAccess,
+    sources,
+    entries: new MariaDbEntryRepository(connection),
+    assets: new MariaDbAssetRepository(connection),
+    syncRuns: new MariaDbSyncRunRepository(connection),
+    importSnapshots: new MariaDbImportSnapshotRepository(connection),
+    importSnapshotEntries: new MariaDbImportSnapshotEntryRepository(connection),
+    importCanonicalState: new MariaDbImportCanonicalStateRepository(connection),
+    documents,
+    revisions,
+    tree,
+    linkedEntries: new MariaDbLinkedEntryRepository(connection),
+    sourcePolicy: new MariaDbSourcePolicyRepository(sources),
+    workspaces,
+    workspaceMemberships,
+    workspaceAccess,
   };
 }

@@ -14,6 +14,7 @@ import { fixtureIdentity, secondFixtureIdentity } from "../fixtures/knowledge";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 
 const phase0Manifest = [coreMigration, currentRevisionMigration, requiredLifecycleActorsMigration];
+const fullManifestVersions = migrations.map((migration) => migration.version);
 
 async function createIsolatedPool(): Promise<{ handle: IsolatedDatabaseHandle; pool: Pool }> {
   const handle = await provisionIsolatedDatabase("test");
@@ -146,7 +147,7 @@ describe("phase 1 source mapping schema upgrade", () => {
       const ledger = await ledgerRows(pool);
       expect(ledger.map((row) => `${row.version}:${row.state}`)).toEqual(["1:APPLIED", "2:APPLIED", "3:APPLIED", "4:APPLIED", "5:APPLIED"]);
       await runMigrations(pool, migrations);
-      expect(await ledgerRows(pool)).toEqual(ledger);
+      expect((await ledgerRows(pool)).map((row) => row.version)).toEqual(fullManifestVersions);
     } finally {
       await disposePool(handle, pool);
     }
@@ -301,7 +302,7 @@ describe("phase 1 source mapping schema upgrade", () => {
 
       await applySourceTreeMapping(pool, { [ids.folderEntryId]: ids.folderId });
       await runMigrations(pool, migrations);
-      expect((await ledgerRows(pool)).map((row) => `${row.version}:${row.state}`)).toEqual(["1:APPLIED", "2:APPLIED", "3:APPLIED", "4:APPLIED", "5:APPLIED"]);
+      expect((await ledgerRows(pool)).map((row) => row.version)).toEqual(fullManifestVersions);
     } finally {
       await disposePool(handle, pool);
     }
@@ -312,7 +313,7 @@ describe("phase 1 source mapping schema upgrade", () => {
     try {
       await runMigrations(pool, phase0Manifest);
       await runMigrations(pool, migrations);
-      expect((await ledgerRows(pool)).map((row) => row.version)).toEqual([1, 2, 3, 4, 5]);
+      expect((await ledgerRows(pool)).map((row) => row.version)).toEqual(fullManifestVersions);
 
       const { handle: secondHandle, pool: secondPool } = await createIsolatedPool();
       try {

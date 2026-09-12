@@ -34,6 +34,8 @@ async function appliedVersions(pool: Pool): Promise<number[]> {
   return rows.map((row) => Number(row.version));
 }
 
+const fullManifestVersions = migrations.map((migration) => migration.version);
+
 describe("migration runner target versions and pre-apply hooks", () => {
   it("applies only up to the target version, then continues to the full manifest", async () => {
     const { handle, pool } = await createIsolatedPool();
@@ -41,7 +43,7 @@ describe("migration runner target versions and pre-apply hooks", () => {
       await runMigrations(pool, migrations, { to: 2 });
       expect(await appliedVersions(pool)).toEqual([1, 2]);
       await runMigrations(pool, migrations);
-      expect(await appliedVersions(pool)).toEqual([1, 2, 3, 4, 5]);
+      expect(await appliedVersions(pool)).toEqual(fullManifestVersions);
     } finally {
       await disposePool(handle, pool);
     }
@@ -54,7 +56,7 @@ describe("migration runner target versions and pre-apply hooks", () => {
       await expect(runMigrations(pool, migrations, { to: 4 })).rejects.toThrow(/below already-applied/);
       await expect(runMigrations(pool, migrations, { to: 99 })).rejects.toThrow(/not a known migration version/);
       await expect(runMigrations(pool, migrations, { to: 0 })).rejects.toThrow(/Invalid migration target/);
-      expect(await appliedVersions(pool)).toEqual([1, 2, 3, 4, 5]);
+      expect(await appliedVersions(pool)).toEqual(fullManifestVersions);
     } finally {
       await disposePool(handle, pool);
     }
@@ -68,7 +70,7 @@ describe("migration runner target versions and pre-apply hooks", () => {
       await expect(runMigrations(pool, migrations, { to: 2 })).rejects.toThrow(/not present in the current migration manifest/);
       await pool.query("DELETE FROM schema_migrations WHERE version = 90");
       await runMigrations(pool, migrations);
-      expect(await appliedVersions(pool)).toEqual([1, 2, 3, 4, 5]);
+      expect(await appliedVersions(pool)).toEqual(fullManifestVersions);
     } finally {
       await disposePool(handle, pool);
     }
@@ -90,7 +92,7 @@ describe("migration runner target versions and pre-apply hooks", () => {
     try {
       await runMigrations(pool, migrations);
       await runMigrations(pool, [...migrations, marker]);
-      expect(await appliedVersions(pool)).toEqual([1, 2, 3, 4, 5, 90]);
+      expect(await appliedVersions(pool)).toEqual([...fullManifestVersions, 90]);
     } finally {
       await pool.query("DROP TABLE IF EXISTS phase1_hook_order");
       await pool.query("DELETE FROM schema_migrations WHERE version = 90");
@@ -117,7 +119,7 @@ describe("migration runner target versions and pre-apply hooks", () => {
       );
       expect(tables).toEqual([]);
       await runMigrations(pool, migrations);
-      expect(await appliedVersions(pool)).toEqual([1, 2, 3, 4, 5]);
+      expect(await appliedVersions(pool)).toEqual(fullManifestVersions);
     } finally {
       await pool.query("DROP TABLE IF EXISTS phase1_hook_failure");
       await pool.query("DELETE FROM schema_migrations WHERE version = 91");
