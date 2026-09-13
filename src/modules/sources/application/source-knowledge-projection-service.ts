@@ -54,6 +54,7 @@ export interface SourceKnowledgeProjectionService {
   moveProjectedNode(caller: CallerContext, input: MoveTreeNodeInput): Promise<void>;
   archiveProjectedDocument(caller: CallerContext, documentId: string): Promise<void>;
   restoreProjectedDocument(caller: CallerContext, documentId: string): Promise<void>;
+  restoreProjectedDocumentToParent(caller: CallerContext, input: { documentId: string; newParentId: string | null; newPosition: number }): Promise<void>;
 }
 
 export type BoundProjectionSource = {
@@ -130,6 +131,31 @@ export function bindSourceProjection(
     const linked = await repositories.entries.findByDocumentId(documentId);
     if (linked && linked.sourceId === bound.id) {
       await restoreSourceEntry(repositories, caller, bound.id, linked.id);
+    }
+  }
+
+  async function moveNodeToParent(
+    caller: CallerContext,
+    source: SourcePolicy,
+    nodeId: string,
+    newParentId: string | null,
+    newPosition: number,
+  ): Promise<void> {
+    const node = await requireLockedSourceNode(repositories, source.id, nodeId);
+    const previousParentId = node.parentId;
+    if (newParentId !== null) {
+      if (newParentId === node.id) throw new TreeCycleError();
+      const parent = await repositories.tree.lockById(newParentId);
+      if (!parent) throw new TreeNodeNotFoundError("Parent folder was not found.");
+      if (parent.sourceId !== source.id) throw new CrossSourceMoveError();
+      if (parent.nodeType !== "FOLDER" || parent.status !== "ACTIVE") throw new InvalidParentError();
+      await assertActiveFolderAncestry(repositories, source.id, parent.id);
+      if (await repositories.tree.hasDescendant(node.id, parent.id)) throw new TreeCycleError();
+    }
+    await repositories.tree.updateParent(node.id, newParentId, caller.identity.id);
+    await placeNodeAtIndex(repositories, source.id, node.id, newParentId, newPosition, caller.identity.id);
+    if (previousParentId !== newParentId) {
+      await renumberSiblingPositions(repositories, source.id, previousParentId, caller.identity.id);
     }
   }
 
@@ -315,21 +341,7 @@ export function bindSourceProjection(
       const source = await requireBoundSource(repositories, caller, bound);
       const node = await requireLockedSourceNode(repositories, source.id, input.nodeId);
       if (node.status !== "ACTIVE") throw new ValidationError("Archived tree nodes cannot be moved.");
-      const previousParentId = node.parentId;
-      if (input.newParentId !== null) {
-        if (input.newParentId === node.id) throw new TreeCycleError();
-        const parent = await repositories.tree.lockById(input.newParentId);
-        if (!parent) throw new TreeNodeNotFoundError("Parent folder was not found.");
-        if (parent.sourceId !== source.id) throw new CrossSourceMoveError();
-        if (parent.nodeType !== "FOLDER" || parent.status !== "ACTIVE") throw new InvalidParentError();
-        await assertActiveFolderAncestry(repositories, source.id, parent.id);
-        if (await repositories.tree.hasDescendant(node.id, parent.id)) throw new TreeCycleError();
-      }
-      await repositories.tree.updateParent(node.id, input.newParentId, caller.identity.id);
-      await placeNodeAtIndex(repositories, source.id, node.id, input.newParentId, newPosition, caller.identity.id);
-      if (previousParentId !== input.newParentId) {
-        await renumberSiblingPositions(repositories, source.id, previousParentId, caller.identity.id);
-      }
+      await moveNodeToParent(caller, source, node.id, input.newParentId, newPosition);
     },
 
     async archiveProjectedDocument(caller, documentId) {
@@ -362,6 +374,34 @@ export function bindSourceProjection(
       if (!node) throw new TreeNodeNotFoundError("Document tree node was not found.");
       await requireLockedSourceNode(repositories, source.id, node.id);
       await assertActiveDocumentPlacement(repositories, source.id, document.id);
+      await repositories.documents.updateStatus(document.id, "ACTIVE", caller.identity.id);
+      await repositories.tree.updateStatusForDocument(document.id, "ACTIVE", caller.identity.id);
+      await restoreLinkedDocumentEntry(caller, document.id);
+    },
+
+    async restoreProjectedDocumentToParent(caller, input) {
+      const existing = await repositories.documents.findById(input.documentId);
+      if (!existing) throw new DocumentNotFoundError();
+      requireBoundDocumentSource(existing.sourceId, bound);
+      const source = await requireBoundSource(repositories, caller, bound);
+      const document = await repositories.documents.lockById(existing.id);
+      if (!document || document.sourceId !== source.id) throw new DocumentNotFoundError();
+      if (document.status === "ACTIVE") {
+        const nodes = await repositories.tree.listBySource(source.id);
+        const activeNode = nodes.find((candidate) => candidate.documentId === document.id);
+        if (!activeNode) throw new TreeNodeNotFoundError("Document tree node was not found.");
+        await requireLockedSourceNode(repositories, source.id, activeNode.id);
+        await moveNodeToParent(caller, source, activeNode.id, input.newParentId, normalizeTreePosition(input.newPosition));
+        return;
+      }
+      const nodes = await repositories.tree.listBySource(source.id);
+      const node = nodes.find((candidate) => candidate.documentId === document.id);
+      if (!node) throw new TreeNodeNotFoundError("Document tree node was not found.");
+      await requireLockedSourceNode(repositories, source.id, node.id);
+      // Placement is validated against the TARGET parent only: the archived
+      // node may sit below an archived old parent, and restoring straight
+      // into an active target never exposes an active document below archived ancestry.
+      await moveNodeToParent(caller, source, node.id, input.newParentId, normalizeTreePosition(input.newPosition));
       await repositories.documents.updateStatus(document.id, "ACTIVE", caller.identity.id);
       await repositories.tree.updateStatusForDocument(document.id, "ACTIVE", caller.identity.id);
       await restoreLinkedDocumentEntry(caller, document.id);

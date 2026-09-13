@@ -45,7 +45,7 @@ describe("MariaDB schema and migrations", () => {
     const rows = await pool.query<{ table_name: string }[]>("SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name IN ('users','workspaces','workspace_memberships','knowledge_sources','source_entries','knowledge_tree_nodes','knowledge_documents','knowledge_revisions','knowledge_assets','sync_runs')");
     expect(rows.map((row) => row.table_name).sort()).toEqual(["knowledge_assets", "knowledge_documents", "knowledge_revisions", "knowledge_sources", "knowledge_tree_nodes", "source_entries", "sync_runs", "users", "workspace_memberships", "workspaces"]);
     const ledger = await pool.query<{ state: string }[]>("SELECT state FROM schema_migrations ORDER BY version");
-    expect(ledger).toEqual([{ state: "APPLIED" }, { state: "APPLIED" }, { state: "APPLIED" }, { state: "APPLIED" }, { state: "APPLIED" }]);
+    expect(ledger).toEqual(migrations.map(() => ({ state: "APPLIED" })));
   });
 
   it("records DDL failure and refuses unfinished/checksum-mismatched migrations", async () => {

@@ -1,0 +1,108 @@
+name: Phase 2 Dev Gate
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase2-dev-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run test:unit
+      - run: npm run typecheck
+      - run: npm run lint
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: hcm_km_root
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -uroot -phcm_km_root"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      KM_TEST_DB_HOST: 127.0.0.1
+      KM_TEST_DB_PORT: 3307
+      KM_TEST_DB_USER: root
+      KM_TEST_DB_PASSWORD: hcm_km_root
+      KM_TEST_DB_ADMIN_USER: root
+      KM_TEST_DB_ADMIN_PASSWORD: hcm_km_root
+      KM_TEST_ADMIN_DATABASE: mysql
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: hcm_km_root
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -uroot -phcm_km_root"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      KM_TEST_DB_HOST: 127.0.0.1
+      KM_TEST_DB_PORT: 3307
+      KM_TEST_DB_USER: root
+      KM_TEST_DB_PASSWORD: hcm_km_root
+      KM_TEST_DB_ADMIN_USER: root
+      KM_TEST_DB_ADMIN_PASSWORD: hcm_km_root
+      KM_TEST_ADMIN_DATABASE: mysql
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run test:integration

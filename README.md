@@ -170,6 +170,40 @@ Select Workspace
 
 更新既有 Source 時由 Source 本身決定 Workspace；Sync 不得順便 transfer Source。Folder Source 仍是 source-managed/read-only；Phase 5 才提供完整 Hub-managed authoring。
 
+## Folder Import & Sync（Phase 2）
+
+```text
+Select Workspace/Source
+  → Select Folder
+  → Scan & Upload (staged batches)
+  → Preview (immutable staged diff)
+  → Confirm
+  → Atomic Apply (single transaction, sync_version +1, one SyncRun)
+```
+
+- **Source folder is authority**：`SOURCE_MANAGED` 的 hierarchy、title 與內容唯讀，只能透過來源 folder 再次同步更新；Hub Preview 永遠不編輯來源內容，發現問題請回來源 folder 修正後重新產生 Preview。
+- **Preview 是 immutable staging truth**：Confirm 只會套用該 snapshot persist 的 `FolderImportPlan`，Apply 不重新讀取本機 folder、不重新 parse、不重新猜 identity。
+- **Warning 可 Apply，Blocker 不可 Apply**：例如 `TITLE_CONFLICT` 只警告；`INVALID_FRONTMATTER`、`PATH_COLLISION`、`IDENTITY_CONFLICT` 等 blocking diagnostics 會 disable Confirm。
+- **Assets 只存 metadata/reference**：不存 binary bytes、無 revision/history；same path + changed hash 直接更新 current projection，rename 不做 hash 推測。
+- **Version conflict 沒有 Force Apply**：Preview 的 `based_on_version` 若已落後，Apply 回 409 `SOURCE_VERSION_CONFLICT`，該 snapshot 轉 STALE，請重新選 folder 產生新的 Preview。
+- **Resource limits**（`KM_IMPORT_*` 環境變數可覆寫，預設值見 `.env.example`）：
+
+| 變數 | 預設 |
+| --- | --- |
+| `KM_IMPORT_MAX_MANIFEST_ENTRIES` | 20,000 |
+| `KM_IMPORT_MAX_PATH_BYTES` | 2 KiB |
+| `KM_IMPORT_MAX_MARKDOWN_FILE_BYTES` | 5 MiB |
+| `KM_IMPORT_MAX_MARKDOWN_TOTAL_BYTES` | 256 MiB |
+| `KM_IMPORT_MAX_METADATA_BYTES` | 256 KiB |
+| `KM_IMPORT_MAX_UPLOAD_BATCH_FILES` / `KM_IMPORT_MAX_UPLOAD_BATCH_BYTES` | 20 / 10 MiB |
+| `KM_IMPORT_MAX_BUILDING_PER_USER` / `KM_IMPORT_MAX_READY_PER_USER` | 3 / 10 |
+
+- **Staging retention 與 cleanup**：BUILDING 2 小時、READY 自 finalize 起 30 分鐘、STALE/APPLIED 24 小時；過期 staging 只刪 snapshot/entries，不動 canonical Knowledge history：
+
+```bash
+npx tsx scripts/db/cleanup-import-snapshots.ts
+```
+
 ## 文件與工作流程
 
 ```text

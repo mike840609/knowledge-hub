@@ -14,24 +14,31 @@ const SECRET_TITLE = "Restricted Secret Plan";
 const SECRET_BODY = "restricted-secret-body-9f31";
 const MISSING_DOCUMENT_ID = "0199f100-0000-7000-8000-000000009999";
 
-async function openWorkspace(page: Page, workspaceName: string): Promise<string> {
+async function openWorkspace(page: Page, workspaceName: string, sourceName?: string): Promise<string> {
   await page.goto("/knowledge");
   await page.getByLabel("Choose a workspace").selectOption({ label: workspaceName });
   await page.getByRole("button", { name: "Apply" }).click();
   await expect(page).toHaveURL(new RegExp(`/knowledge\\?workspaceId=`));
+  if (sourceName) {
+    await page.getByLabel("Choose a source").selectOption({ label: sourceName });
+    await page.getByRole("button", { name: "Apply" }).click();
+    await expect(page).toHaveURL(new RegExp(`sourceId=`));
+  }
   return page.url();
 }
 
 test("browses workspace, source, tree, and stable document URL with history", async ({ page }) => {
-  const browserUrl = await openWorkspace(page, "Query Master");
+  // Seed-source scope: import E2E sources reuse titles like "Architecture",
+  // so full-workspace title locators hit strict-mode violations.
+  const browserUrl = await openWorkspace(page, "Query Master", "Obsidian Wiki");
 
   const workspaceSelect = page.getByLabel("Choose a workspace");
   await expect(workspaceSelect.locator("option:checked")).toHaveText("Query Master");
   await expect(workspaceSelect).toContainText("SWFP");
 
   const sourceSelect = page.getByLabel("Choose a source");
-  await expect(sourceSelect.locator("option:checked")).toHaveText("All sources");
-  await expect(sourceSelect).toContainText("Obsidian Wiki");
+  await expect(sourceSelect.locator("option:checked")).toHaveText("Obsidian Wiki");
+  await expect(sourceSelect).toContainText("All sources");
 
   const tree = page.getByRole("region", { name: "Your source tree" });
   await expect(tree.getByRole("heading", { name: "Obsidian Wiki" })).toBeVisible();

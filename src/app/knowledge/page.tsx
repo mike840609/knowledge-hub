@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { KnowledgeTree } from "@/components/knowledge/knowledge-tree";
+import { SourceImportLauncher } from "@/components/knowledge/source-import-launcher";
 import { SourceSelector } from "@/components/knowledge/source-selector";
 import { WorkspaceSelector } from "@/components/knowledge/workspace-selector";
 import { getKnowledgeBrowserModel } from "@/server/knowledge-read";
@@ -15,6 +16,7 @@ export default async function KnowledgePage({ searchParams }: { searchParams?: P
     sourceId: params.sourceId || undefined,
     includeArchived: params.includeArchived === "true",
   });
+  const selectedSource = model.sources.find((source) => source.id === model.selectedSourceId);
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-6 py-10">
       <header className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-6">
@@ -35,6 +37,7 @@ export default async function KnowledgePage({ searchParams }: { searchParams?: P
           </form>
         ) : <p className="mt-2 text-sm text-slate-500">You are not a member of any workspace.</p>}
       </section>
+      <SourceImportLauncher workspaceId={model.selectedWorkspaceId} source={selectedSource} />
       <section className="mt-8 space-y-6" aria-labelledby="tree-heading">
         <div><h2 id="tree-heading" className="text-xl font-semibold text-ink">Your source tree</h2><p className="mt-1 text-sm text-slate-500">Browse active sources, folders, and documents in the selected workspace.</p></div>
         {model.sourceTrees.length === 0 ? <p className="rounded-xl border border-dashed border-slate-300 p-6 text-sm text-slate-500">No active sources are available yet.</p> : model.sourceTrees.map(({ source, tree }) => <section key={source.id} aria-labelledby={`source-${source.id}`} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center justify-between gap-3"><div><h3 id={`source-${source.id}`} className="font-semibold text-ink">{source.name}</h3><p className="text-xs text-slate-500">{source.ownership === "SOURCE_MANAGED" ? "來源同步 · 唯讀" : "Hub 管理"}</p></div><span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600">{source.status}</span></div><div className="mt-4"><KnowledgeTree items={tree} includeArchived={model.includeArchived} /></div></section>)}
