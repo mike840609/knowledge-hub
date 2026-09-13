@@ -25,7 +25,7 @@ export function ImportChangeGroup({
         type="button"
         aria-expanded={expanded}
         onClick={() => setExpanded((value) => !value)}
-        className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
+        className="flex w-full items-center justify-between gap-2 rounded-md px-4 py-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-kh-accent"
       >
         <h2 className="text-sm font-semibold text-kh-text">
           {title} <span className="font-normal text-kh-text-muted">({changes.length})</span>

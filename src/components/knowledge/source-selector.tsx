@@ -28,7 +28,7 @@ export function SourceSelector({ sources, selectedSourceId, workspaceId }: Sourc
             router.push(`/w/${workspaceId}/knowledge/${next}`);
           }
         }}
-        className="mt-1 min-h-10 w-full truncate rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-sm text-kh-text"
+        className="mt-1 min-h-10 w-full truncate rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-sm text-kh-text outline-none focus:border-kh-accent focus-visible:ring-2 focus-visible:ring-kh-accent"
       >
         {ordered.map((source) => (
           <option key={source.id} value={source.id}>

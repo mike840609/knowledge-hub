@@ -13,7 +13,7 @@ export function TreeFilter({ value, onChange }: { value: string; onChange: (valu
         autoComplete="off"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-h-10 w-full rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-sm text-kh-text placeholder:text-kh-text-muted"
+        className="min-h-10 w-full rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-sm text-kh-text outline-none placeholder:text-kh-text-muted focus:border-kh-accent focus-visible:ring-2 focus-visible:ring-kh-accent"
       />
     </div>
   );

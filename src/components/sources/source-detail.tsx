@@ -25,7 +25,7 @@ export function SourceDetail({ model, showImportSuccess = false }: { model: Sour
         <form method="get" action={`/w/${workspace.id}/sources/${source.id}/update`}>
           <button
             type="submit"
-            className="inline-flex items-center gap-2 rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-sm font-medium text-kh-text transition hover:bg-kh-bg-hover"
+            className="inline-flex items-center gap-2 rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-sm font-medium text-kh-text transition hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent"
           >
             <RefreshCw size={15} strokeWidth={2} aria-hidden="true" />
             Update from folder

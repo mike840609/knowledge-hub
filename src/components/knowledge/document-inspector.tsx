@@ -107,7 +107,7 @@ function InspectorTabs({ data }: { data: DocumentInspectorData }) {
                     includeArchived: data.includeArchived,
                   })}
                   aria-current={isSelected ? "page" : undefined}
-                  className={`flex items-center justify-between gap-2 rounded-md px-2.5 py-2 text-[13px] hover:bg-kh-bg-hover ${isSelected ? "bg-kh-bg-selected font-medium text-kh-text" : "text-kh-text"}`}
+                  className={`flex items-center justify-between gap-2 rounded-md px-2.5 py-2 text-[13px] hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent ${isSelected ? "bg-kh-bg-selected font-medium text-kh-text" : "text-kh-text"}`}
                 >
                   <span>
                     Revision {revision.revisionNo}

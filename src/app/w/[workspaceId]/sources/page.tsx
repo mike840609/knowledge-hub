@@ -26,7 +26,7 @@ export default async function WorkspaceSourcesPage({
           </p>
         </div>
         <Link
-          className="inline-flex items-center rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-sm font-medium text-kh-text transition hover:bg-kh-bg-hover"
+          className="inline-flex items-center rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-sm font-medium text-kh-text transition hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent"
           href={`/w/${workspaceId}/sources/import`}
         >
           Import folder

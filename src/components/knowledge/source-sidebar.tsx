@@ -78,7 +78,7 @@ export function SourceSidebar({
         <SourceSelector workspaceId={workspaceId} sources={visibleSources} selectedSourceId={source.id} />
         {syncable ? (
           <Link
-            className="text-sm font-medium text-kh-text-muted underline-offset-4 hover:underline"
+            className="w-fit rounded text-sm font-medium text-kh-text-muted underline-offset-4 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent"
             href={`/w/${workspaceId}/sources/${source.id}/update`}
           >
             Update from folder
