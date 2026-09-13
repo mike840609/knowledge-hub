@@ -5,6 +5,44 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { ImportPreview } from "@/modules/sources/application/reconcile-import-snapshot";
 
+export type ApplyFailure = { code: string; message: string; latchStale: boolean };
+
+const STALE_GUIDANCE = "The preview no longer matches the source. Choose the folder again for a fresh preview.";
+const RETRYABLE_GUIDANCE = "A transient database conflict interrupted the apply. Nothing was changed — try again.";
+const GENERIC_GUIDANCE = "Applying the import preview failed.";
+
+function readEnvelope(body: unknown): { code: string; message: string } | null {
+  if (!body || typeof body !== "object" || !("error" in body)) return null;
+  const error = (body as { error: unknown }).error;
+  if (!error || typeof error !== "object" || !("code" in error)) return null;
+  const { code, message } = error as { code: unknown; message?: unknown };
+  if (typeof code !== "string" || code.length === 0) return null;
+  return { code, message: typeof message === "string" && message.length > 0 ? message : GENERIC_GUIDANCE };
+}
+
+/**
+ * Design §20.7: branch on the machine-readable `code`, never on the status.
+ * Four distinct import codes map to 409 and only `SOURCE_VERSION_CONFLICT` /
+ * `IMPORT_SNAPSHOT_STALE` invalidate the snapshot; `IMPORT_APPLY_RETRYABLE`
+ * (§17.3) rolled back cleanly, so Apply must stay enabled for a retry.
+ * A 409 with no readable envelope keeps the old conservative latch.
+ */
+export function classifyApplyError(status: number, body: unknown): ApplyFailure {
+  const envelope = readEnvelope(body);
+  if (!envelope) {
+    return status === 409
+      ? { code: "IMPORT_APPLY_FAILED", message: STALE_GUIDANCE, latchStale: true }
+      : { code: "IMPORT_APPLY_FAILED", message: GENERIC_GUIDANCE, latchStale: false };
+  }
+  if (envelope.code === "SOURCE_VERSION_CONFLICT" || envelope.code === "IMPORT_SNAPSHOT_STALE") {
+    return { code: envelope.code, message: STALE_GUIDANCE, latchStale: true };
+  }
+  if (envelope.code === "IMPORT_APPLY_RETRYABLE") {
+    return { code: envelope.code, message: RETRYABLE_GUIDANCE, latchStale: false };
+  }
+  return { code: envelope.code, message: envelope.message, latchStale: false };
+}
+
 export function SourceImportPreviewActions({ preview }: { preview: ImportPreview }) {
   const router = useRouter();
   const [state, setState] = useState<{ kind: "IDLE" } | { kind: "APPLYING" } | { kind: "ERROR"; code: string; message: string }>({ kind: "IDLE" });
@@ -20,20 +58,10 @@ export function SourceImportPreviewActions({ preview }: { preview: ImportPreview
     try {
       const response = await fetch(`/api/source-imports/${preview.snapshotId}/apply`, { method: "POST" });
       const body = await response.json().catch(() => null);
-      if (response.status === 409) {
-        setVersionConflict(true);
-        setState({ kind: "ERROR", code: "SOURCE_VERSION_CONFLICT", message: "The source changed after this preview was created. Choose the folder again for a fresh preview." });
-        return;
-      }
       if (!response.ok || !body || typeof body !== "object" || !("sourceId" in body)) {
-        const error = body && typeof body === "object" && "error" in body
-          ? (body as { error: { code?: unknown; message?: unknown } }).error
-          : null;
-        setState({
-          kind: "ERROR",
-          code: typeof error?.code === "string" ? error.code : "IMPORT_APPLY_FAILED",
-          message: typeof error?.message === "string" ? error.message : "Applying the import preview failed.",
-        });
+        const failure = classifyApplyError(response.status, body);
+        if (failure.latchStale) setVersionConflict(true);
+        setState({ kind: "ERROR", code: failure.code, message: failure.message });
         return;
       }
       const sourceId = (body as { sourceId: string }).sourceId;

@@ -71,14 +71,19 @@ async function buildManifest(staged: StagedFile[]): Promise<ImportManifestEntry[
   );
 }
 
-function readErrorCode(status: number, body: unknown, fallback: string): { code: string; message: string } {
+/**
+ * Design §20.7: the machine-readable `code` is the only signal the UI branches
+ * on. HTTP 409 covers four distinct import codes, so a bare status can never
+ * stand in for one of them — an envelope without a code is simply unknown.
+ */
+export function readErrorCode(body: unknown, fallback: string): { code: string; message: string } {
   if (body && typeof body === "object" && "error" in body) {
     const error = (body as { error: { code?: unknown; message?: unknown } }).error;
-    if (error && typeof error.code === "string") {
-      return { code: error.code, message: typeof error.message === "string" ? error.message : fallback };
+    if (error && typeof error === "object" && typeof error.code === "string" && error.code.length > 0) {
+      return { code: error.code, message: typeof error.message === "string" && error.message.length > 0 ? error.message : fallback };
     }
   }
-  return { code: status === 409 ? "SOURCE_VERSION_CONFLICT" : "IMPORT_REQUEST_FAILED", message: fallback };
+  return { code: "IMPORT_REQUEST_FAILED", message: fallback };
 }
 
 async function postJson(url: string, payload: unknown): Promise<{ ok: boolean; status: number; body: unknown }> {
@@ -128,7 +133,7 @@ async function uploadMarkdownBatches(
       chunk.forEach((entry, index) => form.set(`file-${index}`, entry.file));
       const response = await fetch(`/api/source-imports/${snapshotId}/entries`, { method: "POST", body: form });
       if (!response.ok) {
-        const failure = readErrorCode(response.status, await response.json().catch(() => null), "Uploading folder entries failed.");
+        const failure = readErrorCode(await response.json().catch(() => null), "Uploading folder entries failed.");
         throw Object.assign(new Error(failure.message), { code: failure.code });
       }
       uploaded += chunk.length;
@@ -159,7 +164,7 @@ export function SourceImportLauncher({ workspaceId, source }: { workspaceId: str
         })
         : await postJson(`/api/sources/${source?.id}/source-imports`, { rootName: selection.rootName, manifest });
       if (!session.ok || !session.body || typeof session.body !== "object" || !("snapshotId" in session.body)) {
-        const failure = readErrorCode(session.status, session.body, "Creating the import session failed.");
+        const failure = readErrorCode(session.body, "Creating the import session failed.");
         setState({ kind: "ERROR", code: failure.code, message: failure.message });
         return;
       }
@@ -169,7 +174,7 @@ export function SourceImportLauncher({ workspaceId, source }: { workspaceId: str
       setState({ kind: "FINALIZING" });
       const finalized = await postJson(`/api/source-imports/${snapshotId}/finalize`, {});
       if (!finalized.ok) {
-        const failure = readErrorCode(finalized.status, finalized.body, "Finalizing the import preview failed.");
+        const failure = readErrorCode(finalized.body, "Finalizing the import preview failed.");
         setState({ kind: "ERROR", code: failure.code, message: failure.message });
         return;
       }

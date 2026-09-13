@@ -53,6 +53,15 @@ function splitFrontmatter(text: string): { body: string; metadata: KnowledgeMeta
       throw importError("INVALID_FRONTMATTER", document.warnings[0].message);
     }
 
+    // An empty fence (blank lines or comments only) carries no root node at all,
+    // and yaml reports that as `contents === null`. Spec §7.3 maps frontmatter to
+    // Revision.metadata, so "no properties written" is empty metadata, not an error.
+    // An explicit `null`/`~` literal stays blocking: the author wrote a root value,
+    // and it is a scalar, so it lands in the non-object branch below.
+    if (document.contents === null) {
+      return { body, metadata: {} };
+    }
+
     const value = document.toJS({ maxAliasCount: 50 });
     if (!isPlainObject(value)) {
       throw importError("FRONTMATTER_NOT_OBJECT", "Frontmatter root must be an object.");
