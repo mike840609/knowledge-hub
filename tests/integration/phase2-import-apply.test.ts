@@ -118,6 +118,16 @@ describe("Phase 2 folder import Apply", () => {
     const after = Number((await pool.query<{ count:unknown }[]>("SELECT COUNT(*) AS count FROM knowledge_revisions r JOIN knowledge_documents d ON d.id=r.document_id WHERE d.source_id=?", [initial.sourceId]))[0].count);
     expect(after).toBe(before);
     expect(await pool.query("SELECT id FROM sync_runs WHERE source_id=? AND status='APPLIED'", [initial.sourceId])).toHaveLength(2);
+    const summaries = await pool.query<{ summary: unknown }[]>(
+      "SELECT summary FROM sync_runs WHERE source_id=? AND status='APPLIED' ORDER BY result_version",
+      [initial.sourceId],
+    );
+    expect(summaries).toHaveLength(2);
+    const parseChanged = (value: unknown) =>
+      (typeof value === "string" ? (JSON.parse(value) as { changed: unknown }) : (value as { changed: unknown })).changed;
+    // Initial import added content; the resync was a genuine no-op.
+    expect(parseChanged(summaries[0].summary)).toBe(true);
+    expect(parseChanged(summaries[1].summary)).toBe(false);
   });
 
   it("marks a stale competing Preview and records FAILED without mutating Knowledge", async () => {
