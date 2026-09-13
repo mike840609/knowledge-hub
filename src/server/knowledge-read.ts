@@ -1,3 +1,4 @@
+import { findFirstReadableDocument, sortSourcesByName } from "@/lib/knowledge-navigation";
 import { getCurrentIdentity } from "@/modules/identity/application/get-current-identity";
 import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
@@ -65,4 +66,83 @@ export async function getKnowledgeDocumentModel(documentId: string, input: { inc
     ? view.currentRevision
     : await services.queries.getRevision(caller, documentId, input.revisionNo, { includeArchived: input.includeArchived });
   return { view, revisions, selectedRevision };
+}
+
+export type WorkspaceShellModel = {
+  identityName: string;
+  identityEmpId: string;
+  workspaces: WorkspaceView[];
+  workspace: WorkspaceView;
+};
+
+export type KnowledgeExplorerModel = {
+  sources: SourceView[];
+  source: SourceView;
+  tree: KnowledgeTreeItem[];
+  includeArchived: boolean;
+};
+
+/**
+ * Task 2 read models: Workspace-scoped resolvers. Trusted caller identity
+ * comes from the provider; route IDs are navigation scope only. Inaccessible
+ * IDs return null and must not silently fall back to another Workspace/Source.
+ */
+export async function getWorkspaceShellModel(
+  workspaceId: string,
+): Promise<WorkspaceShellModel | null> {
+  const services = applicationServices();
+  const identity = await getCurrentIdentity(services.identityProvider);
+  const caller = callerFromIdentity(identity);
+  const workspaces = await services.workspaces.listWorkspaces(caller);
+  const workspace = workspaces.find((candidate) => candidate.id === workspaceId);
+  if (!workspace) return null;
+  return {
+    identityName: identity.name,
+    identityEmpId: identity.emp_id,
+    workspaces,
+    workspace,
+  };
+}
+
+export async function getKnowledgeExplorerModel(
+  workspaceId: string,
+  sourceId: string,
+  input: { includeArchived?: boolean } = {},
+): Promise<KnowledgeExplorerModel | null> {
+  const services = applicationServices();
+  const identity = await getCurrentIdentity(services.identityProvider);
+  const caller = callerFromIdentity(identity);
+  const includeArchived = input.includeArchived ?? false;
+  try {
+    const workspaces = await services.workspaces.listWorkspaces(caller);
+    if (!workspaces.some((workspace) => workspace.id === workspaceId)) return null;
+    const source = await services.queries.getSource(caller, sourceId, { includeArchived });
+    if (source.workspaceId !== workspaceId) return null;
+    const sources = await services.queries.listSources(caller, workspaceId, { includeArchived });
+    if (!sources.some((candidate) => candidate.id === sourceId)) return null;
+    const tree = await services.queries.listTree(caller, sourceId, { includeArchived });
+    return { sources: sortSourcesByName(sources), source, tree, includeArchived };
+  } catch {
+    return null;
+  }
+}
+
+export async function getDefaultKnowledgeTarget(
+  workspaceId: string,
+): Promise<{ sourceId: string; documentId: string } | null> {
+  const services = applicationServices();
+  const caller = callerFromIdentity(await getCurrentIdentity(services.identityProvider));
+  try {
+    const sources = sortSourcesByName(
+      await services.queries.listSources(caller, workspaceId),
+    );
+    for (const source of sources) {
+      const tree = await services.queries.listTree(caller, source.id);
+      const first = findFirstReadableDocument(tree);
+      if (first) return { sourceId: source.id, documentId: first.documentId };
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
