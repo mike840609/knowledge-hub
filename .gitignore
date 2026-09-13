@@ -1,11 +1,57 @@
+# dependencies
 node_modules/
+.pnp
+.pnp.js
+.yarn/*
+.npm/
+
+# next.js
 .next/
-playwright-report/
-test-results/
+out/
+build/
+
+# testing
 coverage/
+playwright-report/
+blob-report/
+test-results/
+
+# typescript
 *.tsbuildinfo
+
+# env
 .env
 .env.local
 .env.*.local
 !.env.example
+
+# logs / debug
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# lint
+.eslintcache
+
+# vercel
+.vercel
+
+# os
+.DS_Store
+Thumbs.db
+
+# editors / ides
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*.swo
+*~
+
+# ai / local tooling
+.omo/
+.superpowers/
+.codegraph
+**/.claude/settings.local.json
