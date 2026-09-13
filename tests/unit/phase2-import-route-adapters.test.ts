@@ -4,6 +4,7 @@ import {
   parseResyncImportBody,
   parseUploadBatchSpecs,
 } from "@/server/import-route-adapters";
+import { reviveManifest } from "@/server/source-imports";
 
 function markdownFile(name: string, text: string): File {
   return new File([text], name, { type: "text/markdown" });
@@ -131,5 +132,24 @@ describe("Phase 2 JSON session route adapters", () => {
         expect.objectContaining({ code: "INVALID_IMPORT_MANIFEST" }),
       );
     }
+  });
+});
+
+describe("Phase 2 server manifest revival after JSON transport", () => {
+  it("passes invalid manifest elements through without throwing so the application validator reports 400", () => {
+    for (const manifest of [[null], ["m1"], [[{ uploadKey: "m1" }]], [42], [undefined]]) {
+      expect(() => reviveManifest(manifest as never)).not.toThrow();
+      expect(reviveManifest(manifest as never)).toEqual(manifest);
+    }
+  });
+
+  it("leaves Date and null lastModified values untouched", () => {
+    const stamp = new Date("2026-09-12T00:00:00.000Z");
+    const manifest = [
+      { uploadKey: "a", relativePath: "a.png", kind: "ASSET", size: 1, contentHash: "a".repeat(64), mimeType: "image/png", lastModified: stamp },
+      { uploadKey: "b", relativePath: "b.png", kind: "ASSET", size: 1, contentHash: "b".repeat(64), mimeType: "image/png", lastModified: null },
+    ] as never;
+
+    expect(reviveManifest(manifest)).toEqual(manifest);
   });
 });

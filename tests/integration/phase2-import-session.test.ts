@@ -7,6 +7,9 @@ import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction
 import { CreateFolderImportService, type ImportManifestEntry } from "@/modules/sources/application/create-folder-import";
 import { UploadFolderImportEntriesService } from "@/modules/sources/application/upload-folder-import-entries";
 import { DEFAULT_IMPORT_LIMITS } from "@/modules/sources/domain/import-limits";
+import { toImportErrorResponse } from "@/server/http-error-response";
+import { parseInitialImportBody } from "@/server/import-route-adapters";
+import { reviveManifest } from "@/server/source-imports";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import { createSourceFixture, fixtureCaller, fixtureIdentity, secondFixtureIdentity } from "../fixtures/knowledge";
 
@@ -113,6 +116,20 @@ describe("Phase 2 BUILDING import sessions", () => {
     await expect(create.createInitial(fixtureCaller(), { workspaceId: fixture.workspaceId, sourceName:"Wiki",rootName:"wiki",manifest:total })).rejects.toMatchObject({ code:"IMPORT_LIMIT_EXCEEDED" });
     const mislabeled = [{ uploadKey:"x",relativePath:"image.png",kind:"MARKDOWN",size:10 }] as unknown as ImportManifestEntry[];
     await expect(create.createInitial(fixtureCaller(), { workspaceId: fixture.workspaceId, sourceName:"Wiki",rootName:"wiki",manifest:mislabeled })).rejects.toMatchObject({ code:"INVALID_ASSET_MANIFEST" });
+  });
+
+  it("reports manifest:[null] as 400 INVALID_IMPORT_MANIFEST through the server revival path", async () => {
+    const fixture = await createSourceFixture(pool);
+    const transported = JSON.parse(JSON.stringify({ sourceName: "Review", rootName: "wiki", manifest: [null] })) as unknown;
+    const { sourceName, rootName, manifest } = parseInitialImportBody(transported);
+    const failure = await services().create.createInitial(fixtureCaller(), {
+      workspaceId: fixture.workspaceId,
+      sourceName: sourceName as string,
+      rootName: rootName as string,
+      manifest: reviveManifest(manifest),
+    }).then(() => null, (error: unknown) => error);
+    expect(failure).toMatchObject({ code: "INVALID_IMPORT_MANIFEST" });
+    expect(toImportErrorResponse(failure)).toMatchObject({ status: 400, body: { error: { code: "INVALID_IMPORT_MANIFEST" } } });
   });
 
   it("stores asset manifest rows as RECEIVED without binary upload", async () => {

@@ -9,12 +9,24 @@ import { applicationServices } from "@/server/composition";
 export type InitialImportRequest = { sourceName: string; rootName: string; manifest: ImportManifestEntry[] };
 export type ResyncRequest = { rootName: string; manifest: ImportManifestEntry[] };
 
-/** Caller identity comes only from the trusted provider; payloads carry folder content, never actor overrides. */
-function reviveManifest(manifest: ImportManifestEntry[]): ImportManifestEntry[] {
-  if (!Array.isArray(manifest)) return manifest;
-  return manifest.map((entry) => {
-    if (entry.kind !== "ASSET" || entry.lastModified instanceof Date || entry.lastModified === null) return entry;
-    return { ...entry, lastModified: new Date(entry.lastModified as unknown as string) };
+/**
+ * Caller identity comes only from the trusted provider; payloads carry folder content, never actor overrides.
+ *
+ * The raw manifest is untrusted JSON: elements may not be objects at all, so
+ * revival must never read fields before checking. Invalid elements pass
+ * through untouched for the application manifest validator to report as
+ * INVALID_IMPORT_MANIFEST (400), instead of throwing a TypeError (500).
+ * Date revival is kind-independent because the application classifies
+ * Markdown vs Asset by server-side file extension; the client kind hint must
+ * not decide whether the same asset metadata is accepted.
+ */
+export function reviveManifest(manifest: unknown): ImportManifestEntry[] {
+  if (!Array.isArray(manifest)) return manifest as ImportManifestEntry[];
+  return (manifest as unknown[]).map((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return entry as ImportManifestEntry;
+    const typed = entry as ImportManifestEntry;
+    if (typed.kind !== "ASSET" || typed.lastModified instanceof Date || typed.lastModified === null) return typed;
+    return { ...typed, lastModified: new Date(typed.lastModified as unknown as string) };
   });
 }
 
