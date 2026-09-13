@@ -122,15 +122,14 @@ async function applySnapshot(request: APIRequestContext, snapshotId: string): Pr
 }
 
 test("imports basic-v1 through the directory input and applies the preview", async ({ page }) => {
-  await page.goto("/knowledge");
-  await page.getByLabel("Choose a workspace").selectOption({ label: "Query Master" });
-  await page.getByRole("button", { name: "Apply" }).click();
-  await expect(page).toHaveURL(/\/knowledge\?workspaceId=/);
+  await page.goto(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources`);
+  await page.getByRole("link", { name: "Import folder" }).click();
+  await expect(page).toHaveURL(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources/import`);
 
-  await page.locator("#import-source-name").fill("E2E Folder Import");
-  await page.locator("#import-folder").setInputFiles(path.join(FIXTURE_ROOT, "basic-v1"));
+  await page.getByLabel("Source name").fill("E2E Folder Import");
+  await page.locator('input[type="file"]').setInputFiles(path.join(FIXTURE_ROOT, "basic-v1"));
 
-  await expect(page).toHaveURL(/\/knowledge\/imports\/[0-9a-f-]+/, { timeout: 30_000 });
+  await expect(page).toHaveURL(new RegExp(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources/imports/[0-9a-f-]+`), { timeout: 30_000 });
   await expect(page.getByRole("heading", { name: "Import preview" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Confirm and apply" })).toBeEnabled();
   await page.getByRole("button", { name: "Confirm and apply" }).click();
@@ -150,6 +149,10 @@ test("syncs v1 to v2 with moved, updated, archived, and added labels", async ({ 
     fixture: "basic-v1",
   });
   const { sourceId } = await applySnapshot(request, first.snapshotId);
+
+  await page.goto(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources/${sourceId}/update`);
+  await expect(page.getByRole("heading", { name: "Update from folder" })).toBeVisible();
+  await expect(page.locator('input[type="file"]')).toBeVisible();
 
   const second = await importFolder(request, { sourceId, fixture: "basic-v2" });
   expect(second.preview.summary.documents.moved).toBeGreaterThanOrEqual(1);

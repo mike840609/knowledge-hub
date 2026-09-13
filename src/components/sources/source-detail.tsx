@@ -17,9 +17,7 @@ export function SourceDetail({ model }: { model: SourceDetailModel }) {
             <span>Sync version {source.syncVersion}</span>
           </p>
         </div>
-        <form method="get" action="/knowledge">
-          <input type="hidden" name="workspaceId" value={workspace.id} />
-          <input type="hidden" name="sourceId" value={source.id} />
+        <form method="get" action={`/w/${workspace.id}/sources/${source.id}/update`}>
           <button
             type="submit"
             className="inline-flex items-center gap-2 rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-sm font-medium text-kh-text transition hover:bg-kh-bg-hover"

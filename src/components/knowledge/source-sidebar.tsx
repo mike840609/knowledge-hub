@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import { KnowledgeTree } from "./knowledge-tree";
@@ -60,6 +61,8 @@ export function SourceSidebar({
     () => (showArchived && includeArchived ? tree : withoutArchivedSubtrees(tree)),
     [tree, showArchived, includeArchived],
   );
+  const syncable =
+    source.status === "ACTIVE" && source.ownership === "SOURCE_MANAGED" && source.sourceType === "FOLDER_SYNC";
 
   function handleArchivedToggle(event: React.ChangeEvent<HTMLInputElement>) {
     if (event.target.checked) {
@@ -73,6 +76,14 @@ export function SourceSidebar({
     <aside aria-label="Knowledge explorer" className="flex w-72 shrink-0 flex-col gap-4 border-r border-kh-border bg-kh-bg p-3">
       <div className="flex flex-col gap-2 border-b border-kh-border pb-3">
         <SourceSelector workspaceId={workspaceId} sources={visibleSources} selectedSourceId={source.id} />
+        {syncable ? (
+          <Link
+            className="text-sm font-medium text-kh-text-muted underline-offset-4 hover:underline"
+            href={`/w/${workspaceId}/sources/${source.id}/update`}
+          >
+            Update from folder
+          </Link>
+        ) : null}
         <label className="flex min-h-10 cursor-pointer items-center gap-2 text-sm text-kh-text" htmlFor="show-archived">
           <input
             id="show-archived"
