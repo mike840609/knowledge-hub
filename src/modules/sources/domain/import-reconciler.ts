@@ -514,10 +514,19 @@ function applyCrossTypePathRules(
 /**
  * Materialized folder name guard (design §10/§16).
  *
- * Canonical projection validates every folder name with the same rule
- * (`normalizeFolderName`: non-empty after trimming) at Apply time. Validate
- * here so an input-detectable name surfaces as a READY blocker with its
- * sourcePath instead of failing Apply after a no-blocker Preview.
+ * Exact parity with the canonical projection rule
+ * (`normalizeFolderName` in `src/modules/knowledge/domain/tree-rules.ts`):
+ * the canonical rule is a single check — `name.trim()` must be non-empty —
+ * and this guard applies that same single check to every materialized folder
+ * basename (`basename(sourcePath).trim().length === 0` → BLOCKING
+ * `INVALID_FOLDER_NAME` with its sourcePath). No other name rule exists on
+ * the canonical side (no length cap, no charset ban, no `.`/`..` ban at the
+ * name layer), so there is nothing further to mirror here. Inputs that could
+ * look like additional name rules are rejected earlier and never reach this
+ * guard: NUL/controls by path normalization (`INVALID_SOURCE_PATH`),
+ * `.`/`..`/empty segments by segment filtering, and `/`-embedding by
+ * construction (`basename`). Pinned by the `normalizeFolderName` parity test
+ * in `tests/unit/phase2-reconciler.test.ts`.
  */
 function applyFolderNameRules(plan: FolderImportPlan, desiredFolders: string[]): void {
   for (const sourcePath of desiredFolders) {

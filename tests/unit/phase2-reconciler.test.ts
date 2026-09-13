@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { normalizeFolderName } from "@/modules/knowledge/domain/tree-rules";
 import { reconcileFolderImport } from "@/modules/sources/domain/import-reconciler";
 import type {
   CanonicalAssetState,
@@ -300,5 +301,22 @@ describe("Phase 2 folder import reconciliation", () => {
     expect(blockers.map((item) => item.code)).toContain("INVALID_FOLDER_NAME");
     expect(blockers.find((item) => item.code === "INVALID_FOLDER_NAME")?.sourcePath).toBe(" ");
     expect(plan.summary.blockers).toBeGreaterThan(0);
+  });
+
+  it("mirrors every canonical normalizeFolderName rule at Preview (F4 parity)", () => {
+    const folderNames = ["docs", "my folder", "  padded  ", "a-b_c", " ", "   "];
+    for (const name of folderNames) {
+      let canonicalRejects = false;
+      try {
+        normalizeFolderName(name);
+      } catch {
+        canonicalRejects = true;
+      }
+      const plan = reconcileFolderImport(snapshot([incomingDocument(`${name}/a.md`, `fp:${name}`)]), canonical());
+      const blocked = plan.preview
+        .flatMap((item) => item.diagnostics)
+        .some((item) => item.code === "INVALID_FOLDER_NAME" && item.severity === "BLOCKING");
+      expect(blocked, `folder name ${JSON.stringify(name)}`).toBe(canonicalRejects);
+    }
   });
 });
