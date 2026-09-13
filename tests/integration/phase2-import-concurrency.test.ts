@@ -51,6 +51,67 @@ async function readyInitial(workspaceId: string, path: string, text: string, ass
   return session.snapshotId;
 }
 
+async function readyRichInitial(workspaceId: string): Promise<string> {
+  const { create, upload, finalize } = stack();
+  const guide = new TextEncoder().encode("# Guide\nold body\n");
+  const notes = new TextEncoder().encode("# Notes\n");
+  const manifest: ImportManifestEntry[] = [
+    markdown("m1", "docs/guide.md", guide),
+    markdown("m2", "docs/notes.md", notes),
+    asset("a1", "assets/logo.png", "a".repeat(64)),
+  ];
+  const session = await create.createInitial(fixtureCaller(), { workspaceId, sourceName: "Imported Wiki", rootName: "wiki", manifest });
+  await upload.upload(fixtureCaller(), {
+    snapshotId: session.snapshotId,
+    entries: [{ uploadKey: "m1", bytes: guide }, { uploadKey: "m2", bytes: notes }],
+  });
+  await finalize.finalize(fixtureCaller(), session.snapshotId);
+  return session.snapshotId;
+}
+
+async function readyRichResync(sourceId: string): Promise<string> {
+  const { create, upload, finalize } = stack();
+  const guide = new TextEncoder().encode("# Guide\nnew body\n");
+  const child = new TextEncoder().encode("# Child\n");
+  const manifest: ImportManifestEntry[] = [
+    markdown("m1", "docs/guide.md", guide),
+    markdown("m2", "docs/new/child.md", child),
+    asset("a1", "assets/banner.png", "b".repeat(64)),
+  ];
+  const session = await create.createResync(fixtureCaller(), { sourceId, rootName: "wiki", manifest });
+  await upload.upload(fixtureCaller(), {
+    snapshotId: session.snapshotId,
+    entries: [{ uploadKey: "m1", bytes: guide }, { uploadKey: "m2", bytes: child }],
+  });
+  await finalize.finalize(fixtureCaller(), session.snapshotId);
+  return session.snapshotId;
+}
+
+type CanonicalState = { entries: number; documents: number; assets: number; version: number; guideMarkdown: string };
+
+async function canonicalState(sourceId: string): Promise<CanonicalState> {
+  const count = async (sql: string): Promise<number> =>
+    Number((await pool.query<{ count: unknown }[]>(sql, [sourceId]))[0].count);
+  const version = Number((await pool.query<{ sync_version: number }[]>("SELECT sync_version FROM knowledge_sources WHERE id=?", [sourceId]))[0].sync_version);
+  const guide = (await pool.query<{ markdown: string }[]>(
+    `SELECT r.markdown FROM knowledge_documents d
+     JOIN knowledge_revisions r ON r.id=d.current_revision_id
+     JOIN source_entries e ON e.document_id=d.id
+     WHERE e.source_id=? AND e.source_path='docs/guide.md'`, [sourceId],
+  ))[0]?.markdown ?? "";
+  return {
+    entries: await count("SELECT COUNT(*) AS count FROM source_entries WHERE source_id=?"),
+    documents: await count("SELECT COUNT(*) AS count FROM knowledge_documents WHERE source_id=?"),
+    assets: await count("SELECT COUNT(*) AS count FROM knowledge_assets WHERE source_id=?"),
+    version,
+    guideMarkdown: guide,
+  };
+}
+
+async function failedRunCount(sourceId: string): Promise<number> {
+  return Number((await pool.query<{ count: unknown }[]>("SELECT COUNT(*) AS count FROM sync_runs WHERE source_id=? AND status='FAILED'", [sourceId]))[0].count);
+}
+
 async function readyResync(sourceId: string, path: string, text: string, assetHash?: string): Promise<string> {
   const { create, upload, finalize } = stack();
   const bytes = new TextEncoder().encode(text);
@@ -192,6 +253,34 @@ describe("Phase 2 Apply concurrency and rollback", () => {
     const current = (await pool.query<{ markdown:string }[]>(`SELECT r.markdown FROM knowledge_documents d JOIN knowledge_revisions r ON r.id=d.current_revision_id WHERE d.source_id=?`, [initial.sourceId]))[0];
     expect(current.markdown).toContain("old");
   });
+
+  for (const failurePoint of ["after-folders", "after-assets", "before-run"] as const) {
+    it(`rolls back an initial apply injected at ${failurePoint} with no Source and no SyncRun`, async () => {
+      const fixture = await createSourceFixture(pool);
+      const beforeSources = Number((await pool.query<{ count: unknown }[]>("SELECT COUNT(*) AS count FROM knowledge_sources WHERE workspace_id=?", [fixture.workspaceId]))[0].count);
+      const beforeRuns = Number((await pool.query<{ count: unknown }[]>("SELECT COUNT(*) AS count FROM sync_runs"))[0].count);
+      const snapshotId = await readyRichInitial(fixture.workspaceId);
+      await expect(stack(failurePoint).apply.apply(fixtureCaller(), snapshotId)).rejects.toMatchObject({ code: "TEST_IMPORT_FAILURE" });
+      expect(Number((await pool.query<{ count: unknown }[]>("SELECT COUNT(*) AS count FROM knowledge_sources WHERE workspace_id=?", [fixture.workspaceId]))[0].count)).toBe(beforeSources);
+      expect(Number((await pool.query<{ count: unknown }[]>("SELECT COUNT(*) AS count FROM sync_runs"))[0].count)).toBe(beforeRuns);
+      expect((await pool.query<{ state: string }[]>("SELECT state FROM source_import_snapshots WHERE id=?", [snapshotId]))[0].state).toBe("READY");
+    });
+
+    it(`rolls back an existing-source apply injected at ${failurePoint}, keeps READY, and writes one FAILED SyncRun`, async () => {
+      const fixture = await createSourceFixture(pool);
+      const initialId = await readyRichInitial(fixture.workspaceId);
+      const initial = await stack().apply.apply(fixtureCaller(), initialId);
+      if (initial.kind !== "APPLIED") throw new Error("expected APPLIED");
+      const before = await canonicalState(initial.sourceId);
+      expect(before.guideMarkdown).toContain("old body");
+
+      const snapshotId = await readyRichResync(initial.sourceId);
+      await expect(stack(failurePoint).apply.apply(fixtureCaller(), snapshotId)).rejects.toMatchObject({ code: "TEST_IMPORT_FAILURE" });
+      expect(await canonicalState(initial.sourceId)).toEqual(before);
+      expect((await pool.query<{ state: string }[]>("SELECT state FROM source_import_snapshots WHERE id=?", [snapshotId]))[0].state).toBe("READY");
+      expect(await failedRunCount(initial.sourceId)).toBe(1);
+    });
+  }
 
   it("rechecks membership and Source authority after Preview before any canonical mutation", async () => {
     const fixture = await createSourceFixture(pool);
