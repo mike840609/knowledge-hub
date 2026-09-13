@@ -14,7 +14,9 @@ test("keeps Source Tree visible while switching Documents", async ({ page }) => 
 });
 
 test("filters the current Source", async ({ page }) => {
-  await page.goto(`/w/${WORKSPACE}/knowledge/${SOURCE}`);
+  // Wait for hydration: filling the controlled filter before React attaches
+  // listeners loses the input event (DOM shows text, tree never filters).
+  await page.goto(`/w/${WORKSPACE}/knowledge/${SOURCE}`, { waitUntil: "networkidle" });
   await page.getByPlaceholder("Filter tree").fill("Runbooks");
   await expect(page.getByRole("treeitem", { name: "Runbooks" })).toBeVisible();
   await expect(page.getByRole("treeitem", { name: "Architecture" })).toHaveCount(0);
