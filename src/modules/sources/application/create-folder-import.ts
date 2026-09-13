@@ -16,6 +16,7 @@ export type CreateImportResult = { snapshotId: string; state: "BUILDING"; expire
 type Options = { limits?: ImportLimits; now?: () => Date; buildingTtlMs?: number };
 const MARKDOWN_EXTENSION = /\.(?:md|markdown)$/iu;
 const SHA256 = /^[a-f0-9]{64}$/u;
+const MAX_ASSET_MIME_CHARS = 255;
 
 function nonemptyName(value: string, field: string): string {
   if (typeof value !== "string") throw importError("INVALID_IMPORT_MANIFEST", `${field} must be a string.`);
@@ -77,7 +78,9 @@ function validateManifest(manifest: readonly ImportManifestEntry[], limits: Impo
     if (typeof asset.contentHash !== "string" || !SHA256.test(asset.contentHash.toLowerCase())) {
       throw importError("INVALID_ASSET_MANIFEST", "Non-Markdown assets require a SHA-256 content hash.");
     }
-    if (asset.mimeType !== null && typeof asset.mimeType !== "string") throw importError("INVALID_ASSET_MANIFEST", "Asset MIME type must be a string or null.");
+    if (asset.mimeType !== null && (typeof asset.mimeType !== "string" || asset.mimeType.length > MAX_ASSET_MIME_CHARS)) {
+      throw importError("INVALID_ASSET_MANIFEST", `Asset MIME type must be null or a string up to ${MAX_ASSET_MIME_CHARS} characters.`);
+    }
     if (asset.lastModified !== null && (!(asset.lastModified instanceof Date) || Number.isNaN(asset.lastModified.getTime()))) {
       throw importError("INVALID_ASSET_MANIFEST", "Asset lastModified must be a valid Date or null.");
     }
