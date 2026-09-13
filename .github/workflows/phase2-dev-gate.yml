@@ -3,7 +3,10 @@ name: Phase 2 Dev Gate
 on:
   push:
     branches:
-      - phase-2-implementation
+      - main
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read

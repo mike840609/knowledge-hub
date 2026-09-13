@@ -5,7 +5,7 @@
 | 日期 | 2026-09-12 |
 | Phase | 2 |
 | 名稱 | Knowledge Source Import & Sync |
-| 狀態 | In-chat design approved；written spec pending final review |
+| 狀態 | Approved and implemented |
 | 前置 | Phase 0 Foundation & Architecture、Phase 1 Knowledge Core & Tree |
 | 後續 | Phase 3 Identity, Workspace Admin & Governance |
 
