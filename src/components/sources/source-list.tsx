@@ -5,7 +5,7 @@ export function SourceList({ workspaceId, items }: { workspaceId: string; items:
   if (items.length === 0) {
     return (
       <p className="rounded-md border border-dashed border-kh-border p-6 text-sm text-kh-text-muted">
-        No sources in this workspace yet.
+        No knowledge sources yet.
       </p>
     );
   }

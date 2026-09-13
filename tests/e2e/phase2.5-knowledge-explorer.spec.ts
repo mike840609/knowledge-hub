@@ -29,3 +29,19 @@ test("renders the Document inside the Explorer with a compact header", async ({ 
     hasText: "The Query Master architecture notes",
   })).toHaveCount(0);
 });
+
+test.describe("narrow knowledge layout", () => {
+  test.use({ viewport: { width: 900, height: 900 } });
+
+  test("uses Browse Drawer on narrow screens", async ({ page }) => {
+    await page.goto(`/w/${WORKSPACE}/knowledge/${SOURCE}`);
+    await expect(page.getByRole("button", { name: "Browse" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Browse" }).click();
+    await expect(page.getByRole("dialog", { name: "Browse knowledge" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Details" }).click();
+    await expect(page.getByRole("dialog", { name: "Browse knowledge" }))
+      .toHaveCount(0);
+  });
+});

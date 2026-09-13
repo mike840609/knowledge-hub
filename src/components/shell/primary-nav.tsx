@@ -1,7 +1,13 @@
 import Link from "next/link";
 import { BookOpenText, Database } from "lucide-react";
 
-export function PrimaryNav({ workspaceId }: { workspaceId: string }) {
+export function PrimaryNav({
+  workspaceId,
+  onNavigate,
+}: {
+  workspaceId: string;
+  onNavigate?: () => void;
+}) {
   const items = [
     {
       name: "Knowledge",
@@ -20,6 +26,7 @@ export function PrimaryNav({ workspaceId }: { workspaceId: string }) {
         <Link
           key={name}
           href={href}
+          onClick={onNavigate}
           className="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-kh-text-muted transition hover:bg-kh-bg-hover hover:text-kh-text"
         >
           <Icon size={15} strokeWidth={2} aria-hidden="true" />

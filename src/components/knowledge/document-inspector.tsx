@@ -203,6 +203,19 @@ export function DocumentDetailClient({
   children: ReactNode;
 }) {
   const [inspectorOpen, setInspectorOpen] = useState(false);
+  useEffect(() => {
+    const close = () => setInspectorOpen(false);
+    window.addEventListener("kh:open-browse", close);
+    window.addEventListener("kh:open-nav", close);
+    return () => {
+      window.removeEventListener("kh:open-browse", close);
+      window.removeEventListener("kh:open-nav", close);
+    };
+  }, []);
+  const openInspector = () => {
+    setInspectorOpen(true);
+    window.dispatchEvent(new CustomEvent("kh:open-inspector"));
+  };
   return (
     <div className="flex min-h-0 flex-1">
       <div className="min-w-0 flex-1">
@@ -212,7 +225,7 @@ export function DocumentDetailClient({
           status={status}
           updatedAt={updatedAt}
           revisionBanner={revisionBanner}
-          onDetailsClick={() => setInspectorOpen(true)}
+          onDetailsClick={openInspector}
         />
         {children}
       </div>

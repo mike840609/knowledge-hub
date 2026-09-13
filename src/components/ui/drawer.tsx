@@ -24,7 +24,7 @@ export function Drawer({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange} modal={modal}>
       <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 z-40 bg-black/20" />
+        {modal ? <Dialog.Backdrop className="fixed inset-0 z-40 bg-black/20" /> : null}
         <Dialog.Popup className="fixed inset-y-0 right-0 z-50 flex w-80 max-w-[85vw] flex-col border-l border-kh-border bg-kh-bg shadow-lg focus:outline-none">
           <div className="flex items-start justify-between gap-2 border-b border-kh-border px-4 py-3">
             <div className="min-w-0">
