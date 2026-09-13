@@ -182,19 +182,37 @@ function buildDocumentMatches(
     }
   }
 
-  // Pass 3: unique reconciliation fingerprint among remaining canonical documents.
+  // Pass 3: unique reconciliation fingerprint, unambiguous on BOTH sides (design §9.1).
+  //
+  // Identity may be reused only when exactly one unmatched canonical document and
+  // exactly one unmatched incoming document share a fingerprint. Two canonical
+  // candidates make the predecessor a guess; two incoming claimants make the
+  // successor a guess — both are the same coin flip over stable knowledge
+  // identity, so both stay ADDED, the canonical entries follow the normal
+  // snapshot-absence path (ARCHIVED), and every claimant carries the warning.
+  //
+  // Only documents still unmatched after pass 1 (external id) and pass 2 (exact
+  // path) count as claimants; a stronger claim never contributes ambiguity.
+  const claimantsByFingerprint = new Map<string, number>();
+  for (const incoming of incomingSorted) {
+    if (matches.has(incoming.sourcePath)) continue;
+    const fingerprint = incoming.reconciliationFingerprint;
+    claimantsByFingerprint.set(fingerprint, (claimantsByFingerprint.get(fingerprint) ?? 0) + 1);
+  }
+
   for (const incoming of incomingSorted) {
     if (matches.has(incoming.sourcePath)) continue;
     const candidates = (byFingerprint.get(incoming.reconciliationFingerprint) ?? [])
       .filter((candidate) => unmatchedCurrentIds.has(candidate.entryId))
       .sort((left, right) => compareImportText(left.sourcePath, right.sourcePath));
-    if (candidates.length === 1) {
+    if (candidates.length === 0) continue;
+    if (candidates.length === 1 && claimantsByFingerprint.get(incoming.reconciliationFingerprint) === 1) {
       const candidate = candidates[0];
       matches.set(incoming.sourcePath, candidate);
       unmatchedCurrentIds.delete(candidate.entryId);
-    } else if (candidates.length > 1) {
-      ambiguous.set(incoming.sourcePath, candidates.map((candidate) => candidate.sourcePath));
+      continue;
     }
+    ambiguous.set(incoming.sourcePath, candidates.map((candidate) => candidate.sourcePath));
   }
 
   return { matches, ambiguous, unmatchedCurrentIds };
