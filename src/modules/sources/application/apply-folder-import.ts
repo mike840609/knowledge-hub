@@ -1,5 +1,6 @@
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { importError } from "@/modules/sources/domain/import-errors";
+import { hashImportPlan, hashReadyImportSnapshot } from "@/modules/sources/domain/import-integrity";
 import type { ImportDiffSummary } from "@/modules/sources/domain/import-plan";
 import type { KnowledgeSource } from "@/modules/sources/domain/source";
 import type { SyncRun } from "@/modules/sources/domain/sync-run";
@@ -50,6 +51,15 @@ export class ApplyFolderImportService {
         const timestamp = this.now();
         if (snapshot.expiresAt.getTime() <= timestamp.getTime()) throw importError("IMPORT_SNAPSHOT_EXPIRED", "Import snapshot has expired.");
         if (snapshot.hasBlockers || snapshot.summary.blockers > 0) throw importError("IMPORT_SNAPSHOT_BLOCKED", "Import snapshot contains blocking diagnostics.");
+        if (!snapshot.snapshotHash || !snapshot.planHash) {
+          throw importError("IMPORT_SNAPSHOT_INVALID", "READY snapshot is missing its persisted integrity hashes.");
+        }
+        const persistedEntries = await repositories.importSnapshotEntries.listBySnapshotId(snapshot.id);
+        const planHash = hashImportPlan(snapshot.plan);
+        const snapshotHash = hashReadyImportSnapshot(snapshot, persistedEntries);
+        if (planHash !== snapshot.planHash || snapshotHash !== snapshot.snapshotHash) {
+          throw importError("IMPORT_SNAPSHOT_INTEGRITY_MISMATCH", "Import preview integrity validation failed; create a fresh preview before applying.");
+        }
 
         if (snapshot.sourceId !== null) {
           const source = await repositories.sources.lockById(snapshot.sourceId);
