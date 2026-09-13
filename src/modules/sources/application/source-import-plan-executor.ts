@@ -1,4 +1,5 @@
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
+import { renumberSiblingPositions } from "@/modules/knowledge/application/internal/tree-transaction";
 import { importError } from "@/modules/sources/domain/import-errors";
 import type { FolderImportPlan } from "@/modules/sources/domain/import-plan";
 import type { KnowledgeSource } from "@/modules/sources/domain/source";
@@ -47,13 +48,28 @@ export async function executeFolderImportPlan(
   const handledMoveNodeIds = new Set<string>();
   const assetsByPath = new Map((await repositories.assets.listBySourceId(source.id)).map((asset) => [asset.sourcePath, asset]));
 
+  /**
+   * Every sibling group this Apply mutates — membership, status, or position
+   * alike — is renumbered once at the end (spec §16.1 "normalize sibling
+   * positions", §23). `plan.ordering` alone is not enough: a document can be
+   * archived out of one group while another is created or moved elsewhere,
+   * and archive/restore never appear in the ordering pass at all.
+   */
+  const touchedParents = new Set<string | null>();
+  async function touchGroupOf(treeNodeId: string): Promise<void> {
+    const node = await repositories.tree.findById(treeNodeId);
+    if (node) touchedParents.add(node.parentId);
+  }
+
   for (const action of plan.folders.restore) {
+    await touchGroupOf(action.treeNodeId);
     await projection.restoreProjectedFolder(caller, action.treeNodeId);
     folderNodeByPath.set(action.sourcePath, action.treeNodeId);
   }
   for (const action of plan.folders.create) {
     const parentId = action.parentPath === null ? null : folderNodeByPath.get(action.parentPath);
     if (action.parentPath !== null && !parentId) throw importError("IMPORT_PLAN_PARENT_MISSING", `Folder parent ${action.parentPath} is unavailable.`);
+    touchedParents.add(parentId ?? null);
     const sourceEntryId = uuidv7();
     const projected = await projection.projectFolder(caller, {
       sourceId: source.id,
@@ -70,6 +86,7 @@ export async function executeFolderImportPlan(
   for (const action of plan.documents.create) {
     const parentId = action.parentPath === null ? null : folderNodeByPath.get(action.parentPath);
     if (action.parentPath !== null && !parentId) throw importError("IMPORT_PLAN_PARENT_MISSING", `Document parent ${action.parentPath} is unavailable.`);
+    touchedParents.add(parentId ?? null);
     const sourceEntryId = uuidv7();
     const projected = await projection.projectDocument(caller, {
       sourceId: source.id,
@@ -83,10 +100,12 @@ export async function executeFolderImportPlan(
     createdNodeByKey.set(`document:${action.sourcePath}`, projected.treeNodeId);
   }
   for (const action of plan.documents.restore) {
+    await touchGroupOf(action.treeNodeId);
     const move = moveByTreeNodeId.get(action.treeNodeId);
     if (move) {
       const parentId = move.parentPath === null ? null : folderNodeByPath.get(move.parentPath);
       if (move.parentPath !== null && !parentId) throw importError("IMPORT_PLAN_PARENT_MISSING", `Moved document parent ${move.parentPath} is unavailable.`);
+      touchedParents.add(parentId ?? null);
       await projection.restoreProjectedDocumentToParent(caller, { documentId: action.documentId, newParentId: parentId ?? null, newPosition: move.desiredPosition });
       handledMoveNodeIds.add(action.treeNodeId);
       continue;
@@ -95,8 +114,10 @@ export async function executeFolderImportPlan(
   }
   for (const action of plan.documents.move) {
     if (handledMoveNodeIds.has(action.treeNodeId)) continue;
+    await touchGroupOf(action.treeNodeId);
     const parentId = action.parentPath === null ? null : folderNodeByPath.get(action.parentPath);
     if (action.parentPath !== null && !parentId) throw importError("IMPORT_PLAN_PARENT_MISSING", `Moved document parent ${action.parentPath} is unavailable.`);
+    touchedParents.add(parentId ?? null);
     await projection.moveProjectedNode(caller, { nodeId: action.treeNodeId, newParentId: parentId ?? null, newPosition: action.desiredPosition });
   }
   failAt(options, "after-documents");
@@ -139,6 +160,7 @@ export async function executeFolderImportPlan(
     });
   }
   for (const action of plan.documents.archive) {
+    await touchGroupOf(action.treeNodeId);
     await projection.archiveProjectedDocument(caller, action.documentId);
   }
   for (const action of plan.assets.remove) {
@@ -146,6 +168,7 @@ export async function executeFolderImportPlan(
     if (existing && existing.sourceId === source.id) await repositories.assets.deleteById(action.assetId);
   }
   for (const action of plan.folders.archive) {
+    await touchGroupOf(action.treeNodeId);
     await projection.archiveProjectedFolder(caller, action.treeNodeId);
     folderNodeByPath.delete(action.sourcePath);
   }
@@ -161,6 +184,7 @@ export async function executeFolderImportPlan(
     }
     const expectedParentId = target.parentPath === null ? null : folderNodeByPath.get(target.parentPath);
     if (target.parentPath !== null && !expectedParentId) throw importError("IMPORT_PLAN_PARENT_MISSING", `Ordering parent ${target.parentPath} is unavailable.`);
+    touchedParents.add(expectedParentId ?? null);
     const node = await repositories.tree.findById(nodeId);
     if (!node || node.sourceId !== source.id || node.status !== "ACTIVE") throw importError("IMPORT_PLAN_NODE_MISSING", "Ordering target is unavailable in the bound Source.");
     if (node.parentId !== (expectedParentId ?? null)) {
@@ -168,6 +192,18 @@ export async function executeFolderImportPlan(
       throw importError("IMPORT_PLAN_PARENT_MISMATCH", `Ordering target parent does not match ${target.parentPath ?? "root"}.`);
     }
     if (node.position !== target.position) await repositories.tree.updatePosition(node.id, target.position, caller.identity.id);
+  }
+
+  // Normalize sibling positions (spec §16.1, §23). The ordering pass above
+  // writes raw desired positions for ACTIVE nodes only, so archived siblings
+  // can still collide with them. Phase 1 owns the invariant and renumbers a
+  // group over ALL of its members — `ORDER BY position, id` with no status
+  // filter (tree-rules §8) — which keeps archived nodes inside the same
+  // contiguous run rather than behind the active block, exactly as a Phase 1
+  // move/reorder would leave them. Reusing it verbatim is what keeps
+  // `placeNodeAtIndex`'s index arithmetic sound on the next sync.
+  for (const parentId of touchedParents) {
+    await renumberSiblingPositions(repositories, source.id, parentId, caller.identity.id);
   }
 
   // Defensive invariant: every desired active document must still sit beneath its persisted source-path parent.
