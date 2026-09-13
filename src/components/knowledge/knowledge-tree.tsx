@@ -13,9 +13,9 @@ import type { KnowledgeTreeItem } from "@/modules/knowledge/application/knowledg
 export type KnowledgeTreeProps = {
   items: KnowledgeTreeItem[];
   includeArchived?: boolean;
-  /** Workspace/Source scope. When omitted, legacy `/knowledge/:documentId` hrefs are used. */
-  workspaceId?: string;
-  sourceId?: string;
+  /** Workspace/Source scope for canonical `/w/:workspaceId/knowledge/:sourceId/:documentId` hrefs. */
+  workspaceId: string;
+  sourceId: string;
   selectedDocumentId?: string;
   /** Client-local filter text; ancestors stay visible and expansion is restored on clear. */
   query?: string;
@@ -23,14 +23,11 @@ export type KnowledgeTreeProps = {
 
 function documentHref(
   item: Extract<KnowledgeTreeItem, { type: "document" }>,
-  scope: { workspaceId?: string; sourceId?: string },
+  scope: { workspaceId: string; sourceId: string },
   includeArchived: boolean,
 ): string {
   const suffix = includeArchived ? "?includeArchived=true" : "";
-  if (scope.workspaceId && scope.sourceId) {
-    return `/w/${scope.workspaceId}/knowledge/${scope.sourceId}/${item.documentId}${suffix}`;
-  }
-  return `/knowledge/${item.documentId}${suffix}`;
+  return `/w/${scope.workspaceId}/knowledge/${scope.sourceId}/${item.documentId}${suffix}`;
 }
 
 function TreeNodeRow({
@@ -46,7 +43,7 @@ function TreeNodeRow({
 }: {
   node: KnowledgeTreeNode;
   depth: number;
-  scope: { workspaceId?: string; sourceId?: string };
+  scope: { workspaceId: string; sourceId: string };
   includeArchived: boolean;
   selectedDocumentId: string | undefined;
   collapsedIds: ReadonlySet<string>;

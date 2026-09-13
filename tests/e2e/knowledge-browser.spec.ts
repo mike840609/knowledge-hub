@@ -1,6 +1,14 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
-// Mirrors scripts/db/seed.ts BROWSER_FIXTURES (Playwright cannot resolve `@/` aliases).
+// Workspace-scoped Knowledge Explorer acceptance (Task 11 rewrite of the
+// legacy /knowledge browser spec). Canonical route:
+// /w/:workspaceId/knowledge/:sourceId/:documentId with a persistent shell and
+// a persistent Source Tree. Mirrors scripts/db/seed.ts BROWSER_FIXTURES
+// (Playwright cannot resolve `@/` aliases).
+const QUERY_MASTER_WORKSPACE = "0199f100-0000-7000-8000-000000000001";
+const SWFP_WORKSPACE = "0199f100-0000-7000-8000-000000000002";
+const OBSIDIAN_SOURCE = "0199f100-0000-7000-8000-000000000101";
+const SWFP_SOURCE = "0199f100-0000-7000-8000-000000000102";
 const ARCHITECTURE_TITLE = "Architecture";
 const ARCHITECTURE_BODY_V1 = "The Query Master architecture notes, first revision.";
 const ARCHITECTURE_BODY_V2 = "The Query Master architecture notes, second revision.";
@@ -14,111 +22,103 @@ const SECRET_TITLE = "Restricted Secret Plan";
 const SECRET_BODY = "restricted-secret-body-9f31";
 const MISSING_DOCUMENT_ID = "0199f100-0000-7000-8000-000000009999";
 
-async function openWorkspace(page: Page, workspaceName: string, sourceName?: string): Promise<string> {
-  await page.goto("/knowledge");
-  await page.getByLabel("Choose a workspace").selectOption({ label: workspaceName });
-  await page.getByRole("button", { name: "Apply" }).click();
-  await expect(page).toHaveURL(new RegExp(`/knowledge\\?workspaceId=`));
-  if (sourceName) {
-    await page.getByLabel("Choose a source").selectOption({ label: sourceName });
-    await page.getByRole("button", { name: "Apply" }).click();
-    await expect(page).toHaveURL(new RegExp(`sourceId=`));
-  }
-  return page.url();
-}
+const CANONICAL_DOC_URL = new RegExp(
+  `/w/${QUERY_MASTER_WORKSPACE}/knowledge/${OBSIDIAN_SOURCE}/[0-9a-f-]+`,
+);
 
-test("browses workspace, source, tree, and stable document URL with history", async ({ page }) => {
-  // Seed-source scope: import E2E sources reuse titles like "Architecture",
-  // so full-workspace title locators hit strict-mode violations.
-  const browserUrl = await openWorkspace(page, "Query Master", "Obsidian Wiki");
+test("browses the persistent explorer with a stable canonical document URL", async ({ page }) => {
+  await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${OBSIDIAN_SOURCE}`);
+  await expect(page).toHaveURL(CANONICAL_DOC_URL);
 
-  const workspaceSelect = page.getByLabel("Choose a workspace");
-  await expect(workspaceSelect.locator("option:checked")).toHaveText("Query Master");
-  await expect(workspaceSelect).toContainText("SWFP");
+  // Persistent shell: brand, Workspace selector, and primary nav.
+  await expect(page.getByText("Knowledge Hub", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Workspace")).toHaveValue(QUERY_MASTER_WORKSPACE);
+  await expect(page.getByRole("link", { name: "Knowledge" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Sources" })).toBeVisible();
 
-  const sourceSelect = page.getByLabel("Choose a source");
-  await expect(sourceSelect.locator("option:checked")).toHaveText("Obsidian Wiki");
-  await expect(sourceSelect).toContainText("All sources");
+  // Legacy query-form controls are gone.
+  await expect(page.getByRole("button", { name: "Apply", exact: true })).toHaveCount(0);
+  await expect(page.getByText("All sources", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Back to Knowledge" })).toHaveCount(0);
 
-  const tree = page.getByRole("region", { name: "Your source tree" });
-  await expect(tree.getByRole("heading", { name: "Obsidian Wiki" })).toBeVisible();
-  await expect(tree.getByRole("link", { name: ARCHITECTURE_TITLE, exact: true })).toBeVisible();
-  await expect(tree.getByRole("link", { name: RUNBOOKS_TITLE, exact: true })).toBeVisible();
+  // Persistent Source Tree scoped to the current Source.
+  await expect(page.getByLabel("Source")).toHaveValue(OBSIDIAN_SOURCE);
+  const tree = page.getByRole("tree", { name: "Knowledge tree" });
+  await expect(tree).toBeVisible();
+  await expect(tree.getByRole("treeitem", { name: ARCHITECTURE_TITLE, exact: true })).toBeVisible();
+  await expect(tree.getByRole("treeitem", { name: RUNBOOKS_TITLE, exact: true })).toBeVisible();
   await expect(tree.getByText(RETIRED_TITLE, { exact: true })).toHaveCount(0);
 
-  await expect(page.getByText("Create a Hub document")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Create document" })).toHaveCount(0);
-  await expect(page.locator('input[name="id"], input[name="emp_id"], input[name="org_code"]')).toHaveCount(0);
-
-  await tree.getByRole("link", { name: ARCHITECTURE_TITLE, exact: true }).click();
-  await expect(page).toHaveURL(/\/knowledge\/[0-9a-f-]+$/);
-  const stableUrl = page.url();
+  // Current revision renders; history lives in the closed-by-default Inspector.
   await expect(page.getByRole("heading", { name: ARCHITECTURE_TITLE })).toBeVisible();
   await expect(page.getByText(ARCHITECTURE_BODY_V2, { exact: true })).toBeVisible();
   await expect(page.getByText(ARCHITECTURE_BODY_V1, { exact: true })).toHaveCount(0);
-  await expect(page.getByText("Current revision 2", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Revision history" })).toBeVisible();
-  const history = page.locator("section", { has: page.getByRole("heading", { name: "Revision history" }) });
-  await expect(history.getByText("Revision 1", { exact: false })).toBeVisible();
-  await expect(history.getByText("Revision 2", { exact: false })).toBeVisible();
 
-  await page.reload();
-  await expect(page).toHaveURL(stableUrl);
-  await expect(page.getByRole("heading", { name: ARCHITECTURE_TITLE })).toBeVisible();
-  await expect(page.getByText(ARCHITECTURE_BODY_V2, { exact: true })).toBeVisible();
-
-  await page.getByRole("link", { name: "← Back to Knowledge" }).click();
-  await expect(page).toHaveURL(/\/knowledge(\?.*)?$/);
-  await expect(page.getByRole("heading", { name: "Knowledge" })).toBeVisible();
-
-  await page.goto(browserUrl);
-  await page.getByRole("region", { name: "Your source tree" }).getByRole("link", { name: RUNBOOKS_TITLE, exact: true }).click();
-  await expect(page).toHaveURL(/\/knowledge\/[0-9a-f-]+$/);
+  // Switching Documents keeps the Tree mounted and the URL canonical.
+  await tree.getByRole("treeitem", { name: RUNBOOKS_TITLE, exact: true }).click();
+  await expect(page).toHaveURL(CANONICAL_DOC_URL);
+  await expect(tree).toBeVisible();
   await expect(page.getByRole("heading", { name: RUNBOOKS_TITLE })).toBeVisible();
   await expect(page.getByText(RUNBOOKS_BODY, { exact: true })).toBeVisible();
+
+  const stableUrl = page.url();
+  await page.reload();
+  await expect(page).toHaveURL(stableUrl);
+  await expect(tree).toBeVisible();
+  await expect(page.getByRole("heading", { name: RUNBOOKS_TITLE })).toBeVisible();
 });
 
-test("switches workspace to SWFP through the selector", async ({ page }) => {
-  await openWorkspace(page, "SWFP");
+test("switches workspace through the shell selector", async ({ page }) => {
+  await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${OBSIDIAN_SOURCE}`);
+  await expect(page.getByRole("heading", { name: ARCHITECTURE_TITLE })).toBeVisible();
 
-  const tree = page.getByRole("region", { name: "Your source tree" });
-  await expect(tree.getByRole("heading", { name: "SWFP Handbook" })).toBeVisible();
-  await expect(tree.getByText(ARCHITECTURE_TITLE, { exact: true })).toHaveCount(0);
-  await tree.getByRole("link", { name: SWFP_TITLE, exact: true }).click();
-  await expect(page).toHaveURL(/\/knowledge\/[0-9a-f-]+$/);
+  await page.getByLabel("Workspace").selectOption(SWFP_WORKSPACE);
+  await expect(page).toHaveURL(
+    new RegExp(`/w/${SWFP_WORKSPACE}/knowledge/${SWFP_SOURCE}/[0-9a-f-]+`),
+  );
   await expect(page.getByRole("heading", { name: SWFP_TITLE })).toBeVisible();
   await expect(page.getByText(SWFP_BODY, { exact: true })).toBeVisible();
+  await expect(page.getByRole("tree", { name: "Knowledge tree" })).toBeVisible();
+  await expect(page.getByText(ARCHITECTURE_TITLE, { exact: true })).toHaveCount(0);
 });
 
 test("reveals archived documents only with the archived toggle", async ({ page }) => {
-  await page.goto("/knowledge");
-  await page.getByLabel("Choose a workspace").selectOption({ label: "Query Master" });
-  await page.getByLabel("Include archived").check();
-  await page.getByRole("button", { name: "Apply" }).click();
+  await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${OBSIDIAN_SOURCE}`);
+  const tree = page.getByRole("tree", { name: "Knowledge tree" });
+  await expect(tree).toBeVisible();
+  await expect(tree.getByText(RETIRED_TITLE, { exact: true })).toHaveCount(0);
 
-  const tree = page.getByRole("region", { name: "Your source tree" });
-  const retiredLink = tree.getByRole("link", { name: RETIRED_TITLE, exact: true });
-  await expect(retiredLink).toBeVisible();
+  // The toggle is a controlled checkbox driving a client navigation, so click
+  // the label and wait for the URL + checked state instead of check().
+  await page.getByText("Show archived").click();
+  await expect(page).toHaveURL(/includeArchived=true/);
+  await expect(page.getByLabel("Show archived")).toBeChecked();
+
+  const retiredItem = tree.getByRole("treeitem", { name: RETIRED_TITLE, exact: true });
+  await expect(retiredItem).toBeVisible();
+  const retiredLink = retiredItem.getByRole("link").first();
   await expect(retiredLink).toHaveAttribute("href", /includeArchived=true/);
 
-  await retiredLink.click();
-  await expect(page).toHaveURL(/\/knowledge\/[0-9a-f-]+\?includeArchived=true$/);
+  await retiredItem.click();
+  await expect(page).toHaveURL(
+    new RegExp(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${OBSIDIAN_SOURCE}/[0-9a-f-]+\\?includeArchived=true`),
+  );
   await expect(page.getByRole("heading", { name: RETIRED_TITLE })).toBeVisible();
 
   const plainUrl = page.url().replace("?includeArchived=true", "");
   await page.goto(plainUrl);
-  await expect(page.getByRole("heading", { name: "Document not found." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Not found or no access" })).toBeVisible();
   await expect(page.getByText(RETIRED_TITLE, { exact: true })).toHaveCount(0);
 });
 
 test("shows not-found for a missing document URL", async ({ page }) => {
-  await page.goto(`/knowledge/${MISSING_DOCUMENT_ID}`);
-  await expect(page.getByRole("heading", { name: "Document not found." })).toBeVisible();
+  await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${OBSIDIAN_SOURCE}/${MISSING_DOCUMENT_ID}`);
+  await expect(page.getByRole("heading", { name: "Not found or no access" })).toBeVisible();
 });
 
 test("leaks no title or snippet on a direct unauthorized document URL", async ({ page }) => {
-  await page.goto(`/knowledge/${SECRET_DOCUMENT_ID}`);
+  await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${OBSIDIAN_SOURCE}/${SECRET_DOCUMENT_ID}`);
   await expect(page.getByText(SECRET_TITLE, { exact: true })).toHaveCount(0);
   await expect(page.getByText(SECRET_BODY, { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Knowledge is temporarily unavailable." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Not found or no access" })).toBeVisible();
 });

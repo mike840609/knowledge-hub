@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { classifyApplyError } from "@/components/knowledge/source-import-preview-actions";
-import { readErrorCode } from "@/components/knowledge/source-import-launcher";
+import { classifyApplyError } from "@/components/imports/import-sticky-footer";
+import { readErrorCode } from "@/components/imports/folder-import-form";
 
 /**
  * Design §20.7: the UI branches on the machine-readable `code`, never on the
@@ -17,7 +17,7 @@ describe("classifyApplyError", () => {
       const failure = classifyApplyError(409, envelope(code));
       expect(failure.code, code).toBe(code);
       expect(failure.latchStale, code).toBe(true);
-      expect(failure.message, code).toMatch(/folder again/iu);
+      expect(failure.message, code).toMatch(/refresh the preview/iu);
     }
   });
 

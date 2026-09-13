@@ -9,7 +9,7 @@ export default defineConfig({
   reporter: [["list"]],
   webServer: {
     command: `${process.execPath} node_modules/next/dist/bin/next start --hostname 127.0.0.1`,
-    url: `http://127.0.0.1:${port}/knowledge`,
+    url: `http://127.0.0.1:${port}/`,
     timeout: 30_000,
     reuseExistingServer: false,
     env: { ...process.env, NODE_ENV: "production", PORT: String(port) } as Record<string, string>,
