@@ -118,6 +118,41 @@ describe("Phase 2 BUILDING import sessions", () => {
     await expect(create.createInitial(fixtureCaller(), { workspaceId: fixture.workspaceId, sourceName:"Wiki",rootName:"wiki",manifest:mislabeled })).rejects.toMatchObject({ code:"INVALID_ASSET_MANIFEST" });
   });
 
+  it("rejects markdown total bytes over the limit when every file is individually legal", async () => {
+    const fixture = await createSourceFixture(pool);
+    const uow = new MariaDbUnitOfWork(pool);
+    const limits = { ...DEFAULT_IMPORT_LIMITS, maxMarkdownFileBytes: 10, maxMarkdownTotalBytes: 25 };
+    const create = new CreateFolderImportService(uow, { limits, now: clock });
+    const legal = (uploadKey: string, path: string, size: number): ImportManifestEntry => ({ uploadKey, relativePath: path, kind: "MARKDOWN", size });
+    const base = { workspaceId: fixture.workspaceId, sourceName: "Wiki", rootName: "wiki" };
+    const over = [legal("m1", "a.md", 10), legal("m2", "b.md", 10), legal("m3", "c.md", 10)];
+    await expect(create.createInitial(fixtureCaller(), { ...base, manifest: over })).rejects.toMatchObject({ code: "IMPORT_LIMIT_EXCEEDED" });
+    const exact = [legal("m1", "a.md", 10), legal("m2", "b.md", 10), legal("m3", "c.md", 5)];
+    await expect(create.createInitial(fixtureCaller(), { ...base, manifest: exact })).resolves.toMatchObject({ state: "BUILDING" });
+  });
+
+  it("enforces upload batch byte boundaries independent of the file-count limit", async () => {
+    const fixture = await createSourceFixture(pool);
+    const uow = new MariaDbUnitOfWork(pool);
+    const limits = { ...DEFAULT_IMPORT_LIMITS, maxMarkdownFileBytes: 60, maxUploadBatchFiles: 10, maxUploadBatchBytes: 100 };
+    const create = new CreateFolderImportService(uow, { limits, now: clock });
+    const upload = new UploadFolderImportEntriesService(uow, { limits, now: clock });
+    const entry = (uploadKey: string, size: number): ImportManifestEntry => ({ uploadKey, relativePath: `${uploadKey}.md`, kind: "MARKDOWN", size });
+    const base = { workspaceId: fixture.workspaceId, sourceName: "Wiki", rootName: "wiki" };
+
+    const atLimit = await create.createInitial(fixtureCaller(), { ...base, manifest: [entry("m1", 50), entry("m2", 50)] });
+    await expect(upload.upload(fixtureCaller(), {
+      snapshotId: atLimit.snapshotId,
+      entries: [{ uploadKey: "m1", bytes: new Uint8Array(50) }, { uploadKey: "m2", bytes: new Uint8Array(50) }],
+    })).resolves.toMatchObject({ accepted: 2, idempotent: 0 });
+
+    const over = await create.createInitial(fixtureCaller(), { ...base, manifest: [entry("m1", 60), entry("m2", 60)] });
+    await expect(upload.upload(fixtureCaller(), {
+      snapshotId: over.snapshotId,
+      entries: [{ uploadKey: "m1", bytes: new Uint8Array(60) }, { uploadKey: "m2", bytes: new Uint8Array(60) }],
+    })).rejects.toMatchObject({ code: "IMPORT_LIMIT_EXCEEDED" });
+  });
+
   it("reports manifest:[null] as 400 INVALID_IMPORT_MANIFEST through the server revival path", async () => {
     const fixture = await createSourceFixture(pool);
     const transported = JSON.parse(JSON.stringify({ sourceName: "Review", rootName: "wiki", manifest: [null] })) as unknown;
