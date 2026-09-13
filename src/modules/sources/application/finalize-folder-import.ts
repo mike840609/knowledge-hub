@@ -1,8 +1,8 @@
-import { createHash } from "node:crypto";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { parseGenericMarkdownText } from "@/modules/sources/adapters/generic-markdown-folder-adapter";
 import type { ImportDiagnostic } from "@/modules/sources/domain/import-diagnostic";
 import { importError, SourceImportError } from "@/modules/sources/domain/import-errors";
+import { hashImportPlan, hashReadyImportSnapshot } from "@/modules/sources/domain/import-integrity";
 import { DEFAULT_IMPORT_LIMITS, type ImportLimits } from "@/modules/sources/domain/import-limits";
 import { compareImportText, isIgnoredImportPath, normalizeImportPath } from "@/modules/sources/domain/import-path";
 import type { ReadyImportAsset, ReadyImportContent, ReadyImportDocument, ImportPreviewChange } from "@/modules/sources/domain/import-plan";
@@ -26,10 +26,6 @@ type NormalizedEntry = {
   ignored: boolean;
   diagnostics: ImportDiagnostic[];
 };
-
-function sha256(value: string): string {
-  return createHash("sha256").update(value, "utf8").digest("hex");
-}
 
 function blocker(code: string, sourcePath: string | null, message: string): ImportDiagnostic {
   return { code, severity: "BLOCKING", sourcePath, message };
@@ -97,28 +93,6 @@ function finalizedBase(entry: NormalizedEntry): FinalizedImportSnapshotEntry {
     rawMarkdown: null,
     diagnostics: [...entry.diagnostics],
     previewChange: null,
-  };
-}
-
-function hashableEntry(entry: FinalizedImportSnapshotEntry): unknown {
-  return {
-    uploadKey: entry.uploadKey,
-    clientRelativePath: entry.clientRelativePath,
-    sourcePath: entry.sourcePath,
-    sourcePathHash: entry.sourcePathHash,
-    entryType: entry.entryType,
-    sourceFileHash: entry.sourceFileHash,
-    resolvedTitle: entry.resolvedTitle,
-    titleSource: entry.titleSource,
-    markdown: entry.markdown,
-    metadata: entry.metadata,
-    revisionContentHash: entry.revisionContentHash,
-    reconciliationFingerprint: entry.reconciliationFingerprint,
-    mimeType: entry.mimeType,
-    assetContentHash: entry.assetContentHash,
-    assetSize: entry.assetSize,
-    assetLastModified: entry.assetLastModified?.toISOString() ?? null,
-    diagnostics: entry.diagnostics,
   };
 }
 
@@ -262,13 +236,8 @@ export class FinalizeFolderImportService {
 
     const previewByPath = new Map(plan.preview.map((change) => [change.sourcePath, change]));
     const persistedEntries = finalized.map((entry) => ({ ...entry, previewChange: entry.sourcePath === null ? null : (previewByPath.get(entry.sourcePath) ?? null) }));
-    const orderedHashEntries = [...persistedEntries].sort((left, right) => compareImportText(left.sourcePath ?? left.clientRelativePath, right.sourcePath ?? right.clientRelativePath) || compareImportText(left.uploadKey, right.uploadKey));
-    const snapshotHash = sha256(JSON.stringify({
-      adapterVersion: snapshot.adapterVersion,
-      sourceBinding: content.sourceBinding,
-      entries: orderedHashEntries.map(hashableEntry),
-    }));
-    const planHash = sha256(JSON.stringify(plan));
+    const snapshotHash = hashReadyImportSnapshot(snapshot, persistedEntries);
+    const planHash = hashImportPlan(plan);
     const expiresAt = new Date(now.getTime() + this.readyTtlMs);
     const hasBlockers = plan.summary.blockers > 0;
 

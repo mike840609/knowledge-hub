@@ -55,6 +55,13 @@ async function expectReadyAndUnconsumed(snapshotId: string): Promise<void> {
 }
 
 describe("Phase 2 READY snapshot integrity", () => {
+  it("applies a freshly finalized READY snapshot without integrity mismatch", async () => {
+    const { snapshotId } = await readyInitial();
+
+    const result = await services().apply.apply(fixtureCaller(), snapshotId);
+    expect(result).toMatchObject({ kind: "APPLIED", resultVersion: 1, alreadyApplied: false });
+  });
+
   it("rejects a persisted action plan whose bytes no longer match plan_hash", async () => {
     const { snapshotId } = await readyInitial();
     await pool.query(
