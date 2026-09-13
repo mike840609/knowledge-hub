@@ -6,9 +6,9 @@ Knowledge Hub 採用自建 Knowledge Core，不綁定 Obsidian、特定 Wiki gen
 
 ## 目前狀態
 
-更新日期：2026-09-10。
+更新日期：2026-09-13。
 
-`phase-0-foundation` 已完成 Phase 0 application、migration、integration fixtures 與最小 Web flow；實際檢查結果記錄於 [`docs/superpowers/verification/`](docs/superpowers/verification/)。Phase 1–9 仍以 canonical design / implementation plan 為主，文件內列出的尚未執行命令與測試案例不代表已交付。
+`phase-0-foundation` 已完成 Phase 0 application、migration、integration fixtures 與最小 Web flow；`phase-1-knowledge-core-tree`（PR #6）已完成 Workspace-scoped Knowledge identity、Revision、Tree 與 read-only browser；`phase-2-source-import-sync`（PR #7）已完成整包 Markdown folder 經 Preview → Confirm → Apply 的首次匯入與 re-sync，含 staging snapshot、migration 006/007 與 unit/integration/E2E 測試。Phase 0/1 實際檢查結果記錄於 [`docs/superpowers/verification/`](docs/superpowers/verification/)（Phase 2 verification 文件尚未補上）。Phase 3–9 仍以 canonical design / implementation plan 為主，文件內列出的尚未執行命令與測試案例不代表已交付。
 
 2026-09-10 architecture review 已把 Workspace access-boundary correction **直接整合進 Phase 0/1 canonical spec 與 plan**：`org_code` 保留為使用者公司組織屬性，但 **Workspace 才是 Knowledge container 與基本存取邊界**。不同 org 的使用者可以透過 WorkspaceMembership 共用同一 Workspace；同 org 也不代表自動取得 Workspace 內容。
 
@@ -23,6 +23,8 @@ Knowledge Hub 採用自建 Knowledge Core，不綁定 Obsidian、特定 Wiki gen
 | [Phase 0 Implementation Plan](docs/superpowers/plans/2026-09-10-phase-0-foundation-implementation.md) | Phase 0 current implementation tasks、fixtures、acceptance cases |
 | [Phase 1 Knowledge Core & Tree Design](docs/superpowers/specs/2026-09-10-phase-1-knowledge-core-tree-design.md) | Workspace-scoped Knowledge identity、Revision、Tree、SourceEntry、lifecycle |
 | [Phase 1 Implementation Plan](docs/superpowers/plans/2026-09-10-phase-1-knowledge-core-tree-implementation.md) | Phase 1 current implementation tasks 與 read-only browser |
+| [Phase 2 Knowledge Source Import & Sync Design](docs/superpowers/specs/2026-09-12-phase-2-knowledge-source-import-sync-design.md) | Folder import staging、immutable Preview、atomic Apply、diagnostics、limits、retention |
+| [Phase 2 Implementation Plan](docs/superpowers/plans/2026-09-12-phase-2-knowledge-source-import-sync.md) | Phase 2 current implementation tasks、fixtures、acceptance cases |
 
 推薦執行／閱讀順序：
 
@@ -33,6 +35,8 @@ README
   → Phase 0 Implementation Plan
   → Phase 1 Design
   → Phase 1 Implementation Plan
+  → Phase 2 Design
+  → Phase 2 Implementation Plan
 ```
 
 ### Architecture history
