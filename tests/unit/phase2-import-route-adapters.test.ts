@@ -3,6 +3,7 @@ import {
   parseInitialImportBody,
   parseResyncImportBody,
   parseUploadBatchSpecs,
+  validateUploadContentLength,
 } from "@/server/import-route-adapters";
 import { reviveManifest } from "@/server/source-imports";
 
@@ -18,6 +19,24 @@ function multipart(specs: unknown, files: Record<string, File | string> = {}): F
 }
 
 describe("Phase 2 multipart upload route adapter", () => {
+  it("requires a finite positive integer Content-Length before parsing multipart", () => {
+    const maxBytes = 11 * 1024 * 1024;
+    expect(validateUploadContentLength("1", maxBytes)).toBe(1);
+    expect(validateUploadContentLength(String(maxBytes), maxBytes)).toBe(maxBytes);
+    for (const raw of [null, "", "0", "-1", "1.5", "NaN", "abc", "Infinity"]) {
+      expect(() => validateUploadContentLength(raw, maxBytes)).toThrowError(
+        expect.objectContaining({ code: "INVALID_UPLOAD_BATCH" }),
+      );
+    }
+  });
+
+  it("rejects an oversized multipart envelope before formData parsing", () => {
+    const maxBytes = 11 * 1024 * 1024;
+    expect(() => validateUploadContentLength(String(maxBytes + 1), maxBytes)).toThrowError(
+      expect.objectContaining({ code: "IMPORT_LIMIT_EXCEEDED" }),
+    );
+  });
+
   it("parses well-formed specs into upload keys and File parts", () => {
     const form = multipart(
       [{ uploadKey: "m1", field: "f0" }],
