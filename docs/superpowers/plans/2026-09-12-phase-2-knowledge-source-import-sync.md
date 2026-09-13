@@ -768,7 +768,7 @@ export type ApplyFolderImportResult =
 export class ApplyFolderImportService { apply(caller: CallerContext, snapshotId: string): Promise<ApplyFolderImportResult>; }
 export async function executeFolderImportPlan(
   repositories: SourceRepositories, caller: CallerContext, source: KnowledgeSource, plan: FolderImportPlan,
-  options?: { failurePoint?: "folders" | "documents" | "revisions" | "assets" | "before-run" },
+  options?: { failurePoint?: "after-folders" | "after-documents" | "after-revisions" | "after-assets" | "before-run" },
 ): Promise<void>;
 ```
 
