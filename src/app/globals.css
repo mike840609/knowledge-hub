@@ -4,14 +4,25 @@
 
 :root {
   color-scheme: light;
+  --kh-bg: #ffffff;
+  --kh-bg-subtle: #f7f7f8;
+  --kh-bg-hover: #f1f1f2;
+  --kh-bg-selected: #eef2ff;
+  --kh-border: #e5e7eb;
+  --kh-text: #202124;
+  --kh-text-muted: #6b7280;
+  --kh-accent: #5e6ad2;
+  --kh-danger: #dc2626;
+  --kh-warning: #b45309;
+  --kh-success: #15803d;
 }
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  background: #f7f9fb;
-  color: #102a43;
+  background: var(--kh-bg-subtle);
+  color: var(--kh-text);
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
