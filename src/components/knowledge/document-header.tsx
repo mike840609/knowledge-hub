@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -23,23 +22,15 @@ export function DocumentHeader({
   status,
   updatedAt,
   revisionBanner,
+  onDetailsClick,
 }: {
   breadcrumb: DocumentBreadcrumbSegment[];
   title: string;
   status: "ACTIVE" | "ARCHIVED";
   updatedAt: Date;
   revisionBanner: { viewingNo: number; backHref: string } | null;
+  onDetailsClick: () => void;
 }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-
-  function openDetails() {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("details", "open");
-    const query = params.toString();
-    router.push(query ? `${pathname}?${query}` : pathname);
-  }
 
   return (
     <header className="sticky top-0 z-10 border-b border-kh-border bg-kh-bg/95 backdrop-blur">
@@ -71,7 +62,7 @@ export function DocumentHeader({
           </h1>
           <button
             type="button"
-            onClick={openDetails}
+            onClick={onDetailsClick}
             className="inline-flex h-8 shrink-0 items-center rounded-md border border-kh-border bg-kh-bg px-3 text-[13px] font-medium text-kh-text hover:bg-kh-bg-hover"
           >
             Details

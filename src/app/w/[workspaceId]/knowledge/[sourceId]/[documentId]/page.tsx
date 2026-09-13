@@ -1,6 +1,7 @@
-import { getKnowledgeDocumentModel, getKnowledgeExplorerModel } from "@/server/knowledge-read";
+import { getKnowledgeDocumentModel, getKnowledgeExplorerModel, getWorkspaceShellModel } from "@/server/knowledge-read";
 import type { KnowledgeTreeItem } from "@/modules/knowledge/application/knowledge-query-service";
-import { DocumentHeader, type DocumentBreadcrumbSegment } from "@/components/knowledge/document-header";
+import type { DocumentBreadcrumbSegment } from "@/components/knowledge/document-header";
+import { DocumentDetailClient, type DocumentInspectorData } from "@/components/knowledge/document-inspector";
 import { DocumentViewer } from "@/components/knowledge/document-viewer";
 
 function buildBreadcrumb(
@@ -74,29 +75,42 @@ export default async function KnowledgeDocumentPage({
   const archivedSuffix = includeArchived ? "?includeArchived=true" : "";
 
   const explorer = await getKnowledgeExplorerModel(workspaceId, sourceId, { includeArchived: true });
+  const shell = await getWorkspaceShellModel(workspaceId);
   const breadcrumb = explorer
     ? buildBreadcrumb(workspaceId, sourceId, explorer.source.name, explorer.tree, documentId, selectedRevision.title)
     : [{ label: selectedRevision.title }];
 
+  const inspectorData: DocumentInspectorData = {
+    workspaceId,
+    workspaceName: shell?.workspace.name ?? workspaceId,
+    sourceId,
+    sourceName: explorer?.source.name ?? sourceId,
+    documentId,
+    status: view.status,
+    revisions: model.revisions,
+    selectedRevisionNo: selectedRevision.revisionNo,
+    includeArchived,
+  };
+
   return (
-    <div className="min-h-0 flex-1">
-      <DocumentHeader
-        breadcrumb={breadcrumb}
-        title={selectedRevision.title}
-        status={view.status}
-        updatedAt={selectedRevision.createdAt}
-        revisionBanner={
-          isHistorical
-            ? {
-                viewingNo: selectedRevision.revisionNo,
-                backHref: `/w/${workspaceId}/knowledge/${sourceId}/${documentId}${archivedSuffix}`,
-              }
-            : null
-        }
-      />
+    <DocumentDetailClient
+      breadcrumb={breadcrumb}
+      title={selectedRevision.title}
+      status={view.status}
+      updatedAt={selectedRevision.createdAt}
+      revisionBanner={
+        isHistorical
+          ? {
+              viewingNo: selectedRevision.revisionNo,
+              backHref: `/w/${workspaceId}/knowledge/${sourceId}/${documentId}${archivedSuffix}`,
+            }
+          : null
+      }
+      inspectorData={inspectorData}
+    >
       <div className="mx-auto w-full max-w-[860px] px-6 py-6">
         <DocumentViewer view={view} selectedRevision={selectedRevision} />
       </div>
-    </div>
+    </DocumentDetailClient>
   );
 }
