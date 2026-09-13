@@ -2,6 +2,20 @@ import { importError } from "@/modules/sources/domain/import-errors";
 
 export type UploadBatchSpec = { uploadKey: string; field: string; file: File };
 
+export function validateUploadContentLength(rawContentLength: string | null, maxBytes: number): number {
+  if (rawContentLength === null || !/^[0-9]+$/u.test(rawContentLength)) {
+    throw importError("INVALID_UPLOAD_BATCH", "Upload requests require a valid Content-Length header.");
+  }
+  const contentLength = Number(rawContentLength);
+  if (!Number.isSafeInteger(contentLength) || contentLength <= 0) {
+    throw importError("INVALID_UPLOAD_BATCH", "Upload requests require a positive integer Content-Length header.");
+  }
+  if (contentLength > maxBytes) {
+    throw importError("IMPORT_LIMIT_EXCEEDED", "Upload batch exceeds the configured request byte limit.");
+  }
+  return contentLength;
+}
+
 export function parseUploadBatchSpecs(form: FormData): UploadBatchSpec[] {
   let specs: unknown;
   try {
