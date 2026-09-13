@@ -5,6 +5,7 @@ import type { ImportDiffSummary } from "@/modules/sources/domain/import-plan";
 import type { KnowledgeSource } from "@/modules/sources/domain/source";
 import type { SyncRun } from "@/modules/sources/domain/sync-run";
 import type { SourceUnitOfWork } from "@/modules/sources/ports/unit-of-work";
+import { DomainError } from "@/shared/domain/errors";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import { executeFolderImportPlan, type ImportApplyFailurePoint } from "./source-import-plan-executor";
 
@@ -13,10 +14,31 @@ export type ApplyFolderImportResult =
   | { kind: "VERSION_CONFLICT"; sourceId: string; currentVersion: number };
 
 type Options = { now?: () => Date; failurePoint?: ImportApplyFailurePoint };
-type FailedAttempt = { sourceId: string; basedOnVersion: number; summary: ImportDiffSummary; callerId: string };
 
-function failedSummary(summary: ImportDiffSummary, reason: string): Record<string, unknown> {
-  return { ...summary, failure: reason };
+/**
+ * Snapshot provenance every SyncRun carries (spec §22). Snapshots are deleted
+ * 24h after APPLIED, so the counts alone would leave canonical history with
+ * nothing linking a run back to the import that produced it.
+ */
+type RunProvenance = { snapshotId: string; snapshotHash: string; planHash: string };
+
+type FailedAttempt = { sourceId: string; basedOnVersion: number; summary: ImportDiffSummary; provenance: RunProvenance; callerId: string };
+
+function runSummary(summary: ImportDiffSummary, provenance: RunProvenance): Record<string, unknown> {
+  return { ...summary, ...provenance };
+}
+
+/** Spec §17.1 names the marker `failureCode`; it is always a code, never prose. */
+function failedSummary(summary: ImportDiffSummary, provenance: RunProvenance, failureCode: string): Record<string, unknown> {
+  return { ...runSummary(summary, provenance), failureCode };
+}
+
+/**
+ * Canonical history must never absorb raw driver text: an `error.message` can
+ * carry SQL fragments, connection details, or source paths (spec §18.4).
+ */
+function applyFailureCode(error: unknown): string {
+  return error instanceof DomainError && error.code ? error.code : "IMPORT_APPLY_FAILED";
 }
 
 function assertImportableSource(source: KnowledgeSource): void {
@@ -60,6 +82,7 @@ export class ApplyFolderImportService {
         if (planHash !== snapshot.planHash || snapshotHash !== snapshot.snapshotHash) {
           throw importError("IMPORT_SNAPSHOT_INTEGRITY_MISMATCH", "Import preview integrity validation failed; create a fresh preview before applying.");
         }
+        const provenance: RunProvenance = { snapshotId: snapshot.id, snapshotHash: snapshot.snapshotHash, planHash: snapshot.planHash };
 
         if (snapshot.sourceId !== null) {
           const source = await repositories.sources.lockById(snapshot.sourceId);
@@ -77,7 +100,7 @@ export class ApplyFolderImportService {
               basedOnVersion,
               resultVersion: null,
               status: "FAILED",
-              summary: failedSummary(snapshot.summary, "SOURCE_VERSION_CONFLICT"),
+              summary: failedSummary(snapshot.summary, provenance, "SOURCE_VERSION_CONFLICT"),
               startedAt: timestamp,
               completedAt: timestamp,
             };
@@ -86,7 +109,7 @@ export class ApplyFolderImportService {
             return { kind: "VERSION_CONFLICT", sourceId: source.id, currentVersion: source.syncVersion };
           }
 
-          failedAttempt.value = { sourceId: source.id, basedOnVersion, summary: snapshot.summary, callerId: caller.identity.id };
+          failedAttempt.value = { sourceId: source.id, basedOnVersion, summary: snapshot.summary, provenance, callerId: caller.identity.id };
           await executeFolderImportPlan(repositories, caller, source, snapshot.plan, { failurePoint: this.failurePoint, now: this.now });
           if (this.failurePoint === "before-run") throw importError("TEST_IMPORT_FAILURE", "Injected import failure before SyncRun.");
           const resultVersion = await repositories.sources.guardAndAdvanceVersion(source.id, basedOnVersion, caller.identity.id);
@@ -99,7 +122,7 @@ export class ApplyFolderImportService {
             basedOnVersion,
             resultVersion,
             status: "APPLIED",
-            summary: { ...snapshot.summary },
+            summary: runSummary(snapshot.summary, provenance),
             startedAt: timestamp,
             completedAt: this.now(),
           });
@@ -138,7 +161,7 @@ export class ApplyFolderImportService {
           basedOnVersion: 0,
           resultVersion,
           status: "APPLIED",
-          summary: { ...snapshot.summary },
+          summary: runSummary(snapshot.summary, provenance),
           startedAt: timestamp,
           completedAt: this.now(),
         });
@@ -160,7 +183,7 @@ export class ApplyFolderImportService {
               basedOnVersion: attempt.basedOnVersion,
               resultVersion: null,
               status: "FAILED",
-              summary: failedSummary(attempt.summary, error instanceof Error ? error.message : "IMPORT_APPLY_FAILED"),
+              summary: failedSummary(attempt.summary, attempt.provenance, applyFailureCode(error)),
               startedAt: timestamp,
               completedAt: timestamp,
             });
