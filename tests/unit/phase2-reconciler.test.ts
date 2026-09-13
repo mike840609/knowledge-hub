@@ -154,6 +154,127 @@ describe("Phase 2 folder import reconciliation", () => {
     expect(plan.preview.flatMap((item) => item.diagnostics).map((item) => item.code)).toContain("AMBIGUOUS_IDENTITY");
   });
 
+  it("keeps the canonical-side ambiguity shape when two canonical entries share one incoming fingerprint", () => {
+    const left = currentDocument("a.md", "same");
+    const right = currentDocument("b.md", "same");
+    const plan = reconcileFolderImport(snapshot([incomingDocument("guide/c.md", "same")]), canonical({ documents: [left, right] }));
+
+    expect(plan.documents.create).toEqual([expect.objectContaining({ sourcePath: "guide/c.md" })]);
+    expect(plan.documents.move).toHaveLength(0);
+    expect(plan.documents.revise).toHaveLength(0);
+    expect(plan.documents.archive.map((item) => item.sourcePath)).toEqual(["a.md", "b.md"]);
+
+    const ambiguous = plan.preview.flatMap((item) => item.diagnostics).filter((item) => item.code === "AMBIGUOUS_IDENTITY");
+    expect(ambiguous).toEqual([
+      expect.objectContaining({
+        severity: "WARNING",
+        sourcePath: "guide/c.md",
+        details: { candidates: ["a.md", "b.md"] },
+      }),
+    ]);
+    expect(plan.summary.warnings).toBe(1);
+  });
+
+  it("does not guess identity when two incoming files claim the same canonical fingerprint", () => {
+    const existing = currentDocument("a.md", "same");
+    const plan = reconcileFolderImport(
+      snapshot([incomingDocument("c.md", "same"), incomingDocument("d.md", "same")]),
+      canonical({ documents: [existing] }),
+    );
+
+    expect(plan.documents.create.map((item) => item.sourcePath)).toEqual(["c.md", "d.md"]);
+    expect(plan.documents.move).toHaveLength(0);
+    expect(plan.documents.revise).toHaveLength(0);
+    expect(plan.documents.restore).toHaveLength(0);
+    expect(plan.documents.archive).toEqual([
+      expect.objectContaining({ entryId: existing.entryId, sourcePath: "a.md" }),
+    ]);
+
+    const ambiguous = plan.preview.flatMap((item) => item.diagnostics).filter((item) => item.code === "AMBIGUOUS_IDENTITY");
+    expect(ambiguous).toEqual([
+      expect.objectContaining({ severity: "WARNING", sourcePath: "c.md", details: { candidates: ["a.md"] } }),
+      expect.objectContaining({ severity: "WARNING", sourcePath: "d.md", details: { candidates: ["a.md"] } }),
+    ]);
+    expect(plan.summary).toMatchObject({ warnings: 2, blockers: 0 });
+    expect(plan.summary.documents).toMatchObject({ added: 2, archived: 1, moved: 0, renamed: 0 });
+  });
+
+  it("lets an exact path claim win over a competing fingerprint claim", () => {
+    const renamedSource = currentDocument("a.md", "same");
+    const keptInPlace = currentDocument("keep.md", "same");
+    const plan = reconcileFolderImport(
+      snapshot([incomingDocument("keep.md", "same"), incomingDocument("renamed.md", "same")]),
+      canonical({ documents: [renamedSource, keptInPlace] }),
+    );
+
+    expect(plan.documents.create).toHaveLength(0);
+    expect(plan.documents.archive).toHaveLength(0);
+    expect(plan.documents.move).toEqual([
+      expect.objectContaining({ entryId: renamedSource.entryId, fromPath: "a.md", toPath: "renamed.md" }),
+    ]);
+    expect(plan.preview.flatMap((item) => item.diagnostics)).toHaveLength(0);
+  });
+
+  it("still reuses a unique fingerprint identity when other incoming files carry other fingerprints", () => {
+    const existing = currentDocument("a.md", "one");
+    const plan = reconcileFolderImport(
+      snapshot([incomingDocument("renamed.md", "one"), incomingDocument("other.md", "two")]),
+      canonical({ documents: [existing] }),
+    );
+
+    expect(plan.documents.move).toEqual([
+      expect.objectContaining({ entryId: existing.entryId, fromPath: "a.md", toPath: "renamed.md" }),
+    ]);
+    expect(plan.documents.create.map((item) => item.sourcePath)).toEqual(["other.md"]);
+    expect(plan.documents.archive).toHaveLength(0);
+    expect(plan.preview.flatMap((item) => item.diagnostics)).toHaveLength(0);
+  });
+
+  it("composes MOVED with UPDATED for a relocated document whose revision content changed", () => {
+    const existing = currentDocument("docs/a.md", "same");
+    const incoming = incomingDocument("guide/a.md", "same", {
+      title: "Retitled",
+      revisionContentHash: "revision:moved",
+    });
+
+    const plan = reconcileFolderImport(
+      snapshot([incoming]),
+      canonical({ documents: [existing], folders: [currentFolder("docs")] }),
+    );
+
+    expect(plan.documents.move).toEqual([
+      expect.objectContaining({ entryId: existing.entryId, fromPath: "docs/a.md", toPath: "guide/a.md" }),
+    ]);
+    expect(plan.documents.revise).toEqual([
+      expect.objectContaining({ entryId: existing.entryId, expectedCurrentRevisionId: "revision:docs/a.md" }),
+    ]);
+    expect(plan.preview.find((item) => item.kind === "DOCUMENT")?.labels).toEqual(["MOVED", "UPDATED"]);
+    expect(plan.summary.documents).toMatchObject({ moved: 1, updated: 1, renamed: 0, added: 0 });
+  });
+
+  it("composes RESTORED with UPDATED for an archived document that returns with new content", () => {
+    const existing = currentDocument("docs/a.md", "same", { status: "ARCHIVED" });
+    const incoming = incomingDocument("docs/a.md", "same", {
+      title: "Retitled",
+      revisionContentHash: "revision:restored",
+    });
+
+    const plan = reconcileFolderImport(
+      snapshot([incoming]),
+      canonical({ documents: [existing], folders: [currentFolder("docs")] }),
+    );
+
+    expect(plan.documents.restore).toEqual([
+      { entryId: existing.entryId, documentId: existing.documentId, treeNodeId: existing.treeNodeId },
+    ]);
+    expect(plan.documents.revise).toEqual([
+      expect.objectContaining({ entryId: existing.entryId, expectedCurrentRevisionId: "revision:docs/a.md" }),
+    ]);
+    expect(plan.documents.move).toHaveLength(0);
+    expect(plan.preview.find((item) => item.kind === "DOCUMENT")?.labels).toEqual(["RESTORED", "UPDATED"]);
+    expect(plan.summary.documents).toMatchObject({ restored: 1, updated: 1, added: 0 });
+  });
+
   it("restores archived exact-path document with the same stable IDs", () => {
     const existing = currentDocument("docs/a.md", "same", { status: "ARCHIVED" });
     const plan = reconcileFolderImport(
