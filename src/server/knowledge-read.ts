@@ -57,7 +57,20 @@ export async function getKnowledgeBrowserModel(input: {
   };
 }
 
-export async function getKnowledgeDocumentModel(documentId: string, input: { includeArchived?: boolean; revisionNo?: number } = {}) {
+export type KnowledgeDocumentModel = {
+  view: {
+    documentId: string;
+    sourceId: string;
+    workspaceId: string;
+    status: "ACTIVE" | "ARCHIVED";
+    currentRevision: import("@/modules/knowledge/application/knowledge-query-service").KnowledgeRevisionView;
+  };
+  revisions: import("@/modules/knowledge/application/knowledge-query-service").KnowledgeRevisionView[];
+  selectedRevision: import("@/modules/knowledge/application/knowledge-query-service").KnowledgeRevisionView;
+};
+
+/** Legacy scope-blind loader. Only the pre-2.5 `/knowledge` routes use this. */
+export async function getLegacyKnowledgeDocumentModel(documentId: string, input: { includeArchived?: boolean; revisionNo?: number } = {}) {
   const services = applicationServices();
   const caller = callerFromIdentity(await getCurrentIdentity(services.identityProvider));
   const view = await services.queries.getDocument(caller, documentId, { includeArchived: input.includeArchived });
@@ -66,6 +79,29 @@ export async function getKnowledgeDocumentModel(documentId: string, input: { inc
     ? view.currentRevision
     : await services.queries.getRevision(caller, documentId, input.revisionNo, { includeArchived: input.includeArchived });
   return { view, revisions, selectedRevision };
+}
+
+/**
+ * Task 5 read model: Workspace/Source-scoped Document load. Trusted caller
+ * identity comes from the provider and the query service re-enforces
+ * membership; route IDs are navigation scope only, never authorization proof.
+ * After loading, the Document's owning Workspace/Source must match the route —
+ * a mismatch (or any access failure) resolves to null, never to another
+ * scope's content. `revisionNo` selects a historical revision (?revision=N).
+ */
+export async function getKnowledgeDocumentModel(
+  workspaceId: string,
+  sourceId: string,
+  documentId: string,
+  input: { includeArchived?: boolean; revisionNo?: number } = {},
+): Promise<KnowledgeDocumentModel | null> {
+  try {
+    const { view, revisions, selectedRevision } = await getLegacyKnowledgeDocumentModel(documentId, input);
+    if (view.workspaceId !== workspaceId || view.sourceId !== sourceId) return null;
+    return { view, revisions, selectedRevision };
+  } catch {
+    return null;
+  }
 }
 
 export type WorkspaceShellModel = {

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DocumentViewer } from "@/components/knowledge/document-viewer";
 import { NotFoundError } from "@/modules/knowledge/domain/errors";
-import { getKnowledgeDocumentModel } from "@/server/knowledge-read";
+import { getLegacyKnowledgeDocumentModel } from "@/server/knowledge-read";
 
 export const dynamic = "force-dynamic";
 
@@ -18,8 +18,9 @@ export default async function DocumentPage({ params, searchParams }: { params: P
     revisionNo = parsed;
   }
   try {
-    const { view, revisions, selectedRevision } = await getKnowledgeDocumentModel(documentId, { includeArchived, revisionNo });
+    const { view, revisions, selectedRevision } = await getLegacyKnowledgeDocumentModel(documentId, { includeArchived, revisionNo });
     const archivedSuffix = includeArchived ? "includeArchived=true" : "";
+    const isHistorical = selectedRevision.id !== view.currentRevision.id;
     const historyHref = (target: number, isCurrent: boolean) => {
       const parts: string[] = [];
       if (!isCurrent) parts.push(`revision=${target}`);
@@ -29,6 +30,8 @@ export default async function DocumentPage({ params, searchParams }: { params: P
     return (
       <main className="mx-auto min-h-screen max-w-4xl px-6 py-10">
         <Link className="text-sm font-semibold text-accent" href="/knowledge">← Back to Knowledge</Link>
+        <p className="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-accent">{isHistorical ? `Viewing revision ${selectedRevision.revisionNo} (current is ${view.currentRevision.revisionNo})` : `Current revision ${view.currentRevision.revisionNo}`}</p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-ink">{selectedRevision.title}</h1>
         <div className="mt-6"><DocumentViewer view={view} selectedRevision={selectedRevision} /></div>
         <section aria-labelledby="history-heading" className="mt-8 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 id="history-heading" className="text-lg font-semibold text-ink">Revision history</h2>
