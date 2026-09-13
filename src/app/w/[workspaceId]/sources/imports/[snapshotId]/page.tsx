@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { SourceImportPreview } from "@/components/knowledge/source-import-preview";
-import { SourceImportPreviewActions } from "@/components/knowledge/source-import-preview-actions";
+import { ImportPreview } from "@/components/imports/import-preview";
 import { getSourceImportPreview } from "@/server/source-imports";
 
 export const dynamic = "force-dynamic";
@@ -19,18 +18,21 @@ export default async function WorkspaceSourceImportPreviewPage({
     if (error instanceof Error && "code" in error && (error as { code: unknown }).code === "IMPORT_SNAPSHOT_NOT_FOUND") notFound();
     throw error;
   }
+  // The Preview carries its own workspaceId; the route Workspace is navigation
+  // context only. A mismatch gets the same inaccessible/not-found treatment.
   if (preview.workspaceId !== workspaceId) notFound();
   return (
-    <main className="mx-auto min-h-screen max-w-6xl space-y-6 px-6 py-10">
-      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-kh-border pb-6">
-        <div>
-          <Link className="text-sm font-semibold text-accent" href={`/w/${workspaceId}/sources`}>Back to Sources</Link>
-          <h1 className="mt-3 text-4xl font-semibold tracking-tight text-kh-text">Import preview</h1>
-          <p className="mt-1 text-sm text-kh-text-muted">Review the immutable staged diff. Warnings may proceed; blockers never apply.</p>
-        </div>
-      </header>
-      <SourceImportPreviewActions preview={preview} />
-      <SourceImportPreview preview={preview} />
+    <main className="mx-auto min-h-screen max-w-4xl px-6 py-8">
+      <Link className="text-sm font-medium text-kh-accent" href={`/w/${workspaceId}/sources`}>
+        Back to Sources
+      </Link>
+      <h1 className="mt-2 text-2xl font-semibold text-kh-text">Import preview</h1>
+      <p className="mt-1 text-sm text-kh-text-muted">
+        Review the immutable staged diff. Warnings may proceed; blockers never apply.
+      </p>
+      <div className="mt-4">
+        <ImportPreview workspaceId={workspaceId} preview={preview} />
+      </div>
     </main>
   );
 }

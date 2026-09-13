@@ -4,10 +4,15 @@ import { ImportHistory } from "@/components/sources/import-history";
 import { sourceTypeLabel } from "@/components/sources/source-list-row";
 import { TechnicalDetails } from "@/components/sources/technical-details";
 
-export function SourceDetail({ model }: { model: SourceDetailModel }) {
+export function SourceDetail({ model, showImportSuccess = false }: { model: SourceDetailModel; showImportSuccess?: boolean }) {
   const { workspace, source, runs } = model;
   return (
     <div className="flex flex-col gap-6">
+      {showImportSuccess ? (
+        <p role="status" className="rounded-md border border-kh-success/40 bg-kh-bg px-3 py-2 text-sm text-kh-success">
+          Import applied successfully.
+        </p>
+      ) : null}
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-kh-text">{source.name}</h1>
