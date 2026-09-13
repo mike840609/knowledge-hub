@@ -8,6 +8,24 @@ export type RevisionPayload = {
   contentHash: string;
 };
 
+/**
+ * Persisted plan form (issue #9 item 3): document bodies live once in
+ * `source_import_snapshot_entries.markdown` and the plan only carries this
+ * reference. Embedding full Markdown in `snapshots.plan` duplicated every
+ * byte and blew past MariaDB `max_allowed_packet` (16 MiB) far below the
+ * §19 limits (256 MiB total). The executor loads the body by `uploadKey`
+ * inside the Apply transaction and verifies `contentHash` before use.
+ *
+ * `RevisionPayload` remains accepted at Apply time so in-flight v1 plans
+ * (finalized before this change, READY TTL 30m) still apply.
+ */
+export type RevisionReference = {
+  uploadKey: string;
+  title: string;
+  metadata: KnowledgeMetadata;
+  contentHash: string;
+};
+
 export type ImportPreviewLabel =
   | "ADDED"
   | "UPDATED"
@@ -38,6 +56,7 @@ export type ImportDiffSummary = {
 
 export type ReadyImportDocument = {
   sourcePath: string;
+  uploadKey: string;
   externalId: string | null;
   title: string;
   markdown: string;
@@ -119,7 +138,7 @@ export type FolderImportPlan = {
       parentPath: string | null;
       desiredPosition: number;
       externalId: string | null;
-      content: RevisionPayload;
+      content: RevisionReference | RevisionPayload;
     }[];
     restore: { entryId: string; documentId: string; treeNodeId: string }[];
     move: {
@@ -134,7 +153,7 @@ export type FolderImportPlan = {
       entryId: string;
       documentId: string;
       expectedCurrentRevisionId: string;
-      content: RevisionPayload;
+      content: RevisionReference | RevisionPayload;
     }[];
     archive: { entryId: string; documentId: string; treeNodeId: string; sourcePath: string }[];
     updateLocator: { entryId: string; sourcePath: string; contentHash: string }[];

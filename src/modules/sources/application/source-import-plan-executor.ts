@@ -1,7 +1,7 @@
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { renumberSiblingPositions } from "@/modules/knowledge/application/internal/tree-transaction";
 import { importError } from "@/modules/sources/domain/import-errors";
-import type { FolderImportPlan } from "@/modules/sources/domain/import-plan";
+import type { FolderImportPlan, RevisionPayload, RevisionReference } from "@/modules/sources/domain/import-plan";
 import type { KnowledgeSource } from "@/modules/sources/domain/source";
 import type { SourceRepositories } from "@/modules/sources/ports/unit-of-work";
 import { uuidv7 } from "@/shared/ids/uuidv7";
@@ -15,6 +15,7 @@ export type ImportApplyFailurePoint =
   | "before-run";
 
 export type ExecuteFolderImportPlanOptions = {
+  snapshotId: string;
   failurePoint?: ImportApplyFailurePoint;
   now?: () => Date;
 };
@@ -28,12 +29,29 @@ function parentPath(path: string): string | null {
   return index < 0 ? null : path.slice(0, index);
 }
 
+function isLegacyPayload(content: RevisionReference | RevisionPayload): content is RevisionPayload {
+  return typeof (content as RevisionPayload).markdown === "string";
+}
+
+async function resolveContent(
+  repositories: SourceRepositories,
+  snapshotId: string,
+  content: RevisionReference | RevisionPayload,
+): Promise<RevisionPayload> {
+  if (isLegacyPayload(content)) return content;
+  const entry = await repositories.importSnapshotEntries.findByUploadKey(snapshotId, content.uploadKey);
+  if (!entry || entry.entryType !== "DOCUMENT" || entry.markdown === null || entry.revisionContentHash !== content.contentHash) {
+    throw importError("IMPORT_SNAPSHOT_INTEGRITY_MISMATCH", "Staging entry referenced by the persisted plan is unavailable or changed; create a fresh preview before applying.");
+  }
+  return { title: content.title, markdown: entry.markdown, metadata: content.metadata, contentHash: content.contentHash };
+}
+
 export async function executeFolderImportPlan(
   repositories: SourceRepositories,
   caller: CallerContext,
   source: KnowledgeSource,
   plan: FolderImportPlan,
-  options: ExecuteFolderImportPlanOptions = {},
+  options: ExecuteFolderImportPlanOptions,
 ): Promise<void> {
   if (plan.planVersion !== "phase2:v1") throw importError("IMPORT_PLAN_VERSION_UNSUPPORTED", "Unsupported import plan version.");
   if (plan.sourceBinding.workspaceId !== source.workspaceId) throw importError("IMPORT_PLAN_BINDING_MISMATCH", "Import plan Workspace binding does not match the Source.");
@@ -88,13 +106,14 @@ export async function executeFolderImportPlan(
     if (action.parentPath !== null && !parentId) throw importError("IMPORT_PLAN_PARENT_MISSING", `Document parent ${action.parentPath} is unavailable.`);
     touchedParents.add(parentId ?? null);
     const sourceEntryId = uuidv7();
+    const content = await resolveContent(repositories, options.snapshotId, action.content);
     const projected = await projection.projectDocument(caller, {
       sourceId: source.id,
       parentId: parentId ?? null,
       position: action.desiredPosition,
-      title: action.content.title,
-      markdown: action.content.markdown,
-      metadata: action.content.metadata,
+      title: content.title,
+      markdown: content.markdown,
+      metadata: content.metadata,
       mapping: { sourceEntryId, externalId: action.externalId, sourcePath: action.sourcePath },
     });
     createdNodeByKey.set(`document:${action.sourcePath}`, projected.treeNodeId);
@@ -123,12 +142,13 @@ export async function executeFolderImportPlan(
   failAt(options, "after-documents");
 
   for (const action of plan.documents.revise) {
+    const content = await resolveContent(repositories, options.snapshotId, action.content);
     await projection.projectRevision(caller, {
       documentId: action.documentId,
       expectedCurrentRevisionId: action.expectedCurrentRevisionId,
-      title: action.content.title,
-      markdown: action.content.markdown,
-      metadata: action.content.metadata,
+      title: content.title,
+      markdown: content.markdown,
+      metadata: content.metadata,
     });
   }
   for (const action of plan.documents.updateLocator) {
