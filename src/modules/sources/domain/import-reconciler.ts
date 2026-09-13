@@ -13,7 +13,7 @@ import type {
   ReadyImportAsset,
   ReadyImportContent,
   ReadyImportDocument,
-  RevisionPayload,
+  RevisionReference,
 } from "./import-plan";
 
 function parentPath(path: string): string | null {
@@ -37,10 +37,10 @@ function compareDepthDescendingThenPath(left: string, right: string): number {
   return depth(right) - depth(left) || compareImportText(left, right);
 }
 
-function revisionPayload(document: ReadyImportDocument): RevisionPayload {
+function revisionPayload(document: ReadyImportDocument): RevisionReference {
   return {
+    uploadKey: document.uploadKey,
     title: document.title,
-    markdown: document.markdown,
     metadata: document.metadata,
     contentHash: document.revisionContentHash,
   };

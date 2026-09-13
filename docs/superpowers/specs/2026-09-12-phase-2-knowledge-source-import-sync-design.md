@@ -661,6 +661,8 @@ FolderImportPlan
 
 Plan本身不包含預先生成的 canonical UUID。Canonical UUIDv7只在 Apply transaction真正 create entity 時生成。
 
+Document create/revise 的內容以 `uploadKey` 參照 staging entry，不內嵌全文 Markdown——全文只存一份在 `source_import_snapshot_entries.markdown`，否則 §19 上限內的 snapshot 就會超過 `max_allowed_packet` 使 finalize 硬失敗。Apply 在同一 transaction 內按 key 讀取並以 `contentHash` 驗證後才執行；讀不到或對不上即 integrity failure。
+
 `plan_version` 允許未來 plan schema演進。
 
 Apply不重新 reconcile；它驗證 snapshot/plan hash後執行 persisted plan。

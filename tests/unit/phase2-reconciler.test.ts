@@ -24,6 +24,7 @@ function incomingDocument(
 ): ReadyImportDocument {
   return {
     sourcePath,
+    uploadKey: `upload:${sourcePath}`,
     externalId: null,
     title: "Stable title",
     markdown: "Stable body\n",

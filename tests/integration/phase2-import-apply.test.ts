@@ -8,6 +8,8 @@ import { UploadFolderImportEntriesService } from "@/modules/sources/application/
 import { FinalizeFolderImportService } from "@/modules/sources/application/finalize-folder-import";
 import { ApplyFolderImportService } from "@/modules/sources/application/apply-folder-import";
 import { DEFAULT_IMPORT_LIMITS } from "@/modules/sources/domain/import-limits";
+import { hashImportPlan } from "@/modules/sources/domain/import-integrity";
+import type { FolderImportPlan } from "@/modules/sources/domain/import-plan";
 import { createSourceFixture, fixtureCaller } from "../fixtures/knowledge";
 
 let pool: Pool;
@@ -233,5 +235,76 @@ describe("Phase 2 folder import Apply", () => {
     expect(resync.preview.hasBlockers).toBe(false);
     const result = await services().apply.apply(fixtureCaller(), resync.snapshotId);
     expect(result).toMatchObject({ kind: "APPLIED", resultVersion: 2, alreadyApplied: false });
+  });
+});
+
+describe("Phase 2 persisted plan references staging entries (issue #9 item 3)", () => {
+  async function readPlan(snapshotId: string): Promise<FolderImportPlan> {
+    const rows = await pool.query<{ plan: unknown }[]>("SELECT plan FROM source_import_snapshots WHERE id=?", [snapshotId]);
+    const raw = rows[0].plan;
+    return (typeof raw === "string" ? JSON.parse(raw) : raw) as FolderImportPlan;
+  }
+
+  async function writePlan(snapshotId: string, plan: FolderImportPlan): Promise<void> {
+    await pool.query("UPDATE source_import_snapshots SET plan=?, plan_hash=? WHERE id=?", [JSON.stringify(plan), hashImportPlan(plan), snapshotId]);
+  }
+
+  it("persists document bodies by uploadKey reference instead of embedding Markdown", async () => {
+    const fixture = await createSourceFixture(pool);
+    const body = "# Guide\n\n" + "content line\n".repeat(200);
+    const snapshotId = await readyInitial(fixture.workspaceId, "guide.md", body);
+    const plan = await readPlan(snapshotId);
+    expect(plan.documents.create).toHaveLength(1);
+    const content = plan.documents.create[0].content;
+    expect(content).toMatchObject({ uploadKey: "m1", title: "Guide" });
+    expect(content).not.toHaveProperty("markdown");
+    expect(JSON.stringify(plan)).not.toContain("content line");
+  });
+
+  it("rejects Apply when the referenced entry content hash no longer matches", async () => {
+    const fixture = await createSourceFixture(pool);
+    const snapshotId = await readyInitial(fixture.workspaceId, "guide.md", "# Guide\n");
+    const plan = await readPlan(snapshotId);
+    const content = plan.documents.create[0].content;
+    if (!("uploadKey" in content)) throw new Error("expected reference content");
+    plan.documents.create[0].content = { ...content, contentHash: "tampered" };
+    await writePlan(snapshotId, plan);
+    await expect(services().apply.apply(fixtureCaller(), snapshotId)).rejects.toMatchObject({ code: "IMPORT_SNAPSHOT_INTEGRITY_MISMATCH" });
+  });
+
+  it("rejects Apply when the referenced staging entry is unknown", async () => {
+    const fixture = await createSourceFixture(pool);
+    const snapshotId = await readyInitial(fixture.workspaceId, "guide.md", "# Guide\n");
+    const plan = await readPlan(snapshotId);
+    const content = plan.documents.create[0].content;
+    if (!("uploadKey" in content)) throw new Error("expected reference content");
+    plan.documents.create[0].content = { ...content, uploadKey: "missing" };
+    await writePlan(snapshotId, plan);
+    await expect(services().apply.apply(fixtureCaller(), snapshotId)).rejects.toMatchObject({ code: "IMPORT_SNAPSHOT_INTEGRITY_MISMATCH" });
+  });
+
+  it("still applies a legacy plan with embedded Markdown (in-flight v1 snapshots)", async () => {
+    const fixture = await createSourceFixture(pool);
+    const body = "# Guide\n\nlegacy body\n";
+    const snapshotId = await readyInitial(fixture.workspaceId, "guide.md", body);
+    const plan = await readPlan(snapshotId);
+    const content = plan.documents.create[0].content;
+    if (!("uploadKey" in content)) throw new Error("expected reference content");
+    const entries = await pool.query<{ markdown: unknown }[]>(
+      "SELECT markdown FROM source_import_snapshot_entries WHERE snapshot_id=? AND upload_key=?",
+      [snapshotId, content.uploadKey],
+    );
+    const markdown = String(entries[0].markdown);
+    plan.documents.create[0].content = { title: content.title, markdown, metadata: content.metadata, contentHash: content.contentHash };
+    await writePlan(snapshotId, plan);
+    const result = await services().apply.apply(fixtureCaller(), snapshotId);
+    expect(result).toMatchObject({ kind: "APPLIED", resultVersion: 1 });
+    if (result.kind !== "APPLIED") throw new Error("expected APPLIED");
+    const revisions = await pool.query<{ markdown: unknown }[]>(
+      "SELECT markdown FROM knowledge_revisions r JOIN knowledge_documents d ON d.id=r.document_id WHERE d.source_id=?",
+      [result.sourceId],
+    );
+    expect(revisions).toHaveLength(1);
+    expect(String(revisions[0].markdown)).toBe(markdown);
   });
 });

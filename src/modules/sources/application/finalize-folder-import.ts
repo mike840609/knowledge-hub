@@ -169,6 +169,7 @@ export class FinalizeFolderImportService {
             if (!hasBlocker(diagnostics)) {
               documents.push({
                 sourcePath: parsed.sourcePath,
+                uploadKey: entry.staged.uploadKey,
                 externalId: null,
                 title: parsed.resolvedTitle,
                 markdown: parsed.markdown,
