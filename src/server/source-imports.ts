@@ -24,9 +24,9 @@ export function reviveManifest(manifest: unknown): ImportManifestEntry[] {
   if (!Array.isArray(manifest)) return manifest as ImportManifestEntry[];
   return (manifest as unknown[]).map((entry) => {
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) return entry as ImportManifestEntry;
-    const typed = entry as ImportManifestEntry;
-    if (typed.kind !== "ASSET" || typed.lastModified instanceof Date || typed.lastModified === null) return typed;
-    return { ...typed, lastModified: new Date(typed.lastModified as unknown as string) };
+    const lastModified = (entry as { lastModified?: unknown }).lastModified;
+    if (typeof lastModified !== "string") return entry as ImportManifestEntry;
+    return { ...(entry as Record<string, unknown>), lastModified: new Date(lastModified) } as ImportManifestEntry;
   });
 }
 

@@ -143,6 +143,23 @@ describe("Phase 2 server manifest revival after JSON transport", () => {
     }
   });
 
+  it("revives an ISO lastModified string to a Date regardless of the client kind hint", () => {
+    const transported = JSON.parse(JSON.stringify([{
+      uploadKey: "a",
+      relativePath: "a.png",
+      kind: "MARKDOWN",
+      size: 1,
+      contentHash: "a".repeat(64),
+      mimeType: "image/png",
+      lastModified: "2026-09-12T00:00:00.000Z",
+    }])) as unknown[];
+
+    const revived = reviveManifest(transported as never);
+
+    expect(revived).toHaveLength(1);
+    expect((revived[0] as { lastModified: unknown }).lastModified).toBeInstanceOf(Date);
+  });
+
   it("leaves Date and null lastModified values untouched", () => {
     const stamp = new Date("2026-09-12T00:00:00.000Z");
     const manifest = [

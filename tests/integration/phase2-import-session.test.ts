@@ -132,6 +132,29 @@ describe("Phase 2 BUILDING import sessions", () => {
     expect(toImportErrorResponse(failure)).toMatchObject({ status: 400, body: { error: { code: "INVALID_IMPORT_MANIFEST" } } });
   });
 
+  it("accepts full asset fields with a wrong client kind hint after JSON transport", async () => {
+    const fixture = await createSourceFixture(pool);
+    const transported = JSON.parse(JSON.stringify([{
+      uploadKey: "a",
+      relativePath: "a.png",
+      kind: "MARKDOWN",
+      size: 1,
+      contentHash: "a".repeat(64),
+      mimeType: "image/png",
+      lastModified: "2026-09-12T00:00:00.000Z",
+    }])) as unknown;
+    const { sourceName, rootName, manifest } = parseInitialImportBody({ sourceName: "Wiki", rootName: "wiki", manifest: transported });
+    const result = await services().create.createInitial(fixtureCaller(), {
+      workspaceId: fixture.workspaceId,
+      sourceName: sourceName as string,
+      rootName: rootName as string,
+      manifest: reviveManifest(manifest),
+    });
+    expect(result.state).toBe("BUILDING");
+    const row = (await pool.query<AssetStageRow[]>("SELECT entry_type,upload_status,asset_content_hash FROM source_import_snapshot_entries WHERE snapshot_id=?", [result.snapshotId]))[0];
+    expect(row).toMatchObject({ entry_type: "ASSET", upload_status: "RECEIVED", asset_content_hash: "a".repeat(64) });
+  });
+
   it("stores asset manifest rows as RECEIVED without binary upload", async () => {
     const fixture = await createSourceFixture(pool);
     const created = await services().create.createInitial(fixtureCaller(), { workspaceId: fixture.workspaceId, sourceName:"Wiki",rootName:"wiki",manifest:assetManifest() });
