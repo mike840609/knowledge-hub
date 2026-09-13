@@ -1095,9 +1095,13 @@ tests/fixtures/import/
 ├─ malformed-frontmatter/
 ├─ title-resolution/
 ├─ duplicate-content/
-├─ assets/
-└─ unsafe-path-manifest/
+└─ assets/
 ```
+
+Unsafe paths have no fixture directory: they are rejected by server-side path
+normalization and pinned by parser unit tests (`normalizeImportPath` rejects
+`../`, absolute, control-character, and empty paths), so no snapshot-level
+fixture is needed.
 
 ### 25.5 Performance acceptance
 
