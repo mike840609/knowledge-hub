@@ -80,14 +80,4 @@ describe("Phase 2 READY snapshot integrity", () => {
     });
     await expectReadyAndUnconsumed(snapshotId);
   });
-
-  it("rejects a READY snapshot persisted with an unsupported plan version", async () => {
-    const { snapshotId } = await readyInitial();
-    await pool.query("UPDATE source_import_snapshots SET plan_version='phase2:v999' WHERE id=?", [snapshotId]);
-
-    await expect(services().apply.apply(fixtureCaller(), snapshotId)).rejects.toMatchObject({
-      code: "IMPORT_PLAN_VERSION_UNSUPPORTED",
-    });
-    await expectReadyAndUnconsumed(snapshotId);
-  });
 });

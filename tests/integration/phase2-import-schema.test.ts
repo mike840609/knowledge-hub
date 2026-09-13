@@ -98,6 +98,22 @@ describe("Phase 2 import persistence schema", () => {
     ).rejects.toThrow();
   });
 
+  it("rejects unsupported plan_version at the DB boundary", async () => {
+    const { userId, workspaceId } = await seedTarget();
+    const snapshotId = uuidv7();
+    await pool.query(insertSnapshotSql, snapshotValues({
+      id: snapshotId, workspaceId, sourceId: null, basedOnVersion: null, createdBy: userId, proposedSourceName: "New Wiki",
+    }));
+    await expect(
+      pool.query("UPDATE source_import_snapshots SET plan_version='phase2:v999' WHERE id=?", [snapshotId]),
+    ).rejects.toThrow();
+    const unsupported = snapshotValues({
+      id: uuidv7(), workspaceId, sourceId: null, basedOnVersion: null, createdBy: userId, proposedSourceName: "New Wiki",
+    });
+    (unsupported as unknown[])[9] = "phase2:v999";
+    await expect(pool.query(insertSnapshotSql, unsupported)).rejects.toThrow();
+  });
+
   it("cascades staging entries when a snapshot is physically deleted", async () => {
     const { userId, workspaceId } = await seedTarget();
     const snapshotId = uuidv7();
