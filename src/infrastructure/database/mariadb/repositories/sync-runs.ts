@@ -28,6 +28,9 @@ export class MariaDbSyncRunRepository implements SyncRunRepository {
   }
 
   async listBySourceId(sourceId: string, limit: number): Promise<SyncRun[]> {
+    if (!Number.isSafeInteger(limit) || limit <= 0) {
+      throw new Error("Sync run limit must be a positive integer.");
+    }
     const rows = await this.connection.query<DbRow[]>(
       `SELECT * FROM sync_runs WHERE source_id = ? ORDER BY started_at DESC, id DESC LIMIT ?`,
       [sourceId, limit],
