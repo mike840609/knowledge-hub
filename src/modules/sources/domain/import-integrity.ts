@@ -34,7 +34,7 @@ export function hashImportPlan(plan: FolderImportPlan): string {
 }
 
 export function hashReadyImportSnapshot(
-  snapshot: Pick<ImportSnapshot, "adapterType" | "adapterVersion" | "workspaceId" | "sourceId" | "basedOnVersion">,
+  snapshot: Pick<ImportSnapshot, "adapterVersion" | "workspaceId" | "sourceId" | "basedOnVersion">,
   entries: readonly ImportSnapshotEntry[],
 ): string {
   const orderedEntries = [...entries].sort(
@@ -43,7 +43,6 @@ export function hashReadyImportSnapshot(
       compareImportText(left.uploadKey, right.uploadKey),
   );
   return sha256(JSON.stringify({
-    adapterType: snapshot.adapterType,
     adapterVersion: snapshot.adapterVersion,
     sourceBinding: {
       workspaceId: snapshot.workspaceId,
