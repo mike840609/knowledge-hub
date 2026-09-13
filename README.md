@@ -4,6 +4,32 @@
 
 Knowledge Hub 採用自建 Knowledge Core，不綁定 Obsidian、特定 Wiki generator、Refine 或 Outline。專案目錄名稱為 `HCM-KM`。
 
+## Quick Start
+
+前置需求：Node.js 20.9–24（見 `.node-version`）、Docker（跑 MariaDB）、`make`。
+
+```bash
+make bootstrap   # npm ci + 建 .env + 啟動 MariaDB + migrate + seed
+make dev         # 啟動 dev server
+```
+
+瀏覽器開啟 http://127.0.0.1:3000/knowledge（seed 已內建 Query Master 等瀏覽 fixtures）。
+
+常用指令（完整列表見 `make help`，細節對應 `package.json` scripts）：
+
+| 指令 | 用途 |
+| --- | --- |
+| `make dev` / `make build` / `make start` | 開發／建置／跑 production build |
+| `make db-up` / `make db-down` / `make db-logs` | 啟停／看 log（MariaDB 跑在 127.0.0.1:3307） |
+| `make db-migrate` / `make db-seed` | 搬 schema／灌 fixtures（皆冪等，可重跑） |
+| `make test-unit` | Unit tests（不需 DB） |
+| `make test-integration` | Integration tests（需 DB，腳本自建自清隔離 DB） |
+| `make test-e2e` | E2E（需 DB＋`make browsers` 裝過一次 Chromium；腳本自建 DB、build、跑 Playwright） |
+| `make verify` | 本地版 CI gate：unit＋typecheck＋lint＋build |
+| `make clean` / `make db-reset` | 清建置產物／**清空 dev 資料重來** |
+
+疑難排解：port 衝突先查 3307（DB）、3000（dev）、3101（E2E）；DB 起不來用 `make db-logs` 看； dev 資料亂掉用 `make db-reset`（會刪 volume）。
+
 ## 目前狀態
 
 更新日期：2026-09-13。
