@@ -4,6 +4,10 @@ import { getCurrentIdentity } from "@/modules/identity/application/get-current-i
 import { applicationServices } from "@/server/composition";
 import { getDefaultKnowledgeTarget } from "@/server/knowledge-read";
 
+// The resolver depends on per-request caller identity, so it must render
+// on demand and never be statically prerendered (CI builds with no identity).
+export const dynamic = "force-dynamic";
+
 export default async function HomePage() {
   const services = applicationServices();
   const caller = callerFromIdentity(await getCurrentIdentity(services.identityProvider));
