@@ -99,4 +99,25 @@ export class MariaDbWorkspaceRepository implements WorkspaceRepository {
       ],
     );
   }
+
+  async renameWorkspace(workspaceId: string, name: string, updatedAt: Date): Promise<void> {
+    await this.connection.query("UPDATE workspaces SET name = ?, updated_at = ? WHERE id = ?", [
+      name,
+      updatedAt,
+      workspaceId,
+    ]);
+  }
+
+  async setWorkspaceLifecycle(
+    workspaceId: string,
+    state: "ACTIVE" | "ARCHIVED",
+    archivedBy: string | null,
+    archivedAt: Date | null,
+    updatedAt: Date,
+  ): Promise<void> {
+    await this.connection.query(
+      "UPDATE workspaces SET lifecycle_state = ?, archived_by = ?, archived_at = ?, updated_at = ? WHERE id = ?",
+      [state, archivedBy, archivedAt, updatedAt, workspaceId],
+    );
+  }
 }

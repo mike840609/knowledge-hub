@@ -27,7 +27,21 @@ export class PersonalWorkspaceFrozenError extends DomainError {
   }
 }
 
-/** Personal provisioning or backfill ran before the migration 008 governance columns exist. */
+/** Team creation without the platform-level workspace.create_team capability. */
+export class TeamCreationDeniedError extends DomainError {
+  constructor(message = "Team Workspace creation requires the platform workspace.create_team capability.") {
+    super("TEAM_CREATION_DENIED", message);
+    this.name = "TeamCreationDeniedError";
+  }
+}
+
+/** A Team lifecycle transition or mutation violates the ACTIVE<->ARCHIVED boundary (spec §14.1). */
+export class WorkspaceLifecycleError extends DomainError {
+  constructor(message: string) {
+    super("WORKSPACE_LIFECYCLE_VIOLATION", message);
+    this.name = "WorkspaceLifecycleError";
+  }
+}
 export class PersonalProvisioningUnavailableError extends DomainError {
   constructor(
     message = "Personal workspace provisioning requires migration 008 (workspaces.workspace_type / personal_owner_user_id with uq_workspaces_personal_owner).",

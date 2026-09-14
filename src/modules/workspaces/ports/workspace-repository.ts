@@ -16,4 +16,20 @@ export interface WorkspaceRepository {
    * columns do not exist yet. Authorization never matches on the name.
    */
   findPersonalByOwnerUserId(ownerUserId: string): Promise<Workspace | null>;
+  /**
+   * Rename a Team workspace. Callers must hold the row FOR UPDATE and pass
+   * the revalidated lifecycle/authorization checks before calling.
+   */
+  renameWorkspace(workspaceId: string, name: string, updatedAt: Date): Promise<void>;
+  /**
+   * Apply a Team lifecycle transition. Callers must hold the row FOR UPDATE
+   * and pass the revalidated lifecycle/authorization checks before calling.
+   */
+  setWorkspaceLifecycle(
+    workspaceId: string,
+    state: "ACTIVE" | "ARCHIVED",
+    archivedBy: string | null,
+    archivedAt: Date | null,
+    updatedAt: Date,
+  ): Promise<void>;
 }

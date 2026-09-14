@@ -16,6 +16,9 @@ export type PersonalMutationOperation =
   | "add-group-mapping"
   | "transfer-ownership"
   | "archive"
+  | "restore"
+  | "content-write"
+  | "source-import"
   | "delete";
 
 export type EnsurePersonalWorkspaceResult = {

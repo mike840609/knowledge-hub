@@ -54,4 +54,15 @@ export class MariaDbWorkspaceMembershipRepository implements WorkspaceMembership
     );
     return Number(rows[0]?.count ?? 0);
   }
+
+  async updateRole(workspaceId: string, userId: string, role: WorkspaceRole): Promise<void> {
+    if (role !== "OWNER" && role !== "ADMIN" && role !== "EDITOR" && role !== "VIEWER") {
+      throw new IntegrityViolationError("Membership role update requires an explicit role.");
+    }
+    await this.connection.query("UPDATE workspace_memberships SET role = ? WHERE workspace_id = ? AND user_id = ?", [
+      role,
+      workspaceId,
+      userId,
+    ]);
+  }
 }
