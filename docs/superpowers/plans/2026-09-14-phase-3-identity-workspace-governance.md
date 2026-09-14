@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Upgrade the Phase 0–2 binary WorkspaceMembership foundation into production Workspace governance with My Space, fixed RBAC, trusted SSO group/platform claims, lifecycle-safe mutation serialization, direct + group grants, auditable governance, and Phase 2.5 administration UI without changing canonical Knowledge identity.
+**Goal:** Upgrade the Phase 0–2 binary WorkspaceMembership foundation into production Workspace governance with My Space, fixed RBAC, trusted SSO group/platform claims, Hub-owned user identity resolution, lifecycle-safe mutation serialization, direct + group grants, auditable governance, and Phase 2.5 administration UI without changing canonical Knowledge identity.
 
-**Architecture:** Keep `Workspace → KnowledgeSource → Tree/Document/Revision` as the only Knowledge path. Replace identity-only caller creation with a trusted `AuthenticatedPrincipal`, resolve Workspace authorization from direct + validated group grants, and require every Workspace-scoped mutation to participate in a Workspace row `FOR UPDATE` serialization protocol so archive cannot race with content/governance writes under READ COMMITTED. Existing Source mutations preserve Source-first locking, then lock the parent Workspace before validation/write.
+**Architecture:** Keep `Workspace → KnowledgeSource → Tree/Document/Revision` as the only Knowledge path. Company SSO yields trusted external claims, then a Hub identity resolver maps trusted `emp_id` to the canonical Hub-owned UUID user before CallerContext exists. Workspace authorization resolves direct + validated group grants. Every Workspace-scoped mutation participates in a Workspace row `FOR UPDATE` serialization protocol; folder-import mutations additionally preserve the existing Snapshot-first topology as `ImportSnapshot → [bound Source] → Workspace → deeper rows`, while non-import existing Source mutations remain `Source → Workspace → deeper rows`.
 
 **Tech Stack:** Next.js 15.5, React 19, TypeScript 5.7, MariaDB 10.11 native `UUID`, Vitest, Playwright, existing modular-monolith application/ports/infrastructure layout.
 
@@ -20,8 +20,10 @@
 - Full group-derived effective access is only computable for the current trusted caller in Phase 3.
 - Workspace is the only Phase 3 Knowledge authorization boundary; no Source/Document ACL columns.
 - Archived Team remains readable but blocks ordinary content/governance mutations; only OWNER restores through product APIs.
+- Company SSO external subject/employee identifiers never become `users.id` directly; canonical Hub user IDs are Hub-owned UUIDv7 values.
 - Every Workspace-scoped mutation must hold the parent Workspace row lock before committing mutation.
-- Existing Source mutations lock `Source → Workspace → deeper resource`; governance/new-source paths lock `Workspace` and must not then acquire unrelated Source locks.
+- Folder-import mutation lock order is `ImportSnapshot → [bound Source] → Workspace → deeper resource`; never `Workspace → ImportSnapshot`.
+- Non-import existing Source mutations lock `Source → Workspace → deeper resource`; governance/non-import new-source paths lock `Workspace` and must not then acquire unrelated Source/Snapshot locks.
 - Governance mutation and audit append commit/rollback atomically.
 - Production identity must not silently fall back to Local identity.
 - Existing Workspace/Source/Document/Revision stable IDs and `/w/:workspaceId/...` routes remain canonical.
@@ -32,16 +34,23 @@
 
 ```text
 src/modules/identity/domain/
+  external-company-identity.ts
+  trusted-identity-claims.ts
   authenticated-principal.ts
   caller-context.ts
+src/modules/identity/application/
+  hub-identity-resolver.ts
 src/modules/identity/ports/
   identity-provider.ts
   company-sso-session-reader.ts
+  user-repository.ts
 src/infrastructure/identity/
   local-identity-provider.ts
   company-sso-identity-provider.ts
+src/infrastructure/database/mariadb/repositories/users.ts
 src/server/
   identity-provider-factory.ts
+  trusted-caller.ts
   composition.ts
   config.ts
 
@@ -90,6 +99,7 @@ src/components/workspaces/...
 
 tests/unit/phase3-workspace-capabilities.test.ts
 tests/unit/phase3-identity-provider.test.ts
+tests/integration/phase3-identity-resolution.test.ts
 tests/integration/phase3-schema.test.ts
 tests/integration/phase3-bootstrap.test.ts
 tests/integration/phase3-authorization.test.ts
@@ -233,16 +243,19 @@ git commit -m "feat: add phase 3 workspace governance schema"
 
 ---
 
-### Task 2: Add fixed capability bundles and AuthenticatedPrincipal
+### Task 2: Add fixed capability bundles and trusted identity types
 
 **Files:**
+- Create: `src/modules/identity/domain/external-company-identity.ts`
+- Create: `src/modules/identity/domain/trusted-identity-claims.ts`
 - Create: `src/modules/identity/domain/authenticated-principal.ts`
 - Modify: `src/modules/identity/domain/caller-context.ts`
 - Create: `src/modules/workspaces/domain/workspace-capability.ts`
 - Create: `tests/unit/phase3-workspace-capabilities.test.ts`
 
 **Interfaces:**
-- Produces `AuthenticatedPrincipal`, `CallerContext`, `PlatformCapability`, `WorkspaceCapability`, `capabilitiesForRole()`.
+- Produces `ExternalCompanyIdentity`, `TrustedIdentityClaims`, `AuthenticatedPrincipal`, `CallerContext`, `PlatformCapability`, `WorkspaceCapability`, `capabilitiesForRole()`.
+- `AuthenticatedPrincipal.identity.id` is always the resolved Hub UUID, never an external SSO subject.
 
 - [ ] **Step 1: Write failing unit tests**
 
@@ -254,41 +267,49 @@ it("keeps OWNER and ADMIN authority distinct", () => {
   expect(capabilitiesForRole("ADMIN")).not.toContain("membership.manage_admin");
 });
 
-it("copies trusted principal claims into caller context", () => {
+it("copies resolved Hub identity and trusted claims into caller context", () => {
   const caller = callerFromPrincipal({
-    identity,
+    identity: hubIdentity,
     validatedExternalGroupIds: ["grp-a"],
     platformCapabilities: ["workspace.create_team"],
     refreshedAt: new Date("2026-09-14T00:00:00Z"),
   });
+  expect(caller.identity.id).toBe(hubIdentity.id);
   expect(caller.validatedExternalGroupIds).toEqual(["grp-a"]);
   expect(caller.platformCapabilities).toEqual(["workspace.create_team"]);
 });
 ```
 
-- [ ] **Step 2: Implement principal/context types**
+- [ ] **Step 2: Implement identity/principal/context types**
 
 ```ts
 export type PlatformCapability = "workspace.create_team";
 
+export type ExternalCompanyIdentity = {
+  subject: string;
+  emp_id: string;
+  name: string;
+  org_code: string;
+};
+
+export type TrustedIdentityClaims = {
+  externalIdentity: ExternalCompanyIdentity;
+  validatedExternalGroupIds: readonly string[];
+  platformCapabilities: readonly PlatformCapability[];
+  refreshedAt: Date;
+};
+
 export type AuthenticatedPrincipal = {
-  identity: UserIdentity;
+  identity: UserIdentity; // canonical Hub UUID identity
   validatedExternalGroupIds: readonly string[];
   platformCapabilities: readonly PlatformCapability[];
   refreshedAt: Date;
 };
 
 export type CallerContext = AuthenticatedPrincipal;
-
-export function callerFromPrincipal(principal: AuthenticatedPrincipal): CallerContext {
-  return {
-    identity: { ...principal.identity },
-    validatedExternalGroupIds: [...principal.validatedExternalGroupIds],
-    platformCapabilities: [...principal.platformCapabilities],
-    refreshedAt: new Date(principal.refreshedAt),
-  };
-}
 ```
+
+`callerFromPrincipal()` copies only an already-resolved `AuthenticatedPrincipal`. It must not accept external identity input directly.
 
 - [ ] **Step 3: Implement capability bundles**
 
@@ -305,89 +326,122 @@ npm run typecheck
 
 ```bash
 git add src/modules/identity src/modules/workspaces/domain tests/unit/phase3-workspace-capabilities.test.ts
-git commit -m "feat: add trusted principal and workspace capabilities"
+git commit -m "feat: add trusted identity types and workspace capabilities"
 ```
 
 ---
 
-### Task 3: Complete trusted identity provider and company SSO integration
+### Task 3: Complete company SSO claims and Hub identity resolution
 
 **Files:**
 - Modify: `src/modules/identity/ports/identity-provider.ts`
 - Create: `src/modules/identity/ports/company-sso-session-reader.ts`
+- Modify: `src/modules/identity/ports/user-repository.ts`
+- Create: `src/modules/identity/application/hub-identity-resolver.ts`
+- Modify: `src/infrastructure/database/mariadb/repositories/users.ts`
 - Modify: `src/infrastructure/identity/local-identity-provider.ts`
 - Create: `src/infrastructure/identity/company-sso-identity-provider.ts`
 - Create: `src/server/identity-provider-factory.ts`
 - Modify: `src/server/config.ts`
 - Modify: `src/server/composition.ts`
-- Modify callers of `getCurrentIdentity` to use principal/caller helper
 - Create: `tests/unit/phase3-identity-provider.test.ts`
+- Create: `tests/integration/phase3-identity-resolution.test.ts`
 
 **Interfaces:**
-- `IdentityProvider.getCurrentPrincipal(): Promise<AuthenticatedPrincipal>`.
+- `IdentityProvider.getCurrentClaims(): Promise<TrustedIdentityClaims>`.
 - `CompanySsoSessionReader.readCurrentSession(): Promise<TrustedCompanySession | null>`.
+- `HubIdentityResolver.resolve(externalIdentity: ExternalCompanyIdentity): Promise<UserIdentity>`.
 
-- [ ] **Step 1: Write failing provider tests**
+Phase 3 baseline account-link key is trusted `emp_id`, because the existing Hub schema already makes `users.emp_id` unique. External `subject` is retained as trusted claim context but is not written into `users.id`. If subject-based linking becomes required, design an explicit identity-link table later rather than reinterpreting the Hub UUID column.
+
+- [ ] **Step 1: Write failing provider and resolver tests**
+
+Provider tests:
 
 ```ts
-it("maps only trusted company session groups and platform grants", async () => {
+it("maps trusted company session to external claims and platform grants", async () => {
   const reader = fakeCompanySession({
-    user: identity,
+    externalIdentity: { subject: "oidc-sub-123", emp_id: "E123", name: "Alice", org_code: "ENG" },
     groupIds: ["grp-team-admin", "grp-create-workspace"],
     refreshedAt: new Date("2026-09-14T01:00:00Z"),
   });
   const provider = new CompanySsoIdentityProvider(reader, {
     workspaceCreateTeamGroupIds: new Set(["grp-create-workspace"]),
   });
-  const principal = await provider.getCurrentPrincipal();
-  expect(principal.validatedExternalGroupIds).toEqual(["grp-team-admin", "grp-create-workspace"]);
-  expect(principal.platformCapabilities).toEqual(["workspace.create_team"]);
-});
-
-it("fails closed when production company session is unavailable", async () => {
-  const provider = new CompanySsoIdentityProvider(fakeCompanySession(null), policy);
-  await expect(provider.getCurrentPrincipal()).rejects.toMatchObject({ code: "IDENTITY_REQUIRED" });
+  const claims = await provider.getCurrentClaims();
+  expect(claims.externalIdentity.subject).toBe("oidc-sub-123");
+  expect(claims.validatedExternalGroupIds).toEqual(["grp-team-admin", "grp-create-workspace"]);
+  expect(claims.platformCapabilities).toEqual(["workspace.create_team"]);
 });
 ```
 
-- [ ] **Step 2: Change IdentityProvider contract**
+Resolver integration tests must prove:
+
+```text
+existing emp_id -> same existing Hub UUID
+profile name/org update -> Hub UUID unchanged
+new emp_id -> UUIDv7 generated by Hub
+concurrent first login for same emp_id -> one row / one UUID
+external subject is never used as users.id
+```
+
+Also keep the fail-closed provider test when production company session is unavailable.
+
+- [ ] **Step 2: Change IdentityProvider contract to return trusted external claims**
 
 ```ts
 export interface IdentityProvider {
-  getCurrentPrincipal(): Promise<AuthenticatedPrincipal>;
+  getCurrentClaims(): Promise<TrustedIdentityClaims>;
 }
 ```
 
-- [ ] **Step 3: Implement Local provider from server-only config**
+The provider authenticates external identity; it does **not** decide canonical Hub user IDs.
 
-Local groups/platform capabilities come from `server/config.ts`, never request input.
+- [ ] **Step 3: Implement HubIdentityResolver against the existing users table**
 
-- [ ] **Step 4: Implement Company SSO adapter over trusted session reader**
+Add repository primitives that do not require a caller-supplied Hub ID:
 
 ```ts
-export class CompanySsoIdentityProvider implements IdentityProvider {
-  constructor(
-    private readonly sessions: CompanySsoSessionReader,
-    private readonly policy: { workspaceCreateTeamGroupIds: ReadonlySet<string> },
-  ) {}
+findByEmpId(empId: string): Promise<UserIdentity | null>;
+insert(identity: UserIdentity): Promise<void>;
+updateProfile(userId: string, profile: { name: string; org_code: string }): Promise<void>;
+```
 
-  async getCurrentPrincipal(): Promise<AuthenticatedPrincipal> {
-    const session = await this.sessions.readCurrentSession();
-    if (!session) throw new IdentityError("IDENTITY_REQUIRED", "Authenticated company session required.");
-    const platformCapabilities = session.groupIds.some((id) => this.policy.workspaceCreateTeamGroupIds.has(id))
-      ? (["workspace.create_team"] as const)
-      : [];
-    return {
-      identity: session.user,
-      validatedExternalGroupIds: [...session.groupIds],
-      platformCapabilities,
-      refreshedAt: session.refreshedAt,
+Resolver algorithm:
+
+```ts
+async resolve(external: ExternalCompanyIdentity): Promise<UserIdentity> {
+  return this.uow.run(async (repos) => {
+    const existing = await repos.users.findByEmpId(external.emp_id);
+    if (existing) {
+      await repos.users.updateProfile(existing.id, { name: external.name, org_code: external.org_code });
+      return { ...existing, name: external.name, org_code: external.org_code };
+    }
+
+    const candidate: UserIdentity = {
+      id: uuidv7(),
+      emp_id: external.emp_id,
+      name: external.name,
+      org_code: external.org_code,
     };
-  }
+    try {
+      await repos.users.insert(candidate);
+      return candidate;
+    } catch (error) {
+      if (!isDuplicateEmpId(error)) throw error;
+      const winner = await repos.users.findByEmpId(external.emp_id);
+      if (!winner) throw error;
+      return winner;
+    }
+  });
 }
 ```
 
-The concrete `CompanySsoSessionReader` must bind to the company's server-side session middleware/SDK in deployment code; do not read arbitrary client-supplied `x-groups`/`x-capabilities` headers.
+The exact duplicate-key helper may live in infrastructure, but concurrency behavior is part of the contract. Never use `external.subject`, `emp_id`, or OIDC `sub` as the UUID column value.
+
+- [ ] **Step 4: Implement Local and Company providers from server-only trusted config/session**
+
+Company provider validates session/external identity/group IDs and maps configured group IDs to platform capabilities. Local provider may derive equivalent trusted claims from explicit server config for dev/test. Neither provider accepts browser-supplied groups/capabilities.
 
 - [ ] **Step 5: Implement provider factory with production fail-closed selection**
 
@@ -401,14 +455,15 @@ export function createIdentityProvider(config: IdentityRuntimeConfig): IdentityP
 }
 ```
 
-- [ ] **Step 6: Wire composition and replace identity-only call sites**
+- [ ] **Step 6: Wire composition without building CallerContext yet**
 
-Each server request obtains principal once, then `callerFromPrincipal(principal)`.
+Composition provides `IdentityProvider` + `HubIdentityResolver`. Request bootstrap in Task 7 will compose claims → resolved Hub user → Personal Workspace → `AuthenticatedPrincipal`/CallerContext.
 
 - [ ] **Step 7: Verify**
 
 ```bash
 npm run test:unit -- tests/unit/phase3-identity-provider.test.ts
+npm run test:integration -- --run tests/integration/phase3-identity-resolution.test.ts
 npm run typecheck
 npm run build
 ```
@@ -416,8 +471,8 @@ npm run build
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/modules/identity src/infrastructure/identity src/server src/app tests/unit/phase3-identity-provider.test.ts
-git commit -m "feat: integrate trusted company identity claims"
+git add src/modules/identity src/infrastructure/identity src/infrastructure/database/mariadb/repositories/users.ts src/server tests/unit/phase3-identity-provider.test.ts tests/integration/phase3-identity-resolution.test.ts
+git commit -m "feat: resolve trusted company identity to hub users"
 ```
 
 ---
@@ -610,7 +665,7 @@ git commit -m "feat: evaluate workspace capabilities from direct and group grant
 
 ---
 
-### Task 7: Implement idempotent My Space provisioning and system freeze
+### Task 7: Implement trusted caller bootstrap, idempotent My Space provisioning, and system freeze
 
 **Files:**
 - Create: `src/modules/workspaces/application/personal-workspace-service.ts`
@@ -624,19 +679,20 @@ git commit -m "feat: evaluate workspace capabilities from direct and group grant
 **Interfaces:**
 - `ensurePersonalWorkspace(userId): Promise<Workspace>`.
 - `freezePersonalWorkspaceSystem(userId, reason, correlationId): Promise<void>`.
-- Shared request bootstrap: trusted principal → ensureUser → ensurePersonalWorkspace → CallerContext.
+- Shared request bootstrap: trusted claims → `HubIdentityResolver` → ensure Personal Workspace → `AuthenticatedPrincipal` → CallerContext.
 - `npm run db:backfill-personal-workspaces`: rerunnable existing-user backfill, using the same provisioning service.
 
-- [ ] **Step 1: Write failing Personal tests**
+- [ ] **Step 1: Write failing Personal/trusted-caller tests**
 
 Test repeated/concurrent provisioning returns same ID, fixed name, one OWNER/SYSTEM_PERSONAL row, second member/group mapping rejected, system freeze audited.
 
 Also test:
 
-- backfill all existing users, then repeat with no new Workspace IDs or duplicate provision audit events;
-- first company login persists a new Hub user before creating its Personal membership;
+- first company login resolves/creates Hub user by trusted `emp_id` before creating its Personal membership;
+- external SSO subject never appears in membership/audit `user_id` fields;
+- backfill all existing Hub users, then repeat with no new Workspace IDs or duplicate provision audit events;
 - direct Team URL and API requests provision My Space without visiting `/`;
-- login provisioning racing with backfill still produces one Personal Workspace per user.
+- login provisioning racing with backfill still produces one Personal Workspace per Hub user.
 
 - [ ] **Step 2: Implement provision in one transaction**
 
@@ -646,11 +702,24 @@ Lock/query by unique `personal_owner_user_id`; handle duplicate-race by re-read;
 
 Use `Workspace.lockById`, set lifecycle ARCHIVED, append `PERSONAL_WORKSPACE_FROZEN`.
 
-- [ ] **Step 4: Wire shared request bootstrap and existing-user backfill**
+- [ ] **Step 4: Wire the shared trusted caller bootstrap**
 
-Create one trusted caller helper for every Human Web/API entry point. After obtaining the principal once per request, persist/validate its Hub user identity, ensure My Space, then call application services with CallerContext. Do not duplicate provisioning in individual routes or rely on `/` navigation.
+```text
+IdentityProvider.getCurrentClaims()
+→ HubIdentityResolver.resolve(claims.externalIdentity)
+→ ensurePersonalWorkspace(hubIdentity.id)
+→ AuthenticatedPrincipal {
+     identity: hubIdentity,
+     validatedExternalGroupIds: claims.validatedExternalGroupIds,
+     platformCapabilities: claims.platformCapabilities,
+     refreshedAt: claims.refreshedAt
+   }
+→ callerFromPrincipal(...)
+```
 
-Add `db:backfill-personal-workspaces` to package.json. Enumerate all existing Hub users and invoke the same idempotent service. Before enabling completed Phase 3 rollout, verify every existing user has exactly one PERSONAL Workspace and its OWNER/SYSTEM_PERSONAL membership. A failed run must be safe to resume without replacing IDs.
+Every Human Web/API entry point uses this helper. Do not let individual routes re-resolve external identity, accept a client-provided Hub user id, or rely on `/` navigation for provisioning.
+
+Add `db:backfill-personal-workspaces` to package.json. Enumerate all existing Hub users and invoke the same idempotent Personal provisioning service. Before completed Phase 3 rollout, verify every existing Hub user has exactly one PERSONAL Workspace and OWNER/SYSTEM_PERSONAL membership.
 
 - [ ] **Step 5: Verify**
 
@@ -662,7 +731,7 @@ npm run test:integration
 
 ```bash
 git add src/modules/workspaces src/server scripts/db/backfill-personal-workspaces.ts package.json tests/integration/phase3-personal-workspace.test.ts
-git commit -m "feat: provision and freeze personal workspaces"
+git commit -m "feat: bootstrap trusted callers and personal workspaces"
 ```
 
 ---
@@ -793,26 +862,47 @@ git commit -m "feat: govern workspace members and group mappings"
 
 ---
 
-### Task 10: Retrofit Workspace lifecycle locking into existing Knowledge/Source write paths
+### Task 10: Retrofit canonical lock hierarchy into existing Knowledge/Source/import write paths
 
 **Files:**
-- Modify current Source/Knowledge command services that mutate Workspace-scoped state, including folder import create/apply/sync and HUB-managed Knowledge mutation internals
+- Modify current Source/Knowledge command services that mutate Workspace-scoped state
+- Modify Phase 2 folder-import upload/finalize/apply flows that currently lock ImportSnapshot
 - Modify repository interfaces only where required to expose transaction-scoped Workspace lock
 - Create: `tests/integration/phase3-concurrency.test.ts`
 
 **Interfaces:**
-- Existing Source mutation lock order: `Source FOR UPDATE → parent Workspace FOR UPDATE → deeper rows`.
-- New Source creation: `Workspace FOR UPDATE → validate → insert Source`.
 
-- [ ] **Step 1: Write two-connection race tests before changing code**
+```text
+Folder import initial apply:
+  ImportSnapshot → Workspace → create Source → deeper rows
 
-Case A: content transaction locks Source then Workspace first; archive on second connection blocks until content commits, then archives.
+Folder import resync/apply:
+  ImportSnapshot → existing Source → Workspace → deeper rows
 
-Case B: archive locks Workspace first; content transaction eventually acquires Workspace lock, re-reads ARCHIVED, and rolls back without content change.
+Folder import upload/finalize:
+  ImportSnapshot → Workspace → staging rows
 
-Case C: membership mutation and archive serialize on Workspace lock; archive-win rejects membership change.
+Non-import existing Source mutation:
+  Source → Workspace → deeper rows
 
-- [ ] **Step 2: Add shared transaction helper**
+Non-import new Source creation:
+  Workspace → create Source
+```
+
+**Forbidden inversions:** `Workspace → ImportSnapshot` and `Workspace → existing Source`.
+
+- [ ] **Step 1: Write two-connection race/deadlock tests before changing code**
+
+Cover all of these:
+
+1. Initial import apply locks Snapshot, then waits for/locks Workspace; archive never asks for Snapshot and therefore cannot form a cycle.
+2. Resync/apply locks Snapshot → Source → Workspace; archive-win causes apply to re-read ARCHIVED and roll back.
+3. Upload/finalize locks Snapshot → Workspace; archive-win rejects staging mutation.
+4. Non-import Source mutation keeps Source → Workspace.
+5. Membership mutation and archive serialize on Workspace lock.
+6. Add an explicit regression test that would deadlock if any path acquires Workspace and then waits for a Snapshot already held by a Snapshot-first flow; the implemented paths must complete without lock timeout/deadlock.
+
+- [ ] **Step 2: Add shared Workspace validation helper**
 
 ```ts
 export async function lockActiveWorkspaceForMutation(
@@ -829,9 +919,44 @@ export async function lockActiveWorkspaceForMutation(
 }
 ```
 
-- [ ] **Step 3: Retrofit existing Source mutation paths without reversing Source-first locks**
+This helper acquires only Workspace; the caller is responsible for entering it in the correct outer lock order.
 
-For existing Source update/apply flows:
+- [ ] **Step 3: Retrofit Phase 2 ImportSnapshot mutation paths first**
+
+Initial apply:
+
+```text
+lock ImportSnapshot FOR UPDATE
+→ validate snapshot creator/state/binding
+→ lock Workspace FOR UPDATE
+→ re-evaluate source.manage + ACTIVE
+→ insert Source
+→ execute plan
+```
+
+Resync/apply:
+
+```text
+lock ImportSnapshot FOR UPDATE
+→ lock bound Source FOR UPDATE
+→ verify Source/Workspace binding
+→ lock parent Workspace FOR UPDATE
+→ re-evaluate source.manage + ACTIVE
+→ execute plan
+```
+
+Upload/finalize/staging mutation:
+
+```text
+lock ImportSnapshot FOR UPDATE
+→ lock snapshot.workspaceId Workspace FOR UPDATE
+→ re-evaluate capability + ACTIVE
+→ mutate staging rows
+```
+
+Do not introduce any helper that locks Workspace before loading/locking the ImportSnapshot for these flows.
+
+- [ ] **Step 4: Retrofit non-import existing Source mutation paths**
 
 ```text
 resolve Source
@@ -841,26 +966,26 @@ resolve Source
 → deeper locks/write
 ```
 
-Do not lock Workspace then later lock an unrelated existing Source; that would create a cycle against legacy Source-first flows.
+Do not lock Workspace then later lock an existing Source.
 
-- [ ] **Step 4: Retrofit new Source creation**
+- [ ] **Step 5: Retrofit non-import new Source creation**
 
-Since no Source row exists yet, lock Workspace first, validate ACTIVE + `source.manage`, then insert.
+When no ImportSnapshot/Source row exists, lock Workspace first, validate ACTIVE + `source.manage`, then insert.
 
-- [ ] **Step 5: Verify concurrency and regression suites**
+- [ ] **Step 6: Verify concurrency and regression suites**
 
 ```bash
 npm run test:integration
 npm run typecheck
 ```
 
-Expected: all race tests and Phase 1/2 mutation tests pass.
+Expected: all Snapshot/Source/Workspace race tests and Phase 1/2 mutation tests pass without deadlock or post-archive mutation commit.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add src/modules src/infrastructure/database tests/integration/phase3-concurrency.test.ts
-git commit -m "fix: serialize workspace lifecycle with content mutations"
+git commit -m "fix: serialize workspace lifecycle without import lock inversion"
 ```
 
 ---
@@ -891,7 +1016,7 @@ Current caller returns `groupAccess="EVALUATED"` with matched groups/effective c
 
 - [ ] **Step 2: Implement trusted caller server helper once**
 
-Every route reuses Task 7’s shared trusted caller bootstrap: obtain principal once, ensureUser, ensurePersonalWorkspace, then call application service. Never accept group/platform capability fields from request JSON.
+Every route reuses Task 7’s shared trusted caller bootstrap: trusted claims → Hub identity resolution → ensurePersonalWorkspace → CallerContext. Never accept identity/group/platform capability fields from request JSON.
 
 - [ ] **Step 3: Implement governance route handlers**
 
@@ -993,7 +1118,7 @@ Expected: PASS.
 npm run test:integration
 ```
 
-Expected: PASS, including bootstrap, SSO/provider, owner invariant, audit, direct+group union, and archive concurrency races.
+Expected: PASS, including Hub identity resolution, bootstrap, SSO/provider, owner invariant, audit, direct+group union, and Snapshot/Source/Workspace archive concurrency races.
 
 - [ ] **Step 3: Run E2E and production build**
 
@@ -1010,14 +1135,19 @@ Record evidence that:
 
 ```text
 - production cannot silently use Local identity
-- browser cannot inject groups/platform capabilities
+- browser cannot inject identity/groups/platform capabilities
+- external SSO subject/employee identifiers never become users.id directly
+- existing emp_id resolves to stable existing Hub UUID
+- concurrent first login for one emp_id creates exactly one Hub UUID user
 - every existing user is backfilled with one My Space; first-login/deep-link/API bootstrap also provisions it
 - external group ID matching and uniqueness use exact UTF-8 bytes
 - every Team has direct OWNER >= 1
 - group cannot grant OWNER
 - ADMIN cannot create governance authority or demote/remove existing OWNER/ADMIN grants
 - other-user group access is never fabricated
-- archive and content/governance writes serialize on Workspace row
+- import lock order is ImportSnapshot → [Source] → Workspace; no Workspace → ImportSnapshot inversion exists
+- non-import existing Source lock order remains Source → Workspace
+- archive and content/import/governance writes serialize on Workspace row
 - archived ordinary writes/governance fail
 - system recovery is not exposed via normal HTTP/UI and is audited
 - Source/Document IDs survive Phase 3 migration
@@ -1026,7 +1156,7 @@ Record evidence that:
 
 - [ ] **Step 5: Write verification report**
 
-Include command outputs/summary, migration/bootstrap evidence, two-connection race evidence, provider selection evidence, and final acceptance checklist.
+Include command outputs/summary, Hub identity resolution evidence, migration/bootstrap evidence, two-connection race/deadlock evidence, provider selection evidence, and final acceptance checklist.
 
 - [ ] **Step 6: Commit**
 
@@ -1045,13 +1175,14 @@ git commit -m "docs: verify phase 3 workspace governance"
 | Fixed My Space + default entry | 7, 12 |
 | Fixed roles/capabilities | 2, 6 |
 | Trusted external groups/platform capability | 2, 3, 6 |
-| Company SSO transport integration | 3 |
+| Company SSO transport + Hub UUID resolution | 3, 7 |
 | Explicit legacy owner bootstrap/readiness | 4 |
 | Direct + group capability union | 6 |
 | OWNER/ADMIN governance | 8, 9 |
 | Team direct OWNER >= 1 | 4, 9 |
 | Workspace-only ACL | 6, 10 |
 | Archive/read-only semantics | 8, 9, 10 |
+| Snapshot/Source/Workspace lock hierarchy | 5, 10 |
 | Archive/write concurrency serialization | 5, 10 |
 | System-only stranded governance recovery | 8 |
 | Atomic audit | 5, 7, 8, 9 |
