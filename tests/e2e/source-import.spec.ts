@@ -121,29 +121,31 @@ async function applySnapshot(request: APIRequestContext, snapshotId: string): Pr
   return (await response.json()) as { sourceId: string };
 }
 
-test("imports basic-v1 through the directory input and applies the preview", async ({ page }) => {
-  await page.goto("/knowledge");
-  await page.getByLabel("Choose a workspace").selectOption({ label: "Query Master" });
-  await page.getByRole("button", { name: "Apply" }).click();
-  await expect(page).toHaveURL(/\/knowledge\?workspaceId=/);
+test("imports basic-v1 through the directory input and applies the grouped preview", async ({ page }) => {
+  await page.goto(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources`);
+  await page.getByRole("link", { name: "Import folder" }).click();
+  await expect(page).toHaveURL(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources/import`);
 
-  await page.locator("#import-source-name").fill("E2E Folder Import");
-  await page.locator("#import-folder").setInputFiles(path.join(FIXTURE_ROOT, "basic-v1"));
+  await page.getByLabel("Source name").fill("E2E Folder Import");
+  await page.locator('input[type="file"]').setInputFiles(path.join(FIXTURE_ROOT, "basic-v1"));
 
-  await expect(page).toHaveURL(/\/knowledge\/imports\/[0-9a-f-]+/, { timeout: 30_000 });
+  await expect(page).toHaveURL(new RegExp(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources/imports/[0-9a-f-]+`), { timeout: 30_000 });
   await expect(page.getByRole("heading", { name: "Import preview" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Confirm and apply" })).toBeEnabled();
-  await page.getByRole("button", { name: "Confirm and apply" }).click();
+  await expect(page.getByRole("heading", { name: "Added" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Updated" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Moved / Renamed" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Archived / Restored" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Unchanged/ }))
+    .toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("link", { name: "Cancel" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Apply changes" })).toBeEnabled();
+  await page.getByRole("button", { name: "Apply changes" }).click();
 
-  await expect(page).toHaveURL(/\/knowledge\?workspaceId=.*&sourceId=.*/, { timeout: 30_000 });
-  const tree = page.getByRole("region", { name: "Your source tree" });
-  await expect(tree.getByRole("link", { name: "Fixture Overview", exact: true })).toBeVisible();
-  await expect(tree.getByRole("link", { name: "Architecture", exact: true })).toBeVisible();
-  await expect(tree.getByRole("link", { name: "Runbook", exact: true })).toBeVisible();
-  await expect(tree.getByRole("link", { name: "Guide", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources/[0-9a-f-]+\\?import=success`), { timeout: 30_000 });
+  await expect(page.getByText("Import applied successfully")).toBeVisible();
 });
 
-test("syncs v1 to v2 with moved, updated, archived, and added labels", async ({ page, request }) => {
+test("syncs v1 to v2 with grouped moved, updated, archived, and added sections", async ({ page, request }) => {
   const first = await importFolder(request, {
     workspaceId: QUERY_MASTER_WORKSPACE_ID,
     sourceName: "E2E Import Sync",
@@ -158,19 +160,29 @@ test("syncs v1 to v2 with moved, updated, archived, and added labels", async ({ 
   expect(second.preview.summary.documents.added).toBeGreaterThanOrEqual(1);
   expect(second.preview.summary.assets.updated).toBe(1);
 
-  await page.goto(`/knowledge/imports/${second.snapshotId}`);
+  await page.goto(
+    `/w/${QUERY_MASTER_WORKSPACE_ID}/sources/imports/${second.snapshotId}`,
+  );
+
   await expect(page.getByRole("heading", { name: "Import preview" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Added" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Updated" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Moved / Renamed" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Archived / Restored" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Unchanged/ }))
+    .toHaveAttribute("aria-expanded", "false");
+
   await expect(page.getByText("platform/architecture.md")).toBeVisible();
   await expect(page.getByText("docs/new-guide.md")).toBeVisible();
-  await page.getByRole("button", { name: "Moved", exact: true }).click();
-  await expect(page.getByText("platform/architecture.md")).toBeVisible();
+  await expect(page.getByText("→").first()).toBeVisible();
 
-  await page.getByRole("button", { name: "Confirm and apply" }).click();
-  await expect(page).toHaveURL(new RegExp(`/knowledge\\?workspaceId=.*&sourceId=${sourceId}`), { timeout: 30_000 });
-  const tree = page.getByRole("region", { name: "Your source tree" });
-  await expect(tree.getByRole("link", { name: "Architecture", exact: true })).toBeVisible();
-  await expect(tree.getByRole("link", { name: "New Guide", exact: true })).toBeVisible();
-  await expect(tree.getByText("Runbook", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: /Unchanged/ }).click();
+  await expect(page.getByRole("button", { name: /Unchanged/ }))
+    .toHaveAttribute("aria-expanded", "true");
+
+  await page.getByRole("button", { name: "Apply changes" }).click();
+  await expect(page).toHaveURL(new RegExp(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources/${sourceId}\\?import=success`), { timeout: 30_000 });
+  await expect(page.getByText("Import applied successfully")).toBeVisible();
 });
 
 test("shows the malformed frontmatter blocker and disables apply", async ({ page, request }) => {
@@ -181,10 +193,12 @@ test("shows the malformed frontmatter blocker and disables apply", async ({ page
   });
   expect(bad.preview.hasBlockers).toBe(true);
 
-  await page.goto(`/knowledge/imports/${bad.snapshotId}`);
+  await page.goto(
+    `/w/${QUERY_MASTER_WORKSPACE_ID}/sources/imports/${bad.snapshotId}`,
+  );
   await expect(page.getByRole("heading", { name: "Import preview" })).toBeVisible();
   await expect(page.getByText("INVALID_FRONTMATTER")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Confirm and apply" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Apply changes" })).toBeDisabled();
   await expect(page.getByRole("button", { name: /force/i })).toHaveCount(0);
 });
 
@@ -204,8 +218,10 @@ test("stale preview loses to the second preview with no force apply", async ({ p
   expect(olderApply.status()).toBe(409);
   expect(((await olderApply.json()) as { error: { code: string } }).error.code).toBe("SOURCE_VERSION_CONFLICT");
 
-  await page.goto(`/knowledge/imports/${older.snapshotId}`);
+  await page.goto(
+    `/w/${QUERY_MASTER_WORKSPACE_ID}/sources/imports/${older.snapshotId}`,
+  );
   await expect(page.getByText("There is no Force Apply")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Confirm and apply" })).toBeDisabled();
-  await expect(page.getByRole("link", { name: "Choose folder again" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Apply changes" })).toBeDisabled();
+  await expect(page.getByRole("link", { name: "Refresh preview" })).toBeVisible();
 });

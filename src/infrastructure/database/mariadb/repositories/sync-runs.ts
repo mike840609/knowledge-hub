@@ -26,4 +26,15 @@ export class MariaDbSyncRunRepository implements SyncRunRepository {
     const rows = await this.connection.query<DbRow[]>("SELECT * FROM sync_runs WHERE id = ?", [runId]);
     return rows[0] ? mapRun(rows[0]) : null;
   }
+
+  async listBySourceId(sourceId: string, limit: number): Promise<SyncRun[]> {
+    if (!Number.isSafeInteger(limit) || limit <= 0) {
+      throw new Error("Sync run limit must be a positive integer.");
+    }
+    const rows = await this.connection.query<DbRow[]>(
+      `SELECT * FROM sync_runs WHERE source_id = ? ORDER BY started_at DESC, id DESC LIMIT ?`,
+      [sourceId, limit],
+    );
+    return rows.map(mapRun);
+  }
 }

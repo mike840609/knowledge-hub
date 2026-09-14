@@ -13,7 +13,7 @@ make bootstrap   # npm ci + 建 .env + 啟動 MariaDB + migrate + seed
 make dev         # 啟動 dev server
 ```
 
-瀏覽器開啟 http://127.0.0.1:3000/knowledge（seed 已內建 Query Master 等瀏覽 fixtures）。
+瀏覽器開啟 http://127.0.0.1:3000/（自動導向第一個可存取 Workspace 的 Knowledge 首份文件；seed 已內建 Query Master 等瀏覽 fixtures）。
 
 常用指令（完整列表見 `make help`，細節對應 `package.json` scripts）：
 
