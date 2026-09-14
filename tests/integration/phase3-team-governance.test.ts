@@ -34,10 +34,11 @@ beforeEach(async () => {
     if (previous === undefined) delete process.env.KM_TEST_DB_NAME;
     else process.env.KM_TEST_DB_NAME = previous;
   }
-  // Runs at 008 by design: the NULL-role "never authority" tests require
-  // pre-009 schema (009 rejects NULL roles at the DB boundary), and every
-  // other test here uses canonical writers that behave identically on 008.
-  await runMigrations(pool, migrations, { to: 8 });
+  // Runs the full manifest: canonical writers record membership provenance
+  // (created_by/updated_at, migration 009), so 008-scoped runs can no longer
+  // insert through the repository. The two NULL-role "never authority" cases
+  // below run on isolated 008 databases with fully raw-SQL setups.
+  await runMigrations(pool, migrations);
 });
 
 afterEach(async () => {
@@ -152,10 +153,9 @@ describe("Phase 3 Team workspace lifecycle (Task 8)", () => {
     ).rejects.toThrow(/OWNER/i);
   });
 
-  it("3. rename requires direct OWNER on an ACTIVE team; NULL-role rows are never authority", async () => {
+  it("3. rename requires direct OWNER on an ACTIVE team; VIEWER rows are never authority", async () => {
     const owner = await seedUser("Rename Owner", "REN-OWN");
     const viewer = await seedUser("Rename Viewer", "REN-VIEW");
-    const nullRoleUser = await seedUser("Null Role", "REN-NULL");
     const workspace = await service().createTeamWorkspace(callerFor(owner, ["workspace.create_team"]), {
       name: "Rename Me",
     });
@@ -165,20 +165,49 @@ describe("Phase 3 Team workspace lifecycle (Task 8)", () => {
         createDirectMembership({ workspaceId: workspace.id, userId: viewer.id, role: "VIEWER", now }),
       );
     });
-    await db().query(
-      "INSERT INTO workspace_memberships (workspace_id, user_id, role, membership_source, created_at) VALUES (?, ?, NULL, 'DIRECT', ?)",
-      [workspace.id, nullRoleUser.id, now],
-    );
 
     await expect(service().renameTeamWorkspace(callerFor(viewer), workspace.id, "Nope")).rejects.toThrow(
-      WorkspaceAccessDeniedError,
-    );
-    await expect(service().renameTeamWorkspace(callerFor(nullRoleUser), workspace.id, "Nope")).rejects.toThrow(
       WorkspaceAccessDeniedError,
     );
 
     const renamed = await service().renameTeamWorkspace(callerFor(owner), workspace.id, "Renamed Team");
     expect(renamed.name).toBe("Renamed Team");
+  });
+
+  it("3b. NULL-role rows are never rename authority (isolated 008 database)", async () => {
+    const legacyHandle = await provisionIsolatedDatabase("test");
+    const previous = process.env.KM_TEST_DB_NAME;
+    process.env.KM_TEST_DB_NAME = legacyHandle.databaseName;
+    let legacyPool: Pool | undefined;
+    try {
+      legacyPool = createDatabasePool(databaseConfig("test"));
+      await runMigrations(legacyPool, migrations, { to: 8 });
+      const ownerId = uuidv7();
+      const nullRoleId = uuidv7();
+      const workspaceId = uuidv7();
+      const now = new Date();
+      await legacyPool.query("INSERT INTO users (id, emp_id, name, org_code) VALUES (?, ?, 'Null Rename Owner', 'RD'), (?, ?, 'Null Rename User', 'RD')", [
+        ownerId, `P3TEAM-RENNULL-OWN-${ownerId.slice(0, 8)}`, nullRoleId, `P3TEAM-RENNULL-NULL-${nullRoleId.slice(0, 8)}`,
+      ]);
+      await legacyPool.query("INSERT INTO workspaces (id, name, workspace_type) VALUES (?, 'Null Rename Team', 'TEAM')", [workspaceId]);
+      await legacyPool.query(
+        "INSERT INTO workspace_memberships (workspace_id, user_id, role, membership_source, created_at) VALUES (?, ?, 'OWNER', 'DIRECT', ?), (?, ?, NULL, 'DIRECT', ?)",
+        [workspaceId, ownerId, now, workspaceId, nullRoleId, now],
+      );
+      const legacyService = new TeamWorkspaceService(new MariaDbUnitOfWork(legacyPool));
+      const nullCaller: CallerContext = { identity: { id: nullRoleId, emp_id: "null", name: "Null Rename User", org_code: "RD" }, validatedExternalGroupIds: [], platformCapabilities: [] };
+      const ownerCaller: CallerContext = { identity: { id: ownerId, emp_id: "owner", name: "Null Rename Owner", org_code: "RD" }, validatedExternalGroupIds: [], platformCapabilities: [] };
+      await expect(legacyService.renameTeamWorkspace(nullCaller, workspaceId, "Nope")).rejects.toThrow(
+        WorkspaceAccessDeniedError,
+      );
+      const renamed = await legacyService.renameTeamWorkspace(ownerCaller, workspaceId, "Renamed Team");
+      expect(renamed.name).toBe("Renamed Team");
+    } finally {
+      if (previous === undefined) delete process.env.KM_TEST_DB_NAME;
+      else process.env.KM_TEST_DB_NAME = previous;
+      if (legacyPool) await legacyPool.end();
+      await disposeIsolatedDatabase(legacyHandle);
+    }
   });
 
   it("4. archive/restore are OWNER-only ACTIVE<->ARCHIVED transitions under row lock", async () => {
@@ -408,29 +437,59 @@ describe("Phase 3 Team member and group governance (Task 9)", () => {
     expect(await directRole(workspaceId, owner.id)).toBeUndefined();
   });
 
-  it("6. non-managers and NULL-role rows are never governance authority", async () => {
+  it("6. non-managers are never governance authority", async () => {
     const { workspaceId, owner } = await createTeam("Authority Team", "GOV-AUTH");
     const viewer = await seedUser("Authority Viewer", "GOV-VIEW");
-    const outsider = await seedUser("Authority Outsider", "GOV-OUT");
     const target = await seedUser("Authority Target", "GOV-TGT");
-    const now = new Date();
     await governance().addDirectMember(callerFor(owner), workspaceId, { userId: viewer.id, role: "VIEWER" });
-    await db().query(
-      "INSERT INTO workspace_memberships (workspace_id, user_id, role, membership_source, created_at) VALUES (?, ?, NULL, 'DIRECT', ?)",
-      [workspaceId, outsider.id, now],
-    );
 
     await expect(
       governance().addDirectMember(callerFor(viewer), workspaceId, { userId: target.id, role: "VIEWER" }),
-    ).rejects.toThrow(WorkspaceAccessDeniedError);
-    await expect(
-      governance().addDirectMember(callerFor(outsider), workspaceId, { userId: target.id, role: "VIEWER" }),
     ).rejects.toThrow(WorkspaceAccessDeniedError);
     await expect(
       governance().addGroupMapping(callerFor(viewer), workspaceId, { externalGroupId: "sso-x", role: "VIEWER" }),
     ).rejects.toThrow(WorkspaceAccessDeniedError);
     expect(await directRole(workspaceId, target.id)).toBeUndefined();
     expect(await groupRole(workspaceId, "sso-x")).toBeUndefined();
+  });
+
+  it("6b. NULL-role rows are never governance authority (isolated 008 database)", async () => {
+    const legacyHandle = await provisionIsolatedDatabase("test");
+    const previous = process.env.KM_TEST_DB_NAME;
+    process.env.KM_TEST_DB_NAME = legacyHandle.databaseName;
+    let legacyPool: Pool | undefined;
+    try {
+      legacyPool = createDatabasePool(databaseConfig("test"));
+      await runMigrations(legacyPool, migrations, { to: 8 });
+      const ownerId = uuidv7();
+      const outsiderId = uuidv7();
+      const targetId = uuidv7();
+      const workspaceId = uuidv7();
+      const now = new Date();
+      await legacyPool.query("INSERT INTO users (id, emp_id, name, org_code) VALUES (?, ?, 'Null Gov Owner', 'RD'), (?, ?, 'Null Gov Outsider', 'RD'), (?, ?, 'Null Gov Target', 'RD')", [
+        ownerId, `P3TEAM-GOVNULL-OWN-${ownerId.slice(0, 8)}`, outsiderId, `P3TEAM-GOVNULL-OUT-${outsiderId.slice(0, 8)}`, targetId, `P3TEAM-GOVNULL-TGT-${targetId.slice(0, 8)}`,
+      ]);
+      await legacyPool.query("INSERT INTO workspaces (id, name, workspace_type) VALUES (?, 'Null Authority Team', 'TEAM')", [workspaceId]);
+      await legacyPool.query(
+        "INSERT INTO workspace_memberships (workspace_id, user_id, role, membership_source, created_at) VALUES (?, ?, 'OWNER', 'DIRECT', ?), (?, ?, NULL, 'DIRECT', ?)",
+        [workspaceId, ownerId, now, workspaceId, outsiderId, now],
+      );
+      const legacyGovernance = new TeamGovernanceService(new MariaDbUnitOfWork(legacyPool));
+      const outsiderCaller: CallerContext = { identity: { id: outsiderId, emp_id: "outsider", name: "Null Gov Outsider", org_code: "RD" }, validatedExternalGroupIds: [], platformCapabilities: [] };
+      await expect(
+        legacyGovernance.addDirectMember(outsiderCaller, workspaceId, { userId: targetId, role: "VIEWER" }),
+      ).rejects.toThrow(WorkspaceAccessDeniedError);
+      const leftovers = await legacyPool.query<unknown[]>(
+        "SELECT user_id FROM workspace_memberships WHERE workspace_id = ? AND user_id = ?",
+        [workspaceId, targetId],
+      );
+      expect(leftovers).toHaveLength(0);
+    } finally {
+      if (previous === undefined) delete process.env.KM_TEST_DB_NAME;
+      else process.env.KM_TEST_DB_NAME = previous;
+      if (legacyPool) await legacyPool.end();
+      await disposeIsolatedDatabase(legacyHandle);
+    }
   });
 
   it("7. ARCHIVED teams reject every ordinary governance mutation", async () => {

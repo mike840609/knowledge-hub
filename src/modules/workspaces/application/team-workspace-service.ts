@@ -88,7 +88,7 @@ export class TeamWorkspaceService {
         createTeamWorkspaceInsert({ id: workspaceId, name, createdBy: caller.identity.id, now }),
       );
       await repositories.workspaceMemberships.insert(
-        createDirectMembership({ workspaceId, userId: caller.identity.id, role: "OWNER", now }),
+        createDirectMembership({ workspaceId, userId: caller.identity.id, role: "OWNER", createdBy: caller.identity.id, now }),
       );
       for (const mapping of mappings) {
         await repositories.groupMappings.insert({

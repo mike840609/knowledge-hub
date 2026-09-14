@@ -290,6 +290,10 @@ async function personalCountForOwner(ownerId: string): Promise<number> {
 
 describe("Phase 3 trusted caller bootstrap (Task 7)", () => {
   it("10. claims resolve to a new UUIDv7 Hub user, persist only the resolver output, and provision My Space", async () => {
+    // Canonical provisioning records membership provenance (009 columns),
+    // so this 008-provisioned database advances to the full manifest first
+    // (empty DB passes the 009 gate).
+    await runMigrations(db(), migrations);
     const unitOfWork = new MariaDbUnitOfWork(db());
     const subject = `sso-subject-${uuidv7()}`;
     const empId = `P3SSO-${subject.slice(0, 8)}`;
@@ -321,6 +325,7 @@ describe("Phase 3 trusted caller bootstrap (Task 7)", () => {
   });
 
   it("11. deep-link and API entries reuse the same caller, user, and My Space", async () => {
+    await runMigrations(db(), migrations);
     const unitOfWork = new MariaDbUnitOfWork(db());
     const subject = `sso-reuse-${uuidv7()}`;
     const empId = `P3SSO-R-${subject.slice(0, 8)}`;
@@ -342,6 +347,7 @@ describe("Phase 3 trusted caller bootstrap (Task 7)", () => {
   });
 
   it("12. a different subject resolves to a different Hub user with its own My Space", async () => {
+    await runMigrations(db(), migrations);
     const unitOfWork = new MariaDbUnitOfWork(db());
     const firstSubject = `sso-first-${uuidv7()}`;
     const secondSubject = `sso-second-${uuidv7()}`;

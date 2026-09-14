@@ -5,6 +5,7 @@ import type { RevisionRepository } from "./revision-repository";
 import type { SourcePolicyPort } from "./source-policy";
 import type { TreeRepository } from "./tree-repository";
 import type { WorkspaceAccessPolicy } from "@/modules/workspaces/ports/workspace-access-policy";
+import type { WorkspaceMembershipRepository } from "@/modules/workspaces/ports/workspace-membership-repository";
 import type { WorkspaceRepository } from "@/modules/workspaces/ports/workspace-repository";
 
 export type KnowledgeRepositories = {
@@ -22,6 +23,14 @@ export type KnowledgeRepositories = {
    */
   workspaces: WorkspaceRepository;
   workspaceAccess: WorkspaceAccessPolicy;
+  /**
+   * Phase 3 §9 direct-role write gate: content/import writers revalidate the
+   * caller's direct role on the same locked connection. The MariaDB
+   * implementation already supplies this repository at runtime (same T5/T6
+   * precedent as `workspaces` above); the port makes it available to the
+   * mutation guard.
+   */
+  workspaceMemberships: WorkspaceMembershipRepository;
 };
 
 export interface KnowledgeUnitOfWork {

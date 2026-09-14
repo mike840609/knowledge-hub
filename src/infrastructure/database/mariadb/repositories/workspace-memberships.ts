@@ -17,12 +17,16 @@ function asMembershipSource(value: unknown): WorkspaceMembershipSource | null {
 }
 
 function mapMembership(row: DbRow): WorkspaceMembership {
+  const createdBy = row.created_by;
+  const updatedAt = row.updated_at;
   return {
     workspaceId: String(row.workspace_id),
     userId: String(row.user_id),
     createdAt: asDate(row.created_at),
     role: asRole(row.role),
     membershipSource: asMembershipSource(row.membership_source),
+    createdBy: createdBy === null || typeof createdBy === "undefined" ? null : String(createdBy),
+    updatedAt: updatedAt === null || typeof updatedAt === "undefined" ? undefined : asDate(updatedAt),
   };
 }
 
@@ -42,8 +46,8 @@ export class MariaDbWorkspaceMembershipRepository implements WorkspaceMembership
       throw new IntegrityViolationError("Membership insert requires an explicit membershipSource.");
     }
     await this.connection.query(
-      "INSERT INTO workspace_memberships (workspace_id, user_id, role, membership_source, created_at) VALUES (?, ?, ?, ?, ?)",
-      [membership.workspaceId, membership.userId, membership.role, membership.membershipSource, membership.createdAt],
+      "INSERT INTO workspace_memberships (workspace_id, user_id, role, membership_source, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [membership.workspaceId, membership.userId, membership.role, membership.membershipSource, membership.createdBy, membership.createdAt, membership.updatedAt],
     );
   }
 
@@ -55,12 +59,13 @@ export class MariaDbWorkspaceMembershipRepository implements WorkspaceMembership
     return Number(rows[0]?.count ?? 0);
   }
 
-  async updateRole(workspaceId: string, userId: string, role: WorkspaceRole): Promise<void> {
+  async updateRole(workspaceId: string, userId: string, role: WorkspaceRole, updatedAt: Date): Promise<void> {
     if (role !== "OWNER" && role !== "ADMIN" && role !== "EDITOR" && role !== "VIEWER") {
       throw new IntegrityViolationError("Membership role update requires an explicit role.");
     }
-    await this.connection.query("UPDATE workspace_memberships SET role = ? WHERE workspace_id = ? AND user_id = ?", [
+    await this.connection.query("UPDATE workspace_memberships SET role = ?, updated_at = ? WHERE workspace_id = ? AND user_id = ?", [
       role,
+      updatedAt,
       workspaceId,
       userId,
     ]);

@@ -127,11 +127,12 @@ describe("Phase 3 additive governance schema (migration 008)", () => {
     );
     expect(constraints.map((row) => row.CONSTRAINT_NAME)).toContain("uq_workspaces_personal_owner");
 
-    const indexes = await pool.query<{ Key_name: string; Non_unique: number; Column_name: string }[]>("SHOW INDEX FROM workspaces");
-    const ownerIndex = indexes.find((row) => row.Key_name === "uq_workspaces_personal_owner");
-    expect(ownerIndex).toBeDefined();
-    expect(Number(ownerIndex?.Non_unique)).toBe(0);
-    expect(ownerIndex?.Column_name).toBe("personal_owner_user_id");
+    const indexes = await pool.query<{ INDEX_NAME: string; NON_UNIQUE: number; COLUMN_NAME: string }[]>(
+      "SELECT INDEX_NAME, NON_UNIQUE, COLUMN_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'workspaces' AND INDEX_NAME = 'uq_workspaces_personal_owner'",
+    );
+    expect(indexes).toHaveLength(1);
+    expect(Number(indexes[0].NON_UNIQUE)).toBe(0);
+    expect(indexes[0].COLUMN_NAME).toBe("personal_owner_user_id");
 
     const workspaceId = uuidv7();
     await pool.query("INSERT INTO workspaces (id, name, workspace_type, personal_owner_user_id) VALUES (?, 'Null Owner Workspace', 'TEAM', NULL)", [workspaceId]);
@@ -251,15 +252,17 @@ describe("Phase 3 canonical writer contracts (Task 5)", () => {
     await pool.query("INSERT INTO users (id, emp_id, name, org_code) VALUES (?, ?, 'Direct Member', 'P3')", [userId, `p3-${userId}`]);
     await new MariaDbUnitOfWork(pool).run(async (repositories) => {
       await repositories.workspaces.insert(createTeamWorkspaceInsert({ id: workspaceId, name: "Direct Membership Workspace", createdBy: userId, now }));
-      await repositories.workspaceMemberships.insert(createDirectMembership({ workspaceId, userId, role: "EDITOR", now }));
+      await repositories.workspaceMemberships.insert(createDirectMembership({ workspaceId, userId, role: "EDITOR", createdBy: userId, now }));
     });
-    const rows = await pool.query<{ role: string | null; membership_source: string | null }[]>(
-      "SELECT role, membership_source FROM workspace_memberships WHERE workspace_id = ? AND user_id = ?",
+    const rows = await pool.query<{ role: string | null; membership_source: string | null; created_by: string | null; updated_at: unknown }[]>(
+      "SELECT role, membership_source, created_by, updated_at FROM workspace_memberships WHERE workspace_id = ? AND user_id = ?",
       [workspaceId, userId],
     );
     expect(rows).toHaveLength(1);
     expect(rows[0].role).toBe("EDITOR");
     expect(rows[0].membership_source).toBe("DIRECT");
+    expect(String(rows[0].created_by)).toBe(userId);
+    expect(rows[0].updated_at).not.toBeNull();
   });
 
   it("personal/system insert API can write role=OWNER + membership_source=SYSTEM_PERSONAL", async () => {
@@ -505,5 +508,82 @@ describe("Migration 009 final constraints gate (Task 11)", () => {
     await expect(
       pool.query("INSERT INTO workspaces (id, name, workspace_type, personal_owner_user_id) VALUES (?, 'My Space', 'PERSONAL', ?)", [uuidv7(), ownerId]),
     ).rejects.toThrow();
+  });
+
+  it("F-provenance. 009 adds membership created_by/updated_at; legacy NULL created_by allowed, updated_at NOT NULL", async () => {
+    const columns = await pool.query<{ COLUMN_NAME: string; IS_NULLABLE: string }[]>(
+      "SELECT COLUMN_NAME, IS_NULLABLE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'workspace_memberships' AND COLUMN_NAME IN ('created_by', 'updated_at')",
+    );
+    expect(columns.map((row) => String(row.COLUMN_NAME)).sort()).toEqual(["created_by", "updated_at"]);
+    const nullability = new Map(columns.map((row) => [String(row.COLUMN_NAME), String(row.IS_NULLABLE)]));
+    expect(nullability.get("created_by")).toBe("YES");
+    expect(nullability.get("updated_at")).toBe("NO");
+
+    const userId = uuidv7();
+    const workspaceId = uuidv7();
+    await pool.query("INSERT INTO users (id, emp_id, name, org_code) VALUES (?, ?, 'Provenance User', 'GATE')", [userId, `gate-${userId}`]);
+    await pool.query("INSERT INTO workspaces (id, name, workspace_type) VALUES (?, 'Provenance Team', 'TEAM')", [workspaceId]);
+    await pool.query(
+      "INSERT INTO workspace_memberships (workspace_id, user_id, role, membership_source, created_by) VALUES (?, ?, 'EDITOR', 'DIRECT', NULL)",
+      [workspaceId, userId],
+    );
+    const rows = await pool.query<{ created_by: string | null; updated_at: unknown; created_at: unknown }[]>(
+      "SELECT created_by, updated_at, created_at FROM workspace_memberships WHERE workspace_id = ? AND user_id = ?",
+      [workspaceId, userId],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].created_by).toBeNull();
+    expect(rows[0].updated_at).not.toBeNull();
+    await expect(
+      pool.query("UPDATE workspace_memberships SET updated_at = NULL WHERE workspace_id = ? AND user_id = ?", [workspaceId, userId]),
+    ).rejects.toThrow();
+  });
+
+  it("F-backfill. 009 lands legacy membership rows on NOT NULL updated_at and NULL created_by", async () => {
+    const { handle, pool: gatePool } = await createIsolatedPool();
+    try {
+      await runMigrations(gatePool, migrations, { to: 8 });
+      const { userId, workspaceId } = await seedHealthyTeam(gatePool);
+      await bootstrapWorkspaceGovernance(gatePool, { owners: {} });
+      await backfillPersonalWorkspaces(gatePool);
+      await runMigrations(gatePool, migrations);
+      expect(await appliedVersions(gatePool)).toContain(9);
+      const rows = await gatePool.query<{ created_by: string | null; updated_at: unknown }[]>(
+        "SELECT created_by, updated_at FROM workspace_memberships WHERE workspace_id = ? AND user_id = ?",
+        [workspaceId, userId],
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0].created_by).toBeNull();
+      expect(rows[0].updated_at).not.toBeNull();
+    } finally {
+      await disposePool(handle, gatePool);
+    }
+  });
+
+  it("I. 009 refuses group mappings attached to PERSONAL workspaces", async () => {
+    const { handle, pool: gatePool } = await createIsolatedPool();
+    try {
+      await runMigrations(gatePool, migrations, { to: 8 });
+      const { userId } = await seedHealthyTeam(gatePool);
+      await bootstrapWorkspaceGovernance(gatePool, { owners: {} });
+      await backfillPersonalWorkspaces(gatePool);
+      const personal = await gatePool.query<{ id: string }[]>(
+        "SELECT id FROM workspaces WHERE workspace_type = 'PERSONAL' AND personal_owner_user_id = ?",
+        [userId],
+      );
+      expect(personal).toHaveLength(1);
+      const mappingId = uuidv7();
+      await gatePool.query(
+        "INSERT INTO workspace_group_mappings (id, workspace_id, external_group_id, role) VALUES (?, ?, ?, 'VIEWER')",
+        [mappingId, String(personal[0].id), Buffer.from("sso-personal-group", "utf8")],
+      );
+      await expect(runMigrations(gatePool, migrations)).rejects.toThrow(/PERSONAL|group/i);
+      expect(await appliedVersions(gatePool)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+      await gatePool.query("DELETE FROM workspace_group_mappings WHERE id = ?", [mappingId]);
+      await runMigrations(gatePool, migrations);
+      expect(await appliedVersions(gatePool)).toContain(9);
+    } finally {
+      await disposePool(handle, gatePool);
+    }
   });
 });

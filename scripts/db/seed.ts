@@ -76,7 +76,7 @@ async function seedBrowserFixtures(pool: ReturnType<typeof createDatabasePool>, 
     await ensureWorkspace(repositories, BROWSER_FIXTURE_IDS.restrictedWorkspace, "Restricted Vault", identity.id, now);
     for (const workspaceId of [BROWSER_FIXTURE_IDS.queryMasterWorkspace, BROWSER_FIXTURE_IDS.swfpWorkspace]) {
       if (!(await repositories.workspaceMemberships.find(workspaceId, identity.id))) {
-        await repositories.workspaceMemberships.insert(createDirectMembership({ workspaceId, userId: identity.id, role: "OWNER", now }));
+        await repositories.workspaceMemberships.insert(createDirectMembership({ workspaceId, userId: identity.id, role: "OWNER", createdBy: identity.id, now }));
       }
     }
     await ensureSource(repositories, { id: BROWSER_FIXTURE_IDS.obsidianWikiSource, name: "Obsidian Wiki", workspaceId: BROWSER_FIXTURE_IDS.queryMasterWorkspace, createdBy: identity.id, now });
@@ -174,7 +174,7 @@ export async function seedDevelopmentDatabase(): Promise<void> {
       const now = new Date();
       const workspace = await repositories.workspaces.findById(DEV_FIXTURE_IDS.workspace);
       if (!workspace) await repositories.workspaces.insert(createTeamWorkspaceInsert({ id: DEV_FIXTURE_IDS.workspace, name: "Local Knowledge", createdBy: identity.id, now }));
-      if (!(await repositories.workspaceMemberships.find(DEV_FIXTURE_IDS.workspace, identity.id))) await repositories.workspaceMemberships.insert(createDirectMembership({ workspaceId: DEV_FIXTURE_IDS.workspace, userId: identity.id, role: "OWNER", now }));
+      if (!(await repositories.workspaceMemberships.find(DEV_FIXTURE_IDS.workspace, identity.id))) await repositories.workspaceMemberships.insert(createDirectMembership({ workspaceId: DEV_FIXTURE_IDS.workspace, userId: identity.id, role: "OWNER", createdBy: identity.id, now }));
       const existing = await repositories.sources.findById(DEV_FIXTURE_IDS.source);
       if (!existing) {
         await repositories.sources.insert({

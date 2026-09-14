@@ -31,6 +31,11 @@ export type EnsurePersonalWorkspaceResult = {
 };
 
 export function assertPersonalMutationAllowed(workspace: Workspace, operation: PersonalMutationOperation): void {
+  // Spec §5 Personal Sources: My Space is frozen for governance/lifecycle
+  // operations only. Content and import writers pass through to normal
+  // Workspace authorization (the mutation guard revalidates lifecycle and
+  // the caller's direct role on the locked row).
+  if (operation === "content-write" || operation === "source-import") return;
   if (workspace.workspaceType === "PERSONAL" || workspace.personalOwnerUserId != null) {
     throw new PersonalWorkspaceFrozenError(operation);
   }
@@ -55,7 +60,7 @@ export class PersonalWorkspaceService {
         await repositories.workspaces.insert(
           createPersonalWorkspaceInsert({ id: workspaceId, name: PERSONAL_WORKSPACE_NAME, ownerUserId: hubUserId, now }),
         );
-        await repositories.workspaceMemberships.insert(createSystemPersonalMembership({ workspaceId, userId: hubUserId, now }));
+        await repositories.workspaceMemberships.insert(createSystemPersonalMembership({ workspaceId, userId: hubUserId, createdBy: hubUserId, now }));
         await repositories.auditEvents.append({
           id: uuidv7(),
           workspaceId,

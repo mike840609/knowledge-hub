@@ -76,7 +76,9 @@ describe("Phase 2 import persistence schema", () => {
   });
 
   it("creates the staging indexes and enforces initial/resync binding shape", async () => {
-    const indexes = await pool.query<{ INDEX_NAME: string }[]>("SHOW INDEX FROM source_import_snapshot_entries");
+    const indexes = await pool.query<{ INDEX_NAME: string }[]>(
+      "SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'source_import_snapshot_entries'",
+    );
     expect(new Set(indexes.map((row) => row.INDEX_NAME))).toEqual(
       expect.objectContaining(
         new Set([

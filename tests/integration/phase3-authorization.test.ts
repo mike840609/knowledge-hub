@@ -91,9 +91,10 @@ async function setupFixture(): Promise<Fixture> {
 beforeAll(async () => {
   handle = await provisionIsolatedDatabase("test");
   pool = await openPool();
-  // Runs at 008 by design: the pre-bootstrap NULL-role tolerance test requires
-  // pre-009 schema (009 rejects NULL roles at the DB boundary).
-  await runMigrations(pool, migrations, { to: 8 });
+  // Full manifest: canonical writers record membership provenance
+  // (created_by/updated_at, migration 009). The pre-bootstrap NULL-role
+  // tolerance test below runs on an isolated 008 database.
+  await runMigrations(pool, migrations);
   sharedPersonalWorkspaceId = uuidv7();
   const now = new Date();
   await new MariaDbUnitOfWork(pool).run(async (repositories) => {
@@ -127,19 +128,35 @@ describe("Phase 3 workspace capability evaluation (Task 6)", () => {
     expect(capabilities.has("workspace.archive")).toBe(false);
   });
 
-  it("grants baseline visibility to pre-bootstrap direct rows with NULL roles", async () => {
-    const fixture = await setupFixture();
-    await pool.query("INSERT INTO workspace_memberships (workspace_id, user_id) VALUES (?, ?)", [fixture.teamWorkspaceId, stranger.id]);
-    const uow = new MariaDbUnitOfWork(pool);
-    await uow.run(async (repositories) => {
-      const policy = new WorkspaceMembershipPolicy(repositories.workspaceMemberships, repositories.groupMappings);
-      await expect(policy.requireMembership(callerFor(stranger), fixture.teamWorkspaceId)).resolves.toBeUndefined();
-      const capabilities = await policy.evaluateCapabilities(callerFor(stranger), fixture.teamWorkspaceId);
-      expect(capabilities.has("workspace.discover")).toBe(true);
-      expect(capabilities.has("document.read")).toBe(true);
-      expect(capabilities.has("document.write")).toBe(false);
-    });
-    await pool.query("DELETE FROM workspace_memberships WHERE workspace_id = ? AND user_id = ?", [fixture.teamWorkspaceId, stranger.id]);
+  it("grants baseline visibility to pre-bootstrap direct rows with NULL roles (isolated 008 database)", async () => {
+    const nullHandle = await provisionIsolatedDatabase("test");
+    const previous = process.env.KM_TEST_DB_NAME;
+    process.env.KM_TEST_DB_NAME = nullHandle.databaseName;
+    let nullPool: Pool | undefined;
+    try {
+      nullPool = createDatabasePool(databaseConfig("test"));
+      await runMigrations(nullPool, migrations, { to: 8 });
+      const userId = uuidv7();
+      const teamId = uuidv7();
+      await nullPool.query("INSERT INTO users (id, emp_id, name, org_code) VALUES (?, ?, 'Null Tolerance User', 'ORG-A')", [userId, `P3-AUTH-NULL-${userId.slice(0, 8)}`]);
+      await nullPool.query("INSERT INTO workspaces (id, name, workspace_type) VALUES (?, 'Null Tolerance Team', 'TEAM')", [teamId]);
+      await nullPool.query("INSERT INTO workspace_memberships (workspace_id, user_id) VALUES (?, ?)", [teamId, userId]);
+      const nullCaller: CallerContext = { identity: { id: userId, emp_id: "null", name: "Null Tolerance User", org_code: "ORG-A" }, validatedExternalGroupIds: [], platformCapabilities: [] };
+      const uow = new MariaDbUnitOfWork(nullPool);
+      await uow.run(async (repositories) => {
+        const policy = new WorkspaceMembershipPolicy(repositories.workspaceMemberships, repositories.groupMappings);
+        await expect(policy.requireMembership(nullCaller, teamId)).resolves.toBeUndefined();
+        const capabilities = await policy.evaluateCapabilities(nullCaller, teamId);
+        expect(capabilities.has("workspace.discover")).toBe(true);
+        expect(capabilities.has("document.read")).toBe(true);
+        expect(capabilities.has("document.write")).toBe(false);
+      });
+    } finally {
+      if (previous === undefined) delete process.env.KM_TEST_DB_NAME;
+      else process.env.KM_TEST_DB_NAME = previous;
+      if (nullPool) await nullPool.end();
+      await disposeIsolatedDatabase(nullHandle);
+    }
   });
 
   it("grants group-only access without any direct membership", async () => {

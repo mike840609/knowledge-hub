@@ -8,7 +8,11 @@ import type { Migration, MigrationReadConnection } from "./types";
  * on `workspaces.workspace_type` and membership `role`/`membership_source`,
  * role/source/type/lifecycle/actor CHECKs, canonical Workspace/User FKs, and
  * the PERSONAL canonical-shape coherence rules (TEAM rows carry no owner,
- * PERSONAL rows carry exactly one owner and the `My Space` name).
+ * PERSONAL rows carry exactly one owner and the `My Space` name). It also
+ * adds the membership provenance columns required by spec §8.2
+ * (`created_by` UUID NULL for legacy rows, `updated_at` NOT NULL defaulting
+ * to CURRENT_TIMESTAMP so legacy rows land on "now" and 008-era operator
+ * SQL keeps working across the cutover) plus the `created_by` User FK.
  *
  * The 008 `UNIQUE(personal_owner_user_id)` constraint is preserved untouched
  * (no DDL here drops or recreates it).
@@ -175,6 +179,20 @@ async function assertGovernanceFinalizeReady(connection: MigrationReadConnection
     }
   }
 
+  const groupMappings = await connection.query<{ id: unknown; workspace_id: unknown }[]>(
+    "SELECT id, workspace_id FROM workspace_group_mappings ORDER BY workspace_id, id",
+  );
+  for (const row of groupMappings) {
+    const workspace = workspaceById.get(String(row.workspace_id));
+    if (!workspace) {
+      problems.push(`workspace_group_mapping ${String(row.id)} references unknown workspace ${String(row.workspace_id)}.`);
+    } else if (String(workspace.workspace_type) === "PERSONAL") {
+      problems.push(
+        `workspace_group_mapping ${String(row.id)} is attached to PERSONAL workspace ${String(row.workspace_id)}; group mappings are TEAM-only (spec §8.4).`,
+      );
+    }
+  }
+
   const auditActors = await connection.query<{ actor_user_id: unknown }[]>(
     "SELECT actor_user_id FROM workspace_audit_events WHERE actor_user_id IS NOT NULL",
   );
@@ -195,6 +213,7 @@ export const phase3WorkspaceGovernanceFinalizeMigration: Migration = {
     "ALTER TABLE workspaces MODIFY workspace_type VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL",
     "ALTER TABLE workspace_memberships MODIFY role VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL",
     "ALTER TABLE workspace_memberships MODIFY membership_source VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL",
+    "ALTER TABLE workspace_memberships ADD COLUMN created_by UUID NULL, ADD COLUMN updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)",
     "ALTER TABLE workspaces ADD CONSTRAINT ck_workspaces_workspace_type CHECK (workspace_type IN ('TEAM', 'PERSONAL'))",
     "ALTER TABLE workspaces ADD CONSTRAINT ck_workspaces_lifecycle_state CHECK (lifecycle_state IN ('ACTIVE', 'ARCHIVED'))",
     "ALTER TABLE workspaces ADD CONSTRAINT ck_workspaces_personal_shape CHECK (((workspace_type = 'TEAM') AND (personal_owner_user_id IS NULL)) OR ((workspace_type = 'PERSONAL') AND (personal_owner_user_id IS NOT NULL)))",
@@ -206,6 +225,7 @@ export const phase3WorkspaceGovernanceFinalizeMigration: Migration = {
     "ALTER TABLE workspaces ADD CONSTRAINT fk_workspaces_personal_owner FOREIGN KEY (personal_owner_user_id) REFERENCES users(id) ON UPDATE RESTRICT ON DELETE RESTRICT",
     "ALTER TABLE workspaces ADD CONSTRAINT fk_workspaces_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON UPDATE RESTRICT ON DELETE RESTRICT",
     "ALTER TABLE workspaces ADD CONSTRAINT fk_workspaces_archived_by FOREIGN KEY (archived_by) REFERENCES users(id) ON UPDATE RESTRICT ON DELETE RESTRICT",
+    "ALTER TABLE workspace_memberships ADD CONSTRAINT fk_memberships_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON UPDATE RESTRICT ON DELETE RESTRICT",
   ],
   beforeApply: async (connection) => {
     await assertGovernanceFinalizeReady(connection);

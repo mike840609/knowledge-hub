@@ -25,7 +25,10 @@ beforeEach(async () => {
     if (previous === undefined) delete process.env.KM_TEST_DB_NAME;
     else process.env.KM_TEST_DB_NAME = previous;
   }
-  await runMigrations(pool, migrations, { to: 8 });
+  // Full manifest: provisioning records membership provenance
+  // (created_by/updated_at, migration 009), so the repository insert needs
+  // 009-scoped columns. The pre-008 failure case below stays isolated.
+  await runMigrations(pool, migrations);
 });
 
 afterEach(async () => {

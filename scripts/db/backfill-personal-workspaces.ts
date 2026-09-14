@@ -1,18 +1,21 @@
 import type { Pool } from "mariadb";
 import { databaseConfig } from "@/infrastructure/database/mariadb/config";
 import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
-import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction";
-import { PERSONAL_WORKSPACE_NAME, PersonalWorkspaceService } from "@/modules/workspaces/application/personal-workspace-service";
+import { uuidv7 } from "@/shared/ids/uuidv7";
+import { PERSONAL_WORKSPACE_NAME, PERSONAL_WORKSPACE_PROVISIONED_EVENT } from "@/modules/workspaces/application/personal-workspace-service";
 
 /**
  * Phase 3 Personal workspace backfill (spec §5).
  *
  * Gives every existing Hub user exactly one My Space plus its
- * OWNER/SYSTEM_PERSONAL membership, reusing the same idempotent
- * provisioning primitive as login-time provisioning. The 008 owner UNIQUE
- * constraint plus application re-read keeps concurrent provisioning and
- * backfill idempotent. Reruns are no-ops. Never applies migrations: run
- * under migration 008 only (009 final constraints are a later task).
+ * OWNER/SYSTEM_PERSONAL membership. Runs under migration 008 only (009
+ * final constraints are a later task), so provisioning here uses 008-era
+ * raw SQL — the canonical repository writers target 009 (membership
+ * created_by/updated_at) and cannot run pre-009. Operator-created rows keep
+ * created_by NULL (legacy provenance); migration 009 backfills updated_at
+ * from created_at. The 008 owner UNIQUE constraint keeps concurrent
+ * provisioning and backfill idempotent. Reruns are no-ops. Never applies
+ * migrations.
  */
 export type PersonalBackfillResult = {
   users: number;
@@ -21,15 +24,13 @@ export type PersonalBackfillResult = {
 };
 
 export async function backfillPersonalWorkspaces(pool: Pool): Promise<PersonalBackfillResult> {
-  const service = new PersonalWorkspaceService(new MariaDbUnitOfWork(pool));
   const userRows = await pool.query<{ id: unknown }[]>("SELECT id FROM users ORDER BY id");
   const userIds = userRows.map((row) => String(row.id));
 
   let provisioned = 0;
   let alreadyProvisioned = 0;
   for (const userId of userIds) {
-    const result = await service.ensurePersonalWorkspace(userId);
-    if (result.created) provisioned += 1;
+    if (await provisionMySpace(pool, userId)) provisioned += 1;
     else alreadyProvisioned += 1;
   }
 
@@ -60,6 +61,59 @@ export async function backfillPersonalWorkspaces(pool: Pool): Promise<PersonalBa
     throw new Error(`Personal backfill verification failed:\n- ${problems.join("\n- ")}`);
   }
   return { users: userIds.length, provisioned, alreadyProvisioned };
+}
+
+/**
+ * 008-era My Space provisioning. Uses only columns that exist at 008 and
+ * records no actor (created_by stays NULL for operator rows, per spec §8.2
+ * legacy provenance). Returns true when this call created the workspace.
+ */
+async function provisionMySpace(pool: Pool, userId: string): Promise<boolean> {
+  const existing = await pool.query<{ id: unknown }[]>(
+    "SELECT id FROM workspaces WHERE personal_owner_user_id = ? LIMIT 1",
+    [userId],
+  );
+  if (existing.length > 0) return false;
+  const now = new Date();
+  const workspaceId = uuidv7();
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    try {
+      await connection.query(
+        `INSERT INTO workspaces (id, name, workspace_type, personal_owner_user_id, lifecycle_state, created_by, archived_by, archived_at, created_at, updated_at)
+         VALUES (?, ?, 'PERSONAL', ?, 'ACTIVE', ?, NULL, NULL, ?, ?)`,
+        [workspaceId, PERSONAL_WORKSPACE_NAME, userId, userId, now, now],
+      );
+      await connection.query(
+        "INSERT INTO workspace_memberships (workspace_id, user_id, role, membership_source) VALUES (?, ?, 'OWNER', 'SYSTEM_PERSONAL')",
+        [workspaceId, userId],
+      );
+      await connection.query(
+        `INSERT INTO workspace_audit_events (id, workspace_id, actor_user_id, actor_kind, event_type, target_type, target_id, payload, correlation_id, created_at)
+         VALUES (?, ?, ?, 'SYSTEM', ?, 'USER', ?, ?, NULL, ?)`,
+        [uuidv7(), workspaceId, userId, PERSONAL_WORKSPACE_PROVISIONED_EVENT, userId, JSON.stringify({ workspaceType: "PERSONAL" }), now],
+      );
+      await connection.commit();
+    } catch (error) {
+      try { await connection.rollback(); } catch { /* preserve the original failure */ }
+      if (!isDuplicateEntry(error)) throw error;
+      const winner = await pool.query<{ id: unknown }[]>(
+        "SELECT id FROM workspaces WHERE personal_owner_user_id = ? LIMIT 1",
+        [userId],
+      );
+      if (winner.length === 0) throw error;
+      return false;
+    }
+  } finally {
+    connection.release();
+  }
+  return true;
+}
+
+function isDuplicateEntry(error: unknown): boolean {
+  const code = (error as { errno?: unknown; code?: unknown })?.errno ?? (error as { code?: unknown })?.code;
+  return code === 1062 || code === "ER_DUP_ENTRY";
 }
 
 const PERSONAL_BACKFILL_HELP = `Usage: npx tsx scripts/db/backfill-personal-workspaces.ts [--target dev|test|e2e]

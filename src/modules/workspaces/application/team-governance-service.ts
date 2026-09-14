@@ -111,7 +111,7 @@ export class TeamGovernanceService {
         projectDirectOwners(await repositories.workspaceMemberships.countDirectOwners(workspaceId), undefined, afterRole),
         operation,
       );
-      await repositories.workspaceMemberships.insert(createDirectMembership({ workspaceId, userId, role: afterRole, now }));
+      await repositories.workspaceMemberships.insert(createDirectMembership({ workspaceId, userId, role: afterRole, createdBy: caller.identity.id, now }));
       await repositories.auditEvents.append({
         id: uuidv7(),
         workspaceId,
@@ -147,7 +147,7 @@ export class TeamGovernanceService {
         projectDirectOwners(await repositories.workspaceMemberships.countDirectOwners(workspaceId), beforeRole, afterRole),
         operation,
       );
-      await repositories.workspaceMemberships.updateRole(workspaceId, userId, afterRole);
+      await repositories.workspaceMemberships.updateRole(workspaceId, userId, afterRole, now);
       await repositories.auditEvents.append({
         id: uuidv7(),
         workspaceId,

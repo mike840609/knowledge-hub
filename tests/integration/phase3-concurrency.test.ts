@@ -384,6 +384,85 @@ describe("Phase 3 canonical import/content lock hierarchy (Task 10)", () => {
     expect(rows).toHaveLength(0);
   });
 
+  it("membership mutation vs archive: change/removeDirectMember are blocked", async () => {
+    const { workspaceId } = await setupGovernanceScope();
+    const governance = new TeamGovernanceService(new MariaDbUnitOfWork(pool));
+    await archiveWorkspace(pool, workspaceId);
+    await expect(governance.changeDirectMemberRole(ownerCaller(), workspaceId, {
+      userId: editor.id, role: "VIEWER",
+    })).rejects.toThrow(WorkspaceLifecycleError);
+    await expect(governance.removeDirectMember(ownerCaller(), workspaceId, editor.id)).rejects.toThrow(
+      WorkspaceLifecycleError,
+    );
+    const rows = await pool.query<{ role: string }[]>(
+      "SELECT role FROM workspace_memberships WHERE workspace_id = ? AND user_id = ?",
+      [workspaceId, editor.id],
+    );
+    expect(rows.map((row) => row.role)).toEqual(["EDITOR"]);
+  });
+
+  it("group mapping mutation vs archive: add/change/remove are blocked", async () => {
+    const { workspaceId } = await setupGovernanceScope();
+    const governance = new TeamGovernanceService(new MariaDbUnitOfWork(pool));
+    const groupId = `sso-group-race-${uuidv7()}`;
+    const now = new Date();
+    await new MariaDbUnitOfWork(pool).run((repositories) =>
+      repositories.groupMappings.insert({
+        id: uuidv7(), workspaceId, externalGroupId: groupId, role: "VIEWER",
+        createdBy: owner.id, createdAt: now, updatedAt: now,
+      }),
+    );
+    await archiveWorkspace(pool, workspaceId);
+    await expect(
+      governance.addGroupMapping(ownerCaller(), workspaceId, { externalGroupId: `sso-group-late-${uuidv7()}`, role: "VIEWER" }),
+    ).rejects.toThrow(WorkspaceLifecycleError);
+    await expect(
+      governance.changeGroupMappingRole(ownerCaller(), workspaceId, { externalGroupId: groupId, role: "EDITOR" }),
+    ).rejects.toThrow(WorkspaceLifecycleError);
+    await expect(governance.removeGroupMapping(ownerCaller(), workspaceId, groupId)).rejects.toThrow(
+      WorkspaceLifecycleError,
+    );
+    const rows = await pool.query<{ role: string }[]>(
+      "SELECT role FROM workspace_group_mappings WHERE workspace_id = ?",
+      [workspaceId],
+    );
+    expect(rows.map((row) => row.role)).toEqual(["VIEWER"]);
+  });
+
+  it("concurrent member add and archive settle without deadlock (governance vs archive race)", async () => {
+    const { workspaceId } = await setupGovernanceScope();
+    const newcomer: UserIdentity = { id: uuidv7(), emp_id: "P3-LOCK-RACE", name: "Lock Racer", org_code: "P3" };
+    await new MariaDbUnitOfWork(pool).run((repositories) => repositories.users.upsertIdentity(newcomer));
+    const settled = await Promise.allSettled([
+      new TeamGovernanceService(new MariaDbUnitOfWork(pool)).addDirectMember(ownerCaller(), workspaceId, {
+        userId: newcomer.id, role: "VIEWER",
+      }),
+      new TeamWorkspaceService(new MariaDbUnitOfWork(poolB)).archiveTeamWorkspace(ownerCaller(), workspaceId),
+    ]);
+    for (const outcome of settled) {
+      if (outcome.status === "rejected") {
+        const code = (outcome.reason as { code?: unknown })?.code;
+        expect(code).not.toBe("ER_LOCK_DEADLOCK");
+        expect(code).not.toBe("ER_LOCK_WAIT_TIMEOUT");
+      }
+    }
+    const workspace = await pool.query<{ lifecycle_state: string }[]>("SELECT lifecycle_state FROM workspaces WHERE id = ?", [workspaceId]);
+    expect(workspace[0]?.lifecycle_state).toBe("ARCHIVED");
+    const members = await pool.query<{ user_id: string }[]>(
+      "SELECT user_id FROM workspace_memberships WHERE workspace_id = ? AND user_id = ?",
+      [workspaceId, newcomer.id],
+    );
+    if (members.length === 0) {
+      const addOutcome = settled[0];
+      expect(addOutcome.status).toBe("rejected");
+      if (addOutcome.status === "rejected") {
+        expect(addOutcome.reason).toBeInstanceOf(WorkspaceLifecycleError);
+      }
+    } else {
+      expect(settled[1].status).toBe("fulfilled");
+    }
+  });
+
   it("lock-inversion regression: concurrent resync apply and archive settle without deadlock", async () => {
     const { workspaceId } = await setupGovernanceScope();
     const sourceId = await appliedInitialSource(pool, workspaceId);

@@ -14,6 +14,14 @@ export type WorkspaceMembership = {
    */
   role?: WorkspaceRole | null;
   membershipSource?: WorkspaceMembershipSource | null;
+  /**
+   * Provenance (spec §8.2, migration 009): the actor whose governance write
+   * created the grant, NULL for legacy/bootstrap rows. Present from 009
+   * onward; absent (undefined) on pre-009 reads.
+   */
+  createdBy?: string | null;
+  /** Row modification time, NOT NULL from 009 onward; absent on pre-009 reads. */
+  updatedAt?: Date;
 };
 
 /**
@@ -28,16 +36,21 @@ export type WorkspaceMembershipInsert = {
   role: WorkspaceRole;
   membershipSource: WorkspaceMembershipSource;
   createdAt: Date;
+  /** Actor recording the grant; NULL for legacy rows (spec §8.2). */
+  createdBy: string | null;
+  updatedAt: Date;
 };
 
 /** Ordinary governance grant onto a workspace (human or group-provisioned). */
-export function createDirectMembership(options: { workspaceId: string; userId: string; role: WorkspaceRole; now: Date }): WorkspaceMembershipInsert {
+export function createDirectMembership(options: { workspaceId: string; userId: string; role: WorkspaceRole; createdBy?: string | null; now: Date }): WorkspaceMembershipInsert {
   return {
     workspaceId: options.workspaceId,
     userId: options.userId,
     role: options.role,
     membershipSource: "DIRECT",
     createdAt: options.now,
+    createdBy: options.createdBy ?? null,
+    updatedAt: options.now,
   };
 }
 
@@ -45,12 +58,14 @@ export function createDirectMembership(options: { workspaceId: string; userId: s
  * System-provisioned PERSONAL workspace ownership. Only the provisioning
  * path writes OWNER + SYSTEM_PERSONAL; group mappings can never grant OWNER.
  */
-export function createSystemPersonalMembership(options: { workspaceId: string; userId: string; now: Date }): WorkspaceMembershipInsert {
+export function createSystemPersonalMembership(options: { workspaceId: string; userId: string; createdBy?: string | null; now: Date }): WorkspaceMembershipInsert {
   return {
     workspaceId: options.workspaceId,
     userId: options.userId,
     role: "OWNER",
     membershipSource: "SYSTEM_PERSONAL",
     createdAt: options.now,
+    createdBy: options.createdBy ?? null,
+    updatedAt: options.now,
   };
 }

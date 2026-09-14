@@ -97,11 +97,11 @@ export async function grantTeamWorkspaceOwner(pool: Pool, options: GrantOwnerOpt
     let isOwner = existing?.role === "OWNER" && (existing.membershipSource === "DIRECT" || existing.membershipSource === null);
     if (!existing) {
       await repositories.workspaceMemberships.insert(
-        createDirectMembership({ workspaceId: options.workspaceId, userId: options.userId, role: "OWNER", now }),
+        createDirectMembership({ workspaceId: options.workspaceId, userId: options.userId, role: "OWNER", createdBy: options.userId, now }),
       );
       isOwner = false;
     } else if (!isOwner) {
-      await repositories.workspaceMemberships.updateRole(options.workspaceId, options.userId, "OWNER");
+      await repositories.workspaceMemberships.updateRole(options.workspaceId, options.userId, "OWNER", now);
       isOwner = false;
     }
     await repositories.auditEvents.append({
