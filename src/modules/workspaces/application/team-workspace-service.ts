@@ -35,7 +35,11 @@ export type TeamMutationOperation =
   | "content-write"
   | "source-import"
   | "add-member"
-  | "add-group-mapping";
+  | "change-member"
+  | "remove-member"
+  | "add-group-mapping"
+  | "change-group-mapping"
+  | "remove-group-mapping";
 
 export function assertTeamMutationAllowed(workspace: Workspace, operation: TeamMutationOperation): void {
   assertPersonalMutationAllowed(workspace, operation);

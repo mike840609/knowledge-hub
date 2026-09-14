@@ -13,7 +13,11 @@ export const PERSONAL_WORKSPACE_PROVISIONED_EVENT = "PERSONAL_WORKSPACE_PROVISIO
 export type PersonalMutationOperation =
   | "rename"
   | "add-member"
+  | "change-member"
+  | "remove-member"
   | "add-group-mapping"
+  | "change-group-mapping"
+  | "remove-group-mapping"
   | "transfer-ownership"
   | "archive"
   | "restore"

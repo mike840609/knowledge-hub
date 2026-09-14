@@ -1,4 +1,5 @@
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
+import { lockWorkspaceForMutation } from "@/modules/workspaces/application/workspace-mutation-guard";
 import { parseGenericMarkdownText } from "@/modules/sources/adapters/generic-markdown-folder-adapter";
 import type { ImportDiagnostic } from "@/modules/sources/domain/import-diagnostic";
 import { importError, SourceImportError } from "@/modules/sources/domain/import-errors";
@@ -8,6 +9,7 @@ import { compareImportText, isIgnoredImportPath, normalizeImportPath } from "@/m
 import type { ReadyImportAsset, ReadyImportContent, ReadyImportDocument, ImportPreviewChange } from "@/modules/sources/domain/import-plan";
 import type { FinalizedImportSnapshotEntry, ImportSnapshot, ImportSnapshotEntry } from "@/modules/sources/domain/import-snapshot";
 import type { SourceRepositories, SourceUnitOfWork } from "@/modules/sources/ports/unit-of-work";
+import { translateKnownSnapshotAccessError } from "./import-snapshot-access";
 import {
   blockedImportPlan,
   previewFromSnapshot,
@@ -123,7 +125,11 @@ export class FinalizeFolderImportService {
   ): Promise<ImportPreview> {
     const snapshot = await repositories.importSnapshots.lockById(snapshotId);
     if (!snapshot || snapshot.createdBy !== caller.identity.id) throw importError("IMPORT_SNAPSHOT_NOT_FOUND", "Import snapshot was not found.");
-    await repositories.workspaceAccess.requireMembership(caller, snapshot.workspaceId);
+    try {
+      await lockWorkspaceForMutation(repositories, caller, snapshot.workspaceId, "source-import");
+    } catch (error) {
+      throw translateKnownSnapshotAccessError(error);
+    }
     if (snapshot.state === "READY") return previewFromSnapshot(snapshot, now);
     if (snapshot.state !== "BUILDING") throw importError("IMPORT_SNAPSHOT_NOT_BUILDING", "Only BUILDING snapshots can be finalized.");
     if (snapshot.expiresAt.getTime() <= now.getTime()) throw importError("IMPORT_SNAPSHOT_EXPIRED", "Import snapshot has expired.");

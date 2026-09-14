@@ -1,4 +1,5 @@
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
+import { lockWorkspaceForMutation } from "@/modules/workspaces/application/workspace-mutation-guard";
 import {
   HubManagedOperationRequiredError,
   SourceArchivedError,
@@ -13,8 +14,9 @@ import type { SourcePolicy } from "../../domain/source-policy";
 
 /**
  * Shared Tree mutation preamble (plan §6): trusted CallerContext → resolve
- * and lock Source on this connection → transaction-scoped Workspace access →
- * Source ACTIVE + HUB_MANAGED. No knowledge writes happen before authorization
+ * and lock Source on this connection → Source ACTIVE + ownership →
+ * lock parent Workspace FOR UPDATE → revalidate lifecycle + capability on
+ * the locked row. No knowledge writes happen before authorization
  * (caller identity provisioning is not a knowledge write); every
  * hierarchy decision below re-reads the latest locked state, because READ
  * COMMITTED never relies on a pre-lock read for the final mutation.
@@ -28,12 +30,13 @@ export async function requireHubManagedSource(
 }
 
 /**
-  * Source projection preamble (spec §15.3, plan §6): same ordering as the Hub
-  * path — trusted CallerContext → resolve and lock Source on this connection
-  * → transaction-scoped Workspace access → Source ACTIVE + SOURCE_MANAGED.
-  * HUB_MANAGED sources are rejected with HUB_MANAGED_OPERATION_REQUIRED; no
-  * force/bypass/isSync escape flag exists.
-  */
+ * Source projection preamble (spec §15.3, plan §6): same ordering as the Hub
+ * path — trusted CallerContext → resolve and lock Source on this connection
+ * → Source ACTIVE + SOURCE_MANAGED → lock parent Workspace FOR UPDATE →
+ * revalidate lifecycle + capability.
+ * HUB_MANAGED sources are rejected with HUB_MANAGED_OPERATION_REQUIRED; no
+ * force/bypass/isSync escape flag exists.
+ */
 export async function requireSourceManagedSource(
   repositories: KnowledgeRepositories,
   caller: CallerContext,
@@ -51,12 +54,12 @@ async function requireOwnedSource(
   await repositories.users.upsertIdentity(caller.identity);
   const source = await repositories.sourcePolicy.lockById(sourceId);
   if (!source) throw new SourceNotFoundError();
-  await repositories.workspaceAccess.requireMembership(caller, source.workspaceId);
   if (source.status !== "ACTIVE") throw new SourceArchivedError();
   if (source.ownership !== ownership) {
     if (ownership === "HUB_MANAGED") throw new SourceReadOnlyError();
     throw new HubManagedOperationRequiredError();
   }
+  await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "content-write");
   return source;
 }
 

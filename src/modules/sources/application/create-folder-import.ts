@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
+import { lockWorkspaceForMutation } from "@/modules/workspaces/application/workspace-mutation-guard";
 import { compareImportText } from "@/modules/sources/domain/import-path";
 import { importError } from "@/modules/sources/domain/import-errors";
 import { DEFAULT_IMPORT_LIMITS, type ImportLimits } from "@/modules/sources/domain/import-limits";
@@ -125,10 +126,10 @@ export class CreateFolderImportService {
     if (ready >= this.limits.maxReadySnapshotsPerUser) throw importError("IMPORT_READY_QUOTA_EXCEEDED", "Too many active READY import snapshots.");
   }
 
-  private async createBound(caller: CallerContext, input: {
+  private buildSnapshot(caller: CallerContext, input: {
     workspaceId: string; sourceId: string | null; basedOnVersion: number | null; proposedSourceName: string | null;
     rootName: string; manifest: ImportManifestEntry[];
-  }): Promise<CreateImportResult> {
+  }): { snapshot: ImportSnapshot; entries: ImportSnapshotEntry[] } {
     validateManifest(input.manifest, this.limits);
     const rootName = nonemptyName(input.rootName, "rootName");
     const proposedSourceName = input.proposedSourceName === null ? null : nonemptyName(input.proposedSourceName, "sourceName");
@@ -143,13 +144,21 @@ export class CreateFolderImportService {
       summary: null, plan: null, createdAt: now, finalizedAt: null, expiresAt, appliedAt: null, staleAt: null,
       resultSourceId: null, resultVersion: null,
     };
+    return { snapshot, entries: stagingEntries(snapshotId, input.manifest) };
+  }
+
+  private async createBound(caller: CallerContext, input: {
+    workspaceId: string; sourceId: string | null; basedOnVersion: number | null; proposedSourceName: string | null;
+    rootName: string; manifest: ImportManifestEntry[];
+  }): Promise<CreateImportResult> {
+    const { snapshot, entries } = this.buildSnapshot(caller, input);
     await this.uow.runWithCreatorQuotaLock(caller.identity.id, this.quotaLockTimeoutSeconds, async (repositories) => {
-      await repositories.workspaceAccess.requireMembership(caller, input.workspaceId);
-      await this.assertQuota(repositories, caller, now);
+      await lockWorkspaceForMutation(repositories, caller, input.workspaceId, "source-import");
+      await this.assertQuota(repositories, caller, snapshot.createdAt);
       await repositories.importSnapshots.insert(snapshot);
-      await repositories.importSnapshotEntries.insertMany(stagingEntries(snapshotId, input.manifest));
+      await repositories.importSnapshotEntries.insertMany(entries);
     });
-    return { snapshotId, state: "BUILDING", expiresAt };
+    return { snapshotId: snapshot.id, state: "BUILDING", expiresAt: snapshot.expiresAt };
   }
 
   async createInitial(caller: CallerContext, input: { workspaceId: string; sourceName: string; rootName: string; manifest: ImportManifestEntry[] }): Promise<CreateImportResult> {
@@ -160,19 +169,21 @@ export class CreateFolderImportService {
   }
 
   async createResync(caller: CallerContext, input: { sourceId: string; rootName: string; manifest: ImportManifestEntry[] }): Promise<CreateImportResult> {
-    validateManifest(input.manifest, this.limits);
-    const binding = await this.uow.run(async (repositories) => {
-      const source = await repositories.sources.findById(input.sourceId);
+    return this.uow.runWithCreatorQuotaLock(caller.identity.id, this.quotaLockTimeoutSeconds, async (repositories) => {
+      const source = await repositories.sources.lockById(input.sourceId);
       if (!source) throw importError("IMPORT_SOURCE_NOT_FOUND", "Import source was not found.");
-      await repositories.workspaceAccess.requireMembership(caller, source.workspaceId);
       if (source.status !== "ACTIVE" || source.sourceType !== "FOLDER_SYNC" || source.ownership !== "SOURCE_MANAGED") {
         throw importError("SOURCE_IMPORT_NOT_ALLOWED", "Only active SOURCE_MANAGED folder sources can be resynced.");
       }
-      return { workspaceId: source.workspaceId, basedOnVersion: source.syncVersion };
-    });
-    return this.createBound(caller, {
-      workspaceId: binding.workspaceId, sourceId: input.sourceId, basedOnVersion: binding.basedOnVersion,
-      proposedSourceName: null, rootName: input.rootName, manifest: input.manifest,
+      await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "source-import");
+      const { snapshot, entries } = this.buildSnapshot(caller, {
+        workspaceId: source.workspaceId, sourceId: input.sourceId, basedOnVersion: source.syncVersion,
+        proposedSourceName: null, rootName: input.rootName, manifest: input.manifest,
+      });
+      await this.assertQuota(repositories, caller, snapshot.createdAt);
+      await repositories.importSnapshots.insert(snapshot);
+      await repositories.importSnapshotEntries.insertMany(entries);
+      return { snapshotId: snapshot.id, state: "BUILDING" as const, expiresAt: snapshot.expiresAt };
     });
   }
 }

@@ -1,5 +1,6 @@
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
+import { lockWorkspaceForMutation } from "@/modules/workspaces/application/workspace-mutation-guard";
 import { IntegrityViolationError, VersionConflictError, SourceNotFoundError, NotFoundError, SourceEntryConflictError } from "@/modules/knowledge/domain/errors";
 import type { ContentInput } from "@/modules/knowledge/domain/content";
 import { fingerprintRevisionContent } from "@/modules/knowledge/domain/content";
@@ -50,7 +51,7 @@ export class SourceApplicationService implements SourceLifecycleCommands {
         await repositories.users.upsertIdentity(caller.identity);
         const source = await repositories.sources.lockById(input.sourceId);
         if (!source) throw new SourceNotFoundError();
-        await repositories.workspaceAccess.requireMembership(caller, source.workspaceId);
+        await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "source-import");
         await requireSourceManagedSource(repositories, caller, input.sourceId);
         const projection = bindSourceProjection(repositories, { id: source.id, workspaceId: source.workspaceId });
         const resultVersion = await repositories.sources.guardAndAdvanceVersion(input.sourceId, input.basedOnVersion, caller.identity.id);
@@ -107,7 +108,7 @@ export class SourceApplicationService implements SourceLifecycleCommands {
         await repositories.users.upsertIdentity(caller.identity);
         const source = await repositories.sources.lockById(input.sourceId);
         if (!source) throw new SourceNotFoundError();
-        await repositories.workspaceAccess.requireMembership(caller, source.workspaceId);
+        await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "source-import");
         await requireSourceManagedSource(repositories, caller, input.sourceId);
         const projection = bindSourceProjection(repositories, { id: source.id, workspaceId: source.workspaceId });
         const resultVersion = await repositories.sources.guardAndAdvanceVersion(input.sourceId, input.basedOnVersion, caller.identity.id);
@@ -140,7 +141,7 @@ export class SourceApplicationService implements SourceLifecycleCommands {
       await repositories.users.upsertIdentity(caller.identity);
       const source = await repositories.sources.lockById(sourceId);
       if (!source) throw new SourceNotFoundError();
-      await repositories.workspaceAccess.requireMembership(caller, source.workspaceId);
+      await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "source-import");
       if (source.status === status) return;
       await repositories.sources.updateStatus(sourceId, status, caller.identity.id);
     });

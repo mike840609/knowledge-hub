@@ -136,7 +136,7 @@ export class TeamGovernanceService {
       const locked = await repositories.workspaces.lockById(workspaceId);
       if (!locked) throw new WorkspaceNotFoundError();
       const actorRole = await requireGovernanceActor(repositories, workspaceId, caller, operation);
-      assertTeamMutationAllowed(locked, "add-member");
+      assertTeamMutationAllowed(locked, operation);
       const before = await repositories.workspaceMemberships.find(workspaceId, userId);
       if (!before) {
         throw new WorkspaceLifecycleError("Team workspace change-member requires an existing direct membership.");
@@ -171,7 +171,7 @@ export class TeamGovernanceService {
       const locked = await repositories.workspaces.lockById(workspaceId);
       if (!locked) throw new WorkspaceNotFoundError();
       const actorRole = await requireGovernanceActor(repositories, workspaceId, caller, operation);
-      assertTeamMutationAllowed(locked, "add-member");
+      assertTeamMutationAllowed(locked, operation);
       const before = await repositories.workspaceMemberships.find(workspaceId, targetUserId);
       if (!before) {
         throw new WorkspaceLifecycleError("Team workspace remove-member requires an existing direct membership.");
@@ -248,7 +248,7 @@ export class TeamGovernanceService {
       const locked = await repositories.workspaces.lockById(workspaceId);
       if (!locked) throw new WorkspaceNotFoundError();
       const actorRole = await requireGovernanceActor(repositories, workspaceId, caller, operation);
-      assertTeamMutationAllowed(locked, "add-group-mapping");
+      assertTeamMutationAllowed(locked, operation);
       const before = await repositories.groupMappings.findExact(workspaceId, externalGroupId);
       if (!before) {
         throw new WorkspaceLifecycleError("Team workspace change-group-mapping requires an existing group mapping.");
@@ -279,7 +279,7 @@ export class TeamGovernanceService {
       const locked = await repositories.workspaces.lockById(workspaceId);
       if (!locked) throw new WorkspaceNotFoundError();
       const actorRole = await requireGovernanceActor(repositories, workspaceId, caller, operation);
-      assertTeamMutationAllowed(locked, "add-group-mapping");
+      assertTeamMutationAllowed(locked, operation);
       const before = await repositories.groupMappings.findExact(workspaceId, targetGroupId);
       if (!before) {
         throw new WorkspaceLifecycleError("Team workspace remove-group-mapping requires an existing group mapping.");
