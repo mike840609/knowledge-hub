@@ -1,5 +1,4 @@
 import type { Pool } from "mariadb";
-import { LocalIdentityProvider } from "@/infrastructure/identity/local-identity-provider";
 import { databaseConfig } from "@/infrastructure/database/mariadb/config";
 import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
 import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction";
@@ -13,6 +12,7 @@ import { UploadFolderImportEntriesService } from "@/modules/sources/application/
 import { SourceApplicationService } from "@/modules/sources/application/source-version-guard";
 import { WorkspaceQueryService } from "@/modules/workspaces/application/workspace-query-service";
 import { importRuntimeConfig } from "@/server/import-config";
+import { createIdentityProvider } from "@/server/identity-provider-factory";
 
 let pool: Pool | undefined;
 let services: ReturnType<typeof buildServices> | undefined;
@@ -24,7 +24,7 @@ function getPool(): Pool {
 
 function buildServices(databasePool: Pool) {
   const unitOfWork = new MariaDbUnitOfWork(databasePool);
-  const identityProvider = new LocalIdentityProvider();
+  const identityProvider = createIdentityProvider();
   const hub = new HubKnowledgeCommandServiceImpl(unitOfWork);
   const queries = new KnowledgeQueryServiceImpl(unitOfWork);
   const sources = new SourceApplicationService(unitOfWork);

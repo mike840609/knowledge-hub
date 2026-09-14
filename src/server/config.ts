@@ -20,3 +20,29 @@ export function localIdentityConfig(): UserIdentity {
     org_code: required("KM_LOCAL_ORG_CODE"),
   });
 }
+
+export type IdentityProviderKind = "local" | "company-sso";
+
+export function identityProviderKind(): IdentityProviderKind {
+  const raw = process.env.KM_IDENTITY_PROVIDER ?? "local";
+  if (raw !== "local" && raw !== "company-sso") {
+    throw new IdentityError(`Unknown identity provider: ${raw}; expected "local" or "company-sso".`);
+  }
+  return raw;
+}
+
+export function companySsoProviderName(): string {
+  return process.env.KM_COMPANY_SSO_PROVIDER ?? "company-sso";
+}
+
+export function companySsoTeamCreateGroups(): readonly string[] {
+  const raw = process.env.KM_COMPANY_SSO_TEAM_CREATE_GROUPS ?? "";
+  return raw
+    .split(",")
+    .map((group) => group.trim())
+    .filter((group) => group.length > 0);
+}
+
+export function isProductionEnvironment(): boolean {
+  return process.env.NODE_ENV === "production";
+}
