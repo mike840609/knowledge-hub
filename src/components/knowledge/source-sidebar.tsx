@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
+import { isFolderSyncable } from "@/modules/knowledge/domain/source-policy";
 import { KnowledgeTree } from "./knowledge-tree";
 import { SourceSelector } from "./source-selector";
 import { TreeFilter } from "./tree-filter";
@@ -61,8 +62,7 @@ export function SourceSidebar({
     () => (showArchived && includeArchived ? tree : withoutArchivedSubtrees(tree)),
     [tree, showArchived, includeArchived],
   );
-  const syncable =
-    source.status === "ACTIVE" && source.ownership === "SOURCE_MANAGED" && source.sourceType === "FOLDER_SYNC";
+  const syncable = isFolderSyncable(source);
 
   function handleArchivedToggle(event: React.ChangeEvent<HTMLInputElement>) {
     if (event.target.checked) {
