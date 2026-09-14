@@ -9,6 +9,7 @@ import { disposeIsolatedDatabase, provisionIsolatedDatabase } from "../../script
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import type { UserIdentity } from "@/modules/identity/domain/user-identity";
 import { TeamWorkspaceService } from "@/modules/workspaces/application/team-workspace-service";
+import { TeamGovernanceService } from "@/modules/workspaces/application/team-governance-service";
 import {
   grantTeamWorkspaceOwner,
   restoreTeamWorkspaceGovernance,
@@ -120,6 +121,53 @@ describe("Phase 3 Team lifecycle audit trail (Task 8)", () => {
     await expect(
       grantTeamWorkspaceOwner(db(), { workspaceId: workspace.id, userId: uuidv7(), reason: "ghost grant" }),
     ).rejects.toThrow(/existing Hub user/i);
+    expect(await eventTypes(workspace.id)).toEqual(["TEAM_WORKSPACE_CREATED"]);
+  });
+});
+
+describe("Phase 3 governance audit trail (Task 9)", () => {
+  it("4. direct and group governance mutations append their §16 events in the same transaction", async () => {
+    const owner = await seedUser("Governance Auditor", "GOV-AUD");
+    const member = await seedUser("Governed Auditee", "GOV-AUDEE");
+    const lifecycle = new TeamWorkspaceService(new MariaDbUnitOfWork(db()));
+    const governance = new TeamGovernanceService(new MariaDbUnitOfWork(db()));
+
+    const workspace = await lifecycle.createTeamWorkspace(callerFor(owner), { name: "Governed Audit Team" });
+    await governance.addDirectMember(callerFor(owner), workspace.id, { userId: member.id, role: "EDITOR" });
+    await governance.changeDirectMemberRole(callerFor(owner), workspace.id, { userId: member.id, role: "VIEWER" });
+    await governance.addGroupMapping(callerFor(owner), workspace.id, { externalGroupId: "sso-audit", role: "EDITOR" });
+    await governance.changeGroupMappingRole(callerFor(owner), workspace.id, {
+      externalGroupId: "sso-audit",
+      role: "VIEWER",
+    });
+    await governance.removeGroupMapping(callerFor(owner), workspace.id, "sso-audit");
+    await governance.removeDirectMember(callerFor(owner), workspace.id, member.id);
+
+    expect(await eventTypes(workspace.id)).toEqual([
+      "TEAM_WORKSPACE_CREATED",
+      "MEMBER_ADDED",
+      "ROLE_CHANGED",
+      "GROUP_MAPPING_ADDED",
+      "GROUP_MAPPING_ROLE_CHANGED",
+      "GROUP_MAPPING_REMOVED",
+      "REMOVED",
+    ]);
+  });
+
+  it("5. denied governance mutations audit nothing", async () => {
+    const owner = await seedUser("Silent Owner", "SIL-OWN");
+    const stranger = await seedUser("Silent Stranger", "SIL-STR");
+    const target = await seedUser("Silent Target", "SIL-TGT");
+    const lifecycle = new TeamWorkspaceService(new MariaDbUnitOfWork(db()));
+    const governance = new TeamGovernanceService(new MariaDbUnitOfWork(db()));
+
+    const workspace = await lifecycle.createTeamWorkspace(callerFor(owner), { name: "Silent Team" });
+    await expect(
+      governance.addDirectMember(callerFor(stranger), workspace.id, { userId: target.id, role: "VIEWER" }),
+    ).rejects.toThrow();
+    await expect(
+      governance.removeDirectMember(callerFor(owner), workspace.id, owner.id),
+    ).rejects.toThrow();
     expect(await eventTypes(workspace.id)).toEqual(["TEAM_WORKSPACE_CREATED"]);
   });
 });

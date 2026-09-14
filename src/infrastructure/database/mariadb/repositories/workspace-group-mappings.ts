@@ -60,6 +60,21 @@ export class MariaDbWorkspaceGroupMappingRepository implements WorkspaceGroupMap
     return rows.map(mapGroupMapping);
   }
 
+  async updateRole(id: string, role: WorkspaceGroupRole): Promise<void> {
+    if (role !== "ADMIN" && role !== "EDITOR" && role !== "VIEWER") {
+      throw new IntegrityViolationError("Group mapping role update requires an ADMIN, EDITOR, or VIEWER role.");
+    }
+    await this.connection.query("UPDATE workspace_group_mappings SET role = ?, updated_at = ? WHERE id = ?", [
+      role,
+      new Date(),
+      id,
+    ]);
+  }
+
+  async remove(id: string): Promise<void> {
+    await this.connection.query("DELETE FROM workspace_group_mappings WHERE id = ?", [id]);
+  }
+
   async insert(mapping: WorkspaceGroupMapping): Promise<void> {
     if (mapping.role !== "ADMIN" && mapping.role !== "EDITOR" && mapping.role !== "VIEWER") {
       throw new IntegrityViolationError("Group mapping insert requires an ADMIN, EDITOR, or VIEWER role.");

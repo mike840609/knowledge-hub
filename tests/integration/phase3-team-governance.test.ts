@@ -9,6 +9,7 @@ import { disposeIsolatedDatabase, provisionIsolatedDatabase } from "../../script
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import type { UserIdentity } from "@/modules/identity/domain/user-identity";
 import { TeamWorkspaceService, assertTeamMutationAllowed } from "@/modules/workspaces/application/team-workspace-service";
+import { TeamGovernanceService } from "@/modules/workspaces/application/team-governance-service";
 import {
   PersonalWorkspaceFrozenError,
   TeamCreationDeniedError,
@@ -65,6 +66,25 @@ function callerFor(identity: UserIdentity, platformCapabilities: readonly ("work
 
 function service(): TeamWorkspaceService {
   return new TeamWorkspaceService(new MariaDbUnitOfWork(db()));
+}
+
+function governance(): TeamGovernanceService {
+  return new TeamGovernanceService(new MariaDbUnitOfWork(db()));
+}
+
+async function createTeam(name: string, tag: string): Promise<{ workspaceId: string; owner: UserIdentity }> {
+  const owner = await seedUser("Governance Owner", tag);
+  const workspace = await service().createTeamWorkspace(callerFor(owner, ["workspace.create_team"]), { name });
+  return { workspaceId: workspace.id, owner };
+}
+
+async function groupRole(workspaceId: string, externalGroupId: string): Promise<string | null | undefined> {
+  const rows = await db().query<{ role: string | null }[]>(
+    "SELECT role FROM workspace_group_mappings WHERE workspace_id = ? AND external_group_id = ?",
+    [workspaceId, Buffer.from(externalGroupId, "utf8")],
+  );
+  if (rows.length === 0) return undefined;
+  return rows[0].role;
 }
 
 async function directRole(workspaceId: string, userId: string): Promise<string | null | undefined> {
@@ -261,5 +281,250 @@ describe("Phase 3 Team workspace lifecycle (Task 8)", () => {
     });
     expect(await lifecycleOf(teamId)).toBe("ACTIVE");
     expect(await directRole(teamId, owner.id)).toBe("OWNER");
+  });
+});
+
+describe("Phase 3 Team member and group governance (Task 9)", () => {
+  it("1. OWNER runs the full direct grant flow: add, change, remove", async () => {
+    const { workspaceId, owner } = await createTeam("Governed Team", "GOV-OWN");
+    const editor = await seedUser("Governed Editor", "GOV-ED");
+    const viewer = await seedUser("Governed Viewer", "GOV-VIEW");
+
+    await governance().addDirectMember(callerFor(owner), workspaceId, { userId: editor.id, role: "EDITOR" });
+    expect(await directRole(workspaceId, editor.id)).toBe("EDITOR");
+    await governance().addDirectMember(callerFor(owner), workspaceId, { userId: viewer.id, role: "VIEWER" });
+    expect(await directRole(workspaceId, viewer.id)).toBe("VIEWER");
+
+    await governance().changeDirectMemberRole(callerFor(owner), workspaceId, { userId: editor.id, role: "VIEWER" });
+    expect(await directRole(workspaceId, editor.id)).toBe("VIEWER");
+
+    await governance().removeDirectMember(callerFor(owner), workspaceId, editor.id);
+    expect(await directRole(workspaceId, editor.id)).toBeUndefined();
+    expect(await directRole(workspaceId, owner.id)).toBe("OWNER");
+  });
+
+  it("2. OWNER runs the full group mapping flow: add, change, remove", async () => {
+    const { workspaceId, owner } = await createTeam("Grouped Governance", "GOV-GRP");
+
+    await governance().addGroupMapping(callerFor(owner), workspaceId, { externalGroupId: "sso-gov-1", role: "ADMIN" });
+    expect(await groupRole(workspaceId, "sso-gov-1")).toBe("ADMIN");
+
+    await governance().changeGroupMappingRole(callerFor(owner), workspaceId, {
+      externalGroupId: "sso-gov-1",
+      role: "EDITOR",
+    });
+    expect(await groupRole(workspaceId, "sso-gov-1")).toBe("EDITOR");
+
+    await governance().removeGroupMapping(callerFor(owner), workspaceId, "sso-gov-1");
+    expect(await groupRole(workspaceId, "sso-gov-1")).toBeUndefined();
+  });
+
+  it("3. ADMIN manages EDITOR/VIEWER but is denied on every OWNER/ADMIN touch", async () => {
+    const { workspaceId, owner } = await createTeam("Ceiling Team", "GOV-CEIL");
+    const admin = await seedUser("Ceiling Admin", "GOV-ADMIN");
+    const target = await seedUser("Ceiling Target", "GOV-TGT");
+    await governance().addDirectMember(callerFor(owner), workspaceId, { userId: admin.id, role: "ADMIN" });
+
+    await governance().addDirectMember(callerFor(admin), workspaceId, { userId: target.id, role: "EDITOR" });
+    expect(await directRole(workspaceId, target.id)).toBe("EDITOR");
+    await governance().changeDirectMemberRole(callerFor(admin), workspaceId, { userId: target.id, role: "VIEWER" });
+    expect(await directRole(workspaceId, target.id)).toBe("VIEWER");
+    await governance().removeDirectMember(callerFor(admin), workspaceId, target.id);
+    expect(await directRole(workspaceId, target.id)).toBeUndefined();
+
+    const other = await seedUser("Ceiling Other", "GOV-OTH");
+    await expect(
+      governance().addDirectMember(callerFor(admin), workspaceId, { userId: other.id, role: "ADMIN" }),
+    ).rejects.toThrow(WorkspaceAccessDeniedError);
+    await expect(
+      governance().addDirectMember(callerFor(admin), workspaceId, { userId: other.id, role: "OWNER" }),
+    ).rejects.toThrow(WorkspaceAccessDeniedError);
+    expect(await directRole(workspaceId, other.id)).toBeUndefined();
+
+    await governance().addDirectMember(callerFor(owner), workspaceId, { userId: other.id, role: "EDITOR" });
+    await expect(
+      governance().changeDirectMemberRole(callerFor(admin), workspaceId, { userId: other.id, role: "ADMIN" }),
+    ).rejects.toThrow(WorkspaceAccessDeniedError);
+    await expect(
+      governance().removeDirectMember(callerFor(admin), workspaceId, admin.id),
+    ).rejects.toThrow(WorkspaceAccessDeniedError);
+    expect(await directRole(workspaceId, other.id)).toBe("EDITOR");
+    expect(await directRole(workspaceId, admin.id)).toBe("ADMIN");
+  });
+
+  it("4. Group→ADMIN requires OWNER; ADMIN actor is denied before and after", async () => {
+    const { workspaceId, owner } = await createTeam("Group Ceiling", "GOV-GCEIL");
+    const admin = await seedUser("Group Admin", "GOV-GADMIN");
+    await governance().addDirectMember(callerFor(owner), workspaceId, { userId: admin.id, role: "ADMIN" });
+
+    await expect(
+      governance().addGroupMapping(callerFor(admin), workspaceId, { externalGroupId: "sso-adm-1", role: "ADMIN" }),
+    ).rejects.toThrow(WorkspaceAccessDeniedError);
+    expect(await groupRole(workspaceId, "sso-adm-1")).toBeUndefined();
+
+    await governance().addGroupMapping(callerFor(admin), workspaceId, { externalGroupId: "sso-ed-1", role: "EDITOR" });
+    expect(await groupRole(workspaceId, "sso-ed-1")).toBe("EDITOR");
+    await expect(
+      governance().changeGroupMappingRole(callerFor(admin), workspaceId, { externalGroupId: "sso-ed-1", role: "ADMIN" }),
+    ).rejects.toThrow(WorkspaceAccessDeniedError);
+
+    await governance().addGroupMapping(callerFor(owner), workspaceId, { externalGroupId: "sso-adm-2", role: "ADMIN" });
+    await expect(
+      governance().changeGroupMappingRole(callerFor(admin), workspaceId, {
+        externalGroupId: "sso-adm-2",
+        role: "EDITOR",
+      }),
+    ).rejects.toThrow(WorkspaceAccessDeniedError);
+    await expect(
+      governance().removeGroupMapping(callerFor(admin), workspaceId, "sso-adm-2"),
+    ).rejects.toThrow(WorkspaceAccessDeniedError);
+    expect(await groupRole(workspaceId, "sso-adm-2")).toBe("ADMIN");
+
+    await expect(
+      governance().addGroupMapping(callerFor(owner), workspaceId, { externalGroupId: "sso-bad", role: "OWNER" }),
+    ).rejects.toThrow(/never grant OWNER/i);
+  });
+
+  it("5. the final direct OWNER is never removed or demoted", async () => {
+    const { workspaceId, owner } = await createTeam("Last Owner", "GOV-LAST");
+
+    await expect(
+      governance().changeDirectMemberRole(callerFor(owner), workspaceId, { userId: owner.id, role: "EDITOR" }),
+    ).rejects.toThrow(WorkspaceAccessDeniedError);
+    await expect(governance().removeDirectMember(callerFor(owner), workspaceId, owner.id)).rejects.toThrow(
+      WorkspaceAccessDeniedError,
+    );
+    expect(await directRole(workspaceId, owner.id)).toBe("OWNER");
+
+    const successor = await seedUser("Second Owner", "GOV-2ND");
+    await governance().addDirectMember(callerFor(owner), workspaceId, { userId: successor.id, role: "OWNER" });
+    await governance().changeDirectMemberRole(callerFor(owner), workspaceId, { userId: owner.id, role: "EDITOR" });
+    expect(await directRole(workspaceId, owner.id)).toBe("EDITOR");
+    expect(await directRole(workspaceId, successor.id)).toBe("OWNER");
+    await governance().removeDirectMember(callerFor(successor), workspaceId, owner.id);
+    expect(await directRole(workspaceId, owner.id)).toBeUndefined();
+  });
+
+  it("6. non-managers and NULL-role rows are never governance authority", async () => {
+    const { workspaceId, owner } = await createTeam("Authority Team", "GOV-AUTH");
+    const viewer = await seedUser("Authority Viewer", "GOV-VIEW");
+    const outsider = await seedUser("Authority Outsider", "GOV-OUT");
+    const target = await seedUser("Authority Target", "GOV-TGT");
+    const now = new Date();
+    await governance().addDirectMember(callerFor(owner), workspaceId, { userId: viewer.id, role: "VIEWER" });
+    await db().query(
+      "INSERT INTO workspace_memberships (workspace_id, user_id, role, membership_source, created_at) VALUES (?, ?, NULL, 'DIRECT', ?)",
+      [workspaceId, outsider.id, now],
+    );
+
+    await expect(
+      governance().addDirectMember(callerFor(viewer), workspaceId, { userId: target.id, role: "VIEWER" }),
+    ).rejects.toThrow(WorkspaceAccessDeniedError);
+    await expect(
+      governance().addDirectMember(callerFor(outsider), workspaceId, { userId: target.id, role: "VIEWER" }),
+    ).rejects.toThrow(WorkspaceAccessDeniedError);
+    await expect(
+      governance().addGroupMapping(callerFor(viewer), workspaceId, { externalGroupId: "sso-x", role: "VIEWER" }),
+    ).rejects.toThrow(WorkspaceAccessDeniedError);
+    expect(await directRole(workspaceId, target.id)).toBeUndefined();
+    expect(await groupRole(workspaceId, "sso-x")).toBeUndefined();
+  });
+
+  it("7. ARCHIVED teams reject every ordinary governance mutation", async () => {
+    const { workspaceId, owner } = await createTeam("Archived Governance", "GOV-ARC");
+    const member = await seedUser("Archived Member", "GOV-AMEM");
+    await governance().addDirectMember(callerFor(owner), workspaceId, { userId: member.id, role: "EDITOR" });
+    await governance().addGroupMapping(callerFor(owner), workspaceId, { externalGroupId: "sso-arc", role: "VIEWER" });
+    await service().archiveTeamWorkspace(callerFor(owner), workspaceId);
+
+    const newcomer = await seedUser("Archived Newcomer", "GOV-ANEW");
+    await expect(
+      governance().addDirectMember(callerFor(owner), workspaceId, { userId: newcomer.id, role: "VIEWER" }),
+    ).rejects.toThrow(WorkspaceLifecycleError);
+    await expect(
+      governance().changeDirectMemberRole(callerFor(owner), workspaceId, { userId: member.id, role: "VIEWER" }),
+    ).rejects.toThrow(WorkspaceLifecycleError);
+    await expect(governance().removeDirectMember(callerFor(owner), workspaceId, member.id)).rejects.toThrow(
+      WorkspaceLifecycleError,
+    );
+    await expect(
+      governance().addGroupMapping(callerFor(owner), workspaceId, { externalGroupId: "sso-arc-2", role: "VIEWER" }),
+    ).rejects.toThrow(WorkspaceLifecycleError);
+    await expect(
+      governance().changeGroupMappingRole(callerFor(owner), workspaceId, {
+        externalGroupId: "sso-arc",
+        role: "EDITOR",
+      }),
+    ).rejects.toThrow(WorkspaceLifecycleError);
+    await expect(governance().removeGroupMapping(callerFor(owner), workspaceId, "sso-arc")).rejects.toThrow(
+      WorkspaceLifecycleError,
+    );
+    expect(await directRole(workspaceId, member.id)).toBe("EDITOR");
+    expect(await groupRole(workspaceId, "sso-arc")).toBe("VIEWER");
+  });
+
+  it("8. personal workspaces stay frozen for governance mutations", async () => {
+    const user = await seedUser("Personal Governed", "GOV-PERS");
+    const newcomer = await seedUser("Personal Newcomer", "GOV-PNEW");
+    const now = new Date();
+    const personalId = uuidv7();
+    await new MariaDbUnitOfWork(db()).run(async (repositories) => {
+      await repositories.users.upsertIdentity(user);
+      await repositories.workspaces.insert(
+        createPersonalWorkspaceInsert({ id: personalId, name: "My Space", ownerUserId: user.id, now }),
+      );
+      const { createSystemPersonalMembership } = await import("@/modules/workspaces/domain/workspace-membership");
+      await repositories.workspaceMemberships.insert(
+        createSystemPersonalMembership({ workspaceId: personalId, userId: user.id, now }),
+      );
+    });
+
+    await expect(
+      governance().addDirectMember(callerFor(user), personalId, { userId: newcomer.id, role: "VIEWER" }),
+    ).rejects.toThrow(PersonalWorkspaceFrozenError);
+    await expect(
+      governance().addGroupMapping(callerFor(user), personalId, { externalGroupId: "sso-p", role: "VIEWER" }),
+    ).rejects.toThrow(PersonalWorkspaceFrozenError);
+  });
+
+  it("9. unknown workspace ids surface not-found on governance mutations and audit reads", async () => {
+    const { owner } = await createTeam("Lost Governance", "GOV-LOST");
+    const missing = uuidv7();
+    const target = await seedUser("Lost Target", "GOV-LTGT");
+    await expect(
+      governance().addDirectMember(callerFor(owner), missing, { userId: target.id, role: "VIEWER" }),
+    ).rejects.toThrow(WorkspaceNotFoundError);
+    await expect(governance().removeDirectMember(callerFor(owner), missing, target.id)).rejects.toThrow(
+      WorkspaceNotFoundError,
+    );
+    await expect(
+      governance().addGroupMapping(callerFor(owner), missing, { externalGroupId: "sso-lost", role: "VIEWER" }),
+    ).rejects.toThrow(WorkspaceNotFoundError);
+    await expect(governance().listGovernanceAudit(callerFor(owner), missing)).rejects.toThrow(WorkspaceNotFoundError);
+  });
+
+  it("10. audit reads require direct OWNER or ADMIN", async () => {
+    const { workspaceId, owner } = await createTeam("Audit Gate", "GOV-AGATE");
+    const admin = await seedUser("Audit Admin", "GOV-AADMIN");
+    const viewer = await seedUser("Audit Viewer", "GOV-AVIEW");
+    const outsider = await seedUser("Audit Outsider", "GOV-AOUT");
+    await governance().addDirectMember(callerFor(owner), workspaceId, { userId: admin.id, role: "ADMIN" });
+    await governance().addDirectMember(callerFor(owner), workspaceId, { userId: viewer.id, role: "VIEWER" });
+
+    const ownerEvents = await governance().listGovernanceAudit(callerFor(owner), workspaceId);
+    expect(ownerEvents.length).toBeGreaterThan(0);
+    const adminEvents = await governance().listGovernanceAudit(callerFor(admin), workspaceId);
+    expect(adminEvents.length).toBe(ownerEvents.length);
+
+    await expect(governance().listGovernanceAudit(callerFor(viewer), workspaceId)).rejects.toThrow(
+      WorkspaceAccessDeniedError,
+    );
+    await expect(governance().listGovernanceAudit(callerFor(outsider), workspaceId)).rejects.toThrow(
+      WorkspaceAccessDeniedError,
+    );
+
+    await service().archiveTeamWorkspace(callerFor(owner), workspaceId);
+    const archivedEvents = await governance().listGovernanceAudit(callerFor(owner), workspaceId);
+    expect(archivedEvents.length).toBeGreaterThanOrEqual(ownerEvents.length);
   });
 });

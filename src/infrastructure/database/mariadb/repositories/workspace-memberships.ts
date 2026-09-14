@@ -65,4 +65,11 @@ export class MariaDbWorkspaceMembershipRepository implements WorkspaceMembership
       userId,
     ]);
   }
+
+  async remove(workspaceId: string, userId: string): Promise<void> {
+    await this.connection.query("DELETE FROM workspace_memberships WHERE workspace_id = ? AND user_id = ?", [
+      workspaceId,
+      userId,
+    ]);
+  }
 }

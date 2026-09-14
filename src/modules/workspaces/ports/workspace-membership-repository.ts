@@ -7,4 +7,6 @@ export interface WorkspaceMembershipRepository {
   countDirectOwners(workspaceId: string): Promise<number>;
   /** System recovery only: promote an existing direct row to a new role. */
   updateRole(workspaceId: string, userId: string, role: WorkspaceRole): Promise<void>;
+  /** Ordinary governance removal of a direct membership row. */
+  remove(workspaceId: string, userId: string): Promise<void>;
 }
