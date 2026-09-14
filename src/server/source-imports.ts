@@ -1,9 +1,11 @@
 import { getCurrentIdentity } from "@/modules/identity/application/get-current-identity";
 import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
-import type { CreateImportResult, ImportManifestEntry } from "@/modules/sources/application/create-folder-import";
-import type { UploadImportResult } from "@/modules/sources/application/upload-folder-import-entries";
-import type { ImportPreview } from "@/modules/sources/application/reconcile-import-snapshot";
 import type { ApplyFolderImportResult } from "@/modules/sources/application/apply-folder-import";
+import type { CreateImportResult, ImportManifestEntry } from "@/modules/sources/application/create-folder-import";
+import type { ImportPreview } from "@/modules/sources/application/reconcile-import-snapshot";
+import type { UploadImportResult } from "@/modules/sources/application/upload-folder-import-entries";
+import { importError } from "@/modules/sources/domain/import-errors";
+import { WorkspaceAccessDeniedError } from "@/modules/workspaces/domain/errors";
 import { applicationServices } from "@/server/composition";
 
 export type InitialImportRequest = { sourceName: string; rootName: string; manifest: ImportManifestEntry[] };
@@ -28,6 +30,25 @@ export function reviveManifest(manifest: unknown): ImportManifestEntry[] {
     if (typeof lastModified !== "string") return entry as ImportManifestEntry;
     return { ...(entry as Record<string, unknown>), lastModified: new Date(lastModified) } as ImportManifestEntry;
   });
+}
+
+/**
+ * Snapshot services check existence + creator ownership before Workspace
+ * membership. Therefore a WorkspaceAccessDeniedError escaping one of these
+ * operations is already backed by trusted discoverability proof.
+ */
+async function withKnownSnapshotAccess<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof WorkspaceAccessDeniedError) {
+      throw importError(
+        "IMPORT_SNAPSHOT_ACCESS_DENIED",
+        "Import snapshot exists, but you no longer have access to its Workspace.",
+      );
+    }
+    throw error;
+  }
 }
 
 export async function createInitialSourceImport(workspaceId: string, input: InitialImportRequest): Promise<CreateImportResult> {
@@ -57,23 +78,23 @@ export async function uploadSourceImportEntries(
 ): Promise<UploadImportResult> {
   const services = applicationServices();
   const caller = callerFromIdentity(await getCurrentIdentity(services.identityProvider));
-  return services.imports.upload.upload(caller, { snapshotId, entries });
+  return withKnownSnapshotAccess(() => services.imports.upload.upload(caller, { snapshotId, entries }));
 }
 
 export async function finalizeSourceImport(snapshotId: string): Promise<ImportPreview> {
   const services = applicationServices();
   const caller = callerFromIdentity(await getCurrentIdentity(services.identityProvider));
-  return services.imports.finalize.finalize(caller, snapshotId);
+  return withKnownSnapshotAccess(() => services.imports.finalize.finalize(caller, snapshotId));
 }
 
 export async function getSourceImportPreview(snapshotId: string): Promise<ImportPreview> {
   const services = applicationServices();
   const caller = callerFromIdentity(await getCurrentIdentity(services.identityProvider));
-  return services.imports.preview.get(caller, snapshotId);
+  return withKnownSnapshotAccess(() => services.imports.preview.get(caller, snapshotId));
 }
 
 export async function applySourceImport(snapshotId: string): Promise<ApplyFolderImportResult> {
   const services = applicationServices();
   const caller = callerFromIdentity(await getCurrentIdentity(services.identityProvider));
-  return services.imports.apply.apply(caller, snapshotId);
+  return withKnownSnapshotAccess(() => services.imports.apply.apply(caller, snapshotId));
 }
