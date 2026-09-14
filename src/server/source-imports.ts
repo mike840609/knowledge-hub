@@ -2,10 +2,9 @@ import { getCurrentIdentity } from "@/modules/identity/application/get-current-i
 import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 import type { ApplyFolderImportResult } from "@/modules/sources/application/apply-folder-import";
 import type { CreateImportResult, ImportManifestEntry } from "@/modules/sources/application/create-folder-import";
+import { translateKnownSnapshotAccessError } from "@/modules/sources/application/import-snapshot-access";
 import type { ImportPreview } from "@/modules/sources/application/reconcile-import-snapshot";
 import type { UploadImportResult } from "@/modules/sources/application/upload-folder-import-entries";
-import { importError } from "@/modules/sources/domain/import-errors";
-import { WorkspaceAccessDeniedError } from "@/modules/workspaces/domain/errors";
 import { applicationServices } from "@/server/composition";
 
 export type InitialImportRequest = { sourceName: string; rootName: string; manifest: ImportManifestEntry[] };
@@ -41,13 +40,7 @@ async function withKnownSnapshotAccess<T>(operation: () => Promise<T>): Promise<
   try {
     return await operation();
   } catch (error) {
-    if (error instanceof WorkspaceAccessDeniedError) {
-      throw importError(
-        "IMPORT_SNAPSHOT_ACCESS_DENIED",
-        "Import snapshot exists, but you no longer have access to its Workspace.",
-      );
-    }
-    throw error;
+    throw translateKnownSnapshotAccessError(error);
   }
 }
 
