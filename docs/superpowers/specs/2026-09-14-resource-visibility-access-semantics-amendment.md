@@ -6,6 +6,12 @@
 
 **Applies to:** Phase 2 import-session behavior immediately; Phase 3 production authorization design generally.
 
+## Precedence
+
+This amendment is the current authorization truth for resource-existence semantics. Where older Phase 1/2 design or implementation-plan text says that every authorization failure must collapse to non-enumerating `404`, this amendment supersedes that statement.
+
+The older rule remains valid only for resources whose discoverability has **not** been established by trusted server-side state.
+
 ## Decision
 
 Knowledge Hub separates **resource discoverability** from **resource readability**.
