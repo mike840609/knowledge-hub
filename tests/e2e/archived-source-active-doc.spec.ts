@@ -8,6 +8,7 @@ import { expect, test } from "@playwright/test";
 // routes with the persistent shell and persistent Source Tree.
 // Mirrors scripts/db/seed.ts BROWSER_FIXTURES (Playwright cannot resolve `@/` aliases).
 const QUERY_MASTER_WORKSPACE = "0199f100-0000-7000-8000-000000000001";
+const OBSIDIAN_SOURCE = "0199f100-0000-7000-8000-000000000101";
 const ARCHIVED_SOURCE = "0199f100-0000-7000-8000-000000000104";
 const ARCHIVED_ACTIVE_DOCUMENT = "0199f100-0000-7000-8000-000000000204";
 const ARCHIVED_ACTIVE_TITLE = "Still Readable";
@@ -47,4 +48,16 @@ test("keeps an active doc under an archived source readable in archived mode", a
   // the Document region: no heading and no article body for the gated doc.
   await expect(page.getByRole("heading", { name: ARCHIVED_ACTIVE_TITLE })).toHaveCount(0);
   await expect(page.locator("article").getByText(ARCHIVED_ACTIVE_BODY, { exact: true })).toHaveCount(0);
+});
+
+test("switching to an archived Source preserves archived mode", async ({ page }) => {
+  await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${OBSIDIAN_SOURCE}?includeArchived=true`);
+  await expect(page.getByLabel("Show archived")).toBeChecked();
+
+  await page.getByLabel("Source").selectOption(ARCHIVED_SOURCE);
+
+  await expect(page).toHaveURL(
+    new RegExp(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${ARCHIVED_SOURCE}/${ARCHIVED_ACTIVE_DOCUMENT}\\?includeArchived=true`),
+  );
+  await expect(page.getByRole("heading", { name: ARCHIVED_ACTIVE_TITLE })).toBeVisible();
 });
