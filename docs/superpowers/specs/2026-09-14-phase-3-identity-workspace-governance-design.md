@@ -42,7 +42,7 @@ Phase 3 不做以下項目：
 - 不建立 Agent principal、MCP transport 或 Agent Memory domain；這些仍分別屬 Phase 7 / Phase 9。
 - 不建立 rich authoring；Phase 5 才加入 Web create/edit。
 - 不重新設計 Phase 2.5 的 Workspace-scoped product route。
-- 不預設 Document-level ACL；只有 Workspace/Source policy 經真實需求證明不足時，才另行設計。
+- 不加入 Source-level override 或 Document-level ACL 的 baseline implementation；只有 Workspace policy 被真實需求證明不足時，才另立 amendment 設計 precedence 與 audit semantics。
 - 不提供 Workspace hard delete。
 
 ## 3. Workspace remains the only Knowledge container
@@ -163,7 +163,7 @@ Database constraints 必須保護：
 ```text
 PERSONAL => personal_owner_user_id IS NOT NULL
 TEAM     => personal_owner_user_id IS NULL
-UNIQUE(personal_owner_user_id) WHERE semantics are represented by nullable unique value
+UNIQUE(personal_owner_user_id)
 ```
 
 MariaDB nullable UNIQUE 允許多個 `NULL`，因此 TEAM rows 不互相衝突，而同一 User 不能成為兩個 Personal Workspace 的 owner。
@@ -215,6 +215,8 @@ WorkspaceGroupMapping
 
 Group mapping 代表 enterprise identity 對 Workspace role 的 grant；同一 caller 若同時有 direct membership 與一個或多個 group grants，effective capabilities 取 grants 的聯集。Phase 3 MVP 不加入 explicit deny rule，以避免 deny precedence 與 nested policy complexity。
 
+`listAccessibleWorkspaces(caller)` 與 Workspace selector 必須聚合 direct membership、Personal Workspace system membership 與 validated group grants；Phase 3 之後不能再把「存在 `workspace_memberships` row」當成唯一 accessible-Workspace query。
+
 ## 7. Roles and capabilities
 
 Roles 是 capability bundle，不是 authorization boundary 本身。
@@ -224,12 +226,12 @@ Phase 3 MVP 採固定 role bundle，避免提前建立 custom-role DSL：
 | Role | Intended use |
 | --- | --- |
 | `OWNER` | Workspace full administration；Personal Workspace owner 固定使用 |
-| `ADMIN` | Team Workspace administration without ownership semantics |
+| `ADMIN` | Team Workspace administration without Personal ownership semantics |
 | `EDITOR` | read/write Knowledge and operate permitted Sources |
 | `VIEWER` | discover + read Knowledge |
 | `DISCOVERER` | discover resource identity/navigation only；不可讀 protected content |
 
-Policy 至少能回答以下 capability questions：
+Workspace-scoped policy 至少能回答：
 
 ```text
 workspace.discover
@@ -246,12 +248,14 @@ audit.read
 Recommended bundle：
 
 ```text
-OWNER      = all Phase 3 capabilities
-ADMIN      = all except immutable Personal ownership operations
+OWNER      = all Workspace-scoped Phase 3 capabilities
+ADMIN      = all Workspace-scoped capabilities except immutable Personal ownership operations
 EDITOR     = workspace/source/document discover + document.read/write + source.manage
 VIEWER     = workspace/source/document discover + document.read
 DISCOVERER = workspace/source/document discover only
 ```
+
+Team Workspace creation 本身沒有既有 Workspace 可承載 role，因此另由 platform-level `workspace.create_team` policy 決定。此 capability 由 company deployment policy 明確授予可信 caller/group；預設不得由任意 Workspace role、`org_code`、Workspace name 或 client parameter 推導。Personal Workspace system provisioning 不需要 `workspace.create_team`。
 
 Phase 5 authoring 之後仍需先通過 `document.write`，再驗證 Source 為 `HUB_MANAGED`；capability 不繞過 Source ownership rules。
 
@@ -281,8 +285,19 @@ Document read       ❌
 - arbitrary UUID guessing 不建立 discoverability；
 - route 中的 Workspace/Source ID 只是 navigation context；
 - workspace name、owner metadata、`org_code` 都不是 authorization proof；
-- `DISCOVERER` 可以支援 request-access UX，但 protected body、revision content、snippet 與未明確分類為 discoverable 的 metadata 必須隱藏；
+- `DISCOVERER` 可以支援 access-denied/request-access UX，但 protected body、revision content、snippet 與未分類 metadata 必須隱藏；
 - Phase 4 search、Phase 7 MCP、Phase 8 retrieval 必須 reuse 同一 distinction。
+
+Phase 3 baseline 對 discoverable metadata 採保守分類：
+
+| Resource | Discoverable without read | Requires read |
+| --- | --- | --- |
+| Workspace | stable ID、name、workspace type、lifecycle state | governance detail not otherwise granted |
+| Source | stable ID、name、source type、lifecycle state | source content-derived detail / protected previews |
+| Document | stable ID、resource type、lifecycle state | title、metadata、snippet、current/revision content |
+| Revision | 不單獨提供 discover-only listing | revision metadata/body |
+
+因此 Document title 預設視為 protected metadata；若未來產品需要在 read-denied 狀態顯示 title，必須另行分類並補 leakage review，而不是 UI 自行決定。
 
 對其他 User 的 Personal Workspace，caller 沒有 trusted discoverability grant 時必須回 `404`，不能因為 UUID 猜中就回 `403`。
 
@@ -290,7 +305,7 @@ Document read       ❌
 
 ### 9.1 Create
 
-只有具公司允許的 Workspace provisioning capability 的 caller 可以建立 Team Workspace。
+只有通過 platform-level `workspace.create_team` policy 的 caller 可以建立 Team Workspace。
 
 Create transaction 至少完成：
 
@@ -341,16 +356,11 @@ Rules：
 
 ## 11. Source-level and Document-level overrides
 
-Phase 3 policy engine 邊界必須允許未來 Source-level override，但 MVP 只有真實需求證明 Workspace role 不足時才實作。
+Phase 3 baseline **不實作** Source-level override 與 Document-level ACL。
 
-如果 Phase 3 implementation 加入 Source override，必須：
+Authorization service 仍以 resource context 評估 Workspace policy，而不是把 Workspace role 判斷散落在 UI/routes 中，因此未來若真實需求證明 Workspace policy 不足，可以在不改 Knowledge identity 的前提下新增一份明確 amendment。
 
-- 由 `Source → Workspace` 先建立 Workspace discoverability；
-- override 不能把任意 caller 直接變成 Workspace member；
-- override 行為必須明確是 grant 或 restriction，不能靠模糊 precedence；
-- 所有變更 audit。
-
-Document-level ACL 暫不加入。若 Workspace + optional Source policy 已能滿足需求，就維持 YAGNI。
+任何未來 override 設計都必須先決定 grant/restriction precedence、discover/read semantics、audit 與 group/direct membership interaction；在這些規則完成前不得加入 ad-hoc Source/Document permission columns。
 
 ## 12. Company SSO adapter
 
@@ -419,7 +429,7 @@ Team Workspace：
 - 顯示 role/capability 允許的 administration UI；
 - unauthorized actions 不只靠 hide button，application service 必須重新 authorization。
 
-Known-but-unreadable resource 顯示 Access denied / request-access UX；undiscoverable 顯示 Not found；unexpected failure 才進 generic error boundary。
+Known-but-unreadable resource 顯示 Access denied；若未來加入 request-access workflow，必須獨立設計 request target、approver 與 audit。Undiscoverable 顯示 Not found；unexpected failure 才進 generic error boundary。
 
 ## 15. Interaction with later phases
 
@@ -430,7 +440,7 @@ Search 可以：
 - filter single Workspace；
 - search across caller-authorized Workspaces；
 - 包含 Personal Workspace；
-- 不洩漏 unreadable content/snippet。
+- 不洩漏 unreadable title/content/snippet。
 
 ### Phase 5 — Human Authoring
 
@@ -458,7 +468,7 @@ Phase 3 implementation migration order：
 4. 建立 SSO Group mapping / audit tables。
 5. 對每個既有 User idempotently provision Personal Workspace + `OWNER/SYSTEM_PERSONAL` membership。
 6. 啟用 database constraints / unique owner invariant。
-7. application authorization 從 binary membership guard 切換成 production policy evaluation。
+7. application authorization 從 binary membership guard 切換成 production policy evaluation；accessible-Workspace listing 同步切換到 direct + group + personal grants 聚合。
 8. 移除任何只適用 local/mock governance 的 deployment assumption。
 
 Local/dev seed 可以明確指定 bootstrap roles；公司 production migration 必須由 explicit configuration / admin bootstrap / SSO mapping 提供初始 admin，不允許 heuristic elevation。
@@ -480,14 +490,16 @@ Phase 3 至少需要下列 evidence：
 
 ### Authorization
 
-- `DISCOVERER`: document exists is discoverable but body read returns `403`；
+- `DISCOVERER`: document exists is discoverable but title/body read returns `403`；
 - undiscoverable resource returns `404`；
 - Viewer can read but cannot write/manage；
 - Editor can write HUB_MANAGED Knowledge but cannot manage membership；
 - Source ownership guard still blocks ordinary writes to SOURCE_MANAGED content；
 - route Workspace mismatch cannot establish authorization；
 - same-org non-member remains denied；
-- cross-org valid grant remains allowed。
+- cross-org valid grant remains allowed；
+- group-only grant appears in accessible Workspace listing and receives mapped capabilities；
+- Workspace role cannot implicitly grant platform-level `workspace.create_team`。
 
 ### Governance
 
@@ -505,10 +517,10 @@ Phase 3 design is satisfied when implementation can demonstrate all of the follo
 1. Every User has an idempotently provisioned Personal Workspace represented as `Workspace(type=PERSONAL)`.
 2. Personal Workspace is single-user at the application authorization layer and cannot receive ordinary members or group mappings.
 3. Team Workspace supports production lifecycle, roles, direct membership and enterprise group grants.
-4. `discover` and `read` are independently evaluable and preserve `404` vs `403` semantics.
+4. `discover` and `read` are independently evaluable and preserve `404` vs `403` semantics with an explicit protected-metadata default.
 5. Human Web reuses the existing Workspace-scoped shell/routes for both Personal and Team Workspace.
 6. Company SSO maps trusted identity/groups into the Workspace policy model without using `org_code` as authorization truth.
-7. Governance changes are auditable.
+7. Governance changes are auditable and Team creation uses an explicit platform-level policy rather than a Workspace-role shortcut.
 8. Phase 4–9 can reuse the same Workspace policy boundary without introducing a parallel personal-Knowledge model.
 
 ## 19. Architectural decision summary
