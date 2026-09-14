@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Upgrade the Phase 0–2 binary WorkspaceMembership foundation into production Workspace governance with My Space, fixed RBAC, trusted SSO group/platform claims, Hub-owned user identity resolution, lifecycle-safe mutation serialization, direct + group grants, auditable governance, and Phase 2.5 administration UI without changing canonical Knowledge identity.
+**Goal:** Upgrade the Phase 0–2 binary WorkspaceMembership foundation into production Workspace governance with My Space, fixed RBAC, trusted Company SSO claims, durable external identity linking to Hub-owned UUID users, lifecycle-safe mutation serialization, direct + group grants, auditable governance, and Phase 2.5 administration UI without changing canonical Knowledge identity.
 
-**Architecture:** Keep `Workspace → KnowledgeSource → Tree/Document/Revision` as the only Knowledge path. Company SSO yields trusted external claims, then a Hub identity resolver maps trusted `emp_id` to the canonical Hub-owned UUID user before CallerContext exists. Workspace authorization resolves direct + validated group grants. Every Workspace-scoped mutation participates in a Workspace row `FOR UPDATE` serialization protocol; folder-import mutations additionally preserve the existing Snapshot-first topology as `ImportSnapshot → [bound Source] → Workspace → deeper rows`, while non-import existing Source mutations remain `Source → Workspace → deeper rows`.
+**Architecture:** Keep `Workspace → KnowledgeSource → Tree/Document/Revision` as the only Knowledge path. Company SSO yields trusted external claims. A durable `(provider, subject) → hub_user_id` identity link resolves those claims to a Hub-owned UUIDv7 user before CallerContext exists. Workspace authorization is the union of direct + validated group grants. Database rollout is staged as migration 008 additive schema → explicit bootstrap → migration 009 final constraints/readiness. Every Workspace-scoped mutation participates in Workspace row serialization. Import creation before a Snapshot exists uses `Workspace` or `Source → Workspace`; once a Snapshot exists, import mutation uses `ImportSnapshot → [Source] → Workspace`.
 
 **Tech Stack:** Next.js 15.5, React 19, TypeScript 5.7, MariaDB 10.11 native `UUID`, Vitest, Playwright, existing modular-monolith application/ports/infrastructure layout.
 
@@ -20,12 +20,15 @@
 - Full group-derived effective access is only computable for the current trusted caller in Phase 3.
 - Workspace is the only Phase 3 Knowledge authorization boundary; no Source/Document ACL columns.
 - Archived Team remains readable but blocks ordinary content/governance mutations; only OWNER restores through product APIs.
-- Company SSO external subject/employee identifiers never become `users.id` directly; canonical Hub user IDs are Hub-owned UUIDv7 values.
-- Every Workspace-scoped mutation must hold the parent Workspace row lock before committing mutation.
-- Folder-import mutation lock order is `ImportSnapshot → [bound Source] → Workspace → deeper resource`; never `Workspace → ImportSnapshot`.
-- Non-import existing Source mutations lock `Source → Workspace → deeper resource`; governance/non-import new-source paths lock `Workspace` and must not then acquire unrelated Source/Snapshot locks.
-- Governance mutation and audit append commit/rollback atomically.
+- Canonical Hub user IDs are Hub-owned UUIDv7 values; external subject/employee IDs never become `users.id`.
+- Durable account identity is `(provider, subject) → hub_user_id`; `emp_id` is not long-term account-link truth.
 - Production identity must not silently fall back to Local identity.
+- Rollout order is `008 additive → bootstrap/readiness → 009 final constraints`.
+- Existing Snapshot mutation lock order is `ImportSnapshot → [bound Source] → Workspace → deeper resource`; never `Workspace → ImportSnapshot`.
+- Pre-Snapshot initial import creation is `Workspace → insert Snapshot`; pre-Snapshot resync creation is `Source → Workspace → insert Snapshot` in one transaction.
+- Non-import existing Source mutation remains `Source → Workspace → deeper resource`.
+- Governance/new-source paths lock Workspace and must not later acquire unrelated Source/Snapshot locks.
+- Governance mutation and audit append commit/rollback atomically.
 - Existing Workspace/Source/Document/Revision stable IDs and `/w/:workspaceId/...` routes remain canonical.
 
 ---
@@ -44,15 +47,13 @@ src/modules/identity/ports/
   identity-provider.ts
   company-sso-session-reader.ts
   user-repository.ts
+  external-identity-link-repository.ts
 src/infrastructure/identity/
   local-identity-provider.ts
   company-sso-identity-provider.ts
-src/infrastructure/database/mariadb/repositories/users.ts
-src/server/
-  identity-provider-factory.ts
-  trusted-caller.ts
-  composition.ts
-  config.ts
+src/infrastructure/database/mariadb/repositories/
+  users.ts
+  external-identity-links.ts
 
 src/modules/workspaces/domain/
   workspace.ts
@@ -78,8 +79,11 @@ src/modules/workspaces/ports/
   workspace-access-policy.ts
   unit-of-work.ts
 
+src/infrastructure/database/mariadb/migrations/
+  008-phase-3-workspace-governance-additive.ts
+  009-phase-3-workspace-governance-finalize.ts
+  index.ts
 src/infrastructure/database/mariadb/
-  migrations/008-phase-3-workspace-governance.ts
   repositories/workspaces.ts
   repositories/workspace-memberships.ts
   repositories/workspace-group-mappings.ts
@@ -88,9 +92,15 @@ src/infrastructure/database/mariadb/
   transaction.ts
 
 scripts/db/bootstrap-phase3-workspace-governance.ts
+scripts/db/backfill-personal-workspaces.ts
 scripts/admin/recover-team-workspace-governance.ts
 
-src/server/workspace-admin.ts
+src/server/
+  identity-provider-factory.ts
+  trusted-caller.ts
+  workspace-admin.ts
+  composition.ts
+  config.ts
 src/app/api/workspaces/...
 src/app/page.tsx
 src/components/shell/workspace-selector.tsx
@@ -99,8 +109,9 @@ src/components/workspaces/...
 
 tests/unit/phase3-workspace-capabilities.test.ts
 tests/unit/phase3-identity-provider.test.ts
-tests/integration/phase3-identity-resolution.test.ts
+tests/unit/phase3-workspace-admin-policy.test.ts
 tests/integration/phase3-schema.test.ts
+tests/integration/phase3-identity-resolution.test.ts
 tests/integration/phase3-bootstrap.test.ts
 tests/integration/phase3-authorization.test.ts
 tests/integration/phase3-personal-workspace.test.ts
@@ -112,111 +123,86 @@ tests/e2e/phase3-workspace-governance.spec.ts
 
 ---
 
-### Task 1: Add Phase 3 schema and governance domain types
+### Task 1: Add migration 008 additive schema and governance domain types
 
 **Files:**
-- Create: `src/infrastructure/database/mariadb/migrations/008-phase-3-workspace-governance.ts`
+- Create: `src/infrastructure/database/mariadb/migrations/008-phase-3-workspace-governance-additive.ts`
 - Modify: `src/infrastructure/database/mariadb/migrations/index.ts`
 - Modify: `src/modules/workspaces/domain/workspace.ts`
 - Modify: `src/modules/workspaces/domain/workspace-membership.ts`
 - Create: `src/modules/workspaces/domain/workspace-group-mapping.ts`
 - Create: `src/modules/workspaces/domain/workspace-audit-event.ts`
+- Create: `src/modules/identity/domain/external-company-identity.ts`
+- Create: `src/modules/identity/ports/external-identity-link-repository.ts`
 - Create: `tests/integration/phase3-schema.test.ts`
 
 **Interfaces:**
-- Produces `WorkspaceType`, `WorkspaceLifecycleState`, `WorkspaceRole`, `WorkspaceMembershipSource`, `WorkspaceGroupMapping`, `WorkspaceAuditEvent`.
+- Produces `WorkspaceType`, `WorkspaceLifecycleState`, `WorkspaceRole`, `WorkspaceMembershipSource`, `WorkspaceGroupMapping`, `WorkspaceAuditEvent`, and the durable external identity link schema.
 
-- [ ] **Step 1: Write failing schema tests**
+- [ ] **Step 1: Write failing additive-schema tests**
 
-```ts
-it("backfills existing workspaces to TEAM without changing ids", async () => {
-  const id = uuidv7();
-  await pool.query("INSERT INTO workspaces (id, name) VALUES (?, 'Existing')", [id]);
-  await runMigrations(pool);
-  const [row] = await pool.query<any[]>(
-    "SELECT id, workspace_type, lifecycle_state FROM workspaces WHERE id = ?",
-    [id],
-  );
-  expect(row).toMatchObject({ id, workspace_type: "TEAM", lifecycle_state: "ACTIVE" });
-});
+Cover:
 
-it("rejects OWNER group mappings", async () => {
-  await expectDatabaseConstraintFailure(() => pool.query(
-    `INSERT INTO workspace_group_mappings
-      (id, workspace_id, external_group_id, role, created_by, updated_by, created_at, updated_at)
-     VALUES (?, ?, ?, 'OWNER', ?, ?, CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6))`,
-    [uuidv7(), workspaceId, Buffer.from("grp-1", "utf8"), userId, userId],
-  ));
-});
+```text
+- existing Workspace IDs survive migration 008 and become TEAM candidates
+- role/membership_source may remain nullable until bootstrap
+- external_identity_links exists and uniquely protects (provider, subject_bytes)
+- same provider cannot bind two subjects to the same Hub user silently
+- group mapping cannot grant OWNER
+- opaque group and identity subject bytes preserve case/accents/trailing spaces
+- new-table Workspace/User FK relationships reject orphan rows where safe to enforce in 008
 ```
 
-The invalid-role insert must otherwise be valid, so it fails on the role constraint rather than missing required fields.
-
-Also assert Personal requires `personal_owner_user_id`, `name='My Space'`, unique personal owner; Team requires null personal owner; membership roles/sources are constrained; audit payload is JSON.
-
-- [ ] **Step 2: Run integration suite; verify failure before migration exists**
+- [ ] **Step 2: Run integration tests and confirm red state**
 
 ```bash
 npm run test:integration
 ```
 
-Expected: Phase 3 schema assertions fail.
+- [ ] **Step 3: Implement migration 008 as additive/compatible**
 
-- [ ] **Step 3: Implement migration 008**
+Required shape:
 
-Use backward-compatible add/backfill/finalize ordering. Existing memberships may temporarily have nullable role/source until Task 4 bootstrap; production readiness must remain false until Task 4 succeeds.
+```sql
+ALTER TABLE workspaces
+  ADD COLUMN workspace_type VARCHAR(16) NULL,
+  ADD COLUMN personal_owner_user_id UUID NULL,
+  ADD COLUMN lifecycle_state VARCHAR(16) NOT NULL DEFAULT 'ACTIVE',
+  ADD COLUMN created_by UUID NULL,
+  ADD COLUMN archived_by UUID NULL,
+  ADD COLUMN archived_at DATETIME(6) NULL;
 
-```ts
-export const phase3WorkspaceGovernanceMigration: Migration = {
-  version: 8,
-  name: "phase-3-workspace-governance",
-  statements: [
-    `ALTER TABLE workspaces
-       ADD COLUMN workspace_type VARCHAR(16) NULL,
-       ADD COLUMN personal_owner_user_id UUID NULL,
-       ADD COLUMN lifecycle_state VARCHAR(16) NOT NULL DEFAULT 'ACTIVE',
-       ADD COLUMN created_by UUID NULL,
-       ADD COLUMN archived_by UUID NULL,
-       ADD COLUMN archived_at DATETIME(6) NULL`,
-    `UPDATE workspaces SET workspace_type='TEAM' WHERE workspace_type IS NULL`,
-    `ALTER TABLE workspace_memberships
-       ADD COLUMN role VARCHAR(16) NULL,
-       ADD COLUMN membership_source VARCHAR(24) NULL,
-       ADD COLUMN created_by UUID NULL,
-       ADD COLUMN updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)`,
-    `CREATE TABLE workspace_group_mappings (
-       id UUID PRIMARY KEY,
-       workspace_id UUID NOT NULL,
-       external_group_id VARBINARY(1020) NOT NULL,
-       role VARCHAR(16) NOT NULL,
-       created_by UUID NOT NULL,
-       created_at DATETIME(6) NOT NULL,
-       updated_by UUID NOT NULL,
-       updated_at DATETIME(6) NOT NULL,
-       UNIQUE KEY uq_workspace_external_group (workspace_id, external_group_id),
-       CHECK (role IN ('ADMIN','EDITOR','VIEWER'))
-     ) ENGINE=InnoDB`,
-    `CREATE TABLE workspace_audit_events (
-       id UUID PRIMARY KEY,
-       workspace_id UUID NOT NULL,
-       actor_kind VARCHAR(16) NOT NULL,
-       actor_user_id UUID NULL,
-       event_type VARCHAR(64) NOT NULL,
-       target_type VARCHAR(32) NOT NULL,
-       target_id UUID NOT NULL,
-       payload JSON NOT NULL,
-       correlation_id VARCHAR(128) NULL,
-       created_at DATETIME(6) NOT NULL
-     ) ENGINE=InnoDB`,
-  ],
-};
+UPDATE workspaces SET workspace_type='TEAM' WHERE workspace_type IS NULL;
+
+ALTER TABLE workspace_memberships
+  ADD COLUMN role VARCHAR(16) NULL,
+  ADD COLUMN membership_source VARCHAR(24) NULL,
+  ADD COLUMN created_by UUID NULL,
+  ADD COLUMN updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6);
 ```
 
-External group IDs follow the spec's opaque-ID contract. Encode validated strings as UTF-8 bytes for storage and every lookup; decode bytes when returning DTOs. Do not trim, case-fold, or Unicode-normalize IDs. Reject empty/invalid Unicode IDs or IDs exceeding 1020 UTF-8 bytes at the provider/config and group-mapping command boundaries. Use VARBINARY so equality and uniqueness preserve case, accents, and trailing spaces independently of database collation.
+Create `external_identity_links`:
 
-Add integration cases mapping `Team-A`, `team-a`, `équipe`, `equipe`, and `Team-A ` separately. A caller carrying one ID must match only that exact grant; duplicate identical bytes in one Workspace must fail the unique constraint.
+```sql
+CREATE TABLE external_identity_links (
+  id UUID NOT NULL,
+  provider VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  subject_bytes VARBINARY(1020) NOT NULL,
+  hub_user_id UUID NOT NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  last_seen_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  CONSTRAINT uq_identity_provider_subject UNIQUE (provider, subject_bytes),
+  CONSTRAINT uq_identity_provider_user UNIQUE (provider, hub_user_id),
+  CONSTRAINT fk_identity_link_user FOREIGN KEY (hub_user_id) REFERENCES users(id) ON UPDATE RESTRICT ON DELETE RESTRICT
+) ENGINE=InnoDB;
+```
 
-- [ ] **Step 4: Update domain types**
+Create `workspace_group_mappings` and `workspace_audit_events`. For these new tables, add safe FKs immediately when referenced rows already exist. Final verification of all canonical FKs still belongs to migration 009.
+
+External group IDs and external identity subjects are opaque exact-byte identifiers. Validate non-empty valid Unicode and byte limits before storage; encode UTF-8 bytes; never trim/case-fold/normalize.
+
+- [ ] **Step 4: Add domain types**
 
 ```ts
 export type WorkspaceType = "PERSONAL" | "TEAM";
@@ -225,28 +211,25 @@ export type WorkspaceRole = "OWNER" | "ADMIN" | "EDITOR" | "VIEWER";
 export type WorkspaceMembershipSource = "DIRECT" | "SYSTEM_PERSONAL";
 ```
 
-- [ ] **Step 5: Register migration and verify**
+- [ ] **Step 5: Register migration 008 and verify**
 
 ```bash
 npm run test:integration
 npm run typecheck
 ```
 
-Expected: PASS.
-
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/infrastructure/database/mariadb/migrations src/modules/workspaces/domain tests/integration/phase3-schema.test.ts
-git commit -m "feat: add phase 3 workspace governance schema"
+git add src/infrastructure/database/mariadb/migrations src/modules/workspaces/domain src/modules/identity tests/integration/phase3-schema.test.ts
+git commit -m "feat: add phase 3 additive governance schema"
 ```
 
 ---
 
-### Task 2: Add fixed capability bundles and trusted identity types
+### Task 2: Add fixed capability bundles and trusted identity claim types
 
 **Files:**
-- Create: `src/modules/identity/domain/external-company-identity.ts`
 - Create: `src/modules/identity/domain/trusted-identity-claims.ts`
 - Create: `src/modules/identity/domain/authenticated-principal.ts`
 - Modify: `src/modules/identity/domain/caller-context.ts`
@@ -254,38 +237,17 @@ git commit -m "feat: add phase 3 workspace governance schema"
 - Create: `tests/unit/phase3-workspace-capabilities.test.ts`
 
 **Interfaces:**
-- Produces `ExternalCompanyIdentity`, `TrustedIdentityClaims`, `AuthenticatedPrincipal`, `CallerContext`, `PlatformCapability`, `WorkspaceCapability`, `capabilitiesForRole()`.
-- `AuthenticatedPrincipal.identity.id` is always the resolved Hub UUID, never an external SSO subject.
+- Produces `TrustedIdentityClaims`, `AuthenticatedPrincipal`, `CallerContext`, `PlatformCapability`, `WorkspaceCapability`, `capabilitiesForRole()`.
 
-- [ ] **Step 1: Write failing unit tests**
+- [ ] **Step 1: Write failing capability tests**
 
-```ts
-it("keeps OWNER and ADMIN authority distinct", () => {
-  expect(capabilitiesForRole("OWNER")).toContain("workspace.archive");
-  expect(capabilitiesForRole("OWNER")).toContain("membership.manage_admin");
-  expect(capabilitiesForRole("ADMIN")).not.toContain("workspace.archive");
-  expect(capabilitiesForRole("ADMIN")).not.toContain("membership.manage_admin");
-});
+Verify OWNER vs ADMIN authority and role bundles.
 
-it("copies resolved Hub identity and trusted claims into caller context", () => {
-  const caller = callerFromPrincipal({
-    identity: hubIdentity,
-    validatedExternalGroupIds: ["grp-a"],
-    platformCapabilities: ["workspace.create_team"],
-    refreshedAt: new Date("2026-09-14T00:00:00Z"),
-  });
-  expect(caller.identity.id).toBe(hubIdentity.id);
-  expect(caller.validatedExternalGroupIds).toEqual(["grp-a"]);
-  expect(caller.platformCapabilities).toEqual(["workspace.create_team"]);
-});
-```
-
-- [ ] **Step 2: Implement identity/principal/context types**
+- [ ] **Step 2: Define external claims vs resolved principal**
 
 ```ts
-export type PlatformCapability = "workspace.create_team";
-
 export type ExternalCompanyIdentity = {
+  provider: string;
   subject: string;
   emp_id: string;
   name: string;
@@ -300,22 +262,20 @@ export type TrustedIdentityClaims = {
 };
 
 export type AuthenticatedPrincipal = {
-  identity: UserIdentity; // canonical Hub UUID identity
+  identity: UserIdentity; // canonical Hub UUID user
   validatedExternalGroupIds: readonly string[];
   platformCapabilities: readonly PlatformCapability[];
   refreshedAt: Date;
 };
-
-export type CallerContext = AuthenticatedPrincipal;
 ```
 
-`callerFromPrincipal()` copies only an already-resolved `AuthenticatedPrincipal`. It must not accept external identity input directly.
+`callerFromPrincipal()` must not accept external identity directly.
 
-- [ ] **Step 3: Implement capability bundles**
+- [ ] **Step 3: Implement role capability constants**
 
-Keep role bundles as code constants; do not add custom-role DB tables.
+No custom-role DB tables.
 
-- [ ] **Step 4: Run tests**
+- [ ] **Step 4: Verify**
 
 ```bash
 npm run test:unit -- tests/unit/phase3-workspace-capabilities.test.ts
@@ -331,13 +291,14 @@ git commit -m "feat: add trusted identity types and workspace capabilities"
 
 ---
 
-### Task 3: Complete company SSO claims and Hub identity resolution
+### Task 3: Implement Company SSO claims and durable Hub identity resolution
 
 **Files:**
 - Modify: `src/modules/identity/ports/identity-provider.ts`
 - Create: `src/modules/identity/ports/company-sso-session-reader.ts`
 - Modify: `src/modules/identity/ports/user-repository.ts`
 - Create: `src/modules/identity/application/hub-identity-resolver.ts`
+- Create/Modify: `src/infrastructure/database/mariadb/repositories/external-identity-links.ts`
 - Modify: `src/infrastructure/database/mariadb/repositories/users.ts`
 - Modify: `src/infrastructure/identity/local-identity-provider.ts`
 - Create: `src/infrastructure/identity/company-sso-identity-provider.ts`
@@ -350,116 +311,75 @@ git commit -m "feat: add trusted identity types and workspace capabilities"
 **Interfaces:**
 - `IdentityProvider.getCurrentClaims(): Promise<TrustedIdentityClaims>`.
 - `CompanySsoSessionReader.readCurrentSession(): Promise<TrustedCompanySession | null>`.
-- `HubIdentityResolver.resolve(externalIdentity: ExternalCompanyIdentity): Promise<UserIdentity>`.
+- `HubIdentityResolver.resolve(externalIdentity): Promise<UserIdentity>`.
 
-Phase 3 baseline account-link key is trusted `emp_id`, because the existing Hub schema already makes `users.emp_id` unique. External `subject` is retained as trusted claim context but is not written into `users.id`. If subject-based linking becomes required, design an explicit identity-link table later rather than reinterpreting the Hub UUID column.
+- [ ] **Step 1: Write failing provider tests**
 
-- [ ] **Step 1: Write failing provider and resolver tests**
+Verify provider exposes trusted `provider + subject + emp_id/profile + groups`, server-side maps `workspace.create_team`, and production missing session fails closed.
 
-Provider tests:
+- [ ] **Step 2: Write failing resolver integration tests**
 
-```ts
-it("maps trusted company session to external claims and platform grants", async () => {
-  const reader = fakeCompanySession({
-    externalIdentity: { subject: "oidc-sub-123", emp_id: "E123", name: "Alice", org_code: "ENG" },
-    groupIds: ["grp-team-admin", "grp-create-workspace"],
-    refreshedAt: new Date("2026-09-14T01:00:00Z"),
-  });
-  const provider = new CompanySsoIdentityProvider(reader, {
-    workspaceCreateTeamGroupIds: new Set(["grp-create-workspace"]),
-  });
-  const claims = await provider.getCurrentClaims();
-  expect(claims.externalIdentity.subject).toBe("oidc-sub-123");
-  expect(claims.validatedExternalGroupIds).toEqual(["grp-team-admin", "grp-create-workspace"]);
-  expect(claims.platformCapabilities).toEqual(["workspace.create_team"]);
-});
-```
-
-Resolver integration tests must prove:
+Must prove:
 
 ```text
-existing emp_id -> same existing Hub UUID
-profile name/org update -> Hub UUID unchanged
-new emp_id -> UUIDv7 generated by Hub
-concurrent first login for same emp_id -> one row / one UUID
-external subject is never used as users.id
+A. existing link (provider, subject) -> same Hub UUID
+B. external subject / emp_id never becomes users.id
+C. first login may attach an unlinked legacy user matched by emp_id
+D. after that link exists, a different subject with the same emp_id is rejected with IDENTITY_LINK_CONFLICT
+E. new subject + new emp_id creates Hub UUIDv7 user + identity link atomically
+F. concurrent identical first login converges to one user/link
+G. concurrent different subjects claiming same emp_id yields one winner + one conflict, not shared identity
 ```
 
-Also keep the fail-closed provider test when production company session is unavailable.
+- [ ] **Step 3: Implement resolver algorithm**
 
-- [ ] **Step 2: Change IdentityProvider contract to return trusted external claims**
-
-```ts
-export interface IdentityProvider {
-  getCurrentClaims(): Promise<TrustedIdentityClaims>;
-}
-```
-
-The provider authenticates external identity; it does **not** decide canonical Hub user IDs.
-
-- [ ] **Step 3: Implement HubIdentityResolver against the existing users table**
-
-Add repository primitives that do not require a caller-supplied Hub ID:
-
-```ts
-findByEmpId(empId: string): Promise<UserIdentity | null>;
-insert(identity: UserIdentity): Promise<void>;
-updateProfile(userId: string, profile: { name: string; org_code: string }): Promise<void>;
-```
-
-Resolver algorithm:
+Pseudocode:
 
 ```ts
 async resolve(external: ExternalCompanyIdentity): Promise<UserIdentity> {
-  return this.uow.run(async (repos) => {
-    const existing = await repos.users.findByEmpId(external.emp_id);
-    if (existing) {
-      await repos.users.updateProfile(existing.id, { name: external.name, org_code: external.org_code });
-      return { ...existing, name: external.name, org_code: external.org_code };
+  return retryUniqueRace(async () => uow.run(async (repos) => {
+    const bySubject = await repos.identityLinks.findByProviderSubject(external.provider, external.subject);
+    if (bySubject) {
+      const user = await repos.users.findById(bySubject.hubUserId);
+      if (!user) throw new IdentityIntegrityError();
+      await repos.users.updateProfile(user.id, { name: external.name, org_code: external.org_code });
+      await repos.identityLinks.touch(bySubject.id);
+      return { ...user, name: external.name, org_code: external.org_code };
     }
 
-    const candidate: UserIdentity = {
-      id: uuidv7(),
-      emp_id: external.emp_id,
-      name: external.name,
-      org_code: external.org_code,
-    };
-    try {
-      await repos.users.insert(candidate);
-      return candidate;
-    } catch (error) {
-      if (!isDuplicateEmpId(error)) throw error;
-      const winner = await repos.users.findByEmpId(external.emp_id);
-      if (!winner) throw error;
-      return winner;
+    const byEmp = await repos.users.findByEmpId(external.emp_id);
+    if (byEmp) {
+      const existingProviderLink = await repos.identityLinks.findByProviderUser(external.provider, byEmp.id);
+      if (existingProviderLink) throw new IdentityLinkConflictError();
+      await repos.identityLinks.insert({
+        id: uuidv7(), provider: external.provider, subject: external.subject,
+        hubUserId: byEmp.id,
+      });
+      await repos.users.updateProfile(byEmp.id, { name: external.name, org_code: external.org_code });
+      return { ...byEmp, name: external.name, org_code: external.org_code };
     }
-  });
+
+    const user = { id: uuidv7(), emp_id: external.emp_id, name: external.name, org_code: external.org_code };
+    await repos.users.insert(user);
+    await repos.identityLinks.insert({ id: uuidv7(), provider: external.provider, subject: external.subject, hubUserId: user.id });
+    return user;
+  }));
 }
 ```
 
-The exact duplicate-key helper may live in infrastructure, but concurrency behavior is part of the contract. Never use `external.subject`, `emp_id`, or OIDC `sub` as the UUID column value.
+On duplicate-key retry, re-read `(provider, subject)` first. If the collision reveals same `emp_id` already linked to another subject, fail closed; never silently share that Hub UUID.
 
-- [ ] **Step 4: Implement Local and Company providers from server-only trusted config/session**
+Do not auto-update `emp_id` on an already-linked account in Phase 3. A trusted subject whose emp_id changes requires explicit reconciliation/migration rather than silent relink.
 
-Company provider validates session/external identity/group IDs and maps configured group IDs to platform capabilities. Local provider may derive equivalent trusted claims from explicit server config for dev/test. Neither provider accepts browser-supplied groups/capabilities.
+- [ ] **Step 4: Implement Local and Company providers**
 
-- [ ] **Step 5: Implement provider factory with production fail-closed selection**
+Only server config/session can provide claims. Browser headers/body cannot supply identity/group/platform capability truth.
 
-```ts
-export function createIdentityProvider(config: IdentityRuntimeConfig): IdentityProvider {
-  if (config.provider === "local") {
-    if (config.nodeEnv === "production") throw new Error("Local identity provider is disabled in production");
-    return new LocalIdentityProvider(config.local);
-  }
-  return new CompanySsoIdentityProvider(config.companySessionReader, config.companyPolicy);
-}
-```
+- [ ] **Step 5: Implement production provider factory**
 
-- [ ] **Step 6: Wire composition without building CallerContext yet**
+Local provider disabled in production; missing company session integration is fatal/readiness failure.
 
-Composition provides `IdentityProvider` + `HubIdentityResolver`. Request bootstrap in Task 7 will compose claims → resolved Hub user → Personal Workspace → `AuthenticatedPrincipal`/CallerContext.
-
-- [ ] **Step 7: Verify**
+- [ ] **Step 6: Verify**
 
 ```bash
 npm run test:unit -- tests/unit/phase3-identity-provider.test.ts
@@ -468,46 +388,38 @@ npm run typecheck
 npm run build
 ```
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add src/modules/identity src/infrastructure/identity src/infrastructure/database/mariadb/repositories/users.ts src/server tests/unit/phase3-identity-provider.test.ts tests/integration/phase3-identity-resolution.test.ts
-git commit -m "feat: resolve trusted company identity to hub users"
+git add src/modules/identity src/infrastructure/identity src/infrastructure/database/mariadb/repositories src/server tests/unit/phase3-identity-provider.test.ts tests/integration/phase3-identity-resolution.test.ts
+git commit -m "feat: link company identities to hub users"
 ```
 
 ---
 
-### Task 4: Implement explicit legacy governance bootstrap and readiness guard
+### Task 4: Bootstrap legacy governance and finalize schema with migration 009
 
 **Files:**
 - Create: `scripts/db/bootstrap-phase3-workspace-governance.ts`
 - Create: `src/modules/workspaces/application/workspace-readiness.ts`
+- Create: `src/infrastructure/database/mariadb/migrations/009-phase-3-workspace-governance-finalize.ts`
+- Modify: `src/infrastructure/database/mariadb/migrations/index.ts`
+- Modify: `scripts/db/migrate.ts` help/runbook if useful
 - Modify: `src/server/config.ts`
 - Modify: `src/server/composition.ts`
 - Create: `tests/integration/phase3-bootstrap.test.ts`
+- Extend: `tests/integration/phase3-schema.test.ts`
 
 **Interfaces:**
 - Bootstrap config explicitly maps legacy Team membership roles and zero-member Team owners.
 - `assertPhase3WorkspaceReadiness(repositories): Promise<void>`.
+- Migration 009 `beforeApply` refuses finalization until bootstrap invariants hold.
 
 - [ ] **Step 1: Write failing bootstrap tests**
 
-```ts
-it("rejects bootstrap when every member is non-owner", async () => {
-  await seedTeamWithMembers([alice, bob]);
-  await expect(runBootstrap([{ workspaceId, userId: alice, role: "EDITOR" }]))
-    .rejects.toThrow(/direct OWNER/);
-});
+Cover all-EDITOR Team, zero-member Team, unknown owner target, null role/source, and successful explicit owner assignment.
 
-it("rejects zero-member Team without explicit owner assignment", async () => {
-  await seedEmptyTeam(workspaceId);
-  await expect(runBootstrap([])).rejects.toThrow(/owner assignment/);
-});
-```
-
-Also test zero-member Team succeeds when an existing Hub User is explicitly assigned OWNER; unknown user fails.
-
-- [ ] **Step 2: Implement explicit bootstrap input**
+- [ ] **Step 2: Implement explicit bootstrap**
 
 ```ts
 export type LegacyWorkspaceBootstrapEntry = {
@@ -517,40 +429,62 @@ export type LegacyWorkspaceBootstrapEntry = {
 };
 ```
 
-For missing legacy memberships, OWNER assignment may insert a new DIRECT membership only when target user exists.
+Every Team must end with direct OWNER >= 1. No heuristic elevation.
 
-- [ ] **Step 3: Validate every Team before commit**
+- [ ] **Step 3: Add migration 009 readiness gate tests**
 
-Run one query that fails if any Team has zero direct OWNER, or any membership retains null role/source.
-
-```sql
-SELECT w.id
-FROM workspaces w
-LEFT JOIN workspace_memberships m
-  ON m.workspace_id = w.id
- AND m.role = 'OWNER'
- AND m.membership_source = 'DIRECT'
-WHERE w.workspace_type = 'TEAM'
-GROUP BY w.id
-HAVING COUNT(m.user_id) = 0;
-```
-
-- [ ] **Step 4: Add startup/readiness guard**
-
-Composition must not expose production Phase 3 services until readiness passes.
-
-- [ ] **Step 5: Verify**
+Run:
 
 ```bash
+npm run db:migrate -- --to 8
+```
+
+Before bootstrap, applying 009 must fail without inserting an APPLIED ledger row. After bootstrap, 009 must apply.
+
+- [ ] **Step 4: Implement migration 009**
+
+`beforeApply` is read-only and checks:
+
+```text
+- every TEAM has direct OWNER >= 1
+- no membership has NULL/invalid role
+- no membership has NULL/invalid membership_source
+- no invalid Workspace type/lifecycle combinations
+```
+
+Statements finalize:
+
+```text
+- workspaces.workspace_type NOT NULL
+- workspace_memberships.role NOT NULL
+- workspace_memberships.membership_source NOT NULL
+- CHECK constraints for workspace type/lifecycle and role/source
+- FKs for personal_owner_user_id / created_by / archived_by where applicable
+- membership created_by FK
+- verify/add canonical FKs for external_identity_links, group mappings, audit events
+```
+
+Keep polymorphic audit `target_id` without a single FK.
+
+- [ ] **Step 5: Wire production readiness to migration 009**
+
+Production Phase 3 services must fail closed if migration 009 is not APPLIED even if migration 008 exists.
+
+- [ ] **Step 6: Verify staged rollout**
+
+```bash
+npm run db:migrate -- --to 8
+npm run db:bootstrap-phase3-workspace-governance -- --config /path/to/bootstrap.json
+npm run db:migrate -- --to 9
 npm run test:integration
 npm run typecheck
 ```
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add scripts/db/bootstrap-phase3-workspace-governance.ts src/modules/workspaces/application/workspace-readiness.ts src/server tests/integration/phase3-bootstrap.test.ts
-git commit -m "feat: validate phase 3 workspace bootstrap readiness"
+git add scripts/db src/infrastructure/database/mariadb/migrations src/modules/workspaces/application/workspace-readiness.ts src/server tests/integration/phase3-bootstrap.test.ts tests/integration/phase3-schema.test.ts
+git commit -m "feat: finalize phase 3 governance schema after bootstrap"
 ```
 
 ---
@@ -570,42 +504,24 @@ git commit -m "feat: validate phase 3 workspace bootstrap readiness"
 - Modify: `src/infrastructure/database/mariadb/repositories/index.ts`
 - Modify: `src/infrastructure/database/mariadb/transaction.ts`
 
-**Interfaces:**
-- `WorkspaceRepository.lockById(id)` performs `SELECT ... FOR UPDATE`.
-- Repositories expose list/count primitives needed by authorization and owner invariant.
+- [ ] **Step 1: Add lock/repository integration tests**
 
-- [ ] **Step 1: Add repository contract tests or integration assertions**
+Two DB connections must block on the same Workspace row lock. Repository primitives must support direct owner count, exact group-ID lookup, append-only audit, and transaction-local authorization.
 
-Verify two connections block on the same Workspace row lock.
+- [ ] **Step 2: Implement `WorkspaceRepository.lockById` with `FOR UPDATE`**
 
-- [ ] **Step 2: Add `lockById`**
+- [ ] **Step 3: Extend repository bundle and UoW**
 
-```ts
-async lockById(id: string): Promise<Workspace | null> {
-  const rows = await this.connection.query<DbRow[]>(
-    "SELECT * FROM workspaces WHERE id = ? FOR UPDATE",
-    [id],
-  );
-  return rows[0] ? mapWorkspace(rows[0]) : null;
-}
-```
+All governance mutation + audit operations use the same transaction connection.
 
-- [ ] **Step 3: Add membership/group/audit repository operations**
-
-Required operations include `find`, `listForWorkspace`, `listByExternalGroupIds`, `countDirectOwners`, `insert/update/delete`, `appendAudit`.
-
-- [ ] **Step 4: Extend MariaDbUnitOfWork repository bundle**
-
-All governance services use the same connection/transaction as audit.
-
-- [ ] **Step 5: Verify**
+- [ ] **Step 4: Verify**
 
 ```bash
 npm run test:integration
 npm run typecheck
 ```
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add src/modules/workspaces/ports src/infrastructure/database/mariadb
@@ -622,114 +538,69 @@ git commit -m "feat: add workspace governance persistence and locking"
 - Modify: `src/modules/workspaces/application/workspace-query-service.ts`
 - Create: `tests/integration/phase3-authorization.test.ts`
 
-**Interfaces:**
-
-```ts
-export type EffectiveWorkspaceAccess = {
-  directRole: WorkspaceRole | null;
-  matchedGroupRoles: readonly WorkspaceRole[];
-  capabilities: ReadonlySet<WorkspaceCapability>;
-};
-
-export interface WorkspaceAccessPolicy {
-  evaluate(caller: CallerContext, workspaceId: string): Promise<EffectiveWorkspaceAccess | null>;
-  require(caller: CallerContext, workspaceId: string, capability: WorkspaceCapability): Promise<EffectiveWorkspaceAccess>;
-}
-```
-
 - [ ] **Step 1: Write failing authorization tests**
 
-Cover direct VIEWER + group EDITOR union, group-only access, no OWNER group, same-org no grant denied, cross-org grant allowed, listAccessibleWorkspaces aggregation.
+Cover direct VIEWER + group EDITOR union, group-only access, no OWNER group, same-org no grant denied, cross-org valid grant, exact group-ID matching, and listAccessibleWorkspaces aggregation.
 
 - [ ] **Step 2: Implement evaluator**
 
-Use only caller's trusted `validatedExternalGroupIds`; never query or persist user-group truth.
+Use only current caller's trusted `validatedExternalGroupIds`; never query or persist user↔group truth.
 
 - [ ] **Step 3: Preserve discover/read semantics**
 
-Undiscoverable remains 404; known-but-unreadable remains 403 even though normal Phase 3 roles all include read.
+Undiscoverable = 404; discoverable but unreadable = 403.
 
-- [ ] **Step 4: Verify**
+- [ ] **Step 4: Verify and commit**
 
 ```bash
 npm run test:integration
 npm run typecheck
-```
-
-- [ ] **Step 5: Commit**
-
-```bash
 git add src/modules/workspaces tests/integration/phase3-authorization.test.ts
 git commit -m "feat: evaluate workspace capabilities from direct and group grants"
 ```
 
 ---
 
-### Task 7: Implement trusted caller bootstrap, idempotent My Space provisioning, and system freeze
+### Task 7: Implement trusted caller bootstrap, My Space provisioning, and system freeze
 
 **Files:**
 - Create: `src/modules/workspaces/application/personal-workspace-service.ts`
-- Modify repositories as required
 - Create: `src/server/trusted-caller.ts`
-- Modify Human Web / API caller establishment and `src/server/composition.ts`
+- Modify Human Web/API caller establishment and `src/server/composition.ts`
 - Create: `scripts/db/backfill-personal-workspaces.ts`
 - Modify: `package.json`
 - Create: `tests/integration/phase3-personal-workspace.test.ts`
 
-**Interfaces:**
-- `ensurePersonalWorkspace(userId): Promise<Workspace>`.
-- `freezePersonalWorkspaceSystem(userId, reason, correlationId): Promise<void>`.
-- Shared request bootstrap: trusted claims → `HubIdentityResolver` → ensure Personal Workspace → `AuthenticatedPrincipal` → CallerContext.
-- `npm run db:backfill-personal-workspaces`: rerunnable existing-user backfill, using the same provisioning service.
-
-- [ ] **Step 1: Write failing Personal/trusted-caller tests**
-
-Test repeated/concurrent provisioning returns same ID, fixed name, one OWNER/SYSTEM_PERSONAL row, second member/group mapping rejected, system freeze audited.
-
-Also test:
-
-- first company login resolves/creates Hub user by trusted `emp_id` before creating its Personal membership;
-- external SSO subject never appears in membership/audit `user_id` fields;
-- backfill all existing Hub users, then repeat with no new Workspace IDs or duplicate provision audit events;
-- direct Team URL and API requests provision My Space without visiting `/`;
-- login provisioning racing with backfill still produces one Personal Workspace per Hub user.
-
-- [ ] **Step 2: Implement provision in one transaction**
-
-Lock/query by unique `personal_owner_user_id`; handle duplicate-race by re-read; insert Workspace + membership + audit atomically.
-
-- [ ] **Step 3: Implement system freeze**
-
-Use `Workspace.lockById`, set lifecycle ARCHIVED, append `PERSONAL_WORKSPACE_FROZEN`.
-
-- [ ] **Step 4: Wire the shared trusted caller bootstrap**
+**Shared request bootstrap:**
 
 ```text
 IdentityProvider.getCurrentClaims()
-→ HubIdentityResolver.resolve(claims.externalIdentity)
+→ HubIdentityResolver.resolve(provider + subject)
 → ensurePersonalWorkspace(hubIdentity.id)
-→ AuthenticatedPrincipal {
-     identity: hubIdentity,
-     validatedExternalGroupIds: claims.validatedExternalGroupIds,
-     platformCapabilities: claims.platformCapabilities,
-     refreshedAt: claims.refreshedAt
-   }
-→ callerFromPrincipal(...)
+→ AuthenticatedPrincipal with resolved Hub identity + trusted groups/platform capabilities
+→ CallerContext
 ```
 
-Every Human Web/API entry point uses this helper. Do not let individual routes re-resolve external identity, accept a client-provided Hub user id, or rely on `/` navigation for provisioning.
+- [ ] **Step 1: Write failing tests**
 
-Add `db:backfill-personal-workspaces` to package.json. Enumerate all existing Hub users and invoke the same idempotent Personal provisioning service. Before completed Phase 3 rollout, verify every existing Hub user has exactly one PERSONAL Workspace and OWNER/SYSTEM_PERSONAL membership.
+Repeated/concurrent provisioning returns same Workspace ID; fixed name; one OWNER/SYSTEM_PERSONAL row; external subject never appears in membership/audit user FK; deep-link/API requests provision without visiting `/`; backfill is rerunnable.
 
-- [ ] **Step 5: Verify**
+- [ ] **Step 2: Implement Personal provisioning transaction**
+
+Use unique `personal_owner_user_id`; duplicate-race re-read; Workspace + membership + audit atomic.
+
+- [ ] **Step 3: Implement system freeze**
+
+Lock Workspace, set ARCHIVED, append audit.
+
+- [ ] **Step 4: Wire shared request helper and backfill**
+
+No individual route may accept caller identity/group/capability from request body.
+
+- [ ] **Step 5: Verify and commit**
 
 ```bash
 npm run test:integration
-```
-
-- [ ] **Step 6: Commit**
-
-```bash
 git add src/modules/workspaces src/server scripts/db/backfill-personal-workspaces.ts package.json tests/integration/phase3-personal-workspace.test.ts
 git commit -m "feat: bootstrap trusted callers and personal workspaces"
 ```
@@ -745,53 +616,24 @@ git commit -m "feat: bootstrap trusted callers and personal workspaces"
 - Create: `scripts/admin/recover-team-workspace-governance.ts`
 - Create: `tests/integration/phase3-team-governance.test.ts`
 
-**Interfaces:**
-- Product lifecycle operations are OWNER-only except create, which needs platform capability.
-- Recovery service is system-only and not exported through Workspace HTTP handlers.
+- [ ] **Step 1: Write lifecycle tests**
 
-- [ ] **Step 1: Write failing Team lifecycle tests**
+Create requires `workspace.create_team`; creator becomes direct OWNER; ADMIN cannot rename/archive/restore; OWNER can; archived read remains.
 
-Cover create capability, creator direct OWNER, last-owner protection, ADMIN cannot rename/archive/restore, OWNER can, archived read remains.
+- [ ] **Step 2: Implement Team lifecycle with Workspace row lock**
 
-- [ ] **Step 2: Implement Team creation**
+Every rename/archive/restore re-evaluates capability/state after `lockById`.
 
-```ts
-if (!caller.platformCapabilities.includes("workspace.create_team")) {
-  throw new WorkspaceAccessDeniedError();
-}
-```
+- [ ] **Step 3: Implement system-only recovery**
 
-Create Workspace + OWNER + audit in one transaction.
+Not exported through normal HTTP. Can restore Team or grant existing Hub user direct OWNER; append `TEAM_WORKSPACE_GOVERNANCE_RECOVERED` with system actor/correlation/reason.
 
-- [ ] **Step 3: Implement lifecycle mutations with Workspace row lock**
-
-Archive/restore/rename start by `workspaces.lockById(workspaceId)` then re-evaluate actor authority and state.
-
-- [ ] **Step 4: Implement system-only recovery**
-
-```ts
-await recovery.recoverTeamGovernance({
-  workspaceId,
-  targetOwnerUserId,
-  action: "RESTORE_AND_GRANT_OWNER",
-  reason,
-  correlationId,
-});
-```
-
-Guard target is existing Hub User; append `TEAM_WORKSPACE_GOVERNANCE_RECOVERED` with `actor_kind=SYSTEM`. Do not expose this operation in `src/app/api/workspaces`.
-
-- [ ] **Step 5: Verify**
+- [ ] **Step 4: Verify and commit**
 
 ```bash
 npm run test:integration
 npm run typecheck
-```
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add src/modules/workspaces scripts/admin/recover-team-workspace-governance.ts tests/integration/phase3-team-governance.test.ts
+git add src/modules/workspaces scripts/admin tests/integration/phase3-team-governance.test.ts
 git commit -m "feat: add team workspace lifecycle and recovery"
 ```
 
@@ -804,82 +646,73 @@ git commit -m "feat: add team workspace lifecycle and recovery"
 - Create: `tests/unit/phase3-workspace-admin-policy.test.ts`
 - Extend: `tests/integration/phase3-team-governance.test.ts`
 
-**Interfaces:**
-- OWNER manages all roles and group ADMIN/EDITOR/VIEWER.
-- ADMIN manages only EDITOR/VIEWER and group EDITOR/VIEWER.
+- [ ] **Step 1: Write authority tests**
 
-- [ ] **Step 1: Write policy tests**
+OWNER can manage OWNER/ADMIN/EDITOR/VIEWER and Group ADMIN/EDITOR/VIEWER. ADMIN can only manage EDITOR/VIEWER and Group EDITOR/VIEWER.
 
-```ts
-expect(canAssignRole("OWNER", "ADMIN")).toBe(true);
-expect(canAssignRole("ADMIN", "ADMIN")).toBe(false);
-expect(canAssignRole("ADMIN", "EDITOR")).toBe(true);
-expect(canAssignGroupRole("ADMIN", "ADMIN")).toBe(false);
+- [ ] **Step 2: Implement mutation contract**
+
+```text
+Workspace FOR UPDATE
+→ evaluate actor in same transaction
+→ require ACTIVE TEAM
+→ load persisted target grant
+→ validate beforeRole and afterRole authority
+→ enforce final direct OWNER invariant
+→ mutate grant
+→ append audit
 ```
 
-- [ ] **Step 2: Implement every governance mutation with Workspace row lock first**
+ADMIN may not downgrade/remove existing OWNER/ADMIN or Group ADMIN by requesting a lower role.
 
-```ts
-return uow.run(async (repos) => {
-  const workspace = await repos.workspaces.lockById(workspaceId);
-  const actorAccess = await policy.evaluateWithinTransaction(repos, caller, workspaceId);
-  requireDiscoverableWorkspace(actorAccess); // preserve non-enumeration before type/lifecycle errors
-  requireActiveTeam(workspace);
-  const currentGrant = await loadTargetGrant(repos, workspaceId, target);
-  if (currentGrant) requireManageAuthority(actorAccess, currentGrant.role);
-  if (requestedRole !== null) requireManageAuthority(actorAccess, requestedRole);
-  // requestedRole=null means removal; upsert checks the existing role too
-  // mutate membership/group
-  // append audit
-});
-```
+- [ ] **Step 3: Reject ordinary governance mutation when ARCHIVED**
 
-For direct membership and group mappings, authority is checked against the persisted grant being changed, not the target user's effective capabilities. Add checks against both beforeRole and afterRole for updates, only afterRole for inserts, and only beforeRole for removals. Never interpret a low requestedRole as permission to demote a privileged grant.
-
-Add negative tests for ADMIN demoting another ADMIN, demoting an OWNER while a second OWNER exists, and downgrading/removing a Group ADMIN mapping (including upsert). Prove these failures leave both grants and audit unchanged. OWNER may perform these transitions subject to the final-owner invariant.
-
-- [ ] **Step 3: Enforce final direct OWNER invariant**
-
-Before OWNER removal/demotion, count direct OWNERs while Workspace lock is held; reject count <= 1.
-
-- [ ] **Step 4: Reject all ordinary governance mutations when ARCHIVED**
-
-Restore is handled only by Task 8 product lifecycle service; recovery only by system service.
-
-- [ ] **Step 5: Verify**
+- [ ] **Step 4: Verify and commit**
 
 ```bash
 npm run test:unit -- tests/unit/phase3-workspace-admin-policy.test.ts
 npm run test:integration
-```
-
-- [ ] **Step 6: Commit**
-
-```bash
 git add src/modules/workspaces tests/unit/phase3-workspace-admin-policy.test.ts tests/integration/phase3-team-governance.test.ts
 git commit -m "feat: govern workspace members and group mappings"
 ```
 
 ---
 
-### Task 10: Retrofit canonical lock hierarchy into existing Knowledge/Source/import write paths
+### Task 10: Retrofit canonical lock hierarchy into all Knowledge/Source/import write paths
 
 **Files:**
+- Modify: `src/modules/sources/application/create-folder-import.ts`
+- Modify: `src/modules/sources/application/upload-folder-import-entries.ts`
+- Modify: `src/modules/sources/application/finalize-folder-import.ts`
+- Modify: `src/modules/sources/application/apply-folder-import.ts`
 - Modify current Source/Knowledge command services that mutate Workspace-scoped state
-- Modify Phase 2 folder-import upload/finalize/apply flows that currently lock ImportSnapshot
-- Modify repository interfaces only where required to expose transaction-scoped Workspace lock
+- Modify repository interfaces only where required
 - Create: `tests/integration/phase3-concurrency.test.ts`
 
-**Interfaces:**
+**Canonical row-lock interfaces:**
 
 ```text
-Folder import initial apply:
+Pre-Snapshot createInitial:
+  creator quota/advisory lock (if used)
+  → Workspace FOR UPDATE
+  → validate ACTIVE + source.manage
+  → insert Snapshot + entries
+
+Pre-Snapshot createResync:
+  creator quota/advisory lock (if used)
+  → existing Source FOR UPDATE
+  → parent Workspace FOR UPDATE
+  → validate ACTIVE + source.manage
+  → capture current sync_version
+  → insert Snapshot + entries in SAME transaction
+
+Existing Snapshot initial apply:
   ImportSnapshot → Workspace → create Source → deeper rows
 
-Folder import resync/apply:
+Existing Snapshot resync/apply:
   ImportSnapshot → existing Source → Workspace → deeper rows
 
-Folder import upload/finalize:
+Upload/finalize:
   ImportSnapshot → Workspace → staging rows
 
 Non-import existing Source mutation:
@@ -889,103 +722,58 @@ Non-import new Source creation:
   Workspace → create Source
 ```
 
-**Forbidden inversions:** `Workspace → ImportSnapshot` and `Workspace → existing Source`.
+**Forbidden inversions:** `Workspace → ImportSnapshot`, `Workspace → existing Source`, and taking creator quota/advisory lock after DB row locks.
 
-- [ ] **Step 1: Write two-connection race/deadlock tests before changing code**
+- [ ] **Step 1: Write two-connection pre-Snapshot race tests**
 
-Cover all of these:
+1. archive wins before `createInitial` Workspace lock → no Snapshot is committed.
+2. createInitial wins Workspace lock → archive waits; snapshot commits before archive.
+3. createResync locks Source → Workspace and captures `sync_version` while locked; archive-win causes no Snapshot commit.
+4. prove createResync no longer reads binding/version in transaction A then inserts snapshot in transaction B.
 
-1. Initial import apply locks Snapshot, then waits for/locks Workspace; archive never asks for Snapshot and therefore cannot form a cycle.
-2. Resync/apply locks Snapshot → Source → Workspace; archive-win causes apply to re-read ARCHIVED and roll back.
-3. Upload/finalize locks Snapshot → Workspace; archive-win rejects staging mutation.
-4. Non-import Source mutation keeps Source → Workspace.
-5. Membership mutation and archive serialize on Workspace lock.
-6. Add an explicit regression test that would deadlock if any path acquires Workspace and then waits for a Snapshot already held by a Snapshot-first flow; the implemented paths must complete without lock timeout/deadlock.
+- [ ] **Step 2: Write existing-Snapshot deadlock/race tests**
 
-- [ ] **Step 2: Add shared Workspace validation helper**
+Cover initial apply, resync apply, upload/finalize, non-import Source mutation, and membership vs archive. Include explicit regression that would deadlock if any path acquires Workspace then waits for a Snapshot already held by Snapshot-first flow.
 
-```ts
-export async function lockActiveWorkspaceForMutation(
-  repositories: SourceRepositories,
-  caller: CallerContext,
-  workspaceId: string,
-  capability: WorkspaceCapability,
-): Promise<Workspace> {
-  const workspace = await repositories.workspaces.lockById(workspaceId);
-  if (!workspace) throw new WorkspaceNotFoundError();
-  await repositories.workspaceAccess.requireWithinTransaction(repositories, caller, workspaceId, capability);
-  if (workspace.lifecycleState !== "ACTIVE") throw new WorkspaceArchivedMutationError();
-  return workspace;
-}
-```
+- [ ] **Step 3: Retrofit `createInitial`**
 
-This helper acquires only Workspace; the caller is responsible for entering it in the correct outer lock order.
+Keep creator quota serialization outermost when used. In the same UoW transaction, lock Workspace, evaluate `source.manage`, require ACTIVE, assert quota, then insert Snapshot + staging rows.
 
-- [ ] **Step 3: Retrofit Phase 2 ImportSnapshot mutation paths first**
+- [ ] **Step 4: Retrofit `createResync` into one transaction**
 
-Initial apply:
+Remove the old split flow that first calls `sources.findById()` in one transaction and later `createBound()` in another. New flow under quota lock:
 
 ```text
-lock ImportSnapshot FOR UPDATE
-→ validate snapshot creator/state/binding
+lock Source FOR UPDATE
+→ validate FOLDER_SYNC / SOURCE_MANAGED
 → lock Workspace FOR UPDATE
-→ re-evaluate source.manage + ACTIVE
-→ insert Source
-→ execute plan
+→ authorize + require ACTIVE
+→ read source.syncVersion while locks are held
+→ construct and insert Snapshot + staging rows
 ```
 
-Resync/apply:
+- [ ] **Step 5: Retrofit existing Snapshot paths**
 
-```text
-lock ImportSnapshot FOR UPDATE
-→ lock bound Source FOR UPDATE
-→ verify Source/Workspace binding
-→ lock parent Workspace FOR UPDATE
-→ re-evaluate source.manage + ACTIVE
-→ execute plan
-```
+Upload/finalize: Snapshot → Workspace. Apply initial: Snapshot → Workspace. Apply resync: Snapshot → Source → Workspace.
 
-Upload/finalize/staging mutation:
+- [ ] **Step 6: Retrofit non-import Knowledge/Source mutations**
 
-```text
-lock ImportSnapshot FOR UPDATE
-→ lock snapshot.workspaceId Workspace FOR UPDATE
-→ re-evaluate capability + ACTIVE
-→ mutate staging rows
-```
+Existing Source: Source → Workspace. New Source without Snapshot: Workspace → insert.
 
-Do not introduce any helper that locks Workspace before loading/locking the ImportSnapshot for these flows.
-
-- [ ] **Step 4: Retrofit non-import existing Source mutation paths**
-
-```text
-resolve Source
-→ lock Source FOR UPDATE
-→ lock Source.workspaceId Workspace FOR UPDATE
-→ re-evaluate capability + ACTIVE
-→ deeper locks/write
-```
-
-Do not lock Workspace then later lock an existing Source.
-
-- [ ] **Step 5: Retrofit non-import new Source creation**
-
-When no ImportSnapshot/Source row exists, lock Workspace first, validate ACTIVE + `source.manage`, then insert.
-
-- [ ] **Step 6: Verify concurrency and regression suites**
+- [ ] **Step 7: Verify**
 
 ```bash
 npm run test:integration
 npm run typecheck
 ```
 
-Expected: all Snapshot/Source/Workspace race tests and Phase 1/2 mutation tests pass without deadlock or post-archive mutation commit.
+Expected: all archive races complete without deadlock or post-archive mutation commit.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add src/modules src/infrastructure/database tests/integration/phase3-concurrency.test.ts
-git commit -m "fix: serialize workspace lifecycle without import lock inversion"
+git commit -m "fix: serialize all workspace import and content mutations"
 ```
 
 ---
@@ -998,8 +786,6 @@ git commit -m "fix: serialize workspace lifecycle without import lock inversion"
 - Modify: `src/server/composition.ts`
 - Extend: `tests/integration/phase3-authorization.test.ts`
 
-**Interfaces:**
-
 ```ts
 export type UserAccessInspection = {
   userId: string;
@@ -1010,86 +796,56 @@ export type UserAccessInspection = {
 };
 ```
 
-- [ ] **Step 1: Write failing access-inspection tests**
+- [ ] **Step 1: Test current-caller vs other-user access inspection**
 
-Current caller returns `groupAccess="EVALUATED"` with matched groups/effective capabilities. Another user returns direct role plus `UNKNOWN_NOT_EVALUATED`, with no fabricated matched groups/effective set.
+Current caller may show matched groups/effective capabilities. Other user returns direct-only + `UNKNOWN_NOT_EVALUATED`.
 
-- [ ] **Step 2: Implement trusted caller server helper once**
+- [ ] **Step 2: Reuse shared trusted-caller helper**
 
-Every route reuses Task 7’s shared trusted caller bootstrap: trusted claims → Hub identity resolution → ensurePersonalWorkspace → CallerContext. Never accept identity/group/platform capability fields from request JSON.
+Never accept identity/group/platform capability fields from request JSON.
 
-- [ ] **Step 3: Implement governance route handlers**
+- [ ] **Step 3: Implement governance routes**
 
-Handlers cover Team create/rename/archive/restore, direct member CRUD, group mapping CRUD, audit read. Do not create HTTP handler for system recovery.
+Team create/rename/archive/restore, member CRUD, group mapping CRUD, audit read. No normal HTTP route for system recovery.
 
-- [ ] **Step 4: Implement truthful access-inspection DTO**
-
-Only compare requested userId to `caller.identity.id` to decide whether current trusted groups may be evaluated.
-
-- [ ] **Step 5: Verify**
+- [ ] **Step 4: Verify and commit**
 
 ```bash
 npm run test:integration
 npm run typecheck
 npm run build
-```
-
-- [ ] **Step 6: Commit**
-
-```bash
 git add src/server src/app/api tests/integration/phase3-authorization.test.ts
 git commit -m "feat: expose workspace governance server contracts"
 ```
 
 ---
 
-### Task 12: Make My Space the default and add grouped Workspace/admin UI
+### Task 12: Make My Space default and add grouped Workspace/admin UI
 
 **Files:**
 - Modify: `src/app/page.tsx`
 - Modify: `src/components/shell/workspace-selector.tsx`
 - Create: `src/app/w/[workspaceId]/settings/page.tsx`
-- Create: `src/components/workspaces/workspace-admin-page.tsx`
-- Create: `src/components/workspaces/member-table.tsx`
-- Create: `src/components/workspaces/group-mapping-table.tsx`
-- Create: `src/components/workspaces/audit-list.tsx`
+- Create components under `src/components/workspaces/`
 - Create/extend: `tests/e2e/phase3-workspace-governance.spec.ts`
 
 - [ ] **Step 1: Write failing E2E expectations**
 
-Verify `/` lands in My Space even when Team Workspaces exist; selector groups My Space separately; Personal settings hide governance controls; Team settings obey OWNER/ADMIN authority.
+`/` lands in My Space even when Team Workspaces exist; selector groups Personal/Teams; Personal hides governance controls; Team settings obey OWNER/ADMIN boundaries.
 
-- [ ] **Step 2: Update root resolution**
+- [ ] **Step 2: Update root resolution and selector**
 
-Reuse Task 7’s shared bootstrap, then resolve the default Knowledge target inside its provisioned My Space only. Root navigation must not be the sole provisioning entry point.
+My Space first, Team name ascending for MVP.
 
-- [ ] **Step 3: Group selector**
+- [ ] **Step 3: Build Team governance UI**
 
-Render optgroups or equivalent accessible UI:
+Separate Members / SSO Groups / Audit. For another user show `Group access not evaluated`, never a fabricated effective role.
 
-```tsx
-<optgroup label="Personal">
-  <option value={mySpace.id}>My Space</option>
-</optgroup>
-<optgroup label="Team Workspaces">
-  {teams.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
-</optgroup>
-```
-
-- [ ] **Step 4: Build Team governance UI**
-
-Keep Members, SSO Groups, Audit separate. For another user show `Group access not evaluated`; do not show a false effective role.
-
-- [ ] **Step 5: Verify**
+- [ ] **Step 4: Verify and commit**
 
 ```bash
 npm run test:e2e
 npm run build
-```
-
-- [ ] **Step 6: Commit**
-
-```bash
 git add src/app src/components tests/e2e/phase3-workspace-governance.spec.ts
 git commit -m "feat: add personal-first workspace governance ui"
 ```
@@ -1102,7 +858,7 @@ git commit -m "feat: add personal-first workspace governance ui"
 - Create: `docs/superpowers/verification/2026-09-14-phase-3-workspace-governance-verification.md`
 - Modify docs only if implementation evidence reveals a real spec mismatch
 
-- [ ] **Step 1: Run all static/unit checks**
+- [ ] **Step 1: Static/unit checks**
 
 ```bash
 npm run lint
@@ -1110,55 +866,46 @@ npm run typecheck
 npm run test:unit
 ```
 
-Expected: PASS.
-
-- [ ] **Step 2: Run all integration tests**
+- [ ] **Step 2: Integration checks**
 
 ```bash
 npm run test:integration
 ```
 
-Expected: PASS, including Hub identity resolution, bootstrap, SSO/provider, owner invariant, audit, direct+group union, and Snapshot/Source/Workspace archive concurrency races.
+Must include identity-link, staged migration/bootstrap, authorization, audit, and pre-/post-Snapshot concurrency suites.
 
-- [ ] **Step 3: Run E2E and production build**
+- [ ] **Step 3: E2E/build**
 
 ```bash
 npm run test:e2e
 npm run build
 ```
 
-Expected: PASS.
-
-- [ ] **Step 4: Verify security invariants explicitly**
-
-Record evidence that:
+- [ ] **Step 4: Record explicit security evidence**
 
 ```text
 - production cannot silently use Local identity
 - browser cannot inject identity/groups/platform capabilities
-- external SSO subject/employee identifiers never become users.id directly
-- existing emp_id resolves to stable existing Hub UUID
-- concurrent first login for one emp_id creates exactly one Hub UUID user
-- every existing user is backfilled with one My Space; first-login/deep-link/API bootstrap also provisions it
-- external group ID matching and uniqueness use exact UTF-8 bytes
-- every Team has direct OWNER >= 1
+- users.id is always Hub UUIDv7
+- (provider, subject) is durable account-link truth
+- recycled emp_id cannot inherit an existing linked Hub account
+- migration 008 can stage legacy DB; migration 009 cannot apply before bootstrap readiness
+- after migration 009, role/source/type final constraints and canonical FKs are active
+- every Team direct OWNER >= 1
 - group cannot grant OWNER
-- ADMIN cannot create governance authority or demote/remove existing OWNER/ADMIN grants
+- ADMIN cannot modify OWNER/ADMIN authority
 - other-user group access is never fabricated
-- import lock order is ImportSnapshot → [Source] → Workspace; no Workspace → ImportSnapshot inversion exists
-- non-import existing Source lock order remains Source → Workspace
-- archive and content/import/governance writes serialize on Workspace row
+- createInitial/createResync cannot commit snapshots after archive wins
+- createResync binding/version capture and snapshot insert occur in one transaction
+- existing import lock order is Snapshot → [Source] → Workspace
+- no Workspace → Snapshot or Workspace → existing Source inversion exists
 - archived ordinary writes/governance fail
 - system recovery is not exposed via normal HTTP/UI and is audited
 - Source/Document IDs survive Phase 3 migration
 - no Source/Document ACL columns were added
 ```
 
-- [ ] **Step 5: Write verification report**
-
-Include command outputs/summary, Hub identity resolution evidence, migration/bootstrap evidence, two-connection race/deadlock evidence, provider selection evidence, and final acceptance checklist.
-
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Write verification report and commit**
 
 ```bash
 git add docs/superpowers/verification
@@ -1175,13 +922,15 @@ git commit -m "docs: verify phase 3 workspace governance"
 | Fixed My Space + default entry | 7, 12 |
 | Fixed roles/capabilities | 2, 6 |
 | Trusted external groups/platform capability | 2, 3, 6 |
-| Company SSO transport + Hub UUID resolution | 3, 7 |
-| Explicit legacy owner bootstrap/readiness | 4 |
+| Durable `(provider, subject)` → Hub UUID identity | 1, 3, 7 |
+| Explicit legacy owner bootstrap | 4 |
+| Migration 009 final NOT NULL/CHECK/FK constraints | 4 |
 | Direct + group capability union | 6 |
 | OWNER/ADMIN governance | 8, 9 |
 | Team direct OWNER >= 1 | 4, 9 |
 | Workspace-only ACL | 6, 10 |
 | Archive/read-only semantics | 8, 9, 10 |
+| Pre-Snapshot import creation locking | 10 |
 | Snapshot/Source/Workspace lock hierarchy | 5, 10 |
 | Archive/write concurrency serialization | 5, 10 |
 | System-only stranded governance recovery | 8 |
