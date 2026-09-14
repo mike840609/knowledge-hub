@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ResourceAccessDenied } from "@/components/errors/resource-access-denied";
 import { ImportPreview } from "@/components/imports/import-preview";
+import { classifyImportPreviewPageError } from "@/server/import-preview-page-error";
 import { getSourceImportPreview } from "@/server/source-imports";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +17,11 @@ export default async function WorkspaceSourceImportPreviewPage({
   try {
     preview = await getSourceImportPreview(snapshotId);
   } catch (error) {
-    if (error instanceof Error && "code" in error && (error as { code: unknown }).code === "IMPORT_SNAPSHOT_NOT_FOUND") notFound();
+    const state = classifyImportPreviewPageError(error);
+    if (state === "NOT_FOUND") notFound();
+    if (state === "ACCESS_DENIED") {
+      return <ResourceAccessDenied backHref={`/w/${workspaceId}/sources`} />;
+    }
     throw error;
   }
   // The Preview carries its own workspaceId; the route Workspace is navigation

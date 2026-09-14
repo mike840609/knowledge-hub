@@ -95,10 +95,12 @@ describe("Phase 2 creator-private preview reads", () => {
     await expect(services().preview.get(fixtureCaller(), uuidv7())).rejects.toMatchObject({ code: "IMPORT_SNAPSHOT_NOT_FOUND" });
   });
 
-  it("denies the creator after workspace membership removal", async () => {
+  it("denies the known creator explicitly after workspace membership removal", async () => {
     const { fixture, session } = await readySession();
     await pool.query("DELETE FROM workspace_memberships WHERE workspace_id=? AND user_id=?", [fixture.workspaceId, fixtureIdentity.id]);
-    await expect(services().preview.get(fixtureCaller(), session.snapshotId)).rejects.toMatchObject({ code: "WORKSPACE_ACCESS_DENIED" });
+    await expect(services().preview.get(fixtureCaller(), session.snapshotId)).rejects.toMatchObject({
+      code: "IMPORT_SNAPSHOT_ACCESS_DENIED",
+    });
   });
 
   it("derives expiry from expiresAt and rejects BUILDING snapshots without a persisted plan", async () => {
