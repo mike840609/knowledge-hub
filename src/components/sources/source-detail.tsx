@@ -1,11 +1,13 @@
 import { RefreshCw } from "lucide-react";
 import type { SourceDetailModel } from "@/server/source-read";
+import { isFolderSyncable } from "@/modules/knowledge/domain/source-policy";
 import { ImportHistory } from "@/components/sources/import-history";
 import { sourceTypeLabel } from "@/components/sources/source-list-row";
 import { TechnicalDetails } from "@/components/sources/technical-details";
 
 export function SourceDetail({ model, showImportSuccess = false }: { model: SourceDetailModel; showImportSuccess?: boolean }) {
   const { workspace, source, runs } = model;
+  const syncable = isFolderSyncable(source);
   return (
     <div className="flex flex-col gap-6">
       {showImportSuccess ? (
@@ -22,15 +24,17 @@ export function SourceDetail({ model, showImportSuccess = false }: { model: Sour
             <span>Sync version {source.syncVersion}</span>
           </p>
         </div>
-        <form method="get" action={`/w/${workspace.id}/sources/${source.id}/update`}>
-          <button
-            type="submit"
-            className="inline-flex items-center gap-2 rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-sm font-medium text-kh-text transition hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent"
-          >
-            <RefreshCw size={15} strokeWidth={2} aria-hidden="true" />
-            Update from folder
-          </button>
-        </form>
+        {syncable ? (
+          <form method="get" action={`/w/${workspace.id}/sources/${source.id}/update`}>
+            <button
+              type="submit"
+              className="inline-flex items-center gap-2 rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-sm font-medium text-kh-text transition hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent"
+            >
+              <RefreshCw size={15} strokeWidth={2} aria-hidden="true" />
+              Update from folder
+            </button>
+          </form>
+        ) : null}
       </header>
 
       <section aria-labelledby="source-overview-heading" className="rounded-md border border-kh-border bg-kh-bg p-4">

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { FolderImportForm } from "@/components/imports/folder-import-form";
+import { isFolderSyncable } from "@/modules/knowledge/domain/source-policy";
 import { getSourceDetailModel } from "@/server/source-read";
 
 export default async function WorkspaceSourceUpdatePage({
@@ -9,7 +10,7 @@ export default async function WorkspaceSourceUpdatePage({
 }) {
   const { workspaceId, sourceId } = await params;
   const model = await getSourceDetailModel(workspaceId, sourceId);
-  if (!model) {
+  if (!model || !isFolderSyncable(model.source)) {
     return (
       <main className="mx-auto flex min-h-screen max-w-4xl flex-col justify-center px-6 py-16">
         <h1 className="text-2xl font-semibold">Not found or no access</h1>
