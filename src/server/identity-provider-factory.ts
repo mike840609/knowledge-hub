@@ -4,6 +4,7 @@ import type { IdentityProvider } from "@/modules/identity/ports/identity-provide
 import type { CompanySsoSessionReader } from "@/modules/identity/ports/company-sso-session-reader";
 import { IdentityError } from "@/modules/knowledge/domain/errors";
 import {
+  allowLocalIdentityInProduction,
   companySsoProviderName,
   companySsoTeamCreateGroups,
   identityProviderKind,
@@ -34,6 +35,10 @@ export function createIdentityProvider(deps: IdentityProviderFactoryDeps = {}): 
     });
   }
   if (isProductionEnvironment()) {
+    // Test/E2E only: the E2E harness sets KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION
+    // explicitly to boot next start with local identity. Never set in a real
+    // company deployment; production readiness still requires company-sso.
+    if (allowLocalIdentityInProduction()) return new LocalIdentityProvider();
     throw new IdentityError("Local identity provider is not allowed in production; configure the Company SSO provider.");
   }
   return new LocalIdentityProvider();

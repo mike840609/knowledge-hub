@@ -14,6 +14,7 @@ const ENV_NAMES = [
   "KM_IDENTITY_PROVIDER",
   "KM_COMPANY_SSO_PROVIDER",
   "KM_COMPANY_SSO_TEAM_CREATE_GROUPS",
+  "KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION",
   "NODE_ENV",
 ];
 const saved = new Map(ENV_NAMES.map((name) => [name, process.env[name]]));
@@ -186,8 +187,17 @@ describe("identity provider factory", () => {
   it("fails closed in production when Local is selected; never silently falls back", () => {
     enableLocal();
     process.env.KM_IDENTITY_PROVIDER = "local";
+    delete process.env.KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION;
     setNodeEnv("production");
     expect(() => createIdentityProvider()).toThrow(IdentityError);
+  });
+
+  it("allows Local in production only with the explicit test-only opt-in flag", () => {
+    enableLocal();
+    process.env.KM_IDENTITY_PROVIDER = "local";
+    process.env.KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION = "true";
+    setNodeEnv("production");
+    expect(createIdentityProvider()).toBeInstanceOf(LocalIdentityProvider);
   });
 
   it("fails closed when Company SSO is selected without a server-side session reader", () => {

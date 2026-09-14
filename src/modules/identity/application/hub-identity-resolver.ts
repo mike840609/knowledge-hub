@@ -28,15 +28,29 @@ export class HubIdentityResolver {
 
   async resolve(external: ExternalCompanyIdentity): Promise<UserIdentity> {
     assertTrustedExternalIdentity(external);
-    try {
-      return await this.unitOfWork.run((repositories) => this.resolveOnce(repositories, external, new Date()));
-    } catch (error) {
-      if (error instanceof IdentityLinkRequiredError || error instanceof IdentityLinkConflictError) throw error;
-      if (error instanceof IntegrityError) {
-        return this.unitOfWork.run((repositories) => this.resolveOnce(repositories, external, new Date()));
+    // Bounded convergence loop (max 5 attempts): concurrent first-logins race
+    // on the (provider, subject) / emp_id unique constraints, and a loser can
+    // collide more than once when its retry re-reads before the winner
+    // commits. Deadlocks/lock-waits surface as retryable apply failures
+    // (code IMPORT_APPLY_RETRYABLE), not IntegrityError, so both are
+    // retried. Each attempt re-runs resolveOnce, which re-reads the winner
+    // link first, so convergence is monotonic. Fail-closed errors
+    // (IdentityLinkRequired/Conflict) and non-retryable errors rethrow
+    // immediately without consuming attempts.
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      try {
+        return await this.unitOfWork.run((repositories) => this.resolveOnce(repositories, external, new Date()));
+      } catch (error) {
+        if (error instanceof IdentityLinkRequiredError || error instanceof IdentityLinkConflictError) throw error;
+        if (error instanceof IntegrityError || isRetryableApplyFailure(error)) {
+          lastError = error;
+          continue;
+        }
+        throw error;
       }
-      throw error;
     }
+    throw lastError;
   }
 
   private async resolveOnce(
@@ -74,6 +88,15 @@ export class HubIdentityResolver {
     });
     return user;
   }
+}
+
+function isRetryableApplyFailure(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code: unknown }).code === "IMPORT_APPLY_RETRYABLE"
+  );
 }
 
 function assertTrustedExternalIdentity(external: ExternalCompanyIdentity): void {

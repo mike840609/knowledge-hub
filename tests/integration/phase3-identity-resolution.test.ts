@@ -191,6 +191,24 @@ describe("Hub runtime identity resolution", () => {
     expect(await countLinks(provider, subject)).toBe(1);
   });
 
+  it("F2. 16-way concurrent identical first-login converges to one user and one link", async () => {
+    const tag = uuidv7();
+    const provider = "company-sso";
+    const subject = `subject-F2-${tag}`;
+    const empId = `EMP-F2-${tag}`;
+    const outcomes = await Promise.allSettled(
+      Array.from({ length: 16 }, () => resolver.resolve(claims(provider, subject, empId, "Racing Login", "RD"))),
+    );
+    const ids = outcomes.map((outcome) => {
+      expect(outcome.status).toBe("fulfilled");
+      if (outcome.status !== "fulfilled") throw new Error("concurrent first-login must converge");
+      return outcome.value.id;
+    });
+    expect(new Set(ids).size).toBe(1);
+    expect(await countUsersByEmp(empId)).toBe(1);
+    expect(await countLinks(provider, subject)).toBe(1);
+  });
+
   it("G. trusted emp_id drift on an existing subject never relinks another account", async () => {
     const tag = uuidv7();
     const provider = "company-sso";

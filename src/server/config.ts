@@ -65,3 +65,15 @@ export function companySsoRolloutHubUserIds(): readonly string[] | undefined {
 export function isProductionEnvironment(): boolean {
   return process.env.NODE_ENV === "production";
 }
+
+/**
+ * Explicit test-only opt-in permitting the Local identity provider under
+ * `NODE_ENV=production` (E2E boots via `next build`/`next start`, which
+ * require production mode). Set ONLY via
+ * `KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION=true` by the E2E harness; never set
+ * this in a real company deployment — production readiness still requires the
+ * Company SSO provider.
+ */
+export function allowLocalIdentityInProduction(): boolean {
+  return process.env.KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION === "true";
+}

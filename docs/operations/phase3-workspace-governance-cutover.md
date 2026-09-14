@@ -84,6 +84,10 @@ npm run db:migrate
 #    The Phase-3-compatible deployment being the only canonical writer is
 #    verified procedurally (no query can prove which deployments hold write
 #    credentials) before maintenance is released.
+#
+#    WARNING: KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION is a test/E2E-only opt-in
+#    for booting `next start` with local identity. Never set it in a real
+#    production deployment; production readiness still requires company-sso.
 ```
 
 ## Quiescence contract (spec §15.1)
