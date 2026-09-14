@@ -514,7 +514,17 @@ Team admin UI 分 Members / SSO Groups / Audit。Current caller 可顯示完整 
 
 My Space Document A → Promote → new Team Document B；A 保留；B 新 ID；不 move、不 sync、不共享 ID、不建 lineage dependency。
 
-## 19. Migration / rollout strategy
+## 19. Production cutover strategy
+
+本節只描述 **implementation 已完成之後** 的 production cutover。下列項目在進入 maintenance 前就必須已完成並通過測試：
+
+- Phase-3-compatible Workspace / membership / Personal / Team writers。
+- Source / Knowledge / import canonical locking retrofit。
+- Personal Workspace backfill tooling。
+- Company SSO provider、durable identity-link resolver、capability authorization。
+- Team governance API/UI 與 system-only recovery implementation。
+
+Production cutover 順序：
 
 1. Enter canonical-write quiescence / maintenance mode before 008。
 2. Apply migration 008；其中 `personal_owner_user_id` nullable UNIQUE 從此生效。
@@ -523,11 +533,12 @@ My Space Document A → Promote → new Team Document B；A 保留；B 新 ID；
 5. Run explicit trusted legacy identity-link bootstrap；禁止 runtime 用 emp_id claim existing user。
 6. Provision/backfill existing users My Space + OWNER/SYSTEM_PERSONAL；concurrent duplicate 由 008 unique constraint 收斂。
 7. While writes remain quiesced, apply migration 009 final constraints/FKs。
-8. Pass production readiness：009 applied + company provider configured + identity-link rollout complete + Phase-3-compatible writer ready。
-9. Enable trusted Company SSO → identity-link resolver → CallerContext and capability-union authorization。
-10. Retrofit/enable all Workspace mutations with canonical locking。
-11. Exit maintenance only after Phase-3-compatible deployment is active。
-12. Enable personal-first UI + Team governance UI/API + system recovery。
+8. Pass production readiness：009 applied + company provider configured + identity-link rollout complete + Phase-3-compatible application/writers ready。
+9. Switch traffic / enable trusted Company SSO → identity-link resolver → CallerContext + capability-union authorization on the Phase-3-compatible deployment。
+10. Verify the Phase-3-compatible deployment is the only canonical application writer。
+11. Exit maintenance / resume canonical writes。
+
+Canonical locking、writer retrofit、API/UI implementation **不得**放在上述 cutover window 內才進行；它們是進入 production cutover 前的 implementation prerequisite。
 
 ## 20. Required tests / verification evidence
 
