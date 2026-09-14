@@ -17,6 +17,8 @@ import {
 } from "@/modules/knowledge/domain/errors";
 import { WorkspaceAccessDeniedError } from "@/modules/workspaces/domain/errors";
 import { uuidv7 } from "@/shared/ids/uuidv7";
+import { createTeamWorkspaceInsert } from "@/modules/workspaces/domain/workspace";
+import { createDirectMembership } from "@/modules/workspaces/domain/workspace-membership";
 import { disposeIsolatedDatabase, provisionIsolatedDatabase } from "../../scripts/db/test-database";
 import { runMigrations, type IsolatedDatabaseHandle } from "../../scripts/db/migrate";
 
@@ -70,8 +72,8 @@ async function setupTreeFixture(): Promise<TreeFixture> {
   await new MariaDbUnitOfWork(pool).run(async (repositories) => {
     await repositories.users.upsertIdentity(owner);
     await repositories.users.upsertIdentity(outsider);
-    await repositories.workspaces.insert({ id: workspaceId, name: "Tree Workspace", createdAt: now, updatedAt: now });
-    await repositories.workspaceMemberships.insert({ workspaceId, userId: owner.id, createdAt: now });
+    await repositories.workspaces.insert(createTeamWorkspaceInsert({ id: workspaceId, name: "Tree Workspace", createdBy: owner.id, now }));
+    await repositories.workspaceMemberships.insert(createDirectMembership({ workspaceId, userId: owner.id, role: "OWNER", now }));
     await repositories.sources.insert({
       id: sourceId, name: "Tree Source", workspaceId, sourceType: "HUB", ownership: "HUB_MANAGED",
       status: "ACTIVE", syncVersion: 0, createdBy: owner.id, updatedBy: owner.id,

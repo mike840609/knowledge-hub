@@ -8,6 +8,8 @@ import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 import type { UserIdentity } from "@/modules/identity/domain/user-identity";
 import { InvalidParentError, TreeCycleError } from "@/modules/knowledge/domain/errors";
 import { uuidv7 } from "@/shared/ids/uuidv7";
+import { createTeamWorkspaceInsert } from "@/modules/workspaces/domain/workspace";
+import { createDirectMembership } from "@/modules/workspaces/domain/workspace-membership";
 import { disposeIsolatedDatabase, provisionIsolatedDatabase } from "../../scripts/db/test-database";
 import { runMigrations, type IsolatedDatabaseHandle } from "../../scripts/db/migrate";
 
@@ -47,9 +49,9 @@ async function setupConcurrencyFixture(pool: Pool): Promise<{ sourceId: string; 
   await new MariaDbUnitOfWork(pool).run(async (repositories) => {
     await repositories.users.upsertIdentity(first);
     await repositories.users.upsertIdentity(second);
-    await repositories.workspaces.insert({ id: workspaceId, name: "Concurrency Workspace", createdAt: now, updatedAt: now });
-    await repositories.workspaceMemberships.insert({ workspaceId, userId: first.id, createdAt: now });
-    await repositories.workspaceMemberships.insert({ workspaceId, userId: second.id, createdAt: now });
+    await repositories.workspaces.insert(createTeamWorkspaceInsert({ id: workspaceId, name: "Concurrency Workspace", createdBy: first.id, now }));
+    await repositories.workspaceMemberships.insert(createDirectMembership({ workspaceId, userId: first.id, role: "OWNER", now }));
+    await repositories.workspaceMemberships.insert(createDirectMembership({ workspaceId, userId: second.id, role: "OWNER", now }));
     await repositories.sources.insert({
       id: sourceId, name: "Concurrency Source", workspaceId, sourceType: "HUB", ownership: "HUB_MANAGED",
       status: "ACTIVE", syncVersion: 0, createdBy: first.id, updatedBy: first.id,

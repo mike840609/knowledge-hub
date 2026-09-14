@@ -29,6 +29,8 @@ import {
 import { SourceApplicationService } from "@/modules/sources/application/source-version-guard";
 import { contentFingerprint, fingerprintRevisionContent } from "@/modules/knowledge/domain/content";
 import { uuidv7 } from "@/shared/ids/uuidv7";
+import { createTeamWorkspaceInsert } from "@/modules/workspaces/domain/workspace";
+import { createDirectMembership } from "@/modules/workspaces/domain/workspace-membership";
 import { disposeIsolatedDatabase, provisionIsolatedDatabase } from "../../scripts/db/test-database";
 import { runMigrations, type IsolatedDatabaseHandle } from "../../scripts/db/migrate";
 
@@ -74,8 +76,8 @@ async function setupMappingScope(): Promise<MappingScope> {
   await new MariaDbUnitOfWork(pool).run(async (repositories) => {
     await repositories.users.upsertIdentity(owner);
     await repositories.users.upsertIdentity(outsider);
-    await repositories.workspaces.insert({ id: workspaceId, name: "Mapping Workspace", createdAt: now, updatedAt: now });
-    await repositories.workspaceMemberships.insert({ workspaceId, userId: owner.id, createdAt: now });
+    await repositories.workspaces.insert(createTeamWorkspaceInsert({ id: workspaceId, name: "Mapping Workspace", createdBy: owner.id, now }));
+    await repositories.workspaceMemberships.insert(createDirectMembership({ workspaceId, userId: owner.id, role: "OWNER", now }));
     await repositories.sources.insert({
       id: managedSourceId, name: "Managed Source", workspaceId, sourceType: "FOLDER_SYNC", ownership: "SOURCE_MANAGED",
       status: "ACTIVE", syncVersion: 0, createdBy: owner.id, updatedBy: owner.id,

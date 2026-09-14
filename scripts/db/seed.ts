@@ -7,6 +7,8 @@ import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 import type { UserIdentity } from "@/modules/identity/domain/user-identity";
 import type { SourceRepositories } from "@/modules/sources/ports/unit-of-work";
 import { localIdentityConfig } from "@/server/config";
+import { createTeamWorkspaceInsert } from "@/modules/workspaces/domain/workspace";
+import { createDirectMembership } from "@/modules/workspaces/domain/workspace-membership";
 
 export const DEV_FIXTURE_IDS = {
   workspace: "0199f000-0000-7000-8000-000000000001",
@@ -49,9 +51,9 @@ export const BROWSER_FIXTURES = {
   archivedActiveBody: "Active notes inside an archived source stay readable with the archived flag.",
 };
 
-async function ensureWorkspace(repositories: SourceRepositories, id: string, name: string, now: Date): Promise<void> {
+async function ensureWorkspace(repositories: SourceRepositories, id: string, name: string, createdBy: string, now: Date): Promise<void> {
   if (!(await repositories.workspaces.findById(id))) {
-    await repositories.workspaces.insert({ id, name, createdAt: now, updatedAt: now });
+    await repositories.workspaces.insert(createTeamWorkspaceInsert({ id, name, createdBy, now }));
   }
 }
 
@@ -69,12 +71,12 @@ async function seedBrowserFixtures(pool: ReturnType<typeof createDatabasePool>, 
   const now = new Date();
   await unitOfWork.run(async (repositories) => {
     await repositories.users.upsertIdentity(identity);
-    await ensureWorkspace(repositories, BROWSER_FIXTURE_IDS.queryMasterWorkspace, "Query Master", now);
-    await ensureWorkspace(repositories, BROWSER_FIXTURE_IDS.swfpWorkspace, "SWFP", now);
-    await ensureWorkspace(repositories, BROWSER_FIXTURE_IDS.restrictedWorkspace, "Restricted Vault", now);
+    await ensureWorkspace(repositories, BROWSER_FIXTURE_IDS.queryMasterWorkspace, "Query Master", identity.id, now);
+    await ensureWorkspace(repositories, BROWSER_FIXTURE_IDS.swfpWorkspace, "SWFP", identity.id, now);
+    await ensureWorkspace(repositories, BROWSER_FIXTURE_IDS.restrictedWorkspace, "Restricted Vault", identity.id, now);
     for (const workspaceId of [BROWSER_FIXTURE_IDS.queryMasterWorkspace, BROWSER_FIXTURE_IDS.swfpWorkspace]) {
       if (!(await repositories.workspaceMemberships.find(workspaceId, identity.id))) {
-        await repositories.workspaceMemberships.insert({ workspaceId, userId: identity.id, createdAt: now });
+        await repositories.workspaceMemberships.insert(createDirectMembership({ workspaceId, userId: identity.id, role: "OWNER", now }));
       }
     }
     await ensureSource(repositories, { id: BROWSER_FIXTURE_IDS.obsidianWikiSource, name: "Obsidian Wiki", workspaceId: BROWSER_FIXTURE_IDS.queryMasterWorkspace, createdBy: identity.id, now });
@@ -171,8 +173,8 @@ export async function seedDevelopmentDatabase(): Promise<void> {
       await repositories.users.upsertIdentity(identity);
       const now = new Date();
       const workspace = await repositories.workspaces.findById(DEV_FIXTURE_IDS.workspace);
-      if (!workspace) await repositories.workspaces.insert({ id: DEV_FIXTURE_IDS.workspace, name: "Local Knowledge", createdAt: now, updatedAt: now });
-      if (!(await repositories.workspaceMemberships.find(DEV_FIXTURE_IDS.workspace, identity.id))) await repositories.workspaceMemberships.insert({ workspaceId: DEV_FIXTURE_IDS.workspace, userId: identity.id, createdAt: now });
+      if (!workspace) await repositories.workspaces.insert(createTeamWorkspaceInsert({ id: DEV_FIXTURE_IDS.workspace, name: "Local Knowledge", createdBy: identity.id, now }));
+      if (!(await repositories.workspaceMemberships.find(DEV_FIXTURE_IDS.workspace, identity.id))) await repositories.workspaceMemberships.insert(createDirectMembership({ workspaceId: DEV_FIXTURE_IDS.workspace, userId: identity.id, role: "OWNER", now }));
       const existing = await repositories.sources.findById(DEV_FIXTURE_IDS.source);
       if (!existing) {
         await repositories.sources.insert({

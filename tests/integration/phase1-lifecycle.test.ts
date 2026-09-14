@@ -21,6 +21,8 @@ import {
 import { WorkspaceAccessDeniedError } from "@/modules/workspaces/domain/errors";
 import { normalizeRevisionContent, revisionContentHash } from "@/modules/knowledge/domain/content";
 import { uuidv7 } from "@/shared/ids/uuidv7";
+import { createTeamWorkspaceInsert } from "@/modules/workspaces/domain/workspace";
+import { createDirectMembership } from "@/modules/workspaces/domain/workspace-membership";
 import { createEntryFixture, createFolderEntryFixture, fixtureIdentity, secondFixtureIdentity } from "../fixtures/knowledge";
 import { disposeIsolatedDatabase, provisionIsolatedDatabase } from "../../scripts/db/test-database";
 import { runMigrations, type IsolatedDatabaseHandle } from "../../scripts/db/migrate";
@@ -68,8 +70,8 @@ async function setupLifecycleScope(): Promise<LifecycleScope> {
     await repositories.users.upsertIdentity(owner);
     await repositories.users.upsertIdentity(fixtureIdentity);
     await repositories.users.upsertIdentity(secondFixtureIdentity);
-    await repositories.workspaces.insert({ id: workspaceId, name: "Lifecycle Workspace", createdAt: now, updatedAt: now });
-    await repositories.workspaceMemberships.insert({ workspaceId, userId: owner.id, createdAt: now });
+    await repositories.workspaces.insert(createTeamWorkspaceInsert({ id: workspaceId, name: "Lifecycle Workspace", createdBy: owner.id, now }));
+    await repositories.workspaceMemberships.insert(createDirectMembership({ workspaceId, userId: owner.id, role: "OWNER", now }));
     await repositories.sources.insert({
       id: hubSourceId, name: "Hub Source", workspaceId, sourceType: "HUB", ownership: "HUB_MANAGED",
       status: "ACTIVE", syncVersion: 0, createdBy: owner.id, updatedBy: owner.id,

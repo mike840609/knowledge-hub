@@ -5,6 +5,8 @@ import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction
 import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
 import { contentFingerprint } from "@/modules/knowledge/domain/content";
 import type { KnowledgeSource } from "@/modules/sources/domain/source";
+import { createTeamWorkspaceInsert } from "@/modules/workspaces/domain/workspace";
+import { createDirectMembership } from "@/modules/workspaces/domain/workspace-membership";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 
 export const fixtureIdentity: UserIdentity = { id: "0199f000-0000-7000-8000-000000000011", emp_id: "FIXTURE-0011", name: "Fixture User", org_code: "FIXTURE" };
@@ -33,9 +35,9 @@ export async function createSourceFixture(pool: Pool, options: { managed?: boole
   await uow.run(async (repositories) => {
     await repositories.users.upsertIdentity(fixtureIdentity);
     await repositories.users.upsertIdentity(secondFixtureIdentity);
-    await repositories.workspaces.insert({ id: workspaceId, name: options.orgCode ? `Fixture ${options.orgCode}` : "Fixture Workspace", createdAt: now, updatedAt: now });
-    await repositories.workspaceMemberships.insert({ workspaceId, userId: fixtureIdentity.id, createdAt: now });
-    await repositories.workspaceMemberships.insert({ workspaceId, userId: secondFixtureIdentity.id, createdAt: now });
+    await repositories.workspaces.insert(createTeamWorkspaceInsert({ id: workspaceId, name: options.orgCode ? `Fixture ${options.orgCode}` : "Fixture Workspace", createdBy: fixtureIdentity.id, now }));
+    await repositories.workspaceMemberships.insert(createDirectMembership({ workspaceId, userId: fixtureIdentity.id, role: "OWNER", now }));
+    await repositories.workspaceMemberships.insert(createDirectMembership({ workspaceId, userId: secondFixtureIdentity.id, role: "OWNER", now }));
     await repositories.sources.insert(source);
     await repositories.tree.insert({ id: folderId, sourceId, parentId: null, nodeType: "FOLDER", name: "Fixture Folder", documentId: null, position: 0, status: "ACTIVE", updatedBy: fixtureIdentity.id, archivedBy: null, archivedAt: null });
   });

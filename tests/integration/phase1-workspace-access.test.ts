@@ -8,6 +8,8 @@ import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 import type { UserIdentity } from "@/modules/identity/domain/user-identity";
 import { WorkspaceAccessDeniedError } from "@/modules/workspaces/domain/errors";
 import { uuidv7 } from "@/shared/ids/uuidv7";
+import { createTeamWorkspaceInsert } from "@/modules/workspaces/domain/workspace";
+import { createDirectMembership } from "@/modules/workspaces/domain/workspace-membership";
 import { disposeIsolatedDatabase, provisionIsolatedDatabase } from "../../scripts/db/test-database";
 import { runMigrations, type IsolatedDatabaseHandle } from "../../scripts/db/migrate";
 
@@ -44,11 +46,11 @@ async function setupWorkspaceScope(): Promise<{ workspaceX: string; workspaceY: 
   const now = new Date();
   await new MariaDbUnitOfWork(pool).run(async (repositories) => {
     for (const user of [hrMember, rdMember, hrOutsider]) await repositories.users.upsertIdentity(user);
-    await repositories.workspaces.insert({ id: workspaceX, name: "Shared X", createdAt: now, updatedAt: now });
-    await repositories.workspaces.insert({ id: workspaceY, name: "RD Only Y", createdAt: now, updatedAt: now });
-    await repositories.workspaceMemberships.insert({ workspaceId: workspaceX, userId: hrMember.id, createdAt: now });
-    await repositories.workspaceMemberships.insert({ workspaceId: workspaceX, userId: rdMember.id, createdAt: now });
-    await repositories.workspaceMemberships.insert({ workspaceId: workspaceY, userId: rdMember.id, createdAt: now });
+    await repositories.workspaces.insert(createTeamWorkspaceInsert({ id: workspaceX, name: "Shared X", createdBy: hrMember.id, now }));
+    await repositories.workspaces.insert(createTeamWorkspaceInsert({ id: workspaceY, name: "RD Only Y", createdBy: rdMember.id, now }));
+    await repositories.workspaceMemberships.insert(createDirectMembership({ workspaceId: workspaceX, userId: hrMember.id, role: "OWNER", now }));
+    await repositories.workspaceMemberships.insert(createDirectMembership({ workspaceId: workspaceX, userId: rdMember.id, role: "OWNER", now }));
+    await repositories.workspaceMemberships.insert(createDirectMembership({ workspaceId: workspaceY, userId: rdMember.id, role: "OWNER", now }));
     await repositories.sources.insert({
       id: sourceX, name: "Shared Hub", workspaceId: workspaceX, sourceType: "HUB", ownership: "HUB_MANAGED",
       status: "ACTIVE", syncVersion: 0, createdBy: hrMember.id, updatedBy: hrMember.id,

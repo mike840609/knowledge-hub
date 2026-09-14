@@ -3,6 +3,11 @@ import type { Pool } from "mariadb";
 import { databaseConfig } from "@/infrastructure/database/mariadb/config";
 import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
 import { migrations } from "@/infrastructure/database/mariadb/migrations";
+import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction";
+import { createPersonalWorkspaceInsert, createTeamWorkspaceInsert } from "@/modules/workspaces/domain/workspace";
+import type { WorkspaceInsert } from "@/modules/workspaces/domain/workspace";
+import { createDirectMembership, createSystemPersonalMembership } from "@/modules/workspaces/domain/workspace-membership";
+import type { WorkspaceMembershipInsert } from "@/modules/workspaces/domain/workspace-membership";
 import { runMigrations, type IsolatedDatabaseHandle } from "../../scripts/db/migrate";
 import { disposeIsolatedDatabase, provisionIsolatedDatabase } from "../../scripts/db/test-database";
 import { uuidv7 } from "@/shared/ids/uuidv7";
@@ -204,5 +209,92 @@ describe("Phase 3 additive governance schema (migration 008)", () => {
     await expect(
       pool.query("INSERT INTO workspace_audit_events (id, workspace_id, actor_kind, event_type) VALUES (?, ?, 'SYSTEM', 'TEAM_WORKSPACE_CREATED')", [uuidv7(), missingWorkspaceId]),
     ).rejects.toThrow();
+  });
+});
+
+describe("Phase 3 canonical writer contracts (Task 5)", () => {
+  it("TEAM Workspace insert writes workspace_type=TEAM and lifecycle_state=ACTIVE", async () => {
+    const workspaceId = uuidv7();
+    const now = new Date();
+    await new MariaDbUnitOfWork(pool).run((repositories) =>
+      repositories.workspaces.insert(createTeamWorkspaceInsert({ id: workspaceId, name: "Writer Contract Team", createdBy: null, now })),
+    );
+    const rows = await pool.query<{ workspace_type: string | null; lifecycle_state: string | null; personal_owner_user_id: string | null }[]>(
+      "SELECT workspace_type, lifecycle_state, personal_owner_user_id FROM workspaces WHERE id = ?",
+      [workspaceId],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].workspace_type).toBe("TEAM");
+    expect(rows[0].lifecycle_state).toBe("ACTIVE");
+    expect(rows[0].personal_owner_user_id).toBeNull();
+  });
+
+  it("direct membership insert always writes role + membership_source=DIRECT", async () => {
+    const userId = uuidv7();
+    const workspaceId = uuidv7();
+    const now = new Date();
+    await pool.query("INSERT INTO users (id, emp_id, name, org_code) VALUES (?, ?, 'Direct Member', 'P3')", [userId, `p3-${userId}`]);
+    await new MariaDbUnitOfWork(pool).run(async (repositories) => {
+      await repositories.workspaces.insert(createTeamWorkspaceInsert({ id: workspaceId, name: "Direct Membership Workspace", createdBy: userId, now }));
+      await repositories.workspaceMemberships.insert(createDirectMembership({ workspaceId, userId, role: "EDITOR", now }));
+    });
+    const rows = await pool.query<{ role: string | null; membership_source: string | null }[]>(
+      "SELECT role, membership_source FROM workspace_memberships WHERE workspace_id = ? AND user_id = ?",
+      [workspaceId, userId],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].role).toBe("EDITOR");
+    expect(rows[0].membership_source).toBe("DIRECT");
+  });
+
+  it("personal/system insert API can write role=OWNER + membership_source=SYSTEM_PERSONAL", async () => {
+    const ownerId = uuidv7();
+    const workspaceId = uuidv7();
+    const now = new Date();
+    await pool.query("INSERT INTO users (id, emp_id, name, org_code) VALUES (?, ?, 'Personal Owner', 'P3')", [ownerId, `p3-${ownerId}`]);
+    await new MariaDbUnitOfWork(pool).run(async (repositories) => {
+      await repositories.workspaces.insert(createPersonalWorkspaceInsert({ id: workspaceId, name: "My Space", ownerUserId: ownerId, now }));
+      await repositories.workspaceMemberships.insert(createSystemPersonalMembership({ workspaceId, userId: ownerId, now }));
+    });
+    const workspaces = await pool.query<{ workspace_type: string | null; personal_owner_user_id: string | null }[]>(
+      "SELECT workspace_type, personal_owner_user_id FROM workspaces WHERE id = ?",
+      [workspaceId],
+    );
+    expect(workspaces[0].workspace_type).toBe("PERSONAL");
+    expect(String(workspaces[0].personal_owner_user_id)).toBe(ownerId);
+    const memberships = await pool.query<{ role: string | null; membership_source: string | null }[]>(
+      "SELECT role, membership_source FROM workspace_memberships WHERE workspace_id = ? AND user_id = ?",
+      [workspaceId, ownerId],
+    );
+    expect(memberships).toHaveLength(1);
+    expect(memberships[0].role).toBe("OWNER");
+    expect(memberships[0].membership_source).toBe("SYSTEM_PERSONAL");
+  });
+
+  it("repository inserts reject governance-less rows that migration 009 will forbid", async () => {
+    const now = new Date();
+    const legacyWorkspace = { id: uuidv7(), name: "Governance-less", createdAt: now, updatedAt: now } as unknown as WorkspaceInsert;
+    await expect(
+      new MariaDbUnitOfWork(pool).run((repositories) => repositories.workspaces.insert(legacyWorkspace)),
+    ).rejects.toThrow();
+    const legacyMembership = { workspaceId: uuidv7(), userId: uuidv7(), createdAt: now } as unknown as WorkspaceMembershipInsert;
+    await expect(
+      new MariaDbUnitOfWork(pool).run((repositories) => repositories.workspaceMemberships.insert(legacyMembership)),
+    ).rejects.toThrow();
+  });
+
+  it("legacy raw NULL rows remain possible only for controlled bootstrap tests", async () => {
+    const userId = uuidv7();
+    const workspaceId = uuidv7();
+    await pool.query("INSERT INTO users (id, emp_id, name, org_code) VALUES (?, ?, 'Bootstrap Legacy', 'P3')", [userId, `p3-${userId}`]);
+    await pool.query("INSERT INTO workspaces (id, name, workspace_type) VALUES (?, 'Bootstrap Legacy Workspace', NULL)", [workspaceId]);
+    await pool.query("INSERT INTO workspace_memberships (workspace_id, user_id, role, membership_source) VALUES (?, ?, NULL, NULL)", [workspaceId, userId]);
+    const rows = await pool.query<{ workspace_type: string | null; role: string | null }[]>(
+      "SELECT w.workspace_type, m.role FROM workspaces w INNER JOIN workspace_memberships m ON m.workspace_id = w.id WHERE w.id = ?",
+      [workspaceId],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].workspace_type).toBeNull();
+    expect(rows[0].role).toBeNull();
   });
 });
