@@ -18,3 +18,11 @@ test("source detail renders overview and hides folder update for a Hub-managed s
   await expect(page.getByRole("button", { name: "Update from folder" })).toHaveCount(0);
   await expect(page.getByText("Technical details")).toBeVisible();
 });
+
+test("folder update route rejects a non-syncable source", async ({ page }) => {
+  await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/sources/${OBSIDIAN_SOURCE}/update`);
+
+  await expect(page.getByRole("heading", { name: "Not found or no access" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Update from folder" })).toHaveCount(0);
+  await expect(page.locator('input[type="file"]')).toHaveCount(0);
+});
