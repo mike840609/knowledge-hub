@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Pool } from "mariadb";
 import { databaseConfig } from "@/infrastructure/database/mariadb/config";
 import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
+import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction";
 import { migrations } from "@/infrastructure/database/mariadb/migrations";
 import { runMigrations, type IsolatedDatabaseHandle } from "../../scripts/db/migrate";
 import { disposeIsolatedDatabase, provisionIsolatedDatabase } from "../../scripts/db/test-database";
@@ -13,7 +14,12 @@ import {
   bootstrapIdentityLinks,
   type LegacyIdentityLinkBootstrapEntry,
 } from "../../scripts/db/bootstrap-phase3-identity-links";
-import { uuidv7 } from "@/shared/ids/uuidv7";
+import { HubIdentityResolver } from "@/modules/identity/application/hub-identity-resolver";
+import { PersonalWorkspaceService } from "@/modules/workspaces/application/personal-workspace-service";
+import { establishTrustedCaller } from "@/server/trusted-caller";
+import type { IdentityProvider } from "@/modules/identity/ports/identity-provider";
+import type { TrustedIdentityClaims } from "@/modules/identity/domain/trusted-identity-claims";
+import { isUuid, uuidv7 } from "@/shared/ids/uuidv7";
 
 let handle: IsolatedDatabaseHandle | undefined;
 let pool: Pool | undefined;
@@ -241,5 +247,135 @@ describe("Phase 3 legacy identity-link bootstrap", () => {
     );
     expect(stored).toHaveLength(1);
     expect(Buffer.from(entries[0].subject, "utf8").equals(Buffer.from(stored[0].subject_bytes))).toBe(true);
+  });
+});
+
+function companySsoClaims(partial: { subject: string; empId: string; name?: string }): TrustedIdentityClaims {
+  return {
+    externalIdentity: {
+      provider: "company-sso",
+      subject: partial.subject,
+      emp_id: partial.empId,
+      name: partial.name ?? `SSO User ${partial.subject.slice(0, 8)}`,
+      org_code: "RD",
+    },
+    validatedExternalGroupIds: ["sso-group-eng"],
+    platformCapabilities: [],
+    refreshedAt: new Date(),
+  };
+}
+
+/** Test double for a Company SSO provider: getCurrentIdentity always throws, claims are server-side. */
+function stubCompanySsoProvider(claims: TrustedIdentityClaims): IdentityProvider {
+  return {
+    async getCurrentIdentity(): Promise<never> {
+      throw new Error("Company SSO identities must resolve through HubIdentityResolver.");
+    },
+    async getCurrentClaims(): Promise<TrustedIdentityClaims> {
+      return claims;
+    },
+  };
+}
+
+async function userCount(): Promise<number> {
+  const rows = await db().query<{ count: number }[]>("SELECT COUNT(*) AS count FROM users");
+  return Number(rows[0].count);
+}
+
+async function personalCountForOwner(ownerId: string): Promise<number> {
+  const rows = await db().query<{ count: number }[]>("SELECT COUNT(*) AS count FROM workspaces WHERE personal_owner_user_id = ?", [ownerId]);
+  return Number(rows[0].count);
+}
+
+describe("Phase 3 trusted caller bootstrap (Task 7)", () => {
+  it("10. claims resolve to a new UUIDv7 Hub user, persist only the resolver output, and provision My Space", async () => {
+    const unitOfWork = new MariaDbUnitOfWork(db());
+    const subject = `sso-subject-${uuidv7()}`;
+    const empId = `P3SSO-${subject.slice(0, 8)}`;
+    const established = await establishTrustedCaller({
+      provider: stubCompanySsoProvider(companySsoClaims({ subject, empId })),
+      resolver: new HubIdentityResolver(unitOfWork),
+      personalWorkspaces: new PersonalWorkspaceService(unitOfWork),
+      unitOfWork,
+    });
+
+    expect(isUuid(established.identity.id)).toBe(true);
+    expect(established.identity.id).not.toBe(subject);
+    expect(established.identity.emp_id).toBe(empId);
+    expect(established.principal.identity).toMatchObject({ id: established.identity.id, emp_id: empId });
+    expect([...established.principal.validatedExternalGroupIds]).toEqual(["sso-group-eng"]);
+    expect(established.caller.identity).toMatchObject({ id: established.identity.id });
+    expect([...established.caller.validatedExternalGroupIds]).toEqual(["sso-group-eng"]);
+    expect(established.personalWorkspace.name).toBe("My Space");
+    expect(established.personalWorkspace.workspaceType).toBe("PERSONAL");
+    expect(established.personalWorkspace.personalOwnerUserId).toBe(established.identity.id);
+
+    const stored = await db().query<{ id: string; emp_id: string; name: string }[]>("SELECT id, emp_id, name FROM users WHERE id = ?", [
+      established.identity.id,
+    ]);
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toMatchObject({ id: established.identity.id, emp_id: empId, name: established.identity.name });
+    expect(await userCount()).toBe(1);
+    expect(await personalCountForOwner(established.identity.id)).toBe(1);
+  });
+
+  it("11. deep-link and API entries reuse the same caller, user, and My Space", async () => {
+    const unitOfWork = new MariaDbUnitOfWork(db());
+    const subject = `sso-reuse-${uuidv7()}`;
+    const empId = `P3SSO-R-${subject.slice(0, 8)}`;
+    const dependencies = {
+      provider: stubCompanySsoProvider(companySsoClaims({ subject, empId })),
+      resolver: new HubIdentityResolver(unitOfWork),
+      personalWorkspaces: new PersonalWorkspaceService(unitOfWork),
+      unitOfWork,
+    };
+
+    const deepLink = await establishTrustedCaller(dependencies);
+    const api = await establishTrustedCaller(dependencies);
+
+    expect(api.identity.id).toBe(deepLink.identity.id);
+    expect(api.caller.identity.id).toBe(deepLink.caller.identity.id);
+    expect(api.personalWorkspace.id).toBe(deepLink.personalWorkspace.id);
+    expect(await userCount()).toBe(1);
+    expect(await personalCountForOwner(deepLink.identity.id)).toBe(1);
+  });
+
+  it("12. a different subject resolves to a different Hub user with its own My Space", async () => {
+    const unitOfWork = new MariaDbUnitOfWork(db());
+    const firstSubject = `sso-first-${uuidv7()}`;
+    const secondSubject = `sso-second-${uuidv7()}`;
+    const first = await establishTrustedCaller({
+      provider: stubCompanySsoProvider(companySsoClaims({ subject: firstSubject, empId: `P3SSO-1-${firstSubject.slice(0, 8)}` })),
+      resolver: new HubIdentityResolver(unitOfWork),
+      personalWorkspaces: new PersonalWorkspaceService(unitOfWork),
+      unitOfWork,
+    });
+    const second = await establishTrustedCaller({
+      provider: stubCompanySsoProvider(companySsoClaims({ subject: secondSubject, empId: `P3SSO-2-${secondSubject.slice(0, 8)}` })),
+      resolver: new HubIdentityResolver(unitOfWork),
+      personalWorkspaces: new PersonalWorkspaceService(unitOfWork),
+      unitOfWork,
+    });
+
+    expect(second.identity.id).not.toBe(first.identity.id);
+    expect(second.personalWorkspace.id).not.toBe(first.personalWorkspace.id);
+    expect(second.personalWorkspace.personalOwnerUserId).toBe(second.identity.id);
+    expect(await userCount()).toBe(2);
+  });
+
+  it("13. colliding emp_id without a link fails closed and provisions nothing", async () => {
+    const unitOfWork = new MariaDbUnitOfWork(db());
+    const user = await seedUser("Collision Owner", "COLLIDE");
+    const subject = `sso-collide-${uuidv7()}`;
+    await expect(
+      establishTrustedCaller({
+        provider: stubCompanySsoProvider(companySsoClaims({ subject, empId: user.empId })),
+        resolver: new HubIdentityResolver(unitOfWork),
+        personalWorkspaces: new PersonalWorkspaceService(unitOfWork),
+        unitOfWork,
+      }),
+    ).rejects.toThrow(/linked|bootstrap/i);
+    expect(await personalCountForOwner(user.id)).toBe(0);
+    expect(await userCount()).toBe(1);
   });
 });

@@ -1,5 +1,6 @@
 import { IntegrityViolationError } from "@/modules/knowledge/domain/errors";
 import type { Workspace, WorkspaceInsert, WorkspaceLifecycleState, WorkspaceType } from "@/modules/workspaces/domain/workspace";
+import { PersonalProvisioningUnavailableError } from "@/modules/workspaces/domain/errors";
 import type { WorkspaceRepository } from "@/modules/workspaces/ports/workspace-repository";
 import type { QueryConnection, DbRow } from "./shared";
 import { asDate, asNullableDate } from "./shared";
@@ -19,6 +20,12 @@ function asLifecycleState(value: unknown): WorkspaceLifecycleState | null {
 function asNullableId(value: unknown): string | null {
   if (value === null || typeof value === "undefined") return null;
   return String(value);
+}
+
+function isUnknownColumnError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  if ("code" in error && String((error as { code: unknown }).code) === "ER_BAD_FIELD_ERROR") return true;
+  return "errno" in error && Number((error as { errno: unknown }).errno) === 1054;
 }
 
 function mapWorkspace(row: DbRow): Workspace {
@@ -57,8 +64,26 @@ export class MariaDbWorkspaceRepository implements WorkspaceRepository {
     return rows[0] ? mapWorkspace(rows[0]) : null;
   }
 
-  async insert(workspace: WorkspaceInsert): Promise<void> {
-    if (workspace.workspaceType !== "PERSONAL" && workspace.workspaceType !== "TEAM") {
+  async findPersonalByOwnerUserId(ownerUserId: string): Promise<Workspace | null> {
+    let rows: DbRow[];
+    try {
+      rows = await this.connection.query<DbRow[]>("SELECT * FROM workspaces WHERE personal_owner_user_id = ? LIMIT 1", [ownerUserId]);
+    } catch (error) {
+      if (isUnknownColumnError(error)) {
+        throw new PersonalProvisioningUnavailableError();
+      }
+      throw error;
+    }
+    const row = rows[0];
+    if (!row) return null;
+    const workspace = mapWorkspace(row);
+    if (workspace.workspaceType !== "PERSONAL") {
+      throw new IntegrityViolationError("Database returned a non-PERSONAL workspace for a personal owner lookup.");
+    }
+    return workspace;
+  }
+
+  async insert(workspace: WorkspaceInsert): Promise<void> {    if (workspace.workspaceType !== "PERSONAL" && workspace.workspaceType !== "TEAM") {
       throw new IntegrityViolationError("Workspace insert requires an explicit workspaceType.");
     }
     if (workspace.lifecycleState !== "ACTIVE" && workspace.lifecycleState !== "ARCHIVED") {

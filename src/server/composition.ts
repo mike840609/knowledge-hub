@@ -11,6 +11,9 @@ import { GetFolderImportPreviewService } from "@/modules/sources/application/get
 import { UploadFolderImportEntriesService } from "@/modules/sources/application/upload-folder-import-entries";
 import { SourceApplicationService } from "@/modules/sources/application/source-version-guard";
 import { WorkspaceQueryService } from "@/modules/workspaces/application/workspace-query-service";
+import { PersonalWorkspaceService } from "@/modules/workspaces/application/personal-workspace-service";
+import { HubIdentityResolver } from "@/modules/identity/application/hub-identity-resolver";
+import { establishTrustedCaller as establishTrustedCallerWith } from "@/server/trusted-caller";
 import { importRuntimeConfig } from "@/server/import-config";
 import { createIdentityProvider } from "@/server/identity-provider-factory";
 
@@ -29,6 +32,10 @@ function buildServices(databasePool: Pool) {
   const queries = new KnowledgeQueryServiceImpl(unitOfWork);
   const sources = new SourceApplicationService(unitOfWork);
   const workspaces = new WorkspaceQueryService(unitOfWork);
+  const resolver = new HubIdentityResolver(unitOfWork);
+  const personalWorkspaces = new PersonalWorkspaceService(unitOfWork);
+  const establishTrustedCaller = () =>
+    establishTrustedCallerWith({ provider: identityProvider, resolver, personalWorkspaces, unitOfWork });
   const importConfig = importRuntimeConfig();
   const imports = {
     create: new CreateFolderImportService(unitOfWork, { limits: importConfig.limits, buildingTtlMs: importConfig.buildingTtlMs }),
@@ -37,7 +44,7 @@ function buildServices(databasePool: Pool) {
     preview: new GetFolderImportPreviewService(unitOfWork),
     apply: new ApplyFolderImportService(unitOfWork),
   };
-  return { identityProvider, unitOfWork, hub, queries, sources, workspaces, imports };
+  return { identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, sources, workspaces, imports };
 }
 
 export function applicationServices() {

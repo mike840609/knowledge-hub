@@ -10,4 +10,10 @@ export interface WorkspaceRepository {
    */
   lockById(workspaceId: string): Promise<Workspace | null>;
   insert(workspace: WorkspaceInsert): Promise<void>;
+  /**
+   * The caller's My Space by owner (spec §4.1). Requires migration 008;
+   * implementations fail with a migration error when the governance
+   * columns do not exist yet. Authorization never matches on the name.
+   */
+  findPersonalByOwnerUserId(ownerUserId: string): Promise<Workspace | null>;
 }
