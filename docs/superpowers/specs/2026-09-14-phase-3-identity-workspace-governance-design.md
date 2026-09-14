@@ -4,16 +4,16 @@
 | --- | --- |
 | 文件日期 | 2026-09-14 |
 | 文件類型 | Design Spec；不包含 Implementation Plan |
-| 狀態 | Review requested |
+| 狀態 | Review requested — brainstorming decisions incorporated |
 | 前置 | Phase 0 Foundation、Phase 1 Knowledge Core & Tree、Phase 2 Knowledge Source Import & Sync、Phase 2.5 Frontend Product Baseline |
 | 既有授權約束 | `2026-09-14-resource-visibility-access-semantics-amendment.md`、`2026-09-14-phase-3-authorization-clarification.md` |
-| 核心新增決策 | Personal Space 不建立獨立 domain；以 `Workspace(type=PERSONAL)` 表達 |
+| 核心決策 | Personal Space 不建立獨立 domain；以 `Workspace(type=PERSONAL)` 表達；Workspace 是 Phase 3 唯一 Knowledge authorization boundary |
 
 ## 1. Goal
 
-Phase 3 把 Phase 0–2 的 local/mock `WorkspaceMembership` foundation 升級成可用於公司正式多使用者環境的 Workspace lifecycle、identity mapping、roles/capabilities 與 auditable governance。
+Phase 3 把 Phase 0–2 的 local/mock `WorkspaceMembership` foundation 升級成可用於公司正式多使用者環境的 Workspace lifecycle、identity mapping、fixed RBAC、enterprise group grants 與 auditable governance。
 
-Phase 3 同時正式定義 **Personal Workspace**：每位 User 可以擁有自己的 Knowledge 空間，但 Personal Space 不形成第二套 Knowledge ownership 或 authorization hierarchy。所有 Knowledge 仍遵循同一條 canonical chain：
+Phase 3 同時正式定義 **Personal Workspace / My Space**：每位 User 有一個 system-managed personal Knowledge scope，但 Personal Space 不形成第二套 Knowledge ownership、storage、routing 或 authorization hierarchy。所有 Knowledge 仍遵循同一條 canonical chain：
 
 ```text
 User / Caller
@@ -30,7 +30,9 @@ User / Caller
       Tree / Document / Revision
 ```
 
-因此 Phase 0–2 已固定的 `Source → Workspace`、`Document → Source → Workspace`、stable Document identity、Source ownership、Tree、Revision 與 import/sync contract 都不需要因 Personal Space 重做。
+因此 Phase 0–2 已固定的 `Source → Workspace`、`Document → Source → Workspace`、stable Document identity、Source ownership、Tree、Revision 與 import/sync contract 都不因 Personal Space 重做。
+
+Phase 3 的產品定位採 **personal-first**：使用者登入 Knowledge Hub 後預設進入 My Space；Team Workspace 是受治理建立的共享 Knowledge scope，而不是另一套任意頁面協作系統。
 
 ## 2. Non-goals
 
@@ -41,9 +43,14 @@ Phase 3 不做以下項目：
 - 不讓 Document 同時支援 `user_id` / `workspace_id` 二選一 ownership。
 - 不建立 Agent principal、MCP transport 或 Agent Memory domain；這些仍分別屬 Phase 7 / Phase 9。
 - 不建立 rich authoring；Phase 5 才加入 Web create/edit。
-- 不重新設計 Phase 2.5 的 Workspace-scoped product route。
-- 不加入 Source-level override 或 Document-level ACL 的 baseline implementation；只有 Workspace policy 被真實需求證明不足時，才另立 amendment 設計 precedence 與 audit semantics。
+- 不重新設計 Phase 2.5 的 Workspace-scoped canonical routes。
+- 不加入 Source-level override 或 Document-level ACL；需要不同權限時使用不同 Workspace，直到真實需求證明 Workspace boundary 不足。
+- 不提供 custom-role DSL、explicit deny、role override 或 per-user deny exception。
+- 不提供可指派的 `DISCOVERER` role。
+- 不建立 email invite、pending invitation、accept/reject 或 invite token workflow。
+- 不把 SSO Group membership 複製／materialize 成 Hub 的 user-group membership truth。
 - 不提供 Workspace hard delete。
+- 不在 Phase 3 實作 Personal → Team Knowledge promotion；Phase 3 只固定未來 promotion 的 identity boundary。
 
 ## 3. Workspace remains the only Knowledge container
 
@@ -54,66 +61,56 @@ Workspace 新增明確類型：
 ```text
 Workspace
 ├─ PERSONAL
-│   └─ single-user Knowledge scope
+│   └─ single-user application Knowledge scope
 └─ TEAM
-    └─ collaborative Knowledge scope
+    └─ governed collaborative Knowledge scope
 ```
 
 Personal Workspace 與 Team Workspace 使用相同 `Workspace → Source → Tree → Document` 模型。差異只存在於 provisioning、membership、lifecycle 與 governance policy。
 
-這表示：
+因此：
 
-- Personal Workspace 可以建立 `HUB`、`FILE_UPLOAD`、`FOLDER_SYNC` Source。
-- Personal Workspace 也可以承接使用者自己的 Obsidian/LLM Wiki generated folder。
+- Personal Workspace 可以有多個 `HUB`、`FILE_UPLOAD`、`FOLDER_SYNC` Source。
+- Personal Workspace 可以承接使用者自己的 Obsidian / LLM Wiki generated folders。
 - `SOURCE_MANAGED` / `HUB_MANAGED` 行為不因 Workspace type 改變。
-- Source/Document 不新增 personal owner 欄位。
-- Search、Publishing、MCP 等後續階段只需要理解 Workspace policy，不需要加入 personal-special data path。
+- Source / Document 不新增 personal owner 欄位。
+- Search、Publishing、MCP、semantic retrieval 等後續階段只理解 Workspace policy，不建立 personal-special data path。
 
-### 3.2 UI representation
+### 3.2 Canonical routes
 
-產品 UX 可以把 Personal Workspace 呈現成 **My Space / Personal**，但 URL 與 application boundary 維持原本的 Workspace-scoped 形式：
+Personal 與 Team 都沿用 Phase 2.5 Workspace-scoped routes：
 
 ```text
 /w/:workspaceId/knowledge/...
 /w/:workspaceId/sources/...
 ```
 
-不新增 `/me/knowledge`、`/personal/...` 這種第二套 canonical route。
-
-Workspace selector 可以分組顯示：
-
-```text
-My Space
-Team Workspaces
-  ├─ Query Master
-  ├─ SWFP
-  └─ HRKM
-```
-
-`PERSONAL` 只是 Workspace kind，不是 synthetic Tree folder。
+不新增 `/me/knowledge`、`/personal/...` 等第二套 canonical route。`PERSONAL` 是 Workspace kind，不是 synthetic Tree folder，也不是 route special case。
 
 ## 4. Personal Workspace invariants
 
-Phase 3 必須保證以下 invariant：
+Phase 3 必須保證：
 
-1. 每個 User **最多一個** Personal Workspace。
+1. 每個 User **恰好一個可取得的 Personal Workspace**；provision operation 本身必須 idempotent。
 2. Personal Workspace 必須有且只有一個 `personal_owner_user_id`。
 3. `personal_owner_user_id` 必須對應既有 User。
-4. Personal Workspace 的 owner 必須同時具有 system-managed Workspace membership，effective role 為 `OWNER`。
-5. Personal Workspace 不允許一般邀請第二位 member。
-6. Personal Workspace 不允許 SSO Group / Team mapping 加入額外成員。
+4. Personal Workspace owner 必須同時具有 system-managed membership，role 固定為 `OWNER`。
+5. Personal Workspace 不允許 ordinary direct membership 加入第二位 member。
+6. Personal Workspace 不允許 SSO Group mapping。
 7. Personal Workspace 不允許 ownership transfer。
-8. Personal Workspace 不允許一般 user archive/delete；離職或 identity deprovisioning 的 retention/lifecycle 由 system governance path 處理。
-9. Personal Workspace 內的 Knowledge authorization 仍從 resource 反查 `Source.workspace_id`，不能因 caller 是 owner 就跳過 policy boundary。
-10. Personal Workspace 是單使用者 application access scope，不代表對公司 infrastructure/compliance 的法律隱私承諾。若未來需要 compliance/break-glass access，必須有獨立 capability、明確 audit 與產品政策；不得存在 hidden bypass。
+8. Personal Workspace display name 固定為 `My Space`；一般 user 不允許 rename。
+9. Personal Workspace 不允許一般 user archive/delete。
+10. identity deprovisioning / offboarding 時只允許 system governance freeze；不自動轉移 owner、不自動刪除 Knowledge。
+11. Personal Workspace authorization 仍從 resource 反查 `Source.workspace_id` 並經 Workspace policy；不能因 caller 是 owner 就跳過 canonical policy boundary。
+12. Personal Workspace 是單使用者 application access scope，不代表公司 infrastructure/compliance 層的法律隱私承諾；任何未來 break-glass/compliance access 都必須是顯式 capability + audit，不得有 hidden bypass。
 
-預設 provision name 為 `My Space`。`name` 仍是 display metadata，可由 owner rename；rename 不影響 Workspace stable ID 或任何 Source/Document identity。
+`My Space` 是 system-managed product label，但 authorization/domain 判斷永遠使用 `workspace_type=PERSONAL`，不得用 name 字串推導 Workspace type。
 
-## 5. Personal Workspace provisioning
+## 5. Personal Workspace provisioning and default entry
 
-### 5.1 Provision timing
+### 5.1 Provisioning
 
-Personal Workspace 以 idempotent system provisioning 建立：
+Personal Workspace 以 idempotent system operation 建立：
 
 ```text
 trusted identity established
@@ -125,24 +122,64 @@ ensureUser(...)
 ensurePersonalWorkspace(userId)
         │
         ├─ existing → return existing Workspace
-        └─ missing  → create PERSONAL Workspace + OWNER membership + audit event
+        └─ missing  → create PERSONAL Workspace
+                     + OWNER/SYSTEM_PERSONAL membership
+                     + audit event
 ```
 
-Phase 3 implementation 可以在首次 successful sign-in 或 explicit user bootstrap 時呼叫此 operation，但必須維持同一個 idempotency contract。
-
-不得由 browser 傳入 `owner_user_id` 來 provision 別人的 Personal Workspace。
-
-### 5.2 Existing users
+Browser 不得傳入 `owner_user_id` 來 provision 別人的 Personal Workspace。
 
 Phase 3 migration/backfill 對每個既有 User 建立缺少的 Personal Workspace。Backfill 必須可重跑且不能產生第二個 Personal Workspace。
 
-Existing Phase 0–2 Workspace 全部視為 `TEAM`；不得依 workspace name、`org_code` 或目前 member 數量猜測它是 Personal Workspace。
+Existing Phase 0–2 Workspace 全部明確 backfill 為 `TEAM`；不得依 workspace name、`org_code` 或目前 member 數猜測 Workspace type。
 
-## 6. Workspace data model delta
+### 5.2 Root navigation
 
-### 6.1 `workspaces`
+Phase 3 覆寫 Phase 2.5 的「first accessible Workspace」root behavior。成功建立 trusted caller context 後：
 
-Phase 3 在既有 Workspace stable ID 上增加治理欄位，概念模型：
+```text
+/
+  → ensure Personal Workspace exists
+  → My Space
+  → first Source by deterministic name order
+  → first readable Document by existing Tree order
+```
+
+若 My Space 尚無 Source / Document，進入對應 empty state，不自動跳去 Team Workspace。
+
+## 6. Team Workspace provisioning and ownership
+
+### 6.1 Create policy
+
+Team Workspace creation 由 platform-level capability `workspace.create_team` 控制。這個 capability 不屬於任何既有 Workspace role，也不得從 `org_code`、Workspace name、owner metadata 或 client parameter 推導。
+
+Create Team Workspace 時 **不強制綁 SSO Group**。Group mapping 是建立後的 optional governance action。
+
+Create transaction 至少完成：
+
+```text
+create TEAM Workspace
++ creator direct membership = OWNER
++ append audit event
+```
+
+### 6.2 Multiple owners
+
+Team Workspace 允許多個 direct `OWNER`，但任何時刻必須滿足：
+
+```text
+TEAM workspace => direct OWNER count >= 1
+```
+
+因此 remove/demote OWNER 必須在同一 transaction 檢查最後 OWNER invariant。SSO Group 永遠不能提供 OWNER grant，所以 owner count 只計算 direct memberships。
+
+Team Workspace 不需要 single-owner transfer workflow；增加新的 OWNER 後再移除舊 OWNER 即可。
+
+## 7. Workspace data model delta
+
+### 7.1 `workspaces`
+
+概念模型：
 
 ```text
 workspaces
@@ -158,36 +195,33 @@ workspaces
 - archived_at NULL
 ```
 
-Database constraints 必須保護：
+Database/application invariants：
 
 ```text
 PERSONAL => personal_owner_user_id IS NOT NULL
 TEAM     => personal_owner_user_id IS NULL
 UNIQUE(personal_owner_user_id)
+PERSONAL => name = 'My Space'
 ```
 
-MariaDB nullable UNIQUE 允許多個 `NULL`，因此 TEAM rows 不互相衝突，而同一 User 不能成為兩個 Personal Workspace 的 owner。
+`personal_owner_user_id` 只表達 Personal Workspace immutable owner identity；它不是 Team Workspace authorization shortcut。
 
-`personal_owner_user_id` 只表達 Personal Workspace immutable owner identity；它不是通用 Team Workspace authorization shortcut。
+### 7.2 `workspace_memberships`
 
-### 6.2 `workspace_memberships`
-
-既有 `(workspace_id, user_id)` association key 保留，Phase 3 增加 production role / provenance：
+既有 `(workspace_id, user_id)` association key 保留，增加：
 
 ```text
 workspace_memberships
 - workspace_id
 - user_id
-- role
+- role: OWNER | ADMIN | EDITOR | VIEWER
 - membership_source: DIRECT | SYSTEM_PERSONAL
-- created_by
+- created_by UUID NULL
 - created_at
 - updated_at
 ```
 
-SSO Group grants 不強行 materialize 成第二條相同 `(workspace_id, user_id)` membership row；Group mapping 使用獨立 mapping，authorization evaluation 合併 direct membership 與 group grants。
-
-Personal Workspace 的 membership 固定：
+Personal system membership 固定：
 
 ```text
 workspace_id = personal workspace
@@ -198,38 +232,64 @@ source       = SYSTEM_PERSONAL
 
 該 row 不允許一般 membership admin 刪除、降級或改 owner。
 
-### 6.3 SSO Group mapping
+Team Workspace direct memberships 使用 `DIRECT`。Direct member 必須是已存在於 Knowledge Hub 的 `users` row；Phase 3 不建立 pending user/invite entity。
 
-Phase 3 新增概念 association：
+### 7.3 `workspace_group_mappings`
+
+Group grant 使用獨立 association，不 materialize 成 `workspace_memberships`：
 
 ```text
-WorkspaceGroupMapping
+workspace_group_mappings
 - workspace_id
 - external_group_id
-- role
+- role: ADMIN | EDITOR | VIEWER
 - created_by
+- created_at
+- updated_by
+- updated_at
+```
+
+Rules：
+
+- 只允許 `TEAM` Workspace。
+- 同一 `(workspace_id, external_group_id)` 只有一個 mapping。
+- Group mapping 永遠不能 grant `OWNER`。
+- Hub 不保存 `user_id ↔ external_group_id` membership truth。
+
+### 7.4 `workspace_audit_events`
+
+Phase 3 新增 append-only governance audit table。概念模型：
+
+```text
+workspace_audit_events
+- id UUID PK
+- workspace_id UUID
+- actor_kind: USER | SYSTEM
+- actor_user_id UUID NULL
+- event_type
+- target_type
+- target_id / target_key
+- payload JSON
+- correlation_id NULL
 - created_at
 ```
 
-只允許 `TEAM` Workspace 建立 mapping。
+`actor_kind=SYSTEM` 用於 Personal provisioning、offboarding freeze 等 system governance action；此時 `actor_user_id` 可以為 NULL。一般 user-triggered mutation 必須保存 stable `actor_user_id`。
 
-Group mapping 代表 enterprise identity 對 Workspace role 的 grant；同一 caller 若同時有 direct membership 與一個或多個 group grants，effective capabilities 取 grants 的聯集。Phase 3 MVP 不加入 explicit deny rule，以避免 deny precedence 與 nested policy complexity。
+Application API 不提供 UPDATE / DELETE audit event capability。
 
-`listAccessibleWorkspaces(caller)` 與 Workspace selector 必須聚合 direct membership、Personal Workspace system membership 與 validated group grants；Phase 3 之後不能再把「存在 `workspace_memberships` row」當成唯一 accessible-Workspace query。
+## 8. Fixed roles and capability bundles
 
-## 7. Roles and capabilities
+Phase 3 對 product/admin UI 只提供四個固定 roles：
 
-Roles 是 capability bundle，不是 authorization boundary 本身。
-
-Phase 3 MVP 採固定 role bundle，避免提前建立 custom-role DSL：
-
-| Role | Intended use |
+| Role | Purpose |
 | --- | --- |
-| `OWNER` | Workspace full administration；Personal Workspace owner 固定使用 |
-| `ADMIN` | Team Workspace administration without Personal ownership semantics |
-| `EDITOR` | read/write Knowledge and operate permitted Sources |
-| `VIEWER` | discover + read Knowledge |
-| `DISCOVERER` | discover resource identity/navigation only；不可讀 protected content |
+| `OWNER` | Team 最終治理權；Personal owner 固定角色 |
+| `ADMIN` | Team 日常管理，不可建立新的 governance authority |
+| `EDITOR` | Knowledge contributor / Source operator |
+| `VIEWER` | Read-only Knowledge consumer |
+
+**不提供 `DISCOVERER` role。** Discover/read 仍是底層 policy semantics，但 Phase 3 admin UI 不允許指派 discover-only access。
 
 Workspace-scoped policy 至少能回答：
 
@@ -240,28 +300,124 @@ document.discover
 document.read
 document.write
 source.manage
-membership.manage
-workspace.manage
+membership.manage_basic
+membership.manage_admin
+membership.manage_owner
+workspace.rename
+workspace.archive
+workspace.restore
 audit.read
 ```
 
 Recommended bundle：
 
 ```text
-OWNER      = all Workspace-scoped Phase 3 capabilities
-ADMIN      = all Workspace-scoped capabilities except immutable Personal ownership operations
-EDITOR     = workspace/source/document discover + document.read/write + source.manage
-VIEWER     = workspace/source/document discover + document.read
-DISCOVERER = workspace/source/document discover only
+OWNER
+= all Workspace-scoped Phase 3 capabilities
+
+ADMIN
+= discover/read/write
++ source.manage
++ membership.manage_basic
++ audit.read
+
+EDITOR
+= workspace/source/document discover
++ document.read/write
++ source.manage
+
+VIEWER
+= workspace/source/document discover
++ document.read
 ```
 
-Team Workspace creation 本身沒有既有 Workspace 可承載 role，因此另由 platform-level `workspace.create_team` policy 決定。此 capability 由 company deployment policy 明確授予可信 caller/group；預設不得由任意 Workspace role、`org_code`、Workspace name 或 client parameter 推導。Personal Workspace system provisioning 不需要 `workspace.create_team`。
+`document.write` 永遠不繞過 Source ownership rule：Phase 5 即使 caller 是 OWNER/ADMIN/EDITOR，也只能透過 authoring service 修改 `HUB_MANAGED` Knowledge；`SOURCE_MANAGED` 仍由 Source sync authority 控制。
 
-Phase 5 authoring 之後仍需先通過 `document.write`，再驗證 Source 為 `HUB_MANAGED`；capability 不繞過 Source ownership rules。
+## 9. Governance authority matrix
 
-## 8. Discover vs read is mandatory
+### 9.1 OWNER
 
-Phase 3 繼承 2026-09-14 accepted authorization amendment：
+OWNER 可以：
+
+- rename TEAM Workspace；
+- archive / restore TEAM Workspace；
+- add/remove/change direct `OWNER` / `ADMIN` / `EDITOR` / `VIEWER`；
+- 建立／修改／移除 `Group → ADMIN|EDITOR|VIEWER` mapping；
+- read audit；
+- manage Sources and Knowledge within normal ownership guards。
+
+OWNER 仍不能移除/demote 最後一個 Team OWNER。
+
+### 9.2 ADMIN
+
+ADMIN 可以：
+
+- add/remove/change direct `EDITOR` / `VIEWER`；
+- 建立／修改／移除 `Group → EDITOR|VIEWER` mapping；
+- read audit；
+- manage Sources and Knowledge within normal ownership guards。
+
+ADMIN 不可以：
+
+- grant / remove / demote `OWNER`；
+- grant / remove / demote `ADMIN`；
+- 把 Group mapping 提升為 `ADMIN`；
+- rename Workspace；
+- archive / restore Workspace。
+
+因此所有「產生或移除 governance authority」的變更都必須由 OWNER 明確執行並 audit。
+
+### 9.3 EDITOR / VIEWER
+
+EDITOR 不管理 memberships / groups / lifecycle。VIEWER 只讀 Knowledge。Phase 3 不提供 role self-escalation。
+
+## 10. Authorization evaluation
+
+### 10.1 Grant sources
+
+Effective access 只由兩種 grant source 組成：
+
+```text
+Direct Membership
++
+validated SSO Group mappings
+```
+
+Company SSO/session adapter 可以把 validated external group IDs 帶入 trusted `CallerContext`。Knowledge Hub 不定期複製整份 user-group membership，也不展開 group grants 成 direct membership rows。
+
+### 10.2 Capability union
+
+同一 caller 若同時有 direct membership 與一個或多個 matching group grants：
+
+```text
+effective capabilities
+= direct membership capability set
+  UNION
+  every matched group mapping capability set
+```
+
+Phase 3 沒有 explicit deny，也沒有「Direct 優先」或「Group 優先」。例如：
+
+```text
+Direct VIEWER + Group EDITOR => effective EDITOR capabilities
+Direct ADMIN + Group VIEWER  => effective ADMIN capabilities
+```
+
+UI 若移除 direct membership，不能宣稱 caller 一定失去 Workspace access；仍需根據 validated groups 重算 effective access。
+
+### 10.3 Accessible Workspace listing
+
+`listAccessibleWorkspaces(caller)` 必須聚合：
+
+- Personal `SYSTEM_PERSONAL` membership；
+- Team direct memberships；
+- matching validated SSO Group mappings。
+
+Phase 3 之後不能再把「存在 `workspace_memberships` row」當成唯一 accessible Workspace query。
+
+## 11. Discover vs read remains mandatory
+
+Phase 3 繼承 accepted authorization amendment：
 
 ```text
 canDiscover(resource)
@@ -271,108 +427,117 @@ canDiscover(resource)
    └─ false → 403 ACCESS_DENIED
 ```
 
-有效狀態可以是：
+雖然 Phase 3 不提供 `DISCOVERER` role，application policy 仍必須保留 discover/read distinction，因為：
 
-```text
-Workspace discover  ✅
-Source discover     ✅
-Document discover   ✅
-Document read       ❌
-```
+- future request-access / special policy 可能產生 discover-only state；
+- Phase 4 search、Phase 7 MCP、Phase 8 retrieval 必須共用相同 non-enumeration semantics；
+- arbitrary UUID guessing 永遠不能建立 discoverability。
 
-因此：
+Phase 3 的四個可指派 Workspace roles 都包含 `document.read`；因此 **正常 Phase 3 Workspace membership 不會單靠 role 產生 discover-only state**。
 
-- arbitrary UUID guessing 不建立 discoverability；
-- route 中的 Workspace/Source ID 只是 navigation context；
-- workspace name、owner metadata、`org_code` 都不是 authorization proof；
-- `DISCOVERER` 可以支援 access-denied/request-access UX，但 protected body、revision content、snippet 與未分類 metadata 必須隱藏；
-- Phase 4 search、Phase 7 MCP、Phase 8 retrieval 必須 reuse 同一 distinction。
-
-Phase 3 baseline 對 discoverable metadata 採保守分類：
+Protected metadata baseline 維持：
 
 | Resource | Discoverable without read | Requires read |
 | --- | --- | --- |
 | Workspace | stable ID、name、workspace type、lifecycle state | governance detail not otherwise granted |
-| Source | stable ID、name、source type、lifecycle state | source content-derived detail / protected previews |
+| Source | stable ID、name、source type、lifecycle state | content-derived detail / protected previews |
 | Document | stable ID、resource type、lifecycle state | title、metadata、snippet、current/revision content |
 | Revision | 不單獨提供 discover-only listing | revision metadata/body |
 
-因此 Document title 預設視為 protected metadata；若未來產品需要在 read-denied 狀態顯示 title，必須另行分類並補 leakage review，而不是 UI 自行決定。
+對其他 User 的 Personal Workspace，caller 沒有 trusted discoverability grant 時必須回 `404`，不能因 UUID 猜中就回 `403`。
 
-對其他 User 的 Personal Workspace，caller 沒有 trusted discoverability grant 時必須回 `404`，不能因為 UUID 猜中就回 `403`。
+## 12. Workspace-level authorization only
 
-## 9. Team Workspace governance
-
-### 9.1 Create
-
-只有通過 platform-level `workspace.create_team` policy 的 caller 可以建立 Team Workspace。
-
-Create transaction 至少完成：
+Phase 3 不實作 Source-level override 或 Document-level ACL。
 
 ```text
-create TEAM Workspace
-+ create initial OWNER membership
-+ append audit event
+Caller
+  ↓
+Workspace policy
+  ↓
+Sources
+  ↓
+Documents / Revisions
 ```
 
-不得建立沒有任何 production administrator 的 Team Workspace。
+若一批 Knowledge 需要不同成員集合或不同 confidentiality boundary，MVP 解法是建立另一個 Team Workspace，而不是在同一 Workspace 內疊加 ACL precedence。
 
-### 9.2 Rename
+未來若真實需求證明 Workspace policy 不足，必須另立 amendment，先定義 grant/restriction precedence、discover/read semantics、audit、group/direct interaction，再新增 granular policy。不得加入 ad-hoc Source/Document permission columns。
 
-`workspace.manage` 可以 rename Team Workspace。Workspace name 是 mutable display metadata；stable ID 不改變，Source/Document references 不改變。
+## 13. Workspace lifecycle
 
-### 9.3 Archive / restore
+### 13.1 Team rename
 
-Team Workspace 支援 `ACTIVE ↔ ARCHIVED`，不 hard delete。
+只有 OWNER 可 rename TEAM Workspace。Workspace name 是 mutable display metadata；stable ID 不改，Source/Document identity 不改。
 
-Archived Workspace：
+Personal Workspace 不支援 rename，固定顯示 `My Space`。
 
-- 對原本可 discover/read 的 caller 仍可瀏覽既有 Knowledge；
-- 一般 Knowledge/Source mutations 禁止；
-- restore 需要 `workspace.manage`；
-- archive/restore 必須產生 audit event；
-- lifecycle denial 與 authorization denial 分開表達，不能把 archived state 偽裝成 membership failure。
+### 13.2 Team archive / restore
 
-Personal Workspace 不提供一般 user archive action。若 identity offboarding 需要凍結 Personal Workspace，由 system governance path 明確處理並 audit。
+只有 OWNER 可執行 `ACTIVE ↔ ARCHIVED`。
 
-## 10. Membership administration
+Archived Team Workspace 是 **read-only frozen scope**：
+
+Allowed：
+
+- 原本仍具有效 access 的 caller 讀取既有 Knowledge；
+- OWNER / ADMIN 讀 governance / audit views；
+- OWNER restore。
+
+Blocked：
+
+- Source import / sync；
+- Knowledge authoring；
+- Source mutation；
+- direct membership add/change/remove；
+- SSO Group mapping add/change/remove；
+- rename；
+- 其他一般 governance mutation。
+
+Archive/restore 產生 audit event。Lifecycle denial 與 authorization denial 分開表達；不能把 archived state 偽裝成 membership failure。
+
+### 13.3 Personal offboarding freeze
+
+Personal Workspace 沒有一般 user archive action。Identity deprovisioning 時由 explicit system governance path freeze/archive並 audit：
+
+- Knowledge retained；
+- ownership 不轉移；
+- 不自動 delete；
+- 一般 user 不可 restore；
+- future retention/compliance policy 另行設計。
+
+## 14. Membership administration
 
 Team Workspace 支援：
 
-- add direct member；
+- add existing Hub user as direct member；
 - change direct member role；
 - remove direct member；
-- add/remove SSO Group mapping；
-- effective access 重新計算。
+- add/change/remove SSO Group mapping；
+- inspect effective access / grant provenance。
 
 Rules：
 
-- caller 必須具有 `membership.manage`；
-- 不能移除最後一個可執行 `workspace.manage` 的 Team administrator；
-- same org 不自動建立 membership；
-- cross org 不自動拒絕 membership；
-- Company Team / SSO Group mapping 是 grant source，不是新的 Knowledge container；
-- Personal Workspace 不進入一般 membership administration flow。
+- direct membership target 必須是既有 Hub User；
+- Phase 3 不做 invite flow；
+- Personal Workspace 不進入一般 membership administration；
+- same org 不自動 allow；cross org 不自動 deny；
+- role mutation 必須遵循 OWNER / ADMIN authority matrix；
+- remove/demote final Team OWNER 必須 transactionally rejected；
+- archived Workspace 禁止 membership/group mutation。
 
-## 11. Source-level and Document-level overrides
+## 15. Company SSO adapter
 
-Phase 3 baseline **不實作** Source-level override 與 Document-level ACL。
-
-Authorization service 仍以 resource context 評估 Workspace policy，而不是把 Workspace role 判斷散落在 UI/routes 中，因此未來若真實需求證明 Workspace policy 不足，可以在不改 Knowledge identity 的前提下新增一份明確 amendment。
-
-任何未來 override 設計都必須先決定 grant/restriction precedence、discover/read semantics、audit 與 group/direct membership interaction；在這些規則完成前不得加入 ad-hoc Source/Document permission columns。
-
-## 12. Company SSO adapter
-
-Company SSO adapter 只負責把可信 external identity 映射成既有 User identity contract：
+Company SSO adapter 把可信 external identity 映射成既有 User identity contract，並可附帶 validated external groups：
 
 ```text
-{id, emp_id, name, org_code}
+identity = {id, emp_id, name, org_code}
+validatedExternalGroupIds = [...]
 ```
 
-SSO claim 本身不直接決定 Knowledge access。
+SSO claims 本身不直接決定 Knowledge access。External group 只有在命中 `workspace_group_mappings` 後才產生 grant。
 
-Authorization input 可以包含 validated external groups，但 group 必須經 `WorkspaceGroupMapping` 轉成 Workspace role/capabilities。不得寫：
+不得寫：
 
 ```text
 if caller.org_code == workspace.owner_org_code => allow
@@ -380,162 +545,305 @@ if caller.org_code == workspace.owner_org_code => allow
 
 也不得因 external group name 與 Workspace name 相同就自動 allow。
 
-## 13. Audit
+## 16. Audit
 
-Phase 3 新增 append-only governance audit events，至少涵蓋：
+### 16.1 Scope
 
-- Personal Workspace provision；
-- Team Workspace create；
+Phase 3 audit 只記 governance events，不要求 audit every read、search query、document revision 或 Agent retrieval。
+
+至少涵蓋：
+
+```text
+PERSONAL_WORKSPACE_PROVISIONED
+PERSONAL_WORKSPACE_FROZEN
+TEAM_WORKSPACE_CREATED
+TEAM_WORKSPACE_RENAMED
+TEAM_WORKSPACE_ARCHIVED
+TEAM_WORKSPACE_RESTORED
+MEMBER_ADDED
+MEMBER_ROLE_CHANGED
+MEMBER_REMOVED
+GROUP_MAPPING_ADDED
+GROUP_MAPPING_ROLE_CHANGED
+GROUP_MAPPING_REMOVED
+```
+
+OWNER grant/remove 可以由 `MEMBER_ADDED` / `MEMBER_ROLE_CHANGED` / `MEMBER_REMOVED` 的 typed before/after payload 明確表示，不需要建立第二份重複 event truth；implementation 若選擇額外 typed OWNER event，也必須保持 single mutation → deterministic audit semantics。
+
+### 16.2 Atomicity
+
+Governance mutation 與 audit append 必須在同一 transaction：
+
+```text
+BEGIN
+  mutate workspace/membership/group mapping
+  append audit event
+COMMIT
+```
+
+不得出現 mutation 成功但 audit 缺失的 committed state。
+
+### 16.3 Audit read
+
+OWNER / ADMIN 可讀 Team Workspace governance audit。EDITOR / VIEWER 不具 `audit.read`。
+
+Audit event 對 application 是 append-only；retention/export/compliance 由未來 platform governance 定義。
+
+## 17. Product behavior
+
+Phase 2.5 shell 不重做，只擴充 Workspace selector 與 Team administration surface。
+
+### 17.1 Workspace selector
+
+Selector 依 Workspace type 分區：
+
+```text
+Workspace ▼
+
+My Space
+
+────────────
+Team Workspaces
+  HRKM
+  Query Master
+  SWFP
+```
+
+Rules：
+
+- `My Space` 永遠置頂；
+- Team Workspaces MVP 依 name deterministic ascending；
+- selector 不顯示 role、org_code、owner、member count 或 permission detail；
+- selector 只是 navigation，不是 authorization proof。
+
+### 17.2 Team administration UI
+
+Direct Members 與 SSO Group Mappings 分開管理：
+
+```text
+Members
+  Alice  OWNER
+  Bob    ADMIN
+  Mike   VIEWER
+
+SSO Groups
+  HRKM-Team      EDITOR
+  HRKM-Readers   VIEWER
+```
+
+Effective Access 是 computed view，不是 persisted truth。查看 user access 時應顯示 grant provenance，例如：
+
+```text
+Mike
+  Direct: VIEWER
+  Group: HRKM-Team → EDITOR
+  Effective: EDITOR capabilities
+```
+
+刪除 direct membership 時，如果 caller 仍可能從 group 取得 access，UI 不得誤導顯示「will lose access」。
+
+### 17.3 Personal administration UI
+
+Personal Workspace 不顯示：
+
 - rename；
-- archive / restore；
-- direct membership add / role change / remove；
-- SSO Group mapping add / role change / remove；
-- system Personal Workspace lifecycle action；
-- future compliance/break-glass action if ever introduced。
+- invite / member management；
+- SSO Group mapping；
+- ownership transfer；
+- user archive/delete。
 
-Audit event 至少需要：
+Personal Workspace 仍可以像 Team 一樣管理多個 Sources，並透過正常 `/w/:workspaceId/...` routes 瀏覽 Knowledge。
 
-```text
-actor
-operation
-resource type/id
-before/after summary or typed payload
-timestamp
-request/correlation id when available
-```
+## 18. Personal → Team promotion boundary for later phases
 
-Phase 3 不要求 audit every read；security-sensitive reads 若有公司 compliance requirement 再另行定義。
-
-## 14. Product behavior
-
-Phase 2.5 shell 不重做，只在 Workspace selector / admin surface 擴充：
+Phase 3 不實作 content promotion，但固定未來語意：
 
 ```text
-Workspace selector
-├─ My Space
-└─ Team Workspaces
+My Space Document A
+       │
+       │ Share / Promote (future Phase 5+)
+       ▼
+Team Workspace Document B
 ```
 
-Personal Workspace：
+Rules：
 
-- 可瀏覽 Knowledge / Sources；
-- 可執行 owner capability 允許的 Source import/sync；
-- 不顯示 invite members / SSO mapping；
-- 不顯示 ownership transfer；
-- 不顯示 user archive/delete。
+- B 是新的 Team-owned stable Document identity；
+- A 保留在 My Space；
+- 不 move A；
+- 不共享 Document ID；
+- 不建立 automatic sync；
+- MVP 不建立 lineage dependency；
+- Promote 完成後 A/B 各自獨立演進。
 
-Team Workspace：
+未來若需要 provenance relation，必須以獨立 relation design 加入，不能把 cross-workspace sync 偷渡進 Document ownership。
 
-- 顯示 role/capability 允許的 administration UI；
-- unauthorized actions 不只靠 hide button，application service 必須重新 authorization。
-
-Known-but-unreadable resource 顯示 Access denied；若未來加入 request-access workflow，必須獨立設計 request target、approver 與 audit。Undiscoverable 顯示 Not found；unexpected failure 才進 generic error boundary。
-
-## 15. Interaction with later phases
+## 19. Interaction with later phases
 
 ### Phase 4 — Discovery
 
-Search 可以：
-
-- filter single Workspace；
-- search across caller-authorized Workspaces；
-- 包含 Personal Workspace；
-- 不洩漏 unreadable title/content/snippet。
+Search 可以 filter single Workspace 或跨 caller-authorized Workspaces，包含 My Space。Authorization 仍以 Workspace policy filtering 為 canonical truth，不洩漏 unauthorized protected metadata。
 
 ### Phase 5 — Human Authoring
 
-Personal Workspace 是合法 HUB_MANAGED authoring target。`document.write` 仍需配合 Source ownership guard。
+My Space 與 Team Workspace 都是合法 `HUB_MANAGED` authoring targets。`document.write` 仍需配合 Source ownership guard。Personal → Team promotion 若在 Phase 5 實作，必須遵守第 18 節的 independent-copy contract。
 
 ### Phase 6 — Publishing
 
-Personal Workspace 的 Knowledge 不因「personal」自動禁止 publishing。Publishing policy 仍需在 Phase 6 明確驗證 caller 對被引用 Knowledge 的權限及 publishing-specific governance。
+Personal Knowledge 不因 `PERSONAL` 自動禁止 publishing；Phase 6 必須另外定義 publishing governance 並驗證 caller 對每個被引用 Workspace Knowledge 的權限。
 
 ### Phase 7 — Agent / MCP
 
-若 Agent delegate human identity，Personal Workspace 可透過完全相同 Workspace policy 被讀取；不建立 `mcp_personal_space` 特例。
+若 Agent delegate human identity，My Space 與 Team Workspace 透過同一 Workspace policy 被讀取；不得新增 `mcp_personal_space` special path。
+
+### Phase 8 — Semantic / Hybrid Retrieval
+
+Derived index 可以使用 Workspace scope filtering，但不能成為 authorization truth。
 
 ### Phase 9 — Agent Memory
 
-Personal Workspace 是 Knowledge scope，不等於 Agent Memory store。Phase 9 仍維持 independent Memory domain，可引用或 promote 到 Personal/Team Workspace Knowledge，但不把所有 personal Knowledge 自動視為 Agent long-term memory。
+My Space 是 personal Knowledge scope，不等於 Agent Memory Store。Agent Memory 保持 independent governed domain。
 
-## 16. Migration strategy
+## 20. Migration strategy
 
-Phase 3 implementation migration order：
+Implementation migration order：
 
 1. `workspaces` 增加 type/lifecycle/personal owner governance columns，以 backward-compatible nullable/default strategy 上線。
-2. Existing Workspaces 明確 backfill 為 `TEAM`。
-3. Membership schema 加 role/provenance；production bootstrap role 不從 `org_code`、workspace name 或 row order 推測。
-4. 建立 SSO Group mapping / audit tables。
-5. 對每個既有 User idempotently provision Personal Workspace + `OWNER/SYSTEM_PERSONAL` membership。
-6. 啟用 database constraints / unique owner invariant。
-7. application authorization 從 binary membership guard 切換成 production policy evaluation；accessible-Workspace listing 同步切換到 direct + group + personal grants 聚合。
-8. 移除任何只適用 local/mock governance 的 deployment assumption。
+2. Existing Workspaces 明確 backfill 為 `TEAM`；不使用名稱/組織/member count heuristic。
+3. `workspace_memberships` 增加 fixed role/provenance fields；production bootstrap roles 由 explicit configuration/admin bootstrap 決定。
+4. 建立 `workspace_group_mappings` 與 `workspace_audit_events`。
+5. 對每個既有 User idempotently provision `My Space` + `OWNER/SYSTEM_PERSONAL` membership。
+6. 啟用 Personal owner uniqueness / type invariants 與 role/group constraints。
+7. application authorization 從 binary membership guard 切換成 capability evaluation；accessible listing 同步切換到 personal + direct + group grants 聚合。
+8. `/` default entry 改為 My Space；Workspace selector 改為 Personal / Team grouping。
+9. 移除只適用 local/mock governance 的 deployment assumptions。
 
-Local/dev seed 可以明確指定 bootstrap roles；公司 production migration 必須由 explicit configuration / admin bootstrap / SSO mapping 提供初始 admin，不允許 heuristic elevation。
+Local/dev seed 可以明確指定 Team bootstrap owners/admins；production migration 不允許從 `org_code`、workspace name、row order 或 member count heuristic elevation。
 
-## 17. Required tests
-
-Phase 3 至少需要下列 evidence：
+## 21. Required tests
 
 ### Personal Workspace
 
-- same user repeated provision → same Workspace ID；
+- repeated provision for same user → same Workspace ID；
 - one user cannot own two Personal Workspaces；
-- Personal Workspace has exactly owner system membership；
-- direct invitation to Personal Workspace rejected；
-- SSO Group mapping to Personal Workspace rejected；
-- other user guessing Personal Workspace/resource UUID → `404`；
-- owner can browse/import/sync through normal Workspace path；
-- Personal Workspace route uses `/w/:workspaceId/...` and does not require special endpoint。
+- Personal Workspace name is fixed `My Space`；rename rejected；
+- exactly one owner system membership；
+- direct second-member add rejected；
+- SSO Group mapping rejected；
+- ownership transfer rejected；
+- ordinary user archive/delete rejected；
+- system offboarding freeze retains Knowledge and emits audit；
+- owner browses/imports/syncs through ordinary Workspace routes；
+- other user guessing Personal Workspace/resource UUID gets `404` unless a future trusted discoverability policy says otherwise；
+- `/` resolves My Space before Team Workspace。
 
-### Authorization
+### Roles / governance authority
 
-- `DISCOVERER`: document exists is discoverable but title/body read returns `403`；
-- undiscoverable resource returns `404`；
-- Viewer can read but cannot write/manage；
-- Editor can write HUB_MANAGED Knowledge but cannot manage membership；
+- Team create requires platform `workspace.create_team`；Workspace role alone cannot grant it；
+- creator becomes direct OWNER；
+- multiple direct OWNERs allowed；
+- removing/demoting final OWNER rejected transactionally；
+- OWNER can grant/revoke OWNER/ADMIN/EDITOR/VIEWER within invariants；
+- ADMIN can manage EDITOR/VIEWER only；
+- ADMIN cannot create/remove ADMIN or OWNER；
+- ADMIN cannot rename/archive/restore Team Workspace；
+- OWNER can rename/archive/restore Team Workspace；
+- SSO Group mapping cannot grant OWNER；
+- ADMIN cannot create/upgrade Group → ADMIN；OWNER can。
+
+### Authorization / groups
+
+- Viewer reads but cannot write/manage；
+- Editor can use permitted Knowledge/Source write operations but cannot manage membership；
 - Source ownership guard still blocks ordinary writes to SOURCE_MANAGED content；
+- direct VIEWER + group EDITOR yields union with EDITOR capabilities；
+- direct removal does not remove access if valid group grant remains；
+- group-only grant appears in accessible Workspace listing；
+- Hub has no materialized user↔external-group membership truth；
+- same-org non-member remains denied；cross-org valid grant remains allowed；
 - route Workspace mismatch cannot establish authorization；
-- same-org non-member remains denied；
-- cross-org valid grant remains allowed；
-- group-only grant appears in accessible Workspace listing and receives mapped capabilities；
-- Workspace role cannot implicitly grant platform-level `workspace.create_team`。
+- arbitrary UUID guessing cannot establish discoverability；
+- discover/read policy still preserves `404` vs `403` semantics even though no `DISCOVERER` role is assignable。
 
-### Governance
+### Lifecycle
 
-- Team Workspace create always establishes administrator；
-- cannot remove last administrator；
-- archive blocks mutations but preserves permitted read behavior；
-- restore requires workspace manage capability；
-- membership/group/lifecycle changes emit audit events；
-- existing Phase 0–2 Source/Document stable IDs survive migration unchanged。
+- archived Team Workspace preserves authorized read；
+- archived Team Workspace blocks import/sync/authoring/source mutation；
+- archived Team Workspace blocks membership/group/rename mutation；
+- only OWNER restores；
+- lifecycle denial remains distinct from authorization denial。
 
-## 18. Acceptance criteria
+### Audit
 
-Phase 3 design is satisfied when implementation can demonstrate all of the following without changing Phase 0–2 canonical Knowledge identity:
+- Personal provision/freeze emit system audit events；
+- Team create/rename/archive/restore emit audit；
+- membership/group role changes emit before/after audit payload；
+- mutation rollback also rolls back its audit event；
+- audit append failure prevents governance mutation commit；
+- OWNER/ADMIN can read audit；EDITOR/VIEWER cannot；
+- application exposes no audit update/delete operation。
 
-1. Every User has an idempotently provisioned Personal Workspace represented as `Workspace(type=PERSONAL)`.
-2. Personal Workspace is single-user at the application authorization layer and cannot receive ordinary members or group mappings.
-3. Team Workspace supports production lifecycle, roles, direct membership and enterprise group grants.
-4. `discover` and `read` are independently evaluable and preserve `404` vs `403` semantics with an explicit protected-metadata default.
-5. Human Web reuses the existing Workspace-scoped shell/routes for both Personal and Team Workspace.
-6. Company SSO maps trusted identity/groups into the Workspace policy model without using `org_code` as authorization truth.
-7. Governance changes are auditable and Team creation uses an explicit platform-level policy rather than a Workspace-role shortcut.
-8. Phase 4–9 can reuse the same Workspace policy boundary without introducing a parallel personal-Knowledge model.
+### Migration / compatibility
 
-## 19. Architectural decision summary
+- existing Phase 0–2 Workspaces become TEAM without changing stable IDs；
+- existing Source/Document/Revision stable IDs remain unchanged；
+- existing Workspace-scoped routes remain canonical；
+- migration/backfill is idempotent where designed to be rerunnable。
+
+## 22. Acceptance criteria
+
+Phase 3 is complete when implementation demonstrates all of the following without changing Phase 0–2 canonical Knowledge identity:
+
+1. Every User receives exactly one idempotently provisioned `Workspace(type=PERSONAL, name='My Space')`.
+2. `/` enters My Space and the Human Web reuses existing Workspace-scoped routes for Personal and Team Knowledge.
+3. Personal Workspace remains single-user/system-managed and cannot receive ordinary members, group mappings, rename, transfer or user-driven archive/delete.
+4. Team Workspace creation is protected by explicit platform `workspace.create_team` and always establishes at least one direct OWNER.
+5. Team Workspace supports multiple OWNERs but can never commit a zero-OWNER state.
+6. Fixed roles are exactly OWNER / ADMIN / EDITOR / VIEWER; no assignable DISCOVERER role exists.
+7. OWNER vs ADMIN governance authority follows the explicit matrix in this spec.
+8. Direct membership and validated SSO Group mapping are independent grant sources whose capabilities are unioned without explicit deny.
+9. SSO Group mappings cannot grant OWNER and Knowledge Hub does not materialize external user-group membership truth.
+10. Workspace is the only Phase 3 Knowledge authorization boundary; there is no Source/Document ACL baseline.
+11. Archived Team Workspace is read-only and only OWNER can restore it.
+12. Discover/read semantics preserve `404` vs `403` behavior even though normal Phase 3 roles all include read.
+13. Governance mutations are atomically auditable through append-only audit events.
+14. Workspace selector groups My Space separately from Team Workspaces while remaining navigation-only.
+15. Phase 4–9 can reuse the same Workspace policy boundary without introducing parallel personal-Knowledge storage or authorization models.
+
+## 23. Architectural decision summary
 
 ```text
-Do:
 User
-  ├─ PERSONAL Workspace
-  │     └─ Sources / Knowledge
+  ├─ PERSONAL Workspace: My Space
+  │     ├─ Source A
+  │     ├─ Source B
+  │     └─ Knowledge
+  │
   └─ TEAM Workspaces
+        ├─ direct memberships
+        ├─ SSO Group mappings
         └─ Sources / Knowledge
 
-Do not:
-User ── PersonalKnowledge
-Workspace ── TeamKnowledge
+Effective Team access
+= direct grants ∪ validated group grants
+
+Authorization boundary
+= Workspace
 ```
 
-The system deliberately keeps **one Knowledge container abstraction: Workspace**. Personal Space is a product/governance specialization of Workspace, not a second storage, routing, search, publishing, or MCP architecture.
+Do not build:
+
+```text
+User ── PersonalKnowledge
+Workspace ── TeamKnowledge
+
+or
+
+Workspace → Source ACL → Document ACL
+
+or
+
+SSO Group membership copied into Hub as a second IAM truth
+```
+
+The system deliberately keeps **one Knowledge container abstraction: Workspace**. Personal Space is a product/governance specialization of Workspace, not a second storage, routing, search, publishing or MCP architecture.
