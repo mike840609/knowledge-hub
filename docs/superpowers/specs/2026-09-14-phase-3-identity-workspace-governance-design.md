@@ -90,6 +90,18 @@ Personal / Team 都沿用 Phase 2.5：
 9. Personal resource 仍透過 `Source.workspace_id` 走一般 Workspace authorization。
 10. `My Space` 只是 system-managed product label；authorization 不得靠 name 字串判斷。
 
+### 4.1 Early database uniqueness
+
+`personal_owner_user_id` 的 uniqueness **不得等到 final migration 009 才建立**。Migration 008 一加入 nullable `personal_owner_user_id` 時，就必須同時建立：
+
+```text
+UNIQUE(personal_owner_user_id)
+```
+
+MariaDB nullable UNIQUE 允許多個 `NULL`，因此所有 legacy TEAM rows 可安全共存；但任何 Personal provisioning/backfill 從 008 起就受到 DB-level「一個 Hub User 最多一個 Personal Workspace」保護。
+
+Application provisioning 仍需 idempotent：若 concurrent create 因 unique constraint collision，rollback/re-read winning Personal Workspace，不建立第二個 Workspace。
+
 ## 5. Personal provisioning and default entry
 
 ```text
@@ -110,7 +122,7 @@ Browser 不得提供 `owner_user_id` 來 provision 別人的 My Space，也不�
 
 上述 bootstrap 是所有 Human Web / API request 共用的 trusted caller establishment，不只在 `/` 執行。直接進入 Team deep link 或 API 也遵守相同順序。
 
-Migration 必須提供可重跑的 existing-user Personal Workspace backfill；完成後驗證每位既有 User 恰有一個 Personal Workspace 與對應 OWNER/SYSTEM_PERSONAL membership。登入 provisioning 與 backfill 並行時仍保持 idempotent。
+Migration 必須提供可重跑的 existing-user Personal Workspace backfill；完成後驗證每位既有 User 恰有一個 Personal Workspace 與對應 OWNER/SYSTEM_PERSONAL membership。登入 provisioning 與 backfill 並行時，008 的 owner unique constraint + application re-read 保持 idempotent。
 
 Existing Phase 0–2 Workspace 全部明確 backfill 為 `TEAM`；不得依 workspace name、`org_code`、row order 或 member count 猜 type。
 
@@ -204,15 +216,15 @@ Canonical account identity truth 是：
 
 ### 7.2 Runtime resolver rules
 
-Production runtime resolver **不得**用 `emp_id` 自動 attach 到既有 Hub User。Runtime rules：
+Production runtime resolver **不得**用 `emp_id` 自動 attach 到既有 Hub User。
 
 1. 先以 `(provider, subject)` 查 identity link。
 2. link 已存在 → 該 Hub UUID 是唯一 account identity；只同步允許更新的 profile fields。
-3. link 不存在，且 `users.emp_id = external.emp_id` 已存在 → fail closed：`IDENTITY_LINK_REQUIRED`（若該 user 已被同 provider 其他 subject 綁定則 `IDENTITY_LINK_CONFLICT`）。不得自動接到該 existing user。
+3. link 不存在，且 `users.emp_id = external.emp_id` 已存在 → fail closed：`IDENTITY_LINK_REQUIRED`；若該 user 已被同 provider 另一個 subject 綁定則 `IDENTITY_LINK_CONFLICT`。
 4. link 不存在且 emp_id 也不存在 → Hub 在同一 transaction 建立 new UUIDv7 User + identity link。
 5. concurrent identical first-login 由 `(provider,subject)` / `emp_id` unique constraints 收斂；duplicate race 後重新讀取 winning link。
 6. SSO subject、emp_id、OIDC `sub` 或其他 external identifier 永遠不得直接寫入 `users.id`。
-7. 已建立的 `(provider, subject)` link 不因 emp_id 後續重新指派而改變；新 subject 不會因拿到舊 emp_id 而繼承舊 My Space / Team membership。
+7. 已建立的 `(provider, subject)` link 不因 emp_id 後續重新指派而改變。
 8. external subject 變更或帳號合併必須走 explicit operator/account-link migration，不做 silent relink。
 
 ### 7.3 Legacy identity-link bootstrap
@@ -279,7 +291,7 @@ workspaces
 - archived_at NULL
 ```
 
-Final schema：`workspace_type NOT NULL`；FK `personal_owner_user_id/created_by/archived_by → users.id`；type/lifecycle CHECKs；unique personal owner；PERSONAL name `My Space`。
+Migration 008 就建立 nullable `personal_owner_user_id` + `UNIQUE(personal_owner_user_id)`；final 009 再補齊/驗證 `workspace_type NOT NULL`、FK `personal_owner_user_id/created_by/archived_by → users.id`、type/lifecycle CHECKs、PERSONAL name `My Space` 等 canonical constraints。
 
 ### 8.2 `workspace_memberships`
 
@@ -428,31 +440,61 @@ ordinary archived membership/group mutation 維持禁止。system-only recovery 
 
 ## 15. Legacy bootstrap, staged migration and readiness
 
-Rollout：
+### 15.1 Populated-production rollout requires write quiescence
+
+Phase 3 的 staged migration 不是 online mixed-version migration。對 populated production database，MVP deployment contract 是：
 
 ```text
-Migration 008 additive/compatibility
+enter maintenance / canonical-write quiescence
   ↓
-Explicit governance bootstrap + explicit legacy identity-link bootstrap + Personal backfill
+apply Migration 008
   ↓
-Migration 009 final constraints/FKs/NOT NULL
+run governance bootstrap
+run trusted legacy identity-link bootstrap
+run Personal Workspace backfill
   ↓
-Production readiness enabled
+apply Migration 009
+  ↓
+deploy/enable Phase-3-compatible application
+  ↓
+exit maintenance / resume canonical writes
 ```
 
-### 15.1 Migration 008
+Quiescence 必須在 **008 前** 開始，並持續到 **009 完成且 Phase-3-compatible writer 已 ready**。此期間：
 
-可暫留 legacy `workspace_type`、membership role/source nullable；建立 identity links/group mappings/audit tables與必要 indexes。不得把 008 當 canonical final schema。
+- 禁止舊版 application 對 canonical tables 寫入，至少涵蓋 `users`、`workspaces`、`workspace_memberships` 以及任何會建立/改變 Workspace governance state 的 path。
+- 若部署操作上無法精確隔離，採 full application write maintenance mode；read-only traffic 可保留。
+- 只允許 migration、explicit Phase 3 bootstrap/backfill/recovery scripts 執行受控寫入。
+- `beforeApply` 的 read-only validation **不是** write fence；schema migration advisory lock 也不能假設 legacy app 會遵守，因此不能用它們取代 quiescence。
+- 不支援「bootstrap 完成後仍讓 Phase 0–2 writer 繼續新增 Workspace/Membership，再直接套 009」的 rollout。
 
-### 15.2 Bootstrap gates
+這延續既有 populated migration 的 safety model：cutover 期間停止 canonical writes，直到 final constraint migration 完成。
+
+### 15.2 Migration 008
+
+008 是 additive/compatibility schema：
+
+- add `workspace_type` / lifecycle governance columns。
+- add nullable membership `role` / `membership_source` where needed。
+- add nullable `personal_owner_user_id` **並立即建立 `UNIQUE(personal_owner_user_id)`**。
+- create identity links / group mappings / audit tables and safe indexes/FKs。
+- 不把 008 當 canonical final schema。
+
+### 15.3 Bootstrap gates
 
 Governance bootstrap 在 009 前驗證每個 Team direct OWNER >= 1、membership role/source 全部有效非 null；零會員 Team explicit 指定 existing Hub User OWNER。
 
 Company identity bootstrap 在 production enable 前，對 rollout scope 中每個既有 human Hub User 建立 trusted `(provider, subject) → hub_user_id` link。Runtime 不負責以 emp_id claim legacy user。
 
-### 15.3 Migration 009
+Personal backfill 在 008 unique owner constraint 保護下 idempotently 建立缺少的 My Space + OWNER/SYSTEM_PERSONAL membership。
+
+所有 bootstrap/backfill 完成後，在仍維持 write quiescence 的狀態進入 009。
+
+### 15.4 Migration 009
 
 009 `beforeApply`/equivalent fail closed when DB governance bootstrap 未完成。009 finalize：workspace_type NOT NULL、membership role/source NOT NULL、role/source/type/lifecycle CHECK、canonical Workspace/User FKs（workspaces/memberships/identity links/group mappings/audit）。
+
+009 gate 與 DDL 執行期間仍必須保持 application write quiescence；因 migration runner 的 `beforeApply` 僅是 read validation、DDL statement 也不是與 legacy writer 的 shared transaction fence。
 
 Production application readiness additionally verifies company provider/session configured，以及 configured company rollout scope 的 legacy users 已完成 identity-link bootstrap。009 未 APPLIED 或 identity-link readiness 未完成，都不得啟用 production Phase 3 authorization。
 
@@ -474,37 +516,48 @@ My Space Document A → Promote → new Team Document B；A 保留；B 新 ID；
 
 ## 19. Migration / rollout strategy
 
-1. Apply migration 008。
-2. Backfill existing Workspaces explicitly TEAM。
-3. Run explicit Team role/owner bootstrap。
-4. Run explicit trusted legacy identity-link bootstrap；禁止 runtime 用 emp_id claim existing user。
-5. Provision existing users My Space + OWNER/SYSTEM_PERSONAL。
-6. Apply migration 009 final constraints/FKs。
-7. Pass production readiness：009 applied + company provider configured + identity-link rollout complete。
-8. Enable trusted Company SSO → identity-link resolver → CallerContext。
-9. Replace binary membership with capability union。
-10. Retrofit all Workspace mutations including createInitial/createResync canonical locks。
-11. Enable personal-first UI + Team governance UI/API + system recovery。
+1. Enter canonical-write quiescence / maintenance mode before 008。
+2. Apply migration 008；其中 `personal_owner_user_id` nullable UNIQUE 從此生效。
+3. Backfill existing Workspaces explicitly TEAM。
+4. Run explicit Team role/owner bootstrap。
+5. Run explicit trusted legacy identity-link bootstrap；禁止 runtime 用 emp_id claim existing user。
+6. Provision/backfill existing users My Space + OWNER/SYSTEM_PERSONAL；concurrent duplicate 由 008 unique constraint 收斂。
+7. While writes remain quiesced, apply migration 009 final constraints/FKs。
+8. Pass production readiness：009 applied + company provider configured + identity-link rollout complete + Phase-3-compatible writer ready。
+9. Enable trusted Company SSO → identity-link resolver → CallerContext and capability-union authorization。
+10. Retrofit/enable all Workspace mutations with canonical locking。
+11. Exit maintenance only after Phase-3-compatible deployment is active。
+12. Enable personal-first UI + Team governance UI/API + system recovery。
 
-## 20. Required tests
+## 20. Required tests / verification evidence
 
 ### Identity / SSO
 
 - existing `(provider,subject)` resolves same Hub UUID。
 - external IDs never become `users.id`。
 - runtime subject with existing emp_id but no link fails `IDENTITY_LINK_REQUIRED`；does not auto-attach。
-- different subject using recycled emp_id cannot inherit already-linked account；conflict/fail closed。
+- different subject using recycled emp_id cannot inherit already-linked account。
 - explicit bootstrap can link trusted provider subject to exact existing Hub user after validating expected emp_id。
 - new subject + unused emp_id creates UUIDv7 user + link atomically。
 - concurrent identical first-login converges on one user/link。
 - production readiness fails if required legacy links missing。
 
-### Schema / bootstrap
+### Personal Workspace / schema
 
+- migration 008 creates nullable unique `personal_owner_user_id` before Personal provisioning/backfill begins。
+- two concurrent Personal provisions for same user converge to one Workspace and one SYSTEM_PERSONAL membership。
+- Personal backfill is rerunnable and cannot create a second My Space。
 - 008 applies to legacy DB。
 - 009 refuses before governance bootstrap。
 - after 009 null/invalid role/source/type rejected at DB level。
 - canonical FKs reject orphan identity/group/audit rows。
+
+### Rollout safety
+
+- documented production runbook enters write quiescence before 008 and resumes only after 009 + Phase-3-compatible writer readiness。
+- bootstrap/backfill scripts are the only allowed canonical writers during cutover。
+- negative migration test: a synthetic legacy Workspace/Membership row written after bootstrap with NULL Phase 3 fields makes 009 readiness fail rather than silently finalize。
+- verification report records the maintenance/write-fence procedure; migration lock/beforeApply is not claimed to provide application write fencing。
 
 ### Authorization / governance
 
@@ -533,21 +586,23 @@ My Space Document A → Promote → new Team Document B；A 保留；B 新 ID；
 ## 21. Acceptance criteria
 
 1. Every User exactly one system-managed My Space。
-2. `/` enters My Space；Personal/Team reuse Workspace routes。
-3. Team creation requires trusted platform capability and creates direct OWNER。
-4. Team direct OWNER >= 1。
-5. Roles exactly OWNER/ADMIN/EDITOR/VIEWER。
-6. OWNER/ADMIN authority follows spec。
-7. Direct + validated Group capabilities union；no deny。
-8. Hub 不 materialize user↔group truth。
-9. Other-user group-effective access never fabricated。
-10. Durable company account identity is `(provider,subject)→Hub UUID`; runtime never uses emp_id to claim an existing account；legacy links are explicitly bootstrapped。
-11. Workspace is only Phase 3 Knowledge ACL boundary。
-12. All pre-/post-Snapshot import, Source/Knowledge, governance mutations follow lock protocol。
-13. Archived Team read-only；system-only recovery audited。
-14. Governance mutation + audit atomic。
-15. 009 finalizes nullable bootstrap fields/CHECK/FKs；production readiness also requires identity-link bootstrap completeness。
-16. Existing Workspace/Source/Document/Revision IDs/routes unchanged。
+2. Migration 008 protects one-My-Space-per-user with nullable unique `personal_owner_user_id` before provisioning/backfill can run。
+3. `/` enters My Space；Personal/Team reuse Workspace routes。
+4. Team creation requires trusted platform capability and creates direct OWNER。
+5. Team direct OWNER >= 1。
+6. Roles exactly OWNER/ADMIN/EDITOR/VIEWER。
+7. OWNER/ADMIN authority follows spec。
+8. Direct + validated Group capabilities union；no deny。
+9. Hub 不 materialize user↔group truth。
+10. Other-user group-effective access never fabricated。
+11. Durable company account identity is `(provider,subject)→Hub UUID`; runtime never uses emp_id to claim an existing account；legacy links are explicitly bootstrapped。
+12. Workspace is only Phase 3 Knowledge ACL boundary。
+13. All pre-/post-Snapshot import, Source/Knowledge, governance mutations follow lock protocol。
+14. Archived Team read-only；system-only recovery audited。
+15. Governance mutation + audit atomic。
+16. Populated rollout holds canonical-write quiescence from before 008 through 009 and Phase-3-compatible writer readiness。
+17. 009 finalizes nullable bootstrap fields/CHECK/FKs；production readiness also requires identity-link bootstrap completeness。
+18. Existing Workspace/Source/Document/Revision IDs/routes unchanged。
 
 ## 22. Architectural summary
 
