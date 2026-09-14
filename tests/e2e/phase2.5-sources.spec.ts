@@ -11,10 +11,10 @@ test("sources list renders compact rows", async ({ page }) => {
   await expect(page.getByText("All sources", { exact: false })).toHaveCount(0);
 });
 
-test("source detail renders overview, import history, and technical details", async ({ page }) => {
+test("source detail renders overview and hides folder update for a Hub-managed source", async ({ page }) => {
   await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/sources/${OBSIDIAN_SOURCE}`);
 
   await expect(page.getByRole("heading", { name: "Obsidian Wiki" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Update from folder" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Update from folder" })).toHaveCount(0);
   await expect(page.getByText("Technical details")).toBeVisible();
 });
