@@ -50,6 +50,16 @@ export class MariaDbWorkspaceGroupMappingRepository implements WorkspaceGroupMap
     return rows.map(mapGroupMapping);
   }
 
+  async listByExternalGroupIds(externalGroupIds: readonly string[]): Promise<WorkspaceGroupMapping[]> {
+    if (externalGroupIds.length === 0) return [];
+    const placeholders = externalGroupIds.map(() => "?").join(", ");
+    const rows = await this.connection.query<DbRow[]>(
+      `SELECT * FROM workspace_group_mappings WHERE external_group_id IN (${placeholders}) ORDER BY created_at, id`,
+      externalGroupIds.map(toGroupBytes),
+    );
+    return rows.map(mapGroupMapping);
+  }
+
   async insert(mapping: WorkspaceGroupMapping): Promise<void> {
     if (mapping.role !== "ADMIN" && mapping.role !== "EDITOR" && mapping.role !== "VIEWER") {
       throw new IntegrityViolationError("Group mapping insert requires an ADMIN, EDITOR, or VIEWER role.");

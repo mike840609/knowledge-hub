@@ -28,7 +28,8 @@ export function createRepositories(connection: DatabaseConnection): SourceReposi
   const tree = new MariaDbTreeRepository(connection);
   const workspaces = new MariaDbWorkspaceRepository(connection);
   const workspaceMemberships = new MariaDbWorkspaceMembershipRepository(connection);
-  const workspaceAccess = new WorkspaceMembershipPolicy(workspaceMemberships);
+  const groupMappings = new MariaDbWorkspaceGroupMappingRepository(connection);
+  const workspaceAccess = new WorkspaceMembershipPolicy(workspaceMemberships, groupMappings);
   return {
     users,
     sources,
@@ -46,7 +47,7 @@ export function createRepositories(connection: DatabaseConnection): SourceReposi
     workspaces,
     workspaceMemberships,
     workspaceAccess,
-    groupMappings: new MariaDbWorkspaceGroupMappingRepository(connection),
+    groupMappings,
     auditEvents: new MariaDbWorkspaceAuditEventRepository(connection),
     identityLinks: new MariaDbExternalIdentityLinkRepository(connection),
   };
