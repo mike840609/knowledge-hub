@@ -4,7 +4,7 @@ import { WorkspaceAccessDeniedError, WorkspaceNotFoundError } from "@/modules/wo
 import { toImportErrorResponse } from "@/server/http-error-response";
 
 describe("Phase 2 import HTTP error mapping", () => {
-  it("maps hidden access/not-found errors to 404 NOT_FOUND", () => {
+  it("maps undiscoverable access/not-found errors to 404 NOT_FOUND", () => {
     for (const error of [
       importError("IMPORT_SNAPSHOT_NOT_FOUND", "Import snapshot was not found."),
       importError("IMPORT_SOURCE_NOT_FOUND", "Import source was not found."),
@@ -15,6 +15,14 @@ describe("Phase 2 import HTTP error mapping", () => {
       expect(mapped.status).toBe(404);
       expect(mapped.body).toEqual({ error: { code: "NOT_FOUND", message: expect.any(String) } });
     }
+  });
+
+  it("maps a discoverable import snapshot denial to 403 ACCESS_DENIED", () => {
+    const mapped = toImportErrorResponse(
+      importError("IMPORT_SNAPSHOT_ACCESS_DENIED", "Import snapshot exists, but access is denied."),
+    );
+    expect(mapped.status).toBe(403);
+    expect(mapped.body).toEqual({ error: { code: "ACCESS_DENIED", message: expect.any(String) } });
   });
 
   it("maps source version/stale/retryable conflicts to 409", () => {
