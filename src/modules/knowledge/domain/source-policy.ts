@@ -17,3 +17,7 @@ export type SourcePolicy = {
 export function isHubManaged(policy: SourcePolicy): boolean {
   return policy.ownership === "HUB_MANAGED";
 }
+
+export function isFolderSyncable(policy: SourcePolicy): boolean {
+  return policy.status === "ACTIVE" && policy.sourceType === "FOLDER_SYNC" && policy.ownership === "SOURCE_MANAGED";
+}
