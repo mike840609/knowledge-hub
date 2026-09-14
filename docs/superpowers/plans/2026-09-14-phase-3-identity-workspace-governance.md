@@ -133,12 +133,14 @@ it("backfills existing workspaces to TEAM without changing ids", async () => {
 it("rejects OWNER group mappings", async () => {
   await expectDatabaseConstraintFailure(() => pool.query(
     `INSERT INTO workspace_group_mappings
-      (id, workspace_id, external_group_id, role, created_by)
-     VALUES (?, ?, 'grp-1', 'OWNER', ?)`,
-    [uuidv7(), workspaceId, userId],
+      (id, workspace_id, external_group_id, role, created_by, updated_by, created_at, updated_at)
+     VALUES (?, ?, ?, 'OWNER', ?, ?, CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6))`,
+    [uuidv7(), workspaceId, Buffer.from("grp-1", "utf8"), userId, userId],
   ));
 });
 ```
+
+The invalid-role insert must otherwise be valid, so it fails on the role constraint rather than missing required fields.
 
 Also assert Personal requires `personal_owner_user_id`, `name='My Space'`, unique personal owner; Team requires null personal owner; membership roles/sources are constrained; audit payload is JSON.
 
@@ -175,7 +177,7 @@ export const phase3WorkspaceGovernanceMigration: Migration = {
     `CREATE TABLE workspace_group_mappings (
        id UUID PRIMARY KEY,
        workspace_id UUID NOT NULL,
-       external_group_id VARCHAR(255) NOT NULL,
+       external_group_id VARBINARY(1020) NOT NULL,
        role VARCHAR(16) NOT NULL,
        created_by UUID NOT NULL,
        created_at DATETIME(6) NOT NULL,
@@ -199,6 +201,10 @@ export const phase3WorkspaceGovernanceMigration: Migration = {
   ],
 };
 ```
+
+External group IDs follow the spec's opaque-ID contract. Encode validated strings as UTF-8 bytes for storage and every lookup; decode bytes when returning DTOs. Do not trim, case-fold, or Unicode-normalize IDs. Reject empty/invalid Unicode IDs or IDs exceeding 1020 UTF-8 bytes at the provider/config and group-mapping command boundaries. Use VARBINARY so equality and uniqueness preserve case, accents, and trailing spaces independently of database collation.
+
+Add integration cases mapping `Team-A`, `team-a`, `équipe`, `equipe`, and `Team-A ` separately. A caller carrying one ID must match only that exact grant; duplicate identical bytes in one Workspace must fail the unique constraint.
 
 - [ ] **Step 4: Update domain types**
 
@@ -609,15 +615,28 @@ git commit -m "feat: evaluate workspace capabilities from direct and group grant
 **Files:**
 - Create: `src/modules/workspaces/application/personal-workspace-service.ts`
 - Modify repositories as required
+- Create: `src/server/trusted-caller.ts`
+- Modify Human Web / API caller establishment and `src/server/composition.ts`
+- Create: `scripts/db/backfill-personal-workspaces.ts`
+- Modify: `package.json`
 - Create: `tests/integration/phase3-personal-workspace.test.ts`
 
 **Interfaces:**
 - `ensurePersonalWorkspace(userId): Promise<Workspace>`.
 - `freezePersonalWorkspaceSystem(userId, reason, correlationId): Promise<void>`.
+- Shared request bootstrap: trusted principal → ensureUser → ensurePersonalWorkspace → CallerContext.
+- `npm run db:backfill-personal-workspaces`: rerunnable existing-user backfill, using the same provisioning service.
 
 - [ ] **Step 1: Write failing Personal tests**
 
-Test repeated provisioning returns same ID, fixed name, one OWNER/SYSTEM_PERSONAL row, second member/group mapping rejected, system freeze audited.
+Test repeated/concurrent provisioning returns same ID, fixed name, one OWNER/SYSTEM_PERSONAL row, second member/group mapping rejected, system freeze audited.
+
+Also test:
+
+- backfill all existing users, then repeat with no new Workspace IDs or duplicate provision audit events;
+- first company login persists a new Hub user before creating its Personal membership;
+- direct Team URL and API requests provision My Space without visiting `/`;
+- login provisioning racing with backfill still produces one Personal Workspace per user.
 
 - [ ] **Step 2: Implement provision in one transaction**
 
@@ -627,16 +646,22 @@ Lock/query by unique `personal_owner_user_id`; handle duplicate-race by re-read;
 
 Use `Workspace.lockById`, set lifecycle ARCHIVED, append `PERSONAL_WORKSPACE_FROZEN`.
 
-- [ ] **Step 4: Verify**
+- [ ] **Step 4: Wire shared request bootstrap and existing-user backfill**
+
+Create one trusted caller helper for every Human Web/API entry point. After obtaining the principal once per request, persist/validate its Hub user identity, ensure My Space, then call application services with CallerContext. Do not duplicate provisioning in individual routes or rely on `/` navigation.
+
+Add `db:backfill-personal-workspaces` to package.json. Enumerate all existing Hub users and invoke the same idempotent service. Before enabling completed Phase 3 rollout, verify every existing user has exactly one PERSONAL Workspace and its OWNER/SYSTEM_PERSONAL membership. A failed run must be safe to resume without replacing IDs.
+
+- [ ] **Step 5: Verify**
 
 ```bash
 npm run test:integration
 ```
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add src/modules/workspaces tests/integration/phase3-personal-workspace.test.ts
+git add src/modules/workspaces src/server scripts/db/backfill-personal-workspaces.ts package.json tests/integration/phase3-personal-workspace.test.ts
 git commit -m "feat: provision and freeze personal workspaces"
 ```
 
@@ -728,13 +753,21 @@ expect(canAssignGroupRole("ADMIN", "ADMIN")).toBe(false);
 ```ts
 return uow.run(async (repos) => {
   const workspace = await repos.workspaces.lockById(workspaceId);
-  requireActiveTeam(workspace);
   const actorAccess = await policy.evaluateWithinTransaction(repos, caller, workspaceId);
-  requireManageAuthority(actorAccess, requestedRole);
+  requireDiscoverableWorkspace(actorAccess); // preserve non-enumeration before type/lifecycle errors
+  requireActiveTeam(workspace);
+  const currentGrant = await loadTargetGrant(repos, workspaceId, target);
+  if (currentGrant) requireManageAuthority(actorAccess, currentGrant.role);
+  if (requestedRole !== null) requireManageAuthority(actorAccess, requestedRole);
+  // requestedRole=null means removal; upsert checks the existing role too
   // mutate membership/group
   // append audit
 });
 ```
+
+For direct membership and group mappings, authority is checked against the persisted grant being changed, not the target user's effective capabilities. Add checks against both beforeRole and afterRole for updates, only afterRole for inserts, and only beforeRole for removals. Never interpret a low requestedRole as permission to demote a privileged grant.
+
+Add negative tests for ADMIN demoting another ADMIN, demoting an OWNER while a second OWNER exists, and downgrading/removing a Group ADMIN mapping (including upsert). Prove these failures leave both grants and audit unchanged. OWNER may perform these transitions subject to the final-owner invariant.
 
 - [ ] **Step 3: Enforce final direct OWNER invariant**
 
@@ -858,7 +891,7 @@ Current caller returns `groupAccess="EVALUATED"` with matched groups/effective c
 
 - [ ] **Step 2: Implement trusted caller server helper once**
 
-Every route obtains `AuthenticatedPrincipal` from provider, builds caller server-side, then calls application service. Never accept group/platform capability fields from request JSON.
+Every route reuses Task 7’s shared trusted caller bootstrap: obtain principal once, ensureUser, ensurePersonalWorkspace, then call application service. Never accept group/platform capability fields from request JSON.
 
 - [ ] **Step 3: Implement governance route handlers**
 
@@ -903,7 +936,7 @@ Verify `/` lands in My Space even when Team Workspaces exist; selector groups My
 
 - [ ] **Step 2: Update root resolution**
 
-Call Personal provisioning after trusted caller establishment, then resolve default Knowledge target inside My Space only.
+Reuse Task 7’s shared bootstrap, then resolve the default Knowledge target inside its provisioned My Space only. Root navigation must not be the sole provisioning entry point.
 
 - [ ] **Step 3: Group selector**
 
@@ -978,9 +1011,11 @@ Record evidence that:
 ```text
 - production cannot silently use Local identity
 - browser cannot inject groups/platform capabilities
+- every existing user is backfilled with one My Space; first-login/deep-link/API bootstrap also provisions it
+- external group ID matching and uniqueness use exact UTF-8 bytes
 - every Team has direct OWNER >= 1
 - group cannot grant OWNER
-- ADMIN cannot create governance authority
+- ADMIN cannot create governance authority or demote/remove existing OWNER/ADMIN grants
 - other-user group access is never fabricated
 - archive and content/governance writes serialize on Workspace row
 - archived ordinary writes/governance fail

@@ -106,6 +106,10 @@ ensurePersonalWorkspace(userId)
 
 Browser 不得提供 `owner_user_id` 來 provision 別人的 My Space。
 
+上述 bootstrap 是所有 Human Web / API request 共用的 trusted caller establishment，不只在 `/` 執行。必須先完成 `ensureUser`，再 provision My Space，最後才呼叫 Workspace application services；直接進入 Team deep link 或 API 也遵守相同順序。
+
+Migration 必須提供可重跑的 existing-user backfill command，逐一呼叫相同 provisioning service；完成後驗證每位既有 User 恰有一個 Personal Workspace 與對應 OWNER/SYSTEM_PERSONAL membership。登入 provisioning 與 backfill 並行時仍保持 idempotent。
+
 Existing Phase 0–2 Workspace 全部明確 backfill 為 `TEAM`；不得依 workspace name、`org_code`、row order 或 member count 猜 type。
 
 Phase 3 root navigation：
@@ -249,6 +253,9 @@ Rules：
 
 - TEAM only。
 - `(workspace_id, external_group_id)` unique。
+- `external_group_id` 是 provider-issued opaque identifier：大小寫、重音與尾端空白都不得由 Hub 合併；不 trim、lowercase 或 Unicode-normalize。
+- 持久化使用 `VARBINARY(1020)` 儲存原始 ID 的 UTF-8 bytes，repository 負責 string ↔ bytes 轉換。比對、查詢參數與 unique constraint 都使用相同精確 bytes；不得依賴 database default collation。
+- Provider boundary 拒絕空 ID、無效 Unicode 或超過 1020 UTF-8 bytes 的 ID；server configuration 與 group mapping 管理輸入中的 IDs 遵守同一驗證與比對契約。
 - 不可 grant OWNER。
 - Hub 不保存 user↔group membership truth。
 
@@ -340,7 +347,9 @@ ADMIN 不可：
 - promote group to ADMIN。
 - rename/archive/restore Workspace。
 
-Final direct OWNER 不得被 remove/demote。
+每次變更必須在 Workspace lock 下讀取 target 的現有 direct membership / group mapping，同時檢查 actor 是否可以管理 beforeRole 與 afterRole。新增只檢查 afterRole；刪除只檢查 beforeRole；更新或 upsert existing row 必須兩者都檢查。ADMIN 不得把既有 OWNER/ADMIN 降為 EDITOR/VIEWER，也不得降級或刪除 Group→ADMIN。不得以 target 的 effective role 取代正在修改之 grant 的 persisted role。
+
+Final direct OWNER 不得被 remove/demote；此 invariant 是額外保護，不能取代上述 actor authority check。
 
 ## 11. Authorization evaluation
 
@@ -620,7 +629,9 @@ Team Document B
 
 ### Personal
 
-- repeated provision → same Workspace ID。
+- repeated / concurrent provision → same Workspace ID。
+- existing-user backfill 可重跑，完成後每位既有 User 恰有一個 My Space + OWNER/SYSTEM_PERSONAL row。
+- 首次 SSO 登入、直接 Team deep link 與 API request 都先 ensureUser 再 provision；不依賴造訪 `/`。
 - one user cannot own two Personal Workspaces。
 - My Space rename/direct second member/group mapping/ownership transfer/user archive rejected。
 - system freeze retains Knowledge and emits audit。
@@ -638,6 +649,8 @@ Team Document B
 
 - fixed roles exactly OWNER/ADMIN/EDITOR/VIEWER。
 - group max ADMIN；never OWNER。
+- ADMIN 不可降級其他 ADMIN、非最後一位 OWNER，或降級/刪除 Group→ADMIN；update/upsert/remove 都驗證 existing role。
+- group IDs 大小寫、重音、尾端空白不同時不互相命中 grant，且可各自建立 mapping；相同 bytes duplicate 被拒絕。
 - direct + group capabilities union。
 - group-only access appears in accessible listing。
 - current caller can inspect matched group grants。
