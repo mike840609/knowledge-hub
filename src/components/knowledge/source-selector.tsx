@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { sortSourcesByName } from "@/lib/knowledge-navigation";
 import type { SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 
@@ -13,7 +13,9 @@ type SourceSelectorProps = {
 
 export function SourceSelector({ sources, selectedSourceId, workspaceId }: SourceSelectorProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const ordered = sortSourcesByName(sources);
+  const archivedSuffix = searchParams.get("includeArchived") === "true" ? "?includeArchived=true" : "";
   return (
     <div className="min-w-0">
       <label className="block text-xs font-medium text-kh-text-muted" htmlFor="source-selector">
@@ -25,7 +27,7 @@ export function SourceSelector({ sources, selectedSourceId, workspaceId }: Sourc
         onChange={(event) => {
           const next = event.target.value;
           if (next !== "" && next !== selectedSourceId) {
-            router.push(`/w/${workspaceId}/knowledge/${next}`);
+            router.push(`/w/${workspaceId}/knowledge/${next}${archivedSuffix}`);
           }
         }}
         className="mt-1 min-h-10 w-full truncate rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-sm text-kh-text outline-none focus:border-kh-accent focus-visible:ring-2 focus-visible:ring-kh-accent"
