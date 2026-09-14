@@ -6,6 +6,7 @@ import { MariaDbUserRepository } from "@/infrastructure/database/mariadb/reposit
 import { MariaDbExternalIdentityLinkRepository } from "@/infrastructure/database/mariadb/repositories/external-identity-links";
 import { mapDatabaseError } from "@/infrastructure/database/mariadb/repositories/shared";
 import { HubIdentityResolver, type HubIdentityRepositories, type HubIdentityUnitOfWork } from "@/modules/identity/application/hub-identity-resolver";
+import { bootstrapIdentityLinks } from "../../scripts/db/bootstrap-phase3-identity-links";
 import {
   IdentityLinkConflictError,
   IdentityLinkRequiredError,
@@ -209,5 +210,30 @@ describe("Hub runtime identity resolution", () => {
       [provider, Buffer.from(subject, "utf8")],
     );
     expect(links.map((row) => String(row.hub_user_id))).toEqual([hubUserA]);
+  });
+
+  it("H. explicitly bootstrapped legacy link resolves at runtime; wrong expected_emp_id never links", async () => {
+    const tag = uuidv7();
+    const provider = "company-sso";
+    const subject = `subject-H-${tag}`;
+    const empId = `EMP-H-${tag}`;
+    const hubUserId = await seedUser(empId, "Legacy Bootstrap User");
+
+    const refusal = await bootstrapIdentityLinks(pool, [
+      { provider, subject, hubUserId, expectedEmpId: "EMP-WRONG" },
+    ]).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(refusal).toBeInstanceOf(Error);
+    expect(await countLinks(provider, subject)).toBe(0);
+
+    const result = await bootstrapIdentityLinks(pool, [{ provider, subject, hubUserId, expectedEmpId: empId }]);
+    expect(result.linked).toBe(1);
+
+    const resolved = await resolver.resolve(claims(provider, subject, empId, "Legacy Bootstrap User"));
+    expect(resolved.id).toBe(hubUserId);
+    expect(resolved.emp_id).toBe(empId);
+    expect(await countUsersByEmp(empId)).toBe(1);
   });
 });
