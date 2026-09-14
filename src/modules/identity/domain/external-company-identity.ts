@@ -13,12 +13,7 @@ export type ExternalCompanyIdentity = {
   org_code: string;
 };
 
-export type TrustedIdentityClaims = {
-  externalIdentity: ExternalCompanyIdentity;
-  validatedExternalGroupIds: string[];
-  platformCapabilities: string[];
-  refreshedAt: Date;
-};
+export type { TrustedIdentityClaims } from "./trusted-identity-claims";
 
 /**
  * Durable `(provider, subject) -> hub_user_id` link row persisted in
