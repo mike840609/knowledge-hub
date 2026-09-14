@@ -4,7 +4,7 @@
 | --- | --- |
 | 文件日期 | 2026-09-14 |
 | 文件類型 | Design Spec；不包含 Implementation Plan |
-| 狀態 | Review requested — PR review gaps incorporated |
+| 狀態 | Review requested — high-severity PR review gaps incorporated |
 | 前置 | Phase 0 Foundation、Phase 1 Knowledge Core & Tree、Phase 2 Knowledge Source Import & Sync、Phase 2.5 Frontend Product Baseline |
 | 既有授權約束 | `2026-09-14-resource-visibility-access-semantics-amendment.md`、`2026-09-14-phase-3-authorization-clarification.md` |
 | 核心決策 | Personal Space 以 `Workspace(type=PERSONAL)` 表達；Workspace 是 Phase 3 唯一 Knowledge authorization boundary |
@@ -93,20 +93,24 @@ Personal / Team 都沿用 Phase 2.5：
 ## 5. Personal provisioning and default entry
 
 ```text
-trusted principal established
+trusted external claims established
   ↓
-ensureUser(...)
+resolveHubIdentity(externalIdentity)
+  ├─ existing emp_id → keep existing Hub UUID
+  └─ first login     → create Hub UUIDv7 user
   ↓
-ensurePersonalWorkspace(userId)
+ensurePersonalWorkspace(hubUserId)
   ├─ exists  → return existing
   └─ missing → create PERSONAL Workspace
                + OWNER/SYSTEM_PERSONAL membership
                + audit event
+  ↓
+build CallerContext from resolved Hub identity + trusted claims
 ```
 
-Browser 不得提供 `owner_user_id` 來 provision 別人的 My Space。
+Browser 不得提供 `owner_user_id` 來 provision 別人的 My Space，也不得提供可覆寫 Hub user ID 的欄位。
 
-上述 bootstrap 是所有 Human Web / API request 共用的 trusted caller establishment，不只在 `/` 執行。必須先完成 `ensureUser`，再 provision My Space，最後才呼叫 Workspace application services；直接進入 Team deep link 或 API 也遵守相同順序。
+上述 bootstrap 是所有 Human Web / API request 共用的 trusted caller establishment，不只在 `/` 執行。必須先完成 trusted external identity → Hub identity resolution，再 provision My Space，最後才呼叫 Workspace application services；直接進入 Team deep link 或 API 也遵守相同順序。
 
 Migration 必須提供可重跑的 existing-user backfill command，逐一呼叫相同 provisioning service；完成後驗證每位既有 User 恰有一個 Personal Workspace 與對應 OWNER/SYSTEM_PERSONAL membership。登入 provisioning 與 backfill 並行時仍保持 idempotent。
 
@@ -155,13 +159,47 @@ SSO Group 永遠不能 grant OWNER，因此 owner count 只計 direct membership
 
 ## 7. Trusted identity contract
 
-### 7.1 Authenticated principal
+### 7.1 External identity vs Hub identity
 
-Phase 3 不再讓 application transport 只拿 `UserIdentity`。Trusted identity boundary 必須產生完整 principal：
+Company SSO identity 與 Hub canonical `UserIdentity` 是兩個不同概念。外部 provider/session 不得直接決定 `users.id`。
+
+```text
+ExternalCompanyIdentity
+- subject: string              # provider-issued stable subject when available
+- emp_id: string               # trusted employee/account key used by Phase 3 resolver
+- name: string
+- org_code: string
+
+TrustedIdentityClaims
+- externalIdentity: ExternalCompanyIdentity
+- validatedExternalGroupIds: string[]
+- platformCapabilities: PlatformCapability[]
+- refreshedAt: Date
+
+Hub UserIdentity
+- id: UUIDv7                   # Hub-owned stable internal ID
+- emp_id: string
+- name: string
+- org_code: string
+```
+
+Phase 3 baseline 使用 trusted `emp_id` resolve Hub identity，因既有 `users.emp_id` 已有 unique contract：
+
+1. 以 `emp_id` 查 existing Hub User。
+2. 若存在，保留既有 Hub UUID；只同步允許更新的 profile fields（目前 `name`、`org_code`）。
+3. 若不存在，由 Hub 產生新的 UUIDv7 並 insert user。
+4. concurrent first-login 若撞到 `emp_id` unique constraint，必須 re-read existing row 並回傳同一 Hub UUID，不得建立第二個 user。
+5. SSO `subject`、employee number、OIDC `sub` 或其他 external identifier **都不得直接寫入 `users.id`**。
+
+若公司未來要求以 provider subject 而非 `emp_id` 作長期 account-link truth，必須新增 explicit identity-link schema/amendment；不得偷偷把 external subject reinterpret 成 Hub UUID。
+
+### 7.2 Authenticated principal
+
+Hub identity resolution 完成後，trusted caller boundary 才建立：
 
 ```text
 AuthenticatedPrincipal
-- identity: { id, emp_id, name, org_code }
+- identity: Hub UserIdentity
 - validatedExternalGroupIds: string[]
 - platformCapabilities: PlatformCapability[]
 - refreshedAt: Date
@@ -169,29 +207,40 @@ AuthenticatedPrincipal
 
 `CallerContext` 只能由 `AuthenticatedPrincipal` 建立。
 
-### 7.2 IdentityProvider
+### 7.3 IdentityProvider and resolver
 
 ```text
-IdentityProvider.getCurrentPrincipal()
-  → AuthenticatedPrincipal
+IdentityProvider.getCurrentClaims()
+  → TrustedIdentityClaims
+
+HubIdentityResolver.resolve(externalIdentity)
+  → Hub UserIdentity
+
+TrustedCaller bootstrap
+  → claims
+  → resolve Hub identity
+  → ensure My Space
+  → AuthenticatedPrincipal / CallerContext
 ```
 
-Provider 負責：
+IdentityProvider 負責：
 
 - 驗證登入 session / trusted company identity。
-- 只輸出已驗證 external group IDs。
+- 只輸出 validated external identity/group IDs。
 - 只輸出由 server-side deployment policy 映射出的 platform capabilities。
-- 每次 request 使用目前有效 session/claims；不得使用 browser body/query/header 提供的任意 group/capability 值。
+- 每次 request 使用目前有效 session/claims；不得使用 browser body/query/header 提供的任意 identity/group/capability 值。
 - 外部 IAM group 變更在下一次 trusted session/claim refresh 後生效。
 
-### 7.3 Provider selection
+HubIdentityResolver 負責 canonical Hub user mapping；Company SSO adapter 不直接產生或覆寫 Hub UUID。
 
-- local/dev 可使用 `LocalIdentityProvider`，其 groups/capabilities 來自 explicit server config。
+### 7.4 Provider selection
+
+- local/dev 可使用 `LocalIdentityProvider`，其 trusted claims/groups/capabilities 來自 explicit server config。
 - company deployment 使用 `CompanySsoIdentityProvider`，由 server-side SSO/session reader 注入。
 - production configuration 不得 silently fallback 到 Local provider。
 - production provider 缺少 trusted session integration 時 startup/readiness 必須 fail closed。
 
-Phase 3 implementation 必須包含這條 real transport → trusted principal → CallerContext integration；只在 test 手工 new CallerContext 不算完成 SSO integration。
+Phase 3 implementation 必須包含 real transport → trusted claims → Hub identity resolution → My Space provisioning → CallerContext integration；只在 test 手工 new CallerContext 不算完成 SSO integration。
 
 ## 8. Data model delta
 
@@ -465,17 +514,39 @@ Blocked through ordinary product APIs：
 
 Phase 3 規定：**任何可能 commit Workspace-scoped mutation 的 transaction，都必須在實際 mutation 前持有該 Workspace row 的 `SELECT ... FOR UPDATE` lock，並在 lock 後重新驗證 lifecycle/capability。**
 
-Lock protocol：
+既有 Phase 2 folder-import 還有 `ImportSnapshot FOR UPDATE` serialization，因此 Phase 3 必須把 Snapshot 納入同一個全域 lock hierarchy；不得只描述 Source / Workspace。
+
+Canonical lock protocol：
 
 ```text
-Existing Source mutation:
+Import snapshot flow — initial apply:
+  lock ImportSnapshot FOR UPDATE
+  → lock snapshot.workspaceId Workspace FOR UPDATE
+  → re-evaluate capability + ACTIVE
+  → create Source
+  → deeper canonical/staging writes
+
+Import snapshot flow — resync/apply existing Source:
+  lock ImportSnapshot FOR UPDATE
+  → lock bound Source FOR UPDATE
+  → lock parent Workspace FOR UPDATE
+  → re-evaluate capability + ACTIVE
+  → deeper Document/Tree writes
+
+Import snapshot flow — upload/finalize/staging mutation:
+  lock ImportSnapshot FOR UPDATE
+  → lock snapshot.workspaceId Workspace FOR UPDATE
+  → re-evaluate capability + ACTIVE
+  → mutate staging state
+
+Non-import existing Source mutation:
   lock Source FOR UPDATE
   → lock parent Workspace FOR UPDATE
   → re-evaluate caller + lifecycle
   → lock deeper Document/Tree rows
   → mutate
 
-New Source creation:
+Non-import new Source creation:
   lock Workspace FOR UPDATE
   → validate ACTIVE + capability
   → create Source
@@ -492,15 +563,22 @@ Archive / Restore:
   → lifecycle mutation + audit
 ```
 
-Existing Source flows keep their established Source-first serialization. Once a transaction has acquired Workspace lock, it must not acquire another unrelated Source lock. Governance/lifecycle paths must not lock Source rows. This prevents lock-order cycles with existing Phase 1/2 Source serialization.
+Lock-order invariants：
+
+- 任何持有 ImportSnapshot lock 且之後需要 Workspace 的 flow，順序固定為 `ImportSnapshot → [bound Source] → Workspace`。
+- **禁止 `Workspace → ImportSnapshot`**；否則會和既有 Snapshot-first finalize/apply 形成 deadlock cycle。
+- 既有 Source mutation 維持 Source-first；禁止 `Workspace → existing Source` 的反向 acquisition。
+- 一旦 transaction 已持有 Workspace lock，不得再取得 unrelated ImportSnapshot 或 unrelated Source lock。
+- governance/lifecycle path 只需要 Workspace/member/group rows，不得為了 archive 去鎖 Source 或 Snapshot。
 
 Result：
 
-- 如果 content mutation 先取得 Workspace lock，archive 等它 commit，再 archive。
-- 如果 archive 先取得 Workspace lock，content mutation 之後看到 ARCHIVED 並 rollback。
+- 如果 import/content mutation 先取得 Workspace lock，archive 等它 commit，再 archive。
+- 如果 archive 先取得 Workspace lock，Snapshot/Source mutation 在取得 Workspace lock 後看到 ARCHIVED 並 rollback。
+- Snapshot-first flow 即使被 archive 阻塞，也不會形成 cycle，因 archive 不反向要求 Snapshot lock。
 - membership/group mutation 與 archive 同樣 serializable at Workspace row boundary。
 
-Phase 3 tests 必須用兩個 DB connections 證明 archive vs import/write，以及 archive vs membership mutation 不會產生「archive 已 commit 後仍有 mutation commit」的狀態。
+Phase 3 tests 必須用兩個 DB connections 證明 archive vs initial import apply、archive vs resync/apply、archive vs upload/finalize，以及 archive vs membership mutation 不會產生「archive 已 commit 後仍有 mutation commit」或 lock-order deadlock。
 
 ### 14.3 Archived access-revocation tradeoff and recovery
 
@@ -619,9 +697,9 @@ Team Document B
 4. Create group mapping/audit persistence。
 5. Provision each existing User one My Space + OWNER/SYSTEM_PERSONAL membership。
 6. Enable final constraints/readiness guard。
-7. Upgrade IdentityProvider from identity-only to trusted principal + production provider injection。
+7. Upgrade identity transport from identity-only to trusted external claims；resolve trusted `emp_id` to Hub-owned UUIDv7 identity before building CallerContext；production provider injection remains fail-closed。
 8. Replace binary membership policy with capability evaluation over direct + validated group grants。
-9. Add Workspace row serialization lock to every Workspace-scoped mutation path while preserving Source-first order for existing Source mutation flows。
+9. Add Workspace row serialization lock to every Workspace-scoped mutation path；folder-import paths additionally obey `ImportSnapshot → [Source] → Workspace` while non-import existing Source mutations remain `Source → Workspace`。
 10. Change `/` to My Space and group selector Personal/Team。
 11. Add Team governance UI/API and system-only recovery command/service。
 
@@ -631,7 +709,7 @@ Team Document B
 
 - repeated / concurrent provision → same Workspace ID。
 - existing-user backfill 可重跑，完成後每位既有 User 恰有一個 My Space + OWNER/SYSTEM_PERSONAL row。
-- 首次 SSO 登入、直接 Team deep link 與 API request 都先 ensureUser 再 provision；不依賴造訪 `/`。
+- 首次 SSO 登入、直接 Team deep link 與 API request 都先 resolve/create Hub user，再 provision My Space；不依賴造訪 `/`。
 - one user cannot own two Personal Workspaces。
 - My Space rename/direct second member/group mapping/ownership transfer/user archive rejected。
 - system freeze retains Knowledge and emits audit。
@@ -639,7 +717,11 @@ Team Document B
 
 ### Identity / SSO
 
-- `IdentityProvider` returns trusted principal including validated groups + platform capabilities。
+- IdentityProvider returns trusted external claims, not an external ID masquerading as Hub `users.id`。
+- existing trusted `emp_id` resolves to the same existing Hub UUID even if profile name/org changes。
+- first login for a new `emp_id` creates one Hub UUIDv7 user；concurrent first logins converge on that same row/UUID。
+- SSO subject / OIDC `sub` / employee number is never written directly into `users.id`。
+- resolved `AuthenticatedPrincipal.identity.id` is a Hub UUID and is the only user ID used by memberships/audit/domain FKs。
 - `callerFromPrincipal` cannot be built from browser-supplied arbitrary groups/capabilities。
 - Local provider only uses server config。
 - company provider maps trusted session claims and refresh semantics。
@@ -667,9 +749,13 @@ Team Document B
 
 ### Concurrency / lifecycle
 
-- active content write vs archive serializes at Workspace row lock。
-- archive wins → content write rolls back on ARCHIVED。
-- content write wins → archive waits and commits after content transaction。
+- initial import apply uses `ImportSnapshot → Workspace` and serializes with archive without deadlock。
+- resync/import apply uses `ImportSnapshot → Source → Workspace` and serializes with archive without deadlock。
+- upload/finalize staging mutation uses `ImportSnapshot → Workspace` and aborts after archive wins。
+- non-import active content write vs archive serializes at Workspace row lock。
+- archive wins → content/import write rolls back on ARCHIVED。
+- content/import write wins → archive waits and commits after mutation transaction。
+- no Phase 3 path acquires `Workspace → ImportSnapshot` or `Workspace → existing Source`。
 - membership/group mutation vs archive has same guarantee。
 - archived ordinary governance/write mutations rejected。
 - OWNER restore works。
@@ -694,9 +780,9 @@ Phase 3 is complete when：
 7. Direct membership + validated SSO Group mappings union capabilities；no explicit deny。
 8. Hub does not materialize external user-group membership truth。
 9. Full group-derived effective access is only computed for current trusted caller；other-user inspection never fabricates group state。
-10. Company identity path produces trusted principal with validated groups/platform capabilities and production does not silently use Local identity。
+10. Company identity path resolves trusted external identity to a Hub-owned stable UUID before CallerContext；external SSO identifiers never become `users.id` directly，and production never silently uses Local identity。
 11. Workspace remains the only Phase 3 Knowledge ACL boundary。
-12. Every Workspace-scoped mutation participates in the Workspace row serialization protocol, preventing archive/write/governance races under READ COMMITTED。
+12. Every Workspace-scoped mutation participates in the Workspace row serialization protocol；folder-import mutation additionally follows `ImportSnapshot → [Source] → Workspace`, preventing archive races and Snapshot/Workspace lock inversion under READ COMMITTED。
 13. Archived Team remains read-only; ordinary governance is frozen; system-only audited recovery exists for stranded governance。
 14. Governance mutations and audit append are atomic。
 15. Existing Workspace/Source/Document/Revision IDs and canonical routes remain unchanged。
@@ -704,17 +790,24 @@ Phase 3 is complete when：
 ## 22. Architectural summary
 
 ```text
-AuthenticatedPrincipal
-  ├─ identity
+Trusted external session/claims
+  ├─ external identity (subject / emp_id / profile)
   ├─ validatedExternalGroupIds
   └─ platformCapabilities
           ↓
-      CallerContext
+HubIdentityResolver
+  └─ trusted emp_id → existing/new Hub UUIDv7 UserIdentity
+          ↓
+AuthenticatedPrincipal
+          ↓
+CallerContext
           ↓
 Workspace authorization
 = direct grants ∪ validated group grants
           ↓
-Workspace row serialization for mutations
+Canonical mutation locks
+  import: ImportSnapshot → [Source] → Workspace
+  other existing Source mutation: Source → Workspace
           ↓
 Sources / Knowledge
 ```
