@@ -14,6 +14,7 @@ import {
   bootstrapIdentityLinks,
   type LegacyIdentityLinkBootstrapEntry,
 } from "../../scripts/db/bootstrap-phase3-identity-links";
+import { backfillPersonalWorkspaces } from "../../scripts/db/backfill-personal-workspaces";
 import { HubIdentityResolver } from "@/modules/identity/application/hub-identity-resolver";
 import { PersonalWorkspaceService } from "@/modules/workspaces/application/personal-workspace-service";
 import { establishTrustedCaller } from "@/server/trusted-caller";
@@ -377,5 +378,34 @@ describe("Phase 3 trusted caller bootstrap (Task 7)", () => {
     ).rejects.toThrow(/linked|bootstrap/i);
     expect(await personalCountForOwner(user.id)).toBe(0);
     expect(await userCount()).toBe(1);
+  });
+});
+
+describe("Migration 009 eligibility through the real cutover artifacts (Task 11)", () => {
+  it("14. governance + identity-link bootstraps with Personal backfill make 009 eligible", async () => {
+    const user = await seedUser("Cutover User", "CUT");
+    const workspaceId = await seedTeam("Cutover Team");
+    await seedMembership(workspaceId, user.id, null, null);
+
+    await expect(runMigrations(db(), migrations)).rejects.toThrow(/refused|OWNER|governance/i);
+
+    const governance = await bootstrapWorkspaceGovernance(db(), ownersConfig({ [workspaceId]: user.id }));
+    expect(governance.teams).toBeGreaterThanOrEqual(1);
+    expect(await directOwnerCount(workspaceId)).toBe(1);
+
+    const links = await bootstrapIdentityLinks(db(), [
+      { provider: "company-sso", subject: `cutover-subject-${uuidv7()}`, hubUserId: user.id, expectedEmpId: user.empId },
+    ]);
+    expect(links.linked).toBe(1);
+
+    const backfill = await backfillPersonalWorkspaces(db());
+    expect(backfill.users).toBeGreaterThanOrEqual(1);
+    expect(backfill.provisioned + backfill.alreadyProvisioned).toBe(backfill.users);
+
+    await runMigrations(db(), migrations);
+    const ledger = await db().query<{ version: number; state: string }[]>(
+      "SELECT version, state FROM schema_migrations WHERE version = 9",
+    );
+    expect(ledger.map((row) => [Number(row.version), row.state])).toEqual([[9, "APPLIED"]]);
   });
 });

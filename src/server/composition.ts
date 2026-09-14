@@ -12,6 +12,12 @@ import { UploadFolderImportEntriesService } from "@/modules/sources/application/
 import { SourceApplicationService } from "@/modules/sources/application/source-version-guard";
 import { WorkspaceQueryService } from "@/modules/workspaces/application/workspace-query-service";
 import { PersonalWorkspaceService } from "@/modules/workspaces/application/personal-workspace-service";
+import {
+  assertProductionReadiness,
+  type ProductionReadinessSummary,
+} from "@/modules/workspaces/application/workspace-readiness";
+import type { CompanySsoSessionReader } from "@/modules/identity/ports/company-sso-session-reader";
+import { companySsoProviderName, companySsoRolloutHubUserIds, identityProviderKind } from "./config";
 import { HubIdentityResolver } from "@/modules/identity/application/hub-identity-resolver";
 import { establishTrustedCaller as establishTrustedCallerWith } from "@/server/trusted-caller";
 import { importRuntimeConfig } from "@/server/import-config";
@@ -50,6 +56,27 @@ function buildServices(databasePool: Pool) {
 export function applicationServices() {
   services ??= buildServices(getPool());
   return services;
+}
+
+/**
+ * Production cutover readiness (spec §19 step 8). The production boot path
+ * must await this before serving traffic: 009 APPLIED, Company SSO provider
+ * configured, a server-side session reader wired, and rollout-scope legacy
+ * identity links complete. Fails closed; the Company SSO session adapter is
+ * passed in once it exists, so an unwired deployment can never report ready.
+ */
+export async function verifyProductionReadiness(options: {
+  companySessionReader?: CompanySsoSessionReader;
+  rolloutHubUserIds?: readonly string[];
+} = {}): Promise<ProductionReadinessSummary> {
+  const databasePool = getPool();
+  return assertProductionReadiness({
+    query: async <T>(sql: string, params?: unknown[]): Promise<T> => databasePool.query(sql, params) as Promise<T>,
+    identityProviderKind: identityProviderKind(),
+    companySsoProvider: companySsoProviderName(),
+    companySessionReaderConfigured: options.companySessionReader !== undefined,
+    rolloutHubUserIds: options.rolloutHubUserIds ?? companySsoRolloutHubUserIds(),
+  });
 }
 
 export async function closeApplicationPool(): Promise<void> {

@@ -68,11 +68,22 @@ npx tsx scripts/db/bootstrap-phase3-identity-links.ts --config /path/to/identity
 # 6. Personal Workspace backfill (Task 7 implementation — NOT part of Task 4):
 npx tsx scripts/db/backfill-personal-workspaces.ts --apply
 
-# 7. Final constraints (Task 11 implementation — NOT part of Task 4).
-#    009 beforeApply fails closed when governance bootstrap is incomplete.
+# 7. Final constraints (migration 009: NOT NULL + CHECKs + canonical FKs).
+#    009 beforeApply fails closed when governance bootstrap, Personal
+#    backfill, or canonical shape is incomplete — no APPLIED ledger row is
+#    written, the operator repairs the data (never the checksums) and reruns.
+#    009 never auto-repairs rows and never reads operator input.
 npm run db:migrate
 
 # 8-11. Readiness → switch traffic → verify single writer → maintenance OFF.
+#    Production boot must await verifyProductionReadiness() (server
+#    composition) before serving traffic: 009 APPLIED + KM_IDENTITY_PROVIDER
+#    = company-sso + wired server-side Company SSO session reader +
+#    rollout-scope identity links complete (KM_COMPANY_SSO_ROLLOUT_USER_IDS,
+#    comma-separated Hub UUIDs; unset means every existing Hub user).
+#    The Phase-3-compatible deployment being the only canonical writer is
+#    verified procedurally (no query can prove which deployments hold write
+#    credentials) before maintenance is released.
 ```
 
 ## Quiescence contract (spec §15.1)
@@ -103,6 +114,27 @@ npm run db:migrate
   existing account.
 - All bootstrap/backfill steps complete while write quiescence still holds,
   then 009 applies.
+
+## Migration 009 gate (spec §15.4)
+
+`009-phase-3-workspace-governance-finalize` re-validates, read-only, before
+any DDL:
+
+- every workspace has a valid non-null type/lifecycle; TEAM rows carry no
+  owner; PERSONAL rows carry an existing owner and the `My Space` name;
+- every membership has a valid non-null role/source; `SYSTEM_PERSONAL`
+  implies `OWNER` inside the member's own PERSONAL workspace;
+- every TEAM has direct `OWNER >= 1`;
+- every user owns exactly one `My Space` PERSONAL workspace with its
+  `OWNER/SYSTEM_PERSONAL` membership (the Personal backfill's output);
+- no orphan `created_by`/`archived_by`/owner references that would violate
+  the new canonical User FKs.
+
+Final DDL: `workspace_type`/`role`/`membership_source` NOT NULL,
+role/source/type/lifecycle/actor CHECKs, PERSONAL-shape coherence CHECKs,
+canonical `workspaces → users` FKs (owner/created/archived), and the 008
+`UNIQUE(personal_owner_user_id)` preserved untouched. An empty database
+passes the gate (fresh installs migrate straight to 009).
 
 ## Rollback / failure handling
 

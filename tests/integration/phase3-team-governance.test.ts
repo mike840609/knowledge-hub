@@ -34,7 +34,10 @@ beforeEach(async () => {
     if (previous === undefined) delete process.env.KM_TEST_DB_NAME;
     else process.env.KM_TEST_DB_NAME = previous;
   }
-  await runMigrations(pool, migrations);
+  // Runs at 008 by design: the NULL-role "never authority" tests require
+  // pre-009 schema (009 rejects NULL roles at the DB boundary), and every
+  // other test here uses canonical writers that behave identically on 008.
+  await runMigrations(pool, migrations, { to: 8 });
 });
 
 afterEach(async () => {

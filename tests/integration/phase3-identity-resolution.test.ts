@@ -6,7 +6,11 @@ import { MariaDbUserRepository } from "@/infrastructure/database/mariadb/reposit
 import { MariaDbExternalIdentityLinkRepository } from "@/infrastructure/database/mariadb/repositories/external-identity-links";
 import { mapDatabaseError } from "@/infrastructure/database/mariadb/repositories/shared";
 import { HubIdentityResolver, type HubIdentityRepositories, type HubIdentityUnitOfWork } from "@/modules/identity/application/hub-identity-resolver";
+import { assertProductionReadiness } from "@/modules/workspaces/application/workspace-readiness";
 import { bootstrapIdentityLinks } from "../../scripts/db/bootstrap-phase3-identity-links";
+import { migrations } from "@/infrastructure/database/mariadb/migrations";
+import { runMigrations, type IsolatedDatabaseHandle } from "../../scripts/db/migrate";
+import { disposeIsolatedDatabase, provisionIsolatedDatabase } from "../../scripts/db/test-database";
 import {
   IdentityLinkConflictError,
   IdentityLinkRequiredError,
@@ -235,5 +239,117 @@ describe("Hub runtime identity resolution", () => {
     expect(resolved.id).toBe(hubUserId);
     expect(resolved.emp_id).toBe(empId);
     expect(await countUsersByEmp(empId)).toBe(1);
+  });
+});
+
+describe("Production readiness (Task 11)", () => {
+  function bind(target: Pool): <T>(sql: string, params?: unknown[]) => Promise<T> {
+    return <T>(sql: string, params?: unknown[]): Promise<T> => target.query(sql, params) as Promise<T>;
+  }
+
+  async function createIsolatedPool(): Promise<{ handle: IsolatedDatabaseHandle; pool: Pool }> {
+    const handle = await provisionIsolatedDatabase("test");
+    const previous = process.env.KM_TEST_DB_NAME;
+    process.env.KM_TEST_DB_NAME = handle.databaseName;
+    try {
+      return { handle, pool: createDatabasePool(databaseConfig("test")) };
+    } finally {
+      if (previous === undefined) delete process.env.KM_TEST_DB_NAME;
+      else process.env.KM_TEST_DB_NAME = previous;
+    }
+  }
+
+  async function disposePool(handle: IsolatedDatabaseHandle, target: Pool): Promise<void> {
+    await target.end();
+    await disposeIsolatedDatabase(handle);
+  }
+
+  it("fails closed when the identity provider is not company-sso", async () => {
+    await expect(
+      assertProductionReadiness({
+        query: bind(pool),
+        identityProviderKind: "local",
+        companySsoProvider: "company-sso",
+        companySessionReaderConfigured: true,
+      }),
+    ).rejects.toThrow(/company-sso/i);
+  });
+
+  it("fails closed when no company session integration is wired", async () => {
+    await expect(
+      assertProductionReadiness({
+        query: bind(pool),
+        identityProviderKind: "company-sso",
+        companySsoProvider: "company-sso",
+        companySessionReaderConfigured: false,
+      }),
+    ).rejects.toThrow(/session/i);
+  });
+
+  it("fails closed when migration 009 is not applied", async () => {
+    const { handle, pool: stagedPool } = await createIsolatedPool();
+    try {
+      await runMigrations(stagedPool, migrations, { to: 8 });
+      await expect(
+        assertProductionReadiness({
+          query: bind(stagedPool),
+          identityProviderKind: "company-sso",
+          companySsoProvider: "company-sso",
+          companySessionReaderConfigured: true,
+        }),
+      ).rejects.toThrow(/009|migration/i);
+    } finally {
+      await disposePool(handle, stagedPool);
+    }
+  });
+
+  it("fails closed when a rollout-scope user has no company-provider link", async () => {
+    const { handle, pool: stagedPool } = await createIsolatedPool();
+    try {
+      await runMigrations(stagedPool, migrations);
+      const linkedId = uuidv7();
+      const missingId = uuidv7();
+      await stagedPool.query("INSERT INTO users (id, emp_id, name, org_code) VALUES (?, ?, 'Linked User', 'RD'), (?, ?, 'Missing User', 'RD')", [
+        linkedId,
+        `RDY-LINKED-${linkedId.slice(0, 8)}`,
+        missingId,
+        `RDY-MISSING-${missingId.slice(0, 8)}`,
+      ]);
+      await bootstrapIdentityLinks(stagedPool, [
+        { provider: "company-sso", subject: `readiness-subject-${uuidv7()}`, hubUserId: linkedId, expectedEmpId: `RDY-LINKED-${linkedId.slice(0, 8)}` },
+      ]);
+      await expect(
+        assertProductionReadiness({
+          query: bind(stagedPool),
+          identityProviderKind: "company-sso",
+          companySsoProvider: "company-sso",
+          companySessionReaderConfigured: true,
+        }),
+      ).rejects.toThrow(new RegExp(missingId));
+    } finally {
+      await disposePool(handle, stagedPool);
+    }
+  });
+
+  it("passes with 009 applied, company-sso session, and complete rollout links", async () => {
+    const { handle, pool: stagedPool } = await createIsolatedPool();
+    try {
+      await runMigrations(stagedPool, migrations);
+      const userId = uuidv7();
+      const empId = `RDY-READY-${userId.slice(0, 8)}`;
+      await stagedPool.query("INSERT INTO users (id, emp_id, name, org_code) VALUES (?, ?, 'Ready User', 'RD')", [userId, empId]);
+      await bootstrapIdentityLinks(stagedPool, [
+        { provider: "company-sso", subject: `readiness-ready-${uuidv7()}`, hubUserId: userId, expectedEmpId: empId },
+      ]);
+      const summary = await assertProductionReadiness({
+        query: bind(stagedPool),
+        identityProviderKind: "company-sso",
+        companySsoProvider: "company-sso",
+        companySessionReaderConfigured: true,
+      });
+      expect(summary).toMatchObject({ migrationVersion: 9, provider: "company-sso", linkedUsers: 1, rolloutUsers: 1 });
+    } finally {
+      await disposePool(handle, stagedPool);
+    }
   });
 });

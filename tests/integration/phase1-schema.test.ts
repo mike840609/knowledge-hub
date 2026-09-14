@@ -146,8 +146,10 @@ describe("phase 1 source mapping schema upgrade", () => {
 
       const ledger = await ledgerRows(pool);
       expect(ledger.map((row) => `${row.version}:${row.state}`)).toEqual(["1:APPLIED", "2:APPLIED", "3:APPLIED", "4:APPLIED", "5:APPLIED"]);
-      await runMigrations(pool, migrations);
-      expect((await ledgerRows(pool)).map((row) => row.version)).toEqual(fullManifestVersions);
+      // Phase-1 legacy seeds carry governance-less rows by construction, so the
+      // full manifest (009 fails closed on them) is out of scope here: stop at 008.
+      await runMigrations(pool, migrations, { to: 8 });
+      expect((await ledgerRows(pool)).map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
     } finally {
       await disposePool(handle, pool);
     }
@@ -264,7 +266,8 @@ describe("phase 1 source mapping schema upgrade", () => {
       expect(preview.pendingUpdates).toBe(0);
 
       await runMigrations(pool, migrations, { to: 5 });
-      await runMigrations(pool, migrations);
+      // Legacy governance-less seed: 009 fails closed, so this rerun stops at 008.
+      await runMigrations(pool, migrations, { to: 8 });
     } finally {
       await disposePool(handle, pool);
     }
@@ -301,8 +304,10 @@ describe("phase 1 source mapping schema upgrade", () => {
       expect(ledger.map((row) => `${row.version}:${row.state}`)).toEqual(["1:APPLIED", "2:APPLIED", "3:APPLIED", "4:APPLIED"]);
 
       await applySourceTreeMapping(pool, { [ids.folderEntryId]: ids.folderId });
-      await runMigrations(pool, migrations);
-      expect((await ledgerRows(pool)).map((row) => row.version)).toEqual(fullManifestVersions);
+      // Recovery target is 008: the legacy seed stays governance-less, so 009
+      // keeps failing closed by design (covered by the 009 gate tests).
+      await runMigrations(pool, migrations, { to: 8 });
+      expect((await ledgerRows(pool)).map((row) => row.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
     } finally {
       await disposePool(handle, pool);
     }
@@ -322,7 +327,9 @@ describe("phase 1 source mapping schema upgrade", () => {
         await runMigrations(secondPool, migrations, { to: 4 });
         const result = await applySourceTreeMapping(secondPool, {});
         expect(result).toEqual({ applied: 2, alreadyApplied: 0, totalEntries: 2 });
-        await runMigrations(secondPool, migrations);
+        // Legacy seed stays pre-009 by design; the empty first pool above
+        // already proves the full manifest (incl. 009) applies to a fresh DB.
+        await runMigrations(secondPool, migrations, { to: 8 });
         void ids;
       } finally {
         await disposePool(secondHandle, secondPool);
@@ -341,7 +348,9 @@ describe("phase 1 source mapping schema upgrade", () => {
       const ids = await seedPhase0Populated(upgraded.pool);
       await runMigrations(upgraded.pool, migrations, { to: 4 });
       await applySourceTreeMapping(upgraded.pool, { [ids.folderEntryId]: ids.folderId });
-      await runMigrations(upgraded.pool, migrations);
+      // The upgraded pool keeps its legacy governance-less seed, so it stops
+      // at 008; the table-shape comparison below is unaffected by 008/009.
+      await runMigrations(upgraded.pool, migrations, { to: 8 });
 
       for (const table of ["source_entries", "knowledge_tree_nodes"]) {
         const freshCreate = await fresh.pool.query<{ Table: string; "Create Table": string }[]>(`SHOW CREATE TABLE \`${table}\``);

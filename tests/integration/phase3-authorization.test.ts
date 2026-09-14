@@ -23,6 +23,7 @@ import { createDirectMembership, createSystemPersonalMembership } from "@/module
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import { disposeIsolatedDatabase, provisionIsolatedDatabase } from "../../scripts/db/test-database";
 import { runMigrations, type IsolatedDatabaseHandle } from "../../scripts/db/migrate";
+import { migrations } from "@/infrastructure/database/mariadb/migrations";
 
 const owner: UserIdentity = { id: "0199f360-0000-7000-8000-000000000001", emp_id: "P3-AUTH-OWNER", name: "Auth Owner", org_code: "ORG-A" };
 const viewer: UserIdentity = { id: "0199f360-0000-7000-8000-000000000002", emp_id: "P3-AUTH-VIEWER", name: "Auth Viewer", org_code: "ORG-A" };
@@ -90,13 +91,15 @@ async function setupFixture(): Promise<Fixture> {
 beforeAll(async () => {
   handle = await provisionIsolatedDatabase("test");
   pool = await openPool();
-  await runMigrations(pool);
+  // Runs at 008 by design: the pre-bootstrap NULL-role tolerance test requires
+  // pre-009 schema (009 rejects NULL roles at the DB boundary).
+  await runMigrations(pool, migrations, { to: 8 });
   sharedPersonalWorkspaceId = uuidv7();
   const now = new Date();
   await new MariaDbUnitOfWork(pool).run(async (repositories) => {
     await repositories.users.upsertIdentity(owner);
     await repositories.workspaces.insert(
-      createPersonalWorkspaceInsert({ id: sharedPersonalWorkspaceId, name: "Owner My Space", ownerUserId: owner.id, now }),
+      createPersonalWorkspaceInsert({ id: sharedPersonalWorkspaceId, name: "My Space", ownerUserId: owner.id, now }),
     );
     await repositories.workspaceMemberships.insert(
       createSystemPersonalMembership({ workspaceId: sharedPersonalWorkspaceId, userId: owner.id, now }),

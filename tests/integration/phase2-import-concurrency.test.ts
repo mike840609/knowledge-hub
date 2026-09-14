@@ -290,7 +290,8 @@ describe("Phase 2 Apply concurrency and rollback", () => {
     const imported = await pool.query("SELECT id FROM knowledge_sources WHERE workspace_id=? AND source_type='FOLDER_SYNC'", [fixture.workspaceId]);
     expect(imported).toHaveLength(0);
 
-    await pool.query("INSERT INTO workspace_memberships (workspace_id,user_id) VALUES (?,?)", [fixture.workspaceId, fixtureIdentity.id]);
+    // Restore the exact fixture grant (009 forbids governance-less rows).
+    await pool.query("INSERT INTO workspace_memberships (workspace_id,user_id,role,membership_source) VALUES (?,?,?,?)", [fixture.workspaceId, fixtureIdentity.id, "OWNER", "DIRECT"]);
     const goodId = await readyInitial(fixture.workspaceId, "second.md", "# Second\n");
     const good = await stack().apply.apply(fixtureCaller(), goodId);
     if (good.kind !== "APPLIED") throw new Error("expected APPLIED");
