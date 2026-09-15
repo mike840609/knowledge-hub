@@ -35,6 +35,8 @@ src/modules/identity/ports/
   user-repository.ts                              # add existing-Hub-user lookup
 src/infrastructure/database/mariadb/repositories/
   users.ts                                        # implement bounded user lookup
+src/modules/workspaces/domain/
+  errors.ts                                       # stable governance semantic codes
 src/modules/workspaces/application/
   workspace-query-service.ts                      # typed nav ordering/state
 src/server/
@@ -95,6 +97,7 @@ docs/superpowers/verification/
 **Files:**
 - Modify: `src/modules/identity/ports/user-repository.ts`
 - Modify: `src/infrastructure/database/mariadb/repositories/users.ts`
+- Modify: `src/modules/workspaces/domain/errors.ts`
 - Modify: `src/modules/workspaces/application/workspace-query-service.ts`
 - Create: `src/server/workspace-admin.ts`
 - Modify: `src/server/knowledge-read.ts`
@@ -113,7 +116,7 @@ docs/superpowers/verification/
 
 **Interfaces:**
 - Consumes: `establishTrustedCaller()`, `WorkspaceQueryService`, `TeamWorkspaceService`, `TeamGovernanceService`, `evaluateWorkspaceCapabilities()`, fixed role/capability bundles, repositories from Tasks 1–11.
-- Produces: `WorkspaceNavigationModel`, `TeamWorkspaceView`, `MemberAdminView`, `UserAccessInspection`, `WorkspaceActions`, bounded Hub-user search, governance route handlers, and stable HTTP error bodies consumed by Task 13.
+- Produces: `WorkspaceNavigationModel`, `TeamWorkspaceView`, `MemberAdminView`, `GroupAdminView`, `AuditPage`, `HubUserLookup`, `UserAccessInspection`, `WorkspaceActions`, bounded Hub-user search, governance route handlers, and stable HTTP error bodies consumed by Task 13.
 
 - [ ] **Step 1: Write failing integration tests for navigation truth, action derivation, and user lookup**
 
@@ -201,11 +204,48 @@ export type UserAccessInspection = {
   effectiveCapabilities?: readonly WorkspaceCapability[];
 };
 
+export type TeamWorkspaceView = {
+  id: string;
+  name: string;
+  lifecycleState: "ACTIVE" | "ARCHIVED";
+  caller: {
+    directRole: WorkspaceRole | null;
+    effectiveCapabilities: readonly WorkspaceCapability[];
+  };
+  actions: WorkspaceActions;
+};
+
+export type HubUserLookup = { id: string; name: string; empId: string };
+
 export type MemberAdminView = {
-  user: { id: string; name: string; empId: string };
+  user: HubUserLookup;
   access: UserAccessInspection;
   assignableRoles: readonly WorkspaceRole[];
   canRemoveDirectAccess: boolean;
+};
+
+export type GroupAdminView = {
+  externalGroupId: string;
+  role: "ADMIN" | "EDITOR" | "VIEWER";
+  assignableRoles: readonly ("ADMIN" | "EDITOR" | "VIEWER")[];
+  canRemove: boolean;
+};
+
+export type AuditItem = {
+  id: string;
+  actorName: string | null;
+  eventType: string;
+  targetType: string;
+  targetId: string | null;
+  summary: string;
+  createdAt: string;
+  before?: Readonly<Record<string, unknown>>;
+  after?: Readonly<Record<string, unknown>>;
+};
+
+export type AuditPage = {
+  items: readonly AuditItem[];
+  nextCursor: string | null;
 };
 ```
 
@@ -221,15 +261,16 @@ searchExisting(query: string, limit: number): Promise<UserIdentity[]>;
 
 Implement in MariaDB using a bounded `name` / `emp_id` lookup, `ORDER BY name ASC, id ASC`, and a hard server-side maximum of 50. It must never create users or resolve external subjects.
 
-Extend `WorkspaceView` to carry `type` and `lifecycleState`, and update `WorkspaceQueryService.listWorkspaces()` ordering to:
+Extend `WorkspaceView` to carry `type` and `lifecycleState`. Implement the comparator explicitly:
 
 ```ts
-PERSONAL first
-ACTIVE TEAM by name ASC, id ASC
-ARCHIVED TEAM by name ASC, id ASC
+function workspaceNavigationRank(workspace: Workspace): number {
+  if (workspace.type === "PERSONAL") return 0;
+  return workspace.lifecycleState === "ACTIVE" ? 1 : 2;
+}
 ```
 
-Assert the PERSONAL item belongs to the caller's system membership; do not identify My Space by display-name string.
+Sort first by rank, then `name.localeCompare`, then UUID string. Assert the PERSONAL item belongs to the caller's system membership; do not identify My Space by display-name string.
 
 - [ ] **Step 5: Implement `WorkspaceAdminService` methods on trusted server data**
 
@@ -267,25 +308,51 @@ expect(await inspectOtherUser(ownerCaller, teamId, viewer.id)).toMatchObject({
 
 Also prove there is no HTTP recovery route and that member creation accepts `userId`, not emp_id.
 
-- [ ] **Step 7: Add explicit governance HTTP routes that always establish a trusted caller**
+- [ ] **Step 7: Add stable governance domain error subclasses before wiring routes**
+
+Extend `src/modules/workspaces/domain/errors.ts` instead of overloading the existing generic `WORKSPACE_ACCESS_DENIED` / `WORKSPACE_LIFECYCLE_VIOLATION` strings. Add subclasses with stable codes used by Task 13:
+
+```ts
+export class InsufficientWorkspaceCapabilityError extends DomainError {
+  constructor(message = "You do not have permission to perform this workspace operation.") {
+    super("INSUFFICIENT_WORKSPACE_CAPABILITY", message);
+  }
+}
+
+export class WorkspaceArchivedError extends DomainError {
+  constructor(message = "This workspace is archived and read-only.") {
+    super("WORKSPACE_ARCHIVED", message);
+  }
+}
+
+export class LastDirectOwnerError extends DomainError {
+  constructor(message = "Every Team workspace must retain at least one direct owner.") {
+    super("LAST_DIRECT_OWNER", message);
+  }
+}
+```
+
+Add equivalently specific `MEMBER_NOT_FOUND`, `MEMBER_ALREADY_EXISTS`, `GROUP_MAPPING_ALREADY_EXISTS`, and `INVALID_ROLE_ASSIGNMENT` errors at the application/domain boundary where the invariant is detected. Existing `WorkspaceNotFoundError` remains the non-enumerating resource-not-found primitive.
+
+- [ ] **Step 8: Add explicit governance HTTP routes that always establish a trusted caller**
 
 Implement these route responsibilities:
 
 ```text
-GET/POST   /api/workspaces
-GET/PATCH  /api/workspaces/:workspaceId
-POST       /api/workspaces/:workspaceId/archive
-POST       /api/workspaces/:workspaceId/restore
-GET/POST   /api/workspaces/:workspaceId/members
+GET/POST     /api/workspaces
+GET/PATCH    /api/workspaces/:workspaceId
+POST         /api/workspaces/:workspaceId/archive
+POST         /api/workspaces/:workspaceId/restore
+GET/POST     /api/workspaces/:workspaceId/members
 PATCH/DELETE /api/workspaces/:workspaceId/members/:userId
 GET/POST/PATCH/DELETE /api/workspaces/:workspaceId/groups
-GET        /api/workspaces/:workspaceId/audit
-GET        /api/users?query=...&limit=...
+GET          /api/workspaces/:workspaceId/audit
+GET          /api/users?query=...&limit=...
 ```
 
 For group PATCH/DELETE, pass `externalGroupId` in the JSON body instead of creating a dynamic path segment for an opaque external identifier. Every route calls `establishTrustedCaller()` and then an application/server service; no browser-supplied identity, groups, platform capabilities, or actor role are accepted.
 
-- [ ] **Step 8: Extend the existing HTTP error mapper with stable governance semantics**
+- [ ] **Step 9: Extend the existing HTTP error mapper with stable governance semantics**
 
 Keep the existing non-enumerating 404 behavior and add a workspace governance mapper in `src/server/http-error-response.ts`. Required mapping:
 
@@ -296,7 +363,7 @@ WORKSPACE_ARCHIVED                          -> 409
 LAST_DIRECT_OWNER                           -> 409
 MEMBER_ALREADY_EXISTS                       -> 409
 GROUP_MAPPING_ALREADY_EXISTS                -> 409
-MEMBER_NOT_FOUND                            -> 400 or 404 only when enumeration is safe within an already-authorized Team admin surface
+MEMBER_NOT_FOUND                            -> 400/404 only after Team admin scope is already authorized
 INVALID_ROLE_ASSIGNMENT                     -> 400
 unknown                                      -> 500 INTERNAL_ERROR
 ```
@@ -304,16 +371,18 @@ unknown                                      -> 500 INTERNAL_ERROR
 Response shape remains:
 
 ```ts
-{ error: { code: string; message: string; field?: string } }
+export type ApiErrorBody = {
+  error: { code: string; message: string; field?: string };
+};
 ```
 
 Do not make the client parse `error.message` to decide behavior.
 
-- [ ] **Step 9: Reuse the richer navigation/action model in shell server reads**
+- [ ] **Step 10: Reuse the richer navigation/action model in shell server reads**
 
 Update `src/server/knowledge-read.ts` so `WorkspaceShellModel` contains navigation items plus current Workspace action/state needed by Task 13. Do not duplicate Workspace ordering or capability derivation in the shell adapter.
 
-- [ ] **Step 10: Run Task 12 verification**
+- [ ] **Step 11: Run Task 12 verification**
 
 ```bash
 npm run test:integration -- --run tests/integration/phase3-workspace-admin-api.test.ts tests/integration/phase3-authorization.test.ts tests/integration/phase3-team-governance.test.ts tests/integration/phase3-audit.test.ts
@@ -323,11 +392,12 @@ npm run build
 
 Expected: all PASS.
 
-- [ ] **Step 11: Commit Task 12**
+- [ ] **Step 12: Commit Task 12**
 
 ```bash
 git add src/modules/identity/ports/user-repository.ts \
   src/infrastructure/database/mariadb/repositories/users.ts \
+  src/modules/workspaces/domain/errors.ts \
   src/modules/workspaces/application/workspace-query-service.ts \
   src/server src/app/api tests/integration/phase3-workspace-admin-api.test.ts
 git commit -m "feat: expose phase 3 workspace product contracts"
@@ -360,7 +430,7 @@ git commit -m "feat: expose phase 3 workspace product contracts"
 - Create/modify: `tests/e2e/phase3-workspace-governance.spec.ts`
 
 **Interfaces:**
-- Consumes: Task 12 `WorkspaceNavigationModel`, `TeamWorkspaceView`, member/group/audit contracts, `WorkspaceActions`, stable error codes, and existing Phase 2 folder import routes.
+- Consumes: Task 12 `WorkspaceNavigationModel`, `TeamWorkspaceView`, `MemberAdminView`, `GroupAdminView`, `AuditPage`, `WorkspaceActions`, stable governance error codes, and existing Phase 2 folder import routes.
 - Produces: deterministic My Space entry, grouped selector, Create Team flow, capability-driven nav/empty states, Team Settings, revoke fallback, archived read-only UX, and the full Phase 3 Playwright journey used by Task 14.
 
 - [ ] **Step 1: Write the failing Playwright journey for root/selector/create/import visibility**
@@ -494,9 +564,9 @@ After mutation, refetch authorization. If the current caller no longer has `work
 
 - [ ] **Step 10: Implement SSO Groups and Audit surfaces**
 
-Groups page manually collects canonical `externalGroupId` and a server-allowed role. Do not persist or require display labels. ADMIN role choices max at EDITOR/VIEWER; OWNER may include ADMIN; options come from the server model.
+Groups page manually collects canonical `externalGroupId` and a server-allowed role. Do not persist or require display labels. ADMIN role choices max at EDITOR/VIEWER; OWNER may include ADMIN; options come from `GroupAdminView.assignableRoles`.
 
-Audit page is read-only, newest-first, with Load more/cursor pagination, actor, event summary, target, timestamp, and relevant before/after details. Do not add filters/export/charts.
+Audit page consumes `AuditPage`: read-only, newest-first, Load more/cursor pagination, actor, event summary, target, timestamp, and relevant before/after details. Do not add filters/export/charts.
 
 - [ ] **Step 11: Map semantic errors to inline/row/banner/toast presentation**
 
@@ -528,7 +598,7 @@ revoke but group VIEWER remains: stays Team, read remains, write controls disapp
 My Space: never exposes member/group/archive/rename controls
 ```
 
-Also run at least one direct API attempt for a hidden action in the E2E setup or leave it to Task 14 integration dual-enforcement assertions; UI hiding alone is never the proof.
+UI hiding alone is never security proof; Task 14 performs direct API dual-enforcement assertions.
 
 - [ ] **Step 13: Run Task 13 verification**
 
@@ -613,8 +683,8 @@ remove direct EDITOR + group VIEWER -> read remains, write/source.manage disappe
 Prove every key hidden action is also denied directly at the server/API layer:
 
 ```text
-ADMIN archive -> 403
-EDITOR settings/member mutation -> 403/404 according to discover semantics
+ADMIN archive -> 403 INSUFFICIENT_WORKSPACE_CAPABILITY
+EDITOR settings/member mutation -> denied according to discover semantics
 VIEWER source mutation -> denied
 ARCHIVED OWNER add member -> 409 WORKSPACE_ARCHIVED
 ARCHIVED OWNER rename -> 409 WORKSPACE_ARCHIVED
@@ -719,12 +789,12 @@ git commit -m "docs: verify phase 3 product closure"
 | platform-gated Create Team | Task 12 action model/routes; Task 13 Step 5 |
 | capability-driven empty-state import | Task 13 Step 7 |
 | ADMIN/OWNER-only Settings | Task 12 action model; Task 13 Steps 6, 8 |
-| existing-Hub-user membership only | Task 12 Steps 1, 4, 7; Task 13 Step 9 |
+| existing-Hub-user membership only | Task 12 Steps 1, 4, 8; Task 13 Step 9 |
 | truthful current/other group access | Task 12 Steps 1, 3, 5; Task 13 Step 9 |
 | direct revoke vs effective access | Task 13 Step 9; Task 14 Step 2 |
 | manual canonical externalGroupId | Task 13 Step 10 |
-| archive/read-only/restore | Task 12 Steps 3, 6–8; Task 13 Steps 7–8; Task 14 Steps 1, 3 |
-| semantic error presentation | Task 12 Step 8; Task 13 Step 11 |
+| archive/read-only/restore | Task 12 Steps 3, 6–9; Task 13 Steps 7–8; Task 14 Steps 1, 3 |
+| stable domain/API errors | Task 12 Steps 7, 9; Task 13 Step 11 |
 | UI + API dual enforcement | Task 14 Step 3 |
 | complete Human product journey | Task 13 Step 12 |
 | existing identity/migration/concurrency hard gates retained | Task 14 Step 4 |
@@ -735,5 +805,6 @@ git commit -m "docs: verify phase 3 product closure"
 
 - Spec coverage: every approved closure section maps to Task 12, 13, or 14 above.
 - Placeholder scan: no TBD/TODO/"similar to" implementation gaps remain.
-- Type consistency: `WorkspaceActions`, `WorkspaceNavigationModel`, `UserAccessInspection`, and `MemberAdminView` are defined in Task 12 and consumed unchanged by Task 13/14.
+- Type consistency: every named Task 12 server contract (`WorkspaceActions`, `WorkspaceNavigationModel`, `TeamWorkspaceView`, `HubUserLookup`, `MemberAdminView`, `GroupAdminView`, `AuditPage`, `UserAccessInspection`) is defined before Task 13 consumes it.
+- Error consistency: stable governance codes are explicitly introduced in `src/modules/workspaces/domain/errors.ts`; the plan does not assume they already exist.
 - Scope: Tasks 1–11 are untouched; this file is the authoritative replacement plan for old Tasks 12–14 only.
