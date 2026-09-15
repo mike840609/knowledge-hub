@@ -182,8 +182,7 @@ describe("Hub runtime identity resolution", () => {
       Array.from({ length: 8 }, () => resolver.resolve(claims(provider, subject, empId, "Racing Login", "RD"))),
     );
     const ids = outcomes.map((outcome) => {
-      expect(outcome.status).toBe("fulfilled");
-      if (outcome.status !== "fulfilled") throw new Error("concurrent first-login must converge");
+      if (outcome.status !== "fulfilled") throw outcome.reason;
       return outcome.value.id;
     });
     expect(new Set(ids).size).toBe(1);
@@ -200,8 +199,7 @@ describe("Hub runtime identity resolution", () => {
       Array.from({ length: 16 }, () => resolver.resolve(claims(provider, subject, empId, "Racing Login", "RD"))),
     );
     const ids = outcomes.map((outcome) => {
-      expect(outcome.status).toBe("fulfilled");
-      if (outcome.status !== "fulfilled") throw new Error("concurrent first-login must converge");
+      if (outcome.status !== "fulfilled") throw outcome.reason;
       return outcome.value.id;
     });
     expect(new Set(ids).size).toBe(1);

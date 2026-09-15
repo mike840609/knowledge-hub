@@ -32,19 +32,31 @@ export class HubIdentityResolver {
     // on the (provider, subject) / emp_id unique constraints, and a loser can
     // collide more than once when its retry re-reads before the winner
     // commits. Deadlocks/lock-waits surface as retryable apply failures
-    // (code IMPORT_APPLY_RETRYABLE), not IntegrityError, so both are
-    // retried. Each attempt re-runs resolveOnce, which re-reads the winner
-    // link first, so convergence is monotonic. Fail-closed errors
-    // (IdentityLinkRequired/Conflict) and non-retryable errors rethrow
-    // immediately without consuming attempts.
+    // (code IMPORT_APPLY_RETRYABLE), not IntegrityError, so those retry too.
+    // IdentityLinkRequired AND IdentityLinkConflict are both
+    // transient-possible mid-race: the three reads in resolveOnce are not
+    // atomic, so a loser can observe subject-miss (stale) + emp-hit +
+    // link-miss (REQUIRED, link still in flight) or subject-miss (stale) +
+    // emp-hit + link-hit (CONFLICT, link committed between the first and
+    // third read — a real row but a stale verdict). A retry can only succeed
+    // on a COMMITTED subject link row, so retrying never resolves
+    // incorrectly; genuine unlinked/conflicting identities re-derive the same
+    // verdict on every attempt and surface after exhaustion. Linear backoff
+    // (10ms x attempt) between attempts spans the winner-commit window under
+    // load; the success path never sleeps.
     let lastError: unknown;
     for (let attempt = 1; attempt <= 5; attempt += 1) {
       try {
         return await this.unitOfWork.run((repositories) => this.resolveOnce(repositories, external, new Date()));
       } catch (error) {
-        if (error instanceof IdentityLinkRequiredError || error instanceof IdentityLinkConflictError) throw error;
-        if (error instanceof IntegrityError || isRetryableApplyFailure(error)) {
+        if (
+          error instanceof IntegrityError ||
+          error instanceof IdentityLinkRequiredError ||
+          error instanceof IdentityLinkConflictError ||
+          isRetryableApplyFailure(error)
+        ) {
           lastError = error;
+          if (attempt < 5) await new Promise((resolve) => setTimeout(resolve, 10 * attempt));
           continue;
         }
         throw error;
