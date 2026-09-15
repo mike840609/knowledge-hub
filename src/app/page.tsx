@@ -1,6 +1,4 @@
 import { redirect } from "next/navigation";
-import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
-import { getCurrentIdentity } from "@/modules/identity/application/get-current-identity";
 import { applicationServices } from "@/server/composition";
 import { getDefaultKnowledgeTarget } from "@/server/knowledge-read";
 
@@ -10,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const services = applicationServices();
-  const caller = callerFromIdentity(await getCurrentIdentity(services.identityProvider));
+  const { caller } = await services.establishTrustedCaller();
   const workspaces = await services.workspaces.listWorkspaces(caller);
   for (const workspace of workspaces) {
     const target = await getDefaultKnowledgeTarget(workspace.id);

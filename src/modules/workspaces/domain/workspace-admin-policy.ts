@@ -12,8 +12,8 @@ import type { WorkspaceRole } from "./workspace-membership";
  * requires actor OWNER. Group mappings can never carry OWNER (DB CHECK +
  * repository guard; rejected here as well in defense in depth).
  *
- * NULL-role rows are never authority (requireDirectOwner pattern): a missing
- * or NULL actor role denies every governance operation.
+ * The application derives effective OWNER/ADMIN authority from current grants.
+ * A missing or NULL effective actor role denies every governance operation.
  */
 export type GovernanceActorRole = WorkspaceRole | null | undefined;
 
@@ -33,7 +33,7 @@ export function assertGovernanceAuthority(input: {
   }
   if (input.actorRole !== "OWNER" && input.actorRole !== "ADMIN") {
     throw new WorkspaceAccessDeniedError(
-      `Team workspace ${input.operation} requires a direct OWNER or ADMIN grant.`,
+      `Team workspace ${input.operation} requires OWNER or effective ADMIN authority.`,
     );
   }
   if (input.actorRole === "OWNER") return;

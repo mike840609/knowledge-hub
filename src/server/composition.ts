@@ -24,24 +24,57 @@ import { importRuntimeConfig } from "@/server/import-config";
 import { createIdentityProvider } from "@/server/identity-provider-factory";
 
 let pool: Pool | undefined;
-let services: ReturnType<typeof buildServices> | undefined;
+let services: ReturnType<typeof buildApplicationServices> | undefined;
+let companySessionReader: CompanySsoSessionReader | undefined;
+
+/** Startup-only dependency registration; never accepts browser identity data. */
+export function configureCompanySsoSessionReader(reader: CompanySsoSessionReader): void {
+  if (services || companySessionReader) {
+    throw new Error("Configure the Company SSO session reader once, before application services are created.");
+  }
+  companySessionReader = reader;
+}
 
 function getPool(): Pool {
   pool ??= createDatabasePool(databaseConfig("dev"));
   return pool;
 }
 
-function buildServices(databasePool: Pool) {
+export function buildApplicationServices(databasePool: Pool, options: {
+  companySessionReader?: CompanySsoSessionReader;
+} = {}) {
   const unitOfWork = new MariaDbUnitOfWork(databasePool);
-  const identityProvider = createIdentityProvider();
+  const identityProvider = createIdentityProvider(options);
+  const providerKind = identityProviderKind();
+  const providerName = companySsoProviderName();
+  const sessionReaderConfigured = options.companySessionReader !== undefined;
   const hub = new HubKnowledgeCommandServiceImpl(unitOfWork);
   const queries = new KnowledgeQueryServiceImpl(unitOfWork);
   const sources = new SourceApplicationService(unitOfWork);
   const workspaces = new WorkspaceQueryService(unitOfWork);
   const resolver = new HubIdentityResolver(unitOfWork);
   const personalWorkspaces = new PersonalWorkspaceService(unitOfWork);
-  const establishTrustedCaller = () =>
-    establishTrustedCallerWith({ provider: identityProvider, resolver, personalWorkspaces, unitOfWork });
+  const verifyReadiness = (rolloutHubUserIds = companySsoRolloutHubUserIds()): Promise<ProductionReadinessSummary> =>
+    assertProductionReadiness({
+      query: async <T>(sql: string, params?: unknown[]): Promise<T> => databasePool.query(sql, params) as Promise<T>,
+      identityProviderKind: providerKind,
+      companySsoProvider: providerName,
+      companySessionReaderConfigured: sessionReaderConfigured,
+      rolloutHubUserIds,
+    });
+  let readiness: Promise<ProductionReadinessSummary> | undefined;
+  const establishTrustedCaller = async () => {
+    // Company traffic cannot bypass the startup gate. Cache success for this
+    // service instance; a failed cutover check can be retried after repair.
+    if (providerKind === "company-sso") {
+      readiness ??= verifyReadiness().catch((error: unknown) => {
+        readiness = undefined;
+        throw error;
+      });
+      await readiness;
+    }
+    return establishTrustedCallerWith({ provider: identityProvider, resolver, personalWorkspaces, unitOfWork });
+  };
   const importConfig = importRuntimeConfig();
   const imports = {
     create: new CreateFolderImportService(unitOfWork, { limits: importConfig.limits, buildingTtlMs: importConfig.buildingTtlMs }),
@@ -50,37 +83,24 @@ function buildServices(databasePool: Pool) {
     preview: new GetFolderImportPreviewService(unitOfWork),
     apply: new ApplyFolderImportService(unitOfWork),
   };
-  return { identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, sources, workspaces, imports };
+  return { verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, sources, workspaces, imports };
 }
 
 export function applicationServices() {
-  services ??= buildServices(getPool());
+  services ??= buildApplicationServices(getPool(), { companySessionReader });
   return services;
 }
 
-/**
- * Production cutover readiness (spec §19 step 8). The production boot path
- * must await this before serving traffic: 009 APPLIED, Company SSO provider
- * configured, a server-side session reader wired, and rollout-scope legacy
- * identity links complete. Fails closed; the Company SSO session adapter is
- * passed in once it exists, so an unwired deployment can never report ready.
- */
+/** Verify the same provider/session dependencies used by request handling. */
 export async function verifyProductionReadiness(options: {
-  companySessionReader?: CompanySsoSessionReader;
   rolloutHubUserIds?: readonly string[];
 } = {}): Promise<ProductionReadinessSummary> {
-  const databasePool = getPool();
-  return assertProductionReadiness({
-    query: async <T>(sql: string, params?: unknown[]): Promise<T> => databasePool.query(sql, params) as Promise<T>,
-    identityProviderKind: identityProviderKind(),
-    companySsoProvider: companySsoProviderName(),
-    companySessionReaderConfigured: options.companySessionReader !== undefined,
-    rolloutHubUserIds: options.rolloutHubUserIds ?? companySsoRolloutHubUserIds(),
-  });
+  return applicationServices().verifyProductionReadiness(options.rolloutHubUserIds);
 }
 
 export async function closeApplicationPool(): Promise<void> {
   if (pool) await pool.end();
   pool = undefined;
   services = undefined;
+  companySessionReader = undefined;
 }

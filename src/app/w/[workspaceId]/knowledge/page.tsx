@@ -1,8 +1,6 @@
 import { redirect } from "next/navigation";
 import { getDefaultKnowledgeTarget, getKnowledgeExplorerModel } from "@/server/knowledge-read";
 import { applicationServices } from "@/server/composition";
-import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
-import { getCurrentIdentity } from "@/modules/identity/application/get-current-identity";
 
 export default async function WorkspaceKnowledgePage({
   params,
@@ -11,7 +9,7 @@ export default async function WorkspaceKnowledgePage({
 }) {
   const { workspaceId } = await params;
   const services = applicationServices();
-  const caller = callerFromIdentity(await getCurrentIdentity(services.identityProvider));
+  const { caller } = await services.establishTrustedCaller();
   const workspaces = await services.workspaces.listWorkspaces(caller);
   if (!workspaces.some((workspace) => workspace.id === workspaceId)) {
     return (

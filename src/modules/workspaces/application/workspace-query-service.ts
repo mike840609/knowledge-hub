@@ -6,7 +6,7 @@ import type { WorkspaceUnitOfWork } from "../ports/unit-of-work";
 import type { Workspace } from "../domain/workspace";
 import type { WorkspaceCapability } from "../domain/workspace-capability";
 import { WorkspaceAccessDeniedError, WorkspaceNotFoundError } from "../domain/errors";
-import { evaluateEffectiveCapabilities, requireWorkspaceRead } from "./workspace-authorization";
+import { evaluateWorkspaceCapabilities, requireWorkspaceRead } from "./workspace-authorization";
 
 export type WorkspaceView = {
   id: string;
@@ -46,13 +46,9 @@ export class WorkspaceMembershipPolicy implements WorkspaceAccessPolicy {
   ) {}
 
   async evaluateCapabilities(caller: CallerContext, workspaceId: string): Promise<Set<WorkspaceCapability>> {
-    const membership = await this.memberships.find(workspaceId, caller.identity.id);
-    const mappings = this.groupMappings ? await this.groupMappings.listByWorkspace(workspaceId) : [];
-    return evaluateEffectiveCapabilities({
-      directRole: membership === null ? undefined : (membership.role ?? null),
-      validatedExternalGroupIds: caller.validatedExternalGroupIds,
-      groupMappings: mappings,
-    });
+    return evaluateWorkspaceCapabilities(
+      { workspaceMemberships: this.memberships, groupMappings: this.groupMappings }, caller, workspaceId,
+    );
   }
 
   async requireMembership(caller: CallerContext, workspaceId: string): Promise<void> {

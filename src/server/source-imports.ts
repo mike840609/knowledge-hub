@@ -1,5 +1,3 @@
-import { getCurrentIdentity } from "@/modules/identity/application/get-current-identity";
-import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 import type { ApplyFolderImportResult } from "@/modules/sources/application/apply-folder-import";
 import type { CreateImportResult, ImportManifestEntry } from "@/modules/sources/application/create-folder-import";
 import { translateKnownSnapshotAccessError } from "@/modules/sources/application/import-snapshot-access";
@@ -46,7 +44,7 @@ async function withKnownSnapshotAccess<T>(operation: () => Promise<T>): Promise<
 
 export async function createInitialSourceImport(workspaceId: string, input: InitialImportRequest): Promise<CreateImportResult> {
   const services = applicationServices();
-  const caller = callerFromIdentity(await getCurrentIdentity(services.identityProvider));
+  const { caller } = await services.establishTrustedCaller();
   return services.imports.create.createInitial(caller, {
     workspaceId,
     sourceName: input.sourceName,
@@ -57,7 +55,7 @@ export async function createInitialSourceImport(workspaceId: string, input: Init
 
 export async function createSourceResync(sourceId: string, input: ResyncRequest): Promise<CreateImportResult> {
   const services = applicationServices();
-  const caller = callerFromIdentity(await getCurrentIdentity(services.identityProvider));
+  const { caller } = await services.establishTrustedCaller();
   return services.imports.create.createResync(caller, {
     sourceId,
     rootName: input.rootName,
@@ -70,24 +68,24 @@ export async function uploadSourceImportEntries(
   entries: { uploadKey: string; bytes: Uint8Array }[],
 ): Promise<UploadImportResult> {
   const services = applicationServices();
-  const caller = callerFromIdentity(await getCurrentIdentity(services.identityProvider));
+  const { caller } = await services.establishTrustedCaller();
   return withKnownSnapshotAccess(() => services.imports.upload.upload(caller, { snapshotId, entries }));
 }
 
 export async function finalizeSourceImport(snapshotId: string): Promise<ImportPreview> {
   const services = applicationServices();
-  const caller = callerFromIdentity(await getCurrentIdentity(services.identityProvider));
+  const { caller } = await services.establishTrustedCaller();
   return withKnownSnapshotAccess(() => services.imports.finalize.finalize(caller, snapshotId));
 }
 
 export async function getSourceImportPreview(snapshotId: string): Promise<ImportPreview> {
   const services = applicationServices();
-  const caller = callerFromIdentity(await getCurrentIdentity(services.identityProvider));
+  const { caller } = await services.establishTrustedCaller();
   return withKnownSnapshotAccess(() => services.imports.preview.get(caller, snapshotId));
 }
 
 export async function applySourceImport(snapshotId: string): Promise<ApplyFolderImportResult> {
   const services = applicationServices();
-  const caller = callerFromIdentity(await getCurrentIdentity(services.identityProvider));
+  const { caller } = await services.establishTrustedCaller();
   return withKnownSnapshotAccess(() => services.imports.apply.apply(caller, snapshotId));
 }

@@ -1,6 +1,4 @@
 import { findFirstReadableDocument, sortSourcesByName } from "@/lib/knowledge-navigation";
-import { getCurrentIdentity } from "@/modules/identity/application/get-current-identity";
-import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import type { WorkspaceView } from "@/modules/workspaces/application/workspace-query-service";
 import { applicationServices } from "@/server/composition";
@@ -33,7 +31,7 @@ export async function getKnowledgeDocumentModel(
 ): Promise<KnowledgeDocumentModel | null> {
   try {
     const services = applicationServices();
-    const caller = callerFromIdentity(await getCurrentIdentity(services.identityProvider));
+    const { caller } = await services.establishTrustedCaller();
     const view = await services.queries.getDocument(caller, documentId, { includeArchived: input.includeArchived });
     const revisions = await services.queries.listRevisions(caller, documentId, { includeArchived: input.includeArchived });
     const selectedRevision = input.revisionNo === undefined
@@ -69,8 +67,7 @@ export async function getWorkspaceShellModel(
   workspaceId: string,
 ): Promise<WorkspaceShellModel | null> {
   const services = applicationServices();
-  const identity = await getCurrentIdentity(services.identityProvider);
-  const caller = callerFromIdentity(identity);
+  const { caller, identity } = await services.establishTrustedCaller();
   const workspaces = await services.workspaces.listWorkspaces(caller);
   const workspace = workspaces.find((candidate) => candidate.id === workspaceId);
   if (!workspace) return null;
@@ -88,8 +85,7 @@ export async function getKnowledgeExplorerModel(
   input: { includeArchived?: boolean } = {},
 ): Promise<KnowledgeExplorerModel | null> {
   const services = applicationServices();
-  const identity = await getCurrentIdentity(services.identityProvider);
-  const caller = callerFromIdentity(identity);
+  const { caller } = await services.establishTrustedCaller();
   const includeArchived = input.includeArchived ?? false;
   try {
     const workspaces = await services.workspaces.listWorkspaces(caller);
@@ -109,7 +105,7 @@ export async function getDefaultKnowledgeTarget(
   workspaceId: string,
 ): Promise<{ sourceId: string; documentId: string } | null> {
   const services = applicationServices();
-  const caller = callerFromIdentity(await getCurrentIdentity(services.identityProvider));
+  const { caller } = await services.establishTrustedCaller();
   try {
     const sources = sortSourcesByName(
       await services.queries.listSources(caller, workspaceId),

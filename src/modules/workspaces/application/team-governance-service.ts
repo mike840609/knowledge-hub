@@ -1,3 +1,4 @@
+import { evaluateWorkspaceCapabilities } from "./workspace-authorization";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import { assertGovernanceAuthority } from "../domain/workspace-admin-policy";
@@ -61,12 +62,14 @@ async function requireGovernanceActor(
   caller: CallerContext,
   operation: string,
 ): Promise<WorkspaceRole> {
-  const actor = await repositories.workspaceMemberships.find(workspaceId, caller.identity.id);
-  const actorRole = actor?.role ?? null;
-  if (actorRole !== "OWNER" && actorRole !== "ADMIN") {
-    throw new WorkspaceAccessDeniedError(`Team workspace ${operation} requires a direct OWNER or ADMIN grant.`);
+  const capabilities = await evaluateWorkspaceCapabilities(repositories, caller, workspaceId);
+  const required = operation === "audit-read" ? "audit.read" : "membership.manage_basic";
+  if (!capabilities.has(required)) {
+    throw new WorkspaceAccessDeniedError(`Team workspace ${operation} requires ${required}.`);
   }
-  return actorRole;
+  // Group grants can never provide the OWNER bundle. Keep the existing
+  // before/after role ceiling and last-direct-owner checks for every mutation.
+  return capabilities.has("membership.manage_owner") ? "OWNER" : "ADMIN";
 }
 
 function projectDirectOwners(

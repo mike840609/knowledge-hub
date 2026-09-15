@@ -1,3 +1,4 @@
+import type { WorkspaceGroupMappingRepository } from "@/modules/workspaces/ports/workspace-group-mapping-repository";
 import type { UserRepository } from "@/modules/identity/ports/user-repository";
 import type { DocumentRepository } from "./document-repository";
 import type { LinkedEntryRepository } from "./linked-entry";
@@ -23,14 +24,9 @@ export type KnowledgeRepositories = {
    */
   workspaces: WorkspaceRepository;
   workspaceAccess: WorkspaceAccessPolicy;
-  /**
-   * Phase 3 §9 direct-role write gate: content/import writers revalidate the
-   * caller's direct role on the same locked connection. The MariaDB
-   * implementation already supplies this repository at runtime (same T5/T6
-   * precedent as `workspaces` above); the port makes it available to the
-   * mutation guard.
-   */
+  /** Current direct and group grants are re-read under the Workspace lock. */
   workspaceMemberships: WorkspaceMembershipRepository;
+  groupMappings: WorkspaceGroupMappingRepository;
 };
 
 export interface KnowledgeUnitOfWork {

@@ -1,3 +1,6 @@
+import type { CallerContext } from "@/modules/identity/domain/caller-context";
+import type { WorkspaceMembershipRepository } from "../ports/workspace-membership-repository";
+import type { WorkspaceGroupMappingRepository } from "../ports/workspace-group-mapping-repository";
 import type { WorkspaceCapability } from "../domain/workspace-capability";
 import { ROLE_WORKSPACE_CAPABILITIES } from "../domain/workspace-capability";
 import type { WorkspaceRole } from "../domain/workspace-membership";
@@ -91,4 +94,23 @@ export type OtherUserAccess = {
 
 export function describeOtherUserAccess(directRole: WorkspaceRole | null | undefined): OtherUserAccess {
   return { directRole: directRole ?? null, groupEffectiveAccess: OTHER_USER_GROUP_ACCESS_UNKNOWN };
+}
+
+/** Read current grants using the caller's transaction/connection. Writers must
+ * hold the Workspace lock before calling this so governance cannot race them. */
+export async function evaluateWorkspaceCapabilities(
+  repositories: {
+    workspaceMemberships: WorkspaceMembershipRepository;
+    groupMappings?: WorkspaceGroupMappingRepository;
+  },
+  caller: CallerContext,
+  workspaceId: string,
+): Promise<Set<WorkspaceCapability>> {
+  const membership = await repositories.workspaceMemberships.find(workspaceId, caller.identity.id);
+  const mappings = repositories.groupMappings ? await repositories.groupMappings.listByWorkspace(workspaceId) : [];
+  return evaluateEffectiveCapabilities({
+    directRole: membership === null ? undefined : membership.role,
+    validatedExternalGroupIds: caller.validatedExternalGroupIds,
+    groupMappings: mappings,
+  });
 }

@@ -152,3 +152,57 @@ passes the gate (fresh installs migrate straight to 009).
   finalize.
 - DDL failures keep the FAILED/RUNNING ledger diagnostics: repair the schema
   explicitly and clear only the affected ledger row — never edit checksums.
+
+
+## Development before company SSO integration
+
+Local development uses `KM_IDENTITY_PROVIDER=local` and the existing
+`KM_LOCAL_*` configuration. Human Web and import API adapters now call the
+same `establishTrustedCaller()` bootstrap: resolve the Hub identity, ensure
+one My Space, and build a caller carrying trusted claims. Local claims have
+no company groups or platform capabilities. The existing navigation / admin
+UI work in Task 13 remains separate from this caller retrofit.
+
+Group authorization can be verified without a company IdP. The integration
+suite supplies a test-only `CompanySsoSessionReader` to
+`buildApplicationServices(isolatedPool, { companySessionReader })` and runs
+real request adapters, imports, Hub writes, and governance against an
+isolated MariaDB database. It covers group-only EDITOR/ADMIN, direct VIEWER
+plus group EDITOR/ADMIN, removed mappings, archive restrictions, authority
+ceilings, and revocation while a writer waits for the Workspace lock. Test
+sessions are not a production login implementation and have no HTTP entry
+point for supplying identity or group claims.
+
+## Connecting the company session adapter later
+
+Implement `CompanySsoSessionReader.readSession()` in trusted server-side
+infrastructure. It must validate the current request's company login session
+and return the provider-issued subject, enterprise profile, and validated
+group IDs. Reuse the reader instance, not a cached user's session or claims.
+The concrete company login/session integration is still required before
+production use.
+
+In the server startup composition for each serving runtime, before any call
+to `applicationServices()`:
+
+1. Configure `KM_IDENTITY_PROVIDER=company-sso`, the provider namespace,
+   optional team-create groups, and the rollout scope.
+2. Call `configureCompanySsoSessionReader(companySessionReader)` once from
+   `src/server/composition.ts`. Late/repeated registration is rejected.
+3. Complete the migration/bootstrap procedure above, then await
+   `verifyProductionReadiness()` before enabling traffic. Readiness uses the
+   same captured provider settings and reader dependency as request handling;
+   it cannot be satisfied by passing a different reader just to the check.
+
+Company request bootstrap also enforces readiness before resolving any user.
+A successful check is cached per application-services instance; a failed
+check is retried on a later request after the operator repairs the cutover.
+Session claims themselves are read afresh for each bootstrap. A missing
+reader, unapplied migration 009, or missing required legacy identity link
+fails closed. The Local development path does not require company readiness.
+
+Content/import writers authorize `document.write` / `source.manage` from
+current direct-plus-group capabilities under the Workspace lock. Governance
+uses effective ADMIN capabilities for basic operations and `audit.read` for
+audit access; group ADMIN cannot grant, demote, or remove OWNER/ADMIN
+authority. No company SSO connection is needed to validate these policies.
