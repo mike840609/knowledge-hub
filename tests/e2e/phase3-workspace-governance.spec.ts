@@ -197,8 +197,15 @@ test.describe("Phase 3 Workspace product acceptance", () => {
         if (route.request().method() === "POST") {
           await route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ error: { code: "TEAM_CREATION_DENIED", message: "Team creation is unavailable." } }) });
         } else {
-          const response = await route.fetch();
-          await route.fulfill({ response, json: { ...await response.json(), canCreateTeam: false } });
+          // The denied submit triggers two overlapping refreshes (explicit dialog refresh
+          // plus the global access-check listener); the superseded fetch is aborted and its
+          // response disposed. Only the surviving refresh needs to complete.
+          try {
+            const response = await route.fetch();
+            await route.fulfill({ response, json: { ...await response.json(), canCreateTeam: false } });
+          } catch {
+            await route.abort().catch(() => {});
+          }
         }
       });
       await dialog.getByRole("button", { name: "Create team", exact: true }).click();

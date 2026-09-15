@@ -44,6 +44,7 @@ export function WorkspaceSelector({ workspaceId }: { workspaceId: string }) {
       </nav>
     </details>
     <CreateTeamDialog open={creating} onOpenChange={setCreating} canCreateTeam={confirmed && navigation.canCreateTeam}
+      onDenied={() => { void refresh(); }}
       onCreated={(id) => { void refresh(); router.push(`/w/${id}/knowledge`); }} />
   </>;
 }
