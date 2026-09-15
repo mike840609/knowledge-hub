@@ -38,8 +38,15 @@ export function configureCompanySsoSessionReader(reader: CompanySsoSessionReader
   companySessionReader = reader;
 }
 
+type GlobalPoolSlot = { __kmDbPool?: Pool };
+
 function getPool(): Pool {
-  pool ??= createDatabasePool(databaseConfig("dev"));
+  // `next dev` re-evaluates server modules on every HMR reload; a plain
+  // module-level singleton would orphan a full pool per reload and exhaust
+  // MariaDB max_connections over a session. Pin the pool on globalThis so
+  // reloads reuse it; closeApplicationPool() clears the slot for tests.
+  const slot = globalThis as unknown as GlobalPoolSlot;
+  pool = slot.__kmDbPool ??= createDatabasePool(databaseConfig("dev"));
   return pool;
 }
 
@@ -107,6 +114,7 @@ export async function verifyProductionReadiness(options: {
 export async function closeApplicationPool(): Promise<void> {
   if (pool) await pool.end();
   pool = undefined;
+  delete (globalThis as unknown as GlobalPoolSlot).__kmDbPool;
   services = undefined;
   companySessionReader = undefined;
 }
