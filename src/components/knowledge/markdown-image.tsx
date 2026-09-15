@@ -2,18 +2,35 @@
 
 import { useState } from "react";
 import { ImageOff } from "lucide-react";
+import { isAllowedMarkdownImageSrc } from "./markdown-image-policy";
 
 export function MarkdownImage({ src, alt }: { src?: string; alt?: string }) {
   const [failed, setFailed] = useState(false);
-  if (!src || failed) {
+  // Issue #20: default-deny remote images. Blocked URLs render a "blocked"
+  // placeholder and are never passed to <img>, so the browser issues no
+  // request for them. Same-origin absolute URLs need the runtime origin.
+  const blocked =
+    !!src &&
+    !isAllowedMarkdownImageSrc(src, {
+      origin: typeof window !== "undefined" ? window.location.origin : undefined,
+    });
+  if (!src || blocked || failed) {
+    const label = blocked
+      ? alt
+        ? `Image blocked: ${alt}`
+        : "Image blocked"
+      : alt
+        ? `Image unavailable: ${alt}`
+        : "Image unavailable";
     return (
       <span
         role="img"
-        aria-label={alt ? `Image unavailable: ${alt}` : "Image unavailable"}
+        aria-label={label}
+        data-blocked={blocked ? "true" : undefined}
         className="my-4 flex w-full items-center justify-center gap-2 rounded-md border border-kh-border bg-kh-bg-subtle px-4 py-8 text-sm text-kh-text-muted"
       >
         <ImageOff className="h-4 w-4 shrink-0" aria-hidden="true" />
-        <span className="truncate">{alt ? `Image unavailable: ${alt}` : "Image unavailable"}</span>
+        <span className="truncate">{label}</span>
       </span>
     );
   }

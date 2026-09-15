@@ -59,6 +59,13 @@ export function MarkdownRenderer({ markdown }: { markdown: string }) {
         remarkPlugins={[remarkGfm]}
         components={{
           a: MarkdownLink,
+          // Image URL policy (issue #20, see markdown-image-policy.ts):
+          // default-deny remote images — only relative Knowledge Hub asset
+          // URLs and same-origin absolute URLs render via MarkdownImage;
+          // arbitrary http(s) (incl. protocol-relative //), data:, and other
+          // schemes render a safe blocked placeholder and never reach <img>.
+          // Links (MarkdownLink above) are unaffected by design: clicking a
+          // link is explicit user action, <img> fetches automatically.
           img: ({ src, alt }: DetailedHTMLProps<ImgHTMLAttributes<HTMLImageElement>, HTMLImageElement>) => (
             <MarkdownImage src={typeof src === "string" ? src : undefined} alt={alt} />
           ),
