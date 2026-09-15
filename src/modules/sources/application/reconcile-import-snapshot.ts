@@ -76,8 +76,9 @@ export function reconcileImportSnapshot(
   content: ReadyImportContent,
   current: CanonicalImportState,
   extraChanges: ImportPreviewChange[] = [],
+  blockedPaths: ReadonlySet<string> = new Set(),
 ): FolderImportPlan {
-  const plan = reconcileFolderImport(content, current);
+  const plan = reconcileFolderImport(content, current, blockedPaths);
   plan.preview = sortChanges([...plan.preview, ...extraChanges]);
   plan.summary = summarizeImportChanges(plan.preview);
   return plan;

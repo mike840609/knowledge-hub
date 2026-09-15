@@ -251,4 +251,28 @@ describe("Phase 2 import finalization", () => {
       { client_relative_path: "good.md", resolved_title: "Good" },
     ]);
   });
+
+  it("shows a blocked-but-present resync file as a blocker row instead of ARCHIVED", async () => {
+    const fixture = await createSourceFixture(pool, { managed: true });
+    const existing = await createDocumentForAnySource(pool, fixture.source.id, fixture.folderId);
+    const existingEntry = await createEntryFixture(pool, fixture.source.id, existing.documentId, "existing");
+    await pool.query("UPDATE source_entries SET source_path='guide.md', external_id=NULL WHERE id=?", [existingEntry.entryId]);
+
+    const bytes = new TextEncoder().encode("---\ntitle: [broken\n---\n# Broken\n");
+    const { create, upload, finalize } = services();
+    const session = await create.createResync(fixtureCaller(), {
+      sourceId: fixture.source.id, rootName: "wiki", manifest: [markdownEntry("m1", "guide.md", bytes)],
+    });
+    await upload.upload(fixtureCaller(), { snapshotId: session.snapshotId, entries: [{ uploadKey: "m1", bytes }] });
+    const preview = await finalize.finalize(fixtureCaller(), session.snapshotId);
+
+    expect(preview.state).toBe("READY");
+    expect(preview.hasBlockers).toBe(true);
+    const rows = preview.changes.filter((change) => change.sourcePath === "guide.md");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].labels).toEqual([]);
+    expect(rows[0].diagnostics.map((diagnostic) => diagnostic.code)).toContain("INVALID_FRONTMATTER");
+    expect(preview.summary.documents.archived).toBe(0);
+    expect(preview.changes.some((change) => change.labels.includes("ARCHIVED"))).toBe(false);
+  });
 });

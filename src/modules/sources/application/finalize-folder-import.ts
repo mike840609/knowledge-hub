@@ -157,6 +157,7 @@ export class FinalizeFolderImportService {
     const assets: ReadyImportAsset[] = [];
     const finalized: FinalizedImportSnapshotEntry[] = [];
     const extraChanges: ImportPreviewChange[] = [];
+    const blockedPaths = new Set<string>();
 
     for (const entry of kept.sort((left, right) => compareImportText(left.sourcePath ?? left.staged.clientRelativePath, right.sourcePath ?? right.staged.clientRelativePath) || compareImportText(left.staged.uploadKey, right.staged.uploadKey))) {
       let row = finalizedBase(entry);
@@ -221,6 +222,7 @@ export class FinalizeFolderImportService {
         }
         if (hasBlocker(entry.diagnostics)) extraChanges.push(diagnosticChange(entry));
       }
+      if (hasBlocker(entry.diagnostics) && entry.sourcePath !== null) blockedPaths.add(entry.sourcePath);
       finalized.push(row);
     }
 
@@ -235,7 +237,7 @@ export class FinalizeFolderImportService {
       const current = snapshot.sourceId === null
         ? { documents: [], folders: [], assets: [] }
         : await repositories.importCanonicalState.load(snapshot.sourceId);
-      plan = reconcileImportSnapshot(content, current, extraChanges);
+      plan = reconcileImportSnapshot(content, current, extraChanges, blockedPaths);
     } catch (error) {
       if (!(error instanceof SourceImportError)) throw error;
       const globalChange: ImportPreviewChange = {

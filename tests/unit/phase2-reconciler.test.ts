@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { normalizeFolderName } from "@/modules/knowledge/domain/tree-rules";
 import { reconcileFolderImport } from "@/modules/sources/domain/import-reconciler";
+import { reconcileImportSnapshot } from "@/modules/sources/application/reconcile-import-snapshot";
 import type {
   CanonicalAssetState,
   CanonicalDocumentState,
   CanonicalFolderState,
   CanonicalImportState,
+  ImportPreviewChange,
   ReadyImportAsset,
   ReadyImportContent,
   ReadyImportDocument,
@@ -487,5 +489,65 @@ describe("Phase 2 folder import reconciliation", () => {
         .some((item) => item.code === "INVALID_FOLDER_NAME" && item.severity === "BLOCKING");
       expect(blocked, `folder name ${JSON.stringify(name)}`).toBe(canonicalRejects);
     }
+  });
+
+  it("does not plan ARCHIVED for a blocked-but-present canonical document", () => {
+    const existing = currentDocument("guide.md", "same");
+    const blockerChange: ImportPreviewChange = {
+      kind: "DOCUMENT",
+      sourcePath: "guide.md",
+      previousPath: null,
+      labels: [],
+      diagnostics: [
+        {
+          code: "INVALID_FRONTMATTER",
+          severity: "BLOCKING",
+          sourcePath: "guide.md",
+          message: "File guide.md has invalid frontmatter.",
+        },
+      ],
+    };
+    const plan = reconcileImportSnapshot(
+      snapshot(),
+      canonical({ documents: [existing] }),
+      [blockerChange],
+      new Set(["guide.md"]),
+    );
+
+    expect(plan.preview.filter((item) => item.sourcePath === "guide.md")).toHaveLength(1);
+    expect(plan.preview.find((item) => item.sourcePath === "guide.md")?.labels).toEqual([]);
+    expect(plan.documents.archive).toHaveLength(0);
+    expect(plan.summary.documents.archived).toBe(0);
+    expect(plan.summary.blockers).toBeGreaterThan(0);
+  });
+
+  it("does not plan REMOVED for a blocked-but-present canonical asset", () => {
+    const existing = currentAsset("images/logo.png", "hash:old");
+    const blockerChange: ImportPreviewChange = {
+      kind: "ASSET",
+      sourcePath: "images/logo.png",
+      previousPath: null,
+      labels: [],
+      diagnostics: [
+        {
+          code: "INVALID_ASSET",
+          severity: "BLOCKING",
+          sourcePath: "images/logo.png",
+          message: "File images/logo.png failed validation.",
+        },
+      ],
+    };
+    const plan = reconcileImportSnapshot(
+      snapshot(),
+      canonical({ assets: [existing] }),
+      [blockerChange],
+      new Set(["images/logo.png"]),
+    );
+
+    expect(plan.preview.filter((item) => item.sourcePath === "images/logo.png")).toHaveLength(1);
+    expect(plan.preview.find((item) => item.sourcePath === "images/logo.png")?.labels).toEqual([]);
+    expect(plan.assets.remove).toHaveLength(0);
+    expect(plan.summary.assets.removed).toBe(0);
+    expect(plan.summary.blockers).toBeGreaterThan(0);
   });
 });
