@@ -8,7 +8,12 @@ import { createDirectMembership } from "../domain/workspace-membership";
 import type { WorkspaceRole } from "../domain/workspace-membership";
 import {
   PersonalWorkspaceFrozenError,
-  WorkspaceAccessDeniedError,
+  InsufficientWorkspaceCapabilityError,
+  LastDirectOwnerError,
+  MemberNotFoundError,
+  MemberAlreadyExistsError,
+  GroupMappingAlreadyExistsError,
+  InvalidRoleAssignmentError,
   WorkspaceLifecycleError,
   WorkspaceNotFoundError,
 } from "../domain/errors";
@@ -34,12 +39,12 @@ export type GroupMappingInput = {
 
 function requireDirectGovernanceRole(role: string, operation: string): WorkspaceRole {
   if (role === "OWNER" || role === "ADMIN" || role === "EDITOR" || role === "VIEWER") return role;
-  throw new WorkspaceLifecycleError(`Team workspace ${operation} requires an OWNER, ADMIN, EDITOR, or VIEWER role.`);
+  throw new InvalidRoleAssignmentError(`Team workspace ${operation} requires an OWNER, ADMIN, EDITOR, or VIEWER role.`);
 }
 
 function requireGroupGovernanceRole(role: string): WorkspaceGroupRole {
   if (role === "ADMIN" || role === "EDITOR" || role === "VIEWER") return role;
-  throw new WorkspaceLifecycleError("SSO group mappings can never grant OWNER on a Team workspace.");
+  throw new InvalidRoleAssignmentError("SSO group mappings can never grant OWNER on a Team workspace.");
 }
 
 function requireTargetUserId(userId: string, operation: string): string {
@@ -63,9 +68,10 @@ async function requireGovernanceActor(
   operation: string,
 ): Promise<WorkspaceRole> {
   const capabilities = await evaluateWorkspaceCapabilities(repositories, caller, workspaceId);
+  if (!capabilities.has("workspace.discover")) throw new WorkspaceNotFoundError();
   const required = operation === "audit-read" ? "audit.read" : "membership.manage_basic";
   if (!capabilities.has(required)) {
-    throw new WorkspaceAccessDeniedError(`Team workspace ${operation} requires ${required}.`);
+    throw new InsufficientWorkspaceCapabilityError(`Team workspace ${operation} requires ${required}.`);
   }
   // Group grants can never provide the OWNER bundle. Keep the existing
   // before/after role ceiling and last-direct-owner checks for every mutation.
@@ -82,7 +88,7 @@ function projectDirectOwners(
 
 function requireDirectOwnerSurvives(projected: number, operation: string): void {
   if (projected < 1) {
-    throw new WorkspaceAccessDeniedError(
+    throw new LastDirectOwnerError(
       `Team workspace ${operation} would leave the workspace without a direct OWNER grant.`,
     );
   }
@@ -103,11 +109,11 @@ export class TeamGovernanceService {
       assertTeamMutationAllowed(locked, operation);
       const existing = await repositories.workspaceMemberships.find(workspaceId, userId);
       if (existing) {
-        throw new WorkspaceLifecycleError("Team workspace add-member requires a user without a direct membership.");
+        throw new MemberAlreadyExistsError();
       }
       const target = await repositories.users.findById(userId);
       if (!target) {
-        throw new WorkspaceLifecycleError("Team workspace add-member requires an existing Hub user.");
+        throw new MemberNotFoundError();
       }
       assertGovernanceAuthority({ actorRole, target: "direct", beforeRole: undefined, afterRole, operation });
       requireDirectOwnerSurvives(
@@ -142,7 +148,7 @@ export class TeamGovernanceService {
       assertTeamMutationAllowed(locked, operation);
       const before = await repositories.workspaceMemberships.find(workspaceId, userId);
       if (!before) {
-        throw new WorkspaceLifecycleError("Team workspace change-member requires an existing direct membership.");
+        throw new MemberNotFoundError();
       }
       const beforeRole = before.role ?? null;
       assertGovernanceAuthority({ actorRole, target: "direct", beforeRole, afterRole, operation });
@@ -177,7 +183,7 @@ export class TeamGovernanceService {
       assertTeamMutationAllowed(locked, operation);
       const before = await repositories.workspaceMemberships.find(workspaceId, targetUserId);
       if (!before) {
-        throw new WorkspaceLifecycleError("Team workspace remove-member requires an existing direct membership.");
+        throw new MemberNotFoundError();
       }
       const beforeRole = before.role ?? null;
       assertGovernanceAuthority({ actorRole, target: "direct", beforeRole, afterRole: undefined, operation });
@@ -213,7 +219,7 @@ export class TeamGovernanceService {
       assertTeamMutationAllowed(locked, operation);
       const existing = await repositories.groupMappings.findExact(workspaceId, externalGroupId);
       if (existing) {
-        throw new WorkspaceLifecycleError("Team workspace add-group-mapping requires an unmapped external group.");
+        throw new GroupMappingAlreadyExistsError();
       }
       assertGovernanceAuthority({ actorRole, target: "group", beforeRole: undefined, afterRole, operation });
       requireDirectOwnerSurvives(await repositories.workspaceMemberships.countDirectOwners(workspaceId), operation);

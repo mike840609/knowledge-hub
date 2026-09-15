@@ -15,7 +15,7 @@ test("source detail renders overview and hides folder update for a Hub-managed s
   await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/sources/${OBSIDIAN_SOURCE}`);
 
   await expect(page.getByRole("heading", { name: "Obsidian Wiki" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Update from folder" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Update from folder" })).toHaveCount(0);
   await expect(page.getByText("Technical details")).toBeVisible();
 });
 

@@ -23,6 +23,7 @@ const ACCESS_DENIED = new Set([
 ]);
 
 const CONFLICT = new Set([
+  "WORKSPACE_ARCHIVED",
   "SOURCE_VERSION_CONFLICT",
   "IMPORT_SNAPSHOT_STALE",
   "IMPORT_APPLY_RETRYABLE",
@@ -41,6 +42,18 @@ export function toImportErrorResponse(error: unknown): ImportHttpError {
       return { status: 409, body: { error: { code: error.code, message: error.message } } };
     }
     return { status: 400, body: { error: { code: error.code, message: error.message } } };
+  }
+  return { status: 500, body: { error: { code: "INTERNAL_ERROR", message: "An unexpected error occurred." } } };
+}
+
+export type ApiErrorBody = { error: { code: string; message: string; field?: string } };
+export function toWorkspaceErrorResponse(error: unknown): { status: number; body: ApiErrorBody } {
+  if (error instanceof DomainError) {
+    if (HIDDEN_NOT_FOUND.has(error.code)) return { status: 404, body: { error: { code: "NOT_FOUND", message: "The requested resource was not found." } } };
+    const status = ["INSUFFICIENT_WORKSPACE_CAPABILITY", "TEAM_CREATION_DENIED", "PERSONAL_WORKSPACE_FROZEN"].includes(error.code) ? 403
+      : ["WORKSPACE_ARCHIVED", "LAST_DIRECT_OWNER", "MEMBER_ALREADY_EXISTS", "GROUP_MAPPING_ALREADY_EXISTS", "WORKSPACE_LIFECYCLE_VIOLATION"].includes(error.code) ? 409
+      : ["MEMBER_NOT_FOUND", "INVALID_ROLE_ASSIGNMENT", "INVALID_WORKSPACE_NAME", "INVALID_REQUEST"].includes(error.code) ? 400 : 500;
+    if (status !== 500) return { status, body: { error: { code: error.code, message: error.message, ...(error.code === "INVALID_WORKSPACE_NAME" ? { field: "name" } : {}) } } };
   }
   return { status: 500, body: { error: { code: "INTERNAL_ERROR", message: "An unexpected error occurred." } } };
 }

@@ -1,0 +1,15 @@
+"use client";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
+import type { TeamWorkspaceView } from "@/server/workspace-admin";
+import { GovernanceError, governanceFailure, governanceRequest, type GovernanceFailure } from "./governance-error";
+export function GeneralSettings({ team }: { team: TeamWorkspaceView }) {
+  const router = useRouter(); const { access, confirmed } = useWorkspaceAuthorization(); const actions = access.actions;
+  const [name, setName] = useState(team.name); const [busy, setBusy] = useState(false); const [error, setError] = useState<GovernanceFailure | null>(null); const [notice, setNotice] = useState(""); const [confirmArchive, setConfirmArchive] = useState(false);
+  useEffect(() => setName(team.name), [team.name]);
+  async function mutate(path: string, method: string, body?: unknown) { if (!confirmed || busy) return; setBusy(true); setError(null); setNotice(""); try { await governanceRequest(`/api/workspaces/${team.id}${path}`, method, body); setConfirmArchive(false); setNotice("Workspace updated."); router.refresh(); } catch (failure) { setError(governanceFailure(failure)); } finally { setBusy(false); } }
+  return <section className="max-w-xl space-y-6"><h2 className="text-lg font-semibold">General</h2><p className="text-sm">State: {access.workspace.lifecycleState}</p>{actions.canRename ? <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); void mutate("", "PATCH", { name }); }}><label className="block text-sm">Team name<Input value={name} maxLength={200} required disabled={busy || !confirmed} aria-invalid={error?.field === "name"} onChange={(event) => setName(event.target.value)} /></label><Button type="submit" disabled={busy || !confirmed || !name.trim()}>Save name</Button></form> : <p>Team name: {team.name}</p>}{actions.canArchive && <div className="rounded-lg border border-red-200 p-4"><h3 className="font-medium">Archive workspace</h3><p className="my-2 text-sm">Archiving keeps knowledge readable and stops imports and membership changes. An owner can restore it later.</p>{confirmArchive ? <div className="space-y-3"><p>Archive {team.name}?</p><div className="flex gap-2"><Button disabled={busy || !confirmed} onClick={() => void mutate("/archive", "POST")}>Confirm archive</Button><Button disabled={busy} onClick={() => setConfirmArchive(false)}>Cancel</Button></div></div> : <Button disabled={busy || !confirmed} onClick={() => setConfirmArchive(true)}>Archive workspace</Button>}</div>}{actions.canRestore && <Button disabled={busy || !confirmed} onClick={() => void mutate("/restore", "POST")}>Restore workspace</Button>}<GovernanceError error={error} /><p role="status" className="text-sm">{notice}</p></section>;
+}

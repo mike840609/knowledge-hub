@@ -32,7 +32,7 @@ test("browses the persistent explorer with a stable canonical document URL", asy
 
   // Persistent shell: brand, Workspace selector, and primary nav.
   await expect(page.getByText("Knowledge Hub", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("Workspace")).toHaveValue(QUERY_MASTER_WORKSPACE);
+  await expect(page.getByLabel("Workspace: Query Master", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Knowledge" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Sources" })).toBeVisible();
 
@@ -51,7 +51,8 @@ test("browses the persistent explorer with a stable canonical document URL", asy
 
   // Current revision renders; history lives in the closed-by-default Inspector.
   await expect(page.getByRole("heading", { name: ARCHITECTURE_TITLE })).toBeVisible();
-  await expect(page.getByText(ARCHITECTURE_BODY_V2, { exact: true })).toBeVisible();
+  // Current revision renders in the visible article (a hidden RSC flight segment duplicates it).
+  await expect(page.locator("article").first().getByText(ARCHITECTURE_BODY_V2, { exact: true })).toBeVisible();
   await expect(page.getByText(ARCHITECTURE_BODY_V1, { exact: true })).toHaveCount(0);
 
   // Switching Documents keeps the Tree mounted and the URL canonical.
@@ -59,7 +60,7 @@ test("browses the persistent explorer with a stable canonical document URL", asy
   await expect(page).toHaveURL(CANONICAL_DOC_URL);
   await expect(tree).toBeVisible();
   await expect(page.getByRole("heading", { name: RUNBOOKS_TITLE })).toBeVisible();
-  await expect(page.getByText(RUNBOOKS_BODY, { exact: true })).toBeVisible();
+  await expect(page.locator("article").first().getByText(RUNBOOKS_BODY, { exact: true })).toBeVisible();
 
   const stableUrl = page.url();
   await page.reload();
@@ -72,12 +73,13 @@ test("switches workspace through the shell selector", async ({ page }) => {
   await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${OBSIDIAN_SOURCE}`);
   await expect(page.getByRole("heading", { name: ARCHITECTURE_TITLE })).toBeVisible();
 
-  await page.getByLabel("Workspace").selectOption(SWFP_WORKSPACE);
+  await page.getByLabel("Workspace: Query Master", { exact: true }).click();
+  await page.getByRole("button", { name: "SWFP", exact: true }).click();
   await expect(page).toHaveURL(
     new RegExp(`/w/${SWFP_WORKSPACE}/knowledge/${SWFP_SOURCE}/[0-9a-f-]+`),
   );
   await expect(page.getByRole("heading", { name: SWFP_TITLE })).toBeVisible();
-  await expect(page.getByText(SWFP_BODY, { exact: true })).toBeVisible();
+  await expect(page.locator("article").first().getByText(SWFP_BODY, { exact: true })).toBeVisible();
   await expect(page.getByRole("tree", { name: "Knowledge tree" })).toBeVisible();
   await expect(page.getByText(ARCHITECTURE_TITLE, { exact: true })).toHaveCount(0);
 });

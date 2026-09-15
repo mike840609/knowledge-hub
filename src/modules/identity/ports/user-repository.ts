@@ -1,6 +1,7 @@
 import type { UserIdentity } from "../domain/user-identity";
 
 export interface UserRepository {
+  searchExisting(query: string, limit: number): Promise<UserIdentity[]>;
   upsertIdentity(identity: UserIdentity): Promise<void>;
   findById(id: string): Promise<UserIdentity | null>;
   findByEmpId(empId: string): Promise<UserIdentity | null>;

@@ -25,6 +25,15 @@ export class MariaDbUserRepository implements UserRepository {
     await this.connection.query("INSERT INTO users (id, emp_id, name, org_code) VALUES (?, ?, ?, ?)", [identity.id, identity.emp_id, identity.name, identity.org_code]);
   }
 
+  async searchExisting(query: string, limit: number): Promise<UserIdentity[]> {
+    const bounded = Math.min(50, Math.max(1, Math.floor(limit) || 20));
+    const rows = await this.connection.query<DbRow[]>(
+      "SELECT id, emp_id, name, org_code FROM users WHERE LOCATE(?, name) > 0 OR LOCATE(?, emp_id) > 0 ORDER BY name ASC, id ASC LIMIT ?",
+      [query, query, bounded],
+    );
+    return rows.map(mapUser);
+  }
+
   async findById(id: string): Promise<UserIdentity | null> {
     const rows = await this.connection.query<DbRow[]>("SELECT id, emp_id, name, org_code FROM users WHERE id = ?", [id]);
     return rows[0] ? mapUser(rows[0]) : null;

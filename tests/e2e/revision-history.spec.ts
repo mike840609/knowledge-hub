@@ -28,11 +28,13 @@ test("opens the Inspector and selects a historical revision", async ({ page }) =
   await expect(historyPanel.getByText("Revision 2")).toBeVisible();
 
   // Default view is current (R2) before navigating to history.
-  await expect(page.getByText(ARCHITECTURE_BODY_V2, { exact: true })).toBeVisible();
+  // Default view is current (R2) before navigating to history; scoped to the visible article
+  // because a hidden RSC flight segment duplicates the body text.
+  await expect(page.locator("article").first().getByText(ARCHITECTURE_BODY_V2, { exact: true })).toBeVisible();
 
   await page.getByRole("link", { name: /Revision 1/ }).click();
   await expect(page).toHaveURL(new RegExp(`/w/${WORKSPACE}/knowledge/${SOURCE}/[0-9a-f-]+.*revision=1`));
-  await expect(page.getByText(ARCHITECTURE_BODY_V1, { exact: true })).toBeVisible();
+  await expect(page.locator("article").first().getByText(ARCHITECTURE_BODY_V1, { exact: true })).toBeVisible();
   await expect(page.getByText(ARCHITECTURE_BODY_V2, { exact: true })).toHaveCount(0);
   await expect(page.getByText("Viewing revision 1")).toBeVisible();
   await expect(page.getByRole("link", { name: "Back to current" })).toBeVisible();

@@ -1,6 +1,7 @@
 import type { WorkspaceMembership, WorkspaceMembershipInsert, WorkspaceRole } from "../domain/workspace-membership";
 
 export interface WorkspaceMembershipRepository {
+  listByWorkspace(workspaceId: string): Promise<WorkspaceMembership[]>;
   find(workspaceId: string, userId: string): Promise<WorkspaceMembership | null>;
   insert(membership: WorkspaceMembershipInsert): Promise<void>;
   /** Number of role=OWNER + membership_source=DIRECT rows (governance guard for owner removal). */

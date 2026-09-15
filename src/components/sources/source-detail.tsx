@@ -1,3 +1,4 @@
+import { WorkspaceImportLink } from "@/components/shell/workspace-import-link";
 import { RefreshCw } from "lucide-react";
 import type { SourceDetailModel } from "@/server/source-read";
 import { isFolderSyncable } from "@/modules/knowledge/domain/source-policy";
@@ -25,15 +26,12 @@ export function SourceDetail({ model, showImportSuccess = false }: { model: Sour
           </p>
         </div>
         {syncable ? (
-          <form method="get" action={`/w/${workspace.id}/sources/${source.id}/update`}>
-            <button
-              type="submit"
+          <WorkspaceImportLink href={`/w/${workspace.id}/sources/${source.id}/update`}
               className="inline-flex items-center gap-2 rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-sm font-medium text-kh-text transition hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent"
             >
               <RefreshCw size={15} strokeWidth={2} aria-hidden="true" />
               Update from folder
-            </button>
-          </form>
+          </WorkspaceImportLink>
         ) : null}
       </header>
 

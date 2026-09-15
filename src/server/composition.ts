@@ -1,3 +1,6 @@
+import { WorkspaceAdminService } from "./workspace-admin";
+import { TeamWorkspaceService } from "@/modules/workspaces/application/team-workspace-service";
+import { TeamGovernanceService } from "@/modules/workspaces/application/team-governance-service";
 import type { Pool } from "mariadb";
 import { databaseConfig } from "@/infrastructure/database/mariadb/config";
 import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
@@ -35,8 +38,15 @@ export function configureCompanySsoSessionReader(reader: CompanySsoSessionReader
   companySessionReader = reader;
 }
 
+type GlobalPoolSlot = { __kmDbPool?: Pool };
+
 function getPool(): Pool {
-  pool ??= createDatabasePool(databaseConfig("dev"));
+  // `next dev` re-evaluates server modules on every HMR reload; a plain
+  // module-level singleton would orphan a full pool per reload and exhaust
+  // MariaDB max_connections over a session. Pin the pool on globalThis so
+  // reloads reuse it; closeApplicationPool() clears the slot for tests.
+  const slot = globalThis as unknown as GlobalPoolSlot;
+  pool = slot.__kmDbPool ??= createDatabasePool(databaseConfig("dev"));
   return pool;
 }
 
@@ -51,6 +61,9 @@ export function buildApplicationServices(databasePool: Pool, options: {
   const hub = new HubKnowledgeCommandServiceImpl(unitOfWork);
   const queries = new KnowledgeQueryServiceImpl(unitOfWork);
   const sources = new SourceApplicationService(unitOfWork);
+  const workspaceAdmin = new WorkspaceAdminService(unitOfWork);
+  const teams = new TeamWorkspaceService(unitOfWork);
+  const governance = new TeamGovernanceService(unitOfWork);
   const workspaces = new WorkspaceQueryService(unitOfWork);
   const resolver = new HubIdentityResolver(unitOfWork);
   const personalWorkspaces = new PersonalWorkspaceService(unitOfWork);
@@ -83,7 +96,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
     preview: new GetFolderImportPreviewService(unitOfWork),
     apply: new ApplyFolderImportService(unitOfWork),
   };
-  return { verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, sources, workspaces, imports };
+  return { workspaceAdmin, teams, governance, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, sources, workspaces, imports };
 }
 
 export function applicationServices() {
@@ -101,6 +114,7 @@ export async function verifyProductionReadiness(options: {
 export async function closeApplicationPool(): Promise<void> {
   if (pool) await pool.end();
   pool = undefined;
+  delete (globalThis as unknown as GlobalPoolSlot).__kmDbPool;
   services = undefined;
   companySessionReader = undefined;
 }

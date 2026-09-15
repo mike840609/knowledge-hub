@@ -582,7 +582,7 @@ describe("Phase 3 Team member and group governance (Task 9)", () => {
       WorkspaceAccessDeniedError,
     );
     await expect(governance().listGovernanceAudit(callerFor(outsider), workspaceId)).rejects.toThrow(
-      WorkspaceAccessDeniedError,
+      WorkspaceNotFoundError,
     );
 
     await service().archiveTeamWorkspace(callerFor(owner), workspaceId);

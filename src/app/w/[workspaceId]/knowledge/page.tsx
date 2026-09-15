@@ -1,4 +1,5 @@
-import { redirect } from "next/navigation";
+import { KnowledgeEmptyState } from "@/components/knowledge/knowledge-empty-state";
+import { redirect, notFound } from "next/navigation";
 import { getDefaultKnowledgeTarget, getKnowledgeExplorerModel } from "@/server/knowledge-read";
 import { applicationServices } from "@/server/composition";
 
@@ -11,17 +12,11 @@ export default async function WorkspaceKnowledgePage({
   const services = applicationServices();
   const { caller } = await services.establishTrustedCaller();
   const workspaces = await services.workspaces.listWorkspaces(caller);
-  if (!workspaces.some((workspace) => workspace.id === workspaceId)) {
-    return (
-      <main className="mx-auto flex min-h-screen max-w-4xl flex-col justify-center px-6 py-16">
-        <h1 className="text-2xl font-semibold">No workspace access</h1>
-      </main>
-    );
-  }
+  if (!workspaces.some((workspace) => workspace.id === workspaceId)) notFound();
   const sources = await services.queries
     .listSources(caller, workspaceId)
     .catch(() => []);
-  if (sources.length === 0) redirect(`/w/${workspaceId}/sources`);
+  if (sources.length === 0) return <KnowledgeEmptyState />;
   const target = await getDefaultKnowledgeTarget(workspaceId);
   if (target) redirect(`/w/${workspaceId}/knowledge/${target.sourceId}/${target.documentId}`);
   const firstByName = [...sources].sort((left, right) =>
@@ -39,5 +34,5 @@ export default async function WorkspaceKnowledgePage({
     const model = await getKnowledgeExplorerModel(workspaceId, firstByName.id);
     if (model) redirect(`/w/${workspaceId}/knowledge/${firstByName.id}`);
   }
-  redirect(`/w/${workspaceId}/sources`);
+  return <KnowledgeEmptyState />;
 }

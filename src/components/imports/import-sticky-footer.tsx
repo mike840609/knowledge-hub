@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { requestWorkspaceAccessCheck, useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
+import { useEffect, useState } from "react";
 import type { ImportPreview } from "@/modules/sources/application/reconcile-import-snapshot";
 
 export type ApplyFailure = { code: string; message: string; latchStale: boolean };
@@ -51,11 +52,20 @@ export function ImportStickyFooter({
   preview: ImportPreview;
 }): React.JSX.Element {
   const router = useRouter();
+  const { access, confirmed } = useWorkspaceAuthorization();
+  const allowed = confirmed && access.actions.canImport;
   const [state, setState] = useState<{ kind: "IDLE" } | { kind: "APPLYING" } | { kind: "ERROR"; code: string; message: string }>({ kind: "IDLE" });
   const [versionConflict, setVersionConflict] = useState(false);
+  const [expired, setExpired] = useState(preview.expired);
+  useEffect(() => {
+    const remaining = new Date(preview.expiresAt).getTime() - Date.now();
+    setExpired(preview.expired || remaining <= 0);
+    const timer = setTimeout(() => setExpired(true), Math.max(0, Math.min(remaining, 2_147_483_647)));
+    return () => clearTimeout(timer);
+  }, [preview.expired, preview.expiresAt]);
   const effectiveState = versionConflict ? "STALE" : preview.state;
-  const stale = effectiveState === "STALE" || effectiveState === "APPLIED" || preview.expired;
-  const disabled = preview.hasBlockers || stale;
+  const stale = effectiveState === "STALE" || effectiveState === "APPLIED" || expired;
+  const disabled = !allowed || preview.hasBlockers || stale || effectiveState !== "READY";
   const cancelHref = preview.sourceId
     ? `/w/${workspaceId}/sources/${preview.sourceId}`
     : `/w/${workspaceId}/sources`;
@@ -64,11 +74,13 @@ export function ImportStickyFooter({
     : `/w/${workspaceId}/sources/import`;
 
   async function apply(): Promise<void> {
+    if (disabled || state.kind === "APPLYING" || new Date(preview.expiresAt).getTime() <= Date.now()) return;
     setState({ kind: "APPLYING" });
     try {
       const response = await fetch(`/api/source-imports/${preview.snapshotId}/apply`, { method: "POST" });
       const body = await response.json().catch(() => null);
       if (!response.ok || !body || typeof body !== "object" || !("sourceId" in body)) {
+        requestWorkspaceAccessCheck(response.status);
         const failure = classifyApplyError(response.status, body);
         if (failure.latchStale) setVersionConflict(true);
         setState({ kind: "ERROR", code: failure.code, message: failure.message });
@@ -91,22 +103,22 @@ export function ImportStickyFooter({
           Cancel
         </Link>
         <div className="flex flex-wrap items-center gap-3">
-          {stale ? (
+          {stale && allowed ? (
             <Link href={refreshHref} className="rounded text-sm font-medium text-kh-accent underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent">
               Refresh preview
             </Link>
           ) : null}
-          <button
+          {allowed ? <button
             type="button"
             disabled={disabled || state.kind === "APPLYING"}
             onClick={() => void apply()}
             className="rounded-md bg-kh-accent px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent focus-visible:ring-offset-2"
           >
             {state.kind === "APPLYING" ? "Applying…" : "Apply changes"}
-          </button>
+          </button> : <p role="status" className="text-sm text-kh-text-muted">This preview is read-only. Applying is unavailable.</p>}
         </div>
       </div>
-      {effectiveState === "STALE" || preview.expired ? (
+      {effectiveState === "STALE" || expired ? (
         <p className="mx-auto mt-2 max-w-4xl text-sm text-kh-danger">
           This preview is stale: the source changed after it was created. There is no Force Apply — create a fresh
           preview.

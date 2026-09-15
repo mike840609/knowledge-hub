@@ -149,7 +149,7 @@ describe("Phase 3 real request adapters with a trusted test session reader", () 
     expect(response.status).toBe(201);
     const { snapshotId } = await response.json();
     await lifecycle.archiveTeamWorkspace(owner, workspace.id);
-    await expect(uploadSourceImportEntries(snapshotId, [{ uploadKey: "m1", bytes }])).rejects.toMatchObject({ code: "WORKSPACE_LIFECYCLE_VIOLATION" });
+    await expect(uploadSourceImportEntries(snapshotId, [{ uploadKey: "m1", bytes }])).rejects.toMatchObject({ code: "WORKSPACE_ARCHIVED" });
     expect((await createThroughRoute(workspace.id)).status).not.toBe(201);
   });
 
@@ -166,23 +166,23 @@ describe("Phase 3 real request adapters with a trusted test session reader", () 
     await governance.changeGroupMappingRole(caller, workspace.id, { externalGroupId: "basic", role: "EDITOR" });
     await governance.removeGroupMapping(caller, workspace.id, "basic");
     for (const role of ["OWNER", "ADMIN"]) {
-      await expect(governance.addDirectMember(caller, workspace.id, { userId: target.id, role })).rejects.toMatchObject({ code: "WORKSPACE_ACCESS_DENIED" });
+      await expect(governance.addDirectMember(caller, workspace.id, { userId: target.id, role })).rejects.toMatchObject({ code: "INSUFFICIENT_WORKSPACE_CAPABILITY" });
     }
     await governance.addDirectMember(owner, workspace.id, { userId: target.id, role: "ADMIN" });
-    await expect(governance.changeDirectMemberRole(caller, workspace.id, { userId: target.id, role: "VIEWER" })).rejects.toMatchObject({ code: "WORKSPACE_ACCESS_DENIED" });
-    await expect(governance.removeDirectMember(caller, workspace.id, target.id)).rejects.toMatchObject({ code: "WORKSPACE_ACCESS_DENIED" });
+    await expect(governance.changeDirectMemberRole(caller, workspace.id, { userId: target.id, role: "VIEWER" })).rejects.toMatchObject({ code: "INSUFFICIENT_WORKSPACE_CAPABILITY" });
+    await expect(governance.removeDirectMember(caller, workspace.id, target.id)).rejects.toMatchObject({ code: "INSUFFICIENT_WORKSPACE_CAPABILITY" });
     await governance.removeDirectMember(owner, workspace.id, target.id);
-    await expect(governance.removeDirectMember(caller, workspace.id, owner.identity.id)).rejects.toMatchObject({ code: "WORKSPACE_ACCESS_DENIED" });
-    await expect(governance.changeGroupMappingRole(caller, workspace.id, { externalGroupId: "writers", role: "EDITOR" })).rejects.toMatchObject({ code: "WORKSPACE_ACCESS_DENIED" });
-    await expect(governance.addGroupMapping(caller, workspace.id, { externalGroupId: "elevated", role: "ADMIN" })).rejects.toMatchObject({ code: "WORKSPACE_ACCESS_DENIED" });
+    await expect(governance.removeDirectMember(caller, workspace.id, owner.identity.id)).rejects.toMatchObject({ code: "INSUFFICIENT_WORKSPACE_CAPABILITY" });
+    await expect(governance.changeGroupMappingRole(caller, workspace.id, { externalGroupId: "writers", role: "EDITOR" })).rejects.toMatchObject({ code: "INSUFFICIENT_WORKSPACE_CAPABILITY" });
+    await expect(governance.addGroupMapping(caller, workspace.id, { externalGroupId: "elevated", role: "ADMIN" })).rejects.toMatchObject({ code: "INSUFFICIENT_WORKSPACE_CAPABILITY" });
     expect((await governance.listGovernanceAudit(caller, workspace.id)).length).toBeGreaterThan(0);
     await governance.removeGroupMapping(owner, workspace.id, "writers");
-    await expect(governance.listGovernanceAudit(caller, workspace.id)).rejects.toMatchObject({ code: "WORKSPACE_ACCESS_DENIED" });
+    await expect(governance.listGovernanceAudit(caller, workspace.id)).rejects.toMatchObject({ code: directViewer ? "INSUFFICIENT_WORKSPACE_CAPABILITY" : "WORKSPACE_NOT_FOUND" });
     await governance.addGroupMapping(owner, workspace.id, { externalGroupId: "writers", role: "ADMIN" });
     await lifecycle.archiveTeamWorkspace(owner, workspace.id);
     expect((await governance.listGovernanceAudit(caller, workspace.id)).length).toBeGreaterThan(0);
-    await expect(governance.addDirectMember(caller, workspace.id, { userId: target.id, role: "VIEWER" })).rejects.toMatchObject({ code: "WORKSPACE_LIFECYCLE_VIOLATION" });
-    await expect(lifecycle.restoreTeamWorkspace(caller, workspace.id)).rejects.toMatchObject({ code: "WORKSPACE_ACCESS_DENIED" });
+    await expect(governance.addDirectMember(caller, workspace.id, { userId: target.id, role: "VIEWER" })).rejects.toMatchObject({ code: "WORKSPACE_ARCHIVED" });
+    await expect(lifecycle.restoreTeamWorkspace(caller, workspace.id)).rejects.toMatchObject({ code: "INSUFFICIENT_WORKSPACE_CAPABILITY" });
   });
 
   it("uses Local bootstrap for actual adapters without requiring company SSO", async () => {
@@ -287,7 +287,7 @@ describe("Phase 3 real request adapters with a trusted test session reader", () 
             await r.auditEvents.append({ id: uuidv7(), workspaceId: workspace.id, actorKind: "USER", actorUserId: caller.identity.id,
               eventType: "UNAUTHORIZED_WRITE", targetType: null, targetId: null, payload: null, correlationId: null, createdAt: new Date() });
           });
-      const rejected = expect(write).rejects.toMatchObject({ code: "WORKSPACE_ACCESS_DENIED" });
+      const rejected = expect(write).rejects.toMatchObject({ code: operation === "governance" ? "WORKSPACE_NOT_FOUND" : "WORKSPACE_ACCESS_DENIED" });
       try {
         await writerReachedLock.promise;
       } finally {

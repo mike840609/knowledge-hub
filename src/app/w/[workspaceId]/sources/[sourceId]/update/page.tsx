@@ -27,9 +27,9 @@ export default async function WorkspaceSourceUpdatePage({
         Sync version {model.source.syncVersion}. Re-select the full folder to preview the next sync.
       </p>
       <div className="mt-5">
-        <FolderImportForm
+        {model.actions.canImport ? <FolderImportForm
           target={{ kind: "existing", workspaceId, sourceId: model.source.id, sourceName: model.source.name }}
-        />
+        /> : <p role="status">This workspace is read-only. Updating is unavailable.</p>}
       </div>
     </main>
   );
