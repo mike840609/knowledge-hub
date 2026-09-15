@@ -245,7 +245,7 @@ LIMIT ? OFFSET ?
 | U3 | §5.1、§5.3 | **權限警報**：任一角色若具 `document.discover` 而無 `document.read` 即失敗，強制同批改用 `requireWorkspaceRead` |
 | U4 | §6.4 | highlight：命中標示、不分大小寫、無命中不標 |
 | U5 | §5.2 | 授權集合過濾：以假 repository 確認 discover-only Workspace 被排除 |
-| U6 | §7.2、§7.4 | `deriveWorkspaceActions`：缺 `document.read` 時 `canSearch` 為 false（純函式；vitest 環境為 `node`，不渲染 React，導覽實際隱藏由 E5 覆蓋） |
+| U6 | §7.2、§7.4 | `deriveWorkspaceActions`：缺 `document.read` 時 `canSearch` 為 false（純函式；vitest 環境為 `node`，不渲染 React） |
 
 ### 9.2 整合測試 `tests/integration/phase4-search.test.ts`（需 DB）
 
@@ -272,7 +272,7 @@ LIMIT ? OFFSET ?
 | E2 | 結果永不含無成員資格 Workspace 的 `restricted-secret-body-9f31` |
 | E3 | 封存切換，連結保留 `includeArchived=true` |
 | E4 | 查無結果的空狀態 |
-| E5 | `canSearch` 為 false 時導覽不顯示 Search，且直接輸入網址仍被 server 擋下（§7.4） |
+| E5 | 非成員直接輸入搜尋網址得到 404（§7.4：隱藏導覽不是 security boundary）。`canSearch` 為 false 的推導由 U6 覆蓋；四個可指派角色都含 `document.read`，因此「導覽隱藏 Search」在現行角色模型下不可達，無法以 E2E 驗證 |
 
 ### 9.4 Fixture
 
