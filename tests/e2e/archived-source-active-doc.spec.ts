@@ -36,7 +36,9 @@ test("keeps an active doc under an archived source readable in archived mode", a
   await expect(activeDocItem.getByRole("link").first()).toHaveAttribute("href", /includeArchived=true/);
 
   await expect(page.getByRole("heading", { name: ARCHIVED_ACTIVE_TITLE })).toBeVisible();
-  await expect(page.getByText(ARCHIVED_ACTIVE_BODY, { exact: true })).toBeVisible();
+  // Next.js retains a hidden RSC flight segment duplicating the document; scope to the
+  // visible article instead of asserting a global single match.
+  await expect(page.locator("article").first().getByText(ARCHIVED_ACTIVE_BODY, { exact: true })).toBeVisible();
   await expect(page).toHaveURL(
     new RegExp(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${ARCHIVED_SOURCE}/${ARCHIVED_ACTIVE_DOCUMENT}\\?includeArchived=true`),
   );

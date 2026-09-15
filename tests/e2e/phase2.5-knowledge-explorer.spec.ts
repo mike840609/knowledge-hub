@@ -25,8 +25,9 @@ test("filters the current Source", async ({ page }) => {
 test("renders the Document inside the Explorer with a compact header", async ({ page }) => {
   await page.goto(`/w/${WORKSPACE}/knowledge/${SOURCE}`);
   await expect(page.getByRole("heading", { name: "Architecture" })).toBeVisible();
-  await expect(page.getByText("Read only")).toBeVisible();
-  await expect(page.getByText(/Updated/)).toBeVisible();
+  // Scoped to main > header: a hidden RSC flight segment duplicates this text elsewhere.
+  await expect(page.locator("main header").first().getByText("Read only")).toBeVisible();
+  await expect(page.locator("main header").first().getByText(/Updated/)).toBeVisible();
   await expect(page.locator("pre").filter({
     hasText: "The Query Master architecture notes",
   })).toHaveCount(0);
