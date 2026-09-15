@@ -125,15 +125,15 @@ export class FinalizeFolderImportService {
   ): Promise<ImportPreview> {
     const snapshot = await repositories.importSnapshots.lockById(snapshotId);
     if (!snapshot || snapshot.createdBy !== caller.identity.id) throw importError("IMPORT_SNAPSHOT_NOT_FOUND", "Import snapshot was not found.");
+    if (snapshot.state === "READY") return previewFromSnapshot(snapshot, now);
+    if (snapshot.state !== "BUILDING") throw importError("IMPORT_SNAPSHOT_NOT_BUILDING", "Only BUILDING snapshots can be finalized.");
+    if (snapshot.expiresAt.getTime() <= now.getTime()) throw importError("IMPORT_SNAPSHOT_EXPIRED", "Import snapshot has expired.");
     const lockedSource = snapshot.sourceId === null ? null : await repositories.sources.lockById(snapshot.sourceId);
     try {
       await lockWorkspaceForMutation(repositories, caller, snapshot.workspaceId, "source-import");
     } catch (error) {
       throw translateKnownSnapshotAccessError(error);
     }
-    if (snapshot.state === "READY") return previewFromSnapshot(snapshot, now);
-    if (snapshot.state !== "BUILDING") throw importError("IMPORT_SNAPSHOT_NOT_BUILDING", "Only BUILDING snapshots can be finalized.");
-    if (snapshot.expiresAt.getTime() <= now.getTime()) throw importError("IMPORT_SNAPSHOT_EXPIRED", "Import snapshot has expired.");
 
     if (snapshot.sourceId !== null) {
       if (!lockedSource) throw importError("IMPORT_SOURCE_NOT_FOUND", "Import source was not found.");
