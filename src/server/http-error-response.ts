@@ -1,6 +1,7 @@
 import { DomainError } from "@/shared/domain/errors";
+import type { SourceImportError } from "@/modules/sources/domain/import-errors";
 
-export type ImportHttpErrorBody = { error: { code: string; message: string } };
+export type ImportHttpErrorBody = { error: { code: string; message: string; details?: Record<string, unknown> } };
 export type ImportHttpError = { status: number; body: ImportHttpErrorBody };
 
 /**
@@ -39,9 +40,19 @@ export function toImportErrorResponse(error: unknown): ImportHttpError {
       return { status: 403, body: { error: { code: "ACCESS_DENIED", message: "You do not have access to the requested resource." } } };
     }
     if (CONFLICT.has(error.code)) {
-      return { status: 409, body: { error: { code: error.code, message: error.message } } };
+      const details = (error as SourceImportError).details;
+      return {
+        status: 409,
+        body: { error: { code: error.code, message: error.message, ...(details !== undefined ? { details } : {}) } },
+      };
     }
-    return { status: 400, body: { error: { code: error.code, message: error.message } } };
+    {
+      const details = (error as SourceImportError).details;
+      return {
+        status: 400,
+        body: { error: { code: error.code, message: error.message, ...(details !== undefined ? { details } : {}) } },
+      };
+    }
   }
   return { status: 500, body: { error: { code: "INTERNAL_ERROR", message: "An unexpected error occurred." } } };
 }

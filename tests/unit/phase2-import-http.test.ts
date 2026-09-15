@@ -31,7 +31,7 @@ describe("Phase 2 import HTTP error mapping", () => {
       "IMPORT_SNAPSHOT_STALE",
       "IMPORT_APPLY_RETRYABLE",
       "UPLOAD_ENTRY_CONFLICT",
-    ]) {
+    ] as const) {
       const mapped = toImportErrorResponse(importError(code, `${code} happened.`));
       expect(mapped.status).toBe(409);
       expect(mapped.body.error.code).toBe(code);
@@ -50,7 +50,7 @@ describe("Phase 2 import HTTP error mapping", () => {
       "IMPORT_SNAPSHOT_BLOCKED",
       "IMPORT_SNAPSHOT_EXPIRED",
       "IMPORT_SNAPSHOT_NOT_BUILDING",
-    ]) {
+    ] as const) {
       const mapped = toImportErrorResponse(importError(code, `${code} happened.`));
       expect(mapped.status).toBe(400);
       expect(mapped.body.error.code).toBe(code);

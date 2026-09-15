@@ -13,7 +13,7 @@ import { translateKnownSnapshotAccessError } from "./import-snapshot-access";
 
 export type ApplyFolderImportResult =
   | { kind: "APPLIED"; sourceId: string; resultVersion: number; runId: string | null; alreadyApplied: boolean }
-  | { kind: "VERSION_CONFLICT"; sourceId: string; currentVersion: number };
+  | { kind: "VERSION_CONFLICT"; sourceId: string; snapshotVersion: number; currentVersion: number };
 
 type Options = { now?: () => Date; failurePoint?: ImportApplyFailurePoint };
 
@@ -113,7 +113,7 @@ export class ApplyFolderImportService {
             };
             await repositories.syncRuns.insert(run);
             await repositories.importSnapshots.markStale({ snapshotId: snapshot.id, staleAt: timestamp });
-            return { kind: "VERSION_CONFLICT", sourceId: source.id, currentVersion: source.syncVersion };
+            return { kind: "VERSION_CONFLICT", sourceId: source.id, snapshotVersion: basedOnVersion, currentVersion: source.syncVersion };
           }
 
           failedAttempt.value = { sourceId: source.id, basedOnVersion, summary: snapshot.summary, provenance, callerId: caller.identity.id };
