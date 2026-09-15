@@ -43,6 +43,56 @@ describe("Phase 2 manifest storage boundaries", () => {
     expect(after).toBe(before);
   });
 
+  it("rejects a raw relativePath whose byte length exceeds the limit even when the normalized approximation is tiny", async () => {
+    const fixture = await createSourceFixture(pool);
+    const create = new CreateFolderImportService(new MariaDbUnitOfWork(pool), { limits: DEFAULT_IMPORT_LIMITS, now: clock });
+    const before = Number((await pool.query<{ count: unknown }[]>("SELECT COUNT(*) AS count FROM source_import_snapshots"))[0].count);
+
+    // The normalized approximation strips "./" segments, so this counts as 4
+    // bytes ("a.md") while the raw value is 120_004 bytes — source-provided
+    // metadata (§5.4) that must be rejected before any insert (ER_DATA_TOO_LONG).
+    const attackPath = "./".repeat(40000) + "a.md";
+    await expect(create.createInitial(fixtureCaller(), {
+      workspaceId: fixture.workspaceId,
+      sourceName: "Raw path attack",
+      rootName: "wiki",
+      manifest: [{ uploadKey: "evil-1", relativePath: attackPath, kind: "MARKDOWN", size: 1 }],
+    })).rejects.toMatchObject({ code: "INVALID_IMPORT_MANIFEST" });
+
+    const after = Number((await pool.query<{ count: unknown }[]>("SELECT COUNT(*) AS count FROM source_import_snapshots"))[0].count);
+    expect(after).toBe(before);
+  });
+
+  it("rejects asset lastModified values outside the MariaDB DATETIME(6) range", async () => {
+    // Both vectors are valid Dates (they pass the NaN check) but fall outside
+    // MariaDB's DATETIME range of 1000-01-01 .. 9999-12-31 (error 1292).
+    const outOfRange = [new Date("0000-01-01T00:00:00.000Z"), new Date(Date.UTC(10000, 0, 1))];
+    for (const lastModified of outOfRange) {
+      expect(Number.isNaN(lastModified.getTime())).toBe(false);
+      const fixture = await createSourceFixture(pool);
+      const create = new CreateFolderImportService(new MariaDbUnitOfWork(pool), { limits: DEFAULT_IMPORT_LIMITS, now: clock });
+      const before = Number((await pool.query<{ count: unknown }[]>("SELECT COUNT(*) AS count FROM source_import_snapshots"))[0].count);
+
+      await expect(create.createInitial(fixtureCaller(), {
+        workspaceId: fixture.workspaceId,
+        sourceName: "Date bounds",
+        rootName: "wiki",
+        manifest: [{
+          uploadKey: "asset-date",
+          relativePath: `date-${lastModified.getTime()}.bin`,
+          kind: "ASSET",
+          size: 1,
+          contentHash: "b".repeat(64),
+          mimeType: "application/octet-stream",
+          lastModified,
+        }],
+      })).rejects.toMatchObject({ code: "INVALID_ASSET_MANIFEST" });
+
+      const after = Number((await pool.query<{ count: unknown }[]>("SELECT COUNT(*) AS count FROM source_import_snapshots"))[0].count);
+      expect(after).toBe(before);
+    }
+  });
+
   it("accepts an Asset MIME value exactly at the 255-character storage boundary", async () => {
     const fixture = await createSourceFixture(pool);
     const create = new CreateFolderImportService(new MariaDbUnitOfWork(pool), { limits: DEFAULT_IMPORT_LIMITS, now: clock });
