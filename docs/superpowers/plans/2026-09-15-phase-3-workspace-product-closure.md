@@ -42,6 +42,7 @@ src/modules/workspaces/application/
 src/server/
   workspace-admin.ts                              # UI-ready governance/read models
   knowledge-read.ts                               # shell consumes richer nav/action model
+  source-read.ts                                  # Sources/import lifecycle-aware models
   http-error-response.ts                          # stable governance HTTP mapping
   composition.ts                                  # compose Task 12 services
 
@@ -61,6 +62,7 @@ src/components/shell/
   primary-nav.tsx
   topbar.tsx
   workspace-selector.tsx
+  use-workspace-authorization.ts                  # refresh/invalidation and route convergence
 src/components/workspaces/
   create-team-dialog.tsx
   archived-workspace-banner.tsx
@@ -72,10 +74,20 @@ src/components/workspaces/
   governance-error.tsx
 src/components/knowledge/
   knowledge-empty-state.tsx
+src/components/sources/
+  source-detail.tsx                               # capability + Source syncability
+src/components/imports/
+  folder-import-form.tsx                          # refreshed mutation permission
+  import-sticky-footer.tsx                        # preview/apply permissions
 
 src/app/
   page.tsx
   w/[workspaceId]/layout.tsx
+  w/[workspaceId]/knowledge/page.tsx              # actually render empty state
+  w/[workspaceId]/sources/page.tsx
+  w/[workspaceId]/sources/[sourceId]/update/page.tsx
+  w/[workspaceId]/sources/import/page.tsx
+  w/[workspaceId]/sources/imports/[snapshotId]/page.tsx
   w/[workspaceId]/settings/page.tsx
   w/[workspaceId]/settings/members/page.tsx
   w/[workspaceId]/settings/groups/page.tsx
@@ -84,7 +96,12 @@ src/app/
 tests/integration/
   phase3-workspace-admin-api.test.ts
 tests/e2e/
+  fixtures/phase3-identities.ts                   # fixed server-owned personas
+  fixtures/phase3-server.ts                       # isolated test-only server bootstrap
   phase3-workspace-governance.spec.ts
+scripts/test/
+  e2e.ts                                         # supervise persona processes/cleanup
+playwright.config.ts                             # persona fixtures/projects
 
 docs/superpowers/verification/
   2026-09-15-phase-3-workspace-governance-verification.md
@@ -101,6 +118,7 @@ docs/superpowers/verification/
 - Modify: `src/modules/workspaces/application/workspace-query-service.ts`
 - Create: `src/server/workspace-admin.ts`
 - Modify: `src/server/knowledge-read.ts`
+- Modify: `src/server/source-read.ts`
 - Modify: `src/server/http-error-response.ts`
 - Modify: `src/server/composition.ts`
 - Create: `src/app/api/users/route.ts`
@@ -113,10 +131,14 @@ docs/superpowers/verification/
 - Create: `src/app/api/workspaces/[workspaceId]/groups/route.ts`
 - Create: `src/app/api/workspaces/[workspaceId]/audit/route.ts`
 - Create: `tests/integration/phase3-workspace-admin-api.test.ts`
+- Create: `tests/e2e/fixtures/phase3-identities.ts`
+- Create: `tests/e2e/fixtures/phase3-server.ts`
+- Modify: `scripts/test/e2e.ts`
+- Modify: `playwright.config.ts`
 
 **Interfaces:**
 - Consumes: `establishTrustedCaller()`, `WorkspaceQueryService`, `TeamWorkspaceService`, `TeamGovernanceService`, `evaluateWorkspaceCapabilities()`, fixed role/capability bundles, repositories from Tasks 1–11.
-- Produces: `WorkspaceNavigationModel`, `TeamWorkspaceView`, `MemberAdminView`, `GroupAdminView`, `AuditPage`, `HubUserLookup`, `UserAccessInspection`, `WorkspaceActions`, bounded Hub-user search, governance route handlers, and stable HTTP error bodies consumed by Task 13.
+- Produces: `WorkspaceNavigationModel`, `WorkspaceAccessView`, `WorkspaceGrantOptions`, `TeamWorkspaceView`, `MemberAdminView`, `GroupAdminView`, `AuditPage`, `HubUserLookup`, `UserAccessInspection`, `WorkspaceActions`, bounded Hub-user search, governance route handlers, and stable HTTP error bodies consumed by Task 13.
 
 - [ ] **Step 1: Write failing integration tests for navigation truth, action derivation, and user lookup**
 
@@ -172,6 +194,7 @@ Create `src/server/workspace-admin.ts` with these exported contracts:
 ```ts
 export type WorkspaceActions = {
   canImport: boolean;
+  canInspectSources: boolean;
   canOpenSettings: boolean;
   canRename: boolean;
   canArchive: boolean;
@@ -213,6 +236,19 @@ export type TeamWorkspaceView = {
     effectiveCapabilities: readonly WorkspaceCapability[];
   };
   actions: WorkspaceActions;
+  grantOptions: WorkspaceGrantOptions;
+};
+
+export type WorkspaceGrantOptions = {
+  newMemberAssignableRoles: readonly WorkspaceRole[];
+  newGroupAssignableRoles: readonly ("ADMIN" | "EDITOR" | "VIEWER")[];
+};
+
+// Read-safe current-caller state; no settings privilege or protected content.
+export type WorkspaceAccessView = {
+  workspace: WorkspaceNavigationItem;
+  effectiveCapabilities: readonly WorkspaceCapability[];
+  actions: WorkspaceActions;
 };
 
 export type HubUserLookup = { id: string; name: string; empId: string };
@@ -249,7 +285,9 @@ export type AuditPage = {
 };
 ```
 
-Use one helper to derive presentation actions from already-evaluated capabilities plus Workspace type/lifecycle. Do not inspect `role === "OWNER"` inside React components.
+Use one helper to derive presentation actions from already-evaluated capabilities plus Workspace type/lifecycle. Do not inspect `role === "OWNER"` inside React components. `canInspectSources` comes from `source.manage` independently of ACTIVE state; `canImport` additionally requires ACTIVE.
+
+Derive `grantOptions` independently of existing rows: ACTIVE effective ADMIN gets EDITOR/VIEWER for new members/groups; ACTIVE direct OWNER gets OWNER/ADMIN/EDITOR/VIEWER for new members and ADMIN/EDITOR/VIEWER for new groups. Archived or unauthorized creation gets empty arrays. Existing-row `assignableRoles` additionally enforces persisted beforeRole and last-owner constraints and must never seed a creation dialog. Test an empty group list, a new user candidate, and both ADMIN/OWNER creation flows.
 
 - [ ] **Step 4: Extend repository/query interfaces for bounded existing-user lookup and rich Workspace navigation**
 
@@ -265,12 +303,12 @@ Extend `WorkspaceView` to carry `type` and `lifecycleState`. Implement the compa
 
 ```ts
 function workspaceNavigationRank(workspace: Workspace): number {
-  if (workspace.type === "PERSONAL") return 0;
+  if (workspace.workspaceType === "PERSONAL") return 0;
   return workspace.lifecycleState === "ACTIVE" ? 1 : 2;
 }
 ```
 
-Sort first by rank, then `name.localeCompare`, then UUID string. Assert the PERSONAL item belongs to the caller's system membership; do not identify My Space by display-name string.
+Use domain `Workspace.workspaceType` in this comparator and map it to the navigation DTO's `type` field. Sort first by rank, then `name.localeCompare`, then UUID string. Assert the PERSONAL item belongs to the caller's system membership; do not identify My Space by display-name string.
 
 - [ ] **Step 5: Implement `WorkspaceAdminService` methods on trusted server data**
 
@@ -278,12 +316,15 @@ Expose focused methods rather than a generic command endpoint:
 
 ```ts
 navigation(caller: CallerContext): Promise<WorkspaceNavigationModel>;
+workspaceState(caller: CallerContext, workspaceId: string): Promise<WorkspaceAccessView>;
 teamView(caller: CallerContext, workspaceId: string): Promise<TeamWorkspaceView>;
 searchUsers(caller: CallerContext, query: string, limit: number): Promise<HubUserLookup[]>;
 listMembers(caller: CallerContext, workspaceId: string): Promise<MemberAdminView[]>;
 listGroups(caller: CallerContext, workspaceId: string): Promise<GroupAdminView[]>;
 listAudit(caller: CallerContext, workspaceId: string, cursor?: string): Promise<AuditPage>;
 ```
+
+`GET /api/workspaces/:workspaceId` uses `workspaceState`: require current `workspace.discover`, return only the read-safe DTO above, and return generic 404 when missing/undiscoverable. Do not require `canOpenSettings` for this endpoint. `teamView`, member/group lists, and audit remain Team admin-authorized. This lets a demoted user refresh safe state without fetching privileged Settings data.
 
 For `listMembers`, evaluate complete group-derived access only when `member.user.id === caller.identity.id`; all other rows return `UNKNOWN_NOT_EVALUATED` unless a future trusted directory source exists.
 
@@ -382,10 +423,21 @@ Do not make the client parse `error.message` to decide behavior.
 
 Update `src/server/knowledge-read.ts` so `WorkspaceShellModel` contains navigation items plus current Workspace action/state needed by Task 13. Do not duplicate Workspace ordering or capability derivation in the shell adapter.
 
+- [ ] **Step 10a: Build the trusted multi-user HTTP E2E harness prerequisite**
+
+Create `tests/e2e/fixtures/phase3-identities.ts` and `phase3-server.ts`; extend `scripts/test/e2e.ts` / `playwright.config.ts` to supervise disposable persona servers. This prerequisite belongs to Task 12 and is consumed by Task 13.
+
+Follow spec §24.1: one fixed server-owned persona per Next process/port, separate browser contexts, shared disposable DB, controlled user/link/My Space/grant seed. Include platform create/no-create, direct roles, group-only roles, and direct EDITOR + group VIEWER. Each process injects its trusted claims reader into the actual Next request runtime before services initialize (registration only in the parent test process is insufficient), and uses real request bootstrap/readiness/application/DB paths. Do not pass identity/groups/roles from browser headers/query/body and do not mock HTTP success.
+
+Use an explicit test-only server entry point; normal production entry never imports/enables the fixture provider, even if test environment variables are accidentally set. No test-login/persona-switch HTTP endpoint. Retain existing production-build Local smoke tests and fail-closed identity regressions. Supervise ports/processes and cleanup on failures.
+
+Add `tests/e2e/phase3-identity-harness.spec.ts` and make `scripts/test/e2e.ts` forward CLI test-selection arguments to Playwright. Before Task 13, prove by HTTP smoke tests that the creator can create Team, non-creator cannot, browser fields cannot override persona, and two contexts see a real governance change in the shared DB. The existing in-process integration injected caller is not a substitute for this cross-process harness.
+
 - [ ] **Step 11: Run Task 12 verification**
 
 ```bash
 npm run test:integration -- --run tests/integration/phase3-workspace-admin-api.test.ts tests/integration/phase3-authorization.test.ts tests/integration/phase3-team-governance.test.ts tests/integration/phase3-audit.test.ts
+npm run test:e2e -- tests/e2e/phase3-identity-harness.spec.ts
 npm run typecheck
 npm run build
 ```
@@ -399,7 +451,8 @@ git add src/modules/identity/ports/user-repository.ts \
   src/infrastructure/database/mariadb/repositories/users.ts \
   src/modules/workspaces/domain/errors.ts \
   src/modules/workspaces/application/workspace-query-service.ts \
-  src/server src/app/api tests/integration/phase3-workspace-admin-api.test.ts
+  src/server src/app/api tests/integration/phase3-workspace-admin-api.test.ts \
+  tests/e2e/fixtures tests/e2e/phase3-identity-harness.spec.ts scripts/test/e2e.ts playwright.config.ts
 git commit -m "feat: expose phase 3 workspace product contracts"
 ```
 
@@ -428,14 +481,23 @@ git commit -m "feat: expose phase 3 workspace product contracts"
 - Create: `src/app/w/[workspaceId]/settings/groups/page.tsx`
 - Create: `src/app/w/[workspaceId]/settings/audit/page.tsx`
 - Create/modify: `tests/e2e/phase3-workspace-governance.spec.ts`
+- Create: `src/components/shell/use-workspace-authorization.ts`
+- Modify: `src/app/w/[workspaceId]/knowledge/page.tsx`
+- Modify: `src/app/w/[workspaceId]/sources/page.tsx`
+- Modify: `src/app/w/[workspaceId]/sources/[sourceId]/update/page.tsx`
+- Modify: `src/app/w/[workspaceId]/sources/import/page.tsx`
+- Modify: `src/app/w/[workspaceId]/sources/imports/[snapshotId]/page.tsx`
+- Modify: `src/components/sources/source-detail.tsx`
+- Modify: `src/components/imports/folder-import-form.tsx`
+- Modify: `src/components/imports/import-sticky-footer.tsx`
 
 **Interfaces:**
-- Consumes: Task 12 `WorkspaceNavigationModel`, `TeamWorkspaceView`, `MemberAdminView`, `GroupAdminView`, `AuditPage`, `WorkspaceActions`, stable governance error codes, and existing Phase 2 folder import routes.
+- Consumes: Task 12 `WorkspaceNavigationModel`, `WorkspaceAccessView`, `WorkspaceGrantOptions`, `TeamWorkspaceView`, `MemberAdminView`, `GroupAdminView`, `AuditPage`, `WorkspaceActions`, stable governance error codes, and existing Phase 2 folder import routes.
 - Produces: deterministic My Space entry, grouped selector, Create Team flow, capability-driven nav/empty states, Team Settings, revoke fallback, archived read-only UX, and the full Phase 3 Playwright journey used by Task 14.
 
 - [ ] **Step 1: Write the failing Playwright journey for root/selector/create/import visibility**
 
-Start `tests/e2e/phase3-workspace-governance.spec.ts` with explicit expectations:
+Use the Task 12 Step 10a persona harness; keep the existing Local smoke suite. Start `tests/e2e/phase3-workspace-governance.spec.ts` with explicit expectations:
 
 ```ts
 test("root enters My Space and selector groups active/archived teams", async ({ page }) => {
@@ -510,7 +572,7 @@ Update `primary-nav.tsx` / `app-shell.tsx` to consume server action flags:
 
 ```text
 Knowledge: all readable callers
-Sources: active caller with canImport/source.manage; archived management-capable callers may inspect read-only Sources without mutation controls
+Sources: actions.canInspectSources; archived inspection remains possible while canImport is false
 Settings: TEAM + actions.canOpenSettings only
 ```
 
@@ -528,6 +590,8 @@ ARCHIVED -> no import CTA
 ```
 
 `archived-workspace-banner.tsx` renders persistent read-only copy. OWNER receives `Restore workspace` only when `actions.canRestore` is true.
+
+Update `src/app/w/[workspaceId]/knowledge/page.tsx` to render the empty state instead of its existing unconditional no-Source redirect to Sources. Retrofit `source-read.ts`, Sources list/detail, import/update pages, `FolderImportForm`, and preview/apply footer with current server-derived actions (spec §18.4). Combine Workspace permission with Source syncability and existing snapshot blockers/state/expiry; never replace those checks. Direct VIEWER/ARCHIVED import URLs do not render a submit-capable form. The shared refresh hook must also update an already-open preview after archive/revoke. Test the actual controls via direct URLs and the allowed archived Sources inspection surface, not only hidden navigation.
 
 - [ ] **Step 8: Add server-authorized Team Settings routes and General page**
 
@@ -552,7 +616,7 @@ Members table columns:
 Name | Direct role | Group access | Actions
 ```
 
-Add Member searches `/api/users` and submits canonical `userId + role`. Role choices come from `MemberAdminView.assignableRoles`; do not hardcode OWNER/ADMIN ceilings in the component.
+Add Member searches `/api/users` and submits canonical `userId + role`. Role choices come from `TeamWorkspaceView.grantOptions.newMemberAssignableRoles`; use `MemberAdminView.assignableRoles` only when editing an existing row. Do not hardcode OWNER/ADMIN ceilings in the component.
 
 For other users with unknown group state render exactly `Group access not evaluated`. Remove confirmation includes:
 
@@ -560,11 +624,15 @@ For other users with unknown group state render exactly `Group access not evalua
 Removing direct access may not fully revoke access if this user is still granted access through an SSO group.
 ```
 
-After mutation, refetch authorization. If the current caller no longer has `workspace.discover`, redirect to `/w/:mySpaceId/knowledge` with a one-time notice. If group access remains, stay in Team and let refreshed action flags remove write/import/admin controls.
+Implement a shared Workspace authorization refresh hook in the shell, not just the mutation dialog. Follow spec §15.3: refresh on initial load/navigation, successful mutations, focus/visible, every 30 seconds while visible, and after relevant 403/404/lifecycle 409 responses. Use navigation + `WorkspaceAccessView`; do not depend on privileged `teamView` after demotion.
+
+No discover on a previously loaded scope → clear scope caches and replace to My Space with a one-time notice. Read remains but Settings is forbidden → same Team Knowledge root. Read remains but import becomes forbidden → stop upload/finalize/apply and show read-only state within the Team. Arbitrary never-visible deep links retain generic 404; a Source 404 must not imply Workspace revocation. Network/5xx failures produce retry state and pause mutation controls, not a false revoked notice. Ignore stale responses by generation/abort and stop polling on hidden/unmount.
+
+Test this with separate administrator and affected-user browser contexts. Healthy visible clients converge by the next 30-second poll response; server authorization has no grace period.
 
 - [ ] **Step 10: Implement SSO Groups and Audit surfaces**
 
-Groups page manually collects canonical `externalGroupId` and a server-allowed role. Do not persist or require display labels. ADMIN role choices max at EDITOR/VIEWER; OWNER may include ADMIN; options come from `GroupAdminView.assignableRoles`.
+Groups page manually collects canonical `externalGroupId` and a server-allowed role. Do not persist or require display labels. ADMIN role choices max at EDITOR/VIEWER; OWNER may include ADMIN; new-mapping options come from `TeamWorkspaceView.grantOptions.newGroupAssignableRoles`, while existing-row edits use `GroupAdminView.assignableRoles`.
 
 Audit page consumes `AuditPage`: read-only, newest-first, Load more/cursor pagination, actor, event summary, target, timestamp, and relevant before/after details. Do not add filters/export/charts.
 
@@ -595,6 +663,12 @@ VIEWER: Knowledge read; no Sources management/Settings
 ARCHIVED: all ordinary mutations absent; Knowledge readable; OWNER restore only
 revoke no remaining access: selector removal + My Space fallback
 revoke but group VIEWER remains: stays Team, read remains, write controls disappear
+Settings user demoted to group VIEWER: redirects to same Team Knowledge
+separate actor/affected contexts: polling/focus sees real revoke/archive
+network/5xx: retry state, no false revoke redirect; stale responses ignored
+VIEWER/ARCHIVED direct Sources/import/update URLs: no submit controls
+open import preview then archive/revoke: upload/finalize/apply controls converge
+new member candidate / empty group list: server-derived creation role options
 My Space: never exposes member/group/archive/rename controls
 ```
 
@@ -796,7 +870,11 @@ git commit -m "docs: verify phase 3 product closure"
 | archive/read-only/restore | Task 12 Steps 3, 6–9; Task 13 Steps 7–8; Task 14 Steps 1, 3 |
 | stable domain/API errors | Task 12 Steps 7, 9; Task 13 Step 11 |
 | UI + API dual enforcement | Task 14 Step 3 |
-| complete Human product journey | Task 13 Step 12 |
+| complete Human product journey | Task 12 Step 10a harness; Task 13 Step 12 |
+| creation options independent of existing rows | Task 12 Step 3; Task 13 Steps 9–10 |
+| affected-client refresh and Settings demotion routing | Task 12 workspaceState; Task 13 Step 9 |
+| existing Sources/import controls and Knowledge empty route | Task 13 Step 7 |
+| production-isolated trusted multi-persona E2E | Task 12 Step 10a |
 | existing identity/migration/concurrency hard gates retained | Task 14 Step 4 |
 | Product Acceptance separate from Company SSO cutover | Task 14 Step 6 |
 | no new Phase 3.5 / Task 15 / schema field | Global Constraints + all tasks |
@@ -805,6 +883,6 @@ git commit -m "docs: verify phase 3 product closure"
 
 - Spec coverage: every approved closure section maps to Task 12, 13, or 14 above.
 - Placeholder scan: no TBD/TODO/"similar to" implementation gaps remain.
-- Type consistency: every named Task 12 server contract (`WorkspaceActions`, `WorkspaceNavigationModel`, `TeamWorkspaceView`, `HubUserLookup`, `MemberAdminView`, `GroupAdminView`, `AuditPage`, `UserAccessInspection`) is defined before Task 13 consumes it.
+- Type consistency: every named Task 12 server contract (`WorkspaceActions`, `WorkspaceNavigationModel`, `WorkspaceAccessView`, `WorkspaceGrantOptions`, `TeamWorkspaceView`, `HubUserLookup`, `MemberAdminView`, `GroupAdminView`, `AuditPage`, `UserAccessInspection`) is defined before Task 13 consumes it.
 - Error consistency: stable governance codes are explicitly introduced in `src/modules/workspaces/domain/errors.ts`; the plan does not assume they already exist.
 - Scope: Tasks 1–11 are untouched; this file is the authoritative replacement plan for old Tasks 12–14 only.

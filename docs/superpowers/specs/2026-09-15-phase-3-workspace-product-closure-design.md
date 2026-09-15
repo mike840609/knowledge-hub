@@ -228,6 +228,7 @@ Server/query layer 應回傳 caller capability + lifecycle 計算後的 UI-ready
 ```ts
 export type WorkspaceActions = {
   canImport: boolean;
+  canInspectSources: boolean;
   canOpenSettings: boolean;
   canRename: boolean;
   canArchive: boolean;
@@ -241,7 +242,7 @@ export type WorkspaceActions = {
 };
 ```
 
-Archived Team 的 ordinary mutation actions 必須直接為 `false`。
+Archived Team 的 ordinary mutation actions 必須直接為 `false`。`canInspectSources` 與 `canImport` 分開：以 `source.manage` 決定 Sources inspection entry，ARCHIVED 時 inspection 可保留，但 import 必須為 false。
 
 Frontend 使用 action flags 做 presentation；API route 仍必須重新 authorization。Action flags 不是 authorization token。
 
@@ -272,6 +273,12 @@ export type TeamWorkspaceView = {
     effectiveCapabilities: readonly WorkspaceCapability[];
   };
   actions: WorkspaceActions;
+  grantOptions: WorkspaceGrantOptions;
+};
+
+export type WorkspaceGrantOptions = {
+  newMemberAssignableRoles: readonly WorkspaceRole[];
+  newGroupAssignableRoles: readonly ("ADMIN" | "EDITOR" | "VIEWER")[];
 };
 ```
 
@@ -317,7 +324,17 @@ OWNER
 
 Assignable role choices 由 server contract 或 capability-policy-derived presentation model 產生，不在 component 中重新 hardcode policy。
 
-### 13.1 No self-service leave
+### 13.1 Creation options and existing-row options
+
+Team Settings model 必須包含 `grantOptions`，不依賴目前是否已有 member/group rows：
+
+- ACTIVE effective ADMIN：新增 member/group 都只能選 EDITOR、VIEWER。
+- ACTIVE direct OWNER：新增 member 可選 OWNER、ADMIN、EDITOR、VIEWER；新增 group 可選 ADMIN、EDITOR、VIEWER。
+- ARCHIVED 或無對應管理能力：新增角色陣列為空；新增 controls 不顯示。
+
+Add Member 的搜尋結果仍是 existing Hub user identity，選定 candidate 後使用 `newMemberAssignableRoles`；新增 Group 使用 `newGroupAssignableRoles`。既有 row 的 `assignableRoles` 只供修改該 row，必須另外考慮 persisted beforeRole、最後一位 direct OWNER 與 lifecycle；不得挪用既有 row 的選項來初始化新增表單。所有選項由 server 產生，寫入時仍重新驗證。
+
+### 13.2 No self-service leave
 
 Phase 3 不提供 `Leave Team`。
 
@@ -392,6 +409,30 @@ My Space 是 deterministic fallback；不自動跳其他 Team。
 - 例如 direct EDITOR 被移除、group VIEWER 仍存在，write/import controls 消失但 read 保留。
 
 Frontend MUST NOT 以「membership row 被刪除」直接判斷 caller 應離開 Workspace。
+
+### 15.3 Affected-client refresh and route convergence
+
+管理者 mutation 後的 refresh 不會更新另一位使用者的 browser。所有 Workspace shell（包含 Knowledge、Sources、Settings、Import）必須有共用授權刷新機制：
+
+- 初次載入、Workspace/route navigation、成功 mutation 後立即刷新。
+- window focus / visibility 回到 visible 時立即刷新。
+- visible page 每 30 秒刷新一次；hidden page 停止 timer，重新 visible 時刷新。
+- 遇到 API 403、404 或 lifecycle 409 時刷新 Workspace 授權，再決定路由；Source/Document 自己的 404 不直接代表整個 Workspace 失權。
+
+使用 caller 的 navigation model 取得 My Space 與目前可 discover 的 Workspace 清單，再取得目前 Workspace 的 read-safe state/capabilities/actions。此 state endpoint 對所有可 discover 的 caller 開放，不要求 Settings 管理能力，不回傳 member/group/audit 或 Knowledge content；未知／不可 discover 的 Workspace 維持 generic 404。Settings model 本身仍是 ADMIN/OWNER-only。
+
+刷新後使用下列 state machine：
+
+| Fresh authorization | Current surface | Result |
+| --- | --- | --- |
+| 無 workspace.discover | 任何先前已載入的 Workspace | 清除該 scope 的 content/preview cache，selector 移除，replace 至 My Space，顯示一次性 notice |
+| 仍可讀，但失去 canOpenSettings | Settings | replace 至同 Team Knowledge root |
+| 仍可讀，但失去 canImport 或 Team 已 archive | Sources/import/update/preview | 保留同 Team；停止後續 upload/finalize/apply，移除 mutation controls，顯示 read-only／權限改變說明；可保留仍被授權的 preview read |
+| 仍有當前頁面能力 | 任意 | 原地刷新 capabilities/actions |
+
+從未成功載入的任意 Workspace deep link 仍是 generic 404，不以 fallback 洩漏存在性。暫時網路錯誤／5xx 不當作撤權；顯示 retry state，未能確認權限期間暫停 mutation controls。使用 abort 或 request generation 防止舊 response 蓋掉新授權／切換後的 Workspace；unmount 清除 timer。
+
+健康網路下，visible 的受影響頁面應在下一次 30 秒 polling 完成後收斂；這是 UI freshness budget，不是授權寬限期，API 每次仍即時驗證。E2E 必須以管理者與受影響者兩個獨立 browser contexts 驗證以上行為。
 
 ## 16. SSO Group administration
 
@@ -474,6 +515,17 @@ Archived 是 lifecycle state，不是另一種 role。
 ### 18.3 Restore
 
 Restore 成功後 Workspace ID、Source/Document IDs、memberships、group mappings 全部不變；ordinary mutations 依 effective capabilities 恢復。
+
+### 18.4 Existing Knowledge / Sources / Import retrofit
+
+既有頁面必須接入相同 server action model，不能只隱藏 primary navigation：
+
+- `/w/:workspaceId/knowledge` 的空狀態直接 render Knowledge empty state，移除既有無 Source 就 redirect Sources 的行為。
+- Sources list 的 Import folder、Source detail 的 Update from folder，都必須依 Workspace actions 顯示。
+- Source update 另須通過既有 `isFolderSyncable(source)`；Workspace 可 import 不代表所有 Source 都可更新。
+- Import/create/update direct URLs 必須 server-side 驗證當前能力與 lifecycle，VIEWER／ARCHIVED 不 render 可提交的表單。
+- `FolderImportForm` 與 snapshot preview/apply footer 接收 server-derived mutation allowance；Apply 仍同時依 snapshot state、expiry、blockers 等既有限制判斷。
+- 權限或 lifecycle 改變時採 §15.3 的刷新／收斂機制，creator-private snapshot 與 discover/read 錯誤語意仍保持。
 
 ## 19. Team Settings information architecture
 
@@ -641,6 +693,21 @@ Playwright 至少串起：
 11. OWNER Restore；mutation capability 恢復。
 12. Audit 顯示上述 governance events。
 13. My Space 全程沒有 Team governance UI。
+
+### 24.1 Trusted multi-user HTTP test harness
+
+Local provider 原本不提供 company groups 或 `workspace.create_team`；不得假設現有固定 Local E2E user 可執行完整 journey。
+
+在 Task 12 建立 test-only server identity fixture，再由 Task 13 Playwright 使用：
+
+1. 所有 persona servers 共用同一個 disposable E2E MariaDB database；每個 Next process 在 startup 固定注入一份 server-owned identity/claims fixture，使用獨立 port。Browser context 綁定該 persona server，不能用 header/query/body 任意指定身份或角色。
+2. Fixture 至少包含有／無 `workspace.create_team` 的 caller、direct OWNER/ADMIN/EDITOR/VIEWER、group-only ADMIN/EDITOR 與 direct EDITOR＋group VIEWER；Hub users、identity links、My Space 及 grants 以受控 seed/bootstrap 建立。
+3. 測試用 server bootstrap/entry point 必須與正常 production entry point 分離。正常啟動不載入 fixture provider，也不提供切換 persona 的 HTTP route；僅有環境變數不足以把正常 production 切為 test identity。
+4. Test bootstrap 可以把固定 claims reader 注入既有 `buildApplicationServices`／reader registration；每個 browser request 仍經真實 trusted bootstrap、readiness、API/application authorization 與 DB transaction，不 mock API success 或硬造 frontend action flags。
+5. OWNER context 用真實 governance API/UI 改變 grants；受影響 persona 保留相同 server-validated group claims，再以其 browser context 驗證刷新與導向。不是只改同一個 page 的角色。
+6. Retain 原本 production-build Local smoke/E2E；新增 identity fixture tests 不能取代正常 entry point 的 build、fail-closed 或 no-Local-fallback regression。
+
+Fixture servers 在測試結束後關閉並刪除 disposable database；先以 HTTP smoke test 證明有權者可 Create Team、無權者遭拒及 browser input 無法覆寫 persona，再執行完整 journey。Company production hookup 仍獨立 pending。
 
 ## 25. Task 14 release gate
 
