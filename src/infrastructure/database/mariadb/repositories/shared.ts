@@ -37,7 +37,8 @@ export function asJsonObject(value: unknown, field: string): Record<string, unkn
   return parsed as Record<string, unknown>;
 }
 
-const INTEGRITY_CODES = ["ER_DUP_ENTRY", "ER_NO_REFERENCED_ROW_2", "ER_ROW_IS_REFERENCED_2", "ER_CHECK_CONSTRAINT_VIOLATED", "ER_NO_REFERENCED_ROW"];
+const INTEGRITY_CODES = ["ER_DUP_ENTRY", "ER_NO_REFERENCED_ROW_2", "ER_ROW_IS_REFERENCED_2", "ER_CHECK_CONSTRAINT_VIOLATED", "ER_NO_REFERENCED_ROW", "ER_CONSTRAINT_FAILED"];
+const INTEGRITY_ERRNOS = [1062, 1452, 1451, 3819, 1216, 4025];
 
 /**
  * Design §17.3: deadlock / lock wait timeout is a retryable apply failure, not
@@ -50,6 +51,16 @@ const INTEGRITY_CODES = ["ER_DUP_ENTRY", "ER_NO_REFERENCED_ROW_2", "ER_ROW_IS_RE
 const RETRYABLE_CODES = ["ER_LOCK_DEADLOCK", "ER_LOCK_WAIT_TIMEOUT"];
 const RETRYABLE_ERRNOS = [1213, 1205];
 
+/**
+ * Defense-in-depth for source-provided values that slip past validation:
+ * an over-long string fails the insert with ER_DATA_TOO_LONG and an
+ * out-of-range temporal fails with ER_TRUNCATED_WRONG_VALUE_FOR_FIELD.
+ * Both mean the request payload was invalid, so they map to a 400-level
+ * import error whose message carries no driver internals.
+ */
+const DATA_BOUND_CODES = ["ER_DATA_TOO_LONG", "ER_TRUNCATED_WRONG_VALUE_FOR_FIELD"];
+const DATA_BOUND_ERRNOS = [1406, 1292];
+
 export function mapDatabaseError(error: unknown): Error {
   const message = error instanceof Error ? error.message : "Database operation failed.";
   const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
@@ -57,7 +68,10 @@ export function mapDatabaseError(error: unknown): Error {
   if (RETRYABLE_CODES.includes(code) || RETRYABLE_ERRNOS.includes(errno)) {
     return importError("IMPORT_APPLY_RETRYABLE", "A transient database conflict interrupted the operation; retry the request.");
   }
-  if (INTEGRITY_CODES.includes(code)) {
+  if (DATA_BOUND_CODES.includes(code) || DATA_BOUND_ERRNOS.includes(errno)) {
+    return importError("INVALID_IMPORT_MANIFEST", "Import manifest contains a value that exceeds the database storage limit.");
+  }
+  if (INTEGRITY_CODES.includes(code) || INTEGRITY_ERRNOS.includes(errno)) {
     return new IntegrityViolationError();
   }
   const wrapped = new Error("Database operation failed.");

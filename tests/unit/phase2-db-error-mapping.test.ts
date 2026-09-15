@@ -48,6 +48,37 @@ describe("mapDatabaseError", () => {
     }
   });
 
+  it("maps data-bound driver errors to 400 INVALID_IMPORT_MANIFEST without leaking driver internals", () => {
+    for (const [code, errno] of [
+      ["ER_DATA_TOO_LONG", 1406],
+      ["ER_TRUNCATED_WRONG_VALUE_FOR_FIELD", 1292],
+    ] as const) {
+      const mapped = mapDatabaseError(sqlError(code, errno));
+      expect(mapped, code).toBeInstanceOf(SourceImportError);
+      expect((mapped as SourceImportError).code).toBe("INVALID_IMPORT_MANIFEST");
+      expect(mapped.message).not.toContain("SQLState");
+      expect(mapped.message).not.toContain(code);
+      const response = toImportErrorResponse(mapped);
+      expect(response.status, code).toBe(400);
+      expect(response.body.error.code).toBe("INVALID_IMPORT_MANIFEST");
+    }
+  });
+
+  it("maps data-bound driver errors by numeric errno when the string code is absent", () => {
+    for (const errno of [1406, 1292]) {
+      const mapped = mapDatabaseError(Object.assign(new Error("truncation failure"), { errno }));
+      expect(mapped, String(errno)).toBeInstanceOf(SourceImportError);
+      expect((mapped as SourceImportError).code).toBe("INVALID_IMPORT_MANIFEST");
+      expect(toImportErrorResponse(mapped).status).toBe(400);
+    }
+  });
+
+  it("maps MariaDB ER_CONSTRAINT_FAILED (4025) to IntegrityViolationError", () => {
+    const mapped = mapDatabaseError(sqlError("ER_CONSTRAINT_FAILED", 4025));
+    expect(mapped).toBeInstanceOf(IntegrityViolationError);
+    expect((mapped as IntegrityViolationError).code).toBe("INTEGRITY_VIOLATION");
+  });
+
   it("maps a retryable driver error to a 409 response with the machine-readable code", () => {
     const mapped = toImportErrorResponse(mapDatabaseError(sqlError("ER_LOCK_DEADLOCK", 1213)));
     expect(mapped.status).toBe(409);

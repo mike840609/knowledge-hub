@@ -184,6 +184,38 @@ test.describe("Phase 3 Workspace product acceptance", () => {
     } finally { await owner.context.close(); await affected.context.close(); await rm(folder, { recursive: true, force: true }); }
   });
 
+  test("revoked import creator renders a dedicated access-denied preview", async ({ browser }) => {
+    const owner = await session(browser, "owner"); const affected = await session(browser, "editor");
+    const body = "# Phase 3\n\nDenied preview knowledge.";
+    try {
+      const id = await createTeam(owner.context.request);
+      await grant(owner.context.request, id, "editor", "EDITOR");
+      const created = await affected.context.request.post(`/api/workspaces/${id}/source-imports`, {
+        data: { sourceName: "Denied preview", rootName: "wiki", manifest: [{ uploadKey: "m1", relativePath: "readme.md", kind: "MARKDOWN", size: Buffer.byteLength(body) }] },
+      });
+      expect(created.status()).toBe(201);
+      const { snapshotId }: { snapshotId: string } = await created.json();
+      const uploaded = await affected.context.request.post(`/api/source-imports/${snapshotId}/entries`, {
+        multipart: { entries: JSON.stringify([{ uploadKey: "m1", field: "file-0" }]), "file-0": { name: "readme.md", mimeType: "text/markdown", buffer: Buffer.from(body) } },
+      });
+      expect(uploaded.ok()).toBe(true);
+      expect((await affected.context.request.post(`/api/source-imports/${snapshotId}/finalize`, { data: {} })).ok()).toBe(true);
+      expect((await owner.context.request.delete(`/api/workspaces/${id}/members/${phase3UserId("editor")}`)).ok()).toBe(true);
+      const denied = await affected.context.request.get(`/api/source-imports/${snapshotId}`);
+      expect(denied.status()).toBe(403);
+      expect((await denied.json()).error.code).toBe("ACCESS_DENIED");
+      const navigation = await affected.context.request.get("/api/workspaces");
+      expect(navigation.ok()).toBe(true);
+      const personal = ((await navigation.json()).items as { id: string; type: string }[]).find((item) => item.type === "PERSONAL")!.id;
+      await affected.page.goto(`/w/${personal}/sources/imports/${snapshotId}`);
+      await expect(affected.page.getByRole("heading", { name: "Access denied" })).toBeVisible();
+      await expect(affected.page.getByRole("link", { name: "Back to Sources" })).toBeVisible();
+      await expect(affected.page.getByRole("heading", { name: "Not found or no access" })).toHaveCount(0);
+      await expect(affected.page.getByRole("heading", { name: "Something went wrong" })).toHaveCount(0);
+      await expect(affected.page.getByRole("heading", { name: "Import preview" })).toHaveCount(0);
+    } finally { await owner.context.close(); await affected.context.close(); }
+  });
+
   test("Create dialog handles a revoked platform capability without submitting again", async ({ browser }) => {
     const owner = await session(browser, "owner");
     try {

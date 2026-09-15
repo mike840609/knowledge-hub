@@ -31,6 +31,13 @@ function manifestPathBytes(path: string): number {
   return new TextEncoder().encode(approximatedNormalized).byteLength;
 }
 
+// MariaDB DATETIME (even with fsp 6) only spans 1000-01-01 00:00:00.000000
+// through 9999-12-31 23:59:59.999999. A wider Date passes the NaN check but
+// fails at insert with ER_TRUNCATED_WRONG_VALUE_FOR_FIELD, so the supported
+// range is enforced here while the value is still attributable to its field.
+const MIN_MARIADB_DATETIME_MS = Date.UTC(1000, 0, 1, 0, 0, 0, 0);
+const MAX_MARIADB_DATETIME_MS = Date.UTC(9999, 11, 31, 23, 59, 59, 999);
+
 function canonicalManifestHash(entries: readonly ImportManifestEntry[]): string {
   const canonical = [...entries].map((entry) => {
     const serverKind = MARKDOWN_EXTENSION.test(entry.relativePath) ? "MARKDOWN" : "ASSET";
@@ -65,6 +72,7 @@ function validateManifest(manifest: readonly ImportManifestEntry[], limits: Impo
       throw importError("INVALID_IMPORT_MANIFEST", "Manifest relative paths must be non-empty and unique.");
     }
     paths.add(raw.relativePath);
+    if (new TextEncoder().encode(raw.relativePath).byteLength > limits.maxPathBytes) throw importError("INVALID_IMPORT_MANIFEST", "Manifest path exceeds the import path byte limit.");
     if (manifestPathBytes(raw.relativePath) > limits.maxPathBytes) throw importError("IMPORT_LIMIT_EXCEEDED", "Manifest path exceeds the import path byte limit.");
     if (!Number.isSafeInteger(raw.size) || raw.size < 0) throw importError("INVALID_IMPORT_MANIFEST", "Manifest size must be a non-negative integer.");
 
@@ -84,6 +92,11 @@ function validateManifest(manifest: readonly ImportManifestEntry[], limits: Impo
     }
     if (asset.lastModified !== null && (!(asset.lastModified instanceof Date) || Number.isNaN(asset.lastModified.getTime()))) {
       throw importError("INVALID_ASSET_MANIFEST", "Asset lastModified must be a valid Date or null.");
+    }
+    const lastModified = asset.lastModified;
+    if (lastModified instanceof Date && !Number.isNaN(lastModified.getTime())
+      && (lastModified.getTime() < MIN_MARIADB_DATETIME_MS || lastModified.getTime() > MAX_MARIADB_DATETIME_MS)) {
+      throw importError("INVALID_ASSET_MANIFEST", "Asset lastModified must fall within 1000-01-01 to 9999-12-31.");
     }
   }
 }

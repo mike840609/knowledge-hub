@@ -13,6 +13,7 @@ import { getWorkspaceShellModel, getKnowledgeDocumentModel, getKnowledgeExplorer
 import { getSourceListModel, getSourceDetailModel } from "@/server/source-read";
 import { createSourceResync, uploadSourceImportEntries, finalizeSourceImport, getSourceImportPreview, applySourceImport } from "@/server/source-imports";
 import { POST as createImportRoute } from "@/app/api/workspaces/[workspaceId]/source-imports/route";
+import { GET as previewImportRoute } from "@/app/api/source-imports/[snapshotId]/route";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import { disposeIsolatedDatabase, provisionIsolatedDatabase } from "../../scripts/db/test-database";
 import { runMigrations, type IsolatedDatabaseHandle } from "../../scripts/db/migrate";
@@ -134,6 +135,19 @@ describe("Phase 3 real request adapters with a trusted test session reader", () 
     await governance.removeGroupMapping(owner, workspace.id, "writers");
     await expect(applySourceImport(snapshotId)).rejects.toMatchObject({ code: "IMPORT_SNAPSHOT_ACCESS_DENIED" });
     await expect(uploadSourceImportEntries(snapshotId, [{ uploadKey: "m1", bytes }])).rejects.toMatchObject({ code: "IMPORT_SNAPSHOT_ACCESS_DENIED" });
+    // Issue #9 item 8: the caller above keeps direct VIEWER membership, which
+    // still permits preview reads. Removing it leaves the creator with no
+    // Workspace access, so the preview GET path must reject with the
+    // discoverable denial (never 404, never a bare
+    // WorkspaceAccessDeniedError leaking into the error boundary).
+    await governance.removeDirectMember(owner, workspace.id, caller.identity.id);
+    await expect(getSourceImportPreview(snapshotId)).rejects.toMatchObject({ code: "IMPORT_SNAPSHOT_ACCESS_DENIED" });
+    const previewResponse = await previewImportRoute(
+      new NextRequest(`http://localhost/api/source-imports/${snapshotId}`, { method: "GET" }),
+      { params: Promise.resolve({ snapshotId }) },
+    );
+    expect(previewResponse.status).toBe(403);
+    expect((await previewResponse.json()).error.code).toBe("ACCESS_DENIED");
     expect((await createThroughRoute(workspace.id)).status).not.toBe(201);
     expect(await pool.query("SELECT id FROM knowledge_sources WHERE workspace_id = ?", [workspace.id])).toHaveLength(0);
   });

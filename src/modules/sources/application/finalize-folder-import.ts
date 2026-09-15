@@ -125,14 +125,25 @@ export class FinalizeFolderImportService {
   ): Promise<ImportPreview> {
     const snapshot = await repositories.importSnapshots.lockById(snapshotId);
     if (!snapshot || snapshot.createdBy !== caller.identity.id) throw importError("IMPORT_SNAPSHOT_NOT_FOUND", "Import snapshot was not found.");
+    if (snapshot.state === "READY") return previewFromSnapshot(snapshot, now);
+    if (snapshot.state !== "BUILDING") throw importError("IMPORT_SNAPSHOT_NOT_BUILDING", "Only BUILDING snapshots can be finalized.");
+    if (snapshot.expiresAt.getTime() <= now.getTime()) throw importError("IMPORT_SNAPSHOT_EXPIRED", "Import snapshot has expired.");
+    const lockedSource = snapshot.sourceId === null ? null : await repositories.sources.lockById(snapshot.sourceId);
     try {
       await lockWorkspaceForMutation(repositories, caller, snapshot.workspaceId, "source-import");
     } catch (error) {
       throw translateKnownSnapshotAccessError(error);
     }
-    if (snapshot.state === "READY") return previewFromSnapshot(snapshot, now);
-    if (snapshot.state !== "BUILDING") throw importError("IMPORT_SNAPSHOT_NOT_BUILDING", "Only BUILDING snapshots can be finalized.");
-    if (snapshot.expiresAt.getTime() <= now.getTime()) throw importError("IMPORT_SNAPSHOT_EXPIRED", "Import snapshot has expired.");
+
+    if (snapshot.sourceId !== null) {
+      if (!lockedSource) throw importError("IMPORT_SOURCE_NOT_FOUND", "Import source was not found.");
+      if (lockedSource.syncVersion !== snapshot.basedOnVersion) {
+        throw importError("SOURCE_VERSION_CONFLICT", "The source changed after this import snapshot was created.", {
+          snapshotVersion: snapshot.basedOnVersion,
+          currentVersion: lockedSource.syncVersion,
+        });
+      }
+    }
 
     const staged = await repositories.importSnapshotEntries.listBySnapshotId(snapshot.id);
     if (staged.some((entry) => entry.entryType === "DOCUMENT" && entry.uploadStatus !== "RECEIVED")) {
@@ -146,6 +157,7 @@ export class FinalizeFolderImportService {
     const assets: ReadyImportAsset[] = [];
     const finalized: FinalizedImportSnapshotEntry[] = [];
     const extraChanges: ImportPreviewChange[] = [];
+    const blockedPaths = new Set<string>();
 
     for (const entry of kept.sort((left, right) => compareImportText(left.sourcePath ?? left.staged.clientRelativePath, right.sourcePath ?? right.staged.clientRelativePath) || compareImportText(left.staged.uploadKey, right.staged.uploadKey))) {
       let row = finalizedBase(entry);
@@ -210,6 +222,7 @@ export class FinalizeFolderImportService {
         }
         if (hasBlocker(entry.diagnostics)) extraChanges.push(diagnosticChange(entry));
       }
+      if (hasBlocker(entry.diagnostics) && entry.sourcePath !== null) blockedPaths.add(entry.sourcePath);
       finalized.push(row);
     }
 
@@ -224,7 +237,7 @@ export class FinalizeFolderImportService {
       const current = snapshot.sourceId === null
         ? { documents: [], folders: [], assets: [] }
         : await repositories.importCanonicalState.load(snapshot.sourceId);
-      plan = reconcileImportSnapshot(content, current, extraChanges);
+      plan = reconcileImportSnapshot(content, current, extraChanges, blockedPaths);
     } catch (error) {
       if (!(error instanceof SourceImportError)) throw error;
       const globalChange: ImportPreviewChange = {

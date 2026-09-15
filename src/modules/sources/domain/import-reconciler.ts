@@ -87,6 +87,7 @@ function reconcileFolders(
   plan: FolderImportPlan,
   desiredFolders: string[],
   currentFolders: CanonicalFolderState[],
+  blockedPaths: ReadonlySet<string> = new Set(),
 ): Map<string, CanonicalFolderState> {
   const currentByPath = new Map(currentFolders.map((folder) => [folder.sourcePath, folder]));
   const desired = new Set(desiredFolders);
@@ -111,6 +112,7 @@ function reconcileFolders(
 
   for (const current of [...currentFolders].sort((left, right) => compareDepthDescendingThenPath(left.sourcePath, right.sourcePath))) {
     if (current.status === "ACTIVE" && !desired.has(current.sourcePath)) {
+      if (blockedPaths.has(current.sourcePath)) continue;
       plan.folders.archive.push({ entryId: current.entryId, treeNodeId: current.treeNodeId, sourcePath: current.sourcePath });
       plan.preview.push({ kind: "FOLDER", sourcePath: current.sourcePath, previousPath: null, labels: ["ARCHIVED"], diagnostics: [] });
     }
@@ -222,6 +224,7 @@ function reconcileDocuments(
   plan: FolderImportPlan,
   incomingDocuments: ReadyImportDocument[],
   currentDocuments: CanonicalDocumentState[],
+  blockedPaths: ReadonlySet<string> = new Set(),
 ): Map<string, CanonicalDocumentState> {
   const { matches, ambiguous, unmatchedCurrentIds } = buildDocumentMatches(incomingDocuments, currentDocuments);
 
@@ -317,6 +320,7 @@ function reconcileDocuments(
 
   for (const existing of [...currentDocuments].sort((left, right) => compareImportText(left.sourcePath, right.sourcePath))) {
     if (!unmatchedCurrentIds.has(existing.entryId) || existing.status !== "ACTIVE") continue;
+    if (blockedPaths.has(existing.sourcePath)) continue;
     plan.documents.archive.push({
       entryId: existing.entryId,
       documentId: existing.documentId,
@@ -347,7 +351,7 @@ function sameAsset(left: CanonicalAssetState, right: ReadyImportAsset): boolean 
   );
 }
 
-function reconcileAssets(plan: FolderImportPlan, incomingAssets: ReadyImportAsset[], currentAssets: CanonicalAssetState[]): void {
+function reconcileAssets(plan: FolderImportPlan, incomingAssets: ReadyImportAsset[], currentAssets: CanonicalAssetState[], blockedPaths: ReadonlySet<string> = new Set()): void {
   const currentByPath = new Map(currentAssets.map((asset) => [asset.sourcePath, asset]));
   const seenPaths = new Set<string>();
 
@@ -383,6 +387,7 @@ function reconcileAssets(plan: FolderImportPlan, incomingAssets: ReadyImportAsse
 
   for (const existing of [...currentAssets].sort((left, right) => compareImportText(left.sourcePath, right.sourcePath))) {
     if (seenPaths.has(existing.sourcePath)) continue;
+    if (blockedPaths.has(existing.sourcePath)) continue;
     plan.assets.remove.push({ assetId: existing.id, sourcePath: existing.sourcePath });
     plan.preview.push({ kind: "ASSET", sourcePath: existing.sourcePath, previousPath: null, labels: ["REMOVED"], diagnostics: [] });
   }
@@ -596,12 +601,12 @@ function summarize(plan: FolderImportPlan): void {
   plan.preview.sort((left, right) => compareImportText(left.sourcePath, right.sourcePath) || compareImportText(left.kind, right.kind));
 }
 
-export function reconcileFolderImport(snapshot: ReadyImportContent, current: CanonicalImportState): FolderImportPlan {
+export function reconcileFolderImport(snapshot: ReadyImportContent, current: CanonicalImportState, blockedPaths: ReadonlySet<string> = new Set()): FolderImportPlan {
   const plan = emptyPlan(snapshot.sourceBinding);
   const desiredFolders = deriveRequiredFolders(snapshot);
-  const currentFoldersByPath = reconcileFolders(plan, desiredFolders, current.folders);
-  const documentMatches = reconcileDocuments(plan, snapshot.documents, current.documents);
-  reconcileAssets(plan, snapshot.assets, current.assets);
+  const currentFoldersByPath = reconcileFolders(plan, desiredFolders, current.folders, blockedPaths);
+  const documentMatches = reconcileDocuments(plan, snapshot.documents, current.documents, blockedPaths);
+  reconcileAssets(plan, snapshot.assets, current.assets, blockedPaths);
   buildOrdering(plan, snapshot, desiredFolders, currentFoldersByPath, documentMatches);
   applyCrossTypePathRules(plan, snapshot, current, desiredFolders);
   applyFolderNameRules(plan, desiredFolders);
