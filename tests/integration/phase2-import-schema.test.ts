@@ -76,17 +76,29 @@ describe("Phase 2 import persistence schema", () => {
   });
 
   it("creates the staging indexes and enforces initial/resync binding shape", async () => {
-    const indexes = await pool.query<{ INDEX_NAME: string }[]>(
+    const entryIndexes = await pool.query<{ INDEX_NAME: string }[]>(
       "SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'source_import_snapshot_entries'",
     );
-    expect(new Set(indexes.map((row) => row.INDEX_NAME))).toEqual(
-      expect.objectContaining(
-        new Set([
-          "uq_import_entries_snapshot_upload",
-          "uq_import_entries_snapshot_path_hash",
-          "idx_import_entries_snapshot_upload",
-        ]),
-      ),
+    const entryNames = [...new Set(entryIndexes.map((row) => row.INDEX_NAME))].sort();
+    expect(entryNames).toEqual(
+      expect.arrayContaining([
+        "uq_import_entries_snapshot_upload",
+        "uq_import_entries_snapshot_path_hash",
+        "idx_import_entries_snapshot_upload",
+      ]),
+    );
+
+    const snapshotIndexes = await pool.query<{ INDEX_NAME: string }[]>(
+      "SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'source_import_snapshots'",
+    );
+    const snapshotNames = [...new Set(snapshotIndexes.map((row) => row.INDEX_NAME))].sort();
+    expect(snapshotNames).toEqual(
+      expect.arrayContaining([
+        "idx_import_snapshots_creator_state",
+        "idx_import_snapshots_source_created",
+        "idx_import_snapshots_workspace_created",
+        "idx_import_snapshots_state_expires",
+      ]),
     );
 
     const { userId, workspaceId, sourceId } = await seedTarget();

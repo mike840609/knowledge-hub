@@ -367,6 +367,53 @@ describe("Phase 2 folder import reconciliation", () => {
     expect(plan.summary.documents.added).toBe(1000);
   });
 
+  it("reconciles 1,000 incoming against 1,000 existing through lookup-map matching", () => {
+    const existing: CanonicalDocumentState[] = [];
+    const incoming: ReadyImportDocument[] = [];
+
+    for (let index = 0; index < 500; index += 1) {
+      const sourcePath = `docs/stable-${String(index).padStart(4, "0")}.md`;
+      const fingerprint = `fp-stable-${index}`;
+      existing.push(currentDocument(sourcePath, fingerprint));
+      incoming.push(incomingDocument(sourcePath, fingerprint));
+    }
+
+    for (let index = 500; index < 800; index += 1) {
+      const sourcePath = `docs/updated-${String(index).padStart(4, "0")}.md`;
+      const fingerprint = `fp-updated-${index}`;
+      existing.push(currentDocument(sourcePath, fingerprint));
+      incoming.push(
+        incomingDocument(sourcePath, fingerprint, {
+          title: `Updated title ${index}`,
+          markdown: `Updated body ${index}\n`,
+          revisionContentHash: `revision:updated-${index}`,
+        }),
+      );
+    }
+
+    for (let index = 800; index < 1000; index += 1) {
+      const fingerprint = `fp-moved-${index}`;
+      existing.push(currentDocument(`docs/moved-${String(index).padStart(4, "0")}.md`, fingerprint));
+      incoming.push(incomingDocument(`guide/moved-${String(index).padStart(4, "0")}.md`, fingerprint));
+    }
+
+    const plan = reconcileFolderImport(
+      { sourceBinding: binding, documents: incoming, assets: [] },
+      { documents: existing, folders: [currentFolder("docs"), currentFolder("guide")], assets: [] },
+    );
+
+    expect(plan.summary.documents).toMatchObject({
+      unchanged: 500,
+      updated: 300,
+      moved: 200,
+      renamed: 0,
+      added: 0,
+      archived: 0,
+    });
+    expect(plan.documents.create).toHaveLength(0);
+    expect(plan.documents.archive).toHaveLength(0);
+  });
+
   it("blocks a file replaced by a folder at the same source path", () => {
     const existing = currentDocument("guide.md", "old");
     const plan = reconcileFolderImport(
