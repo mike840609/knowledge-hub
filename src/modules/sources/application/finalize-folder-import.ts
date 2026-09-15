@@ -134,6 +134,17 @@ export class FinalizeFolderImportService {
     if (snapshot.state !== "BUILDING") throw importError("IMPORT_SNAPSHOT_NOT_BUILDING", "Only BUILDING snapshots can be finalized.");
     if (snapshot.expiresAt.getTime() <= now.getTime()) throw importError("IMPORT_SNAPSHOT_EXPIRED", "Import snapshot has expired.");
 
+    if (snapshot.sourceId !== null) {
+      const source = await repositories.sources.lockById(snapshot.sourceId);
+      if (!source) throw importError("IMPORT_SOURCE_NOT_FOUND", "Import source was not found.");
+      if (source.syncVersion !== snapshot.basedOnVersion) {
+        throw importError("SOURCE_VERSION_CONFLICT", "The source changed after this import snapshot was created.", {
+          snapshotVersion: snapshot.basedOnVersion,
+          currentVersion: source.syncVersion,
+        });
+      }
+    }
+
     const staged = await repositories.importSnapshotEntries.listBySnapshotId(snapshot.id);
     if (staged.some((entry) => entry.entryType === "DOCUMENT" && entry.uploadStatus !== "RECEIVED")) {
       throw importError("UPLOAD_INCOMPLETE", "Every Markdown file must be received before finalization.");

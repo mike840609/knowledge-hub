@@ -195,6 +195,41 @@ describe("Phase 2 import finalization", () => {
     expect(states.filter((row) => row.state === "BUILDING").map((row) => row.id).sort()).toEqual([snapshotIds[1], snapshotIds[2]].sort());
   });
 
+  it("fail-fasts resync finalization when the Source advanced after snapshot creation", async () => {
+    const fixture = await createSourceFixture(pool, { managed: true });
+    const { create, upload, finalize } = services();
+    const bytes = new TextEncoder().encode("# Drifted\n\nbody\n");
+    const session = await create.createResync(fixtureCaller(), {
+      sourceId: fixture.source.id, rootName: "wiki", manifest: [markdownEntry("m1", "docs/drifted.md", bytes)],
+    });
+    await upload.upload(fixtureCaller(), { snapshotId: session.snapshotId, entries: [{ uploadKey: "m1", bytes }] });
+    await new MariaDbUnitOfWork(pool).run(async (repositories) => {
+      const advanced = await repositories.sources.guardAndAdvanceVersion(fixture.source.id, 0, fixtureIdentity.id);
+      expect(advanced).toBe(1);
+    });
+    await expect(finalize.finalize(fixtureCaller(), session.snapshotId)).rejects.toMatchObject({
+      code: "SOURCE_VERSION_CONFLICT",
+      details: { snapshotVersion: 0, currentVersion: 1 },
+    });
+    const rows = await pool.query<{ state: string }[]>("SELECT state FROM source_import_snapshots WHERE id=?", [session.snapshotId]);
+    expect(rows[0].state).toBe("BUILDING");
+    const ready = await pool.query<{ count: unknown }[]>("SELECT COUNT(*) AS count FROM source_import_snapshots WHERE created_by=? AND state='READY'", [fixtureIdentity.id]);
+    expect(Number(ready[0].count)).toBe(0);
+  });
+
+  it("finalizes a resync normally when the Source version has not drifted", async () => {
+    const fixture = await createSourceFixture(pool, { managed: true });
+    const { create, upload, finalize } = services();
+    const bytes = new TextEncoder().encode("# Steady\n\nbody\n");
+    const session = await create.createResync(fixtureCaller(), {
+      sourceId: fixture.source.id, rootName: "wiki", manifest: [markdownEntry("m1", "docs/steady.md", bytes)],
+    });
+    await upload.upload(fixtureCaller(), { snapshotId: session.snapshotId, entries: [{ uploadKey: "m1", bytes }] });
+    const preview = await finalize.finalize(fixtureCaller(), session.snapshotId);
+    expect(preview.state).toBe("READY");
+    expect(preview.hasBlockers).toBe(false);
+  });
+
   it("turns an overlong resolved title into a READY blocker without failing finalization", async () => {
     const bad = new TextEncoder().encode(`# ${"a".repeat(513)}\n\nbody\n`);
     const good = new TextEncoder().encode("# Good\n\nbody\n");

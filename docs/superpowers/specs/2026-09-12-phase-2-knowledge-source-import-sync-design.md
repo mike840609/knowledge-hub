@@ -193,6 +193,13 @@ source_id = existing Source
 based_on_version = Source.sync_version at snapshot creation/finalize contract
 ```
 
+`based_on_version` is captured at snapshot creation while holding the Source
+`lockById`; finalize re-locks the Source and fail-fasts with
+`SOURCE_VERSION_CONFLICT` (details `{snapshotVersion, currentVersion}`) on any
+mismatch before loading canonical state, so a drifted plan is never built or
+persisted. Apply's version compare remains the final gate for races between
+finalize and apply.
+
 Normal sync 不接受 client supplied Workspace transfer。
 
 ### 4.4 Source creation timing
