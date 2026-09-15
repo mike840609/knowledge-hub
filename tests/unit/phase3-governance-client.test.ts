@@ -1,0 +1,31 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { governanceFailure, governanceRequest, GovernanceRequestError } from "@/components/workspaces/governance-error";
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe("governance client boundary", () => {
+  it("refreshes affected authorization for denied mutations and retains structured field errors", async () => {
+    const dispatchEvent = vi.fn();
+    vi.stubGlobal("window", { dispatchEvent });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { code: "TEAM_CREATION_DENIED", message: "Localized server text" } }), { status: 403 })));
+    await expect(governanceRequest("/api/workspaces", "POST", { name: "Team" })).rejects.toBeInstanceOf(GovernanceRequestError);
+    expect(dispatchEvent.mock.calls.map(([event]) => event.type)).toEqual(["kh:workspace-access-check"]);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { code: "INVALID_WORKSPACE_NAME", field: "name", message: "Name required" } }), { status: 400 })));
+    try { await governanceRequest("/api/workspaces", "POST", { name: " " }); } catch (error) { expect(governanceFailure(error)).toEqual({ code: "INVALID_WORKSPACE_NAME", field: "name", message: "Name required" }); }
+  });
+
+  it("notifies all workspace consumers only after a successful mutation", async () => {
+    const dispatchEvent = vi.fn(); const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true })));
+    vi.stubGlobal("window", { dispatchEvent }); vi.stubGlobal("fetch", fetchMock);
+    await governanceRequest("/api/workspaces/team/groups", "DELETE", { externalGroupId: "opaque/group:id" });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ externalGroupId: "opaque/group:id" });
+    expect(dispatchEvent.mock.calls.map(([event]) => event.type)).toEqual(["kh:workspace-mutation"]);
+  });
+
+  it("does not treat network errors as revoked authorization", async () => {
+    const dispatchEvent = vi.fn(); vi.stubGlobal("window", { dispatchEvent }); vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("offline")));
+    await expect(governanceRequest("/api/workspaces/team", "PATCH", { name: "Team" })).rejects.toThrow("offline");
+    expect(dispatchEvent).not.toHaveBeenCalled();
+    expect(governanceFailure(new TypeError("offline")).code).toBe("REQUEST_FAILED");
+  });
+});

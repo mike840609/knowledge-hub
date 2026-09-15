@@ -32,7 +32,7 @@ test("browses the persistent explorer with a stable canonical document URL", asy
 
   // Persistent shell: brand, Workspace selector, and primary nav.
   await expect(page.getByText("Knowledge Hub", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("Workspace")).toHaveValue(QUERY_MASTER_WORKSPACE);
+  await expect(page.getByLabel("Workspace: Query Master", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Knowledge" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Sources" })).toBeVisible();
 
@@ -72,7 +72,8 @@ test("switches workspace through the shell selector", async ({ page }) => {
   await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${OBSIDIAN_SOURCE}`);
   await expect(page.getByRole("heading", { name: ARCHITECTURE_TITLE })).toBeVisible();
 
-  await page.getByLabel("Workspace").selectOption(SWFP_WORKSPACE);
+  await page.getByLabel("Workspace: Query Master", { exact: true }).click();
+  await page.getByRole("button", { name: "SWFP", exact: true }).click();
   await expect(page).toHaveURL(
     new RegExp(`/w/${SWFP_WORKSPACE}/knowledge/${SWFP_SOURCE}/[0-9a-f-]+`),
   );

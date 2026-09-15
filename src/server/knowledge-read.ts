@@ -1,6 +1,6 @@
 import { findFirstReadableDocument, sortSourcesByName } from "@/lib/knowledge-navigation";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
-import type { WorkspaceView } from "@/modules/workspaces/application/workspace-query-service";
+import type { WorkspaceAccessView, WorkspaceNavigationModel, WorkspaceNavigationItem } from "@/server/workspace-admin";
 import { applicationServices } from "@/server/composition";
 
 export type KnowledgeDocumentModel = {
@@ -47,8 +47,10 @@ export async function getKnowledgeDocumentModel(
 export type WorkspaceShellModel = {
   identityName: string;
   identityEmpId: string;
-  workspaces: WorkspaceView[];
-  workspace: WorkspaceView;
+  workspaces: readonly WorkspaceNavigationItem[];
+  workspace: WorkspaceNavigationItem;
+  navigation: WorkspaceNavigationModel;
+  access: WorkspaceAccessView;
 };
 
 export type KnowledgeExplorerModel = {
@@ -68,10 +70,14 @@ export async function getWorkspaceShellModel(
 ): Promise<WorkspaceShellModel | null> {
   const services = applicationServices();
   const { caller, identity } = await services.establishTrustedCaller();
-  const workspaces = await services.workspaces.listWorkspaces(caller);
+  const navigation = await services.workspaceAdmin.navigation(caller);
+  const workspaces = navigation.items;
   const workspace = workspaces.find((candidate) => candidate.id === workspaceId);
   if (!workspace) return null;
+  const access = await services.workspaceAdmin.workspaceState(caller, workspaceId);
   return {
+    navigation,
+    access,
     identityName: identity.name,
     identityEmpId: identity.emp_id,
     workspaces,

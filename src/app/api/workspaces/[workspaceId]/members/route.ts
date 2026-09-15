@@ -1,0 +1,3 @@
+import { workspaceHttp, requestFields, type WorkspaceRouteContext } from "@/server/workspace-http";
+export async function GET(_request: Request, context: WorkspaceRouteContext) { return workspaceHttp(async (s, c) => s.workspaceAdmin.listMembers(c, (await context.params).workspaceId)); }
+export async function POST(request: Request, context: WorkspaceRouteContext) { return workspaceHttp(async (s, c) => { const { workspaceId } = await context.params; await s.workspaceAdmin.workspaceState(c, workspaceId); const body = await requestFields(request, ["userId", "role"]); await s.governance.addDirectMember(c, workspaceId, { userId: body.userId!, role: body.role! }); return { ok: true }; }, 201); }

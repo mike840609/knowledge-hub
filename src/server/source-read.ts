@@ -1,6 +1,7 @@
 import { sortSourcesByName } from "@/lib/knowledge-navigation";
 import type { SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import type { SyncRun } from "@/modules/sources/domain/sync-run";
+import type { WorkspaceActions } from "@/server/workspace-admin";
 import type { WorkspaceView } from "@/modules/workspaces/application/workspace-query-service";
 import { applicationServices } from "@/server/composition";
 
@@ -14,11 +15,13 @@ export type SourceListItemModel = {
 
 export type SourceListModel = {
   workspace: WorkspaceView;
+  actions: WorkspaceActions;
   items: SourceListItemModel[];
 };
 
 export type SourceDetailModel = {
   workspace: WorkspaceView;
+  actions: WorkspaceActions;
   source: SourceView;
   runs: SyncRun[];
 };
@@ -36,6 +39,8 @@ export async function getSourceListModel(workspaceId: string): Promise<SourceLis
   const workspaces = await services.workspaces.listWorkspaces(caller);
   const workspace = workspaces.find((candidate) => candidate.id === workspaceId);
   if (!workspace) return null;
+  const { actions } = await services.workspaceAdmin.workspaceState(caller, workspaceId);
+  if (!actions.canInspectSources) return null;
   let sources: SourceView[];
   try {
     sources = sortSourcesByName(await services.queries.listSources(caller, workspaceId));
@@ -50,7 +55,7 @@ export async function getSourceListModel(workspaceId: string): Promise<SourceLis
       }),
     ),
   );
-  return { workspace, items };
+  return { workspace, actions, items };
 }
 
 export async function getSourceDetailModel(
@@ -63,6 +68,8 @@ export async function getSourceDetailModel(
     const workspaces = await services.workspaces.listWorkspaces(caller);
     const workspace = workspaces.find((candidate) => candidate.id === workspaceId);
     if (!workspace) return null;
+    const { actions } = await services.workspaceAdmin.workspaceState(caller, workspaceId);
+    if (!actions.canInspectSources) return null;
     const source = await services.queries.getSource(caller, sourceId);
     if (source.workspaceId !== workspaceId) return null;
     const sources = await services.queries.listSources(caller, workspaceId);
@@ -70,7 +77,7 @@ export async function getSourceDetailModel(
     const runs = await services.unitOfWork.run(async (repositories) =>
       repositories.syncRuns.listBySourceId(sourceId, SOURCE_RUN_DETAIL_LIMIT),
     );
-    return { workspace, source, runs };
+    return { workspace, actions, source, runs };
   } catch {
     return null;
   }

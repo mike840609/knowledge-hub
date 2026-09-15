@@ -27,7 +27,7 @@ export default async function WorkspaceSourceImportPage({
         the Hub only previews the deterministic diff before anything is applied.
       </p>
       <div className="mt-5">
-        <FolderImportForm target={{ kind: "new", workspaceId }} />
+        {model.actions.canImport ? <FolderImportForm target={{ kind: "new", workspaceId }} /> : <p role="status">This workspace is read-only. Import is unavailable.</p>}
       </div>
     </main>
   );

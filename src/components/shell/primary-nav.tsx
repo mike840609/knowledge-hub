@@ -1,5 +1,8 @@
+"use client";
+
+import { useWorkspaceAuthorization } from "./use-workspace-authorization";
 import Link from "next/link";
-import { BookOpenText, Database } from "lucide-react";
+import { BookOpenText, Database, Settings } from "lucide-react";
 
 export function PrimaryNav({
   workspaceId,
@@ -8,17 +11,19 @@ export function PrimaryNav({
   workspaceId: string;
   onNavigate?: () => void;
 }) {
+  const { access } = useWorkspaceAuthorization();
   const items = [
     {
       name: "Knowledge",
       href: `/w/${workspaceId}/knowledge`,
       Icon: BookOpenText,
     },
-    {
+    ...(access.actions.canInspectSources ? [{
       name: "Sources",
       href: `/w/${workspaceId}/sources`,
       Icon: Database,
-    },
+    }] : []),
+    ...(access.actions.canOpenSettings ? [{name: "Settings", href: `/w/${workspaceId}/settings`, Icon: Settings}] : []),
   ];
   return (
     <nav aria-label="Primary" className="flex flex-col gap-0.5 p-2">

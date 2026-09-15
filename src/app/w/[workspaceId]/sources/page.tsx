@@ -1,4 +1,5 @@
-import Link from "next/link";
+import { notFound } from "next/navigation";
+import { WorkspaceImportLink } from "@/components/shell/workspace-import-link";
 import { SourceList } from "@/components/sources/source-list";
 import { getSourceListModel } from "@/server/source-read";
 
@@ -9,13 +10,7 @@ export default async function WorkspaceSourcesPage({
 }) {
   const { workspaceId } = await params;
   const model = await getSourceListModel(workspaceId);
-  if (!model) {
-    return (
-      <main className="mx-auto flex min-h-screen max-w-4xl flex-col justify-center px-6 py-16">
-        <h1 className="text-2xl font-semibold">No workspace access</h1>
-      </main>
-    );
-  }
+  if (!model) notFound();
   return (
     <main className="mx-auto max-w-4xl px-6 py-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -25,12 +20,12 @@ export default async function WorkspaceSourcesPage({
             {model.items.length} {model.items.length === 1 ? "source" : "sources"} in {model.workspace.name}
           </p>
         </div>
-        <Link
+        <WorkspaceImportLink
           className="inline-flex items-center rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-sm font-medium text-kh-text transition hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent"
           href={`/w/${workspaceId}/sources/import`}
         >
           Import folder
-        </Link>
+        </WorkspaceImportLink>
       </div>
       <div className="mt-5">
         <SourceList workspaceId={workspaceId} items={model.items} />

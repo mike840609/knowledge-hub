@@ -1,4 +1,4 @@
-import { WorkspaceAccessDeniedError, WorkspaceLifecycleError } from "./errors";
+import { InsufficientWorkspaceCapabilityError, InvalidRoleAssignmentError } from "./errors";
 import type { WorkspaceRole } from "./workspace-membership";
 
 /**
@@ -29,10 +29,10 @@ export function assertGovernanceAuthority(input: {
   operation: string;
 }): void {
   if (input.target === "group" && (input.beforeRole === "OWNER" || input.afterRole === "OWNER")) {
-    throw new WorkspaceLifecycleError("SSO group mappings can never grant OWNER on a Team workspace.");
+    throw new InvalidRoleAssignmentError("SSO group mappings can never grant OWNER on a Team workspace.");
   }
   if (input.actorRole !== "OWNER" && input.actorRole !== "ADMIN") {
-    throw new WorkspaceAccessDeniedError(
+    throw new InsufficientWorkspaceCapabilityError(
       `Team workspace ${input.operation} requires OWNER or effective ADMIN authority.`,
     );
   }
@@ -42,7 +42,7 @@ export function assertGovernanceAuthority(input: {
       ? isDirectAuthorityRole(input.beforeRole) || isDirectAuthorityRole(input.afterRole)
       : input.beforeRole === "ADMIN" || input.afterRole === "ADMIN";
   if (touchesAuthority) {
-    throw new WorkspaceAccessDeniedError(
+    throw new InsufficientWorkspaceCapabilityError(
       `Team workspace ${input.operation} touches OWNER/ADMIN authority and requires a direct OWNER grant.`,
     );
   }

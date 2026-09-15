@@ -22,7 +22,7 @@ export function Topbar({
         </button>
       ) : null}
       <span className="text-sm font-semibold text-kh-text">Knowledge Hub</span>
-      <WorkspaceSelector workspaces={model.workspaces} workspaceId={model.workspace.id} />
+      <WorkspaceSelector workspaceId={model.workspace.id} />
       <span className="ml-auto truncate text-sm text-kh-text-muted">{model.identityName}</span>
     </header>
   );

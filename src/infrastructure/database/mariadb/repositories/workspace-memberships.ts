@@ -33,6 +33,11 @@ function mapMembership(row: DbRow): WorkspaceMembership {
 export class MariaDbWorkspaceMembershipRepository implements WorkspaceMembershipRepository {
   constructor(private readonly connection: QueryConnection) {}
 
+  async listByWorkspace(workspaceId: string): Promise<WorkspaceMembership[]> {
+    const rows = await this.connection.query<DbRow[]>("SELECT * FROM workspace_memberships WHERE workspace_id = ? ORDER BY user_id", [workspaceId]);
+    return rows.map(mapMembership);
+  }
+
   async find(workspaceId: string, userId: string): Promise<WorkspaceMembership | null> {
     const rows = await this.connection.query<DbRow[]>("SELECT * FROM workspace_memberships WHERE workspace_id = ? AND user_id = ?", [workspaceId, userId]);
     return rows[0] ? mapMembership(rows[0]) : null;

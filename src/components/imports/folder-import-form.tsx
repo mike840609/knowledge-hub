@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { requestWorkspaceAccessCheck, useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
+import { useEffect, useRef, useState } from "react";
 import type { ImportManifestEntry } from "@/modules/sources/application/create-folder-import";
 
 export type FolderImportTarget =
@@ -106,6 +107,7 @@ async function postJson(url: string, payload: unknown): Promise<{ ok: boolean; s
   } catch {
     body = null;
   }
+  if (!response.ok) requestWorkspaceAccessCheck(response.status);
   return { ok: response.ok, status: response.status, body };
 }
 
@@ -113,6 +115,7 @@ async function uploadMarkdownBatches(
   snapshotId: string,
   staged: StagedFile[],
   onProgress: (uploaded: number, total: number) => void,
+  assertAllowed: () => void,
 ): Promise<void> {
   const markdown = staged.filter((entry) => entry.markdown);
   let uploaded = 0;
@@ -133,6 +136,7 @@ async function uploadMarkdownBatches(
     }
     if (current.length > 0) chunks.push(current);
     for (const chunk of chunks) {
+      assertAllowed();
       const form = new FormData();
       form.set(
         "entries",
@@ -141,6 +145,7 @@ async function uploadMarkdownBatches(
       chunk.forEach((entry, index) => form.set(`file-${index}`, entry.file));
       const response = await fetch(`/api/source-imports/${snapshotId}/entries`, { method: "POST", body: form });
       if (!response.ok) {
+        requestWorkspaceAccessCheck(response.status);
         const failure = readErrorCode(await response.json().catch(() => null), "Uploading folder entries failed.");
         throw Object.assign(new Error(failure.message), { code: failure.code });
       }
@@ -164,11 +169,14 @@ export async function runFolderImport(input: {
   files: FileList | File[];
   sourceName: string;
   onProgress: (state: ImportUiState) => void;
+  assertAllowed?: () => void;
 }): Promise<string> {
-  const { target, files, sourceName, onProgress } = input;
+  const { target, files, sourceName, onProgress, assertAllowed = () => {} } = input;
+  assertAllowed();
   onProgress({ kind: "PREPARING" });
   const selection = selectFolder(files);
   const manifest = await buildManifest(selection.staged);
+  assertAllowed();
   const session = target.kind === "new"
     ? await postJson(`/api/workspaces/${target.workspaceId}/source-imports`, {
       sourceName: sourceName.trim() || selection.rootName,
@@ -184,8 +192,9 @@ export async function runFolderImport(input: {
   const snapshotId = (session.body as { snapshotId: string }).snapshotId;
   onProgress({ kind: "UPLOADING", uploaded: 0, total: selection.staged.filter((entry) => entry.markdown).length });
   await uploadMarkdownBatches(snapshotId, selection.staged, (uploaded, total) =>
-    onProgress({ kind: "UPLOADING", uploaded, total }),
+    onProgress({ kind: "UPLOADING", uploaded, total }), assertAllowed,
   );
+  assertAllowed();
   onProgress({ kind: "FINALIZING" });
   const finalized = await postJson(`/api/source-imports/${snapshotId}/finalize`, {});
   if (!finalized.ok) {
@@ -206,6 +215,14 @@ function statusText(state: ImportUiState): string | null {
 
 export function FolderImportForm({ target }: { target: FolderImportTarget }): React.JSX.Element {
   const router = useRouter();
+  const { access, confirmed } = useWorkspaceAuthorization();
+  const allowed = confirmed && access.actions.canImport;
+  const allowedRef = useRef(allowed);
+  allowedRef.current = allowed;
+  useEffect(() => () => { allowedRef.current = false; }, []);
+  const assertAllowed = () => {
+    if (!allowedRef.current) throw Object.assign(new Error("Workspace access changed. Import is paused."), { code: "WORKSPACE_ACCESS_CHANGED" });
+  };
   const [state, setState] = useState<ImportUiState>({ kind: "IDLE" });
   const [sourceName, setSourceName] = useState("");
   const busy = state.kind === "PREPARING" || state.kind === "UPLOADING" || state.kind === "FINALIZING";
@@ -214,7 +231,8 @@ export function FolderImportForm({ target }: { target: FolderImportTarget }): Re
   async function handleFiles(files: FileList | null): Promise<void> {
     if (!files || files.length === 0) return;
     try {
-      const snapshotId = await runFolderImport({ target, files, sourceName, onProgress: setState });
+      const snapshotId = await runFolderImport({ target, files, sourceName, onProgress: setState, assertAllowed });
+      assertAllowed();
       router.push(`/w/${target.workspaceId}/sources/imports/${snapshotId}`);
     } catch (error) {
       const code = error instanceof Error && "code" in error && typeof (error as { code: unknown }).code === "string"
@@ -223,6 +241,8 @@ export function FolderImportForm({ target }: { target: FolderImportTarget }): Re
       setState({ kind: "ERROR", code, message: error instanceof Error ? error.message : "Importing the folder failed." });
     }
   }
+
+  if (!allowed) return <p role="status" className="p-4 text-sm text-kh-text-muted">Import is unavailable while this workspace is read-only or access is being checked.</p>;
 
   return (
     <div className="rounded-lg border border-kh-border bg-kh-bg p-4">

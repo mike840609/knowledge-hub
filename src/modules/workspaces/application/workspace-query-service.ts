@@ -11,6 +11,8 @@ import { evaluateWorkspaceCapabilities, requireWorkspaceRead } from "./workspace
 export type WorkspaceView = {
   id: string;
   name: string;
+  type: "PERSONAL" | "TEAM";
+  lifecycleState: "ACTIVE" | "ARCHIVED";
 };
 
 export class WorkspaceQueryService {
@@ -21,6 +23,10 @@ export class WorkspaceQueryService {
       await repositories.users.upsertIdentity(caller.identity);
       const accessible = new Map<string, Workspace>();
       for (const workspace of await repositories.workspaces.listForUser(caller.identity.id)) {
+        if (workspace.workspaceType === "PERSONAL") {
+          const membership = await repositories.workspaceMemberships.find(workspace.id, caller.identity.id);
+          if (workspace.personalOwnerUserId !== caller.identity.id || membership?.membershipSource !== "SYSTEM_PERSONAL") continue;
+        }
         accessible.set(workspace.id, workspace);
       }
       if (caller.validatedExternalGroupIds.length > 0) {
@@ -29,12 +35,12 @@ export class WorkspaceQueryService {
           if (accessible.has(mapping.workspaceId)) continue;
           if (mapping.role !== "ADMIN" && mapping.role !== "EDITOR" && mapping.role !== "VIEWER") continue;
           const workspace = await repositories.workspaces.findById(mapping.workspaceId);
-          if (workspace) accessible.set(workspace.id, workspace);
+          if (workspace && workspace.workspaceType !== "PERSONAL") accessible.set(workspace.id, workspace);
         }
       }
       return [...accessible.values()]
-        .sort((left, right) => left.name.localeCompare(right.name) || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0))
-        .map((workspace) => ({ id: workspace.id, name: workspace.name }));
+        .sort((left, right) => navigationRank(left) - navigationRank(right) || left.name.localeCompare(right.name) || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0))
+        .map((workspace) => ({ id: workspace.id, name: workspace.name, type: workspace.workspaceType ?? "TEAM", lifecycleState: workspace.lifecycleState ?? "ACTIVE" }));
     });
   }
 }
@@ -61,4 +67,8 @@ export class WorkspaceMembershipPolicy implements WorkspaceAccessPolicy {
     if (!capabilities.has("workspace.discover")) throw new WorkspaceNotFoundError();
     requireWorkspaceRead(capabilities);
   }
+}
+
+function navigationRank(workspace: Workspace): number {
+  return workspace.workspaceType === "PERSONAL" ? 0 : workspace.lifecycleState === "ARCHIVED" ? 2 : 1;
 }

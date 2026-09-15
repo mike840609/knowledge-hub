@@ -7,7 +7,9 @@ import { createDirectMembership } from "../domain/workspace-membership";
 import type { WorkspaceMembership } from "../domain/workspace-membership";
 import {
   TeamCreationDeniedError,
-  WorkspaceAccessDeniedError,
+  InsufficientWorkspaceCapabilityError,
+  WorkspaceArchivedError,
+  InvalidWorkspaceNameError,
   WorkspaceLifecycleError,
   WorkspaceNotFoundError,
 } from "../domain/errors";
@@ -44,7 +46,7 @@ export type TeamMutationOperation =
 export function assertTeamMutationAllowed(workspace: Workspace, operation: TeamMutationOperation): void {
   assertPersonalMutationAllowed(workspace, operation);
   if (workspace.lifecycleState === "ARCHIVED") {
-    throw new WorkspaceLifecycleError(
+    throw new WorkspaceArchivedError(
       `Archived workspace blocks ${operation}: restore the Team workspace before mutating it.`,
     );
   }
@@ -59,7 +61,7 @@ function requireTeamCreateCapability(caller: CallerContext): void {
 function requireValidTeamName(name: string, operation: string): string {
   const trimmed = name.trim();
   if (trimmed.length === 0 || trimmed.length > 200) {
-    throw new WorkspaceLifecycleError(`Team workspace ${operation} requires a non-empty name of at most 200 characters.`);
+    throw new InvalidWorkspaceNameError(`Team workspace ${operation} requires a non-empty name of at most 200 characters.`);
   }
   return trimmed;
 }
@@ -205,6 +207,6 @@ export class TeamWorkspaceService {
 
 function requireDirectOwner(membership: WorkspaceMembership | null, operation: string): void {
   if (membership?.role !== "OWNER") {
-    throw new WorkspaceAccessDeniedError(`Team workspace ${operation} requires a direct OWNER grant.`);
+    throw new InsufficientWorkspaceCapabilityError(`Team workspace ${operation} requires a direct OWNER grant.`);
   }
 }

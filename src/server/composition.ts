@@ -1,3 +1,6 @@
+import { WorkspaceAdminService } from "./workspace-admin";
+import { TeamWorkspaceService } from "@/modules/workspaces/application/team-workspace-service";
+import { TeamGovernanceService } from "@/modules/workspaces/application/team-governance-service";
 import type { Pool } from "mariadb";
 import { databaseConfig } from "@/infrastructure/database/mariadb/config";
 import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
@@ -51,6 +54,9 @@ export function buildApplicationServices(databasePool: Pool, options: {
   const hub = new HubKnowledgeCommandServiceImpl(unitOfWork);
   const queries = new KnowledgeQueryServiceImpl(unitOfWork);
   const sources = new SourceApplicationService(unitOfWork);
+  const workspaceAdmin = new WorkspaceAdminService(unitOfWork);
+  const teams = new TeamWorkspaceService(unitOfWork);
+  const governance = new TeamGovernanceService(unitOfWork);
   const workspaces = new WorkspaceQueryService(unitOfWork);
   const resolver = new HubIdentityResolver(unitOfWork);
   const personalWorkspaces = new PersonalWorkspaceService(unitOfWork);
@@ -83,7 +89,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
     preview: new GetFolderImportPreviewService(unitOfWork),
     apply: new ApplyFolderImportService(unitOfWork),
   };
-  return { verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, sources, workspaces, imports };
+  return { workspaceAdmin, teams, governance, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, sources, workspaces, imports };
 }
 
 export function applicationServices() {

@@ -1,0 +1,3 @@
+import { workspaceHttp, requestFields, type WorkspaceRouteContext } from "@/server/workspace-http";
+export async function GET(_request: Request, context: WorkspaceRouteContext) { return workspaceHttp(async (s, c) => s.workspaceAdmin.workspaceState(c, (await context.params).workspaceId)); }
+export async function PATCH(request: Request, context: WorkspaceRouteContext) { return workspaceHttp(async (s, c) => { const { workspaceId } = await context.params; await s.workspaceAdmin.workspaceState(c, workspaceId); const body = await requestFields(request, ["name"]); return s.teams.renameTeamWorkspace(c, workspaceId, body.name!); }); }

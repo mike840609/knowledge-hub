@@ -58,6 +58,18 @@ export class MariaDbWorkspaceAuditEventRepository implements WorkspaceAuditEvent
     );
   }
 
+  async listPage(workspaceId: string, cursor: string | undefined, limit: number): Promise<WorkspaceAuditEvent[]> {
+    const bounded = Math.min(51, Math.max(1, Math.floor(limit) || 51));
+    const rows = cursor
+      ? await this.connection.query<DbRow[]>(
+          `SELECT event.* FROM workspace_audit_events event
+           JOIN workspace_audit_events anchor ON anchor.workspace_id = event.workspace_id AND anchor.id = ?
+           WHERE event.workspace_id = ? AND (event.created_at < anchor.created_at OR (event.created_at = anchor.created_at AND event.id < anchor.id))
+           ORDER BY event.created_at DESC, event.id DESC LIMIT ?`, [cursor, workspaceId, bounded])
+      : await this.connection.query<DbRow[]>("SELECT * FROM workspace_audit_events WHERE workspace_id = ? ORDER BY created_at DESC, id DESC LIMIT ?", [workspaceId, bounded]);
+    return rows.map(mapAuditEvent);
+  }
+
   async listByWorkspace(workspaceId: string): Promise<WorkspaceAuditEvent[]> {
     const rows = await this.connection.query<DbRow[]>(
       "SELECT * FROM workspace_audit_events WHERE workspace_id = ? ORDER BY created_at, id",
