@@ -57,54 +57,41 @@ Phase 3 product closure MUST：
 - advanced Audit filters、export、analytics dashboard。
 - Search / semantic retrieval UI。
 - visual redesign、animation、advanced personalization。
+- 新的 Workspace / membership / group schema 欄位。
 
 Company production SSO hookup 可在公司環境完成；Local provider + trusted test claims 必須先把相同 authorization semantics 驗證完。
 
 ## 4. Canonical product journey
 
-Phase 3 必須支援下列完整流程：
+Phase 3 必須支援：
 
 ```text
 Login
-  ↓
-My Space
-  ↓
-empty state / Import knowledge
-  ↓
-Create Team
-  ↓
-Team knowledge
-  ↓
-Team Settings
-  ↓
-Add existing Hub user
-  ↓
-Configure SSO Group mapping
-  ↓
-Inspect direct / effective access truthfully
-  ↓
-Revoke direct access
-  ↓
-Archive Team
-  ↓
-Read archived knowledge
-  ↓
-Restore Team
+→ My Space
+→ empty state / Import knowledge
+→ Create Team
+→ Team knowledge
+→ Team Settings
+→ Add existing Hub user
+→ Configure SSO Group mapping
+→ Inspect direct / effective access truthfully
+→ Revoke direct access
+→ Archive Team
+→ Read archived knowledge
+→ Restore Team
 ```
 
-這條 flow 是 Task 13 E2E 與 Task 14 product acceptance 的主幹。
+這條 flow 是 Task 13 E2E 與 Task 14 Product Acceptance 的主幹。
 
 ## 5. My Space default entry
 
-Phase 2.5 的「first accessible Workspace」root resolution 在 Phase 3 被覆寫。
-
-Canonical root behavior：
+Phase 2.5 的「first accessible Workspace」root resolution 在 Phase 3 被覆寫：
 
 ```text
 /
-  → establish trusted caller
-  → ensurePersonalWorkspace(caller.identity.id)
-  → /w/:mySpaceId/knowledge
+→ establish trusted caller
+→ ensurePersonalWorkspace(caller.identity.id)
+→ /w/:mySpaceId/knowledge
 ```
 
 Rules：
@@ -114,14 +101,13 @@ Rules：
 - 不因 user 已有 Team access 而跳 Team。
 - My Space 沒有 Source 時顯示 empty state，不跳 Team。
 - direct Team deep link 仍可直接進入；root default 與 deep-link authorization 是兩件事。
-
-My Space 沒有 Team governance UI：不顯示 Members、SSO Groups、rename、archive、ownership controls。
+- My Space 不顯示 Members、SSO Groups、rename、archive、ownership controls。
 
 ## 6. Workspace selector
 
-Phase 3 Workspace selector 是 authorization scope switcher，不是 authorization source of truth。
+Workspace selector 是 authorization scope switcher，不是 authorization source of truth。
 
-Ordering 固定由 server/query layer決定：
+Canonical ordering：
 
 ```text
 My Space
@@ -137,32 +123,30 @@ Archived
 + Create team
 ```
 
+Ordering 必須 deterministic：
+
+```text
+My Space first
+→ ACTIVE TEAM by name ASC, id ASC
+→ ARCHIVED TEAM by name ASC, id ASC
+```
+
 Rules：
 
-1. My Space 永遠第一。
-2. Active Teams 按 name ascending。
-3. Archived Teams 獨立分區，按 name ascending。
-4. Archived 區可預設折疊；當前 scope 是 archived Team 時自動展開。
-5. unauthorized Workspace 永遠不出現。
-6. `+ Create team` 只有 caller 具 `workspace.create_team` platform capability 時顯示。
-7. selector 不顯示 org_code、owner、member count 或把 role 當 authorization truth。
+1. Archived 區可預設折疊；當前 scope 為 archived Team 時自動展開。
+2. unauthorized Workspace 永遠不出現。
+3. `+ Create team` 只有 caller 具 `workspace.create_team` platform capability 時顯示。
+4. selector 不顯示 org_code、owner、member count，也不把 role 當 authorization truth。
 
 ### 6.1 Workspace switching
 
-切換任何 Workspace 一律進目標 Workspace 的 Knowledge root：
+切換任何 Workspace 一律進目標 Workspace Knowledge root：
 
 ```text
 /w/:targetWorkspaceId/knowledge
 ```
 
-不嘗試保留上一個 Workspace 的：
-
-- Source。
-- Document。
-- Settings tab。
-- import state。
-
-Selector 的責任是切 scope，不是跨 scope 保存 context。
+不保留上一個 Workspace 的 Source、Document、Settings tab 或 import state。
 
 ## 7. Team creation
 
@@ -174,7 +158,7 @@ Dialog 只要求：
 Team name
 ```
 
-不在建立 wizard 中處理 member 或 SSO Group。
+Product flow 不在 Team-create request 內提交 member 或 SSO Group mapping。Backend 既有 group governance 保持獨立操作；不引入 draft Team 或 partial onboarding state。
 
 Success semantics：
 
@@ -186,13 +170,9 @@ create TEAM Workspace
 → /w/:newTeamId/knowledge
 ```
 
-不引入 draft Team 或 partial onboarding state。
-
 ## 8. Empty-state import entry
 
-空 Workspace 應直接導向既有 Phase 2 import flow；不建立 onboarding wizard。
-
-Rules：
+空 Workspace 直接導向既有 Phase 2 import flow，不建立 onboarding wizard。
 
 ```text
 My Space empty + source.manage
@@ -211,11 +191,9 @@ Archived Team empty
 → no Import CTA for any role
 ```
 
-Empty-state CTA availability 必須依 server-authorized capability + lifecycle 決定。
+## 9. Navigation and Settings visibility
 
-## 9. Product navigation and settings visibility
-
-Phase 2.5 的 primary navigation 保持 Knowledge / Sources；Phase 3 只在適用時增加 Team Settings。
+Phase 2.5 primary navigation 保持 Knowledge / Sources；Phase 3 在適用時增加 Team Settings。
 
 ```text
 Knowledge
@@ -229,7 +207,8 @@ Rules：
 - EDITOR / VIEWER 不顯示 Settings navigation。
 - EDITOR / VIEWER direct URL 仍由 server authorization 拒絕；hidden navigation 不算 security boundary。
 - My Space 不顯示 Team Settings。
-- `Sources` mutation controls 依 `source.manage` 決定；VIEWER 不看到沒有可操作性的 import/update CTA。
+- Sources management entry 對具 `source.manage` 的 caller 顯示；VIEWER 不顯示沒有可操作性的 Sources management navigation。
+- Archived Team 對原本具 Source management capability 的 caller可保留 read-only Source inspection，但所有 mutation action 必須消失；這是 presentation behavior，不改 role capability bundle。
 
 Recommended Team settings routes：
 
@@ -242,9 +221,9 @@ Recommended Team settings routes：
 
 ## 10. UI-ready server action model
 
-Frontend MUST NOT 以 `role === "OWNER"` 等散落判斷自行重建 policy。
+Frontend MUST NOT 以散落的 `role === "OWNER"` 判斷自行重建 policy。
 
-Server/query layer 應回傳 caller capability 計算後的 UI-ready actions，例如：
+Server/query layer 應回傳 caller capability + lifecycle 計算後的 UI-ready actions，例如：
 
 ```ts
 export type WorkspaceActions = {
@@ -262,11 +241,11 @@ export type WorkspaceActions = {
 };
 ```
 
-Lifecycle evaluation 也由 server 合併進 action model。Archived Team 的 ordinary mutation actions 必須直接為 `false`。
+Archived Team 的 ordinary mutation actions 必須直接為 `false`。
 
-Frontend 可以使用 action flags 決定 presentation，但 API route 仍必須重新執行 authorization；action flags 不是 authorization token。
+Frontend 使用 action flags 做 presentation；API route 仍必須重新 authorization。Action flags 不是 authorization token。
 
-## 11. Workspace navigation/read models
+## 11. Workspace read models
 
 Selector 使用 caller-visible navigation model：
 
@@ -279,7 +258,7 @@ export type WorkspaceNavigationItem = {
 };
 ```
 
-`canCreateTeam` 是 caller/platform-level state，不應重複附在每個 Workspace item 上。
+`canCreateTeam` 是 caller/platform-level state，不重複附在每個 Workspace item 上。
 
 Team detail view 至少包含：
 
@@ -300,7 +279,7 @@ export type TeamWorkspaceView = {
 
 Phase 3 Add member 只允許選擇已存在的 Hub User。
 
-User lookup contract 只提供可供管理 UI 搜尋的 existing Hub users；它不是 invitation 或 identity provisioning API。
+User lookup contract 只提供 existing Hub users；不是 invitation 或 identity provisioning API。
 
 Membership write payload 使用 canonical Hub `userId`：
 
@@ -311,20 +290,13 @@ Membership write payload 使用 canonical Hub `userId`：
 }
 ```
 
-MUST NOT 支援：
-
-- arbitrary `emp_id` membership creation。
-- browser-provided external subject linking。
-- pending invite。
-- implicit User creation。
+MUST NOT 支援 arbitrary `emp_id` membership creation、browser-provided external subject linking、pending invite 或 implicit User creation。
 
 未來 company directory integration 可替換 lookup source，但 membership identity 仍是 Hub `userId`。
 
 ## 13. Team member administration UI
 
-Members 使用 table / list surface；每個 row 分開呈現 direct grant 與 group-derived truth。
-
-Recommended row fields：
+Members 使用 table/list，分開呈現 direct grant 與 group-derived truth：
 
 ```text
 Name
@@ -343,19 +315,17 @@ OWNER
 → manage OWNER / ADMIN / EDITOR / VIEWER
 ```
 
-Assignable role choices 應由 server contract 提供或由 capability policy-derived presentation model產生，不在 component 中重新 hardcode policy。
+Assignable role choices 由 server contract 或 capability-policy-derived presentation model 產生，不在 component 中重新 hardcode policy。
 
 ### 13.1 No self-service leave
 
 Phase 3 不提供 `Leave Team`。
 
-Direct membership 的 add/update/remove 由 ADMIN / OWNER governance 完成。這避免產生「direct membership 已移除，但 SSO group 仍授權」時 `Leave` 語意不成立的 UX。
-
-Ownership transfer 也不在 Phase 3。
+Direct membership 的 add/update/remove 由 ADMIN / OWNER governance 完成；ownership transfer 也不在 Phase 3。
 
 ## 14. Truthful effective-access presentation
 
-Canonical authorization 仍是：
+Canonical authorization：
 
 ```text
 effective capabilities
@@ -366,9 +336,7 @@ effective capabilities
 
 Current caller 的 validated group claims 可用，因此可顯示完整 matched groups / effective capabilities。
 
-對 other user，如果 Phase 3 沒有可信的 external group membership source，就不能把 unknown 當 empty。
-
-Recommended view：
+對 other user，如果 Phase 3 沒有可信 external-group membership source，就不能把 unknown 當 empty。
 
 ```ts
 export type UserAccessInspection = {
@@ -396,7 +364,7 @@ Group access: Not evaluated
 
 Remove direct membership 不等於保證完全撤權。
 
-Confirmation MUST 明確表達：
+Confirmation MUST 明確說明：
 
 ```text
 Removing direct access may not fully revoke access if this user
@@ -429,39 +397,31 @@ Frontend MUST NOT 以「membership row 被刪除」直接判斷 caller 應離開
 
 Phase 3 不依賴 company directory picker。
 
-Add mapping UI 先接受：
+Canonical mutation payload 維持既有 schema 欄位：
 
 ```ts
 {
   externalGroupId: string;
-  displayLabel?: string;
   role: "ADMIN" | "EDITOR" | "VIEWER";
 }
 ```
 
 Rules：
 
-- `externalGroupId` 是 authorization key。
-- `displayLabel` 只是 presentation metadata，不得參與 authorization。
+- `externalGroupId` 是唯一 authorization key。
+- Phase 3 不新增 persisted display-label 欄位。
+- 若 UI 需要友善 label，只能是 non-authoritative presentation；不得成為 grant identity，也不得要求 schema migration。
 - ADMIN 可建立/更新 Group → EDITOR / VIEWER。
 - OWNER 可建立/更新 Group → ADMIN / EDITOR / VIEWER。
 - Group 永遠不能 grant OWNER。
 
-未來 directory search picker 只替換輸入 UX，最終仍提交同一個 canonical `externalGroupId`。
+未來 directory search picker 只替換輸入 UX，最終仍提交 canonical `externalGroupId`。
 
 ## 17. Audit UI
 
 Audit 是 governance evidence surface，不是 analytics dashboard。
 
-Phase 3 至少提供：
-
-- newest-first ordering。
-- pagination / Load more。
-- actor。
-- event type / human-readable summary。
-- target。
-- timestamp。
-- relevant before / after role/state details。
+Phase 3 至少提供 newest-first ordering、pagination/Load more、actor、event summary、target、timestamp 與 relevant before/after role/state details。
 
 ADMIN / OWNER 可讀 Team audit。
 
@@ -471,7 +431,7 @@ Phase 3 不做 advanced filters、export 或 charting。
 
 ### 18.1 Active Team archive
 
-Archive 是 OWNER-only danger action，位置建議：
+Archive 是 OWNER-only danger action：
 
 ```text
 Settings
@@ -480,12 +440,7 @@ Settings
 → Archive workspace
 ```
 
-Confirmation MUST 說明：
-
-- Knowledge 保留且仍可讀。
-- imports / content mutation 停止。
-- workspace administration mutation 停止。
-- OWNER 可以 restore。
+Confirmation MUST 說明 Knowledge 保留且仍可讀、imports/content mutation 停止、workspace administration mutation 停止、OWNER 可以 restore。
 
 Archive 成功後留在同一 Team，不跳 My Space。
 
@@ -500,8 +455,6 @@ This workspace is read-only. Existing knowledge remains available.
 
 OWNER 另外看到 `Restore workspace`。
 
-Archived Team behavior：
-
 | Surface | ADMIN | OWNER |
 | --- | --- | --- |
 | Knowledge | read | read |
@@ -514,19 +467,13 @@ Archived Team behavior：
 | Member/group mutation | no | no |
 | Restore | no | yes |
 
-VIEWER / EDITOR 仍可依原本 read capability 閱讀 Knowledge，但沒有 governance surface。
+VIEWER / EDITOR 仍依 read capability 閱讀 Knowledge，但沒有 governance surface。
 
 Archived 是 lifecycle state，不是另一種 role。
 
 ### 18.3 Restore
 
-Restore 成功後：
-
-- Workspace ID 不變。
-- Source/Document IDs 不變。
-- memberships 不變。
-- group mappings 不變。
-- ordinary mutations 依 effective capabilities 恢復。
+Restore 成功後 Workspace ID、Source/Document IDs、memberships、group mappings 全部不變；ordinary mutations 依 effective capabilities 恢復。
 
 ## 19. Team Settings information architecture
 
@@ -541,19 +488,9 @@ Audit
 
 ### General
 
-OWNER：
+OWNER 可 rename Team、inspect lifecycle、archive Active Team、restore Archived Team。
 
-- rename Team。
-- inspect lifecycle state。
-- archive Active Team。
-- restore Archived Team。
-
-ADMIN：
-
-- inspect Team name / lifecycle state。
-- 不顯示無權執行的 rename/archive/restore controls。
-
-避免用 disabled dangerous controls 教使用者 policy；沒有 capability 的 action 直接不出現。
+ADMIN 只 inspect Team name / lifecycle；不顯示無權執行的 rename/archive/restore controls。
 
 ### Members
 
@@ -566,7 +503,6 @@ ADMIN：
 
 - list mapping。
 - manually enter canonical externalGroupId。
-- optional display label。
 - role selection subject to actor ceiling。
 
 ### Audit
@@ -577,8 +513,6 @@ ADMIN：
 
 Governance API 必須提供 stable semantic error code；frontend 不 parse human-readable backend message。
 
-Recommended contract：
-
 ```ts
 export type ApiError = {
   code: string;
@@ -587,7 +521,7 @@ export type ApiError = {
 };
 ```
 
-Minimum semantic errors include：
+Minimum semantic errors：
 
 ```text
 WORKSPACE_ARCHIVED
@@ -603,20 +537,11 @@ WORKSPACE_NOT_FOUND
 Presentation policy：
 
 ```text
-field / form validation
-→ inline
-
-row / invariant conflict
-→ row or dialog inline
-
-workspace/global lifecycle state
-→ banner
-
-successful mutation
-→ toast
-
-undiscoverable resource
-→ generic 404
+field/form validation → inline
+row/invariant conflict → row or dialog inline
+workspace/global lifecycle state → banner
+successful mutation → toast
+undiscoverable resource → generic 404
 ```
 
 404 behavior MUST preserve existing discover-vs-read non-disclosure semantics。
@@ -739,20 +664,9 @@ existing lock-order / concurrency regressions
 lint / typecheck / unit / integration / e2e / build
 ```
 
-Existing Phase 3 backend hard gates remain unchanged，特別是：
+Existing Phase 3 backend hard gates remain unchanged，特別是 production no-Local-fallback、Hub-owned UUIDv7、durable `(provider,subject)` identity、008/009 staged safety、Personal uniqueness、direct OWNER invariant、atomic audit、canonical lock order、archive serialization、no Source/Document ACL。
 
-- production cannot silently use Local identity。
-- Hub User ID remains Hub-owned UUIDv7。
-- `(provider, subject)` is durable account identity truth。
-- migration 008 / 009 staged safety。
-- Personal uniqueness。
-- direct OWNER invariant。
-- atomic audit。
-- canonical Source/Knowledge/import lock order。
-- archive prevents later ordinary mutation commit。
-- no Source/Document ACL introduced。
-
-## 26. Product acceptance vs production SSO cutover
+## 26. Product Acceptance vs Production SSO Cutover
 
 Verification report 必須分開：
 
@@ -764,7 +678,7 @@ Production Company SSO Cutover
 PASS | PENDING COMPANY ENVIRONMENT | FAIL
 ```
 
-Local provider + trusted test claims 可使 Product Acceptance PASS，只要 identity / group / platform-capability semantics 與 production contract 相同。
+Local provider + trusted test claims 可使 Product Acceptance PASS，只要 identity/group/platform-capability semantics 與 production contract 相同。
 
 Company SSO production hookup 若尚未能在公司環境執行，可標 `PENDING COMPANY ENVIRONMENT`，不阻塞 Phase 4 product development；但不能宣稱 production cutover verified。
 
@@ -799,7 +713,7 @@ Production Company SSO Cutover 可獨立標記 pending，但不得把 pending �
 
 本文件 approval 後，下一步由 Superpowers `writing-plans` 更新既有 Phase 3 implementation plan 的 Task 12–14；不新增 Phase 3.5 或 Task 15。
 
-Implementation plan 必須保留 Tasks 1–11 已定的 identity、migration、repository、lock-order 與 cutover sequencing，並只補強：
+Tasks 1–11 已定的 identity、migration、repository、lock-order 與 cutover sequencing保持不變。Implementation plan 只補強：
 
 ```text
 Task 12
@@ -821,7 +735,7 @@ Task 13
 Task 14
 → role/lifecycle/access matrices
 → UI/API dual enforcement
-→ product acceptance report
+→ Product Acceptance report
 → explicit Product Acceptance vs Company SSO Cutover status
 → all existing security/concurrency/cutover evidence
 ```
