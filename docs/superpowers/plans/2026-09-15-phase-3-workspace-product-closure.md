@@ -115,6 +115,7 @@ docs/superpowers/verification/
 - Modify: `src/modules/identity/ports/user-repository.ts`
 - Modify: `src/infrastructure/database/mariadb/repositories/users.ts`
 - Modify: `src/modules/workspaces/domain/errors.ts`
+- Modify: `src/modules/workspaces/application/team-workspace-service.ts`
 - Modify: `src/modules/workspaces/application/workspace-query-service.ts`
 - Create: `src/server/workspace-admin.ts`
 - Modify: `src/server/knowledge-read.ts`
@@ -349,6 +350,8 @@ expect(await inspectOtherUser(ownerCaller, teamId, viewer.id)).toMatchObject({
 
 Also prove there is no HTTP recovery route and that member creation accepts `userId`, not emp_id.
 
+Add HTTP status/body assertions for `POST /api/workspaces`: a caller without `workspace.create_team` receives 403 with `TEAM_CREATION_DENIED`; a capable caller submitting whitespace-only or more than 200 characters receives 400 with `INVALID_WORKSPACE_NAME` and `field: "name"`. Invalid create requests must leave no Workspace, owner membership, or audit event. Also cover the same name validation on owner rename. At the UI layer, simulate platform capability loss after the Create dialog opens: a denied submission stays in the dialog, shows the permission error, refreshes navigation/actions, and disables further submission when `canCreateTeam` is false.
+
 - [ ] **Step 7: Add stable governance domain error subclasses before wiring routes**
 
 Extend `src/modules/workspaces/domain/errors.ts` instead of overloading the existing generic `WORKSPACE_ACCESS_DENIED` / `WORKSPACE_LIFECYCLE_VIOLATION` strings. Add subclasses with stable codes used by Task 13:
@@ -375,6 +378,8 @@ export class LastDirectOwnerError extends DomainError {
 
 Add equivalently specific `MEMBER_NOT_FOUND`, `MEMBER_ALREADY_EXISTS`, `GROUP_MAPPING_ALREADY_EXISTS`, and `INVALID_ROLE_ASSIGNMENT` errors at the application/domain boundary where the invariant is detected. Existing `WorkspaceNotFoundError` remains the non-enumerating resource-not-found primitive.
 
+Preserve the existing `TeamCreationDeniedError` / `TEAM_CREATION_DENIED` from `requireTeamCreateCapability()` and map it explicitly to 403. Add `InvalidWorkspaceNameError` with code `INVALID_WORKSPACE_NAME`; change `requireValidTeamName()` in `src/modules/workspaces/application/team-workspace-service.ts` to throw it for a trimmed name of zero or more than 200 characters, covering both create and rename. Map that code to 400 with `field: "name"`. Keep other lifecycle failures distinct; do not classify every `WORKSPACE_LIFECYCLE_VIOLATION` as a name error or parse error messages.
+
 - [ ] **Step 8: Add explicit governance HTTP routes that always establish a trusted caller**
 
 Implement these route responsibilities:
@@ -400,6 +405,8 @@ Keep the existing non-enumerating 404 behavior and add a workspace governance ma
 ```text
 WORKSPACE_NOT_FOUND / undiscoverable access -> 404 { code: NOT_FOUND }
 INSUFFICIENT_WORKSPACE_CAPABILITY           -> 403
+TEAM_CREATION_DENIED                       -> 403
+INVALID_WORKSPACE_NAME                     -> 400 { code: INVALID_WORKSPACE_NAME, field: "name" }
 WORKSPACE_ARCHIVED                          -> 409
 LAST_DIRECT_OWNER                           -> 409
 MEMBER_ALREADY_EXISTS                       -> 409
@@ -451,6 +458,7 @@ git add src/modules/identity/ports/user-repository.ts \
   src/infrastructure/database/mariadb/repositories/users.ts \
   src/modules/workspaces/domain/errors.ts \
   src/modules/workspaces/application/workspace-query-service.ts \
+  src/modules/workspaces/application/team-workspace-service.ts \
   src/server src/app/api tests/integration/phase3-workspace-admin-api.test.ts \
   tests/e2e/fixtures tests/e2e/phase3-identity-harness.spec.ts scripts/test/e2e.ts playwright.config.ts
 git commit -m "feat: expose phase 3 workspace product contracts"
@@ -641,6 +649,8 @@ Audit page consumes `AuditPage`: read-only, newest-first, Load more/cursor pagin
 Centralize Task 13 error presentation in `governance-error.tsx` or equivalent helper:
 
 ```text
+INVALID_WORKSPACE_NAME + field: name -> create/rename field inline
+TEAM_CREATION_DENIED -> Create dialog permission error + navigation/actions refresh; disable submit when canCreateTeam is false
 field + validation code -> form inline
 LAST_DIRECT_OWNER -> row/dialog inline
 WORKSPACE_ARCHIVED -> persistent/read-only banner + refresh

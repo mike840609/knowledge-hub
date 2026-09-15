@@ -573,12 +573,18 @@ export type ApiError = {
 };
 ```
 
+Create Team 缺少平台能力時，保留 `TEAM_CREATION_DENIED` 並回 403。Create／rename 的名稱先 trim，長度必須為 1–200；不合法時使用專用 `INVALID_WORKSPACE_NAME`，回 400 並附 `field: "name"`，供表單 inline 提示。不得將其他 lifecycle error 全部當作名稱錯誤，或以 message 文字推導錯誤種類。
+
+若 Create dialog 開啟後平台能力失效，提交被拒時保留 dialog 並顯示權限提示，刷新 navigation/actions；`canCreateTeam` 為 false 時停用後續提交。HTTP 測試需驗證無建立能力、空白名稱、超長名稱的 status/code/field，invalid create 不產生 Workspace、owner membership 或 audit event；rename 共用名稱驗證，UI 測試涵蓋 dialog 開啟後撤銷建立能力。
+
 Minimum semantic errors：
 
 ```text
 WORKSPACE_ARCHIVED
 LAST_DIRECT_OWNER
 INSUFFICIENT_WORKSPACE_CAPABILITY
+TEAM_CREATION_DENIED
+INVALID_WORKSPACE_NAME
 MEMBER_NOT_FOUND
 MEMBER_ALREADY_EXISTS
 GROUP_MAPPING_ALREADY_EXISTS
