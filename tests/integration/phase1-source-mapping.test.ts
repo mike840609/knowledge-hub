@@ -502,7 +502,7 @@ describe("source projection authority", () => {
     expect(await countRows("knowledge_assets", "source_id", scope.managedSourceId)).toBe(before.assets);
     expect(Number((await pool.query<{ sync_version: number }[]>("SELECT sync_version FROM knowledge_sources WHERE id = ?", [scope.managedSourceId]))[0].sync_version)).toBe(before.version);
     const service = new SourceApplicationService(unitOfWork);
-    const failedId = await service.recordFailedRun({ caller, sourceId: scope.managedSourceId, basedOnVersion: before.version, summary: { failure: true } });
+    const failedId = await service.recordFailedRun({ caller, sourceId: scope.managedSourceId, basedOnVersion: before.version, summary: { failureCode: "IMPORT_APPLY_FAILED" } });
     expect(await pool.query<{ status: string }[]>("SELECT status FROM sync_runs WHERE id = ?", [failedId])).toEqual([{ status: "FAILED" }]);
     expect(Number((await pool.query<{ sync_version: number }[]>("SELECT sync_version FROM knowledge_sources WHERE id = ?", [scope.managedSourceId]))[0].sync_version)).toBe(before.version);
   });

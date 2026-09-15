@@ -7,6 +7,7 @@ import { fingerprintRevisionContent } from "@/modules/knowledge/domain/content";
 import type { SourceUnitOfWork } from "../ports/unit-of-work";
 import type { SourceEntry } from "../domain/source-entry";
 import type { KnowledgeAsset } from "../domain/asset";
+import { SourceImportError, type ImportErrorCode } from "../domain/import-errors";
 import { bindSourceProjection } from "./source-knowledge-projection-service";
 import { requireSourceManagedSource } from "@/modules/knowledge/application/internal/tree-transaction";
 import { archiveSourceEntry, updateSourceLocator } from "./source-entry-mapping-service";
@@ -25,6 +26,21 @@ export type KnownSourceApplyInput = {
   /** Test-only fault injection; never exposed through a Web action. */
   failurePoint?: "knowledge" | "entry" | "asset" | "run";
 };
+
+/**
+ * Failure-audit marker for the Phase 1 known-entry path (#9 item 22). Same
+ * `failureCode` shape as the Phase 2 Apply path: the import error's own code
+ * when the failure is an import diagnostic, otherwise the generic fallback.
+ */
+function knownEntryFailureCode(error: unknown): ImportErrorCode {
+  return error instanceof SourceImportError ? error.code : "IMPORT_APPLY_FAILED";
+}
+
+function failedSummary(summary: Record<string, unknown> | undefined, error: unknown): Record<string, unknown> {
+  const { failure: _dropped, ...rest } = summary ?? {};
+  void _dropped;
+  return { ...rest, failureCode: knownEntryFailureCode(error) };
+}
 
 /**
  * Phase 1 Source container lifecycle contract (plan §3, verbatim). Archive is
@@ -96,7 +112,7 @@ export class SourceApplicationService implements SourceLifecycleCommands {
         return { runId, resultVersion, changed: knowledgeResult.changed };
       });
     } catch (error) {
-      try { await this.recordFailedRun({ id: runId, caller, sourceId: input.sourceId, basedOnVersion: input.basedOnVersion, summary: { ...(input.summary ?? {}), failure: true } }); } catch { /* Preserve the original failure. */ }
+      try { await this.recordFailedRun({ id: runId, caller, sourceId: input.sourceId, basedOnVersion: input.basedOnVersion, summary: failedSummary(input.summary, error) }); } catch { /* Preserve the original failure. */ }
       throw error;
     }
   }
@@ -123,7 +139,7 @@ export class SourceApplicationService implements SourceLifecycleCommands {
         return { runId, resultVersion };
       });
     } catch (error) {
-      try { await this.recordFailedRun({ id: runId, caller, sourceId: input.sourceId, basedOnVersion: input.basedOnVersion, summary: { ...(input.summary ?? {}), failure: true } }); } catch { /* Preserve original failure. */ }
+      try { await this.recordFailedRun({ id: runId, caller, sourceId: input.sourceId, basedOnVersion: input.basedOnVersion, summary: failedSummary(input.summary, error) }); } catch { /* Preserve original failure. */ }
       throw error;
     }
   }
