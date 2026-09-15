@@ -87,6 +87,7 @@ function reconcileFolders(
   plan: FolderImportPlan,
   desiredFolders: string[],
   currentFolders: CanonicalFolderState[],
+  blockedPaths: ReadonlySet<string> = new Set(),
 ): Map<string, CanonicalFolderState> {
   const currentByPath = new Map(currentFolders.map((folder) => [folder.sourcePath, folder]));
   const desired = new Set(desiredFolders);
@@ -111,6 +112,7 @@ function reconcileFolders(
 
   for (const current of [...currentFolders].sort((left, right) => compareDepthDescendingThenPath(left.sourcePath, right.sourcePath))) {
     if (current.status === "ACTIVE" && !desired.has(current.sourcePath)) {
+      if (blockedPaths.has(current.sourcePath)) continue;
       plan.folders.archive.push({ entryId: current.entryId, treeNodeId: current.treeNodeId, sourcePath: current.sourcePath });
       plan.preview.push({ kind: "FOLDER", sourcePath: current.sourcePath, previousPath: null, labels: ["ARCHIVED"], diagnostics: [] });
     }
@@ -602,7 +604,7 @@ function summarize(plan: FolderImportPlan): void {
 export function reconcileFolderImport(snapshot: ReadyImportContent, current: CanonicalImportState, blockedPaths: ReadonlySet<string> = new Set()): FolderImportPlan {
   const plan = emptyPlan(snapshot.sourceBinding);
   const desiredFolders = deriveRequiredFolders(snapshot);
-  const currentFoldersByPath = reconcileFolders(plan, desiredFolders, current.folders);
+  const currentFoldersByPath = reconcileFolders(plan, desiredFolders, current.folders, blockedPaths);
   const documentMatches = reconcileDocuments(plan, snapshot.documents, current.documents, blockedPaths);
   reconcileAssets(plan, snapshot.assets, current.assets, blockedPaths);
   buildOrdering(plan, snapshot, desiredFolders, currentFoldersByPath, documentMatches);

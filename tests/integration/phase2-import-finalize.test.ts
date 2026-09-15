@@ -7,7 +7,9 @@ import { CreateFolderImportService, type ImportManifestEntry } from "@/modules/s
 import { UploadFolderImportEntriesService } from "@/modules/sources/application/upload-folder-import-entries";
 import { FinalizeFolderImportService } from "@/modules/sources/application/finalize-folder-import";
 import { DEFAULT_IMPORT_LIMITS } from "@/modules/sources/domain/import-limits";
-import { createDocumentForAnySource, createEntryFixture, createSourceFixture, fixtureCaller, fixtureIdentity } from "../fixtures/knowledge";
+import type { SourceRepositories, SourceUnitOfWork } from "@/modules/sources/ports/unit-of-work";
+import { MariaDbSourceRepository } from "@/infrastructure/database/mariadb/repositories/sources";
+import { createDocumentForAnySource, createEntryFixture, createFolderEntryFixture, createSourceFixture, fixtureCaller, fixtureIdentity } from "../fixtures/knowledge";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 
 let pool: Pool;
@@ -53,6 +55,44 @@ async function initialSession(files: { uploadKey: string; path: string; bytes: U
   const session = await create.createInitial(fixtureCaller(), { workspaceId: fixture.workspaceId, sourceName: "Imported Wiki", rootName: "wiki", manifest });
   if (files.length > 0) await upload.upload(fixtureCaller(), { snapshotId: session.snapshotId, entries: files.map((file) => ({ uploadKey: file.uploadKey, bytes: file.bytes })) });
   return { fixture, session, finalize };
+}
+
+/**
+ * Simulates the Source row vanishing between snapshot creation and
+ * finalization (a dangling `source_id` cannot be staged through SQL because
+ * `fk_import_snapshots_source` makes it unrepresentable). Only the Source
+ * row lock is stubbed to miss; every other repository still hits MariaDB.
+ */
+class MissingSourceRepository extends MariaDbSourceRepository {
+  override async lockById(): Promise<null> {
+    return null;
+  }
+}
+
+class MissingSourceUnitOfWork implements SourceUnitOfWork {
+  constructor(private readonly inner: SourceUnitOfWork) {}
+
+  private withMissingSource(repositories: SourceRepositories): SourceRepositories {
+    const stub = Object.assign(
+      Object.create(MissingSourceRepository.prototype) as MariaDbSourceRepository,
+      repositories.sources,
+    );
+    return { ...repositories, sources: stub };
+  }
+
+  run<T>(work: (repositories: SourceRepositories) => Promise<T>): Promise<T> {
+    return this.inner.run((repositories) => work(this.withMissingSource(repositories)));
+  }
+
+  runWithCreatorQuotaLock<T>(
+    creatorId: string,
+    timeoutSeconds: number,
+    work: (repositories: SourceRepositories) => Promise<T>,
+  ): Promise<T> {
+    return this.inner.runWithCreatorQuotaLock(creatorId, timeoutSeconds, (repositories) =>
+      work(this.withMissingSource(repositories)),
+    );
+  }
 }
 
 describe("Phase 2 import finalization", () => {
@@ -274,5 +314,53 @@ describe("Phase 2 import finalization", () => {
     expect(rows[0].diagnostics.map((diagnostic) => diagnostic.code)).toContain("INVALID_FRONTMATTER");
     expect(preview.summary.documents.archived).toBe(0);
     expect(preview.changes.some((change) => change.labels.includes("ARCHIVED"))).toBe(false);
+  });
+
+  it("does not archive a canonical folder shadowed by a blocked file at the same path", async () => {
+    const fixture = await createSourceFixture(pool, { managed: true });
+    await createFolderEntryFixture(pool, fixture.source.id, fixture.folderId, "guide.md");
+
+    const bytes = new TextEncoder().encode("---\ntitle: [broken\n---\n# Broken\n");
+    const { create, upload, finalize } = services();
+    const session = await create.createResync(fixtureCaller(), {
+      sourceId: fixture.source.id, rootName: "wiki", manifest: [markdownEntry("m1", "guide.md", bytes)],
+    });
+    await upload.upload(fixtureCaller(), { snapshotId: session.snapshotId, entries: [{ uploadKey: "m1", bytes }] });
+    const preview = await finalize.finalize(fixtureCaller(), session.snapshotId);
+
+    expect(preview.state).toBe("READY");
+    expect(preview.hasBlockers).toBe(true);
+    expect(preview.changes.flatMap((change) => change.diagnostics).map((diagnostic) => diagnostic.code)).toContain("INVALID_FRONTMATTER");
+    expect(preview.summary.folders.archived).toBe(0);
+    expect(preview.changes.some((change) => change.kind === "FOLDER" && change.labels.includes("ARCHIVED"))).toBe(false);
+  });
+
+  it("reports IMPORT_SOURCE_NOT_FOUND when the Source row vanishes behind a resync snapshot", async () => {
+    const fixture = await createSourceFixture(pool, { managed: true });
+    const uow = new MariaDbUnitOfWork(pool);
+    const create = new CreateFolderImportService(uow, { limits: DEFAULT_IMPORT_LIMITS, now: clock });
+    const upload = new UploadFolderImportEntriesService(uow, { limits: DEFAULT_IMPORT_LIMITS, now: clock });
+    const finalize = new FinalizeFolderImportService(new MissingSourceUnitOfWork(uow), { limits: DEFAULT_IMPORT_LIMITS, now: clock });
+    const bytes = new TextEncoder().encode("# Steady\n\nbody\n");
+    const session = await create.createResync(fixtureCaller(), {
+      sourceId: fixture.source.id, rootName: "wiki", manifest: [markdownEntry("m1", "docs/steady.md", bytes)],
+    });
+    await upload.upload(fixtureCaller(), { snapshotId: session.snapshotId, entries: [{ uploadKey: "m1", bytes }] });
+    await expect(finalize.finalize(fixtureCaller(), session.snapshotId)).rejects.toMatchObject({ code: "IMPORT_SOURCE_NOT_FOUND" });
+  });
+
+  it("denies a revoked Workspace before reporting a missing Source on resync finalization", async () => {
+    const fixture = await createSourceFixture(pool, { managed: true });
+    const uow = new MariaDbUnitOfWork(pool);
+    const create = new CreateFolderImportService(uow, { limits: DEFAULT_IMPORT_LIMITS, now: clock });
+    const upload = new UploadFolderImportEntriesService(uow, { limits: DEFAULT_IMPORT_LIMITS, now: clock });
+    const finalize = new FinalizeFolderImportService(new MissingSourceUnitOfWork(uow), { limits: DEFAULT_IMPORT_LIMITS, now: clock });
+    const bytes = new TextEncoder().encode("# Steady\n\nbody\n");
+    const session = await create.createResync(fixtureCaller(), {
+      sourceId: fixture.source.id, rootName: "wiki", manifest: [markdownEntry("m1", "docs/steady.md", bytes)],
+    });
+    await upload.upload(fixtureCaller(), { snapshotId: session.snapshotId, entries: [{ uploadKey: "m1", bytes }] });
+    await pool.query("DELETE FROM workspace_memberships WHERE workspace_id=? AND user_id=?", [fixture.workspaceId, fixtureIdentity.id]);
+    await expect(finalize.finalize(fixtureCaller(), session.snapshotId)).rejects.toMatchObject({ code: "IMPORT_SNAPSHOT_ACCESS_DENIED" });
   });
 });

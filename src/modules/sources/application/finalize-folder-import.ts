@@ -125,6 +125,7 @@ export class FinalizeFolderImportService {
   ): Promise<ImportPreview> {
     const snapshot = await repositories.importSnapshots.lockById(snapshotId);
     if (!snapshot || snapshot.createdBy !== caller.identity.id) throw importError("IMPORT_SNAPSHOT_NOT_FOUND", "Import snapshot was not found.");
+    const lockedSource = snapshot.sourceId === null ? null : await repositories.sources.lockById(snapshot.sourceId);
     try {
       await lockWorkspaceForMutation(repositories, caller, snapshot.workspaceId, "source-import");
     } catch (error) {
@@ -135,12 +136,11 @@ export class FinalizeFolderImportService {
     if (snapshot.expiresAt.getTime() <= now.getTime()) throw importError("IMPORT_SNAPSHOT_EXPIRED", "Import snapshot has expired.");
 
     if (snapshot.sourceId !== null) {
-      const source = await repositories.sources.lockById(snapshot.sourceId);
-      if (!source) throw importError("IMPORT_SOURCE_NOT_FOUND", "Import source was not found.");
-      if (source.syncVersion !== snapshot.basedOnVersion) {
+      if (!lockedSource) throw importError("IMPORT_SOURCE_NOT_FOUND", "Import source was not found.");
+      if (lockedSource.syncVersion !== snapshot.basedOnVersion) {
         throw importError("SOURCE_VERSION_CONFLICT", "The source changed after this import snapshot was created.", {
           snapshotVersion: snapshot.basedOnVersion,
-          currentVersion: source.syncVersion,
+          currentVersion: lockedSource.syncVersion,
         });
       }
     }

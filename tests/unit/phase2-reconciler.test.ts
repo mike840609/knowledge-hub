@@ -550,4 +550,64 @@ describe("Phase 2 folder import reconciliation", () => {
     expect(plan.summary.assets.removed).toBe(0);
     expect(plan.summary.blockers).toBeGreaterThan(0);
   });
+
+  it("does not plan ARCHIVED for a blocked file sharing its path with a canonical ACTIVE folder", () => {
+    const existing = currentFolder("guide");
+    const blockerChange: ImportPreviewChange = {
+      kind: "DOCUMENT",
+      sourcePath: "guide",
+      previousPath: null,
+      labels: [],
+      diagnostics: [
+        {
+          code: "INVALID_FRONTMATTER",
+          severity: "BLOCKING",
+          sourcePath: "guide",
+          message: "File guide has invalid frontmatter.",
+        },
+      ],
+    };
+    const plan = reconcileImportSnapshot(
+      snapshot(),
+      canonical({ folders: [existing] }),
+      [blockerChange],
+      new Set(["guide"]),
+    );
+
+    expect(plan.preview.filter((item) => item.sourcePath === "guide")).toHaveLength(1);
+    expect(plan.preview.find((item) => item.sourcePath === "guide")?.labels).toEqual([]);
+    expect(plan.folders.archive).toHaveLength(0);
+    expect(plan.summary.folders.archived).toBe(0);
+    expect(plan.summary.blockers).toBeGreaterThan(0);
+  });
+
+  it("does not restore an archived canonical folder for a blocked file at the same path", () => {
+    const archived = currentFolder("guide", "ARCHIVED");
+    const blockerChange: ImportPreviewChange = {
+      kind: "DOCUMENT",
+      sourcePath: "guide",
+      previousPath: null,
+      labels: [],
+      diagnostics: [
+        {
+          code: "INVALID_FRONTMATTER",
+          severity: "BLOCKING",
+          sourcePath: "guide",
+          message: "File guide has invalid frontmatter.",
+        },
+      ],
+    };
+    const plan = reconcileImportSnapshot(
+      snapshot(),
+      canonical({ folders: [archived] }),
+      [blockerChange],
+      new Set(["guide"]),
+    );
+
+    expect(plan.folders.restore).toHaveLength(0);
+    expect(plan.folders.archive).toHaveLength(0);
+    expect(plan.summary.folders.restored).toBe(0);
+    expect(plan.summary.folders.archived).toBe(0);
+    expect(plan.summary.blockers).toBeGreaterThan(0);
+  });
 });

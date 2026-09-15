@@ -754,7 +754,7 @@ Source row lock
 sync_version optimistic token
 ```
 
-所有 Phase 2 Apply統一 lock order：snapshot → Source。
+所有 Phase 2 Apply統一 lock order：snapshot → Source → Workspace。
 
 ### 17.1 Two previews
 
