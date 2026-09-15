@@ -10,6 +10,8 @@ import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 import type { UserIdentity } from "@/modules/identity/domain/user-identity";
 import { WorkspaceAccessDeniedError } from "@/modules/workspaces/domain/errors";
 import { uuidv7 } from "@/shared/ids/uuidv7";
+import { createTeamWorkspaceInsert } from "@/modules/workspaces/domain/workspace";
+import { createDirectMembership } from "@/modules/workspaces/domain/workspace-membership";
 
 let pool: Pool;
 beforeAll(() => { pool = createDatabasePool(databaseConfig("test")); });
@@ -29,15 +31,15 @@ describe("Workspace access boundary", () => {
     const now = new Date();
     await uow.run(async (repositories) => {
       for (const user of [alice, bob, carol]) await repositories.users.upsertIdentity(user);
-      await repositories.workspaces.insert({ id: workspaceX, name: "Cross Org X", createdAt: now, updatedAt: now });
-      await repositories.workspaces.insert({ id: workspaceY, name: "Bob Only Y", createdAt: now, updatedAt: now });
-      await repositories.workspaceMemberships.insert({ workspaceId: workspaceX, userId: alice.id, createdAt: now });
-      await repositories.workspaceMemberships.insert({ workspaceId: workspaceX, userId: bob.id, createdAt: now });
-      await repositories.workspaceMemberships.insert({ workspaceId: workspaceY, userId: bob.id, createdAt: now });
+      await repositories.workspaces.insert(createTeamWorkspaceInsert({ id: workspaceX, name: "Cross Org X", createdBy: alice.id, now }));
+      await repositories.workspaces.insert(createTeamWorkspaceInsert({ id: workspaceY, name: "Bob Only Y", createdBy: bob.id, now }));
+      await repositories.workspaceMemberships.insert(createDirectMembership({ workspaceId: workspaceX, userId: alice.id, role: "OWNER", now }));
+      await repositories.workspaceMemberships.insert(createDirectMembership({ workspaceId: workspaceX, userId: bob.id, role: "OWNER", now }));
+      await repositories.workspaceMemberships.insert(createDirectMembership({ workspaceId: workspaceY, userId: bob.id, role: "OWNER", now }));
       await repositories.sources.insert({ id: sourceId, name: "Shared Hub", workspaceId: workspaceX, sourceType: "HUB", ownership: "HUB_MANAGED", status: "ACTIVE", syncVersion: 0, createdBy: alice.id, updatedBy: alice.id, archivedBy: null, archivedAt: null, createdAt: now, updatedAt: now });
       await repositories.tree.insert({ id: folderId, sourceId, parentId: null, nodeType: "FOLDER", name: "Shared Folder", documentId: null, position: 0, status: "ACTIVE", updatedBy: alice.id, archivedBy: null, archivedAt: null });
     });
-    await expect(pool.query("INSERT INTO workspace_memberships (workspace_id, user_id) VALUES (?, ?)", [workspaceX, alice.id])).rejects.toBeTruthy();
+    await expect(pool.query("INSERT INTO workspace_memberships (workspace_id, user_id, role, membership_source) VALUES (?, ?, 'OWNER', 'DIRECT')", [workspaceX, alice.id])).rejects.toBeTruthy();
     await expect(pool.query("INSERT INTO knowledge_sources (id, name, workspace_id, source_type, ownership, status, sync_version, created_by, updated_by) VALUES (?, 'Invalid', ?, 'HUB', 'HUB_MANAGED', 'ACTIVE', 0, ?, ?)", [uuidv7(), uuidv7(), alice.id, alice.id])).rejects.toBeTruthy();
 
     const aliceCaller = callerFromIdentity(alice);
@@ -67,8 +69,8 @@ describe("Workspace access boundary", () => {
     const uow = new MariaDbUnitOfWork(pool);
     await uow.run(async (repositories) => {
       await repositories.users.upsertIdentity({ ...alice, org_code: "NEW-ORG" });
-      await repositories.workspaces.insert({ id: workspaceId, name: "Identity Change", createdAt: now, updatedAt: now });
-      await repositories.workspaceMemberships.insert({ workspaceId, userId: alice.id, createdAt: now });
+      await repositories.workspaces.insert(createTeamWorkspaceInsert({ id: workspaceId, name: "Identity Change", createdBy: alice.id, now }));
+      await repositories.workspaceMemberships.insert(createDirectMembership({ workspaceId, userId: alice.id, role: "OWNER", now }));
       expect(await repositories.workspaceMemberships.find(workspaceId, alice.id)).not.toBeNull();
     });
     const workspaces = await new WorkspaceQueryService(uow).listWorkspaces(callerFromIdentity({ ...alice, org_code: "NEW-ORG" }));

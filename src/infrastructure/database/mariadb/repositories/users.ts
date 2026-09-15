@@ -34,4 +34,17 @@ export class MariaDbUserRepository implements UserRepository {
     const rows = await this.connection.query<DbRow[]>("SELECT id, emp_id, name, org_code FROM users WHERE emp_id = ?", [empId]);
     return rows[0] ? mapUser(rows[0]) : null;
   }
+
+  async insert(identity: UserIdentity): Promise<void> {
+    await this.connection.query("INSERT INTO users (id, emp_id, name, org_code) VALUES (?, ?, ?, ?)", [
+      identity.id,
+      identity.emp_id,
+      identity.name,
+      identity.org_code,
+    ]);
+  }
+
+  async updateProfile(id: string, profile: { name: string; org_code: string }): Promise<void> {
+    await this.connection.query("UPDATE users SET name = ?, org_code = ? WHERE id = ?", [profile.name, profile.org_code, id]);
+  }
 }

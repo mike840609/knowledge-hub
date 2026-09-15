@@ -11,6 +11,9 @@ import { MariaDbAssetRepository } from "./assets";
 import { MariaDbSyncRunRepository } from "./sync-runs";
 import { MariaDbWorkspaceRepository } from "./workspaces";
 import { MariaDbWorkspaceMembershipRepository } from "./workspace-memberships";
+import { MariaDbWorkspaceGroupMappingRepository } from "./workspace-group-mappings";
+import { MariaDbWorkspaceAuditEventRepository } from "./workspace-audit-events";
+import { MariaDbExternalIdentityLinkRepository } from "./external-identity-links";
 import { MariaDbImportSnapshotRepository } from "./import-snapshots";
 import { MariaDbImportSnapshotEntryRepository } from "./import-snapshot-entries";
 import { MariaDbImportCanonicalStateRepository } from "./import-canonical-state";
@@ -25,7 +28,8 @@ export function createRepositories(connection: DatabaseConnection): SourceReposi
   const tree = new MariaDbTreeRepository(connection);
   const workspaces = new MariaDbWorkspaceRepository(connection);
   const workspaceMemberships = new MariaDbWorkspaceMembershipRepository(connection);
-  const workspaceAccess = new WorkspaceMembershipPolicy(workspaceMemberships);
+  const groupMappings = new MariaDbWorkspaceGroupMappingRepository(connection);
+  const workspaceAccess = new WorkspaceMembershipPolicy(workspaceMemberships, groupMappings);
   return {
     users,
     sources,
@@ -43,5 +47,8 @@ export function createRepositories(connection: DatabaseConnection): SourceReposi
     workspaces,
     workspaceMemberships,
     workspaceAccess,
+    groupMappings,
+    auditEvents: new MariaDbWorkspaceAuditEventRepository(connection),
+    identityLinks: new MariaDbExternalIdentityLinkRepository(connection),
   };
 }

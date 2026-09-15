@@ -10,6 +10,7 @@ const environmentNames = [
   "NODE_ENV", "PORT", "KM_E2E_PORT", "KM_DB_HOST", "KM_DB_PORT", "KM_DB_USER", "KM_DB_PASSWORD", "KM_DB_NAME",
   "KM_E2E_DB_HOST", "KM_E2E_DB_PORT", "KM_E2E_DB_USER", "KM_E2E_DB_PASSWORD", "KM_E2E_DB_NAME",
   "KM_LOCAL_IDENTITY_ENABLED", "KM_LOCAL_ID", "KM_LOCAL_EMP_ID", "KM_LOCAL_NAME", "KM_LOCAL_ORG_CODE",
+  "KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION",
 ];
 
 function runCommand(command: string, args: string[], environment: NodeJS.ProcessEnv): Promise<void> {
@@ -33,6 +34,7 @@ async function main(): Promise<void> {
   const dbPassword = process.env.KM_E2E_DB_PASSWORD ?? process.env.KM_TEST_DB_PASSWORD ?? "hcm_km_root";
   const identity = {
     KM_LOCAL_IDENTITY_ENABLED: "true",
+    KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION: "true",
     KM_LOCAL_ID: "0199f000-0000-7000-8000-000000000909",
     KM_LOCAL_EMP_ID: "E2E-0909",
     KM_LOCAL_NAME: "E2E Knowledge User",

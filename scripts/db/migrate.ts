@@ -123,10 +123,25 @@ hold write quiescence through the final step):
   npx tsx scripts/db/backfill-source-tree-mapping.ts --mapping /path/to/verified-mapping.json --apply
   npm run db:migrate -- --to 5
 
-An untargeted run on a populated database safely stops at the 005 readiness
-gate (004 stays APPLIED, 005 gets no ledger row); backfill, then rerun.
-DDL failures keep the FAILED/RUNNING ledger diagnostics: repair the schema
-explicitly and clear only the affected ledger row — never edit checksums.
+ An untargeted run on a populated database safely stops at the 005 readiness
+ gate (004 stays APPLIED, 005 gets no ledger row); backfill, then rerun.
+ DDL failures keep the FAILED/RUNNING ledger diagnostics: repair the schema
+ explicitly and clear only the affected ledger row — never edit checksums.
+
+ Phase 3 populated-production cutover (canonical-write quiescence from
+ BEFORE 008 through 009 + Phase-3-compatible writer readiness; full order in
+ docs/operations/phase3-workspace-governance-cutover.md):
+
+   maintenance ON (stop canonical writes first)
+   npm run db:migrate -- --to 8
+   npx tsx scripts/db/bootstrap-phase3-workspace-governance.ts --config /path/to/governance.json
+   npx tsx scripts/db/bootstrap-phase3-identity-links.ts --config /path/to/identity-links.json
+   npx tsx scripts/db/backfill-personal-workspaces.ts --apply          # Task 7 implementation
+   npm run db:migrate                                                  # 009 final constraints (Task 11)
+   verify readiness → switch traffic → maintenance OFF
+
+ beforeApply read-only validation and the migration advisory lock are NOT
+ application write fences and never replace quiescence.
 `;
 
 async function main(): Promise<void> {

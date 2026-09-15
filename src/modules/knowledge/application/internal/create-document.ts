@@ -1,4 +1,5 @@
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
+import { lockWorkspaceForMutation } from "@/modules/workspaces/application/workspace-mutation-guard";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import { fingerprintRevisionContent, type RevisionContentInput } from "../../domain/content";
 import { SourceArchivedError, SourceNotFoundError, SourceReadOnlyError } from "../../domain/errors";
@@ -17,8 +18,9 @@ export type CreateHubDocumentInput = RevisionContentInput & {
  * Hub-managed document creation bound to an already-open canonical transaction.
  *
  * Path (§6): trusted CallerContext → resolve/lock Source on this connection →
- * transaction-scoped WorkspaceAccessPolicy → Source ACTIVE + HUB_MANAGED →
- * parent validation → atomic Document + R1 + TreeNode + pointer writes.
+ * Source ACTIVE + HUB_MANAGED → lock parent Workspace FOR UPDATE →
+ * revalidate lifecycle + capability → parent validation → atomic Document +
+ * R1 + TreeNode + pointer writes.
  * Never opens a nested unit of work; the owning service commits once.
  */
 export async function createDocumentInTransaction(
@@ -29,9 +31,9 @@ export async function createDocumentInTransaction(
   await repositories.users.upsertIdentity(caller.identity);
   const source = await repositories.sourcePolicy.lockById(input.sourceId);
   if (!source) throw new SourceNotFoundError();
-  await repositories.workspaceAccess.requireMembership(caller, source.workspaceId);
   if (source.status !== "ACTIVE") throw new SourceArchivedError();
   if (source.ownership !== "HUB_MANAGED") throw new SourceReadOnlyError();
+  await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "content-write");
   let position: number | undefined;
   if (input.position !== undefined) {
     position = normalizeTreePosition(input.position);

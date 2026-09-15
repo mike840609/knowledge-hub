@@ -5,6 +5,8 @@ import { treeMappingMigration } from "./004-phase-1-tree-mapping";
 import { treeMappingConstraintsMigration } from "./005-phase-1-tree-mapping-constraints";
 import { phase2ImportStagingMigration } from "./006-phase-2-import-staging";
 import { phase2AssetProjectionMigration } from "./007-phase-2-asset-projection";
+import { phase3WorkspaceGovernanceAdditiveMigration } from "./008-phase-3-workspace-governance-additive";
+import { phase3WorkspaceGovernanceFinalizeMigration } from "./009-phase-3-workspace-governance-finalize";
 
 export const migrations = [
   coreMigration,
@@ -14,4 +16,6 @@ export const migrations = [
   treeMappingConstraintsMigration,
   phase2ImportStagingMigration,
   phase2AssetProjectionMigration,
+  phase3WorkspaceGovernanceAdditiveMigration,
+  phase3WorkspaceGovernanceFinalizeMigration,
 ] as const;

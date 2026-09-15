@@ -1,5 +1,4 @@
 import type { Pool } from "mariadb";
-import { LocalIdentityProvider } from "@/infrastructure/identity/local-identity-provider";
 import { databaseConfig } from "@/infrastructure/database/mariadb/config";
 import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
 import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction";
@@ -12,23 +11,70 @@ import { GetFolderImportPreviewService } from "@/modules/sources/application/get
 import { UploadFolderImportEntriesService } from "@/modules/sources/application/upload-folder-import-entries";
 import { SourceApplicationService } from "@/modules/sources/application/source-version-guard";
 import { WorkspaceQueryService } from "@/modules/workspaces/application/workspace-query-service";
+import { PersonalWorkspaceService } from "@/modules/workspaces/application/personal-workspace-service";
+import {
+  assertProductionReadiness,
+  type ProductionReadinessSummary,
+} from "@/modules/workspaces/application/workspace-readiness";
+import type { CompanySsoSessionReader } from "@/modules/identity/ports/company-sso-session-reader";
+import { companySsoProviderName, companySsoRolloutHubUserIds, identityProviderKind } from "./config";
+import { HubIdentityResolver } from "@/modules/identity/application/hub-identity-resolver";
+import { establishTrustedCaller as establishTrustedCallerWith } from "@/server/trusted-caller";
 import { importRuntimeConfig } from "@/server/import-config";
+import { createIdentityProvider } from "@/server/identity-provider-factory";
 
 let pool: Pool | undefined;
-let services: ReturnType<typeof buildServices> | undefined;
+let services: ReturnType<typeof buildApplicationServices> | undefined;
+let companySessionReader: CompanySsoSessionReader | undefined;
+
+/** Startup-only dependency registration; never accepts browser identity data. */
+export function configureCompanySsoSessionReader(reader: CompanySsoSessionReader): void {
+  if (services || companySessionReader) {
+    throw new Error("Configure the Company SSO session reader once, before application services are created.");
+  }
+  companySessionReader = reader;
+}
 
 function getPool(): Pool {
   pool ??= createDatabasePool(databaseConfig("dev"));
   return pool;
 }
 
-function buildServices(databasePool: Pool) {
+export function buildApplicationServices(databasePool: Pool, options: {
+  companySessionReader?: CompanySsoSessionReader;
+} = {}) {
   const unitOfWork = new MariaDbUnitOfWork(databasePool);
-  const identityProvider = new LocalIdentityProvider();
+  const identityProvider = createIdentityProvider(options);
+  const providerKind = identityProviderKind();
+  const providerName = companySsoProviderName();
+  const sessionReaderConfigured = options.companySessionReader !== undefined;
   const hub = new HubKnowledgeCommandServiceImpl(unitOfWork);
   const queries = new KnowledgeQueryServiceImpl(unitOfWork);
   const sources = new SourceApplicationService(unitOfWork);
   const workspaces = new WorkspaceQueryService(unitOfWork);
+  const resolver = new HubIdentityResolver(unitOfWork);
+  const personalWorkspaces = new PersonalWorkspaceService(unitOfWork);
+  const verifyReadiness = (rolloutHubUserIds = companySsoRolloutHubUserIds()): Promise<ProductionReadinessSummary> =>
+    assertProductionReadiness({
+      query: async <T>(sql: string, params?: unknown[]): Promise<T> => databasePool.query(sql, params) as Promise<T>,
+      identityProviderKind: providerKind,
+      companySsoProvider: providerName,
+      companySessionReaderConfigured: sessionReaderConfigured,
+      rolloutHubUserIds,
+    });
+  let readiness: Promise<ProductionReadinessSummary> | undefined;
+  const establishTrustedCaller = async () => {
+    // Company traffic cannot bypass the startup gate. Cache success for this
+    // service instance; a failed cutover check can be retried after repair.
+    if (providerKind === "company-sso") {
+      readiness ??= verifyReadiness().catch((error: unknown) => {
+        readiness = undefined;
+        throw error;
+      });
+      await readiness;
+    }
+    return establishTrustedCallerWith({ provider: identityProvider, resolver, personalWorkspaces, unitOfWork });
+  };
   const importConfig = importRuntimeConfig();
   const imports = {
     create: new CreateFolderImportService(unitOfWork, { limits: importConfig.limits, buildingTtlMs: importConfig.buildingTtlMs }),
@@ -37,16 +83,24 @@ function buildServices(databasePool: Pool) {
     preview: new GetFolderImportPreviewService(unitOfWork),
     apply: new ApplyFolderImportService(unitOfWork),
   };
-  return { identityProvider, unitOfWork, hub, queries, sources, workspaces, imports };
+  return { verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, sources, workspaces, imports };
 }
 
 export function applicationServices() {
-  services ??= buildServices(getPool());
+  services ??= buildApplicationServices(getPool(), { companySessionReader });
   return services;
+}
+
+/** Verify the same provider/session dependencies used by request handling. */
+export async function verifyProductionReadiness(options: {
+  rolloutHubUserIds?: readonly string[];
+} = {}): Promise<ProductionReadinessSummary> {
+  return applicationServices().verifyProductionReadiness(options.rolloutHubUserIds);
 }
 
 export async function closeApplicationPool(): Promise<void> {
   if (pool) await pool.end();
   pool = undefined;
   services = undefined;
+  companySessionReader = undefined;
 }

@@ -21,8 +21,10 @@ async function seedTarget(): Promise<{ userId: string; workspaceId: string; sour
   const workspaceId = uuidv7();
   const sourceId = uuidv7();
   await pool.query("INSERT INTO users (id, emp_id, name, org_code) VALUES (?, ?, 'Phase 2 User', 'P2')", [userId, `p2-${userId}`]);
-  await pool.query("INSERT INTO workspaces (id, name) VALUES (?, 'Phase 2 Workspace')", [workspaceId]);
-  await pool.query("INSERT INTO workspace_memberships (workspace_id, user_id) VALUES (?, ?)", [workspaceId, userId]);
+  // Canonical governance shape (migration 009 forbids governance-less rows):
+  // TEAM workspace plus an OWNER/DIRECT membership for the fixture user.
+  await pool.query("INSERT INTO workspaces (id, name, workspace_type) VALUES (?, 'Phase 2 Workspace', 'TEAM')", [workspaceId]);
+  await pool.query("INSERT INTO workspace_memberships (workspace_id, user_id, role, membership_source) VALUES (?, ?, 'OWNER', 'DIRECT')", [workspaceId, userId]);
   await pool.query(
     "INSERT INTO knowledge_sources (id, name, workspace_id, source_type, ownership, status, sync_version, created_by, updated_by) VALUES (?, 'Phase 2 Source', ?, 'FOLDER_SYNC', 'SOURCE_MANAGED', 'ACTIVE', 7, ?, ?)",
     [sourceId, workspaceId, userId, userId],
@@ -74,7 +76,9 @@ describe("Phase 2 import persistence schema", () => {
   });
 
   it("creates the staging indexes and enforces initial/resync binding shape", async () => {
-    const indexes = await pool.query<{ INDEX_NAME: string }[]>("SHOW INDEX FROM source_import_snapshot_entries");
+    const indexes = await pool.query<{ INDEX_NAME: string }[]>(
+      "SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'source_import_snapshot_entries'",
+    );
     expect(new Set(indexes.map((row) => row.INDEX_NAME))).toEqual(
       expect.objectContaining(
         new Set([

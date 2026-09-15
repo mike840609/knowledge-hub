@@ -1,4 +1,5 @@
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
+import { lockWorkspaceForMutation } from "@/modules/workspaces/application/workspace-mutation-guard";
 import { importError } from "@/modules/sources/domain/import-errors";
 import { hashImportPlan, hashReadyImportSnapshot } from "@/modules/sources/domain/import-integrity";
 import type { ImportDiffSummary } from "@/modules/sources/domain/import-plan";
@@ -8,6 +9,7 @@ import type { SourceUnitOfWork } from "@/modules/sources/ports/unit-of-work";
 import { DomainError } from "@/shared/domain/errors";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import { executeFolderImportPlan, type ImportApplyFailurePoint } from "./source-import-plan-executor";
+import { translateKnownSnapshotAccessError } from "./import-snapshot-access";
 
 export type ApplyFolderImportResult =
   | { kind: "APPLIED"; sourceId: string; resultVersion: number; runId: string | null; alreadyApplied: boolean }
@@ -62,7 +64,6 @@ export class ApplyFolderImportService {
       return await this.uow.run(async (repositories) => {
         const snapshot = await repositories.importSnapshots.lockById(snapshotId);
         if (!snapshot || snapshot.createdBy !== caller.identity.id) throw importError("IMPORT_SNAPSHOT_NOT_FOUND", "Import snapshot was not found.");
-        await repositories.workspaceAccess.requireMembership(caller, snapshot.workspaceId);
 
         if (snapshot.state === "APPLIED") {
           if (!snapshot.resultSourceId || snapshot.resultVersion === null) throw importError("IMPORT_SNAPSHOT_INVALID", "Applied snapshot is missing its persisted result.");
@@ -87,6 +88,11 @@ export class ApplyFolderImportService {
         if (snapshot.sourceId !== null) {
           const source = await repositories.sources.lockById(snapshot.sourceId);
           if (!source) throw importError("IMPORT_SOURCE_NOT_FOUND", "Import source was not found.");
+          try {
+            await lockWorkspaceForMutation(repositories, caller, snapshot.workspaceId, "source-import");
+          } catch (error) {
+            throw translateKnownSnapshotAccessError(error);
+          }
           assertImportableSource(source);
           if (source.workspaceId !== snapshot.workspaceId) throw importError("IMPORT_PLAN_BINDING_MISMATCH", "Snapshot Workspace does not match its Source.");
           const basedOnVersion = snapshot.basedOnVersion;
@@ -132,6 +138,11 @@ export class ApplyFolderImportService {
         }
 
         if (snapshot.basedOnVersion !== null || snapshot.proposedSourceName === null) throw importError("IMPORT_SNAPSHOT_INVALID", "Initial snapshot has invalid Source binding.");
+        try {
+          await lockWorkspaceForMutation(repositories, caller, snapshot.workspaceId, "source-import");
+        } catch (error) {
+          throw translateKnownSnapshotAccessError(error);
+        }
         const sourceId = uuidv7();
         const source: KnowledgeSource = {
           id: sourceId,

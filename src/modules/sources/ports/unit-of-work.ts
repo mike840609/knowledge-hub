@@ -9,6 +9,9 @@ import type { ImportCanonicalStateRepository } from "./import-canonical-state-re
 
 import type { WorkspaceRepository } from "@/modules/workspaces/ports/workspace-repository";
 import type { WorkspaceMembershipRepository } from "@/modules/workspaces/ports/workspace-membership-repository";
+import type { WorkspaceGroupMappingRepository } from "@/modules/workspaces/ports/workspace-group-mapping-repository";
+import type { WorkspaceAuditEventRepository } from "@/modules/workspaces/ports/workspace-audit-event-repository";
+import type { ExternalIdentityLinkRepository } from "@/modules/identity/ports/external-identity-link-repository";
 
 export type SourceRepositories = KnowledgeRepositories & {
   sources: SourceRepository;
@@ -20,6 +23,9 @@ export type SourceRepositories = KnowledgeRepositories & {
   importCanonicalState: ImportCanonicalStateRepository;
   workspaces: WorkspaceRepository;
   workspaceMemberships: WorkspaceMembershipRepository;
+  groupMappings: WorkspaceGroupMappingRepository;
+  auditEvents: WorkspaceAuditEventRepository;
+  identityLinks: ExternalIdentityLinkRepository;
 };
 
 export interface SourceUnitOfWork {

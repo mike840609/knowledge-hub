@@ -1,10 +1,11 @@
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
+import { lockWorkspaceForMutation } from "@/modules/workspaces/application/workspace-mutation-guard";
 import { decodeUtf8Markdown, sourceFileHash } from "@/modules/sources/adapters/generic-markdown-folder-adapter";
 import type { ImportDiagnostic } from "@/modules/sources/domain/import-diagnostic";
 import { importError, SourceImportError } from "@/modules/sources/domain/import-errors";
 import { DEFAULT_IMPORT_LIMITS, type ImportLimits } from "@/modules/sources/domain/import-limits";
 import type { SourceUnitOfWork } from "@/modules/sources/ports/unit-of-work";
-import { requireKnownSnapshotWorkspaceAccess } from "./import-snapshot-access";
+import { translateKnownSnapshotAccessError } from "./import-snapshot-access";
 
 export type UploadImportResult = { accepted: number; idempotent: number; diagnostics: ImportDiagnostic[] };
 type Options = { limits?: ImportLimits; now?: () => Date };
@@ -41,7 +42,11 @@ export class UploadFolderImportEntriesService {
       if (!snapshot || snapshot.createdBy !== caller.identity.id) {
         throw importError("IMPORT_SNAPSHOT_NOT_FOUND", "Import snapshot was not found.");
       }
-      await requireKnownSnapshotWorkspaceAccess(repositories.workspaceAccess, caller, snapshot.workspaceId);
+      try {
+        await lockWorkspaceForMutation(repositories, caller, snapshot.workspaceId, "source-import");
+      } catch (error) {
+        throw translateKnownSnapshotAccessError(error);
+      }
       if (snapshot.state !== "BUILDING") throw importError("IMPORT_SNAPSHOT_NOT_BUILDING", "Only BUILDING snapshots accept uploads.");
       if (snapshot.expiresAt.getTime() <= now.getTime()) throw importError("IMPORT_SNAPSHOT_EXPIRED", "Import snapshot has expired.");
 

@@ -15,7 +15,9 @@
     "test:integration": "tsx scripts/test/integration.ts",
     "test:e2e": "tsx scripts/test/e2e.ts",
     "db:migrate": "tsx scripts/db/migrate.ts",
-    "db:seed": "tsx scripts/db/seed.ts"
+    "db:seed": "tsx scripts/db/seed.ts",
+    "db:backfill-personal-workspaces": "tsx scripts/db/backfill-personal-workspaces.ts",
+    "admin:recover-team-workspace-governance": "tsx scripts/admin/recover-team-workspace-governance.ts"
   },
   "dependencies": {
     "@base-ui-components/react": "1.0.0-rc.0",

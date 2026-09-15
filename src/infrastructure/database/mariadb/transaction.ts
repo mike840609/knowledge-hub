@@ -1,13 +1,14 @@
 import type { Pool } from "mariadb";
 import type { KnowledgeUnitOfWork } from "@/modules/knowledge/ports/unit-of-work";
 import type { SourceUnitOfWork, SourceRepositories } from "@/modules/sources/ports/unit-of-work";
+import type { HubIdentityUnitOfWork } from "@/modules/identity/application/hub-identity-resolver";
 import { DomainError } from "@/modules/knowledge/domain/errors";
 import { importError } from "@/modules/sources/domain/import-errors";
 import { creatorQuotaLockName } from "./repositories/import-snapshots";
 import { createRepositories } from "./repositories";
 import { mapDatabaseError } from "./repositories/shared";
 
-export class MariaDbUnitOfWork implements KnowledgeUnitOfWork, SourceUnitOfWork {
+export class MariaDbUnitOfWork implements KnowledgeUnitOfWork, SourceUnitOfWork, HubIdentityUnitOfWork {
   constructor(private readonly pool: Pool) {}
 
   async run<T>(work: (repositories: SourceRepositories) => Promise<T>): Promise<T> {
