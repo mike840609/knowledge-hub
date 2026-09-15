@@ -4,7 +4,7 @@
 | --- | --- |
 | 文件日期 | 2026-09-15 |
 | 文件類型 | Design Spec amendment；不包含 Implementation Plan |
-| 狀態 | Review requested |
+| 狀態 | Approved — implementation plan written |
 | Parent spec | `docs/superpowers/specs/2026-09-14-phase-3-identity-workspace-governance-design.md` |
 | 前置 | Phase 2.5 Frontend Product Baseline、Phase 3 Identity / Workspace Governance Tasks 1–11 |
 | 目的 | 補齊 Phase 3 Task 12–14 的 API、UI、操作流程與 release acceptance，使 Workspace governance 不只存在於底層，而是能被 Human Web product 完整操作與理解 |
@@ -711,31 +711,8 @@ Production Company SSO Cutover 可獨立標記 pending，但不得把 pending �
 
 ## 28. Implementation planning handoff
 
-本文件 approval 後，下一步由 Superpowers `writing-plans` 更新既有 Phase 3 implementation plan 的 Task 12–14；不新增 Phase 3.5 或 Task 15。
+Approved. Authoritative implementation plan:
 
-Tasks 1–11 已定的 identity、migration、repository、lock-order 與 cutover sequencing保持不變。Implementation plan 只補強：
+`docs/superpowers/plans/2026-09-15-phase-3-workspace-product-closure.md`
 
-```text
-Task 12
-→ UI-ready server model
-→ existing-user lookup
-→ Team governance API
-→ truthful access inspection
-→ semantic API errors
-
-Task 13
-→ My Space root
-→ grouped Workspace selector
-→ Create Team dialog
-→ capability-driven empty states/navigation
-→ Team Settings General/Members/Groups/Audit
-→ revoke/archive/restore UX
-→ complete Playwright journey
-
-Task 14
-→ role/lifecycle/access matrices
-→ UI/API dual enforcement
-→ Product Acceptance report
-→ explicit Product Acceptance vs Company SSO Cutover status
-→ all existing security/concurrency/cutover evidence
-```
+該 plan 取代既有 Phase 3 plan 的 Task 12–14；不新增 Phase 3.5 或 Task 15。Tasks 1–11 已定的 identity、migration、repository、lock-order 與 cutover sequencing保持不變。
