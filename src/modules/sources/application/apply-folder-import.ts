@@ -84,6 +84,7 @@ export class ApplyFolderImportService {
           throw importError("IMPORT_SNAPSHOT_INTEGRITY_MISMATCH", "Import preview integrity validation failed; create a fresh preview before applying.");
         }
         const provenance: RunProvenance = { snapshotId: snapshot.id, snapshotHash: snapshot.snapshotHash, planHash: snapshot.planHash };
+        const stagingEntriesByUploadKey = new Map(persistedEntries.map((entry) => [entry.uploadKey, entry]));
 
         if (snapshot.sourceId !== null) {
           const source = await repositories.sources.lockById(snapshot.sourceId);
@@ -116,7 +117,7 @@ export class ApplyFolderImportService {
           }
 
           failedAttempt.value = { sourceId: source.id, basedOnVersion, summary: snapshot.summary, provenance, callerId: caller.identity.id };
-          await executeFolderImportPlan(repositories, caller, source, snapshot.plan, { snapshotId: snapshot.id, failurePoint: this.failurePoint, now: this.now });
+          await executeFolderImportPlan(repositories, caller, source, snapshot.plan, { stagingEntriesByUploadKey, failurePoint: this.failurePoint, now: this.now });
           if (this.failurePoint === "before-run") throw importError("TEST_IMPORT_FAILURE", "Injected import failure before SyncRun.");
           const resultVersion = await repositories.sources.guardAndAdvanceVersion(source.id, basedOnVersion, caller.identity.id);
           if (resultVersion === null) throw importError("SOURCE_VERSION_CONFLICT", "Source version changed while applying the persisted plan.");
@@ -160,7 +161,7 @@ export class ApplyFolderImportService {
           updatedAt: timestamp,
         };
         await repositories.sources.insert(source);
-        await executeFolderImportPlan(repositories, caller, source, snapshot.plan, { snapshotId: snapshot.id, failurePoint: this.failurePoint, now: this.now });
+        await executeFolderImportPlan(repositories, caller, source, snapshot.plan, { stagingEntriesByUploadKey, failurePoint: this.failurePoint, now: this.now });
         if (this.failurePoint === "before-run") throw importError("TEST_IMPORT_FAILURE", "Injected import failure before SyncRun.");
         const resultVersion = await repositories.sources.guardAndAdvanceVersion(source.id, 0, caller.identity.id);
         if (resultVersion !== 1) throw importError("IMPORT_VERSION_ADVANCE_FAILED", "Initial Source could not advance to sync version 1.");

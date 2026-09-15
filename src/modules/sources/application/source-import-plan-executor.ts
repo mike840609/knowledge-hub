@@ -2,6 +2,7 @@ import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { renumberSiblingPositions } from "@/modules/knowledge/application/internal/tree-transaction";
 import { importError } from "@/modules/sources/domain/import-errors";
 import type { FolderImportPlan, RevisionPayload, RevisionReference } from "@/modules/sources/domain/import-plan";
+import type { ImportSnapshotEntry } from "@/modules/sources/domain/import-snapshot";
 import type { KnowledgeSource } from "@/modules/sources/domain/source";
 import type { SourceRepositories } from "@/modules/sources/ports/unit-of-work";
 import { uuidv7 } from "@/shared/ids/uuidv7";
@@ -15,7 +16,7 @@ export type ImportApplyFailurePoint =
   | "before-run";
 
 export type ExecuteFolderImportPlanOptions = {
-  snapshotId: string;
+  stagingEntriesByUploadKey: ReadonlyMap<string, ImportSnapshotEntry>;
   failurePoint?: ImportApplyFailurePoint;
   now?: () => Date;
 };
@@ -33,13 +34,12 @@ function isLegacyPayload(content: RevisionReference | RevisionPayload): content 
   return typeof (content as RevisionPayload).markdown === "string";
 }
 
-async function resolveContent(
-  repositories: SourceRepositories,
-  snapshotId: string,
+function resolveContent(
+  stagingEntriesByUploadKey: ReadonlyMap<string, ImportSnapshotEntry>,
   content: RevisionReference | RevisionPayload,
-): Promise<RevisionPayload> {
+): RevisionPayload {
   if (isLegacyPayload(content)) return content;
-  const entry = await repositories.importSnapshotEntries.findByUploadKey(snapshotId, content.uploadKey);
+  const entry = stagingEntriesByUploadKey.get(content.uploadKey);
   if (!entry || entry.entryType !== "DOCUMENT" || entry.markdown === null || entry.revisionContentHash !== content.contentHash) {
     throw importError("IMPORT_SNAPSHOT_INTEGRITY_MISMATCH", "Staging entry referenced by the persisted plan is unavailable or changed; create a fresh preview before applying.");
   }
@@ -106,7 +106,7 @@ export async function executeFolderImportPlan(
     if (action.parentPath !== null && !parentId) throw importError("IMPORT_PLAN_PARENT_MISSING", `Document parent ${action.parentPath} is unavailable.`);
     touchedParents.add(parentId ?? null);
     const sourceEntryId = uuidv7();
-    const content = await resolveContent(repositories, options.snapshotId, action.content);
+    const content = resolveContent(options.stagingEntriesByUploadKey, action.content);
     const projected = await projection.projectDocument(caller, {
       sourceId: source.id,
       parentId: parentId ?? null,
@@ -142,7 +142,7 @@ export async function executeFolderImportPlan(
   failAt(options, "after-documents");
 
   for (const action of plan.documents.revise) {
-    const content = await resolveContent(repositories, options.snapshotId, action.content);
+    const content = resolveContent(options.stagingEntriesByUploadKey, action.content);
     await projection.projectRevision(caller, {
       documentId: action.documentId,
       expectedCurrentRevisionId: action.expectedCurrentRevisionId,
