@@ -60,4 +60,17 @@ describe("PATCH /api/documents/[documentId] (spec §6.1, §6.3)", () => {
     const response = await PATCH(request({ title: "T", markdown: "M" }), context);
     expect(response.status).toBe(400);
   });
+
+  it("returns 200 with changed: false verbatim on a no-op save", async () => {
+    // A no-op save echoes the CURRENT revision rather than inventing a new one:
+    // the content is unchanged, so no new revision was created. This is a
+    // success, not an error, and must not be special-cased into a failure.
+    const createRevision = createRevisionMock({ revisionId: "rev-1", revisionNo: 1, changed: false });
+    vi.mocked(applicationServices).mockReturnValue(fakeServices(createRevision));
+
+    const response = await PATCH(request({ title: "T", markdown: "M", expectedCurrentRevisionId: "rev-1" }), context);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ revisionId: "rev-1", revisionNo: 1, changed: false });
+  });
 });
