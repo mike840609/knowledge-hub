@@ -4,6 +4,9 @@ import type { SourceView } from "@/modules/knowledge/application/knowledge-query
 import type { KnowledgeSearchResult } from "@/modules/knowledge/application/knowledge-search-service";
 import { SearchTimeoutError } from "@/modules/knowledge/domain/errors";
 import { applicationServices } from "@/server/composition";
+import { DomainError } from "@/shared/domain/errors";
+
+const AUTHORIZATION_NOT_FOUND_CODES = ["WORKSPACE_NOT_FOUND", "WORKSPACE_ACCESS_DENIED", "INSUFFICIENT_WORKSPACE_CAPABILITY"];
 
 export type SearchPageInput = {
   q: string;
@@ -30,11 +33,18 @@ export type SearchPageModel = SearchPageInput & {
 export async function getSearchPageModel(workspaceId: string, input: SearchPageInput): Promise<SearchPageModel> {
   const services = applicationServices();
   const { caller } = await services.establishTrustedCaller();
-  const navigation = await services.workspaceAdmin.navigation(caller);
-  const workspace = navigation.items.find((item) => item.id === workspaceId);
-  if (!workspace) notFound();
-  const { actions } = await services.workspaceAdmin.workspaceState(caller, workspaceId);
-  if (!actions.canSearch) notFound();
+  let workspace: { name: string };
+  try {
+    const navigation = await services.workspaceAdmin.navigation(caller);
+    const found = navigation.items.find((item) => item.id === workspaceId);
+    if (!found) notFound();
+    workspace = found;
+    const { actions } = await services.workspaceAdmin.workspaceState(caller, workspaceId);
+    if (!actions.canSearch) notFound();
+  } catch (error) {
+    if (error instanceof DomainError && AUTHORIZATION_NOT_FOUND_CODES.includes(error.code)) notFound();
+    throw error;
+  }
 
   const sources = sortSourcesByName(
     await services.queries.listSources(caller, workspaceId, { includeArchived: input.includeArchived }),
