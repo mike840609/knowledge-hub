@@ -23,13 +23,23 @@ export class CleanupFolderImportsService {
   async cleanup(input: { now?: Date; batchSize?: number } = {}): Promise<{ deleted: number }> {
     const now = input.now ?? this.now();
     const limit = input.batchSize === undefined ? this.batchSize : clampBatchSize(input.batchSize);
-    return this.uow.run(async (repositories) => {
-      const candidates = await repositories.importSnapshots.listCleanupCandidates(now, limit);
-      let deleted = 0;
-      for (const snapshotId of candidates) {
-        if (await repositories.importSnapshots.deleteIfCleanupEligible(snapshotId, now)) deleted += 1;
-      }
-      return { deleted };
+    // Short transactions only: the candidate list is a read-only pass that commits
+    // immediately, then each conditional delete runs in its own transaction so no
+    // pass ever holds snapshot-row + cascaded-entry locks across up to 500 rows.
+    // Each DELETE re-checks the full eligibility predicate inside the statement, so
+    // a snapshot finalized concurrently after the list pass is never wrongly
+    // deleted; leftovers are picked up by the next cron pass (batch-cap semantics
+    // unchanged).
+    const candidates = await this.uow.run(async (repositories) => {
+      return repositories.importSnapshots.listCleanupCandidates(now, limit);
     });
+    let deleted = 0;
+    for (const snapshotId of candidates) {
+      const removed = await this.uow.run(async (repositories) => {
+        return repositories.importSnapshots.deleteIfCleanupEligible(snapshotId, now);
+      });
+      if (removed) deleted += 1;
+    }
+    return { deleted };
   }
 }

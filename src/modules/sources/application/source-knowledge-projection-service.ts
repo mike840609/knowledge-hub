@@ -16,6 +16,8 @@ import {
 } from "@/modules/knowledge/domain/errors";
 import { isRevisionContentUnchanged } from "@/modules/knowledge/domain/revision";
 import type { SourcePolicy } from "@/modules/knowledge/domain/source-policy";
+import type { KnowledgeTreeNode } from "@/modules/knowledge/domain/tree-node";
+import type { TreeViewNode } from "@/modules/knowledge/ports/tree-repository";
 import { normalizeFolderName, normalizeTreePosition } from "@/modules/knowledge/domain/tree-rules";
 import type {
   CreateHubDocumentInput,
@@ -62,6 +64,25 @@ export type BoundProjectionSource = {
   workspaceId: string;
 };
 
+/**
+ * Optional per-Apply fast path (issue #9 item 17a). When the owning
+ * orchestration already resolved the Source binding and hoisted the full
+ * source tree on this connection, it passes both here so projection commands
+ * skip their per-command `requireBoundSource` round-trip (upsertIdentity +
+ * Source FOR UPDATE + Workspace guard) and their per-command full-tree
+ * `listBySource` re-reads. Omitting the hints keeps the legacy path
+ * byte-identical for non-import callers (2-arg `bindSourceProjection`).
+ *
+ * `treeView`, when present, is the executor-owned MUTABLE tx-local truth:
+ * every tree write a projection command performs (insert/move/updatePosition
+ * /renumber/status) maintains it in memory alongside the database write, so
+ * later commands never observe a stale row.
+ */
+export type BoundProjectionHints = {
+  boundPolicy?: SourcePolicy;
+  treeView?: TreeViewNode[];
+};
+
 function requireBoundDocumentSource(existingSourceId: string, bound: BoundProjectionSource): void {
   if (existingSourceId !== bound.id) throw new DocumentNotFoundError();
 }
@@ -75,7 +96,17 @@ async function requireBoundSource(
   repositories: SourceRepositories,
   caller: CallerContext,
   bound: BoundProjectionSource,
+  hints?: BoundProjectionHints,
 ): Promise<SourcePolicy> {
+  // Hoisted fast path: the binding was already resolved once per Apply on
+  // this connection under the Source X-lock. Only the cheap in-memory
+  // workspaceId equality check repeats per command (no DB, no new locks).
+  if (hints?.boundPolicy) {
+    if (hints.boundPolicy.workspaceId !== bound.workspaceId || hints.boundPolicy.id !== bound.id) {
+      throw new InvalidSourceMappingError("Bound source workspace changed during projection.");
+    }
+    return hints.boundPolicy;
+  }
   const source = await requireSourceManagedSource(repositories, caller, bound.id);
   if (source.workspaceId !== bound.workspaceId) {
     throw new InvalidSourceMappingError("Bound source workspace changed during projection.");
@@ -119,6 +150,7 @@ async function requireUniqueExternalId(
 export function bindSourceProjection(
   repositories: SourceRepositories,
   bound: BoundProjectionSource,
+  hints?: BoundProjectionHints,
 ): SourceKnowledgeProjectionService {
   async function archiveLinkedDocumentEntry(caller: CallerContext, documentId: string): Promise<void> {
     const linked = await repositories.entries.findByDocumentId(documentId);
@@ -132,6 +164,40 @@ export function bindSourceProjection(
     if (linked && linked.sourceId === bound.id) {
       await restoreSourceEntry(repositories, caller, bound.id, linked.id);
     }
+  }
+
+  function syncViewNode(nodeId: string, patch: Partial<Pick<TreeViewNode, "parentId" | "position" | "status" | "name">>): void {
+    const node = hints?.treeView?.find((candidate) => candidate.id === nodeId);
+    if (node) Object.assign(node, patch);
+  }
+
+  function syncViewDocumentStatus(documentId: string, status: "ACTIVE" | "ARCHIVED"): void {
+    const node = hints?.treeView?.find((candidate) => candidate.documentId === documentId);
+    if (node) {
+      node.status = status;
+      node.documentStatus = status;
+    }
+  }
+
+  function syncViewCurrentRevision(documentId: string, revisionId: string): void {
+    const node = hints?.treeView?.find((candidate) => candidate.documentId === documentId);
+    if (node) node.currentRevisionId = revisionId;
+  }
+
+  function pushViewNode(node: TreeViewNode): void {
+    hints?.treeView?.push(node);
+  }
+
+  function viewNodeById(nodeId: string): TreeViewNode | undefined {
+    return hints?.treeView?.find((candidate) => candidate.id === nodeId);
+  }
+
+  async function treeNodeById(nodeId: string): Promise<KnowledgeTreeNode | null> {
+    return viewNodeById(nodeId) ?? (await repositories.tree.findById(nodeId));
+  }
+
+  async function treeNodesBySource(sourceId: string): Promise<readonly TreeViewNode[]> {
+    return hints?.treeView ?? (await repositories.tree.listBySource(sourceId));
   }
 
   async function moveNodeToParent(
@@ -149,13 +215,14 @@ export function bindSourceProjection(
       if (!parent) throw new TreeNodeNotFoundError("Parent folder was not found.");
       if (parent.sourceId !== source.id) throw new CrossSourceMoveError();
       if (parent.nodeType !== "FOLDER" || parent.status !== "ACTIVE") throw new InvalidParentError();
-      await assertActiveFolderAncestry(repositories, source.id, parent.id);
+      await assertActiveFolderAncestry(repositories, source.id, parent.id, hints?.treeView);
       if (await repositories.tree.hasDescendant(node.id, parent.id)) throw new TreeCycleError();
     }
     await repositories.tree.updateParent(node.id, newParentId, caller.identity.id);
-    await placeNodeAtIndex(repositories, source.id, node.id, newParentId, newPosition, caller.identity.id);
+    syncViewNode(node.id, { parentId: newParentId });
+    await placeNodeAtIndex(repositories, source.id, node.id, newParentId, newPosition, caller.identity.id, hints?.treeView);
     if (previousParentId !== newParentId) {
-      await renumberSiblingPositions(repositories, source.id, previousParentId, caller.identity.id);
+      await renumberSiblingPositions(repositories, source.id, previousParentId, caller.identity.id, hints?.treeView);
     }
   }
 
@@ -179,11 +246,11 @@ export function bindSourceProjection(
         throw new InvalidSourceMappingError("Projected documents must target the bound authorized source.");
       }
       requireMapping(input.mapping);
-      const source = await requireBoundSource(repositories, caller, bound);
+      const source = await requireBoundSource(repositories, caller, bound, hints);
       await requireUniqueExternalId(repositories, source.id, input.mapping.externalId);
       const position = input.position === undefined ? undefined : normalizeTreePosition(input.position);
-      if (input.parentId !== null) await assertActiveFolderAncestry(repositories, source.id, input.parentId);
-      const siblings = (await repositories.tree.listBySource(source.id)).filter((node) => node.parentId === input.parentId);
+      if (input.parentId !== null) await assertActiveFolderAncestry(repositories, source.id, input.parentId, hints?.treeView);
+      const siblings = (await treeNodesBySource(source.id)).filter((node) => node.parentId === input.parentId);
       const index = position === undefined ? siblings.length : Math.min(position, siblings.length);
       const { normalized: content, contentHash } = fingerprintRevisionContent(input);
       const now = new Date();
@@ -200,12 +267,14 @@ export function bindSourceProjection(
         contentHash, createdBy: caller.identity.id, createdAt: now,
       });
       await repositories.documents.setCurrentRevision(documentId, revisionId, caller.identity.id);
-      await repositories.tree.insert({
+      const insertedNode: KnowledgeTreeNode = {
         id: treeNodeId, sourceId: source.id, parentId: input.parentId, nodeType: "DOCUMENT",
         name: null, documentId, position: index, status: "ACTIVE",
         updatedBy: caller.identity.id, archivedBy: null, archivedAt: null,
-      });
-      await placeNodeAtIndex(repositories, source.id, treeNodeId, input.parentId, index, caller.identity.id);
+      };
+      await repositories.tree.insert(insertedNode);
+      pushViewNode({ ...insertedNode, title: content.title, documentStatus: "ACTIVE", currentRevisionId: revisionId });
+      await placeNodeAtIndex(repositories, source.id, treeNodeId, input.parentId, index, caller.identity.id, hints?.treeView);
       await repositories.documents.assertComplete(documentId);
       await createSourceEntryMapping(repositories, caller, source.id, {
         sourceEntryId: input.mapping.sourceEntryId,
@@ -227,7 +296,7 @@ export function bindSourceProjection(
       const existing = await repositories.documents.findById(input.documentId);
       if (!existing) throw new DocumentNotFoundError();
       requireBoundDocumentSource(existing.sourceId, bound);
-      const source = await requireBoundSource(repositories, caller, bound);
+      const source = await requireBoundSource(repositories, caller, bound, hints);
       const document = await repositories.documents.lockById(input.documentId);
       if (!document || document.sourceId !== source.id) throw new DocumentNotFoundError();
       if (document.status !== "ACTIVE") throw new DocumentArchivedError();
@@ -245,6 +314,7 @@ export function bindSourceProjection(
         contentHash, createdBy: caller.identity.id, createdAt: new Date(),
       });
       await repositories.documents.setCurrentRevision(document.id, revisionId, caller.identity.id);
+      syncViewCurrentRevision(document.id, revisionId);
       await repositories.documents.assertComplete(document.id);
       return { revisionId, revisionNo, changed: true };
     },
@@ -255,7 +325,7 @@ export function bindSourceProjection(
       }
       requireMapping(input.mapping);
       const name = normalizeFolderName(input.name);
-      const source = await requireBoundSource(repositories, caller, bound);
+      const source = await requireBoundSource(repositories, caller, bound, hints);
       await requireUniqueExternalId(repositories, source.id, input.mapping.externalId);
       if (input.parentId !== null) {
         const parent = await repositories.tree.lockById(input.parentId);
@@ -263,17 +333,19 @@ export function bindSourceProjection(
         if (parent.sourceId !== source.id || parent.nodeType !== "FOLDER" || parent.status !== "ACTIVE") {
           throw new InvalidParentError();
         }
-        await assertActiveFolderAncestry(repositories, source.id, parent.id);
+        await assertActiveFolderAncestry(repositories, source.id, parent.id, hints?.treeView);
       }
-      const siblings = (await repositories.tree.listBySource(source.id)).filter((node) => node.parentId === input.parentId);
+      const siblings = (await treeNodesBySource(source.id)).filter((node) => node.parentId === input.parentId);
       const position = input.position === undefined ? siblings.length : Math.min(normalizeTreePosition(input.position), siblings.length);
       const treeNodeId = uuidv7();
-      await repositories.tree.insert({
+      const insertedNode: KnowledgeTreeNode = {
         id: treeNodeId, sourceId: source.id, parentId: input.parentId, nodeType: "FOLDER",
         name, documentId: null, position, status: "ACTIVE",
         updatedBy: caller.identity.id, archivedBy: null, archivedAt: null,
-      });
-      await placeNodeAtIndex(repositories, source.id, treeNodeId, input.parentId, position, caller.identity.id);
+      };
+      await repositories.tree.insert(insertedNode);
+      pushViewNode({ ...insertedNode, title: name, documentStatus: null, currentRevisionId: null });
+      await placeNodeAtIndex(repositories, source.id, treeNodeId, input.parentId, position, caller.identity.id, hints?.treeView);
       await createSourceEntryMapping(repositories, caller, source.id, {
         sourceEntryId: input.mapping.sourceEntryId,
         externalId: input.mapping.externalId,
@@ -291,15 +363,16 @@ export function bindSourceProjection(
     },
 
     async renameProjectedFolder(caller, input) {
-      const routing = await repositories.tree.findById(input.nodeId);
+      const routing = await treeNodeById(input.nodeId);
       requireBoundTreeSource(routing?.sourceId, bound);
       const name = normalizeFolderName(input.name);
-      const source = await requireBoundSource(repositories, caller, bound);
+      const source = await requireBoundSource(repositories, caller, bound, hints);
       const node = await requireLockedSourceNode(repositories, source.id, input.nodeId);
       if (node.nodeType !== "FOLDER") throw new ValidationError("Only folders can be renamed.");
       if (node.status !== "ACTIVE") throw new ValidationError("Archived folders cannot be renamed.");
-      if (node.parentId) await assertActiveFolderAncestry(repositories, source.id, node.parentId);
+      if (node.parentId) await assertActiveFolderAncestry(repositories, source.id, node.parentId, hints?.treeView);
       await repositories.tree.updateName(node.id, name, caller.identity.id);
+      syncViewNode(node.id, { name });
       const linked = await repositories.entries.findByTreeNodeId(node.id);
       if (linked && linked.sourceId === source.id) {
         await repositories.entries.update({ ...linked, updatedBy: caller.identity.id, lastSeenAt: new Date() });
@@ -307,38 +380,40 @@ export function bindSourceProjection(
     },
 
     async archiveProjectedFolder(caller, nodeId) {
-      const routing = await repositories.tree.findById(nodeId);
+      const routing = await treeNodeById(nodeId);
       requireBoundTreeSource(routing?.sourceId, bound);
-      const source = await requireBoundSource(repositories, caller, bound);
+      const source = await requireBoundSource(repositories, caller, bound, hints);
       const node = await requireLockedSourceNode(repositories, source.id, nodeId);
       if (node.nodeType !== "FOLDER") throw new ValidationError("Only folders can be archived.");
       if (node.status === "ARCHIVED") return;
-      if (node.parentId) await assertActiveFolderAncestry(repositories, source.id, node.parentId);
-      const nodes = await repositories.tree.listBySource(source.id);
+      if (node.parentId) await assertActiveFolderAncestry(repositories, source.id, node.parentId, hints?.treeView);
+      const nodes = await treeNodesBySource(source.id);
       if (nodes.some((candidate) => candidate.parentId === node.id && candidate.status === "ACTIVE")) {
         throw new FolderNotEmptyError();
       }
       await repositories.tree.updateStatus(node.id, "ARCHIVED", caller.identity.id);
+      syncViewNode(node.id, { status: "ARCHIVED" });
       await archiveLinkedFolderEntry(caller, node.id);
     },
 
     async restoreProjectedFolder(caller, nodeId) {
-      const routing = await repositories.tree.findById(nodeId);
+      const routing = await treeNodeById(nodeId);
       requireBoundTreeSource(routing?.sourceId, bound);
-      const source = await requireBoundSource(repositories, caller, bound);
+      const source = await requireBoundSource(repositories, caller, bound, hints);
       const node = await requireLockedSourceNode(repositories, source.id, nodeId);
       if (node.nodeType !== "FOLDER") throw new ValidationError("Only folders can be restored.");
       if (node.status === "ACTIVE") return;
-      if (node.parentId) await assertActiveFolderAncestry(repositories, source.id, node.parentId);
+      if (node.parentId) await assertActiveFolderAncestry(repositories, source.id, node.parentId, hints?.treeView);
       await repositories.tree.updateStatus(node.id, "ACTIVE", caller.identity.id);
+      syncViewNode(node.id, { status: "ACTIVE" });
       await restoreLinkedFolderEntry(caller, node.id);
     },
 
     async moveProjectedNode(caller, input) {
       const newPosition = normalizeTreePosition(input.newPosition);
-      const routing = await repositories.tree.findById(input.nodeId);
+      const routing = await treeNodeById(input.nodeId);
       requireBoundTreeSource(routing?.sourceId, bound);
-      const source = await requireBoundSource(repositories, caller, bound);
+      const source = await requireBoundSource(repositories, caller, bound, hints);
       const node = await requireLockedSourceNode(repositories, source.id, input.nodeId);
       if (node.status !== "ACTIVE") throw new ValidationError("Archived tree nodes cannot be moved.");
       await moveNodeToParent(caller, source, node.id, input.newParentId, newPosition);
@@ -348,16 +423,17 @@ export function bindSourceProjection(
       const existing = await repositories.documents.findById(documentId);
       if (!existing) throw new DocumentNotFoundError();
       requireBoundDocumentSource(existing.sourceId, bound);
-      const source = await requireBoundSource(repositories, caller, bound);
+      const source = await requireBoundSource(repositories, caller, bound, hints);
       const document = await repositories.documents.lockById(documentId);
       if (!document || document.sourceId !== source.id) throw new DocumentNotFoundError();
       if (document.status === "ARCHIVED") return;
-      const nodes = await repositories.tree.listBySource(source.id);
+      const nodes = await treeNodesBySource(source.id);
       const node = nodes.find((candidate) => candidate.documentId === document.id);
       if (!node) throw new TreeNodeNotFoundError("Document tree node was not found.");
       await requireLockedSourceNode(repositories, source.id, node.id);
       await repositories.documents.updateStatus(document.id, "ARCHIVED", caller.identity.id);
       await repositories.tree.updateStatusForDocument(document.id, "ARCHIVED", caller.identity.id);
+      syncViewDocumentStatus(document.id, "ARCHIVED");
       await archiveLinkedDocumentEntry(caller, document.id);
     },
 
@@ -365,17 +441,18 @@ export function bindSourceProjection(
       const existing = await repositories.documents.findById(documentId);
       if (!existing) throw new DocumentNotFoundError();
       requireBoundDocumentSource(existing.sourceId, bound);
-      const source = await requireBoundSource(repositories, caller, bound);
+      const source = await requireBoundSource(repositories, caller, bound, hints);
       const document = await repositories.documents.lockById(existing.id);
       if (!document || document.sourceId !== source.id) throw new DocumentNotFoundError();
       if (document.status === "ACTIVE") return;
-      const nodes = await repositories.tree.listBySource(source.id);
+      const nodes = await treeNodesBySource(source.id);
       const node = nodes.find((candidate) => candidate.documentId === document.id);
       if (!node) throw new TreeNodeNotFoundError("Document tree node was not found.");
       await requireLockedSourceNode(repositories, source.id, node.id);
-      await assertActiveDocumentPlacement(repositories, source.id, document.id);
+      await assertActiveDocumentPlacement(repositories, source.id, document.id, hints?.treeView);
       await repositories.documents.updateStatus(document.id, "ACTIVE", caller.identity.id);
       await repositories.tree.updateStatusForDocument(document.id, "ACTIVE", caller.identity.id);
+      syncViewDocumentStatus(document.id, "ACTIVE");
       await restoreLinkedDocumentEntry(caller, document.id);
     },
 
@@ -383,18 +460,18 @@ export function bindSourceProjection(
       const existing = await repositories.documents.findById(input.documentId);
       if (!existing) throw new DocumentNotFoundError();
       requireBoundDocumentSource(existing.sourceId, bound);
-      const source = await requireBoundSource(repositories, caller, bound);
+      const source = await requireBoundSource(repositories, caller, bound, hints);
       const document = await repositories.documents.lockById(existing.id);
       if (!document || document.sourceId !== source.id) throw new DocumentNotFoundError();
       if (document.status === "ACTIVE") {
-        const nodes = await repositories.tree.listBySource(source.id);
+        const nodes = await treeNodesBySource(source.id);
         const activeNode = nodes.find((candidate) => candidate.documentId === document.id);
         if (!activeNode) throw new TreeNodeNotFoundError("Document tree node was not found.");
         await requireLockedSourceNode(repositories, source.id, activeNode.id);
         await moveNodeToParent(caller, source, activeNode.id, input.newParentId, normalizeTreePosition(input.newPosition));
         return;
       }
-      const nodes = await repositories.tree.listBySource(source.id);
+      const nodes = await treeNodesBySource(source.id);
       const node = nodes.find((candidate) => candidate.documentId === document.id);
       if (!node) throw new TreeNodeNotFoundError("Document tree node was not found.");
       await requireLockedSourceNode(repositories, source.id, node.id);
@@ -404,6 +481,7 @@ export function bindSourceProjection(
       await moveNodeToParent(caller, source, node.id, input.newParentId, normalizeTreePosition(input.newPosition));
       await repositories.documents.updateStatus(document.id, "ACTIVE", caller.identity.id);
       await repositories.tree.updateStatusForDocument(document.id, "ACTIVE", caller.identity.id);
+      syncViewDocumentStatus(document.id, "ACTIVE");
       await restoreLinkedDocumentEntry(caller, document.id);
     },
   };

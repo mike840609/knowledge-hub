@@ -1,5 +1,6 @@
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
-import { renumberSiblingPositions } from "@/modules/knowledge/application/internal/tree-transaction";
+import { renumberSiblingPositions, requireSourceManagedSource } from "@/modules/knowledge/application/internal/tree-transaction";
+import type { TreeViewNode } from "@/modules/knowledge/ports/tree-repository";
 import { importError } from "@/modules/sources/domain/import-errors";
 import type { FolderImportPlan, RevisionPayload, RevisionReference } from "@/modules/sources/domain/import-plan";
 import type { ImportSnapshotEntry } from "@/modules/sources/domain/import-snapshot";
@@ -58,7 +59,16 @@ export async function executeFolderImportPlan(
   if (plan.sourceBinding.sourceId !== null && plan.sourceBinding.sourceId !== source.id) throw importError("IMPORT_PLAN_BINDING_MISMATCH", "Import plan Source binding does not match the Source.");
 
   const now = options.now ?? (() => new Date());
-  const projection = bindSourceProjection(repositories, { id: source.id, workspaceId: source.workspaceId });
+  // Staleness contract (issue #9 item 17a): `treeView` is the executor-owned
+  // MUTABLE tx-local truth for this Apply. It is hoisted once here — one
+  // source-binding resolution plus one full-tree read per plan — and every
+  // tree write the executor performs below (projection commands, the ordering
+  // pass, the renumber pass) maintains it in memory alongside the database
+  // write. No command path may re-read the tree from the database while the
+  // view is in scope; post-Apply verification reads stay on the database.
+  const boundPolicy = await requireSourceManagedSource(repositories, caller, source.id);
+  const treeView: TreeViewNode[] = await repositories.tree.listBySource(source.id);
+  const projection = bindSourceProjection(repositories, { id: source.id, workspaceId: source.workspaceId }, { boundPolicy, treeView });
   const current = await repositories.importCanonicalState.load(source.id);
   const folderNodeByPath = new Map(current.folders.map((folder) => [folder.sourcePath, folder.treeNodeId]));
   const createdNodeByKey = new Map<string, string>();
@@ -75,7 +85,7 @@ export async function executeFolderImportPlan(
    */
   const touchedParents = new Set<string | null>();
   async function touchGroupOf(treeNodeId: string): Promise<void> {
-    const node = await repositories.tree.findById(treeNodeId);
+    const node = treeView.find((candidate) => candidate.id === treeNodeId);
     if (node) touchedParents.add(node.parentId);
   }
 
@@ -205,13 +215,16 @@ export async function executeFolderImportPlan(
     const expectedParentId = target.parentPath === null ? null : folderNodeByPath.get(target.parentPath);
     if (target.parentPath !== null && !expectedParentId) throw importError("IMPORT_PLAN_PARENT_MISSING", `Ordering parent ${target.parentPath} is unavailable.`);
     touchedParents.add(expectedParentId ?? null);
-    const node = await repositories.tree.findById(nodeId);
+    const node = treeView.find((candidate) => candidate.id === nodeId);
     if (!node || node.sourceId !== source.id || node.status !== "ACTIVE") throw importError("IMPORT_PLAN_NODE_MISSING", "Ordering target is unavailable in the bound Source.");
     if (node.parentId !== (expectedParentId ?? null)) {
       // Ordering is not allowed to silently reparent anything; reparenting belongs to the persisted move/create actions.
       throw importError("IMPORT_PLAN_PARENT_MISMATCH", `Ordering target parent does not match ${target.parentPath ?? "root"}.`);
     }
-    if (node.position !== target.position) await repositories.tree.updatePosition(node.id, target.position, caller.identity.id);
+    if (node.position !== target.position) {
+      await repositories.tree.updatePosition(node.id, target.position, caller.identity.id);
+      node.position = target.position;
+    }
   }
 
   // Normalize sibling positions (spec §16.1, §23). The ordering pass above
@@ -223,7 +236,7 @@ export async function executeFolderImportPlan(
   // move/reorder would leave them. Reusing it verbatim is what keeps
   // `placeNodeAtIndex`'s index arithmetic sound on the next sync.
   for (const parentId of touchedParents) {
-    await renumberSiblingPositions(repositories, source.id, parentId, caller.identity.id);
+    await renumberSiblingPositions(repositories, source.id, parentId, caller.identity.id, treeView);
   }
 
   // Defensive invariant: every desired active document must still sit beneath its persisted source-path parent.

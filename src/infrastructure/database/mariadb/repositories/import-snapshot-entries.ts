@@ -37,26 +37,78 @@ function mapEntry(row: DbRow): ImportSnapshotEntry {
   };
 }
 
+const INSERT_COLUMNS =
+  "id,snapshot_id,upload_key,client_relative_path,source_path,source_path_hash,entry_type,upload_status,declared_size," +
+  "source_file_hash,raw_markdown,resolved_title,title_source,markdown,metadata,revision_content_hash,reconciliation_fingerprint," +
+  "mime_type,asset_content_hash,asset_size,asset_last_modified,diagnostics,preview_change";
+const ROW_PLACEHOLDERS = "(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+
+/**
+ * Item 17b: `raw_markdown` admits rows up to 5 MiB, so pure row-count
+ * chunking could still blow `max_allowed_packet`. Chunks accumulate until
+ * either cap is hit; a single row past the solo threshold goes out alone so
+ * it fails naturally at the server (existing 1406 mapping) instead of
+ * poisoning a whole chunk.
+ */
+const MAX_CHUNK_ROWS = 1000;
+const MAX_CHUNK_BYTES = 4 * 1024 * 1024;
+const SOLO_ROW_BYTES = 8 * 1024 * 1024;
+
+function toRowArgs(entry: ImportSnapshotEntry): unknown[] {
+  return [
+    entry.id, entry.snapshotId, entry.uploadKey, entry.clientRelativePath, entry.sourcePath, entry.sourcePathHash,
+    entry.entryType, entry.uploadStatus, entry.declaredSize, entry.sourceFileHash, entry.rawMarkdown, entry.resolvedTitle,
+    entry.titleSource, entry.markdown, entry.metadata === null ? null : JSON.stringify(entry.metadata), entry.revisionContentHash,
+    entry.reconciliationFingerprint, entry.mimeType, entry.assetContentHash, entry.assetSize, entry.assetLastModified,
+    JSON.stringify(entry.diagnostics), entry.previewChange === null ? null : JSON.stringify(entry.previewChange),
+  ];
+}
+
+function estimatedBytes(args: unknown[]): number {
+  let total = 0;
+  for (const arg of args) {
+    if (typeof arg === "string") total += arg.length;
+    else if (typeof arg === "number") total += 8;
+    else if (arg instanceof Date) total += 24;
+  }
+  return total;
+}
+
 export class MariaDbImportSnapshotEntryRepository implements ImportSnapshotEntryRepository {
   constructor(private readonly connection: QueryConnection) {}
 
   async insertMany(entries: ImportSnapshotEntry[]): Promise<void> {
-    for (const entry of entries) {
+    if (entries.length === 0) return;
+    let chunk: unknown[][] = [];
+    let chunkBytes = 0;
+    const flush = async (): Promise<void> => {
+      if (chunk.length === 0) return;
+      const placeholders = chunk.map(() => ROW_PLACEHOLDERS).join(",");
       await this.connection.query(
-        `INSERT INTO source_import_snapshot_entries (
-          id,snapshot_id,upload_key,client_relative_path,source_path,source_path_hash,entry_type,upload_status,declared_size,
-          source_file_hash,raw_markdown,resolved_title,title_source,markdown,metadata,revision_content_hash,reconciliation_fingerprint,
-          mime_type,asset_content_hash,asset_size,asset_last_modified,diagnostics,preview_change
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [
-          entry.id, entry.snapshotId, entry.uploadKey, entry.clientRelativePath, entry.sourcePath, entry.sourcePathHash,
-          entry.entryType, entry.uploadStatus, entry.declaredSize, entry.sourceFileHash, entry.rawMarkdown, entry.resolvedTitle,
-          entry.titleSource, entry.markdown, entry.metadata === null ? null : JSON.stringify(entry.metadata), entry.revisionContentHash,
-          entry.reconciliationFingerprint, entry.mimeType, entry.assetContentHash, entry.assetSize, entry.assetLastModified,
-          JSON.stringify(entry.diagnostics), entry.previewChange === null ? null : JSON.stringify(entry.previewChange),
-        ],
+        `INSERT INTO source_import_snapshot_entries (${INSERT_COLUMNS}) VALUES ${placeholders}`,
+        chunk.flat(),
       );
+      chunk = [];
+      chunkBytes = 0;
+    };
+    for (const entry of entries) {
+      const args = toRowArgs(entry);
+      const size = estimatedBytes(args);
+      if (size > SOLO_ROW_BYTES) {
+        await flush();
+        await this.connection.query(
+          `INSERT INTO source_import_snapshot_entries (${INSERT_COLUMNS}) VALUES ${ROW_PLACEHOLDERS}`,
+          args,
+        );
+        continue;
+      }
+      if (chunk.length >= MAX_CHUNK_ROWS || (chunk.length > 0 && chunkBytes + size > MAX_CHUNK_BYTES)) {
+        await flush();
+      }
+      chunk.push(args);
+      chunkBytes += size;
     }
+    await flush();
   }
 
   async listBySnapshotId(snapshotId: string): Promise<ImportSnapshotEntry[]> {

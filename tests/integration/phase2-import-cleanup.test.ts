@@ -209,4 +209,18 @@ describe("Phase 2 staging cleanup", () => {
     expect(await pool.query("SELECT id FROM source_import_snapshot_entries WHERE snapshot_id=?", [freshReady])).toHaveLength(1);
     expect(await canonicalCounts()).toEqual(before);
   });
+
+  it("reports zero deletions when no snapshot is cleanup-eligible", async () => {
+    const fixture = await createSourceFixture(pool, { managed: true });
+    const future = new Date(now.getTime() + 60_000);
+    const fresh = await insertSnapshot({ state: "READY", workspaceId: fixture.workspaceId, expiresAt: future, finalizedAt: now });
+
+    const before = await canonicalCounts();
+    const result = await services().cleanup.cleanup();
+    expect(result.deleted).toBe(0);
+
+    const remaining = (await pool.query<{ id: unknown }[]>("SELECT id FROM source_import_snapshots ORDER BY id")).map((row) => String(row.id));
+    expect(remaining).toContain(fresh);
+    expect(await canonicalCounts()).toEqual(before);
+  });
 });

@@ -1,8 +1,14 @@
 import { IntegrityError, InvalidParentError, TreeCycleError, TreeNodeNotFoundError } from "../domain/errors";
 import type { KnowledgeRepositories } from "../ports/unit-of-work";
+import type { TreeViewNode } from "../ports/tree-repository";
 
-export async function assertActiveFolderAncestry(repositories: KnowledgeRepositories, sourceId: string, folderId: string): Promise<void> {
-  const nodes = await repositories.tree.listBySource(sourceId);
+export async function assertActiveFolderAncestry(
+  repositories: KnowledgeRepositories,
+  sourceId: string,
+  folderId: string,
+  preloadedNodes?: readonly TreeViewNode[],
+): Promise<void> {
+  const nodes = preloadedNodes ?? (await repositories.tree.listBySource(sourceId));
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const folder = byId.get(folderId);
   if (!folder) {
@@ -21,10 +27,15 @@ export async function assertActiveFolderAncestry(repositories: KnowledgeReposito
   }
 }
 
-export async function assertActiveDocumentPlacement(repositories: KnowledgeRepositories, sourceId: string, documentId: string): Promise<void> {
-  const nodes = await repositories.tree.listBySource(sourceId);
+export async function assertActiveDocumentPlacement(
+  repositories: KnowledgeRepositories,
+  sourceId: string,
+  documentId: string,
+  preloadedNodes?: readonly TreeViewNode[],
+): Promise<void> {
+  const nodes = preloadedNodes ?? (await repositories.tree.listBySource(sourceId));
   const documentNode = nodes.find((node) => node.documentId === documentId);
   if (!documentNode) throw new TreeNodeNotFoundError("Document tree node was not found.");
   if (documentNode.sourceId !== sourceId || documentNode.nodeType !== "DOCUMENT") throw new IntegrityError("Document tree node references a different source.");
-  if (documentNode.parentId) await assertActiveFolderAncestry(repositories, sourceId, documentNode.parentId);
+  if (documentNode.parentId) await assertActiveFolderAncestry(repositories, sourceId, documentNode.parentId, preloadedNodes);
 }
