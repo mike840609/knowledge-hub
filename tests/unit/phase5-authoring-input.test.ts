@@ -39,6 +39,21 @@ describe("parseCreateDocumentInput (spec §6.1, §6.2, §6.4)", () => {
   it("rejects a blank title", () => {
     expect(() => parseCreateDocumentInput({ title: "   ", markdown: "x" })).toThrow();
   });
+
+  it("rejects filename-based input with unclosed frontmatter", () => {
+    const markdown = "---\ntitle: Test\nno closing delimiter\n";
+    expect(() => parseCreateDocumentInput({ filename: "doc.md", markdown })).toThrow();
+  });
+
+  it("rejects filename-based input with non-object frontmatter", () => {
+    const markdown = "---\njust a string\n---\n";
+    expect(() => parseCreateDocumentInput({ filename: "doc.md", markdown })).toThrow();
+  });
+
+  it("rejects filename-based input with duplicate keys in frontmatter", () => {
+    const markdown = "---\ntitle: First\ntitle: Second\n---\n";
+    expect(() => parseCreateDocumentInput({ filename: "doc.md", markdown })).toThrow();
+  });
 });
 
 describe("parseUpdateDocumentInput (spec §6.1)", () => {

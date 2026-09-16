@@ -1,7 +1,5 @@
-import { fromMarkdown } from "mdast-util-from-markdown";
-import { toString } from "mdast-util-to-string";
-import { parseDocument } from "yaml";
-import { resolveImportTitle } from "@/modules/sources/domain/import-title";
+import { parseGenericMarkdownText, sourceFileHash } from "@/modules/sources/adapters/generic-markdown-folder-adapter";
+import { SourceImportError } from "@/modules/sources/domain/import-errors";
 import { DomainError } from "@/shared/domain/errors";
 
 export const MAX_TITLE_LENGTH = 512;
@@ -35,41 +33,6 @@ function checkedTitle(raw: string): string {
   return title;
 }
 
-function extractFrontmatterTitle(markdown: string): unknown {
-  const normalized = markdown.replace(/\r\n/g, "\n");
-  const lines = normalized.split("\n");
-  if (lines[0] !== "---") return undefined;
-
-  const closingIndex = lines.findIndex((line, index) => index > 0 && line === "---");
-  if (closingIndex < 0) return undefined;
-
-  const yamlText = lines.slice(1, closingIndex).join("\n");
-  try {
-    const document = parseDocument(yamlText, {
-      prettyErrors: false,
-      strict: false,
-    });
-    const metadata = document.toJS({ maxAliasCount: 50 }) as Record<string, unknown> | null;
-    return metadata?.title;
-  } catch {
-    return undefined;
-  }
-}
-
-function extractFirstH1(markdown: string): string | null {
-  try {
-    const tree = fromMarkdown(markdown);
-    for (const node of tree.children) {
-      if (node.type !== "heading" || node.depth !== 1) continue;
-      const text = toString(node).trim();
-      if (text) return text;
-    }
-  } catch {
-    // If markdown parsing fails, just return null
-  }
-  return null;
-}
-
 export function parseCreateDocumentInput(body: unknown): { title: string; markdown: string } {
   const record = readObject(body);
   const hasTitle = record.title !== undefined;
@@ -80,14 +43,20 @@ export function parseCreateDocumentInput(body: unknown): { title: string; markdo
 
   // Upload path: the same frontmatter → H1 → filename precedence folder import uses.
   const filename = readString(record, "filename");
-  const frontmatterTitle = extractFrontmatterTitle(markdown);
-  const firstH1 = extractFirstH1(markdown);
-  const resolved = resolveImportTitle({
-    sourcePath: filename,
-    frontmatterTitle,
-    firstH1,
-  });
-  return { title: checkedTitle(resolved.title), markdown };
+  try {
+    const hash = sourceFileHash(new TextEncoder().encode(markdown));
+    const parsed = parseGenericMarkdownText({
+      sourcePath: filename,
+      text: markdown,
+      sourceFileHash: hash,
+    });
+    return { title: checkedTitle(parsed.resolvedTitle), markdown };
+  } catch (error) {
+    if (error instanceof SourceImportError) {
+      invalid(error.message);
+    }
+    throw error;
+  }
 }
 
 export function parseUpdateDocumentInput(body: unknown): {
