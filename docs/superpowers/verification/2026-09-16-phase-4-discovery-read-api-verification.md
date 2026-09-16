@@ -44,7 +44,7 @@
 | U2 | `tests/unit/phase4-search-query.test.ts` | `toLikePattern`：跳脫 `!`／`%`／`_`；`100%` 不變成萬用字元 | PASS |
 | U3 | `tests/unit/phase4-search-capability.test.ts` | 「discover-vs-read tripwire」：無角色可 discover 而不能 read | PASS |
 | U4 | `tests/unit/phase4-search-query.test.ts` | `highlightSnippet`：命中標示、不分大小寫、無命中不標 | PASS |
-| U5 | `tests/unit/phase4-search-authorization.test.ts`（`excludes a discover-only Workspace from the workspaceIds handed to the repository`） | 授權集合過濾：以假 `KnowledgeUnitOfWork`／`WorkspaceUnitOfWork` 驅動真正的 `KnowledgeSearchService.search`，`evaluateWorkspaceCapabilities` mock 成回傳 discover-only（無 `document.read`）與可讀兩種集合，斷言傳給 `repositories.search.search` 的 `workspaceIds` 排除前者 | PASS（先前記錄誤指向 `tests/integration/phase4-search-service.test.ts:76`：該測試的 `outsider` fixture 無任何成員資格，`accessible` 清單本身即為空，`readableWorkspaces` 的迴圈從未執行，把它換成 `return [...candidateIds]` 該測試仍會通過，並未鎖住 §5.2 的過濾邏輯。已驗證新測試在還原該替換後會失敗（見下方驗證紀錄），替換回原始碼後恢復通過） |
+| U5 | `tests/unit/phase4-search-authorization.test.ts`（`excludes a discover-only Workspace from the workspaceIds handed to the repository`） | 授權集合過濾：以假 `KnowledgeUnitOfWork`／`WorkspaceUnitOfWork` 驅動真正的 `KnowledgeSearchService.search`，`evaluateWorkspaceCapabilities` mock 成回傳 discover-only（無 `document.read`）與可讀兩種集合，斷言傳給 `repositories.search.search` 的 `workspaceIds` 排除前者 | PASS（先前記錄誤指向 `tests/integration/phase4-search-service.test.ts:76`：該測試的 `outsider` fixture 無任何成員資格，`accessible` 清單本身即為空，`readableWorkspaces` 的迴圈從未執行，把它換成 `return [...candidateIds]` 該測試仍會通過，並未鎖住 §5.2 的過濾邏輯。已驗證新測試在還原該替換後會失敗，替換回原始碼後恢復通過） |
 | U6 | `tests/unit/phase4-search-capability.test.ts` | `canSearch` 推導：具 `document.read` 為 true、discover-only 為 false、封存 Team 仍為 true | PASS |
 
 ### 整合測試（I1–I12，需 DB）
@@ -104,8 +104,24 @@ Phase 3 Product Acceptance：**PASS**，記錄於 `docs/superpowers/verification
 
 ## 修改的檔案
 
+本節記錄**本驗收記錄產出當下**（commit `a50e2b5`）的變更，以及其後因審查而追加的修正。
+
+驗收當下：
+
 - `scripts/db/seed.ts`：修復 Phase 4 搜尋 fixture 建立順序，避免搶在「是否為全新資料庫」的空表判斷之前寫入 `obsidianWikiSource` 的 tree，導致 Architecture／Runbooks／Retired Notes 種子文件永遠不被建立。
 - `docs/superpowers/verification/2026-09-16-phase-4-discovery-read-api-verification.md`：本驗收記錄（新增）。
+
+驗收後、依整支分支審查追加（commit `c2ea863`）：
+
+- `src/app/w/[workspaceId]/search/page.tsx`、`src/lib/search-params.ts`、`tests/unit/phase4-search-params.test.ts`：重複查詢參數（`?q=a&q=b`）會讓 `searchParams` 交付陣列而造成 500；於路由邊界正規化並放寬型別宣告。
+- 本記錄的效能基準章節：補記基準只測單表 `LIKE`、非實際上線的五表 JOIN，數字為下限。
+
+驗收後、依設計符合性審查追加（commits `a73f3a6`、`1565c94`、`8e91643`）：
+
+- `tests/unit/phase4-search-authorization.test.ts`（新增）：鎖住 §5.2 `scope=all` 的 `document.read` 過濾（U5）。
+- `tests/unit/phase4-search-repository-timeout.test.ts`、`tests/unit/phase4-search-read.test.ts`（新增）：補上 §6.6 逾時路徑的兩端覆蓋（errno 1969 轉譯、非逾時錯誤原樣傳遞、`timedOut` 狀態）。
+- `src/server/search-read.ts`：還原 §7.1 指定的授權 try/catch。
+- `src/components/search/search-form.tsx`、`src/components/search/search-results.tsx`：依 §7.3 讓 Source 篩選只在單一 Workspace 範圍顯示，並從全範圍分頁連結移除失效的 `source` 參數。
 
 ## 已知缺口
 
