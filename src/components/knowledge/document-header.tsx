@@ -57,7 +57,7 @@ export function DocumentHeader({
           </ol>
         </nav>
         <div className="mt-1 flex min-w-0 items-start justify-between gap-3">
-          <h1 className="min-w-0 flex-1 break-words text-base font-medium text-kh-text" title={title}>
+          <h1 className="min-w-0 flex-1 truncate text-xl font-semibold tracking-tight text-kh-text" title={title}>
             {title}
           </h1>
           <button
