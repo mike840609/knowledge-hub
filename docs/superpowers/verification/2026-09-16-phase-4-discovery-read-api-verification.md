@@ -44,7 +44,7 @@
 | U2 | `tests/unit/phase4-search-query.test.ts` | `toLikePattern`：跳脫 `!`／`%`／`_`；`100%` 不變成萬用字元 | PASS |
 | U3 | `tests/unit/phase4-search-capability.test.ts` | 「discover-vs-read tripwire」：無角色可 discover 而不能 read | PASS |
 | U4 | `tests/unit/phase4-search-query.test.ts` | `highlightSnippet`：命中標示、不分大小寫、無命中不標 | PASS |
-| U5 | `tests/integration/phase4-search-service.test.ts`（`never leaks content of unreadable workspaces in an all-scope search`） | 授權集合過濾：discover-only Workspace 被排除於 all-scope 結果外 | PASS（此案例實際落在整合測試而非純單元測試，因為需要真實授權集合計算與 DB 資料驗證；純函式層面的集合過濾邏輯另由 U3 的 tripwire 鎖住前提） |
+| U5 | `tests/unit/phase4-search-authorization.test.ts`（`excludes a discover-only Workspace from the workspaceIds handed to the repository`） | 授權集合過濾：以假 `KnowledgeUnitOfWork`／`WorkspaceUnitOfWork` 驅動真正的 `KnowledgeSearchService.search`，`evaluateWorkspaceCapabilities` mock 成回傳 discover-only（無 `document.read`）與可讀兩種集合，斷言傳給 `repositories.search.search` 的 `workspaceIds` 排除前者 | PASS（先前記錄誤指向 `tests/integration/phase4-search-service.test.ts:76`：該測試的 `outsider` fixture 無任何成員資格，`accessible` 清單本身即為空，`readableWorkspaces` 的迴圈從未執行，把它換成 `return [...candidateIds]` 該測試仍會通過，並未鎖住 §5.2 的過濾邏輯。已驗證新測試在還原該替換後會失敗（見下方驗證紀錄），替換回原始碼後恢復通過） |
 | U6 | `tests/unit/phase4-search-capability.test.ts` | `canSearch` 推導：具 `document.read` 為 true、discover-only 為 false、封存 Team 仍為 true | PASS |
 
 ### 整合測試（I1–I12，需 DB）
