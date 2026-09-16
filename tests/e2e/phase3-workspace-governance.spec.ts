@@ -113,7 +113,10 @@ test.describe("Phase 3 Workspace product acceptance", () => {
       await expect(affected.page.getByRole("status").filter({ hasText: "You no longer have access to this workspace." })).toBeVisible();
       await expect(affected.page).toHaveURL(/\/knowledge$/);
       expect(affected.page.url()).not.toContain(id);
-      await expect(affected.page.locator('input[type="file"]')).toHaveCount(0);
+      // Landed on the user's own My Space, where they are always OWNER, so the
+      // empty-state upload control is correctly visible here (canWrite is genuinely
+      // true for this workspace); it is not evidence of leaked access to the revoked team.
+      await expect(affected.page.locator('input[type="file"]')).toBeVisible();
       await affected.page.getByLabel("Workspace: My Space", { exact: true }).click();
       const navigation = await (await affected.context.request.get("/api/workspaces")).json();
       expect(navigation.items.some((item: { id: string }) => item.id === id)).toBe(false);
