@@ -10,6 +10,7 @@ import {
 import type { KnowledgeTreeNode } from "../../domain/tree-node";
 import { assignContiguousPositions, orderSiblingsByPosition } from "../../domain/tree-rules";
 import type { KnowledgeRepositories } from "../../ports/unit-of-work";
+import type { TreeViewNode } from "../../ports/tree-repository";
 import type { SourcePolicy } from "../../domain/source-policy";
 
 /**
@@ -83,20 +84,28 @@ export async function requireLockedSourceNode(
 /**
  * Renumber one sibling group contiguously (spec §8: plain
  * `ORDER BY position, id`; no LexoRank or fractional indexing).
+ *
+ * `preloadedNodes` is an optional tx-local tree view (issue #9 item 17a):
+ * when supplied, the sibling read comes from it instead of a fresh
+ * `listBySource`, and the in-memory positions of the touched siblings are
+ * updated alongside the database writes so the view stays the tx-local
+ * truth. Omitting it keeps the legacy re-read path byte-identical.
  */
 export async function renumberSiblingPositions(
   repositories: KnowledgeRepositories,
   sourceId: string,
   parentId: string | null,
   actorId: string,
+  preloadedNodes?: readonly TreeViewNode[],
 ): Promise<void> {
-  const nodes = await repositories.tree.listBySource(sourceId);
+  const nodes = preloadedNodes ?? (await repositories.tree.listBySource(sourceId));
   const siblings = orderSiblingsByPosition(nodes.filter((node) => node.parentId === parentId));
   const positions = assignContiguousPositions(siblings);
   for (const sibling of siblings) {
     const position = positions.get(sibling.id)!;
     if (sibling.position !== position) {
       await repositories.tree.updatePosition(sibling.id, position, actorId);
+      if (preloadedNodes) sibling.position = position;
     }
   }
 }
@@ -107,6 +116,11 @@ export async function renumberSiblingPositions(
  * renumber contiguously. Raw position values alone cannot place a node
  * because ties fall back to id order; index insertion makes move/reorder
  * targets unambiguous.
+ *
+ * `preloadedNodes` follows the same tx-local view contract as
+ * `renumberSiblingPositions`: supplied view rows are read instead of a fresh
+ * `listBySource`, and their in-memory positions are updated alongside the
+ * database writes. The placed node must already be a member of the view.
  */
 export async function placeNodeAtIndex(
   repositories: KnowledgeRepositories,
@@ -115,8 +129,9 @@ export async function placeNodeAtIndex(
   parentId: string | null,
   index: number,
   actorId: string,
+  preloadedNodes?: readonly TreeViewNode[],
 ): Promise<void> {
-  const nodes = await repositories.tree.listBySource(sourceId);
+  const nodes = preloadedNodes ?? (await repositories.tree.listBySource(sourceId));
   const node = nodes.find((candidate) => candidate.id === nodeId);
   if (!node) throw new TreeNodeNotFoundError("Tree node was not found in this source.");
   const others = orderSiblingsByPosition(nodes.filter((candidate) => candidate.parentId === parentId && candidate.id !== nodeId));
@@ -125,6 +140,7 @@ export async function placeNodeAtIndex(
   for (const [position, sibling] of merged.entries()) {
     if (sibling.position !== position) {
       await repositories.tree.updatePosition(sibling.id, position, actorId);
+      if (preloadedNodes) sibling.position = position;
     }
   }
 }
