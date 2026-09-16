@@ -24,7 +24,7 @@ function useDesktopLayout(): boolean {
 
 function DocumentRegionSkeleton() {
   return (
-    <div className="mx-auto w-full max-w-[860px] px-6 py-6" aria-hidden="true">
+    <div className="kh-reading-column pb-6 pt-5" aria-hidden="true">
       <Skeleton className="h-4 w-40" />
       <Skeleton className="mt-3 h-7 w-2/3" />
       <div className="mt-3 flex gap-2">

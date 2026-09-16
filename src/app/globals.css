@@ -39,3 +39,9 @@ body {
 a { color: inherit; }
 
 ::selection { background: #99f6e4; }
+
+@layer components {
+  .kh-reading-column {
+    @apply mx-auto w-full max-w-[860px] px-6;
+  }
+}

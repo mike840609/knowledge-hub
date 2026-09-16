@@ -6,7 +6,7 @@ type DocumentDetails = Awaited<ReturnType<KnowledgeQueryService["getDocument"]>>
 export function DocumentViewer({ view, selectedRevision }: { view: DocumentDetails; selectedRevision?: DocumentDetails["currentRevision"] }) {
   const displayed = selectedRevision ?? view.currentRevision;
   return (
-    <article className="min-w-0">
+    <article className="min-w-0 [&>div>:first-child]:mt-0">
       <MarkdownRenderer markdown={displayed.markdown} />
     </article>
   );

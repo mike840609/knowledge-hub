@@ -34,7 +34,7 @@ export function DocumentHeader({
 
   return (
     <header className="border-b border-kh-border bg-kh-bg-subtle">
-      <div className="mx-auto w-full max-w-[860px] px-6 py-3">
+      <div className="kh-reading-column pb-4 pt-4">
         <nav aria-label="Breadcrumb">
           <ol className="flex min-w-0 items-center gap-1 text-[13px] text-kh-text-muted">
             {breadcrumb.map((segment, index) => {
@@ -57,7 +57,7 @@ export function DocumentHeader({
           </ol>
         </nav>
         <div className="mt-1 flex min-w-0 items-start justify-between gap-3">
-          <h1 className="min-w-0 flex-1 break-words text-xl font-semibold tracking-tight text-kh-text" title={title}>
+          <h1 className="min-w-0 flex-1 break-words text-base font-medium text-kh-text" title={title}>
             {title}
           </h1>
           <button
