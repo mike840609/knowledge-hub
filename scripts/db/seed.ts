@@ -16,15 +16,17 @@ export const DEV_FIXTURE_IDS = {
   folder: "0199f000-0000-7000-8000-000000000201",
 };
 
-/** Task 9 read-only browser fixtures: Query Master + SWFP plus a no-membership workspace for direct-URL denial checks. */
+/** Task 9 read-only browser fixtures: Query Master + SWFP plus a no-membership workspace for direct-URL denial checks, and an empty (member, no sources) workspace for authoring E2E. */
 export const BROWSER_FIXTURE_IDS = {
   queryMasterWorkspace: "0199f100-0000-7000-8000-000000000001",
   swfpWorkspace: "0199f100-0000-7000-8000-000000000002",
   restrictedWorkspace: "0199f100-0000-7000-8000-000000000003",
+  emptyWorkspace: "0199f100-0000-7000-8000-000000000004",
   obsidianWikiSource: "0199f100-0000-7000-8000-000000000101",
   swfpSource: "0199f100-0000-7000-8000-000000000102",
   restrictedSource: "0199f100-0000-7000-8000-000000000103",
   archivedWikiSource: "0199f100-0000-7000-8000-000000000104",
+  sourceManagedSource: "0199f100-0000-7000-8000-000000000105",
   secretDocument: "0199f100-0000-7000-8000-000000000201",
   secretRevision: "0199f100-0000-7000-8000-000000000202",
   secretNode: "0199f100-0000-7000-8000-000000000203",
@@ -34,6 +36,9 @@ export const BROWSER_FIXTURE_IDS = {
   searchDocument: "0199f100-0000-7000-8000-000000000207",
   searchRevision: "0199f100-0000-7000-8000-000000000208",
   searchNode: "0199f100-0000-7000-8000-000000000209",
+  sourceManagedDocument: "0199f100-0000-7000-8000-000000000210",
+  sourceManagedRevision: "0199f100-0000-7000-8000-000000000211",
+  sourceManagedNode: "0199f100-0000-7000-8000-000000000212",
 };
 
 /** Mirrored literally in tests/e2e/knowledge-browser.spec.ts (Playwright cannot resolve `@/` aliases). */
@@ -54,6 +59,9 @@ export const BROWSER_FIXTURES = {
   archivedActiveBody: "Active notes inside an archived source stay readable with the archived flag.",
   searchTitle: "請假流程 SWFP Leave Policy",
   searchBody: "員工請假流程：先在系統送出申請，主管簽核後生效。Employee leave requests need manager approval.",
+  sourceManagedSourceName: "Vendor Compliance Vault",
+  sourceManagedTitle: "Compliance Policy",
+  sourceManagedBody: "Source-managed content synced from an external folder; the hub cannot edit it.",
 };
 
 async function ensureWorkspace(repositories: SourceRepositories, id: string, name: string, createdBy: string, now: Date): Promise<void> {
@@ -79,7 +87,8 @@ async function seedBrowserFixtures(pool: ReturnType<typeof createDatabasePool>, 
     await ensureWorkspace(repositories, BROWSER_FIXTURE_IDS.queryMasterWorkspace, "Query Master", identity.id, now);
     await ensureWorkspace(repositories, BROWSER_FIXTURE_IDS.swfpWorkspace, "SWFP", identity.id, now);
     await ensureWorkspace(repositories, BROWSER_FIXTURE_IDS.restrictedWorkspace, "Restricted Vault", identity.id, now);
-    for (const workspaceId of [BROWSER_FIXTURE_IDS.queryMasterWorkspace, BROWSER_FIXTURE_IDS.swfpWorkspace]) {
+    await ensureWorkspace(repositories, BROWSER_FIXTURE_IDS.emptyWorkspace, "Empty Workspace", identity.id, now);
+    for (const workspaceId of [BROWSER_FIXTURE_IDS.queryMasterWorkspace, BROWSER_FIXTURE_IDS.swfpWorkspace, BROWSER_FIXTURE_IDS.emptyWorkspace]) {
       if (!(await repositories.workspaceMemberships.find(workspaceId, identity.id))) {
         await repositories.workspaceMemberships.insert(createDirectMembership({ workspaceId, userId: identity.id, role: "OWNER", createdBy: identity.id, now }));
       }
@@ -187,6 +196,39 @@ async function seedBrowserFixtures(pool: ReturnType<typeof createDatabasePool>, 
         status: "ACTIVE", updatedBy: identity.id, archivedBy: null, archivedAt: null,
       });
       await repositories.documents.assertComplete(BROWSER_FIXTURE_IDS.archivedActiveDocument);
+    }
+  });
+  // SOURCE_MANAGED fixture proving Edit never appears on source-managed content.
+  // Runs after the empty-tree check above (see the hazard comment near treeCount), in its own
+  // unit of work, so it cannot interfere with the "is this a brand-new database" detection.
+  // Named to sort AFTER "Obsidian Wiki" so it never becomes getDefaultKnowledgeTarget's pick for
+  // queryMasterWorkspace; tests/e2e/phase5-authoring.spec.ts navigates to it by explicit URL instead.
+  await unitOfWork.run(async (repositories) => {
+    if (!(await repositories.sources.findById(BROWSER_FIXTURE_IDS.sourceManagedSource))) {
+      await repositories.sources.insert({
+        id: BROWSER_FIXTURE_IDS.sourceManagedSource, name: BROWSER_FIXTURES.sourceManagedSourceName,
+        workspaceId: BROWSER_FIXTURE_IDS.queryMasterWorkspace, sourceType: "FOLDER_SYNC", ownership: "SOURCE_MANAGED",
+        status: "ACTIVE", syncVersion: 0, createdBy: identity.id, updatedBy: identity.id,
+        archivedBy: null, archivedAt: null, createdAt: now, updatedAt: now,
+      });
+    }
+    if (!(await repositories.documents.findById(BROWSER_FIXTURE_IDS.sourceManagedDocument))) {
+      const content = { title: BROWSER_FIXTURES.sourceManagedTitle, markdown: BROWSER_FIXTURES.sourceManagedBody, metadata: {} };
+      await repositories.documents.insertDraft({
+        id: BROWSER_FIXTURE_IDS.sourceManagedDocument, sourceId: BROWSER_FIXTURE_IDS.sourceManagedSource, currentRevisionId: null,
+        status: "ACTIVE", createdBy: identity.id, updatedBy: identity.id, archivedBy: null, archivedAt: null, createdAt: now, updatedAt: now,
+      });
+      await repositories.revisions.insert({
+        id: BROWSER_FIXTURE_IDS.sourceManagedRevision, documentId: BROWSER_FIXTURE_IDS.sourceManagedDocument, revisionNo: 1,
+        ...content, contentHash: contentFingerprint(content), createdBy: identity.id, createdAt: now,
+      });
+      await repositories.documents.setCurrentRevision(BROWSER_FIXTURE_IDS.sourceManagedDocument, BROWSER_FIXTURE_IDS.sourceManagedRevision, identity.id);
+      await repositories.tree.insert({
+        id: BROWSER_FIXTURE_IDS.sourceManagedNode, sourceId: BROWSER_FIXTURE_IDS.sourceManagedSource, parentId: null,
+        nodeType: "DOCUMENT", name: null, documentId: BROWSER_FIXTURE_IDS.sourceManagedDocument, position: 0,
+        status: "ACTIVE", updatedBy: identity.id, archivedBy: null, archivedAt: null,
+      });
+      await repositories.documents.assertComplete(BROWSER_FIXTURE_IDS.sourceManagedDocument);
     }
   });
 }
