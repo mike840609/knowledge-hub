@@ -73,8 +73,8 @@ export function SourceSidebar({
   }
 
   return (
-    <aside aria-label="Knowledge explorer" className="flex w-72 shrink-0 flex-col gap-4 border-r border-kh-border bg-kh-bg p-3">
-      <div className="flex flex-col gap-2 border-b border-kh-border pb-3">
+    <aside aria-label="Knowledge explorer" className="flex h-full min-h-0 w-full shrink-0 flex-col lg:w-72 gap-4 border-r border-kh-border bg-kh-bg p-3">
+      <div className="flex shrink-0 flex-col gap-2 border-b border-kh-border pb-3">
         <SourceSelector workspaceId={workspaceId} sources={visibleSources} selectedSourceId={source.id} />
         {syncable ? (
           <Link
@@ -95,8 +95,8 @@ export function SourceSidebar({
           Show archived
         </label>
       </div>
-      <TreeFilter value={query} onChange={setQuery} />
-      <nav aria-label="Document tree" className="min-h-0 flex-1 overflow-y-auto">
+      <div className="shrink-0"><TreeFilter value={query} onChange={setQuery} /></div>
+      <nav aria-label="Document tree" className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <KnowledgeTree
           items={visibleTree}
           workspaceId={workspaceId}

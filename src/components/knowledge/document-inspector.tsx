@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
+import { DocumentTopbarContext } from "@/components/shell/document-topbar-context";
+import { InspectorContext } from "./inspector-context";
 import { X } from "lucide-react";
 import type { KnowledgeRevisionView } from "@/modules/knowledge/application/knowledge-query-service";
 import { Drawer } from "@/components/ui/drawer";
@@ -153,9 +156,9 @@ export function DocumentInspector({
     return (
       <aside
         aria-label="Document details"
-        className="hidden w-80 shrink-0 border-l border-kh-border bg-kh-bg min-[1440px]:block"
+        className="hidden h-full min-h-0 w-80 shrink-0 flex-col border-l border-kh-border bg-kh-bg min-[1440px]:flex"
       >
-        <div className="flex items-start justify-between gap-2 border-b border-kh-border px-4 py-3">
+        <div className="flex shrink-0 items-start justify-between gap-2 border-b border-kh-border px-4 py-3">
           <h2 className="truncate text-sm font-semibold text-kh-text">Document details</h2>
           <button
             type="button"
@@ -166,7 +169,8 @@ export function DocumentInspector({
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
-        <div className="px-4 py-3">
+        <div key={data.documentId} role="region" aria-label="Document details content" tabIndex={0}
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain break-words px-4 py-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-kh-accent">
           <InspectorTabs data={data} />
         </div>
       </aside>
@@ -174,6 +178,7 @@ export function DocumentInspector({
   }
   return (
     <Drawer
+      key={data.documentId}
       open={open}
       onOpenChange={onOpenChange}
       modal={false}
@@ -202,23 +207,40 @@ export function DocumentDetailClient({
   inspectorData: DocumentInspectorData;
   children: ReactNode;
 }) {
-  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const inspector = useContext(InspectorContext);
+  const setDocumentTopbar = useContext(DocumentTopbarContext)?.setDocument;
+  const pathname = usePathname();
+  const headerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const close = () => setInspectorOpen(false);
-    window.addEventListener("kh:open-browse", close);
-    window.addEventListener("kh:open-nav", close);
-    return () => {
-      window.removeEventListener("kh:open-browse", close);
-      window.removeEventListener("kh:open-nav", close);
-    };
-  }, []);
-  const openInspector = () => {
-    setInspectorOpen(true);
+    if (!window.location.hash) contentRef.current?.scrollTo({ top: 0 });
+  }, [inspectorData.documentId]);
+  const inspectorOpen = inspector?.open ?? false;
+  const setInspectorOpen = inspector?.setOpen;
+  const openInspector = useCallback(() => {
+    setInspectorOpen?.(true);
     window.dispatchEvent(new CustomEvent("kh:open-inspector"));
-  };
+  }, [setInspectorOpen]);
+  useEffect(() => {
+    const header = headerRef.current;
+    const root = contentRef.current;
+    if (!header || !root || !setDocumentTopbar) return;
+    setDocumentTopbar({ pathname, title, visible: false, onDetailsClick: openInspector });
+    const observer = new IntersectionObserver(([entry]) => {
+      const visible = !entry.isIntersecting && entry.boundingClientRect.bottom <= (entry.rootBounds?.top ?? 0);
+      setDocumentTopbar({ pathname, title, visible, onDetailsClick: openInspector });
+    }, { root, threshold: 0 });
+    observer.observe(header);
+    return () => {
+      observer.disconnect();
+      setDocumentTopbar(null);
+    };
+  }, [pathname, title, openInspector, setDocumentTopbar]);
   return (
-    <div className="flex min-h-0 flex-1">
-      <div className="min-w-0 flex-1">
+    <div data-document-pane className="flex h-full min-h-0 overflow-hidden">
+      <div ref={contentRef} role="region" aria-label="Document content" tabIndex={0}
+        className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain contain-layout focus-visible:outline focus-visible:outline-2 focus-visible:outline-kh-accent">
+        <div ref={headerRef}>
         <DocumentHeader
           breadcrumb={breadcrumb}
           title={title}
@@ -227,9 +249,10 @@ export function DocumentDetailClient({
           revisionBanner={revisionBanner}
           onDetailsClick={openInspector}
         />
+        </div>
         {children}
       </div>
-      <DocumentInspector open={inspectorOpen} onOpenChange={setInspectorOpen} data={inspectorData} />
+      <DocumentInspector open={inspectorOpen} onOpenChange={(open) => setInspectorOpen?.(open)} data={inspectorData} />
     </div>
   );
 }

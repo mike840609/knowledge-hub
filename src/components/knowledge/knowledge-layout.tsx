@@ -4,6 +4,7 @@ import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import { SourceSidebar } from "./source-sidebar";
+import { InspectorContext } from "./inspector-context";
 import { Drawer } from "@/components/ui/drawer";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -23,7 +24,7 @@ function useDesktopLayout(): boolean {
 
 function DocumentRegionSkeleton() {
   return (
-    <div className="mx-auto w-full max-w-[860px] px-6 py-6" aria-hidden="true">
+    <div className="kh-reading-column pb-6 pt-5" aria-hidden="true">
       <Skeleton className="h-4 w-40" />
       <Skeleton className="mt-3 h-7 w-2/3" />
       <div className="mt-3 flex gap-2">
@@ -59,7 +60,9 @@ export function KnowledgeLayout({
   const desktop = useDesktopLayout();
   const pathname = usePathname();
   const [browseOpen, setBrowseOpen] = useState(false);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   const pathnameRef = useRef(pathname);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const close = () => setBrowseOpen(false);
@@ -75,8 +78,19 @@ export function KnowledgeLayout({
     if (pathnameRef.current !== pathname) {
       pathnameRef.current = pathname;
       setBrowseOpen(false);
+      if (!window.location.hash) contentRef.current?.scrollTo({ top: 0 });
     }
   }, [pathname]);
+
+  useEffect(() => {
+    const close = () => setInspectorOpen(false);
+    window.addEventListener("kh:open-browse", close);
+    window.addEventListener("kh:open-nav", close);
+    return () => {
+      window.removeEventListener("kh:open-browse", close);
+      window.removeEventListener("kh:open-nav", close);
+    };
+  }, []);
 
   const sidebar = (
     <SourceSidebar
@@ -89,7 +103,8 @@ export function KnowledgeLayout({
   );
 
   return (
-    <div className="flex min-h-0 flex-1">
+    <InspectorContext.Provider value={{ open: inspectorOpen, setOpen: setInspectorOpen }}>
+    <div className="flex h-full min-h-0 overflow-hidden">
       {desktop ? (
         <Suspense
           fallback={
@@ -101,9 +116,9 @@ export function KnowledgeLayout({
           {sidebar}
         </Suspense>
       ) : null}
-      <div className="min-w-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {desktop ? null : (
-          <div className="border-b border-kh-border bg-kh-bg px-3 py-2">
+          <div className="shrink-0 border-b border-kh-border bg-kh-bg px-3 py-2">
             <button
               type="button"
               onClick={() => {
@@ -120,7 +135,9 @@ export function KnowledgeLayout({
             </button>
           </div>
         )}
-        <Suspense fallback={<DocumentRegionSkeleton />}>{children}</Suspense>
+        <div ref={contentRef} className="min-h-0 flex-1 overflow-hidden overscroll-contain [&:not(:has([data-document-pane]))]:overflow-y-auto">
+          <Suspense fallback={<DocumentRegionSkeleton />}>{children}</Suspense>
+        </div>
       </div>
       <Drawer
         open={browseOpen}
@@ -128,8 +145,14 @@ export function KnowledgeLayout({
         modal={false}
         title="Browse knowledge"
       >
-        <Suspense fallback={null}>{sidebar}</Suspense>
+        <div className="h-full" onClick={(event) => {
+          const link = (event.target as HTMLElement).closest("a");
+          if (link && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) setBrowseOpen(false);
+        }}>
+          <Suspense fallback={null}>{sidebar}</Suspense>
+        </div>
       </Drawer>
     </div>
+    </InspectorContext.Provider>
   );
 }

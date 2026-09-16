@@ -45,7 +45,7 @@ export default async function KnowledgeDocumentPage({
   if (query?.revision !== undefined) {
     if (!/^[0-9]+$/.test(query.revision)) {
       return (
-        <div className="mx-auto w-full max-w-[860px] px-6 py-16">
+        <div className="kh-reading-column py-16">
           <h1 className="text-2xl font-semibold">Not found or no access</h1>
         </div>
       );
@@ -53,7 +53,7 @@ export default async function KnowledgeDocumentPage({
     const parsed = Number(query.revision);
     if (!Number.isSafeInteger(parsed) || parsed < 1) {
       return (
-        <div className="mx-auto w-full max-w-[860px] px-6 py-16">
+        <div className="kh-reading-column py-16">
           <h1 className="text-2xl font-semibold">Not found or no access</h1>
         </div>
       );
@@ -64,7 +64,7 @@ export default async function KnowledgeDocumentPage({
   const model = await getKnowledgeDocumentModel(workspaceId, sourceId, documentId, { includeArchived, revisionNo });
   if (!model) {
     return (
-      <div className="mx-auto w-full max-w-[860px] px-6 py-16">
+      <div className="kh-reading-column py-16">
         <h1 className="text-2xl font-semibold">Not found or no access</h1>
       </div>
     );
@@ -108,7 +108,7 @@ export default async function KnowledgeDocumentPage({
       }
       inspectorData={inspectorData}
     >
-      <div className="mx-auto w-full max-w-[860px] px-6 py-6">
+      <div className="kh-reading-column pb-6 pt-10">
         <DocumentViewer view={view} selectedRevision={selectedRevision} />
       </div>
     </DocumentDetailClient>
