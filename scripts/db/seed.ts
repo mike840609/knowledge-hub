@@ -105,27 +105,11 @@ async function seedBrowserFixtures(pool: ReturnType<typeof createDatabasePool>, 
       });
       await repositories.documents.assertComplete(BROWSER_FIXTURE_IDS.secretDocument);
     }
-    if (!(await repositories.documents.findById(BROWSER_FIXTURE_IDS.searchDocument))) {
-      const content = { title: BROWSER_FIXTURES.searchTitle, markdown: BROWSER_FIXTURES.searchBody, metadata: {} };
-      await repositories.documents.insertDraft({
-        id: BROWSER_FIXTURE_IDS.searchDocument, sourceId: BROWSER_FIXTURE_IDS.obsidianWikiSource, currentRevisionId: null,
-        status: "ACTIVE", createdBy: identity.id, updatedBy: identity.id, archivedBy: null, archivedAt: null, createdAt: now, updatedAt: now,
-      });
-      await repositories.revisions.insert({
-        id: BROWSER_FIXTURE_IDS.searchRevision, documentId: BROWSER_FIXTURE_IDS.searchDocument, revisionNo: 1,
-        ...content, contentHash: contentFingerprint(content), createdBy: identity.id, createdAt: now,
-      });
-      await repositories.documents.setCurrentRevision(BROWSER_FIXTURE_IDS.searchDocument, BROWSER_FIXTURE_IDS.searchRevision, identity.id);
-      await repositories.tree.insert({
-        id: BROWSER_FIXTURE_IDS.searchNode, sourceId: BROWSER_FIXTURE_IDS.obsidianWikiSource, parentId: null,
-        nodeType: "DOCUMENT", name: null, documentId: BROWSER_FIXTURE_IDS.searchDocument, position: 1,
-        status: "ACTIVE", updatedBy: identity.id, archivedBy: null, archivedAt: null,
-      });
-      await repositories.documents.assertComplete(BROWSER_FIXTURE_IDS.searchDocument);
-    }
   });
   const hub = new HubKnowledgeCommandServiceImpl(new MariaDbUnitOfWork(pool));
   const caller = callerFromIdentity(identity);
+  // Must run before the search fixture below: it gates on an empty tree to detect a first-ever seed,
+  // so anything else inserted into this source's tree first would make that check always false.
   const treeCount = await unitOfWork.run((repositories) => repositories.tree.listBySource(BROWSER_FIXTURE_IDS.obsidianWikiSource));
   if (treeCount.length === 0) {
     const architecture = await hub.createDocument(caller, {
@@ -146,6 +130,26 @@ async function seedBrowserFixtures(pool: ReturnType<typeof createDatabasePool>, 
     });
     await hub.archiveDocument(caller, retired.documentId);
   }
+  await unitOfWork.run(async (repositories) => {
+    if (!(await repositories.documents.findById(BROWSER_FIXTURE_IDS.searchDocument))) {
+      const content = { title: BROWSER_FIXTURES.searchTitle, markdown: BROWSER_FIXTURES.searchBody, metadata: {} };
+      await repositories.documents.insertDraft({
+        id: BROWSER_FIXTURE_IDS.searchDocument, sourceId: BROWSER_FIXTURE_IDS.obsidianWikiSource, currentRevisionId: null,
+        status: "ACTIVE", createdBy: identity.id, updatedBy: identity.id, archivedBy: null, archivedAt: null, createdAt: now, updatedAt: now,
+      });
+      await repositories.revisions.insert({
+        id: BROWSER_FIXTURE_IDS.searchRevision, documentId: BROWSER_FIXTURE_IDS.searchDocument, revisionNo: 1,
+        ...content, contentHash: contentFingerprint(content), createdBy: identity.id, createdAt: now,
+      });
+      await repositories.documents.setCurrentRevision(BROWSER_FIXTURE_IDS.searchDocument, BROWSER_FIXTURE_IDS.searchRevision, identity.id);
+      await repositories.tree.insert({
+        id: BROWSER_FIXTURE_IDS.searchNode, sourceId: BROWSER_FIXTURE_IDS.obsidianWikiSource, parentId: null,
+        nodeType: "DOCUMENT", name: null, documentId: BROWSER_FIXTURE_IDS.searchDocument, position: 1,
+        status: "ACTIVE", updatedBy: identity.id, archivedBy: null, archivedAt: null,
+      });
+      await repositories.documents.assertComplete(BROWSER_FIXTURE_IDS.searchDocument);
+    }
+  });
   const swfpTree = await unitOfWork.run((repositories) => repositories.tree.listBySource(BROWSER_FIXTURE_IDS.swfpSource));
   if (swfpTree.length === 0) {
     await hub.createDocument(caller, {
