@@ -6,7 +6,7 @@ import { importError, SourceImportError } from "@/modules/sources/domain/import-
 import { hashImportPlan, hashReadyImportSnapshot } from "@/modules/sources/domain/import-integrity";
 import { DEFAULT_IMPORT_LIMITS, type ImportLimits } from "@/modules/sources/domain/import-limits";
 import { compareImportText, isIgnoredImportPath, normalizeImportPath } from "@/modules/sources/domain/import-path";
-import type { ReadyImportAsset, ReadyImportContent, ReadyImportDocument, ImportPreviewChange } from "@/modules/sources/domain/import-plan";
+import type { FolderImportPlan, ImportDiffSummary, ReadyImportAsset, ReadyImportContent, ReadyImportDocument, ImportPreviewChange } from "@/modules/sources/domain/import-plan";
 import type { FinalizedImportSnapshotEntry, ImportSnapshot, ImportSnapshotEntry } from "@/modules/sources/domain/import-snapshot";
 import type { SourceRepositories, SourceUnitOfWork } from "@/modules/sources/ports/unit-of-work";
 import { translateKnownSnapshotAccessError } from "./import-snapshot-access";
@@ -98,6 +98,20 @@ function finalizedBase(entry: NormalizedEntry): FinalizedImportSnapshotEntry {
   };
 }
 
+type PreparedFinalize = {
+  persistedEntries: FinalizedImportSnapshotEntry[];
+  snapshotHash: string;
+  planHash: string;
+  summary: ImportDiffSummary;
+  plan: FolderImportPlan;
+  hasBlockers: boolean;
+  expiresAt: Date;
+};
+
+type FinalizePreparation =
+  | { kind: "preview"; preview: ImportPreview }
+  | { kind: "prepared"; artifacts: PreparedFinalize };
+
 export class FinalizeFolderImportService {
   private readonly limits: ImportLimits;
   private readonly now: () => Date;
@@ -112,20 +126,26 @@ export class FinalizeFolderImportService {
 
   async finalize(caller: CallerContext, snapshotId: string): Promise<ImportPreview> {
     const now = this.now();
+    // Lock order in both phases is snapshot → Source → Workspace. Phase A
+    // holds no quota lock; only Phase B runs under runWithCreatorQuotaLock.
+    const preparation = await this.uow.run((repositories) =>
+      this.finalizePrepare(caller, snapshotId, now, repositories),
+    );
+    if (preparation.kind === "preview") return preparation.preview;
     return this.uow.runWithCreatorQuotaLock(caller.identity.id, this.quotaLockTimeoutSeconds, async (repositories) =>
-      this.finalizeLocked(caller, snapshotId, now, repositories),
+      this.finalizeCommit(caller, snapshotId, now, preparation.artifacts, repositories),
     );
   }
 
-  private async finalizeLocked(
+  private async finalizePrepare(
     caller: CallerContext,
     snapshotId: string,
     now: Date,
     repositories: SourceRepositories,
-  ): Promise<ImportPreview> {
+  ): Promise<FinalizePreparation> {
     const snapshot = await repositories.importSnapshots.lockById(snapshotId);
     if (!snapshot || snapshot.createdBy !== caller.identity.id) throw importError("IMPORT_SNAPSHOT_NOT_FOUND", "Import snapshot was not found.");
-    if (snapshot.state === "READY") return previewFromSnapshot(snapshot, now);
+    if (snapshot.state === "READY") return { kind: "preview", preview: previewFromSnapshot(snapshot, now) };
     if (snapshot.state !== "BUILDING") throw importError("IMPORT_SNAPSHOT_NOT_BUILDING", "Only BUILDING snapshots can be finalized.");
     if (snapshot.expiresAt.getTime() <= now.getTime()) throw importError("IMPORT_SNAPSHOT_EXPIRED", "Import snapshot has expired.");
     const lockedSource = snapshot.sourceId === null ? null : await repositories.sources.lockById(snapshot.sourceId);
@@ -143,6 +163,15 @@ export class FinalizeFolderImportService {
           currentVersion: lockedSource.syncVersion,
         });
       }
+    }
+
+    // Advisory pre-check: cheap reject for already-over-quota users before
+    // parse/reconcile/canonical work. TOCTOU-unsafe by design — quota may
+    // fill before Phase B, whose authoritative count is the real gate; Phase
+    // A work is then discarded, which is correct.
+    const advisoryReady = await repositories.importSnapshots.countActiveByCreatorAndState(caller.identity.id, "READY", now);
+    if (advisoryReady >= this.limits.maxReadySnapshotsPerUser) {
+      throw importError("IMPORT_READY_QUOTA_EXCEEDED", "Too many active READY import snapshots.");
     }
 
     const staged = await repositories.importSnapshotEntries.listBySnapshotId(snapshot.id);
@@ -261,33 +290,67 @@ export class FinalizeFolderImportService {
     const expiresAt = new Date(now.getTime() + this.readyTtlMs);
     const hasBlockers = plan.summary.blockers > 0;
 
+    return {
+      kind: "prepared",
+      artifacts: { persistedEntries, snapshotHash, planHash, summary: plan.summary, plan, hasBlockers, expiresAt },
+    };
+  }
+
+  private async finalizeCommit(
+    caller: CallerContext,
+    snapshotId: string,
+    now: Date,
+    artifacts: PreparedFinalize,
+    repositories: SourceRepositories,
+  ): Promise<ImportPreview> {
+    const snapshot = await repositories.importSnapshots.lockById(snapshotId);
+    if (!snapshot || snapshot.createdBy !== caller.identity.id) throw importError("IMPORT_SNAPSHOT_NOT_FOUND", "Import snapshot was not found.");
+    if (snapshot.state !== "BUILDING") throw importError("IMPORT_SNAPSHOT_STATE_CONFLICT", "Import snapshot state changed concurrently.");
+    if (snapshot.expiresAt.getTime() <= now.getTime()) throw importError("IMPORT_SNAPSHOT_EXPIRED", "Import snapshot has expired.");
+    const lockedSource = snapshot.sourceId === null ? null : await repositories.sources.lockById(snapshot.sourceId);
+    try {
+      await lockWorkspaceForMutation(repositories, caller, snapshot.workspaceId, "source-import");
+    } catch (error) {
+      throw translateKnownSnapshotAccessError(error);
+    }
+
+    if (snapshot.sourceId !== null) {
+      if (!lockedSource) throw importError("IMPORT_SOURCE_NOT_FOUND", "Import source was not found.");
+      if (lockedSource.syncVersion !== snapshot.basedOnVersion) {
+        throw importError("SOURCE_VERSION_CONFLICT", "The source changed after this import snapshot was created.", {
+          snapshotVersion: snapshot.basedOnVersion,
+          currentVersion: lockedSource.syncVersion,
+        });
+      }
+    }
+
     const activeReady = await repositories.importSnapshots.countActiveByCreatorAndState(caller.identity.id, "READY", now);
     if (activeReady >= this.limits.maxReadySnapshotsPerUser) {
       throw importError("IMPORT_READY_QUOTA_EXCEEDED", "Too many active READY import snapshots.");
     }
 
-    await repositories.importSnapshotEntries.replaceFinalizedEntries(snapshot.id, persistedEntries);
+    await repositories.importSnapshotEntries.replaceFinalizedEntries(snapshot.id, artifacts.persistedEntries);
     await repositories.importSnapshots.markReady({
       snapshotId: snapshot.id,
-      snapshotHash,
-      planHash,
-      summary: plan.summary,
-      plan,
-      hasBlockers,
+      snapshotHash: artifacts.snapshotHash,
+      planHash: artifacts.planHash,
+      summary: artifacts.summary,
+      plan: artifacts.plan,
+      hasBlockers: artifacts.hasBlockers,
       finalizedAt: now,
-      expiresAt,
+      expiresAt: artifacts.expiresAt,
     });
 
     const ready: ImportSnapshot = {
       ...snapshot,
       state: "READY",
-      snapshotHash,
-      planHash,
-      summary: plan.summary,
-      plan,
-      hasBlockers,
+      snapshotHash: artifacts.snapshotHash,
+      planHash: artifacts.planHash,
+      summary: artifacts.summary,
+      plan: artifacts.plan,
+      hasBlockers: artifacts.hasBlockers,
       finalizedAt: now,
-      expiresAt,
+      expiresAt: artifacts.expiresAt,
     };
     return previewFromSnapshot(ready, now);
   }

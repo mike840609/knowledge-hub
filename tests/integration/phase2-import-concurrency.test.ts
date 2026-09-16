@@ -183,6 +183,14 @@ async function quotaLockHeld(): Promise<boolean> {
   }
 }
 
+async function waitForQuotaRelease(): Promise<void> {
+  const deadline = Date.now() + 5000;
+  while (await quotaLockHeld()) {
+    if (Date.now() > deadline) throw new Error("creator quota lock still held after finalize settled");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
 describe("Phase 2 Apply concurrency and rollback", () => {
   it("serializes parallel double Apply into one mutation and one idempotent result", async () => {
     const fixture = await createSourceFixture(pool);
@@ -366,7 +374,31 @@ describe("Phase 2 Apply concurrency and rollback", () => {
     await plain.upload.upload(fixtureCaller(), { snapshotId: secondSession.snapshotId, entries: [{ uploadKey: "m1", bytes: secondBytes }] });
 
     const gate: CommitGate = { armed: true, entered: deferred(), release: deferred() };
-    const gatedFinalize = new FinalizeFolderImportService(new MariaDbUnitOfWork(commitBarrierPool(pool, gate)), {
+    // Finalize now commits twice: Phase A (plain uow, no quota lock) then
+    // Phase B (quota-locked). Only the Phase B commit may block the gate.
+    let commitCount = 0;
+    const phaseAwarePool: Pool = new Proxy(pool, {
+      get(target, property, receiver) {
+        if (property === "getConnection") {
+          return async () => {
+            const connection = await target.getConnection();
+            const commit = connection.commit.bind(connection);
+            connection.commit = async () => {
+              commitCount += 1;
+              if (commitCount > 1 && gate.armed) {
+                gate.entered.resolve();
+                await gate.release.promise;
+              }
+              return commit();
+            };
+            return connection;
+          };
+        }
+        const value = Reflect.get(target, property, receiver);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const gatedFinalize = new FinalizeFolderImportService(new MariaDbUnitOfWork(phaseAwarePool), {
       limits: DEFAULT_IMPORT_LIMITS, now: clock,
     });
     const tenth = gatedFinalize.finalize(fixtureCaller(), firstSession.snapshotId);
@@ -378,7 +410,7 @@ describe("Phase 2 Apply concurrency and rollback", () => {
     gate.release.resolve();
     const preview = await tenth;
     expect(preview.hasBlockers).toBe(false);
-    expect(await quotaLockHeld()).toBe(false);
+    await waitForQuotaRelease();
 
     await expect(plain.finalize.finalize(fixtureCaller(), secondSession.snapshotId)).rejects.toMatchObject({ code: "IMPORT_READY_QUOTA_EXCEEDED" });
     expect(await readyCount()).toBe(10);
