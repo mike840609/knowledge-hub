@@ -2,7 +2,7 @@ import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { importError } from "@/modules/sources/domain/import-errors";
 import type { SourceUnitOfWork } from "@/modules/sources/ports/unit-of-work";
 import { requireKnownSnapshotWorkspaceAccess } from "./import-snapshot-access";
-import { previewFromSnapshot, type ImportPreview } from "./reconcile-import-snapshot";
+import { previewFromSnapshot, resolveImportPreviewNames, type ImportPreview } from "./reconcile-import-snapshot";
 
 export type { ImportPreview } from "./reconcile-import-snapshot";
 
@@ -23,7 +23,7 @@ export class GetFolderImportPreviewService {
         throw importError("IMPORT_SNAPSHOT_NOT_FOUND", "Import snapshot was not found.");
       }
       await requireKnownSnapshotWorkspaceAccess(repositories.workspaceAccess, caller, snapshot.workspaceId);
-      return previewFromSnapshot(snapshot, now);
+      return resolveImportPreviewNames(repositories, previewFromSnapshot(snapshot, now));
     });
   }
 }

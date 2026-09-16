@@ -14,6 +14,7 @@ import {
   blockedImportPlan,
   previewFromSnapshot,
   reconcileImportSnapshot,
+  resolveImportPreviewNames,
   type ImportPreview,
 } from "./reconcile-import-snapshot";
 
@@ -145,7 +146,9 @@ export class FinalizeFolderImportService {
   ): Promise<FinalizePreparation> {
     const snapshot = await repositories.importSnapshots.lockById(snapshotId);
     if (!snapshot || snapshot.createdBy !== caller.identity.id) throw importError("IMPORT_SNAPSHOT_NOT_FOUND", "Import snapshot was not found.");
-    if (snapshot.state === "READY") return { kind: "preview", preview: previewFromSnapshot(snapshot, now) };
+    if (snapshot.state === "READY") {
+      return { kind: "preview", preview: await resolveImportPreviewNames(repositories, previewFromSnapshot(snapshot, now)) };
+    }
     if (snapshot.state !== "BUILDING") throw importError("IMPORT_SNAPSHOT_NOT_BUILDING", "Only BUILDING snapshots can be finalized.");
     if (snapshot.expiresAt.getTime() <= now.getTime()) throw importError("IMPORT_SNAPSHOT_EXPIRED", "Import snapshot has expired.");
     const lockedSource = snapshot.sourceId === null ? null : await repositories.sources.lockById(snapshot.sourceId);
@@ -352,6 +355,6 @@ export class FinalizeFolderImportService {
       finalizedAt: now,
       expiresAt: artifacts.expiresAt,
     };
-    return previewFromSnapshot(ready, now);
+    return resolveImportPreviewNames(repositories, previewFromSnapshot(ready, now));
   }
 }
