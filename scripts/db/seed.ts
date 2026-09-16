@@ -54,7 +54,6 @@ export const BROWSER_FIXTURES = {
   archivedActiveBody: "Active notes inside an archived source stay readable with the archived flag.",
   searchTitle: "請假流程 SWFP Leave Policy",
   searchBody: "員工請假流程：先在系統送出申請，主管簽核後生效。Employee leave requests need manager approval.",
-  searchMissTitle: "Retired Notes",
 };
 
 async function ensureWorkspace(repositories: SourceRepositories, id: string, name: string, createdBy: string, now: Date): Promise<void> {

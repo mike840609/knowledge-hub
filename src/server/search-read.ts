@@ -37,9 +37,7 @@ export async function getSearchPageModel(workspaceId: string, input: SearchPageI
   if (!actions.canSearch) notFound();
 
   const sources = sortSourcesByName(
-    await services.queries
-      .listSources(caller, workspaceId, { includeArchived: input.includeArchived })
-      .catch(() => []),
+    await services.queries.listSources(caller, workspaceId, { includeArchived: input.includeArchived }),
   );
   const base = { ...input, workspaceId, workspaceName: workspace.name, sources };
   if (input.q.trim() === "") return { ...base, result: null, timedOut: false };
