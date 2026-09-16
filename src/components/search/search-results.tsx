@@ -4,7 +4,7 @@ import { SearchResultRow } from "@/components/search/search-result-row";
 
 function pageHref(model: SearchPageModel, page: number): string {
   const params = new URLSearchParams({ q: model.q, scope: model.scope });
-  if (model.sourceId) params.set("source", model.sourceId);
+  if (model.scope === "workspace" && model.sourceId) params.set("source", model.sourceId);
   if (model.includeArchived) params.set("archived", "1");
   if (page > 1) params.set("page", String(page));
   return `/w/${model.workspaceId}/search?${params.toString()}`;
