@@ -7,7 +7,9 @@ import type { TreeViewNode } from "@/modules/knowledge/ports/tree-repository";
 import type { SourceEntry } from "@/modules/sources/domain/source-entry";
 import type { FolderImportPlan } from "@/modules/sources/domain/import-plan";
 import type { KnowledgeSource } from "@/modules/sources/domain/source";
+import type { SourcePolicy } from "@/modules/knowledge/domain/source-policy";
 import { executeFolderImportPlan } from "@/modules/sources/application/source-import-plan-executor";
+import { bindSourceProjection } from "@/modules/sources/application/source-knowledge-projection-service";
 import type { SourceRepositories } from "@/modules/sources/ports/unit-of-work";
 
 const DOC_COUNT = 50;
@@ -209,5 +211,126 @@ describe("executeFolderImportPlan read amplification (issue #9 item 17a)", () =>
     expect(counts.upsertIdentity).toBe(1);
     expect(counts.sourcePolicyLockById).toBe(1);
     expect(counts.workspaceLockById).toBe(1);
+  });
+});
+
+describe("bindSourceProjection tree-view field sync (issue #9 item 17a follow-up)", () => {
+  const now = new Date("2026-09-15T00:00:00.000Z");
+
+  function seedSource() {
+    const source: KnowledgeSource = {
+      id: "src-view",
+      name: "source",
+      workspaceId: "ws-1",
+      sourceType: "FOLDER_SYNC",
+      ownership: "SOURCE_MANAGED",
+      status: "ACTIVE",
+      syncVersion: 1,
+      createdBy: "user-1",
+      updatedBy: "user-1",
+      archivedBy: null,
+      archivedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const caller = callerFromIdentity({ id: "user-1", emp_id: "E001", name: "Test", org_code: "HRSD" });
+    const boundPolicy: SourcePolicy = {
+      id: source.id,
+      workspaceId: source.workspaceId,
+      name: source.name,
+      sourceType: source.sourceType,
+      ownership: source.ownership,
+      status: source.status,
+      syncVersion: source.syncVersion,
+    };
+    return { source, caller, boundPolicy };
+  }
+
+  async function seedDocumentView(
+    status: "ACTIVE" | "ARCHIVED",
+    currentRevisionId: string,
+  ) {
+    const { source, caller, boundPolicy } = seedSource();
+    const { repositories, nodes } = stubRepositories(source);
+    const viewNode: TreeViewNode = {
+      id: "node-1",
+      sourceId: source.id,
+      parentId: null,
+      nodeType: "DOCUMENT",
+      name: null,
+      documentId: "doc-1",
+      position: 0,
+      status,
+      updatedBy: "user-1",
+      archivedBy: null,
+      archivedAt: null,
+      title: "Doc",
+      documentStatus: status,
+      currentRevisionId,
+    };
+    nodes.set(viewNode.id, viewNode);
+    await repositories.documents.insertDraft({
+      id: "doc-1",
+      sourceId: source.id,
+      currentRevisionId,
+      status,
+      createdBy: "user-1",
+      updatedBy: "user-1",
+      archivedBy: null,
+      archivedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await repositories.revisions.insert({
+      id: currentRevisionId,
+      documentId: "doc-1",
+      revisionNo: 1,
+      title: "Doc",
+      markdown: "# Doc\n",
+      metadata: {},
+      contentHash: "hash-1",
+      createdBy: "user-1",
+      createdAt: now,
+    });
+    const treeView = [viewNode];
+    const projection = bindSourceProjection(
+      repositories,
+      { id: source.id, workspaceId: source.workspaceId },
+      { boundPolicy, treeView },
+    );
+    return { caller, projection, viewNode };
+  }
+
+  it("syncs both view status fields when a projected document is archived", async () => {
+    const { caller, projection, viewNode } = await seedDocumentView("ACTIVE", "rev-1");
+
+    await projection.archiveProjectedDocument(caller, "doc-1");
+
+    expect(viewNode.status).toBe("ARCHIVED");
+    expect(viewNode.documentStatus).toBe("ARCHIVED");
+  });
+
+  it("syncs both view status fields when a projected document is restored", async () => {
+    const { caller, projection, viewNode } = await seedDocumentView("ARCHIVED", "rev-1");
+
+    await projection.restoreProjectedDocument(caller, "doc-1");
+
+    expect(viewNode.status).toBe("ACTIVE");
+    expect(viewNode.documentStatus).toBe("ACTIVE");
+  });
+
+  it("syncs the view currentRevisionId after a projected revision is written", async () => {
+    const { caller, projection, viewNode } = await seedDocumentView("ACTIVE", "rev-1");
+
+    const result = await projection.projectRevision(caller, {
+      documentId: "doc-1",
+      expectedCurrentRevisionId: "rev-1",
+      title: "Doc v2",
+      markdown: "# Doc v2\n",
+      metadata: {},
+    });
+
+    expect(result.changed).toBe(true);
+    expect(viewNode.currentRevisionId).toBe(result.revisionId);
   });
 });

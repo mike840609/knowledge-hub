@@ -173,7 +173,15 @@ export function bindSourceProjection(
 
   function syncViewDocumentStatus(documentId: string, status: "ACTIVE" | "ARCHIVED"): void {
     const node = hints?.treeView?.find((candidate) => candidate.documentId === documentId);
-    if (node) node.status = status;
+    if (node) {
+      node.status = status;
+      node.documentStatus = status;
+    }
+  }
+
+  function syncViewCurrentRevision(documentId: string, revisionId: string): void {
+    const node = hints?.treeView?.find((candidate) => candidate.documentId === documentId);
+    if (node) node.currentRevisionId = revisionId;
   }
 
   function pushViewNode(node: TreeViewNode): void {
@@ -306,6 +314,7 @@ export function bindSourceProjection(
         contentHash, createdBy: caller.identity.id, createdAt: new Date(),
       });
       await repositories.documents.setCurrentRevision(document.id, revisionId, caller.identity.id);
+      syncViewCurrentRevision(document.id, revisionId);
       await repositories.documents.assertComplete(document.id);
       return { revisionId, revisionNo, changed: true };
     },
