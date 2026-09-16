@@ -76,6 +76,12 @@ export default async function KnowledgeDocumentPage({
 
   const explorer = await getKnowledgeExplorerModel(workspaceId, sourceId, { includeArchived: true });
   const shell = await getWorkspaceShellModel(workspaceId);
+  const canEdit =
+    shell?.access.actions.canWrite === true &&
+    explorer?.source.ownership === "HUB_MANAGED" &&
+    view.status === "ACTIVE" &&
+    !isHistorical;
+  const editHref = canEdit ? `/w/${workspaceId}/knowledge/${sourceId}/${documentId}/edit` : null;
   const breadcrumb = explorer
     ? buildBreadcrumb(workspaceId, sourceId, explorer.source.name, explorer.tree, documentId, selectedRevision.title)
     : [{ label: selectedRevision.title }];
@@ -107,6 +113,7 @@ export default async function KnowledgeDocumentPage({
           : null
       }
       inspectorData={inspectorData}
+      editHref={editHref}
     >
       <div className="mx-auto w-full max-w-[860px] px-6 py-6">
         <DocumentViewer view={view} selectedRevision={selectedRevision} />

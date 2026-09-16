@@ -23,6 +23,7 @@ export function DocumentHeader({
   updatedAt,
   revisionBanner,
   onDetailsClick,
+  editHref,
 }: {
   breadcrumb: DocumentBreadcrumbSegment[];
   title: string;
@@ -30,6 +31,7 @@ export function DocumentHeader({
   updatedAt: Date;
   revisionBanner: { viewingNo: number; backHref: string } | null;
   onDetailsClick: () => void;
+  editHref: string | null;
 }) {
 
   return (
@@ -60,16 +62,26 @@ export function DocumentHeader({
           <h1 className="min-w-0 flex-1 truncate text-xl font-semibold tracking-tight text-kh-text" title={title}>
             {title}
           </h1>
-          <button
-            type="button"
-            onClick={onDetailsClick}
-            className="inline-flex h-8 shrink-0 items-center rounded-md border border-kh-border bg-kh-bg px-3 text-[13px] font-medium text-kh-text hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent"
-          >
-            Details
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {editHref ? (
+              <a
+                href={editHref}
+                className="inline-flex h-8 items-center rounded-md border border-kh-border bg-kh-bg px-3 text-[13px] font-medium text-kh-text hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent"
+              >
+                Edit
+              </a>
+            ) : null}
+            <button
+              type="button"
+              onClick={onDetailsClick}
+              className="inline-flex h-8 shrink-0 items-center rounded-md border border-kh-border bg-kh-bg px-3 text-[13px] font-medium text-kh-text hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent"
+            >
+              Details
+            </button>
+          </div>
         </div>
         <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-kh-text-muted">
-          <Badge variant="outline">Read only</Badge>
+          {editHref ? null : <Badge variant="outline">Read only</Badge>}
           {status === "ARCHIVED" ? <Badge variant="warning">Archived</Badge> : null}
           <span>Updated {formatUpdatedAt(updatedAt)}</span>
         </div>
