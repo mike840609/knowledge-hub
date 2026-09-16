@@ -19,7 +19,7 @@ export function Topbar({
   const active = state?.pathname === pathname;
   const visible = active && state.visible;
   return (
-    <header className="flex h-14 shrink-0 items-center border-b border-kh-border bg-kh-bg">
+    <header className="flex h-12 shrink-0 items-center border-b border-kh-border bg-kh-bg">
       <div className="flex shrink-0 items-center gap-2 px-3 lg:h-full lg:w-40 lg:border-r lg:border-kh-border">
         {onMenuClick ? (
           <button
