@@ -92,6 +92,12 @@
 
 升級觸發條件（spec §10）：**production 搜尋 p95 超過 1 秒**。觸發後依序評估：先縮小掃描範圍，再考慮 derived n-gram 索引表，最後才是外部搜尋引擎；外部引擎選型留給 Phase 8（Phase 0 ADR）。在觸發前不建立 derived index。
 
+**基準的已知限制**：
+
+(a) 本基準建立的是單一表 `bench_docs(id, title, markdown)` 語料，量測的是裸 `LIKE` 掃描。實際上線的查詢並非如此——它是一個五表 join（`knowledge_documents` → `knowledge_revisions` → `knowledge_tree_nodes` → `knowledge_sources` → `workspaces`），帶 `workspace_id IN (...)`、三個 status 條件、逐 term 的 `LIKE` 配對、查詢內的 `LOCATE`/`SUBSTRING`，以及對計算欄位 `title_hits` 的 filesort（見 `src/infrastructure/database/mariadb/repositories/knowledge-search.ts:63-80`）。因此上表數字是實際成本的**下界**，不是對已上線查詢的量測。spec §10 的「production p95 超過 1 秒」觸發條件即建立在這份證據之上，故第一次 production p95 量測才應被視為真正的校準點。此限制源自 spec §4.2 訂定的基準方法，Task 6 被要求依樣重現以求可比較——這是基準方法的既有限制，不是本次基準執行的缺陷。
+
+(b) p95 警訊也可能來自本文件記錄的升級路徑未涵蓋的原因：`src/modules/knowledge/application/knowledge-search-service.ts` 中的 `readableWorkspaces`（約第 89-100 行）對每個候選 workspace 個別呼叫 `evaluateWorkspaceCapabilities`，而每次呼叫都會發出兩次查詢（`workspaceMemberships.find` 與 `groupMappings.listByWorkspace`），且是在已執行過的 `listWorkspaces`之外額外疊加。若呼叫者身處 30 個 workspace，掃描開始前大約要付出 60 次序列化的資料庫往返。收到 p95 警訊時，應先檢查往返次數，再假設瓶頸是掃描本身。
+
 ## 前置條件狀態
 
 Phase 3 Product Acceptance：**PASS**，記錄於 `docs/superpowers/verification/2026-09-15-phase-3-workspace-governance-verification.md`（該檔案位於分支 `docs/phase-3-product-acceptance`，非本分支；引用其路徑與狀態，未合併或 cherry-pick 至本分支）。

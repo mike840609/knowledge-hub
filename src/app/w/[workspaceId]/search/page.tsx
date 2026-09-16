@@ -1,5 +1,6 @@
 import { SearchForm } from "@/components/search/search-form";
 import { SearchResults } from "@/components/search/search-results";
+import { firstSearchParam, type SearchParamValue } from "@/lib/search-params";
 import { getSearchPageModel } from "@/server/search-read";
 
 export default async function WorkspaceSearchPage({
@@ -7,16 +8,27 @@ export default async function WorkspaceSearchPage({
   searchParams,
 }: {
   params: Promise<{ workspaceId: string }>;
-  searchParams?: Promise<{ q?: string; scope?: string; source?: string; archived?: string; page?: string }>;
+  searchParams?: Promise<{
+    q?: SearchParamValue;
+    scope?: SearchParamValue;
+    source?: SearchParamValue;
+    archived?: SearchParamValue;
+    page?: SearchParamValue;
+  }>;
 }) {
   const { workspaceId } = await params;
   const query = await searchParams;
-  const parsedPage = Number.parseInt(query?.page ?? "1", 10);
+  const q = firstSearchParam(query?.q);
+  const scope = firstSearchParam(query?.scope);
+  const source = firstSearchParam(query?.source);
+  const archived = firstSearchParam(query?.archived);
+  const page = firstSearchParam(query?.page);
+  const parsedPage = Number.parseInt(page ?? "1", 10);
   const model = await getSearchPageModel(workspaceId, {
-    q: query?.q ?? "",
-    scope: query?.scope === "all" ? "all" : "workspace",
-    sourceId: query?.source ? query.source : null,
-    includeArchived: query?.archived === "1",
+    q: q ?? "",
+    scope: scope === "all" ? "all" : "workspace",
+    sourceId: source ? source : null,
+    includeArchived: archived === "1",
     page: Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1,
   });
   return (
