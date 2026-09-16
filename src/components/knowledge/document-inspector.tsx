@@ -237,9 +237,9 @@ export function DocumentDetailClient({
     };
   }, [pathname, title, openInspector, setDocumentTopbar]);
   return (
-    <div className="flex h-full min-h-0 overflow-hidden">
+    <div data-document-pane className="flex h-full min-h-0 overflow-hidden">
       <div ref={contentRef} role="region" aria-label="Document content" tabIndex={0}
-        className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain focus-visible:outline focus-visible:outline-2 focus-visible:outline-kh-accent">
+        className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain contain-layout focus-visible:outline focus-visible:outline-2 focus-visible:outline-kh-accent">
         <div ref={headerRef}>
         <DocumentHeader
           breadcrumb={breadcrumb}

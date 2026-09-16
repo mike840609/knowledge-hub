@@ -135,7 +135,7 @@ export function KnowledgeLayout({
             </button>
           </div>
         )}
-        <div ref={contentRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <div ref={contentRef} className="min-h-0 flex-1 overflow-hidden overscroll-contain [&:not(:has([data-document-pane]))]:overflow-y-auto">
           <Suspense fallback={<DocumentRegionSkeleton />}>{children}</Suspense>
         </div>
       </div>
