@@ -3,6 +3,7 @@ import { MariaDbUserRepository } from "./users";
 import { MariaDbSourceRepository } from "./sources";
 import { MariaDbSourcePolicyRepository } from "./source-policy";
 import { MariaDbDocumentRepository } from "./documents";
+import { MariaDbKnowledgeSearchRepository } from "./knowledge-search";
 import { MariaDbRevisionRepository } from "./revisions";
 import { MariaDbTreeRepository } from "./tree";
 import { MariaDbEntryRepository } from "./entries";
@@ -44,6 +45,7 @@ export function createRepositories(connection: DatabaseConnection): SourceReposi
     tree,
     linkedEntries: new MariaDbLinkedEntryRepository(connection),
     sourcePolicy: new MariaDbSourcePolicyRepository(sources),
+    search: new MariaDbKnowledgeSearchRepository(connection),
     workspaces,
     workspaceMemberships,
     workspaceAccess,

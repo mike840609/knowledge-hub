@@ -6,6 +6,7 @@ import { databaseConfig } from "@/infrastructure/database/mariadb/config";
 import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
 import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction";
 import { KnowledgeQueryServiceImpl } from "@/modules/knowledge/application/knowledge-query-service";
+import { KnowledgeSearchService } from "@/modules/knowledge/application/knowledge-search-service";
 import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
 import { ApplyFolderImportService } from "@/modules/sources/application/apply-folder-import";
 import { CreateFolderImportService } from "@/modules/sources/application/create-folder-import";
@@ -65,6 +66,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
   const teams = new TeamWorkspaceService(unitOfWork);
   const governance = new TeamGovernanceService(unitOfWork);
   const workspaces = new WorkspaceQueryService(unitOfWork);
+  const search = new KnowledgeSearchService(unitOfWork, workspaces);
   const resolver = new HubIdentityResolver(unitOfWork);
   const personalWorkspaces = new PersonalWorkspaceService(unitOfWork);
   const verifyReadiness = (rolloutHubUserIds = companySsoRolloutHubUserIds()): Promise<ProductionReadinessSummary> =>
@@ -96,7 +98,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
     preview: new GetFolderImportPreviewService(unitOfWork),
     apply: new ApplyFolderImportService(unitOfWork),
   };
-  return { workspaceAdmin, teams, governance, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, sources, workspaces, imports };
+  return { workspaceAdmin, teams, governance, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, sources, workspaces, search, imports };
 }
 
 export function applicationServices() {

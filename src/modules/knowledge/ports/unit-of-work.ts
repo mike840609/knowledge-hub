@@ -1,6 +1,7 @@
 import type { WorkspaceGroupMappingRepository } from "@/modules/workspaces/ports/workspace-group-mapping-repository";
 import type { UserRepository } from "@/modules/identity/ports/user-repository";
 import type { DocumentRepository } from "./document-repository";
+import type { KnowledgeSearchRepository } from "./knowledge-search-repository";
 import type { LinkedEntryRepository } from "./linked-entry";
 import type { RevisionRepository } from "./revision-repository";
 import type { SourcePolicyPort } from "./source-policy";
@@ -16,6 +17,8 @@ export type KnowledgeRepositories = {
   tree: TreeRepository;
   linkedEntries: LinkedEntryRepository;
   sourcePolicy: SourcePolicyPort;
+  /** Phase 4 keyword discovery; read-only and never used by mutation paths. */
+  search: KnowledgeSearchRepository;
   /**
    * Phase 3 §14.2: every Hub content mutation holds the parent Workspace
    * row FOR UPDATE before writing. The MariaDB implementation already
