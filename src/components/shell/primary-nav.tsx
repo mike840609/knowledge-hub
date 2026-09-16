@@ -2,7 +2,7 @@
 
 import { useWorkspaceAuthorization } from "./use-workspace-authorization";
 import Link from "next/link";
-import { BookOpenText, Database, Settings } from "lucide-react";
+import { BookOpenText, Database, Search, Settings } from "lucide-react";
 
 export function PrimaryNav({
   workspaceId,
@@ -18,6 +18,11 @@ export function PrimaryNav({
       href: `/w/${workspaceId}/knowledge`,
       Icon: BookOpenText,
     },
+    ...(access.actions.canSearch ? [{
+      name: "Search",
+      href: `/w/${workspaceId}/search`,
+      Icon: Search,
+    }] : []),
     ...(access.actions.canInspectSources ? [{
       name: "Sources",
       href: `/w/${workspaceId}/sources`,
