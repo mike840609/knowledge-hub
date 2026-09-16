@@ -7,6 +7,7 @@ import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/
 import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 import type { UserIdentity } from "@/modules/identity/domain/user-identity";
 import type { KnowledgeSearchCriteria } from "@/modules/knowledge/ports/knowledge-search-repository";
+import { SourceApplicationService } from "@/modules/sources/application/source-version-guard";
 import { createTeamWorkspaceInsert } from "@/modules/workspaces/domain/workspace";
 import { createDirectMembership } from "@/modules/workspaces/domain/workspace-membership";
 import { uuidv7 } from "@/shared/ids/uuidv7";
@@ -69,7 +70,10 @@ describe("Phase 4 search repository", () => {
     expect(await search({ terms: ["Runbook", "absent"], workspaceIds: [workspaceId] })).toHaveLength(0);
   });
 
-  it("hides archived documents, sources and tree nodes unless includeArchived is set", async () => {
+  // hub.archiveDocument flips knowledge_documents.status and the document's tree
+  // node together (set-document-lifecycle.ts), so this case cannot isolate
+  // d.status from n.status — it only proves the pair is hidden as a unit.
+  it("hides a document archived together with its tree node unless includeArchived is set", async () => {
     const { workspaceId, sourceId } = await createScope();
     const hub = new HubKnowledgeCommandServiceImpl(new MariaDbUnitOfWork(pool));
     const created = await hub.createDocument(callerFromIdentity(owner), {
@@ -79,6 +83,21 @@ describe("Phase 4 search repository", () => {
 
     expect(await search({ terms: ["archivedneedle"], workspaceIds: [workspaceId] })).toHaveLength(0);
     expect(await search({ terms: ["archivedneedle"], workspaceIds: [workspaceId], includeArchived: true })).toHaveLength(1);
+  });
+
+  // Archiving the Source only flips knowledge_sources.status; the document and
+  // its tree node stay ACTIVE. This isolates the s.status = 'ACTIVE' predicate,
+  // which the document-archival case above never exercises.
+  it("hides documents under an archived source unless includeArchived is set", async () => {
+    const { workspaceId, sourceId } = await createScope();
+    const hub = new HubKnowledgeCommandServiceImpl(new MariaDbUnitOfWork(pool));
+    await hub.createDocument(callerFromIdentity(owner), {
+      sourceId, parentId: null, title: "Under retired source", markdown: "archivedsourceneedle 內容", metadata: {},
+    });
+    await new SourceApplicationService(new MariaDbUnitOfWork(pool)).archiveSource(callerFromIdentity(owner), sourceId);
+
+    expect(await search({ terms: ["archivedsourceneedle"], workspaceIds: [workspaceId] })).toHaveLength(0);
+    expect(await search({ terms: ["archivedsourceneedle"], workspaceIds: [workspaceId], includeArchived: true })).toHaveLength(1);
   });
 
   it("searches only the current revision", async () => {
@@ -107,18 +126,32 @@ describe("Phase 4 search repository", () => {
     expect(await search({ terms: ["scopedneedle"], workspaceIds: [workspaceId], sourceId: uuidv7() })).toHaveLength(0);
   });
 
-  it("ranks title hits above body-only hits", async () => {
+  it("ranks title hits above body-only hits and returns correct snippet and attribution fields", async () => {
     const { workspaceId, sourceId } = await createScope();
     const hub = new HubKnowledgeCommandServiceImpl(new MariaDbUnitOfWork(pool));
+    // Longer than SNIPPET_LENGTH (160) so the no-match ELSE branch (SUBSTRING
+    // from 1) is distinguishable from returning the whole markdown untouched.
+    const longUnrelatedBody = "unrelated body. ".repeat(20);
     await hub.createDocument(callerFromIdentity(owner), {
       sourceId, parentId: null, title: "Body only", markdown: "rankneedle appears in the body", metadata: {},
     });
     await hub.createDocument(callerFromIdentity(owner), {
-      sourceId, parentId: null, title: "rankneedle in the title", markdown: "unrelated body", metadata: {},
+      sourceId, parentId: null, title: "rankneedle in the title", markdown: longUnrelatedBody, metadata: {},
     });
 
-    expect((await search({ terms: ["rankneedle"], workspaceIds: [workspaceId] })).map((row) => row.title))
-      .toEqual(["rankneedle in the title", "Body only"]);
+    const rows = await search({ terms: ["rankneedle"], workspaceIds: [workspaceId] });
+    expect(rows.map((row) => row.title)).toEqual(["rankneedle in the title", "Body only"]);
+
+    const [titleHit, bodyHit] = rows;
+    // Title-only hit: the term never appears in the body, so LOCATE finds
+    // nothing and the snippet must fall back to the body's first 160 chars.
+    expect(titleHit.snippet).toBe(longUnrelatedBody.slice(0, 160));
+    // Body hit: the term appears in the body, so the snippet must be built
+    // around that match, not an unrelated slice.
+    expect(bodyHit.snippet).toContain("rankneedle");
+    expect(bodyHit.snippet.length).toBeLessThanOrEqual(160);
+    expect(titleHit.sourceName).toBe("Search Source");
+    expect(titleHit.workspaceName).toBe(`Search ${workspaceId}`);
   });
 
   it("applies limit and offset for pagination", async () => {
