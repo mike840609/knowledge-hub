@@ -11,6 +11,8 @@ export type WorkspaceActions = {
   canImport: boolean; canInspectSources: boolean; canOpenSettings: boolean; canRename: boolean;
   canArchive: boolean; canRestore: boolean; canManageBasicMembers: boolean; canManageAdminMembers: boolean;
   canManageOwners: boolean; canManageBasicGroups: boolean; canManageAdminGroups: boolean; canReadAudit: boolean;
+  /** Phase 4: keyword search needs read, not manage; archived Teams stay searchable. */
+  canSearch: boolean;
 };
 export type WorkspaceNavigationItem = { id: string; name: string; type: "PERSONAL" | "TEAM"; lifecycleState: "ACTIVE" | "ARCHIVED" };
 export type WorkspaceNavigationModel = { canCreateTeam: boolean; items: readonly WorkspaceNavigationItem[] };
@@ -41,6 +43,7 @@ export function deriveWorkspaceActions(workspace: Workspace, capabilities: Reado
   const has = (capability: WorkspaceCapability) => capabilities.has(capability);
   return {
     canInspectSources: has("source.manage"), canImport: active && has("source.manage"),
+    canSearch: has("document.read"),
     canOpenSettings: team && has("membership.manage_basic"),
     canRename: team && active && has("workspace.rename"), canArchive: team && active && has("workspace.archive"),
     canRestore: team && !active && has("workspace.restore"),
