@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   buildKnowledgeTree,
@@ -141,6 +141,7 @@ export function KnowledgeTree({
   query = "",
 }: KnowledgeTreeProps) {
   const router = useRouter();
+  const treeRef = useRef<HTMLUListElement>(null);
   const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(new Set());
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -158,6 +159,19 @@ export function KnowledgeTree({
     () => (filtering ? new Set<string>() : collapsedIds),
     [filtering, collapsedIds],
   );
+
+  // Reveal only the hidden portion of the selected row, without moving the
+  // document pane or recentering a row that is already visible.
+  useEffect(() => {
+    const tree = treeRef.current;
+    const selected = tree?.querySelector<HTMLElement>('[aria-current="page"]');
+    const scroller = tree?.closest("nav");
+    if (!selected || !scroller) return;
+    const row = selected.getBoundingClientRect();
+    const viewport = scroller.getBoundingClientRect();
+    if (row.top < viewport.top) scroller.scrollTop += row.top - viewport.top;
+    else if (row.bottom > viewport.bottom) scroller.scrollTop += row.bottom - viewport.bottom;
+  }, [selectedDocumentId, effectiveCollapsed, roots]);
 
   const itemById = useMemo(() => {
     const map = new Map<string, KnowledgeTreeItem>();
@@ -250,6 +264,7 @@ export function KnowledgeTree({
   const firstId = roots[0]?.item.id;
   return (
     <ul
+      ref={treeRef}
       role="tree"
       aria-label="Knowledge tree"
       onKeyDown={handleKeyDown}

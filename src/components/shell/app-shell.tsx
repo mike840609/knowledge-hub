@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { WorkspaceShellModel } from "@/server/knowledge-read";
+import { DocumentTopbarContext, type DocumentTopbarState } from "./document-topbar-context";
 import { Topbar } from "@/components/shell/topbar";
 import { PrimaryNav } from "@/components/shell/primary-nav";
 import { WorkspaceAuthorizationContext, useWorkspaceAuthorizationRefresh } from "./use-workspace-authorization";
@@ -10,6 +11,7 @@ import { Drawer } from "@/components/ui/drawer";
 
 export function AppShell({ model, children }: { model: WorkspaceShellModel; children: ReactNode }) {
   const authorization = useWorkspaceAuthorizationRefresh(model.access, model.navigation);
+  const [documentTopbar, setDocumentTopbar] = useState<DocumentTopbarState | null>(null);
   const [navOpen, setNavOpen] = useState(false);
   const [accessNotice, setAccessNotice] = useState(false);
   useEffect(() => {
@@ -39,6 +41,7 @@ export function AppShell({ model, children }: { model: WorkspaceShellModel; chil
 
   return (
     <WorkspaceAuthorizationContext.Provider value={authorization}>
+    <DocumentTopbarContext.Provider value={{ document: documentTopbar, setDocument: setDocumentTopbar }}>
     <div className="flex h-screen flex-col bg-kh-bg-subtle text-kh-text">
       <Topbar model={model} onMenuClick={openNav} />
       {accessNotice && <p role="status" className="border-b border-kh-border bg-kh-bg p-3 text-sm">You no longer have access to this workspace.<button aria-label="Dismiss access notice" className="ml-3 underline" onClick={() => setAccessNotice(false)}>Dismiss</button></p>}
@@ -54,6 +57,7 @@ export function AppShell({ model, children }: { model: WorkspaceShellModel; chil
         <PrimaryNav workspaceId={model.workspace.id} onNavigate={() => setNavOpen(false)} />
       </Drawer>
     </div>
+    </DocumentTopbarContext.Provider>
     </WorkspaceAuthorizationContext.Provider>
   );
 }
