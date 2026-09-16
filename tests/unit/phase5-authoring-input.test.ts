@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { MAX_MARKDOWN_BYTES, MAX_TITLE_LENGTH, parseCreateDocumentInput, parseUpdateDocumentInput } from "@/server/authoring-input";
+import { DomainError } from "@/shared/domain/errors";
+import { SourceImportError } from "@/modules/sources/domain/import-errors";
+
+function thrownBy(run: () => unknown): unknown {
+  try {
+    run();
+  } catch (error) {
+    return error;
+  }
+  throw new Error("Expected the call to throw, but it returned normally.");
+}
 
 describe("parseCreateDocumentInput (spec §6.1, §6.2, §6.4)", () => {
   it("accepts an explicit title", () => {
@@ -42,17 +53,26 @@ describe("parseCreateDocumentInput (spec §6.1, §6.2, §6.4)", () => {
 
   it("rejects filename-based input with unclosed frontmatter", () => {
     const markdown = "---\ntitle: Test\nno closing delimiter\n";
-    expect(() => parseCreateDocumentInput({ filename: "doc.md", markdown })).toThrow();
+    const error = thrownBy(() => parseCreateDocumentInput({ filename: "doc.md", markdown }));
+    expect(error).toBeInstanceOf(DomainError);
+    expect(error).not.toBeInstanceOf(SourceImportError);
+    expect((error as DomainError).code).toBe("INVALID_REQUEST");
   });
 
   it("rejects filename-based input with non-object frontmatter", () => {
     const markdown = "---\njust a string\n---\n";
-    expect(() => parseCreateDocumentInput({ filename: "doc.md", markdown })).toThrow();
+    const error = thrownBy(() => parseCreateDocumentInput({ filename: "doc.md", markdown }));
+    expect(error).toBeInstanceOf(DomainError);
+    expect(error).not.toBeInstanceOf(SourceImportError);
+    expect((error as DomainError).code).toBe("INVALID_REQUEST");
   });
 
   it("rejects filename-based input with duplicate keys in frontmatter", () => {
     const markdown = "---\ntitle: First\ntitle: Second\n---\n";
-    expect(() => parseCreateDocumentInput({ filename: "doc.md", markdown })).toThrow();
+    const error = thrownBy(() => parseCreateDocumentInput({ filename: "doc.md", markdown }));
+    expect(error).toBeInstanceOf(DomainError);
+    expect(error).not.toBeInstanceOf(SourceImportError);
+    expect((error as DomainError).code).toBe("INVALID_REQUEST");
   });
 });
 
