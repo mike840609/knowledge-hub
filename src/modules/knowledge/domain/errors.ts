@@ -182,3 +182,15 @@ export class IdentityError extends DomainError {
     this.name = "IdentityError";
   }
 }
+
+/**
+ * Phase 4 spec §6.6: the search statement carries max_statement_time=5, so an
+ * over-broad query is interrupted by the server (errno 1969) instead of
+ * holding a connection. This is a user-correctable state, never a 500.
+ */
+export class SearchTimeoutError extends DomainError {
+  constructor(message = "The search took too long; narrow the query and try again.") {
+    super("SEARCH_TIMEOUT", message);
+    this.name = "SearchTimeoutError";
+  }
+}
