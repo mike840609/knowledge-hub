@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
+import { DocumentArchivedError, SourceArchivedError } from "@/modules/knowledge/domain/errors";
 import type { applicationServices as ApplicationServicesFn } from "@/server/composition";
 
 vi.mock("@/server/composition", () => ({ applicationServices: vi.fn() }));
@@ -72,5 +73,39 @@ describe("PATCH /api/documents/[documentId] (spec §6.1, §6.3)", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ revisionId: "rev-1", revisionNo: 1, changed: false });
+  });
+
+  // Spec §7.2: an archived source/document write must be 409, not 404. The metadata
+  // carry-forward read must therefore include archived, leaving the authoritative
+  // lifecycle refusal to createRevision. This is the exact call that regressed.
+  it("reads the current revision with includeArchived so lifecycle stays with createRevision", async () => {
+    const getCurrentRevision = vi.fn(async () => ({ id: "rev-1", metadata: {} }));
+    vi.mocked(applicationServices).mockReturnValue({
+      establishTrustedCaller: vi.fn(async () => ({ caller })),
+      queries: { getCurrentRevision },
+      hub: { createRevision: createRevisionMock({ revisionId: "rev-2", revisionNo: 2, changed: true }) },
+    } as unknown as Services);
+
+    await PATCH(request({ title: "T", markdown: "M", expectedCurrentRevisionId: "rev-1" }), context);
+
+    expect(getCurrentRevision).toHaveBeenCalledWith(caller, DOCUMENT_ID, { includeArchived: true });
+  });
+
+  it("maps an archived source to 409, not the 404 the metadata read would have short-circuited to", async () => {
+    const createRevision = vi.fn<CreateRevisionFn>(async () => { throw new SourceArchivedError(); });
+    vi.mocked(applicationServices).mockReturnValue(fakeServices(createRevision));
+
+    const response = await PATCH(request({ title: "T", markdown: "M", expectedCurrentRevisionId: "rev-1" }), context);
+
+    expect(response.status).toBe(409);
+  });
+
+  it("maps an archived document to 409", async () => {
+    const createRevision = vi.fn<CreateRevisionFn>(async () => { throw new DocumentArchivedError(); });
+    vi.mocked(applicationServices).mockReturnValue(fakeServices(createRevision));
+
+    const response = await PATCH(request({ title: "T", markdown: "M", expectedCurrentRevisionId: "rev-1" }), context);
+
+    expect(response.status).toBe(409);
   });
 });

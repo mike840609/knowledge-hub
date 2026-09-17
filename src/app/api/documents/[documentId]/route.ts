@@ -12,7 +12,11 @@ export async function PATCH(request: Request, context: DocumentRouteContext) {
     // rather than clearing frontmatter the import brought in. Reading it outside
     // the write transaction is safe: if current has moved on, createRevision
     // rejects with REVISION_CONFLICT before any mismatched metadata is written.
-    const current = await services.queries.getCurrentRevision(caller, documentId);
+    // includeArchived: this read only carries metadata forward — lifecycle is the
+    // authoritative job of createRevision, which returns SOURCE_ARCHIVED /
+    // DOCUMENT_ARCHIVED (409). Without it an archived source/document would
+    // short-circuit here to a 404, contradicting spec §7.2 (archived write → 409).
+    const current = await services.queries.getCurrentRevision(caller, documentId, { includeArchived: true });
     return services.hub.createRevision(caller, {
       documentId,
       expectedCurrentRevisionId: input.expectedCurrentRevisionId,

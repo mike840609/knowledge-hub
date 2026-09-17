@@ -8,7 +8,7 @@ import type { UserIdentity } from "@/modules/identity/domain/user-identity";
 import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
 import { KnowledgeQueryServiceImpl } from "@/modules/knowledge/application/knowledge-query-service";
 import { contentFingerprint } from "@/modules/knowledge/domain/content";
-import { RevisionConflictError, SourceReadOnlyError } from "@/modules/knowledge/domain/errors";
+import { DocumentArchivedError, DocumentNotFoundError, RevisionConflictError, SourceReadOnlyError } from "@/modules/knowledge/domain/errors";
 import { ensureDefaultHubSource } from "@/modules/sources/application/ensure-default-hub-source";
 import { WorkspaceAccessDeniedError } from "@/modules/workspaces/domain/errors";
 import { createTeamWorkspaceInsert } from "@/modules/workspaces/domain/workspace";
@@ -167,5 +167,30 @@ describe("Phase 5 authoring (spec §4, §7.1)", () => {
     await expect(hub.createRevision(caller, {
       documentId, expectedCurrentRevisionId: revisionId, title: "Doc", markdown: "v2", metadata: {},
     })).rejects.toBeInstanceOf(SourceReadOnlyError);
+  });
+
+  // Spec §7.2: an archived write is a 409, not a 404. The route reads current
+  // metadata before createRevision; if that read excluded archived it would fail
+  // closed to DocumentNotFoundError (404) and the 409 would be unreachable. Prove
+  // the real read returns under includeArchived and createRevision owns the 409.
+  it("keeps archived-document lifecycle with createRevision, which the default metadata read hides as not-found", async () => {
+    const workspaceId = await createWorkspace();
+    const unitOfWork = new MariaDbUnitOfWork(pool);
+    const caller = callerFromIdentity(owner);
+    const hub = new HubKnowledgeCommandServiceImpl(unitOfWork);
+    const queries = new KnowledgeQueryServiceImpl(unitOfWork);
+    const sourceId = await ensureDefaultHubSource(unitOfWork, caller, workspaceId);
+    const created = await hub.createDocument(caller, { sourceId, parentId: null, title: "Doc", markdown: "v1", metadata: {} });
+    await hub.archiveDocument(caller, created.documentId);
+
+    // The pre-fix route used the default read, which fails closed for an archived doc:
+    await expect(queries.getCurrentRevision(caller, created.documentId)).rejects.toBeInstanceOf(DocumentNotFoundError);
+    // The fixed route opts into includeArchived purely to carry metadata forward:
+    const current = await queries.getCurrentRevision(caller, created.documentId, { includeArchived: true });
+    expect(current.markdown).toBe("v1");
+    // ...and the authoritative lifecycle refusal (→ 409) lives in createRevision:
+    await expect(hub.createRevision(caller, {
+      documentId: created.documentId, expectedCurrentRevisionId: current.id, title: "Doc", markdown: "v2", metadata: {},
+    })).rejects.toBeInstanceOf(DocumentArchivedError);
   });
 });

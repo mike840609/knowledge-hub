@@ -57,3 +57,53 @@ test("never shows Edit on source-managed content", async ({ page }) => {
   await expect(page.locator("main header").first().getByText("Read only")).toBeVisible();
   await expect(page.getByRole("link", { name: "Edit", exact: true })).toHaveCount(0);
 });
+
+// Spec §4/§10 core acceptance: the second (stale) editor is told about the conflict,
+// their typed input survives on screen, and the first editor's content is what persisted.
+// Ruling B skips React component unit tests, so this browser behavior is E2E-only.
+test("a stale second editor gets a conflict, keeps their input, and does not overwrite the winner", async ({ page }) => {
+  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge`);
+  await page.getByRole("button", { name: "New document" }).click();
+  await page.getByLabel("Document title").fill("Conflict Note");
+  await page.getByRole("button", { name: "Create" }).click();
+  await expect(page.getByRole("heading", { name: "Conflict Note" })).toBeVisible();
+  const documentUrl = page.url();
+
+  // Two editors open the same base revision. A second page in the same context is
+  // the same identity — the conflict is about revision versioning, not authorization.
+  await page.goto(`${documentUrl}/edit`);
+  const editorA = page.locator("main form").first();
+  const pageB = await page.context().newPage();
+  await pageB.goto(`${documentUrl}/edit`);
+  const editorB = pageB.locator("main form").first();
+
+  // A saves first and wins.
+  await editorA.getByLabel("Markdown").fill("winner body");
+  await editorA.getByRole("button", { name: "Save" }).click();
+  await expect(page.locator("article").first().getByText("winner body")).toBeVisible();
+
+  // B saves stale: conflict shown, input preserved, reload offered — no silent overwrite.
+  await editorB.getByLabel("Markdown").fill("loser body");
+  await editorB.getByRole("button", { name: "Save" }).click();
+  await expect(pageB.getByRole("alert").filter({ hasText: "已被其他人更新" })).toBeVisible();
+  await expect(editorB.getByLabel("Markdown")).toHaveValue("loser body");
+  await expect(pageB.getByRole("link", { name: "重新載入最新版本" })).toBeVisible();
+
+  // The persisted current revision is the winner's, never the loser's.
+  await pageB.goto(documentUrl);
+  await expect(pageB.locator("article").first().getByText("winner body")).toBeVisible();
+  await expect(pageB.getByText("loser body")).toHaveCount(0);
+  await pageB.close();
+});
+
+// Spec §6.2 parity: folder import decodes with a fatal UTF-8 decoder, so a single
+// upload must reject malformed UTF-8 too rather than storing U+FFFD replacements.
+test("rejects a malformed UTF-8 upload instead of storing replacement characters", async ({ page }) => {
+  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge`);
+  await page.setInputFiles('input[type="file"]', {
+    name: "broken.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from([0x23, 0x20, 0xff, 0xfe, 0x0a]), // "# " then lone invalid bytes
+  });
+  await expect(page.getByText("這個檔案不是有效的 UTF-8 文字，無法上傳。")).toBeVisible();
+});

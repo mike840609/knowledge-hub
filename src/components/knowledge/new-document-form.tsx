@@ -40,7 +40,17 @@ export function NewDocumentForm({ workspaceId, variant }: { workspaceId: string;
     // pick cannot start a concurrent create.
     setBusy(true);
     try {
-      await create({ filename: file.name, markdown: await file.text() });
+      // Match folder import's fatal UTF-8 decode (generic-markdown-folder-adapter.ts):
+      // reject malformed UTF-8 rather than silently substituting U+FFFD, so the same
+      // file stores identical content whether it arrives by import or by upload.
+      let markdown: string;
+      try {
+        markdown = new TextDecoder("utf-8", { fatal: true }).decode(await file.arrayBuffer());
+      } catch {
+        setError({ code: "INVALID_ENCODING", message: "這個檔案不是有效的 UTF-8 文字，無法上傳。" });
+        return;
+      }
+      await create({ filename: file.name, markdown });
     } finally {
       setBusy(false);
     }
