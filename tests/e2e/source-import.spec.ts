@@ -200,6 +200,16 @@ test("shows the malformed frontmatter blocker and disables apply", async ({ page
   await expect(page.getByText("INVALID_FRONTMATTER")).toBeVisible();
   await expect(page.getByRole("button", { name: "Apply changes" })).toBeDisabled();
   await expect(page.getByRole("button", { name: /force/i })).toHaveCount(0);
+
+  // The Warnings filter has to surface the offending row, not just the summary
+  // above it. A blocked document produces a diagnostic-only change (no labels),
+  // so it groups under "Unchanged" — the one group that starts collapsed under
+  // the default All filter. Nothing else covers the filter select, so without
+  // this the group would silently render collapsed and look empty.
+  await page.getByLabel("Filter changes").selectOption("warnings");
+  const warningGroup = page.getByRole("region", { name: "Unchanged" });
+  await expect(warningGroup.getByRole("button", { name: /Unchanged/ })).toHaveAttribute("aria-expanded", "true");
+  await expect(warningGroup.getByText("INVALID_FRONTMATTER")).toBeVisible();
 });
 
 test("stale preview loses to the second preview with no force apply", async ({ page, request }) => {

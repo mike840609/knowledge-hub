@@ -210,6 +210,43 @@ describe("Phase 2 staging cleanup", () => {
     expect(await canonicalCounts()).toEqual(before);
   });
 
+  it("caps deletions at the requested batch size and picks up leftovers on the next pass", async () => {
+    const fixture = await createSourceFixture(pool, { managed: true });
+    const past = new Date(now.getTime() - 1);
+    const ids: string[] = [];
+    for (let index = 0; index < 5; index += 1) {
+      ids.push(await insertSnapshot({ state: "BUILDING", workspaceId: fixture.workspaceId, expiresAt: past }));
+    }
+
+    expect((await services().cleanup.cleanup({ batchSize: 2 })).deleted).toBe(2);
+    const remaining = (await pool.query<{ id: unknown }[]>("SELECT id FROM source_import_snapshots")).map((row) => String(row.id));
+    expect(remaining).toHaveLength(3);
+
+    expect((await services().cleanup.cleanup()).deleted).toBe(3);
+    expect(await pool.query("SELECT id FROM source_import_snapshots")).toHaveLength(0);
+    expect(ids).toHaveLength(5);
+  });
+
+  it("never deletes a snapshot finalized after the candidate list pass (finalize/cleanup race)", async () => {
+    const fixture = await createSourceFixture(pool, { managed: true });
+    const past = new Date(now.getTime() - 1);
+    const future = new Date(now.getTime() + 60_000);
+    const raced = await insertSnapshot({ state: "BUILDING", workspaceId: fixture.workspaceId, expiresAt: past });
+    const uow = new MariaDbUnitOfWork(pool);
+
+    const candidates = await uow.run((repositories) => repositories.importSnapshots.listCleanupCandidates(now, 200));
+    expect(candidates).toContain(raced);
+
+    await pool.query(
+      "UPDATE source_import_snapshots SET state='READY', snapshot_hash=?, plan_hash=?, summary=?, plan=?, has_blockers=FALSE, finalized_at=?, expires_at=? WHERE id=?",
+      ["b".repeat(64), "c".repeat(64), JSON.stringify(summary), JSON.stringify({ ...plan, sourceBinding: { workspaceId: fixture.workspaceId, sourceId: null, basedOnVersion: null } }), now, future, raced],
+    );
+
+    const removed = await uow.run((repositories) => repositories.importSnapshots.deleteIfCleanupEligible(raced, now));
+    expect(removed).toBe(false);
+    expect(await pool.query("SELECT state FROM source_import_snapshots WHERE id=?", [raced])).toHaveLength(1);
+  });
+
   it("reports zero deletions when no snapshot is cleanup-eligible", async () => {
     const fixture = await createSourceFixture(pool, { managed: true });
     const future = new Date(now.getTime() + 60_000);

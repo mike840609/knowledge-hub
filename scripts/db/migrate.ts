@@ -128,6 +128,31 @@ hold write quiescence through the final step):
  DDL failures keep the FAILED/RUNNING ledger diagnostics: repair the schema
  explicitly and clear only the affected ledger row — never edit checksums.
 
+ Phase 2 asset-projection readiness gate (007) runbook (stop canonical
+ writes + back up first, hold write quiescence through the final step):
+
+   npm run db:migrate -- --to 6
+   npm run db:migrate
+
+ An untargeted run on a populated database safely stops at the 007 readiness
+ gate (006 stays APPLIED, 007 gets no ledger row) when knowledge_assets holds
+ a non-canonical source_path or two rows share one normalized path within a
+ source. The refusal names the offending asset id. To list every colliding
+ row (the gate reports one at a time):
+
+   SELECT source_id, source_path, COUNT(*) c, GROUP_CONCAT(id) ids
+   FROM knowledge_assets GROUP BY source_id, source_path HAVING c > 1;
+
+ Non-canonical paths have no SQL predicate — normalizeImportPath defines
+ canonical form — so take them from the gate's message, remediate (rewrite the
+ stored path to its canonical form, or dedupe the colliding rows so one
+ normalized path maps to one row per source), then rerun. Canonicalizing a
+ path can expose a new duplicate, so expect to iterate.
+
+ Write quiescence is not optional here: the gate paginates, so concurrent
+ writes to knowledge_assets can move rows between pages and the migration
+ lock does not block application writes.
+
  Phase 3 populated-production cutover (canonical-write quiescence from
  BEFORE 008 through 009 + Phase-3-compatible writer readiness; full order in
  docs/operations/phase3-workspace-governance-cutover.md):

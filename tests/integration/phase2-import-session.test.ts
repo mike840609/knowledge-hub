@@ -6,6 +6,8 @@ import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
 import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction";
 import { CreateFolderImportService, type ImportManifestEntry } from "@/modules/sources/application/create-folder-import";
 import { UploadFolderImportEntriesService } from "@/modules/sources/application/upload-folder-import-entries";
+import { FinalizeFolderImportService } from "@/modules/sources/application/finalize-folder-import";
+import { ApplyFolderImportService } from "@/modules/sources/application/apply-folder-import";
 import { DEFAULT_IMPORT_LIMITS } from "@/modules/sources/domain/import-limits";
 import { toImportErrorResponse } from "@/server/http-error-response";
 import { parseInitialImportBody } from "@/server/import-route-adapters";
@@ -40,6 +42,8 @@ function services() {
   return {
     create: new CreateFolderImportService(uow, { limits: DEFAULT_IMPORT_LIMITS, now: clock }),
     upload: new UploadFolderImportEntriesService(uow, { limits: DEFAULT_IMPORT_LIMITS, now: clock }),
+    finalize: new FinalizeFolderImportService(uow, { limits: DEFAULT_IMPORT_LIMITS, now: clock }),
+    apply: new ApplyFolderImportService(uow, { now: clock }),
   };
 }
 
@@ -91,6 +95,23 @@ describe("Phase 2 BUILDING import sessions", () => {
 
     const created = await services().create.createInitial(fixtureCaller(), { workspaceId: fixture.workspaceId, sourceName: "Wiki", rootName: "wiki", manifest: markdownManifest() });
     await expect(services().upload.upload(fixtureCaller(secondFixtureIdentity), { snapshotId: created.snapshotId, entries: [{ uploadKey: "m1", bytes: new TextEncoder().encode("# Hello") }] })).rejects.toThrow();
+  });
+
+  it("hides finalize and apply from a different workspace member (creator-private)", async () => {
+    const fixture = await createSourceFixture(pool);
+    const { create, upload, finalize, apply } = services();
+    const created = await create.createInitial(fixtureCaller(), { workspaceId: fixture.workspaceId, sourceName: "Wiki", rootName: "wiki", manifest: markdownManifest() });
+    await expect(finalize.finalize(fixtureCaller(secondFixtureIdentity), created.snapshotId)).rejects.toMatchObject({
+      code: "IMPORT_SNAPSHOT_NOT_FOUND",
+    });
+
+    const bytes = new TextEncoder().encode("# Hello");
+    await upload.upload(fixtureCaller(), { snapshotId: created.snapshotId, entries: [{ uploadKey: "m1", bytes }] });
+    await finalize.finalize(fixtureCaller(), created.snapshotId);
+    await expect(apply.apply(fixtureCaller(secondFixtureIdentity), created.snapshotId)).rejects.toMatchObject({
+      code: "IMPORT_SNAPSHOT_NOT_FOUND",
+    });
+    expect((await pool.query<{ state: string }[]>("SELECT state FROM source_import_snapshots WHERE id=?", [created.snapshotId]))[0].state).toBe("READY");
   });
 
   it("enforces active snapshot quotas while ignoring expired rows", async () => {

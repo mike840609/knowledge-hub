@@ -121,6 +121,19 @@ describe("Phase 2 import finalization", () => {
     expect(retry).toEqual(preview);
   });
 
+  it("derives READY expiry from the service clock as finalized_at plus 30 minutes (§19)", async () => {
+    const bytes = new TextEncoder().encode("# Ttl\n\nbody\n");
+    const { session, finalize } = await initialSession([{ uploadKey: "m1", path: "docs/ttl.md", bytes }]);
+    await finalize.finalize(fixtureCaller(), session.snapshotId);
+    const rows = await pool.query<{ finalized_at: unknown; expires_at: unknown }[]>(
+      "SELECT finalized_at,expires_at FROM source_import_snapshots WHERE id=?",
+      [session.snapshotId],
+    );
+    const finalizedAt = new Date(rows[0].finalized_at as string).getTime();
+    const expiresAt = new Date(rows[0].expires_at as string).getTime();
+    expect(expiresAt - finalizedAt).toBe(30 * 60_000);
+  });
+
   it("refuses incomplete Markdown upload and keeps the snapshot BUILDING", async () => {
     const fixture = await createSourceFixture(pool);
     const { create, finalize } = services();

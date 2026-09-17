@@ -15,7 +15,11 @@ export type ImportPreview = {
   state: "READY" | "APPLIED" | "STALE";
   expired: boolean;
   workspaceId: string;
+  /** Human-readable Workspace name; null when the lookup fails. Never throws. */
+  workspaceName: string | null;
   sourceId: string | null;
+  /** Human-readable Source name for existing Sources; null for new Sources or failed lookups. */
+  sourceName: string | null;
   proposedSourceName: string | null;
   basedOnVersion: number | null;
   expiresAt: Date;
@@ -110,7 +114,9 @@ export function previewFromSnapshot(snapshot: ImportSnapshot, now: Date): Import
     state: snapshot.state,
     expired: snapshot.expiresAt.getTime() <= now.getTime(),
     workspaceId: snapshot.workspaceId,
+    workspaceName: null,
     sourceId: snapshot.sourceId,
+    sourceName: null,
     proposedSourceName: snapshot.proposedSourceName,
     basedOnVersion: snapshot.basedOnVersion,
     expiresAt: snapshot.expiresAt,
@@ -118,4 +124,36 @@ export function previewFromSnapshot(snapshot: ImportSnapshot, now: Date): Import
     summary: snapshot.summary,
     changes: snapshot.plan.preview,
   };
+}
+
+/** Minimal repository surface needed to resolve human-readable preview names. */
+export type ImportPreviewNameSources = {
+  workspaces: { findById(workspaceId: string): Promise<{ name: string } | null> };
+  sources: { findById(sourceId: string): Promise<{ name: string } | null> };
+};
+
+/**
+ * Attaches workspaceName/sourceName to a preview built by previewFromSnapshot.
+ * Name lookups never throw: any failure (missing row, database error) falls
+ * back to null and the UI renders the id or proposed name instead.
+ */
+export async function resolveImportPreviewNames(
+  repositories: ImportPreviewNameSources,
+  preview: ImportPreview,
+): Promise<ImportPreview> {
+  let workspaceName: string | null = null;
+  try {
+    workspaceName = (await repositories.workspaces.findById(preview.workspaceId))?.name ?? null;
+  } catch {
+    workspaceName = null;
+  }
+  let sourceName: string | null = null;
+  if (preview.sourceId !== null) {
+    try {
+      sourceName = (await repositories.sources.findById(preview.sourceId))?.name ?? null;
+    } catch {
+      sourceName = null;
+    }
+  }
+  return { ...preview, workspaceName, sourceName };
 }

@@ -130,6 +130,46 @@ describe("Phase 2 import persistence schema", () => {
     await expect(pool.query(insertSnapshotSql, unsupported)).rejects.toThrow();
   });
 
+  it("rejects state-shape violations at the DB boundary (ck_import_snapshots_state_shape)", async () => {
+    const { userId, workspaceId } = await seedTarget();
+    const snapshotId = uuidv7();
+    await pool.query(insertSnapshotSql, snapshotValues({
+      id: snapshotId, workspaceId, sourceId: null, basedOnVersion: null, createdBy: userId, proposedSourceName: "New Wiki",
+    }));
+    // errno, not a bare toThrow(): a typo'd column or a bad fixture also
+    // throws, which would let this pass while proving nothing. 4025 is
+    // MariaDB's ER_CONSTRAINT_FAILED, so it pins the CHECK as the reason.
+    // BUILDING rows must not carry finalization artifacts.
+    await expect(
+      pool.query("UPDATE source_import_snapshots SET finalized_at=? WHERE id=?", [new Date(), snapshotId]),
+    ).rejects.toMatchObject({ errno: 4025 });
+    // READY without its persisted hash/summary/plan shape is not representable.
+    await expect(
+      pool.query("UPDATE source_import_snapshots SET state='READY' WHERE id=?", [snapshotId]),
+    ).rejects.toMatchObject({ errno: 4025 });
+  });
+
+  it("rejects duplicate staging entry keys and path hashes (uq_import_entries_snapshot_upload/path_hash)", async () => {
+    const { userId, workspaceId } = await seedTarget();
+    const snapshotId = uuidv7();
+    await pool.query(insertSnapshotSql, snapshotValues({
+      id: snapshotId, workspaceId, sourceId: null, basedOnVersion: null, createdBy: userId, proposedSourceName: "New Wiki",
+    }));
+    const insertEntry = (uploadKey: string, pathHash: string) =>
+      pool.query(
+        `INSERT INTO source_import_snapshot_entries (
+          id, snapshot_id, upload_key, client_relative_path, source_path, source_path_hash,
+          entry_type, upload_status, declared_size, diagnostics
+        ) VALUES (?, ?, ?, 'README.md', NULL, ?, 'DOCUMENT', 'PENDING', 10, '[]')`,
+        [uuidv7(), snapshotId, uploadKey, pathHash],
+      );
+    await insertEntry("f1", "d".repeat(64));
+    // 1062 is ER_DUP_ENTRY: proves the unique index rejected these, rather
+    // than some unrelated failure in the insert.
+    await expect(insertEntry("f1", "e".repeat(64))).rejects.toMatchObject({ errno: 1062 });
+    await expect(insertEntry("f2", "d".repeat(64))).rejects.toMatchObject({ errno: 1062 });
+  });
+
   it("cascades staging entries when a snapshot is physically deleted", async () => {
     const { userId, workspaceId } = await seedTarget();
     const snapshotId = uuidv7();
