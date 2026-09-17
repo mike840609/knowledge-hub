@@ -63,10 +63,9 @@ describe("007 asset projection readiness gate", () => {
     try {
       await runMigrations(pool, migrations, { to: 6 });
       const { sourceId } = await seedScope(pool);
-      const canonicalId = await insertAsset(pool, sourceId, "images/diagram.png");
+      await insertAsset(pool, sourceId, "images/diagram.png");
       const badId = await insertAsset(pool, sourceId, "images//needs-canonical.png");
       await expect(assertAssetProjectionReady(asReadConnection(pool))).rejects.toThrow(new RegExp(`asset ${badId}`));
-      expect(canonicalId).not.toBe(badId);
     } finally {
       await disposePool(handle, pool);
     }
@@ -93,6 +92,47 @@ describe("007 asset projection readiness gate", () => {
       await insertAsset(pool, sourceId, "images/logo.png");
       const duplicateId = await insertAsset(pool, sourceId, "images/logo.png");
       await expect(assertAssetProjectionReady(asReadConnection(pool))).rejects.toThrow(new RegExp(`asset ${duplicateId}`));
+    } finally {
+      await disposePool(handle, pool);
+    }
+  });
+
+  // The paging loop is the only new algorithm here, and the default batch size
+  // of 500 means the other cases never execute a second iteration. These two
+  // force pagination so a cursor that fails to advance (or skips a window)
+  // fails the suite instead of silently passing bad rows through the gate.
+  it("checks rows beyond the first page when the batch size forces pagination", async () => {
+    const { handle, pool } = await createIsolatedPool();
+    try {
+      await runMigrations(pool, migrations, { to: 6 });
+      const { sourceId } = await seedScope(pool);
+      for (const path of ["a/1.png", "a/2.png", "a/3.png", "a/4.png"]) await insertAsset(pool, sourceId, path);
+      // uuidv7 ids ascend with insertion, so with batchSize 2 this row is only
+      // reachable on the third page.
+      const lastId = await insertAsset(pool, sourceId, "a//5.png");
+      await expect(assertAssetProjectionReady(asReadConnection(pool), { batchSize: 2 })).rejects.toThrow(
+        new RegExp(`asset ${lastId}`),
+      );
+      // Canonicalizing that row makes the same 5-row/3-page scan pass, which
+      // also pins that the loop terminates instead of re-reading a page.
+      await pool.query("UPDATE knowledge_assets SET source_path = 'a/5.png' WHERE id = ?", [lastId]);
+      await assertAssetProjectionReady(asReadConnection(pool), { batchSize: 2 });
+    } finally {
+      await disposePool(handle, pool);
+    }
+  });
+
+  it("detects duplicate paths whose rows fall on different pages", async () => {
+    const { handle, pool } = await createIsolatedPool();
+    try {
+      await runMigrations(pool, migrations, { to: 6 });
+      const { sourceId } = await seedScope(pool);
+      await insertAsset(pool, sourceId, "a/1.png");
+      for (const path of ["a/2.png", "a/3.png", "a/4.png"]) await insertAsset(pool, sourceId, path);
+      const duplicateId = await insertAsset(pool, sourceId, "a/1.png");
+      await expect(assertAssetProjectionReady(asReadConnection(pool), { batchSize: 2 })).rejects.toThrow(
+        new RegExp(`asset ${duplicateId}`),
+      );
     } finally {
       await disposePool(handle, pool);
     }

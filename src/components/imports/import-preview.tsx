@@ -42,8 +42,11 @@ function groupOf(change: ImportPreviewChange): ChangeGroupKey {
 /**
  * Label-based filter predicate. Unlike groupOf (display grouping with
  * precedence), every filter tests its own label(s) independently so a
- * multi-label change (e.g. ["RENAMED", "UPDATED"]) appears under each
- * matching filter — consistent with the summary counters.
+ * multi-label change (e.g. ["RENAMED", "UPDATED"]) appears under each matching
+ * filter — the same per-label independence summarizeImportChanges uses. The
+ * option counts are not summary figures though: they count changes, while the
+ * summary counts per-kind totals and diagnostics, so the two differ by unit.
+ * "warnings" matches any diagnostic, BLOCKING included.
  */
 export function matchesFilter(change: ImportPreviewChange, filter: ChangeFilter): boolean {
   if (filter === "all") return true;
@@ -82,6 +85,12 @@ export function ImportPreview({
     }
     return grouped;
   }, [preview.changes, filter]);
+  // §19 allows 20,000 manifest entries; recomputing 7 option counts on every
+  // render would be 140,000 predicate calls. They depend only on the changes.
+  const counts = useMemo(
+    () => FILTER_META.map((option) => countFor(preview.changes, option.value)),
+    [preview.changes],
+  );
 
   return (
     <div className="flex flex-col gap-4 pb-6">
@@ -97,19 +106,27 @@ export function ImportPreview({
           onChange={(event) => setFilter(event.target.value as ChangeFilter)}
           className="rounded-md border border-kh-border bg-kh-bg px-2 py-1 text-sm text-kh-text focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent"
         >
-          {FILTER_META.map((option) => (
+          {FILTER_META.map((option, index) => (
             <option key={option.value} value={option.value}>
-              {option.label} ({countFor(preview.changes, option.value)})
+              {option.label} ({counts[index]})
             </option>
           ))}
         </select>
       </div>
+      {/*
+        Under an explicit filter every surviving group is what the user asked
+        for, so none of them start collapsed. Without this, a diagnostic-only
+        change (labels: []) lands in "unchanged" and the Warnings filter would
+        render it inside a collapsed group — the one row the filter exists to
+        show. The filter is part of the key because ImportChangeGroup only
+        reads defaultExpanded as its initial state.
+      */}
       {GROUP_META.filter((group) => filter === "all" || groups[group.key].length > 0).map((group) => (
         <ImportChangeGroup
-          key={group.key}
+          key={`${filter}-${group.key}`}
           title={group.title}
           changes={groups[group.key]}
-          defaultExpanded={group.key !== "unchanged"}
+          defaultExpanded={filter !== "all" || group.key !== "unchanged"}
         />
       ))}
       <ImportStickyFooter workspaceId={workspaceId} preview={preview} />

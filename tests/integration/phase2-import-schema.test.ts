@@ -136,14 +136,17 @@ describe("Phase 2 import persistence schema", () => {
     await pool.query(insertSnapshotSql, snapshotValues({
       id: snapshotId, workspaceId, sourceId: null, basedOnVersion: null, createdBy: userId, proposedSourceName: "New Wiki",
     }));
+    // errno, not a bare toThrow(): a typo'd column or a bad fixture also
+    // throws, which would let this pass while proving nothing. 4025 is
+    // MariaDB's ER_CONSTRAINT_FAILED, so it pins the CHECK as the reason.
     // BUILDING rows must not carry finalization artifacts.
     await expect(
       pool.query("UPDATE source_import_snapshots SET finalized_at=? WHERE id=?", [new Date(), snapshotId]),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({ errno: 4025 });
     // READY without its persisted hash/summary/plan shape is not representable.
     await expect(
       pool.query("UPDATE source_import_snapshots SET state='READY' WHERE id=?", [snapshotId]),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({ errno: 4025 });
   });
 
   it("rejects duplicate staging entry keys and path hashes (uq_import_entries_snapshot_upload/path_hash)", async () => {
@@ -161,8 +164,10 @@ describe("Phase 2 import persistence schema", () => {
         [uuidv7(), snapshotId, uploadKey, pathHash],
       );
     await insertEntry("f1", "d".repeat(64));
-    await expect(insertEntry("f1", "e".repeat(64))).rejects.toThrow();
-    await expect(insertEntry("f2", "d".repeat(64))).rejects.toThrow();
+    // 1062 is ER_DUP_ENTRY: proves the unique index rejected these, rather
+    // than some unrelated failure in the insert.
+    await expect(insertEntry("f1", "e".repeat(64))).rejects.toMatchObject({ errno: 1062 });
+    await expect(insertEntry("f2", "d".repeat(64))).rejects.toMatchObject({ errno: 1062 });
   });
 
   it("cascades staging entries when a snapshot is physically deleted", async () => {

@@ -86,6 +86,12 @@ test("switches workspace through the shell selector", async ({ page }) => {
 
 test("reveals archived documents only with the archived toggle", async ({ page }) => {
   await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${OBSIDIAN_SOURCE}`);
+  // The bare source URL redirects to its first document. Wait for that landing
+  // before touching the toggle: the tree renders on both the intermediate and
+  // the final page, so the assertions below do not gate the redirect, and a
+  // click issued mid-navigation is discarded (seen as an intermittent failure
+  // under full-suite load, reproducing as a plain document URL with no query).
+  await expect(page).toHaveURL(new RegExp(`/knowledge/${OBSIDIAN_SOURCE}/[0-9a-f-]+$`));
   const tree = page.getByRole("tree", { name: "Knowledge tree" });
   await expect(tree).toBeVisible();
   await expect(tree.getByText(RETIRED_TITLE, { exact: true })).toHaveCount(0);

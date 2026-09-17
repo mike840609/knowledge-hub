@@ -132,10 +132,19 @@ export class FinalizeFolderImportService {
     const preparation = await this.uow.run((repositories) =>
       this.finalizePrepare(caller, snapshotId, now, repositories),
     );
-    if (preparation.kind === "preview") return preparation.preview;
-    return this.uow.runWithCreatorQuotaLock(caller.identity.id, this.quotaLockTimeoutSeconds, async (repositories) =>
-      this.finalizeCommit(caller, snapshotId, now, preparation.artifacts, repositories),
-    );
+    const preview =
+      preparation.kind === "preview"
+        ? preparation.preview
+        : await this.uow.runWithCreatorQuotaLock(caller.identity.id, this.quotaLockTimeoutSeconds, async (repositories) =>
+            this.finalizeCommit(caller, snapshotId, now, preparation.artifacts, repositories),
+          );
+    // Display-only names resolve in their own transaction, after both critical
+    // sections have committed. Inside them it would widen the quota lock and
+    // the snapshot/Source/Workspace row locks that §19 requires to stay short,
+    // and resolveImportPreviewNames swallows errors — swallowing a
+    // transaction-aborting error (a deadlock rolls the whole thing back) would
+    // let a rolled-back finalize still report a READY preview.
+    return this.uow.run((repositories) => resolveImportPreviewNames(repositories, preview));
   }
 
   private async finalizePrepare(
@@ -147,7 +156,7 @@ export class FinalizeFolderImportService {
     const snapshot = await repositories.importSnapshots.lockById(snapshotId);
     if (!snapshot || snapshot.createdBy !== caller.identity.id) throw importError("IMPORT_SNAPSHOT_NOT_FOUND", "Import snapshot was not found.");
     if (snapshot.state === "READY") {
-      return { kind: "preview", preview: await resolveImportPreviewNames(repositories, previewFromSnapshot(snapshot, now)) };
+      return { kind: "preview", preview: previewFromSnapshot(snapshot, now) };
     }
     if (snapshot.state !== "BUILDING") throw importError("IMPORT_SNAPSHOT_NOT_BUILDING", "Only BUILDING snapshots can be finalized.");
     if (snapshot.expiresAt.getTime() <= now.getTime()) throw importError("IMPORT_SNAPSHOT_EXPIRED", "Import snapshot has expired.");
@@ -355,6 +364,6 @@ export class FinalizeFolderImportService {
       finalizedAt: now,
       expiresAt: artifacts.expiresAt,
     };
-    return resolveImportPreviewNames(repositories, previewFromSnapshot(ready, now));
+    return previewFromSnapshot(ready, now);
   }
 }
