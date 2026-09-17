@@ -1,5 +1,7 @@
 "use client";
 
+import { requestWorkspaceAccessCheck } from "@/components/shell/use-workspace-authorization";
+
 export type GovernanceFailure = { code: string; message: string; field?: string };
 export class GovernanceRequestError extends Error {
   constructor(public failure: GovernanceFailure) { super(failure.message); }
@@ -14,11 +16,7 @@ export async function governanceRequest<T>(url: string, method = "GET", body?: u
     // re-checking there would needlessly flip `confirmed` off and could disable
     // Save if the refresh transiently fails.
     const code = data?.error?.code;
-    const mayIndicateAccessChange =
-      response.status === 403 ||
-      response.status === 404 ||
-      (response.status === 409 && code !== "REVISION_CONFLICT");
-    if (mayIndicateAccessChange) window.dispatchEvent(new Event("kh:workspace-access-check"));
+    requestWorkspaceAccessCheck(response.status, typeof code === "string" ? code : undefined);
     throw new GovernanceRequestError(data?.error ?? { code: "REQUEST_FAILED", message: "Unable to complete the request. Please try again." });
   }
   if (method !== "GET") window.dispatchEvent(new Event("kh:workspace-mutation"));

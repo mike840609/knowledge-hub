@@ -27,7 +27,6 @@ import { establishTrustedCaller as establishTrustedCallerWith } from "@/server/t
 import { importRuntimeConfig } from "@/server/import-config";
 import { createIdentityProvider } from "@/server/identity-provider-factory";
 
-let pool: Pool | undefined;
 let services: ReturnType<typeof buildApplicationServices> | undefined;
 let companySessionReader: CompanySsoSessionReader | undefined;
 
@@ -46,9 +45,11 @@ function getPool(): Pool {
   // module-level singleton would orphan a full pool per reload and exhaust
   // MariaDB max_connections over a session. Pin the pool on globalThis so
   // reloads reuse it; closeApplicationPool() clears the slot for tests.
+  // The slot is the single source of truth — no module-level mirror — so a
+  // future one-sided edit can't reintroduce the HMR pool leak.
   const slot = globalThis as unknown as GlobalPoolSlot;
-  pool = slot.__kmDbPool ??= createDatabasePool(databaseConfig("dev"));
-  return pool;
+  slot.__kmDbPool ??= createDatabasePool(databaseConfig("dev"));
+  return slot.__kmDbPool;
 }
 
 export function buildApplicationServices(databasePool: Pool, options: {
@@ -114,9 +115,9 @@ export async function verifyProductionReadiness(options: {
 }
 
 export async function closeApplicationPool(): Promise<void> {
-  if (pool) await pool.end();
-  pool = undefined;
-  delete (globalThis as unknown as GlobalPoolSlot).__kmDbPool;
+  const slot = globalThis as unknown as GlobalPoolSlot;
+  if (slot.__kmDbPool) await slot.__kmDbPool.end();
+  delete slot.__kmDbPool;
   services = undefined;
   companySessionReader = undefined;
 }
