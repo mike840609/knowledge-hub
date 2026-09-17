@@ -7,11 +7,15 @@
   --kh-bg: #ffffff;
   --kh-bg-subtle: #f7f7f8;
   --kh-bg-hover: #f1f1f2;
-  --kh-bg-selected: #eef2ff;
+  --kh-bg-selected: #eceef1;
   --kh-border: #e5e7eb;
   --kh-text: #202124;
   --kh-text-muted: #6b7280;
-  --kh-accent: #5e6ad2;
+  --kh-primary: #59616c;
+  --kh-primary-hover: #48515d;
+  --kh-link: #405f91;
+  --kh-focus: #405f91;
+  --kh-highlight: #e3eaf2;
   --kh-danger: #dc2626;
   --kh-warning: #b45309;
   --kh-success: #15803d;
@@ -38,7 +42,7 @@ body {
 
 a { color: inherit; }
 
-::selection { background: #99f6e4; }
+::selection { background: var(--kh-highlight); color: var(--kh-text); }
 
 @layer components {
   .kh-reading-column {

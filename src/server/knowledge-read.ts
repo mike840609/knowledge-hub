@@ -57,6 +57,7 @@ export type KnowledgeExplorerModel = {
   sources: SourceView[];
   source: SourceView;
   tree: KnowledgeTreeItem[];
+  collections: { source: SourceView; tree: KnowledgeTreeItem[] }[];
   includeArchived: boolean;
 };
 
@@ -88,7 +89,7 @@ export async function getWorkspaceShellModel(
 export async function getKnowledgeExplorerModel(
   workspaceId: string,
   sourceId: string,
-  input: { includeArchived?: boolean } = {},
+  input: { includeArchived?: boolean; includeCollections?: boolean } = {},
 ): Promise<KnowledgeExplorerModel | null> {
   const services = applicationServices();
   const { caller } = await services.establishTrustedCaller();
@@ -101,7 +102,16 @@ export async function getKnowledgeExplorerModel(
     const sources = await services.queries.listSources(caller, workspaceId, { includeArchived });
     if (!sources.some((candidate) => candidate.id === sourceId)) return null;
     const tree = await services.queries.listTree(caller, sourceId, { includeArchived });
-    return { sources: sortSourcesByName(sources), source, tree, includeArchived };
+    const ordered = sortSourcesByName(sources);
+    // Only the explorer layout needs every collection. Each query retains its
+    // own authorization checks; document/header reads still load one tree.
+    const collections = input.includeCollections
+      ? await Promise.all(ordered.map(async (candidate) => ({
+          source: candidate,
+          tree: candidate.id === sourceId ? tree : await services.queries.listTree(caller, candidate.id, { includeArchived }),
+        })))
+      : [{ source, tree }];
+    return { sources: ordered, source, tree, collections, includeArchived };
   } catch {
     return null;
   }

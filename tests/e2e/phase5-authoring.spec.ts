@@ -15,7 +15,7 @@ const SOURCE_MANAGED_DOCUMENT = "0199f100-0000-7000-8000-000000000210";
 // the inline create form (retried until the click's handler is attached). Once
 // that onClick responds, the file input's onChange in the same form is wired too.
 async function gotoKnowledgeReadyToUpload(page: Page, workspaceId: string) {
-  await page.goto(`/w/${workspaceId}/knowledge`);
+  await page.goto(`/w/${workspaceId}/knowledge/new`);
   await expect(async () => {
     await page.getByRole("button", { name: "New document" }).click();
     await expect(page.getByLabel("Document title")).toBeVisible({ timeout: 1_000 });
@@ -25,7 +25,7 @@ async function gotoKnowledgeReadyToUpload(page: Page, workspaceId: string) {
 }
 
 test("creates the first document in a workspace with no sources", async ({ page }) => {
-  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge`);
+  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
   await page.getByRole("button", { name: "New document" }).click();
   await page.getByLabel("Document title").fill("My First Note");
   await page.getByRole("button", { name: "Create" }).click();
@@ -34,7 +34,7 @@ test("creates the first document in a workspace with no sources", async ({ page 
 });
 
 test("edits a hub-managed document and records a second revision", async ({ page }) => {
-  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge`);
+  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
   await page.getByRole("button", { name: "New document" }).click();
   await page.getByLabel("Document title").fill("Editable Note");
   await page.getByRole("button", { name: "Create" }).click();
@@ -80,7 +80,7 @@ test("never shows Edit on source-managed content", async ({ page }) => {
 // their typed input survives on screen, and the first editor's content is what persisted.
 // Ruling B skips React component unit tests, so this browser behavior is E2E-only.
 test("a stale second editor gets a conflict, keeps their input, and does not overwrite the winner", async ({ page }) => {
-  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge`);
+  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
   await page.getByRole("button", { name: "New document" }).click();
   await page.getByLabel("Document title").fill("Conflict Note");
   await page.getByRole("button", { name: "Create" }).click();

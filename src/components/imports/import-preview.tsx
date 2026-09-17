@@ -104,7 +104,7 @@ export function ImportPreview({
           id="import-change-filter"
           value={filter}
           onChange={(event) => setFilter(event.target.value as ChangeFilter)}
-          className="rounded-md border border-kh-border bg-kh-bg px-2 py-1 text-sm text-kh-text focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent"
+          className="rounded-md border border-kh-border bg-kh-bg px-2 py-1 text-sm text-kh-text focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
         >
           {FILTER_META.map((option, index) => (
             <option key={option.value} value={option.value}>

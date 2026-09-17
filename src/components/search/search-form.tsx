@@ -27,7 +27,7 @@ export function SearchForm({
             id="search-scope"
             name="scope"
             defaultValue={scope}
-            className="min-h-10 rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-sm text-kh-text focus:border-kh-accent focus-visible:ring-2 focus-visible:ring-kh-accent"
+            className="min-h-10 rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-sm text-kh-text focus:border-kh-focus focus-visible:ring-2 focus-visible:ring-kh-focus"
           >
             <option value="workspace">This workspace</option>
             <option value="all">All my workspaces</option>
@@ -40,7 +40,7 @@ export function SearchForm({
               id="search-source"
               name="source"
               defaultValue={sourceId ?? ""}
-              className="min-h-10 rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-sm text-kh-text focus:border-kh-accent focus-visible:ring-2 focus-visible:ring-kh-accent"
+              className="min-h-10 rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-sm text-kh-text focus:border-kh-focus focus-visible:ring-2 focus-visible:ring-kh-focus"
             >
               <option value="">All sources</option>
               {sources.map((source) => (

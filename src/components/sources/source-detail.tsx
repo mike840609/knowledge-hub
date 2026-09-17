@@ -1,4 +1,5 @@
 import { WorkspaceImportLink } from "@/components/shell/workspace-import-link";
+import Link from "next/link";
 import { RefreshCw } from "lucide-react";
 import type { SourceDetailModel } from "@/server/source-read";
 import { isFolderSyncable } from "@/modules/knowledge/domain/source-policy";
@@ -22,12 +23,12 @@ export function SourceDetail({ model, showImportSuccess = false }: { model: Sour
           <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-kh-text-muted">
             <span className="rounded border border-kh-border px-1.5 py-0.5">{sourceTypeLabel(source.sourceType)}</span>
             <span className="rounded border border-kh-border px-1.5 py-0.5">{source.status}</span>
-            <span>Sync version {source.syncVersion}</span>
+
           </p>
         </div>
         {syncable ? (
           <WorkspaceImportLink href={`/w/${workspace.id}/sources/${source.id}/update`}
-              className="inline-flex items-center gap-2 rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-sm font-medium text-kh-text transition hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent"
+              className="inline-flex items-center gap-2 rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-sm font-medium text-kh-text transition hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
             >
               <RefreshCw size={15} strokeWidth={2} aria-hidden="true" />
               Update from folder
@@ -48,7 +49,7 @@ export function SourceDetail({ model, showImportSuccess = false }: { model: Sour
           </div>
           <div className="flex gap-2">
             <dt className="w-24 shrink-0 text-kh-text-muted">Documents</dt>
-            <dd className="text-kh-text">Browse under Knowledge</dd>
+            <dd><Link className="rounded text-kh-link underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-kh-focus" href={`/w/${workspace.id}/knowledge/${source.id}${source.status === "ARCHIVED" ? "?includeArchived=true" : ""}`}>Browse documents</Link></dd>
           </div>
           <div className="flex gap-2">
             <dt className="w-24 shrink-0 text-kh-text-muted">Sync runs</dt>

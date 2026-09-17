@@ -98,13 +98,13 @@ export function ImportStickyFooter({
       <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3">
         <Link
           href={cancelHref}
-          className="rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-sm font-medium text-kh-text transition hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent"
+          className="rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-sm font-medium text-kh-text transition hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
         >
           Cancel
         </Link>
         <div className="flex flex-wrap items-center gap-3">
           {stale && allowed ? (
-            <Link href={refreshHref} className="rounded text-sm font-medium text-kh-accent underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent">
+            <Link href={refreshHref} className="rounded text-sm font-medium text-kh-link underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus">
               Refresh preview
             </Link>
           ) : null}
@@ -112,7 +112,7 @@ export function ImportStickyFooter({
             type="button"
             disabled={disabled || state.kind === "APPLYING"}
             onClick={() => void apply()}
-            className="rounded-md bg-kh-accent px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent focus-visible:ring-offset-2"
+            className="rounded-md bg-kh-primary hover:bg-kh-primary-hover px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus focus-visible:ring-offset-2"
           >
             {state.kind === "APPLYING" ? "Applying…" : "Apply changes"}
           </button> : <p role="status" className="text-sm text-kh-text-muted">This preview is read-only. Applying is unavailable.</p>}

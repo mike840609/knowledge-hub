@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { DocumentTopbarContext } from "@/components/shell/document-topbar-context";
@@ -44,6 +45,7 @@ export type DocumentInspectorData = {
 };
 
 function InspectorTabs({ data }: { data: DocumentInspectorData }) {
+  const { access } = useWorkspaceAuthorization();
   const sorted = [...data.revisions].sort((a, b) => a.revisionNo - b.revisionNo);
   const current = sorted[sorted.length - 1];
   const created = sorted[0]?.createdAt;
@@ -63,6 +65,7 @@ function InspectorTabs({ data }: { data: DocumentInspectorData }) {
           <div>
             <dt className="text-xs text-kh-text-muted">Source</dt>
             <dd className="mt-0.5 text-kh-text">{data.sourceName}</dd>
+            {access.actions.canInspectSources ? <dd className="mt-1"><Link href={`/w/${data.workspaceId}/sources/${data.sourceId}`} className="rounded text-kh-link underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-kh-focus">Manage source</Link></dd> : null}
           </div>
           <div>
             <dt className="text-xs text-kh-text-muted">Status</dt>
@@ -110,7 +113,7 @@ function InspectorTabs({ data }: { data: DocumentInspectorData }) {
                     includeArchived: data.includeArchived,
                   })}
                   aria-current={isSelected ? "page" : undefined}
-                  className={`flex items-center justify-between gap-2 rounded-md px-2.5 py-2 text-[13px] hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent ${isSelected ? "bg-kh-bg-selected font-medium text-kh-text" : "text-kh-text"}`}
+                  className={`flex items-center justify-between gap-2 rounded-md px-2.5 py-2 text-[13px] hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus ${isSelected ? "bg-kh-bg-selected font-medium text-kh-text" : "text-kh-text"}`}
                 >
                   <span>
                     Revision {revision.revisionNo}
@@ -164,13 +167,13 @@ export function DocumentInspector({
             type="button"
             aria-label="Close details"
             onClick={() => onOpenChange(false)}
-            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent"
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
         <div key={data.documentId} role="region" aria-label="Document details content" tabIndex={0}
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain break-words px-4 py-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-kh-accent">
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain break-words px-4 py-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-kh-focus">
           <InspectorTabs data={data} />
         </div>
       </aside>
@@ -243,7 +246,7 @@ export function DocumentDetailClient({
   return (
     <div data-document-pane className="flex h-full min-h-0 overflow-hidden">
       <div ref={contentRef} role="region" aria-label="Document content" tabIndex={0}
-        className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain contain-layout focus-visible:outline focus-visible:outline-2 focus-visible:outline-kh-accent">
+        className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain contain-layout focus-visible:outline focus-visible:outline-2 focus-visible:outline-kh-focus">
         <div ref={headerRef}>
         <DocumentHeader
           breadcrumb={breadcrumb}

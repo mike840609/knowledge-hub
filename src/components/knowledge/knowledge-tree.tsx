@@ -67,12 +67,12 @@ function TreeNodeRow({
         data-node-id={item.id}
         tabIndex={tabIndex}
         onFocus={() => onFocusNode(item.id)}
-        className={`rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent ${selected ? "bg-kh-bg-hover" : ""}`}
+        className={`rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus ${selected ? "bg-kh-bg-selected" : ""}`}
       >
         <Link
           href={documentHref(item, scope, includeArchived)}
           title={item.label}
-          className={`block truncate rounded px-2 py-1.5 text-sm hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent ${
+          className={`block truncate rounded px-2 py-1.5 text-sm hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus ${
             selected ? "font-semibold text-kh-text" : "text-kh-text-muted"
           }`}
         >
@@ -92,7 +92,7 @@ function TreeNodeRow({
       data-node-id={item.id}
       tabIndex={tabIndex}
       onFocus={() => onFocusNode(item.id)}
-      className="rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent"
+      className="rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
     >
       <button
         type="button"
@@ -100,7 +100,7 @@ function TreeNodeRow({
         aria-expanded={!collapsed}
         title={item.label}
         tabIndex={-1}
-        className="flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm font-medium text-kh-text hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent"
+        className="flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm font-medium text-kh-text hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
       >
         <span aria-hidden="true" className="inline-block w-3 shrink-0 text-kh-text-muted">
           {collapsed ? "▸" : "▾"}
@@ -257,7 +257,7 @@ export function KnowledgeTree({
     return filtering ? (
       <p className="px-2 py-3 text-sm text-kh-text-muted">No matching documents.</p>
     ) : (
-      <p className="text-sm text-kh-text-muted">This source has no active tree nodes.</p>
+      <p className="text-sm text-kh-text-muted">No documents in this collection.</p>
     );
   }
 

@@ -63,14 +63,14 @@ export function DocumentEditor({
       </label>
       <div className="flex items-center gap-2">
         <Button type="submit" disabled={busy || !confirmed || !title.trim()}>Save</Button>
-        <Button type="button" className="bg-transparent text-kh-text hover:brightness-100" disabled={busy} onClick={() => router.push(documentHref)}>
+        <Button type="button" variant="secondary" disabled={busy} onClick={() => router.push(documentHref)}>
           Cancel
         </Button>
       </div>
       {conflict ? (
         <p role="alert" className="rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2 text-sm text-kh-text">
           這份文件已被其他人更新。你的輸入仍保留在表單中。
-          <a className="ml-2 font-medium text-kh-accent underline underline-offset-2" href={`${documentHref}/edit`}>重新載入最新版本</a>
+          <a className="ml-2 font-medium text-kh-link underline underline-offset-2" href={`${documentHref}/edit`}>重新載入最新版本</a>
         </p>
       ) : (
         <GovernanceError error={error} />

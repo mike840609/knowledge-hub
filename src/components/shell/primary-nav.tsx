@@ -37,7 +37,7 @@ export function PrimaryNav({
           key={name}
           href={href}
           onClick={onNavigate}
-          className="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-kh-text-muted transition hover:bg-kh-bg-hover hover:text-kh-text focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent"
+          className="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-kh-text-muted transition hover:bg-kh-bg-hover hover:text-kh-text focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
         >
           <Icon size={15} strokeWidth={2} aria-hidden="true" />
           <span>{name}</span>

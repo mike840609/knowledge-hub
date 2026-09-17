@@ -69,7 +69,7 @@ export function NewDocumentForm({ workspaceId, variant }: { workspaceId: string;
           </label>
           <div className="flex gap-2">
             <Button type="submit" disabled={busy || !confirmed || !title.trim()}>Create</Button>
-            <Button type="button" className="bg-transparent text-kh-text hover:brightness-100" disabled={busy} onClick={() => setOpen(false)}>Cancel</Button>
+            <Button type="button" variant="secondary" disabled={busy} onClick={() => setOpen(false)}>Cancel</Button>
           </div>
         </form>
       ) : (

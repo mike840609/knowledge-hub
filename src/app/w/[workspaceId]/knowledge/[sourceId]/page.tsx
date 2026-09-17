@@ -29,7 +29,7 @@ export default async function SourceKnowledgePage({
       <h1 className="text-2xl font-semibold">{model.source.name}</h1>
       <p className="mt-4 text-kh-text-muted">This source does not contain any readable documents.</p>
       <Link
-        className="mt-6 inline-flex w-fit items-center rounded-md border border-kh-border bg-kh-bg px-4 py-2 font-medium text-kh-text hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent"
+        className="mt-6 inline-flex w-fit items-center rounded-md border border-kh-border bg-kh-bg px-4 py-2 font-medium text-kh-text hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
         href={`/w/${workspaceId}/sources`}
       >
         Go to Sources

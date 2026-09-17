@@ -42,7 +42,7 @@ test("browses the persistent explorer with a stable canonical document URL", asy
   await expect(page.getByRole("link", { name: "Back to Knowledge" })).toHaveCount(0);
 
   // Persistent Source Tree scoped to the current Source.
-  await expect(page.getByLabel("Source")).toHaveValue(OBSIDIAN_SOURCE);
+  await expect(page.getByRole("button", { name: "Obsidian Wiki", exact: true })).toHaveAttribute("aria-expanded", "true");
   const tree = page.getByRole("tree", { name: "Knowledge tree" });
   await expect(tree).toBeVisible();
   await expect(tree.getByRole("treeitem", { name: ARCHITECTURE_TITLE, exact: true })).toBeVisible();
@@ -98,9 +98,10 @@ test("reveals archived documents only with the archived toggle", async ({ page }
 
   // The toggle is a controlled checkbox driving a client navigation, so click
   // the label and wait for the URL + checked state instead of check().
+  await page.getByRole("complementary", { name: "Knowledge explorer" }).getByLabel("Document display options").click();
   await page.getByText("Show archived").click();
   await expect(page).toHaveURL(/includeArchived=true/);
-  await expect(page.getByLabel("Show archived")).toBeChecked();
+  await expect(page.getByRole("complementary", { name: "Knowledge explorer" }).getByLabel("Show archived")).toBeChecked();
 
   const retiredItem = tree.getByRole("treeitem", { name: RETIRED_TITLE, exact: true });
   await expect(retiredItem).toBeVisible();
