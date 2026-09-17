@@ -32,9 +32,11 @@ make dev         # 啟動 dev server
 
 ## 目前狀態
 
-更新日期：2026-09-13。
+更新日期：2026-09-17。
 
-`phase-0-foundation` 已完成 Phase 0 application、migration、integration fixtures 與最小 Web flow；`phase-1-knowledge-core-tree`（PR #6）已完成 Workspace-scoped Knowledge identity、Revision、Tree 與 read-only browser；`phase-2-source-import-sync`（PR #7）已完成整包 Markdown folder 經 Preview → Confirm → Apply 的首次匯入與 re-sync，含 staging snapshot、migration 006/007 與 unit/integration/E2E 測試。Phase 0/1 實際檢查結果記錄於 [`docs/superpowers/verification/`](docs/superpowers/verification/)（Phase 2 verification 文件尚未補上）。Phase 3–9 仍以 canonical design / implementation plan 為主，文件內列出的尚未執行命令與測試案例不代表已交付。
+已交付階段：`phase-0-foundation`（Phase 0 application、migration、fixtures 與最小 Web flow）、`phase-1-knowledge-core-tree`（PR #6，Workspace-scoped Knowledge identity、Revision、Tree 與 read-only browser）、`phase-2-source-import-sync`（PR #7，整包 Markdown folder 經 Preview → Confirm → Apply 的首次匯入與 re-sync）、Phase 2.5（PR #19，frontend product baseline）、Phase 3（PR #24，Workspace lifecycle/admin、production roles/capabilities、membership 與 enterprise identity governance）、Phase 4（PR #32，Workspace-aware keyword search 與 read API），以及 **Phase 5（PR #35，review 中）**：單篇 Markdown upload 與 Web create/edit 的 Hub-managed authoring，含 lazy default source、immutable Revision、stale-editor 409 conflict，以及 capability + HUB_MANAGED ownership 雙重把關。
+
+實際檢查結果記錄於 [`docs/superpowers/verification/`](docs/superpowers/verification/)：Phase 0/1/4/5 皆有 fresh verification record；Phase 2 以 PR #7 及後續 review batch 交付、Phase 3 以 [governance cutover](docs/operations/phase3-workspace-governance-cutover.md) 交付，兩者尚未補 verification 文件。Phase 6–9 仍以 canonical design / implementation plan 為主，文件內列出的尚未執行命令與測試案例不代表已交付。
 
 2026-09-10 architecture review 已把 Workspace access-boundary correction **直接整合進 Phase 0/1 canonical spec 與 plan**：`org_code` 保留為使用者公司組織屬性，但 **Workspace 才是 Knowledge container 與基本存取邊界**。不同 org 的使用者可以透過 WorkspaceMembership 共用同一 Workspace；同 org 也不代表自動取得 Workspace 內容。
 
@@ -51,6 +53,12 @@ make dev         # 啟動 dev server
 | [Phase 1 Implementation Plan](docs/superpowers/plans/2026-09-10-phase-1-knowledge-core-tree-implementation.md) | Phase 1 current implementation tasks 與 read-only browser |
 | [Phase 2 Knowledge Source Import & Sync Design](docs/superpowers/specs/2026-09-12-phase-2-knowledge-source-import-sync-design.md) | Folder import staging、immutable Preview、atomic Apply、diagnostics、limits、retention |
 | [Phase 2 Implementation Plan](docs/superpowers/plans/2026-09-12-phase-2-knowledge-source-import-sync.md) | Phase 2 current implementation tasks、fixtures、acceptance cases |
+| [Phase 3 Identity, Workspace Administration & Governance Design](docs/superpowers/specs/2026-09-14-phase-3-identity-workspace-governance-design.md) | Workspace lifecycle/admin、roles/capabilities、membership、Team/SSO mapping、audit |
+| [Phase 3 Implementation Plan](docs/superpowers/plans/2026-09-14-phase-3-identity-workspace-governance.md) | Phase 3 governance tasks、cutover 與 acceptance cases |
+| [Phase 4 Discovery & Read API Design](docs/superpowers/specs/2026-09-16-phase-4-discovery-read-api-design.md) | Workspace-aware keyword search、read API、非洩漏 candidate rules |
+| [Phase 4 Implementation Plan](docs/superpowers/plans/2026-09-16-phase-4-discovery-read-api.md) | Phase 4 search/read tasks、fixtures、acceptance cases |
+| [Phase 5 Human Authoring Design](docs/superpowers/specs/2026-09-16-phase-5-human-authoring-design.md) | 單篇 upload、Web create/edit、stale-editor conflict、capability + HUB_MANAGED ownership gate |
+| [Phase 5 Implementation Plan](docs/superpowers/plans/2026-09-16-phase-5-human-authoring.md) | Phase 5 authoring tasks、fixtures、acceptance cases |
 
 推薦執行／閱讀順序：
 
@@ -63,6 +71,12 @@ README
   → Phase 1 Implementation Plan
   → Phase 2 Design
   → Phase 2 Implementation Plan
+  → Phase 3 Design
+  → Phase 3 Implementation Plan
+  → Phase 4 Design
+  → Phase 4 Implementation Plan
+  → Phase 5 Design
+  → Phase 5 Implementation Plan
 ```
 
 ### Architecture history
@@ -198,7 +212,7 @@ Select Workspace
   → Create Source + Apply
 ```
 
-更新既有 Source 時由 Source 本身決定 Workspace；Sync 不得順便 transfer Source。Folder Source 仍是 source-managed/read-only；Phase 5 才提供完整 Hub-managed authoring。
+更新既有 Source 時由 Source 本身決定 Workspace；Sync 不得順便 transfer Source。Folder Source 仍是 source-managed/read-only；Hub-managed authoring（單篇 upload、Web create/edit）由 Phase 5 提供（PR #35）。
 
 ## Folder Import & Sync（Phase 2）
 

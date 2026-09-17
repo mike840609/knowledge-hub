@@ -6,6 +6,7 @@ import { useParams, usePathname, useRouter, useSearchParams } from "next/navigat
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import { isFolderSyncable } from "@/modules/knowledge/domain/source-policy";
 import { KnowledgeTree } from "./knowledge-tree";
+import { NewDocumentForm } from "./new-document-form";
 import { SourceSelector } from "./source-selector";
 import { TreeFilter } from "./tree-filter";
 
@@ -76,6 +77,7 @@ export function SourceSidebar({
     <aside aria-label="Knowledge explorer" className="flex h-full min-h-0 w-full shrink-0 flex-col lg:w-72 gap-4 border-r border-kh-border bg-kh-bg p-3">
       <div className="flex shrink-0 flex-col gap-2 border-b border-kh-border pb-3">
         <SourceSelector workspaceId={workspaceId} sources={visibleSources} selectedSourceId={source.id} />
+        <NewDocumentForm workspaceId={workspaceId} variant="sidebar" />
         {syncable ? (
           <Link
             className="w-fit rounded text-sm font-medium text-kh-text-muted underline-offset-4 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent"

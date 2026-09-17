@@ -5,7 +5,7 @@
 | 日期 | 2026-09-10 |
 | 文件定位 | 各階段目標、主要交付、完成後能力與範圍邊界 |
 | 決策依據 | 原 KM 規劃與 current Phase 0／1 canonical design；Workspace architecture history 僅保存決策演進 |
-| 目前狀態 | Phase 0–2 design／implementation 已完成（Phase 0/1 由 verification evidence 證實，Phase 2 verification 文件尚未補上）；Phase 3–9 仍依各自 canonical 文件接續 |
+| 目前狀態 | Phase 0–5 implementation 已完成（Phase 0/1/4/5 有 verification evidence；Phase 2 由 PR #7＋review batch、Phase 3 由 governance cutover 交付，兩者尚未補 verification 文件；Phase 5 於 PR #35 review 中）；Phase 6–9 仍依各自 canonical 文件接續 |
 | 專案入口 | [README](../../../README.md) |
 
 本 roadmap 只整理已確認的階段方向；future phase 的技術選型仍需該 Phase 自己的 design spec。Phase 0 的程式驗收以 verification record 為準，其餘 Phase 文件產出不等於程式實作或驗收完成。
@@ -241,7 +241,10 @@ M1 是 functional MVP，**不代表公司正式 multi-user governance 已完成*
 | Phase 1 | [current canonical](../specs/2026-09-10-phase-1-knowledge-core-tree-design.md) | [current canonical](../plans/2026-09-10-phase-1-knowledge-core-tree-implementation.md) | 已完成；結果見 [verification](../verification/2026-09-11-phase-1-knowledge-core-tree-verification.md) |
 | Workspace architecture change | [history record](../specs/2026-09-10-workspace-access-boundary-amendment.md) | [history record](../plans/2026-09-10-workspace-foundation-implementation-amendment.md) | 已整合到 Phase 0/1 canonical docs |
 | Phase 2 | [current canonical](../specs/2026-09-12-phase-2-knowledge-source-import-sync-design.md) | [current canonical](../plans/2026-09-12-phase-2-knowledge-source-import-sync.md) | 已完成（PR #7）；verification 文件尚未補上 |
-| Phase 3–9 | roadmap only | 尚未逐 Phase 完成 | 尚未完成 |
+| Phase 3 | [current canonical](../specs/2026-09-14-phase-3-identity-workspace-governance-design.md) | [current canonical](../plans/2026-09-14-phase-3-identity-workspace-governance.md) | 已完成（PR #24）；見 [governance cutover](../../operations/phase3-workspace-governance-cutover.md)，verification 文件尚未補上 |
+| Phase 4 | [current canonical](../specs/2026-09-16-phase-4-discovery-read-api-design.md) | [current canonical](../plans/2026-09-16-phase-4-discovery-read-api.md) | 已完成（PR #32）；結果見 [verification](../verification/2026-09-16-phase-4-discovery-read-api-verification.md) |
+| Phase 5 | [current canonical](../specs/2026-09-16-phase-5-human-authoring-design.md) | [current canonical](../plans/2026-09-16-phase-5-human-authoring.md) | 已完成（PR #35，review 中）；結果見 [verification](../verification/2026-09-16-phase-5-human-authoring-verification.md) |
+| Phase 6–9 | roadmap only | 尚未逐 Phase 完成 | 尚未完成 |
 
 各 Phase 詳細 design 存 `docs/superpowers/specs/`，implementation plan 存 `docs/superpowers/plans/`，實際測試與驗收證據存 `docs/superpowers/verification/`。
 

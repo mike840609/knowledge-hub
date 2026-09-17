@@ -8,7 +8,17 @@ export async function governanceRequest<T>(url: string, method = "GET", body?: u
   const response = await fetch(url, { method, cache: "no-store", headers: body === undefined ? undefined : { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   const data = await response.json().catch(() => null);
   if (!response.ok) {
-    if ([403, 404, 409].includes(response.status)) window.dispatchEvent(new Event("kh:workspace-access-check"));
+    // 403/404 and most 409s can mean the caller's access or the workspace lifecycle
+    // changed, so re-check access. A 409 REVISION_CONFLICT is purely a content
+    // versioning clash from a concurrent edit — not an authorization change — so
+    // re-checking there would needlessly flip `confirmed` off and could disable
+    // Save if the refresh transiently fails.
+    const code = data?.error?.code;
+    const mayIndicateAccessChange =
+      response.status === 403 ||
+      response.status === 404 ||
+      (response.status === 409 && code !== "REVISION_CONFLICT");
+    if (mayIndicateAccessChange) window.dispatchEvent(new Event("kh:workspace-access-check"));
     throw new GovernanceRequestError(data?.error ?? { code: "REQUEST_FAILED", message: "Unable to complete the request. Please try again." });
   }
   if (method !== "GET") window.dispatchEvent(new Event("kh:workspace-mutation"));
