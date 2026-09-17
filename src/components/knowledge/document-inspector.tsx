@@ -198,6 +198,8 @@ export function DocumentDetailClient({
   revisionBanner,
   inspectorData,
   children,
+  editHref,
+  readOnly,
 }: {
   breadcrumb: DocumentBreadcrumbSegment[];
   title: string;
@@ -206,6 +208,8 @@ export function DocumentDetailClient({
   revisionBanner: { viewingNo: number; backHref: string } | null;
   inspectorData: DocumentInspectorData;
   children: ReactNode;
+  editHref: string | null;
+  readOnly: boolean;
 }) {
   const inspector = useContext(InspectorContext);
   const setDocumentTopbar = useContext(DocumentTopbarContext)?.setDocument;
@@ -248,6 +252,8 @@ export function DocumentDetailClient({
           updatedAt={updatedAt}
           revisionBanner={revisionBanner}
           onDetailsClick={openInspector}
+          editHref={editHref}
+          readOnly={readOnly}
         />
         </div>
         {children}

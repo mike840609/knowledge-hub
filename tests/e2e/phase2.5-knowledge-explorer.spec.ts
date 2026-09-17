@@ -26,7 +26,9 @@ test("renders the Document inside the Explorer with a compact header", async ({ 
   await page.goto(`/w/${WORKSPACE}/knowledge/${SOURCE}`);
   await expect(page.getByRole("heading", { name: "Architecture" })).toBeVisible();
   // Scoped to main > header: a hidden RSC flight segment duplicates this text elsewhere.
-  await expect(page.locator("main header").first().getByText("Read only")).toBeVisible();
+  // The seed identity is an OWNER on a HUB_MANAGED, ACTIVE document, so the header shows
+  // Edit (not the "Read only" badge, which is reserved for viewers who cannot edit).
+  await expect(page.locator("main header").first().getByRole("link", { name: "Edit" })).toBeVisible();
   await expect(page.locator("main header").first().getByText(/Updated/)).toBeVisible();
   await expect(page.locator("pre").filter({
     hasText: "The Query Master architecture notes",

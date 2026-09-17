@@ -22,6 +22,21 @@ describe("governance client boundary", () => {
     expect(dispatchEvent.mock.calls.map(([event]) => event.type)).toEqual(["kh:workspace-mutation"]);
   });
 
+  it("re-checks access on an authorization/lifecycle 409 but not on a revision conflict", async () => {
+    const dispatchEvent = vi.fn();
+    vi.stubGlobal("window", { dispatchEvent });
+
+    // A concurrent-edit conflict is not an access change: it must not re-check access.
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { code: "REVISION_CONFLICT", message: "stale" } }), { status: 409 })));
+    await expect(governanceRequest("/api/documents/x", "PATCH", { title: "t" })).rejects.toBeInstanceOf(GovernanceRequestError);
+    expect(dispatchEvent).not.toHaveBeenCalled();
+
+    // A lifecycle 409 still re-checks, since the caller's access may genuinely have changed.
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { code: "WORKSPACE_ARCHIVED", message: "archived" } }), { status: 409 })));
+    await expect(governanceRequest("/api/workspaces/x", "PATCH", { name: "n" })).rejects.toBeInstanceOf(GovernanceRequestError);
+    expect(dispatchEvent.mock.calls.map(([event]) => event.type)).toEqual(["kh:workspace-access-check"]);
+  });
+
   it("does not treat network errors as revoked authorization", async () => {
     const dispatchEvent = vi.fn(); vi.stubGlobal("window", { dispatchEvent }); vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("offline")));
     await expect(governanceRequest("/api/workspaces/team", "PATCH", { name: "Team" })).rejects.toThrow("offline");
