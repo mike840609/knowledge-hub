@@ -143,3 +143,39 @@ describe("Phase 2 Markdown adapter frontmatter root", () => {
     );
   });
 });
+
+
+describe("Markdown stable source identity", () => {
+  const parse = (text: string) => parseGenericMarkdownText({ sourcePath: "auth.md", text, sourceFileHash: hash(text) });
+
+  it("extracts and trims a case-sensitive opaque identity without changing content hashes", () => {
+    const withoutId = parse("---\ntitle: Auth\nowner: platform\n---\nbody\n");
+    const withId = parse('---\nknowledge_id: "  Auth-001  "\ntitle: Auth\nowner: platform\n---\nbody\n');
+    expect(withoutId.externalId).toBeNull();
+    expect(withId.externalId).toBe("Auth-001");
+    expect(withId.metadata).toEqual({ title: "Auth", owner: "platform" });
+    expect(withId.resolvedTitle).toBe(withoutId.resolvedTitle);
+    expect(withId.revisionContentHash).toBe(withoutId.revisionContentHash);
+    expect(withId.reconciliationFingerprint).toBe(withoutId.reconciliationFingerprint);
+    expect(withId.sourceFileHash).not.toBe(withoutId.sourceFileHash);
+  });
+
+  it.each(["null", '""', '"   "', "123", "true", "[a, b]", "{value: a}", JSON.stringify("a".repeat(513))])(
+    "rejects invalid knowledge_id %s", (value) => {
+      expect(() => parse(`---\nknowledge_id: ${value}\n---\nbody\n`)).toThrowError(
+        expect.objectContaining({ code: "INVALID_KNOWLEDGE_ID" }),
+      );
+    },
+  );
+
+  it("measures the 512-character storage limit in Unicode characters", () => {
+    expect(parse(`---\nknowledge_id: "${"😀".repeat(512)}"\n---\nbody\n`).externalId).toBe("😀".repeat(512));
+    expect(() => parse(`---\nknowledge_id: "${"😀".repeat(513)}"\n---\nbody\n`)).toThrowError(
+      expect.objectContaining({ code: "INVALID_KNOWLEDGE_ID" }),
+    );
+  });
+
+  it("reserves only the top-level field", () => {
+    expect(parse("---\nowner:\n  knowledge_id: nested\n---\nbody\n").metadata).toEqual({ owner: { knowledge_id: "nested" } });
+  });
+});

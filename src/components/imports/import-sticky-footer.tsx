@@ -23,8 +23,8 @@ function readEnvelope(body: unknown): { code: string; message: string } | null {
 
 /**
  * Design §20.7: branch on the machine-readable `code`, never on the status.
- * Four distinct import codes map to 409 and only `SOURCE_VERSION_CONFLICT` /
- * `IMPORT_SNAPSHOT_STALE` invalidate the snapshot; `IMPORT_APPLY_RETRYABLE`
+ * Source/version/identity conflicts and unsupported plans require a fresh
+ * preview; `IMPORT_APPLY_RETRYABLE`
  * (§17.3) rolled back cleanly, so Apply must stay enabled for a retry.
  * A 409 with no readable envelope keeps the old conservative latch.
  */
@@ -35,7 +35,7 @@ export function classifyApplyError(status: number, body: unknown): ApplyFailure 
       ? { code: "IMPORT_APPLY_FAILED", message: STALE_GUIDANCE, latchStale: true }
       : { code: "IMPORT_APPLY_FAILED", message: GENERIC_GUIDANCE, latchStale: false };
   }
-  if (envelope.code === "SOURCE_VERSION_CONFLICT" || envelope.code === "IMPORT_SNAPSHOT_STALE") {
+  if (["SOURCE_VERSION_CONFLICT", "IMPORT_SNAPSHOT_STALE", "IDENTITY_STATE_CHANGED", "IMPORT_PLAN_VERSION_UNSUPPORTED"].includes(envelope.code)) {
     return { code: envelope.code, message: STALE_GUIDANCE, latchStale: true };
   }
   if (envelope.code === "IMPORT_APPLY_RETRYABLE") {

@@ -16,7 +16,7 @@ const DOC_COUNT = 50;
 
 function buildPlan(sourceId: string, workspaceId: string): FolderImportPlan {
   return {
-    planVersion: "phase2:v1",
+    planVersion: "phase2:v2",
     sourceBinding: { workspaceId, sourceId, basedOnVersion: 1 },
     folders: { create: [], restore: [], archive: [] },
     documents: {
@@ -32,6 +32,7 @@ function buildPlan(sourceId: string, workspaceId: string): FolderImportPlan {
       revise: [],
       archive: [],
       updateLocator: [],
+      adoptExternalId: [],
     },
     assets: { upsert: [], remove: [] },
     ordering: Array.from({ length: DOC_COUNT }, (_, i) => ({

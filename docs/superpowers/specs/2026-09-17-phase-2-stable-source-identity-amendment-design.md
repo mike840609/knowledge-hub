@@ -6,7 +6,7 @@
 | Type | Phase 2 design amendment |
 | Parent design | `docs/superpowers/specs/2026-09-12-phase-2-knowledge-source-import-sync-design.md` |
 | Scope | Generic Markdown Folder stable source identity |
-| Status | Design approved in discussion; implementation plan not yet written |
+| Status | Implemented in working tree; see implementation plan and verification report |
 
 ## 1. Goal
 
@@ -50,7 +50,7 @@ Accepted values:
 
 - YAML string only;
 - leading and trailing whitespace are trimmed before use;
-- the trimmed result must be non-empty;
+- the trimmed result must contain 1–512 Unicode characters, matching the persisted VARCHAR(512) contract;
 - value is otherwise opaque;
 - comparison is case-sensitive;
 - uniqueness is scoped to one `KnowledgeSource`.

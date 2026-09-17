@@ -12,6 +12,8 @@ import { fingerprintReconciliationContent } from "@/modules/sources/domain/recon
 import type { ParsedMarkdownEntry } from "@/modules/sources/domain/import-snapshot";
 import { resolveImportTitle } from "@/modules/sources/domain/import-title";
 
+import { splitMarkdownSourceIdentity } from "@/modules/sources/domain/markdown-source-identity";
+
 export function decodeUtf8Markdown(bytes: Uint8Array): string {
   try {
     return new TextDecoder("utf-8", { fatal: true }).decode(bytes).replace(/^\ufeff/u, "");
@@ -88,7 +90,9 @@ export function parseGenericMarkdownText(input: {
   text: string;
   sourceFileHash: string;
 }): ParsedMarkdownEntry {
-  const { body, metadata } = splitFrontmatter(input.text);
+  const parsedFrontmatter = splitFrontmatter(input.text);
+  const { externalId, metadata } = splitMarkdownSourceIdentity(parsedFrontmatter.metadata);
+  const body = parsedFrontmatter.body;
   const title = resolveImportTitle({
     sourcePath: input.sourcePath,
     frontmatterTitle: metadata.title,
@@ -98,7 +102,7 @@ export function parseGenericMarkdownText(input: {
 
   return {
     sourcePath: input.sourcePath,
-    externalId: null,
+    externalId,
     resolvedTitle: revision.normalized.title,
     titleSource: title.source,
     markdown: revision.normalized.markdown,

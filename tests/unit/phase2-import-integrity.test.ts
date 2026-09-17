@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { hashReadyImportSnapshot } from "@/modules/sources/domain/import-integrity";
+import { hashImportPlan, hashReadyImportSnapshot } from "@/modules/sources/domain/import-integrity";
+import { reconcileFolderImport } from "@/modules/sources/domain/import-reconciler";
 import type { ImportSnapshot, ImportSnapshotEntry } from "@/modules/sources/domain/import-snapshot";
 
 type HashableSnapshot = Parameters<typeof hashReadyImportSnapshot>[0];
@@ -24,6 +25,7 @@ function documentEntry(sourcePath: string, input: Partial<ImportSnapshotEntry> =
     clientRelativePath: sourcePath,
     sourcePath,
     sourcePathHash: `path:${sourcePath}`,
+    externalId: null,
     entryType: "DOCUMENT",
     uploadStatus: "RECEIVED",
     declaredSize: 12,
@@ -79,6 +81,11 @@ function hash(entries: readonly ImportSnapshotEntry[], header: HashableSnapshot 
 }
 
 describe("Phase 2 READY snapshot hash", () => {
+  it("includes persisted source identity independently of revision content", () => {
+    const entry = documentEntry("docs/a.md");
+    expect(hash([{ ...entry, externalId: "K1" }])).not.toBe(hash([entry]));
+    expect(hash([{ ...entry, externalId: "K1" }])).not.toBe(hash([{ ...entry, externalId: "K2" }]));
+  });
   it("ignores browser upload order and client upload bookkeeping", () => {
     const asUploaded = [
       documentEntry("docs/b.md", { uploadKey: "0-b.md" }),
@@ -162,5 +169,22 @@ describe("Phase 2 READY snapshot hash", () => {
     expect(hash([documentEntry("docs/a.md", { revisionContentHash: "revision:other" })])).not.toBe(baseline);
     expect(hash([documentEntry("docs/a.md", { reconciliationFingerprint: "fingerprint:other" })])).not.toBe(baseline);
     expect(hash([documentEntry("docs/a.md", { sourceFileHash: "file:other" })])).not.toBe(baseline);
+  });
+});
+
+
+describe("Phase 2 plan identity integrity", () => {
+  it("hashes adoption actions and preview identity details", () => {
+    const plan = reconcileFolderImport({ sourceBinding: { workspaceId: "workspace", sourceId: "source", basedOnVersion: 1 }, documents: [], assets: [] }, { documents: [], folders: [], assets: [] });
+    const originalHash = hashImportPlan(plan);
+    plan.documents.adoptExternalId.push({ entryId: "entry", externalId: "K1" });
+    expect(hashImportPlan(plan)).not.toBe(originalHash);
+    const adoptionHash = hashImportPlan(plan);
+    plan.documents.adoptExternalId[0].externalId = "K2";
+    expect(hashImportPlan(plan)).not.toBe(adoptionHash);
+    plan.preview.push({ kind: "DOCUMENT", sourcePath: "a.md", previousPath: null, labels: ["UNCHANGED"], diagnostics: [], identity: { adoptedExternalId: "K2" } });
+    const detailHash = hashImportPlan(plan);
+    plan.preview[0].identity!.adoptedExternalId = "K3";
+    expect(hashImportPlan(plan)).not.toBe(detailHash);
   });
 });

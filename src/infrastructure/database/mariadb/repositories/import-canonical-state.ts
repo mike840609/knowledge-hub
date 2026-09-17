@@ -1,3 +1,4 @@
+import { stripLegacyMarkdownSourceIdentity } from "@/modules/sources/domain/markdown-source-identity";
 import type { KnowledgeMetadata } from "@/modules/knowledge/domain/content";
 import { fingerprintReconciliationContent } from "@/modules/sources/domain/reconciliation-fingerprint";
 import { importError } from "@/modules/sources/domain/import-errors";
@@ -72,7 +73,7 @@ export class MariaDbImportCanonicalStateRepository implements ImportCanonicalSta
           metadata,
           contentHash: String(row.content_hash),
         },
-        reconciliationFingerprint: fingerprintReconciliationContent({ markdown, metadata }),
+        reconciliationFingerprint: fingerprintReconciliationContent({ markdown, metadata: stripLegacyMarkdownSourceIdentity(metadata) }),
       });
     }
 

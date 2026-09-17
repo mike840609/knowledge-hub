@@ -16,8 +16,8 @@ export type RevisionPayload = {
  * §19 limits (256 MiB total). The executor loads the body by `uploadKey`
  * inside the Apply transaction and verifies `contentHash` before use.
  *
- * `RevisionPayload` remains accepted at Apply time so in-flight v1 plans
- * (finalized before this change, READY TTL 30m) still apply.
+ * `RevisionPayload` remains available for in-memory callers. Persisted v1
+ * plans require a fresh Preview before Apply.
  */
 export type RevisionReference = {
   uploadKey: string;
@@ -36,11 +36,21 @@ export type ImportPreviewLabel =
   | "UNCHANGED"
   | "REMOVED";
 
+export type ImportPreviewIdentityDetail = {
+  adoptedExternalId: string;
+};
+
+export type AdoptExternalIdAction = {
+  entryId: string;
+  externalId: string;
+};
+
 export type ImportPreviewChange = {
   kind: "DOCUMENT" | "FOLDER" | "ASSET";
   sourcePath: string;
   previousPath: string | null;
   labels: ImportPreviewLabel[];
+  identity?: ImportPreviewIdentityDetail;
   diagnostics: ImportDiagnostic[];
 };
 
@@ -125,7 +135,7 @@ export type CanonicalImportState = {
 };
 
 export type FolderImportPlan = {
-  planVersion: "phase2:v1";
+  planVersion: "phase2:v2";
   sourceBinding: ReadyImportContent["sourceBinding"];
   folders: {
     create: { sourcePath: string; parentPath: string | null; name: string; desiredPosition: number }[];
@@ -156,6 +166,7 @@ export type FolderImportPlan = {
       content: RevisionReference | RevisionPayload;
     }[];
     archive: { entryId: string; documentId: string; treeNodeId: string; sourcePath: string }[];
+    adoptExternalId: AdoptExternalIdAction[];
     updateLocator: { entryId: string; sourcePath: string; contentHash: string }[];
   };
   assets: {

@@ -217,6 +217,7 @@ export class FinalizeFolderImportService {
             entry.diagnostics = diagnostics;
             row = {
               ...row,
+              externalId: parsed.externalId,
               resolvedTitle: titleTooLong ? null : parsed.resolvedTitle,
               titleSource: titleTooLong ? null : parsed.titleSource,
               markdown: parsed.markdown,
@@ -229,7 +230,7 @@ export class FinalizeFolderImportService {
               documents.push({
                 sourcePath: parsed.sourcePath,
                 uploadKey: entry.staged.uploadKey,
-                externalId: null,
+                externalId: parsed.externalId,
                 title: parsed.resolvedTitle,
                 markdown: parsed.markdown,
                 metadata: parsed.metadata,

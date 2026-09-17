@@ -10,6 +10,18 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-17-phase-2-stable-source-identity-amendment-design.md`
 
+## Implementation status — 2026-09-17
+
+Tasks 1–6 are implemented in the working tree. Task 7 verification is recorded in
+[`2026-09-17-phase-2-stable-source-identity-verification.md`](../verification/2026-09-17-phase-2-stable-source-identity-verification.md).
+The step checklists below preserve the original proposed procedure; their commit steps have not been executed.
+
+- Staging uses migration 010 and persisted v2 versions/external identity.
+- Markdown parsing, legacy comparison, reconciliation, explicit adoption, transactional Apply, and Preview detail are implemented.
+- Lifecycle and rollback acceptance tests are consolidated in `phase2-import-apply.test.ts` instead of adding overlapping cases to finalize-edge tests.
+- Incoming identity conflicts use per-document blocking diagnostics. Canonical duplicate identities remain a global integrity blocker.
+- Main's existing PR #36 upload hydration test fix is included because this documentation branch predates it.
+
 ## Global Constraints
 
 - Node engine remains `>=20.9.0 <25`; use npm and keep `package-lock.json` unchanged unless dependencies actually change. This amendment adds no npm dependency.

@@ -53,6 +53,11 @@ export function ImportChangeGroup({
                   </span>
                   <span className="text-xs text-kh-text-muted">{labelText(change)}</span>
                 </div>
+                {change.identity ? (
+                  <p className="mt-1 break-all text-xs text-kh-text-muted">
+                    Identity adopted: <span className="font-medium">{change.identity.adoptedExternalId}</span>
+                  </p>
+                ) : null}
                 {change.diagnostics.length > 0 ? (
                   <ul className="mt-1 list-disc pl-5 text-xs text-kh-text-muted">
                     {change.diagnostics.map((diagnostic, index) => (

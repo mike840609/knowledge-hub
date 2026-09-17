@@ -4,6 +4,7 @@ import {
   NotFoundError,
   SourceEntryConflictError,
 } from "@/modules/knowledge/domain/errors";
+import { importError } from "../domain/import-errors";
 import type { SourceEntry, SourceEntryType } from "../domain/source-entry";
 import type { SourceRepositories } from "../ports/unit-of-work";
 
@@ -181,4 +182,31 @@ export async function restoreSourceEntry(
   };
   await repositories.entries.update(restored);
   return restored;
+}
+
+/** Adopt identity only within the caller's existing, Source-locked transaction. */
+export async function adoptSourceExternalId(
+  repositories: SourceRepositories,
+  caller: CallerContext,
+  sourceId: string,
+  entryId: string,
+  externalId: string,
+): Promise<SourceEntry> {
+  requireExternalId(externalId);
+  const entry = await repositories.entries.findById(entryId);
+  if (!entry || entry.sourceId !== sourceId || entry.entryType !== "DOCUMENT" || entry.externalId !== null) {
+    throw importError("IDENTITY_STATE_CHANGED", "Source identity changed after Preview; create a fresh Preview.");
+  }
+  const conflicting = await repositories.entries.findByExternalId(sourceId, externalId);
+  if (conflicting && conflicting.id !== entry.id) {
+    throw importError("IDENTITY_STATE_CHANGED", "Source identity is now bound to another document; create a fresh Preview.");
+  }
+  const updated: SourceEntry = {
+    ...entry,
+    externalId,
+    updatedBy: caller.identity.id,
+    lastSeenAt: new Date(),
+  };
+  await repositories.entries.update(updated);
+  return updated;
 }

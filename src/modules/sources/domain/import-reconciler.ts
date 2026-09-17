@@ -1,4 +1,5 @@
 import { canonicalizeJsonObject, isSameRevisionContent } from "@/modules/knowledge/domain/content";
+import { stripLegacyMarkdownSourceIdentity } from "./markdown-source-identity";
 import { importError } from "./import-errors";
 import { compareImportText } from "./import-path";
 import type { ImportDiagnostic } from "./import-diagnostic";
@@ -60,10 +61,10 @@ function emptySummary(): ImportDiffSummary {
 
 function emptyPlan(sourceBinding: ReadyImportContent["sourceBinding"]): FolderImportPlan {
   return {
-    planVersion: "phase2:v1",
+    planVersion: "phase2:v2",
     sourceBinding,
     folders: { create: [], restore: [], archive: [] },
-    documents: { create: [], restore: [], move: [], revise: [], archive: [], updateLocator: [] },
+    documents: { create: [], restore: [], move: [], revise: [], archive: [], adoptExternalId: [], updateLocator: [] },
     assets: { upsert: [], remove: [] },
     ordering: [],
     preview: [],
@@ -127,6 +128,7 @@ function buildDocumentMatches(
 ): {
   matches: Map<string, CanonicalDocumentState>;
   ambiguous: Map<string, string[]>;
+  conflicts: Map<string, ImportDiagnostic>;
   unmatchedCurrentIds: Set<string>;
 } {
   const currentSorted = [...currentDocuments].sort((left, right) => compareImportText(left.sourcePath, right.sourcePath));
@@ -137,6 +139,10 @@ function buildDocumentMatches(
   const unmatchedCurrentIds = new Set(currentSorted.map((document) => document.entryId));
   const matches = new Map<string, CanonicalDocumentState>();
   const ambiguous = new Map<string, string[]>();
+  const conflicts = new Map<string, ImportDiagnostic>();
+  const conflict = (incoming: ReadyImportDocument, message: string) => {
+    conflicts.set(incoming.sourcePath, { code: "IDENTITY_CONFLICT", severity: "BLOCKING", sourcePath: incoming.sourcePath, message });
+  };
 
   for (const current of currentSorted) {
     if (current.externalId !== null) {
@@ -151,22 +157,27 @@ function buildDocumentMatches(
     byFingerprint.set(current.reconciliationFingerprint, candidates);
   }
 
-  const incomingExternalIds = new Set<string>();
+  const incomingByExternalId = new Map<string, ReadyImportDocument[]>();
   for (const incoming of incomingSorted) {
     if (incoming.externalId === null) continue;
-    if (incomingExternalIds.has(incoming.externalId)) {
-      throw importError("IDENTITY_CONFLICT", "Import snapshot contains duplicate external identities.");
+    const claimants = incomingByExternalId.get(incoming.externalId) ?? [];
+    claimants.push(incoming);
+    incomingByExternalId.set(incoming.externalId, claimants);
+  }
+  for (const claimants of incomingByExternalId.values()) {
+    if (claimants.length > 1) {
+      for (const incoming of claimants) conflict(incoming, "Import snapshot contains duplicate external identities.");
     }
-    incomingExternalIds.add(incoming.externalId);
   }
 
   // Pass 1: stable external identity. Check path contradiction before matching.
   for (const incoming of incomingSorted) {
-    if (incoming.externalId === null) continue;
+    if (incoming.externalId === null || conflicts.has(incoming.sourcePath)) continue;
     const external = byExternalId.get(incoming.externalId);
     const path = byPath.get(incoming.sourcePath);
     if (external && path && external.entryId !== path.entryId) {
-      throw importError("IDENTITY_CONFLICT", "External identity and source path resolve to different documents.");
+      conflict(incoming, "External identity and source path resolve to different documents.");
+      continue;
     }
     if (external && unmatchedCurrentIds.has(external.entryId)) {
       matches.set(incoming.sourcePath, external);
@@ -176,8 +187,12 @@ function buildDocumentMatches(
 
   // Pass 2: exact path for every still-unmatched incoming document.
   for (const incoming of incomingSorted) {
-    if (matches.has(incoming.sourcePath)) continue;
+    if (matches.has(incoming.sourcePath) || conflicts.has(incoming.sourcePath)) continue;
     const exact = byPath.get(incoming.sourcePath);
+    if (exact && !unmatchedCurrentIds.has(exact.entryId)) {
+      conflict(incoming, "Source path is already claimed by another incoming document's external identity.");
+      continue;
+    }
     if (exact && unmatchedCurrentIds.has(exact.entryId)) {
       matches.set(incoming.sourcePath, exact);
       unmatchedCurrentIds.delete(exact.entryId);
@@ -189,21 +204,20 @@ function buildDocumentMatches(
   // Identity may be reused only when exactly one unmatched canonical document and
   // exactly one unmatched incoming document share a fingerprint. Two canonical
   // candidates make the predecessor a guess; two incoming claimants make the
-  // successor a guess — both are the same coin flip over stable knowledge
-  // identity, so both stay ADDED, the canonical entries follow the normal
-  // snapshot-absence path (ARCHIVED), and every claimant carries the warning.
+  // successor a guess. Unidentified claimants retain warning + ADDED behavior;
+  // identified claimants instead receive a blocking adoption ambiguity diagnostic.
   //
   // Only documents still unmatched after pass 1 (external id) and pass 2 (exact
   // path) count as claimants; a stronger claim never contributes ambiguity.
   const claimantsByFingerprint = new Map<string, number>();
   for (const incoming of incomingSorted) {
-    if (matches.has(incoming.sourcePath)) continue;
+    if (matches.has(incoming.sourcePath) || conflicts.has(incoming.sourcePath)) continue;
     const fingerprint = incoming.reconciliationFingerprint;
     claimantsByFingerprint.set(fingerprint, (claimantsByFingerprint.get(fingerprint) ?? 0) + 1);
   }
 
   for (const incoming of incomingSorted) {
-    if (matches.has(incoming.sourcePath)) continue;
+    if (matches.has(incoming.sourcePath) || conflicts.has(incoming.sourcePath)) continue;
     const candidates = (byFingerprint.get(incoming.reconciliationFingerprint) ?? [])
       .filter((candidate) => unmatchedCurrentIds.has(candidate.entryId))
       .sort((left, right) => compareImportText(left.sourcePath, right.sourcePath));
@@ -217,7 +231,13 @@ function buildDocumentMatches(
     ambiguous.set(incoming.sourcePath, candidates.map((candidate) => candidate.sourcePath));
   }
 
-  return { matches, ambiguous, unmatchedCurrentIds };
+  for (const incoming of incomingSorted) {
+    const existing = matches.get(incoming.sourcePath);
+    if (existing && existing.externalId !== null && existing.externalId !== incoming.externalId) {
+      conflict(incoming, "An established source identity cannot be removed or replaced.");
+    }
+  }
+  return { matches, ambiguous, conflicts, unmatchedCurrentIds };
 }
 
 function reconcileDocuments(
@@ -226,20 +246,29 @@ function reconcileDocuments(
   currentDocuments: CanonicalDocumentState[],
   blockedPaths: ReadonlySet<string> = new Set(),
 ): Map<string, CanonicalDocumentState> {
-  const { matches, ambiguous, unmatchedCurrentIds } = buildDocumentMatches(incomingDocuments, currentDocuments);
+  const { matches, ambiguous, conflicts, unmatchedCurrentIds } = buildDocumentMatches(incomingDocuments, currentDocuments);
 
   for (const incoming of [...incomingDocuments].sort((left, right) => compareImportText(left.sourcePath, right.sourcePath))) {
     const existing = matches.get(incoming.sourcePath);
     const ambiguity = ambiguous.get(incoming.sourcePath);
     const diagnostics = [...incoming.diagnostics];
+    const identityConflict = conflicts.get(incoming.sourcePath);
+    if (identityConflict) diagnostics.push(identityConflict);
     if (ambiguity) {
       diagnostics.push({
-        code: "AMBIGUOUS_IDENTITY",
-        severity: "WARNING",
+        code: incoming.externalId === null ? "AMBIGUOUS_IDENTITY" : "IDENTITY_ADOPTION_AMBIGUOUS",
+        severity: incoming.externalId === null ? "WARNING" : "BLOCKING",
         sourcePath: incoming.sourcePath,
-        message: "Could not safely determine which existing document this file replaces; a new identity will be created.",
+        message: incoming.externalId === null
+          ? "Could not safely determine which existing document this file replaces; a new identity will be created."
+          : "Could not safely determine which existing document should adopt this source identity.",
         details: { candidates: ambiguity },
       });
+    }
+
+    if (identityConflict || (ambiguity && incoming.externalId !== null)) {
+      plan.preview.push({ kind: "DOCUMENT", sourcePath: incoming.sourcePath, previousPath: existing?.sourcePath ?? null, labels: [], diagnostics });
+      continue;
     }
 
     if (!existing) {
@@ -266,7 +295,10 @@ function reconcileDocuments(
     const pathChanged = existing.sourcePath !== incoming.sourcePath;
     const parentChanged = oldParent !== newParent;
     const filenameChanged = basename(existing.sourcePath) !== basename(incoming.sourcePath);
-    const contentChanged = !isSameRevisionContent(existing.currentRevision, {
+    const contentChanged = !isSameRevisionContent({
+      ...existing.currentRevision,
+      metadata: stripLegacyMarkdownSourceIdentity(existing.currentRevision.metadata),
+    }, {
       title: incoming.title,
       markdown: incoming.markdown,
       metadata: incoming.metadata,
@@ -308,12 +340,19 @@ function reconcileDocuments(
       });
     }
 
+    const identity = existing.externalId === null && incoming.externalId !== null
+      ? { adoptedExternalId: incoming.externalId }
+      : undefined;
+    if (identity) {
+      plan.documents.adoptExternalId.push({ entryId: existing.entryId, externalId: identity.adoptedExternalId });
+    }
     if (labels.length === 0) labels.push("UNCHANGED");
     plan.preview.push({
       kind: "DOCUMENT",
       sourcePath: incoming.sourcePath,
       previousPath: pathChanged ? existing.sourcePath : null,
       labels,
+      ...(identity ? { identity } : {}),
       diagnostics,
     });
   }

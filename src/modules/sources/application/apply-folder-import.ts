@@ -71,6 +71,9 @@ export class ApplyFolderImportService {
         }
         if (snapshot.state === "STALE") throw importError("IMPORT_SNAPSHOT_STALE", "Import snapshot is stale and cannot be applied.");
         if (snapshot.state !== "READY" || !snapshot.plan || !snapshot.summary) throw importError("IMPORT_SNAPSHOT_NOT_READY", "Only READY snapshots can be applied.");
+        if (snapshot.adapterVersion !== "phase2:v2" || snapshot.planVersion !== "phase2:v2" || snapshot.plan.planVersion !== "phase2:v2") {
+          throw importError("IMPORT_PLAN_VERSION_UNSUPPORTED", "Unsupported import plan version; create a fresh Preview.");
+        }
         const timestamp = this.now();
         if (snapshot.expiresAt.getTime() <= timestamp.getTime()) throw importError("IMPORT_SNAPSHOT_EXPIRED", "Import snapshot has expired.");
         if (snapshot.hasBlockers || snapshot.summary.blockers > 0) throw importError("IMPORT_SNAPSHOT_BLOCKED", "Import snapshot contains blocking diagnostics.");
