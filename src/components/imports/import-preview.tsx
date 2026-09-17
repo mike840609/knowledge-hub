@@ -39,13 +39,22 @@ function groupOf(change: ImportPreviewChange): ChangeGroupKey {
   return "unchanged";
 }
 
-function matchesFilter(change: ImportPreviewChange, filter: ChangeFilter): boolean {
+/**
+ * Label-based filter predicate. Unlike groupOf (display grouping with
+ * precedence), every filter tests its own label(s) independently so a
+ * multi-label change (e.g. ["RENAMED", "UPDATED"]) appears under each
+ * matching filter — consistent with the summary counters.
+ */
+export function matchesFilter(change: ImportPreviewChange, filter: ChangeFilter): boolean {
   if (filter === "all") return true;
   if (filter === "warnings") return change.diagnostics.length > 0;
-  if (filter === "moved" || filter === "renamed") {
-    return new Set(change.labels).has(filter === "moved" ? "MOVED" : "RENAMED");
-  }
-  return groupOf(change) === filter;
+  const labels = new Set(change.labels);
+  if (filter === "moved") return labels.has("MOVED");
+  if (filter === "renamed") return labels.has("RENAMED");
+  if (filter === "added") return labels.has("ADDED");
+  if (filter === "updated") return labels.has("UPDATED");
+  if (filter === "archived") return labels.has("ARCHIVED") || labels.has("RESTORED") || labels.has("REMOVED");
+  return false;
 }
 
 function countFor(changes: readonly ImportPreviewChange[], filter: ChangeFilter): number {

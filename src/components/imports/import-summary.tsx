@@ -16,7 +16,7 @@ export function ImportSummary({ preview }: { preview: ImportPreview }): React.JS
         </div>
         <div className="flex gap-2">
           <dt className="w-24 shrink-0 text-kh-text-muted">Source</dt>
-          <dd className="text-kh-text">{preview.sourceName ?? preview.proposedSourceName ?? "New source"}</dd>
+          <dd className="text-kh-text">{preview.sourceName ?? preview.sourceId ?? preview.proposedSourceName ?? "New source"}</dd>
         </div>
         <div className="flex gap-2">
           <dt className="w-24 shrink-0 text-kh-text-muted">Based on</dt>
