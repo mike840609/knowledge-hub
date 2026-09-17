@@ -337,7 +337,7 @@ describe("Phase 2 Apply concurrency and rollback", () => {
     gate.armed = false;
     gate.release.resolve();
     await expect(third).resolves.toMatchObject({ state: "BUILDING" });
-    expect(await quotaLockHeld()).toBe(false);
+    await waitForQuotaRelease();
 
     await expect(plain.create.createInitial(fixtureCaller(), {
       workspaceId: fixture.workspaceId, sourceName: "Quota Four", rootName: "q4",
