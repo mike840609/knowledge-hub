@@ -111,9 +111,13 @@ provisioning 使用 `"content-write"`（要求 `document.write`），不是 `"so
 
 `title` 與 `filename` 互斥：兩者皆給或皆不給都回 `INVALID_REQUEST`。
 
+帶 `filename` 上傳時，儲存行為與 folder import 完全一致（`finalize-folder-import.ts:181,192-193`）：`parseGenericMarkdownText` 解出的 body（frontmatter 已從內容中移除）存為 `markdown`，解出的 frontmatter 存為 `metadata`——不是把原始檔案內容原封不動存下來。同一份 `.md` 檔不論走 import 還是走 upload，儲存結果必須一致。帶明確 `title`（無 `filename`）的路徑沒有檔案可解析 frontmatter，維持原樣：`markdown` 為呼叫端給的原文、`metadata` 為 `{}`。
+
 ### 6.3 requestFields 零變更
 
 四個欄位（`title`／`filename`／`markdown`／`expectedCurrentRevisionId`）都是 string，`requestFields` 現行只支援 string 欄位的限制剛好不構成阻礙。`metadata` 不開放編輯（§3），一律以 `{}` 傳入；既有文件的 metadata 在編輯時**原樣保留**——`createRevision` 的呼叫端先讀出 current revision 的 metadata 再原樣回填，避免編輯一次就清空 folder import 帶進來的 frontmatter。
+
+這裡的「一律以 `{}` 傳入」指的是**編輯**（`PATCH`）路徑：metadata 不是使用者可編輯的欄位，所以編輯表單沒有 metadata 輸入，送出時沒有新值可傳。這與**上傳建立**（§6.2）無關——上傳一份帶 frontmatter 的 `.md` 時，metadata 來自解析結果，不是 `{}`；「不開放編輯」不等於「上傳時捨棄 frontmatter」。
 
 ### 6.4 上限
 

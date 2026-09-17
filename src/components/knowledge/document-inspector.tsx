@@ -194,6 +194,7 @@ export function DocumentDetailClient({
   inspectorData,
   children,
   editHref,
+  readOnly,
 }: {
   breadcrumb: DocumentBreadcrumbSegment[];
   title: string;
@@ -203,6 +204,7 @@ export function DocumentDetailClient({
   inspectorData: DocumentInspectorData;
   children: ReactNode;
   editHref: string | null;
+  readOnly: boolean;
 }) {
   const [inspectorOpen, setInspectorOpen] = useState(false);
   useEffect(() => {
@@ -229,6 +231,7 @@ export function DocumentDetailClient({
           revisionBanner={revisionBanner}
           onDetailsClick={openInspector}
           editHref={editHref}
+          readOnly={readOnly}
         />
         {children}
       </div>

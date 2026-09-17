@@ -8,7 +8,7 @@ export async function POST(request: Request, context: WorkspaceRouteContext) {
     const input = parseCreateDocumentInput(await request.json().catch(() => null));
     const sourceId = await ensureDefaultHubSource(services.unitOfWork, caller, workspaceId);
     const created = await services.hub.createDocument(caller, {
-      sourceId, parentId: null, title: input.title, markdown: input.markdown, metadata: {},
+      sourceId, parentId: null, title: input.title, markdown: input.markdown, metadata: input.metadata,
     });
     return { documentId: created.documentId, sourceId, revisionId: created.revisionId };
   }, 201);

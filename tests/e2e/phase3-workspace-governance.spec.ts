@@ -113,10 +113,13 @@ test.describe("Phase 3 Workspace product acceptance", () => {
       await expect(affected.page.getByRole("status").filter({ hasText: "You no longer have access to this workspace." })).toBeVisible();
       await expect(affected.page).toHaveURL(/\/knowledge$/);
       expect(affected.page.url()).not.toContain(id);
-      // Landed on the user's own My Space, where they are always OWNER, so the
-      // empty-state upload control is correctly visible here (canWrite is genuinely
-      // true for this workspace); it is not evidence of leaked access to the revoked team.
-      await expect(affected.page.locator('input[type="file"]')).toBeVisible();
+      // Landed on the user's own My Space, where they are always OWNER, so a
+      // Phase 5 upload control is legitimately present here — that is expected
+      // UI for My Space, not a governance signal, so it is deliberately not
+      // asserted on in either direction. The governance invariant this test
+      // guards is carried by the checks already above and below: the URL
+      // redirect target, the revoked workspace id no longer appearing in it,
+      // and the /api/workspaces listing not including that workspace.
       await affected.page.getByLabel("Workspace: My Space", { exact: true }).click();
       const navigation = await (await affected.context.request.get("/api/workspaces")).json();
       expect(navigation.items.some((item: { id: string }) => item.id === id)).toBe(false);

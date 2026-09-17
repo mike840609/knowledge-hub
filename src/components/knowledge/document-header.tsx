@@ -24,6 +24,7 @@ export function DocumentHeader({
   revisionBanner,
   onDetailsClick,
   editHref,
+  readOnly,
 }: {
   breadcrumb: DocumentBreadcrumbSegment[];
   title: string;
@@ -32,6 +33,7 @@ export function DocumentHeader({
   revisionBanner: { viewingNo: number; backHref: string } | null;
   onDetailsClick: () => void;
   editHref: string | null;
+  readOnly: boolean;
 }) {
 
   return (
@@ -81,7 +83,7 @@ export function DocumentHeader({
           </div>
         </div>
         <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-kh-text-muted">
-          {editHref ? null : <Badge variant="outline">Read only</Badge>}
+          {readOnly ? <Badge variant="outline">Read only</Badge> : null}
           {status === "ARCHIVED" ? <Badge variant="warning">Archived</Badge> : null}
           <span>Updated {formatUpdatedAt(updatedAt)}</span>
         </div>

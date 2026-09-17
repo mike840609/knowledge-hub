@@ -12,9 +12,9 @@ export type ImportHttpError = { status: number; body: ImportHttpErrorBody };
  * is a 400 that preserves its machine-readable code. Anything else is a 500
  * INTERNAL_ERROR with no internal detail.
  *
- * HIDDEN_NOT_FOUND (lines 15-20) is used by toImportErrorResponse() and covers
- * only import-domain resources. WORKSPACE_HIDDEN_NOT_FOUND (lines 23-28) extends
- * it with Knowledge-domain resources for toWorkspaceErrorResponse().
+ * HIDDEN_NOT_FOUND is used by toImportErrorResponse() and covers only
+ * import-domain resources. WORKSPACE_HIDDEN_NOT_FOUND extends it with
+ * Knowledge-domain resources for toWorkspaceErrorResponse().
  */
 const HIDDEN_NOT_FOUND = new Set([
   "IMPORT_SNAPSHOT_NOT_FOUND",

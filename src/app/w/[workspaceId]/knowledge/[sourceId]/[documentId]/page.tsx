@@ -76,6 +76,12 @@ export default async function KnowledgeDocumentPage({
 
   const explorer = await getKnowledgeExplorerModel(workspaceId, sourceId, { includeArchived: true });
   const shell = await getWorkspaceShellModel(workspaceId);
+  // Badge visibility is ownership, not editability (spec §8.3): a HUB_MANAGED
+  // document is never "Read only" even when this particular view (e.g. a
+  // historical revision, or a viewer without canWrite) cannot be edited right
+  // now — that is communicated separately (the revision banner, or simply the
+  // absence of an Edit link), not by mislabeling the document itself.
+  const sourceManaged = explorer?.source.ownership !== "HUB_MANAGED";
   const canEdit =
     shell?.access.actions.canWrite === true &&
     explorer?.source.ownership === "HUB_MANAGED" &&
@@ -114,6 +120,7 @@ export default async function KnowledgeDocumentPage({
       }
       inspectorData={inspectorData}
       editHref={editHref}
+      readOnly={sourceManaged}
     >
       <div className="mx-auto w-full max-w-[860px] px-6 py-6">
         <DocumentViewer view={view} selectedRevision={selectedRevision} />

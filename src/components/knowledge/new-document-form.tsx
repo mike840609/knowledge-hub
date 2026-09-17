@@ -35,7 +35,15 @@ export function NewDocumentForm({ workspaceId, variant }: { workspaceId: string;
   }
 
   async function upload(file: File) {
-    await create({ filename: file.name, markdown: await file.text() });
+    // Set busy before the (possibly slow) file read, not just inside create(),
+    // so the input is disabled for the whole operation and a fast second file
+    // pick cannot start a concurrent create.
+    setBusy(true);
+    try {
+      await create({ filename: file.name, markdown: await file.text() });
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (

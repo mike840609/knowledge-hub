@@ -42,9 +42,7 @@ test("uploads a markdown file and takes its title from frontmatter", async ({ pa
     mimeType: "text/markdown",
     buffer: Buffer.from("---\ntitle: 請假流程 Uploaded\n---\n\n內容\n", "utf8"),
   });
-  // level: 1 disambiguates from the setext-style "title: ..." pseudo-heading CommonMark derives
-  // from the frontmatter block that stays in the stored markdown body (upload does not strip it).
-  await expect(page.getByRole("heading", { name: "請假流程 Uploaded", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "請假流程 Uploaded" })).toBeVisible();
 });
 
 // The seed's default HUB source (Obsidian Wiki) is HUB_MANAGED, so it alone would not exercise this

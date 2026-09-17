@@ -45,7 +45,7 @@ export function deriveWorkspaceActions(workspace: Workspace, capabilities: Reado
   return {
     canInspectSources: has("source.manage"), canImport: active && has("source.manage"),
     canSearch: has("document.read"),
-    canWrite: has("document.write"),
+    canWrite: active && has("document.write"),
     canOpenSettings: team && has("membership.manage_basic"),
     canRename: team && active && has("workspace.rename"), canArchive: team && active && has("workspace.archive"),
     canRestore: team && !active && has("workspace.restore"),

@@ -1,6 +1,7 @@
 import { parseGenericMarkdownText, sourceFileHash } from "@/modules/sources/adapters/generic-markdown-folder-adapter";
 import { SourceImportError } from "@/modules/sources/domain/import-errors";
 import { DomainError } from "@/shared/domain/errors";
+import type { KnowledgeMetadata } from "@/modules/knowledge/domain/content";
 
 export const MAX_TITLE_LENGTH = 512;
 export const MAX_MARKDOWN_BYTES = 5 * 1024 * 1024;
@@ -33,15 +34,18 @@ function checkedTitle(raw: string): string {
   return title;
 }
 
-export function parseCreateDocumentInput(body: unknown): { title: string; markdown: string } {
+export function parseCreateDocumentInput(body: unknown): { title: string; markdown: string; metadata: KnowledgeMetadata } {
   const record = readObject(body);
   const hasTitle = record.title !== undefined;
   const hasFilename = record.filename !== undefined;
   if (hasTitle === hasFilename) invalid("Provide exactly one of title or filename.");
   const markdown = readMarkdown(record);
-  if (hasTitle) return { title: checkedTitle(readString(record, "title")), markdown };
+  if (hasTitle) return { title: checkedTitle(readString(record, "title")), markdown, metadata: {} };
 
-  // Upload path: the same frontmatter → H1 → filename precedence folder import uses.
+  // Upload path: the same frontmatter → H1 → filename precedence folder import uses,
+  // and the same frontmatter-stripped body / frontmatter-as-metadata storage
+  // (spec §6.2) — matching finalize-folder-import.ts so the same .md file
+  // produces the same stored content whether it arrives by import or upload.
   const filename = readString(record, "filename");
   try {
     const hash = sourceFileHash(new TextEncoder().encode(markdown));
@@ -50,7 +54,7 @@ export function parseCreateDocumentInput(body: unknown): { title: string; markdo
       text: markdown,
       sourceFileHash: hash,
     });
-    return { title: checkedTitle(parsed.resolvedTitle), markdown };
+    return { title: checkedTitle(parsed.resolvedTitle), markdown: parsed.markdown, metadata: parsed.metadata };
   } catch (error) {
     if (error instanceof SourceImportError) {
       invalid(error.message);

@@ -15,12 +15,26 @@ function thrownBy(run: () => unknown): unknown {
 describe("parseCreateDocumentInput (spec §6.1, §6.2, §6.4)", () => {
   it("accepts an explicit title", () => {
     expect(parseCreateDocumentInput({ title: "Runbook", markdown: "# Hi" }))
-      .toEqual({ title: "Runbook", markdown: "# Hi" });
+      .toEqual({ title: "Runbook", markdown: "# Hi", metadata: {} });
   });
 
   it("resolves the title from frontmatter when a filename is given", () => {
     const markdown = "---\ntitle: 請假流程\n---\n\n# Something Else\n";
     expect(parseCreateDocumentInput({ filename: "leave.md", markdown }).title).toBe("請假流程");
+  });
+
+  it("strips frontmatter from the stored body and preserves it as metadata (spec §6.2)", () => {
+    const markdown = "---\ntitle: 請假流程\nowner: hr\n---\n\n# Something Else\n\nBody text.\n";
+    const result = parseCreateDocumentInput({ filename: "leave.md", markdown });
+    expect(result.markdown).not.toContain("---");
+    expect(result.markdown).not.toContain("title: 請假流程");
+    expect(result.markdown).toContain("Body text.");
+    expect(result.metadata).toEqual({ title: "請假流程", owner: "hr" });
+  });
+
+  it("returns empty metadata for a filename upload with no frontmatter", () => {
+    const result = parseCreateDocumentInput({ filename: "leave.md", markdown: "# Leave Policy\n" });
+    expect(result.metadata).toEqual({});
   });
 
   it("falls back to the first H1, then to the filename stem", () => {

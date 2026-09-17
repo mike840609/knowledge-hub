@@ -11,6 +11,8 @@ const team = {
   personalOwnerUserId: null,
 } as unknown as Workspace;
 
+const archivedTeam = { ...team, lifecycleState: "ARCHIVED" } as unknown as Workspace;
+
 function actionsFor(role: "OWNER" | "EDITOR" | "VIEWER") {
   return deriveWorkspaceActions(team, new Set<WorkspaceCapability>(ROLE_WORKSPACE_CAPABILITIES[role]));
 }
@@ -23,5 +25,10 @@ describe("canWrite derivation (spec §8.1)", () => {
 
   it("is false for VIEWER", () => {
     expect(actionsFor("VIEWER").canWrite).toBe(false);
+  });
+
+  it("is false in an ARCHIVED workspace even when the role holds document.write", () => {
+    const actions = deriveWorkspaceActions(archivedTeam, new Set<WorkspaceCapability>(ROLE_WORKSPACE_CAPABILITIES.EDITOR));
+    expect(actions.canWrite).toBe(false);
   });
 });
