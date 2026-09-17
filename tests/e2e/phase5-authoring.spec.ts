@@ -1,10 +1,28 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 // Mirrors scripts/db/seed.ts BROWSER_FIXTURE_IDS (Playwright cannot resolve `@/` aliases).
 const EMPTY_WORKSPACE = "0199f100-0000-7000-8000-000000000004";
 const QUERY_MASTER_WORKSPACE = "0199f100-0000-7000-8000-000000000001";
 const SOURCE_MANAGED_SOURCE = "0199f100-0000-7000-8000-000000000105";
 const SOURCE_MANAGED_DOCUMENT = "0199f100-0000-7000-8000-000000000210";
+
+// Navigate to Knowledge and return only once the authoring form is interactive.
+// On a populated workspace the document view is heavy (tree + reading pane +
+// inspector + topbar) and hydrates lazily, so setInputFiles can dispatch the
+// change event before React wires the file input's onChange — silently dropping
+// the upload (no POST fires). The file input has no readiness signal of its own,
+// so prove hydration through its sibling in the SAME component: open and close
+// the inline create form (retried until the click's handler is attached). Once
+// that onClick responds, the file input's onChange in the same form is wired too.
+async function gotoKnowledgeReadyToUpload(page: Page, workspaceId: string) {
+  await page.goto(`/w/${workspaceId}/knowledge`);
+  await expect(async () => {
+    await page.getByRole("button", { name: "New document" }).click();
+    await expect(page.getByLabel("Document title")).toBeVisible({ timeout: 1_000 });
+  }).toPass({ timeout: 15_000 });
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByLabel("Document title")).toHaveCount(0);
+}
 
 test("creates the first document in a workspace with no sources", async ({ page }) => {
   await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge`);
@@ -36,7 +54,7 @@ test("edits a hub-managed document and records a second revision", async ({ page
 });
 
 test("uploads a markdown file and takes its title from frontmatter", async ({ page }) => {
-  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge`);
+  await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
   await page.setInputFiles('input[type="file"]', {
     name: "leave.md",
     mimeType: "text/markdown",
@@ -99,7 +117,7 @@ test("a stale second editor gets a conflict, keeps their input, and does not ove
 // Spec §6.2 parity: folder import decodes with a fatal UTF-8 decoder, so a single
 // upload must reject malformed UTF-8 too rather than storing U+FFFD replacements.
 test("rejects a malformed UTF-8 upload instead of storing replacement characters", async ({ page }) => {
-  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge`);
+  await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
   await page.setInputFiles('input[type="file"]', {
     name: "broken.md",
     mimeType: "text/markdown",
