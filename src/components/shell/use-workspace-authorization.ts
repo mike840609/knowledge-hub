@@ -17,7 +17,8 @@ export function useWorkspaceAuthorization() {
   return value;
 }
 
-export function requestWorkspaceAccessCheck(status: number) {
+export function requestWorkspaceAccessCheck(status: number, code?: string) {
+  if (code === "REVISION_CONFLICT") return;
   if ([403, 404, 409].includes(status)) window.dispatchEvent(new Event("kh:workspace-access-check"));
 }
 

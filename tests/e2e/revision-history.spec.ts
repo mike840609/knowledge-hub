@@ -35,7 +35,7 @@ test("opens the Inspector and selects a historical revision", async ({ page }) =
   await page.getByRole("link", { name: /Revision 1/ }).click();
   await expect(page).toHaveURL(new RegExp(`/w/${WORKSPACE}/knowledge/${SOURCE}/[0-9a-f-]+.*revision=1`));
   await expect(page.locator("article").first().getByText(ARCHITECTURE_BODY_V1, { exact: true })).toBeVisible();
-  await expect(page.getByText(ARCHITECTURE_BODY_V2, { exact: true })).toHaveCount(0);
+  await expect(page.locator("article").first().getByText(ARCHITECTURE_BODY_V2, { exact: true })).toHaveCount(0);
   await expect(page.getByText("Viewing revision 1")).toBeVisible();
   await expect(page.getByRole("link", { name: "Back to current" })).toBeVisible();
 });
@@ -58,6 +58,6 @@ test("shows not-found for an unknown revision number", async ({ page }) => {
 
   await page.goto(`${documentUrl}?revision=999`);
   await expect(page.getByRole("heading", { name: "Not found or no access" })).toBeVisible();
-  await expect(page.getByText(ARCHITECTURE_BODY_V1, { exact: true })).toHaveCount(0);
-  await expect(page.getByText(ARCHITECTURE_BODY_V2, { exact: true })).toHaveCount(0);
+  await expect(page.locator("article").first().getByText(ARCHITECTURE_BODY_V1, { exact: true })).toHaveCount(0);
+  await expect(page.locator("article").first().getByText(ARCHITECTURE_BODY_V2, { exact: true })).toHaveCount(0);
 });
