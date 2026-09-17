@@ -1,5 +1,7 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { normalizeFolderName } from "@/modules/knowledge/domain/tree-rules";
+import { parseGenericMarkdownText } from "@/modules/sources/adapters/generic-markdown-folder-adapter";
 import { reconcileFolderImport } from "@/modules/sources/domain/import-reconciler";
 import { reconcileImportSnapshot } from "@/modules/sources/application/reconcile-import-snapshot";
 import type {
@@ -145,6 +147,48 @@ describe("Phase 2 folder import reconciliation", () => {
     ]);
     expect(plan.documents.revise).toHaveLength(0);
     expect(plan.preview.find((item) => item.kind === "DOCUMENT")?.labels).toEqual(["MOVED", "RENAMED"]);
+  });
+
+  it("reuses identity across a filename-fallback rename while revising the derived title (§8.2/§10.1 pure unit)", () => {
+    const sha = (value: string) => createHash("sha256").update(value, "utf8").digest("hex");
+    const body = "body\n";
+    const before = parseGenericMarkdownText({ sourcePath: "docs/foo.md", text: body, sourceFileHash: sha(body) });
+    const after = parseGenericMarkdownText({ sourcePath: "docs/bar.md", text: body, sourceFileHash: sha(body) });
+    expect(before.titleSource).toBe("FILENAME");
+    expect(after.titleSource).toBe("FILENAME");
+    expect(after.reconciliationFingerprint).toBe(before.reconciliationFingerprint);
+    expect(after.revisionContentHash).not.toBe(before.revisionContentHash);
+
+    const existing = currentDocument("docs/foo.md", before.reconciliationFingerprint, {
+      currentRevision: {
+        id: "revision:foo",
+        title: before.resolvedTitle,
+        markdown: before.markdown,
+        metadata: {},
+        contentHash: before.revisionContentHash,
+      },
+    });
+    const incoming = incomingDocument("docs/bar.md", after.reconciliationFingerprint, {
+      title: after.resolvedTitle,
+      markdown: after.markdown,
+      metadata: {},
+      revisionContentHash: after.revisionContentHash,
+    });
+
+    const plan = reconcileFolderImport(
+      snapshot([incoming]),
+      canonical({ documents: [existing], folders: [currentFolder("docs")] }),
+    );
+
+    expect(plan.documents.create).toHaveLength(0);
+    expect(plan.documents.move).toEqual([
+      expect.objectContaining({ entryId: existing.entryId, fromPath: "docs/foo.md", toPath: "docs/bar.md" }),
+    ]);
+    expect(plan.documents.revise).toEqual([
+      expect.objectContaining({ entryId: existing.entryId, expectedCurrentRevisionId: "revision:foo" }),
+    ]);
+    expect(plan.preview.find((item) => item.kind === "DOCUMENT")?.labels).toEqual(["RENAMED", "UPDATED"]);
+    expect(plan.preview.find((item) => item.kind === "DOCUMENT")?.previousPath).toBe("docs/foo.md");
   });
 
   it("does not guess ambiguous fingerprint identity", () => {
@@ -293,6 +337,21 @@ describe("Phase 2 folder import reconciliation", () => {
     expect(plan.preview.find((item) => item.kind === "DOCUMENT")?.labels).toEqual(["RESTORED"]);
   });
 
+  it("restores an archived folder when its path is required again (§11)", () => {
+    const plan = reconcileFolderImport(
+      snapshot([incomingDocument("docs/a.md", "same")]),
+      canonical({ folders: [currentFolder("docs", "ARCHIVED")] }),
+    );
+
+    expect(plan.folders.restore).toEqual([
+      { entryId: "folder-entry:docs", treeNodeId: "folder-tree:docs", sourcePath: "docs" },
+    ]);
+    expect(plan.folders.create).toHaveLength(0);
+    expect(plan.folders.archive).toHaveLength(0);
+    expect(plan.preview.find((item) => item.kind === "FOLDER" && item.sourcePath === "docs")?.labels).toEqual(["RESTORED"]);
+    expect(plan.summary.folders).toMatchObject({ added: 0, archived: 0, restored: 1 });
+  });
+
   it("treats folder identity as exact path while preserving matched document identity", () => {
     const existing = currentDocument("old/a.md", "same");
     const plan = reconcileFolderImport(
@@ -303,6 +362,19 @@ describe("Phase 2 folder import reconciliation", () => {
     expect(plan.folders.create).toEqual([expect.objectContaining({ sourcePath: "new" })]);
     expect(plan.folders.archive).toEqual([expect.objectContaining({ sourcePath: "old" })]);
     expect(plan.documents.move).toEqual([expect.objectContaining({ entryId: existing.entryId, toPath: "new/a.md" })]);
+  });
+
+  it("marks a same-path same-hash asset UNCHANGED without an upsert and a changed-hash asset UPDATED (§12)", () => {
+    const plan = reconcileFolderImport(
+      snapshot([], [incomingAsset("images/logo.png", "hash:new"), incomingAsset("images/same.png", "hash:keep")]),
+      canonical({ assets: [currentAsset("images/logo.png", "hash:old"), currentAsset("images/same.png", "hash:keep")] }),
+    );
+
+    expect(plan.assets.upsert).toEqual([expect.objectContaining({ sourcePath: "images/logo.png", contentHash: "hash:new" })]);
+    expect(plan.assets.remove).toHaveLength(0);
+    expect(plan.preview.find((item) => item.kind === "ASSET" && item.sourcePath === "images/logo.png")?.labels).toEqual(["UPDATED"]);
+    expect(plan.preview.find((item) => item.kind === "ASSET" && item.sourcePath === "images/same.png")?.labels).toEqual(["UNCHANGED"]);
+    expect(plan.summary.assets).toMatchObject({ added: 0, updated: 1, removed: 0, unchanged: 1 });
   });
 
   it("matches assets by path only and models a same-hash rename as remove plus add", () => {

@@ -132,6 +132,32 @@ describe("Phase 2 folder import Apply", () => {
     expect(parseChanged(summaries[1].summary)).toBe(false);
   });
 
+  it("advances sync_version exactly once per Confirm regardless of entry count (§16/§25.2)", async () => {
+    const fixture = await createSourceFixture(pool);
+    const sourceId = await readyInitialFiles(fixture.workspaceId, [
+      { path: "docs/a.md", text: "# A\n\nbody a\n" },
+      { path: "docs/b.md", text: "# B\n\nbody b\n" },
+      { path: "docs/c.md", text: "# C\n\nbody c\n" },
+      { path: "docs/d.md", text: "# D\n\nbody d\n" },
+      { path: "docs/e.md", text: "# E\n\nbody e\n" },
+    ]);
+    expect((await pool.query<{ sync_version: number }[]>("SELECT sync_version FROM knowledge_sources WHERE id=?", [sourceId]))[0].sync_version).toBe(1);
+    expect(await pool.query("SELECT id FROM sync_runs WHERE source_id=? AND status='APPLIED'", [sourceId])).toHaveLength(1);
+
+    const resync = await readyResyncFiles(sourceId, [
+      { path: "docs/a.md", text: "# A\n\nbody a changed\n" },
+      { path: "docs/b.md", text: "# B\n\nbody b\n" },
+      { path: "docs/c.md", text: "# C\n\nbody c\n" },
+      { path: "docs/d.md", text: "# D\n\nbody d\n" },
+      { path: "docs/e.md", text: "# E\n\nbody e\n" },
+      { path: "docs/f.md", text: "# F\n\nbody f\n" },
+    ]);
+    const result = await services().apply.apply(fixtureCaller(), resync.snapshotId);
+    expect(result).toMatchObject({ kind: "APPLIED", resultVersion: 2, alreadyApplied: false });
+    expect((await pool.query<{ sync_version: number }[]>("SELECT sync_version FROM knowledge_sources WHERE id=?", [sourceId]))[0].sync_version).toBe(2);
+    expect(await pool.query("SELECT id FROM sync_runs WHERE source_id=? AND status='APPLIED'", [sourceId])).toHaveLength(2);
+  });
+
   it("marks a stale competing Preview and records FAILED without mutating Knowledge", async () => {
     const fixture = await createSourceFixture(pool);
     const initialId = await readyInitial(fixture.workspaceId);
