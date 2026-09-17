@@ -11,8 +11,12 @@ export function ImportSummary({ preview }: { preview: ImportPreview }): React.JS
       </h2>
       <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
         <div className="flex gap-2">
+          <dt className="w-24 shrink-0 text-kh-text-muted">Workspace</dt>
+          <dd className="text-kh-text">{preview.workspaceName ?? preview.workspaceId}</dd>
+        </div>
+        <div className="flex gap-2">
           <dt className="w-24 shrink-0 text-kh-text-muted">Source</dt>
-          <dd className="text-kh-text">{preview.sourceId ?? preview.proposedSourceName ?? "New source"}</dd>
+          <dd className="text-kh-text">{preview.sourceName ?? preview.proposedSourceName ?? "New source"}</dd>
         </div>
         <div className="flex gap-2">
           <dt className="w-24 shrink-0 text-kh-text-muted">Based on</dt>
