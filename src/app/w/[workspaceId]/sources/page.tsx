@@ -15,13 +15,13 @@ export default async function WorkspaceSourcesPage({
     <main className="mx-auto max-w-4xl px-6 py-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-kh-text">Sources</h1>
+          <h1 className="text-2xl font-semibold text-kh-text">Manage sources</h1>
           <p className="mt-1 text-sm text-kh-text-muted">
             {model.items.length} {model.items.length === 1 ? "source" : "sources"} in {model.workspace.name}
           </p>
         </div>
         <WorkspaceImportLink
-          className="inline-flex items-center rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-sm font-medium text-kh-text transition hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent"
+          className="inline-flex items-center rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-sm font-medium text-kh-text transition hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
           href={`/w/${workspaceId}/sources/import`}
         >
           Import folder

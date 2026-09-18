@@ -20,7 +20,7 @@ export function SearchResultRow({
     <li>
       <Link
         href={href}
-        className="flex gap-3 rounded-md border border-kh-border bg-kh-bg px-3 py-2.5 transition hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent"
+        className="flex gap-3 rounded-md border border-kh-border bg-kh-bg px-3 py-2.5 transition hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
       >
         <FileText size={16} strokeWidth={2} aria-hidden="true" className="mt-0.5 shrink-0 text-kh-text-muted" />
         <span className="min-w-0 flex-1">
@@ -31,7 +31,7 @@ export function SearchResultRow({
           <span className="mt-1 block text-sm text-kh-text-muted line-clamp-2">
             {highlightSnippet(hit.snippet, terms).map((segment, index) =>
               segment.match
-                ? <mark key={index} className="bg-kh-accent/20 text-kh-text">{segment.text}</mark>
+                ? <mark key={index} className="bg-kh-highlight text-kh-text">{segment.text}</mark>
                 : <span key={index}>{segment.text}</span>,
             )}
           </span>

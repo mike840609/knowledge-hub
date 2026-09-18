@@ -28,10 +28,10 @@ export function WorkspaceSelector({ workspaceId }: { workspaceId: string }) {
   const currentName = current?.type === "PERSONAL" ? "My Space" : current?.name ?? "Workspace";
   const item = (entry: (typeof navigation.items)[number]) => (
     <button key={entry.id} type="button" aria-current={entry.id === workspaceId ? "page" : undefined}
-      className={`flex min-h-10 w-full items-center gap-2 rounded px-3 py-2 text-left text-sm hover:bg-kh-bg-hover focus-visible:ring-2 focus-visible:ring-kh-accent ${entry.id === workspaceId ? "bg-kh-bg-hover font-medium" : ""}`}
+      className={`flex min-h-10 w-full items-center gap-2 rounded px-3 py-2 text-left text-sm hover:bg-kh-bg-hover focus-visible:ring-2 focus-visible:ring-kh-focus ${entry.id === workspaceId ? "bg-kh-bg-selected font-medium" : ""}`}
       onClick={() => choose(entry.id)}>
         <span className="min-w-0 flex-1 truncate" title={entry.type === "PERSONAL" ? "My Space" : entry.name}>{entry.type === "PERSONAL" ? "My Space" : entry.name}</span>
-        {entry.id === workspaceId && <Check className="h-4 w-4 shrink-0 text-kh-accent" aria-hidden="true" />}
+        {entry.id === workspaceId && <Check className="h-4 w-4 shrink-0 text-kh-text" aria-hidden="true" />}
       </button>
   );
   return <>
@@ -42,7 +42,7 @@ export function WorkspaceSelector({ workspaceId }: { workspaceId: string }) {
       }
     }}>
       <summary aria-label={`Workspace: ${currentName}`} title={`Switch workspace: ${currentName}`}
-        className="flex min-h-9 w-full cursor-pointer list-none items-center gap-2 rounded-md border border-kh-border px-3 text-sm hover:bg-kh-bg-hover focus-visible:ring-2 focus-visible:ring-kh-accent [&::-webkit-details-marker]:hidden">
+        className="flex min-h-9 w-full cursor-pointer list-none items-center gap-2 rounded-md border border-kh-border px-3 text-sm hover:bg-kh-bg-hover focus-visible:ring-2 focus-visible:ring-kh-focus [&::-webkit-details-marker]:hidden">
         <span className="hidden shrink-0 text-xs text-kh-text-muted sm:inline">Workspace</span>
         <span className="min-w-0 flex-1 truncate font-medium">{currentName}</span>
         <ChevronDown className="h-4 w-4 shrink-0 text-kh-text-muted group-open:rotate-180" aria-hidden="true" />
@@ -55,7 +55,7 @@ export function WorkspaceSelector({ workspaceId }: { workspaceId: string }) {
           <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-kh-text-muted">Archived</summary>
           {navigation.items.filter((entry) => entry.type === "TEAM" && entry.lifecycleState === "ARCHIVED").map(item)}
         </details>
-        {navigation.canCreateTeam && <button type="button" disabled={!confirmed} className="mt-2 w-full rounded border-t border-kh-border px-3 py-2 text-left text-sm text-kh-accent disabled:opacity-50"
+        {navigation.canCreateTeam && <button type="button" disabled={!confirmed} className="mt-2 w-full rounded border-t border-kh-border px-3 py-2 text-left text-sm text-kh-text disabled:opacity-50"
           onClick={() => { if (menu.current) menu.current.open = false; setCreating(true); }}>Create team</button>}
       </nav>
     </details>

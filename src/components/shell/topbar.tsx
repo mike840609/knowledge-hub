@@ -26,7 +26,7 @@ export function Topbar({
             type="button"
             aria-label="Open menu"
             onClick={onMenuClick}
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent lg:hidden"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus lg:hidden"
           >
             <Menu className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -42,7 +42,7 @@ export function Topbar({
           {active ? state.title : ""}
         </span>
         <button type="button" aria-label="Document details" onClick={active ? state.onDetailsClick : undefined}
-          className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md border border-kh-border px-2 text-sm hover:bg-kh-bg-hover focus-visible:ring-2 focus-visible:ring-kh-accent sm:px-3">
+          className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md border border-kh-border px-2 text-sm hover:bg-kh-bg-hover focus-visible:ring-2 focus-visible:ring-kh-focus sm:px-3">
           <PanelRight className="h-4 w-4" aria-hidden="true" />
           <span className="hidden sm:inline">Details</span>
         </button>

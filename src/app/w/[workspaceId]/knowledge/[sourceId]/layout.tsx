@@ -14,7 +14,7 @@ export default async function SourceExplorerLayout({
   // let the client sidebar keep archived nodes out of the DOM unless
   // `?includeArchived=true` is present. The sidebar lives outside the child
   // Document route, so Tree client state survives Document navigation.
-  const model = await getKnowledgeExplorerModel(workspaceId, sourceId, { includeArchived: true });
+  const model = await getKnowledgeExplorerModel(workspaceId, sourceId, { includeArchived: true, includeCollections: true });
   if (!model) {
     return (
       <main className="mx-auto flex min-h-full max-w-4xl flex-col justify-center px-6 py-16">
@@ -25,9 +25,8 @@ export default async function SourceExplorerLayout({
   return (
     <KnowledgeLayout
       workspaceId={workspaceId}
-      sources={model.sources}
       source={model.source}
-      tree={model.tree}
+      collections={model.collections}
       includeArchived={model.includeArchived}
     >
       {children}

@@ -19,7 +19,7 @@ export default async function WorkspaceSourceUpdatePage({
   }
   return (
     <main className="mx-auto max-w-4xl px-6 py-8">
-      <Link className="w-fit rounded text-sm font-medium text-kh-text-muted underline-offset-4 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent" href={`/w/${workspaceId}/sources/${sourceId}`}>
+      <Link className="w-fit rounded text-sm font-medium text-kh-text-muted underline-offset-4 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus" href={`/w/${workspaceId}/sources/${sourceId}`}>
         Back to {model.source.name}
       </Link>
       <h1 className="mt-3 text-2xl font-semibold text-kh-text">Update from folder</h1>

@@ -9,9 +9,9 @@ import { Drawer } from "@/components/ui/drawer";
 import { Skeleton } from "@/components/ui/skeleton";
 
 function useDesktopLayout(): boolean {
-  const [desktop, setDesktop] = useState<boolean>(
-    () => typeof window === "undefined" || window.matchMedia("(min-width: 1024px)").matches,
-  );
+  // Keep the server and first client render identical. Reading matchMedia in
+  // the initializer causes a hydration mismatch on a narrow viewport.
+  const [desktop, setDesktop] = useState(true);
   useEffect(() => {
     const query = window.matchMedia("(min-width: 1024px)");
     const update = () => setDesktop(query.matches);
@@ -44,16 +44,14 @@ function DocumentRegionSkeleton() {
 
 export function KnowledgeLayout({
   workspaceId,
-  sources,
   source,
-  tree,
+  collections,
   includeArchived,
   children,
 }: {
   workspaceId: string;
-  sources: SourceView[];
   source: SourceView;
-  tree: KnowledgeTreeItem[];
+  collections: { source: SourceView; tree: KnowledgeTreeItem[] }[];
   includeArchived: boolean;
   children: ReactNode;
 }) {
@@ -95,9 +93,8 @@ export function KnowledgeLayout({
   const sidebar = (
     <SourceSidebar
       workspaceId={workspaceId}
-      sources={sources}
       source={source}
-      tree={tree}
+      collections={collections}
       includeArchived={includeArchived}
     />
   );
@@ -109,7 +106,7 @@ export function KnowledgeLayout({
         <Suspense
           fallback={
             <aside aria-label="Knowledge explorer" className="w-72 shrink-0 border-r border-kh-border bg-kh-bg p-3">
-              <p className="text-sm text-kh-text-muted">Loading source tree…</p>
+              <p className="text-sm text-kh-text-muted">Loading documents…</p>
             </aside>
           }
         >
@@ -129,7 +126,7 @@ export function KnowledgeLayout({
                   window.dispatchEvent(new CustomEvent("kh:open-browse"));
                 }
               }}
-              className="inline-flex h-8 items-center rounded-md border border-kh-border bg-kh-bg px-3 text-[13px] font-medium text-kh-text hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent"
+              className="inline-flex h-8 items-center rounded-md border border-kh-border bg-kh-bg px-3 text-[13px] font-medium text-kh-text hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
             >
               Browse
             </button>

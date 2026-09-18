@@ -47,7 +47,7 @@ export function DocumentHeader({
                 <li key={`${segment.label}-${index}`} className="flex min-w-0 items-center gap-1">
                   {index > 0 ? <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> : null}
                   {segment.href && !isLast ? (
-                    <Link href={segment.href} className="shrink-0 rounded hover:text-kh-text hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent">
+                    <Link href={segment.href} className="shrink-0 rounded hover:text-kh-text hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus">
                       {segment.label}
                     </Link>
                   ) : (
@@ -68,7 +68,7 @@ export function DocumentHeader({
             {editHref ? (
               <a
                 href={editHref}
-                className="inline-flex h-8 items-center rounded-md border border-kh-border bg-kh-bg px-3 text-[13px] font-medium text-kh-text hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent"
+                className="inline-flex h-8 items-center rounded-md border border-kh-border bg-kh-bg px-3 text-[13px] font-medium text-kh-text hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
               >
                 Edit
               </a>
@@ -76,7 +76,7 @@ export function DocumentHeader({
             <button
               type="button"
               onClick={onDetailsClick}
-              className="inline-flex h-8 shrink-0 items-center rounded-md border border-kh-border bg-kh-bg px-3 text-[13px] font-medium text-kh-text hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-accent"
+              className="inline-flex h-8 shrink-0 items-center rounded-md border border-kh-border bg-kh-bg px-3 text-[13px] font-medium text-kh-text hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
             >
               Details
             </button>
@@ -90,7 +90,7 @@ export function DocumentHeader({
         {revisionBanner ? (
           <p className="mt-2 rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2 text-[13px] text-kh-text">
             Viewing revision {revisionBanner.viewingNo} —{" "}
-            <Link href={revisionBanner.backHref} className="font-medium text-kh-accent underline underline-offset-2">
+            <Link href={revisionBanner.backHref} className="font-medium text-kh-link underline underline-offset-2">
               Back to current
             </Link>
           </p>
