@@ -19,6 +19,7 @@ const config: Config = {
         "kh-primary-hover": "var(--kh-primary-hover)",
         "kh-link": "var(--kh-link)",
         "kh-focus": "var(--kh-focus)",
+        "kh-selected-text": "var(--kh-selected-text)",
         "kh-highlight": "var(--kh-highlight)",
         "kh-danger": "var(--kh-danger)",
         "kh-warning": "var(--kh-warning)",

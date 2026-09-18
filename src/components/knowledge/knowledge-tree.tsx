@@ -72,8 +72,8 @@ function TreeNodeRow({
         <Link
           href={documentHref(item, scope, includeArchived)}
           title={item.label}
-          className={`block truncate rounded px-2 py-1.5 text-sm hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus ${
-            selected ? "font-semibold text-kh-text" : "text-kh-text-muted"
+          className={`block truncate rounded px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus ${
+            selected ? "font-semibold text-kh-selected-text hover:bg-kh-bg-selected" : "text-kh-text-muted hover:bg-kh-bg-hover"
           }`}
         >
           {item.label}

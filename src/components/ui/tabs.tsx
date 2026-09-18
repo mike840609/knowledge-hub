@@ -23,7 +23,7 @@ export function TabsTab({
 }: ComponentProps<typeof BaseTabs.Tab> & { children: ReactNode }) {
   return (
     <BaseTabs.Tab
-      className={`-mb-px border-b-2 border-transparent px-3 py-2 text-[13px] font-medium text-kh-text-muted transition hover:text-kh-text focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus data-[selected]:border-kh-primary data-[selected]:text-kh-text ${className}`}
+      className={`-mb-px border-b-2 border-transparent px-3 py-2 text-[13px] font-medium text-kh-text-muted transition hover:text-kh-text focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus data-[selected]:border-kh-primary data-[selected]:text-kh-selected-text ${className}`}
       {...props}
     >
       {children}

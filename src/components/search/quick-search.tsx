@@ -162,7 +162,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
                 {!loading && hits.map((hit, index) => (
                   <li key={hit.documentId} id={`quick-hit-${index}`} role="option" aria-selected={index === activeIndex}>
                     <button type="button" onClick={() => openDocument(hit)} onMouseEnter={() => setActiveIndex(index)} className={`w-full rounded-md px-3 py-2 text-left focus-visible:ring-2 focus-visible:ring-kh-focus ${index === activeIndex ? "bg-kh-bg-selected" : "hover:bg-kh-bg-hover"}`}>
-                      <span className="block truncate text-sm font-medium text-kh-text">{hit.title}</span>
+                      <span className={`block truncate text-sm font-medium ${index === activeIndex ? "text-kh-selected-text" : "text-kh-text"}`}>{hit.title}</span>
                       <span className="block truncate text-xs text-kh-text-muted">{hit.sourceName} · {plainSnippet(hit.snippet)}</span>
                     </button>
                   </li>
