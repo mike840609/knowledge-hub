@@ -15,7 +15,7 @@ export default async function NewNotePage({ params }: { params: Promise<{ worksp
       </Link>
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold text-kh-text">Add to Notes</h1>
-        <p className="text-sm text-kh-text-muted">Create a document or upload a Markdown file to Notes in {model.workspace.name}. You can edit it here after adding it.</p>
+        <p className="text-sm text-kh-text-muted">Write a document or upload a Markdown file to Notes in {model.workspace.name}.</p>
       </header>
       <NewDocumentForm workspaceId={workspaceId} variant="empty" />
     </main>

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { GovernanceError, governanceFailure, governanceRequest, type GovernanceFailure } from "@/components/workspaces/governance-error";
 
@@ -12,8 +13,9 @@ type Created = { documentId: string; sourceId: string };
 export function NewDocumentForm({ workspaceId, variant }: { workspaceId: string; variant: "empty" | "sidebar" }) {
   const router = useRouter();
   const { access, confirmed } = useWorkspaceAuthorization();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(variant === "empty");
   const [title, setTitle] = useState("");
+  const [markdown, setMarkdown] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<GovernanceFailure | null>(null);
 
@@ -60,16 +62,27 @@ export function NewDocumentForm({ workspaceId, variant }: { workspaceId: string;
     <div className={variant === "empty" ? "w-full space-y-3" : "space-y-2"}>
       {open ? (
         <form
-          className="space-y-2"
-          onSubmit={(event) => { event.preventDefault(); void create({ title, markdown: "" }); }}
+          className="space-y-4"
+          onSubmit={(event) => { event.preventDefault(); void create({ title, markdown }); }}
         >
           <label className="block text-sm text-kh-text">
             Document title
             <Input className="mt-1" value={title} maxLength={512} required autoFocus disabled={busy} onChange={(event) => setTitle(event.target.value)} />
           </label>
+          <label className="block text-sm text-kh-text">
+            Content <span className="text-kh-text-muted">(Markdown)</span>
+            <Textarea className="mt-1 min-h-64 resize-y" value={markdown} placeholder="Write your note…" disabled={busy} onChange={(event) => setMarkdown(event.target.value)} />
+          </label>
           <div className="flex gap-2">
-            <Button type="submit" disabled={busy || !confirmed || !title.trim()}>Create</Button>
-            <Button type="button" variant="secondary" disabled={busy} onClick={() => setOpen(false)}>Cancel</Button>
+            <Button type="submit" disabled={busy || !confirmed || !title.trim()}>{busy ? "Creating…" : "Create document"}</Button>
+            <Button type="button" variant="secondary" disabled={busy} onClick={() => {
+              if (variant === "empty") {
+                if ((title || markdown) && !window.confirm("Discard this draft?")) return;
+                router.push(`/w/${workspaceId}/knowledge`);
+              } else {
+                setOpen(false);
+              }
+            }}>Cancel</Button>
           </div>
         </form>
       ) : (

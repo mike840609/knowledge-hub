@@ -3,16 +3,21 @@
 import { useContext } from "react";
 import { usePathname } from "next/navigation";
 import { DocumentTopbarContext } from "./document-topbar-context";
-import { Menu, PanelRight } from "lucide-react";
+import { Menu, PanelLeftClose, PanelLeftOpen, PanelRight } from "lucide-react";
 import type { WorkspaceShellModel } from "@/server/knowledge-read";
 import { WorkspaceSelector } from "@/components/shell/workspace-selector";
+import { QuickSearch } from "@/components/search/quick-search";
 
 export function Topbar({
   model,
   onMenuClick,
+  navCollapsed,
+  onToggleNav,
 }: {
   model: WorkspaceShellModel;
   onMenuClick?: () => void;
+  navCollapsed: boolean;
+  onToggleNav: () => void;
 }) {
   const state = useContext(DocumentTopbarContext)?.document;
   const pathname = usePathname();
@@ -20,7 +25,7 @@ export function Topbar({
   const visible = active && state.visible;
   return (
     <header className="flex h-12 shrink-0 items-center border-b border-kh-border bg-kh-bg">
-      <div className="flex shrink-0 items-center gap-2 px-3 lg:h-full lg:w-40 lg:border-r lg:border-kh-border">
+      <div className={`flex shrink-0 items-center gap-2 px-3 lg:h-full lg:border-r lg:border-kh-border ${navCollapsed ? "lg:w-12 lg:px-2" : "lg:w-40"}`}>
         {onMenuClick ? (
           <button
             type="button"
@@ -31,11 +36,15 @@ export function Topbar({
             <Menu className="h-4 w-4" aria-hidden="true" />
           </button>
         ) : null}
-        <span className="hidden text-sm font-semibold text-kh-text sm:block">Knowledge Hub</span>
+        <button type="button" onClick={onToggleNav} aria-label={navCollapsed ? "Expand navigation" : "Collapse navigation"} title={navCollapsed ? "Expand navigation" : "Collapse navigation"} className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-md text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text focus-visible:ring-2 focus-visible:ring-kh-focus lg:inline-flex">
+          {navCollapsed ? <PanelLeftOpen className="h-4 w-4" aria-hidden="true" /> : <PanelLeftClose className="h-4 w-4" aria-hidden="true" />}
+        </button>
+        <span className={`hidden whitespace-nowrap text-xs font-semibold text-kh-text sm:block ${navCollapsed ? "lg:hidden" : ""}`}>Knowledge Hub</span>
       </div>
       <div className="flex h-full w-28 min-w-0 shrink-0 items-center pr-2 sm:w-64 sm:px-3 lg:w-72">
         <WorkspaceSelector workspaceId={model.workspace.id} />
       </div>
+      <QuickSearch workspaceId={model.workspace.id} />
       <div aria-hidden={!visible} inert={!visible}
         className={`flex min-w-0 flex-1 items-center gap-2 px-3 transition-opacity duration-150 motion-reduce:transition-none ${visible ? "opacity-100" : "pointer-events-none opacity-0"}`}>
         <span className="min-w-0 flex-1 truncate text-sm font-semibold text-kh-text" title={active ? state.title : undefined}>
