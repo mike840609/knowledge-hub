@@ -91,10 +91,10 @@ export function reconcileImportSnapshot(
 export function blockedImportPlan(content: ReadyImportContent, changes: ImportPreviewChange[]): FolderImportPlan {
   const preview = sortChanges([...changes]);
   return {
-    planVersion: "phase2:v1",
+    planVersion: "phase2:v2",
     sourceBinding: content.sourceBinding,
     folders: { create: [], restore: [], archive: [] },
-    documents: { create: [], restore: [], move: [], revise: [], archive: [], updateLocator: [] },
+    documents: { create: [], restore: [], move: [], revise: [], archive: [], adoptExternalId: [], updateLocator: [] },
     assets: { upsert: [], remove: [] },
     ordering: [],
     preview,

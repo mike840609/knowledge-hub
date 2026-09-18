@@ -76,11 +76,7 @@ function canonicalDiagnostics(diagnostics: readonly ImportDiagnostic[]): unknown
 function hashableEntry(entry: ImportSnapshotEntry): unknown {
   return {
     sourcePath: entry.sourcePath,
-    // §15.1 enumerates external IDs. Phase 2's generic Markdown adapter never
-    // produces one and staging has no column for it, so the slot is pinned as
-    // null: a future adapter that carries an external ID must feed it here, and
-    // doing so changes the digest — which is the intended effect.
-    externalId: null,
+    externalId: entry.externalId,
     sourcePathHash: entry.sourcePathHash,
     entryType: entry.entryType,
     sourceFileHash: entry.sourceFileHash,
@@ -118,6 +114,7 @@ function canonicalPlan(plan: FolderImportPlan): unknown {
       move: plan.documents.move.map((item) => ({ ...item })),
       revise: plan.documents.revise.map((item) => ({ ...item, content: canonicalPlanContent(item.content) })),
       archive: plan.documents.archive.map((item) => ({ ...item })),
+      adoptExternalId: plan.documents.adoptExternalId.map((item) => ({ ...item })),
       updateLocator: plan.documents.updateLocator.map((item) => ({ ...item })),
     },
     assets: {

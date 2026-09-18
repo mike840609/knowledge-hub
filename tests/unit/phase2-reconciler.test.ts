@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { MariaDbImportCanonicalStateRepository } from "@/infrastructure/database/mariadb/repositories/import-canonical-state";
+import { fingerprintReconciliationContent } from "@/modules/sources/domain/reconciliation-fingerprint";
+import { describe, expect, it, vi } from "vitest";
 import { normalizeFolderName } from "@/modules/knowledge/domain/tree-rules";
 import { parseGenericMarkdownText } from "@/modules/sources/adapters/generic-markdown-folder-adapter";
 import { reconcileFolderImport } from "@/modules/sources/domain/import-reconciler";
@@ -394,17 +396,126 @@ describe("Phase 2 folder import reconciliation", () => {
     const byPath = currentDocument("a.md", "two", { externalId: "Y" });
     const incoming = incomingDocument("a.md", "incoming", { externalId: "X" });
 
-    expect(() => reconcileFolderImport(snapshot([incoming]), canonical({ documents: [byExternal, byPath] }))).toThrowError(
-      expect.objectContaining({ code: "IDENTITY_CONFLICT" }),
+    const plan = reconcileFolderImport(snapshot([incoming]), canonical({ documents: [byExternal, byPath] }));
+    expect(plan.preview.find((change) => change.sourcePath === "a.md")?.diagnostics).toContainEqual(
+      expect.objectContaining({ code: "IDENTITY_CONFLICT", sourcePath: "a.md", severity: "BLOCKING" }),
     );
   });
 
   it("rejects duplicate external IDs in one snapshot", () => {
     const left = incomingDocument("a.md", "one", { externalId: "X" });
     const right = incomingDocument("b.md", "two", { externalId: "X" });
-    expect(() => reconcileFolderImport(snapshot([left, right]), canonical())).toThrowError(
-      expect.objectContaining({ code: "IDENTITY_CONFLICT" }),
-    );
+    const plan = reconcileFolderImport(snapshot([left, right]), canonical());
+    expect(plan.documents.create).toEqual([]);
+    expect(plan.summary.blockers).toBe(2);
+    expect(plan.preview.every((change) => change.diagnostics.some((diagnostic) => diagnostic.code === "IDENTITY_CONFLICT"))).toBe(true);
+  });
+
+  it("adopts an exact-path identity without changing content counters", () => {
+    const existing = currentDocument("auth.md", "same");
+    const plan = reconcileFolderImport(snapshot([incomingDocument("auth.md", "same", { externalId: "K1" })]), canonical({ documents: [existing] }));
+    expect(plan.planVersion).toBe("phase2:v2");
+    expect(plan.documents.adoptExternalId).toEqual([{ entryId: existing.entryId, externalId: "K1" }]);
+    expect(plan.documents.revise).toHaveLength(0);
+    expect(plan.preview[0]).toMatchObject({ labels: ["UNCHANGED"], identity: { adoptedExternalId: "K1" } });
+    expect(plan.summary.documents).toMatchObject({ unchanged: 1, updated: 0 });
+  });
+
+  it("adopts identity across a unique-fingerprint rename", () => {
+    const existing = currentDocument("old.md", "same");
+    const plan = reconcileFolderImport(snapshot([incomingDocument("new.md", "same", { externalId: "K1" })]), canonical({ documents: [existing] }));
+    expect(plan.documents.adoptExternalId).toEqual([{ entryId: existing.entryId, externalId: "K1" }]);
+    expect(plan.documents.move).toEqual([expect.objectContaining({ entryId: existing.entryId, toPath: "new.md" })]);
+    expect(plan.documents.revise).toHaveLength(0);
+  });
+
+  it("preserves established identity across simultaneous rename and content edit", () => {
+    const existing = currentDocument("old.md", "old", { externalId: "K1" });
+    const plan = reconcileFolderImport(snapshot([incomingDocument("new.md", "new", { externalId: "K1", markdown: "Edited" })]), canonical({ documents: [existing] }));
+    expect(plan.documents.adoptExternalId).toEqual([]);
+    expect(plan.documents.move).toHaveLength(1);
+    expect(plan.documents.revise).toHaveLength(1);
+    expect(plan.documents.create).toHaveLength(0);
+  });
+
+  it.each([null, "K2"])("blocks established identity replacement with %s at exact path or fingerprint", (externalId) => {
+    for (const sourcePath of ["old.md", "new.md"]) {
+      const existing = currentDocument("old.md", "same", { externalId: "K1" });
+      const plan = reconcileFolderImport(snapshot([incomingDocument(sourcePath, "same", { externalId })]), canonical({ documents: [existing] }));
+      expect(plan.preview.find((change) => change.sourcePath === sourcePath)?.diagnostics).toContainEqual(expect.objectContaining({ code: "IDENTITY_CONFLICT", severity: "BLOCKING", sourcePath }));
+      expect(plan.documents.adoptExternalId).toEqual([]);
+      expect(plan.documents.create).toEqual([]);
+      expect(plan.documents.revise).toEqual([]);
+      expect(plan.documents.move).toEqual([]);
+    }
+  });
+
+  it("blocks ambiguous identified adoption on either side", () => {
+    for (const [incoming, existing] of [
+      [[incomingDocument("new.md", "same", { externalId: "K1" })], [currentDocument("a.md", "same"), currentDocument("b.md", "same")]],
+      [[incomingDocument("new.md", "same", { externalId: "K1" }), incomingDocument("other.md", "same", { externalId: "K2" })], [currentDocument("a.md", "same")]],
+    ] as [ReadyImportDocument[], CanonicalDocumentState[]][]) {
+      const plan = reconcileFolderImport(snapshot(incoming), canonical({ documents: existing }));
+      expect(plan.documents.adoptExternalId).toEqual([]);
+      expect(plan.documents.create).toEqual([]);
+      expect(plan.summary.blockers).toBe(incoming.length);
+      expect(plan.preview.flatMap((change) => change.diagnostics)).toEqual(incoming.map(() => expect.objectContaining({ code: "IDENTITY_ADOPTION_AMBIGUOUS", severity: "BLOCKING" })));
+    }
+  });
+
+  it("supports new identified and unidentified documents together with case-sensitive IDs", () => {
+    const plan = reconcileFolderImport(snapshot([
+      incomingDocument("a.md", "a", { externalId: "K1" }),
+      incomingDocument("b.md", "b", { externalId: "k1" }),
+      incomingDocument("c.md", "c"),
+    ]), canonical());
+    expect(plan.documents.create.map((action) => action.externalId)).toEqual(["K1", "k1", null]);
+    expect(plan.documents.adoptExternalId).toEqual([]);
+    expect(plan.summary.blockers).toBe(0);
+  });
+
+  it("ignores stored legacy knowledge_id without rewriting history, but retains real metadata changes", () => {
+    const existing = currentDocument("auth.md", "same");
+    existing.currentRevision.metadata = { knowledge_id: "K1", owner: "platform" };
+    const incoming = incomingDocument("auth.md", "same", { externalId: "K1", metadata: { owner: "platform" } });
+    const plan = reconcileFolderImport(snapshot([incoming]), canonical({ documents: [existing] }));
+    expect(plan.documents.revise).toEqual([]);
+    expect(existing.currentRevision.metadata).toEqual({ knowledge_id: "K1", owner: "platform" });
+    const edited = reconcileFolderImport(snapshot([{ ...incoming, metadata: { owner: "security" } }]), canonical({ documents: [existing] }));
+    expect(edited.documents.revise[0].content.metadata).toEqual({ owner: "security" });
+  });
+
+  it("rejects duplicate canonical IDs as a global integrity conflict", () => {
+    expect(() => reconcileFolderImport(snapshot(), canonical({ documents: [
+      currentDocument("a.md", "a", { externalId: "K1" }),
+      currentDocument("b.md", "b", { externalId: "K1" }),
+    ] }))).toThrowError(expect.objectContaining({ code: "IDENTITY_CONFLICT" }));
+  });
+
+  it("blocks a second file reusing the original path of an externally matched predecessor", () => {
+    const plan = reconcileFolderImport(snapshot([
+      incomingDocument("new.md", "changed", { externalId: "K1" }),
+      incomingDocument("old.md", "other"),
+    ]), canonical({ documents: [currentDocument("old.md", "same", { externalId: "K1" })] }));
+    expect(plan.preview.find((change) => change.sourcePath === "old.md")?.diagnostics).toContainEqual(expect.objectContaining({ code: "IDENTITY_CONFLICT", severity: "BLOCKING" }));
+    expect(plan.documents.create).toEqual([]);
+  });
+
+  it("loads legacy fingerprints without reserved metadata while retaining the immutable revision", async () => {
+    const query = vi.fn().mockResolvedValueOnce([{
+      entry_id: "entry:old.md", external_id: null, source_path: "old.md", entry_type: "DOCUMENT", entry_status: "ACTIVE",
+      document_id: "document:old.md", tree_node_id: "tree:old.md", tree_node_type: "DOCUMENT",
+      revision_id: "legacy", title: "Stable title", markdown: "Stable body\n",
+      metadata: JSON.stringify({ knowledge_id: "K1", owner: "platform" }), content_hash: "legacy-hash",
+    }]).mockResolvedValueOnce([]);
+    const state = await new MariaDbImportCanonicalStateRepository({ query }).load("source");
+    const fingerprint = fingerprintReconciliationContent({ markdown: "Stable body\n", metadata: { owner: "platform" } });
+    expect(state.documents[0].reconciliationFingerprint).toBe(fingerprint);
+    expect(state.documents[0].currentRevision.metadata).toHaveProperty("knowledge_id", "K1");
+    const plan = reconcileFolderImport(snapshot([incomingDocument("new.md", fingerprint, { externalId: "K1", metadata: { owner: "platform" } })]), state);
+    expect(plan.documents.adoptExternalId).toEqual([{ entryId: "entry:old.md", externalId: "K1" }]);
+    expect(plan.documents.move).toHaveLength(1);
+    expect(plan.documents.revise).toHaveLength(0);
   });
 
   it("orders desired siblings deterministically with folders before documents", () => {

@@ -7,6 +7,7 @@ import type { ImportSnapshotEntry } from "@/modules/sources/domain/import-snapsh
 import type { KnowledgeSource } from "@/modules/sources/domain/source";
 import type { SourceRepositories } from "@/modules/sources/ports/unit-of-work";
 import { uuidv7 } from "@/shared/ids/uuidv7";
+import { adoptSourceExternalId } from "./source-entry-mapping-service";
 import { bindSourceProjection } from "./source-knowledge-projection-service";
 
 export type ImportApplyFailurePoint =
@@ -54,7 +55,7 @@ export async function executeFolderImportPlan(
   plan: FolderImportPlan,
   options: ExecuteFolderImportPlanOptions,
 ): Promise<void> {
-  if (plan.planVersion !== "phase2:v1") throw importError("IMPORT_PLAN_VERSION_UNSUPPORTED", "Unsupported import plan version.");
+  if (plan.planVersion !== "phase2:v2") throw importError("IMPORT_PLAN_VERSION_UNSUPPORTED", "Unsupported import plan version; create a fresh Preview.");
   if (plan.sourceBinding.workspaceId !== source.workspaceId) throw importError("IMPORT_PLAN_BINDING_MISMATCH", "Import plan Workspace binding does not match the Source.");
   if (plan.sourceBinding.sourceId !== null && plan.sourceBinding.sourceId !== source.id) throw importError("IMPORT_PLAN_BINDING_MISMATCH", "Import plan Source binding does not match the Source.");
 
@@ -160,6 +161,9 @@ export async function executeFolderImportPlan(
       markdown: content.markdown,
       metadata: content.metadata,
     });
+  }
+  for (const action of plan.documents.adoptExternalId) {
+    await adoptSourceExternalId(repositories, caller, source.id, action.entryId, action.externalId);
   }
   for (const action of plan.documents.updateLocator) {
     const entry = await repositories.entries.findById(action.entryId);

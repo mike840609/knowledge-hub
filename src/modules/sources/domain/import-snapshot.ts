@@ -3,13 +3,16 @@ import type { ImportDiagnostic } from "./import-diagnostic";
 import type { ImportDiffSummary, FolderImportPlan, ImportPreviewChange } from "./import-plan";
 import type { ImportTitleSource } from "./import-title";
 
+export type ImportAdapterVersion = "phase2:v1" | "phase2:v2";
+export type ImportPlanVersion = "phase2:v1" | "phase2:v2";
+
 export type ImportSnapshotState = "BUILDING" | "READY" | "APPLIED" | "STALE";
 export type ImportEntryType = "DOCUMENT" | "ASSET";
 export type ImportUploadStatus = "PENDING" | "RECEIVED";
 
 export type ParsedMarkdownEntry = {
   sourcePath: string;
-  externalId: null;
+  externalId: string | null;
   resolvedTitle: string;
   titleSource: ImportTitleSource;
   markdown: string;
@@ -29,8 +32,8 @@ export type ImportSnapshot = {
   rootName: string;
   proposedSourceName: string | null;
   adapterType: "GENERIC_MARKDOWN_FOLDER";
-  adapterVersion: "phase2:v1";
-  planVersion: "phase2:v1";
+  adapterVersion: ImportAdapterVersion;
+  planVersion: ImportPlanVersion;
   state: ImportSnapshotState;
   manifestHash: string;
   snapshotHash: string | null;
@@ -54,6 +57,7 @@ export type ImportSnapshotEntry = {
   clientRelativePath: string;
   sourcePath: string | null;
   sourcePathHash: string | null;
+  externalId: string | null;
   entryType: ImportEntryType;
   uploadStatus: ImportUploadStatus;
   declaredSize: number;

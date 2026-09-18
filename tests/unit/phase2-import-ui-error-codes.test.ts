@@ -4,16 +4,16 @@ import { readErrorCode } from "@/components/imports/folder-import-form";
 
 /**
  * Design §20.7: the UI branches on the machine-readable `code`, never on the
- * message and never on the HTTP status alone — four distinct import codes all
- * map to 409, and only two of them mean "this preview is dead".
+ * message and never on the HTTP status alone. Some conflicts permit retry;
+ * stale identity and plan versions require a fresh preview.
  */
 function envelope(code: string, message = `${code} happened.`): unknown {
   return { error: { code, message } };
 }
 
 describe("classifyApplyError", () => {
-  it("latches the stale state for the two codes that invalidate the snapshot", () => {
-    for (const code of ["SOURCE_VERSION_CONFLICT", "IMPORT_SNAPSHOT_STALE"]) {
+  it("latches the stale state for the codes that invalidate the snapshot", () => {
+    for (const code of ["SOURCE_VERSION_CONFLICT", "IMPORT_SNAPSHOT_STALE", "IDENTITY_STATE_CHANGED", "IMPORT_PLAN_VERSION_UNSUPPORTED"]) {
       const failure = classifyApplyError(409, envelope(code));
       expect(failure.code, code).toBe(code);
       expect(failure.latchStale, code).toBe(true);

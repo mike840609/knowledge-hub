@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Pool } from "mariadb";
 import { databaseConfig } from "@/infrastructure/database/mariadb/config";
 import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
+import { MariaDbImportSnapshotRepository } from "@/infrastructure/database/mariadb/repositories/import-snapshots";
 import { MariaDbAssetRepository } from "@/infrastructure/database/mariadb/repositories/assets";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 
@@ -65,14 +66,22 @@ const insertSnapshotSql = `INSERT INTO source_import_snapshots (
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
 describe("Phase 2 import persistence schema", () => {
-  it("applies migrations 006 and 007", async () => {
+  it("applies migrations 006, 007 and 010", async () => {
     const rows = await pool.query<{ version: number; state: string }[]>(
-      "SELECT version, state FROM schema_migrations WHERE version IN (6, 7) ORDER BY version",
+      "SELECT version, state FROM schema_migrations WHERE version IN (6, 7, 10) ORDER BY version",
     );
     expect(rows.map((row) => [Number(row.version), row.state])).toEqual([
       [6, "APPLIED"],
       [7, "APPLIED"],
+      [10, "APPLIED"],
     ]);
+  });
+
+  it("persists staging identity with the source-entry storage contract", async () => {
+    const columns = await pool.query<{ COLUMN_NAME: string; CHARACTER_MAXIMUM_LENGTH: number; COLLATION_NAME: string }[]>(
+      "SELECT COLUMN_NAME, CHARACTER_MAXIMUM_LENGTH, COLLATION_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'source_import_snapshot_entries' AND COLUMN_NAME = 'external_id'",
+    );
+    expect(columns).toEqual([expect.objectContaining({ COLUMN_NAME: "external_id", CHARACTER_MAXIMUM_LENGTH: 512, COLLATION_NAME: "utf8mb4_bin" })]);
   });
 
   it("creates the staging indexes and enforces initial/resync binding shape", async () => {
@@ -112,6 +121,20 @@ describe("Phase 2 import persistence schema", () => {
         id: uuidv7(), workspaceId, sourceId, basedOnVersion: null, createdBy: userId, proposedSourceName: null,
       })),
     ).rejects.toThrow();
+  });
+
+  it("reads persisted v1 and v2 versions while rejecting mixed version pairs", async () => {
+    const { userId, workspaceId } = await seedTarget();
+    const repository = new MariaDbImportSnapshotRepository(pool);
+    for (const version of ["phase2:v1", "phase2:v2"]) {
+      const id = uuidv7();
+      const values = snapshotValues({ id, workspaceId, sourceId: null, basedOnVersion: null, createdBy: userId, proposedSourceName: "Wiki" });
+      values[8] = version;
+      values[9] = version;
+      await pool.query(insertSnapshotSql, values);
+      expect(await repository.findById(id)).toMatchObject({ adapterVersion: version, planVersion: version });
+      await expect(pool.query("UPDATE source_import_snapshots SET plan_version=? WHERE id=?", [version === "phase2:v1" ? "phase2:v2" : "phase2:v1", id])).rejects.toThrow();
+    }
   });
 
   it("rejects unsupported plan_version at the DB boundary", async () => {

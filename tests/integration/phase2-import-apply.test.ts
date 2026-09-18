@@ -6,6 +6,8 @@ import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction
 import { CreateFolderImportService, type ImportManifestEntry } from "@/modules/sources/application/create-folder-import";
 import { UploadFolderImportEntriesService } from "@/modules/sources/application/upload-folder-import-entries";
 import { FinalizeFolderImportService } from "@/modules/sources/application/finalize-folder-import";
+import { adoptSourceExternalId } from "@/modules/sources/application/source-entry-mapping-service";
+import { uuidv7 } from "@/shared/ids/uuidv7";
 import { ApplyFolderImportService } from "@/modules/sources/application/apply-folder-import";
 import { DEFAULT_IMPORT_LIMITS } from "@/modules/sources/domain/import-limits";
 import { hashImportPlan } from "@/modules/sources/domain/import-integrity";
@@ -309,7 +311,7 @@ describe("Phase 2 persisted plan references staging entries (issue #9 item 3)", 
     await expect(services().apply.apply(fixtureCaller(), snapshotId)).rejects.toMatchObject({ code: "IMPORT_SNAPSHOT_INTEGRITY_MISMATCH" });
   });
 
-  it("still applies a legacy plan with embedded Markdown (in-flight v1 snapshots)", async () => {
+  it("applies v2 plans with embedded Markdown payloads", async () => {
     const fixture = await createSourceFixture(pool);
     const body = "# Guide\n\nlegacy body\n";
     const snapshotId = await readyInitial(fixture.workspaceId, "guide.md", body);
@@ -332,5 +334,157 @@ describe("Phase 2 persisted plan references staging entries (issue #9 item 3)", 
     );
     expect(revisions).toHaveLength(1);
     expect(String(revisions[0].markdown)).toBe(markdown);
+  });
+});
+describe("Phase 2 stable source identity lifecycle", () => {
+  const text = (id: string | null, body = "body", owner = "platform") =>
+    `---\n${id === null ? "" : `knowledge_id: ${id}\n`}title: Auth\nowner: ${owner}\n---\n${body}\n`;
+
+  async function entries(sourceId: string) {
+    return pool.query<{ id: string; document_id: string; external_id: string | null; source_path: string }[]>(
+      "SELECT id,document_id,external_id,source_path FROM source_entries WHERE source_id=? AND entry_type='DOCUMENT' ORDER BY source_path", [sourceId],
+    );
+  }
+  async function revisions(documentId: string) {
+    return pool.query<{ id: string; markdown: string; metadata: unknown }[]>(
+      "SELECT id,markdown,metadata FROM knowledge_revisions WHERE document_id=? ORDER BY created_at,id", [documentId],
+    );
+  }
+  async function initial(files: { path: string; text: string }[]) {
+    return readyInitialFiles((await createSourceFixture(pool)).workspaceId, files);
+  }
+  async function rewritePlan(snapshotId: string, update: (plan: FolderImportPlan) => void) {
+    const row = (await pool.query<{ plan: unknown }[]>("SELECT plan FROM source_import_snapshots WHERE id=?", [snapshotId]))[0];
+    const plan = (typeof row.plan === "string" ? JSON.parse(row.plan) : row.plan) as FolderImportPlan;
+    update(plan);
+    await pool.query("UPDATE source_import_snapshots SET plan=?,plan_hash=? WHERE id=?", [JSON.stringify(plan), hashImportPlan(plan), snapshotId]);
+  }
+
+  it.each(["auth.md", "security/login.md"])("adopts an identity at %s without replacing the document or creating a revision", async (path) => {
+    const sourceId = await initial([{ path: "auth.md", text: text(null) }]);
+    const before = (await entries(sourceId))[0];
+    const beforeRevisions = await revisions(before.document_id);
+    const resync = await readyResyncFiles(sourceId, [{ path, text: text("auth-001") }]);
+    expect(resync.preview.hasBlockers).toBe(false);
+    expect(resync.preview.changes.find((change) => change.sourcePath === path)?.identity).toEqual({ adoptedExternalId: "auth-001" });
+    await services().apply.apply(fixtureCaller(), resync.snapshotId);
+    expect(await entries(sourceId)).toEqual([{ ...before, external_id: "auth-001", source_path: path }]);
+    expect(await revisions(before.document_id)).toEqual(beforeRevisions);
+  });
+
+  it("preserves established identity across simultaneous move and edit in a mixed source", async () => {
+    const sourceId = await initial([{ path: "docs/auth.md", text: text("auth-001") }, { path: "plain.md", text: "# Plain\n" }]);
+    const before = (await entries(sourceId)).find((entry) => entry.external_id === "auth-001")!;
+    const resync = await readyResyncFiles(sourceId, [
+      { path: "security/login.md", text: text("auth-001", "updated") },
+      { path: "plain.md", text: "# Plain\n" },
+      { path: "fresh.md", text: text("fresh-002", "fresh body") },
+    ]);
+    expect(resync.preview.hasBlockers).toBe(false);
+    const change = resync.preview.changes.find((item) => item.sourcePath === "security/login.md")!;
+    expect(change.labels).toEqual(expect.arrayContaining(["MOVED", "RENAMED", "UPDATED"]));
+    await services().apply.apply(fixtureCaller(), resync.snapshotId);
+    expect((await entries(sourceId)).find((entry) => entry.external_id === "auth-001")).toMatchObject({ document_id: before.document_id, source_path: "security/login.md" });
+    expect(await revisions(before.document_id)).toHaveLength(2);
+    expect(await entries(sourceId)).toHaveLength(3);
+  });
+
+  it.each(["K2", null])("blocks replacement/removal of established identity: %s", async (id) => {
+    const sourceId = await initial([{ path: "auth.md", text: text("K1") }]);
+    const before = await entries(sourceId);
+    const resync = await readyResyncFiles(sourceId, [{ path: "auth.md", text: text(id) }]);
+    expect(resync.preview.hasBlockers).toBe(true);
+    expect(resync.preview.changes.flatMap((change) => change.diagnostics)).toEqual(expect.arrayContaining([expect.objectContaining({ code: "IDENTITY_CONFLICT", severity: "BLOCKING" })]));
+    await expect(services().apply.apply(fixtureCaller(), resync.snapshotId)).rejects.toMatchObject({ code: "IMPORT_SNAPSHOT_BLOCKED" });
+    expect(await entries(sourceId)).toEqual(before);
+  });
+
+  it("blocks duplicate incoming identities and identity/path contradictions", async () => {
+    const sourceId = await initial([{ path: "a.md", text: text("A") }, { path: "b.md", text: text("B", "other") }]);
+    for (const files of [
+      [{ path: "a.md", text: text("A") }, { path: "b.md", text: text("A") }],
+      [{ path: "b.md", text: text("A") }],
+    ]) {
+      const resync = await readyResyncFiles(sourceId, files);
+      expect(resync.preview.hasBlockers).toBe(true);
+      await expect(services().apply.apply(fixtureCaller(), resync.snapshotId)).rejects.toMatchObject({ code: "IMPORT_SNAPSHOT_BLOCKED" });
+    }
+  });
+
+  it("blocks ambiguous identified adoption while retaining unidentified warning and add behavior", async () => {
+    const sourceId = await initial([{ path: "a.md", text: text(null) }, { path: "b.md", text: text(null) }]);
+    const identified = await readyResyncFiles(sourceId, [{ path: "new.md", text: text("K1") }]);
+    expect(identified.preview.hasBlockers).toBe(true);
+    expect(identified.preview.changes.flatMap((change) => change.diagnostics)).toEqual(expect.arrayContaining([expect.objectContaining({ code: "IDENTITY_ADOPTION_AMBIGUOUS" })]));
+    const unidentified = await readyResyncFiles(sourceId, [{ path: "new.md", text: text(null) }]);
+    expect(unidentified.preview.hasBlockers).toBe(false);
+    expect(unidentified.preview.changes.find((change) => change.sourcePath === "new.md")?.labels).toContain("ADDED");
+    expect(unidentified.preview.changes.flatMap((change) => change.diagnostics)).toEqual(expect.arrayContaining([expect.objectContaining({ severity: "WARNING" })]));
+  });
+
+  it("keeps legacy revisions immutable and excludes reserved identity from subsequent real revisions", async () => {
+    const sourceId = await initial([{ path: "auth.md", text: text(null) }]);
+    const before = (await entries(sourceId))[0];
+    const legacy = (await revisions(before.document_id))[0];
+    await pool.query("UPDATE knowledge_revisions SET metadata=? WHERE id=?", [JSON.stringify({ title: "Auth", owner: "platform", knowledge_id: "auth-001" }), legacy.id]);
+    const storedLegacy = await revisions(before.document_id);
+    const adoption = await readyResyncFiles(sourceId, [{ path: "auth.md", text: text("auth-001") }]);
+    await services().apply.apply(fixtureCaller(), adoption.snapshotId);
+    expect(await revisions(before.document_id)).toEqual(storedLegacy);
+    const edited = await readyResyncFiles(sourceId, [{ path: "auth.md", text: text("auth-001", "changed", "security") }]);
+    await services().apply.apply(fixtureCaller(), edited.snapshotId);
+    const after = await revisions(before.document_id);
+    expect(after).toHaveLength(2);
+    const current = after.find((revision) => revision.id !== legacy.id)!;
+    expect(typeof current.metadata === "string" ? JSON.parse(current.metadata) : current.metadata).toEqual({ title: "Auth", owner: "security" });
+    expect(after.find((revision) => revision.id === legacy.id)).toEqual(storedLegacy[0]);
+  });
+
+  it.each(["none", "target", "other"])("commits or rolls back move + revise + adoption atomically with drift %s", async (drift) => {
+    const sourceId = await initial([{ path: "docs/auth.md", text: text("auth-001") }, { path: "other.md", text: "# Other\n" }]);
+    const before = (await entries(sourceId)).find((entry) => entry.external_id === "auth-001")!;
+    const resync = await readyResyncFiles(sourceId, [{ path: "security/login.md", text: text("auth-001", "edited") }, { path: "other.md", text: "# Other\n" }]);
+    // Exercise executor atomicity with an explicit valid move/revise/adopt plan;
+    // first-time reconciliation deliberately cannot infer a simultaneous move+edit.
+    await pool.query("UPDATE source_entries SET external_id=NULL WHERE id=?", [before.id]);
+    await rewritePlan(resync.snapshotId, (plan) => { plan.documents.adoptExternalId = [{ entryId: before.id, externalId: "auth-001" }]; });
+    if (drift === "target") await pool.query("UPDATE source_entries SET external_id='changed' WHERE id=?", [before.id]);
+    if (drift === "other") await pool.query("UPDATE source_entries SET external_id='auth-001' WHERE source_id=? AND source_path='other.md'", [sourceId]);
+    const beforeApply = await entries(sourceId);
+    const beforeRevisions = await revisions(before.document_id);
+    const beforeTree = await pool.query("SELECT id,parent_id,position,status FROM knowledge_tree_nodes WHERE source_id=? ORDER BY id", [sourceId]);
+    if (drift === "none") {
+      await services().apply.apply(fixtureCaller(), resync.snapshotId);
+      expect((await entries(sourceId)).find((entry) => entry.id === before.id)).toMatchObject({ document_id: before.document_id, external_id: "auth-001", source_path: "security/login.md" });
+      expect(await revisions(before.document_id)).toHaveLength(2);
+    } else {
+      await expect(services().apply.apply(fixtureCaller(), resync.snapshotId)).rejects.toMatchObject({ code: "IDENTITY_STATE_CHANGED" });
+      expect(await entries(sourceId)).toEqual(beforeApply);
+      expect(await revisions(before.document_id)).toEqual(beforeRevisions);
+      expect(await pool.query("SELECT id,parent_id,position,status FROM knowledge_tree_nodes WHERE source_id=? ORDER BY id", [sourceId])).toEqual(beforeTree);
+      expect((await pool.query<{ sync_version: number }[]>("SELECT sync_version FROM knowledge_sources WHERE id=?", [sourceId]))[0].sync_version).toBe(1);
+    }
+  });
+
+  it("rejects adoption targets that are missing, folders, or owned by a different source", async () => {
+    const sourceId = await initial([{ path: "docs/auth.md", text: text(null) }]);
+    const before = (await entries(sourceId))[0];
+    const folder = (await pool.query<{ id: string }[]>("SELECT id FROM source_entries WHERE source_id=? AND entry_type='FOLDER'", [sourceId]))[0];
+    const uow = new MariaDbUnitOfWork(pool);
+    for (const [boundSourceId, entryId] of [[sourceId, uuidv7()], [sourceId, folder.id], [uuidv7(), before.id]]) {
+      await expect(uow.run((repositories) => adoptSourceExternalId(repositories, fixtureCaller(), boundSourceId, entryId, "K1"))).rejects.toMatchObject({ code: "IDENTITY_STATE_CHANGED" });
+    }
+    expect(await entries(sourceId)).toEqual([before]);
+  });
+
+  it("rejects real v1 snapshot shapes before attempting v2 integrity hashing", async () => {
+    const snapshotId = await readyInitial((await createSourceFixture(pool)).workspaceId);
+    const row = (await pool.query<{ plan: unknown }[]>("SELECT plan FROM source_import_snapshots WHERE id=?", [snapshotId]))[0];
+    const plan = (typeof row.plan === "string" ? JSON.parse(row.plan) : row.plan) as Record<string, unknown>;
+    plan.planVersion = "phase2:v1";
+    delete (plan.documents as Record<string, unknown>).adoptExternalId;
+    await pool.query("UPDATE source_import_snapshots SET adapter_version='phase2:v1',plan_version='phase2:v1',plan=? WHERE id=?", [JSON.stringify(plan), snapshotId]);
+    await expect(services().apply.apply(fixtureCaller(), snapshotId)).rejects.toMatchObject({ code: "IMPORT_PLAN_VERSION_UNSUPPORTED" });
+    expect((await pool.query<{ state: string }[]>("SELECT state FROM source_import_snapshots WHERE id=?", [snapshotId]))[0].state).toBe("READY");
   });
 });

@@ -6,6 +6,7 @@ import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction
 import { CreateFolderImportService, type ImportManifestEntry } from "@/modules/sources/application/create-folder-import";
 import { UploadFolderImportEntriesService } from "@/modules/sources/application/upload-folder-import-entries";
 import { FinalizeFolderImportService } from "@/modules/sources/application/finalize-folder-import";
+import { ApplyFolderImportService } from "@/modules/sources/application/apply-folder-import";
 import { DEFAULT_IMPORT_LIMITS } from "@/modules/sources/domain/import-limits";
 import type { SourceRepositories, SourceUnitOfWork } from "@/modules/sources/ports/unit-of-work";
 import { MariaDbSourceRepository } from "@/infrastructure/database/mariadb/repositories/sources";
@@ -96,6 +97,34 @@ class MissingSourceUnitOfWork implements SourceUnitOfWork {
 }
 
 describe("Phase 2 import finalization", () => {
+  it("persists reserved source identity separately from immutable revision metadata", async () => {
+    const bytes = new TextEncoder().encode("---\nknowledge_id: auth-001\ntitle: Auth\nowner: platform\n---\nbody\n");
+    const { session, finalize } = await initialSession([{ uploadKey: "auth", path: "auth.md", bytes }]);
+    const preview = await finalize.finalize(fixtureCaller(), session.snapshotId);
+    expect(preview.hasBlockers).toBe(false);
+    const [entry] = await pool.query<{ external_id: string; metadata: string | Record<string, unknown> }[]>(
+      "SELECT external_id,metadata FROM source_import_snapshot_entries WHERE snapshot_id=?", [session.snapshotId],
+    );
+    expect(entry.external_id).toBe("auth-001");
+    expect(typeof entry.metadata === "string" ? JSON.parse(entry.metadata) : entry.metadata).toEqual({ title: "Auth", owner: "platform" });
+    const [snapshot] = await pool.query<{ adapter_version: string; plan_version: string }[]>(
+      "SELECT adapter_version,plan_version FROM source_import_snapshots WHERE id=?", [session.snapshotId],
+    );
+    expect(snapshot).toMatchObject({ adapter_version: "phase2:v2", plan_version: "phase2:v2" });
+  });
+
+  it("blocks invalid knowledge_id at Preview and prevents Apply", async () => {
+    const bytes = new TextEncoder().encode("---\nknowledge_id: 123\n---\nbody\n");
+    const { session, finalize } = await initialSession([{ uploadKey: "auth", path: "auth.md", bytes }]);
+    const preview = await finalize.finalize(fixtureCaller(), session.snapshotId);
+    expect(preview.hasBlockers).toBe(true);
+    expect(preview.changes.flatMap((change) => change.diagnostics)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "INVALID_KNOWLEDGE_ID", severity: "BLOCKING" }),
+    ]));
+    const apply = new ApplyFolderImportService(new MariaDbUnitOfWork(pool), { now: clock });
+    await expect(apply.apply(fixtureCaller(), session.snapshotId)).rejects.toMatchObject({ code: "IMPORT_SNAPSHOT_BLOCKED" });
+  });
+
   it("finalizes a valid BUILDING snapshot into immutable READY content and clears raw Markdown", async () => {
     const bytes = new TextEncoder().encode("---\ntitle: Canonical\n---\n# Different\n\nBody\n");
     const { session, finalize } = await initialSession([{ uploadKey: "m1", path: "docs/readme.md", bytes }]);

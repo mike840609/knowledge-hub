@@ -17,6 +17,7 @@ function mapEntry(row: DbRow): ImportSnapshotEntry {
     clientRelativePath: String(row.client_relative_path),
     sourcePath: row.source_path === null ? null : String(row.source_path),
     sourcePathHash: row.source_path_hash === null ? null : String(row.source_path_hash),
+    externalId: row.external_id === null ? null : String(row.external_id),
     entryType: String(row.entry_type) as ImportSnapshotEntry["entryType"],
     uploadStatus: String(row.upload_status) as ImportSnapshotEntry["uploadStatus"],
     declaredSize: asNumber(row.declared_size, "declared_size"),
@@ -38,10 +39,10 @@ function mapEntry(row: DbRow): ImportSnapshotEntry {
 }
 
 const INSERT_COLUMNS =
-  "id,snapshot_id,upload_key,client_relative_path,source_path,source_path_hash,entry_type,upload_status,declared_size," +
+  "id,snapshot_id,upload_key,client_relative_path,source_path,source_path_hash,external_id,entry_type,upload_status,declared_size," +
   "source_file_hash,raw_markdown,resolved_title,title_source,markdown,metadata,revision_content_hash,reconciliation_fingerprint," +
   "mime_type,asset_content_hash,asset_size,asset_last_modified,diagnostics,preview_change";
-const ROW_PLACEHOLDERS = "(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+const ROW_PLACEHOLDERS = "(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
 
 /**
  * Item 17b: `raw_markdown` admits rows up to 5 MiB, so pure row-count
@@ -56,7 +57,7 @@ const SOLO_ROW_BYTES = 8 * 1024 * 1024;
 
 function toRowArgs(entry: ImportSnapshotEntry): unknown[] {
   return [
-    entry.id, entry.snapshotId, entry.uploadKey, entry.clientRelativePath, entry.sourcePath, entry.sourcePathHash,
+    entry.id, entry.snapshotId, entry.uploadKey, entry.clientRelativePath, entry.sourcePath, entry.sourcePathHash, entry.externalId,
     entry.entryType, entry.uploadStatus, entry.declaredSize, entry.sourceFileHash, entry.rawMarkdown, entry.resolvedTitle,
     entry.titleSource, entry.markdown, entry.metadata === null ? null : JSON.stringify(entry.metadata), entry.revisionContentHash,
     entry.reconciliationFingerprint, entry.mimeType, entry.assetContentHash, entry.assetSize, entry.assetLastModified,

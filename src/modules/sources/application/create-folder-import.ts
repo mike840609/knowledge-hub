@@ -107,7 +107,7 @@ function stagingEntries(snapshotId: string, manifest: readonly ImportManifestEnt
     const asset = raw as Partial<Extract<ImportManifestEntry, { kind: "ASSET" }>>;
     return {
       id: uuidv7(), snapshotId, uploadKey: raw.uploadKey, clientRelativePath: raw.relativePath,
-      sourcePath: null, sourcePathHash: null, entryType: markdown ? "DOCUMENT" : "ASSET",
+      sourcePath: null, sourcePathHash: null, externalId: null, entryType: markdown ? "DOCUMENT" : "ASSET",
       uploadStatus: markdown ? "PENDING" : "RECEIVED", declaredSize: raw.size, sourceFileHash: null,
       rawMarkdown: null, resolvedTitle: null, titleSource: null, markdown: null, metadata: null,
       revisionContentHash: null, reconciliationFingerprint: null,
@@ -152,7 +152,7 @@ export class CreateFolderImportService {
     const snapshot: ImportSnapshot = {
       id: snapshotId, workspaceId: input.workspaceId, sourceId: input.sourceId, basedOnVersion: input.basedOnVersion,
       createdBy: caller.identity.id, rootName, proposedSourceName, adapterType: "GENERIC_MARKDOWN_FOLDER",
-      adapterVersion: "phase2:v1", planVersion: "phase2:v1", state: "BUILDING",
+      adapterVersion: "phase2:v2", planVersion: "phase2:v2", state: "BUILDING",
       manifestHash: canonicalManifestHash(input.manifest), snapshotHash: null, planHash: null, hasBlockers: false,
       summary: null, plan: null, createdAt: now, finalizedAt: null, expiresAt, appliedAt: null, staleAt: null,
       resultSourceId: null, resultVersion: null,

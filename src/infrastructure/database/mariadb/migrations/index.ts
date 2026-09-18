@@ -7,6 +7,7 @@ import { phase2ImportStagingMigration } from "./006-phase-2-import-staging";
 import { phase2AssetProjectionMigration } from "./007-phase-2-asset-projection";
 import { phase3WorkspaceGovernanceAdditiveMigration } from "./008-phase-3-workspace-governance-additive";
 import { phase3WorkspaceGovernanceFinalizeMigration } from "./009-phase-3-workspace-governance-finalize";
+import { phase2StableSourceIdentityMigration } from "./010-phase-2-stable-source-identity";
 
 export const migrations = [
   coreMigration,
@@ -18,4 +19,5 @@ export const migrations = [
   phase2AssetProjectionMigration,
   phase3WorkspaceGovernanceAdditiveMigration,
   phase3WorkspaceGovernanceFinalizeMigration,
+  phase2StableSourceIdentityMigration,
 ] as const;

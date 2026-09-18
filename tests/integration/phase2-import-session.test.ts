@@ -66,8 +66,8 @@ describe("Phase 2 BUILDING import sessions", () => {
       workspaceId: fixture.workspaceId, sourceName: "Imported Wiki", rootName: "wiki", manifest: markdownManifest(),
     });
     expect(result.state).toBe("BUILDING");
-    const row = (await pool.query<InitialSnapshotRow[]>("SELECT source_id,based_on_version,proposed_source_name,state FROM source_import_snapshots WHERE id=?", [result.snapshotId]))[0];
-    expect(row).toMatchObject({ source_id: null, based_on_version: null, proposed_source_name: "Imported Wiki", state: "BUILDING" });
+    const row = (await pool.query<InitialSnapshotRow[]>("SELECT source_id,based_on_version,proposed_source_name,state,adapter_version,plan_version FROM source_import_snapshots WHERE id=?", [result.snapshotId]))[0];
+    expect(row).toMatchObject({ source_id: null, based_on_version: null, proposed_source_name: "Imported Wiki", state: "BUILDING", adapter_version: "phase2:v2", plan_version: "phase2:v2" });
     expect(Number((await pool.query<{ count: unknown }[]>("SELECT COUNT(*) AS count FROM knowledge_sources"))[0].count)).toBe(before);
   });
 

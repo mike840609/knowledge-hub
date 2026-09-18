@@ -97,9 +97,9 @@ async function uploadMarkdownFiles(request: APIRequestContext, snapshotId: strin
 
 async function importFolder(
   request: APIRequestContext,
-  input: { workspaceId?: string; sourceId?: string; sourceName?: string; fixture: string },
+  input: { workspaceId?: string; sourceId?: string; sourceName?: string; fixture?: string; files?: FixtureFile[] },
 ): Promise<{ snapshotId: string; preview: ImportPreviewPayload }> {
-  const { rootName, files } = readFixtureTree(input.fixture);
+  const { rootName, files } = input.files ? { rootName: "identity", files: input.files } : readFixtureTree(input.fixture!);
   const manifest = toManifest(files);
   const session = input.sourceId
     ? await request.post(`/api/sources/${input.sourceId}/source-imports`, { data: { rootName, manifest } })
@@ -234,4 +234,26 @@ test("stale preview loses to the second preview with no force apply", async ({ p
   await expect(page.getByText("There is no Force Apply")).toBeVisible();
   await expect(page.getByRole("button", { name: "Apply changes" })).toBeDisabled();
   await expect(page.getByRole("link", { name: "Refresh preview" })).toBeVisible();
+});
+
+
+test("previews identity-only adoption without counting a content update and blocks changed identity", async ({ page, request }) => {
+  const files = (identity?: string) => [{ relativePath: "guide.md", bytes: Buffer.from(`---\ntitle: Guide\n${identity ? `knowledge_id: ${identity}\n` : ""}---\n# Guide\n\nStable content.\n`) }];
+  const first = await importFolder(request, { workspaceId: QUERY_MASTER_WORKSPACE_ID, sourceName: "E2E Stable Identity", files: files() });
+  const { sourceId } = await applySnapshot(request, first.snapshotId);
+  const adopted = await importFolder(request, { sourceId, files: files("guide-001") });
+  expect(adopted.preview.hasBlockers).toBe(false);
+  expect(adopted.preview.summary.documents.updated).toBe(0);
+  expect(adopted.preview.summary.documents.unchanged).toBe(1);
+  await page.goto(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources/imports/${adopted.snapshotId}`);
+  await page.getByRole("button", { name: /Unchanged/ }).click();
+  await expect(page.getByText("Identity adopted: guide-001")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Apply changes" })).toBeEnabled();
+  await page.getByRole("button", { name: "Apply changes" }).click();
+  await expect(page).toHaveURL(new RegExp(`/sources/${sourceId}\\?import=success`));
+  const conflict = await importFolder(request, { sourceId, files: files("guide-002") });
+  expect(conflict.preview.hasBlockers).toBe(true);
+  await page.goto(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources/imports/${conflict.snapshotId}`);
+  await expect(page.getByText(/IDENTITY_CONFLICT/).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Apply changes" })).toBeDisabled();
 });
