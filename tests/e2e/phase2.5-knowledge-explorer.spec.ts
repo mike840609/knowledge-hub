@@ -3,6 +3,11 @@ import { expect, test } from "@playwright/test";
 const WORKSPACE = "0199f100-0000-7000-8000-000000000001";
 const SOURCE = "0199f100-0000-7000-8000-000000000101";
 
+async function openDocumentFilter(page: import("@playwright/test").Page) {
+  await page.getByRole("button", { name: "Filter documents and sources" }).click();
+  return page.getByPlaceholder("Filter documents and sources");
+}
+
 test("keeps Source Tree visible while switching Documents", async ({ page }) => {
   await page.goto(`/w/${WORKSPACE}/knowledge/${SOURCE}`);
   const tree = page.getByRole("tree", { name: "Knowledge tree" });
@@ -17,7 +22,8 @@ test("filters the current Source", async ({ page }) => {
   // Wait for hydration: filling the controlled filter before React attaches
   // listeners loses the input event (DOM shows text, tree never filters).
   await page.goto(`/w/${WORKSPACE}/knowledge/${SOURCE}`, { waitUntil: "networkidle" });
-  await page.getByPlaceholder("Filter documents").fill("Runbooks");
+  const filter = await openDocumentFilter(page);
+  await filter.fill("Runbooks");
   await expect(page.getByRole("treeitem", { name: "Runbooks" })).toBeVisible();
   await expect(page.getByRole("treeitem", { name: "Architecture" })).toHaveCount(0);
 });
@@ -80,9 +86,10 @@ test("reading navigation separates collections from authoring and source managem
 
 test("filters documents across collections without switching sources", async ({ page }) => {
   await page.goto(`/w/${WORKSPACE}/knowledge/${SOURCE}`, { waitUntil: "networkidle" });
-  await page.getByPlaceholder("Filter documents").fill("Compliance Policy");
+  const filter = await openDocumentFilter(page);
+  await filter.fill("Compliance Policy");
   await expect(page.getByRole("link", { name: "Compliance Policy", exact: true })).toBeVisible();
   await expect(page.getByRole("treeitem", { name: "Architecture", exact: true })).toHaveCount(0);
-  await page.getByPlaceholder("Filter documents").fill("no-such-document-123");
+  await filter.fill("no-such-document-123");
   await expect(page.getByRole("status").filter({ hasText: "No matching documents." })).toBeVisible();
 });

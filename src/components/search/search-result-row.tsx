@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { FileText } from "lucide-react";
 import { highlightSnippet } from "@/modules/knowledge/domain/search-query";
+import { plainSearchSnippet } from "@/lib/search-snippet";
 import type { KnowledgeSearchRow } from "@/modules/knowledge/ports/knowledge-search-repository";
 
 function formatTimestamp(value: Date): string {
@@ -16,24 +17,31 @@ export function SearchResultRow({
   includeArchived: boolean;
 }) {
   const href = `/w/${hit.workspaceId}/knowledge/${hit.sourceId}/${hit.documentId}${includeArchived ? "?includeArchived=true" : ""}`;
+  const snippet = plainSearchSnippet(hit.snippet);
   return (
     <li>
       <Link
         href={href}
-        className="flex gap-3 rounded-md border border-kh-border bg-kh-bg px-3 py-2.5 transition hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
+        className="kh-interactive-row flex gap-3 px-3 py-3"
       >
         <FileText size={16} strokeWidth={2} aria-hidden="true" className="mt-0.5 shrink-0 text-kh-text-muted" />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-kh-text">{hit.title}</span>
-          <span className="mt-0.5 block truncate text-xs text-kh-text-muted">
-            {hit.workspaceName} · {hit.sourceName} · <time dateTime={new Date(hit.updatedAt).toISOString()}>{formatTimestamp(hit.updatedAt)}</time>
-          </span>
-          <span className="mt-1 block text-sm text-kh-text-muted line-clamp-2">
-            {highlightSnippet(hit.snippet, terms).map((segment, index) =>
+          <span className="block truncate text-sm font-medium text-kh-text">
+            {highlightSnippet(hit.title, terms).map((segment, index) =>
               segment.match
-                ? <mark key={index} className="bg-kh-highlight text-kh-text">{segment.text}</mark>
+                ? <mark key={index} className="rounded-sm bg-kh-highlight text-kh-text">{segment.text}</mark>
                 : <span key={index}>{segment.text}</span>,
             )}
+          </span>
+          {snippet && <span className="mt-1 block line-clamp-2 text-sm leading-5 text-kh-text-muted">
+            {highlightSnippet(snippet, terms).map((segment, index) =>
+              segment.match
+                ? <mark key={index} className="rounded-sm bg-kh-highlight text-kh-text">{segment.text}</mark>
+                : <span key={index}>{segment.text}</span>,
+            )}
+          </span>}
+          <span className="mt-1 block truncate text-xs text-kh-text-muted">
+            {hit.workspaceName} · {hit.sourceName} · <time dateTime={new Date(hit.updatedAt).toISOString()}>{formatTimestamp(hit.updatedAt)}</time>
           </span>
         </span>
       </Link>

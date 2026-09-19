@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { WorkspaceImportLink } from "@/components/shell/workspace-import-link";
 import { SourceList } from "@/components/sources/source-list";
 import { getSourceListModel } from "@/server/source-read";
+import { PageHeader } from "@/components/shell/page-header";
 
 export default async function WorkspaceSourcesPage({
   params,
@@ -12,22 +13,20 @@ export default async function WorkspaceSourcesPage({
   const model = await getSourceListModel(workspaceId);
   if (!model) notFound();
   return (
-    <main className="mx-auto max-w-4xl px-6 py-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold text-kh-text">Manage sources</h1>
-          <p className="mt-1 text-sm text-kh-text-muted">
-            {model.items.length} {model.items.length === 1 ? "source" : "sources"} in {model.workspace.name}
-          </p>
-        </div>
-        <WorkspaceImportLink
+    <main className="mx-auto max-w-4xl px-6 py-6">
+      <PageHeader
+        location={model.workspace.name}
+        locationHref={`/w/${workspaceId}/knowledge`}
+        title="Manage sources"
+        description={`${model.items.length} ${model.items.length === 1 ? "source" : "sources"}`}
+        actions={<WorkspaceImportLink
           className="inline-flex items-center rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-sm font-medium text-kh-text transition hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
           href={`/w/${workspaceId}/sources/import`}
         >
           Import folder
-        </WorkspaceImportLink>
-      </div>
-      <div className="mt-5">
+        </WorkspaceImportLink>}
+      />
+      <div className="mt-6">
         <SourceList workspaceId={workspaceId} items={model.items} />
       </div>
     </main>

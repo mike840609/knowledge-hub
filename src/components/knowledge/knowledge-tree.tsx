@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ChevronDown, ChevronRight, FileText, Star } from "lucide-react";
 import {
   buildKnowledgeTree,
   filterKnowledgeTree,
@@ -19,6 +20,8 @@ export type KnowledgeTreeProps = {
   selectedDocumentId?: string;
   /** Client-local filter text; ancestors stay visible and expansion is restored on clear. */
   query?: string;
+  favoriteDocumentIds: ReadonlySet<string>;
+  onToggleFavorite: (documentId: string) => void;
 };
 
 function documentHref(
@@ -40,6 +43,8 @@ function TreeNodeRow({
   activeId,
   onToggle,
   onFocusNode,
+  favoriteDocumentIds,
+  onToggleFavorite,
 }: {
   node: KnowledgeTreeNode;
   depth: number;
@@ -50,6 +55,8 @@ function TreeNodeRow({
   activeId: string | null;
   onToggle: (id: string) => void;
   onFocusNode: (id: string) => void;
+  favoriteDocumentIds: ReadonlySet<string>;
+  onToggleFavorite: (documentId: string) => void;
 }) {
   const { item } = node;
   const isActive = activeId === null ? false : activeId === item.id;
@@ -57,6 +64,7 @@ function TreeNodeRow({
 
   if (item.type === "document") {
     const selected = selectedDocumentId !== undefined && item.documentId === selectedDocumentId;
+    const isFavorite = favoriteDocumentIds.has(item.documentId);
     return (
       <li
         role="treeitem"
@@ -67,17 +75,21 @@ function TreeNodeRow({
         data-node-id={item.id}
         tabIndex={tabIndex}
         onFocus={() => onFocusNode(item.id)}
-        className={`rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus ${selected ? "bg-kh-bg-selected" : ""}`}
+        className={`kh-interactive-row group flex min-h-9 items-center ${selected ? "bg-kh-bg-selected hover:bg-kh-bg-selected" : ""}`}
       >
         <Link
           href={documentHref(item, scope, includeArchived)}
           title={item.label}
-          className={`block truncate rounded px-2 py-1.5 text-sm hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus ${
-            selected ? "font-semibold text-kh-text" : "text-kh-text-muted"
+          className={`flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus ${
+            selected ? "font-medium text-kh-selected-text" : "text-kh-text-muted"
           }`}
         >
-          {item.label}
+          <FileText size={14} strokeWidth={1.8} className="shrink-0 text-kh-text-muted" aria-hidden="true" />
+          <span className="truncate">{item.label}</span>
         </Link>
+        <button type="button" onClick={() => onToggleFavorite(item.documentId)} aria-label={`${isFavorite ? "Remove from" : "Add to"} favorites: ${item.label}`} title={isFavorite ? "Remove from favorites" : "Add to favorites"} className={`mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus ${isFavorite ? "text-kh-selected-text" : "kh-favorite-action text-kh-text-muted hover:bg-kh-bg-hover"}`}>
+          <Star size={14} strokeWidth={1.8} fill={isFavorite ? "currentColor" : "none"} aria-hidden="true" />
+        </button>
       </li>
     );
   }
@@ -92,7 +104,7 @@ function TreeNodeRow({
       data-node-id={item.id}
       tabIndex={tabIndex}
       onFocus={() => onFocusNode(item.id)}
-      className="rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
+      className="rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
     >
       <button
         type="button"
@@ -100,11 +112,9 @@ function TreeNodeRow({
         aria-expanded={!collapsed}
         title={item.label}
         tabIndex={-1}
-        className="flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm font-medium text-kh-text hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
+        className="kh-interactive-row flex min-h-9 w-full items-center gap-2 px-2 text-left text-sm font-medium text-kh-text"
       >
-        <span aria-hidden="true" className="inline-block w-3 shrink-0 text-kh-text-muted">
-          {collapsed ? "▸" : "▾"}
-        </span>
+        {collapsed ? <ChevronRight size={14} strokeWidth={1.8} className="shrink-0 text-kh-text-muted" aria-hidden="true" /> : <ChevronDown size={14} strokeWidth={1.8} className="shrink-0 text-kh-text-muted" aria-hidden="true" />}
         <span className="min-w-0 flex-1 truncate">{item.label}</span>
       </button>
       {!collapsed && node.children.length > 0 ? (
@@ -121,6 +131,8 @@ function TreeNodeRow({
               activeId={activeId}
               onToggle={onToggle}
               onFocusNode={onFocusNode}
+              favoriteDocumentIds={favoriteDocumentIds}
+              onToggleFavorite={onToggleFavorite}
             />
           ))}
         </ul>
@@ -139,6 +151,8 @@ export function KnowledgeTree({
   sourceId,
   selectedDocumentId,
   query = "",
+  favoriteDocumentIds,
+  onToggleFavorite,
 }: KnowledgeTreeProps) {
   const router = useRouter();
   const treeRef = useRef<HTMLUListElement>(null);
@@ -237,7 +251,7 @@ export function KnowledgeTree({
         }
         break;
       case "Enter":
-        if (current?.dataset.nodeId && (event.target as HTMLElement).tagName !== "A") {
+        if (current?.dataset.nodeId && !["A", "BUTTON"].includes((event.target as HTMLElement).tagName)) {
           const item = itemById.get(current.dataset.nodeId);
           if (item?.type === "folder") {
             event.preventDefault();
@@ -282,6 +296,8 @@ export function KnowledgeTree({
           activeId={activeId ?? firstId ?? null}
           onToggle={toggle}
           onFocusNode={setActiveId}
+          favoriteDocumentIds={favoriteDocumentIds}
+          onToggleFavorite={onToggleFavorite}
         />
       ))}
     </ul>

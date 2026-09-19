@@ -20,17 +20,17 @@ export function SearchResults({ model }: { model: SearchPageModel }) {
   }
   const result = model.result;
   if (result === null) {
-    return <p className="rounded-md border border-dashed border-kh-border p-6 text-sm text-kh-text-muted">Enter a keyword to search.</p>;
+    return <p className="rounded-md bg-kh-bg-subtle p-6 text-sm text-kh-text-muted">Enter a keyword to search.</p>;
   }
   if (result.tooLong) {
     return <p role="alert" className="rounded-md border border-kh-border p-6 text-sm text-kh-danger">Query is too long; use at most 200 characters.</p>;
   }
   if (result.hits.length === 0) {
-    return <p className="rounded-md border border-dashed border-kh-border p-6 text-sm text-kh-text-muted">No results for this query.</p>;
+    return <p className="rounded-md bg-kh-bg-subtle p-6 text-sm text-kh-text-muted">No results for this query.</p>;
   }
   return (
     <>
-      <ul className="flex flex-col gap-2">
+      <ul className="flex flex-col gap-1">
         {result.hits.map((hit) => (
           <SearchResultRow key={hit.documentId} hit={hit} terms={result.terms} includeArchived={model.includeArchived} />
         ))}

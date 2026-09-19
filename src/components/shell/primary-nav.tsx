@@ -2,27 +2,26 @@
 
 import { useWorkspaceAuthorization } from "./use-workspace-authorization";
 import Link from "next/link";
-import { BookOpenText, Database, Search, Settings } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { BookOpenText, Database, Settings } from "lucide-react";
 
 export function PrimaryNav({
   workspaceId,
   onNavigate,
+  compact = false,
 }: {
   workspaceId: string;
   onNavigate?: () => void;
+  compact?: boolean;
 }) {
   const { access } = useWorkspaceAuthorization();
+  const pathname = usePathname();
   const items = [
     {
       name: "Knowledge",
       href: `/w/${workspaceId}/knowledge`,
       Icon: BookOpenText,
     },
-    ...(access.actions.canSearch ? [{
-      name: "Search",
-      href: `/w/${workspaceId}/search`,
-      Icon: Search,
-    }] : []),
     ...(access.actions.canInspectSources ? [{
       name: "Sources",
       href: `/w/${workspaceId}/sources`,
@@ -32,17 +31,23 @@ export function PrimaryNav({
   ];
   return (
     <nav aria-label="Primary" className="flex flex-col gap-0.5 p-2">
-      {items.map(({ name, href, Icon }) => (
-        <Link
-          key={name}
-          href={href}
-          onClick={onNavigate}
-          className="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-kh-text-muted transition hover:bg-kh-bg-hover hover:text-kh-text focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
-        >
-          <Icon size={15} strokeWidth={2} aria-hidden="true" />
-          <span>{name}</span>
-        </Link>
-      ))}
+      {items.map(({ name, href, Icon }) => {
+        const selected = pathname === href || pathname.startsWith(`${href}/`);
+        return (
+          <Link
+            key={name}
+            href={href}
+            onClick={onNavigate}
+            aria-current={selected ? "page" : undefined}
+            aria-label={compact ? name : undefined}
+            title={compact ? name : undefined}
+            className={`flex h-9 items-center rounded px-2 text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus ${compact ? "justify-center" : "gap-2"} ${selected ? "bg-kh-bg-selected font-medium text-kh-selected-text hover:bg-kh-bg-selected" : "text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text"}`}
+          >
+            <Icon size={15} strokeWidth={2} aria-hidden="true" />
+            {compact ? null : <span>{name}</span>}
+          </Link>
+        );
+      })}
     </nav>
   );
 }

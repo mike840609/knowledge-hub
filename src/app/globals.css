@@ -5,17 +5,21 @@
 :root {
   color-scheme: light;
   --kh-bg: #ffffff;
-  --kh-bg-subtle: #f7f7f8;
-  --kh-bg-hover: #f1f1f2;
-  --kh-bg-selected: #eceef1;
-  --kh-border: #e5e7eb;
+  --kh-reading-bg: #f8f8f6;
+  --kh-bg-subtle: #f6f7f9;
+  --kh-bg-nav: #eaecef;
+  --kh-bg-sidebar: #f0f1f2;
+  --kh-bg-hover: #f1f2f5;
+  --kh-bg-selected: #eef0ff;
+  --kh-border: #e7e9ee;
   --kh-text: #202124;
-  --kh-text-muted: #6b7280;
-  --kh-primary: #59616c;
-  --kh-primary-hover: #48515d;
-  --kh-link: #405f91;
-  --kh-focus: #405f91;
-  --kh-highlight: #e3eaf2;
+  --kh-text-muted: #606875;
+  --kh-primary: #4f5bc8;
+  --kh-primary-hover: #414bb4;
+  --kh-link: #3743a8;
+  --kh-focus: #4f5bc8;
+  --kh-selected-text: #3743a8;
+  --kh-highlight: #e8eaff;
   --kh-danger: #dc2626;
   --kh-warning: #b45309;
   --kh-success: #15803d;
@@ -45,7 +49,21 @@ a { color: inherit; }
 ::selection { background: var(--kh-highlight); color: var(--kh-text); }
 
 @layer components {
+  .kh-interactive-row {
+    @apply rounded-md transition-colors hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus;
+  }
+
   .kh-reading-column {
     @apply mx-auto w-full max-w-[860px] px-6;
   }
+
+  .kh-sidebar-surface {
+    --kh-bg-hover: #e4e6ea;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .kh-favorite-action { opacity: 0; }
+  .group:hover .kh-favorite-action,
+  .group:focus-within .kh-favorite-action { opacity: 1; }
 }

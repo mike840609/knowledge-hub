@@ -6,38 +6,33 @@ const QUERY_MASTER_WORKSPACE = "0199f100-0000-7000-8000-000000000001";
 const SOURCE_MANAGED_SOURCE = "0199f100-0000-7000-8000-000000000105";
 const SOURCE_MANAGED_DOCUMENT = "0199f100-0000-7000-8000-000000000210";
 
-// Navigate to Knowledge and return only once the authoring form is interactive.
-// On a populated workspace the document view is heavy (tree + reading pane +
-// inspector + topbar) and hydrates lazily, so setInputFiles can dispatch the
-// change event before React wires the file input's onChange — silently dropping
-// the upload (no POST fires). The file input has no readiness signal of its own,
-// so prove hydration through its sibling in the SAME component: open and close
-// the inline create form (retried until the click's handler is attached). Once
-// that onClick responds, the file input's onChange in the same form is wired too.
+// Navigate to the standalone authoring page and return only once the form is
+// interactive. The create action stays disabled until the client confirms the
+// workspace authorization, which gives the upload tests a stable hydration
+// signal before setInputFiles dispatches the file input's change event.
 async function gotoKnowledgeReadyToUpload(page: Page, workspaceId: string) {
   await page.goto(`/w/${workspaceId}/knowledge/new`);
-  await expect(async () => {
-    await page.getByRole("button", { name: "New document" }).click();
-    await expect(page.getByLabel("Document title")).toBeVisible({ timeout: 1_000 });
-  }).toPass({ timeout: 15_000 });
-  await page.getByRole("button", { name: "Cancel" }).click();
-  await expect(page.getByLabel("Document title")).toHaveCount(0);
+  const title = page.getByLabel("Document title");
+  await expect(title).toBeEditable({ timeout: 15_000 });
+  // A temporary value proves the controlled input and submit handler are
+  // wired after hydration without creating a document.
+  await title.fill("Hydration probe");
+  await expect(page.getByRole("button", { name: "Create document" })).toBeEnabled({ timeout: 15_000 });
+  await title.fill("");
 }
 
 test("creates the first document in a workspace with no sources", async ({ page }) => {
-  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
-  await page.getByRole("button", { name: "New document" }).click();
+  await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
   await page.getByLabel("Document title").fill("My First Note");
-  await page.getByRole("button", { name: "Create" }).click();
+  await page.getByRole("button", { name: "Create document" }).click();
 
   await expect(page.getByRole("heading", { name: "My First Note" })).toBeVisible();
 });
 
 test("edits a hub-managed document and records a second revision", async ({ page }) => {
-  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
-  await page.getByRole("button", { name: "New document" }).click();
+  await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
   await page.getByLabel("Document title").fill("Editable Note");
-  await page.getByRole("button", { name: "Create" }).click();
+  await page.getByRole("button", { name: "Create document" }).click();
   await expect(page.getByRole("heading", { name: "Editable Note" })).toBeVisible();
 
   await page.getByRole("link", { name: "Edit", exact: true }).click();
@@ -80,10 +75,9 @@ test("never shows Edit on source-managed content", async ({ page }) => {
 // their typed input survives on screen, and the first editor's content is what persisted.
 // Ruling B skips React component unit tests, so this browser behavior is E2E-only.
 test("a stale second editor gets a conflict, keeps their input, and does not overwrite the winner", async ({ page }) => {
-  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
-  await page.getByRole("button", { name: "New document" }).click();
+  await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
   await page.getByLabel("Document title").fill("Conflict Note");
-  await page.getByRole("button", { name: "Create" }).click();
+  await page.getByRole("button", { name: "Create document" }).click();
   await expect(page.getByRole("heading", { name: "Conflict Note" })).toBeVisible();
   const documentUrl = page.url();
 

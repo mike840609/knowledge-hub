@@ -2,6 +2,7 @@ import { SearchForm } from "@/components/search/search-form";
 import { SearchResults } from "@/components/search/search-results";
 import { firstSearchParam, type SearchParamValue } from "@/lib/search-params";
 import { getSearchPageModel } from "@/server/search-read";
+import { PageHeader } from "@/components/shell/page-header";
 
 export default async function WorkspaceSearchPage({
   params,
@@ -32,10 +33,9 @@ export default async function WorkspaceSearchPage({
     page: Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1,
   });
   return (
-    <main className="mx-auto max-w-4xl px-6 py-8">
-      <h1 className="text-2xl font-semibold text-kh-text">Search</h1>
-      <p className="mt-1 text-sm text-kh-text-muted">{model.workspaceName}</p>
-      <div className="mt-5">
+    <main className="mx-auto max-w-4xl px-6 py-6">
+      <PageHeader location={model.workspaceName} locationHref={`/w/${workspaceId}/knowledge`} title="Search" description="Find documents across this workspace." />
+      <div className="mt-6">
         <SearchForm
           workspaceId={model.workspaceId}
           q={model.q}
