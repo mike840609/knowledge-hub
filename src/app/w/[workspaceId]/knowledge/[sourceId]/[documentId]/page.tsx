@@ -3,6 +3,7 @@ import type { KnowledgeTreeItem } from "@/modules/knowledge/application/knowledg
 import type { DocumentBreadcrumbSegment } from "@/components/knowledge/document-header";
 import { DocumentDetailClient, type DocumentInspectorData } from "@/components/knowledge/document-inspector";
 import { DocumentViewer } from "@/components/knowledge/document-viewer";
+import { markdownStartsWithDocumentTitle } from "@/lib/markdown-title";
 
 function buildBreadcrumb(
   workspaceId: string,
@@ -71,6 +72,7 @@ export default async function KnowledgeDocumentPage({
   }
 
   const { view, selectedRevision } = model;
+  const contentOwnsTitle = markdownStartsWithDocumentTitle(selectedRevision.markdown, selectedRevision.title);
   const isHistorical = selectedRevision.id !== view.currentRevision.id;
   const archivedSuffix = includeArchived ? "?includeArchived=true" : "";
 
@@ -121,8 +123,9 @@ export default async function KnowledgeDocumentPage({
       inspectorData={inspectorData}
       editHref={editHref}
       readOnly={sourceManaged}
+      contentOwnsTitle={contentOwnsTitle}
     >
-      <div className="kh-reading-column pb-6 pt-10">
+      <div className={`kh-reading-column pb-6 ${contentOwnsTitle ? "pt-6" : "pt-8"}`}>
         <DocumentViewer view={view} selectedRevision={selectedRevision} />
       </div>
     </DocumentDetailClient>

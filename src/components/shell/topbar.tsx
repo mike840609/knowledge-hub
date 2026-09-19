@@ -24,8 +24,8 @@ export function Topbar({
   const active = state?.pathname === pathname;
   const visible = active && state.visible;
   return (
-    <header className="flex h-12 shrink-0 items-center border-b border-kh-border bg-kh-bg">
-      <div className={`flex shrink-0 items-center gap-2 px-3 lg:h-full lg:border-r lg:border-kh-border ${navCollapsed ? "lg:w-12 lg:px-2" : "lg:w-40"}`}>
+    <header className="flex h-12 shrink-0 items-center border-b border-kh-border/60 bg-kh-reading-bg">
+      <div className={`flex shrink-0 items-center gap-2 px-3 lg:h-full lg:border-r lg:border-kh-border lg:bg-kh-bg-nav ${navCollapsed ? "lg:w-12 lg:px-2" : "lg:w-40"}`}>
         {onMenuClick ? (
           <button
             type="button"
@@ -50,8 +50,8 @@ export function Topbar({
         <span className="min-w-0 flex-1 truncate text-sm font-semibold text-kh-text" title={active ? state.title : undefined}>
           {active ? state.title : ""}
         </span>
-        <button type="button" aria-label="Document details" onClick={active ? state.onDetailsClick : undefined}
-          className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md border border-kh-border px-2 text-sm hover:bg-kh-bg-hover focus-visible:ring-2 focus-visible:ring-kh-focus sm:px-3">
+        <button type="button" aria-label="Document details" aria-keyshortcuts="Meta+I Control+I" title="Details (⌘/Ctrl I)" onClick={active ? state.onDetailsClick : undefined}
+          className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md px-2 text-sm text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text focus-visible:ring-2 focus-visible:ring-kh-focus sm:px-3">
           <PanelRight className="h-4 w-4" aria-hidden="true" />
           <span className="hidden sm:inline">Details</span>
         </button>

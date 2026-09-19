@@ -42,7 +42,7 @@ export function WorkspaceSelector({ workspaceId }: { workspaceId: string }) {
       }
     }}>
       <summary aria-label={`Workspace: ${currentName}`} title={`Switch workspace: ${currentName}`}
-        className="flex min-h-9 w-full cursor-pointer list-none items-center gap-2 rounded-md border border-kh-border px-3 text-sm hover:bg-kh-bg-hover focus-visible:ring-2 focus-visible:ring-kh-focus [&::-webkit-details-marker]:hidden">
+        className="flex min-h-9 w-full cursor-pointer list-none items-center gap-2 rounded-md px-3 text-sm hover:bg-kh-bg-hover focus-visible:ring-2 focus-visible:ring-kh-focus group-open:bg-kh-bg-hover [&::-webkit-details-marker]:hidden">
         <span className="hidden shrink-0 text-xs text-kh-text-muted sm:inline">Workspace</span>
         <span className="min-w-0 flex-1 truncate font-medium">{currentName}</span>
         <ChevronDown className="h-4 w-4 shrink-0 text-kh-text-muted group-open:rotate-180" aria-hidden="true" />

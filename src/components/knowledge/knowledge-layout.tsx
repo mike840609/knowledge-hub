@@ -105,7 +105,7 @@ export function KnowledgeLayout({
       {desktop ? (
         <Suspense
           fallback={
-            <aside aria-label="Knowledge explorer" className="w-72 shrink-0 border-r border-kh-border bg-kh-bg p-3">
+            <aside aria-label="Knowledge explorer" className="w-72 shrink-0 border-r border-kh-border bg-kh-bg-sidebar p-3">
               <p className="text-sm text-kh-text-muted">Loading documents…</p>
             </aside>
           }

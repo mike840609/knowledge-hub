@@ -12,6 +12,7 @@ export function Drawer({
   children,
   label = "Close panel",
   modal = true,
+  surfaceClassName = "bg-kh-bg",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -20,12 +21,13 @@ export function Drawer({
   children: ReactNode;
   label?: string;
   modal?: boolean;
+  surfaceClassName?: string;
 }) {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange} modal={modal}>
       <Dialog.Portal>
         {modal ? <Dialog.Backdrop className="fixed inset-0 z-40 bg-black/20" /> : null}
-        <Dialog.Popup className="fixed inset-y-0 right-0 z-50 flex w-80 max-w-[85vw] flex-col border-l border-kh-border bg-kh-bg shadow-lg focus:outline-none">
+        <Dialog.Popup className={`fixed inset-y-0 right-0 z-50 flex w-80 max-w-[85vw] flex-col border-l border-kh-border shadow-lg focus:outline-none ${surfaceClassName}`}>
           <div className="flex items-start justify-between gap-2 border-b border-kh-border px-4 py-3">
             <div className="min-w-0">
               <Dialog.Title className="truncate text-sm font-semibold text-kh-text">

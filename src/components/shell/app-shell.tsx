@@ -60,10 +60,10 @@ export function AppShell({ model, children }: { model: WorkspaceShellModel; chil
       {!authorization.confirmed && !authorization.revoked && <p role="alert" className="bg-kh-bg p-3 text-sm text-kh-danger">Unable to confirm workspace access. Changes are paused. <button className="underline" onClick={() => void authorization.refresh()}>Retry</button></p>}
       {authorization.access.workspace.lifecycleState === "ARCHIVED" && <ArchivedWorkspaceBanner workspaceId={model.workspace.id} canRestore={authorization.confirmed && authorization.access.actions.canRestore} />}
       <div className="flex min-h-0 flex-1">
-        <aside className={`hidden shrink-0 border-r border-kh-border bg-kh-bg lg:block ${navCollapsed ? "w-12" : "w-40"}`}>
+        <aside className={`hidden shrink-0 border-r border-kh-border bg-kh-bg-nav lg:block ${navCollapsed ? "w-12" : "w-40"}`}>
           <PrimaryNav workspaceId={model.workspace.id} compact={navCollapsed} />
         </aside>
-        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto has-[[data-document-pane]]:overflow-hidden">{authorization.revoked ? <p role="status">Workspace access changed. Returning to My Space…</p> : children}</main>
+        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-kh-bg has-[[data-document-pane]]:overflow-hidden">{authorization.revoked ? <p role="status">Workspace access changed. Returning to My Space…</p> : children}</main>
       </div>
       <Drawer open={navOpen} onOpenChange={setNavOpen} title="Menu">
         <PrimaryNav workspaceId={model.workspace.id} onNavigate={() => setNavOpen(false)} />

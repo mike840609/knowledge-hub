@@ -5,6 +5,7 @@ import { Search, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
+import { plainSearchSnippet } from "@/lib/search-snippet";
 
 type QuickHit = {
   documentId: string;
@@ -15,15 +16,6 @@ type QuickHit = {
 };
 
 type QuickResponse = { hits: QuickHit[]; tooLong: boolean; timedOut: boolean };
-
-function plainSnippet(value: string): string {
-  return value
-    .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, "$2")
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    .replace(/[#*`>|]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
 
 export function QuickSearch({ workspaceId }: { workspaceId: string }) {
   const router = useRouter();
@@ -108,11 +100,11 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
         onClick={() => setOpen(true)}
         aria-label="Quick search"
         title="Quick search (⌘/Ctrl K)"
-        className="inline-flex h-8 min-w-8 items-center justify-center gap-2 rounded-md border border-kh-border px-2 text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus sm:px-3"
+        className="inline-flex h-8 min-w-8 items-center justify-center gap-2 rounded-md px-2 text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus sm:px-3"
       >
         <Search className="h-4 w-4" aria-hidden="true" />
         <span className="hidden text-[13px] sm:inline">Search</span>
-        <kbd className="ml-3 hidden rounded border border-kh-border px-1 text-[10px] lg:inline">⌘K</kbd>
+        <kbd className="ml-3 hidden rounded bg-kh-bg-subtle px-1 text-[10px] lg:inline">⌘K</kbd>
       </button>
       <Dialog.Root open={open} onOpenChange={setOpen}>
         <Dialog.Portal>
@@ -163,7 +155,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
                   <li key={hit.documentId} id={`quick-hit-${index}`} role="option" aria-selected={index === activeIndex}>
                     <button type="button" onClick={() => openDocument(hit)} onMouseEnter={() => setActiveIndex(index)} className={`w-full rounded-md px-3 py-2 text-left focus-visible:ring-2 focus-visible:ring-kh-focus ${index === activeIndex ? "bg-kh-bg-selected" : "hover:bg-kh-bg-hover"}`}>
                       <span className={`block truncate text-sm font-medium ${index === activeIndex ? "text-kh-selected-text" : "text-kh-text"}`}>{hit.title}</span>
-                      <span className="block truncate text-xs text-kh-text-muted">{hit.sourceName} · {plainSnippet(hit.snippet)}</span>
+                      <span className="block truncate text-xs text-kh-text-muted">{hit.sourceName} · {plainSearchSnippet(hit.snippet)}</span>
                     </button>
                   </li>
                 ))}
