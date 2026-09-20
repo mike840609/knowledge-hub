@@ -105,7 +105,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
       >
         <Search className="h-4 w-4" aria-hidden="true" />
         <span className="hidden text-body-sm sm:inline">Search</span>
-        <kbd className="ml-3 hidden rounded-md bg-kh-bg-subtle px-1 text-micro lg:inline">⌘K</kbd>
+        <kbd className="ml-3 hidden rounded-md bg-kh-bg-subtle px-1 text-micro text-kh-text-faint lg:inline">⌘K</kbd>
       </button>
       <Dialog.Root open={open} onOpenChange={setOpen}>
         <Dialog.Portal>

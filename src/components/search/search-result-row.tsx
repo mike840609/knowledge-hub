@@ -50,7 +50,7 @@ export function SearchResultRow({
               <Highlighted text={hit.title} terms={terms} />
             </span>
             {snippet && (
-              <span className="mt-0.5 block line-clamp-2 text-body-sm text-kh-text-muted">
+              <span className="mt-0.5 block line-clamp-2 text-body-sm text-kh-text-secondary">
                 <Highlighted text={snippet} terms={terms} />
               </span>
             )}

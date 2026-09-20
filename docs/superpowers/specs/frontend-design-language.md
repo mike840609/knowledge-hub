@@ -181,11 +181,45 @@ Names say what a surface is, not where it was first used. The previous names
 (`reading-bg`, `bg-nav`, `bg-sidebar`) are why a warm grey and three cool ones
 ended up adjacent without anyone noticing.
 
+### Divergence: this ramp is tinted, the reference's is not
+
+Measured, the reference's light surfaces are achromatic — `#f8f8f8`, `#f4f4f4`,
+`#f0f0f0`, chroma 0 — and its dark surfaces are close to it. Its accent carries
+all of the colour. This ramp is cool-tinted instead, chroma 2 to 8.
+
+That is a deliberate choice and not a reading of the reference. It is recorded
+here because the earlier wording, "four steps of one cool neutral hue", read as
+though the tint were the rule being followed rather than a departure from it.
+Either is defensible; claiming the wrong provenance is not.
+
+Its dark ramp also sits lower: canvas at L\* 2.4 against this one's 6.3, with
+tighter steps. A near-black canvas and a soft dark one are a matter of taste,
+not correctness.
+
 ## 8. Colour
 
 One restrained accent, used for selected state, focus, primary action and
-active navigation. Hierarchy relies on weight, size, spacing and muted
-foreground rather than decorative colour.
+active navigation. Hierarchy relies on weight, size, spacing and foreground
+level rather than decorative colour.
+
+### Foreground levels
+
+Four, matching the depth the reference carries:
+
+```text
+text            primary   — titles, body, anything being read
+text-secondary  content one step down — snippets, supporting prose
+text-muted      metadata and chrome — timestamps, counts, breadcrumbs
+text-faint      hints that are not content — kbd, separators, disabled
+```
+
+`text`, `text-secondary` and `text-muted` all meet 4.5:1 against every surface
+they can sit on and may carry body text. **`text-faint` meets 3:1 and may
+not** — it is for marks a reader can ignore without losing meaning.
+
+Two levels were not enough, and the symptom was concrete: a search result's
+snippet and the metadata beneath it rendered in the same colour, so content
+and chrome read as one undifferentiated block.
 
 Semantic colours carry meaning only. Each of success, warning and danger has a
 text colour, a tinted background and a border, so status is scannable at a
@@ -197,6 +231,14 @@ dark background needs a light red. One token cannot serve both once a dark
 theme exists.
 
 No component declares a colour outside the token layer.
+
+### On ladder depth
+
+The reference carries more rungs than this contract does — three border levels
+plus a translucent one, four line levels plus a tint. This product has two
+(`border`, `border-strong`) because it has two jobs to express: a decorative
+divider and a control boundary. Depth is added when a surface needs a
+distinction that cannot be made with what exists, not to match a count.
 
 ## 9. Typography and motion
 
@@ -401,5 +443,13 @@ Each of these changes behaviour rather than appearance:
 - Off-scale type, radius, elevation and motion values do not compile.
 - The `lg` radius and both elevation tokens appear only on floating surfaces.
 - No component declares a colour outside the token layer.
+
+### On ladder depth
+
+The reference carries more rungs than this contract does — three border levels
+plus a translucent one, four line levels plus a tint. This product has two
+(`border`, `border-strong`) because it has two jobs to express: a decorative
+divider and a control boundary. Depth is added when a surface needs a
+distinction that cannot be made with what exists, not to match a count.
 - One focus idiom across the codebase.
 - Light and dark themes resolve every token.
