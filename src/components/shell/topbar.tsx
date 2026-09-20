@@ -47,7 +47,7 @@ export function Topbar({
       </div>
       <QuickSearch workspaceId={model.workspace.id} />
       <div aria-hidden={!visible} inert={!visible}
-        className={`flex min-w-0 flex-1 items-center gap-2 px-3 transition-opacity duration-150 motion-reduce:transition-none ${visible ? "opacity-100" : "pointer-events-none opacity-0"}`}>
+        className={`flex min-w-0 flex-1 items-center gap-2 px-3 transition-opacity duration-120 ease-out ${visible ? "opacity-100" : "pointer-events-none opacity-0"}`}>
         <span className="min-w-0 flex-1 truncate text-body font-semibold text-kh-text" title={active ? state.title : undefined}>
           {active ? state.title : ""}
         </span>

@@ -109,8 +109,8 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
       </button>
       <Dialog.Root open={open} onOpenChange={setOpen}>
         <Dialog.Portal>
-          <Dialog.Backdrop className="fixed inset-0 z-50 bg-kh-overlay" />
-          <Dialog.Popup className="fixed left-1/2 top-[min(14vh,120px)] z-[60] flex max-h-[75vh] w-[min(640px,calc(100vw-24px))] -translate-x-1/2 flex-col overflow-hidden rounded-lg border border-kh-border bg-kh-bg shadow-modal focus:outline-none">
+          <Dialog.Backdrop className="fixed inset-0 z-50 bg-kh-overlay transition-opacity duration-120 ease-out data-[starting-style]:opacity-0 data-[ending-style]:opacity-0" />
+          <Dialog.Popup className="fixed left-1/2 top-[min(14vh,120px)] z-[60] flex max-h-[75vh] w-[min(640px,calc(100vw-24px))] -translate-x-1/2 flex-col overflow-hidden rounded-lg border border-kh-border bg-kh-bg shadow-modal outline-none transition-[opacity,transform] duration-120 ease-out data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0">
             <Dialog.Title className="sr-only">Quick search</Dialog.Title>
             <div className="flex items-center gap-3 border-b border-kh-border px-4">
               <Search className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />
