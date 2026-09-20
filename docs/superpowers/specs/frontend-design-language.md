@@ -339,6 +339,22 @@ Each of these changes behaviour rather than appearance:
    replaced, so gaps and paddings remain unenforced. Page container widths
    spread across seven values and page padding across three.
 9. Dates are formatted with a hardcoded `en-US` locale.
+10. Menus are hand-rolled `<details>` elements (`workspace-selector`, the
+    sidebar's display options) rather than Base UI's `Menu`, which is already
+    a dependency. They have no arrow-key navigation, which §10 requires of
+    every list of rows — this is a gap in the contract's own coverage, not
+    only in the code.
+11. `search-form` overrides the button shape through `className`. A primitive
+    owns its own shape (§15); an override is the drift the button system
+    exists to prevent, and it escaped the sweep because it was a `<Button>`
+    rather than a hand-rolled one.
+12. `Input` and `Textarea` are not on the button size scale, so controls do
+    not align when placed side by side in a form.
+13. Loading has three spellings — a skeleton, `Loading documents…` and
+    `Searching…` — and the document skeleton is duplicated between
+    `knowledge-layout` and `loading.tsx`.
+14. `error.tsx` and `not-found.tsx` cover one route. `/search`, `/sources` and
+    `/settings` have no boundary, and there is no `global-error.tsx`.
 
 ## 19. Completion criteria
 

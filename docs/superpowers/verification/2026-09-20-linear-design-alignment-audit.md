@@ -56,10 +56,10 @@
 | 9 | 只有 primary/secondary 兩個 variant，缺 ghost/danger/link | ✅ 已完成 | `287c220` |
 | 10 | 破壞性操作用主色：Archive workspace／Confirm archive 以紫色 primary 呈現 | ✅ 已完成 | `287c220` |
 | 11 | Badge 狀態不可掃視：success/warning/danger 共用 `bg-kh-bg-hover`，只差文字色 | ✅ 已完成 | `0a70605` |
-| 12 | `search-form.tsx:22` 以 `className="m-1 min-h-9 px-4 py-1.5"` 覆寫 `<Button>` 的形狀——正是 button 系統要擋的漂移，因為不是手刻 `inline-flex` 而從 finding 8 的掃描漏掉 | ❌ 未完成 | — |
-| 13 | `Input` 40px、`search-form` input 44px，都沒有上 Button 的 size scale，表單並排對不齊 | ❌ 未完成 | — |
-| 14 | 選單是原生 `<details>` 手刻（`workspace-selector`、`source-sidebar`），Base UI 的 `Menu` 未使用（僅用 button/dialog/tabs）。無方向鍵導航、無 roving focus。**違反契約自己的「每個 list 可方向鍵導航」規則** | ❌ 未完成 | — |
-| 15 | Loading 三種寫法：骨架屏、`Loading documents…`、`Searching…`；且 `knowledge-layout` 的 `DocumentRegionSkeleton` 與 `loading.tsx` 幾乎逐行重複 | ❌ 未完成 | — |
+| 12 | `search-form.tsx:22` 以 `className="m-1 min-h-9 px-4 py-1.5"` 覆寫 `<Button>` 的形狀——正是 button 系統要擋的漂移，因為不是手刻 `inline-flex` 而從 finding 8 的掃描漏掉 | ❌ 未完成 | 契約 Open items |
+| 13 | `Input` 40px、`search-form` input 44px，都沒有上 Button 的 size scale，表單並排對不齊 | ❌ 未完成 | 契約 Open items |
+| 14 | 選單是原生 `<details>` 手刻（`workspace-selector`、`source-sidebar`），Base UI 的 `Menu` 未使用（僅用 button/dialog/tabs）。無方向鍵導航、無 roving focus。**違反契約自己的「每個 list 可方向鍵導航」規則** | ❌ 未完成 | 契約 Open items |
+| 15 | Loading 三種寫法：骨架屏、`Loading documents…`、`Searching…`；且 `knowledge-layout` 的 `DocumentRegionSkeleton` 與 `loading.tsx` 幾乎逐行重複 | ❌ 未完成 | 契約 Open items |
 
 ---
 
@@ -100,7 +100,7 @@
 | 30 | 無 `CLAUDE.md` | ✅ 已完成 | `76c3619` |
 | 31 | Settings 導航無 active state、未用既有 `ui/tabs`；容器寬度 **7 種**、頁面內距 3 種 | ❌ 未完成 | 契約 Open items |
 | 32 | 空狀態／錯誤狀態僅標題加段落；knowledge 空狀態並列兩個等重 CTA | ❌ 未完成 | 契約 Open items |
-| 33 | `error.tsx`/`not-found.tsx` 只覆蓋 `knowledge/[sourceId]/` 一條路由；`/search`、`/sources`、`/settings` 無邊界，也無 `global-error.tsx` | ❌ 未完成 | — |
+| 33 | `error.tsx`/`not-found.tsx` 只覆蓋 `knowledge/[sourceId]/` 一條路由；`/search`、`/sources`、`/settings` 無邊界，也無 `global-error.tsx` | ❌ 未完成 | 契約 Open items |
 | 34 | 日期格式硬寫 `en-US`（3 處） | ❌ 未完成 | 契約 Open items |
 
 ---
