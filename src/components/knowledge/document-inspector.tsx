@@ -11,6 +11,7 @@ import type { KnowledgeRevisionView } from "@/modules/knowledge/application/know
 import { Drawer } from "@/components/ui/drawer";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/components/ui/tabs";
 import { DocumentHeader, type DocumentBreadcrumbSegment } from "./document-header";
+import { buttonClasses } from "@/components/ui/button";
 
 function formatDateTime(value: Date): string {
   return new Intl.DateTimeFormat("en-US", {
@@ -65,7 +66,7 @@ function TechnicalIds({ items }: { items: { label: string; value: string }[] }) 
           <div key={label}>
             <div className="flex items-center justify-between gap-2">
               <span>{label}</span>
-              <button type="button" aria-label={`Copy ${label.toLowerCase()} ID`} onClick={() => void copy(label, value)} className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-kh-bg-hover focus-visible:ring-2 focus-visible:ring-kh-focus">
+              <button type="button" aria-label={`Copy ${label.toLowerCase()} ID`} onClick={() => void copy(label, value)} className={buttonClasses({ variant: "ghost", icon: true, size: "sm" })}>
                 {copied === label ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <Copy className="h-3.5 w-3.5" aria-hidden="true" />}
               </button>
             </div>
@@ -201,7 +202,7 @@ export function DocumentInspector({
             type="button"
             aria-label="Close details"
             onClick={() => onOpenChange(false)}
-            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
+            className={buttonClasses({ variant: "ghost", icon: true, size: "sm" })}
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </button>

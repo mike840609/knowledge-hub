@@ -7,6 +7,7 @@ import { SourceSidebar } from "./source-sidebar";
 import { InspectorContext } from "./inspector-context";
 import { Drawer } from "@/components/ui/drawer";
 import { Skeleton } from "@/components/ui/skeleton";
+import { buttonClasses } from "@/components/ui/button";
 
 function useDesktopLayout(): boolean {
   // Keep the server and first client render identical. Reading matchMedia in
@@ -126,7 +127,7 @@ export function KnowledgeLayout({
                   window.dispatchEvent(new CustomEvent("kh:open-browse"));
                 }
               }}
-              className="inline-flex h-8 items-center rounded-md border border-kh-border bg-kh-bg px-3 text-body-sm font-medium text-kh-text hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
+              className={buttonClasses({ variant: "secondary" })}
             >
               Browse
             </button>

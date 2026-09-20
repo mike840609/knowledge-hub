@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { requestWorkspaceAccessCheck, useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { useEffect, useState } from "react";
 import type { ImportPreview } from "@/modules/sources/application/reconcile-import-snapshot";
+import { buttonClasses } from "@/components/ui/button";
 
 export type ApplyFailure = { code: string; message: string; latchStale: boolean };
 
@@ -98,7 +99,7 @@ export function ImportStickyFooter({
       <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3">
         <Link
           href={cancelHref}
-          className="rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-body font-medium text-kh-text transition hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
+          className={buttonClasses({ variant: "secondary", size: "lg" })}
         >
           Cancel
         </Link>
@@ -112,7 +113,7 @@ export function ImportStickyFooter({
             type="button"
             disabled={disabled || state.kind === "APPLYING"}
             onClick={() => void apply()}
-            className="rounded-md bg-kh-primary hover:bg-kh-primary-hover px-4 py-2 text-body font-medium text-kh-on-primary disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus focus-visible:ring-offset-2"
+            className={buttonClasses({ size: "lg" })}
           >
             {state.kind === "APPLYING" ? "Applying…" : "Apply changes"}
           </button> : <p role="status" className="text-body text-kh-text-muted">This preview is read-only. Applying is unavailable.</p>}

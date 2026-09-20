@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { plainSearchSnippet } from "@/lib/search-snippet";
+import { buttonClasses } from "@/components/ui/button";
 
 type QuickHit = {
   documentId: string;
@@ -100,7 +101,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
         onClick={() => setOpen(true)}
         aria-label="Quick search"
         title="Quick search (⌘/Ctrl K)"
-        className="inline-flex h-8 min-w-8 items-center justify-center gap-2 rounded-md px-2 text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus sm:px-3"
+        className={buttonClasses({ variant: "ghost" })}
       >
         <Search className="h-4 w-4" aria-hidden="true" />
         <span className="hidden text-body-sm sm:inline">Search</span>
@@ -141,7 +142,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
                 placeholder="Search documents…"
                 className="h-14 min-w-0 flex-1 bg-transparent text-body text-kh-text outline-none placeholder:text-kh-text-muted"
               />
-              <Dialog.Close aria-label="Close search" className="rounded-md p-1 text-kh-text-muted hover:bg-kh-bg-hover focus-visible:ring-2 focus-visible:ring-kh-focus">
+              <Dialog.Close aria-label="Close search" className={buttonClasses({ variant: "ghost", icon: true, size: "sm" })}>
                 <X className="h-4 w-4" aria-hidden="true" />
               </Dialog.Close>
             </div>

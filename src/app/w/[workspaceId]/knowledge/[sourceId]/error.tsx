@@ -1,5 +1,7 @@
 "use client";
 
+import { buttonClasses } from "@/components/ui/button";
+
 export default function SourceDocumentError({
   reset,
 }: {
@@ -15,7 +17,7 @@ export default function SourceDocumentError({
       <button
         type="button"
         onClick={() => reset()}
-        className="mt-6 inline-flex h-9 items-center rounded-md border border-kh-border bg-kh-bg px-4 text-body font-medium text-kh-text hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
+        className={buttonClasses({ variant: "secondary", size: "lg", className: "mt-6" })}
       >
         Retry
       </button>

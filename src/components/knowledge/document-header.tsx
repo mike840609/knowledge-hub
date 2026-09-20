@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ChevronRight, LockKeyhole } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { buttonClasses } from "@/components/ui/button";
 
 export type DocumentBreadcrumbSegment = {
   label: string;
@@ -82,7 +83,7 @@ export function DocumentHeader({
             {editHref ? (
               <a
                 href={editHref}
-                className="inline-flex h-8 items-center rounded-md px-3 text-body-sm font-medium text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
+                className={buttonClasses({ variant: "ghost" })}
               >
                 Edit
               </a>
@@ -92,7 +93,7 @@ export function DocumentHeader({
               onClick={onDetailsClick}
               aria-keyshortcuts="Meta+I Control+I"
               title="Details (⌘/Ctrl I)"
-              className="inline-flex h-8 shrink-0 items-center rounded-md px-3 text-body-sm font-medium text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
+              className={buttonClasses({ variant: "ghost" })}
             >
               Details
             </button>

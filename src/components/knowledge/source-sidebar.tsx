@@ -9,6 +9,7 @@ import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/applicat
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { KnowledgeTree } from "./knowledge-tree";
 import { TreeFilter } from "./tree-filter";
+import { buttonClasses } from "@/components/ui/button";
 
 export type SourceSidebarProps = {
   workspaceId: string;
@@ -105,7 +106,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
   const hasNotes = visibleCollections.some(({ source: candidate }) => candidate.sourceType === "HUB" && candidate.name === "Notes" && candidate.status === "ACTIVE");
   const canCreate = access.actions.canWrite && confirmed;
   const newNoteHref = `/w/${workspaceId}/knowledge/new`;
-  const addNote = <Link href={newNoteHref} aria-label="Add to Notes" title="Add to Notes" className="inline-flex min-h-9 min-w-9 shrink-0 items-center justify-center rounded-md text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"><Plus size={15} aria-hidden="true" /></Link>;
+  const addNote = <Link href={newNoteHref} aria-label="Add to Notes" title="Add to Notes" className={buttonClasses({ variant: "ghost", icon: true })}><Plus size={15} aria-hidden="true" /></Link>;
 
   function toggleArchived(checked: boolean) {
     const params = new URLSearchParams(searchParams.toString());
@@ -133,7 +134,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
             aria-controls={filterOpen ? "tree-filter" : undefined}
             title="Filter documents and sources"
             onClick={() => filterOpen ? closeFilter() : setFilterOpen(true)}
-            className={`flex min-h-9 min-w-9 items-center justify-center rounded-md text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text focus-visible:ring-2 focus-visible:ring-kh-focus ${filterOpen ? "bg-kh-bg-hover text-kh-text" : ""}`}
+            className={buttonClasses({ variant: "ghost", icon: true, className: filterOpen ? "bg-kh-bg-hover text-kh-text" : "" })}
           >
             <ListFilter size={16} aria-hidden="true" />
           </button>
@@ -143,7 +144,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
               event.currentTarget.querySelector("summary")?.focus();
             }
           }}>
-            <summary aria-label="Document display options" title="Document display options" className="flex min-h-9 min-w-9 cursor-pointer list-none items-center justify-center rounded-md text-kh-text-muted hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus [&::-webkit-details-marker]:hidden">
+            <summary aria-label="Document display options" title="Document display options" className={buttonClasses({ variant: "ghost", icon: true, className: "cursor-pointer list-none [&::-webkit-details-marker]:hidden" })}>
               <MoreHorizontal size={17} aria-hidden="true" />
             </summary>
             <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-md border border-kh-border bg-kh-bg p-2 shadow-popover">

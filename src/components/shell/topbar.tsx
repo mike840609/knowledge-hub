@@ -7,6 +7,7 @@ import { Menu, PanelLeftClose, PanelLeftOpen, PanelRight } from "lucide-react";
 import type { WorkspaceShellModel } from "@/server/knowledge-read";
 import { WorkspaceSelector } from "@/components/shell/workspace-selector";
 import { QuickSearch } from "@/components/search/quick-search";
+import { buttonClasses } from "@/components/ui/button";
 
 export function Topbar({
   model,
@@ -31,12 +32,12 @@ export function Topbar({
             type="button"
             aria-label="Open menu"
             onClick={onMenuClick}
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus lg:hidden"
+            className={buttonClasses({ variant: "ghost", icon: true, className: "lg:hidden" })}
           >
             <Menu className="h-4 w-4" aria-hidden="true" />
           </button>
         ) : null}
-        <button type="button" onClick={onToggleNav} aria-label={navCollapsed ? "Expand navigation" : "Collapse navigation"} title={navCollapsed ? "Expand navigation" : "Collapse navigation"} className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-md text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text focus-visible:ring-2 focus-visible:ring-kh-focus lg:inline-flex">
+        <button type="button" onClick={onToggleNav} aria-label={navCollapsed ? "Expand navigation" : "Collapse navigation"} title={navCollapsed ? "Expand navigation" : "Collapse navigation"} className={buttonClasses({ variant: "ghost", icon: true, className: "max-lg:hidden" })}>
           {navCollapsed ? <PanelLeftOpen className="h-4 w-4" aria-hidden="true" /> : <PanelLeftClose className="h-4 w-4" aria-hidden="true" />}
         </button>
         <span className={`hidden whitespace-nowrap text-caption font-semibold text-kh-text sm:block ${navCollapsed ? "lg:hidden" : ""}`}>Knowledge Hub</span>
@@ -51,7 +52,7 @@ export function Topbar({
           {active ? state.title : ""}
         </span>
         <button type="button" aria-label="Document details" aria-keyshortcuts="Meta+I Control+I" title="Details (⌘/Ctrl I)" onClick={active ? state.onDetailsClick : undefined}
-          className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md px-2 text-body text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text focus-visible:ring-2 focus-visible:ring-kh-focus sm:px-3">
+          className={buttonClasses({ variant: "ghost" })}>
           <PanelRight className="h-4 w-4" aria-hidden="true" />
           <span className="hidden sm:inline">Details</span>
         </button>

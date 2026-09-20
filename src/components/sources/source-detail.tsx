@@ -6,6 +6,7 @@ import { isFolderSyncable } from "@/modules/knowledge/domain/source-policy";
 import { ImportHistory } from "@/components/sources/import-history";
 import { sourceTypeLabel } from "@/components/sources/source-list-row";
 import { TechnicalDetails } from "@/components/sources/technical-details";
+import { buttonClasses } from "@/components/ui/button";
 
 export function SourceDetail({ model, showImportSuccess = false }: { model: SourceDetailModel; showImportSuccess?: boolean }) {
   const { workspace, source, runs } = model;
@@ -28,7 +29,7 @@ export function SourceDetail({ model, showImportSuccess = false }: { model: Sour
         </div>
         {syncable ? (
           <WorkspaceImportLink href={`/w/${workspace.id}/sources/${source.id}/update`}
-              className="inline-flex items-center gap-2 rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-body font-medium text-kh-text transition hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
+              className={buttonClasses({ variant: "secondary" })}
             >
               <RefreshCw size={15} strokeWidth={2} aria-hidden="true" />
               Update from folder

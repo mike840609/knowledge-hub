@@ -3,6 +3,7 @@
 import { Dialog } from "@base-ui-components/react/dialog";
 import { X } from "lucide-react";
 import type { ReactNode } from "react";
+import { buttonClasses } from "@/components/ui/button";
 
 export function Drawer({
   open,
@@ -41,7 +42,7 @@ export function Drawer({
             </div>
             <Dialog.Close
               aria-label={label}
-              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
+              className={buttonClasses({ variant: "ghost", icon: true, size: "sm" })}
             >
               <X className="h-4 w-4" aria-hidden="true" />
             </Dialog.Close>

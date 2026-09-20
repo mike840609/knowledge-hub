@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { buttonClasses } from "@/components/ui/button";
 
 export function ResourceAccessDenied({ backHref }: { backHref: string }): React.JSX.Element {
   return (
@@ -8,7 +9,7 @@ export function ResourceAccessDenied({ backHref }: { backHref: string }): React.
         This import session exists, but you no longer have permission to access its Workspace.
       </p>
       <Link
-        className="mt-6 inline-flex rounded-md text-body font-medium text-kh-link underline-offset-4 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
+        className={buttonClasses({ variant: "link", className: "mt-6" })}
         href={backHref}
       >
         Back to Sources

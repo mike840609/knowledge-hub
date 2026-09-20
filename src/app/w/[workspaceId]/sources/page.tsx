@@ -3,6 +3,7 @@ import { WorkspaceImportLink } from "@/components/shell/workspace-import-link";
 import { SourceList } from "@/components/sources/source-list";
 import { getSourceListModel } from "@/server/source-read";
 import { PageHeader } from "@/components/shell/page-header";
+import { buttonClasses } from "@/components/ui/button";
 
 export default async function WorkspaceSourcesPage({
   params,
@@ -20,7 +21,7 @@ export default async function WorkspaceSourcesPage({
         title="Manage sources"
         description={`${model.items.length} ${model.items.length === 1 ? "source" : "sources"}`}
         actions={<WorkspaceImportLink
-          className="inline-flex items-center rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-body font-medium text-kh-text transition hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
+          className={buttonClasses({ variant: "secondary" })}
           href={`/w/${workspaceId}/sources/import`}
         >
           Import folder
