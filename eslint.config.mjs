@@ -19,7 +19,7 @@ const webAdapterRestrictions = [
 
 export default tseslint.config(
   {
-    ignores: [".next/**", "node_modules/**", "playwright-report/**", "test-results/**", "next-env.d.ts"],
+    ignores: [".next/**", ".next-dev/**", "node_modules/**", "playwright-report/**", "test-results/**", "next-env.d.ts"],
   },
   ...tseslint.configs.recommended,
   {

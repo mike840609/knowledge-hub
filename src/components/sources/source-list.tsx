@@ -4,13 +4,13 @@ import { SourceListRow } from "@/components/sources/source-list-row";
 export function SourceList({ workspaceId, items }: { workspaceId: string; items: SourceListItemModel[] }) {
   if (items.length === 0) {
     return (
-      <p className="rounded-md border border-dashed border-kh-border p-6 text-sm text-kh-text-muted">
+      <p className="rounded-md bg-kh-bg-subtle p-6 text-sm text-kh-text-muted">
         No knowledge sources yet.
       </p>
     );
   }
   return (
-    <ul className="flex flex-col gap-2">
+    <ul className="flex flex-col gap-1">
       {items.map((item) => (
         <SourceListRow key={item.source.id} workspaceId={workspaceId} item={item} />
       ))}

@@ -6,7 +6,7 @@ import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } 
 import { usePathname } from "next/navigation";
 import { DocumentTopbarContext } from "@/components/shell/document-topbar-context";
 import { InspectorContext } from "./inspector-context";
-import { X } from "lucide-react";
+import { Check, Copy, X } from "lucide-react";
 import type { KnowledgeRevisionView } from "@/modules/knowledge/application/knowledge-query-service";
 import { Drawer } from "@/components/ui/drawer";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/components/ui/tabs";
@@ -44,6 +44,40 @@ export type DocumentInspectorData = {
   includeArchived: boolean;
 };
 
+function TechnicalIds({ items }: { items: { label: string; value: string }[] }) {
+  const [message, setMessage] = useState("");
+  const [copied, setCopied] = useState<string | null>(null);
+  async function copy(label: string, value: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(label);
+      setMessage(`${label} ID copied`);
+    } catch {
+      setCopied(null);
+      setMessage("Could not copy. Select the ID and copy it manually.");
+    }
+  }
+  return (
+    <details className="mt-4 border-t border-kh-border pt-3 text-xs text-kh-text-muted">
+      <summary className="cursor-pointer rounded py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-kh-focus">Technical IDs</summary>
+      <div className="mt-2 space-y-3">
+        {items.map(({ label, value }) => (
+          <div key={label}>
+            <div className="flex items-center justify-between gap-2">
+              <span>{label}</span>
+              <button type="button" aria-label={`Copy ${label.toLowerCase()} ID`} onClick={() => void copy(label, value)} className="inline-flex h-7 w-7 items-center justify-center rounded hover:bg-kh-bg-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-kh-focus">
+                {copied === label ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <Copy className="h-3.5 w-3.5" aria-hidden="true" />}
+              </button>
+            </div>
+            <code className="block select-all break-all text-[11px] leading-relaxed">{value}</code>
+          </div>
+        ))}
+        <p role="status" className="text-xs">{message}</p>
+      </div>
+    </details>
+  );
+}
+
 function InspectorTabs({ data }: { data: DocumentInspectorData }) {
   const { access } = useWorkspaceAuthorization();
   const sorted = [...data.revisions].sort((a, b) => a.revisionNo - b.revisionNo);
@@ -57,45 +91,45 @@ function InspectorTabs({ data }: { data: DocumentInspectorData }) {
         <TabsTab value="history">History</TabsTab>
       </TabsList>
       <TabsPanel value="details">
-        <dl className="space-y-2.5 text-[13px]">
+        <dl className="space-y-3 text-[13px] [&>div]:grid [&>div]:grid-cols-[6rem_minmax(0,1fr)] [&>div]:items-baseline [&>div]:gap-x-3 [&_dd]:col-start-2 [&_dd]:min-w-0 [&_dd]:break-words">
           <div>
             <dt className="text-xs text-kh-text-muted">Workspace</dt>
-            <dd className="mt-0.5 text-kh-text">{data.workspaceName}</dd>
+            <dd className="text-kh-text">{data.workspaceName}</dd>
           </div>
           <div>
             <dt className="text-xs text-kh-text-muted">Source</dt>
-            <dd className="mt-0.5 text-kh-text">{data.sourceName}</dd>
+            <dd className="text-kh-text">{data.sourceName}</dd>
             {access.actions.canInspectSources ? <dd className="mt-1"><Link href={`/w/${data.workspaceId}/sources/${data.sourceId}`} className="rounded text-kh-link underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-kh-focus">Manage source</Link></dd> : null}
           </div>
           <div>
             <dt className="text-xs text-kh-text-muted">Status</dt>
-            <dd className="mt-0.5 text-kh-text">{data.status}</dd>
+            <dd className="text-kh-text">{data.status === "ACTIVE" ? "Active" : "Archived"}</dd>
           </div>
           <div>
             <dt className="text-xs text-kh-text-muted">Current revision</dt>
-            <dd className="mt-0.5 text-kh-text">
+            <dd className="text-kh-text">
               {current ? `Revision ${current.revisionNo}` : "—"}
             </dd>
           </div>
           <div>
             <dt className="text-xs text-kh-text-muted">Created</dt>
-            <dd className="mt-0.5 text-kh-text">
+            <dd className="text-kh-text">
               {created ? formatDateTime(created) : "—"}
             </dd>
           </div>
           <div>
             <dt className="text-xs text-kh-text-muted">Updated</dt>
-            <dd className="mt-0.5 text-kh-text">
+            <dd className="text-kh-text">
               {current ? formatDateTime(current.createdAt) : "—"}
             </dd>
           </div>
         </dl>
-        <div className="mt-4 space-y-1 border-t border-kh-border pt-3 font-mono text-[11px] leading-relaxed text-kh-text-muted">
-          <p className="break-all">Document {data.documentId}</p>
-          <p className="break-all">Source {data.sourceId}</p>
-          <p className="break-all">Workspace {data.workspaceId}</p>
-          {current ? <p className="break-all">Revision {current.id}</p> : null}
-        </div>
+        <TechnicalIds items={[
+          { label: "Document", value: data.documentId },
+          { label: "Source", value: data.sourceId },
+          { label: "Workspace", value: data.workspaceId },
+          ...(current ? [{ label: "Revision", value: current.id }] : []),
+        ]} />
       </TabsPanel>
       <TabsPanel value="history">
         <ul className="space-y-1">
@@ -159,9 +193,9 @@ export function DocumentInspector({
     return (
       <aside
         aria-label="Document details"
-        className="hidden h-full min-h-0 w-80 shrink-0 flex-col border-l border-kh-border bg-kh-bg min-[1440px]:flex"
+        className="hidden h-full min-h-0 w-80 shrink-0 flex-col border-l border-kh-border/70 bg-kh-reading-bg min-[1440px]:flex"
       >
-        <div className="flex shrink-0 items-start justify-between gap-2 border-b border-kh-border px-4 py-3">
+        <div className="flex shrink-0 items-start justify-between gap-2 border-b border-kh-border/70 px-4 py-3">
           <h2 className="truncate text-sm font-semibold text-kh-text">Document details</h2>
           <button
             type="button"
@@ -187,6 +221,7 @@ export function DocumentInspector({
       modal={false}
       title="Document details"
       description={data.sourceName}
+      surfaceClassName="bg-kh-reading-bg"
     >
       <InspectorTabs data={data} />
     </Drawer>
@@ -203,6 +238,7 @@ export function DocumentDetailClient({
   children,
   editHref,
   readOnly,
+  contentOwnsTitle,
 }: {
   breadcrumb: DocumentBreadcrumbSegment[];
   title: string;
@@ -213,6 +249,7 @@ export function DocumentDetailClient({
   children: ReactNode;
   editHref: string | null;
   readOnly: boolean;
+  contentOwnsTitle: boolean;
 }) {
   const inspector = useContext(InspectorContext);
   const setDocumentTopbar = useContext(DocumentTopbarContext)?.setDocument;
@@ -229,6 +266,20 @@ export function DocumentDetailClient({
     window.dispatchEvent(new CustomEvent("kh:open-inspector"));
   }, [setInspectorOpen]);
   useEffect(() => {
+    if (!setInspectorOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing || event.repeat || event.altKey || event.shiftKey) return;
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "i") return;
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
+      event.preventDefault();
+      if (inspectorOpen) setInspectorOpen(false);
+      else openInspector();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [inspectorOpen, openInspector, setInspectorOpen]);
+  useEffect(() => {
     const header = headerRef.current;
     const root = contentRef.current;
     if (!header || !root || !setDocumentTopbar) return;
@@ -244,7 +295,7 @@ export function DocumentDetailClient({
     };
   }, [pathname, title, openInspector, setDocumentTopbar]);
   return (
-    <div data-document-pane className="flex h-full min-h-0 overflow-hidden">
+    <div data-document-pane className="flex h-full min-h-0 overflow-hidden bg-kh-reading-bg">
       <div ref={contentRef} role="region" aria-label="Document content" tabIndex={0}
         className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain contain-layout focus-visible:outline focus-visible:outline-2 focus-visible:outline-kh-focus">
         <div ref={headerRef}>
@@ -257,6 +308,7 @@ export function DocumentDetailClient({
           onDetailsClick={openInspector}
           editHref={editHref}
           readOnly={readOnly}
+          contentOwnsTitle={contentOwnsTitle}
         />
         </div>
         {children}

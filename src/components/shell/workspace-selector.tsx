@@ -28,7 +28,7 @@ export function WorkspaceSelector({ workspaceId }: { workspaceId: string }) {
   const currentName = current?.type === "PERSONAL" ? "My Space" : current?.name ?? "Workspace";
   const item = (entry: (typeof navigation.items)[number]) => (
     <button key={entry.id} type="button" aria-current={entry.id === workspaceId ? "page" : undefined}
-      className={`flex min-h-10 w-full items-center gap-2 rounded px-3 py-2 text-left text-sm hover:bg-kh-bg-hover focus-visible:ring-2 focus-visible:ring-kh-focus ${entry.id === workspaceId ? "bg-kh-bg-selected font-medium" : ""}`}
+      className={`flex min-h-10 w-full items-center gap-2 rounded px-3 py-2 text-left text-sm focus-visible:ring-2 focus-visible:ring-kh-focus ${entry.id === workspaceId ? "bg-kh-bg-selected font-medium text-kh-selected-text hover:bg-kh-bg-selected" : "hover:bg-kh-bg-hover"}`}
       onClick={() => choose(entry.id)}>
         <span className="min-w-0 flex-1 truncate" title={entry.type === "PERSONAL" ? "My Space" : entry.name}>{entry.type === "PERSONAL" ? "My Space" : entry.name}</span>
         {entry.id === workspaceId && <Check className="h-4 w-4 shrink-0 text-kh-text" aria-hidden="true" />}
@@ -42,7 +42,7 @@ export function WorkspaceSelector({ workspaceId }: { workspaceId: string }) {
       }
     }}>
       <summary aria-label={`Workspace: ${currentName}`} title={`Switch workspace: ${currentName}`}
-        className="flex min-h-9 w-full cursor-pointer list-none items-center gap-2 rounded-md border border-kh-border px-3 text-sm hover:bg-kh-bg-hover focus-visible:ring-2 focus-visible:ring-kh-focus [&::-webkit-details-marker]:hidden">
+        className="flex min-h-9 w-full cursor-pointer list-none items-center gap-2 rounded-md px-3 text-sm hover:bg-kh-bg-hover focus-visible:ring-2 focus-visible:ring-kh-focus group-open:bg-kh-bg-hover [&::-webkit-details-marker]:hidden">
         <span className="hidden shrink-0 text-xs text-kh-text-muted sm:inline">Workspace</span>
         <span className="min-w-0 flex-1 truncate font-medium">{currentName}</span>
         <ChevronDown className="h-4 w-4 shrink-0 text-kh-text-muted group-open:rotate-180" aria-hidden="true" />

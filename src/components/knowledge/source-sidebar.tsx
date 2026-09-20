@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, ChevronRight, MoreHorizontal, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, Clock3, FileText, MoreHorizontal, Plus, ListFilter, Star } from "lucide-react";
+import { emptyDocumentShortcuts, parseDocumentShortcuts, rememberDocument, toggleFavoriteDocument, type DocumentShortcuts } from "@/lib/document-shortcuts";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { KnowledgeTree } from "./knowledge-tree";
@@ -37,7 +38,12 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
   const routeParams = useParams();
   const { access, confirmed } = useWorkspaceAuthorization();
   const [query, setQuery] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterTriggerRef = useRef<HTMLButtonElement>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [shortcuts, setShortcuts] = useState<DocumentShortcuts>(emptyDocumentShortcuts);
+  const [favoritesOpen, setFavoritesOpen] = useState(false);
+  const [recentOpen, setRecentOpen] = useState(false);
   const showArchived = searchParams.get("includeArchived") === "true";
   const resolvedDocumentId = selectedDocumentId ?? (typeof routeParams?.documentId === "string" ? routeParams.documentId : undefined);
   const needle = query.trim().toLowerCase();
@@ -46,6 +52,55 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
     .map((collection) => ({ ...collection, tree: showArchived && includeArchived ? collection.tree : withoutArchivedSubtrees(collection.tree) }))
     .sort((a, b) => Number(b.source.sourceType === "HUB") - Number(a.source.sourceType === "HUB")),
   [collections, showArchived, includeArchived]);
+  const shortcutStorageKey = `kh:document-shortcuts:${workspaceId}`;
+  const documents = useMemo(() => {
+    const map = new Map<string, { documentId: string; sourceId: string; sourceName: string; label: string }>();
+    for (const collection of visibleCollections) {
+      for (const item of collection.tree) {
+        if (item.type === "document") map.set(`${collection.source.id}:${item.documentId}`, { documentId: item.documentId, sourceId: collection.source.id, sourceName: collection.source.name, label: item.label });
+      }
+    }
+    return map;
+  }, [visibleCollections]);
+  const favoriteKeys = shortcuts.favorites.filter((key) => documents.has(key)).slice(0, 4);
+  const recentKeys = shortcuts.recent.filter((key) => documents.has(key) && !shortcuts.favorites.includes(key) && key !== `${source.id}:${resolvedDocumentId}`).slice(0, 4);
+  const favoriteDocumentIds = new Set(shortcuts.favorites.map((key) => documents.get(key)?.documentId).filter((id): id is string => Boolean(id)));
+
+  useEffect(() => {
+    let raw: string | null = null;
+    try { raw = window.localStorage.getItem(shortcutStorageKey); } catch { /* Storage may be unavailable. */ }
+    const stored = parseDocumentShortcuts(raw);
+    const key = resolvedDocumentId ? `${source.id}:${resolvedDocumentId}` : null;
+    const next = key && documents.has(key) ? rememberDocument(stored, key) : stored;
+    setShortcuts(next);
+    if (key && documents.has(key)) {
+      try { window.localStorage.setItem(shortcutStorageKey, JSON.stringify(next)); } catch { /* Storage may be unavailable. */ }
+    }
+  }, [shortcutStorageKey, source.id, resolvedDocumentId, documents]);
+
+  function toggleFavorite(sourceId: string, documentId: string) {
+    const key = `${sourceId}:${documentId}`;
+    const adding = !shortcuts.favorites.includes(key);
+    const next = toggleFavoriteDocument(shortcuts, key);
+    setShortcuts(next);
+    if (adding) setFavoritesOpen(true);
+    try { window.localStorage.setItem(shortcutStorageKey, JSON.stringify(next)); } catch { /* Storage may be unavailable. */ }
+  }
+
+  function shortcutRow(key: string, favorite: boolean) {
+    const document = documents.get(key);
+    if (!document) return null;
+    const selected = document.documentId === resolvedDocumentId;
+    return <li key={key} className={`kh-interactive-row group flex min-h-9 items-center ${selected ? "bg-kh-bg-selected hover:bg-kh-bg-selected" : ""}`}>
+      <Link href={`/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}${showArchived ? "?includeArchived=true" : ""}`} title={`${document.label} · ${document.sourceName}`} aria-current={selected ? "page" : undefined} className={`flex min-h-9 min-w-0 flex-1 items-center gap-2 px-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus ${selected ? "font-medium text-kh-selected-text" : "text-kh-text-muted"}`}>
+        {favorite ? <FileText size={14} strokeWidth={1.8} className="shrink-0" aria-hidden="true" /> : <Clock3 size={14} strokeWidth={1.8} className="shrink-0" aria-hidden="true" />}
+        <span className="truncate">{document.label}</span>
+      </Link>
+      <button type="button" onClick={() => toggleFavorite(document.sourceId, document.documentId)} aria-label={`${favorite ? "Remove from" : "Add to"} favorites: ${document.label}`} title={favorite ? "Remove from favorites" : "Add to favorites"} className={`mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-kh-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus ${favorite ? "opacity-80" : "kh-favorite-action"}`}>
+        <Star size={14} strokeWidth={1.8} fill={favorite ? "currentColor" : "none"} aria-hidden="true" />
+      </button>
+    </li>;
+  }
   const matches = visibleCollections.filter(({ source: candidate, tree }) => !needle || candidate.name.toLowerCase().includes(needle) || tree.some((item) => item.label.toLowerCase().includes(needle)));
   const hasNotes = visibleCollections.some(({ source: candidate }) => candidate.sourceType === "HUB" && candidate.name === "Notes" && candidate.status === "ACTIVE");
   const canCreate = access.actions.canWrite && confirmed;
@@ -59,29 +114,63 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
     router.push(`${pathname}${params.size ? `?${params}` : ""}`);
   }
 
+  function closeFilter() {
+    setQuery("");
+    setFilterOpen(false);
+    filterTriggerRef.current?.focus();
+  }
+
   return (
-    <aside aria-label="Knowledge explorer" className="flex h-full min-h-0 w-full shrink-0 flex-col gap-3 border-r border-kh-border bg-kh-bg p-3 lg:w-72">
+    <aside aria-label="Knowledge explorer" className="kh-sidebar-surface flex h-full min-h-0 w-full shrink-0 flex-col gap-3 border-r border-kh-border bg-kh-bg-sidebar p-3 lg:w-72">
       <div className="flex shrink-0 items-center justify-between gap-2">
         <h2 className="px-2 text-sm font-semibold text-kh-text">Documents</h2>
-        <details className="relative" onKeyDown={(event) => {
-          if (event.key === "Escape") {
-            event.currentTarget.open = false;
-            event.currentTarget.querySelector("summary")?.focus();
-          }
-        }}>
-          <summary aria-label="Document display options" title="Document display options" className="flex min-h-9 min-w-9 cursor-pointer list-none items-center justify-center rounded text-kh-text-muted hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus [&::-webkit-details-marker]:hidden">
-            <MoreHorizontal size={17} aria-hidden="true" />
-          </summary>
-          <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-md border border-kh-border bg-kh-bg p-2 shadow-md">
-            <label className="flex min-h-10 cursor-pointer items-center gap-2 rounded px-2 text-sm text-kh-text hover:bg-kh-bg-hover">
-              <input type="checkbox" checked={showArchived} onChange={(event) => toggleArchived(event.target.checked)} className="h-4 w-4 accent-kh-primary" />
-              Show archived
-            </label>
-          </div>
-        </details>
+        <div className="flex items-center gap-0.5">
+          <button
+            ref={filterTriggerRef}
+            type="button"
+            aria-label="Filter documents and sources"
+            aria-expanded={filterOpen}
+            aria-controls={filterOpen ? "tree-filter" : undefined}
+            title="Filter documents and sources"
+            onClick={() => filterOpen ? closeFilter() : setFilterOpen(true)}
+            className={`flex min-h-9 min-w-9 items-center justify-center rounded text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text focus-visible:ring-2 focus-visible:ring-kh-focus ${filterOpen ? "bg-kh-bg-hover text-kh-text" : ""}`}
+          >
+            <ListFilter size={16} aria-hidden="true" />
+          </button>
+          <details className="relative" onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.currentTarget.open = false;
+              event.currentTarget.querySelector("summary")?.focus();
+            }
+          }}>
+            <summary aria-label="Document display options" title="Document display options" className="flex min-h-9 min-w-9 cursor-pointer list-none items-center justify-center rounded text-kh-text-muted hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus [&::-webkit-details-marker]:hidden">
+              <MoreHorizontal size={17} aria-hidden="true" />
+            </summary>
+            <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-md border border-kh-border bg-kh-bg p-2 shadow-md">
+              <label className="flex min-h-10 cursor-pointer items-center gap-2 rounded px-2 text-sm text-kh-text hover:bg-kh-bg-hover">
+                <input type="checkbox" checked={showArchived} onChange={(event) => toggleArchived(event.target.checked)} className="h-4 w-4 accent-kh-primary" />
+                Show archived
+              </label>
+            </div>
+          </details>
+        </div>
       </div>
-      <div className="shrink-0"><TreeFilter value={query} onChange={setQuery} /></div>
+      {filterOpen ? <div className="shrink-0"><TreeFilter value={query} onChange={setQuery} onClose={closeFilter} /></div> : null}
       <nav aria-label="Document tree" className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain">
+        {!needle && favoriteKeys.length > 0 ? <section aria-label="Favorites" className="pb-1">
+          <h3><button type="button" aria-expanded={favoritesOpen} onClick={() => setFavoritesOpen((open) => !open)} className="kh-interactive-row flex min-h-8 w-full items-center gap-2 px-2 text-left text-xs font-medium text-kh-text-muted">
+            {favoritesOpen ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
+            <span>Favorites</span>
+          </button></h3>
+          {favoritesOpen ? <ul className="mt-0.5 space-y-0.5">{favoriteKeys.map((key) => shortcutRow(key, true))}</ul> : null}
+        </section> : null}
+        {!needle && recentKeys.length > 0 ? <section aria-label="Recent documents" className="pb-1">
+          <h3><button type="button" aria-expanded={recentOpen} onClick={() => setRecentOpen((open) => !open)} className="kh-interactive-row flex min-h-8 w-full items-center gap-2 px-2 text-left text-xs font-medium text-kh-text-muted">
+            {recentOpen ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
+            <span>Recent</span>
+          </button></h3>
+          {recentOpen ? <ul className="mt-0.5 space-y-0.5">{recentKeys.map((key) => shortcutRow(key, false))}</ul> : null}
+        </section> : null}
         {!hasNotes && canCreate && (!needle || "notes".includes(needle)) ? (
           <div className="flex items-center justify-between pl-2">
             <Link href={newNoteHref} className="rounded text-sm font-medium text-kh-text hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus">Notes</Link>
@@ -95,7 +184,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
           return (
             <section key={candidate.id} aria-label={`${candidate.name} documents`}>
               <div className="flex items-center gap-1">
-                <button type="button" aria-expanded={open} aria-controls={`collection-${candidate.id}`} onClick={() => setExpanded((previous) => ({ ...previous, [candidate.id]: !open }))} title={candidate.name} className="flex min-h-9 min-w-0 flex-1 items-center gap-1.5 rounded px-2 text-left text-sm font-semibold text-kh-text hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus">
+                <button type="button" aria-expanded={open} aria-controls={`collection-${candidate.id}`} onClick={() => setExpanded((previous) => ({ ...previous, [candidate.id]: !open }))} title={candidate.name} className="flex min-h-9 min-w-0 flex-1 items-center gap-1.5 rounded px-2 text-left text-sm font-medium text-kh-text hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus">
                   <Icon size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />
                   <span className="truncate">{candidate.name}</span>
                   {candidate.status === "ARCHIVED" ? <span className="ml-auto text-xs font-normal text-kh-text-muted">Archived</span> : null}
@@ -103,7 +192,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
                 {isNotes && canCreate ? addNote : null}
               </div>
               <div id={`collection-${candidate.id}`} hidden={!open} className="mt-1 pl-2">
-                {open ? <KnowledgeTree items={tree} workspaceId={workspaceId} sourceId={candidate.id} selectedDocumentId={resolvedDocumentId} includeArchived={showArchived} query={candidate.name.toLowerCase().includes(needle) ? "" : query} /> : null}
+                {open ? <KnowledgeTree items={tree} workspaceId={workspaceId} sourceId={candidate.id} selectedDocumentId={resolvedDocumentId} includeArchived={showArchived} query={candidate.name.toLowerCase().includes(needle) ? "" : query} favoriteDocumentIds={favoriteDocumentIds} onToggleFavorite={(documentId) => toggleFavorite(candidate.id, documentId)} /> : null}
               </div>
             </section>
           );

@@ -3,10 +3,10 @@ import type { HTMLAttributes } from "react";
 type BadgeVariant = "default" | "secondary" | "outline" | "success" | "warning" | "danger";
 
 const variantClasses: Record<BadgeVariant, string> = {
-  default: "border-transparent bg-kh-bg-selected text-kh-text",
+  default: "border-transparent bg-kh-bg-hover text-kh-text",
   secondary: "border-transparent bg-kh-bg-hover text-kh-text",
   outline: "border-kh-border bg-kh-bg text-kh-text-muted",
-  success: "border-transparent bg-kh-bg-selected text-kh-success",
+  success: "border-transparent bg-kh-bg-hover text-kh-success",
   warning: "border-transparent bg-kh-bg-hover text-kh-warning",
   danger: "border-transparent bg-kh-bg-hover text-kh-danger",
 };
