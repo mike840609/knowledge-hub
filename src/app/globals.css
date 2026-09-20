@@ -50,7 +50,7 @@ body {
   margin: 0;
   background: var(--kh-bg-sunken);
   color: var(--kh-text);
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--kh-font-sans), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   /* App shell owns all scrolling (inner panes). A window-level scrollbar would
      move the topbar/sidebars together, so lock the viewport. Inner scroll
      containers (AppShell main, document pane, tree nav) are unaffected. */
@@ -66,6 +66,13 @@ body {
 a { color: inherit; }
 
 ::selection { background: var(--kh-highlight); color: var(--kh-text); }
+
+/* Timestamps re-render in place (the document header ticks every minute) and
+   stack into columns in history tables. Proportional figures make both jump. */
+time,
+kbd {
+  font-variant-numeric: tabular-nums;
+}
 
 @layer components {
   /* The one focus idiom. Every interactive surface composes this instead of
