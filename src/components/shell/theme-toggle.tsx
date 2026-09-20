@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
-import { buttonClasses } from "@/components/ui/button";
 
 type Theme = "light" | "dark";
 
@@ -17,10 +16,21 @@ export const THEME_STORAGE_KEY = "kh:theme";
  */
 const DEFAULT_THEME: Theme = "light";
 
+const OPTIONS: { value: Theme; label: string; Icon: typeof Sun }[] = [
+  { value: "light", label: "Light theme", Icon: Sun },
+  { value: "dark", label: "Dark theme", Icon: Moon },
+];
+
 function apply(theme: Theme): void {
   document.documentElement.dataset.theme = theme;
 }
 
+/**
+ * A segmented control rather than one button that swaps its icon. A swapping
+ * icon is ambiguous — readers split on whether it shows the current state or
+ * the one a click would reach. Showing both options and lighting the active
+ * one removes the question.
+ */
 export function ThemeToggle() {
   // Server and first client render must agree, so resolve in an effect. The
   // head script has already applied any stored choice by now, which is what
@@ -39,8 +49,7 @@ export function ThemeToggle() {
     apply(resolved);
   }, []);
 
-  function toggle() {
-    const next: Theme = (theme ?? DEFAULT_THEME) === "dark" ? "light" : "dark";
+  function choose(next: Theme) {
     setTheme(next);
     apply(next);
     try {
@@ -50,20 +59,31 @@ export function ThemeToggle() {
     }
   }
 
-  const dark = theme === "dark";
-  const label = dark ? "Switch to light theme" : "Switch to dark theme";
   return (
-    <button
-      type="button"
-      onClick={toggle}
-      aria-label={label}
-      title={label}
-      aria-pressed={dark}
-      className={buttonClasses({ variant: "ghost", icon: true })}
+    <div
+      role="group"
+      aria-label="Theme"
+      className="flex shrink-0 items-center gap-0.5 rounded-lg border border-kh-border p-0.5"
     >
-      {theme === null ? null : dark
-        ? <Sun className="h-4 w-4" aria-hidden="true" />
-        : <Moon className="h-4 w-4" aria-hidden="true" />}
-    </button>
+      {OPTIONS.map(({ value, label, Icon }) => {
+        // Until the effect resolves, neither option claims to be active.
+        const active = theme === value;
+        return (
+          <button
+            key={value}
+            type="button"
+            aria-label={label}
+            aria-pressed={theme === null ? undefined : active}
+            title={label}
+            onClick={() => choose(value)}
+            className={`kh-focus-ring inline-flex h-[22px] w-6 items-center justify-center rounded-md transition-colors ${
+              active ? "bg-kh-bg-hover text-kh-text" : "text-kh-text-faint hover:text-kh-text-muted"
+            }`}
+          >
+            <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        );
+      })}
+    </div>
   );
 }
