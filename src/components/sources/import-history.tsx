@@ -1,11 +1,7 @@
 import { History } from "lucide-react";
 import type { SyncRun } from "@/modules/sources/domain/sync-run";
 import { syncStatusLabel } from "@/components/sources/source-list-row";
-
-function formatTimestamp(value: Date): string {
-  const date = value instanceof Date ? value : new Date(value);
-  return date.toLocaleString();
-}
+import { formatDateTime } from "@/lib/format-date";
 
 function describeRun(run: SyncRun): string {
   const result = run.resultVersion === null ? "no new version" : `version ${run.resultVersion}`;
@@ -29,11 +25,11 @@ export function ImportHistory({ runs }: { runs: SyncRun[] }) {
               {syncStatusLabel(run.status)} <span className="font-normal text-kh-text-muted">{describeRun(run)}</span>
             </p>
             <p className="mt-0.5 text-caption text-kh-text-muted">
-              <time dateTime={new Date(run.startedAt).toISOString()}>{formatTimestamp(run.startedAt)}</time>
+              <time dateTime={new Date(run.startedAt).toISOString()}>{formatDateTime(run.startedAt)}</time>
               {run.completedAt ? (
                 <>
                   {" → "}
-                  <time dateTime={new Date(run.completedAt).toISOString()}>{formatTimestamp(run.completedAt)}</time>
+                  <time dateTime={new Date(run.completedAt).toISOString()}>{formatDateTime(run.completedAt)}</time>
                 </>
               ) : null}
               {" · triggered by "}

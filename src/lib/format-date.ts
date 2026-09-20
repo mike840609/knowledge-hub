@@ -1,5 +1,10 @@
 /**
- * Every date the UI renders is formatted here.
+ * Every date the UI renders is formatted here — which was not true of the
+ * first version of this module. It swept up the four sites that spelled a
+ * locale inline and missed three that did not: two identical copies of a
+ * `toLocaleString()` helper in `source-list-row` and `import-history`, whose
+ * output varies with the runtime's own locale rather than being merely wrong
+ * in one place, and the audit list, which rendered a raw ISO string.
  *
  * The locale is one constant rather than the reader's browser locale on
  * purpose. These timestamps render on the server and again on the client, so

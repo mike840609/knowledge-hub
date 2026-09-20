@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChevronRight, Database } from "lucide-react";
 import type { SourceListItemModel } from "@/server/source-read";
+import { formatDateTime } from "@/lib/format-date";
 
 export function sourceTypeLabel(sourceType: string): string {
   if (sourceType === "FOLDER_SYNC") return "Folder sync";
@@ -12,11 +13,6 @@ export function syncStatusLabel(status: string): string {
   if (status === "APPLIED") return "Synced";
   if (status === "FAILED") return "Failed";
   return "Previewed";
-}
-
-function formatTimestamp(value: Date): string {
-  const date = value instanceof Date ? value : new Date(value);
-  return date.toLocaleString();
 }
 
 export function SourceListRow({ workspaceId, item }: { workspaceId: string; item: SourceListItemModel }) {
@@ -34,7 +30,7 @@ export function SourceListRow({ workspaceId, item }: { workspaceId: string; item
         </span>
         {latestRun ? (
           <span className="hidden shrink-0 text-caption text-kh-text-muted sm:inline">
-            {syncStatusLabel(latestRun.status)} · <time dateTime={new Date(latestRun.startedAt).toISOString()}>{formatTimestamp(latestRun.startedAt)}</time>
+            {syncStatusLabel(latestRun.status)} · <time dateTime={new Date(latestRun.startedAt).toISOString()}>{formatDateTime(latestRun.startedAt)}</time>
           </span>
         ) : (
           <span className="hidden shrink-0 text-caption text-kh-text-muted sm:inline">Never synced</span>

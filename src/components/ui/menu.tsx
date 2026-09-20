@@ -68,14 +68,25 @@ export function MenuRadioGroup(props: ComponentProps<typeof BaseMenu.RadioGroup>
   return <BaseMenu.RadioGroup {...props} />;
 }
 
-/** The indicator occupies its slot whether or not it is showing, so the labels stay aligned. */
+/**
+ * The indicator occupies its slot whether or not it is showing, so the labels
+ * stay aligned.
+ *
+ * `closeOnClick` defaults to `true` here, against the library's own default of
+ * `false` for checkbox and radio items. §10 says choosing an option closes the
+ * menu, with one exception, so the primitive states the rule and the exception
+ * opts out — rather than every ordinary caller having to opt in and the rule
+ * holding only where someone remembered. `Show archived` is what this cost:
+ * it left the menu sitting over a view that had navigated away underneath.
+ */
 export function MenuRadioItem({
   className = "",
   children,
+  closeOnClick = true,
   ...props
 }: ComponentProps<typeof BaseMenu.RadioItem> & { children: ReactNode }) {
   return (
-    <BaseMenu.RadioItem className={`${ROW} ${className}`} {...props}>
+    <BaseMenu.RadioItem className={`${ROW} ${className}`} closeOnClick={closeOnClick} {...props}>
       <span className="flex h-4 w-4 shrink-0 items-center justify-center">
         <BaseMenu.RadioItemIndicator>
           <Check className="h-4 w-4 text-kh-selected-text" aria-hidden="true" />
@@ -89,10 +100,11 @@ export function MenuRadioItem({
 export function MenuCheckboxItem({
   className = "",
   children,
+  closeOnClick = true,
   ...props
 }: ComponentProps<typeof BaseMenu.CheckboxItem> & { children: ReactNode }) {
   return (
-    <BaseMenu.CheckboxItem className={`${ROW} ${className}`} {...props}>
+    <BaseMenu.CheckboxItem className={`${ROW} ${className}`} closeOnClick={closeOnClick} {...props}>
       <span className="flex h-4 w-4 shrink-0 items-center justify-center">
         <BaseMenu.CheckboxItemIndicator>
           <Check className="h-4 w-4 text-kh-selected-text" aria-hidden="true" />

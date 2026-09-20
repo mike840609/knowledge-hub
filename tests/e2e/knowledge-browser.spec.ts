@@ -101,7 +101,13 @@ test("reveals archived documents only with the archived toggle", async ({ page }
   await page.getByRole("complementary", { name: "Knowledge explorer" }).getByLabel("Document display options").click();
   await page.getByRole("menuitemcheckbox", { name: "Show archived" }).click();
   await expect(page).toHaveURL(/includeArchived=true/);
-  // Choosing it closes the menu, so reopen to read the state back.
+  // Choosing an option closes the menu: this one navigates, so leaving it open
+  // would park it over a view that changed underneath. Base UI defaults
+  // checkbox items to staying open, so assert the close rather than assume it
+  // — this passed for years on the reopen alone, which is satisfied just as
+  // well by a menu that never closed.
+  await expect(page.getByRole("menuitemcheckbox", { name: "Show archived" })).toHaveCount(0);
+  // Reopen to read the state back.
   await page.getByRole("complementary", { name: "Knowledge explorer" }).getByLabel("Document display options").click();
   await expect(page.getByRole("menuitemcheckbox", { name: "Show archived" })).toHaveAttribute("aria-checked", "true");
   await page.keyboard.press("Escape");
