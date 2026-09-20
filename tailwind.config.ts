@@ -56,6 +56,7 @@ const config: Config = {
         "kh-bg-hover": "var(--kh-bg-hover)",
         "kh-bg-selected": "var(--kh-bg-selected)",
         "kh-border": "var(--kh-border)",
+        "kh-border-strong": "var(--kh-border-strong)",
         "kh-text": "var(--kh-text)",
         "kh-text-muted": "var(--kh-text-muted)",
         "kh-primary": "var(--kh-primary)",

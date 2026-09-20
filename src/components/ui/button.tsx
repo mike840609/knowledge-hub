@@ -3,7 +3,7 @@ import type { ComponentProps } from "react";
 
 const variantClasses = {
   primary: "border-transparent bg-kh-primary text-kh-on-primary hover:bg-kh-primary-hover",
-  secondary: "border-kh-border bg-kh-bg text-kh-text hover:bg-kh-bg-hover",
+  secondary: "border-kh-border-strong bg-kh-bg text-kh-text hover:bg-kh-bg-hover",
   ghost: "border-transparent bg-transparent text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text",
   danger: "border-transparent bg-kh-danger-solid text-kh-on-primary hover:bg-kh-danger-solid-hover",
   link: "border-transparent bg-transparent text-kh-link underline underline-offset-2 hover:text-kh-text",

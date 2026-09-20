@@ -26,7 +26,7 @@ export function Topbar({
   const active = state?.pathname === pathname;
   const visible = active && state.visible;
   return (
-    <header className="flex h-12 shrink-0 items-center border-b border-kh-border/60 bg-kh-bg-raised">
+    <header className="flex h-12 shrink-0 items-center border-b border-kh-border bg-kh-bg-raised">
       <div className={`flex shrink-0 items-center gap-2 px-3 lg:h-full lg:border-r lg:border-kh-border lg:bg-kh-bg-sunken ${navCollapsed ? "lg:w-12 lg:px-2" : "lg:w-40"}`}>
         {onMenuClick ? (
           <button

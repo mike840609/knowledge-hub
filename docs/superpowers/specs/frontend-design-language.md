@@ -68,6 +68,7 @@ together, and say what job the new token does that no existing one covers.
 | Type (document) | `reading`, `display` | rendered Markdown only; a longer measure wants a larger size and looser leading |
 | Radius | `sm`, `md`, `lg` | see §5 |
 | Elevation | `popover`, `modal` | floating surfaces only |
+| Border | `border`, `border-strong` | see §6 |
 | Motion | two durations, one easing curve | see §9 |
 
 ## 5. Radius
@@ -107,6 +108,25 @@ reserved for floating surfaces.
 Subtle 1px neutral borders are the main structural device. Prefer a
 border, separator, panel boundary or selected background over a floating
 card.
+
+There are two border tokens, and picking the wrong one is a defect in both
+directions:
+
+- `border` — **structure**: dividers, panel edges, separators, table and code
+  block boundaries. Decorative. It must stay below the hover fill in
+  lightness; a static line that out-shines an interactive state inverts the
+  hierarchy and reads as too bright. This happened once in dark: the divider
+  sat at L\* 18.4 against a hover fill at L\* 15.2.
+- `border-strong` — **control boundaries**: any control whose border is the
+  only thing separating it from its background, which today means `Input`,
+  `Textarea` and the `secondary` button (all of which fill with `bg`, the
+  canvas colour). WCAG 1.4.11 requires 3:1 for non-text boundaries that
+  identify a component, and a decorative divider cannot meet that and stay
+  decorative.
+
+`border-strong` is validated against **every** surface it can sit on, not just
+the canvas — `subtle` and `sunken` are the tight cases and a value chosen
+against the canvas alone will fail them.
 
 Cards are intentionally rare. Prefer:
 
