@@ -307,8 +307,13 @@ semantics.
 
 ## 18. Open items
 
-Known gaps against the principles in §2, each of which changes behaviour
-rather than appearance:
+Known gaps against the principles in §2. This list is canonical; the audit
+that found them is recorded at
+`docs/superpowers/verification/2026-09-20-linear-design-alignment-audit.md`,
+which also covers what was addressed at the time and is a point-in-time
+record rather than a tracker.
+
+Each of these changes behaviour rather than appearance:
 
 1. `⌘K` executes search only. The reference language treats it as a command
    palette; creating a note, toggling archived and opening Details have no
