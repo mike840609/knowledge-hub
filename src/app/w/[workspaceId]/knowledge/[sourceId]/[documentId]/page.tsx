@@ -3,6 +3,7 @@ import type { KnowledgeTreeItem } from "@/modules/knowledge/application/knowledg
 import type { DocumentBreadcrumbSegment } from "@/components/knowledge/document-header";
 import { DocumentDetailClient, type DocumentInspectorData } from "@/components/knowledge/document-inspector";
 import { DocumentViewer } from "@/components/knowledge/document-viewer";
+import { StatusMessage } from "@/components/ui/status-message";
 import { markdownStartsWithDocumentTitle } from "@/lib/markdown-title";
 
 function buildBreadcrumb(
@@ -46,17 +47,19 @@ export default async function KnowledgeDocumentPage({
   if (query?.revision !== undefined) {
     if (!/^[0-9]+$/.test(query.revision)) {
       return (
-        <div className="kh-reading-column py-16">
-          <h1 className="text-heading font-semibold">Not found or no access</h1>
-        </div>
+        <StatusMessage
+          title="Not found or no access"
+          description="This content does not exist or you do not have access to it."
+        />
       );
     }
     const parsed = Number(query.revision);
     if (!Number.isSafeInteger(parsed) || parsed < 1) {
       return (
-        <div className="kh-reading-column py-16">
-          <h1 className="text-heading font-semibold">Not found or no access</h1>
-        </div>
+        <StatusMessage
+          title="Not found or no access"
+          description="This content does not exist or you do not have access to it."
+        />
       );
     }
     revisionNo = parsed;
@@ -65,9 +68,10 @@ export default async function KnowledgeDocumentPage({
   const model = await getKnowledgeDocumentModel(workspaceId, sourceId, documentId, { includeArchived, revisionNo });
   if (!model) {
     return (
-      <div className="kh-reading-column py-16">
-        <h1 className="text-heading font-semibold">Not found or no access</h1>
-      </div>
+      <StatusMessage
+        title="Not found or no access"
+        description="This content does not exist or you do not have access to it."
+      />
     );
   }
 

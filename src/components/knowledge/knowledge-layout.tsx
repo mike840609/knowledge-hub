@@ -6,7 +6,7 @@ import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/applicat
 import { SourceSidebar } from "./source-sidebar";
 import { InspectorContext } from "./inspector-context";
 import { Drawer } from "@/components/ui/drawer";
-import { Skeleton } from "@/components/ui/skeleton";
+import { DocumentSkeleton, TreeSkeleton } from "./knowledge-skeletons";
 import { useScrollRestoration } from "./use-scroll-restoration";
 import { buttonClasses } from "@/components/ui/button";
 
@@ -22,26 +22,6 @@ function useDesktopLayout(): boolean {
     return () => query.removeEventListener("change", update);
   }, []);
   return desktop;
-}
-
-function DocumentRegionSkeleton() {
-  return (
-    <div className="kh-reading-column pb-6 pt-5" aria-hidden="true">
-      <Skeleton className="h-4 w-40" />
-      <Skeleton className="mt-3 h-7 w-2/3" />
-      <div className="mt-3 flex gap-2">
-        <Skeleton className="h-5 w-16" />
-        <Skeleton className="h-5 w-44" />
-      </div>
-      <div className="mt-6 space-y-3">
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-5/6" />
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-2/3" />
-      </div>
-    </div>
-  );
 }
 
 export function KnowledgeLayout({
@@ -109,7 +89,7 @@ export function KnowledgeLayout({
         <Suspense
           fallback={
             <aside aria-label="Knowledge explorer" className="w-72 shrink-0 border-r border-kh-border bg-kh-bg-sunken p-3">
-              <p className="text-body text-kh-text-muted">Loading documents…</p>
+              <TreeSkeleton />
             </aside>
           }
         >
@@ -136,7 +116,7 @@ export function KnowledgeLayout({
           </div>
         )}
         <div ref={contentRef} className="min-h-0 flex-1 overflow-hidden overscroll-contain [&:not(:has([data-document-pane]))]:overflow-y-auto">
-          <Suspense fallback={<DocumentRegionSkeleton />}>{children}</Suspense>
+          <Suspense fallback={<DocumentSkeleton />}>{children}</Suspense>
         </div>
       </div>
       <Drawer

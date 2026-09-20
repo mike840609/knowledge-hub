@@ -1,14 +1,7 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
-
-// A dense UI leans on the typeface. Inter holds up at 11-14px where the
-// system stack varies by platform; figures are made tabular per call site.
-const inter = Inter({
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--kh-font-sans",
-});
+import { inter } from "./fonts";
+import { THEME_PRE_PAINT_SCRIPT } from "./theme-script";
 
 export const metadata: Metadata = {
   title: "TSMC Knowledge Hub",
@@ -19,13 +12,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" className={inter.variable}>
       <head>
-        {/* Applies a stored theme before first paint. Without a stored choice
-            the CSS media query decides, so this stays a no-op. */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `var d=document.documentElement;try{d.dataset.theme=localStorage.getItem("kh:theme")==="dark"?"dark":"light"}catch(e){d.dataset.theme="light"}`,
-          }}
-        />
+        <script dangerouslySetInnerHTML={{ __html: THEME_PRE_PAINT_SCRIPT }} />
       </head>
       <body className="antialiased">{children}</body>
     </html>

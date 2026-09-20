@@ -5,6 +5,7 @@ import { Search, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
+import { ResultListSkeleton } from "@/components/knowledge/knowledge-skeletons";
 import { plainSearchSnippet } from "@/lib/search-snippet";
 import { buttonClasses } from "@/components/ui/button";
 
@@ -147,7 +148,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
               </Dialog.Close>
             </div>
             <div className="min-h-0 overflow-y-auto p-2">
-              {loading ? <p role="status" className="px-3 py-3 text-body text-kh-text-muted">Searching…</p> : null}
+              {loading ? <ResultListSkeleton /> : null}
               {!loading && message ? <p role="status" className="px-3 py-3 text-body text-kh-text-muted">{message}</p> : null}
               {!loading && !message && trimmed && hits.length === 0 ? <p role="status" className="px-3 py-3 text-body text-kh-text-muted">No matching documents.</p> : null}
               {!trimmed ? <p className="px-3 py-3 text-body text-kh-text-muted">Type to search documents in this workspace.</p> : null}
