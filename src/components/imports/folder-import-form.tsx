@@ -245,7 +245,7 @@ export function FolderImportForm({ target }: { target: FolderImportTarget }): Re
   if (!allowed) return <p role="status" className="p-4 text-body text-kh-text-muted">Import is unavailable while this workspace is read-only or access is being checked.</p>;
 
   return (
-    <div className="rounded-lg border border-kh-border bg-kh-bg p-4">
+    <div className="rounded-md border border-kh-border bg-kh-bg p-4">
       {target.kind === "new" ? (
         <>
           <label className="block text-body font-medium text-kh-text" htmlFor="import-source-name">Source name</label>

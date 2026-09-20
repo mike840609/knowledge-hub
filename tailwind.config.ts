@@ -4,6 +4,10 @@ import type { Config } from "tailwindcss";
  * Design tokens. The scales below are *replaced*, not extended, so the only
  * spellings that compile are the ones named here — an arbitrary `text-[13px]`
  * or a stray `rounded-xl` fails loudly instead of quietly forking the system.
+ *
+ * Contract and rationale:
+ *   docs/superpowers/specs/2026-09-13-phase-2.5-frontend-product-baseline-design.md §25–28
+ *   docs/superpowers/specs/2026-09-20-frontend-design-language-amendment.md
  */
 const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],

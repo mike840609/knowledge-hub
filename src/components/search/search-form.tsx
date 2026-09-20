@@ -15,7 +15,7 @@ export function SearchForm({
 }) {
   return (
     <form action={`/w/${workspaceId}/search`} method="get" role="search" className="space-y-3">
-      <div className="flex items-center gap-2 rounded-lg border border-kh-border bg-kh-bg pl-3 transition-colors focus-within:border-kh-focus focus-within:ring-2 focus-within:ring-kh-focus">
+      <div className="flex items-center gap-2 rounded-md border border-kh-border bg-kh-bg pl-3 transition-colors focus-within:border-kh-focus focus-within:ring-2 focus-within:ring-kh-focus">
         <Search size={18} strokeWidth={2} className="shrink-0 text-kh-text-muted" aria-hidden="true" />
         <label htmlFor="search-q" className="sr-only">Search knowledge</label>
         <input id="search-q" name="q" type="search" defaultValue={q} autoComplete="off" placeholder="Search documents…" className="h-11 min-w-0 flex-1 bg-transparent text-body text-kh-text outline-none placeholder:text-kh-text-muted" />

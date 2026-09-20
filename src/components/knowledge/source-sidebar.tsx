@@ -147,7 +147,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
             <summary aria-label="Document display options" title="Document display options" className={buttonClasses({ variant: "ghost", icon: true, className: "cursor-pointer list-none [&::-webkit-details-marker]:hidden" })}>
               <MoreHorizontal size={17} aria-hidden="true" />
             </summary>
-            <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-md border border-kh-border bg-kh-bg p-2 shadow-popover">
+            <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-lg border border-kh-border bg-kh-bg p-2 shadow-popover">
               <label className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md px-2 text-body text-kh-text hover:bg-kh-bg-hover">
                 <input type="checkbox" checked={showArchived} onChange={(event) => toggleArchived(event.target.checked)} className="h-4 w-4 accent-kh-primary" />
                 Show archived
