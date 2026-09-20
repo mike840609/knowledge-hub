@@ -11,23 +11,31 @@ const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
     // Six UI sizes plus two that exist only for rendered documents.
+    // Every size carries its own tracking. Reference values, measured from
+    // linear.app: 12px 0, 13px -.01em, 14px -.013em, 15px -.011em, 17px 0.
+    // Sizes without a measured counterpart are interpolated, not invented
+    // from nothing, and are marked below.
     fontSize: {
-      micro: ["11px", { lineHeight: "14px" }],
-      caption: ["12px", { lineHeight: "16px" }],
-      "body-sm": ["13px", { lineHeight: "18px" }],
-      body: ["14px", { lineHeight: "20px" }],
-      title: ["16px", { lineHeight: "24px" }],
-      heading: ["20px", { lineHeight: "28px" }],
-      // Document scale: longer measure wants a larger size and looser leading.
-      reading: ["15px", { lineHeight: "28px" }],
-      display: ["24px", { lineHeight: "32px" }],
+      micro: ["11px", { lineHeight: "14px", letterSpacing: "-0.01em" }], // interpolated
+      caption: ["12px", { lineHeight: "16px", letterSpacing: "0" }],
+      "body-sm": ["13px", { lineHeight: "18px", letterSpacing: "-0.01em" }],
+      body: ["14px", { lineHeight: "20px", letterSpacing: "-0.013em" }],
+      title: ["16px", { lineHeight: "24px", letterSpacing: "-0.01em" }], // interpolated
+      heading: ["20px", { lineHeight: "28px", letterSpacing: "-0.015em" }], // interpolated
+      // Document scale: longer measure wants a larger size and looser leading
+      // than the reference, which sets 15px at 1.6 for marketing prose.
+      reading: ["15px", { lineHeight: "28px", letterSpacing: "-0.011em" }],
+      display: ["24px", { lineHeight: "32px", letterSpacing: "-0.015em" }], // interpolated
     },
-    // Controls at 6px, overlays at 10px. `sm` is for inline chrome (kbd, code).
+    // Rungs of the reference ladder (4/6/8/12/16/24/32), taking the four this
+    // product needs: inline chrome, controls, menus, modals. 10px, used
+    // earlier, is not on that ladder at all.
     borderRadius: {
       none: "0",
       sm: "4px",
       md: "6px",
-      lg: "10px",
+      lg: "8px",
+      xl: "12px",
       full: "9999px",
     },
     // Two elevations, themed via variables so dark mode can deepen them.

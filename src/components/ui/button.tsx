@@ -9,17 +9,22 @@ const variantClasses = {
   link: "border-transparent bg-transparent text-kh-link underline underline-offset-2 hover:text-kh-text",
 } as const;
 
-/** Control heights. `md` is the shell default; `lg` is for page-level forms. */
+/**
+ * Control heights, matching the reference ladder (24 / 32 / 40). `md` is the
+ * shell default; `lg` is for page-level forms, where it also lines up with
+ * Input. `sm` sits exactly on the WCAG 2.5.8 minimum target of 24px, so it is
+ * for icon-only secondary actions inside dense chrome and nothing else.
+ */
 const sizeClasses = {
-  sm: "h-7 gap-1.5 px-2 text-body-sm",
+  sm: "h-6 gap-1 px-2 text-body-sm",
   md: "h-8 gap-2 px-3 text-body",
-  lg: "h-9 gap-2 px-4 text-body",
+  lg: "h-10 gap-2 px-4 text-body",
 } as const;
 
 const iconSizeClasses = {
-  sm: "h-7 w-7",
+  sm: "h-6 w-6",
   md: "h-8 w-8",
-  lg: "h-9 w-9",
+  lg: "h-10 w-10",
 } as const;
 
 export type ButtonVariant = keyof typeof variantClasses;

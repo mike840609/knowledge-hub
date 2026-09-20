@@ -29,6 +29,34 @@ point here. Everything else in that document stands.
 reach for each token; a second copy of the numbers would be a second source of
 truth, which is the failure this document exists to prevent.
 
+## 1a. Reference values and their provenance
+
+Where this contract states a number rather than a principle, the number comes
+from measuring the reference product rather than from taste.
+
+The values were read from the public CSS served by `linear.app` on
+2026-09-20 — `layout.B05Dfi6O.css` for the token ladders, and the `Button`,
+`CommandMenu`, `Select`, `Tooltip` and `KBD` stylesheets for how they are
+applied:
+
+```text
+radius ladder   4 / 6 / 8 / 12 / 16 / 24 / 32, plus circle and rounded
+control radius  6 (Select)        tooltip 8       command palette 12
+button heights  24 / 32 / 40 / 44
+type sizes      10 / 12 / 13 / 14 / 15 / 17 / 20 / 24
+tracking        10px -.015em, 12px 0, 13px -.01em, 14px -.013em,
+                15px -.011em, 17px 0
+```
+
+**The limit of this evidence:** that is the marketing site, which shares the
+design system with the product but is not the product. It is far better than
+recollection and worse than the app itself. Treat these as the best available
+reading, not as gospel, and prefer a fresh measurement to an argument.
+
+Where this product has no counterpart at a measured size, the value is
+interpolated between the two nearest rungs and marked as such in
+`tailwind.config.ts`. Nothing is invented.
+
 ## 2. Principles
 
 The product adopts a Linear/GitHub-inspired workbench. The intent is not
@@ -66,39 +94,40 @@ together, and say what job the new token does that no existing one covers.
 | --- | --- | --- |
 | Type (UI) | `micro`, `caption`, `body-sm`, `body`, `title`, `heading` | `body` is the ~14px default the UI spends most of its time in |
 | Type (document) | `reading`, `display` | rendered Markdown only; a longer measure wants a larger size and looser leading |
-| Radius | `sm`, `md`, `lg` | see §5 |
+| Radius | `sm`, `md`, `lg`, `xl` | see §5 |
 | Elevation | `popover`, `modal` | floating surfaces only |
 | Border | `border`, `border-strong` | see §6 |
 | Motion | two durations, one easing curve | see §9 |
 
 ## 5. Radius
 
-Three tiers:
+Four rungs, taken from the reference ladder (see §1a):
 
-- `sm` — inline chrome: `kbd`, inline code, badges. These sit inside a text
-  line and take the control radius badly.
-- `md` — controls, rows, panels, sections. The default.
-- `lg` — **floating surfaces only**: dialogs, drawers, dropdowns, popovers.
+- `sm` 4px — inline chrome: `kbd`, inline code, badges. These sit inside a
+  text line and take the control radius badly.
+- `md` 6px — controls, rows, panels, sections. The default.
+- `lg` 8px — menus, dropdowns, popovers, tooltips.
+- `xl` 12px — modals, dialogs, the command palette.
 
-`lg` appearing on a panel is a bug. The rule is checkable by grep, and that is
-the point of stating it this way.
+`lg` or `xl` appearing on a panel is a bug, and so is a modal at `lg`. The
+rule is checkable by grep, which is the point of stating it by surface rather
+than by feel.
 
 Large SaaS-style rounding — uniformly heavy radii on ordinary cards and panels
-— is avoided.
+— is avoided. That is a rule about panels, not an argument against tiering:
+the reference tiers its own radii, and one small radius shared by a 32px
+button and a 640px command palette reads as undersized on the latter.
 
-### Divergence from the original §26
+### Superseding the original §26
 
-The Phase 2.5 text specified two tiers, `4px default / 6px interactive,
-floating surfaces`. This contract uses three, with floating surfaces above
-6px.
+Phase 2.5 §26 specified two tiers, `4px default / 6px interactive, floating
+surfaces`. The reference's own ladder has seven rungs and puts tooltips at 8
+and the command palette at 12, so the two-tier rule does not describe the
+language this product follows. It is superseded.
 
-The accompanying instruction, "avoid large SaaS-style rounding", targets
-uniformly heavy rounding on ordinary panels; it is not an argument against
-tiering. The reference language this product follows tiers its own radii:
-small on controls, larger on floating surfaces. One small radius shared by a
-32px button and a 640px command palette reads as undersized on the latter.
-
-The substituted rule is narrower and enforceable, which the original was not.
+An earlier revision of this contract used a third tier at 10px. That value is
+not on the ladder at all — it was chosen by feel, which is exactly the failure
+this document exists to prevent.
 
 ## 6. Elevation and borders
 
@@ -172,6 +201,17 @@ No component declares a colour outside the token layer.
 ## 9. Typography and motion
 
 UI text is approximately 14px; document body 15–16px.
+
+**Every size carries its own tracking.** The reference pairs each step with a
+negative letter-spacing tuned per size rather than derived from a formula —
+12px sits at 0, 13px at -.01em, 14px at -.013em, 15px at -.011em — and that
+tuning is a large part of why a dense UI stays comfortable to read. A size
+token without letter-spacing is incomplete; this contract shipped that way
+once.
+
+Line heights are this product's own. The reference sets 15px at 1.6 for
+marketing prose; the document scale here is looser because it serves a longer
+measure.
 
 The typeface is loaded, not inherited from the platform — the default sans
 varies most at the 11–14px sizes this UI lives in. Timestamps and figures that
