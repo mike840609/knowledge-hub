@@ -57,7 +57,7 @@ test.describe("narrow knowledge layout", () => {
     // Close it through its visible control before opening document details.
     await page.getByRole("dialog", { name: "Browse knowledge" }).getByRole("button", { name: "Close panel" }).click();
     await expect(page.getByRole("dialog", { name: "Browse knowledge" })).toHaveCount(0);
-    await page.getByRole("button", { name: "Details" }).click();
+    await page.locator("main").getByRole("button", { name: "Details" }).click();
     await expect(page.getByRole("dialog", { name: "Document details" })).toBeVisible();
     expect(errors.filter((error) => /hydration|server rendered HTML/i.test(error))).toEqual([]);
   });

@@ -280,9 +280,27 @@ the list is long enough that tabbing through it is the greater harm — the tree
 is the exception. A roving tabindex leaves every row unreachable if its script
 does not run.
 
-This applies to the knowledge tree, the `⌘K` palette and the search results
-page alike. A list that is reachable by mouse and not by keyboard is a defect,
-and the search results page shipped that way once.
+This applies to the knowledge tree, the `⌘K` palette, the search results page
+and **menus** alike. A list that is reachable by mouse and not by keyboard is a
+defect, and both the search results page and every menu shipped that way once.
+
+### Menus
+
+Menus are lists of rows, so the rule above governs them, and a `<details>`
+element cannot satisfy it. `src/components/ui/menu.tsx` wraps Base UI's `Menu`
+— the same library that already owns Dialog, Tabs and Button — and is the only
+way a menu is built here. Dismissal, outside clicks, focus return and
+arrow-key movement come from it rather than from a hand-written `keydown`
+handler per menu.
+
+Rows sit on the control height so a menu reads as part of the same system, at
+the `lg` radius and `popover` elevation that §5 and §6 give floating surfaces.
+A section long enough that it should not sit open becomes a submenu rather
+than a nested disclosure.
+
+Choosing an option closes the menu. The exception is a choice whose effect is
+visible in the menu itself — picking a theme is the one case — where staying
+open lets the reader see what they did.
 
 ## 11. Navigation state
 
@@ -307,7 +325,9 @@ Light is the starting point until someone picks otherwise.
 
 The choice persists to `localStorage` under `kh:theme`. A pre-paint script in
 the document head applies it before the first frame, so a reader who picked
-dark never sees a light one.
+dark never sees a light one. It stamps `data-theme` unconditionally, defaulting
+to light, so the DOM states which theme is in force from the first byte rather
+than only after hydration.
 
 ### What this costs
 
@@ -436,21 +456,16 @@ Each of these changes behaviour rather than appearance:
    replaced, so gaps and paddings remain unenforced. Page container widths
    spread across seven values and page padding across three.
 9. Dates are formatted with a hardcoded `en-US` locale.
-10. Menus are hand-rolled `<details>` elements (`workspace-selector`, the
-    sidebar's display options) rather than Base UI's `Menu`, which is already
-    a dependency. They have no arrow-key navigation, which §10 requires of
-    every list of rows — this is a gap in the contract's own coverage, not
-    only in the code.
-11. `search-form` overrides the button shape through `className`. A primitive
+10. `search-form` overrides the button shape through `className`. A primitive
     owns its own shape (§15); an override is the drift the button system
     exists to prevent, and it escaped the sweep because it was a `<Button>`
     rather than a hand-rolled one.
-12. `Input` and `Textarea` are not on the button size scale, so controls do
+11. `Input` and `Textarea` are not on the button size scale, so controls do
     not align when placed side by side in a form.
-13. Loading has three spellings — a skeleton, `Loading documents…` and
+12. Loading has three spellings — a skeleton, `Loading documents…` and
     `Searching…` — and the document skeleton is duplicated between
     `knowledge-layout` and `loading.tsx`.
-14. `error.tsx` and `not-found.tsx` cover one route. `/search`, `/sources` and
+13. `error.tsx` and `not-found.tsx` cover one route. `/search`, `/sources` and
     `/settings` have no boundary, and there is no `global-error.tsx`.
 
 ## 19. Completion criteria

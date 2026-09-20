@@ -43,7 +43,7 @@ test("edits a hub-managed document and records a second revision", async ({ page
   await editorForm.getByRole("button", { name: "Save" }).click();
 
   await expect(page.locator("article").first().getByText("updated body")).toBeVisible();
-  await page.getByRole("button", { name: "Details" }).click();
+  await page.locator("main").getByRole("button", { name: "Details" }).click();
   await page.getByRole("tab", { name: "History" }).click();
   await expect(page.getByRole("link", { name: /Revision 2/ })).toBeVisible();
 });

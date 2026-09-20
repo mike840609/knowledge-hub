@@ -74,7 +74,7 @@ test("switches workspace through the shell selector", async ({ page }) => {
   await expect(page.getByRole("heading", { name: ARCHITECTURE_TITLE })).toBeVisible();
 
   await page.getByLabel("Workspace: Query Master", { exact: true }).click();
-  await page.getByRole("button", { name: "SWFP", exact: true }).click();
+  await page.getByRole("menuitem", { name: "SWFP", exact: true }).click();
   await expect(page).toHaveURL(
     new RegExp(`/w/${SWFP_WORKSPACE}/knowledge/${SWFP_SOURCE}/[0-9a-f-]+`),
   );
@@ -99,9 +99,12 @@ test("reveals archived documents only with the archived toggle", async ({ page }
   // The toggle is a controlled checkbox driving a client navigation, so click
   // the label and wait for the URL + checked state instead of check().
   await page.getByRole("complementary", { name: "Knowledge explorer" }).getByLabel("Document display options").click();
-  await page.getByText("Show archived").click();
+  await page.getByRole("menuitemcheckbox", { name: "Show archived" }).click();
   await expect(page).toHaveURL(/includeArchived=true/);
-  await expect(page.getByRole("complementary", { name: "Knowledge explorer" }).getByLabel("Show archived")).toBeChecked();
+  // Choosing it closes the menu, so reopen to read the state back.
+  await page.getByRole("complementary", { name: "Knowledge explorer" }).getByLabel("Document display options").click();
+  await expect(page.getByRole("menuitemcheckbox", { name: "Show archived" })).toHaveAttribute("aria-checked", "true");
+  await page.keyboard.press("Escape");
 
   const retiredItem = tree.getByRole("treeitem", { name: RETIRED_TITLE, exact: true });
   await expect(retiredItem).toBeVisible();

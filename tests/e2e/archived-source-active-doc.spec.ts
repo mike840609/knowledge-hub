@@ -24,7 +24,7 @@ test("keeps an active doc under an archived source readable in archived mode", a
   const tree = page.getByRole("tree", { name: "Knowledge tree" });
   await expect(tree).toBeVisible();
   await page.getByRole("complementary", { name: "Knowledge explorer" }).getByLabel("Document display options").click();
-  await expect(page.getByRole("complementary", { name: "Knowledge explorer" }).getByLabel("Show archived")).toBeChecked();
+  await expect(page.getByRole("menuitemcheckbox", { name: "Show archived" })).toHaveAttribute("aria-checked", "true");
 
   const docLinks = tree.getByRole("treeitem").getByRole("link");
   expect(await docLinks.count()).toBeGreaterThan(0);
@@ -56,9 +56,9 @@ test("keeps an active doc under an archived source readable in archived mode", a
 test("switching to an archived Source preserves archived mode", async ({ page }) => {
   await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${OBSIDIAN_SOURCE}?includeArchived=true`);
   await page.getByRole("complementary", { name: "Knowledge explorer" }).getByLabel("Document display options").click();
-  await expect(page.getByRole("complementary", { name: "Knowledge explorer" }).getByLabel("Show archived")).toBeChecked();
+  await expect(page.getByRole("menuitemcheckbox", { name: "Show archived" })).toHaveAttribute("aria-checked", "true");
 
-  await page.getByRole("complementary", { name: "Knowledge explorer" }).getByLabel("Document display options").press("Escape");
+  await page.keyboard.press("Escape");
   await page.locator(`button[aria-controls="collection-${ARCHIVED_SOURCE}"]`).click();
   await page.getByRole("link", { name: ARCHIVED_ACTIVE_TITLE, exact: true }).click();
 

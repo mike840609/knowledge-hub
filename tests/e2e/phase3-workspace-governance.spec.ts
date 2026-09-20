@@ -36,7 +36,7 @@ test.describe("Phase 3 Workspace product acceptance", () => {
       await page.getByLabel("Workspace: My Space", { exact: true }).click();
       await expect(page.getByText("Teams", { exact: true })).toBeVisible();
       await expect(page.getByText("Archived", { exact: true })).toBeVisible();
-      await page.getByRole("button", { name: "Create team", exact: true }).click();
+      await page.getByRole("menuitem", { name: "Create team", exact: true }).click();
       const dialog = page.getByRole("dialog");
       await dialog.getByLabel("Team name").fill("UI closure team");
       await dialog.getByRole("button", { name: "Create team", exact: true }).click();
@@ -96,7 +96,7 @@ test.describe("Phase 3 Workspace product acceptance", () => {
       await expect(viewer.page.locator('input[type="file"]')).toHaveCount(0);
       await viewer.page.goto("/");
       await viewer.page.getByLabel("Workspace: My Space", { exact: true }).click();
-      await expect(viewer.page.getByRole("button", { name: "Create team", exact: true })).toHaveCount(0);
+      await expect(viewer.page.getByRole("menuitem", { name: "Create team", exact: true })).toHaveCount(0);
     } finally { await owner.context.close(); await admin.context.close(); await viewer.context.close(); }
   });
 
@@ -227,7 +227,7 @@ test.describe("Phase 3 Workspace product acceptance", () => {
     try {
       await owner.page.goto("/");
       await owner.page.getByLabel("Workspace: My Space", { exact: true }).click();
-      await owner.page.getByRole("button", { name: "Create team", exact: true }).click();
+      await owner.page.getByRole("menuitem", { name: "Create team", exact: true }).click();
       const dialog = owner.page.getByRole("dialog");
       await dialog.getByLabel("Team name").fill("Capability expired");
       // Simulate a newly denied session at the HTTP boundary; real denied creation is covered by the fixed nonCreator persona.
