@@ -7,7 +7,7 @@ import { Menu, PanelLeftClose, PanelLeftOpen, PanelRight } from "lucide-react";
 import type { WorkspaceShellModel } from "@/server/knowledge-read";
 import { WorkspaceSelector } from "@/components/shell/workspace-selector";
 import { QuickSearch } from "@/components/search/quick-search";
-import { ThemeToggle } from "@/components/shell/theme-toggle";
+import { UserMenu } from "@/components/shell/user-menu";
 import { buttonClasses } from "@/components/ui/button";
 
 export function Topbar({
@@ -58,9 +58,8 @@ export function Topbar({
           <span className="hidden sm:inline">Details</span>
         </button>
       </div>
-      <div className="ml-auto flex shrink-0 items-center gap-1 px-3">
-        <span className="hidden min-w-0 truncate text-body text-kh-text-muted sm:block">{model.identityName}</span>
-        <ThemeToggle />
+      <div className="ml-auto flex shrink-0 items-center px-3">
+        <UserMenu identityName={model.identityName} />
       </div>
     </header>
   );

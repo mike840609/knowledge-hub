@@ -18,7 +18,7 @@ test("opens the Inspector and selects a historical revision", async ({ page }) =
   await expect(page.getByRole("tab", { name: "Details" })).toHaveCount(0);
   await expect(page.getByRole("tab", { name: "History" })).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Details" }).click();
+  await page.locator("main").getByRole("button", { name: "Details" }).click();
   await expect(page.getByRole("tab", { name: "Details" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "History" })).toBeVisible();
 
@@ -44,7 +44,7 @@ test("shows Details metadata in the Inspector", async ({ page }) => {
   await page.goto(`/w/${WORKSPACE}/knowledge/${SOURCE}`);
   await expect(page.getByRole("heading", { name: "Architecture" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Details" }).click();
+  await page.locator("main").getByRole("button", { name: "Details" }).click();
   await expect(page.getByRole("tab", { name: "Details" })).toBeVisible();
   const detailsPanel = page.getByRole("tabpanel", { name: "Details" });
   await expect(detailsPanel.getByText("Query Master")).toBeVisible();

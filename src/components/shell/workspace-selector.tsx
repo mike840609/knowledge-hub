@@ -1,66 +1,102 @@
 "use client";
 
 import { Check, ChevronDown } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CreateTeamDialog } from "@/components/workspaces/create-team-dialog";
+import {
+  MenuContent,
+  MenuGroup,
+  MenuGroupLabel,
+  MenuItem,
+  MenuRoot,
+  MenuSeparator,
+  MenuSub,
+  MenuSubTrigger,
+  MenuTrigger,
+} from "@/components/ui/menu";
 import { useWorkspaceAuthorization } from "./use-workspace-authorization";
+
+type NavigationItem = ReturnType<typeof useWorkspaceAuthorization>["navigation"]["items"][number];
+
+function displayName(entry: NavigationItem): string {
+  return entry.type === "PERSONAL" ? "My Space" : entry.name;
+}
 
 export function WorkspaceSelector({ workspaceId }: { workspaceId: string }) {
   const router = useRouter();
   const { navigation, confirmed, refresh } = useWorkspaceAuthorization();
   const [creating, setCreating] = useState(false);
-  const menu = useRef<HTMLDetailsElement>(null);
   const current = navigation.items.find((item) => item.id === workspaceId);
-  const choose = (id: string) => {
-    if (menu.current) menu.current.open = false;
-    router.push(`/w/${id}/knowledge`);
+  const currentName = current ? displayName(current) : "Workspace";
+
+  // Dismissal, outside clicks, focus return and arrow-key movement all come
+  // from the primitive; this used to hand-roll the first three and never
+  // offered the fourth.
+  const item = (entry: NavigationItem) => {
+    const selected = entry.id === workspaceId;
+    const name = displayName(entry);
+    return (
+      <MenuItem
+        key={entry.id}
+        onClick={() => router.push(`/w/${entry.id}/knowledge`)}
+        className={selected ? "bg-kh-bg-selected font-medium text-kh-selected-text" : ""}
+      >
+        <span className="min-w-0 flex-1 truncate" title={name}>{name}</span>
+        {selected && <Check className="h-4 w-4 shrink-0" aria-hidden="true" />}
+      </MenuItem>
+    );
   };
-  useEffect(() => {
-    const closeOutside = (event: PointerEvent) => {
-      if (menu.current && event.target instanceof Node && !menu.current.contains(event.target)) {
-        menu.current.open = false;
-      }
-    };
-    document.addEventListener("pointerdown", closeOutside);
-    return () => document.removeEventListener("pointerdown", closeOutside);
-  }, []);
-  const currentName = current?.type === "PERSONAL" ? "My Space" : current?.name ?? "Workspace";
-  const item = (entry: (typeof navigation.items)[number]) => (
-    <button key={entry.id} type="button" aria-current={entry.id === workspaceId ? "page" : undefined}
-      className={`flex min-h-10 w-full items-center gap-2 rounded-md px-3 py-2 text-left text-body focus-visible:ring-2 focus-visible:ring-kh-focus ${entry.id === workspaceId ? "bg-kh-bg-selected font-medium text-kh-selected-text hover:bg-kh-bg-selected" : "hover:bg-kh-bg-hover"}`}
-      onClick={() => choose(entry.id)}>
-        <span className="min-w-0 flex-1 truncate" title={entry.type === "PERSONAL" ? "My Space" : entry.name}>{entry.type === "PERSONAL" ? "My Space" : entry.name}</span>
-        {entry.id === workspaceId && <Check className="h-4 w-4 shrink-0 text-kh-text" aria-hidden="true" />}
-      </button>
+
+  const personal = navigation.items.filter((entry) => entry.type === "PERSONAL");
+  const teams = navigation.items.filter((entry) => entry.type === "TEAM" && entry.lifecycleState === "ACTIVE");
+  const archived = navigation.items.filter((entry) => entry.type === "TEAM" && entry.lifecycleState === "ARCHIVED");
+
+  return (
+    <>
+      <MenuRoot>
+        <MenuTrigger
+          aria-label={`Workspace: ${currentName}`}
+          title={`Switch workspace: ${currentName}`}
+          className="kh-focus-ring flex min-h-8 w-full min-w-0 items-center gap-2 rounded-md px-3 text-body transition-colors hover:bg-kh-bg-hover data-[popup-open]:bg-kh-bg-hover"
+        >
+          <span className="hidden shrink-0 text-caption text-kh-text-muted sm:inline">Workspace</span>
+          <span className="min-w-0 flex-1 truncate text-left font-medium">{currentName}</span>
+          <ChevronDown className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />
+        </MenuTrigger>
+        <MenuContent className="max-h-[min(24rem,calc(100dvh-5rem))] w-64 max-w-[calc(100vw-5rem)] overflow-auto">
+          {personal.map(item)}
+          <MenuGroup>
+            <MenuGroupLabel>Teams</MenuGroupLabel>
+            {teams.map(item)}
+          </MenuGroup>
+          {/* Always present, even when empty: a reader looking for an archived
+              team needs to see that the section exists and is simply empty. */}
+          <MenuSub>
+            <MenuSubTrigger>Archived</MenuSubTrigger>
+            <MenuContent className="w-56">
+              {archived.length > 0
+                ? archived.map(item)
+                : <MenuItem disabled>No archived teams</MenuItem>}
+            </MenuContent>
+          </MenuSub>
+          {navigation.canCreateTeam && (
+            <>
+              <MenuSeparator />
+              <MenuItem disabled={!confirmed} onClick={() => setCreating(true)}>
+                Create team
+              </MenuItem>
+            </>
+          )}
+        </MenuContent>
+      </MenuRoot>
+      <CreateTeamDialog
+        open={creating}
+        onOpenChange={setCreating}
+        canCreateTeam={confirmed && navigation.canCreateTeam}
+        onDenied={() => { void refresh(); }}
+        onCreated={(id) => { void refresh(); router.push(`/w/${id}/knowledge`); }}
+      />
+    </>
   );
-  return <>
-    <details ref={menu} className="group relative min-w-0 w-full" onKeyDown={(event) => {
-      if (event.key === "Escape" && menu.current) {
-        menu.current.open = false;
-        menu.current.querySelector("summary")?.focus();
-      }
-    }}>
-      <summary aria-label={`Workspace: ${currentName}`} title={`Switch workspace: ${currentName}`}
-        className="flex min-h-9 w-full cursor-pointer list-none items-center gap-2 rounded-md px-3 text-body hover:bg-kh-bg-hover focus-visible:ring-2 focus-visible:ring-kh-focus group-open:bg-kh-bg-hover [&::-webkit-details-marker]:hidden">
-        <span className="hidden shrink-0 text-caption text-kh-text-muted sm:inline">Workspace</span>
-        <span className="min-w-0 flex-1 truncate font-medium">{currentName}</span>
-        <ChevronDown className="h-4 w-4 shrink-0 text-kh-text-muted group-open:rotate-180" aria-hidden="true" />
-      </summary>
-      <nav aria-label="Workspaces" className="absolute left-0 top-full z-50 mt-2 max-h-[min(24rem,calc(100dvh-5rem))] w-64 max-w-[calc(100vw-5rem)] sm:w-full overflow-auto rounded-lg border border-kh-border bg-kh-bg p-2 shadow-modal">
-        {navigation.items.filter((entry) => entry.type === "PERSONAL").map(item)}
-        <p className="px-3 pt-3 text-caption font-semibold text-kh-text-muted">Teams</p>
-        {navigation.items.filter((entry) => entry.type === "TEAM" && entry.lifecycleState === "ACTIVE").map(item)}
-        <details open={current?.lifecycleState === "ARCHIVED" || undefined} className="mt-2">
-          <summary className="cursor-pointer px-3 py-2 text-caption font-semibold text-kh-text-muted">Archived</summary>
-          {navigation.items.filter((entry) => entry.type === "TEAM" && entry.lifecycleState === "ARCHIVED").map(item)}
-        </details>
-        {navigation.canCreateTeam && <button type="button" disabled={!confirmed} className="mt-2 w-full rounded-md border-t border-kh-border px-3 py-2 text-left text-body text-kh-text disabled:opacity-50"
-          onClick={() => { if (menu.current) menu.current.open = false; setCreating(true); }}>Create team</button>}
-      </nav>
-    </details>
-    <CreateTeamDialog open={creating} onOpenChange={setCreating} canCreateTeam={confirmed && navigation.canCreateTeam}
-      onDenied={() => { void refresh(); }}
-      onCreated={(id) => { void refresh(); router.push(`/w/${id}/knowledge`); }} />
-  </>;
 }

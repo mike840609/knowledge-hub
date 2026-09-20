@@ -7,6 +7,7 @@ import { ChevronDown, ChevronRight, Clock3, FileText, MoreHorizontal, Plus, List
 import { emptyDocumentShortcuts, parseDocumentShortcuts, rememberDocument, toggleFavoriteDocument, type DocumentShortcuts } from "@/lib/document-shortcuts";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
+import { MenuCheckboxItem, MenuContent, MenuRoot, MenuTrigger } from "@/components/ui/menu";
 import { KnowledgeTree } from "./knowledge-tree";
 import { TreeFilter } from "./tree-filter";
 import { buttonClasses } from "@/components/ui/button";
@@ -138,22 +139,16 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
           >
             <ListFilter size={16} aria-hidden="true" />
           </button>
-          <details className="relative" onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              event.currentTarget.open = false;
-              event.currentTarget.querySelector("summary")?.focus();
-            }
-          }}>
-            <summary aria-label="Document display options" title="Document display options" className={buttonClasses({ variant: "ghost", icon: true, className: "cursor-pointer list-none [&::-webkit-details-marker]:hidden" })}>
+          <MenuRoot>
+            <MenuTrigger aria-label="Document display options" title="Document display options" className={buttonClasses({ variant: "ghost", icon: true })}>
               <MoreHorizontal size={17} aria-hidden="true" />
-            </summary>
-            <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-lg border border-kh-border bg-kh-bg p-2 shadow-popover">
-              <label className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md px-2 text-body text-kh-text hover:bg-kh-bg-hover">
-                <input type="checkbox" checked={showArchived} onChange={(event) => toggleArchived(event.target.checked)} className="h-4 w-4 accent-kh-primary" />
+            </MenuTrigger>
+            <MenuContent align="end" className="w-52">
+              <MenuCheckboxItem checked={showArchived} onCheckedChange={toggleArchived}>
                 Show archived
-              </label>
-            </div>
-          </details>
+              </MenuCheckboxItem>
+            </MenuContent>
+          </MenuRoot>
         </div>
       </div>
       {filterOpen ? <div className="shrink-0"><TreeFilter value={query} onChange={setQuery} onClose={closeFilter} /></div> : null}

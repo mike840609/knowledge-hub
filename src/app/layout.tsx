@@ -23,7 +23,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             the CSS media query decides, so this stays a no-op. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var t=localStorage.getItem("kh:theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}`,
+            __html: `var d=document.documentElement;try{d.dataset.theme=localStorage.getItem("kh:theme")==="dark"?"dark":"light"}catch(e){d.dataset.theme="light"}`,
           }}
         />
       </head>
