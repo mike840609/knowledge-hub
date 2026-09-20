@@ -13,20 +13,20 @@ function pageHref(model: SearchPageModel, page: number): string {
 export function SearchResults({ model }: { model: SearchPageModel }) {
   if (model.timedOut) {
     return (
-      <p role="alert" className="rounded-md border border-kh-border p-6 text-sm text-kh-danger">
+      <p role="alert" className="rounded-md border border-kh-border p-6 text-body text-kh-danger">
         搜尋逾時，請縮小範圍後再試一次。
       </p>
     );
   }
   const result = model.result;
   if (result === null) {
-    return <p className="rounded-md bg-kh-bg-subtle p-6 text-sm text-kh-text-muted">Enter a keyword to search.</p>;
+    return <p className="rounded-md bg-kh-bg-subtle p-6 text-body text-kh-text-muted">Enter a keyword to search.</p>;
   }
   if (result.tooLong) {
-    return <p role="alert" className="rounded-md border border-kh-border p-6 text-sm text-kh-danger">Query is too long; use at most 200 characters.</p>;
+    return <p role="alert" className="rounded-md border border-kh-border p-6 text-body text-kh-danger">Query is too long; use at most 200 characters.</p>;
   }
   if (result.hits.length === 0) {
-    return <p className="rounded-md bg-kh-bg-subtle p-6 text-sm text-kh-text-muted">No results for this query.</p>;
+    return <p className="rounded-md bg-kh-bg-subtle p-6 text-body text-kh-text-muted">No results for this query.</p>;
   }
   return (
     <>
@@ -35,7 +35,7 @@ export function SearchResults({ model }: { model: SearchPageModel }) {
           <SearchResultRow key={hit.documentId} hit={hit} terms={result.terms} includeArchived={model.includeArchived} />
         ))}
       </ul>
-      <nav aria-label="Search pages" className="mt-4 flex gap-3 text-sm">
+      <nav aria-label="Search pages" className="mt-4 flex gap-3 text-body">
         {result.page > 1 && <Link className="underline" href={pageHref(model, result.page - 1)}>Previous</Link>}
         {result.hasNext && <Link className="underline" href={pageHref(model, result.page + 1)}>Next</Link>}
       </nav>

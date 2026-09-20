@@ -105,8 +105,8 @@ export function KnowledgeLayout({
       {desktop ? (
         <Suspense
           fallback={
-            <aside aria-label="Knowledge explorer" className="w-72 shrink-0 border-r border-kh-border bg-kh-bg-sidebar p-3">
-              <p className="text-sm text-kh-text-muted">Loading documents…</p>
+            <aside aria-label="Knowledge explorer" className="w-72 shrink-0 border-r border-kh-border bg-kh-bg-sunken p-3">
+              <p className="text-body text-kh-text-muted">Loading documents…</p>
             </aside>
           }
         >
@@ -126,7 +126,7 @@ export function KnowledgeLayout({
                   window.dispatchEvent(new CustomEvent("kh:open-browse"));
                 }
               }}
-              className="inline-flex h-8 items-center rounded-md border border-kh-border bg-kh-bg px-3 text-[13px] font-medium text-kh-text hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
+              className="inline-flex h-8 items-center rounded-md border border-kh-border bg-kh-bg px-3 text-body-sm font-medium text-kh-text hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
             >
               Browse
             </button>

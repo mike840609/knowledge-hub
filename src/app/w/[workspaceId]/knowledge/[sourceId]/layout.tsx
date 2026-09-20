@@ -18,7 +18,7 @@ export default async function SourceExplorerLayout({
   if (!model) {
     return (
       <main className="mx-auto flex min-h-full max-w-4xl flex-col justify-center px-6 py-16">
-        <h1 className="text-2xl font-semibold">Not found or no access</h1>
+        <h1 className="text-heading font-semibold">Not found or no access</h1>
       </main>
     );
   }

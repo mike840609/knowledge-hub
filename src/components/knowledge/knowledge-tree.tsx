@@ -80,7 +80,7 @@ function TreeNodeRow({
         <Link
           href={documentHref(item, scope, includeArchived)}
           title={item.label}
-          className={`flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus ${
+          className={`flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-body focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus ${
             selected ? "font-medium text-kh-selected-text" : "text-kh-text-muted"
           }`}
         >
@@ -112,7 +112,7 @@ function TreeNodeRow({
         aria-expanded={!collapsed}
         title={item.label}
         tabIndex={-1}
-        className="kh-interactive-row flex min-h-9 w-full items-center gap-2 px-2 text-left text-sm font-medium text-kh-text"
+        className="kh-interactive-row flex min-h-9 w-full items-center gap-2 px-2 text-left text-body font-medium text-kh-text"
       >
         {collapsed ? <ChevronRight size={14} strokeWidth={1.8} className="shrink-0 text-kh-text-muted" aria-hidden="true" /> : <ChevronDown size={14} strokeWidth={1.8} className="shrink-0 text-kh-text-muted" aria-hidden="true" />}
         <span className="min-w-0 flex-1 truncate">{item.label}</span>
@@ -138,7 +138,7 @@ function TreeNodeRow({
         </ul>
       ) : null}
       {!collapsed && node.children.length === 0 ? (
-        <p className="py-1 pl-7 text-xs text-kh-text-muted">No documents yet.</p>
+        <p className="py-1 pl-7 text-caption text-kh-text-muted">No documents yet.</p>
       ) : null}
     </li>
   );
@@ -269,9 +269,9 @@ export function KnowledgeTree({
 
   if (roots.length === 0) {
     return filtering ? (
-      <p className="px-2 py-3 text-sm text-kh-text-muted">No matching documents.</p>
+      <p className="px-2 py-3 text-body text-kh-text-muted">No matching documents.</p>
     ) : (
-      <p className="text-sm text-kh-text-muted">No documents in this collection.</p>
+      <p className="text-body text-kh-text-muted">No documents in this collection.</p>
     );
   }
 

@@ -58,21 +58,21 @@ function TechnicalIds({ items }: { items: { label: string; value: string }[] }) 
     }
   }
   return (
-    <details className="mt-4 border-t border-kh-border pt-3 text-xs text-kh-text-muted">
-      <summary className="cursor-pointer rounded py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-kh-focus">Technical IDs</summary>
+    <details className="mt-4 border-t border-kh-border pt-3 text-caption text-kh-text-muted">
+      <summary className="cursor-pointer rounded-md py-1 focus-visible:ring-2 focus-visible:ring-kh-focus">Technical IDs</summary>
       <div className="mt-2 space-y-3">
         {items.map(({ label, value }) => (
           <div key={label}>
             <div className="flex items-center justify-between gap-2">
               <span>{label}</span>
-              <button type="button" aria-label={`Copy ${label.toLowerCase()} ID`} onClick={() => void copy(label, value)} className="inline-flex h-7 w-7 items-center justify-center rounded hover:bg-kh-bg-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-kh-focus">
+              <button type="button" aria-label={`Copy ${label.toLowerCase()} ID`} onClick={() => void copy(label, value)} className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-kh-bg-hover focus-visible:ring-2 focus-visible:ring-kh-focus">
                 {copied === label ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <Copy className="h-3.5 w-3.5" aria-hidden="true" />}
               </button>
             </div>
-            <code className="block select-all break-all text-[11px] leading-relaxed">{value}</code>
+            <code className="block select-all break-all text-micro leading-relaxed">{value}</code>
           </div>
         ))}
-        <p role="status" className="text-xs">{message}</p>
+        <p role="status" className="text-caption">{message}</p>
       </div>
     </details>
   );
@@ -91,34 +91,34 @@ function InspectorTabs({ data }: { data: DocumentInspectorData }) {
         <TabsTab value="history">History</TabsTab>
       </TabsList>
       <TabsPanel value="details">
-        <dl className="space-y-3 text-[13px] [&>div]:grid [&>div]:grid-cols-[6rem_minmax(0,1fr)] [&>div]:items-baseline [&>div]:gap-x-3 [&_dd]:col-start-2 [&_dd]:min-w-0 [&_dd]:break-words">
+        <dl className="space-y-3 text-body-sm [&>div]:grid [&>div]:grid-cols-[6rem_minmax(0,1fr)] [&>div]:items-baseline [&>div]:gap-x-3 [&_dd]:col-start-2 [&_dd]:min-w-0 [&_dd]:break-words">
           <div>
-            <dt className="text-xs text-kh-text-muted">Workspace</dt>
+            <dt className="text-caption text-kh-text-muted">Workspace</dt>
             <dd className="text-kh-text">{data.workspaceName}</dd>
           </div>
           <div>
-            <dt className="text-xs text-kh-text-muted">Source</dt>
+            <dt className="text-caption text-kh-text-muted">Source</dt>
             <dd className="text-kh-text">{data.sourceName}</dd>
-            {access.actions.canInspectSources ? <dd className="mt-1"><Link href={`/w/${data.workspaceId}/sources/${data.sourceId}`} className="rounded text-kh-link underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-kh-focus">Manage source</Link></dd> : null}
+            {access.actions.canInspectSources ? <dd className="mt-1"><Link href={`/w/${data.workspaceId}/sources/${data.sourceId}`} className="rounded-md text-kh-link underline underline-offset-4 focus-visible:ring-2 focus-visible:ring-kh-focus">Manage source</Link></dd> : null}
           </div>
           <div>
-            <dt className="text-xs text-kh-text-muted">Status</dt>
+            <dt className="text-caption text-kh-text-muted">Status</dt>
             <dd className="text-kh-text">{data.status === "ACTIVE" ? "Active" : "Archived"}</dd>
           </div>
           <div>
-            <dt className="text-xs text-kh-text-muted">Current revision</dt>
+            <dt className="text-caption text-kh-text-muted">Current revision</dt>
             <dd className="text-kh-text">
               {current ? `Revision ${current.revisionNo}` : "—"}
             </dd>
           </div>
           <div>
-            <dt className="text-xs text-kh-text-muted">Created</dt>
+            <dt className="text-caption text-kh-text-muted">Created</dt>
             <dd className="text-kh-text">
               {created ? formatDateTime(created) : "—"}
             </dd>
           </div>
           <div>
-            <dt className="text-xs text-kh-text-muted">Updated</dt>
+            <dt className="text-caption text-kh-text-muted">Updated</dt>
             <dd className="text-kh-text">
               {current ? formatDateTime(current.createdAt) : "—"}
             </dd>
@@ -147,13 +147,13 @@ function InspectorTabs({ data }: { data: DocumentInspectorData }) {
                     includeArchived: data.includeArchived,
                   })}
                   aria-current={isSelected ? "page" : undefined}
-                  className={`flex items-center justify-between gap-2 rounded-md px-2.5 py-2 text-[13px] hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus ${isSelected ? "bg-kh-bg-selected font-medium text-kh-text" : "text-kh-text"}`}
+                  className={`flex items-center justify-between gap-2 rounded-md px-2.5 py-2 text-body-sm hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus ${isSelected ? "bg-kh-bg-selected font-medium text-kh-text" : "text-kh-text"}`}
                 >
                   <span>
                     Revision {revision.revisionNo}
                     {isCurrent ? " (current)" : ""}
                   </span>
-                  <span className="shrink-0 text-xs text-kh-text-muted">
+                  <span className="shrink-0 text-caption text-kh-text-muted">
                     {formatDateTime(revision.createdAt)}
                   </span>
                 </Link>
@@ -193,10 +193,10 @@ export function DocumentInspector({
     return (
       <aside
         aria-label="Document details"
-        className="hidden h-full min-h-0 w-80 shrink-0 flex-col border-l border-kh-border/70 bg-kh-reading-bg min-[1440px]:flex"
+        className="hidden h-full min-h-0 w-80 shrink-0 flex-col border-l border-kh-border/70 bg-kh-bg-raised min-[1440px]:flex"
       >
         <div className="flex shrink-0 items-start justify-between gap-2 border-b border-kh-border/70 px-4 py-3">
-          <h2 className="truncate text-sm font-semibold text-kh-text">Document details</h2>
+          <h2 className="truncate text-body font-semibold text-kh-text">Document details</h2>
           <button
             type="button"
             aria-label="Close details"
@@ -207,7 +207,7 @@ export function DocumentInspector({
           </button>
         </div>
         <div key={data.documentId} role="region" aria-label="Document details content" tabIndex={0}
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain break-words px-4 py-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-kh-focus">
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain break-words px-4 py-3 focus-visible:ring-2 focus-visible:ring-kh-focus">
           <InspectorTabs data={data} />
         </div>
       </aside>
@@ -221,7 +221,7 @@ export function DocumentInspector({
       modal={false}
       title="Document details"
       description={data.sourceName}
-      surfaceClassName="bg-kh-reading-bg"
+      surfaceClassName="bg-kh-bg-raised"
     >
       <InspectorTabs data={data} />
     </Drawer>
@@ -295,9 +295,9 @@ export function DocumentDetailClient({
     };
   }, [pathname, title, openInspector, setDocumentTopbar]);
   return (
-    <div data-document-pane className="flex h-full min-h-0 overflow-hidden bg-kh-reading-bg">
+    <div data-document-pane className="flex h-full min-h-0 overflow-hidden bg-kh-bg-raised">
       <div ref={contentRef} role="region" aria-label="Document content" tabIndex={0}
-        className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain contain-layout focus-visible:outline focus-visible:outline-2 focus-visible:outline-kh-focus">
+        className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain contain-layout focus-visible:ring-2 focus-visible:ring-kh-focus">
         <div ref={headerRef}>
         <DocumentHeader
           breadcrumb={breadcrumb}

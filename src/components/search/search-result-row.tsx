@@ -26,21 +26,21 @@ export function SearchResultRow({
       >
         <FileText size={16} strokeWidth={2} aria-hidden="true" className="mt-0.5 shrink-0 text-kh-text-muted" />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-kh-text">
+          <span className="block truncate text-body font-medium text-kh-text">
             {highlightSnippet(hit.title, terms).map((segment, index) =>
               segment.match
                 ? <mark key={index} className="rounded-sm bg-kh-highlight text-kh-text">{segment.text}</mark>
                 : <span key={index}>{segment.text}</span>,
             )}
           </span>
-          {snippet && <span className="mt-1 block line-clamp-2 text-sm leading-5 text-kh-text-muted">
+          {snippet && <span className="mt-1 block line-clamp-2 text-body leading-5 text-kh-text-muted">
             {highlightSnippet(snippet, terms).map((segment, index) =>
               segment.match
                 ? <mark key={index} className="rounded-sm bg-kh-highlight text-kh-text">{segment.text}</mark>
                 : <span key={index}>{segment.text}</span>,
             )}
           </span>}
-          <span className="mt-1 block truncate text-xs text-kh-text-muted">
+          <span className="mt-1 block truncate text-caption text-kh-text-muted">
             {hit.workspaceName} · {hit.sourceName} · <time dateTime={new Date(hit.updatedAt).toISOString()}>{formatTimestamp(hit.updatedAt)}</time>
           </span>
         </span>

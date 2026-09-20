@@ -53,11 +53,11 @@ export function DocumentEditor({
       className="mx-auto w-full max-w-[860px] space-y-4 px-6 py-6"
       onSubmit={(event) => { event.preventDefault(); void save(); }}
     >
-      <label className="block text-sm text-kh-text">
+      <label className="block text-body text-kh-text">
         Title
         <Input className="mt-1" value={title} maxLength={512} required disabled={busy} onChange={(event) => setTitle(event.target.value)} />
       </label>
-      <label className="block text-sm text-kh-text">
+      <label className="block text-body text-kh-text">
         Markdown
         <Textarea className="mt-1 min-h-[24rem]" value={markdown} disabled={busy} onChange={(event) => setMarkdown(event.target.value)} />
       </label>
@@ -68,7 +68,7 @@ export function DocumentEditor({
         </Button>
       </div>
       {conflict ? (
-        <p role="alert" className="rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2 text-sm text-kh-text">
+        <p role="alert" className="rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2 text-body text-kh-text">
           這份文件已被其他人更新。你的輸入仍保留在表單中。
           <a className="ml-2 font-medium text-kh-link underline underline-offset-2" href={`${documentHref}/edit`}>重新載入最新版本</a>
         </p>

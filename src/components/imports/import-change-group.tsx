@@ -27,7 +27,7 @@ export function ImportChangeGroup({
         onClick={() => setExpanded((value) => !value)}
         className="flex w-full items-center justify-between gap-2 rounded-md px-4 py-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-kh-focus"
       >
-        <h2 className="text-sm font-semibold text-kh-text">
+        <h2 className="text-body font-semibold text-kh-text">
           {title} <span className="font-normal text-kh-text-muted">({changes.length})</span>
         </h2>
         <ChevronDown
@@ -39,27 +39,27 @@ export function ImportChangeGroup({
       </button>
       {expanded ? (
         changes.length === 0 ? (
-          <p className="px-4 pb-4 text-sm text-kh-text-muted">No entries in this group.</p>
+          <p className="px-4 pb-4 text-body text-kh-text-muted">No entries in this group.</p>
         ) : (
           <ul className="divide-y divide-kh-border border-t border-kh-border">
             {changes.map((change) => (
-              <li key={`${change.kind}-${change.sourcePath}`} className="px-4 py-2 text-sm">
+              <li key={`${change.kind}-${change.sourcePath}`} className="px-4 py-2 text-body">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded border border-kh-border px-1.5 py-0.5 text-xs text-kh-text-muted">
+                  <span className="rounded-md border border-kh-border px-1.5 py-0.5 text-caption text-kh-text-muted">
                     {change.kind}
                   </span>
                   <span className="font-medium text-kh-text">
                     {change.previousPath ? `${change.previousPath} → ${change.sourcePath}` : change.sourcePath}
                   </span>
-                  <span className="text-xs text-kh-text-muted">{labelText(change)}</span>
+                  <span className="text-caption text-kh-text-muted">{labelText(change)}</span>
                 </div>
                 {change.identity ? (
-                  <p className="mt-1 break-all text-xs text-kh-text-muted">
+                  <p className="mt-1 break-all text-caption text-kh-text-muted">
                     Identity adopted: <span className="font-medium">{change.identity.adoptedExternalId}</span>
                   </p>
                 ) : null}
                 {change.diagnostics.length > 0 ? (
-                  <ul className="mt-1 list-disc pl-5 text-xs text-kh-text-muted">
+                  <ul className="mt-1 list-disc pl-5 text-caption text-kh-text-muted">
                     {change.diagnostics.map((diagnostic, index) => (
                       <li key={`${diagnostic.code}-${index}`}>
                         {diagnostic.severity === "BLOCKING" ? (

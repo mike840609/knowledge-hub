@@ -2,34 +2,53 @@
 @tailwind components;
 @tailwind utilities;
 
+/**
+ * Surfaces are four steps of one cool neutral hue, each with a distinct job:
+ *   bg      canvas — document and page content
+ *   raised  chrome sitting on the canvas — topbar, document header
+ *   sunken  navigation rails — primary nav, knowledge sidebar
+ *   subtle  inset fills — code blocks, table headers, kbd
+ * Accent, link and focus all share one hue so selection reads as a single idea.
+ */
 :root {
   color-scheme: light;
   --kh-bg: #ffffff;
-  --kh-reading-bg: #f8f8f6;
+  --kh-bg-raised: #fafbfc;
+  --kh-bg-sunken: #f1f2f5;
   --kh-bg-subtle: #f6f7f9;
-  --kh-bg-nav: #eaecef;
-  --kh-bg-sidebar: #f0f1f2;
-  --kh-bg-hover: #f1f2f5;
+  --kh-bg-hover: #eceef2;
+  --kh-bg-hover-strong: #e4e7ec;
   --kh-bg-selected: #eef0ff;
-  --kh-border: #e7e9ee;
-  --kh-text: #202124;
-  --kh-text-muted: #606875;
+  --kh-border: #e5e7ee;
+  --kh-text: #1d1f24;
+  --kh-text-muted: #61697a;
   --kh-primary: #4f5bc8;
   --kh-primary-hover: #414bb4;
+  --kh-on-primary: #ffffff;
   --kh-link: #3743a8;
   --kh-focus: #4f5bc8;
   --kh-selected-text: #3743a8;
   --kh-highlight: #e8eaff;
-  --kh-danger: #dc2626;
-  --kh-warning: #b45309;
-  --kh-success: #15803d;
+  --kh-overlay: rgb(23 25 32 / 0.28);
+  --kh-danger: #c62828;
+  --kh-danger-hover: #ad1f1f;
+  --kh-danger-bg: #fdeceb;
+  --kh-danger-border: #f4c9c6;
+  --kh-warning: #92500a;
+  --kh-warning-bg: #fdf1dd;
+  --kh-warning-border: #f0d9ab;
+  --kh-success: #14663a;
+  --kh-success-bg: #e4f4ea;
+  --kh-success-border: #b8e0c7;
+  --kh-shadow-popover: 0 1px 2px rgb(23 25 32 / 0.05), 0 6px 16px -4px rgb(23 25 32 / 0.1);
+  --kh-shadow-modal: 0 2px 4px rgb(23 25 32 / 0.06), 0 16px 40px -8px rgb(23 25 32 / 0.18);
 }
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  background: var(--kh-bg-subtle);
+  background: var(--kh-bg-sunken);
   color: var(--kh-text);
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   /* App shell owns all scrolling (inner panes). A window-level scrollbar would
@@ -49,16 +68,23 @@ a { color: inherit; }
 ::selection { background: var(--kh-highlight); color: var(--kh-text); }
 
 @layer components {
+  /* The one focus idiom. Every interactive surface composes this instead of
+     spelling out its own ring/outline pair. */
+  .kh-focus-ring {
+    @apply outline-none focus-visible:ring-2 focus-visible:ring-kh-focus;
+  }
+
   .kh-interactive-row {
-    @apply rounded-md transition-colors hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus;
+    @apply kh-focus-ring rounded-md transition-colors hover:bg-kh-bg-hover;
   }
 
   .kh-reading-column {
     @apply mx-auto w-full max-w-[860px] px-6;
   }
 
+  /* Rails need a deeper hover than the canvas, or it disappears into them. */
   .kh-sidebar-surface {
-    --kh-bg-hover: #e4e6ea;
+    --kh-bg-hover: var(--kh-bg-hover-strong);
   }
 }
 

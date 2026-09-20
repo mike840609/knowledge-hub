@@ -103,13 +103,13 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
         className="inline-flex h-8 min-w-8 items-center justify-center gap-2 rounded-md px-2 text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus sm:px-3"
       >
         <Search className="h-4 w-4" aria-hidden="true" />
-        <span className="hidden text-[13px] sm:inline">Search</span>
-        <kbd className="ml-3 hidden rounded bg-kh-bg-subtle px-1 text-[10px] lg:inline">⌘K</kbd>
+        <span className="hidden text-body-sm sm:inline">Search</span>
+        <kbd className="ml-3 hidden rounded-md bg-kh-bg-subtle px-1 text-micro lg:inline">⌘K</kbd>
       </button>
       <Dialog.Root open={open} onOpenChange={setOpen}>
         <Dialog.Portal>
-          <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/25" />
-          <Dialog.Popup className="fixed left-1/2 top-[min(14vh,120px)] z-[60] flex max-h-[75vh] w-[min(640px,calc(100vw-24px))] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-kh-border bg-kh-bg shadow-xl focus:outline-none">
+          <Dialog.Backdrop className="fixed inset-0 z-50 bg-kh-overlay" />
+          <Dialog.Popup className="fixed left-1/2 top-[min(14vh,120px)] z-[60] flex max-h-[75vh] w-[min(640px,calc(100vw-24px))] -translate-x-1/2 flex-col overflow-hidden rounded-lg border border-kh-border bg-kh-bg shadow-modal focus:outline-none">
             <Dialog.Title className="sr-only">Quick search</Dialog.Title>
             <div className="flex items-center gap-3 border-b border-kh-border px-4">
               <Search className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />
@@ -139,29 +139,29 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
                 aria-controls="quick-search-results"
                 aria-activedescendant={hits[activeIndex] ? `quick-hit-${activeIndex}` : undefined}
                 placeholder="Search documents…"
-                className="h-14 min-w-0 flex-1 bg-transparent text-sm text-kh-text outline-none placeholder:text-kh-text-muted"
+                className="h-14 min-w-0 flex-1 bg-transparent text-body text-kh-text outline-none placeholder:text-kh-text-muted"
               />
-              <Dialog.Close aria-label="Close search" className="rounded p-1 text-kh-text-muted hover:bg-kh-bg-hover focus-visible:ring-2 focus-visible:ring-kh-focus">
+              <Dialog.Close aria-label="Close search" className="rounded-md p-1 text-kh-text-muted hover:bg-kh-bg-hover focus-visible:ring-2 focus-visible:ring-kh-focus">
                 <X className="h-4 w-4" aria-hidden="true" />
               </Dialog.Close>
             </div>
             <div className="min-h-0 overflow-y-auto p-2">
-              {loading ? <p role="status" className="px-3 py-3 text-sm text-kh-text-muted">Searching…</p> : null}
-              {!loading && message ? <p role="status" className="px-3 py-3 text-sm text-kh-text-muted">{message}</p> : null}
-              {!loading && !message && trimmed && hits.length === 0 ? <p role="status" className="px-3 py-3 text-sm text-kh-text-muted">No matching documents.</p> : null}
-              {!trimmed ? <p className="px-3 py-3 text-sm text-kh-text-muted">Type to search documents in this workspace.</p> : null}
+              {loading ? <p role="status" className="px-3 py-3 text-body text-kh-text-muted">Searching…</p> : null}
+              {!loading && message ? <p role="status" className="px-3 py-3 text-body text-kh-text-muted">{message}</p> : null}
+              {!loading && !message && trimmed && hits.length === 0 ? <p role="status" className="px-3 py-3 text-body text-kh-text-muted">No matching documents.</p> : null}
+              {!trimmed ? <p className="px-3 py-3 text-body text-kh-text-muted">Type to search documents in this workspace.</p> : null}
               <ul id="quick-search-results" role="listbox" aria-label="Documents" className="space-y-0.5">
                 {!loading && hits.map((hit, index) => (
                   <li key={hit.documentId} id={`quick-hit-${index}`} role="option" aria-selected={index === activeIndex}>
                     <button type="button" onClick={() => openDocument(hit)} onMouseEnter={() => setActiveIndex(index)} className={`w-full rounded-md px-3 py-2 text-left focus-visible:ring-2 focus-visible:ring-kh-focus ${index === activeIndex ? "bg-kh-bg-selected" : "hover:bg-kh-bg-hover"}`}>
-                      <span className={`block truncate text-sm font-medium ${index === activeIndex ? "text-kh-selected-text" : "text-kh-text"}`}>{hit.title}</span>
-                      <span className="block truncate text-xs text-kh-text-muted">{hit.sourceName} · {plainSearchSnippet(hit.snippet)}</span>
+                      <span className={`block truncate text-body font-medium ${index === activeIndex ? "text-kh-selected-text" : "text-kh-text"}`}>{hit.title}</span>
+                      <span className="block truncate text-caption text-kh-text-muted">{hit.sourceName} · {plainSearchSnippet(hit.snippet)}</span>
                     </button>
                   </li>
                 ))}
               </ul>
             </div>
-            <button type="button" onClick={openAll} className="flex shrink-0 items-center justify-between border-t border-kh-border px-5 py-3 text-left text-[13px] text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text focus-visible:ring-2 focus-visible:ring-kh-focus">
+            <button type="button" onClick={openAll} className="flex shrink-0 items-center justify-between border-t border-kh-border px-5 py-3 text-left text-body-sm text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text focus-visible:ring-2 focus-visible:ring-kh-focus">
               <span>Open full search</span><span aria-hidden="true">↵</span>
             </button>
           </Dialog.Popup>

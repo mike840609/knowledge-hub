@@ -98,13 +98,13 @@ export function ImportStickyFooter({
       <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3">
         <Link
           href={cancelHref}
-          className="rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-sm font-medium text-kh-text transition hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
+          className="rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-body font-medium text-kh-text transition hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
         >
           Cancel
         </Link>
         <div className="flex flex-wrap items-center gap-3">
           {stale && allowed ? (
-            <Link href={refreshHref} className="rounded text-sm font-medium text-kh-link underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus">
+            <Link href={refreshHref} className="rounded-md text-body font-medium text-kh-link underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus">
               Refresh preview
             </Link>
           ) : null}
@@ -112,23 +112,23 @@ export function ImportStickyFooter({
             type="button"
             disabled={disabled || state.kind === "APPLYING"}
             onClick={() => void apply()}
-            className="rounded-md bg-kh-primary hover:bg-kh-primary-hover px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus focus-visible:ring-offset-2"
+            className="rounded-md bg-kh-primary hover:bg-kh-primary-hover px-4 py-2 text-body font-medium text-kh-on-primary disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus focus-visible:ring-offset-2"
           >
             {state.kind === "APPLYING" ? "Applying…" : "Apply changes"}
-          </button> : <p role="status" className="text-sm text-kh-text-muted">This preview is read-only. Applying is unavailable.</p>}
+          </button> : <p role="status" className="text-body text-kh-text-muted">This preview is read-only. Applying is unavailable.</p>}
         </div>
       </div>
       {effectiveState === "STALE" || expired ? (
-        <p className="mx-auto mt-2 max-w-4xl text-sm text-kh-danger">
+        <p className="mx-auto mt-2 max-w-4xl text-body text-kh-danger">
           This preview is stale: the source changed after it was created. There is no Force Apply — create a fresh
           preview.
         </p>
       ) : null}
       {effectiveState === "APPLIED" ? (
-        <p className="mx-auto mt-2 max-w-4xl text-sm text-kh-text-muted">This preview was already applied.</p>
+        <p className="mx-auto mt-2 max-w-4xl text-body text-kh-text-muted">This preview was already applied.</p>
       ) : null}
       {state.kind === "ERROR" ? (
-        <p role="alert" className="mx-auto mt-2 max-w-4xl text-sm text-kh-danger">
+        <p role="alert" className="mx-auto mt-2 max-w-4xl text-body text-kh-danger">
           {state.code}: {state.message}
         </p>
       ) : null}

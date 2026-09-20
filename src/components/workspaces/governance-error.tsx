@@ -28,5 +28,5 @@ export function governanceFailure(error: unknown): GovernanceFailure {
 export function GovernanceError({ error }: { error: GovernanceFailure | null }) {
   if (!error) return null;
   const message = error.code === "NOT_FOUND" ? "This resource is not available." : error.code === "WORKSPACE_ARCHIVED" ? "This workspace is archived and read-only. Refresh to see its current state." : error.code === "INSUFFICIENT_WORKSPACE_CAPABILITY" ? "You no longer have permission to perform this action." : error.message;
-  return <p role="alert" className="mt-2 text-sm text-red-700">{message}</p>;
+  return <p role="alert" className="mt-2 text-body text-kh-danger">{message}</p>;
 }

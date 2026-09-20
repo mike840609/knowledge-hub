@@ -27,7 +27,7 @@ export function TreeFilter({ value, onChange, onClose }: { value: string; onChan
         autoComplete="off"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-9 min-w-0 flex-1 appearance-none bg-transparent text-sm text-kh-text outline-none placeholder:text-kh-text-muted [&::-webkit-search-cancel-button]:hidden"
+        className="h-9 min-w-0 flex-1 appearance-none bg-transparent text-body text-kh-text outline-none placeholder:text-kh-text-muted [&::-webkit-search-cancel-button]:hidden"
       />
       {value ? <button type="button" aria-label="Clear document filter" title="Clear filter" onClick={() => { onChange(""); inputRef.current?.focus(); }} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md hover:bg-kh-bg-selected hover:text-kh-text focus-visible:ring-2 focus-visible:ring-kh-focus"><X className="h-3.5 w-3.5" aria-hidden="true" /></button> : null}
     </div>
