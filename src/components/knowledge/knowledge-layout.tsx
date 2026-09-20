@@ -7,6 +7,7 @@ import { SourceSidebar } from "./source-sidebar";
 import { InspectorContext } from "./inspector-context";
 import { Drawer } from "@/components/ui/drawer";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useScrollRestoration } from "./use-scroll-restoration";
 import { buttonClasses } from "@/components/ui/button";
 
 function useDesktopLayout(): boolean {
@@ -77,9 +78,10 @@ export function KnowledgeLayout({
     if (pathnameRef.current !== pathname) {
       pathnameRef.current = pathname;
       setBrowseOpen(false);
-      if (!window.location.hash) contentRef.current?.scrollTo({ top: 0 });
     }
   }, [pathname]);
+
+  useScrollRestoration(contentRef, pathname);
 
   useEffect(() => {
     const close = () => setInspectorOpen(false);

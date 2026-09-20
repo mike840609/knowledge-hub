@@ -6,6 +6,7 @@ import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } 
 import { usePathname } from "next/navigation";
 import { DocumentTopbarContext } from "@/components/shell/document-topbar-context";
 import { InspectorContext } from "./inspector-context";
+import { useScrollRestoration } from "./use-scroll-restoration";
 import { Check, Copy, X } from "lucide-react";
 import type { KnowledgeRevisionView } from "@/modules/knowledge/application/knowledge-query-service";
 import { Drawer } from "@/components/ui/drawer";
@@ -257,9 +258,7 @@ export function DocumentDetailClient({
   const pathname = usePathname();
   const headerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!window.location.hash) contentRef.current?.scrollTo({ top: 0 });
-  }, [inspectorData.documentId]);
+  useScrollRestoration(contentRef, inspectorData.documentId);
   const inspectorOpen = inspector?.open ?? false;
   const setInspectorOpen = inspector?.setOpen;
   const openInspector = useCallback(() => {

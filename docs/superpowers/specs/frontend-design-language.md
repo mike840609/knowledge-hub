@@ -181,12 +181,39 @@ Motion is two durations and one ease-out curve. Overlays enter and leave;
 nothing appears instantly. `prefers-reduced-motion` is honoured by one global
 rule, so no component has to remember it.
 
-## 10. Focus
+## 10. Focus and keyboard
 
-One idiom: the ring, composed from `.kh-focus-ring`. Every interactive surface
-uses it. There is no second spelling.
+One focus idiom: the ring, composed from `.kh-focus-ring`. Every interactive
+surface uses it. There is no second spelling.
 
-## 11. Theme contract
+**Every list of rows is navigable by arrow key**, with the same idiom: the
+container owns a `keydown` handler, Up/Down move focus between rows, Home/End
+jump to the ends, and Enter is left to the row's own element so `⌘`-click and
+middle-click keep working. Where a list has a query field above it, ArrowDown
+from the field enters the list and ArrowUp off the first row returns to it, so
+the two read as one control.
+
+Rows keep their natural tab stop rather than taking a roving tabindex, unless
+the list is long enough that tabbing through it is the greater harm — the tree
+is the exception. A roving tabindex leaves every row unreachable if its script
+does not run.
+
+This applies to the knowledge tree, the `⌘K` palette and the search results
+page alike. A list that is reachable by mouse and not by keyboard is a defect,
+and the search results page shipped that way once.
+
+## 11. Navigation state
+
+A view returns to where it was left, not to the top. Scroll position is
+remembered per view and restored on return; going somewhere new still starts
+at the top, and a hash target is left alone so in-page anchors keep working.
+
+What the user has arranged is theirs to keep. Filters, expansion and
+collapsed sections belong in the URL when they should be shareable, and in
+`localStorage` when they are a personal preference — not in component state
+that a refresh discards.
+
+## 12. Theme contract
 
 Light and dark must both resolve every token.
 
@@ -199,12 +226,12 @@ so the duplication is deliberate and the two blocks are edited together.
 An explicit choice persists to `localStorage` under `kh:theme`. A pre-paint
 script in the document head applies it before the first frame.
 
-## 12. Icons
+## 13. Icons
 
 A consistent outline icon language (Lucide). In primary navigation, icons
 support labels rather than replace them.
 
-## 13. Frontend technology
+## 14. Frontend technology
 
 ```text
 Base UI
@@ -219,7 +246,7 @@ Do not introduce HeroUI or another opinionated full visual framework.
 Shadcn-style component architecture and accessibility patterns may be used as
 implementation references.
 
-## 14. Component architecture
+## 15. Component architecture
 
 Low-level reusable primitives belong under `components/ui`. Product and domain
 components stay separated by responsibility:
@@ -243,20 +270,26 @@ appearance, it takes the shape from the primitive — `buttonClasses()` — rath
 than restating it. Twenty-one hand-rolled copies of the button class string
 were how the button system drifted the first time.
 
-## 15. State strategy
+## 16. State strategy
 
 No Redux, Zustand or other application-wide state framework.
 
 ```text
-URL              → Workspace / Source / Document
+URL              → Workspace / Source / Document, and anything shareable
 Server data      → Workspace / Source / Tree / Document / Revision / Import state
-Local component  → Tree expansion, tree filter, inspector open, drawer state
+Persisted local  → Scroll position, nav collapse, theme, favourites, and the
+                   view arrangement the user set (see §11)
+Local component  → Genuinely ephemeral chrome: inspector open, drawer open
 ```
+
+Local component state is for what should not outlive the interaction. Tree
+expansion and the tree filter are still held there and should not be; §11
+covers why, and it is open item 6.
 
 A global state library is added only if a concrete requirement proves local
 ownership insufficient.
 
-## 16. Domain contract boundary
+## 17. Domain contract boundary
 
 The frontend does not redesign or bypass the application/domain contracts:
 workspace identity and access resolution, KnowledgeSource semantics, source
@@ -272,7 +305,7 @@ A narrow read-only projection may be added where the UI needs information the
 domain model already stores. Such a projection must not alter lifecycle
 semantics.
 
-## 17. Open items
+## 18. Open items
 
 Known gaps against the principles in §2, each of which changes behaviour
 rather than appearance:
@@ -287,8 +320,22 @@ rather than appearance:
    state. Page container widths are inconsistent across four values.
 4. Empty and error states are heading-plus-paragraph, and the knowledge empty
    state presents two equally weighted primary actions.
+5. No row carries a context menu. Renaming, archiving and copying a link all
+   require opening the document first, where the reference language puts them
+   one right-click away on the row.
+6. Tree expansion and the tree filter live in component state, so a refresh
+   discards the arrangement the user set. §11 says where they belong.
+7. Navigation is a server round trip with a single `loading.tsx` boundary, so
+   opening a document shows a skeleton first. This is the largest felt gap
+   against the reference language and the only one that is architectural
+   rather than presentational — it wants measurement and a prefetch/caching
+   decision, not a CSS change.
+8. `spacing` is the one scale still left at Tailwind's default rather than
+   replaced, so gaps and paddings remain unenforced. Page container widths
+   spread across seven values and page padding across three.
+9. Dates are formatted with a hardcoded `en-US` locale.
 
-## 18. Completion criteria
+## 19. Completion criteria
 
 - Off-scale type, radius, elevation and motion values do not compile.
 - The `lg` radius and both elevation tokens appear only on floating surfaces.

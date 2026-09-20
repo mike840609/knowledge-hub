@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { SearchPageModel } from "@/server/search-read";
 import { SearchResultRow } from "@/components/search/search-result-row";
+import { SearchResultList } from "@/components/search/search-result-list";
 
 function pageHref(model: SearchPageModel, page: number): string {
   const params = new URLSearchParams({ q: model.q, scope: model.scope });
@@ -30,11 +31,17 @@ export function SearchResults({ model }: { model: SearchPageModel }) {
   }
   return (
     <>
-      <ul className="flex flex-col gap-1">
+      <SearchResultList label="Search results">
         {result.hits.map((hit) => (
-          <SearchResultRow key={hit.documentId} hit={hit} terms={result.terms} includeArchived={model.includeArchived} />
+          <SearchResultRow
+            key={hit.documentId}
+            hit={hit}
+            terms={result.terms}
+            includeArchived={model.includeArchived}
+            showWorkspace={model.scope === "all"}
+          />
         ))}
-      </ul>
+      </SearchResultList>
       <nav aria-label="Search pages" className="mt-4 flex gap-3 text-body">
         {result.page > 1 && <Link className="underline" href={pageHref(model, result.page - 1)}>Previous</Link>}
         {result.hasNext && <Link className="underline" href={pageHref(model, result.page + 1)}>Next</Link>}
