@@ -6,6 +6,7 @@ import type { ImportPreviewChange } from "@/modules/sources/domain/import-plan";
 import { ImportChangeGroup } from "@/components/imports/import-change-group";
 import { ImportStickyFooter } from "@/components/imports/import-sticky-footer";
 import { ImportSummary } from "@/components/imports/import-summary";
+import { Select } from "@/components/ui/select";
 import { ImportWarningSummary } from "@/components/imports/import-warning-summary";
 
 type ChangeGroupKey = "added" | "updated" | "moved" | "archived" | "unchanged";
@@ -100,18 +101,18 @@ export function ImportPreview({
         <label htmlFor="import-change-filter" className="font-medium text-kh-text-muted">
           Filter changes
         </label>
-        <select
+        <Select
           id="import-change-filter"
+         
           value={filter}
           onChange={(event) => setFilter(event.target.value as ChangeFilter)}
-          className="rounded-md border border-kh-border bg-kh-bg px-2 py-1 text-body text-kh-text focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
         >
           {FILTER_META.map((option, index) => (
             <option key={option.value} value={option.value}>
               {option.label} ({counts[index]})
             </option>
           ))}
-        </select>
+        </Select>
       </div>
       {/*
         Under an explicit filter every surviving group is what the user asked

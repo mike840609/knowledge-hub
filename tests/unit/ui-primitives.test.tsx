@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonClasses } from "@/components/ui/button";
+import { controlHeight } from "@/components/ui/control";
+import { fieldClasses } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 
 /**
  * The button system has five variants, three sizes and an icon shape. Until
@@ -82,5 +87,74 @@ describe("Badge", () => {
 
   it("defaults to the neutral tone", () => {
     expect(renderToStaticMarkup(<Badge>x</Badge>)).toContain("bg-kh-bg-hover");
+  });
+});
+
+/**
+ * Fields drifted off the button ladder because the two spelled their heights
+ * separately: `min-h-10` here, `h-10` there, and a 44px input in the search
+ * form that matched neither. These lock them to the one ladder.
+ */
+describe("fieldClasses", () => {
+  it("reads the same height ladder buttons do", () => {
+    for (const size of ["sm", "md", "lg"] as const) {
+      expect(fieldClasses({ size })).toContain(controlHeight[size]);
+      expect(buttonClasses({ size })).toContain(controlHeight[size]);
+    }
+  });
+
+  it("puts every field on the control border, not the decorative one", () => {
+    // WCAG 1.4.11: a field fills with the canvas colour, so its border is the
+    // only thing identifying the control and needs 3:1.
+    expect(fieldClasses()).toContain("border-kh-border-strong");
+    expect(fieldClasses()).not.toContain("border-kh-border ");
+  });
+
+  it("carries the one focus idiom", () => {
+    expect(fieldClasses()).toContain("kh-focus-ring");
+  });
+
+  it("drops the fixed height for a multi-line field, which sizes by rows", () => {
+    const classes = fieldClasses({ multiline: true });
+    expect(classes).not.toMatch(/\bh-(6|8|10)\b/);
+    expect(classes).toMatch(/\bpy-[\d.]+\b/);
+  });
+});
+
+describe("field elements", () => {
+  it("renders Input, Select and Textarea on the shared shape", () => {
+    const input = renderToStaticMarkup(<Input aria-label="Query" />);
+    const select = renderToStaticMarkup(<Select aria-label="Scope"><option>a</option></Select>);
+    const textarea = renderToStaticMarkup(<Textarea aria-label="Body" />);
+    for (const html of [input, select, textarea]) {
+      expect(html).toContain("border-kh-border-strong");
+      expect(html).toContain("kh-focus-ring");
+    }
+    expect(input).toContain("<input");
+    expect(select).toContain("<select");
+    expect(textarea).toContain("<textarea");
+  });
+
+  it("defaults to the same rung a default button takes", () => {
+    // Every form in the app paired a default <Button> with a default <Input>
+    // and got 32px next to 40px. The defaults have to agree.
+    for (const html of [
+      renderToStaticMarkup(<Input aria-label="Query" />),
+      renderToStaticMarkup(<Select aria-label="Scope" />),
+    ]) {
+      expect(html).toContain(controlHeight.md);
+    }
+    expect(buttonClasses()).toContain(controlHeight.md);
+  });
+
+  it("still opts a whole row up a rung when asked", () => {
+    expect(renderToStaticMarkup(<Input aria-label="Query" size="lg" />)).toContain(controlHeight.lg);
+    expect(buttonClasses({ size: "lg" })).toContain(controlHeight.lg);
+  });
+
+  it("does not leak the ladder rung as the native size attribute", () => {
+    // `size` is the ladder rung here, so the DOM attribute of the same name
+    // must not leak through as a row count.
+    expect(renderToStaticMarkup(<Select aria-label="Scope" size="sm" />)).not.toContain('size="');
   });
 });
