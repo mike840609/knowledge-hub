@@ -299,14 +299,29 @@ that a refresh discards.
 
 Light and dark must both resolve every token.
 
-Dark is served by two selectors carrying identical values: a
-`prefers-color-scheme` media query for visitors who never touch the control,
-which also works with JavaScript disabled, and a `data-theme` attribute for an
-explicit choice. Plain CSS cannot share a variable block across that boundary,
-so the duplication is deliberate and the two blocks are edited together.
+**The theme is the reader's explicit choice and nothing else.** Dark is served
+by one selector, `:root[data-theme="dark"]`. The system's
+`prefers-color-scheme` is deliberately not consulted, so the control reflects
+what was last picked rather than changing underfoot when the OS switches.
+Light is the starting point until someone picks otherwise.
 
-An explicit choice persists to `localStorage` under `kh:theme`. A pre-paint
-script in the document head applies it before the first frame.
+The choice persists to `localStorage` under `kh:theme`. A pre-paint script in
+the document head applies it before the first frame, so a reader who picked
+dark never sees a light one.
+
+### What this costs
+
+A visitor whose OS is set to dark gets light until they pick, and with
+JavaScript disabled the theme cannot change at all. An earlier revision served
+both, with a media query alongside the attribute; that meant two blocks of
+identical values that had to be edited together, and a toggle that could not
+return to following the system once touched. Trading those away for one
+source of truth and a control that always tells the truth about its own state
+is the deliberate call recorded here.
+
+Should following the system be wanted again, it returns as a third state on
+the control — `light` / `dark` / `system` — not as a second CSS block. The
+attribute stays the only thing the stylesheet reads.
 
 ## 13. Icons
 

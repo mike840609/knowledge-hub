@@ -9,14 +9,22 @@ type Theme = "light" | "dark";
 /** Shared with the pre-paint script in the document head. */
 export const THEME_STORAGE_KEY = "kh:theme";
 
-function systemTheme(): Theme {
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+/**
+ * The theme is the reader's explicit choice and nothing else. The system's
+ * `prefers-color-scheme` is deliberately not consulted, so the control always
+ * reflects what was last picked rather than changing underfoot when the OS
+ * switches. Light is the starting point until someone picks otherwise.
+ */
+const DEFAULT_THEME: Theme = "light";
+
+function apply(theme: Theme): void {
+  document.documentElement.dataset.theme = theme;
 }
 
 export function ThemeToggle() {
-  // Server and first client render must agree, so resolve the theme in an
-  // effect. The head script has already applied a stored choice by now, which
-  // is what keeps the paint from flashing.
+  // Server and first client render must agree, so resolve in an effect. The
+  // head script has already applied any stored choice by now, which is what
+  // keeps the first paint from being the wrong theme.
   const [theme, setTheme] = useState<Theme | null>(null);
 
   useEffect(() => {
@@ -26,26 +34,19 @@ export function ThemeToggle() {
     } catch {
       /* Storage may be unavailable. */
     }
-    if (stored === "light" || stored === "dark") {
-      setTheme(stored);
-      return;
-    }
-    // No explicit choice: follow the system, and keep following it.
-    const query = window.matchMedia("(prefers-color-scheme: dark)");
-    const update = () => setTheme(query.matches ? "dark" : "light");
-    update();
-    query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
+    const resolved: Theme = stored === "dark" || stored === "light" ? stored : DEFAULT_THEME;
+    setTheme(resolved);
+    apply(resolved);
   }, []);
 
   function toggle() {
-    const next: Theme = (theme ?? systemTheme()) === "dark" ? "light" : "dark";
+    const next: Theme = (theme ?? DEFAULT_THEME) === "dark" ? "light" : "dark";
     setTheme(next);
-    document.documentElement.dataset.theme = next;
+    apply(next);
     try {
       window.localStorage.setItem(THEME_STORAGE_KEY, next);
     } catch {
-      /* Storage may be unavailable. */
+      /* Storage may be unavailable; the choice then lasts for this page only. */
     }
   }
 
@@ -57,6 +58,7 @@ export function ThemeToggle() {
       onClick={toggle}
       aria-label={label}
       title={label}
+      aria-pressed={dark}
       className={buttonClasses({ variant: "ghost", icon: true })}
     >
       {theme === null ? null : dark

@@ -48,49 +48,9 @@
   --kh-shadow-modal: 0 2px 4px rgb(23 25 32 / 0.06), 0 16px 40px -8px rgb(23 25 32 / 0.18);
 }
 
-/* Dark theme. The two blocks below carry the same values and must stay in
-   sync: the media query serves visitors who never touch the control (and
-   works without JavaScript), the attribute serves an explicit choice. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-  color-scheme: dark;
-  --kh-bg: #131417;
-  --kh-bg-raised: #191a1e;
-  --kh-bg-sunken: #0e0f12;
-  --kh-bg-subtle: #1d1f24;
-  --kh-bg-hover: #24262c;
-  --kh-bg-hover-strong: #2b2e35;
-  --kh-bg-selected: #23253d;
-  --kh-border: #1e2127;
-  --kh-border-strong: #6a6d73;
-  --kh-text: #e7e8ec;
-  --kh-text-secondary: #bfc5d1;
-  --kh-text-muted: #9ba2b0;
-  --kh-text-faint: #747b89;
-  --kh-primary: #5e6ad2;
-  --kh-primary-hover: #6b76dd;
-  --kh-on-primary: #ffffff;
-  --kh-link: #a3abf5;
-  --kh-focus: #7c86e8;
-  --kh-selected-text: #bcc2f7;
-  --kh-highlight: #2e3157;
-  --kh-overlay: rgb(0 0 0 / 0.55);
-  --kh-danger: #f28b82;
-  --kh-danger-solid: #c0433c;
-  --kh-danger-solid-hover: #cf524a;
-  --kh-danger-bg: #2e1b1a;
-  --kh-danger-border: #4a2725;
-  --kh-warning: #f5c26b;
-  --kh-warning-bg: #2c2114;
-  --kh-warning-border: #46351d;
-  --kh-success: #7ee2a8;
-  --kh-success-bg: #14281d;
-  --kh-success-border: #23462f;
-  --kh-shadow-popover: 0 1px 2px rgb(0 0 0 / 0.4), 0 6px 16px -4px rgb(0 0 0 / 0.5);
-  --kh-shadow-modal: 0 2px 4px rgb(0 0 0 / 0.45), 0 16px 40px -8px rgb(0 0 0 / 0.6);
-  }
-}
-
+/* Dark theme. Applied only by explicit choice — the toggle writes
+   `data-theme` and persists it. The system's `prefers-color-scheme` is
+   deliberately not consulted; see the contract's theme section. */
 :root[data-theme="dark"] {
   color-scheme: dark;
   --kh-bg: #131417;
