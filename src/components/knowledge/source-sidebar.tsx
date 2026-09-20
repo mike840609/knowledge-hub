@@ -9,6 +9,7 @@ import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/applicat
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { KnowledgeTree } from "./knowledge-tree";
 import { TreeFilter } from "./tree-filter";
+import { buttonClasses } from "@/components/ui/button";
 
 export type SourceSidebarProps = {
   workspaceId: string;
@@ -92,7 +93,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
     if (!document) return null;
     const selected = document.documentId === resolvedDocumentId;
     return <li key={key} className={`kh-interactive-row group flex min-h-9 items-center ${selected ? "bg-kh-bg-selected hover:bg-kh-bg-selected" : ""}`}>
-      <Link href={`/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}${showArchived ? "?includeArchived=true" : ""}`} title={`${document.label} · ${document.sourceName}`} aria-current={selected ? "page" : undefined} className={`flex min-h-9 min-w-0 flex-1 items-center gap-2 px-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus ${selected ? "font-medium text-kh-selected-text" : "text-kh-text-muted"}`}>
+      <Link href={`/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}${showArchived ? "?includeArchived=true" : ""}`} title={`${document.label} · ${document.sourceName}`} aria-current={selected ? "page" : undefined} className={`flex min-h-9 min-w-0 flex-1 items-center gap-2 px-2 text-body focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus ${selected ? "font-medium text-kh-selected-text" : "text-kh-text-muted"}`}>
         {favorite ? <FileText size={14} strokeWidth={1.8} className="shrink-0" aria-hidden="true" /> : <Clock3 size={14} strokeWidth={1.8} className="shrink-0" aria-hidden="true" />}
         <span className="truncate">{document.label}</span>
       </Link>
@@ -105,7 +106,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
   const hasNotes = visibleCollections.some(({ source: candidate }) => candidate.sourceType === "HUB" && candidate.name === "Notes" && candidate.status === "ACTIVE");
   const canCreate = access.actions.canWrite && confirmed;
   const newNoteHref = `/w/${workspaceId}/knowledge/new`;
-  const addNote = <Link href={newNoteHref} aria-label="Add to Notes" title="Add to Notes" className="inline-flex min-h-9 min-w-9 shrink-0 items-center justify-center rounded text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"><Plus size={15} aria-hidden="true" /></Link>;
+  const addNote = <Link href={newNoteHref} aria-label="Add to Notes" title="Add to Notes" className={buttonClasses({ variant: "ghost", icon: true })}><Plus size={15} aria-hidden="true" /></Link>;
 
   function toggleArchived(checked: boolean) {
     const params = new URLSearchParams(searchParams.toString());
@@ -121,9 +122,9 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
   }
 
   return (
-    <aside aria-label="Knowledge explorer" className="kh-sidebar-surface flex h-full min-h-0 w-full shrink-0 flex-col gap-3 border-r border-kh-border bg-kh-bg-sidebar p-3 lg:w-72">
+    <aside aria-label="Knowledge explorer" className="kh-sidebar-surface flex h-full min-h-0 w-full shrink-0 flex-col gap-3 border-r border-kh-border bg-kh-bg-sunken p-3 lg:w-72">
       <div className="flex shrink-0 items-center justify-between gap-2">
-        <h2 className="px-2 text-sm font-semibold text-kh-text">Documents</h2>
+        <h2 className="px-2 text-body font-semibold text-kh-text">Documents</h2>
         <div className="flex items-center gap-0.5">
           <button
             ref={filterTriggerRef}
@@ -133,7 +134,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
             aria-controls={filterOpen ? "tree-filter" : undefined}
             title="Filter documents and sources"
             onClick={() => filterOpen ? closeFilter() : setFilterOpen(true)}
-            className={`flex min-h-9 min-w-9 items-center justify-center rounded text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text focus-visible:ring-2 focus-visible:ring-kh-focus ${filterOpen ? "bg-kh-bg-hover text-kh-text" : ""}`}
+            className={buttonClasses({ variant: "ghost", icon: true, className: filterOpen ? "bg-kh-bg-hover text-kh-text" : "" })}
           >
             <ListFilter size={16} aria-hidden="true" />
           </button>
@@ -143,11 +144,11 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
               event.currentTarget.querySelector("summary")?.focus();
             }
           }}>
-            <summary aria-label="Document display options" title="Document display options" className="flex min-h-9 min-w-9 cursor-pointer list-none items-center justify-center rounded text-kh-text-muted hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus [&::-webkit-details-marker]:hidden">
+            <summary aria-label="Document display options" title="Document display options" className={buttonClasses({ variant: "ghost", icon: true, className: "cursor-pointer list-none [&::-webkit-details-marker]:hidden" })}>
               <MoreHorizontal size={17} aria-hidden="true" />
             </summary>
-            <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-md border border-kh-border bg-kh-bg p-2 shadow-md">
-              <label className="flex min-h-10 cursor-pointer items-center gap-2 rounded px-2 text-sm text-kh-text hover:bg-kh-bg-hover">
+            <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-lg border border-kh-border bg-kh-bg p-2 shadow-popover">
+              <label className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md px-2 text-body text-kh-text hover:bg-kh-bg-hover">
                 <input type="checkbox" checked={showArchived} onChange={(event) => toggleArchived(event.target.checked)} className="h-4 w-4 accent-kh-primary" />
                 Show archived
               </label>
@@ -158,14 +159,14 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
       {filterOpen ? <div className="shrink-0"><TreeFilter value={query} onChange={setQuery} onClose={closeFilter} /></div> : null}
       <nav aria-label="Document tree" className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain">
         {!needle && favoriteKeys.length > 0 ? <section aria-label="Favorites" className="pb-1">
-          <h3><button type="button" aria-expanded={favoritesOpen} onClick={() => setFavoritesOpen((open) => !open)} className="kh-interactive-row flex min-h-8 w-full items-center gap-2 px-2 text-left text-xs font-medium text-kh-text-muted">
+          <h3><button type="button" aria-expanded={favoritesOpen} onClick={() => setFavoritesOpen((open) => !open)} className="kh-interactive-row flex min-h-8 w-full items-center gap-2 px-2 text-left text-caption font-medium text-kh-text-muted">
             {favoritesOpen ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
             <span>Favorites</span>
           </button></h3>
           {favoritesOpen ? <ul className="mt-0.5 space-y-0.5">{favoriteKeys.map((key) => shortcutRow(key, true))}</ul> : null}
         </section> : null}
         {!needle && recentKeys.length > 0 ? <section aria-label="Recent documents" className="pb-1">
-          <h3><button type="button" aria-expanded={recentOpen} onClick={() => setRecentOpen((open) => !open)} className="kh-interactive-row flex min-h-8 w-full items-center gap-2 px-2 text-left text-xs font-medium text-kh-text-muted">
+          <h3><button type="button" aria-expanded={recentOpen} onClick={() => setRecentOpen((open) => !open)} className="kh-interactive-row flex min-h-8 w-full items-center gap-2 px-2 text-left text-caption font-medium text-kh-text-muted">
             {recentOpen ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
             <span>Recent</span>
           </button></h3>
@@ -173,7 +174,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
         </section> : null}
         {!hasNotes && canCreate && (!needle || "notes".includes(needle)) ? (
           <div className="flex items-center justify-between pl-2">
-            <Link href={newNoteHref} className="rounded text-sm font-medium text-kh-text hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus">Notes</Link>
+            <Link href={newNoteHref} className="rounded-md text-body font-medium text-kh-text hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus">Notes</Link>
             {addNote}
           </div>
         ) : null}
@@ -184,10 +185,10 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
           return (
             <section key={candidate.id} aria-label={`${candidate.name} documents`}>
               <div className="flex items-center gap-1">
-                <button type="button" aria-expanded={open} aria-controls={`collection-${candidate.id}`} onClick={() => setExpanded((previous) => ({ ...previous, [candidate.id]: !open }))} title={candidate.name} className="flex min-h-9 min-w-0 flex-1 items-center gap-1.5 rounded px-2 text-left text-sm font-medium text-kh-text hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus">
+                <button type="button" aria-expanded={open} aria-controls={`collection-${candidate.id}`} onClick={() => setExpanded((previous) => ({ ...previous, [candidate.id]: !open }))} title={candidate.name} className="flex min-h-9 min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 text-left text-body font-medium text-kh-text hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus">
                   <Icon size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />
                   <span className="truncate">{candidate.name}</span>
-                  {candidate.status === "ARCHIVED" ? <span className="ml-auto text-xs font-normal text-kh-text-muted">Archived</span> : null}
+                  {candidate.status === "ARCHIVED" ? <span className="ml-auto text-caption font-normal text-kh-text-muted">Archived</span> : null}
                 </button>
                 {isNotes && canCreate ? addNote : null}
               </div>
@@ -197,7 +198,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
             </section>
           );
         })}
-        {matches.length === 0 && needle ? <p role="status" className="px-2 py-3 text-sm text-kh-text-muted">No matching documents.</p> : null}
+        {matches.length === 0 && needle ? <p role="status" className="px-2 py-3 text-body text-kh-text-muted">No matching documents.</p> : null}
       </nav>
     </aside>
   );

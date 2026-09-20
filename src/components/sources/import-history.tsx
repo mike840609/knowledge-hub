@@ -14,7 +14,7 @@ function describeRun(run: SyncRun): string {
 
 export function ImportHistory({ runs }: { runs: SyncRun[] }) {
   if (runs.length === 0) {
-    return <p className="text-sm text-kh-text-muted">No sync runs recorded for this source yet.</p>;
+    return <p className="text-body text-kh-text-muted">No sync runs recorded for this source yet.</p>;
   }
   return (
     <ul className="flex flex-col gap-2">
@@ -25,10 +25,10 @@ export function ImportHistory({ runs }: { runs: SyncRun[] }) {
         >
           <History size={15} strokeWidth={2} aria-hidden="true" className="shrink-0 text-kh-text-muted" />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-kh-text">
+            <p className="text-body font-medium text-kh-text">
               {syncStatusLabel(run.status)} <span className="font-normal text-kh-text-muted">{describeRun(run)}</span>
             </p>
-            <p className="mt-0.5 text-xs text-kh-text-muted">
+            <p className="mt-0.5 text-caption text-kh-text-muted">
               <time dateTime={new Date(run.startedAt).toISOString()}>{formatTimestamp(run.startedAt)}</time>
               {run.completedAt ? (
                 <>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { SearchPageModel } from "@/server/search-read";
 import { SearchResultRow } from "@/components/search/search-result-row";
+import { SearchResultList } from "@/components/search/search-result-list";
 
 function pageHref(model: SearchPageModel, page: number): string {
   const params = new URLSearchParams({ q: model.q, scope: model.scope });
@@ -13,29 +14,35 @@ function pageHref(model: SearchPageModel, page: number): string {
 export function SearchResults({ model }: { model: SearchPageModel }) {
   if (model.timedOut) {
     return (
-      <p role="alert" className="rounded-md border border-kh-border p-6 text-sm text-kh-danger">
+      <p role="alert" className="rounded-md border border-kh-border p-6 text-body text-kh-danger">
         搜尋逾時，請縮小範圍後再試一次。
       </p>
     );
   }
   const result = model.result;
   if (result === null) {
-    return <p className="rounded-md bg-kh-bg-subtle p-6 text-sm text-kh-text-muted">Enter a keyword to search.</p>;
+    return <p className="rounded-md bg-kh-bg-subtle p-6 text-body text-kh-text-muted">Enter a keyword to search.</p>;
   }
   if (result.tooLong) {
-    return <p role="alert" className="rounded-md border border-kh-border p-6 text-sm text-kh-danger">Query is too long; use at most 200 characters.</p>;
+    return <p role="alert" className="rounded-md border border-kh-border p-6 text-body text-kh-danger">Query is too long; use at most 200 characters.</p>;
   }
   if (result.hits.length === 0) {
-    return <p className="rounded-md bg-kh-bg-subtle p-6 text-sm text-kh-text-muted">No results for this query.</p>;
+    return <p className="rounded-md bg-kh-bg-subtle p-6 text-body text-kh-text-muted">No results for this query.</p>;
   }
   return (
     <>
-      <ul className="flex flex-col gap-1">
+      <SearchResultList label="Search results">
         {result.hits.map((hit) => (
-          <SearchResultRow key={hit.documentId} hit={hit} terms={result.terms} includeArchived={model.includeArchived} />
+          <SearchResultRow
+            key={hit.documentId}
+            hit={hit}
+            terms={result.terms}
+            includeArchived={model.includeArchived}
+            showWorkspace={model.scope === "all"}
+          />
         ))}
-      </ul>
-      <nav aria-label="Search pages" className="mt-4 flex gap-3 text-sm">
+      </SearchResultList>
+      <nav aria-label="Search pages" className="mt-4 flex gap-3 text-body">
         {result.page > 1 && <Link className="underline" href={pageHref(model, result.page - 1)}>Previous</Link>}
         {result.hasNext && <Link className="underline" href={pageHref(model, result.page + 1)}>Next</Link>}
       </nav>

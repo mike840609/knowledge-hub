@@ -38,3 +38,39 @@ test("keeps archived mode on result links", async ({ page }) => {
   const links = page.getByRole("link", { name: SEARCH_TITLE });
   await expect(links.first()).toHaveAttribute("href", /includeArchived=true/);
 });
+
+test("moves through results with the keyboard", async ({ page }) => {
+  // "Query Master" appears in both the Architecture and Runbooks fixtures, so
+  // there is more than one row to move between.
+  await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/search?q=${encodeURIComponent("Query Master")}`);
+  const results = page.locator("a[data-search-result]");
+  expect(await results.count()).toBeGreaterThan(1);
+
+  const query = page.locator("#search-q");
+  await query.focus();
+
+  // The field and the list behave as one control: down enters, up leaves.
+  await page.keyboard.press("ArrowDown");
+  await expect(results.first()).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(results.nth(1)).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await expect(results.first()).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await expect(query).toBeFocused();
+
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("End");
+  await expect(results.last()).toBeFocused();
+  await page.keyboard.press("Home");
+  await expect(results.first()).toBeFocused();
+});
+
+test("opens the focused result with Enter", async ({ page }) => {
+  await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/search?q=${encodeURIComponent("Query Master")}`);
+  await page.locator("#search-q").focus();
+  await page.keyboard.press("ArrowDown");
+  const href = await page.locator("a[data-search-result]").first().getAttribute("href");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(new RegExp(href!.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+});

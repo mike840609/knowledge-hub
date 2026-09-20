@@ -47,7 +47,7 @@ export default async function KnowledgeDocumentPage({
     if (!/^[0-9]+$/.test(query.revision)) {
       return (
         <div className="kh-reading-column py-16">
-          <h1 className="text-2xl font-semibold">Not found or no access</h1>
+          <h1 className="text-heading font-semibold">Not found or no access</h1>
         </div>
       );
     }
@@ -55,7 +55,7 @@ export default async function KnowledgeDocumentPage({
     if (!Number.isSafeInteger(parsed) || parsed < 1) {
       return (
         <div className="kh-reading-column py-16">
-          <h1 className="text-2xl font-semibold">Not found or no access</h1>
+          <h1 className="text-heading font-semibold">Not found or no access</h1>
         </div>
       );
     }
@@ -66,7 +66,7 @@ export default async function KnowledgeDocumentPage({
   if (!model) {
     return (
       <div className="kh-reading-column py-16">
-        <h1 className="text-2xl font-semibold">Not found or no access</h1>
+        <h1 className="text-heading font-semibold">Not found or no access</h1>
       </div>
     );
   }

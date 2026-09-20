@@ -29,11 +29,11 @@ export default async function WorkspaceSourceImportPreviewPage({
   if (preview.workspaceId !== workspaceId) notFound();
   return (
     <main className="mx-auto min-h-screen max-w-4xl px-6 py-8">
-      <Link className="w-fit rounded text-sm font-medium text-kh-link underline-offset-4 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus" href={`/w/${workspaceId}/sources`}>
+      <Link className="w-fit rounded-md text-body font-medium text-kh-link underline-offset-4 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus" href={`/w/${workspaceId}/sources`}>
         Back to Sources
       </Link>
-      <h1 className="mt-2 text-2xl font-semibold text-kh-text">Import preview</h1>
-      <p className="mt-1 text-sm text-kh-text-muted">
+      <h1 className="mt-2 text-heading font-semibold text-kh-text">Import preview</h1>
+      <p className="mt-1 text-body text-kh-text-muted">
         Review the immutable staged diff. Warnings may proceed; blockers never apply.
       </p>
       <div className="mt-4">

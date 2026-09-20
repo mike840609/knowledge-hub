@@ -65,11 +65,11 @@ export function NewDocumentForm({ workspaceId, variant }: { workspaceId: string;
           className="space-y-4"
           onSubmit={(event) => { event.preventDefault(); void create({ title, markdown }); }}
         >
-          <label className="block text-sm text-kh-text">
+          <label className="block text-body text-kh-text">
             Document title
             <Input className="mt-1" value={title} maxLength={512} required autoFocus disabled={busy} onChange={(event) => setTitle(event.target.value)} />
           </label>
-          <label className="block text-sm text-kh-text">
+          <label className="block text-body text-kh-text">
             Content <span className="text-kh-text-muted">(Markdown)</span>
             <Textarea className="mt-1 min-h-64 resize-y" value={markdown} placeholder="Write your note…" disabled={busy} onChange={(event) => setMarkdown(event.target.value)} />
           </label>
@@ -88,7 +88,7 @@ export function NewDocumentForm({ workspaceId, variant }: { workspaceId: string;
       ) : (
         <Button type="button" disabled={busy || !confirmed} onClick={() => setOpen(true)}>New document</Button>
       )}
-      <label className="block text-sm text-kh-text-muted">
+      <label className="block text-body text-kh-text-muted">
         <span className="cursor-pointer underline-offset-4 hover:underline">Upload .md</span>
         <input
           type="file"

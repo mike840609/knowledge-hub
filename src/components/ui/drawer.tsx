@@ -3,6 +3,7 @@
 import { Dialog } from "@base-ui-components/react/dialog";
 import { X } from "lucide-react";
 import type { ReactNode } from "react";
+import { buttonClasses } from "@/components/ui/button";
 
 export function Drawer({
   open,
@@ -26,22 +27,22 @@ export function Drawer({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange} modal={modal}>
       <Dialog.Portal>
-        {modal ? <Dialog.Backdrop className="fixed inset-0 z-40 bg-black/20" /> : null}
-        <Dialog.Popup className={`fixed inset-y-0 right-0 z-50 flex w-80 max-w-[85vw] flex-col border-l border-kh-border shadow-lg focus:outline-none ${surfaceClassName}`}>
+        {modal ? <Dialog.Backdrop className="fixed inset-0 z-40 bg-kh-overlay transition-opacity duration-120 ease-out data-[starting-style]:opacity-0 data-[ending-style]:opacity-0" /> : null}
+        <Dialog.Popup className={`fixed inset-y-0 right-0 z-50 flex w-80 max-w-[85vw] flex-col border-l border-kh-border shadow-modal outline-none transition-[opacity,transform] duration-160 ease-out data-[starting-style]:translate-x-4 data-[starting-style]:opacity-0 data-[ending-style]:translate-x-4 data-[ending-style]:opacity-0 ${surfaceClassName}`}>
           <div className="flex items-start justify-between gap-2 border-b border-kh-border px-4 py-3">
             <div className="min-w-0">
-              <Dialog.Title className="truncate text-sm font-semibold text-kh-text">
+              <Dialog.Title className="truncate text-body font-semibold text-kh-text">
                 {title}
               </Dialog.Title>
               {description ? (
-                <Dialog.Description className="mt-0.5 text-xs text-kh-text-muted">
+                <Dialog.Description className="mt-0.5 text-caption text-kh-text-muted">
                   {description}
                 </Dialog.Description>
               ) : null}
             </div>
             <Dialog.Close
               aria-label={label}
-              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
+              className={buttonClasses({ variant: "ghost", icon: true, size: "sm" })}
             >
               <X className="h-4 w-4" aria-hidden="true" />
             </Dialog.Close>

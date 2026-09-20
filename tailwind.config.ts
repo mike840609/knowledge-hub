@@ -1,32 +1,93 @@
 import type { Config } from "tailwindcss";
 
+/**
+ * Design tokens. The scales below are *replaced*, not extended, so the only
+ * spellings that compile are the ones named here — an arbitrary `text-[13px]`
+ * or a stray `rounded-xl` fails loudly instead of quietly forking the system.
+ *
+ * Contract and rationale: docs/superpowers/specs/frontend-design-language.md
+ */
 const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
+    // Six UI sizes plus two that exist only for rendered documents.
+    // Every size carries its own tracking. Reference values, measured from
+    // linear.app: 12px 0, 13px -.01em, 14px -.013em, 15px -.011em, 17px 0.
+    // Sizes without a measured counterpart are interpolated, not invented
+    // from nothing, and are marked below.
+    fontSize: {
+      micro: ["11px", { lineHeight: "14px", letterSpacing: "-0.01em" }], // interpolated
+      caption: ["12px", { lineHeight: "16px", letterSpacing: "0" }],
+      "body-sm": ["13px", { lineHeight: "18px", letterSpacing: "-0.01em" }],
+      body: ["14px", { lineHeight: "20px", letterSpacing: "-0.013em" }],
+      title: ["16px", { lineHeight: "24px", letterSpacing: "-0.01em" }], // interpolated
+      heading: ["20px", { lineHeight: "28px", letterSpacing: "-0.015em" }], // interpolated
+      // Document scale: longer measure wants a larger size and looser leading
+      // than the reference, which sets 15px at 1.6 for marketing prose.
+      reading: ["15px", { lineHeight: "28px", letterSpacing: "-0.011em" }],
+      display: ["24px", { lineHeight: "32px", letterSpacing: "-0.015em" }], // interpolated
+    },
+    // Rungs of the reference ladder (4/6/8/12/16/24/32), taking the four this
+    // product needs: inline chrome, controls, menus, modals. 10px, used
+    // earlier, is not on that ladder at all.
+    borderRadius: {
+      none: "0",
+      sm: "4px",
+      md: "6px",
+      lg: "8px",
+      xl: "12px",
+      full: "9999px",
+    },
+    // Two elevations, themed via variables so dark mode can deepen them.
+    boxShadow: {
+      none: "none",
+      popover: "var(--kh-shadow-popover)",
+      modal: "var(--kh-shadow-modal)",
+    },
+    transitionDuration: {
+      DEFAULT: "120ms",
+      0: "0ms",
+      120: "120ms",
+      160: "160ms",
+    },
+    transitionTimingFunction: {
+      DEFAULT: "cubic-bezier(0.16, 1, 0.3, 1)",
+      out: "cubic-bezier(0.16, 1, 0.3, 1)",
+      linear: "linear",
+    },
     extend: {
       colors: {
-        ink: "#102a43",
-        paper: "#f7f9fb",
-        accent: "#0f766e",
         "kh-bg": "var(--kh-bg)",
-        "kh-reading-bg": "var(--kh-reading-bg)",
+        "kh-bg-raised": "var(--kh-bg-raised)",
+        "kh-bg-sunken": "var(--kh-bg-sunken)",
         "kh-bg-subtle": "var(--kh-bg-subtle)",
-        "kh-bg-nav": "var(--kh-bg-nav)",
-        "kh-bg-sidebar": "var(--kh-bg-sidebar)",
         "kh-bg-hover": "var(--kh-bg-hover)",
         "kh-bg-selected": "var(--kh-bg-selected)",
         "kh-border": "var(--kh-border)",
+        "kh-border-strong": "var(--kh-border-strong)",
         "kh-text": "var(--kh-text)",
+        "kh-text-secondary": "var(--kh-text-secondary)",
         "kh-text-muted": "var(--kh-text-muted)",
+        "kh-text-faint": "var(--kh-text-faint)",
         "kh-primary": "var(--kh-primary)",
         "kh-primary-hover": "var(--kh-primary-hover)",
+        "kh-on-primary": "var(--kh-on-primary)",
         "kh-link": "var(--kh-link)",
         "kh-focus": "var(--kh-focus)",
         "kh-selected-text": "var(--kh-selected-text)",
         "kh-highlight": "var(--kh-highlight)",
+        "kh-overlay": "var(--kh-overlay)",
         "kh-danger": "var(--kh-danger)",
+        "kh-danger-solid": "var(--kh-danger-solid)",
+        "kh-danger-solid-hover": "var(--kh-danger-solid-hover)",
+        "kh-danger-bg": "var(--kh-danger-bg)",
+        "kh-danger-border": "var(--kh-danger-border)",
         "kh-warning": "var(--kh-warning)",
+        "kh-warning-bg": "var(--kh-warning-bg)",
+        "kh-warning-border": "var(--kh-warning-border)",
         "kh-success": "var(--kh-success)",
+        "kh-success-bg": "var(--kh-success-bg)",
+        "kh-success-border": "var(--kh-success-border)",
       },
     },
   },

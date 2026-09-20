@@ -19,10 +19,10 @@ export function ImportWarningSummary({ preview }: { preview: ImportPreview }): R
           aria-labelledby="import-blockers-heading"
           className="rounded-md border border-kh-danger/40 bg-kh-bg p-4"
         >
-          <h2 id="import-blockers-heading" className="text-sm font-semibold text-kh-danger">
+          <h2 id="import-blockers-heading" className="text-body font-semibold text-kh-danger">
             Blockers ({blockers.length}) — fix the source folder and create a fresh preview
           </h2>
-          <ul className="mt-2 list-disc pl-5 text-sm text-kh-text">
+          <ul className="mt-2 list-disc pl-5 text-body text-kh-text">
             {blockers.map((diagnostic, index) => (
               <li key={`${diagnostic.code}-${diagnostic.sourcePath}-${index}`}>
                 <span className="font-medium">{diagnostic.code}</span> at {diagnostic.sourcePath}: {diagnostic.message}
@@ -36,10 +36,10 @@ export function ImportWarningSummary({ preview }: { preview: ImportPreview }): R
           aria-labelledby="import-warnings-heading"
           className="rounded-md border border-kh-warning/40 bg-kh-bg p-4"
         >
-          <h2 id="import-warnings-heading" className="text-sm font-semibold text-kh-warning">
+          <h2 id="import-warnings-heading" className="text-body font-semibold text-kh-warning">
             Warnings ({warnings.length}) — review, then Apply may proceed
           </h2>
-          <ul className="mt-2 list-disc pl-5 text-sm text-kh-text">
+          <ul className="mt-2 list-disc pl-5 text-body text-kh-text">
             {warnings.map((diagnostic, index) => (
               <li key={`${diagnostic.code}-${diagnostic.sourcePath}-${index}`}>
                 <span className="font-medium">{diagnostic.code}</span> at {diagnostic.sourcePath}: {diagnostic.message}

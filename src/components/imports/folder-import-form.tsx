@@ -242,16 +242,16 @@ export function FolderImportForm({ target }: { target: FolderImportTarget }): Re
     }
   }
 
-  if (!allowed) return <p role="status" className="p-4 text-sm text-kh-text-muted">Import is unavailable while this workspace is read-only or access is being checked.</p>;
+  if (!allowed) return <p role="status" className="p-4 text-body text-kh-text-muted">Import is unavailable while this workspace is read-only or access is being checked.</p>;
 
   return (
-    <div className="rounded-lg border border-kh-border bg-kh-bg p-4">
+    <div className="rounded-md border border-kh-border bg-kh-bg p-4">
       {target.kind === "new" ? (
         <>
-          <label className="block text-sm font-medium text-kh-text" htmlFor="import-source-name">Source name</label>
+          <label className="block text-body font-medium text-kh-text" htmlFor="import-source-name">Source name</label>
           <input
             id="import-source-name"
-            className="mt-1 w-full rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-sm text-kh-text outline-none placeholder:text-kh-text-muted focus:border-kh-focus focus-visible:ring-2 focus-visible:ring-kh-focus"
+            className="mt-1 w-full rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-body text-kh-text outline-none placeholder:text-kh-text-muted focus:border-kh-focus focus-visible:ring-2 focus-visible:ring-kh-focus"
             value={sourceName}
             disabled={busy}
             onChange={(event) => setSourceName(event.target.value)}
@@ -259,12 +259,12 @@ export function FolderImportForm({ target }: { target: FolderImportTarget }): Re
           />
         </>
       ) : (
-        <p className="text-sm text-kh-text-muted">
+        <p className="text-body text-kh-text-muted">
           Re-select the full folder of <span className="font-medium text-kh-text">{target.sourceName}</span> to preview the next sync.
           The source folder stays authoritative; nothing is applied until you confirm the preview.
         </p>
       )}
-      <label className="mt-3 block text-sm font-medium text-kh-text" htmlFor="import-folder">Folder</label>
+      <label className="mt-3 block text-body font-medium text-kh-text" htmlFor="import-folder">Folder</label>
       <input
         id="import-folder"
         type="file"
@@ -276,9 +276,9 @@ export function FolderImportForm({ target }: { target: FolderImportTarget }): Re
           void handleFiles(event.target.files);
           event.target.value = "";
         }}
-        className="mt-1 w-full rounded-md text-sm text-kh-text outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
+        className="mt-1 w-full rounded-md text-body text-kh-text outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
       />
-      {status ? <p role="status" className="mt-3 text-sm text-kh-text-muted">{status}</p> : null}
+      {status ? <p role="status" className="mt-3 text-body text-kh-text-muted">{status}</p> : null}
     </div>
   );
 }

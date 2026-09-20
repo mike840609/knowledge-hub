@@ -6,6 +6,7 @@ import { isFolderSyncable } from "@/modules/knowledge/domain/source-policy";
 import { ImportHistory } from "@/components/sources/import-history";
 import { sourceTypeLabel } from "@/components/sources/source-list-row";
 import { TechnicalDetails } from "@/components/sources/technical-details";
+import { buttonClasses } from "@/components/ui/button";
 
 export function SourceDetail({ model, showImportSuccess = false }: { model: SourceDetailModel; showImportSuccess?: boolean }) {
   const { workspace, source, runs } = model;
@@ -13,22 +14,22 @@ export function SourceDetail({ model, showImportSuccess = false }: { model: Sour
   return (
     <div className="flex flex-col gap-6">
       {showImportSuccess ? (
-        <p role="status" className="rounded-md border border-kh-success/40 bg-kh-bg px-3 py-2 text-sm text-kh-success">
+        <p role="status" className="rounded-md border border-kh-success/40 bg-kh-bg px-3 py-2 text-body text-kh-success">
           Import applied successfully.
         </p>
       ) : null}
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-kh-text">{source.name}</h1>
-          <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-kh-text-muted">
-            <span className="rounded border border-kh-border px-1.5 py-0.5">{sourceTypeLabel(source.sourceType)}</span>
-            <span className="rounded border border-kh-border px-1.5 py-0.5">{source.status}</span>
+          <h1 className="text-heading font-semibold text-kh-text">{source.name}</h1>
+          <p className="mt-1 flex flex-wrap items-center gap-2 text-caption text-kh-text-muted">
+            <span className="rounded-md border border-kh-border px-1.5 py-0.5">{sourceTypeLabel(source.sourceType)}</span>
+            <span className="rounded-md border border-kh-border px-1.5 py-0.5">{source.status}</span>
 
           </p>
         </div>
         {syncable ? (
           <WorkspaceImportLink href={`/w/${workspace.id}/sources/${source.id}/update`}
-              className="inline-flex items-center gap-2 rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-sm font-medium text-kh-text transition hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
+              className={buttonClasses({ variant: "secondary" })}
             >
               <RefreshCw size={15} strokeWidth={2} aria-hidden="true" />
               Update from folder
@@ -37,8 +38,8 @@ export function SourceDetail({ model, showImportSuccess = false }: { model: Sour
       </header>
 
       <section aria-labelledby="source-overview-heading" className="rounded-md border border-kh-border bg-kh-bg p-4">
-        <h2 id="source-overview-heading" className="text-sm font-semibold text-kh-text">Overview</h2>
-        <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+        <h2 id="source-overview-heading" className="text-body font-semibold text-kh-text">Overview</h2>
+        <dl className="mt-3 grid gap-2 text-body sm:grid-cols-2">
           <div className="flex gap-2">
             <dt className="w-24 shrink-0 text-kh-text-muted">Workspace</dt>
             <dd className="text-kh-text">{workspace.name}</dd>
@@ -49,7 +50,7 @@ export function SourceDetail({ model, showImportSuccess = false }: { model: Sour
           </div>
           <div className="flex gap-2">
             <dt className="w-24 shrink-0 text-kh-text-muted">Documents</dt>
-            <dd><Link className="rounded text-kh-link underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-kh-focus" href={`/w/${workspace.id}/knowledge/${source.id}${source.status === "ARCHIVED" ? "?includeArchived=true" : ""}`}>Browse documents</Link></dd>
+            <dd><Link className="rounded-md text-kh-link underline underline-offset-4 focus-visible:ring-2 focus-visible:ring-kh-focus" href={`/w/${workspace.id}/knowledge/${source.id}${source.status === "ARCHIVED" ? "?includeArchived=true" : ""}`}>Browse documents</Link></dd>
           </div>
           <div className="flex gap-2">
             <dt className="w-24 shrink-0 text-kh-text-muted">Sync runs</dt>
@@ -59,7 +60,7 @@ export function SourceDetail({ model, showImportSuccess = false }: { model: Sour
       </section>
 
       <section aria-labelledby="import-history-heading" className="flex flex-col gap-3">
-        <h2 id="import-history-heading" className="text-sm font-semibold text-kh-text">Import history</h2>
+        <h2 id="import-history-heading" className="text-body font-semibold text-kh-text">Import history</h2>
         <ImportHistory runs={runs} />
       </section>
 

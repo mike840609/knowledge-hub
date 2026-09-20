@@ -96,7 +96,7 @@ export function ImportPreview({
     <div className="flex flex-col gap-4 pb-6">
       <ImportSummary preview={preview} />
       <ImportWarningSummary preview={preview} />
-      <div className="flex items-center gap-2 text-sm">
+      <div className="flex items-center gap-2 text-body">
         <label htmlFor="import-change-filter" className="font-medium text-kh-text-muted">
           Filter changes
         </label>
@@ -104,7 +104,7 @@ export function ImportPreview({
           id="import-change-filter"
           value={filter}
           onChange={(event) => setFilter(event.target.value as ChangeFilter)}
-          className="rounded-md border border-kh-border bg-kh-bg px-2 py-1 text-sm text-kh-text focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
+          className="rounded-md border border-kh-border bg-kh-bg px-2 py-1 text-body text-kh-text focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
         >
           {FILTER_META.map((option, index) => (
             <option key={option.value} value={option.value}>
