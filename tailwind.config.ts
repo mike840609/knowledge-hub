@@ -5,9 +5,7 @@ import type { Config } from "tailwindcss";
  * spellings that compile are the ones named here — an arbitrary `text-[13px]`
  * or a stray `rounded-xl` fails loudly instead of quietly forking the system.
  *
- * Contract and rationale:
- *   docs/superpowers/specs/2026-09-13-phase-2.5-frontend-product-baseline-design.md §25–28
- *   docs/superpowers/specs/2026-09-20-frontend-design-language-amendment.md
+ * Contract and rationale: docs/superpowers/specs/frontend-design-language.md
  */
 const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],

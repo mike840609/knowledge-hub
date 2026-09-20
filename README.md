@@ -59,7 +59,7 @@ make dev         # 啟動 dev server
 | [Phase 4 Implementation Plan](docs/superpowers/plans/2026-09-16-phase-4-discovery-read-api.md) | Phase 4 search/read tasks、fixtures、acceptance cases |
 | [Phase 5 Human Authoring Design](docs/superpowers/specs/2026-09-16-phase-5-human-authoring-design.md) | 單篇 upload、Web create/edit、stale-editor conflict、capability + HUB_MANAGED ownership gate |
 | [Phase 5 Implementation Plan](docs/superpowers/plans/2026-09-16-phase-5-human-authoring.md) | Phase 5 authoring tasks、fixtures、acceptance cases |
-| [Frontend Design Language Amendment](docs/superpowers/specs/2026-09-20-frontend-design-language-amendment.md) | Design token contract、enforcement 機制、overlay radius divergence、theme contract |
+| [Frontend Design Language](docs/superpowers/specs/frontend-design-language.md) *(living contract)* | 視覺語言、design token 契約與 enforcement、component 架構、state 策略、theme contract。**不帶日期，就地修訂**；supersedes Phase 2.5 §25–30 |
 
 推薦執行／閱讀順序：
 
