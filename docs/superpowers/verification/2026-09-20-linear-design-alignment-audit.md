@@ -107,15 +107,20 @@
 
 ## 6. 驗證缺口
 
-這些不是設計問題，是**本次交付的證據強度不足之處**，誠實記錄以免日後被誤認為已驗證。
+稽核當下記錄的三項證據不足之處，**現已全部補上**。原始記錄保留，因為「當時沒有」本身是這份紀錄的一部分。
 
-| 項目 | 狀態 | 說明 |
+| 項目 | 稽核當下 | 現況 |
 | --- | --- | --- |
-| 暗色主題目視檢查 | ⚠️ 部分 | 經過一次人工檢視，即是 finding 18 的來源。修正後的 code block 與表格邊框**尚未被看過**——其 `bg-subtle` 填色與新 divider 僅差 L\* 0.93，推論靠填色即足夠，但這是推論不是觀察 |
-| 鍵盤導航自動化測試 | ❌ 無 | finding 20 的方向鍵行為無任何測試。e2e 通過只證明搜尋 DOM 改動未破壞既有斷言，不證明方向鍵會動 |
-| UI primitive render 測試 | ❌ 無 | 316 個 unit test 無一 render component。`Button` 現有 5 variant × 3 size × icon 十餘種組合，唯一安全網是 e2e |
+| 暗色主題目視檢查 | ⚠️ 僅一次人工檢視 | ✅ app 接真實資料庫跑起來，明暗兩主題、改動前後皆截圖比對 |
+| 鍵盤導航自動化測試 | ❌ 無 | ✅ `phase4-search.spec.ts` 新增兩個 case：方向鍵在列間移動、上鍵離開列表回到查詢框、Home/End、Enter 開啟 |
+| UI primitive render 測試 | ❌ 無 | ✅ `tests/unit/ui-primitives.test.tsx` 11 個 case 覆蓋 `buttonClasses` 的 variant × size × icon 矩陣與 `Button`／`Badge` 的實際 render |
 
----
+補測試時的兩點值得記著：
+
+- **沒有新增任何依賴。** 用既有 `react-dom` 的 `renderToStaticMarkup` 即可覆蓋純呈現型 primitive，不需要 testing-library 或 jsdom。
+- `tsconfig.json` 的 `jsx: "preserve"` 是給 Next 用的，會讓 esbuild 停在 classic runtime，render 時噴 `React is not defined`。`vitest.config.ts` 因此指定 `esbuild: { jsx: "automatic" }`，只影響測試。
+
+Badge 那個 case 明確鎖住它修正過的回歸：斷言 success／warning／danger 的背景 token **互不相同**——它們曾經共用 `bg-kh-bg-hover`，只差文字色。
 
 ## 執行紀錄
 
