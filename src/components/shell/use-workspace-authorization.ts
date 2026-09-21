@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { WorkspaceAccessView, WorkspaceNavigationModel } from "@/server/workspace-admin";
+import { writeStored } from "@/components/shell/use-persisted-state";
 
 export type WorkspaceAuthorization = {
   access: WorkspaceAccessView;
@@ -58,7 +59,7 @@ export function useWorkspaceAuthorizationRefresh(initialAccess: WorkspaceAccessV
         setConfirmed(false);
         setRevoked(true);
         // A document navigation drops the App Router cache and all mounted scope state.
-        window.sessionStorage.setItem("kh:workspace-access-notice", "1");
+        writeStored("session", "kh:workspace-access-notice", "1");
         window.location.replace(`/w/${mySpace.id}/knowledge?notice=access-changed`);
         return;
       }

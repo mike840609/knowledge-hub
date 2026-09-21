@@ -105,7 +105,7 @@ export function ImportStickyFooter({
         </Link>
         <div className="flex flex-wrap items-center gap-3">
           {stale && allowed ? (
-            <Link href={refreshHref} className="rounded-md text-body font-medium text-kh-link underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus">
+            <Link href={refreshHref} className="rounded-md text-body font-medium text-kh-link underline-offset-2 hover:underline kh-focus-ring">
               Refresh preview
             </Link>
           ) : null}

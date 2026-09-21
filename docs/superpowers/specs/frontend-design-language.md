@@ -297,7 +297,19 @@ rule, so no component has to remember it.
 ## 10. Focus and keyboard
 
 One focus idiom: the ring, composed from `.kh-focus-ring`. Every interactive
-surface uses it. There is no second spelling.
+surface uses it. There is no second spelling, and `no-restricted-syntax` in
+`eslint.config.mjs` now says so in a form the build can check.
+
+It needed that. This was the only rule in §3–§11 with nothing enforcing it —
+the type, radius, elevation and container scales are replaced in
+`tailwind.config.ts`, so an off-scale value does not compile — and it was the
+only one the codebase broke, in 29 places across 17 files. Ten of those copies
+left out `outline-none`, so the browser drew its own black outline on top of
+the themed ring; that one is a visible defect in both themes and neither
+review nor the type checker had any way to see it.
+
+A rule stated absolutely and enforced by nothing is a rule that decays at the
+rate people forget it.
 
 **Every list of rows is navigable by arrow key**, with the same idiom: the
 container owns a `keydown` handler, Up/Down move focus between rows, Home/End
@@ -341,8 +353,24 @@ at the top, and a hash target is left alone so in-page anchors keep working.
 
 What the user has arranged is theirs to keep. Filters, expansion and
 collapsed sections belong in the URL when they should be shareable, and in
-`localStorage` when they are a personal preference — not in component state
-that a refresh discards.
+storage when they are a personal preference — not in component state that a
+refresh discards.
+
+Which storage is part of the decision. A choice keeps (`localStorage`): which
+sources are expanded, which folders are collapsed, which sections are open,
+whether the nav rail is collapsed. Work in progress lasts the session
+(`sessionStorage`): a find-as-you-type filter is worth keeping across a
+refresh and not worth greeting someone with a week later, when a stale needle
+would make the tree look empty for no reason.
+
+`usePersistedJson` in `components/shell/use-persisted-state.ts` is how, and
+it exists because the hand-written version gets two things wrong. It must
+read in an effect, not during render, or the server and the first client
+render disagree; and it must not write before it has read, or the first
+render overwrites what was stored with the fallback. Storage access is also
+wrapped, because reading `window.localStorage` **throws** rather than
+returning null where a browser blocks it — unguarded, that took down the
+whole shell rather than losing a preference.
 
 ## 12. Theme contract
 
@@ -479,6 +507,23 @@ per area rather than beside a caller: the document skeleton had two callers,
 was copied into both, and the two drifted to different paddings, so the page
 shifted as the route boundary handed over to the `Suspense` fallback.
 
+**The document skeleton is kept knowing what it costs.** Measured, opening a
+document takes 383ms at p50, of which about 250ms is the skeleton rather than
+the work: the data is there at ~130ms, the main thread records no long tasks
+in the remainder, and React throttles a Suspense fallback once shown so that
+it cannot flash. Removing the boundary measures 141ms, and the previous
+document stays on screen instead of a skeleton appearing. The full record is
+`docs/superpowers/verification/2026-09-21-navigation-latency-measurement.md`.
+
+Keeping it is a deliberate choice, not an unexamined one, and there is no
+middle setting: an invisible or delayed fallback still commits, which unmounts
+the previous document and leaves the region blank rather than stale. The one
+lever that would keep the skeleton and drop its cost is prefetching the
+document data rather than only the loading boundary, so that a navigation
+finds the data already in the router cache and never reaches the fallback.
+That is unmeasured; it would trade N prefetch requests per visible tree row
+for it.
+
 Error and not-found states take their shape from `StatusMessage` — heading,
 one line, optional action — so that a new boundary cannot invent a fourth
 spelling. Boundaries are placed where the shell survives them: the workspace
@@ -501,7 +546,7 @@ Local component  → Genuinely ephemeral chrome: inspector open, drawer open
 
 Local component state is for what should not outlive the interaction. Tree
 expansion and the tree filter are still held there and should not be; §11
-covers why, and it is open item 5.
+covers why, and it is now done: `usePersistedJson` holds it.
 
 A global state library is added only if a concrete requirement proves local
 ownership insufficient.
@@ -551,20 +596,14 @@ Each of these changes behaviour rather than appearance:
 4. No row carries a context menu. Renaming, archiving and copying a link all
    require opening the document first, where the reference language puts them
    one right-click away on the row.
-5. Tree expansion and the tree filter live in component state, so a refresh
-   discards the arrangement the user set. §11 says where they belong.
-6. Navigation is a server round trip, so opening a document shows a skeleton
-   first. This is the largest felt gap against the reference language and the
-   only one that is architectural rather than presentational — it wants
-   measurement and a prefetch/caching decision, not a CSS change.
-7. `spacing` is the one scale still left at Tailwind's default rather than
+5. `spacing` is the one scale still left at Tailwind's default rather than
    replaced, so paddings, margins and gaps remain unenforced. Note that
    replacing `spacing` wholesale is the wrong fix: Tailwind feeds it to
    `width` and `height` too, and a 288px sidebar is not a decision about
    rhythm. What can be replaced is `padding`, `margin`, `gap` and `space`,
    which is where a rhythm applies. (Page container widths were the other
    half of this item and are now §7.)
-8. Timestamps are formatted in the runtime's own time zone, which differs
+6. Timestamps are formatted in the runtime's own time zone, which differs
    between the server render and the client render. The locale is settled
    (§15, one module); the zone is the same product decision the locale was —
    resolve it server-side, or render these client-side only.

@@ -29,7 +29,7 @@ export default async function WorkspaceSourceImportPreviewPage({
   if (preview.workspaceId !== workspaceId) notFound();
   return (
     <main className="kh-page min-h-screen py-6">
-      <Link className="w-fit rounded-md text-body font-medium text-kh-link underline-offset-4 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus" href={`/w/${workspaceId}/sources`}>
+      <Link className="w-fit rounded-md text-body font-medium text-kh-link underline-offset-4 hover:underline kh-focus-ring" href={`/w/${workspaceId}/sources`}>
         Back to Sources
       </Link>
       <h1 className="mt-2 text-heading font-semibold text-kh-text">Import preview</h1>

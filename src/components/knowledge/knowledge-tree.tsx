@@ -10,6 +10,7 @@ import {
   type KnowledgeTreeNode,
 } from "@/lib/knowledge-navigation";
 import type { KnowledgeTreeItem } from "@/modules/knowledge/application/knowledge-query-service";
+import { isStringArray, usePersistedJson } from "@/components/shell/use-persisted-state";
 
 export type KnowledgeTreeProps = {
   items: KnowledgeTreeItem[];
@@ -80,14 +81,14 @@ function TreeNodeRow({
         <Link
           href={documentHref(item, scope, includeArchived)}
           title={item.label}
-          className={`flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-body focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus ${
+          className={`flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-body kh-focus-ring ${
             selected ? "font-medium text-kh-selected-text" : "text-kh-text-muted"
           }`}
         >
           <FileText size={14} strokeWidth={1.8} className="shrink-0 text-kh-text-muted" aria-hidden="true" />
           <span className="truncate">{item.label}</span>
         </Link>
-        <button type="button" onClick={() => onToggleFavorite(item.documentId)} aria-label={`${isFavorite ? "Remove from" : "Add to"} favorites: ${item.label}`} title={isFavorite ? "Remove from favorites" : "Add to favorites"} className={`mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus ${isFavorite ? "text-kh-selected-text" : "kh-favorite-action text-kh-text-muted hover:bg-kh-bg-hover"}`}>
+        <button type="button" onClick={() => onToggleFavorite(item.documentId)} aria-label={`${isFavorite ? "Remove from" : "Add to"} favorites: ${item.label}`} title={isFavorite ? "Remove from favorites" : "Add to favorites"} className={`mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md kh-focus-ring ${isFavorite ? "text-kh-selected-text" : "kh-favorite-action text-kh-text-muted hover:bg-kh-bg-hover"}`}>
           <Star size={14} strokeWidth={1.8} fill={isFavorite ? "currentColor" : "none"} aria-hidden="true" />
         </button>
       </li>
@@ -104,7 +105,7 @@ function TreeNodeRow({
       data-node-id={item.id}
       tabIndex={tabIndex}
       onFocus={() => onFocusNode(item.id)}
-      className="rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
+      className="rounded-md kh-focus-ring"
     >
       <button
         type="button"
@@ -144,6 +145,8 @@ function TreeNodeRow({
   );
 }
 
+const EMPTY_COLLAPSED: string[] = [];
+
 export function KnowledgeTree({
   items,
   includeArchived = false,
@@ -156,7 +159,14 @@ export function KnowledgeTree({
 }: KnowledgeTreeProps) {
   const router = useRouter();
   const treeRef = useRef<HTMLUListElement>(null);
-  const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(new Set());
+  // Collapsed folders are per source: the same workspace can hold several
+  // trees, and collapsing one should not fold another.
+  const [collapsedList, setCollapsedList] = usePersistedJson<string[]>(
+    `kh:tree-collapsed:${workspaceId}:${sourceId}`,
+    EMPTY_COLLAPSED,
+    isStringArray,
+  );
+  const collapsedIds = useMemo<ReadonlySet<string>>(() => new Set(collapsedList), [collapsedList]);
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const roots = useMemo(() => {
@@ -194,12 +204,9 @@ export function KnowledgeTree({
   }, [items]);
 
   const toggle = (id: string) => {
-    setCollapsedIds((previous) => {
-      const next = new Set(previous);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    setCollapsedList((previous) =>
+      previous.includes(id) ? previous.filter((entry) => entry !== id) : [...previous, id],
+    );
     setActiveId(id);
   };
 

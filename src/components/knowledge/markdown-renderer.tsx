@@ -17,7 +17,7 @@ function MarkdownLink(props: DetailedHTMLProps<AnchorHTMLAttributes<HTMLAnchorEl
         href={href}
         target="_blank"
         rel="noreferrer noopener"
-        className="rounded-md font-medium text-kh-link underline decoration-kh-link underline-offset-2 hover:decoration-kh-link focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
+        className="rounded-md font-medium text-kh-link underline decoration-kh-link underline-offset-2 hover:decoration-kh-link kh-focus-ring"
       >
         {children}
         <ExternalLink className="ml-0.5 inline h-3 w-3 shrink-0" aria-hidden="true" />
@@ -29,7 +29,7 @@ function MarkdownLink(props: DetailedHTMLProps<AnchorHTMLAttributes<HTMLAnchorEl
     <a
       {...rest}
       href={href}
-      className="rounded-md font-medium text-kh-link underline decoration-kh-link underline-offset-2 hover:decoration-kh-link focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
+      className="rounded-md font-medium text-kh-link underline decoration-kh-link underline-offset-2 hover:decoration-kh-link kh-focus-ring"
     >
       {children}
     </a>

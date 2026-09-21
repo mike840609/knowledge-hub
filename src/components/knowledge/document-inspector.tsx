@@ -55,7 +55,7 @@ function TechnicalIds({ items }: { items: { label: string; value: string }[] }) 
   }
   return (
     <details className="mt-4 border-t border-kh-border pt-3 text-caption text-kh-text-muted">
-      <summary className="cursor-pointer rounded-md py-1 focus-visible:ring-2 focus-visible:ring-kh-focus">Technical IDs</summary>
+      <summary className="cursor-pointer rounded-md py-1 kh-focus-ring">Technical IDs</summary>
       <div className="mt-2 space-y-3">
         {items.map(({ label, value }) => (
           <div key={label}>
@@ -95,7 +95,7 @@ function InspectorTabs({ data }: { data: DocumentInspectorData }) {
           <div>
             <dt className="text-caption text-kh-text-muted">Source</dt>
             <dd className="text-kh-text">{data.sourceName}</dd>
-            {access.actions.canInspectSources ? <dd className="mt-1"><Link href={`/w/${data.workspaceId}/sources/${data.sourceId}`} className="rounded-md text-kh-link underline underline-offset-4 focus-visible:ring-2 focus-visible:ring-kh-focus">Manage source</Link></dd> : null}
+            {access.actions.canInspectSources ? <dd className="mt-1"><Link href={`/w/${data.workspaceId}/sources/${data.sourceId}`} className="rounded-md text-kh-link underline underline-offset-4 kh-focus-ring">Manage source</Link></dd> : null}
           </div>
           <div>
             <dt className="text-caption text-kh-text-muted">Status</dt>
@@ -143,7 +143,7 @@ function InspectorTabs({ data }: { data: DocumentInspectorData }) {
                     includeArchived: data.includeArchived,
                   })}
                   aria-current={isSelected ? "page" : undefined}
-                  className={`flex items-center justify-between gap-2 rounded-md px-2.5 py-2 text-body-sm hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus ${isSelected ? "bg-kh-bg-selected font-medium text-kh-text" : "text-kh-text"}`}
+                  className={`flex items-center justify-between gap-2 rounded-md px-2.5 py-2 text-body-sm hover:bg-kh-bg-hover kh-focus-ring ${isSelected ? "bg-kh-bg-selected font-medium text-kh-text" : "text-kh-text"}`}
                 >
                   <span>
                     Revision {revision.revisionNo}
@@ -203,7 +203,7 @@ export function DocumentInspector({
           </button>
         </div>
         <div key={data.documentId} role="region" aria-label="Document details content" tabIndex={0}
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain break-words px-4 py-3 focus-visible:ring-2 focus-visible:ring-kh-focus">
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain break-words px-4 py-3 kh-focus-ring">
           <InspectorTabs data={data} />
         </div>
       </aside>
@@ -291,7 +291,7 @@ export function DocumentDetailClient({
   return (
     <div data-document-pane className="flex h-full min-h-0 overflow-hidden bg-kh-bg-raised">
       <div ref={contentRef} role="region" aria-label="Document content" tabIndex={0}
-        className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain contain-layout focus-visible:ring-2 focus-visible:ring-kh-focus">
+        className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain contain-layout kh-focus-ring">
         <div ref={headerRef}>
         <DocumentHeader
           breadcrumb={breadcrumb}
