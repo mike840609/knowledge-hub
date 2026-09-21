@@ -42,7 +42,7 @@ export function GroupsSettings({
       </p>
       {canAdd && (
         <form
-          className="max-w-xl space-y-3 rounded-md border border-kh-border p-4"
+          className="max-w-panel space-y-3 rounded-md border border-kh-border p-4"
           onSubmit={async (event) => {
             event.preventDefault();
             if (!confirmed || busy || !externalGroupId.trim() || !chosenRole) return;

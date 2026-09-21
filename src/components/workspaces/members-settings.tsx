@@ -63,7 +63,7 @@ export function MembersSettings({
     <section className="space-y-6">
       <h2 className="text-title font-semibold">Members</h2>
       {canAdd && (
-        <div className="max-w-xl rounded-md border border-kh-border p-4">
+        <div className="max-w-panel rounded-md border border-kh-border p-4">
           <h3 className="font-medium">Add member</h3>
           <form
             className="mt-3 flex gap-2"

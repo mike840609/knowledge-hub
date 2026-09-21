@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { FolderImportForm } from "@/components/imports/folder-import-form";
 import { getSourceListModel } from "@/server/source-read";
+import { StatusMessage } from "@/components/ui/status-message";
 
 export default async function WorkspaceSourceImportPage({
   params,
@@ -11,13 +12,16 @@ export default async function WorkspaceSourceImportPage({
   const model = await getSourceListModel(workspaceId);
   if (!model) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-4xl flex-col justify-center px-6 py-16">
-        <h1 className="text-heading font-semibold">No workspace access</h1>
+      <main className="flex min-h-screen flex-col justify-center">
+        <StatusMessage
+          title="No workspace access"
+          description="You do not have access to this workspace, or it no longer exists."
+        />
       </main>
     );
   }
   return (
-    <main className="mx-auto max-w-4xl px-6 py-8">
+    <main className="kh-page py-6">
       <Link className="w-fit rounded-md text-body font-medium text-kh-text-muted underline-offset-4 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus" href={`/w/${workspaceId}/sources`}>
         Back to Sources
       </Link>

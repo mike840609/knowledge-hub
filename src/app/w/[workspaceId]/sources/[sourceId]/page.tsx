@@ -1,5 +1,6 @@
 import { SourceDetail } from "@/components/sources/source-detail";
 import { getSourceDetailModel } from "@/server/source-read";
+import { StatusMessage } from "@/components/ui/status-message";
 
 export default async function WorkspaceSourceDetailPage({
   params,
@@ -13,13 +14,16 @@ export default async function WorkspaceSourceDetailPage({
   const model = await getSourceDetailModel(workspaceId, sourceId);
   if (!model) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-4xl flex-col justify-center px-6 py-16">
-        <h1 className="text-heading font-semibold">Not found or no access</h1>
+      <main className="flex min-h-screen flex-col justify-center">
+        <StatusMessage
+          title="Not found or no access"
+          description="This content does not exist or you do not have access to it."
+        />
       </main>
     );
   }
   return (
-    <main className="mx-auto max-w-4xl px-6 py-8">
+    <main className="kh-page py-6">
       <SourceDetail model={model} showImportSuccess={importParam === "success"} />
     </main>
   );

@@ -8,7 +8,7 @@ export default async function NewNotePage({ params }: { params: Promise<{ worksp
   const model = await getWorkspaceShellModel(workspaceId);
   if (!model?.access.actions.canWrite) notFound();
   return (
-    <main className="mx-auto w-full max-w-3xl px-6 py-6">
+    <main className="kh-reading-column py-6">
       <PageHeader location="Documents" locationHref={`/w/${workspaceId}/knowledge`} title="Add to Notes" description={`Write a document or upload a Markdown file to Notes in ${model.workspace.name}.`} />
       <div className="mt-6"><NewDocumentForm workspaceId={workspaceId} variant="empty" /></div>
     </main>

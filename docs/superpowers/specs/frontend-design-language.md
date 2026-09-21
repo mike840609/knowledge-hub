@@ -97,6 +97,7 @@ together, and say what job the new token does that no existing one covers.
 | Radius | `sm`, `md`, `lg`, `xl` | see §5 |
 | Elevation | `popover`, `modal` | floating surfaces only |
 | Border | `border`, `border-strong` | see §6 |
+| Container | `page`, `wide`, `reading`, `panel` | see §7; the `maxWidth` scale is replaced, so `max-w-4xl` does not compile |
 | Control height | `sm`, `md`, `lg` (24 / 32 / 40) | see §15; buttons and fields read the same ladder |
 | Motion | two durations, one easing curve | see §9 |
 
@@ -184,6 +185,32 @@ bg-subtle   inset fills — code blocks, table headers, kbd
 Names say what a surface is, not where it was first used. The previous names
 (`reading-bg`, `bg-nav`, `bg-sidebar`) are why a warm grey and three cool ones
 ended up adjacent without anyone noticing.
+
+### Three page containers, named by job
+
+```text
+kh-page            56rem  the standard page — lists, forms, detail views
+kh-page-wide       64rem  a page whose content is a table
+kh-reading-column  860px  prose measure — the document, its editor, and
+                          every message state
+```
+
+They are classes rather than remembered widths, and the `maxWidth` scale is
+replaced like the others, so `max-w-4xl` compiles to nothing and a sixth width
+cannot appear quietly. `panel` (36rem) is the one non-page width the scale
+keeps, for a form panel sitting inside a page. Arbitrary values still work,
+because a truncation width on a label is not a container.
+
+Five widths were in use for what was mostly the same page: `2xl`, `3xl`,
+`4xl`, `5xl` and the reading column. Only three of those distinctions were
+real. Most of what the odd widths were doing was holding a message — a
+not-found heading with no explanation, an empty state — and those do not need
+a width of their own: they use `StatusMessage`, which sits in the reading
+column. Nine such blocks were spelled out inline, eight of them a bare `<h1>`.
+
+Page padding is `py-6`. `py-8` appeared on four sources pages for no reason
+anyone recorded. The `py-16` of a centred message state belongs to
+`StatusMessage`, not to the pages that show one.
 
 ### Divergence: this ramp is tinted, the reference's is not
 
@@ -531,11 +558,12 @@ Each of these changes behaviour rather than appearance:
    only one that is architectural rather than presentational — it wants
    measurement and a prefetch/caching decision, not a CSS change.
 7. `spacing` is the one scale still left at Tailwind's default rather than
-   replaced, so gaps and paddings remain unenforced. Page containers spread
-   across five widths — `2xl`, `3xl`, `4xl`, `5xl` and the reading column's
-   860px — and page padding across three. (Counted as containers that bound a
-   whole page. An earlier revision said seven, which counted panel and control
-   widths as though they were page containers.)
+   replaced, so paddings, margins and gaps remain unenforced. Note that
+   replacing `spacing` wholesale is the wrong fix: Tailwind feeds it to
+   `width` and `height` too, and a 288px sidebar is not a decision about
+   rhythm. What can be replaced is `padding`, `margin`, `gap` and `space`,
+   which is where a rhythm applies. (Page container widths were the other
+   half of this item and are now §7.)
 8. Timestamps are formatted in the runtime's own time zone, which differs
    between the server render and the client render. The locale is settled
    (§15, one module); the zone is the same product decision the locale was —

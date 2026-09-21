@@ -14,7 +14,7 @@ export default async function WorkspaceSourcesPage({
   const model = await getSourceListModel(workspaceId);
   if (!model) notFound();
   return (
-    <main className="mx-auto max-w-4xl px-6 py-6">
+    <main className="kh-page py-6">
       <PageHeader
         location={model.workspace.name}
         locationHref={`/w/${workspaceId}/knowledge`}
