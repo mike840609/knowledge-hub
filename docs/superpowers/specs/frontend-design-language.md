@@ -575,7 +575,16 @@ that found them is recorded at
 which also covers what was addressed at the time and is a point-in-time
 record rather than a tracker.
 
-Each of these changes behaviour rather than appearance:
+Each of these changes behaviour rather than appearance.
+
+Items 1 to 4 are four exits from one missing thing — a list of what can be
+done, by whom, to what — and are treated together in
+`docs/superpowers/specs/2026-09-21-action-model-spec.md`, which is proposed
+and not yet agreed. That spec also corrects two of the items below against
+the code: archiving a document and copying a link do not exist anywhere in
+this product, so item 4 describes actions as badly placed when two of the
+three were never built.
+
 
 1. `⌘K` executes search only. The reference language treats it as a command
    palette; creating a note, toggling archived and opening Details have no
