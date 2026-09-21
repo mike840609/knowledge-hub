@@ -479,6 +479,23 @@ per area rather than beside a caller: the document skeleton had two callers,
 was copied into both, and the two drifted to different paddings, so the page
 shifted as the route boundary handed over to the `Suspense` fallback.
 
+**The document skeleton is kept knowing what it costs.** Measured, opening a
+document takes 383ms at p50, of which about 250ms is the skeleton rather than
+the work: the data is there at ~130ms, the main thread records no long tasks
+in the remainder, and React throttles a Suspense fallback once shown so that
+it cannot flash. Removing the boundary measures 141ms, and the previous
+document stays on screen instead of a skeleton appearing. The full record is
+`docs/superpowers/verification/2026-09-21-navigation-latency-measurement.md`.
+
+Keeping it is a deliberate choice, not an unexamined one, and there is no
+middle setting: an invisible or delayed fallback still commits, which unmounts
+the previous document and leaves the region blank rather than stale. The one
+lever that would keep the skeleton and drop its cost is prefetching the
+document data rather than only the loading boundary, so that a navigation
+finds the data already in the router cache and never reaches the fallback.
+That is unmeasured; it would trade N prefetch requests per visible tree row
+for it.
+
 Error and not-found states take their shape from `StatusMessage` — heading,
 one line, optional action — so that a new boundary cannot invent a fourth
 spelling. Boundaries are placed where the shell survives them: the workspace
@@ -553,24 +570,14 @@ Each of these changes behaviour rather than appearance:
    one right-click away on the row.
 5. Tree expansion and the tree filter live in component state, so a refresh
    discards the arrangement the user set. §11 says where they belong.
-6. Opening a document takes ~383ms, of which ~250ms is spent showing a
-   skeleton that is no longer needed. Measured, not estimated:
-   `docs/superpowers/verification/2026-09-21-navigation-latency-measurement.md`.
-   The data arrives at ~130ms and the main thread does no work at all in the
-   remaining time; React throttles a Suspense fallback once shown, so the
-   skeleton costs more than the wait it covers. Removing it measures 2.7×
-   faster. This item used to call navigation architectural and ask for a
-   prefetch/caching decision — the measurement says otherwise, and the open
-   question is now a design one: what a 130ms wait should show. A top
-   progress bar is the usual answer; a skeleton is not.
-7. `spacing` is the one scale still left at Tailwind's default rather than
+6. `spacing` is the one scale still left at Tailwind's default rather than
    replaced, so paddings, margins and gaps remain unenforced. Note that
    replacing `spacing` wholesale is the wrong fix: Tailwind feeds it to
    `width` and `height` too, and a 288px sidebar is not a decision about
    rhythm. What can be replaced is `padding`, `margin`, `gap` and `space`,
    which is where a rhythm applies. (Page container widths were the other
    half of this item and are now §7.)
-8. Timestamps are formatted in the runtime's own time zone, which differs
+7. Timestamps are formatted in the runtime's own time zone, which differs
    between the server render and the client render. The locale is settled
    (§15, one module); the zone is the same product decision the locale was —
    resolve it server-side, or render these client-side only.
