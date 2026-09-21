@@ -1,5 +1,6 @@
 import { Button as BaseButton } from "@base-ui-components/react/button";
 import type { ComponentProps } from "react";
+import { controlHeight, controlWidth, type ControlSize } from "./control";
 
 const variantClasses = {
   primary: "border-transparent bg-kh-primary text-kh-on-primary hover:bg-kh-primary-hover",
@@ -10,25 +11,26 @@ const variantClasses = {
 } as const;
 
 /**
- * Control heights, matching the reference ladder (24 / 32 / 40). `md` is the
- * shell default; `lg` is for page-level forms, where it also lines up with
- * Input. `sm` sits exactly on the WCAG 2.5.8 minimum target of 24px, so it is
+ * Heights come from the shared ladder in `control.ts`; only the padding and
+ * type size are the button's own. `md` is the shell default; `lg` is for
+ * page-level forms, where it lines up with `Input` because both read the same
+ * ladder. `sm` sits exactly on the WCAG 2.5.8 minimum target of 24px, so it is
  * for icon-only secondary actions inside dense chrome and nothing else.
  */
-const sizeClasses = {
-  sm: "h-6 gap-1 px-2 text-body-sm",
-  md: "h-8 gap-2 px-3 text-body",
-  lg: "h-10 gap-2 px-4 text-body",
-} as const;
+const sizeClasses: Record<ControlSize, string> = {
+  sm: `${controlHeight.sm} gap-1 px-2 text-body-sm`,
+  md: `${controlHeight.md} gap-2 px-3 text-body`,
+  lg: `${controlHeight.lg} gap-2 px-4 text-body`,
+};
 
-const iconSizeClasses = {
-  sm: "h-6 w-6",
-  md: "h-8 w-8",
-  lg: "h-10 w-10",
-} as const;
+const iconSizeClasses: Record<ControlSize, string> = {
+  sm: `${controlHeight.sm} ${controlWidth.sm}`,
+  md: `${controlHeight.md} ${controlWidth.md}`,
+  lg: `${controlHeight.lg} ${controlWidth.lg}`,
+};
 
 export type ButtonVariant = keyof typeof variantClasses;
-export type ButtonSize = keyof typeof sizeClasses;
+export type ButtonSize = ControlSize;
 
 export type ButtonAppearance = {
   variant?: ButtonVariant;

@@ -122,6 +122,32 @@
 
 Badge 那個 case 明確鎖住它修正過的回歸：斷言 success／warning／danger 的背景 token **互不相同**——它們曾經共用 `bg-kh-bg-hover`，只差文字色。
 
+## 後續更新
+
+稽核當下的狀態欄是 `4dfdb95` 的快照，**不隨後續工作更新**——canonical 來源仍是契約的 Open items。這一節只記錄快照之後發生了什麼，讓讀者知道上面的 ❌ 有哪些已經不成立。
+
+| # | 發現 | 處理 |
+| --- | --- | --- |
+| 14 | 選單手刻 `<details>`，無方向鍵導航 | ✅ [#43](https://github.com/mike840609/knowledge-hub/pull/43) — `ui/menu.tsx` 包 Base UI `Menu`，兩個選單轉換完成 |
+| 12 | `search-form` 以 `className` 覆寫 Button 形狀 | ✅ 本批次 |
+| 13 | `Input`/`Textarea` 未上 size scale | ✅ 本批次 — 高度階梯抽到 `ui/control.ts`，buttons 與 fields 共讀 |
+| 15 | Loading 三種寫法、骨架屏重複 | ✅ 本批次 |
+| 33 | error/not-found 只覆蓋一條路由 | ✅ 本批次 |
+| 34 | 日期硬寫 `en-US` | ✅ 本批次 — 全部收進 `lib/format-date.ts` |
+
+修 12 的時候發現它比紀錄的更廣：`search-form` 不只覆寫 Button，它的 input 是 44px、兩個 `<select>` 是手刻的。順著查下去，**全庫五個手刻 `<select>` 全部用 `border` 而非 `border-strong`**——也就是 finding 19 修的 WCAG 1.4.11 問題在 select 上原封不動地存在，只因為當時的掃描對象是「有 `Input`/`Textarea` import 的檔案」。契約 §6 因此改寫成規則而非元件清單。
+
+### 兩處措辭更正
+
+原文保留，更正記在這裡：
+
+- **finding 24「`aria-live` 全庫 0 處」**在字面上正確，但誇大了缺口。`role="status"` 本身帶隱含的 `aria-live="polite"`，而 repo 有在用；真正缺的是 toast/undo 層，不是「完全沒有播報」。契約 Open items 已改寫。
+- **finding 34 記「3 處」，實際是 5 處**：另有 `search-result-row` 的第二個 formatter，以及 `document-header` 裡每次 render 都重建的 `new Intl.RelativeTimeFormat("en")`。
+
+### 這批工作自己找到的新缺口
+
+時間戳記用 runtime 自己的時區格式化，server 與 client 不同區時會產生 hydration mismatch。實測 `Mar 4, 2026, 9:05 PM`（UTC）對 `Mar 5, 2026, 5:05 AM`（Asia/Taipei）——連日期都不同。已進契約 Open items，**未修**：跟 locale 一樣是產品決定（server 端解析，或改成只在 client render），不是格式化問題。
+
 ## 執行紀錄
 
 10 個 commit，每個獨立可 review 且各自綠燈：

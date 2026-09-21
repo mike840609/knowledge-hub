@@ -5,18 +5,12 @@ import { useEffect, useState } from "react";
 import { ChevronRight, LockKeyhole } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
+import { formatDateTime, formatRelativeTime } from "@/lib/format-date";
 
 export type DocumentBreadcrumbSegment = {
   label: string;
   href?: string;
 };
-
-function formatUpdatedAt(value: Date): string {
-  return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(value);
-}
 
 export function DocumentHeader({
   breadcrumb,
@@ -47,12 +41,7 @@ export function DocumentHeader({
     return () => window.clearInterval(timer);
   }, []);
   const elapsed = now === null ? null : Math.max(0, now - new Date(updatedAt).getTime());
-  const relative = elapsed === null ? formatUpdatedAt(updatedAt)
-    : elapsed < 60_000 ? "just now"
-    : new Intl.RelativeTimeFormat("en", { numeric: "auto" }).format(
-      -Math.floor(elapsed / (elapsed < 3_600_000 ? 60_000 : elapsed < 86_400_000 ? 3_600_000 : 86_400_000)),
-      elapsed < 3_600_000 ? "minute" : elapsed < 86_400_000 ? "hour" : "day",
-    );
+  const relative = elapsed === null ? formatDateTime(updatedAt) : formatRelativeTime(elapsed);
 
   return (
     <header className="bg-kh-bg-raised">
@@ -105,7 +94,7 @@ export function DocumentHeader({
         <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-kh-text-muted">
           {readOnly ? <span className="inline-flex items-center gap-1"><LockKeyhole className="h-3 w-3" aria-hidden="true" />Read only</span> : null}
           {status === "ARCHIVED" ? <Badge variant="warning">Archived</Badge> : null}
-          <time dateTime={new Date(updatedAt).toISOString()} title={formatUpdatedAt(updatedAt)}>Updated {relative}</time>
+          <time dateTime={new Date(updatedAt).toISOString()} title={formatDateTime(updatedAt)}>Updated {relative}</time>
         </div>
         {revisionBanner ? (
           <p className="mt-2 rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2 text-body-sm text-kh-text">

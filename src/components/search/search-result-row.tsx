@@ -3,9 +3,7 @@ import { FileText } from "lucide-react";
 import { highlightSnippet } from "@/modules/knowledge/domain/search-query";
 import { plainSearchSnippet } from "@/lib/search-snippet";
 import type { KnowledgeSearchRow } from "@/modules/knowledge/ports/knowledge-search-repository";
-
-const fullTimestamp = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" });
-const columnTimestamp = new Intl.DateTimeFormat("en-US", { dateStyle: "medium" });
+import { formatDate, formatDateTime } from "@/lib/format-date";
 
 function asDate(value: Date): Date {
   return value instanceof Date ? value : new Date(value);
@@ -64,10 +62,10 @@ export function SearchResultRow({
             </span>
             <time
               dateTime={updatedAt.toISOString()}
-              title={fullTimestamp.format(updatedAt)}
+              title={formatDateTime(updatedAt)}
               className="sm:w-[7.5rem] sm:text-right"
             >
-              {columnTimestamp.format(updatedAt)}
+              {formatDate(updatedAt)}
             </time>
           </span>
         </span>

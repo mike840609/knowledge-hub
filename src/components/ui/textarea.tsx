@@ -1,5 +1,16 @@
 import type { TextareaHTMLAttributes } from "react";
+import type { ControlSize } from "./control";
+import { fieldClasses } from "./field";
 
-export function Textarea({ className = "", ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea className={`min-h-36 w-full rounded-md border border-kh-border-strong bg-kh-bg px-3 py-2 font-mono text-body text-kh-text outline-none ring-offset-2 placeholder:text-kh-text-muted focus:border-kh-focus focus-visible:ring-2 focus-visible:ring-kh-focus ${className}`} {...props} />;
+export function Textarea({
+  className = "",
+  size = "md",
+  ...props
+}: TextareaHTMLAttributes<HTMLTextAreaElement> & { size?: ControlSize }) {
+  return (
+    <textarea
+      className={fieldClasses({ size, multiline: true, className: `min-h-36 w-full font-mono ${className}` })}
+      {...props}
+    />
+  );
 }

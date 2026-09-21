@@ -97,6 +97,7 @@ together, and say what job the new token does that no existing one covers.
 | Radius | `sm`, `md`, `lg`, `xl` | see §5 |
 | Elevation | `popover`, `modal` | floating surfaces only |
 | Border | `border`, `border-strong` | see §6 |
+| Control height | `sm`, `md`, `lg` (24 / 32 / 40) | see §15; buttons and fields read the same ladder |
 | Motion | two durations, one easing curve | see §9 |
 
 ## 5. Radius
@@ -147,11 +148,14 @@ directions:
   hierarchy and reads as too bright. This happened once in dark: the divider
   sat at L\* 18.4 against a hover fill at L\* 15.2.
 - `border-strong` — **control boundaries**: any control whose border is the
-  only thing separating it from its background, which today means `Input`,
-  `Textarea` and the `secondary` button (all of which fill with `bg`, the
-  canvas colour). WCAG 1.4.11 requires 3:1 for non-text boundaries that
-  identify a component, and a decorative divider cannot meet that and stay
-  decorative.
+  only thing separating it from its background. That is every form field
+  (`Input`, `Select`, `Textarea`) and the `secondary` button, all of which
+  fill with `bg`, the canvas colour. WCAG 1.4.11 requires 3:1 for non-text
+  boundaries that identify a component, and a decorative divider cannot meet
+  that and stay decorative. Read it as a rule about the job, not as a list of
+  components: the hand-rolled `<select>` elements scattered through settings
+  and imports all carried `border` and all failed the rule, precisely because
+  they were not on the list.
 
 `border-strong` is validated against **every** surface it can sit on, not just
 the canvas — `subtle` and `sunken` are the tight cases and a value chosen
@@ -387,6 +391,75 @@ appearance, it takes the shape from the primitive — `buttonClasses()` — rath
 than restating it. Twenty-one hand-rolled copies of the button class string
 were how the button system drifted the first time.
 
+**An override is drift too.** Reshaping a primitive through `className` — a
+height, a padding, a radius — defeats the thing the primitive exists for, and
+it is harder to catch than a hand-rolled copy because the import looks right.
+`search-form` passed `className="m-1 min-h-9 px-4 py-1.5"` to a `<Button>` and
+escaped the sweep that found the other twenty-one. If a call site needs a
+shape the primitive does not offer, the primitive gains a prop.
+
+### Controls sit on one height ladder
+
+24 / 32 / 40, named `sm` / `md` / `lg`, defined once in
+`components/ui/control.ts` and read by buttons and fields alike. Spelling a
+height per component is how `Input` arrived at `min-h-10` while `Button` said
+`h-10` and the search field said neither — three values for one rung, and a
+form row that did not line up.
+
+**Fields and buttons share a default rung**, `md`. They did not before — every
+form in the app paired a default `<Button>` at 32px with a default `<Input>`
+at 40px — and a default that has to be opted out of to line up is not a
+default. A form that wants more presence opts the whole row up together; the
+search page is the only one that does.
+
+This was reverted once and then restored, so the alternative is recorded
+rather than left to be proposed again: 40px fields with a 36px button inset
+into a 44px search box, and a `ring-offset-2` on fields alone. It is a
+defensible look and it costs three standing departures from this section —
+two heights that are not rungs, a default that does not line up, and the only
+offset focus ring in the system. Reopening it means accepting those three,
+not just the appearance.
+
+Every form field is `Input`, `Select` or `Textarea`, which share their shape
+through `fieldClasses()` in `components/ui/field.ts`. `Select` is a native
+`<select>`: the search page is a plain GET form that works without JavaScript,
+and every hand-rolled copy it replaces was native already. A multi-line field
+takes its height from `rows` rather than the ladder; only its padding scales.
+
+### Tabs come in two kinds and share only their look
+
+Base UI's tabs swap panels inside one page and mark the current tab with an
+attribute. Sibling routes cannot use them: each tab is a link to its own URL
+and the current one is decided by the pathname. They are different mechanisms
+and must not be forced into one component.
+
+They do share the look, which lives in `components/ui/tab.ts` so that changing
+a tab changes both. A route tab bar is `NavTabs`: links carrying
+`aria-current="page"`, not `role="tab"` — claiming the tab role would promise
+arrow-key movement between panels that a set of links does not have.
+
+The current route is matched exactly, not by prefix. A section's index tab
+lives at the section root, so a prefix match leaves it lit on every page in
+the section.
+
+### One loading idiom, one message shape
+
+A region that is loading shows a skeleton shaped like what is being fetched,
+paired with a screen-reader-only `role="status"` line, because a skeleton is
+`aria-hidden` and on its own announces nothing. Prose such as
+`Loading documents…` is not a second option. The skeletons live in one module
+per area rather than beside a caller: the document skeleton had two callers,
+was copied into both, and the two drifted to different paddings, so the page
+shifted as the route boundary handed over to the `Suspense` fallback.
+
+Error and not-found states take their shape from `StatusMessage` — heading,
+one line, optional action — so that a new boundary cannot invent a fourth
+spelling. Boundaries are placed where the shell survives them: the workspace
+boundary keeps the topbar and sidebar mounted so the reader can navigate away
+instead of reloading. `global-error` replaces the root layout, so it restates
+the stylesheet, the typeface and the theme stamp; without the last of those a
+dark-mode reader is handed a white page at the worst possible moment.
+
 ## 16. State strategy
 
 No Redux, Zustand or other application-wide state framework.
@@ -401,7 +474,7 @@ Local component  → Genuinely ephemeral chrome: inspector open, drawer open
 
 Local component state is for what should not outlive the interaction. Tree
 expansion and the tree filter are still held there and should not be; §11
-covers why, and it is open item 6.
+covers why, and it is open item 5.
 
 A global state library is added only if a concrete requirement proves local
 ownership insufficient.
@@ -436,37 +509,37 @@ Each of these changes behaviour rather than appearance:
    palette; creating a note, toggling archived and opening Details have no
    keyboard path and no discoverable shortcut list.
 2. No toast or undo layer. Feedback is `role="status"` text that shifts
-   layout, and no `aria-live` region exists. Destructive actions confirm
-   inline rather than acting and offering undo.
-3. Settings navigation does not use the `ui/tabs` primitive and has no active
-   state. Page container widths are inconsistent across four values.
-4. Empty and error states are heading-plus-paragraph, and the knowledge empty
-   state presents two equally weighted primary actions.
-5. No row carries a context menu. Renaming, archiving and copying a link all
+   layout, and destructive actions confirm inline rather than acting and
+   offering undo. (The announcement itself works — `role="status"` carries an
+   implicit `aria-live="polite"`. An earlier wording here counted literal
+   `aria-live` attributes and read as though nothing were announced at all,
+   which overstated the gap.)
+3. Empty and error states are heading-plus-paragraph. `StatusMessage` (§15)
+   gives them one shape; it does not give them illustration or guidance on
+   what to do next. (This item used to add "and the knowledge empty state
+   presents two equally weighted primary actions", which stopped being true
+   when that state was given a primary and a secondary action, and was left
+   here afterwards. An open item that describes a fixed problem teaches the
+   next reader to stop trusting the list.)
+4. No row carries a context menu. Renaming, archiving and copying a link all
    require opening the document first, where the reference language puts them
    one right-click away on the row.
-6. Tree expansion and the tree filter live in component state, so a refresh
+5. Tree expansion and the tree filter live in component state, so a refresh
    discards the arrangement the user set. §11 says where they belong.
-7. Navigation is a server round trip with a single `loading.tsx` boundary, so
-   opening a document shows a skeleton first. This is the largest felt gap
-   against the reference language and the only one that is architectural
-   rather than presentational — it wants measurement and a prefetch/caching
-   decision, not a CSS change.
-8. `spacing` is the one scale still left at Tailwind's default rather than
-   replaced, so gaps and paddings remain unenforced. Page container widths
-   spread across seven values and page padding across three.
-9. Dates are formatted with a hardcoded `en-US` locale.
-10. `search-form` overrides the button shape through `className`. A primitive
-    owns its own shape (§15); an override is the drift the button system
-    exists to prevent, and it escaped the sweep because it was a `<Button>`
-    rather than a hand-rolled one.
-11. `Input` and `Textarea` are not on the button size scale, so controls do
-    not align when placed side by side in a form.
-12. Loading has three spellings — a skeleton, `Loading documents…` and
-    `Searching…` — and the document skeleton is duplicated between
-    `knowledge-layout` and `loading.tsx`.
-13. `error.tsx` and `not-found.tsx` cover one route. `/search`, `/sources` and
-    `/settings` have no boundary, and there is no `global-error.tsx`.
+6. Navigation is a server round trip, so opening a document shows a skeleton
+   first. This is the largest felt gap against the reference language and the
+   only one that is architectural rather than presentational — it wants
+   measurement and a prefetch/caching decision, not a CSS change.
+7. `spacing` is the one scale still left at Tailwind's default rather than
+   replaced, so gaps and paddings remain unenforced. Page containers spread
+   across five widths — `2xl`, `3xl`, `4xl`, `5xl` and the reading column's
+   860px — and page padding across three. (Counted as containers that bound a
+   whole page. An earlier revision said seven, which counted panel and control
+   widths as though they were page containers.)
+8. Timestamps are formatted in the runtime's own time zone, which differs
+   between the server render and the client render. The locale is settled
+   (§15, one module); the zone is the same product decision the locale was —
+   resolve it server-side, or render these client-side only.
 
 ## 19. Completion criteria
 

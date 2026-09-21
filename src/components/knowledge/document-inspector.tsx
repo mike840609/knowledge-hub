@@ -13,13 +13,7 @@ import { Drawer } from "@/components/ui/drawer";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/components/ui/tabs";
 import { DocumentHeader, type DocumentBreadcrumbSegment } from "./document-header";
 import { buttonClasses } from "@/components/ui/button";
-
-function formatDateTime(value: Date): string {
-  return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(value);
-}
+import { formatDateTime } from "@/lib/format-date";
 
 function revisionHref(input: {
   workspaceId: string;
