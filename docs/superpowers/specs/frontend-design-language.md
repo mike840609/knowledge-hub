@@ -353,8 +353,24 @@ at the top, and a hash target is left alone so in-page anchors keep working.
 
 What the user has arranged is theirs to keep. Filters, expansion and
 collapsed sections belong in the URL when they should be shareable, and in
-`localStorage` when they are a personal preference — not in component state
-that a refresh discards.
+storage when they are a personal preference — not in component state that a
+refresh discards.
+
+Which storage is part of the decision. A choice keeps (`localStorage`): which
+sources are expanded, which folders are collapsed, which sections are open,
+whether the nav rail is collapsed. Work in progress lasts the session
+(`sessionStorage`): a find-as-you-type filter is worth keeping across a
+refresh and not worth greeting someone with a week later, when a stale needle
+would make the tree look empty for no reason.
+
+`usePersistedJson` in `components/shell/use-persisted-state.ts` is how, and
+it exists because the hand-written version gets two things wrong. It must
+read in an effect, not during render, or the server and the first client
+render disagree; and it must not write before it has read, or the first
+render overwrites what was stored with the fallback. Storage access is also
+wrapped, because reading `window.localStorage` **throws** rather than
+returning null where a browser blocks it — unguarded, that took down the
+whole shell rather than losing a preference.
 
 ## 12. Theme contract
 
@@ -530,7 +546,7 @@ Local component  → Genuinely ephemeral chrome: inspector open, drawer open
 
 Local component state is for what should not outlive the interaction. Tree
 expansion and the tree filter are still held there and should not be; §11
-covers why, and it is open item 5.
+covers why, and it is now done: `usePersistedJson` holds it.
 
 A global state library is added only if a concrete requirement proves local
 ownership insufficient.
@@ -580,16 +596,14 @@ Each of these changes behaviour rather than appearance:
 4. No row carries a context menu. Renaming, archiving and copying a link all
    require opening the document first, where the reference language puts them
    one right-click away on the row.
-5. Tree expansion and the tree filter live in component state, so a refresh
-   discards the arrangement the user set. §11 says where they belong.
-6. `spacing` is the one scale still left at Tailwind's default rather than
+5. `spacing` is the one scale still left at Tailwind's default rather than
    replaced, so paddings, margins and gaps remain unenforced. Note that
    replacing `spacing` wholesale is the wrong fix: Tailwind feeds it to
    `width` and `height` too, and a 288px sidebar is not a decision about
    rhythm. What can be replaced is `padding`, `margin`, `gap` and `space`,
    which is where a rhythm applies. (Page container widths were the other
    half of this item and are now §7.)
-7. Timestamps are formatted in the runtime's own time zone, which differs
+6. Timestamps are formatted in the runtime's own time zone, which differs
    between the server render and the client render. The locale is settled
    (§15, one module); the zone is the same product decision the locale was —
    resolve it server-side, or render these client-side only.

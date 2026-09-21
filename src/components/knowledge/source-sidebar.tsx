@@ -11,6 +11,7 @@ import { MenuCheckboxItem, MenuContent, MenuRoot, MenuTrigger } from "@/componen
 import { KnowledgeTree } from "./knowledge-tree";
 import { TreeFilter } from "./tree-filter";
 import { buttonClasses } from "@/components/ui/button";
+import { isBoolean, isBooleanRecord, isString, usePersistedJson } from "@/components/shell/use-persisted-state";
 
 export type SourceSidebarProps = {
   workspaceId: string;
@@ -39,13 +40,16 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
   const searchParams = useSearchParams();
   const routeParams = useParams();
   const { access, confirmed } = useWorkspaceAuthorization();
-  const [query, setQuery] = useState("");
-  const [filterOpen, setFilterOpen] = useState(false);
+  // The filter is work in progress rather than an arrangement, so it lasts
+  // for the session: worth keeping across a refresh, not worth greeting
+  // someone with a week later. Everything else below is a choice, and keeps.
+  const [query, setQuery] = usePersistedJson(`kh:tree-filter:${workspaceId}`, "", isString, "session");
+  const [filterOpen, setFilterOpen] = usePersistedJson(`kh:tree-filter-open:${workspaceId}`, false, isBoolean, "session");
   const filterTriggerRef = useRef<HTMLButtonElement>(null);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [expanded, setExpanded] = usePersistedJson<Record<string, boolean>>(`kh:tree-expanded:${workspaceId}`, {}, isBooleanRecord);
   const [shortcuts, setShortcuts] = useState<DocumentShortcuts>(emptyDocumentShortcuts);
-  const [favoritesOpen, setFavoritesOpen] = useState(false);
-  const [recentOpen, setRecentOpen] = useState(false);
+  const [favoritesOpen, setFavoritesOpen] = usePersistedJson(`kh:sidebar-favorites:${workspaceId}`, false, isBoolean);
+  const [recentOpen, setRecentOpen] = usePersistedJson(`kh:sidebar-recent:${workspaceId}`, false, isBoolean);
   const showArchived = searchParams.get("includeArchived") === "true";
   const resolvedDocumentId = selectedDocumentId ?? (typeof routeParams?.documentId === "string" ? routeParams.documentId : undefined);
   const needle = query.trim().toLowerCase();

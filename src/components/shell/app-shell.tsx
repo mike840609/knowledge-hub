@@ -8,22 +8,20 @@ import { PrimaryNav } from "@/components/shell/primary-nav";
 import { WorkspaceAuthorizationContext, useWorkspaceAuthorizationRefresh } from "./use-workspace-authorization";
 import { ArchivedWorkspaceBanner } from "@/components/workspaces/archived-workspace-banner";
 import { Drawer } from "@/components/ui/drawer";
+import { isBoolean, readStored, removeStored, usePersistedJson } from "@/components/shell/use-persisted-state";
 
 export function AppShell({ model, children }: { model: WorkspaceShellModel; children: ReactNode }) {
   const authorization = useWorkspaceAuthorizationRefresh(model.access, model.navigation);
   const [documentTopbar, setDocumentTopbar] = useState<DocumentTopbarState | null>(null);
   const [navOpen, setNavOpen] = useState(false);
-  const [navCollapsed, setNavCollapsed] = useState(false);
+  const [navCollapsed, setNavCollapsed] = usePersistedJson("kh:nav-collapsed", false, isBoolean);
   const [accessNotice, setAccessNotice] = useState(false);
-  useEffect(() => {
-    setNavCollapsed(window.localStorage.getItem("kh:nav-collapsed") === "1");
-  }, []);
 
   useEffect(() => {
     const url = new URL(window.location.href);
-    if (url.searchParams.get("notice") === "access-changed" || window.sessionStorage.getItem("kh:workspace-access-notice") === "1") {
+    if (url.searchParams.get("notice") === "access-changed" || readStored("session", "kh:workspace-access-notice") === "1") {
       setAccessNotice(true);
-      window.sessionStorage.removeItem("kh:workspace-access-notice");
+      removeStored("session", "kh:workspace-access-notice");
       url.searchParams.delete("notice");
       window.history.replaceState(null, "", url.pathname + url.search);
     }
@@ -45,11 +43,8 @@ export function AppShell({ model, children }: { model: WorkspaceShellModel; chil
   }, []);
 
   const toggleNav = useCallback(() => {
-    setNavCollapsed((collapsed) => {
-      window.localStorage.setItem("kh:nav-collapsed", collapsed ? "0" : "1");
-      return !collapsed;
-    });
-  }, []);
+    setNavCollapsed((collapsed) => !collapsed);
+  }, [setNavCollapsed]);
 
   return (
     <WorkspaceAuthorizationContext.Provider value={authorization}>

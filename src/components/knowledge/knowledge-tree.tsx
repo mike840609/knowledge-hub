@@ -10,6 +10,7 @@ import {
   type KnowledgeTreeNode,
 } from "@/lib/knowledge-navigation";
 import type { KnowledgeTreeItem } from "@/modules/knowledge/application/knowledge-query-service";
+import { isStringArray, usePersistedJson } from "@/components/shell/use-persisted-state";
 
 export type KnowledgeTreeProps = {
   items: KnowledgeTreeItem[];
@@ -144,6 +145,8 @@ function TreeNodeRow({
   );
 }
 
+const EMPTY_COLLAPSED: string[] = [];
+
 export function KnowledgeTree({
   items,
   includeArchived = false,
@@ -156,7 +159,14 @@ export function KnowledgeTree({
 }: KnowledgeTreeProps) {
   const router = useRouter();
   const treeRef = useRef<HTMLUListElement>(null);
-  const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(new Set());
+  // Collapsed folders are per source: the same workspace can hold several
+  // trees, and collapsing one should not fold another.
+  const [collapsedList, setCollapsedList] = usePersistedJson<string[]>(
+    `kh:tree-collapsed:${workspaceId}:${sourceId}`,
+    EMPTY_COLLAPSED,
+    isStringArray,
+  );
+  const collapsedIds = useMemo<ReadonlySet<string>>(() => new Set(collapsedList), [collapsedList]);
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const roots = useMemo(() => {
@@ -194,12 +204,9 @@ export function KnowledgeTree({
   }, [items]);
 
   const toggle = (id: string) => {
-    setCollapsedIds((previous) => {
-      const next = new Set(previous);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    setCollapsedList((previous) =>
+      previous.includes(id) ? previous.filter((entry) => entry !== id) : [...previous, id],
+    );
     setActiveId(id);
   };
 
