@@ -2,6 +2,7 @@
 
 import { Tabs as BaseTabs } from "@base-ui-components/react/tabs";
 import type { ComponentProps, ReactNode } from "react";
+import { selectableTabClasses, tabListClasses } from "./tab";
 
 export function TabsRoot({ ...props }: ComponentProps<typeof BaseTabs.Root>) {
   return <BaseTabs.Root {...props} />;
@@ -10,7 +11,7 @@ export function TabsRoot({ ...props }: ComponentProps<typeof BaseTabs.Root>) {
 export function TabsList({ className = "", ...props }: ComponentProps<typeof BaseTabs.List>) {
   return (
     <BaseTabs.List
-      className={`flex items-center gap-1 border-b border-kh-border ${className}`}
+      className={`${tabListClasses} ${className}`}
       {...props}
     />
   );
@@ -23,7 +24,7 @@ export function TabsTab({
 }: ComponentProps<typeof BaseTabs.Tab> & { children: ReactNode }) {
   return (
     <BaseTabs.Tab
-      className={`-mb-px border-b-2 border-transparent px-3 py-2 text-body-sm font-medium text-kh-text-muted transition hover:text-kh-text focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus data-[selected]:border-kh-primary data-[selected]:text-kh-selected-text ${className}`}
+      className={`${selectableTabClasses} ${className}`}
       {...props}
     >
       {children}
@@ -32,5 +33,5 @@ export function TabsTab({
 }
 
 export function TabsPanel({ className = "", ...props }: ComponentProps<typeof BaseTabs.Panel>) {
-  return <BaseTabs.Panel className={`py-3 focus:outline-none ${className}`} {...props} />;
+  return <BaseTabs.Panel className={`kh-focus-ring py-3 ${className}`} {...props} />;
 }

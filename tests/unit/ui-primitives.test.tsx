@@ -7,6 +7,7 @@ import { fieldClasses } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { selectableTabClasses, tabClasses, tabListClasses } from "@/components/ui/tab";
 
 /**
  * The button system has five variants, three sizes and an icon shape. Until
@@ -156,5 +157,46 @@ describe("field elements", () => {
     // `size` is the ladder rung here, so the DOM attribute of the same name
     // must not leak through as a row count.
     expect(renderToStaticMarkup(<Select aria-label="Scope" size="sm" />)).not.toContain('size="');
+  });
+});
+
+/**
+ * Two things need the tab look and cannot share a component: Base UI's tabs
+ * swap panels inside a page and mark the current one with an attribute, while
+ * route tabs are links whose current one comes from the pathname. These pin
+ * that they still share the shape.
+ */
+describe("tabClasses", () => {
+  it("gives the link and attribute forms the same base", () => {
+    const shared = ["-mb-px", "border-b-2", "px-3", "py-2", "text-body-sm", "font-medium"];
+    for (const token of shared) {
+      expect(tabClasses(false)).toContain(token);
+      expect(selectableTabClasses).toContain(token);
+    }
+  });
+
+  it("marks the active tab with the accent border and selected text", () => {
+    expect(tabClasses(true)).toContain("border-kh-primary");
+    expect(tabClasses(true)).toContain("text-kh-selected-text");
+    expect(tabClasses(true)).not.toContain("border-transparent");
+  });
+
+  it("leaves an inactive tab muted and borderless", () => {
+    expect(tabClasses(false)).toContain("border-transparent");
+    expect(tabClasses(false)).toContain("text-kh-text-muted");
+    expect(tabClasses(false)).not.toContain("border-kh-primary");
+  });
+
+  it("carries the one focus idiom rather than spelling the ring out", () => {
+    // The Base UI tab used to write `focus:outline-none focus-visible:ring-2
+    // focus-visible:ring-kh-focus` by hand, which is §10's "second spelling".
+    expect(tabClasses(false)).toContain("kh-focus-ring");
+    expect(selectableTabClasses).toContain("kh-focus-ring");
+    expect(tabClasses(false)).not.toContain("focus-visible:ring-2");
+  });
+
+  it("puts the list on a single bottom rule", () => {
+    expect(tabListClasses).toContain("border-b");
+    expect(tabListClasses).toContain("border-kh-border");
   });
 });

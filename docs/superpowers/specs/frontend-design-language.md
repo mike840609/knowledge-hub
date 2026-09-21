@@ -426,6 +426,22 @@ through `fieldClasses()` in `components/ui/field.ts`. `Select` is a native
 and every hand-rolled copy it replaces was native already. A multi-line field
 takes its height from `rows` rather than the ladder; only its padding scales.
 
+### Tabs come in two kinds and share only their look
+
+Base UI's tabs swap panels inside one page and mark the current tab with an
+attribute. Sibling routes cannot use them: each tab is a link to its own URL
+and the current one is decided by the pathname. They are different mechanisms
+and must not be forced into one component.
+
+They do share the look, which lives in `components/ui/tab.ts` so that changing
+a tab changes both. A route tab bar is `NavTabs`: links carrying
+`aria-current="page"`, not `role="tab"` — claiming the tab role would promise
+arrow-key movement between panels that a set of links does not have.
+
+The current route is matched exactly, not by prefix. A section's index tab
+lives at the section root, so a prefix match leaves it lit on every page in
+the section.
+
 ### One loading idiom, one message shape
 
 A region that is loading shows a skeleton shaped like what is being fetched,
@@ -458,7 +474,7 @@ Local component  → Genuinely ephemeral chrome: inspector open, drawer open
 
 Local component state is for what should not outlive the interaction. Tree
 expansion and the tree filter are still held there and should not be; §11
-covers why, and it is open item 6.
+covers why, and it is open item 5.
 
 A global state library is added only if a concrete requirement proves local
 ownership insufficient.
@@ -498,33 +514,29 @@ Each of these changes behaviour rather than appearance:
    implicit `aria-live="polite"`. An earlier wording here counted literal
    `aria-live` attributes and read as though nothing were announced at all,
    which overstated the gap.)
-3. Settings navigation does not use the `ui/tabs` primitive and has no active
-   state. `ui/tabs` wraps Base UI's client-side tabs, which route-based
-   navigation cannot use directly, so this wants a link-based tab bar sharing
-   the tab classes — a decision, not a mechanical change.
-4. Empty and error states are heading-plus-paragraph. `StatusMessage` (§15)
+3. Empty and error states are heading-plus-paragraph. `StatusMessage` (§15)
    gives them one shape; it does not give them illustration or guidance on
    what to do next. (This item used to add "and the knowledge empty state
    presents two equally weighted primary actions", which stopped being true
    when that state was given a primary and a secondary action, and was left
    here afterwards. An open item that describes a fixed problem teaches the
    next reader to stop trusting the list.)
-5. No row carries a context menu. Renaming, archiving and copying a link all
+4. No row carries a context menu. Renaming, archiving and copying a link all
    require opening the document first, where the reference language puts them
    one right-click away on the row.
-6. Tree expansion and the tree filter live in component state, so a refresh
+5. Tree expansion and the tree filter live in component state, so a refresh
    discards the arrangement the user set. §11 says where they belong.
-7. Navigation is a server round trip, so opening a document shows a skeleton
+6. Navigation is a server round trip, so opening a document shows a skeleton
    first. This is the largest felt gap against the reference language and the
    only one that is architectural rather than presentational — it wants
    measurement and a prefetch/caching decision, not a CSS change.
-8. `spacing` is the one scale still left at Tailwind's default rather than
+7. `spacing` is the one scale still left at Tailwind's default rather than
    replaced, so gaps and paddings remain unenforced. Page containers spread
    across five widths — `2xl`, `3xl`, `4xl`, `5xl` and the reading column's
    860px — and page padding across three. (Counted as containers that bound a
    whole page. An earlier revision said seven, which counted panel and control
    widths as though they were page containers.)
-9. Timestamps are formatted in the runtime's own time zone, which differs
+8. Timestamps are formatted in the runtime's own time zone, which differs
    between the server render and the client render. The locale is settled
    (§15, one module); the zone is the same product decision the locale was —
    resolve it server-side, or render these client-side only.
