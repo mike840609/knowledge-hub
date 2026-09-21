@@ -23,7 +23,7 @@ export default async function WorkspaceSourceUpdatePage({
   }
   return (
     <main className="kh-page py-6">
-      <Link className="w-fit rounded-md text-body font-medium text-kh-text-muted underline-offset-4 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus" href={`/w/${workspaceId}/sources/${sourceId}`}>
+      <Link className="w-fit rounded-md text-body font-medium text-kh-text-muted underline-offset-4 hover:underline kh-focus-ring" href={`/w/${workspaceId}/sources/${sourceId}`}>
         Back to {model.source.name}
       </Link>
       <h1 className="mt-3 text-heading font-semibold text-kh-text">Update from folder</h1>

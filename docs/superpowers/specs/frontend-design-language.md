@@ -297,7 +297,19 @@ rule, so no component has to remember it.
 ## 10. Focus and keyboard
 
 One focus idiom: the ring, composed from `.kh-focus-ring`. Every interactive
-surface uses it. There is no second spelling.
+surface uses it. There is no second spelling, and `no-restricted-syntax` in
+`eslint.config.mjs` now says so in a form the build can check.
+
+It needed that. This was the only rule in §3–§11 with nothing enforcing it —
+the type, radius, elevation and container scales are replaced in
+`tailwind.config.ts`, so an off-scale value does not compile — and it was the
+only one the codebase broke, in 29 places across 17 files. Ten of those copies
+left out `outline-none`, so the browser drew its own black outline on top of
+the themed ring; that one is a visible defect in both themes and neither
+review nor the type checker had any way to see it.
+
+A rule stated absolutely and enforced by nothing is a rule that decays at the
+rate people forget it.
 
 **Every list of rows is navigable by arrow key**, with the same idiom: the
 container owns a `keydown` handler, Up/Down move focus between rows, Home/End

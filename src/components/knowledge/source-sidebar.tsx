@@ -94,11 +94,11 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
     if (!document) return null;
     const selected = document.documentId === resolvedDocumentId;
     return <li key={key} className={`kh-interactive-row group flex min-h-9 items-center ${selected ? "bg-kh-bg-selected hover:bg-kh-bg-selected" : ""}`}>
-      <Link href={`/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}${showArchived ? "?includeArchived=true" : ""}`} title={`${document.label} · ${document.sourceName}`} aria-current={selected ? "page" : undefined} className={`flex min-h-9 min-w-0 flex-1 items-center gap-2 px-2 text-body focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus ${selected ? "font-medium text-kh-selected-text" : "text-kh-text-muted"}`}>
+      <Link href={`/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}${showArchived ? "?includeArchived=true" : ""}`} title={`${document.label} · ${document.sourceName}`} aria-current={selected ? "page" : undefined} className={`flex min-h-9 min-w-0 flex-1 items-center gap-2 px-2 text-body kh-focus-ring ${selected ? "font-medium text-kh-selected-text" : "text-kh-text-muted"}`}>
         {favorite ? <FileText size={14} strokeWidth={1.8} className="shrink-0" aria-hidden="true" /> : <Clock3 size={14} strokeWidth={1.8} className="shrink-0" aria-hidden="true" />}
         <span className="truncate">{document.label}</span>
       </Link>
-      <button type="button" onClick={() => toggleFavorite(document.sourceId, document.documentId)} aria-label={`${favorite ? "Remove from" : "Add to"} favorites: ${document.label}`} title={favorite ? "Remove from favorites" : "Add to favorites"} className={`mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-kh-text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus ${favorite ? "opacity-80" : "kh-favorite-action"}`}>
+      <button type="button" onClick={() => toggleFavorite(document.sourceId, document.documentId)} aria-label={`${favorite ? "Remove from" : "Add to"} favorites: ${document.label}`} title={favorite ? "Remove from favorites" : "Add to favorites"} className={`mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-kh-text-muted kh-focus-ring ${favorite ? "opacity-80" : "kh-favorite-action"}`}>
         <Star size={14} strokeWidth={1.8} fill={favorite ? "currentColor" : "none"} aria-hidden="true" />
       </button>
     </li>;
@@ -169,7 +169,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
         </section> : null}
         {!hasNotes && canCreate && (!needle || "notes".includes(needle)) ? (
           <div className="flex items-center justify-between pl-2">
-            <Link href={newNoteHref} className="rounded-md text-body font-medium text-kh-text hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus">Notes</Link>
+            <Link href={newNoteHref} className="rounded-md text-body font-medium text-kh-text hover:underline kh-focus-ring">Notes</Link>
             {addNote}
           </div>
         ) : null}
@@ -180,7 +180,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
           return (
             <section key={candidate.id} aria-label={`${candidate.name} documents`}>
               <div className="flex items-center gap-1">
-                <button type="button" aria-expanded={open} aria-controls={`collection-${candidate.id}`} onClick={() => setExpanded((previous) => ({ ...previous, [candidate.id]: !open }))} title={candidate.name} className="flex min-h-9 min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 text-left text-body font-medium text-kh-text hover:bg-kh-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus">
+                <button type="button" aria-expanded={open} aria-controls={`collection-${candidate.id}`} onClick={() => setExpanded((previous) => ({ ...previous, [candidate.id]: !open }))} title={candidate.name} className="flex min-h-9 min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 text-left text-body font-medium text-kh-text hover:bg-kh-bg-hover kh-focus-ring">
                   <Icon size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />
                   <span className="truncate">{candidate.name}</span>
                   {candidate.status === "ARCHIVED" ? <span className="ml-auto text-caption font-normal text-kh-text-muted">Archived</span> : null}

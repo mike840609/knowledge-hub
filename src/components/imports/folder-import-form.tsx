@@ -251,7 +251,7 @@ export function FolderImportForm({ target }: { target: FolderImportTarget }): Re
           <label className="block text-body font-medium text-kh-text" htmlFor="import-source-name">Source name</label>
           <input
             id="import-source-name"
-            className="mt-1 w-full rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-body text-kh-text outline-none placeholder:text-kh-text-muted focus:border-kh-focus focus-visible:ring-2 focus-visible:ring-kh-focus"
+            className="mt-1 w-full rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-body text-kh-text outline-none placeholder:text-kh-text-muted focus:border-kh-focus kh-focus-ring"
             value={sourceName}
             disabled={busy}
             onChange={(event) => setSourceName(event.target.value)}
@@ -276,7 +276,7 @@ export function FolderImportForm({ target }: { target: FolderImportTarget }): Re
           void handleFiles(event.target.files);
           event.target.value = "";
         }}
-        className="mt-1 w-full rounded-md text-body text-kh-text outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
+        className="mt-1 w-full rounded-md text-body text-kh-text outline-none kh-focus-ring"
       />
       {status ? <p role="status" className="mt-3 text-body text-kh-text-muted">{status}</p> : null}
     </div>

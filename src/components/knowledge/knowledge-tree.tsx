@@ -80,14 +80,14 @@ function TreeNodeRow({
         <Link
           href={documentHref(item, scope, includeArchived)}
           title={item.label}
-          className={`flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-body focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus ${
+          className={`flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-body kh-focus-ring ${
             selected ? "font-medium text-kh-selected-text" : "text-kh-text-muted"
           }`}
         >
           <FileText size={14} strokeWidth={1.8} className="shrink-0 text-kh-text-muted" aria-hidden="true" />
           <span className="truncate">{item.label}</span>
         </Link>
-        <button type="button" onClick={() => onToggleFavorite(item.documentId)} aria-label={`${isFavorite ? "Remove from" : "Add to"} favorites: ${item.label}`} title={isFavorite ? "Remove from favorites" : "Add to favorites"} className={`mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus ${isFavorite ? "text-kh-selected-text" : "kh-favorite-action text-kh-text-muted hover:bg-kh-bg-hover"}`}>
+        <button type="button" onClick={() => onToggleFavorite(item.documentId)} aria-label={`${isFavorite ? "Remove from" : "Add to"} favorites: ${item.label}`} title={isFavorite ? "Remove from favorites" : "Add to favorites"} className={`mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md kh-focus-ring ${isFavorite ? "text-kh-selected-text" : "kh-favorite-action text-kh-text-muted hover:bg-kh-bg-hover"}`}>
           <Star size={14} strokeWidth={1.8} fill={isFavorite ? "currentColor" : "none"} aria-hidden="true" />
         </button>
       </li>
@@ -104,7 +104,7 @@ function TreeNodeRow({
       data-node-id={item.id}
       tabIndex={tabIndex}
       onFocus={() => onFocusNode(item.id)}
-      className="rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus"
+      className="rounded-md kh-focus-ring"
     >
       <button
         type="button"

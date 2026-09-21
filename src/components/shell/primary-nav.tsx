@@ -41,7 +41,7 @@ export function PrimaryNav({
             aria-current={selected ? "page" : undefined}
             aria-label={compact ? name : undefined}
             title={compact ? name : undefined}
-            className={`flex h-9 items-center rounded-md px-2 text-body transition focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus ${compact ? "justify-center" : "gap-2"} ${selected ? "bg-kh-bg-selected font-medium text-kh-selected-text hover:bg-kh-bg-selected" : "text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text"}`}
+            className={`flex h-9 items-center rounded-md px-2 text-body transition kh-focus-ring ${compact ? "justify-center" : "gap-2"} ${selected ? "bg-kh-bg-selected font-medium text-kh-selected-text hover:bg-kh-bg-selected" : "text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text"}`}
           >
             <Icon size={15} strokeWidth={2} aria-hidden="true" />
             {compact ? null : <span>{name}</span>}

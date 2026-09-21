@@ -50,7 +50,7 @@ export function SourceDetail({ model, showImportSuccess = false }: { model: Sour
           </div>
           <div className="flex gap-2">
             <dt className="w-24 shrink-0 text-kh-text-muted">Documents</dt>
-            <dd><Link className="rounded-md text-kh-link underline underline-offset-4 focus-visible:ring-2 focus-visible:ring-kh-focus" href={`/w/${workspace.id}/knowledge/${source.id}${source.status === "ARCHIVED" ? "?includeArchived=true" : ""}`}>Browse documents</Link></dd>
+            <dd><Link className="rounded-md text-kh-link underline underline-offset-4 kh-focus-ring" href={`/w/${workspace.id}/knowledge/${source.id}${source.status === "ARCHIVED" ? "?includeArchived=true" : ""}`}>Browse documents</Link></dd>
           </div>
           <div className="flex gap-2">
             <dt className="w-24 shrink-0 text-kh-text-muted">Sync runs</dt>

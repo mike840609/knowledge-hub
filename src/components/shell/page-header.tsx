@@ -17,7 +17,7 @@ export function PageHeader({
   return (
     <header>
       <nav aria-label="Breadcrumb" className="text-body-sm text-kh-text-muted">
-        <Link href={locationHref} className="rounded-md hover:text-kh-text hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus">
+        <Link href={locationHref} className="rounded-md hover:text-kh-text hover:underline kh-focus-ring">
           {location}
         </Link>
       </nav>
