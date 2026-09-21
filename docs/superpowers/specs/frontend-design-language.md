@@ -553,10 +553,16 @@ Each of these changes behaviour rather than appearance:
    one right-click away on the row.
 5. Tree expansion and the tree filter live in component state, so a refresh
    discards the arrangement the user set. §11 says where they belong.
-6. Navigation is a server round trip, so opening a document shows a skeleton
-   first. This is the largest felt gap against the reference language and the
-   only one that is architectural rather than presentational — it wants
-   measurement and a prefetch/caching decision, not a CSS change.
+6. Opening a document takes ~383ms, of which ~250ms is spent showing a
+   skeleton that is no longer needed. Measured, not estimated:
+   `docs/superpowers/verification/2026-09-21-navigation-latency-measurement.md`.
+   The data arrives at ~130ms and the main thread does no work at all in the
+   remaining time; React throttles a Suspense fallback once shown, so the
+   skeleton costs more than the wait it covers. Removing it measures 2.7×
+   faster. This item used to call navigation architectural and ask for a
+   prefetch/caching decision — the measurement says otherwise, and the open
+   question is now a design one: what a 130ms wait should show. A top
+   progress bar is the usual answer; a skeleton is not.
 7. `spacing` is the one scale still left at Tailwind's default rather than
    replaced, so paddings, margins and gaps remain unenforced. Note that
    replacing `spacing` wholesale is the wrong fix: Tailwind feeds it to
