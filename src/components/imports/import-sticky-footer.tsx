@@ -96,7 +96,7 @@ export function ImportStickyFooter({
 
   return (
     <div className="sticky bottom-0 -mx-6 border-t border-kh-border bg-kh-bg px-6 py-3">
-      <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3">
+      <div className="mx-auto flex max-w-page flex-wrap items-center justify-between gap-3">
         <Link
           href={cancelHref}
           className={buttonClasses({ variant: "secondary", size: "lg" })}
@@ -120,16 +120,16 @@ export function ImportStickyFooter({
         </div>
       </div>
       {effectiveState === "STALE" || expired ? (
-        <p className="mx-auto mt-2 max-w-4xl text-body text-kh-danger">
+        <p className="mx-auto mt-2 max-w-page text-body text-kh-danger">
           This preview is stale: the source changed after it was created. There is no Force Apply — create a fresh
           preview.
         </p>
       ) : null}
       {effectiveState === "APPLIED" ? (
-        <p className="mx-auto mt-2 max-w-4xl text-body text-kh-text-muted">This preview was already applied.</p>
+        <p className="mx-auto mt-2 max-w-page text-body text-kh-text-muted">This preview was already applied.</p>
       ) : null}
       {state.kind === "ERROR" ? (
-        <p role="alert" className="mx-auto mt-2 max-w-4xl text-body text-kh-danger">
+        <p role="alert" className="mx-auto mt-2 max-w-page text-body text-kh-danger">
           {state.code}: {state.message}
         </p>
       ) : null}

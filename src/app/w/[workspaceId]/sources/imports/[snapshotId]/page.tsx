@@ -28,7 +28,7 @@ export default async function WorkspaceSourceImportPreviewPage({
   // context only. A mismatch gets the same inaccessible/not-found treatment.
   if (preview.workspaceId !== workspaceId) notFound();
   return (
-    <main className="mx-auto min-h-screen max-w-4xl px-6 py-8">
+    <main className="kh-page min-h-screen py-6">
       <Link className="w-fit rounded-md text-body font-medium text-kh-link underline-offset-4 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus" href={`/w/${workspaceId}/sources`}>
         Back to Sources
       </Link>

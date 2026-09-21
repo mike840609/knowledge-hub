@@ -2,6 +2,7 @@ import Link from "next/link";
 import { FolderImportForm } from "@/components/imports/folder-import-form";
 import { isFolderSyncable } from "@/modules/knowledge/domain/source-policy";
 import { getSourceDetailModel } from "@/server/source-read";
+import { StatusMessage } from "@/components/ui/status-message";
 
 export default async function WorkspaceSourceUpdatePage({
   params,
@@ -12,13 +13,16 @@ export default async function WorkspaceSourceUpdatePage({
   const model = await getSourceDetailModel(workspaceId, sourceId);
   if (!model || !isFolderSyncable(model.source)) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-4xl flex-col justify-center px-6 py-16">
-        <h1 className="text-heading font-semibold">Not found or no access</h1>
+      <main className="flex min-h-screen flex-col justify-center">
+        <StatusMessage
+          title="Not found or no access"
+          description="This content does not exist or you do not have access to it."
+        />
       </main>
     );
   }
   return (
-    <main className="mx-auto max-w-4xl px-6 py-8">
+    <main className="kh-page py-6">
       <Link className="w-fit rounded-md text-body font-medium text-kh-text-muted underline-offset-4 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-kh-focus" href={`/w/${workspaceId}/sources/${sourceId}`}>
         Back to {model.source.name}
       </Link>

@@ -50,7 +50,7 @@ export function DocumentEditor({
 
   return (
     <form
-      className="mx-auto w-full max-w-[860px] space-y-4 px-6 py-6"
+      className="kh-reading-column space-y-4 py-6"
       onSubmit={(event) => { event.preventDefault(); void save(); }}
     >
       <label className="block text-body text-kh-text">

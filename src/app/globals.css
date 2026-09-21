@@ -130,8 +130,18 @@ kbd {
     @apply kh-focus-ring rounded-md transition-colors hover:bg-kh-bg-hover;
   }
 
+  /* Three page containers, each with one job. Anything that fills a page
+     uses one of them rather than spelling a width out. */
   .kh-reading-column {
-    @apply mx-auto w-full max-w-[860px] px-6;
+    @apply mx-auto w-full max-w-reading px-6;
+  }
+
+  .kh-page {
+    @apply mx-auto w-full max-w-page px-6;
+  }
+
+  .kh-page-wide {
+    @apply mx-auto w-full max-w-wide px-6;
   }
 
   /* Rails need a deeper hover than the canvas, or it disappears into them. */

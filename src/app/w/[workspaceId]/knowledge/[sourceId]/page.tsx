@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { findFirstReadableDocument } from "@/lib/knowledge-navigation";
 import { getKnowledgeExplorerModel } from "@/server/knowledge-read";
 import { buttonClasses } from "@/components/ui/button";
+import { StatusMessage } from "@/components/ui/status-message";
 
 export default async function SourceKnowledgePage({
   params,
@@ -18,23 +19,30 @@ export default async function SourceKnowledgePage({
   const model = await getKnowledgeExplorerModel(workspaceId, sourceId, { includeArchived });
   if (!model) {
     return (
-      <main className="mx-auto flex min-h-full max-w-4xl flex-col justify-center px-6 py-16">
-        <h1 className="text-heading font-semibold">Not found or no access</h1>
+      <main className="flex min-h-full flex-col justify-center">
+        <StatusMessage
+          title="Not found or no access"
+          description="This content does not exist or you do not have access to it."
+        />
       </main>
     );
   }
   const first = findFirstReadableDocument(model.tree);
   if (first) redirect(`/w/${workspaceId}/knowledge/${sourceId}/${first.documentId}${archivedSuffix}`);
   return (
-    <main className="mx-auto flex min-h-full max-w-4xl flex-col justify-center px-6 py-16">
-      <h1 className="text-heading font-semibold">{model.source.name}</h1>
-      <p className="mt-4 text-kh-text-muted">This source does not contain any readable documents.</p>
-      <Link
-        className={buttonClasses({ variant: "secondary", size: "lg", className: "mt-6 w-fit" })}
-        href={`/w/${workspaceId}/sources`}
-      >
-        Go to Sources
-      </Link>
+    <main className="flex min-h-full flex-col justify-center">
+      <StatusMessage
+        title={model.source.name}
+        description="This source does not contain any readable documents."
+        action={
+          <Link
+            className={buttonClasses({ variant: "secondary", size: "lg" })}
+            href={`/w/${workspaceId}/sources`}
+          >
+            Go to Sources
+          </Link>
+        }
+      />
     </main>
   );
 }

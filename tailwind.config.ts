@@ -44,6 +44,21 @@ const config: Config = {
       popover: "var(--kh-shadow-popover)",
       modal: "var(--kh-shadow-modal)",
     },
+    // Page containers, named by the job rather than by a size on Tailwind's
+    // ladder. Five widths were in use for what were mostly the same kind of
+    // page; these are the three that turned out to have distinct jobs, plus
+    // the panel width used inside a page. Replacing the scale means
+    // `max-w-4xl` no longer compiles, so a sixth cannot appear quietly.
+    // Arbitrary values still work, for the one-off truncation widths that are
+    // not containers at all.
+    maxWidth: {
+      none: "none",
+      full: "100%",
+      panel: "36rem", // a form panel sitting inside a page
+      reading: "860px", // prose measure — see §7
+      page: "56rem", // the standard page container
+      wide: "64rem", // a page whose content is a table
+    },
     transitionDuration: {
       DEFAULT: "120ms",
       0: "0ms",
