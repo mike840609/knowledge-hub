@@ -6,6 +6,20 @@ const QUERY_MASTER_WORKSPACE = "0199f100-0000-7000-8000-000000000001";
 const SOURCE_MANAGED_SOURCE = "0199f100-0000-7000-8000-000000000105";
 const SOURCE_MANAGED_DOCUMENT = "0199f100-0000-7000-8000-000000000210";
 
+// Creating, saving or uploading is a POST, a client navigation and a fresh
+// server render before anything appears on screen. Playwright's 5s default is
+// a comfortable budget for a page that is already rendered and a tight one for
+// that chain: under a loaded machine two of the assertions below lost the race
+// intermittently, in either order, on code that had not changed — and they
+// lost it on `main` too. This is the same judgement the hydration waits below
+// already apply to the same environment, named rather than repeated so the
+// next reader can tell a deliberate budget from a copied literal.
+//
+// It is only for assertions that wait on the server. A client-side check, such
+// as the UTF-8 decode, keeps the default: giving it 15s would hide a real
+// regression for three times as long.
+const ROUND_TRIP = { timeout: 15_000 };
+
 // Navigate to the standalone authoring page and return only once the form is
 // interactive. The create action stays disabled until the client confirms the
 // workspace authorization, which gives the upload tests a stable hydration
@@ -13,11 +27,11 @@ const SOURCE_MANAGED_DOCUMENT = "0199f100-0000-7000-8000-000000000210";
 async function gotoKnowledgeReadyToUpload(page: Page, workspaceId: string) {
   await page.goto(`/w/${workspaceId}/knowledge/new`);
   const title = page.getByLabel("Document title");
-  await expect(title).toBeEditable({ timeout: 15_000 });
+  await expect(title).toBeEditable(ROUND_TRIP);
   // A temporary value proves the controlled input and submit handler are
   // wired after hydration without creating a document.
   await title.fill("Hydration probe");
-  await expect(page.getByRole("button", { name: "Create document" })).toBeEnabled({ timeout: 15_000 });
+  await expect(page.getByRole("button", { name: "Create document" })).toBeEnabled(ROUND_TRIP);
   await title.fill("");
 }
 
@@ -26,14 +40,14 @@ test("creates the first document in a workspace with no sources", async ({ page 
   await page.getByLabel("Document title").fill("My First Note");
   await page.getByRole("button", { name: "Create document" }).click();
 
-  await expect(page.getByRole("heading", { name: "My First Note" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "My First Note" })).toBeVisible(ROUND_TRIP);
 });
 
 test("edits a hub-managed document and records a second revision", async ({ page }) => {
   await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
   await page.getByLabel("Document title").fill("Editable Note");
   await page.getByRole("button", { name: "Create document" }).click();
-  await expect(page.getByRole("heading", { name: "Editable Note" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Editable Note" })).toBeVisible(ROUND_TRIP);
 
   await page.getByRole("link", { name: "Edit", exact: true }).click();
   // main form + first(): same pre-existing duplicate-DOM quirk as the "main header" convention
@@ -42,7 +56,7 @@ test("edits a hub-managed document and records a second revision", async ({ page
   await editorForm.getByLabel("Markdown").fill("updated body");
   await editorForm.getByRole("button", { name: "Save" }).click();
 
-  await expect(page.locator("article").first().getByText("updated body")).toBeVisible();
+  await expect(page.locator("article").first().getByText("updated body")).toBeVisible(ROUND_TRIP);
   await page.locator("main").getByRole("button", { name: "Details" }).click();
   await page.getByRole("tab", { name: "History" }).click();
   await expect(page.getByRole("link", { name: /Revision 2/ })).toBeVisible();
@@ -55,7 +69,7 @@ test("uploads a markdown file and takes its title from frontmatter", async ({ pa
     mimeType: "text/markdown",
     buffer: Buffer.from("---\ntitle: 請假流程 Uploaded\n---\n\n內容\n", "utf8"),
   });
-  await expect(page.getByRole("heading", { name: "請假流程 Uploaded" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "請假流程 Uploaded" })).toBeVisible(ROUND_TRIP);
 });
 
 // The seed's default HUB source (Obsidian Wiki) is HUB_MANAGED, so it alone would not exercise this
@@ -78,7 +92,7 @@ test("a stale second editor gets a conflict, keeps their input, and does not ove
   await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
   await page.getByLabel("Document title").fill("Conflict Note");
   await page.getByRole("button", { name: "Create document" }).click();
-  await expect(page.getByRole("heading", { name: "Conflict Note" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Conflict Note" })).toBeVisible(ROUND_TRIP);
   const documentUrl = page.url();
 
   // Two editors open the same base revision. A second page in the same context is
@@ -92,18 +106,18 @@ test("a stale second editor gets a conflict, keeps their input, and does not ove
   // A saves first and wins.
   await editorA.getByLabel("Markdown").fill("winner body");
   await editorA.getByRole("button", { name: "Save" }).click();
-  await expect(page.locator("article").first().getByText("winner body")).toBeVisible();
+  await expect(page.locator("article").first().getByText("winner body")).toBeVisible(ROUND_TRIP);
 
   // B saves stale: conflict shown, input preserved, reload offered — no silent overwrite.
   await editorB.getByLabel("Markdown").fill("loser body");
   await editorB.getByRole("button", { name: "Save" }).click();
-  await expect(pageB.getByRole("alert").filter({ hasText: "已被其他人更新" })).toBeVisible();
+  await expect(pageB.getByRole("alert").filter({ hasText: "已被其他人更新" })).toBeVisible(ROUND_TRIP);
   await expect(editorB.getByLabel("Markdown")).toHaveValue("loser body");
   await expect(pageB.getByRole("link", { name: "重新載入最新版本" })).toBeVisible();
 
   // The persisted current revision is the winner's, never the loser's.
   await pageB.goto(documentUrl);
-  await expect(pageB.locator("article").first().getByText("winner body")).toBeVisible();
+  await expect(pageB.locator("article").first().getByText("winner body")).toBeVisible(ROUND_TRIP);
   await expect(pageB.getByText("loser body")).toHaveCount(0);
   await pageB.close();
 });
