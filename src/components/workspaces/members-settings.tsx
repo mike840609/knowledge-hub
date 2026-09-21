@@ -6,11 +6,197 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import type { HubUserLookup, MemberAdminView, TeamWorkspaceView } from "@/server/workspace-admin";
-import { GovernanceError, governanceFailure, governanceRequest, type GovernanceFailure } from "./governance-error";
+import {
+  GovernanceError,
+  governanceFailure,
+  governanceRequest,
+  type GovernanceFailure,
+} from "./governance-error";
 import { GrantRowActions } from "./grant-row-actions";
-export function MembersSettings({ team, members }: { team: TeamWorkspaceView; members: readonly MemberAdminView[] }) {
-  const router = useRouter(); const { access, confirmed } = useWorkspaceAuthorization(); const [query, setQuery] = useState(""); const [candidates, setCandidates] = useState<HubUserLookup[]>([]); const [selected, setSelected] = useState(""); const [role, setRole] = useState(""); const [busy, setBusy] = useState(false); const [searching, setSearching] = useState(false); const [searched, setSearched] = useState(false); const searchGeneration = useRef(0); const [error, setError] = useState<GovernanceFailure | null>(null); const [notice, setNotice] = useState("");
-  const roles = team.grantOptions.newMemberAssignableRoles; const chosenRole = roles.find((value) => value === role) ?? roles[0] ?? ""; const canAdd = access.actions.canManageBasicMembers && access.workspace.lifecycleState === "ACTIVE" && roles.length > 0;
-  async function search() { const generation = ++searchGeneration.current; setSearching(true); setError(null); setSelected(""); try { const users = await governanceRequest<HubUserLookup[]>(`/api/users?query=${encodeURIComponent(query.trim())}&limit=20`); if (generation === searchGeneration.current) { setCandidates(users.filter((user) => !members.some((member) => member.user.id === user.id))); setSearched(true); } } catch (failure) { if (generation === searchGeneration.current) setError(governanceFailure(failure)); } finally { if (generation === searchGeneration.current) setSearching(false); } }
-  return <section className="space-y-6"><h2 className="text-title font-semibold">Members</h2>{canAdd && <div className="max-w-xl rounded-md border border-kh-border p-4"><h3 className="font-medium">Add member</h3><form className="mt-3 flex gap-2" onSubmit={(event) => { event.preventDefault(); void search(); }}><Input aria-label="Search existing users" placeholder="Name or employee ID" value={query} disabled={!confirmed || busy} onChange={(event) => { ++searchGeneration.current; setSearching(false); setQuery(event.target.value); setCandidates([]); setSelected(""); setSearched(false); }} /><Button type="submit" disabled={!confirmed || busy || searching || !query.trim()}>Search</Button></form>{searched && candidates.length === 0 && <p className="mt-2 text-body">No existing users found to add.</p>}{candidates.length > 0 && <form className="mt-3 flex flex-wrap gap-2" onSubmit={async (event) => { event.preventDefault(); if (!confirmed || busy || !selected || !chosenRole) return; setBusy(true); setError(null); setNotice(""); try { await governanceRequest(`/api/workspaces/${team.id}/members`, "POST", { userId: selected, role: chosenRole }); setCandidates([]); setSelected(""); setQuery(""); setSearched(false); setNotice("Member added."); router.refresh(); } catch (failure) { setError(governanceFailure(failure)); } finally { setBusy(false); } }}><Select aria-label="User to add" value={selected} disabled={busy || !confirmed} onChange={(event) => setSelected(event.target.value)}><option value="">Select a user</option>{candidates.map((user) => <option key={user.id} value={user.id}>{user.name} ({user.empId})</option>)}</Select><Select aria-label="New member role" value={chosenRole} disabled={busy || !confirmed} onChange={(event) => setRole(event.target.value)}>{roles.map((value) => <option key={value}>{value}</option>)}</Select><Button type="submit" disabled={busy || !confirmed || !selected}>Add member</Button></form>}</div>}<GovernanceError error={error} /><p role="status" className="text-body">{notice}</p><div className="overflow-x-auto"><table className="w-full text-left text-body"><thead><tr>{["Name", "Direct role", "Group access", "Actions"].map((label) => <th className="border-b border-kh-border p-3" key={label}>{label}</th>)}</tr></thead><tbody>{members.map((member) => <tr className="border-b border-kh-border" key={member.user.id}><td className="p-3 align-top">{member.user.name}<span className="block text-caption text-kh-text-muted">{member.user.empId}</span></td><td className="p-3 align-top">{member.access.directRole ?? "No direct role"}</td><td className="p-3 align-top">{member.access.groupAccess === "UNKNOWN_NOT_EVALUATED" ? "Group access not evaluated" : member.access.matchedGroups?.length ? member.access.matchedGroups.map((group) => `${group.externalGroupId}: ${group.role}`).join(", ") : "No matching group grants"}</td><td className="p-3 align-top"><GrantRowActions role={member.access.directRole ?? ""} roles={member.assignableRoles} canRemove={member.canRemoveDirectAccess} url={`/api/workspaces/${team.id}/members/${member.user.id}`} label={member.user.name} member /></td></tr>)}</tbody></table></div></section>;
+export function MembersSettings({
+  team,
+  members,
+}: {
+  team: TeamWorkspaceView;
+  members: readonly MemberAdminView[];
+}) {
+  const router = useRouter();
+  const { access, confirmed } = useWorkspaceAuthorization();
+  const [query, setQuery] = useState("");
+  const [candidates, setCandidates] = useState<HubUserLookup[]>([]);
+  const [selected, setSelected] = useState("");
+  const [role, setRole] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [searched, setSearched] = useState(false);
+  const searchGeneration = useRef(0);
+  const [error, setError] = useState<GovernanceFailure | null>(null);
+  const [notice, setNotice] = useState("");
+  const roles = team.grantOptions.newMemberAssignableRoles;
+  const chosenRole = roles.find((value) => value === role) ?? roles[0] ?? "";
+  const canAdd =
+    access.actions.canManageBasicMembers &&
+    access.workspace.lifecycleState === "ACTIVE" &&
+    roles.length > 0;
+  async function search() {
+    const generation = ++searchGeneration.current;
+    setSearching(true);
+    setError(null);
+    setSelected("");
+    try {
+      const users = await governanceRequest<HubUserLookup[]>(
+        `/api/users?query=${encodeURIComponent(query.trim())}&limit=20`,
+      );
+      if (generation === searchGeneration.current) {
+        setCandidates(
+          users.filter((user) => !members.some((member) => member.user.id === user.id)),
+        );
+        setSearched(true);
+      }
+    } catch (failure) {
+      if (generation === searchGeneration.current) setError(governanceFailure(failure));
+    } finally {
+      if (generation === searchGeneration.current) setSearching(false);
+    }
+  }
+  return (
+    <section className="space-y-6">
+      <h2 className="text-title font-semibold">Members</h2>
+      {canAdd && (
+        <div className="max-w-xl rounded-md border border-kh-border p-4">
+          <h3 className="font-medium">Add member</h3>
+          <form
+            className="mt-3 flex gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void search();
+            }}
+          >
+            <Input
+              aria-label="Search existing users"
+              placeholder="Name or employee ID"
+              value={query}
+              disabled={!confirmed || busy}
+              onChange={(event) => {
+                ++searchGeneration.current;
+                setSearching(false);
+                setQuery(event.target.value);
+                setCandidates([]);
+                setSelected("");
+                setSearched(false);
+              }}
+            />
+            <Button type="submit" disabled={!confirmed || busy || searching || !query.trim()}>
+              Search
+            </Button>
+          </form>
+          {searched && candidates.length === 0 && (
+            <p className="mt-2 text-body">No existing users found to add.</p>
+          )}
+          {candidates.length > 0 && (
+            <form
+              className="mt-3 flex flex-wrap gap-2"
+              onSubmit={async (event) => {
+                event.preventDefault();
+                if (!confirmed || busy || !selected || !chosenRole) return;
+                setBusy(true);
+                setError(null);
+                setNotice("");
+                try {
+                  await governanceRequest(`/api/workspaces/${team.id}/members`, "POST", {
+                    userId: selected,
+                    role: chosenRole,
+                  });
+                  setCandidates([]);
+                  setSelected("");
+                  setQuery("");
+                  setSearched(false);
+                  setNotice("Member added.");
+                  router.refresh();
+                } catch (failure) {
+                  setError(governanceFailure(failure));
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              <Select
+                aria-label="User to add"
+                value={selected}
+                disabled={busy || !confirmed}
+                onChange={(event) => setSelected(event.target.value)}
+              >
+                <option value="">Select a user</option>
+                {candidates.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.name} ({user.empId})
+                  </option>
+                ))}
+              </Select>
+              <Select
+                aria-label="New member role"
+                value={chosenRole}
+                disabled={busy || !confirmed}
+                onChange={(event) => setRole(event.target.value)}
+              >
+                {roles.map((value) => (
+                  <option key={value}>{value}</option>
+                ))}
+              </Select>
+              <Button type="submit" disabled={busy || !confirmed || !selected}>
+                Add member
+              </Button>
+            </form>
+          )}
+        </div>
+      )}
+      <GovernanceError error={error} />
+      <p role="status" className="text-body">
+        {notice}
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-body">
+          <thead>
+            <tr>
+              {["Name", "Direct role", "Group access", "Actions"].map((label) => (
+                <th className="border-b border-kh-border p-3" key={label}>
+                  {label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {members.map((member) => (
+              <tr className="border-b border-kh-border" key={member.user.id}>
+                <td className="p-3 align-top">
+                  {member.user.name}
+                  <span className="block text-caption text-kh-text-muted">{member.user.empId}</span>
+                </td>
+                <td className="p-3 align-top">{member.access.directRole ?? "No direct role"}</td>
+                <td className="p-3 align-top">
+                  {member.access.groupAccess === "UNKNOWN_NOT_EVALUATED"
+                    ? "Group access not evaluated"
+                    : member.access.matchedGroups?.length
+                      ? member.access.matchedGroups
+                          .map((group) => `${group.externalGroupId}: ${group.role}`)
+                          .join(", ")
+                      : "No matching group grants"}
+                </td>
+                <td className="p-3 align-top">
+                  <GrantRowActions
+                    role={member.access.directRole ?? ""}
+                    roles={member.assignableRoles}
+                    canRemove={member.canRemoveDirectAccess}
+                    url={`/api/workspaces/${team.id}/members/${member.user.id}`}
+                    label={member.user.name}
+                    member
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
 }
