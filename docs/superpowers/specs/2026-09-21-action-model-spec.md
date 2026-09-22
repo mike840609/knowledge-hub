@@ -1,202 +1,140 @@
-# Action Model — Design Spec
+# 動作模型 — 設計規格
 
-| Item | Value |
+| 項目 | 內容 |
 | --- | --- |
-| Date | 2026-09-21 |
-| Type | Design spec, for review before code |
-| Answers | Contract open items 1 (`⌘K`), 2 (toast/undo), 3 (empty/error guidance), 4 (context menus) |
-| Contract | `docs/superpowers/specs/frontend-design-language.md` |
-| Status | **Proposed. Not agreed.** Section 8 is the part that needs a decision. |
+| 日期 | 2026-09-21 |
+| 類型 | 設計規格，供實作前審查 |
+| 回應 | 契約 Open items 1（`⌘K`）、2（toast／undo）、3（空狀態與錯誤狀態的引導）、4（context menu） |
+| 對照契約 | `docs/superpowers/specs/frontend-design-language.md` |
+| 狀態 | **提案，尚未拍板。真正需要決定的是第 8 節。** |
 
-## 1. Why these four items are one spec
+## 1. 為什麼這四條要寫成同一份規格
 
-They are four exits from the same missing thing. `⌘K` as a command palette, a
-context menu on a row, "what can I do here" in an empty state, and the toast
-that reports what an action did all need the same list: **what can be done,
-by whom, to what, right now**. Written separately, that list gets designed
-four times and agrees with itself by accident.
+它們是同一個缺口的四個出口。`⌘K` command palette、列上的 context menu、空狀態裡的「我在這裡能做什麼」、以及動作完成後的 toast，都需要同一份清單：**誰、在什麼情境、能對什麼做什麼**。分開寫，這份清單會被設計四次，而且只會靠運氣彼此一致。
 
-This product has no such list. Every action is bound to the surface that
-happens to show it — editing lives on a button in the document header,
-importing on a button in an empty state, archiving in a settings panel — and
-nothing can enumerate them.
+這個產品沒有這份清單。每個動作都綁在剛好顯示它的那個畫面上——編輯在文件標頭的按鈕、匯入在空狀態的按鈕、封存在設定面板——沒有任何東西能把它們列舉出來。
 
-## 2. What is actually there today
+## 2. 現況（實測，非引述）
 
-Measured against `main` @ `7275641`, because three of the four items describe
-the product slightly wrongly and a spec built on that would inherit the error.
+對照 `main` @ `7275641`。之所以要重新實測，是因為四條裡有三條對產品的描述有誤，照著它們寫規格會把錯誤繼承下去。
 
-**Mutations reachable from the UI**, in full:
+**UI 可觸及的 mutation，全部如下：**
 
 ```text
-Knowledge   create a document          POST /api/workspaces/:id/documents
-            edit a document            PATCH /api/documents/:id
-Sources     apply an import preview    POST /api/source-imports/:id/apply
-Workspace   archive / restore          POST /api/workspaces/:id/archive|restore
-            rename                     PATCH /api/workspaces/:id
-Members     add / change role / remove  …/members
-Groups      add / change role / remove  …/groups
-Local only  favourite a document, remember recents (localStorage)
+Knowledge   建立文件              POST   /api/workspaces/:id/documents
+            編輯文件              PATCH  /api/documents/:id
+Sources     套用匯入預覽          POST   /api/source-imports/:id/apply
+Workspace   封存／還原            POST   /api/workspaces/:id/archive|restore
+            重新命名              PATCH  /api/workspaces/:id
+Members     新增／改角色／移除     …/members
+Groups      新增／改角色／移除     …/groups
+僅存本機     收藏文件、最近瀏覽紀錄（localStorage）
 ```
 
-**Corrections to open item 4.** It reads "renaming, archiving and copying a
-link all require opening the document first".
+**對 Open item 4 的更正。** 它寫著「重新命名、封存、複製連結都要先進文件頁」。
 
-- Renaming a document: true, it is the title field in the editor.
-- **Archiving a document does not exist.** Not in the UI, not in the API. The
-  document routes are POST and PATCH only. Documents reach `ARCHIVED` through
-  a source re-sync, never through a person.
-- **Copying a link does not exist.** The `Copy` button in the Inspector
-  copies a document or source **ID**, which is a support affordance, not a
-  share one.
+- 重新命名文件：**屬實**，就是編輯器裡的標題欄位。
+- **封存文件並不存在。** UI 沒有，API 也沒有——document 路由只有 POST 與 PATCH。文件會變成 `ARCHIVED` 只能透過 source 重新同步，沒有任何人為入口。
+- **複製連結並不存在。** Inspector 那顆 `Copy` 按鈕複製的是文件或 source 的 **ID**，那是支援用途，不是分享用途。
 
-**Correction to open item 1.** `⌘K` does not only "execute search" — it opens
-a palette that searches documents, moves by arrow key, has
-`aria-activedescendant`, and opens a hit. What it lacks is anything that is
-not a document.
+**對 Open item 1 的更正。** `⌘K` 並非「只會執行搜尋」——它已經是一個 palette：搜尋文件、方向鍵移動、`aria-activedescendant`、Enter 開啟結果。它缺的是**文件以外的東西**。
 
-## 3. The finding that should decide whether to do this at all
+## 3. 決定要不要做這件事的關鍵發現
 
-Count what a palette could offer today, generously:
+寬鬆地數一下 palette 今天能放什麼：
 
 ```text
-navigation   Knowledge · Sources · Settings · switch workspace · open a document
-creation     Add to Notes · Import knowledge
-document     Edit · Open details · Favourite · Show archived
-workspace    Archive · Restore · Settings tabs
+導航     Knowledge · Sources · Settings · 切換 workspace · 開啟文件
+建立     Add to Notes · Import knowledge
+文件     Edit · Open details · 收藏 · 顯示已封存
+工作區   封存 · 還原 · Settings 各分頁
 ```
 
-Roughly fourteen entries, and **the majority are navigation**. The reference
-product's palette is valuable because the product has a hundred commands;
-ours would be a fast way to go somewhere, plus four things to do.
+約十四項，**其中多數是導航**。參考產品的 palette 之所以有價值，是因為那個產品有上百個命令；我們的會是一個「快速前往某處」的工具，外加四件能做的事。
 
-That is still worth something — "go somewhere fast" is most of what a palette
-is used for — but it should be named honestly rather than sold as parity. **A
-command palette does not create commands.** If the goal is that a reader can
-act without hunting, the prior question is which actions this product should
-have, and that is a product decision, not a UI one.
+這仍然有價值——「快速前往」本來就是 palette 最主要的用途——但應該誠實命名，而不是包裝成對等。**Command palette 不會生出 command。** 如果目標是「讀者不必四處翻找就能動作」，那前置問題是**這個產品應該擁有哪些動作**，而那是產品決定，不是 UI 決定。
 
-Section 8 puts that question first.
+第 8 節把這個問題排在最前面。
 
-## 4. The model
+## 4. 模型
 
-One module owns the list. Nothing else enumerates actions.
+由單一模組持有這份清單。其他任何地方都不得自行列舉動作。
 
 ```ts
 type ActionId = "document.edit" | "document.favourite" | "knowledge.create" | …
 
 type Action = {
   id: ActionId;
-  label: string;                  // imperative: "Edit document"
+  label: string;                  // 祈使句：「Edit document」
   group: "navigate" | "create" | "document" | "workspace";
-  shortcut?: string;              // aria-keyshortcuts spelling
-  /** Where it may appear. A row menu shows `row`; the palette shows `palette`. */
+  shortcut?: string;              // aria-keyshortcuts 的拼法
+  /** 允許出現的地方。列選單取 `row`，palette 取 `palette`。 */
   surfaces: readonly ("palette" | "row" | "empty")[];
-  /** Whether the action is offered, given what the caller can do and what the
-   *  target is. Never a security decision — see below. */
+  /** 依「呼叫者能做什麼」與「目標是什麼」決定是否提供。
+   *  絕不是安全判斷 —— 見 4.2。 */
   available: (context: ActionContext) => boolean;
   run: (context: ActionContext) => void | Promise<ActionResult>;
 };
 ```
 
-### 4.1 Availability has three axes, not one
+### 4.1 可用性有三個軸，不是一個
 
-The UI already reads `access.actions.*` for workspace capability. That alone
-is not enough, and conflating the axes is the mistake `CLAUDE.md` names:
+UI 目前只讀 `access.actions.*`，也就是工作區能力那一軸。單靠它不夠，而把幾個軸混為一談正是 `CLAUDE.md` 點名的錯誤：
 
-1. **Workspace capability** — `canWrite`, `canImport`, `canOpenSettings`…
-2. **Source ownership** — `SOURCE_MANAGED` content is read-only in the Hub
-   however much capability the caller has. "Workspace access and source
-   ownership are separate questions and must not be conflated."
-3. **Target state** — an archived workspace offers Restore, not Archive.
+1. **工作區能力** —— `canWrite`、`canImport`、`canOpenSettings`……
+2. **Source 所有權** —— `SOURCE_MANAGED` 的內容在 Hub 裡是唯讀的，呼叫者能力再大也一樣。「Workspace access and source ownership are separate questions and must not be conflated.」
+3. **目標狀態** —— 已封存的工作區提供的是「還原」，不是「封存」。
 
-### 4.2 The registry is not authorization
+### 4.2 Registry 不是授權
 
-Stated here because a palette makes it tempting to think otherwise:
+在這裡明講，因為 palette 特別容易讓人誤以為相反：
 
-> Possessing a `workspace_id`, `source_id` or `document_id` grants nothing.
-> URL parameters are navigation inputs, never authorization proof, and the
-> application service must re-verify policy regardless of what the UI allowed.
+> 持有 `workspace_id`、`source_id` 或 `document_id` 不授予任何權限。URL 參數是導航輸入，永遠不是授權證明；不論 UI 允許了什麼，application service 都必須重新驗證政策。
 
-`available()` decides **what to show**. The service decides **what happens**.
-An action hidden from the palette must still be refused by the server, and
-this spec adds no endpoint that trusts the caller's claim about itself.
+`available()` 決定**顯示什麼**，service 決定**發生什麼**。一個在 palette 裡被藏起來的動作，伺服器一樣必須拒絕。這份規格不新增任何信任呼叫者自述的端點。
 
-## 5. The three surfaces
+## 5. 三個出口
 
-**Palette (`⌘K`).** Keeps its current search behaviour and gains an action
-section above the hits. Typing filters both. Actions are grouped by §4's
-`group`; the empty query shows actions and recents rather than nothing.
+**Palette（`⌘K`）。** 保留現有的搜尋行為，在搜尋結果之上新增動作區。輸入同時過濾兩者。動作依 §4 的 `group` 分組；查詢為空時顯示動作與最近項目，而不是一片空白。
 
-**Row menu.** The existing `ui/menu` primitive, opened from a row's `⋯`
-button **and** by right-click on the row. Right-click alone would hide the
-actions from keyboard and touch, which §10 forbids in the same breath as it
-requires arrow-key movement.
+**列選單。** 沿用既有的 `ui/menu` primitive，由列上的 `⋯` 按鈕開啟，**並且**支援在列上按右鍵。只做右鍵會讓鍵盤與觸控使用者拿不到這些動作，而 §10 在要求方向鍵導航的同一句話裡就禁止了這件事。
 
-**Empty state.** Open item 3 asks for guidance rather than a bare heading.
-The registry answers it directly: an empty state lists the actions whose
-`surfaces` include `empty` and that are available here, which is the same
-question a reader is asking. This also removes the one place the current
-empty state has to hard-code two buttons.
+**空狀態。** Open item 3 要的是引導而非光禿禿的標題。Registry 直接回答它：空狀態列出 `surfaces` 含 `empty` 且在此處可用的動作——那正是讀者當下在問的問題。這也順帶拿掉目前空狀態必須硬寫兩顆按鈕的地方。
 
-## 6. Feedback: toast and undo
+## 6. 回饋：toast 與 undo
 
-Current state is a `role="status"` paragraph that shifts layout when it
-appears. (§18 item 2 once said no `aria-live` region exists; that was wrong —
-`role="status"` carries an implicit `aria-live="polite"`. The gap is the
-layer, not the announcement.)
+現況是一段 `role="status"` 的文字，出現時會把版面推開。（§18 第 2 條曾寫「全庫沒有 `aria-live`」，那是錯的——`role="status"` 本身帶有隱含的 `aria-live="polite"`。缺的是這一層，不是播報。）
 
-Proposed: one toast region, `role="status"` `aria-live="polite"`, fixed to a
-corner so it displaces nothing, one toast at a time, dismissed on the next
-navigation.
+提案：單一 toast 區域，`role="status"`、`aria-live="polite"`，固定在角落因而不擠壓任何版面，一次只顯示一則，下一次導航時關閉。
 
-**Undo is offered only where the inverse already exists as a real operation.**
-An "Undo" that cannot restore the prior state is a lie, and this codebase has
-no soft-delete to lean on. Today that means:
+**只有在逆向操作已經真實存在時，才提供 undo。** 一個無法還原前一個狀態的「Undo」是謊話，而這個 codebase 沒有 soft-delete 可以倚賴。因此目前是：
 
-| action | undo | why |
+| 動作 | 可 undo | 原因 |
 | --- | --- | --- |
-| archive workspace | **yes** — restore | the inverse endpoint exists |
-| change a member's role | **yes** — set it back | previous role is known |
-| remove a member or group | **yes** — re-add | the grant is reconstructible |
-| edit a document | **no** | creates a revision; reverting is a new revision, which is a feature, not an undo |
-| apply an import | **no** | the spec's own rule: no force apply, no rollback |
+| 封存工作區 | **是** —— 還原 | 逆向端點已存在 |
+| 變更成員角色 | **是** —— 改回去 | 先前的角色是已知的 |
+| 移除成員或群組 | **是** —— 重新加入 | 該授權可重建 |
+| 編輯文件 | **否** | 會產生一個新 revision；「還原」是再產生一個 revision，那是功能，不是 undo |
+| 套用匯入 | **否** | 規格本身的規則：沒有 force apply，也沒有回滾 |
 
-Two-step inline confirmation stays **only** where undo is impossible and the
-consequence is large. Where undo exists, act and offer undo — the reference
-behaviour, and what the contract's §18 item 2 asks for.
+兩段式的行內確認**只保留在**無法 undo 且後果重大的地方。凡是能 undo 的，就先做、再給 undo——這是參考產品的行為，也是契約 §18 第 2 條要的。
 
-## 7. What this spec does not decide
+## 7. 這份規格刻意不決定的事
 
-**Document archive is a domain change, not a UI feature.** Adding it means an
-endpoint, a lifecycle transition, a rule for what happens when a
-`SOURCE_MANAGED` document is archived in the Hub and the next sync disagrees,
-and an audit entry. It touches the knowledge module, not `components/`. It is
-out of scope here and should be its own spec if it is wanted.
+**文件封存是 domain 改動，不是 UI 功能。** 要加它，意味著一個端點、一個生命週期轉換、一條「Hub 封存了一份 `SOURCE_MANAGED` 文件、下次同步卻不同意」時該怎麼辦的規則，以及一筆稽核紀錄。它動到的是 knowledge 模組，不是 `components/`。這裡不處理；若要做，它該是自己的一份規格。
 
-The registry is designed so that adding it later is a new entry, not a
-redesign.
+Registry 的設計讓它日後只是新增一個項目，而不是重新設計。
 
-## 8. What needs a decision before any code
+## 8. 動工之前需要的決定
 
-1. **Is a mostly-navigational palette worth building now?** §3 is the honest
-   count. If the answer is "not yet", items 1 and 4 should be deferred
-   explicitly rather than left looking like pending work — and items 2 and 3
-   can still proceed, because the toast layer and empty-state guidance do not
-   depend on the palette.
-2. **Should document archive exist?** If yes, it is a prior domain spec and
-   this one waits for it. If no, open item 4 should be reworded, because its
-   premise is a product capability that was never built.
-3. **Right-click on rows, or only the `⋯` button?** Right-click is the
-   reference behaviour and costs a `contextmenu` handler; the button alone is
-   less discoverable but has no surprise.
+1. **現在值得做一個以導航為主的 palette 嗎？** 第 3 節是誠實的數量。若答案是「還不值得」，第 1、4 條應該**明確延後**，而不是繼續掛著看起來像待辦——而且第 2、3 條仍可進行，因為 toast 層與空狀態引導並不依賴 palette。
+2. **文件封存該存在嗎？** 若要，那是一份前置的 domain 規格，這份要等它。若不要，Open item 4 應該重寫，因為它的前提是一個從未被建造的產品能力。
+3. **列上要支援右鍵，還是只用 `⋯` 按鈕？** 右鍵是參考產品的行為，代價是一個 `contextmenu` handler；只用按鈕比較不易被發現，但沒有意外。
 
-## 9. Completion criteria, if it proceeds
+## 9. 若決定進行，完成的判準
 
-- One module enumerates actions; no surface has its own list.
-- Every action states availability across all three axes of §4.1.
-- No endpoint added by this work trusts a client claim; each re-verifies.
-- The toast region displaces no layout, and every undo offered restores the
-  prior state in a test that asserts the state, not the toast.
-- An action unavailable to the caller is absent from the palette **and**
-  refused by the server, asserted separately.
+- 由單一模組列舉動作；沒有任何出口持有自己的清單。
+- 每個動作都在 §4.1 的三個軸上說明其可用性。
+- 這項工作新增的端點都不信任客戶端的自述，各自重新驗證。
+- Toast 區域不擠壓任何版面；每一個提供出去的 undo，都有測試斷言它**還原了狀態**，而不是斷言 toast 出現過。
+- 對呼叫者不可用的動作，既不出現在 palette，**也**被伺服器拒絕——兩者分別斷言。
