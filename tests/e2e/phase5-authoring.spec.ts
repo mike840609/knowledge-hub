@@ -122,6 +122,48 @@ test("a stale second editor gets a conflict, keeps their input, and does not ove
   await pageB.close();
 });
 
+/**
+ * The editor's form is server-rendered with a `type="submit"` button and no
+ * `action`, so before React attaches `preventDefault` a click is a **native**
+ * submit: the browser navigates to the same URL as a GET and the draft is
+ * gone. CI found this the hard way — a second page loading in the same browser
+ * delayed hydration past a save.
+ *
+ * Holding a page in that state needs care. `javaScriptEnabled: false` does not
+ * model it: this route streams, so its content arrives in a hidden `<div>` at
+ * the end of the body and an *inline* script moves it into place. Turning
+ * JavaScript off stops that too, and the form never reaches the page at all.
+ * Blocking the framework chunks is the faithful version — inline scripts still
+ * run, React never hydrates.
+ */
+test("the editor cannot be saved before it can handle its own submit", async ({ page, browser }) => {
+  await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
+  await page.getByLabel("Document title").fill("Pre-hydration Note");
+  await page.getByRole("button", { name: "Create document" }).click();
+  await expect(page.getByRole("heading", { name: "Pre-hydration Note" })).toBeVisible(ROUND_TRIP);
+  await page.getByRole("link", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/\/edit$/);
+  const editUrl = page.url();
+
+  const context = await browser.newContext();
+  const unhydrated = await context.newPage();
+  try {
+    await unhydrated.route("**/_next/static/chunks/**", (route) => route.abort());
+    await unhydrated.goto(editUrl);
+    const save = unhydrated.locator('main form button[type="submit"]');
+    await expect(save).toHaveText("Save");
+    await expect(save).toBeDisabled();
+
+    // The guard is the attribute rather than a handler, so even a forced click
+    // cannot submit the form out from under the draft.
+    await save.click({ force: true }).catch(() => undefined);
+    await unhydrated.waitForTimeout(500);
+    expect(unhydrated.url()).toBe(editUrl);
+  } finally {
+    await context.close();
+  }
+});
+
 // Spec §6.2 parity: folder import decodes with a fatal UTF-8 decoder, so a single
 // upload must reject malformed UTF-8 too rather than storing U+FFFD replacements.
 test("rejects a malformed UTF-8 upload instead of storing replacement characters", async ({ page }) => {

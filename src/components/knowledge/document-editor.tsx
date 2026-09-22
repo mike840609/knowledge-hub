@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
+import { useHydrated } from "@/components/shell/use-hydrated";
 import { GovernanceError, governanceFailure, governanceRequest, type GovernanceFailure } from "@/components/workspaces/governance-error";
 
 export function DocumentEditor({
@@ -25,10 +26,17 @@ export function DocumentEditor({
 }) {
   const router = useRouter();
   const { confirmed } = useWorkspaceAuthorization();
+  // The whole form waits for hydration, not just its button. Before React
+  // attaches, a submit navigates away as a GET and discards the draft, and
+  // anything typed into a controlled field is overwritten by the server's
+  // value the moment hydration commits. Neither is worth a dimmed field for
+  // the fraction of a second it costs. See `use-hydrated`.
+  const hydrated = useHydrated();
   const [title, setTitle] = useState(initialTitle);
   const [markdown, setMarkdown] = useState(initialMarkdown);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<GovernanceFailure | null>(null);
+  const ready = hydrated && !busy;
   const documentHref = `/w/${workspaceId}/knowledge/${sourceId}/${documentId}`;
 
   async function save() {
@@ -55,14 +63,14 @@ export function DocumentEditor({
     >
       <label className="block text-body text-kh-text">
         Title
-        <Input className="mt-1" value={title} maxLength={512} required disabled={busy} onChange={(event) => setTitle(event.target.value)} />
+        <Input className="mt-1" value={title} maxLength={512} required disabled={!ready} onChange={(event) => setTitle(event.target.value)} />
       </label>
       <label className="block text-body text-kh-text">
         Markdown
-        <Textarea className="mt-1 min-h-[24rem]" value={markdown} disabled={busy} onChange={(event) => setMarkdown(event.target.value)} />
+        <Textarea className="mt-1 min-h-[24rem]" value={markdown} disabled={!ready} onChange={(event) => setMarkdown(event.target.value)} />
       </label>
       <div className="flex items-center gap-2">
-        <Button type="submit" disabled={busy || !confirmed || !title.trim()}>Save</Button>
+        <Button type="submit" disabled={!ready || !confirmed || !title.trim()}>Save</Button>
         <Button type="button" variant="secondary" disabled={busy} onClick={() => router.push(documentHref)}>
           Cancel
         </Button>

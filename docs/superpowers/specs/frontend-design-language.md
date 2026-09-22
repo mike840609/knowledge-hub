@@ -571,6 +571,28 @@ application service decides what *happens*, and must refuse an action that was
 never offered, because knowing an ID grants nothing. Tests assert both halves
 separately.
 
+### A control that cannot do its job yet is disabled
+
+A server-rendered `<form onSubmit>` with a `type="submit"` button and no
+`action` is submittable before React attaches `preventDefault`. The browser
+then performs a **native** submit — a GET to the same URL — the server
+re-renders from stored state, and everything the reader typed is gone without
+a word. Measured on the document editor: a draft in the textarea is replaced by
+the saved content and the URL gains a bare `?`.
+
+So a submit button is disabled until its form has mounted (`useHydrated`). The
+brief disabled state is the truth, not a cosmetic cost: the form genuinely
+cannot accept a save yet. It is also what makes the behaviour testable, because
+a test clicking the button waits for it rather than racing it — CI caught this
+as an intermittent failure where a second page loading in the same browser
+delayed hydration past a save.
+
+**`javaScriptEnabled: false` does not model this state.** These routes stream,
+so their content arrives in a hidden `<div>` at the end of the body and an
+*inline* script moves it into place; turning JavaScript off stops that too and
+the form never reaches the page. Blocking the framework chunks is the faithful
+version — inline scripts still run, React never hydrates.
+
 ### A timestamp is rendered in the reader's zone, which means twice
 
 `components/ui/timestamp.tsx` is the only thing that renders a moment in time.
