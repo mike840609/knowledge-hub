@@ -9,11 +9,18 @@ const SOURCE_MANAGED_DOCUMENT = "0199f100-0000-7000-8000-000000000210";
 // Creating, saving or uploading is a POST, a client navigation and a fresh
 // server render before anything appears on screen. Playwright's 5s default is
 // a comfortable budget for a page that is already rendered and a tight one for
-// that chain: under a loaded machine two of the assertions below lost the race
-// intermittently, in either order, on code that had not changed — and they
-// lost it on `main` too. This is the same judgement the hydration waits below
-// already apply to the same environment, named rather than repeated so the
-// next reader can tell a deliberate budget from a copied literal.
+// that chain, so the server-bound assertions below are given more.
+//
+// This comment used to go further and say the editor-save assertions "lost the
+// race intermittently, on code that had not changed — and they lost it on
+// `main` too", which read as a verdict: the environment is noisy, move on. It
+// was wrong, and it cost time. Those two assertions were failing on a real
+// defect — `router.refresh()` immediately after `router.push()` discarded the
+// navigation, ten times in sixty on a production build — whose probability
+// tracked machine load, which is exactly what a flake looks like from the
+// outside. The measurement is in
+// docs/superpowers/verification/2026-09-22-lost-navigation-after-save-measurement.md.
+// A budget is a budget; it is not evidence that what it covers is noise.
 //
 // It is only for assertions that wait on the server. A client-side check, such
 // as the UTF-8 decode, keeps the default: giving it 15s would hide a real
