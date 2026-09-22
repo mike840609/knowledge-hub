@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { useToast } from "@/components/ui/toast";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import type { HubUserLookup, MemberAdminView, TeamWorkspaceView } from "@/server/workspace-admin";
 import {
@@ -21,6 +22,7 @@ export function MembersSettings({
   members: readonly MemberAdminView[];
 }) {
   const router = useRouter();
+  const toast = useToast();
   const { access, confirmed } = useWorkspaceAuthorization();
   const [query, setQuery] = useState("");
   const [candidates, setCandidates] = useState<HubUserLookup[]>([]);
@@ -31,13 +33,26 @@ export function MembersSettings({
   const [searched, setSearched] = useState(false);
   const searchGeneration = useRef(0);
   const [error, setError] = useState<GovernanceFailure | null>(null);
-  const [notice, setNotice] = useState("");
   const roles = team.grantOptions.newMemberAssignableRoles;
   const chosenRole = roles.find((value) => value === role) ?? roles[0] ?? "";
   const canAdd =
     access.actions.canManageBasicMembers &&
     access.workspace.lifecycleState === "ACTIVE" &&
     roles.length > 0;
+  const memberUrl = (userId: string) => `/api/workspaces/${team.id}/members/${userId}`;
+  async function grantMember(userId: string, role: string) {
+    await governanceRequest(`/api/workspaces/${team.id}/members`, "POST", { userId, role });
+    router.refresh();
+  }
+  async function setMemberRole(userId: string, role: string) {
+    await governanceRequest(memberUrl(userId), "PATCH", { role });
+    router.refresh();
+  }
+  async function removeMember(userId: string) {
+    await governanceRequest(memberUrl(userId), "DELETE");
+    router.refresh();
+  }
+
   async function search() {
     const generation = ++searchGeneration.current;
     setSearching(true);
@@ -99,20 +114,21 @@ export function MembersSettings({
               onSubmit={async (event) => {
                 event.preventDefault();
                 if (!confirmed || busy || !selected || !chosenRole) return;
+                const added = candidates.find((user) => user.id === selected);
+                const userId = selected;
+                const role = chosenRole;
                 setBusy(true);
                 setError(null);
-                setNotice("");
                 try {
-                  await governanceRequest(`/api/workspaces/${team.id}/members`, "POST", {
-                    userId: selected,
-                    role: chosenRole,
-                  });
+                  await grantMember(userId, role);
                   setCandidates([]);
                   setSelected("");
                   setQuery("");
                   setSearched(false);
-                  setNotice("Member added.");
-                  router.refresh();
+                  toast({
+                    message: `${added?.name ?? "Member"} added as ${role}.`,
+                    undo: { run: () => removeMember(userId) },
+                  });
                 } catch (failure) {
                   setError(governanceFailure(failure));
                 } finally {
@@ -151,9 +167,6 @@ export function MembersSettings({
         </div>
       )}
       <GovernanceError error={error} />
-      <p role="status" className="text-body">
-        {notice}
-      </p>
       <div className="overflow-x-auto">
         <table className="w-full text-left text-body">
           <thead>
@@ -187,9 +200,11 @@ export function MembersSettings({
                     role={member.access.directRole ?? ""}
                     roles={member.assignableRoles}
                     canRemove={member.canRemoveDirectAccess}
-                    url={`/api/workspaces/${team.id}/members/${member.user.id}`}
                     label={member.user.name}
                     member
+                    onChangeRole={(role) => setMemberRole(member.user.id, role)}
+                    onRemove={() => removeMember(member.user.id)}
+                    onRestore={(role) => grantMember(member.user.id, role)}
                   />
                 </td>
               </tr>

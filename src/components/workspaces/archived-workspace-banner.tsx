@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import {
   GovernanceError,
@@ -17,6 +18,7 @@ export function ArchivedWorkspaceBanner({
   canRestore: boolean;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const { confirmed } = useWorkspaceAuthorization();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<GovernanceFailure | null>(null);
@@ -36,6 +38,15 @@ export function ArchivedWorkspaceBanner({
             try {
               await governanceRequest(`/api/workspaces/${workspaceId}/restore`, "POST");
               router.refresh();
+              toast({
+                message: "Workspace restored.",
+                undo: {
+                  run: async () => {
+                    await governanceRequest(`/api/workspaces/${workspaceId}/archive`, "POST");
+                    router.refresh();
+                  },
+                },
+              });
             } catch (failure) {
               setError(governanceFailure(failure));
             } finally {

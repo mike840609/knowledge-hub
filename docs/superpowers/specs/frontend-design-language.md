@@ -571,6 +571,44 @@ application service decides what *happens*, and must refuse an action that was
 never offered, because knowing an ID grants nothing. Tests assert both halves
 separately.
 
+### Feedback has one place, and undo is a promise
+
+`components/ui/toast.tsx` is the one region: fixed in a corner, mounted by the
+app shell, `role="status"` with `aria-live="polite"`. It holds one message at a
+time and clears on navigation, because a toast describes what just happened
+*here*.
+
+The region is rendered whether or not it holds anything. A live region
+inserted at the same moment as its content is not reliably announced, and the
+older pattern — a `<p role="status">` appearing inside the panel that
+performed the mutation — also pushed the rest of that panel down as it
+arrived.
+
+**Messages split by whether the reader must act on them.** A failure stays
+where the control is, next to the field or the button that produced it, and
+can mark that field invalid; that is what `GovernanceError` is for. A
+confirmation reports and gets out of the way, so it goes to the toast. A
+mutation that *navigates* to its own result gets neither — saving a document
+lands on the saved document, and a toast on top of that is noise.
+
+**Undo is offered only where a reverse operation already exists.** An "Undo"
+that cannot restore the previous state is a lie, and this codebase has no
+soft-delete to lean on. Archiving a workspace, renaming it, granting access,
+changing a role and revoking a grant all qualify. Editing a document does not:
+its reverse would be a *new* revision, which is a feature and not an undo.
+Applying an import does not: the import spec forbids both force-apply and
+rollback.
+
+The reverse call is not always the mirror of the forward one. Restoring a
+revoked grant goes through the add endpoint, because changing the role of a
+membership that no longer exists is refused — and it is a new grant, which the
+audit trail records as such. The tests assert the state after the undo rather
+than the toast, which is the only way that distinction shows up.
+
+**A two-step confirmation is kept only where undo is impossible and the
+consequence is real.** Asking twice before something reversible buys nothing
+and teaches the reader to click through the prompts that matter.
+
 Error and not-found states take their shape from `StatusMessage` — heading,
 one line, optional action — so that a new boundary cannot invent a fourth
 spelling. Boundaries are placed where the shell survives them: the workspace
@@ -624,12 +662,20 @@ record rather than a tracker.
 
 Each of these changes behaviour rather than appearance.
 
-Three items that used to head this list — `⌘K` searched only, no row carried a
-context menu, and empty states offered no guidance — were four exits from one
-missing thing, a list of what can be done, by whom, to what. That list now
-exists (§15) and all three read it, so they are closed. The record of what was
-decided, and of two claims in the old wording that turned out to be false, is
+Four items that used to head this list — `⌘K` searched only, no row carried a
+context menu, empty states offered no guidance, and there was no toast or undo
+layer — were four exits from one missing thing, a list of what can be done, by
+whom, to what. That list now exists (§15) and all four read it, so they are
+closed. The record of what was decided, and of two claims in the old wording
+that turned out to be false, is
 `docs/superpowers/specs/2026-09-21-action-model-spec.md`.
+
+The toast item is worth one correction of its own: the announcement was never
+broken. `role="status"` carries an implicit `aria-live="polite"`, and an
+earlier wording here counted literal `aria-live` attributes and read as though
+nothing were announced at all. What was missing was a place for feedback to
+live that was not inside the panel that produced it, and an undo offered only
+where it could be kept.
 
 One of those claims is worth repeating here, because the old item is the kind
 of thing a reader trusts: **archiving a document and copying a link do not
@@ -640,27 +686,19 @@ record is to leave the lifecycle as it is, so the registry gains an entry if
 that ever changes rather than being redesigned.
 
 
-1. No toast or undo layer. Feedback is `role="status"` text that shifts
-   layout, and destructive actions confirm inline rather than acting and
-   offering undo. (The announcement itself works — `role="status"` carries an
-   implicit `aria-live="polite"`. An earlier wording here counted literal
-   `aria-live` attributes and read as though nothing were announced at all,
-   which overstated the gap.) The action model spec §6 sets out which of this
-   product's mutations can honestly offer undo — a reverse operation must
-   already exist — and which cannot.
-2. The palette is mostly navigation, and that is a product gap rather than a
+1. The palette is mostly navigation, and that is a product gap rather than a
    UI one. Counted against the code it can offer about fourteen entries, of
    which the majority are ways to get somewhere; a command palette does not
    create commands. Worth revisiting when this product has more a reader can
    do, not by adding entries that do nothing.
-3. `spacing` is the one scale still left at Tailwind's default rather than
+2. `spacing` is the one scale still left at Tailwind's default rather than
    replaced, so paddings, margins and gaps remain unenforced. Note that
    replacing `spacing` wholesale is the wrong fix: Tailwind feeds it to
    `width` and `height` too, and a 288px sidebar is not a decision about
    rhythm. What can be replaced is `padding`, `margin`, `gap` and `space`,
    which is where a rhythm applies. (Page container widths were the other
    half of this item and are now §7.)
-4. Timestamps are formatted in the runtime's own time zone, which differs
+3. Timestamps are formatted in the runtime's own time zone, which differs
    between the server render and the client render. The locale is settled
    (§15, one module); the zone is the same product decision the locale was —
    resolve it server-side, or render these client-side only.
