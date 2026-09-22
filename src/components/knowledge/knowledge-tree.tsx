@@ -160,7 +160,7 @@ function TreeNodeRow({
         </ul>
       ) : null}
       {!collapsed && node.children.length === 0 ? (
-        <p className="py-1 pl-7 text-caption text-kh-text-muted">No documents yet.</p>
+        <p className="py-1 pl-6 text-caption text-kh-text-muted">No documents yet.</p>
       ) : null}
     </li>
   );

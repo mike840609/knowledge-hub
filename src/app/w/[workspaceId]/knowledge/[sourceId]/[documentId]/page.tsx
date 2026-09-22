@@ -130,7 +130,7 @@ export default async function KnowledgeDocumentPage({
       ownership={explorer?.source.ownership ?? "SOURCE_MANAGED"}
       contentOwnsTitle={contentOwnsTitle}
     >
-      <div className={`kh-reading-column pb-6 ${contentOwnsTitle ? "pt-6" : "pt-8"}`}>
+      <div className="kh-reading-column py-6">
         <DocumentViewer view={view} selectedRevision={selectedRevision} />
       </div>
     </DocumentDetailClient>
