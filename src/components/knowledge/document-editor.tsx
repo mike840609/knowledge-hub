@@ -45,8 +45,13 @@ export function DocumentEditor({
     setError(null);
     try {
       await governanceRequest(`/api/documents/${documentId}`, "PATCH", { title, markdown, expectedCurrentRevisionId });
+      // Just the push. The `router.refresh()` that used to follow it raced the
+      // navigation it was meant to freshen and discarded it: measured on a
+      // production build, a save left the reader on the editor 10 times in 60
+      // with it and once in 60 without. It was redundant either way — the push
+      // fetches this dynamic route's payload after the PATCH rather than
+      // replaying a prefetch, which the network log shows on every run.
       router.push(documentHref);
-      router.refresh();
     } catch (failure) {
       setError(governanceFailure(failure));
     } finally {
