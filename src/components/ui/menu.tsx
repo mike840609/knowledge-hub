@@ -1,5 +1,6 @@
 "use client";
 
+import { ContextMenu as BaseContextMenu } from "@base-ui-components/react/context-menu";
 import { Menu as BaseMenu } from "@base-ui-components/react/menu";
 import { Check, ChevronRight } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
@@ -49,6 +50,37 @@ export function MenuContent({
 
 export function MenuItem({ className = "", ...props }: ComponentProps<typeof BaseMenu.Item>) {
   return <BaseMenu.Item className={`${ROW} ${className}`} {...props} />;
+}
+
+/**
+ * The same menu, reached by right-click or long-press instead of a button.
+ *
+ * It is deliberately an addition rather than a replacement: right-click alone
+ * would put these actions out of reach of keyboard and touch users, which §10
+ * forbids in the same breath as it requires arrow-key navigation. Every row
+ * that carries one also carries a `⋯` trigger showing the same items, and
+ * `ContextMenu.Item` is `Menu.Item` — the same component under both roots — so
+ * the two openings cannot drift apart in styling or behaviour.
+ *
+ * Base UI handles the long-press itself, which is why this is its component
+ * rather than a `contextmenu` listener of our own.
+ */
+export const ContextMenuRoot = BaseContextMenu.Root;
+export const ContextMenuTrigger = BaseContextMenu.Trigger;
+
+export function ContextMenuContent({
+  children,
+  className = "",
+  ...props
+}: ComponentProps<typeof BaseContextMenu.Positioner> & { children: ReactNode; className?: string }) {
+  return (
+    <BaseContextMenu.Portal>
+      <BaseContextMenu.Positioner {...props}>
+        {/* Anchored to a point rather than a control, so it sizes to its rows. */}
+        <BaseContextMenu.Popup className={`${POPUP} min-w-48 ${className}`}>{children}</BaseContextMenu.Popup>
+      </BaseContextMenu.Positioner>
+    </BaseContextMenu.Portal>
+  );
 }
 
 export function MenuGroupLabel({ className = "", ...props }: ComponentProps<typeof BaseMenu.GroupLabel>) {

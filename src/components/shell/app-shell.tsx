@@ -9,6 +9,7 @@ import { WorkspaceAuthorizationContext, useWorkspaceAuthorizationRefresh } from 
 import { ArchivedWorkspaceBanner } from "@/components/workspaces/archived-workspace-banner";
 import { Drawer } from "@/components/ui/drawer";
 import { isBoolean, readStored, removeStored, usePersistedJson } from "@/components/shell/use-persisted-state";
+import { ToastProvider } from "@/components/ui/toast";
 
 export function AppShell({ model, children }: { model: WorkspaceShellModel; children: ReactNode }) {
   const authorization = useWorkspaceAuthorizationRefresh(model.access, model.navigation);
@@ -49,6 +50,7 @@ export function AppShell({ model, children }: { model: WorkspaceShellModel; chil
   return (
     <WorkspaceAuthorizationContext.Provider value={authorization}>
     <DocumentTopbarContext.Provider value={{ document: documentTopbar, setDocument: setDocumentTopbar }}>
+    <ToastProvider>
     <div className="flex h-screen overflow-hidden flex-col bg-kh-bg-subtle text-kh-text supports-[height:100dvh]:h-dvh">
       <Topbar model={model} onMenuClick={openNav} navCollapsed={navCollapsed} onToggleNav={toggleNav} />
       {accessNotice && <p role="status" className="border-b border-kh-border bg-kh-bg p-3 text-body">You no longer have access to this workspace.<button aria-label="Dismiss access notice" className="ml-3 underline" onClick={() => setAccessNotice(false)}>Dismiss</button></p>}
@@ -64,6 +66,7 @@ export function AppShell({ model, children }: { model: WorkspaceShellModel; chil
         <PrimaryNav workspaceId={model.workspace.id} onNavigate={() => setNavOpen(false)} />
       </Drawer>
     </div>
+    </ToastProvider>
     </DocumentTopbarContext.Provider>
     </WorkspaceAuthorizationContext.Provider>
   );

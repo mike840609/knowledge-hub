@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
-import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { DocumentTopbarContext } from "@/components/shell/document-topbar-context";
 import { InspectorContext } from "./inspector-context";
@@ -13,7 +13,7 @@ import { Drawer } from "@/components/ui/drawer";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/components/ui/tabs";
 import { DocumentHeader, type DocumentBreadcrumbSegment } from "./document-header";
 import { buttonClasses } from "@/components/ui/button";
-import { formatDateTime } from "@/lib/format-date";
+import { Timestamp } from "@/components/ui/timestamp";
 
 function revisionHref(input: {
   workspaceId: string;
@@ -110,13 +110,13 @@ function InspectorTabs({ data }: { data: DocumentInspectorData }) {
           <div>
             <dt className="text-caption text-kh-text-muted">Created</dt>
             <dd className="text-kh-text">
-              {created ? formatDateTime(created) : "—"}
+              {created ? <Timestamp value={created} /> : "—"}
             </dd>
           </div>
           <div>
             <dt className="text-caption text-kh-text-muted">Updated</dt>
             <dd className="text-kh-text">
-              {current ? formatDateTime(current.createdAt) : "—"}
+              {current ? <Timestamp value={current.createdAt} /> : "—"}
             </dd>
           </div>
         </dl>
@@ -150,7 +150,7 @@ function InspectorTabs({ data }: { data: DocumentInspectorData }) {
                     {isCurrent ? " (current)" : ""}
                   </span>
                   <span className="shrink-0 text-caption text-kh-text-muted">
-                    {formatDateTime(revision.createdAt)}
+                    <Timestamp value={revision.createdAt} />
                   </span>
                 </Link>
               </li>
@@ -234,6 +234,7 @@ export function DocumentDetailClient({
   children,
   editHref,
   readOnly,
+  ownership,
   contentOwnsTitle,
 }: {
   breadcrumb: DocumentBreadcrumbSegment[];
@@ -245,6 +246,8 @@ export function DocumentDetailClient({
   children: ReactNode;
   editHref: string | null;
   readOnly: boolean;
+  /** Passed rather than inferred from `readOnly`: the two happen to agree today. */
+  ownership: "SOURCE_MANAGED" | "HUB_MANAGED";
   contentOwnsTitle: boolean;
 }) {
   const inspector = useContext(InspectorContext);
@@ -273,21 +276,40 @@ export function DocumentDetailClient({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [inspectorOpen, openInspector, setInspectorOpen]);
+  // The palette asks for the inspector from outside the document pane, which
+  // owns whether it is open; this is the pane answering.
+  useEffect(() => {
+    if (!setInspectorOpen) return;
+    const onRequest = () => openInspector();
+    window.addEventListener("kh:request-details", onRequest);
+    return () => window.removeEventListener("kh:request-details", onRequest);
+  }, [openInspector, setInspectorOpen]);
+  const target = useMemo(
+    () => ({
+      documentId: inspectorData.documentId,
+      sourceId: inspectorData.sourceId,
+      label: title,
+      ownership,
+      status,
+      revision: revisionBanner ? ("HISTORICAL" as const) : ("CURRENT" as const),
+    }),
+    [inspectorData.documentId, inspectorData.sourceId, title, ownership, status, revisionBanner],
+  );
   useEffect(() => {
     const header = headerRef.current;
     const root = contentRef.current;
     if (!header || !root || !setDocumentTopbar) return;
-    setDocumentTopbar({ pathname, title, visible: false, onDetailsClick: openInspector });
+    setDocumentTopbar({ pathname, title, visible: false, onDetailsClick: openInspector, target });
     const observer = new IntersectionObserver(([entry]) => {
       const visible = !entry.isIntersecting && entry.boundingClientRect.bottom <= (entry.rootBounds?.top ?? 0);
-      setDocumentTopbar({ pathname, title, visible, onDetailsClick: openInspector });
+      setDocumentTopbar({ pathname, title, visible, onDetailsClick: openInspector, target });
     }, { root, threshold: 0 });
     observer.observe(header);
     return () => {
       observer.disconnect();
       setDocumentTopbar(null);
     };
-  }, [pathname, title, openInspector, setDocumentTopbar]);
+  }, [pathname, title, openInspector, setDocumentTopbar, target]);
   return (
     <div data-document-pane className="flex h-full min-h-0 overflow-hidden bg-kh-bg-raised">
       <div ref={contentRef} role="region" aria-label="Document content" tabIndex={0}

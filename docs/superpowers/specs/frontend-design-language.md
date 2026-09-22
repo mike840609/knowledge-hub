@@ -345,6 +345,22 @@ Choosing an option closes the menu. The exception is a choice whose effect is
 visible in the menu itself — picking a theme is the one case — where staying
 open lets the reader see what they did.
 
+A row's menu may also open on right-click and long-press, through Base UI's
+`ContextMenu` rather than a `contextmenu` listener of our own, which is what
+gives the long-press. **Right-click is never the only opening.** A row that
+carries one also carries a visible trigger showing the same items, because a
+pointer gesture no keyboard or touch user can perform would put those actions
+out of reach — the same rule that makes arrow-key movement mandatory two
+paragraphs above. Both openings render the same component for the same action,
+so they cannot drift apart.
+
+That trigger is floated over the row's own background rather than given a
+column of its own. A second reserved control slot re-truncates every label in
+the tree to buy a button that is invisible most of the time; a float costs
+nothing when hidden. It follows that a row holding a floated control must have
+a background whenever that control is showing, which is why
+`.kh-interactive-row` tints on `focus-within` as well as on hover.
+
 ## 11. Navigation state
 
 A view returns to where it was left, not to the top. Scroll position is
@@ -524,6 +540,126 @@ finds the data already in the router cache and never reaches the fallback.
 That is unmeasured; it would trade N prefetch requests per visible tree row
 for it.
 
+### One registry decides what can be done
+
+`components/actions/action-registry.ts` holds the list of actions — who, in
+what situation, may do what to what — and the palette, the row menu and the
+empty state read it. No surface keeps its own list. Before it, every action
+was welded to whichever screen happened to show it (Edit to the document
+header, Import to the empty state, Archive to the settings panel) and nothing
+could enumerate them, so each new surface designed the same list again and
+agreed with the others by luck.
+
+It returns data: no React, no routing, no icons. That is what makes the
+availability rules testable without a DOM, and they are the part that is easy
+to get quietly wrong. Icons are named and resolved at the surface.
+
+**Availability has three axes, and conflating them is a defect, not a style
+choice** (§17 and `CLAUDE.md` both say so):
+
+1. workspace capability — `canWrite`, `canImport`, `canOpenSettings`, …
+2. source ownership — `SOURCE_MANAGED` content is read-only in the Hub however
+   capable the caller is
+3. target state — an archived document, or a historical revision, offers
+   reading, not editing
+
+The document page had all three spelled out inline at one call site, which is
+how the registry knows they are the right three.
+
+**The registry is not authorization.** It decides what is *shown*. The
+application service decides what *happens*, and must refuse an action that was
+never offered, because knowing an ID grants nothing. Tests assert both halves
+separately.
+
+### A control that cannot do its job yet is disabled
+
+A server-rendered `<form onSubmit>` with a `type="submit"` button and no
+`action` is submittable before React attaches `preventDefault`. The browser
+then performs a **native** submit — a GET to the same URL — the server
+re-renders from stored state, and everything the reader typed is gone without
+a word. Measured on the document editor: a draft in the textarea is replaced by
+the saved content and the URL gains a bare `?`.
+
+So a submit button is disabled until its form has mounted (`useHydrated`). The
+brief disabled state is the truth, not a cosmetic cost: the form genuinely
+cannot accept a save yet. It is also what makes the behaviour testable, because
+a test clicking the button waits for it rather than racing it — CI caught this
+as an intermittent failure where a second page loading in the same browser
+delayed hydration past a save.
+
+**`javaScriptEnabled: false` does not model this state.** These routes stream,
+so their content arrives in a hidden `<div>` at the end of the body and an
+*inline* script moves it into place; turning JavaScript off stops that too and
+the form never reaches the page. Blocking the framework chunks is the faithful
+version — inline scripts still run, React never hydrates.
+
+### A timestamp is rendered in the reader's zone, which means twice
+
+`components/ui/timestamp.tsx` is the only thing that renders a moment in time.
+`formatDateTime` and `formatDate` take the zone as a **required** argument,
+because leaving it to the runtime is precisely the defect: three of the six
+render sites were server components, so the server's zone was what reached the
+page and stayed there — a reader in Asia/Taipei was shown UTC on the Sources
+list, in search results and in the audit log, permanently, not as a flicker.
+A required parameter means a new call site cannot inherit that by omission.
+
+Nothing in a request carries the browser's zone, so `Timestamp` renders twice
+on purpose. The first pass — on the server, and again as the first client
+render — formats in `SSR_TIME_ZONE` (UTC), so the two agree byte for byte and
+React has nothing to reconcile. An effect then swaps in
+`Intl.DateTimeFormat().resolvedOptions().timeZone`. **An explicit agreed zone
+is the point**; formatting the first pass in the runtime's own zone is what
+tore the markup before.
+
+The cost is worth stating rather than hiding: for the moment before hydration,
+and for a reader with JavaScript off, the visible zone is UTC. The `dateTime`
+attribute always carries the exact instant, so nothing machine-readable is
+ambiguous, and the e2e tests compare the rendered text against that attribute
+re-formatted in the browser's zone rather than against a fixture string.
+
+The locale is still one constant (§15, one module) rather than the reader's,
+because honouring that one needs a server-side resolution — a header or a
+stored preference — which is a product decision. The zone did not need one:
+"the reader's browser" is answerable in the browser.
+
+### Feedback has one place, and undo is a promise
+
+`components/ui/toast.tsx` is the one region: fixed in a corner, mounted by the
+app shell, `role="status"` with `aria-live="polite"`. It holds one message at a
+time and clears on navigation, because a toast describes what just happened
+*here*.
+
+The region is rendered whether or not it holds anything. A live region
+inserted at the same moment as its content is not reliably announced, and the
+older pattern — a `<p role="status">` appearing inside the panel that
+performed the mutation — also pushed the rest of that panel down as it
+arrived.
+
+**Messages split by whether the reader must act on them.** A failure stays
+where the control is, next to the field or the button that produced it, and
+can mark that field invalid; that is what `GovernanceError` is for. A
+confirmation reports and gets out of the way, so it goes to the toast. A
+mutation that *navigates* to its own result gets neither — saving a document
+lands on the saved document, and a toast on top of that is noise.
+
+**Undo is offered only where a reverse operation already exists.** An "Undo"
+that cannot restore the previous state is a lie, and this codebase has no
+soft-delete to lean on. Archiving a workspace, renaming it, granting access,
+changing a role and revoking a grant all qualify. Editing a document does not:
+its reverse would be a *new* revision, which is a feature and not an undo.
+Applying an import does not: the import spec forbids both force-apply and
+rollback.
+
+The reverse call is not always the mirror of the forward one. Restoring a
+revoked grant goes through the add endpoint, because changing the role of a
+membership that no longer exists is refused — and it is a new grant, which the
+audit trail records as such. The tests assert the state after the undo rather
+than the toast, which is the only way that distinction shows up.
+
+**A two-step confirmation is kept only where undo is impossible and the
+consequence is real.** Asking twice before something reversible buys nothing
+and teaches the reader to click through the prompts that matter.
+
 Error and not-found states take their shape from `StatusMessage` — heading,
 one line, optional action — so that a new boundary cannot invent a fourth
 spelling. Boundaries are placed where the shell survives them: the workspace
@@ -575,38 +711,49 @@ that found them is recorded at
 which also covers what was addressed at the time and is a point-in-time
 record rather than a tracker.
 
-Each of these changes behaviour rather than appearance:
+Each of these changes behaviour rather than appearance.
 
-1. `⌘K` executes search only. The reference language treats it as a command
-   palette; creating a note, toggling archived and opening Details have no
-   keyboard path and no discoverable shortcut list.
-2. No toast or undo layer. Feedback is `role="status"` text that shifts
-   layout, and destructive actions confirm inline rather than acting and
-   offering undo. (The announcement itself works — `role="status"` carries an
-   implicit `aria-live="polite"`. An earlier wording here counted literal
-   `aria-live` attributes and read as though nothing were announced at all,
-   which overstated the gap.)
-3. Empty and error states are heading-plus-paragraph. `StatusMessage` (§15)
-   gives them one shape; it does not give them illustration or guidance on
-   what to do next. (This item used to add "and the knowledge empty state
-   presents two equally weighted primary actions", which stopped being true
-   when that state was given a primary and a secondary action, and was left
-   here afterwards. An open item that describes a fixed problem teaches the
-   next reader to stop trusting the list.)
-4. No row carries a context menu. Renaming, archiving and copying a link all
-   require opening the document first, where the reference language puts them
-   one right-click away on the row.
-5. `spacing` is the one scale still left at Tailwind's default rather than
+A fifth is closed on its own terms: timestamps now follow the reader's
+browser (§15). It was the only item on this list that was a defect rather than
+a gap — three of the six render sites were server components, so a reader
+outside the server's zone was shown the wrong time and kept it.
+
+Four items that used to head this list — `⌘K` searched only, no row carried a
+context menu, empty states offered no guidance, and there was no toast or undo
+layer — were four exits from one missing thing, a list of what can be done, by
+whom, to what. That list now exists (§15) and all four read it, so they are
+closed. The record of what was decided, and of two claims in the old wording
+that turned out to be false, is
+`docs/superpowers/specs/2026-09-21-action-model-spec.md`.
+
+The toast item is worth one correction of its own: the announcement was never
+broken. `role="status"` carries an implicit `aria-live="polite"`, and an
+earlier wording here counted literal `aria-live` attributes and read as though
+nothing were announced at all. What was missing was a place for feedback to
+live that was not inside the panel that produced it, and an undo offered only
+where it could be kept.
+
+One of those claims is worth repeating here, because the old item is the kind
+of thing a reader trusts: **archiving a document and copying a link do not
+exist in this product**, and never did. The item said a context menu was
+missing for three actions when two of the three had never been built. A
+document archive would be a domain change, not a UI one; the decision on
+record is to leave the lifecycle as it is, so the registry gains an entry if
+that ever changes rather than being redesigned.
+
+
+1. The palette is mostly navigation, and that is a product gap rather than a
+   UI one. Counted against the code it can offer about fourteen entries, of
+   which the majority are ways to get somewhere; a command palette does not
+   create commands. Worth revisiting when this product has more a reader can
+   do, not by adding entries that do nothing.
+2. `spacing` is the one scale still left at Tailwind's default rather than
    replaced, so paddings, margins and gaps remain unenforced. Note that
    replacing `spacing` wholesale is the wrong fix: Tailwind feeds it to
    `width` and `height` too, and a 288px sidebar is not a decision about
    rhythm. What can be replaced is `padding`, `margin`, `gap` and `space`,
    which is where a rhythm applies. (Page container widths were the other
    half of this item and are now §7.)
-6. Timestamps are formatted in the runtime's own time zone, which differs
-   between the server render and the client render. The locale is settled
-   (§15, one module); the zone is the same product decision the locale was —
-   resolve it server-side, or render these client-side only.
 
 ## 19. Completion criteria
 

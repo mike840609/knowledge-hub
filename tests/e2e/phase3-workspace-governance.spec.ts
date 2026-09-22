@@ -62,8 +62,9 @@ test.describe("Phase 3 Workspace product acceptance", () => {
       await page.getByLabel("Team name").fill("Renamed UI team");
       await page.getByRole("button", { name: "Save name" }).click();
       await expect(page.getByLabel("Workspace: Renamed UI team", { exact: true })).toBeVisible();
+      // Archiving is reversible, so it acts at once and offers undo rather
+      // than asking twice.
       await page.getByRole("button", { name: "Archive workspace", exact: true }).click();
-      await page.getByRole("button", { name: "Confirm archive" }).click();
       await expect(page.getByText("State: ARCHIVED")).toBeVisible();
       await expect(page.getByRole("button", { name: "Save name" })).toHaveCount(0);
       await page.getByRole("button", { name: "Restore workspace", exact: true }).first().click();

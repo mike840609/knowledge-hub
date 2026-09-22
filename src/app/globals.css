@@ -127,7 +127,7 @@ kbd {
   }
 
   .kh-interactive-row {
-    @apply kh-focus-ring rounded-md transition-colors hover:bg-kh-bg-hover;
+    @apply kh-focus-ring rounded-md transition-colors hover:bg-kh-bg-hover focus-within:bg-kh-bg-hover;
   }
 
   /* Three page containers, each with one job. Anything that fills a page
@@ -163,7 +163,11 @@ kbd {
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .kh-favorite-action { opacity: 0; }
-  .group:hover .kh-favorite-action,
-  .group:focus-within .kh-favorite-action { opacity: 1; }
+  /* A control that belongs to one row and appears when that row is reached.
+     It stays visible while its own menu is open, or the menu would hang off a
+     trigger that had vanished from under the pointer. */
+  .kh-row-action { opacity: 0; }
+  .group:hover .kh-row-action,
+  .group:focus-within .kh-row-action,
+  .kh-row-action[data-popup-open] { opacity: 1; }
 }

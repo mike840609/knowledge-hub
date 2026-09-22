@@ -1,132 +1,135 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { useToast } from "@/components/ui/toast";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import {
   GovernanceError,
   governanceFailure,
-  governanceRequest,
   type GovernanceFailure,
 } from "./governance-error";
+
+/**
+ * Both of these are reversible — a role can be set back, a grant can be
+ * granted again — so both act at once and offer undo rather than asking
+ * twice.
+ *
+ * The three operations arrive as callbacks because undoing a removal is not
+ * the reverse *call* of removing: `PATCH` on a membership that no longer
+ * exists is rejected, so restoring one goes through the add endpoint. The
+ * settings components already build those URLs; a `url` prop here could only
+ * have guessed at the third.
+ *
+ * The role restored is the one held before the change, captured at the click.
+ * Reading it back afterwards would read whatever the row shows now.
+ */
 export function GrantRowActions({
   role,
   roles,
   canRemove,
-  url,
-  identityBody,
   label,
   member = false,
+  onChangeRole,
+  onRemove,
+  onRestore,
 }: {
   role: string;
   roles: readonly string[];
   canRemove: boolean;
-  url: string;
-  identityBody?: { externalGroupId: string };
   label: string;
   member?: boolean;
+  onChangeRole: (role: string) => Promise<void>;
+  onRemove: () => Promise<void>;
+  onRestore: (role: string) => Promise<void>;
 }) {
   const { access, confirmed } = useWorkspaceAuthorization();
-  const router = useRouter();
+  const toast = useToast();
   const [nextRole, setNextRole] = useState(role);
-  const [confirm, setConfirm] = useState<"role" | "remove" | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<GovernanceFailure | null>(null);
-  const [notice, setNotice] = useState("");
-  useEffect(() => {
-    setNextRole(role);
-    setConfirm(null);
-  }, [role]);
+  useEffect(() => setNextRole(role), [role]);
   const allowed =
     confirmed &&
     access.workspace.lifecycleState === "ACTIVE" &&
     (member ? access.actions.canManageBasicMembers : access.actions.canManageBasicGroups);
-  async function save() {
-    if (!allowed || busy || !confirm) return;
+
+  async function run(
+    action: () => Promise<void>,
+    done: { message: string; undo?: () => Promise<void> },
+  ) {
+    if (!allowed || busy) return;
     setBusy(true);
     setError(null);
-    setNotice("");
     try {
-      await governanceRequest(
-        url,
-        confirm === "remove" ? "DELETE" : "PATCH",
-        confirm === "remove" ? identityBody : { ...identityBody, role: nextRole },
-      );
-      setConfirm(null);
-      setNotice("Access updated.");
-      router.refresh();
+      await action();
+      toast({ message: done.message, undo: done.undo ? { run: done.undo } : undefined });
     } catch (failure) {
       setError(governanceFailure(failure));
     } finally {
       setBusy(false);
     }
   }
+
   return (
     <div className="min-w-52 space-y-2">
       {allowed && (
-        <>
-          <div className="flex flex-wrap gap-2">
-            {roles.length > 0 && (
-              <>
-                <Select
-                  aria-label={`Role for ${label}`}
-                  value={nextRole}
-                  disabled={busy}
-                  onChange={(event) => setNextRole(event.target.value)}
-                >
-                  {!roles.includes(role) && (
-                    <option value={role} disabled>
-                      {role}
-                    </option>
-                  )}
-                  {roles.map((value) => (
-                    <option key={value}>{value}</option>
-                  ))}
-                </Select>
-                <Button
-                  disabled={busy || nextRole === role || !roles.includes(nextRole)}
-                  onClick={() => setConfirm("role")}
-                >
-                  Change role
-                </Button>
-              </>
-            )}
-            {canRemove && (
-              <Button variant="secondary" disabled={busy} onClick={() => setConfirm("remove")}>
-                Remove
+        <div className="flex flex-wrap gap-2">
+          {roles.length > 0 && (
+            <>
+              <Select
+                aria-label={`Role for ${label}`}
+                value={nextRole}
+                disabled={busy}
+                onChange={(event) => setNextRole(event.target.value)}
+              >
+                {!roles.includes(role) && (
+                  <option value={role} disabled>
+                    {role}
+                  </option>
+                )}
+                {roles.map((value) => (
+                  <option key={value}>{value}</option>
+                ))}
+              </Select>
+              <Button
+                disabled={busy || nextRole === role || !roles.includes(nextRole)}
+                onClick={() => {
+                  const previous = role;
+                  const assigned = nextRole;
+                  void run(() => onChangeRole(assigned), {
+                    message: `${label} is now ${assigned}.`,
+                    undo: previous ? () => onChangeRole(previous) : undefined,
+                  });
+                }}
+              >
+                Change role
               </Button>
-            )}
-          </div>
-          {confirm && (
-            <div className="rounded-md border border-kh-border p-3">
-              <p className="text-body">
-                {confirm === "remove"
-                  ? `Remove ${member ? "direct access for" : "group mapping for"} ${label}?`
-                  : `Change ${label} from ${role} to ${nextRole}?`}
-              </p>
-              {member && confirm === "remove" && (
-                <p className="my-2 text-body">
-                  Removing direct access may not fully revoke access if this user is still granted
-                  access through an SSO group.
-                </p>
-              )}
-              <div className="mt-2 flex gap-2">
-                <Button disabled={busy} onClick={() => void save()}>
-                  Confirm {confirm === "remove" ? "remove" : "change"}
-                </Button>
-                <Button variant="secondary" disabled={busy} onClick={() => setConfirm(null)}>
-                  Cancel
-                </Button>
-              </div>
-            </div>
+            </>
           )}
-        </>
+          {canRemove && (
+            <Button
+              variant="secondary"
+              disabled={busy}
+              onClick={() => {
+                const previous = role;
+                void run(onRemove, {
+                  message: member
+                    ? `Direct access removed for ${label}. Access through an SSO group is unaffected.`
+                    : `Group mapping removed for ${label}.`,
+                  // Restoring is a new grant, and the audit trail says so —
+                  // that is what actually happened. Offered only when there
+                  // was a role to restore.
+                  undo: previous ? () => onRestore(previous) : undefined,
+                });
+              }}
+            >
+              Remove
+            </Button>
+          )}
+        </div>
       )}
       <GovernanceError error={error} />
-      <p role="status" className="text-body">
-        {notice}
-      </p>
     </div>
   );
 }

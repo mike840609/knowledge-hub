@@ -3,7 +3,7 @@ import { FileText } from "lucide-react";
 import { highlightSnippet } from "@/modules/knowledge/domain/search-query";
 import { plainSearchSnippet } from "@/lib/search-snippet";
 import type { KnowledgeSearchRow } from "@/modules/knowledge/ports/knowledge-search-repository";
-import { formatDate, formatDateTime } from "@/lib/format-date";
+import { Timestamp } from "@/components/ui/timestamp";
 
 function asDate(value: Date): Date {
   return value instanceof Date ? value : new Date(value);
@@ -60,13 +60,7 @@ export function SearchResultRow({
             <span className="max-w-[10rem] truncate rounded-md border border-kh-border px-1.5 py-0.5">
               {hit.sourceName}
             </span>
-            <time
-              dateTime={updatedAt.toISOString()}
-              title={formatDateTime(updatedAt)}
-              className="sm:w-[7.5rem] sm:text-right"
-            >
-              {formatDate(updatedAt)}
-            </time>
+            <Timestamp value={updatedAt} variant="date" className="sm:w-[7.5rem] sm:text-right" />
           </span>
         </span>
       </Link>

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { useToast } from "@/components/ui/toast";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import type { GroupAdminView, TeamWorkspaceView } from "@/server/workspace-admin";
 import {
@@ -21,18 +22,31 @@ export function GroupsSettings({
   groups: readonly GroupAdminView[];
 }) {
   const router = useRouter();
+  const toast = useToast();
   const { access, confirmed } = useWorkspaceAuthorization();
   const [externalGroupId, setExternalGroupId] = useState("");
   const [role, setRole] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<GovernanceFailure | null>(null);
-  const [notice, setNotice] = useState("");
   const roles = team.grantOptions.newGroupAssignableRoles;
   const chosenRole = roles.find((value) => value === role) ?? roles[0] ?? "";
   const canAdd =
     access.actions.canManageBasicGroups &&
     access.workspace.lifecycleState === "ACTIVE" &&
     roles.length > 0;
+  const groupsUrl = `/api/workspaces/${team.id}/groups`;
+  async function grantGroup(id: string, assigned: string) {
+    await governanceRequest(groupsUrl, "POST", { externalGroupId: id, role: assigned });
+    router.refresh();
+  }
+  async function setGroupRole(id: string, assigned: string) {
+    await governanceRequest(groupsUrl, "PATCH", { externalGroupId: id, role: assigned });
+    router.refresh();
+  }
+  async function removeGroup(id: string) {
+    await governanceRequest(groupsUrl, "DELETE", { externalGroupId: id });
+    router.refresh();
+  }
   return (
     <section className="space-y-6">
       <h2 className="text-title font-semibold">SSO Groups</h2>
@@ -46,17 +60,17 @@ export function GroupsSettings({
           onSubmit={async (event) => {
             event.preventDefault();
             if (!confirmed || busy || !externalGroupId.trim() || !chosenRole) return;
+            const id = externalGroupId.trim();
+            const assigned = chosenRole;
             setBusy(true);
             setError(null);
-            setNotice("");
             try {
-              await governanceRequest(`/api/workspaces/${team.id}/groups`, "POST", {
-                externalGroupId: externalGroupId.trim(),
-                role: chosenRole,
-              });
+              await grantGroup(id, assigned);
               setExternalGroupId("");
-              setNotice("Group mapping added.");
-              router.refresh();
+              toast({
+                message: `${id} mapped to ${assigned}.`,
+                undo: { run: () => removeGroup(id) },
+              });
             } catch (failure) {
               setError(governanceFailure(failure));
             } finally {
@@ -94,9 +108,6 @@ export function GroupsSettings({
         </form>
       )}
       <GovernanceError error={error} />
-      <p role="status" className="text-body">
-        {notice}
-      </p>
       {groups.length === 0 ? (
         <p className="text-body">No SSO group mappings yet.</p>
       ) : (
@@ -121,9 +132,10 @@ export function GroupsSettings({
                       role={group.role}
                       roles={group.assignableRoles}
                       canRemove={group.canRemove}
-                      url={`/api/workspaces/${team.id}/groups`}
-                      identityBody={{ externalGroupId: group.externalGroupId }}
                       label={group.externalGroupId}
+                      onChangeRole={(assigned) => setGroupRole(group.externalGroupId, assigned)}
+                      onRemove={() => removeGroup(group.externalGroupId)}
+                      onRestore={(assigned) => grantGroup(group.externalGroupId, assigned)}
                     />
                   </td>
                 </tr>

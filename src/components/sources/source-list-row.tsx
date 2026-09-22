@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ChevronRight, Database } from "lucide-react";
 import type { SourceListItemModel } from "@/server/source-read";
-import { formatDateTime } from "@/lib/format-date";
+import { Timestamp } from "@/components/ui/timestamp";
 
 export function sourceTypeLabel(sourceType: string): string {
   if (sourceType === "FOLDER_SYNC") return "Folder sync";
@@ -30,7 +30,7 @@ export function SourceListRow({ workspaceId, item }: { workspaceId: string; item
         </span>
         {latestRun ? (
           <span className="hidden shrink-0 text-caption text-kh-text-muted sm:inline">
-            {syncStatusLabel(latestRun.status)} · <time dateTime={new Date(latestRun.startedAt).toISOString()}>{formatDateTime(latestRun.startedAt)}</time>
+            {syncStatusLabel(latestRun.status)} · <Timestamp value={latestRun.startedAt} />
           </span>
         ) : (
           <span className="hidden shrink-0 text-caption text-kh-text-muted sm:inline">Never synced</span>
