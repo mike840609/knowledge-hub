@@ -6,6 +6,7 @@ import { ChevronRight, LockKeyhole } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
 import { formatDateTime, formatRelativeTime } from "@/lib/format-date";
+import { useDisplayTimeZone } from "@/components/ui/timestamp";
 
 export type DocumentBreadcrumbSegment = {
   label: string;
@@ -35,13 +36,16 @@ export function DocumentHeader({
 }) {
 
   const [now, setNow] = useState<number | null>(null);
+  // Before mount there is no "now" and no zone; both arrive in the same tick,
+  // so the first render is the one the server also produced.
+  const zone = useDisplayTimeZone();
   useEffect(() => {
     setNow(Date.now());
     const timer = window.setInterval(() => setNow(Date.now()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
   const elapsed = now === null ? null : Math.max(0, now - new Date(updatedAt).getTime());
-  const relative = elapsed === null ? formatDateTime(updatedAt) : formatRelativeTime(elapsed);
+  const relative = elapsed === null ? formatDateTime(updatedAt, zone) : formatRelativeTime(elapsed);
 
   return (
     <header className="bg-kh-bg-raised">
@@ -94,7 +98,7 @@ export function DocumentHeader({
         <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-kh-text-muted">
           {readOnly ? <span className="inline-flex items-center gap-1"><LockKeyhole className="h-3 w-3" aria-hidden="true" />Read only</span> : null}
           {status === "ARCHIVED" ? <Badge variant="warning">Archived</Badge> : null}
-          <time dateTime={new Date(updatedAt).toISOString()} title={formatDateTime(updatedAt)}>Updated {relative}</time>
+          <time dateTime={new Date(updatedAt).toISOString()} title={formatDateTime(updatedAt, zone)}>Updated {relative}</time>
         </div>
         {revisionBanner ? (
           <p className="mt-2 rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2 text-body-sm text-kh-text">

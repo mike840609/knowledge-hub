@@ -571,6 +571,35 @@ application service decides what *happens*, and must refuse an action that was
 never offered, because knowing an ID grants nothing. Tests assert both halves
 separately.
 
+### A timestamp is rendered in the reader's zone, which means twice
+
+`components/ui/timestamp.tsx` is the only thing that renders a moment in time.
+`formatDateTime` and `formatDate` take the zone as a **required** argument,
+because leaving it to the runtime is precisely the defect: three of the six
+render sites were server components, so the server's zone was what reached the
+page and stayed there — a reader in Asia/Taipei was shown UTC on the Sources
+list, in search results and in the audit log, permanently, not as a flicker.
+A required parameter means a new call site cannot inherit that by omission.
+
+Nothing in a request carries the browser's zone, so `Timestamp` renders twice
+on purpose. The first pass — on the server, and again as the first client
+render — formats in `SSR_TIME_ZONE` (UTC), so the two agree byte for byte and
+React has nothing to reconcile. An effect then swaps in
+`Intl.DateTimeFormat().resolvedOptions().timeZone`. **An explicit agreed zone
+is the point**; formatting the first pass in the runtime's own zone is what
+tore the markup before.
+
+The cost is worth stating rather than hiding: for the moment before hydration,
+and for a reader with JavaScript off, the visible zone is UTC. The `dateTime`
+attribute always carries the exact instant, so nothing machine-readable is
+ambiguous, and the e2e tests compare the rendered text against that attribute
+re-formatted in the browser's zone rather than against a fixture string.
+
+The locale is still one constant (§15, one module) rather than the reader's,
+because honouring that one needs a server-side resolution — a header or a
+stored preference — which is a product decision. The zone did not need one:
+"the reader's browser" is answerable in the browser.
+
 ### Feedback has one place, and undo is a promise
 
 `components/ui/toast.tsx` is the one region: fixed in a corner, mounted by the
@@ -662,6 +691,11 @@ record rather than a tracker.
 
 Each of these changes behaviour rather than appearance.
 
+A fifth is closed on its own terms: timestamps now follow the reader's
+browser (§15). It was the only item on this list that was a defect rather than
+a gap — three of the six render sites were server components, so a reader
+outside the server's zone was shown the wrong time and kept it.
+
 Four items that used to head this list — `⌘K` searched only, no row carried a
 context menu, empty states offered no guidance, and there was no toast or undo
 layer — were four exits from one missing thing, a list of what can be done, by
@@ -698,10 +732,6 @@ that ever changes rather than being redesigned.
    rhythm. What can be replaced is `padding`, `margin`, `gap` and `space`,
    which is where a rhythm applies. (Page container widths were the other
    half of this item and are now §7.)
-3. Timestamps are formatted in the runtime's own time zone, which differs
-   between the server render and the client render. The locale is settled
-   (§15, one module); the zone is the same product decision the locale was —
-   resolve it server-side, or render these client-side only.
 
 ## 19. Completion criteria
 

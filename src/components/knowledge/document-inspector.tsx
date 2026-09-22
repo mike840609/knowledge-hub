@@ -13,7 +13,7 @@ import { Drawer } from "@/components/ui/drawer";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/components/ui/tabs";
 import { DocumentHeader, type DocumentBreadcrumbSegment } from "./document-header";
 import { buttonClasses } from "@/components/ui/button";
-import { formatDateTime } from "@/lib/format-date";
+import { Timestamp } from "@/components/ui/timestamp";
 
 function revisionHref(input: {
   workspaceId: string;
@@ -110,13 +110,13 @@ function InspectorTabs({ data }: { data: DocumentInspectorData }) {
           <div>
             <dt className="text-caption text-kh-text-muted">Created</dt>
             <dd className="text-kh-text">
-              {created ? formatDateTime(created) : "—"}
+              {created ? <Timestamp value={created} /> : "—"}
             </dd>
           </div>
           <div>
             <dt className="text-caption text-kh-text-muted">Updated</dt>
             <dd className="text-kh-text">
-              {current ? formatDateTime(current.createdAt) : "—"}
+              {current ? <Timestamp value={current.createdAt} /> : "—"}
             </dd>
           </div>
         </dl>
@@ -150,7 +150,7 @@ function InspectorTabs({ data }: { data: DocumentInspectorData }) {
                     {isCurrent ? " (current)" : ""}
                   </span>
                   <span className="shrink-0 text-caption text-kh-text-muted">
-                    {formatDateTime(revision.createdAt)}
+                    <Timestamp value={revision.createdAt} />
                   </span>
                 </Link>
               </li>

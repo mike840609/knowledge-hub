@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { formatDateTime } from "@/lib/format-date";
+import { Timestamp } from "@/components/ui/timestamp";
 import type { AuditPage } from "@/server/workspace-admin";
 import {
   GovernanceError,
@@ -29,9 +29,7 @@ export function AuditSettings({
           <li key={item.id} className="rounded-md border border-kh-border p-4">
             <div className="flex flex-wrap justify-between gap-2">
               <p className="font-medium">{item.summary}</p>
-              <time className="text-caption text-kh-text-muted" dateTime={item.createdAt}>
-                {formatDateTime(new Date(item.createdAt))}
-              </time>
+              <Timestamp value={item.createdAt} className="text-caption text-kh-text-muted" />
             </div>
             <p className="mt-1 text-body">
               Actor: {item.actorName ?? "Unknown actor"} · {item.eventType}

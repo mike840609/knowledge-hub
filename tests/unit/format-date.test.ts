@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { UI_LOCALE, formatDate, formatDateTime, formatRelativeTime } from "@/lib/format-date";
+import { SSR_TIME_ZONE, UI_LOCALE, formatDate, formatDateTime, formatRelativeTime } from "@/lib/format-date";
 
 /**
  * Four call sites each built their own `Intl` formatter with the locale
@@ -14,10 +14,31 @@ describe("format-date", () => {
   });
 
   it("formats a date with and without its time", () => {
-    expect(formatDateTime(when)).toMatch(/Mar 4, 2026/);
-    expect(formatDateTime(when)).toMatch(/\d:\d\d/);
-    expect(formatDate(when)).toMatch(/Mar 4, 2026/);
-    expect(formatDate(when)).not.toMatch(/\d:\d\d/);
+    expect(formatDateTime(when, "UTC")).toMatch(/Mar 4, 2026/);
+    expect(formatDateTime(when, "UTC")).toMatch(/\d:\d\d/);
+    expect(formatDate(when, "UTC")).toMatch(/Mar 4, 2026/);
+    expect(formatDate(when, "UTC")).not.toMatch(/\d:\d\d/);
+  });
+
+  /**
+   * The zone is a required argument because leaving it to the runtime is the
+   * bug: three of the six render sites were server components, so the
+   * server's zone was what a reader in Asia/Taipei saw and kept.
+   */
+  it("renders the same instant differently in different zones", () => {
+    expect(formatDateTime(when, "UTC")).toBe("Mar 4, 2026, 9:05 AM");
+    expect(formatDateTime(when, "Asia/Taipei")).toBe("Mar 4, 2026, 5:05 PM");
+    // A zone can cross the date boundary, which is why the date form takes one too.
+    expect(formatDate(new Date("2026-03-04T17:00:00Z"), "UTC")).toBe("Mar 4, 2026");
+    expect(formatDate(new Date("2026-03-04T17:00:00Z"), "Asia/Taipei")).toBe("Mar 5, 2026");
+  });
+
+  it("agrees on one zone for the render the server and the client share", () => {
+    expect(SSR_TIME_ZONE).toBe("UTC");
+  });
+
+  it("falls back to that zone rather than throwing on one it does not know", () => {
+    expect(formatDateTime(when, "Mars/Olympus_Mons")).toBe(formatDateTime(when, SSR_TIME_ZONE));
   });
 
   it("picks the coarsest useful unit for a relative time", () => {
