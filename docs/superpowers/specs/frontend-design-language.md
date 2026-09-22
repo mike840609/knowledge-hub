@@ -73,12 +73,12 @@ visual imitation. The principles are:
 
 ## 3. Enforcement
 
-The `fontSize`, `borderRadius`, `boxShadow`, `transitionDuration` and
-`transitionTimingFunction` scales in `tailwind.config.ts` are **replaced**,
-not extended.
+The `fontSize`, `borderRadius`, `boxShadow`, `transitionDuration`,
+`transitionTimingFunction`, `padding`, `margin`, `gap` and `space` scales in
+`tailwind.config.ts` are **replaced**, not extended.
 
 Tailwind therefore emits no class for a value the system does not name.
-`text-[13px]`, `rounded-xl` and `shadow-sm` produce no CSS. `borderRadius`
+`text-[13px]`, `rounded-xl`, `shadow-sm` and `p-7` produce no CSS. `borderRadius`
 carries no `DEFAULT` key, so a bare `rounded` does not compile either.
 
 This is what makes the rest of this document binding rather than advisory. A
@@ -98,6 +98,7 @@ together, and say what job the new token does that no existing one covers.
 | Elevation | `popover`, `modal` | floating surfaces only |
 | Border | `border`, `border-strong` | see §6 |
 | Container | `page`, `wide`, `reading`, `panel` | see §7; the `maxWidth` scale is replaced, so `max-w-4xl` does not compile |
+| Spacing rhythm | `0`, `px`, `0.5`–`6` every half step, `auto` (margin), `16` (padding) | paddings, margins and gaps; `16` is `StatusMessage` only, see §7 |
 | Control height | `sm`, `md`, `lg` (24 / 32 / 40) | see §15; buttons and fields read the same ladder |
 | Motion | two durations, one easing curve | see §9 |
 
@@ -747,17 +748,21 @@ that ever changes rather than being redesigned.
    which the majority are ways to get somewhere; a command palette does not
    create commands. Worth revisiting when this product has more a reader can
    do, not by adding entries that do nothing.
-2. `spacing` is the one scale still left at Tailwind's default rather than
-   replaced, so paddings, margins and gaps remain unenforced. Note that
-   replacing `spacing` wholesale is the wrong fix: Tailwind feeds it to
-   `width` and `height` too, and a 288px sidebar is not a decision about
-   rhythm. What can be replaced is `padding`, `margin`, `gap` and `space`,
-   which is where a rhythm applies. (Page container widths were the other
-   half of this item and are now §7.)
+ 2. `spacing` was the one scale still left at Tailwind's default rather than
+    replaced, so paddings, margins and gaps were unenforced. Closed: `padding`,
+    `margin`, `gap` and `space` are now replaced with the 2px-base ladder the
+    codebase actually uses (`0`, `px`, `0.5`–`6`, `auto` on margin,
+    `16` on padding for `StatusMessage`), and the three off-rhythm sites are
+    migrated — document content padding unified at `py-6`, tree empty-state
+    indent at the nearest rung, search-field icon clearance as a documented
+    arbitrary one-off (icon geometry, not rhythm). Replacing `spacing`
+    wholesale stays the wrong fix: Tailwind feeds it to `width` and `height`
+    too, and a 288px sidebar is not a decision about rhythm. (Page container
+    widths were the other half of this item and are now §7.)
 
 ## 19. Completion criteria
 
-- Off-scale type, radius, elevation and motion values do not compile.
+- Off-scale type, radius, elevation, motion and spacing-rhythm values do not compile.
 - The `lg` radius and both elevation tokens appear only on floating surfaces.
 - No component declares a colour outside the token layer.
 
