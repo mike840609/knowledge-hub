@@ -26,7 +26,10 @@ export function SearchForm({
         <div className="relative min-w-0 flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-kh-text-muted" aria-hidden="true" />
           <label htmlFor="search-q" className="sr-only">Search knowledge</label>
-          <Input id="search-q" name="q" size="lg" type="search" defaultValue={q} autoComplete="off" placeholder="Search documents…" className="pl-9" />
+          {/* Icon-clearance padding is geometry, not rhythm: left-3 + w-4 icon
+              + a gap-2 gutter. Spelled arbitrary so the rhythm scale stays
+              clean — the same exemption §7 gives truncation widths. */}
+          <Input id="search-q" name="q" size="lg" type="search" defaultValue={q} autoComplete="off" placeholder="Search documents…" className="pl-[2.25rem]" />
         </div>
         <Button type="submit" size="lg">Search</Button>
       </div>

@@ -7,6 +7,20 @@ import type { Config } from "tailwindcss";
  *
  * Contract and rationale: docs/superpowers/specs/frontend-design-language.md
  */
+const rhythm = {
+  0: "0px",
+  px: "1px",
+  0.5: "0.125rem",
+  1: "0.25rem",
+  1.5: "0.375rem",
+  2: "0.5rem",
+  2.5: "0.625rem",
+  3: "0.75rem",
+  4: "1rem",
+  5: "1.25rem",
+  6: "1.5rem",
+};
+
 const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
@@ -70,6 +84,26 @@ const config: Config = {
       out: "cubic-bezier(0.16, 1, 0.3, 1)",
       linear: "linear",
     },
+    // Spacing rhythm: the 2px-base ladder the codebase actually uses, 0–24px
+    // in every 2px step (0.5–6), plus the zero/1px/auto utilities and the one
+    // tall vertical rhythm below. Census of src/ (p/m/gap/space), 2026-09-22:
+    // 8px ~123, 12px ~103, 4px ~43, 24px ~38, 16px ~35, 2px ~21, 6px ~13,
+    // 20px ~10, 10px ~7, 0/auto a handful each. Nothing else is used, so
+    // nothing else compiles: p-7/m-8/gap-9 and the rest of Tailwind's default
+    // produce no CSS, the same bar as text-[13px] and rounded-xl.
+    // Deliberately NOT `spacing`: width/height (h-6/h-8/h-10 control ladder,
+    // w-72 sidebars, icon h-4/w-4) and inset/translate read from `spacing`,
+    // and a sidebar width is not a decision about rhythm (§18 item 2).
+    padding: {
+      ...rhythm,
+      16: "4rem", // StatusMessage's centred-message vertical rhythm — see §7
+    },
+    margin: {
+      ...rhythm,
+      auto: "auto", // mx-auto/ml-auto centring; negatives (-mx-6, -mb-px) derive
+    },
+    gap: { ...rhythm }, // gap-x-*/gap-y-* read this scale too
+    space: { ...rhythm },
     extend: {
       colors: {
         "kh-bg": "var(--kh-bg)",
