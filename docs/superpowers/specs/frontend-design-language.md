@@ -345,6 +345,22 @@ Choosing an option closes the menu. The exception is a choice whose effect is
 visible in the menu itself — picking a theme is the one case — where staying
 open lets the reader see what they did.
 
+A row's menu may also open on right-click and long-press, through Base UI's
+`ContextMenu` rather than a `contextmenu` listener of our own, which is what
+gives the long-press. **Right-click is never the only opening.** A row that
+carries one also carries a visible trigger showing the same items, because a
+pointer gesture no keyboard or touch user can perform would put those actions
+out of reach — the same rule that makes arrow-key movement mandatory two
+paragraphs above. Both openings render the same component for the same action,
+so they cannot drift apart.
+
+That trigger is floated over the row's own background rather than given a
+column of its own. A second reserved control slot re-truncates every label in
+the tree to buy a button that is invisible most of the time; a float costs
+nothing when hidden. It follows that a row holding a floated control must have
+a background whenever that control is showing, which is why
+`.kh-interactive-row` tints on `focus-within` as well as on hover.
+
 ## 11. Navigation state
 
 A view returns to where it was left, not to the top. Scroll position is
@@ -524,6 +540,37 @@ finds the data already in the router cache and never reaches the fallback.
 That is unmeasured; it would trade N prefetch requests per visible tree row
 for it.
 
+### One registry decides what can be done
+
+`components/actions/action-registry.ts` holds the list of actions — who, in
+what situation, may do what to what — and the palette, the row menu and the
+empty state read it. No surface keeps its own list. Before it, every action
+was welded to whichever screen happened to show it (Edit to the document
+header, Import to the empty state, Archive to the settings panel) and nothing
+could enumerate them, so each new surface designed the same list again and
+agreed with the others by luck.
+
+It returns data: no React, no routing, no icons. That is what makes the
+availability rules testable without a DOM, and they are the part that is easy
+to get quietly wrong. Icons are named and resolved at the surface.
+
+**Availability has three axes, and conflating them is a defect, not a style
+choice** (§17 and `CLAUDE.md` both say so):
+
+1. workspace capability — `canWrite`, `canImport`, `canOpenSettings`, …
+2. source ownership — `SOURCE_MANAGED` content is read-only in the Hub however
+   capable the caller is
+3. target state — an archived document, or a historical revision, offers
+   reading, not editing
+
+The document page had all three spelled out inline at one call site, which is
+how the registry knows they are the right three.
+
+**The registry is not authorization.** It decides what is *shown*. The
+application service decides what *happens*, and must refuse an action that was
+never offered, because knowing an ID grants nothing. Tests assert both halves
+separately.
+
 Error and not-found states take their shape from `StatusMessage` — heading,
 one line, optional action — so that a new boundary cannot invent a fourth
 spelling. Boundaries are placed where the shell survives them: the workspace
@@ -577,42 +624,43 @@ record rather than a tracker.
 
 Each of these changes behaviour rather than appearance.
 
-Items 1 to 4 are four exits from one missing thing — a list of what can be
-done, by whom, to what — and are treated together in
-`docs/superpowers/specs/2026-09-21-action-model-spec.md`, which is proposed
-and not yet agreed. That spec also corrects two of the items below against
-the code: archiving a document and copying a link do not exist anywhere in
-this product, so item 4 describes actions as badly placed when two of the
-three were never built.
+Three items that used to head this list — `⌘K` searched only, no row carried a
+context menu, and empty states offered no guidance — were four exits from one
+missing thing, a list of what can be done, by whom, to what. That list now
+exists (§15) and all three read it, so they are closed. The record of what was
+decided, and of two claims in the old wording that turned out to be false, is
+`docs/superpowers/specs/2026-09-21-action-model-spec.md`.
+
+One of those claims is worth repeating here, because the old item is the kind
+of thing a reader trusts: **archiving a document and copying a link do not
+exist in this product**, and never did. The item said a context menu was
+missing for three actions when two of the three had never been built. A
+document archive would be a domain change, not a UI one; the decision on
+record is to leave the lifecycle as it is, so the registry gains an entry if
+that ever changes rather than being redesigned.
 
 
-1. `⌘K` executes search only. The reference language treats it as a command
-   palette; creating a note, toggling archived and opening Details have no
-   keyboard path and no discoverable shortcut list.
-2. No toast or undo layer. Feedback is `role="status"` text that shifts
+1. No toast or undo layer. Feedback is `role="status"` text that shifts
    layout, and destructive actions confirm inline rather than acting and
    offering undo. (The announcement itself works — `role="status"` carries an
    implicit `aria-live="polite"`. An earlier wording here counted literal
    `aria-live` attributes and read as though nothing were announced at all,
-   which overstated the gap.)
-3. Empty and error states are heading-plus-paragraph. `StatusMessage` (§15)
-   gives them one shape; it does not give them illustration or guidance on
-   what to do next. (This item used to add "and the knowledge empty state
-   presents two equally weighted primary actions", which stopped being true
-   when that state was given a primary and a secondary action, and was left
-   here afterwards. An open item that describes a fixed problem teaches the
-   next reader to stop trusting the list.)
-4. No row carries a context menu. Renaming, archiving and copying a link all
-   require opening the document first, where the reference language puts them
-   one right-click away on the row.
-5. `spacing` is the one scale still left at Tailwind's default rather than
+   which overstated the gap.) The action model spec §6 sets out which of this
+   product's mutations can honestly offer undo — a reverse operation must
+   already exist — and which cannot.
+2. The palette is mostly navigation, and that is a product gap rather than a
+   UI one. Counted against the code it can offer about fourteen entries, of
+   which the majority are ways to get somewhere; a command palette does not
+   create commands. Worth revisiting when this product has more a reader can
+   do, not by adding entries that do nothing.
+3. `spacing` is the one scale still left at Tailwind's default rather than
    replaced, so paddings, margins and gaps remain unenforced. Note that
    replacing `spacing` wholesale is the wrong fix: Tailwind feeds it to
    `width` and `height` too, and a 288px sidebar is not a decision about
    rhythm. What can be replaced is `padding`, `margin`, `gap` and `space`,
    which is where a rhythm applies. (Page container widths were the other
    half of this item and are now §7.)
-6. Timestamps are formatted in the runtime's own time zone, which differs
+4. Timestamps are formatted in the runtime's own time zone, which differs
    between the server render and the client render. The locale is settled
    (§15, one module); the zone is the same product decision the locale was —
    resolve it server-side, or render these client-side only.

@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronRight, Clock3, FileText, MoreHorizontal, Plus, ListFilter, Star } from "lucide-react";
-import { emptyDocumentShortcuts, parseDocumentShortcuts, rememberDocument, toggleFavoriteDocument, type DocumentShortcuts } from "@/lib/document-shortcuts";
+import { rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { MenuCheckboxItem, MenuContent, MenuRoot, MenuTrigger } from "@/components/ui/menu";
@@ -12,6 +12,9 @@ import { KnowledgeTree } from "./knowledge-tree";
 import { TreeFilter } from "./tree-filter";
 import { buttonClasses } from "@/components/ui/button";
 import { isBoolean, isBooleanRecord, isString, usePersistedJson } from "@/components/shell/use-persisted-state";
+import { documentShortcutKey, useDocumentShortcuts } from "./use-document-shortcuts";
+import { useActionRunner } from "@/components/actions/action-menu";
+import { actionsFor, type ActionTarget } from "@/components/actions/action-registry";
 
 export type SourceSidebarProps = {
   workspaceId: string;
@@ -47,7 +50,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
   const [filterOpen, setFilterOpen] = usePersistedJson(`kh:tree-filter-open:${workspaceId}`, false, isBoolean, "session");
   const filterTriggerRef = useRef<HTMLButtonElement>(null);
   const [expanded, setExpanded] = usePersistedJson<Record<string, boolean>>(`kh:tree-expanded:${workspaceId}`, {}, isBooleanRecord);
-  const [shortcuts, setShortcuts] = useState<DocumentShortcuts>(emptyDocumentShortcuts);
+  const { shortcuts, update: updateShortcuts } = useDocumentShortcuts(workspaceId);
   const [favoritesOpen, setFavoritesOpen] = usePersistedJson(`kh:sidebar-favorites:${workspaceId}`, false, isBoolean);
   const [recentOpen, setRecentOpen] = usePersistedJson(`kh:sidebar-recent:${workspaceId}`, false, isBoolean);
   const showArchived = searchParams.get("includeArchived") === "true";
@@ -58,7 +61,6 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
     .map((collection) => ({ ...collection, tree: showArchived && includeArchived ? collection.tree : withoutArchivedSubtrees(collection.tree) }))
     .sort((a, b) => Number(b.source.sourceType === "HUB") - Number(a.source.sourceType === "HUB")),
   [collections, showArchived, includeArchived]);
-  const shortcutStorageKey = `kh:document-shortcuts:${workspaceId}`;
   const documents = useMemo(() => {
     const map = new Map<string, { documentId: string; sourceId: string; sourceName: string; label: string }>();
     for (const collection of visibleCollections) {
@@ -73,25 +75,24 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
   const favoriteDocumentIds = new Set(shortcuts.favorites.map((key) => documents.get(key)?.documentId).filter((id): id is string => Boolean(id)));
 
   useEffect(() => {
-    let raw: string | null = null;
-    try { raw = window.localStorage.getItem(shortcutStorageKey); } catch { /* Storage may be unavailable. */ }
-    const stored = parseDocumentShortcuts(raw);
-    const key = resolvedDocumentId ? `${source.id}:${resolvedDocumentId}` : null;
-    const next = key && documents.has(key) ? rememberDocument(stored, key) : stored;
-    setShortcuts(next);
-    if (key && documents.has(key)) {
-      try { window.localStorage.setItem(shortcutStorageKey, JSON.stringify(next)); } catch { /* Storage may be unavailable. */ }
-    }
-  }, [shortcutStorageKey, source.id, resolvedDocumentId, documents]);
+    const key = resolvedDocumentId ? documentShortcutKey(source.id, resolvedDocumentId) : null;
+    if (key && documents.has(key)) updateShortcuts((previous) => rememberDocument(previous, key));
+  }, [source.id, resolvedDocumentId, documents, updateShortcuts]);
 
-  function toggleFavorite(sourceId: string, documentId: string) {
-    const key = `${sourceId}:${documentId}`;
-    const adding = !shortcuts.favorites.includes(key);
-    const next = toggleFavoriteDocument(shortcuts, key);
-    setShortcuts(next);
-    if (adding) setFavoritesOpen(true);
-    try { window.localStorage.setItem(shortcutStorageKey, JSON.stringify(next)); } catch { /* Storage may be unavailable. */ }
-  }
+  const toggleFavorite = useCallback((sourceId: string, documentId: string) => {
+    updateShortcuts((previous) => toggleFavoriteDocument(previous, documentShortcutKey(sourceId, documentId)));
+  }, [updateShortcuts]);
+
+  // Favourites can now be starred from a row menu or the palette as well as
+  // from here, so the section reveals itself whenever the list grows rather
+  // than only when this component was the one that did it.
+  const previousFavorites = useRef(shortcuts.favorites);
+  useEffect(() => {
+    if (shortcuts.favorites.length > previousFavorites.current.length) setFavoritesOpen(true);
+    previousFavorites.current = shortcuts.favorites;
+  }, [shortcuts.favorites, setFavoritesOpen]);
+
+  const runAction = useActionRunner({ onToggleFavorite: toggleFavorite });
 
   function shortcutRow(key: string, favorite: boolean) {
     const document = documents.get(key);
@@ -102,7 +103,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
         {favorite ? <FileText size={14} strokeWidth={1.8} className="shrink-0" aria-hidden="true" /> : <Clock3 size={14} strokeWidth={1.8} className="shrink-0" aria-hidden="true" />}
         <span className="truncate">{document.label}</span>
       </Link>
-      <button type="button" onClick={() => toggleFavorite(document.sourceId, document.documentId)} aria-label={`${favorite ? "Remove from" : "Add to"} favorites: ${document.label}`} title={favorite ? "Remove from favorites" : "Add to favorites"} className={`mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-kh-text-muted kh-focus-ring ${favorite ? "opacity-80" : "kh-favorite-action"}`}>
+      <button type="button" onClick={() => toggleFavorite(document.sourceId, document.documentId)} aria-label={`${favorite ? "Remove from" : "Add to"} favorites: ${document.label}`} title={favorite ? "Remove from favorites" : "Add to favorites"} className={`mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-kh-text-muted kh-focus-ring ${favorite ? "opacity-80" : "kh-row-action"}`}>
         <Star size={14} strokeWidth={1.8} fill={favorite ? "currentColor" : "none"} aria-hidden="true" />
       </button>
     </li>;
@@ -192,7 +193,35 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
                 {isNotes && canCreate ? addNote : null}
               </div>
               <div id={`collection-${candidate.id}`} hidden={!open} className="mt-1 pl-2">
-                {open ? <KnowledgeTree items={tree} workspaceId={workspaceId} sourceId={candidate.id} selectedDocumentId={resolvedDocumentId} includeArchived={showArchived} query={candidate.name.toLowerCase().includes(needle) ? "" : query} favoriteDocumentIds={favoriteDocumentIds} onToggleFavorite={(documentId) => toggleFavorite(candidate.id, documentId)} /> : null}
+                {open ? <KnowledgeTree
+                  items={tree}
+                  workspaceId={workspaceId}
+                  sourceId={candidate.id}
+                  selectedDocumentId={resolvedDocumentId}
+                  includeArchived={showArchived}
+                  query={candidate.name.toLowerCase().includes(needle) ? "" : query}
+                  favoriteDocumentIds={favoriteDocumentIds}
+                  onToggleFavorite={(documentId) => toggleFavorite(candidate.id, documentId)}
+                  documentActions={(item) => actionsFor("row", {
+                    workspaceId,
+                    workspaceType: access.workspace.type,
+                    can: access.actions,
+                    confirmed,
+                    includeArchived: showArchived,
+                    // Ownership comes from the collection, not the row: it is
+                    // the source that decides whether the Hub may write here.
+                    target: {
+                      documentId: item.documentId,
+                      sourceId: candidate.id,
+                      label: item.label,
+                      ownership: candidate.ownership,
+                      status: item.status,
+                      revision: "CURRENT",
+                      favorite: shortcuts.favorites.includes(documentShortcutKey(candidate.id, item.documentId)),
+                    } satisfies ActionTarget,
+                  })}
+                  onRunAction={runAction}
+                /> : null}
               </div>
             </section>
           );

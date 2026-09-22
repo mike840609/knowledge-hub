@@ -127,6 +127,7 @@ export default async function KnowledgeDocumentPage({
       inspectorData={inspectorData}
       editHref={editHref}
       readOnly={sourceManaged}
+      ownership={explorer?.source.ownership ?? "SOURCE_MANAGED"}
       contentOwnsTitle={contentOwnsTitle}
     >
       <div className={`kh-reading-column pb-6 ${contentOwnsTitle ? "pt-6" : "pt-8"}`}>

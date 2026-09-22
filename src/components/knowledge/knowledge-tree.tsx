@@ -11,6 +11,8 @@ import {
 } from "@/lib/knowledge-navigation";
 import type { KnowledgeTreeItem } from "@/modules/knowledge/application/knowledge-query-service";
 import { isStringArray, usePersistedJson } from "@/components/shell/use-persisted-state";
+import { RowActionsTrigger, RowContextMenu } from "@/components/actions/action-menu";
+import type { Action } from "@/components/actions/action-registry";
 
 export type KnowledgeTreeProps = {
   items: KnowledgeTreeItem[];
@@ -23,6 +25,9 @@ export type KnowledgeTreeProps = {
   query?: string;
   favoriteDocumentIds: ReadonlySet<string>;
   onToggleFavorite: (documentId: string) => void;
+  /** What this reader may do to this document, from the one registry. */
+  documentActions: (item: Extract<KnowledgeTreeItem, { type: "document" }>) => readonly Action[];
+  onRunAction: (action: Action) => void;
 };
 
 function documentHref(
@@ -46,6 +51,8 @@ function TreeNodeRow({
   onFocusNode,
   favoriteDocumentIds,
   onToggleFavorite,
+  documentActions,
+  onRunAction,
 }: {
   node: KnowledgeTreeNode;
   depth: number;
@@ -58,6 +65,8 @@ function TreeNodeRow({
   onFocusNode: (id: string) => void;
   favoriteDocumentIds: ReadonlySet<string>;
   onToggleFavorite: (documentId: string) => void;
+  documentActions: (item: Extract<KnowledgeTreeItem, { type: "document" }>) => readonly Action[];
+  onRunAction: (action: Action) => void;
 }) {
   const { item } = node;
   const isActive = activeId === null ? false : activeId === item.id;
@@ -66,8 +75,11 @@ function TreeNodeRow({
   if (item.type === "document") {
     const selected = selectedDocumentId !== undefined && item.documentId === selectedDocumentId;
     const isFavorite = favoriteDocumentIds.has(item.documentId);
+    const actions = documentActions(item);
     return (
-      <li
+      <RowContextMenu
+        actions={actions}
+        onRun={onRunAction}
         role="treeitem"
         aria-label={item.label}
         aria-level={depth}
@@ -76,7 +88,7 @@ function TreeNodeRow({
         data-node-id={item.id}
         tabIndex={tabIndex}
         onFocus={() => onFocusNode(item.id)}
-        className={`kh-interactive-row group flex min-h-9 items-center ${selected ? "bg-kh-bg-selected hover:bg-kh-bg-selected" : ""}`}
+        className={`kh-interactive-row group relative flex min-h-9 items-center ${selected ? "bg-kh-bg-selected hover:bg-kh-bg-selected" : ""}`}
       >
         <Link
           href={documentHref(item, scope, includeArchived)}
@@ -88,10 +100,17 @@ function TreeNodeRow({
           <FileText size={14} strokeWidth={1.8} className="shrink-0 text-kh-text-muted" aria-hidden="true" />
           <span className="truncate">{item.label}</span>
         </Link>
-        <button type="button" onClick={() => onToggleFavorite(item.documentId)} aria-label={`${isFavorite ? "Remove from" : "Add to"} favorites: ${item.label}`} title={isFavorite ? "Remove from favorites" : "Add to favorites"} className={`mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md kh-focus-ring ${isFavorite ? "text-kh-selected-text" : "kh-favorite-action text-kh-text-muted hover:bg-kh-bg-hover"}`}>
+        <button type="button" onClick={() => onToggleFavorite(item.documentId)} aria-label={`${isFavorite ? "Remove from" : "Add to"} favorites: ${item.label}`} title={isFavorite ? "Remove from favorites" : "Add to favorites"} className={`mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md kh-focus-ring ${isFavorite ? "text-kh-selected-text" : "kh-row-action text-kh-text-muted hover:bg-kh-bg-hover"}`}>
           <Star size={14} strokeWidth={1.8} fill={isFavorite ? "currentColor" : "none"} aria-hidden="true" />
         </button>
-      </li>
+        {/* Floated just inside the favourite toggle, carrying the row's own
+            background: reserving a second control slot would have re-truncated
+            every label in the tree to buy a button that is invisible most of
+            the time. `right-8` is that toggle's width plus its margin. */}
+        <div className="kh-row-action absolute right-8 top-1/2 flex -translate-y-1/2 items-center rounded-md bg-inherit">
+          <RowActionsTrigger actions={actions} onRun={onRunAction} label={item.label} />
+        </div>
+      </RowContextMenu>
     );
   }
 
@@ -134,6 +153,8 @@ function TreeNodeRow({
               onFocusNode={onFocusNode}
               favoriteDocumentIds={favoriteDocumentIds}
               onToggleFavorite={onToggleFavorite}
+              documentActions={documentActions}
+              onRunAction={onRunAction}
             />
           ))}
         </ul>
@@ -156,6 +177,8 @@ export function KnowledgeTree({
   query = "",
   favoriteDocumentIds,
   onToggleFavorite,
+  documentActions,
+  onRunAction,
 }: KnowledgeTreeProps) {
   const router = useRouter();
   const treeRef = useRef<HTMLUListElement>(null);
@@ -305,6 +328,8 @@ export function KnowledgeTree({
           onFocusNode={setActiveId}
           favoriteDocumentIds={favoriteDocumentIds}
           onToggleFavorite={onToggleFavorite}
+          documentActions={documentActions}
+          onRunAction={onRunAction}
         />
       ))}
     </ul>
