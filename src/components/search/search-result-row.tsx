@@ -41,7 +41,7 @@ export function SearchResultRow({
           Below sm it wraps under the title; from sm it becomes aligned
           right-hand columns a reader can scan straight down. */}
       <Link href={href} data-search-result className="kh-interactive-row flex items-start gap-3 px-3 py-2.5">
-        <FileText size={16} strokeWidth={2} aria-hidden="true" className="mt-0.5 shrink-0 text-kh-text-muted" />
+        <FileText size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-kh-text-muted" />
         <span className="min-w-0 flex-1 sm:flex sm:items-start sm:gap-3">
           <span className="block min-w-0 sm:flex-1">
             <span className="block truncate text-body font-medium text-kh-text">

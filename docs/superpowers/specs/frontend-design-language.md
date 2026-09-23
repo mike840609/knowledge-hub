@@ -159,6 +159,10 @@ directions:
   and imports all carried `border` and all failed the rule, precisely because
   they were not on the list.
 
+A scrollbar is a control too: its thumb takes `border-strong` over a
+transparent track, at the platform's `thin` width. The default 15px gutter was
+the widest thing in the chrome.
+
 `border-strong` is validated against **every** surface it can sit on, not just
 the canvas — `subtle` and `sunken` are the tight cases and a value chosen
 against the canvas alone will fail them.
@@ -439,6 +443,17 @@ attribute stays the only thing the stylesheet reads.
 A consistent outline icon language (Lucide). In primary navigation, icons
 support labels rather than replace them.
 
+One stroke weight, 1.5, set once in `globals.css` for every `svg.lucide`.
+Lucide's default of 2 at the 14–16px these icons render drew heavier than the
+text beside them, and call sites had drifted to three weights (2, 1.8 and the
+default). No call site passes `strokeWidth`; the rule overrides it anyway.
+
+The one native control with a platform glyph, `<select>`, gets a chevron in
+the same weight (`.kh-select`), drawn as two gradient strokes in
+`text-muted`. It keeps native behaviour and needs no wrapper element. It is
+not an SVG: `img-src 'self'` refuses `data:` images, which is the Markdown
+image policy doing its job, not something to loosen for a glyph.
+
 ## 14. Frontend technology
 
 ```text
@@ -506,6 +521,13 @@ defensible look and it costs three standing departures from this section —
 two heights that are not rungs, a default that does not line up, and the only
 offset focus ring in the system. Reopening it means accepting those three,
 not just the appearance.
+
+**Rows sit on the ladder too.** A navigation or tree row is `md` (32px) and
+the control floated inside it is `sm` (24px). Rows were 36px with a 28px
+floated button, neither on the ladder, so a sidebar row, the menu row that
+opens from it and the button beside it were three unrelated heights. The
+reference's sidebar is denser still, at roughly 28px; `md` is the nearest rung,
+and a rung is not added for one surface.
 
 Every form field is `Input`, `Select` or `Textarea`, which share their shape
 through `fieldClasses()` in `components/ui/field.ts`. `Select` is a native

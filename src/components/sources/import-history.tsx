@@ -19,7 +19,7 @@ export function ImportHistory({ runs }: { runs: SyncRun[] }) {
           key={run.id}
           className="flex items-center gap-3 rounded-md border border-kh-border bg-kh-bg px-3 py-2.5"
         >
-          <History size={15} strokeWidth={2} aria-hidden="true" className="shrink-0 text-kh-text-muted" />
+          <History size={15} aria-hidden="true" className="shrink-0 text-kh-text-muted" />
           <div className="min-w-0 flex-1">
             <p className="text-body font-medium text-kh-text">
               {syncStatusLabel(run.status)} <span className="font-normal text-kh-text-muted">{describeRun(run)}</span>
