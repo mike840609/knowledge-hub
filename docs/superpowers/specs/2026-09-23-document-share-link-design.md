@@ -300,7 +300,12 @@ CREATE TABLE document_share_link_views (
 ## 8. Token
 
 - 產生：`crypto.randomUUID()`（UUIDv4，122 bit 隨機），URL 為 `/s/<token>`。
-- **不可以用 codebase 慣用的 `uuidv7()`。** UUIDv7 的前 48 bit 是時間戳，隨機部分只剩約 74 bit，而且會洩漏建立時間。它適合當主鍵，不適合當授權。連結本身的主鍵 `id` 仍然用 UUIDv7。
+- **不可以用 codebase 慣用的 `uuidv7()`。** 連結本身的主鍵 `id` 仍然用 UUIDv7，但 token 不行，原因依嚴重程度：
+  1. **同一毫秒內是連號的。** `src/shared/ids/uuidv7.ts` 為了單調遞增，同一毫秒內把上一個值的隨機部分加 1。`create` 在同一個 transaction 裡依序產生連結 `id`、token、audit 事件 `id`，三者實測為 `…d31e`、`…d31f`、`…d320`——看得到連結 ID（撤銷 API 的 URL、access log）或 audit 事件 ID 的人，就能算出 token。同一個 Node 程序裡，不同使用者在同一毫秒建立的連結也會相鄰。
+  2. 前 48 bit 是時間戳，會洩漏連結的建立時間，隨機部分最多約 74 bit。
+  3. token 與系統裡所有 ID 長得一樣，容易被當成一般 ID 寫進 log 或 payload。
+
+  UUIDv4 的代價只有 index 插入區域性較差，這張表的規模可以忽略。實作須加一個測試：連續建立兩條連結，斷言兩個 token 之差不是 1，且 token 的 version 欄位為 4。
 - 儲存：明文存在 `token` 欄位（MariaDB native `UUID`），unique index 查詢。
 - 擁有者隨時可以從對話框再複製同一條連結。
 - 產生由新的 port（`ShareTokenIssuer`）提供，domain 與 application 層不直接依賴 `node:crypto`，測試可注入固定值。
