@@ -61,7 +61,7 @@
 | 可猜測性 | UUIDv7，含時間戳，部分可推測 | 256 bit 隨機 |
 | 儲存 | 明文，到處引用 | 只存 SHA-256 hash |
 | 期限 | 永久 | 必填，最長 90 天 |
-| 撤銷 | 不可 | 隨時，另有全域開關（§5.6） |
+| 撤銷 | 不可 | 隨時 |
 | 稽核 | 無 | 建立、撤銷有治理紀錄；檢視有匿名計數 |
 | 接受它的地方 | 所有 read service（搭配 membership） | **只有** `/s/:token` 的讀取路徑 |
 
@@ -102,7 +102,7 @@ My Space 文件列 → 右鍵（或 ⋯、或 ⌘K）→「Share link…」
     說明文字：「任何持有此連結的人都能閱讀這份文件，不需要登入。
               他們會看到你之後的每一次修改，但無法編輯，也看不到 My Space 的其他內容。
               請只分享你願意被轉傳的內容。」
-    標籤（選填，例如「給 HRBP 小組」）
+    標籤（選填，例如「給後端小組」）
     期限：1 天 / 7 天 / 30 天 / 90 天（預設值見 D2）
     [建立連結]
 → 顯示完整連結與 [複製]。提示：「此連結只會顯示這一次。」
@@ -129,7 +129,6 @@ My Space 文件列 → 右鍵（或 ⋯、或 ⌘K）→「Share link…」
 3. Workspace `lifecycle_state = ACTIVE`。
 4. 該文件目前有效（未撤銷且未到期）的連結少於 **10** 條。
 5. `expiresInDays ∈ {1, 7, 30, 90}`；標籤可省略，最長 200 字元。
-6. 全域開關為開啟（§5.6）。
 
 **所有權（`SOURCE_MANAGED` / `HUB_MANAGED`）不影響是否能分享。** 分享是閱讀，所有權回答的是「誰能寫」。依 `CLAUDE.md`，這兩個問題不能混為一談——這裡要刻意寫明它**不是**條件，免得實作者順手加上。
 
@@ -137,18 +136,17 @@ My Space 文件列 → 右鍵（或 ⋯、或 ⌘K）→「Share link…」
 
 以下全部成立，連結才有效。任一不成立就是「無法使用」，不區分原因：
 
-1. 全域開關為開啟（§5.6）。
-2. `token_hash` 存在。
-3. `revoked_at IS NULL`。
-4. `expires_at > now`。
-5. 文件 `status = ACTIVE`。
-6. 文件所屬 Source `status = ACTIVE`。
-7. 文件所屬 Workspace `lifecycle_state = ACTIVE`。
-8. **連結建立者仍有該文件的讀取權**：以建立者的 **direct membership** 重新評估 `document.read`。對 PERSONAL 而言就是 `OWNER / SYSTEM_PERSONAL` 那一列仍存在。
+1. `token_hash` 存在。
+2. `revoked_at IS NULL`。
+3. `expires_at > now`。
+4. 文件 `status = ACTIVE`。
+5. 文件所屬 Source `status = ACTIVE`。
+6. 文件所屬 Workspace `lifecycle_state = ACTIVE`。
+7. **連結建立者仍有該文件的讀取權**：以建立者的 **direct membership** 重新評估 `document.read`。對 PERSONAL 而言就是 `OWNER / SYSTEM_PERSONAL` 那一列仍存在。
 
 檢視者的身分**不在**條件裡：不呼叫 `establishTrustedCaller`，也不讀取 SSO session。
 
-第 8 條只看 direct role，因為 group grant 依賴當次 session 的 validated group IDs，檢視時拿不到建立者的 session。v1 只有 PERSONAL，沒有差別；這條限制是 Team 延後的原因之一（§11）。
+第 7 條只看 direct role，因為 group grant 依賴當次 session 的 validated group IDs，檢視時拿不到建立者的 session。v1 只有 PERSONAL，沒有差別；這條限制是 Team 延後的原因之一（§11）。
 
 有效性判斷寫成 `modules/knowledge/domain` 裡的純函式，不含 I/O，讓每一條都能單獨被單元測試鎖住。
 
@@ -172,14 +170,6 @@ My Space 文件列 → 右鍵（或 ⋯、或 ⌘K）→「Share link…」
 
 符合 lifecycle 不變式：連結列與檢視計數永不刪除。過期、撤銷只是狀態。
 
-### 5.6 全域開關
-
-伺服器設定 `KM_SHARE_LINKS_ENABLED`（預設 `false`，須明確開啟）。
-
-- 關閉時：`/s/*` 一律回傳失效頁，建立 API 回傳 409，UI 不顯示「Share link…」。
-- 既有連結的資料不受影響；重新開啟後，未過期、未撤銷的連結恢復有效。
-- 用途：不需登入的連結一旦外流，資安或維運人員需要一個**不必逐條撤銷、不必改程式**就能立即止血的手段。
-
 ## 6. 讀取路徑
 
 ### 6.1 唯一的入口
@@ -191,7 +181,7 @@ GET /s/:token   （server component，不在 /w/ layout 之下）
        ├─ hash = SHA-256(token)
        ├─ 讀 link、document、source、workspace、建立者的 direct membership
        ├─ 套用 §5.2 純函式
-       ├─ 累加檢視計數（§7.2）   ← 失敗則整個請求失敗（見 D4）
+       ├─ 累加檢視計數（§7.2）   ← 失敗只記 log，照常顯示內容（見 D3）
        └─ 回傳 { title, markdown, sharedByName, updatedAt, expiresAt }
   → 任何錯誤 → §6.3 的統一頁面，HTTP 404
 ```
@@ -211,7 +201,7 @@ GET /s/:token   （server component，不在 /w/ layout 之下）
 
 ### 6.3 失效頁面
 
-所有失效情況——token 不存在、撤銷、過期、全域開關關閉、文件封存、擁有者失去存取權——顯示同一頁面、回傳同一狀態碼（404），文字涵蓋所有可能：
+所有失效情況——token 不存在、撤銷、過期、文件封存、擁有者失去存取權——顯示同一頁面、回傳同一狀態碼（404），文字涵蓋所有可能：
 
 ```text
 這個連結無法使用
@@ -330,7 +320,6 @@ src/modules/knowledge/application/document-share-service.ts   create / list / re
 src/infrastructure/database/mariadb/repositories/document-share-links.ts
 src/infrastructure/database/mariadb/migrations/011-document-share-links.ts
 src/server/share-read.ts                                      /s/:token 的 read projection
-src/server/config.ts                                          KM_SHARE_LINKS_ENABLED
 src/server/composition.ts                                     wiring
 ```
 
@@ -370,7 +359,7 @@ Source FOR UPDATE → Workspace FOR UPDATE → 重新驗證 §5.1 → insert/upd
 
 撤銷用 `POST …/revoke` 而不是 `DELETE`：沒有 hard delete，路由不該暗示有。
 
-錯誤對應沿用 `http-error-response.ts`：文件不存在或呼叫者無權 → 404；非 PERSONAL、文件已封存、超過 10 條上限、全域開關關閉 → 409 並附明確原因。
+錯誤對應沿用 `http-error-response.ts`：文件不存在或呼叫者無權 → 404；非 PERSONAL、文件已封存、超過 10 條上限 → 409 並附明確原因。
 
 ## 10. UI
 
@@ -392,7 +381,7 @@ Source FOR UPDATE → Workspace FOR UPDATE → 重新驗證 §5.1 → insert/upd
 
 在三個軸上的可用性（動作模型規格 §4.1）：
 
-1. **工作區能力**：`workspaceType === "PERSONAL"`、`confirmed`、且伺服器回報全域開關為開啟。
+1. **工作區能力**：`workspaceType === "PERSONAL"` 且 `confirmed`。
 2. **Source 所有權**：**不看**。見 §5.1 最後一段。
 3. **目標狀態**：`status === "ACTIVE"` 且 `revision === "CURRENT"`。在歷史版本上提供分享，會讓人以為分享的是那個版本。
 
@@ -417,7 +406,7 @@ Source FOR UPDATE → Workspace FOR UPDATE → 重新驗證 §5.1 → insert/upd
 不是做不到，而是有三個問題 v1 不應該順便決定：
 
 1. **治理繞道。** Team 的成員集合由 OWNER/ADMIN 管理。任何 EDITOR 都能把 Team 文件以不需登入的連結送出去，等於繞過整套治理。需要一個由 OWNER 控制的 Workspace 設定（例如 `shareLinksAllowed`），以及「誰能建立」的規則（`document.write`？ADMIN 以上？）。
-2. **建立者的授權無法離線評估。** §5.2 第 8 條只能看 direct role。在 Team 裡，靠 SSO group 取得存取權的建立者，檢視時無法重新評估——要嘛只允許有 direct role 的人建立，要嘛接受「group 被移除後連結仍有效直到過期」。
+2. **建立者的授權無法離線評估。** §5.2 第 7 條只能看 direct role。在 Team 裡，靠 SSO group 取得存取權的建立者，檢視時無法重新評估——要嘛只允許有 direct role 的人建立，要嘛接受「group 被移除後連結仍有效直到過期」。
 3. **稽核可見性。** Team 的 OWNER/ADMIN 應該能在 Audit 頁看到並撤銷成員發出的連結，那是新的治理權限。
 
 這三點應該是一份獨立規格，在 v1 的使用資料出來之後再寫。
@@ -428,6 +417,7 @@ Source FOR UPDATE → Workspace FOR UPDATE → 重新驗證 §5.1 → insert/upd
 
 | # | 決定 | 內容 |
 | --- | --- | --- |
+| A0 | 使用對象 | 一般開發者的知識分享，不是專為特定敏感資料領域設計；因此不設全域開關，檢視計數是統計用途而非稽核 |
 | A1 | 檢視不需登入 | 持有連結即可閱讀；`/s/:token` 不經 SSO、不需要 Hub 帳號。影響見 §2 最後一段、§6.1 部署要求、§7.2、§14 |
 | A2 | 顯示目前版本 | 擁有者更新後，檢視者重新整理即看到新版本；不做快照、不做即時推送（§5.3） |
 
@@ -436,10 +426,8 @@ Source FOR UPDATE → Workspace FOR UPDATE → 重新驗證 §5.1 → insert/upd
 | # | 決定 | 本規格的建議 | 替代方案 |
 | --- | --- | --- | --- |
 | D1 | token 只存 hash，事後無法再複製 | **採用**，以多條連結 + 標籤緩解 | 以伺服器金鑰加密保存，可重新複製；代價是金鑰管理與輪替 |
-| D2 | 期限選項與預設值 | **1 / 7 / 30 / 90 天，必填，預設 7 天** | 預設 30 天。A1 之後連結外流的後果更大，較短的預設值讓「忘了撤銷」的連結自然失效 |
-| D3 | 全域開關（§5.6） | **採用，預設關閉，須明確開啟** | 不做；外流時只能逐條撤銷 |
-| D4 | 檢視計數寫入失敗時 | **fail closed**（不顯示內容） | fail open；可用性較好，但計數會少算 |
-| D5 | 部署範圍 | **v1 只在 Hub 部署於內網時開啟**（`KM_SHARE_LINKS_ENABLED` 只在內網環境設為 `true`） | 對外部署也開啟；等同網際網路公開，需要資安單位另行核准 |
+| D2 | 期限選項與預設值 | **1 / 7 / 30 / 90 天，必填，預設 30 天** | 預設 7 天：「忘了撤銷」的連結較快失效，但分享給整個團隊的文件要常常重建連結 |
+| D3 | 檢視計數寫入失敗時 | **fail open**（照常顯示內容，只記 log） | fail closed：計數永遠準確，但一個統計用的寫入失敗會讓檢視者看不到文件 |
 
 ## 13. 完成判準
 
@@ -447,14 +435,15 @@ Source FOR UPDATE → Workspace FOR UPDATE → 重新驗證 §5.1 → insert/upd
 
 - §5.2 的每一條條件各有一個「只有這條不成立 → 無效」的案例。
 - §5.1 的每一條條件各有一個拒絕案例；`SOURCE_MANAGED` 文件**可以**建立分享。
-- `action-registry`：PERSONAL + ACTIVE + CURRENT + 開關開啟才出現 `document.share`；TEAM、ARCHIVED、HISTORICAL、`confirmed = false`、開關關閉都不出現。
+- `action-registry`：PERSONAL + ACTIVE + CURRENT 才出現 `document.share`；TEAM、ARCHIVED、HISTORICAL、`confirmed = false` 都不出現。
 
 **整合（MariaDB）**
 
-- 非擁有者、Team 文件、封存文件、第 11 條連結、開關關閉：`create` 被拒，且沒有寫入任何 link 或 audit 列。
+- 非擁有者、Team 文件、封存文件、第 11 條連結：`create` 被拒，且沒有寫入任何 link 或 audit 列。
 - `create` 與 `DOCUMENT_SHARE_LINK_CREATED` 在同一 transaction：模擬 audit 寫入失敗時，link 也不存在。
 - 資料庫裡找不到 token 明文；audit payload 不含 token 或 hash。
-- 撤銷後、到期後、開關關閉後、文件經 resync 變成 ARCHIVED 後、Source 封存後，`readShared` 一律失敗；開關重新開啟後，未過期未撤銷的連結恢復有效。
+- 撤銷後、到期後、文件經 resync 變成 ARCHIVED 後、Source 封存後，`readShared` 一律失敗。
+- 模擬檢視計數寫入失敗：`readShared` 仍回傳內容。
 - 擁有者建立新 revision 後，`readShared` 回傳新的內容。
 - 同一天檢視三次 → 一列，`view_count = 3`；表中沒有任何可識別檢視者的欄位。
 - 並行：resync apply 與 `create` 同時執行不會死結。
@@ -474,11 +463,11 @@ Source FOR UPDATE → Workspace FOR UPDATE → 重新驗證 §5.1 → insert/upd
 
 ## 14. 已知限制
 
-1. **任何拿到連結的人都能看，包括已離職的人。** 不需登入代表 Hub 無法區分檢視者，SSO 的離職處理也擋不住他們。擁有者離職時，他發出的連結同樣存活到過期。期限必填、預設 7 天（D2）、全域開關（D3），是本規格對這一點的全部緩解。
-2. **轉寄沒有邊界。** 連結可以被轉到公司外；能不能打開只取決於網路可達性（§2、D5）。檢視計數能讓擁有者發現「次數比預期多」，但無法得知是誰。
+1. **任何拿到連結的人都能看，包括已離職的人。** 不需登入代表 Hub 無法區分檢視者，SSO 的離職處理也擋不住他們。擁有者離職時，他發出的連結同樣存活到過期。必填期限（D2）與擁有者隨時撤銷，是本規格對這一點的緩解。
+2. **轉寄沒有邊界。** 連結可以被轉到公司外；能不能打開只取決於網路可達性（§2）。檢視計數能讓擁有者發現「次數比預期多」，但無法得知是誰。
 3. **聊天工具的連結預覽會抓取頁面。** 貼到 Slack／Teams 時，對方伺服器會先抓一次頁面來產生預覽：`<title>`（文件標題）會出現在聊天室裡，而且算一次檢視。§6.5 不輸出 Open Graph tag，所以內文摘要不會出現在預覽裡，但標題會。
 4. **token 在 URL 裡。** 會出現在瀏覽器歷史紀錄，也可能出現在反向代理的 access log。部署時應遮罩 `/s/` 路徑。
-5. **沒有資料分類。** 系統無法得知一份文件是否含敏感 HR 資料，也就無法禁止分享它。若之後引入分類，分享連結是第一個應該接上的地方。
+5. **沒有資料分類。** 系統無法得知一份文件是否含敏感資料，也就無法禁止分享它。若之後引入分類，分享連結是第一個應該接上的地方。
 6. **相對連結與圖片對檢視者無效。** Assets 目前只存 metadata，Hub 內部連結檢視者也打不開。
 7. **沒有速率限制。** 256 bit token 無法被暴力猜中，但匿名端點仍可能被大量請求。速率限制放在 gateway 層（§15），不在應用程式內實作。
 
@@ -491,10 +480,10 @@ Source FOR UPDATE → Workspace FOR UPDATE → 重新驗證 §5.1 → insert/upd
 - `README.md` 的 canonical documents 表：加入本規格與對應的 implementation plan。
 - `frontend-design-language.md`：如果 `share` 圖示或閱讀頁需要新的 token，依契約規定一併修改。
 
-**上線檢查清單**——不在程式範圍內，但開啟 `KM_SHARE_LINKS_ENABLED` 前必須逐項確認並記錄在 `docs/superpowers/verification/`：
+**上線檢查清單**——不在程式範圍內，但上線前必須逐項確認並記錄在 `docs/superpowers/verification/`：
 
 - [ ] SSO gateway 只對 `/s/*` 放行，其餘路徑仍強制登入（附設定片段）。
-- [ ] 記錄 Hub 主機的網路可達範圍（內網／對外），並符合 D5 的決定。
+- [ ] 記錄 Hub 主機的網路可達範圍（內網／對外）；對外時，分享連結等同網際網路公開。
 - [ ] Reverse proxy 的 access log 遮罩 `/s/` 之後的 token。
 - [ ] Gateway 對 `/s/*` 設定速率限制。
 - [ ] 資安單位知悉此功能提供不需登入的讀取路徑。
