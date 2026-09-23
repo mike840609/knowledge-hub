@@ -7,7 +7,7 @@
 | 範圍 | My Space 單篇文件的唯讀分享連結（`/s/:token`），持有連結即可閱讀，不需登入 |
 | 修改的契約 | `CLAUDE.md`「Knowing an ID is not authorization」、Phase 3 spec §13「Workspace-only authorization boundary」——見 §3 |
 | 對照文件 | Phase 3 governance spec、Phase 2.5 §24.1、動作模型規格、`frontend-design-language.md` |
-| 狀態 | **待審查。** §12.1 是已拍板的決定，§12.2 是仍待拍板的決定；全部拍板前不動程式。 |
+| 狀態 | **已拍板（§12），待實作。** 實作計畫：`docs/superpowers/plans/2026-09-23-document-share-link.md` |
 
 ## 1. 要解決的問題
 
@@ -104,7 +104,7 @@ My Space 文件列 → 右鍵（或 ⋯、或 ⌘K）→「Share link…」
               他們會看到你之後的每一次修改，但無法編輯，也看不到 My Space 的其他內容。
               請只分享你願意被轉傳的內容。」
     標籤（選填，例如「給後端小組」）
-    期限：1 天 / 7 天 / 30 天 / 90 天（預設值見 D2）
+    期限：1 天 / 7 天 / 30 天（預設）/ 90 天
     [建立連結]
 → 顯示完整連結與 [複製]
 → 對話框下半部列出這份文件所有連結：標籤、建立時間、到期時間、檢視次數、[複製]、[撤銷]
@@ -184,12 +184,14 @@ GET /s/:token   （server component，不在 /w/ layout 之下）
        ├─ 以 token 查 unique index
        ├─ 讀 link、document、source、workspace、建立者的 direct membership
        ├─ 套用 §5.2 純函式
-       ├─ 累加檢視計數（§7.2）   ← 失敗只記 log，照常顯示內容（見 D3）
+       ├─ 累加檢視計數（§7.2）   ← 另一個 transaction；失敗只記 log，照常顯示內容（A5）
        └─ 回傳 { title, markdown, sharedByName, updatedAt, expiresAt }
   → 任何錯誤 → §6.3 的統一頁面，HTTP 404
 ```
 
 `readShared` **沒有 caller 參數**，也不呼叫 `workspaceAccess.requireMembership`。這正是它存在的原因，也因此它必須是整個 codebase 裡**唯一**不經 caller 就回傳文件內容的方法。完成判準（§13）要求用測試斷言這一點。
+
+**組裝要求：** `/s/:token` 取得 `DocumentShareService` 的路徑不能經過 identity provider 的建構或 production readiness 檢查。現有的 `applicationServices()` 在 `company-sso` 模式下缺少 session reader 時會在建構階段就丟錯（`identity-provider-factory.ts`），所以 composition root 要提供一個只組裝 unit of work 與分享服務的獨立入口。E2E 以沒有設定 SSO session reader 的伺服器（`phase3UnconfiguredOrigin()`）開啟連結來證明這一點。
 
 **部署要求：** 公司 SSO 在應用程式之前的 gateway／reverse proxy 必須對 `/s/*` 放行，而且**只**放行這個 prefix。放行範圍寫錯（例如放行 `/s` 開頭的所有路徑，或整個 `/api`）會讓其他頁面也不需登入；應用程式內的每條其他路由仍會呼叫 `establishTrustedCaller`，但不應該把這當成唯一防線。
 
@@ -337,8 +339,8 @@ src/server/composition.ts                                     wiring
 
 ```ts
 interface DocumentShareService {
-  create(caller, { documentId, label?, expiresInDays }): Promise<ShareLinkView>;
-  list(caller, documentId): Promise<ShareLinkView[]>;   // 含 url 與每日檢視計數
+  create(caller, { documentId, label?, expiresInDays }): Promise<ShareLinkView>;   // 含 path
+  list(caller, documentId): Promise<ShareLinkView[]>;   // 含 path 與每日檢視計數
   revoke(caller, linkId): Promise<void>;
   readShared(token): Promise<SharedDocumentView>;       // 沒有 caller：唯一不經 membership 的內容讀取
 }
@@ -362,10 +364,12 @@ Source FOR UPDATE → Workspace FOR UPDATE → 重新驗證 §5.1 → insert/upd
 
 | 方法 | 路徑 | 需要登入 | 回應 |
 | --- | --- | --- | --- |
-| `POST` | `/api/documents/:documentId/share-links` | 是 | `201 { link }`，`link.url` 為完整連結 |
-| `GET` | `/api/documents/:documentId/share-links` | 是 | `200 { links }`，每條都含 `url` |
+| `POST` | `/api/documents/:documentId/share-links` | 是 | `201 { link }`，`link.path` 為 `/s/<token>` |
+| `GET` | `/api/documents/:documentId/share-links` | 是 | `200 { links }`，每條都含 `path` |
 | `POST` | `/api/share-links/:linkId/revoke` | 是 | `204` |
 | `GET` | `/s/:token` | **否** | 頁面；失效一律 404 |
+
+API 回傳路徑而不是完整 URL：伺服器在 reverse proxy 後面看到的 `Host` 不一定是使用者看到的網址，而且 `Host` 可由請求偽造。完整連結由瀏覽器以 `window.location.origin` 組成。
 
 撤銷用 `POST …/revoke` 而不是 `DELETE`：沒有 hard delete，路由不該暗示有。
 
@@ -423,7 +427,9 @@ Source FOR UPDATE → Workspace FOR UPDATE → 重新驗證 §5.1 → insert/upd
 
 ## 12. 決定
 
-### 12.1 已拍板（2026-09-23）
+所有決定均已拍板，沒有待決事項。
+
+### 已拍板（2026-09-23）
 
 | # | 決定 | 內容 |
 | --- | --- | --- |
@@ -431,13 +437,8 @@ Source FOR UPDATE → Workspace FOR UPDATE → 重新驗證 §5.1 → insert/upd
 | A1 | 檢視不需登入 | 持有連結即可閱讀；`/s/:token` 不經 SSO、不需要 Hub 帳號。影響見 §2 最後一段、§6.1 部署要求、§7.2、§14 |
 | A2 | 顯示目前版本 | 擁有者更新後，檢視者重新整理即看到新版本；不做快照、不做即時推送（§5.3） |
 | A3 | Token 形式 | 隨機 UUIDv4，明文保存於獨立的 unique 欄位；擁有者可隨時再複製（§8） |
-
-### 12.2 待拍板
-
-| # | 決定 | 本規格的建議 | 替代方案 |
-| --- | --- | --- | --- |
-| D2 | 期限選項與預設值 | **1 / 7 / 30 / 90 天，必填，預設 30 天** | 預設 7 天：「忘了撤銷」的連結較快失效，但分享給整個團隊的文件要常常重建連結 |
-| D3 | 檢視計數寫入失敗時 | **fail open**（照常顯示內容，只記 log） | fail closed：計數永遠準確，但一個統計用的寫入失敗會讓檢視者看不到文件 |
+| A4 | 期限 | 1 / 7 / 30 / 90 天，必填，預設 30 天 |
+| A5 | 檢視計數寫入失敗 | fail open：在獨立的 transaction 寫入，失敗只記 log（不含 token），照常顯示內容 |
 
 ## 13. 完成判準
 
@@ -474,7 +475,7 @@ Source FOR UPDATE → Workspace FOR UPDATE → 重新驗證 §5.1 → insert/upd
 
 ## 14. 已知限制
 
-1. **任何拿到連結的人都能看，包括已離職的人。** 不需登入代表 Hub 無法區分檢視者，SSO 的離職處理也擋不住他們。擁有者離職時，他發出的連結同樣存活到過期。必填期限（D2）與擁有者隨時撤銷，是本規格對這一點的緩解。
+1. **任何拿到連結的人都能看，包括已離職的人。** 不需登入代表 Hub 無法區分檢視者，SSO 的離職處理也擋不住他們。擁有者離職時，他發出的連結同樣存活到過期。必填期限（A4）與擁有者隨時撤銷，是本規格對這一點的緩解。
 2. **轉寄沒有邊界。** 連結可以被轉到公司外；能不能打開只取決於網路可達性（§2）。檢視計數能讓擁有者發現「次數比預期多」，但無法得知是誰。
 3. **聊天工具的連結預覽會抓取頁面。** 貼到 Slack／Teams 時，對方伺服器會先抓一次頁面來產生預覽：`<title>`（文件標題）會出現在聊天室裡，而且算一次檢視。§6.5 不輸出 Open Graph tag，所以內文摘要不會出現在預覽裡，但標題會。
 4. **token 在 URL 裡。** 會出現在瀏覽器歷史紀錄，也可能出現在反向代理的 access log。部署時應遮罩 `/s/` 路徑。
