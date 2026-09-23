@@ -88,20 +88,20 @@ function TreeNodeRow({
         data-node-id={item.id}
         tabIndex={tabIndex}
         onFocus={() => onFocusNode(item.id)}
-        className={`kh-interactive-row group relative flex min-h-9 items-center ${selected ? "bg-kh-bg-selected hover:bg-kh-bg-selected" : ""}`}
+        className={`kh-interactive-row group relative flex min-h-8 items-center ${selected ? "bg-kh-bg-selected hover:bg-kh-bg-selected" : ""}`}
       >
         <Link
           href={documentHref(item, scope, includeArchived)}
           title={item.label}
-          className={`flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-body kh-focus-ring ${
+          className={`flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-body kh-focus-ring ${
             selected ? "font-medium text-kh-selected-text" : "text-kh-text-muted"
           }`}
         >
-          <FileText size={14} strokeWidth={1.8} className="shrink-0 text-kh-text-muted" aria-hidden="true" />
+          <FileText size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />
           <span className="truncate">{item.label}</span>
         </Link>
-        <button type="button" onClick={() => onToggleFavorite(item.documentId)} aria-label={`${isFavorite ? "Remove from" : "Add to"} favorites: ${item.label}`} title={isFavorite ? "Remove from favorites" : "Add to favorites"} className={`mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md kh-focus-ring ${isFavorite ? "text-kh-selected-text" : "kh-row-action text-kh-text-muted hover:bg-kh-bg-hover"}`}>
-          <Star size={14} strokeWidth={1.8} fill={isFavorite ? "currentColor" : "none"} aria-hidden="true" />
+        <button type="button" onClick={() => onToggleFavorite(item.documentId)} aria-label={`${isFavorite ? "Remove from" : "Add to"} favorites: ${item.label}`} title={isFavorite ? "Remove from favorites" : "Add to favorites"} className={`mr-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md kh-focus-ring ${isFavorite ? "text-kh-selected-text" : "kh-row-action text-kh-text-muted hover:bg-kh-bg-hover"}`}>
+          <Star size={14} fill={isFavorite ? "currentColor" : "none"} aria-hidden="true" />
         </button>
         {/* Floated just inside the favourite toggle, carrying the row's own
             background: reserving a second control slot would have re-truncated
@@ -132,9 +132,9 @@ function TreeNodeRow({
         aria-expanded={!collapsed}
         title={item.label}
         tabIndex={-1}
-        className="kh-interactive-row flex min-h-9 w-full items-center gap-2 px-2 text-left text-body font-medium text-kh-text"
+        className="kh-interactive-row flex min-h-8 w-full items-center gap-2 px-2 text-left text-body font-medium text-kh-text"
       >
-        {collapsed ? <ChevronRight size={14} strokeWidth={1.8} className="shrink-0 text-kh-text-muted" aria-hidden="true" /> : <ChevronDown size={14} strokeWidth={1.8} className="shrink-0 text-kh-text-muted" aria-hidden="true" />}
+        {collapsed ? <ChevronRight size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" /> : <ChevronDown size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />}
         <span className="min-w-0 flex-1 truncate">{item.label}</span>
       </button>
       {!collapsed && node.children.length > 0 ? (

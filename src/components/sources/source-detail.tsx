@@ -31,7 +31,7 @@ export function SourceDetail({ model, showImportSuccess = false }: { model: Sour
           <WorkspaceImportLink href={`/w/${workspace.id}/sources/${source.id}/update`}
               className={buttonClasses({ variant: "secondary" })}
             >
-              <RefreshCw size={15} strokeWidth={2} aria-hidden="true" />
+              <RefreshCw size={15} aria-hidden="true" />
               Update from folder
           </WorkspaceImportLink>
         ) : null}

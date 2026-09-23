@@ -32,7 +32,6 @@ export function ImportChangeGroup({
         </h2>
         <ChevronDown
           size={15}
-          strokeWidth={2}
           aria-hidden="true"
           className={`shrink-0 text-kh-text-muted transition-transform ${expanded ? "rotate-180" : ""}`}
         />

@@ -89,7 +89,16 @@
   --kh-shadow-modal: 0 2px 4px rgb(0 0 0 / 0.45), 0 16px 40px -8px rgb(0 0 0 / 0.6);
 }
 
-* { box-sizing: border-box; }
+* { box-sizing: border-box; scrollbar-width: thin; }
+
+/* A scrollbar is a control, so its thumb takes the control boundary. The
+   platform's 15px gutter was the widest element in the chrome. */
+:root { scrollbar-color: var(--kh-border-strong) transparent; }
+
+/* One icon weight. Lucide's default 2px line at 14–16px drew heavier than
+   the 13–14px text beside it; the reference's icons sit lighter. Beats the
+   element's own stroke-width attribute, so no call site sets one. */
+svg.lucide { stroke-width: 1.5; }
 
 body {
   margin: 0;
@@ -160,6 +169,22 @@ kbd {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Native <select> with the platform arrow swapped for a chevron in the icon
+   set's weight. Drawn as two gradient strokes rather than an SVG: the app's
+   `img-src 'self'` policy refuses data: images, and a gradient reads the
+   colour token, so it follows the theme. Unlayered, like the rule below, so
+   it wins over the field's px-* utility. */
+.kh-select {
+  --kh-chevron-stroke: transparent calc(50% - 0.75px), var(--kh-text-muted) calc(50% - 0.75px),
+    var(--kh-text-muted) calc(50% + 0.75px), transparent calc(50% + 0.75px);
+  appearance: none;
+  background-image: linear-gradient(45deg, var(--kh-chevron-stroke)), linear-gradient(135deg, var(--kh-chevron-stroke));
+  background-position: right 1rem center, right calc(1rem - 5px) center;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 2rem;
 }
 
 @media (hover: hover) and (pointer: fine) {
