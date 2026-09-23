@@ -7,7 +7,7 @@
 | 範圍 | My Space 單篇文件的唯讀分享連結（`/s/:token`），持有連結即可閱讀，不需登入 |
 | 修改的契約 | `CLAUDE.md`「Knowing an ID is not authorization」、Phase 3 spec §13「Workspace-only authorization boundary」——見 §3 |
 | 對照文件 | Phase 3 governance spec、Phase 2.5 §24.1、動作模型規格、`frontend-design-language.md` |
-| 狀態 | **已拍板（§12），待實作。** 實作計畫：`docs/superpowers/plans/2026-09-23-document-share-link.md` |
+| 狀態 | **已拍板（§12），已實作。** 實作計畫：`docs/superpowers/plans/2026-09-23-document-share-link.md`；驗證紀錄：`docs/superpowers/verification/2026-09-23-document-share-link-verification.md` |
 
 ## 1. 要解決的問題
 

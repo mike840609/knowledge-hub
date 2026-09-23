@@ -32,7 +32,7 @@ export default async function SharedDocumentPage({ params }: SharedPageProps) {
         <div className="kh-reading-column pb-3 pt-5">
           <h1 className="text-heading font-semibold tracking-tight text-kh-text">{shared.title}</h1>
           <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-kh-text-muted">
-            <span>Shared by {shared.sharedByName}</span>
+            <span>{`Shared by ${shared.sharedByName}`}</span>
             <span aria-hidden="true">·</span>
             <span>Updated <Timestamp value={shared.updatedAt} /></span>
             <span aria-hidden="true">·</span>

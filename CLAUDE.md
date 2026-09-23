@@ -79,6 +79,15 @@ pass.
   inputs, never authorization proof, and the application service must
   re-verify policy regardless of what the UI allowed. A UI selector is not an
   access check.
+  The single bearer grant is a **document share link**
+  (`docs/superpowers/specs/2026-09-23-document-share-link-design.md`): an
+  unguessable (random UUIDv4, never derived from any entity ID), expiring,
+  revocable token that the document's owner issues on purpose. It requires no
+  sign-in. It is accepted by exactly one read path (`/s/:token`, through
+  `DocumentShareService.readShared`) and grants whoever holds it the current
+  revision of one document — never search, tree, history, MCP, or any write.
+  No other code path may serve document content without a caller;
+  `tests/unit/share-link-single-exception.test.ts` enforces that.
 - **`org_code` does not decide access.** It answers which company org a user
   belongs to; workspace membership answers what they can open. Cross-org
   membership is legal and same-org membership is not automatic.
