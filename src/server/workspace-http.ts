@@ -5,7 +5,14 @@ import { DomainError } from "@/shared/domain/errors";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 export type WorkspaceRouteContext = { params: Promise<{ workspaceId: string; userId?: string }> };
 export async function workspaceHttp(work: (services: ReturnType<typeof applicationServices>, caller: CallerContext) => Promise<unknown>, status = 200) {
-  try { const services = applicationServices(); const { caller } = await services.establishTrustedCaller(); return NextResponse.json(await work(services, caller), { status, headers: { "Cache-Control": "private, no-store" } }); }
+  try {
+    const services = applicationServices();
+    const { caller } = await services.establishTrustedCaller();
+    const result = await work(services, caller);
+    // A 204 cannot carry a body; everything else is JSON.
+    if (status === 204) return new NextResponse(null, { status, headers: { "Cache-Control": "private, no-store" } });
+    return NextResponse.json(result, { status, headers: { "Cache-Control": "private, no-store" } });
+  }
   catch (error) { const mapped = toWorkspaceErrorResponse(error); return NextResponse.json(mapped.body, { status: mapped.status, headers: { "Cache-Control": "private, no-store" } }); }
 }
 export async function requestFields(request: Request, fields: readonly string[]): Promise<Record<string, string>> {

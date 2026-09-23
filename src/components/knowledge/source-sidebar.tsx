@@ -215,7 +215,9 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
                       sourceId: candidate.id,
                       label: item.label,
                       ownership: candidate.ownership,
-                      status: item.status,
+                      // A document stays ACTIVE inside an archived collection;
+                      // what may be done to it follows the collection too.
+                      status: candidate.status === "ARCHIVED" ? "ARCHIVED" : item.status,
                       revision: "CURRENT",
                       favorite: shortcuts.favorites.includes(documentShortcutKey(candidate.id, item.documentId)),
                     } satisfies ActionTarget,

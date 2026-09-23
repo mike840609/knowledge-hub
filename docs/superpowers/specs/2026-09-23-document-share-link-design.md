@@ -106,7 +106,9 @@ My Space 文件列 → 右鍵（或 ⋯、或 ⌘K）→「Share link…」
     標籤（選填，例如「給後端小組」）
     期限：1 天 / 7 天 / 30 天（預設）/ 90 天
     [建立連結]
-→ 顯示完整連結與 [複製]
+→ 顯示完整連結與 [複製]。複製只在使用者自己按下時執行，不在建立請求回來後自動執行：
+   等過網路往返的剪貼簿寫入，部分瀏覽器會視為沒有使用者操作而拒絕。完整連結以唯讀欄位顯示，
+   剪貼簿被拒時仍可手動選取複製。
 → 對話框下半部列出這份文件所有連結：標籤、建立時間、到期時間、檢視次數、[複製]、[撤銷]
    之後任何時候打開對話框，都能再複製同一條連結
 ```
@@ -193,7 +195,12 @@ GET /s/:token   （server component，不在 /w/ layout 之下）
 
 **組裝要求：** `/s/:token` 取得 `DocumentShareService` 的路徑不能經過 identity provider 的建構或 production readiness 檢查。現有的 `applicationServices()` 在 `company-sso` 模式下缺少 session reader 時會在建構階段就丟錯（`identity-provider-factory.ts`），所以 composition root 要提供一個只組裝 unit of work 與分享服務的獨立入口。E2E 以沒有設定 SSO session reader 的伺服器（`phase3UnconfiguredOrigin()`）開啟連結來證明這一點。
 
-**部署要求：** 公司 SSO 在應用程式之前的 gateway／reverse proxy 必須對 `/s/*` 放行，而且**只**放行這個 prefix。放行範圍寫錯（例如放行 `/s` 開頭的所有路徑，或整個 `/api`）會讓其他頁面也不需登入；應用程式內的每條其他路由仍會呼叫 `establishTrustedCaller`，但不應該把這當成唯一防線。
+**部署要求：** 公司 SSO 在應用程式之前的 gateway／reverse proxy 必須放行兩個 prefix，而且**只**放行這兩個：
+
+- `/s/*`：分享頁本身。
+- `/_next/static/*`：Next.js 的建置產物（CSS、JS chunk、字型）。分享頁的樣式、字型和時間戳在瀏覽器端的換算都靠它們；只放行 `/s/*` 會讓匿名讀者拿到沒有樣式的頁面。這個 prefix 只有建置時產生的靜態檔案，不含任何使用者資料。
+
+放行範圍寫錯（例如放行 `/s` 開頭的所有路徑、整個 `/_next`，或整個 `/api`）會讓其他頁面也不需登入；應用程式內的每條其他路由仍會呼叫 `establishTrustedCaller`，但不應該把這當成唯一防線。
 
 ### 6.2 不擴散到其他讀取面
 
@@ -224,9 +231,9 @@ GET /s/:token   （server component，不在 /w/ layout 之下）
 | `Referrer-Policy` | `no-referrer` | 內文裡的外部連結被點擊時，token 不能經由 `Referer` 洩漏給外站 |
 | `Cache-Control` | `private, no-store` | 撤銷後不能再由任何快取送出內容；擁有者更新後重新整理一定拿到新版本（§5.3） |
 | `X-Robots-Tag` | `noindex, nofollow` | 防止搜尋引擎或內部爬蟲收錄 |
-| `Content-Security-Policy` | `frame-ancestors 'none'` | 匿名頁面不能被別的網站嵌入 iframe |
+| `Content-Security-Policy` | `img-src 'self'; frame-ancestors 'none'` | 匿名頁面不能被別的網站嵌入 iframe，且保留全站的圖片限制 |
 
-既有的 `img-src 'self'` CSP 與 `markdown-image-policy` 照常套用；兩個 CSP header 會同時生效。
+`markdown-image-policy` 照常套用。CSP 必須是**一個** header 同時帶兩個 directive：Next.js 對同一個 key 只保留最後一條符合的規則，所以 `/s/*` 若只設 `frame-ancestors`，會把全站的 `img-src 'self'`（Issue #20）蓋掉，而這正好是唯一不需登入的頁面。E2E 斷言完整的 header 值。
 
 ### 6.5 頁面本身
 
@@ -397,7 +404,7 @@ API 回傳路徑而不是完整 URL：伺服器在 reverse proxy 後面看到的
 
 1. **工作區能力**：`workspaceType === "PERSONAL"` 且 `confirmed`。
 2. **Source 所有權**：**不看**。見 §5.1 最後一段。
-3. **目標狀態**：`status === "ACTIVE"` 且 `revision === "CURRENT"`。在歷史版本上提供分享，會讓人以為分享的是那個版本。
+3. **目標狀態**：`status === "ACTIVE"` 且 `revision === "CURRENT"`。在歷史版本上提供分享，會讓人以為分享的是那個版本。`status` 同時反映文件所屬 source 的狀態：source 封存時，裡面仍是 ACTIVE 的文件也視為 ARCHIVED，因為建立會被 §5.1 第 1 條拒絕。
 
 `available()` 決定顯示什麼，service 決定發生什麼：§13 要求分別斷言兩者。
 
@@ -510,7 +517,7 @@ API 回傳路徑而不是完整 URL：伺服器在 reverse proxy 後面看到的
 
 **上線檢查清單**——不在程式範圍內，但上線前必須逐項確認並記錄在 `docs/superpowers/verification/`：
 
-- [ ] SSO gateway 只對 `/s/*` 放行，其餘路徑仍強制登入（附設定片段）。
+- [ ] SSO gateway 只對 `/s/*` 與 `/_next/static/*` 放行，其餘路徑仍強制登入（附設定片段，§6.1）。
 - [ ] 記錄 Hub 主機的網路可達範圍（內網／對外）；對外時，分享連結等同網際網路公開。
 - [ ] Reverse proxy 的 access log 遮罩 `/s/` 之後的 token。
 - [ ] Gateway 對 `/s/*` 設定速率限制。

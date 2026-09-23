@@ -19,7 +19,9 @@ export function useWorkspaceAuthorization() {
 }
 
 export function requestWorkspaceAccessCheck(status: number, code?: string) {
-  if (code === "REVISION_CONFLICT") return;
+  // Conflicts about content, not access: re-checking would pause every
+  // mutation in the shell for an answer that says nothing about authorization.
+  if (code === "REVISION_CONFLICT" || code === "SHARE_LINK_LIMIT_REACHED") return;
   if ([403, 404, 409].includes(status)) window.dispatchEvent(new Event("kh:workspace-access-check"));
 }
 

@@ -8,8 +8,16 @@ import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 import type { UserIdentity } from "@/modules/identity/domain/user-identity";
 import { DocumentShareService } from "@/modules/knowledge/application/document-share-service";
 import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
+import { KnowledgeQueryServiceImpl } from "@/modules/knowledge/application/knowledge-query-service";
+import { KnowledgeSearchService } from "@/modules/knowledge/application/knowledge-search-service";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "@/modules/knowledge/ports/unit-of-work";
+import { ApplyFolderImportService } from "@/modules/sources/application/apply-folder-import";
+import { CreateFolderImportService } from "@/modules/sources/application/create-folder-import";
 import { ensureDefaultHubSource } from "@/modules/sources/application/ensure-default-hub-source";
+import { FinalizeFolderImportService } from "@/modules/sources/application/finalize-folder-import";
+import { UploadFolderImportEntriesService } from "@/modules/sources/application/upload-folder-import-entries";
+import { DEFAULT_IMPORT_LIMITS } from "@/modules/sources/domain/import-limits";
+import { WorkspaceQueryService } from "@/modules/workspaces/application/workspace-query-service";
 import { PersonalWorkspaceService } from "@/modules/workspaces/application/personal-workspace-service";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import { createDocumentFixture, createDocumentForAnySource, createSourceFixture, fixtureCaller } from "../fixtures/knowledge";
@@ -261,5 +269,68 @@ describe("DocumentShareService.readShared (share-link spec §5.2, §5.3, §6.1)"
       shareLinks: replacing(repositories.shareLinks, "recordView", async () => { throw new Error("views unavailable"); }),
     }));
     await expect(service(failing).readShared(tokenOf(link.path))).resolves.toMatchObject({ title: "Shared Runbook" });
+  });
+});
+
+describe("share links and the rest of the system (share-link spec §6.2, §9.3, §13)", () => {
+  function importServices() {
+    const unitOfWork = new MariaDbUnitOfWork(pool);
+    return {
+      create: new CreateFolderImportService(unitOfWork, { limits: DEFAULT_IMPORT_LIMITS }),
+      upload: new UploadFolderImportEntriesService(unitOfWork, { limits: DEFAULT_IMPORT_LIMITS }),
+      finalize: new FinalizeFolderImportService(unitOfWork, { limits: DEFAULT_IMPORT_LIMITS }),
+      apply: new ApplyFolderImportService(unitOfWork, {}),
+    };
+  }
+
+  function markdown(text: string) {
+    const bytes = new TextEncoder().encode(text);
+    return { manifest: { uploadKey: `m-${uuidv7().slice(-8)}`, relativePath: "docs/readme.md", kind: "MARKDOWN" as const, size: bytes.byteLength }, bytes };
+  }
+
+  async function readySnapshot(caller: ReturnType<typeof callerFromIdentity>, start: { snapshotId: string }, entry: ReturnType<typeof markdown>) {
+    const services = importServices();
+    await services.upload.upload(caller, { snapshotId: start.snapshotId, entries: [{ uploadKey: entry.manifest.uploadKey, bytes: entry.bytes }] });
+    await services.finalize.finalize(caller, start.snapshotId);
+    return start.snapshotId;
+  }
+
+  it("resync apply and link creation on the same folder source never deadlock", async () => {
+    const { caller, workspaceId } = await mySpaceDocument();
+    const services = importServices();
+    const first = markdown("# Readme\n\nversion 0\n");
+    const initial = await services.create.createInitial(caller, { workspaceId, sourceName: "Synced Wiki", rootName: "wiki", manifest: [first.manifest] });
+    const applied = await services.apply.apply(caller, await readySnapshot(caller, initial, first));
+    if (applied.kind !== "APPLIED") throw new Error("expected the initial import to apply");
+    const rows = await pool.query<{ id: unknown }[]>("SELECT id FROM knowledge_documents WHERE source_id = ?", [applied.sourceId]);
+    const documentId = String(rows[0].id);
+
+    for (let round = 1; round <= 3; round += 1) {
+      const entry = markdown(`# Readme\n\nversion ${round}\n`);
+      const snapshotId = await readySnapshot(caller, await services.create.createResync(caller, { sourceId: applied.sourceId, rootName: "wiki", manifest: [entry.manifest] }), entry);
+      // Resync apply locks Snapshot → Source → Workspace; create locks Source → Workspace.
+      const [resync, link] = await Promise.all([services.apply.apply(caller, snapshotId), service().create(caller, { documentId })]);
+      expect(resync.kind).toBe("APPLIED");
+      await expect(service().readShared(tokenOf(link.path))).resolves.toMatchObject({ markdown: expect.stringContaining(`version ${round}`) });
+    }
+  });
+
+  it("gives a Hub user who holds the link nothing beyond the link itself", async () => {
+    const { caller, documentId, workspaceId } = await mySpaceDocument();
+    const token = tokenOf((await service().create(caller, { documentId })).path);
+    const holder = newIdentity("Link Holder");
+    await new MariaDbUnitOfWork(pool).run((repositories) => repositories.users.upsertIdentity(holder));
+    const holderCaller = callerFromIdentity(holder);
+    await expect(service().readShared(token)).resolves.toMatchObject({ title: "Shared Runbook" });
+
+    const unitOfWork = new MariaDbUnitOfWork(pool);
+    const workspaces = new WorkspaceQueryService(unitOfWork);
+    expect((await workspaces.listWorkspaces(holderCaller)).map((workspace) => workspace.id)).not.toContain(workspaceId);
+    const searching = new KnowledgeSearchService(unitOfWork, workspaces);
+    const query = { q: "Shared Runbook", scope: { kind: "all" as const } };
+    // The owner finds it, so the holder's empty result means something.
+    expect((await searching.search(caller, query)).hits.map((hit) => hit.documentId)).toContain(documentId);
+    expect((await searching.search(holderCaller, query)).hits.map((hit) => hit.documentId)).not.toContain(documentId);
+    await expect(new KnowledgeQueryServiceImpl(unitOfWork).getDocument(holderCaller, documentId)).rejects.toMatchObject({ code: "WORKSPACE_ACCESS_DENIED" });
   });
 });

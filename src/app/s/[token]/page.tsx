@@ -40,7 +40,7 @@ export default async function SharedDocumentPage({ params }: SharedPageProps) {
           </p>
         </div>
       </header>
-      <article className="kh-reading-column min-w-0 pb-12 pt-6 [&>div>:first-child]:mt-0">
+      <article className="kh-reading-column min-w-0 pb-6 pt-6 [&>div>:first-child]:mt-0">
         <MarkdownRenderer markdown={shared.markdown} />
       </article>
     </main>

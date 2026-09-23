@@ -62,12 +62,15 @@ test.describe("document share link", () => {
       expect(headers["referrer-policy"]).toBe("no-referrer");
       expect(headers["cache-control"]).toContain("no-store");
       expect(headers["x-robots-tag"]).toContain("noindex");
-      expect(headers["content-security-policy"]).toContain("frame-ancestors 'none'");
+      // Both directives, in one header: a second CSP rule would replace the
+      // global img-src lockdown rather than add to it.
+      expect(headers["content-security-policy"]).toBe("img-src 'self'; frame-ancestors 'none'");
 
-      // Everything else on that origin still requires signing in.
+      // Everything else on that origin still requires signing in: a page and an API.
       const workspace = await reader.get(`/w/${workspaceId}/knowledge`);
       expect(workspace.status()).not.toBe(200);
       expect(await workspace.text()).not.toContain("first shared body");
+      expect((await reader.get("/api/workspaces")).status()).not.toBe(200);
 
       // The owner edits; the reader sees the new text on the next load (A2).
       await page.keyboard.press("Escape");
