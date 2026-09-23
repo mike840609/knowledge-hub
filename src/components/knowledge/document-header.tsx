@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ChevronRight, LockKeyhole } from "lucide-react";
+import { ChevronRight, LockKeyhole, PanelRight } from "lucide-react";
 import { ActionIcon } from "@/components/actions/action-icon";
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
@@ -76,18 +76,21 @@ export function DocumentHeader({
               })}
             </ol>
           </nav>
+          {/* Icon-only so the header stays light; each keeps its name as
+              aria-label and tooltip. Details draws the same glyph as the
+              sticky topbar's copy of this button. */}
           <div className="flex shrink-0 items-center gap-2">
             {editHref ? (
               <a
                 href={editHref}
-                className={buttonClasses({ variant: "ghost" })}
+                aria-label="Edit"
+                title="Edit"
+                className={buttonClasses({ variant: "ghost", icon: true })}
               >
-                Edit
+                <ActionIcon name="edit" className="h-4 w-4" />
               </a>
             ) : null}
             {onShareClick ? (
-              // Icon-only here to keep the header light; the name and tooltip
-              // still say what it does, and a click only opens the dialog.
               <button
                 type="button"
                 onClick={onShareClick}
@@ -101,11 +104,12 @@ export function DocumentHeader({
             <button
               type="button"
               onClick={onDetailsClick}
+              aria-label="Details"
               aria-keyshortcuts="Meta+I Control+I"
               title="Details (⌘/Ctrl I)"
-              className={buttonClasses({ variant: "ghost" })}
+              className={buttonClasses({ variant: "ghost", icon: true })}
             >
-              Details
+              <PanelRight className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
         </div>
