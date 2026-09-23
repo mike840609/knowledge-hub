@@ -408,7 +408,7 @@ API 回傳路徑而不是完整 URL：伺服器在 reverse proxy 後面看到的
 
 `available()` 決定顯示什麼，service 決定發生什麼：§13 要求分別斷言兩者。
 
-文件頁標頭也提供同一個動作（從 registry 取），與 Edit 並列。標頭只放圖標，`aria-label` 與 tooltip 仍是「Share link…」：標頭沒有 Copy link 可以混淆，點下去只會開啟對話框，建立連結前對話框會說明後果。圖標用 `Share2` 而不是鏈結，因為 Copy link 已經用了鏈結圖標，兩者在右鍵選單裡並列。
+文件頁標頭也提供同一個動作（從 registry 取），與 Edit 並列。標頭只放圖標，`aria-label` 與 tooltip 仍是「Share link…」：標頭沒有 Copy link 可以混淆，點下去只會開啟對話框，建立連結前對話框會說明後果。圖標用 `Share2` 而不是鏈結，因為 Copy link 已經用了鏈結圖標，兩者在右鍵選單裡並列。文件往下捲、標頭離開畫面後，頂端固定的 topbar 也在 Details 左邊提供同一個圖標；是否顯示仍由文件頁向 registry 取得，topbar 不自行判斷。
 
 ### 10.2 用詞
 

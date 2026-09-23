@@ -318,17 +318,18 @@ export function DocumentDetailClient({
     const header = headerRef.current;
     const root = contentRef.current;
     if (!header || !root || !setDocumentTopbar) return;
-    setDocumentTopbar({ pathname, title, visible: false, onDetailsClick: openInspector, target });
+    const onShareClick = canShare ? () => requestShare(target.documentId) : null;
+    setDocumentTopbar({ pathname, title, visible: false, onDetailsClick: openInspector, onShareClick, target });
     const observer = new IntersectionObserver(([entry]) => {
       const visible = !entry.isIntersecting && entry.boundingClientRect.bottom <= (entry.rootBounds?.top ?? 0);
-      setDocumentTopbar({ pathname, title, visible, onDetailsClick: openInspector, target });
+      setDocumentTopbar({ pathname, title, visible, onDetailsClick: openInspector, onShareClick, target });
     }, { root, threshold: 0 });
     observer.observe(header);
     return () => {
       observer.disconnect();
       setDocumentTopbar(null);
     };
-  }, [pathname, title, openInspector, setDocumentTopbar, target]);
+  }, [pathname, title, openInspector, setDocumentTopbar, target, canShare]);
   return (
     <div data-document-pane className="flex h-full min-h-0 overflow-hidden bg-kh-bg-raised">
       <div ref={contentRef} role="region" aria-label="Document content" tabIndex={0}

@@ -100,4 +100,18 @@ test.describe("document share link", () => {
       await reader.dispose();
     }
   });
+
+  test("once the header scrolls away, the topbar still offers Share link…", async ({ page }) => {
+    const title = `Long Shared Note ${Date.now()}`;
+    const body = Array.from({ length: 80 }, (_, index) => `Paragraph ${index + 1}.`).join("\n\n");
+    await createMySpaceDocument(page, title, body);
+
+    const topbarShare = page.getByRole("banner").getByRole("button", { name: "Share link…" });
+    await expect(topbarShare).toHaveCount(0);
+    await page.getByRole("region", { name: "Document content" }).evaluate((element) => element.scrollTo(0, element.scrollHeight));
+    await expect(topbarShare).toBeVisible();
+
+    await topbarShare.click();
+    await expect(page.getByRole("dialog", { name: "Share link" })).toBeVisible();
+  });
 });

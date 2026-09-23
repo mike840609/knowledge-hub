@@ -8,6 +8,13 @@ export type DocumentTopbarState = {
   visible: boolean;
   onDetailsClick: () => void;
   /**
+   * Opens the share-link dialog; null where sharing is not offered. The
+   * document pane decides this from the registry, so the topbar never
+   * re-derives the rule — it only keeps the action reachable once the
+   * header has scrolled away.
+   */
+  onShareClick: (() => void) | null;
+  /**
    * What the command palette needs in order to offer actions on the document
    * being read. It travels with the topbar state because the palette lives in
    * the topbar and the document pane is the only thing that knows these facts

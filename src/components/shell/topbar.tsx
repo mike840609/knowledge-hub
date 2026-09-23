@@ -9,6 +9,7 @@ import { WorkspaceSelector } from "@/components/shell/workspace-selector";
 import { QuickSearch } from "@/components/search/quick-search";
 import { UserMenu } from "@/components/shell/user-menu";
 import { buttonClasses } from "@/components/ui/button";
+import { ActionIcon } from "@/components/actions/action-icon";
 
 export function Topbar({
   model,
@@ -52,6 +53,12 @@ export function Topbar({
         <span className="min-w-0 flex-1 truncate text-body font-semibold text-kh-text" title={active ? state.title : undefined}>
           {active ? state.title : ""}
         </span>
+        {active && state.onShareClick ? (
+          <button type="button" aria-label="Share link…" title="Share link…" onClick={state.onShareClick}
+            className={buttonClasses({ variant: "ghost", icon: true })}>
+            <ActionIcon name="share" className="h-4 w-4" />
+          </button>
+        ) : null}
         <button type="button" aria-label="Document details" aria-keyshortcuts="Meta+I Control+I" title="Details (⌘/Ctrl I)" onClick={active ? state.onDetailsClick : undefined}
           className={buttonClasses({ variant: "ghost" })}>
           <PanelRight className="h-4 w-4" aria-hidden="true" />
