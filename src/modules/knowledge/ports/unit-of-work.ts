@@ -1,6 +1,7 @@
 import type { WorkspaceGroupMappingRepository } from "@/modules/workspaces/ports/workspace-group-mapping-repository";
 import type { UserRepository } from "@/modules/identity/ports/user-repository";
 import type { DocumentRepository } from "./document-repository";
+import type { DocumentShareLinkRepository } from "./document-share-link-repository";
 import type { KnowledgeSearchRepository } from "./knowledge-search-repository";
 import type { LinkedEntryRepository } from "./linked-entry";
 import type { RevisionRepository } from "./revision-repository";
@@ -9,6 +10,7 @@ import type { TreeRepository } from "./tree-repository";
 import type { WorkspaceAccessPolicy } from "@/modules/workspaces/ports/workspace-access-policy";
 import type { WorkspaceMembershipRepository } from "@/modules/workspaces/ports/workspace-membership-repository";
 import type { WorkspaceRepository } from "@/modules/workspaces/ports/workspace-repository";
+import type { WorkspaceAuditEventRepository } from "@/modules/workspaces/ports/workspace-audit-event-repository";
 
 export type KnowledgeRepositories = {
   users: UserRepository;
@@ -30,6 +32,9 @@ export type KnowledgeRepositories = {
   /** Current direct and group grants are re-read under the Workspace lock. */
   workspaceMemberships: WorkspaceMembershipRepository;
   groupMappings: WorkspaceGroupMappingRepository;
+  shareLinks: DocumentShareLinkRepository;
+  /** Share-link create/revoke append governance events in the same transaction (share-link spec §7.3). */
+  auditEvents: WorkspaceAuditEventRepository;
 };
 
 export interface KnowledgeUnitOfWork {
