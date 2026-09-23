@@ -355,6 +355,16 @@ out of reach — the same rule that makes arrow-key movement mandatory two
 paragraphs above. Both openings render the same component for the same action,
 so they cannot drift apart.
 
+**A replacement menu may not be poorer than the one it replaced.** Taking
+over right-click on a row that is a link takes the browser's own menu away, and
+that menu offered *Open in new tab* and *Copy link address*. Both are in the
+registry, on every document row, whatever the reader may otherwise do there —
+they are reading, not writing. Copy link also appears in the palette, where it
+copies the page being read, and it reports through the toast because the menu
+it is chosen from has already closed; the clipboard can refuse, and says so.
+This was missed on the first pass and found by reading the product rather than
+the diff: middle-click still worked, so nothing looked broken.
+
 That trigger is floated over the row's own background rather than given a
 column of its own. A second reserved control slot re-truncates every label in
 the tree to buy a button that is invisible most of the time; a float costs

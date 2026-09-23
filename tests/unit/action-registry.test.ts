@@ -123,6 +123,38 @@ describe("action registry — surfaces", () => {
   });
 });
 
+describe("action registry — what the browser's own menu used to offer", () => {
+  it("gives a row back Open in new tab and Copy link", () => {
+    const rows = ids(actionsFor("row", context({ target: target() })));
+    expect(rows).toContain("document.open-new-tab");
+    expect(rows).toContain("document.copy-link");
+  });
+
+  it("offers them on content the reader can only read, because both are reading", () => {
+    const readOnly = target({ ownership: "SOURCE_MANAGED", status: "ARCHIVED", revision: "HISTORICAL" });
+    const none = { canWrite: false, canImport: false, canSearch: true, canInspectSources: false, canOpenSettings: false };
+    const rows = ids(actionsFor("row", context({ can: none, confirmed: false, target: readOnly })));
+    expect(rows).toEqual(expect.arrayContaining(["document.open-new-tab", "document.copy-link"]));
+  });
+
+  it("puts Copy link in the palette too, where it copies the page being read", () => {
+    const palette = ids(actionsFor("palette", context({ target: target() })));
+    expect(palette).toContain("document.copy-link");
+    // A new tab of the page you are already on is not something the palette needs.
+    expect(palette).not.toContain("document.open-new-tab");
+  });
+
+  it("points both at the same place Open document does", () => {
+    const actions = availableActions(context({ includeArchived: true, target: target() }));
+    const href = (id: string) => {
+      const effect = actions.find((action) => action.id === id)?.effect;
+      return effect && "href" in effect ? effect.href : undefined;
+    };
+    expect(href("document.open-new-tab")).toBe(href("document.open"));
+    expect(href("document.copy-link")).toBe(href("document.open"));
+  });
+});
+
 describe("action registry — hrefs", () => {
   it("keeps an archived view archived when it links onwards", () => {
     const archived = availableActions(context({ includeArchived: true, target: target() }));

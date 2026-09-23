@@ -25,6 +25,8 @@ export type ActionId =
   | "create.document"
   | "create.import"
   | "document.open"
+  | "document.open-new-tab"
+  | "document.copy-link"
   | "document.edit"
   | "document.favorite"
   | "document.details";
@@ -36,6 +38,8 @@ export type ActionSurface = "palette" | "row" | "empty";
 
 /** Named rather than imported so this module stays free of component imports. */
 export type ActionIconName =
+  | "new-tab"
+  | "copy-link"
   | "knowledge"
   | "search"
   | "sources"
@@ -51,6 +55,10 @@ export type ActionCommand = "document.toggle-favorite" | "document.open-details"
 
 export type ActionEffect =
   | { kind: "navigate"; href: string }
+  /** Leaves this tab where it is; what a middle-click on the row's link does. */
+  | { kind: "open-new-tab"; href: string }
+  /** A path, not a URL: the origin is the browser's to supply, not this module's. */
+  | { kind: "copy-link"; href: string }
   | { kind: "command"; command: ActionCommand; documentId: string; sourceId: string };
 
 export type Action = {
@@ -202,6 +210,30 @@ export function availableActions(context: ActionContext): readonly Action[] {
       keywords: [target.label],
       surfaces: ["row"],
       effect: { kind: "navigate", href: documentHref },
+    });
+    // A row's link used to answer right-click with the browser's own menu,
+    // which offers these two. Replacing that menu took them away, so the
+    // replacement has to give them back — a context menu that is poorer than
+    // the one it displaced is a regression, however much it adds.
+    actions.push({
+      id: "document.open-new-tab",
+      label: "Open in new tab",
+      group: "document",
+      icon: "new-tab",
+      keywords: ["tab", "window", target.label],
+      surfaces: ["row"],
+      effect: { kind: "open-new-tab", href: documentHref },
+    });
+    actions.push({
+      id: "document.copy-link",
+      label: "Copy link",
+      group: "document",
+      icon: "copy-link",
+      keywords: ["share", "url", "address", target.label],
+      // The palette's target is the document being read, so this is also
+      // "copy a link to this page" — which has no other home.
+      surfaces: ["palette", "row"],
+      effect: { kind: "copy-link", href: documentHref },
     });
     // All three axes at once: the capability, then the ownership, then the
     // state of the document itself.

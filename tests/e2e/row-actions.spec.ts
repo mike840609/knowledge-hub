@@ -105,3 +105,38 @@ test("favouriting from the row menu reaches the sidebar without a reload", async
   await row.click({ button: "right" });
   await expect(page.getByRole("menuitem", { name: "Remove from favorites" })).toBeVisible();
 });
+
+/**
+ * The row menu replaced the browser's own right-click menu on a link, and that
+ * menu offered "Open in new tab" and "Copy link address". These assert the
+ * replacement does what those did, not merely that it lists them.
+ */
+test("Open in new tab opens the document in a new tab and leaves this one alone", async ({ page, context }) => {
+  await openTree(page);
+  const here = page.url();
+  const row = page.getByRole("treeitem", { name: "Runbooks", exact: true });
+  const href = await row.getByRole("link").getAttribute("href");
+
+  await row.click({ button: "right" });
+  const [opened] = await Promise.all([
+    context.waitForEvent("page"),
+    page.getByRole("menuitem", { name: "Open in new tab" }).click(),
+  ]);
+  await opened.waitForLoadState();
+  expect(new URL(opened.url()).pathname).toBe(href);
+  expect(page.url()).toBe(here);
+});
+
+test("Copy link puts the document's full URL on the clipboard and says so", async ({ page, context, baseURL }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await openTree(page);
+  const row = page.getByRole("treeitem", { name: "Runbooks", exact: true });
+  const href = await row.getByRole("link").getAttribute("href");
+
+  await row.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Copy link" }).click();
+
+  await expect(page.getByRole("status")).toContainText("Link copied.");
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  expect(copied).toBe(new URL(href!, baseURL).toString());
+});
