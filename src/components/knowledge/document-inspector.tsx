@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { SHARE_REQUEST_EVENT } from "@/components/actions/action-menu";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
@@ -233,6 +234,7 @@ export function DocumentDetailClient({
   inspectorData,
   children,
   editHref,
+  canShare,
   readOnly,
   ownership,
   contentOwnsTitle,
@@ -245,6 +247,7 @@ export function DocumentDetailClient({
   inspectorData: DocumentInspectorData;
   children: ReactNode;
   editHref: string | null;
+  canShare: boolean;
   readOnly: boolean;
   /** Passed rather than inferred from `readOnly`: the two happen to agree today. */
   ownership: "SOURCE_MANAGED" | "HUB_MANAGED";
@@ -323,6 +326,7 @@ export function DocumentDetailClient({
           revisionBanner={revisionBanner}
           onDetailsClick={openInspector}
           editHref={editHref}
+          onShareClick={canShare ? () => window.dispatchEvent(new CustomEvent(SHARE_REQUEST_EVENT, { detail: { documentId: inspectorData.documentId } })) : null}
           readOnly={readOnly}
           contentOwnsTitle={contentOwnsTitle}
         />

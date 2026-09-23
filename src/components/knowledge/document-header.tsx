@@ -21,6 +21,7 @@ export function DocumentHeader({
   revisionBanner,
   onDetailsClick,
   editHref,
+  onShareClick,
   readOnly,
   contentOwnsTitle,
 }: {
@@ -31,6 +32,8 @@ export function DocumentHeader({
   revisionBanner: { viewingNo: number; backHref: string } | null;
   onDetailsClick: () => void;
   editHref: string | null;
+  /** Opens the share-link dialog; null where sharing is not offered (share-link spec §10.1). */
+  onShareClick: (() => void) | null;
   readOnly: boolean;
   contentOwnsTitle: boolean;
 }) {
@@ -80,6 +83,11 @@ export function DocumentHeader({
               >
                 Edit
               </a>
+            ) : null}
+            {onShareClick ? (
+              <button type="button" onClick={onShareClick} className={buttonClasses({ variant: "ghost" })}>
+                Share link…
+              </button>
             ) : null}
             <button
               type="button"

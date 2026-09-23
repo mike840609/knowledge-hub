@@ -94,6 +94,9 @@ export default async function KnowledgeDocumentPage({
     view.status === "ACTIVE" &&
     !isHistorical;
   const editHref = canEdit ? `/w/${workspaceId}/knowledge/${sourceId}/${documentId}/edit` : null;
+  // The same rule as the registry's document.share (share-link spec §10.1):
+  // My Space, active, current revision — and ownership deliberately not asked.
+  const canShare = shell?.workspace.type === "PERSONAL" && view.status === "ACTIVE" && !isHistorical;
   const breadcrumb = explorer
     ? buildBreadcrumb(workspaceId, sourceId, explorer.source.name, explorer.tree, documentId, selectedRevision.title)
     : [{ label: selectedRevision.title }];
@@ -126,6 +129,7 @@ export default async function KnowledgeDocumentPage({
       }
       inspectorData={inspectorData}
       editHref={editHref}
+      canShare={canShare}
       readOnly={sourceManaged}
       ownership={explorer?.source.ownership ?? "SOURCE_MANAGED"}
       contentOwnsTitle={contentOwnsTitle}

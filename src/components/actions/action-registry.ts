@@ -26,6 +26,7 @@ export type ActionId =
   | "create.import"
   | "document.open"
   | "document.edit"
+  | "document.share"
   | "document.favorite"
   | "document.details";
 
@@ -44,10 +45,11 @@ export type ActionIconName =
   | "import"
   | "open"
   | "edit"
+  | "share"
   | "favorite"
   | "details";
 
-export type ActionCommand = "document.toggle-favorite" | "document.open-details";
+export type ActionCommand = "document.toggle-favorite" | "document.open-details" | "document.open-share";
 
 export type ActionEffect =
   | { kind: "navigate"; href: string }
@@ -220,6 +222,31 @@ export function availableActions(context: ActionContext): readonly Action[] {
         keywords: ["rename", "title", "write", target.label],
         surfaces: ["palette", "row"],
         effect: { kind: "navigate", href: `${documentHref.split("?")[0]}/edit` },
+      });
+    }
+    // Share-link spec §10.1. Ownership is deliberately not consulted: sharing
+    // is reading, and SOURCE_MANAGED content is as readable as any other. A
+    // historical revision is excluded because the link always shows the
+    // current one, and offering it there would suggest otherwise.
+    if (
+      context.workspaceType === "PERSONAL" &&
+      confirmed &&
+      target.status === "ACTIVE" &&
+      target.revision === "CURRENT"
+    ) {
+      actions.push({
+        id: "document.share",
+        label: "Share link…",
+        group: "document",
+        icon: "share",
+        keywords: ["link", "share", "copy link", "public", target.label],
+        surfaces: ["palette", "row"],
+        effect: {
+          kind: "command",
+          command: "document.open-share",
+          documentId: target.documentId,
+          sourceId: target.sourceId,
+        },
       });
     }
     actions.push({

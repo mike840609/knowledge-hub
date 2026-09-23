@@ -16,6 +16,8 @@ import {
 import { ActionIcon } from "./action-icon";
 import type { Action } from "./action-registry";
 
+export const SHARE_REQUEST_EVENT = "kh:request-share";
+
 /**
  * Turning registry entries into rows, and running what a reader picks.
  *
@@ -45,6 +47,11 @@ export function useActionRunner({ onToggleFavorite }: ActionHandlers) {
           // The inspector belongs to the document pane, which owns whether it
           // is open; asking is the only thing a detached surface can do.
           window.dispatchEvent(new CustomEvent("kh:request-details"));
+          break;
+        case "document.open-share":
+          // The dialog lives with the knowledge layout (ShareLinkDialogHost);
+          // any surface can ask for it the same way it asks for details.
+          window.dispatchEvent(new CustomEvent(SHARE_REQUEST_EVENT, { detail: { documentId: action.effect.documentId } }));
           break;
       }
     },

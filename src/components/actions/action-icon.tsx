@@ -2,6 +2,7 @@ import {
   Database,
   FileText,
   Info,
+  Link as LinkIcon,
   Pencil,
   Plus,
   Search,
@@ -26,6 +27,7 @@ const icons: Record<ActionIconName, LucideIcon> = {
   import: Upload,
   open: FileText,
   edit: Pencil,
+  share: LinkIcon,
   favorite: Star,
   details: Info,
 };
