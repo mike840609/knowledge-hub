@@ -1,13 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { markdownStartsWithDocumentTitle } from "@/lib/markdown-title";
+import { markdownOpensWithHeading } from "@/lib/markdown-title";
 
-describe("markdownStartsWithDocumentTitle", () => {
-  it("recognizes an opening heading with a decorative emoji", () => {
-    expect(markdownStartsWithDocumentTitle("# 💰 Assets Tracker 使用說明\n\nWelcome", "Assets Tracker 使用說明")).toBe(true);
+describe("markdownOpensWithHeading", () => {
+  it("recognizes an opening heading whether or not it repeats the saved title", () => {
+    expect(markdownOpensWithHeading("# 💰 Assets Tracker 使用說明\n\nWelcome")).toBe(true);
+    expect(markdownOpensWithHeading("# Shell 操作快捷鍵指南\n\nText")).toBe(true);
   });
 
-  it("keeps a different heading and does not match headings later in the document", () => {
-    expect(markdownStartsWithDocumentTitle("# Getting started\n\nText", "Assets Tracker 使用說明")).toBe(false);
-    expect(markdownStartsWithDocumentTitle("Intro\n\n# Assets Tracker 使用說明", "Assets Tracker 使用說明")).toBe(false);
+  it("looks past a byte-order mark and leading blank lines", () => {
+    expect(markdownOpensWithHeading("﻿# Title")).toBe(true);
+    expect(markdownOpensWithHeading("\n  \r\n# Title\nbody")).toBe(true);
+  });
+
+  it("does not count a heading later in the document", () => {
+    expect(markdownOpensWithHeading("Intro\n\n# Assets Tracker 使用說明")).toBe(false);
+  });
+
+  it("does not count a lower-level heading, a bare hash or a hashtag", () => {
+    expect(markdownOpensWithHeading("## Section\n\nText")).toBe(false);
+    expect(markdownOpensWithHeading("#\n\nText")).toBe(false);
+    expect(markdownOpensWithHeading("#tag at the start")).toBe(false);
+  });
+
+  it("is false for an empty document", () => {
+    expect(markdownOpensWithHeading("")).toBe(false);
   });
 });
