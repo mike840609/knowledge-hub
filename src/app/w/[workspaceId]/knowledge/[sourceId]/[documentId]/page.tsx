@@ -4,7 +4,7 @@ import type { DocumentBreadcrumbSegment } from "@/components/knowledge/document-
 import { DocumentDetailClient, type DocumentInspectorData } from "@/components/knowledge/document-inspector";
 import { DocumentViewer } from "@/components/knowledge/document-viewer";
 import { StatusMessage } from "@/components/ui/status-message";
-import { markdownStartsWithDocumentTitle } from "@/lib/markdown-title";
+import { markdownOpensWithHeading } from "@/lib/markdown-title";
 
 function buildBreadcrumb(
   workspaceId: string,
@@ -76,7 +76,7 @@ export default async function KnowledgeDocumentPage({
   }
 
   const { view, selectedRevision } = model;
-  const contentOwnsTitle = markdownStartsWithDocumentTitle(selectedRevision.markdown, selectedRevision.title);
+  const contentOwnsTitle = markdownOpensWithHeading(selectedRevision.markdown);
   const isHistorical = selectedRevision.id !== view.currentRevision.id;
   const archivedSuffix = includeArchived ? "?includeArchived=true" : "";
 

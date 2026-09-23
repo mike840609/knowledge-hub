@@ -279,9 +279,15 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
                   action but no document looks like a search that never ran. */}
               {!loading && !message && trimmed && hits.length === 0 && matched.length > 0 ? <p role="status" className="px-3 py-2 text-body-sm text-kh-text-muted">No matching documents.</p> : null}
             </div>
-            <button type="button" onClick={openAll} className="flex shrink-0 items-center justify-between border-t border-kh-border px-5 py-3 text-left text-body-sm text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text kh-focus-ring">
-              <span>Open full search</span><span aria-hidden="true">↵</span>
-            </button>
+            {/* Only with a query: without one this is the "Open full search"
+                row again. ↵ is shown only when Enter would really do this,
+                which is when there is no row for it to choose instead. */}
+            {trimmed ? (
+              <button type="button" onClick={openAll} className="flex shrink-0 items-center justify-between gap-3 border-t border-kh-border px-5 py-3 text-left text-body-sm text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text kh-focus-ring">
+                <span className="min-w-0 truncate">Search all documents for “{trimmed}”</span>
+                {activeRow ? null : <span aria-hidden="true">↵</span>}
+              </button>
+            ) : null}
           </Dialog.Popup>
         </Dialog.Portal>
       </Dialog.Root>

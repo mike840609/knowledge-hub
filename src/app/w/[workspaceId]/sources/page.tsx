@@ -18,7 +18,7 @@ export default async function WorkspaceSourcesPage({
       <PageHeader
         location={model.workspace.name}
         locationHref={`/w/${workspaceId}/knowledge`}
-        title="Manage sources"
+        title="Sources"
         description={`${model.items.length} ${model.items.length === 1 ? "source" : "sources"}`}
         actions={<WorkspaceImportLink
           className={buttonClasses({ variant: "secondary" })}
