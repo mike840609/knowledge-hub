@@ -415,6 +415,11 @@ dark never sees a light one. It stamps `data-theme` unconditionally, defaulting
 to light, so the DOM states which theme is in force from the first byte rather
 than only after hydration.
 
+Because the script writes to `<html>` before React hydrates, the server HTML
+and the DOM React finds disagree on that one attribute by design. The root
+layout marks `<html>` `suppressHydrationWarning`; React applies it to that
+element's own attributes only, so a real mismatch anywhere below still reports.
+
 ### What this costs
 
 A visitor whose OS is set to dark gets light until they pick, and with
