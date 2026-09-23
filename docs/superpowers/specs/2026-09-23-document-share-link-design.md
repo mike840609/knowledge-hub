@@ -58,8 +58,8 @@
 | --- | --- | --- |
 | 產生目的 | 識別 | 授權 |
 | 誰決定產生 | 系統，建立文件時 | 擁有者，刻意操作 |
-| 可猜測性 | UUIDv7，含時間戳，部分可推測 | 256 bit 隨機 |
-| 儲存 | 明文，到處引用 | 只存 SHA-256 hash |
+| 可猜測性 | UUIDv7，前 48 bit 是時間戳 | UUIDv4，122 bit 隨機 |
+| 與實體的關係 | 就是實體本身的主鍵 | 獨立欄位，無法從任何實體 ID 推導 |
 | 期限 | 永久 | 必填，最長 90 天 |
 | 撤銷 | 不可 | 隨時 |
 | 稽核 | 無 | 建立、撤銷有治理紀錄；檢視有匿名計數 |
@@ -78,8 +78,9 @@
 >   access check.
 >   The single bearer grant is a **document share link**
 >   (`docs/superpowers/specs/2026-09-23-document-share-link-design.md`): an
->   unguessable, expiring, revocable token that the document's owner issues on
->   purpose, stored only as a hash. It requires no sign-in. It is accepted by
+>   unguessable (random UUIDv4, never derived from any entity ID), expiring,
+>   revocable token that the document's owner issues on purpose. It requires
+>   no sign-in. It is accepted by
 >   exactly one read path (`/s/:token`) and grants whoever holds it the current
 >   revision of one document — never search, tree, history, MCP, or any write.
 >   No other code path may serve document content without a caller.
@@ -105,8 +106,9 @@ My Space 文件列 → 右鍵（或 ⋯、或 ⌘K）→「Share link…」
     標籤（選填，例如「給後端小組」）
     期限：1 天 / 7 天 / 30 天 / 90 天（預設值見 D2）
     [建立連結]
-→ 顯示完整連結與 [複製]。提示：「此連結只會顯示這一次。」
-→ 對話框下半部列出這份文件所有連結：標籤、建立時間、到期時間、檢視次數、[撤銷]
+→ 顯示完整連結與 [複製]
+→ 對話框下半部列出這份文件所有連結：標籤、建立時間、到期時間、檢視次數、[複製]、[撤銷]
+   之後任何時候打開對話框，都能再複製同一條連結
 ```
 
 **檢視者：**
@@ -136,7 +138,7 @@ My Space 文件列 → 右鍵（或 ⋯、或 ⌘K）→「Share link…」
 
 以下全部成立，連結才有效。任一不成立就是「無法使用」，不區分原因：
 
-1. `token_hash` 存在。
+1. `token` 存在。
 2. `revoked_at IS NULL`。
 3. `expires_at > now`。
 4. 文件 `status = ACTIVE`。
@@ -178,7 +180,8 @@ My Space 文件列 → 右鍵（或 ⋯、或 ⌘K）→「Share link…」
 GET /s/:token   （server component，不在 /w/ layout 之下）
   → 不呼叫 establishTrustedCaller          ← 刻意：檢視者可以是任何人
   → shareLinks.readShared(token)
-       ├─ hash = SHA-256(token)
+       ├─ 格式不是 UUID → 直接視為無效，不查 DB
+       ├─ 以 token 查 unique index
        ├─ 讀 link、document、source、workspace、建立者的 direct membership
        ├─ 套用 §5.2 純函式
        ├─ 累加檢視計數（§7.2）   ← 失敗只記 log，照常顯示內容（見 D3）
@@ -241,7 +244,7 @@ GET /s/:token   （server component，不在 /w/ layout 之下）
 CREATE TABLE document_share_links (
   id           UUID        NOT NULL,
   document_id  UUID        NOT NULL,
-  token_hash   BINARY(32)  NOT NULL,
+  token        UUID        NOT NULL,   -- UUIDv4，見 §8
   label        VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL,
   created_by   UUID        NOT NULL,
   created_at   DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
@@ -249,7 +252,7 @@ CREATE TABLE document_share_links (
   revoked_by   UUID        NULL,
   revoked_at   DATETIME(6) NULL,
   PRIMARY KEY (id),
-  CONSTRAINT uq_share_links_token_hash UNIQUE (token_hash),
+  CONSTRAINT uq_share_links_token UNIQUE (token),
   CONSTRAINT fk_share_links_document  FOREIGN KEY (document_id) REFERENCES knowledge_documents(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
   CONSTRAINT fk_share_links_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
   CONSTRAINT fk_share_links_revoked_by FOREIGN KEY (revoked_by) REFERENCES users(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
@@ -292,19 +295,21 @@ CREATE TABLE document_share_link_views (
 | `DOCUMENT_SHARE_LINK_CREATED` | `DOCUMENT_SHARE_LINK` | link id | `{ documentId, expiresAt, label }` |
 | `DOCUMENT_SHARE_LINK_REVOKED` | `DOCUMENT_SHARE_LINK` | link id | `{ documentId }` |
 
-`workspace_id` 在寫入當下推導。payload 絕不包含 token 或 token hash。
+`workspace_id` 在寫入當下推導。payload 絕不包含 token：audit 的讀者不一定是連結的擁有者，不能藉此取得可用的連結。
 
 ## 8. Token
 
-- 產生：32 bytes CSPRNG，base64url 編碼（43 字元），URL 為 `/s/<token>`。
-- 儲存：只存 `SHA-256(token)`。token 是 256 bit 隨機值，不需要 slow hash。
-- 查詢：以 hash 走 unique index，不逐一比對。
-- **token 明文只在建立的 HTTP 回應中出現一次**，之後任何 API 都無法取回。
-- 產生與 hash 由新的 port（`ShareTokenIssuer`）提供，domain 與 application 層不直接依賴 `node:crypto`，測試可注入固定值。
+- 產生：`crypto.randomUUID()`（UUIDv4，122 bit 隨機），URL 為 `/s/<token>`。
+- **不可以用 codebase 慣用的 `uuidv7()`。** UUIDv7 的前 48 bit 是時間戳，隨機部分只剩約 74 bit，而且會洩漏建立時間。它適合當主鍵，不適合當授權。連結本身的主鍵 `id` 仍然用 UUIDv7。
+- 儲存：明文存在 `token` 欄位（MariaDB native `UUID`），unique index 查詢。
+- 擁有者隨時可以從對話框再複製同一條連結。
+- 產生由新的 port（`ShareTokenIssuer`）提供，domain 與 application 層不直接依賴 `node:crypto`，測試可注入固定值。
 
-不需登入的前提下，token 是**唯一**的防線，所以它的長度與隨機性不能妥協，也不接受擁有者自訂 slug。
+不需登入的前提下，token 是**唯一**的防線，所以不接受擁有者自訂 slug，也不接受縮短。
 
-只存 hash 的直接後果是擁有者**無法事後再複製同一條連結**。這是決定 D1；本規格的緩解方式是允許每份文件最多 10 條有效連結並附標籤——要再分享給別人，就建立新的一條，舊連結不受影響。
+**為什麼明文保存而不是只存 hash：** 只存 hash 時，擁有者建立連結後就再也複製不到它，要再分享只能建立新連結——這與「打開分享對話框、按複製」的預期不符。明文保存的代價是「能讀資料庫的人能拿到可用的連結」；但能讀資料庫的人本來就讀得到所有文件內容，多出來的只是「還能透過連結看到之後的更新」，而這由期限與撤銷限制。為此引入 hash 或密鑰管理不划算（決定 A3）。
+
+每份文件最多 10 條有效連結的上限仍保留：分享給不同對象時用不同連結，可以個別撤銷、個別看檢視次數。
 
 ## 9. 應用層與 HTTP
 
@@ -327,8 +332,8 @@ src/server/composition.ts                                     wiring
 
 ```ts
 interface DocumentShareService {
-  create(caller, { documentId, label?, expiresInDays }): Promise<{ link: ShareLinkView; token: string }>;
-  list(caller, documentId): Promise<ShareLinkView[]>;   // 含每日檢視計數，不含 token
+  create(caller, { documentId, label?, expiresInDays }): Promise<ShareLinkView>;
+  list(caller, documentId): Promise<ShareLinkView[]>;   // 含 url 與每日檢視計數
   revoke(caller, linkId): Promise<void>;
   readShared(token): Promise<SharedDocumentView>;       // 沒有 caller：唯一不經 membership 的內容讀取
 }
@@ -352,8 +357,8 @@ Source FOR UPDATE → Workspace FOR UPDATE → 重新驗證 §5.1 → insert/upd
 
 | 方法 | 路徑 | 需要登入 | 回應 |
 | --- | --- | --- | --- |
-| `POST` | `/api/documents/:documentId/share-links` | 是 | `201 { link, url }`，`url` 只出現這一次 |
-| `GET` | `/api/documents/:documentId/share-links` | 是 | `200 { links }` |
+| `POST` | `/api/documents/:documentId/share-links` | 是 | `201 { link }`，`link.url` 為完整連結 |
+| `GET` | `/api/documents/:documentId/share-links` | 是 | `200 { links }`，每條都含 `url` |
 | `POST` | `/api/share-links/:linkId/revoke` | 是 | `204` |
 | `GET` | `/s/:token` | **否** | 頁面；失效一律 404 |
 
@@ -420,12 +425,12 @@ Source FOR UPDATE → Workspace FOR UPDATE → 重新驗證 §5.1 → insert/upd
 | A0 | 使用對象 | 一般開發者的知識分享，不是專為特定敏感資料領域設計；因此不設全域開關，檢視計數是統計用途而非稽核 |
 | A1 | 檢視不需登入 | 持有連結即可閱讀；`/s/:token` 不經 SSO、不需要 Hub 帳號。影響見 §2 最後一段、§6.1 部署要求、§7.2、§14 |
 | A2 | 顯示目前版本 | 擁有者更新後，檢視者重新整理即看到新版本；不做快照、不做即時推送（§5.3） |
+| A3 | Token 形式 | 隨機 UUIDv4，明文保存於獨立的 unique 欄位；擁有者可隨時再複製（§8） |
 
 ### 12.2 待拍板
 
 | # | 決定 | 本規格的建議 | 替代方案 |
 | --- | --- | --- | --- |
-| D1 | token 只存 hash，事後無法再複製 | **採用**，以多條連結 + 標籤緩解 | 以伺服器金鑰加密保存，可重新複製；代價是金鑰管理與輪替 |
 | D2 | 期限選項與預設值 | **1 / 7 / 30 / 90 天，必填，預設 30 天** | 預設 7 天：「忘了撤銷」的連結較快失效，但分享給整個團隊的文件要常常重建連結 |
 | D3 | 檢視計數寫入失敗時 | **fail open**（照常顯示內容，只記 log） | fail closed：計數永遠準確，但一個統計用的寫入失敗會讓檢視者看不到文件 |
 
@@ -441,7 +446,8 @@ Source FOR UPDATE → Workspace FOR UPDATE → 重新驗證 §5.1 → insert/upd
 
 - 非擁有者、Team 文件、封存文件、第 11 條連結：`create` 被拒，且沒有寫入任何 link 或 audit 列。
 - `create` 與 `DOCUMENT_SHARE_LINK_CREATED` 在同一 transaction：模擬 audit 寫入失敗時，link 也不存在。
-- 資料庫裡找不到 token 明文；audit payload 不含 token 或 hash。
+- token 是 UUIDv4（version 欄位為 4），且不等於同一列的 `id` 或 `document_id`；audit payload 不含 token。
+- 格式不是 UUID 的 `/s/:token` 回傳失效頁，且不發出任何 DB 查詢。
 - 撤銷後、到期後、文件經 resync 變成 ARCHIVED 後、Source 封存後，`readShared` 一律失敗。
 - 模擬檢視計數寫入失敗：`readShared` 仍回傳內容。
 - 擁有者建立新 revision 後，`readShared` 回傳新的內容。
@@ -469,7 +475,7 @@ Source FOR UPDATE → Workspace FOR UPDATE → 重新驗證 §5.1 → insert/upd
 4. **token 在 URL 裡。** 會出現在瀏覽器歷史紀錄，也可能出現在反向代理的 access log。部署時應遮罩 `/s/` 路徑。
 5. **沒有資料分類。** 系統無法得知一份文件是否含敏感資料，也就無法禁止分享它。若之後引入分類，分享連結是第一個應該接上的地方。
 6. **相對連結與圖片對檢視者無效。** Assets 目前只存 metadata，Hub 內部連結檢視者也打不開。
-7. **沒有速率限制。** 256 bit token 無法被暴力猜中，但匿名端點仍可能被大量請求。速率限制放在 gateway 層（§15），不在應用程式內實作。
+7. **沒有速率限制。** 122 bit 隨機的 token 無法被暴力猜中，但匿名端點仍可能被大量請求。速率限制放在 gateway 層（§15），不在應用程式內實作。
 
 ## 15. 拍板後要同步修改的文件與設定
 
