@@ -4,11 +4,11 @@ import {
   Link2,
   FileText,
   Info,
-  Link as LinkIcon,
   Pencil,
   Plus,
   Search,
   Settings,
+  Share2,
   Star,
   Upload,
   type LucideIcon,
@@ -31,7 +31,9 @@ const icons: Record<ActionIconName, LucideIcon> = {
   import: Upload,
   open: FileText,
   edit: Pencil,
-  share: LinkIcon,
+  // Not a chain: Copy link already is one, and the two sit side by side in
+  // the row menu while doing very different things.
+  share: Share2,
   favorite: Star,
   details: Info,
 };

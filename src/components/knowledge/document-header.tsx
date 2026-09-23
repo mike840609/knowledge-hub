@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ChevronRight, LockKeyhole } from "lucide-react";
+import { ActionIcon } from "@/components/actions/action-icon";
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
 import { formatDateTime, formatRelativeTime } from "@/lib/format-date";
@@ -85,8 +86,16 @@ export function DocumentHeader({
               </a>
             ) : null}
             {onShareClick ? (
-              <button type="button" onClick={onShareClick} className={buttonClasses({ variant: "ghost" })}>
-                Share link…
+              // Icon-only here to keep the header light; the name and tooltip
+              // still say what it does, and a click only opens the dialog.
+              <button
+                type="button"
+                onClick={onShareClick}
+                aria-label="Share link…"
+                title="Share link…"
+                className={buttonClasses({ variant: "ghost", icon: true })}
+              >
+                <ActionIcon name="share" className="h-4 w-4" />
               </button>
             ) : null}
             <button
