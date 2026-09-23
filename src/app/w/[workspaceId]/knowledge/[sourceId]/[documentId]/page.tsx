@@ -126,6 +126,7 @@ export default async function KnowledgeDocumentPage({
       }
       inspectorData={inspectorData}
       editHref={editHref}
+      sourceStatus={explorer?.source.status ?? "ARCHIVED"}
       readOnly={sourceManaged}
       ownership={explorer?.source.ownership ?? "SOURCE_MANAGED"}
       contentOwnsTitle={contentOwnsTitle}

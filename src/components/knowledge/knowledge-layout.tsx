@@ -4,6 +4,7 @@ import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import { SourceSidebar } from "./source-sidebar";
+import { ShareLinkDialogHost } from "./share-link-dialog";
 import { InspectorContext } from "./inspector-context";
 import { Drawer } from "@/components/ui/drawer";
 import { DocumentSkeleton, TreeSkeleton } from "./knowledge-skeletons";
@@ -132,6 +133,7 @@ export function KnowledgeLayout({
           <Suspense fallback={null}>{sidebar}</Suspense>
         </div>
       </Drawer>
+      <ShareLinkDialogHost />
     </div>
     </InspectorContext.Provider>
   );

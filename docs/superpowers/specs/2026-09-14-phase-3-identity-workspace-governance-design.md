@@ -379,6 +379,8 @@ canDiscover=true && canRead=false → 403
 
 Phase 3 不做 Source/Document ACL。需要不同成員集合就拆另一個 Team Workspace。
 
+> **例外（2026-09-23）：** 文件分享連結是單篇、唯讀、有期限、不需登入的 bearer grant，不是 ACL——它不指定對象、不擴張任何 Workspace capability、不進入 `evaluateEffectiveCapabilities`。規則見 [share link spec](2026-09-23-document-share-link-design.md)。
+
 ## 14. Lifecycle and mutation serialization
 
 ### 14.1 Team lifecycle

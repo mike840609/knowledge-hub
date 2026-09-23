@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ChevronRight, LockKeyhole } from "lucide-react";
+import { ActionIcon } from "@/components/actions/action-icon";
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
 import { formatDateTime, formatRelativeTime } from "@/lib/format-date";
@@ -21,6 +22,7 @@ export function DocumentHeader({
   revisionBanner,
   onDetailsClick,
   editHref,
+  onShareClick,
   readOnly,
   contentOwnsTitle,
 }: {
@@ -31,6 +33,8 @@ export function DocumentHeader({
   revisionBanner: { viewingNo: number; backHref: string } | null;
   onDetailsClick: () => void;
   editHref: string | null;
+  /** Opens the share-link dialog; null where sharing is not offered (share-link spec §10.1). */
+  onShareClick: (() => void) | null;
   readOnly: boolean;
   contentOwnsTitle: boolean;
 }) {
@@ -80,6 +84,19 @@ export function DocumentHeader({
               >
                 Edit
               </a>
+            ) : null}
+            {onShareClick ? (
+              // Icon-only here to keep the header light; the name and tooltip
+              // still say what it does, and a click only opens the dialog.
+              <button
+                type="button"
+                onClick={onShareClick}
+                aria-label="Share link…"
+                title="Share link…"
+                className={buttonClasses({ variant: "ghost", icon: true })}
+              >
+                <ActionIcon name="share" className="h-4 w-4" />
+              </button>
             ) : null}
             <button
               type="button"

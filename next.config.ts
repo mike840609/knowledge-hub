@@ -14,6 +14,22 @@ const nextConfig: NextConfig = {
         source: "/:path*",
         headers: [{ key: "Content-Security-Policy", value: "img-src 'self'" }],
       },
+      {
+        // Share links need no sign-in (share-link spec §6.4): the token must
+        // not leak through Referer, a revoked link must not be served from a
+        // cache, crawlers must not index it, and no site may frame it.
+        // Next.js keeps only the LAST matching header per key, so this CSP
+        // repeats the global img-src directive; setting frame-ancestors alone
+        // would silently drop the Issue #20 image lockdown on the one page
+        // that needs no sign-in.
+        source: "/s/:path*",
+        headers: [
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "Cache-Control", value: "private, no-store" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+          { key: "Content-Security-Policy", value: "img-src 'self'; frame-ancestors 'none'" },
+        ],
+      },
     ];
   },
 };

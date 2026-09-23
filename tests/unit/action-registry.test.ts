@@ -197,3 +197,32 @@ describe("action registry — palette matching", () => {
     expect(ids(matchActions(actions, "import"))).toEqual(["navigate.sources", "create.import"]);
   });
 });
+
+describe("action registry — document.share (share-link spec §10.1)", () => {
+  const shareOffered = (overrides: Partial<ActionContext>) =>
+    ids(availableActions(context({ target: target(), ...overrides }))).includes("document.share");
+
+  it("is offered on an active, current document in My Space, in the row menu and the palette", () => {
+    const share = availableActions(context({ workspaceType: "PERSONAL", target: target() })).find((action) => action.id === "document.share");
+    expect(share?.label).toBe("Share link…");
+    expect(share?.surfaces).toEqual(["palette", "row"]);
+    expect(share?.effect).toEqual({ kind: "command", command: "document.open-share", documentId: "d1", sourceId: "s1" });
+  });
+
+  it("is offered on SOURCE_MANAGED content: ownership decides writing, not sharing", () => {
+    expect(shareOffered({ workspaceType: "PERSONAL", target: target({ ownership: "SOURCE_MANAGED" }) })).toBe(true);
+  });
+
+  it("does not depend on the write capability", () => {
+    expect(shareOffered({ workspaceType: "PERSONAL", can: { ...allCapabilities, canWrite: false } })).toBe(true);
+  });
+
+  it.each([
+    ["a Team workspace", { workspaceType: "TEAM" }],
+    ["an unconfirmed access check", { workspaceType: "PERSONAL", confirmed: false }],
+    ["an archived document", { workspaceType: "PERSONAL", target: target({ status: "ARCHIVED" }) }],
+    ["a historical revision", { workspaceType: "PERSONAL", target: target({ revision: "HISTORICAL" }) }],
+  ] as const)("is not offered on %s", (_, overrides) => {
+    expect(shareOffered(overrides as Partial<ActionContext>)).toBe(false);
+  });
+});

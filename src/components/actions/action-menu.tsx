@@ -17,6 +17,31 @@ import {
 import { ActionIcon } from "./action-icon";
 import type { Action } from "./action-registry";
 
+export const SHARE_REQUEST_EVENT = "kh:request-share";
+
+/**
+ * Ask the share-link dialog (ShareLinkDialogHost, mounted by the knowledge
+ * layout) to open for a document. The one way every surface asks, so the
+ * event's shape lives in one place.
+ */
+export function requestShare(documentId: string): void {
+  window.dispatchEvent(new CustomEvent(SHARE_REQUEST_EVENT, { detail: { documentId } }));
+}
+
+/**
+ * Write an in-app href to the clipboard as an absolute URL. False when the
+ * browser refuses — an insecure origin, a denied permission, a document
+ * without focus — so each caller can say so in its own place.
+ */
+export async function writeLinkToClipboard(href: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(new URL(href, window.location.origin).toString());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Turning registry entries into rows, and running what a reader picks.
  *
@@ -57,6 +82,11 @@ export function useActionRunner({ onToggleFavorite }: ActionHandlers) {
               // it is open; asking is the only thing a detached surface can do.
               window.dispatchEvent(new CustomEvent("kh:request-details"));
               return;
+            case "document.open-share":
+              // The dialog lives with the knowledge layout; any surface asks
+              // for it the same way it asks for details.
+              requestShare(effect.documentId);
+              return;
           }
       }
     },
@@ -71,13 +101,8 @@ export function useActionRunner({ onToggleFavorite }: ActionHandlers) {
  * a denied permission, a document without focus.
  */
 async function copyLink(href: string, toast: ReturnType<typeof useToast>) {
-  const url = new URL(href, window.location.origin).toString();
-  try {
-    await navigator.clipboard.writeText(url);
-    toast({ message: "Link copied." });
-  } catch {
-    toast({ message: "Could not copy the link. Your browser blocked the clipboard.", tone: "danger" });
-  }
+  if (await writeLinkToClipboard(href)) toast({ message: "Link copied." });
+  else toast({ message: "Could not copy the link. Your browser blocked the clipboard.", tone: "danger" });
 }
 
 export function ActionMenuItems({

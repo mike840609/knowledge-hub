@@ -8,6 +8,8 @@ import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction
 import { KnowledgeQueryServiceImpl } from "@/modules/knowledge/application/knowledge-query-service";
 import { KnowledgeSearchService } from "@/modules/knowledge/application/knowledge-search-service";
 import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
+import { DocumentShareService } from "@/modules/knowledge/application/document-share-service";
+import { RandomShareTokenIssuer } from "@/infrastructure/security/random-share-token-issuer";
 import { ApplyFolderImportService } from "@/modules/sources/application/apply-folder-import";
 import { CreateFolderImportService } from "@/modules/sources/application/create-folder-import";
 import { FinalizeFolderImportService } from "@/modules/sources/application/finalize-folder-import";
@@ -62,6 +64,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
   const sessionReaderConfigured = options.companySessionReader !== undefined;
   const hub = new HubKnowledgeCommandServiceImpl(unitOfWork);
   const queries = new KnowledgeQueryServiceImpl(unitOfWork);
+  const shares = new DocumentShareService(unitOfWork, new RandomShareTokenIssuer());
   const sources = new SourceApplicationService(unitOfWork);
   const workspaceAdmin = new WorkspaceAdminService(unitOfWork);
   const teams = new TeamWorkspaceService(unitOfWork);
@@ -99,12 +102,22 @@ export function buildApplicationServices(databasePool: Pool, options: {
     preview: new GetFolderImportPreviewService(unitOfWork),
     apply: new ApplyFolderImportService(unitOfWork),
   };
-  return { workspaceAdmin, teams, governance, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, sources, workspaces, search, imports };
+  return { workspaceAdmin, teams, governance, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, shares, sources, workspaces, search, imports };
 }
 
 export function applicationServices() {
   services ??= buildApplicationServices(getPool(), { companySessionReader });
   return services;
+}
+
+/**
+ * The `/s/:token` entry (share-link spec §6.1). It deliberately bypasses
+ * applicationServices(): building those constructs the identity provider,
+ * which throws when Company SSO has no session reader, and the reader of a
+ * share link has no identity at all. Only the unit of work is needed.
+ */
+export function shareReadService(): Pick<DocumentShareService, "readShared"> {
+  return new DocumentShareService(new MariaDbUnitOfWork(getPool()), new RandomShareTokenIssuer());
 }
 
 /** Verify the same provider/session dependencies used by request handling. */

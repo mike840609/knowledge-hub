@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { requestShare } from "@/components/actions/action-menu";
+import { availableActions } from "@/components/actions/action-registry";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
@@ -233,6 +235,7 @@ export function DocumentDetailClient({
   inspectorData,
   children,
   editHref,
+  sourceStatus,
   readOnly,
   ownership,
   contentOwnsTitle,
@@ -245,6 +248,12 @@ export function DocumentDetailClient({
   inspectorData: DocumentInspectorData;
   children: ReactNode;
   editHref: string | null;
+  /**
+   * The collection's own lifecycle. A document can be ACTIVE inside an
+   * archived source; every action that would be refused there must not be
+   * offered, so the target's state folds both together.
+   */
+  sourceStatus: "ACTIVE" | "ARCHIVED";
   readOnly: boolean;
   /** Passed rather than inferred from `readOnly`: the two happen to agree today. */
   ownership: "SOURCE_MANAGED" | "HUB_MANAGED";
@@ -290,11 +299,21 @@ export function DocumentDetailClient({
       sourceId: inspectorData.sourceId,
       label: title,
       ownership,
-      status,
+      status: status === "ACTIVE" && sourceStatus === "ACTIVE" ? ("ACTIVE" as const) : ("ARCHIVED" as const),
       revision: revisionBanner ? ("HISTORICAL" as const) : ("CURRENT" as const),
     }),
-    [inspectorData.documentId, inspectorData.sourceId, title, ownership, status, revisionBanner],
+    [inspectorData.documentId, inspectorData.sourceId, title, ownership, status, sourceStatus, revisionBanner],
   );
+  // The header asks the registry, like every other surface (action-model
+  // spec §4; share-link spec §10.1), rather than re-deriving the rule.
+  const { access, confirmed } = useWorkspaceAuthorization();
+  const canShare = availableActions({
+    workspaceId: inspectorData.workspaceId,
+    workspaceType: access.workspace.type,
+    can: access.actions,
+    confirmed,
+    target: { ...target, favorite: false },
+  }).some((action) => action.id === "document.share");
   useEffect(() => {
     const header = headerRef.current;
     const root = contentRef.current;
@@ -323,6 +342,7 @@ export function DocumentDetailClient({
           revisionBanner={revisionBanner}
           onDetailsClick={openInspector}
           editHref={editHref}
+          onShareClick={canShare ? () => requestShare(inspectorData.documentId) : null}
           readOnly={readOnly}
           contentOwnsTitle={contentOwnsTitle}
         />
