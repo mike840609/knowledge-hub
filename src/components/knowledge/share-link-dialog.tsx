@@ -147,11 +147,11 @@ export function ShareLinkDialog({
           >
             <label className="block min-w-0 flex-1 text-body">
               Label <span className="text-kh-text-muted">(optional)</span>
-              <Input value={label} maxLength={200} disabled={busy} placeholder="For the backend team" onChange={(event) => setLabel(event.target.value)} />
+              <Input className="mt-1" value={label} maxLength={200} disabled={busy} placeholder="For the backend team" onChange={(event) => setLabel(event.target.value)} />
             </label>
             <label className="block text-body">
               Expires after
-              <Select value={expiresInDays} disabled={busy} onChange={(event) => setExpiresInDays(Number(event.target.value))}>
+              <Select className="mt-1 block" value={expiresInDays} disabled={busy} onChange={(event) => setExpiresInDays(Number(event.target.value))}>
                 {EXPIRY_OPTIONS.map((option) => <option key={option.days} value={option.days}>{option.label}</option>)}
               </Select>
             </label>
