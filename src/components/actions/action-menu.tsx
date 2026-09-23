@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { MoreHorizontal } from "lucide-react";
 import { buttonClasses } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import {
   ContextMenuContent,
   ContextMenuRoot,
@@ -33,30 +34,57 @@ export type ActionHandlers = {
 
 export function useActionRunner({ onToggleFavorite }: ActionHandlers) {
   const router = useRouter();
+  const toast = useToast();
   return useCallback(
     (action: Action) => {
-      if (action.effect.kind === "navigate") {
-        router.push(action.effect.href);
-        return;
-      }
-      switch (action.effect.command) {
-        case "document.toggle-favorite":
-          onToggleFavorite(action.effect.sourceId, action.effect.documentId);
-          break;
-        case "document.open-details":
-          // The inspector belongs to the document pane, which owns whether it
-          // is open; asking is the only thing a detached surface can do.
-          window.dispatchEvent(new CustomEvent("kh:request-details"));
-          break;
-        case "document.open-share":
-          // The dialog lives with the knowledge layout (ShareLinkDialogHost);
-          // any surface can ask for it the same way it asks for details.
-          window.dispatchEvent(new CustomEvent(SHARE_REQUEST_EVENT, { detail: { documentId: action.effect.documentId } }));
-          break;
+      const { effect } = action;
+      switch (effect.kind) {
+        case "navigate":
+          router.push(effect.href);
+          return;
+        case "open-new-tab":
+          // `noopener` so the new tab cannot reach back into this one.
+          window.open(effect.href, "_blank", "noopener");
+          return;
+        case "copy-link":
+          void copyLink(effect.href, toast);
+          return;
+        case "command":
+          switch (effect.command) {
+            case "document.toggle-favorite":
+              onToggleFavorite(effect.sourceId, effect.documentId);
+              return;
+            case "document.open-details":
+              // The inspector belongs to the document pane, which owns whether
+              // it is open; asking is the only thing a detached surface can do.
+              window.dispatchEvent(new CustomEvent("kh:request-details"));
+              return;
+            case "document.open-share":
+              // The dialog lives with the knowledge layout (ShareLinkDialogHost);
+              // any surface can ask for it the same way it asks for details.
+              window.dispatchEvent(new CustomEvent(SHARE_REQUEST_EVENT, { detail: { documentId: effect.documentId } }));
+              return;
+          }
       }
     },
-    [router, onToggleFavorite],
+    [router, toast, onToggleFavorite],
   );
+}
+
+/**
+ * The browser's own "Copy link address" gave no feedback because the menu it
+ * lived in was the feedback. This one closes before the copy lands, so it has
+ * to say whether it worked — and the clipboard can refuse: an insecure origin,
+ * a denied permission, a document without focus.
+ */
+async function copyLink(href: string, toast: ReturnType<typeof useToast>) {
+  const url = new URL(href, window.location.origin).toString();
+  try {
+    await navigator.clipboard.writeText(url);
+    toast({ message: "Link copied." });
+  } catch {
+    toast({ message: "Could not copy the link. Your browser blocked the clipboard.", tone: "danger" });
+  }
 }
 
 export function ActionMenuItems({

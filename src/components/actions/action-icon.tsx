@@ -1,5 +1,7 @@
 import {
   Database,
+  ExternalLink,
+  Link2,
   FileText,
   Info,
   Link as LinkIcon,
@@ -19,6 +21,8 @@ import type { ActionIconName } from "./action-registry";
  * place those names become pictures.
  */
 const icons: Record<ActionIconName, LucideIcon> = {
+  "new-tab": ExternalLink,
+  "copy-link": Link2,
   knowledge: FileText,
   search: Search,
   sources: Database,
