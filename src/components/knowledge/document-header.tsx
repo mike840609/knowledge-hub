@@ -84,7 +84,8 @@ export function DocumentHeader({
               <a
                 href={editHref}
                 aria-label="Edit"
-                title="Edit"
+                aria-keyshortcuts="E"
+                title="Edit (E)"
                 className={buttonClasses({ variant: "ghost", icon: true })}
               >
                 <ActionIcon name="edit" className="h-4 w-4" />

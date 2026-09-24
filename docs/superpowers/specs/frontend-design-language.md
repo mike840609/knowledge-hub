@@ -348,6 +348,41 @@ This applies to the knowledge tree, the `⌘K` palette, the search results page
 and **menus** alike. A list that is reachable by mouse and not by keyboard is a
 defect, and both the search results page and every menu shipped that way once.
 
+### Shortcuts
+
+`Action.shortcut` in the registry is the one place a shortcut is defined. The
+same value binds the key, is the `aria-keyshortcuts` on the button that does
+the same thing, and is the hint shown beside the action in the palette
+(`shortcutLabel`), so the three cannot disagree. Adding a shortcut is filling
+that field.
+
+A single key (`C`, `E`, `/`) is also a character, so it acts only when
+`isSingleKeyShortcut` in `lib/shortcut-keys.ts` says so: no `⌘`, `Ctrl` or
+`Alt`; not mid-composition in an input method (a letter typed while composing
+Chinese is text, not a command); not inside a field, a dialog, a menu or a
+listbox; not a key repeat; and no Shift, except for `/`, which some layouts
+only type with it. Keys are compared by `event.key`, what the reader sees on
+the keycap, not by position.
+
+Single keys are bound in the palette (`quick-search.tsx`), from the same
+actions it lists, so `E` exists exactly when "Edit document" is offered there:
+on the document being read, when the registry's three availability axes allow
+it. The row menu shows no hints. It acts on the row it was opened from, and a
+row's "Edit document" beside an `E` that edits a different document would be
+a lie on every row but one.
+
+In the document forms, ⌘Enter saves through the form's own submit button, and
+only when that button is enabled. `Esc` leaves only a form nothing has been
+typed into; with changes it does nothing. No key discards a draft; Cancel is
+the one way to.
+
+"Edit document" enters the editor by a full page load (`effect.kind ===
+"load"`) from every surface, as the header's Edit link always has. A client
+navigation there left the document page in the router cache, and the push
+back after a save then showed the old revision until a reload. The palette and
+row menu had that bug from the day they offered Edit; no test saw it, because
+every test entered the editor through the header's plain link.
+
 ### Menus
 
 Menus are lists of rows, so the rule above governs them, and a `<details>`

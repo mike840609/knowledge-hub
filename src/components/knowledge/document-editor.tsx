@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { useHydrated } from "@/components/shell/use-hydrated";
+import { useFormKeys } from "@/components/knowledge/use-form-keys";
 import { GovernanceError, governanceFailure, governanceRequest, type GovernanceFailure } from "@/components/workspaces/governance-error";
 
 export function DocumentEditor({
@@ -38,6 +39,11 @@ export function DocumentEditor({
   const [error, setError] = useState<GovernanceFailure | null>(null);
   const ready = hydrated && !busy;
   const documentHref = `/w/${workspaceId}/knowledge/${sourceId}/${documentId}`;
+  const onKeyDown = useFormKeys({
+    dirty: title !== initialTitle || markdown !== initialMarkdown,
+    busy,
+    onCancel: () => router.push(documentHref),
+  });
 
   async function save() {
     if (busy || !confirmed) return;
@@ -64,6 +70,7 @@ export function DocumentEditor({
   return (
     <form
       className="kh-reading-column space-y-4 py-6"
+      onKeyDown={onKeyDown}
       onSubmit={(event) => { event.preventDefault(); void save(); }}
     >
       <label className="block text-body text-kh-text">
@@ -75,8 +82,8 @@ export function DocumentEditor({
         <Textarea className="mt-1 min-h-[24rem]" value={markdown} disabled={!ready} onChange={(event) => setMarkdown(event.target.value)} />
       </label>
       <div className="flex items-center gap-2">
-        <Button type="submit" disabled={!ready || !confirmed || !title.trim()}>Save</Button>
-        <Button type="button" variant="secondary" disabled={busy} onClick={() => router.push(documentHref)}>
+        <Button type="submit" title="Save (⌘Enter)" disabled={!ready || !confirmed || !title.trim()}>Save</Button>
+        <Button type="button" variant="secondary" title="Cancel (Esc)" disabled={busy} onClick={() => router.push(documentHref)}>
           Cancel
         </Button>
       </div>

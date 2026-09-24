@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
+import { useFormKeys } from "@/components/knowledge/use-form-keys";
 import { GovernanceError, governanceFailure, governanceRequest, type GovernanceFailure } from "@/components/workspaces/governance-error";
 
 type Created = { documentId: string; sourceId: string };
@@ -18,6 +19,19 @@ export function NewDocumentForm({ workspaceId, variant }: { workspaceId: string;
   const [markdown, setMarkdown] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<GovernanceFailure | null>(null);
+
+  // Cancel's own behaviour, shared with Esc. The confirm only fires when
+  // something was typed, and Esc only cancels when nothing was, so Esc never
+  // reaches it.
+  function cancel() {
+    if (variant === "empty") {
+      if ((title || markdown) && !window.confirm("Discard this draft?")) return;
+      router.push(`/w/${workspaceId}/knowledge`);
+    } else {
+      setOpen(false);
+    }
+  }
+  const onKeyDown = useFormKeys({ dirty: Boolean(title || markdown), busy, onCancel: cancel });
 
   if (!access.actions.canWrite) return null;
 
@@ -63,6 +77,7 @@ export function NewDocumentForm({ workspaceId, variant }: { workspaceId: string;
       {open ? (
         <form
           className="space-y-4"
+          onKeyDown={onKeyDown}
           onSubmit={(event) => { event.preventDefault(); void create({ title, markdown }); }}
         >
           <label className="block text-body text-kh-text">
@@ -74,15 +89,8 @@ export function NewDocumentForm({ workspaceId, variant }: { workspaceId: string;
             <Textarea className="mt-1 min-h-64 resize-y" value={markdown} placeholder="Write your note…" disabled={busy} onChange={(event) => setMarkdown(event.target.value)} />
           </label>
           <div className="flex gap-2">
-            <Button type="submit" disabled={busy || !confirmed || !title.trim()}>{busy ? "Creating…" : "Create document"}</Button>
-            <Button type="button" variant="secondary" disabled={busy} onClick={() => {
-              if (variant === "empty") {
-                if ((title || markdown) && !window.confirm("Discard this draft?")) return;
-                router.push(`/w/${workspaceId}/knowledge`);
-              } else {
-                setOpen(false);
-              }
-            }}>Cancel</Button>
+            <Button type="submit" title="Create document (⌘Enter)" disabled={busy || !confirmed || !title.trim()}>{busy ? "Creating…" : "Create document"}</Button>
+            <Button type="button" variant="secondary" title="Cancel (Esc)" disabled={busy} onClick={cancel}>Cancel</Button>
           </div>
         </form>
       ) : (

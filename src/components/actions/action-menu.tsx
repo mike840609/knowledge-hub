@@ -65,6 +65,9 @@ export function useActionRunner({ onToggleFavorite }: ActionHandlers) {
         case "navigate":
           router.push(effect.href);
           return;
+        case "load":
+          window.location.assign(effect.href);
+          return;
         case "open-new-tab":
           // `noopener` so the new tab cannot reach back into this one.
           window.open(effect.href, "_blank", "noopener");

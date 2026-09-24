@@ -168,7 +168,14 @@ describe("action registry — hrefs", () => {
   it("does not carry the query string into the edit route", () => {
     const archived = availableActions(context({ includeArchived: true, target: target() }));
     const edit = archived.find((action) => action.id === "document.edit");
-    expect(edit?.effect).toEqual({ kind: "navigate", href: "/w/w1/knowledge/s1/d1/edit" });
+    expect(edit?.effect).toEqual({ kind: "load", href: "/w/w1/knowledge/s1/d1/edit" });
+  });
+
+  it("enters the editor by a full page load, as the header's Edit link does", () => {
+    // A client navigation into the editor leaves the document page in the
+    // router cache, and the push back after a save then shows it stale.
+    const edit = availableActions(context({ target: target() })).find((action) => action.id === "document.edit");
+    expect(edit?.effect.kind).toBe("load");
   });
 });
 
@@ -224,5 +231,30 @@ describe("action registry — document.share (share-link spec §10.1)", () => {
     ["a historical revision", { workspaceType: "PERSONAL", target: target({ revision: "HISTORICAL" }) }],
   ] as const)("is not offered on %s", (_, overrides) => {
     expect(shareOffered(overrides as Partial<ActionContext>)).toBe(false);
+  });
+});
+
+describe("action registry — shortcuts", () => {
+  const byId = (id: string, ctx: ActionContext) =>
+    availableActions(ctx).find((action) => action.id === id);
+
+  it("binds C to Create document and E to Edit document", () => {
+    expect(byId("create.document", context())?.shortcut).toBe("C");
+    expect(byId("document.edit", context({ target: target() }))?.shortcut).toBe("E");
+  });
+
+  it("offers no E wherever editing is not offered", () => {
+    const withE = (t: ActionTarget) =>
+      availableActions(context({ target: t })).filter((action) => action.shortcut === "E");
+    expect(withE(target({ ownership: "SOURCE_MANAGED" }))).toEqual([]);
+    expect(withE(target({ status: "ARCHIVED" }))).toEqual([]);
+    expect(withE(target({ revision: "HISTORICAL" }))).toEqual([]);
+  });
+
+  it("gives no two actions the same shortcut", () => {
+    const shortcuts = availableActions(context({ target: target() }))
+      .map((action) => action.shortcut)
+      .filter((shortcut): shortcut is string => Boolean(shortcut));
+    expect(new Set(shortcuts).size).toBe(shortcuts.length);
   });
 });

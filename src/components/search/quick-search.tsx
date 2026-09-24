@@ -19,6 +19,8 @@ import {
 import { plainSearchSnippet } from "@/lib/search-snippet";
 import { toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import { buttonClasses } from "@/components/ui/button";
+import { Kbd } from "@/components/ui/kbd";
+import { isSingleKeyShortcut, shortcutLabel } from "@/lib/shortcut-keys";
 
 type QuickHit = {
   documentId: string;
@@ -104,6 +106,9 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
   useEffect(() => setActiveIndex(0), [trimmed, open]);
   const activeRow = rows[activeIndex];
 
+  // ⌘K, and the single keys. The single keys read the same actions this
+  // palette lists, so E exists exactly when "Edit document" is on offer here:
+  // the registry's three availability axes are not restated.
   useEffect(() => {
     if (!enabled) {
       setOpen(false);
@@ -113,11 +118,24 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         setOpen(true);
+        return;
       }
+      if (!isSingleKeyShortcut(event)) return;
+      if (event.key === "/") {
+        // Kept out of the field that is about to take focus.
+        event.preventDefault();
+        setOpen(true);
+        return;
+      }
+      const key = event.key.toLowerCase();
+      const action = actions.find((candidate) => candidate.shortcut?.toLowerCase() === key);
+      if (!action) return;
+      event.preventDefault();
+      runAction(action);
     };
     window.addEventListener("keydown", onShortcut);
     return () => window.removeEventListener("keydown", onShortcut);
-  }, [enabled]);
+  }, [enabled, actions, runAction]);
 
   useEffect(() => {
     if (!enabled || !open || !trimmed) {
@@ -185,12 +203,13 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Quick search"
-        title="Quick search (⌘/Ctrl K)"
+        aria-keyshortcuts="Meta+K Control+K /"
+        title="Quick search (⌘K or /)"
         className={buttonClasses({ variant: "ghost" })}
       >
         <Search className="h-4 w-4" aria-hidden="true" />
         <span className="hidden text-body-sm sm:inline">Search</span>
-        <kbd className="ml-3 hidden rounded-md bg-kh-bg-subtle px-1 text-micro text-kh-text-faint lg:inline">⌘K</kbd>
+        <Kbd className="ml-3 hidden lg:inline">⌘K</Kbd>
       </button>
       <Dialog.Root open={open} onOpenChange={setOpen}>
         <Dialog.Portal>
@@ -255,6 +274,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
                         <span className={`min-w-0 flex-1 truncate text-body ${index === activeIndex ? "text-kh-selected-text" : "text-kh-text"}`}>
                           {action.label}
                         </span>
+                        {action.shortcut ? <Kbd className="shrink-0">{shortcutLabel(action.shortcut)}</Kbd> : null}
                       </button>
                     </li>
                   );

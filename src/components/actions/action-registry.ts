@@ -57,6 +57,12 @@ export type ActionCommand = "document.toggle-favorite" | "document.open-details"
 
 export type ActionEffect =
   | { kind: "navigate"; href: string }
+  /**
+   * A full page load rather than a client navigation. Entering the editor
+   * this way keeps the document page out of the router cache, so the push
+   * back after a save shows the saved revision and not a stale copy.
+   */
+  | { kind: "load"; href: string }
   /** Leaves this tab where it is; what a middle-click on the row's link does. */
   | { kind: "open-new-tab"; href: string }
   /** A path, not a URL: the origin is the browser's to supply, not this module's. */
@@ -69,7 +75,7 @@ export type Action = {
   label: string;
   group: ActionGroup;
   icon: ActionIconName;
-  /** Extra words the palette matches on, so "new" finds "Add to Notes". */
+  /** Extra words the palette matches on, so "new" finds "Create document". */
   keywords: readonly string[];
   /** `aria-keyshortcuts` spelling, where one exists. */
   shortcut?: string;
@@ -179,10 +185,14 @@ export function availableActions(context: ActionContext): readonly Action[] {
   if (can.canWrite && confirmed) {
     actions.push({
       id: "create.document",
-      label: "Add to Notes",
+      // "Create", because the key is C. The noun is the one the rest of the
+      // product uses (Edit document, Open document); where it goes, Notes,
+      // is a keyword rather than the label.
+      label: "Create document",
       group: "create",
       icon: "create",
-      keywords: ["new", "note", "document", "write"],
+      keywords: ["new", "add", "note", "notes", "write"],
+      shortcut: "C",
       surfaces: ["palette", "empty"],
       effect: { kind: "navigate", href: `/w/${workspaceId}/knowledge/new` },
     });
@@ -252,8 +262,9 @@ export function availableActions(context: ActionContext): readonly Action[] {
         group: "document",
         icon: "edit",
         keywords: ["rename", "title", "write", target.label],
+        shortcut: "E",
         surfaces: ["palette", "row"],
-        effect: { kind: "navigate", href: `${documentHref.split("?")[0]}/edit` },
+        effect: { kind: "load", href: `${documentHref.split("?")[0]}/edit` },
       });
     }
     // Share-link spec §10.1. Ownership is deliberately not consulted: sharing
