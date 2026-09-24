@@ -20,7 +20,7 @@ import { plainSearchSnippet } from "@/lib/search-snippet";
 import { toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import { buttonClasses } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
-import { shortcutLabel } from "@/lib/shortcut-keys";
+import { isSingleKeyShortcut, shortcutLabel } from "@/lib/shortcut-keys";
 
 type QuickHit = {
   documentId: string;
@@ -106,6 +106,9 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
   useEffect(() => setActiveIndex(0), [trimmed, open]);
   const activeRow = rows[activeIndex];
 
+  // ⌘K, and the single keys. The single keys read the same actions this
+  // palette lists, so E exists exactly when "Edit document" is on offer here:
+  // the registry's three availability axes are not restated.
   useEffect(() => {
     if (!enabled) {
       setOpen(false);
@@ -115,11 +118,24 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         setOpen(true);
+        return;
       }
+      if (!isSingleKeyShortcut(event)) return;
+      if (event.key === "/") {
+        // Kept out of the field that is about to take focus.
+        event.preventDefault();
+        setOpen(true);
+        return;
+      }
+      const key = event.key.toLowerCase();
+      const action = actions.find((candidate) => candidate.shortcut?.toLowerCase() === key);
+      if (!action) return;
+      event.preventDefault();
+      runAction(action);
     };
     window.addEventListener("keydown", onShortcut);
     return () => window.removeEventListener("keydown", onShortcut);
-  }, [enabled]);
+  }, [enabled, actions, runAction]);
 
   useEffect(() => {
     if (!enabled || !open || !trimmed) {
