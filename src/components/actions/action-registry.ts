@@ -57,6 +57,12 @@ export type ActionCommand = "document.toggle-favorite" | "document.open-details"
 
 export type ActionEffect =
   | { kind: "navigate"; href: string }
+  /**
+   * A full page load rather than a client navigation. Entering the editor
+   * this way keeps the document page out of the router cache, so the push
+   * back after a save shows the saved revision and not a stale copy.
+   */
+  | { kind: "load"; href: string }
   /** Leaves this tab where it is; what a middle-click on the row's link does. */
   | { kind: "open-new-tab"; href: string }
   /** A path, not a URL: the origin is the browser's to supply, not this module's. */
@@ -255,7 +261,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
         keywords: ["rename", "title", "write", target.label],
         shortcut: "E",
         surfaces: ["palette", "row"],
-        effect: { kind: "navigate", href: `${documentHref.split("?")[0]}/edit` },
+        effect: { kind: "load", href: `${documentHref.split("?")[0]}/edit` },
       });
     }
     // Share-link spec §10.1. Ownership is deliberately not consulted: sharing
