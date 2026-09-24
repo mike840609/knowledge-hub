@@ -183,6 +183,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
       group: "create",
       icon: "create",
       keywords: ["new", "note", "document", "write"],
+      shortcut: "C",
       surfaces: ["palette", "empty"],
       effect: { kind: "navigate", href: `/w/${workspaceId}/knowledge/new` },
     });
@@ -252,6 +253,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
         group: "document",
         icon: "edit",
         keywords: ["rename", "title", "write", target.label],
+        shortcut: "E",
         surfaces: ["palette", "row"],
         effect: { kind: "navigate", href: `${documentHref.split("?")[0]}/edit` },
       });

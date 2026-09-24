@@ -226,3 +226,28 @@ describe("action registry — document.share (share-link spec §10.1)", () => {
     expect(shareOffered(overrides as Partial<ActionContext>)).toBe(false);
   });
 });
+
+describe("action registry — shortcuts", () => {
+  const byId = (id: string, ctx: ActionContext) =>
+    availableActions(ctx).find((action) => action.id === id);
+
+  it("binds C to Add to Notes and E to Edit document", () => {
+    expect(byId("create.document", context())?.shortcut).toBe("C");
+    expect(byId("document.edit", context({ target: target() }))?.shortcut).toBe("E");
+  });
+
+  it("offers no E wherever editing is not offered", () => {
+    const withE = (t: ActionTarget) =>
+      availableActions(context({ target: t })).filter((action) => action.shortcut === "E");
+    expect(withE(target({ ownership: "SOURCE_MANAGED" }))).toEqual([]);
+    expect(withE(target({ status: "ARCHIVED" }))).toEqual([]);
+    expect(withE(target({ revision: "HISTORICAL" }))).toEqual([]);
+  });
+
+  it("gives no two actions the same shortcut", () => {
+    const shortcuts = availableActions(context({ target: target() }))
+      .map((action) => action.shortcut)
+      .filter((shortcut): shortcut is string => Boolean(shortcut));
+    expect(new Set(shortcuts).size).toBe(shortcuts.length);
+  });
+});
