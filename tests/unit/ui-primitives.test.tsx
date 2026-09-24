@@ -5,6 +5,7 @@ import { Button, buttonClasses } from "@/components/ui/button";
 import { controlHeight } from "@/components/ui/control";
 import { fieldClasses } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Kbd } from "@/components/ui/kbd";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { selectableTabClasses, tabClasses, tabListClasses } from "@/components/ui/tab";
@@ -198,5 +199,14 @@ describe("tabClasses", () => {
   it("puts the list on a single bottom rule", () => {
     expect(tabListClasses).toContain("border-b");
     expect(tabListClasses).toContain("border-kh-border");
+  });
+});
+
+describe("Kbd", () => {
+  it("renders a kbd on the inline-chrome radius, with the caller's classes after its own", () => {
+    const html = renderToStaticMarkup(<Kbd className="ml-3">⌘K</Kbd>);
+    expect(html).toMatch(/^<kbd class="[^"]*\brounded-sm\b[^"]*\bml-3"/);
+    expect(html).toContain(">⌘K</kbd>");
+    expect(html).not.toContain("rounded-md");
   });
 });
