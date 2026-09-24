@@ -238,7 +238,7 @@ describe("action registry — shortcuts", () => {
   const byId = (id: string, ctx: ActionContext) =>
     availableActions(ctx).find((action) => action.id === id);
 
-  it("binds C to Add to Notes and E to Edit document", () => {
+  it("binds C to Create document and E to Edit document", () => {
     expect(byId("create.document", context())?.shortcut).toBe("C");
     expect(byId("document.edit", context({ target: target() }))?.shortcut).toBe("E");
   });

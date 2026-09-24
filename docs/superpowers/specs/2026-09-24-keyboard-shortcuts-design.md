@@ -32,7 +32,7 @@
 
 | 按鍵 | 作用 | 生效位置 |
 | --- | --- | --- |
-| `C` | Add to Notes（`create.document`） | 任何頁面，registry 提供 `create.document` 時 |
+| `C` | Create document（`create.document`） | 任何頁面，registry 提供 `create.document` 時 |
 | `E` | Edit document（`document.edit`） | 正在閱讀的文件，registry 提供 `document.edit` 時 |
 | `/` | 打開 palette（與 `⌘K` 同一個） | 任何頁面 |
 | `⌘Enter` / `Ctrl Enter` | 儲存 | 編輯文件、新增文件兩個表單內 |
@@ -82,7 +82,7 @@ QuickSearch 只在 `confirmed && canSearch` 時啟用（`quick-search.tsx:55`）
 
 ### 4.1 palette
 
-有 `shortcut` 的列在右側顯示按鍵：Add to Notes 顯示 `C`，Edit document 顯示 `E`，Open details 顯示 `⌘I`。
+有 `shortcut` 的列在右側顯示按鍵：Create document 顯示 `C`，Edit document 顯示 `E`，Open details 顯示 `⌘I`。
 
 顯示文字由 `shortcut` 欄位推導：取第一組（空白分隔），`Meta` 轉 `⌘`、`Control` 轉 `Ctrl`，`+` 去掉。`"Meta+I Control+I"` 顯示為 `⌘I`，`"E"` 顯示為 `E`。沿用介面上既有的寫法（`⌘K`、`⌘/Ctrl I`），不做平台偵測。轉換函式與第 3.3 節的判斷放在同一個檔案。
 
@@ -99,7 +99,7 @@ QuickSearch 只在 `confirmed && canSearch` 時啟用（`quick-search.tsx:55`）
 | 按鈕 | 位置 | `title` | `aria-keyshortcuts` |
 | --- | --- | --- | --- |
 | Edit | `document-header.tsx` | `Edit (E)` | `E` |
-| `+`（Add to Notes） | `source-sidebar.tsx:115` | `Add to Notes (C)` | `C` |
+| `+`（Create document） | `source-sidebar.tsx:115` | `Create document (C)` | `C` |
 | Quick search | `quick-search.tsx` | `Quick search (⌘K or /)` | `Meta+K Control+K /` |
 
 ### 4.4 右鍵選單不顯示
@@ -159,7 +159,7 @@ Save 與 Create document 顯示 `title="Save (⌘Enter)"`／`"Create document (�
 - Knowledge 頁按 `C`，到 `/knowledge/new`。
 - 在文件樹篩選框輸入 `c`：網址不變，篩選框內容為 `c`。
 - `HUB_MANAGED` 文件頁按 `E`，到 `/edit`；`SOURCE_MANAGED` 文件頁按 `E`，網址不變。
-- 按 `/`：palette 打開，查詢框為空（`/` 沒被打進去），Add to Notes 列顯示 `C`。
+- 按 `/`：palette 打開，查詢框為空（`/` 沒被打進去），Create document 列顯示 `C`。
 - 編輯頁：改標題後按 `⌘Enter`，回到文件頁且標題為新值。
 - 編輯頁：沒改內容按 `Esc`，回到文件頁。
 - 編輯頁：改過內容按 `Esc`，仍在 `/edit` 且內容保留。
@@ -202,3 +202,5 @@ Save 與 Create document 顯示 `title="Save (⌘Enter)"`／`"Create document (�
 這是**既存缺陷**。palette 與右鍵選單從提供 Edit document 起（#47、#50）就走 `router.push`；既有測試全部從文件頁首的 Edit 進入，而那是純 `<a>`，整頁載入，所以從未踩到。
 
 修法：registry 為 `document.edit` 改用新的 effect `{ kind: "load", href }`，runner 以 `location.assign` 執行。所有入口（頁首、palette、右鍵選單、`E`）因此走同一條已知可行的路。存檔後 `router.push` 為何拿到過期內容，是 #49 處理過的同一區域，未在此追根，留作獨立題目。
+
+**命名修訂。** `create.document` 的標籤由「Add to Notes」改為「Create document」，新增頁標題改為「New document」。快捷鍵是 `C`，而「Add to」讓人聯想不到 `C`；名詞沿用產品其他地方的 document（Edit document、Open document、表單按鈕 Create document），去處 Notes 改為 palette 關鍵字（`add`、`notes`）。

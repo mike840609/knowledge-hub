@@ -9,7 +9,7 @@ export default async function NewNotePage({ params }: { params: Promise<{ worksp
   if (!model?.access.actions.canWrite) notFound();
   return (
     <main className="kh-reading-column py-6">
-      <PageHeader location="Documents" locationHref={`/w/${workspaceId}/knowledge`} title="Add to Notes" description={`Write a document or upload a Markdown file to Notes in ${model.workspace.name}.`} />
+      <PageHeader location="Documents" locationHref={`/w/${workspaceId}/knowledge`} title="New document" description={`Write a document or upload a Markdown file to Notes in ${model.workspace.name}.`} />
       <div className="mt-6"><NewDocumentForm workspaceId={workspaceId} variant="empty" /></div>
     </main>
   );

@@ -78,8 +78,8 @@ test("reading navigation separates collections from authoring and source managem
   await expect(page).toHaveURL(/\/knowledge\/0199f100-0000-7000-8000-000000000105\//);
   await expect(page.getByRole("heading", { name: "Compliance Policy", exact: true })).toBeVisible();
 
-  await page.getByRole("link", { name: "Add to Notes", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Add to Notes" })).toBeVisible();
+  await page.getByRole("link", { name: "Create document", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "New document" })).toBeVisible();
   await expect(page.locator('input[type="file"]')).toBeAttached();
   await expect(page.getByText(/upload a Markdown file to Notes/)).toBeVisible();
 });

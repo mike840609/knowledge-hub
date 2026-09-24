@@ -33,7 +33,7 @@ test("/ opens the palette without typing the slash, and the palette shows shortc
   await expect(field).toHaveValue("");
 
   const list = page.getByRole("listbox", { name: "Actions and documents" });
-  await expect(list.getByRole("option", { name: /Add to Notes/ }).locator("kbd")).toHaveText("C");
+  await expect(list.getByRole("option", { name: /Create document/ }).locator("kbd")).toHaveText("C");
   await expect(list.getByRole("option", { name: /Edit document/ }).locator("kbd")).toHaveText("E");
 });
 

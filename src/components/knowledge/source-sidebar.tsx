@@ -112,7 +112,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
   const hasNotes = visibleCollections.some(({ source: candidate }) => candidate.sourceType === "HUB" && candidate.name === "Notes" && candidate.status === "ACTIVE");
   const canCreate = access.actions.canWrite && confirmed;
   const newNoteHref = `/w/${workspaceId}/knowledge/new`;
-  const addNote = <Link href={newNoteHref} aria-label="Add to Notes" aria-keyshortcuts="C" title="Add to Notes (C)" className={buttonClasses({ variant: "ghost", icon: true })}><Plus size={15} aria-hidden="true" /></Link>;
+  const addNote = <Link href={newNoteHref} aria-label="Create document" aria-keyshortcuts="C" title="Create document (C)" className={buttonClasses({ variant: "ghost", icon: true })}><Plus size={15} aria-hidden="true" /></Link>;
 
   function toggleArchived(checked: boolean) {
     const params = new URLSearchParams(searchParams.toString());

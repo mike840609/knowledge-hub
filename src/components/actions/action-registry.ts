@@ -75,7 +75,7 @@ export type Action = {
   label: string;
   group: ActionGroup;
   icon: ActionIconName;
-  /** Extra words the palette matches on, so "new" finds "Add to Notes". */
+  /** Extra words the palette matches on, so "new" finds "Create document". */
   keywords: readonly string[];
   /** `aria-keyshortcuts` spelling, where one exists. */
   shortcut?: string;
@@ -185,10 +185,13 @@ export function availableActions(context: ActionContext): readonly Action[] {
   if (can.canWrite && confirmed) {
     actions.push({
       id: "create.document",
-      label: "Add to Notes",
+      // "Create", because the key is C. The noun is the one the rest of the
+      // product uses (Edit document, Open document); where it goes, Notes,
+      // is a keyword rather than the label.
+      label: "Create document",
       group: "create",
       icon: "create",
-      keywords: ["new", "note", "document", "write"],
+      keywords: ["new", "add", "note", "notes", "write"],
       shortcut: "C",
       surfaces: ["palette", "empty"],
       effect: { kind: "navigate", href: `/w/${workspaceId}/knowledge/new` },
