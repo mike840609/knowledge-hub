@@ -28,7 +28,7 @@ export default async function SharedDocumentPage({ params }: SharedPageProps) {
   if (!shared) notFound();
   return (
     <main className="min-h-screen bg-kh-bg">
-      <header className="bg-kh-bg-raised">
+      <header>
         <div className="kh-reading-column pb-3 pt-5">
           <h1 className="text-heading font-semibold tracking-tight text-kh-text">{shared.title}</h1>
           <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-kh-text-muted">

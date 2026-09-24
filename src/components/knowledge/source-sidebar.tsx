@@ -130,7 +130,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
   return (
     <aside aria-label="Knowledge explorer" className="kh-sidebar-surface flex h-full min-h-0 w-full shrink-0 flex-col gap-3 border-r border-kh-border bg-kh-bg-sunken p-3 lg:w-72">
       <div className="flex shrink-0 items-center justify-between gap-2">
-        <h2 className="px-2 text-body font-semibold text-kh-text">Documents</h2>
+        <h2 className="px-2 text-caption font-medium text-kh-text-muted">Documents</h2>
         <div className="flex items-center gap-0.5">
           <button
             ref={filterTriggerRef}

@@ -52,7 +52,7 @@ export function DocumentHeader({
   const relative = elapsed === null ? formatDateTime(updatedAt, zone) : formatRelativeTime(elapsed);
 
   return (
-    <header className="bg-kh-bg-raised">
+    <header>
       <div className="kh-reading-column pb-3 pt-5">
         <div className="flex min-w-0 items-center justify-between gap-3">
           <nav aria-label="Breadcrumb" className="min-w-0 flex-1">
