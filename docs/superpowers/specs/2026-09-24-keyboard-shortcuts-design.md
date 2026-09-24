@@ -7,7 +7,7 @@
 | 回應 | 對照 Linear 設計語言的 UI/UX 審查第 1 項：鍵盤操作是目前體感差距最大的地方 |
 | 對照契約 | `docs/superpowers/specs/frontend-design-language.md` §10（Focus and keyboard）、§15（One registry decides what can be done） |
 | 對照規格 | `docs/superpowers/specs/2026-09-21-action-model-spec.md`（`Action.shortcut` 欄位的由來） |
-| 狀態 | 設計已逐段確認，待審閱後進入實作計畫 |
+| 狀態 | 已實作。第 9 節記錄實作時發現並一併修正的既存缺陷。 |
 
 ## 1. 現況（實測，非引述）
 
@@ -194,3 +194,11 @@ Save 與 Create document 顯示 `title="Save (⌘Enter)"`／`"Create document (�
 修改  tests/unit/action-registry.test.ts              shortcut 斷言
 修改  docs/superpowers/specs/frontend-design-language.md  §10
 ```
+
+## 9. 實作時的發現
+
+`E` 的 e2e（按 `E` 進編輯頁、改標題、存檔）失敗：存檔確實成功，回到文件頁卻顯示舊標題，直到重新整理。以兩個探測測試隔離變因：用 client 端導航進編輯頁再按 Save 按鈕，同樣失敗；用整頁載入進編輯頁再按 `⌘Enter`，通過。所以缺陷不在 `⌘Enter`，而在「client 端導航進編輯頁」：文件頁留在 router cache，存檔後的 push 回到了過期的副本。
+
+這是**既存缺陷**。palette 與右鍵選單從提供 Edit document 起（#47、#50）就走 `router.push`；既有測試全部從文件頁首的 Edit 進入，而那是純 `<a>`，整頁載入，所以從未踩到。
+
+修法：registry 為 `document.edit` 改用新的 effect `{ kind: "load", href }`，runner 以 `location.assign` 執行。所有入口（頁首、palette、右鍵選單、`E`）因此走同一條已知可行的路。存檔後 `router.push` 為何拿到過期內容，是 #49 處理過的同一區域，未在此追根，留作獨立題目。
