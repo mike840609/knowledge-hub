@@ -1,10 +1,13 @@
 import type { SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import { Search } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { LiveSearchSubmit } from "./live-search-submit";
 
-/** A plain GET form: shareable URLs, and it works without JavaScript. */
+/**
+ * A plain GET form: shareable URLs, and it works without JavaScript. With
+ * JavaScript it searches as the reader types (`LiveSearchSubmit`).
+ */
 export function SearchForm({
   workspaceId, q, scope, sourceId, includeArchived, sources,
 }: {
@@ -31,7 +34,7 @@ export function SearchForm({
               clean — the same exemption §7 gives truncation widths. */}
           <Input id="search-q" name="q" size="lg" type="search" defaultValue={q} autoComplete="off" placeholder="Search documents…" className="pl-[2.25rem]" />
         </div>
-        <Button type="submit" size="lg">Search</Button>
+        <LiveSearchSubmit />
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <label className="inline-flex items-center gap-2 text-caption text-kh-text-muted" htmlFor="search-scope">

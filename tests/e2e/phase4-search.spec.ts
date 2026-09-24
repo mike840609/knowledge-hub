@@ -74,3 +74,37 @@ test("opens the focused result with Enter", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(new RegExp(href!.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });
+
+test("searches as the reader types, and a filter change searches too", async ({ page }) => {
+  await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/search`);
+  // The submit button goes once the form can search on its own; waiting for
+  // that is waiting for hydration, so typing below is not lost to a race.
+  await expect(page.getByRole("button", { name: "Search", exact: true })).toHaveCount(0);
+
+  await page.locator("#search-q").fill("Query Master");
+  await expect(page).toHaveURL(/[?&]q=Query\+Master(&|$)/);
+  await expect(page.locator("a[data-search-result]").first()).toBeVisible();
+  await expect(page.locator("#search-q")).toBeFocused();
+
+  await page.getByLabel("Scope").selectOption("all");
+  await expect(page).toHaveURL(/[?&]scope=all(&|$)/);
+  await expect(page).toHaveURL(/[?&]q=Query\+Master(&|$)/);
+});
+
+test("without JavaScript the search form keeps its button and submits as a GET", async ({ browser }) => {
+  const context = await browser.newContext();
+  const unhydrated = await context.newPage();
+  try {
+    // Blocking the framework chunks keeps React from hydrating while the
+    // streamed page still assembles (see phase5-authoring for why not
+    // javaScriptEnabled: false).
+    await unhydrated.route("**/_next/static/chunks/**", (route) => route.abort());
+    await unhydrated.goto(`/w/${QUERY_MASTER_WORKSPACE}/search`);
+    await unhydrated.locator("#search-q").fill("Query Master");
+    await unhydrated.getByRole("button", { name: "Search", exact: true }).click();
+    await expect(unhydrated).toHaveURL(/[?&]q=Query\+Master(&|$)/);
+    await expect(unhydrated.locator("a[data-search-result]").first()).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});

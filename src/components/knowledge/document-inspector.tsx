@@ -330,7 +330,7 @@ export function DocumentDetailClient({
     };
   }, [pathname, title, openInspector, setDocumentTopbar, target]);
   return (
-    <div data-document-pane className="flex h-full min-h-0 overflow-hidden bg-kh-bg-raised">
+    <div data-document-pane className="flex h-full min-h-0 overflow-hidden bg-kh-bg">
       <div ref={contentRef} role="region" aria-label="Document content" tabIndex={0}
         className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain contain-layout kh-focus-ring">
         <div ref={headerRef}>

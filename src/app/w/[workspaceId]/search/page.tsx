@@ -34,7 +34,7 @@ export default async function WorkspaceSearchPage({
   });
   return (
     <main className="kh-page py-6">
-      <PageHeader location={model.workspaceName} locationHref={`/w/${workspaceId}/knowledge`} title="Search" description="Find documents across this workspace." />
+      <PageHeader location={model.workspaceName} locationHref={`/w/${workspaceId}/knowledge`} title="Search" />
       <div className="mt-6">
         <SearchForm
           workspaceId={model.workspaceId}

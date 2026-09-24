@@ -182,10 +182,16 @@ Four steps of one cool neutral hue, each with a single job:
 
 ```text
 bg          canvas — document and page content
-bg-raised   chrome on the canvas — topbar, document header
+bg-raised   chrome on the canvas — topbar, inspector panel
 bg-sunken   navigation rails — primary nav, knowledge sidebar
 bg-subtle   inset fills — code blocks, table headers, kbd
 ```
+
+A document is content, so it sits on `bg` like every other page. The
+document pane had been painted `bg-raised` whole, header and body alike,
+which put documents on a lighter surface than every other page in dark
+(#191a1e against #131417) and left the share page with a raised band over a
+canvas body. Neither was a choice anyone recorded.
 
 Names say what a surface is, not where it was first used. The previous names
 (`reading-bg`, `bg-nav`, `bg-sidebar`) are why a warm grey and three cool ones
@@ -212,6 +218,12 @@ real. Most of what the odd widths were doing was holding a message — a
 not-found heading with no explanation, an empty state — and those do not need
 a width of their own: they use `StatusMessage`, which sits in the reading
 column. Nine such blocks were spelled out inline, eight of them a bare `<h1>`.
+
+A page's header is one line, `location › title`, with actions at the right
+(`PageHeader`). The title is body-size and medium weight: the page is named
+where it sits, the way the document header names a document, rather than
+announced above it. A form page may add one line saying what it does; a list
+page does not restate its own name.
 
 Page padding is `py-6`. `py-8` appeared on four sources pages for no reason
 anyone recorded. The `py-16` of a centred message state belongs to
@@ -252,6 +264,10 @@ text-faint      hints that are not content — kbd, separators, disabled
 `text`, `text-secondary` and `text-muted` all meet 4.5:1 against every surface
 they can sit on and may carry body text. **`text-faint` meets 3:1 and may
 not** — it is for marks a reader can ignore without losing meaning.
+
+A group label in a navigation rail (Documents, Favorites, Recent) is
+`caption`, medium, `text-muted`: one style, so a label never reads as another
+row. Collections and rows below it keep `body`.
 
 Two levels were not enough, and the symptom was concrete: a search result's
 snippet and the metadata beneath it rendered in the same colour, so content
@@ -532,7 +548,10 @@ and a rung is not added for one surface.
 Every form field is `Input`, `Select` or `Textarea`, which share their shape
 through `fieldClasses()` in `components/ui/field.ts`. `Select` is a native
 `<select>`: the search page is a plain GET form that works without JavaScript,
-and every hand-rolled copy it replaces was native already. A multi-line field
+and every hand-rolled copy it replaces was native already. With JavaScript,
+that form searches as the reader types and its submit button goes
+(`LiveSearchSubmit`); the URL is still the state, so a search stays
+shareable, and without JavaScript the button and the GET remain. A multi-line field
 takes its height from `rows` rather than the ladder; only its padding scales.
 
 ### Tabs come in two kinds and share only their look

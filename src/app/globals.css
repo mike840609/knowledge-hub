@@ -5,7 +5,7 @@
 /**
  * Surfaces are four steps of one cool neutral hue, each with a distinct job:
  *   bg      canvas — document and page content
- *   raised  chrome sitting on the canvas — topbar, document header
+ *   raised  chrome sitting on the canvas — topbar, inspector panel
  *   sunken  navigation rails — primary nav, knowledge sidebar
  *   subtle  inset fills — code blocks, table headers, kbd
  * Accent, link and focus all share one hue so selection reads as a single idea.
