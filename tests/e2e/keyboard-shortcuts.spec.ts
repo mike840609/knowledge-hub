@@ -71,3 +71,42 @@ test("E does nothing on source-managed content", async ({ page }) => {
   await page.waitForTimeout(500);
   expect(new URL(page.url()).pathname).toBe(url);
 });
+
+/** A note of our own, so saving it cannot disturb another test's fixture. */
+async function editOwnNote(page: Page, title: string) {
+  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
+  const field = page.getByLabel("Document title");
+  await expect(field).toBeEditable(ROUND_TRIP);
+  await field.fill(title);
+  await page.getByRole("button", { name: "Create document" }).click();
+  await expect(page.getByRole("heading", { name: title })).toBeVisible(ROUND_TRIP);
+  await pressUntil(page, "e", () => expect(page).toHaveURL(/\/edit$/, { timeout: 1_000 }));
+  // main form + first(): the duplicate-DOM quirk phase5-authoring documents.
+  const titleField = page.locator("main form").first().getByLabel("Title", { exact: true });
+  await expect(titleField).toBeEditable(ROUND_TRIP);
+  return titleField;
+}
+
+test("⌘Enter saves from inside the editor", async ({ page }) => {
+  const titleField = await editOwnNote(page, "Shortcut Save Note");
+  await titleField.fill("Saved By Keyboard");
+  await titleField.press("ControlOrMeta+Enter");
+  await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
+  await expect(page.getByRole("heading", { name: "Saved By Keyboard" })).toBeVisible(ROUND_TRIP);
+});
+
+test("Esc leaves an unchanged editor", async ({ page }) => {
+  const titleField = await editOwnNote(page, "Shortcut Esc Clean Note");
+  await titleField.press("Escape");
+  await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
+  await expect(page.getByRole("heading", { name: "Shortcut Esc Clean Note" })).toBeVisible(ROUND_TRIP);
+});
+
+test("Esc never discards a changed draft", async ({ page }) => {
+  const titleField = await editOwnNote(page, "Shortcut Esc Dirty Note");
+  await titleField.fill("Unsaved change");
+  await titleField.press("Escape");
+  await page.waitForTimeout(500);
+  await expect(page).toHaveURL(/\/edit$/);
+  await expect(titleField).toHaveValue("Unsaved change");
+});
