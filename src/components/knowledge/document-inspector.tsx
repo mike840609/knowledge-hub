@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRefreshOnArrival } from "@/components/shell/refresh-on-arrival";
 import { requestShare } from "@/components/actions/action-menu";
 import { availableActions } from "@/components/actions/action-registry";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
@@ -259,6 +260,7 @@ export function DocumentDetailClient({
   ownership: "SOURCE_MANAGED" | "HUB_MANAGED";
   contentOwnsTitle: boolean;
 }) {
+  useRefreshOnArrival();
   const inspector = useContext(InspectorContext);
   const setDocumentTopbar = useContext(DocumentTopbarContext)?.setDocument;
   const pathname = usePathname();

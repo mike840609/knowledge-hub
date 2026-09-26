@@ -737,6 +737,18 @@ confirmation reports and gets out of the way, so it goes to the toast. A
 mutation that *navigates* to its own result gets neither — saving a document
 lands on the saved document, and a toast on top of that is noise.
 
+**A mutation that navigates to its result refreshes on arrival.** The push
+fetches the destination page fresh, but a layout the two routes share is kept
+as it was: saving a title left the knowledge sidebar naming the document by
+its old one until a reload. `router.refresh()` renders the layouts again, but
+never in the same breath as the push: a navigate dispatched while a refresh is
+pending discards it, and a refresh sent alongside a push was measured leaving
+the reader on the editor (#49). So the mutation calls `refreshOnArrival(href)`
+before pushing, and the destination (`useRefreshOnArrival` in
+`components/shell/refresh-on-arrival.ts`) refreshes once it has mounted, when
+there is no navigation left to race. Saving and creating a document both work
+this way.
+
 **Undo is offered only where a reverse operation already exists.** An "Undo"
 that cannot restore the previous state is a lie, and this codebase has no
 soft-delete to lean on. Archiving a workspace, renaming it, granting access,
