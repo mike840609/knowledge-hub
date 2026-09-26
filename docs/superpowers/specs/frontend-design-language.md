@@ -376,12 +376,15 @@ only when that button is enabled. `Esc` leaves only a form nothing has been
 typed into; with changes it does nothing. No key discards a draft; Cancel is
 the one way to.
 
-"Edit document" enters the editor by a full page load (`effect.kind ===
-"load"`) from every surface, as the header's Edit link always has. A client
-navigation there left the document page in the router cache, and the push
-back after a save then showed the old revision until a reload. The palette and
-row menu had that bug from the day they offered Edit; no test saw it, because
-every test entered the editor through the header's plain link.
+**A link to the page being read does not prefetch** (`prefetch={false}` on
+the selected row in the tree and in Favorites/Recent). Prefetched from itself,
+the page comes back whole rather than cut at its loading boundary, and the
+router applies a prefetch's content on its first use however old it is. The
+return from a save is that first use, so the reader landed on the revision
+before the one just saved, until a reload. It showed only when the editor was
+entered by client navigation (palette, row menu, `E`); a full load into the
+editor starts with an empty router cache, which is why every earlier test,
+all entering through the header's plain link, passed.
 
 ### Menus
 

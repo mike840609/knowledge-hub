@@ -92,6 +92,11 @@ function TreeNodeRow({
       >
         <Link
           href={documentHref(item, scope, includeArchived)}
+          // Never prefetch the page being read: prefetched from itself, the
+          // server sends the whole page, and the router applies that copy on
+          // the next visit however old it is, so the return from a save
+          // showed the revision before it. Keyboard-shortcuts spec §9.
+          prefetch={selected ? false : undefined}
           title={item.label}
           className={`flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-body kh-focus-ring ${
             selected ? "font-medium text-kh-selected-text" : "text-kh-text-muted"

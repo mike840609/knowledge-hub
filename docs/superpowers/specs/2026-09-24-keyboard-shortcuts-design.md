@@ -201,6 +201,11 @@ Save 與 Create document 顯示 `title="Save (⌘Enter)"`／`"Create document (�
 
 這是**既存缺陷**。palette 與右鍵選單從提供 Edit document 起（#47、#50）就走 `router.push`；既有測試全部從文件頁首的 Edit 進入，而那是純 `<a>`，整頁載入，所以從未踩到。
 
-修法：registry 為 `document.edit` 改用新的 effect `{ kind: "load", href }`，runner 以 `location.assign` 執行。所有入口（頁首、palette、右鍵選單、`E`）因此走同一條已知可行的路。存檔後 `router.push` 為何拿到過期內容，是 #49 處理過的同一區域，未在此追根，留作獨立題目。
+初版修法是繞道：`document.edit` 改用整頁載入（`{ kind: "load" }`）。其後追到根因並改為從源頭修正，繞道已移除：
+
+- **根因。** 閱讀文件時，側欄指向**這份文件本身**的 `<Link>` 會 prefetch 它。從自己這頁 prefetch 自己，伺服器回的是整頁（沒有 loading 邊界可切），而 Next 15 對一筆 prefetch 的**第一次使用**會直接套用其內容，不論多舊（`navigate-reducer`：`stale` 狀態只在非首次讀取時才改為 lazy fetch）。存檔後的 `router.push` 正是第一次使用，於是顯示存檔前的內容。
+- **證據。** 網路紀錄：client 端進編輯頁再存檔，存檔後沒有任何文件頁的 RSC 請求；整頁載入進編輯頁再存檔，有一次導航請求（`prefetch=-`）。後者在 `/edit` 上同樣 prefetch 過文件頁，但從別頁 prefetch 的只到 loading 邊界，首次使用時會補抓資料。擋掉文件頁對自己的 prefetch，前者即改為顯示新內容。
+- **修法。** 樹與 Favorites／Recent 中「目前這份文件」的連結 `prefetch={false}`。prefetch 自己所在的頁本來就沒有用途。
+- **為何不用 `router.refresh()`。** Next 的 action queue 在 refresh 尚未完成時收到 navigate，會把 refresh 標為 discarded，連同它清空 prefetch cache 的效果一起丟掉；這也是 #49 看到 refresh 與 push 互搶的原因。
 
 **命名修訂。** `create.document` 的標籤由「Add to Notes」改為「Create document」，新增頁標題改為「New document」。快捷鍵是 `C`，而「Add to」讓人聯想不到 `C`；名詞沿用產品其他地方的 document（Edit document、Open document、表單按鈕 Create document），去處 Notes 改為 palette 關鍵字（`add`、`notes`）。

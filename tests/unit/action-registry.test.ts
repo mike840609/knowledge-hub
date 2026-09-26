@@ -168,14 +168,7 @@ describe("action registry — hrefs", () => {
   it("does not carry the query string into the edit route", () => {
     const archived = availableActions(context({ includeArchived: true, target: target() }));
     const edit = archived.find((action) => action.id === "document.edit");
-    expect(edit?.effect).toEqual({ kind: "load", href: "/w/w1/knowledge/s1/d1/edit" });
-  });
-
-  it("enters the editor by a full page load, as the header's Edit link does", () => {
-    // A client navigation into the editor leaves the document page in the
-    // router cache, and the push back after a save then shows it stale.
-    const edit = availableActions(context({ target: target() })).find((action) => action.id === "document.edit");
-    expect(edit?.effect.kind).toBe("load");
+    expect(edit?.effect).toEqual({ kind: "navigate", href: "/w/w1/knowledge/s1/d1/edit" });
   });
 });
 
