@@ -54,9 +54,10 @@ export function DocumentEditor({
       // Just the push. The `router.refresh()` that used to follow it raced the
       // navigation it was meant to freshen and discarded it: measured on a
       // production build, a save left the reader on the editor 10 times in 60
-      // with it and once in 60 without. It was redundant either way — the push
-      // fetches this dynamic route's payload after the PATCH rather than
-      // replaying a prefetch, which the network log shows on every run.
+      // with it and once in 60 without. The push fetches this route's payload
+      // after the PATCH, provided nothing prefetched the document from itself
+      // first; the sidebar's selected row does not, for that reason
+      // (keyboard-shortcuts spec §9).
       router.push(documentHref);
     } catch (failure) {
       setError(governanceFailure(failure));
