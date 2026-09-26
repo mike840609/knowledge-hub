@@ -69,6 +69,31 @@ test("edits a hub-managed document and records a second revision", async ({ page
   await expect(page.getByRole("link", { name: /Revision 2/ })).toBeVisible();
 });
 
+// The push back from a save fetches the document page fresh, but a layout the
+// editor and the document share (the sidebar tree) is kept as it was, so the
+// tree went on naming the revision before the save until a reload.
+test("after a save, the sidebar names the document by its new title", async ({ page }) => {
+  // Unique per run: the workspace is shared across tests and repeats.
+  const run = Date.now().toString(36);
+  const before = `Tree Title Before ${run}`;
+  const after = `Tree Title After ${run}`;
+  await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
+  await page.getByLabel("Document title").fill(before);
+  await page.getByRole("button", { name: "Create document" }).click();
+  await expect(page.getByRole("heading", { name: before })).toBeVisible(ROUND_TRIP);
+  // Creating navigates to the new document too, and the tree must gain its row.
+  await expect(page.getByRole("treeitem", { name: before, exact: true })).toBeVisible(ROUND_TRIP);
+
+  await page.getByRole("link", { name: "Edit", exact: true }).click();
+  const editorForm = page.locator("main form").first();
+  await editorForm.getByLabel("Title", { exact: true }).fill(after);
+  await editorForm.getByRole("button", { name: "Save" }).click();
+
+  await expect(page.getByRole("heading", { name: after })).toBeVisible(ROUND_TRIP);
+  await expect(page.getByRole("treeitem", { name: after, exact: true })).toBeVisible(ROUND_TRIP);
+  await expect(page.getByRole("treeitem", { name: before, exact: true })).toHaveCount(0);
+});
+
 test("uploads a markdown file and takes its title from frontmatter", async ({ page }) => {
   await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
   await page.setInputFiles('input[type="file"]', {

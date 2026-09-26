@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { useHydrated } from "@/components/shell/use-hydrated";
 import { useFormKeys } from "@/components/knowledge/use-form-keys";
+import { refreshOnArrival } from "@/components/shell/refresh-on-arrival";
 import { GovernanceError, governanceFailure, governanceRequest, type GovernanceFailure } from "@/components/workspaces/governance-error";
 
 export function DocumentEditor({
@@ -57,7 +58,9 @@ export function DocumentEditor({
       // with it and once in 60 without. The push fetches this route's payload
       // after the PATCH, provided nothing prefetched the document from itself
       // first; the sidebar's selected row does not, for that reason
-      // (keyboard-shortcuts spec §9).
+      // (keyboard-shortcuts spec §9). The sidebar, a layout this route and the
+      // document share, is refreshed once the document has mounted.
+      refreshOnArrival(documentHref);
       router.push(documentHref);
     } catch (failure) {
       setError(governanceFailure(failure));

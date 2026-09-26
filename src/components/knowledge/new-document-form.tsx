@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { useFormKeys } from "@/components/knowledge/use-form-keys";
+import { refreshOnArrival } from "@/components/shell/refresh-on-arrival";
 import { GovernanceError, governanceFailure, governanceRequest, type GovernanceFailure } from "@/components/workspaces/governance-error";
 
 type Created = { documentId: string; sourceId: string };
@@ -41,8 +42,11 @@ export function NewDocumentForm({ workspaceId, variant }: { workspaceId: string;
     setError(null);
     try {
       const created = await governanceRequest<Created>(`/api/workspaces/${workspaceId}/documents`, "POST", body);
-      router.push(`/w/${workspaceId}/knowledge/${created.sourceId}/${created.documentId}`);
-      router.refresh();
+      // Not push-then-refresh in one breath (#49): the refresh waits for the
+      // new document to mount, so the sidebar gains its row without a race.
+      const href = `/w/${workspaceId}/knowledge/${created.sourceId}/${created.documentId}`;
+      refreshOnArrival(href);
+      router.push(href);
     } catch (failure) {
       setError(governanceFailure(failure));
     } finally {
