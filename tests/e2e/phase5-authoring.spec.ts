@@ -132,6 +132,7 @@ test("a stale second editor gets a conflict, keeps their input, and does not ove
   await page.goto(`${documentUrl}/edit`);
   const editorA = page.locator("main form").first();
   const pageB = await page.context().newPage();
+  pageB.on("dialog", (dialog) => void dialog.accept());
   await pageB.goto(`${documentUrl}/edit`);
   const editorB = pageB.locator("main form").first();
 
@@ -145,7 +146,7 @@ test("a stale second editor gets a conflict, keeps their input, and does not ove
   await editorB.getByRole("button", { name: "Save" }).click();
   await expect(pageB.getByRole("alert").filter({ hasText: "已被其他人更新" })).toBeVisible(ROUND_TRIP);
   await expect(editorB.getByLabel("Markdown")).toHaveValue("loser body");
-  await expect(pageB.getByRole("link", { name: "重新載入最新版本" })).toBeVisible();
+  await expect(pageB.getByRole("button", { name: "載入最新版本（捨棄你的修改）" })).toBeVisible();
 
   // The persisted current revision is the winner's, never the loser's.
   await pageB.goto(documentUrl);
