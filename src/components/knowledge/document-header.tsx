@@ -2,17 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ChevronRight, LockKeyhole, PanelRight } from "lucide-react";
+import { LockKeyhole, PanelRight } from "lucide-react";
 import { ActionIcon } from "@/components/actions/action-icon";
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
 import { formatDateTime, formatRelativeTime } from "@/lib/format-date";
 import { useDisplayTimeZone } from "@/components/ui/timestamp";
-
-export type DocumentBreadcrumbSegment = {
-  label: string;
-  href?: string;
-};
+import { DocumentBreadcrumb, type DocumentBreadcrumbSegment } from "./document-breadcrumb";
 
 export function DocumentHeader({
   breadcrumb,
@@ -55,27 +51,7 @@ export function DocumentHeader({
     <header>
       <div className="kh-reading-column pb-3 pt-5">
         <div className="flex min-w-0 items-center justify-between gap-3">
-          <nav aria-label="Breadcrumb" className="min-w-0 flex-1">
-            <ol className="flex min-w-0 items-center gap-1 text-body-sm text-kh-text-muted">
-              {breadcrumb.map((segment, index) => {
-                const isLast = index === breadcrumb.length - 1;
-                return (
-                  <li key={`${segment.label}-${index}`} className="flex min-w-0 items-center gap-1">
-                    {index > 0 ? <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> : null}
-                    {segment.href && !isLast ? (
-                      <Link href={segment.href} className="shrink-0 rounded-md hover:text-kh-text hover:underline kh-focus-ring">
-                        {segment.label}
-                      </Link>
-                    ) : (
-                      <span aria-current={isLast ? "page" : undefined} className="truncate">
-                        {segment.label}
-                      </span>
-                    )}
-                  </li>
-                );
-              })}
-            </ol>
-          </nav>
+          <DocumentBreadcrumb segments={breadcrumb} />
           {/* Icon-only so the header stays light; each keeps its name as
               aria-label and tooltip. Details draws the same glyph as the
               sticky topbar's copy of this button. */}

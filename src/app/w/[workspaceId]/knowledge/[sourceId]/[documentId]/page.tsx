@@ -1,36 +1,9 @@
 import { getKnowledgeDocumentModel, getKnowledgeExplorerModel, getWorkspaceShellModel } from "@/server/knowledge-read";
-import type { KnowledgeTreeItem } from "@/modules/knowledge/application/knowledge-query-service";
-import type { DocumentBreadcrumbSegment } from "@/components/knowledge/document-header";
+import { documentLocation } from "@/server/document-location";
 import { DocumentDetailClient, type DocumentInspectorData } from "@/components/knowledge/document-inspector";
 import { DocumentViewer } from "@/components/knowledge/document-viewer";
 import { StatusMessage } from "@/components/ui/status-message";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
-
-function buildBreadcrumb(
-  workspaceId: string,
-  sourceId: string,
-  sourceName: string,
-  tree: KnowledgeTreeItem[],
-  documentId: string,
-  title: string,
-): DocumentBreadcrumbSegment[] {
-  const byId = new Map(tree.map((item) => [item.id, item]));
-  const node = tree.find((item) => item.type === "document" && item.documentId === documentId);
-  const segments: DocumentBreadcrumbSegment[] = [
-    { label: sourceName, href: `/w/${workspaceId}/knowledge/${sourceId}` },
-  ];
-  if (node) {
-    const folders: string[] = [];
-    let current = node.parentId ? byId.get(node.parentId) : undefined;
-    while (current) {
-      if (current.type === "folder") folders.unshift(current.label);
-      current = current.parentId ? byId.get(current.parentId) : undefined;
-    }
-    for (const folder of folders) segments.push({ label: folder });
-  }
-  segments.push({ label: title });
-  return segments;
-}
 
 export default async function KnowledgeDocumentPage({
   params,
@@ -95,7 +68,7 @@ export default async function KnowledgeDocumentPage({
     !isHistorical;
   const editHref = canEdit ? `/w/${workspaceId}/knowledge/${sourceId}/${documentId}/edit` : null;
   const breadcrumb = explorer
-    ? buildBreadcrumb(workspaceId, sourceId, explorer.source.name, explorer.tree, documentId, selectedRevision.title)
+    ? [...documentLocation(workspaceId, sourceId, explorer.source.name, explorer.tree, documentId), { label: selectedRevision.title }]
     : [{ label: selectedRevision.title }];
 
   const inspectorData: DocumentInspectorData = {
