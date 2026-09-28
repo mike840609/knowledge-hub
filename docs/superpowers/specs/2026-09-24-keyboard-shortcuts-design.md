@@ -110,6 +110,8 @@ QuickSearch 只在 `confirmed && canSearch` 時啟用（`quick-search.tsx:55`）
 
 ## 5. 表單：`⌘Enter` 與 `Esc`
 
+> 2026-09-28：兩個表單已合併為文件編輯器，並新增 `⌘⇧P` 預覽與預覽中的 `Esc`。現行規則見 `2026-09-28-document-composer-design.md` 第 6 節；本節保留當時的決定。
+
 ### 5.1 掛在哪裡
 
 編輯文件與新增文件兩個表單，共用 `src/components/knowledge/use-form-keys.ts`。回傳一個掛在 `<form>` 上的 `onKeyDown`：焦點在表單內才生效，不掛全域監聽，因此不會與 palette 或選單衝突（palette 以 portal 渲染在表單之外，事件不會冒泡進表單）。

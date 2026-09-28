@@ -371,10 +371,16 @@ it. The row menu shows no hints. It acts on the row it was opened from, and a
 row's "Edit document" beside an `E` that edits a different document would be
 a lie on every row but one.
 
-In the document forms, ⌘Enter saves through the form's own submit button, and
-only when that button is enabled. `Esc` leaves only a form nothing has been
-typed into; with changes it does nothing. No key discards a draft; Cancel is
-the one way to.
+In the document composer (new and edit share it), ⌘Enter saves through the
+form's own submit button, and only when that button is enabled. ⌘⇧P toggles
+the preview. `Esc` in preview returns to the text; otherwise it leaves only a
+composer nothing has been typed into, and with changes it does nothing. No key
+discards a draft; Cancel is the one way to, and it asks first.
+
+The composer's title field and text are the one place without the focus ring.
+A text field matches `:focus-visible` for as long as it has focus, so a ring
+would frame the whole canvas for the whole time anyone writes; the caret is the
+focus indicator there. Its buttons keep the ring. Composer spec §6.
 
 **A link to the page being read does not prefetch** (`prefetch={false}` on
 the selected row in the tree and in Favorites/Recent). Prefetched from itself,

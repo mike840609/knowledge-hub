@@ -7,7 +7,7 @@
 | 回應 | 對照 Linear 設計語言的 UI/UX 審查第 2 項；`frontend-design-language.md` §18 Open items 第 3 項（編輯與閱讀是兩個不同的頁面；該項由 PR #61 加入） |
 | 對照契約 | `docs/superpowers/specs/frontend-design-language.md` §7（page containers）、§10（Focus and keyboard）、§15（component architecture） |
 | 對照規格 | `2026-09-16-phase-5-human-authoring-design.md`（authoring API、409 conflict）、`2026-09-24-keyboard-shortcuts-design.md`（`E`、`⌘Enter`、`Esc`） |
-| 狀態 | 設計已拍板，待實作 |
+| 狀態 | 已實作。驗證見 docs/superpowers/verification/2026-09-28-document-composer-verification.md。 |
 
 ## 1. 現況（實測，非引述）
 
@@ -44,16 +44,17 @@
 | 單元 | 位置 | 職責 | 依賴 |
 | --- | --- | --- | --- |
 | `DocumentBreadcrumb` | 從 `document-header.tsx` 抽出 | 只畫麵包屑；閱讀頁與編輯器共用 | 無 |
-| `buildBreadcrumb` | 從 `[documentId]/page.tsx` 移到 `src/server/` | 由 tree 算出路徑；閱讀頁與 `/edit` 共用 | explorer model |
+| `documentLocation` | `src/server/document-location.ts` | 由 tree 算出 source › 資料夾路徑，不含文件本身；閱讀頁與 `/edit` 共用，各自附加標題 | explorer model |
 | `resolveAuthoredTitle` | `src/lib/authored-title.ts` | 純函式，第 4 節 | `mdast-util-from-markdown`、`mdast-util-to-string` |
-| draft store | `src/lib/document-draft.ts` | 純函式：讀、寫、刪，注入 `Storage` | 無 |
-| `useDraft` | `src/components/knowledge/use-draft.ts` | 把 draft store 接上 `sessionStorage` 與 hydration | draft store |
-| `DocumentComposer` | `src/components/knowledge/document-composer.tsx` | 編輯器本體：標題欄（需要時）、textarea、預覽、動作、錯誤、還原提示。存檔動作由外部傳入 | 以上各項、`MarkdownRenderer`、`useFormKeys` |
+| draft store | `src/lib/document-draft.ts` | 純函式：讀、寫、刪，注入 `Storage`；`browserDraftStorage()` 取得分頁的 `sessionStorage` | 無 |
+| `DocumentComposer` | `src/components/knowledge/document-composer.tsx` | 編輯器本體：標題欄（需要時）、textarea、預覽、動作、錯誤、還原提示；`blocked` 讓另一個操作（如上傳）獨佔頁面，`footer` render prop `(state: { busy }) => ReactNode` 在 `<form>` 外渲染。存檔動作由外部傳入 | 以上各項、`MarkdownRenderer`、`useFormKeys` |
 | `DocumentEditor`、`NewDocumentForm` | 既有檔案 | 變成薄包裝：組好 composer 的初始值，呼叫 `PATCH` 或 `POST` | `DocumentComposer` |
 
-- `NewDocumentForm` 的 `sidebar` 變體移除。上傳檔案功能留在新增頁，行為不變。
+實作時把 `useDraft` 併入 draft store：三個呼叫不需要一個 hook。
+
+- `NewDocumentForm` 的 `sidebar` 變體移除。上傳檔案功能留在新增頁；新增頁把 `DocumentComposer` 的 `blocked` 接上傳狀態、`footer` 放上傳按鈕，使打字新增與上傳互斥（沿用舊表單的行為）。
 - 不變：路由、伺服器端權限檢查、API 契約、存檔後的導航（`refreshOnArrival` + `router.push`）、閱讀頁行為。
-- `/edit` 的 page 需要多傳 `breadcrumb` 與 `metadataTitle`（取自 current revision 的 metadata）。
+- `/edit` 的 page 需要多傳 `location`（`documentLocation(...)`，source 與資料夾、不含文件本身）與 `metadataTitle`（取自 current revision 的 metadata）；composer 在其後附加解析出的標題。
 
 ## 4. 標題規則
 
@@ -85,6 +86,7 @@
 **還原**
 
 - hydration 之後讀取（伺服器端沒有 `sessionStorage`；表單本來就等 hydration 才可用）。
+- 欄位與 Save 要等還原檢查跑完（`restoreChecked`）才啟用：hydration 一旦提交就開放輸入，會讓打字落在 sessionStorage 讀取完成前的空檔，被稍後才到的還原內容蓋掉。
 - 有稿子 → 還原，內容上方顯示「已還原未存的修改 · 捨棄」。
 - 稿子的 `baseRevisionId` 不是目前的 current revision → 照樣還原，但 `expectedCurrentRevisionId` 用稿子的基準版本，提示改為「這份文件在你離開後被更新過」。存檔會走既有的 409 衝突流程，不會默默覆蓋別人的修改。
 
@@ -117,6 +119,8 @@
 
 `⌘/Ctrl ⇧ P` 與 GitHub Markdown 編輯器相同。已知風險：Firefox 的 `Ctrl ⇧ P` 是開私密視窗，可能屬於網頁無法攔截的保留快捷鍵。實作時先在 Firefox 實測；攔不住就換一組按鍵，並回寫本節與 verification 紀錄。
 
+2026-09-29：尚未在 Firefox 實測（見 verification 紀錄）。
+
 **輸入區**
 
 - 無邊框、無背景，使用閱讀頁的內文字體與字級（非等寬）。代價：表格與程式碼區塊的原始碼不對齊。
@@ -138,7 +142,7 @@
 
 **單元（node 環境）**
 
-- `resolveAuthoredTitle`：metadata 優先；開頭 H1；H1 帶行內格式取純文字；H1 不在開頭 → `TYPED`；只有圖片的 H1 → `TYPED`；BOM 與前導空行；metadata title 為空字串或非字串 → 往下；標題欄 trim；全空 → 空結果。
+- `resolveAuthoredTitle`：metadata 優先；開頭 H1；H1 帶行內格式取純文字；H1 不在開頭 → `TYPED`；只有圖片且 alt 為空的 H1 → TYPED（alt 文字會被取用，與匯入相同）；BOM 與前導空行；metadata title 為空字串或非字串 → 往下；標題欄 trim；全空 → 空結果。
 - draft store（注入假 `Storage`）：有修改才寫入、改回初始值即刪除；損壞 JSON 回 `null`；版本不符回 `null`；`Storage` 丟例外時不外洩；編輯與新增 key 互不干擾。
 
 **E2E（Playwright）**
