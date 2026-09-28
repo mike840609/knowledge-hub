@@ -59,7 +59,8 @@ export function NewDocumentForm({ workspaceId, workspaceName }: { workspaceId: s
       cancelHref={listHref}
       conflictHref={null}
       onSubmit={({ title, markdown }) => create({ title, markdown })}
-      footer={
+      blocked={uploading}
+      footer={({ busy }) => (
         <div className="space-y-2 border-t border-kh-border pt-4">
           <label className="text-body text-kh-text-muted">
             <span className="cursor-pointer underline-offset-4 hover:underline">Upload .md</span> to Notes in {workspaceName} instead.
@@ -67,7 +68,7 @@ export function NewDocumentForm({ workspaceId, workspaceName }: { workspaceId: s
               type="file"
               accept=".md,.markdown"
               className="sr-only"
-              disabled={uploading || !confirmed}
+              disabled={uploading || busy || !confirmed}
               onChange={(event) => {
                 const file = event.target.files?.[0];
                 event.target.value = "";
@@ -77,7 +78,7 @@ export function NewDocumentForm({ workspaceId, workspaceName }: { workspaceId: s
           </label>
           <GovernanceError error={uploadError} />
         </div>
-      }
+      )}
     />
   );
 }

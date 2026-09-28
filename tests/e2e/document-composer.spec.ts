@@ -200,3 +200,36 @@ test("a new document can be named by its H1 alone", async ({ page }) => {
   await form.getByRole("button", { name: "Create document" }).click();
   await expect(page.getByRole("treeitem", { name: title, exact: true })).toBeVisible(ROUND_TRIP);
 });
+
+// Composer-side half of the create/upload exclusion (new-document-form.tsx's
+// own POST is held here, not stubbed away, so the real create still runs and
+// still lands): while the upload is in flight, Create must not be clickable,
+// or the two could race two documents and two competing refreshOnArrival calls.
+test("an upload in flight disables Create, so the two cannot race", async ({ page }) => {
+  const title = unique("Held Upload");
+  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
+  const form = composer(page);
+  const titleField = form.getByLabel("Title", { exact: true });
+  await expect(titleField).toBeEditable(ROUND_TRIP);
+  // Would otherwise make Create clickable: proves the disable below is the
+  // upload's doing, not just an untitled document.
+  await titleField.fill(unique("Would-be Create"));
+
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  await page.route("**/api/workspaces/*/documents", async (route) => {
+    if (route.request().method() !== "POST") { await route.continue(); return; }
+    await gate;
+    await route.continue();
+  });
+
+  await page.setInputFiles('input[type="file"]', {
+    name: "held.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from(`# ${title}\n\nbody`, "utf8"),
+  });
+  await expect(form.getByRole("button", { name: "Create document" })).toBeDisabled();
+
+  release();
+  await expect(page.getByRole("treeitem", { name: title, exact: true })).toBeVisible(ROUND_TRIP);
+});

@@ -34,6 +34,7 @@ export function DocumentComposer({
   cancelHref,
   onSubmit,
   conflictHref,
+  blocked,
   footer,
 }: {
   draftKey: DraftKey;
@@ -52,7 +53,9 @@ export function DocumentComposer({
   onSubmit: (input: ComposerSubmit) => Promise<string>;
   /** Where "load the latest version" goes after a conflict; null when creating. */
   conflictHref: string | null;
-  footer?: ReactNode;
+  /** Another operation owns the page, e.g. an upload; nothing here may start. */
+  blocked?: boolean;
+  footer?: (state: { busy: boolean }) => ReactNode;
 }) {
   const router = useRouter();
   const { confirmed } = useWorkspaceAuthorization();
@@ -78,7 +81,7 @@ export function DocumentComposer({
   // Fields wait for the restore check too: enabling them the instant
   // hydration commits, before sessionStorage has been read, lets a keystroke
   // land in the gap and then be overwritten by a draft arriving a tick later.
-  const ready = hydrated && restoreChecked && !busy;
+  const ready = hydrated && restoreChecked && !busy && !blocked;
   const initial = { title: initialTitle, markdown: initialMarkdown };
 
   // Once, after hydration: the server has no sessionStorage, and anything set
@@ -201,88 +204,90 @@ export function DocumentComposer({
   const untitled = !resolved.title;
 
   return (
-    <form onKeyDown={onKeyDown} onSubmit={(event) => { event.preventDefault(); void save(); }}>
-      <div className="kh-reading-column pb-3 pt-5">
-        <div className="flex min-w-0 items-center justify-between gap-3">
-          <DocumentBreadcrumb segments={[...location, { label: resolved.title || untitledLabel }]} />
-          <div className="flex shrink-0 items-center gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              aria-pressed={previewing}
-              aria-keyshortcuts="Meta+Shift+P Control+Shift+P"
-              title="Preview (⌘⇧P)"
-              className="aria-pressed:bg-kh-bg-selected aria-pressed:text-kh-text"
-              disabled={!hydrated}
-              onClick={togglePreview}
-            >
-              Preview
-            </Button>
-            <Button type="button" variant="secondary" title="Cancel (Esc)" disabled={busy} onClick={cancel}>
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              title={untitled ? "Add a title, or start the document with a # heading" : `${submitLabel} (⌘Enter)`}
-              disabled={!ready || !confirmed || untitled}
-            >
-              {submitLabel}
-            </Button>
+    <>
+      <form onKeyDown={onKeyDown} onSubmit={(event) => { event.preventDefault(); void save(); }}>
+        <div className="kh-reading-column pb-3 pt-5">
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <DocumentBreadcrumb segments={[...location, { label: resolved.title || untitledLabel }]} />
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                aria-pressed={previewing}
+                aria-keyshortcuts="Meta+Shift+P Control+Shift+P"
+                title="Preview (⌘⇧P)"
+                className="aria-pressed:bg-kh-bg-selected aria-pressed:text-kh-text"
+                disabled={!hydrated}
+                onClick={togglePreview}
+              >
+                Preview
+              </Button>
+              <Button type="button" variant="secondary" title="Cancel (Esc)" disabled={busy || blocked} onClick={cancel}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                title={untitled ? "Add a title, or start the document with a # heading" : `${submitLabel} (⌘Enter)`}
+                disabled={!ready || !confirmed || untitled}
+              >
+                {submitLabel}
+              </Button>
+            </div>
           </div>
+          {resolved.source === "METADATA" ? (
+            <p className="mt-1.5 text-caption text-kh-text-muted">標題來自上傳檔案的 frontmatter</p>
+          ) : null}
         </div>
-        {resolved.source === "METADATA" ? (
-          <p className="mt-1.5 text-caption text-kh-text-muted">標題來自上傳檔案的 frontmatter</p>
-        ) : null}
-      </div>
-      <div className="kh-reading-column space-y-4 py-6">
-        {restored ? (
-          <p role="status" className="flex flex-wrap items-center gap-2 rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2 text-body text-kh-text">
-            {restored === "stale" ? "這份文件在你離開後被更新過，已還原你未存的修改。" : "已還原未存的修改。"}
-            <Button type="button" variant="link" onClick={discardDraft}>捨棄</Button>
-          </p>
-        ) : null}
-        {conflict ? (
-          <div role="alert" className="rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2 text-body text-kh-text">
-            這份文件已被其他人更新。你的輸入仍保留在表單中。
-            <Button type="button" variant="link" className="ml-2" onClick={loadLatest}>載入最新版本（捨棄你的修改）</Button>
-          </div>
-        ) : (
-          <GovernanceError error={error} />
-        )}
-        {resolved.source === "TYPED" ? (
-          <input
-            ref={titleRef}
-            aria-label="Title"
-            placeholder="Title"
-            value={title}
-            maxLength={512}
+        <div className="kh-reading-column space-y-4 py-6">
+          {restored ? (
+            <p role="status" className="flex flex-wrap items-center gap-2 rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2 text-body text-kh-text">
+              {restored === "stale" ? "這份文件在你離開後被更新過，已還原你未存的修改。" : "已還原未存的修改。"}
+              <Button type="button" variant="link" onClick={discardDraft}>捨棄</Button>
+            </p>
+          ) : null}
+          {conflict ? (
+            <div role="alert" className="rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2 text-body text-kh-text">
+              這份文件已被其他人更新。你的輸入仍保留在表單中。
+              <Button type="button" variant="link" className="ml-2" onClick={loadLatest}>載入最新版本（捨棄你的修改）</Button>
+            </div>
+          ) : (
+            <GovernanceError error={error} />
+          )}
+          {resolved.source === "TYPED" ? (
+            <input
+              ref={titleRef}
+              aria-label="Title"
+              placeholder="Title"
+              value={title}
+              maxLength={512}
+              disabled={!ready}
+              hidden={previewing}
+              onChange={(event) => changeTitle(event.target.value)}
+              className="w-full border-0 bg-transparent p-0 text-heading font-semibold tracking-tight text-kh-text outline-none placeholder:text-kh-text-muted"
+            />
+          ) : null}
+          {/* No display utility here: it would override [hidden] (plan Global Constraints). */}
+          <textarea
+            ref={textareaRef}
+            aria-label="Markdown"
+            placeholder="Write in Markdown. Start with # to name the document."
+            value={markdown}
             disabled={!ready}
             hidden={previewing}
-            onChange={(event) => changeTitle(event.target.value)}
-            className="w-full border-0 bg-transparent p-0 text-heading font-semibold tracking-tight text-kh-text outline-none placeholder:text-kh-text-muted"
+            onChange={(event) => changeMarkdown(event.target.value)}
+            className="min-h-[12rem] w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-reading text-kh-text outline-none placeholder:text-kh-text-muted"
           />
-        ) : null}
-        {/* No display utility here: it would override [hidden] (plan Global Constraints). */}
-        <textarea
-          ref={textareaRef}
-          aria-label="Markdown"
-          placeholder="Write in Markdown. Start with # to name the document."
-          value={markdown}
-          disabled={!ready}
-          hidden={previewing}
-          onChange={(event) => changeMarkdown(event.target.value)}
-          className="min-h-[12rem] w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-reading text-kh-text outline-none placeholder:text-kh-text-muted"
-        />
-        {previewing ? (
-          <div ref={previewRef} role="region" aria-label="Preview" tabIndex={-1} className="outline-none">
-            {resolved.source === "TYPED" && resolved.title ? (
-              <h1 className="mb-4 text-heading font-semibold tracking-tight text-kh-text">{resolved.title}</h1>
-            ) : null}
-            <MarkdownArticle markdown={markdown} />
-          </div>
-        ) : null}
-        {footer}
-      </div>
-    </form>
+          {previewing ? (
+            <div ref={previewRef} role="region" aria-label="Preview" tabIndex={-1} className="outline-none">
+              {resolved.source === "TYPED" && resolved.title ? (
+                <h1 className="mb-4 text-heading font-semibold tracking-tight text-kh-text">{resolved.title}</h1>
+              ) : null}
+              <MarkdownArticle markdown={markdown} />
+            </div>
+          ) : null}
+        </div>
+      </form>
+      {footer ? <div className="kh-reading-column pb-6">{footer({ busy })}</div> : null}
+    </>
   );
 }
