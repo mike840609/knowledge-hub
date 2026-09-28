@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { refreshOnArrival } from "@/components/shell/refresh-on-arrival";
 import { GovernanceError, governanceFailure, governanceRequest, type GovernanceFailure } from "@/components/workspaces/governance-error";
@@ -15,6 +16,7 @@ export function NewDocumentForm({ workspaceId, workspaceName }: { workspaceId: s
   const { access, confirmed } = useWorkspaceAuthorization();
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<GovernanceFailure | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!access.actions.canWrite) return null;
   const listHref = `/w/${workspaceId}/knowledge`;
@@ -67,20 +69,33 @@ export function NewDocumentForm({ workspaceId, workspaceName }: { workspaceId: s
       blocked={uploading}
       footer={({ busy }) => (
         <div className="space-y-2 border-t border-kh-border pt-4">
-          <label className="text-body text-kh-text-muted">
-            <span className="cursor-pointer underline-offset-4 hover:underline">Upload .md</span> to Notes in {workspaceName} instead.
-            <input
-              type="file"
-              accept=".md,.markdown"
-              className="sr-only"
+          {/* The button takes focus, so keyboard users see the one focus ring;
+              the file input is only the picker it opens. */}
+          <p className="text-body text-kh-text-muted">
+            <Button
+              type="button"
+              variant="link"
               disabled={uploading || busy || !confirmed}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                event.target.value = "";
-                if (file) void upload(file);
-              }}
-            />
-          </label>
+              onClick={() => fileInputRef.current?.click()}
+            >
+              Upload .md
+            </Button>{" "}
+            to Notes in {workspaceName} instead.
+          </p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".md,.markdown"
+            hidden
+            tabIndex={-1}
+            aria-hidden="true"
+            disabled={uploading || busy || !confirmed}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (file) void upload(file);
+            }}
+          />
           <GovernanceError error={uploadError} />
         </div>
       )}

@@ -121,3 +121,27 @@ description.
 - Numbers above are from the single `make verify` and single `make test-e2e`
   run recorded in this document; nothing here is claimed from memory or from
   an earlier session.
+
+## Follow-up fixes after the final review
+
+Three follow-ups were fixed before merge: the textarea re-fits its height when
+the column rewraps (a `ResizeObserver` on width, plus `document.fonts.ready`);
+the preview draws a title above the content only when the content does not
+open with its own heading (the reader's rule); and "Upload .md" is a real
+button, so keyboard focus shows the contract's one focus ring and the file
+input is only the picker it opens. Covered by two new cases in
+`document-composer.spec.ts` ("the text re-fits its height when the column
+rewraps", "Upload .md is a focusable button that opens the file picker") and a
+one-heading assertion added to the frontmatter case.
+
+| Command | Exit | Result |
+| --- | --- | --- |
+| `make verify` | 0 | 457/457 unit tests; typecheck, lint, build clean |
+| `make test-e2e` (run 1) | 2 | 104 passed, 1 failed — the phase5-authoring sidebar case above |
+| `make test-e2e` (run 2) | 2 | 104 passed, 1 failed — the same case |
+| sidebar case, `--repeat-each=40` | 1 | 5 failed / 35 passed (12.5%) |
+
+Two consecutive full-run failures of the same case prompted the repeat
+measurement: 5/40 sits inside the 3/40–7/40 range measured at main and every
+earlier commit of this branch, so these fixes show no sign of raising its
+rate. Every other case, including the two new ones, passed in both runs.

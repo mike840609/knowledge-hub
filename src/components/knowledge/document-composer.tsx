@@ -9,11 +9,17 @@ import { refreshOnArrival } from "@/components/shell/refresh-on-arrival";
 import { GovernanceError, governanceFailure, type GovernanceFailure } from "@/components/workspaces/governance-error";
 import { carryTitle, resolveAuthoredTitle } from "@/lib/authored-title";
 import { browserDraftStorage, clearDraft, readDraft, syncDraft, type DraftKey } from "@/lib/document-draft";
+import { markdownOpensWithHeading } from "@/lib/markdown-title";
 import { DocumentBreadcrumb, type DocumentBreadcrumbSegment } from "./document-breadcrumb";
 import { MarkdownArticle } from "./document-viewer";
 import { useFormKeys } from "./use-form-keys";
 
-export type ComposerSubmit = { title: string; markdown: string; expectedRevisionId: string | null };
+function fitHeight(textarea: HTMLTextAreaElement) {
+  textarea.style.height = "auto";
+  textarea.style.height = `${textarea.scrollHeight}px`;
+}
+
+export type ComposerSubmit ={ title: string; markdown: string; expectedRevisionId: string | null };
 
 /**
  * Writing a document, laid out like reading one (composer spec). The header row
@@ -140,10 +146,31 @@ export function DocumentComposer({
   // The text grows with its content, so the page scrolls, not a box inside it.
   useLayoutEffect(() => {
     const textarea = textareaRef.current;
-    if (!textarea || previewing) return;
-    textarea.style.height = "auto";
-    textarea.style.height = `${textarea.scrollHeight}px`;
+    if (textarea && !previewing) fitHeight(textarea);
   }, [markdown, previewing]);
+
+  // Rewrapping changes the height too — a narrower window, a web font that
+  // arrives after first layout. The textarea hides its overflow, so without
+  // this the lines past the old height are clipped until the next keystroke.
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea || previewing) return;
+    let width = textarea.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (textarea.clientWidth === width) return;
+      width = textarea.clientWidth;
+      fitHeight(textarea);
+    });
+    observer.observe(textarea);
+    let live = true;
+    void document.fonts?.ready.then(() => {
+      if (live) fitHeight(textarea);
+    });
+    return () => {
+      live = false;
+      observer.disconnect();
+    };
+  }, [previewing]);
 
   function keep(nextTitle: string, nextMarkdown: string) {
     syncDraft(browserDraftStorage(), draftKey, { title: nextTitle, markdown: nextMarkdown, baseRevisionId }, initial);
@@ -297,7 +324,8 @@ export function DocumentComposer({
           />
           {previewing ? (
             <div ref={previewRef} role="region" aria-label="Preview" tabIndex={-1} className="outline-none">
-              {resolved.source !== "H1" && resolved.title ? (
+              {/* The reader's rule: a title above the content unless the content opens with its own heading. */}
+              {resolved.title && !markdownOpensWithHeading(markdown) ? (
                 <h1 className="mb-4 text-heading font-semibold tracking-tight text-kh-text">{resolved.title}</h1>
               ) : null}
               <MarkdownArticle markdown={markdown} />

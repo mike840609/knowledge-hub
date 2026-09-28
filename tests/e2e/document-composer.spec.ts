@@ -87,6 +87,10 @@ test("a frontmatter title survives editing the H1", async ({ page }) => {
 
   const body = await openEditor(page, page.url());
   await expect(composer(page).getByText("標題來自上傳檔案的 frontmatter")).toBeVisible();
+  // The body opens with its own H1, so preview shows that one heading, as the reader does.
+  await composer(page).getByRole("button", { name: "Preview" }).click();
+  await expect(composer(page).getByRole("region", { name: "Preview" }).getByRole("heading", { level: 1 })).toHaveCount(1);
+  await page.keyboard.press("Escape");
   await body.fill("# Another heading entirely\n\ntext");
   await composer(page).getByRole("button", { name: "Save" }).click();
   await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
@@ -279,5 +283,31 @@ test("an upload in flight disables Create, so the two cannot race", async ({ pag
   await expect(form.getByRole("button", { name: "Create document" })).toBeDisabled();
 
   release();
+  await expect(page.getByRole("treeitem", { name: title, exact: true })).toBeVisible(ROUND_TRIP);
+});
+
+test("the text re-fits its height when the column rewraps", async ({ page }) => {
+  const url = await createNote(page, unique("Rewrap"), "word ".repeat(400));
+  const body = await openEditor(page, url);
+  const fits = () => body.evaluate((element: HTMLTextAreaElement) => element.scrollHeight <= element.clientHeight + 1);
+  expect(await fits()).toBe(true);
+  // Narrower column, more lines: without a re-fit the tail is clipped behind overflow-hidden.
+  await page.setViewportSize({ width: 480, height: 800 });
+  await expect.poll(fits).toBe(true);
+});
+
+test("Upload .md is a focusable button that opens the file picker", async ({ page }) => {
+  const title = unique("Picked Upload");
+  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
+  const upload = page.getByRole("button", { name: "Upload .md" });
+  await expect(upload).toBeEnabled(ROUND_TRIP);
+  await composer(page).getByLabel("Markdown").focus();
+  await page.keyboard.press("Tab");
+  await expect(upload).toBeFocused();
+  await expect(upload).not.toHaveCSS("box-shadow", "none");
+
+  const chooser = page.waitForEvent("filechooser");
+  await page.keyboard.press("Enter");
+  await (await chooser).setFiles({ name: "picked.md", mimeType: "text/markdown", buffer: Buffer.from(`# ${title}\n\nbody\n`, "utf8") });
   await expect(page.getByRole("treeitem", { name: title, exact: true })).toBeVisible(ROUND_TRIP);
 });
