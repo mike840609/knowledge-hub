@@ -865,6 +865,28 @@ that ever changes rather than being redesigned.
     wholesale stays the wrong fix: Tailwind feeds it to `width` and `height`
     too, and a 288px sidebar is not a decision about rhythm. (Page container
     widths were the other half of this item and are now §7.)
+ 3. Editing is a different page from reading. `…/edit` is a form — a labelled
+    Title input, a Markdown textarea, Save and Cancel
+    (`src/components/knowledge/document-editor.tsx`) — so the document a
+    reader was looking at is replaced by something that does not resemble it.
+    This changes behaviour and gets a spec before code. One constraint is
+    already fixed: there is no autosave, because every save is a revision and
+    a revision per pause would make history useless. What stays open is
+    whether the title and body are edited on the document page itself or on a
+    separate route laid out like the reader, whether Markdown previews while
+    typing, and what leaving with unsaved changes does (the editor already
+    knows when it is dirty; it does not yet guard navigation).
+ 4. Knowledge pages carry two sidebars side by side: the primary nav
+    (`src/components/shell/app-shell.tsx`, `w-40`, collapsible to `w-12`)
+    and the Knowledge explorer (`src/components/knowledge/source-sidebar.tsx`,
+    `w-72`). The reference has one. Merging them changes the shell every page
+    sits in, so it comes after item 3.
+ 5. Two things are deferred on purpose, each with the condition that reopens
+    it. List pages sit in `kh-page` rather than spanning the window; widen
+    them when the Sources list is long enough that the width costs a reader
+    something. `E` acts only on the document being read, not on the focused
+    row (`docs/superpowers/specs/2026-09-24-keyboard-shortcuts-design.md`
+    §3.2); revisit if rows gain actions a reader reaches by focus.
 
 ## 19. Completion criteria
 

@@ -32,11 +32,13 @@ make dev         # 啟動 dev server
 
 ## 目前狀態
 
-更新日期：2026-09-17。
+更新日期：2026-09-28。
 
-已交付階段：`phase-0-foundation`（Phase 0 application、migration、fixtures 與最小 Web flow）、`phase-1-knowledge-core-tree`（PR #6，Workspace-scoped Knowledge identity、Revision、Tree 與 read-only browser）、`phase-2-source-import-sync`（PR #7，整包 Markdown folder 經 Preview → Confirm → Apply 的首次匯入與 re-sync）、Phase 2.5（PR #19，frontend product baseline）、Phase 3（PR #24，Workspace lifecycle/admin、production roles/capabilities、membership 與 enterprise identity governance）、Phase 4（PR #32，Workspace-aware keyword search 與 read API），以及 **Phase 5（PR #35，review 中）**：單篇 Markdown upload 與 Web create/edit 的 Hub-managed authoring，含 lazy default source、immutable Revision、stale-editor 409 conflict，以及 capability + HUB_MANAGED ownership 雙重把關。
+已交付階段：`phase-0-foundation`（Phase 0 application、migration、fixtures 與最小 Web flow）、`phase-1-knowledge-core-tree`（PR #6，Workspace-scoped Knowledge identity、Revision、Tree 與 read-only browser）、`phase-2-source-import-sync`（PR #7，整包 Markdown folder 經 Preview → Confirm → Apply 的首次匯入與 re-sync）、Phase 2.5（PR #19，frontend product baseline）、Phase 3（PR #24，Workspace lifecycle/admin、production roles/capabilities、membership 與 enterprise identity governance）、Phase 4（PR #32，Workspace-aware keyword search 與 read API），以及 Phase 5（PR #35）：單篇 Markdown upload 與 Web create/edit 的 Hub-managed authoring，含 lazy default source、immutable Revision、stale-editor 409 conflict，以及 capability + HUB_MANAGED ownership 雙重把關。Phase 5 之後另交付 document share link（PR #52）與 keyboard shortcuts（PR #58–#60）。
 
-實際檢查結果記錄於 [`docs/superpowers/verification/`](docs/superpowers/verification/)：Phase 0/1/4/5 皆有 fresh verification record；Phase 2 以 PR #7 及後續 review batch 交付、Phase 3 以 [governance cutover](docs/operations/phase3-workspace-governance-cutover.md) 交付，兩者尚未補 verification 文件。Phase 6–9 仍以 canonical design / implementation plan 為主，文件內列出的尚未執行命令與測試案例不代表已交付。
+實際檢查結果記錄於 [`docs/superpowers/verification/`](docs/superpowers/verification/)：Phase 0–5 與 share link 皆有 verification record（Phase 2/3 於 PR #51 補上）。
+
+**Phase 6（tKMS Publishing）延後**（2026-09-28 決定）。目前優先處理 Web 介面上的待辦，清單見 [Frontend Design Language §18 Open items](docs/superpowers/specs/frontend-design-language.md)。Phase 6–9 仍只有 roadmap，尚無 canonical design / implementation plan。
 
 2026-09-10 architecture review 已把 Workspace access-boundary correction **直接整合進 Phase 0/1 canonical spec 與 plan**：`org_code` 保留為使用者公司組織屬性，但 **Workspace 才是 Knowledge container 與基本存取邊界**。不同 org 的使用者可以透過 WorkspaceMembership 共用同一 Workspace；同 org 也不代表自動取得 Workspace 內容。
 
@@ -61,6 +63,9 @@ make dev         # 啟動 dev server
 | [Phase 5 Implementation Plan](docs/superpowers/plans/2026-09-16-phase-5-human-authoring.md) | Phase 5 authoring tasks、fixtures、acceptance cases |
 | [Document Share Link Design](docs/superpowers/specs/2026-09-23-document-share-link-design.md) | My Space 單篇文件的不需登入唯讀連結；CLAUDE.md「Knowing an ID is not authorization」的唯一例外 |
 | [Document Share Link Implementation Plan](docs/superpowers/plans/2026-09-23-document-share-link.md) | share link tasks、測試與上線檢查清單 |
+| [Action Model Design](docs/superpowers/specs/2026-09-21-action-model-spec.md) | 單一 action registry：`⌘K` palette、row context menu、空狀態引導與 toast／undo 共用的「誰能對什麼做什麼」 |
+| [Keyboard Shortcuts Design](docs/superpowers/specs/2026-09-24-keyboard-shortcuts-design.md) | `C`、`E`、`/`、`⌘Enter`、`Esc` 的行為與範圍 |
+| [Keyboard Shortcuts Implementation Plan](docs/superpowers/plans/2026-09-24-keyboard-shortcuts.md) | keyboard shortcuts tasks 與測試 |
 | [Frontend Design Language](docs/superpowers/specs/frontend-design-language.md) *(living contract)* | 視覺語言、design token 契約與 enforcement、component 架構、state 策略、theme contract。**不帶日期，就地修訂**；supersedes Phase 2.5 §25–30 |
 
 推薦執行／閱讀順序：
