@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { useHydrated } from "@/components/shell/use-hydrated";
@@ -114,7 +114,11 @@ export function DocumentComposer({
   // text. Later: whichever of text and preview is showing. A hidden textarea
   // keeps its selection, so returning to it puts the caret back where it was.
   useEffect(() => {
-    if (!hydrated) return;
+    // Also wait for the restore check: focusing while fields are still
+    // disabled (restore pending) is a no-op, and this effect's deps did not
+    // used to include restoreChecked, so it never ran again once that flag
+    // flipped and the fields actually became usable.
+    if (!hydrated || !restoreChecked) return;
     if (previewing) {
       previewRef.current?.focus();
       return;
@@ -131,7 +135,7 @@ export function DocumentComposer({
     }
     textarea?.focus();
     textarea?.setSelectionRange(0, 0);
-  }, [hydrated, previewing]);
+  }, [hydrated, restoreChecked, previewing]);
 
   // The text grows with its content, so the page scrolls, not a box inside it.
   useLayoutEffect(() => {
@@ -193,13 +197,26 @@ export function DocumentComposer({
       router.push(href);
     } catch (failure) {
       setError(governanceFailure(failure));
-    } finally {
       setBusy(false);
     }
+    // No finally: on success the page is navigating away, and re-enabling
+    // the fields would let a keystroke land between the PATCH and the
+    // navigation, rewriting the draft against a base revision already
+    // superseded by the save that just happened.
   }
 
   const togglePreview = () => setPreviewing((was) => !was);
-  const onKeyDown = useFormKeys({ dirty, busy, onCancel: cancel, preview: { active: previewing, toggle: togglePreview } });
+  const exitPreview = () => setPreviewing(false);
+  const onKeyDown = useFormKeys({ dirty, busy, onCancel: cancel, preview: { active: previewing, toggle: togglePreview, exit: exitPreview } });
+
+  // Plain Enter in a single-line title field would otherwise submit the form
+  // natively; ⌘/Ctrl Enter still reaches useFormKeys's save handling above.
+  function onTitleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== "Enter" || event.metaKey || event.ctrlKey) return;
+    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+    event.preventDefault();
+    textareaRef.current?.focus();
+  }
   const conflict = error?.code === "REVISION_CONFLICT";
   const untitled = !resolved.title;
 
@@ -263,6 +280,7 @@ export function DocumentComposer({
               disabled={!ready}
               hidden={previewing}
               onChange={(event) => changeTitle(event.target.value)}
+              onKeyDown={onTitleKeyDown}
               className="w-full border-0 bg-transparent p-0 text-heading font-semibold tracking-tight text-kh-text outline-none placeholder:text-kh-text-muted"
             />
           ) : null}
@@ -279,7 +297,7 @@ export function DocumentComposer({
           />
           {previewing ? (
             <div ref={previewRef} role="region" aria-label="Preview" tabIndex={-1} className="outline-none">
-              {resolved.source === "TYPED" && resolved.title ? (
+              {resolved.source !== "H1" && resolved.title ? (
                 <h1 className="mb-4 text-heading font-semibold tracking-tight text-kh-text">{resolved.title}</h1>
               ) : null}
               <MarkdownArticle markdown={markdown} />

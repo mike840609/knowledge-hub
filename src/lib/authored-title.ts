@@ -26,9 +26,20 @@ export function resolveAuthoredTitle(input: { metadataTitle: unknown; markdown: 
  */
 function openingHeadingText(markdown: string): string {
   if (!markdownOpensWithHeading(markdown)) return "";
-  const first = fromMarkdown(markdown).children[0];
+  // An ATX heading is one line: parsing only it, not the rest of a
+  // potentially large document, keeps this cheap to run on every keystroke.
+  const first = fromMarkdown(firstNonBlankLine(markdown)).children[0];
   if (first?.type !== "heading" || first.depth !== 1) return "";
   return toString(first).trim();
+}
+
+/** Strips a leading BOM and blank lines, the way `markdownOpensWithHeading` does, then takes one line. */
+function firstNonBlankLine(markdown: string): string {
+  const withoutBom = markdown.startsWith("﻿") ? markdown.slice(1) : markdown;
+  for (const line of withoutBom.split(/\r?\n/)) {
+    if (line.trim() !== "") return line;
+  }
+  return "";
 }
 
 /** Deleting the opening H1 reveals the title field; it starts with the title the H1 was giving. */

@@ -43,6 +43,19 @@ describe("resolveAuthoredTitle", () => {
   it("returns an empty title when nothing supplies one", () => {
     expect(resolve("", "   ")).toEqual({ title: "", source: "TYPED" });
   });
+
+  // F2: openingHeadingText must resolve the heading from the first line alone
+  // (not a whole-document parse), so these stay correct however large the
+  // body that follows is.
+  it("resolves the opening H1 without needing to parse a large body", () => {
+    const hugeBody = "line of body text\n".repeat(10_000); // ~180 KB
+    expect(resolve(`# Big Document\n\n${hugeBody}`)).toEqual({ title: "Big Document", source: "H1" });
+  });
+
+  it("reads inline formatting in the H1 as plain text even in a large document", () => {
+    const hugeBody = "line of body text\n".repeat(10_000);
+    expect(resolve(`# **季度** \`OKR\` 目標\n\n${hugeBody}`)).toEqual({ title: "季度 OKR 目標", source: "H1" });
+  });
 });
 
 describe("carryTitle", () => {

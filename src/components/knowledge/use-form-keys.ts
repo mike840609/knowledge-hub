@@ -21,7 +21,7 @@ export function useFormKeys({
   dirty: boolean;
   busy: boolean;
   onCancel: () => void;
-  preview?: { active: boolean; toggle: () => void };
+  preview?: { active: boolean; toggle: () => void; exit: () => void };
 }) {
   return (event: KeyboardEvent<HTMLFormElement>) => {
     const intent = formKeyIntent(
@@ -46,6 +46,8 @@ export function useFormKeys({
     }
     event.preventDefault();
     if (intent === "cancel") onCancel();
+    // Esc always exits preview (never toggles it back on); only ⌘⇧P toggles.
+    else if (intent === "exit-preview") preview?.exit();
     else preview?.toggle();
   };
 }

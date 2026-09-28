@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { refreshOnArrival } from "@/components/shell/refresh-on-arrival";
 import { GovernanceError, governanceFailure, governanceRequest, type GovernanceFailure } from "@/components/workspaces/governance-error";
+import { browserDraftStorage, clearDraft } from "@/lib/document-draft";
 import { DocumentComposer } from "./document-composer";
 
 type Created = { documentId: string; sourceId: string };
@@ -37,6 +38,10 @@ export function NewDocumentForm({ workspaceId, workspaceName }: { workspaceId: s
         return;
       }
       const href = await create({ filename: file.name, markdown });
+      // The composer's own draft is for the form the upload just bypassed;
+      // the label offers upload "instead", so leaving it behind would offer
+      // to restore a stale draft next time this workspace's /new is opened.
+      clearDraft(browserDraftStorage(), { kind: "new", workspaceId });
       refreshOnArrival(href);
       router.push(href);
     } catch (failure) {

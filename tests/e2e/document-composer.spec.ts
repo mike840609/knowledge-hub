@@ -34,6 +34,18 @@ async function openEditor(page: Page, documentUrl: string) {
   return body;
 }
 
+test("focus lands in Title on arrival, and in Markdown at position 0 for an H1-led document", async ({ page }) => {
+  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
+  const titleField = composer(page).getByLabel("Title", { exact: true });
+  await expect(titleField).toBeFocused(ROUND_TRIP);
+
+  const title = unique("Focus H1");
+  const url = await createNote(page, title, `# ${title}\n\nbody`);
+  const body = await openEditor(page, url);
+  await expect(body).toBeFocused(ROUND_TRIP);
+  expect(await body.evaluate((element: HTMLTextAreaElement) => element.selectionStart)).toBe(0);
+});
+
 test("a document that opens with an H1 is named by it, with no title field", async ({ page }) => {
   const before = unique("Composer H1");
   const after = unique("Composer Renamed");
@@ -117,6 +129,9 @@ test("an unsaved edit survives leaving and is offered back on return", async ({ 
   await openEditor(page, url);
   await expect(composer(page).getByRole("status").filter({ hasText: "已還原未存的修改" })).toBeVisible();
   await expect(body).toHaveValue("draft text");
+  // F1: a restored draft's caret belongs at the start, same as a fresh open.
+  await expect(body).toBeFocused(ROUND_TRIP);
+  expect(await body.evaluate((element: HTMLTextAreaElement) => element.selectionStart)).toBe(0);
 
   await composer(page).getByRole("button", { name: "捨棄" }).click();
   await expect(body).toHaveValue("");
@@ -188,6 +203,39 @@ test("Cancel asks before discarding changes, and discarding clears the draft", a
   await openEditor(page, url);
   await expect(body).toHaveValue("");
   await expect(composer(page).getByRole("status").filter({ hasText: "已還原" })).toHaveCount(0);
+});
+
+test("Enter in the title field moves to Markdown instead of submitting", async ({ page }) => {
+  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
+  const form = composer(page);
+  const titleField = form.getByLabel("Title", { exact: true });
+  await expect(titleField).toBeEditable(ROUND_TRIP);
+  await titleField.fill(unique("Enter In Title"));
+
+  await titleField.press("Enter");
+  await expect(page).toHaveURL(/\/new$/);
+  await expect(form.getByLabel("Markdown")).toBeFocused();
+});
+
+test("Esc exits preview for good, even if its keydown fires twice before React re-renders", async ({ page }) => {
+  const url = await createNote(page, unique("Preview Exit"));
+  const body = await openEditor(page, url);
+  await composer(page).getByRole("button", { name: "Preview" }).click();
+  const preview = composer(page).getByRole("region", { name: "Preview" });
+  await expect(preview).toBeVisible();
+
+  // A held key auto-repeats: two native keydowns can be dispatched before
+  // React commits the state update from the first one, so both read the same
+  // "still previewing" closure. A toggle() for each would flip twice and land
+  // back in preview; an idempotent exit() lands on editing either way.
+  await composer(page).evaluate((form) => {
+    const escape = () => new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    form.dispatchEvent(escape());
+    form.dispatchEvent(escape());
+  });
+
+  await expect(preview).toBeHidden();
+  await expect(body).toBeVisible();
 });
 
 test("a new document can be named by its H1 alone", async ({ page }) => {
