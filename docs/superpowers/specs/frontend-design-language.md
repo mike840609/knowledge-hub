@@ -871,17 +871,13 @@ that ever changes rather than being redesigned.
     wholesale stays the wrong fix: Tailwind feeds it to `width` and `height`
     too, and a 288px sidebar is not a decision about rhythm. (Page container
     widths were the other half of this item and are now §7.)
- 3. Editing is a different page from reading. `…/edit` is a form — a labelled
-    Title input, a Markdown textarea, Save and Cancel
-    (`src/components/knowledge/document-editor.tsx`) — so the document a
-    reader was looking at is replaced by something that does not resemble it.
-    This changes behaviour and gets a spec before code. One constraint is
-    already fixed: there is no autosave, because every save is a revision and
-    a revision per pause would make history useless. What stays open is
-    whether the title and body are edited on the document page itself or on a
-    separate route laid out like the reader, whether Markdown previews while
-    typing, and what leaving with unsaved changes does (the editor already
-    knows when it is dirty; it does not yet guard navigation).
+ 3. Editing was a different page from reading. Closed: the document composer
+    (`docs/superpowers/specs/2026-09-28-document-composer-design.md`) edits
+    in the reader's layout on the same `/edit` and `/new` routes. The title
+    follows the content (metadata title, then the opening H1, then a typed
+    field), preview toggles in place, and the navigation guard this item asked
+    about became a tab-scoped draft restored on return, since the App Router
+    cannot intercept in-app navigation. There is still no autosave.
  4. Knowledge pages carry two sidebars side by side: the primary nav
     (`src/components/shell/app-shell.tsx`, `w-40`, collapsible to `w-12`)
     and the Knowledge explorer (`src/components/knowledge/source-sidebar.tsx`,

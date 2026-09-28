@@ -171,6 +171,6 @@
 
 ## 10. 對其他文件的影響
 
-- `frontend-design-language.md` §10 快捷鍵表：加入 `⌘/Ctrl ⇧ P`，並記下 `Esc` 在預覽中的行為。焦點一節記下編輯畫布不套焦點環的例外（第 6 節）。§18 第 3 項於實作合併後關閉。
+- `frontend-design-language.md` §10 快捷鍵表：加入 `⌘/Ctrl ⇧ P`，並記下 `Esc` 在預覽中的行為。焦點一節記下編輯畫布不套焦點環的例外（第 6 節）。§18 第 3 項已隨本實作關閉（該項由 PR #61 加入）。
 - `2026-09-24-keyboard-shortcuts-design.md` 第 5 節（表單按鍵）：指向本規格第 6 節。
 - README canonical 表：加入本規格與實作計畫。
