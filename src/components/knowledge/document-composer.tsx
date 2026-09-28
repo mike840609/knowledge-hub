@@ -62,6 +62,7 @@ export function DocumentComposer({
   const [markdown, setMarkdown] = useState(initialMarkdown);
   const [baseRevisionId, setBaseRevisionId] = useState(currentRevisionId);
   const [restored, setRestored] = useState<"current" | "stale" | null>(null);
+  const [restoreChecked, setRestoreChecked] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<GovernanceFailure | null>(null);
@@ -74,7 +75,10 @@ export function DocumentComposer({
 
   const resolved = resolveAuthoredTitle({ metadataTitle, markdown, typedTitle: title });
   const dirty = title !== initialTitle || markdown !== initialMarkdown;
-  const ready = hydrated && !busy;
+  // Fields wait for the restore check too: enabling them the instant
+  // hydration commits, before sessionStorage has been read, lets a keystroke
+  // land in the gap and then be overwritten by a draft arriving a tick later.
+  const ready = hydrated && restoreChecked && !busy;
   const initial = { title: initialTitle, markdown: initialMarkdown };
 
   // Once, after hydration: the server has no sessionStorage, and anything set
@@ -83,11 +87,13 @@ export function DocumentComposer({
     if (!hydrated || restoreTried.current) return;
     restoreTried.current = true;
     const draft = readDraft(browserDraftStorage(), draftKey);
-    if (!draft) return;
-    setTitle(draft.title);
-    setMarkdown(draft.markdown);
-    setBaseRevisionId(draft.baseRevisionId);
-    setRestored(draft.baseRevisionId === currentRevisionId ? "current" : "stale");
+    if (draft) {
+      setTitle(draft.title);
+      setMarkdown(draft.markdown);
+      setBaseRevisionId(draft.baseRevisionId);
+      setRestored(draft.baseRevisionId === currentRevisionId ? "current" : "stale");
+    }
+    setRestoreChecked(true);
   }, [hydrated, draftKey, currentRevisionId]);
 
   // Closing the tab loses sessionStorage; reloading does not, but the browser

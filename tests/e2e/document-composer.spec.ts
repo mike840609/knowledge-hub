@@ -51,8 +51,14 @@ test("deleting the opening H1 brings back the title field, filled with it", asyn
   const title = unique("Carry");
   const url = await createNote(page, title, `# ${title}\n\nbody`);
   const body = await openEditor(page, url);
+  // Change the H1 away from the stored title first, so a no-op carryTitle
+  // (one that just leaves the stored title alone) cannot pass this test.
+  const changedHeading = unique("Carry Changed");
+  await body.fill(`# ${changedHeading}\n\nbody`);
+  await expect(composer(page).getByLabel("Title", { exact: true })).toHaveCount(0);
+
   await body.fill("body");
-  await expect(composer(page).getByLabel("Title", { exact: true })).toHaveValue(title);
+  await expect(composer(page).getByLabel("Title", { exact: true })).toHaveValue(changedHeading);
 });
 
 test("a frontmatter title survives editing the H1", async ({ page }) => {
@@ -151,17 +157,32 @@ test("Cancel asks before discarding changes, and discarding clears the draft", a
   const url = await createNote(page, unique("Cancel"));
   const body = await openEditor(page, url);
   await body.fill("changed");
+  const cancel = composer(page).getByRole("button", { name: "Cancel" });
 
-  page.once("dialog", (dialog) => {
-    expect(dialog.message()).toBe("Discard changes?");
-    void dialog.dismiss();
-  });
-  await composer(page).getByRole("button", { name: "Cancel" }).click();
-  await expect(page).toHaveURL(/\/edit$/);
+  // waitForEvent, not page.once: a listener's own expect() cannot fail the
+  // test, and toHaveURL(/\/edit$/) right after the click would pass even if
+  // no dialog had appeared at all (router.push is async). Asserting the
+  // Markdown field is still visible with its typed value, after the click has
+  // fully resolved, is the positive signal that no navigation happened.
+  //
+  // The click is started but not awaited yet: window.confirm() blocks the
+  // page's JS thread, and with it the click action itself, until the dialog
+  // is answered — awaiting the click before consuming the dialog would
+  // deadlock (measured: a real 30s test timeout on `cancel.click()`).
+  const dismissed = page.waitForEvent("dialog");
+  const dismissClick = cancel.click();
+  const dismissDialog = await dismissed;
+  expect(dismissDialog.message()).toBe("Discard changes?");
+  await dismissDialog.dismiss();
+  await dismissClick;
+  await expect(body).toBeVisible();
   await expect(body).toHaveValue("changed");
 
-  page.once("dialog", (dialog) => void dialog.accept());
-  await composer(page).getByRole("button", { name: "Cancel" }).click();
+  const accepted = page.waitForEvent("dialog");
+  const acceptClick = cancel.click();
+  const acceptDialog = await accepted;
+  await acceptDialog.accept();
+  await acceptClick;
   await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
 
   await openEditor(page, url);
