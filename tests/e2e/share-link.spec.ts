@@ -20,8 +20,9 @@ test.describe("document share link", () => {
     await page.waitForURL(/\/w\/[^/]+\/knowledge/);
     const workspaceId = new URL(page.url()).pathname.split("/")[2];
     await page.goto(`/w/${workspaceId}/knowledge/new`);
-    await page.getByLabel("Document title").fill(title);
-    await page.getByLabel(/Content/).fill(body);
+    const form = page.locator("main form").first();
+    await form.getByLabel("Title", { exact: true }).fill(title);
+    await form.getByLabel("Markdown").fill(body);
     await expect(page.getByRole("button", { name: "Create document" })).toBeEnabled(ROUND_TRIP);
     await page.getByRole("button", { name: "Create document" }).click();
     await expect(page.getByRole("heading", { name: title })).toBeVisible(ROUND_TRIP);

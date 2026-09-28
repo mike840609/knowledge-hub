@@ -27,13 +27,18 @@ const SOURCE_MANAGED_DOCUMENT = "0199f100-0000-7000-8000-000000000210";
 // regression for three times as long.
 const ROUND_TRIP = { timeout: 15_000 };
 
+/** The new-document page's title field. main form + first(): the duplicate-DOM quirk noted below. */
+function newTitle(page: Page) {
+  return page.locator("main form").first().getByLabel("Title", { exact: true });
+}
+
 // Navigate to the standalone authoring page and return only once the form is
 // interactive. The create action stays disabled until the client confirms the
 // workspace authorization, which gives the upload tests a stable hydration
 // signal before setInputFiles dispatches the file input's change event.
 async function gotoKnowledgeReadyToUpload(page: Page, workspaceId: string) {
   await page.goto(`/w/${workspaceId}/knowledge/new`);
-  const title = page.getByLabel("Document title");
+  const title = newTitle(page);
   await expect(title).toBeEditable(ROUND_TRIP);
   // A temporary value proves the controlled input and submit handler are
   // wired after hydration without creating a document.
@@ -44,7 +49,7 @@ async function gotoKnowledgeReadyToUpload(page: Page, workspaceId: string) {
 
 test("creates the first document in a workspace with no sources", async ({ page }) => {
   await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
-  await page.getByLabel("Document title").fill("My First Note");
+  await newTitle(page).fill("My First Note");
   await page.getByRole("button", { name: "Create document" }).click();
 
   await expect(page.getByRole("heading", { name: "My First Note" })).toBeVisible(ROUND_TRIP);
@@ -52,7 +57,7 @@ test("creates the first document in a workspace with no sources", async ({ page 
 
 test("edits a hub-managed document and records a second revision", async ({ page }) => {
   await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
-  await page.getByLabel("Document title").fill("Editable Note");
+  await newTitle(page).fill("Editable Note");
   await page.getByRole("button", { name: "Create document" }).click();
   await expect(page.getByRole("heading", { name: "Editable Note" })).toBeVisible(ROUND_TRIP);
 
@@ -78,7 +83,7 @@ test("after a save, the sidebar names the document by its new title", async ({ p
   const before = `Tree Title Before ${run}`;
   const after = `Tree Title After ${run}`;
   await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
-  await page.getByLabel("Document title").fill(before);
+  await newTitle(page).fill(before);
   await page.getByRole("button", { name: "Create document" }).click();
   await expect(page.getByRole("heading", { name: before })).toBeVisible(ROUND_TRIP);
   // Creating navigates to the new document too, and the tree must gain its row.
@@ -122,7 +127,7 @@ test("never shows Edit on source-managed content", async ({ page }) => {
 // Ruling B skips React component unit tests, so this browser behavior is E2E-only.
 test("a stale second editor gets a conflict, keeps their input, and does not overwrite the winner", async ({ page }) => {
   await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
-  await page.getByLabel("Document title").fill("Conflict Note");
+  await newTitle(page).fill("Conflict Note");
   await page.getByRole("button", { name: "Create document" }).click();
   await expect(page.getByRole("heading", { name: "Conflict Note" })).toBeVisible(ROUND_TRIP);
   const documentUrl = page.url();
@@ -171,7 +176,7 @@ test("a stale second editor gets a conflict, keeps their input, and does not ove
  */
 test("the editor cannot be saved before it can handle its own submit", async ({ page, browser }) => {
   await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
-  await page.getByLabel("Document title").fill("Pre-hydration Note");
+  await newTitle(page).fill("Pre-hydration Note");
   await page.getByRole("button", { name: "Create document" }).click();
   await expect(page.getByRole("heading", { name: "Pre-hydration Note" })).toBeVisible(ROUND_TRIP);
   await page.getByRole("link", { name: "Edit", exact: true }).click();

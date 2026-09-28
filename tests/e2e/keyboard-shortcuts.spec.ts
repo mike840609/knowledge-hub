@@ -75,7 +75,7 @@ test("E does nothing on source-managed content", async ({ page }) => {
 /** A note of our own, so saving it cannot disturb another test's fixture. */
 async function editOwnNote(page: Page, title: string) {
   await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
-  const field = page.getByLabel("Document title");
+  const field = page.locator("main form").first().getByLabel("Title", { exact: true });
   await expect(field).toBeEditable(ROUND_TRIP);
   await field.fill(title);
   await page.getByRole("button", { name: "Create document" }).click();

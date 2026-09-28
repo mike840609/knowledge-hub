@@ -189,3 +189,14 @@ test("Cancel asks before discarding changes, and discarding clears the draft", a
   await expect(body).toHaveValue("");
   await expect(composer(page).getByRole("status").filter({ hasText: "已還原" })).toHaveCount(0);
 });
+
+test("a new document can be named by its H1 alone", async ({ page }) => {
+  const title = unique("Only H1");
+  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
+  const form = composer(page);
+  await expect(form.getByLabel("Title", { exact: true })).toBeEditable(ROUND_TRIP);
+  await form.getByLabel("Markdown").fill(`# ${title}\n\nbody`);
+  await expect(form.getByLabel("Title", { exact: true })).toHaveCount(0);
+  await form.getByRole("button", { name: "Create document" }).click();
+  await expect(page.getByRole("treeitem", { name: title, exact: true })).toBeVisible(ROUND_TRIP);
+});
