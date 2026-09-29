@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { openPalette } from "./fixtures/palette";
+import { showMarkdown } from "./composer-helpers";
 
 /**
  * Creates documents in the E2E user's own My Space, and the specs share one
@@ -21,8 +22,10 @@ async function createMySpaceDocument(page: Page, title: string, body: string): P
   await page.waitForURL(/\/w\/[^/]+\/knowledge/);
   const workspaceId = new URL(page.url()).pathname.split("/")[2];
   await page.goto(`/w/${workspaceId}/knowledge/new`);
-  await page.getByLabel("Document title").fill(title);
-  await page.getByLabel(/Content/).fill(body);
+  // The composer opens in rendered editing; exact Markdown is typed in its source view (composer-helpers).
+  const form = page.locator("main form").first();
+  await form.getByLabel("Title", { exact: true }).fill(title);
+  await (await showMarkdown(form)).fill(body);
   await expect(page.getByRole("button", { name: "Create document" })).toBeEnabled(ROUND_TRIP);
   await page.getByRole("button", { name: "Create document" }).click();
   await expect(page.locator("article").first()).toBeVisible(ROUND_TRIP);

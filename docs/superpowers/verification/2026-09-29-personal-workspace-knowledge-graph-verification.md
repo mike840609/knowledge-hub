@@ -5,7 +5,7 @@
 | 日期 | 2026-09-29 |
 | 對象 | [設計](../specs/2026-09-29-personal-workspace-knowledge-graph-design.md)、[計畫](../plans/2026-09-29-personal-workspace-knowledge-graph.md)：TOC、連結索引（migration 012）、wikilink／相對 `.md` 連結渲染、Backlinks、Workspace／Local graph |
 | 環境 | 開發用容器；MariaDB 10.11.14（本機安裝，`127.0.0.1:3307`）；Node 22；Chromium 由環境內建的 1194 版經 shim 提供給 Playwright 1.63（shim 在 repo 之外，不屬於本變更） |
-| 結論 | 全部通過。unit 620、integration 486、e2e 107、`tsc --noEmit`、`eslint .`、`next build` 皆綠。效能量測見 §3；實作過程中測試抓到的問題見 §4；未做的事見 §6；圖譜視覺重做（Linear 語彙）見 §7、標題列 chip 與 inspector 分頁記憶見 §8 |
+| 結論 | 全部通過。rebase 到 main（§10）之後：unit 735、integration 486、e2e 145，`tsc --noEmit`、`eslint .`、`next build` 皆綠（rebase 前這條分支自己的數字是 620／486／107，見 §1）。效能量測見 §3；實作過程中測試抓到的問題見 §4；未做的事見 §6；圖譜視覺重做（Linear 語彙）見 §7、標題列 chip 與 inspector 分頁記憶見 §8 |
 
 ## 1. 基準與結果
 
@@ -172,7 +172,7 @@
 
 **這次調查留下的做法。**
 
-- 重現工具：`scripts/diagnostics/router-stuck-transition.ts`（§10）。它不需要改任何東西——直接讀 React root 的 lane 狀態，判斷失敗是不是「閒置在一個遺失的 ping 上」，並可在失敗後製造一個不相關的更新來確認它會被釋放。要驗證一個修法或一次 Next 升級，跑 400 次比在 e2e 裡碰運氣可靠得多。
+- 重現工具：`scripts/diagnostics/router-stuck-transition.ts`（§11）。它不需要改任何東西——直接讀 React root 的 lane 狀態，判斷失敗是不是「閒置在一個遺失的 ping 上」，並可在失敗後製造一個不相關的更新來確認它會被釋放。要驗證一個修法或一次 Next 升級，跑 400 次比在 e2e 裡碰運氣可靠得多。
 - 插樁比推理可靠：action queue 孤兒的假設在讀原始碼時看起來完全合理，插樁後一行就被推翻。
 - webpack 的持久化快取把 `node_modules` 當成不可變：改了 `node_modules` 裡的檔案後重 build 兩次都沒有生效，要清 `.next/cache` 才會。
 
@@ -201,7 +201,27 @@
 - **這個 repo 的 `.next/cache` 仍含被插樁的 React 的編譯結果，`.next` 目前是插樁 build**（我準備清掉快取的指令被 permission classifier 擋下，我沒有換別的方法繞過）。後果：在這個工作目錄裡，`npm run build` 會沿用快取，**不會**帶到 patch，也還帶著 log 程式碼。CI 與任何乾淨 checkout 不受影響（上面的驗證就是在乾淨 checkout 做的）。清掉 `.next/cache` 後重新 build 即可；README 也寫了「新增或移除 patch 之後要清快取」。
 - 這個 patch 修的是框架內附程式碼裡的一個 bug；它不會讓 e2e 的深度切換案例「永遠」穩定（那要在沒有其他不穩定來源時才成立），但已知的這個來源已經關掉：重現腳本 400 次 0 次、案例 40 次 0 次。`revision-history` 的偶發失敗（§8 第 4 點）是否也是這個原因，仍然沒有驗證；之後若再出現，先用重現腳本的方式看 React root 的狀態。
 
-## 10. 重現
+## 10. 與 main 的 rebase（文件 composer，#62）
+
+`origin/main` 在這條分支開出之後多了一個 commit：#62，新增與編輯共用的文件 composer（42 個檔案，與這條分支重疊 10 個）。把 13 個 commit rebase 到它上面；`backup/pre-rebase-531a0d7`（本機）保留了 rebase 前的樣子。
+
+**衝突與解法**（13 個 commit 中 5 個出現衝突，其餘自動合併）：
+
+| 檔案 | 兩邊各做了什麼 | 解法 |
+| --- | --- | --- |
+| `markdown-renderer.tsx`（兩個 commit） | main 把 prose class 抽成 `MARKDOWN_PROSE`；我加了標題錨點用的 `scroll-mt-4`，並 import wikilink 的 remark 外掛 | 保留 main 的結構，`scroll-mt-4` 搬進 `markdown-prose.ts` 的常數（composer 的渲染編輯器用同一個常數，標題的 scroll margin 對它無害）；兩邊的 import 都留 |
+| `document-viewer.tsx` | main 抽出 `MarkdownArticle`（composer 的預覽與閱讀共用同一個元素）；我讓 viewer 接受 `links` | `MarkdownArticle` 與 `DocumentViewer` 都接受 `links`。草稿沒有連結解析，所以預覽裡的連結在儲存前是純文字 |
+| 文件頁 `page.tsx` | main 把麵包屑移到 `documentLocation`；我的兩個型別 import 服務的 `buildBreadcrumb` 因此不存在了 | 留 `documentLocation` 與 `getDocumentLinkModel`，刪掉不再用的兩個型別 import |
+| `package.json`／`package-lock.json`（兩個 commit） | 各自新增依賴：`@milkdown/kit` 對 `d3-force`；`jsdom` 對 `patch-package` | `package.json` 兩邊都留。**lockfile 不手併**：第二次以 main 的 lock 為底，讓 npm 把 patch-package 加回去，結果只多 216 行、沒有刪除。`npm ci` 接受合併後的 lock |
+| `README.md` | 兩邊各在文件表格加列 | 都留 |
+
+**自動合併、但需要驗證的**：文件標題列與 inspector 兩邊都改過（main 改了麵包屑與編輯入口，我加了 chip 與分頁記憶）。git 沒有報衝突，所以只有測試能證明它們合在一起是對的：chip 與分頁記憶的 e2e 通過。
+
+**必須調整的**：我的三個 e2e spec（`reading-links`、`reading-outline`、`workspace-graph`）用舊的新增文件表單建立文件（「Document title」、「Content」），composer 取代了它。rebase 後 13 個測試在 30 秒逾時失敗——是逾時，不是斷言失敗，因為找不到那些欄位。改成 main 自己的 spec 的慣例（`main form`、`Title` 精確比對、用 `showMarkdown` 切到原始碼再輸入 Markdown），沒有動任何斷言。這是獨立的一個 commit，**沒有塞回早先的 commit**，所以 rebase 後中間那幾個 commit 的 e2e 不是綠的（unit、typecheck、lint 是）；以整條分支為單位驗證。
+
+**rebase 之後**（`npm ci` 重裝、乾淨的建置）：unit 735（我的 620 加上 main 的）、integration 486、e2e **145／145**（4.3 分鐘）、`tsc --noEmit`、`eslint .`、`next build` 皆乾淨；`postinstall` 套上 React patch（§9）。
+
+## 11. 重現
 
 ```bash
 make db-up && make db-migrate && make db-reindex-links   # 既有資料庫：migration 012 後回填索引
