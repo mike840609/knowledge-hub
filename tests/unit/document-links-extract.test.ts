@@ -142,6 +142,28 @@ describe("extractDocumentLinks", () => {
     expect(found[0].line).toBe(3);
   });
 
+  describe("the parse is skipped for a document that cannot link (a superset check, never a filter)", () => {
+    it("still finds every spelling of a link to a Markdown file", () => {
+      for (const markdown of [
+        "[a](b.md)",
+        "[a](b.MD)",
+        "[a](dir/b.markdown#top)",
+        "[a](<My Note.md>)",
+        "[a][r]\n\n[r]: c.md",
+        "[a](b%2Emd)",
+        "[a](b.%6Dd)",
+        "[[Wiki]]",
+        "text [[Wiki|alias]] text",
+      ]) {
+        expect(extractDocumentLinks(markdown).length, markdown).toBeGreaterThan(0);
+      }
+    });
+
+    it("finds nothing, and does not need to look, in a document with no [[ and no .md", () => {
+      expect(extractDocumentLinks("# Title\n\n- [ ] a task\n- [x] done\n\n[site](https://example.com) and [pic](a.png) and `code`.")).toEqual([]);
+    });
+  });
+
   it("returns nothing for text with no brackets, without parsing", () => {
     expect(extractDocumentLinks("plain text with no links")).toEqual([]);
     expect(extractDocumentLinks("")).toEqual([]);

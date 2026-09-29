@@ -33,6 +33,12 @@ function LocalGraph({ graph, focusId }: { graph: LocalGraphData; focusId: string
               href={graph.depthHrefs[depth]}
               replace
               scroll={false}
+              // These point at the page they are on. Prefetched from itself, the
+              // server answers with the whole page and Next applies it on first
+              // use — racing the click, and sometimes losing the navigation
+              // (keyboard-shortcuts spec §9 has the mechanism, and the tree the
+              // same fix).
+              prefetch={false}
               aria-current={graph.depth === depth ? "true" : undefined}
               className={`rounded-md px-1 kh-focus-ring ${graph.depth === depth ? "font-medium text-kh-text" : "text-kh-text-muted hover:text-kh-text"}`}
             >

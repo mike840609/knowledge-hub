@@ -91,6 +91,8 @@ export function GraphExplorer({
               href={`${pathname}${graphQuery({ ...filters, view })}`}
               replace
               scroll={false}
+              // A link to the page it is on: never prefetched (see LocalGraph).
+              prefetch={false}
               aria-current={filters.view === view ? "page" : undefined}
               className={`rounded-sm px-2.5 py-1 text-body-sm kh-focus-ring ${
                 filters.view === view ? "bg-kh-bg font-medium text-kh-text shadow-popover" : "text-kh-text-muted hover:text-kh-text"
@@ -149,7 +151,7 @@ export function GraphExplorer({
               Write <code className="rounded-md bg-kh-bg-subtle px-1 py-0.5 font-mono text-body-sm">[[Document title]]</code> in a document and the relationship appears here.
             </p>
             {data.nodes.length > 0 ? (
-              <Link href={`/w/${workspaceId}/graph${graphQuery({ ...filters, view: "list" })}`} className="mt-4 rounded-md text-body text-kh-link underline underline-offset-2 kh-focus-ring">
+              <Link href={`/w/${workspaceId}/graph${graphQuery({ ...filters, view: "list" })}`} prefetch={false} className="mt-4 rounded-md text-body text-kh-link underline underline-offset-2 kh-focus-ring">
                 See the {data.nodes.length} {data.nodes.length === 1 ? "document" : "documents"} as a list
               </Link>
             ) : null}

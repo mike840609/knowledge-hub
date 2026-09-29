@@ -40,6 +40,16 @@ export type ExtractedLink = {
 /** `!` right before the brackets makes it an embed, which is not a link (spec §2). */
 const WIKI_LINK = /(?<!!)\[\[([^[\]\n]+?)\]\]/g;
 const URL_SCHEME = /^[a-zA-Z][a-zA-Z0-9+.-]*:/;
+/**
+ * A necessary condition, checked before the (costly) parse: a link to another
+ * document needs `[[`, or a URL that ends in a Markdown extension. Parsing is
+ * about 1.7 ms per KB and most of an extraction's cost, and a document with
+ * neither cannot have a link, so it skips the parse altogether. Deliberately a
+ * superset — `.md` also matches `.mdx`, `%2e` and `.%6d` catch an escaped dot or
+ * letter that `decodeURI` would undo — because a false positive only costs a
+ * parse, while a false negative would be a link the index never sees.
+ */
+const MAY_LINK_TO_A_DOCUMENT = /\[\[|\.md|\.markdown|%2e|\.%[46]d/i;
 const MARKDOWN_FILE = /\.(?:md|markdown)$/i;
 
 function truncate(value: string, maxCodePoints: number): string {
@@ -250,7 +260,7 @@ function collect(markdown: string, tree: Root): Found[] {
  * a reader sees as a link.
  */
 export function extractDocumentLinks(markdown: string): ExtractedLink[] {
-  if (!markdown.includes("[")) return [];
+  if (!MAY_LINK_TO_A_DOCUMENT.test(markdown)) return [];
   const found = collect(markdown, parseMarkdown(markdown));
   found.sort((left, right) => left.offset - right.offset);
   return found.slice(0, MAX_LINKS_PER_DOCUMENT).map(({ link }, ordinal) => ({ ...link, ordinal }));

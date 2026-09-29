@@ -52,7 +52,11 @@ function DocumentLink({
   const hash = fragment === null || fragment === "" ? "" : `#${encodeURIComponent(fragment)}`;
   const shared = target.ambiguousWith > 0 ? `${target.ambiguousWith} other document${target.ambiguousWith === 1 ? "" : "s"} share this name` : undefined;
   return (
-    <Link href={`${target.basePath}${hash}`} title={shared ?? target.title} className={INTERNAL_LINK_CLASS}>
+    // Not prefetched: the renderer does not know which document it is in, and a
+    // link to the page it is on (`[[This page's own title]]`) prefetched from
+    // itself is the hazard the tree avoids — see LocalGraph. A click still
+    // fetches the page; only the speculative fetch is given up.
+    <Link href={`${target.basePath}${hash}`} prefetch={false} title={shared ?? target.title} className={INTERNAL_LINK_CLASS}>
       {children}
     </Link>
   );
