@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { LINK_MARKDOWN_FIXTURES, linkFixture } from "../fixtures/link-markdown";
 import {
   extractDocumentLinks,
   MAX_LINKS_PER_DOCUMENT,
@@ -65,71 +66,15 @@ describe("parseDocumentHref", () => {
 });
 
 describe("extractDocumentLinks", () => {
-  it("finds wikilinks in every form", () => {
-    expect(links("See [[Alpha]], [[Beta|the beta]], [[Gamma#Setup]] and [[Delta#Setup|d]].")).toEqual([
-      { kind: "WIKI", target: "Alpha", fragment: null, display: null },
-      { kind: "WIKI", target: "Beta", fragment: null, display: "the beta" },
-      { kind: "WIKI", target: "Gamma", fragment: "Setup", display: null },
-      { kind: "WIKI", target: "Delta", fragment: "Setup", display: "d" },
-    ]);
-  });
-
-  it("finds path-qualified and non-Latin names", () => {
-    expect(links("[[Notes/Source]] and [[請假流程]]").map((link) => link.target)).toEqual(["Notes/Source", "請假流程"]);
-  });
-
-  it("finds relative Markdown links, inline and by reference", () => {
-    expect(links("[b](../b.md) and [c][ref] and [d](<My Note.md>)\n\n[ref]: c.md#top\n")).toEqual([
-      { kind: "PATH", target: "../b.md", fragment: null, display: "b" },
-      { kind: "PATH", target: "c.md", fragment: "top", display: "c" },
-      { kind: "PATH", target: "My Note.md", fragment: null, display: "d" },
-    ]);
+  // The rule table: each case is Markdown plus the links it holds. The same list is what the
+  // editor's round trip is held to (`editor-wikilinks.test.ts`), so a rule is written once.
+  it.each(LINK_MARKDOWN_FIXTURES)("finds exactly the links of: $name", ({ markdown, links: expected }) => {
+    expect(links(markdown)).toEqual(expected);
   });
 
   it("returns links in reading order across both syntaxes", () => {
-    const found = extractDocumentLinks("[[One]] then [two](two.md) then [[Three]]");
+    const found = extractDocumentLinks(linkFixture("a wikilink and a relative link, in reading order").markdown);
     expect(found.map((link) => [link.ordinal, link.target])).toEqual([[0, "One"], [1, "two.md"], [2, "Three"]]);
-  });
-
-  it("does not treat an embed as a link", () => {
-    expect(links("![[Image.png]] and ![[Other note]] but [[Real]]")).toEqual([
-      { kind: "WIKI", target: "Real", fragment: null, display: null },
-    ]);
-  });
-
-  it("does not see brackets that are being shown, not written", () => {
-    const markdown = ["`[[inline]]`", "", "```", "[[fenced]]", "```", "", "    [[indented]]", "", "<div>[[html]]</div>", "", "kept [[Real]]"].join("\n");
-    expect(links(markdown).map((link) => link.target)).toEqual(["Real"]);
-  });
-
-  it("does not see an escaped wikilink", () => {
-    expect(links("\\[\\[literal\\]\\] and [[Real]]").map((link) => link.target)).toEqual(["Real"]);
-  });
-
-  it("leaves other links alone", () => {
-    expect(links("[site](https://example.com/a.md) [pic](img.png) [anchor](#part) [pdf](a.pdf) <https://example.com>")).toEqual([]);
-  });
-
-  it("does not turn the text of a link into a second link", () => {
-    expect(links("[see [[Inner]]](outer.md)").map((link) => link.target)).toEqual(["outer.md"]);
-  });
-
-  it("does not span lines or nest", () => {
-    expect(links("[[broken\nlink]] and [[a [[b]] c]]").map((link) => link.target)).toEqual(["b"]);
-  });
-
-  it("finds wikilinks in tables, lists, quotes and headings", () => {
-    const markdown = ["| a | b |", "| - | - |", "| [[InTable]] | x |", "", "- [[InList]]", "", "> [[InQuote]]", "", "## About [[InHeading]]"].join("\n");
-    expect(links(markdown).map((link) => link.target)).toEqual(["InTable", "InList", "InQuote", "InHeading"]);
-  });
-
-  it("finds a wikilink with an escaped pipe in a table cell", () => {
-    const markdown = ["| a |", "| - |", "| [[Note\\|shown]] |"].join("\n");
-    expect(links(markdown)).toEqual([{ kind: "WIKI", target: "Note", fragment: null, display: "shown" }]);
-  });
-
-  it("does not see a wikilink split by emphasis (documented limit)", () => {
-    expect(links("[[*starred*]]")).toEqual([]);
   });
 
   it("numbers lines within the body", () => {
