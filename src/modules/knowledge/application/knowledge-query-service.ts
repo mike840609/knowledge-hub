@@ -1,6 +1,5 @@
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import {
-  DocumentNotFoundError,
   IntegrityViolationError,
   RevisionNotFoundError,
   SourceNotFoundError,
@@ -9,8 +8,9 @@ import {
 import type { KnowledgeRevision } from "../domain/revision";
 import type { SourcePolicy } from "../domain/source-policy";
 import { collectAncestors } from "../domain/tree-rules";
+import { requireSourcePolicy, requireVisibleDocument } from "./internal/require-visible-document";
 import type { TreeViewNode } from "../ports/tree-repository";
-import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "../ports/unit-of-work";
+import type { KnowledgeUnitOfWork } from "../ports/unit-of-work";
 
 export type SourceView = {
   id: string;
@@ -113,12 +113,6 @@ function toTreeItem(node: TreeViewNode, includeArchived: boolean): KnowledgeTree
   };
 }
 
-async function requireSourcePolicy(repositories: KnowledgeRepositories, sourceId: string): Promise<SourcePolicy> {
-  const policy = await repositories.sourcePolicy.findById(sourceId);
-  if (!policy) throw new SourceNotFoundError();
-  return policy;
-}
-
 export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
   private readonly unitOfWork: KnowledgeUnitOfWork;
 
@@ -166,7 +160,7 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
     input: { includeArchived?: boolean } = {},
   ): Promise<{ documentId: string; sourceId: string; workspaceId: string; status: "ACTIVE" | "ARCHIVED"; currentRevision: KnowledgeRevisionView }> {
     return this.unitOfWork.run(async (repositories) => {
-      const { document, policy } = await this.requireVisibleDocument(repositories, caller, documentId, input.includeArchived ?? false);
+      const { document, policy } = await requireVisibleDocument(repositories, caller, documentId, input.includeArchived ?? false);
       const current = await repositories.revisions.findCurrent(document.id);
       if (!current) throw new IntegrityViolationError("Document current revision is missing.");
       return {
@@ -181,7 +175,7 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
 
   async getCurrentRevision(caller: CallerContext, documentId: string, input: { includeArchived?: boolean } = {}): Promise<KnowledgeRevisionView> {
     return this.unitOfWork.run(async (repositories) => {
-      const { document } = await this.requireVisibleDocument(repositories, caller, documentId, input.includeArchived ?? false);
+      const { document } = await requireVisibleDocument(repositories, caller, documentId, input.includeArchived ?? false);
       const current = await repositories.revisions.findCurrent(document.id);
       if (!current) throw new IntegrityViolationError("Document current revision is missing.");
       return toRevisionView(current);
@@ -190,7 +184,7 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
 
   async getRevision(caller: CallerContext, documentId: string, revisionNo: number, input: { includeArchived?: boolean } = {}): Promise<KnowledgeRevisionView> {
     return this.unitOfWork.run(async (repositories) => {
-      const { document } = await this.requireVisibleDocument(repositories, caller, documentId, input.includeArchived ?? false);
+      const { document } = await requireVisibleDocument(repositories, caller, documentId, input.includeArchived ?? false);
       const revision = await repositories.revisions.findByRevisionNo(document.id, revisionNo);
       if (!revision) throw new RevisionNotFoundError();
       return toRevisionView(revision);
@@ -199,7 +193,7 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
 
   async listRevisions(caller: CallerContext, documentId: string, input: { includeArchived?: boolean } = {}): Promise<KnowledgeRevisionView[]> {
     return this.unitOfWork.run(async (repositories) => {
-      const { document } = await this.requireVisibleDocument(repositories, caller, documentId, input.includeArchived ?? false);
+      const { document } = await requireVisibleDocument(repositories, caller, documentId, input.includeArchived ?? false);
       const revisions = await repositories.revisions.listByDocument(document.id);
       return revisions.map(toRevisionView);
     });
@@ -221,20 +215,5 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
         return item ? [item] : [];
       });
     });
-  }
-
-  private async requireVisibleDocument(
-    repositories: KnowledgeRepositories,
-    caller: CallerContext,
-    documentId: string,
-    includeArchived: boolean,
-  ): Promise<{ document: { id: string; sourceId: string; status: "ACTIVE" | "ARCHIVED" }; policy: SourcePolicy }> {
-    await repositories.users.upsertIdentity(caller.identity);
-    const document = await repositories.documents.findById(documentId);
-    if (!document) throw new DocumentNotFoundError();
-    const policy = await requireSourcePolicy(repositories, document.sourceId);
-    await repositories.workspaceAccess.requireMembership(caller, policy.workspaceId);
-    if (!includeArchived && (document.status !== "ACTIVE" || policy.status !== "ACTIVE")) throw new DocumentNotFoundError();
-    return { document, policy };
   }
 }

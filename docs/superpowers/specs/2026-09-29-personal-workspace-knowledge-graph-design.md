@@ -220,7 +220,7 @@ CREATE TABLE knowledge_document_links (
 ```ts
 interface KnowledgeLinkService {
   /** 一份文件的連結視圖：解析後的 outgoing、backlinks、unresolved。 */
-  getDocumentLinks(caller, documentId, input?: { markdown?: string; includeArchived?: boolean }): Promise<DocumentLinkView>;
+  getDocumentLinks(caller, documentId, input?: { revisionNo?: number; includeArchived?: boolean }): Promise<DocumentLinkView>;
   /** 整個 Workspace 的圖。 */
   getWorkspaceGraph(caller, workspaceId, input?: { sourceId?: string; includeUnresolved?: boolean; includeOrphans?: boolean; limit?: number }): Promise<WorkspaceGraphView>;
   /** 以某文件為中心的 1–2 度鄰居。 */
@@ -237,7 +237,7 @@ interface KnowledgeLinkService {
 
 ### 8.2 `getDocumentLinks`
 
-`markdown` 可選：閱讀頁傳入**選定 revision** 的內容（`?revision=N` 看歷史版本時，outgoing 要對應那份內容），未傳則用目前 revision。outgoing 由 `extractDocumentLinks(markdown)` 現算後對目錄解析——**不需要索引**；只有 `backlinks` 需要別的文件的邊。
+`revisionNo` 可選：閱讀頁在看歷史版本（`?revision=N`）時傳入，outgoing 要對應那份內容；未傳則用目前 revision。service 自己依 `revisionNo` 讀取該 revision（經同一個授權檢查），**不接受呼叫者傳入的 Markdown 本文**。outgoing 由 `extractDocumentLinks` 現算後對目錄解析——**不需要索引**；只有 `backlinks` 需要別的文件的邊。
 
 回傳：
 

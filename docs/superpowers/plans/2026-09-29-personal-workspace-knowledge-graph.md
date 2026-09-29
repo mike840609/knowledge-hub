@@ -41,8 +41,9 @@
 | 2.5 | 四個寫入點掛上 `links.replaceForDocument`（NOOP 不重建） | `create-document.ts`、`create-revision.ts`、`source-knowledge-projection-service.ts`（兩處） | `tests/integration/link-index-write-points.test.ts`：四條路徑各一；再掃描原始碼，`revisions.insert(` 的檔案必須同時含 `links.replaceForDocument`；`phase2-import-apply-perf` 的 stub 補上 `links` |
 | 2.6 | 抽出 `requireVisibleDocument`（行為不變），`KnowledgeQueryServiceImpl` 改用它 | `application/internal/require-visible-document.ts`、`knowledge-query-service.ts` | 既有 `phase1-query`、`phase1-workspace-access` 不改動仍綠 |
 | 2.7 | `KnowledgeLinkService.getDocumentLinks`（outgoing 現算、backlinks 由邊、context、index state）；註冊到 composition root | `application/knowledge-link-service.ts`、`src/server/composition.ts` | `tests/integration/knowledge-link-service.test.ts`：非成員被拒；跨 Workspace 連結不解析且與「不存在」不可區分；封存來源不出現在 backlinks；歷史 revision 的 outgoing；context 截斷；`SOURCE_MANAGED` 來源的連結同樣被索引 |
-| 2.8 | `scripts/db/reindex-document-links.ts`、`npm run db:reindex-document-links`、`make db-reindex-links`；`db:migrate` 尾端提示 | `scripts/db/`、`package.json`、`Makefile` | `tests/integration/link-index-reindex.test.ts`：清空索引後 reindex 全數還原；冪等；中途 revision 變動時該份被略過而不是寫入舊內容 |
+| 2.8 | `scripts/db/reindex-document-links.ts`、`npm run db:reindex-document-links`、`make db-reindex-links`；`db:migrate` 尾端提示 | `scripts/db/`、`package.json`、`Makefile` | `tests/integration/link-index-reindex.test.ts`：清空索引後 reindex 全數還原；冪等；與同時進行的存檔競爭時，索引永遠對應最後成為目前的那個 revision（鎖住文件後才讀 revision） |
 | 2.9 | 營運說明：部署順序與 reindex（migration → reindex → 開放） | `docs/operations/document-link-index-rollout.md` | — |
+| 2.10 | Domain：圖與 backlink 建構器（`resolveEdges`、`buildWorkspaceGraph`、`buildLocalGraph`、`backlinksTo`）與 `linkContext`——原本排在切片 4，因為 service 需要而提前 | `link-graph.ts`、`link-context.ts` | `link-graph.test.ts`、`link-context.test.ts` |
 
 **驗收：** 見 §13 切片 2。`make verify` 與 `make test-integration` 綠。
 
@@ -86,6 +87,6 @@
 | 切片 | unit | integration | e2e | build | 備註 |
 | --- | --- | --- | --- | --- | --- |
 | 1 TOC | 462（+35） | 不受影響 | `document-outline.spec.ts` 4/4 | 通過 | 1.7 已檢查：應用程式自有 id（`tree-filter`、`search-q` 等）可能與標題 slug 相同，outline 改在 `article` 內查找，不用全頁 `getElementById` |
-| 2 索引 | | | | | |
+| 2 索引 | 主要新增：extract 28、resolution 25、graph 19、context 8、write-points 2 | 467 → 485（link-index 15、reindex 5、service 18，含既有 444） | 不受影響 | 通過 | 效能測試 stub 補上 `links` 並斷言每份文件恰一次索引寫入（已驗證移除 hook 會失敗） |
 | 3 渲染／Backlinks | | | | | |
 | 4 圖譜 | | | | | |
