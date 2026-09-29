@@ -14,6 +14,8 @@ import { useActiveHeading } from "./use-active-heading";
 import { useScrollToHash } from "./use-scroll-to-hash";
 import { OutlineDisclosure, OutlineList, OutlineRail } from "./document-outline";
 import { DocumentLinksPanel } from "./document-links-panel";
+import { rememberedInspectorTab, rememberInspectorTab, resolveInspectorTab } from "./inspector-tab-memory";
+import { summariseLinks } from "./link-summary";
 import type { DocumentLinkView } from "@/modules/knowledge/application/knowledge-link-service";
 import type { GraphViewData } from "./graph-model";
 import type { OutlineEntry } from "@/shared/markdown/outline";
@@ -109,18 +111,35 @@ function InspectorTabs({
   requestedTab: RequestedInspectorTab | null;
 }) {
   const { access } = useWorkspaceAuthorization();
-  const [tab, setTab] = useState(requestedTab?.tab ?? "details");
+  const available = useMemo(
+    () => ["details", "links", "history", ...(outline.length > 0 ? ["outline"] : [])],
+    [outline.length],
+  );
+  // The inspector renders only once it has been opened, never on the server, so
+  // storage can be read here without the first render disagreeing with the HTML.
+  const [tab, setTab] = useState(() =>
+    resolveInspectorTab({ requested: requestedTab?.tab, remembered: rememberedInspectorTab(), available }),
+  );
+  const choose = useCallback(
+    (next: string) => {
+      const resolved = resolveInspectorTab({ requested: next, available });
+      setTab(resolved);
+      rememberInspectorTab(resolved);
+    },
+    [available],
+  );
   // Someone asked for a tab while this is already open (the palette's
-  // "Show backlinks"); a fresh nonce is a fresh request even for the same tab.
+  // "Show backlinks", the header's links chip); a fresh nonce is a fresh request
+  // even for the same tab.
   useEffect(() => {
-    if (requestedTab) setTab(requestedTab.tab);
-  }, [requestedTab]);
+    if (requestedTab) choose(requestedTab.tab);
+  }, [requestedTab, choose]);
   const sorted = [...data.revisions].sort((a, b) => a.revisionNo - b.revisionNo);
   const current = sorted[sorted.length - 1];
   const created = sorted[0]?.createdAt;
 
   return (
-    <TabsRoot value={tab} onValueChange={(value) => setTab(String(value))}>
+    <TabsRoot value={tab} onValueChange={(value) => choose(String(value))}>
       <TabsList aria-label="Document inspector">
         <TabsTab value="details">Details</TabsTab>
         <TabsTab value="links">Links</TabsTab>
@@ -333,6 +352,15 @@ export function DocumentDetailClient({
     setInspectorOpen?.(true);
     window.dispatchEvent(new CustomEvent("kh:open-inspector"));
   }, [setInspectorOpen]);
+  // A request is answered once. Left standing after the inspector closes, it
+  // would beat the tab the reader has since chosen the next time it opens.
+  useEffect(() => {
+    if (!inspectorOpen) setRequestedTab(null);
+  }, [inspectorOpen]);
+  const openLinks = useCallback(() => {
+    setRequestedTab({ tab: "links", nonce: Date.now() });
+    openInspector();
+  }, [openInspector]);
   useEffect(() => {
     if (!setInspectorOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -409,6 +437,8 @@ export function DocumentDetailClient({
               updatedAt={updatedAt}
               revisionBanner={revisionBanner}
               onDetailsClick={openInspector}
+              linkSummary={summariseLinks(inspectorData.links)}
+              onLinksClick={openLinks}
               editHref={editHref}
               onShareClick={canShare ? () => requestShare(inspectorData.documentId) : null}
               readOnly={readOnly}

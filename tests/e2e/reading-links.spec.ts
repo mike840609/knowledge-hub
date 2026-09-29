@@ -85,6 +85,77 @@ test.describe("wikilinks and backlinks in My Space", () => {
     await expect(unresolved).toContainText(`Ghost ${stamp}`);
   });
 
+  test("the header says what links here, and its chip opens the Links tab", async ({ page }) => {
+    await page.setViewportSize({ width: 1500, height: 900 });
+    const stamp = Date.now();
+    const hubTitle = `Chip Hub ${stamp}`;
+    const leafTitle = `Chip Leaf ${stamp}`;
+    const hub = await createMySpaceDocument(page, hubTitle, "Linked to from the leaf.");
+    const leaf = await createMySpaceDocument(page, leafTitle, `Points at [[${hubTitle}]].`);
+    const lone = await createMySpaceDocument(page, `Chip Lone ${stamp}`, "Nothing links here and it links nowhere.");
+
+    // No links, no chip: the header is not asked to announce nothing.
+    await page.goto(lone.url);
+    await expect(page.locator("article").first()).toBeVisible(ROUND_TRIP);
+    await expect(page.getByRole("button", { name: /backlinks?|outgoing links?/ })).toHaveCount(0);
+
+    // A document that only links out still says so, so its neighbourhood can be found.
+    await page.goto(leaf.url);
+    await expect(page.getByRole("button", { name: "1 outgoing link" })).toBeVisible(ROUND_TRIP);
+
+    // One that is linked to says how many link in, and the chip opens the inspector on Links.
+    await page.goto(hub.url);
+    // By role, which sees what a reader can — the raw DOM can hold a hidden duplicate (see phase5-authoring).
+    const chip = page.getByRole("button", { name: "1 backlink" });
+    await expect(chip).toBeVisible(ROUND_TRIP);
+    await expect(async () => {
+      await chip.click();
+      await expect(page.getByRole("tab", { name: "Links", selected: true })).toBeVisible({ timeout: 1_000 });
+    }).toPass(ROUND_TRIP);
+    await expect(page.locator('[data-links-section="backlinks"]')).toContainText(leafTitle);
+
+    // The request was answered once: having chosen History since, the reader is not sent back to Links.
+    await page.getByRole("tab", { name: "History" }).click();
+    await page.getByRole("button", { name: "Close details" }).click();
+    await page.getByRole("button", { name: "Details" }).first().click();
+    await expect(page.getByRole("tab", { name: "History", selected: true })).toBeVisible();
+  });
+
+  test("the inspector opens on the tab the reader last used, after a reload and on the next document", async ({ page }) => {
+    await page.setViewportSize({ width: 1500, height: 900 });
+    const stamp = Date.now();
+    const oneTitle = `Memory One ${stamp}`;
+    const twoTitle = `Memory Two ${stamp}`;
+    const two = await createMySpaceDocument(page, twoTitle, "The second document.");
+    const one = await createMySpaceDocument(page, oneTitle, `Points at [[${twoTitle}]].`);
+
+    // The header button is server-rendered and can be pressed a moment before it does anything.
+    const openDetails = async (tab: string) => {
+      await expect(async () => {
+        await page.getByRole("button", { name: "Details" }).first().click();
+        await expect(page.getByRole("tab", { name: tab, selected: true })).toBeVisible({ timeout: 1_000 });
+      }).toPass(ROUND_TRIP);
+    };
+
+    // Nothing remembered yet: Details. Choosing History and closing keeps it.
+    await page.goto(one.url);
+    await openDetails("Details");
+    await page.getByRole("tab", { name: "History" }).click();
+    await page.getByRole("button", { name: "Close details" }).click();
+
+    // An arrangement, so it survives a reload...
+    await page.reload();
+    await openDetails("History");
+
+    // ...and follows the reader to the next document.
+    await page.goto(two.url);
+    await openDetails("History");
+
+    // A tab asked for by name still wins over the one remembered.
+    await page.getByRole("button", { name: "1 backlink" }).click();
+    await expect(page.getByRole("tab", { name: "Links", selected: true })).toBeVisible();
+  });
+
   test("a rename leaves the old name unresolved and the new one resolves", async ({ page }) => {
     const stamp = Date.now();
     const oldTitle = `Before Rename ${stamp}`;

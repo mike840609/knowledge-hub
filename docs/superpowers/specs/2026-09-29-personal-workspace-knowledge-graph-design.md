@@ -76,7 +76,9 @@ TOC、連結、Backlinks、圖譜是同一條鏈：**標題錨點**讓 `[[Note#H
 → 有多份同名：連到規則 §6.2 選出的那份，tooltip 標明還有 N 份同名
 
 文件底部「Linked from N documents」：列出每份來源文件的標題、所屬 Source、連結所在那一行的上下文
+文件標題列的小 chip（「3 backlinks」／沒有 backlink 時「2 outgoing links」）→ 點了開啟 inspector 的「Links」分頁（§11.1）
 inspector 的「Links」分頁：Backlinks / Outgoing / Unresolved + Local graph
+inspector 開在上次用的那個分頁（§11.1）
 ```
 
 **圖譜：**
@@ -329,7 +331,23 @@ type WorkspaceGraphView = {
 - 動作註冊表（動作模型規格 §4）新增：`navigate.graph`（palette，「Open graph」）與 `document.backlinks`（**只在 palette**，「Show backlinks」，開啟 inspector 的 Links 分頁）。`document.backlinks` 不出現在 row menu，理由與 `document.details` 相同：它開啟的面板描述的是目前正在閱讀的那份文件，在別的列上提供會承諾一個顯示不了那一列的畫面。兩者都是讀取，不依賴 capability、所有權或生命週期（歷史 revision 上也提供）；可用性規則寫在註冊表、有單元測試。`navigate.graph` 因此使「沒有任何 capability 的成員」可用的動作從 1 個變成 2 個（Knowledge 與 Graph）——能讀 Knowledge 就能看它的圖。
 - 主導覽新增「Graph」項（`Network` 圖示），所有有讀取權的人可見。
 - 載入：圖譜頁用既有的 skeleton 慣用法與 `loading.tsx`。
-- **指向自己所在頁面的連結一律 `prefetch={false}`**（depth 切換、Graph／List 切換、內文的 wikilink——渲染器不知道目前是哪份文件，自連結 `[[本文標題]]` 同樣會踩到）。從自己這頁 prefetch 自己，伺服器回整頁，Next 15 會直接套用 prefetch 的首次使用，與點擊競爭時導覽會遺失（keyboard-shortcuts spec §9；實作時在 local graph 的 depth 切換上重現：修正前約每 8 次失敗 1 次，修正後 30／30 通過）。
+- **指向自己所在頁面的連結一律 `prefetch={false}`**（depth 切換、Graph／List 切換、內文的 wikilink——渲染器不知道目前是哪份文件，自連結 `[[本文標題]]` 同樣會踩到）。從自己這頁 prefetch 自己，伺服器回整頁，Next 15 會直接套用 prefetch 的首次使用，與點擊競爭時導覽會遺失（keyboard-shortcuts spec §9；實作時在 local graph 的 depth 切換上重現：修正前約每 8 次失敗 1 次，修正後 30／30 通過；**更正：之後重複 20 次仍有 1 次失敗，`prefetch={false}` 去掉了一個原因、不是全部，見驗證紀錄 §8 第 3 點**）。
+
+### 11.1 Local graph 放在哪裡：Inspector 的 Links 分頁，不固定在頁面右上角
+
+**決定。** 圖留在 inspector（細節面板）裡，不固定在文件頁的右上角；補的是入口，不是把圖搬出來。
+
+理由：（1）右側已有 On this page 的 rail，右上角還有編輯、分享、Details；再放一張圖是跟目錄與閱讀區搶位置。（2）多數文件只有幾條連結，圖上是 2–4 個點，資訊量不如一行「Linked from 3 documents」——而那一行已經在文件底部。（3）圖是探索用的，不是閱讀用的；需要它的人會主動開，不需要的人不該被常駐的圖打擾。
+
+入口的兩個補強：
+
+- **標題列的連結 chip**（`summariseLinks`，純函式）：在 meta 列（「Updated …」之後）放一個 ghost 按鈕，點了開啟 inspector 並切到 Links（設定同一個 `requestedTab`，與命令面板的「Show backlinks」殊途同歸；chip 不經過 `kh:request-details` 事件，因為它就在文件窗格裡，直接呼叫即可）。文字**以 backlink 為主**——那是讀者從頁面本身看不到的，也是「這份文件對別人有用」的訊號；用 `backlinkTotal` 而不是列表長度，因為列表可能被截斷、而文字必須與它開啟的分頁上的數字一致。沒有 backlink 但有已解析的外連時顯示「N outgoing links」，讓只往外連的文件其鄰居圖也找得到。**沒有連結、或只有未解析連結時不顯示**：未解析連結在內文已用虛線標出，標題列不為每個亂寫的 `[[…]]` 發聲。按鈕的視覺高度不變（`h-6` 的點擊區加負 margin），所以有 chip 的文件與沒有的文件之間標題列不會跳動；點擊區 24px（WCAG 2.5.8）。
+- **記住上次用的 inspector 分頁**（`inspector-tab-memory`）：讀者常駐在 Links 的話，不必每份文件都再點一次。存在 `localStorage`（`kh:inspector-tab`），走與主題、導覽收合相同的受保護讀寫（`readStored`／`writeStored`），是每位讀者、每個瀏覽器自己的排列，伺服器不需要知道。`resolveInspectorTab` 的優先序：**剛剛提出的請求（chip、命令面板）> 記住的分頁 > Details**，且任何「這份文件沒有的分頁」都會落到下一個選項——Outline 只有在有標題時才存在，記住的 `outline` 不能把下一份沒有標題的文件留在一個不存在的分頁上。直接讀取而不是走 `usePersistedJson`：後者的契約是「先用預設值、在 effect 裡讀取」以免伺服器與第一次 client render 不一致；inspector 從來不在伺服器的 HTML 裡（要讀者開啟後才渲染），沒有東西要對齊，而先用預設值會讓 Details 面板閃一幀。
+- **一個請求只回應一次。** `requestedTab` 在 inspector 關閉時清掉。留著的話，讀者用 chip 開了 Links、改選 History、關掉，再按 Details 時，過期的請求會蓋過他剛選的分頁（實作時由 e2e 抓到，見驗證紀錄 §8）。
+
+**副作用。** 沒有指定分頁的開啟（標題列的 Details 按鈕、⌘/Ctrl I、命令面板的「Details」）現在也開在記住的分頁，不再固定是 Details——面板是同一個，分頁是讀者上次留下的。
+
+**沒有做的。** 「寬螢幕預設就開在 Links」——那是偏好設定，不是預設；有了分頁記憶，愛用圖的人自己選過一次就會一直在那裡。
 
 ## 12. 安全與不變式檢查
 
