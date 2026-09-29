@@ -1742,6 +1742,47 @@ test("the toolbar adds a link from an address typed into it", async ({ page }) =
   await expect(source).toHaveValue("[hello world](https://example.com)\n");
 });
 
+test("a javascript: link is not a live link in the editor, and the document keeps what was written", async ({ page }) => {
+  // Milkdown sanitises an anchor's href when it draws the link; the editor's
+  // ⌘-click reads that rendered href. This pins the sanitising to the locked version.
+  const markdown = "[click](javascript:alert(1)) and [ok](https://example.com)\n";
+  const url = await createNote(page, unique("Unsafe Link"), markdown);
+  const surface = await openEditor(page, url);
+  await expect(surface.locator("a", { hasText: "click" })).not.toHaveAttribute("href", /javascript/i);
+  await expect(surface.locator("a", { hasText: "ok" })).toHaveAttribute("href", "https://example.com");
+  const source = await showMarkdown(composer(page));
+  await expect(source).toHaveValue(markdown);
+});
+
+test("the toolbar goes away when focus leaves the editor", async ({ page }) => {
+  const url = await createNote(page, unique("Blur"), "hello world\n");
+  const surface = await openEditor(page, url);
+  const toolbar = page.getByRole("toolbar", { name: "Formatting" });
+  await surface.locator("p").selectText();
+  await expect(toolbar).toBeVisible(ROUND_TRIP);
+  await composer(page).getByLabel("Title", { exact: true }).click();
+  await expect(toolbar).toBeHidden();
+});
+
+test("the bulleted-list button wraps a paragraph into a list and lifts it back out", async ({ page }) => {
+  const url = await createNote(page, unique("List Toggle"), "item\n");
+  const surface = await openEditor(page, url);
+  const toolbar = page.getByRole("toolbar", { name: "Formatting" });
+  await surface.locator("p").selectText();
+  await toolbar.getByRole("button", { name: "Bulleted list" }).click();
+  await expect(surface.getByRole("listitem")).toHaveCount(1);
+  await expect(toolbar.getByRole("button", { name: "Bulleted list" })).toHaveAttribute("aria-pressed", "true");
+  let source = await showMarkdown(composer(page));
+  await expect(source).toHaveValue("- item\n");
+
+  await composer(page).getByRole("button", { name: "Markdown", exact: true }).click();
+  await surface.locator("li p").selectText();
+  await toolbar.getByRole("button", { name: "Bulleted list" }).click();
+  await expect(surface.getByRole("listitem")).toHaveCount(0);
+  source = await showMarkdown(composer(page));
+  await expect(source).toHaveValue("item\n");
+});
+
 test("changes made in the Markdown show when switching back", async ({ page }) => {
   const url = await createNote(page, unique("Back"), "old\n");
   const surface = await openEditor(page, url);
