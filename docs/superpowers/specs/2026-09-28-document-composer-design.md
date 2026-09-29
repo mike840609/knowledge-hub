@@ -176,17 +176,17 @@
 - `markdown` 字串仍是**唯一的狀態來源**；渲染編輯器是它的一個檢視。標題規則、草稿、dirty、409、存檔都讀這個字串。
 - **開啟時只解析、不回寫**：文件載入後 `markdown` 維持原字串，所以沒編輯就不 dirty，也不會因正規化而變 dirty。
 - **第一次使用者編輯**（非程式性的 ProseMirror transaction）立刻標記 `touched`，此時就算 dirty（`beforeunload`、Cancel 確認即時生效），即使輸出尚未跑。
-- **輸出**：渲染編輯器內容 → Markdown。Milkdown 的 listener 內建約 200ms 的 debounce，且只在文件真的改變時才輸出，`markdown` 由它更新。以下時機**強制立即輸出**（直接對編輯器取值）：存檔、切換模式、Cancel 確認前、`pagehide`／`visibilitychange` 轉為 hidden、元件卸載。輸出後若 `markdown` 與初始值相同，`touched` 解除；若因正規化而不同，維持 dirty。
+- **輸出**：渲染編輯器內容 → Markdown。Milkdown 的 listener 內建約 200ms 的 debounce，且只在文件真的改變時才輸出，`markdown` 由它更新。以下時機**強制立即輸出**（直接對編輯器取值）：存檔、切換模式、`pagehide`／`visibilitychange` 轉為 hidden、元件卸載。Cancel 不需要：它本來就是捨棄，`touched` 已讓它視為有修改而先確認。輸出後若 `markdown` 與初始值相同，`touched` 解除；若因正規化而不同，維持 dirty。
 - **Markdown → 渲染**（切回渲染模式）：文字有變時，以新內容取代渲染編輯器的文件內容；此時渲染編輯器的復原紀錄被清除。文字沒變則不動。復原紀錄不跨模式。
 - 存檔永遠先強制輸出，再送出 `markdown` 與由它解析出的標題。
 
 ### 11.3 標題
 
-`resolveAuthoredTitle` 與第 4 節規則不變，輸入仍是 `markdown` 字串。渲染模式下為了麵包屑即時更新：
+`resolveAuthoredTitle` 與第 4 節規則不變，輸入是 `markdown` 字串。渲染模式下麵包屑與標題欄的更新跟著**輸出**走（約 200ms 的延遲），不另外從編輯器的節點推一個近似值：那個近似會和 mdast 的取字規則不一致（只含圖片 alt 的 H1、行內格式），為了省 200ms 不值得。
 
-- 以編輯器第一個節點判斷——是 H1 且有文字，就用它的純文字當**顯示用**標題，不必等輸出。
-- 這只是近似（例如只含圖片 alt 的 H1，mdast 會取 alt，ProseMirror 的 textContent 不會）。**送出的標題永遠來自強制輸出後的 `markdown` 字串**，因此與閱讀頁、匯入的規則一致。
+- **送出的標題永遠來自強制輸出後的 `markdown` 字串**，因此與閱讀頁、匯入的規則一致。
 - 標題欄（`TYPED` 時）、`METADATA` 說明、標題延續（刪掉開頭 H1 時預填）的行為不變。
+- `METADATA` 且內容不以標題開頭時，渲染模式在編輯區上方顯示該標題（唯讀的 `<h1>`），與閱讀頁一致；`TYPED` 已有標題欄，不重複。
 
 ### 11.4 編輯體驗
 
@@ -235,7 +235,7 @@
 | 正規化 | `*` 清單 → `-`；表格分隔線 `\|---\|` → `\| - \|`；行尾兩個空格的換行 → 反斜線；setext 標題（`===`）→ `#`；多餘跳脫（`1\.` → `1.`）；wikilink `[[X]]` → `\[\[X]]`（顯示相同，Obsidian 不再認得） |
 | 故障 | 沒有標題的圖片使解析丟錯、整份文件為空（已用補丁解決，並由失敗保護兜底） |
 
-- `_斜體_` 緊貼中日韓文字時，CommonMark 本來就不視為強調（閱讀頁同樣顯示底線），編輯器輸出 `\_斜體\_`，顯示不變。
+- `_斜體_` 緊貼中日韓文字時，CommonMark 本來就不視為強調（閱讀頁同樣顯示底線）；編輯器輸出時只跳脫可能被當成結尾的底線（`與_斜體\_，`），顯示不變。
 - round-trip 可以在專案的 vitest 內執行：檔頭加 `// @vitest-environment jsdom`，並安裝 `jsdom`。
 
 **尚待瀏覽器 spike（實作計畫的第一個 task，通過才繼續）**
@@ -269,6 +269,6 @@
 ### 11.10 完成標準
 
 - 瀏覽器 spike 通過，並把 bundle 量測寫進 verification。
-- `make verify` 與 `make test-e2e` 全部通過；新增／改寫的案例重複 30 次無失敗。
+- `make verify` 與 `make test-e2e` 全部通過；`document-composer.spec.ts` 整個檔案重複 15 次無失敗。
 - 設計語言 §10（快捷鍵、焦點環例外涵蓋渲染編輯區）與 README 更新。
 
