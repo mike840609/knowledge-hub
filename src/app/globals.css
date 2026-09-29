@@ -156,6 +156,14 @@ kbd {
   .kh-editor img.ProseMirror-separator {
     @apply m-0 inline border-0;
   }
+  /* While a node (an image, a rule) is selected, ProseMirror marks the editor with this and
+     keeps the browser's text selection only as a carrier: it must not show. */
+  .kh-editor.ProseMirror-hideselection *::selection {
+    @apply bg-transparent;
+  }
+  .kh-editor.ProseMirror-hideselection {
+    @apply caret-transparent;
+  }
   .kh-editor > :first-child {
     @apply mt-0;
   }

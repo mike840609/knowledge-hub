@@ -14,10 +14,20 @@ import { markdownOpensWithHeading } from "@/lib/markdown-title";
 import { DocumentBreadcrumb, type DocumentBreadcrumbSegment } from "./document-breadcrumb";
 import { MarkdownArticle } from "./document-viewer";
 import type { MarkdownEditor } from "./editor/editor-core";
+import type { RenderedEditorProps } from "./editor/rendered-editor";
 import { useFormKeys } from "./use-form-keys";
 
+// Its code failing to load (offline, or replaced by a deploy) is a failed editor, not a broken page.
+function EditorUnavailable({ onFail }: RenderedEditorProps) {
+  useEffect(() => onFail(), [onFail]);
+  return null;
+}
+
 // Loaded on demand and never on the server: Milkdown and ProseMirror stay out of the first bundle.
-const RenderedEditor = dynamic(() => import("./editor/rendered-editor").then((module) => module.RenderedEditor), { ssr: false });
+const RenderedEditor = dynamic(
+  () => import("./editor/rendered-editor").then((module) => module.RenderedEditor, () => EditorUnavailable),
+  { ssr: false },
+);
 
 type Mode = "rendered" | "source";
 
@@ -98,7 +108,9 @@ export function DocumentComposer({
   // Typed into the editor and not yet delivered as Markdown (its output is debounced).
   const pendingRef = useRef(false);
   const restoreTried = useRef(false);
-  const focusedOnce = useRef(false);
+  // The surface focus was last given to (null until the first focus), and whether a focus had to wait for its surface.
+  const focusedMode = useRef<Mode | null>(null);
+  const focusWaited = useRef(false);
   const leaving = useRef(false);
   const arrivalGuard = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(arrivalGuard.current), []);
@@ -114,6 +126,8 @@ export function DocumentComposer({
   // Rendered editing also waits for its editor: a title field that is editable
   // before Save can act would let ⌘Enter do nothing.
   const ready = interactive && (showing === "source" || editorReady);
+  // The Markdown text takes typing once the editor has loaded, or failed and left the source in charge (spec §11.5).
+  const sourceReady = editorReady || editorFailed;
   const mountEditor = hydrated && restoreChecked && !editorFailed;
   const initial = { title: initialTitle, markdown: initialMarkdown };
 
@@ -144,15 +158,23 @@ export function DocumentComposer({
   }, [dirty]);
 
   // First focus: an empty title field when one is shown, else the start of the
-  // text. Later: whichever surface is showing. Both wait until they can take it:
-  // focusing a disabled field, or an editor still loading, does nothing, and
-  // this effect must run again once they can.
+  // text. Later: the surface a mode switch shows. Each waits until its surface can
+  // take it (an editor still loading, a Markdown text not yet enabled). A focus
+  // that had to wait is dropped if the person has meanwhile put the caret in a
+  // field themselves: the editor arriving must not take it from them.
   useEffect(() => {
-    if (!hydrated || !restoreChecked) return;
+    if (!hydrated || !restoreChecked || focusedMode.current === showing) return;
     const rendered = showing === "rendered";
-    if (rendered && !editorReady) return;
-    const first = !focusedOnce.current;
-    focusedOnce.current = true;
+    if (rendered ? !editorReady : !sourceReady) {
+      focusWaited.current = true;
+      return;
+    }
+    const first = focusedMode.current === null;
+    focusedMode.current = showing;
+    const active = document.activeElement;
+    const movedOn = focusWaited.current && active instanceof HTMLElement && (active.matches("input, textarea") || active.isContentEditable);
+    focusWaited.current = false;
+    if (movedOn) return;
     if (first && titleRef.current && !titleRef.current.value) {
       titleRef.current.focus();
       return;
@@ -165,7 +187,7 @@ export function DocumentComposer({
     const textarea = textareaRef.current;
     textarea?.focus();
     if (first) textarea?.setSelectionRange(0, 0);
-  }, [hydrated, restoreChecked, showing, editorReady]);
+  }, [hydrated, restoreChecked, showing, editorReady, sourceReady]);
 
   // The Markdown text grows with its content, so the page scrolls, not a box inside it.
   useLayoutEffect(() => {
@@ -197,14 +219,19 @@ export function DocumentComposer({
   }, [showing]);
 
   // Anything that changed `markdown` from outside the rendered editor (a
-  // discarded draft, an edit made in the source) reaches the editor here. Not
-  // while the person has typed something the editor has not delivered yet.
+  // discarded draft, an edit made in the source, either one landing while the
+  // editor was still loading) reaches the editor here. Not while the person has
+  // typed something the editor has not delivered yet. Markdown the editor makes
+  // nothing of leaves the source in charge, as it does on opening (spec §11.5).
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor || !editorReady || showing !== "rendered" || pendingRef.current) return;
-    if (markdown !== syncedRef.current) {
+    if (markdown === syncedRef.current) return;
+    try {
       editor.replaceMarkdown(markdown);
       syncedRef.current = markdown;
+    } catch {
+      handleEditorFail();
     }
   }, [markdown, showing, editorReady]);
 
@@ -241,9 +268,11 @@ export function DocumentComposer({
     return adopt(editor.getMarkdown());
   }
 
-  function handleEditorReady(editor: MarkdownEditor) {
+  // `openedWith` is what the editor shows. If `markdown` moved on while it was
+  // loading, the effect above sees the difference and brings it up to date.
+  function handleEditorReady(editor: MarkdownEditor, openedWith: string) {
     editorRef.current = editor;
-    syncedRef.current = markdown;
+    syncedRef.current = openedWith;
     setEditorReady(true);
   }
 
@@ -262,9 +291,10 @@ export function DocumentComposer({
   // The editor's output only means something while the rendered view is the one
   // being edited. After a mode switch everything typed was already delivered by
   // `flush`, and a debounce firing late would overwrite what is being typed in
-  // the source.
+  // the source. Once leaving has begun (Cancel, load the latest version) the
+  // draft is already cleared, and a late emission would write it back.
   function handleEditorMarkdown(next: string) {
-    if (showing !== "rendered") return;
+    if (leaving.current || showing !== "rendered") return;
     adopt(next);
   }
 
@@ -469,7 +499,7 @@ export function DocumentComposer({
             aria-label="Markdown"
             placeholder="Write in Markdown. Start with # to name the document."
             value={markdown}
-            disabled={!interactive}
+            disabled={!interactive || !sourceReady}
             hidden={showing !== "source"}
             onChange={(event) => applyMarkdown(event.target.value)}
             className="min-h-[12rem] w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-reading text-kh-text outline-none placeholder:text-kh-text-muted"

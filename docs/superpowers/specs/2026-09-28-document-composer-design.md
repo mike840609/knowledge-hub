@@ -202,17 +202,20 @@
 ### 11.5 載入
 
 - 編輯器以 `next/dynamic`（`ssr: false`）延後載入，Markdown／ProseMirror 套件不進 `/edit`、`/new` 的首包。這同時解決第 1–10 節實作後留下的「預覽的 Markdown 套件提早載入」follow-up。
-- 載入期間顯示閱讀頁的 `MarkdownArticle`（可在伺服器渲染）當唯讀內容，編輯器就緒後原位換成可編輯，不會閃出 textarea。欄位與 Save 的 `ready` 再加上「編輯器就緒」；就緒前 Markdown 模式的 textarea 同樣停用。
+- 載入期間顯示閱讀頁的 `MarkdownArticle`（可在伺服器渲染）當唯讀內容，編輯器就緒後原位換成可編輯，不會閃出 textarea。欄位與 Save 的 `ready` 再加上「編輯器就緒」；在編輯器就緒（或確定失敗、改用 Markdown 模式）之前，Markdown 模式的 textarea 同樣停用。
 - 首次聚焦規則不變：有標題欄且為空時聚焦標題欄，否則聚焦編輯區開頭（渲染模式為文件開頭，游標在最前）。還原的草稿同樣。
 - **失敗保護**：編輯器建立失敗、或解析後輸出為空但 `markdown` 非空，一律改用 Markdown 模式，顯示一行說明，且不讓那個空輸出進入 `markdown`。這是故障路徑，不是被拒絕的「無法還原時警告」——它防的是像上面圖片那樣讓整份文件靜默消失的解析失敗。
 - 兩個編輯區（渲染、textarea）都保持掛載，以 `hidden` 切換可見（沿用第 6 節的做法，不在同一元素加 display 類別）。
+- 離開頁面的流程（Cancel、載入最新版本）開始後，編輯器遲到的去抖輸出一律忽略，否則剛捨棄的草稿會被寫回 sessionStorage，下次開啟被「還原」。
+- 編輯器以「它開啟時用的 Markdown」為準記錄同步基準（由 `RenderedEditor` 經 `onReady` 回報）。`next/dynamic` 讓它在較晚的 render 才掛載，其間若捨棄草稿或在原始碼檢視改了內容，composer 據此發現編輯器顯示的是舊內容並整份換掉。
+- 原始碼 → 渲染的取代與開啟走同一條失敗保護：取代拋錯或輸出與輸入不符（`parsedIntact` 為假）時，留在 Markdown 模式並顯示同一行說明。編輯器區塊載入失敗同樣改用 Markdown 模式。
 
 ### 11.6 快捷鍵與 Esc
 
 | 按鍵 | 行為 |
 | --- | --- |
 | `⌘/Ctrl /` | 切換渲染 ⇄ Markdown（Typora 的慣例） |
-| `⌘/Ctrl Enter` | 存檔（不變）。在 ProseMirror 內也生效，因為事件會冒泡到 `<form>` |
+| `⌘/Ctrl Enter` | 存檔（不變）。在 ProseMirror 內也生效：編輯器把這個組合鍵綁成「已處理、不做事」（否則游標在程式碼區塊或表格內時，ProseMirror 會把它當成「跳出」而插入一個空段落，輸出成 `<br />`），事件仍冒泡到 `<form>` 由 `useFormKeys` 存檔 |
 | `Esc` | 沒有修改且沒有在保存 → 離開；有修改 → 不做事。兩種模式相同 |
 | `⌘/Ctrl ⇧ P` | 移除 |
 

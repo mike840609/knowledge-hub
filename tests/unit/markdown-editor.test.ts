@@ -2,6 +2,7 @@
 import { editorViewCtx, remarkPluginsCtx, serializerCtx } from "@milkdown/kit/core";
 import { listenerCtx } from "@milkdown/kit/plugin/listener";
 import { DOMParser as ProseDOMParser, DOMSerializer, type Node as ProseNode } from "@milkdown/kit/prose/model";
+import { TextSelection } from "@milkdown/kit/prose/state";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMarkdownEditor, EditorParseError, parsedIntact, type EditorOptions, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
 
@@ -299,6 +300,21 @@ describe("a failed open", () => {
   });
 });
 
+describe("a failed replacement", () => {
+  // A lone link reference definition is Markdown the editor makes nothing of: remark reads a
+  // `definition` node, and Milkdown has no node for it, so the document comes out empty.
+  it("throws EditorParseError when non-empty Markdown replaces to nothing", async () => {
+    const { editor } = await open("start\n");
+    expect(() => editor.replaceMarkdown("[a]: https://example.com\n")).toThrow(EditorParseError);
+  });
+
+  it("accepts an empty document, which is not a failure", async () => {
+    const { editor } = await open("start\n");
+    editor.replaceMarkdown("");
+    expect(editor.getMarkdown().trim()).toBe("");
+  });
+});
+
 describe("the editable element", () => {
   it("carries the classes and the name it was given, and can be locked and unlocked", async () => {
     const { root, editor } = await open("text\n", { editable: false });
@@ -309,5 +325,35 @@ describe("the editable element", () => {
     expect(element?.getAttribute("contenteditable")).toBe("false");
     editor.setEditable(true);
     expect(element?.getAttribute("contenteditable")).toBe("true");
+  });
+});
+
+describe("⌘/Ctrl Enter belongs to the form", () => {
+  // ProseMirror binds Mod-Enter to "exit the code block / table", which inserts an empty
+  // paragraph (written out as `<br />`) before the form's save could read the document.
+  it.each([
+    ["a code block", "```js\nconst a = 1;\n```\n\nafter\n", "const"],
+    ["a table cell", "| a | b |\n| - | - |\n| 1 | 2 |\n\nafter\n", "1"],
+  ])("changes nothing in %s, and still lets the key reach the form", async (_where, markdown, inside) => {
+    for (const modifier of [{ metaKey: true }, { ctrlKey: true }]) {
+      const { editor, calls } = await open(markdown);
+      const reachedForm = vi.fn();
+      document.addEventListener("keydown", reachedForm);
+      const event = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, ...modifier });
+      editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        let caret = 0;
+        view.state.doc.descendants((node, pos) => {
+          if (!caret && node.isText && node.text?.includes(inside)) caret = pos + 1;
+        });
+        view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, caret)));
+        view.dom.focus();
+        view.dom.dispatchEvent(event);
+      });
+      document.removeEventListener("keydown", reachedForm);
+      expect(editor.getMarkdown()).toBe(markdown);
+      expect(calls.edits).toBe(0);
+      expect(reachedForm).toHaveBeenCalledOnce();
+    }
   });
 });

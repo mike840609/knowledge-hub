@@ -10,7 +10,11 @@ export type RenderedEditorProps = {
   /** What to open with. Later changes go in through the handle `onReady` gave. */
   markdown: string;
   editable: boolean;
-  onReady: (editor: MarkdownEditor) => void;
+  /**
+   * The editor is built. `openedWith` is exactly the Markdown it was built from: `markdown` may
+   * have moved on while it was building, and the caller then has to bring the editor up to date.
+   */
+  onReady: (editor: MarkdownEditor, openedWith: string) => void;
   /** The editor could not be built (or made nothing of a non-empty document). */
   onFail: () => void;
   onUserEdit: () => void;
@@ -40,9 +44,10 @@ export function RenderedEditor(props: RenderedEditorProps) {
     container.appendChild(host);
     let cancelled = false;
     const toolbar = selectionToolbar();
+    const openedWith = latest.current.markdown;
     createMarkdownEditor({
       root: host,
-      markdown: latest.current.markdown,
+      markdown: openedWith,
       className: `kh-editor ${MARKDOWN_PROSE}`,
       ariaLabel: "Content",
       editable: latest.current.editable,
@@ -60,7 +65,7 @@ export function RenderedEditor(props: RenderedEditorProps) {
         editorRef.current = editor;
         // `editable` may have changed while the editor was building, when the effect below had no handle yet.
         editor.setEditable(latest.current.editable);
-        latest.current.onReady(editor);
+        latest.current.onReady(editor, openedWith);
       },
       () => {
         if (!cancelled) latest.current.onFail();

@@ -103,7 +103,10 @@ export type EditorOptions = {
 export type MarkdownEditor = {
   /** The document as Markdown right now, without waiting for the debounce (a pending `onMarkdown` still arrives once, with the same value). */
   getMarkdown: () => string;
-  /** Replaces the whole document. Emits no `onUserEdit` and no `onMarkdown` — not even for an edit still waiting out its debounce — and clears the undo history. */
+  /**
+   * Replaces the whole document. Emits no `onUserEdit` and no `onMarkdown` — not even for an edit still waiting out its debounce — and clears the undo history.
+   * Throws `EditorParseError` when non-empty Markdown comes out as nothing (the open path's rule); the editor then holds that empty document and should be discarded.
+   */
   replaceMarkdown: (markdown: string) => void;
   setEditable: (editable: boolean) => void;
   /** Focus with the selection where it is. */
@@ -149,6 +152,11 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
       ctx.update(editorViewOptionsCtx, (previous) => ({
         ...previous,
         editable: () => editable,
+        // ⌘/Ctrl Enter saves; the form handles it as the key bubbles out. ProseMirror would first
+        // "exit" a code block or table on it, inserting an empty paragraph (written as `<br />`).
+        // A direct prop runs before every plugin's keymap; claiming the key stops those, not the bubbling.
+        handleKeyDown: (view, event) =>
+          ((event.metaKey || event.ctrlKey) && event.key === "Enter") || Boolean(previous.handleKeyDown?.(view, event)),
         attributes: {
           ...(typeof previous.attributes === "object" ? previous.attributes : {}),
           class: `editor ${options.className}`,
@@ -191,7 +199,12 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
 
   return {
     getMarkdown: () => editor.action(getMarkdown()),
-    replaceMarkdown: (markdown) => editor.action(replaceAll(markdown, true)),
+    replaceMarkdown: (markdown) => {
+      editor.action(replaceAll(markdown, true));
+      if (!parsedIntact(markdown, editor.action(getMarkdown()))) {
+        throw new EditorParseError("The editor produced an empty document from non-empty Markdown.");
+      }
+    },
     setEditable: (next) => {
       editable = next;
       editor.action((ctx) => ctx.get(editorViewCtx).setProps({ editable: () => editable }));

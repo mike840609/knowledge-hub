@@ -49,6 +49,29 @@ async function leaveEditor(page: Page, documentUrl: string) {
   await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
 }
 
+/**
+ * The title the reader shows for the document: its breadcrumb's last segment, which is the
+ * stored title. Not the sidebar: its refresh after a save is dropped now and then, a known
+ * defect on main (composer verification record).
+ */
+function readerTitle(page: Page) {
+  return page.getByRole("region", { name: "Document content" }).getByRole("navigation", { name: "Breadcrumb" }).getByRole("listitem").last();
+}
+
+/** The rendered editor's code: the app's only lazily loaded chunks (`<id>.<hash>.js`; first-load chunks are `<id>-<hash>.js`). */
+const EDITOR_CODE = /\/_next\/static\/chunks\/[^/-]+\.[0-9a-f]+\.js$/;
+
+/** Holds the editor's code back until released, so the page can be used while the editor is still loading. */
+async function holdEditorCode(page: Page) {
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  await page.route(EDITOR_CODE, async (route) => {
+    await held;
+    await route.continue();
+  });
+  return release;
+}
+
 /** Opens the editor and returns the rendered surface once it can be typed into. */
 async function openEditor(page: Page, documentUrl: string) {
   await page.goto(`${documentUrl}/edit`);
@@ -131,12 +154,17 @@ test("typing Markdown syntax writes a heading and a list, and Create saves it", 
   await page.keyboard.type("- one");
   await page.keyboard.press("Enter");
   await page.keyboard.type("two");
+  // An empty item ends the list; then bold, typed as Markdown.
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("**x**");
 
   await expect(surface.getByRole("heading", { level: 1 })).toHaveText(title);
   await expect(surface.getByRole("listitem")).toHaveCount(2);
+  await expect(surface.locator("strong")).toHaveText("x");
   await expect(composer(page).getByLabel("Title", { exact: true })).toHaveCount(0);
   const source = await showMarkdown(composer(page));
-  await expect(source).toHaveValue(`# ${title}\n\n- one\n- two\n`);
+  await expect(source).toHaveValue(`# ${title}\n\n- one\n- two\n\n**x**\n`);
 
   await composer(page).getByRole("button", { name: "Create document" }).click();
   await expect(page.getByRole("treeitem", { name: title, exact: true })).toBeVisible(ROUND_TRIP);
@@ -151,6 +179,27 @@ test("⌘Enter saves from inside the rendered editor", async ({ page }) => {
   await surface.press("ControlOrMeta+Enter");
   await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
   await expect(page.locator("article").first().getByText("more")).toBeVisible(ROUND_TRIP);
+});
+
+test("⌘Enter with the caret in a code block saves, and adds nothing to the Markdown", async ({ page }) => {
+  const markdown = "```js\nconst a = 1;\n```\n\nafter\n";
+  const url = await createNote(page, unique("Code Save"), markdown);
+  const surface = await openEditor(page, url);
+  await surface.locator("pre").click();
+  // ProseMirror's own ⌘Enter would leave the code block by inserting an empty paragraph (`<br />`).
+  // Pressed as ProseMirror reads "Mod" in this browser: ⌘ where it reports a Mac, Ctrl elsewhere.
+  // The form saves on either.
+  const mod = (await page.evaluate(() => /Mac|iP(hone|[oa]d)/.test(navigator.platform))) ? "Meta" : "Control";
+  const saved = page.waitForResponse((response) => response.request().method() === "PATCH" && response.url().includes("/api/documents/"));
+  await page.keyboard.press(`${mod}+Enter`);
+  const response = await saved;
+  expect(response.ok()).toBe(true);
+  expect((JSON.parse(response.request().postData() ?? "{}") as { markdown?: string }).markdown).toBe(markdown);
+  await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
+
+  await openEditor(page, url);
+  const source = await showMarkdown(composer(page));
+  await expect(source).toHaveValue(markdown);
 });
 
 test("selecting text shows the toolbar, and Bold writes ** into the Markdown", async ({ page }) => {
@@ -255,11 +304,79 @@ test("⌘/ switches between the rendered editor and the Markdown", async ({ page
   await expect(surface).toBeVisible();
 });
 
+test("Markdown the editor makes nothing of stays in the source, with the reason shown", async ({ page }) => {
+  const url = await createNote(page, unique("Unparsed"), "body\n");
+  await openEditor(page, url);
+  const source = await showMarkdown(composer(page));
+  // A lone link reference definition: the editor has no node for it, so it would come out empty.
+  await source.fill("[a]: https://example.com\n");
+  const toggle = composer(page).getByRole("button", { name: "Markdown", exact: true });
+  await toggle.click();
+  await expect(composer(page).getByRole("status").filter({ hasText: "已改用 Markdown 模式" })).toBeVisible();
+  await expect(source).toBeVisible();
+  await expect(source).toHaveValue("[a]: https://example.com\n");
+  await expect(toggle).toBeDisabled();
+});
+
+test("the Markdown waits for the editor to load before it takes typing", async ({ page }) => {
+  const url = await createNote(page, unique("Wait For Editor"), "body\n");
+  const release = await holdEditorCode(page);
+  await page.goto(`${url}/edit`);
+  const toggle = composer(page).getByRole("button", { name: "Markdown", exact: true });
+  await expect(toggle).toBeEnabled(ROUND_TRIP);
+  await toggle.click();
+  const source = composer(page).getByLabel("Markdown", { exact: true });
+  await expect(source).toBeVisible();
+  await expect(source).toBeDisabled();
+  release();
+  await expect(source).toBeEnabled(ROUND_TRIP);
+});
+
+test("the editor arriving does not take the caret from a field the person moved to", async ({ page }) => {
+  const url = await createNote(page, unique("Keep Focus"), "body\n");
+  const release = await holdEditorCode(page);
+  await page.goto(`${url}/edit`);
+  const toggle = composer(page).getByRole("button", { name: "Markdown", exact: true });
+  await expect(toggle).toBeEnabled(ROUND_TRIP);
+  await toggle.click();
+  const titleField = composer(page).getByLabel("Title", { exact: true });
+  await titleField.click();
+  await page.keyboard.type(" more");
+  release();
+  await expect(page.locator(".ProseMirror")).toHaveAttribute("contenteditable", "true", ROUND_TRIP);
+  // A steal would come right after the editor is built; keep watching for a while.
+  for (let check = 0; check < 5; check += 1) {
+    await expect(titleField).toBeFocused();
+    await page.waitForTimeout(100);
+  }
+  await expect(titleField).toHaveValue(/ more$/);
+});
+
+test("an editor whose code cannot load leaves the Markdown in charge", async ({ page }) => {
+  const url = await createNote(page, unique("No Editor Code"), "body\n");
+  await page.route(EDITOR_CODE, (route) => route.abort());
+  await page.goto(`${url}/edit`);
+  await expect(composer(page).getByRole("status").filter({ hasText: "已改用 Markdown 模式" })).toBeVisible(ROUND_TRIP);
+  const source = composer(page).getByLabel("Markdown", { exact: true });
+  await expect(source).toBeEditable();
+  await source.fill("still editable");
+  await composer(page).getByRole("button", { name: "Save" }).click();
+  await expect(page.locator("article").first().getByText("still editable")).toBeVisible(ROUND_TRIP);
+});
+
 test("an image the reader would refuse is not loaded by the editor either", async ({ page }) => {
   const markdown = "![x](https://evil.example/a.png)\n\nbody\n";
+  const requested: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).hostname === "evil.example") requested.push(request.url());
+  });
   const url = await createNote(page, unique("Image"), markdown);
   const surface = await openEditor(page, url);
-  await expect(surface.locator('img[src="https://evil.example/a.png"]')).toHaveCount(0);
+  // The image is there, with its address only where no browser loads it.
+  const image = surface.locator('img[data-kh-src="https://evil.example/a.png"]');
+  await expect(image).toHaveCount(1);
+  await expect(image).not.toHaveAttribute("src", /./);
+  expect(requested).toEqual([]);
   // The document still holds the address; only the element lost it.
   const source = await showMarkdown(composer(page));
   await expect(source).toHaveValue(markdown);
@@ -276,7 +393,8 @@ test("a document that opens with an H1 is named by it, with no title field", asy
   await source.fill(`# ${after}\n\nbody`);
   await expect(composer(page).getByRole("navigation", { name: "Breadcrumb" })).toContainText(after);
   await composer(page).getByRole("button", { name: "Save" }).click();
-  await expect(page.getByRole("treeitem", { name: after, exact: true })).toBeVisible(ROUND_TRIP);
+  await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
+  await expect(readerTitle(page)).toHaveText(after, ROUND_TRIP);
 });
 
 test("deleting the opening H1 brings back the title field, filled with it", async ({ page }) => {
@@ -314,7 +432,8 @@ test("a frontmatter title survives editing the H1", async ({ page }) => {
   await source.fill("# Another heading entirely\n\ntext");
   await composer(page).getByRole("button", { name: "Save" }).click();
   await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
-  await expect(page.getByRole("treeitem", { name: title, exact: true })).toBeVisible(ROUND_TRIP);
+  await expect(page.locator("article").first().getByRole("heading", { name: "Another heading entirely" })).toBeVisible(ROUND_TRIP);
+  await expect(readerTitle(page)).toHaveText(title);
 });
 
 test("what was typed in the rendered editor survives leaving and is offered back on return", async ({ page }) => {
@@ -334,6 +453,55 @@ test("what was typed in the rendered editor survives leaving and is offered back
   await expect(back).not.toContainText("draft text");
   await page.reload();
   await expect(back).toBeEditable(ROUND_TRIP);
+  await expect(composer(page).getByRole("status").filter({ hasText: "已還原" })).toHaveCount(0);
+});
+
+test("a draft discarded while the editor is still loading is not what the editor shows", async ({ page }) => {
+  const url = await createNote(page, unique("Discard Early"), "start\n");
+  const surface = await openEditor(page, url);
+  await surface.click();
+  await page.keyboard.type("draft text ");
+  await leaveEditor(page, url);
+
+  // Press 捨棄 the moment the editor's host joins the page, while the editor in it is being built.
+  await page.addInitScript(() => {
+    new MutationObserver((records, observer) => {
+      for (const record of records) {
+        const host = [...record.addedNodes].find((node) => node instanceof HTMLDivElement && node.attributes.length === 0 && !node.firstChild);
+        if (!host || !(record.target instanceof HTMLElement) || !record.target.parentElement?.hasAttribute("hidden")) continue;
+        const discard = [...document.querySelectorAll<HTMLButtonElement>("main form button")].find((button) => button.textContent === "捨棄");
+        if (!discard) continue;
+        (window as unknown as { discardedWhileBuilding?: boolean }).discardedWhileBuilding = !document.querySelector(".ProseMirror");
+        discard.click();
+        observer.disconnect();
+        return;
+      }
+    }).observe(document, { childList: true, subtree: true });
+  });
+  const back = await openEditor(page, url);
+  expect(await page.evaluate(() => (window as unknown as { discardedWhileBuilding?: boolean }).discardedWhileBuilding)).toBe(true);
+  await expect(composer(page).getByRole("status").filter({ hasText: "已還原" })).toHaveCount(0);
+  await expect(back).not.toContainText("draft text");
+  await expect(back).toHaveText("start");
+});
+
+test("Cancel right after typing leaves no draft, even when the editor's output lands after it", async ({ page }) => {
+  const url = await createNote(page, unique("Cancel Late"), "start\n");
+  const surface = await openEditor(page, url);
+  await surface.click();
+  await page.keyboard.type("typed ");
+  const cancel = composer(page).getByRole("button", { name: "Cancel" });
+  const asked = page.waitForEvent("dialog");
+  const click = cancel.click();
+  const dialog = await asked;
+  // window.confirm holds the page; answering after the editor's 200 ms output debounce makes
+  // that output land after Cancel has cleared the draft, as a slow answer would.
+  await page.waitForTimeout(400);
+  await dialog.accept();
+  await click;
+  await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
+
+  await openEditor(page, url);
   await expect(composer(page).getByRole("status").filter({ hasText: "已還原" })).toHaveCount(0);
 });
 

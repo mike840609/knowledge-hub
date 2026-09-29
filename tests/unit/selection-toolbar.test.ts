@@ -227,6 +227,36 @@ describe("the selection toolbar's DOM contract", () => {
   });
 });
 
+
+describe("the list buttons", () => {
+  // Bulleted ⇄ numbered is not a conversion ProseMirror offers: a list cannot be the first
+  // child of a list item, so the other type's button would do nothing. It says so instead.
+  it.each([
+    ["- item\n", "Numbered list", "Bulleted list"],
+    ["1. item\n", "Bulleted list", "Numbered list"],
+  ])("in %j, disables %s and leaves %s pressable", async (markdown, other, same) => {
+    const editor = await open(markdown);
+    mountToolbar(editor);
+    select(editor, 3, 7);
+    expect(button(other).disabled).toBe(true);
+    expect(button(other).type).toBe("button");
+    expect(button(same).disabled).toBe(false);
+    expect(button(same).getAttribute("aria-pressed")).toBe("true");
+    button(other).click();
+    expect(editor.getMarkdown()).toBe(markdown);
+  });
+
+  it("disables neither outside a list, and enables them again on leaving one", async () => {
+    const editor = await open("text\n\n- item\n");
+    mountToolbar(editor);
+    select(editor, 9, 13);
+    expect(button("Numbered list").disabled).toBe(true);
+    select(editor, 1, 5);
+    expect(button("Bulleted list").disabled).toBe(false);
+    expect(button("Numbered list").disabled).toBe(false);
+  });
+});
+
 describe("hiding on blur", () => {
   async function shown() {
     const editor = await open("some text\n");
@@ -293,6 +323,24 @@ describe("hiding on blur", () => {
     expect(toolbarElement().dataset.show).toBe("false");
   });
 
+  it("hides the link box when focus leaves it for anywhere but the editor or the toolbar", async () => {
+    await shown();
+    button("Link").click();
+    expect(document.activeElement).toBe(linkBox());
+    linkBox().value = "half-typed";
+    focusElsewhere();
+    expect(toolbarElement().dataset.show).toBe("false");
+    expect(buttonRow().className).not.toContain("hidden");
+    expect(linkBox().value).toBe("");
+  });
+
+  it("keeps the link box's toolbar when focus goes from the box back into the editor", async () => {
+    const editor = await shown();
+    button("Link").click();
+    linkBox().dispatchEvent(new FocusEvent("blur", { relatedTarget: editorDom(editor) }));
+    expect(toolbarElement().dataset.show).toBe("true");
+  });
+
   it("leaves nothing behind when the editor is destroyed", async () => {
     const editor = await shown();
     const dom = editorDom(editor);
@@ -332,6 +380,18 @@ describe("the React wrapper", () => {
     wrapper.render(props({ editable: false, onReady: built.onReady }));
     const editor = await built.promise;
     expect(isEditable(editor)).toBe(false);
+  });
+
+  // The composer's sync base: if its Markdown moved on while the editor was building (a draft
+  // discarded, a source edit), it must learn that the editor opened with the older text.
+  it("reports the Markdown it opened with, even when the prop moved on while it was building", async () => {
+    const onReady = vi.fn();
+    const wrapper = mount(props({ markdown: "opened with\n", onReady }));
+    wrapper.render(props({ markdown: "moved on\n", onReady }));
+    await vi.waitFor(() => expect(onReady).toHaveBeenCalledOnce());
+    const [editor, openedWith] = onReady.mock.calls[0] as [MarkdownEditor, string];
+    expect(openedWith).toBe("opened with\n");
+    expect(editor.getMarkdown()).toBe("opened with\n");
   });
 
   it("follows later editable changes", async () => {

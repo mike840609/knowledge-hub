@@ -29,10 +29,16 @@ function headingLevel(view: EditorView): number {
   return parent.type.name === "heading" ? Number(parent.attrs.level) : 0;
 }
 
-function inList(view: EditorView, name: "bullet_list" | "ordered_list"): boolean {
+type ListName = "bullet_list" | "ordered_list";
+
+/** The list the caret is directly in (the innermost one), if any. */
+function currentList(view: EditorView): ListName | null {
   const { $from } = view.state.selection;
-  for (let depth = $from.depth; depth > 0; depth -= 1) if ($from.node(depth).type.name === name) return true;
-  return false;
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    const name = $from.node(depth).type.name;
+    if (name === "bullet_list" || name === "ordered_list") return name;
+  }
+  return null;
 }
 
 // A pressed toggle reads as selected, as the composer's own Markdown toggle does.
@@ -50,6 +56,7 @@ type Item = {
   text: string;
   className?: string;
   active: (view: EditorView) => boolean;
+  disabled?: (view: EditorView) => boolean;
   run: (ctx: Ctx, view: EditorView, openLink: () => void) => void;
 };
 
@@ -72,17 +79,21 @@ const items: Item[] = [
       else commands.call(wrapInHeadingCommand.key, level);
     },
   })),
+  // Inside a list, the other type's button is disabled: wrapping would put a list first in a
+  // list item, which the schema refuses, so it could only ever do nothing.
   {
     label: "Bulleted list",
     text: "•",
-    active: (view) => inList(view, "bullet_list"),
-    run: (ctx, view) => ctx.get(commandsCtx).call(inList(view, "bullet_list") ? liftListItemCommand.key : wrapInBulletListCommand.key),
+    active: (view) => currentList(view) === "bullet_list",
+    disabled: (view) => currentList(view) === "ordered_list",
+    run: (ctx, view) => ctx.get(commandsCtx).call(currentList(view) === "bullet_list" ? liftListItemCommand.key : wrapInBulletListCommand.key),
   },
   {
     label: "Numbered list",
     text: "1.",
-    active: (view) => inList(view, "ordered_list"),
-    run: (ctx, view) => ctx.get(commandsCtx).call(inList(view, "ordered_list") ? liftListItemCommand.key : wrapInOrderedListCommand.key),
+    active: (view) => currentList(view) === "ordered_list",
+    disabled: (view) => currentList(view) === "bullet_list",
+    run: (ctx, view) => ctx.get(commandsCtx).call(currentList(view) === "ordered_list" ? liftListItemCommand.key : wrapInOrderedListCommand.key),
   },
 ];
 
@@ -127,7 +138,7 @@ export function selectionToolbar(): { plugins: MilkdownPlugin[]; configure: (ctx
             button.setAttribute("aria-label", item.label);
             button.addEventListener("mousedown", (event) => event.preventDefault());
             button.addEventListener("click", () => {
-              if (!editorView.editable) return;
+              if (!editorView.editable || button.disabled) return;
               item.run(ctx, editorView, openLink);
               if (!linkMode) editorView.focus();
             });
@@ -186,13 +197,24 @@ export function selectionToolbar(): { plugins: MilkdownPlugin[]; configure: (ctx
             if (event.relatedTarget instanceof Node && element.contains(event.relatedTarget)) return;
             provider.hide();
           }
+          // The link box, from its side: leaving it for the page closes it; going back into the
+          // editor (Enter, Esc) or elsewhere in the toolbar does not.
+          function hideOnLinkBoxBlur(event: FocusEvent) {
+            const next = event.relatedTarget;
+            if (next instanceof Node && (element.contains(next) || editorView.dom.contains(next))) return;
+            provider.hide();
+          }
           const showOnFocus = () => provider.update(editorView);
           editorView.dom.addEventListener("blur", hideOnBlur);
           editorView.dom.addEventListener("focus", showOnFocus);
+          input.addEventListener("blur", hideOnLinkBoxBlur);
 
           return {
             update: (view, previous) => {
-              for (const { item, button } of pressers) button.setAttribute("aria-pressed", String(item.active(view)));
+              for (const { item, button } of pressers) {
+                button.setAttribute("aria-pressed", String(item.active(view)));
+                button.disabled = item.disabled?.(view) ?? false;
+              }
               provider.update(view, previous);
             },
             destroy: () => {
