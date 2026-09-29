@@ -2,6 +2,7 @@ import type { AnchorHTMLAttributes, DetailedHTMLProps, ImgHTMLAttributes } from 
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ExternalLink } from "lucide-react";
+import { remarkHeadingIds } from "@/shared/markdown/remark-heading-ids";
 import { MarkdownImage } from "./markdown-image";
 import { MARKDOWN_PROSE } from "./markdown-prose";
 
@@ -57,7 +58,7 @@ export function MarkdownRenderer({ markdown }: { markdown: string }) {
   return (
     <div className={MARKDOWN_PROSE}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkHeadingIds]}
         components={{
           a: MarkdownLink,
           // Image URL policy (issue #20, see markdown-image-policy.ts):

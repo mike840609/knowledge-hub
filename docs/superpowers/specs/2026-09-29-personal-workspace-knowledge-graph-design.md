@@ -265,11 +265,11 @@ type WorkspaceGraphView = {
 
 ### 9.1 Slug
 
-`headingSlug(text)`：`NFKC` → 小寫 → 移除不屬於 `\p{L}\p{N}\p{M}`、空白、`_`、`-` 的字元 → 空白轉 `-` → 合併連續 `-` → 去頭尾 `-`；結果為空則用 `section`。同一份文件內重複時依序加後綴 `-1`、`-2`（GitHub 規則）。中文標題因此可用（`## 請假流程` → `#請假流程`）。
+`headingSlug(text)`：`NFC` → 小寫 → 移除不屬於 `\p{L}\p{M}\p{N}\p{Pc}`、`-`、空白的字元 → **每個**空白換成一個 `-`。**不合併連續的 `-`、不去頭尾的 `-`**：`a - b` 是 `a---b`，與 GitHub 一致，這正是「不改內容就能用」的條件。結果為空則用 `section`（空 id 無法連結）。同一份文件內重複時依序加後綴 `-1`、`-2`，且加了後綴的 slug 也算已被占用（GitHub 規則）。中文標題因此可用（`## 請假流程` → `#請假流程`）。
 
 ### 9.2 單一來源
 
-`src/lib/markdown/` 有**一份**解析設定（`unified` + `remark-parse` + `remark-gfm`）、**一個** slug 指派函式 `assignHeadingSlugs(tree)`。渲染時 `remarkHeadingIds` plugin 與目錄抽取 `extractOutline(markdown)` 都呼叫它，所以錨點與目錄項目不可能各算各的。測試把兩者的結果逐一比對（含 CJK、重複標題、含 GFM 刪除線的標題）。
+`src/shared/markdown/` 有**一份**解析設定（`unified` + `remark-parse` + `remark-gfm`）、**一個** slug 指派函式 `assignHeadingSlugs(tree)`。渲染時 `remarkHeadingIds` plugin 與目錄抽取 `extractOutline(markdown)` 都呼叫它，所以錨點與目錄項目不可能各算各的。測試把兩者的結果逐一比對（含 CJK、重複標題、含 GFM 刪除線的標題）。
 
 ### 9.3 UI
 

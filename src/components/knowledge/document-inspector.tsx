@@ -10,6 +10,9 @@ import { usePathname } from "next/navigation";
 import { DocumentTopbarContext } from "@/components/shell/document-topbar-context";
 import { InspectorContext } from "./inspector-context";
 import { useScrollRestoration } from "./use-scroll-restoration";
+import { useActiveHeading } from "./use-active-heading";
+import { OutlineDisclosure, OutlineList, OutlineRail } from "./document-outline";
+import type { OutlineEntry } from "@/shared/markdown/outline";
 import { Check, Copy, X } from "lucide-react";
 import type { KnowledgeRevisionView } from "@/modules/knowledge/application/knowledge-query-service";
 import { Drawer } from "@/components/ui/drawer";
@@ -78,7 +81,7 @@ function TechnicalIds({ items }: { items: { label: string; value: string }[] }) 
   );
 }
 
-function InspectorTabs({ data }: { data: DocumentInspectorData }) {
+function InspectorTabs({ data, outline, activeSlug }: { data: DocumentInspectorData; outline: readonly OutlineEntry[]; activeSlug: string | null }) {
   const { access } = useWorkspaceAuthorization();
   const sorted = [...data.revisions].sort((a, b) => a.revisionNo - b.revisionNo);
   const current = sorted[sorted.length - 1];
@@ -89,6 +92,7 @@ function InspectorTabs({ data }: { data: DocumentInspectorData }) {
       <TabsList aria-label="Document inspector">
         <TabsTab value="details">Details</TabsTab>
         <TabsTab value="history">History</TabsTab>
+        {outline.length > 0 ? <TabsTab value="outline">Outline</TabsTab> : null}
       </TabsList>
       <TabsPanel value="details">
         <dl className="space-y-3 text-body-sm [&>div]:grid [&>div]:grid-cols-[6rem_minmax(0,1fr)] [&>div]:items-baseline [&>div]:gap-x-3 [&_dd]:col-start-2 [&_dd]:min-w-0 [&_dd]:break-words">
@@ -162,6 +166,13 @@ function InspectorTabs({ data }: { data: DocumentInspectorData }) {
           })}
         </ul>
       </TabsPanel>
+      {outline.length > 0 ? (
+        <TabsPanel value="outline">
+          <nav aria-label="Document outline">
+            <OutlineList entries={outline} activeSlug={activeSlug} />
+          </nav>
+        </TabsPanel>
+      ) : null}
     </TabsRoot>
   );
 }
@@ -182,10 +193,14 @@ export function DocumentInspector({
   open,
   onOpenChange,
   data,
+  outline,
+  activeSlug,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   data: DocumentInspectorData;
+  outline: readonly OutlineEntry[];
+  activeSlug: string | null;
 }) {
   const wide = useWideInspector();
   if (!open) return null;
@@ -208,7 +223,7 @@ export function DocumentInspector({
         </div>
         <div key={data.documentId} role="region" aria-label="Document details content" tabIndex={0}
           className="min-h-0 flex-1 overflow-y-auto overscroll-contain break-words px-4 py-3 kh-focus-ring">
-          <InspectorTabs data={data} />
+          <InspectorTabs data={data} outline={outline} activeSlug={activeSlug} />
         </div>
       </aside>
     );
@@ -223,7 +238,7 @@ export function DocumentInspector({
       description={data.sourceName}
       surfaceClassName="bg-kh-bg-raised"
     >
-      <InspectorTabs data={data} />
+      <InspectorTabs data={data} outline={outline} activeSlug={activeSlug} />
     </Drawer>
   );
 }
@@ -241,6 +256,7 @@ export function DocumentDetailClient({
   readOnly,
   ownership,
   contentOwnsTitle,
+  outline,
 }: {
   breadcrumb: DocumentBreadcrumbSegment[];
   title: string;
@@ -260,6 +276,8 @@ export function DocumentDetailClient({
   /** Passed rather than inferred from `readOnly`: the two happen to agree today. */
   ownership: "SOURCE_MANAGED" | "HUB_MANAGED";
   contentOwnsTitle: boolean;
+  /** Headings of the revision on screen, from the same parse that gives them their ids. */
+  outline: OutlineEntry[];
 }) {
   useRefreshOnArrival();
   const inspector = useContext(InspectorContext);
@@ -268,6 +286,7 @@ export function DocumentDetailClient({
   const headerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   useScrollRestoration(contentRef, inspectorData.documentId);
+  const activeSlug = useActiveHeading(outline.map((entry) => entry.slug), contentRef);
   const inspectorOpen = inspector?.open ?? false;
   const setInspectorOpen = inspector?.setOpen;
   const openInspector = useCallback(() => {
@@ -335,24 +354,30 @@ export function DocumentDetailClient({
   return (
     <div data-document-pane className="flex h-full min-h-0 overflow-hidden bg-kh-bg">
       <div ref={contentRef} role="region" aria-label="Document content" tabIndex={0}
-        className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain contain-layout kh-focus-ring">
-        <div ref={headerRef}>
-        <DocumentHeader
-          breadcrumb={breadcrumb}
-          title={title}
-          status={status}
-          updatedAt={updatedAt}
-          revisionBanner={revisionBanner}
-          onDetailsClick={openInspector}
-          editHref={editHref}
-          onShareClick={canShare ? () => requestShare(inspectorData.documentId) : null}
-          readOnly={readOnly}
-          contentOwnsTitle={contentOwnsTitle}
-        />
+        className="kh-document-pane min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain contain-layout kh-focus-ring">
+        <div className="flex items-start">
+          <div className="min-w-0 flex-1">
+            <div ref={headerRef}>
+            <DocumentHeader
+              breadcrumb={breadcrumb}
+              title={title}
+              status={status}
+              updatedAt={updatedAt}
+              revisionBanner={revisionBanner}
+              onDetailsClick={openInspector}
+              editHref={editHref}
+              onShareClick={canShare ? () => requestShare(inspectorData.documentId) : null}
+              readOnly={readOnly}
+              contentOwnsTitle={contentOwnsTitle}
+            />
+            </div>
+            <OutlineDisclosure entries={outline} activeSlug={activeSlug} />
+            {children}
+          </div>
+          <OutlineRail entries={outline} activeSlug={activeSlug} />
         </div>
-        {children}
       </div>
-      <DocumentInspector open={inspectorOpen} onOpenChange={(open) => setInspectorOpen?.(open)} data={inspectorData} />
+      <DocumentInspector open={inspectorOpen} onOpenChange={(open) => setInspectorOpen?.(open)} data={inspectorData} outline={outline} activeSlug={activeSlug} />
     </div>
   );
 }

@@ -20,9 +20,9 @@
 
 | # | 任務 | 檔案 | 測試 |
 | --- | --- | --- | --- |
-| 1.1 | 明確宣告 `unified`、`remark-parse`（版本與 lockfile 內現有的一致），共用解析設定 `parseMarkdown(markdown)`（remark-parse + remark-gfm） | `package.json`、`src/lib/markdown/parse.ts` | `tests/unit/markdown-parse.test.ts` |
-| 1.2 | `headingSlug`、`assignHeadingSlugs(tree)`（GitHub 相容、CJK、重複後綴） | `src/lib/markdown/heading-slug.ts` | `tests/unit/heading-slug.test.ts`：英文、CJK、標點、重複、空、超長、含行內 code／強調／GFM 刪除線 |
-| 1.3 | `extractOutline(markdown)`（深度 1–4、上限 200、縮排深度） | `src/lib/markdown/outline.ts` | `tests/unit/markdown-outline.test.ts`：跳級標題、code fence 內的 `#`、setext 標題、空文件 |
+| 1.1 | 明確宣告 `unified`、`remark-parse`（版本與 lockfile 內現有的一致），共用解析設定 `parseMarkdown(markdown)`（remark-parse + remark-gfm） | `package.json`、`src/shared/markdown/parse.ts` | `tests/unit/markdown-parse.test.ts` |
+| 1.2 | `headingSlug`、`assignHeadingSlugs(tree)`（GitHub 相容、CJK、重複後綴） | `src/shared/markdown/heading-slug.ts` | `tests/unit/heading-slug.test.ts`：英文、CJK、標點、重複、空、超長、含行內 code／強調／GFM 刪除線 |
+| 1.3 | `extractOutline(markdown)`（深度 1–4、上限 200、縮排深度） | `src/shared/markdown/outline.ts` | `tests/unit/markdown-outline.test.ts`：跳級標題、code fence 內的 `#`、setext 標題、空文件 |
 | 1.4 | `remarkHeadingIds` plugin 掛進 `MarkdownRenderer`；標題加 `scroll-mt-4` | `src/components/knowledge/markdown-renderer.tsx` | `tests/unit/markdown-renderer-headings.test.tsx`：渲染結果的 `id` 與 `extractOutline` 逐項相等 |
 | 1.5 | `useActiveHeading(ids, scrollRoot)`（IntersectionObserver）、`DocumentOutline`（`nav`＋`ol`、`aria-current`、reduced motion） | `src/components/knowledge/use-active-heading.ts`、`document-outline.tsx` | 元件以 `react-dom/server` 渲染的結構測試；捲動同步在 e2e |
 | 1.6 | 版面：rail（`min-[1280px]`、inspector 關閉時）、inspector「Outline」分頁、窄螢幕 `<details>`；文件頁把選定 revision 的 outline 傳下去 | `document-inspector.tsx`、`[documentId]/page.tsx`、`document-viewer.tsx` | e2e `tests/e2e/document-outline.spec.ts` |
@@ -50,7 +50,7 @@
 
 | # | 任務 | 檔案 | 測試 |
 | --- | --- | --- | --- |
-| 3.1 | `remarkKnowledgeLinks` plugin：把 `[[…]]` 變成帶 `data-kh-wikilink` 的 link 節點；`MarkdownRenderer` 新增可選 `links` prop（key → 解析結果）；無 `links` 時輸出純文字 | `src/lib/markdown/remark-knowledge-links.ts`、`markdown-renderer.tsx` | `tests/unit/markdown-renderer-links.test.tsx`：resolved／unresolved／ambiguous 三種輸出；alias、fragment→`#slug`；相對 `.md` 連結；無 `links` 時純文字；code 內不轉換；`data-*` 屬性確實傳到 `a` 元件 |
+| 3.1 | `remarkKnowledgeLinks` plugin：把 `[[…]]` 變成帶 `data-kh-wikilink` 的 link 節點；`MarkdownRenderer` 新增可選 `links` prop（key → 解析結果）；無 `links` 時輸出純文字 | `src/shared/markdown/remark-knowledge-links.ts`、`markdown-renderer.tsx` | `tests/unit/markdown-renderer-links.test.tsx`：resolved／unresolved／ambiguous 三種輸出；alias、fragment→`#slug`；相對 `.md` 連結；無 `links` 時純文字；code 內不轉換；`data-*` 屬性確實傳到 `a` 元件 |
 | 3.2 | 文件頁呼叫 `getDocumentLinks`，把解析結果傳給 viewer；`getKnowledgeDocumentModel` 之外新增 `getDocumentLinkModel` | `src/server/link-graph-read.ts`、`[documentId]/page.tsx`、`document-viewer.tsx` | e2e |
 | 3.3 | `DocumentLinksPanel`（inspector「Links」分頁：Backlinks／Outgoing／Unresolved；索引更新中提示） | `document-links-panel.tsx`、`document-inspector.tsx` | 結構測試 + e2e |
 | 3.4 | `BacklinksFooter`（「Linked from N documents」，含上下文） | `backlinks-footer.tsx` | e2e |
@@ -85,7 +85,7 @@
 
 | 切片 | unit | integration | e2e | build | 備註 |
 | --- | --- | --- | --- | --- | --- |
-| 1 TOC | | | | | |
+| 1 TOC | 462（+35） | 不受影響 | `document-outline.spec.ts` 4/4 | 通過 | 1.7 已檢查：應用程式自有 id（`tree-filter`、`search-q` 等）可能與標題 slug 相同，outline 改在 `article` 內查找，不用全頁 `getElementById` |
 | 2 索引 | | | | | |
 | 3 渲染／Backlinks | | | | | |
 | 4 圖譜 | | | | | |

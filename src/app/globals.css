@@ -225,6 +225,34 @@ kbd {
     @apply mx-auto w-full max-w-wide px-6;
   }
 
+  /* The document pane, not the viewport, decides where the outline goes: the
+     primary nav, the explorer and the inspector take a variable share of the
+     window, so a viewport breakpoint says nothing about the room the content
+     has. Wide enough, the outline is a rail beside it; otherwise a disclosure
+     above it. Both are in the DOM and the query picks one, so the server
+     render is right at every width without a script deciding first. */
+  .kh-document-pane {
+    container: kh-document / inline-size;
+  }
+
+  .kh-outline-rail {
+    display: none;
+  }
+
+  .kh-outline-inline {
+    display: block;
+  }
+
+  @container kh-document (min-width: 60rem) {
+    .kh-outline-rail {
+      display: block;
+    }
+
+    .kh-outline-inline {
+      display: none;
+    }
+  }
+
   /* Rails need a deeper hover than the canvas, or it disappears into them. */
   .kh-sidebar-surface {
     --kh-bg-hover: var(--kh-bg-hover-strong);

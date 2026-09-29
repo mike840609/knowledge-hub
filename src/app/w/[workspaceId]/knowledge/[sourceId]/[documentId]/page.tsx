@@ -4,6 +4,7 @@ import { DocumentDetailClient, type DocumentInspectorData } from "@/components/k
 import { DocumentViewer } from "@/components/knowledge/document-viewer";
 import { StatusMessage } from "@/components/ui/status-message";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
+import { extractOutline } from "@/shared/markdown/outline";
 
 export default async function KnowledgeDocumentPage({
   params,
@@ -103,6 +104,7 @@ export default async function KnowledgeDocumentPage({
       readOnly={sourceManaged}
       ownership={explorer?.source.ownership ?? "SOURCE_MANAGED"}
       contentOwnsTitle={contentOwnsTitle}
+      outline={extractOutline(selectedRevision.markdown)}
     >
       <div className="kh-reading-column py-6">
         <DocumentViewer view={view} selectedRevision={selectedRevision} />
