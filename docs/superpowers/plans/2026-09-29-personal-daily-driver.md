@@ -14,13 +14,13 @@
 
 | # | 任務 | 檔案 | 測試 | 驗收 |
 | --- | --- | --- | --- | --- |
-| 0.1 | **Spike**：在 jsdom 測試裡替 `createMarkdownEditor` 加一個最小的 inline 節點與 remark 外掛，確認 (a) `[[x]]` 能往返，(b) 以 mdast `html` 節點輸出時不被跳脫。結論寫回規格 §4.1（(b) 不成立就改用自訂 to-markdown handler） | `editor/wiki-link.ts`（草稿）、暫時的測試 | 暫時 | 規格 §4.1 已標明採用的輸出方式 |
-| 0.2 | 把 `document-links-extract.test.ts` 的 Markdown 輸入整理成共用 fixture 清單，抽取器測試改用它（行為不變） | `tests/fixtures/link-markdown.ts`、該測試檔 | 抽取器測試全部照舊通過 | 清單涵蓋：wikilink 的別名／標題／區塊 id／管線、被跳脫的、程式碼與行內程式碼、連結內巢狀、相對 `.md` 路徑、上限 |
+| 0.1 ✅ | **Spike**（2026-09-29 完成，結論在規格 §4.4）：在 jsdom 測試裡替 `createMarkdownEditor` 加一個最小的 inline 節點與 remark 外掛，確認 (a) `[[x]]` 能往返，(b) 以 mdast `html` 節點輸出時不被跳脫。結論寫回規格 §4.1（(b) 不成立就改用自訂 to-markdown handler） | `editor/wiki-link.ts`（草稿）、暫時的測試 | 暫時 | 規格 §4.1 已標明採用的輸出方式。**結果：(a) 成立；(b) 對表格內的 `\|` 不成立，改用自訂 `wikiLink` 節點與 handler；另發現 main 上的 D0b（Milkdown 的 `text` handler 對以空白結尾的文字不跳脫）** |
+| 0.2 | 把 `document-links-extract.test.ts` 的 Markdown 輸入整理成共用 fixture 清單（**另加 spike 找到的三筆：表格裡的別名 `\|`、`\[\[x\]\] and ![a](/a.png)`、`[[A]] \[\[x\]\] [[B]]`**），抽取器測試改用它（行為不變） | `tests/fixtures/link-markdown.ts`、該測試檔 | 抽取器測試全部照舊通過 | 清單涵蓋：wikilink 的別名／標題／區塊 id／管線、被跳脫的、程式碼與行內程式碼、連結內巢狀、相對 `.md` 路徑、上限 |
 | 0.3 | remark 外掛：走訪 `text` 節點，用 `findWikiLinks(node, markdown)` 切出 `wikiLink` mdast 節點（值為原始字串） | `editor/remark-wikilinks.ts` | 單元：切分正確、前後文字保留、被跳脫的不切、程式碼內不切、`position` 缺失時不動作 | 純函式層完成，不依賴 DOM |
-| 0.4 | ProseMirror inline atom 節點 `wiki_link`：屬性 `raw`／`target`／`fragment`／`alias`；`parseMarkdown`、`toMarkdown`（依 0.1 的結論）、`toDOM`／`parseDOM`；退格整個刪除、左右鍵整個跳過 | `editor/wiki-link.ts` | jsdom：節點往返、DOM 形狀、複製貼上（`parseDOM`）保留 `raw` | 節點單獨可用 |
+| 0.4 | ProseMirror inline atom 節點 `wiki_link`：**只有屬性 `raw`**，`target`／`fragment`／`alias` 顯示時由 `parseWikiLinkParts` 現算（規格 §4.1-2）；`parseMarkdown`、`toMarkdown`（依 0.1 的結論）、`toDOM`／`parseDOM`；退格整個刪除、左右鍵整個跳過 | `editor/wiki-link.ts` | jsdom：節點往返、DOM 形狀、複製貼上（`parseDOM`）保留 `raw` | 節點單獨可用 |
 | 0.5 | input rule：打完 `]]` 把 `[[…]]` 轉成節點；貼上含 `[[…]]` 的文字走既有的 Markdown 貼上解析 | 同上 | jsdom：逐字輸入 `[[Note#H\|a]]` 得到節點；貼上得到節點；`\[\[x\]\]` 不轉換 | 手打與貼上都不再產生被跳脫的輸出 |
-| 0.6 | 接進 `editor-core.ts` 的**基礎**外掛清單（不放在 `extraPlugins`，任何宿主都要有） | `editor-core.ts` | 既有 `markdown-editor.test.ts` 全過 | 其他正規化行為不變 |
-| 0.7 | **往返測試**：對 0.2 的每一筆 fixture，`extractDocumentLinks(輸入)` 等於 `extractDocumentLinks(編輯器往返後)`；另加：刻意跳脫的保持跳脫、程式碼內不變、編輯周邊文字後連結不變 | `tests/unit/editor-wikilinks.test.ts` | 本身 | 全部通過；**故意把 0.6 的接線拿掉會讓它失敗**（變異驗證，記進驗證紀錄） |
+| 0.6 | 接進 `editor-core.ts` 的**基礎**外掛清單（不放在 `extraPlugins`，任何宿主都要有），**並在編輯器設定裡呼叫 `configureWikiLinkStringify`**（`wikiLink` 與 `text` 的 handler；兩者缺一往返都會壞，規格 §4.4）。既有 `markdown-editor.test.ts` 的 `"a wikilink is escaped"` 案記錄的是缺陷本身，接線後要改成新的預期 | `editor-core.ts`、`markdown-editor.test.ts` | 既有測試全過（該案除外，已改預期） | 其他正規化行為不變 |
+| 0.7 | **往返測試**：對 0.2 的每一筆 fixture，`extractDocumentLinks(輸入)` 等於 `extractDocumentLinks(編輯器往返後)`；另加：刻意跳脫的保持跳脫、程式碼內不變、編輯周邊文字後連結不變 | `tests/unit/editor-wikilinks.test.ts` | 本身 | 全部通過；**故意把 0.6 的接線拿掉會讓它失敗**（變異驗證，記進驗證紀錄）；**分別拿掉節點與拿掉 `configureWikiLinkStringify` 各一次**，兩次都要失敗（前者讓 wikilink 被跳脫，後者讓表格別名與 D0b 兩案失敗） |
 | 0.8 | 顯示樣式：`.kh-wikilink` 用連結 token（不新增 token）；`title` 顯示原始字串 | `globals.css` | e2e 目視＋屬性斷言 | 亮暗模式都看得出是連結 |
 | 0.9 | **渲染模式 e2e**（不呼叫 `showMarkdown` 來輸入）：(a) 開啟有 wikilink 的文件，在渲染模式打一個字並存檔，切到原始碼視圖仍是 `[[…]]`，目標頁 backlinks 還在；(b) 新增文件時在渲染模式打 `[[目標]]`，存檔後目標頁出現該 backlink | `tests/e2e/composer-wikilinks.spec.ts` | 本身 | 兩案在缺陷版本上會失敗、修復後通過（先在未修的 main 上跑一次確認會紅） |
 | 0.10 | 受損文件的**唯讀**報告：找出現行 revision 中符合「只有開頭被跳脫」特徵（`\[\[…]]`，結尾未跳脫）的文件，輸出 Workspace／文件 ID／標題／行號，預設 dry-run，沒有修復選項 | `scripts/db/report-escaped-wikilinks.ts`、`package.json` script、`Makefile` target | integration：種入受損、刻意跳脫、正常三種，只報第一種 | 報告數字寫進驗證紀錄；**修復不在這一批**（規格 §12-2 已決定先看數量再決定），腳本沒有寫入選項 |

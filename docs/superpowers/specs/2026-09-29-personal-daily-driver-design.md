@@ -71,8 +71,8 @@ composer 預設是渲染編輯（Milkdown）。把文件送進去、編輯一個
 ### 4.1 行為
 
 1. **解析。** Milkdown 的 remark 階段加一個外掛：走訪 `text` 節點，用 `findWikiLinks` 找出 wikilink（它已處理跳脫、程式碼、連結內的巢狀），把該範圍換成 mdast 節點 `wikiLink`（`value` 為括號內的原始字串），前後文字節點照舊。被使用者刻意跳脫的 `\[\[x\]\]` 不會被辨識，仍是文字。
-2. **節點。** ProseMirror inline **atom** 節點 `wiki_link`，屬性 `raw`（原始字串，供輸出）與由 `parseWikiLinkParts` 得到的 `target`／`fragment`／`alias`（供顯示）。
-3. **輸出。** 序列化時原樣寫回 `[[raw]]`。實作以 mdast 的行內 `html` 節點輸出（該節點不做跳脫）；切片 0 的第一個任務是驗證這一點，不成立就改用自訂的 to-markdown handler。
+2. **節點。** ProseMirror inline **atom** 節點 `wiki_link`，**只存一個屬性 `raw`**（括號內外的原始字串，供輸出）；`target`／`fragment`／`alias` 顯示時用 `parseWikiLinkParts(raw)` 現算，不另存（存兩份就可能不一致；spike 證實現算就夠）。
+3. **輸出。** 序列化時原樣寫回 `[[raw]]`，由**自訂的 mdast 節點 `wikiLink` 與它的 to-markdown handler** 輸出，不用行內 `html` 節點——spike（§4.4）發現 `html` 節點在表格儲存格裡會寫出未跳脫的 `|`，把整列弄壞；自訂 handler 可以看 `state.stack` 在表格內把 `|` 補回 `\|`。handler 必須設在編輯器設定的 `remarkStringifyOptionsCtx.handlers`（不能放在 remark 外掛的 extension，因為 options 的 handlers 會蓋過 extension 的，已驗證）。
 4. **輸入。** 打完 `]]` 時，input rule 把 `[[…]]` 轉成節點；貼上含 `[[…]]` 的文字，走 Milkdown 既有的 Markdown 貼上解析，自動經過同一個外掛。
 5. **顯示。** 像連結的樣式（設計語言的連結色與底線），文字為 `alias ?? target`（有 fragment 時附 `› fragment`），`title` 顯示原始字串；⌘/Ctrl-點擊的行為與閱讀頁一致，一般點擊不導覽（編輯器對連結的既有規則）。
 
@@ -86,6 +86,33 @@ composer 預設是渲染編輯（Milkdown）。把文件送進去、編輯一個
 ### 4.3 已受損的文件
 
 `\[\[X]]`（只有開頭被跳脫）是 Milkdown 輸出的特徵；使用者刻意跳脫時會寫 `\[\[X\]\]`（兩邊都跳脫）。所以可以用這個特徵**偵測**已受損的文件。提供一支唯讀、預設 dry-run 的報告腳本；**修復**（每份文件一個新 revision，會進歷史）**這一批不做**：先跑報告、看到實際數量後再決定（§12-2），腳本本身沒有寫入選項。
+
+### 4.4 Spike 結論（任務 0.1，2026-09-29）
+
+做法：在 jsdom 裡，用 `createMarkdownEditor` 的 `extraPlugins`／`configure` 掛上一個草稿版的 remark 外掛與 `wiki_link` 節點（`findWikiLinks` 切分、只存 `raw`、自訂 `wikiLink` mdast 節點輸出），對 35 筆輸入各做兩件事：開啟後直接取 Markdown，以及在第一個文字區塊前面打一個字後取 Markdown；每筆都用 `extractDocumentLinks` 比對連結邊。
+
+**結果。** 35 筆全部在往返後邊與輸入相同。沒有節點時（現在的 main），其中 31 筆的 wikilink 邊全部消失，1 筆（`literalBeforeImage`，見 D0b）反而多出一條不該有的邊，只有 3 筆不受影響（`insideLink`、`relative`、`starred`，本來就沒有 wikilink 邊或不在編輯範圍）。涵蓋：一般、別名、標題、別名加標題、清單、有序清單、任務清單、多個連結、中文與路徑、標題列、引用、粗體與斜體內（含粗體裡只有一個連結）、表格（含 `\|`）、`#^blockId`、含空白、embed `![[…]]`、被跳脫的、行內與圍欄程式碼、連結內的 wikilink、`[[*starred*]]`、跨行與巢狀、相鄰、行首行尾、軟斷行、硬斷行、圖片旁、實體。既有的 `markdown-editor.test.ts`（48 個測試）也仍通過——草稿在那個測試裡沒有接線，所以這只說明加入這些檔案沒有弄壞什麼，不是說接線後不會改變（見下方對計畫的影響）。
+
+**§4.1 的兩個假設，結論：**
+
+| 假設 | 結論 |
+| --- | --- |
+| (a) 節點能無損往返 `[[x]]` | 成立 |
+| (b) 以 mdast `html` 節點輸出不會被跳脫 | 對大多數情況成立，**但表格裡的 `[[Note\|alias]]` 會寫成 `[[Note|alias]]`，把儲存格切開，連結邊 1 → 0**。改用自訂 `wikiLink` 節點加 handler，在 `state.stack` 含 `tableCell` 時補回 `\|`，該案通過 |
+
+**spike 順帶發現一個 main 上就有的缺陷（D0b，與節點無關）。** Milkdown 的 `text` handler 對「以空白結尾、且不含 `*`、`_`、`\`」的文字直接原樣回傳，完全不跳脫。所以在**沒有**這個節點的 main 上，`\[\[lit\]\] and ![a](/a.png)` 往返成 `[[lit]] and ![a](/a.png)`：刻意跳脫（不是連結）的文字變成了連結（邊 0 → 1）。有了 wikilink 節點會更常碰到（連結前的文字常以空白結尾）：`\[\[lit\]\] and [[Real]]` 同樣會讓 `lit` 變成連結。處理：`configureWikiLinkStringify` 也包了 `text` handler，只對「含 `[[` 且以空白結尾」的文字改走 `safe`（跳脫後把結尾空白補回），其餘照舊，把改動範圍限制在 wikilink 上。驗證：`\[\[lit\]\] and ![a](/a.png)` 與 `[[A]] \[\[lit\]\] [[B]]` 都維持原樣。
+
+**沒有證明的部分（留給後續任務，不要當成已完成）：**
+- ProseMirror 層的互動：退格整個刪除節點、方向鍵跳過、複製貼上（`parseDOM`／`toDOM`）、input rule（任務 0.4、0.5）。
+- 顯示與樣式、`title`、亮暗模式（0.8）。
+- 真正的瀏覽器與 composer 存檔流程（0.9 的渲染模式 e2e）。
+- 編輯器 chunk 的大小差（切片 0 的量測）。
+
+**對計畫的影響：**
+- 0.4：節點只有 `raw` 一個屬性。
+- 0.6：接進 `editor-core.ts` 時要同時做兩件事——把 remark 外掛與節點放進基礎外掛清單，**以及**在編輯器設定裡呼叫 `configureWikiLinkStringify`（`wikiLink` 與 `text` 的 handler）。兩者缺一，往返都會壞。
+- 既有 `markdown-editor.test.ts` 的 `"a wikilink is escaped"` 案（`see [[Other Page]] here` → `see \[\[Other Page]] here`）記錄的正是缺陷本身；接線後它會變，要改成新的預期，並在 0.7 的變異驗證裡確認拿掉接線它會回到舊值。
+- 0.2 的共用 fixture 加入：表格裡的別名（`\|`）、`\[\[x\]\] and ![a](/a.png)`、`[[A]] \[\[x\]\] [[B]]`。
 
 ## 5. 切片 C — 程式碼區塊
 
