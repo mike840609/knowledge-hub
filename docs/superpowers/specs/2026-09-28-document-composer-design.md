@@ -7,7 +7,7 @@
 | 回應 | 對照 Linear 設計語言的 UI/UX 審查第 2 項；`frontend-design-language.md` §18 Open items 第 3 項（編輯與閱讀是兩個不同的頁面；該項由 PR #61 加入） |
 | 對照契約 | `docs/superpowers/specs/frontend-design-language.md` §7（page containers）、§10（Focus and keyboard）、§15（component architecture） |
 | 對照規格 | `2026-09-16-phase-5-human-authoring-design.md`（authoring API、409 conflict）、`2026-09-24-keyboard-shortcuts-design.md`（`E`、`⌘Enter`、`Esc`） |
-| 狀態 | 第 1–10 節（Markdown 原始碼編輯器）已實作，驗證見 `docs/superpowers/verification/2026-09-28-document-composer-verification.md`。**第 11 節（2026-09-29 修訂：預設渲染編輯、可切換原始碼）待實作**，它取代決定 1、決定 3，以及第 6 節的預覽與快捷鍵。 |
+| 狀態 | 已實作。驗證見 docs/superpowers/verification/2026-09-28-document-composer-verification.md。第 11 節（2026-09-29 修訂）取代決定 1、決定 3，以及第 6 節的預覽與快捷鍵。 |
 
 ## 1. 現況（實測，非引述）
 

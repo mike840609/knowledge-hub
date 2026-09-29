@@ -372,15 +372,18 @@ row's "Edit document" beside an `E` that edits a different document would be
 a lie on every row but one.
 
 In the document composer (new and edit share it), ⌘Enter saves through the
-form's own submit button, and only when that button is enabled. ⌘⇧P toggles
-the preview. `Esc` in preview returns to the text; otherwise it leaves only a
-composer nothing has been typed into, and with changes it does nothing. No key
-discards a draft; Cancel is the one way to, and it asks first.
+form's own submit button, and only when that button is enabled. ⌘/ switches
+between the rendered editor and the Markdown source; the source is the
+default's opposite, a keystroke away. `Esc` leaves only a composer nothing has
+been typed into, and with changes it does nothing. No key discards a draft;
+Cancel is the one way to, and it asks first. ⌘K stays the global search; the
+editor binds no key that is already bound.
 
-The composer's title field and text are the one place without the focus ring.
-A text field matches `:focus-visible` for as long as it has focus, so a ring
-would frame the whole canvas for the whole time anyone writes; the caret is the
-focus indicator there. Its buttons keep the ring. Composer spec §6.
+The composer's title field, its rendered editor and its Markdown text are the
+one place without the focus ring. A text field matches `:focus-visible` for as
+long as it has focus, so a ring would frame the whole canvas for the whole time
+anyone writes; the caret is the focus indicator there. Its buttons keep the
+ring. Composer spec §6.
 
 **A link to the page being read does not prefetch** (`prefetch={false}` on
 the selected row in the tree and in Favorites/Recent). Prefetched from itself,
@@ -875,9 +878,10 @@ that ever changes rather than being redesigned.
     (`docs/superpowers/specs/2026-09-28-document-composer-design.md`) edits
     in the reader's layout on the same `/edit` and `/new` routes. The title
     follows the content (metadata title, then the opening H1, then a typed
-    field), preview toggles in place, and the navigation guard this item asked
-    about became a tab-scoped draft restored on return, since the App Router
-    cannot intercept in-app navigation. There is still no autosave.
+    field), the document is edited rendered with its Markdown a toggle away,
+    and the navigation guard this item asked about became a tab-scoped draft
+    restored on return, since the App Router cannot intercept in-app
+    navigation. There is still no autosave.
  4. Knowledge pages carry two sidebars side by side: the primary nav
     (`src/components/shell/app-shell.tsx`, `w-40`, collapsible to `w-12`)
     and the Knowledge explorer (`src/components/knowledge/source-sidebar.tsx`,

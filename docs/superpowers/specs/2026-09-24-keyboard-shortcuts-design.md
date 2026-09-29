@@ -110,7 +110,7 @@ QuickSearch 只在 `confirmed && canSearch` 時啟用（`quick-search.tsx:55`）
 
 ## 5. 表單：`⌘Enter` 與 `Esc`
 
-> 2026-09-28：兩個表單已合併為文件編輯器，並新增 `⌘⇧P` 預覽與預覽中的 `Esc`。現行規則見 `2026-09-28-document-composer-design.md` 第 6 節；本節保留當時的決定。
+> 2026-09-28：兩個表單已合併為文件編輯器；2026-09-29 起預設為渲染編輯，並以 `⌘/Ctrl /` 切換 Markdown 原始碼（取代先前的 `⌘⇧P` 預覽）。現行規則見 `2026-09-28-document-composer-design.md` 第 11.6 節；本節保留當時的決定。
 
 ### 5.1 掛在哪裡
 
