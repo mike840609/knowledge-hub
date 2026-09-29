@@ -1,8 +1,10 @@
 import {
+  CornerUpLeft,
   Database,
   ExternalLink,
   Link2,
   FileText,
+  Network,
   Info,
   Pencil,
   Plus,
@@ -25,6 +27,7 @@ const icons: Record<ActionIconName, LucideIcon> = {
   "copy-link": Link2,
   knowledge: FileText,
   search: Search,
+  graph: Network,
   sources: Database,
   settings: Settings,
   create: Plus,
@@ -36,6 +39,7 @@ const icons: Record<ActionIconName, LucideIcon> = {
   share: Share2,
   favorite: Star,
   details: Info,
+  backlinks: CornerUpLeft,
 };
 
 export function ActionIcon({ name, className = "h-4 w-4 shrink-0 text-kh-text-muted" }: { name: ActionIconName; className?: string }) {

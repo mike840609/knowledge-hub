@@ -1,6 +1,7 @@
 import type { WorkspaceGroupMappingRepository } from "@/modules/workspaces/ports/workspace-group-mapping-repository";
 import type { UserRepository } from "@/modules/identity/ports/user-repository";
 import type { DocumentRepository } from "./document-repository";
+import type { DocumentLinkRepository } from "./document-link-repository";
 import type { DocumentShareLinkRepository } from "./document-share-link-repository";
 import type { KnowledgeSearchRepository } from "./knowledge-search-repository";
 import type { LinkedEntryRepository } from "./linked-entry";
@@ -33,6 +34,12 @@ export type KnowledgeRepositories = {
   workspaceMemberships: WorkspaceMembershipRepository;
   groupMappings: WorkspaceGroupMappingRepository;
   shareLinks: DocumentShareLinkRepository;
+  /**
+   * The derived link index (graph spec §7). Every path that writes a revision
+   * replaces the document's edges in the same transaction; reads use it for
+   * backlinks and the graph and never for authorization.
+   */
+  links: DocumentLinkRepository;
   /** Share-link create/revoke append governance events in the same transaction (share-link spec §7.3). */
   auditEvents: WorkspaceAuditEventRepository;
 };

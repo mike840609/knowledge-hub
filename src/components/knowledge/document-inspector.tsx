@@ -10,6 +10,15 @@ import { usePathname } from "next/navigation";
 import { DocumentTopbarContext } from "@/components/shell/document-topbar-context";
 import { InspectorContext } from "./inspector-context";
 import { useScrollRestoration } from "./use-scroll-restoration";
+import { useActiveHeading } from "./use-active-heading";
+import { useScrollToHash } from "./use-scroll-to-hash";
+import { OutlineDisclosure, OutlineList, OutlineRail } from "./document-outline";
+import { DocumentLinksPanel } from "./document-links-panel";
+import { rememberedInspectorTab, rememberInspectorTab, resolveInspectorTab } from "./inspector-tab-memory";
+import { summariseLinks } from "./link-summary";
+import type { DocumentLinkView } from "@/modules/knowledge/application/knowledge-link-service";
+import type { GraphViewData } from "./graph-model";
+import type { OutlineEntry } from "@/shared/markdown/outline";
 import { Check, Copy, X } from "lucide-react";
 import type { KnowledgeRevisionView } from "@/modules/knowledge/application/knowledge-query-service";
 import { Drawer } from "@/components/ui/drawer";
@@ -42,7 +51,19 @@ export type DocumentInspectorData = {
   revisions: KnowledgeRevisionView[];
   selectedRevisionNo: number;
   includeArchived: boolean;
+  /** What links here and what this links to; `null` when it could not be read. */
+  links: DocumentLinkView | null;
+  /** The document's neighbourhood, laid out on the server; `null` when there is none to draw. */
+  localGraph: {
+    data: GraphViewData;
+    depth: 1 | 2;
+    openHref: string;
+    depthHrefs: { 1: string; 2: string };
+  } | null;
 };
+
+/** A request, from outside the pane, for the inspector to open on a particular tab. */
+export type RequestedInspectorTab = { tab: string; nonce: number };
 
 function TechnicalIds({ items }: { items: { label: string; value: string }[] }) {
   const [message, setMessage] = useState("");
@@ -78,17 +99,52 @@ function TechnicalIds({ items }: { items: { label: string; value: string }[] }) 
   );
 }
 
-function InspectorTabs({ data }: { data: DocumentInspectorData }) {
+function InspectorTabs({
+  data,
+  outline,
+  activeSlug,
+  requestedTab,
+}: {
+  data: DocumentInspectorData;
+  outline: readonly OutlineEntry[];
+  activeSlug: string | null;
+  requestedTab: RequestedInspectorTab | null;
+}) {
   const { access } = useWorkspaceAuthorization();
+  const available = useMemo(
+    () => ["details", "links", "history", ...(outline.length > 0 ? ["outline"] : [])],
+    [outline.length],
+  );
+  // The inspector renders only once it has been opened, never on the server, so
+  // storage can be read here without the first render disagreeing with the HTML.
+  const [tab, setTab] = useState(() =>
+    resolveInspectorTab({ requested: requestedTab?.tab, remembered: rememberedInspectorTab(), available }),
+  );
+  const choose = useCallback(
+    (next: string) => {
+      const resolved = resolveInspectorTab({ requested: next, available });
+      setTab(resolved);
+      rememberInspectorTab(resolved);
+    },
+    [available],
+  );
+  // Someone asked for a tab while this is already open (the palette's
+  // "Show backlinks", the header's links chip); a fresh nonce is a fresh request
+  // even for the same tab.
+  useEffect(() => {
+    if (requestedTab) choose(requestedTab.tab);
+  }, [requestedTab, choose]);
   const sorted = [...data.revisions].sort((a, b) => a.revisionNo - b.revisionNo);
   const current = sorted[sorted.length - 1];
   const created = sorted[0]?.createdAt;
 
   return (
-    <TabsRoot defaultValue="details">
+    <TabsRoot value={tab} onValueChange={(value) => choose(String(value))}>
       <TabsList aria-label="Document inspector">
         <TabsTab value="details">Details</TabsTab>
+        <TabsTab value="links">Links</TabsTab>
         <TabsTab value="history">History</TabsTab>
+        {outline.length > 0 ? <TabsTab value="outline">Outline</TabsTab> : null}
       </TabsList>
       <TabsPanel value="details">
         <dl className="space-y-3 text-body-sm [&>div]:grid [&>div]:grid-cols-[6rem_minmax(0,1fr)] [&>div]:items-baseline [&>div]:gap-x-3 [&_dd]:col-start-2 [&_dd]:min-w-0 [&_dd]:break-words">
@@ -131,6 +187,9 @@ function InspectorTabs({ data }: { data: DocumentInspectorData }) {
           ...(current ? [{ label: "Revision", value: current.id }] : []),
         ]} />
       </TabsPanel>
+      <TabsPanel value="links">
+        <DocumentLinksPanel view={data.links} localGraph={data.localGraph} focusId={data.documentId} />
+      </TabsPanel>
       <TabsPanel value="history">
         <ul className="space-y-1">
           {sorted.map((revision) => {
@@ -162,6 +221,13 @@ function InspectorTabs({ data }: { data: DocumentInspectorData }) {
           })}
         </ul>
       </TabsPanel>
+      {outline.length > 0 ? (
+        <TabsPanel value="outline">
+          <nav aria-label="Document outline">
+            <OutlineList entries={outline} activeSlug={activeSlug} />
+          </nav>
+        </TabsPanel>
+      ) : null}
     </TabsRoot>
   );
 }
@@ -182,10 +248,16 @@ export function DocumentInspector({
   open,
   onOpenChange,
   data,
+  outline,
+  activeSlug,
+  requestedTab,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   data: DocumentInspectorData;
+  outline: readonly OutlineEntry[];
+  activeSlug: string | null;
+  requestedTab: RequestedInspectorTab | null;
 }) {
   const wide = useWideInspector();
   if (!open) return null;
@@ -208,7 +280,7 @@ export function DocumentInspector({
         </div>
         <div key={data.documentId} role="region" aria-label="Document details content" tabIndex={0}
           className="min-h-0 flex-1 overflow-y-auto overscroll-contain break-words px-4 py-3 kh-focus-ring">
-          <InspectorTabs data={data} />
+          <InspectorTabs data={data} outline={outline} activeSlug={activeSlug} requestedTab={requestedTab} />
         </div>
       </aside>
     );
@@ -223,7 +295,7 @@ export function DocumentInspector({
       description={data.sourceName}
       surfaceClassName="bg-kh-bg-raised"
     >
-      <InspectorTabs data={data} />
+      <InspectorTabs data={data} outline={outline} activeSlug={activeSlug} requestedTab={requestedTab} />
     </Drawer>
   );
 }
@@ -241,6 +313,7 @@ export function DocumentDetailClient({
   readOnly,
   ownership,
   contentOwnsTitle,
+  outline,
 }: {
   breadcrumb: DocumentBreadcrumbSegment[];
   title: string;
@@ -260,6 +333,8 @@ export function DocumentDetailClient({
   /** Passed rather than inferred from `readOnly`: the two happen to agree today. */
   ownership: "SOURCE_MANAGED" | "HUB_MANAGED";
   contentOwnsTitle: boolean;
+  /** Headings of the revision on screen, from the same parse that gives them their ids. */
+  outline: OutlineEntry[];
 }) {
   useRefreshOnArrival();
   const inspector = useContext(InspectorContext);
@@ -268,12 +343,24 @@ export function DocumentDetailClient({
   const headerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   useScrollRestoration(contentRef, inspectorData.documentId);
+  useScrollToHash(inspectorData.documentId);
+  const activeSlug = useActiveHeading(outline.map((entry) => entry.slug), contentRef);
+  const [requestedTab, setRequestedTab] = useState<RequestedInspectorTab | null>(null);
   const inspectorOpen = inspector?.open ?? false;
   const setInspectorOpen = inspector?.setOpen;
   const openInspector = useCallback(() => {
     setInspectorOpen?.(true);
     window.dispatchEvent(new CustomEvent("kh:open-inspector"));
   }, [setInspectorOpen]);
+  // A request is answered once. Left standing after the inspector closes, it
+  // would beat the tab the reader has since chosen the next time it opens.
+  useEffect(() => {
+    if (!inspectorOpen) setRequestedTab(null);
+  }, [inspectorOpen]);
+  const openLinks = useCallback(() => {
+    setRequestedTab({ tab: "links", nonce: Date.now() });
+    openInspector();
+  }, [openInspector]);
   useEffect(() => {
     if (!setInspectorOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -292,7 +379,11 @@ export function DocumentDetailClient({
   // owns whether it is open; this is the pane answering.
   useEffect(() => {
     if (!setInspectorOpen) return;
-    const onRequest = () => openInspector();
+    const onRequest = (event: Event) => {
+      const tab = (event as CustomEvent<{ tab?: string } | undefined>).detail?.tab;
+      if (tab) setRequestedTab({ tab, nonce: Date.now() });
+      openInspector();
+    };
     window.addEventListener("kh:request-details", onRequest);
     return () => window.removeEventListener("kh:request-details", onRequest);
   }, [openInspector, setInspectorOpen]);
@@ -335,24 +426,32 @@ export function DocumentDetailClient({
   return (
     <div data-document-pane className="flex h-full min-h-0 overflow-hidden bg-kh-bg">
       <div ref={contentRef} role="region" aria-label="Document content" tabIndex={0}
-        className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain contain-layout kh-focus-ring">
-        <div ref={headerRef}>
-        <DocumentHeader
-          breadcrumb={breadcrumb}
-          title={title}
-          status={status}
-          updatedAt={updatedAt}
-          revisionBanner={revisionBanner}
-          onDetailsClick={openInspector}
-          editHref={editHref}
-          onShareClick={canShare ? () => requestShare(inspectorData.documentId) : null}
-          readOnly={readOnly}
-          contentOwnsTitle={contentOwnsTitle}
-        />
+        className="kh-document-pane min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain contain-layout kh-focus-ring">
+        <div className="flex items-start">
+          <div className="min-w-0 flex-1">
+            <div ref={headerRef}>
+            <DocumentHeader
+              breadcrumb={breadcrumb}
+              title={title}
+              status={status}
+              updatedAt={updatedAt}
+              revisionBanner={revisionBanner}
+              onDetailsClick={openInspector}
+              linkSummary={summariseLinks(inspectorData.links)}
+              onLinksClick={openLinks}
+              editHref={editHref}
+              onShareClick={canShare ? () => requestShare(inspectorData.documentId) : null}
+              readOnly={readOnly}
+              contentOwnsTitle={contentOwnsTitle}
+            />
+            </div>
+            <OutlineDisclosure entries={outline} activeSlug={activeSlug} />
+            {children}
+          </div>
+          <OutlineRail entries={outline} activeSlug={activeSlug} />
         </div>
-        {children}
       </div>
-      <DocumentInspector open={inspectorOpen} onOpenChange={(open) => setInspectorOpen?.(open)} data={inspectorData} />
+      <DocumentInspector open={inspectorOpen} onOpenChange={(open) => setInspectorOpen?.(open)} data={inspectorData} outline={outline} activeSlug={activeSlug} requestedTab={requestedTab} />
     </div>
   );
 }

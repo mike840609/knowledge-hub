@@ -1,0 +1,49 @@
+import type { ExtractedLink } from "../domain/document-links";
+import type { CatalogDocument } from "../domain/link-resolution";
+
+/** The valid outgoing edges of one document. */
+export type IndexedDocumentLinks = {
+  documentId: string;
+  links: ExtractedLink[];
+};
+
+/**
+ * How much of a Workspace's link index can be trusted right now. `stale`
+ * counts ACTIVE documents whose index row is missing, was extracted from an
+ * older revision, or was extracted by an older version of the rules.
+ */
+export type LinkIndexState = {
+  documents: number;
+  stale: number;
+};
+
+/**
+ * The link index (graph spec §7): raw edges per document, for the document's
+ * current revision. Derived data — reading it never authorizes anything.
+ */
+export interface DocumentLinkRepository {
+  /**
+   * Makes `links` the document's edges, recorded against `revisionId`. Called
+   * in the same transaction that wrote the revision, with the document lock
+   * held, so it replaces rather than merges.
+   */
+  replaceForDocument(input: { documentId: string; revisionId: string; links: readonly ExtractedLink[] }): Promise<void>;
+
+  /** ACTIVE documents in ACTIVE sources of one Workspace, as link targets. */
+  loadCatalog(workspaceId: string): Promise<CatalogDocument[]>;
+
+  /** Edges of the Workspace's ACTIVE documents whose index row is still valid. */
+  loadValidEdges(workspaceId: string): Promise<IndexedDocumentLinks[]>;
+
+  countIndexState(workspaceId: string): Promise<LinkIndexState>;
+
+  /** Current Markdown of documents in one Workspace, for showing where a link sits. */
+  loadCurrentMarkdown(workspaceId: string, documentIds: readonly string[]): Promise<Map<string, string>>;
+
+  /**
+   * Documents (any status) whose index row is missing or no longer matches
+   * their current revision or the current rules, ordered by id, after `afterId`.
+   * For the repair script.
+   */
+  listStaleDocumentIds(limit: number, afterId?: string): Promise<string[]>;
+}

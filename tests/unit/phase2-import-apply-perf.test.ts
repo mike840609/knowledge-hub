@@ -56,6 +56,7 @@ function buildPlan(sourceId: string, workspaceId: string): FolderImportPlan {
 /** In-memory counting stub: emulates the tx-local tree/document/entry state. */
 function stubRepositories(source: KnowledgeSource) {
   const counts = { listBySource: 0, upsertIdentity: 0, sourcePolicyLockById: 0, workspaceLockById: 0 };
+  const linkIndexWrites: { documentId: string; revisionId: string; links: number }[] = [];
   const nodes = new Map<string, TreeViewNode>();
   const documents = new Map<string, KnowledgeDocument>();
   const revisions = new Map<string, KnowledgeRevision>();
@@ -166,6 +167,13 @@ function stubRepositories(source: KnowledgeSource) {
         entries.set(entry.id, { ...entry });
       },
     },
+    // The link index is written with every revision (graph spec §7.3). Here it
+    // only records the calls, so the perf contract below can say how many.
+    links: {
+      replaceForDocument: async (input: { documentId: string; revisionId: string; links: readonly unknown[] }) => {
+        linkIndexWrites.push({ documentId: input.documentId, revisionId: input.revisionId, links: input.links.length });
+      },
+    },
     assets: {
       listBySourceId: async () => [],
     },
@@ -173,7 +181,7 @@ function stubRepositories(source: KnowledgeSource) {
       load: async () => ({ documents: [], folders: [], assets: [] }),
     },
   } as unknown as SourceRepositories;
-  return { repositories, counts, nodes, entries };
+  return { repositories, counts, nodes, entries, linkIndexWrites };
 }
 
 describe("executeFolderImportPlan read amplification (issue #9 item 17a)", () => {
@@ -195,7 +203,7 @@ describe("executeFolderImportPlan read amplification (issue #9 item 17a)", () =>
       updatedAt: now,
     };
     const caller = callerFromIdentity({ id: "user-1", emp_id: "E001", name: "Test", org_code: "HRSD" });
-    const { repositories, counts, nodes, entries } = stubRepositories(source);
+    const { repositories, counts, nodes, entries, linkIndexWrites } = stubRepositories(source);
 
     await executeFolderImportPlan(repositories, caller, source, buildPlan(source.id, source.workspaceId), {
       stagingEntriesByUploadKey: new Map(),
@@ -212,6 +220,13 @@ describe("executeFolderImportPlan read amplification (issue #9 item 17a)", () =>
     expect(counts.upsertIdentity).toBe(1);
     expect(counts.sourcePolicyLockById).toBe(1);
     expect(counts.workspaceLockById).toBe(1);
+
+    // Indexing adds a constant amount of work per document, not per link and not
+    // per Apply: one replacement for each revision written, each against the
+    // revision it was extracted from.
+    expect(linkIndexWrites).toHaveLength(DOC_COUNT);
+    expect(new Set(linkIndexWrites.map((write) => write.documentId)).size).toBe(DOC_COUNT);
+    expect(linkIndexWrites.every((write) => write.revisionId.length > 0)).toBe(true);
   });
 });
 

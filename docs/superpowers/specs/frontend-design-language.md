@@ -863,7 +863,10 @@ that ever changes rather than being redesigned.
    UI one. Counted against the code it can offer about fourteen entries, of
    which the majority are ways to get somewhere; a command palette does not
    create commands. Worth revisiting when this product has more a reader can
-   do, not by adding entries that do nothing.
+   do, not by adding entries that do nothing. (2026-09-29: two entries were
+   added for real product behaviour — Open graph and Show backlinks — which is
+   the kind of addition this item asks for; the count is about sixteen, still
+   mostly navigation.)
  2. `spacing` was the one scale still left at Tailwind's default rather than
     replaced, so paddings, margins and gaps were unenforced. Closed: `padding`,
     `margin`, `gap` and `space` are now replaced with the 2px-base ladder the

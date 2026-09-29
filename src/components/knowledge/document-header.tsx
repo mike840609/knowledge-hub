@@ -17,6 +17,8 @@ export function DocumentHeader({
   updatedAt,
   revisionBanner,
   onDetailsClick,
+  linkSummary,
+  onLinksClick,
   editHref,
   onShareClick,
   readOnly,
@@ -28,6 +30,10 @@ export function DocumentHeader({
   updatedAt: Date;
   revisionBanner: { viewingNo: number; backHref: string } | null;
   onDetailsClick: () => void;
+  /** "3 backlinks" and the like; `null` when the document has no links worth announcing. */
+  linkSummary: string | null;
+  /** Opens the inspector on its Links tab. */
+  onLinksClick: () => void;
   editHref: string | null;
   /** Opens the share-link dialog; null where sharing is not offered (share-link spec §10.1). */
   onShareClick: (() => void) | null;
@@ -97,6 +103,20 @@ export function DocumentHeader({
           {readOnly ? <span className="inline-flex items-center gap-1"><LockKeyhole className="h-3 w-3" aria-hidden="true" />Read only</span> : null}
           {status === "ARCHIVED" ? <Badge variant="warning">Archived</Badge> : null}
           <time dateTime={new Date(updatedAt).toISOString()} title={formatDateTime(updatedAt, zone)}>Updated {relative}</time>
+          {linkSummary ? (
+            // The padding makes a 24px target (WCAG 2.5.8) and the negative
+            // margins give it back, so a document with links is not a row taller
+            // than one without and the header does not jump between them.
+            <button
+              type="button"
+              onClick={onLinksClick}
+              title="Show links in the details panel"
+              className="-mx-1.5 -my-1 inline-flex h-6 items-center gap-1 rounded-md px-1.5 tabular-nums hover:bg-kh-bg-hover hover:text-kh-text kh-focus-ring"
+            >
+              <ActionIcon name="graph" className="h-3 w-3 shrink-0" />
+              {linkSummary}
+            </button>
+          ) : null}
         </div>
         {revisionBanner ? (
           <p className="mt-2 rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2 text-body-sm text-kh-text">

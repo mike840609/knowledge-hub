@@ -169,6 +169,27 @@ hold write quiescence through the final step):
  application write fences and never replace quiescence.
 `;
 
+/**
+ * Migration 012 creates the link index empty and migrations cannot write data,
+ * so documents that predate it need `db:reindex-document-links`. Say so here,
+ * where the operator is looking, rather than leaving Backlinks quietly empty.
+ */
+async function hintUnindexedDocuments(pool: Pool): Promise<void> {
+  try {
+    const rows = await pool.query<{ unindexed: unknown }[]>(
+      `SELECT COUNT(*) AS unindexed FROM knowledge_documents d
+       LEFT JOIN knowledge_link_index i ON i.document_id = d.id
+       WHERE d.current_revision_id IS NOT NULL AND i.document_id IS NULL`,
+    );
+    const unindexed = Number(rows[0]?.unindexed ?? 0);
+    if (unindexed > 0) {
+      console.log(`${unindexed} document(s) have no link index row yet. Run: npm run db:reindex-document-links`);
+    }
+  } catch {
+    // The table does not exist below migration 012 (`--to`); nothing to say.
+  }
+}
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   if (args.includes("--help") || args.includes("-h")) {
@@ -185,6 +206,7 @@ async function main(): Promise<void> {
   try {
     await runMigrations(pool, migrations, { to });
     console.log(`Migrations are up to date for ${databaseConfig(kind).database}${to === undefined ? "" : ` (target ${to})`}.`);
+    await hintUnindexedDocuments(pool);
   } finally {
     await pool.end();
   }

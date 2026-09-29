@@ -8,6 +8,7 @@ import type { UserIdentity } from "@/modules/identity/domain/user-identity";
 import type { SourceRepositories } from "@/modules/sources/ports/unit-of-work";
 import { localIdentityConfig } from "@/server/config";
 import { createTeamWorkspaceInsert } from "@/modules/workspaces/domain/workspace";
+import { reindexDocumentLinks } from "./reindex-document-links";
 import { createDirectMembership } from "@/modules/workspaces/domain/workspace-membership";
 
 export const DEV_FIXTURE_IDS = {
@@ -255,6 +256,9 @@ export async function seedDevelopmentDatabase(): Promise<void> {
       if (!folder) await repositories.tree.insert({ id: DEV_FIXTURE_IDS.folder, sourceId: DEV_FIXTURE_IDS.source, parentId: null, nodeType: "FOLDER", name: "Getting Started", documentId: null, position: 0, status: "ACTIVE", updatedBy: identity.id, archivedBy: null, archivedAt: null });
     });
     await seedBrowserFixtures(pool, identity);
+    // Some fixtures are inserted directly rather than through the command
+    // service, so they carry no link index row; this brings every one up to date.
+    await reindexDocumentLinks(pool);
   } finally {
     await pool.end();
   }

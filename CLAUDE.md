@@ -28,6 +28,11 @@ npx vitest run --config vitest.config.ts tests/unit/<file>.test.ts
 npx vitest run --config vitest.config.ts -t "<test name>"
 ```
 
+`node_modules/next`'s vendored React carries one patch (`patches/next+15.5.25.patch`,
+applied by `postinstall`). A navigation that "finishes loading and never appears"
+is the symptom of it being missing; see README's patch section before touching
+either the patch or the Next version, and clear `.next/cache` after changing it.
+
 CI (`.github/workflows/phase2-dev-gate.yml`) runs four jobs on every PR to
 `main`: `unit` (which also runs typecheck and lint), `build`, `integration`
 and `e2e`. `make verify` covers everything except the two DB-backed jobs.
@@ -99,6 +104,16 @@ pass.
   ID decides identity, and the revision stores title/Markdown/metadata. Moving
   or renaming a file creates no revision; editing the article title does.
 - **Lifecycle is `ACTIVE` / `ARCHIVED` only.** There is no hard delete.
+- **The link index is derived, and never decides access.** `knowledge_link_index`
+  and `knowledge_document_links` record what each document's *current revision
+  wrote* (`[[wikilinks]]`, relative `.md` links); what a link *points at* is
+  resolved at read time, inside one Workspace, against the documents as they are
+  now (`docs/superpowers/specs/2026-09-29-personal-workspace-knowledge-graph-design.md`).
+  Every code path that inserts a revision must replace the document's edges in
+  the same transaction (`repositories.links.replaceForDocument`;
+  `tests/unit/link-index-write-points.test.ts` fails if one does not). A link
+  never resolves across Workspaces, and a shared page (`/s/:token`) is given no
+  resolutions at all.
 
 ## Frontend design language
 

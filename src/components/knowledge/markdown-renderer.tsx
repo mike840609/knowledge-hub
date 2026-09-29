@@ -1,12 +1,113 @@
+import Link from "next/link";
 import type { AnchorHTMLAttributes, DetailedHTMLProps, ImgHTMLAttributes } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ExternalLink } from "lucide-react";
+import { parseDocumentHref } from "@/modules/knowledge/domain/document-links";
+import { linkLookupKey } from "@/modules/knowledge/domain/link-graph";
+import { headingSlug } from "@/shared/markdown/heading-slug";
+import { remarkHeadingIds } from "@/shared/markdown/remark-heading-ids";
 import { MarkdownImage } from "./markdown-image";
 import { MARKDOWN_PROSE } from "./markdown-prose";
+import type { RenderedLinks } from "./rendered-links";
+import { remarkKnowledgeLinks, WIKILINK_ANCHOR, WIKILINK_FRAGMENT, WIKILINK_TARGET } from "./remark-knowledge-links";
 
 function isExternalHref(href: string): boolean {
   return href.startsWith("http://") || href.startsWith("https://") || href.startsWith("//");
+}
+
+type AnchorProps = DetailedHTMLProps<AnchorHTMLAttributes<HTMLAnchorElement>, HTMLAnchorElement> & {
+  [WIKILINK_TARGET]?: string;
+  [WIKILINK_FRAGMENT]?: string;
+  [WIKILINK_ANCHOR]?: string;
+};
+
+const INTERNAL_LINK_CLASS =
+  "rounded-md font-medium text-kh-link underline decoration-kh-link underline-offset-2 hover:decoration-kh-link kh-focus-ring";
+
+/**
+ * A link to a document that is not there. Dashed rather than absent, so the
+ * reader can see that something was meant to be linked here; a tooltip says
+ * what, and assistive technology gets the same in words.
+ */
+function UnresolvedLink({ children, what }: { children: React.ReactNode; what: string }) {
+  return (
+    <span data-unresolved-link title={what} className="cursor-help border-b border-dashed border-kh-text-muted text-kh-text-secondary">
+      {children}
+      <span className="sr-only"> (no matching document)</span>
+    </span>
+  );
+}
+
+/** A link to another document, inside the workspace the reader is in. */
+function DocumentLink({
+  target,
+  fragment,
+  children,
+}: {
+  target: { basePath: string; title: string; ambiguousWith: number };
+  fragment: string | null;
+  children: React.ReactNode;
+}) {
+  const hash = fragment === null || fragment === "" ? "" : `#${encodeURIComponent(fragment)}`;
+  const shared = target.ambiguousWith > 0 ? `${target.ambiguousWith} other document${target.ambiguousWith === 1 ? "" : "s"} share this name` : undefined;
+  return (
+    // Not prefetched: the renderer does not know which document it is in, and a
+    // link to the page it is on (`[[This page's own title]]`) prefetched from
+    // itself is the hazard the tree avoids — see LocalGraph. A click still
+    // fetches the page; only the speculative fetch is given up.
+    <Link href={`${target.basePath}${hash}`} prefetch={false} title={shared ?? target.title} className={INTERNAL_LINK_CLASS}>
+      {children}
+    </Link>
+  );
+}
+
+function MarkdownAnchor({ links, ...props }: AnchorProps & { links?: RenderedLinks }) {
+  const wikiTarget = props[WIKILINK_TARGET];
+  const anchor = props[WIKILINK_ANCHOR];
+  const { children } = props;
+
+  // [[#Heading]]: a link within this page.
+  if (anchor !== undefined) {
+    return (
+      <a href={`#${encodeURIComponent(anchor)}`} className={INTERNAL_LINK_CLASS}>
+        {children}
+      </a>
+    );
+  }
+
+  // [[Target]] and friends. Without resolutions — a shared page, where the
+  // reader has no access to the workspace — it is just its text.
+  if (wikiTarget !== undefined) {
+    if (!links) return <span>{children}</span>;
+    const resolved = links[linkLookupKey("WIKI", wikiTarget)];
+    if (!resolved || resolved.status === "UNRESOLVED") {
+      return <UnresolvedLink what={`No document titled “${wikiTarget}” in this workspace`}>{children}</UnresolvedLink>;
+    }
+    const fragment = props[WIKILINK_FRAGMENT];
+    return (
+      <DocumentLink target={resolved} fragment={fragment === undefined ? null : headingSlug(fragment)}>
+        {children}
+      </DocumentLink>
+    );
+  }
+
+  // [text](../other.md): a relative link to a Markdown file is a link to a document.
+  const document = props.href ? parseDocumentHref(props.href) : null;
+  if (document) {
+    if (!links) return <span>{children}</span>;
+    const resolved = links[linkLookupKey("PATH", document.target)];
+    if (!resolved || resolved.status === "UNRESOLVED") {
+      return <UnresolvedLink what={`No document at “${document.target}” in this source`}>{children}</UnresolvedLink>;
+    }
+    return (
+      <DocumentLink target={resolved} fragment={document.fragment}>
+        {children}
+      </DocumentLink>
+    );
+  }
+
+  return <MarkdownLink {...props} />;
 }
 
 function MarkdownLink(props: DetailedHTMLProps<AnchorHTMLAttributes<HTMLAnchorElement>, HTMLAnchorElement>) {
@@ -53,13 +154,19 @@ function ScrollablePre({ children }: { children?: React.ReactNode }) {
   );
 }
 
-export function MarkdownRenderer({ markdown }: { markdown: string }) {
+/**
+ * `links` says where each `[[wikilink]]` and relative `.md` link goes. Without
+ * it — a shared page, or anywhere the reader is not in the workspace — those
+ * read as plain text rather than as links into content the reader may not
+ * have, and nothing is looked up.
+ */
+export function MarkdownRenderer({ markdown, links }: { markdown: string; links?: RenderedLinks }) {
   return (
     <div className={MARKDOWN_PROSE}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkHeadingIds, remarkKnowledgeLinks]}
         components={{
-          a: MarkdownLink,
+          a: (props: AnchorProps) => <MarkdownAnchor {...props} links={links} />,
           // Image URL policy (issue #20, see markdown-image-policy.ts):
           // default-deny remote images — only relative Knowledge Hub asset
           // URLs and same-origin absolute URLs render via MarkdownImage;

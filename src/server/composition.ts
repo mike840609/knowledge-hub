@@ -7,6 +7,7 @@ import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
 import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction";
 import { KnowledgeQueryServiceImpl } from "@/modules/knowledge/application/knowledge-query-service";
 import { KnowledgeSearchService } from "@/modules/knowledge/application/knowledge-search-service";
+import { KnowledgeLinkServiceImpl } from "@/modules/knowledge/application/knowledge-link-service";
 import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
 import { DocumentShareService } from "@/modules/knowledge/application/document-share-service";
 import { RandomShareTokenIssuer } from "@/infrastructure/security/random-share-token-issuer";
@@ -64,6 +65,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
   const sessionReaderConfigured = options.companySessionReader !== undefined;
   const hub = new HubKnowledgeCommandServiceImpl(unitOfWork);
   const queries = new KnowledgeQueryServiceImpl(unitOfWork);
+  const links = new KnowledgeLinkServiceImpl(unitOfWork);
   const shares = new DocumentShareService(unitOfWork, new RandomShareTokenIssuer());
   const sources = new SourceApplicationService(unitOfWork);
   const workspaceAdmin = new WorkspaceAdminService(unitOfWork);
@@ -102,7 +104,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
     preview: new GetFolderImportPreviewService(unitOfWork),
     apply: new ApplyFolderImportService(unitOfWork),
   };
-  return { workspaceAdmin, teams, governance, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, shares, sources, workspaces, search, imports };
+  return { workspaceAdmin, teams, governance, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, links, shares, sources, workspaces, search, imports };
 }
 
 export function applicationServices() {

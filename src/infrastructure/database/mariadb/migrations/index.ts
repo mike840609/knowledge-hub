@@ -9,6 +9,7 @@ import { phase3WorkspaceGovernanceAdditiveMigration } from "./008-phase-3-worksp
 import { phase3WorkspaceGovernanceFinalizeMigration } from "./009-phase-3-workspace-governance-finalize";
 import { phase2StableSourceIdentityMigration } from "./010-phase-2-stable-source-identity";
 import { documentShareLinksMigration } from "./011-document-share-links";
+import { documentLinkIndexMigration } from "./012-document-link-index";
 
 export const migrations = [
   coreMigration,
@@ -22,4 +23,5 @@ export const migrations = [
   phase3WorkspaceGovernanceFinalizeMigration,
   phase2StableSourceIdentityMigration,
   documentShareLinksMigration,
+  documentLinkIndexMigration,
 ] as const;
