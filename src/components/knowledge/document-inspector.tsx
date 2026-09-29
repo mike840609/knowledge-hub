@@ -11,7 +11,10 @@ import { DocumentTopbarContext } from "@/components/shell/document-topbar-contex
 import { InspectorContext } from "./inspector-context";
 import { useScrollRestoration } from "./use-scroll-restoration";
 import { useActiveHeading } from "./use-active-heading";
+import { useScrollToHash } from "./use-scroll-to-hash";
 import { OutlineDisclosure, OutlineList, OutlineRail } from "./document-outline";
+import { DocumentLinksPanel } from "./document-links-panel";
+import type { DocumentLinkView } from "@/modules/knowledge/application/knowledge-link-service";
 import type { OutlineEntry } from "@/shared/markdown/outline";
 import { Check, Copy, X } from "lucide-react";
 import type { KnowledgeRevisionView } from "@/modules/knowledge/application/knowledge-query-service";
@@ -45,7 +48,12 @@ export type DocumentInspectorData = {
   revisions: KnowledgeRevisionView[];
   selectedRevisionNo: number;
   includeArchived: boolean;
+  /** What links here and what this links to; `null` when it could not be read. */
+  links: DocumentLinkView | null;
 };
+
+/** A request, from outside the pane, for the inspector to open on a particular tab. */
+export type RequestedInspectorTab = { tab: string; nonce: number };
 
 function TechnicalIds({ items }: { items: { label: string; value: string }[] }) {
   const [message, setMessage] = useState("");
@@ -81,16 +89,33 @@ function TechnicalIds({ items }: { items: { label: string; value: string }[] }) 
   );
 }
 
-function InspectorTabs({ data, outline, activeSlug }: { data: DocumentInspectorData; outline: readonly OutlineEntry[]; activeSlug: string | null }) {
+function InspectorTabs({
+  data,
+  outline,
+  activeSlug,
+  requestedTab,
+}: {
+  data: DocumentInspectorData;
+  outline: readonly OutlineEntry[];
+  activeSlug: string | null;
+  requestedTab: RequestedInspectorTab | null;
+}) {
   const { access } = useWorkspaceAuthorization();
+  const [tab, setTab] = useState(requestedTab?.tab ?? "details");
+  // Someone asked for a tab while this is already open (the palette's
+  // "Show backlinks"); a fresh nonce is a fresh request even for the same tab.
+  useEffect(() => {
+    if (requestedTab) setTab(requestedTab.tab);
+  }, [requestedTab]);
   const sorted = [...data.revisions].sort((a, b) => a.revisionNo - b.revisionNo);
   const current = sorted[sorted.length - 1];
   const created = sorted[0]?.createdAt;
 
   return (
-    <TabsRoot defaultValue="details">
+    <TabsRoot value={tab} onValueChange={(value) => setTab(String(value))}>
       <TabsList aria-label="Document inspector">
         <TabsTab value="details">Details</TabsTab>
+        <TabsTab value="links">Links</TabsTab>
         <TabsTab value="history">History</TabsTab>
         {outline.length > 0 ? <TabsTab value="outline">Outline</TabsTab> : null}
       </TabsList>
@@ -134,6 +159,9 @@ function InspectorTabs({ data, outline, activeSlug }: { data: DocumentInspectorD
           { label: "Workspace", value: data.workspaceId },
           ...(current ? [{ label: "Revision", value: current.id }] : []),
         ]} />
+      </TabsPanel>
+      <TabsPanel value="links">
+        <DocumentLinksPanel view={data.links} />
       </TabsPanel>
       <TabsPanel value="history">
         <ul className="space-y-1">
@@ -195,12 +223,14 @@ export function DocumentInspector({
   data,
   outline,
   activeSlug,
+  requestedTab,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   data: DocumentInspectorData;
   outline: readonly OutlineEntry[];
   activeSlug: string | null;
+  requestedTab: RequestedInspectorTab | null;
 }) {
   const wide = useWideInspector();
   if (!open) return null;
@@ -223,7 +253,7 @@ export function DocumentInspector({
         </div>
         <div key={data.documentId} role="region" aria-label="Document details content" tabIndex={0}
           className="min-h-0 flex-1 overflow-y-auto overscroll-contain break-words px-4 py-3 kh-focus-ring">
-          <InspectorTabs data={data} outline={outline} activeSlug={activeSlug} />
+          <InspectorTabs data={data} outline={outline} activeSlug={activeSlug} requestedTab={requestedTab} />
         </div>
       </aside>
     );
@@ -238,7 +268,7 @@ export function DocumentInspector({
       description={data.sourceName}
       surfaceClassName="bg-kh-bg-raised"
     >
-      <InspectorTabs data={data} outline={outline} activeSlug={activeSlug} />
+      <InspectorTabs data={data} outline={outline} activeSlug={activeSlug} requestedTab={requestedTab} />
     </Drawer>
   );
 }
@@ -286,7 +316,9 @@ export function DocumentDetailClient({
   const headerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   useScrollRestoration(contentRef, inspectorData.documentId);
+  useScrollToHash(inspectorData.documentId);
   const activeSlug = useActiveHeading(outline.map((entry) => entry.slug), contentRef);
+  const [requestedTab, setRequestedTab] = useState<RequestedInspectorTab | null>(null);
   const inspectorOpen = inspector?.open ?? false;
   const setInspectorOpen = inspector?.setOpen;
   const openInspector = useCallback(() => {
@@ -311,7 +343,11 @@ export function DocumentDetailClient({
   // owns whether it is open; this is the pane answering.
   useEffect(() => {
     if (!setInspectorOpen) return;
-    const onRequest = () => openInspector();
+    const onRequest = (event: Event) => {
+      const tab = (event as CustomEvent<{ tab?: string } | undefined>).detail?.tab;
+      if (tab) setRequestedTab({ tab, nonce: Date.now() });
+      openInspector();
+    };
     window.addEventListener("kh:request-details", onRequest);
     return () => window.removeEventListener("kh:request-details", onRequest);
   }, [openInspector, setInspectorOpen]);
@@ -377,7 +413,7 @@ export function DocumentDetailClient({
           <OutlineRail entries={outline} activeSlug={activeSlug} />
         </div>
       </div>
-      <DocumentInspector open={inspectorOpen} onOpenChange={(open) => setInspectorOpen?.(open)} data={inspectorData} outline={outline} activeSlug={activeSlug} />
+      <DocumentInspector open={inspectorOpen} onOpenChange={(open) => setInspectorOpen?.(open)} data={inspectorData} outline={outline} activeSlug={activeSlug} requestedTab={requestedTab} />
     </div>
   );
 }

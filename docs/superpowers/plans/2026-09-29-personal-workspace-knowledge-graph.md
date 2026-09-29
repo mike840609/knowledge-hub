@@ -55,7 +55,8 @@
 | 3.2 | 文件頁呼叫 `getDocumentLinks`，把解析結果傳給 viewer；`getKnowledgeDocumentModel` 之外新增 `getDocumentLinkModel` | `src/server/link-graph-read.ts`、`[documentId]/page.tsx`、`document-viewer.tsx` | e2e |
 | 3.3 | `DocumentLinksPanel`（inspector「Links」分頁：Backlinks／Outgoing／Unresolved；索引更新中提示） | `document-links-panel.tsx`、`document-inspector.tsx` | 結構測試 + e2e |
 | 3.4 | `BacklinksFooter`（「Linked from N documents」，含上下文） | `backlinks-footer.tsx` | e2e |
-| 3.5 | 動作註冊表：`document.backlinks`；`kh:request-details` 事件帶 `tab` | `action-registry.ts`、`document-inspector.tsx`、palette 與 row menu 接線 | 更新 `tests/unit/action-registry.test.ts` |
+| 3.5 | 動作註冊表：`document.backlinks`（僅 palette）；`kh:request-details` 事件帶 `tab`，inspector 分頁改為受控 | `action-registry.ts`、`action-menu.tsx`、`document-inspector.tsx` | `tests/unit/action-registry.test.ts`（+5） |
+| 3.8 | 跨文件標題錨點：Next client navigation 在文件仍是 Suspense 骨架時就結束 hash 捲動，改為文件掛載後依網址 hash 捲到標題（e2e 發現） | `use-scroll-to-hash.ts` | `document-links.spec.ts` 第 4 案 |
 | 3.6 | 分享頁維持純文字，並加守門測試：`s/[token]` 樹不 import 連結服務 | `tests/unit/share-link-single-exception.test.ts`（新增一項） | 同左 |
 | 3.7 | seed fixtures：Query Master 內加幾份互相連結的文件，供 e2e 與手動驗證 | `scripts/db/seed.ts` | e2e |
 
@@ -88,5 +89,5 @@
 | --- | --- | --- | --- | --- | --- |
 | 1 TOC | 462（+35） | 不受影響 | `document-outline.spec.ts` 4/4 | 通過 | 1.7 已檢查：應用程式自有 id（`tree-filter`、`search-q` 等）可能與標題 slug 相同，outline 改在 `article` 內查找，不用全頁 `getElementById` |
 | 2 索引 | 主要新增：extract 28、resolution 25、graph 19、context 8、write-points 2 | 467 → 485（link-index 15、reindex 5、service 18，含既有 444） | 不受影響 | 通過 | 效能測試 stub 補上 `links` 並斷言每份文件恰一次索引寫入（已驗證移除 hook 會失敗） |
-| 3 渲染／Backlinks | | | | | |
+| 3 渲染／Backlinks | 主要新增：renderer links 19、registry +5、shared-page guard +1 | 不受影響 | `document-links.spec.ts` 5/5（含真實 `/s/:token` 無 `/w/` 連結）＋ outline 4/4 | 通過 | 畫面已目視確認（rail、resolved／unresolved 連結、Linked from、Links 分頁）；folder-sync 相對 `.md` 連結由 integration 覆蓋，未做 e2e 匯入流程 |
 | 4 圖譜 | | | | | |

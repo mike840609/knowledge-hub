@@ -1,4 +1,5 @@
 import {
+  CornerUpLeft,
   Database,
   ExternalLink,
   Link2,
@@ -36,6 +37,7 @@ const icons: Record<ActionIconName, LucideIcon> = {
   share: Share2,
   favorite: Star,
   details: Info,
+  backlinks: CornerUpLeft,
 };
 
 export function ActionIcon({ name, className = "h-4 w-4 shrink-0 text-kh-text-muted" }: { name: ActionIconName; className?: string }) {

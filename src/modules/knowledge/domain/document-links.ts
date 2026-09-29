@@ -53,19 +53,27 @@ function withinLimit(value: string, maxCodePoints: number): boolean {
   return value.length <= maxCodePoints || Array.from(value).length <= maxCodePoints;
 }
 
-/** `Target#Heading|Alias` → its parts. `null` when there is no target (`[[#Heading]]` is an anchor, not an edge). */
-export function parseWikiLinkBody(body: string): { target: string; fragment: string | null; alias: string | null } | null {
+/**
+ * `Target#Heading|Alias` → its parts. `target` is empty for `[[#Heading]]`,
+ * which is an anchor within the page rather than a link to another document.
+ */
+export function parseWikiLinkParts(body: string): { target: string; fragment: string | null; alias: string | null } {
   const pipe = body.indexOf("|");
   const left = pipe === -1 ? body : body.slice(0, pipe);
   const alias = pipe === -1 ? null : body.slice(pipe + 1).trim() || null;
   const hash = left.indexOf("#");
   const target = (hash === -1 ? left : left.slice(0, hash)).trim();
-  if (target === "") return null;
   const rawFragment = hash === -1 ? "" : left.slice(hash + 1).trim();
   // `#^block-id` addresses a paragraph, which the reader cannot follow; the
   // link still points at the document.
   const fragment = rawFragment === "" || rawFragment.startsWith("^") ? null : rawFragment;
   return { target, fragment, alias };
+}
+
+/** As `parseWikiLinkParts`, or `null` when there is no target to link to. */
+export function parseWikiLinkBody(body: string): { target: string; fragment: string | null; alias: string | null } | null {
+  const parts = parseWikiLinkParts(body);
+  return parts.target === "" ? null : parts;
 }
 
 /**
@@ -122,6 +130,52 @@ function unescapeWithMask(raw: string): { text: string; escaped: boolean[] } {
   return { text, escaped };
 }
 
+export type WikiLinkMatch = {
+  /** Where the `[[` starts in the text node's value. */
+  index: number;
+  /** Length of the whole `[[…]]`. */
+  length: number;
+  /** Empty for `[[#Heading]]`. */
+  target: string;
+  fragment: string | null;
+  alias: string | null;
+};
+
+/**
+ * The `[[…]]` links written in one text node, in order. The single place that
+ * decides what counts as one, used both to index a document and to render it:
+ * two copies of these rules would let the graph show an edge the page does not,
+ * or the page show a link the graph does not know about.
+ *
+ * An embed (`![[…]]`) is not a link, and neither is an escaped one
+ * (`\[\[x\]\]`), which reaches the tree as `[[x]]` — the source span is
+ * consulted to tell the two apart.
+ */
+export function findWikiLinks(node: Pick<Text, "value" | "position">, markdown: string): WikiLinkMatch[] {
+  const start = node.position?.start;
+  const end = node.position?.end;
+  const raw = start?.offset !== undefined && end?.offset !== undefined ? markdown.slice(start.offset, end.offset) : null;
+  let escaped: boolean[] | null = null;
+  if (raw !== null) {
+    const mask = unescapeWithMask(raw);
+    if (mask.text === node.value) escaped = mask.escaped;
+    // The span does not read back as the node's text (an entity, a stripped
+    // indent), so escapes cannot be located; without a literal `[[` anywhere
+    // in it there is nothing here that was written as a link.
+    else if (!raw.includes("[[")) return [];
+  }
+  const matches: WikiLinkMatch[] = [];
+  for (const match of node.value.matchAll(WIKI_LINK)) {
+    const first = match.index ?? 0;
+    const last = first + match[0].length - 1;
+    if (escaped && (escaped[first] || escaped[first + 1] || escaped[last] || escaped[last - 1])) continue;
+    const parts = parseWikiLinkParts(match[1]);
+    if (parts.target === "" && parts.fragment === null) continue;
+    matches.push({ index: first, length: match[0].length, ...parts });
+  }
+  return matches;
+}
+
 type Found = { offset: number; link: Omit<ExtractedLink, "ordinal"> };
 
 function collect(markdown: string, tree: Root): Found[] {
@@ -156,32 +210,17 @@ function collect(markdown: string, tree: Root): Found[] {
 
   const addWikiLinks = (node: Text) => {
     const start = node.position?.start;
-    const end = node.position?.end;
-    // An escaped `\[\[x\]\]` reaches the tree as `[[x]]`; the source still has the backslashes.
-    const raw = start?.offset !== undefined && end?.offset !== undefined ? markdown.slice(start.offset, end.offset) : null;
-    let escaped: boolean[] | null = null;
-    if (raw !== null) {
-      const mask = unescapeWithMask(raw);
-      if (mask.text === node.value) escaped = mask.escaped;
-      // The span does not read back as the node's text (an entity, a stripped
-      // indent), so escapes cannot be located; without a literal `[[` anywhere
-      // in it there is nothing here that was written as a link.
-      else if (!raw.includes("[[")) return;
-    }
-    for (const match of node.value.matchAll(WIKI_LINK)) {
-      const first = match.index ?? 0;
-      const last = first + match[0].length - 1;
-      if (escaped && (escaped[first] || escaped[first + 1] || escaped[last] || escaped[last - 1])) continue;
-      const parsed = parseWikiLinkBody(match[1]);
-      if (!parsed || !withinLimit(parsed.target, MAX_LINK_TARGET_LENGTH)) continue;
+    for (const match of findWikiLinks(node, markdown)) {
+      // `[[#Heading]]` is an anchor within the page, not an edge.
+      if (match.target === "" || !withinLimit(match.target, MAX_LINK_TARGET_LENGTH)) continue;
       const newlinesBefore = node.value.slice(0, match.index).split("\n").length - 1;
       found.push({
-        offset: (start?.offset ?? 0) + (match.index ?? 0),
+        offset: (start?.offset ?? 0) + match.index,
         link: {
           kind: "WIKI",
-          target: parsed.target,
-          fragment: parsed.fragment === null ? null : truncate(parsed.fragment, MAX_LINK_FRAGMENT_LENGTH),
-          display: parsed.alias === null ? null : truncate(parsed.alias, MAX_LINK_DISPLAY_LENGTH),
+          target: match.target,
+          fragment: match.fragment === null ? null : truncate(match.fragment, MAX_LINK_FRAGMENT_LENGTH),
+          display: match.alias === null ? null : truncate(match.alias, MAX_LINK_DISPLAY_LENGTH),
           line: Math.max(1, (start?.line ?? 1) + newlinesBefore),
         },
       });

@@ -308,7 +308,7 @@ type WorkspaceGraphView = {
 
 - 元件放 `src/components/knowledge/`（`document-outline.tsx`、`document-links-panel.tsx`、`backlinks-footer.tsx`、`graph-canvas.tsx`、`graph-controls.tsx`），頁面 `src/app/w/[workspaceId]/graph/page.tsx`；沿用 `/w/:workspaceId/...` 路由，不建 `/me`（Phase 3 §3.2）。
 - 只用 tokens 名稱：`text-body`／`text-body-sm`／`text-caption`、`rounded-md`、`shadow-popover`、`duration-120`、間距階梯（設計語言 §3–§5、§18 第 2 項）；不新增 token，所以不需要修改 `tailwind.config.ts` 與契約文件。
-- 動作註冊表（動作模型規格 §4）新增：`navigate.graph`（palette，「Open graph」）與 `document.backlinks`（palette + row，「Show backlinks」，開啟 inspector 的 Links 分頁）。兩者只在有 Knowledge 讀取權時提供，可用性規則寫在註冊表、有單元測試。
+- 動作註冊表（動作模型規格 §4）新增：`navigate.graph`（palette，「Open graph」）與 `document.backlinks`（**只在 palette**，「Show backlinks」，開啟 inspector 的 Links 分頁）。`document.backlinks` 不出現在 row menu，理由與 `document.details` 相同：它開啟的面板描述的是目前正在閱讀的那份文件，在別的列上提供會承諾一個顯示不了那一列的畫面。兩者都是讀取，不依賴 capability、所有權或生命週期（歷史 revision 上也提供）；可用性規則寫在註冊表、有單元測試。`navigate.graph` 因此使「沒有任何 capability 的成員」可用的動作從 1 個變成 2 個（Knowledge 與 Graph）——能讀 Knowledge 就能看它的圖。
 - 主導覽新增「Graph」項（`Network` 圖示），所有有讀取權的人可見。
 - 載入：圖譜頁用既有的 skeleton 慣用法與 `loading.tsx`。
 

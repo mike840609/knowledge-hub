@@ -75,6 +75,22 @@ describe("the share link is the single caller-less content path", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("the shared page never resolves links: nothing under /s/:token reaches the link services or their resolutions", () => {
+    // A shared page is read by someone with no access to the Workspace. A
+    // wikilink resolved there would be a link into content they cannot open,
+    // and a resolution is a statement about what exists in the Workspace
+    // (graph spec §12, D9). The renderer reads such links as their text when it
+    // is given no resolutions, so the page must not be given any.
+    const files = [...filesUnder(path.join("src", "app", "s")), path.join("src", "server", "share-read.ts")];
+    const offenders = files
+      .filter((file) => /link-graph-read|knowledge-link-service|rendered-links|applicationServices\(\)\.links|\.links\.(getDocumentLinks|getWorkspaceGraph|getLocalGraph)/.test(readFileSync(file, "utf8")))
+      .map((file) => file);
+    expect(offenders).toEqual([]);
+    const page = readFileSync(path.join("src", "app", "s", "[token]", "page.tsx"), "utf8");
+    expect(page).toMatch(/<MarkdownRenderer\s+markdown=\{shared\.markdown\}\s*\/>/);
+    expect(page).not.toMatch(/<MarkdownRenderer[^>]*\blinks=/);
+  });
+
   it("only the /s/:token projection reaches the caller-less entry", () => {
     const callers = ["src/server", "src/app", "src/components"]
       .flatMap(filesUnder)

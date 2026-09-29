@@ -82,6 +82,10 @@ export function useActionRunner({ onToggleFavorite }: ActionHandlers) {
               // it is open; asking is the only thing a detached surface can do.
               window.dispatchEvent(new CustomEvent("kh:request-details"));
               return;
+            case "document.open-links":
+              // Same request, asking for the Links tab.
+              window.dispatchEvent(new CustomEvent("kh:request-details", { detail: { tab: "links" } }));
+              return;
             case "document.open-share":
               // The dialog lives with the knowledge layout; any surface asks
               // for it the same way it asks for details.

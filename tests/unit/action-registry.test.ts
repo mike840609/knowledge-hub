@@ -251,3 +251,38 @@ describe("action registry — shortcuts", () => {
     expect(new Set(shortcuts).size).toBe(shortcuts.length);
   });
 });
+
+describe("action registry — document.backlinks (graph spec §11)", () => {
+  it("is offered in the palette for the open document, and never on a row", () => {
+    const available = availableActions(context({ target: target() }));
+    expect(ids(available)).toContain("document.backlinks");
+    expect(ids(actionsFor("palette", context({ target: target() })))).toContain("document.backlinks");
+    // The panel it opens describes the document that is open, so a row for some other document cannot offer it.
+    expect(ids(actionsFor("row", context({ target: target() })))).not.toContain("document.backlinks");
+  });
+
+  it("is reading, so it depends on neither capability nor ownership nor lifecycle", () => {
+    const readOnly = context({
+      can: { canWrite: false, canImport: false, canSearch: false, canInspectSources: false, canOpenSettings: false },
+      confirmed: false,
+      target: target({ ownership: "SOURCE_MANAGED", status: "ARCHIVED", revision: "HISTORICAL" }),
+    });
+    expect(ids(availableActions(readOnly))).toContain("document.backlinks");
+  });
+
+  it("is not offered when there is no document to describe", () => {
+    expect(ids(availableActions(context()))).not.toContain("document.backlinks");
+  });
+
+  it("asks the pane for the Links tab rather than navigating", () => {
+    const action = availableActions(context({ target: target() })).find((candidate) => candidate.id === "document.backlinks");
+    expect(action?.effect).toEqual({ kind: "command", command: "document.open-links", documentId: "d1", sourceId: "s1" });
+  });
+
+  it("is found by the words a reader would use", () => {
+    const palette = actionsFor("palette", context({ target: target() }));
+    for (const word of ["backlinks", "links", "references", "mentions"]) {
+      expect(ids(matchActions(palette, word)), word).toContain("document.backlinks");
+    }
+  });
+});

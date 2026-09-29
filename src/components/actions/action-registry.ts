@@ -30,7 +30,8 @@ export type ActionId =
   | "document.edit"
   | "document.share"
   | "document.favorite"
-  | "document.details";
+  | "document.details"
+  | "document.backlinks";
 
 export type ActionGroup = "navigate" | "create" | "document";
 
@@ -51,9 +52,14 @@ export type ActionIconName =
   | "edit"
   | "share"
   | "favorite"
-  | "details";
+  | "details"
+  | "backlinks";
 
-export type ActionCommand = "document.toggle-favorite" | "document.open-details" | "document.open-share";
+export type ActionCommand =
+  | "document.toggle-favorite"
+  | "document.open-details"
+  | "document.open-share"
+  | "document.open-links";
 
 export type ActionEffect =
   | { kind: "navigate"; href: string }
@@ -313,6 +319,25 @@ export function availableActions(context: ActionContext): readonly Action[] {
       effect: {
         kind: "command",
         command: "document.open-details",
+        documentId: target.documentId,
+        sourceId: target.sourceId,
+      },
+    });
+    // Graph spec §11. Palette only, for the same reason as Open details: the
+    // panel it opens describes the document currently open, so offering it on
+    // some other row would promise a view that cannot show that row. Reading,
+    // so it depends on neither capability nor ownership — and it is offered on
+    // a historical revision too, whose own links the panel then shows.
+    actions.push({
+      id: "document.backlinks",
+      label: "Show backlinks",
+      group: "document",
+      icon: "backlinks",
+      keywords: ["links", "references", "linked", "mentions", "graph", target.label],
+      surfaces: ["palette"],
+      effect: {
+        kind: "command",
+        command: "document.open-links",
         documentId: target.documentId,
         sourceId: target.sourceId,
       },
