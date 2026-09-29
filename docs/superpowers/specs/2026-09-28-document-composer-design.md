@@ -7,7 +7,7 @@
 | 回應 | 對照 Linear 設計語言的 UI/UX 審查第 2 項；`frontend-design-language.md` §18 Open items 第 3 項（編輯與閱讀是兩個不同的頁面；該項由 PR #61 加入） |
 | 對照契約 | `docs/superpowers/specs/frontend-design-language.md` §7（page containers）、§10（Focus and keyboard）、§15（component architecture） |
 | 對照規格 | `2026-09-16-phase-5-human-authoring-design.md`（authoring API、409 conflict）、`2026-09-24-keyboard-shortcuts-design.md`（`E`、`⌘Enter`、`Esc`） |
-| 狀態 | 已實作。驗證見 docs/superpowers/verification/2026-09-28-document-composer-verification.md。 |
+| 狀態 | 第 1–10 節（Markdown 原始碼編輯器）已實作，驗證見 `docs/superpowers/verification/2026-09-28-document-composer-verification.md`。**第 11 節（2026-09-29 修訂：預設渲染編輯、可切換原始碼）待實作**，它取代決定 1、決定 3，以及第 6 節的預覽與快捷鍵。 |
 
 ## 1. 現況（實測，非引述）
 
@@ -25,9 +25,9 @@
 
 | # | 問題 | 決定 | 理由 |
 | --- | --- | --- | --- |
-| 1 | 編輯原始碼還是所見即所得 | **Markdown 原始碼** | revision 存的是 Markdown 字串。所見即所得編輯器會「解析 → 內部模型 → 重新序列化」，這個來回不保證不變（`*` 變 `_`、清單符號、表格空白），使用者改一個字，其餘格式也可能被改寫並記進 revision。原始碼編輯沒有這個損失，也不需要新套件。 |
+| 1 | 編輯原始碼還是所見即所得 | **預設渲染編輯（Milkdown），可切換到 Markdown 原始碼**（第 11 節） | 2026-09-29 修訂。初版選原始碼，理由是所見即所得編輯器會「解析 → 內部模型 → 重新序列化」，不保證原樣（`*` 變 `-`、表格空白、不認得的語法），使用者改一個字，其餘格式也可能被改寫並記進 revision。產品決定改為與 Linear 一致的渲染編輯並**接受這個正規化**；每個 revision 不可變，改寫前的原文仍在上一個 revision，可在歷史中檢視。原始碼模式保留，作為看到實際 Markdown 的出口。 |
 | 2 | 標題怎麼改 | **跟著內容走**：metadata title → 開頭 H1 → 標題欄（第 4 節） | 一份文件只有一個標題，與閱讀頁判斷條件相同。metadata 優先是為了與上傳的優先順序一致，不讓 revision 的 `title` 與它自己帶的 metadata 互相矛盾。 |
-| 3 | 預覽 | **同一欄切換**，不並排 | 並排會把閱讀欄切半，與閱讀頁差最多；不預覽則每次確認排版都得多存一個 revision。 |
+| 3 | 預覽 | ~~同一欄切換~~ **已取代**：渲染模式本身就是預覽，Preview 按鈕由「渲染 ⇄ Markdown」切換取代（第 11 節） | 原理由（不並排、不用多存 revision 來確認排版）仍成立，渲染模式直接滿足。 |
 | 4 | 未存修改離開 | **分頁內暫存（sessionStorage）+ 還原**，另加 `beforeunload` | Next App Router 沒有攔截站內導航的 API，攔截式確認擋不住瀏覽器「上一頁」。暫存對所有離開方式都有效，且不產生 revision。 |
 | 5 | 範圍 | **新增與編輯共用同一個編輯器** | 只改一邊，會有兩套標題規則不同的編輯器。 |
 | 6 | 路由 | **保留 `/edit`、`/new`**，版面改成與閱讀頁相同 | 伺服器端的權限檢查（`edit/page.tsx:18-23`）留在門口；存檔後導航沿用 #49、#59、#60 修好的路徑；重新整理仍在編輯器。就地切換會把權限判斷搬到 client、改用 `router.refresh()`（#49 的起因），並推翻 #58 的「Edit 整頁載入」。 |
@@ -37,9 +37,9 @@
 
 編輯頁、新增頁與閱讀頁共用同一副骨架：`kh-reading-column` 內 `pt-5 pb-3` 的一行（左麵包屑、右動作），下接同欄寬 `py-6` 的內容。與閱讀頁的差別只有：
 
-- 右側動作是 **Preview**（切換，`aria-pressed`）、**Cancel**、**Save**，取代 Edit／Share／Details。
+- 右側動作是 **渲染／Markdown 切換**（`aria-pressed`，第 11 節；初版為 Preview 按鈕）、**Cancel**、**Save**，取代 Edit／Share／Details。
 - 麵包屑最後一段即時顯示將存成的標題（新增頁為 `New document`，解析出標題後改為標題）。
-- 內容是無邊框的 textarea，而不是渲染後的文章。
+- 內容預設是可編輯的渲染內容（第 11 節）；Markdown 模式是無邊框的 textarea。
 
 | 單元 | 位置 | 職責 | 依賴 |
 | --- | --- | --- | --- |
@@ -47,7 +47,7 @@
 | `documentLocation` | `src/server/document-location.ts` | 由 tree 算出 source › 資料夾路徑，不含文件本身；閱讀頁與 `/edit` 共用，各自附加標題 | explorer model |
 | `resolveAuthoredTitle` | `src/lib/authored-title.ts` | 純函式，第 4 節 | `mdast-util-from-markdown`、`mdast-util-to-string` |
 | draft store | `src/lib/document-draft.ts` | 純函式：讀、寫、刪，注入 `Storage`；`browserDraftStorage()` 取得分頁的 `sessionStorage` | 無 |
-| `DocumentComposer` | `src/components/knowledge/document-composer.tsx` | 編輯器本體：標題欄（需要時）、textarea、預覽、動作、錯誤、還原提示；`blocked` 讓另一個操作（如上傳）獨佔頁面，`footer` render prop `(state: { busy }) => ReactNode` 在 `<form>` 外渲染。存檔動作由外部傳入 | 以上各項、`MarkdownRenderer`、`useFormKeys` |
+| `DocumentComposer` | `src/components/knowledge/document-composer.tsx` | 編輯器本體：標題欄（需要時）、編輯區（渲染／Markdown）、動作、錯誤、還原提示；`blocked` 讓另一個操作（如上傳）獨佔頁面，`footer` render prop `(state: { busy }) => ReactNode` 在 `<form>` 外渲染。存檔動作由外部傳入 | 以上各項、`MarkdownRenderer`、`useFormKeys` |
 | `DocumentEditor`、`NewDocumentForm` | 既有檔案 | 變成薄包裝：組好 composer 的初始值，呼叫 `PATCH` 或 `POST` | `DocumentComposer` |
 
 實作時把 `useDraft` 併入 draft store：三個呼叫不需要一個 hook。
@@ -95,38 +95,22 @@
 **離開**
 
 - Cancel：有修改時先 `window.confirm("Discard changes?")`（新增頁現況即如此，編輯頁補上）；確認後清除暫存並離開。
-- `Esc`：規則不變——有修改時不做事（預覽中另見第 6 節）。
+- `Esc`：規則不變——有修改時不做事（第 11.6 節說明兩種模式下的行為）。
 - `beforeunload`：有修改時才掛上，擋關分頁。重新整理也會觸發這個提示（瀏覽器無法區分），但即使離開，暫存仍在。
 - 站內導航（側欄、palette、上一頁）：不攔截，靠暫存還原。
 
 ## 6. 預覽、快捷鍵與輸入區
 
-**預覽**
+**預覽（已由第 11 節取代）**
 
-- 預覽用閱讀頁同一個 `MarkdownRenderer`，外層與 `DocumentViewer` 相同的 `<article>` 樣式；圖片政策（`markdown-image-policy.ts`）相同。
-- `source === "TYPED"` 時預覽上方顯示與閱讀頁相同的 `<h1>`；`H1` 時由 Markdown 自己顯示。
-- textarea 在預覽時**只加 `hidden`，不卸載**，保留瀏覽器原生的復原紀錄與游標位置。
-- 切到預覽時焦點移到預覽區（`tabIndex={-1}`）；切回編輯時焦點回到 textarea 原游標位置。
-- 預覽中可存檔，`⌘Enter` 照常有效。
+渲染模式本身就是預覽，初版的 Preview 按鈕、`⌘/Ctrl ⇧ P` 與「預覽中 `Esc` 回到編輯」全部移除。下方「輸入區」的規則現在描述 **Markdown 模式**的 textarea。快捷鍵見第 11.6 節。
 
-**快捷鍵**（只掛在編輯器的 `<form>` 上，擴充 `useFormKeys`，不新增全域監聽）
-
-| 按鍵 | 行為 |
-| --- | --- |
-| `⌘/Ctrl ⇧ P` | 切換預覽 |
-| `⌘/Ctrl Enter` | 存檔（不變） |
-| `Esc` | 預覽中 → 回到編輯；編輯中且無修改 → 離開；有修改 → 不做事 |
-
-`⌘/Ctrl ⇧ P` 與 GitHub Markdown 編輯器相同。已知風險：Firefox 的 `Ctrl ⇧ P` 是開私密視窗，可能屬於網頁無法攔截的保留快捷鍵。實作時先在 Firefox 實測；攔不住就換一組按鍵，並回寫本節與 verification 紀錄。
-
-2026-09-29：尚未在 Firefox 實測（見 verification 紀錄）。
-
-**輸入區**
+**輸入區（Markdown 模式）**
 
 - 無邊框、無背景，使用閱讀頁的內文字體與字級（非等寬）。代價：表格與程式碼區塊的原始碼不對齊。
 - 高度隨內容增長（`input` 時設為 `scrollHeight`），捲動的是整頁，不出現框中框捲軸。
 - 進入時自動聚焦，游標在最前。
-- 標題欄與 textarea **不套 `kh-focus-ring`**。文字欄位聚焦時一律符合 `:focus-visible`，外框會在整個編輯期間框住整張畫布；閃爍的游標本身就是焦點指示，而 Preview／Cancel／Save 等控制項照常套焦點環。這是設計語言 §10 單一焦點環規則的例外，須記入契約。
+- 標題欄、textarea 與渲染編輯區**不套 `kh-focus-ring`**。文字欄位聚焦時一律符合 `:focus-visible`，外框會在整個編輯期間框住整張畫布；閃爍的游標本身就是焦點指示，而模式切換／Cancel／Save 等控制項照常套焦點環。這是設計語言 §10 單一焦點環規則的例外，須記入契約。
 - `E` 從閱讀頁整頁載入 `/edit`（#58）不變。
 
 ## 7. 錯誤處理
@@ -151,20 +135,20 @@
 - 以 H1 開頭：無標題欄；改 H1 時麵包屑即時更新；存檔後側欄顯示新名稱。
 - 無 H1：顯示標題欄；刪掉開頭 H1 時標題欄預填原 H1。
 - 帶 frontmatter title 的上傳文件：改 H1 不改名，顯示說明。
-- 預覽：按鈕與快捷鍵皆可切換；切回後內容與游標仍在；預覽中 `Esc` 回編輯；預覽中 `⌘Enter` 存檔。
+- ~~預覽~~：由第 11.9 節的模式切換案例取代。
 - 暫存：輸入後從側欄離開、按 `E` 回來 → 還原提示；「捨棄」後清空。
 - 暫存 + 衝突：離開期間他人存檔 → 還原後存檔得 409；「載入最新版本」後不再還原舊稿。
 - 有修改時按 Cancel → 確認框。
 - 新增頁：只寫 H1 即可建立，標題取自 H1。
 - 既有 `phase5-authoring.spec.ts`、`keyboard-shortcuts.spec.ts` 的選擇器依新欄位名更新：欄位名稱統一為 `Title` 與 `Markdown`，新增頁不再用 `Document title`。
 
-**手動**：Firefox 上 `Ctrl ⇧ P` 的結果，記入 verification。
+**手動**：見第 11.9 節（Firefox 的 `Ctrl /`、注音輸入法）。
 
 **完成標準**：`make verify` 與 `make test-e2e` 全部通過，並補 verification 紀錄。
 
 ## 9. 不做的事
 
-- 所見即所得、語法高亮、工具列、斜線指令。
+- 語法高亮（Markdown 模式）、斜線選單（渲染模式）。所見即所得與選取浮動工具列自第 11 節起納入。
 - 自動存檔成 revision；跨分頁或跨裝置的草稿（localStorage／伺服器端草稿）。
 - 攔截站內導航的確認框。
 - 伺服器端強制「標題 = H1」。
@@ -172,6 +156,106 @@
 
 ## 10. 對其他文件的影響
 
-- `frontend-design-language.md` §10 快捷鍵表：加入 `⌘/Ctrl ⇧ P`，並記下 `Esc` 在預覽中的行為。焦點一節記下編輯畫布不套焦點環的例外（第 6 節）。§18 第 3 項已隨本實作關閉（該項由 PR #61 加入）。
+- `frontend-design-language.md` §10 快捷鍵表：加入 `⌘/Ctrl /`（渲染 ⇄ Markdown）；初版曾加入的 `⌘/Ctrl ⇧ P` 與「預覽中 `Esc`」移除。焦點一節記下編輯畫布不套焦點環的例外（第 6 節）。§18 第 3 項已隨本實作關閉（該項由 PR #61 加入）。
 - `2026-09-24-keyboard-shortcuts-design.md` 第 5 節（表單按鍵）：指向本規格第 6 節。
 - README canonical 表：加入本規格與實作計畫。
+
+## 11. 渲染編輯模式（2026-09-29 修訂）
+
+產品要求編輯體驗與 Linear 一致：預設編輯排版後的內容，並可切換看實際的 Markdown。本節取代決定 1、決定 3，以及第 6 節的預覽與快捷鍵；第 4 節（標題）、第 5 節（暫存）、第 7 節（錯誤）的規則不變，因為它們都只依賴 `markdown` 字串。
+
+### 11.1 取捨與新增依賴
+
+- 一律渲染編輯，**接受正規化**：第一次在渲染模式編輯後，整份文件由編輯器重新輸出成 Markdown，未動的部分也可能改寫（`*` → `-`、表格空白、編輯器不認得的語法）。不做「無法原樣還原時自動改用原始碼」的保護，也不在存檔前警告。
+- 這是產品決定，代價是資料上可能有損：不認得的語法可能被改寫或丟失，且進到新 revision。緩解只有兩項——上一個 revision 保留原文；spike（11.8）先量出常見語法的實際行為，寫進 verification 紀錄。
+- 新增依賴：`@milkdown/kit`、`@milkdown/react`（7.22.x，基於 ProseMirror 與 remark，與閱讀頁的 `remark-gfm` 同一系）。第 1–10 節「不新增套件」的限制不再適用於此範圍。
+
+### 11.2 模式與單一來源
+
+- `mode: "rendered" | "source"`，預設 `rendered`。Markdown 模式就是第 6 節的 textarea，行為不變。
+- `markdown` 字串仍是**唯一的狀態來源**；渲染編輯器是它的一個檢視。標題規則、草稿、dirty、409、存檔都讀這個字串。
+- **開啟時只解析、不回寫**：文件載入後 `markdown` 維持原字串，所以沒編輯就不 dirty，也不會因正規化而變 dirty。
+- **第一次使用者編輯**（非程式性的 ProseMirror transaction）立刻標記 `touched`，此時就算 dirty（`beforeunload`、Cancel 確認即時生效），即使輸出尚未跑。
+- **輸出**：渲染編輯器內容 → Markdown，延遲約 300ms 更新 `markdown`。以下時機**強制立即輸出**：存檔、切換模式、Cancel 確認前、`pagehide`／`visibilitychange` 轉為 hidden、元件卸載。輸出後若 `markdown` 與初始值相同，`touched` 解除；若因正規化而不同，維持 dirty。
+- **Markdown → 渲染**（切回渲染模式）：文字有變時，以新內容取代渲染編輯器的文件內容；此時渲染編輯器的復原紀錄被清除。文字沒變則不動。復原紀錄不跨模式。
+- 存檔永遠先強制輸出，再送出 `markdown` 與由它解析出的標題。
+
+### 11.3 標題
+
+`resolveAuthoredTitle` 與第 4 節規則不變，輸入仍是 `markdown` 字串。渲染模式下為了麵包屑即時更新：
+
+- 以編輯器第一個節點判斷——是 H1 且有文字，就用它的純文字當**顯示用**標題，不必等輸出。
+- 這只是近似（例如只含圖片 alt 的 H1，mdast 會取 alt，ProseMirror 的 textContent 不會）。**送出的標題永遠來自強制輸出後的 `markdown` 字串**，因此與閱讀頁、匯入的規則一致。
+- 標題欄（`TYPED` 時）、`METADATA` 說明、標題延續（刪掉開頭 H1 時預填）的行為不變。
+
+### 11.4 編輯體驗
+
+- **打字轉換**：`# `～`### `、`- `、`1. `、`> `、` ``` `、`**粗體**`、`*斜體*`、`` `行內程式碼` ``。GFM：表格、任務清單。
+- **快捷鍵**：`⌘/Ctrl B`、`⌘/Ctrl I`、`⌘/Ctrl K`（連結）。
+- **選取浮動工具列**：選取文字時出現，含粗體、斜體、連結、標題（H1／H2）、項目清單、編號清單。不含斜線選單。工具列按鈕遵守既有控制項高度階梯與焦點環，`aria-pressed` 反映目前狀態。
+- **樣式與閱讀頁共用**：把 `MarkdownRenderer` 外層的 class 字串抽成共用常數，閱讀頁與編輯區同一份，避免日後漸漸不一致。
+- **圖片**沿用閱讀頁的來源白名單（`markdown-image-policy.ts`），以同一個 `MarkdownImage` 做 node view；白名單外的來源不載入，顯示閱讀頁同樣的替代畫面。
+- **連結**：編輯區內點擊不導航，`⌘/Ctrl`＋點擊才在新分頁開啟（同閱讀頁對外部連結的做法）。
+
+### 11.5 載入
+
+- 編輯器以 `next/dynamic`（`ssr: false`）延後載入，Markdown／ProseMirror 套件不進 `/edit`、`/new` 的首包。這同時解決第 1–10 節實作後留下的「預覽的 Markdown 套件提早載入」follow-up。
+- 載入期間顯示閱讀頁的 `MarkdownArticle`（可在伺服器渲染）當唯讀內容，編輯器就緒後原位換成可編輯，不會閃出 textarea。欄位與 Save 的 `ready` 再加上「編輯器就緒」；就緒前 Markdown 模式的 textarea 同樣停用。
+- 首次聚焦規則不變：有標題欄且為空時聚焦標題欄，否則聚焦編輯區開頭（渲染模式為文件開頭，游標在最前）。還原的草稿同樣。
+- 兩個編輯區（渲染、textarea）都保持掛載，以 `hidden` 切換可見（沿用第 6 節的做法，不在同一元素加 display 類別）。
+
+### 11.6 快捷鍵與 Esc
+
+| 按鍵 | 行為 |
+| --- | --- |
+| `⌘/Ctrl /` | 切換渲染 ⇄ Markdown（Typora 的慣例） |
+| `⌘/Ctrl Enter` | 存檔（不變）。在 ProseMirror 內也生效，因為事件會冒泡到 `<form>` |
+| `Esc` | 沒有修改且沒有在保存 → 離開；有修改 → 不做事。兩種模式相同 |
+| `⌘/Ctrl ⇧ P` | 移除 |
+
+- 只掛在編輯器的 `<form>` 上，擴充 `useFormKeys`，不新增全域監聽；輸入法組字中一律不觸發（`isComposing`／`keyCode 229`）。
+- 移除 `⌘⇧P` 後，初版記錄的 Firefox 私密視窗風險不再適用。`⌘/Ctrl /` 沒有已知的瀏覽器保留綁定，但仍須在 Firefox 手動確認一次。
+
+### 11.7 沿用不變
+
+- 草稿存的是 `markdown`（強制輸出後的值），還原、`baseRevisionId`、409、清除、`beforeunload`、Cancel 確認、存檔後導航的 fallback（第 5、7 節）全部不變。
+- 上傳、`blocked`／`footer`、標題來源說明、`METADATA` 優先，不變。
+- 路由、伺服器端權限檢查、API 契約不變。
+
+### 11.8 風險與 spike
+
+實作計畫的第一個 task 是 **spike**，通過才繼續：
+
+1. 在 Next 15 + React 19 下以 `ssr: false` 掛載 Milkdown，且 hydration 無警告。
+2. 對一組代表性文件量測「解析 → 輸出」的實際結果，並把「哪些寫法被正規化、哪些丟失」寫進 verification 紀錄：標題、`*` 與 `-` 清單、巢狀清單、`_` 與 `*` 強調、GFM 表格、任務清單、程式碼區塊（含語言）、行內程式碼、連結（含 title）、圖片（含 alt）、硬換行、HTML 區塊、腳註、wikilink 字樣、中日韓文字。
+3. 量測新增的 bundle 大小，並確認只在 `/edit`、`/new` 載入。
+4. 決定 round-trip 測試能否在無 DOM 的環境（vitest node）執行；不能的話改在 Playwright 內執行。
+
+若 spike 顯示常見語法會被丟失、或無法掛載，**停止並回報**，不硬做；此時保留的是本 PR 已完成的 Markdown 原始碼編輯器。
+
+其他風險：**輸入法**（注音等組字中，打字轉換不得誤觸發）無法自動化，須手動驗證；無障礙（編輯區的角色與名稱、工具列的鍵盤操作）須在 e2e 內檢查。
+
+### 11.9 測試
+
+**單元／spike 產出**：11.8 第 2 點的 round-trip 語料，把每個案例的「輸入 → 輸出」固定為斷言，讓正規化行為有文件也有回歸保護；第一次編輯前不回寫（解析後 `markdown` 不變）。
+
+**E2E**
+
+- 打開文件預設是渲染；沒編輯直接離開不 dirty、不出 `beforeunload`。
+- 打字轉換：`# ` 變標題、`- ` 變清單；`**x**` 變粗體。
+- 選取文字出現浮動工具列，按粗體後切到 Markdown 模式看到 `**…**`。
+- 在 Markdown 模式改字，切回渲染看到變更；切換不遺失未存內容。
+- 標題跟著渲染模式的 H1 變；存檔的標題與閱讀頁一致。
+- 草稿：在渲染模式編輯後離開、回來，還原提示出現且內容一致；409 流程不變。
+- 圖片白名單外的來源在編輯區不載入。
+- `⌘/Ctrl /` 切換；`⌘/Ctrl Enter` 在渲染模式存檔。
+- 既有測試改寫：凡用 `getByLabel("Markdown").fill(...)` 直接填 Markdown 的，改為先切到 Markdown 模式（共用 helper），或改用打字。
+
+**手動**（記入 verification）：Firefox 的 `Ctrl /`；注音輸入法在渲染模式的組字與打字轉換；一份真實的匯入文件（含表格與程式碼）開啟、編輯、存檔前後的差異。
+
+### 11.10 完成標準
+
+- spike 通過，並把 round-trip 量測寫進 verification。
+- `make verify` 與 `make test-e2e` 全部通過；新增／改寫的案例重複 30 次無失敗。
+- 設計語言 §10（快捷鍵、焦點環例外涵蓋渲染編輯區）與 README 更新。
+
