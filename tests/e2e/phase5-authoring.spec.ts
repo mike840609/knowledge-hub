@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { showMarkdown } from "./composer-helpers";
 
 // Mirrors scripts/db/seed.ts BROWSER_FIXTURE_IDS (Playwright cannot resolve `@/` aliases).
 const EMPTY_WORKSPACE = "0199f100-0000-7000-8000-000000000004";
@@ -65,7 +66,8 @@ test("edits a hub-managed document and records a second revision", async ({ page
   // main form + first(): same pre-existing duplicate-DOM quirk as the "main header" convention
   // above (a hidden leftover node the a11y tree doesn't surface, but raw-DOM locators still match).
   const editorForm = page.locator("main form").first();
-  await editorForm.getByLabel("Markdown").fill("updated body");
+  const source = await showMarkdown(editorForm);
+  await source.fill("updated body");
   await editorForm.getByRole("button", { name: "Save" }).click();
 
   await expect(page.locator("article").first().getByText("updated body")).toBeVisible(ROUND_TRIP);
@@ -142,15 +144,17 @@ test("a stale second editor gets a conflict, keeps their input, and does not ove
   const editorB = pageB.locator("main form").first();
 
   // A saves first and wins.
-  await editorA.getByLabel("Markdown").fill("winner body");
+  const sourceA = await showMarkdown(editorA);
+  await sourceA.fill("winner body");
   await editorA.getByRole("button", { name: "Save" }).click();
   await expect(page.locator("article").first().getByText("winner body")).toBeVisible(ROUND_TRIP);
 
   // B saves stale: conflict shown, input preserved, reload offered — no silent overwrite.
-  await editorB.getByLabel("Markdown").fill("loser body");
+  const sourceB = await showMarkdown(editorB);
+  await sourceB.fill("loser body");
   await editorB.getByRole("button", { name: "Save" }).click();
   await expect(pageB.getByRole("alert").filter({ hasText: "已被其他人更新" })).toBeVisible(ROUND_TRIP);
-  await expect(editorB.getByLabel("Markdown")).toHaveValue("loser body");
+  await expect(sourceB).toHaveValue("loser body");
   await expect(pageB.getByRole("button", { name: "載入最新版本（捨棄你的修改）" })).toBeVisible();
 
   // The persisted current revision is the winner's, never the loser's.

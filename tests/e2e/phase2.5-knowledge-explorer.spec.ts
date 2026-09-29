@@ -80,7 +80,7 @@ test("reading navigation separates collections from authoring and source managem
 
   await page.getByRole("link", { name: "Create document", exact: true }).click();
   await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("New document");
-  await expect(page.locator("main form").first().getByLabel("Markdown")).toBeVisible();
+  await expect(page.locator("main form").first().getByRole("textbox", { name: "Content" })).toBeVisible();
   await expect(page.locator('input[type="file"]')).toBeAttached();
   await expect(page.getByText("Upload .md")).toBeVisible();
 });
