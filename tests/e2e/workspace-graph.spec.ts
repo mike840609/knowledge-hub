@@ -1,6 +1,14 @@
 import { expect, test, type Page } from "@playwright/test";
 import { openPalette } from "./fixtures/palette";
 
+/**
+ * Creates documents in the E2E user's own My Space, and the specs share one
+ * database and run in file-name order. phase2.5-routing.spec.ts asserts that a
+ * fresh My Space is empty, so this file must sort after it — which is why it is
+ * named `reading-…` and not `document-…`. share-link.spec.ts relies on the same
+ * ordering for the same reason.
+ */
+
 // Mirrors scripts/db/seed.ts BROWSER_FIXTURE_IDS (Playwright cannot resolve `@/` aliases).
 const EMPTY_WORKSPACE = "0199f100-0000-7000-8000-000000000004";
 const RESTRICTED_WORKSPACE = "0199f100-0000-7000-8000-000000000003";

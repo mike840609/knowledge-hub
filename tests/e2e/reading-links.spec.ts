@@ -2,6 +2,14 @@ import { expect, test, type Page } from "@playwright/test";
 import { phase3UnconfiguredOrigin } from "./fixtures/phase3-identities";
 import { openPalette } from "./fixtures/palette";
 
+/**
+ * Creates documents in the E2E user's own My Space, and the specs share one
+ * database and run in file-name order. phase2.5-routing.spec.ts asserts that a
+ * fresh My Space is empty, so this file must sort after it — which is why it is
+ * named `reading-…` and not `document-…`. share-link.spec.ts relies on the same
+ * ordering for the same reason.
+ */
+
 // Same budget and reasoning as phase5-authoring.spec.ts.
 const ROUND_TRIP = { timeout: 15_000 };
 
