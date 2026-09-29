@@ -1296,6 +1296,15 @@ export function DocumentComposer({
     setTouched(true);
   }
 
+  // The editor's output only means something while the rendered view is the one
+  // being edited. After a mode switch everything typed was already delivered by
+  // `flush`, and a debounce firing late would overwrite what is being typed in
+  // the source.
+  function handleEditorMarkdown(next: string) {
+    if (showing !== "rendered") return;
+    adopt(next);
+  }
+
   function discardDraft() {
     clearDraft(browserDraftStorage(), draftKey);
     pendingRef.current = false;
@@ -1487,7 +1496,7 @@ export function DocumentComposer({
                 onReady={handleEditorReady}
                 onFail={handleEditorFail}
                 onUserEdit={handleUserEdit}
-                onMarkdown={adopt}
+                onMarkdown={handleEditorMarkdown}
               />
             </div>
           ) : null}
