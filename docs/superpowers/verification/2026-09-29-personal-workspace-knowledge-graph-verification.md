@@ -5,13 +5,13 @@
 | 日期 | 2026-09-29 |
 | 對象 | [設計](../specs/2026-09-29-personal-workspace-knowledge-graph-design.md)、[計畫](../plans/2026-09-29-personal-workspace-knowledge-graph.md)：TOC、連結索引（migration 012）、wikilink／相對 `.md` 連結渲染、Backlinks、Workspace／Local graph |
 | 環境 | 開發用容器；MariaDB 10.11.14（本機安裝，`127.0.0.1:3307`）；Node 22；Chromium 由環境內建的 1194 版經 shim 提供給 Playwright 1.63（shim 在 repo 之外，不屬於本變更） |
-| 結論 | 全部通過。unit 617、integration 486、e2e 107、`tsc --noEmit`、`eslint .`、`next build` 皆綠。效能量測見 §3；實作過程中測試抓到的問題見 §4；未做的事見 §6；圖譜視覺重做（Linear 語彙）見 §7、標題列 chip 與 inspector 分頁記憶見 §8 |
+| 結論 | 全部通過。unit 620、integration 486、e2e 107、`tsc --noEmit`、`eslint .`、`next build` 皆綠。效能量測見 §3；實作過程中測試抓到的問題見 §4；未做的事見 §6；圖譜視覺重做（Linear 語彙）見 §7、標題列 chip 與 inspector 分頁記憶見 §8 |
 
 ## 1. 基準與結果
 
 | 層 | 開工前 | 完成後 | 新增 |
 | --- | --- | --- | --- |
-| unit（`make test-unit`） | 427（51 檔） | **617（65 檔）** | +190 |
+| unit（`make test-unit`） | 427（51 檔） | **620（66 檔）** | +193 |
 | integration（`make test-integration`） | 444（43 檔） | **486（46 檔）** | +42 |
 | e2e（`make test-e2e`） | 91 | **107** | +16 |
 | typecheck／lint／build | 乾淨 | 乾淨 | — |
@@ -161,14 +161,14 @@
 
 **影響範圍。** 任何走「延遲載入」路徑（目的地沒有 prefetch 資料）的同頁導覽都可能踩到：深度切換、History 分頁的 revision 連結、`includeArchived`。§8 第 4 點的 `revision-history` 失敗很可能是同一個（未驗證）。這是框架的問題，不是這個功能的；這個功能只是剛好有一個容易被測試點到的入口。
 
-**選項（尚未決定）。**
+**選項與決定。** 決定採用選項 1（見下方「處置」）。
 
 1. **對 15.5.25 用 patch-package 套上游的那一行**（`react-dom-client.production.js`，開發版同一處也要）。已驗證、很小、升級到 Next 16 時移除。代價：repo 目前沒有 patch-package，要新增依賴與 postinstall，並修改 vendored 程式碼。
 2. **升級到 Next 16.x**：已含修正，但是 major 升級，不該為了這個 bug 而做。
 3. **不動，記為已知問題**：e2e 的深度切換案例（以及可能的 `revision-history`）會以 1–5% 失敗；使用者偶爾要點兩次。
 4. **只針對這個控制項**：深度切換改成 client 端狀態（伺服端一次回傳兩種深度的資料與 layout），不再導覽，也讓切換即時。但只解決一個入口，其他同頁導覽仍有此風險，而且 `?graph=2` 的可分享網址要另外處理。
 
-建議：先做 1（成本低、已驗證），在正常的升級週期做 2 並移除 patch；不建議只做 4。
+當時的建議與最後的決定一致：先做 1，在正常的升級週期做 2 並移除 patch；不只做 4。
 
 **這次調查留下的做法。**
 
@@ -176,11 +176,30 @@
 - 插樁比推理可靠：action queue 孤兒的假設在讀原始碼時看起來完全合理，插樁後一行就被推翻。
 - webpack 的持久化快取把 `node_modules` 當成不可變：改了 `node_modules` 裡的檔案後重 build 兩次都沒有生效，要清 `.next/cache` 才會。
 
+**處置：patch-package 套上游的那一行。**
+
+- `patch-package`（dev dependency，15 個僅開發用的傳遞依賴；新增後 `npm audit` 的 7 項既有問題沒有變動，都不在它的依賴裡）＋ `postinstall: patch-package` ＋ `patches/next+15.5.25.patch`。
+- patch 內容是 `pingSuspendedRoot` 在 render 途中的分支多記一次 ping，共 4 個 build：`react-dom-client.production.js`（`next build`／`start`）、`react-dom-client.development.js`（`next dev`）、`react-dom-profiling.profiling.js`、`react-dom-profiling.development.js`（`--profile`）。與 Next 16.3.7 內附 React 的修法逐字同形。**沒有**修 `react-dom-experimental`：那一組只有開啟 Next 的 experimental flag 才會被選用，這個 app 沒有。
+- 用 patch-package 自己的流程產生：它對乾淨的 `next@15.5.25` 做 diff，所以 patch 只含這 4 個檔案的變動，同時證明了先前還原的其餘檔案都是原樣。
+- **守門測試** `tests/unit/vendored-react-ping-fix.test.ts`：檢查內附 React 的 `pingSuspendedRoot` 在兩個地方記錄 ping。它驗證的是**原始碼的行為**，不是 patch 檔存在，所以新版 Next 若內附的 React 已含修正，它會自己通過、patch 就可以刪。它會抓到兩件事：`npm ci --ignore-scripts` 漏掉 patch；升級 Next 後 patch 沒跟上。在沒有 patch 的乾淨 checkout 上實測會失敗（production 與 development 兩個 build 各一個失敗，訊息說明怎麼處理）。
+- 版本綁定是刻意的：patch 檔名帶 `15.5.25`，升級 Next 之後舊 patch 會讓 `patch-package` 報錯，逼人回來看這件事，而不是無聲地留著一個不再適用的 patch。README 有寫怎麼處理。
+
+**處置的驗證（都在乾淨 checkout 上，不碰這個 repo 的 `.next` 與其快取）。**
+
+| 項目 | 結果 |
+| --- | --- |
+| 乾淨 checkout `npm ci` | `postinstall` 套用 patch，4 個 build 都已修；重跑 `patch-package` 是冪等的；與主 repo 裡的檔案逐位元相同（做了兩次） |
+| 出貨的 bundle | 兩份 React（app 用的 chunk 與 framework chunk）的壓縮後程式碼都是修正後的形狀；對照組是未修正的形狀 |
+| 沒有插樁的 production build，重現腳本 400 次 | **打了 patch：0 次失敗**；**沒有 patch 的對照（同樣方式、同樣的乾淨 checkout 建置）：12 次失敗（3.0%）**，12 次都被判定為「React 閒置在遺失的 ping 上」，且都被不相關的更新在 142–361 ms 內釋放。以 3.0% 計，400 次全過的機率約百萬分之五 |
+| 完整 e2e（打了 patch 的乾淨 checkout） | 107／107 |
+| 先前會失敗的深度切換案例，重複 40 次 | 40／40（沒有 patch 時 19／20，見 §8 第 3 點） |
+| unit／typecheck／lint（主 repo） | unit 620／620（含守門測試 3 個）、`tsc --noEmit` 與 `eslint .` 乾淨 |
+
 **環境備註與沒有做的事。**
 
-- 調查時在 `node_modules/next` 與其 vendored React 裡臨時加了 log，已從事前備份還原（4 個檔案，逐位元比對確認）。
-- **`.next/cache` 仍含被插樁的 React 的編譯結果，`.next` 目前是插樁 build。** 我準備清掉快取的指令被 permission classifier 擋下，我沒有換別的方法繞過。這個 build 在沒有 `globalThis.__log` 時不會做任何事，功能上無影響，但它不是乾淨的 build；清除 `.next/cache` 後重新 build 即可。
-- **這個問題我沒有修**：上面的選項需要決定。
+- 調查時在 `node_modules/next` 與其 vendored React 裡臨時加了 log，已從事前備份還原（4 個檔案，逐位元比對確認）。之後的 patch 是在還原後的乾淨檔案上做的。
+- **這個 repo 的 `.next/cache` 仍含被插樁的 React 的編譯結果，`.next` 目前是插樁 build**（我準備清掉快取的指令被 permission classifier 擋下，我沒有換別的方法繞過）。後果：在這個工作目錄裡，`npm run build` 會沿用快取，**不會**帶到 patch，也還帶著 log 程式碼。CI 與任何乾淨 checkout 不受影響（上面的驗證就是在乾淨 checkout 做的）。清掉 `.next/cache` 後重新 build 即可；README 也寫了「新增或移除 patch 之後要清快取」。
+- 這個 patch 修的是框架內附程式碼裡的一個 bug；它不會讓 e2e 的深度切換案例「永遠」穩定（那要在沒有其他不穩定來源時才成立），但已知的這個來源已經關掉：重現腳本 400 次 0 次、案例 40 次 0 次。`revision-history` 的偶發失敗（§8 第 4 點）是否也是這個原因，仍然沒有驗證；之後若再出現，先用重現腳本的方式看 React root 的狀態。
 
 ## 10. 重現
 

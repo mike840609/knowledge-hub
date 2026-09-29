@@ -31,6 +31,14 @@ make dev         # 啟動 dev server
 
 疑難排解：port 衝突先查 3307（DB）、3000（dev）、3101（E2E）；DB 起不來用 `make db-logs` 看； dev 資料亂掉用 `make db-reset`（會刪 volume）。
 
+### 對 Next 內附 React 的 patch
+
+`npm ci` 之後 `postinstall` 會跑 `patch-package`，把 `patches/next+15.5.25.patch` 套到 `node_modules/next` 內附的 React（一行修正：render 途中收到的 ping 不再被丟掉；否則同頁導覽偶爾「載入完了卻不顯示」，見 [驗證紀錄 §9](docs/superpowers/verification/2026-09-29-personal-workspace-knowledge-graph-verification.md)）。
+
+- 用 `npm ci --ignore-scripts` 安裝會漏掉它；`tests/unit/vendored-react-ping-fix.test.ts` 會失敗並告訴你補跑 `npx patch-package`。
+- 升級 Next 時，patch 檔名帶版本，舊版 patch 會讓 `patch-package` 報錯，這是刻意的：先看新版內附的 React 是否已含這個修正（那個 unit test 會自己通過），是的話直接刪 `patches/next+*.patch`；否則重做 patch，並用 `npx tsx scripts/diagnostics/router-stuck-transition.ts 100`（需要正在運行的 production build）確認。上游修正已在 Next 16.x。
+- **新增或移除 patch 之後，清掉 `.next/cache` 再 build。** webpack 的持久化快取把 `node_modules` 當成不可變，不清的話 build 會沿用快取裡編譯過的舊版 React，patch 看起來「沒有生效」。CI 是乾淨 checkout，不受影響。
+
 ## 目前狀態
 
 更新日期：2026-09-29。

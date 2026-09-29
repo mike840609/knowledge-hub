@@ -3,13 +3,15 @@
  * document page: a same-page navigation (`?graph=2`) whose response arrives,
  * and whose page never changes.
  *
- * Why this exists. The cause is a hole in React's ping handling that the
- * vendored copy inside Next 15.5 still has (verification record §9). It hits
- * about 1–5% of these navigations, which is too rare for an end-to-end test to
- * tell a fix from luck: 400 clean runs are needed to say anything. This script
- * makes those runs cheap, and says *why* a run failed rather than only that it
- * did, so it can be pointed at a Next upgrade or a patch and answer the
- * question directly.
+ * Why this exists. The cause is a hole in React's ping handling in the copy
+ * vendored inside Next 15.5 (verification record §9), which
+ * `patches/next+15.5.25.patch` closes. Unpatched it hits about 1–5% of these
+ * navigations, which is too rare for an end-to-end test to tell a fix from luck:
+ * 400 clean runs are needed to say anything. This script makes those runs
+ * cheap, and says *why* a run failed rather than only that it did, so it can be
+ * pointed at a Next upgrade or a new patch and answer the question directly.
+ * On the patched build it should report no failures; on a build without the
+ * patch it reports about 3%.
  *
  * It needs a running production build (`make start`, or `next start`) and a
  * document that links to others, so the inspector's Links tab shows a

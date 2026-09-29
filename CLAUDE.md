@@ -28,6 +28,11 @@ npx vitest run --config vitest.config.ts tests/unit/<file>.test.ts
 npx vitest run --config vitest.config.ts -t "<test name>"
 ```
 
+`node_modules/next`'s vendored React carries one patch (`patches/next+15.5.25.patch`,
+applied by `postinstall`). A navigation that "finishes loading and never appears"
+is the symptom of it being missing; see README's patch section before touching
+either the patch or the Next version, and clear `.next/cache` after changing it.
+
 CI (`.github/workflows/phase2-dev-gate.yml`) runs four jobs on every PR to
 `main`: `unit` (which also runs typecheck and lint), `build`, `integration`
 and `e2e`. `make verify` covers everything except the two DB-backed jobs.
