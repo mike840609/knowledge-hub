@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { phase3UnconfiguredOrigin } from "./fixtures/phase3-identities";
+import { openPalette } from "./fixtures/palette";
 
 // Same budget and reasoning as phase5-authoring.spec.ts.
 const ROUND_TRIP = { timeout: 15_000 };
@@ -63,8 +64,7 @@ test.describe("wikilinks and backlinks in My Space", () => {
     await page.goto(target.url);
 
     // Opened from the command palette rather than by clicking the tab.
-    await page.keyboard.press("Control+k");
-    await page.getByRole("dialog").getByRole("combobox").fill("backlinks");
+    await (await openPalette(page)).fill("backlinks");
     await page.getByRole("option", { name: /Show backlinks/ }).click();
 
     const links = page.getByRole("tab", { name: "Links", selected: true });

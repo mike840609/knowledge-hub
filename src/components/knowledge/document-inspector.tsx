@@ -15,6 +15,7 @@ import { useScrollToHash } from "./use-scroll-to-hash";
 import { OutlineDisclosure, OutlineList, OutlineRail } from "./document-outline";
 import { DocumentLinksPanel } from "./document-links-panel";
 import type { DocumentLinkView } from "@/modules/knowledge/application/knowledge-link-service";
+import type { GraphViewData } from "./graph-model";
 import type { OutlineEntry } from "@/shared/markdown/outline";
 import { Check, Copy, X } from "lucide-react";
 import type { KnowledgeRevisionView } from "@/modules/knowledge/application/knowledge-query-service";
@@ -50,6 +51,13 @@ export type DocumentInspectorData = {
   includeArchived: boolean;
   /** What links here and what this links to; `null` when it could not be read. */
   links: DocumentLinkView | null;
+  /** The document's neighbourhood, laid out on the server; `null` when there is none to draw. */
+  localGraph: {
+    data: GraphViewData;
+    depth: 1 | 2;
+    openHref: string;
+    depthHrefs: { 1: string; 2: string };
+  } | null;
 };
 
 /** A request, from outside the pane, for the inspector to open on a particular tab. */
@@ -161,7 +169,7 @@ function InspectorTabs({
         ]} />
       </TabsPanel>
       <TabsPanel value="links">
-        <DocumentLinksPanel view={data.links} />
+        <DocumentLinksPanel view={data.links} localGraph={data.localGraph} focusId={data.documentId} />
       </TabsPanel>
       <TabsPanel value="history">
         <ul className="space-y-1">

@@ -63,6 +63,8 @@ export type DocumentLinkView = {
   backlinks: BacklinkView[];
   backlinkTotal: number;
   index: LinkIndexState;
+  /** The document's neighbourhood, when asked for (`localGraphDepth`); `null` if it is not in the graph (archived). */
+  localGraph: LinkGraph | null;
 };
 
 export type WorkspaceGraphView = WorkspaceGraph & {
@@ -83,7 +85,11 @@ export interface KnowledgeLinkService {
    * revision whose links are shown (the one on screen when a historical
    * revision is being read); the default is the current one.
    */
-  getDocumentLinks(caller: CallerContext, documentId: string, input?: { revisionNo?: number; includeArchived?: boolean }): Promise<DocumentLinkView>;
+  getDocumentLinks(
+    caller: CallerContext,
+    documentId: string,
+    input?: { revisionNo?: number; includeArchived?: boolean; localGraphDepth?: 1 | 2 },
+  ): Promise<DocumentLinkView>;
   getWorkspaceGraph(caller: CallerContext, workspaceId: string, input?: GraphOptions): Promise<WorkspaceGraphView>;
   getLocalGraph(caller: CallerContext, documentId: string, input?: { depth?: 1 | 2 }): Promise<LocalGraphView>;
 }
@@ -109,7 +115,7 @@ export class KnowledgeLinkServiceImpl implements KnowledgeLinkService {
   async getDocumentLinks(
     caller: CallerContext,
     documentId: string,
-    input: { revisionNo?: number; includeArchived?: boolean } = {},
+    input: { revisionNo?: number; includeArchived?: boolean; localGraphDepth?: 1 | 2 } = {},
   ): Promise<DocumentLinkView> {
     return this.unitOfWork.run(async (repositories) => {
       const { document, policy } = await requireVisibleDocument(repositories, caller, documentId, input.includeArchived ?? false);
@@ -177,6 +183,15 @@ export class KnowledgeLinkServiceImpl implements KnowledgeLinkService {
         }),
         backlinkTotal: backlinks.length,
         index: await repositories.links.countIndexState(workspaceId),
+        // From the same catalog and edges already resolved for this request, so
+        // asking for the neighbourhood costs no second read of the Workspace.
+        localGraph: input.localGraphDepth === undefined
+          ? null
+          : buildLocalGraph(
+              buildWorkspaceGraph(catalog, edges, { includeUnresolved: true, includeOrphans: true, limit: Number.MAX_SAFE_INTEGER }),
+              document.id,
+              input.localGraphDepth,
+            ),
       };
     });
   }

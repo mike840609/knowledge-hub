@@ -3,7 +3,7 @@
 import { useWorkspaceAuthorization } from "./use-workspace-authorization";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpenText, Database, Settings } from "lucide-react";
+import { BookOpenText, Database, Network, Settings } from "lucide-react";
 
 export function PrimaryNav({
   workspaceId,
@@ -21,6 +21,11 @@ export function PrimaryNav({
       name: "Knowledge",
       href: `/w/${workspaceId}/knowledge`,
       Icon: BookOpenText,
+    },
+    {
+      name: "Graph",
+      href: `/w/${workspaceId}/graph`,
+      Icon: Network,
     },
     ...(access.actions.canInspectSources ? [{
       name: "Sources",

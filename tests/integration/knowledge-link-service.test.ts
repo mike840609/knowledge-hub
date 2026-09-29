@@ -169,6 +169,22 @@ describe("getDocumentLinks", () => {
     expect(view.backlinks).toEqual([]);
   });
 
+  it("carries the document's neighbourhood when asked, from the same read, and not otherwise", async () => {
+    const scope = await setupLinkScope(pool);
+    const centre = await hubDocument(pool, scope, "Hub centre", "[[Spoke]] [[Void]]");
+    await hubDocument(pool, scope, "Spoke", "[[Rim]]");
+    await hubDocument(pool, scope, "Rim", "x");
+
+    expect((await service.getDocumentLinks(owner, centre.documentId)).localGraph).toBeNull();
+    const one = (await service.getDocumentLinks(owner, centre.documentId, { localGraphDepth: 1 })).localGraph!;
+    expect(one.nodes.map((node) => node.title).sort()).toEqual(["Hub centre", "Spoke", "Void"]);
+    const two = (await service.getDocumentLinks(owner, centre.documentId, { localGraphDepth: 2 })).localGraph!;
+    expect(two.nodes.map((node) => node.title).sort()).toEqual(["Hub centre", "Rim", "Spoke", "Void"]);
+    // The same answer as asking for the graph directly.
+    const direct = await service.getLocalGraph(owner, centre.documentId, { depth: 2 });
+    expect({ nodes: two.nodes, edges: two.edges }).toEqual({ nodes: direct.nodes, edges: direct.edges });
+  });
+
   it("is refused for a caller who is not a member, and does not say whether the document exists", async () => {
     const scope = await setupLinkScope(pool);
     const doc = await hubDocument(pool, scope, "Private", "[[Anything]]");

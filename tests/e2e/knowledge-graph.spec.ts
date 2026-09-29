@@ -1,0 +1,149 @@
+import { expect, test, type Page } from "@playwright/test";
+import { openPalette } from "./fixtures/palette";
+
+// Mirrors scripts/db/seed.ts BROWSER_FIXTURE_IDS (Playwright cannot resolve `@/` aliases).
+const EMPTY_WORKSPACE = "0199f100-0000-7000-8000-000000000004";
+const RESTRICTED_WORKSPACE = "0199f100-0000-7000-8000-000000000003";
+
+// Same budget and reasoning as phase5-authoring.spec.ts.
+const ROUND_TRIP = { timeout: 15_000 };
+
+async function createMySpaceDocument(page: Page, title: string, body: string): Promise<{ workspaceId: string; url: string; documentId: string }> {
+  await page.goto("/");
+  await page.waitForURL(/\/w\/[^/]+\/knowledge/);
+  const workspaceId = new URL(page.url()).pathname.split("/")[2];
+  await page.goto(`/w/${workspaceId}/knowledge/new`);
+  await page.getByLabel("Document title").fill(title);
+  await page.getByLabel(/Content/).fill(body);
+  await expect(page.getByRole("button", { name: "Create document" })).toBeEnabled(ROUND_TRIP);
+  await page.getByRole("button", { name: "Create document" }).click();
+  await expect(page.locator("article").first()).toBeVisible(ROUND_TRIP);
+  return { workspaceId, url: page.url(), documentId: new URL(page.url()).pathname.split("/").at(-1)! };
+}
+
+const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** A document's node in the drawing, by its title (each carries its link counts in its name). */
+const node = (page: Page, title: string) => page.getByRole("link", { name: new RegExp(`^${escape(title)}, \\d+ incoming, \\d+ outgoing$`) });
+
+/** A target nothing answers to: drawn, and named, but not a link — there is no page to open. */
+const ghost = (page: Page, title: string) => page.getByRole("img", { name: new RegExp(`^${escape(title)} \\(unresolved\\), \\d+ incoming, \\d+ outgoing$`) });
+
+test.describe("the workspace graph", () => {
+  test("draws documents and their links, and the filters, find box and views work", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const stamp = Date.now();
+    const a = `Graph A ${stamp}`;
+    const b = `Graph B ${stamp}`;
+    const c = `Graph C ${stamp}`;
+    const missing = `Graph Missing ${stamp}`;
+    await createMySpaceDocument(page, b, `Back to [[${a}]].`);
+    const docA = await createMySpaceDocument(page, a, `Links to [[${b}]] and [[${missing}]].`);
+    await createMySpaceDocument(page, c, "Nothing links here and it links nowhere.");
+    const { workspaceId } = docA;
+
+    // Reached from the primary navigation.
+    await page.goto(`/w/${workspaceId}/knowledge`);
+    await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Graph" }).click();
+    await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/graph$`), ROUND_TRIP);
+    await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Graph" })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("group", { name: /^Knowledge graph, \d+ nodes?, \d+ links?$/ })).toBeVisible(ROUND_TRIP);
+
+    // A and B link to each other; C is an orphan, and shown by default.
+    await expect(node(page, a)).toHaveAttribute("aria-label", `${a}, 1 incoming, 1 outgoing`);
+    await expect(node(page, b)).toHaveAttribute("aria-label", `${b}, 1 incoming, 1 outgoing`);
+    await expect(node(page, c)).toHaveAttribute("aria-label", `${c}, 0 incoming, 0 outgoing`);
+    // The missing target is hidden until asked for.
+    await expect(ghost(page, missing)).toHaveCount(0);
+
+    await page.getByLabel("Unresolved").check();
+    await expect(page).toHaveURL(/unresolved=1/, ROUND_TRIP);
+    await expect(ghost(page, missing)).toHaveAttribute("aria-label", `${missing} (unresolved), 1 incoming, 0 outgoing`, ROUND_TRIP);
+    await expect(node(page, a)).toHaveAttribute("aria-label", `${a}, 1 incoming, 2 outgoing`, ROUND_TRIP);
+
+    await page.getByLabel("Orphans").uncheck();
+    await expect(page).toHaveURL(/orphans=0/, ROUND_TRIP);
+    await expect(node(page, c)).toHaveCount(0);
+    await expect(node(page, a)).toBeVisible();
+
+    // The find box only highlights: what does not match is dimmed, and nothing moves.
+    await page.getByRole("searchbox", { name: "Find a document" }).fill(`Graph B ${stamp}`);
+    await expect(node(page, a)).toHaveClass(/opacity-30/);
+    await expect(node(page, b)).not.toHaveClass(/opacity-30/);
+    await page.getByRole("searchbox", { name: "Find a document" }).fill("");
+
+    // Zooming changes the view, and Reset brings it back.
+    const transform = () => page.locator("svg[role='group'] > g").first().getAttribute("transform");
+    expect(await transform()).toBe("translate(0 0) scale(1)");
+    await page.getByRole("button", { name: "Zoom in" }).click();
+    await expect.poll(transform).toMatch(/scale\(1\.3\)/);
+    await page.getByRole("button", { name: "Reset view" }).click();
+    await expect.poll(transform).toBe("translate(0 0) scale(1)");
+
+    // The same nodes, as a table with exact counts.
+    await page.getByRole("link", { name: "List", exact: true }).click();
+    await expect(page).toHaveURL(/view=list/, ROUND_TRIP);
+    const row = page.getByRole("row", { name: new RegExp(a) });
+    await expect(row.getByRole("cell").nth(1)).toHaveText("1");
+    await expect(row.getByRole("cell").nth(2)).toHaveText("2");
+    await expect(page.getByRole("row", { name: new RegExp(`${missing}.*Unresolved`) })).toBeVisible();
+
+    // A node is a real link: it opens its document.
+    await page.getByRole("link", { name: "Graph", exact: true }).first().click();
+    await page.goto(`/w/${workspaceId}/graph?unresolved=1`);
+    await node(page, a).click();
+    await expect(page).toHaveURL(docA.url, ROUND_TRIP);
+  });
+
+  test("the document's own Links tab draws its neighbourhood and opens the full graph on it", async ({ page }) => {
+    await page.setViewportSize({ width: 1500, height: 900 });
+    const stamp = Date.now();
+    const centre = `Local Centre ${stamp}`;
+    const near = `Local Near ${stamp}`;
+    const far = `Local Far ${stamp}`;
+    await createMySpaceDocument(page, far, "the far one");
+    await createMySpaceDocument(page, near, `Points at [[${far}]].`);
+    const doc = await createMySpaceDocument(page, centre, `Links to [[${near}]].`);
+    await page.goto(doc.url);
+
+    await page.getByRole("button", { name: "Details" }).first().click();
+    await page.getByRole("tab", { name: "Links" }).click();
+    const local = page.locator('[data-links-section="graph"]');
+    await expect(local.getByRole("group", { name: /^Local graph, 2 documents$/ })).toBeVisible(ROUND_TRIP);
+    await expect(local.getByRole("link", { name: new RegExp(`^${near}`) })).toBeVisible();
+    // One link out from the centre does not reach the far document.
+    await expect(local.getByRole("link", { name: new RegExp(`^${far}`) })).toHaveCount(0);
+
+    await local.getByRole("link", { name: "2 links" }).click();
+    await expect(page).toHaveURL(/graph=2/, ROUND_TRIP);
+    await page.getByRole("tab", { name: "Links" }).click();
+    await expect(page.locator('[data-links-section="graph"]').getByRole("link", { name: new RegExp(`^${far}`) })).toBeVisible(ROUND_TRIP);
+
+    await page.locator('[data-links-section="graph"]').getByRole("link", { name: "Open in graph" }).click();
+    await expect(page).toHaveURL(new RegExp(`/w/${doc.workspaceId}/graph\\?focus=${doc.documentId}$`), ROUND_TRIP);
+    await expect(page.getByRole("link", { name: new RegExp(`^${centre}`) }).first()).toBeVisible(ROUND_TRIP);
+  });
+
+  test("says so, rather than drawing a scatter of dots, when nothing is linked", async ({ page }) => {
+    await page.goto(`/w/${EMPTY_WORKSPACE}/graph`);
+    const empty = page.locator("[data-graph-empty]");
+    await expect(empty.getByText("No links between documents yet")).toBeVisible(ROUND_TRIP);
+    await expect(empty.getByText("[[Document title]]")).toBeVisible();
+  });
+
+  test("is the command palette's Open graph", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForURL(/\/w\/[^/]+\/knowledge/);
+    const workspaceId = new URL(page.url()).pathname.split("/")[2];
+    await (await openPalette(page)).fill("graph");
+    await page.getByRole("option", { name: /Open graph/ }).click();
+    await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/graph$`), ROUND_TRIP);
+  });
+
+  test("is not available for a workspace the caller is not a member of", async ({ page }) => {
+    // The same answer as the workspace's other routes give a non-member: 404, with nothing drawn.
+    const response = await page.goto(`/w/${RESTRICTED_WORKSPACE}/graph`);
+    expect(response?.status()).toBe(404);
+    await expect(page.locator("svg[role='group']")).toHaveCount(0);
+  });
+});

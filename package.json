@@ -23,6 +23,7 @@
   "dependencies": {
     "@base-ui-components/react": "1.0.0-rc.0",
     "@milkdown/kit": "7.22.2",
+    "d3-force": "^3.0.0",
     "dotenv": "^16.4.7",
     "lucide-react": "^1.45.0",
     "mariadb": "^3.4.2",
@@ -40,6 +41,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",
+    "@types/d3-force": "^3.0.10",
     "@types/mdast": "^4.0.4",
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.2",

@@ -52,7 +52,8 @@ describe("action registry — the workspace capability axis", () => {
         canOpenSettings: false,
       },
     });
-    expect(ids(availableActions(none))).toEqual(["navigate.knowledge"]);
+    // Reading is what makes the graph available: membership, nothing more.
+    expect(ids(availableActions(none))).toEqual(["navigate.knowledge", "navigate.graph"]);
   });
 
   it("withholds everything that mutates while access is unconfirmed", () => {

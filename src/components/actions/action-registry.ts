@@ -20,6 +20,7 @@ import type { WorkspaceActions } from "@/server/workspace-admin";
 export type ActionId =
   | "navigate.knowledge"
   | "navigate.search"
+  | "navigate.graph"
   | "navigate.sources"
   | "navigate.settings"
   | "create.document"
@@ -44,6 +45,7 @@ export type ActionIconName =
   | "copy-link"
   | "knowledge"
   | "search"
+  | "graph"
   | "sources"
   | "settings"
   | "create"
@@ -147,6 +149,17 @@ export function availableActions(context: ActionContext): readonly Action[] {
     keywords: ["documents", "tree", "browse"],
     surfaces: ["palette"],
     effect: { kind: "navigate", href: `/w/${workspaceId}/knowledge${suffix}` },
+  });
+  // Reading Knowledge is what makes a graph of it available; no capability
+  // beyond membership, so it is offered wherever Go to Knowledge is (graph spec §11).
+  actions.push({
+    id: "navigate.graph",
+    label: "Open graph",
+    group: "navigate",
+    icon: "graph",
+    keywords: ["links", "network", "map", "relationships", "backlinks", "connections"],
+    surfaces: ["palette"],
+    effect: { kind: "navigate", href: `/w/${workspaceId}/graph` },
   });
   if (can.canSearch) {
     actions.push({

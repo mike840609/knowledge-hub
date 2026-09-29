@@ -18,7 +18,7 @@ import { applicationServices } from "@/server/composition";
 export async function getDocumentLinkModel(
   workspaceId: string,
   documentId: string,
-  input: { includeArchived?: boolean; revisionNo?: number } = {},
+  input: { includeArchived?: boolean; revisionNo?: number; localGraphDepth?: 1 | 2 } = {},
 ): Promise<DocumentLinkView | null> {
   try {
     const services = applicationServices();

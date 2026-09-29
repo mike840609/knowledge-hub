@@ -2,8 +2,63 @@
 
 import Link from "next/link";
 import type { DocumentLinkView, OutgoingLinkView } from "@/modules/knowledge/application/knowledge-link-service";
+import { GraphCanvas } from "./graph-canvas";
+import type { GraphViewData } from "./graph-model";
 import { documentPath } from "./rendered-links";
 import { LinkIndexNote } from "./link-index-note";
+
+export type LocalGraphData = {
+  data: GraphViewData;
+  depth: 1 | 2;
+  openHref: string;
+  depthHrefs: { 1: string; 2: string };
+};
+
+/**
+ * The document and what it is one or two links from, small enough to sit in
+ * the inspector. Not pannable or zoomable — that is what the full graph is
+ * for, one click away — but every node is a link, and the table under it (the
+ * sections below) lists the same documents in words.
+ */
+function LocalGraph({ graph, focusId }: { graph: LocalGraphData; focusId: string }) {
+  const connected = graph.data.nodes.length > 1;
+  return (
+    <section aria-label="Local graph" data-links-section="graph">
+      <div className="flex items-baseline justify-between">
+        <h3 className="text-caption font-medium text-kh-text-muted">Graph</h3>
+        <div className="flex items-center gap-2 text-caption">
+          {([1, 2] as const).map((depth) => (
+            <Link
+              key={depth}
+              href={graph.depthHrefs[depth]}
+              replace
+              scroll={false}
+              aria-current={graph.depth === depth ? "true" : undefined}
+              className={`rounded-md px-1 kh-focus-ring ${graph.depth === depth ? "font-medium text-kh-text" : "text-kh-text-muted hover:text-kh-text"}`}
+            >
+              {depth === 1 ? "1 link" : "2 links"}
+            </Link>
+          ))}
+        </div>
+      </div>
+      {connected ? (
+        <div className="mt-1 h-56 overflow-hidden rounded-md border border-kh-border bg-kh-bg">
+          <GraphCanvas
+            data={graph.data}
+            focusId={focusId}
+            interactive={false}
+            ariaLabel={`Local graph, ${graph.data.nodes.length} documents`}
+          />
+        </div>
+      ) : (
+        <p className="mt-1 px-2 text-body-sm text-kh-text-muted">Nothing is linked to or from this document yet.</p>
+      )}
+      <Link href={graph.openHref} className="mt-1 inline-block rounded-md px-1 text-caption text-kh-link underline underline-offset-2 kh-focus-ring">
+        Open in graph
+      </Link>
+    </section>
+  );
+}
 
 function SectionHeading({ children, count }: { children: string; count: number }) {
   return (
@@ -41,7 +96,15 @@ function OutgoingRow({ workspaceId, link }: { workspaceId: string; link: Outgoin
  * tries to link to that is not there. Everything comes from the same view that
  * resolved the links in the content, so the two cannot disagree.
  */
-export function DocumentLinksPanel({ view }: { view: DocumentLinkView | null }) {
+export function DocumentLinksPanel({
+  view,
+  localGraph,
+  focusId,
+}: {
+  view: DocumentLinkView | null;
+  localGraph: LocalGraphData | null;
+  focusId: string;
+}) {
   if (!view) {
     return <p className="text-body-sm text-kh-text-muted">Links are not available right now.</p>;
   }
@@ -49,6 +112,7 @@ export function DocumentLinksPanel({ view }: { view: DocumentLinkView | null }) 
   return (
     <div className="space-y-4">
       <LinkIndexNote stale={view.index.stale} />
+      {localGraph ? <LocalGraph graph={localGraph} focusId={focusId} /> : null}
       <section aria-label="Backlinks" data-links-section="backlinks">
         <SectionHeading count={view.backlinkTotal}>Backlinks</SectionHeading>
         {view.backlinks.length === 0 ? (
