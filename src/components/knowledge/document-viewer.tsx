@@ -3,11 +3,16 @@ import { MarkdownRenderer } from "./markdown-renderer";
 
 type DocumentDetails = Awaited<ReturnType<KnowledgeQueryService["getDocument"]>>;
 
-export function DocumentViewer({ view, selectedRevision }: { view: DocumentDetails; selectedRevision?: DocumentDetails["currentRevision"] }) {
-  const displayed = selectedRevision ?? view.currentRevision;
+/** Rendered Markdown as the reader shows it; the composer's preview is this same element. */
+export function MarkdownArticle({ markdown }: { markdown: string }) {
   return (
     <article className="min-w-0 [&>div>:first-child]:mt-0">
-      <MarkdownRenderer markdown={displayed.markdown} />
+      <MarkdownRenderer markdown={markdown} />
     </article>
   );
+}
+
+export function DocumentViewer({ view, selectedRevision }: { view: DocumentDetails; selectedRevision?: DocumentDetails["currentRevision"] }) {
+  const displayed = selectedRevision ?? view.currentRevision;
+  return <MarkdownArticle markdown={displayed.markdown} />;
 }

@@ -79,9 +79,10 @@ test("reading navigation separates collections from authoring and source managem
   await expect(page.getByRole("heading", { name: "Compliance Policy", exact: true })).toBeVisible();
 
   await page.getByRole("link", { name: "Create document", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "New document" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("New document");
+  await expect(page.locator("main form").first().getByRole("textbox", { name: "Content" })).toBeVisible();
   await expect(page.locator('input[type="file"]')).toBeAttached();
-  await expect(page.getByText(/upload a Markdown file to Notes/)).toBeVisible();
+  await expect(page.getByText("Upload .md")).toBeVisible();
 });
 
 test("filters documents across collections without switching sources", async ({ page }) => {

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { DocumentEditor } from "@/components/knowledge/document-editor";
 import { getKnowledgeDocumentModel, getKnowledgeExplorerModel, getWorkspaceShellModel } from "@/server/knowledge-read";
+import { documentLocation } from "@/server/document-location";
 
 export default async function EditDocumentPage({
   params,
@@ -21,14 +22,17 @@ export default async function EditDocumentPage({
   if (explorer.source.ownership !== "HUB_MANAGED") notFound();
   if (model.view.status !== "ACTIVE") notFound();
 
+  const current = model.view.currentRevision;
   return (
     <DocumentEditor
       workspaceId={workspaceId}
       sourceId={sourceId}
       documentId={documentId}
-      expectedCurrentRevisionId={model.view.currentRevision.id}
-      initialTitle={model.view.currentRevision.title}
-      initialMarkdown={model.view.currentRevision.markdown}
+      location={documentLocation(workspaceId, sourceId, explorer.source.name, explorer.tree, documentId)}
+      metadataTitle={current.metadata.title}
+      currentRevisionId={current.id}
+      initialTitle={current.title}
+      initialMarkdown={current.markdown}
     />
   );
 }

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { showMarkdown } from "./composer-helpers";
 
 // Mirrors scripts/db/seed.ts BROWSER_FIXTURE_IDS (Playwright cannot resolve `@/` aliases).
 const EMPTY_WORKSPACE = "0199f100-0000-7000-8000-000000000004";
@@ -27,13 +28,18 @@ const SOURCE_MANAGED_DOCUMENT = "0199f100-0000-7000-8000-000000000210";
 // regression for three times as long.
 const ROUND_TRIP = { timeout: 15_000 };
 
+/** The new-document page's title field. main form + first(): the duplicate-DOM quirk noted below. */
+function newTitle(page: Page) {
+  return page.locator("main form").first().getByLabel("Title", { exact: true });
+}
+
 // Navigate to the standalone authoring page and return only once the form is
 // interactive. The create action stays disabled until the client confirms the
 // workspace authorization, which gives the upload tests a stable hydration
 // signal before setInputFiles dispatches the file input's change event.
 async function gotoKnowledgeReadyToUpload(page: Page, workspaceId: string) {
   await page.goto(`/w/${workspaceId}/knowledge/new`);
-  const title = page.getByLabel("Document title");
+  const title = newTitle(page);
   await expect(title).toBeEditable(ROUND_TRIP);
   // A temporary value proves the controlled input and submit handler are
   // wired after hydration without creating a document.
@@ -44,7 +50,7 @@ async function gotoKnowledgeReadyToUpload(page: Page, workspaceId: string) {
 
 test("creates the first document in a workspace with no sources", async ({ page }) => {
   await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
-  await page.getByLabel("Document title").fill("My First Note");
+  await newTitle(page).fill("My First Note");
   await page.getByRole("button", { name: "Create document" }).click();
 
   await expect(page.getByRole("heading", { name: "My First Note" })).toBeVisible(ROUND_TRIP);
@@ -52,7 +58,7 @@ test("creates the first document in a workspace with no sources", async ({ page 
 
 test("edits a hub-managed document and records a second revision", async ({ page }) => {
   await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
-  await page.getByLabel("Document title").fill("Editable Note");
+  await newTitle(page).fill("Editable Note");
   await page.getByRole("button", { name: "Create document" }).click();
   await expect(page.getByRole("heading", { name: "Editable Note" })).toBeVisible(ROUND_TRIP);
 
@@ -60,7 +66,8 @@ test("edits a hub-managed document and records a second revision", async ({ page
   // main form + first(): same pre-existing duplicate-DOM quirk as the "main header" convention
   // above (a hidden leftover node the a11y tree doesn't surface, but raw-DOM locators still match).
   const editorForm = page.locator("main form").first();
-  await editorForm.getByLabel("Markdown").fill("updated body");
+  const source = await showMarkdown(editorForm);
+  await source.fill("updated body");
   await editorForm.getByRole("button", { name: "Save" }).click();
 
   await expect(page.locator("article").first().getByText("updated body")).toBeVisible(ROUND_TRIP);
@@ -78,7 +85,7 @@ test("after a save, the sidebar names the document by its new title", async ({ p
   const before = `Tree Title Before ${run}`;
   const after = `Tree Title After ${run}`;
   await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
-  await page.getByLabel("Document title").fill(before);
+  await newTitle(page).fill(before);
   await page.getByRole("button", { name: "Create document" }).click();
   await expect(page.getByRole("heading", { name: before })).toBeVisible(ROUND_TRIP);
   // Creating navigates to the new document too, and the tree must gain its row.
@@ -122,7 +129,7 @@ test("never shows Edit on source-managed content", async ({ page }) => {
 // Ruling B skips React component unit tests, so this browser behavior is E2E-only.
 test("a stale second editor gets a conflict, keeps their input, and does not overwrite the winner", async ({ page }) => {
   await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
-  await page.getByLabel("Document title").fill("Conflict Note");
+  await newTitle(page).fill("Conflict Note");
   await page.getByRole("button", { name: "Create document" }).click();
   await expect(page.getByRole("heading", { name: "Conflict Note" })).toBeVisible(ROUND_TRIP);
   const documentUrl = page.url();
@@ -132,20 +139,23 @@ test("a stale second editor gets a conflict, keeps their input, and does not ove
   await page.goto(`${documentUrl}/edit`);
   const editorA = page.locator("main form").first();
   const pageB = await page.context().newPage();
+  pageB.on("dialog", (dialog) => void dialog.accept());
   await pageB.goto(`${documentUrl}/edit`);
   const editorB = pageB.locator("main form").first();
 
   // A saves first and wins.
-  await editorA.getByLabel("Markdown").fill("winner body");
+  const sourceA = await showMarkdown(editorA);
+  await sourceA.fill("winner body");
   await editorA.getByRole("button", { name: "Save" }).click();
   await expect(page.locator("article").first().getByText("winner body")).toBeVisible(ROUND_TRIP);
 
   // B saves stale: conflict shown, input preserved, reload offered — no silent overwrite.
-  await editorB.getByLabel("Markdown").fill("loser body");
+  const sourceB = await showMarkdown(editorB);
+  await sourceB.fill("loser body");
   await editorB.getByRole("button", { name: "Save" }).click();
   await expect(pageB.getByRole("alert").filter({ hasText: "已被其他人更新" })).toBeVisible(ROUND_TRIP);
-  await expect(editorB.getByLabel("Markdown")).toHaveValue("loser body");
-  await expect(pageB.getByRole("link", { name: "重新載入最新版本" })).toBeVisible();
+  await expect(sourceB).toHaveValue("loser body");
+  await expect(pageB.getByRole("button", { name: "載入最新版本（捨棄你的修改）" })).toBeVisible();
 
   // The persisted current revision is the winner's, never the loser's.
   await pageB.goto(documentUrl);
@@ -170,7 +180,7 @@ test("a stale second editor gets a conflict, keeps their input, and does not ove
  */
 test("the editor cannot be saved before it can handle its own submit", async ({ page, browser }) => {
   await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
-  await page.getByLabel("Document title").fill("Pre-hydration Note");
+  await newTitle(page).fill("Pre-hydration Note");
   await page.getByRole("button", { name: "Create document" }).click();
   await expect(page.getByRole("heading", { name: "Pre-hydration Note" })).toBeVisible(ROUND_TRIP);
   await page.getByRole("link", { name: "Edit", exact: true }).click();

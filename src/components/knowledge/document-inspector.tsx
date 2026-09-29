@@ -14,7 +14,8 @@ import { Check, Copy, X } from "lucide-react";
 import type { KnowledgeRevisionView } from "@/modules/knowledge/application/knowledge-query-service";
 import { Drawer } from "@/components/ui/drawer";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/components/ui/tabs";
-import { DocumentHeader, type DocumentBreadcrumbSegment } from "./document-header";
+import { DocumentHeader } from "./document-header";
+import type { DocumentBreadcrumbSegment } from "./document-breadcrumb";
 import { buttonClasses } from "@/components/ui/button";
 import { Timestamp } from "@/components/ui/timestamp";
 

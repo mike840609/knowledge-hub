@@ -139,6 +139,78 @@ kbd {
     @apply kh-focus-ring rounded-md transition-colors hover:bg-kh-bg-hover focus-within:bg-kh-bg-hover;
   }
 
+  /* The rendered editor (composer spec §11). The reader's prose classes are on the
+     element itself; these are the parts React gives the reader as components. */
+  .kh-editor {
+    @apply min-h-[12rem] outline-none;
+  }
+  /* What prosemirror-view/style/prosemirror.css requires, without its colours: ProseMirror
+     reads typed spaces back from the DOM, so they must not collapse, and it draws an
+     <img class="ProseMirror-separator"> after inline nodes that the img rule below must miss. */
+  .kh-editor {
+    white-space: pre-wrap;
+    white-space: break-spaces;
+    overflow-wrap: break-word;
+    font-variant-ligatures: none;
+  }
+  .kh-editor img.ProseMirror-separator {
+    @apply m-0 inline border-0;
+  }
+  /* While a node (an image, a rule) is selected, ProseMirror marks the editor with this and
+     keeps the browser's text selection only as a carrier: it must not show. */
+  .kh-editor.ProseMirror-hideselection *::selection {
+    @apply bg-transparent;
+  }
+  .kh-editor.ProseMirror-hideselection {
+    @apply caret-transparent;
+  }
+  .kh-editor > :first-child {
+    @apply mt-0;
+  }
+  .kh-editor li > p {
+    @apply my-0;
+  }
+  .kh-editor a {
+    @apply cursor-text font-medium text-kh-link underline decoration-kh-link underline-offset-2;
+  }
+  .kh-editor img {
+    @apply my-4 h-auto max-w-full rounded-md border border-kh-border;
+  }
+  .kh-editor pre {
+    @apply my-4 overflow-x-auto rounded-md border border-kh-border bg-kh-bg-subtle px-4 py-3 font-mono text-body-sm leading-6 text-kh-text;
+  }
+  .kh-editor pre code {
+    @apply bg-transparent p-0;
+  }
+  .kh-editor table {
+    @apply my-4 w-full border-collapse text-body;
+  }
+  /* The marker is drawn out of flow: a task item is `paragraph block*`, so a flex row
+     would put a nested list or a second paragraph beside the first one. */
+  .kh-editor li[data-item-type="task"] {
+    @apply relative list-none pl-6;
+  }
+  .kh-editor li[data-item-type="task"]::before {
+    content: "☐";
+    @apply absolute left-0 text-kh-text-muted;
+  }
+  .kh-editor li[data-item-type="task"][data-checked="true"]::before {
+    content: "☑";
+  }
+  /* An empty document says what to do, as the old textarea's placeholder did. */
+  .kh-editor > p:first-child:last-child:has(> br:only-child)::before {
+    content: "Write here. Start with # to name the document.";
+    @apply pointer-events-none float-left h-0 text-kh-text-muted;
+  }
+
+  /* The toolbar over a selection. Milkdown's tooltip sets `left`/`top` and `data-show`. */
+  .kh-selection-toolbar {
+    @apply absolute z-20 flex items-center rounded-lg border border-kh-border bg-kh-bg-raised p-1 shadow-popover;
+  }
+  .kh-selection-toolbar[data-show="false"] {
+    @apply hidden;
+  }
+
   /* Three page containers, each with one job. Anything that fills a page
      uses one of them rather than spelling a width out. */
   .kh-reading-column {

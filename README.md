@@ -66,6 +66,9 @@ make dev         # 啟動 dev server
 | [Action Model Design](docs/superpowers/specs/2026-09-21-action-model-spec.md) | 單一 action registry：`⌘K` palette、row context menu、空狀態引導與 toast／undo 共用的「誰能對什麼做什麼」 |
 | [Keyboard Shortcuts Design](docs/superpowers/specs/2026-09-24-keyboard-shortcuts-design.md) | `C`、`E`、`/`、`⌘Enter`、`Esc` 的行為與範圍 |
 | [Keyboard Shortcuts Implementation Plan](docs/superpowers/plans/2026-09-24-keyboard-shortcuts.md) | keyboard shortcuts tasks 與測試 |
+| [Document Composer Design](docs/superpowers/specs/2026-09-28-document-composer-design.md) | 新增與編輯共用的文件編輯器：閱讀版面、預設渲染編輯（Milkdown）並可切換 Markdown 原始碼、標題跟著 H1、分頁內暫存 |
+| [Document Composer Implementation Plan](docs/superpowers/plans/2026-09-28-document-composer.md) | composer tasks 與測試 |
+| [Rendered Editing Implementation Plan](docs/superpowers/plans/2026-09-29-rendered-editing.md) | 渲染編輯（composer spec 第 11 節）的 tasks 與測試 |
 | [Frontend Design Language](docs/superpowers/specs/frontend-design-language.md) *(living contract)* | 視覺語言、design token 契約與 enforcement、component 架構、state 策略、theme contract。**不帶日期，就地修訂**；supersedes Phase 2.5 §25–30 |
 
 推薦執行／閱讀順序：

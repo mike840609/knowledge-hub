@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { showMarkdown } from "./composer-helpers";
 import { phase3UnconfiguredOrigin } from "./fixtures/phase3-identities";
 
 // Server round trips (create, save, revoke) get the same budget as phase5-authoring.spec.ts.
@@ -20,8 +21,10 @@ test.describe("document share link", () => {
     await page.waitForURL(/\/w\/[^/]+\/knowledge/);
     const workspaceId = new URL(page.url()).pathname.split("/")[2];
     await page.goto(`/w/${workspaceId}/knowledge/new`);
-    await page.getByLabel("Document title").fill(title);
-    await page.getByLabel(/Content/).fill(body);
+    const form = page.locator("main form").first();
+    await form.getByLabel("Title", { exact: true }).fill(title);
+    const source = await showMarkdown(form);
+    await source.fill(body);
     await expect(page.getByRole("button", { name: "Create document" })).toBeEnabled(ROUND_TRIP);
     await page.getByRole("button", { name: "Create document" }).click();
     await expect(page.getByRole("heading", { name: title })).toBeVisible(ROUND_TRIP);
@@ -76,7 +79,8 @@ test.describe("document share link", () => {
       await page.keyboard.press("Escape");
       await page.getByRole("link", { name: "Edit", exact: true }).click();
       const editorForm = page.locator("main form").first();
-      await editorForm.getByLabel("Markdown").fill("second shared body");
+      const source = await showMarkdown(editorForm);
+      await source.fill("second shared body");
       await editorForm.getByRole("button", { name: "Save" }).click();
       await expect(page.locator("article").first().getByText("second shared body")).toBeVisible(ROUND_TRIP);
       expect(await (await reader.get(path!)).text()).toContain("second shared body");
