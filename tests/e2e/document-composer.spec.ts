@@ -348,3 +348,20 @@ test("a save whose client navigation never lands still ends on the document", as
   release();
   await page.unrouteAll({ behavior: "ignoreErrors" });
 });
+
+test("a Cancel whose client navigation never lands still leaves the editor", async ({ page }) => {
+  const url = await createNote(page, unique("Dropped Cancel"));
+  await openEditor(page, url);
+  let release = () => {};
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  await page.route((target) => target.pathname === url && target.searchParams.has("_rsc"), async (route) => {
+    await held;
+    await route.abort();
+  });
+
+  await composer(page).getByRole("button", { name: "Cancel" }).click();
+  await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
+
+  release();
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+});

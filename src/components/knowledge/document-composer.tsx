@@ -205,7 +205,19 @@ export function DocumentComposer({
   function cancel() {
     if (dirty && !window.confirm("Discard changes?")) return;
     clearDraft(browserDraftStorage(), draftKey);
-    router.push(cancelHref);
+    leaving.current = true;
+    leave(cancelHref);
+  }
+
+  // The router now and then drops a client navigation from `/edit` back to
+  // its document after the response has arrived — measured on main as well,
+  // with the old editor (composer verification record). Leaving is already
+  // decided when this runs (saved, or discarded), so if this component is
+  // still mounted after a grace period, finish with a full load instead of
+  // leaving a stranded editor behind. Unmounting on arrival cancels it.
+  function leave(href: string) {
+    router.push(href);
+    arrivalGuard.current = window.setTimeout(() => window.location.assign(href), ARRIVAL_GRACE_MS);
   }
 
   function loadLatest() {
@@ -226,14 +238,7 @@ export function DocumentComposer({
       // Push only, then refresh on arrival: a refresh fired beside the push
       // discards it (keyboard-shortcuts spec §9, #49).
       refreshOnArrival(href);
-      router.push(href);
-      // The router now and then drops a navigation from `/edit` back to its
-      // document after the response has arrived — measured on main as well,
-      // with the old editor (composer verification record). The save has
-      // already succeeded, so if this component is still mounted after a
-      // grace period, finish the journey with a full load instead of leaving
-      // a disabled editor behind. Unmounting on arrival cancels it.
-      arrivalGuard.current = window.setTimeout(() => window.location.assign(href), ARRIVAL_GRACE_MS);
+      leave(href);
     } catch (failure) {
       setError(governanceFailure(failure));
       setBusy(false);

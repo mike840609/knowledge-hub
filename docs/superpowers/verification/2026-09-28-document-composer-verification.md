@@ -181,3 +181,15 @@ and passes only through the full-load fallback.
 | leaving, stale-draft and never-lands cases, `--repeat-each=30` | 0 | 90/90 passed |
 | `make verify` | 0 | unit, typecheck, lint, build clean |
 | `make test-e2e` | 0 | 106/106 passed |
+
+CI then failed the same way on Cancel (a confirmed discard left the URL on
+`/edit`): Cancel is the third path from `/edit` back to the document. Save and
+Cancel now share one `leave(href)` — client navigation, then a full load if the
+composer is still mounted after 3 s — and a new case holds the RSC fetch and
+presses Cancel.
+
+| Command | Exit | Result |
+| --- | --- | --- |
+| leaving, stale-draft, both never-lands and both Cancel cases, `--repeat-each=30` | 0 | 150/150 passed |
+| `make verify` | 0 | unit, typecheck, lint, build clean |
+| `make test-e2e` | 0 | 107/107 passed |
