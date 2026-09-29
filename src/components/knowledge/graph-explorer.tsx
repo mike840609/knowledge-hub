@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useOptimistic, useState, useTransition } from "react";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { tabClasses } from "@/components/ui/tab";
 import { GraphCanvas } from "./graph-canvas";
 import { GraphList } from "./graph-list";
 import type { GraphViewData } from "./graph-model";
@@ -34,7 +35,7 @@ export function graphQuery(filters: GraphFilters): string {
 
 function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
   return (
-    <label className="flex items-center gap-2 text-body-sm text-kh-text-secondary">
+    <label className="flex h-8 items-center gap-2 text-body-sm text-kh-text-secondary">
       <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="accent-kh-primary" />
       {label}
     </label>
@@ -83,8 +84,13 @@ export function GraphExplorer({
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <div role="group" aria-label="View" className="flex items-center gap-1 rounded-md bg-kh-bg-subtle p-0.5">
+      {/*
+        One row: the two views as the shared tab look on the left, the filters
+        and the totals on the right. The tabs are links (the view is in the URL),
+        so they carry `aria-current` rather than the tab role, as `NavTabs` does.
+      */}
+      <div className="flex flex-wrap items-center gap-x-4 border-b border-kh-border">
+        <nav aria-label="View" className="flex items-center gap-1">
           {(["graph", "list"] as const).map((view) => (
             <Link
               key={view}
@@ -94,41 +100,41 @@ export function GraphExplorer({
               // A link to the page it is on: never prefetched (see LocalGraph).
               prefetch={false}
               aria-current={filters.view === view ? "page" : undefined}
-              className={`rounded-sm px-2.5 py-1 text-body-sm kh-focus-ring ${
-                filters.view === view ? "bg-kh-bg font-medium text-kh-text shadow-popover" : "text-kh-text-muted hover:text-kh-text"
-              }`}
+              className={tabClasses(filters.view === view)}
             >
               {view === "graph" ? "Graph" : "List"}
             </Link>
           ))}
-        </div>
-        {/* The field primitives fill their container, so the width belongs to a wrapper. */}
-        <div className="w-56">
-          <label className="sr-only" htmlFor="graph-find">Find a document</label>
-          <Input
-            id="graph-find"
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Find a document"
-          />
-        </div>
-        {sources.length > 1 ? (
-          <div className="w-44">
-            <label className="sr-only" htmlFor="graph-source">Source</label>
-            <Select id="graph-source" value={shown.sourceId ?? ""} onChange={(event) => change({ sourceId: event.target.value || null })}>
-              <option value="">All sources</option>
-              {sources.map((source) => (
-                <option key={source.id} value={source.id}>{source.name}</option>
-              ))}
-            </Select>
+        </nav>
+        <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1 py-1">
+          {/* The field primitives fill their container, so the width belongs to a wrapper. */}
+          <div className="w-56">
+            <label className="sr-only" htmlFor="graph-find">Find a document</label>
+            <Input
+              id="graph-find"
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Find a document"
+            />
           </div>
-        ) : null}
-        <Toggle label="Orphans" checked={shown.orphans} onChange={(orphans) => change({ orphans })} />
-        <Toggle label="Unresolved" checked={shown.unresolved} onChange={(unresolved) => change({ unresolved })} />
-        <p className="ml-auto text-caption text-kh-text-muted" data-graph-summary>
-          {total.documents} {total.documents === 1 ? "document" : "documents"} · {total.edges} {total.edges === 1 ? "link" : "links"}
-        </p>
+          {sources.length > 1 ? (
+            <div className="w-44">
+              <label className="sr-only" htmlFor="graph-source">Source</label>
+              <Select id="graph-source" value={shown.sourceId ?? ""} onChange={(event) => change({ sourceId: event.target.value || null })}>
+                <option value="">All sources</option>
+                {sources.map((source) => (
+                  <option key={source.id} value={source.id}>{source.name}</option>
+                ))}
+              </Select>
+            </div>
+          ) : null}
+          <Toggle label="Orphans" checked={shown.orphans} onChange={(orphans) => change({ orphans })} />
+          <Toggle label="Unresolved" checked={shown.unresolved} onChange={(unresolved) => change({ unresolved })} />
+          <p className="text-caption tabular-nums text-kh-text-muted" data-graph-summary>
+            {total.documents} {total.documents === 1 ? "document" : "documents"} · {total.edges} {total.edges === 1 ? "link" : "links"}
+          </p>
+        </div>
       </div>
       <LinkIndexNote stale={staleDocuments} />
       {truncated ? (
@@ -138,10 +144,10 @@ export function GraphExplorer({
       ) : null}
       <div
         aria-busy={pending}
-        className={`min-h-[24rem] flex-1 overflow-hidden rounded-md border border-kh-border bg-kh-bg-raised transition-opacity ${pending ? "opacity-60" : ""}`}
+        className={`min-h-[24rem] flex-1 overflow-hidden rounded-md border border-kh-border bg-kh-bg transition-opacity ${pending ? "opacity-60" : ""}`}
       >
         {filters.view === "list" ? (
-          <div className="h-full overflow-y-auto p-3">
+          <div className="h-full overflow-y-auto">
             <GraphList data={data} query={query} />
           </div>
         ) : data.edges.length === 0 ? (

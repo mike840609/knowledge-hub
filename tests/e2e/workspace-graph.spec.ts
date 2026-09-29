@@ -61,6 +61,12 @@ test.describe("the workspace graph", () => {
     await expect(node(page, a)).toHaveAttribute("aria-label", `${a}, 1 incoming, 1 outgoing`);
     await expect(node(page, b)).toHaveAttribute("aria-label", `${b}, 1 incoming, 1 outgoing`);
     await expect(node(page, c)).toHaveAttribute("aria-label", `${c}, 0 incoming, 0 outgoing`);
+    // C is on the shelf under the drawing rather than adrift in it, and says so.
+    await expect(page.getByText(/^Not linked · \d+$/)).toBeVisible();
+    // Pointing at a node opens a card with what the drawing can only suggest.
+    await node(page, a).hover();
+    await expect(page.locator("[data-graph-card]")).toContainText(`${a}`);
+    await expect(page.locator("[data-graph-card]")).toContainText("1 in");
     // The missing target is hidden until asked for.
     await expect(ghost(page, missing)).toHaveCount(0);
 
@@ -76,8 +82,8 @@ test.describe("the workspace graph", () => {
 
     // The find box only highlights: what does not match is dimmed, and nothing moves.
     await page.getByRole("searchbox", { name: "Find a document" }).fill(`Graph B ${stamp}`);
-    await expect(node(page, a)).toHaveClass(/opacity-30/);
-    await expect(node(page, b)).not.toHaveClass(/opacity-30/);
+    await expect(node(page, a)).toHaveClass(/opacity-25/);
+    await expect(node(page, b)).not.toHaveClass(/opacity-25/);
     await page.getByRole("searchbox", { name: "Find a document" }).fill("");
 
     // Zooming changes the view, and Reset brings it back.

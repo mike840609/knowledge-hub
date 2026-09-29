@@ -5,13 +5,13 @@
 | 日期 | 2026-09-29 |
 | 對象 | [設計](../specs/2026-09-29-personal-workspace-knowledge-graph-design.md)、[計畫](../plans/2026-09-29-personal-workspace-knowledge-graph.md)：TOC、連結索引（migration 012）、wikilink／相對 `.md` 連結渲染、Backlinks、Workspace／Local graph |
 | 環境 | 開發用容器；MariaDB 10.11.14（本機安裝，`127.0.0.1:3307`）；Node 22；Chromium 由環境內建的 1194 版經 shim 提供給 Playwright 1.63（shim 在 repo 之外，不屬於本變更） |
-| 結論 | 全部通過。unit 590、integration 486、e2e 105、`tsc --noEmit`、`eslint .`、`next build` 皆綠。效能量測見 §3；實作過程中測試抓到的問題見 §4；未做的事見 §6 |
+| 結論 | 全部通過。unit 608、integration 486、e2e 105、`tsc --noEmit`、`eslint .`、`next build` 皆綠。效能量測見 §3；實作過程中測試抓到的問題見 §4；未做的事見 §6；圖譜視覺重做（Linear 語彙）見 §8 |
 
 ## 1. 基準與結果
 
 | 層 | 開工前 | 完成後 | 新增 |
 | --- | --- | --- | --- |
-| unit（`make test-unit`） | 427（51 檔） | **590（63 檔）** | +163 |
+| unit（`make test-unit`） | 427（51 檔） | **608（63 檔）** | +181 |
 | integration（`make test-integration`） | 444（43 檔） | **486（46 檔）** | +42 |
 | e2e（`make test-e2e`） | 91 | **105** | +14 |
 | typecheck／lint／build | 乾淨 | 乾淨 | — |
@@ -29,7 +29,7 @@
 | 1 TOC | `heading-slug`（8）、`markdown-outline`（10）、`markdown-renderer-headings`（10，逐項比對 render 出的 `id` 與 outline 的 slug，含 CJK、重複、GFM 刪除線、setext、巢狀）、`active-heading`（7）；e2e `reading-outline` 4 案 |
 | 2 索引 | `document-links-extract`（30，規格 §5 規則表逐列）、`link-resolution`（25，含 tie-break 全序與輸入順序無關）、`link-index-write-points`（2，原始碼掃描）；integration `link-index`（schema、四個寫入點、repository、過期偵測）、`link-index-reindex`（5，含與存檔競爭）、`knowledge-link-service`（19，含授權、跨 Workspace 不可區分、封存、改名） |
 | 3 渲染／Backlinks | `markdown-renderer-links`（19）、`link-context`（8）、`link-graph`（19）、`action-registry`（+5）、`share-link-single-exception`（+1）；e2e `reading-links` 5 案，含**真實 `/s/:token` 頁面**（無 session 的 origin）不出現 `/w/`、不出現失效連結標記 |
-| 4 圖譜 | `graph-layout`（11）、`graph-model`（8）；e2e `workspace-graph` 5 案（節點與計數、Unresolved／Orphans 過濾、找尋高亮、縮放與重設、List view 精確計數、Local graph 與 depth、空狀態、命令面板、非成員 404） |
+| 4 圖譜 | `graph-layout`（18）、`graph-model`（19）；e2e `workspace-graph` 5 案（節點與計數、Unresolved／Orphans 過濾、找尋高亮、縮放與重設、List view 精確計數、Local graph 與 depth、空狀態、命令面板、非成員 404） |
 
 畫面另以真實瀏覽器逐項目視確認（1440／1100／1500 寬；rail、展開式目錄、resolved／alias／unresolved 連結、Linked from、Links 分頁、圖譜 hover 強調、List view、local graph）。
 
@@ -83,7 +83,36 @@
 - **主導覽中指向自己所在頁面的項目**（Knowledge、Sources、Graph）仍會 prefetch 自己。這是既有的模式、本變更沒有動；上面第 3 點的機制對它們同樣成立，但沒有觀察到實際的導覽遺失。
 - **本機 e2e 的環境筆記**：`npm run test:e2e` 會在同一個 repo 目錄 `next build`，會覆寫正在運行的 `.next`；同時跑著 dev／production server 的人會看到 chunk 不一致。
 
-## 7. 重現
+## 7. 圖譜視覺重做（對齊 Linear 語彙）
+
+**範圍。** 只動呈現：`layoutGraph`、`GraphCanvas`、`GraphExplorer`、`GraphList` 與純函式 `selectVisibleLabels`。資料模型、授權、URL 參數、可存取名稱、元件對外的 props 都沒有變。設計依據是 repo 自己的[設計語言契約](../specs/frontend-design-language.md)，規格 §10.2–§10.3 已回寫。
+
+**重做前的問題**（在 90 個節點、209 條連結的示範資料上，1440×900 目視）：
+
+| 問題 | 原因 |
+| --- | --- |
+| 沒有連結的節點散在畫面四周，把整張圖拉大、相連的部分縮小 | 孤點也丟進 `forceCenter`，位置與圖無關 |
+| 90 個節點一個標籤都沒有 | 標籤規則是「≤ 80 個全顯示，否則只顯示 hover 的」——剛好超過一點就整張沒有 |
+| 節點太重、中心節點半徑 12 | 全部節點深灰、半徑 4–12 |
+| 工具列的 Graph／List 是自製分段控制、且用了 `shadow-popover`；畫布容器用 `bg-kh-bg-raised`；List 有雙層框 | 沒有用 `ui/tab.ts`，也沒讀契約的表面與陰影規則 |
+
+**重做後。** 孤點成為畫面下方的「Not linked · N」貨架；標籤由 `selectVisibleLabels` 依目前縮放挑選（示範資料 90 個節點：首屏 100% 有 41 個標籤，含貨架上的 7 個；按兩次 Zoom in 到約 169% 為 67 個——實際以 DOM 中的 `<text>` 計數，不是目測）；節點靜止為中性灰、強調色只給被強調者；邊併成一條 path；tooltip 是唯一有陰影的元素；工具列改用共用 tab 外觀。亮色、暗色、hover、List、local graph、找尋高亮＋未解析節點皆逐張目視確認。
+
+**測試。** unit +18（`graph-layout` 11 → 18：貨架在相連部分之下、不拉寬繪圖、格線對齊、只有孤點時外框仍容納、與輸入順序無關、60 個孤點寬度 ≤ 700、`nodeRadius` 下限與上限；`graph-model` 8 → 19：`estimateLabelWidth`（拉丁／CJK／混合）、`selectVisibleLabels`（不重疊、放大時變多、上限、**強制的標籤永遠顯示且不受上限限制**、加權者優先、輸入順序無關））。e2e 沒有新增案例，改了一處斷言並新增兩項：找尋高亮的淡化 class 由 `opacity-30` 改為 `opacity-25`（這是刻意的視覺變更）、貨架標題存在、hover 節點會出現含標題與 `1 in` 的 tooltip。1000 節點、3000 邊的 layout 量測 0.82–0.89 s（重做前 0.91–1.04 s）；差異在同一台機器上量測雜訊的範圍內，不宣稱變快，只確認**沒有變慢**、仍在規格 §14 的 1.5 s 內。
+
+**這一輪抓到的問題。**
+
+1. **標籤測試的期望寫錯。** 我原本斷言「到達上限就停止」，但強制的標籤算在上限內；實際需要的規則是「強制的永遠顯示」。改寫測試並補了一條「不會丟掉強制標籤」的測試——這是行為決定，不是遷就實作。
+2. **一次全套 e2e 103／105。**（a）`reading-links` 的改名案例：`getByLabel("Title")` 命中兩個元素，其中一個是 disabled。這就是 `phase5-authoring` 裡記載的「重複 DOM」既有現象（路由轉換後留下一份隱藏的表單）；那三個既有 spec 都用 `page.locator("main form").first()`，只有我這一個沒有。**是我的測試沒有照慣例**，已改為同樣的寫法，而不是加重試。（b）`revision-history` 的「選取歷史 revision」在 5 秒內沒有導覽到 `revision=1`。這是既有測試、與本變更沒有共用任何被修改的檔案；單獨重跑兩個 spec 8／8 通過、再重跑全套 105／105 通過。**沒有找到根因**，我把它記為一次在全套負載下出現、沒有再重現的失敗，而不是「已修正」。如果它再出現，優先懷疑的是與 §4 第 3 點同類的 prefetch 競爭（該案例點的是 Inspector 內指向自己所在頁面的連結）。
+3. **`pkill -f` 殺掉自己。** 用 `pkill -f "next start"` 停掉示範用 server 時，指令列本身含有該字串，連我自己的 shell 一起殺了（exit 144）。改為以 `ss` 找出監聽 3000 的 PID 再終止。純屬工具操作，沒有影響程式碼，但留在這裡因為它讓一次 rebuild 看起來像失敗。
+
+**沒有做、也需要知道的。**
+
+- **視覺以目視驗證，沒有像素比對的回歸測試。** e2e 只斷言結構與可存取名稱；顏色與位置的正確性靠 token 契約（顏色只在 CSS 變數層）與逐張目視。
+- **標籤位置是估計。** `estimateLabelWidth` 不量字型，字寬以 0.58em／1em 估計、寧寬勿窄；極窄的等寬字型下標籤會比需要的稀疏，不會重疊。
+- **tooltip 會蓋住鄰近節點。** 它固定在節點上方（靠近上緣時改到下方），hover 密集區時會遮住相鄰標籤；它不吃 pointer events，所以不會擋住操作。
+
+## 8. 重現
 
 ```bash
 make db-up && make db-migrate && make db-reindex-links   # 既有資料庫：migration 012 後回填索引

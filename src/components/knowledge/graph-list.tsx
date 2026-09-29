@@ -11,23 +11,23 @@ import { matchesQuery, type GraphViewData } from "./graph-model";
 export function GraphList({ data, query }: { data: GraphViewData; query: string }) {
   const rows = data.nodes.filter((node) => matchesQuery(node, query));
   if (rows.length === 0) {
-    return <p className="px-1 py-6 text-body text-kh-text-muted">{query.trim() === "" ? "No documents to list." : "No document matches."}</p>;
+    return <p className="px-3 py-6 text-body text-kh-text-muted">{query.trim() === "" ? "No documents to list." : "No document matches."}</p>;
   }
   return (
-    <div className="overflow-x-auto rounded-md border border-kh-border">
+    <div className="overflow-x-auto">
       <table className="w-full border-collapse text-body-sm">
         <caption className="sr-only">Documents and how many links come in and go out</caption>
         <thead>
-          <tr className="bg-kh-bg-subtle text-left text-caption text-kh-text-muted">
-            <th scope="col" className="px-3 py-2 font-medium">Document</th>
-            <th scope="col" className="px-3 py-2 font-medium">Source</th>
-            <th scope="col" className="px-3 py-2 text-right font-medium">Links in</th>
-            <th scope="col" className="px-3 py-2 text-right font-medium">Links out</th>
+          <tr className="text-left text-caption text-kh-text-muted">
+            <th scope="col" className="sticky top-0 border-b border-kh-border bg-kh-bg-subtle px-3 py-2 font-medium">Document</th>
+            <th scope="col" className="sticky top-0 border-b border-kh-border bg-kh-bg-subtle px-3 py-2 font-medium">Source</th>
+            <th scope="col" className="sticky top-0 border-b border-kh-border bg-kh-bg-subtle px-3 py-2 text-right font-medium">Links in</th>
+            <th scope="col" className="sticky top-0 border-b border-kh-border bg-kh-bg-subtle px-3 py-2 text-right font-medium">Links out</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((node) => (
-            <tr key={node.id} className="border-t border-kh-border">
+            <tr key={node.id} className="border-b border-kh-border last:border-b-0 hover:bg-kh-bg-hover">
               <th scope="row" className="max-w-0 px-3 py-2 text-left font-normal">
                 {node.href ? (
                   <Link href={node.href} className="block truncate rounded-md text-kh-link hover:underline kh-focus-ring">

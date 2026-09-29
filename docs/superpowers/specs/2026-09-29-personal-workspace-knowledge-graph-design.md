@@ -288,13 +288,31 @@ type WorkspaceGraphView = {
 
 `layoutGraph(nodes, edges)` 用 `d3-force`（`forceLink`、`forceManyBody`、`forceCenter`、`forceCollide`）同步跑固定 tick 數後 `stop()`，不做動畫。tick 數**依節點數固定**（≤200 個節點 300、≤500 個 200、其餘 150），不是時間預算——時間預算會讓畫面取決於機器當時忙不忙。`simulation.randomSource` 用固定種子的 LCG，節點與邊都先依 id 排成正規順序（邊的順序會影響 `forceLink` 的累加順序，實作時的決定性測試抓到過這件事），所以**同樣的圖，不論輸入順序，永遠得到同樣的座標**——SSR 與 hydration 一致、E2E 可預測、單元測試可斷言。1000 節點、3000 邊的合成圖量測約 1.0 秒（§14）。
 
+**沒有任何連結的節點不參與力導向。** 孤點沒有邊，`forceCenter` 只能把它們推到一個與圖無關的位置，結果是它們散落在畫面邊緣、把整張圖拉大、讓真正相連的部分縮小。所以 `layoutGraph` 先把節點分成「有邊」與「無邊」：只對前者做 force；後者排成一個**貨架（shelf）**——置於相連部分下方 64 單位，格寬 116、列高 34，欄數依寬度與 √(2.4n) 取小、每列置中對齊，格子由標題長度而非位置決定，所以整齊。整張圖的外框（`extent`）算入貨架，因此 fit-to-view 會把它納入，但貨架的寬度不超過相連部分（下限 348）而不會拉寬繪圖。`GraphLayout.unlinked` 回傳貨架標題「Not linked · N」的錨點（沒有孤點時為 `null`）。全部是純函式、同樣具決定性，單元測試涵蓋：貨架在相連部分之下、不拉寬繪圖、格線對齊、只有孤點時外框仍容納、與輸入順序無關、60 個孤點時寬度 ≤ 700。
+
 ### 10.3 繪製
 
-`GraphCanvas`（client component）以 `<svg>` 繪製：邊用 `stroke-kh-border-strong`，節點用 `fill-kh-primary`／`fill-kh-text-muted`，目前文件用 `fill-kh-primary`，`UNRESOLVED` 節點虛線外框且 `fill-kh-bg`；**不引入任何 token 以外的顏色**（設計語言 §8：顏色只在 CSS 變數層，亮暗自動）。節點半徑隨 degree 從 4 到 12。標籤：節點 ≤ 80 個時全顯示，否則只顯示 hover／focus／目前文件與其鄰居。
+`GraphCanvas`（client component）以 `<svg>` 繪製，目標是**安靜、單一強調色、標籤讀得出來**——依 repo 自己的設計語言契約（`frontend-design-language.md`），也就是 Linear 式的克制：低裝飾、一個強調色、不靠陰影與飽和色分層。**不引入任何 token 以外的顏色**（契約 §8：顏色只在 CSS 變數層，亮暗自動；用 `fill-kh-*`／`stroke-kh-*`）。
+
+| 元素 | 規則 |
+| --- | --- |
+| 邊 | 全部併成**一條** `<path>`（一個 DOM 節點，而不是每條邊一個），`stroke-kh-border-strong`、`vector-effect: non-scaling-stroke`（縮放時維持 1px 髮絲線）；靜止時 40% 不透明度，hover 時退到 10%，被強調的邊另畫一條 `stroke-kh-primary` 的 path |
+| 節點 | 靜止是**中性灰**（`fill-kh-border-strong`），只有被強調（hover 鄰居、目前文件、搜尋命中）才用 `fill-kh-primary`——強調色因此只代表「你正在看的那一塊」，而不是整張圖都是藍的。半徑 `3.5 + 1.5·√degree`，上限 9（原本 4–12，中心節點過重） |
+| 未解析節點 | 空心（`fill-kh-bg`）、`stroke-kh-text-muted`、虛線 `2 1.5`；圖例只在有未解析節點時出現 |
+| 目前文件 | 多一圈 `fill-kh-highlight` 的光暈，外環 `stroke-kh-focus` |
+| 焦點 | 單一焦點語彙 `kh-focus-ring` 的等價：鍵盤聚焦時顯示外環（`group-focus-visible`），hover 強調時同一個外環常駐 |
+| 標籤 | 11px（與 `text-micro` 同級），**以螢幕像素固定、不隨縮放變大變小**；預設 `fill-kh-text-secondary`，被強調／搜尋命中者 `fill-kh-text`，目前文件與 hover 者再加 `font-medium`；加一圈 `paint-order: stroke` 的 `stroke-kh-bg` 光暈，壓在邊上仍可讀；**不再是「≤ 80 個節點全顯示、否則幾乎都不顯示」** |
+| 貨架 | 標題「Not linked · N」（`fill-kh-text-muted`、`font-medium`），其下的孤點只畫點與標題 |
+| Tooltip | 節點旁的卡片（`role="tooltip"`、`data-graph-card`、不吃 pointer events）：標題、Source、`N in · M out`。它是**唯一**用 `rounded-lg`、邊框、`shadow-popover` 的地方，因為它是浮層（契約 §5、§6）；畫布本身無陰影 |
+| 控制 | 右下角分組的縮放控制（`role="group" aria-label="Zoom"`：Zoom out／`{k}%`／Zoom in／Reset view，皆為 `ghost` 的 24px icon button）與圖例、操作提示；左上不放任何浮動元素 |
+
+**標籤 declutter（`selectVisibleLabels`，純函式）。** 標籤由該函式在 client 依**目前縮放**挑選，而不是固定門檻：依優先序（強制 → 加權 → degree → 標題 → id，全序）逐一嘗試，佔位盒以估計字寬（`estimateLabelWidth`：全形／CJK 1em、其他約 0.58em，寧寬勿窄）算在**螢幕像素**上，與已放置的標籤或節點圓點相碰就略過，最多 140 個。強制（hover／focus／目前文件）的標籤**永遠顯示**、且不受上限限制；加權（hover 的鄰居、搜尋命中）優先於其他但不能蓋掉已放的標籤。放大時單位變小、更多標籤放得下——所以「大圖看不到任何標籤」與「小圖標籤重疊」兩個問題由同一條規則解決。節點超過 400 個時只檢查標籤互撞，不檢查標籤與節點圓點（O(n²) 的代價換不到可見的差別）。
+
+**設計語言的符合檢查。** 這次重做同時修掉三處原本不合契約的地方：Graph／List 切換原本是自製的分段控制且用了 `shadow-popover`（浮層專用）——改為 `ui/tab.ts` 的共用 tab 外觀（`aria-current="page"` 的連結，與 `NavTabs` 相同）；畫布容器原本用 `bg-kh-bg-raised`（chrome 用的表面）——改為 `bg-kh-bg`（canvas）＋ `border-kh-border`、無陰影；List view 原本在外框內又有一層表格外框——改為單一邊框、sticky 表頭、列 hover。工具列改為單一橫列：左邊是 tab、右邊是找尋、過濾與統計（`tabular-nums`）。
 
 ### 10.4 互動
 
-平移（拖曳背景）、縮放（滾輪、`+`／`−`／Reset 按鈕，鍵盤可用）、hover 高亮鄰居並淡化其他、點擊開啟文件（普通點擊走 client navigation，修飾鍵維持瀏覽器預設）、標題搜尋框高亮。過濾條件（Source、orphans、unresolved、focus）放在 URL search params，由伺服端重算，所以可分享、可書籤、上一頁有效。`prefers-reduced-motion` 時關閉縮放與 hover 的過渡。
+平移（拖曳背景）、縮放（滾輪、`+`／`−`／`0`、縮放控制的三個按鈕，每次 ×1.3、範圍 0.3–6，鍵盤可用）、hover 高亮鄰居並淡化其他（並開啟 tooltip）、點擊開啟文件（普通點擊走 client navigation，修飾鍵維持瀏覽器預設）、標題搜尋框高亮。過濾條件（Source、orphans、unresolved、focus）放在 URL search params，由伺服端重算，所以可分享、可書籤、上一頁有效。`prefers-reduced-motion` 時關閉縮放與 hover 的過渡。
 
 ### 10.5 無障礙
 
@@ -306,7 +324,7 @@ type WorkspaceGraphView = {
 
 ## 11. UI 與設計語言
 
-- 元件放 `src/components/knowledge/`（`document-outline.tsx`、`document-links-panel.tsx`、`backlinks-footer.tsx`、`graph-canvas.tsx`、`graph-controls.tsx`），頁面 `src/app/w/[workspaceId]/graph/page.tsx`；沿用 `/w/:workspaceId/...` 路由，不建 `/me`（Phase 3 §3.2）。
+- 元件放 `src/components/knowledge/`（`document-outline.tsx`、`document-links-panel.tsx`、`backlinks-footer.tsx`、`graph-canvas.tsx`、`graph-explorer.tsx`、`graph-list.tsx`、`graph-model.ts`），頁面 `src/app/w/[workspaceId]/graph/page.tsx`；沿用 `/w/:workspaceId/...` 路由，不建 `/me`（Phase 3 §3.2）。
 - 只用 tokens 名稱：`text-body`／`text-body-sm`／`text-caption`、`rounded-md`、`shadow-popover`、`duration-120`、間距階梯（設計語言 §3–§5、§18 第 2 項）；不新增 token，所以不需要修改 `tailwind.config.ts` 與契約文件。
 - 動作註冊表（動作模型規格 §4）新增：`navigate.graph`（palette，「Open graph」）與 `document.backlinks`（**只在 palette**，「Show backlinks」，開啟 inspector 的 Links 分頁）。`document.backlinks` 不出現在 row menu，理由與 `document.details` 相同：它開啟的面板描述的是目前正在閱讀的那份文件，在別的列上提供會承諾一個顯示不了那一列的畫面。兩者都是讀取，不依賴 capability、所有權或生命週期（歷史 revision 上也提供）；可用性規則寫在註冊表、有單元測試。`navigate.graph` 因此使「沒有任何 capability 的成員」可用的動作從 1 個變成 2 個（Knowledge 與 Graph）——能讀 Knowledge 就能看它的圖。
 - 主導覽新增「Graph」項（`Network` 圖示），所有有讀取權的人可見。

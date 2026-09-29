@@ -12,11 +12,11 @@ function ring(count: number): { nodes: LayoutNodeInput[]; edges: LayoutEdgeInput
 
 describe("nodeRadius", () => {
   it("grows with degree, from a floor to a ceiling", () => {
-    expect(nodeRadius(0)).toBe(4);
+    expect(nodeRadius(0)).toBe(3.5);
     expect(nodeRadius(1)).toBeGreaterThan(nodeRadius(0));
     expect(nodeRadius(9)).toBeGreaterThan(nodeRadius(4));
-    expect(nodeRadius(10_000)).toBe(12);
-    expect(nodeRadius(-3)).toBe(4);
+    expect(nodeRadius(10_000)).toBe(9);
+    expect(nodeRadius(-3)).toBe(3.5);
   });
 });
 
@@ -106,6 +106,75 @@ describe("layoutGraph", () => {
     expect(layout.nodes).toHaveLength(100);
     expect(layout.width).toBeGreaterThan(0);
     expect(layout.height).toBeGreaterThan(0);
+  });
+
+  describe("the shelf of unlinked nodes", () => {
+    const connected = [node("a", 0, 1), node("b", 1, 1), node("c", 1, 0)];
+    const linkedEdges = [edge("a", "b"), edge("b", "c")];
+    const solo = (count: number) => Array.from({ length: count }, (_, index) => node(`solo${String(index).padStart(3, "0")}`));
+    const placed = (layout: ReturnType<typeof layoutGraph>, id: string) => layout.nodes.find((candidate) => candidate.id === id)!;
+
+    it("keeps unlinked nodes out of the simulation and puts them below the connected drawing", () => {
+      const layout = layoutGraph([...connected, ...solo(7)], linkedEdges);
+      const lowestLinked = Math.max(...connected.map((n) => placed(layout, n.id).y + placed(layout, n.id).radius));
+      for (const id of solo(7).map((n) => n.id)) expect(placed(layout, id).y).toBeGreaterThan(lowestLinked);
+    });
+
+    it("does not let them stretch the drawing: the connected part keeps the room", () => {
+      const without = layoutGraph(connected, linkedEdges);
+      const withShelf = layoutGraph([...connected, ...solo(30)], linkedEdges);
+      // Same positions for the linked nodes, up to the shift that padding and the shelf's extent cause.
+      const dx = placed(withShelf, "a").x - placed(without, "a").x;
+      const dy = placed(withShelf, "a").y - placed(without, "a").y;
+      for (const id of ["b", "c"]) {
+        expect(placed(withShelf, id).x - placed(without, id).x).toBeCloseTo(dx, 0);
+        expect(placed(withShelf, id).y - placed(without, id).y).toBeCloseTo(dy, 0);
+      }
+    });
+
+    it("lays them on a grid: rows aligned, cells apart, in id order", () => {
+      const layout = layoutGraph([...connected, ...solo(9)], linkedEdges);
+      const shelf = solo(9).map((n) => placed(layout, n.id));
+      const rows = new Map<number, number[]>();
+      for (const n of shelf) rows.set(n.y, [...(rows.get(n.y) ?? []), n.x]);
+      expect(rows.size).toBeGreaterThan(1);
+      for (const xs of rows.values()) {
+        const sorted = [...xs].sort((left, right) => left - right);
+        for (let i = 1; i < sorted.length; i += 1) expect(sorted[i] - sorted[i - 1]).toBeGreaterThanOrEqual(100);
+      }
+      // First in id order is first in reading order.
+      expect(shelf[0].y).toBeLessThanOrEqual(shelf[shelf.length - 1].y);
+    });
+
+    it("says where its caption goes, above the shelf, and only when there is a shelf", () => {
+      const layout = layoutGraph([...connected, ...solo(3)], linkedEdges);
+      expect(layout.unlinked).not.toBeNull();
+      const top = Math.min(...solo(3).map((n) => placed(layout, n.id).y));
+      expect(layout.unlinked!.y).toBeLessThan(top);
+      expect(layoutGraph(connected, linkedEdges).unlinked).toBeNull();
+    });
+
+    it("is the whole drawing when nothing is linked, and still fits its extent", () => {
+      const layout = layoutGraph(solo(12), []);
+      expect(layout.nodes).toHaveLength(12);
+      for (const n of layout.nodes) {
+        expect(n.x - n.radius).toBeGreaterThanOrEqual(0);
+        expect(n.y - n.radius).toBeGreaterThanOrEqual(0);
+        expect(n.x + n.radius).toBeLessThanOrEqual(layout.width);
+        expect(n.y + n.radius).toBeLessThanOrEqual(layout.height);
+      }
+    });
+
+    it("is the same whatever order it is handed over in", () => {
+      const nodes = [...connected, ...solo(11)];
+      expect(layoutGraph([...nodes].reverse(), [...linkedEdges].reverse())).toEqual(layoutGraph(nodes, linkedEdges));
+    });
+
+    it("keeps the shelf about as wide as the drawing above it, not a strip across the page", () => {
+      const layout = layoutGraph([...connected, ...solo(60)], linkedEdges);
+      const xs = solo(60).map((n) => placed(layout, n.id).x);
+      expect(Math.max(...xs) - Math.min(...xs)).toBeLessThanOrEqual(700);
+    });
   });
 
   it("lays out a thousand nodes within the budget the design gives it (spec §14)", () => {

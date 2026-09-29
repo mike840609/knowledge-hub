@@ -94,8 +94,11 @@ test.describe("wikilinks and backlinks in My Space", () => {
     await expect(page.locator("article").first().getByRole("link", { name: oldTitle })).toBeVisible();
 
     await page.goto(`${renamed.url}/edit`);
-    await page.getByLabel("Title").fill(newTitle);
-    await page.getByRole("button", { name: "Save" }).click();
+    // `main form` + first(): the repo's convention for the editor (see phase5-authoring) —
+    // a route transition can leave a hidden duplicate of the form, and a bare label matches both.
+    const editorForm = page.locator("main form").first();
+    await editorForm.getByLabel("Title").fill(newTitle);
+    await editorForm.getByRole("button", { name: "Save" }).click();
     await expect(page).toHaveURL(renamed.url, ROUND_TRIP);
 
     // Nothing about the linking document was written, and what it points at changed.
