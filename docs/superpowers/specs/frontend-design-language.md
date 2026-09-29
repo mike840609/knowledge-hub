@@ -376,8 +376,9 @@ form's own submit button, and only when that button is enabled. ⌘/ switches
 between the rendered editor and the Markdown source; the source is the
 default's opposite, a keystroke away. `Esc` leaves only a composer nothing has
 been typed into, and with changes it does nothing. No key discards a draft;
-Cancel is the one way to, and it asks first. ⌘K stays the global search; the
-editor binds no key that is already bound.
+Cancel is the one way to, and it asks first. ⌘K stays the global search and the
+editor does not bind it. The editor does bind ⌘B and ⌘I for its text; ⌘I is
+also the reading page's Open details, and the editing page has no such panel.
 
 The composer's title field, its rendered editor and its Markdown text are the
 one place without the focus ring. A text field matches `:focus-visible` for as

@@ -217,7 +217,7 @@ verified" below.
 | Unit + typecheck + lint + build | `make verify` | 0 | 57 files, 542 tests passed; `tsc --noEmit`, `eslint .` and `next build` clean |
 | E2E, full suite | `make test-e2e` | 0 | 126 passed (2.1 min), including all 35 `document-composer.spec.ts` cases and the `phase5-authoring.spec.ts` "sidebar names the document by its new title" case, which passed on this run, so the re-run contingency for that known intermittent case did not apply |
 | Composer spec, 15 repeats | `npx tsx scripts/test/e2e.ts tests/e2e/document-composer.spec.ts --repeat-each=15` | 0 | 525 passed of 525 (35 cases × 15), 16.1 min |
-| Round-trip corpus | `npx vitest run --config vitest.config.ts tests/unit/markdown-editor.test.ts` | 0 | 48 passed: 17 "leaves … as it was", 8 rewritten, and the tests of the image-title patch, the image policy, edit detection, output, and the failed-open and failed-replacement paths |
+| Round-trip corpus | `npx vitest run --config vitest.config.ts tests/unit/markdown-editor.test.ts` | 0 | 48 passed: 17 "leaves … as it was", 8 rewritten, and the tests of the image-title patch, `parsedIntact`, the image policy, edit detection (creating and replacing are not edits, typing is), the editable element, the two `⌘/Ctrl Enter` cases (the key adds nothing in a code block or table), output, and the failed-open and failed-replacement paths |
 
 ### Bundle: what the editor costs on `/edit` and `/new`
 
@@ -236,7 +236,7 @@ in source:
 The exact figures are gzip bytes: for each route, every `.js` file that
 `.next/app-build-manifest.json` lists for `/layout` plus the route, each
 compressed with Node's `zlib.gzipSync` (default level) and summed
-(`.superpowers/firstload.mjs`, the script Task 3 used). Next's own "First
+(a throwaway script in the git-ignored `.superpowers/` directory, not committed). Next's own "First
 Load JS" column is also gzip, in decimal kB (1 kB = 1,000 B); in all 12
 builds measured for this record the printed figure equals the byte sum
 rounded down to whole kB. Raw (uncompressed) first-load size was not
@@ -268,7 +268,7 @@ Two things that limit how far these numbers can be pushed:
   the reader and the editor's toolbar use (`@floating-ui`). In the `a5ffe06`
   build the reading page loads one 53,334 B chunk; in `224ccaa` that is a
   6,393 B chunk plus a 47,276 B one (+335 B), and the webpack runtime file grew
-  from 1,703 B to 1,838 B (+135 B). This was accepted (ledger ruling 12) rather
+  from 1,703 B to 1,838 B (+135 B). This was accepted rather
   than forced back to zero with a `splitChunks` override.
 
 The editor itself is three lazy chunks. They are reachable only through the
@@ -283,6 +283,27 @@ chunk that contains those strings.
 | `ce4d20c7.8b8cfb5568627a1b.js` | 97,264 B | 30,928 B | `prosemirror` |
 | `6343.f33f63afec681740.js` | 8,057 B | 3,453 B | `kh-selection-toolbar` |
 | total | 353,902 B | 111,084 B | |
+
+The rendered-editing plan (`2026-09-29-rendered-editing.md`, Task 5) expected
+the reading page's figure not to have grown. It did, by the amounts above, and
+that expectation is waived here: forcing the split back would need a
+`splitChunks` override in `next.config`, a larger and riskier change than
+under 1 kB gzip on one route.
+
+### Browser spike (the Task 3 gate)
+
+Spec §11.8 made a browser run the gate before the composer could depend on the
+editor. It ran on `d5bb839` (the first commit that mounts the editor) and
+passed; it was not repeated by hand at `HEAD`, where the same behaviours are
+covered by the composer e2e cases (525 of 525 above).
+
+- **Mount and hydration.** No console, page or hydration error on mount.
+- **One editor.** Exactly one `.ProseMirror` element, in a production build and
+  in `next dev` under React Strict Mode (the double effect does not build two).
+- **Toolbar.** Positioned 8 px above the selection and not clipped by the
+  reading column.
+- **Repeat.** 420 of 420 at `--repeat-each=15` on the 28 cases the spec had
+  then.
 
 ### Round trip: what stays and what is rewritten
 
@@ -339,6 +360,14 @@ const rewritten: Record<string, [input: string, output: string]> = {
   underscore in text is escaped, including one between CJK letters (with the
   locked `mdast-util-to-markdown` 2.1.2; 2.1.3 would keep the inner one, and
   the test flags a bump).
+- **Also rewritten, measured after the corpus was fixed and not pinned by a
+  test.** An aligned table has its cells padded; an indented code block becomes
+  a fenced one; a `~~~` fence becomes a ```` ``` ```` fence; the closing `##`
+  of `## Title ##` is dropped; reference links are inlined and their
+  definitions removed. A reference-style image `![alt][ref]` makes the open
+  fail with `EditorParseError`, so the composer falls back to the Markdown
+  source, safely. These are the writings to look for when a real imported
+  document is compared before and after saving (item 3 below).
 - **Image without a title.** Milkdown 7.22.2 parses `![alt](url)` with an mdast
   `title` of `null`, which ProseMirror's attribute validation rejects, so the
   parse throws and the whole document comes out empty. The patch is a remark
@@ -355,8 +384,8 @@ const rewritten: Record<string, [input: string, output: string]> = {
 
 ### What was not verified
 
-Items 1 to 3 were not performed and need a person. Items 4 to 11 are known
-limits and deferrals, recorded as they stand.
+Items 1 to 3 were not performed and need a person. Items 4 to 12 are known
+limits and deferrals, recorded as they stand. Item 13 was not run.
 
 1. **Firefox `Ctrl /`.** Not performed; needs a person. Open the editor in
    Firefox, put the caret in the text, press `Ctrl+/`, and note (a) whether
@@ -397,5 +426,15 @@ limits and deferrals, recorded as they stand.
     `src/components/knowledge/markdown-prose.ts` (the blockquote's
     `border-l-2`, moved verbatim from the reader) is left standing. A person has to
     decide whether to add an ignore for it.
-11. `make test-integration` (the CI `integration` job) was not run for this
+11. A change typed in the rendered editor and reverted inside the 200 ms
+    debounce (type a letter, press Backspace) leaves the document marked as
+    changed: the editor reports two edits and never a new value, so nothing
+    clears the flag. The same follows a revert made in the source view. The
+    effect is a `beforeunload` prompt, `Esc` doing nothing and Cancel asking to
+    confirm, on a document that has not changed. It cannot lose text, and
+    saving sends the original text. Not fixed.
+12. The selection toolbar appears and disappears instantly, without the
+    enter/leave transition the design language §9 asks of overlays (recorded
+    in spec §11.4).
+13. `make test-integration` (the CI `integration` job) was not run for this
     record.

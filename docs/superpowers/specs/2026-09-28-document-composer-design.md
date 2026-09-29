@@ -193,6 +193,7 @@
 - **打字轉換**：`# `～`### `、`- `、`1. `、`> `、` ``` `、`**粗體**`、`*斜體*`、`` `行內程式碼` ``。GFM：表格、任務清單。
 - **快捷鍵**：`⌘/Ctrl B`、`⌘/Ctrl I`。`⌘/Ctrl K` **不綁**：它是全域搜尋（palette）的快捷鍵；連結只走浮動工具列，按下連結後工具列換成行內的網址輸入框（Enter 套用、Esc 取消）。工具列內所有按鈕必須是 `type="button"`（編輯區在 `<form>` 內，預設的 submit 會存檔），並以 `mousedown` 的 `preventDefault` 保住選取。
 - **選取浮動工具列**：選取文字時出現，含粗體、斜體、連結、標題（H1／H2）、項目清單、編號清單。不含斜線選單。工具列按鈕遵守既有控制項高度階梯與焦點環，`aria-pressed` 反映目前狀態。
+- **已知偏離**：工具列的顯示與隱藏是即時的，沒有進出場轉場，偏離設計語言第 9 節「浮層要有進出場」。補上轉場需要沿用或新增動效 token，另案處理。`⌘/Ctrl I` 同時是閱讀頁「開啟詳細資料」的快捷鍵；編輯頁沒有那個面板，編輯器內它作為斜體。
 - **樣式與閱讀頁共用**：把 `MarkdownRenderer` 外層的 class 字串抽成共用常數，閱讀頁與編輯區同一份，避免日後漸漸不一致。
 - **圖片**沿用閱讀頁的來源白名單（`markdown-image-policy.ts`）。白名單外的來源不載入：編輯區以**空的 `src`** 呈現該圖片（瀏覽器不會發出請求；畫面上是一個空圖框，不是閱讀頁的「Image blocked」提示），文件內容與 Markdown 輸出保有原網址，剪貼簿另以 `data-kh-src` 帶著原網址，複製貼上不會丟失。**偏離初稿**：初稿寫的是以 `MarkdownImage` 做 node view 顯示同樣的替代畫面；改為在 schema 上處理，因為圖片節點的 DOM 同時是剪貼簿的序列化格式，node view 管不到那一半。
 - **連結**：編輯區內點擊不導航，`⌘/Ctrl`＋點擊才在新分頁開啟（同閱讀頁對外部連結的做法）。
@@ -201,7 +202,7 @@
 
 ### 11.5 載入
 
-- 編輯器以 `next/dynamic`（`ssr: false`）延後載入，Markdown／ProseMirror 套件不進 `/edit`、`/new` 的首包。這同時解決第 1–10 節實作後留下的「預覽的 Markdown 套件提早載入」follow-up。
+- 編輯器以 `next/dynamic`（`ssr: false`）延後載入，Milkdown／ProseMirror 不進 `/edit`、`/new` 的首包（已量測，見驗證紀錄）。閱讀頁的 Markdown 渲染套件（react-markdown、remark-gfm）仍在首包裡：載入期間的 `MarkdownArticle` 與標題規則（`authored-title`）都要用它。第 1–10 節實作後留下的「預覽的 Markdown 套件提早載入」follow-up 因此**沒有**在這裡解決，仍然開著。
 - 載入期間顯示閱讀頁的 `MarkdownArticle`（可在伺服器渲染）當唯讀內容，編輯器就緒後原位換成可編輯，不會閃出 textarea。渲染模式下，欄位與 Save 的 `ready` 再加上「編輯器就緒」（Markdown 模式不等它）；在編輯器就緒（或確定失敗、改用 Markdown 模式）之前，Markdown 模式的 textarea 同樣停用。
 - 首次聚焦規則不變：有標題欄且為空時聚焦標題欄，否則聚焦編輯區開頭（渲染模式為文件開頭，游標在最前）。還原的草稿同樣。
 - **失敗保護**：編輯器建立失敗、或解析後輸出為空但 `markdown` 非空，一律改用 Markdown 模式，顯示一行說明，且不讓那個空輸出進入 `markdown`。這是故障路徑，不是被拒絕的「無法還原時警告」——它防的是像上面圖片那樣讓整份文件靜默消失的解析失敗。
@@ -241,7 +242,7 @@
 - `_斜體_` 緊貼中日韓文字時，CommonMark 本來就不視為強調（閱讀頁同樣顯示底線）；編輯器輸出時兩個底線都跳脫（`與\_斜體\_，`），顯示不變。這取決於鎖定的 `mdast-util-to-markdown` 2.1.2；2.1.3 起不再跳脫詞中的開頭底線。升級該套件時，`tests/unit/markdown-editor.test.ts` 的這個案例會提醒。
 - round-trip 可以在專案的 vitest 內執行：檔頭加 `// @vitest-environment jsdom`，並安裝 `jsdom`。
 
-**尚待瀏覽器 spike（實作計畫的第一個 task，通過才繼續）**
+**瀏覽器 spike（Task 3 的閘門，已通過；結果見驗證紀錄）**
 
 1. 在 Next 15 + React 19 下以 `ssr: false` 掛載，hydration 無警告；StrictMode 的重複 effect 不會建出兩個編輯器。
 2. 浮動工具列（Milkdown 的 tooltip plugin + floating-ui）在真實版面上定位正確，不被閱讀欄裁切。
