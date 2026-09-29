@@ -1,5 +1,6 @@
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { fingerprintRevisionContent } from "@/modules/knowledge/domain/content";
+import { extractDocumentLinks } from "@/modules/knowledge/domain/document-links";
 import {
   CrossSourceMoveError,
   DocumentArchivedError,
@@ -267,6 +268,7 @@ export function bindSourceProjection(
         contentHash, createdBy: caller.identity.id, createdAt: now,
       });
       await repositories.documents.setCurrentRevision(documentId, revisionId, caller.identity.id);
+      await repositories.links.replaceForDocument({ documentId, revisionId, links: extractDocumentLinks(content.markdown) });
       const insertedNode: KnowledgeTreeNode = {
         id: treeNodeId, sourceId: source.id, parentId: input.parentId, nodeType: "DOCUMENT",
         name: null, documentId, position: index, status: "ACTIVE",
@@ -314,6 +316,7 @@ export function bindSourceProjection(
         contentHash, createdBy: caller.identity.id, createdAt: new Date(),
       });
       await repositories.documents.setCurrentRevision(document.id, revisionId, caller.identity.id);
+      await repositories.links.replaceForDocument({ documentId: document.id, revisionId, links: extractDocumentLinks(content.markdown) });
       syncViewCurrentRevision(document.id, revisionId);
       await repositories.documents.assertComplete(document.id);
       return { revisionId, revisionNo, changed: true };

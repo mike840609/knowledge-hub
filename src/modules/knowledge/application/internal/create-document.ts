@@ -2,6 +2,7 @@ import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { lockWorkspaceForMutation } from "@/modules/workspaces/application/workspace-mutation-guard";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import { fingerprintRevisionContent, type RevisionContentInput } from "../../domain/content";
+import { extractDocumentLinks } from "../../domain/document-links";
 import { SourceArchivedError, SourceNotFoundError, SourceReadOnlyError } from "../../domain/errors";
 import { normalizeTreePosition } from "../../domain/tree-rules";
 import type { KnowledgeRepositories } from "../../ports/unit-of-work";
@@ -56,6 +57,9 @@ export async function createDocumentInTransaction(
     contentHash, createdBy: caller.identity.id, createdAt: now,
   });
   await repositories.documents.setCurrentRevision(documentId, revisionId, caller.identity.id);
+  // Same transaction as the revision: an index row exists for every current
+  // revision, which is what lets "no links" and "not indexed yet" differ.
+  await repositories.links.replaceForDocument({ documentId, revisionId, links: extractDocumentLinks(content.markdown) });
   await repositories.tree.insert({
     id: treeNodeId, sourceId: source.id, parentId: input.parentId, nodeType: "DOCUMENT",
     name: null, documentId, position: index, status: "ACTIVE",

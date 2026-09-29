@@ -2,6 +2,7 @@ import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { lockWorkspaceForMutation } from "@/modules/workspaces/application/workspace-mutation-guard";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import { fingerprintRevisionContent, type RevisionContentInput } from "../../domain/content";
+import { extractDocumentLinks } from "../../domain/document-links";
 import { isRevisionContentUnchanged } from "../../domain/revision";
 import {
   DocumentArchivedError,
@@ -59,6 +60,7 @@ export async function createRevisionInTransaction(
     contentHash, createdBy: caller.identity.id, createdAt: new Date(),
   });
   await repositories.documents.setCurrentRevision(document.id, revisionId, caller.identity.id);
+  await repositories.links.replaceForDocument({ documentId: document.id, revisionId, links: extractDocumentLinks(content.markdown) });
   await repositories.documents.assertComplete(document.id);
   return { revisionId, revisionNo, changed: true };
 }

@@ -17,6 +17,7 @@
     "db:migrate": "tsx scripts/db/migrate.ts",
     "db:seed": "tsx scripts/db/seed.ts",
     "db:backfill-personal-workspaces": "tsx scripts/db/backfill-personal-workspaces.ts",
+    "db:reindex-document-links": "tsx scripts/db/reindex-document-links.ts",
     "admin:recover-team-workspace-governance": "tsx scripts/admin/recover-team-workspace-governance.ts"
   },
   "dependencies": {
