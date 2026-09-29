@@ -54,10 +54,12 @@ export function RenderedEditor(props: RenderedEditorProps) {
     }).then(
       (editor) => {
         if (cancelled) {
-          void editor.destroy();
+          void editor.destroy().catch(() => undefined);
           return;
         }
         editorRef.current = editor;
+        // `editable` may have changed while the editor was building, when the effect below had no handle yet.
+        editor.setEditable(latest.current.editable);
         latest.current.onReady(editor);
       },
       () => {
@@ -68,7 +70,7 @@ export function RenderedEditor(props: RenderedEditorProps) {
       cancelled = true;
       const editor = editorRef.current;
       editorRef.current = null;
-      if (editor) void editor.destroy();
+      if (editor) void editor.destroy().catch(() => undefined);
       host.remove();
     };
   }, []);
@@ -77,14 +79,14 @@ export function RenderedEditor(props: RenderedEditorProps) {
     editorRef.current?.setEditable(props.editable);
   }, [props.editable]);
 
-  // A plain click on a link edits the text around it; ⌘/Ctrl-click follows it, as the reader's links do.
+  // A plain click on a link edits the text around it and never navigates, editable or not
+  // (a non-editable anchor would follow itself); ⌘/Ctrl-click follows it, as the reader's links do.
   function followLinkOnModifierClick(event: MouseEvent<HTMLDivElement>) {
-    if (!(event.metaKey || event.ctrlKey)) return;
     const link = (event.target as HTMLElement).closest("a");
-    const href = link?.getAttribute("href");
-    if (!href) return;
+    if (!link) return;
     event.preventDefault();
-    window.open(href, "_blank", "noopener,noreferrer");
+    const href = link.getAttribute("href");
+    if (href && (event.metaKey || event.ctrlKey)) window.open(href, "_blank", "noopener,noreferrer");
   }
 
   return <div ref={containerRef} onClick={followLinkOnModifierClick} />;

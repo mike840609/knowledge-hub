@@ -35,6 +35,16 @@ function inList(view: EditorView, name: "bullet_list" | "ordered_list"): boolean
   return false;
 }
 
+// A pressed toggle reads as selected, as the composer's own Markdown toggle does.
+const PRESSED = "aria-pressed:bg-kh-bg-selected aria-pressed:text-kh-text";
+const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
+
+/** `example.com` is a web address; a path, an anchor or anything with a scheme (`mailto:`) is left as typed. */
+function withScheme(value: string): string {
+  if (!value || HAS_SCHEME.test(value) || value.startsWith("/") || value.startsWith("#")) return value;
+  return `https://${value}`;
+}
+
 type Item = {
   label: string;
   text: string;
@@ -111,12 +121,13 @@ export function selectionToolbar(): { plugins: MilkdownPlugin[]; configure: (ctx
           const pressers = items.map((item) => {
             const button = document.createElement("button");
             button.type = "button";
-            button.className = buttonClasses({ variant: "ghost", size: "sm", className: item.className ?? "" });
+            button.className = buttonClasses({ variant: "ghost", size: "sm", className: `${PRESSED} ${item.className ?? ""}` });
             button.textContent = item.text;
             button.title = item.label;
             button.setAttribute("aria-label", item.label);
             button.addEventListener("mousedown", (event) => event.preventDefault());
             button.addEventListener("click", () => {
+              if (!editorView.editable) return;
               item.run(ctx, editorView, openLink);
               if (!linkMode) editorView.focus();
             });
@@ -125,11 +136,18 @@ export function selectionToolbar(): { plugins: MilkdownPlugin[]; configure: (ctx
           });
 
           const input = document.createElement("input");
-          input.type = "url";
+          // Not `type="url"`: inside the composer's validating form that would block Save on half-typed text.
+          input.type = "text";
+          input.setAttribute("inputmode", "url");
+          input.setAttribute("autocomplete", "off");
           input.placeholder = "https://";
           input.setAttribute("aria-label", "Link address");
           input.className = fieldClasses({ size: "sm", className: "w-56" });
           linkRow.appendChild(input);
+          // Pressing the toolbar's padding must not take focus (and with it the toolbar) from the editor either.
+          element.addEventListener("mousedown", (event) => {
+            if (event.target !== input) event.preventDefault();
+          });
 
           function showButtons() {
             setLinkMode(false);
@@ -139,17 +157,19 @@ export function selectionToolbar(): { plugins: MilkdownPlugin[]; configure: (ctx
             setLinkMode(true);
             input.focus();
           }
-          // Stops here: a bare Enter would submit the composer's form, and Esc would leave the page.
+          // Enter and Esc stop here: a bare Enter would submit the composer's form, and Esc would leave
+          // the page. Every other key still bubbles, so ⌘K reaches the global search.
           input.addEventListener("keydown", (event) => {
+            if (event.key !== "Enter" && event.key !== "Escape") return;
             event.stopPropagation();
-            if (event.isComposing) return;
+            if (event.isComposing || event.keyCode === 229) return;
             if (event.key === "Escape") {
               event.preventDefault();
               showButtons();
               editorView.focus();
             } else if (event.key === "Enter") {
               event.preventDefault();
-              const href = input.value.trim();
+              const href = withScheme(input.value.trim());
               showButtons();
               editorView.focus();
               if (href) ctx.get(commandsCtx).call(toggleLinkCommand.key, { href });
@@ -158,6 +178,13 @@ export function selectionToolbar(): { plugins: MilkdownPlugin[]; configure: (ctx
 
           const provider = new TooltipProvider({ content: element, offset: 8 });
           provider.onHide = showButtons;
+          // The provider re-evaluates only on ProseMirror updates, and a blur dispatches none.
+          // Focus moving into the toolbar itself (the link box) keeps it.
+          function hideOnBlur(event: FocusEvent) {
+            if (event.relatedTarget instanceof Node && element.contains(event.relatedTarget)) return;
+            provider.hide();
+          }
+          editorView.dom.addEventListener("blur", hideOnBlur);
 
           return {
             update: (view, previous) => {
@@ -165,6 +192,7 @@ export function selectionToolbar(): { plugins: MilkdownPlugin[]; configure: (ctx
               provider.update(view, previous);
             },
             destroy: () => {
+              editorView.dom.removeEventListener("blur", hideOnBlur);
               provider.destroy();
               element.remove();
             },

@@ -165,12 +165,14 @@ kbd {
   .kh-editor table {
     @apply my-4 w-full border-collapse text-body;
   }
+  /* The marker is drawn out of flow: a task item is `paragraph block*`, so a flex row
+     would put a nested list or a second paragraph beside the first one. */
   .kh-editor li[data-item-type="task"] {
-    @apply flex list-none gap-2;
+    @apply relative list-none pl-6;
   }
   .kh-editor li[data-item-type="task"]::before {
     content: "☐";
-    @apply text-kh-text-muted;
+    @apply absolute left-0 text-kh-text-muted;
   }
   .kh-editor li[data-item-type="task"][data-checked="true"]::before {
     content: "☑";
