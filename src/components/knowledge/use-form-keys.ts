@@ -4,8 +4,8 @@ import type { KeyboardEvent } from "react";
 import { formKeyIntent } from "@/lib/form-keys";
 
 /**
- * ⌘Enter saves, ⌘⇧P toggles preview and Esc cancels, inside a document form.
- * The rules are `formKeyIntent`'s; this only carries them out.
+ * ⌘Enter saves, ⌘/ switches rendered ⇄ Markdown and Esc cancels, inside a
+ * document form. The rules are `formKeyIntent`'s; this only carries them out.
  *
  * Saving goes through the form's own submit button and only when that button
  * is enabled: `requestSubmit()` ignores a disabled button, so checking it here
@@ -16,12 +16,12 @@ export function useFormKeys({
   dirty,
   busy,
   onCancel,
-  preview,
+  mode,
 }: {
   dirty: boolean;
   busy: boolean;
   onCancel: () => void;
-  preview?: { active: boolean; toggle: () => void; exit: () => void };
+  mode?: { toggle: () => void };
 }) {
   return (event: KeyboardEvent<HTMLFormElement>) => {
     const intent = formKeyIntent(
@@ -34,7 +34,7 @@ export function useFormKeys({
         isComposing: event.nativeEvent.isComposing,
         keyCode: event.keyCode,
       },
-      { dirty, busy, previewing: preview?.active ?? false, canPreview: preview !== undefined },
+      { dirty, busy, canToggleMode: mode !== undefined },
     );
     if (intent === null) return;
     if (intent === "save") {
@@ -46,8 +46,6 @@ export function useFormKeys({
     }
     event.preventDefault();
     if (intent === "cancel") onCancel();
-    // Esc always exits preview (never toggles it back on); only ⌘⇧P toggles.
-    else if (intent === "exit-preview") preview?.exit();
-    else preview?.toggle();
+    else mode?.toggle();
   };
 }

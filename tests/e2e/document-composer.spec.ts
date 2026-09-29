@@ -1,4 +1,5 @@
 import { expect, test, type Dialog, type Page } from "@playwright/test";
+import { showMarkdown } from "./composer-helpers";
 
 // Mirrors scripts/db/seed.ts BROWSER_FIXTURE_IDS (Playwright cannot resolve `@/` aliases).
 const EMPTY_WORKSPACE = "0199f100-0000-7000-8000-000000000004";
@@ -13,6 +14,11 @@ function unique(label: string) {
 /** main form + first(): the duplicate-DOM quirk phase5-authoring.spec.ts documents. */
 function composer(page: Page) {
   return page.locator("main form").first();
+}
+
+/** The rendered editing surface. */
+function surfaceOf(page: Page) {
+  return composer(page).getByRole("textbox", { name: "Content" });
 }
 
 /**
@@ -43,33 +49,231 @@ async function leaveEditor(page: Page, documentUrl: string) {
   await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
 }
 
+/** Opens the editor and returns the rendered surface once it can be typed into. */
 async function openEditor(page: Page, documentUrl: string) {
   await page.goto(`${documentUrl}/edit`);
-  const body = composer(page).getByLabel("Markdown");
-  await expect(body).toBeEditable(ROUND_TRIP);
-  return body;
+  const surface = surfaceOf(page);
+  await expect(surface).toBeEditable(ROUND_TRIP);
+  return surface;
 }
 
-test("focus lands in Title on arrival, and in Markdown at position 0 for an H1-led document", async ({ page }) => {
+test("the rendered editor mounts without hydration or page errors", async ({ page }) => {
+  const problems: string[] = [];
+  page.on("pageerror", (error) => problems.push(error.message));
+  page.on("console", (message) => {
+    const text = message.text();
+    if ((message.type() === "error" && !/Failed to load resource/.test(text)) || /hydrat/i.test(text)) problems.push(text);
+  });
+  const url = await createNote(page, unique("Clean Mount"), "# Clean\n\nbody with **bold**");
+  const surface = await openEditor(page, url);
+  await expect(surface.locator("strong")).toHaveText("bold");
+  await page.waitForTimeout(1_000);
+  expect(problems).toEqual([]);
+  // Strict Mode builds two editors while developing; a production build must hold exactly one.
+  await expect(page.locator(".ProseMirror")).toHaveCount(1);
+});
+
+test("focus lands in Title on a new document, and at the start of the content for an H1-led one", async ({ page }) => {
   await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
-  const titleField = composer(page).getByLabel("Title", { exact: true });
-  await expect(titleField).toBeFocused(ROUND_TRIP);
+  await expect(composer(page).getByLabel("Title", { exact: true })).toBeFocused(ROUND_TRIP);
 
   const title = unique("Focus H1");
   const url = await createNote(page, title, `# ${title}\n\nbody`);
-  const body = await openEditor(page, url);
-  await expect(body).toBeFocused(ROUND_TRIP);
-  expect(await body.evaluate((element: HTMLTextAreaElement) => element.selectionStart)).toBe(0);
+  const surface = await openEditor(page, url);
+  await expect(surface).toBeFocused(ROUND_TRIP);
+  await page.keyboard.type("X");
+  const source = await showMarkdown(composer(page));
+  await expect(source).toHaveValue(`# X${title}\n\nbody\n`);
+});
+
+test("a document opens rendered, and its Markdown is shown untouched", async ({ page }) => {
+  const markdown = "# Shown\n\nSome **bold** words\n\n* star item\n";
+  const url = await createNote(page, unique("Shown"), markdown);
+  const surface = await openEditor(page, url);
+  await expect(surface.locator("strong")).toHaveText("bold");
+
+  const source = await showMarkdown(composer(page));
+  // Opening rewrites nothing, not even the * list the editor would write as -.
+  await expect(source).toHaveValue(markdown);
+
+  await composer(page).getByRole("button", { name: "Markdown", exact: true }).click();
+  await expect(surface).toBeVisible();
+  await expect(surface.locator("strong")).toHaveText("bold");
+});
+
+test("saving without a change keeps the Markdown exactly as it was", async ({ page }) => {
+  const markdown = "* one\n* two\n";
+  const url = await createNote(page, unique("Untouched"), markdown);
+  await openEditor(page, url);
+  await composer(page).getByRole("button", { name: "Save" }).click();
+  await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
+
+  await openEditor(page, url);
+  const source = await showMarkdown(composer(page));
+  await expect(source).toHaveValue(markdown);
+});
+
+test("an untouched rendered editor is not a modification: Esc leaves it", async ({ page }) => {
+  const url = await createNote(page, unique("Not Dirty"), "# Not dirty\n\n* a\n* b\n");
+  const surface = await openEditor(page, url);
+  await surface.press("Escape");
+  await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
+});
+
+test("typing Markdown syntax writes a heading and a list, and Create saves it", async ({ page }) => {
+  const title = unique("Typed Heading");
+  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
+  const surface = surfaceOf(page);
+  await expect(surface).toBeEditable(ROUND_TRIP);
+  await surface.click();
+  await page.keyboard.type(`# ${title}`);
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("- one");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("two");
+
+  await expect(surface.getByRole("heading", { level: 1 })).toHaveText(title);
+  await expect(surface.getByRole("listitem")).toHaveCount(2);
+  await expect(composer(page).getByLabel("Title", { exact: true })).toHaveCount(0);
+  const source = await showMarkdown(composer(page));
+  await expect(source).toHaveValue(`# ${title}\n\n- one\n- two\n`);
+
+  await composer(page).getByRole("button", { name: "Create document" }).click();
+  await expect(page.getByRole("treeitem", { name: title, exact: true })).toBeVisible(ROUND_TRIP);
+});
+
+test("⌘Enter saves from inside the rendered editor", async ({ page }) => {
+  const title = unique("Save Shortcut");
+  const url = await createNote(page, title, `# ${title}\n\nbody\n`);
+  const surface = await openEditor(page, url);
+  await surface.click();
+  await page.keyboard.type("more ");
+  await surface.press("ControlOrMeta+Enter");
+  await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
+  await expect(page.locator("article").first().getByText("more")).toBeVisible(ROUND_TRIP);
+});
+
+test("selecting text shows the toolbar, and Bold writes ** into the Markdown", async ({ page }) => {
+  const url = await createNote(page, unique("Toolbar"), "hello world\n");
+  const surface = await openEditor(page, url);
+  const toolbar = page.getByRole("toolbar", { name: "Formatting" });
+  await expect(toolbar).toBeHidden();
+
+  await surface.locator("p").selectText();
+  await expect(toolbar).toBeVisible(ROUND_TRIP);
+  const box = await toolbar.boundingBox();
+  const viewport = page.viewportSize()!;
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.y).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
+
+  await toolbar.getByRole("button", { name: "Bold" }).click();
+  // A toolbar button must not submit the form it sits in.
+  await expect(page).toHaveURL(/\/edit$/);
+  await expect(surface.locator("strong")).toHaveText("hello world");
+  await expect(toolbar.getByRole("button", { name: "Bold" })).toHaveAttribute("aria-pressed", "true");
+  const source = await showMarkdown(composer(page));
+  await expect(source).toHaveValue("**hello world**\n");
+});
+
+test("the toolbar adds a link from an address typed into it", async ({ page }) => {
+  const url = await createNote(page, unique("Link"), "hello world\n");
+  const surface = await openEditor(page, url);
+  const toolbar = page.getByRole("toolbar", { name: "Formatting" });
+  await surface.locator("p").selectText();
+  await toolbar.getByRole("button", { name: "Link" }).click();
+  const address = toolbar.getByLabel("Link address");
+  await expect(address).toBeFocused();
+  await address.fill("https://example.com");
+  await address.press("Enter");
+
+  // Enter in the address box must neither save the document nor leave the page.
+  await expect(page).toHaveURL(/\/edit$/);
+  await expect(surface.locator('a[href="https://example.com"]')).toHaveText("hello world");
+  const source = await showMarkdown(composer(page));
+  await expect(source).toHaveValue("[hello world](https://example.com)\n");
+});
+
+test("a javascript: link is not a live link in the editor, and the document keeps what was written", async ({ page }) => {
+  // Milkdown sanitises an anchor's href when it draws the link; the editor's
+  // ⌘-click reads that rendered href. This pins the sanitising to the locked version.
+  const markdown = "[click](javascript:alert(1)) and [ok](https://example.com)\n";
+  const url = await createNote(page, unique("Unsafe Link"), markdown);
+  const surface = await openEditor(page, url);
+  await expect(surface.locator("a", { hasText: "click" })).not.toHaveAttribute("href", /javascript/i);
+  await expect(surface.locator("a", { hasText: "ok" })).toHaveAttribute("href", "https://example.com");
+  const source = await showMarkdown(composer(page));
+  await expect(source).toHaveValue(markdown);
+});
+
+test("the toolbar goes away when focus leaves the editor", async ({ page }) => {
+  const url = await createNote(page, unique("Blur"), "hello world\n");
+  const surface = await openEditor(page, url);
+  const toolbar = page.getByRole("toolbar", { name: "Formatting" });
+  await surface.locator("p").selectText();
+  await expect(toolbar).toBeVisible(ROUND_TRIP);
+  await composer(page).getByLabel("Title", { exact: true }).click();
+  await expect(toolbar).toBeHidden();
+});
+
+test("the bulleted-list button wraps a paragraph into a list and lifts it back out", async ({ page }) => {
+  const url = await createNote(page, unique("List Toggle"), "item\n");
+  const surface = await openEditor(page, url);
+  const toolbar = page.getByRole("toolbar", { name: "Formatting" });
+  await surface.locator("p").selectText();
+  await toolbar.getByRole("button", { name: "Bulleted list" }).click();
+  await expect(surface.getByRole("listitem")).toHaveCount(1);
+  await expect(toolbar.getByRole("button", { name: "Bulleted list" })).toHaveAttribute("aria-pressed", "true");
+  let source = await showMarkdown(composer(page));
+  await expect(source).toHaveValue("- item\n");
+
+  await composer(page).getByRole("button", { name: "Markdown", exact: true }).click();
+  await surface.locator("li p").selectText();
+  await toolbar.getByRole("button", { name: "Bulleted list" }).click();
+  await expect(surface.getByRole("listitem")).toHaveCount(0);
+  source = await showMarkdown(composer(page));
+  await expect(source).toHaveValue("item\n");
+});
+
+test("changes made in the Markdown show when switching back", async ({ page }) => {
+  const url = await createNote(page, unique("Back"), "old\n");
+  const surface = await openEditor(page, url);
+  const source = await showMarkdown(composer(page));
+  await source.fill("# Changed heading\n\nnew body\n");
+  await composer(page).getByRole("button", { name: "Markdown", exact: true }).click();
+  await expect(surface.getByRole("heading", { level: 1 })).toHaveText("Changed heading");
+  await expect(surface).toContainText("new body");
+});
+
+test("⌘/ switches between the rendered editor and the Markdown", async ({ page }) => {
+  const url = await createNote(page, unique("Shortcut"), "text\n");
+  const surface = await openEditor(page, url);
+  await surface.press("ControlOrMeta+/");
+  const source = composer(page).getByLabel("Markdown", { exact: true });
+  await expect(source).toBeVisible();
+  await source.press("ControlOrMeta+/");
+  await expect(surface).toBeVisible();
+});
+
+test("an image the reader would refuse is not loaded by the editor either", async ({ page }) => {
+  const markdown = "![x](https://evil.example/a.png)\n\nbody\n";
+  const url = await createNote(page, unique("Image"), markdown);
+  const surface = await openEditor(page, url);
+  await expect(surface.locator('img[src="https://evil.example/a.png"]')).toHaveCount(0);
+  // The document still holds the address; only the element lost it.
+  const source = await showMarkdown(composer(page));
+  await expect(source).toHaveValue(markdown);
 });
 
 test("a document that opens with an H1 is named by it, with no title field", async ({ page }) => {
   const before = unique("Composer H1");
   const after = unique("Composer Renamed");
   const url = await createNote(page, before, `# ${before}\n\nbody`);
-  const body = await openEditor(page, url);
+  await openEditor(page, url);
   await expect(composer(page).getByLabel("Title", { exact: true })).toHaveCount(0);
 
-  await body.fill(`# ${after}\n\nbody`);
+  const source = await showMarkdown(composer(page));
+  await source.fill(`# ${after}\n\nbody`);
   await expect(composer(page).getByRole("navigation", { name: "Breadcrumb" })).toContainText(after);
   await composer(page).getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("treeitem", { name: after, exact: true })).toBeVisible(ROUND_TRIP);
@@ -78,21 +282,22 @@ test("a document that opens with an H1 is named by it, with no title field", asy
 test("deleting the opening H1 brings back the title field, filled with it", async ({ page }) => {
   const title = unique("Carry");
   const url = await createNote(page, title, `# ${title}\n\nbody`);
-  const body = await openEditor(page, url);
+  await openEditor(page, url);
+  const source = await showMarkdown(composer(page));
   // Change the H1 away from the stored title first, so a no-op carryTitle
   // (one that just leaves the stored title alone) cannot pass this test.
   const changedHeading = unique("Carry Changed");
-  await body.fill(`# ${changedHeading}\n\nbody`);
+  await source.fill(`# ${changedHeading}\n\nbody`);
   await expect(composer(page).getByLabel("Title", { exact: true })).toHaveCount(0);
 
-  await body.fill("body");
+  await source.fill("body");
   await expect(composer(page).getByLabel("Title", { exact: true })).toHaveValue(changedHeading);
 });
 
 test("a frontmatter title survives editing the H1", async ({ page }) => {
   const title = unique("Frontmatter Title");
   await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
-  // Enabled once hydrated and authorized, on the old form and the composer alike.
+  // Enabled once hydrated and authorized.
   await expect(page.locator('input[type="file"]')).toBeEnabled(ROUND_TRIP);
   await page.setInputFiles('input[type="file"]', {
     name: "fm.md",
@@ -101,96 +306,71 @@ test("a frontmatter title survives editing the H1", async ({ page }) => {
   });
   await expect(page).not.toHaveURL(/\/new$/, ROUND_TRIP);
 
-  const body = await openEditor(page, page.url());
+  const surface = await openEditor(page, page.url());
   await expect(composer(page).getByText("標題來自上傳檔案的 frontmatter")).toBeVisible();
-  // The body opens with its own H1, so preview shows that one heading, as the reader does.
-  await composer(page).getByRole("button", { name: "Preview" }).click();
-  await expect(composer(page).getByRole("region", { name: "Preview" }).getByRole("heading", { level: 1 })).toHaveCount(1);
-  await page.keyboard.press("Escape");
-  await body.fill("# Another heading entirely\n\ntext");
+  // The body opens with its own H1, so the editor shows that one heading, as the reader does.
+  await expect(surface.getByRole("heading", { level: 1 })).toHaveCount(1);
+  const source = await showMarkdown(composer(page));
+  await source.fill("# Another heading entirely\n\ntext");
   await composer(page).getByRole("button", { name: "Save" }).click();
   await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
   await expect(page.getByRole("treeitem", { name: title, exact: true })).toBeVisible(ROUND_TRIP);
 });
 
-test("preview shows the saved look and returns to the same text and caret", async ({ page }) => {
-  const url = await createNote(page, unique("Preview"));
-  const body = await openEditor(page, url);
-  await body.fill("Some **bold** words");
-  await body.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(4, 4));
-
-  await composer(page).getByRole("button", { name: "Preview" }).click();
-  const preview = composer(page).getByRole("region", { name: "Preview" });
-  await expect(preview.locator("strong")).toHaveText("bold");
-  await expect(body).toBeHidden();
-
-  await page.keyboard.press("Escape");
-  await expect(body).toBeVisible();
-  await expect(body).toBeFocused();
-  await expect(body).toHaveValue("Some **bold** words");
-  expect(await body.evaluate((element: HTMLTextAreaElement) => element.selectionStart)).toBe(4);
-
-  await page.keyboard.press("ControlOrMeta+Shift+P");
-  await expect(preview).toBeVisible();
-  await page.keyboard.press("ControlOrMeta+Enter");
-  await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
-  await expect(page.locator("article").first().locator("strong")).toHaveText("bold", ROUND_TRIP);
-});
-
-test("an unsaved edit survives leaving and is offered back on return", async ({ page }) => {
-  const title = unique("Draft");
-  const url = await createNote(page, title);
-  const body = await openEditor(page, url);
-  await body.fill("draft text");
+test("what was typed in the rendered editor survives leaving and is offered back on return", async ({ page }) => {
+  const url = await createNote(page, unique("Draft"), "start\n");
+  const surface = await openEditor(page, url);
+  await surface.click();
+  await page.keyboard.type("draft text");
 
   await leaveEditor(page, url);
 
-  await openEditor(page, url);
+  const back = await openEditor(page, url);
   await expect(composer(page).getByRole("status").filter({ hasText: "已還原未存的修改" })).toBeVisible();
-  await expect(body).toHaveValue("draft text");
-  // F1: a restored draft's caret belongs at the start, same as a fresh open.
-  await expect(body).toBeFocused(ROUND_TRIP);
-  expect(await body.evaluate((element: HTMLTextAreaElement) => element.selectionStart)).toBe(0);
+  await expect(back).toContainText("draft text");
+  await expect(back).toBeFocused(ROUND_TRIP);
 
   await composer(page).getByRole("button", { name: "捨棄" }).click();
-  await expect(body).toHaveValue("");
+  await expect(back).not.toContainText("draft text");
   await page.reload();
-  await expect(body).toBeEditable(ROUND_TRIP);
+  await expect(back).toBeEditable(ROUND_TRIP);
   await expect(composer(page).getByRole("status").filter({ hasText: "已還原" })).toHaveCount(0);
 });
 
 test("a restored draft on a document someone changed meanwhile conflicts instead of overwriting", async ({ page }) => {
-  const title = unique("Stale Draft");
-  const url = await createNote(page, title);
-  const body = await openEditor(page, url);
-  await body.fill("mine");
+  const url = await createNote(page, unique("Stale Draft"));
+  await openEditor(page, url);
+  const source = await showMarkdown(composer(page));
+  await source.fill("mine");
   await leaveEditor(page, url);
 
   // A new page is a new tab, with its own sessionStorage.
   const other = await page.context().newPage();
-  const theirs = await openEditor(other, url);
-  await theirs.fill("theirs");
+  await openEditor(other, url);
+  const theirSource = await showMarkdown(composer(other));
+  await theirSource.fill("theirs");
   await composer(other).getByRole("button", { name: "Save" }).click();
   await expect(other).not.toHaveURL(/\/edit$/, ROUND_TRIP);
   await expect(other.locator("article").first().getByText("theirs")).toBeVisible(ROUND_TRIP);
   await other.close();
 
-  await openEditor(page, url);
+  const surface = await openEditor(page, url);
   await expect(composer(page).getByRole("status").filter({ hasText: "被更新過" })).toBeVisible();
-  await expect(body).toHaveValue("mine");
+  await expect(surface).toContainText("mine");
   await composer(page).getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "已被其他人更新" })).toBeVisible(ROUND_TRIP);
-  await expect(body).toHaveValue("mine");
+  await expect(surface).toContainText("mine");
 
   await composer(page).getByRole("button", { name: "載入最新版本（捨棄你的修改）" }).click();
-  await expect(body).toHaveValue("theirs", ROUND_TRIP);
+  await expect(surface).toContainText("theirs", ROUND_TRIP);
   await expect(composer(page).getByRole("status").filter({ hasText: "已還原" })).toHaveCount(0);
 });
 
 test("Cancel asks before discarding changes, and discarding clears the draft", async ({ page }) => {
   const url = await createNote(page, unique("Cancel"));
-  const body = await openEditor(page, url);
-  await body.fill("changed");
+  await openEditor(page, url);
+  const source = await showMarkdown(composer(page));
+  await source.fill("changed");
   const cancel = composer(page).getByRole("button", { name: "Cancel" });
 
   // waitForEvent, not page.once: a listener's own expect() cannot fail the
@@ -209,8 +389,8 @@ test("Cancel asks before discarding changes, and discarding clears the draft", a
   expect(dismissDialog.message()).toBe("Discard changes?");
   await dismissDialog.dismiss();
   await dismissClick;
-  await expect(body).toBeVisible();
-  await expect(body).toHaveValue("changed");
+  await expect(source).toBeVisible();
+  await expect(source).toHaveValue("changed");
 
   const accepted = page.waitForEvent("dialog");
   const acceptClick = cancel.click();
@@ -219,12 +399,12 @@ test("Cancel asks before discarding changes, and discarding clears the draft", a
   await acceptClick;
   await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
 
-  await openEditor(page, url);
-  await expect(body).toHaveValue("");
+  const surface = await openEditor(page, url);
+  await expect(surface).not.toContainText("changed");
   await expect(composer(page).getByRole("status").filter({ hasText: "已還原" })).toHaveCount(0);
 });
 
-test("Enter in the title field moves to Markdown instead of submitting", async ({ page }) => {
+test("Enter in the title field moves to the content instead of submitting", async ({ page }) => {
   await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
   const form = composer(page);
   const titleField = form.getByLabel("Title", { exact: true });
@@ -233,28 +413,7 @@ test("Enter in the title field moves to Markdown instead of submitting", async (
 
   await titleField.press("Enter");
   await expect(page).toHaveURL(/\/new$/);
-  await expect(form.getByLabel("Markdown")).toBeFocused();
-});
-
-test("Esc exits preview for good, even if its keydown fires twice before React re-renders", async ({ page }) => {
-  const url = await createNote(page, unique("Preview Exit"));
-  const body = await openEditor(page, url);
-  await composer(page).getByRole("button", { name: "Preview" }).click();
-  const preview = composer(page).getByRole("region", { name: "Preview" });
-  await expect(preview).toBeVisible();
-
-  // A held key auto-repeats: two native keydowns can be dispatched before
-  // React commits the state update from the first one, so both read the same
-  // "still previewing" closure. A toggle() for each would flip twice and land
-  // back in preview; an idempotent exit() lands on editing either way.
-  await composer(page).evaluate((form) => {
-    const escape = () => new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
-    form.dispatchEvent(escape());
-    form.dispatchEvent(escape());
-  });
-
-  await expect(preview).toBeHidden();
-  await expect(body).toBeVisible();
+  await expect(surfaceOf(page)).toBeFocused();
 });
 
 test("a new document can be named by its H1 alone", async ({ page }) => {
@@ -262,7 +421,8 @@ test("a new document can be named by its H1 alone", async ({ page }) => {
   await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
   const form = composer(page);
   await expect(form.getByLabel("Title", { exact: true })).toBeEditable(ROUND_TRIP);
-  await form.getByLabel("Markdown").fill(`# ${title}\n\nbody`);
+  const source = await showMarkdown(form);
+  await source.fill(`# ${title}\n\nbody`);
   await expect(form.getByLabel("Title", { exact: true })).toHaveCount(0);
   await form.getByRole("button", { name: "Create document" }).click();
   await expect(page.getByRole("treeitem", { name: title, exact: true })).toBeVisible(ROUND_TRIP);
@@ -301,9 +461,10 @@ test("an upload in flight disables Create, so the two cannot race", async ({ pag
   await expect(page.getByRole("treeitem", { name: title, exact: true })).toBeVisible(ROUND_TRIP);
 });
 
-test("the text re-fits its height when the column rewraps", async ({ page }) => {
+test("the Markdown text re-fits its height when the column rewraps", async ({ page }) => {
   const url = await createNote(page, unique("Rewrap"), "word ".repeat(400));
-  const body = await openEditor(page, url);
+  await openEditor(page, url);
+  const body = await showMarkdown(composer(page));
   const fits = () => body.evaluate((element: HTMLTextAreaElement) => element.scrollHeight <= element.clientHeight + 1);
   expect(await fits()).toBe(true);
   // Narrower column, more lines: without a re-fit the tail is clipped behind overflow-hidden.
@@ -316,7 +477,7 @@ test("Upload .md is a focusable button that opens the file picker", async ({ pag
   await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
   const upload = page.getByRole("button", { name: "Upload .md" });
   await expect(upload).toBeEnabled(ROUND_TRIP);
-  await composer(page).getByLabel("Markdown").focus();
+  await surfaceOf(page).focus();
   await page.keyboard.press("Tab");
   await expect(upload).toBeFocused();
   await expect(upload).not.toHaveCSS("box-shadow", "none");
@@ -329,7 +490,8 @@ test("Upload .md is a focusable button that opens the file picker", async ({ pag
 
 test("a save whose client navigation never lands still ends on the document", async ({ page }) => {
   const url = await createNote(page, unique("Dropped Return"));
-  const body = await openEditor(page, url);
+  await openEditor(page, url);
+  const body = await showMarkdown(composer(page));
   // Hold the router's fetch of the document, so its client navigation never
   // lands — the shape of the dropped navigation measured on main. A full load
   // is a document request, not an RSC fetch, so it is not held.

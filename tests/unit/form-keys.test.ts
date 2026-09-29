@@ -5,34 +5,35 @@ function key(overrides: Partial<FormKeyEvent> = {}): FormKeyEvent {
   return { key: "a", metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, isComposing: false, keyCode: 65, ...overrides };
 }
 
-const editing = { dirty: false, busy: false, previewing: false, canPreview: true };
+const editing = { dirty: false, busy: false, canToggleMode: true };
 
 describe("formKeyIntent", () => {
   it("saves on ⌘Enter and Ctrl Enter", () => {
     expect(formKeyIntent(key({ key: "Enter", metaKey: true }), editing)).toBe("save");
     expect(formKeyIntent(key({ key: "Enter", ctrlKey: true }), editing)).toBe("save");
-    expect(formKeyIntent(key({ key: "Enter", metaKey: true }), { ...editing, previewing: true })).toBe("save");
   });
 
   it("does nothing while an input method is composing", () => {
     expect(formKeyIntent(key({ key: "Enter", metaKey: true, isComposing: true }), editing)).toBeNull();
     expect(formKeyIntent(key({ key: "Escape", keyCode: 229 }), editing)).toBeNull();
+    expect(formKeyIntent(key({ key: "/", metaKey: true, isComposing: true }), editing)).toBeNull();
   });
 
-  it("toggles preview on ⌘⇧P and Ctrl ⇧P, whatever case the key reports", () => {
-    expect(formKeyIntent(key({ key: "p", metaKey: true, shiftKey: true }), editing)).toBe("toggle-preview");
-    expect(formKeyIntent(key({ key: "P", ctrlKey: true, shiftKey: true }), editing)).toBe("toggle-preview");
-    expect(formKeyIntent(key({ key: "P", metaKey: true, shiftKey: true }), { ...editing, previewing: true })).toBe("toggle-preview");
+  it("toggles rendered ⇄ Markdown on ⌘/ and Ctrl /", () => {
+    expect(formKeyIntent(key({ key: "/", metaKey: true }), editing)).toBe("toggle-mode");
+    expect(formKeyIntent(key({ key: "/", ctrlKey: true }), editing)).toBe("toggle-mode");
+    // Some layouts type "/" with Shift.
+    expect(formKeyIntent(key({ key: "/", metaKey: true, shiftKey: true }), editing)).toBe("toggle-mode");
   });
 
-  it("leaves ⌘P, ⌥⌘⇧P and forms without a preview alone", () => {
-    expect(formKeyIntent(key({ key: "p", metaKey: true }), editing)).toBeNull();
-    expect(formKeyIntent(key({ key: "p", metaKey: true, shiftKey: true, altKey: true }), editing)).toBeNull();
-    expect(formKeyIntent(key({ key: "p", metaKey: true, shiftKey: true }), { ...editing, canPreview: false })).toBeNull();
+  it("leaves a bare slash, ⌥⌘/ and a form without modes alone", () => {
+    expect(formKeyIntent(key({ key: "/" }), editing)).toBeNull();
+    expect(formKeyIntent(key({ key: "/", metaKey: true, altKey: true }), editing)).toBeNull();
+    expect(formKeyIntent(key({ key: "/", metaKey: true }), { ...editing, canToggleMode: false })).toBeNull();
   });
 
-  it("uses Esc in preview to return to editing, changes or not", () => {
-    expect(formKeyIntent(key({ key: "Escape" }), { ...editing, previewing: true, dirty: true })).toBe("exit-preview");
+  it("no longer answers to ⌘⇧P", () => {
+    expect(formKeyIntent(key({ key: "p", metaKey: true, shiftKey: true }), editing)).toBeNull();
   });
 
   it("uses Esc to leave only an unchanged, idle form", () => {

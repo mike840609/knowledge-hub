@@ -261,6 +261,38 @@ describe("hiding on blur", () => {
     expect(toolbarElement().dataset.show).toBe("true");
   });
 
+  /** Moves focus out of the editor for real, to a field elsewhere on the page. */
+  function focusElsewhere() {
+    const field = document.createElement("input");
+    document.body.appendChild(field);
+    field.focus();
+  }
+
+  // Focus coming back (from the Markdown view, from the title field) dispatches no ProseMirror
+  // update, so an unchanged selection would otherwise stay without its toolbar.
+  it("comes back when focus returns to the editor with the selection unchanged", async () => {
+    const editor = await shown();
+    focusElsewhere();
+    await throttleWindow();
+    expect(toolbarElement().dataset.show).toBe("false");
+    editorDom(editor).focus();
+    await throttleWindow();
+    expect(toolbarElement().dataset.show).toBe("true");
+  });
+
+  it("stays hidden when focus returns to a caret", async () => {
+    const editor = await open("some text\n");
+    mountToolbar(editor);
+    await throttleWindow();
+    select(editor, 3, 3);
+    await throttleWindow();
+    focusElsewhere();
+    await throttleWindow();
+    editorDom(editor).focus();
+    await throttleWindow();
+    expect(toolbarElement().dataset.show).toBe("false");
+  });
+
   it("leaves nothing behind when the editor is destroyed", async () => {
     const editor = await shown();
     const dom = editorDom(editor);

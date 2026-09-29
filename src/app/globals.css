@@ -144,6 +144,18 @@ kbd {
   .kh-editor {
     @apply min-h-[12rem] outline-none;
   }
+  /* What prosemirror-view/style/prosemirror.css requires, without its colours: ProseMirror
+     reads typed spaces back from the DOM, so they must not collapse, and it draws an
+     <img class="ProseMirror-separator"> after inline nodes that the img rule below must miss. */
+  .kh-editor {
+    white-space: pre-wrap;
+    white-space: break-spaces;
+    overflow-wrap: break-word;
+    font-variant-ligatures: none;
+  }
+  .kh-editor img.ProseMirror-separator {
+    @apply m-0 inline border-0;
+  }
   .kh-editor > :first-child {
     @apply mt-0;
   }

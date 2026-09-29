@@ -178,13 +178,17 @@ export function selectionToolbar(): { plugins: MilkdownPlugin[]; configure: (ctx
 
           const provider = new TooltipProvider({ content: element, offset: 8 });
           provider.onHide = showButtons;
-          // The provider re-evaluates only on ProseMirror updates, and a blur dispatches none.
-          // Focus moving into the toolbar itself (the link box) keeps it.
+          // The provider re-evaluates only on ProseMirror updates, and neither a blur nor a focus
+          // dispatches one. Focus moving into the toolbar itself (the link box) keeps it; focus
+          // coming back (from the Markdown view, the title field) re-evaluates, so an unchanged
+          // selection gets its toolbar back.
           function hideOnBlur(event: FocusEvent) {
             if (event.relatedTarget instanceof Node && element.contains(event.relatedTarget)) return;
             provider.hide();
           }
+          const showOnFocus = () => provider.update(editorView);
           editorView.dom.addEventListener("blur", hideOnBlur);
+          editorView.dom.addEventListener("focus", showOnFocus);
 
           return {
             update: (view, previous) => {
@@ -193,6 +197,7 @@ export function selectionToolbar(): { plugins: MilkdownPlugin[]; configure: (ctx
             },
             destroy: () => {
               editorView.dom.removeEventListener("blur", hideOnBlur);
+              editorView.dom.removeEventListener("focus", showOnFocus);
               provider.destroy();
               element.remove();
             },

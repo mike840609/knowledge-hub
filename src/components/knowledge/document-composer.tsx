@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,13 @@ import { browserDraftStorage, clearDraft, readDraft, syncDraft, type DraftKey } 
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
 import { DocumentBreadcrumb, type DocumentBreadcrumbSegment } from "./document-breadcrumb";
 import { MarkdownArticle } from "./document-viewer";
+import type { MarkdownEditor } from "./editor/editor-core";
 import { useFormKeys } from "./use-form-keys";
+
+// Loaded on demand and never on the server: Milkdown and ProseMirror stay out of the first bundle.
+const RenderedEditor = dynamic(() => import("./editor/rendered-editor").then((module) => module.RenderedEditor), { ssr: false });
+
+type Mode = "rendered" | "source";
 
 /** How long a successful save waits for the client navigation before a full load. */
 const ARRIVAL_GRACE_MS = 3_000;
@@ -22,14 +29,15 @@ function fitHeight(textarea: HTMLTextAreaElement) {
   textarea.style.height = `${textarea.scrollHeight}px`;
 }
 
-export type ComposerSubmit ={ title: string; markdown: string; expectedRevisionId: string | null };
+export type ComposerSubmit = { title: string; markdown: string; expectedRevisionId: string | null };
 
 /**
  * Writing a document, laid out like reading one (composer spec). The header row
  * is the reader's with the actions swapped; the column is the reader's with the
- * article swapped for its source. Everything that decides something lives in
- * `lib/`: the title in `authored-title`, the draft in `document-draft`, the keys
- * in `form-keys`.
+ * article swapped for an editor: the rendered document by default, its Markdown
+ * source on request (spec §11). `markdown` is the only state either edits.
+ * Everything that decides something lives in `lib/`: the title in
+ * `authored-title`, the draft in `document-draft`, the keys in `form-keys`.
  */
 export function DocumentComposer({
   draftKey,
@@ -75,24 +83,38 @@ export function DocumentComposer({
   const [baseRevisionId, setBaseRevisionId] = useState(currentRevisionId);
   const [restored, setRestored] = useState<"current" | "stale" | null>(null);
   const [restoreChecked, setRestoreChecked] = useState(false);
-  const [previewing, setPreviewing] = useState(false);
+  const [mode, setMode] = useState<Mode>("rendered");
+  // A change made in the rendered editor. Counts as a modification at once, before its output arrives.
+  const [touched, setTouched] = useState(false);
+  const [editorReady, setEditorReady] = useState(false);
+  const [editorFailed, setEditorFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<GovernanceFailure | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const previewRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<MarkdownEditor | null>(null);
+  // The Markdown the rendered editor last showed or produced; if `markdown` differs, the editor is out of date.
+  const syncedRef = useRef(initialMarkdown);
+  // Typed into the editor and not yet delivered as Markdown (its output is debounced).
+  const pendingRef = useRef(false);
   const restoreTried = useRef(false);
   const focusedOnce = useRef(false);
   const leaving = useRef(false);
   const arrivalGuard = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(arrivalGuard.current), []);
 
+  // A failed editor leaves the Markdown source, which always works.
+  const showing: Mode = editorFailed ? "source" : mode;
   const resolved = resolveAuthoredTitle({ metadataTitle, markdown, typedTitle: title });
-  const dirty = title !== initialTitle || markdown !== initialMarkdown;
+  const dirty = title !== initialTitle || markdown !== initialMarkdown || touched;
   // Fields wait for the restore check too: enabling them the instant
   // hydration commits, before sessionStorage has been read, lets a keystroke
   // land in the gap and then be overwritten by a draft arriving a tick later.
-  const ready = hydrated && restoreChecked && !busy && !blocked;
+  const interactive = hydrated && restoreChecked && !busy && !blocked;
+  // Rendered editing also waits for its editor: a title field that is editable
+  // before Save can act would let ⌘Enter do nothing.
+  const ready = interactive && (showing === "source" || editorReady);
+  const mountEditor = hydrated && restoreChecked && !editorFailed;
   const initial = { title: initialTitle, markdown: initialMarkdown };
 
   // Once, after hydration: the server has no sessionStorage, and anything set
@@ -122,44 +144,41 @@ export function DocumentComposer({
   }, [dirty]);
 
   // First focus: an empty title field when one is shown, else the start of the
-  // text. Later: whichever of text and preview is showing. A hidden textarea
-  // keeps its selection, so returning to it puts the caret back where it was.
+  // text. Later: whichever surface is showing. Both wait until they can take it:
+  // focusing a disabled field, or an editor still loading, does nothing, and
+  // this effect must run again once they can.
   useEffect(() => {
-    // Also wait for the restore check: focusing while fields are still
-    // disabled (restore pending) is a no-op, and this effect's deps did not
-    // used to include restoreChecked, so it never ran again once that flag
-    // flipped and the fields actually became usable.
     if (!hydrated || !restoreChecked) return;
-    if (previewing) {
-      previewRef.current?.focus();
-      return;
-    }
-    const textarea = textareaRef.current;
-    if (focusedOnce.current) {
-      textarea?.focus();
-      return;
-    }
+    const rendered = showing === "rendered";
+    if (rendered && !editorReady) return;
+    const first = !focusedOnce.current;
     focusedOnce.current = true;
-    if (titleRef.current && !titleRef.current.value) {
+    if (first && titleRef.current && !titleRef.current.value) {
       titleRef.current.focus();
       return;
     }
+    if (rendered) {
+      if (first) editorRef.current?.focusStart();
+      else editorRef.current?.focus();
+      return;
+    }
+    const textarea = textareaRef.current;
     textarea?.focus();
-    textarea?.setSelectionRange(0, 0);
-  }, [hydrated, restoreChecked, previewing]);
+    if (first) textarea?.setSelectionRange(0, 0);
+  }, [hydrated, restoreChecked, showing, editorReady]);
 
-  // The text grows with its content, so the page scrolls, not a box inside it.
+  // The Markdown text grows with its content, so the page scrolls, not a box inside it.
   useLayoutEffect(() => {
     const textarea = textareaRef.current;
-    if (textarea && !previewing) fitHeight(textarea);
-  }, [markdown, previewing]);
+    if (textarea && showing === "source") fitHeight(textarea);
+  }, [markdown, showing]);
 
   // Rewrapping changes the height too — a narrower window, a web font that
   // arrives after first layout. The textarea hides its overflow, so without
   // this the lines past the old height are clipped until the next keystroke.
   useEffect(() => {
     const textarea = textareaRef.current;
-    if (!textarea || previewing) return;
+    if (!textarea || showing !== "source") return;
     let width = textarea.clientWidth;
     const observer = new ResizeObserver(() => {
       if (textarea.clientWidth === width) return;
@@ -175,18 +194,31 @@ export function DocumentComposer({
       live = false;
       observer.disconnect();
     };
-  }, [previewing]);
+  }, [showing]);
+
+  // Anything that changed `markdown` from outside the rendered editor (a
+  // discarded draft, an edit made in the source) reaches the editor here. Not
+  // while the person has typed something the editor has not delivered yet.
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor || !editorReady || showing !== "rendered" || pendingRef.current) return;
+    if (markdown !== syncedRef.current) {
+      editor.replaceMarkdown(markdown);
+      syncedRef.current = markdown;
+    }
+  }, [markdown, showing, editorReady]);
 
   function keep(nextTitle: string, nextMarkdown: string) {
     syncDraft(browserDraftStorage(), draftKey, { title: nextTitle, markdown: nextMarkdown, baseRevisionId }, initial);
   }
 
-  function changeMarkdown(next: string) {
+  function applyMarkdown(next: string): { markdown: string; title: string } {
     const after = resolveAuthoredTitle({ metadataTitle, markdown: next, typedTitle: title });
     const nextTitle = carryTitle(resolved, after, title);
     setMarkdown(next);
     setTitle(nextTitle);
     keep(nextTitle, next);
+    return { markdown: next, title: nextTitle };
   }
 
   function changeTitle(next: string) {
@@ -194,8 +226,52 @@ export function DocumentComposer({
     keep(next, markdown);
   }
 
+  // The rendered editor's output becomes `markdown`.
+  function adopt(next: string): { markdown: string; title: string } {
+    syncedRef.current = next;
+    pendingRef.current = false;
+    if (next === initialMarkdown) setTouched(false);
+    return next === markdown ? { markdown, title } : applyMarkdown(next);
+  }
+
+  // Brings `markdown` up to date with what was typed, now rather than after the debounce.
+  function flush(): { markdown: string; title: string } {
+    const editor = editorRef.current;
+    if (leaving.current || !editor || !pendingRef.current) return { markdown, title };
+    return adopt(editor.getMarkdown());
+  }
+
+  function handleEditorReady(editor: MarkdownEditor) {
+    editorRef.current = editor;
+    syncedRef.current = markdown;
+    setEditorReady(true);
+  }
+
+  function handleEditorFail() {
+    editorRef.current = null;
+    pendingRef.current = false;
+    setEditorReady(false);
+    setEditorFailed(true);
+  }
+
+  function handleUserEdit() {
+    pendingRef.current = true;
+    setTouched(true);
+  }
+
+  // The editor's output only means something while the rendered view is the one
+  // being edited. After a mode switch everything typed was already delivered by
+  // `flush`, and a debounce firing late would overwrite what is being typed in
+  // the source.
+  function handleEditorMarkdown(next: string) {
+    if (showing !== "rendered") return;
+    adopt(next);
+  }
+
   function discardDraft() {
     clearDraft(browserDraftStorage(), draftKey);
+    pendingRef.current = false;
+    setTouched(false);
     setTitle(initialTitle);
     setMarkdown(initialMarkdown);
     setBaseRevisionId(currentRevisionId);
@@ -204,6 +280,7 @@ export function DocumentComposer({
 
   function cancel() {
     if (dirty && !window.confirm("Discard changes?")) return;
+    pendingRef.current = false;
     clearDraft(browserDraftStorage(), draftKey);
     leaving.current = true;
     leave(cancelHref);
@@ -228,11 +305,15 @@ export function DocumentComposer({
   }
 
   async function save() {
-    if (busy || !confirmed || !resolved.title) return;
+    if (busy || !confirmed || !ready) return;
+    // What was typed a moment ago has not reached `markdown` yet; save what is there.
+    const snapshot = flush();
+    const final = resolveAuthoredTitle({ metadataTitle, markdown: snapshot.markdown, typedTitle: snapshot.title });
+    if (!final.title) return;
     setBusy(true);
     setError(null);
     try {
-      const href = await onSubmit({ title: resolved.title, markdown, expectedRevisionId: baseRevisionId });
+      const href = await onSubmit({ title: final.title, markdown: snapshot.markdown, expectedRevisionId: baseRevisionId });
       clearDraft(browserDraftStorage(), draftKey);
       leaving.current = true;
       // Push only, then refresh on arrival: a refresh fired beside the push
@@ -249,9 +330,39 @@ export function DocumentComposer({
     // superseded by the save that just happened.
   }
 
-  const togglePreview = () => setPreviewing((was) => !was);
-  const exitPreview = () => setPreviewing(false);
-  const onKeyDown = useFormKeys({ dirty, busy, onCancel: cancel, preview: { active: previewing, toggle: togglePreview, exit: exitPreview } });
+  function toggleMode() {
+    if (editorFailed) return;
+    // Going to the source: what is in the editor becomes `markdown` first.
+    // Coming back, the effect above brings the editor up to date.
+    if (showing === "rendered") flush();
+    setMode(showing === "rendered" ? "source" : "rendered");
+  }
+
+  // Typed text is kept as a draft even if the tab is hidden or closed within the
+  // debounce. The editor may already be gone when this runs on unmount.
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
+  useEffect(() => {
+    const persist = () => {
+      try {
+        flushRef.current();
+      } catch {
+        // The editor was destroyed first; its last delivered output was already kept.
+      }
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") persist();
+    };
+    window.addEventListener("pagehide", persist);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", persist);
+      document.removeEventListener("visibilitychange", onVisibility);
+      persist();
+    };
+  }, []);
+
+  const onKeyDown = useFormKeys({ dirty, busy, onCancel: cancel, mode: { toggle: toggleMode } });
 
   // Plain Enter in a single-line title field would otherwise submit the form
   // natively; ⌘/Ctrl Enter still reaches useFormKeys's save handling above.
@@ -259,7 +370,8 @@ export function DocumentComposer({
     if (event.key !== "Enter" || event.metaKey || event.ctrlKey) return;
     if (event.nativeEvent.isComposing || event.keyCode === 229) return;
     event.preventDefault();
-    textareaRef.current?.focus();
+    if (showing === "rendered") editorRef.current?.focusStart();
+    else textareaRef.current?.focus();
   }
   const conflict = error?.code === "REVISION_CONFLICT";
   const untitled = !resolved.title;
@@ -274,14 +386,14 @@ export function DocumentComposer({
               <Button
                 type="button"
                 variant="ghost"
-                aria-pressed={previewing}
-                aria-keyshortcuts="Meta+Shift+P Control+Shift+P"
-                title="Preview (⌘⇧P)"
+                aria-pressed={showing === "source"}
+                aria-keyshortcuts="Meta+/ Control+/"
+                title={editorFailed ? "Rendered editing is not available for this document" : "Show Markdown source (⌘/)"}
                 className="aria-pressed:bg-kh-bg-selected aria-pressed:text-kh-text"
-                disabled={!hydrated}
-                onClick={togglePreview}
+                disabled={!hydrated || editorFailed}
+                onClick={toggleMode}
               >
-                Preview
+                Markdown
               </Button>
               <Button type="button" variant="secondary" title="Cancel (Esc)" disabled={busy || blocked} onClick={cancel}>
                 Cancel
@@ -306,6 +418,11 @@ export function DocumentComposer({
               <Button type="button" variant="link" onClick={discardDraft}>捨棄</Button>
             </p>
           ) : null}
+          {editorFailed ? (
+            <p role="status" className="rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2 text-body text-kh-text">
+              這份文件的排版無法在渲染模式下編輯，已改用 Markdown 模式。
+            </p>
+          ) : null}
           {conflict ? (
             <div role="alert" className="rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2 text-body text-kh-text">
               這份文件已被其他人更新。你的輸入仍保留在表單中。
@@ -322,32 +439,41 @@ export function DocumentComposer({
               value={title}
               maxLength={512}
               disabled={!ready}
-              hidden={previewing}
               onChange={(event) => changeTitle(event.target.value)}
               onKeyDown={onTitleKeyDown}
               className="w-full border-0 bg-transparent p-0 text-heading font-semibold tracking-tight text-kh-text outline-none placeholder:text-kh-text-muted"
             />
           ) : null}
-          {/* No display utility here: it would override [hidden] (plan Global Constraints). */}
+          {/* The reader's rule: a title above the content unless the content opens with its own heading.
+              TYPED has the title field above; METADATA has neither. */}
+          {showing === "rendered" && resolved.source === "METADATA" && !markdownOpensWithHeading(markdown) ? (
+            <h1 className="text-heading font-semibold tracking-tight text-kh-text">{resolved.title}</h1>
+          ) : null}
+          {/* Until the editor is ready the reader's own rendering stands in for it, so nothing flashes. */}
+          {showing === "rendered" && !editorReady ? <MarkdownArticle markdown={markdown} /> : null}
+          {mountEditor ? (
+            <div hidden={showing !== "rendered" || !editorReady}>
+              <RenderedEditor
+                markdown={markdown}
+                editable={interactive}
+                onReady={handleEditorReady}
+                onFail={handleEditorFail}
+                onUserEdit={handleUserEdit}
+                onMarkdown={handleEditorMarkdown}
+              />
+            </div>
+          ) : null}
+          {/* No display utility here: it would override [hidden]. */}
           <textarea
             ref={textareaRef}
             aria-label="Markdown"
             placeholder="Write in Markdown. Start with # to name the document."
             value={markdown}
-            disabled={!ready}
-            hidden={previewing}
-            onChange={(event) => changeMarkdown(event.target.value)}
+            disabled={!interactive}
+            hidden={showing !== "source"}
+            onChange={(event) => applyMarkdown(event.target.value)}
             className="min-h-[12rem] w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-reading text-kh-text outline-none placeholder:text-kh-text-muted"
           />
-          {previewing ? (
-            <div ref={previewRef} role="region" aria-label="Preview" tabIndex={-1} className="outline-none">
-              {/* The reader's rule: a title above the content unless the content opens with its own heading. */}
-              {resolved.title && !markdownOpensWithHeading(markdown) ? (
-                <h1 className="mb-4 text-heading font-semibold tracking-tight text-kh-text">{resolved.title}</h1>
-              ) : null}
-              <MarkdownArticle markdown={markdown} />
-            </div>
-          ) : null}
         </div>
       </form>
       {footer ? <div className="kh-reading-column pb-6">{footer({ busy })}</div> : null}
