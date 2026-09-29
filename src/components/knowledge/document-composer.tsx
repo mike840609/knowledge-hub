@@ -14,6 +14,9 @@ import { DocumentBreadcrumb, type DocumentBreadcrumbSegment } from "./document-b
 import { MarkdownArticle } from "./document-viewer";
 import { useFormKeys } from "./use-form-keys";
 
+/** How long a successful save waits for the client navigation before a full load. */
+const ARRIVAL_GRACE_MS = 3_000;
+
 function fitHeight(textarea: HTMLTextAreaElement) {
   textarea.style.height = "auto";
   textarea.style.height = `${textarea.scrollHeight}px`;
@@ -81,6 +84,8 @@ export function DocumentComposer({
   const restoreTried = useRef(false);
   const focusedOnce = useRef(false);
   const leaving = useRef(false);
+  const arrivalGuard = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(arrivalGuard.current), []);
 
   const resolved = resolveAuthoredTitle({ metadataTitle, markdown, typedTitle: title });
   const dirty = title !== initialTitle || markdown !== initialMarkdown;
@@ -222,6 +227,13 @@ export function DocumentComposer({
       // discards it (keyboard-shortcuts spec §9, #49).
       refreshOnArrival(href);
       router.push(href);
+      // The router now and then drops a navigation from `/edit` back to its
+      // document after the response has arrived — measured on main as well,
+      // with the old editor (composer verification record). The save has
+      // already succeeded, so if this component is still mounted after a
+      // grace period, finish the journey with a full load instead of leaving
+      // a disabled editor behind. Unmounting on arrival cancels it.
+      arrivalGuard.current = window.setTimeout(() => window.location.assign(href), ARRIVAL_GRACE_MS);
     } catch (failure) {
       setError(governanceFailure(failure));
       setBusy(false);

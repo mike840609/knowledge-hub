@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Dialog, type Page } from "@playwright/test";
 
 // Mirrors scripts/db/seed.ts BROWSER_FIXTURE_IDS (Playwright cannot resolve `@/` aliases).
 const EMPTY_WORKSPACE = "0199f100-0000-7000-8000-000000000004";
@@ -25,6 +25,22 @@ async function createNote(page: Page, title: string, markdown = "") {
   expect(response.ok()).toBe(true);
   const created = (await response.json()) as { sourceId: string; documentId: string };
   return `/w/${EMPTY_WORKSPACE}/knowledge/${created.sourceId}/${created.documentId}`;
+}
+
+/**
+ * Leaves a dirty editor for the document page by a full load, accepting the
+ * `beforeunload` prompt the dirty editor raises. Not by clicking the sidebar:
+ * a client navigation from `/edit` to its document is sometimes dropped by the
+ * router after its response arrives — on `main` too, with the old editor (see
+ * the composer verification record). These tests are about the draft, which
+ * survives any way of leaving; that defect is tracked on its own.
+ */
+async function leaveEditor(page: Page, documentUrl: string) {
+  const accept = (dialog: Dialog) => void dialog.accept();
+  page.on("dialog", accept);
+  await page.goto(documentUrl);
+  page.off("dialog", accept);
+  await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
 }
 
 async function openEditor(page: Page, documentUrl: string) {
@@ -127,8 +143,7 @@ test("an unsaved edit survives leaving and is offered back on return", async ({ 
   const body = await openEditor(page, url);
   await body.fill("draft text");
 
-  await page.getByRole("treeitem", { name: title, exact: true }).click();
-  await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
+  await leaveEditor(page, url);
 
   await openEditor(page, url);
   await expect(composer(page).getByRole("status").filter({ hasText: "已還原未存的修改" })).toBeVisible();
@@ -149,14 +164,14 @@ test("a restored draft on a document someone changed meanwhile conflicts instead
   const url = await createNote(page, title);
   const body = await openEditor(page, url);
   await body.fill("mine");
-  await page.getByRole("treeitem", { name: title, exact: true }).click();
-  await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
+  await leaveEditor(page, url);
 
   // A new page is a new tab, with its own sessionStorage.
   const other = await page.context().newPage();
   const theirs = await openEditor(other, url);
   await theirs.fill("theirs");
   await composer(other).getByRole("button", { name: "Save" }).click();
+  await expect(other).not.toHaveURL(/\/edit$/, ROUND_TRIP);
   await expect(other.locator("article").first().getByText("theirs")).toBeVisible(ROUND_TRIP);
   await other.close();
 
@@ -310,4 +325,26 @@ test("Upload .md is a focusable button that opens the file picker", async ({ pag
   await page.keyboard.press("Enter");
   await (await chooser).setFiles({ name: "picked.md", mimeType: "text/markdown", buffer: Buffer.from(`# ${title}\n\nbody\n`, "utf8") });
   await expect(page.getByRole("treeitem", { name: title, exact: true })).toBeVisible(ROUND_TRIP);
+});
+
+test("a save whose client navigation never lands still ends on the document", async ({ page }) => {
+  const url = await createNote(page, unique("Dropped Return"));
+  const body = await openEditor(page, url);
+  // Hold the router's fetch of the document, so its client navigation never
+  // lands — the shape of the dropped navigation measured on main. A full load
+  // is a document request, not an RSC fetch, so it is not held.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  await page.route((target) => target.pathname === url && target.searchParams.has("_rsc"), async (route) => {
+    await held;
+    await route.abort();
+  });
+
+  await body.fill("saved anyway");
+  await composer(page).getByRole("button", { name: "Save" }).click();
+  await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
+  await expect(page.locator("article").first().getByText("saved anyway")).toBeVisible(ROUND_TRIP);
+
+  release();
+  await page.unrouteAll({ behavior: "ignoreErrors" });
 });

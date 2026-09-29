@@ -145,3 +145,39 @@ Two consecutive full-run failures of the same case prompted the repeat
 measurement: 5/40 sits inside the 3/40–7/40 range measured at main and every
 earlier commit of this branch, so these fixes show no sign of raising its
 rate. Every other case, including the two new ones, passed in both runs.
+
+## Dropped navigation from `/edit` back to the document
+
+CI on the rebased branch failed in `document-composer.spec.ts`: after leaving
+the editor by a sidebar click, or after another tab's save, the URL stayed on
+`/edit`. An instrumented probe (click target, every fetch, `pushState`,
+navigation events) showed the same thing each time: the click hit the link and
+was not prevented, the navigation's RSC request returned 200 within ~30 ms, and
+the router never applied it — no `pushState`; a second click navigated at once.
+
+| Measurement | Result |
+| --- | --- |
+| Sidebar click from `/edit` to its document, this branch, 40 repeats | 3 failed |
+| Same probe on `main` (old editor), 40 repeats | 4 failed, identical signature |
+| phase5 save-then-return tests, `main`, 30 repeats each | 0/60 failed |
+| Same tests, this branch, 30 repeats each | 0/60 failed |
+| Composer stale-draft test with the leaving test, 30 repeats each | 4 failed, all at "URL left `/edit`" after the other tab's save |
+
+So the router drops a navigation from `/edit` back to its document now and
+then, under load, on `main` too. It is not fixed here; it needs its own
+investigation. This branch made one consequence worse: since the final-review
+fix F3, `busy` stays set after a successful save, so a dropped navigation left
+a disabled editor. The composer therefore finishes the journey with a full
+load if it is still mounted 3 s after a successful save (spec §7). The two
+draft tests leave the editor by a full load, since they test the draft, not
+sidebar navigation.
+
+New case "a save whose client navigation never lands still ends on the
+document" holds the document's RSC fetch so the client navigation cannot land,
+and passes only through the full-load fallback.
+
+| Command | Exit | Result |
+| --- | --- | --- |
+| leaving, stale-draft and never-lands cases, `--repeat-each=30` | 0 | 90/90 passed |
+| `make verify` | 0 | unit, typecheck, lint, build clean |
+| `make test-e2e` | 0 | 106/106 passed |
