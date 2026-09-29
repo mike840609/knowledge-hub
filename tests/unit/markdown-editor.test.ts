@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
-import { editorViewCtx } from "@milkdown/kit/core";
-import { afterEach, describe, expect, it } from "vitest";
-import { createMarkdownEditor, parsedIntact, type EditorOptions, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
+import { editorViewCtx, remarkPluginsCtx, serializerCtx } from "@milkdown/kit/core";
+import { listenerCtx } from "@milkdown/kit/plugin/listener";
+import { DOMParser as ProseDOMParser, DOMSerializer, type Node as ProseNode } from "@milkdown/kit/prose/model";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createMarkdownEditor, EditorParseError, parsedIntact, type EditorOptions, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
 
 const opened: MarkdownEditor[] = [];
 afterEach(async () => {
@@ -36,6 +38,27 @@ function type(editor: MarkdownEditor, text: string) {
   });
 }
 const settle = () => new Promise((resolve) => setTimeout(resolve, 400));
+
+/** The document as the clipboard carries it: ProseMirror's schema serialiser into detached HTML. */
+function copy(editor: MarkdownEditor): HTMLElement {
+  return editor.action((ctx) => {
+    const { doc, schema } = ctx.get(editorViewCtx).state;
+    const holder = document.createElement("div");
+    holder.appendChild(DOMSerializer.fromSchema(schema).serializeFragment(doc.content));
+    return holder;
+  });
+}
+/** What paste makes of clipboard HTML: the schema's parser, and the images it found. */
+function pastedImages(editor: MarkdownEditor, holder: HTMLElement): ProseNode[] {
+  const images: ProseNode[] = [];
+  editor.action((ctx) => {
+    const parsed = ProseDOMParser.fromSchema(ctx.get(editorViewCtx).state.schema).parse(holder);
+    parsed.descendants((node) => {
+      if (node.type.name === "image") images.push(node);
+    });
+  });
+  return images;
+}
 
 // Written as inputs and outputs, so the list is the documentation of what the
 // editor rewrites on the first edit (composer spec §11.8) and a regression guard.
@@ -105,6 +128,29 @@ describe("images follow the reader's policy", () => {
     expect(sources).toEqual(["", "/ok.png"]);
     expect(editor.getMarkdown()).toBe(markdown);
   });
+
+  it("keeps a refused source through copy and paste inside the editor", async () => {
+    const { editor } = await open("![x](https://evil.example/a.png)\n");
+    const images = pastedImages(editor, copy(editor));
+    expect(images.map((image) => image.attrs.src)).toEqual(["https://evil.example/a.png"]);
+  });
+
+  it("still gives the copied element an empty src, and carries the real source only in data-kh-src", async () => {
+    const { root, editor } = await open("![x](https://evil.example/a.png) ![y](/ok.png)\n");
+    const copied = [...copy(editor).querySelectorAll("img")];
+    expect(copied.map((image) => image.getAttribute("src"))).toEqual(["", "/ok.png"]);
+    expect(copied.map((image) => image.getAttribute("data-kh-src"))).toEqual(["https://evil.example/a.png", "/ok.png"]);
+    const live = [...root.querySelectorAll("img")].map((image) => image.getAttribute("src")).filter((src) => src !== null);
+    expect(live).toEqual(["", "/ok.png"]);
+  });
+
+  it("reads an image pasted from elsewhere from its src, as before", async () => {
+    const { editor } = await open("text\n");
+    const holder = document.createElement("div");
+    holder.innerHTML = '<p><img src="/plain.png" alt="a"></p>';
+    const [image] = pastedImages(editor, holder);
+    expect(image.attrs).toEqual({ src: "/plain.png", alt: "a", title: "a" });
+  });
 });
 
 describe("what counts as an edit", () => {
@@ -132,6 +178,22 @@ describe("what counts as an edit", () => {
     expect(calls.markdown).toEqual([]);
     expect(editor.getMarkdown()).toBe("# New\n\nreplaced\n");
   });
+
+  it("is not opening and focusing any document of the corpus", async () => {
+    const corpus: [name: string, markdown: string][] = [
+      ...Object.entries(unchanged),
+      ...Object.entries(rewritten).map(([name, [input]]): [string, string] => [name, input]),
+    ];
+    const sessions: { name: string; calls: { edits: number; markdown: string[] } }[] = [];
+    for (const [name, markdown] of corpus) {
+      const { editor, calls } = await open(markdown);
+      editor.focusStart();
+      sessions.push({ name, calls });
+    }
+    await settle();
+    expect(sessions.filter(({ calls }) => calls.edits > 0).map(({ name }) => name)).toEqual([]);
+    expect(sessions.filter(({ calls }) => calls.markdown.length > 0).map(({ name }) => name)).toEqual([]);
+  });
 });
 
 describe("output", () => {
@@ -142,6 +204,98 @@ describe("output", () => {
     expect(editor.getMarkdown()).toBe("# ZT\n");
     await settle();
     expect(calls.markdown).toEqual(["# ZT\n"]);
+  });
+
+  it("delivers the settled value once after a forced read, equal to what the read returned", async () => {
+    const { editor, calls } = await open("# T\n");
+    type(editor, "Z");
+    const flushed = editor.getMarkdown();
+    await settle();
+    expect(flushed).toBe("# ZT\n");
+    expect(calls.markdown).toEqual([flushed]);
+  });
+
+  it("leaves no emission behind when the document is replaced while an edit is pending", async () => {
+    const { editor, calls } = await open("# T\n");
+    type(editor, "Z");
+    editor.replaceMarkdown("# Other\n");
+    await settle();
+    expect(calls.markdown).toEqual([]);
+    expect(editor.getMarkdown()).toBe("# Other\n");
+  });
+
+  it("drops a pending emission that a change the listener does not see has made stale", async () => {
+    const { editor, calls } = await open("# T\n");
+    type(editor, "Z");
+    editor.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      view.dispatch(view.state.tr.insertText("Q", 1).setMeta("addToHistory", false));
+    });
+    await settle();
+    expect(editor.getMarkdown()).toBe("# QZT\n");
+    expect(calls.markdown).toEqual([]);
+  });
+
+  it("delivers an edit made after a replacement as usual", async () => {
+    const { editor, calls } = await open("# T\n");
+    type(editor, "Z");
+    editor.replaceMarkdown("# Other\n");
+    type(editor, "Y");
+    await settle();
+    expect(calls.markdown).toEqual(["# YOther\n"]);
+  });
+});
+
+describe("a failed open", () => {
+  function attach() {
+    const root = document.createElement("div");
+    document.body.appendChild(root);
+    return root;
+  }
+  const create = (root: HTMLElement, overrides: Partial<EditorOptions> = {}) =>
+    createMarkdownEditor({
+      root,
+      markdown: "text\n",
+      className: "kh-editor",
+      ariaLabel: "Content",
+      editable: true,
+      onUserEdit: () => {},
+      onMarkdown: () => {},
+      allowImage: () => true,
+      ...overrides,
+    });
+
+  it("throws EditorParseError and leaves nothing mounted when a non-empty document parses to nothing", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const root = attach();
+    // Without the title fix a title-less image makes Milkdown's parse throw, which it logs and turns into an empty document.
+    const failure = create(root, { markdown: "![no title](/a.png)\n", configure: (ctx) => ctx.update(remarkPluginsCtx, () => []) });
+    await expect(failure).rejects.toBeInstanceOf(EditorParseError);
+    expect(root.querySelector(".ProseMirror")).toBeNull();
+    errors.mockRestore();
+  });
+
+  it("destroys the half-built editor when the first read throws, and rethrows that error", async () => {
+    const root = attach();
+    const failure = create(root, {
+      configure: (ctx) =>
+        ctx.get(listenerCtx).mounted((mounted) =>
+          mounted.set(serializerCtx, () => {
+            throw new Error("serialiser failed");
+          }),
+        ),
+    });
+    await expect(failure).rejects.toThrow("serialiser failed");
+    expect(root.querySelector(".ProseMirror")).toBeNull();
+  });
+
+  it("does not swallow a failure of create()", async () => {
+    const failure = create(attach(), {
+      configure: () => {
+        throw new Error("configure failed");
+      },
+    });
+    await expect(failure).rejects.toThrow("configure failed");
   });
 });
 

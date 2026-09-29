@@ -29,6 +29,10 @@ const imagePolicyCtx = $ctx<(src: string) => boolean, "khImagePolicy">(() => fal
 /**
  * The reader never lets `<img>` fetch a source its policy refuses; neither may
  * the editor. The document keeps the URL — only the element loses its `src`.
+ *
+ * ProseMirror's clipboard goes through the same `toDOM`/`parseDOM`, so the real
+ * source also travels in `data-kh-src`, which no browser loads, and the parser
+ * prefers it: copy and paste inside the editor must not blank the URL.
  */
 const safeImageSchema = imageSchema.extendSchema((previous) => (ctx) => {
   const spec = previous(ctx);
@@ -37,9 +41,21 @@ const safeImageSchema = imageSchema.extendSchema((previous) => (ctx) => {
   if (!toDOM) return spec;
   return {
     ...spec,
+    // Milkdown's own rule, except that `src` reads `data-kh-src` first.
+    parseDOM: [
+      {
+        tag: "img[src]",
+        getAttrs: (dom) => ({
+          src: dom.getAttribute("data-kh-src") ?? dom.getAttribute("src") ?? "",
+          alt: dom.getAttribute("alt") || "",
+          title: dom.getAttribute("title") || dom.getAttribute("alt") || "",
+        }),
+      },
+    ],
     toDOM: (node) => {
       const [tag, attrs] = toDOM(node) as [string, Record<string, unknown>];
-      return [tag, { ...attrs, src: allow(String(node.attrs.src ?? "")) ? attrs.src : "" }];
+      const source = String(node.attrs.src ?? "");
+      return [tag, { ...attrs, src: allow(source) ? attrs.src : "", ...(source ? { "data-kh-src": source } : {}) }];
     },
   };
 });
@@ -63,9 +79,20 @@ export type EditorOptions = {
   className: string;
   ariaLabel: string;
   editable: boolean;
-  /** A change made by the person typing — not the initial parse, not `replaceMarkdown`. Synchronous. */
+  /**
+   * A change made by the person typing — not the initial parse, not `replaceMarkdown`. Synchronous.
+   * It can fire more than once for one keystroke (transactions appended to it pass through as well),
+   * and it runs inside ProseMirror's state update: do not call back into the editor from it —
+   * `getMarkdown()` there would read the document from before the edit.
+   */
   onUserEdit: () => void;
-  /** The document as Markdown, after a change has settled (Milkdown debounces this by ~200 ms). */
+  /**
+   * The document as Markdown, after a change has settled (Milkdown debounces this by ~200 ms).
+   * It always describes the document as it is when delivered: an emission that the document has
+   * moved past is dropped, so a change made by a route the listener does not see (`replaceMarkdown`,
+   * a transaction marked `addToHistory: false`) leaves no stale value behind. A `getMarkdown()` call
+   * does not cancel a pending emission; the settled value still arrives once, equal to what it returned.
+   */
   onMarkdown: (markdown: string) => void;
   allowImage: (src: string) => boolean;
   extraPlugins?: MilkdownPlugin[];
@@ -74,9 +101,9 @@ export type EditorOptions = {
 };
 
 export type MarkdownEditor = {
-  /** The document as Markdown right now, without waiting for the debounce. */
+  /** The document as Markdown right now, without waiting for the debounce (a pending `onMarkdown` still arrives once, with the same value). */
   getMarkdown: () => string;
-  /** Replaces the whole document. Emits no `onUserEdit` and no `onMarkdown`, and clears the undo history. */
+  /** Replaces the whole document. Emits no `onUserEdit` and no `onMarkdown` — not even for an edit still waiting out its debounce — and clears the undo history. */
   replaceMarkdown: (markdown: string) => void;
   setEditable: (editable: boolean) => void;
   /** Focus with the selection where it is. */
@@ -86,6 +113,15 @@ export type MarkdownEditor = {
   action: <T>(fn: (ctx: Ctx) => T) => T;
   destroy: () => Promise<void>;
 };
+
+/** Tears down a half-built editor without letting a failure of the teardown hide the error that caused it. */
+async function destroyAfterFailure(editor: Editor): Promise<void> {
+  try {
+    await editor.destroy();
+  } catch {
+    // The original failure is the one the caller needs to see.
+  }
+}
 
 export async function createMarkdownEditor(options: EditorOptions): Promise<MarkdownEditor> {
   let editable = options.editable;
@@ -120,8 +156,12 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
         },
       }));
       options.configure?.(ctx);
-      ctx.get(listenerCtx).markdownUpdated((_ctx, markdown, previous) => {
-        if (markdown !== previous) options.onMarkdown(markdown);
+      ctx.get(listenerCtx).markdownUpdated((current, markdown, previous) => {
+        if (markdown === previous) return;
+        // The debounced emission serialises the last change the listener saw. If the
+        // document has moved on by a route it does not see, that value is stale.
+        if (markdown !== getMarkdown()(current)) return;
+        options.onMarkdown(markdown);
       });
     })
     .use(commonmarkWithSafeImages)
@@ -134,8 +174,18 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
     .use(options.extraPlugins ?? [])
     .create();
 
-  if (!parsedIntact(options.markdown, editor.action(getMarkdown()))) {
-    await editor.destroy();
+  // A rejected `create()` propagates untouched and is not followed by `destroy()`: Milkdown then
+  // stays in its "OnCreate" status and `destroy()` would wait for it forever. The caller owns
+  // `root` and discards it on that path. Once created, every way out but success destroys the editor.
+  let initial: string;
+  try {
+    initial = editor.action(getMarkdown());
+  } catch (error) {
+    await destroyAfterFailure(editor);
+    throw error;
+  }
+  if (!parsedIntact(options.markdown, initial)) {
+    await destroyAfterFailure(editor);
     throw new EditorParseError("The editor produced an empty document from non-empty Markdown.");
   }
 
