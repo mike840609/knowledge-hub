@@ -3,8 +3,8 @@
 | 項目 | 內容 |
 | --- | --- |
 | 日期 | 2026-09-29 |
-| 狀態 | 提案，待拍板（§12） |
-| 範圍 | 讓個人 Workspace 成為每天會開的工具：修掉渲染編輯器破壞 wikilink 的缺陷（切片 0）、程式碼區塊（C）、`[[` 自動完成與從失效連結建立文件（D）、整理與封存的 web 入口（A）、收藏跟著人走（B，可延後） |
+| 狀態 | 五項待拍板事項已決定（2026-09-29，見 §12）；尚未開始實作 |
+| 範圍 | 讓個人 Workspace 成為每天會開的工具：修掉渲染編輯器破壞 wikilink 的缺陷（切片 0）、程式碼區塊（C）、`[[` 自動完成與從失效連結建立文件（D）、整理與封存的 web 入口（A）、⌘K 最近開過與側欄收藏全顯示（B.0）。收藏改存 server（B.1–B.4）**不在這一批** |
 | 前置 | [知識連結與圖譜](2026-09-29-personal-workspace-knowledge-graph-design.md)（#78）、[文件 composer](2026-09-28-document-composer-design.md)（#62）、[動作模型](2026-09-21-action-model-spec.md)、[Frontend Design Language](frontend-design-language.md) |
 | 實作計畫 | [`plans/2026-09-29-personal-daily-driver.md`](../plans/2026-09-29-personal-daily-driver.md) |
 
@@ -63,7 +63,7 @@ composer 預設是渲染編輯（Milkdown）。把文件送進去、編輯一個
 | D9 | 從失效連結建立文件：`/knowledge/new?title=…&from=<documentId>`，只在有寫入權時顯示 | 沿用既有 create flow；`from` 只用來決定「取消」回哪裡，由 ID 組出路徑，不接受任意 URL |
 | D10 | 整理先做選單式「移到…」與鍵盤重排；拖曳留作後續 | 選單與鍵盤是無障礙的完整替代，也是拖曳之後仍需保留的入口 |
 | D11 | 「刪除」就是**封存**，附可撤銷的 toast；不做硬刪除 | 不變式：生命週期只有 ACTIVE／ARCHIVED；動作模型：撤銷只在能保住的地方提供，而封存能還原 |
-| D12 | 收藏改存 server（per-user），最近開過的維持本機 | 收藏是使用者資料，該跟著人走；最近開過像瀏覽紀錄，本機即可 |
+| D12 | 收藏改存 server（per-user），最近開過的維持本機。**延後到後面批次**；這批只做 B.0（不需 migration） | 收藏是使用者資料，該跟著人走；最近開過像瀏覽紀錄，本機即可。單一瀏覽器的使用者不受影響（§12-1） |
 | D13 | 測試政策：任何影響編輯器的變更，必須有渲染模式的測試 | §1.1 |
 
 ## 4. 切片 0 — 編輯器認得 wikilink
@@ -85,11 +85,11 @@ composer 預設是渲染編輯（Milkdown）。把文件送進去、編輯一個
 
 ### 4.3 已受損的文件
 
-`\[\[X]]`（只有開頭被跳脫）是 Milkdown 輸出的特徵；使用者刻意跳脫時會寫 `\[\[X\]\]`（兩邊都跳脫）。所以可以用這個特徵**偵測**已受損的文件。提供一支唯讀、預設 dry-run 的報告腳本；**修復**（每份文件一個新 revision，會進歷史）只在你確認範圍後才做，列為待拍板（§12）。
+`\[\[X]]`（只有開頭被跳脫）是 Milkdown 輸出的特徵；使用者刻意跳脫時會寫 `\[\[X\]\]`（兩邊都跳脫）。所以可以用這個特徵**偵測**已受損的文件。提供一支唯讀、預設 dry-run 的報告腳本；**修復**（每份文件一個新 revision，會進歷史）**這一批不做**：先跑報告、看到實際數量後再決定（§12-2），腳本本身沒有寫入選項。
 
 ## 5. 切片 C — 程式碼區塊
 
-- **管線。** `MarkdownRenderer` 加 `rehype-highlight`（`detect: false`，只處理有語言標示的圍欄；語言集為 lowlight 的 `common`，加上 `dockerfile`、`groovy`、`protobuf`，其餘留待需要時再加）。單一區塊超過 20 KB 不高亮（避免病態輸入拖慢渲染）。輸出是 hast→React 元素，不經 `innerHTML`。
+- **管線。** `MarkdownRenderer` 加 `rehype-highlight`（`detect: false`，只處理有語言標示的圍欄；語言集為 lowlight 的 `common`，加上 `dockerfile`、`groovy`、`protobuf`，其餘留待需要時再加；已決定不再額外加語言，§12-5）。**注意：** repo 目前沒有安裝 highlight.js／lowlight，上面「`common` 含哪些語言」是我憑印象寫的，不是查證過的；任務 C.1 安裝後第一件事是列出 `common` 實際包含的語言與那三個額外語言是否存在，與這份規格不符就改規格。單一區塊超過 20 KB 不高亮（避免病態輸入拖慢渲染）。輸出是 hast→React 元素，不經 `innerHTML`。
 - **顏色。** `globals.css` 新增 `--kh-syntax-{keyword,string,number,comment,function,type,variable,meta}`，亮暗各一組，對比至少 4.5:1（在 `bg-subtle` 上量測）；`.hljs-*` 的規則寫在該檔（顏色層）。契約文件同步新增這組 token。
 - **複製。** `ScrollablePre` 右上角一顆 ghost icon button（24px），`aria-label="Copy code"`，點擊後圖示與文字變成「Copied」1.5 秒，`aria-live="polite"`；複製的是**原始程式碼**（由 hast 的純文字取得，不含高亮的 span）。剪貼簿被拒絕時顯示「Could not copy」，不丟錯。分享頁同樣可用（D6）。
 - **範圍。** 閱讀頁與分享頁。composer 渲染編輯器裡的程式碼區塊維持不高亮（ProseMirror 的裝飾層是另一件事，列入第二批）。
@@ -148,9 +148,11 @@ registry 新增（型別 `ActionTarget` 之外加 `FolderTarget`）：`document.
 
 design-language §18 寫「封存文件從來不存在」。服務層一直有、是 web 沒有入口，這一批補上入口後要把該段改成事實（並記錄封存對連結的影響）。
 
-## 8. 切片 B — 收藏跟著人走（可延後）
+## 8. 切片 B — 最近開過與收藏
 
-- **資料。** migration 013：`knowledge_document_favorites(user_id, document_id, created_at)`，主鍵 `(user_id, document_id)`。**不存 workspace_id**（不變式：範圍由 Document → Source → Workspace 推導）；讀取時 join 並套用讀取政策，失去存取權的文件自然消失。
+**這一批只做 B.0**（下面「同批小改」：⌘K 最近開過、側欄收藏全顯示，純 client、無 migration）。**收藏改存 server（其餘各項）延後**，設計保留在此，等單一瀏覽器不夠用時再排（§12-1）。
+
+- **資料（延後）。** migration 013：`knowledge_document_favorites(user_id, document_id, created_at)`，主鍵 `(user_id, document_id)`。**不存 workspace_id**（不變式：範圍由 Document → Source → Workspace 推導）；讀取時 join 並套用讀取政策，失去存取權的文件自然消失。
 - **API。** `GET /api/favorites?workspaceId=`、`PUT`／`DELETE /api/documents/:id/favorite`；服務用既有的 `requireVisibleDocument`。
 - **遷移。** 第一次載入時，把該 Workspace 的 localStorage 收藏合併進 server 再清掉本機那份，使用者不會弄丟星號。
 - **同批小改（不需要 migration，可獨立先做）：** ⌘K 沒有輸入時列出最近開過的文件；側欄的收藏不再只顯示 4 筆。
@@ -177,7 +179,7 @@ design-language §18 寫「封存文件從來不存在」。服務層一直有�
 | 3 | 切片 A-1 | 封存／還原（文件與資料夾）、新增資料夾、重新命名資料夾、資料夾內新增文件 | M | — |
 | 4 | 切片 A-2 | 「移到…」對話框、鍵盤重排、palette 動作 | M | A-1 |
 | 5 | 切片 D | 建議清單端點、自動完成、從失效連結建立文件 | M | 切片 0 |
-| 6 | 切片 B | 收藏 server 化；⌘K 最近開過 | M | —（可延後） |
+| 6 | 切片 B.0 | ⌘K 最近開過；側欄收藏全顯示（純 client、無 migration） | S | —（與其他切片無依賴，可插在任何位置出貨）。B.1–B.4（server 化）延後，不在這一批 |
 
 \* 大小是我的估計，以「改動的檔案與需要新設計的部分」為準：S＝一個 PR、不需新決策；M＝一個 PR 但有多個介面與測試層；L＝需要拆成多個 PR。沒有換算成時間，因為我沒有這個專案的速度基準。
 
@@ -191,15 +193,17 @@ design-language §18 寫「封存文件從來不存在」。服務層一直有�
 - **驗證紀錄。** 完成後寫 `docs/superpowers/verification/2026-09-29-personal-daily-driver-verification.md`，含實測數字，並如實記錄失敗與偏離規格之處。
 - **效能。** `link-targets` 在 2 000 與 5 000 份文件的 Workspace 上量測回應時間與 payload；語法高亮量測 1 MB Markdown（含 200 個程式碼區塊）的渲染時間增量。
 
-## 12. 待拍板與風險
+## 12. 已決定的事項與風險
 
-**待你決定**
+**已決定（2026-09-29）**
 
-1. **切片 B 要不要放進第一批？** 我的建議是延後：單一瀏覽器的使用者不受影響；⌘K 最近開過那個小改可以先做。
-2. **已受損的文件要不要修復？** 報告腳本會列出候選；修復每份文件都會多一個 revision。我的建議是先看報告的數量再決定。
-3. **封存的名稱。** 我用「封存」（與資料模型與現有的「Show archived」一致）；若你想讓使用者感覺是「刪除」，可以加一句說明而不改名稱。
-4. **拖曳整理**要不要排進這一批？我的建議是先出選單與鍵盤版，拖曳等你實際用過再決定。
-5. **程式碼語言集。** 預設是 lowlight `common`（含 sql、yaml、java、python、bash、json、xml、kotlin…）加 `dockerfile`、`groovy`、`protobuf`；你的日常若還有別的（例如 hcl、scala）現在說。
+| # | 問題 | 決定 | 對計畫的影響 |
+| --- | --- | --- | --- |
+| 1 | 切片 B 要不要放進第一批 | **延後**，只先做 B.0（⌘K 最近開過、側欄收藏全顯示） | B.1–B.4（migration 013、API、client 同步、rollout）移出這一批 |
+| 2 | 已受損的文件要不要修復 | **先跑唯讀報告，看數量再決定** | 任務 0.10 只交報告；這一批沒有寫入或修復的程式碼 |
+| 3 | 封存的名稱 | **維持「封存」** | 選單、toast、說明都用「封存／還原」；不加「刪除」字樣 |
+| 4 | 拖曳整理 | **這一批不做**，先出「移到…」與 `Alt+↑/↓` | A-2 不含拖放；拖曳之後再視使用情況決定 |
+| 5 | 程式碼語言集 | **用預設**（`common` 加 `dockerfile`、`groovy`、`protobuf`），不額外加 | 見 §5 的提醒：`common` 的實際內容在 C.1 查證，不符就改這份規格 |
 
 **風險**
 

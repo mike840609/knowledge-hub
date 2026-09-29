@@ -23,7 +23,7 @@
 | 0.7 | **往返測試**：對 0.2 的每一筆 fixture，`extractDocumentLinks(輸入)` 等於 `extractDocumentLinks(編輯器往返後)`；另加：刻意跳脫的保持跳脫、程式碼內不變、編輯周邊文字後連結不變 | `tests/unit/editor-wikilinks.test.ts` | 本身 | 全部通過；**故意把 0.6 的接線拿掉會讓它失敗**（變異驗證，記進驗證紀錄） |
 | 0.8 | 顯示樣式：`.kh-wikilink` 用連結 token（不新增 token）；`title` 顯示原始字串 | `globals.css` | e2e 目視＋屬性斷言 | 亮暗模式都看得出是連結 |
 | 0.9 | **渲染模式 e2e**（不呼叫 `showMarkdown` 來輸入）：(a) 開啟有 wikilink 的文件，在渲染模式打一個字並存檔，切到原始碼視圖仍是 `[[…]]`，目標頁 backlinks 還在；(b) 新增文件時在渲染模式打 `[[目標]]`，存檔後目標頁出現該 backlink | `tests/e2e/composer-wikilinks.spec.ts` | 本身 | 兩案在缺陷版本上會失敗、修復後通過（先在未修的 main 上跑一次確認會紅） |
-| 0.10 | 受損文件的**唯讀**報告：找出現行 revision 中符合「只有開頭被跳脫」特徵（`\[\[…]]`，結尾未跳脫）的文件，輸出 Workspace／文件 ID／標題／行號，預設 dry-run，沒有修復選項 | `scripts/db/report-escaped-wikilinks.ts`、`package.json` script、`Makefile` target | integration：種入受損、刻意跳脫、正常三種，只報第一種 | 報告數字寫進驗證紀錄；修復與否交給你（規格 §12-2） |
+| 0.10 | 受損文件的**唯讀**報告：找出現行 revision 中符合「只有開頭被跳脫」特徵（`\[\[…]]`，結尾未跳脫）的文件，輸出 Workspace／文件 ID／標題／行號，預設 dry-run，沒有修復選項 | `scripts/db/report-escaped-wikilinks.ts`、`package.json` script、`Makefile` target | integration：種入受損、刻意跳脫、正常三種，只報第一種 | 報告數字寫進驗證紀錄；**修復不在這一批**（規格 §12-2 已決定先看數量再決定），腳本沒有寫入選項 |
 | 0.11 | 文件：驗證紀錄記錄合併後發現的缺陷與根因；CLAUDE.md 連結索引的不變式補一句「編輯器必須無損往返 wikilink，且有渲染模式的測試」；圖譜規格 §15 指向本規格 | 三份文件 | — | — |
 
 **切片 0 的量測**：編輯器 chunk 的大小差（`next build` 輸出，前後對照）；預期是個位數 KB，若超過 10 KB 要說明。
@@ -32,7 +32,7 @@
 
 | # | 任務 | 檔案 | 測試 | 驗收 |
 | --- | --- | --- | --- | --- |
-| C.1 | 加依賴 `rehype-highlight`（與明確宣告 `lowlight`），確認 `react-markdown@10` 的 `rehypePlugins` 用法；`npm ci` 與 patch 仍正常 | `package.json`、lock | — | 乾淨 `npm ci` 通過 |
+| C.1 | 加依賴 `rehype-highlight`（與明確宣告 `lowlight`），確認 `react-markdown@10` 的 `rehypePlugins` 用法；`npm ci` 與 patch 仍正常。**安裝後先列出 `common` 實際包含的語言，以及 `dockerfile`、`groovy`、`protobuf` 是否存在**（repo 目前沒有 highlight.js，規格 §5 的清單是憑印象），與規格不符就先改規格 | `package.json`、lock | — | 乾淨 `npm ci` 通過；實際語言清單記進驗證紀錄 |
 | C.2 | 設定模組：`common` 語言集加 `dockerfile`、`groovy`、`protobuf`；`detect: false`；單一區塊超過 20 KB 不高亮（以 `no-highlight` 標記，需先確認 `rehype-highlight` 確實尊重它，否則自寫一個 rehype 外掛跳過） | `src/components/knowledge/code-highlight.ts` | 單元：語言白名單、無語言不高亮、超過上限不高亮 | 行為與規格 §5 一致 |
 | C.3 | 語法 token：`--kh-syntax-*` 亮暗各一組，`.hljs-*` 規則寫在顏色層；契約文件同步 | `globals.css`、`frontend-design-language.md` | 單元：解析兩組主題的色值，斷言各 token 對 `--kh-bg-subtle` 的對比 ≥ 4.5:1 | 對比守門測試通過（這條測試防止之後有人改色壞掉） |
 | C.4 | `ScrollablePre` 加 `CopyCodeButton`（client island）：ghost、24px、`aria-label="Copy code"`、「Copied」1.5 秒、`aria-live="polite"`、剪貼簿被拒時顯示「Could not copy」；複製的文字由 hast 純文字取得；**不使用 `useToast`**（D6） | `markdown-renderer.tsx`、`copy-code-button.tsx` | e2e | 分享頁不丟錯 |
@@ -78,15 +78,17 @@
 | D.8 | e2e：渲染模式打 `[[Kub` → 清單出現 → Enter → 存檔 → 目標頁有 backlink；失效連結 → 建立 → 回到原文件時連結已有效 | `tests/e2e/composer-autocomplete.spec.ts` | 本身 | 通過；不使用 `showMarkdown` 輸入 |
 | D.9 | 量測：`link-targets` 在 2 000 與 5 000 份文件時的回應時間與 payload | 驗證紀錄 | — | 數字寫進規格 §11；超出預期就把「上限外退回 server 端查詢」提前做 |
 
-## 6. 切片 B — 收藏跟著人走（PR 6，可延後）
+## 6. 切片 B — 最近開過與收藏（PR 6）
+
+**這一批只做 B.0**（規格 §12-1 已決定）。**B.1–B.4 延後，不在這一批**，任務保留在下面供之後排程。B.0 與其他切片無依賴，可插在任何位置出貨。
 
 | # | 任務 | 檔案 | 測試 | 驗收 |
 | --- | --- | --- | --- | --- |
-| B.0 | **可先獨立做、不需 migration**：⌘K 沒有輸入時列出最近開過的文件；側欄收藏不再只顯示 4 筆 | `quick-search.tsx`、`source-sidebar.tsx` | e2e | 純 client |
-| B.1 | migration 013 `knowledge_document_favorites(user_id, document_id, created_at)`，主鍵 `(user_id, document_id)`，不存 workspace_id；repository、埠、服務（`requireVisibleDocument`） | `migrations/013-…`、repository、服務 | integration：失去存取權的文件不出現；不同使用者互不可見；重複收藏冪等 | 不變式：範圍由 Document → Source → Workspace 推導 |
-| B.2 | 路由：`GET /api/favorites?workspaceId=`、`PUT`／`DELETE /api/documents/:id/favorite` | 路由 | integration | — |
-| B.3 | client：收藏改由 server 提供；第一次載入把 localStorage 收藏合併進 server 再清除本機那份；最近開過維持本機 | `use-document-shortcuts.ts` 等 | e2e：另一個瀏覽器 context 看得到同一批收藏 | 不遺失既有星號 |
-| B.4 | rollout 文件：migration 順序與回滾 | `docs/operations/` | — | — |
+| B.0 | **本批要做；不需 migration**：⌘K 沒有輸入時列出最近開過的文件；側欄收藏不再只顯示 4 筆 | `quick-search.tsx`、`source-sidebar.tsx` | e2e | 純 client |
+| B.1（延後） | migration 013 `knowledge_document_favorites(user_id, document_id, created_at)`，主鍵 `(user_id, document_id)`，不存 workspace_id；repository、埠、服務（`requireVisibleDocument`） | `migrations/013-…`、repository、服務 | integration：失去存取權的文件不出現；不同使用者互不可見；重複收藏冪等 | 不變式：範圍由 Document → Source → Workspace 推導 |
+| B.2（延後） | 路由：`GET /api/favorites?workspaceId=`、`PUT`／`DELETE /api/documents/:id/favorite` | 路由 | integration | — |
+| B.3（延後） | client：收藏改由 server 提供；第一次載入把 localStorage 收藏合併進 server 再清除本機那份；最近開過維持本機 | `use-document-shortcuts.ts` 等 | e2e：另一個瀏覽器 context 看得到同一批收藏 | 不遺失既有星號 |
+| B.4（延後） | rollout 文件：migration 順序與回滾 | `docs/operations/` | — | — |
 
 ## 7. 完成一個切片時要做的事
 
