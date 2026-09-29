@@ -57,7 +57,7 @@
 
 1. **layout 的決定性。** 節點依 id 排序後，同一張圖以相反順序餵入仍得到不同座標。原因是 `forceLink` 依 link 順序累加力。修正：邊也以正規順序排序並去重。（決定性測試：正序、反序、重複執行三者相等。）
 2. **效能測試的斷言其實沒套用。** 我原本想在 `phase2-import-apply-perf` 加「每份文件恰一次索引寫入」的斷言，替換樣式少了一個空行而沒有生效，測試靠「沒有斷言」通過。是 lint 的 `no-unused-vars`（變數宣告了沒使用）發現的。修正後另外**暫時移除 `projectDocument` 裡的 hook，確認測試會失敗**，再還原。同樣的驗證也對 `share-link-single-exception` 新增的守門測試做過（傳 `links` 給分享頁 → 測試失敗）。
-3. **Next 15 的 prefetch 陷阱。** e2e 的 local graph depth 切換約每 8 次失敗 1 次：點擊後完全沒有導覽。根因與 keyboard-shortcuts spec §9 記載的一致——指向**自己所在頁面**的 `<Link>` 會從自己 prefetch 自己，伺服器回整頁，Next 15 直接套用 prefetch 的首次使用，與點擊競爭時導覽會遺失。修正：所有指向自己所在頁面的連結 `prefetch={false}`（depth 切換、Graph／List 切換、內文 wikilink——渲染器不知道目前是哪份文件，自連結同樣會踩到）。在本機以同樣步驟重複：**修正前 7／8，修正後 30／30**。**（更正：30 次的樣本太小。之後把同一個測試重複 20 次仍出現 1 次失敗，`prefetch={false}` 去掉了一個原因、但不是全部，見 §8 第 3 點。）**
+3. **Next 15 的 prefetch 陷阱。** e2e 的 local graph depth 切換約每 8 次失敗 1 次：點擊後完全沒有導覽。根因與 keyboard-shortcuts spec §9 記載的一致——指向**自己所在頁面**的 `<Link>` 會從自己 prefetch 自己，伺服器回整頁，Next 15 直接套用 prefetch 的首次使用，與點擊競爭時導覽會遺失。修正：所有指向自己所在頁面的連結 `prefetch={false}`（depth 切換、Graph／List 切換、內文 wikilink——渲染器不知道目前是哪份文件，自連結同樣會踩到）。在本機以同樣步驟重複：**修正前 7／8，修正後 30／30**。**（更正：30 次的樣本太小。之後把同一個測試重複 20 次仍出現 1 次失敗，`prefetch={false}` 去掉了一個原因、但不是全部，見 §9。）**
 4. **e2e 檔案順序。** 我的三個 spec 在 My Space 建文件，而 `phase2.5-routing.spec.ts` 假設 E2E 使用者的 My Space 是空的；spec 在同一個資料庫依檔名順序執行，所以排在它前面就會把它弄壞（第一次全套 e2e 104／105）。`share-link.spec.ts` 本來就靠排在它後面。修正：把我的 spec 改名為 `reading-*`／`workspace-graph`，並在檔頭寫明原因。**沒有改既有測試的假設。**
 5. **未解析節點沒有可存取名稱。** 圖譜中不可點的 `<g>` 只有 `<title>`，螢幕閱讀器與 `getByRole` 都看不到。修正：`role="img"` 加 `aria-label`，與可點節點的說法一致。
 6. **跨文件的標題錨點。** `[[Note#Setup]]` 導覽到另一份文件後停在頂端：Next 在文件仍是 Suspense 骨架時就結束了 hash 捲動，而內容在巢狀捲動容器裡。修正：文件掛載後依網址 hash 捲到該標題（`use-scroll-to-hash`）。
@@ -124,8 +124,8 @@
 
 1. **過期的請求會蓋過讀者的選擇。** 第一版沒有清掉 `requestedTab`：用 chip 開 Links、改選 History、關閉，再按 Details，會被送回 Links，因為 `InspectorTabs` 重新掛載時仍看得到那個舊請求。變異驗證 A 證明測試抓得到這件事；修正是 inspector 關閉時把請求清掉。這是「分頁記憶」與「請求」兩個功能各自正確、合在一起才出錯的類型。
 2. **又一個沒照慣例的 `getByLabel`。** 全套 e2e 第一次有 `reading-outline` 的「歷史 revision 的目錄」案例失敗：`getByLabel("Markdown")` 命中兩個 textarea（既有的「重複 DOM」現象，phase5-authoring 已記載，`page.locator("main form").first()` 是既有慣例）。這是繼 `reading-links` 的改名案例（§7）之後**我的第二個沒照慣例的 spec**；這次把我所有 spec 掃了一遍，剩下的編輯器操作都已用同樣的寫法。
-3. **不是這個變更造成、也沒有解決的失敗：`workspace-graph` 的「local graph 切換深度」偶爾失敗。** 全套 e2e 中出現一次：點了「2 links」後網址一直沒有變成 `graph=2`。為了判斷是不是這個變更造成，**把該測試單獨重複 20 次，分別在有／沒有本變更的 `document-header`／`document-inspector` 下各跑一次：兩者都是 19／20 通過、1 次失敗**——所以在已經推上去的 commit（`e7f452a`）上就存在。trace 顯示 `?graph=2` 的 RSC 請求有送出、也回了 200，但 router 沒有套用它；沒有伺服器端的錯誤。**根因沒有找到。** 這修正了我在 §4 第 3 點的說法：那裡「修正後 30／30」是樣本太小，`prefetch={false}` 確實去掉了一個原因（修正前約 1／8），但沒有去掉全部——剩下的約 5% 是另一個原因，或同一個機制的另一條路。使用者可見的後果是：偶爾點深度切換沒有反應。**我沒有用重試遮蓋它，測試保持原樣。** 下一步建議：在 `<Link>` 的 `onClick` 記錄 router 的狀態，並檢查點擊當下是否有仍在進行中的 `router.refresh()`／導覽（`refreshOnArrival` 與 sidebar 的 prefetch 是首先要排除的）。
-4. **兩次全套 e2e 的另一個既有失敗**：上一輪（§7 第 2 點）的 `revision-history`「選取歷史 revision」偶發失敗，這一輪沒有再出現。仍然沒有根因，仍然記為「一次在全套負載下出現、沒有再重現」。
+3. **不是這個變更造成的失敗：`workspace-graph` 的「local graph 切換深度」偶爾失敗。** 點了「2 links」後網址一直沒有變成 `graph=2`。把該測試單獨重複 20 次，在有／沒有本變更的 `document-header`／`document-inspector` 下都是 19／20 通過、1 次失敗，所以在已推上去的 commit 上就存在。**根因已在後續調查中找到：React 的 ping 處理有一個洞，見 §9。** 測試保持原樣，沒有用重試遮蓋。
+4. **兩次全套 e2e 的另一個既有失敗**：上一輪（§7 第 2 點）的 `revision-history`「選取歷史 revision」偶發失敗，這一輪沒有再出現。它同樣是「同頁 search-param 導覽點了沒反應」，很可能就是 §9 的同一個原因，但當時沒有留下 trace，**這一點沒有驗證**。
 
 **沒有做、也需要知道的。**
 
@@ -133,11 +133,61 @@
 - **記憶是每個瀏覽器的。** 換一台裝置就回到 Details；沒有存到伺服器，也沒有打算存（規格 §11.1）。
 - **「Details」按鈕不再保證開在 Details 分頁。** 這是刻意的（規格 §11.1「副作用」），但會讓依賴「按了 Details 就是 Details 分頁」的測試或文件說明出錯；repo 內現有的測試都用全新的瀏覽器 context，沒有受影響。
 
-## 9. 重現
+## 9. 「local graph 切換深度」偶發失敗的根因：React 的 ping 遺失
+
+**現象。** 同頁導覽（`?graph=2`）的 RSC 請求送出、回 200、body 完整，但畫面與網址都不變，約 1–5%。任何不相關的 React 更新（視窗 focus、切換 inspector 分頁）會讓它在 100–270 ms 內提交；什麼都不做，約 30 秒後自己提交。使用者看到的是「點了沒反應」，再點一次就好（第二次導覽接手），或等到下一次 React 更新。
+
+**排除的假設，與怎麼排除的。**
+
+| 假設 | 結果 |
+| --- | --- |
+| 導覽與 prefetch 競爭（§4 第 3 點） | 不是這個。`prefetch={false}` 去掉了另一個原因；失敗時被丟掉的正是導覽請求本身 |
+| Next 的 action queue：導覽搶佔時沒更新 `actionQueue.last`，之後入隊的 action 成為孤兒、它的 `setState(promise)` 永不 resolve | 讀原始碼時我的推測，**插樁後推翻**：失敗時佇列是空的，點擊前沒有任何 router action，`navigate` 與 `server-patch` 都以 `discarded:false` 正常完成 |
+| `router.refresh()` 或第二次導覽把它丟掉（`use-workspace-authorization`） | 失敗時沒有任何 refresh 或第二次導覽；access check 早在約 1 秒前完成 |
+| 請求或伺服器問題 | 請求 200、body 完整、無伺服器端錯誤 |
+| 樣式表載入（React 在 commit 前等待新樣式表） | DOM 中只有一個已載入的樣式表；且該機制的逾時是 60 秒，不是 30 秒 |
+
+**證據鏈。**
+
+1. 失敗時 React root：`pendingLanes` 與 `suspendedLanes` 相同（數條 transition lane）、`pingedLanes = 0`、沒有排程的 callback。React 是閒置的，在等一個已經來過的 ping。
+2. 任何不相關的 React 更新都立刻釋放它：focus 事件 → access re-check → `setState`（117–269 ms，六次）；點 History 分頁（91 ms）；只有滑鼠移動不行，因為它不觸發 React 更新。
+3. 不做任何事時的約 30 秒後提交，與 access check 的 `setInterval(30_000)` 吻合。
+4. 對 React 的 ping 路徑插樁：**每一個失敗（4／4）的最後三個事件完全相同**——`attachPing`（一個 Flight chunk，狀態是 `resolved_model`）→ 同一毫秒的 `ping`（`wipIsRoot: true`、`exit: 4`）→ `markSuspended`（`wipPinged: 0`）。
+5. 機制：Flight chunk 的 `then()` 在 `resolved_model`（資料已到、尚未解析）狀態會**同步**解析並立刻呼叫 callback，所以 `pingSuspendedRoot` 在 render 途中被同步呼叫。此時 `workInProgressRootExitStatus` 是 4（suspended with delay）——這條導覽路徑因為 Next 的 `use(unresolvedThenable)` 一定會進入這個狀態。在這個狀態下該函式有兩個分支：不在 render 中就 `prepareFreshStack`（重來）；**在 render 中則什麼都不做**（原始碼裡有一個 TODO 描述這一點）——不重來，也不把 ping 記進 `workInProgressRootPingedLanes`。接著 `markRootSuspended` 把剛設好的 `pingedLanes` 清掉。React 就停在一個已經 resolved 的 thenable 上。發生與否取決於 chunk 在被用到的那一刻是不是剛好在 `resolved_model`，所以與串流時序有關，只有 1–5%。
+
+**因果驗證。** 把上游的修法（render 中的 ping 也記進 `workInProgressRootPingedLanes`）套用到瀏覽器收到的 React chunk 上——用 Playwright 在傳輸途中改寫該 chunk 的一小段，**磁碟上什麼都沒改**——重跑同一個重現：**400 次 0 次失敗**。同一個 build、同樣條件、不改寫的對照：**400 次 4 次失敗**；先前同一個 build 的其他批次合計 38／1 490（2.6%）。以 2.6% 計，400 次全過的機率約十萬分之二。
+
+**上游狀態（實際下載 tarball 比對）。** Next 15.5.25 與 15.5.26（15.5 系列最新）vendored 的是同一版 React（`19.2.0-canary-0bdb9206-20250818`），程式碼相同，有這個洞。**Next 16.3.7**（`19.3.0-canary-cbb046ab-20260731`）的 `pingSuspendedRoot` 已經是上面驗證過的修法。所以 15.5 的小版本升級沒有用。
+
+**影響範圍。** 任何走「延遲載入」路徑（目的地沒有 prefetch 資料）的同頁導覽都可能踩到：深度切換、History 分頁的 revision 連結、`includeArchived`。§8 第 4 點的 `revision-history` 失敗很可能是同一個（未驗證）。這是框架的問題，不是這個功能的；這個功能只是剛好有一個容易被測試點到的入口。
+
+**選項（尚未決定）。**
+
+1. **對 15.5.25 用 patch-package 套上游的那一行**（`react-dom-client.production.js`，開發版同一處也要）。已驗證、很小、升級到 Next 16 時移除。代價：repo 目前沒有 patch-package，要新增依賴與 postinstall，並修改 vendored 程式碼。
+2. **升級到 Next 16.x**：已含修正，但是 major 升級，不該為了這個 bug 而做。
+3. **不動，記為已知問題**：e2e 的深度切換案例（以及可能的 `revision-history`）會以 1–5% 失敗；使用者偶爾要點兩次。
+4. **只針對這個控制項**：深度切換改成 client 端狀態（伺服端一次回傳兩種深度的資料與 layout），不再導覽，也讓切換即時。但只解決一個入口，其他同頁導覽仍有此風險，而且 `?graph=2` 的可分享網址要另外處理。
+
+建議：先做 1（成本低、已驗證），在正常的升級週期做 2 並移除 patch；不建議只做 4。
+
+**這次調查留下的做法。**
+
+- 重現工具：`scripts/diagnostics/router-stuck-transition.ts`（§10）。它不需要改任何東西——直接讀 React root 的 lane 狀態，判斷失敗是不是「閒置在一個遺失的 ping 上」，並可在失敗後製造一個不相關的更新來確認它會被釋放。要驗證一個修法或一次 Next 升級，跑 400 次比在 e2e 裡碰運氣可靠得多。
+- 插樁比推理可靠：action queue 孤兒的假設在讀原始碼時看起來完全合理，插樁後一行就被推翻。
+- webpack 的持久化快取把 `node_modules` 當成不可變：改了 `node_modules` 裡的檔案後重 build 兩次都沒有生效，要清 `.next/cache` 才會。
+
+**環境備註與沒有做的事。**
+
+- 調查時在 `node_modules/next` 與其 vendored React 裡臨時加了 log，已從事前備份還原（4 個檔案，逐位元比對確認）。
+- **`.next/cache` 仍含被插樁的 React 的編譯結果，`.next` 目前是插樁 build。** 我準備清掉快取的指令被 permission classifier 擋下，我沒有換別的方法繞過。這個 build 在沒有 `globalThis.__log` 時不會做任何事，功能上無影響，但它不是乾淨的 build；清除 `.next/cache` 後重新 build 即可。
+- **這個問題我沒有修**：上面的選項需要決定。
+
+## 10. 重現
 
 ```bash
 make db-up && make db-migrate && make db-reindex-links   # 既有資料庫：migration 012 後回填索引
 make verify                                             # unit + typecheck + lint + build
 make test-integration                                   # 需要 MariaDB
 make browsers && make test-e2e                          # 全部 e2e；只跑一個 spec：npm run test:e2e -- tests/e2e/workspace-graph.spec.ts
+npx tsx scripts/diagnostics/router-stuck-transition.ts 100   # §9：需要正在運行的 production build；可同時開幾個
 ```

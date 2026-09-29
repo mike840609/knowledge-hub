@@ -331,7 +331,7 @@ type WorkspaceGraphView = {
 - 動作註冊表（動作模型規格 §4）新增：`navigate.graph`（palette，「Open graph」）與 `document.backlinks`（**只在 palette**，「Show backlinks」，開啟 inspector 的 Links 分頁）。`document.backlinks` 不出現在 row menu，理由與 `document.details` 相同：它開啟的面板描述的是目前正在閱讀的那份文件，在別的列上提供會承諾一個顯示不了那一列的畫面。兩者都是讀取，不依賴 capability、所有權或生命週期（歷史 revision 上也提供）；可用性規則寫在註冊表、有單元測試。`navigate.graph` 因此使「沒有任何 capability 的成員」可用的動作從 1 個變成 2 個（Knowledge 與 Graph）——能讀 Knowledge 就能看它的圖。
 - 主導覽新增「Graph」項（`Network` 圖示），所有有讀取權的人可見。
 - 載入：圖譜頁用既有的 skeleton 慣用法與 `loading.tsx`。
-- **指向自己所在頁面的連結一律 `prefetch={false}`**（depth 切換、Graph／List 切換、內文的 wikilink——渲染器不知道目前是哪份文件，自連結 `[[本文標題]]` 同樣會踩到）。從自己這頁 prefetch 自己，伺服器回整頁，Next 15 會直接套用 prefetch 的首次使用，與點擊競爭時導覽會遺失（keyboard-shortcuts spec §9；實作時在 local graph 的 depth 切換上重現：修正前約每 8 次失敗 1 次，修正後 30／30 通過；**更正：之後重複 20 次仍有 1 次失敗，`prefetch={false}` 去掉了一個原因、不是全部，見驗證紀錄 §8 第 3 點**）。
+- **指向自己所在頁面的連結一律 `prefetch={false}`**（depth 切換、Graph／List 切換、內文的 wikilink——渲染器不知道目前是哪份文件，自連結 `[[本文標題]]` 同樣會踩到）。從自己這頁 prefetch 自己，伺服器回整頁，Next 15 會直接套用 prefetch 的首次使用，與點擊競爭時導覽會遺失（keyboard-shortcuts spec §9；實作時在 local graph 的 depth 切換上重現：修正前約每 8 次失敗 1 次，修正後 30／30 通過；**更正：之後重複 20 次仍有 1 次失敗，`prefetch={false}` 去掉了一個原因、不是全部；剩下的是 React 的 ping 遺失，見驗證紀錄 §9**）。
 
 ### 11.1 Local graph 放在哪裡：Inspector 的 Links 分頁，不固定在頁面右上角
 
