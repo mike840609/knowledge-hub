@@ -79,8 +79,9 @@ const items: Item[] = [
       else commands.call(wrapInHeadingCommand.key, level);
     },
   })),
-  // Inside a list, the other type's button is disabled: wrapping would put a list first in a
-  // list item, which the schema refuses, so it could only ever do nothing.
+  // Inside a list, the other type's button is disabled: on an item's first paragraph, wrapping
+  // would put a list first in the item, which the schema refuses. (A later paragraph of an item
+  // could take a nested list; typing `- ` still does that.)
   {
     label: "Bulleted list",
     text: "•",

@@ -219,8 +219,8 @@ export function DocumentComposer({
   }, [showing]);
 
   // Anything that changed `markdown` from outside the rendered editor (a
-  // discarded draft, an edit made in the source, either one landing while the
-  // editor was still loading) reaches the editor here. Not while the person has
+  // discarded draft landing while the editor was still loading, or an edit made
+  // in the source) reaches the editor here. Not while the person has
   // typed something the editor has not delivered yet. Markdown the editor makes
   // nothing of leaves the source in charge, as it does on opening (spec §11.5).
   useEffect(() => {
@@ -236,6 +236,8 @@ export function DocumentComposer({
   }, [markdown, showing, editorReady]);
 
   function keep(nextTitle: string, nextMarkdown: string) {
+    // Cancel and load-latest leave the fields editable while the page navigates; a keystroke there must not write back the draft they just cleared.
+    if (leaving.current) return;
     syncDraft(browserDraftStorage(), draftKey, { title: nextTitle, markdown: nextMarkdown, baseRevisionId }, initial);
   }
 
