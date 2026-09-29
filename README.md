@@ -22,6 +22,7 @@ make dev         # 啟動 dev server
 | `make dev` / `make build` / `make start` | 開發／建置／跑 production build |
 | `make db-up` / `make db-down` / `make db-logs` | 啟停／看 log（MariaDB 跑在 127.0.0.1:3307） |
 | `make db-migrate` / `make db-seed` | 搬 schema／灌 fixtures（皆冪等，可重跑） |
+| `make db-reindex-links` | 回填／修復文件連結索引（migration 012 之後執行一次；冪等，可在服務運行中執行） |
 | `make test-unit` | Unit tests（不需 DB） |
 | `make test-integration` | Integration tests（需 DB，腳本自建自清隔離 DB） |
 | `make test-e2e` | E2E（需 DB＋`make browsers` 裝過一次 Chromium；腳本自建 DB、build、跑 Playwright） |
@@ -32,9 +33,9 @@ make dev         # 啟動 dev server
 
 ## 目前狀態
 
-更新日期：2026-09-28。
+更新日期：2026-09-29。
 
-已交付階段：`phase-0-foundation`（Phase 0 application、migration、fixtures 與最小 Web flow）、`phase-1-knowledge-core-tree`（PR #6，Workspace-scoped Knowledge identity、Revision、Tree 與 read-only browser）、`phase-2-source-import-sync`（PR #7，整包 Markdown folder 經 Preview → Confirm → Apply 的首次匯入與 re-sync）、Phase 2.5（PR #19，frontend product baseline）、Phase 3（PR #24，Workspace lifecycle/admin、production roles/capabilities、membership 與 enterprise identity governance）、Phase 4（PR #32，Workspace-aware keyword search 與 read API），以及 Phase 5（PR #35）：單篇 Markdown upload 與 Web create/edit 的 Hub-managed authoring，含 lazy default source、immutable Revision、stale-editor 409 conflict，以及 capability + HUB_MANAGED ownership 雙重把關。Phase 5 之後另交付 document share link（PR #52）與 keyboard shortcuts（PR #58–#60）。
+已交付階段：`phase-0-foundation`（Phase 0 application、migration、fixtures 與最小 Web flow）、`phase-1-knowledge-core-tree`（PR #6，Workspace-scoped Knowledge identity、Revision、Tree 與 read-only browser）、`phase-2-source-import-sync`（PR #7，整包 Markdown folder 經 Preview → Confirm → Apply 的首次匯入與 re-sync）、Phase 2.5（PR #19，frontend product baseline）、Phase 3（PR #24，Workspace lifecycle/admin、production roles/capabilities、membership 與 enterprise identity governance）、Phase 4（PR #32，Workspace-aware keyword search 與 read API），以及 Phase 5（PR #35）：單篇 Markdown upload 與 Web create/edit 的 Hub-managed authoring，含 lazy default source、immutable Revision、stale-editor 409 conflict，以及 capability + HUB_MANAGED ownership 雙重把關。Phase 5 之後另交付 document share link（PR #52）、keyboard shortcuts（PR #58–#60），以及 Personal Workspace 的知識連結與圖譜：文件目錄（TOC）、`[[wikilink]]` 與相對 `.md` 連結、Backlinks、Workspace／Local graph（規格見下表；migration 012 之後需執行 `make db-reindex-links` 回填索引，見 [rollout](docs/operations/document-link-index-rollout.md)）。
 
 實際檢查結果記錄於 [`docs/superpowers/verification/`](docs/superpowers/verification/)：Phase 0–5 與 share link 皆有 verification record（Phase 2/3 於 PR #51 補上）。
 
@@ -69,6 +70,9 @@ make dev         # 啟動 dev server
 | [Document Composer Design](docs/superpowers/specs/2026-09-28-document-composer-design.md) | 新增與編輯共用的文件編輯器：閱讀版面、預設渲染編輯（Milkdown）並可切換 Markdown 原始碼、標題跟著 H1、分頁內暫存 |
 | [Document Composer Implementation Plan](docs/superpowers/plans/2026-09-28-document-composer.md) | composer tasks 與測試 |
 | [Rendered Editing Implementation Plan](docs/superpowers/plans/2026-09-29-rendered-editing.md) | 渲染編輯（composer spec 第 11 節）的 tasks 與測試 |
+| [Personal Workspace 知識連結與圖譜 Design](docs/superpowers/specs/2026-09-29-personal-workspace-knowledge-graph-design.md) | TOC 與標題錨點、`[[wikilink]]`／相對 `.md` 連結的抽取與解析、Backlinks、Workspace／Local graph；可重建的 link index（derived data，不改變任何授權不變式）；收回 Phase 2.5 對 wiki-link 解析的延後 |
+| [Personal Workspace 知識連結與圖譜 Implementation Plan](docs/superpowers/plans/2026-09-29-personal-workspace-knowledge-graph.md) | 四個切片（TOC、連結索引、連結渲染與 Backlinks、圖譜）的 tasks、測試與量測 |
+| [Document link index rollout](docs/operations/document-link-index-rollout.md) | migration 012 的部署順序、回填／修復腳本、回滾 |
 | [Frontend Design Language](docs/superpowers/specs/frontend-design-language.md) *(living contract)* | 視覺語言、design token 契約與 enforcement、component 架構、state 策略、theme contract。**不帶日期，就地修訂**；supersedes Phase 2.5 §25–30 |
 
 推薦執行／閱讀順序：

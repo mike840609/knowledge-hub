@@ -53,6 +53,8 @@
 
 **2026-09-28：Phase 6 延後。** 目前先處理 Web 介面的待辦（[Frontend Design Language §18](../specs/frontend-design-language.md)）。這項決定只延後 Phase 6，不改變 Phase 之間的依賴順序：之後若要讓 Phase 7 先於 Phase 6 開工，須另外在本文件記錄決定與理由。恢復 Phase 6 前，須先取得 tKMS 的 API 規格與測試環境，repo 內目前沒有這些資料。
 
+**2026-09-29：Personal Workspace 知識連結與圖譜（不屬於 Phase 0–9 編號）。** 在 Phase 6 延後期間，補齊 My Space 作為個人知識工作區缺的能力：TOC、`[[wikilink]]`、Backlinks、關聯圖譜（[設計](../specs/2026-09-29-personal-workspace-knowledge-graph-design.md)）。它收回 Phase 2.5 §3 對「Internal wiki-link resolution」的延後，只做 wikilink 子集（不含 embed、callout）。**它與 Phase 9 的關係：** 這裡處理的是*人寫下的明確連結*，索引是 derived data、可整表重建，不是 Agent 導出的 relations、也不是 Phase 9 的 patch layer；Phase 9 之後可以把這份索引當輸入，但不依賴它。**不改變** Phase 之間的依賴順序，也不改變任何授權不變式。
+
 ## 3. Phase Details
 
 ### Phase 0 — Foundation & Architecture
@@ -247,6 +249,7 @@ M1 是 functional MVP，**不代表公司正式 multi-user governance 已完成*
 | Phase 4 | [current canonical](../specs/2026-09-16-phase-4-discovery-read-api-design.md) | [current canonical](../plans/2026-09-16-phase-4-discovery-read-api.md) | 已完成（PR #32）；結果見 [verification](../verification/2026-09-16-phase-4-discovery-read-api-verification.md) |
 | Phase 5 | [current canonical](../specs/2026-09-16-phase-5-human-authoring-design.md) | [current canonical](../plans/2026-09-16-phase-5-human-authoring.md) | 已完成（PR #35）；結果見 [verification](../verification/2026-09-16-phase-5-human-authoring-verification.md) |
 | Phase 6 | roadmap only | — | 延後（2026-09-28），見 §2 |
+| Personal Workspace 知識連結與圖譜 | [current canonical](../specs/2026-09-29-personal-workspace-knowledge-graph-design.md) | [current canonical](../plans/2026-09-29-personal-workspace-knowledge-graph.md) | 已實作（TOC、連結索引、Backlinks、圖譜）；結果見 [verification](../verification/2026-09-29-personal-workspace-knowledge-graph-verification.md)；營運見 [rollout](../../operations/document-link-index-rollout.md) |
 | Phase 7–9 | roadmap only | 尚未逐 Phase 完成 | 尚未完成 |
 
 各 Phase 詳細 design 存 `docs/superpowers/specs/`，implementation plan 存 `docs/superpowers/plans/`，實際測試與驗收證據存 `docs/superpowers/verification/`。

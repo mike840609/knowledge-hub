@@ -8,7 +8,7 @@
 | 修改的契約 | 無。新增一份**可重建的 derived index**；不改變 scope、authorization、ownership、lifecycle 任何一條不變式（§12） |
 | 接續／收回的既有決定 | Phase 2.5 §3 把「Internal wiki-link resolution」列為非目標；本規格收回其中的 wikilink 解析，`Obsidian-specific rendering extensions` 中的 callout、embed 仍不做（§2） |
 | 對照文件 | Phase 3 governance spec §3–§5（My Space）、Phase 5 authoring spec、文件分享連結規格、動作模型規格、`frontend-design-language.md` |
-| 狀態 | **草案。** §15 列出需要拍板的項目與建議預設；預設值已寫進 §3，實作依預設進行，任何一項改動都只影響該項所在的切片（§13） |
+| 狀態 | **已實作（四個切片，§13）。** §15 列出需要拍板的項目與建議預設；實作依預設進行，任何一項改動都只影響該項所在的切片。驗證紀錄：`docs/superpowers/verification/2026-09-29-personal-workspace-knowledge-graph-verification.md` |
 | 實作計畫 | `docs/superpowers/plans/2026-09-29-personal-workspace-knowledge-graph.md` |
 
 ## 1. 要解決的問題
@@ -286,7 +286,7 @@ type WorkspaceGraphView = {
 
 ### 10.2 Layout
 
-`layoutGraph(nodes, edges)` 用 `d3-force`（`forceLink`、`forceManyBody`、`forceCenter`、`forceCollide`）同步跑固定 tick 數後 `stop()`，不做動畫。`simulation.randomSource` 用固定種子的 LCG，節點先依 id 排序，所以**同樣的圖永遠得到同樣的座標**——SSR 與 hydration 一致、E2E 可預測、單元測試可斷言。1000 節點的目標是伺服端 < 1.5 秒（§14）。
+`layoutGraph(nodes, edges)` 用 `d3-force`（`forceLink`、`forceManyBody`、`forceCenter`、`forceCollide`）同步跑固定 tick 數後 `stop()`，不做動畫。tick 數**依節點數固定**（≤200 個節點 300、≤500 個 200、其餘 150），不是時間預算——時間預算會讓畫面取決於機器當時忙不忙。`simulation.randomSource` 用固定種子的 LCG，節點與邊都先依 id 排成正規順序（邊的順序會影響 `forceLink` 的累加順序，實作時的決定性測試抓到過這件事），所以**同樣的圖，不論輸入順序，永遠得到同樣的座標**——SSR 與 hydration 一致、E2E 可預測、單元測試可斷言。1000 節點、3000 邊的合成圖量測約 1.0 秒（§14）。
 
 ### 10.3 繪製
 
@@ -311,6 +311,7 @@ type WorkspaceGraphView = {
 - 動作註冊表（動作模型規格 §4）新增：`navigate.graph`（palette，「Open graph」）與 `document.backlinks`（**只在 palette**，「Show backlinks」，開啟 inspector 的 Links 分頁）。`document.backlinks` 不出現在 row menu，理由與 `document.details` 相同：它開啟的面板描述的是目前正在閱讀的那份文件，在別的列上提供會承諾一個顯示不了那一列的畫面。兩者都是讀取，不依賴 capability、所有權或生命週期（歷史 revision 上也提供）；可用性規則寫在註冊表、有單元測試。`navigate.graph` 因此使「沒有任何 capability 的成員」可用的動作從 1 個變成 2 個（Knowledge 與 Graph）——能讀 Knowledge 就能看它的圖。
 - 主導覽新增「Graph」項（`Network` 圖示），所有有讀取權的人可見。
 - 載入：圖譜頁用既有的 skeleton 慣用法與 `loading.tsx`。
+- **指向自己所在頁面的連結一律 `prefetch={false}`**（depth 切換、Graph／List 切換、內文的 wikilink——渲染器不知道目前是哪份文件，自連結 `[[本文標題]]` 同樣會踩到）。從自己這頁 prefetch 自己，伺服器回整頁，Next 15 會直接套用 prefetch 的首次使用，與點擊競爭時導覽會遺失（keyboard-shortcuts spec §9；實作時在 local graph 的 depth 切換上重現：修正前約每 8 次失敗 1 次，修正後 30／30 通過）。
 
 ## 12. 安全與不變式檢查
 
@@ -348,12 +349,15 @@ type WorkspaceGraphView = {
 
 ## 14. 效能與規模
 
-| 項目 | 設計 | 上限／目標 |
+| 項目 | 設計 | 上限與量測 |
 | --- | --- | --- |
-| 寫入 | 每份文件 1 次抽取 + 3 個語句（刪子列、upsert 標記、批次插入） | 抽取為線性時間；import Apply 增加的是常數個語句／文件（`phase2-import-apply-perf` 的 stub 補上 `links`，斷言不受影響） |
-| 文件頁讀取 | 每次載入目錄（id、title、path）與該 Workspace 的有效邊，記憶體內解析 | 約 2 000 份文件、20 000 條邊時 < 100 ms（實作時量測並記錄在 verification） |
-| 圖譜 | 同上再加 layout | 節點上限 1000；伺服端 < 1.5 s |
+| 寫入：抽取 | 每份文件 1 次抽取；不含 `[[` 或 `.md` 的文件**跳過解析** | 成本主要是 Markdown 解析（約 1.7 ms／KB）：3.7 KB、40 條連結的文件約 4–8 ms；沒有連結的文件約 0.003 ms |
+| 寫入：SQL | 3 個語句（刪子列、upsert 標記、批次插入，每 500 列一批） | import Apply 增加的是常數個語句／文件；`phase2-import-apply-perf` 斷言每份文件恰一次替換 |
+| 文件頁讀取 | 載入目錄（id、title、path）與該 Workspace 的有效邊，記憶體內解析 | 2 000 份文件、20 000 條邊：中位數 96 ms、p95 119 ms；含 2 度 local graph 中位數 131 ms |
+| 圖譜 | 同上再加 layout | 節點上限 1000。資料讀取＋建構 133 ms；layout 約 1.0 s（1000 節點、3000 邊的合成圖；真實連結圖較稀疏）。典型 My Space（數百節點）遠低於此 |
 | 邊數護欄 | 每份文件 2000 條 | 超過的部分不索引 |
+
+量測環境是開發用容器，資料庫與測試同機；數字用來確認量級與回歸，不是容量承諾。原始數字與方法見 verification 紀錄。
 
 **已知取捨**：文件頁每次讀取的成本是 O(Workspace 大小)，而不是 O(這份文件的連結數)。對 My Space 的規模（數百到數千份）這不是問題；若之後 Workspace 大到成為問題，最佳化路徑是在邊表加一個正規化 key 欄位與索引，讓 Backlinks 只查候選邊（§16）。這是資料結構的擴充而非重寫，因為邊本來就存 raw target。
 

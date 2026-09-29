@@ -5,7 +5,7 @@
 | 日期 | 2026-09-29 |
 | 設計規格 | [`2026-09-29-personal-workspace-knowledge-graph-design.md`](../specs/2026-09-29-personal-workspace-knowledge-graph-design.md)（以下 §n 都指它） |
 | 前置 | Phase 0–5、文件分享連結、keyboard shortcuts（PR #52–#60）已在 `main` |
-| 基準 | 開工前：unit 427、integration 444 全綠；`tsc --noEmit`、`eslint .` 乾淨 |
+| 基準 | 開工前：unit 427、integration 444、e2e 91 全綠；`tsc --noEmit`、`eslint .` 乾淨。完成後：unit 590、integration 486、e2e 105（[verification](../verification/2026-09-29-personal-workspace-knowledge-graph-verification.md)） |
 | 分支 | `claude/keen-cannon-7axign`；每個切片一個 commit 系列，可獨立回退 |
 
 ## 0. 共同規則
@@ -25,7 +25,7 @@
 | 1.3 | `extractOutline(markdown)`（深度 1–4、上限 200、縮排深度） | `src/shared/markdown/outline.ts` | `tests/unit/markdown-outline.test.ts`：跳級標題、code fence 內的 `#`、setext 標題、空文件 |
 | 1.4 | `remarkHeadingIds` plugin 掛進 `MarkdownRenderer`；標題加 `scroll-mt-4` | `src/components/knowledge/markdown-renderer.tsx` | `tests/unit/markdown-renderer-headings.test.tsx`：渲染結果的 `id` 與 `extractOutline` 逐項相等 |
 | 1.5 | `useActiveHeading(ids, scrollRoot)`（IntersectionObserver）、`DocumentOutline`（`nav`＋`ol`、`aria-current`、reduced motion） | `src/components/knowledge/use-active-heading.ts`、`document-outline.tsx` | 元件以 `react-dom/server` 渲染的結構測試；捲動同步在 e2e |
-| 1.6 | 版面：rail（`min-[1280px]`、inspector 關閉時）、inspector「Outline」分頁、窄螢幕 `<details>`；文件頁把選定 revision 的 outline 傳下去 | `document-inspector.tsx`、`[documentId]/page.tsx`、`document-viewer.tsx` | e2e `tests/e2e/document-outline.spec.ts` |
+| 1.6 | 版面：rail（`min-[1280px]`、inspector 關閉時）、inspector「Outline」分頁、窄螢幕 `<details>`；文件頁把選定 revision 的 outline 傳下去 | `document-inspector.tsx`、`[documentId]/page.tsx`、`document-viewer.tsx` | e2e `tests/e2e/reading-outline.spec.ts` |
 | 1.7 | 掃描現有 `id=` 用法確認與標題 id 無衝突（§15 風險） | — | 一次性檢查，結果記在 verification |
 
 **驗收：** 見 §13 切片 1。`make verify` 綠；e2e：四個標題的文件出現四項目錄、點第三項後 `location.hash` 變更且該標題在視窗內、`<2` 個標題不出現目錄、歷史 revision 顯示該版目錄。
@@ -56,11 +56,11 @@
 | 3.3 | `DocumentLinksPanel`（inspector「Links」分頁：Backlinks／Outgoing／Unresolved；索引更新中提示） | `document-links-panel.tsx`、`document-inspector.tsx` | 結構測試 + e2e |
 | 3.4 | `BacklinksFooter`（「Linked from N documents」，含上下文） | `backlinks-footer.tsx` | e2e |
 | 3.5 | 動作註冊表：`document.backlinks`（僅 palette）；`kh:request-details` 事件帶 `tab`，inspector 分頁改為受控 | `action-registry.ts`、`action-menu.tsx`、`document-inspector.tsx` | `tests/unit/action-registry.test.ts`（+5） |
-| 3.8 | 跨文件標題錨點：Next client navigation 在文件仍是 Suspense 骨架時就結束 hash 捲動，改為文件掛載後依網址 hash 捲到標題（e2e 發現） | `use-scroll-to-hash.ts` | `document-links.spec.ts` 第 4 案 |
+| 3.8 | 跨文件標題錨點：Next client navigation 在文件仍是 Suspense 骨架時就結束 hash 捲動，改為文件掛載後依網址 hash 捲到標題（e2e 發現） | `use-scroll-to-hash.ts` | `reading-links.spec.ts` 第 4 案 |
 | 3.6 | 分享頁維持純文字，並加守門測試：`s/[token]` 樹不 import 連結服務 | `tests/unit/share-link-single-exception.test.ts`（新增一項） | 同左 |
 | 3.7 | seed fixtures：Query Master 內加幾份互相連結的文件，供 e2e 與手動驗證 | `scripts/db/seed.ts` | e2e |
 
-**驗收：** 見 §13 切片 3；`tests/e2e/document-links.spec.ts`。
+**驗收：** 見 §13 切片 3；`tests/e2e/reading-links.spec.ts`。
 
 ## 4. 切片 4 — 圖譜
 
@@ -75,7 +75,7 @@
 | 4.7 | inspector Local graph、「Open in graph」；主導覽「Graph」；`navigate.graph` 動作 | `document-links-panel.tsx`、`primary-nav.tsx`、`action-registry.ts` | 更新 registry 測試 |
 | 4.8 | 空狀態、索引更新中、truncated 提示 | `graph-*.tsx` | e2e |
 
-**驗收：** §13 切片 4 與整體驗收場景；`tests/e2e/knowledge-graph.spec.ts`。
+**驗收：** §13 切片 4 與整體驗收場景；`tests/e2e/workspace-graph.spec.ts`。
 
 ## 5. 收尾
 
@@ -87,7 +87,7 @@
 
 | 切片 | unit | integration | e2e | build | 備註 |
 | --- | --- | --- | --- | --- | --- |
-| 1 TOC | 462（+35） | 不受影響 | `document-outline.spec.ts` 4/4 | 通過 | 1.7 已檢查：應用程式自有 id（`tree-filter`、`search-q` 等）可能與標題 slug 相同，outline 改在 `article` 內查找，不用全頁 `getElementById` |
-| 2 索引 | 主要新增：extract 28、resolution 25、graph 19、context 8、write-points 2 | 467 → 485（link-index 15、reindex 5、service 18，含既有 444） | 不受影響 | 通過 | 效能測試 stub 補上 `links` 並斷言每份文件恰一次索引寫入（已驗證移除 hook 會失敗） |
-| 3 渲染／Backlinks | 主要新增：renderer links 19、registry +5、shared-page guard +1 | 不受影響 | `document-links.spec.ts` 5/5（含真實 `/s/:token` 無 `/w/` 連結）＋ outline 4/4 | 通過 | 畫面已目視確認（rail、resolved／unresolved 連結、Linked from、Links 分頁）；folder-sync 相對 `.md` 連結由 integration 覆蓋，未做 e2e 匯入流程 |
-| 4 圖譜 | | | | | |
+| 1 TOC | 462（+35） | 不受影響 | `reading-outline.spec.ts` 4/4 | 通過 | 1.7 已檢查：應用程式自有 id（`tree-filter`、`search-q` 等）可能與標題 slug 相同，outline 改在 `article` 內查找，不用全頁 `getElementById` |
+| 2 索引 | 主要新增：extract 28、resolution 25、graph 19、context 8、write-points 2 | 444 → 485（link-index 18、reindex 5、service 18；之後 local graph 再加 1 → 486） | 不受影響 | 通過 | 效能測試 stub 補上 `links` 並斷言每份文件恰一次索引寫入（已驗證移除 hook 會失敗） |
+| 3 渲染／Backlinks | 主要新增：renderer links 19、registry +5、shared-page guard +1 | 不受影響 | `reading-links.spec.ts` 5/5（含真實 `/s/:token` 無 `/w/` 連結）＋ outline 4/4 | 通過 | 畫面已目視確認（rail、resolved／unresolved 連結、Linked from、Links 分頁）；folder-sync 相對 `.md` 連結由 integration 覆蓋，未做 e2e 匯入流程 |
+| 4 圖譜 | 主要新增：graph-layout 11、graph-model 8 | 486（+1：local graph 隨 getDocumentLinks 回傳） | `workspace-graph.spec.ts` 5/5；**全套 105/105** | 通過 | layout 1000 節點約 1.0 s；`prefetch` 陷阱與 e2e 檔案順序見 verification §4 |

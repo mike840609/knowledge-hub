@@ -99,6 +99,16 @@ pass.
   ID decides identity, and the revision stores title/Markdown/metadata. Moving
   or renaming a file creates no revision; editing the article title does.
 - **Lifecycle is `ACTIVE` / `ARCHIVED` only.** There is no hard delete.
+- **The link index is derived, and never decides access.** `knowledge_link_index`
+  and `knowledge_document_links` record what each document's *current revision
+  wrote* (`[[wikilinks]]`, relative `.md` links); what a link *points at* is
+  resolved at read time, inside one Workspace, against the documents as they are
+  now (`docs/superpowers/specs/2026-09-29-personal-workspace-knowledge-graph-design.md`).
+  Every code path that inserts a revision must replace the document's edges in
+  the same transaction (`repositories.links.replaceForDocument`;
+  `tests/unit/link-index-write-points.test.ts` fails if one does not). A link
+  never resolves across Workspaces, and a shared page (`/s/:token`) is given no
+  resolutions at all.
 
 ## Frontend design language
 
