@@ -1,4 +1,4 @@
-import { expect, test, type Dialog, type Page } from "@playwright/test";
+import { expect, test, type Dialog, type Locator, type Page } from "@playwright/test";
 import { showMarkdown } from "./composer-helpers";
 
 // Mirrors scripts/db/seed.ts BROWSER_FIXTURE_IDS (Playwright cannot resolve `@/` aliases).
@@ -78,6 +78,61 @@ async function openEditor(page: Page, documentUrl: string) {
   const surface = surfaceOf(page);
   await expect(surface).toBeEditable(ROUND_TRIP);
   return surface;
+}
+
+/** The next save's PATCH, as the page sends it. */
+function nextSave(page: Page) {
+  return page.waitForRequest((request) => request.method() === "PATCH" && request.url().includes("/api/documents/"), ROUND_TRIP);
+}
+
+function sentBody(request: Awaited<ReturnType<typeof nextSave>>) {
+  return JSON.parse(request.postData() ?? "{}") as { title?: string; markdown?: string };
+}
+
+/** Types into a note's body, then into its H1: the editor's last output is the one that renames it. */
+async function editBodyThenHeading(page: Page, surface: Locator) {
+  await surface.locator("p").click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" typed");
+  await surface.getByRole("heading", { level: 1 }).click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" renamed");
+}
+
+/**
+ * An init script. Presses ⌘/Ctrl Enter where a real key press queued behind the editor's debounced
+ * output is handled: after that output has run (it writes the draft) and React has scheduled the
+ * render it asks for, but before that render. A person lands there only now and then (the window is
+ * about as long as the output task, longer for a longer document); wrapping `setTimeout` lands there
+ * every time. Only an output that carries every one of `words` sets it off, never one delivered
+ * mid-typing. It records the Markdown React last rendered, to show the press did land before it.
+ */
+function pressSaveBeforeOutputRenders(words: string[]) {
+  let draftWrites = 0;
+  let pressed = false;
+  const setItem = Storage.prototype.setItem;
+  Storage.prototype.setItem = function (key: string, value: string) {
+    if (key.startsWith("kh:draft:")) draftWrites += 1;
+    setItem.call(this, key, value);
+  };
+  const schedule = window.setTimeout;
+  window.setTimeout = ((handler: TimerHandler, delay?: number, ...args: unknown[]) => {
+    if (typeof handler !== "function") return schedule(handler, delay, ...args);
+    return schedule((...callArgs: unknown[]) => {
+      const writesBefore = draftWrites;
+      handler(...callArgs);
+      const shown = document.querySelector(".ProseMirror")?.textContent ?? "";
+      if (pressed || draftWrites === writesBefore || !words.every((word) => shown.includes(word))) return;
+      pressed = true;
+      // React schedules its render from a microtask queued while `handler` ran; these two run after it.
+      queueMicrotask(() => queueMicrotask(() => {
+        const source = document.querySelector<HTMLTextAreaElement>('main form textarea[aria-label="Markdown"]');
+        (window as unknown as { renderedAtPress?: string }).renderedAtPress = source?.value;
+        const save = { key: "Enter", metaKey: true, ctrlKey: true, bubbles: true, cancelable: true };
+        document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", save));
+      }));
+    }, delay, ...args);
+  }) as typeof window.setTimeout;
 }
 
 test("the rendered editor mounts without hydration or page errors", async ({ page }) => {
@@ -181,6 +236,43 @@ test("⌘Enter saves from inside the rendered editor", async ({ page }) => {
   await expect(page.locator("article").first().getByText("more")).toBeVisible(ROUND_TRIP);
 });
 
+test("⌘Enter pressed before the editor's last output has rendered still saves everything typed", async ({ page }) => {
+  const title = unique("Gap Save");
+  await page.addInitScript(pressSaveBeforeOutputRenders, ["start typed", `${title} renamed`]);
+  const url = await createNote(page, title, `# ${title}\n\nstart\n`);
+  const surface = await openEditor(page, url);
+  const saved = nextSave(page);
+  await editBodyThenHeading(page, surface);
+
+  const sent = sentBody(await saved);
+  const renderedAtPress = await page.evaluate(() => (window as unknown as { renderedAtPress?: string }).renderedAtPress);
+  const typed = `# ${title} renamed\n\nstart typed\n`;
+  expect(sent.markdown).toBe(typed);
+  expect(sent.title).toBe(`${title} renamed`);
+  // The press did come before that render: the Markdown React had rendered was still behind what was typed.
+  expect(renderedAtPress).toEqual(expect.any(String));
+  expect(renderedAtPress).not.toBe(typed);
+  await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
+  await expect(readerTitle(page)).toHaveText(`${title} renamed`, ROUND_TRIP);
+  await expect(page.locator("article").first().getByText("start typed")).toBeVisible(ROUND_TRIP);
+});
+
+test("⌘Enter pressed after the editor's output has rendered saves the same", async ({ page }) => {
+  const title = unique("Settled Save");
+  const url = await createNote(page, title, `# ${title}\n\nstart\n`);
+  const surface = await openEditor(page, url);
+  await editBodyThenHeading(page, surface);
+  // The breadcrumb follows the rendered Markdown, so this waits out the output and its render.
+  await expect(composer(page).getByRole("navigation", { name: "Breadcrumb" })).toContainText(`${title} renamed`, ROUND_TRIP);
+
+  const saved = nextSave(page);
+  await surface.press("ControlOrMeta+Enter");
+  const sent = sentBody(await saved);
+  expect(sent.markdown).toBe(`# ${title} renamed\n\nstart typed\n`);
+  expect(sent.title).toBe(`${title} renamed`);
+  await expect(readerTitle(page)).toHaveText(`${title} renamed`, ROUND_TRIP);
+});
+
 test("⌘Enter with the caret in a code block saves, and adds nothing to the Markdown", async ({ page }) => {
   const markdown = "```js\nconst a = 1;\n```\n\nafter\n";
   const url = await createNote(page, unique("Code Save"), markdown);
@@ -223,6 +315,35 @@ test("selecting text shows the toolbar, and Bold writes ** into the Markdown", a
   await expect(toolbar.getByRole("button", { name: "Bold" })).toHaveAttribute("aria-pressed", "true");
   const source = await showMarkdown(composer(page));
   await expect(source).toHaveValue("**hello world**\n");
+});
+
+test("the toolbar works from the keyboard: select, Tab into it, press Bold", async ({ page }) => {
+  const url = await createNote(page, unique("Toolbar Keys"), "hello world\n");
+  const surface = await openEditor(page, url);
+  const toolbar = page.getByRole("toolbar", { name: "Formatting" });
+  const bold = toolbar.getByRole("button", { name: "Bold" });
+  // A titled note without an H1 opens with the caret at the start of its text.
+  await expect(surface).toBeFocused(ROUND_TRIP);
+  for (let letter = 0; letter < "hello ".length; letter += 1) await page.keyboard.press("ArrowRight");
+  // One key makes the selection: the editor reads it after the key, so a toolbar shown means it holds all of it.
+  await page.keyboard.press("Shift+End");
+  await expect(toolbar).toBeVisible(ROUND_TRIP);
+
+  // The toolbar follows the editor in the tab order, and focus moving into it keeps it open.
+  await page.keyboard.press("Tab");
+  await expect(bold).toBeFocused();
+  await expect(toolbar).toBeVisible();
+  await page.keyboard.press("Enter");
+
+  // Enter on a toolbar button presses it; it does not submit the form.
+  await expect(page).toHaveURL(/\/edit$/);
+  await expect(surface.locator("strong")).toHaveText("world");
+  await expect(bold).toHaveAttribute("aria-pressed", "true");
+  // Pressing a button hands focus back to the editor, selection kept.
+  await expect(surface).toBeFocused();
+  await expect(toolbar).toBeVisible();
+  const source = await showMarkdown(composer(page));
+  await expect(source).toHaveValue("hello **world**\n");
 });
 
 test("the toolbar adds a link from an address typed into it", async ({ page }) => {

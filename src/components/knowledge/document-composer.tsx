@@ -30,6 +30,7 @@ const RenderedEditor = dynamic(
 );
 
 type Mode = "rendered" | "source";
+type Content = { markdown: string; title: string };
 
 /** How long a successful save waits for the client navigation before a full load. */
 const ARRIVAL_GRACE_MS = 3_000;
@@ -107,6 +108,9 @@ export function DocumentComposer({
   const syncedRef = useRef(initialMarkdown);
   // Typed into the editor and not yet delivered as Markdown (its output is debounced).
   const pendingRef = useRef(false);
+  // `markdown` and `title` as last set, ahead of the render that shows them: the editor's output is
+  // set from a timer and rendered a task later, and a Save handled in between runs the old closures.
+  const latestRef = useRef<Content>({ markdown: initialMarkdown, title: initialTitle });
   const restoreTried = useRef(false);
   // The surface focus was last given to (null until the first focus), and whether a focus had to wait for its surface.
   const focusedMode = useRef<Mode | null>(null);
@@ -138,8 +142,7 @@ export function DocumentComposer({
     restoreTried.current = true;
     const draft = readDraft(browserDraftStorage(), draftKey);
     if (draft) {
-      setTitle(draft.title);
-      setMarkdown(draft.markdown);
+      setContent({ markdown: draft.markdown, title: draft.title });
       setBaseRevisionId(draft.baseRevisionId);
       setRestored(draft.baseRevisionId === currentRevisionId ? "current" : "stale");
     }
@@ -241,32 +244,39 @@ export function DocumentComposer({
     syncDraft(browserDraftStorage(), draftKey, { title: nextTitle, markdown: nextMarkdown, baseRevisionId }, initial);
   }
 
-  function applyMarkdown(next: string): { markdown: string; title: string } {
-    const after = resolveAuthoredTitle({ metadataTitle, markdown: next, typedTitle: title });
-    const nextTitle = carryTitle(resolved, after, title);
-    setMarkdown(next);
-    setTitle(nextTitle);
-    keep(nextTitle, next);
-    return { markdown: next, title: nextTitle };
+  function setContent(next: Content) {
+    latestRef.current = next;
+    setMarkdown(next.markdown);
+    setTitle(next.title);
+  }
+
+  function applyMarkdown(next: string): Content {
+    const current = latestRef.current;
+    const before = resolveAuthoredTitle({ metadataTitle, markdown: current.markdown, typedTitle: current.title });
+    const after = resolveAuthoredTitle({ metadataTitle, markdown: next, typedTitle: current.title });
+    const content = { markdown: next, title: carryTitle(before, after, current.title) };
+    setContent(content);
+    keep(content.title, content.markdown);
+    return content;
   }
 
   function changeTitle(next: string) {
-    setTitle(next);
-    keep(next, markdown);
+    setContent({ ...latestRef.current, title: next });
+    keep(next, latestRef.current.markdown);
   }
 
   // The rendered editor's output becomes `markdown`.
-  function adopt(next: string): { markdown: string; title: string } {
+  function adopt(next: string): Content {
     syncedRef.current = next;
     pendingRef.current = false;
     if (next === initialMarkdown) setTouched(false);
-    return next === markdown ? { markdown, title } : applyMarkdown(next);
+    return next === latestRef.current.markdown ? latestRef.current : applyMarkdown(next);
   }
 
   // Brings `markdown` up to date with what was typed, now rather than after the debounce.
-  function flush(): { markdown: string; title: string } {
+  function flush(): Content {
     const editor = editorRef.current;
-    if (leaving.current || !editor || !pendingRef.current) return { markdown, title };
+    if (leaving.current || !editor || !pendingRef.current) return latestRef.current;
     return adopt(editor.getMarkdown());
   }
 
@@ -304,8 +314,7 @@ export function DocumentComposer({
     clearDraft(browserDraftStorage(), draftKey);
     pendingRef.current = false;
     setTouched(false);
-    setTitle(initialTitle);
-    setMarkdown(initialMarkdown);
+    setContent({ markdown: initialMarkdown, title: initialTitle });
     setBaseRevisionId(currentRevisionId);
     setRestored(null);
   }
