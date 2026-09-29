@@ -15,7 +15,7 @@
 | # | 任務 | 檔案 | 測試 | 驗收 |
 | --- | --- | --- | --- | --- |
 | 0.1 ✅ | **Spike**（2026-09-29 完成，結論在規格 §4.4）：在 jsdom 測試裡替 `createMarkdownEditor` 加一個最小的 inline 節點與 remark 外掛，確認 (a) `[[x]]` 能往返，(b) 以 mdast `html` 節點輸出時不被跳脫。結論寫回規格 §4.1（(b) 不成立就改用自訂 to-markdown handler） | `editor/wiki-link.ts`（草稿）、暫時的測試 | 暫時 | 規格 §4.1 已標明採用的輸出方式。**結果：(a) 成立；(b) 對表格內的 `\|` 不成立，改用自訂 `wikiLink` 節點與 handler；另發現 main 上的 D0b（Milkdown 的 `text` handler 對以空白結尾的文字不跳脫）** |
-| 0.2 | 把 `document-links-extract.test.ts` 的 Markdown 輸入整理成共用 fixture 清單（**另加 spike 找到的三筆：表格裡的別名 `\|`、`\[\[x\]\] and ![a](/a.png)`、`[[A]] \[\[x\]\] [[B]]`**），抽取器測試改用它（行為不變） | `tests/fixtures/link-markdown.ts`、該測試檔 | 抽取器測試全部照舊通過 | 清單涵蓋：wikilink 的別名／標題／區塊 id／管線、被跳脫的、程式碼與行內程式碼、連結內巢狀、相對 `.md` 路徑、上限 |
+| 0.2 ✅ | 把 `document-links-extract.test.ts` 的 Markdown 輸入整理成共用 fixture 清單（**另加 spike 找到的三筆：表格裡的別名 `\|`、`\[\[x\]\] and ![a](/a.png)`、`[[A]] \[\[x\]\] [[B]]`**），抽取器測試改用它（行為不變） | `tests/fixtures/link-markdown.ts`、該測試檔 | 抽取器測試全部照舊通過 | 清單涵蓋：wikilink 的別名／標題／區塊 id／管線、被跳脫的、程式碼與行內程式碼、連結內巢狀、相對 `.md` 路徑、上限。**完成（`claude/wikilink-editor-slice0` 的 74e88e0）：32 筆，其中 13 筆對應原有斷言（改為斷言完整的連結，原本有幾個只比 target）、19 筆新增；單元 755 全過。變異驗證：弄壞 `findWikiLinks` 的跳脫處理，兩筆會失敗。有一筆（跳脫的 `[[` 在圖片前）對抽取器沒有約束力——抽取器的預檢需要字面的 `[[`，在解析前就回傳空——只約束編輯器，fixture 檔裡已註明** |
 | 0.3 | remark 外掛：走訪 `text` 節點，用 `findWikiLinks(node, markdown)` 切出 `wikiLink` mdast 節點（值為原始字串） | `editor/remark-wikilinks.ts` | 單元：切分正確、前後文字保留、被跳脫的不切、程式碼內不切、`position` 缺失時不動作 | 純函式層完成，不依賴 DOM |
 | 0.4 | ProseMirror inline atom 節點 `wiki_link`：**只有屬性 `raw`**，`target`／`fragment`／`alias` 顯示時由 `parseWikiLinkParts` 現算（規格 §4.1-2）；`parseMarkdown`、`toMarkdown`（依 0.1 的結論）、`toDOM`／`parseDOM`；退格整個刪除、左右鍵整個跳過 | `editor/wiki-link.ts` | jsdom：節點往返、DOM 形狀、複製貼上（`parseDOM`）保留 `raw` | 節點單獨可用 |
 | 0.5 | input rule：打完 `]]` 把 `[[…]]` 轉成節點；貼上含 `[[…]]` 的文字走既有的 Markdown 貼上解析 | 同上 | jsdom：逐字輸入 `[[Note#H\|a]]` 得到節點；貼上得到節點；`\[\[x\]\]` 不轉換 | 手打與貼上都不再產生被跳脫的輸出 |
@@ -24,7 +24,7 @@
 | 0.8 | 顯示樣式：`.kh-wikilink` 用連結 token（不新增 token）；`title` 顯示原始字串 | `globals.css` | e2e 目視＋屬性斷言 | 亮暗模式都看得出是連結 |
 | 0.9 | **渲染模式 e2e**（不呼叫 `showMarkdown` 來輸入）：(a) 開啟有 wikilink 的文件，在渲染模式打一個字並存檔，切到原始碼視圖仍是 `[[…]]`，目標頁 backlinks 還在；(b) 新增文件時在渲染模式打 `[[目標]]`，存檔後目標頁出現該 backlink | `tests/e2e/composer-wikilinks.spec.ts` | 本身 | 兩案在缺陷版本上會失敗、修復後通過（先在未修的 main 上跑一次確認會紅） |
 | 0.10 | 受損文件的**唯讀**報告：找出現行 revision 中符合「只有開頭被跳脫」特徵（`\[\[…]]`，結尾未跳脫）的文件，輸出 Workspace／文件 ID／標題／行號，預設 dry-run，沒有修復選項 | `scripts/db/report-escaped-wikilinks.ts`、`package.json` script、`Makefile` target | integration：種入受損、刻意跳脫、正常三種，只報第一種 | 報告數字寫進驗證紀錄；**修復不在這一批**（規格 §12-2 已決定先看數量再決定），腳本沒有寫入選項 |
-| 0.11 | 文件：驗證紀錄記錄合併後發現的缺陷與根因；CLAUDE.md 連結索引的不變式補一句「編輯器必須無損往返 wikilink，且有渲染模式的測試」；圖譜規格 §15 指向本規格 | 三份文件 | — | — |
+| 0.11 | 文件：CLAUDE.md 連結索引的不變式補一句「編輯器必須無損往返 wikilink，且有渲染模式的測試」；圖譜規格 §15 指向本規格；新的驗證紀錄 `2026-09-29-personal-daily-driver-verification.md` 開頭寫切片 0 一節（測試數字、變異驗證、量測、偏離）。**圖譜驗證紀錄裡「合併後發現的缺陷與根因」那一段已在文件 PR（#79）寫好，不要重複** | 兩份既有文件加一份新文件 | — | — |
 
 **切片 0 的量測**：編輯器 chunk 的大小差（`next build` 輸出，前後對照）；預期是個位數 KB，若超過 10 KB 要說明。
 
