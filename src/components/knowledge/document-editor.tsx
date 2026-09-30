@@ -26,6 +26,7 @@ export function DocumentEditor({
   const documentHref = `/w/${workspaceId}/knowledge/${sourceId}/${documentId}`;
   return (
     <DocumentComposer
+      workspaceId={workspaceId}
       draftKey={{ kind: "edit", documentId }}
       location={location}
       untitledLabel="Untitled"

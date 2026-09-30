@@ -466,6 +466,26 @@ nothing when hidden. It follows that a row holding a floated control must have
 a background whenever that control is showing, which is why
 `.kh-interactive-row` tints on `focus-within` as well as on hover.
 
+### The `[[` list
+
+The one floating list that is not a menu: it opens under the caret while a
+wikilink is being typed (`editor/wikilink-suggest.ts`, daily-driver spec §6).
+It takes what a menu takes — the `lg` radius, a border, the `popover`
+elevation, the selected row in `kh-bg-selected` —
+and its own colour is all in tokens (`.kh-wikilink-suggest` in `globals.css`;
+`tests/e2e/zz-composer-autocomplete.spec.ts` resolves the tokens and compares,
+in both themes).
+
+What differs is that focus never leaves the document. It is therefore not a
+Base UI menu, whose whole point is to take focus: the editor becomes a
+`combobox` while the list is open and points at the row in force with
+`aria-activedescendant`, and the keys are the editor's (`handleKeyDown`, before
+its own keymaps). It is drawn on `document.body`, `fixed`, so no scrolling
+ancestor clips it, and it sits under the line it belongs to — above it when
+there is more room there, and scrolling rather than covering the line when
+there is room on neither side. Its count is announced by a live region of its
+own: the page's one `role="status"` is the toast layer's.
+
 ## 11. Navigation state
 
 A view returns to where it was left, not to the top. Scroll position is

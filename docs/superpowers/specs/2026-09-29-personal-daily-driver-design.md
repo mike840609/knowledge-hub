@@ -147,6 +147,40 @@ composer 預設是渲染編輯（Milkdown）。把文件送進去、編輯一個
 - `new` 頁讀 `title` 作為 `initialTitle`（上限 512 字元，複用既有驗證）；`from` 必須是 UUID 且屬於同一個 Workspace 才使用，用來把「取消」導回原文件。伺服端仍由建立服務逐項授權——**URL 參數只是導覽輸入**。
 - 建立後照既有流程進入新文件；原文件的連結由讀取時解析自動變成有效，不需要任何寫入。
 
+### 6.3 D 的實作記錄（2026-09-30）
+
+只寫實作時決定、或與上面寫的不一樣的地方。
+
+**清單的資料與排序**
+
+- **`link-targets` 的回應**是 `{workspaceId, targets: [{documentId, sourceId, sourceName, title, editedAt}], truncated}`：比上面寫的多 `editedAt`（「最近更新」的依據）與 `truncated`（超過 5,000 份時標示）。授權是「這個 Workspace 的成員」，與 `getWorkspaceGraph` 相同；非成員與不存在的 workspace 是同一個隱藏的 404。它只有標題，沒有任何內文（測試斷言內文不出現在回應）。WHERE 與 `loadCatalog` 逐字相同（Source、Document、TreeNode 三個都 ACTIVE），並且有測試斷言兩者的文件集合一致，所以「清單裡有的＝連結會解析到的」；只封存文件列、或只封存樹節點，各有一案（變異驗證時發現只有「兩個一起封存」的案例分不出兩個條件各自的作用）。
+- **排序**在「前綴 > 包含 > 最近更新」之前多一層「與查詢完全相同」：打 `Kubernetes` 時，剛好叫 Kubernetes 的文件不該被較新的 `Kubernetes upgrade notes` 擠到後面。各層內依最近編輯，再依標題與 ID 決定，同樣的輸入永遠同樣的順序。空查詢＝全部依最近編輯。
+- **比對比解析寬一點。** 比對用 `normalizeLinkKey` 再加 NFKC，所以全形字母與數字（中文輸入法常常自己打出來）找得到一般的；解析本身仍不折全形（`[[Ｋube]]` 不會解析到 `Kube`）。這樣是安全的，因為選取寫進去的是文件自己的標題，不是打的字。
+- **寫成 `[[標題]]` 不會解析回自己的標題，就不列出**：`|`、`#`（被讀成別名與標題）、`/`（路徑，Hub 文件沒有路徑）、`.md` 結尾（副檔名被解析器忽略）、會把文字切斷的 Markdown 語法（`*`、反引號、`<`…）。判斷**不是字元清單**，是真的丟給抽取器與解析器：寫出 `[[標題]]`，要抽出恰好一條、沒有 fragment 與別名、並且在只有這份文件的目錄裡解析到自己（`isWritableAsWikiLink`，`domain/wiki-link-title.ts`）。少了這一步，選取會寫出一條指去別處、或哪也不去的連結，與「選到的就是會解析到的」矛盾。
+- **同名的多份都列**，以 Source 名稱區分；選取寫成 `[[標題]]`，去向由解析器的既有規則決定。資料裡有 `sameTitle`（還有幾份同名），目前介面沒有用它。
+- **超過 5,000 份時**清單是最近編輯的 5,000 份，沒有命中時說 `No match among the 5,000 most recently edited documents.`，不假裝找過整個 Workspace。**沒有做「上限外退回 server 端查詢」**；量測見驗證紀錄。
+- **編輯既有文件時，這份文件不列給自己**（規格沒寫：連到自己沒有用，而「最近更新」會讓它永遠排第一）。
+
+**觸發、鍵與無障礙**
+
+- **觸發比上面多三條：** `[[` 前是 `!`（嵌入）不觸發；`|` 或 `#` 出現就關（名稱已選定，接下來是別名或標題，文件清單補不了）；查詢超過 100 字元不觸發（那是接在 `[[` 後的一段文字，不是在找名稱）。
+- **鍵**：↑/↓（環狀）、Enter／Tab 選、Esc 關。它們要在編輯器自己的 keymap 之前攔到（否則 Enter 先拆清單項、Tab 先縮排），所以掛在編輯器的 `handleKeyDown`（包住 composer 原本的 ⌘Enter），不是外掛自己的 keymap。輸入法組字中的按鍵（`isComposing` 或 keyCode 229）不是清單的；帶 ⌘／Ctrl／Alt 的（⌘Enter 是存檔）與 Shift+Enter／Shift+方向鍵也不是。**清單沒有結果或還在載入時，Enter／Tab 是編輯器的，不吞。** Esc 關閉時 `stopPropagation`（composer 的 Esc 會離開頁面），之後同一個 `[[` 不再開，直到游標離開又回來、或出現新的 `[[`。
+- **選取是獨立的一步 undo**（`closeHistory`）：Undo 回到打的字，不是回到整段輸入之前。
+- **無障礙。** 清單開著時編輯器元素成為 `role="combobox"`（`aria-expanded`、`aria-controls`、`aria-activedescendant`、`aria-haspopup="listbox"`），關閉時還原原本的屬性。「N 個建議」**不是**上面寫的 `role="status"`：頁面的 `role="status"` 是 toast 區，e2e 與整頁的 `getByRole("status")` 都靠它是唯一，所以清單用自己的 `aria-live="polite"`。沒有結果時 `aria-expanded="false"`、不指向不存在的列。
+- **定位。** 清單放在 `document.body` 上、`position: fixed`，由游標座標決定：從 `[[` 的位置起、在那一行下方；下方放不下而上方較寬時放上方；兩邊都放不下時清單捲動，不蓋住那一行（e2e 在 330px 高的視窗抓到第一版蓋住那一行，已修）。不用 floating-ui（不是直接依賴）。
+- **取得清單。** 第一次要用才抓（打普通文字不發請求，有 e2e 案例），此後至多每 60 秒；抓失敗時清單顯示 `Couldn't load suggestions. You can still type the link out.`，打字不受影響，之後至少 5 秒才再試；抓過一次的清單在刷新失敗時繼續用。走 `governanceRequest`，所以 403／404 會觸發既有的存取重新確認。
+
+**從失效連結建立（6.2）**
+
+- **「有可寫的 Hub Source」在實作裡收斂成「有寫入權」。** 新文件一律由建立服務走 `ensureDefaultHubSource`，沒有 Hub Source 時建立一個，所以 `canWrite` 就是唯一要問的（包括從 SOURCE_MANAGED 文件裡的失效連結建立，新文件放在 Notes）。
+- **只提供給 wikilink。** 相對 `.md` 路徑指的是 source 裡的位置，在 Hub 建立的文件佔不到那個位置。標題是 `titleForNewDocument`：連結寫的名稱去掉副檔名，並且要通過與建議清單同一個「解析回自己」的檢查（`[[a/b]]` 沒有任何標題能讓它解析，就不提供）。
+- **入口有四處：** 閱讀頁（失效連結變成真的 `<a>`，仍是虛線、仍標示「沒有對應文件」）、inspector 的 Unresolved 列（`Create`）、圖譜的失效節點（畫布上是連結，卡片說 `Click to create`；清單視圖有 `Create`）。閱讀頁與 inspector 帶 `from`；圖譜不帶（多份文件可能寫同一個名稱）。沒有寫入權的人看到的和原本一樣（有 e2e，用唯讀成員的身分）。
+- **`new` 頁的 `title` 不合建立規則（空、超過 512 字元、有換行）就整個略過，不是截短**：截短的標題不再讓原本的連結解析。`from` 先驗是 UUID，再問查詢服務——必須是**這個 workspace 內、這個人讀得到的**文件才用，而且只是決定 Cancel 回哪裡；`javascript:`、外部網址、別的 workspace 的文件、不存在的 ID 都會落回原本的清單（各有測試）。URL 參數仍只是導覽輸入，建立本身由既有的建立服務授權。
+- **有標題起頭的新文件有自己的草稿**：草稿的 key 多了標題，否則先前留下的空白新文件草稿會蓋掉連結給的標題，或反過來。
+- **既有 e2e 有三處因此要改，都是預期的後果：** `reading-links` 的兩案（缺失連結對可寫的人現在是通往表單的連結，`title` 多一句 `Create it.`，也有 link role）與 `workspace-graph` 的 ghost 節點（可寫時是 link，名稱是 `… (unresolved; opens the form to create it), …`）。
+
+**沒有做：** 清單裡提示同名；`[[Title#` 之後補標題、`[[Title|` 之後補別名；`![[` 嵌入；限定 Source 的補全（`[[Source/…`）。
+
 ## 7. 切片 A — 整理與封存
 
 ### 7.1 API（新）
@@ -261,6 +295,7 @@ design-language §18 寫「封存文件從來不存在」。服務層一直有�
 - **每個切片自帶**：單元（純函式與 registry 可用性）、integration（新 API 與服務授權，含 `SOURCE_MANAGED`、封存 Source、唯讀成員的拒絕案例）、e2e（使用者路徑）、`tsc`／`eslint`／`build`。
 - **驗證紀錄。** 完成後寫 `docs/superpowers/verification/2026-09-29-personal-daily-driver-verification.md`，含實測數字，並如實記錄失敗與偏離規格之處。
 - **效能。** `link-targets` 在 2 000 與 5 000 份文件的 Workspace 上量測回應時間與 payload；語法高亮量測 1 MB Markdown（含 200 個程式碼區塊）的渲染時間增量。
+  - **實測（切片 D，2026-09-30，同一台機器與同一個行程，沒有 HTTP）：** `link-targets` 2 000 份 p50 15.9 ms、payload 406 KiB（gzip 53 KiB）；5 000 份 p50 42.5 ms、payload 1 016 KiB（gzip 132 KiB）；前端每次按鍵的排序 5 000 份 p50 ≤ 1.8 ms。沒有超出預期，「上限外退回 server 端查詢」維持不做。詳見驗證紀錄。
 
 ## 12. 已決定的事項與風險
 

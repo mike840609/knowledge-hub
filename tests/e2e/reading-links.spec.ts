@@ -50,8 +50,10 @@ test.describe("wikilinks and backlinks in My Space", () => {
     await expect(article.getByRole("link", { name: "the alias" })).toBeVisible();
     const missing = article.locator("[data-unresolved-link]");
     await expect(missing).toHaveCount(1);
-    await expect(missing).toHaveAttribute("title", `No document titled “No Such Note ${stamp}” in this workspace`);
-    await expect(article.getByRole("link", { name: `No Such Note ${stamp}` })).toHaveCount(0);
+    // The E2E user may write here, so the broken link is also the way to make its document: a link to the
+    // new-document form and to nothing in the workspace (zz-create-from-link.spec.ts follows it).
+    await expect(missing).toHaveAttribute("title", `No document titled “No Such Note ${stamp}” in this workspace. Create it.`);
+    await expect(article.getByRole("link", { name: `No Such Note ${stamp}` })).toHaveAttribute("href", /\/knowledge\/new\?title=/);
 
     // Following it lands on the target, whose footer says who links here and where.
     await link.click();
@@ -178,7 +180,11 @@ test.describe("wikilinks and backlinks in My Space", () => {
     // Nothing about the linking document was written, and what it points at changed.
     await page.goto(linker.url);
     await expect(page.locator("article").first().locator("[data-unresolved-link]")).toHaveCount(1);
-    await expect(page.locator("article").first().getByRole("link", { name: oldTitle })).toHaveCount(0);
+    // It no longer goes to the renamed document. (For someone who may write, what is left is the way to make
+    // a document of the old name: a link to the new-document form, and to nothing in the workspace.)
+    const article = page.locator("article").first();
+    await expect(article.locator(`a[href$="${new URL(renamed.url).pathname}"]`)).toHaveCount(0);
+    await expect(article.getByRole("link", { name: oldTitle })).toHaveAttribute("href", /\/knowledge\/new\?title=/);
   });
 
   test("a heading in a link lands on that heading", async ({ page }) => {

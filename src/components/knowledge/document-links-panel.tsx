@@ -75,13 +75,24 @@ function SectionHeading({ children, count }: { children: string; count: number }
   );
 }
 
-function OutgoingRow({ workspaceId, link }: { workspaceId: string; link: OutgoingLinkView }) {
+function OutgoingRow({ workspaceId, link, createHref }: { workspaceId: string; link: OutgoingLinkView; createHref?: string }) {
   if (link.resolution.status === "UNRESOLVED") {
     return (
-      <li className="px-2 py-1.5 text-body-sm text-kh-text-secondary">
-        <span data-unresolved-link title={`No document matches “${link.target}”`} className="cursor-help border-b border-dashed border-kh-text-muted">
+      <li className="flex items-baseline justify-between gap-2 px-2 py-1.5 text-body-sm text-kh-text-secondary">
+        <span data-unresolved-link title={`No document matches “${link.target}”`} className="min-w-0 cursor-help truncate border-b border-dashed border-kh-text-muted">
           {link.display ?? link.target}
         </span>
+        {createHref ? (
+          <Link
+            href={createHref}
+            prefetch={false}
+            data-create-link
+            aria-label={`Create a document for “${link.target}”`}
+            className="shrink-0 rounded-md px-1 text-caption text-kh-link underline underline-offset-2 kh-focus-ring"
+          >
+            Create
+          </Link>
+        ) : null}
       </li>
     );
   }
@@ -106,10 +117,13 @@ export function DocumentLinksPanel({
   view,
   localGraph,
   focusId,
+  createLinks = {},
 }: {
   view: DocumentLinkView | null;
   localGraph: LocalGraphData | null;
   focusId: string;
+  /** Where to make the document an unresolved link names, by the link's `lookupKey`; empty for someone who cannot write. */
+  createLinks?: Readonly<Record<string, string>>;
 }) {
   if (!view) {
     return <p className="text-body-sm text-kh-text-muted">Links are not available right now.</p>;
@@ -156,7 +170,7 @@ export function DocumentLinksPanel({
           <SectionHeading count={view.unresolved.length}>Unresolved</SectionHeading>
           <ul className="mt-1 space-y-0.5">
             {view.unresolved.map((link) => (
-              <OutgoingRow key={link.lookupKey} workspaceId={view.workspaceId} link={link} />
+              <OutgoingRow key={link.lookupKey} workspaceId={view.workspaceId} link={link} createHref={createLinks[link.lookupKey]} />
             ))}
           </ul>
         </section>

@@ -70,15 +70,15 @@
 
 | # | 任務 | 檔案 | 測試 | 驗收 |
 | --- | --- | --- | --- | --- |
-| D.1 | `KnowledgeLinkService.listLinkTargets(caller, workspaceId)`：沿用 `loadCatalog`（ACTIVE 限定）＋補 `sourceName`＋更新時間，上限 5 000；授權與 `getDocumentLinks` 相同 | 服務、埠、repository | integration：只含 ACTIVE、只含這個 Workspace、封存的不出現、非成員得 404、超過上限被截斷並標示 | 不跨 Workspace |
-| D.2 | `GET /api/workspaces/:id/link-targets`，`Cache-Control: private, no-store` | 路由 | integration | — |
-| D.3 | 純函式 `rankSuggestions(targets, query)`：前綴 > 包含 > 最近更新；正規化用 `normalizeLinkKey`；空查詢回最近更新 | `link-suggestions.ts` | 單元：排序、同名、CJK、全形、空查詢 | 「選到的就是會解析到的」有測試（用解析器驗證） |
-| D.4 | ProseMirror 外掛：觸發偵測（`[[`＋不含 `]`／換行；不在程式碼內；前面不是反斜線）、`role="listbox"` 彈窗、上下／Enter／Tab／Esc、選取時把範圍換成 `wiki_link` 節點；`aria-expanded`／`aria-controls`／`aria-activedescendant` | `editor/wikilink-suggest.ts` | jsdom：觸發偵測的正反案例、選取後的文件內容、Esc 不改文件 | 與切片 0 的節點相容 |
-| D.5 | 接進 `RenderedEditor`（需要 `workspaceId`）；目錄第一次觸發時抓取，之後至多每 60 秒更新；抓取失敗時彈窗顯示「無法載入建議」而不是靜默 | `rendered-editor.tsx`、`document-composer.tsx` | e2e | 失敗時可繼續正常打字 |
-| D.6 | 閱讀頁失效連結改為連結（有寫入權且有可寫 Hub Source 時）：`RenderedLinks` 帶 `create` 資訊；inspector 的 Unresolved 與圖譜的失效節點同樣提供入口 | `markdown-renderer.tsx`、`rendered-links.ts`、`document-links-panel.tsx`、`graph-*` | e2e | 沒有寫入權時維持原樣 |
-| D.7 | `new` 頁讀 `title`（沿用長度驗證）與 `from`（UUID 且同 Workspace 才使用，僅決定「取消」回哪裡） | `new/page.tsx`、`new-document-form.tsx` | 單元：`from` 驗證；e2e | 惡意 `from` 不造成導覽到別處 |
-| D.8 | e2e：渲染模式打 `[[Kub` → 清單出現 → Enter → 存檔 → 目標頁有 backlink；失效連結 → 建立 → 回到原文件時連結已有效 | `tests/e2e/composer-autocomplete.spec.ts` | 本身 | 通過；不使用 `showMarkdown` 輸入 |
-| D.9 | 量測：`link-targets` 在 2 000 與 5 000 份文件時的回應時間與 payload | 驗證紀錄 | — | 數字寫進規格 §11；超出預期就把「上限外退回 server 端查詢」提前做 |
+| D.1 ✅ | `KnowledgeLinkService.listLinkTargets(caller, workspaceId)`：沿用 `loadCatalog`（ACTIVE 限定）＋補 `sourceName`＋更新時間，上限 5 000；授權與 `getDocumentLinks` 相同 | 服務、埠、repository | integration：只含 ACTIVE、只含這個 Workspace、封存的不出現、非成員得 404、超過上限被截斷並標示 | 不跨 Workspace **完成。回應多了 `editedAt`、`truncated`；上限可注入（`linkTargetLimit`），測試不必造 5,000 份。變異驗證抓到「只封存文件列／只封存樹節點」原本沒有各自的案例，已補** |
+| D.2 ✅ | `GET /api/workspaces/:id/link-targets`，`Cache-Control: private, no-store` | 路由 | integration | — **完成（`tests/integration/link-targets-api.test.ts`，8 案：形狀、no-store、不含內文、唯讀成員可讀、封存立刻消失、不跨 workspace、非成員與不存在的 workspace 同一個 404、壞 ID 400、截斷）** |
+| D.3 ✅ | 純函式 `rankSuggestions(targets, query)`：前綴 > 包含 > 最近更新；正規化用 `normalizeLinkKey`；空查詢回最近更新 | `link-suggestions.ts` | 單元：排序、同名、CJK、全形、空查詢 | 「選到的就是會解析到的」有測試（用解析器驗證） **完成。多了「與查詢完全相同」一層與 NFKC 比對；寫成 `[[標題]]` 不會解析回自己的標題不列出（判斷是真的丟給抽取器與解析器，`isWritableAsWikiLink` 在 domain）。「選到的就是會解析到的」對同名與雜亂標題都有測試** |
+| D.4 ✅ | ProseMirror 外掛：觸發偵測（`[[`＋不含 `]`／換行；不在程式碼內；前面不是反斜線）、`role="listbox"` 彈窗、上下／Enter／Tab／Esc、選取時把範圍換成 `wiki_link` 節點；`aria-expanded`／`aria-controls`／`aria-activedescendant` | `editor/wikilink-suggest.ts` | jsdom：觸發偵測的正反案例、選取後的文件內容、Esc 不改文件 | 與切片 0 的節點相容 **完成（`wikilink-suggest.ts`、`link-suggest-popup.ts`；jsdom 49 案；變異驗證約 40 個變異體，最後剩兩個沒有可觀察差別的：唯讀時鍵處理裡與 `sync` 重複的防衛，以及卸載時沒清的 `listeners` 集合）。鍵掛在編輯器的 `handleKeyDown`，不是外掛 keymap；選取是獨立的一步 undo；「N 個建議」用 `aria-live="polite"`，不是 `role="status"`（那是 toast 區）** |
+| D.5 ✅ | 接進 `RenderedEditor`（需要 `workspaceId`）；目錄第一次觸發時抓取，之後至多每 60 秒更新；抓取失敗時彈窗顯示「無法載入建議」而不是靜默 | `rendered-editor.tsx`、`document-composer.tsx` | e2e | 失敗時可繼續正常打字 **完成。清單第一次要用才抓；失敗說話且可繼續打字；編輯時不列自己。Chromium 抓到第一版在矮視窗會蓋住游標那一行，已修** |
+| D.6 ✅ | 閱讀頁失效連結改為連結（有寫入權且有可寫 Hub Source 時）：`RenderedLinks` 帶 `create` 資訊；inspector 的 Unresolved 與圖譜的失效節點同樣提供入口 | `markdown-renderer.tsx`、`rendered-links.ts`、`document-links-panel.tsx`、`graph-*` | e2e | 沒有寫入權時維持原樣 **完成。入口四處：閱讀頁、inspector、圖譜畫布、圖譜清單。只給 wikilink；「有可寫的 Hub Source」收斂成 `canWrite`。既有 e2e 三處因此更新（`reading-links` 兩案、`workspace-graph` 的 ghost 節點）** |
+| D.7 ✅ | `new` 頁讀 `title`（沿用長度驗證）與 `from`（UUID 且同 Workspace 才使用，僅決定「取消」回哪裡） | `new/page.tsx`、`new-document-form.tsx` | 單元：`from` 驗證；e2e | 惡意 `from` 不造成導覽到別處 **完成。`title` 不合規則就略過、不截短；`from` 要是這個 workspace 內讀得到的文件才用；有標題起頭的新文件有自己的草稿 key** |
+| D.8 ✅ | e2e：渲染模式打 `[[Kub` → 清單出現 → Enter → 存檔 → 目標頁有 backlink；失效連結 → 建立 → 回到原文件時連結已有效 | `tests/e2e/composer-autocomplete.spec.ts` | 本身 | 通過；不使用 `showMarkdown` 輸入 **完成（`zz-composer-autocomplete.spec.ts` 9 案、`zz-create-from-link.spec.ts` 5 案；`zz-` 前綴的理由同 zz-wikilinks-composer）。沒有一案用 `showMarkdown` 輸入** |
+| D.9 ✅ | 量測：`link-targets` 在 2 000 與 5 000 份文件時的回應時間與 payload | 驗證紀錄 | — | 數字寫進規格 §11；超出預期就把「上限外退回 server 端查詢」提前做 **完成（`scripts/diagnostics/measure-link-targets.ts`）。5,000 份：查詢 p50 42.5 ms、payload 1,016 KiB（gzip 132 KiB）、按鍵成本 p50 ≤ 1.8 ms。沒有超出預期，所以沒有提前做 server 端查詢；數字在驗證紀錄與規格 §11** |
 
 ## 6. 切片 B — 最近開過與收藏（PR 6）
 

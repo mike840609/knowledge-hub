@@ -26,6 +26,20 @@ describe("draftStorageKey", () => {
     expect(draftStorageKey(edit)).toBe("kh:draft:edit:doc-1");
     expect(draftStorageKey(create)).toBe("kh:draft:new:ws-1");
   });
+
+  it("gives a document started from a broken link's title a draft of its own, and one for each title", () => {
+    const seeded: DraftKey = { kind: "new", workspaceId: "ws-1", title: "Kubernetes & more" };
+    expect(draftStorageKey(seeded)).toBe("kh:draft:new:ws-1:Kubernetes%20%26%20more");
+    expect(draftStorageKey(seeded)).not.toBe(draftStorageKey(create));
+    expect(draftStorageKey({ kind: "new", workspaceId: "ws-1", title: "Other" })).not.toBe(draftStorageKey(seeded));
+    // The blank form's draft is not what a seeded form restores, nor the other way round.
+    const storage = memoryStorage();
+    syncDraft(storage, create, { title: "Typed", markdown: "body", baseRevisionId: null }, { title: "", markdown: "" });
+    expect(readDraft(storage, seeded)).toBeNull();
+    syncDraft(storage, seeded, { title: "Kubernetes & more", markdown: "notes", baseRevisionId: null }, { title: "Kubernetes & more", markdown: "" });
+    expect(readDraft(storage, create)).toEqual({ title: "Typed", markdown: "body", baseRevisionId: null });
+    expect(readDraft(storage, seeded)).toEqual({ title: "Kubernetes & more", markdown: "notes", baseRevisionId: null });
+  });
 });
 
 describe("syncDraft and readDraft", () => {

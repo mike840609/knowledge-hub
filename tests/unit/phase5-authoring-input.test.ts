@@ -5,6 +5,7 @@ import {
   MAX_TITLE_LENGTH,
   parseCreateDocumentInput,
   parseCreateFolderInput,
+  parseSeedTitle,
   parseTreeNodePatchInput,
   parseUpdateDocumentInput,
   requireRouteId,
@@ -222,5 +223,25 @@ describe("requireRouteId", () => {
       const error = thrownBy(() => requireRouteId(bad, "the folder"));
       expect((error as DomainError).code).toBe("INVALID_REQUEST");
     }
+  });
+});
+
+describe("parseSeedTitle", () => {
+  it("is the title, trimmed", () => {
+    expect(parseSeedTitle("  Kubernetes upgrade  ")).toBe("Kubernetes upgrade");
+    expect(parseSeedTitle("知識庫")).toBe("知識庫");
+  });
+
+  it("is nothing for what the create request would refuse, rather than something cut to fit", () => {
+    expect(parseSeedTitle(undefined)).toBeNull();
+    expect(parseSeedTitle("")).toBeNull();
+    expect(parseSeedTitle("   ")).toBeNull();
+    expect(parseSeedTitle("x".repeat(MAX_TITLE_LENGTH))).toBe("x".repeat(MAX_TITLE_LENGTH));
+    expect(parseSeedTitle("x".repeat(MAX_TITLE_LENGTH + 1))).toBeNull();
+    expect(parseSeedTitle("two\nlines")).toBeNull();
+  });
+
+  it("is nothing for a parameter given twice, which is no one's title", () => {
+    expect(parseSeedTitle(["a", "b"])).toBeNull();
   });
 });

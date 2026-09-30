@@ -193,6 +193,81 @@ describe("getDocumentLinks", () => {
   });
 });
 
+describe("listLinkTargets", () => {
+  it("lists the documents of the Workspace a link can go to, with the source they are in, most recently edited first", async () => {
+    const scope = await setupLinkScope(pool);
+    const first = await hubDocument(pool, scope, "First", "x");
+    const second = await hubDocument(pool, scope, "Second", "x");
+    await managedDocument(pool, scope, "notes/third.md", "Third", "x");
+    // Editing First makes it the newest.
+    await reviseHubDocument(pool, first.documentId, first.revisionId, "First", "changed");
+
+    const view = await service.listLinkTargets(owner, scope.workspaceId);
+    expect(view.workspaceId).toBe(scope.workspaceId);
+    expect(view.truncated).toBe(false);
+    expect(view.targets.map((target) => [target.title, target.sourceName])).toEqual([
+      ["First", "Hub Notes"],
+      ["Third", "Vault"],
+      ["Second", "Hub Notes"],
+    ]);
+    expect(view.targets.find((target) => target.title === "Second")).toMatchObject({ documentId: second.documentId, sourceId: scope.hubSourceId });
+    expect(new Date(view.targets[0].editedAt).getTime()).toBeGreaterThanOrEqual(new Date(view.targets[2].editedAt).getTime());
+  });
+
+  it("offers exactly what a link would resolve to: the same documents the resolver's catalog has, whatever is archived", async () => {
+    const scope = await setupLinkScope(pool);
+    await hubDocument(pool, scope, "Live", "x");
+    const gone = await hubDocument(pool, scope, "Archived document", "x");
+    const nodeArchived = await hubDocument(pool, scope, "Archived node only", "x");
+    const rowArchived = await hubDocument(pool, scope, "Archived row only", "x");
+    await managedDocument(pool, scope, "a.md", "In a live source", "x");
+    await archiveDocument(gone.documentId);
+    // Each half of an archive on its own, so neither condition can stand in for the other.
+    await pool.query("UPDATE knowledge_documents SET status='ARCHIVED', archived_by=?, archived_at=NOW(6) WHERE id=?", [linkOwner.id, rowArchived.documentId]);
+    await pool.query("UPDATE knowledge_tree_nodes SET status='ARCHIVED', archived_by=?, archived_at=NOW(6) WHERE document_id=?", [linkOwner.id, nodeArchived.documentId]);
+
+    const view = await service.listLinkTargets(owner, scope.workspaceId);
+    const catalog = await new MariaDbUnitOfWork(pool).run((repositories) => repositories.links.loadCatalog(scope.workspaceId));
+    expect(new Set(view.targets.map((target) => target.documentId))).toEqual(new Set(catalog.map((entry) => entry.documentId)));
+    expect(view.targets.map((target) => target.title).sort()).toEqual(["In a live source", "Live"]);
+  });
+
+  it("leaves out documents of a source that is archived, which nothing resolves to", async () => {
+    const scope = await setupLinkScope(pool);
+    await hubDocument(pool, scope, "Kept", "x");
+    await managedDocument(pool, scope, "a.md", "In an archived source", "x");
+    await pool.query("UPDATE knowledge_sources SET status='ARCHIVED', archived_by=?, archived_at=NOW(6) WHERE id=?", [linkOwner.id, scope.managedSourceId]);
+    expect((await service.listLinkTargets(owner, scope.workspaceId)).targets.map((target) => target.title)).toEqual(["Kept"]);
+  });
+
+  it("never lists another Workspace's documents, or shows this one's to someone who is not in it", async () => {
+    const mine = await setupLinkScope(pool);
+    const theirs = await setupLinkScope(pool);
+    await hubDocument(pool, mine, "Mine", "x");
+    await hubDocument(pool, theirs, "Theirs", "x");
+    expect((await service.listLinkTargets(owner, mine.workspaceId)).targets.map((target) => target.title)).toEqual(["Mine"]);
+    await expect(service.listLinkTargets(outsider, mine.workspaceId)).rejects.toBeInstanceOf(WorkspaceAccessDeniedError);
+    await expect(service.listLinkTargets(owner, "0199f500-0000-7000-8000-00000000dead")).rejects.toBeInstanceOf(WorkspaceAccessDeniedError);
+  });
+
+  it("says so when there are more than it lists: the most recently edited ones are what it keeps", async () => {
+    const scope = await setupLinkScope(pool);
+    for (const title of ["One", "Two", "Three", "Four"]) await hubDocument(pool, scope, title, "x");
+    const small = new KnowledgeLinkServiceImpl(new MariaDbUnitOfWork(pool), { linkTargetLimit: 3 });
+    const cut = await small.listLinkTargets(owner, scope.workspaceId);
+    expect(cut.truncated).toBe(true);
+    expect(cut.targets.map((target) => target.title)).toEqual(["Four", "Three", "Two"]);
+    // Exactly the limit is not truncation: nothing is left out.
+    const exact = new KnowledgeLinkServiceImpl(new MariaDbUnitOfWork(pool), { linkTargetLimit: 4 });
+    expect((await exact.listLinkTargets(owner, scope.workspaceId)).truncated).toBe(false);
+  });
+
+  it("is empty for a Workspace with no documents, not an error", async () => {
+    const scope = await setupLinkScope(pool);
+    expect(await service.listLinkTargets(owner, scope.workspaceId)).toEqual({ workspaceId: scope.workspaceId, targets: [], truncated: false });
+  });
+});
+
 describe("getWorkspaceGraph", () => {
   it("draws the Workspace's documents and the links between them", async () => {
     const scope = await setupLinkScope(pool);

@@ -53,6 +53,8 @@ export type DocumentInspectorData = {
   includeArchived: boolean;
   /** What links here and what this links to; `null` when it could not be read. */
   links: DocumentLinkView | null;
+  /** Where to make the document an unresolved link names, by the link's `lookupKey`; empty for someone who cannot write. */
+  createLinks?: Record<string, string>;
   /** The document's neighbourhood, laid out on the server; `null` when there is none to draw. */
   localGraph: {
     data: GraphViewData;
@@ -188,7 +190,7 @@ function InspectorTabs({
         ]} />
       </TabsPanel>
       <TabsPanel value="links">
-        <DocumentLinksPanel view={data.links} localGraph={data.localGraph} focusId={data.documentId} />
+        <DocumentLinksPanel view={data.links} localGraph={data.localGraph} focusId={data.documentId} createLinks={data.createLinks} />
       </TabsPanel>
       <TabsPanel value="history">
         <ul className="space-y-1">

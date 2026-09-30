@@ -145,3 +145,50 @@ describe("without resolutions (a shared page: the reader is not in the workspace
     expect(renderWithoutLinks("[site](https://example.com)")).toContain('href="https://example.com"');
   });
 });
+
+describe("an unresolved link the reader may make the document for", () => {
+  const CREATE = "/w/w1/knowledge/new?title=Missing&from=d-here";
+  const withCreate: RenderedLinks = {
+    ...links,
+    [linkLookupKey("WIKI", "Missing")]: { status: "UNRESOLVED", createHref: CREATE },
+    // Nothing gives a path link a way to be made; if something did, the reader must still not follow it.
+    [linkLookupKey("PATH", "gone.md")]: { status: "UNRESOLVED", createHref: "/should-not-be-linked" },
+  };
+  const renderCreate = (markdown: string) => renderToStaticMarkup(<MarkdownRenderer markdown={markdown} links={withCreate} />);
+
+  it("is a link to the form that makes it, still marked as going nowhere yet, in words as well", () => {
+    const html = renderCreate("Try [[Missing]].");
+    expect(html).toContain(`href="${CREATE.replace("&", "&amp;")}"`);
+    expect(html).toContain("data-unresolved-link");
+    expect(html).toContain("data-create-link");
+    expect(html).toContain("(no matching document; create it)");
+    expect(html).toContain("No document titled “Missing” in this workspace. Create it.");
+  });
+
+  it("shows the alias it was written with", () => {
+    const html = renderCreate("[[Missing|the missing one]]");
+    expect(html).toContain(">the missing one<");
+    expect(html).toContain("data-create-link");
+    expect(html).not.toContain(">Missing<");
+  });
+
+  it("is what it always was — text that goes nowhere — for a reader who was given no address", () => {
+    const html = render("Try [[Missing]].");
+    expect(html).not.toContain("data-create-link");
+    expect(html).not.toContain("<a ");
+    expect(html).toContain("(no matching document)");
+  });
+
+  it("is not offered for a relative path, which names a place in a source", () => {
+    const html = renderCreate("See [the gone one](gone.md).");
+    expect(html).not.toContain("data-create-link");
+    expect(html).not.toContain("should-not-be-linked");
+    expect(html).toContain("data-unresolved-link");
+  });
+
+  it("does not touch a link that resolved", () => {
+    const html = renderCreate("See [[Query Master]].");
+    expect(html).toContain('href="/w/w1/knowledge/s1/d-qm"');
+    expect(html).not.toContain("data-create-link");
+  });
+});

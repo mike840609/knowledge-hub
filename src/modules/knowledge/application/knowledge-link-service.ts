@@ -22,6 +22,8 @@ import { requireVisibleDocument } from "./internal/require-visible-document";
 export const BACKLINK_LIMIT = 200;
 /** Only this many backlinks get a line of context, which costs a Markdown read each. */
 export const BACKLINK_CONTEXT_LIMIT = 50;
+/** The most documents offered as link targets at once; past it the list is the most recently edited, and says so. */
+export const LINK_TARGET_LIMIT = 5000;
 
 export type ResolvedLinkTarget = {
   status: "RESOLVED";
@@ -79,6 +81,24 @@ export type LocalGraphView = LinkGraph & {
   index: LinkIndexState;
 };
 
+/** One document the editor may offer for `[[…`. */
+export type LinkTargetView = {
+  documentId: string;
+  sourceId: string;
+  /** Said next to the title so two documents that share one can be told apart. */
+  sourceName: string;
+  title: string;
+  /** ISO 8601: when the document's current revision was written. */
+  editedAt: string;
+};
+
+export type LinkTargetsView = {
+  workspaceId: string;
+  targets: LinkTargetView[];
+  /** More documents could be linked to than are listed: these are the most recently edited `LINK_TARGET_LIMIT`. */
+  truncated: boolean;
+};
+
 export interface KnowledgeLinkService {
   /**
    * What a document links to and what links to it. `revisionNo` selects the
@@ -90,6 +110,12 @@ export interface KnowledgeLinkService {
     documentId: string,
     input?: { revisionNo?: number; includeArchived?: boolean; localGraphDepth?: 1 | 2 },
   ): Promise<DocumentLinkView>;
+  /**
+   * The documents of a Workspace a link can be written to — the ones it would resolve to, no more —
+   * for the editor's `[[` list. Only for someone who is a member; the list is what they may link, and
+   * it never grants a read of anything in it.
+   */
+  listLinkTargets(caller: CallerContext, workspaceId: string): Promise<LinkTargetsView>;
   getWorkspaceGraph(caller: CallerContext, workspaceId: string, input?: GraphOptions): Promise<WorkspaceGraphView>;
   getLocalGraph(caller: CallerContext, documentId: string, input?: { depth?: 1 | 2 }): Promise<LocalGraphView>;
 }
@@ -110,7 +136,11 @@ function originOf(catalog: readonly CatalogDocument[], document: { id: string; s
  * else changes.
  */
 export class KnowledgeLinkServiceImpl implements KnowledgeLinkService {
-  constructor(private readonly unitOfWork: KnowledgeUnitOfWork) {}
+  /** `linkTargetLimit` is the product's `LINK_TARGET_LIMIT`; a test that asks what happens past it does not need five thousand documents. */
+  constructor(
+    private readonly unitOfWork: KnowledgeUnitOfWork,
+    private readonly options: { linkTargetLimit?: number } = {},
+  ) {}
 
   async getDocumentLinks(
     caller: CallerContext,
@@ -192,6 +222,28 @@ export class KnowledgeLinkServiceImpl implements KnowledgeLinkService {
               document.id,
               input.localGraphDepth,
             ),
+      };
+    });
+  }
+
+  async listLinkTargets(caller: CallerContext, workspaceId: string): Promise<LinkTargetsView> {
+    return this.unitOfWork.run(async (repositories) => {
+      await repositories.users.upsertIdentity(caller.identity);
+      await repositories.workspaceAccess.requireMembership(caller, workspaceId);
+      const limit = this.options.linkTargetLimit ?? LINK_TARGET_LIMIT;
+      // One more than the limit: whether there is one more is what "truncated" says.
+      const rows = await repositories.links.loadLinkTargets(workspaceId, limit + 1);
+      const sourceNames = new Map((await repositories.sourcePolicy.listByWorkspaceId(workspaceId, {})).map((source) => [source.id, source.name]));
+      return {
+        workspaceId,
+        targets: rows.slice(0, limit).map((row) => ({
+          documentId: row.documentId,
+          sourceId: row.sourceId,
+          sourceName: sourceNames.get(row.sourceId) ?? "",
+          title: row.title,
+          editedAt: row.editedAt.toISOString(),
+        })),
+        truncated: rows.length > limit,
       };
     });
   }

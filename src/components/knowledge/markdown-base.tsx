@@ -30,8 +30,27 @@ const INTERNAL_LINK_CLASS =
  * A link to a document that is not there. Dashed rather than absent, so the
  * reader can see that something was meant to be linked here; a tooltip says
  * what, and assistive technology gets the same in words.
+ *
+ * For someone who may write here it is also the way to make the document
+ * (`createHref`, from `createLinksFor`): a real link to the new-document page,
+ * so it can be reached by keyboard and opened in a new tab like any other.
  */
-function UnresolvedLink({ children, what }: { children: React.ReactNode; what: string }) {
+function UnresolvedLink({ children, what, createHref }: { children: React.ReactNode; what: string; createHref?: string }) {
+  if (createHref) {
+    return (
+      <Link
+        href={createHref}
+        prefetch={false}
+        data-unresolved-link
+        data-create-link
+        title={`${what}. Create it.`}
+        className="cursor-pointer rounded-sm border-b border-dashed border-kh-text-muted text-kh-text-secondary hover:border-kh-link hover:text-kh-link kh-focus-ring"
+      >
+        {children}
+        <span className="sr-only"> (no matching document; create it)</span>
+      </Link>
+    );
+  }
   return (
     <span data-unresolved-link title={what} className="cursor-help border-b border-dashed border-kh-text-muted text-kh-text-secondary">
       {children}
@@ -83,7 +102,11 @@ function MarkdownAnchor({ links, ...props }: AnchorProps & { links?: RenderedLin
     if (!links) return <span>{children}</span>;
     const resolved = links[linkLookupKey("WIKI", wikiTarget)];
     if (!resolved || resolved.status === "UNRESOLVED") {
-      return <UnresolvedLink what={`No document titled “${wikiTarget}” in this workspace`}>{children}</UnresolvedLink>;
+      return (
+        <UnresolvedLink what={`No document titled “${wikiTarget}” in this workspace`} createHref={resolved?.status === "UNRESOLVED" ? resolved.createHref : undefined}>
+          {children}
+        </UnresolvedLink>
+      );
     }
     const fragment = props[WIKILINK_FRAGMENT];
     return (

@@ -3,14 +3,19 @@
  * §5). A draft is never a revision: it lives only in the browser, and any
  * failure to read or write it means "no draft", never an error.
  */
-export type DraftKey = { kind: "edit"; documentId: string } | { kind: "new"; workspaceId: string };
+/**
+ * `title` is the title a new document was started from (a broken link's): such a document is not the
+ * blank one, and a draft left by that one must not stand in for it, nor its draft for the blank one's.
+ */
+export type DraftKey = { kind: "edit"; documentId: string } | { kind: "new"; workspaceId: string; title?: string };
 export type Draft = { title: string; markdown: string; baseRevisionId: string | null };
 export type DraftStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 const VERSION = 1;
 
 export function draftStorageKey(key: DraftKey): string {
-  return key.kind === "edit" ? `kh:draft:edit:${key.documentId}` : `kh:draft:new:${key.workspaceId}`;
+  if (key.kind === "edit") return `kh:draft:edit:${key.documentId}`;
+  return key.title === undefined ? `kh:draft:new:${key.workspaceId}` : `kh:draft:new:${key.workspaceId}:${encodeURIComponent(key.title)}`;
 }
 
 export function readDraft(storage: DraftStorage | null, key: DraftKey): Draft | null {

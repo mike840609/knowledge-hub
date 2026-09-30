@@ -53,6 +53,7 @@ export type ComposerSubmit = { title: string; markdown: string; expectedRevision
  * `authored-title`, the draft in `document-draft`, the keys in `form-keys`.
  */
 export function DocumentComposer({
+  workspaceId,
   draftKey,
   location,
   untitledLabel,
@@ -68,6 +69,8 @@ export function DocumentComposer({
   blocked,
   footer,
 }: {
+  /** Where `[[` looks for documents to link to. */
+  workspaceId: string;
   draftKey: DraftKey;
   /** Breadcrumb up to, not including, the document; the resolved title is appended. */
   location: DocumentBreadcrumbSegment[];
@@ -94,6 +97,11 @@ export function DocumentComposer({
   const { confirmed, access } = useWorkspaceAuthorization();
   const [draftStatus, setDraftStatus] = useState<DraftStatus>("loading");
   const persistent = useRef<PersistentDraft | null>(null);
+  // A new document started from a broken link's title keeps its draft in the tab, not the account: the
+  // account holds one blank "new" draft per workspace (`draft:new`, the only key the server accepts for it),
+  // and a second document under that key would restore the wrong text or overwrite the blank one's.
+  const seeded = draftKey.kind === "new" && draftKey.title !== undefined;
+  const durableDraft = access.workspace.type === "PERSONAL" && !seeded;
   // Everything waits for hydration; see `use-hydrated` for what a native submit costs.
   const hydrated = useHydrated();
   const [title, setTitle] = useState(initialTitle);
@@ -147,7 +155,7 @@ export function DocumentComposer({
   useEffect(() => {
     if (!hydrated || restoreTried.current) return;
     restoreTried.current = true;
-    const remote = access.workspace.type === "PERSONAL"
+    const remote = durableDraft
       ? new PersistentDraft(`/api/workspaces/${access.workspace.id}/personal`, draftKey.kind === "new" ? "draft:new" : `draft:${draftKey.documentId}`, setDraftStatus)
       : null;
     persistent.current = remote;
@@ -526,7 +534,7 @@ export function DocumentComposer({
           ) : null}
         </div>
         <div className="kh-reading-column space-y-4 py-6">
-          {access.workspace.type === "PERSONAL" && <p role="status" className="text-caption text-kh-text-muted">
+          {durableDraft && <p role="status" className="text-caption text-kh-text-muted">
             {({ loading: "Loading draft…", saved: "Draft saved to your account", saving: "Saving draft…", local: "Draft kept on this device · syncing…", error: "Draft sync failed. Keep this page open and retry.", conflict: "Draft changed on another device. Your text is preserved here; copy it before loading another draft." })[draftStatus]}
             {draftStatus === "error" && <Button type="button" variant="link" onClick={() => void persistent.current?.retry()}>Retry draft save</Button>}
           </p>}
@@ -572,6 +580,8 @@ export function DocumentComposer({
           {mountEditor ? (
             <div hidden={showing !== "rendered" || !editorReady}>
               <RenderedEditor
+                workspaceId={workspaceId}
+                documentId={draftKey.kind === "edit" ? draftKey.documentId : undefined}
                 markdown={markdown}
                 editable={interactive}
                 onReady={handleEditorReady}

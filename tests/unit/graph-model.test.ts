@@ -38,6 +38,30 @@ describe("toGraphViewData", () => {
   });
 });
 
+describe("toGraphViewData: making the document an unresolved target names", () => {
+  const nodes = [doc("a", "Alpha"), ghost("unresolved:WIKI:nowhere", "Nowhere"), ghost("unresolved:PATH:x.md", "x.md")];
+  const edges: GraphEdge[] = [{ from: "a", to: "unresolved:WIKI:nowhere", count: 1 }, { from: "a", to: "unresolved:PATH:x.md", count: 1 }];
+  const sourceNames = new Map([["s1", "Notes"]]);
+
+  it("has no way in unless it is told where to", () => {
+    const data = toGraphViewData({ workspaceId: "w1", nodes, edges, sourceNames });
+    expect(data.nodes.map((node) => node.createHref)).toEqual([null, null, null]);
+  });
+
+  it("gives an unresolved node the address it is told, and never a document", () => {
+    const data = toGraphViewData({
+      workspaceId: "w1",
+      nodes,
+      edges,
+      sourceNames,
+      createHref: (node) => (node.id === "unresolved:WIKI:nowhere" ? `/make/${node.title}` : `/should-not-be-asked-for-${node.id}`),
+    });
+    expect(data.nodes.map((node) => node.createHref)).toEqual([null, "/make/Nowhere", "/should-not-be-asked-for-unresolved:PATH:x.md"]);
+    // A page to open is still only a document's.
+    expect(data.nodes.map((node) => node.href)).toEqual(["/w/w1/knowledge/s1/a", null, null]);
+  });
+});
+
 describe("adjacency", () => {
   it("links both ways", () => {
     const neighbours = adjacency([{ from: "a", to: "b", count: 1 }, { from: "c", to: "a", count: 1 }]);

@@ -10,6 +10,8 @@ export type GraphViewNode = {
   title: string;
   /** `null` for a target nothing answers to: there is no page to open. */
   href: string | null;
+  /** For a target nothing answers to, where the reader may make the document it names; `null` when they may not, or when no title could be the answer. */
+  createHref: string | null;
   sourceName: string | null;
   inDegree: number;
   outDegree: number;
@@ -37,6 +39,8 @@ export function toGraphViewData(input: {
   nodes: readonly GraphNode[];
   edges: readonly GraphEdge[];
   sourceNames: ReadonlyMap<string, string>;
+  /** Where to make the document an unresolved node names (`createHrefForNode`); absent for someone who cannot write. */
+  createHref?: (node: GraphNode) => string | null;
 }): GraphViewData {
   const layout = layoutGraph(input.nodes, input.edges);
   const placed = new Map(layout.nodes.map((node) => [node.id, node]));
@@ -48,6 +52,7 @@ export function toGraphViewData(input: {
       kind: node.kind,
       title: node.title,
       href: node.kind === "DOCUMENT" && node.sourceId ? documentPath(input.workspaceId, node.sourceId, node.id) : null,
+      createHref: node.kind === "UNRESOLVED" ? input.createHref?.(node) ?? null : null,
       sourceName: node.sourceId ? input.sourceNames.get(node.sourceId) ?? null : null,
       inDegree: node.inDegree,
       outDegree: node.outDegree,
@@ -59,12 +64,17 @@ export function toGraphViewData(input: {
   return { nodes, edges: [...input.edges], width: layout.width, height: layout.height, unlinked: layout.unlinked };
 }
 
-export function graphViewFrom(workspaceId: string, view: Pick<WorkspaceGraphView, "nodes" | "edges" | "sources">): GraphViewData {
+export function graphViewFrom(
+  workspaceId: string,
+  view: Pick<WorkspaceGraphView, "nodes" | "edges" | "sources">,
+  createHref?: (node: GraphNode) => string | null,
+): GraphViewData {
   return toGraphViewData({
     workspaceId,
     nodes: view.nodes,
     edges: view.edges,
     sourceNames: new Map(view.sources.map((source) => [source.id, source.name])),
+    createHref,
   });
 }
 

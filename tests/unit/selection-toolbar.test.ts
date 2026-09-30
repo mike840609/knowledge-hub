@@ -353,7 +353,7 @@ describe("hiding on blur", () => {
 
 describe("the React wrapper", () => {
   function props(overrides: Partial<RenderedEditorProps> = {}): RenderedEditorProps {
-    return { markdown: "some text\n", editable: true, onReady: () => {}, onFail: () => {}, onUserEdit: () => {}, onMarkdown: () => {}, ...overrides };
+    return { workspaceId: "00000000-0000-4000-8000-000000000001", markdown: "some text\n", editable: true, onReady: () => {}, onFail: () => {}, onUserEdit: () => {}, onMarkdown: () => {}, ...overrides };
   }
   function mount(initial: RenderedEditorProps) {
     const container = document.createElement("div");

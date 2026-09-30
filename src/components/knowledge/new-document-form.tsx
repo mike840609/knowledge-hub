@@ -15,11 +15,17 @@ export function NewDocumentForm({
   workspaceId,
   workspaceName,
   folder = null,
+  seedTitle = null,
+  cancelHref = null,
 }: {
   workspaceId: string;
   workspaceName: string;
   /** Where the document goes, when it is not the top of Notes; `label` is only a caption. */
   folder?: { id: string; label: string | null } | null;
+  /** The title to start from: the name a broken link gave the document. */
+  seedTitle?: string | null;
+  /** Where Cancel goes instead of the list: the document whose link this is for. Already checked by the page. */
+  cancelHref?: string | null;
 }) {
   const router = useRouter();
   const { access, confirmed } = useWorkspaceAuthorization();
@@ -64,16 +70,17 @@ export function NewDocumentForm({
 
   return (
     <DocumentComposer
-      draftKey={{ kind: "new", workspaceId }}
+      workspaceId={workspaceId}
+      draftKey={seedTitle === null ? { kind: "new", workspaceId } : { kind: "new", workspaceId, title: seedTitle }}
       location={[{ label: "Documents", href: listHref }, ...(folder?.label ? [{ label: folder.label }] : [])]}
       untitledLabel="New document"
       metadataTitle={undefined}
-      initialTitle=""
+      initialTitle={seedTitle ?? ""}
       initialMarkdown=""
       currentRevisionId={null}
       submitLabel="Create document"
       busyLabel="Creating…"
-      cancelHref={listHref}
+      cancelHref={cancelHref ?? listHref}
       conflictHref={null}
       onSubmit={({ title, markdown }) => create({ title, markdown })}
       blocked={uploading}

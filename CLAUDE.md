@@ -123,6 +123,8 @@ pass.
   not one that types through the Markdown source view, which never runs it
   (`tests/unit/editor-wikilinks.test.ts`, `tests/e2e/zz-wikilinks-composer.spec.ts`;
   both read the extractor's cases in `tests/fixtures/link-markdown.ts`).
+  The `[[` list writes through that same node and is held to the same rule
+  (`tests/unit/wikilink-suggest.test.ts`, `tests/e2e/zz-composer-autocomplete.spec.ts`).
 
 ## Frontend design language
 
