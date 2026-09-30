@@ -6,6 +6,7 @@ import { commonmark, imageSchema } from "@milkdown/kit/preset/commonmark";
 import { gfm } from "@milkdown/kit/preset/gfm";
 import { Plugin, Selection } from "@milkdown/kit/prose/state";
 import { $ctx, $prose, getMarkdown, replaceAll } from "@milkdown/kit/utils";
+import { configureWikiLinkStringify, wikiLinkPlugins } from "./wiki-link";
 
 /** The editor could not make a document of this Markdown; the caller should fall back to the source. */
 export class EditorParseError extends Error {
@@ -148,6 +149,9 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
       ctx.set(imagePolicyCtx.key, options.allowImage);
       // Milkdown's defaults are `*` and `***`; most documents here use `-` and `---`.
       ctx.update(remarkStringifyOptionsCtx, (previous) => ({ ...previous, bullet: "-" as const, rule: "-" as const }));
+      // A `[[wikilink]]` is a node here, and has to be written back as it was: both halves are needed, and
+      // this is the half that cannot be a plugin (the stringify options are read when the editor is built).
+      configureWikiLinkStringify(ctx);
       ctx.update(remarkPluginsCtx, (previous) => [...previous, { plugin: fillNullImageTitles, options: {} }] as typeof previous);
       ctx.update(editorViewOptionsCtx, (previous) => ({
         ...previous,
@@ -176,6 +180,8 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
     .use(safeImageSchema)
     .use(imagePolicyCtx)
     .use(gfm)
+    // In every host of the editor, not an extra: a document with a wikilink must survive being opened in it.
+    .use(wikiLinkPlugins)
     .use(history)
     .use(listener)
     .use(editWatcher)

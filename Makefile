@@ -40,6 +40,10 @@ db-migrate: db-up ## Apply schema migrations to the dev database.
 db-reindex-links: db-up ## Index document links (backfill after migration 012, or repair). Idempotent.
 	npm run db:reindex-document-links
 
+.PHONY: db-report-escaped-wikilinks
+db-report-escaped-wikilinks: db-up ## List documents that may have lost wikilinks to the old editor (read-only; changes nothing).
+	npm run db:report-escaped-wikilinks
+
 .PHONY: db-seed
 db-seed: db-migrate ## Load dev fixtures (idempotent, safe to re-run).
 	npm run db:seed

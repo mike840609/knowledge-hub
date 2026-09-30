@@ -114,6 +114,15 @@ pass.
   `tests/unit/link-index-write-points.test.ts` fails if one does not). A link
   never resolves across Workspaces, and a shared page (`/s/:token`) is given no
   resolutions at all.
+- **The rendered editor must write a wikilink back as it read it.** It holds
+  `[[x]]` as a `wiki_link` node; as text it would be written `\[\[x]]`, which is
+  no link, and a document opened and saved there would lose its edges
+  (`docs/superpowers/specs/2026-09-29-personal-daily-driver-design.md` §1.1, §4).
+  Any change to the editor, the composer, or the Markdown they write needs a test
+  that runs the *rendered* editor and reads the links a saved document holds —
+  not one that types through the Markdown source view, which never runs it
+  (`tests/unit/editor-wikilinks.test.ts`, `tests/e2e/zz-wikilinks-composer.spec.ts`;
+  both read the extractor's cases in `tests/fixtures/link-markdown.ts`).
 
 ## Frontend design language
 

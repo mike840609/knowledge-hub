@@ -410,6 +410,7 @@ type WorkspaceGraphView = {
 風險：
 
 - **語法邊界**：`[[a\|b]]` 在 GFM 表格內需寫成 `\|`；被強調語法切成多個 text 節點的 wikilink（如 `[[*x*]]`）不會被辨識。兩者都記在測試裡作為已知行為。
+- **渲染編輯器曾把 `[[X]]` 寫成 `\[\[X]]`（上線後才發現，已修）**：composer 預設的渲染編輯器把 wikilink 當文字，存檔時寫成被跳脫的、不成連結的形式，所以在那裡編輯並存檔一份有 wikilink 的文件，它的邊由 1 變 0。連結索引本身沒有錯——它如實記錄「現行 revision 寫了什麼」，而 revision 已經沒有連結了。這份規格的驗證當時沒有測到，因為 #78 rebase 到 composer（#62）時，e2e 改成走 Markdown 原始碼視圖，之後沒有任何測試在渲染模式下讀存檔後的連結。原因、修法、往返測試與受損文件的唯讀報告見[個人日用套件設計 §1.1、§4](2026-09-29-personal-daily-driver-design.md)。
 - **標題 id 與應用程式 id 衝突**：作者的標題 `Main` 產生 `id="main"`。實作時掃描現有 `id=` 用法確認無衝突；若有，改由那一邊重新命名。
 - **索引與內容漂移**：任何未來新增的「產生 revision」的路徑若沒掛上索引，該文件會被標為 stale 而不是靜默錯誤——這是把有效性寫成 `revision_id` 比對（§7.2）的主要理由。新增產生 revision 的路徑時，PR 檢查表要包含「是否呼叫 `links.replaceForDocument`」，並有一個 integration test 掃描 `revisions.insert` 的呼叫點與 `links.replaceForDocument` 成對出現。
 

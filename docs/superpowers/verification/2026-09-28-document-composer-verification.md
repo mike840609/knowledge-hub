@@ -359,7 +359,11 @@ const rewritten: Record<string, [input: string, output: string]> = {
   `\[\[X]]` (it displays the same and no longer reads as a wikilink); every
   underscore in text is escaped, including one between CJK letters (with the
   locked `mdast-util-to-markdown` 2.1.2; 2.1.3 would keep the inner one, and
-  the test flags a bump).
+  the test flags a bump). *(Superseded for the wikilink: it was accepted here
+  while a wikilink was only text. Once #78 made wikilinks index edges it became
+  a defect, and the editor now writes `[[X]]` back as it read it — see the
+  [daily-driver verification record](2026-09-29-personal-daily-driver-verification.md).
+  The corpus test now lists it as unchanged.)*
 - **Also rewritten, measured after the corpus was fixed and not pinned by a
   test.** An aligned table has its cells padded; an indented code block becomes
   a fenced one; a `~~~` fence becomes a ```` ``` ```` fence; the closing `##`

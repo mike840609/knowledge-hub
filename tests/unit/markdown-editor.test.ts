@@ -81,6 +81,9 @@ const unchanged: Record<string, string> = {
   "inline html": "text <kbd>Ctrl</kbd> more\n",
   "footnote": "text[^1]\n\n[^1]: the note\n",
   "CJK text": "# 標題\n\n這是**粗體**，還有`程式碼`。\n",
+  // Written as `\[\[x]]` until the wikilink became a node of its own (daily-driver spec §4): no link at all after a save.
+  "a wikilink": "see [[Other Page]] here\n",
+  "a wikilink with a heading and an alias": "see [[Other Page#Setup|the setup]] here\n",
 };
 const rewritten: Record<string, [input: string, output: string]> = {
   "star list becomes dash": ["* one\n* two\n", "- one\n- two\n"],
@@ -89,7 +92,6 @@ const rewritten: Record<string, [input: string, output: string]> = {
   "setext heading becomes ATX": ["Title\n=====\n\ntext\n", "# Title\n\ntext\n"],
   "a redundant escape is dropped": ["a and 1\\. not a list\n", "a and 1. not a list\n"],
   "a star rule becomes dashes": ["a\n\n***\n\nb\n", "a\n\n---\n\nb\n"],
-  "a wikilink is escaped": ["see [[Other Page]] here\n", "see \\[\\[Other Page]] here\n"],
   // mdast-util-to-markdown 2.1.2 (the locked version) escapes every underscore in text; 2.1.3 keeps one between two letters (與_斜體\_，).
   "underscores in text are escaped, including one between CJK letters": ["與_斜體_，\n", "與\\_斜體\\_，\n"],
 };

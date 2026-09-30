@@ -173,6 +173,15 @@ kbd {
   .kh-editor a {
     @apply cursor-text font-medium text-kh-link underline decoration-kh-link underline-offset-2;
   }
+  /* A [[wikilink]] is one node, read as the reader reads it: the link colour and underline. It is
+     not followed from here — a draft has no resolutions, so only the reader can say where it goes —
+     so it does not take the pointer. Selected as a whole, since a caret is never inside it. */
+  .kh-editor .kh-wikilink {
+    @apply cursor-default font-medium text-kh-link underline decoration-kh-link underline-offset-2;
+  }
+  .kh-editor .kh-wikilink.ProseMirror-selectednode {
+    @apply rounded-sm bg-kh-bg-selected;
+  }
   .kh-editor img {
     @apply my-4 h-auto max-w-full rounded-md border border-kh-border;
   }
