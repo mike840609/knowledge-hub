@@ -221,6 +221,8 @@
 
 **rebase 之後**（`npm ci` 重裝、乾淨的建置）：unit 735（我的 620 加上 main 的）、integration 486、e2e **145／145**（4.3 分鐘）、`tsc --noEmit`、`eslint .`、`next build` 皆乾淨；`postinstall` 套上 React patch（§9）。
 
+**事後發現：這份「全綠」沒有覆蓋渲染模式。** 上面把三個 spec 改成用 `showMarkdown` 切到 Markdown 原始碼再輸入，是為了讓它們在新表單上跑得起來；副作用是它們從此不再走 composer 預設的渲染編輯（Milkdown）。而渲染編輯器會把 `[[wikilink]]` 序列化成 `\[\[…]]`：在渲染模式編輯並存檔一份有 wikilink 的文件，它的連結索引由 1 條變 0 條（`[[Note|alias]]`、`[[Note#Setup]]`、清單裡的 wikilink 同樣），backlinks 與圖譜的邊隨之消失。`[text](note.md)` 不受影響。這是 #62 與 #78 各自正確、合在一起才出現的缺陷，145／145 沒有測到它，是因為沒有任何一個 e2e 在渲染模式下寫入或編輯 wikilink。修法與測試政策（任何影響編輯器的變更都要有渲染模式的測試）見 [個人日用套件設計 §1.1](../specs/2026-09-29-personal-daily-driver-design.md)，是該計畫的切片 0。
+
 ## 11. 重現
 
 ```bash
