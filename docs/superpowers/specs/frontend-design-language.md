@@ -758,7 +758,12 @@ stored preference — which is a product decision. The zone did not need one:
 `components/ui/toast.tsx` is the one region: fixed in a corner, mounted by the
 app shell, `role="status"` with `aria-live="polite"`. It holds one message at a
 time and clears on navigation, because a toast describes what just happened
-*here*.
+*here* — except one that says its own action is what navigates: archiving the
+document that is open sends the reader to the list, and the Undo has to be
+there when they arrive. Such a toast survives the navigations of the next few
+seconds, plural because one push can be several (the router changes the
+address to the route it was sent to, and that route redirects), and a later,
+unrelated navigation clears it as usual.
 
 The region is rendered whether or not it holds anything. A live region
 inserted at the same moment as its content is not reliably announced, and the
@@ -773,6 +778,15 @@ confirmation reports and gets out of the way, so it goes to the toast. A
 mutation that *navigates* to its own result gets neither — saving a document
 lands on the saved document, and a toast on top of that is noise.
 
+**A refusal that says nothing about access does not re-check it.** A failed
+request that might mean the caller's access changed makes the shell re-check
+it, and while it does every mutation is paused and "Unable to confirm
+workspace" is shown. That is the right price for a 403 and the wrong one for
+"this folder is not empty": the caller can still do everything they could a
+moment ago. Conflicts about content — a stale revision, a full share-link
+list, a folder that is not empty, a parent that is archived, a move into
+itself — are excluded in `requestWorkspaceAccessCheck`, and a test holds each.
+
 **A mutation that navigates to its result refreshes on arrival.** The push
 fetches the destination page fresh, but a layout the two routes share is kept
 as it was: saving a title left the knowledge sidebar naming the document by
@@ -786,9 +800,13 @@ there is no navigation left to race. Saving and creating a document both work
 this way.
 
 **Undo is offered only where a reverse operation already exists.** An "Undo"
-that cannot restore the previous state is a lie, and this codebase has no
-soft-delete to lean on. Archiving a workspace, renaming it, granting access,
-changing a role and revoking a grant all qualify. Editing a document does not:
+that cannot restore the previous state is a lie. Archiving a workspace,
+renaming it, granting access, changing a role and revoking a grant all qualify,
+and so do archiving and restoring a document or a folder, and renaming a
+folder: ARCHIVED is a lifecycle and not a deletion, so the document keeps every
+revision and its place, and restore is the reverse. Creating a folder does not:
+the nearest thing to taking it back is archiving it, which is not the same.
+Editing a document does not:
 its reverse would be a *new* revision, which is a feature and not an undo.
 Applying an import does not: the import spec forbids both force-apply and
 rollback.
@@ -877,12 +895,20 @@ live that was not inside the panel that produced it, and an undo offered only
 where it could be kept.
 
 One of those claims is worth repeating here, because the old item is the kind
-of thing a reader trusts: **archiving a document and copying a link do not
-exist in this product**, and never did. The item said a context menu was
-missing for three actions when two of the three had never been built. A
-document archive would be a domain change, not a UI one; the decision on
-record is to leave the lifecycle as it is, so the registry gains an entry if
-that ever changes rather than being redesigned.
+of thing a reader trusts: **archiving a document and copying a link did not
+exist in this product when it was written.** The item said a context menu was
+missing for three actions when two of the three had never been built. Copying
+a link was built with the menu. Archiving was the other half, and it was never
+a domain change: the domain had always had it (`archiveDocument`,
+`archiveFolder` and their restores in `HubKnowledgeCommandService`), and what
+the web lacked was an entry. That is now added (daily-driver spec §7), and the
+registry took it as this paragraph said it would, as entries rather than a
+redesign — with one thing it had not carried, the state of the source apart
+from the state of the document: an archived source's documents read as
+archived and cannot be restored until the source is. Archiving turns the links
+that pointed at a document into unresolved ones, because links resolve only to
+active documents; the confirmation says how many, in words. Restoring heals
+them, since resolution is read at read time and nothing was rewritten.
 
 
 1. The palette is mostly navigation, and that is a product gap rather than a

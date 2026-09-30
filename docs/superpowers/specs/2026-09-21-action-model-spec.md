@@ -34,7 +34,7 @@ Groups      新增／改角色／移除     …/groups
 **對 Open item 4 的更正。** 它寫著「重新命名、封存、複製連結都要先進文件頁」。
 
 - 重新命名文件：**屬實**，就是編輯器裡的標題欄位。
-- **封存文件並不存在。** UI 沒有，API 也沒有——document 路由只有 POST 與 PATCH。文件會變成 `ARCHIVED` 只能透過 source 重新同步，沒有任何人為入口。
+- **封存文件並不存在。** UI 沒有，API 也沒有——document 路由只有 POST 與 PATCH。文件會變成 `ARCHIVED` 只能透過 source 重新同步，沒有任何人為入口。（**2026-09-30 更新：** 服務層一直有 `archiveDocument`／`restoreDocument` 與資料夾版本，缺的只是 web 入口；這條寫「API 也沒有」指的是 HTTP 路由。個人日用套件切片 A-1 補上了入口，見 §10。）
 - **複製連結並不存在。** Inspector 那顆 `Copy` 按鈕複製的是文件或 source 的 **ID**，那是支援用途，不是分享用途。
 
 **對 Open item 1 的更正。** `⌘K` 並非「只會執行搜尋」——它已經是一個 palette：搜尋文件、方向鍵移動、`aria-activedescendant`、Enter 開啟結果。它缺的是**文件以外的東西**。
@@ -150,3 +150,17 @@ Registry 的設計讓它日後只是新增一個項目，而不是重新設計�
 - 這項工作新增的端點都不信任客戶端的自述，各自重新驗證。
 - Toast 區域不擠壓任何版面；每一個提供出去的 undo，都有測試斷言它**還原了狀態**，而不是斷言 toast 出現過。
 - 對呼叫者不可用的動作，既不出現在 palette，**也**被伺服器拒絕——兩者分別斷言。
+
+## 10. 後續（2026-09-30）：封存、資料夾，與它們需要 registry 多帶的東西
+
+§8-2 決定「文件封存維持現狀，不新增」，並說 registry 的設計讓它日後只是新增一個項目。日後到了：個人日用套件切片 A-1（[規格 §7](2026-09-29-personal-daily-driver-design.md)）。結果與那句話大致相符——是新增項目——但有三個地方 registry 得多帶東西：
+
+- **`ActionTarget.sourceStatus`。** 原本的 `status` 是「有效狀態」（文件與 source 都是 ACTIVE 才是 ACTIVE），因為已封存 source 裡的文件什麼都不能改。但「還原」需要知道是誰被封存：文件自己被封存而 source 在用，可以還原；source 被封存，服務會拒絕，得先還原 source。所以兩者分開帶。
+- **`FolderTarget`** 與 `ActionContext.folder`：資料夾列有自己的目標，可用性同樣三軸（能寫且已確認、HUB_MANAGED、狀態，外加所在 source 的狀態）。資料夾動作只在 row，不在 palette——palette 描述的是正在讀的那份文件，沒有資料夾可指。
+- **兩種新效果。** `create-folder`（要一個名稱）與 `folder-command`（重新命名、封存、還原）；文件的封存與還原走既有的 `command`，多帶一個 `label` 給訊息用。
+
+**undo 的清單（§6）多三列：** 封存／還原文件、封存／還原資料夾（互為逆向；文件保有所有 revision 與位置，ARCHIVED 是生命週期而不是刪除）、重新命名資料夾（改回舊名）。**新增資料夾不能 undo**——最接近的反向是封存它，那不是同一件事。
+
+**toast「下一次導航時關閉」有了一個例外。** 封存正開著的文件會把讀者送到清單，Undo 得在那裡等著。toast 可以自己聲明「我的動作會導航」，撐過之後 3 秒內的導覽（複數：一次 push 可以是好幾次，路由器先把網址改成推去的路由，那個路由再 redirect）。寫 e2e 時才發現只撐過一次是不夠的。
+
+**一個副作用：** `requestWorkspaceAccessCheck` 對所有 409 都重新確認存取權，重新確認期間所有寫入動作暫停、還閃出「Unable to confirm workspace」。「資料夾不是空的」這類拒絕說的是內容而不是權限，所以 `FOLDER_NOT_EMPTY`、`INVALID_PARENT`、`TREE_CYCLE`、`CROSS_SOURCE_MOVE` 與 `REVISION_CONFLICT` 一樣被排除。
