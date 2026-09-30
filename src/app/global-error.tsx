@@ -1,7 +1,7 @@
 "use client";
 
 import "./globals.css";
-import { inter } from "./fonts";
+import { inter, mono } from "./fonts";
 import { THEME_PRE_PAINT_SCRIPT } from "./theme-script";
 import { Button } from "@/components/ui/button";
 import { StatusMessage } from "@/components/ui/status-message";
@@ -14,7 +14,7 @@ import { StatusMessage } from "@/components/ui/status-message";
  */
 export default function GlobalError({ reset }: { error: Error & { digest?: string }; reset: () => void }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={`${inter.variable} ${mono.variable}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_PRE_PAINT_SCRIPT }} />
       </head>

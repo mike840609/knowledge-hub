@@ -1,11 +1,15 @@
-import { Inter } from "next/font/google";
+import { Inter, Geist_Mono } from "next/font/google";
 
-// A dense UI leans on the typeface. Inter holds up at 11-14px where the
-// system stack varies by platform; figures are made tabular per call site.
-// Shared so that `global-error`, which replaces the root layout, renders in
-// the same typeface rather than falling back to the system stack.
+// Inter 在 11–14px 撐住 dense UI；figures 逐處 tabular。
+// global-error 取代 root layout，必須同字體。
 export const inter = Inter({
   subsets: ["latin"],
   display: "swap",
   variable: "--kh-font-sans",
+});
+
+export const mono = Geist_Mono({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--kh-font-mono",
 });

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { inter } from "./fonts";
+import { inter, mono } from "./fonts";
 import { THEME_PRE_PAINT_SCRIPT } from "./theme-script";
 
 export const metadata: Metadata = {
@@ -13,7 +13,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     // The pre-paint script stamps data-theme on <html> before React hydrates,
     // on purpose (§12 of the design contract), so the server HTML never has it.
     // This silences that one attribute mismatch; it does not reach children.
-    <html lang="en" className={inter.variable} suppressHydrationWarning>
+    <html lang="en" className={`${inter.variable} ${mono.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_PRE_PAINT_SCRIPT }} />
       </head>

@@ -24,6 +24,15 @@ const rhythm = {
 const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
+    fontFamily: {
+      sans: ["var(--kh-font-sans)", "ui-sans-serif", "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
+      mono: ["var(--kh-font-mono)", "ui-monospace", "SF Mono", "Menlo", "monospace"],
+    },
+    fontWeight: {
+      normal: "400",
+      medium: "510",
+      semibold: "590",
+    },
     // Six UI sizes plus two that exist only for rendered documents.
     // Every size carries its own tracking. Reference values, measured from
     // linear.app: 12px 0, 13px -.01em, 14px -.013em, 15px -.011em, 17px 0.
