@@ -4,6 +4,7 @@ import type {
   DocumentLinkRepository,
   IndexedDocumentLinks,
   LinkIndexState,
+  LinkTargetRow,
 } from "@/modules/knowledge/ports/document-link-repository";
 import type { DbRow, QueryConnection } from "./shared";
 import { asDate, asNumber, asRequiredString } from "./shared";
@@ -58,6 +59,27 @@ export class MariaDbDocumentLinkRepository implements DocumentLinkRepository {
       title: asRequiredString(row.title, "link catalog title"),
       sourcePath: row.source_path === null || row.source_path === undefined ? null : String(row.source_path),
       createdAt: asDate(row.created_at),
+    }));
+  }
+
+  async loadLinkTargets(workspaceId: string, limit: number): Promise<LinkTargetRow[]> {
+    // The same WHERE as `loadCatalog`, on purpose: what is offered is what a link would resolve to.
+    const rows = await this.connection.query<DbRow[]>(
+      `SELECT d.id AS document_id, d.source_id AS source_id, r.title AS title, r.created_at AS edited_at
+       FROM knowledge_documents d
+       JOIN knowledge_sources s ON s.id = d.source_id
+       JOIN knowledge_revisions r ON r.id = d.current_revision_id
+       JOIN knowledge_tree_nodes n ON n.document_id = d.id
+       WHERE s.workspace_id = ? AND s.status = 'ACTIVE' AND d.status = 'ACTIVE' AND n.status = 'ACTIVE'
+       ORDER BY r.created_at DESC, d.id
+       LIMIT ?`,
+      [workspaceId, limit],
+    );
+    return rows.map((row) => ({
+      documentId: String(row.document_id),
+      sourceId: String(row.source_id),
+      title: asRequiredString(row.title, "link target title"),
+      editedAt: asDate(row.edited_at),
     }));
   }
 

@@ -17,6 +17,15 @@ export type LinkIndexState = {
   stale: number;
 };
 
+/** A document a `[[wikilink]]` can be written to, as the editor offers it. */
+export type LinkTargetRow = {
+  documentId: string;
+  sourceId: string;
+  title: string;
+  /** When the current revision was written: what "recently edited" means to someone choosing a link. */
+  editedAt: Date;
+};
+
 /**
  * The link index (graph spec §7): raw edges per document, for the document's
  * current revision. Derived data — reading it never authorizes anything.
@@ -31,6 +40,13 @@ export interface DocumentLinkRepository {
 
   /** ACTIVE documents in ACTIVE sources of one Workspace, as link targets. */
   loadCatalog(workspaceId: string): Promise<CatalogDocument[]>;
+
+  /**
+   * The same documents `loadCatalog` gives — the ones a link can resolve to — most recently edited
+   * first, at most `limit` of them. It is its own query, not the catalog cut down, so that an editor's
+   * list of suggestions does not read a Workspace's every path and creation time to show titles.
+   */
+  loadLinkTargets(workspaceId: string, limit: number): Promise<LinkTargetRow[]>;
 
   /** Edges of the Workspace's ACTIVE documents whose index row is still valid. */
   loadValidEdges(workspaceId: string): Promise<IndexedDocumentLinks[]>;
