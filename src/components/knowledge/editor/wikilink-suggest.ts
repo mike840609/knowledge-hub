@@ -49,7 +49,15 @@ function detect(state: EditorState): Trigger | null {
   // text offsets and document positions stay one to one.
   const before = parent.textBetween(0, $from.parentOffset, undefined, "\n");
   const found = findWikiLinkTrigger(before);
-  return found ? { from: $from.start() + found.from, to: $from.pos, query: found.query } : null;
+  if (!found) return null;
+  const from = $from.start() + found.from;
+  // `textBetween` omits mark boundaries: brackets in earlier code or link text
+  // must not become a trigger merely because the caret is outside that mark.
+  let protectedText = false;
+  state.doc.nodesBetween(from, $from.pos, (node) => {
+    if (node.marks.some(keepsAsText)) protectedText = true;
+  });
+  return protectedText ? null : { from, to: $from.pos, query: found.query };
 }
 
 /**
@@ -123,6 +131,8 @@ export function wikiLinkSuggest(options: WikiLinkSuggestOptions): { plugins: Mil
     const transaction = view.state.tr.replaceWith(state.trigger.from, state.trigger.to, node);
     // Its own undo step: Undo takes back the pick and leaves what was typed, not everything typed before it.
     view.dispatch(closeHistory(transaction).scrollIntoView());
+    // Following prose is another step even when typed immediately after the pick.
+    view.dispatch(closeHistory(view.state.tr));
     view.focus();
   }
 

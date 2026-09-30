@@ -80,7 +80,9 @@ export function createSuggestPopup(): SuggestPopup {
 
   element.append(announce, list, message);
   // Pressing anywhere on the list must not take the caret from the document.
-  element.addEventListener("mousedown", (event) => event.preventDefault());
+  element.addEventListener("mousedown", (event) => {
+    if (event.button === 0) event.preventDefault();
+  });
   document.body.appendChild(element);
 
   const optionId = (index: number) => `${id}-option-${index}`;
@@ -109,7 +111,9 @@ export function createSuggestPopup(): SuggestPopup {
         row.append(title, source);
         // `mousedown`, not `click`: it is what arrives before the editor could lose its selection
         // (the list's own `mousedown`, above, is what keeps it).
-        row.addEventListener("mousedown", () => onPick(index));
+        row.addEventListener("mousedown", (event) => {
+          if (event.button === 0) onPick(index);
+        });
         list.appendChild(row);
       });
       const text = view.message ? messageText(view.message) : "";

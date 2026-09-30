@@ -232,6 +232,32 @@ describe("where `[[` is not the start of a link", () => {
     expect(isShown()).toBe(false);
   });
 
+  it.each(["`[[`", "[\\[\\[](https://example.com/docs)"])("does not complete brackets in preceding marked text: %s", async (markdown) => {
+    const { editor, loadTargets } = await open({ markdown });
+    focusAtEnd(editor);
+    const view = viewOf(editor);
+    // Type ordinary text after the mark, without extending its formatting.
+    view.dispatch(view.state.tr.setStoredMarks([]));
+    typeText(editor, "air");
+    await flush();
+    expect(isShown()).toBe(false);
+    expect(loadTargets).not.toHaveBeenCalled();
+    press(editor, "Enter");
+    expect(savedLinks(editor)).toEqual([]);
+    expect(editor.getMarkdown()).toContain(markdown);
+  });
+
+  it("completes a new trigger after inline code without replacing the code", async () => {
+    const { editor } = await open({ markdown: "`[[`" });
+    focusAtEnd(editor);
+    typeText(editor, " [[air");
+    await flush();
+    expect(isShown()).toBe(true);
+    press(editor, "Enter");
+    expect(savedLinks(editor)).toEqual([["WIKI", "Airflow", null]]);
+    expect(editor.getMarkdown()).toContain("`[[`");
+  });
+
   it("is not one after a backslash, or an exclamation mark", async () => {
     await typedIn("Start ", () => {}, "\\[[Kube");
     expect(isShown()).toBe(false);
@@ -336,6 +362,18 @@ describe("choosing", () => {
     expect(savedLinks(editor)).toEqual([["WIKI", "Airflow", null]]);
   });
 
+  it.each([1, 2])("does not choose on mouse button %s", async (button) => {
+    const { editor } = await open();
+    focusAtEnd(editor);
+    typeText(editor, "[[air");
+    await flush();
+    const before = editor.getMarkdown();
+    options()[0].dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, button }));
+    expect(editor.getMarkdown()).toBe(before);
+    expect(savedLinks(editor)).toEqual([]);
+    expect(isShown()).toBe(true);
+  });
+
   it("wraps from the last row to the first, and back", async () => {
     const { editor } = await open();
     focusAtEnd(editor);
@@ -371,6 +409,27 @@ describe("choosing", () => {
     undo(view.state, view.dispatch);
     expect(view.state.doc.textContent).toContain("[[air");
     expect(view.state.doc.textContent).not.toContain("Airflow");
+  });
+
+  it("undoes following typing separately from accepting a suggestion", async () => {
+    const { editor } = await open({ markdown: "See" });
+    focusAtEnd(editor);
+    typeText(editor, " [[air");
+    await flush();
+    const before = editor.getMarkdown();
+    press(editor, "Enter");
+    const picked = editor.getMarkdown();
+    typeText(editor, " suffix");
+    const { undo, redo } = await import("@milkdown/kit/prose/history");
+    const view = viewOf(editor);
+    undo(view.state, view.dispatch);
+    expect(editor.getMarkdown()).toBe(picked);
+    undo(view.state, view.dispatch);
+    expect(editor.getMarkdown()).toBe(before);
+    redo(view.state, view.dispatch);
+    expect(editor.getMarkdown()).toBe(picked);
+    redo(view.state, view.dispatch);
+    expect(editor.getMarkdown().trim()).toBe("See [[Airflow]] suffix");
   });
 
   it("writes a title as the resolver reads it, for a title with spaces, Chinese and an accent", async () => {

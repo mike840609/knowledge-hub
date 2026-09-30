@@ -37,6 +37,13 @@ async function createNote(page: Page, workspaceId: string, title: string, markdo
 
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+/** Knowledge redirects to the default document in a nonempty workspace. */
+async function knowledgeLandingUrl(page: Page, workspaceId: string): Promise<string> {
+  await page.goto(`/w/${workspaceId}/knowledge`);
+  await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/knowledge/[^/]+/[^/?]+$`), ROUND_TRIP);
+  return page.url();
+}
+
 /** The inspector's Links tab, opened as reading-links.spec.ts opens it: from the command palette. */
 async function openLinksTab(page: Page) {
   await (await openPalette(page)).fill("backlinks");
@@ -104,11 +111,12 @@ test.describe("creating the document a broken link names", () => {
     await expect(composer(page).getByLabel("Title", { exact: true })).toHaveValue(`${stamp} Wanted`, ROUND_TRIP);
   });
 
-  test("the graph's unresolved node, in the drawing and in the table, opens the form; Cancel goes to the list", async ({ page }) => {
+  test("the graph's unresolved node, in the drawing and in the table, opens the form; Cancel follows the Knowledge landing page", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     const stamp = unique("Node");
     const workspaceId = await mySpace(page);
     await createNote(page, workspaceId, `Source ${stamp}`, `Needs [[${stamp} Missing]].`);
+    const fallbackUrl = await knowledgeLandingUrl(page, workspaceId);
 
     await page.goto(`/w/${workspaceId}/graph?unresolved=1`);
     const ghost = page.getByRole("link", { name: new RegExp(`^${escape(`${stamp} Missing`)} \\(unresolved; opens the form to create it\\)`) });
@@ -120,9 +128,9 @@ test.describe("creating the document a broken link names", () => {
     await ghost.locator("circle").last().click();
     await expect(page).toHaveURL(/\/knowledge\/new\?/, ROUND_TRIP);
     await expect(composer(page).getByLabel("Title", { exact: true })).toHaveValue(`${stamp} Missing`, ROUND_TRIP);
-    // Several documents may write it, so there is no one to go back to.
+    // Several documents may write it, so Cancel follows the ordinary Knowledge landing page.
     await composer(page).getByRole("button", { name: "Cancel" }).click();
-    await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/knowledge$`), ROUND_TRIP);
+    await expect(page).toHaveURL(fallbackUrl, ROUND_TRIP);
 
     await page.goto(`/w/${workspaceId}/graph?unresolved=1&view=list`);
     const row = page.getByRole("row", { name: new RegExp(`${escape(`${stamp} Missing`)}.*Unresolved`) });
@@ -136,13 +144,14 @@ test.describe("creating the document a broken link names", () => {
     await page.goto(sourceUrl);
     await expect(page.locator("article").first().locator("[data-unresolved-link]")).toHaveCount(1, ROUND_TRIP);
     await expect(page.locator("article").first().locator("a[data-create-link]")).toHaveCount(0);
+    const fallbackUrl = await knowledgeLandingUrl(page, workspaceId);
 
     // Addresses anyone can write: `from` is followed only when it is a readable document of this workspace.
     for (const from of ["javascript:alert(1)", "https://example.com/", "../../etc/passwd", "0199f500-0000-7000-8000-00000000dead"]) {
       await page.goto(`/w/${workspaceId}/knowledge/new?title=${encodeURIComponent(`${stamp} T`)}&from=${encodeURIComponent(from)}`);
       await expect(composer(page).getByLabel("Title", { exact: true })).toHaveValue(`${stamp} T`, ROUND_TRIP);
       await composer(page).getByRole("button", { name: "Cancel" }).click();
-      await expect(page, from).toHaveURL(new RegExp(`/w/${workspaceId}/knowledge$`), ROUND_TRIP);
+      await expect(page, from).toHaveURL(fallbackUrl, ROUND_TRIP);
     }
     // A title the create request would refuse is left out rather than cut.
     await page.goto(`/w/${workspaceId}/knowledge/new?title=${"x".repeat(600)}`);
