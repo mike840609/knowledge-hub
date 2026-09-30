@@ -457,3 +457,67 @@ Next 的 build 輸出（有 ±1 kB 的分組誤差，見切片 0 的紀錄；每
 - **位置連續的假設**只由「Hub 管理的同層在每次建立與移動後被重新編號」這個事實與那個隨機測試撐著；若某條路徑（例如未來的匯入到 Hub 來源）留下空洞，`reorderStep` 會有偏差，畫面上的順序可能差一格。服務端夾住過大的索引，所以不會壞，只會不準。
 - **兩個分頁的競爭。** 對話框開著時目的資料夾被封存有 e2e；兩個分頁同時重排同一同層沒有測，靠服務的鎖與「請求進行中保留最後一鍵」是同一個分頁內的事。
 - **重排失敗的樣子**只有 jsdom 測了「不報位置、不放回焦點」；瀏覽器裡「失敗時 toast 說話」沒有 e2e。
+
+
+## 切片 D — `[[` 自動完成與從失效連結建立文件
+
+分支 `claude/wikilink-autocomplete-slice-d`，三個提交：清單的資料與排序（`1689ba7`）、渲染編輯器裡的清單（`7c72ad3`）、從失效連結建立（`36688e5`）。設計與偏離見規格 §6.3。
+
+### 結果
+
+| 層 | 新增 | 結果 |
+| --- | --- | --- |
+| 單元 | 98 案（`link-suggestions` 21、`wikilink-suggest` 49、`create-from-link` 14、`document-links-panel-create` 3，另在 `markdown-renderer-links`、`phase5-authoring-input`、`document-draft`、`graph-model` 各加案） | 全套 90 檔 **1377/1377** |
+| integration | `listLinkTargets` 6、`link-targets-api` 8、`new-document-from-link` 4 | 全套 51 檔 **599/599** |
+| e2e | `zz-composer-autocomplete` 9、`zz-create-from-link` 5（含唯讀成員與編輯者兩個身分）；改了 3 處既有斷言（見下） | 全套 **195/195**（6.8 分鐘），沒有 flaky、沒有跳過 |
+| `tsc`、`eslint`、`next build` | — | 乾淨；每次 `test:e2e` 的 build 兩次都過 |
+
+**不走 `showMarkdown` 的證明。** 自動完成的 jsdom 測試與 e2e 都在渲染編輯器裡打字，選取後用抽取器讀**存出去的 Markdown** 有哪些連結（`savedLinks`），並且讓文件走一次 `replaceMarkdown` 往返後逐字相同——CLAUDE.md 的不變式（編輯器必須把 wikilink 寫回原樣）對這條新的寫入路徑成立。
+
+### 變異驗證
+
+每個都是改一處、跑對應的測試、看有沒有紅；存活的逐一處理：
+
+- **`listLinkTargets`／路由／repository（12 個）**：存活 1 個——把 `d.status = 'ACTIVE'` 拿掉。原本「封存」的案例是兩邊一起封存（文件列與樹節點），分不出各自的條件；補了「只封存文件列」的案例後被殺。
+- **`rankSuggestions`／觸發偵測／`isWritableAsWikiLink`（19 個）**：存活 2 個，都是等價的——空查詢時放哪一層（只有一層）、寫得成連結的檢查裡多出的「沒有 fragment 與別名」（另一個條件已經蓋住）。
+- **外掛與清單 DOM（約 40 個）**：第一輪存活 11 個。逐個看：`keyCode 229` 與 `isComposing` 在同一個測試裡連按，第一個按鍵就已經讓後面不成立（拆成兩個案例）；「Esc 之後同一個位置」的測試偵測不到 `dismissed` 沒被清掉（位置經過 mapping 會移動；改成「游標離開再回來會重開」）；Shift+Enter 沒有案例；⌘Enter 的案例在 jsdom 用 `metaKey`，而 ProseMirror 的 `Mod` 在那裡是 Ctrl（改用 Ctrl，才偵測得到 composer 原本的處理被丟掉）；三種監聽沒移除（改成計每個 `addEventListener` 有沒有對應的 `removeEventListener`）；「有選取範圍就不觸發」的測試選的範圍起點在 `[[` 之前，所以拿掉那個條件也一樣過（改成選最後一個字）；選取後游標沒移動的那行，與列上 `mousedown` 的 `preventDefault`（清單本身已經擋了），其實都是多餘的（映射本來就把游標放在新節點之後），刪掉。**最後剩兩個沒有可觀察差別的**：唯讀時鍵處理裡與 `sync` 重複的防衛，以及卸載時沒清的 `listeners` 集合（只是記憶體，沒有行為）。
+- **從失效連結建立（29 個）**：存活 4 個。三個被新測試殺掉——`link.kind !== "WIKI"` 與圖譜節點的 PATH 判斷（我的測試只用了含 `/` 的路徑，而 `gone.md` 單獨是個合法的標題）；`renderedLinksFrom` 沒有測試（讀者測試都是手寫 `RenderedLinks`，繞過了它）。剩一個等價的：`titleForNewDocument` 的 512 字元上限，抽取器本來就不抽超過 512 的目標，所以那行是明說用意的重複。
+
+### 寫的時候測試與檢查抓到的問題（我的錯，都已修）
+
+- **矮視窗裡清單蓋住游標那一行**（e2e 抓到）。第一版只決定放上或放下，清單比兩邊的空間都高時就疊在那行字上。現在兩邊都放不下時清單自己捲動（`max-height` 依剩下的空間）。
+- **e2e 的 `getByRole("textbox")` 在清單開著時找不到編輯器**——因為它此時是 `combobox`。這是設計上的後果，測試改用 `aria-label` 找。
+- **快速打字讓選取與之前的輸入併成同一步 undo**（jsdom 抓到）；加 `closeHistory`，選取是獨立一步。
+- **Enter 在沒有結果時被編輯器自己的 keymap 處理**（拆段落），所以「沒有吞」不能用 `defaultPrevented` 判斷，改看文件。
+- **兩個 lint／型別錯誤**：測試裡的 `!` 接在 `?.` 後；測試的 `index` 形狀與 `LinkIndexState` 不符（我先寫了猜的欄位）。
+- **既有 e2e 三處預期會變：** `reading-links` 兩案（可寫者看到的失效連結現在是通往表單的連結）、`workspace-graph` 的 ghost 節點（可寫時是 link）。其中**「重新命名後舊名稱失效」那一案第一次全跑時，用舊斷言（失效連結不是 link）居然過了**，第二次（同一份程式）才紅。我沒有找到原因：頁面在那一刻的伺服器渲染應該已經有建立連結。可能的解釋是那一次 `getWorkspaceShellModel` 暫時回 null（此時 `canWrite` 未知，頁面就不提供建立入口——這是優雅降級，不是錯），但這是猜測。新斷言（連結指向表單、不指向被改名的文件）在之後的每一輪都過。
+- **圖譜畫布上的失效節點 `hover()` 被 `svg` 攔截**：`<a>` 的方框包含標籤（不吃指標），方框中心在圓外。改成對節點自己的圓操作（`workspace-graph.spec.ts` 已有同一個提醒）。
+
+### 量測（D.9）
+
+`scripts/diagnostics/measure-link-targets.ts`：在拋棄式資料庫建一個 workspace、灌 N 份 Hub 文件（標題是英文與中文混合，平均約 35 字元），量 `listLinkTargets`（即 `GET …/link-targets` 執行的東西）、送出的大小、`rankSuggestions` 每次按鍵的成本。
+
+| | 2,000 份 | 5,000 份 |
+| --- | --- | --- |
+| `listLinkTargets` 第一次 | 24.5 ms | 39.5 ms |
+| `listLinkTargets` 暖的，30 次 | p50 15.9、p95 27.1 ms | p50 42.5、p95 53.2 ms |
+| payload（原始／gzip） | 405.6／52.6 KiB | 1,015.6／132.2 KiB |
+| 前端 `JSON.parse` | 1.4 ms | 3.3 ms |
+| `rankSuggestions` 每次按鍵（暖的） | p50 0.2–0.5、p95 ≤ 1.0 ms | p50 0.9–1.8、p95 ≤ 2.3 ms |
+| `rankSuggestions` 第一次（要先算每份的比對鍵） | 4–24 ms | 13–27 ms |
+
+執行計畫在兩個尺寸都相同：`idx_sources_workspace_status` → 每份文件用 `uq_documents_source_id`，再 PRIMARY 與 `uq_tree_one_document`；`Using temporary; Using filesort` 出現在排序（依 revision 時間），5,000 份時整個查詢 40 多毫秒。
+
+**結論：超出預期的地方沒有**，所以**沒有把「上限外退回 server 端查詢」提前做**。按鍵成本在毫秒等級；第一次打 `[[` 要等的是一次 40–50 ms 的查詢加上傳輸。上限 5,000 是一份 1 MB 的原始 JSON（gzip 後 132 KiB），單獨看就是該有上限的理由。
+
+### 沒有證明的部分
+
+- **真的中文輸入法。** `isComposing` 與 keyCode 229 只用合成的鍵盤事件測過（jsdom）；Playwright 沒有驅動輸入法的方法，所以「用注音／倉頡打到一半按 Enter」在瀏覽器裡是否真的不選清單，我沒有驗證。這是使用者最可能遇到的情況，所以放在第一位。
+- **螢幕閱讀器沒有實測。** 在 `contenteditable` 上動態設 `role="combobox"`、`aria-activedescendant`，與一個 `aria-live="polite"` 的區域，都是照 ARIA 的模式寫的，屬性有 e2e 斷言，但沒有聽過。
+- **只在 Chromium 測過。** Firefox、Safari 沒有；`coordsAtPos` 與 `position: fixed` 在那兩個上應該一樣，沒有驗證。
+- **視覺只看過一列的亮暗截圖。** 多列、很長的標題（截斷）、放在游標上方時的樣子，e2e 只斷言了位置與顏色，我沒有看過畫面。
+- **定位在捲動容器內的跟隨**（頁面或編輯器捲動時清單跟著游標）：加了捲動與 resize 的監聽，沒有 e2e。
+- **量測是在同一台機器、同一個行程裡**：沒有 HTTP、代理或壓縮的成本，資料庫在本機，標題是合成的。灌 5,000 份走建立服務，花了 237 秒。gzip 的數字是我用 `zlib` 算的，不是量到的線上位元組數。
+- **`sameTitle` 有資料、介面沒有用。** 兩份同標題的文件在清單裡只靠 Source 名稱區分。
+- **成員看得到整個 workspace 的標題。** 與圖譜相同的授權（成員即可），這是規格寫的；唯讀成員也能取得清單，這也是（他們本來就讀得到這些文件）。若之後有更細的讀取範圍，`link-targets` 要跟著改。
+- **同時兩個分頁、清單顯示中文件被封存**：清單最多 60 秒是舊的，選到剛被封存的文件會寫出一條會失效的連結（解析只看 ACTIVE）。沒有測，也沒有處理；封存本來就會讓連結失效，這是同一件事。
