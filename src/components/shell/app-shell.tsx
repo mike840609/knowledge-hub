@@ -10,6 +10,9 @@ import { ArchivedWorkspaceBanner } from "@/components/workspaces/archived-worksp
 import { Drawer } from "@/components/ui/drawer";
 import { isBoolean, readStored, removeStored, usePersistedJson } from "@/components/shell/use-persisted-state";
 import { ToastProvider } from "@/components/ui/toast";
+import { NAV_TOGGLE_SHORTCUT } from "@/components/actions/action-registry";
+import { matchesShortcut } from "@/lib/shortcut-keys";
+import { TOGGLE_NAV_EVENT } from "./nav-toggle";
 
 export function AppShell({ model, children }: { model: WorkspaceShellModel; children: ReactNode }) {
   const authorization = useWorkspaceAuthorizationRefresh(model.access, model.navigation);
@@ -46,6 +49,31 @@ export function AppShell({ model, children }: { model: WorkspaceShellModel; chil
   const toggleNav = useCallback(() => {
     setNavCollapsed((collapsed) => !collapsed);
   }, [setNavCollapsed]);
+
+  // ⌘\ and the palette's "Toggle navigation". Where the rail is on screen it collapses or expands; where it
+  // is not (a narrow window, whose navigation is the menu) that is what it opens, or closes.
+  const toggleNavigation = useCallback(() => {
+    if (window.matchMedia("(min-width: 1024px)").matches) toggleNav();
+    else if (navOpen) setNavOpen(false);
+    else openNav();
+  }, [navOpen, openNav, toggleNav]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || !matchesShortcut(event, NAV_TOGGLE_SHORTCUT)) return;
+      // A dialog or menu that is open owns its keys; the palette is one, and toggling the page behind it is not what was asked.
+      if (event.target instanceof HTMLElement && event.target.closest('[role="dialog"], [role="menu"]')) return;
+      // No field types ⌘\, so it acts in the composer's title and editor too — where the writer most wants the room.
+      event.preventDefault();
+      toggleNavigation();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener(TOGGLE_NAV_EVENT, toggleNavigation);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener(TOGGLE_NAV_EVENT, toggleNavigation);
+    };
+  }, [toggleNavigation]);
 
   return (
     <WorkspaceAuthorizationContext.Provider value={authorization}>

@@ -18,6 +18,7 @@ import type { WorkspaceActions } from "@/server/workspace-admin";
  */
 
 export type ActionId =
+  | "navigate.toggle-nav"
   | "navigate.home"
   | "navigate.knowledge"
   | "navigate.search"
@@ -59,6 +60,7 @@ export type ActionSurface = "palette" | "row" | "empty" | "create";
 export type ActionIconName =
   | "new-tab"
   | "copy-link"
+  | "sidebar"
   | "knowledge"
   | "search"
   | "graph"
@@ -92,6 +94,8 @@ export type FolderCommand = "folder.rename" | "folder.archive" | "folder.restore
 
 export type ActionEffect =
   | { kind: "download"; href: string }
+  /** Collapses or expands the app shell's navigation (or, where there is no rail, opens the menu). */
+  | { kind: "toggle-nav" }
   | { kind: "navigate"; href: string }
   /** Leaves this tab where it is; what a middle-click on the row's link does. */
   | { kind: "open-new-tab"; href: string }
@@ -106,6 +110,14 @@ export type ActionEffect =
   | { kind: "folder-command"; command: FolderCommand; nodeId: string; sourceId: string; label: string }
   /** Asks for a place — a folder, or the top level — and moves the node there, last. */
   | { kind: "move"; sourceId: string; label: string; node: { type: "document"; documentId: string } | { type: "folder"; nodeId: string } };
+
+/**
+ * Collapse or expand the navigation. The one binding for it: the app shell reads the key from here, the
+ * button that does the same thing takes its `aria-keyshortcuts` from here, and the palette shows it
+ * beside the action. ⌘\ rather than ⌘/, which the document composer already has for switching between
+ * the rendered editor and the Markdown source, and rather than ⌘B, which is bold there.
+ */
+export const NAV_TOGGLE_SHORTCUT = "Meta+\\ Control+\\";
 
 export type Action = {
   id: ActionId;
@@ -199,6 +211,16 @@ export function availableActions(context: ActionContext): readonly Action[] {
   const archived = context.includeArchived === true;
   const suffix = archived ? "?includeArchived=true" : "";
   const actions: Action[] = [];
+  actions.push({
+    id: "navigate.toggle-nav",
+    label: "Toggle navigation",
+    group: "navigate",
+    icon: "sidebar",
+    keywords: ["sidebar", "collapse", "expand", "hide", "show", "menu", "panel"],
+    shortcut: NAV_TOGGLE_SHORTCUT,
+    surfaces: ["palette"],
+    effect: { kind: "toggle-nav" },
+  });
   if (context.workspaceType === "PERSONAL") actions.push({ id: "navigate.home", label: "Go to My Space home", group: "navigate", icon: "knowledge", keywords: ["drafts", "favorites", "recent", "export"], surfaces: ["palette"], effect: { kind: "navigate", href: `/w/${workspaceId}/home` } });
 
   actions.push({

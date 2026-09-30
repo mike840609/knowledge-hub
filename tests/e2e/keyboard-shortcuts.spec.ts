@@ -110,3 +110,92 @@ test("Esc never discards a changed draft", async ({ page }) => {
   await expect(page).toHaveURL(/\/edit$/);
   await expect(titleField).toHaveValue("Unsaved change");
 });
+
+/** The primary navigation, its button and its width: collapsed is the narrow rail, expanded the one with the labels. */
+function navigation(page: Page) {
+  const rail = page.getByRole("navigation", { name: "Primary" }).locator("xpath=ancestor::aside");
+  return {
+    rail,
+    collapse: page.getByRole("button", { name: "Collapse navigation" }),
+    expand: page.getByRole("button", { name: "Expand navigation" }),
+    width: async () => (await rail.boundingBox())?.width ?? 0,
+  };
+}
+
+test.describe("⌘\\ collapses and expands the navigation", () => {
+  test("from anywhere on the page, and the choice is remembered", async ({ page }) => {
+    await openArchitecture(page);
+    const nav = navigation(page);
+    await expect(nav.collapse).toHaveAttribute("aria-keyshortcuts", "Meta+\\ Control+\\");
+    expect(await nav.width()).toBeGreaterThan(150);
+
+    await pressUntil(page, "ControlOrMeta+Backslash", () => expect(nav.expand).toBeVisible({ timeout: 1_000 }));
+    await expect.poll(nav.width).toBeLessThan(60);
+    await page.keyboard.press("ControlOrMeta+Backslash");
+    await expect(nav.collapse).toBeVisible();
+    await expect.poll(nav.width).toBeGreaterThan(150);
+
+    // Collapsed, and reloaded: still collapsed.
+    await page.keyboard.press("ControlOrMeta+Backslash");
+    await expect(nav.expand).toBeVisible();
+    await page.reload();
+    await expect(nav.expand).toBeVisible(ROUND_TRIP);
+    await expect.poll(nav.width).toBeLessThan(60);
+  });
+
+  test("also while writing, from the title and from the editor, without typing anything", async ({ page }) => {
+    await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/new`);
+    const form = page.locator("main form").first();
+    const title = form.getByLabel("Title", { exact: true });
+    await expect(title).toBeEditable(ROUND_TRIP);
+    const nav = navigation(page);
+
+    await title.click();
+    await pressUntil(page, "ControlOrMeta+Backslash", () => expect(nav.expand).toBeVisible({ timeout: 1_000 }));
+    await expect(title).toHaveValue("");
+
+    const surface = form.getByRole("textbox", { name: "Content" });
+    await expect(surface).toBeEditable(ROUND_TRIP);
+    await surface.click();
+    await page.keyboard.type("text");
+    await page.keyboard.press("ControlOrMeta+Backslash");
+    await expect(nav.collapse).toBeVisible();
+    await expect(surface).toHaveText("text");
+  });
+
+  test("the palette lists it with its shortcut, finds it by what people call it, and runs it", async ({ page }) => {
+    await openArchitecture(page);
+    const nav = navigation(page);
+    const field = page.getByRole("combobox", { name: "Search documents and actions" });
+    await pressUntil(page, "/", () => expect(field).toBeVisible({ timeout: 1_000 }));
+    await field.fill("sidebar");
+    const option = page.getByRole("listbox", { name: "Actions and documents" }).getByRole("option", { name: /Toggle navigation/ });
+    await expect(option.locator("kbd")).toHaveText("⌘\\");
+    await option.click();
+    await expect(field).toBeHidden();
+    await expect(nav.expand).toBeVisible(ROUND_TRIP);
+  });
+
+  test("a dialog that is open keeps the key: the palette does not toggle the page behind it", async ({ page }) => {
+    await openArchitecture(page);
+    const nav = navigation(page);
+    const field = page.getByRole("combobox", { name: "Search documents and actions" });
+    await pressUntil(page, "/", () => expect(field).toBeVisible({ timeout: 1_000 }));
+    await page.keyboard.press("ControlOrMeta+Backslash");
+    await expect(field).toBeVisible();
+    // With the palette open the page behind it is out of the accessibility tree, so look at it once the
+    // palette is closed: had the key reached the shell, the navigation would be collapsed by now.
+    await page.keyboard.press("Escape");
+    await expect(field).toBeHidden();
+    await expect(nav.collapse).toBeVisible();
+    expect(await nav.width()).toBeGreaterThan(150);
+  });
+
+  test("in a window too narrow for the rail, it opens the menu that takes its place", async ({ page }) => {
+    await page.setViewportSize({ width: 800, height: 700 });
+    // The tree is behind the Browse button at this width, so go to the source and let it land on a document.
+    await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${OBSIDIAN_SOURCE}`);
+    await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible(ROUND_TRIP);
+    await pressUntil(page, "ControlOrMeta+Backslash", () => expect(page.getByRole("dialog", { name: "Menu" })).toBeVisible({ timeout: 1_000 }));
+  });
+});

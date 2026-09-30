@@ -211,3 +211,15 @@ Save 與 Create document 顯示 `title="Save (⌘Enter)"`／`"Create document (�
 - **為何不用 `router.refresh()`。** Next 的 action queue 在 refresh 尚未完成時收到 navigate，會把 refresh 標為 discarded，連同它清空 prefetch cache 的效果一起丟掉；這也是 #49 看到 refresh 與 push 互搶的原因。
 
 **命名修訂。** `create.document` 的標籤由「Add to Notes」改為「Create document」，新增頁標題改為「New document」。快捷鍵是 `C`，而「Add to」讓人聯想不到 `C`；名詞沿用產品其他地方的 document（Edit document、Open document、表單按鈕 Create document），去處 Notes 改為 palette 關鍵字（`add`、`notes`）。
+
+## 10. 之後加的：`⌘\` 收合／展開導覽（2026-09-30）
+
+主導覽（左邊 Knowledge／Graph／Sources 那一欄）原本只有頂欄的按鈕能收合。現在 `⌘\`（其他平台 `Ctrl \`）也可以，定義在 registry 的 `NAV_TOGGLE_SHORTCUT`；規則見 `frontend-design-language.md` §10 的 Shortcuts。
+
+- **為什麼是 `⌘\`。** `⌘/` 在 composer 是「渲染⇄原始碼」，`⌘B` 是粗體。`⌘\` 沒有任何綁定，編輯器也不吃它，所以在 composer 裡也能用（沒有欄位會打出它，因此不需要單鍵那組「輸入中不觸發」的規則；`matchesShortcut` 只排除輸入法組字與按住不放）。
+- **開著的 dialog 或 menu 留著自己的鍵**：palette 開著時按 `⌘\` 不會動到後面的頁面。
+- **沒有側欄的視窗**（小於 `lg`）：開關的是取代它的 Menu 抽屜。
+- **知識樹沒有收合功能**，所以這個快捷鍵碰不到它；要收知識樹得先做那個功能（文件頁還有右側 inspector，寬度要重新分配）。
+- **`aria-keyshortcuts` 是 `"Meta+\\ Control+\\"`**（字面上兩個反斜線是 JS 字串的跳脫，實際是 `\`）。
+- 鍵盤配置：`event.key` 為 `\` 才算；US 與注音鍵盤都有這個鍵。某些配置（如德文）要按 AltGr，我沒有在那些配置上試過。
+

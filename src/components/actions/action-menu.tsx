@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/menu";
 import { requestFolderName } from "@/components/knowledge/folder-name-request";
 import { requestMove } from "@/components/knowledge/move-request";
+import { requestNavToggle } from "@/components/shell/nav-toggle";
 import { useTreeMutations } from "@/components/knowledge/use-tree-mutations";
 import { ActionIcon } from "./action-icon";
 import type { Action } from "./action-registry";
@@ -66,6 +67,9 @@ export function useActionRunner({ onToggleFavorite }: ActionHandlers) {
     (action: Action) => {
       const { effect } = action;
       switch (effect.kind) {
+        case "toggle-nav":
+          requestNavToggle();
+          return;
         case "download":
           window.location.assign(effect.href);
           return;

@@ -39,6 +39,34 @@ export function isSingleKeyShortcut(event: KeyEventLike): boolean {
   return true;
 }
 
+/** The parts of a KeyboardEvent `matchesShortcut` reads. */
+export type ShortcutEventLike = Pick<KeyEventLike, "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey" | "isComposing" | "repeat" | "keyCode">;
+
+/**
+ * Whether a key press is a registry `shortcut` that carries a modifier ("Meta+\ Control+\": either
+ * alternative). The modifiers must be exactly those named, so ⌘\ is not ⌘⇧\ (`|`) and not ⌘⌥\; the
+ * key is compared by what it types (`event.key`), not by where it sits, as everywhere else here.
+ *
+ * Not for a single key: that is `isSingleKeyShortcut`, which also says where such a key may not act.
+ * A key that no field types (`\` with ⌘) has no such place to stay out of, so this asks only whether
+ * it was pressed — not mid-composition in an input method, and not as a held-down repeat.
+ */
+export function matchesShortcut(event: ShortcutEventLike, shortcut: string): boolean {
+  if (event.isComposing || event.keyCode === 229 || event.repeat) return false;
+  return shortcut.split(" ").some((alternative) => {
+    const parts = alternative.split("+");
+    const key = parts.pop();
+    if (!key || parts.length === 0) return false;
+    return (
+      event.key.toLowerCase() === key.toLowerCase() &&
+      event.metaKey === parts.includes("Meta") &&
+      event.ctrlKey === parts.includes("Control") &&
+      event.altKey === parts.includes("Alt") &&
+      event.shiftKey === parts.includes("Shift")
+    );
+  });
+}
+
 /**
  * A registry `shortcut` is spelled for `aria-keyshortcuts` ("Meta+I Control+I").
  * On screen it shows its first alternative, the way the UI already writes ⌘K.

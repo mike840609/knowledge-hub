@@ -8,6 +8,7 @@ import {
   FolderInput,
   FolderPlus,
   Link2,
+  PanelLeft,
   FileText,
   Network,
   Info,
@@ -30,6 +31,7 @@ import type { ActionIconName } from "./action-registry";
 const icons: Record<ActionIconName, LucideIcon> = {
   "new-tab": ExternalLink,
   "copy-link": Link2,
+  sidebar: PanelLeft,
   knowledge: FileText,
   search: Search,
   graph: Network,
