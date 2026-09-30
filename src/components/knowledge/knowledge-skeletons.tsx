@@ -1,4 +1,9 @@
+"use client";
+
+import { useContext } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DocumentPane } from "./document-pane";
+import { InspectorContext } from "./inspector-context";
 
 /**
  * One loading idiom: a skeleton shaped like the thing being fetched, plus a
@@ -17,25 +22,47 @@ function LoadingStatus({ children }: { children: string }) {
 }
 
 export function DocumentSkeleton() {
+  const inspector = useContext(InspectorContext);
   return (
-    <div className="kh-reading-column pb-6 pt-5">
-      <LoadingStatus>Loading document</LoadingStatus>
-      <div aria-hidden="true">
-        <Skeleton className="h-4 w-40" />
-        <Skeleton className="mt-3 h-7 w-2/3" />
-        <div className="mt-3 flex gap-2">
-          <Skeleton className="h-5 w-16" />
-          <Skeleton className="h-5 w-44" />
-        </div>
-        <div className="mt-6 space-y-3">
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-5/6" />
-          <Skeleton className="h-4 w-full" />
+    <DocumentPane
+      loading
+      inspectorOpen={inspector?.open}
+      outline={
+        <div aria-hidden="true" className="space-y-3 py-6 pr-4">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-4 w-4/5" />
+          <Skeleton className="h-4 w-3/5" />
           <Skeleton className="h-4 w-2/3" />
         </div>
+      }
+      inspector={inspector?.open ? (
+        <div aria-hidden="true" className="hidden h-full flex-col gap-3 border-l border-kh-border/70 bg-kh-bg-raised px-4 py-3 min-[1440px]:flex">
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="mt-3 h-8 w-full" />
+          <Skeleton className="h-4 w-4/5" />
+          <Skeleton className="h-4 w-3/5" />
+        </div>
+      ) : null}
+    >
+      <div className="kh-reading-column pb-6 pt-5">
+        <LoadingStatus>Loading document</LoadingStatus>
+        <div aria-hidden="true">
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="mt-3 h-7 w-2/3" />
+          <div className="mt-3 flex gap-2">
+            <Skeleton className="h-5 w-16" />
+            <Skeleton className="h-5 w-44" />
+          </div>
+          <div className="mt-6 space-y-3">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-5/6" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-2/3" />
+          </div>
+        </div>
       </div>
-    </div>
+    </DocumentPane>
   );
 }
 

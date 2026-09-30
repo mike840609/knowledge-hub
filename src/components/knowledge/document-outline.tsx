@@ -77,7 +77,7 @@ export function OutlineRail({ entries, activeSlug }: { entries: readonly Outline
   return (
     <aside
       aria-label="On this page"
-      className="kh-outline-rail sticky top-4 max-h-[calc(100vh-8rem)] w-56 shrink-0 self-start overflow-y-auto overscroll-contain py-6 pr-4"
+      className="sticky top-4 max-h-[calc(100vh-8rem)] overflow-y-auto overscroll-contain py-6 pr-4"
     >
       <h2 className="mb-2 text-caption font-medium text-kh-text-muted">On this page</h2>
       <OutlineList entries={entries} activeSlug={activeSlug} />
