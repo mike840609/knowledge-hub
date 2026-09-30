@@ -353,7 +353,7 @@ Next 的 build 輸出（有 ±1 kB 的分組誤差，見切片 0 的紀錄）：
 | --- | --- | --- |
 | A2.1 | `6510eca` | PATCH 的三種形狀與 27 個 integration |
 | A2.2–A2.4 | `e0239a2` | registry、對話框、樹上的 Alt+↑/↓、jsdom 與 e2e |
-| A2.5 | `eb2eb00` | 文件與驗證紀錄 |
+| A2.5 | `28d95d8` | 文件與驗證紀錄 |
 | — | （本 commit） | 與 folder sync 的混合情境測試（integration 6 案） |
 
 ### 結果
