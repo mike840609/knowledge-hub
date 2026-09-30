@@ -34,11 +34,13 @@ export type ActionId =
   | "document.favorite"
   | "document.details"
   | "document.backlinks"
+  | "document.move"
   | "document.archive"
   | "document.restore"
   | "folder.new-document"
   | "folder.new-folder"
   | "folder.rename"
+  | "folder.move"
   | "folder.archive"
   | "folder.restore";
 
@@ -71,6 +73,7 @@ export type ActionIconName =
   | "new-document"
   | "new-folder"
   | "rename"
+  | "move"
   | "archive"
   | "restore";
 
@@ -97,7 +100,9 @@ export type ActionEffect =
    * inside that folder otherwise. `sourceId` is the parent's, or null for the default source.
    */
   | { kind: "create-folder"; sourceId: string | null; parentId: string | null; parentLabel: string | null }
-  | { kind: "folder-command"; command: FolderCommand; nodeId: string; sourceId: string; label: string };
+  | { kind: "folder-command"; command: FolderCommand; nodeId: string; sourceId: string; label: string }
+  /** Asks for a place — a folder, or the top level — and moves the node there, last. */
+  | { kind: "move"; sourceId: string; label: string; node: { type: "document"; documentId: string } | { type: "folder"; nodeId: string } };
 
 export type Action = {
   id: ActionId;
@@ -417,6 +422,19 @@ export function availableActions(context: ActionContext): readonly Action[] {
         sourceId: target.sourceId,
       },
     });
+    // The same three axes as Edit, plus the source's own state: a source that is archived refuses
+    // every change to what is in it, and a move is one. Before Archive, which stays last.
+    if (can.canWrite && confirmed && target.ownership === "HUB_MANAGED" && target.status === "ACTIVE" && target.sourceStatus === "ACTIVE") {
+      actions.push({
+        id: "document.move",
+        label: "Move document…",
+        group: "document",
+        icon: "move",
+        keywords: ["folder", "relocate", "put", "organize", "file", target.label],
+        surfaces: ["palette", "row"],
+        effect: { kind: "move", sourceId: target.sourceId, label: target.label, node: { type: "document", documentId: target.documentId } },
+      });
+    }
     // Last in the group, where a menu keeps what is hard to take back. This is not deleting: an
     // archived document keeps every revision and its place, and Restore puts it back (the
     // lifecycle is ACTIVE or ARCHIVED, and nothing else). All three axes, as Edit has them: the
@@ -476,6 +494,15 @@ export function availableActions(context: ActionContext): readonly Action[] {
         keywords: ["name", "title", folder.label],
         surfaces: ["row"],
         effect: { kind: "folder-command", command: "folder.rename", ...identity },
+      });
+      actions.push({
+        id: "folder.move",
+        label: "Move folder…",
+        group: "folder",
+        icon: "move",
+        keywords: ["relocate", "put", "nest", "organize", folder.label],
+        surfaces: ["row"],
+        effect: { kind: "move", sourceId: folder.sourceId, label: folder.label, node: { type: "folder", nodeId: folder.nodeId } },
       });
       actions.push({
         id: "folder.archive",

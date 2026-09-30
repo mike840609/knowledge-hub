@@ -174,7 +174,7 @@ registry 新增（型別 `ActionTarget` 之外加 `FolderTarget`）：`document.
 ### 7.3 介面
 
 - 文件列：row menu 多「移到…」「封存」（在「顯示已封存」下改為「還原」）。資料夾列：現在沒有任何選單，補上 context menu 與 `⋯`：「在這裡新增文件」「新增資料夾」「重新命名」「移到…」「封存／還原」。側欄標題列的建立入口多「新增資料夾」。palette 對**目前開啟的文件**提供「Move document…」「Archive document」。
-- 「移到…」是對話框，列出該 Source 內的 ACTIVE 資料夾樹與「最上層」，排除自己與自己的子孫；放在最後一位（append）。
+- 「移到…」是對話框，列出該 Source 內的 ACTIVE 資料夾樹與「最上層」，排除自己與自己的子孫；放在最後一位（append）。（實作見 §7.6。）
 - **鍵盤重排。** 樹上聚焦一列後 `Alt+↑`／`Alt+↓` 在同層上下移動（呼叫 `reorderTreeNode`），並以 `aria-live` 回報新位置。與既有快捷鍵（C、E、/、⌘Enter、Esc、⌘I）及樹的方向鍵不衝突，實作時以瀏覽器實測確認。
 - **封存的回饋。** 封存後出現 toast `Archived “X”.` 附 **Undo**（呼叫 restore；動作模型：撤銷只在能保住的地方提供，這裡能）。若目前正開著被封存的文件，導向該 Source 的清單。封存會讓指向它的連結變成失效（解析只看 ACTIVE 文件）——文件頁的封存動作在有 backlink 時，toast 補一句 `N documents link here; those links will stop working.`（N＝1 時用單數）。
 - 變更後 `router.refresh()`；側欄是共用 layout，沿用既有的刷新慣例（`refresh-on-arrival` 的時序規則）。
@@ -197,6 +197,23 @@ design-language §18 寫「封存文件從來不存在」。服務層一直有�
 - **`/knowledge/new?folder=<id>`。** 不是 ID 的被忽略；是 ID 但寫不進去（不存在、已封存、在別的 source）的照樣交給建立請求，由服務用白話拒絕（`INVALID_PARENT`：目標資料夾已不存在，或已被封存）。標題列多一段資料夾名稱，只是說明。
 - **不在這個 PR：** 「移到…」、鍵盤重排、palette 的 Move（A-2）；資料夾名稱唯一性（資料庫沒有這條約束，同層可以有同名資料夾——與檔案系統不同，這是既有的資料模型）。
 - **重新命名資料夾的 Undo 是改回舊名**；新增資料夾沒有 Undo。
+
+### 7.6 A-2 的實作記錄（2026-09-30）
+
+同樣只寫實作時決定、或與上面寫的不一樣的地方。
+
+- **`PATCH /api/tree-nodes/:id` 的三種形狀，一次只做一件事。** `{name}` 改名；`{parentId, position?}` 移到資料夾，`parentId: null` 是最上層，省略 `position` 是放在最後；只有 `{position}` 是在原本的同層裡換位置。「有沒有 `parentId` 這個鍵」與「它是不是 null」是兩回事（null 是一個地方，沒有鍵是沒有說），所以是用鍵在不在來分，不是用值。名稱與位置一起給是 400，不做一半。省略位置的「最後」是 `APPEND_POSITION`（安全整數上限），靠的是放置本來就把過大的索引夾到最後（`placeNodeAtIndex`），服務沒有改。
+- **位置是同層「所有」節點的索引，包括已封存的。** 樹預設不畫已封存的節點，所以「往下一格」不能是「畫面上的索引＋1」：中間若隔著一個看不見的已封存節點，就會落在鄰居的錯誤那一側。要的位置是**鄰居自己的儲存位置**（`reorderStep`）——放在那個索引，就在鄰居的另一側，不論中間隱藏了幾個。這依賴 Hub 管理的同層位置是連續的（每次建立與移動都會重新編號），所以測試是拿真的服務跑（隱藏 B、E 的六份文件，隨機 60 步，每步後比對畫面上看得到的順序），不是只測純函式。
+- **移動不動連結。** 不產生 revision，索引不動；Hub 文件沒有 `sourcePath`，相對路徑連結對它本來就沒有意義，wikilink 靠標題解析，位置不是解析的依據。所以移動不需要像封存那樣提示「N 份文件的連結會失效」。
+- **對話框是一組原生 radio。** 「最上層」與 ACTIVE 資料夾依樹的順序縮排列出；自己與自己的子孫不列出（純函式 `moveDestinations`，已封存的資料夾與其底下也不列，因為服務要求祖先鏈一路 ACTIVE）；目前所在的位置標「Current」且不可選（要放最後請用 Alt+↓）。方向鍵在 radio 群組裡原生可用，Enter 由 fieldset 明說送出（不是每個瀏覽器都讓 radio 的 Enter 送出表單）。**沒有搜尋欄**：資料夾很多時要捲動，這是刻意不做的，見下。
+- **標籤是 `Move document…`／`Move folder…`，不是 §7.3 寫的「移到…」。** registry 的標籤要能單獨成句（palette 一列沒有上下文），選單裡的其他項也是「動詞＋名詞」（Edit document、Archive document）。palette 只給目前開著的文件，資料夾沒有 palette 項。§7.3 與計畫寫 A-2 要把「Archive document」加進 palette——A-1 已經加了，這裡只多 Move。
+- **Undo 是移回原資料夾的原位置**（PATCH 帶舊的 `parentId` 與舊的 `position`）。重排沒有 Undo toast：一步的反向是反方向的一步，每按一次鍵就出一個 toast 會蓋住樹。
+- **移進資料夾後，那個資料夾會被展開**（`kh:reveal-folder` 事件，有那個資料夾的那棵樹回應），否則移進去的東西會藏在讀者收合的資料夾裡。這是 A-1「樹會展開目前文件的祖先」的同一個想法。
+- **Alt+↑/↓ 只作用在選單裡有 Move 的列。** 判斷用的是該列自己的 registry 動作（`document.move`／`folder.move`），所以唯讀成員、SOURCE_MANAGED 的列、已封存的列都不會動，而且那時不 `preventDefault`，鍵留給別人。其他修飾鍵組合（Alt+Shift、Ctrl+Alt、⌘+Alt）不算重排。篩選中不動並用 aria-live 說「Clear the filter to reorder.」——篩過的樹裡，旁邊那列不是它真正的鄰居。已在最上或最下會說「already first／last」，不送請求。
+- **請求進行中按的鍵保留最後一個。** 送出後到新的樹送到之前，樹是要被換掉的，照它算下一步會算錯；所以只記住最後按的那個方向，新的樹到了再照新的樹算。按住不放＝一個來回一步，放開就停；先下後上是走一步再走回來，不是第二下被吃掉。逾時（3 秒）放棄。
+- **焦點與報位置。** 移動後把焦點放回該列（Chromium 移動有焦點的節點時焦點其實還在；別的瀏覽器不一定，所以明說，單元測試模擬「焦點被丟掉」的瀏覽器來驗證）；位置以 `aria-live="polite"` 的區域報（「Moved “B” up. Position 1 of 3.」），每則重新掛上，同樣的話說兩次也聽得到兩次。**不是 `role="status"`**：toast 層是頁面唯一的 status，多一個會讓每個「找頁面上的 status」的查詢變成不明確（既有的 e2e 就有這樣寫的）。
+- **沒有在 macOS 與 Windows 實測 Alt+↑/↓**（計畫 A2.4 要求）。沒有那兩種環境；Chromium on Linux 通過。Option/Alt+上下在樹（非可編輯區）沒有瀏覽器預設行為，沒發現衝突，但這是推論不是實測。
+- **不在這個 PR：** 拖放；對話框裡的搜尋；重排的 Undo。
 
 ## 8. 切片 B — 最近開過與收藏
 

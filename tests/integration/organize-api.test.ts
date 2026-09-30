@@ -12,6 +12,7 @@ import { ensureDefaultHubSource } from "@/modules/sources/application/ensure-def
 import { createTeamWorkspaceInsert } from "@/modules/workspaces/domain/workspace";
 import { createDirectMembership } from "@/modules/workspaces/domain/workspace-membership";
 import { uuidv7 } from "@/shared/ids/uuidv7";
+import { buildKnowledgeTree, reorderStep } from "@/lib/knowledge-navigation";
 import { createDocumentForAnySource } from "../fixtures/knowledge";
 
 const injected = vi.hoisted(() => ({ caller: null as unknown, services: null as unknown }));
@@ -339,7 +340,8 @@ describe("renaming a folder", () => {
   });
 
   it.each([
-    ["no name (moving arrives with the move dialog)", { parentId: null, position: 0 }],
+    ["nothing to change", {}],
+    ["a name together with a place", { name: "After", parentId: null }],
     ["a blank name", { name: " " }],
     ["a name past the column's length", { name: "x".repeat(513) }],
   ])("answers 400 for %s", async (_what, body) => {
@@ -355,6 +357,267 @@ describe("renaming a folder", () => {
     const w = await world();
     as(w.owner);
     await expectError(await patchTreeNode(request({ name: "A" }, "PATCH"), ofNode("not-an-id")), 400, "INVALID_REQUEST");
+  });
+});
+
+/** The children of one parent in order, with the positions they hold — archived ones included, as the table does. */
+async function order(w: World, sourceId: string, parentId: string | null) {
+  return (await tree(w, sourceId))
+    .filter((item) => item.parentId === parentId)
+    .sort((a, b) => a.position - b.position)
+    .map((item) => ({ label: item.label, position: item.position }));
+}
+async function nodeOf(w: World, documentId: string) {
+  const found = (await tree(w, w.notes)).find((item) => item.type === "document" && item.documentId === documentId);
+  if (!found) throw new Error("No node for that document.");
+  return found.id;
+}
+async function revisionCount(documentId: string) {
+  const rows = (await pool.query("SELECT COUNT(*) AS c FROM knowledge_revisions WHERE document_id = ?", [documentId])) as { c: bigint | number }[];
+  return Number(rows[0].c);
+}
+
+/** Notes with A, B and a folder F at the top (in that order), and a document D already inside F. */
+async function arranged() {
+  const w = await world();
+  const a = await makeDocument(w, "A");
+  const b = await makeDocument(w, "B");
+  const folder = await makeFolder(w, "F");
+  const d = await makeDocument(w, "D", "body", folder.treeNodeId);
+  return { w, a, b, d, folder: folder.treeNodeId, bNode: await nodeOf(w, b.documentId) };
+}
+
+describe("moving a node", () => {
+  it("puts a document last in the folder it is moved into, and closes the gap it left", async () => {
+    const { w, b, folder, bNode } = await arranged();
+    as(w.owner);
+    expect((await patchTreeNode(request({ parentId: folder }, "PATCH"), ofNode(bNode))).status).toBe(204);
+    expect(await order(w, w.notes, folder)).toEqual([{ label: "D", position: 0 }, { label: "B", position: 1 }]);
+    expect(await order(w, w.notes, null)).toEqual([{ label: "A", position: 0 }, { label: "F", position: 1 }]);
+    // Only where it is changed: same document, same revision.
+    expect(await revisionCount(b.documentId)).toBe(1);
+    expect(await nodeOf(w, b.documentId)).toBe(bNode);
+  });
+
+  it("puts it at the place it is given", async () => {
+    const { w, folder, bNode } = await arranged();
+    as(w.owner);
+    expect((await patchTreeNode(request({ parentId: folder, position: 0 }, "PATCH"), ofNode(bNode))).status).toBe(204);
+    expect(await order(w, w.notes, folder)).toEqual([{ label: "B", position: 0 }, { label: "D", position: 1 }]);
+  });
+
+  it("counts an archived sibling in the place it is given, because the group is every sibling", async () => {
+    const { w, d, folder, bNode } = await arranged();
+    const extra = await makeDocument(w, "E", "body", folder);
+    await hub.archiveDocument(w.owner, extra.documentId);
+    // The group is D, E (archived). Index 1 is between them, however many are in view.
+    as(w.owner);
+    expect((await patchTreeNode(request({ parentId: folder, position: 1 }, "PATCH"), ofNode(bNode))).status).toBe(204);
+    expect(await order(w, w.notes, folder)).toEqual([{ label: "D", position: 0 }, { label: "B", position: 1 }, { label: "E", position: 2 }]);
+    expect(d.documentId).toBeTruthy();
+  });
+
+  it("takes a document back to the top level with a null parent, last", async () => {
+    const { w, d, folder } = await arranged();
+    as(w.owner);
+    expect((await patchTreeNode(request({ parentId: null }, "PATCH"), ofNode(await nodeOf(w, d.documentId)))).status).toBe(204);
+    expect(await order(w, w.notes, null)).toEqual([{ label: "A", position: 0 }, { label: "B", position: 1 }, { label: "F", position: 2 }, { label: "D", position: 3 }]);
+    expect(await order(w, w.notes, folder)).toEqual([]);
+  });
+
+  it("moves a folder with everything in it", async () => {
+    const { w, d, folder } = await arranged();
+    const other = await makeFolder(w, "G");
+    as(w.owner);
+    expect((await patchTreeNode(request({ parentId: other.treeNodeId }, "PATCH"), ofNode(folder))).status).toBe(204);
+    expect(await order(w, w.notes, other.treeNodeId)).toEqual([{ label: "F", position: 0 }]);
+    // D is still in F: nothing under it was touched.
+    expect((await tree(w, w.notes)).find((item) => item.type === "document" && item.documentId === d.documentId)?.parentId).toBe(folder);
+  });
+
+  it.each([
+    ["itself", (n: { folder: string; inner: string }) => n.folder],
+    ["a folder it holds", (n: { folder: string; inner: string }) => n.inner],
+  ])("refuses to put a folder inside %s", async (_what, destination) => {
+    const { w, folder } = await arranged();
+    const inner = await makeFolder(w, "Inner", { parentId: folder });
+    as(w.owner);
+    await expectError(await patchTreeNode(request({ parentId: destination({ folder, inner: inner.treeNodeId }) }, "PATCH"), ofNode(folder)), 409, "TREE_CYCLE");
+    expect((await tree(w, w.notes)).find((item) => item.id === folder)?.parentId).toBeNull();
+  });
+
+  it("refuses a destination in another source", async () => {
+    const { w, bNode } = await arranged();
+    const other = await addSource(w);
+    as(w.owner);
+    await expectError(await patchTreeNode(request({ parentId: other.folderId }, "PATCH"), ofNode(bNode)), 409, "CROSS_SOURCE_MOVE");
+    expect((await tree(w, w.notes)).find((item) => item.id === bNode)?.parentId).toBeNull();
+  });
+
+  it("refuses a destination that is archived, or is not a folder", async () => {
+    const { w, a, folder, bNode } = await arranged();
+    const gone = await makeFolder(w, "Gone");
+    await hub.archiveFolder(w.owner, gone.treeNodeId);
+    as(w.owner);
+    await expectError(await patchTreeNode(request({ parentId: gone.treeNodeId }, "PATCH"), ofNode(bNode)), 409, "INVALID_PARENT");
+    await expectError(await patchTreeNode(request({ parentId: await nodeOf(w, a.documentId) }, "PATCH"), ofNode(bNode)), 409, "INVALID_PARENT");
+    expect(await order(w, w.notes, folder)).toEqual([{ label: "D", position: 0 }]);
+  });
+
+  it("answers 404 for a destination that is not there", async () => {
+    const { w, bNode } = await arranged();
+    as(w.owner);
+    await expectError(await patchTreeNode(request({ parentId: uuidv7() }, "PATCH"), ofNode(bNode)), 404, "NOT_FOUND");
+  });
+
+  it("refuses an archived node", async () => {
+    const { w, b, folder, bNode } = await arranged();
+    await hub.archiveDocument(w.owner, b.documentId);
+    as(w.owner);
+    await expectError(await patchTreeNode(request({ parentId: folder }, "PATCH"), ofNode(bNode)), 400, "VALIDATION_ERROR");
+  });
+
+  it("refuses a viewer, and changes nothing", async () => {
+    const { w, folder, bNode } = await arranged();
+    as(w.viewer);
+    await expectError(await patchTreeNode(request({ parentId: folder }, "PATCH"), ofNode(bNode)), 404, "NOT_FOUND");
+    expect(await order(w, w.notes, folder)).toEqual([{ label: "D", position: 0 }]);
+  });
+
+  it("tells someone outside the workspace nothing but that it is not found — the same as for a node that is not there", async () => {
+    const { w, folder, bNode } = await arranged();
+    as(w.outsider);
+    const denied = await patchTreeNode(request({ parentId: folder }, "PATCH"), ofNode(bNode));
+    const missing = await patchTreeNode(request({ parentId: folder }, "PATCH"), ofNode(uuidv7()));
+    await expectError(denied.clone(), 404, "NOT_FOUND");
+    expect(await denied.json()).toEqual(await missing.json());
+  });
+
+  it("refuses SOURCE_MANAGED content, and an archived source", async () => {
+    const w = await world();
+    const managed = await addSource(w, { managed: true });
+    const archived = await addSource(w, { archived: true });
+    as(w.owner);
+    await expectError(await patchTreeNode(request({ parentId: null }, "PATCH"), ofNode(managed.folderId)), 409, "SOURCE_MANAGED_READ_ONLY");
+    await expectError(await patchTreeNode(request({ parentId: null }, "PATCH"), ofNode(archived.folderId)), 409, "SOURCE_ARCHIVED");
+  });
+
+  it.each([
+    ["a parent that is not an ID", { parentId: "not-an-id" }],
+    ["a place below zero", { parentId: null, position: -1 }],
+    ["a place that is not a whole number", { parentId: null, position: 1.5 }],
+    ["a place that is not a number", { parentId: null, position: "0" }],
+  ])("answers 400 for %s", async (_what, body) => {
+    const { w, bNode } = await arranged();
+    as(w.owner);
+    await expectError(await patchTreeNode(request(body, "PATCH"), ofNode(bNode)), 400, "INVALID_REQUEST");
+    expect(await order(w, w.notes, null)).toEqual([{ label: "A", position: 0 }, { label: "B", position: 1 }, { label: "F", position: 2 }]);
+  });
+});
+
+describe("reordering among siblings", () => {
+  async function three() {
+    const w = await world();
+    const docs: Record<string, string> = {};
+    for (const title of ["A", "B", "C"]) docs[title] = (await makeDocument(w, title)).documentId;
+    return { w, docs, aNode: await nodeOf(w, docs.A), cNode: await nodeOf(w, docs.C) };
+  }
+
+  it("puts a node at the place it is given, and renumbers the rest contiguously", async () => {
+    const { w, cNode } = await three();
+    as(w.owner);
+    expect((await patchTreeNode(request({ position: 0 }, "PATCH"), ofNode(cNode))).status).toBe(204);
+    expect(await order(w, w.notes, null)).toEqual([{ label: "C", position: 0 }, { label: "A", position: 1 }, { label: "B", position: 2 }]);
+  });
+
+  it("puts a place past the end at the end", async () => {
+    const { w, aNode } = await three();
+    as(w.owner);
+    expect((await patchTreeNode(request({ position: 99 }, "PATCH"), ofNode(aNode))).status).toBe(204);
+    expect(await order(w, w.notes, null)).toEqual([{ label: "B", position: 0 }, { label: "C", position: 1 }, { label: "A", position: 2 }]);
+  });
+
+  it("keeps the node where it is in the tree: only the order changes, and no revision is written", async () => {
+    const w = await world();
+    const folder = await makeFolder(w, "F");
+    const first = await makeDocument(w, "First", "body", folder.treeNodeId);
+    await makeDocument(w, "Second", "body", folder.treeNodeId);
+    as(w.owner);
+    expect((await patchTreeNode(request({ position: 1 }, "PATCH"), ofNode(await nodeOf(w, first.documentId)))).status).toBe(204);
+    expect(await order(w, w.notes, folder.treeNodeId)).toEqual([{ label: "Second", position: 0 }, { label: "First", position: 1 }]);
+    expect(await revisionCount(first.documentId)).toBe(1);
+  });
+
+  it("refuses a viewer, an outsider, SOURCE_MANAGED content, an archived source and an archived node", async () => {
+    const { w, docs, cNode } = await three();
+    const managed = await addSource(w, { managed: true });
+    const archivedSource = await addSource(w, { archived: true });
+    await hub.archiveDocument(w.owner, docs.B);
+    const bNode = await nodeOf(w, docs.B);
+    as(w.viewer);
+    await expectError(await patchTreeNode(request({ position: 0 }, "PATCH"), ofNode(cNode)), 404, "NOT_FOUND");
+    as(w.outsider);
+    await expectError(await patchTreeNode(request({ position: 0 }, "PATCH"), ofNode(cNode)), 404, "NOT_FOUND");
+    as(w.owner);
+    await expectError(await patchTreeNode(request({ position: 0 }, "PATCH"), ofNode(managed.folderId)), 409, "SOURCE_MANAGED_READ_ONLY");
+    await expectError(await patchTreeNode(request({ position: 0 }, "PATCH"), ofNode(archivedSource.folderId)), 409, "SOURCE_ARCHIVED");
+    await expectError(await patchTreeNode(request({ position: 0 }, "PATCH"), ofNode(bNode)), 400, "VALIDATION_ERROR");
+    expect(await order(w, w.notes, null)).toEqual([{ label: "A", position: 0 }, { label: "B", position: 1 }, { label: "C", position: 2 }]);
+  });
+
+  it.each([
+    ["a place below zero", { position: -1 }],
+    ["a place that is not a whole number", { position: 0.5 }],
+    ["a place that is null", { position: null }],
+  ])("answers 400 for %s", async (_what, body) => {
+    const { w, cNode } = await three();
+    as(w.owner);
+    await expectError(await patchTreeNode(request(body, "PATCH"), ofNode(cNode)), 400, "INVALID_REQUEST");
+  });
+});
+
+describe("the step the tree asks for, against the real service", () => {
+  it("puts a node on the far side of its neighbour in view, whatever archived siblings are hidden between them", async () => {
+    // Six documents; B and E are archived, so the reader sees A, C, D, F — and the server counts all six.
+    const w = await world();
+    const docs: Record<string, string> = {};
+    for (const title of ["A", "B", "C", "D", "E", "F"]) docs[title] = (await makeDocument(w, title)).documentId;
+    await hub.archiveDocument(w.owner, docs.B);
+    await hub.archiveDocument(w.owner, docs.E);
+    const nodes: Record<string, string> = {};
+    for (const title of ["A", "C", "D", "F"]) nodes[title] = await nodeOf(w, docs[title]);
+
+    const model = ["A", "C", "D", "F"];
+    // Seeded, so a failure is the same failure next time (mulberry32; the low bits of a plain LCG alternate, which would repeat the same few moves).
+    let state = 7;
+    const random = () => {
+      state = (state + 0x6d2b79f5) | 0;
+      let t = Math.imul(state ^ (state >>> 15), 1 | state);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    const next = (bound: number) => Math.floor(random() * bound);
+    let moves = 0;
+    as(w.owner);
+    for (let round = 0; round < 60; round += 1) {
+      const title = model[next(model.length)];
+      const direction = next(2) === 0 ? -1 : 1;
+      const view = await queries.listTree(w.owner, w.notes);
+      const step = reorderStep(buildKnowledgeTree(view), nodes[title], direction);
+      const at = model.indexOf(title);
+      const other = at + direction;
+      if (other < 0 || other >= model.length) {
+        expect(step?.kind).toBe("edge");
+        continue;
+      }
+      if (step?.kind !== "move") throw new Error(`Round ${round}: expected a step for ${title}.`);
+      [model[at], model[other]] = [model[other], model[at]];
+      expect((await patchTreeNode(request({ position: step.position }, "PATCH"), ofNode(nodes[title]))).status).toBe(204);
+      expect((await queries.listTree(w.owner, w.notes)).map((item) => item.label)).toEqual(model);
+      moves += 1;
+    }
+    // A run that mostly bounced off the ends would prove little.
+    expect(moves).toBeGreaterThan(30);
   });
 });
 

@@ -28,6 +28,19 @@ export const restoredFolder = (name: string) => `Restored folder ${quote(name)}.
 export const createdFolder = (name: string) => `Created folder ${quote(name)}.`;
 export const renamedFolder = (to: string) => `Renamed to ${quote(to)}.`;
 
+/** Where it went: into a folder, or to the top level, which has no name of its own to say. */
+export const movedNode = (name: string, destination: string | null) =>
+  destination === null ? `Moved ${quote(name)} to the top level.` : `Moved ${quote(name)} to ${quote(destination)}.`;
+
+/** Said aloud after a keyboard reorder: where the node is now, among the siblings the reader can see. */
+export const reorderedNode = (name: string, direction: "up" | "down", index: number, count: number) =>
+  `Moved ${quote(name)} ${direction}. Position ${index + 1} of ${count}.`;
+
+export const alreadyAtEdge = (name: string, edge: "first" | "last") => `${quote(name)} is already ${edge}.`;
+
+/** The tree shows a filtered subset, whose neighbours are not the node's real ones. */
+export const CLEAR_FILTER_TO_REORDER = "Clear the filter to reorder.";
+
 /** The name field's own rules, said before the request is sent; the server checks the same. */
 export function folderNameProblem(raw: string, maxLength: number): string | null {
   const name = raw.trim();

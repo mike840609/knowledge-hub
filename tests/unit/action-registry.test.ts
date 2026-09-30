@@ -310,8 +310,8 @@ function combinations<T extends Record<string, readonly unknown[]>>(axes: T): { 
   return rows as { [K in keyof T]: T[K][number] }[];
 }
 
-const FOLDER_ACTIONS = ["folder.new-document", "folder.new-folder", "folder.rename", "folder.archive", "folder.restore"];
-const LIFECYCLE_ACTIONS = ["document.archive", "document.restore", ...FOLDER_ACTIONS];
+const FOLDER_ACTIONS = ["folder.new-document", "folder.new-folder", "folder.rename", "folder.move", "folder.archive", "folder.restore"];
+const LIFECYCLE_ACTIONS = ["document.move", "document.archive", "document.restore", ...FOLDER_ACTIONS];
 
 describe("action registry — archiving a document (daily-driver spec §7.2)", () => {
   // Expected values are written out here from the spec's three axes, not read back from the registry.
@@ -378,6 +378,56 @@ describe("action registry — archiving a document (daily-driver spec §7.2)", (
   });
 });
 
+describe("action registry — moving a document (daily-driver spec §7.2)", () => {
+  const cells = combinations({
+    canWrite: [true, false],
+    confirmed: [true, false],
+    ownership: ["HUB_MANAGED", "SOURCE_MANAGED"],
+    status: ["ACTIVE", "ARCHIVED"],
+    sourceStatus: ["ACTIVE", "ARCHIVED"],
+  } as const);
+
+  it.each(cells)("canWrite=$canWrite confirmed=$confirmed $ownership document $status in a $sourceStatus source", (cell) => {
+    const offered = ids(
+      availableActions(
+        context({
+          can: { ...allCapabilities, canWrite: cell.canWrite },
+          confirmed: cell.confirmed,
+          target: target({ ownership: cell.ownership, status: cell.status, sourceStatus: cell.sourceStatus }),
+        }),
+      ),
+    ).filter((id) => id === "document.move");
+    // Written out from the axes: the caller may write, the source is the Hub's, and both the document and its source are live.
+    const expected = cell.canWrite && cell.confirmed && cell.ownership === "HUB_MANAGED" && cell.status === "ACTIVE" && cell.sourceStatus === "ACTIVE" ? ["document.move"] : [];
+    expect(offered).toEqual(expected);
+  });
+
+  it("is on a row and in the palette, where the palette's document is the one being read", () => {
+    expect(ids(actionsFor("row", context({ target: target() })))).toContain("document.move");
+    expect(ids(actionsFor("palette", context({ target: target() })))).toContain("document.move");
+  });
+
+  it("goes just before Archive, which stays last", () => {
+    const row = ids(actionsFor("row", context({ target: target() })));
+    expect(row.slice(-2)).toEqual(["document.move", "document.archive"]);
+  });
+
+  it("names the document and its source for the dialog that asks where", () => {
+    const move = availableActions(context({ target: target() })).find((action) => action.id === "document.move");
+    expect(move?.label).toBe("Move document…");
+    expect(move?.effect).toEqual({ kind: "move", sourceId: "s1", label: "Onboarding", node: { type: "document", documentId: "d1" } });
+  });
+
+  it("is found by the words a reader would use for it", () => {
+    const actions = availableActions(context({ target: target() }));
+    for (const word of ["move", "folder", "relocate"]) expect(ids(matchActions(actions, word))).toContain("document.move");
+  });
+
+  it("is not on offer where there is no document", () => {
+    expect(ids(availableActions(context()))).not.toContain("document.move");
+  });
+});
+
 describe("action registry — a folder's actions (daily-driver spec §7.2)", () => {
   const cells = combinations({
     canWrite: [true, false],
@@ -398,7 +448,7 @@ describe("action registry — a folder's actions (daily-driver spec §7.2)", () 
       ),
     ).filter((id) => FOLDER_ACTIONS.includes(id));
     const mayWrite = cell.canWrite && cell.confirmed && cell.ownership === "HUB_MANAGED" && cell.sourceStatus === "ACTIVE";
-    const expected = !mayWrite ? [] : cell.status === "ACTIVE" ? ["folder.new-document", "folder.new-folder", "folder.rename", "folder.archive"] : ["folder.restore"];
+    const expected = !mayWrite ? [] : cell.status === "ACTIVE" ? ["folder.new-document", "folder.new-folder", "folder.rename", "folder.move", "folder.archive"] : ["folder.restore"];
     expect(offered).toEqual(expected);
   });
 
@@ -410,7 +460,7 @@ describe("action registry — a folder's actions (daily-driver spec §7.2)", () 
     const withFolder = context({ folder: folder() });
     expect(ids(actionsFor("palette", withFolder)).filter((id) => FOLDER_ACTIONS.includes(id))).toEqual([]);
     expect(ids(actionsFor("empty", withFolder)).filter((id) => FOLDER_ACTIONS.includes(id))).toEqual([]);
-    expect(ids(actionsFor("row", withFolder))).toEqual(["folder.new-document", "folder.new-folder", "folder.rename", "folder.archive"]);
+    expect(ids(actionsFor("row", withFolder))).toEqual(["folder.new-document", "folder.new-folder", "folder.rename", "folder.move", "folder.archive"]);
   });
 
   it("names its targets: New document goes to the new-document page with the folder, the rest carry the folder's identity", () => {
@@ -418,6 +468,7 @@ describe("action registry — a folder's actions (daily-driver spec §7.2)", () 
     expect(byId["folder.new-document"]).toEqual({ kind: "navigate", href: "/w/w1/knowledge/new?folder=n1" });
     expect(byId["folder.new-folder"]).toEqual({ kind: "create-folder", sourceId: "s1", parentId: "n1", parentLabel: "Runbooks" });
     expect(byId["folder.rename"]).toEqual({ kind: "folder-command", command: "folder.rename", nodeId: "n1", sourceId: "s1", label: "Runbooks" });
+    expect(byId["folder.move"]).toEqual({ kind: "move", sourceId: "s1", label: "Runbooks", node: { type: "folder", nodeId: "n1" } });
     expect(byId["folder.archive"]).toEqual({ kind: "folder-command", command: "folder.archive", nodeId: "n1", sourceId: "s1", label: "Runbooks" });
     const restore = availableActions(context({ folder: folder({ status: "ARCHIVED" }) })).find((action) => action.id === "folder.restore");
     expect(restore?.effect).toEqual({ kind: "folder-command", command: "folder.restore", nodeId: "n1", sourceId: "s1", label: "Runbooks" });

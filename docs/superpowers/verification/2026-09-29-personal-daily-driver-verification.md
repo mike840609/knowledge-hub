@@ -342,3 +342,118 @@ Next 的 build 輸出（有 ±1 kB 的分組誤差，見切片 0 的紀錄）：
 - **只在 Chromium 測過。**
 - **效能沒有量**：資料夾很多、樹很大的時候，`buildKnowledgeTree` 與展開祖先的 effect 的成本。
 - 螢幕閱讀器沒有實測；`aria-live` 區域是既有的 toast 區域。
+
+## 切片 A-2 — 移動與重排：「移到…」對話框、palette 的 Move document…、Alt+↑/↓
+
+**做了什麼。** 樹上的文件與資料夾列的選單多了「Move document…」「Move folder…」，打開對話框，列出該來源的資料夾與最上層，選一個就放在那裡的最後；palette 對目前開著的文件也有「Move document…」；樹上聚焦一列按 Alt+↑／Alt+↓，在同層上下移一格。服務層（`moveTreeNode`、`reorderTreeNode`）早就有；這個切片補的是 `PATCH /api/tree-nodes/:id` 的移動與重排形狀、registry 的項目與 web 入口。
+
+**分支**：`claude/organize-move-slice-a2`，從 `main`（`7aedcd4`，A-1 與 #83 之後）開出。
+
+| 任務 | commit | 內容 |
+| --- | --- | --- |
+| A2.1 | `6510eca` | PATCH 的三種形狀與 27 個 integration |
+| A2.2–A2.4 | `e0239a2` | registry、對話框、樹上的 Alt+↑/↓、jsdom 與 e2e |
+| A2.5 | `28d95d8` | 文件與驗證紀錄 |
+| — | （本 commit） | 與 folder sync 的混合情境測試（integration 6 案） |
+
+### 結果
+
+| 檢查 | 開始前（main） | 現在 |
+| --- | --- | --- |
+| 單元測試 | 1198 | **1276** 全過 |
+| integration（`npm run test:integration`，本機） | 547 | **580** 全過（+33：`organize-api.test.ts` +27，`sync-and-organize.test.ts` +6） |
+| e2e（完整，`npm run test:e2e`，5.6 分鐘） | 164 | **177** 全過（+13，`zz-organize-move.spec.ts`） |
+| `tsc --noEmit`、`eslint` | 乾淨 | 乾淨 |
+| `next build` | 成功 | 成功 |
+
+單元多出的 78 個：registry +37（其中一個 32 格矩陣）、body 解析 +14、樹的重排（jsdom）14、`moveDestinations`／`reorderStep` 10、訊息 +3。
+
+### 變異驗證
+
+每個守門都刻意弄壞一次，確認測試會失敗，還原後再確認全過（還原用 `cmp`）。
+
+| 弄壞的東西 | 抓到它的測試 |
+| --- | --- |
+| 路由：移動忽略 `parentId`、移動忽略 `position`、重排忽略 `position`、改名改了名字（對照） | 9／3／2／1（integration） |
+| body 解析：null 的 parent 不算移動、預設放最前而不是最後、名稱與位置可同時給、位置允許 -1 | 1／2／1／1 |
+| `reorderStep` 要鄰居在畫面上的索引而不是它的儲存位置 | 1（對真服務的隨機測試；**第一版沒抓到**，見下） |
+| registry：document.move 不看來源狀態、不看擁有者、不進 palette；folder.move 進了 palette | 1／3／1／1 |
+| 樹：拿掉「該列有 Move 才理這個鍵」、拿掉篩選中不動、拿掉請求中保留最後一鍵、接受其他修飾鍵、拿掉焦點放回、方向反了 | 各 1／1／1／1／1／5（jsdom） |
+| e2e：不展開目的資料夾、篩選中仍重排、請求中的鍵被丟掉 | 各 1 |
+
+### 寫的時候抓到的問題（我的錯，都已修）
+
+1. **對真服務的隨機測試第一版沒有偵測力。** 我用的亂數是線性同餘產生器取 `% 4` 與 `% 2`，低位元會交替，四份文件只走了幾種固定的步。把 `reorderStep` 改成要畫面上的索引（會落在隱藏節點的錯誤一側），測試照樣過。換成 mulberry32、步數 40→60，並斷言至少有 30 步是真的移動（不是撞牆），改壞後才紅。**只有變異驗證抓到它**；沒做的話，這個測試看起來是「已證明隱藏的已封存節點不會讓順序錯」，實際什麼也沒證明。
+2. **e2e 點隱藏的 radio 沒有反應。** 我用 `check({ force: true })` 點 `sr-only` 的 input，它在對話框左上角（label 沒有 `relative`，絕對定位是相對於對話框），那個座標點到的是別的東西；十二案裡十案「剛好」過、兩案不過。改成 label 加 `relative`，測試點 label 的文字，跟讀者一樣。
+3. **我原本的 aria-live 區域用了 `role="status"`，會讓既有的 e2e 出現 strict mode 違規。** 先 grep 了 `getByRole("status")`（`row-actions.spec.ts:142` 在有樹的頁面上，頁面全域找 status），改成 `aria-live="polite"` 不帶 role。這一個是跑之前查出來的，不是被測試抓到的。
+4. **請求進行中按的鍵一開始是直接丟掉。** 想到先下後上快速按，第二下被吃掉，列會停在往下一格，跟使用者要的「走回來」相反。改成保留最後一個，新的樹到了再照新的樹算。對應的 e2e 用同一個 tick 內 dispatch 兩個 keydown（否則第二下可能等到第一步完成才到，改壞了也會過）。
+5. **`&&` 串起來的指令沒有因 `eslint` 失敗而停下**，一個 lint 錯誤（測試裡沒用到的 `_prefetch`）的 commit 進去了；發現後併回尚未推送的 commit。跟 A-1 是同一個錯，這次仍然犯了。
+6. **jsdom 沒有 `CSS.escape`**，我在放回焦點時用它組選擇器。改成走訪 `[data-node-id]` 比對 dataset，不必轉義任何 ID 也不依賴這個 API。
+7. **第一次改壞 e2e 用的變異不是 lint 乾淨的**（移掉一段留下沒用到的變數），`next build` 的 lint 步驟先失敗，我看到的是「什麼都沒輸出」。改成 `void x`。
+
+### 一個沒被證明有必要的東西
+
+**放回焦點的程式碼，在 Chromium 上不需要。** 我把它拿掉、寫了探測用的 e2e：往下移的那一步，被移動的節點會收到兩次 `focusout`，但事後的 `document.activeElement` 仍是那一列。也就是 Chromium 自己把焦點還回去（或根本沒失去）。所以完整 e2e 拿掉那段程式碼照樣全過，**e2e 分辨不出有沒有它**。它留在程式碼裡，是因為別的瀏覽器移動有焦點的節點時不一定保留焦點；單元測試（jsdom）用「先 `blur()` 再重畫」模擬那種瀏覽器，拿掉它會紅。這個保護在 Firefox 與 Safari 上沒有實測過。
+
+### 與 folder sync 的混合情境（`tests/integration/sync-and-organize.test.ts`，6 案）
+
+問題是「Hub 這邊整理（A-1、A-2），會不會弄壞 folder sync」。答案來自程式碼：sync 的寫入端都要求 `SOURCE_MANAGED`，Hub 的都要求 `HUB_MANAGED`，來源的擁有者建立後不會變。這個測試把它從外面證明一次，用真的服務與真的資料庫，兩個方向：
+
+- Hub 整理兩輪（建資料夾與文件、移進資料夾、移到最上層最前面、改名、資料夾移進資料夾、文件封存又還原、資料夾封存）之後，同步來源的 `knowledge_sources`、樹、文件、revision、link index、`source_entries`、`sync_runs` **每一列逐欄相同**（含時間與 `updated_by`）。
+- 對同步來源套用兩次有變動的 sync（改內容、刪檔、新增、搬移、檔案換位置回來）之後，Hub 的 Notes 同樣逐列不變。
+- Hub 對同步節點的 rename、移動、重排、封存、還原、在裡面新增資料夾或文件、把 Hub 節點移進同步資料夾，全部被拒絕，兩邊的列都不變，之後的 sync 仍照常套用。
+- 同一串 sync（v1→v2→v3）有 Hub 夾在中間與沒有，最後同步來源給讀者看的樣子（樹、entries、每份文件的 revision 數、版本）相同。
+- 唯一的間接影響是讀取時的：同步文件裡的 `[[Hub note]]` 在 Hub 文件被封存期間變成未解析，還原就回來；同步來源那邊什麼都沒被寫。
+
+**變異驗證。**
+
+| 弄壞的東西 | 結果 |
+| --- | --- |
+| 擁有者守門關掉（`requireOwnedSource`） | 「被拒絕」那案紅 |
+| 讀一個來源的樹時改成讀整個 workspace 的（跨來源污染） | 三個「逐列不變」與「有沒有 Hub 夾在中間」的案紅（**第一版只有兩個紅**，見下） |
+| `assertActiveFolderAncestry` 不比對父節點的來源；`moveTreeNode` 不擋 `CrossSourceMoveError` | **沒有紅**，因為資料庫的外鍵 `fk_tree_parent_same_source (source_id, parent_id)` 獨立擋住了（測試看到的仍是 409 且沒有寫入）。這是等價變異，不是缺口：程式碼與資料庫各守一次，我只證明了結果 |
+
+**第一版的測試沒有偵測力，兩處，都靠變異驗證抓到：**
+
+1. 「Hub 整理不動同步來源」原本不會被跨來源污染的變異弄紅。我把一個節點移到最上層最前面、又移回最後，跨來源的重新編號先把同步來源的位置推開、後一步又推回原位，逐列比對看到的是原樣。改成移到最前面就留在那裡。
+2. 我另外寫了一案「每個來源的同層各自從 0 起算」，改壞後照樣過，它什麼也沒證明，刪了。
+
+另外，最上層的節點在同一個 workspace 內以 ID（時間排序的 uuidv7）決定同位置的先後，所以測試的 `world()` 先建兩個 Hub 最上層節點，再做 sync：反過來（sync 的節點比較舊）污染會被藏起來。
+
+**沒有證明的部分。**
+
+- **完整 integration 跑過一次在 `knowledge-link-service.test.ts` 的「says how much of the index can be trusted」失敗（106 秒）**，之後連跑兩次全過（580/580）。那個測試只用自己的 workspace，不依賴全域狀態，我沒有找到原因，懷疑是 MariaDB 剛重啟後的環境因素，但這是猜測。
+- 同步走的是匯入服務（`create`／`upload`／`finalize`／`apply`），資料是記憶體裡的位元組，不是瀏覽器選資料夾上傳。
+- **兩邊同時發生**（Hub 在 sync 套用的那一瞬間整理）沒有測。兩邊都先鎖來源（`FOR UPDATE`）再鎖 workspace，不會交錯，但那是我讀程式碼的結論，不是跑出來的。
+- 只驗了 `FOLDER_SYNC` 這一種同步來源。
+
+### 量測
+
+Next 的 build 輸出（有 ±1 kB 的分組誤差，見切片 0 的紀錄；每次 `test:e2e` 建兩次，兩次差 1 kB）：
+
+| 頁面 | A-1 之後 | A-2 |
+| --- | --- | --- |
+| 文件頁 First Load JS | 194 kB | **194–195 kB** |
+| `/edit`、`/new` | 170、171 kB | 171–172 kB |
+| 圖譜、分享頁 | 119、114 kB | 119–120、114–115 kB |
+
+在誤差內。`MoveDialogHost` 進了知識 layout，所以所有知識頁付這個成本；我沒有查它的組成。
+
+### 與規格的偏離（都已回寫進規格 §7.6 與計畫）
+
+- 標籤是 `Move document…`／`Move folder…`，不是「移到…」。
+- palette 的「Archive document」A-1 已經加了；A-2 只多 Move。
+- 重排沒有 Undo toast，用 aria-live 報位置。
+- 對話框沒有搜尋欄。
+- **沒有在 macOS 與 Windows 實測 Alt+↑/↓**（計畫 A2.4 要求）。
+
+### 沒有證明的部分
+
+- **視覺沒有目視。** 對話框（縮排、Current 標示、選取與焦點的樣子、捲動）在亮暗兩個主題下都只由 e2e 的屬性斷言涵蓋，我沒有看過畫面。`has-[:checked]`、`has-[:focus-visible]` 這幾個 Tailwind 變體有沒有編出對的 CSS，只從「測試能選到、按得到」間接知道，我沒有讀編出來的樣式表。
+- **macOS 與 Windows 的 Alt+↑/↓。** 見上。
+- **Firefox、Safari。** 只在 Chromium 測過；放回焦點的保護在那兩個上沒驗證。
+- **螢幕閱讀器沒有實測**；aria-live 的內容、每則重新掛上是否真的讓同樣的話讀兩次，都是照規格寫的，沒有聽過。
+- **很大的樹。** 對話框是 `max-h-72` 捲動，沒有量過幾百個資料夾的樣子；每次重排要走訪一次 `[data-node-id]`。
+- **位置連續的假設**只由「Hub 管理的同層在每次建立與移動後被重新編號」這個事實與那個隨機測試撐著；若某條路徑（例如未來的匯入到 Hub 來源）留下空洞，`reorderStep` 會有偏差，畫面上的順序可能差一格。服務端夾住過大的索引，所以不會壞，只會不準。
+- **兩個分頁的競爭。** 對話框開著時目的資料夾被封存有 e2e；兩個分頁同時重排同一同層沒有測，靠服務的鎖與「請求進行中保留最後一鍵」是同一個分頁內的事。
+- **重排失敗的樣子**只有 jsdom 測了「不報位置、不放回焦點」；瀏覽器裡「失敗時 toast 說話」沒有 e2e。

@@ -5,6 +5,7 @@ import {
   Database,
   ExternalLink,
   FilePlus,
+  FolderInput,
   FolderPlus,
   Link2,
   FileText,
@@ -47,6 +48,7 @@ const icons: Record<ActionIconName, LucideIcon> = {
   "new-document": FilePlus,
   "new-folder": FolderPlus,
   rename: Pencil,
+  move: FolderInput,
   archive: Archive,
   restore: ArchiveRestore,
 };

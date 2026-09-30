@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import { SourceSidebar } from "./source-sidebar";
 import { FolderNameDialogHost } from "./folder-name-dialog";
+import { MoveDialogHost } from "./move-dialog";
 import { ShareLinkDialogHost } from "./share-link-dialog";
 import { InspectorContext } from "./inspector-context";
 import { Drawer } from "@/components/ui/drawer";
@@ -140,6 +141,7 @@ export function KnowledgeLayout({
       </Drawer>
       <ShareLinkDialogHost />
       <FolderNameDialogHost />
+      <MoveDialogHost collections={collections} />
     </div>
     </InspectorContext.Provider>
   );

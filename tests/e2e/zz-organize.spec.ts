@@ -1,8 +1,6 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { showMarkdown } from "./composer-helpers";
-
-// Server-bound assertions only; see the note in phase5-authoring.spec.ts.
-const ROUND_TRIP = { timeout: 15_000 };
+import { ROUND_TRIP, childrenOf, createFolder, header, mySpace, openKnowledge, row, toast, unique } from "./fixtures/organize";
 
 // Mirrors scripts/db/seed.ts BROWSER_FIXTURE_IDS: a workspace with a SOURCE_MANAGED source in it, read here and never changed.
 const QUERY_MASTER_WORKSPACE = "0199f100-0000-7000-8000-000000000001";
@@ -20,44 +18,6 @@ const OBSIDIAN_SOURCE = "0199f100-0000-7000-8000-000000000101";
  * move the nodes workspace-graph.spec.ts hovers, which sorts before this and must not see them. Its
  * names are unique, so nothing here depends on what earlier specs left in the tree.
  */
-
-function unique(label: string) {
-  return `${label} ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
-}
-
-async function mySpace(page: Page): Promise<string> {
-  await page.goto("/");
-  await page.waitForURL(/\/w\/[^/]+\/knowledge/);
-  return new URL(page.url()).pathname.split("/")[2];
-}
-
-/**
- * The knowledge explorer of a workspace, once it is there to act on. A workspace with nothing in it
- * shows an empty state and no explorer at all — the first thing to make is a document — so this
- * makes sure Notes has one, which also means the spec does not depend on what ran before it.
- */
-async function openKnowledge(page: Page, workspaceId: string) {
-  const seeded = await page.request.post(`/api/workspaces/${workspaceId}/documents`, { data: { title: unique("Seed"), markdown: "seed" } });
-  expect(seeded.ok()).toBe(true);
-  await page.goto(`/w/${workspaceId}/knowledge`);
-  await expect(page.getByRole("complementary", { name: "Knowledge explorer" })).toBeVisible(ROUND_TRIP);
-  await expect(page.getByRole("button", { name: "Create folder" }).first()).toBeVisible(ROUND_TRIP);
-}
-
-const row = (page: Page, name: string) => page.getByRole("treeitem", { name, exact: true });
-/** A folder row's own header, which is where its menu is — the treeitem also holds everything inside it. */
-const header = (page: Page, name: string) => row(page, name).locator(":scope > div").first();
-const toast = (page: Page, text: string | RegExp) => page.getByRole("status").filter({ hasText: text });
-
-/** Make a folder from the sidebar, as a reader does. */
-async function createFolder(page: Page, name: string) {
-  await page.getByRole("button", { name: "Create folder" }).first().click();
-  const dialog = page.getByRole("dialog", { name: "New folder" });
-  await dialog.getByLabel("Name").fill(name);
-  await dialog.getByRole("button", { name: "Create folder" }).click();
-  await expect(dialog).toHaveCount(0, ROUND_TRIP);
-  await expect(row(page, name)).toBeVisible(ROUND_TRIP);
-}
 
 /** Open a folder's menu by its `⋯` button. */
 async function openFolderMenu(page: Page, name: string) {
@@ -109,11 +69,6 @@ async function showArchived(page: Page, on: boolean) {
   if ((await item.getAttribute("aria-checked")) !== String(on)) await item.click();
   else await page.keyboard.press("Escape");
   await expect(page.getByRole("menu")).toHaveCount(0);
-}
-
-/** The names of the treeitems directly inside a folder, in the order they are drawn. */
-async function childrenOf(folder: Locator) {
-  return folder.locator(":scope > ul > li[role=treeitem]").evaluateAll((items) => items.map((item) => item.getAttribute("aria-label")));
 }
 
 test.describe("folders", () => {
