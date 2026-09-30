@@ -4,6 +4,8 @@ import type { UserIdentity } from "./user-identity";
 
 export type CallerContext = {
   identity: UserIdentity;
+  /** Server deployment scope; when set, all other workspaces are unavailable. */
+  personalWorkspaceOnly?: string;
   /** Validated external group IDs resolved server-side; never browser-supplied. */
   validatedExternalGroupIds: readonly string[];
   /** Platform capabilities mapped server-side; never browser-supplied. */

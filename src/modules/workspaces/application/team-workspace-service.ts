@@ -53,7 +53,7 @@ export function assertTeamMutationAllowed(workspace: Workspace, operation: TeamM
 }
 
 function requireTeamCreateCapability(caller: CallerContext): void {
-  if (!caller.platformCapabilities.includes("workspace.create_team")) {
+  if (caller.personalWorkspaceOnly || !caller.platformCapabilities.includes("workspace.create_team")) {
     throw new TeamCreationDeniedError();
   }
 }
@@ -124,7 +124,9 @@ export class TeamWorkspaceService {
   }
 
   async renameTeamWorkspace(caller: CallerContext, workspaceId: string, name: string): Promise<Workspace> {
+    if (caller.personalWorkspaceOnly) throw new WorkspaceNotFoundError();
     const trimmed = requireValidTeamName(name, "rename");
+    if (caller.personalWorkspaceOnly) throw new WorkspaceNotFoundError();
     const now = new Date();
     await this.unitOfWork.run(async (repositories) => {
       const locked = await repositories.workspaces.lockById(workspaceId);
@@ -163,6 +165,7 @@ export class TeamWorkspaceService {
     eventType: string,
     operation: "archive" | "restore",
   ): Promise<Workspace> {
+    if (caller.personalWorkspaceOnly) throw new WorkspaceNotFoundError();
     const now = new Date();
     await this.unitOfWork.run(async (repositories) => {
       const locked = await repositories.workspaces.lockById(workspaceId);

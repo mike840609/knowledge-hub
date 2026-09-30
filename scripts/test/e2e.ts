@@ -76,11 +76,8 @@ async function main(): Promise<void> {
       ...process.env,
       NODE_ENV: "production",
       KM_IDENTITY_PROVIDER: "local",
-      // Team workspaces are closed unless a server says otherwise (src/server/config.ts). The specs about
-      // them, and about the switcher's menu, run with them open; the one server that keeps them closed is
-      // started by playwright.config.ts.
-      KM_TEAM_WORKSPACES_ENABLED: "true",
       ...identity,
+      KM_TEAM_WORKSPACES_ENABLED: process.env.KM_TEAM_WORKSPACES_ENABLED ?? "true",
       KM_E2E_PORT: e2ePort,
       KM_E2E_DB_HOST: dbHost,
       KM_E2E_DB_PORT: dbPort,
@@ -107,7 +104,7 @@ async function main(): Promise<void> {
     try { await seedPhase3Identities(fixturePool); } finally { await fixturePool.end(); }
     cancellation.check();
     await cancellation.run("node_modules/next/dist/bin/next", ["build"], { ...commonEnvironment, NODE_ENV: "production" });
-    phase3Root = await preparePhase3Application(projectRoot);
+    if (process.env.KM_E2E_PERSONAL_ONLY !== "true") phase3Root = await preparePhase3Application(projectRoot);
     cancellation.check();
     const phase3Environment = {
       ...commonEnvironment, KM_IDENTITY_PROVIDER: "company-sso", KM_COMPANY_SSO_PROVIDER: PHASE3_PROVIDER,
@@ -116,7 +113,7 @@ async function main(): Promise<void> {
       KM_PHASE3_SERVER_PERSONA: "owner",
     };
     cancellation.check();
-    await cancellation.run("node_modules/next/dist/bin/next", ["build"], phase3Environment, phase3Root);
+    if (phase3Root) await cancellation.run("node_modules/next/dist/bin/next", ["build"], phase3Environment, phase3Root);
     cancellation.check();
     await cancellation.run("node_modules/@playwright/test/cli.js", ["test", ...process.argv.slice(2)], {
       ...commonEnvironment, NODE_ENV: "production", PORT: e2ePort,

@@ -43,6 +43,7 @@ export default async function WorkspaceSearchPage({
           sourceId={model.sourceId}
           includeArchived={model.includeArchived}
           sources={model.sources}
+          teamsEnabled={process.env.KM_TEAM_WORKSPACES_ENABLED === "true"}
         />
       </div>
       <div className="mt-6">

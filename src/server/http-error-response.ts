@@ -25,6 +25,8 @@ const HIDDEN_NOT_FOUND = new Set([
 
 const WORKSPACE_HIDDEN_NOT_FOUND = new Set([
   ...HIDDEN_NOT_FOUND,
+  "TREE_NODE_NOT_FOUND",
+  "REVISION_NOT_FOUND",
   "DOCUMENT_NOT_FOUND",
   "SOURCE_NOT_FOUND",
   "SHARE_LINK_NOT_FOUND",
@@ -77,12 +79,12 @@ export function toWorkspaceErrorResponse(error: unknown): { status: number; body
     if (WORKSPACE_HIDDEN_NOT_FOUND.has(error.code)) return { status: 404, body: { error: { code: "NOT_FOUND", message: "The requested resource was not found." } } };
     const status = ["INSUFFICIENT_WORKSPACE_CAPABILITY", "TEAM_CREATION_DENIED", "PERSONAL_WORKSPACE_FROZEN"].includes(error.code) ? 403
       : ["WORKSPACE_ARCHIVED", "LAST_DIRECT_OWNER", "MEMBER_ALREADY_EXISTS", "GROUP_MAPPING_ALREADY_EXISTS", "WORKSPACE_LIFECYCLE_VIOLATION",
-         "REVISION_CONFLICT", "SOURCE_MANAGED_READ_ONLY", "SOURCE_ARCHIVED", "DOCUMENT_ARCHIVED",
+         "PERSONAL_ITEM_CONFLICT", "REVISION_CONFLICT", "SOURCE_MANAGED_READ_ONLY", "SOURCE_ARCHIVED", "DOCUMENT_ARCHIVED",
          "SHARE_LINK_NOT_PERSONAL", "SHARE_LINK_LIMIT_REACHED",
          // The tree and folder commands: each is a state the reader can act on, so none is a 500.
          "FOLDER_NOT_EMPTY", "TREE_CYCLE", "INVALID_PARENT", "CROSS_SOURCE_MOVE", "HUB_MANAGED_OPERATION_REQUIRED"].includes(error.code) ? 409
       : ["MEMBER_NOT_FOUND", "INVALID_ROLE_ASSIGNMENT", "INVALID_WORKSPACE_NAME", "INVALID_REQUEST",
-         "INVALID_TITLE", "INVALID_METADATA", "VALIDATION_ERROR",
+         "INVALID_TITLE", "INVALID_METADATA", "VALIDATION_ERROR", "INVALID_PARENT", "CROSS_SOURCE_MOVE", "TREE_CYCLE", "FOLDER_NOT_EMPTY", "HUB_MANAGED_OPERATION_REQUIRED",
          "INVALID_SHARE_LINK_EXPIRY", "INVALID_SHARE_LINK_LABEL"].includes(error.code) ? 400 : 500;
     if (status !== 500) return { status, body: { error: { code: error.code, message: error.message, ...(error.code === "INVALID_WORKSPACE_NAME" ? { field: "name" } : {}) } } };
   }

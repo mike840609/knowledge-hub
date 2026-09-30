@@ -9,6 +9,7 @@ export async function workspaceHttp(work: (services: ReturnType<typeof applicati
     const services = applicationServices();
     const { caller } = await services.establishTrustedCaller();
     const result = await work(services, caller);
+    if (result instanceof Response) { result.headers.set("Cache-Control", "private, no-store"); return result; }
     // A 204 cannot carry a body; everything else is JSON.
     if (status === 204) return new NextResponse(null, { status, headers: { "Cache-Control": "private, no-store" } });
     return NextResponse.json(result, { status, headers: { "Cache-Control": "private, no-store" } });

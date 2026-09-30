@@ -13,7 +13,7 @@ export function parseDocumentShortcuts(raw: string | null): DocumentShortcuts {
     const value: unknown = JSON.parse(raw);
     if (!value || typeof value !== "object") return emptyDocumentShortcuts;
     const record = value as Record<string, unknown>;
-    return { recent: uniqueKeys(record.recent, 8), favorites: uniqueKeys(record.favorites, 8) };
+    return { recent: uniqueKeys(record.recent, 8), favorites: uniqueKeys(record.favorites, 10_000) };
   } catch {
     return emptyDocumentShortcuts;
   }
@@ -28,6 +28,6 @@ export function toggleFavoriteDocument(shortcuts: DocumentShortcuts, key: string
     ...shortcuts,
     favorites: shortcuts.favorites.includes(key)
       ? shortcuts.favorites.filter((item) => item !== key)
-      : [key, ...shortcuts.favorites].slice(0, 8),
+      : [key, ...shortcuts.favorites],
   };
 }

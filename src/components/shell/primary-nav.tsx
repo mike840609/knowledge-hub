@@ -3,7 +3,7 @@
 import { useWorkspaceAuthorization } from "./use-workspace-authorization";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpenText, Database, Network, Settings } from "lucide-react";
+import { BookOpenText, Database, Network, Settings, Home } from "lucide-react";
 
 export function PrimaryNav({
   workspaceId,
@@ -17,6 +17,7 @@ export function PrimaryNav({
   const { access } = useWorkspaceAuthorization();
   const pathname = usePathname();
   const items = [
+    ...(access.workspace.type === "PERSONAL" ? [{ name: "Home", href: `/w/${workspaceId}/home`, Icon: Home }] : []),
     {
       name: "Knowledge",
       href: `/w/${workspaceId}/knowledge`,

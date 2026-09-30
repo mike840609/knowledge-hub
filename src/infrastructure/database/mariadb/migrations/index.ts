@@ -1,3 +1,4 @@
+import { personalItemsMigration } from "./013-personal-items";
 import { coreMigration } from "./001-core";
 import { currentRevisionMigration } from "./002-current-revision";
 import { requiredLifecycleActorsMigration } from "./003-required-lifecycle-actors";
@@ -24,4 +25,5 @@ export const migrations = [
   phase2StableSourceIdentityMigration,
   documentShareLinksMigration,
   documentLinkIndexMigration,
+  personalItemsMigration,
 ] as const;
