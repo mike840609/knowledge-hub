@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import ReactMarkdown from "react-markdown";
 import { describe, expect, it } from "vitest";
 import { codeHighlightPlugins, HIGHLIGHT_LANGUAGES, MAX_HIGHLIGHT_CHARS } from "@/components/knowledge/code-highlight";
+import { PLATFORM_SAMPLES } from "../fixtures/code-samples";
 
 /** The Markdown through the same plugins the renderer uses, as HTML. */
 function render(markdown: string): string {
@@ -35,20 +36,8 @@ describe("the languages", () => {
 });
 
 describe("a fenced block with a language", () => {
-  // The platform's own languages, one line of each, and a class the grammar must produce for it.
-  it.each([
-    ["sql", "select id from t where n = 1 -- note", ["hljs-keyword", "hljs-number", "hljs-comment"]],
-    ["yaml", "name: x\nlist:\n  - 1", ["hljs-attr", "hljs-number"]],
-    ["java", "public class A { int x = 1; }", ["hljs-keyword", "hljs-type", "hljs-number"]],
-    ["python", "def f():\n  return 1", ["hljs-keyword", "hljs-number"]],
-    ["bash", 'echo "a" | grep b', ["hljs-built_in", "hljs-string"]],
-    ["json", '{"a": 1, "b": [true]}', ["hljs-attr", "hljs-number", "hljs-literal"]],
-    ["xml", '<a b="1"/>', ["hljs-tag", "hljs-name", "hljs-attr", "hljs-string"]],
-    ["kotlin", "fun main() { val x = 1 }", ["hljs-keyword", "hljs-number"]],
-    ["dockerfile", "FROM node:22\nRUN npm ci", ["hljs-keyword", "hljs-number"]],
-    ["groovy", "def x = 1", ["hljs-keyword", "hljs-number"]],
-    ["protobuf", "message A { string b = 1; }", ["hljs-keyword", "hljs-type", "hljs-number"]],
-  ])("%s is coloured", (language, code, classes) => {
+  // The platform's own languages, one short example each, and classes the grammar must produce for it.
+  it.each(PLATFORM_SAMPLES.map((sample) => [sample.language, sample.code, sample.classes] as const))("%s is coloured", (language, code, classes) => {
     const html = codeHtml(fence(language, code));
     for (const name of classes) expect(html).toContain(`class="${name}`);
   });

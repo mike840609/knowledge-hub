@@ -44,6 +44,14 @@
   --kh-success: #14663a;
   --kh-success-bg: #e4f4ea;
   --kh-success-border: #b8e0c7;
+  --kh-syntax-keyword: #8a2fa8;
+  --kh-syntax-string: #0f6b3f;
+  --kh-syntax-number: #a24500;
+  --kh-syntax-comment: #5f6778;
+  --kh-syntax-function: #3743a8;
+  --kh-syntax-type: #0a6a7d;
+  --kh-syntax-variable: #a3283f;
+  --kh-syntax-meta: #6e5a00;
   --kh-shadow-popover: 0 1px 2px rgb(23 25 32 / 0.05), 0 6px 16px -4px rgb(23 25 32 / 0.1);
   --kh-shadow-modal: 0 2px 4px rgb(23 25 32 / 0.06), 0 16px 40px -8px rgb(23 25 32 / 0.18);
 }
@@ -85,6 +93,14 @@
   --kh-success: #7ee2a8;
   --kh-success-bg: #14281d;
   --kh-success-border: #23462f;
+  --kh-syntax-keyword: #d2a6f5;
+  --kh-syntax-string: #8fdcae;
+  --kh-syntax-number: #f2a86e;
+  --kh-syntax-comment: #8f97a7;
+  --kh-syntax-function: #a3abf5;
+  --kh-syntax-type: #6fd3e0;
+  --kh-syntax-variable: #f5989f;
+  --kh-syntax-meta: #dcc66e;
   --kh-shadow-popover: 0 1px 2px rgb(0 0 0 / 0.4), 0 6px 16px -4px rgb(0 0 0 / 0.5);
   --kh-shadow-modal: 0 2px 4px rgb(0 0 0 / 0.45), 0 16px 40px -8px rgb(0 0 0 / 0.6);
 }
@@ -137,6 +153,74 @@ kbd {
 
   .kh-interactive-row {
     @apply kh-focus-ring rounded-md transition-colors hover:bg-kh-bg-hover focus-within:bg-kh-bg-hover;
+  }
+
+  /* Colour in a fenced code block (daily-driver spec §5). lowlight names what it found with
+     highlight.js's scopes (`hljs-*`); each is mapped here onto one of the eight `--kh-syntax-*`
+     tokens. What is not named — operators, punctuation, parameters, the tag around a tag's name —
+     keeps the block's own text colour, on purpose: colouring everything colours nothing.
+     A diff's added and removed lines take the success and danger colours the product already has.
+     A new scope from a lowlight upgrade is caught by tests/unit/syntax-colors.test.ts. */
+  .hljs-keyword,
+  .hljs-selector-tag,
+  .hljs-name,
+  .hljs-doctag,
+  .hljs-template-tag,
+  .hljs-variable.language_ {
+    color: var(--kh-syntax-keyword);
+  }
+  .hljs-string,
+  .hljs-regexp,
+  .hljs-symbol,
+  .hljs-link,
+  .hljs-code {
+    color: var(--kh-syntax-string);
+  }
+  .hljs-number,
+  .hljs-literal {
+    color: var(--kh-syntax-number);
+  }
+  .hljs-comment,
+  .hljs-quote,
+  .hljs-formula {
+    color: var(--kh-syntax-comment);
+  }
+  .hljs-title,
+  .hljs-section {
+    color: var(--kh-syntax-function);
+  }
+  .hljs-type,
+  .hljs-built_in,
+  .hljs-title.class_ {
+    color: var(--kh-syntax-type);
+  }
+  .hljs-variable,
+  .hljs-template-variable,
+  .hljs-attr,
+  .hljs-attribute,
+  .hljs-property,
+  .hljs-selector-attr,
+  .hljs-selector-class,
+  .hljs-selector-id,
+  .hljs-selector-pseudo {
+    color: var(--kh-syntax-variable);
+  }
+  .hljs-meta,
+  .hljs-meta .hljs-keyword,
+  .hljs-bullet {
+    color: var(--kh-syntax-meta);
+  }
+  .hljs-addition {
+    color: var(--kh-success);
+  }
+  .hljs-deletion {
+    color: var(--kh-danger);
+  }
+  .hljs-emphasis {
+    @apply italic;
+  }
+  .hljs-strong {
+    @apply font-semibold;
   }
 
   /* The rendered editor (composer spec §11). The reader's prose classes are on the
