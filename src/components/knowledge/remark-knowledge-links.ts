@@ -9,8 +9,8 @@ export const WIKILINK_TARGET = "data-kh-wikilink";
 export const WIKILINK_FRAGMENT = "data-kh-fragment";
 export const WIKILINK_ANCHOR = "data-kh-anchor";
 
-/** What is shown for a link the author wrote as `[[Target#Heading|Alias]]`. */
-function shownText(match: WikiLinkMatch): string {
+/** What is shown for a link the author wrote as `[[Target#Heading|Alias]]` — in the reader, and in the editor. */
+export function shownText(match: Pick<WikiLinkMatch, "target" | "fragment" | "alias">): string {
   if (match.alias !== null) return match.alias;
   if (match.target === "") return match.fragment ?? "";
   return match.fragment === null ? match.target : `${match.target} › ${match.fragment}`;
