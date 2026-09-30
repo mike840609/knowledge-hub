@@ -12,6 +12,9 @@ export type TreeLink = {
  * and only reuse these functions for in-memory validation and ordering.
  */
 
+/** The `name` column is VARCHAR(512). The rule below only asks for a non-empty name, which imports use too, so the limit is stated for the callers that take a name from a person. */
+export const MAX_FOLDER_NAME_LENGTH = 512;
+
 export function normalizeFolderName(name: string): string {
   const trimmed = name.trim();
   if (!trimmed) throw new ValidationError("Folder name must be a non-empty string.");

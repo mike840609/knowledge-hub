@@ -1,7 +1,11 @@
 import {
+  Archive,
+  ArchiveRestore,
   CornerUpLeft,
   Database,
   ExternalLink,
+  FilePlus,
+  FolderPlus,
   Link2,
   FileText,
   Network,
@@ -40,6 +44,11 @@ const icons: Record<ActionIconName, LucideIcon> = {
   favorite: Star,
   details: Info,
   backlinks: CornerUpLeft,
+  "new-document": FilePlus,
+  "new-folder": FolderPlus,
+  rename: Pencil,
+  archive: Archive,
+  restore: ArchiveRestore,
 };
 
 export function ActionIcon({ name, className = "h-4 w-4 shrink-0 text-kh-text-muted" }: { name: ActionIconName; className?: string }) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { requestWorkspaceAccessCheck } from "@/components/shell/use-workspace-authorization";
+import { organizeFailure } from "@/components/knowledge/organize-messages";
 
 export type GovernanceFailure = { code: string; message: string; field?: string };
 export class GovernanceRequestError extends Error {
@@ -43,10 +44,15 @@ export function governanceFailure(error: unknown): GovernanceFailure {
     ? error.failure
     : { code: "REQUEST_FAILED", message: "Unable to connect. Please try again." };
 }
+/** The tree's own refusals have a sentence of their own (daily-driver spec §7.1); a form that files a document into a folder shows it too. */
+const TREE_CODES: ReadonlySet<string> = new Set(["INVALID_PARENT", "FOLDER_NOT_EMPTY", "TREE_CYCLE", "CROSS_SOURCE_MOVE"]);
+
 export function GovernanceError({ error }: { error: GovernanceFailure | null }) {
   if (!error) return null;
   const message =
-    error.code === "NOT_FOUND"
+    TREE_CODES.has(error.code)
+      ? organizeFailure(error)
+      : error.code === "NOT_FOUND"
       ? "This resource is not available."
       : error.code === "WORKSPACE_ARCHIVED"
         ? "This workspace is archived and read-only. Refresh to see its current state."

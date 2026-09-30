@@ -24,6 +24,7 @@ export type ActionId =
   | "navigate.sources"
   | "navigate.settings"
   | "create.document"
+  | "create.folder"
   | "create.import"
   | "document.open"
   | "document.open-new-tab"
@@ -32,12 +33,23 @@ export type ActionId =
   | "document.share"
   | "document.favorite"
   | "document.details"
-  | "document.backlinks";
+  | "document.backlinks"
+  | "document.archive"
+  | "document.restore"
+  | "folder.new-document"
+  | "folder.new-folder"
+  | "folder.rename"
+  | "folder.archive"
+  | "folder.restore";
 
-export type ActionGroup = "navigate" | "create" | "document";
+export type ActionGroup = "navigate" | "create" | "document" | "folder";
 
-/** Where an action may be offered. A surface renders nothing it did not ask for. */
-export type ActionSurface = "palette" | "row" | "empty";
+/**
+ * Where an action may be offered. A surface renders nothing it did not ask for. `create` is the
+ * sidebar's menu of things to start, which is not the palette: it offers what can be *made*, and
+ * nothing that can be *found*.
+ */
+export type ActionSurface = "palette" | "row" | "empty" | "create";
 
 /** Named rather than imported so this module stays free of component imports. */
 export type ActionIconName =
@@ -55,13 +67,23 @@ export type ActionIconName =
   | "share"
   | "favorite"
   | "details"
-  | "backlinks";
+  | "backlinks"
+  | "new-document"
+  | "new-folder"
+  | "rename"
+  | "archive"
+  | "restore";
 
 export type ActionCommand =
   | "document.toggle-favorite"
   | "document.open-details"
   | "document.open-share"
-  | "document.open-links";
+  | "document.open-links"
+  | "document.archive"
+  | "document.restore";
+
+/** What a folder row can be asked to do that needs a request to the server, or a name from the reader. */
+export type FolderCommand = "folder.rename" | "folder.archive" | "folder.restore";
 
 export type ActionEffect =
   | { kind: "navigate"; href: string }
@@ -69,7 +91,13 @@ export type ActionEffect =
   | { kind: "open-new-tab"; href: string }
   /** A path, not a URL: the origin is the browser's to supply, not this module's. */
   | { kind: "copy-link"; href: string }
-  | { kind: "command"; command: ActionCommand; documentId: string; sourceId: string };
+  | { kind: "command"; command: ActionCommand; documentId: string; sourceId: string; label?: string }
+  /**
+   * Asks for a name and makes a folder: at the top of the Notes source when `parentId` is null,
+   * inside that folder otherwise. `sourceId` is the parent's, or null for the default source.
+   */
+  | { kind: "create-folder"; sourceId: string | null; parentId: string | null; parentLabel: string | null }
+  | { kind: "folder-command"; command: FolderCommand; nodeId: string; sourceId: string; label: string };
 
 export type Action = {
   id: ActionId;
@@ -95,10 +123,31 @@ export type ActionTarget = {
   sourceId: string;
   label: string;
   ownership: "SOURCE_MANAGED" | "HUB_MANAGED";
+  /**
+   * ACTIVE only when the document *and* its source are: an archived collection's documents read as
+   * archived, because nothing may be done to them. Which of the two it is matters for exactly one
+   * thing, restoring, so the source's own state is here as well.
+   */
   status: "ACTIVE" | "ARCHIVED";
+  sourceStatus: "ACTIVE" | "ARCHIVED";
   /** A historical revision is a reading view: it is not the document's current state. */
   revision: "CURRENT" | "HISTORICAL";
   favorite: boolean;
+};
+
+/**
+ * The folder an action would act on. A folder is a place in one source's tree, so what may be done
+ * to it follows the same three axes as a document: the caller, the source's ownership, and its own
+ * state — plus the state of the source it is in, which is why that is carried too.
+ */
+export type FolderTarget = {
+  nodeId: string;
+  sourceId: string;
+  label: string;
+  ownership: "SOURCE_MANAGED" | "HUB_MANAGED";
+  /** The folder's own lifecycle. */
+  status: "ACTIVE" | "ARCHIVED";
+  sourceStatus: "ACTIVE" | "ARCHIVED";
 };
 
 export type ActionContext = {
@@ -120,6 +169,8 @@ export type ActionContext = {
    */
   onboarding?: boolean;
   target?: ActionTarget;
+  /** A folder row's own target; a surface has a document or a folder to describe, not both. */
+  folder?: FolderTarget;
 };
 
 /**
@@ -136,7 +187,7 @@ export type ActionContext = {
  * still be refused by the server, because knowing an ID is not authorization.
  */
 export function availableActions(context: ActionContext): readonly Action[] {
-  const { workspaceId, can, confirmed, target } = context;
+  const { workspaceId, can, confirmed, target, folder } = context;
   const archived = context.includeArchived === true;
   const suffix = archived ? "?includeArchived=true" : "";
   const actions: Action[] = [];
@@ -206,8 +257,19 @@ export function availableActions(context: ActionContext): readonly Action[] {
       icon: "create",
       keywords: ["new", "add", "note", "notes", "write"],
       shortcut: "C",
-      surfaces: ["palette", "empty"],
+      surfaces: ["palette", "empty", "create"],
       effect: { kind: "navigate", href: `/w/${workspaceId}/knowledge/new` },
+    });
+    // The same gate as a document, for the same reason: it writes to the Notes source, which
+    // is made on first use. Not on the empty state, which offers a place to start writing.
+    actions.push({
+      id: "create.folder",
+      label: "Create folder",
+      group: "create",
+      icon: "new-folder",
+      keywords: ["new", "add", "directory", "organize", "group", "notes"],
+      surfaces: ["palette", "create"],
+      effect: { kind: "create-folder", sourceId: null, parentId: null, parentLabel: null },
     });
   }
   if (can.canImport && confirmed) {
@@ -355,6 +417,86 @@ export function availableActions(context: ActionContext): readonly Action[] {
         sourceId: target.sourceId,
       },
     });
+    // Last in the group, where a menu keeps what is hard to take back. This is not deleting: an
+    // archived document keeps every revision and its place, and Restore puts it back (the
+    // lifecycle is ACTIVE or ARCHIVED, and nothing else). All three axes, as Edit has them: the
+    // caller, the ownership, the state. Restore is not offered inside an archived source, which
+    // would refuse it: the source has to come back first.
+    if (can.canWrite && confirmed && target.ownership === "HUB_MANAGED") {
+      if (target.status === "ACTIVE") {
+        actions.push({
+          id: "document.archive",
+          label: "Archive document",
+          group: "document",
+          icon: "archive",
+          keywords: ["delete", "remove", "hide", "trash", target.label],
+          surfaces: ["palette", "row"],
+          effect: { kind: "command", command: "document.archive", documentId: target.documentId, sourceId: target.sourceId, label: target.label },
+        });
+      } else if (target.sourceStatus === "ACTIVE") {
+        actions.push({
+          id: "document.restore",
+          label: "Restore document",
+          group: "document",
+          icon: "restore",
+          keywords: ["unarchive", "undo", "bring back", target.label],
+          surfaces: ["palette", "row"],
+          effect: { kind: "command", command: "document.restore", documentId: target.documentId, sourceId: target.sourceId, label: target.label },
+        });
+      }
+    }
+  }
+
+  if (folder && can.canWrite && confirmed && folder.ownership === "HUB_MANAGED" && folder.sourceStatus === "ACTIVE") {
+    const identity = { nodeId: folder.nodeId, sourceId: folder.sourceId, label: folder.label };
+    if (folder.status === "ACTIVE") {
+      actions.push({
+        id: "folder.new-document",
+        label: "New document here",
+        group: "folder",
+        icon: "new-document",
+        keywords: ["create", "add", "note", "write", folder.label],
+        surfaces: ["row"],
+        effect: { kind: "navigate", href: `/w/${workspaceId}/knowledge/new?folder=${folder.nodeId}` },
+      });
+      actions.push({
+        id: "folder.new-folder",
+        label: "New folder here",
+        group: "folder",
+        icon: "new-folder",
+        keywords: ["create", "add", "subfolder", "nest", folder.label],
+        surfaces: ["row"],
+        effect: { kind: "create-folder", sourceId: folder.sourceId, parentId: folder.nodeId, parentLabel: folder.label },
+      });
+      actions.push({
+        id: "folder.rename",
+        label: "Rename folder",
+        group: "folder",
+        icon: "rename",
+        keywords: ["name", "title", folder.label],
+        surfaces: ["row"],
+        effect: { kind: "folder-command", command: "folder.rename", ...identity },
+      });
+      actions.push({
+        id: "folder.archive",
+        label: "Archive folder",
+        group: "folder",
+        icon: "archive",
+        keywords: ["delete", "remove", "hide", folder.label],
+        surfaces: ["row"],
+        effect: { kind: "folder-command", command: "folder.archive", ...identity },
+      });
+    } else {
+      actions.push({
+        id: "folder.restore",
+        label: "Restore folder",
+        group: "folder",
+        icon: "restore",
+        keywords: ["unarchive", "undo", "bring back", folder.label],
+        surfaces: ["row"],
+        effect: { kind: "folder-command", command: "folder.restore", ...identity },
+      });
+    }
   }
 
   return actions;
@@ -384,10 +526,11 @@ export const actionGroupLabels: Record<ActionGroup, string> = {
   navigate: "Go to",
   create: "Create",
   document: "This document",
+  folder: "This folder",
 };
 
 /** Registry order within a group is meaningful; group order is this. */
-export const actionGroupOrder: readonly ActionGroup[] = ["document", "create", "navigate"];
+export const actionGroupOrder: readonly ActionGroup[] = ["document", "folder", "create", "navigate"];
 
 export function groupActions(
   actions: readonly Action[],

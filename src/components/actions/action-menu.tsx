@@ -14,6 +14,8 @@ import {
   MenuRoot,
   MenuTrigger,
 } from "@/components/ui/menu";
+import { requestFolderName } from "@/components/knowledge/folder-name-request";
+import { useTreeMutations } from "@/components/knowledge/use-tree-mutations";
 import { ActionIcon } from "./action-icon";
 import type { Action } from "./action-registry";
 
@@ -58,6 +60,7 @@ export type ActionHandlers = {
 export function useActionRunner({ onToggleFavorite }: ActionHandlers) {
   const router = useRouter();
   const toast = useToast();
+  const mutations = useTreeMutations();
   return useCallback(
     (action: Action) => {
       const { effect } = action;
@@ -91,10 +94,32 @@ export function useActionRunner({ onToggleFavorite }: ActionHandlers) {
               // for it the same way it asks for details.
               requestShare(effect.documentId);
               return;
+            case "document.archive":
+              void mutations.archiveDocument({ documentId: effect.documentId, sourceId: effect.sourceId, title: effect.label ?? "Untitled document" });
+              return;
+            case "document.restore":
+              void mutations.restoreDocument({ documentId: effect.documentId, sourceId: effect.sourceId, title: effect.label ?? "Untitled document" });
+              return;
+          }
+          return;
+        case "create-folder":
+          requestFolderName({ mode: "create", sourceId: effect.sourceId, parentId: effect.parentId, parentLabel: effect.parentLabel });
+          return;
+        case "folder-command":
+          switch (effect.command) {
+            case "folder.rename":
+              requestFolderName({ mode: "rename", nodeId: effect.nodeId, name: effect.label });
+              return;
+            case "folder.archive":
+              void mutations.archiveFolder({ nodeId: effect.nodeId, name: effect.label });
+              return;
+            case "folder.restore":
+              void mutations.restoreFolder({ nodeId: effect.nodeId, name: effect.label });
+              return;
           }
       }
     },
-    [router, toast, onToggleFavorite],
+    [router, toast, mutations, onToggleFavorite],
   );
 }
 
@@ -176,7 +201,7 @@ export function RowActionsTrigger({
  * sets, and naming them keeps both branches below type-checked.
  */
 type RowProps = {
-  role: string;
+  role?: string;
   tabIndex?: number;
   className?: string;
   onFocus?: () => void;
@@ -192,16 +217,22 @@ export function RowContextMenu({
   actions,
   onRun,
   children,
+  as = "li",
   ...rowProps
 }: {
   actions: readonly Action[];
   onRun: (action: Action) => void;
   children: React.ReactNode;
+  /**
+   * A folder's own row is the treeitem and holds its children, so the menu goes on its header
+   * only — a right-click on a child must open the child's menu, not the folder's.
+   */
+  as?: "li" | "div";
 } & RowProps) {
-  if (actions.length === 0) return <li {...rowProps}>{children}</li>;
+  if (actions.length === 0) return as === "li" ? <li {...rowProps}>{children}</li> : <div {...rowProps}>{children}</div>;
   return (
     <ContextMenuRoot>
-      <ContextMenuTrigger render={<li />} {...rowProps}>
+      <ContextMenuTrigger render={as === "li" ? <li /> : <div />} {...rowProps}>
         {children}
       </ContextMenuTrigger>
       <ContextMenuContent>

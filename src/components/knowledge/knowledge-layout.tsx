@@ -4,10 +4,12 @@ import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import { SourceSidebar } from "./source-sidebar";
+import { FolderNameDialogHost } from "./folder-name-dialog";
 import { ShareLinkDialogHost } from "./share-link-dialog";
 import { InspectorContext } from "./inspector-context";
 import { Drawer } from "@/components/ui/drawer";
 import { DocumentSkeleton, TreeSkeleton } from "./knowledge-skeletons";
+import { useRefreshOnArrival } from "@/components/shell/refresh-on-arrival";
 import { useScrollRestoration } from "./use-scroll-restoration";
 import { buttonClasses } from "@/components/ui/button";
 
@@ -63,6 +65,9 @@ export function KnowledgeLayout({
   }, [pathname]);
 
   useScrollRestoration(contentRef, pathname);
+  // The document pane asks for this too, but not every place a mutation lands has one: the empty state
+  // of a source whose last document was just archived does not. The layout is there for all of them.
+  useRefreshOnArrival();
 
   useEffect(() => {
     const close = () => setInspectorOpen(false);
@@ -134,6 +139,7 @@ export function KnowledgeLayout({
         </div>
       </Drawer>
       <ShareLinkDialogHost />
+      <FolderNameDialogHost />
     </div>
     </InspectorContext.Provider>
   );

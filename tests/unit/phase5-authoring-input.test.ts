@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { MAX_MARKDOWN_BYTES, MAX_TITLE_LENGTH, parseCreateDocumentInput, parseUpdateDocumentInput } from "@/server/authoring-input";
+import {
+  MAX_FOLDER_NAME_LENGTH,
+  MAX_MARKDOWN_BYTES,
+  MAX_TITLE_LENGTH,
+  parseCreateDocumentInput,
+  parseCreateFolderInput,
+  parseRenameFolderInput,
+  parseUpdateDocumentInput,
+  requireRouteId,
+} from "@/server/authoring-input";
 import { DomainError } from "@/shared/domain/errors";
 import { SourceImportError } from "@/modules/sources/domain/import-errors";
 
@@ -15,7 +24,7 @@ function thrownBy(run: () => unknown): unknown {
 describe("parseCreateDocumentInput (spec §6.1, §6.2, §6.4)", () => {
   it("accepts an explicit title", () => {
     expect(parseCreateDocumentInput({ title: "Runbook", markdown: "# Hi" }))
-      .toEqual({ title: "Runbook", markdown: "# Hi", metadata: {} });
+      .toEqual({ title: "Runbook", markdown: "# Hi", metadata: {}, parentId: null });
   });
 
   it("resolves the title from frontmatter when a filename is given", () => {
@@ -95,5 +104,87 @@ describe("parseUpdateDocumentInput (spec §6.1)", () => {
     expect(parseUpdateDocumentInput({ title: "A", markdown: "b", expectedCurrentRevisionId: "r1" }))
       .toEqual({ title: "A", markdown: "b", expectedCurrentRevisionId: "r1" });
     expect(() => parseUpdateDocumentInput({ title: "A", markdown: "b" })).toThrow();
+  });
+});
+
+const ID = "0198f0a0-7c1e-7a3b-9d5e-0123456789ab";
+
+describe("a parent folder on a new document (daily-driver spec §7.1)", () => {
+  it("is the top level unless one is given", () => {
+    expect(parseCreateDocumentInput({ title: "A", markdown: "x" }).parentId).toBeNull();
+    expect(parseCreateDocumentInput({ title: "A", markdown: "x", parentId: null }).parentId).toBeNull();
+  });
+
+  it("is kept when it is an ID, on a typed title and on an upload", () => {
+    expect(parseCreateDocumentInput({ title: "A", markdown: "x", parentId: ID }).parentId).toBe(ID);
+    expect(parseCreateDocumentInput({ filename: "a.md", markdown: "# A", parentId: ID }).parentId).toBe(ID);
+  });
+
+  it.each([
+    { parentId: "", why: "an empty string" },
+    { parentId: "not-an-id", why: "text" },
+    { parentId: 5, why: "a number" },
+    { parentId: {}, why: "an object" },
+    { parentId: "0198f0a0-7c1e-7a3b-9d5e-0123456789a", why: "an ID one character short" },
+  ])("is refused as $why", ({ parentId }) => {
+    const error = thrownBy(() => parseCreateDocumentInput({ title: "A", markdown: "x", parentId }));
+    expect(error).toBeInstanceOf(DomainError);
+    expect((error as DomainError).code).toBe("INVALID_REQUEST");
+  });
+});
+
+describe("parseCreateFolderInput", () => {
+  it("takes a name and, optionally, a parent and a source", () => {
+    expect(parseCreateFolderInput({ name: "Runbooks" })).toEqual({ sourceId: null, parentId: null, name: "Runbooks" });
+    expect(parseCreateFolderInput({ name: "Runbooks", parentId: ID, sourceId: ID })).toEqual({ sourceId: ID, parentId: ID, name: "Runbooks" });
+    expect(parseCreateFolderInput({ name: "Runbooks", parentId: null, sourceId: null })).toEqual({ sourceId: null, parentId: null, name: "Runbooks" });
+  });
+
+  it("trims the name, as the domain does", () => {
+    expect(parseCreateFolderInput({ name: "  請假流程  " }).name).toBe("請假流程");
+  });
+
+  it("refuses an empty or blank name, and a name that is not text", () => {
+    for (const name of ["", "   ", "\n\t"]) expect(() => parseCreateFolderInput({ name })).toThrow();
+    expect(() => parseCreateFolderInput({ name: 5 })).toThrow();
+    expect(() => parseCreateFolderInput({})).toThrow();
+  });
+
+  it("allows the longest name the column holds and refuses one more", () => {
+    expect(parseCreateFolderInput({ name: "x".repeat(MAX_FOLDER_NAME_LENGTH) }).name).toHaveLength(MAX_FOLDER_NAME_LENGTH);
+    expect(() => parseCreateFolderInput({ name: "x".repeat(MAX_FOLDER_NAME_LENGTH + 1) })).toThrow(/too long/i);
+  });
+
+  it("counts the name after trimming, not before", () => {
+    expect(() => parseCreateFolderInput({ name: ` ${"x".repeat(MAX_FOLDER_NAME_LENGTH)} ` })).not.toThrow();
+  });
+
+  it.each([["bad", "sourceId"], ["bad", "parentId"], [5, "sourceId"], [5, "parentId"]])("refuses %j as %s", (value, field) => {
+    const error = thrownBy(() => parseCreateFolderInput({ name: "A", [field]: value }));
+    expect((error as DomainError).code).toBe("INVALID_REQUEST");
+  });
+
+  it("refuses a body that is not an object", () => {
+    for (const body of [null, undefined, "x", 5, [], [{ name: "A" }]]) expect(() => parseCreateFolderInput(body)).toThrow();
+  });
+});
+
+describe("parseRenameFolderInput", () => {
+  it("takes the same name, with the same limits", () => {
+    expect(parseRenameFolderInput({ name: " New name " })).toEqual({ name: "New name" });
+    expect(() => parseRenameFolderInput({ name: " " })).toThrow();
+    expect(() => parseRenameFolderInput({ name: "x".repeat(MAX_FOLDER_NAME_LENGTH + 1) })).toThrow();
+    expect(() => parseRenameFolderInput({})).toThrow();
+    expect(() => parseRenameFolderInput(null)).toThrow();
+  });
+});
+
+describe("requireRouteId", () => {
+  it("passes an ID and refuses anything else with a 400-class code", () => {
+    expect(requireRouteId(ID, "the folder")).toBe(ID);
+    for (const bad of ["", "abc", "../etc", ID + "x", ID.toUpperCase() + " "]) {
+      const error = thrownBy(() => requireRouteId(bad, "the folder"));
+      expect((error as DomainError).code).toBe("INVALID_REQUEST");
+    }
   });
 });

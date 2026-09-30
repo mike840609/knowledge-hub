@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronRight, Clock3, FileText, MoreHorizontal, Plus, ListFilter, Star } from "lucide-react";
+import { ActionIcon } from "@/components/actions/action-icon";
 import { rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
@@ -14,7 +15,7 @@ import { buttonClasses } from "@/components/ui/button";
 import { isBoolean, isBooleanRecord, isString, usePersistedJson } from "@/components/shell/use-persisted-state";
 import { documentShortcutKey, useDocumentShortcuts } from "./use-document-shortcuts";
 import { useActionRunner } from "@/components/actions/action-menu";
-import { actionsFor, type ActionTarget } from "@/components/actions/action-registry";
+import { actionsFor, type ActionTarget, type FolderTarget } from "@/components/actions/action-registry";
 
 export type SourceSidebarProps = {
   workspaceId: string;
@@ -113,6 +114,13 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
   const canCreate = access.actions.canWrite && confirmed;
   const newNoteHref = `/w/${workspaceId}/knowledge/new`;
   const addNote = <Link href={newNoteHref} aria-label="Create document" aria-keyshortcuts="C" title="Create document (C)" className={buttonClasses({ variant: "ghost", icon: true })}><Plus size={15} aria-hidden="true" /></Link>;
+  // What can be made here, from the registry like everything else: the button exists when the action does.
+  const createFolder = actionsFor("create", { workspaceId, workspaceType: access.workspace.type, can: access.actions, confirmed }).find((action) => action.id === "create.folder");
+  const addFolder = createFolder ? (
+    <button type="button" aria-label="Create folder" title="Create folder" onClick={() => runAction(createFolder)} className={buttonClasses({ variant: "ghost", icon: true })}>
+      <ActionIcon name="new-folder" className="h-4 w-4 shrink-0" />
+    </button>
+  ) : null;
 
   function toggleArchived(checked: boolean) {
     const params = new URLSearchParams(searchParams.toString());
@@ -175,7 +183,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
         {!hasNotes && canCreate && (!needle || "notes".includes(needle)) ? (
           <div className="flex items-center justify-between pl-2">
             <Link href={newNoteHref} className="rounded-md text-body font-medium text-kh-text hover:underline kh-focus-ring">Notes</Link>
-            {addNote}
+            <div className="flex items-center">{addFolder}{addNote}</div>
           </div>
         ) : null}
         {matches.map(({ source: candidate, tree }) => {
@@ -190,7 +198,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
                   <span className="truncate">{candidate.name}</span>
                   {candidate.status === "ARCHIVED" ? <span className="ml-auto text-caption font-normal text-kh-text-muted">Archived</span> : null}
                 </button>
-                {isNotes && canCreate ? addNote : null}
+                {isNotes && canCreate ? <div className="flex items-center">{addFolder}{addNote}</div> : null}
               </div>
               <div id={`collection-${candidate.id}`} hidden={!open} className="mt-1 pl-2">
                 {open ? <KnowledgeTree
@@ -218,9 +226,27 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
                       // A document stays ACTIVE inside an archived collection;
                       // what may be done to it follows the collection too.
                       status: candidate.status === "ARCHIVED" ? "ARCHIVED" : item.status,
+                      sourceStatus: candidate.status,
                       revision: "CURRENT",
                       favorite: shortcuts.favorites.includes(documentShortcutKey(candidate.id, item.documentId)),
                     } satisfies ActionTarget,
+                  })}
+                  folderActions={(item) => actionsFor("row", {
+                    workspaceId,
+                    workspaceType: access.workspace.type,
+                    can: access.actions,
+                    confirmed,
+                    includeArchived: showArchived,
+                    // The same three axes as a document: the source's ownership, and the folder's own
+                    // state — plus the source's, since an archived source refuses every change to it.
+                    folder: {
+                      nodeId: item.id,
+                      sourceId: candidate.id,
+                      label: item.label,
+                      ownership: candidate.ownership,
+                      status: item.status,
+                      sourceStatus: candidate.status,
+                    } satisfies FolderTarget,
                   })}
                   onRunAction={runAction}
                 /> : null}

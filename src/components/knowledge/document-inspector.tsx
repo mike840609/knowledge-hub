@@ -394,6 +394,7 @@ export function DocumentDetailClient({
       label: title,
       ownership,
       status: status === "ACTIVE" && sourceStatus === "ACTIVE" ? ("ACTIVE" as const) : ("ARCHIVED" as const),
+      sourceStatus,
       revision: revisionBanner ? ("HISTORICAL" as const) : ("CURRENT" as const),
     }),
     [inspectorData.documentId, inspectorData.sourceId, title, ownership, status, sourceStatus, revisionBanner],

@@ -11,7 +11,16 @@ import { DocumentComposer } from "./document-composer";
 
 type Created = { documentId: string; sourceId: string };
 
-export function NewDocumentForm({ workspaceId, workspaceName }: { workspaceId: string; workspaceName: string }) {
+export function NewDocumentForm({
+  workspaceId,
+  workspaceName,
+  folder = null,
+}: {
+  workspaceId: string;
+  workspaceName: string;
+  /** Where the document goes, when it is not the top of Notes; `label` is only a caption. */
+  folder?: { id: string; label: string | null } | null;
+}) {
   const router = useRouter();
   const { access, confirmed } = useWorkspaceAuthorization();
   const [uploading, setUploading] = useState(false);
@@ -22,7 +31,7 @@ export function NewDocumentForm({ workspaceId, workspaceName }: { workspaceId: s
   const listHref = `/w/${workspaceId}/knowledge`;
 
   async function create(body: unknown): Promise<string> {
-    const created = await governanceRequest<Created>(`/api/workspaces/${workspaceId}/documents`, "POST", body);
+    const created = await governanceRequest<Created>(`/api/workspaces/${workspaceId}/documents`, "POST", { ...(body as object), ...(folder ? { parentId: folder.id } : {}) });
     return `/w/${workspaceId}/knowledge/${created.sourceId}/${created.documentId}`;
   }
 
@@ -56,7 +65,7 @@ export function NewDocumentForm({ workspaceId, workspaceName }: { workspaceId: s
   return (
     <DocumentComposer
       draftKey={{ kind: "new", workspaceId }}
-      location={[{ label: "Documents", href: listHref }]}
+      location={[{ label: "Documents", href: listHref }, ...(folder?.label ? [{ label: folder.label }] : [])]}
       untitledLabel="New document"
       metadataTitle={undefined}
       initialTitle=""
@@ -80,7 +89,7 @@ export function NewDocumentForm({ workspaceId, workspaceName }: { workspaceId: s
             >
               Upload .md
             </Button>{" "}
-            to Notes in {workspaceName} instead.
+            to {folder ? (folder.label ? `the folder “${folder.label}”` : "that folder") : "Notes"} in {workspaceName} instead.
           </p>
           <input
             ref={fileInputRef}
