@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, startTransition } from "react";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { migrateLocalFavorites, enqueueFavoriteWrite, pendingFavoriteWrites } from "@/lib/favorite-sync";
 import { useToast } from "@/components/ui/toast";
@@ -50,14 +50,22 @@ export function useDocumentShortcuts(workspaceId: string): {
   useEffect(() => {
     // Read in an effect, not in the initializer: the server renders this too,
     // and `window.localStorage` throws outright where a browser blocks it.
-    const cached = parseDocumentShortcuts(readStored("local", storageKey));
-    current.current = cached;
-    setShortcuts(cached);
+    // The destination sidebar mounts beside save's arrival refresh, so an
+    // identical value never reaches state and a real one arrives as a
+    // transition, never discarding the navigation (#63) or refresh (#64).
+    const next = parseDocumentShortcuts(readStored("local", storageKey));
+    if (JSON.stringify(current.current) !== JSON.stringify(next)) {
+      current.current = next;
+      startTransition(() => setShortcuts(next));
+    }
     const onChange = (event: Event) => {
       const detail = (event as CustomEvent<Broadcast>).detail;
-      if (detail?.key === storageKey) {
-        if (JSON.stringify(detail.value.favorites) !== JSON.stringify(current.current.favorites)) generation.current++;
-        current.current = detail.value; setShortcuts(detail.value);
+      if (detail?.key !== storageKey) return;
+      const value = detail.value;
+      if (JSON.stringify(value.favorites) !== JSON.stringify(current.current.favorites)) generation.current++;
+      if (JSON.stringify(current.current) !== JSON.stringify(value)) {
+        current.current = value;
+        startTransition(() => setShortcuts(value));
       }
     };
     window.addEventListener(CHANGED, onChange);
@@ -73,8 +81,10 @@ export function useDocumentShortcuts(workspaceId: string): {
         const items = await response.json() as { key: string; sourceId?: string }[];
         if (!live || requestGeneration !== generation.current) return;
         const next = { ...current.current, favorites: items.filter(i => i.key.startsWith("favorite:") && i.sourceId).map(i => `${i.sourceId}:${i.key.split(":")[1]}`) };
-        current.current = next;
-        setShortcuts(next);
+        if (JSON.stringify(current.current) !== JSON.stringify(next)) {
+          current.current = next;
+          startTransition(() => setShortcuts(next));
+        }
         writeStored("local", storageKey, JSON.stringify(next));
       } catch { if (live) toast({ message: "Favorites could not sync. Showing this device’s saved list.", tone: "danger" }); }
     };
@@ -87,11 +97,13 @@ export function useDocumentShortcuts(workspaceId: string): {
     (change: (previous: DocumentShortcuts) => DocumentShortcuts) => {
       const before = current.current;
       const next = change(before);
+      // A no-op read must not interrupt navigation or a refresh.
+      if (JSON.stringify(before) === JSON.stringify(next)) return;
       if (JSON.stringify(next.favorites) !== JSON.stringify(before.favorites)) generation.current++;
       current.current = next;
-      setShortcuts(next);
       writeStored("local", storageKey, JSON.stringify(next));
       window.dispatchEvent(new CustomEvent<Broadcast>(CHANGED, { detail: { key: storageKey, value: next } }));
+      startTransition(() => setShortcuts(next));
       if (personal) {
         const changed = [...new Set([...before.favorites, ...next.favorites])].filter(key => before.favorites.includes(key) !== next.favorites.includes(key));
         for (const key of changed) {
@@ -108,7 +120,8 @@ export function useDocumentShortcuts(workspaceId: string): {
             const favorites = current.current.favorites.filter(k => k !== key);
             if (!selected) favorites.push(key);
             const reverted = { ...current.current, favorites };
-            current.current = reverted; setShortcuts(reverted);
+            generation.current++;
+            current.current = reverted; startTransition(() => setShortcuts(reverted));
             writeStored("local", storageKey, JSON.stringify(reverted));
             window.dispatchEvent(new CustomEvent<Broadcast>(CHANGED, { detail: { key: storageKey, value: reverted } }));
             toast({ message: "Favorite was not saved. Please try again.", tone: "danger" });
