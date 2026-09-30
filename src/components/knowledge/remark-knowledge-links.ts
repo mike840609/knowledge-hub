@@ -1,7 +1,8 @@
-import type { Nodes, Parent, PhrasingContent, Root } from "mdast";
+import type { PhrasingContent, Root } from "mdast";
 import type {} from "mdast-util-to-hast";
-import { findWikiLinks, type WikiLinkMatch } from "@/modules/knowledge/domain/document-links";
+import type { WikiLinkMatch } from "@/modules/knowledge/domain/document-links";
 import { headingSlug } from "@/shared/markdown/heading-slug";
+import { replaceWikiLinks } from "./replace-wiki-links";
 
 /** Attribute names the plugin puts on the link and `MarkdownAnchor` reads back. */
 export const WIKILINK_TARGET = "data-kh-wikilink";
@@ -31,34 +32,6 @@ function linkNode(match: WikiLinkMatch): PhrasingContent {
   };
 }
 
-/** Where `[[x]]` is being shown rather than written, or already means something else. */
-const LEAVE_ALONE = new Set<Nodes["type"]>(["link", "linkReference", "definition", "code", "inlineCode", "html", "image", "imageReference"]);
-
-function transform(parent: Parent, markdown: string): void {
-  const next: PhrasingContent[] = [];
-  let changed = false;
-  for (const child of parent.children as Nodes[]) {
-    if (child.type === "text") {
-      const matches = findWikiLinks(child, markdown);
-      if (matches.length > 0) {
-        changed = true;
-        let cursor = 0;
-        for (const match of matches) {
-          if (match.index > cursor) next.push({ type: "text", value: child.value.slice(cursor, match.index) });
-          next.push(linkNode(match));
-          cursor = match.index + match.length;
-        }
-        if (cursor < child.value.length) next.push({ type: "text", value: child.value.slice(cursor) });
-        continue;
-      }
-    } else if (!LEAVE_ALONE.has(child.type) && "children" in child) {
-      transform(child as Parent, markdown);
-    }
-    next.push(child as PhrasingContent);
-  }
-  if (changed) (parent as { children: unknown[] }).children = next;
-}
-
 /**
  * Turns `[[Target#Heading|Alias]]` into a link the renderer can resolve. It
  * only marks the link (with the target and fragment as attributes); which
@@ -71,6 +44,6 @@ function transform(parent: Parent, markdown: string): void {
  */
 export function remarkKnowledgeLinks() {
   return (tree: Root, file: { toString(): string }) => {
-    transform(tree, String(file));
+    replaceWikiLinks(tree, String(file), linkNode);
   };
 }
