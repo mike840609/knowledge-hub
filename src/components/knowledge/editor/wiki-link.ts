@@ -71,7 +71,7 @@ export function splitWikiLinkText(text: string): WikiLinkPiece[] {
 }
 
 /** Text that is being shown, or is already inside a link, is not where a wikilink starts. */
-const keepsAsText = (mark: Mark) => mark.type.spec.code === true || mark.type.name === "link";
+export const keepsAsText = (mark: Mark) => mark.type.spec.code === true || mark.type.name === "link";
 
 /** Typing the closing `]]` of `[[…]]` makes it a node. */
 const wikiLinkInputRule = $inputRule(

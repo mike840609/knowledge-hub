@@ -64,6 +64,7 @@ export function NewDocumentForm({
 
   return (
     <DocumentComposer
+      workspaceId={workspaceId}
       draftKey={{ kind: "new", workspaceId }}
       location={[{ label: "Documents", href: listHref }, ...(folder?.label ? [{ label: folder.label }] : [])]}
       untitledLabel="New document"

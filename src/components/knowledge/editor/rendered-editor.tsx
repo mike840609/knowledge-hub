@@ -3,10 +3,17 @@
 import { useEffect, useRef, type MouseEvent } from "react";
 import { isAllowedMarkdownImageSrc } from "@/components/knowledge/markdown-image-policy";
 import { MARKDOWN_PROSE } from "@/components/knowledge/markdown-prose";
+import { governanceRequest } from "@/components/workspaces/governance-error";
+import type { LinkTargetsView } from "@/modules/knowledge/application/knowledge-link-service";
 import { createMarkdownEditor, type MarkdownEditor } from "./editor-core";
 import { selectionToolbar } from "./selection-toolbar";
+import { wikiLinkSuggest } from "./wikilink-suggest";
 
 export type RenderedEditorProps = {
+  /** The Workspace whose documents `[[` offers. */
+  workspaceId: string;
+  /** The document being edited, when there is one: `[[` does not offer it to itself. */
+  documentId?: string;
   /** What to open with. Later changes go in through the handle `onReady` gave. */
   markdown: string;
   editable: boolean;
@@ -44,6 +51,11 @@ export function RenderedEditor(props: RenderedEditorProps) {
     container.appendChild(host);
     let cancelled = false;
     const toolbar = selectionToolbar();
+    const suggest = wikiLinkSuggest({
+      // Read through the ref at the moment of use, like every other prop here.
+      loadTargets: () => governanceRequest<LinkTargetsView>(`/api/workspaces/${latest.current.workspaceId}/link-targets`),
+      excludeDocumentId: () => latest.current.documentId,
+    });
     const openedWith = latest.current.markdown;
     createMarkdownEditor({
       root: host,
@@ -54,8 +66,11 @@ export function RenderedEditor(props: RenderedEditorProps) {
       onUserEdit: () => latest.current.onUserEdit(),
       onMarkdown: (markdown) => latest.current.onMarkdown(markdown),
       allowImage: (src) => isAllowedMarkdownImageSrc(src, { origin: window.location.origin }),
-      extraPlugins: toolbar.plugins,
-      configure: toolbar.configure,
+      extraPlugins: [...toolbar.plugins, ...suggest.plugins],
+      configure: (ctx) => {
+        toolbar.configure(ctx);
+        suggest.configure(ctx);
+      },
     }).then(
       (editor) => {
         if (cancelled) {

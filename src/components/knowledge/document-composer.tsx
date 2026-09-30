@@ -51,6 +51,7 @@ export type ComposerSubmit = { title: string; markdown: string; expectedRevision
  * `authored-title`, the draft in `document-draft`, the keys in `form-keys`.
  */
 export function DocumentComposer({
+  workspaceId,
   draftKey,
   location,
   untitledLabel,
@@ -65,6 +66,8 @@ export function DocumentComposer({
   blocked,
   footer,
 }: {
+  /** Where `[[` looks for documents to link to. */
+  workspaceId: string;
   draftKey: DraftKey;
   /** Breadcrumb up to, not including, the document; the resolved title is appended. */
   location: DocumentBreadcrumbSegment[];
@@ -495,6 +498,8 @@ export function DocumentComposer({
           {mountEditor ? (
             <div hidden={showing !== "rendered" || !editorReady}>
               <RenderedEditor
+                workspaceId={workspaceId}
+                documentId={draftKey.kind === "edit" ? draftKey.documentId : undefined}
                 markdown={markdown}
                 editable={interactive}
                 onReady={handleEditorReady}
