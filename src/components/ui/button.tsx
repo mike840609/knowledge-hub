@@ -4,8 +4,8 @@ import { controlHeight, controlWidth, type ControlSize } from "./control";
 
 const variantClasses = {
   primary: "border-transparent bg-kh-primary text-kh-on-primary hover:bg-kh-primary-hover",
-  secondary: "border-kh-border-strong bg-kh-bg text-kh-text hover:bg-kh-bg-hover",
-  ghost: "border-transparent bg-transparent text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text",
+  secondary: "border-kh-border bg-kh-ghost text-kh-text hover:bg-kh-ghost-hover",
+  ghost: "border-transparent bg-kh-ghost text-kh-text-muted hover:bg-kh-ghost-hover hover:text-kh-text",
   danger: "border-transparent bg-kh-danger-solid text-kh-on-primary hover:bg-kh-danger-solid-hover",
   link: "border-transparent bg-transparent text-kh-link underline underline-offset-2 hover:text-kh-text",
 } as const;
@@ -56,7 +56,7 @@ export function buttonClasses({
     : icon
       ? iconSizeClasses[size]
       : sizeClasses[size];
-  return `kh-focus-ring inline-flex shrink-0 items-center justify-center rounded-md border font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 ${shape} ${variantClasses[variant]} ${className}`;
+  return `kh-focus-ring inline-flex shrink-0 items-center justify-center rounded-md border font-medium transition-[background-color,transform] duration-120 ease-out active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 ${shape} ${variantClasses[variant]} ${className}`;
 }
 
 type ButtonProps = ComponentProps<typeof BaseButton> & ButtonAppearance;

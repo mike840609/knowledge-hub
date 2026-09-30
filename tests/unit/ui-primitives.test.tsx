@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import fs from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonClasses } from "@/components/ui/button";
@@ -50,8 +51,24 @@ describe("buttonClasses", () => {
 
   it("routes destructive and quiet variants to their own tokens", () => {
     expect(buttonClasses({ variant: "danger" })).toContain("bg-kh-danger-solid");
-    expect(buttonClasses({ variant: "ghost" })).toContain("bg-transparent");
-    expect(buttonClasses({ variant: "secondary" })).toContain("border-kh-border-strong");
+    expect(buttonClasses({ variant: "ghost" })).toContain("bg-kh-ghost");
+    expect(buttonClasses({ variant: "secondary" })).toContain("border-kh-border");
+  });
+
+  it("gives ghost a translucent fill, not transparent", () => {
+    expect(buttonClasses({ variant: "ghost" })).toContain("bg-kh-ghost");
+    expect(buttonClasses({ variant: "ghost" })).not.toContain("bg-transparent");
+  });
+
+  it("presses with scale on every non-link variant", () => {
+    for (const variant of ["primary", "secondary", "ghost", "danger"] as const) {
+      expect(buttonClasses({ variant })).toContain("active:scale-[0.98]");
+    }
+  });
+
+  it("has no shape overrides smuggled via className in src", () => {
+    const src = fs.readFileSync("src/components/search/search-form.tsx", "utf8");
+    expect(src).not.toMatch(/buttonClasses\([^)]*className[^)]*(h-|px-|py-|min-h-)/);
   });
 
   it("appends the caller's classes after its own", () => {

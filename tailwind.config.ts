@@ -121,6 +121,8 @@ const config: Config = {
         "kh-bg-subtle": "var(--kh-bg-subtle)",
         "kh-bg-hover": "var(--kh-bg-hover)",
         "kh-bg-selected": "var(--kh-bg-selected)",
+        "kh-ghost": "var(--kh-ghost)",
+        "kh-ghost-hover": "var(--kh-ghost-hover)",
         "kh-border": "var(--kh-border)",
         "kh-border-strong": "var(--kh-border-strong)",
         "kh-text": "var(--kh-text)",

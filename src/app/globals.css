@@ -19,6 +19,8 @@
   --kh-bg-hover: #eceef2;
   --kh-bg-hover-strong: #e4e7ec;
   --kh-bg-selected: #eef0ff;
+  --kh-ghost: rgba(23, 25, 32, 0.03);
+  --kh-ghost-hover: rgba(23, 25, 32, 0.06);
   --kh-border: #e5e7ee;
   --kh-border-strong: #828797;
   --kh-text: #1d1f24;
@@ -68,6 +70,8 @@
   --kh-bg-hover: #1e2025;
   --kh-bg-hover-strong: #2b2e35;
   --kh-bg-selected: #23253d;
+  --kh-ghost: rgba(255, 255, 255, 0.02);
+  --kh-ghost-hover: rgba(255, 255, 255, 0.05);
   --kh-border: rgba(255, 255, 255, 0.08);
   --kh-border-strong: rgba(255, 255, 255, 0.34);
   --kh-text: #e7e8ec;
