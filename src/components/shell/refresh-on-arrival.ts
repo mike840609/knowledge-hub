@@ -20,10 +20,22 @@ import { usePathname, useRouter } from "next/navigation";
  * navigation, and a full load renders everything fresh anyway.
  */
 let pendingPathname: string | null = null;
+/** The path being left, when the destination is not known: see `refreshOnArrivalElsewhere`. */
+let pendingLeaving: string | null = null;
 
 /** Call before pushing to `href`; the page there refreshes once it has mounted. */
 export function refreshOnArrival(href: string): void {
   pendingPathname = new URL(href, window.location.origin).pathname;
+}
+
+/**
+ * For a push whose destination the caller cannot name, because the route it pushes to redirects:
+ * archiving the document that is open sends the reader to its source, which sends them on to the
+ * first document there, or to an empty state. Whichever it is, the first place that is not the one
+ * being left refreshes.
+ */
+export function refreshOnArrivalElsewhere(): void {
+  pendingLeaving = window.location.pathname;
 }
 
 /** Mounted by a page a mutation may navigate to. */
@@ -31,8 +43,12 @@ export function useRefreshOnArrival(): void {
   const pathname = usePathname();
   const router = useRouter();
   useEffect(() => {
-    if (pendingPathname !== pathname) return;
-    pendingPathname = null;
-    router.refresh();
+    if (pendingPathname === pathname) {
+      pendingPathname = null;
+      router.refresh();
+    } else if (pendingLeaving !== null && pendingLeaving !== pathname) {
+      pendingLeaving = null;
+      router.refresh();
+    }
   }, [pathname, router]);
 }

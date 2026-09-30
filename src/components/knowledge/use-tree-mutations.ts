@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo } from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
-import { refreshOnArrival } from "@/components/shell/refresh-on-arrival";
+import { refreshOnArrival, refreshOnArrivalElsewhere } from "@/components/shell/refresh-on-arrival";
 import { useToast } from "@/components/ui/toast";
 import { governanceFailure, governanceRequest } from "@/components/workspaces/governance-error";
 import {
@@ -78,7 +78,8 @@ export function useTreeMutations(): TreeMutations {
           const listHref = `/w/${workspaceId}/knowledge/${input.sourceId}`;
           // The toast is shown first and told to outlive the navigation it is about to cause.
           toast({ message, undo, survivesNavigation: true });
-          refreshOnArrival(listHref);
+          // The source's page redirects, so where the reader lands is not known from here.
+          refreshOnArrivalElsewhere();
           router.push(listHref);
         } else {
           toast({ message, undo });

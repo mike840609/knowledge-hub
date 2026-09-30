@@ -40,11 +40,15 @@ export type ToastRequest = {
   undo?: ToastUndo;
   /**
    * For a toast whose own action navigates: archiving the document that is open sends the reader
-   * to the list, and the Undo has to still be there when they arrive. Only the navigation that
-   * follows — not a later one.
+   * to the list, and the Undo has to still be there when they arrive. It survives the navigations
+   * that follow within `SURVIVES_NAVIGATION_MS` — plural, because one push can be several: the
+   * router changes the address to the route it was sent to, and that route redirects.
    */
   survivesNavigation?: boolean;
 };
+
+/** Long enough for a push and a redirect and the refresh that follows, short enough that a later, unrelated navigation still clears the toast. */
+const SURVIVES_NAVIGATION_MS = 3_000;
 
 type ActiveToast = ToastRequest & { id: number; state: "idle" | "undoing" };
 
@@ -67,23 +71,24 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<ActiveToast | null>(null);
   const nextId = useRef(0);
   const held = useRef(false);
-  const survivor = useRef<number | null>(null);
+  const survivor = useRef<{ id: number; until: number } | null>(null);
   const pathname = usePathname();
 
   const show = useCallback((request: ToastRequest) => {
     // One at a time: a queue would mean a reader's undo waiting behind
     // something they have already read.
     const id = (nextId.current += 1);
-    survivor.current = request.survivesNavigation ? id : null;
+    survivor.current = request.survivesNavigation ? { id, until: Date.now() + SURVIVES_NAVIGATION_MS } : null;
     setToast({ ...request, id, state: "idle" });
   }, []);
 
   // A toast describes what just happened here. Somewhere else, it is litter —
-  // unless it says so about itself, once.
+  // unless its own action is what sent the reader there.
   useEffect(() => {
     const keep = survivor.current;
-    survivor.current = null;
-    setToast((current) => (current !== null && current.id === keep ? current : null));
+    const survives = keep !== null && Date.now() < keep.until;
+    if (!survives) survivor.current = null;
+    setToast((current) => (survives && current !== null && current.id === keep.id ? current : null));
   }, [pathname]);
 
   useEffect(() => {

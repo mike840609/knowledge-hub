@@ -18,10 +18,23 @@ export function useWorkspaceAuthorization() {
   return value;
 }
 
+/**
+ * Conflicts about content, not access: re-checking would pause every mutation in the shell — and say
+ * "Unable to confirm workspace" while it did — for an answer that says nothing about authorization.
+ * A folder that is not empty, a parent that is archived, a move into itself: the caller can still do
+ * everything they could a moment ago, and is being told about the tree.
+ */
+const CONFLICTS_ABOUT_CONTENT: ReadonlySet<string> = new Set([
+  "REVISION_CONFLICT",
+  "SHARE_LINK_LIMIT_REACHED",
+  "FOLDER_NOT_EMPTY",
+  "INVALID_PARENT",
+  "TREE_CYCLE",
+  "CROSS_SOURCE_MOVE",
+]);
+
 export function requestWorkspaceAccessCheck(status: number, code?: string) {
-  // Conflicts about content, not access: re-checking would pause every
-  // mutation in the shell for an answer that says nothing about authorization.
-  if (code === "REVISION_CONFLICT" || code === "SHARE_LINK_LIMIT_REACHED") return;
+  if (code !== undefined && CONFLICTS_ABOUT_CONTENT.has(code)) return;
   if ([403, 404, 409].includes(status)) window.dispatchEvent(new Event("kh:workspace-access-check"));
 }
 
