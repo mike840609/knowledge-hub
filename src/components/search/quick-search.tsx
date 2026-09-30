@@ -98,7 +98,15 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
   const matched = useMemo(() => matchActions(actions, trimmed), [actions, trimmed]);
   // Recent documents come first while nothing is typed: the default row is then the document opened before
   // this one, which is the thing most often wanted from an empty palette. With none, it is what it always was.
-  const recentRows = useMemo<PaletteRow[]>(() => (trimmed ? [] : recents.map((hit) => ({ kind: "hit" as const, hit }))), [trimmed, recents]);
+  // Of what the server has answered, only the documents asked for last: an answer to an earlier question — one that
+  // still named the document being read, when this page had not yet said which it was — is not shown once the
+  // question has changed, however long the newer answer takes.
+  const recentIds = useMemo(() => recentDocumentIds(shortcuts, reading?.documentId), [shortcuts, reading?.documentId]);
+  const recentIdsKey = recentIds.join(",");
+  const recentRows = useMemo<PaletteRow[]>(
+    () => (trimmed ? [] : recents.filter((hit) => recentIds.includes(hit.documentId)).map((hit) => ({ kind: "hit" as const, hit }))),
+    [trimmed, recents, recentIds],
+  );
   const rows = useMemo<PaletteRow[]>(
     () => [
       ...recentRows,
@@ -114,10 +122,10 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
   // first row; someone who has keeps the row they are on, which is now further down.
   const shownRecents = useRef(0);
   useEffect(() => {
-    const added = recents.length - shownRecents.current;
-    shownRecents.current = recents.length;
+    const added = recentRows.length - shownRecents.current;
+    shownRecents.current = recentRows.length;
     if (added !== 0) setActiveIndex((index) => (index === 0 ? 0 : Math.max(0, index + added)));
-  }, [recents.length]);
+  }, [recentRows.length]);
   const activeRow = rows[activeIndex];
 
   // ⌘K, and the single keys. The single keys read the same actions this
@@ -154,8 +162,6 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
   // The documents to list while nothing is typed. They are asked of the server rather than read back from
   // what the browser remembered: that is only a list of IDs, and a document may have been renamed or
   // archived since. The server checks each and answers with what it is called now.
-  const recentIds = useMemo(() => recentDocumentIds(shortcuts, reading?.documentId), [shortcuts, reading?.documentId]);
-  const recentIdsKey = recentIds.join(",");
   const typing = trimmed !== "";
   useEffect(() => {
     if (!enabled || !open || typing || !recentIdsKey) {
