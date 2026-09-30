@@ -28,6 +28,8 @@ const WORKSPACE_HIDDEN_NOT_FOUND = new Set([
   "DOCUMENT_NOT_FOUND",
   "SOURCE_NOT_FOUND",
   "SHARE_LINK_NOT_FOUND",
+  // A tree node is found by its own ID, so "no such node" must not be told apart from "not yours".
+  "TREE_NODE_NOT_FOUND",
 ]);
 
 const ACCESS_DENIED = new Set([
@@ -76,7 +78,9 @@ export function toWorkspaceErrorResponse(error: unknown): { status: number; body
     const status = ["INSUFFICIENT_WORKSPACE_CAPABILITY", "TEAM_CREATION_DENIED", "PERSONAL_WORKSPACE_FROZEN"].includes(error.code) ? 403
       : ["WORKSPACE_ARCHIVED", "LAST_DIRECT_OWNER", "MEMBER_ALREADY_EXISTS", "GROUP_MAPPING_ALREADY_EXISTS", "WORKSPACE_LIFECYCLE_VIOLATION",
          "REVISION_CONFLICT", "SOURCE_MANAGED_READ_ONLY", "SOURCE_ARCHIVED", "DOCUMENT_ARCHIVED",
-         "SHARE_LINK_NOT_PERSONAL", "SHARE_LINK_LIMIT_REACHED"].includes(error.code) ? 409
+         "SHARE_LINK_NOT_PERSONAL", "SHARE_LINK_LIMIT_REACHED",
+         // The tree and folder commands: each is a state the reader can act on, so none is a 500.
+         "FOLDER_NOT_EMPTY", "TREE_CYCLE", "INVALID_PARENT", "CROSS_SOURCE_MOVE", "HUB_MANAGED_OPERATION_REQUIRED"].includes(error.code) ? 409
       : ["MEMBER_NOT_FOUND", "INVALID_ROLE_ASSIGNMENT", "INVALID_WORKSPACE_NAME", "INVALID_REQUEST",
          "INVALID_TITLE", "INVALID_METADATA", "VALIDATION_ERROR",
          "INVALID_SHARE_LINK_EXPIRY", "INVALID_SHARE_LINK_LABEL"].includes(error.code) ? 400 : 500;
