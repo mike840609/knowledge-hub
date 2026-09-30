@@ -53,6 +53,7 @@ describe("buttonClasses", () => {
     expect(buttonClasses({ variant: "danger" })).toContain("bg-kh-danger-solid");
     expect(buttonClasses({ variant: "ghost" })).toContain("bg-kh-ghost");
     expect(buttonClasses({ variant: "secondary" })).toContain("border-kh-border");
+    expect(buttonClasses({ variant: "secondary" })).not.toContain("border-strong");
   });
 
   it("gives ghost a translucent fill, not transparent", () => {
