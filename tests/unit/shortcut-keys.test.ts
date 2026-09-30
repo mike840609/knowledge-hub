@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSingleKeyShortcut, shortcutLabel, type KeyEventLike } from "@/lib/shortcut-keys";
+import { isSingleKeyShortcut, matchesShortcut, shortcutLabel, type KeyEventLike, type ShortcutEventLike } from "@/lib/shortcut-keys";
 
 /** A target whose closest() answers for the selectors it is "inside". */
 function inside(...matches: string[]) {
@@ -82,5 +82,54 @@ describe("shortcutLabel", () => {
 
   it("shows Control as Ctrl when it comes first", () => {
     expect(shortcutLabel("Control+I")).toBe("Ctrl I");
+  });
+});
+
+describe("matchesShortcut", () => {
+  const press = (overrides: Partial<ShortcutEventLike> = {}): ShortcutEventLike => ({
+    key: "\\",
+    metaKey: false,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    isComposing: false,
+    repeat: false,
+    ...overrides,
+  });
+  const NAV = "Meta+\\ Control+\\";
+
+  it("takes either alternative: ⌘ on a Mac, Ctrl elsewhere", () => {
+    expect(matchesShortcut(press({ metaKey: true }), NAV)).toBe(true);
+    expect(matchesShortcut(press({ ctrlKey: true }), NAV)).toBe(true);
+  });
+
+  it("wants the modifier the shortcut names, and only it", () => {
+    expect(matchesShortcut(press(), NAV)).toBe(false);
+    expect(matchesShortcut(press({ metaKey: true, ctrlKey: true }), NAV)).toBe(false);
+    expect(matchesShortcut(press({ metaKey: true, altKey: true }), NAV)).toBe(false);
+    // ⌘⇧\ types `|`, and is another shortcut.
+    expect(matchesShortcut(press({ metaKey: true, shiftKey: true, key: "|" }), NAV)).toBe(false);
+    expect(matchesShortcut(press({ metaKey: true, shiftKey: true }), NAV)).toBe(false);
+  });
+
+  it("wants the key it names", () => {
+    expect(matchesShortcut(press({ metaKey: true, key: "/" }), NAV)).toBe(false);
+    expect(matchesShortcut(press({ metaKey: true, key: "b" }), NAV)).toBe(false);
+  });
+
+  it("compares letters without regard to case, as ⌘I is bound", () => {
+    expect(matchesShortcut(press({ metaKey: true, key: "I" }), "Meta+I Control+I")).toBe(true);
+    expect(matchesShortcut(press({ ctrlKey: true, key: "i" }), "Meta+I Control+I")).toBe(true);
+    expect(matchesShortcut(press({ ctrlKey: true, altKey: true, key: "i" }), "Meta+I Control+I")).toBe(false);
+  });
+
+  it("is not a key pressed to compose with an input method, or held down", () => {
+    expect(matchesShortcut(press({ metaKey: true, isComposing: true }), NAV)).toBe(false);
+    expect(matchesShortcut(press({ metaKey: true, keyCode: 229 }), NAV)).toBe(false);
+    expect(matchesShortcut(press({ metaKey: true, repeat: true }), NAV)).toBe(false);
+  });
+
+  it("is not a single key: a shortcut with no modifier is isSingleKeyShortcut's, with its rules about fields", () => {
+    expect(matchesShortcut(press({ key: "c" }), "C")).toBe(false);
   });
 });

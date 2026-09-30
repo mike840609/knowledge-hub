@@ -9,6 +9,7 @@ import { WorkspaceSelector } from "@/components/shell/workspace-selector";
 import { QuickSearch } from "@/components/search/quick-search";
 import { UserMenu } from "@/components/shell/user-menu";
 import { buttonClasses } from "@/components/ui/button";
+import { NAV_TOGGLE_SHORTCUT } from "@/components/actions/action-registry";
 
 export function Topbar({
   model,
@@ -38,7 +39,7 @@ export function Topbar({
             <Menu className="h-4 w-4" aria-hidden="true" />
           </button>
         ) : null}
-        <button type="button" onClick={onToggleNav} aria-label={navCollapsed ? "Expand navigation" : "Collapse navigation"} title={navCollapsed ? "Expand navigation" : "Collapse navigation"} className={buttonClasses({ variant: "ghost", icon: true, className: "max-lg:hidden" })}>
+        <button type="button" onClick={onToggleNav} aria-label={navCollapsed ? "Expand navigation" : "Collapse navigation"} aria-keyshortcuts={NAV_TOGGLE_SHORTCUT} title={`${navCollapsed ? "Expand navigation" : "Collapse navigation"} (⌘/Ctrl \\)`} className={buttonClasses({ variant: "ghost", icon: true, className: "max-lg:hidden" })}>
           {navCollapsed ? <PanelLeftOpen className="h-4 w-4" aria-hidden="true" /> : <PanelLeftClose className="h-4 w-4" aria-hidden="true" />}
         </button>
         <span className={`hidden whitespace-nowrap text-caption font-semibold text-kh-text sm:block ${navCollapsed ? "lg:hidden" : ""}`}>Knowledge Hub</span>

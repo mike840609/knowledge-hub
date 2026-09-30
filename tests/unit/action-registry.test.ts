@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  NAV_TOGGLE_SHORTCUT,
   actionsFor,
   availableActions,
   groupActions,
@@ -67,8 +68,24 @@ describe("action registry — the workspace capability axis", () => {
         canOpenSettings: false,
       },
     });
-    // Reading is what makes the graph available: membership, nothing more.
-    expect(ids(availableActions(none))).toEqual(["navigate.knowledge", "navigate.graph"]);
+    // Reading is what makes the graph available: membership, nothing more. Collapsing the navigation is not
+    // an action on anything, so it is there for everyone.
+    expect(ids(availableActions(none))).toEqual(["navigate.knowledge", "navigate.graph", "navigate.toggle-nav"]);
+  });
+
+  it("leaves the first row of the palette — what Enter does in an empty one — a place to go, not Toggle navigation", () => {
+    expect(availableActions(context())[0].id).toBe("navigate.knowledge");
+    expect(availableActions(context({ workspaceType: "PERSONAL" }))[0].id).toBe("navigate.home");
+    const navigate = availableActions(context()).filter((action) => action.group === "navigate");
+    expect(navigate[navigate.length - 1].id).toBe("navigate.toggle-nav");
+  });
+
+  it("offers Toggle navigation to everyone, even while access is unconfirmed, in the palette only", () => {
+    for (const confirmed of [true, false]) {
+      const toggle = availableActions(context({ confirmed, can: { canWrite: false, canImport: false, canSearch: false, canInspectSources: false, canOpenSettings: false } }))
+        .find((action) => action.id === "navigate.toggle-nav");
+      expect(toggle).toMatchObject({ label: "Toggle navigation", group: "navigate", shortcut: NAV_TOGGLE_SHORTCUT, surfaces: ["palette"], effect: { kind: "toggle-nav" } });
+    }
   });
 
   it("withholds everything that mutates while access is unconfirmed", () => {
@@ -197,6 +214,10 @@ describe("action registry — palette matching", () => {
 
   it("matches a keyword the label never says", () => {
     expect(ids(matchActions(actions, "new"))).toContain("create.document");
+  });
+
+  it("finds Toggle navigation by what people call it", () => {
+    for (const word of ["sidebar", "collapse", "toggle nav"]) expect(ids(matchActions(actions, word)), word).toContain("navigate.toggle-nav");
   });
 
   it("returns everything for an empty query", () => {
