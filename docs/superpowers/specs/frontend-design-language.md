@@ -94,6 +94,8 @@ together, and say what job the new token does that no existing one covers.
 | --- | --- | --- |
 | Type (UI) | `micro`, `caption`, `body-sm`, `body`, `title`, `heading` | `body` is the ~14px default the UI spends most of its time in |
 | Type (document) | `reading`, `display` | rendered Markdown only; a longer measure wants a larger size and looser leading |
+| Weight | `normal` 400, `medium` 510, `semibold` 590 | the only three weights; `font-bold` and anything heavier compiles to nothing, see §9 |
+| Family | `sans` (Inter variable), `mono` (Geist Mono variable) | UI text is sans; `kbd`, timestamps-figures alignment and code-adjacent chrome take mono |
 | Radius | `sm`, `md`, `lg`, `xl` | see §5 |
 | Elevation | `popover`, `modal` | floating surfaces only |
 | Border | `border`, `border-strong` | see §6 |
@@ -152,13 +154,15 @@ directions:
   sat at L\* 18.4 against a hover fill at L\* 15.2.
 - `border-strong` — **control boundaries**: any control whose border is the
   only thing separating it from its background. That is every form field
-  (`Input`, `Select`, `Textarea`) and the `secondary` button, all of which
-  fill with `bg`, the canvas colour. WCAG 1.4.11 requires 3:1 for non-text
-  boundaries that identify a component, and a decorative divider cannot meet
-  that and stay decorative. Read it as a rule about the job, not as a list of
-  components: the hand-rolled `<select>` elements scattered through settings
-  and imports all carried `border` and all failed the rule, precisely because
-  they were not on the list.
+  (`Input`, `Select`, `Textarea`), all of which fill with `bg`, the canvas
+  colour. WCAG 1.4.11 requires 3:1 for non-text boundaries that identify a
+  component, and a decorative divider cannot meet that and stay decorative.
+  Read it as a rule about the job, not as a list of components: the hand-rolled
+  `<select>` elements scattered through settings and imports all carried
+  `border` and all failed the rule, precisely because they were not on the
+  list. The `secondary` button is not on this list either: it sits on a ghost
+  fill (`--kh-ghost`) rather than on bare canvas, so the fill already separates
+  it from its background and its border is decorative `border`.
 
 A scrollbar is a control too: its thumb takes `border-strong` over a
 transparent track, at the platform's `thin` width. The default 15px gutter was
@@ -166,7 +170,14 @@ the widest thing in the chrome.
 
 `border-strong` is validated against **every** surface it can sit on, not just
 the canvas — `subtle` and `sunken` are the tight cases and a value chosen
-against the canvas alone will fail them.
+against the canvas alone will fail them. In dark it is a translucent white at
+alpha 0.34, the first alpha where all three clear 3:1 (bg 3.017, subtle 3.121,
+sunken 3.058), reached in three +0.02 steps from 0.28.
+
+`--kh-ghost` (with `--kh-ghost-hover`) is the quiet fill behind the
+`secondary` and `ghost` buttons: translucent dark-on-light (0.03 rest, 0.06
+hover) and white-on-dark (0.02 rest, 0.05 hover), so a hover is a fill change
+rather than a border change.
 
 Cards are intentionally rare. Prefer:
 
@@ -179,7 +190,7 @@ Separator
 
 ## 7. Surfaces
 
-Four steps of one cool neutral hue, each with a single job:
+Four steps of one neutral ramp, each with a single job:
 
 ```text
 bg          canvas — document and page content
@@ -193,6 +204,11 @@ document pane had been painted `bg-raised` whole, header and body alike,
 which put documents on a lighter surface than every other page in dark
 (#191a1e against #131417) and left the share page with a raised band over a
 canvas body. Neither was a choice anyone recorded.
+
+The dark ramp now reads, final: `bg` #08090a, `raised` #0f1011, `sunken`
+#0b0c0e, `subtle` #191a1b. `sunken` is the interpolated step — it sits
+between canvas and raised rather than continuing past either, and is recorded
+as such here rather than as a measured value.
 
 Names say what a surface is, not where it was first used. The previous names
 (`reading-bg`, `bg-nav`, `bg-sidebar`) are why a warm grey and three cool ones
@@ -230,20 +246,21 @@ Page padding is `py-6`. `py-8` appeared on four sources pages for no reason
 anyone recorded. The `py-16` of a centred message state belongs to
 `StatusMessage`, not to the pages that show one.
 
-### Divergence: this ramp is tinted, the reference's is not
+### Convergence: this ramp is achromatic, like the reference's
 
 Measured, the reference's light surfaces are achromatic — `#f8f8f8`, `#f4f4f4`,
 `#f0f0f0`, chroma 0 — and its dark surfaces are close to it. Its accent carries
-all of the colour. This ramp is cool-tinted instead, chroma 2 to 8.
+all of the colour. This ramp now agrees: the dark steps carry chroma ~0
+throughout, and the light steps sit at the threshold of perception.
 
-That is a deliberate choice and not a reading of the reference. It is recorded
-here because the earlier wording, "four steps of one cool neutral hue", read as
-though the tint were the rule being followed rather than a departure from it.
-Either is defensible; claiming the wrong provenance is not.
+An earlier revision of this section recorded the opposite — a cool-tinted ramp
+at chroma 2 to 8, described as a deliberate departure. That tint belonged to
+the old dark ramp (canvas #131417) and left with it.
 
-Its dark ramp also sits lower: canvas at L\* 2.4 against this one's 6.3, with
-tighter steps. A near-black canvas and a soft dark one are a matter of taste,
-not correctness.
+Its dark canvas also sits where the reference's does: L\* 2.4 against the old
+6.3, the reference's own measured value. A near-black canvas and a soft dark
+one were a matter of taste; the taste has been chosen, and it is the
+reference's.
 
 ## 8. Colour
 
@@ -334,8 +351,16 @@ marketing prose; the document scale here is looser because it serves a longer
 measure.
 
 The typeface is loaded, not inherited from the platform — the default sans
-varies most at the 11–14px sizes this UI lives in. Timestamps and figures that
+varies most at the 11–14px sizes this UI lives in. The body sets `cv01` and
+`ss03` globally: a single-storey `a` and a geometric `g`, the reference's
+letterforms rather than Inter's default double-storey ones. Timestamps and figures that
 re-render in place or stack into columns use tabular numerals.
+
+Weight is expressed only through the §4 ladder — 400, 510, 590 — so `font-bold`
+(and `extrabold`, `black`, or any `font-[6xx]`/`font-[7xx]` spelling) compiles
+to nothing. The one `font-bold` the codebase carried, on the Bold toggle's own
+glyph, now reads `font-semibold`: strong emphasis is 590, and there is no 700
+to reach for.
 
 Motion is two durations and one ease-out curve. Overlays enter and leave;
 nothing appears instantly. `prefers-reduced-motion` is honoured by one global
