@@ -57,7 +57,7 @@ describe("what the composer sends to the browser", () => {
     }
   });
 
-  it("does not reach lowlight, rehype-highlight or highlight.js", () => {
-    expect([...packages].filter((name) => /^(lowlight|rehype-highlight|highlight\.js)(\/|$)/.test(name))).toEqual([]);
+  it("does not reach lowlight or highlight.js", () => {
+    expect([...packages].filter((name) => /^(lowlight|highlight\.js)(\/|$)/.test(name))).toEqual([]);
   });
 });

@@ -2,7 +2,7 @@ import { common } from "lowlight";
 import { renderToStaticMarkup } from "react-dom/server";
 import ReactMarkdown from "react-markdown";
 import { describe, expect, it } from "vitest";
-import { codeHighlightPlugins, HIGHLIGHT_LANGUAGES, MAX_HIGHLIGHT_CHARS } from "@/components/knowledge/code-highlight";
+import { codeHighlightPlugins, HIGHLIGHT_LANGUAGES, MAX_HIGHLIGHT_CHARS, MAX_HIGHLIGHT_DEPTH, MAX_HIGHLIGHT_DOCUMENT_CHARS, rehypeCodeHighlight, type CodeHighlightOptions } from "@/components/knowledge/code-highlight";
 import { PLATFORM_SAMPLES } from "../fixtures/code-samples";
 
 /** The Markdown through the same plugins the renderer uses, as HTML. */
@@ -11,6 +11,13 @@ function render(markdown: string): string {
 }
 
 const fence = (language: string, code: string) => "```" + language + "\n" + code + "\n```";
+
+/** The same, with the plugin given other limits or languages. */
+function renderWith(options: CodeHighlightOptions, markdown: string): string {
+  return renderToStaticMarkup(<ReactMarkdown rehypePlugins={[[rehypeCodeHighlight, options]]}>{markdown}</ReactMarkdown>);
+}
+/** For each code block of the output, in order: is it coloured? */
+const colouredBlocks = (html: string) => [...html.matchAll(/<code[^>]*>([\s\S]*?)<\/code>/g)].map((match) => /<span class="hljs-/.test(match[1]));
 
 /** What the `<code>` element holds, as HTML. */
 function codeHtml(markdown: string): string {
@@ -71,6 +78,25 @@ describe("a fenced block with a language", () => {
       expect(hasToken(html)).toBe(false);
       expect(shownText(html)).toBe("a.b=1 <c>\n");
     }
+    expect(render(fence("mermaid", "graph TD; A-->B"))).not.toContain("hljs");
+  });
+
+  it("leaves a block that says no-highlight alone, in whatever language it also names", () => {
+    const tree = (
+      <ReactMarkdown
+        rehypePlugins={[
+          () => (root: { children: { children?: { tagName?: string; properties?: { className?: string[] } }[] }[] }) => {
+            // As a plugin before this one would mark it (the class Markdown gives is `language-sql`; this adds the mark).
+            const code = root.children[0].children![0];
+            code.properties!.className = ["language-sql", "no-highlight"];
+          },
+          rehypeCodeHighlight,
+        ]}
+      >
+        {fence("sql", "select 1")}
+      </ReactMarkdown>
+    );
+    expect(hasToken(renderToStaticMarkup(tree))).toBe(false);
   });
 });
 
@@ -118,5 +144,77 @@ describe("a block over the limit", () => {
     const html = render([fence("sql", sqlOfLength(MAX_HIGHLIGHT_CHARS + 1)), "", fence("sql", "select 1")].join("\n"));
     const blocks = [...html.matchAll(/<code[^>]*>([\s\S]*?)<\/code>/g)].map((match) => hasToken(match[1]));
     expect(blocks).toEqual([false, true]);
+  });
+});
+
+describe("a document over its budget", () => {
+  /** A block whose text, with the newline Markdown adds, is `length` characters of SQL. */
+  const sqlBlock = (length: number) => fence("sql", "select 1;".repeat(Math.ceil(length / 9)).slice(0, length - 1));
+
+  it("leaves room for at least one block at the block limit", () => {
+    expect(MAX_HIGHLIGHT_DOCUMENT_CHARS).toBeGreaterThan(MAX_HIGHLIGHT_CHARS);
+  });
+
+  it("colours blocks in order until the budget is spent, then leaves the rest plain", () => {
+    const html = renderWith({ maxDocumentChars: 250 }, [sqlBlock(100), sqlBlock(100), sqlBlock(100), sqlBlock(100)].join("\n\n"));
+    expect(colouredBlocks(html)).toEqual([true, true, false, false]);
+  });
+
+  it("judges each block on its own: a small one after the budget ran short still fits in what is left", () => {
+    const html = renderWith({ maxDocumentChars: 250 }, [sqlBlock(100), sqlBlock(100), sqlBlock(100), sqlBlock(50)].join("\n\n"));
+    expect(colouredBlocks(html)).toEqual([true, true, false, true]);
+  });
+
+  it("holds at the real limits: 20 blocks of 5,000 characters are coloured and the 21st is not", () => {
+    const html = render(Array.from({ length: 21 }, () => sqlBlock(5_000)).join("\n\n"));
+    const blocks = colouredBlocks(html);
+    expect(blocks.slice(0, 20).every(Boolean)).toBe(true);
+    expect(blocks[20]).toBe(false);
+  });
+
+  it("counts a block that was tried and then refused for its depth as spent", () => {
+    // 100 characters of Rust whose comments nest two deep, against a depth limit of one; then two plain blocks.
+    const nested = fence("rust", "/* /* " + "x".repeat(87) + " */ */");
+    const html = renderWith({ maxDocumentChars: 250, maxDepth: 1 }, [nested, sqlBlock(100), sqlBlock(100)].join("\n\n"));
+    expect(colouredBlocks(html)).toEqual([false, true, false]);
+  });
+});
+
+describe("a block nested too deeply", () => {
+  const nested = (levels: number) => "/* ".repeat(levels) + "x" + " */".repeat(levels);
+
+  // Rust's and Swift's comments nest, so `/*` repeated makes as many levels of <span>, and rendering that many overflows the stack.
+  it.each(["rust", "swift"])("in %s is left as plain text and the page still renders", (language) => {
+    const code = "/*".repeat(MAX_HIGHLIGHT_CHARS / 2 - 1);
+    let html = "";
+    expect(() => (html = codeHtml(fence(language, code)))).not.toThrow();
+    expect(hasToken(html)).toBe(false);
+    expect(shownText(html)).toBe(code + "\n");
+  });
+
+  it("still colours what real code does: comments nested a few levels", () => {
+    expect(hasToken(codeHtml(fence("rust", "/* a /* b */ c */ fn main() {}")))).toBe(true);
+    expect(hasToken(codeHtml(fence("rust", nested(5))))).toBe(true);
+  });
+
+  it("is judged by the limit: at it, coloured; one level past it, not", () => {
+    expect(hasToken(renderWith({ maxDepth: 3 }, fence("rust", nested(3))))).toBe(true);
+    expect(hasToken(renderWith({ maxDepth: 3 }, fence("rust", nested(4))))).toBe(false);
+  });
+
+  it("has a default limit far below where rendering fails, and above where real code goes", () => {
+    expect(MAX_HIGHLIGHT_DEPTH).toBeGreaterThanOrEqual(20);
+    expect(MAX_HIGHLIGHT_DEPTH).toBeLessThanOrEqual(200);
+  });
+});
+
+describe("a grammar that fails", () => {
+  // Registers without complaint and throws when it is first used: an invalid regular expression is compiled then.
+  const broken = () => ({ contains: [{ begin: "(" }] });
+
+  it("leaves its block as plain text, and does not stop the blocks after it", () => {
+    const html = renderWith({ languages: { ...common, broken } }, [fence("broken", "a ( <b>"), fence("sql", "select 1")].join("\n\n"));
+    expect(colouredBlocks(html)).toEqual([false, true]);
+    expect(html).toContain("a ( &lt;b&gt;");
   });
 });
