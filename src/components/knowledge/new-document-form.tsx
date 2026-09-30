@@ -79,6 +79,7 @@ export function NewDocumentForm({
       initialMarkdown=""
       currentRevisionId={null}
       submitLabel="Create document"
+      busyLabel="Creating…"
       cancelHref={cancelHref ?? listHref}
       conflictHref={null}
       onSubmit={({ title, markdown }) => create({ title, markdown })}

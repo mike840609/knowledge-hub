@@ -518,6 +518,30 @@ test("a document that opens with an H1 is named by it, with no title field", asy
   await expect(readerTitle(page)).toHaveText(after, ROUND_TRIP);
 });
 
+test("opening a document whose H1 differs from its stored title warns that saving renames it", async ({ page }) => {
+  const stored = unique("Stored Title");
+  const heading = unique("Divergent Heading");
+  const url = await createNote(page, stored, `# ${heading}\n\nbody`);
+  await openEditor(page, url);
+  // The breadcrumb follows the H1, so the person sees the new name at once —
+  // and is told that saving keeps it, instead of being renamed silently.
+  await expect(composer(page).getByRole("navigation", { name: "Breadcrumb" })).toContainText(heading);
+  await expect(composer(page).getByText(`儲存會將標題改為「${heading}」`)).toBeVisible();
+
+  const saved = nextSave(page);
+  await composer(page).getByRole("button", { name: "Save" }).click();
+  expect(sentBody(await saved).title).toBe(heading);
+  await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
+  await expect(readerTitle(page)).toHaveText(heading, ROUND_TRIP);
+});
+
+test("a document whose H1 already matches its stored title shows no rename warning", async ({ page }) => {
+  const title = unique("Matching Title");
+  const url = await createNote(page, title, `# ${title}\n\nbody`);
+  await openEditor(page, url);
+  await expect(composer(page).getByText("儲存會將標題改為")).toHaveCount(0);
+});
+
 test("deleting the opening H1 brings back the title field, filled with it", async ({ page }) => {
   const title = unique("Carry");
   const url = await createNote(page, title, `# ${title}\n\nbody`);
@@ -748,6 +772,61 @@ test("an upload in flight disables Create, so the two cannot race", async ({ pag
 
   release();
   await expect(page.getByRole("treeitem", { name: title, exact: true })).toBeVisible(ROUND_TRIP);
+});
+
+// The pre-composer new-document form renamed its submit while the create was
+// in flight ("Creating…"); the composer only disabled it, so a slow save
+// looked idle (#75). While the POST is held, the submit must read its busy
+// label, not the idle one.
+test("a create in flight reads Creating…, so the save looks busy", async ({ page }) => {
+  const title = unique("Held Create");
+  await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
+  const form = composer(page);
+  const titleField = form.getByLabel("Title", { exact: true });
+  await expect(titleField).toBeEditable(ROUND_TRIP);
+  await titleField.fill(title);
+
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  await page.route("**/api/workspaces/*/documents", async (route) => {
+    if (route.request().method() !== "POST") { await route.continue(); return; }
+    await gate;
+    await route.continue();
+  });
+
+  await form.getByRole("button", { name: "Create document" }).click();
+  const busy = form.getByRole("button", { name: "Creating…" });
+  await expect(busy).toBeVisible();
+  await expect(busy).toBeDisabled();
+
+  release();
+  await expect(page.getByRole("treeitem", { name: title, exact: true })).toBeVisible(ROUND_TRIP);
+});
+
+// Same busy-label contract on the edit side: "Save" becomes "Saving…".
+test("a save in flight reads Saving…, so the edit looks busy", async ({ page }) => {
+  const title = unique("Held Save");
+  const url = await createNote(page, title, `# ${title}\n\nbody\n`);
+  await openEditor(page, url);
+  const form = composer(page);
+  const body = await showMarkdown(form);
+  await body.fill(`# ${title}\n\nchanged\n`);
+
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  await page.route("**/api/documents/*", async (route) => {
+    if (route.request().method() !== "PATCH") { await route.continue(); return; }
+    await gate;
+    await route.continue();
+  });
+
+  await form.getByRole("button", { name: "Save" }).click();
+  const busy = form.getByRole("button", { name: "Saving…" });
+  await expect(busy).toBeVisible();
+  await expect(busy).toBeDisabled();
+
+  release();
+  await expect(page.locator("article").first().getByText("changed")).toBeVisible(ROUND_TRIP);
 });
 
 test("the Markdown text re-fits its height when the column rewraps", async ({ page }) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
+import { createContext, useContext, useEffect, useRef, useState, useCallback, startTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { WorkspaceAccessView, WorkspaceNavigationModel } from "@/server/workspace-admin";
 import { writeStored } from "@/components/shell/use-persisted-state";
@@ -49,6 +49,7 @@ export function useWorkspaceAuthorizationRefresh(initialAccess: WorkspaceAccessV
   const generation = useRef(0);
   const controller = useRef<AbortController | null>(null);
   const current = useRef(initialAccess);
+  const currentNav = useRef(initialNavigation);
   const workspaceId = initialAccess.workspace.id;
 
   const refresh = useCallback(async () => {
@@ -69,7 +70,16 @@ export function useWorkspaceAuthorizationRefresh(initialAccess: WorkspaceAccessV
       if (response && !response.ok && response.status !== 404) throw new Error("Could not refresh workspace access.");
       const fresh = response?.ok ? await response.json() as WorkspaceAccessView : null;
       if (request !== generation.current) return;
-      setNavigation(nav);
+      // A save dispatches `kh:workspace-mutation`, so this refresh usually
+      // resolves inside save's push transition carrying values identical to
+      // what the shell already shows. Applying them as urgent state would
+      // re-render the shell mid-transition and discard the navigation (#63)
+      // or the arrival refresh (#64). Unchanged values never reach state; a
+      // real change arrives as a transition, never interrupting one in flight.
+      if (JSON.stringify(currentNav.current) !== JSON.stringify(nav)) {
+        currentNav.current = nav;
+        startTransition(() => setNavigation(nav));
+      }
       if (!fresh) {
         setConfirmed(false);
         setRevoked(true);
@@ -80,7 +90,10 @@ export function useWorkspaceAuthorizationRefresh(initialAccess: WorkspaceAccessV
       }
       const changed = JSON.stringify(current.current) !== JSON.stringify(fresh);
       current.current = fresh;
-      setAccess(fresh);
+      // Same race as above: an identical access view is the common case
+      // after a mutation, and must not re-render the shell mid-transition.
+      // `setConfirmed(true)` below already bails out when nothing changed.
+      if (changed) startTransition(() => setAccess(fresh));
       setConfirmed(true);
       if (pathname.includes(`/w/${workspaceId}/settings`) && !fresh.actions.canOpenSettings) {
         router.replace(`/w/${workspaceId}/knowledge`);

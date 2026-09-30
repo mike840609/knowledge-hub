@@ -6,7 +6,7 @@ Knowledge Hub 採用自建 Knowledge Core，不綁定 Obsidian、特定 Wiki gen
 
 ## Quick Start
 
-前置需求：Node.js 20.9–24（見 `.node-version`）、Docker（跑 MariaDB）、`make`。
+前置需求：Node.js 20.19–24（見 `.node-version`）、Docker（跑 MariaDB）、`make`。
 
 ```bash
 make bootstrap   # npm ci + 建 .env + 啟動 MariaDB + migrate + seed
