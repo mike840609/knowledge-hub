@@ -95,10 +95,10 @@ export function useActionRunner({ onToggleFavorite }: ActionHandlers) {
               requestShare(effect.documentId);
               return;
             case "document.archive":
-              void mutations.archiveDocument({ documentId: effect.documentId, sourceId: effect.sourceId, title: effect.label ?? "這份文件" });
+              void mutations.archiveDocument({ documentId: effect.documentId, sourceId: effect.sourceId, title: effect.label ?? "Untitled document" });
               return;
             case "document.restore":
-              void mutations.restoreDocument({ documentId: effect.documentId, sourceId: effect.sourceId, title: effect.label ?? "這份文件" });
+              void mutations.restoreDocument({ documentId: effect.documentId, sourceId: effect.sourceId, title: effect.label ?? "Untitled document" });
               return;
           }
           return;

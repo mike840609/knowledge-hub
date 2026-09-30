@@ -122,7 +122,7 @@ test.describe("folders", () => {
     await openKnowledge(page, workspaceId);
     const name = unique("Runbooks");
     await createFolder(page, name);
-    await expect(toast(page, `已建立資料夾「${name}」`)).toBeVisible();
+    await expect(toast(page, `Created folder “${name}”.`)).toBeVisible();
     await expect(row(page, name)).toContainText("No documents yet.");
 
     // Rename, by the `⋯` button; the row takes the new name and the Undo puts the old one back.
@@ -134,15 +134,15 @@ test.describe("folders", () => {
     await dialog.getByRole("button", { name: "Rename" }).click();
     await expect(row(page, renamed)).toBeVisible(ROUND_TRIP);
     await expect(row(page, name)).toHaveCount(0);
-    await toast(page, `已重新命名為「${renamed}」`).getByRole("button", { name: "復原" }).click();
+    await toast(page, `Renamed to “${renamed}”.`).getByRole("button", { name: "Undo" }).click();
     await expect(row(page, name)).toBeVisible(ROUND_TRIP);
     await expect(row(page, renamed)).toHaveCount(0);
 
     // Archive: gone from the tree, and the Undo brings it back.
     await chooseFromFolderMenu(page, name, "Archive folder");
-    await expect(toast(page, `已封存資料夾「${name}」`)).toBeVisible();
+    await expect(toast(page, `Archived folder “${name}”.`)).toBeVisible();
     await expect(row(page, name)).toHaveCount(0, ROUND_TRIP);
-    await toast(page, `已封存資料夾「${name}」`).getByRole("button", { name: "復原" }).click();
+    await toast(page, `Archived folder “${name}”.`).getByRole("button", { name: "Undo" }).click();
     await expect(row(page, name)).toBeVisible(ROUND_TRIP);
 
     // Archived folders are found under "Show archived", marked, and restored from there.
@@ -168,7 +168,7 @@ test.describe("folders", () => {
     await page.getByRole("button", { name: "Create folder" }).first().click();
     const dialog = page.getByRole("dialog", { name: "New folder" });
     await dialog.getByRole("button", { name: "Create folder" }).click();
-    await expect(dialog.getByRole("alert")).toHaveText("請輸入資料夾名稱。");
+    await expect(dialog.getByRole("alert")).toHaveText("Enter a folder name.");
     await dialog.getByLabel("Name").fill("x".repeat(513));
     await dialog.getByRole("button", { name: "Create folder" }).click();
     await expect(dialog.getByRole("alert")).toContainText("512");
@@ -228,13 +228,13 @@ test.describe("documents", () => {
     await page.getByRole("menuitem", { name: "Archive document" }).click();
 
     // The reader is not left on a page that is no longer there; the toast is, and so is the Undo.
-    await expect(toast(page, `已封存「${first}」`)).toBeVisible(ROUND_TRIP);
+    await expect(toast(page, `Archived “${first}”.`)).toBeVisible(ROUND_TRIP);
     await expect(page).not.toHaveURL(firstUrl);
     await expect(row(page, first)).toHaveCount(0, ROUND_TRIP);
-    await expect(toast(page, `已封存「${first}」`)).toBeVisible();
+    await expect(toast(page, `Archived “${first}”.`)).toBeVisible();
 
     // Undo restores it, and takes the reader back to it, and it is where it was: before the second.
-    await toast(page, `已封存「${first}」`).getByRole("button", { name: "復原" }).click();
+    await toast(page, `Archived “${first}”.`).getByRole("button", { name: "Undo" }).click();
     await expect(page).toHaveURL(firstUrl, ROUND_TRIP);
     await expect(row(page, first)).toBeVisible(ROUND_TRIP);
     expect(await childrenOf(row(page, folder))).toEqual([first, second]);
@@ -259,7 +259,7 @@ test.describe("documents", () => {
     await row(page, title).click({ button: "right" });
     await expect(page.getByRole("menuitem", { name: "Archive document" })).toHaveCount(0);
     await page.getByRole("menuitem", { name: "Restore document" }).click();
-    await expect(toast(page, `已還原「${title}」`)).toBeVisible();
+    await expect(toast(page, `Restored “${title}”.`)).toBeVisible();
     await expect(row(page, title)).toHaveAttribute("data-status", "ACTIVE", ROUND_TRIP);
     await showArchived(page, false);
     await expect(row(page, title)).toBeVisible();
@@ -279,9 +279,9 @@ test.describe("documents", () => {
 
     await row(page, stamp).click({ button: "right" });
     await page.getByRole("menuitem", { name: "Archive document" }).click();
-    await expect(toast(page, "2 份文件連到這裡，它們的連結會變成失效")).toBeVisible(ROUND_TRIP);
+    await expect(toast(page, "2 documents link here; those links will stop working.")).toBeVisible(ROUND_TRIP);
     // And Undo puts it back: what linked to it works again, so the sentence was about something reversible.
-    await toast(page, "2 份文件連到這裡").getByRole("button", { name: "復原" }).click();
+    await toast(page, "2 documents link here").getByRole("button", { name: "Undo" }).click();
     await expect(row(page, stamp)).toBeVisible(ROUND_TRIP);
   });
 });
@@ -298,7 +298,7 @@ test.describe("what cannot be done", () => {
 
     const accessChecks = await countAccessChecks(page);
     await chooseFromFolderMenu(page, folder, "Archive folder");
-    await expect(toast(page, "先移走或封存裡面的內容")).toBeVisible(ROUND_TRIP);
+    await expect(toast(page, "Move or archive what's inside first")).toBeVisible(ROUND_TRIP);
     await expect(row(page, folder)).toHaveAttribute("data-status", "ACTIVE");
     await expect(row(page, title)).toBeVisible();
     // The refusal is about the folder, not the caller: no re-check of access was asked for, and the menu is still whole.
@@ -312,7 +312,7 @@ test.describe("what cannot be done", () => {
     await page.getByRole("menuitem", { name: "Archive document" }).click();
     await expect(row(page, title)).toHaveCount(0, ROUND_TRIP);
     await chooseFromFolderMenu(page, folder, "Archive folder");
-    await expect(toast(page, `已封存資料夾「${folder}」`)).toBeVisible(ROUND_TRIP);
+    await expect(toast(page, `Archived folder “${folder}”.`)).toBeVisible(ROUND_TRIP);
     await expect(row(page, folder)).toHaveCount(0, ROUND_TRIP);
   });
 
@@ -333,7 +333,7 @@ test.describe("what cannot be done", () => {
     await (await showMarkdown(form)).fill("x");
     const accessChecks = await countAccessChecks(page);
     await page.getByRole("button", { name: "Create document" }).click();
-    await expect(page.getByRole("alert").filter({ hasText: "目標資料夾已不存在，或已被封存。" })).toBeVisible(ROUND_TRIP);
+    await expect(page.getByRole("alert").filter({ hasText: "The destination folder no longer exists, or has been archived." })).toBeVisible(ROUND_TRIP);
     await expect(page).toHaveURL(newUrl);
     // A refusal about the tree says nothing about the caller's access, so it does not ask for a re-check.
     expect(await accessChecks()).toBe(0);

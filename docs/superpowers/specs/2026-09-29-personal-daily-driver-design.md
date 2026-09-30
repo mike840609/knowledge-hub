@@ -176,7 +176,7 @@ registry 新增（型別 `ActionTarget` 之外加 `FolderTarget`）：`document.
 - 文件列：row menu 多「移到…」「封存」（在「顯示已封存」下改為「還原」）。資料夾列：現在沒有任何選單，補上 context menu 與 `⋯`：「在這裡新增文件」「新增資料夾」「重新命名」「移到…」「封存／還原」。側欄標題列的建立入口多「新增資料夾」。palette 對**目前開啟的文件**提供「Move document…」「Archive document」。
 - 「移到…」是對話框，列出該 Source 內的 ACTIVE 資料夾樹與「最上層」，排除自己與自己的子孫；放在最後一位（append）。
 - **鍵盤重排。** 樹上聚焦一列後 `Alt+↑`／`Alt+↓` 在同層上下移動（呼叫 `reorderTreeNode`），並以 `aria-live` 回報新位置。與既有快捷鍵（C、E、/、⌘Enter、Esc、⌘I）及樹的方向鍵不衝突，實作時以瀏覽器實測確認。
-- **封存的回饋。** 封存後出現 toast「已封存『X』」附**復原**（呼叫 restore；動作模型：撤銷只在能保住的地方提供，這裡能）。若目前正開著被封存的文件，導向該 Source 的清單。封存會讓指向它的連結變成失效（解析只看 ACTIVE 文件）——文件頁的封存動作在有 backlink 時，toast 補一句「N 份文件連到這裡，它們的連結會變成失效」。
+- **封存的回饋。** 封存後出現 toast `Archived “X”.` 附 **Undo**（呼叫 restore；動作模型：撤銷只在能保住的地方提供，這裡能）。若目前正開著被封存的文件，導向該 Source 的清單。封存會讓指向它的連結變成失效（解析只看 ACTIVE 文件）——文件頁的封存動作在有 backlink 時，toast 補一句 `N documents link here; those links will stop working.`（N＝1 時用單數）。
 - 變更後 `router.refresh()`；側欄是共用 layout，沿用既有的刷新慣例（`refresh-on-arrival` 的時序規則）。
 
 ### 7.4 文件更正
@@ -189,7 +189,7 @@ design-language §18 寫「封存文件從來不存在」。服務層一直有�
 
 - **API 的細節。** `POST /workspaces/:id/folders` 的 `sourceId` 可省略（預設 Notes source）；給了就必須屬於**路徑上的這個 workspace**，否則 404——同一個人在兩個 workspace 都能寫時，服務不會擋下錯放，只有這個比對會。`parentId` 省略或 null 都是最上層。`POST /documents/:id/archive` 回 `{backlinks}`：封存前有多少文件連到它（讀不到則 null，不影響封存），讓提示能說出連結失效的份數。路徑上的 ID 先驗格式（400），不讓壞掉的 UUID 進資料庫變成 500。
 - **唯讀成員被拒絕的回應是 404，不是 403。** 內容寫入者沿用 Phase 1 的契約：沒有 `document.write` 就是 `WorkspaceAccessDeniedError`（隱藏的 404），既有的文件寫入也一樣。整理動作沒有另起一套。UI 不會對唯讀成員顯示這些動作，所以這只是直接呼叫 API 時的樣子。
-- **文案語言。** 選單、對話框標題與按鈕維持英文（與 registry 及既有選單一致）；toast 與錯誤說明依 §7.1／§7.3 用中文（composer 的「已還原未存的修改。」是同一個模式）。全部集中在 `organize-messages.ts`，要換語言只改那個檔。「復原」是 toast 的 Undo 按鈕標籤。
+- **文案語言。** 全英文：選單、對話框標題與按鈕，加上 toast、對話框說明與錯誤說明（2026-09-30 決定；本節原本寫的是 toast 與錯誤說明用中文，與 composer 的「已還原未存的修改。」同一個模式，實作後改掉）。引號用 typographic `“ ”`，標題本身含直引號時才分得出邊界。全部集中在 `organize-messages.ts`（與對話框自己的兩句說明），要換語言只改那裡。toast 的按鈕標籤是 `Undo`。composer 與上傳編碼錯誤那幾句舊的中文沒有動。
 - **建立入口。** 側欄的 Notes 列多一顆 Create folder 按鈕（在 `+` 旁），不是把 `+` 改成選單——既有的 `Create document` 連結與 `C` 快捷鍵不動。存在與否由 registry 的 `create` 表面決定。空的 workspace 顯示空狀態、沒有側欄，所以第一份文件之前只有 palette 能建資料夾；這是原本就有的行為（第一件事是寫文件），沒有為它另開入口。
 - **資料夾的選單只掛在標題列。** 資料夾列本身是 treeitem 且包著子項，選單若掛在整個 `li`，對子項的右鍵會冒泡成資料夾的選單。`⋯` 可用鍵盤到達（Tab 或聚焦後 Enter）。
 - **樹會展開目前文件的祖先資料夾**（每份文件一次），否則在資料夾內新增的文件會藏在收合的資料夾裡；之後收合是使用者的選擇，會保留。

@@ -75,9 +75,9 @@ function FolderNameDialog({ request, onClose }: { request: FolderNameRequest | n
           <Dialog.Description className="mt-1 text-body text-kh-text-muted">
             {request?.mode === "create"
               ? request.parentLabel
-                ? `會建立在「${request.parentLabel}」裡面。`
-                : "會建立在最上層。"
-              : "只改名稱，位置與裡面的文件都不變。"}
+                ? `It will be created inside “${request.parentLabel}”.`
+                : "It will be created at the top level."
+              : "Only the name changes; its place and what's inside stay as they are."}
           </Dialog.Description>
           <form
             className="mt-4"
