@@ -253,13 +253,33 @@ design-language §18 寫「封存文件從來不存在」。服務層一直有�
 
 ## 8. 切片 B — 最近開過與收藏
 
-**這一批只做 B.0**（下面「同批小改」：⌘K 最近開過、側欄收藏全顯示，純 client、無 migration）。**收藏改存 server（其餘各項）延後**，設計保留在此，等單一瀏覽器不夠用時再排（§12-1）。
+**狀態（2026-09-30）：B.0 已完成（§8.1）；收藏改存 server 由 [個人工作空間（#86）](2026-09-30-personal-workspace-design.md) 用 `personal_items` 做掉了**，下面原本的設計（`knowledge_document_favorites`、`/api/favorites`）不會照寫，留著是為了看得出當初的想法與差別。
 
-- **資料（延後）。** migration 013：`knowledge_document_favorites(user_id, document_id, created_at)`，主鍵 `(user_id, document_id)`。**不存 workspace_id**（不變式：範圍由 Document → Source → Workspace 推導）；讀取時 join 並套用讀取政策，失去存取權的文件自然消失。
-- **API。** `GET /api/favorites?workspaceId=`、`PUT`／`DELETE /api/documents/:id/favorite`；服務用既有的 `requireVisibleDocument`。
-- **遷移。** 第一次載入時，把該 Workspace 的 localStorage 收藏合併進 server 再清掉本機那份，使用者不會弄丟星號。
-- **同批小改（不需要 migration，可獨立先做）：** ⌘K 沒有輸入時列出最近開過的文件；側欄的收藏不再只顯示 4 筆。
-- **為什麼可延後。** 只用一個瀏覽器的人完全不受影響；它解的是跨裝置。
+- **資料（原設計，已由 #86 取代）。** migration 013：`knowledge_document_favorites(user_id, document_id, created_at)`，主鍵 `(user_id, document_id)`。**不存 workspace_id**（不變式：範圍由 Document → Source → Workspace 推導）；讀取時 join 並套用讀取政策，失去存取權的文件自然消失。實際上 #86 的 migration 013 是通用的 `personal_items`（草稿與收藏同一張表，`favorite:<documentId>` 一列一份，附版本與刪除墓碑）。
+- **API（原設計，已取代）。** 實際是 `/api/workspaces/:id/personal`。
+- **遷移（已由 #86 做到）。** 第一次載入時把瀏覽器的收藏合併上去，不覆蓋遠端已刪除的項目（`favorite-sync.ts`）。
+- **最近開過維持本機**（D12）：只有「哪些文件、什麼順序」存在 `kh:document-shortcuts:<workspace>`，最多 8 筆；這一點沒有改。
+
+### 8.1 B.0 的實作記錄（2026-09-30）
+
+兩個小改，都不需要 migration：
+
+1. **⌘K 沒有輸入時列出最近開過的文件。** 列在空白 palette 的最前面，標題「Recent」，最多 8 筆，排除正在讀的那份；一打字就換成搜尋結果，清空又回來。沒有任何最近開過時，palette 與之前完全一樣。
+2. **側欄「Favorites」不再只顯示 4 筆。** 全部顯示；清單超過 `max-h-72`（18 rem）時在自己裡面捲動，不把下面的樹擠出畫面。
+
+**偏離「純 client」（計畫 B.0 原文）。** 最近開過的**清單**仍只存本機，但顯示用的**標題**不存本機，而是每次開 palette 時向 `GET /api/workspaces/:id/recent-documents?ids=a,b,c` 現查。理由：本機只存 ID，是因為標題會過期——文件改名後 palette 會顯示舊名字；文件被封存，或使用者失去存取權之後，一個存在瀏覽器裡的標題會繼續顯示它本來不該再被看到的字。伺服器現查解決這三件事，代價是 palette 開啟時多一次很小的請求（最多 8 個 ID，沒有內文）。
+
+這個路由遵守「知道 ID 不等於授權」：
+
+- **成員資格先於一切。** 先過 `listSources`（非成員得到與「workspace 不存在」同一個隱藏 404），再逐一以 `getDocument` 由服務重新檢查讀取政策；讀不到的（封存、不存在、格式錯誤、失去存取權）**靜默略過**，不回錯誤，也就不洩漏它們是否存在。
+- **只回這個 workspace 的。** 帶別的 workspace 的文件 ID 進來，會被略過（範圍由 Document → Source → Workspace 推導，不信任呼叫者說它屬於哪裡）。
+- **只回 `documentId`、`sourceId`、現在的 `title`、`sourceName`。** 沒有內文、沒有 revision。`Cache-Control: private, no-store`。
+- **順序照請求。** 排序是 client 的責任（本機的最近順序）；伺服器不重排，也不補上請求之外的文件。ID 清單上限 8（`MAX_RECENT_DOCUMENTS`），格式不對的（不是 UUID）與重複的先被 `parseDocumentIdList` 丟掉。
+- 失敗（網路、5xx）就當作沒有最近開過，palette 退回原樣，不顯示錯誤。
+
+**最近開過排在最前面**是一個使用者看得到的決定，需要被知道：預設的 Enter 列因此變成「前一份文件」，而不是「Go to …」的第一個地方。這是 ⌘K 當「在最近兩份文件之間切換」用時想要的；代價是沒有輸入時 Enter 不再是導覽。**沒有任何最近開過時，第一列仍是導覽**（有 e2e 與 action-registry 的單元測試釘著）。要改回「導覽在前」是把 `recentRows` 移到 `rows` 後面的一行，`activeIndex` 的調整不受影響。
+
+**沒有做：** 收藏不受 8 筆限制，但側欄上仍沒有排序或分組（新加的在最上面）；palette 只列最近開過，沒有列收藏（收藏在側欄、在首頁）。
 
 ## 9. 授權與不變式檢查
 

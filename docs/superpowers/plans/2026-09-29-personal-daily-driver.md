@@ -82,15 +82,13 @@
 
 ## 6. 切片 B — 最近開過與收藏（PR 6）
 
-**這一批只做 B.0**（規格 §12-1 已決定）。**B.1–B.4 延後，不在這一批**，任務保留在下面供之後排程。B.0 與其他切片無依賴，可插在任何位置出貨。
+**B.0 已完成；B.1–B.4 由 [個人工作空間（#86）](2026-09-30-personal-workspace.md) 用另一個形狀做掉了，不再照下面原本的寫法做。** 原本的任務列保留，讓人看得出當初想的是什麼、以及現在對應到哪裡。
 
 | # | 任務 | 檔案 | 測試 | 驗收 |
 | --- | --- | --- | --- | --- |
-| B.0 | **本批要做；不需 migration**：⌘K 沒有輸入時列出最近開過的文件；側欄收藏不再只顯示 4 筆 | `quick-search.tsx`、`source-sidebar.tsx` | e2e | 純 client |
-| B.1（延後） | migration 013 `knowledge_document_favorites(user_id, document_id, created_at)`，主鍵 `(user_id, document_id)`，不存 workspace_id；repository、埠、服務（`requireVisibleDocument`） | `migrations/013-…`、repository、服務 | integration：失去存取權的文件不出現；不同使用者互不可見；重複收藏冪等 | 不變式：範圍由 Document → Source → Workspace 推導 |
-| B.2（延後） | 路由：`GET /api/favorites?workspaceId=`、`PUT`／`DELETE /api/documents/:id/favorite` | 路由 | integration | — |
-| B.3（延後） | client：收藏改由 server 提供；第一次載入把 localStorage 收藏合併進 server 再清除本機那份；最近開過維持本機 | `use-document-shortcuts.ts` 等 | e2e：另一個瀏覽器 context 看得到同一批收藏 | 不遺失既有星號 |
-| B.4（延後） | rollout 文件：migration 順序與回滾 | `docs/operations/` | — | — |
+| B.0 ✅ | ⌘K 沒有輸入時列出最近開過的文件；側欄收藏不再只顯示 4 筆 | `quick-search.tsx`、`source-sidebar.tsx`、`recent-documents.ts`、`recent-documents` 路由 | 單元（解析與挑選）、integration、e2e | **完成，但偏離了「純 client、不需 migration」的寫法：** 最近開過的「清單」（哪些文件、什麼順序）仍只存本機，但**標題與可讀性由一個小路由 `GET /api/workspaces/:id/recent-documents?ids=` 現查**，不把標題存在本機。理由：文件改名、封存、或使用者失去存取權之後，存在 localStorage 的標題會變成過期甚至不該再看到的字。路由仍是 migration 之外的，沒有新表。**另一個使用者看得到的決定：** 最近開過**排在空白 palette 的最前面**，所以預設的 Enter 是「前一份文件」（不是「Go to …」）；沒有任何最近開過時維持原樣。細節與理由見規格 §8.1 |
+| B.1–B.3 | ~~migration 013 `knowledge_document_favorites`、`/api/favorites` 路由、client 同步~~ | — | — | **由 #86 取代。** 收藏存在 migration 013 的 `personal_items`（`favorite:<documentId>` 一列一份，含版本與刪除墓碑），經 `/api/workspaces/:id/personal` 同步；第一次載入把瀏覽器收藏遷上去且不覆蓋遠端的刪除；最近開過維持本機。原本的驗收「另一個瀏覽器 context 看得到同一批收藏」在 `personal-workspace.spec.ts` 裡。**與原設計不同：** 表是通用的個人項目（草稿與收藏同一張），不是專屬的收藏表；存的只是文件 ID，不是授權：開啟時照常由服務重新檢查 |
+| B.4 | ~~rollout 文件~~ | — | — | **沒有做，也沒有取代。** #86 的 migration 013 沒有對應的 `docs/operations/` 文件（012 有：`document-link-index-rollout.md`）。這是缺口，列在待辦 |
 
 ## 7. 完成一個切片時要做的事
 

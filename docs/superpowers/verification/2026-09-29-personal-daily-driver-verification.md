@@ -472,6 +472,8 @@ Next 的 build 輸出（有 ±1 kB 的分組誤差，見切片 0 的紀錄；每
 | e2e | `zz-composer-autocomplete` 9、`zz-create-from-link` 5（含唯讀成員與編輯者兩個身分）；改了 3 處既有斷言（見下） | 全套 **195/195**（6.8 分鐘），沒有 flaky、沒有跳過 |
 | `tsc`、`eslint`、`next build` | — | 乾淨；每次 `test:e2e` 的 build 兩次都過 |
 
+**合併時的全套數字**（併入 #86／#87 之後，#88 合併前最後一次）：單元 1409、integration 603、e2e 199。上表是分支上、併入之前的數字。
+
 **不走 `showMarkdown` 的證明。** 自動完成的 jsdom 測試與 e2e 都在渲染編輯器裡打字，選取後用抽取器讀**存出去的 Markdown** 有哪些連結（`savedLinks`），並且讓文件走一次 `replaceMarkdown` 往返後逐字相同——CLAUDE.md 的不變式（編輯器必須把 wikilink 寫回原樣）對這條新的寫入路徑成立。
 
 ### 變異驗證
