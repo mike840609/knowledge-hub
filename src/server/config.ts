@@ -12,6 +12,19 @@ export function localIdentityEnabled(): boolean {
   return process.env.KM_LOCAL_IDENTITY_ENABLED === "true";
 }
 
+/**
+ * Whether Team workspaces are open to the people who use the product. They are announced and not yet
+ * open: the workspace switcher shows "Coming soon" where they will be, and does not take anyone to one.
+ * `KM_TEAM_WORKSPACES_ENABLED=true` opens them; anything else, unset included, keeps them closed. It is
+ * read on every request, so opening them later is a configuration change and a restart, not a build.
+ *
+ * This decides what the *switcher* offers. It is not access control: a Team workspace's own rules
+ * (membership, roles, the archived state) are the services', and are unchanged whether this is on or off.
+ */
+export function teamWorkspacesEnabled(): boolean {
+  return process.env.KM_TEAM_WORKSPACES_ENABLED === "true";
+}
+
 export function localIdentityConfig(): UserIdentity {
   if (!localIdentityEnabled()) throw new IdentityError("Local identity is disabled; configure a trusted identity provider.");
   return validateUserIdentity({

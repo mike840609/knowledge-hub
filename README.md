@@ -81,6 +81,7 @@ make dev         # 啟動 dev server
 | [Personal Workspace 知識連結與圖譜 Design](docs/superpowers/specs/2026-09-29-personal-workspace-knowledge-graph-design.md) | TOC 與標題錨點、`[[wikilink]]`／相對 `.md` 連結的抽取與解析、Backlinks、Workspace／Local graph；可重建的 link index（derived data，不改變任何授權不變式）；收回 Phase 2.5 對 wiki-link 解析的延後 |
 | [Personal Workspace 知識連結與圖譜 Implementation Plan](docs/superpowers/plans/2026-09-29-personal-workspace-knowledge-graph.md) | 四個切片（TOC、連結索引、連結渲染與 Backlinks、圖譜）的 tasks、測試與量測 |
 | [Document link index rollout](docs/operations/document-link-index-rollout.md) | migration 012 的部署順序、回填／修復腳本、回滾 |
+| [Team workspaces：先預告、暫不開放](docs/operations/team-workspaces-availability.md) | `KM_TEAM_WORKSPACES_ENABLED`：切換器只顯示「Coming soon」；這不是存取控制；怎麼開放、怎麼測 |
 | [個人日用套件（第一批）Design](docs/superpowers/specs/2026-09-29-personal-daily-driver-design.md) | *已拍板，尚未實作*。修掉渲染編輯器破壞 `[[wikilink]]` 的缺陷（切片 0）、程式碼區塊、`[[` 自動完成與從失效連結建立文件、整理與封存的 web 入口、⌘K 最近開過；收藏改存 server 延後 |
 | [個人日用套件（第一批）Implementation Plan](docs/superpowers/plans/2026-09-29-personal-daily-driver.md) | 六個切片（0、C、A-1、A-2、D、B.0）的 tasks、測試與驗收；建議順序 0 → C → A-1 → A-2 → D → B.0（B.0 無依賴，可提前） |
 | [Frontend Design Language](docs/superpowers/specs/frontend-design-language.md) *(living contract)* | 視覺語言、design token 契約與 enforcement、component 架構、state 策略、theme contract。**不帶日期，就地修訂**；supersedes Phase 2.5 §25–30 |

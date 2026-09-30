@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { defineConfig, devices } from "@playwright/test";
 import { PHASE3_PROVIDER, phase3Origin, phase3PersonaNames, phase3UnconfiguredOrigin } from "./tests/e2e/fixtures/phase3-identities";
+import { teamsClosedOrigin } from "./tests/e2e/fixtures/teams-closed";
 
 const port = Number(process.env.KM_E2E_PORT ?? "3101");
 const phase3Root = process.env.KM_PHASE3_APP_ROOT;
@@ -9,9 +10,15 @@ const localServer = {
   url: `http://127.0.0.1:${port}/`, timeout: 60_000, reuseExistingServer: false,
   env: { ...process.env, NODE_ENV: "production", KM_IDENTITY_PROVIDER: "local", PORT: String(port) } as Record<string, string>,
 };
+// The same build and database, with Team workspaces closed: what the switcher says while they are.
+const teamsClosedServer = {
+  ...localServer,
+  url: `${teamsClosedOrigin()}/`,
+  env: { ...localServer.env, PORT: new URL(teamsClosedOrigin()).port, KM_TEAM_WORKSPACES_ENABLED: "false" },
+};
 export default defineConfig({
   testDir: "./tests/e2e", timeout: 30_000, fullyParallel: false, workers: 1, reporter: [["list"]],
-  webServer: [localServer, ...(phase3Root ? phase3PersonaNames.map((persona) => ({
+  webServer: [localServer, teamsClosedServer, ...(phase3Root ? phase3PersonaNames.map((persona) => ({
     command: `${process.execPath} node_modules/next/dist/bin/next start --hostname 127.0.0.1`,
     cwd: phase3Root, url: `${phase3Origin(persona)}/`, timeout: 60_000, reuseExistingServer: false,
     env: {

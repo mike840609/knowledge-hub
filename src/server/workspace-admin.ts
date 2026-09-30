@@ -6,6 +6,7 @@ import type { WorkspaceRepositories, WorkspaceUnitOfWork } from "@/modules/works
 import { WorkspaceQueryService } from "@/modules/workspaces/application/workspace-query-service";
 import { evaluateWorkspaceCapabilities } from "@/modules/workspaces/application/workspace-authorization";
 import { InsufficientWorkspaceCapabilityError, WorkspaceNotFoundError } from "@/modules/workspaces/domain/errors";
+import { teamWorkspacesEnabled } from "./config";
 
 export type WorkspaceActions = {
   canImport: boolean; canInspectSources: boolean; canOpenSettings: boolean; canRename: boolean;
@@ -16,7 +17,12 @@ export type WorkspaceActions = {
   canWrite: boolean;
 };
 export type WorkspaceNavigationItem = { id: string; name: string; type: "PERSONAL" | "TEAM"; lifecycleState: "ACTIVE" | "ARCHIVED" };
-export type WorkspaceNavigationModel = { canCreateTeam: boolean; items: readonly WorkspaceNavigationItem[] };
+export type WorkspaceNavigationModel = {
+  canCreateTeam: boolean;
+  /** False while Team workspaces are announced and not open (`teamWorkspacesEnabled`): the switcher offers none of them. */
+  teamsOpen: boolean;
+  items: readonly WorkspaceNavigationItem[];
+};
 export type UserAccessInspection = {
   userId: string; directRole: WorkspaceRole | null; groupAccess: "EVALUATED" | "UNKNOWN_NOT_EVALUATED";
   matchedGroups?: readonly { externalGroupId: string; role: WorkspaceRole }[];
@@ -73,7 +79,11 @@ async function readState(repositories: WorkspaceRepositories, caller: CallerCont
 export class WorkspaceAdminService {
   constructor(private readonly unitOfWork: WorkspaceUnitOfWork) {}
   async navigation(caller: CallerContext): Promise<WorkspaceNavigationModel> {
-    return { canCreateTeam: caller.platformCapabilities.includes("workspace.create_team"), items: await new WorkspaceQueryService(this.unitOfWork).listWorkspaces(caller) };
+    return {
+      canCreateTeam: caller.platformCapabilities.includes("workspace.create_team"),
+      teamsOpen: teamWorkspacesEnabled(),
+      items: await new WorkspaceQueryService(this.unitOfWork).listWorkspaces(caller),
+    };
   }
   async workspaceState(caller: CallerContext, workspaceId: string): Promise<WorkspaceAccessView> {
     return this.unitOfWork.run(async repositories => {

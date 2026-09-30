@@ -724,6 +724,23 @@ so their content arrives in a hidden `<div>` at the end of the body and an
 the form never reaches the page. Blocking the framework chunks is the faithful
 version — inline scripts still run, React never hydrates.
 
+### A feature that is announced and not open is a disabled row that says so
+
+Team workspaces exist and are not yet offered. The workspace switcher does not
+hide the place where they will be, and does not list them as if they could be
+entered: it shows one disabled row, "Team workspaces", with "Coming soon" on it,
+and nothing that leads to one (no team names, no "Archived" submenu, no "Create
+team"). A reader is told the feature is coming and is not offered something
+that would go nowhere. The disabled row carries its own explanation as text,
+not only as a tooltip, which only a pointer reaches.
+
+What this decides is what the switcher *offers*. It is not access control and
+must not be read as one (`docs/operations/team-workspaces-availability.md`): a
+link into a Team workspace still opens it, and the services' rules are the same
+whether the flag is on or off. A test holds both halves — that the closed
+switcher offers nothing, and that a link still works — so that nobody takes the
+first for the second.
+
 ### A timestamp is rendered in the reader's zone, which means twice
 
 `components/ui/timestamp.tsx` is the only thing that renders a moment in time.
