@@ -10,6 +10,7 @@ import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-auth
 import { refreshOnArrival } from "@/components/shell/refresh-on-arrival";
 import { GovernanceError, governanceFailure, type GovernanceFailure } from "@/components/workspaces/governance-error";
 import { carryTitle, resolveAuthoredTitle } from "@/lib/authored-title";
+import { matchesInitial } from "@/lib/composer-output";
 import { browserDraftStorage, clearDraft, readDraft, syncDraft, type DraftKey } from "@/lib/document-draft";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
 import { DocumentBreadcrumb, type DocumentBreadcrumbSegment } from "./document-breadcrumb";
@@ -60,6 +61,7 @@ export function DocumentComposer({
   initialMarkdown,
   currentRevisionId,
   submitLabel,
+  busyLabel,
   cancelHref,
   onSubmit,
   conflictHref,
@@ -77,6 +79,8 @@ export function DocumentComposer({
   /** The revision this editor opened on; null when creating. */
   currentRevisionId: string | null;
   submitLabel: string;
+  /** The submit's in-flight label, e.g. "Creating…" for a create, "Saving…" for an edit. */
+  busyLabel: string;
   cancelHref: string;
   /** Sends the document and returns where it now lives; throws on refusal. */
   onSubmit: (input: ComposerSubmit) => Promise<string>;
@@ -167,11 +171,16 @@ export function DocumentComposer({
   useEffect(() => {
     if (!dirty || (persistent.current && draftStatus === "saved")) return;
     const warn = (event: BeforeUnloadEvent) => {
-      if (!leaving.current) event.preventDefault();
+      if (leaving.current) return;
+      // A revert inside the output debounce emits nothing, so `dirty` may
+      // still hold a stale `touched`: compare the flushed content before
+      // prompting (spec §11.2, #65).
+      if (matchesInitial(flushRef.current(), { title: initialTitle, markdown: initialMarkdown })) return;
+      event.preventDefault();
     };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty, draftStatus]);
+  }, [dirty, draftStatus, initialTitle, initialMarkdown]);
 
   // First focus: an empty title field when one is shown, else the start of the
   // text. Later: the surface a mode switch shows. Each waits until its surface can
@@ -272,6 +281,10 @@ export function DocumentComposer({
     const content = { markdown: next, title: carryTitle(before, after, current.title) };
     setContent(content);
     keep(content.title, content.markdown);
+    // Source edits never pass through `adopt`, and a revert inside the output
+    // debounce emits no output at all: release `touched` here too when the
+    // content is back at the initial one (spec §11.2, #65).
+    if (matchesInitial(content, initial)) setTouched(false);
     return content;
   }
 
@@ -336,7 +349,10 @@ export function DocumentComposer({
   }
 
   function cancel() {
-    if (dirty && !window.confirm("Discard changes?")) return;
+    // A revert inside the output debounce emits nothing, so `touched` may
+    // still be set on an unchanged document: compare the flushed content
+    // instead of trusting it (spec §11.2, #65).
+    if (!matchesInitial(flush(), initial) && !window.confirm("Discard changes?")) return;
     pendingRef.current = false;
     void persistent.current?.clear();
     clearDraft(browserDraftStorage(), draftKey);
@@ -422,7 +438,26 @@ export function DocumentComposer({
     };
   }, []);
 
-  const onKeyDown = useFormKeys({ dirty, busy, onCancel: cancel, mode: { toggle: toggleMode } });
+  const formKeys = useFormKeys({ dirty, busy, onCancel: cancel, mode: { toggle: toggleMode } });
+
+  // Esc on a document reverted inside the output debounce: the form keys read
+  // a stale `touched` and stay silent. Flush-compare first; when the flushed
+  // content matches the initial one, cancel directly (spec §11.2, #65).
+  // Anything else keeps the form keys' answer.
+  function onKeyDown(event: KeyboardEvent<HTMLFormElement>) {
+    if (
+      event.key === "Escape" &&
+      !busy &&
+      !event.nativeEvent.isComposing &&
+      event.keyCode !== 229 &&
+      matchesInitial(flush(), initial)
+    ) {
+      event.preventDefault();
+      cancel();
+      return;
+    }
+    formKeys(event);
+  }
 
   // Plain Enter in a single-line title field would otherwise submit the form
   // natively; ⌘/Ctrl Enter still reaches useFormKeys's save handling above.
@@ -435,10 +470,26 @@ export function DocumentComposer({
   }
   const conflict = error?.code === "REVISION_CONFLICT";
   const untitled = !resolved.title;
+  // Issue #72: the title follows the H1 (composer spec §4), so opening a
+  // document whose stored title differs from its H1 already shows the new
+  // name in the breadcrumb. Say so, or saving renames it without a word.
+  const renamesOnSave =
+    resolved.source === "H1" && !untitled && resolved.title !== initialTitle;
 
   return (
     <>
-      <form onKeyDown={onKeyDown} onSubmit={(event) => { event.preventDefault(); void save(); }}>
+      <form
+        onBlur={() => {
+          // Leaving a field flushes pending rendered output, so a revert
+          // inside the debounce compares clean before Esc, Cancel, or unload
+          // reads `touched` (spec §11.2, #65). Without pending edits this
+          // returns the current content untouched: an unedited document is
+          // never rewritten in normalized form.
+          flush();
+        }}
+        onKeyDown={onKeyDown}
+        onSubmit={(event) => { event.preventDefault(); void save(); }}
+      >
         <div className="kh-reading-column pb-3 pt-5">
           <div className="flex min-w-0 items-center justify-between gap-3">
             <DocumentBreadcrumb segments={[...location, { label: resolved.title || untitledLabel }]} />
@@ -463,12 +514,15 @@ export function DocumentComposer({
                 title={untitled ? "Add a title, or start the document with a # heading" : `${submitLabel} (⌘Enter)`}
                 disabled={!ready || !confirmed || untitled}
               >
-                {submitLabel}
+                {busy ? busyLabel : submitLabel}
               </Button>
             </div>
           </div>
           {resolved.source === "METADATA" ? (
             <p className="mt-1.5 text-caption text-kh-text-muted">標題來自上傳檔案的 frontmatter</p>
+          ) : null}
+          {renamesOnSave ? (
+            <p className="mt-1.5 text-caption text-kh-text-muted">儲存會將標題改為「{resolved.title}」</p>
           ) : null}
         </div>
         <div className="kh-reading-column space-y-4 py-6">

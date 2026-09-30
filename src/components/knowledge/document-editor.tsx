@@ -34,6 +34,7 @@ export function DocumentEditor({
       initialMarkdown={initialMarkdown}
       currentRevisionId={currentRevisionId}
       submitLabel="Save"
+      busyLabel="Saving…"
       cancelHref={documentHref}
       conflictHref={`${documentHref}/edit`}
       onSubmit={async ({ title, markdown, expectedRevisionId }) => {

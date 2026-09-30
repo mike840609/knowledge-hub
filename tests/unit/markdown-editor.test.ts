@@ -5,6 +5,7 @@ import { DOMParser as ProseDOMParser, DOMSerializer, type Node as ProseNode } fr
 import { TextSelection } from "@milkdown/kit/prose/state";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMarkdownEditor, EditorParseError, parsedIntact, type EditorOptions, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
+import { matchesInitial } from "@/lib/composer-output";
 
 const opened: MarkdownEditor[] = [];
 afterEach(async () => {
@@ -31,6 +32,13 @@ async function open(markdown: string, overrides: Partial<EditorOptions> = {}) {
   return { root, editor, calls };
 }
 
+/** What deleting the just-typed text does: one transaction that changes it back. */
+function backspace(editor: MarkdownEditor) {
+  editor.action((ctx) => {
+    const view = ctx.get(editorViewCtx);
+    view.dispatch(view.state.tr.delete(1, 2));
+  });
+}
 /** What typing does to the document: one transaction that changes it. */
 function type(editor: MarkdownEditor, text: string) {
   editor.action((ctx) => {
@@ -94,6 +102,31 @@ const rewritten: Record<string, [input: string, output: string]> = {
   "a star rule becomes dashes": ["a\n\n***\n\nb\n", "a\n\n---\n\nb\n"],
   // mdast-util-to-markdown 2.1.2 (the locked version) escapes every underscore in text; 2.1.3 keeps one between two letters (與_斜體\_，).
   "underscores in text are escaped, including one between CJK letters": ["與_斜體_，\n", "與\\_斜體\\_，\n"],
+  // The six writings the 2026-09-29 verification record left unpinned (issue #77):
+  // an aligned table has its cells padded (alignment survives); an indented code
+  // block becomes fenced; a tilde fence becomes backticks; an ATX closing
+  // sequence is dropped; reference links and images are inlined and their
+  // definitions removed — the same inlining reference links already had.
+  "an aligned table has its cells padded": ["| a   | b |\n|:----|----:|\n| 1   | 2 |\n", "| a  |  b |\n| :- | -: |\n| 1  |  2 |\n"],
+  "an indented code block becomes fenced": ["    const a = 1;\n", "```\nconst a = 1;\n```\n"],
+  "a tilde fence becomes backticks": ["~~~ts\nconst a = 1;\n~~~\n", "```ts\nconst a = 1;\n```\n"],
+  "an ATX closing sequence is dropped": ["## Title ##\n", "## Title\n"],
+  "reference links are inlined and their definitions removed": [
+    "see [site][ref] here\n\n[ref]: https://example.com\n",
+    "see [site](https://example.com) here\n",
+  ],
+  // Reference images used to fail the open with EditorParseError (a lone one) or,
+  // worse, vanish silently inside a paragraph. They now resolve like links.
+  "reference images are inlined and their definitions removed": ["![alt][ref]\n\n[ref]: /a.png\n", "![alt](/a.png)\n"],
+  "a reference image inside a paragraph is kept": ["text ![alt][ref] more\n\n[ref]: /a.png\n", "text ![alt](/a.png) more\n"],
+  "duplicate image definitions keep the first destination": [
+    "![alt][ref]\n\n[ref]: /first.png\n[ref]: /second.png\n",
+    "![alt](/first.png)\n",
+  ],
+  "duplicate image definitions ignore identifier casing": [
+    '![alt][REF]\n\n[ref]: /first.png "first"\n[REF]: /second.png "second"\n',
+    '![alt](/first.png "first")\n',
+  ],
 };
 
 describe("Markdown round trip through the editor", () => {
@@ -207,6 +240,20 @@ describe("output", () => {
     expect(editor.getMarkdown()).toBe("# ZT\n");
     await settle();
     expect(calls.markdown).toEqual(["# ZT\n"]);
+  });
+
+  it("emits nothing when typing is reverted inside the debounce (issue #65)", async () => {
+    const initial = "# T\n";
+    const { editor, calls } = await open(initial);
+    type(editor, "Z");
+    backspace(editor);
+    await settle();
+    expect(calls.edits).toBe(2);
+    expect(calls.markdown).toEqual([]);
+    // Nothing will release `touched` on the composer's behalf: the flush and
+    // the source path must compare the flushed content with the initial one.
+    expect(editor.getMarkdown()).toBe(initial);
+    expect(matchesInitial({ markdown: editor.getMarkdown(), title: "T" }, { markdown: initial, title: "T" })).toBe(true);
   });
 
   it("delivers the settled value once after a forced read, equal to what the read returned", async () => {

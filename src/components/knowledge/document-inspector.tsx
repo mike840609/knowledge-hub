@@ -5,7 +5,7 @@ import { useRefreshOnArrival } from "@/components/shell/refresh-on-arrival";
 import { requestShare } from "@/components/actions/action-menu";
 import { availableActions } from "@/components/actions/action-registry";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
-import { useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState, startTransition, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { DocumentTopbarContext } from "@/components/shell/document-topbar-context";
 import { InspectorContext } from "./inspector-context";
@@ -413,15 +413,19 @@ export function DocumentDetailClient({
     const header = headerRef.current;
     const root = contentRef.current;
     if (!header || !root || !setDocumentTopbar) return;
-    setDocumentTopbar({ pathname, title, visible: false, onDetailsClick: openInspector, target });
+    // Shell chrome, not the document: it joins an in-flight navigation or
+    // arrival refresh instead of rendering urgently inside it (#63, #64).
+    const state = { pathname, title, visible: false, onDetailsClick: openInspector, target };
+    startTransition(() => setDocumentTopbar(state));
     const observer = new IntersectionObserver(([entry]) => {
       const visible = !entry.isIntersecting && entry.boundingClientRect.bottom <= (entry.rootBounds?.top ?? 0);
-      setDocumentTopbar({ pathname, title, visible, onDetailsClick: openInspector, target });
+      const next = { pathname, title, visible, onDetailsClick: openInspector, target };
+      startTransition(() => setDocumentTopbar(next));
     }, { root, threshold: 0 });
     observer.observe(header);
     return () => {
       observer.disconnect();
-      setDocumentTopbar(null);
+      startTransition(() => setDocumentTopbar(null));
     };
   }, [pathname, title, openInspector, setDocumentTopbar, target]);
   return (
