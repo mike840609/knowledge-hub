@@ -12,7 +12,7 @@ import { carryTitle, resolveAuthoredTitle } from "@/lib/authored-title";
 import { browserDraftStorage, clearDraft, readDraft, syncDraft, type DraftKey } from "@/lib/document-draft";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
 import { DocumentBreadcrumb, type DocumentBreadcrumbSegment } from "./document-breadcrumb";
-import { MarkdownArticle } from "./document-viewer";
+import { MarkdownArticle } from "./markdown-article";
 import type { MarkdownEditor } from "./editor/editor-core";
 import type { RenderedEditorProps } from "./editor/rendered-editor";
 import { useFormKeys } from "./use-form-keys";
