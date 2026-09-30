@@ -406,6 +406,18 @@ Cancel is the one way to, and it asks first. ⌘K stays the global search and th
 editor does not bind it. The editor does bind ⌘B and ⌘I for its text; ⌘I is
 also the reading page's Open details, and the editing page has no such panel.
 
+⌘\ (Ctrl \ elsewhere) collapses and expands the primary navigation, and is
+`NAV_TOGGLE_SHORTCUT` in the registry: the app shell reads the key from there,
+the collapse button takes its `aria-keyshortcuts` from there, and the palette's
+"Toggle navigation" shows it (`matchesShortcut` in `lib/shortcut-keys.ts` reads
+a shortcut that carries a modifier, as `isSingleKeyShortcut` reads one that
+does not). It acts from the composer's title and editor, since no field types
+it — the writer is who most wants the room — but a dialog or menu that is open,
+the palette included, keeps its keys. Where the rail is not on screen (a window
+under `lg`) it opens and closes the menu that takes its place. It is not ⌘/,
+which the composer has for the rendered/source switch, nor ⌘B, which is bold
+there. The Knowledge explorer beside it has no collapse, so this does not reach it.
+
 The composer's title field, its rendered editor and its Markdown text are the
 one place without the focus ring. A text field matches `:focus-visible` for as
 long as it has focus, so a ring would frame the whole canvas for the whole time
