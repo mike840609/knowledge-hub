@@ -787,6 +787,23 @@ moment ago. Conflicts about content — a stale revision, a full share-link
 list, a folder that is not empty, a parent that is archived, a move into
 itself — are excluded in `requestWorkspaceAccessCheck`, and a test holds each.
 
+**A key that moves a row is announced in a live region, not in a toast, and
+the live region is not `role="status"`.** After Alt+↑/↓ the tree says where the
+row is now ("Moved “B” up. Position 1 of 3.") in an `aria-live="polite"` region
+it owns, remounted per message so the same words twice are heard twice. The
+toast layer is the page's one `status`; a second would make every "find the
+status on this page" query — the e2e suite has several — ambiguous.
+
+**A choice among places is a native radio group, with its label as the target.**
+The Move dialog lists the top level and the folders as `<input type="radio">`
+visually hidden (`sr-only`, and `relative` on its label so it stays with it) and
+a label that carries the row's look through `has-[:checked]`, `has-[:focus-visible]`
+and `has-[:disabled]`. The arrow keys, the group's one tab stop and the
+checked state are the browser's; a custom listbox would have had to rebuild all
+three. Where a place cannot be chosen (where the item already is) the radio is
+disabled and the row says "Current". Tests click the label, as a reader does:
+a forced click on the hidden input lands wherever the pixel is.
+
 **A mutation that navigates to its result refreshes on arrival.** The push
 fetches the destination page fresh, but a layout the two routes share is kept
 as it was: saving a title left the knowledge sidebar naming the document by
@@ -802,9 +819,13 @@ this way.
 **Undo is offered only where a reverse operation already exists.** An "Undo"
 that cannot restore the previous state is a lie. Archiving a workspace,
 renaming it, granting access, changing a role and revoking a grant all qualify,
-and so do archiving and restoring a document or a folder, and renaming a
-folder: ARCHIVED is a lifecycle and not a deletion, so the document keeps every
-revision and its place, and restore is the reverse. Creating a folder does not:
+and so do archiving and restoring a document or a folder, renaming a folder,
+and moving a document or a folder through the Move dialog (back to the folder
+and the place it came from): ARCHIVED is a lifecycle and not a deletion, so the
+document keeps every revision and its place, and restore is the reverse. A step
+made with Alt+↑/↓ gets no Undo toast — its reverse is the step the other way,
+and a toast for every key press would bury the tree — and is said aloud
+instead (below). Creating a folder does not:
 the nearest thing to taking it back is archiving it, which is not the same.
 Editing a document does not:
 its reverse would be a *new* revision, which is a feature and not an undo.

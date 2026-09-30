@@ -159,6 +159,8 @@ Registry 的設計讓它日後只是新增一個項目，而不是重新設計�
 - **`FolderTarget`** 與 `ActionContext.folder`：資料夾列有自己的目標，可用性同樣三軸（能寫且已確認、HUB_MANAGED、狀態，外加所在 source 的狀態）。資料夾動作只在 row，不在 palette——palette 描述的是正在讀的那份文件，沒有資料夾可指。
 - **兩種新效果。** `create-folder`（要一個名稱）與 `folder-command`（重新命名、封存、還原）；文件的封存與還原走既有的 `command`，多帶一個 `label` 給訊息用。
 
+**A-2 再多一種效果與兩個項目（2026-09-30）。** `move`（要一個地方）：`document.move`「Move document…」在 row 與 palette，`folder.move`「Move folder…」只在 row。可用性同封存的三軸，再加所在 source 必須是 ACTIVE（source 被封存時服務會拒絕任何內容變更，移動也是）；放在 Archive 之前，Archive 仍是選單的最後一項。效果帶的是 `sourceId`、標題與「哪個節點」——文件用 `documentId`（palette 手上只有它），資料夾用樹節點 ID——由對話框自己在樹裡找位置。**在樹上按 Alt+↑/↓ 重排不是 registry 的動作**（沒有選單項、沒有 palette 項）：它是鍵盤對同一個「可以移動」的回答，所以樹用該列自己的 registry 動作裡有沒有 Move 來決定要不要理這個鍵。
+
 **undo 的清單（§6）多三列：** 封存／還原文件、封存／還原資料夾（互為逆向；文件保有所有 revision 與位置，ARCHIVED 是生命週期而不是刪除）、重新命名資料夾（改回舊名）。**新增資料夾不能 undo**——最接近的反向是封存它，那不是同一件事。
 
 **toast「下一次導航時關閉」有了一個例外。** 封存正開著的文件會把讀者送到清單，Undo 得在那裡等著。toast 可以自己聲明「我的動作會導航」，撐過之後 3 秒內的導覽（複數：一次 push 可以是好幾次，路由器先把網址改成推去的路由，那個路由再 redirect）。寫 e2e 時才發現只撐過一次是不夠的。

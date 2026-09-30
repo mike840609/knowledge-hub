@@ -60,11 +60,11 @@
 
 | # | 任務 | 檔案 | 測試 | 驗收 |
 | --- | --- | --- | --- | --- |
-| A2.1 | `PATCH /tree-nodes/:id` 接 `{parentId, position}`（`moveTreeNode`／`reorderTreeNode`），輸入解析 | 路由、`authoring-input.ts` | integration：搬進資料夾與搬回最上層；搬進自己的子孫得 409；跨 Source 得 409；封存的節點得 400；重排 | 錯誤碼都經 A1.1 的對應 |
-| A2.2 | 「移到…」對話框：列出該 Source 的 ACTIVE 資料夾樹與「最上層」，排除自己與子孫，可鍵盤操作；沿用分享對話框的對話框元件 | `move-dialog.tsx` | e2e | 選取後放在目標資料夾最後 |
-| A2.3 | registry：`document.move`、`folder.move`；palette 對目前開啟的文件提供「Move document…」「Archive document」 | `action-registry.ts`、palette | 單元：可用性矩陣 | — |
-| A2.4 | 鍵盤重排：樹上聚焦一列後 `Alt+↑`／`Alt+↓`（呼叫 `reorderTreeNode`），移動後焦點留在該列，`aria-live` 回報位置；在 macOS 與 Windows 的 Chromium 實測，不行就換鍵並回寫規格 | `knowledge-tree.tsx` | e2e | 與既有快捷鍵及樹的方向鍵不衝突 |
-| A2.5 | e2e：移動文件進出資料夾、對話框排除子孫、重排、鍵盤重排 | `tests/e2e/organize-move.spec.ts` | 本身 | 通過 |
+| A2.1 ✅ | `PATCH /tree-nodes/:id` 接 `{parentId, position}`（`moveTreeNode`／`reorderTreeNode`），輸入解析 | 路由、`authoring-input.ts` | integration：搬進資料夾與搬回最上層；搬進自己的子孫得 409；跨 Source 得 409；封存的節點得 400；重排 | 錯誤碼都經 A1.1 的對應 **完成（6510eca）。三種形狀（改名／移動／重排）一次一件；省略 position＝最後；位置是含已封存節點的同層索引，另有一個對真服務跑隨機 60 步的測試（第一版的亂數低位元會交替，沒有偵測力，靠變異驗證抓到）** |
+| A2.2 ✅ | 「移到…」對話框：列出該 Source 的 ACTIVE 資料夾樹與「最上層」，排除自己與子孫，可鍵盤操作；沿用分享對話框的對話框元件 | `move-dialog.tsx` | e2e | 選取後放在目標資料夾最後 **完成。原生 radio 群組；目前位置標 Current 且不可選；沒有搜尋欄；Undo 移回原資料夾的原位置；目的資料夾會被展開** |
+| A2.3 ✅ | registry：`document.move`、`folder.move`；palette 對目前開啟的文件提供「Move document…」「Archive document」 | `action-registry.ts`、palette | 單元：可用性矩陣 | — **完成。標籤是 `Move document…`／`Move folder…`；palette 的「Archive document」A-1 已加，這裡只多 Move** |
+| A2.4 ✅ | 鍵盤重排：樹上聚焦一列後 `Alt+↑`／`Alt+↓`（呼叫 `reorderTreeNode`），移動後焦點留在該列，`aria-live` 回報位置；在 macOS 與 Windows 的 Chromium 實測，不行就換鍵並回寫規格 | `knowledge-tree.tsx` | e2e | 與既有快捷鍵及樹的方向鍵不衝突 **完成，除了 macOS／Windows 沒有實測。只作用在選單有 Move 的列；請求進行中保留最後一個鍵；aria-live 不是 role=status** |
+| A2.5 ✅ | e2e：移動文件進出資料夾、對話框排除子孫、重排、鍵盤重排 | `tests/e2e/zz-organize-move.spec.ts`（`zz-` 的理由同 zz-organize）；另有 jsdom 的 `knowledge-tree-reorder.test.tsx` | 本身 | 通過 **完成：e2e 13 案、jsdom 14 案** |
 
 ## 5. 切片 D — 自動完成與從失效連結建立文件（PR 5，依賴切片 0）
 
