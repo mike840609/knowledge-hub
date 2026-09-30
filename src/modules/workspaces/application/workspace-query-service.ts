@@ -39,6 +39,7 @@ export class WorkspaceQueryService {
         }
       }
       return [...accessible.values()]
+        .filter((workspace) => !caller.personalWorkspaceOnly || workspace.id === caller.personalWorkspaceOnly)
         .sort((left, right) => navigationRank(left) - navigationRank(right) || left.name.localeCompare(right.name) || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0))
         .map((workspace) => ({ id: workspace.id, name: workspace.name, type: workspace.workspaceType ?? "TEAM", lifecycleState: workspace.lifecycleState ?? "ACTIVE" }));
     });

@@ -1,3 +1,4 @@
+import { RevisionRestore } from "@/components/knowledge/revision-restore";
 import { getKnowledgeDocumentModel, getKnowledgeExplorerModel, getWorkspaceShellModel } from "@/server/knowledge-read";
 import { documentLocation } from "@/server/document-location";
 import { getDocumentLinkModel } from "@/server/link-graph-read";
@@ -150,6 +151,7 @@ export default async function KnowledgeDocumentPage({
       outline={extractOutline(selectedRevision.markdown)}
     >
       <div className="kh-reading-column py-6">
+        {isHistorical && <RevisionRestore documentId={documentId} href={`/w/${workspaceId}/knowledge/${sourceId}/${documentId}`} historical={selectedRevision} current={view.currentRevision} editable={!sourceManaged && view.status === "ACTIVE" && explorer?.source.status === "ACTIVE"} />}
         <DocumentViewer view={view} selectedRevision={selectedRevision} links={linkView ? renderedLinksFrom(linkView, createLinks) : undefined} />
         {linkView ? <BacklinksFooter view={linkView} /> : null}
       </div>

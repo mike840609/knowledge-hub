@@ -8,5 +8,5 @@ export default async function HomePage() {
   const navigation = await services.workspaceAdmin.navigation(caller);
   const personal = navigation.items.find((item) => item.type === "PERSONAL");
   if (!personal) throw new Error("Personal workspace provisioning is unavailable.");
-  redirect(`/w/${personal.id}/knowledge`);
+  redirect(`/w/${personal.id}/${caller.personalWorkspaceOnly ? "home" : "knowledge"}`);
 }

@@ -66,6 +66,9 @@ export function useActionRunner({ onToggleFavorite }: ActionHandlers) {
     (action: Action) => {
       const { effect } = action;
       switch (effect.kind) {
+        case "download":
+          window.location.assign(effect.href);
+          return;
         case "navigate":
           router.push(effect.href);
           return;

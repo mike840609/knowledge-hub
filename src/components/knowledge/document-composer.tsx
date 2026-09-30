@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { PersistentDraft, type DraftStatus } from "@/lib/persistent-draft";
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -89,7 +90,14 @@ export function DocumentComposer({
   footer?: (state: { busy: boolean }) => ReactNode;
 }) {
   const router = useRouter();
-  const { confirmed } = useWorkspaceAuthorization();
+  const { confirmed, access } = useWorkspaceAuthorization();
+  const [draftStatus, setDraftStatus] = useState<DraftStatus>("loading");
+  const persistent = useRef<PersistentDraft | null>(null);
+  // A new document started from a broken link's title keeps its draft in the tab, not the account: the
+  // account holds one blank "new" draft per workspace (`draft:new`, the only key the server accepts for it),
+  // and a second document under that key would restore the wrong text or overwrite the blank one's.
+  const seeded = draftKey.kind === "new" && draftKey.title !== undefined;
+  const durableDraft = access.workspace.type === "PERSONAL" && !seeded;
   // Everything waits for hydration; see `use-hydrated` for what a native submit costs.
   const hydrated = useHydrated();
   const [title, setTitle] = useState(initialTitle);
@@ -143,25 +151,35 @@ export function DocumentComposer({
   useEffect(() => {
     if (!hydrated || restoreTried.current) return;
     restoreTried.current = true;
-    const draft = readDraft(browserDraftStorage(), draftKey);
-    if (draft) {
-      setContent({ markdown: draft.markdown, title: draft.title });
-      setBaseRevisionId(draft.baseRevisionId);
-      setRestored(draft.baseRevisionId === currentRevisionId ? "current" : "stale");
-    }
-    setRestoreChecked(true);
-  }, [hydrated, draftKey, currentRevisionId]);
+    const remote = durableDraft
+      ? new PersistentDraft(`/api/workspaces/${access.workspace.id}/personal`, draftKey.kind === "new" ? "draft:new" : `draft:${draftKey.documentId}`, setDraftStatus)
+      : null;
+    persistent.current = remote;
+    let live = true;
+    const restore = async () => {
+      const draft = remote ? await remote.load() : readDraft(browserDraftStorage(), draftKey);
+      if (!live) return;
+      if (draft) {
+        setContent({ markdown: draft.markdown, title: draft.title });
+        setBaseRevisionId(draft.baseRevisionId);
+        setRestored(draft.baseRevisionId === currentRevisionId ? "current" : "stale");
+      }
+      setRestoreChecked(true);
+    };
+    void restore();
+    return () => { live = false; restoreTried.current = false; remote?.dispose(); };
+  }, [hydrated, currentRevisionId, access.workspace.id, access.workspace.type]);
 
-  // Closing the tab loses sessionStorage; reloading does not, but the browser
-  // cannot tell the two apart, so both ask.
+  // Warn while text has not reached durable account storage. Legacy Team drafts
+  // remain tab-scoped and therefore still warn before leaving.
   useEffect(() => {
-    if (!dirty) return;
+    if (!dirty || (persistent.current && draftStatus === "saved")) return;
     const warn = (event: BeforeUnloadEvent) => {
       if (!leaving.current) event.preventDefault();
     };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty]);
+  }, [dirty, draftStatus]);
 
   // First focus: an empty title field when one is shown, else the start of the
   // text. Later: the surface a mode switch shows. Each waits until its surface can
@@ -244,7 +262,9 @@ export function DocumentComposer({
   function keep(nextTitle: string, nextMarkdown: string) {
     // Cancel and load-latest leave the fields editable while the page navigates; a keystroke there must not write back the draft they just cleared.
     if (leaving.current) return;
-    syncDraft(browserDraftStorage(), draftKey, { title: nextTitle, markdown: nextMarkdown, baseRevisionId }, initial);
+    if (persistent.current) {
+      persistent.current.change(nextTitle === initialTitle && nextMarkdown === initialMarkdown ? null : { title: nextTitle, markdown: nextMarkdown, baseRevisionId });
+    } else syncDraft(browserDraftStorage(), draftKey, { title: nextTitle, markdown: nextMarkdown, baseRevisionId }, initial);
   }
 
   function setContent(next: Content) {
@@ -314,6 +334,7 @@ export function DocumentComposer({
   }
 
   function discardDraft() {
+    void persistent.current?.clear();
     clearDraft(browserDraftStorage(), draftKey);
     pendingRef.current = false;
     setTouched(false);
@@ -325,6 +346,7 @@ export function DocumentComposer({
   function cancel() {
     if (dirty && !window.confirm("Discard changes?")) return;
     pendingRef.current = false;
+    void persistent.current?.clear();
     clearDraft(browserDraftStorage(), draftKey);
     leaving.current = true;
     leave(cancelHref);
@@ -343,6 +365,7 @@ export function DocumentComposer({
 
   function loadLatest() {
     if (!conflictHref) return;
+    void persistent.current?.clear();
     clearDraft(browserDraftStorage(), draftKey);
     leaving.current = true;
     window.location.assign(conflictHref);
@@ -358,6 +381,7 @@ export function DocumentComposer({
     setError(null);
     try {
       const href = await onSubmit({ title: final.title, markdown: snapshot.markdown, expectedRevisionId: baseRevisionId });
+      await persistent.current?.clear();
       clearDraft(browserDraftStorage(), draftKey);
       leaving.current = true;
       // Push only, then refresh on arrival: a refresh fired beside the push
@@ -456,6 +480,10 @@ export function DocumentComposer({
           ) : null}
         </div>
         <div className="kh-reading-column space-y-4 py-6">
+          {durableDraft && <p role="status" className="text-caption text-kh-text-muted">
+            {({ loading: "Loading draft…", saved: "Draft saved to your account", saving: "Saving draft…", local: "Draft kept on this device · syncing…", error: "Draft sync failed. Keep this page open and retry.", conflict: "Draft changed on another device. Your text is preserved here; copy it before loading another draft." })[draftStatus]}
+            {draftStatus === "error" && <Button type="button" variant="link" onClick={() => void persistent.current?.retry()}>Retry draft save</Button>}
+          </p>}
           {restored ? (
             <p role="status" className="flex flex-wrap items-center gap-2 rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2 text-body text-kh-text">
               {restored === "stale" ? "這份文件在你離開後被更新過，已還原你未存的修改。" : "已還原未存的修改。"}

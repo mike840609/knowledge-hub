@@ -894,7 +894,8 @@ No Redux, Zustand or other application-wide state framework.
 ```text
 URL              → Workspace / Source / Document, and anything shareable
 Server data      → Workspace / Source / Tree / Document / Revision / Import state
-Persisted local  → Scroll position, nav collapse, theme, favourites, and the
+                   Personal drafts and account favorites
+Persisted local  → Scroll position, nav collapse, theme, recent reads, and the
                    view arrangement the user set (see §11)
 Local component  → Genuinely ephemeral chrome: inspector open, drawer open
 ```
@@ -968,6 +969,13 @@ that pointed at a document into unresolved ones, because links resolve only to
 active documents; the confirmation says how many, in words. Restoring heals
 them, since resolution is read at read time and nothing was rewritten.
 
+The 2026-09-30 personal rollout adds document/folder organization through the
+existing Hub commands, Markdown downloads, revision restoration, persistent
+personal drafts and account favorites. The personal rollout spec supersedes
+the earlier deferred-product decisions on these operations. Team navigation
+remains visible but disabled, labelled Coming soon, until server configuration
+explicitly enables it. Disabled controls have no navigation or click action.
+
 
 1. The palette is mostly navigation, and that is a product gap rather than a
    UI one. Counted against the code it can offer about fourteen entries, of
@@ -995,7 +1003,7 @@ them, since resolution is read at read time and nothing was rewritten.
     field), the document is edited rendered with its Markdown a toggle away,
     and the navigation guard this item asked about became a tab-scoped draft
     restored on return, since the App Router cannot intercept in-app
-    navigation. There is still no autosave.
+    navigation. Personal workspaces now save drafts to the account separately from published revisions, with a local recovery copy and visible save status; Team drafts remain tab-scoped.
  4. Knowledge pages carry two sidebars side by side: the primary nav
     (`src/components/shell/app-shell.tsx`, `w-40`, collapsible to `w-12`)
     and the Knowledge explorer (`src/components/knowledge/source-sidebar.tsx`,

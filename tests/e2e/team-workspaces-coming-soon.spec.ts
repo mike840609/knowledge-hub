@@ -11,9 +11,8 @@ const QUERY_MASTER_WORKSPACE = "0199f100-0000-7000-8000-000000000001";
  * them open — so that "there is no Query Master in the menu" is a fact about the flag and not about a
  * menu that never had it.
  *
- * What is held here is what the switcher offers. It is not access control: a Team workspace's own
- * rules are the services', and a link to one still opens it — which is checked too, so that nobody
- * takes this for a lock.
+ * A closed Team is also denied by trusted-caller authorization. The switcher is the visible explanation;
+ * the direct-link case below checks the server boundary.
  */
 
 async function openSwitcher(page: Page, current: string) {
@@ -26,7 +25,7 @@ test.describe("with Team workspaces closed", () => {
 
   test("the switcher says they are coming, and offers none of them", async ({ page }) => {
     await page.goto("/");
-    await page.waitForURL(/\/w\/[^/]+\/knowledge/);
+    await page.waitForURL(/\/w\/[^/]+\/home/);
     await openSwitcher(page, "My Space");
     const menu = page.getByRole("menu");
 
@@ -49,21 +48,17 @@ test.describe("with Team workspaces closed", () => {
 
   test("My Space is still the workspace, and is still there to choose", async ({ page }) => {
     await page.goto("/");
-    await page.waitForURL(/\/w\/[^/]+\/knowledge/);
-    const home = page.url();
+    await page.waitForURL(/\/w\/[^/]+\/home/);
     await openSwitcher(page, "My Space");
     await page.getByRole("menuitem", { name: "My Space" }).click();
-    await expect(page).toHaveURL(home);
+    await expect(page).toHaveURL(/\/w\/[^/]+\/knowledge/);
   });
 
-  test("a link into a Team workspace still opens it, and the switcher there still lets the reader leave", async ({ page }) => {
-    // The switcher is not a lock: this is here so that nobody reads it as one.
-    await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge`);
-    await expect(page.getByLabel("Workspace: Query Master", { exact: true })).toBeVisible();
-    await openSwitcher(page, "Query Master");
-    await expect(page.getByRole("menuitem", { name: /Team workspaces/ })).toContainText("Coming soon");
-    await page.getByRole("menuitem", { name: "My Space" }).click();
-    await expect(page).toHaveURL(/\/w\/(?!0199f100-0000-7000-8000-000000000001)[^/]+\/knowledge/);
+  test("a direct Team link is denied while workspaces are closed", async ({ page }) => {
+    const response = await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge`);
+    expect(response?.status()).toBe(404);
+    const navigation = await (await page.request.get("/api/workspaces")).json();
+    expect(navigation.items.some((item: { id: string }) => item.id === QUERY_MASTER_WORKSPACE)).toBe(false);
   });
 });
 
