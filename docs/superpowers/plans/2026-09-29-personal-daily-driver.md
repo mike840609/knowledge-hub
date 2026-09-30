@@ -26,7 +26,7 @@
 | 0.10 | 受損文件的**唯讀**報告：找出現行 revision 中符合「只有開頭被跳脫」特徵（`\[\[…]]`，結尾未跳脫）的文件，輸出 Workspace／文件 ID／標題／行號，預設 dry-run，沒有修復選項 | `scripts/db/report-escaped-wikilinks.ts`、`package.json` script、`Makefile` target | integration：種入受損、刻意跳脫、正常三種，只報第一種 | 報告數字寫進驗證紀錄；**修復不在這一批**（規格 §12-2 已決定先看數量再決定），腳本沒有寫入選項 |
 | 0.11 | 文件：**composer 規格 §11.8 的「已接受的正規化」清單要刪掉「wikilink `[[X]]` → `\[\[X]]`（顯示相同，Obsidian 不再認得）」那一項——它是 #78 之前接受的，#78 讓 wikilink 進了連結索引之後就不能再接受了**；CLAUDE.md 連結索引的不變式補一句「編輯器必須無損往返 wikilink，且有渲染模式的測試」；圖譜規格 §15 指向本規格；新的驗證紀錄 `2026-09-29-personal-daily-driver-verification.md` 開頭寫切片 0 一節（測試數字、變異驗證、量測、偏離）。**圖譜驗證紀錄裡「合併後發現的缺陷與根因」那一段已在文件 PR（#79）寫好，不要重複** | 兩份既有文件加一份新文件 | — | — |
 
-**切片 0 的量測**：編輯器 chunk 的大小差（`next build` 輸出，前後對照）；預期是個位數 KB，若超過 10 KB 要說明。**實測（781ac28 的 commit 訊息與 0.9 列）：靜態 JS 總量 +2,827 bytes（+0.16%），含編輯器的 lazy chunk +2,232 bytes，First Load JS 不變。**
+**切片 0 的量測**：編輯器 chunk 的大小差（`next build` 輸出，前後對照）；預期是個位數 KB，若超過 10 KB 要說明。**實測（781ac28 的 commit 訊息與 0.9 列）：靜態 JS 總量 +2,827 bytes（+0.16%），所有 lazy chunk 合計 +2,235 bytes（256,625 → 258,860），First Load JS 不變。**
 
 **e2e 的檔名排序會影響別的 spec（0.9 的教訓）。** 各 spec 共用一個資料庫、依檔名順序執行。0.9 的 spec 要建立互相連結的文件：放進固定的空白 workspace，會讓 `workspace-graph.spec.ts` 的「nothing is linked」失敗（第一次的失敗）；放進 My Space 且檔名排在前面，六份新文件會改變 `workspace-graph.spec.ts` 畫出來的版面，它對節點的 `hover` 就落在畫布上（「svg intercepts pointer events」，第二次的失敗）。所以檔案叫 `zz-wikilinks-composer.spec.ts`，排在最後，檔頭說明原因。**這也點出一個既有的脆弱點：`workspace-graph.spec.ts:44` 的 hover 依賴版面，文件多幾份就會壞，與這次的修改無關；沒有在這個 PR 修，列為後續。**
 
