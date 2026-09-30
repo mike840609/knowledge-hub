@@ -1,5 +1,7 @@
 # 個人日用套件（第一批）— 設計規格
 
+> 2026-09-30 更新：本文件當時將 Team 旗標限定於切換器；後續的 [Personal workspace rollout](2026-09-30-personal-workspace-design.md) 擴充為伺服器端 personal-only 授權。整理與封存已在主線完成；帳號收藏、草稿、匯出、版本還原與首頁的後續實作也以該 rollout 規格為準。
+
 | 項目 | 內容 |
 | --- | --- |
 | 日期 | 2026-09-29 |

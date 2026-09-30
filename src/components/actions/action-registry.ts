@@ -18,6 +18,7 @@ import type { WorkspaceActions } from "@/server/workspace-admin";
  */
 
 export type ActionId =
+  | "navigate.home"
   | "navigate.knowledge"
   | "navigate.search"
   | "navigate.graph"
@@ -26,6 +27,7 @@ export type ActionId =
   | "create.document"
   | "create.folder"
   | "create.import"
+  | "document.export"
   | "document.open"
   | "document.open-new-tab"
   | "document.copy-link"
@@ -89,6 +91,7 @@ export type ActionCommand =
 export type FolderCommand = "folder.rename" | "folder.archive" | "folder.restore";
 
 export type ActionEffect =
+  | { kind: "download"; href: string }
   | { kind: "navigate"; href: string }
   /** Leaves this tab where it is; what a middle-click on the row's link does. */
   | { kind: "open-new-tab"; href: string }
@@ -196,6 +199,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
   const archived = context.includeArchived === true;
   const suffix = archived ? "?includeArchived=true" : "";
   const actions: Action[] = [];
+  if (context.workspaceType === "PERSONAL") actions.push({ id: "navigate.home", label: "Go to My Space home", group: "navigate", icon: "knowledge", keywords: ["drafts", "favorites", "recent", "export"], surfaces: ["palette"], effect: { kind: "navigate", href: `/w/${workspaceId}/home` } });
 
   actions.push({
     id: "navigate.knowledge",
@@ -293,6 +297,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
   }
 
   if (target) {
+    actions.push({ id: "document.export", label: "Download Markdown", group: "document", icon: "open", keywords: ["export", "download", "markdown"], surfaces: ["palette", "row"], effect: { kind: "download", href: `/api/documents/${target.documentId}/export` } });
     const documentHref = `/w/${workspaceId}/knowledge/${target.sourceId}/${target.documentId}${suffix}`;
     actions.push({
       id: "document.open",

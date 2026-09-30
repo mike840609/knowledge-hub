@@ -18,8 +18,8 @@ export function localIdentityEnabled(): boolean {
  * `KM_TEAM_WORKSPACES_ENABLED=true` opens them; anything else, unset included, keeps them closed. It is
  * read on every request, so opening them later is a configuration change and a restart, not a build.
  *
- * This decides what the *switcher* offers. It is not access control: a Team workspace's own rules
- * (membership, roles, the archived state) are the services', and are unchanged whether this is on or off.
+ * The switcher reads this flag. Trusted callers also receive a personal-only authorization scope while
+ * it is closed; the Team's stored membership and lifecycle stay intact for later reopening.
  */
 export function teamWorkspacesEnabled(): boolean {
   return process.env.KM_TEAM_WORKSPACES_ENABLED === "true";

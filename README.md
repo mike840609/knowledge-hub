@@ -13,7 +13,7 @@ make bootstrap   # npm ci + 建 .env + 啟動 MariaDB + migrate + seed
 make dev         # 啟動 dev server
 ```
 
-瀏覽器開啟 http://127.0.0.1:3000/（自動導向第一個可存取 Workspace 的 Knowledge 首份文件；seed 已內建 Query Master 等瀏覽 fixtures）。
+瀏覽器開啟 http://127.0.0.1:3000/，預設進入 My Space 個人首頁。Team 入口保留並反灰，標示 Coming soon。
 
 常用指令（完整列表見 `make help`，細節對應 `package.json` scripts）：
 
@@ -51,6 +51,26 @@ make dev         # 啟動 dev server
 
 2026-09-10 architecture review 已把 Workspace access-boundary correction **直接整合進 Phase 0/1 canonical spec 與 plan**：`org_code` 保留為使用者公司組織屬性，但 **Workspace 才是 Knowledge container 與基本存取邊界**。不同 org 的使用者可以透過 WorkspaceMembership 共用同一 Workspace；同 org 也不代表自動取得 Workspace 內容。
 
+## Personal workspace rollout
+
+個人使用功能與契約見 [Personal workspace design](docs/superpowers/specs/2026-09-30-personal-workspace-design.md)，測試結果與採用步驟見 [驗證紀錄](docs/superpowers/verification/2026-09-30-personal-workspace.md)。
+
+- Team 預設暫停開放；`KM_TEAM_WORKSPACES_ENABLED=true` 才恢復完整 Team 導覽與存取，既有資料和 membership 不變。
+- 執行 `npm run db:migrate` 套用 migration 013，新增帳號草稿與收藏儲存。migration 012 是文件連結索引。
+- My Space 草稿自動保存到帳號，失敗時保留本機恢復副本；正式 Save 才建立 revision、更新分享內容。
+- Home 的「Organize documents」進入既有 Knowledge 樹；可在樹上操作 Hub-managed 文件／資料夾的移動、建立、更名、封存／還原。來源同步內容仍回原始來源修改。
+- 文件選單提供 Markdown 下載；Home 提供 My Space ZIP（包含封存文件的最新已存版本、metadata、目錄與 ID/path manifest；不包含草稿、版本歷史和附件 bytes）。原文連結保留，檔名附穩定 ID 避免碰撞。上限 64 MiB／9,999 份文件。
+- 歷史版本可與目前版本並列比較，還原會新增 revision，並檢查編輯衝突。
+- Home 提供草稿、最近編輯、最近閱讀與完整收藏；收藏跟隨帳號，一次性移轉舊的瀏覽器收藏，最近閱讀仍保留在裝置。
+
+個人模式瀏覽器驗證：
+
+```bash
+KM_TEAM_WORKSPACES_ENABLED=false KM_E2E_PERSONAL_ONLY=true npm run test:e2e -- personal-workspace.spec.ts
+```
+
+既有 Team E2E 與 integration 測試明確使用 Team-enabled 模式；個人 rollout 測試另外驗證關閉與重新開放。
+
 ## 文件入口
 
 ### Current canonical documents
@@ -81,7 +101,7 @@ make dev         # 啟動 dev server
 | [Personal Workspace 知識連結與圖譜 Design](docs/superpowers/specs/2026-09-29-personal-workspace-knowledge-graph-design.md) | TOC 與標題錨點、`[[wikilink]]`／相對 `.md` 連結的抽取與解析、Backlinks、Workspace／Local graph；可重建的 link index（derived data，不改變任何授權不變式）；收回 Phase 2.5 對 wiki-link 解析的延後 |
 | [Personal Workspace 知識連結與圖譜 Implementation Plan](docs/superpowers/plans/2026-09-29-personal-workspace-knowledge-graph.md) | 四個切片（TOC、連結索引、連結渲染與 Backlinks、圖譜）的 tasks、測試與量測 |
 | [Document link index rollout](docs/operations/document-link-index-rollout.md) | migration 012 的部署順序、回填／修復腳本、回滾 |
-| [Team workspaces：先預告、暫不開放](docs/operations/team-workspaces-availability.md) | `KM_TEAM_WORKSPACES_ENABLED`：切換器只顯示「Coming soon」；這不是存取控制；怎麼開放、怎麼測 |
+| [Team workspaces：先預告、暫不開放](docs/operations/team-workspaces-availability.md) | `KM_TEAM_WORKSPACES_ENABLED`：Coming soon 入口、伺服器存取限制、重新開放與測試 |
 | [個人日用套件（第一批）Design](docs/superpowers/specs/2026-09-29-personal-daily-driver-design.md) | *已拍板，尚未實作*。修掉渲染編輯器破壞 `[[wikilink]]` 的缺陷（切片 0）、程式碼區塊、`[[` 自動完成與從失效連結建立文件、整理與封存的 web 入口、⌘K 最近開過；收藏改存 server 延後 |
 | [個人日用套件（第一批）Implementation Plan](docs/superpowers/plans/2026-09-29-personal-daily-driver.md) | 六個切片（0、C、A-1、A-2、D、B.0）的 tasks、測試與驗收；建議順序 0 → C → A-1 → A-2 → D → B.0（B.0 無依賴，可提前） |
 | [Frontend Design Language](docs/superpowers/specs/frontend-design-language.md) *(living contract)* | 視覺語言、design token 契約與 enforcement、component 架構、state 策略、theme contract。**不帶日期，就地修訂**；supersedes Phase 2.5 §25–30 |

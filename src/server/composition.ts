@@ -1,3 +1,5 @@
+import { PersonalService } from "@/modules/personal/application/personal-service";
+import { MariaDbPersonalStore } from "@/infrastructure/database/mariadb/repositories/personal-items";
 import { WorkspaceAdminService } from "./workspace-admin";
 import { TeamWorkspaceService } from "@/modules/workspaces/application/team-workspace-service";
 import { TeamGovernanceService } from "@/modules/workspaces/application/team-governance-service";
@@ -66,6 +68,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
   const hub = new HubKnowledgeCommandServiceImpl(unitOfWork);
   const queries = new KnowledgeQueryServiceImpl(unitOfWork);
   const links = new KnowledgeLinkServiceImpl(unitOfWork);
+  const personal = new PersonalService(new MariaDbPersonalStore(databasePool), queries, unitOfWork);
   const shares = new DocumentShareService(unitOfWork, new RandomShareTokenIssuer());
   const sources = new SourceApplicationService(unitOfWork);
   const workspaceAdmin = new WorkspaceAdminService(unitOfWork);
@@ -94,7 +97,11 @@ export function buildApplicationServices(databasePool: Pool, options: {
       });
       await readiness;
     }
-    return establishTrustedCallerWith({ provider: identityProvider, resolver, personalWorkspaces, unitOfWork });
+    const trusted = await establishTrustedCallerWith({ provider: identityProvider, resolver, personalWorkspaces, unitOfWork });
+    if (process.env.KM_TEAM_WORKSPACES_ENABLED !== "true") {
+      trusted.caller.personalWorkspaceOnly = trusted.personalWorkspace.id;
+    }
+    return trusted;
   };
   const importConfig = importRuntimeConfig();
   const imports = {
@@ -104,7 +111,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
     preview: new GetFolderImportPreviewService(unitOfWork),
     apply: new ApplyFolderImportService(unitOfWork),
   };
-  return { workspaceAdmin, teams, governance, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, links, shares, sources, workspaces, search, imports };
+  return { personal, workspaceAdmin, teams, governance, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, links, shares, sources, workspaces, search, imports };
 }
 
 export function applicationServices() {

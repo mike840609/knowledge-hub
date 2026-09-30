@@ -106,6 +106,7 @@ export async function evaluateWorkspaceCapabilities(
   caller: CallerContext,
   workspaceId: string,
 ): Promise<Set<WorkspaceCapability>> {
+  if (caller.personalWorkspaceOnly && caller.personalWorkspaceOnly !== workspaceId) return new Set();
   const membership = await repositories.workspaceMemberships.find(workspaceId, caller.identity.id);
   const mappings = repositories.groupMappings ? await repositories.groupMappings.listByWorkspace(workspaceId) : [];
   return evaluateEffectiveCapabilities({

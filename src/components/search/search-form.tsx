@@ -9,7 +9,7 @@ import { LiveSearchSubmit } from "./live-search-submit";
  * JavaScript it searches as the reader types (`LiveSearchSubmit`).
  */
 export function SearchForm({
-  workspaceId, q, scope, sourceId, includeArchived, sources,
+  workspaceId, q, scope, sourceId, includeArchived, sources, teamsEnabled = true,
 }: {
   workspaceId: string;
   q: string;
@@ -17,6 +17,7 @@ export function SearchForm({
   sourceId: string | null;
   includeArchived: boolean;
   sources: SourceView[];
+  teamsEnabled?: boolean;
 }) {
   // The query field and its submit button sit side by side on the `lg` rung
   // rather than nesting the button inside a shared border box. That box was
@@ -41,7 +42,7 @@ export function SearchForm({
           Scope
           <Select id="search-scope" name="scope" defaultValue={scope} className="max-w-[11rem]">
             <option value="workspace">This workspace</option>
-            <option value="all">All my workspaces</option>
+            <option value="all" disabled={!teamsEnabled}>All my workspaces{teamsEnabled ? "" : " · Teams coming soon"}</option>
           </Select>
         </label>
         {scope === "workspace" && (

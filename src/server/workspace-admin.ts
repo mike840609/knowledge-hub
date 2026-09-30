@@ -19,7 +19,7 @@ export type WorkspaceActions = {
 export type WorkspaceNavigationItem = { id: string; name: string; type: "PERSONAL" | "TEAM"; lifecycleState: "ACTIVE" | "ARCHIVED" };
 export type WorkspaceNavigationModel = {
   canCreateTeam: boolean;
-  /** False while Team workspaces are announced and not open (`teamWorkspacesEnabled`): the switcher offers none of them. */
+  /** False while Team workspaces are announced and unavailable. */
   teamsOpen: boolean;
   items: readonly WorkspaceNavigationItem[];
 };
@@ -80,7 +80,7 @@ export class WorkspaceAdminService {
   constructor(private readonly unitOfWork: WorkspaceUnitOfWork) {}
   async navigation(caller: CallerContext): Promise<WorkspaceNavigationModel> {
     return {
-      canCreateTeam: caller.platformCapabilities.includes("workspace.create_team"),
+      canCreateTeam: !caller.personalWorkspaceOnly && caller.platformCapabilities.includes("workspace.create_team"),
       teamsOpen: teamWorkspacesEnabled(),
       items: await new WorkspaceQueryService(this.unitOfWork).listWorkspaces(caller),
     };
@@ -100,7 +100,7 @@ export class WorkspaceAdminService {
   }
   async searchUsers(caller: CallerContext, query: string, limit: number): Promise<HubUserLookup[]> {
     // User lookup is an authenticated existing-Hub directory, never an identity resolver.
-    if (!caller.identity.id) throw new InsufficientWorkspaceCapabilityError();
+    if (!caller.identity.id || caller.personalWorkspaceOnly) throw new InsufficientWorkspaceCapabilityError();
     const normalized = query.trim();
     if (!normalized) return [];
     return this.unitOfWork.run(async repositories => (await repositories.users.searchExisting(normalized.slice(0, 200), limit)).map(user => ({ id: user.id, name: user.name, empId: user.emp_id })));

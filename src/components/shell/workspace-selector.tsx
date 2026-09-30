@@ -53,8 +53,7 @@ export function WorkspaceSelector({ workspaceId }: { workspaceId: string }) {
   const archived = navigation.items.filter((entry) => entry.type === "TEAM" && entry.lifecycleState === "ARCHIVED");
   // Team workspaces are announced and not yet open. While they are not, the switcher says so where they
   // will be — one disabled row — and takes nobody to one: not by their names, not by "Archived", and not
-  // by creating one. Whoever is already in one (a link, a bookmark) keeps the name they are in, and My Space
-  // to leave by. This is the switcher's say; it is not access control (see `teamWorkspacesEnabled`).
+  // by creating one. Server authorization also closes direct links while Team is unavailable.
   const teamsOpen = navigation.teamsOpen;
   return (
     <>
