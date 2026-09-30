@@ -63,6 +63,8 @@ const safeImageSchema = imageSchema.extendSchema((previous) => (ctx) => {
 const commonmarkWithSafeImages = commonmark.filter((plugin) => plugin !== imageSchema[0] && plugin !== imageSchema[1]);
 
 type MarkdownNode = { type: string; title?: string | null; children?: MarkdownNode[] };
+type DefinitionNode = MarkdownNode & { identifier?: string; url?: string };
+type ImageReferenceNode = MarkdownNode & { identifier?: string; alt?: string };
 
 /** Milkdown 7.22 hands a title-less image's `null` title to a ProseMirror attribute that must be a string, and the parse throws. */
 const fillNullImageTitles = () => (tree: MarkdownNode) => {
@@ -71,6 +73,39 @@ const fillNullImageTitles = () => (tree: MarkdownNode) => {
     node.children?.forEach(walk);
   };
   walk(tree);
+};
+
+/**
+ * Milkdown 7.22 has no node for `imageReference`: a reference-style image either
+ * empties the whole document (the open then fails with `EditorParseError`) or,
+ * inside a paragraph, is silently dropped while the text around it survives.
+ * Resolve it against the document's definitions before parsing, so `![alt][ref]`
+ * becomes an `image` the way reference links already come out inlined; the
+ * leftover `definition` nodes are dropped as before. A reference with no
+ * matching definition is left alone and keeps its current escaped-text output.
+ */
+const resolveImageReferences = () => (tree: MarkdownNode) => {
+  const definitions = new Map<string, { url: string; title: string }>();
+  const collect = (node: MarkdownNode) => {
+    if (node.type === "definition") {
+      const id = (node as DefinitionNode).identifier?.toLowerCase();
+      const url = (node as DefinitionNode).url;
+      if (id && url) definitions.set(id, { url, title: node.title ?? "" });
+    }
+    node.children?.forEach(collect);
+  };
+  collect(tree);
+  const resolve = (node: MarkdownNode) => {
+    if (!node.children) return;
+    node.children.forEach(resolve);
+    node.children = node.children.map((child) => {
+      if (child.type !== "imageReference") return child;
+      const target = definitions.get((child as ImageReferenceNode).identifier?.toLowerCase() ?? "");
+      if (!target) return child;
+      return { type: "image", url: target.url, title: target.title, alt: (child as ImageReferenceNode).alt ?? "" };
+    });
+  };
+  resolve(tree);
 };
 
 export type EditorOptions = {
@@ -152,7 +187,7 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
       // A `[[wikilink]]` is a node here, and has to be written back as it was: both halves are needed, and
       // this is the half that cannot be a plugin (the stringify options are read when the editor is built).
       configureWikiLinkStringify(ctx);
-      ctx.update(remarkPluginsCtx, (previous) => [...previous, { plugin: fillNullImageTitles, options: {} }] as typeof previous);
+      ctx.update(remarkPluginsCtx, (previous) => [...previous, { plugin: resolveImageReferences, options: {} }, { plugin: fillNullImageTitles, options: {} }] as typeof previous);
       ctx.update(editorViewOptionsCtx, (previous) => ({
         ...previous,
         editable: () => editable,
