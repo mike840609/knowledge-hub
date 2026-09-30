@@ -1,4 +1,20 @@
-import { expect, test } from "@playwright/test";
+import { expect, test as base } from "@playwright/test";
+
+// The suite shares My Space across files. Keep these temporary documents out
+// of later graph layouts and explorer menus, even when an assertion fails.
+const test = base.extend<{ loadingDocuments: string[] }>({
+  loadingDocuments: async ({ request }, use) => {
+    const documentIds: string[] = [];
+    try {
+      await use(documentIds);
+    } finally {
+      for (const documentId of documentIds) {
+        const response = await request.post(`/api/documents/${documentId}/archive`);
+        expect(response.status(), `archive loading fixture ${documentId}`).toBe(200);
+      }
+    }
+  },
+});
 
 const ROUND_TRIP = { timeout: 15_000 };
 const paragraphs = Array.from({ length: 45 }, (_, index) => `Paragraph ${index}: document content that keeps the reading pane scrollable.`).join("\n\n");
@@ -10,7 +26,7 @@ for (const scenario of [
   { name: "narrow pane", width: 1100, inspector: false },
   { name: "mobile", width: 390, inspector: false },
 ]) {
-  test(`document loading keeps the reading column aligned: ${scenario.name}`, async ({ page }) => {
+  test(`document loading keeps the reading column aligned: ${scenario.name}`, async ({ page, loadingDocuments }) => {
     await page.setViewportSize({ width: scenario.width, height: 900 });
     await page.goto("/");
     await page.waitForURL(/\/w\/[^/]+\/knowledge/);
@@ -22,6 +38,7 @@ for (const scenario of [
       const response = await page.request.post(`/api/workspaces/${workspaceId}/documents`, { data: { title, markdown } });
       expect(response.status()).toBe(201);
       const { sourceId, documentId } = await response.json() as { sourceId: string; documentId: string };
+      loadingDocuments.push(documentId);
       return `/w/${workspaceId}/knowledge/${sourceId}/${documentId}`;
     };
     const destination = await create(withOutlineTitle, `## First section\n\n[[${plainTitle}]]\n\n${paragraphs}\n\n## Last section\n\nEnd.`);
