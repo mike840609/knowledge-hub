@@ -1,8 +1,11 @@
 import { readFileSync } from "node:fs";
+import postcss from "postcss";
 import { renderToStaticMarkup } from "react-dom/server";
 import ReactMarkdown from "react-markdown";
+import tailwindcss from "tailwindcss";
 import { describe, expect, it } from "vitest";
 import { codeHighlightPlugins } from "@/components/knowledge/code-highlight";
+import tailwindConfig from "../../tailwind.config";
 import { PLATFORM_SAMPLES, SCOPE_SAMPLES } from "../fixtures/code-samples";
 
 /**
@@ -78,9 +81,14 @@ describe("the syntax tokens", () => {
   });
 });
 
-/** Every rule of the stylesheet, as its selectors and its body. */
-const RULES = [...CSS_WITHOUT_COMMENTS.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selector, body]) => ({ selector: selector.trim(), body }));
-const HLJS_RULES = RULES.filter((rule) => rule.selector.includes(".hljs-"));
+/** The rules of a stylesheet that colour code, as their selectors and their bodies. */
+function hljsRules(css: string) {
+  const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  return [...withoutComments.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selector, body]) => ({ selector: selector.trim(), body })).filter((rule) => rule.selector.includes(".hljs-"));
+}
+const HLJS_RULES = hljsRules(CSS);
+const scopesOf = (rules: ReturnType<typeof hljsRules>) => new Set(rules.flatMap((rule) => [...rule.selector.matchAll(/\.hljs-([\w-]+)/g)].map((match) => match[1])));
+const tokensUsedBy = (rules: ReturnType<typeof hljsRules>) => new Set(rules.flatMap((rule) => [...rule.body.matchAll(/var\((--kh-syntax-[a-z]+)\)/g)].map((match) => match[1])));
 
 describe("the rules that colour code", () => {
   it("exist", () => {
@@ -103,6 +111,18 @@ describe("the rules that colour code", () => {
   });
 });
 
+describe("the stylesheet as it ships", () => {
+  // Tailwind drops a rule inside `@layer` that nothing in `src` names, and nothing does: highlight.js makes
+  // these classes while rendering. The source reads fine and the page has no colour, so the tests above cannot see it.
+  it("still holds every rule that colours code, after Tailwind has compiled it", async () => {
+    const compiled = (await postcss([tailwindcss(tailwindConfig)]).process(CSS, { from: "src/app/globals.css" })).css;
+    const shipped = hljsRules(compiled);
+    expect([...scopesOf(shipped)].sort()).toEqual([...scopesOf(HLJS_RULES)].sort());
+    expect([...tokensUsedBy(shipped)].sort()).toEqual([...tokensUsedBy(HLJS_RULES)].sort());
+    expect(tokensUsedBy(shipped).size).toBe(TOKENS.length);
+  }, 30_000);
+});
+
 /**
  * Wrappers and punctuation: scopes that are deliberately left in the block's own colour. A wrapper
  * (`function`, `params`, `tag`, `subst`) holds other scopes and colouring it would colour them all;
@@ -114,7 +134,7 @@ describe("the classes the highlighter emits", () => {
   const render = (language: string, code: string) =>
     renderToStaticMarkup(<ReactMarkdown rehypePlugins={codeHighlightPlugins}>{"```" + language + "\n" + code + "\n```"}</ReactMarkdown>);
   const scopesIn = (html: string) => [...html.matchAll(/class="([^"]*)"/g)].flatMap(([, value]) => value.split(" ")).filter((name) => name.startsWith("hljs-") && name !== "hljs-");
-  const styled = new Set(HLJS_RULES.flatMap((rule) => [...rule.selector.matchAll(/\.hljs-([\w-]+)/g)].map((match) => match[1])));
+  const styled = scopesOf(HLJS_RULES);
 
   const samples = [...PLATFORM_SAMPLES, ...SCOPE_SAMPLES];
   const emitted = new Map<string, string>();

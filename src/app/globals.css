@@ -155,74 +155,6 @@ kbd {
     @apply kh-focus-ring rounded-md transition-colors hover:bg-kh-bg-hover focus-within:bg-kh-bg-hover;
   }
 
-  /* Colour in a fenced code block (daily-driver spec §5). lowlight names what it found with
-     highlight.js's scopes (`hljs-*`); each is mapped here onto one of the eight `--kh-syntax-*`
-     tokens. What is not named — operators, punctuation, parameters, the tag around a tag's name —
-     keeps the block's own text colour, on purpose: colouring everything colours nothing.
-     A diff's added and removed lines take the success and danger colours the product already has.
-     A new scope from a lowlight upgrade is caught by tests/unit/syntax-colors.test.ts. */
-  .hljs-keyword,
-  .hljs-selector-tag,
-  .hljs-name,
-  .hljs-doctag,
-  .hljs-template-tag,
-  .hljs-variable.language_ {
-    color: var(--kh-syntax-keyword);
-  }
-  .hljs-string,
-  .hljs-regexp,
-  .hljs-symbol,
-  .hljs-link,
-  .hljs-code {
-    color: var(--kh-syntax-string);
-  }
-  .hljs-number,
-  .hljs-literal {
-    color: var(--kh-syntax-number);
-  }
-  .hljs-comment,
-  .hljs-quote,
-  .hljs-formula {
-    color: var(--kh-syntax-comment);
-  }
-  .hljs-title,
-  .hljs-section {
-    color: var(--kh-syntax-function);
-  }
-  .hljs-type,
-  .hljs-built_in,
-  .hljs-title.class_ {
-    color: var(--kh-syntax-type);
-  }
-  .hljs-variable,
-  .hljs-template-variable,
-  .hljs-attr,
-  .hljs-attribute,
-  .hljs-property,
-  .hljs-selector-attr,
-  .hljs-selector-class,
-  .hljs-selector-id,
-  .hljs-selector-pseudo {
-    color: var(--kh-syntax-variable);
-  }
-  .hljs-meta,
-  .hljs-meta .hljs-keyword,
-  .hljs-bullet {
-    color: var(--kh-syntax-meta);
-  }
-  .hljs-addition {
-    color: var(--kh-success);
-  }
-  .hljs-deletion {
-    color: var(--kh-danger);
-  }
-  .hljs-emphasis {
-    @apply italic;
-  }
-  .hljs-strong {
-    @apply font-semibold;
-  }
-
   /* The rendered editor (composer spec §11). The reader's prose classes are on the
      element itself; these are the parts React gives the reader as components. */
   .kh-editor {
@@ -378,6 +310,78 @@ kbd {
   background-size: 5px 5px;
   background-repeat: no-repeat;
   padding-right: 2rem;
+}
+
+/* Colour in a fenced code block (daily-driver spec §5). lowlight names what it found with
+   highlight.js's scopes (`hljs-*`); each is mapped here onto one of the eight `--kh-syntax-*`
+   tokens. What is not named — operators, punctuation, parameters, the tag around a tag's name —
+   keeps the block's own text colour, on purpose: colouring everything colours nothing.
+   A diff's added and removed lines take the success and danger colours the product already has.
+   A new scope from a lowlight upgrade is caught by tests/unit/syntax-colors.test.tsx.
+
+   Unlayered on purpose. Tailwind removes a rule inside `@layer` unless a class of that name is
+   written somewhere in `src`, and these classes are not: highlight.js makes them while rendering.
+   That test checks the stylesheet as compiled as well, because in the source they all look fine. */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-name,
+.hljs-doctag,
+.hljs-template-tag,
+.hljs-variable.language_ {
+  color: var(--kh-syntax-keyword);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-symbol,
+.hljs-link,
+.hljs-code {
+  color: var(--kh-syntax-string);
+}
+.hljs-number,
+.hljs-literal {
+  color: var(--kh-syntax-number);
+}
+.hljs-comment,
+.hljs-quote,
+.hljs-formula {
+  color: var(--kh-syntax-comment);
+}
+.hljs-title,
+.hljs-section {
+  color: var(--kh-syntax-function);
+}
+.hljs-type,
+.hljs-built_in,
+.hljs-title.class_ {
+  color: var(--kh-syntax-type);
+}
+.hljs-variable,
+.hljs-template-variable,
+.hljs-attr,
+.hljs-attribute,
+.hljs-property,
+.hljs-selector-attr,
+.hljs-selector-class,
+.hljs-selector-id,
+.hljs-selector-pseudo {
+  color: var(--kh-syntax-variable);
+}
+.hljs-meta,
+.hljs-meta .hljs-keyword,
+.hljs-bullet {
+  color: var(--kh-syntax-meta);
+}
+.hljs-addition {
+  color: var(--kh-success);
+}
+.hljs-deletion {
+  color: var(--kh-danger);
+}
+.hljs-emphasis {
+  @apply italic;
+}
+.hljs-strong {
+  @apply font-semibold;
 }
 
 @media (hover: hover) and (pointer: fine) {
