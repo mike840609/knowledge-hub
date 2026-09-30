@@ -4,7 +4,8 @@ import { history } from "@milkdown/kit/plugin/history";
 import { listener, listenerCtx } from "@milkdown/kit/plugin/listener";
 import { commonmark, imageSchema } from "@milkdown/kit/preset/commonmark";
 import { gfm } from "@milkdown/kit/preset/gfm";
-import { Plugin, Selection } from "@milkdown/kit/prose/state";
+import { Plugin, Selection, TextSelection } from "@milkdown/kit/prose/state";
+import type { EditorView } from "@milkdown/kit/prose/view";
 import { $ctx, $prose, getMarkdown, replaceAll } from "@milkdown/kit/utils";
 import { configureWikiLinkStringify, wikiLinkPlugins } from "./wiki-link";
 
@@ -111,8 +112,26 @@ const resolveImageReferences = () => (tree: MarkdownNode) => {
   resolve(tree);
 };
 
-export type EditorOptions = {
-  root: HTMLElement;
+/**
+ * A code block that ends the document traps the keyboard: ArrowDown has nowhere to move. Leaving
+ * by key inserts the paragraph below on purpose — an explicit exit, the way tables leave on Enter —
+ * rather than keeping one there always: a standing trailing paragraph would mark every such
+ * document dirty on open and save a whitespace-only revision.
+ */
+function exitTrailingCodeBlock(view: EditorView): boolean {
+  const { state } = view;
+  const { $cursor } = state.selection as TextSelection;
+  if (!$cursor || $cursor.parent.type.name !== "code_block") return false;
+  if ($cursor.parentOffset !== $cursor.parent.content.size) return false;
+  const after = $cursor.after($cursor.depth);
+  if (after !== state.doc.content.size) return false;
+  const tr = state.tr.insert(after, state.schema.nodes.paragraph.create());
+  tr.setSelection(TextSelection.near(tr.doc.resolve(after + 1)));
+  view.dispatch(tr);
+  return true;
+}
+
+export type EditorOptions = {  root: HTMLElement;
   markdown: string;
   /** Classes for the editable element (the reader's prose classes). */
   className: string;
@@ -197,8 +216,23 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
         // ⌘/Ctrl Enter saves; the form handles it as the key bubbles out. ProseMirror would first
         // "exit" a code block or table on it, inserting an empty paragraph (written as `<br />`).
         // A direct prop runs before every plugin's keymap; claiming the key stops those, not the bubbling.
-        handleKeyDown: (view, event) =>
-          ((event.metaKey || event.ctrlKey) && event.key === "Enter") || Boolean(previous.handleKeyDown?.(view, event)),
+        // ArrowDown out of a trailing code block likewise leaves here: nowhere else handles it.
+        handleKeyDown: (view, event) => {
+          if ((event.metaKey || event.ctrlKey) && event.key === "Enter") return true;
+          if (
+            event.key === "ArrowDown" &&
+            !event.metaKey &&
+            !event.ctrlKey &&
+            !event.altKey &&
+            !event.shiftKey &&
+            !event.isComposing &&
+            event.keyCode !== 229 &&
+            exitTrailingCodeBlock(view)
+          ) {
+            return true;
+          }
+          return Boolean(previous.handleKeyDown?.(view, event));
+        },
         attributes: {
           ...(typeof previous.attributes === "object" ? previous.attributes : {}),
           class: `editor ${options.className}`,

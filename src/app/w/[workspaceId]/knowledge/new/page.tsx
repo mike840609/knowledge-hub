@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { MarkdownArticle } from "@/components/knowledge/markdown-article";
 import { NewDocumentForm } from "@/components/knowledge/new-document-form";
 import { parseSeedTitle } from "@/server/authoring-input";
 import { findHubFolderLabel, findReadableDocumentHref, getWorkspaceShellModel } from "@/server/knowledge-read";
@@ -33,6 +34,8 @@ export default async function NewNotePage({
     <NewDocumentForm
       workspaceId={workspaceId}
       workspaceName={model.workspace.name}
+      userId={model.identityId}
+      standIn={<MarkdownArticle markdown="" />}
       folder={folderId ? { id: folderId, label: folderLabel } : null}
       seedTitle={seedTitle}
       cancelHref={cancelHref}

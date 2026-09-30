@@ -17,21 +17,32 @@ const refusing: DraftStorage = {
   removeItem: () => { throw new Error("SecurityError"); },
 };
 
-const edit: DraftKey = { kind: "edit", documentId: "doc-1" };
-const create: DraftKey = { kind: "new", workspaceId: "ws-1" };
+const edit: DraftKey = { kind: "edit", userId: "user-1", documentId: "doc-1" };
+const create: DraftKey = { kind: "new", userId: "user-1", workspaceId: "ws-1" };
 const initial = { title: "Saved", markdown: "saved body" };
 
 describe("draftStorageKey", () => {
   it("names edit and new drafts apart", () => {
-    expect(draftStorageKey(edit)).toBe("kh:draft:edit:doc-1");
-    expect(draftStorageKey(create)).toBe("kh:draft:new:ws-1");
+    expect(draftStorageKey(edit)).toBe("kh:draft:edit:user-1:doc-1");
+    expect(draftStorageKey(create)).toBe("kh:draft:new:user-1:ws-1");
+  });
+
+  it("keeps one user's drafts from standing in for another's", () => {
+    const mine: DraftKey = { kind: "edit", userId: "user-1", documentId: "doc-1" };
+    const theirs: DraftKey = { kind: "edit", userId: "user-2", documentId: "doc-1" };
+    expect(draftStorageKey(mine)).not.toBe(draftStorageKey(theirs));
+    const storage = memoryStorage();
+    syncDraft(storage, mine, { title: "Mine", markdown: "mine", baseRevisionId: "rev-1" }, initial);
+    expect(readDraft(storage, theirs)).toBeNull();
+    syncDraft(storage, theirs, { title: "Theirs", markdown: "theirs", baseRevisionId: "rev-1" }, initial);
+    expect(readDraft(storage, mine)?.title).toBe("Mine");
   });
 
   it("gives a document started from a broken link's title a draft of its own, and one for each title", () => {
-    const seeded: DraftKey = { kind: "new", workspaceId: "ws-1", title: "Kubernetes & more" };
-    expect(draftStorageKey(seeded)).toBe("kh:draft:new:ws-1:Kubernetes%20%26%20more");
+    const seeded: DraftKey = { kind: "new", userId: "user-1", workspaceId: "ws-1", title: "Kubernetes & more" };
+    expect(draftStorageKey(seeded)).toBe("kh:draft:new:user-1:ws-1:Kubernetes%20%26%20more");
     expect(draftStorageKey(seeded)).not.toBe(draftStorageKey(create));
-    expect(draftStorageKey({ kind: "new", workspaceId: "ws-1", title: "Other" })).not.toBe(draftStorageKey(seeded));
+    expect(draftStorageKey({ kind: "new", userId: "user-1", workspaceId: "ws-1", title: "Other" })).not.toBe(draftStorageKey(seeded));
     // The blank form's draft is not what a seeded form restores, nor the other way round.
     const storage = memoryStorage();
     syncDraft(storage, create, { title: "Typed", markdown: "body", baseRevisionId: null }, { title: "", markdown: "" });
@@ -68,13 +79,13 @@ describe("syncDraft and readDraft", () => {
   it("reads nothing from a missing, corrupt, foreign-version or wrong-shaped entry", () => {
     const storage = memoryStorage();
     expect(readDraft(storage, edit)).toBeNull();
-    storage.map.set("kh:draft:edit:doc-1", "{not json");
+    storage.map.set("kh:draft:edit:user-1:doc-1", "{not json");
     expect(readDraft(storage, edit)).toBeNull();
-    storage.map.set("kh:draft:edit:doc-1", JSON.stringify({ v: 2, title: "t", markdown: "m", baseRevisionId: null }));
+    storage.map.set("kh:draft:edit:user-1:doc-1", JSON.stringify({ v: 2, title: "t", markdown: "m", baseRevisionId: null }));
     expect(readDraft(storage, edit)).toBeNull();
-    storage.map.set("kh:draft:edit:doc-1", JSON.stringify({ v: 1, title: 7, markdown: "m", baseRevisionId: null }));
+    storage.map.set("kh:draft:edit:user-1:doc-1", JSON.stringify({ v: 1, title: 7, markdown: "m", baseRevisionId: null }));
     expect(readDraft(storage, edit)).toBeNull();
-    storage.map.set("kh:draft:edit:doc-1", "null");
+    storage.map.set("kh:draft:edit:user-1:doc-1", "null");
     expect(readDraft(storage, edit)).toBeNull();
   });
 });

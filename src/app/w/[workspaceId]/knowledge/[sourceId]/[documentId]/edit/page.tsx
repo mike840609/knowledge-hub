@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { DocumentEditor } from "@/components/knowledge/document-editor";
+import { MarkdownArticle } from "@/components/knowledge/markdown-article";
 import { getKnowledgeDocumentModel, getKnowledgeExplorerModel, getWorkspaceShellModel } from "@/server/knowledge-read";
 import { documentLocation } from "@/server/document-location";
 
@@ -28,6 +29,8 @@ export default async function EditDocumentPage({
       workspaceId={workspaceId}
       sourceId={sourceId}
       documentId={documentId}
+      userId={shell.identityId}
+      standIn={<MarkdownArticle markdown={current.markdown} />}
       location={documentLocation(workspaceId, sourceId, explorer.source.name, explorer.tree, documentId)}
       metadataTitle={current.metadata.title}
       currentRevisionId={current.id}

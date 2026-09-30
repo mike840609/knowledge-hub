@@ -1,6 +1,7 @@
 "use client";
 
 import { governanceRequest } from "@/components/workspaces/governance-error";
+import type { ReactNode } from "react";
 import type { DocumentBreadcrumbSegment } from "./document-breadcrumb";
 import { DocumentComposer } from "./document-composer";
 
@@ -8,6 +9,8 @@ export function DocumentEditor({
   workspaceId,
   sourceId,
   documentId,
+  userId,
+  standIn,
   location,
   metadataTitle,
   currentRevisionId,
@@ -17,6 +20,10 @@ export function DocumentEditor({
   workspaceId: string;
   sourceId: string;
   documentId: string;
+  /** The server-resolved Hub user id: drafts are keyed per user (see `DraftKey`). */
+  userId: string;
+  /** The server-rendered stand-in for the editor while it loads (see `DocumentComposer`). */
+  standIn: ReactNode;
   location: DocumentBreadcrumbSegment[];
   metadataTitle: unknown;
   currentRevisionId: string;
@@ -27,7 +34,8 @@ export function DocumentEditor({
   return (
     <DocumentComposer
       workspaceId={workspaceId}
-      draftKey={{ kind: "edit", documentId }}
+      draftKey={{ kind: "edit", userId, documentId }}
+      standIn={standIn}
       location={location}
       untitledLabel="Untitled"
       metadataTitle={metadataTitle}
