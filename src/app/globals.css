@@ -61,15 +61,15 @@
    deliberately not consulted; see the contract's theme section. */
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --kh-bg: #131417;
-  --kh-bg-raised: #191a1e;
-  --kh-bg-sunken: #0e0f12;
-  --kh-bg-subtle: #1d1f24;
-  --kh-bg-hover: #24262c;
+  --kh-bg: #08090a;
+  --kh-bg-raised: #0f1011;
+  --kh-bg-sunken: #0b0c0e;
+  --kh-bg-subtle: #191a1b;
+  --kh-bg-hover: #1e2025;
   --kh-bg-hover-strong: #2b2e35;
   --kh-bg-selected: #23253d;
-  --kh-border: #1e2127;
-  --kh-border-strong: #6a6d73;
+  --kh-border: rgba(255, 255, 255, 0.08);
+  --kh-border-strong: rgba(255, 255, 255, 0.34);
   --kh-text: #e7e8ec;
   --kh-text-secondary: #bfc5d1;
   --kh-text-muted: #9ba2b0;
