@@ -37,8 +37,11 @@ const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 /** A document's node in the drawing, by its title (each carries its link counts in its name). */
 const node = (page: Page, title: string) => page.getByRole("link", { name: new RegExp(`^${escape(title)}, \\d+ incoming, \\d+ outgoing$`) });
 
-/** A target nothing answers to: drawn, and named, but not a link — there is no page to open. */
-const ghost = (page: Page, title: string) => page.getByRole("img", { name: new RegExp(`^${escape(title)} \\(unresolved\\), \\d+ incoming, \\d+ outgoing$`) });
+/**
+ * A target nothing answers to: drawn, and named. It has no page to open, so to a reader who may write
+ * (My Space, here) it is the way to the form that makes one, and a link; to anyone else it is not a link.
+ */
+const ghost = (page: Page, title: string) => page.getByRole("link", { name: new RegExp(`^${escape(title)} \\(unresolved; opens the form to create it\\), \\d+ incoming, \\d+ outgoing$`) });
 
 test.describe("the workspace graph", () => {
   test("draws documents and their links, and the filters, find box and views work", async ({ page }) => {
@@ -75,7 +78,7 @@ test.describe("the workspace graph", () => {
 
     await page.getByLabel("Unresolved").check();
     await expect(page).toHaveURL(/unresolved=1/, ROUND_TRIP);
-    await expect(ghost(page, missing)).toHaveAttribute("aria-label", `${missing} (unresolved), 1 incoming, 0 outgoing`, ROUND_TRIP);
+    await expect(ghost(page, missing)).toHaveAttribute("aria-label", `${missing} (unresolved; opens the form to create it), 1 incoming, 0 outgoing`, ROUND_TRIP);
     await expect(node(page, a)).toHaveAttribute("aria-label", `${a}, 1 incoming, 2 outgoing`, ROUND_TRIP);
 
     await page.getByLabel("Orphans").uncheck();

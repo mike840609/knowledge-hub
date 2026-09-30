@@ -5,6 +5,7 @@ import { DocumentDetailClient, type DocumentInspectorData } from "@/components/k
 import { DocumentViewer } from "@/components/knowledge/document-viewer";
 import { BacklinksFooter } from "@/components/knowledge/backlinks-footer";
 import { renderedLinksFrom } from "@/components/knowledge/rendered-links";
+import { createHrefForNode, createLinksFor } from "@/lib/create-from-link";
 import { toGraphViewData } from "@/components/knowledge/graph-model";
 import { StatusMessage } from "@/components/ui/status-message";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
@@ -76,6 +77,10 @@ export default async function KnowledgeDocumentPage({
     view.status === "ACTIVE" &&
     !isHistorical;
   const editHref = canEdit ? `/w/${workspaceId}/knowledge/${sourceId}/${documentId}/edit` : null;
+  // A new document goes to the workspace's own Notes whatever this one is (a synced source's document
+  // included), so what decides whether a broken link offers to make it is the capability to write here.
+  const canCreate = shell?.access.actions.canWrite === true;
+  const createLinks = linkView ? createLinksFor(linkView, canCreate) : {};
   const breadcrumb = explorer
     ? [...documentLocation(workspaceId, sourceId, explorer.source.name, explorer.tree, documentId), { label: selectedRevision.title }]
     : [{ label: selectedRevision.title }];
@@ -102,6 +107,7 @@ export default async function KnowledgeDocumentPage({
     selectedRevisionNo: selectedRevision.revisionNo,
     includeArchived,
     links: linkView,
+    createLinks,
     localGraph: linkView?.localGraph && linkView.localGraph.nodes.length > 0
       ? {
           data: toGraphViewData({
@@ -109,6 +115,7 @@ export default async function KnowledgeDocumentPage({
             nodes: linkView.localGraph.nodes,
             edges: linkView.localGraph.edges,
             sourceNames: new Map([[sourceId, explorer?.source.name ?? ""]]),
+            createHref: (node) => createHrefForNode(workspaceId, node, canCreate),
           }),
           depth: graphDepth,
           openHref: `/w/${workspaceId}/graph?focus=${documentId}`,
@@ -143,7 +150,7 @@ export default async function KnowledgeDocumentPage({
       outline={extractOutline(selectedRevision.markdown)}
     >
       <div className="kh-reading-column py-6">
-        <DocumentViewer view={view} selectedRevision={selectedRevision} links={linkView ? renderedLinksFrom(linkView) : undefined} />
+        <DocumentViewer view={view} selectedRevision={selectedRevision} links={linkView ? renderedLinksFrom(linkView, createLinks) : undefined} />
         {linkView ? <BacklinksFooter view={linkView} /> : null}
       </div>
     </DocumentDetailClient>

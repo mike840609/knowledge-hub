@@ -37,6 +37,17 @@ export function GraphList({ data, query }: { data: GraphViewData; query: string 
                   <span className="flex items-center gap-2 text-kh-text-secondary">
                     <span className="truncate">{node.title}</span>
                     <Badge variant="outline">Unresolved</Badge>
+                    {node.createHref ? (
+                      <Link
+                        href={node.createHref}
+                        prefetch={false}
+                        data-create-link
+                        aria-label={`Create a document for “${node.title}”`}
+                        className="shrink-0 rounded-md px-1 text-caption text-kh-link underline underline-offset-2 kh-focus-ring"
+                      >
+                        Create
+                      </Link>
+                    ) : null}
                   </span>
                 )}
               </th>

@@ -37,6 +37,19 @@ function checkedTitle(raw: string): string {
   return title;
 }
 
+/**
+ * A title offered in the address (`/knowledge/new?title=…`) to start a document from. It is a navigation
+ * input: the create request checks the title as it does any other, so this only decides whether there is
+ * something to put in the field. Anything that would be refused there — empty, too long — is left out
+ * rather than cut, because a title cut short is one the link it was made for no longer resolves to.
+ */
+export function parseSeedTitle(value: string | string[] | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const title = value.trim();
+  if (!title || title.length > MAX_TITLE_LENGTH || /[\n\r]/.test(title)) return null;
+  return title;
+}
+
 /** An ID that names a row. Anything else would reach the database as a malformed UUID and come back as a 500. */
 function readId(record: Record<string, unknown>, field: string): string {
   const value = readString(record, field);

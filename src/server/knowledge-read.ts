@@ -138,6 +138,23 @@ export async function findHubFolderLabel(workspaceId: string, folderId: string):
   return null;
 }
 
+/**
+ * Where a document of this workspace is read, for the new-document page to send Cancel back to it
+ * (`?from=`). A navigation input like the folder: what it names has to be a document this caller can
+ * read, in this workspace, or it is ignored — an address that leads somewhere the caller could not have
+ * gone is not to be followed just because it was in the URL.
+ */
+export async function findReadableDocumentHref(workspaceId: string, documentId: string): Promise<string | null> {
+  try {
+    const services = applicationServices();
+    const { caller } = await services.establishTrustedCaller();
+    const view = await services.queries.getDocument(caller, documentId, {});
+    return view.workspaceId === workspaceId ? `/w/${workspaceId}/knowledge/${view.sourceId}/${view.documentId}` : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getDefaultKnowledgeTarget(
   workspaceId: string,
 ): Promise<{ sourceId: string; documentId: string } | null> {

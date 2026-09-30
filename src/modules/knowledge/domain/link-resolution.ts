@@ -41,7 +41,7 @@ export function normalizeLinkKey(value: string): string {
 
 const MARKDOWN_EXTENSION = /\.(?:md|markdown)$/i;
 
-function stripMarkdownExtension(value: string): string {
+export function stripMarkdownExtension(value: string): string {
   return value.replace(MARKDOWN_EXTENSION, "");
 }
 

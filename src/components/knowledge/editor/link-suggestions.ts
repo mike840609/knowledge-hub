@@ -1,6 +1,6 @@
 import type { LinkTargetView } from "@/modules/knowledge/application/knowledge-link-service";
-import { extractDocumentLinks } from "@/modules/knowledge/domain/document-links";
-import { buildLinkResolver, normalizeLinkKey } from "@/modules/knowledge/domain/link-resolution";
+import { normalizeLinkKey } from "@/modules/knowledge/domain/link-resolution";
+import { isWritableAsWikiLink } from "@/modules/knowledge/domain/wiki-link-title";
 
 /**
  * What the `[[` list offers and how it is put in order (daily-driver spec §6.1). Pure: the editor
@@ -40,7 +40,6 @@ export function findWikiLinkTrigger(textBefore: string): WikiLinkTrigger | null 
 }
 
 const KEYS = new WeakMap<LinkTargetView, { match: string; resolves: string }>();
-const writable = new Map<string, boolean>();
 
 /**
  * How a title is compared with what was typed. The resolver's own `normalizeLinkKey`, after a
@@ -60,32 +59,6 @@ function keysOf(target: LinkTargetView): { match: string; resolves: string } {
     KEYS.set(target, keys);
   }
   return keys;
-}
-
-/**
- * Whether `[[title]]` written on its own is a link that resolves back to a document with that title.
- * Asked of the real extractor and the real resolver, not of a list of characters to avoid: a title
- * holding `|` or `#` is read as an alias or a heading, one with `/` as a path, one ending `.md` loses
- * its ending, and Markdown syntax inside (`*`, `` ` ``, `<`) can split the text so that no link is
- * found at all. Any of those would be inserted as a link that goes somewhere else, or nowhere.
- */
-export function isWritableAsWikiLink(title: string): boolean {
-  const cached = writable.get(title);
-  if (cached !== undefined) return cached;
-  let result = false;
-  if (title.trim() !== "" && !/[\n\r]/.test(title)) {
-    const links = extractDocumentLinks(`[[${title.trim()}]]`);
-    const only = links.length === 1 ? links[0] : null;
-    if (only && only.kind === "WIKI" && only.fragment === null && only.display === null) {
-      const alone = { documentId: "self", sourceId: "s", title, sourcePath: null, createdAt: new Date(0) };
-      const resolution = buildLinkResolver([alone]).resolve(only, { documentId: "here", sourceId: "s", sourcePath: null });
-      result = resolution.status === "RESOLVED" && resolution.documentId === "self";
-    }
-  }
-  // A workspace has a few thousand titles at most; the cache is a cost saved, not a store to grow.
-  if (writable.size > 20_000) writable.clear();
-  writable.set(title, result);
-  return result;
 }
 
 export type Suggestion = {

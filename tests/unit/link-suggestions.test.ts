@@ -1,14 +1,9 @@
 import { describe, expect, it } from "vitest";
-import {
-  MAX_QUERY_LENGTH,
-  SUGGESTION_LIMIT,
-  findWikiLinkTrigger,
-  isWritableAsWikiLink,
-  rankSuggestions,
-} from "@/components/knowledge/editor/link-suggestions";
+import { MAX_QUERY_LENGTH, SUGGESTION_LIMIT, findWikiLinkTrigger, rankSuggestions } from "@/components/knowledge/editor/link-suggestions";
 import type { LinkTargetView } from "@/modules/knowledge/application/knowledge-link-service";
 import { extractDocumentLinks } from "@/modules/knowledge/domain/document-links";
 import { buildLinkResolver, normalizeLinkKey, type CatalogDocument } from "@/modules/knowledge/domain/link-resolution";
+import { isWritableAsWikiLink } from "@/modules/knowledge/domain/wiki-link-title";
 
 let counter = 0;
 function target(title: string, editedAt: string, sourceName = "Notes", sourceId = "source-1"): LinkTargetView {

@@ -56,7 +56,7 @@ function NodeCard({ node, left, top, below }: { node: GraphViewNode; left: numbe
       <p className="truncate text-body-sm font-medium text-kh-text">{node.title}</p>
       <p className="mt-0.5 flex items-center gap-1.5 text-caption tabular-nums text-kh-text-muted">
         {unresolved ? (
-          <span>No document yet · linked from {node.inDegree}</span>
+          <span>No document yet · linked from {node.inDegree}{node.createHref ? " · Click to create" : ""}</span>
         ) : (
           <>
             {node.sourceName ? <span className="truncate">{node.sourceName}</span> : null}
@@ -283,7 +283,9 @@ export function GraphCanvas({
             const found = searching && matches.has(node.id);
             const dim = (emphasisedSet !== null && !inEmphasis && !found) || (searching && !found && !inEmphasis);
             const unresolved = node.kind === "UNRESOLVED";
-            const summary = `${node.title}${unresolved ? " (unresolved)" : ""}, ${node.inDegree} incoming, ${node.outDegree} outgoing`;
+            // Where a click goes: the page, or for a target nothing answers to, the form that makes it (when the reader may).
+            const destination = node.href ?? node.createHref;
+            const summary = `${node.title}${unresolved ? (node.createHref ? " (unresolved; opens the form to create it)" : " (unresolved)") : ""}, ${node.inDegree} incoming, ${node.outDegree} outgoing`;
             const accent = !unresolved && (inEmphasis || found);
             const body = (
               <>
@@ -325,11 +327,11 @@ export function GraphCanvas({
                 ) : null}
               </>
             );
-            const className = `group outline-none transition-opacity duration-120 ${dim ? "opacity-25" : ""} ${node.href ? "cursor-pointer" : "cursor-default"}`;
-            return node.href ? (
+            const className = `group outline-none transition-opacity duration-120 ${dim ? "opacity-25" : ""} ${destination ? "cursor-pointer" : "cursor-default"}`;
+            return destination ? (
               <a
                 key={node.id}
-                href={node.href}
+                href={destination}
                 aria-label={summary}
                 className={className}
                 onMouseEnter={() => setHovered(node.id)}
@@ -339,7 +341,7 @@ export function GraphCanvas({
                 onClick={(event) => {
                   if (!plainClick(event)) return;
                   event.preventDefault();
-                  router.push(node.href!);
+                  router.push(destination);
                 }}
               >
                 {body}
