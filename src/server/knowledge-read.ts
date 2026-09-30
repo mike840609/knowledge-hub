@@ -117,6 +117,27 @@ export async function getKnowledgeExplorerModel(
   }
 }
 
+/**
+ * The name of an active folder in one of this workspace's Hub sources, for the new-document page to
+ * say where the document will go. Only ever a caption: the folder ID in the URL is a navigation input
+ * and this decides nothing — the create request is authorized, and refused if the folder is not there
+ * or not active, by the service. `null` for anything it cannot find, which is not an error here.
+ */
+export async function findHubFolderLabel(workspaceId: string, folderId: string): Promise<string | null> {
+  const services = applicationServices();
+  const { caller } = await services.establishTrustedCaller();
+  try {
+    for (const source of await services.queries.listSources(caller, workspaceId)) {
+      if (source.ownership !== "HUB_MANAGED") continue;
+      const found = (await services.queries.listTree(caller, source.id)).find((item) => item.type === "folder" && item.id === folderId);
+      if (found) return found.label;
+    }
+  } catch {
+    /* A caption is not worth a failed page. */
+  }
+  return null;
+}
+
 export async function getDefaultKnowledgeTarget(
   workspaceId: string,
 ): Promise<{ sourceId: string; documentId: string } | null> {

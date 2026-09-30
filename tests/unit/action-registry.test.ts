@@ -363,9 +363,9 @@ describe("action registry — archiving a document (daily-driver spec §7.2)", (
 
   it("is a command for the runner, carrying which document and which source", () => {
     const archive = availableActions(context({ target: target() })).find((action) => action.id === "document.archive");
-    expect(archive?.effect).toEqual({ kind: "command", command: "document.archive", documentId: "d1", sourceId: "s1" });
+    expect(archive?.effect).toEqual({ kind: "command", command: "document.archive", documentId: "d1", sourceId: "s1", label: "Onboarding" });
     const restore = availableActions(context({ target: target({ status: "ARCHIVED" }) })).find((action) => action.id === "document.restore");
-    expect(restore?.effect).toEqual({ kind: "command", command: "document.restore", documentId: "d1", sourceId: "s1" });
+    expect(restore?.effect).toEqual({ kind: "command", command: "document.restore", documentId: "d1", sourceId: "s1", label: "Onboarding" });
   });
 
   it("is found by the words a reader would use for it, none of which is what it does", () => {

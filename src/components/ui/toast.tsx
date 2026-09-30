@@ -38,6 +38,12 @@ export type ToastRequest = {
   message: string;
   tone?: "default" | "danger";
   undo?: ToastUndo;
+  /**
+   * For a toast whose own action navigates: archiving the document that is open sends the reader
+   * to the list, and the Undo has to still be there when they arrive. Only the navigation that
+   * follows — not a later one.
+   */
+  survivesNavigation?: boolean;
 };
 
 type ActiveToast = ToastRequest & { id: number; state: "idle" | "undoing" };
@@ -61,16 +67,24 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<ActiveToast | null>(null);
   const nextId = useRef(0);
   const held = useRef(false);
+  const survivor = useRef<number | null>(null);
   const pathname = usePathname();
 
   const show = useCallback((request: ToastRequest) => {
     // One at a time: a queue would mean a reader's undo waiting behind
     // something they have already read.
-    setToast({ ...request, id: (nextId.current += 1), state: "idle" });
+    const id = (nextId.current += 1);
+    survivor.current = request.survivesNavigation ? id : null;
+    setToast({ ...request, id, state: "idle" });
   }, []);
 
-  // A toast describes what just happened here. Somewhere else, it is litter.
-  useEffect(() => setToast(null), [pathname]);
+  // A toast describes what just happened here. Somewhere else, it is litter —
+  // unless it says so about itself, once.
+  useEffect(() => {
+    const keep = survivor.current;
+    survivor.current = null;
+    setToast((current) => (current !== null && current.id === keep ? current : null));
+  }, [pathname]);
 
   useEffect(() => {
     if (!toast || toast.state === "undoing") return;

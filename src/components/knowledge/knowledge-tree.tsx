@@ -27,6 +27,8 @@ export type KnowledgeTreeProps = {
   onToggleFavorite: (documentId: string) => void;
   /** What this reader may do to this document, from the one registry. */
   documentActions: (item: Extract<KnowledgeTreeItem, { type: "document" }>) => readonly Action[];
+  /** And to this folder: the same registry, the same rules, a folder's own target. */
+  folderActions: (item: Extract<KnowledgeTreeItem, { type: "folder" }>) => readonly Action[];
   onRunAction: (action: Action) => void;
 };
 
@@ -52,6 +54,7 @@ function TreeNodeRow({
   favoriteDocumentIds,
   onToggleFavorite,
   documentActions,
+  folderActions,
   onRunAction,
 }: {
   node: KnowledgeTreeNode;
@@ -66,9 +69,11 @@ function TreeNodeRow({
   favoriteDocumentIds: ReadonlySet<string>;
   onToggleFavorite: (documentId: string) => void;
   documentActions: (item: Extract<KnowledgeTreeItem, { type: "document" }>) => readonly Action[];
+  folderActions: (item: Extract<KnowledgeTreeItem, { type: "folder" }>) => readonly Action[];
   onRunAction: (action: Action) => void;
 }) {
   const { item } = node;
+  const archived = item.status === "ARCHIVED";
   const isActive = activeId === null ? false : activeId === item.id;
   const tabIndex = activeId === null ? undefined : isActive ? 0 : -1;
 
@@ -86,6 +91,7 @@ function TreeNodeRow({
         aria-current={selected ? "page" : undefined}
         aria-selected={selected ? true : undefined}
         data-node-id={item.id}
+        data-status={item.status}
         tabIndex={tabIndex}
         onFocus={() => onFocusNode(item.id)}
         className={`kh-interactive-row group relative flex min-h-8 items-center ${selected ? "bg-kh-bg-selected hover:bg-kh-bg-selected" : ""}`}
@@ -104,6 +110,7 @@ function TreeNodeRow({
         >
           <FileText size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />
           <span className="truncate">{item.label}</span>
+          {archived ? <span className="ml-auto shrink-0 text-caption font-normal text-kh-text-muted">Archived</span> : null}
         </Link>
         <button type="button" onClick={() => onToggleFavorite(item.documentId)} aria-label={`${isFavorite ? "Remove from" : "Add to"} favorites: ${item.label}`} title={isFavorite ? "Remove from favorites" : "Add to favorites"} className={`mr-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md kh-focus-ring ${isFavorite ? "text-kh-selected-text" : "kh-row-action text-kh-text-muted hover:bg-kh-bg-hover"}`}>
           <Star size={14} fill={isFavorite ? "currentColor" : "none"} aria-hidden="true" />
@@ -120,6 +127,7 @@ function TreeNodeRow({
   }
 
   const collapsed = collapsedIds.has(item.id);
+  const actions = item.type === "folder" ? folderActions(item) : [];
   return (
     <li
       role="treeitem"
@@ -127,21 +135,35 @@ function TreeNodeRow({
       aria-level={depth}
       aria-expanded={!collapsed}
       data-node-id={item.id}
+      data-status={item.status}
       tabIndex={tabIndex}
       onFocus={() => onFocusNode(item.id)}
       className="rounded-md kh-focus-ring"
     >
-      <button
-        type="button"
-        onClick={() => onToggle(item.id)}
-        aria-expanded={!collapsed}
-        title={item.label}
-        tabIndex={-1}
-        className="kh-interactive-row flex min-h-8 w-full items-center gap-2 px-2 text-left text-body font-medium text-kh-text"
+      <RowContextMenu
+        as="div"
+        actions={actions}
+        onRun={onRunAction}
+        className="kh-interactive-row group relative flex min-h-8 items-center"
       >
-        {collapsed ? <ChevronRight size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" /> : <ChevronDown size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />}
-        <span className="min-w-0 flex-1 truncate">{item.label}</span>
-      </button>
+        <button
+          type="button"
+          onClick={() => onToggle(item.id)}
+          aria-expanded={!collapsed}
+          title={item.label}
+          tabIndex={-1}
+          className={`flex min-h-8 min-w-0 flex-1 items-center gap-2 px-2 text-left text-body font-medium kh-focus-ring rounded-md ${archived ? "text-kh-text-muted" : "text-kh-text"}`}
+        >
+          {collapsed ? <ChevronRight size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" /> : <ChevronDown size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />}
+          <span className="min-w-0 flex-1 truncate">{item.label}</span>
+          {archived ? <span className="shrink-0 text-caption font-normal text-kh-text-muted">Archived</span> : null}
+        </button>
+        {/* Floated over the header's own background, as a document row's is: a
+            second control slot would have re-truncated every folder name. */}
+        <div className="kh-row-action absolute right-1 top-1/2 flex -translate-y-1/2 items-center rounded-md bg-inherit">
+          <RowActionsTrigger actions={actions} onRun={onRunAction} label={item.label} />
+        </div>
+      </RowContextMenu>
       {!collapsed && node.children.length > 0 ? (
         <ul role="group" className="ml-3 border-l border-kh-border pl-2">
           {node.children.map((child) => (
@@ -159,6 +181,7 @@ function TreeNodeRow({
               favoriteDocumentIds={favoriteDocumentIds}
               onToggleFavorite={onToggleFavorite}
               documentActions={documentActions}
+              folderActions={folderActions}
               onRunAction={onRunAction}
             />
           ))}
@@ -183,6 +206,7 @@ export function KnowledgeTree({
   favoriteDocumentIds,
   onToggleFavorite,
   documentActions,
+  folderActions,
   onRunAction,
 }: KnowledgeTreeProps) {
   const router = useRouter();
@@ -230,6 +254,20 @@ export function KnowledgeTree({
     for (const item of items) map.set(item.id, item);
     return map;
   }, [items]);
+
+  // A document opened from somewhere else — a search hit, a link, a new document made inside a
+  // folder — is shown in the tree, not hidden in a folder that was collapsed. Once per document:
+  // collapsing its folder afterwards is the reader's choice and stays.
+  const revealedFor = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!selectedDocumentId || revealedFor.current === selectedDocumentId) return;
+    const opened = items.find((item) => item.type === "document" && item.documentId === selectedDocumentId);
+    if (!opened) return;
+    revealedFor.current = selectedDocumentId;
+    const ancestors = new Set<string>();
+    for (let cursor = opened.parentId; cursor && !ancestors.has(cursor); cursor = itemById.get(cursor)?.parentId ?? null) ancestors.add(cursor);
+    setCollapsedList((previous) => (previous.some((id) => ancestors.has(id)) ? previous.filter((id) => !ancestors.has(id)) : previous));
+  }, [selectedDocumentId, items, itemById, setCollapsedList]);
 
   const toggle = (id: string) => {
     setCollapsedList((previous) =>
@@ -334,6 +372,7 @@ export function KnowledgeTree({
           favoriteDocumentIds={favoriteDocumentIds}
           onToggleFavorite={onToggleFavorite}
           documentActions={documentActions}
+          folderActions={folderActions}
           onRunAction={onRunAction}
         />
       ))}

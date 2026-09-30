@@ -91,7 +91,7 @@ export type ActionEffect =
   | { kind: "open-new-tab"; href: string }
   /** A path, not a URL: the origin is the browser's to supply, not this module's. */
   | { kind: "copy-link"; href: string }
-  | { kind: "command"; command: ActionCommand; documentId: string; sourceId: string }
+  | { kind: "command"; command: ActionCommand; documentId: string; sourceId: string; label?: string }
   /**
    * Asks for a name and makes a folder: at the top of the Notes source when `parentId` is null,
    * inside that folder otherwise. `sourceId` is the parent's, or null for the default source.
@@ -431,7 +431,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
           icon: "archive",
           keywords: ["delete", "remove", "hide", "trash", target.label],
           surfaces: ["palette", "row"],
-          effect: { kind: "command", command: "document.archive", documentId: target.documentId, sourceId: target.sourceId },
+          effect: { kind: "command", command: "document.archive", documentId: target.documentId, sourceId: target.sourceId, label: target.label },
         });
       } else if (target.sourceStatus === "ACTIVE") {
         actions.push({
@@ -441,7 +441,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
           icon: "restore",
           keywords: ["unarchive", "undo", "bring back", target.label],
           surfaces: ["palette", "row"],
-          effect: { kind: "command", command: "document.restore", documentId: target.documentId, sourceId: target.sourceId },
+          effect: { kind: "command", command: "document.restore", documentId: target.documentId, sourceId: target.sourceId, label: target.label },
         });
       }
     }

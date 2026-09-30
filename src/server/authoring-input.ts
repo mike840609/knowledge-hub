@@ -2,12 +2,11 @@ import { parseGenericMarkdownText, sourceFileHash } from "@/modules/sources/adap
 import { SourceImportError } from "@/modules/sources/domain/import-errors";
 import { DomainError } from "@/shared/domain/errors";
 import type { KnowledgeMetadata } from "@/modules/knowledge/domain/content";
-import { normalizeFolderName } from "@/modules/knowledge/domain/tree-rules";
+import { MAX_FOLDER_NAME_LENGTH, normalizeFolderName } from "@/modules/knowledge/domain/tree-rules";
 import { isUuid } from "@/shared/ids/uuidv7";
 
 export const MAX_TITLE_LENGTH = 512;
-/** The column is VARCHAR(512); the domain's own rule only asks for a non-empty name, so the limit is stated here, as the title's is. */
-export const MAX_FOLDER_NAME_LENGTH = 512;
+export { MAX_FOLDER_NAME_LENGTH };
 export const MAX_MARKDOWN_BYTES = 5 * 1024 * 1024;
 
 function invalid(message: string): never {
