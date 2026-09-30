@@ -5,7 +5,9 @@ import {
   groupActions,
   matchActions,
   type ActionContext,
+  type ActionSurface,
   type ActionTarget,
+  type FolderTarget,
 } from "@/components/actions/action-registry";
 
 const allCapabilities = {
@@ -33,8 +35,21 @@ function target(overrides: Partial<ActionTarget> = {}): ActionTarget {
     label: "Onboarding",
     ownership: "HUB_MANAGED",
     status: "ACTIVE",
+    sourceStatus: "ACTIVE",
     revision: "CURRENT",
     favorite: false,
+    ...overrides,
+  };
+}
+
+function folder(overrides: Partial<FolderTarget> = {}): FolderTarget {
+  return {
+    nodeId: "n1",
+    sourceId: "s1",
+    label: "Runbooks",
+    ownership: "HUB_MANAGED",
+    status: "ACTIVE",
+    sourceStatus: "ACTIVE",
     ...overrides,
   };
 }
@@ -284,6 +299,172 @@ describe("action registry — document.backlinks (graph spec §11)", () => {
     const palette = actionsFor("palette", context({ target: target() }));
     for (const word of ["backlinks", "links", "references", "mentions"]) {
       expect(ids(matchActions(palette, word)), word).toContain("document.backlinks");
+    }
+  });
+});
+
+/** Every combination of the axes, so no cell of the matrix is one nobody thought of. */
+function combinations<T extends Record<string, readonly unknown[]>>(axes: T): { [K in keyof T]: T[K][number] }[] {
+  let rows: Record<string, unknown>[] = [{}];
+  for (const [name, values] of Object.entries(axes)) rows = rows.flatMap((row) => values.map((value) => ({ ...row, [name]: value })));
+  return rows as { [K in keyof T]: T[K][number] }[];
+}
+
+const FOLDER_ACTIONS = ["folder.new-document", "folder.new-folder", "folder.rename", "folder.archive", "folder.restore"];
+const LIFECYCLE_ACTIONS = ["document.archive", "document.restore", ...FOLDER_ACTIONS];
+
+describe("action registry — archiving a document (daily-driver spec §7.2)", () => {
+  // Expected values are written out here from the spec's three axes, not read back from the registry.
+  const cells = combinations({
+    canWrite: [true, false],
+    confirmed: [true, false],
+    ownership: ["HUB_MANAGED", "SOURCE_MANAGED"],
+    status: ["ACTIVE", "ARCHIVED"],
+    sourceStatus: ["ACTIVE", "ARCHIVED"],
+  } as const);
+
+  it.each(cells)("canWrite=$canWrite confirmed=$confirmed $ownership document $status in a $sourceStatus source", (cell) => {
+    const offered = ids(
+      availableActions(
+        context({
+          can: { ...allCapabilities, canWrite: cell.canWrite },
+          confirmed: cell.confirmed,
+          target: target({ ownership: cell.ownership, status: cell.status, sourceStatus: cell.sourceStatus }),
+        }),
+      ),
+    ).filter((id) => id === "document.archive" || id === "document.restore");
+    const mayWrite = cell.canWrite && cell.confirmed && cell.ownership === "HUB_MANAGED";
+    const expected = !mayWrite ? [] : cell.status === "ACTIVE" ? ["document.archive"] : cell.sourceStatus === "ACTIVE" ? ["document.restore"] : [];
+    expect(offered).toEqual(expected);
+  });
+
+  it("offers Restore, not Archive, on a document that is archived on its own in a live source", () => {
+    const offered = ids(availableActions(context({ target: target({ status: "ARCHIVED", sourceStatus: "ACTIVE" }) })));
+    expect(offered).toContain("document.restore");
+    expect(offered).not.toContain("document.archive");
+  });
+
+  it("offers neither in an archived source, which would refuse Restore: the source has to come back first", () => {
+    const offered = ids(availableActions(context({ target: target({ status: "ARCHIVED", sourceStatus: "ARCHIVED" }) })));
+    expect(offered).not.toContain("document.archive");
+    expect(offered).not.toContain("document.restore");
+  });
+
+  it("puts it last in a row menu, where a menu keeps what is hard to take back", () => {
+    const row = ids(actionsFor("row", context({ target: target() })));
+    expect(row.at(-1)).toBe("document.archive");
+    expect(row).toContain("document.edit");
+  });
+
+  it("offers it in the palette for the document being read", () => {
+    expect(ids(actionsFor("palette", context({ target: target() })))).toContain("document.archive");
+    expect(ids(actionsFor("palette", context({ target: target({ status: "ARCHIVED" }) })))).toContain("document.restore");
+  });
+
+  it("is a command for the runner, carrying which document and which source", () => {
+    const archive = availableActions(context({ target: target() })).find((action) => action.id === "document.archive");
+    expect(archive?.effect).toEqual({ kind: "command", command: "document.archive", documentId: "d1", sourceId: "s1" });
+    const restore = availableActions(context({ target: target({ status: "ARCHIVED" }) })).find((action) => action.id === "document.restore");
+    expect(restore?.effect).toEqual({ kind: "command", command: "document.restore", documentId: "d1", sourceId: "s1" });
+  });
+
+  it("is found by the words a reader would use for it, none of which is what it does", () => {
+    const actions = availableActions(context({ target: target() }));
+    for (const word of ["delete", "remove", "archive"]) expect(ids(matchActions(actions, word))).toContain("document.archive");
+  });
+
+  it("is not on offer where there is no document", () => {
+    expect(ids(availableActions(context()))).not.toContain("document.archive");
+  });
+});
+
+describe("action registry — a folder's actions (daily-driver spec §7.2)", () => {
+  const cells = combinations({
+    canWrite: [true, false],
+    confirmed: [true, false],
+    ownership: ["HUB_MANAGED", "SOURCE_MANAGED"],
+    status: ["ACTIVE", "ARCHIVED"],
+    sourceStatus: ["ACTIVE", "ARCHIVED"],
+  } as const);
+
+  it.each(cells)("canWrite=$canWrite confirmed=$confirmed $ownership folder $status in a $sourceStatus source", (cell) => {
+    const offered = ids(
+      availableActions(
+        context({
+          can: { ...allCapabilities, canWrite: cell.canWrite },
+          confirmed: cell.confirmed,
+          folder: folder({ ownership: cell.ownership, status: cell.status, sourceStatus: cell.sourceStatus }),
+        }),
+      ),
+    ).filter((id) => FOLDER_ACTIONS.includes(id));
+    const mayWrite = cell.canWrite && cell.confirmed && cell.ownership === "HUB_MANAGED" && cell.sourceStatus === "ACTIVE";
+    const expected = !mayWrite ? [] : cell.status === "ACTIVE" ? ["folder.new-document", "folder.new-folder", "folder.rename", "folder.archive"] : ["folder.restore"];
+    expect(offered).toEqual(expected);
+  });
+
+  it("offers nothing to do to a folder that is not the row's own: without a folder there are no folder actions", () => {
+    expect(ids(availableActions(context({ target: target() }))).filter((id) => FOLDER_ACTIONS.includes(id))).toEqual([]);
+  });
+
+  it("is row-only: the palette describes the document being read, and has no folder to point at", () => {
+    const withFolder = context({ folder: folder() });
+    expect(ids(actionsFor("palette", withFolder)).filter((id) => FOLDER_ACTIONS.includes(id))).toEqual([]);
+    expect(ids(actionsFor("empty", withFolder)).filter((id) => FOLDER_ACTIONS.includes(id))).toEqual([]);
+    expect(ids(actionsFor("row", withFolder))).toEqual(["folder.new-document", "folder.new-folder", "folder.rename", "folder.archive"]);
+  });
+
+  it("names its targets: New document goes to the new-document page with the folder, the rest carry the folder's identity", () => {
+    const byId = Object.fromEntries(availableActions(context({ folder: folder() })).map((action) => [action.id, action.effect]));
+    expect(byId["folder.new-document"]).toEqual({ kind: "navigate", href: "/w/w1/knowledge/new?folder=n1" });
+    expect(byId["folder.new-folder"]).toEqual({ kind: "create-folder", sourceId: "s1", parentId: "n1", parentLabel: "Runbooks" });
+    expect(byId["folder.rename"]).toEqual({ kind: "folder-command", command: "folder.rename", nodeId: "n1", sourceId: "s1", label: "Runbooks" });
+    expect(byId["folder.archive"]).toEqual({ kind: "folder-command", command: "folder.archive", nodeId: "n1", sourceId: "s1", label: "Runbooks" });
+    const restore = availableActions(context({ folder: folder({ status: "ARCHIVED" }) })).find((action) => action.id === "folder.restore");
+    expect(restore?.effect).toEqual({ kind: "folder-command", command: "folder.restore", nodeId: "n1", sourceId: "s1", label: "Runbooks" });
+  });
+
+  it("does not carry the archived view into the new-document link: a new document is not archived", () => {
+    const action = availableActions(context({ includeArchived: true, folder: folder() })).find((candidate) => candidate.id === "folder.new-document");
+    expect(action?.effect).toEqual({ kind: "navigate", href: "/w/w1/knowledge/new?folder=n1" });
+  });
+
+  it("groups them apart from the document's, with a label of their own", () => {
+    const sections = groupActions(actionsFor("row", context({ target: target(), folder: folder() })));
+    expect(sections.map((section) => section.label)).toEqual(["This document", "This folder"]);
+  });
+});
+
+describe("action registry — Create folder", () => {
+  it("is offered where Create document is, and not to someone who cannot write", () => {
+    expect(ids(availableActions(context()))).toContain("create.folder");
+    expect(ids(availableActions(context({ can: { ...allCapabilities, canWrite: false } })))).not.toContain("create.folder");
+    expect(ids(availableActions(context({ confirmed: false })))).not.toContain("create.folder");
+  });
+
+  it("makes a folder at the top of the Notes source", () => {
+    const action = availableActions(context()).find((candidate) => candidate.id === "create.folder");
+    expect(action?.effect).toEqual({ kind: "create-folder", sourceId: null, parentId: null, parentLabel: null });
+  });
+
+  it("is in the palette and in the sidebar's create menu, not on the empty state and not on a row", () => {
+    const surfacesOf = (id: string): ActionSurface[] => (availableActions(context()).find((candidate) => candidate.id === id)?.surfaces ?? []) as ActionSurface[];
+    expect(surfacesOf("create.folder")).toEqual(["palette", "create"]);
+    expect(surfacesOf("create.document")).toEqual(["palette", "empty", "create"]);
+  });
+
+  it("is found by 'new', like Create document", () => {
+    expect(ids(matchActions(availableActions(context()), "new"))).toEqual(expect.arrayContaining(["create.document", "create.folder"]));
+  });
+});
+
+describe("action registry — SOURCE_MANAGED content is read-only in the Hub, on every surface", () => {
+  const surfaces: ActionSurface[] = ["palette", "row", "empty", "create"];
+  it.each(surfaces)("offers no archive, restore or folder action on %s", (surface) => {
+    for (const status of ["ACTIVE", "ARCHIVED"] as const) {
+      const offered = ids(
+        actionsFor(surface, context({ target: target({ ownership: "SOURCE_MANAGED", status }), folder: folder({ ownership: "SOURCE_MANAGED", status }) })),
+      );
+      expect(offered.filter((id) => LIFECYCLE_ACTIONS.includes(id))).toEqual([]);
     }
   });
 });

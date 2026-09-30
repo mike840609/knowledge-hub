@@ -19,6 +19,8 @@ export type DocumentTopbarState = {
     label: string;
     ownership: "SOURCE_MANAGED" | "HUB_MANAGED";
     status: "ACTIVE" | "ARCHIVED";
+    /** The source's own state, apart from the effective `status`: restoring depends on which one archived it. */
+    sourceStatus: "ACTIVE" | "ARCHIVED";
     revision: "CURRENT" | "HISTORICAL";
   };
 };
