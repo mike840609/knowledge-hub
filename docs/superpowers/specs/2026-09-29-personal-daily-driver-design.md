@@ -55,7 +55,7 @@ composer 預設是渲染編輯（Milkdown）。把文件送進去、編輯一個
 | D1 | **切片 0 先做，單獨一個 PR（視同 hotfix）** | 它是資料完整性問題，且 D 依賴它；不該與功能綁在一起等待 |
 | D2 | 編輯器用專屬的 inline wikilink 節點，不靠 stringify 選項 | §1.1：解析後無法區分 |
 | D3 | 解析時用既有的 `findWikiLinks(node, markdown)` 辨識，節點保存**原始字串**，序列化原樣輸出 | 抽取與渲染已共用同一支函式（圖譜規格 §5）；編輯器加入第三個消費者，三者不可能分歧 |
-| D4 | 程式碼高亮用 `rehype-highlight`＋`lowlight`，在 server 端跑，只處理**有標示語言的**圍欄，不自動偵測 | 閱讀頁是 server component，client 零 JS；自動偵測慢且常錯；套件大小（npm unpacked）lowlight 約 60 KB、rehype-highlight 約 26 KB，shiki 約 600 KB 且是非同步介面 |
+| D4 | 程式碼高亮用 `lowlight`（自己的 rehype 外掛，見 §5；原訂 `rehype-highlight`，C.7 改掉），在 server 端跑，只處理**有標示語言的**圍欄，不自動偵測 | 閱讀頁是 server component，高亮不進 client bundle（C.7 實測：client 的 80 個檔中沒有任何一個含 lowlight；server 端有）；自動偵測慢且常錯；shiki 約 600 KB 且是非同步介面。（原文的套件大小是 npm unpacked 的數字，不是進 bundle 的大小，這裡不再引用） |
 | D5 | 語法顏色進 CSS 變數層（新增一組 `--kh-syntax-*`，亮暗各一組） | 契約：顏色只在 CSS 變數層；新增 token 要同步改契約文件 |
 | D6 | 複製鈕是獨立的 client island，**不依賴 toast** | `/s/:token` 分享頁沒有 app shell，`useToast` 會丟錯 |
 | D7 | `[[` 建議清單：第一次觸發時抓取整個 Workspace 的標題目錄（上限 5 000），之後在 client 端過濾排序 | 即時、一次請求、免逐鍵查詢；規模上限外退回 server 端查詢 |
@@ -117,7 +117,13 @@ composer 預設是渲染編輯（Milkdown）。把文件送進去、編輯一個
 
 ## 5. 切片 C — 程式碼區塊
 
-- **管線。** `MarkdownRenderer` 加 `rehype-highlight`（`detect: false`，只處理有語言標示的圍欄；語言集為 lowlight 的 `common`，加上 `dockerfile`、`groovy`、`protobuf`，其餘留待需要時再加；已決定不再額外加語言，§12-5）。單一區塊超過 20,000 字元不高亮（避免病態輸入拖慢渲染；以字元計而非位元組，高亮走的是字元，含 Markdown 加在區塊結尾的那個換行）。做法是先把超限的區塊標成 `no-highlight`（`rehype-highlight` 尊重這個 class，讀其原始碼確認），再交給它。輸出是 hast→React 元素，不經 `innerHTML`。
+- **管線。** `MarkdownRenderer` 加一個 rehype 外掛（`code-highlight.ts`），直接用 lowlight 為有語言標示的圍欄上色；只處理有語言、且語言有註冊的圍欄，不猜語言（沒有語言的區塊維持純文字）；語言集為 lowlight 的 `common`，加上 `dockerfile`、`groovy`、`protobuf`，其餘留待需要時再加；已決定不再額外加語言，§12-5。輸出是 hast→React 元素，不經 `innerHTML`。**偏離（C.7 記錄）：** 原本寫的是套用 `rehype-highlight`。C.7 量測時發現它給不了下面三條限制，而其中一條是會讓整頁渲染失敗的缺陷，所以把它做的事直接寫出來、移除該依賴。
+- **限制。** 上色的成本要有上限，不然一個貼進來的日誌或壓縮過的 bundle 就決定一頁要多久。都以字元計（高亮走的是字元；區塊的字數含 Markdown 加在結尾的那個換行），超過的區塊維持純文字，其後的區塊各自判斷，都不是錯誤：
+  - **單一區塊 20,000 字元。**
+  - **整份文件 100,000 字元的預算**，依序花用，「試過」就算花掉（包括後來因深度被拒的）。單一區塊有上限、整份文件沒有時，200 個區塊的 1 MB 文件閱讀渲染 +4.9 s，4 MB 文件 +22.8 s（文件上限是 5 MB，`MAX_MARKDOWN_BYTES`），每次載入都是，而分享頁前面沒有登入。有預算後分別是 +0.42 s 與 +0.5 s。
+  - **輸出巢狀深度 50。** rust、swift 的區塊註解會巢狀，`/*` 重複 1 萬次（在 20,000 字元內）會產生 1 萬層 `<span>`；渲染它會爆堆疊，整份文件（包括分享連結）都渲染不出來。實測 3,000 層丟例外、5,000 層卻不丟，取決於引擎暖機程度，所以上限要遠低於任何一個數字；真實程式碼的輸出是個位數層。
+  - 文法丟例外也是留純文字。
+- **成本的實測（C.7）。** 真實程式碼每 KB 約 5 ms：20 KB 的 runbook（10 個區塊）+86 ms，20,000 字元的 C 資料表、INI、SQL、Python 各約 100 ms。**不是線性的部分：** 刻意構造的單一超長 token 是二次方成長，`ini` 的連續數字 5,000 字元 122 ms、10,000 字元 488 ms、19,999 字元約 1.9 s；所以 20,000 字元的上限把單一區塊的最壞情況限制在約 2 s，整份文件最多約 5 個這樣的區塊（預算 100,000）。要收緊是改一個常數：上限 10,000 字元則單一區塊最壞約 0.5 s。這是 §12 沒有問過的取捨，記在這裡。
 - **語言集（C.1 查證，lowlight 3.3.0／highlight.js 11.11.2）。** `common` 共 37 個：`arduino bash c cpp csharp css diff go graphql ini java javascript json kotlin less lua makefile markdown objectivec perl php php-template plaintext python python-repl r ruby rust scss shell sql swift typescript vbnet wasm xml yaml`。`dockerfile`、`groovy`、`protobuf` **都不在 `common` 內**，但都在 `all`（192 個）裡，且都是內建語言、不需要另裝；加入後別名 `docker`、`proto` 也可用（`yml`、`sh`、`zsh`、`js`、`ts`、`py`、`kt`、`md`、`toml`、`jsonc` 等原本就是 `common` 內語言的別名）。從 `highlight.js/lib/languages/*` 個別引入，不引 `all`（會把 192 個語言都打進 bundle），所以 `highlight.js` 要列為直接依賴（版本範圍與 lowlight 相同的 `~11.11`，避免裝出兩份）。**這份語言集對本專案的技術棧有兩個缺口：** 沒有 `properties`（Spring Boot 的 `application.properties`；highlight.js 有這個語言，只是不在 `common`；`ini` 在 `common` 內、`toml` 是它的別名，但那是另一個語法）與 `nginx`、`scala`、`gradle`。ClickHouse 的 SQL 走 `sql`（highlight.js 沒有 clickhouse 語言）。§12-5 的決定是不額外加，這裡只記錄；要加是一行的事。
 - **顏色。** `globals.css` 新增 `--kh-syntax-{keyword,string,number,comment,function,type,variable,meta}`，亮暗各一組，對比至少 4.5:1（在 `bg-subtle` 上量測）；`.hljs-*` 的規則寫在該檔（顏色層）。契約文件同步新增這組 token。**規則必須寫在 `@layer` 之外**：Tailwind 會刪掉 `@layer` 裡「`src` 內沒有任何地方寫出該 class 名」的規則，而 `hljs-*` 是 highlight.js 渲染時才產生的（實測：放在 `@layer components` 裡，編譯後一條規則都不剩、頁面沒有顏色，但原始碼與單元測試看起來完全正常）。所以測試要把樣式表編譯過再檢查。
 - **複製。** `ScrollablePre` 右上角一顆 ghost icon button（24px），`aria-label="Copy code"`，點擊後圖示變成勾、旁邊出現「Copied」1.5 秒（寫在 `aria-live="polite"` 的區域，讓螢幕閱讀器讀到）；複製的是**原始程式碼**，不含高亮的 span，也不含 Markdown 加在區塊結尾的那個換行（作者自己的結尾換行保留）。剪貼簿被拒絕、或頁面不是安全環境（沒有 `navigator.clipboard`）時顯示「Could not copy」，不丟錯。分享頁同樣可用（D6）。**偏離（C.4 記錄）：** 原文寫「由 hast 的純文字取得」；實作改成點擊時讀 `<pre>` 的 `textContent`——結果相同（span 裡的文字就是原文），但不必把每個區塊的程式碼經由 prop 在頁面資料裡再送一次。按鈕放在 `<pre>` 之外、不捲動的外框裡，長行捲動時它不動；常駐可見（不是 hover 才出現，觸控裝置沒有 hover）。
