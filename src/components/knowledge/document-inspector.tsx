@@ -24,6 +24,7 @@ import type { KnowledgeRevisionView } from "@/modules/knowledge/application/know
 import { Drawer } from "@/components/ui/drawer";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/components/ui/tabs";
 import { DocumentHeader } from "./document-header";
+import { DocumentPane } from "./document-pane";
 import type { DocumentBreadcrumbSegment } from "./document-breadcrumb";
 import { buttonClasses } from "@/components/ui/button";
 import { Timestamp } from "@/components/ui/timestamp";
@@ -267,7 +268,7 @@ export function DocumentInspector({
     return (
       <aside
         aria-label="Document details"
-        className="hidden h-full min-h-0 w-80 shrink-0 flex-col border-l border-kh-border/70 bg-kh-bg-raised min-[1440px]:flex"
+        className="hidden h-full min-h-0 w-full flex-col border-l border-kh-border/70 bg-kh-bg-raised min-[1440px]:flex"
       >
         <div className="flex shrink-0 items-start justify-between gap-2 border-b border-kh-border/70 px-4 py-3">
           <h2 className="truncate text-body font-semibold text-kh-text">Document details</h2>
@@ -431,34 +432,30 @@ export function DocumentDetailClient({
     };
   }, [pathname, title, openInspector, setDocumentTopbar, target]);
   return (
-    <div data-document-pane className="flex h-full min-h-0 overflow-hidden bg-kh-bg">
-      <div ref={contentRef} role="region" aria-label="Document content" tabIndex={0}
-        className="kh-document-pane min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain contain-layout kh-focus-ring">
-        <div className="flex items-start">
-          <div className="min-w-0 flex-1">
-            <div ref={headerRef}>
-            <DocumentHeader
-              breadcrumb={breadcrumb}
-              title={title}
-              status={status}
-              updatedAt={updatedAt}
-              revisionBanner={revisionBanner}
-              onDetailsClick={openInspector}
-              linkSummary={summariseLinks(inspectorData.links)}
-              onLinksClick={openLinks}
-              editHref={editHref}
-              onShareClick={canShare ? () => requestShare(inspectorData.documentId) : null}
-              readOnly={readOnly}
-              contentOwnsTitle={contentOwnsTitle}
-            />
-            </div>
-            <OutlineDisclosure entries={outline} activeSlug={activeSlug} />
-            {children}
-          </div>
-          <OutlineRail entries={outline} activeSlug={activeSlug} />
-        </div>
+    <DocumentPane
+      contentRef={contentRef}
+      outline={<OutlineRail entries={outline} activeSlug={activeSlug} />}
+      inspectorOpen={inspectorOpen}
+      inspector={<DocumentInspector open={inspectorOpen} onOpenChange={(open) => setInspectorOpen?.(open)} data={inspectorData} outline={outline} activeSlug={activeSlug} requestedTab={requestedTab} />}
+    >
+      <div ref={headerRef}>
+        <DocumentHeader
+          breadcrumb={breadcrumb}
+          title={title}
+          status={status}
+          updatedAt={updatedAt}
+          revisionBanner={revisionBanner}
+          onDetailsClick={openInspector}
+          linkSummary={summariseLinks(inspectorData.links)}
+          onLinksClick={openLinks}
+          editHref={editHref}
+          onShareClick={canShare ? () => requestShare(inspectorData.documentId) : null}
+          readOnly={readOnly}
+          contentOwnsTitle={contentOwnsTitle}
+        />
       </div>
-      <DocumentInspector open={inspectorOpen} onOpenChange={(open) => setInspectorOpen?.(open)} data={inspectorData} outline={outline} activeSlug={activeSlug} requestedTab={requestedTab} />
-    </div>
+      <OutlineDisclosure entries={outline} activeSlug={activeSlug} />
+      {children}
+    </DocumentPane>
   );
 }

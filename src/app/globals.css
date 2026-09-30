@@ -267,6 +267,8 @@ kbd {
      render is right at every width without a script deciding first. */
   .kh-document-pane {
     container: kh-document / inline-size;
+    /* A short loading skeleton and a long article use the same inline space. */
+    scrollbar-gutter: stable;
   }
 
   .kh-outline-rail {
