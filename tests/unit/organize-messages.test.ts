@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  alreadyAtEdge,
   archivedDocument,
   archivedFolder,
   createdFolder,
   folderNameProblem,
+  movedNode,
   organizeFailure,
   renamedFolder,
+  reorderedNode,
   restoredDocument,
   restoredFolder,
 } from "@/components/knowledge/organize-messages";
@@ -34,6 +37,23 @@ describe("what an archive says", () => {
     expect(restoredFolder("F")).toBe("Restored folder “F”.");
     expect(createdFolder("F")).toBe("Created folder “F”.");
     expect(renamedFolder("G")).toBe("Renamed to “G”.");
+  });
+});
+
+describe("what a move says", () => {
+  it("names where it went, and says the top level in words because it has no name", () => {
+    expect(movedNode("Runbook", "Projects")).toBe("Moved “Runbook” to “Projects”.");
+    expect(movedNode("Runbook", null)).toBe("Moved “Runbook” to the top level.");
+  });
+
+  it("says a reorder by direction and by where the node is now, counting from one", () => {
+    expect(reorderedNode("Runbook", "up", 0, 5)).toBe("Moved “Runbook” up. Position 1 of 5.");
+    expect(reorderedNode("Runbook", "down", 3, 5)).toBe("Moved “Runbook” down. Position 4 of 5.");
+  });
+
+  it("says when there was nowhere further to go", () => {
+    expect(alreadyAtEdge("Runbook", "first")).toBe("“Runbook” is already first.");
+    expect(alreadyAtEdge("Runbook", "last")).toBe("“Runbook” is already last.");
   });
 });
 

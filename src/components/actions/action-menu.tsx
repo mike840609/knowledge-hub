@@ -15,6 +15,7 @@ import {
   MenuTrigger,
 } from "@/components/ui/menu";
 import { requestFolderName } from "@/components/knowledge/folder-name-request";
+import { requestMove } from "@/components/knowledge/move-request";
 import { useTreeMutations } from "@/components/knowledge/use-tree-mutations";
 import { ActionIcon } from "./action-icon";
 import type { Action } from "./action-registry";
@@ -104,6 +105,9 @@ export function useActionRunner({ onToggleFavorite }: ActionHandlers) {
           return;
         case "create-folder":
           requestFolderName({ mode: "create", sourceId: effect.sourceId, parentId: effect.parentId, parentLabel: effect.parentLabel });
+          return;
+        case "move":
+          requestMove({ sourceId: effect.sourceId, label: effect.label, node: effect.node });
           return;
         case "folder-command":
           switch (effect.command) {

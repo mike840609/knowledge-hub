@@ -1,18 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronRight, FileText, Star } from "lucide-react";
 import {
   buildKnowledgeTree,
   filterKnowledgeTree,
+  reorderStep,
   type KnowledgeTreeNode,
 } from "@/lib/knowledge-navigation";
 import type { KnowledgeTreeItem } from "@/modules/knowledge/application/knowledge-query-service";
 import { isStringArray, usePersistedJson } from "@/components/shell/use-persisted-state";
 import { RowActionsTrigger, RowContextMenu } from "@/components/actions/action-menu";
 import type { Action } from "@/components/actions/action-registry";
+import { REVEAL_FOLDER_EVENT } from "./move-request";
+import { CLEAR_FILTER_TO_REORDER, alreadyAtEdge, reorderedNode } from "./organize-messages";
 
 export type KnowledgeTreeProps = {
   items: KnowledgeTreeItem[];
@@ -30,6 +33,11 @@ export type KnowledgeTreeProps = {
   /** And to this folder: the same registry, the same rules, a folder's own target. */
   folderActions: (item: Extract<KnowledgeTreeItem, { type: "folder" }>) => readonly Action[];
   onRunAction: (action: Action) => void;
+  /**
+   * Puts a node at a place among its siblings (Alt+↑/↓), and says whether that happened. The tree
+   * decides which place from what it shows; whether it may is the actions' say, and the server's.
+   */
+  onReorder: (input: { nodeId: string; position: number }) => Promise<boolean>;
 };
 
 function documentHref(
@@ -208,6 +216,7 @@ export function KnowledgeTree({
   documentActions,
   folderActions,
   onRunAction,
+  onReorder,
 }: KnowledgeTreeProps) {
   const router = useRouter();
   const treeRef = useRef<HTMLUListElement>(null);
@@ -255,6 +264,16 @@ export function KnowledgeTree({
     return map;
   }, [items]);
 
+  // Opens `startId` and every folder above it, and only those: the reader's other folders stay as they were.
+  const expandFrom = useCallback(
+    (startId: string | null) => {
+      const open = new Set<string>();
+      for (let cursor = startId; cursor && !open.has(cursor); cursor = itemById.get(cursor)?.parentId ?? null) open.add(cursor);
+      setCollapsedList((previous) => (previous.some((id) => open.has(id)) ? previous.filter((id) => !open.has(id)) : previous));
+    },
+    [itemById, setCollapsedList],
+  );
+
   // A document opened from somewhere else — a search hit, a link, a new document made inside a
   // folder — is shown in the tree, not hidden in a folder that was collapsed. Once per document:
   // collapsing its folder afterwards is the reader's choice and stays.
@@ -264,10 +283,78 @@ export function KnowledgeTree({
     const opened = items.find((item) => item.type === "document" && item.documentId === selectedDocumentId);
     if (!opened) return;
     revealedFor.current = selectedDocumentId;
-    const ancestors = new Set<string>();
-    for (let cursor = opened.parentId; cursor && !ancestors.has(cursor); cursor = itemById.get(cursor)?.parentId ?? null) ancestors.add(cursor);
-    setCollapsedList((previous) => (previous.some((id) => ancestors.has(id)) ? previous.filter((id) => !ancestors.has(id)) : previous));
-  }, [selectedDocumentId, items, itemById, setCollapsedList]);
+    expandFrom(opened.parentId);
+  }, [selectedDocumentId, items, expandFrom]);
+
+  // Something was put inside a folder (the move dialog): open it, so it is seen where it went. Only
+  // the tree that has that folder answers.
+  useEffect(() => {
+    const reveal = (event: Event) => {
+      const folderId = (event as CustomEvent<{ folderId?: unknown }>).detail?.folderId;
+      if (typeof folderId === "string" && itemById.get(folderId)?.type === "folder") expandFrom(folderId);
+    };
+    window.addEventListener(REVEAL_FOLDER_EVENT, reveal);
+    return () => window.removeEventListener(REVEAL_FOLDER_EVENT, reveal);
+  }, [itemById, expandFrom]);
+
+  // Alt+↑/↓ moves the focused row among its siblings. A request is in flight until the tree it changed
+  // arrives; a key pressed meanwhile is not aimed at a tree that is about to be different, but kept —
+  // the latest one, so a held key goes one step per round trip and stops when it is let go, and a press
+  // the other way is a step back rather than lost — and made when the new tree is here. The focus is
+  // put back on the row then too, since a row that has changed its place in the list may have been
+  // taken out of the page and put back, which drops focus.
+  const reordering = useRef(false);
+  const reorderGiveUp = useRef<number | undefined>(undefined);
+  const queuedReorder = useRef<{ id: string; direction: -1 | 1 } | null>(null);
+  const focusAfterReorder = useRef<string | null>(null);
+  const [announcement, setAnnouncement] = useState({ text: "", sequence: 0 });
+  const announce = (text: string) => setAnnouncement((previous) => ({ text, sequence: previous.sequence + 1 }));
+  useEffect(() => () => window.clearTimeout(reorderGiveUp.current), []);
+  useEffect(() => {
+    reordering.current = false;
+    window.clearTimeout(reorderGiveUp.current);
+    const id = focusAfterReorder.current;
+    focusAfterReorder.current = null;
+    if (id) Array.from(treeRef.current?.querySelectorAll<HTMLElement>("[data-node-id]") ?? []).find((element) => element.dataset.nodeId === id)?.focus();
+    const queued = queuedReorder.current;
+    queuedReorder.current = null;
+    const item = queued ? itemById.get(queued.id) : undefined;
+    if (queued && item) void reorder(item, queued.direction);
+    // The dependency is "the tree arrived"; `reorder` reads the render this effect is in, which is that one.
+  }, [items]);
+
+  async function reorder(item: KnowledgeTreeItem, direction: -1 | 1) {
+    // A filtered tree shows some of the siblings, and the ones next to this row in it are not its neighbours.
+    if (filtering) {
+      announce(CLEAR_FILTER_TO_REORDER);
+      return;
+    }
+    if (reordering.current) {
+      queuedReorder.current = { id: item.id, direction };
+      return;
+    }
+    const step = reorderStep(roots, item.id, direction);
+    if (!step) return;
+    if (step.kind === "edge") {
+      announce(alreadyAtEdge(item.label, direction < 0 ? "first" : "last"));
+      return;
+    }
+    reordering.current = true;
+    // If the tree never arrives, the next key press is not lost for good.
+    window.clearTimeout(reorderGiveUp.current);
+    reorderGiveUp.current = window.setTimeout(() => {
+      reordering.current = false;
+      queuedReorder.current = null;
+    }, 3000);
+    if (await onReorder({ nodeId: item.id, position: step.position })) {
+      focusAfterReorder.current = item.id;
+      announce(reorderedNode(item.label, direction < 0 ? "up" : "down", step.index, step.count));
+    } else {
+      reordering.current = false;
+      queuedReorder.current = null;
+      window.clearTimeout(reorderGiveUp.current);
+    }
+  }
 
   const toggle = (id: string) => {
     setCollapsedList((previous) =>
@@ -277,6 +364,19 @@ export function KnowledgeTree({
   };
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLElement>) {
+    // Alt+arrow is a different key from the arrow: the plain one moves the focus, this one moves the row.
+    if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+      const row = (event.target as HTMLElement).closest?.('[role="treeitem"]') as HTMLElement | null;
+      const item = row?.dataset.nodeId ? itemById.get(row.dataset.nodeId) : undefined;
+      if (!item) return;
+      const actions = item.type === "document" ? documentActions(item) : folderActions(item);
+      // Only a row the reader may move: the same actions the row's menu is made of, so a row that has no
+      // Move there has no reorder here, and the key is left alone for whatever else wanted it.
+      if (!actions.some((action) => action.id === "document.move" || action.id === "folder.move")) return;
+      event.preventDefault();
+      void reorder(item, event.key === "ArrowUp" ? -1 : 1);
+      return;
+    }
     const container = event.currentTarget;
     const visible = Array.from(container.querySelectorAll<HTMLElement>('[role="treeitem"]'));
     if (visible.length === 0) return;
@@ -350,6 +450,13 @@ export function KnowledgeTree({
 
   const firstId = roots[0]?.item.id;
   return (
+    <>
+    {/* Where a row went after Alt+↑/↓, said aloud. Remounted per message so the same words twice are heard twice.
+        A live region and not `role="status"`: the toast layer is the page's one status, and a second would
+        make every "the status" of a page with a tree ambiguous. */}
+    <div aria-live="polite" aria-atomic="true" className="sr-only">
+      <p key={announcement.sequence}>{announcement.text}</p>
+    </div>
     <ul
       ref={treeRef}
       role="tree"
@@ -377,5 +484,6 @@ export function KnowledgeTree({
         />
       ))}
     </ul>
+    </>
   );
 }

@@ -14,6 +14,7 @@ import { TreeFilter } from "./tree-filter";
 import { buttonClasses } from "@/components/ui/button";
 import { isBoolean, isBooleanRecord, isString, usePersistedJson } from "@/components/shell/use-persisted-state";
 import { documentShortcutKey, useDocumentShortcuts } from "./use-document-shortcuts";
+import { useTreeMutations } from "./use-tree-mutations";
 import { useActionRunner } from "@/components/actions/action-menu";
 import { actionsFor, type ActionTarget, type FolderTarget } from "@/components/actions/action-registry";
 
@@ -94,6 +95,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
   }, [shortcuts.favorites, setFavoritesOpen]);
 
   const runAction = useActionRunner({ onToggleFavorite: toggleFavorite });
+  const mutations = useTreeMutations();
 
   function shortcutRow(key: string, favorite: boolean) {
     const document = documents.get(key);
@@ -249,6 +251,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
                     } satisfies FolderTarget,
                   })}
                   onRunAction={runAction}
+                  onReorder={async (input) => (await mutations.reorderNode(input)).ok}
                 /> : null}
               </div>
             </section>

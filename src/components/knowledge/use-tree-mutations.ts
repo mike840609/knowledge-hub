@@ -10,6 +10,7 @@ import {
   archivedDocument,
   archivedFolder,
   createdFolder,
+  movedNode,
   organizeFailure,
   renamedFolder,
   restoredDocument,
@@ -26,6 +27,22 @@ export type TreeMutations = {
   /** For a dialog: the refusal comes back as words to put next to the field, not as a toast. */
   createFolder(input: { name: string; parentId: string | null; sourceId: string | null }): Promise<OrganizeResult>;
   renameFolder(input: { nodeId: string; from: string; to: string }): Promise<OrganizeResult>;
+  /**
+   * Into a folder, or to the top level with a null parent, last. `from` is where it was, for the Undo;
+   * `to.label` is the folder's name, or null for the top level. For a dialog, like the two above.
+   */
+  moveNode(input: {
+    nodeId: string;
+    label: string;
+    from: { parentId: string | null; position: number };
+    to: { parentId: string | null; label: string | null };
+  }): Promise<OrganizeResult>;
+  /**
+   * To another place among its own siblings, from the keyboard. There is no dialog to put a refusal
+   * beside, so it is said as a toast here, and there is no Undo toast either: a step is undone by the
+   * step back, and a toast for every key press would bury the tree.
+   */
+  reorderNode(input: { nodeId: string; position: number }): Promise<OrganizeResult>;
 };
 
 /**
@@ -110,6 +127,36 @@ export function useTreeMutations(): TreeMutations {
     }
 
     return {
+      async moveNode({ nodeId, label, from, to }) {
+        try {
+          await governanceRequest(`/api/tree-nodes/${nodeId}`, "PATCH", { parentId: to.parentId });
+          toast({
+            message: movedNode(label, to.label),
+            undo: {
+              label: UNDO_LABEL,
+              run: async () => {
+                await governanceRequest(`/api/tree-nodes/${nodeId}`, "PATCH", { parentId: from.parentId, position: from.position });
+                refresh();
+              },
+            },
+          });
+          refresh();
+          return { ok: true };
+        } catch (failure) {
+          return { ok: false, message: organizeFailure(governanceFailure(failure)) };
+        }
+      },
+      async reorderNode({ nodeId, position }) {
+        try {
+          await governanceRequest(`/api/tree-nodes/${nodeId}`, "PATCH", { position });
+          refresh();
+          return { ok: true };
+        } catch (failure) {
+          const message = organizeFailure(governanceFailure(failure));
+          toast({ message, tone: "danger" });
+          return { ok: false, message };
+        }
+      },
       archiveDocument: (input) => setDocument("archive", input),
       restoreDocument: (input) => setDocument("restore", input),
       archiveFolder: (input) => setFolder("archive", input),
