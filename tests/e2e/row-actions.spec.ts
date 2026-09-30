@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openPalette } from "./fixtures/palette";
 
 // Mirrors scripts/db/seed.ts BROWSER_FIXTURE_IDS.
 const QUERY_MASTER_WORKSPACE = "0199f100-0000-7000-8000-000000000001";
@@ -73,7 +74,9 @@ test("a row action runs: Edit opens the editor", async ({ page }) => {
 
 test("the palette offers actions as well as documents, and keeps the keyboard over both", async ({ page }) => {
   await openTree(page);
-  await page.keyboard.press("ControlOrMeta+k");
+  // A single ⌘K pressed before hydration reaches no listener, and the page can look finished well
+  // before it is; openPalette presses again until the palette answers.
+  await openPalette(page);
 
   const field = page.getByRole("combobox", { name: "Search documents and actions" });
   await expect(field).toBeFocused();
