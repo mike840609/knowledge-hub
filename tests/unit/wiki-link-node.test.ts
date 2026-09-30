@@ -5,7 +5,7 @@ import { Selection, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
-import { configureWikiLinkStringify, splitWikiLinkText, wikiLinkPlugins } from "@/components/knowledge/editor/wiki-link";
+import { splitWikiLinkText } from "@/components/knowledge/editor/wiki-link";
 
 // jsdom has no ClipboardEvent, which ProseMirror's `pasteText` makes.
 beforeAll(() => {
@@ -30,8 +30,6 @@ async function open(markdown: string) {
     onUserEdit: () => {},
     onMarkdown: () => {},
     allowImage: () => true,
-    extraPlugins: wikiLinkPlugins,
-    configure: configureWikiLinkStringify,
   });
   opened.push(editor);
   return { root, editor };
