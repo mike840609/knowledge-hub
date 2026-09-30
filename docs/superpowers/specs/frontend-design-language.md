@@ -97,6 +97,7 @@ together, and say what job the new token does that no existing one covers.
 | Radius | `sm`, `md`, `lg`, `xl` | see §5 |
 | Elevation | `popover`, `modal` | floating surfaces only |
 | Border | `border`, `border-strong` | see §6 |
+| Syntax colour | `--kh-syntax-{keyword,string,number,comment,function,type,variable,meta}` | fenced code in the reader and on a shared page; see §8 |
 | Container | `page`, `wide`, `reading`, `panel` | see §7; the `maxWidth` scale is replaced, so `max-w-4xl` does not compile |
 | Spacing rhythm | `0`, `px`, `0.5`–`6` every half step, `auto` (margin), `16` (padding) | paddings, margins and gaps; `16` is `StatusMessage` only, see §7 |
 | Control height | `sm`, `md`, `lg` (24 / 32 / 40) | see §15; buttons and fields read the same ladder |
@@ -283,6 +284,31 @@ dark background needs a light red. One token cannot serve both once a dark
 theme exists.
 
 No component declares a colour outside the token layer.
+
+### Syntax colour
+
+Fenced code is coloured from eight tokens, `--kh-syntax-` plus `keyword`,
+`string`, `number`, `comment`, `function`, `type`, `variable` and `meta`,
+declared for both themes next to the rest of the palette. The rules that put
+them on the highlighter's classes (`.hljs-*`) are in `globals.css` and use
+`var(--kh-syntax-*)` and nothing else; a colour written into one of those rules
+is the same drift as a colour written into a component.
+
+They sit on `bg-subtle`, the code block's own surface, and each meets **4.5:1**
+against it in both themes — the bar for text, since code is read, not glanced
+at. That is checked by `tests/unit/syntax-colors.test.tsx` from the stylesheet
+itself, so changing a value until it fails is caught before it ships. The same
+test holds the two colours the diff rules borrow, `--kh-success` and
+`--kh-danger`, to the bar on that surface.
+
+Not everything is coloured. Operators, punctuation, parameters and the wrappers
+around other scopes keep the block's text colour: colouring every scope colours
+nothing. A scope the highlighter starts to emit that has neither a colour nor a
+reason to be left plain fails the same test, which is how a lowlight upgrade
+announces itself.
+
+The rendered editor's code blocks are not coloured (daily-driver spec §5);
+they are the editor's, and its decorations are a different piece of work.
 
 ### On ladder depth
 
