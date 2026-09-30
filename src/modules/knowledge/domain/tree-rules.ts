@@ -21,6 +21,12 @@ export function normalizeFolderName(name: string): string {
   return trimmed;
 }
 
+/**
+ * A place in a sibling group is an index, and placement clamps an index past the end to the end
+ * (`placeNodeAtIndex`), so this is how a caller says "last" without having to count the group.
+ */
+export const APPEND_POSITION = Number.MAX_SAFE_INTEGER;
+
 export function normalizeTreePosition(position: number): number {
   if (!Number.isSafeInteger(position) || position < 0) {
     throw new ValidationError("Tree position must be a non-negative integer.");

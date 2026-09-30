@@ -2,7 +2,7 @@ import { parseGenericMarkdownText, sourceFileHash } from "@/modules/sources/adap
 import { SourceImportError } from "@/modules/sources/domain/import-errors";
 import { DomainError } from "@/shared/domain/errors";
 import type { KnowledgeMetadata } from "@/modules/knowledge/domain/content";
-import { MAX_FOLDER_NAME_LENGTH, normalizeFolderName } from "@/modules/knowledge/domain/tree-rules";
+import { APPEND_POSITION, MAX_FOLDER_NAME_LENGTH, normalizeFolderName } from "@/modules/knowledge/domain/tree-rules";
 import { isUuid } from "@/shared/ids/uuidv7";
 
 export const MAX_TITLE_LENGTH = 512;
@@ -74,8 +74,39 @@ export function parseCreateFolderInput(body: unknown): { sourceId: string | null
   };
 }
 
-export function parseRenameFolderInput(body: unknown): { name: string } {
-  return { name: checkedFolderName(readString(readObject(body), "name")) };
+/** A place in a sibling group: an index from the start, so a whole number and never negative. */
+function readPosition(record: Record<string, unknown>): number {
+  const value = record.position;
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) invalid("Provide position as a whole number, 0 or more.");
+  return value;
+}
+
+/**
+ * What a PATCH to a tree node asks for, and exactly one thing at a time (daily-driver spec §7.1):
+ *
+ *  - `{ name }` renames a folder;
+ *  - `{ parentId, position? }` moves a node into a folder, or to the top level with `null` — and to
+ *    the end of it when `position` is left out;
+ *  - `{ position }` alone puts it somewhere else among its own siblings.
+ *
+ * A `parentId` that is `null` is a place; one that is missing is not, which is why the two are told
+ * apart by the key being there rather than by its value.
+ */
+export type TreeNodePatch =
+  | { kind: "rename"; name: string }
+  | { kind: "move"; parentId: string | null; position: number }
+  | { kind: "reorder"; position: number };
+
+export function parseTreeNodePatchInput(body: unknown): TreeNodePatch {
+  const record = readObject(body);
+  const renames = record.name !== undefined;
+  const moves = "parentId" in record;
+  const places = record.position !== undefined;
+  if (!renames && !moves && !places) invalid("Provide name, or parentId and position.");
+  if (renames && (moves || places)) invalid("Change the name or the place, not both at once.");
+  if (renames) return { kind: "rename", name: checkedFolderName(readString(record, "name")) };
+  if (moves) return { kind: "move", parentId: readOptionalParentId(record), position: places ? readPosition(record) : APPEND_POSITION };
+  return { kind: "reorder", position: readPosition(record) };
 }
 
 export function parseCreateDocumentInput(body: unknown): { title: string; markdown: string; metadata: KnowledgeMetadata; parentId: string | null } {

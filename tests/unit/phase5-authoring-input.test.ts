@@ -5,7 +5,7 @@ import {
   MAX_TITLE_LENGTH,
   parseCreateDocumentInput,
   parseCreateFolderInput,
-  parseRenameFolderInput,
+  parseTreeNodePatchInput,
   parseUpdateDocumentInput,
   requireRouteId,
 } from "@/server/authoring-input";
@@ -169,13 +169,49 @@ describe("parseCreateFolderInput", () => {
   });
 });
 
-describe("parseRenameFolderInput", () => {
-  it("takes the same name, with the same limits", () => {
-    expect(parseRenameFolderInput({ name: " New name " })).toEqual({ name: "New name" });
-    expect(() => parseRenameFolderInput({ name: " " })).toThrow();
-    expect(() => parseRenameFolderInput({ name: "x".repeat(MAX_FOLDER_NAME_LENGTH + 1) })).toThrow();
-    expect(() => parseRenameFolderInput({})).toThrow();
-    expect(() => parseRenameFolderInput(null)).toThrow();
+describe("parseTreeNodePatchInput", () => {
+  const PARENT = "0199f100-0000-7000-8000-000000000201";
+
+  it("renames, with the same name and the same limits as a new folder", () => {
+    expect(parseTreeNodePatchInput({ name: " New name " })).toEqual({ kind: "rename", name: "New name" });
+    expect(() => parseTreeNodePatchInput({ name: " " })).toThrow();
+    expect(() => parseTreeNodePatchInput({ name: "x".repeat(MAX_FOLDER_NAME_LENGTH + 1) })).toThrow();
+    expect(() => parseTreeNodePatchInput({ name: 5 })).toThrow();
+  });
+
+  it("moves into a folder, at a place if one is given and at the end if not", () => {
+    expect(parseTreeNodePatchInput({ parentId: PARENT, position: 2 })).toEqual({ kind: "move", parentId: PARENT, position: 2 });
+    expect(parseTreeNodePatchInput({ parentId: PARENT, position: 0 })).toEqual({ kind: "move", parentId: PARENT, position: 0 });
+    expect(parseTreeNodePatchInput({ parentId: PARENT })).toEqual({ kind: "move", parentId: PARENT, position: Number.MAX_SAFE_INTEGER });
+  });
+
+  it("moves to the top level with an explicit null, which is a place — not the same as saying nothing", () => {
+    expect(parseTreeNodePatchInput({ parentId: null })).toEqual({ kind: "move", parentId: null, position: Number.MAX_SAFE_INTEGER });
+    expect(parseTreeNodePatchInput({ parentId: null, position: 1 })).toEqual({ kind: "move", parentId: null, position: 1 });
+    // No parentId key at all is not a move to the top level: with a position it is a reorder, and alone it is nothing.
+    expect(parseTreeNodePatchInput({ position: 1 })).toEqual({ kind: "reorder", position: 1 });
+    expect(() => parseTreeNodePatchInput({})).toThrow();
+  });
+
+  it.each([-1, 1.5, "1", null, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 2])("refuses %j as a position", (position) => {
+    for (const body of [{ position }, { parentId: PARENT, position }]) {
+      const error = thrownBy(() => parseTreeNodePatchInput(body));
+      expect((error as DomainError).code).toBe("INVALID_REQUEST");
+    }
+  });
+
+  it.each([["bad"], [5], [true]])("refuses %j as a parent", (parentId) => {
+    expect((thrownBy(() => parseTreeNodePatchInput({ parentId })) as DomainError).code).toBe("INVALID_REQUEST");
+  });
+
+  it("does one thing at a time: a name with a place is refused, not half done", () => {
+    for (const body of [{ name: "A", parentId: PARENT }, { name: "A", position: 1 }, { name: "A", parentId: null, position: 0 }]) {
+      expect((thrownBy(() => parseTreeNodePatchInput(body)) as DomainError).code).toBe("INVALID_REQUEST");
+    }
+  });
+
+  it("refuses a body that is not an object", () => {
+    for (const body of [null, undefined, "x", 5, [], [{ name: "A" }]]) expect(() => parseTreeNodePatchInput(body)).toThrow();
   });
 });
 
