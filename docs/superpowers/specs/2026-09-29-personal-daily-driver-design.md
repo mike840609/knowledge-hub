@@ -255,6 +255,12 @@ design-language §18 寫「封存文件從來不存在」。服務層一直有�
 | 4 | 拖曳整理 | **這一批不做**，先出「移到…」與 `Alt+↑/↓` | A-2 不含拖放；拖曳之後再視使用情況決定 |
 | 5 | 程式碼語言集 | **用預設**（`common` 加 `dockerfile`、`groovy`、`protobuf`），不額外加 | 見 §5 的提醒：`common` 的實際內容在 C.1 查證，不符就改這份規格 |
 
+**已決定（2026-09-30）**
+
+| # | 問題 | 決定 | 對計畫的影響 |
+| --- | --- | --- | --- |
+| 6 | Team workspace 要不要現在開放 | **不開放，先預告**：在前端把工作空間切換擋掉，選單顯示一列停用的「Team workspaces · Coming soon」，之後才開放 | 旗標 `KM_TEAM_WORKSPACES_ENABLED`（預設關，只認 `true`）；**只是切換器提供什麼，不是存取控制**——直接開連結與 API 都不變，見 [operations 文件](../../operations/team-workspaces-availability.md)。整理與封存（§7）在 Team 裡的行為沒有因此改變 |
+
 **風險**
 
 - Milkdown 7.22 的自訂節點與 remark 外掛 API 我只讀過現有程式碼、沒有實作過；切片 0 的第一個任務是一個小 spike（節點＋往返），失敗就在這裡發現，不會拖到後面。

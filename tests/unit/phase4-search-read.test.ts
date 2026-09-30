@@ -23,7 +23,7 @@ function fakeServices(overrides: {
   return {
     establishTrustedCaller: vi.fn(async () => ({ caller })),
     workspaceAdmin: {
-      navigation: vi.fn(async () => ({ canCreateTeam: false, items: [navigationItem] })),
+      navigation: vi.fn(async () => ({ canCreateTeam: false, teamsOpen: true, items: [navigationItem] })),
       workspaceState: overrides.workspaceState ?? vi.fn(async () => ({ workspace: navigationItem, effectiveCapabilities: [], actions: { canSearch: true } })),
     },
     queries: { listSources: vi.fn(async () => []) },

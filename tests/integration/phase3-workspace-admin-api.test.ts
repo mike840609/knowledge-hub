@@ -63,6 +63,26 @@ describe("Phase 3 workspace product contracts and real route adapters", () => {
     const personal = await admin.workspaceState(owner, nav.items[0]!.id);
     expect(personal.actions).toMatchObject({ canImport: true, canOpenSettings: false, canArchive: false, canManageOwners: false });
   });
+  it("says whether Team workspaces are open, from the environment at the time of asking, and lists the same workspaces either way", async () => {
+    const asOf = async (value: string | undefined) => {
+      if (value === undefined) delete process.env.KM_TEAM_WORKSPACES_ENABLED; else process.env.KM_TEAM_WORKSPACES_ENABLED = value;
+      return admin.navigation(owner);
+    };
+    const before = process.env.KM_TEAM_WORKSPACES_ENABLED;
+    try {
+      const closed = await asOf(undefined);
+      const open = await asOf("true");
+      expect(closed.teamsOpen).toBe(false);
+      expect(open.teamsOpen).toBe(true);
+      expect((await asOf("false")).teamsOpen).toBe(false);
+      // The flag is what the switcher offers. Which workspaces the caller belongs to, and what they may do
+      // in them, are not its business: the model lists the same ones, and the same capability, either way.
+      expect(closed.items).toEqual(open.items);
+      expect(closed.canCreateTeam).toBe(open.canCreateTeam);
+    } finally {
+      if (before === undefined) delete process.env.KM_TEAM_WORKSPACES_ENABLED; else process.env.KM_TEAM_WORKSPACES_ENABLED = before;
+    }
+  });
   it.each(["VIEWER", "EDITOR", "ADMIN", "OWNER"] as WorkspaceRole[])("enforces %s active/archived UI capability matrix", async role => {
     const caller = await user(role); await governance.addDirectMember(owner, workspaceId, { userId: caller.identity.id, role });
     const active = await admin.workspaceState(caller, workspaceId);

@@ -76,6 +76,10 @@ async function main(): Promise<void> {
       ...process.env,
       NODE_ENV: "production",
       KM_IDENTITY_PROVIDER: "local",
+      // Team workspaces are closed unless a server says otherwise (src/server/config.ts). The specs about
+      // them, and about the switcher's menu, run with them open; the one server that keeps them closed is
+      // started by playwright.config.ts.
+      KM_TEAM_WORKSPACES_ENABLED: "true",
       ...identity,
       KM_E2E_PORT: e2ePort,
       KM_E2E_DB_HOST: dbHost,
