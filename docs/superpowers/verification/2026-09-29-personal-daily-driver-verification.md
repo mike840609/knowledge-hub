@@ -353,14 +353,15 @@ Next 的 build 輸出（有 ±1 kB 的分組誤差，見切片 0 的紀錄）：
 | --- | --- | --- |
 | A2.1 | `6510eca` | PATCH 的三種形狀與 27 個 integration |
 | A2.2–A2.4 | `e0239a2` | registry、對話框、樹上的 Alt+↑/↓、jsdom 與 e2e |
-| A2.5 | （本 commit） | 文件與驗證紀錄 |
+| A2.5 | `eb2eb00` | 文件與驗證紀錄 |
+| — | （本 commit） | 與 folder sync 的混合情境測試（integration 6 案） |
 
 ### 結果
 
 | 檢查 | 開始前（main） | 現在 |
 | --- | --- | --- |
 | 單元測試 | 1198 | **1276** 全過 |
-| integration（`npm run test:integration`，本機） | 547 | **574** 全過（+27，`organize-api.test.ts`） |
+| integration（`npm run test:integration`，本機） | 547 | **580** 全過（+33：`organize-api.test.ts` +27，`sync-and-organize.test.ts` +6） |
 | e2e（完整，`npm run test:e2e`，5.6 分鐘） | 164 | **177** 全過（+13，`zz-organize-move.spec.ts`） |
 | `tsc --noEmit`、`eslint` | 乾淨 | 乾淨 |
 | `next build` | 成功 | 成功 |
@@ -393,6 +394,38 @@ Next 的 build 輸出（有 ±1 kB 的分組誤差，見切片 0 的紀錄）：
 ### 一個沒被證明有必要的東西
 
 **放回焦點的程式碼，在 Chromium 上不需要。** 我把它拿掉、寫了探測用的 e2e：往下移的那一步，被移動的節點會收到兩次 `focusout`，但事後的 `document.activeElement` 仍是那一列。也就是 Chromium 自己把焦點還回去（或根本沒失去）。所以完整 e2e 拿掉那段程式碼照樣全過，**e2e 分辨不出有沒有它**。它留在程式碼裡，是因為別的瀏覽器移動有焦點的節點時不一定保留焦點；單元測試（jsdom）用「先 `blur()` 再重畫」模擬那種瀏覽器，拿掉它會紅。這個保護在 Firefox 與 Safari 上沒有實測過。
+
+### 與 folder sync 的混合情境（`tests/integration/sync-and-organize.test.ts`，6 案）
+
+問題是「Hub 這邊整理（A-1、A-2），會不會弄壞 folder sync」。答案來自程式碼：sync 的寫入端都要求 `SOURCE_MANAGED`，Hub 的都要求 `HUB_MANAGED`，來源的擁有者建立後不會變。這個測試把它從外面證明一次，用真的服務與真的資料庫，兩個方向：
+
+- Hub 整理兩輪（建資料夾與文件、移進資料夾、移到最上層最前面、改名、資料夾移進資料夾、文件封存又還原、資料夾封存）之後，同步來源的 `knowledge_sources`、樹、文件、revision、link index、`source_entries`、`sync_runs` **每一列逐欄相同**（含時間與 `updated_by`）。
+- 對同步來源套用兩次有變動的 sync（改內容、刪檔、新增、搬移、檔案換位置回來）之後，Hub 的 Notes 同樣逐列不變。
+- Hub 對同步節點的 rename、移動、重排、封存、還原、在裡面新增資料夾或文件、把 Hub 節點移進同步資料夾，全部被拒絕，兩邊的列都不變，之後的 sync 仍照常套用。
+- 同一串 sync（v1→v2→v3）有 Hub 夾在中間與沒有，最後同步來源給讀者看的樣子（樹、entries、每份文件的 revision 數、版本）相同。
+- 唯一的間接影響是讀取時的：同步文件裡的 `[[Hub note]]` 在 Hub 文件被封存期間變成未解析，還原就回來；同步來源那邊什麼都沒被寫。
+
+**變異驗證。**
+
+| 弄壞的東西 | 結果 |
+| --- | --- |
+| 擁有者守門關掉（`requireOwnedSource`） | 「被拒絕」那案紅 |
+| 讀一個來源的樹時改成讀整個 workspace 的（跨來源污染） | 三個「逐列不變」與「有沒有 Hub 夾在中間」的案紅（**第一版只有兩個紅**，見下） |
+| `assertActiveFolderAncestry` 不比對父節點的來源；`moveTreeNode` 不擋 `CrossSourceMoveError` | **沒有紅**，因為資料庫的外鍵 `fk_tree_parent_same_source (source_id, parent_id)` 獨立擋住了（測試看到的仍是 409 且沒有寫入）。這是等價變異，不是缺口：程式碼與資料庫各守一次，我只證明了結果 |
+
+**第一版的測試沒有偵測力，兩處，都靠變異驗證抓到：**
+
+1. 「Hub 整理不動同步來源」原本不會被跨來源污染的變異弄紅。我把一個節點移到最上層最前面、又移回最後，跨來源的重新編號先把同步來源的位置推開、後一步又推回原位，逐列比對看到的是原樣。改成移到最前面就留在那裡。
+2. 我另外寫了一案「每個來源的同層各自從 0 起算」，改壞後照樣過，它什麼也沒證明，刪了。
+
+另外，最上層的節點在同一個 workspace 內以 ID（時間排序的 uuidv7）決定同位置的先後，所以測試的 `world()` 先建兩個 Hub 最上層節點，再做 sync：反過來（sync 的節點比較舊）污染會被藏起來。
+
+**沒有證明的部分。**
+
+- **完整 integration 跑過一次在 `knowledge-link-service.test.ts` 的「says how much of the index can be trusted」失敗（106 秒）**，之後連跑兩次全過（580/580）。那個測試只用自己的 workspace，不依賴全域狀態，我沒有找到原因，懷疑是 MariaDB 剛重啟後的環境因素，但這是猜測。
+- 同步走的是匯入服務（`create`／`upload`／`finalize`／`apply`），資料是記憶體裡的位元組，不是瀏覽器選資料夾上傳。
+- **兩邊同時發生**（Hub 在 sync 套用的那一瞬間整理）沒有測。兩邊都先鎖來源（`FOR UPDATE`）再鎖 workspace，不會交錯，但那是我讀程式碼的結論，不是跑出來的。
+- 只驗了 `FOLDER_SYNC` 這一種同步來源。
 
 ### 量測
 
