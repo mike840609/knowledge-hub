@@ -70,7 +70,14 @@ describe("action registry — the workspace capability axis", () => {
     });
     // Reading is what makes the graph available: membership, nothing more. Collapsing the navigation is not
     // an action on anything, so it is there for everyone.
-    expect(ids(availableActions(none))).toEqual(["navigate.toggle-nav", "navigate.knowledge", "navigate.graph"]);
+    expect(ids(availableActions(none))).toEqual(["navigate.knowledge", "navigate.graph", "navigate.toggle-nav"]);
+  });
+
+  it("leaves the first row of the palette — what Enter does in an empty one — a place to go, not Toggle navigation", () => {
+    expect(availableActions(context())[0].id).toBe("navigate.knowledge");
+    expect(availableActions(context({ workspaceType: "PERSONAL" }))[0].id).toBe("navigate.home");
+    const navigate = availableActions(context()).filter((action) => action.group === "navigate");
+    expect(navigate[navigate.length - 1].id).toBe("navigate.toggle-nav");
   });
 
   it("offers Toggle navigation to everyone, even while access is unconfirmed, in the palette only", () => {

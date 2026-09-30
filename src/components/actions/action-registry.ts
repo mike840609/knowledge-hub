@@ -211,16 +211,6 @@ export function availableActions(context: ActionContext): readonly Action[] {
   const archived = context.includeArchived === true;
   const suffix = archived ? "?includeArchived=true" : "";
   const actions: Action[] = [];
-  actions.push({
-    id: "navigate.toggle-nav",
-    label: "Toggle navigation",
-    group: "navigate",
-    icon: "sidebar",
-    keywords: ["sidebar", "collapse", "expand", "hide", "show", "menu", "panel"],
-    shortcut: NAV_TOGGLE_SHORTCUT,
-    surfaces: ["palette"],
-    effect: { kind: "toggle-nav" },
-  });
   if (context.workspaceType === "PERSONAL") actions.push({ id: "navigate.home", label: "Go to My Space home", group: "navigate", icon: "knowledge", keywords: ["drafts", "favorites", "recent", "export"], surfaces: ["palette"], effect: { kind: "navigate", href: `/w/${workspaceId}/home` } });
 
   actions.push({
@@ -276,6 +266,18 @@ export function availableActions(context: ActionContext): readonly Action[] {
       effect: { kind: "navigate", href: `/w/${workspaceId}/settings` },
     });
   }
+  // Last of the navigation, not first: the first row is what Enter does in an empty palette, and that has
+  // always been where to go, never a change to the page.
+  actions.push({
+    id: "navigate.toggle-nav",
+    label: "Toggle navigation",
+    group: "navigate",
+    icon: "sidebar",
+    keywords: ["sidebar", "collapse", "expand", "hide", "show", "menu", "panel"],
+    shortcut: NAV_TOGGLE_SHORTCUT,
+    surfaces: ["palette"],
+    effect: { kind: "toggle-nav" },
+  });
 
   if (can.canWrite && confirmed) {
     actions.push({
