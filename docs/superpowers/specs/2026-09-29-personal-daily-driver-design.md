@@ -74,7 +74,8 @@ composer 預設是渲染編輯（Milkdown）。把文件送進去、編輯一個
 2. **節點。** ProseMirror inline **atom** 節點 `wiki_link`，**只存一個屬性 `raw`**（括號內外的原始字串，供輸出）；`target`／`fragment`／`alias` 顯示時用 `parseWikiLinkParts(raw)` 現算，不另存（存兩份就可能不一致；spike 證實現算就夠）。
 3. **輸出。** 序列化時原樣寫回 `[[raw]]`，由**自訂的 mdast 節點 `wikiLink` 與它的 to-markdown handler** 輸出，不用行內 `html` 節點——spike（§4.4）發現 `html` 節點在表格儲存格裡會寫出未跳脫的 `|`，把整列弄壞；自訂 handler 可以看 `state.stack` 在表格內把 `|` 補回 `\|`。handler 必須設在編輯器設定的 `remarkStringifyOptionsCtx.handlers`（不能放在 remark 外掛的 extension，因為 options 的 handlers 會蓋過 extension 的，已驗證）。
 4. **輸入。** 打完 `]]` 時，input rule 把 `[[…]]` 轉成節點（`!` 或反斜線在前、程式碼或連結內都不轉）。貼上含 `[[…]]` 的文字，由 `transformPasted` 轉成節點。**（更正：本規格原先寫「走 Milkdown 既有的 Markdown 貼上解析」，那是錯的——編輯器沒有載入 clipboard 外掛，也沒有任何貼上處理，純文字就是以文字貼上，所以貼進來的 `[[x]]` 一樣會被跳脫寫回。貼上需要自己的處理。）** 貼上處理要看**貼到哪裡**，不能只看被貼的內容：貼進程式碼區塊的文字，到 `transformPasted` 時沒有外層的 code block，只看內容會誤轉；行內程式碼結尾的位置也不算在 code mark 之內（該 mark 不 inclusive），要看 stored marks。
-5. **顯示。** 像連結的樣式（設計語言的連結色與底線），文字為 `alias ?? target`（有 fragment 時附 `› fragment`），`title` 顯示原始字串；⌘/Ctrl-點擊的行為與閱讀頁一致，一般點擊不導覽（編輯器對連結的既有規則）。
+5. **顯示。** 像連結的樣式（設計語言的連結色與底線，沿用既有 token，不新增），文字為 `alias ?? target`（有 fragment 時附 `› fragment`，與閱讀頁共用 `shownText`），`title` 顯示原始字串。**（更正：原文寫「⌘/Ctrl-點擊與閱讀頁一致」——做不到。跟隨連結需要文件目錄來解析，編輯器沒有；草稿本來就沒有解析。所以編輯器裡的 wikilink **任何點擊都不導覽**，點一下是選取整個節點，導覽在閱讀頁。）**
+   瀏覽器實測（Chromium）：游標在連結正後方按一次 Backspace，整個連結被刪掉，Ctrl+Z 還原；點連結選取整個節點（選取底色）並留在原頁；方向鍵越過連結時，有的序列是先選取、再按一次才越過，有的序列直接越過，不同序列不同，所以**不對方向鍵的行為下斷言**。
 
 ### 4.2 不變式與驗收
 
