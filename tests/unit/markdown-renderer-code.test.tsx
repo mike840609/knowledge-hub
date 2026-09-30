@@ -27,6 +27,10 @@ describe("code in the reader's renderer", () => {
     }
   });
 
+  it("keeps the button off the printed page", () => {
+    expect(reader(SQL)).toMatch(/<div class="[^"]*\bprint:hidden\b[^"]*"><span aria-live="polite"/);
+  });
+
   it("has no button on inline code", () => {
     expect(reader("run `select 1` first")).not.toContain("Copy code");
   });
