@@ -119,6 +119,14 @@ const rewritten: Record<string, [input: string, output: string]> = {
   // worse, vanish silently inside a paragraph. They now resolve like links.
   "reference images are inlined and their definitions removed": ["![alt][ref]\n\n[ref]: /a.png\n", "![alt](/a.png)\n"],
   "a reference image inside a paragraph is kept": ["text ![alt][ref] more\n\n[ref]: /a.png\n", "text ![alt](/a.png) more\n"],
+  "duplicate image definitions keep the first destination": [
+    "![alt][ref]\n\n[ref]: /first.png\n[ref]: /second.png\n",
+    "![alt](/first.png)\n",
+  ],
+  "duplicate image definitions ignore identifier casing": [
+    '![alt][REF]\n\n[ref]: /first.png "first"\n[REF]: /second.png "second"\n',
+    '![alt](/first.png "first")\n',
+  ],
 };
 
 describe("Markdown round trip through the editor", () => {

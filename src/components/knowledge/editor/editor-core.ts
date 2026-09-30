@@ -90,7 +90,10 @@ const resolveImageReferences = () => (tree: MarkdownNode) => {
     if (node.type === "definition") {
       const id = (node as DefinitionNode).identifier?.toLowerCase();
       const url = (node as DefinitionNode).url;
-      if (id && url) definitions.set(id, { url, title: node.title ?? "" });
+      // Reference definitions use the first match, as the reader does.
+      if (id && url && !definitions.has(id)) {
+        definitions.set(id, { url, title: node.title ?? "" });
+      }
     }
     node.children?.forEach(collect);
   };
