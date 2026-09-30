@@ -23,6 +23,19 @@ export function rememberDocument(shortcuts: DocumentShortcuts, key: string): Doc
   return { ...shortcuts, recent: [key, ...shortcuts.recent.filter((item) => item !== key)].slice(0, 8) };
 }
 
+/**
+ * The documents to offer as recent, newest first, as IDs: what was remembered (`sourceId:documentId`),
+ * without the one being read — the palette is for going somewhere else.
+ */
+export function recentDocumentIds(shortcuts: DocumentShortcuts, reading?: string): string[] {
+  const ids: string[] = [];
+  for (const key of shortcuts.recent) {
+    const documentId = key.split(":")[1];
+    if (documentId && documentId !== reading && !ids.includes(documentId)) ids.push(documentId);
+  }
+  return ids;
+}
+
 export function toggleFavoriteDocument(shortcuts: DocumentShortcuts, key: string): DocumentShortcuts {
   return {
     ...shortcuts,

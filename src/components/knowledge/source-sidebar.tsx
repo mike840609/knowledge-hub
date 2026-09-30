@@ -72,7 +72,8 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
     }
     return map;
   }, [visibleCollections]);
-  const favoriteKeys = shortcuts.favorites.filter((key) => documents.has(key)).slice(0, 4);
+  // Every favorite, not the first few: one that is starred and then not shown is one that cannot be found.
+  const favoriteKeys = shortcuts.favorites.filter((key) => documents.has(key));
   const recentKeys = shortcuts.recent.filter((key) => documents.has(key) && !shortcuts.favorites.includes(key) && key !== `${source.id}:${resolvedDocumentId}`).slice(0, 4);
   const favoriteDocumentIds = new Set(shortcuts.favorites.map((key) => documents.get(key)?.documentId).filter((id): id is string => Boolean(id)));
 
@@ -173,7 +174,8 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
             {favoritesOpen ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
             <span>Favorites</span>
           </button></h3>
-          {favoritesOpen ? <ul className="mt-0.5 space-y-0.5">{favoriteKeys.map((key) => shortcutRow(key, true))}</ul> : null}
+          {/* A long list scrolls in place, so opening it does not push the tree out of sight. */}
+          {favoritesOpen ? <ul className="mt-0.5 max-h-72 space-y-0.5 overflow-y-auto overscroll-contain">{favoriteKeys.map((key) => shortcutRow(key, true))}</ul> : null}
         </section> : null}
         {!needle && recentKeys.length > 0 ? <section aria-label="Recent documents" className="pb-1">
           <h3><button type="button" aria-expanded={recentOpen} onClick={() => setRecentOpen((open) => !open)} className="kh-interactive-row flex min-h-8 w-full items-center gap-2 px-2 text-left text-caption font-medium text-kh-text-muted">

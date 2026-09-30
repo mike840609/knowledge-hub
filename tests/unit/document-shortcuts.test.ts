@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseDocumentShortcuts, rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
+import { parseDocumentShortcuts, recentDocumentIds, rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
 
 describe("document shortcuts", () => {
   it("keeps recent documents unique and newest first", () => {
@@ -20,3 +20,22 @@ describe("document shortcuts", () => {
       .toEqual({ recent: ["source:a"], favorites: [] });
   });
 });
+
+describe("recentDocumentIds", () => {
+  it("is the documents opened lately, as IDs, newest first", () => {
+    expect(recentDocumentIds({ recent: ["s1:d3", "s1:d2", "s2:d1"], favorites: [] })).toEqual(["d3", "d2", "d1"]);
+  });
+
+  it("leaves out the document being read: the palette is for going somewhere else", () => {
+    expect(recentDocumentIds({ recent: ["s1:d3", "s1:d2", "s2:d1"], favorites: [] }, "d3")).toEqual(["d2", "d1"]);
+  });
+
+  it("is not thrown by a remembered key that is not `source:document`, and names a document once", () => {
+    expect(recentDocumentIds({ recent: ["nonsense", "s1:d1", "s2:d1", "s1:"], favorites: [] })).toEqual(["d1"]);
+  });
+
+  it("is what was remembered, favorites or not", () => {
+    expect(recentDocumentIds({ recent: ["s1:d1"], favorites: ["s1:d1", "s1:d9"] })).toEqual(["d1"]);
+  });
+});
+

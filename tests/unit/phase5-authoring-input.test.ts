@@ -4,7 +4,9 @@ import {
   MAX_MARKDOWN_BYTES,
   MAX_TITLE_LENGTH,
   parseCreateDocumentInput,
+  MAX_RECENT_DOCUMENTS,
   parseCreateFolderInput,
+  parseDocumentIdList,
   parseSeedTitle,
   parseTreeNodePatchInput,
   parseUpdateDocumentInput,
@@ -243,5 +245,34 @@ describe("parseSeedTitle", () => {
 
   it("is nothing for a parameter given twice, which is no one's title", () => {
     expect(parseSeedTitle(["a", "b"])).toBeNull();
+  });
+});
+
+describe("parseDocumentIdList", () => {
+  const id = (n: number) => `0199f100-0000-7000-8000-${String(n).padStart(12, "0")}`;
+
+  it("is the IDs, in the order given", () => {
+    expect(parseDocumentIdList(`${id(3)},${id(1)},${id(2)}`)).toEqual([id(3), id(1), id(2)]);
+    expect(parseDocumentIdList(` ${id(1)} , ${id(2)} `)).toEqual([id(1), id(2)]);
+  });
+
+  it("leaves out what is not an ID, rather than passing it on to be a database error", () => {
+    expect(parseDocumentIdList(`nope,${id(1)},'; DROP TABLE x;--,,${id(2)}.md`)).toEqual([id(1)]);
+  });
+
+  it("counts a repeat once", () => {
+    expect(parseDocumentIdList(`${id(1)},${id(2)},${id(1)}`)).toEqual([id(1), id(2)]);
+  });
+
+  it("looks at the first few only", () => {
+    const many = Array.from({ length: 20 }, (_, index) => id(index + 1)).join(",");
+    expect(parseDocumentIdList(many)).toEqual(Array.from({ length: MAX_RECENT_DOCUMENTS }, (_, index) => id(index + 1)));
+    expect(parseDocumentIdList(many, 3)).toHaveLength(3);
+  });
+
+  it("is nothing for nothing", () => {
+    expect(parseDocumentIdList(null)).toEqual([]);
+    expect(parseDocumentIdList("")).toEqual([]);
+    expect(parseDocumentIdList(",,")).toEqual([]);
   });
 });

@@ -3,7 +3,7 @@
 import { Dialog } from "@base-ui-components/react/dialog";
 import { Search, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { useContext, useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { DocumentTopbarContext } from "@/components/shell/document-topbar-context";
 import { ResultListSkeleton } from "@/components/knowledge/knowledge-skeletons";
@@ -17,7 +17,7 @@ import {
   type Action,
 } from "@/components/actions/action-registry";
 import { plainSearchSnippet } from "@/lib/search-snippet";
-import { toggleFavoriteDocument } from "@/lib/document-shortcuts";
+import { recentDocumentIds, toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import { buttonClasses } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { isSingleKeyShortcut, shortcutLabel } from "@/lib/shortcut-keys";
@@ -58,6 +58,8 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<QuickHit[]>([]);
+  // What was opened lately, listed while nothing is typed; found out from the server (see the effect below).
+  const [recents, setRecents] = useState<QuickHit[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -94,16 +96,28 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
   );
 
   const matched = useMemo(() => matchActions(actions, trimmed), [actions, trimmed]);
+  // Recent documents come first while nothing is typed: the default row is then the document opened before
+  // this one, which is the thing most often wanted from an empty palette. With none, it is what it always was.
+  const recentRows = useMemo<PaletteRow[]>(() => (trimmed ? [] : recents.map((hit) => ({ kind: "hit" as const, hit }))), [trimmed, recents]);
   const rows = useMemo<PaletteRow[]>(
     () => [
+      ...recentRows,
       ...matched.map((action) => ({ kind: "action" as const, action })),
       ...hits.map((hit) => ({ kind: "hit" as const, hit })),
     ],
-    [matched, hits],
+    [recentRows, matched, hits],
   );
   // The first row is the default target, and the row set changes as results
   // arrive; leaving the index where it was would point it at something else.
   useEffect(() => setActiveIndex(0), [trimmed, open]);
+  // The recent documents arrive above the rows that were already there. Someone who has not moved keeps the
+  // first row; someone who has keeps the row they are on, which is now further down.
+  const shownRecents = useRef(0);
+  useEffect(() => {
+    const added = recents.length - shownRecents.current;
+    shownRecents.current = recents.length;
+    if (added !== 0) setActiveIndex((index) => (index === 0 ? 0 : Math.max(0, index + added)));
+  }, [recents.length]);
   const activeRow = rows[activeIndex];
 
   // ⌘K, and the single keys. The single keys read the same actions this
@@ -136,6 +150,32 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
     window.addEventListener("keydown", onShortcut);
     return () => window.removeEventListener("keydown", onShortcut);
   }, [enabled, actions, runAction]);
+
+  // The documents to list while nothing is typed. They are asked of the server rather than read back from
+  // what the browser remembered: that is only a list of IDs, and a document may have been renamed or
+  // archived since. The server checks each and answers with what it is called now.
+  const recentIds = useMemo(() => recentDocumentIds(shortcuts, reading?.documentId), [shortcuts, reading?.documentId]);
+  const recentIdsKey = recentIds.join(",");
+  const typing = trimmed !== "";
+  useEffect(() => {
+    if (!enabled || !open || typing || !recentIdsKey) {
+      setRecents([]);
+      return;
+    }
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const response = await fetch(`/api/workspaces/${workspaceId}/recent-documents?ids=${encodeURIComponent(recentIdsKey)}`, { signal: controller.signal, cache: "no-store" });
+        if (!response.ok) throw new Error("Recent documents unavailable");
+        const result = await response.json() as { hits: Omit<QuickHit, "snippet">[] };
+        setRecents(result.hits.map((hit) => ({ ...hit, snippet: "" })));
+      } catch {
+        // A list that could not be had is a list that is not there: the palette is what it was without it.
+        if (!controller.signal.aborted) setRecents([]);
+      }
+    })();
+    return () => controller.abort();
+  }, [enabled, open, typing, recentIdsKey, workspaceId]);
 
   useEffect(() => {
     if (!enabled || !open || !trimmed) {
@@ -193,6 +233,15 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
   };
 
   if (!enabled) return null;
+
+  // A document, whether it was searched for or remembered: what it is called, and where it is (and, for a
+  // search, the line that matched).
+  const documentRow = (hit: QuickHit, index: number) => (
+    <button type="button" onClick={() => choose({ kind: "hit", hit })} onMouseEnter={() => setActiveIndex(index)} className={`w-full rounded-md px-3 py-2 text-left kh-focus-ring ${index === activeIndex ? "bg-kh-bg-selected" : "hover:bg-kh-bg-hover"}`}>
+      <span className={`block truncate text-body font-medium ${index === activeIndex ? "text-kh-selected-text" : "text-kh-text"}`}>{hit.title}</span>
+      <span className="block truncate text-caption text-kh-text-muted">{hit.sourceName}{hit.snippet ? ` · ${plainSearchSnippet(hit.snippet)}` : ""}</span>
+    </button>
+  );
 
   let rowIndex = -1;
   const groupsShown = new Set<string>();
@@ -252,6 +301,19 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
             </div>
             <div className="min-h-0 overflow-y-auto p-2">
               <ul id="quick-search-results" role="listbox" aria-label="Actions and documents" className="space-y-0.5">
+                {recentRows.map((row, position) => {
+                  if (row.kind !== "hit") return null;
+                  rowIndex += 1;
+                  const index = rowIndex;
+                  return (
+                    <li key={`recent-${row.hit.documentId}`} id={`quick-row-${index}`} role="option" aria-selected={index === activeIndex}>
+                      {position === 0 ? (
+                        <p aria-hidden="true" className="px-3 pb-1 pt-2 text-caption font-semibold text-kh-text-muted">Recent</p>
+                      ) : null}
+                      {documentRow(row.hit, index)}
+                    </li>
+                  );
+                })}
                 {matched.map((action) => {
                   rowIndex += 1;
                   const index = rowIndex;
@@ -284,10 +346,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
                   const index = rowIndex;
                   return (
                     <li key={hit.documentId} id={`quick-row-${index}`} role="option" aria-selected={index === activeIndex}>
-                      <button type="button" onClick={() => choose({ kind: "hit", hit })} onMouseEnter={() => setActiveIndex(index)} className={`w-full rounded-md px-3 py-2 text-left kh-focus-ring ${index === activeIndex ? "bg-kh-bg-selected" : "hover:bg-kh-bg-hover"}`}>
-                        <span className={`block truncate text-body font-medium ${index === activeIndex ? "text-kh-selected-text" : "text-kh-text"}`}>{hit.title}</span>
-                        <span className="block truncate text-caption text-kh-text-muted">{hit.sourceName} · {plainSearchSnippet(hit.snippet)}</span>
-                      </button>
+                      {documentRow(hit, index)}
                     </li>
                   );
                 })}
