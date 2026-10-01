@@ -31,18 +31,21 @@ export function refreshOnArrival(href: string): void {
 /**
  * For a push whose destination the caller cannot name, because the route it pushes to redirects:
  * archiving the document that is open sends the reader to its source, which sends them on to the
- * first document there, or to an empty state. Whichever it is, the first place that is not the one
- * being left refreshes.
+ * first document there, or to an empty state. Whichever it is, that destination refreshes once
+ * its page has committed, rather than when the redirect's URL first appears.
  */
 export function refreshOnArrivalElsewhere(): void {
   pendingLeaving = window.location.pathname;
 }
 
-/** Mounted by a page a mutation may navigate to. */
-export function useRefreshOnArrival(): void {
+/** Pass the path belonging to the page's server data, so a pending navigation is not an arrival. */
+export function useRefreshOnArrival(readyPathname: string): void {
   const pathname = usePathname();
   const router = useRouter();
   useEffect(() => {
+    // A shared layout (or the previous document kept during a transition) can see the new
+    // pathname before its page has committed. Refreshing then races the push/redirect.
+    if (pathname !== readyPathname) return;
     if (pendingPathname === pathname) {
       pendingPathname = null;
       router.refresh();
@@ -50,5 +53,11 @@ export function useRefreshOnArrival(): void {
       pendingLeaving = null;
       router.refresh();
     }
-  }, [pathname, router]);
+  }, [pathname, readyPathname, router]);
+}
+
+/** For a server-rendered destination with no document inspector, such as an empty source. */
+export function RefreshOnArrival({ pathname }: { pathname: string }) {
+  useRefreshOnArrival(pathname);
+  return null;
 }

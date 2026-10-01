@@ -334,6 +334,23 @@ describe("hiding on blur", () => {
     expect(linkBox().value).toBe("");
   });
 
+  it("keeps the half-typed address when the browser tab loses focus", async () => {
+    await shown();
+    button("Link").click();
+    expect(document.activeElement).toBe(linkBox());
+    linkBox().value = "half-typed";
+    // Switching tabs blurs with a null relatedTarget while the document itself is unfocused.
+    const hasFocus = vi.spyOn(document, "hasFocus").mockReturnValue(false);
+    try {
+      linkBox().dispatchEvent(new FocusEvent("blur", { relatedTarget: null }));
+      expect(toolbarElement().dataset.show).toBe("true");
+      expect(buttonRow().className).toBe("hidden");
+      expect(linkBox().value).toBe("half-typed");
+    } finally {
+      hasFocus.mockRestore();
+    }
+  });
+
   it("keeps the link box's toolbar when focus goes from the box back into the editor", async () => {
     const editor = await shown();
     button("Link").click();

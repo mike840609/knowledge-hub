@@ -231,9 +231,22 @@ kbd {
   /* The toolbar over a selection. Milkdown's tooltip sets `left`/`top` and `data-show`. */
   .kh-selection-toolbar {
     @apply absolute z-20 flex items-center rounded-lg border border-kh-border bg-kh-bg-raised p-1 shadow-popover;
+    /* Overlays enter and leave (design language §9). The tooltip only toggles `data-show` —
+       there is no exit state to hook like Base UI's `data-[ending-style]` — so both directions
+       ride one discrete `display` transition. Duration and ease are the motion tokens; no new
+       token, so neither the contract nor tailwind.config.ts changes. */
+    @apply transition-[opacity,transform,display] duration-120 ease-out [transition-behavior:allow-discrete];
+  }
+  @starting-style {
+    .kh-selection-toolbar {
+      opacity: 0;
+      transform: scale(0.98);
+    }
   }
   .kh-selection-toolbar[data-show="false"] {
     @apply hidden;
+    opacity: 0;
+    transform: scale(0.98);
   }
 
   /* The `[[` list of documents. It is placed by the editor from the caret's coordinates (`left`/`top`),
