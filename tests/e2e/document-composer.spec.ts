@@ -636,14 +636,13 @@ test("Cancel right after typing leaves no draft, even when the editor's output l
   await surface.click();
   await page.keyboard.type("typed ");
   const cancel = composer(page).getByRole("button", { name: "Cancel" });
-  const asked = page.waitForEvent("dialog");
-  const click = cancel.click();
-  const dialog = await asked;
-  // window.confirm holds the page; answering after the editor's 200 ms output debounce makes
-  // that output land after Cancel has cleared the draft, as a slow answer would.
+  await cancel.click();
+  const dialog = page.getByRole("alertdialog", { name: "Discard changes?" });
+  await expect(dialog).toBeVisible();
+  // Answering after the editor's 200 ms output debounce has passed: whatever that output wrote,
+  // discarding clears it, so no draft is left to be restored.
   await page.waitForTimeout(400);
-  await dialog.accept();
-  await click;
+  await dialog.getByRole("button", { name: "Discard changes" }).click();
   await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
 
   await openEditor(page, url);
@@ -686,30 +685,29 @@ test("Cancel asks before discarding changes, and discarding clears the draft", a
   await source.fill("changed");
   const cancel = composer(page).getByRole("button", { name: "Cancel" });
 
-  // waitForEvent, not page.once: a listener's own expect() cannot fail the
-  // test, and toHaveURL(/\/edit$/) right after the click would pass even if
-  // no dialog had appeared at all (router.push is async). Asserting the
-  // Markdown field is still visible with its typed value, after the click has
-  // fully resolved, is the positive signal that no navigation happened.
-  //
-  // The click is started but not awaited yet: window.confirm() blocks the
-  // page's JS thread, and with it the click action itself, until the dialog
-  // is answered — awaiting the click before consuming the dialog would
-  // deadlock (measured: a real 30s test timeout on `cancel.click()`).
-  const dismissed = page.waitForEvent("dialog");
-  const dismissClick = cancel.click();
-  const dismissDialog = await dismissed;
-  expect(dismissDialog.message()).toBe("Discard changes?");
-  await dismissDialog.dismiss();
-  await dismissClick;
+  // The question is the app's own dialog, not the browser's: it is in the page, so a click does not
+  // block on it. Asserting the Markdown field is still there with its typed value after answering
+  // "Keep editing" is the positive signal that no navigation happened (router.push is async, so a
+  // URL check alone would pass even if the dialog had never appeared).
+  await cancel.click();
+  const dialog = page.getByRole("alertdialog", { name: "Discard changes?" });
+  await expect(dialog).toBeVisible();
+  // The safe answer holds focus, so Enter on a freshly opened dialog never discards by reflex.
+  await expect(dialog.getByRole("button", { name: "Keep editing" })).toBeFocused();
+  await dialog.getByRole("button", { name: "Keep editing" }).click();
+  await expect(dialog).toBeHidden();
   await expect(source).toBeVisible();
   await expect(source).toHaveValue("changed");
 
-  const accepted = page.waitForEvent("dialog");
-  const acceptClick = cancel.click();
-  const acceptDialog = await accepted;
-  await acceptDialog.accept();
-  await acceptClick;
+  // Escape means no, too.
+  await cancel.click();
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(source).toHaveValue("changed");
+
+  await cancel.click();
+  await dialog.getByRole("button", { name: "Discard changes" }).click();
   await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
 
   const surface = await openEditor(page, url);

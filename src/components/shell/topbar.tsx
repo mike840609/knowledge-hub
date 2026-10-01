@@ -9,6 +9,7 @@ import { WorkspaceSelector } from "@/components/shell/workspace-selector";
 import { QuickSearch } from "@/components/search/quick-search";
 import { UserMenu } from "@/components/shell/user-menu";
 import { buttonClasses } from "@/components/ui/button";
+import { Tooltip } from "@/components/ui/tooltip";
 import { NAV_TOGGLE_SHORTCUT } from "@/components/actions/action-registry";
 
 export function Topbar({
@@ -39,9 +40,11 @@ export function Topbar({
             <Menu className="h-4 w-4" aria-hidden="true" />
           </button>
         ) : null}
-        <button type="button" onClick={onToggleNav} aria-label={navCollapsed ? "Expand navigation" : "Collapse navigation"} aria-keyshortcuts={NAV_TOGGLE_SHORTCUT} title={`${navCollapsed ? "Expand navigation" : "Collapse navigation"} (⌘/Ctrl \\)`} className={buttonClasses({ variant: "ghost", icon: true, className: "max-lg:hidden" })}>
-          {navCollapsed ? <PanelLeftOpen className="h-4 w-4" aria-hidden="true" /> : <PanelLeftClose className="h-4 w-4" aria-hidden="true" />}
-        </button>
+        <Tooltip label={navCollapsed ? "Expand navigation" : "Collapse navigation"} shortcut={NAV_TOGGLE_SHORTCUT}>
+          <button type="button" onClick={onToggleNav} aria-label={navCollapsed ? "Expand navigation" : "Collapse navigation"} aria-keyshortcuts={NAV_TOGGLE_SHORTCUT} className={buttonClasses({ variant: "ghost", icon: true, className: "max-lg:hidden" })}>
+            {navCollapsed ? <PanelLeftOpen className="h-4 w-4" aria-hidden="true" /> : <PanelLeftClose className="h-4 w-4" aria-hidden="true" />}
+          </button>
+        </Tooltip>
         <span className={`hidden whitespace-nowrap text-caption font-semibold text-kh-text sm:block ${navCollapsed ? "lg:hidden" : ""}`}>Knowledge Hub</span>
       </div>
       <div className="flex h-full w-28 min-w-0 shrink-0 items-center pr-2 sm:w-64 sm:px-3 lg:w-72">
@@ -53,11 +56,13 @@ export function Topbar({
         <span className="min-w-0 flex-1 truncate text-body font-semibold text-kh-text" title={active ? state.title : undefined}>
           {active ? state.title : ""}
         </span>
-        <button type="button" aria-label="Document details" aria-keyshortcuts="Meta+I Control+I" title="Details (⌘/Ctrl I)" onClick={active ? state.onDetailsClick : undefined}
+        <Tooltip label="Details" shortcut="Meta+I Control+I">
+          <button type="button" aria-label="Document details" aria-keyshortcuts="Meta+I Control+I" onClick={active ? state.onDetailsClick : undefined}
           className={buttonClasses({ variant: "ghost" })}>
           <PanelRight className="h-4 w-4" aria-hidden="true" />
           <span className="hidden sm:inline">Details</span>
         </button>
+        </Tooltip>
       </div>
       <div className="ml-auto flex shrink-0 items-center px-3">
         <UserMenu identityName={model.identityName} />

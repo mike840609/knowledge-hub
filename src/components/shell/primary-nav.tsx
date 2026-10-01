@@ -3,6 +3,7 @@
 import { useWorkspaceAuthorization } from "./use-workspace-authorization";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Tooltip } from "@/components/ui/tooltip";
 import { BookOpenText, Database, Network, Settings, Home } from "lucide-react";
 
 export function PrimaryNav({
@@ -39,20 +40,20 @@ export function PrimaryNav({
     <nav aria-label="Primary" className="flex flex-col gap-0.5 p-2">
       {items.map(({ name, href, Icon }) => {
         const selected = pathname === href || pathname.startsWith(`${href}/`);
-        return (
+        const link = (
           <Link
             key={name}
             href={href}
             onClick={onNavigate}
             aria-current={selected ? "page" : undefined}
             aria-label={compact ? name : undefined}
-            title={compact ? name : undefined}
             className={`flex h-8 items-center rounded-md px-2 text-body transition kh-focus-ring ${compact ? "justify-center" : "gap-2"} ${selected ? "bg-kh-bg-selected font-medium text-kh-selected-text hover:bg-kh-bg-selected" : "text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text"}`}
           >
             <Icon size={15} aria-hidden="true" />
             {compact ? null : <span>{name}</span>}
           </Link>
         );
+        return compact ? <Tooltip key={name} label={name} side="right">{link}</Tooltip> : link;
       })}
     </nav>
   );

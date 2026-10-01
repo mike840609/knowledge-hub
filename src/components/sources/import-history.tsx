@@ -1,6 +1,7 @@
 import { History } from "lucide-react";
 import type { SyncRun } from "@/modules/sources/domain/sync-run";
-import { syncStatusLabel } from "@/components/sources/source-list-row";
+import { Status } from "@/components/ui/status";
+import { syncStatusKind, syncStatusLabel } from "@/components/sources/source-list-row";
 import { Timestamp } from "@/components/ui/timestamp";
 
 function describeRun(run: SyncRun): string {
@@ -22,7 +23,7 @@ export function ImportHistory({ runs }: { runs: SyncRun[] }) {
           <History size={15} aria-hidden="true" className="shrink-0 text-kh-text-muted" />
           <div className="min-w-0 flex-1">
             <p className="text-body font-medium text-kh-text">
-              {syncStatusLabel(run.status)} <span className="font-normal text-kh-text-muted">{describeRun(run)}</span>
+              <Status kind={syncStatusKind(run.status)}>{syncStatusLabel(run.status)}</Status> <span className="font-normal text-kh-text-muted">{describeRun(run)}</span>
             </p>
             <p className="mt-0.5 text-caption text-kh-text-muted">
               <Timestamp value={run.startedAt} />

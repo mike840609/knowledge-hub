@@ -12,6 +12,8 @@ import { MenuCheckboxItem, MenuContent, MenuItem, MenuRoot, MenuTrigger } from "
 import { KnowledgeTree } from "./knowledge-tree";
 import { TreeFilter } from "./tree-filter";
 import { buttonClasses } from "@/components/ui/button";
+import { Status } from "@/components/ui/status";
+import { Tooltip } from "@/components/ui/tooltip";
 import { isBoolean, isBooleanRecord, isString, usePersistedJson } from "@/components/shell/use-persisted-state";
 import { documentShortcutKey, useDocumentShortcuts } from "./use-document-shortcuts";
 import { useTreeMutations } from "./use-tree-mutations";
@@ -110,22 +112,26 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
         {favorite ? <FileText size={14} className="shrink-0" aria-hidden="true" /> : <Clock3 size={14} className="shrink-0" aria-hidden="true" />}
         <span className="truncate">{document.label}</span>
       </Link>
-      <button type="button" onClick={() => toggleFavorite(document.sourceId, document.documentId)} aria-label={`${favorite ? "Remove from" : "Add to"} favorites: ${document.label}`} title={favorite ? "Remove from favorites" : "Add to favorites"} className={`mr-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-kh-text-muted kh-focus-ring ${favorite ? "opacity-80" : "kh-row-action"}`}>
-        <Star size={14} fill={favorite ? "currentColor" : "none"} aria-hidden="true" />
-      </button>
+      <Tooltip label={favorite ? "Remove from favorites" : "Add to favorites"}>
+        <button type="button" onClick={() => toggleFavorite(document.sourceId, document.documentId)} aria-label={`${favorite ? "Remove from" : "Add to"} favorites: ${document.label}`} className={`mr-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-kh-text-muted kh-focus-ring ${favorite ? "opacity-80" : "kh-row-action"}`}>
+          <Star size={14} fill={favorite ? "currentColor" : "none"} aria-hidden="true" />
+        </button>
+      </Tooltip>
     </li>;
   }
   const matches = visibleCollections.filter(({ source: candidate, tree }) => !needle || candidate.name.toLowerCase().includes(needle) || tree.some((item) => item.label.toLowerCase().includes(needle)));
   const hasNotes = visibleCollections.some(({ source: candidate }) => candidate.sourceType === "HUB" && candidate.name === "Notes" && candidate.status === "ACTIVE");
   const canCreate = access.actions.canWrite && confirmed;
   const newNoteHref = `/w/${workspaceId}/knowledge/new`;
-  const addNote = <Link href={newNoteHref} aria-label="Create document" aria-keyshortcuts="C" title="Create document (C)" className={buttonClasses({ variant: "ghost", icon: true })}><Plus size={15} aria-hidden="true" /></Link>;
+  const addNote = <Tooltip label="Create document" shortcut="C"><Link href={newNoteHref} aria-label="Create document" aria-keyshortcuts="C" className={buttonClasses({ variant: "ghost", icon: true })}><Plus size={15} aria-hidden="true" /></Link></Tooltip>;
   // What can be made here, from the registry like everything else: the button exists when the action does.
   const createFolder = actionsFor("create", { workspaceId, workspaceType: access.workspace.type, can: access.actions, confirmed }).find((action) => action.id === "create.folder");
   const addFolder = createFolder ? (
-    <button type="button" aria-label="Create folder" title="Create folder" onClick={() => runAction(createFolder)} className={buttonClasses({ variant: "ghost", icon: true })}>
-      <ActionIcon name="new-folder" className="h-4 w-4 shrink-0" />
-    </button>
+    <Tooltip label="Create folder">
+      <button type="button" aria-label="Create folder" onClick={() => runAction(createFolder)} className={buttonClasses({ variant: "ghost", icon: true })}>
+        <ActionIcon name="new-folder" className="h-4 w-4 shrink-0" />
+      </button>
+    </Tooltip>
   ) : null;
 
   function toggleArchived(checked: boolean) {
@@ -146,18 +152,19 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
       <div className="flex shrink-0 items-center justify-between gap-2">
         <h2 className="px-2 text-caption font-medium text-kh-text-muted">Documents</h2>
         <div className="flex items-center gap-0.5">
-          <button
-            ref={filterTriggerRef}
-            type="button"
-            aria-label="Filter documents and sources"
-            aria-expanded={filterOpen}
-            aria-controls={filterOpen ? "tree-filter" : undefined}
-            title="Filter documents and sources"
-            onClick={() => filterOpen ? closeFilter() : setFilterOpen(true)}
-            className={buttonClasses({ variant: "ghost", icon: true, className: filterOpen ? "bg-kh-bg-hover text-kh-text" : "" })}
-          >
-            <ListFilter size={16} aria-hidden="true" />
-          </button>
+          <Tooltip label="Filter documents and sources">
+            <button
+              ref={filterTriggerRef}
+              type="button"
+              aria-label="Filter documents and sources"
+              aria-expanded={filterOpen}
+              aria-controls={filterOpen ? "tree-filter" : undefined}
+              onClick={() => filterOpen ? closeFilter() : setFilterOpen(true)}
+              className={buttonClasses({ variant: "ghost", icon: true, className: filterOpen ? "bg-kh-bg-hover text-kh-text" : "" })}
+            >
+              <ListFilter size={16} aria-hidden="true" />
+            </button>
+          </Tooltip>
           <MenuRoot>
             <MenuTrigger aria-label="Document display options" title="Document display options" className={buttonClasses({ variant: "ghost", icon: true })}>
               <MoreHorizontal size={17} aria-hidden="true" />
@@ -230,7 +237,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
                 <button type="button" aria-expanded={open} aria-controls={`collection-${candidate.id}`} onClick={() => setExpanded((previous) => ({ ...previous, [candidate.id]: !open }))} title={candidate.name} className="flex min-h-8 min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 text-left text-body font-medium text-kh-text hover:bg-kh-bg-hover kh-focus-ring">
                   <Icon size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />
                   <span className="truncate">{candidate.name}</span>
-                  {candidate.status === "ARCHIVED" ? <span className="ml-auto text-caption font-normal text-kh-text-muted">Archived</span> : null}
+                  {candidate.status === "ARCHIVED" ? <Status kind="archived" className="ml-auto text-caption font-normal text-kh-text-muted">Archived</Status> : null}
                 </button>
                 {isNotes && canCreate ? <div className="flex items-center">{addFolder}{addNote}</div> : null}
               </div>

@@ -1,10 +1,13 @@
 "use client";
 import Link from "next/link";
+import { FileText } from "lucide-react";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { buttonClasses } from "@/components/ui/button";
-import { StatusMessage } from "@/components/ui/status-message";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Kbd } from "@/components/ui/kbd";
 import { ActionIcon } from "@/components/actions/action-icon";
 import { actionsFor } from "@/components/actions/action-registry";
+import { shortcutLabel } from "@/lib/shortcut-keys";
 
 /**
  * An empty state answers one question: what can I do from here. It asks the
@@ -12,6 +15,10 @@ import { actionsFor } from "@/components/actions/action-registry";
  * and cannot import is told that plainly instead of being shown a heading with
  * nothing under it — and so a future action arrives here without anyone having
  * to remember this file exists.
+ *
+ * Only the first action is the primary one; the rest are secondary, so two
+ * equal-weight buttons never ask the reader to choose. The first action's own
+ * shortcut, if it has one, is taught underneath.
  */
 export function KnowledgeEmptyState() {
   const { access, confirmed } = useWorkspaceAuthorization();
@@ -22,15 +29,17 @@ export function KnowledgeEmptyState() {
     confirmed,
     onboarding: true,
   });
+  const first = actions[0];
 
   return (
     <section>
-      <StatusMessage
-        title="Knowledge"
+      <EmptyState
+        icon={FileText}
+        title="No documents yet"
         description={
           actions.length > 0
-            ? "No documents yet. Add a note or import a folder to get started."
-            : "No documents yet. You can read this workspace; adding to it needs edit access."
+            ? "Add a note or import a folder to get started."
+            : "You can read this workspace; adding to it needs edit access."
         }
         action={
           <>
@@ -50,6 +59,13 @@ export function KnowledgeEmptyState() {
               ) : null,
             )}
           </>
+        }
+        hint={
+          first?.shortcut ? (
+            <>
+              Shortcut <Kbd>{shortcutLabel(first.shortcut)}</Kbd> {first.label}
+            </>
+          ) : undefined
         }
       />
     </section>

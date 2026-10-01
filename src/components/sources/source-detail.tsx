@@ -1,3 +1,4 @@
+import { Status } from "@/components/ui/status";
 import { WorkspaceImportLink } from "@/components/shell/workspace-import-link";
 import Link from "next/link";
 import { RefreshCw } from "lucide-react";
@@ -23,8 +24,9 @@ export function SourceDetail({ model, showImportSuccess = false }: { model: Sour
           <h1 className="text-heading font-semibold text-kh-text">{source.name}</h1>
           <p className="mt-1 flex flex-wrap items-center gap-2 text-caption text-kh-text-muted">
             <span className="rounded-md border border-kh-border px-1.5 py-0.5">{sourceTypeLabel(source.sourceType)}</span>
-            <span className="rounded-md border border-kh-border px-1.5 py-0.5">{source.status}</span>
-
+            <span className="rounded-md border border-kh-border px-1.5 py-0.5">
+              <Status kind={source.status === "ARCHIVED" ? "archived" : "active"}>{source.status === "ARCHIVED" ? "Archived" : "Active"}</Status>
+            </span>
           </p>
         </div>
         {syncable ? (

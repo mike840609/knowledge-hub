@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChevronRight, Database } from "lucide-react";
 import type { SourceListItemModel } from "@/server/source-read";
+import { Status, type StatusKind } from "@/components/ui/status";
 import { Timestamp } from "@/components/ui/timestamp";
 
 export function sourceTypeLabel(sourceType: string): string {
@@ -13,6 +14,12 @@ export function syncStatusLabel(status: string): string {
   if (status === "APPLIED") return "Synced";
   if (status === "FAILED") return "Failed";
   return "Previewed";
+}
+
+export function syncStatusKind(status: string): StatusKind {
+  if (status === "APPLIED") return "success";
+  if (status === "FAILED") return "danger";
+  return "pending";
 }
 
 export function SourceListRow({ workspaceId, item }: { workspaceId: string; item: SourceListItemModel }) {
@@ -29,11 +36,13 @@ export function SourceListRow({ workspaceId, item }: { workspaceId: string; item
           {sourceTypeLabel(source.sourceType)}
         </span>
         {latestRun ? (
-          <span className="hidden shrink-0 text-caption text-kh-text-muted sm:inline">
-            {syncStatusLabel(latestRun.status)} · <Timestamp value={latestRun.startedAt} />
+          <span className="hidden shrink-0 items-center gap-1 text-caption text-kh-text-muted sm:inline-flex">
+            <Status kind={syncStatusKind(latestRun.status)}>{syncStatusLabel(latestRun.status)}</Status>
+            <span aria-hidden="true">·</span>
+            <Timestamp value={latestRun.startedAt} />
           </span>
         ) : (
-          <span className="hidden shrink-0 text-caption text-kh-text-muted sm:inline">Never synced</span>
+          <Status kind="none" className="hidden shrink-0 text-caption text-kh-text-muted sm:inline-flex">Never synced</Status>
         )}
         <ChevronRight size={15} aria-hidden="true" className="shrink-0 text-kh-text-muted" />
       </Link>

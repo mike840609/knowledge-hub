@@ -16,6 +16,8 @@ import { RowActionsTrigger, RowContextMenu } from "@/components/actions/action-m
 import type { Action } from "@/components/actions/action-registry";
 import { REVEAL_FOLDER_EVENT } from "./move-request";
 import { CLEAR_FILTER_TO_REORDER, alreadyAtEdge, reorderedNode } from "./organize-messages";
+import { Status } from "@/components/ui/status";
+import { Tooltip } from "@/components/ui/tooltip";
 
 export type KnowledgeTreeProps = {
   items: KnowledgeTreeItem[];
@@ -118,11 +120,11 @@ function TreeNodeRow({
         >
           <FileText size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />
           <span className="truncate">{item.label}</span>
-          {archived ? <span className="ml-auto shrink-0 text-caption font-normal text-kh-text-muted">Archived</span> : null}
+          {archived ? <Status kind="archived" className="ml-auto shrink-0 text-caption font-normal text-kh-text-muted">Archived</Status> : null}
         </Link>
-        <button type="button" onClick={() => onToggleFavorite(item.documentId)} aria-label={`${isFavorite ? "Remove from" : "Add to"} favorites: ${item.label}`} title={isFavorite ? "Remove from favorites" : "Add to favorites"} className={`mr-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md kh-focus-ring ${isFavorite ? "text-kh-selected-text" : "kh-row-action text-kh-text-muted hover:bg-kh-bg-hover"}`}>
+        <Tooltip label={isFavorite ? "Remove from favorites" : "Add to favorites"}><button type="button" onClick={() => onToggleFavorite(item.documentId)} aria-label={`${isFavorite ? "Remove from" : "Add to"} favorites: ${item.label}`} className={`mr-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md kh-focus-ring ${isFavorite ? "text-kh-selected-text" : "kh-row-action text-kh-text-muted hover:bg-kh-bg-hover"}`}>
           <Star size={14} fill={isFavorite ? "currentColor" : "none"} aria-hidden="true" />
-        </button>
+        </button></Tooltip>
         {/* Floated just inside the favourite toggle, carrying the row's own
             background: reserving a second control slot would have re-truncated
             every label in the tree to buy a button that is invisible most of
@@ -164,7 +166,7 @@ function TreeNodeRow({
         >
           {collapsed ? <ChevronRight size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" /> : <ChevronDown size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />}
           <span className="min-w-0 flex-1 truncate">{item.label}</span>
-          {archived ? <span className="shrink-0 text-caption font-normal text-kh-text-muted">Archived</span> : null}
+          {archived ? <Status kind="archived" className="shrink-0 text-caption font-normal text-kh-text-muted">Archived</Status> : null}
         </button>
         {/* Floated over the header's own background, as a document row's is: a
             second control slot would have re-truncated every folder name. */}

@@ -27,6 +27,7 @@ import { DocumentHeader } from "./document-header";
 import { DocumentPane } from "./document-pane";
 import type { DocumentBreadcrumbSegment } from "./document-breadcrumb";
 import { buttonClasses } from "@/components/ui/button";
+import { Status } from "@/components/ui/status";
 import { Timestamp } from "@/components/ui/timestamp";
 
 function revisionHref(input: {
@@ -162,7 +163,7 @@ function InspectorTabs({
           </div>
           <div>
             <dt className="text-caption text-kh-text-muted">Status</dt>
-            <dd className="text-kh-text">{data.status === "ACTIVE" ? "Active" : "Archived"}</dd>
+            <dd className="text-kh-text"><Status kind={data.status === "ACTIVE" ? "active" : "archived"}>{data.status === "ACTIVE" ? "Active" : "Archived"}</Status></dd>
           </div>
           <div>
             <dt className="text-caption text-kh-text-muted">Current revision</dt>

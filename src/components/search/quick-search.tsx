@@ -20,6 +20,7 @@ import { plainSearchSnippet } from "@/lib/search-snippet";
 import { documentIdInPath, recentDocumentIds, toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import { buttonClasses } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
+import { Tooltip } from "@/components/ui/tooltip";
 import { isSingleKeyShortcut, shortcutLabel } from "@/lib/shortcut-keys";
 
 type QuickHit = {
@@ -267,18 +268,19 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label="Quick search"
-        aria-keyshortcuts="Meta+K Control+K /"
-        title="Quick search (⌘K or /)"
-        className={buttonClasses({ variant: "ghost" })}
-      >
-        <Search className="h-4 w-4" aria-hidden="true" />
-        <span className="hidden text-body-sm sm:inline">Search</span>
-        <Kbd className="ml-3 hidden lg:inline">⌘K</Kbd>
-      </button>
+      <Tooltip label="Search and actions" keys="/">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label="Quick search"
+          aria-keyshortcuts="Meta+K Control+K /"
+          className={buttonClasses({ variant: "ghost" })}
+        >
+          <Search className="h-4 w-4" aria-hidden="true" />
+          <span className="hidden text-body-sm sm:inline">Search</span>
+          <Kbd className="ml-3 hidden lg:inline">⌘K</Kbd>
+        </button>
+      </Tooltip>
       <Dialog.Root open={open} onOpenChange={setOpen}>
         <Dialog.Portal>
           <Dialog.Backdrop className="fixed inset-0 z-50 bg-kh-overlay transition-opacity duration-120 ease-out data-[starting-style]:opacity-0 data-[ending-style]:opacity-0" />
