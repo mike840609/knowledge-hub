@@ -20,7 +20,8 @@ export default async function WorkspaceSourcesPage({
         locationHref={`/w/${workspaceId}/knowledge`}
         title="Sources"
         description={`${model.items.length} ${model.items.length === 1 ? "source" : "sources"}`}
-        actions={<WorkspaceImportLink
+        // The empty state carries the same action as its primary; two of them on one screen is one too many.
+        actions={model.items.length === 0 ? undefined : <WorkspaceImportLink
           className={buttonClasses({ variant: "secondary" })}
           href={`/w/${workspaceId}/sources/import`}
         >
