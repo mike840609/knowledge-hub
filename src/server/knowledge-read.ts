@@ -45,6 +45,7 @@ export async function getKnowledgeDocumentModel(
 }
 
 export type WorkspaceShellModel = {
+  identityId: string;
   identityName: string;
   identityEmpId: string;
   workspaces: readonly WorkspaceNavigationItem[];
@@ -79,6 +80,7 @@ export async function getWorkspaceShellModel(
   return {
     navigation,
     access,
+    identityId: identity.id,
     identityName: identity.name,
     identityEmpId: identity.emp_id,
     workspaces,

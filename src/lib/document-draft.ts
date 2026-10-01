@@ -6,16 +6,21 @@
 /**
  * `title` is the title a new document was started from (a broken link's): such a document is not the
  * blank one, and a draft left by that one must not stand in for it, nor its draft for the blank one's.
+ *
+ * `userId` is the server-resolved Hub user id, threaded from the page: two people sharing a tab
+ * must not be offered each other's draft. It is key material only, never authorization.
  */
-export type DraftKey = { kind: "edit"; documentId: string } | { kind: "new"; workspaceId: string; title?: string };
+export type DraftKey = { kind: "edit"; userId: string; documentId: string } | { kind: "new"; userId: string; workspaceId: string; title?: string };
 export type Draft = { title: string; markdown: string; baseRevisionId: string | null };
 export type DraftStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 const VERSION = 1;
 
 export function draftStorageKey(key: DraftKey): string {
-  if (key.kind === "edit") return `kh:draft:edit:${key.documentId}`;
-  return key.title === undefined ? `kh:draft:new:${key.workspaceId}` : `kh:draft:new:${key.workspaceId}:${encodeURIComponent(key.title)}`;
+  if (key.kind === "edit") return `kh:draft:edit:${key.userId}:${key.documentId}`;
+  return key.title === undefined
+    ? `kh:draft:new:${key.userId}:${key.workspaceId}`
+    : `kh:draft:new:${key.userId}:${key.workspaceId}:${encodeURIComponent(key.title)}`;
 }
 
 export function readDraft(storage: DraftStorage | null, key: DraftKey): Draft | null {

@@ -199,10 +199,13 @@ export function selectionToolbar(): { plugins: MilkdownPlugin[]; configure: (ctx
             provider.hide();
           }
           // The link box, from its side: leaving it for the page closes it; going back into the
-          // editor (Enter, Esc) or elsewhere in the toolbar does not.
+          // editor (Enter, Esc) or elsewhere in the toolbar does not. Switching browser tabs or
+          // windows also blurs with a null relatedTarget — but the whole document lost focus with
+          // it, so the half-typed address stays for the trip back.
           function hideOnLinkBoxBlur(event: FocusEvent) {
             const next = event.relatedTarget;
             if (next instanceof Node && (element.contains(next) || editorView.dom.contains(next))) return;
+            if (next === null && !document.hasFocus()) return;
             provider.hide();
           }
           const showOnFocus = () => provider.update(editorView);

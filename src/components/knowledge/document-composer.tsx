@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { PersistentDraft, type DraftStatus } from "@/lib/persistent-draft";
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type KeyboardEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { useHydrated } from "@/components/shell/use-hydrated";
@@ -14,7 +14,6 @@ import { matchesInitial } from "@/lib/composer-output";
 import { browserDraftStorage, clearDraft, readDraft, syncDraft, type DraftKey } from "@/lib/document-draft";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
 import { DocumentBreadcrumb, type DocumentBreadcrumbSegment } from "./document-breadcrumb";
-import { MarkdownArticle } from "./markdown-article";
 import type { MarkdownEditor } from "./editor/editor-core";
 import type { RenderedEditorProps } from "./editor/rendered-editor";
 import { useFormKeys } from "./use-form-keys";
@@ -25,11 +24,27 @@ function EditorUnavailable({ onFail }: RenderedEditorProps) {
   return null;
 }
 
+/**
+ * How long the editor chunk may take before the composer stops waiting. Webpack's own chunk
+ * timeout is about two minutes, during which the Markdown textarea sits disabled; fifteen
+ * seconds is a failed load by any measure that matters, and the source works as the fallback.
+ */
+const EDITOR_LOAD_TIMEOUT_MS = 15_000;
+
 // Loaded on demand and never on the server: Milkdown and ProseMirror stay out of the first bundle.
-const RenderedEditor = dynamic(
-  () => import("./editor/rendered-editor").then((module) => module.RenderedEditor, () => EditorUnavailable),
-  { ssr: false },
-);
+// A fresh import per attempt — `next/dynamic` caches the loader's result, so retrying through the
+// same loader would replay a transient failure until a full reload.
+function importRenderedEditor(): Promise<ComponentType<RenderedEditorProps>> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut: Promise<ComponentType<RenderedEditorProps>> = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(EditorUnavailable), EDITOR_LOAD_TIMEOUT_MS);
+  });
+  const loaded = import("./editor/rendered-editor").then(
+    (module) => module.RenderedEditor,
+    () => EditorUnavailable,
+  );
+  return Promise.race([loaded, timedOut]).finally(() => clearTimeout(timer));
+}
 
 type Mode = "rendered" | "source";
 type Content = { markdown: string; title: string };
@@ -55,6 +70,7 @@ export type ComposerSubmit = { title: string; markdown: string; expectedRevision
 export function DocumentComposer({
   workspaceId,
   draftKey,
+  standIn,
   location,
   untitledLabel,
   metadataTitle,
@@ -72,6 +88,14 @@ export function DocumentComposer({
   /** Where `[[` looks for documents to link to. */
   workspaceId: string;
   draftKey: DraftKey;
+  /**
+   * What stands in for the rendered editor while it loads, rendered on the
+   * server by the page: the composer is a client component, so a static import
+   * of the Markdown stack here would ship react-markdown to /edit and /new.
+   * It is frozen at what the composer opened with — a restored draft replaces
+   * it with a skeleton until the editor arrives, rather than a stale article.
+   */
+  standIn: ReactNode;
   /** Breadcrumb up to, not including, the document; the resolved title is appended. */
   location: DocumentBreadcrumbSegment[];
   /** The last breadcrumb segment while nothing supplies a title. */
@@ -114,6 +138,9 @@ export function DocumentComposer({
   const [touched, setTouched] = useState(false);
   const [editorReady, setEditorReady] = useState(false);
   const [editorFailed, setEditorFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  // A new loader per attempt: the failed load must not be replayed from the cache.
+  const RenderedEditor = useMemo(() => dynamic(() => importRenderedEditor(), { ssr: false }), [loadAttempt]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<GovernanceFailure | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
@@ -331,6 +358,13 @@ export function DocumentComposer({
     setEditorFailed(true);
   }
 
+  // Trying rendered editing again mounts a new loader, so a transient chunk failure gets a fresh
+  // import (and a build failure a rebuild) instead of staying failed until a full reload.
+  function retryRenderedEditor() {
+    setEditorFailed(false);
+    setLoadAttempt((attempt) => attempt + 1);
+  }
+
   function handleUserEdit() {
     pendingRef.current = true;
     setTouched(true);
@@ -538,15 +572,22 @@ export function DocumentComposer({
             {({ loading: "Loading draft…", saved: "Draft saved to your account", saving: "Saving draft…", local: "Draft kept on this device · syncing…", error: "Draft sync failed. Keep this page open and retry.", conflict: "Draft changed on another device. Your text is preserved here; copy it before loading another draft." })[draftStatus]}
             {draftStatus === "error" && <Button type="button" variant="link" onClick={() => void persistent.current?.retry()}>Retry draft save</Button>}
           </p>}
-          {restored ? (
-            <p role="status" className="flex flex-wrap items-center gap-2 rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2 text-body text-kh-text">
-              {restored === "stale" ? "這份文件在你離開後被更新過，已還原你未存的修改。" : "已還原未存的修改。"}
-              <Button type="button" variant="link" onClick={discardDraft}>捨棄</Button>
-            </p>
-          ) : null}
+          {/* The live region stays mounted while empty: a region created together with its text is
+              often not announced. Empty it is `sr-only` — still in the accessibility tree, but with
+              no footprint (an empty box would add a `space-y` gap). The restore effect fills it a
+              commit after hydration, so the announcement fires. */}
+          <p role="status" className={restored ? "flex flex-wrap items-center gap-2 rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2 text-body text-kh-text" : "sr-only"}>
+            {restored ? (
+              <>
+                {restored === "stale" ? "這份文件在你離開後被更新過，已還原你未存的修改。" : "已還原未存的修改。"}
+                <Button type="button" variant="link" onClick={discardDraft}>捨棄</Button>
+              </>
+            ) : null}
+          </p>
           {editorFailed ? (
             <p role="status" className="rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2 text-body text-kh-text">
               這份文件的排版無法在渲染模式下編輯，已改用 Markdown 模式。
+              <Button type="button" variant="link" className="ml-2" onClick={retryRenderedEditor}>重試渲染模式</Button>
             </p>
           ) : null}
           {conflict ? (
@@ -575,8 +616,20 @@ export function DocumentComposer({
           {showing === "rendered" && resolved.source === "METADATA" && !markdownOpensWithHeading(markdown) ? (
             <h1 className="text-heading font-semibold tracking-tight text-kh-text">{resolved.title}</h1>
           ) : null}
-          {/* Until the editor is ready the reader's own rendering stands in for it, so nothing flashes. */}
-          {showing === "rendered" && !editorReady ? <MarkdownArticle markdown={markdown} /> : null}
+          {/* Until the editor is ready the server's rendering stands in for it, so nothing flashes.
+              It is what the composer opened with: restored text waits for the editor behind a
+              skeleton rather than wearing the old revision as its face. */}
+          {showing === "rendered" && !editorReady ? (
+            markdown === initial.markdown ? (
+              standIn
+            ) : (
+              <div aria-hidden="true" className="animate-pulse space-y-3 py-2">
+                <div className="h-4 w-3/4 rounded-md bg-kh-bg-hover" />
+                <div className="h-4 w-full rounded-md bg-kh-bg-hover" />
+                <div className="h-4 w-2/3 rounded-md bg-kh-bg-hover" />
+              </div>
+            )
+          ) : null}
           {mountEditor ? (
             <div hidden={showing !== "rendered" || !editorReady}>
               <RenderedEditor
