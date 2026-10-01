@@ -151,6 +151,42 @@ test.describe("the palette, before anything is typed", () => {
     await expect(options(page).filter({ hasText: a })).toBeVisible(ROUND_TRIP);
   });
 
+  test("says the list is still changing while the recent documents are asked for, and keeps the row someone has moved to when they arrive above it", async ({ page }) => {
+    const stamp = unique("Late");
+    const workspaceId = await mySpace(page);
+    const [a, b, c] = [`${stamp} Alpha`, `${stamp} Beta`, `${stamp} Gamma`];
+    const notes = { a: await createNote(page, workspaceId, a), b: await createNote(page, workspaceId, b), c: await createNote(page, workspaceId, c) };
+    await read(page, notes.a, a);
+    await read(page, notes.b, b);
+    await read(page, notes.c, c);
+    // The answer is late: what is showing is the actions, and the person is already on the way down them.
+    await page.route("**/recent-documents?*", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 1_500));
+      await route.continue();
+    });
+
+    await openPalette(page, { settled: false });
+    const list = listbox(page);
+    await expect(list).toHaveAttribute("aria-busy", "true");
+    await expect(options(page).first()).toHaveAttribute("aria-selected", "true");
+    await page.keyboard.press("ArrowDown");
+    const chosen = options(page).nth(1);
+    await expect(chosen).toHaveAttribute("aria-selected", "true");
+    const label = await chosen.innerText();
+    expect(label).not.toContain(b);
+
+    // Beta and Alpha arrive above it (and whatever else was opened lately). It is still the row that was
+    // chosen, further down, not the one that happens to be second: what Enter does is what the person last picked.
+    await expect(recentHeading(page)).toBeVisible(ROUND_TRIP);
+    await expect(list).toHaveAttribute("aria-busy", "false");
+    await expect(options(page).nth(0)).toContainText(b);
+    await expect(options(page).nth(0)).toHaveAttribute("aria-selected", "false");
+    await expect(options(page).nth(1)).toHaveAttribute("aria-selected", "false");
+    const selected = list.locator('[role="option"][aria-selected="true"]');
+    await expect(selected).toHaveCount(1);
+    expect(await selected.innerText()).toBe(label);
+  });
+
   test("with nothing else opened it is what it was: the first row is a place to go", async ({ page }) => {
     await mySpace(page);
     await expect(page.getByRole("treeitem").first()).toBeVisible(ROUND_TRIP);

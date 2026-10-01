@@ -502,6 +502,11 @@ Next 的 build 輸出（有 ±1 kB 的分組誤差，見切片 0 的紀錄；每
 
 ### 寫的時候測試與檢查抓到的問題（我的錯，都已修）
 
+- **`row-actions.spec.ts:75` 紅了，是 B.0 造成的競態；我第一個診斷只對了一半，第一個修法沒有修好。** 測試開 palette、確認第一列被選中、按 ↓、期待第 2 列被選中；單獨跑與 29 案一起跑都過，完整套件裡連續兩次紅（先前的完整跑與 CI 都過，是運氣）。
+  - **第一個診斷（對了一半）：**「最近開過」的回應在 ↓ 之後才到，我的程式把使用者已選的那一列保持在原列（往下挪），第 2 列就不是被選中的。這是真的——trace 裡那個請求只花約 17ms，窗口很小。**修法：** listbox 加 `aria-busy`（回應還沒回來時為 true，**在開啟的那一次 render 就是真的**，不靠 effect），共用的 `openPalette` fixture 等它結束；新的 e2e 用 `page.route` 把回應延遲 1.5 秒，斷言載入中是 busy、使用者已選的那一列在回應到達後仍是被選中的那一列。**但加了這個修法後，完整套件裡同一案還是紅。**
+  - **真正的原因（看失敗當下的快照：第 2 列是「Open graph」這個動作列，所以列表在 ↓ 之後又變了）：** 這個測試的工作空間裡「正在讀的文件」要等頁面 topbar 的 effect 註冊（`reading`），在那之前它是 `undefined`；最近開過把「正在讀的那份」也列出來，等 `reading` 知道了那一列又消失，選取跟著往上挪回第 1 列。`aria-busy` 擋不住——那時 ID 清單已經變了、請求早已結算。**修法：** 目前文件的 ID 本來就在 URL 裡、第一次 render 就知道，新函式 `documentIdInPath(pathname)` 同步取出它，與 `reading` 一起當排除項，「正在讀的那份」從頭到尾不會出現。（不能用 `isUuid`：`uuidv7.ts` 會 import `node:crypto`，進了 client bundle 會出事；用本地的格式比對，反正這只是把一份文件從清單拿掉，不授權任何事。）
+  - 我第一版 e2e 的斷言假設最近開過只有 2 列（單獨跑時成立；與其他測試一起跑時前面的測試已經建過文件，`goto("/")` 會多落在一份舊文件），改成比對「選中的是同一列的文字」。
+
 - **矮視窗裡清單蓋住游標那一行**（e2e 抓到）。第一版只決定放上或放下，清單比兩邊的空間都高時就疊在那行字上。現在兩邊都放不下時清單自己捲動（`max-height` 依剩下的空間）。
 - **e2e 的 `getByRole("textbox")` 在清單開著時找不到編輯器**——因為它此時是 `combobox`。這是設計上的後果，測試改用 `aria-label` 找。
 - **快速打字讓選取與之前的輸入併成同一步 undo**（jsdom 抓到）；加 `closeHistory`，選取是獨立一步。
@@ -547,9 +552,9 @@ Next 的 build 輸出（有 ±1 kB 的分組誤差，見切片 0 的紀錄；每
 
 | 層 | 新增 | 結果 |
 | --- | --- | --- |
-| 單元 | `parseDocumentIdList`（`phase5-authoring-input`）、`recentDocumentIds`、`favoritesInPlace`（`document-shortcuts`） | 全套 95 檔 **1431/1431** |
+| 單元 | `parseDocumentIdList`（`phase5-authoring-input`）、`recentDocumentIds`、`favoritesInPlace`（`document-shortcuts`） | 全套 95 檔 **1436/1436**（含 `documentIdInPath` 的 5 案：文件頁與其下的頁、非文件頁、不是 ID 的段、整段或不取與大小寫、不被別處的 ID 騙到；輔助函式變異體 5/5 被殺，其中兩個原本存活的由補的案例殺掉） |
 | integration | `recent-documents-api` 10 案：順序與形狀、`no-store`、不含內文、用現在的標題、封存／不存在／格式錯誤的略過、別的 workspace 的略過、唯讀成員可讀、非成員與不存在的 workspace 同一個 404、壞 ID 400、上限 8、空清單 | 全套 53 檔 **613/613** |
-| e2e | `zz-recents-favorites` 8 案：最近開過的順序與排除目前這份、Enter 去前一份、封存後消失、打字時讓位且清空後回來、回應提到沒被要求的文件時不顯示、取不到清單時退回原樣、沒有任何最近開過時第一列是導覽；側欄：最新 4 筆在原位且這一節不高於 240px、「Show all」列出全部且每項是連結、Esc 還焦點、重新整理後還在，以及 2 筆時沒有「Show all」（Team workspace，收藏只存本機） | 單檔 8/8（4 筆版本）；上一版（全顯示）的 7 案在 4 個 worker × 12 輪下 84/84 |
+| e2e | `zz-recents-favorites` 9 案：最近開過的順序與排除目前這份、Enter 去前一份、封存後消失、打字時讓位且清空後回來、回應提到沒被要求的文件時不顯示、取不到清單時退回原樣、沒有任何最近開過時第一列是導覽、**回應晚到時列表標示載入中，且使用者已選的那一列保持被選中**；側欄：最新 4 筆在原位且這一節不高於 240px、「Show all」列出全部且每項是連結、Esc 還焦點、重新整理後還在，以及 2 筆時沒有「Show all」（Team workspace，收藏只存本機） | 單檔 9/9；上一版（全顯示）的 7 案在 4 個 worker × 12 輪下 84/84 |
 | `tsc`、`eslint`、`next build` | — | 乾淨 |
 
 ### 變異驗證
@@ -579,15 +584,29 @@ Next 的 build 輸出（有 ±1 kB 的分組誤差，見切片 0 的紀錄；每
 
 4. 側欄改成「4 筆加 Show all」之後：213 過／4 紅／2 跳過，**4 案全在 `zz-organize*`**：`zz-organize-move`「Alt+↑ and Alt+↓ say why they do nothing while the tree is filtered」（深度相等不符）、`zz-organize`「come back from Show archived」（同第 1 次）、「say how many other documents' links stop working」（同第 3 次）、「a folder that still holds something…」（同第 3 次，`outside of the viewport`）。其中三案前面出現過；這條分支上四次完整跑裡，`zz-organize*` 共紅過 4 個不同的案（沒有一案每次都紅）。
 
-**追蹤檔看到的事（第 4 次，兩案）：封存的 `POST /api/documents/:id/archive` 回 200**——伺服器確實封存了，但畫面沒有跟上：那一列 15 秒沒消失，或「N documents link here」的 toast 沒出現。也就是變更成功之後，前端沒有刷新或沒有跑完後續處理；不是伺服器錯誤。這與 #87 修的「背景刷新丟掉 router transition」（#63、#64）是同一個區域，**我沒有證明是同一個原因**，也沒有去查。如果這是真的使用者會遇到的事（封存成功、列還在直到重新整理），它比一個不穩的 e2e 更值得另外查。
+**（這段是當時的推測，已被下面「後來找了」取代）追蹤檔看到的事（第 4 次，兩案）：封存的 `POST /api/documents/:id/archive` 回 200**——伺服器確實封存了，但畫面沒有跟上：那一列 15 秒沒消失，或「N documents link here」的 toast 沒出現。也就是變更成功之後，前端沒有刷新或沒有跑完後續處理；不是伺服器錯誤。這與 #87 修的「背景刷新丟掉 router transition」（#63、#64）是同一個區域，**我沒有證明是同一個原因**，也沒有去查。如果這是真的使用者會遇到的事（封存成功、列還在直到重新整理），它比一個不穩的 e2e 更值得另外查。
 
 四次紅的都在 `zz-organize` 右鍵／選單的流程，而且**都不是我這次改到的程式**（B.0 只動 palette 的抓取與側欄收藏的清單）。失敗當下的頁面快照裡帳號沒有任何收藏，所以不是側欄長高造成的版面位移。**基準線：** 在乾淨的 `origin/main`（dff2043，沒有 B.0）上跑同一套完整 e2e，一次：203 過／1 紅／2 跳過，紅的是 `zz-organize`「are made inside a folder, archived with an Undo…」——`locator.click` 逾時，`element is outside of the viewport`，與第 3 次的第二案是同一種症狀。所以**這類 `zz-organize` 選單流程的間歇失敗在沒有 B.0 的 main 上也會發生**；這是 1 次樣本，不是失敗率。原因我沒有找。
 
 **CI 上的證據（PR #94 開了之後）：** CI 的 `e2e` 在這個 PR 的第一次 run 紅了一案：`zz-organize-move.spec.ts:136`（對資料夾列按右鍵後 `Move folder…` 30 秒沒出現；215 過／1 紅）。**`main` 自己的 push CI 也紅在同一案**：#90 合併後那次（`zz-organize-move.spec.ts:109` 與 `:136`，207 過／2 紅），#89 合併後那次紅在 `row-actions.spec.ts:133`（Copy link）；兩次的 `unit`／`build`／`integration` 都綠。所以這類選單流程的 e2e 在沒有 B.0 的 main 上、在 CI 上，也是間歇紅的。要重跑 CI 需要有權限的人（我的整合帳號回 403）。
 
+**最後一次完整 e2e（含 `documentIdInPath` 之後；工作樹裡帶著下面那一行 `openKnowledge` 修法）：217 過／1 紅／2 跳過。** 紅的是 `archived-source-active-doc.spec.ts:56`（`goto` 之後立刻點「Document display options」，選單沒開）——這是完整套件的第 2 個測試，伺服器剛冷啟動；單獨重複 10 輪 10/10，同樣是「點擊落在 hydrate 之前」的類型，我沒有動它。`row-actions:75` 與 `zz-organize*` 這次都過。
+
+**後來找了，這個「間歇」其實是資料量相依，不是隨機。** 在 `zz-organize*` 之前先用 API 在 My Space 塞 200 份文件（完整套件跑到那裡時，前面的 spec 也塞了很多），這兩個檔案 22 案裡 **8 案紅**，正是完整套件裡「間歇」紅的那幾案（`move:109`、`:136`、`organize:164`、`:198`、`:223`、`:245`）；隔離跑（樹很短）21/21 全過。機制（用 `Element.prototype.scrollTop` 的 setter 與 `focus` 包 stack trace 抓到）：
+
+1. `page.goto` 一回來測試就 `hover` 資料夾列（把 200 多列的樹捲到底）並按 `⋯`，**此時 React 還沒 hydrate 完**。
+2. hydrate 完成後，`KnowledgeTree` **第一次掛載**，「把選中那一列捲進可視範圍」的 effect 初次執行，**把樹捲回頂端**（`nav.scrollTop` 從 6364 變成 36）。React 同時把 hydrate 前捕捉的點擊重播，選單這才打開，但觸發按鈕已在 y=6942、選單在畫面外（`element is outside of the viewport`）。
+3. 我最先猜的是那個 effect 在樹刷新時重跑（依賴 `roots`），試了「每個選擇只做一次」的守衛，**結果沒有改善**——因為是新掛載的實例（ref 是空的）。我先還原了。所以這不是 app 在刷新時亂捲，是測試沒等 hydration。
+
+**修法（一行）：** `tests/e2e/fixtures/organize.ts` 的 `openKnowledge` 改成 `page.goto(..., { waitUntil: "networkidle" })`——repo 裡 `phase2.5-knowledge-explorer.spec.ts` 已經有同樣的慣例（註解「Wait for hydration」）。**效果：** 長樹情境 8/22 紅 → 修法之後再跑 3 次完整的長樹情境，分別 1、1、0 案紅（紅的都是下面沒解決的 `move:71`）；完整 e2e 兩次，其中一次 217 過／0 紅（這條分支第一次完整全綠），另一次的唯一一紅是上面那個 B.0 造成的 `row-actions:75`（`zz-organize*` 全過）。樣本很小，不是失敗率。
+
+**沒有解決的：** 長樹情境下 `zz-organize-move.spec.ts:71`（Move 對話框裡「目前所在資料夾」那個選項應該是 Current／disabled，卻是 enabled）在修法之後仍然約 3/5 次紅。trace 裡沒有任何搬移請求，文件確實沒被動過；對話框用 `collections` 算出來的目前位置不是它在 DOM 裡所在的資料夾。**原因我沒找到**；它在 CI 與完整套件裡還沒出現過，只在我塞 200 份文件的壓力情境裡。
+
+**這個修法不在 PR #94 裡**：它是 `zz-organize*` 的 fixture，與 B.0 無關；以 patch 提出，由使用者決定併進來或另開 PR。
+
 ### 沒有證明的部分
 
-- **`zz-organize` 間歇失敗的原因與失敗率。** 只知道它在沒有 B.0 的 main 上也出現過一次（上面的基準線），所以不是 B.0 帶來的；但我沒有找出原因（症狀是選單項目被 inert 遮罩攔截、或「outside of the viewport」），也沒有量過它的失敗率。這條分支沒有一次完整 e2e 是乾淨全綠，這是事實；其餘檔案在三次完整跑裡沒有別的失敗（扣掉我自己那案，已修並以並行重複驗證）。
+- **`zz-organize` 間歇失敗的原因與失敗率。** **已找到主要原因**（上面：測試沒等 hydration，長樹下才踩得到），修法是一行 fixture，**還沒併進這個 PR**；仍有一案（`move:71`）在壓力情境下沒解釋。這條分支沒有一次完整 e2e 是乾淨全綠，這是事實；其餘檔案在三次完整跑裡沒有別的失敗（扣掉我自己那案，已修並以並行重複驗證）。
 - **「Show all」面板沒有搜尋、也沒有星號按鈕**：一百個星號會是一個很長的捲動清單（面板上限 24 rem 或 60vh）；沒有量過、也沒有為此設計過。側欄上仍沒有排序或分組。
 - **最近開過只存本機**：換瀏覽器看不到（規格 D12 的決定，沒有改）。
 - **palette 開啟時多一次請求**：本機量過的回應時間在滿載時曾到 3.2 秒，但那是 8 個並行瀏覽器；單人使用沒有量。

@@ -24,6 +24,18 @@ export function rememberDocument(shortcuts: DocumentShortcuts, key: string): Doc
 }
 
 /**
+ * The document a Knowledge path is on (`/w/:workspace/knowledge/:source/:document`, and under it `/edit`
+ * and the like), read from the path itself — which is there from the first render, where the page's own
+ * report of what it is showing is an effect later.
+ */
+export function documentIdInPath(pathname: string): string | undefined {
+  // The shape of an ID, not a check of one: this only takes a document out of a list, it grants nothing.
+  const match = /^\/w\/[^/]+\/knowledge\/[^/]+\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/|$)/i.exec(pathname);
+  // Stored IDs are lower case; a path may not be.
+  return match?.[1].toLowerCase();
+}
+
+/**
  * The documents to offer as recent, newest first, as IDs: what was remembered (`sourceId:documentId`),
  * without the one being read — the palette is for going somewhere else.
  */

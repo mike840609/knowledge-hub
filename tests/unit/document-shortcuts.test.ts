@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FAVORITES_SHOWN, favoritesInPlace, parseDocumentShortcuts, recentDocumentIds, rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
+import { FAVORITES_SHOWN, documentIdInPath, favoritesInPlace, parseDocumentShortcuts, recentDocumentIds, rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
 
 describe("document shortcuts", () => {
   it("keeps recent documents unique and newest first", () => {
@@ -61,5 +61,42 @@ describe("favoritesInPlace", () => {
     const given = keys(6);
     favoritesInPlace(given);
     expect(given).toEqual(keys(6));
+  });
+});
+
+describe("documentIdInPath", () => {
+  const workspace = "01a0f5b0-0000-7000-8000-000000000001";
+  const source = "01a0f5b0-0000-7000-8000-000000000002";
+  const document = "01a0f5b0-0000-7000-8000-000000000003";
+
+  it("reads the document of a document page, and of the pages under it", () => {
+    expect(documentIdInPath(`/w/${workspace}/knowledge/${source}/${document}`)).toBe(document);
+    expect(documentIdInPath(`/w/${workspace}/knowledge/${source}/${document}/edit`)).toBe(document);
+    expect(documentIdInPath(`/w/${workspace}/knowledge/${source}/${document}/`)).toBe(document);
+  });
+
+  it("is undefined for a path that is not on a document", () => {
+    expect(documentIdInPath(`/w/${workspace}/knowledge/${source}`)).toBeUndefined();
+    expect(documentIdInPath(`/w/${workspace}/knowledge/new`)).toBeUndefined();
+    expect(documentIdInPath(`/w/${workspace}/knowledge`)).toBeUndefined();
+    expect(documentIdInPath(`/w/${workspace}/graph`)).toBeUndefined();
+    expect(documentIdInPath(`/w/${workspace}/home`)).toBeUndefined();
+    expect(documentIdInPath("/")).toBeUndefined();
+  });
+
+  it("does not take a segment that is not an ID for one", () => {
+    expect(documentIdInPath(`/w/${workspace}/knowledge/${source}/new`)).toBeUndefined();
+    expect(documentIdInPath(`/w/${workspace}/knowledge/${source}/not-a-uuid/edit`)).toBeUndefined();
+  });
+
+  it("takes the whole segment or nothing, and the ID as it is stored", () => {
+    expect(documentIdInPath(`/w/${workspace}/knowledge/${source}/${document}0`)).toBeUndefined();
+    expect(documentIdInPath(`/w/${workspace}/knowledge/${source}/${document}-x/edit`)).toBeUndefined();
+    expect(documentIdInPath(`/w/${workspace}/knowledge/${source}/${document.toUpperCase()}`)).toBe(document);
+  });
+
+  it("is not fooled by an ID in another place in the path", () => {
+    expect(documentIdInPath(`/w/${workspace}/search/${source}/${document}`)).toBeUndefined();
+    expect(documentIdInPath(`/x/w/${workspace}/knowledge/${source}/${document}`)).toBeUndefined();
   });
 });

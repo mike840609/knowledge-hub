@@ -17,7 +17,7 @@ import {
   type Action,
 } from "@/components/actions/action-registry";
 import { plainSearchSnippet } from "@/lib/search-snippet";
-import { recentDocumentIds, toggleFavoriteDocument } from "@/lib/document-shortcuts";
+import { documentIdInPath, recentDocumentIds, toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import { buttonClasses } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { isSingleKeyShortcut, shortcutLabel } from "@/lib/shortcut-keys";
@@ -60,6 +60,9 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
   const [hits, setHits] = useState<QuickHit[]>([]);
   // What was opened lately, listed while nothing is typed; found out from the server (see the effect below).
   const [recents, setRecents] = useState<QuickHit[]>([]);
+  // Which list of recent documents has been answered (or failed), so that "still being asked for" is known at
+  // the render that opens the palette, not one effect later.
+  const [recentsSettledFor, setRecentsSettledFor] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -101,7 +104,11 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
   // Of what the server has answered, only the documents asked for last: an answer to an earlier question — one that
   // still named the document being read, when this page had not yet said which it was — is not shown once the
   // question has changed, however long the newer answer takes.
-  const recentIds = useMemo(() => recentDocumentIds(shortcuts, reading?.documentId), [shortcuts, reading?.documentId]);
+  // The document being read is not a place to go. Its ID is taken from the path when the page has not yet said
+  // which document it is: until it does, it would be listed, and then be taken out from under whoever is
+  // already moving down the list.
+  const readingId = reading?.documentId ?? documentIdInPath(pathname);
+  const recentIds = useMemo(() => recentDocumentIds(shortcuts, readingId), [shortcuts, readingId]);
   const recentIdsKey = recentIds.join(",");
   const recentRows = useMemo<PaletteRow[]>(
     () => (trimmed ? [] : recents.filter((hit) => recentIds.includes(hit.documentId)).map((hit) => ({ kind: "hit" as const, hit }))),
@@ -163,9 +170,13 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
   // what the browser remembered: that is only a list of IDs, and a document may have been renamed or
   // archived since. The server checks each and answers with what it is called now.
   const typing = trimmed !== "";
+  // The list is still changing: documents are about to be put above the rows that are showing. It says so
+  // (`aria-busy`), which is for a screen reader and for a test that would otherwise press a key into the gap.
+  const recentsPending = enabled && open && !typing && recentIdsKey !== "" && recentsSettledFor !== recentIdsKey;
   useEffect(() => {
     if (!enabled || !open || typing || !recentIdsKey) {
       setRecents([]);
+      setRecentsSettledFor(null);
       return;
     }
     const controller = new AbortController();
@@ -178,6 +189,8 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
       } catch {
         // A list that could not be had is a list that is not there: the palette is what it was without it.
         if (!controller.signal.aborted) setRecents([]);
+      } finally {
+        if (!controller.signal.aborted) setRecentsSettledFor(recentIdsKey);
       }
     })();
     return () => controller.abort();
@@ -306,7 +319,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
               </Dialog.Close>
             </div>
             <div className="min-h-0 overflow-y-auto p-2">
-              <ul id="quick-search-results" role="listbox" aria-label="Actions and documents" className="space-y-0.5">
+              <ul id="quick-search-results" role="listbox" aria-label="Actions and documents" aria-busy={recentsPending} className="space-y-0.5">
                 {recentRows.map((row, position) => {
                   if (row.kind !== "hit") return null;
                   rowIndex += 1;
