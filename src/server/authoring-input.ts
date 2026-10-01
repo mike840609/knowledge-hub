@@ -78,6 +78,25 @@ export function requireRouteId(value: string, what: string): string {
   return value;
 }
 
+/** The most documents the palette asks about at once: what it remembers as recent (`rememberDocument`) and no more. */
+export const MAX_RECENT_DOCUMENTS = 8;
+
+/**
+ * `?ids=a,b,c` — document IDs the caller says it opened lately. A navigation input like any other: an entry
+ * that is not an ID is left out (it could only reach the database as a malformed UUID), a repeat is counted
+ * once, the order the caller gave is kept, and only the first few are looked at.
+ */
+export function parseDocumentIdList(raw: string | null, limit = MAX_RECENT_DOCUMENTS): string[] {
+  if (!raw) return [];
+  const ids: string[] = [];
+  for (const part of raw.split(",")) {
+    const id = part.trim();
+    if (isUuid(id) && !ids.includes(id)) ids.push(id);
+    if (ids.length === limit) break;
+  }
+  return ids;
+}
+
 export function parseCreateFolderInput(body: unknown): { sourceId: string | null; parentId: string | null; name: string } {
   const record = readObject(body);
   return {
