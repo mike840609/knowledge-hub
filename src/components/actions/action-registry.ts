@@ -122,6 +122,31 @@ export type ActionEffect =
  */
 export const NAV_TOGGLE_SHORTCUT = "Meta+\\ Control+\\";
 
+/**
+ * The key each row action takes (row-keyboard-actions spec §4.2). An action reads its `shortcut`
+ * from here, so binding, `aria-keyshortcuts` and the hint on screen still have one source. It is
+ * data rather than a field on the built action because an action the caller may not run is not
+ * built at all, and the tree must still know the key is its own: `E` on a read-only row is
+ * taken and does nothing, it is not passed on to edit the document being read.
+ */
+export const rowShortcuts = {
+  "document.edit": "E",
+  "document.favorite": "F",
+  "document.move": "M",
+  "folder.new-document": "C",
+  "folder.move": "M",
+  "folder.rename": "R",
+} as const;
+
+/** The keys, lower-cased, that a focused row of this kind takes for itself. */
+export function claimedRowKeys(kind: "document" | "folder"): ReadonlySet<string> {
+  return new Set(
+    Object.entries(rowShortcuts)
+      .filter(([id]) => id.startsWith(`${kind}.`))
+      .map(([, key]) => key.toLowerCase()),
+  );
+}
+
 export type Action = {
   id: ActionId;
   /** Imperative, and complete on its own: a palette row has no surrounding context. */
@@ -377,7 +402,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
         group: "document",
         icon: "edit",
         keywords: ["rename", "title", "write", target.label],
-        shortcut: "E",
+        shortcut: rowShortcuts["document.edit"],
         surfaces: ["palette", "row"],
         effect: { kind: "navigate", href: `${documentHref.split("?")[0]}/edit` },
       });
@@ -413,6 +438,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
       group: "document",
       icon: "favorite",
       keywords: ["star", "bookmark", target.label],
+      shortcut: rowShortcuts["document.favorite"],
       surfaces: ["palette", "row"],
       effect: {
         kind: "command",
@@ -466,6 +492,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
         group: "document",
         icon: "move",
         keywords: ["folder", "relocate", "put", "organize", "file", target.label],
+        shortcut: rowShortcuts["document.move"],
         surfaces: ["palette", "row"],
         effect: { kind: "move", sourceId: target.sourceId, label: target.label, node: { type: "document", documentId: target.documentId } },
       });
@@ -509,6 +536,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
         group: "folder",
         icon: "new-document",
         keywords: ["create", "add", "note", "write", folder.label],
+        shortcut: rowShortcuts["folder.new-document"],
         surfaces: ["row"],
         effect: { kind: "navigate", href: `/w/${workspaceId}/knowledge/new?folder=${folder.nodeId}` },
       });
@@ -527,6 +555,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
         group: "folder",
         icon: "rename",
         keywords: ["name", "title", folder.label],
+        shortcut: rowShortcuts["folder.rename"],
         surfaces: ["row"],
         effect: { kind: "folder-command", command: "folder.rename", ...identity },
       });
@@ -536,6 +565,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
         group: "folder",
         icon: "move",
         keywords: ["relocate", "put", "nest", "organize", folder.label],
+        shortcut: rowShortcuts["folder.move"],
         surfaces: ["row"],
         effect: { kind: "move", sourceId: folder.sourceId, label: folder.label, node: { type: "folder", nodeId: folder.nodeId } },
       });

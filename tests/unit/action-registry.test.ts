@@ -3,8 +3,10 @@ import {
   NAV_TOGGLE_SHORTCUT,
   actionsFor,
   availableActions,
+  claimedRowKeys,
   groupActions,
   matchActions,
+  rowShortcuts,
   type ActionContext,
   type ActionSurface,
   type ActionTarget,
@@ -286,6 +288,49 @@ describe("action registry — shortcuts", () => {
       .map((action) => action.shortcut)
       .filter((shortcut): shortcut is string => Boolean(shortcut));
     expect(new Set(shortcuts).size).toBe(shortcuts.length);
+  });
+
+  const shortcutsOn = (surface: ActionSurface, ctx: ActionContext) =>
+    actionsFor(surface, ctx)
+      .map((action) => action.shortcut)
+      .filter((shortcut): shortcut is string => Boolean(shortcut));
+
+  it("binds F and M on a document row, and C, M and R on a folder row", () => {
+    expect(shortcutsOn("row", context({ target: target() })).sort()).toEqual(["E", "F", "M"]);
+    expect(shortcutsOn("row", context({ folder: folder() })).sort()).toEqual(["C", "M", "R"]);
+  });
+
+  it("gives no two actions on one surface the same key (C means two things, on two kinds of target)", () => {
+    for (const [surface, ctx] of [
+      ["row", context({ target: target() })],
+      ["row", context({ folder: folder() })],
+      ["palette", context({ target: target() })],
+    ] as const) {
+      const keys = shortcutsOn(surface, ctx);
+      expect(new Set(keys).size).toBe(keys.length);
+    }
+  });
+
+  it("reads every row action's shortcut from rowShortcuts, so there is one source", () => {
+    const seen = [
+      ...availableActions(context({ target: target() })),
+      ...availableActions(context({ folder: folder() })),
+    ];
+    for (const action of seen) {
+      if (action.id in rowShortcuts) expect(action.shortcut).toBe(rowShortcuts[action.id as keyof typeof rowShortcuts]);
+    }
+  });
+
+  it("claims a kind's keys even where the registry offers none of them, so a read-only row keeps its keys", () => {
+    expect([...claimedRowKeys("document")].sort()).toEqual(["e", "f", "m"]);
+    expect([...claimedRowKeys("folder")].sort()).toEqual(["c", "m", "r"]);
+    const readOnly = availableActions(context({ target: target({ ownership: "SOURCE_MANAGED" }) }));
+    expect(readOnly.some((action) => action.id === "document.edit")).toBe(false);
+    expect(claimedRowKeys("document").has("e")).toBe(true);
+  });
+
+  it("leaves C on a document row to the global Create document", () => {
+    expect(claimedRowKeys("document").has("c")).toBe(false);
   });
 });
 
