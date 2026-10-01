@@ -58,3 +58,9 @@ Home 仍會列出工作區所有 metadata；Personal service 的既有逐項權�
 ## 獨立 review 後續
 
 見 [independent code review](2026-10-02-linear-remediation-review.md)：確認並修正手機 explorer menu 的 stacking／pointer blocking regression，新增 2 個 browser scenarios，包含一般及 context menu、dialog focus／Escape／送出。原有 102 個情境是 initial implementation 的分批驗證紀錄，不代表 review 前已覆蓋這兩個新情境。
+
+## PR handoff verification
+
+PR 準備時再次 fetch 並 rebase 到 `add48f0`（main 的搜尋／tooltip 修正）。Workspace selector 衝突保留 main 移除原生 tooltip 的行為，並保留 `kh-control` 觸控尺寸。
+
+Rebase 後重新通過 typecheck、lint、99 個 unit test files／1,468 tests，以及 production build 與 `linear-remediation`、`row-actions` 共 18 個 E2E tests。原先 integration 與其他 E2E 結果屬於上述實作驗證階段，未於此次 handoff 全量重跑。
