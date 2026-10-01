@@ -96,7 +96,7 @@ const config: Config = {
     // and a sidebar width is not a decision about rhythm (§18 item 2).
     padding: {
       ...rhythm,
-      16: "4rem", // StatusMessage's centred-message vertical rhythm — see §7
+      16: "4rem", // StatusMessage's and EmptyState's centred-message vertical rhythm — see §7
     },
     margin: {
       ...rhythm,

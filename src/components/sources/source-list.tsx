@@ -1,12 +1,27 @@
+import { Database } from "lucide-react";
 import type { SourceListItemModel } from "@/server/source-read";
 import { SourceListRow } from "@/components/sources/source-list-row";
+import { WorkspaceImportLink } from "@/components/shell/workspace-import-link";
+import { buttonClasses } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export function SourceList({ workspaceId, items }: { workspaceId: string; items: SourceListItemModel[] }) {
   if (items.length === 0) {
     return (
-      <p className="rounded-md bg-kh-bg-subtle p-6 text-body text-kh-text-muted">
-        No knowledge sources yet.
-      </p>
+      <EmptyState
+        icon={Database}
+        title="No sources yet"
+        description="A source is a folder of Markdown the Hub keeps in sync. Import one and its documents appear in Knowledge."
+        action={
+          // Absent for a reader who cannot import, rather than a button that would be refused.
+          <WorkspaceImportLink
+            className={buttonClasses({ variant: "primary" })}
+            href={`/w/${workspaceId}/sources/import`}
+          >
+            Import folder
+          </WorkspaceImportLink>
+        }
+      />
     );
   }
   return (

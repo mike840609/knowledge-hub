@@ -6,6 +6,7 @@ import { LockKeyhole, PanelRight } from "lucide-react";
 import { ActionIcon } from "@/components/actions/action-icon";
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
+import { Tooltip } from "@/components/ui/tooltip";
 import { formatDateTime, formatRelativeTime } from "@/lib/format-date";
 import { useDisplayTimeZone } from "@/components/ui/timestamp";
 import { DocumentBreadcrumb, type DocumentBreadcrumbSegment } from "./document-breadcrumb";
@@ -63,37 +64,40 @@ export function DocumentHeader({
               sticky topbar's copy of this button. */}
           <div className="flex shrink-0 items-center gap-2">
             {editHref ? (
-              <a
-                href={editHref}
-                aria-label="Edit"
-                aria-keyshortcuts="E"
-                title="Edit (E)"
-                className={buttonClasses({ variant: "ghost", icon: true })}
-              >
-                <ActionIcon name="edit" className="h-4 w-4" />
-              </a>
+              <Tooltip label="Edit" shortcut="E">
+                <a
+                  href={editHref}
+                  aria-label="Edit"
+                  aria-keyshortcuts="E"
+                  className={buttonClasses({ variant: "ghost", icon: true })}
+                >
+                  <ActionIcon name="edit" className="h-4 w-4" />
+                </a>
+              </Tooltip>
             ) : null}
             {onShareClick ? (
+              <Tooltip label="Share link…">
+                <button
+                  type="button"
+                  onClick={onShareClick}
+                  aria-label="Share link…"
+                  className={buttonClasses({ variant: "ghost", icon: true })}
+                >
+                  <ActionIcon name="share" className="h-4 w-4" />
+                </button>
+              </Tooltip>
+            ) : null}
+            <Tooltip label="Details" shortcut="Meta+I Control+I">
               <button
                 type="button"
-                onClick={onShareClick}
-                aria-label="Share link…"
-                title="Share link…"
+                onClick={onDetailsClick}
+                aria-label="Details"
+                aria-keyshortcuts="Meta+I Control+I"
                 className={buttonClasses({ variant: "ghost", icon: true })}
               >
-                <ActionIcon name="share" className="h-4 w-4" />
+                <PanelRight className="h-4 w-4" aria-hidden="true" />
               </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={onDetailsClick}
-              aria-label="Details"
-              aria-keyshortcuts="Meta+I Control+I"
-              title="Details (⌘/Ctrl I)"
-              className={buttonClasses({ variant: "ghost", icon: true })}
-            >
-              <PanelRight className="h-4 w-4" aria-hidden="true" />
-            </button>
+            </Tooltip>
           </div>
         </div>
         {contentOwnsTitle ? null : (

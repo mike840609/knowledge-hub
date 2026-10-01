@@ -1,7 +1,7 @@
 "use client";
 
 import { Dialog } from "@base-ui-components/react/dialog";
-import { Search, X } from "lucide-react";
+import { FileText, Search, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useContext, useEffect, useMemo, useState } from "react";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
@@ -20,7 +20,9 @@ import { plainSearchSnippet } from "@/lib/search-snippet";
 import { toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import { buttonClasses } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
+import { Tooltip } from "@/components/ui/tooltip";
 import { isSingleKeyShortcut, shortcutLabel } from "@/lib/shortcut-keys";
+import { readRecentTitles } from "@/components/knowledge/recent-titles";
 
 type QuickHit = {
   documentId: string;
@@ -94,12 +96,27 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
   );
 
   const matched = useMemo(() => matchActions(actions, trimmed), [actions, trimmed]);
+  // With nothing typed, the likeliest target is the last thing read. Read in the render only while
+  // open — never on the server, where the palette is closed — so it cannot disagree with the first paint.
+  const recentHits = useMemo<QuickHit[]>(() => {
+    if (!open || trimmed) return [];
+    const titles = readRecentTitles(workspaceId);
+    const hits: QuickHit[] = [];
+    for (const key of shortcuts.recent) {
+      const entry = titles[key];
+      const [sourceId, documentId] = key.split(":");
+      if (!entry || !sourceId || !documentId || documentId === reading?.documentId) continue;
+      hits.push({ documentId, sourceId, title: entry.title, sourceName: entry.sourceName, snippet: "" });
+    }
+    return hits.slice(0, 5);
+  }, [open, trimmed, workspaceId, shortcuts.recent, reading?.documentId]);
   const rows = useMemo<PaletteRow[]>(
     () => [
+      ...recentHits.map((hit) => ({ kind: "hit" as const, hit })),
       ...matched.map((action) => ({ kind: "action" as const, action })),
       ...hits.map((hit) => ({ kind: "hit" as const, hit })),
     ],
-    [matched, hits],
+    [recentHits, matched, hits],
   );
   // The first row is the default target, and the row set changes as results
   // arrive; leaving the index where it was would point it at something else.
@@ -199,18 +216,19 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label="Quick search"
-        aria-keyshortcuts="Meta+K Control+K /"
-        title="Quick search (⌘K or /)"
-        className={buttonClasses({ variant: "ghost" })}
-      >
-        <Search className="h-4 w-4" aria-hidden="true" />
-        <span className="hidden text-body-sm sm:inline">Search</span>
-        <Kbd className="ml-3 hidden lg:inline">⌘K</Kbd>
-      </button>
+      <Tooltip label="Search and actions" keys="/">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label="Quick search"
+          aria-keyshortcuts="Meta+K Control+K /"
+          className={buttonClasses({ variant: "ghost" })}
+        >
+          <Search className="h-4 w-4" aria-hidden="true" />
+          <span className="hidden text-body-sm sm:inline">Search</span>
+          <Kbd className="ml-3 hidden lg:inline">⌘K</Kbd>
+        </button>
+      </Tooltip>
       <Dialog.Root open={open} onOpenChange={setOpen}>
         <Dialog.Portal>
           <Dialog.Backdrop className="fixed inset-0 z-50 bg-kh-overlay transition-opacity duration-120 ease-out data-[starting-style]:opacity-0 data-[ending-style]:opacity-0" />
@@ -252,6 +270,27 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
             </div>
             <div className="min-h-0 overflow-y-auto p-2">
               <ul id="quick-search-results" role="listbox" aria-label="Actions and documents" className="space-y-0.5">
+                {recentHits.map((hit, position) => {
+                  rowIndex += 1;
+                  const index = rowIndex;
+                  return (
+                    <li key={`recent-${hit.sourceId}:${hit.documentId}`} id={`quick-row-${index}`} role="option" aria-selected={index === activeIndex}>
+                      {position === 0 ? (
+                        <p aria-hidden="true" className="px-3 pb-1 pt-2 text-caption font-semibold text-kh-text-muted">Recent</p>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => choose({ kind: "hit", hit })}
+                        onMouseEnter={() => setActiveIndex(index)}
+                        className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left kh-focus-ring ${index === activeIndex ? "bg-kh-bg-selected" : "hover:bg-kh-bg-hover"}`}
+                      >
+                        <FileText className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />
+                        <span className={`min-w-0 flex-1 truncate text-body ${index === activeIndex ? "text-kh-selected-text" : "text-kh-text"}`}>{hit.title}</span>
+                        <span className="max-w-[10rem] shrink-0 truncate text-caption text-kh-text-muted">{hit.sourceName}</span>
+                      </button>
+                    </li>
+                  );
+                })}
                 {matched.map((action) => {
                   rowIndex += 1;
                   const index = rowIndex;

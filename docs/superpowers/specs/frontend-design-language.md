@@ -99,7 +99,7 @@ together, and say what job the new token does that no existing one covers.
 | Border | `border`, `border-strong` | see §6 |
 | Syntax colour | `--kh-syntax-{keyword,string,number,comment,function,type,variable,meta}` | fenced code in the reader and on a shared page; see §8 |
 | Container | `page`, `wide`, `reading`, `panel` | see §7; the `maxWidth` scale is replaced, so `max-w-4xl` does not compile |
-| Spacing rhythm | `0`, `px`, `0.5`–`6` every half step, `auto` (margin), `16` (padding) | paddings, margins and gaps; `16` is `StatusMessage` only, see §7 |
+| Spacing rhythm | `0`, `px`, `0.5`–`6` every half step, `auto` (margin), `16` (padding) | paddings, margins and gaps; `16` is `StatusMessage` and `EmptyState` only, see §7 |
 | Control height | `sm`, `md`, `lg` (24 / 32 / 40) | see §15; buttons and fields read the same ladder |
 | Motion | two durations, one easing curve | see §9 |
 
@@ -228,7 +228,7 @@ page does not restate its own name.
 
 Page padding is `py-6`. `py-8` appeared on four sources pages for no reason
 anyone recorded. The `py-16` of a centred message state belongs to
-`StatusMessage`, not to the pages that show one.
+`StatusMessage` and `EmptyState`, not to the pages that show one.
 
 ### Divergence: this ramp is tinted, the reference's is not
 
@@ -381,6 +381,21 @@ same value binds the key, is the `aria-keyshortcuts` on the button that does
 the same thing, and is the hint shown beside the action in the palette
 (`shortcutLabel`), so the three cannot disagree. Adding a shortcut is filling
 that field.
+
+**A control with no visible label names itself in a `Tooltip`, not in `title=`**
+(`components/ui/tooltip.tsx`, Base UI's Tooltip). The native tooltip waits about
+a second, cannot be styled, and never appears for a keyboard user or on touch;
+this one opens on hover and on keyboard focus, at the `lg` radius and `popover`
+elevation (§5, §6), and shows the control's shortcut as a `Kbd`. The shortcut is
+passed as the registry's `shortcut` value, the same string that binds the key
+and fills `aria-keyshortcuts`, so the tooltip cannot say a key the control does
+not have. A shortcut that is not in the registry (the graph's `+`, `−`, `0`) is
+passed as `keys` and read as written. The control keeps its own `aria-label`;
+the tooltip is a hint, not a name. Three things keep the native `title`: text
+that is truncated (the title is the rest of the string), a timestamp's exact
+time, and a disabled control whose title says *why* it is disabled — a disabled
+button receives no pointer events, so a tooltip over it would never open. A menu
+trigger takes no tooltip either, since it would sit on the menu it opens.
 
 A single key (`C`, `E`, `/`) is also a character, so it acts only when
 `isSingleKeyShortcut` in `lib/shortcut-keys.ts` says so: no `⌘`, `Ctrl` or
@@ -676,6 +691,28 @@ The current route is matched exactly, not by prefix. A section's index tab
 lives at the section root, so a prefix match leaves it lit on every page in
 the section.
 
+### A state is a glyph and a word; an empty place leads with its action
+
+`components/ui/status.tsx` says a state with a glyph, a colour from the semantic
+tokens, and the word beside it: a sync that succeeded, one that failed and one
+that is only previewed used to be the same grey sentence, so a list of sources
+could only be scanned by reading it. Only the glyph is coloured; the word keeps
+the surrounding text colour, which is what makes colour a second channel rather
+than the only one (WCAG 1.4.1). `archived` and `none` are muted on purpose — an
+archived document is a lifecycle state, not a problem. `Badge` stays for chrome
+that is a label rather than a state (a source's type).
+
+`components/ui/empty-state.tsx` is the shape of a place with nothing in it, and
+is not `StatusMessage`. That one is an error or a not-found — something went
+wrong, here is the way out — and sits left-aligned like the page it replaced. An
+empty list is where the reader starts: it is centred, has an icon, **names the
+state ("No documents yet") and never the page**, and leads with one primary
+action. A second action is secondary, so two equal buttons never ask the reader
+to choose. `hint` teaches the one shortcut that does the primary action, because
+the empty state is the one moment a reader is looking for what to do. Compact
+empty lines inside a rail or a list (a folder with nothing in it) stay one line
+of `text-muted`; they are not pages.
+
 ### One loading idiom, one message shape
 
 A region that is loading shows a skeleton shaped like what is being fetched,
@@ -891,6 +928,18 @@ than the toast, which is the only way that distinction shows up.
 consequence is real.** Asking twice before something reversible buys nothing
 and teaches the reader to click through the prompts that matter.
 
+Where one is kept it is `ConfirmDialog` (`components/ui/confirm-dialog.tsx`,
+Base UI's AlertDialog), never `window.confirm`: the native one cannot be themed,
+holds the page's JavaScript thread while it is up, and reads differently in
+every browser. It is the modal surface (`xl`, `modal`), and **the safe answer
+holds focus** — Cancel is first and takes it, so Enter on a dialog that has just
+opened never confirms by reflex; Escape and the backdrop both mean no. Its
+confirm button names the act ("Discard changes"), not "OK". A dialog inside a
+form is rendered beside it, not in it: React events bubble through a portal to
+the component that rendered it, and the form's keys are not the dialog's. The
+composer's Cancel is the first user, and the draft is still cleared only on the
+discard answer.
+
 Error and not-found states take their shape from `StatusMessage` — heading,
 one line, optional action — so that a new boundary cannot invent a fourth
 spelling. Boundaries are placed where the shell survives them: the workspace
@@ -989,7 +1038,11 @@ remains visible but disabled, labelled Coming soon, until server configuration
 explicitly enables it. Disabled controls have no navigation or click action.
 
 
-1. The palette is mostly navigation, and that is a product gap rather than a
+1. The palette, with nothing typed, lists the last few documents read ahead of
+   its actions (`Recent`), since the likeliest target is the last thing read.
+   Their names are kept beside the recent list (`recent-titles.ts`) because the
+   palette opens from pages that have no tree to look them up in.
+   The palette is mostly navigation, and that is a product gap rather than a
    UI one. Counted against the code it can offer about fourteen entries, of
    which the majority are ways to get somewhere; a command palette does not
    create commands. Worth revisiting when this product has more a reader can

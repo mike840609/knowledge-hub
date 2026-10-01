@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { ListFilter, X } from "lucide-react";
+import { Tooltip } from "@/components/ui/tooltip";
 
 export function TreeFilter({ value, onChange, onClose }: { value: string; onChange: (value: string) => void; onClose: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -29,7 +30,7 @@ export function TreeFilter({ value, onChange, onClose }: { value: string; onChan
         onChange={(event) => onChange(event.target.value)}
         className="h-8 min-w-0 flex-1 appearance-none bg-transparent text-body text-kh-text outline-none placeholder:text-kh-text-muted [&::-webkit-search-cancel-button]:hidden"
       />
-      {value ? <button type="button" aria-label="Clear document filter" title="Clear filter" onClick={() => { onChange(""); inputRef.current?.focus(); }} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md hover:bg-kh-bg-selected hover:text-kh-text kh-focus-ring"><X className="h-3.5 w-3.5" aria-hidden="true" /></button> : null}
+      {value ? <Tooltip label="Clear filter"><button type="button" aria-label="Clear document filter" onClick={() => { onChange(""); inputRef.current?.focus(); }} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md hover:bg-kh-bg-selected hover:text-kh-text kh-focus-ring"><X className="h-3.5 w-3.5" aria-hidden="true" /></button></Tooltip> : null}
     </div>
   );
 }

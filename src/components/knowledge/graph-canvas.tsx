@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Maximize2, Minus, Plus } from "lucide-react";
+import { Tooltip } from "@/components/ui/tooltip";
 import { buttonClasses } from "@/components/ui/button";
 import { adjacency, LABEL_PX, matchesQuery, nodeLabel, selectVisibleLabels, type GraphViewData, type GraphViewNode } from "./graph-model";
 
@@ -382,17 +383,17 @@ export function GraphCanvas({
             <span className="hidden text-kh-text-faint sm:inline">Scroll to zoom · drag to pan</span>
           </div>
           <div role="group" aria-label="Zoom" className="absolute bottom-3 right-3 flex items-center rounded-md border border-kh-border bg-kh-bg">
-            <button type="button" aria-label="Zoom out" title="Zoom out (−)" onClick={() => zoomAt(null, null, 1 / ZOOM_STEP)} className={buttonClasses({ variant: "ghost", icon: true, size: "sm" })}>
+            <Tooltip label="Zoom out" keys="−" side="top"><button type="button" aria-label="Zoom out" onClick={() => zoomAt(null, null, 1 / ZOOM_STEP)} className={buttonClasses({ variant: "ghost", icon: true, size: "sm" })}>
               <Minus className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
+            </button></Tooltip>
             <span aria-live="polite" className="w-10 text-center text-caption tabular-nums text-kh-text-muted">{Math.round(view.k * 100)}%</span>
-            <button type="button" aria-label="Zoom in" title="Zoom in (+)" onClick={() => zoomAt(null, null, ZOOM_STEP)} className={buttonClasses({ variant: "ghost", icon: true, size: "sm" })}>
+            <Tooltip label="Zoom in" keys="+" side="top"><button type="button" aria-label="Zoom in" onClick={() => zoomAt(null, null, ZOOM_STEP)} className={buttonClasses({ variant: "ghost", icon: true, size: "sm" })}>
               <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
+            </button></Tooltip>
             <span aria-hidden="true" className="mx-0.5 h-4 w-px bg-kh-border" />
-            <button type="button" aria-label="Reset view" title="Reset view (0)" onClick={() => setView(HOME)} className={buttonClasses({ variant: "ghost", icon: true, size: "sm" })}>
+            <Tooltip label="Reset view" keys="0" side="top"><button type="button" aria-label="Reset view" onClick={() => setView(HOME)} className={buttonClasses({ variant: "ghost", icon: true, size: "sm" })}>
               <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
+            </button></Tooltip>
           </div>
         </>
       ) : null}

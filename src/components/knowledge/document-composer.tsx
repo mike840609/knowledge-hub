@@ -5,6 +5,7 @@ import { PersistentDraft, type DraftStatus } from "@/lib/persistent-draft";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type KeyboardEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useHydrated } from "@/components/shell/use-hydrated";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { refreshOnArrival } from "@/components/shell/refresh-on-arrival";
@@ -119,6 +120,7 @@ export function DocumentComposer({
 }) {
   const router = useRouter();
   const { confirmed, access } = useWorkspaceAuthorization();
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   const [draftStatus, setDraftStatus] = useState<DraftStatus>("loading");
   const persistent = useRef<PersistentDraft | null>(null);
   // A new document started from a broken link's title keeps its draft in the tab, not the account: the
@@ -394,7 +396,15 @@ export function DocumentComposer({
     // A revert inside the output debounce emits nothing, so `touched` may
     // still be set on an unchanged document: compare the flushed content
     // instead of trusting it (spec §11.2, #65).
-    if (!matchesInitial(flush(), initial) && !window.confirm("Discard changes?")) return;
+    if (!matchesInitial(flush(), initial)) {
+      setConfirmingDiscard(true);
+      return;
+    }
+    leaveDiscarding();
+  }
+
+  // Cancel, once it is settled that there is nothing to keep (or that the reader said so).
+  function leaveDiscarding() {
     pendingRef.current = false;
     void persistent.current?.clear();
     clearDraft(browserDraftStorage(), draftKey);
@@ -657,6 +667,16 @@ export function DocumentComposer({
           />
         </div>
       </form>
+      {/* Outside the form: a portal's events bubble to the component that rendered it, and the form's keys are not the dialog's. */}
+      <ConfirmDialog
+        open={confirmingDiscard}
+        onOpenChange={setConfirmingDiscard}
+        title="Discard changes?"
+        description="What you have typed here has not been saved, and will be lost."
+        confirmLabel="Discard changes"
+        cancelLabel="Keep editing"
+        onConfirm={leaveDiscarding}
+      />
       {footer ? <div className="kh-reading-column pb-6">{footer({ busy })}</div> : null}
     </>
   );
