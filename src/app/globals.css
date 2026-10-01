@@ -144,6 +144,22 @@ kbd {
   font-variant-numeric: tabular-nums;
 }
 
+/* The browser's own clear button is a fixed-colour ×. Draw the same glyph from the muted text token
+   so it follows both themes; the two fields that have a button of their own hide it instead. */
+input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 16px;
+  width: 16px;
+  cursor: pointer;
+  background-color: var(--kh-text-muted);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M18 6 6 18M6 6l12 12'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M18 6 6 18M6 6l12 12'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+input[type="search"]::-webkit-search-cancel-button:hover {
+  background-color: var(--kh-text);
+}
+
 @layer components {
   /* The one focus idiom. Every interactive surface composes this instead of
      spelling out its own ring/outline pair. */

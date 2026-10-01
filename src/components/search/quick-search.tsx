@@ -40,6 +40,9 @@ type QuickResponse = { hits: QuickHit[]; tooLong: boolean; timedOut: boolean };
  */
 type PaletteRow = { kind: "action"; action: Action } | { kind: "hit"; hit: QuickHit };
 
+/** Typing pause that ends a burst. The first character skips it. */
+const SEARCH_DEBOUNCE_MS = 180;
+
 /**
  * `⌘K`.
  *
@@ -129,6 +132,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
   // The recent documents arrive above the rows that were already there. Someone who has not moved keeps the
   // first row; someone who has keeps the row they are on, which is now further down.
   const shownRecents = useRef(0);
+  const queryStarted = useRef(false);
   useEffect(() => {
     const added = recentRows.length - shownRecents.current;
     shownRecents.current = recentRows.length;
@@ -199,11 +203,16 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
 
   useEffect(() => {
     if (!enabled || !open || !trimmed) {
+      queryStarted.current = false;
       setHits([]);
       setLoading(false);
       setMessage("");
       return;
     }
+    // The first character fires at once; only keystrokes after it wait, so a typing burst is one request
+    // and a single character is not 180ms slower than it has to be. Stale requests are aborted below.
+    const wait = queryStarted.current ? SEARCH_DEBOUNCE_MS : 0;
+    queryStarted.current = true;
     const controller = new AbortController();
     setHits([]);
     setLoading(true);
@@ -226,7 +235,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
-    }, 180);
+    }, wait);
     return () => {
       window.clearTimeout(timer);
       controller.abort();
@@ -314,7 +323,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
                 aria-controls="quick-search-results"
                 aria-activedescendant={activeRow ? `quick-row-${activeIndex}` : undefined}
                 placeholder="Search documents, or run an action…"
-                className="h-14 min-w-0 flex-1 bg-transparent text-body text-kh-text outline-none placeholder:text-kh-text-muted"
+                className="h-14 min-w-0 flex-1 bg-transparent text-body text-kh-text outline-none placeholder:text-kh-text-muted [&::-webkit-search-cancel-button]:hidden"
               />
               <Dialog.Close aria-label="Close search" className={buttonClasses({ variant: "ghost", icon: true, size: "sm" })}>
                 <X className="h-4 w-4" aria-hidden="true" />
