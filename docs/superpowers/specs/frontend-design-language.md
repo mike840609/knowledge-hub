@@ -1038,11 +1038,7 @@ remains visible but disabled, labelled Coming soon, until server configuration
 explicitly enables it. Disabled controls have no navigation or click action.
 
 
-1. The palette, with nothing typed, lists the last few documents read ahead of
-   its actions (`Recent`), since the likeliest target is the last thing read.
-   Their names are kept beside the recent list (`recent-titles.ts`) because the
-   palette opens from pages that have no tree to look them up in.
-   The palette is mostly navigation, and that is a product gap rather than a
+1. The palette is mostly navigation, and that is a product gap rather than a
    UI one. Counted against the code it can offer about fourteen entries, of
    which the majority are ways to get somewhere; a command palette does not
    create commands. Worth revisiting when this product has more a reader can

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { FileText } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -6,7 +6,6 @@ import { Status } from "@/components/ui/status";
 import { Tooltip } from "@/components/ui/tooltip";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { syncStatusKind, syncStatusLabel } from "@/components/sources/source-list-row";
-import { readRecentTitles, rememberRecentTitles } from "@/components/knowledge/recent-titles";
 
 describe("Status", () => {
   it("says the state in a word as well as a glyph, and colours only the glyph", () => {
@@ -74,47 +73,5 @@ describe("ConfirmDialog", () => {
       <ConfirmDialog open={false} onOpenChange={() => {}} title="Discard?" description="d" confirmLabel="Discard" onConfirm={() => {}} />,
     );
     expect(html).toBe("");
-  });
-});
-
-describe("recent titles", () => {
-  afterEach(() => vi.unstubAllGlobals());
-
-  function stubStorage(initial: Record<string, string> = {}) {
-    const data = new Map(Object.entries(initial));
-    vi.stubGlobal("window", {
-      localStorage: {
-        getItem: (key: string) => data.get(key) ?? null,
-        setItem: (key: string, value: string) => void data.set(key, value),
-        removeItem: (key: string) => void data.delete(key),
-      },
-    });
-    return data;
-  }
-
-  it("reads nothing from a missing or malformed value", () => {
-    stubStorage({ "kh:recent-titles:w1": "{not json" });
-    expect(readRecentTitles("w1")).toEqual({});
-    expect(readRecentTitles("w2")).toEqual({});
-  });
-
-  it("keeps the stored name where this tree does not have the document, and drops what is no longer recent", () => {
-    const data = stubStorage({
-      "kh:recent-titles:w1": JSON.stringify({
-        "s2:d2": { title: "Elsewhere", sourceName: "Other" },
-        "s9:d9": { title: "Gone", sourceName: "Old" },
-      }),
-    });
-    rememberRecentTitles("w1", ["s1:d1", "s2:d2"], new Map([["s1:d1", { title: "Here", sourceName: "Notes" }]]));
-    expect(JSON.parse(data.get("kh:recent-titles:w1") ?? "{}")).toEqual({
-      "s1:d1": { title: "Here", sourceName: "Notes" },
-      "s2:d2": { title: "Elsewhere", sourceName: "Other" },
-    });
-  });
-
-  it("refreshes a title that has been renamed", () => {
-    stubStorage({ "kh:recent-titles:w1": JSON.stringify({ "s1:d1": { title: "Old", sourceName: "Notes" } }) });
-    rememberRecentTitles("w1", ["s1:d1"], new Map([["s1:d1", { title: "New", sourceName: "Notes" }]]));
-    expect(readRecentTitles("w1")["s1:d1"]?.title).toBe("New");
   });
 });
