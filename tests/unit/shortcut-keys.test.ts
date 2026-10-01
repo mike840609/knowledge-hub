@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSingleKeyShortcut, matchesShortcut, shortcutLabel, type KeyEventLike, type ShortcutEventLike } from "@/lib/shortcut-keys";
+import { actionForKey, isSingleKeyShortcut, matchesShortcut, shortcutLabel, type KeyEventLike, type ShortcutEventLike } from "@/lib/shortcut-keys";
 
 /** A target whose closest() answers for the selectors it is "inside". */
 function inside(...matches: string[]) {
@@ -131,5 +131,32 @@ describe("matchesShortcut", () => {
 
   it("is not a single key: a shortcut with no modifier is isSingleKeyShortcut's, with its rules about fields", () => {
     expect(matchesShortcut(press({ key: "c" }), "C")).toBe(false);
+  });
+});
+
+describe("actionForKey", () => {
+  const edit = { id: "document.edit", shortcut: "E" };
+  const move = { id: "document.move", shortcut: "M" };
+  const details = { id: "document.details", shortcut: "Meta+I Control+I" };
+  const plain = { id: "document.open" };
+  const actions = [plain, edit, details, move];
+
+  it("finds the action whose single-key shortcut is the key", () => {
+    expect(actionForKey(actions, { key: "e" })).toBe(edit);
+    expect(actionForKey(actions, { key: "m" })).toBe(move);
+  });
+
+  it("compares by what the key types, so a capital is the same key", () => {
+    expect(actionForKey(actions, { key: "E" })).toBe(edit);
+  });
+
+  it("never matches a shortcut that carries a modifier, or an action with none", () => {
+    expect(actionForKey(actions, { key: "i" })).toBeUndefined();
+    expect(actionForKey([plain], { key: "e" })).toBeUndefined();
+  });
+
+  it("returns nothing for a key no action takes, and for an empty list", () => {
+    expect(actionForKey(actions, { key: "z" })).toBeUndefined();
+    expect(actionForKey([], { key: "e" })).toBeUndefined();
   });
 });

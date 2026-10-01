@@ -78,3 +78,13 @@ export function shortcutLabel(shortcut: string): string {
     .map((part) => (part === "Meta" ? "⌘" : part === "Control" ? "Ctrl " : part))
     .join("");
 }
+
+/**
+ * The action a single key runs: the first whose registry `shortcut` is that key. A shortcut with a
+ * modifier ("Meta+I Control+I") is never equal to one key, so it is never found here; that is
+ * `matchesShortcut`'s. Shared by the palette's listener and the tree's, so the rule is written once.
+ */
+export function actionForKey<A extends { shortcut?: string }>(actions: readonly A[], event: { key: string }): A | undefined {
+  const key = event.key.toLowerCase();
+  return actions.find((action) => action.shortcut?.toLowerCase() === key);
+}
