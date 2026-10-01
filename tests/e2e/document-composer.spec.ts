@@ -433,7 +433,7 @@ test("Markdown the editor makes nothing of stays in the source, with the reason 
   await source.fill("[a]: https://example.com\n");
   const toggle = composer(page).getByRole("button", { name: "Markdown", exact: true });
   await toggle.click();
-  await expect(composer(page).getByRole("status").filter({ hasText: "已改用 Markdown 模式" })).toBeVisible();
+  await expect(composer(page).getByRole("status").filter({ hasText: "Your text is available in Markdown mode" })).toBeVisible();
   await expect(source).toBeVisible();
   await expect(source).toHaveValue("[a]: https://example.com\n");
   await expect(toggle).toBeDisabled();
@@ -477,7 +477,7 @@ test("an editor whose code cannot load leaves the Markdown in charge", async ({ 
   const url = await createNote(page, unique("No Editor Code"), "body\n");
   await page.route(EDITOR_CODE, (route) => route.abort());
   await page.goto(`${url}/edit`);
-  await expect(composer(page).getByRole("status").filter({ hasText: "已改用 Markdown 模式" })).toBeVisible(ROUND_TRIP);
+  await expect(composer(page).getByRole("status").filter({ hasText: "Your text is available in Markdown mode" })).toBeVisible(ROUND_TRIP);
   const source = composer(page).getByLabel("Markdown", { exact: true });
   await expect(source).toBeEditable();
   await source.fill("still editable");
@@ -526,7 +526,7 @@ test("opening a document whose H1 differs from its stored title warns that savin
   // The breadcrumb follows the H1, so the person sees the new name at once —
   // and is told that saving keeps it, instead of being renamed silently.
   await expect(composer(page).getByRole("navigation", { name: "Breadcrumb" })).toContainText(heading);
-  await expect(composer(page).getByText(`儲存會將標題改為「${heading}」`)).toBeVisible();
+  await expect(composer(page).getByText(`Saving will rename this document to “${heading}”`)).toBeVisible();
 
   const saved = nextSave(page);
   await composer(page).getByRole("button", { name: "Save" }).click();
@@ -539,7 +539,7 @@ test("a document whose H1 already matches its stored title shows no rename warni
   const title = unique("Matching Title");
   const url = await createNote(page, title, `# ${title}\n\nbody`);
   await openEditor(page, url);
-  await expect(composer(page).getByText("儲存會將標題改為")).toHaveCount(0);
+  await expect(composer(page).getByText("Saving will rename this document to")).toHaveCount(0);
 });
 
 test("deleting the opening H1 brings back the title field, filled with it", async ({ page }) => {
@@ -570,7 +570,7 @@ test("a frontmatter title survives editing the H1", async ({ page }) => {
   await expect(page).not.toHaveURL(/\/new$/, ROUND_TRIP);
 
   const surface = await openEditor(page, page.url());
-  await expect(composer(page).getByText("標題來自上傳檔案的 frontmatter")).toBeVisible();
+  await expect(composer(page).getByText("Title comes from the uploaded file’s frontmatter")).toBeVisible();
   // The body opens with its own H1, so the editor shows that one heading, as the reader does.
   await expect(surface.getByRole("heading", { level: 1 })).toHaveCount(1);
   const source = await showMarkdown(composer(page));
@@ -590,15 +590,15 @@ test("what was typed in the rendered editor survives leaving and is offered back
   await leaveEditor(page, url);
 
   const back = await openEditor(page, url);
-  await expect(composer(page).getByRole("status").filter({ hasText: "已還原未存的修改" })).toBeVisible();
+  await expect(composer(page).getByRole("status").filter({ hasText: "Your unsaved changes were restored" })).toBeVisible();
   await expect(back).toContainText("draft text");
   await expect(back).toBeFocused(ROUND_TRIP);
 
-  await composer(page).getByRole("button", { name: "捨棄" }).click();
+  await composer(page).getByRole("button", { name: "Discard draft" }).click();
   await expect(back).not.toContainText("draft text");
   await page.reload();
   await expect(back).toBeEditable(ROUND_TRIP);
-  await expect(composer(page).getByRole("status").filter({ hasText: "已還原" })).toHaveCount(0);
+  await expect(composer(page).getByRole("status").filter({ hasText: "unsaved changes were restored" })).toHaveCount(0);
 });
 
 test("a draft discarded while the editor is still loading is not what the editor shows", async ({ page }) => {
@@ -608,13 +608,13 @@ test("a draft discarded while the editor is still loading is not what the editor
   await page.keyboard.type("draft text ");
   await leaveEditor(page, url);
 
-  // Press 捨棄 the moment the editor's host joins the page, while the editor in it is being built.
+  // Press Discard draft the moment the editor's host joins the page, while the editor in it is being built.
   await page.addInitScript(() => {
     new MutationObserver((records, observer) => {
       for (const record of records) {
         const host = [...record.addedNodes].find((node) => node instanceof HTMLDivElement && node.attributes.length === 0 && !node.firstChild);
         if (!host || !(record.target instanceof HTMLElement) || !record.target.parentElement?.hasAttribute("hidden")) continue;
-        const discard = [...document.querySelectorAll<HTMLButtonElement>("main form button")].find((button) => button.textContent === "捨棄");
+        const discard = [...document.querySelectorAll<HTMLButtonElement>("main form button")].find((button) => button.textContent === "Discard draft");
         if (!discard) continue;
         (window as unknown as { discardedWhileBuilding?: boolean }).discardedWhileBuilding = !document.querySelector(".ProseMirror");
         discard.click();
@@ -625,7 +625,7 @@ test("a draft discarded while the editor is still loading is not what the editor
   });
   const back = await openEditor(page, url);
   expect(await page.evaluate(() => (window as unknown as { discardedWhileBuilding?: boolean }).discardedWhileBuilding)).toBe(true);
-  await expect(composer(page).getByRole("status").filter({ hasText: "已還原" })).toHaveCount(0);
+  await expect(composer(page).getByRole("status").filter({ hasText: "unsaved changes were restored" })).toHaveCount(0);
   await expect(back).not.toContainText("draft text");
   await expect(back).toHaveText("start");
 });
@@ -646,7 +646,7 @@ test("Cancel right after typing leaves no draft, even when the editor's output l
   await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
 
   await openEditor(page, url);
-  await expect(composer(page).getByRole("status").filter({ hasText: "已還原" })).toHaveCount(0);
+  await expect(composer(page).getByRole("status").filter({ hasText: "unsaved changes were restored" })).toHaveCount(0);
 });
 
 test("a restored draft on a document someone changed meanwhile conflicts instead of overwriting", async ({ page }) => {
@@ -667,15 +667,15 @@ test("a restored draft on a document someone changed meanwhile conflicts instead
   await other.close();
 
   const surface = await openEditor(page, url);
-  await expect(composer(page).getByRole("status").filter({ hasText: "被更新過" })).toBeVisible();
+  await expect(composer(page).getByRole("status").filter({ hasText: "changed while you were away" })).toBeVisible();
   await expect(surface).toContainText("mine");
   await composer(page).getByRole("button", { name: "Save" }).click();
-  await expect(page.getByRole("alert").filter({ hasText: "已被其他人更新" })).toBeVisible(ROUND_TRIP);
+  await expect(page.getByRole("alert").filter({ hasText: "Someone updated this document" })).toBeVisible(ROUND_TRIP);
   await expect(surface).toContainText("mine");
 
-  await composer(page).getByRole("button", { name: "載入最新版本（捨棄你的修改）" }).click();
+  await composer(page).getByRole("button", { name: "Load latest version (discard your changes)" }).click();
   await expect(surface).toContainText("theirs", ROUND_TRIP);
-  await expect(composer(page).getByRole("status").filter({ hasText: "已還原" })).toHaveCount(0);
+  await expect(composer(page).getByRole("status").filter({ hasText: "unsaved changes were restored" })).toHaveCount(0);
 });
 
 test("Cancel asks before discarding changes, and discarding clears the draft", async ({ page }) => {
@@ -712,7 +712,7 @@ test("Cancel asks before discarding changes, and discarding clears the draft", a
 
   const surface = await openEditor(page, url);
   await expect(surface).not.toContainText("changed");
-  await expect(composer(page).getByRole("status").filter({ hasText: "已還原" })).toHaveCount(0);
+  await expect(composer(page).getByRole("status").filter({ hasText: "unsaved changes were restored" })).toHaveCount(0);
 });
 
 test("Enter in the title field moves to the content instead of submitting", async ({ page }) => {

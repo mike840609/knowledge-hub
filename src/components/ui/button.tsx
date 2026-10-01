@@ -56,7 +56,7 @@ export function buttonClasses({
     : icon
       ? iconSizeClasses[size]
       : sizeClasses[size];
-  return `kh-focus-ring inline-flex shrink-0 items-center justify-center rounded-md border font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 ${shape} ${variantClasses[variant]} ${className}`;
+  return `${variant === "link" ? "" : "kh-control"} ${icon ? "kh-icon-control" : ""} kh-focus-ring inline-flex shrink-0 items-center justify-center rounded-md border font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 ${shape} ${variantClasses[variant]} ${className}`;
 }
 
 type ButtonProps = ComponentProps<typeof BaseButton> & ButtonAppearance;

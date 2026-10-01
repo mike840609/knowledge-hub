@@ -129,7 +129,7 @@ test.describe("the palette, before anything is typed", () => {
     await expect(options(page).nth(0)).toContainText(a, ROUND_TRIP);
   });
 
-  test("when the list cannot be had it is what it was: no Recent, and the first row is a place to go", async ({ page }) => {
+  test("when recents fail, contextual actions remain available", async ({ page }) => {
     const stamp = unique("Down");
     const workspaceId = await mySpace(page);
     const [a, b] = [`${stamp} Alpha`, `${stamp} Beta`];
@@ -145,7 +145,7 @@ test.describe("the palette, before anything is typed", () => {
     await openPalette(page);
     await expect.poll(() => asked, ROUND_TRIP).toBeGreaterThan(0);
     await expect(recentHeading(page)).toBeHidden();
-    await expect(options(page).first()).toContainText(/Go to /);
+    await expect(options(page).first()).toContainText(/This document/);
     // Typing still searches.
     await page.getByRole("dialog").getByRole("combobox").fill(stamp);
     await expect(options(page).filter({ hasText: a })).toBeVisible(ROUND_TRIP);
@@ -187,13 +187,13 @@ test.describe("the palette, before anything is typed", () => {
     expect(await selected.innerText()).toBe(label);
   });
 
-  test("with nothing else opened it is what it was: the first row is a place to go", async ({ page }) => {
+  test("with no recent documents, contextual actions lead", async ({ page }) => {
     await mySpace(page);
     await expect(page.getByRole("treeitem").first()).toBeVisible(ROUND_TRIP);
     await openPalette(page);
     await expect(recentHeading(page)).toBeHidden();
     await expect(options(page).first()).toHaveAttribute("aria-selected", "true");
-    await expect(options(page).first()).toContainText(/Go to /);
+    await expect(options(page).first()).toContainText(/This document/);
   });
 });
 

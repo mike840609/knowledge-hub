@@ -1,6 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
+import { NavigationContext } from "./navigation-context";
+import { TreeSkeleton } from "@/components/knowledge/knowledge-skeletons";
 import type { WorkspaceShellModel } from "@/server/knowledge-read";
 import { DocumentTopbarContext, type DocumentTopbarState } from "./document-topbar-context";
 import { Topbar } from "@/components/shell/topbar";
@@ -16,6 +19,10 @@ import { matchesShortcut } from "@/lib/shortcut-keys";
 import { TOGGLE_NAV_EVENT } from "./nav-toggle";
 
 export function AppShell({ model, children }: { model: WorkspaceShellModel; children: ReactNode }) {
+  const pathname = usePathname();
+  const knowledgeRoute = pathname.startsWith(`/w/${model.workspace.id}/knowledge`);
+  const [explorerTarget, setExplorerTarget] = useState<HTMLElement | null>(null);
+  const [mobileExplorerTarget, setMobileExplorerTarget] = useState<HTMLElement | null>(null);
   const authorization = useWorkspaceAuthorizationRefresh(model.access, model.navigation);
   const [documentTopbar, setDocumentTopbar] = useState<DocumentTopbarState | null>(null);
   const [navOpen, setNavOpen] = useState(false);
@@ -79,6 +86,7 @@ export function AppShell({ model, children }: { model: WorkspaceShellModel; chil
   return (
     <WorkspaceAuthorizationContext.Provider value={authorization}>
     <DocumentTopbarContext.Provider value={{ document: documentTopbar, setDocument: setDocumentTopbar }}>
+    <NavigationContext.Provider value={{ explorerTarget, mobileExplorerTarget, closeNavigation: () => setNavOpen(false) }}>
     <ToastProvider>
     <TooltipProvider delay={500} closeDelay={0}>
     <div className="flex h-screen overflow-hidden flex-col bg-kh-bg-subtle text-kh-text supports-[height:100dvh]:h-dvh">
@@ -87,17 +95,25 @@ export function AppShell({ model, children }: { model: WorkspaceShellModel; chil
       {!authorization.confirmed && !authorization.revoked && <p role="alert" className="bg-kh-bg p-3 text-body text-kh-danger">Unable to confirm workspace access. Changes are paused. <button className="underline" onClick={() => void authorization.refresh()}>Retry</button></p>}
       {authorization.access.workspace.lifecycleState === "ARCHIVED" && <ArchivedWorkspaceBanner workspaceId={model.workspace.id} canRestore={authorization.confirmed && authorization.access.actions.canRestore} />}
       <div className="flex min-h-0 flex-1">
-        <aside className={`hidden shrink-0 border-r border-kh-border bg-kh-bg-sunken lg:block ${navCollapsed ? "w-12" : "w-40"}`}>
+        <aside className={`hidden shrink-0 border-r border-kh-border bg-kh-bg-sunken lg:flex lg:flex-col ${navCollapsed ? "w-12" : "w-72"}`}>
           <PrimaryNav workspaceId={model.workspace.id} compact={navCollapsed} />
+          <div ref={setExplorerTarget} className={`min-h-0 flex-1 empty:hidden ${navCollapsed ? "hidden" : ""}`} />
+          {knowledgeRoute && !explorerTarget && !navCollapsed ? <div className="p-3"><TreeSkeleton /></div> : null}
         </aside>
         <main className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-kh-bg has-[[data-document-pane]]:overflow-hidden">{authorization.revoked ? <p role="status">Workspace access changed. Returning to My Space…</p> : children}</main>
       </div>
-      <Drawer open={navOpen} onOpenChange={setNavOpen} title="Menu">
-        <PrimaryNav workspaceId={model.workspace.id} onNavigate={() => setNavOpen(false)} />
+      <Drawer side="left" open={navOpen} onOpenChange={setNavOpen} title="Menu">
+        <div className="flex h-full min-h-0 flex-col" onClick={(event) => {
+          if ((event.target as HTMLElement).closest("a") && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) setNavOpen(false);
+        }}>
+          <PrimaryNav workspaceId={model.workspace.id} />
+          <div ref={setMobileExplorerTarget} className="min-h-0 flex-1 empty:hidden" />
+        </div>
       </Drawer>
     </div>
     </TooltipProvider>
     </ToastProvider>
+    </NavigationContext.Provider>
     </DocumentTopbarContext.Provider>
     </WorkspaceAuthorizationContext.Provider>
   );

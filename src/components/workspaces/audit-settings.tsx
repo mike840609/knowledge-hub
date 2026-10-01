@@ -9,6 +9,13 @@ import {
   governanceRequest,
   type GovernanceFailure,
 } from "./governance-error";
+const eventLabels: Record<string, string> = {
+  MEMBER_ADDED: "Added a member", ROLE_CHANGED: "Changed a member’s role", REMOVED: "Removed a member",
+  GROUP_MAPPING_ADDED: "Linked a group", GROUP_MAPPING_ROLE_CHANGED: "Changed a group’s role", GROUP_MAPPING_REMOVED: "Unlinked a group",
+  WORKSPACE_CREATED: "Created the workspace", WORKSPACE_RENAMED: "Renamed the workspace", WORKSPACE_ARCHIVED: "Archived the workspace", WORKSPACE_RESTORED: "Restored the workspace",
+  SHARE_LINK_CREATED: "Created a share link", SHARE_LINK_REVOKED: "Revoked a share link", PERSONAL_WORKSPACE_PROVISIONED: "Created My Space",
+};
+function readableName(value: string): string { return value.toLowerCase().replaceAll("_", " "); }
 export function AuditSettings({
   workspaceId,
   initialPage,
@@ -28,21 +35,20 @@ export function AuditSettings({
         {page.items.map((item) => (
           <li key={item.id} className="rounded-md border border-kh-border p-4">
             <div className="flex flex-wrap justify-between gap-2">
-              <p className="font-medium">{item.summary}</p>
+              <p className="font-medium">{eventLabels[item.eventType] ?? readableName(item.eventType)}</p>
               <Timestamp value={item.createdAt} className="text-caption text-kh-text-muted" />
             </div>
             <p className="mt-1 text-body">
-              Actor: {item.actorName ?? "Unknown actor"} · {item.eventType}
+              Actor: {item.actorName ?? "Unknown actor"}
             </p>
             <p className="text-body">
-              Target: {item.targetType}
-              {item.targetId ? ` · ${item.targetId}` : ""}
+              Target: {readableName(item.targetType)}
             </p>
-            {(item.before || item.after) && (
+            {(
               <details className="mt-2 text-body">
-                <summary className="cursor-pointer">Before / after details</summary>
+                <summary className="cursor-pointer">Technical details</summary>
                 <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all">
-                  {JSON.stringify({ before: item.before, after: item.after }, null, 2)}
+                  {JSON.stringify({ event: item.eventType, target: item.targetType, id: item.targetId, before: item.before, after: item.after }, null, 2)}
                 </pre>
               </details>
             )}

@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { requestWorkspaceAccessCheck, useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { useEffect, useRef, useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import type { ImportManifestEntry } from "@/modules/sources/application/create-folder-import";
 
 export type FolderImportTarget =
@@ -209,7 +211,7 @@ function statusText(state: ImportUiState): string | null {
   if (state.kind === "PREPARING") return "Preparing the folder manifest…";
   if (state.kind === "UPLOADING") return `Uploading Markdown files… ${state.uploaded}/${state.total}`;
   if (state.kind === "FINALIZING") return "Analyzing the folder and building the preview…";
-  if (state.kind === "ERROR") return `${state.code}: ${state.message}`;
+  if (state.kind === "ERROR") return state.message;
   return null;
 }
 
@@ -225,11 +227,14 @@ export function FolderImportForm({ target }: { target: FolderImportTarget }): Re
   };
   const [state, setState] = useState<ImportUiState>({ kind: "IDLE" });
   const [sourceName, setSourceName] = useState("");
+  const picker = useRef<HTMLInputElement>(null);
+  const [selection, setSelection] = useState<{ name: string; count: number } | null>(null);
   const busy = state.kind === "PREPARING" || state.kind === "UPLOADING" || state.kind === "FINALIZING";
   const status = statusText(state);
 
   async function handleFiles(files: FileList | null): Promise<void> {
     if (!files || files.length === 0) return;
+    setSelection({ name: files[0].webkitRelativePath.split("/")[0] || "Selected folder", count: files.length });
     try {
       const snapshotId = await runFolderImport({ target, files, sourceName, onProgress: setState, assertAllowed });
       assertAllowed();
@@ -249,9 +254,9 @@ export function FolderImportForm({ target }: { target: FolderImportTarget }): Re
       {target.kind === "new" ? (
         <>
           <label className="block text-body font-medium text-kh-text" htmlFor="import-source-name">Source name</label>
-          <input
+          <Input
             id="import-source-name"
-            className="mt-1 w-full rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-body text-kh-text outline-none placeholder:text-kh-text-muted focus:border-kh-focus kh-focus-ring"
+            className="mt-1"
             value={sourceName}
             disabled={busy}
             onChange={(event) => setSourceName(event.target.value)}
@@ -264,21 +269,28 @@ export function FolderImportForm({ target }: { target: FolderImportTarget }): Re
           The source folder stays authoritative; nothing is applied until you confirm the preview.
         </p>
       )}
-      <label className="mt-3 block text-body font-medium text-kh-text" htmlFor="import-folder">Folder</label>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <Button type="button" variant="secondary" disabled={busy} aria-describedby="import-folder-selection" onClick={() => picker.current?.click()}>Choose folder</Button>
+        <p id="import-folder-selection" className="text-body text-kh-text-muted">{selection ? `${selection.name} · ${selection.count} files` : "No folder selected"}</p>
+      </div>
       <input
         id="import-folder"
         type="file"
         disabled={busy}
+        hidden
+        tabIndex={-1}
+        aria-hidden="true"
         ref={(element) => {
+          picker.current = element;
           if (element) element.setAttribute("webkitdirectory", "");
         }}
         onChange={(event) => {
           void handleFiles(event.target.files);
           event.target.value = "";
         }}
-        className="mt-1 w-full rounded-md text-body text-kh-text outline-none kh-focus-ring"
       />
       {status ? <p role="status" className="mt-3 text-body text-kh-text-muted">{status}</p> : null}
+      {state.kind === "ERROR" ? <details className="mt-2 text-caption text-kh-text-muted"><summary className="cursor-pointer rounded-md kh-focus-ring">Technical details</summary><code>{state.code}</code></details> : null}
     </div>
   );
 }

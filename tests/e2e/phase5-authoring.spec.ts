@@ -153,9 +153,9 @@ test("a stale second editor gets a conflict, keeps their input, and does not ove
   const sourceB = await showMarkdown(editorB);
   await sourceB.fill("loser body");
   await editorB.getByRole("button", { name: "Save" }).click();
-  await expect(pageB.getByRole("alert").filter({ hasText: "已被其他人更新" })).toBeVisible(ROUND_TRIP);
+  await expect(pageB.getByRole("alert").filter({ hasText: "Someone updated this document" })).toBeVisible(ROUND_TRIP);
   await expect(sourceB).toHaveValue("loser body");
-  await expect(pageB.getByRole("button", { name: "載入最新版本（捨棄你的修改）" })).toBeVisible();
+  await expect(pageB.getByRole("button", { name: "Load latest version (discard your changes)" })).toBeVisible();
 
   // The persisted current revision is the winner's, never the loser's.
   await pageB.goto(documentUrl);

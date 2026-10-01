@@ -114,7 +114,7 @@ function TreeNodeRow({
           // showed the revision before it. Keyboard-shortcuts spec §9.
           prefetch={selected ? false : undefined}
           title={item.label}
-          className={`flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-body kh-focus-ring ${
+          className={`kh-tree-document-link kh-control flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-body kh-focus-ring ${
             selected ? "font-medium text-kh-selected-text" : "text-kh-text-muted"
           }`}
         >
@@ -122,14 +122,14 @@ function TreeNodeRow({
           <span className="truncate">{item.label}</span>
           {archived ? <Status kind="archived" className="ml-auto shrink-0 text-caption font-normal text-kh-text-muted">Archived</Status> : null}
         </Link>
-        <Tooltip label={isFavorite ? "Remove from favorites" : "Add to favorites"}><button type="button" onClick={() => onToggleFavorite(item.documentId)} aria-label={`${isFavorite ? "Remove from" : "Add to"} favorites: ${item.label}`} className={`mr-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md kh-focus-ring ${isFavorite ? "text-kh-selected-text" : "kh-row-action text-kh-text-muted hover:bg-kh-bg-hover"}`}>
+        <Tooltip label={isFavorite ? "Remove from favorites" : "Add to favorites"}><button type="button" onClick={() => onToggleFavorite(item.documentId)} aria-label={`${isFavorite ? "Remove from" : "Add to"} favorites: ${item.label}`} className={`mr-1 inline-flex kh-control kh-icon-control h-6 w-6 shrink-0 items-center justify-center rounded-md kh-focus-ring ${isFavorite ? "text-kh-selected-text" : "kh-row-action text-kh-text-muted hover:bg-kh-bg-hover"}`}>
           <Star size={14} fill={isFavorite ? "currentColor" : "none"} aria-hidden="true" />
         </button></Tooltip>
         {/* Floated just inside the favourite toggle, carrying the row's own
             background: reserving a second control slot would have re-truncated
             every label in the tree to buy a button that is invisible most of
             the time. `right-8` is that toggle's width plus its margin. */}
-        <div className="kh-row-action absolute right-8 top-1/2 flex -translate-y-1/2 items-center rounded-md bg-inherit">
+        <div className="kh-tree-row-actions kh-row-action absolute right-8 top-1/2 flex -translate-y-1/2 items-center rounded-md bg-inherit">
           <RowActionsTrigger actions={actions} onRun={onRunAction} label={item.label} />
         </div>
       </RowContextMenu>
@@ -162,7 +162,7 @@ function TreeNodeRow({
           aria-expanded={!collapsed}
           title={item.label}
           tabIndex={-1}
-          className={`flex min-h-8 min-w-0 flex-1 items-center gap-2 px-2 text-left text-body font-medium kh-focus-ring rounded-md ${archived ? "text-kh-text-muted" : "text-kh-text"}`}
+          className={`kh-tree-folder-button kh-control flex min-h-8 min-w-0 flex-1 items-center gap-2 px-2 text-left text-body font-medium kh-focus-ring rounded-md ${archived ? "text-kh-text-muted" : "text-kh-text"}`}
         >
           {collapsed ? <ChevronRight size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" /> : <ChevronDown size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />}
           <span className="min-w-0 flex-1 truncate">{item.label}</span>

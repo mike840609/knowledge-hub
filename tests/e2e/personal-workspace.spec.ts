@@ -29,12 +29,13 @@ test("personal rollout: disabled teams, drafts across browsers, organize, export
   await expect(resumed).toHaveURL(new RegExp(`${doc.documentId}$`), wait);
   await expect(resumed.getByRole("region", { name: "Document content", exact: true }).getByRole("article").getByText("Persistent draft body", { exact: true })).toBeVisible(wait);
   await page.goto(`/w/${workspaceId}/home`);
-  await page.getByRole("link", { name: "Organize documents" }).click();
+  await page.getByRole("button", { name: "Home actions" }).click();
+  await page.getByRole("menuitem", { name: "Organize documents" }).click();
   await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/knowledge(?:/|$)`), wait);
   await page.goto(`${href}?revision=1`);
   const content = page.getByRole("region", { name: "Document content", exact: true });
   await content.getByText("Compare revision 1 with current revision 2", { exact: true }).click();
-  await expect(content.getByText("Revision 2 · Personal lifecycle", { exact: true })).toBeVisible();
+  await expect(content.getByRole("table", { name: "Changed lines from revision 1 to 2" })).toBeVisible();
   await content.getByRole("button", { name: "Restore revision 1", exact: true }).click(); await expect(page).toHaveURL(new RegExp(`${doc.documentId}$`), wait);
   await expect(content.getByRole("article").getByText("Original body", { exact: true })).toBeVisible(wait);
   await page.goto(`/w/${workspaceId}/home`);
@@ -43,7 +44,8 @@ test("personal rollout: disabled teams, drafts across browsers, organize, export
   await page.getByRole("button", { name: "Favorite: Personal lifecycle", exact: true }).first().click(); expect((await favoriteResponse).ok()).toBe(true);
   await resumed.goto(`${new URL(page.url()).origin}/w/${workspaceId}/home`);
   await expect(resumed.getByRole("button", { name: "Remove favorite: Personal lifecycle", exact: true }).first()).toBeVisible(wait);
-  const downloadPromise = page.waitForEvent("download"); await page.getByRole("link", { name: "Export Markdown ZIP" }).click(); const download = await downloadPromise;
+  await page.getByRole("button", { name: "Home actions" }).click();
+  const downloadPromise = page.waitForEvent("download"); await page.getByRole("menuitem", { name: "Export Markdown ZIP" }).click(); const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("my-space.zip"); const zipPath = (await download.path())!;
   expect(execFileSync("unzip", ["-t", zipPath], { encoding: "utf8" })).toContain("No errors detected");
   const zip = await readFile(zipPath);
@@ -62,7 +64,7 @@ test("a new-note draft survives closing its tab and can be resumed from Home", a
   await expect(page.getByText("Draft saved to your account", { exact: true })).toBeVisible(wait);
   await page.close();
   const next = await context.newPage(); await next.goto("/");
-  await next.getByRole("link", { name: "New persistent note", exact: true }).click();
+  await next.getByRole("region", { name: "Drafts", exact: true }).getByRole("link", { name: /^New persistent note/ }).click();
   await expect(next.getByRole("textbox", { name: "Content", exact: true })).toBeEditable(wait);
   await next.getByRole("button", { name: "Markdown", exact: true }).click();
   await expect(next.getByRole("textbox", { name: "Markdown", exact: true })).toHaveValue("# New persistent note\n\nClose and resume");

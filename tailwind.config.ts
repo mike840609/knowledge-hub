@@ -2,8 +2,8 @@ import type { Config } from "tailwindcss";
 
 /**
  * Design tokens. The scales below are *replaced*, not extended, so the only
- * spellings that compile are the ones named here — an arbitrary `text-[13px]`
- * or a stray `rounded-xl` fails loudly instead of quietly forking the system.
+ * ordinary utilities that compile are the ones named here. Arbitrary values
+ * still compile; ESLint design/contract enforces type, radius and rhythm tokens.
  *
  * Contract and rationale: docs/superpowers/specs/frontend-design-language.md
  */
@@ -90,7 +90,7 @@ const config: Config = {
     // 8px ~123, 12px ~103, 4px ~43, 24px ~38, 16px ~35, 2px ~21, 6px ~13,
     // 20px ~10, 10px ~7, 0/auto a handful each. Nothing else is used, so
     // nothing else compiles: p-7/m-8/gap-9 and the rest of Tailwind's default
-    // produce no CSS, the same bar as text-[13px] and rounded-xl.
+    // produce no CSS. Arbitrary values are checked separately by ESLint.
     // Deliberately NOT `spacing`: width/height (h-6/h-8/h-10 control ladder,
     // w-72 sidebars, icon h-4/w-4) and inset/translate read from `spacing`,
     // and a sidebar width is not a decision about rhythm (§18 item 2).

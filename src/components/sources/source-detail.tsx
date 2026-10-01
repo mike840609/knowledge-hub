@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/shell/page-header";
 import { Status } from "@/components/ui/status";
 import { WorkspaceImportLink } from "@/components/shell/workspace-import-link";
 import Link from "next/link";
@@ -19,25 +20,13 @@ export function SourceDetail({ model, showImportSuccess = false }: { model: Sour
           Import applied successfully.
         </p>
       ) : null}
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-heading font-semibold text-kh-text">{source.name}</h1>
-          <p className="mt-1 flex flex-wrap items-center gap-2 text-caption text-kh-text-muted">
-            <span className="rounded-md border border-kh-border px-1.5 py-0.5">{sourceTypeLabel(source.sourceType)}</span>
-            <span className="rounded-md border border-kh-border px-1.5 py-0.5">
-              <Status kind={source.status === "ARCHIVED" ? "archived" : "active"}>{source.status === "ARCHIVED" ? "Archived" : "Active"}</Status>
-            </span>
-          </p>
-        </div>
-        {syncable ? (
-          <WorkspaceImportLink href={`/w/${workspace.id}/sources/${source.id}/update`}
-              className={buttonClasses({ variant: "secondary" })}
-            >
-              <RefreshCw size={15} aria-hidden="true" />
-              Update from folder
-          </WorkspaceImportLink>
-        ) : null}
-      </header>
+      <PageHeader location="Sources" locationHref={`/w/${workspace.id}/sources`} title={source.name}
+        actions={syncable ? <WorkspaceImportLink href={`/w/${workspace.id}/sources/${source.id}/update`} className={buttonClasses({ variant: "secondary" })}><RefreshCw size={15} aria-hidden="true" />Update from folder</WorkspaceImportLink> : undefined}
+      />
+      <p className="flex flex-wrap items-center gap-2 text-caption text-kh-text-muted">
+        <span className="rounded-md border border-kh-border px-1.5 py-0.5">{sourceTypeLabel(source.sourceType)}</span>
+        <Status kind={source.status === "ARCHIVED" ? "archived" : "active"}>{source.status === "ARCHIVED" ? "Archived" : "Active"}</Status>
+      </p>
 
       <section aria-labelledby="source-overview-heading" className="rounded-md border border-kh-border bg-kh-bg p-4">
         <h2 id="source-overview-heading" className="text-body font-semibold text-kh-text">Overview</h2>

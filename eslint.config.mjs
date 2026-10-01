@@ -1,4 +1,5 @@
 import tseslint from "typescript-eslint";
+import { designContractRule } from "./scripts/eslint/design-contract.mjs";
 import nextPlugin from "@next/eslint-plugin-next";
 
 const moduleBoundaryRestrictions = [
@@ -15,8 +16,8 @@ const knowledgeBoundaryRestrictions = [
 /**
  * §10 of the design contract says there is one focus idiom, `.kh-focus-ring`,
  * and no second spelling. Unlike the type, radius, elevation and container
- * scales — which `tailwind.config.ts` replaces, so an off-scale value simply
- * does not compile — that rule had nothing enforcing it, and it was the one
+ * scales — whose named utilities are replaced by `tailwind.config.ts` and whose
+ * arbitrary values are checked by design/contract — that rule had nothing enforcing it, and it was the one
  * rule the codebase broke: 29 hand-written copies across 17 files.
  *
  * The ring belongs in one place because it is themed and because a copy that
@@ -39,7 +40,7 @@ export default tseslint.config(
   },
   ...tseslint.configs.recommended,
   {
-    plugins: { "@next/next": nextPlugin },
+    plugins: { "@next/next": nextPlugin, design: { rules: { contract: designContractRule } } },
     rules: nextPlugin.configs.recommended.rules,
   },
   {
@@ -65,6 +66,7 @@ export default tseslint.config(
         "patterns": webAdapterRestrictions,
       }],
       "no-restricted-syntax": ["error", focusRingRestriction],
+      "design/contract": "error",
     }
   }
 );
