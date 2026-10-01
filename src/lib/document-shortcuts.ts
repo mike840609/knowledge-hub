@@ -36,6 +36,20 @@ export function recentDocumentIds(shortcuts: DocumentShortcuts, reading?: string
   return ids;
 }
 
+/** How many favourites the sidebar lists in place; the rest are behind "Show all". */
+export const FAVORITES_SHOWN = 4;
+
+/**
+ * The favourites to list in place — the newest few — and, when there are more than that, the number on the
+ * "Show all" row: how many there are in all, not how many are behind it.
+ */
+export function favoritesInPlace(favorites: readonly string[]): { inPlace: string[]; showAll: number | null } {
+  return {
+    inPlace: favorites.slice(0, FAVORITES_SHOWN),
+    showAll: favorites.length > FAVORITES_SHOWN ? favorites.length : null,
+  };
+}
+
 export function toggleFavoriteDocument(shortcuts: DocumentShortcuts, key: string): DocumentShortcuts {
   return {
     ...shortcuts,

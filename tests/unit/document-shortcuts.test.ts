@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseDocumentShortcuts, recentDocumentIds, rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
+import { FAVORITES_SHOWN, favoritesInPlace, parseDocumentShortcuts, recentDocumentIds, rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
 
 describe("document shortcuts", () => {
   it("keeps recent documents unique and newest first", () => {
@@ -39,3 +39,27 @@ describe("recentDocumentIds", () => {
   });
 });
 
+describe("favoritesInPlace", () => {
+  const keys = (count: number) => Array.from({ length: count }, (_, index) => `source:${index + 1}`);
+
+  it("lists four in place", () => {
+    expect(FAVORITES_SHOWN).toBe(4);
+  });
+
+  it("has no Show all row for none, or up to four, and lists them all in place in the order given", () => {
+    expect(favoritesInPlace([])).toEqual({ inPlace: [], showAll: null });
+    expect(favoritesInPlace(keys(3))).toEqual({ inPlace: keys(3), showAll: null });
+    expect(favoritesInPlace(keys(4))).toEqual({ inPlace: keys(4), showAll: null });
+  });
+
+  it("lists the first four in place from five on, and says how many there are in all, not how many are behind the row", () => {
+    expect(favoritesInPlace(keys(5))).toEqual({ inPlace: keys(4), showAll: 5 });
+    expect(favoritesInPlace(keys(10))).toEqual({ inPlace: keys(4), showAll: 10 });
+  });
+
+  it("does not change what it was given", () => {
+    const given = keys(6);
+    favoritesInPlace(given);
+    expect(given).toEqual(keys(6));
+  });
+});

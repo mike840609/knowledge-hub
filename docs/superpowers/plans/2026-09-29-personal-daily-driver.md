@@ -86,7 +86,7 @@
 
 | # | 任務 | 檔案 | 測試 | 驗收 |
 | --- | --- | --- | --- | --- |
-| B.0 ✅ | ⌘K 沒有輸入時列出最近開過的文件；側欄收藏不再只顯示 4 筆 | `quick-search.tsx`、`source-sidebar.tsx`、`recent-documents.ts`、`recent-documents` 路由 | 單元（解析與挑選）、integration、e2e | **完成，但偏離了「純 client、不需 migration」的寫法：** 最近開過的「清單」（哪些文件、什麼順序）仍只存本機，但**標題與可讀性由一個小路由 `GET /api/workspaces/:id/recent-documents?ids=` 現查**，不把標題存在本機。理由：文件改名、封存、或使用者失去存取權之後，存在 localStorage 的標題會變成過期甚至不該再看到的字。路由仍是 migration 之外的，沒有新表。**另一個使用者看得到的決定：** 最近開過**排在空白 palette 的最前面**，所以預設的 Enter 是「前一份文件」（不是「Go to …」）；沒有任何最近開過時維持原樣。細節與理由見規格 §8.1 |
+| B.0 ✅ | ⌘K 沒有輸入時列出最近開過的文件；側欄收藏預設 4 筆，其餘在「Show all N」的 Menu 裡（第一版做成全部列出，量過版面後改掉，見規格 §8.1） | `quick-search.tsx`、`source-sidebar.tsx`、`recent-documents.ts`、`recent-documents` 路由 | 單元（解析與挑選）、integration、e2e | **完成，但偏離了「純 client、不需 migration」的寫法：** 最近開過的「清單」（哪些文件、什麼順序）仍只存本機，但**標題與可讀性由一個小路由 `GET /api/workspaces/:id/recent-documents?ids=` 現查**，不把標題存在本機。理由：文件改名、封存、或使用者失去存取權之後，存在 localStorage 的標題會變成過期甚至不該再看到的字。路由仍是 migration 之外的，沒有新表。**另一個使用者看得到的決定：** 最近開過**排在空白 palette 的最前面**，所以預設的 Enter 是「前一份文件」（不是「Go to …」）；沒有任何最近開過時維持原樣。細節與理由見規格 §8.1 |
 | B.1–B.3 | ~~migration 013 `knowledge_document_favorites`、`/api/favorites` 路由、client 同步~~ | — | — | **由 #86 取代。** 收藏存在 migration 013 的 `personal_items`（`favorite:<documentId>` 一列一份，含版本與刪除墓碑），經 `/api/workspaces/:id/personal` 同步；第一次載入把瀏覽器收藏遷上去且不覆蓋遠端的刪除；最近開過維持本機。原本的驗收「另一個瀏覽器 context 看得到同一批收藏」在 `personal-workspace.spec.ts` 裡。**與原設計不同：** 表是通用的個人項目（草稿與收藏同一張），不是專屬的收藏表；存的只是文件 ID，不是授權：開啟時照常由服務重新檢查 |
 | B.4 | ~~rollout 文件~~ | — | — | **沒有做，也沒有取代。** #86 的 migration 013 沒有對應的 `docs/operations/` 文件（012 有：`document-link-index-rollout.md`）。這是缺口，列在待辦 |
 

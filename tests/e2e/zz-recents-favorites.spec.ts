@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { openPalette } from "./fixtures/palette";
 
 // Server-bound assertions only; see the note in phase5-authoring.spec.ts.
@@ -161,30 +161,71 @@ test.describe("the palette, before anything is typed", () => {
   });
 });
 
+// Mirrors scripts/db/seed.ts BROWSER_FIXTURE_IDS (as row-actions.spec.ts does): a Team workspace whose favorites are this browser's own.
+const QUERY_MASTER_WORKSPACE = "0199f100-0000-7000-8000-000000000001";
+const OBSIDIAN_SOURCE = "0199f100-0000-7000-8000-000000000101";
+
+const favoritesRegion = (page: Page) => page.getByRole("region", { name: "Favorites" });
+const showAll = (page: Page) => favoritesRegion(page).getByRole("button", { name: /^Show all \d+$/ });
+
 test.describe("the sidebar's Favorites", () => {
-  test("lists every favorite, not the first few, and scrolls in place when there are many", async ({ page }) => {
+  test("lists the newest four in place and the rest behind Show all, in a section no taller for ten than for five", async ({ page }) => {
     const stamp = unique("Fav");
     const workspaceId = await mySpace(page);
     const titles = Array.from({ length: 10 }, (_, index) => `${stamp} Note ${String(index + 1).padStart(2, "0")}`);
-    const first = await createNote(page, workspaceId, titles[0]);
-    for (const title of titles.slice(1)) await createNote(page, workspaceId, title);
-    await read(page, first, titles[0]);
+    const notes: { url: string; documentId: string }[] = [];
+    for (const title of titles) notes.push(await createNote(page, workspaceId, title));
+    await read(page, notes[0], titles[0]);
 
-    const favorites = page.getByRole("region", { name: "Favorites" });
-    // Counted among this test's own documents: favorites follow the account, so others may be there too.
-    const mine = (region: Locator) => region.getByRole("link", { name: stamp });
-    for (const [index, title] of titles.entries()) {
+    const favorites = favoritesRegion(page);
+    for (const title of titles) {
       await page.getByRole("button", { name: `Add to favorites: ${title}`, exact: true }).click();
       await expect(favorites.getByRole("link", { name: title, exact: true })).toBeVisible(ROUND_TRIP);
-      await expect(mine(favorites)).toHaveCount(index + 1);
     }
-    // All ten are there — the old limit was four — in a list that scrolls rather than pushing the tree away.
-    await expect(mine(favorites)).toHaveCount(10);
-    const list = favorites.locator("ul");
-    const scrolls = await list.evaluate((element) => ({ scrolls: element.scrollHeight > element.clientHeight, tall: element.clientHeight <= 288 }));
-    expect(scrolls).toEqual({ scrolls: true, tall: true });
-    // Reload: still all ten, from wherever they are kept.
+    // The newest four, newest first. Others in the account may be older than these, never newer.
+    const links = favorites.getByRole("link");
+    await expect(links).toHaveCount(4, ROUND_TRIP);
+    for (const [position, title] of [titles[9], titles[8], titles[7], titles[6]].entries()) {
+      await expect(links.nth(position)).toContainText(title);
+    }
+    // The rest are one click away, and the section holds four rows and that one, not a list that grows.
+    await expect(showAll(page)).toBeVisible();
+    const section = await favorites.boundingBox();
+    expect(section?.height ?? Infinity).toBeLessThan(240);
+
+    // Show all lists every favorite, the oldest among them, each a link that goes to its document.
+    await showAll(page).click();
+    const menu = page.getByRole("menu");
+    const mine = menu.getByRole("menuitem", { name: stamp });
+    await expect(mine).toHaveCount(10);
+    await expect(mine.filter({ hasText: titles[0] })).toHaveAttribute("href", new RegExp(`${notes[0].documentId}$`));
+    await mine.filter({ hasText: titles[0] }).click();
+    await expect(page).toHaveURL(notes[0].url, ROUND_TRIP);
+    await expect(page.getByRole("menu")).toHaveCount(0);
+
+    // Esc closes it and gives focus back to what opened it.
+    await showAll(page).click();
+    await expect(page.getByRole("menu")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("menu")).toHaveCount(0);
+    await expect(showAll(page)).toBeFocused();
+
+    // Reload: the same four, and Show all, from wherever they are kept.
     await page.reload();
-    await expect(mine(page.getByRole("region", { name: "Favorites" }))).toHaveCount(10, ROUND_TRIP);
+    await expect(favoritesRegion(page).getByRole("link")).toHaveCount(4, ROUND_TRIP);
+    await expect(showAll(page)).toBeVisible(ROUND_TRIP);
+  });
+
+  test("has no Show all while there are four or fewer", async ({ page }) => {
+    // A Team workspace's favorites are this browser's own, so nothing else in the account decides how many there are.
+    await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${OBSIDIAN_SOURCE}`);
+    const favorites = favoritesRegion(page);
+    const star = page.getByRole("button", { name: /^Add to favorites: / });
+    await expect(star.first()).toBeVisible(ROUND_TRIP);
+    await star.first().click();
+    await expect(favorites.getByRole("link")).toHaveCount(1, ROUND_TRIP);
+    await star.first().click();
+    await expect(favorites.getByRole("link")).toHaveCount(2, ROUND_TRIP);
+    await expect(favorites.getByRole("button", { name: /^Show all/ })).toHaveCount(0);
   });
 });

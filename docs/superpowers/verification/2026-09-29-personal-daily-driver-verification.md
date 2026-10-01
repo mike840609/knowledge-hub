@@ -485,6 +485,21 @@ Next 的 build 輸出（有 ±1 kB 的分組誤差，見切片 0 的紀錄；每
 - **外掛與清單 DOM（約 40 個）**：第一輪存活 11 個。逐個看：`keyCode 229` 與 `isComposing` 在同一個測試裡連按，第一個按鍵就已經讓後面不成立（拆成兩個案例）；「Esc 之後同一個位置」的測試偵測不到 `dismissed` 沒被清掉（位置經過 mapping 會移動；改成「游標離開再回來會重開」）；Shift+Enter 沒有案例；⌘Enter 的案例在 jsdom 用 `metaKey`，而 ProseMirror 的 `Mod` 在那裡是 Ctrl（改用 Ctrl，才偵測得到 composer 原本的處理被丟掉）；三種監聽沒移除（改成計每個 `addEventListener` 有沒有對應的 `removeEventListener`）；「有選取範圍就不觸發」的測試選的範圍起點在 `[[` 之前，所以拿掉那個條件也一樣過（改成選最後一個字）；選取後游標沒移動的那行，與列上 `mousedown` 的 `preventDefault`（清單本身已經擋了），其實都是多餘的（映射本來就把游標放在新節點之後），刪掉。**最後剩兩個沒有可觀察差別的**：唯讀時鍵處理裡與 `sync` 重複的防衛，以及卸載時沒清的 `listeners` 集合（只是記憶體，沒有行為）。
 - **從失效連結建立（29 個）**：存活 4 個。三個被新測試殺掉——`link.kind !== "WIKI"` 與圖譜節點的 PATH 判斷（我的測試只用了含 `/` 的路徑，而 `gone.md` 單獨是個合法的標題）；`renderedLinksFrom` 沒有測試（讀者測試都是手寫 `RenderedLinks`，繞過了它）。剩一個等價的：`titleForNewDocument` 的 512 字元上限，抽取器本來就不抽超過 512 的目標，所以那行是明說用意的重複。
 
+**側欄的「4 筆加 Show all」（見下一節）：**
+
+- **e2e 9 個變異體：7 個被殺，2 個存活——兩個都是真的測試缺口，不是等價：** 「剛好 4 筆就出現 Show all」（`>` 寫成 `>=`）與「Show all 的數字寫成藏起來的筆數而不是總數」。我的 e2e 用 My Space，帳號裡的收藏會累積（#86 起依帳號同步），湊不出「剛好 4 筆」，數字又只用 regex 比對。Team workspace 的種子來源湊不到 5 份文件，在共用資料庫裡新增文件又會牽動其他 spec。
+- **修法：把判斷抽成純函式 `favoritesInPlace`**，邊界用單元測試釘死（0、3、4、5、10 筆；數字是總數；順序；不改輸入）。**輔助函式 6 個變異體 6/6 被殺**（限制 4→5、4→3、`>=`、隱藏數、取最舊的四筆、改動輸入），先前存活的兩個也在內。e2e 保留整合層的檢查。
+
+### 側欄收藏：做了兩個版本，第一版的說法站不住
+
+**第一版**把全部收藏列出來、超過 `max-h-72`（18 rem）在清單內捲動，PR 說明與規格都寫「不把樹擠出畫面」。**那句話沒有量過，量過之後是錯的**：1280 寬、10 筆以上收藏，樹從側欄頂端算 366px 才開始；視窗高 720px（側欄 604px）時不捲動只看得到約 238px 的樹，600px 時約 118px；清單內外還有兩層捲動，游標在清單上滾輪不會捲外層。是使用者問「收藏超過四筆不會擠到其他項目嗎」才去量的。
+
+**第二版（現在）**：預設列出最新加的 4 筆，超過 4 筆時多一列「Show all N」，開啟現成 `ui/menu` 的 Menu 列出全部，每一項是真的連結（`<a role="menuitem" href>`）。使用者提的做法；Menu 當連結用沒有問題（先試 `render={<Link/>}`，e2e 斷言了 `href`，沒有退回就地展開的備案）。
+
+- **量測（720px 高、10 筆以上收藏）：這一節固定 206px**，與收藏數無關（同一個帳號累積到 20、30 筆時仍是 206px）；第一版是 288px 的清單加標題。
+- **看過畫面：** 亮色與暗色（暗色用 `data-theme="dark"`，不是 `emulateMedia`——我第一次用 `emulateMedia` 截的「暗色」其實還是亮色，發現後才改）、720px 高、4 列加「Show all 20」、面板在右側、目前這份高亮、來源名稱在右。面板第一版寬 `w-72`，很長的標題截太多，改成 `w-96`（並限制不超出視窗）。
+- **代價：** 第 5 筆以後要多點一次；面板裡的列沒有星號按鈕，要取消星號得從前 4 筆、樹的那一列或文件頁；面板沒有搜尋。
+
 ### 寫的時候測試與檢查抓到的問題（我的錯，都已修）
 
 - **矮視窗裡清單蓋住游標那一行**（e2e 抓到）。第一版只決定放上或放下，清單比兩邊的空間都高時就疊在那行字上。現在兩邊都放不下時清單自己捲動（`max-height` 依剩下的空間）。
@@ -524,7 +539,7 @@ Next 的 build 輸出（有 ±1 kB 的分組誤差，見切片 0 的紀錄；每
 - **成員看得到整個 workspace 的標題。** 與圖譜相同的授權（成員即可），這是規格寫的；唯讀成員也能取得清單，這也是（他們本來就讀得到這些文件）。若之後有更細的讀取範圍，`link-targets` 要跟著改。
 - **同時兩個分頁、清單顯示中文件被封存**：清單最多 60 秒是舊的，選到剛被封存的文件會寫出一條會失效的連結（解析只看 ACTIVE）。沒有測，也沒有處理；封存本來就會讓連結失效，這是同一件事。
 
-## 切片 B.0 — ⌘K 最近開過、側欄收藏全顯示
+## 切片 B.0 — ⌘K 最近開過、側欄收藏預設 4 筆加「Show all」
 
 分支 `claude/b0-recents-favorites`（已併入 #89 之後的 main）。設計與偏離見規格 §8.1。
 
@@ -532,18 +547,18 @@ Next 的 build 輸出（有 ±1 kB 的分組誤差，見切片 0 的紀錄；每
 
 | 層 | 新增 | 結果 |
 | --- | --- | --- |
-| 單元 | `parseDocumentIdList`（`phase5-authoring-input`）、`recentDocumentIds`（`document-shortcuts`） | 全套 95 檔 **1427/1427** |
+| 單元 | `parseDocumentIdList`（`phase5-authoring-input`）、`recentDocumentIds`、`favoritesInPlace`（`document-shortcuts`） | 全套 95 檔 **1431/1431** |
 | integration | `recent-documents-api` 10 案：順序與形狀、`no-store`、不含內文、用現在的標題、封存／不存在／格式錯誤的略過、別的 workspace 的略過、唯讀成員可讀、非成員與不存在的 workspace 同一個 404、壞 ID 400、上限 8、空清單 | 全套 53 檔 **613/613** |
-| e2e | `zz-recents-favorites` 7 案：最近開過的順序與排除目前這份、Enter 去前一份、封存後消失、打字時讓位且清空後回來、回應提到沒被要求的文件時不顯示、取不到清單時退回原樣、側欄收藏全顯示且在自己裡面捲動、重新整理後還在 | 單檔 7/7；**並行壓力**（4 個 worker × 12 輪）84/84 |
+| e2e | `zz-recents-favorites` 8 案：最近開過的順序與排除目前這份、Enter 去前一份、封存後消失、打字時讓位且清空後回來、回應提到沒被要求的文件時不顯示、取不到清單時退回原樣、沒有任何最近開過時第一列是導覽；側欄：最新 4 筆在原位且這一節不高於 240px、「Show all」列出全部且每項是連結、Esc 還焦點、重新整理後還在，以及 2 筆時沒有「Show all」（Team workspace，收藏只存本機） | 單檔 8/8（4 筆版本）；上一版（全顯示）的 7 案在 4 個 worker × 12 輪下 84/84 |
 | `tsc`、`eslint`、`next build` | — | 乾淨 |
 
 ### 變異驗證
 
 **server 端（`recent-documents.ts`、路由、`parseDocumentIdList`、`recentDocumentIds`，12 個）：12/12 被殺。** 包括：不檢查是別的 workspace、不先檢查成員資格、錯誤沒被吞掉、排序被改、路由不驗 workspace ID、路由忽略 `ids`、不驗 UUID、不去重、不設上限、沒排除正在讀的、重複沒去掉。
 
-**palette／側欄（e2e，共 13 個有效變異體）：9 個被殺，4 個存活，存活的都是等價的：**
+**palette（e2e，11 個有效變異體）：7 個被殺，4 個存活，存活的都是等價的：**
 
-- 被殺：側欄切回 4 筆、側欄清單不在自己裡面捲動、最近開過排在動作之後（渲染順序與索引不一致）、沒排除正在讀的、請求不帶 `ids`、第一列的 `activeIndex` 位移錯誤、回應提到沒被要求的文件也顯示、打字時最近開過還在（**兩個 guard 一起拿掉**才會被殺）、沒有「Recent」標題。
+- 被殺：最近開過排在動作之後（渲染順序與索引不一致）、沒排除正在讀的、請求不帶 `ids`、第一列的 `activeIndex` 位移錯誤、回應提到沒被要求的文件也顯示、打字時最近開過還在（**兩個 guard 一起拿掉**才會被殺）、沒有「Recent」標題。
 - 存活而等價：打字時的 guard 有兩處（`recentRows` 與抓取的 effect），各自拿掉一處沒有可觀察的差別——是刻意的重複防衛，兩個一起拿掉才被殺；失敗時 `setRecents([])`（顯示時已經與最新的 ID 取交集，留下的舊回應只會是還被要求的文件）；`!response.ok` 的檢查（`{}` 沒有 `hits`，`.map` 丟錯後被 `catch` 接住，結果相同）。
 - **我的腳本有一次誤判：** 「沒有 Recent 標題」的變異體第一次不是 lint 乾淨的（多了沒用到的 `position`），build 失敗，腳本把「沒有輸出」當成存活。改成 `position === -1` 重跑才被殺。之後腳本遇到沒輸出會標成無效，不再算存活。
 
@@ -556,18 +571,24 @@ Next 的 build 輸出（有 ±1 kB 的分組誤差，見切片 0 的紀錄；每
 
 ### 完整 e2e 的紀錄（誠實版）
 
-併入 #89 之後，完整 `npm run test:e2e`（序列執行）跑了三次，**沒有一次是乾淨全綠**：
+併入 #89 之後，完整 `npm run test:e2e`（序列執行）跑了四次，**沒有一次是乾淨全綠**：
 
 1. 208 過／1 紅／2 跳過：`zz-organize`「come back from Show archived」（右鍵封存後那一列 15 秒沒消失）。隔離重跑整個檔案 9/9、該案單獨重複 12 輪 12/12，**沒有重現，也沒有留下追蹤檔**（被後面的重跑清掉）。
 2. 208 過／1 紅／2 跳過：我自己新增的最近開過那案（上面的 `read()` 競態），**已修**。`zz-organize` 這次全過。
 3. 209 過／2 紅／2 跳過：`zz-organize` 另外兩案（「say how many other documents' links stop working」：toast 沒出現；「a folder that still holds something…」：base-ui 的 inert 遮罩攔截了選單項目的點擊，`element is outside of the viewport`）。
 
-三次紅的都在 `zz-organize` 右鍵／選單的流程（三個不同的案），而且**都不是我這次改到的程式**（B.0 只動 palette 的抓取與側欄收藏的清單）。失敗當下的頁面快照裡帳號沒有任何收藏，所以不是側欄長高造成的版面位移。**基準線：** 在乾淨的 `origin/main`（dff2043，沒有 B.0）上跑同一套完整 e2e，一次：203 過／1 紅／2 跳過，紅的是 `zz-organize`「are made inside a folder, archived with an Undo…」——`locator.click` 逾時，`element is outside of the viewport`，與第 3 次的第二案是同一種症狀。所以**這類 `zz-organize` 選單流程的間歇失敗在沒有 B.0 的 main 上也會發生**；這是 1 次樣本，不是失敗率。原因我沒有找。
+4. 側欄改成「4 筆加 Show all」之後：213 過／4 紅／2 跳過，**4 案全在 `zz-organize*`**：`zz-organize-move`「Alt+↑ and Alt+↓ say why they do nothing while the tree is filtered」（深度相等不符）、`zz-organize`「come back from Show archived」（同第 1 次）、「say how many other documents' links stop working」（同第 3 次）、「a folder that still holds something…」（同第 3 次，`outside of the viewport`）。其中三案前面出現過；這條分支上四次完整跑裡，`zz-organize*` 共紅過 4 個不同的案（沒有一案每次都紅）。
+
+**追蹤檔看到的事（第 4 次，兩案）：封存的 `POST /api/documents/:id/archive` 回 200**——伺服器確實封存了，但畫面沒有跟上：那一列 15 秒沒消失，或「N documents link here」的 toast 沒出現。也就是變更成功之後，前端沒有刷新或沒有跑完後續處理；不是伺服器錯誤。這與 #87 修的「背景刷新丟掉 router transition」（#63、#64）是同一個區域，**我沒有證明是同一個原因**，也沒有去查。如果這是真的使用者會遇到的事（封存成功、列還在直到重新整理），它比一個不穩的 e2e 更值得另外查。
+
+四次紅的都在 `zz-organize` 右鍵／選單的流程，而且**都不是我這次改到的程式**（B.0 只動 palette 的抓取與側欄收藏的清單）。失敗當下的頁面快照裡帳號沒有任何收藏，所以不是側欄長高造成的版面位移。**基準線：** 在乾淨的 `origin/main`（dff2043，沒有 B.0）上跑同一套完整 e2e，一次：203 過／1 紅／2 跳過，紅的是 `zz-organize`「are made inside a folder, archived with an Undo…」——`locator.click` 逾時，`element is outside of the viewport`，與第 3 次的第二案是同一種症狀。所以**這類 `zz-organize` 選單流程的間歇失敗在沒有 B.0 的 main 上也會發生**；這是 1 次樣本，不是失敗率。原因我沒有找。
+
+**CI 上的證據（PR #94 開了之後）：** CI 的 `e2e` 在這個 PR 的第一次 run 紅了一案：`zz-organize-move.spec.ts:136`（對資料夾列按右鍵後 `Move folder…` 30 秒沒出現；215 過／1 紅）。**`main` 自己的 push CI 也紅在同一案**：#90 合併後那次（`zz-organize-move.spec.ts:109` 與 `:136`，207 過／2 紅），#89 合併後那次紅在 `row-actions.spec.ts:133`（Copy link）；兩次的 `unit`／`build`／`integration` 都綠。所以這類選單流程的 e2e 在沒有 B.0 的 main 上、在 CI 上，也是間歇紅的。要重跑 CI 需要有權限的人（我的整合帳號回 403）。
 
 ### 沒有證明的部分
 
 - **`zz-organize` 間歇失敗的原因與失敗率。** 只知道它在沒有 B.0 的 main 上也出現過一次（上面的基準線），所以不是 B.0 帶來的；但我沒有找出原因（症狀是選單項目被 inert 遮罩攔截、或「outside of the viewport」），也沒有量過它的失敗率。這條分支沒有一次完整 e2e 是乾淨全綠，這是事實；其餘檔案在三次完整跑裡沒有別的失敗（扣掉我自己那案，已修並以並行重複驗證）。
-- **側欄的收藏沒有排序或分組，也沒有搜尋**：一百個星號會是一長串（在 18 rem 內捲動）；沒有量過、也沒有設計過這種情況。
+- **「Show all」面板沒有搜尋、也沒有星號按鈕**：一百個星號會是一個很長的捲動清單（面板上限 24 rem 或 60vh）；沒有量過、也沒有為此設計過。側欄上仍沒有排序或分組。
 - **最近開過只存本機**：換瀏覽器看不到（規格 D12 的決定，沒有改）。
 - **palette 開啟時多一次請求**：本機量過的回應時間在滿載時曾到 3.2 秒，但那是 8 個並行瀏覽器；單人使用沒有量。
-- **沒有看過畫面的視覺檢查。** 「Recent」標題與兩行的列都照既有 palette 的樣式，e2e 斷言了文字與順序，我沒有看過亮暗兩種主題的截圖。
+- **視覺檢查只做了一部分。** 看過側欄的 Show all 面板（亮、暗，720px 高）；**沒有看過** palette 的「Recent」標題與兩行的列（只斷言了文字與順序）、Team workspace 的側欄、窄視窗（抽屜）裡面板的位置、很長的標題以外的情況，也只在 Chromium。

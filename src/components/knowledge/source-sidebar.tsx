@@ -5,10 +5,10 @@ import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronRight, Clock3, FileText, MoreHorizontal, Plus, ListFilter, Star } from "lucide-react";
 import { ActionIcon } from "@/components/actions/action-icon";
-import { rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
+import { favoritesInPlace, rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
-import { MenuCheckboxItem, MenuContent, MenuRoot, MenuTrigger } from "@/components/ui/menu";
+import { MenuCheckboxItem, MenuContent, MenuItem, MenuRoot, MenuTrigger } from "@/components/ui/menu";
 import { KnowledgeTree } from "./knowledge-tree";
 import { TreeFilter } from "./tree-filter";
 import { buttonClasses } from "@/components/ui/button";
@@ -72,8 +72,11 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
     }
     return map;
   }, [visibleCollections]);
-  // Every favorite, not the first few: one that is starred and then not shown is one that cannot be found.
+  // The newest few are listed in place; the rest are one click away in "Show all", which lists every one, so a
+  // favorite that is starred and not shown is never one that cannot be found.
   const favoriteKeys = shortcuts.favorites.filter((key) => documents.has(key));
+  // The section is the same height however many are starred: the newest few, and a row for the rest.
+  const { inPlace: favoritesInPlaceKeys, showAll: favoritesTotal } = favoritesInPlace(favoriteKeys);
   const recentKeys = shortcuts.recent.filter((key) => documents.has(key) && !shortcuts.favorites.includes(key) && key !== `${source.id}:${resolvedDocumentId}`).slice(0, 4);
   const favoriteDocumentIds = new Set(shortcuts.favorites.map((key) => documents.get(key)?.documentId).filter((id): id is string => Boolean(id)));
 
@@ -174,8 +177,35 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
             {favoritesOpen ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
             <span>Favorites</span>
           </button></h3>
-          {/* A long list scrolls in place, so opening it does not push the tree out of sight. */}
-          {favoritesOpen ? <ul className="mt-0.5 max-h-72 space-y-0.5 overflow-y-auto overscroll-contain">{favoriteKeys.map((key) => shortcutRow(key, true))}</ul> : null}
+          {favoritesOpen ? <ul className="mt-0.5 space-y-0.5">
+            {favoritesInPlaceKeys.map((key) => shortcutRow(key, true))}
+            {favoritesTotal !== null ? <li>
+              <MenuRoot>
+                <MenuTrigger className="kh-interactive-row kh-focus-ring flex min-h-8 w-full items-center gap-2 px-2 text-left text-caption font-medium text-kh-text-muted">
+                  <MoreHorizontal size={14} className="shrink-0" aria-hidden="true" />
+                  <span>Show all {favoritesTotal}</span>
+                </MenuTrigger>
+                <MenuContent side="right" align="start" className="max-h-[min(24rem,60vh)] w-96 max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain">
+                  {favoriteKeys.map((key) => {
+                    const document = documents.get(key);
+                    if (!document) return null;
+                    const selected = document.documentId === resolvedDocumentId;
+                    return (
+                      <MenuItem
+                        key={key}
+                        render={<Link href={`/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}${showArchived ? "?includeArchived=true" : ""}`} prefetch={selected ? false : undefined} aria-current={selected ? "page" : undefined} />}
+                        className={selected ? "bg-kh-bg-selected font-medium text-kh-selected-text" : ""}
+                      >
+                        <FileText size={14} className="shrink-0" aria-hidden="true" />
+                        <span className="min-w-0 flex-1 truncate" title={document.label}>{document.label}</span>
+                        <span className="max-w-[40%] shrink-0 truncate text-caption text-kh-text-muted">{document.sourceName}</span>
+                      </MenuItem>
+                    );
+                  })}
+                </MenuContent>
+              </MenuRoot>
+            </li> : null}
+          </ul> : null}
         </section> : null}
         {!needle && recentKeys.length > 0 ? <section aria-label="Recent documents" className="pb-1">
           <h3><button type="button" aria-expanded={recentOpen} onClick={() => setRecentOpen((open) => !open)} className="kh-interactive-row flex min-h-8 w-full items-center gap-2 px-2 text-left text-caption font-medium text-kh-text-muted">
