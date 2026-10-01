@@ -60,7 +60,6 @@ export function WorkspaceSelector({ workspaceId }: { workspaceId: string }) {
       <MenuRoot>
         <MenuTrigger
           aria-label={`Workspace: ${currentName}`}
-          title={`Switch workspace: ${currentName}`}
           className="kh-focus-ring flex min-h-8 w-full min-w-0 items-center gap-2 rounded-md px-3 text-body transition-colors hover:bg-kh-bg-hover data-[popup-open]:bg-kh-bg-hover"
         >
           <span className="hidden shrink-0 text-caption text-kh-text-muted sm:inline">Workspace</span>

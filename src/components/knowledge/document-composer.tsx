@@ -6,6 +6,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentTy
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Tooltip } from "@/components/ui/tooltip";
 import { useHydrated } from "@/components/shell/use-hydrated";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { refreshOnArrival } from "@/components/shell/refresh-on-arrival";
@@ -558,9 +559,11 @@ export function DocumentComposer({
               >
                 Markdown
               </Button>
-              <Button type="button" variant="secondary" title="Cancel (Esc)" disabled={busy || blocked} onClick={cancel}>
-                Cancel
-              </Button>
+              <Tooltip label="Cancel" keys="Esc">
+                <Button type="button" variant="secondary" disabled={busy || blocked} onClick={cancel}>
+                  Cancel
+                </Button>
+              </Tooltip>
               <Button
                 type="submit"
                 title={untitled ? "Add a title, or start the document with a # heading" : `${submitLabel} (⌘Enter)`}

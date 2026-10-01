@@ -72,6 +72,35 @@ test("a row action runs: Edit opens the editor", async ({ page }) => {
   await expect(page).toHaveURL(/\/edit$/);
 });
 
+test("the palette searches on the first character without waiting out the typing pause, and a burst is one request", async ({ page }) => {
+  await openTree(page);
+  const field = await openPalette(page);
+  // Timed inside the page: Playwright's own round trip would swamp a 180ms window.
+  await page.evaluate(() => {
+    const w = window as unknown as { __input: number; __fetches: number[] };
+    w.__fetches = [];
+    const original = window.fetch;
+    window.fetch = (...args) => {
+      if (String(args[0]).includes("quick-search")) w.__fetches.push(performance.now());
+      return original(...args);
+    };
+    document.addEventListener("input", () => { w.__input = performance.now(); }, true);
+  });
+
+  await field.pressSequentially("a");
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __fetches: number[] }).__fetches.length)).toBe(1);
+  const firstDelay = await page.evaluate(() => {
+    const w = window as unknown as { __input: number; __fetches: number[] };
+    return w.__fetches[0]! - w.__input;
+  });
+  expect(firstDelay).toBeLessThan(100);
+
+  // Later characters are still debounced: three typed together make one more request, not three.
+  await field.pressSequentially("bcd", { delay: 20 });
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => (window as unknown as { __fetches: number[] }).__fetches.length)).toBe(2);
+});
+
 test("the palette offers actions as well as documents, and keeps the keyboard over both", async ({ page }) => {
   await openTree(page);
   // A single ⌘K pressed before hydration reaches no listener, and the page can look finished well
