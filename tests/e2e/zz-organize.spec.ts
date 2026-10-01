@@ -21,8 +21,13 @@ const OBSIDIAN_SOURCE = "0199f100-0000-7000-8000-000000000101";
 
 /** Open a folder's menu by its `⋯` button. */
 async function openFolderMenu(page: Page, name: string) {
+  // A mutation's toast can arrive before its menu has finished closing. Wait for that
+  // exit before clicking the same trigger again, otherwise the click can toggle it shut.
+  await expect(page.getByRole("menu")).toHaveCount(0);
   await header(page, name).hover();
-  await page.getByRole("button", { name: `Actions for ${name}` }).click();
+  const trigger = page.getByRole("button", { name: `Actions for ${name}` });
+  await trigger.click();
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
   return page.getByRole("menu");
 }
 
@@ -41,7 +46,7 @@ async function countAccessChecks(page: Page) {
 }
 
 async function closeMenu(page: Page) {
-  await page.keyboard.press("Escape");
+  await page.getByRole("menu").press("Escape");
   await expect(page.getByRole("menu")).toHaveCount(0);
 }
 
@@ -61,6 +66,7 @@ async function createDocumentIn(page: Page, folder: string, title: string) {
   await page.getByRole("button", { name: "Create document" }).click();
   await expect(page.getByRole("region", { name: "Document content" })).toBeVisible(ROUND_TRIP);
   await expect(row(page, title)).toBeVisible(ROUND_TRIP);
+  await expect(row(page, title)).toHaveAttribute("aria-current", "page", ROUND_TRIP);
 }
 
 async function showArchived(page: Page, on: boolean) {
@@ -162,6 +168,8 @@ test.describe("folders", () => {
 
 test.describe("documents", () => {
   test("are made inside a folder, archived with an Undo that takes the reader back, and restored to the same place", async ({ page }) => {
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
     const workspaceId = await mySpace(page);
     await openKnowledge(page, workspaceId);
     const folder = unique("Filing");
@@ -193,6 +201,7 @@ test.describe("documents", () => {
     await expect(page).toHaveURL(firstUrl, ROUND_TRIP);
     await expect(row(page, first)).toBeVisible(ROUND_TRIP);
     expect(await childrenOf(row(page, folder))).toEqual([first, second]);
+    expect(errors).toEqual([]);
   });
 
   test("come back from Show archived, marked as archived until they do", async ({ page }) => {

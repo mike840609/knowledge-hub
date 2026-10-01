@@ -4,6 +4,7 @@ import { findFirstReadableDocument } from "@/lib/knowledge-navigation";
 import { getKnowledgeExplorerModel } from "@/server/knowledge-read";
 import { buttonClasses } from "@/components/ui/button";
 import { StatusMessage } from "@/components/ui/status-message";
+import { RefreshOnArrival } from "@/components/shell/refresh-on-arrival";
 
 export default async function SourceKnowledgePage({
   params,
@@ -31,6 +32,7 @@ export default async function SourceKnowledgePage({
   if (first) redirect(`/w/${workspaceId}/knowledge/${sourceId}/${first.documentId}${archivedSuffix}`);
   return (
     <main className="flex min-h-full flex-col justify-center">
+      <RefreshOnArrival pathname={`/w/${workspaceId}/knowledge/${sourceId}`} />
       <StatusMessage
         title={model.source.name}
         description="This source does not contain any readable documents."

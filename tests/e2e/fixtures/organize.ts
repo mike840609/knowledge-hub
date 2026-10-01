@@ -27,7 +27,11 @@ export async function mySpace(page: Page): Promise<string> {
 export async function openKnowledge(page: Page, workspaceId: string) {
   const seeded = await page.request.post(`/api/workspaces/${workspaceId}/documents`, { data: { title: unique("Seed"), markdown: "seed" } });
   expect(seeded.ok()).toBe(true);
-  await page.goto(`/w/${workspaceId}/knowledge`);
+  const document = (await seeded.json()) as { sourceId: string; documentId: string };
+  // The workspace landing page redirects after streaming the sidebar. Opening the document
+  // directly keeps that late navigation from closing a menu or clearing a mutation's toast.
+  await page.goto(`/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}`);
+  await expect(page.getByRole("region", { name: "Document content" })).toBeVisible(ROUND_TRIP);
   await expect(page.getByRole("complementary", { name: "Knowledge explorer" })).toBeVisible(ROUND_TRIP);
   await expect(page.getByRole("button", { name: "Create folder" }).first()).toBeVisible(ROUND_TRIP);
 }
