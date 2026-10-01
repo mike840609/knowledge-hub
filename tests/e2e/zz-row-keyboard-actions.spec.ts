@@ -27,6 +27,7 @@ async function apiFolder(page: Page, workspaceId: string, name: string) {
 /**
  * A key pressed before hydration reaches no listener. `j` is harmless to repeat, so press it until the focus
  * leaves `from` (where it goes depends on the order the tree draws, which is not the point), then put it back.
+ * `from` needs a row after it, or `j` has nowhere to go.
  */
 async function armTree(page: Page, from: Locator) {
   await from.focus();
@@ -49,6 +50,8 @@ async function setUp(page: Page) {
   await openKnowledge(page, workspaceId);
   await page.reload();
   await expect(row(page, a)).toBeVisible(ROUND_TRIP);
+  // The document being read is not `a`, so a key that reaches `a` can only have come from the tree's claim.
+  expect(page.url()).not.toContain(docA.documentId);
   return { workspaceId, a, b, folder, folderId, docA };
 }
 
@@ -168,13 +171,18 @@ test("the row menu shows each action's key, without truncating its label, and no
   await expect(menu.getByRole("menuitem", { name: /Edit document/ }).locator("kbd")).toHaveText("E");
   await expect(menu.getByRole("menuitem", { name: /Add to favorites/ }).locator("kbd")).toHaveText("F");
   await expect(menu.getByRole("menuitem", { name: /Move document/ }).locator("kbd")).toHaveText("M");
-  const truncated = await menu.getByRole("menuitem").locator("span.truncate").evaluateAll((spans) => spans.filter((span) => span.scrollWidth > span.clientWidth).length);
+  const labels = menu.getByRole("menuitem").locator("span.truncate");
+  expect(await labels.count()).toBeGreaterThan(0);
+  expect(await labels.count()).toBe(await menu.getByRole("menuitem").count());
+  const truncated = await labels.evaluateAll((spans) => spans.filter((span) => span.scrollWidth > span.clientWidth).length);
   expect(truncated).toBe(0);
   await page.keyboard.press("Escape");
   await expect(page.getByRole("menu")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Vendor Compliance Vault", exact: true }).click();
   await row(page, "Compliance Policy").click({ button: "right" });
+  await expect(page.getByRole("menu")).toBeVisible(ROUND_TRIP);
+  await expect(page.getByRole("menuitem", { name: /Open document/ })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: /Edit document/ })).toHaveCount(0);
 });
 
@@ -189,4 +197,44 @@ test("right-clicking a row makes it the row the keys act on once the menu closes
   const favorites = page.getByRole("region", { name: "Favorites" });
   await expect(favorites.getByRole("link", { name: new RegExp(b) })).toBeVisible(ROUND_TRIP);
   await expect(favorites.getByRole("link", { name: new RegExp(a) })).toHaveCount(0);
+});
+
+/** What a row key would have done to the page: left it, opened another dialog, or favourited the row. */
+async function expectUntouched(page: Page, title: string, before: string, dialogs: number) {
+  await page.waitForTimeout(300); // bounded settle: a leaked key navigates or opens something within a tick
+  expect(page.url()).toBe(before);
+  await expect(page.getByRole("dialog")).toHaveCount(dialogs);
+  await expect(page.getByRole("region", { name: "Favorites" }).getByRole("link", { name: new RegExp(title) })).toHaveCount(0);
+}
+
+test("row keys pressed while the row menu is open do not act", async ({ page }) => {
+  const { a } = await setUp(page);
+  await armTree(page, row(page, a));
+  const before = page.url();
+  await row(page, a).click({ button: "right" });
+  await expect(page.getByRole("menu")).toBeVisible(ROUND_TRIP);
+  for (const key of ["e", "f", "m", "r", "c"]) await page.keyboard.press(key);
+  await expectUntouched(page, a, before, 0);
+});
+
+test("row keys pressed while the Move dialog is open do not act", async ({ page }) => {
+  const { a } = await setUp(page);
+  await armTree(page, row(page, a));
+  const before = page.url();
+  await page.keyboard.press("m");
+  await expect(page.getByRole("dialog", { name: "Move document" })).toBeVisible(ROUND_TRIP);
+  for (const key of ["f", "e", "c"]) await page.keyboard.press(key);
+  await expectUntouched(page, a, before, 1);
+  await expect(page.getByRole("dialog", { name: "Move document" })).toBeVisible();
+});
+
+test("row keys typed into the palette stay in the palette", async ({ page }) => {
+  const { a } = await setUp(page);
+  await armTree(page, row(page, a));
+  const before = page.url();
+  const field = await openPalette(page, { settled: false });
+  // `c` is the one the page always answers (Create document); E, F and M need a document being read.
+  for (const key of ["e", "f", "m", "c"]) await page.keyboard.press(key);
+  await expect(field).toHaveValue("efmc");
+  await expectUntouched(page, a, before, 1);
 });
