@@ -126,19 +126,31 @@ describe("a key on the row in focus", () => {
     expect(event.defaultPrevented).toBe(false);
   });
 
-  it("does not act on a key that came from a menu rendered into the body", () => {
+  it("does not act on a key that came from a menu inside the row", () => {
     const { onRunAction } = render();
     const menu = document.createElement("div");
     menu.setAttribute("role", "menu");
     const item = document.createElement("div");
     menu.appendChild(item);
-    document.body.appendChild(menu);
-    press(item, "e");
+    // Inside the row's subtree, so the event reaches the tree's handler and only the menu guard stops it.
+    rowFor("A").appendChild(menu);
+    const event = press(item, "e");
     expect(onRunAction).not.toHaveBeenCalled();
+    expect(event.defaultPrevented).toBe(false);
   });
 });
 
 describe("j and k", () => {
+  it("are not moves when typed into a field inside the row", () => {
+    render();
+    act(() => rowFor("A").focus());
+    const input = document.createElement("input");
+    rowFor("A").appendChild(input);
+    const event = press(input, "j");
+    expect(document.activeElement).toBe(rowFor("A"));
+    expect(event.defaultPrevented).toBe(false);
+  });
+
   it("move the focus as the arrows do", () => {
     render();
     act(() => rowFor("A").focus());
