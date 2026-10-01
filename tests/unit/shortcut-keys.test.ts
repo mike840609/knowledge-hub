@@ -135,10 +135,12 @@ describe("matchesShortcut", () => {
 });
 
 describe("actionForKey", () => {
-  const edit = { id: "document.edit", shortcut: "E" };
-  const move = { id: "document.move", shortcut: "M" };
-  const details = { id: "document.details", shortcut: "Meta+I Control+I" };
-  const plain = { id: "document.open" };
+  type Fixture = { id: string; shortcut?: string };
+
+  const edit: Fixture = { id: "document.edit", shortcut: "E" };
+  const move: Fixture = { id: "document.move", shortcut: "M" };
+  const details: Fixture = { id: "document.details", shortcut: "Meta+I Control+I" };
+  const plain: Fixture = { id: "document.open" };
   const actions = [plain, edit, details, move];
 
   it("finds the action whose single-key shortcut is the key", () => {
