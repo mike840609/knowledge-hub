@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { toast } from "./fixtures/organize";
 import { openPalette } from "./fixtures/palette";
 
 // Mirrors scripts/db/seed.ts BROWSER_FIXTURE_IDS.
@@ -168,7 +169,8 @@ test("Copy link puts the document's full URL on the clipboard and says so", asyn
   await row.click({ button: "right" });
   await page.getByRole("menuitem", { name: "Copy link" }).click();
 
-  await expect(page.getByRole("status")).toContainText("Link copied.");
+  // Not a bare `getByRole("status")`: the document skeleton is a status too, and is still on screen when the page is slow.
+  await expect(toast(page, "Link copied.")).toBeVisible();
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   expect(copied).toBe(new URL(href!, baseURL).toString());
 });
