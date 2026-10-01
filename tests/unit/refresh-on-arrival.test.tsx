@@ -36,6 +36,9 @@ it("waits for the pushed document to commit before refreshing its shared tree", 
   expect(navigation.router.refresh).not.toHaveBeenCalled();
   await render("/w/space/knowledge/notes/restored", "/w/space/knowledge/notes/restored");
   expect(navigation.router.refresh).toHaveBeenCalledTimes(1);
+  // Remount so the effect runs again: a consumed arrival must not refresh twice.
+  await act(async () => root.unmount());
+  root = createRoot(container);
   await render("/w/space/knowledge/notes/restored", "/w/space/knowledge/notes/restored");
   expect(navigation.router.refresh).toHaveBeenCalledTimes(1);
 });

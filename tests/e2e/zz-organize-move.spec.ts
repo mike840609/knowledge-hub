@@ -117,18 +117,21 @@ test.describe("the Move dialog", () => {
     await openKnowledge(page, workspaceId);
 
     const dialog = await openMoveDialog(page, title, "document");
+    // Wait for the dialog's initial autofocus before placing focus in the radio group.
+    await expect.poll(() => dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true);
     // Top level is the first place to go; the folder it is in is skipped over, being where it is now.
     const topLevel = dialog.getByRole("radio", { name: "Top level" });
-    await topLevel.press("ArrowDown");
+    await topLevel.focus();
+    await page.keyboard.press("ArrowDown");
     await expect(dialog.getByRole("radio", { name: from })).not.toBeChecked();
     // The folders are listed in the tree's order; keep going until the one wanted is chosen.
     const wanted = dialog.getByRole("radio", { name: to });
     const places = await dialog.getByRole("radio").count();
     for (let presses = 0; presses < places && !(await wanted.isChecked()); presses += 1) await page.keyboard.press("ArrowDown");
     await expect(wanted).toBeChecked();
-    // Dialog autofocus can settle after the radio's checked state. Enter belongs to this
-    // destination, rather than whichever control happens to have focus at that moment.
-    await wanted.press("Enter");
+    await expect(wanted).toBeFocused();
+    // Enter must work from the focus left by the arrow sequence, without repairing it.
+    await page.keyboard.press("Enter");
 
     await expect(dialog).toHaveCount(0, ROUND_TRIP);
     await expect(toast(page, `Moved “${title}” to “${to}”.`)).toBeVisible(ROUND_TRIP);
