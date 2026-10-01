@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
@@ -14,12 +14,18 @@ type Created = { documentId: string; sourceId: string };
 export function NewDocumentForm({
   workspaceId,
   workspaceName,
+  userId,
+  standIn,
   folder = null,
   seedTitle = null,
   cancelHref = null,
 }: {
   workspaceId: string;
   workspaceName: string;
+  /** The server-resolved Hub user id: drafts are keyed per user (see `DraftKey`). */
+  userId: string;
+  /** The server-rendered stand-in for the editor while it loads (see `DocumentComposer`). */
+  standIn: ReactNode;
   /** Where the document goes, when it is not the top of Notes; `label` is only a caption. */
   folder?: { id: string; label: string | null } | null;
   /** The title to start from: the name a broken link gave the document. */
@@ -58,7 +64,7 @@ export function NewDocumentForm({
       // The composer's own draft is for the form the upload just bypassed;
       // the label offers upload "instead", so leaving it behind would offer
       // to restore a stale draft next time this workspace's /new is opened.
-      clearDraft(browserDraftStorage(), { kind: "new", workspaceId });
+      clearDraft(browserDraftStorage(), { kind: "new", userId, workspaceId });
       refreshOnArrival(href);
       router.push(href);
     } catch (failure) {
@@ -71,7 +77,8 @@ export function NewDocumentForm({
   return (
     <DocumentComposer
       workspaceId={workspaceId}
-      draftKey={seedTitle === null ? { kind: "new", workspaceId } : { kind: "new", workspaceId, title: seedTitle }}
+      draftKey={seedTitle === null ? { kind: "new", userId, workspaceId } : { kind: "new", userId, workspaceId, title: seedTitle }}
+      standIn={standIn}
       location={[{ label: "Documents", href: listHref }, ...(folder?.label ? [{ label: folder.label }] : [])]}
       untitledLabel="New document"
       metadataTitle={undefined}
