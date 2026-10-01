@@ -339,7 +339,7 @@ export function DocumentDetailClient({
   /** Headings of the revision on screen, from the same parse that gives them their ids. */
   outline: OutlineEntry[];
 }) {
-  useRefreshOnArrival();
+  useRefreshOnArrival(`/w/${inspectorData.workspaceId}/knowledge/${inspectorData.sourceId}/${inspectorData.documentId}`);
   const inspector = useContext(InspectorContext);
   const setDocumentTopbar = useContext(DocumentTopbarContext)?.setDocument;
   const pathname = usePathname();
