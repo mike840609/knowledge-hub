@@ -410,12 +410,19 @@ listbox; not a key repeat; and no Shift, except for `/`, which some layouts
 only type with it. Keys are compared by `event.key`, what the reader sees on
 the keycap, not by position.
 
-Single keys are bound in the palette (`quick-search.tsx`), from the same
-actions it lists, so `E` exists exactly when "Edit document" is offered there:
-on the document being read, when the registry's three availability axes allow
-it. The row menu shows no hints. It acts on the row it was opened from, and a
-row's "Edit document" beside an `E` that edits a different document would be
-a lie on every row but one.
+Single keys act on the row in focus, and on the document being read when no
+row is. The tree (`knowledge-tree.tsx`) takes the keys `rowShortcuts` declares
+for the kind of row it is on (`E`, `F`, `M` for a document; `C`, `M`, `R` for a
+folder), runs the row's own action for it, and takes the key even where the
+registry offers the row nothing, so `E` on a read-only row does nothing and
+does not edit the document being read. A key the kind has not declared is left
+to the page: `C` on a document row is still Create document. The page's listener
+(`quick-search.tsx`) binds the rest from the actions the palette lists, so with
+no row in focus `E`, `F` and `M` act on the document being read, when the
+registry's three availability axes allow it. `j` and `k` are the arrows' other
+spelling inside the tree. The row menu shows each action's key: it is opened
+from a row, and the key does that thing when that row has the focus. Row keys
+spec: `docs/superpowers/specs/2026-10-02-row-keyboard-actions-design.md`.
 
 In the document composer (new and edit share it), ⌘Enter saves through the
 form's own submit button, and only when that button is enabled. ⌘/ switches
@@ -1074,12 +1081,12 @@ explicitly enables it. Disabled controls have no navigation or click action.
     and the Knowledge explorer (`src/components/knowledge/source-sidebar.tsx`,
     `w-72`). The reference has one. Merging them changes the shell every page
     sits in, so it comes after item 3.
- 5. Two things are deferred on purpose, each with the condition that reopens
-    it. List pages sit in `kh-page` rather than spanning the window; widen
-    them when the Sources list is long enough that the width costs a reader
-    something. `E` acts only on the document being read, not on the focused
-    row (`docs/superpowers/specs/2026-09-24-keyboard-shortcuts-design.md`
-    §3.2); revisit if rows gain actions a reader reaches by focus.
+ 5. One thing is deferred on purpose, with the condition that reopens it. List
+    pages sit in `kh-page` rather than spanning the window; widen them when the
+    Sources list is long enough that the width costs a reader something. (`E`
+    acting only on the document being read, not on the focused row, was the
+    other half of this item; it closed when rows gained keys a reader reaches
+    by focus: `docs/superpowers/specs/2026-10-02-row-keyboard-actions-design.md`.)
 
 ## 19. Completion criteria
 

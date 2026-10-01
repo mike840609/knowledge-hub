@@ -7,7 +7,7 @@
 | 回應 | 對照 Linear 設計語言的 UI/UX 審查 C.2：列的鍵盤操作。視覺 token 與回饋原語已對齊，剩下的體感差距集中在「對焦點列直接做事」 |
 | 對照契約 | `docs/superpowers/specs/frontend-design-language.md` §10（Shortcuts）、§15（One registry decides what can be done）、§18 第 5 項 |
 | 對照規格 | `docs/superpowers/specs/2026-09-24-keyboard-shortcuts-design.md`（本規格修訂其 §2、§3.2、§4.4）、`2026-09-21-action-model-spec.md` |
-| 狀態 | 設計已核可，規格待審；尚未實作 |
+| 狀態 | 已核可，已實作（見 `docs/superpowers/plans/2026-10-02-row-keyboard-actions.md`） |
 
 ## 1. 現況（對照 PR #96 合併後的程式碼，皆已讀程式碼確認）
 
@@ -110,7 +110,7 @@ export function claimedRowKeys(kind: "document" | "folder"): ReadonlySet<string>
   - 每個帶 `rowShortcuts` 鍵的動作，其 `shortcut` 等於該表的值（單一來源）。
   - 唯讀的目標（`SOURCE_MANAGED`、`ARCHIVED`、`HISTORICAL`）取得的動作清單裡沒有 `document.edit`，但 `claimedRowKeys("document")` 仍含 `E`。
 
-### 6.2 E2E（`tests/e2e/row-keyboard-actions.spec.ts`）
+### 6.2 E2E（`tests/e2e/zz-row-keyboard-actions.spec.ts`）
 
 - 焦點在樹的列 A，正在讀文件 B：按 `E` 進的是 A 的編輯頁，不是 B 的。
 - 焦點在 `SOURCE_MANAGED` 的列上按 `E`：網址不變（沒有落到正在讀的那份）。
@@ -140,7 +140,7 @@ export function claimedRowKeys(kind: "document" | "folder"): ReadonlySet<string>
 ## 8. 影響的檔案
 
 ```text
-新增  tests/e2e/row-keyboard-actions.spec.ts
+新增  tests/e2e/zz-row-keyboard-actions.spec.ts
 修改  src/lib/shortcut-keys.ts                       actionForKey
 修改  src/components/actions/action-registry.ts      rowShortcuts、claimedRowKeys；F、M、R、C 的 shortcut
 修改  src/components/actions/action-menu.tsx         選單項目顯示 Kbd
@@ -164,3 +164,10 @@ export function claimedRowKeys(kind: "document" | "folder"): ReadonlySet<string>
 
 - 第 3 節第 5 點（選單與對話框關閉後焦點回到該列）的現況未驗證，可能需要補。
 - 第 4.3 節的行為變更（文件頁按 `F`／`M` 作用在正在讀的那份）會讓原本沒有這些鍵的使用者在無意間按到就觸發。`F` 可逆（再按一次取消收藏）；`M` 只開對話框，不會直接移動。兩者都不是破壞性動作，這是選這兩個鍵而不選封存的原因之一。
+
+**實作時的發現（e2e 驗證了上面標為未驗證的部分）：**
+
+- 關閉 Move 對話框後，焦點回到該列（已驗證，不需要補正式程式）。
+- 在未取得焦點的列上按右鍵，選單關閉後，鍵盤作用的目標就是那一列（已驗證）。
+- 「選單開著時按鍵不作用」是由 Base UI 在開啟的選單內消耗按鍵所保證，不是由我們的守衛；測試把這個範圍固定下來。
+- 以 portal 渲染的對話框／palette，其事件目標沒有 treeitem 祖先，樹自己的守衛在那裡不相關；把鍵擋在外面的是頁面監聽器的 `isSingleKeyShortcut`。
