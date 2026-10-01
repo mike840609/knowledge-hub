@@ -22,7 +22,7 @@ import { documentIdInPath, recentDocumentIds, toggleFavoriteDocument } from "@/l
 import { buttonClasses } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { Tooltip } from "@/components/ui/tooltip";
-import { isSingleKeyShortcut, shortcutLabel } from "@/lib/shortcut-keys";
+import { actionForKey, isSingleKeyShortcut, shortcutLabel } from "@/lib/shortcut-keys";
 
 type QuickHit = {
   documentId: string;
@@ -162,8 +162,10 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
         setOpen(true);
         return;
       }
-      const key = event.key.toLowerCase();
-      const action = actions.find((candidate) => candidate.shortcut?.toLowerCase() === key);
+      // The tree answers the keys it has declared for the row in focus, and says so by taking the event
+      // (row-keyboard-actions spec §4.2). `/` is above and never the tree's.
+      if (event.defaultPrevented) return;
+      const action = actionForKey(actions, event);
       if (!action) return;
       event.preventDefault();
       runAction(action);

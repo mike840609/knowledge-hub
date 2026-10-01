@@ -13,7 +13,8 @@ import {
 import type { KnowledgeTreeItem } from "@/modules/knowledge/application/knowledge-query-service";
 import { isStringArray, usePersistedJson } from "@/components/shell/use-persisted-state";
 import { RowActionsTrigger, RowContextMenu } from "@/components/actions/action-menu";
-import type { Action } from "@/components/actions/action-registry";
+import { claimedRowKeys, type Action } from "@/components/actions/action-registry";
+import { actionForKey, isSingleKeyShortcut } from "@/lib/shortcut-keys";
 import { REVEAL_FOLDER_EVENT } from "./move-request";
 import { CLEAR_FILTER_TO_REORDER, alreadyAtEdge, reorderedNode } from "./organize-messages";
 import { Status } from "@/components/ui/status";
@@ -394,7 +395,24 @@ export function KnowledgeTree({
         if (target.dataset.nodeId) setActiveId(target.dataset.nodeId);
       }
     };
-    switch (event.key) {
+    // A single key is only a key where it is not a character (`isSingleKeyShortcut`): not in a field, a
+    // dialog or a menu, not with a modifier. Row keys and `j`/`k` ask that first.
+    const single = isSingleKeyShortcut(event.nativeEvent) ? event.key.toLowerCase() : "";
+    if (single && current?.dataset.nodeId) {
+      const item = itemById.get(current.dataset.nodeId);
+      if (item && claimedRowKeys(item.type).has(single)) {
+        // The tree takes the key even where the row may not do the thing: the registry offers no Edit on a
+        // read-only row, and the page's own E must not edit the document being read instead.
+        event.preventDefault();
+        const actions = item.type === "document" ? documentActions(item) : folderActions(item);
+        const action = actionForKey(actions, event);
+        if (action) onRunAction(action);
+        return;
+      }
+    }
+    // j and k are the arrows' other spelling; held with a modifier they are not keys at all.
+    const arrow = single === "j" ? "ArrowDown" : single === "k" ? "ArrowUp" : event.key;
+    switch (arrow) {
       case "ArrowDown":
         event.preventDefault();
         focusAt(index < 0 ? 0 : Math.min(index + 1, visible.length - 1));
