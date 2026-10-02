@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
   collectHandleFiles,
+  forgetRememberedFolder,
   getRememberedFolderMeta,
   isDirectoryPickerSupported,
   rememberFolderHandle,
@@ -319,6 +320,16 @@ export function FolderImportForm({ target }: { target: FolderImportTarget }): Re
     }
   }
 
+  async function handleForget(): Promise<void> {
+    if (!rememberedSourceId) return;
+    setRememberedRoot(null);
+    try {
+      await forgetRememberedFolder(rememberedSourceId);
+    } catch {
+      // Forgetting is best-effort; the hint is already cleared.
+    }
+  }
+
   if (!allowed) return <p role="status" className="p-4 text-body text-kh-text-muted">Import is unavailable while this workspace is read-only or access is being checked.</p>;
 
   return (
@@ -348,6 +359,11 @@ export function FolderImportForm({ target }: { target: FolderImportTarget }): Re
         <Button type="button" variant="secondary" disabled={busy} aria-describedby="import-folder-selection" onClick={handleChooseFolder}>Choose folder</Button>
         <p id="import-folder-selection" className="text-body text-kh-text-muted">{selection ? `${selection.name} · ${selection.count} files` : "No folder selected"}</p>
       </div>
+      {rememberedSourceId && rememberedRoot ? (
+        <div className="mt-2">
+          <Button type="button" variant="link" onClick={() => void handleForget()}>Forget remembered folder</Button>
+        </div>
+      ) : null}
       <input
         id="import-folder"
         type="file"

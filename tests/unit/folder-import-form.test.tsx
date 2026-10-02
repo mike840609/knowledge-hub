@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FolderImportForm } from "@/components/imports/folder-import-form";
 import {
   collectHandleFiles,
+  forgetRememberedFolder,
   getRememberedFolderMeta,
   isDirectoryPickerSupported,
   rememberFolderHandle,
@@ -177,5 +178,28 @@ describe("folder import directory picker", () => {
       "/api/source-imports/snap-new/entries",
       "/api/source-imports/snap-new/finalize",
     ]);
+  });
+
+  it("clears the remembered hint immediately and forgets the stored folder", async () => {
+    vi.mocked(getRememberedFolderMeta).mockReturnValue({ rootName: "Notes", lastSyncAt: "2026-10-01T00:00:00.000Z" });
+    vi.mocked(forgetRememberedFolder).mockResolvedValue(undefined);
+    renderForm();
+    expect(container.textContent).toContain("Last synced folder: Notes");
+    const forget = [...container.querySelectorAll("button")].find((element) =>
+      element.textContent?.includes("Forget remembered folder"),
+    );
+    if (!forget) throw new Error("Forget remembered folder button not found");
+    await act(async () => {
+      forget.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(vi.mocked(forgetRememberedFolder)).toHaveBeenCalledWith("s1");
+    expect(container.textContent).not.toContain("Last synced folder");
+    expect(container.querySelector("button")?.textContent).toContain("Choose folder");
+  });
+
+  it("hides the forget control when no folder is remembered", () => {
+    vi.mocked(getRememberedFolderMeta).mockReturnValue(null);
+    renderForm();
+    expect(container.textContent).not.toContain("Forget remembered folder");
   });
 });

@@ -17,7 +17,8 @@ type RememberedMeta = NonNullable<ReturnType<typeof getRememberedFolderMeta>>;
  * The link keeps its own WorkspaceImportLink permission gate; this wrapper
  * only demotes its emphasis (primary to ghost) once a remembered folder
  * makes Sync now available. Memory is read after mount so the server and
- * client first render stay identical.
+ * client first render stay identical. The muted "Last folder" caption lives
+ * here so it is rendered once, ahead of both actions.
  */
 export function SourceSyncActions({
   workspaceId,
@@ -40,6 +41,10 @@ export function SourceSyncActions({
   const updateHref = `/w/${workspaceId}/sources/${sourceId}/update`;
   return (
     <>
+      {hasMemory && meta ? (
+        <span className="text-caption text-kh-text-muted">Last folder: {meta.rootName}</span>
+      ) : null}
+      <SyncNowButton workspaceId={workspaceId} sourceId={sourceId} />
       <WorkspaceImportLink
         href={updateHref}
         className={buttonClasses({ variant: hasMemory ? "ghost" : "primary" })}
@@ -47,7 +52,6 @@ export function SourceSyncActions({
         <RefreshCw size={15} aria-hidden="true" />
         Update from folder
       </WorkspaceImportLink>
-      <SyncNowButton workspaceId={workspaceId} sourceId={sourceId} />
     </>
   );
 }

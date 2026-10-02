@@ -85,9 +85,10 @@ it("renders Update from folder as primary when no folder is remembered", async (
   expect(link?.className).toContain("bg-kh-primary");
   expect(link?.className).not.toContain("bg-transparent");
   expect(container.textContent).not.toContain("Sync now");
+  expect(container.textContent).not.toContain("Last folder:");
 });
 
-it("demotes Update from folder to ghost and shows Sync now together when a folder is remembered", async () => {
+it("orders caption before Sync now before Update when a folder is remembered (ghost Update, primary Sync)", async () => {
   store.meta = { rootName: "notes", lastSyncAt: "2026-10-02T00:00:00.000Z" };
   await renderActions();
   const link = updateLink();
@@ -97,11 +98,17 @@ it("demotes Update from folder to ghost and shows Sync now together when a folde
   // Integration-style: the real SyncNowButton renders alongside the link.
   expect(container.textContent).toContain("Sync now");
   expect(container.textContent).toContain("Last folder: notes");
-  const updateIndex = container.innerHTML.indexOf("Update from folder");
+  const caption = container.querySelector("span.text-caption");
+  expect(caption?.textContent).toContain("Last folder: notes");
+  expect(caption?.className).toContain("text-kh-text-muted");
+  const captionIndex = container.innerHTML.indexOf("Last folder: notes");
   const syncIndex = container.innerHTML.indexOf("Sync now");
-  expect(updateIndex).toBeGreaterThanOrEqual(0);
+  const updateIndex = container.innerHTML.indexOf("Update from folder");
+  expect(captionIndex).toBeGreaterThanOrEqual(0);
   expect(syncIndex).toBeGreaterThanOrEqual(0);
-  expect(updateIndex).toBeLessThan(syncIndex);
+  expect(updateIndex).toBeGreaterThanOrEqual(0);
+  expect(captionIndex).toBeLessThan(syncIndex);
+  expect(syncIndex).toBeLessThan(updateIndex);
 });
 
 it("renders the Sync now button with the primary variant when memory exists", async () => {

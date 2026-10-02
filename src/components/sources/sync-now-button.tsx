@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { runFolderImport, type ImportUiState } from "@/components/imports/folder-import-form";
 import {
   collectHandleFiles,
-  forgetRememberedFolder,
   getRememberedFolderMeta,
   isDirectoryPickerSupported,
   loadRememberedHandle,
@@ -48,7 +47,6 @@ export function SyncNowButton({ workspaceId, sourceId }: { workspaceId: string; 
       setMeta(null);
     }
   }, [sourceId]);
-  const [forgotten, setForgotten] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [needsReselect, setNeedsReselect] = useState(false);
@@ -87,29 +85,15 @@ export function SyncNowButton({ workspaceId, sourceId }: { workspaceId: string; 
     }
   }
 
-  async function handleForget(): Promise<void> {
-    try {
-      await forgetRememberedFolder(sourceId);
-    } catch {
-      // Forgetting is best-effort; hiding still drops the stale entry from view.
-    } finally {
-      setForgotten(true);
-    }
-  }
-
   if (!pickerSupported) return null;
   if (!confirmed || !access.actions.canImport) return null;
-  if (forgotten || !meta) return null;
+  if (!meta) return null;
 
   const updateHref = `/w/${workspaceId}/sources/${sourceId}/update`;
   return (
     <span className="flex flex-wrap items-center gap-2">
       <Button type="button" variant="primary" disabled={busy} onClick={() => void handleSync()}>
         {busy ? "Syncing…" : "Sync now"}
-      </Button>
-      <span className="text-caption text-kh-text-muted">Last folder: {meta.rootName}</span>
-      <Button type="button" variant="ghost" disabled={busy} onClick={() => void handleForget()}>
-        Forget
       </Button>
       {status ? (
         <span role="status" className="text-caption text-kh-text-muted">

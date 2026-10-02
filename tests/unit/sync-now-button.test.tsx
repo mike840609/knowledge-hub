@@ -114,11 +114,12 @@ it("renders nothing when no folder is remembered", async () => {
   expect(container.innerHTML).toBe("");
 });
 
-it("shows Sync now with the remembered folder caption and a Forget action", async () => {
+it("shows Sync now without a Forget control and without the folder caption (caption lives in the header actions)", async () => {
   await renderButton();
   expect(container.textContent).toContain("Sync now");
-  expect(container.textContent).toContain("Last folder: notes");
-  expect(container.textContent).toContain("Forget");
+  expect(container.textContent).not.toContain("Last folder: notes");
+  expect(container.textContent).not.toContain("Forget");
+  expect(container.querySelector("button")).not.toBeNull();
 });
 
 it("loads the remembered folder in an effect: server render shows nothing and reads no browser storage", () => {
@@ -128,12 +129,13 @@ it("loads the remembered folder in an effect: server render shows nothing and re
   expect(store.getRememberedFolderMeta).not.toHaveBeenCalled();
 });
 
-it("forgets the remembered folder and hides itself", async () => {
+it("renders no Forget control", async () => {
   await renderButton();
-  click("Forget");
-  await act(async () => {});
-  expect(store.forgetRememberedFolder).toHaveBeenCalledWith("src-1");
-  expect(container.innerHTML).toBe("");
+  const forget = [...container.querySelectorAll("button")].find((element) =>
+    element.textContent?.includes("Forget"),
+  );
+  expect(forget).toBeUndefined();
+  expect(store.forgetRememberedFolder).not.toHaveBeenCalled();
 });
 
 it("asks to pick the folder again when the saved handle is unavailable", async () => {
