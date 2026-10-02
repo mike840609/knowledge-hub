@@ -26,6 +26,8 @@ export type KnowledgeTreeProps = {
   workspaceId: string;
   sourceId: string;
   selectedDocumentId?: string;
+  /** Sidebar sections above the tree can change height after persisted state arrives. */
+  revealLayoutKey?: string;
   /** Client-local filter text; ancestors stay visible and expansion is restored on clear. */
   query?: string;
   favoriteDocumentIds: ReadonlySet<string>;
@@ -212,6 +214,7 @@ export function KnowledgeTree({
   workspaceId,
   sourceId,
   selectedDocumentId,
+  revealLayoutKey,
   query = "",
   favoriteDocumentIds,
   onToggleFavorite,
@@ -258,7 +261,7 @@ export function KnowledgeTree({
     const viewport = scroller.getBoundingClientRect();
     if (row.top < viewport.top) scroller.scrollTop += row.top - viewport.top;
     else if (row.bottom > viewport.bottom) scroller.scrollTop += row.bottom - viewport.bottom;
-  }, [selectedDocumentId, effectiveCollapsed, roots]);
+  }, [selectedDocumentId, effectiveCollapsed, roots, revealLayoutKey]);
 
   const itemById = useMemo(() => {
     const map = new Map<string, KnowledgeTreeItem>();

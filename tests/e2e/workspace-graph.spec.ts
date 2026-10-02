@@ -69,8 +69,10 @@ test.describe("the workspace graph", () => {
     await expect(node(page, c)).toHaveAttribute("aria-label", `${c}, 0 incoming, 0 outgoing`);
     // C is on the shelf under the drawing rather than adrift in it, and says so.
     await expect(page.getByText(/^Not linked · \d+$/)).toBeVisible();
+    // The SVG link bounds also include its pointer-disabled label. Target the painted
+    // node circle rather than the bounding-box centre, which can fall in empty space.
     // Pointing at a node opens a card with what the drawing can only suggest.
-    await node(page, a).hover();
+    await node(page, a).locator("circle").last().hover();
     await expect(page.locator("[data-graph-card]")).toContainText(`${a}`);
     await expect(page.locator("[data-graph-card]")).toContainText("1 in");
     // The missing target is hidden until asked for.
@@ -111,7 +113,7 @@ test.describe("the workspace graph", () => {
     // A node is a real link: it opens its document.
     await page.getByRole("link", { name: "Graph", exact: true }).first().click();
     await page.goto(`/w/${workspaceId}/graph?unresolved=1`);
-    await node(page, a).click();
+    await node(page, a).locator("circle").last().click();
     await expect(page).toHaveURL(docA.url, ROUND_TRIP);
   });
 

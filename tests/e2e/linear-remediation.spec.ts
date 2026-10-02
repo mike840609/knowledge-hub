@@ -211,3 +211,31 @@ test('mobile explorer row actions and folder dialog remain operable', async ({ p
   await folder.getByRole('button', { name: 'Create folder', exact: true }).click();
   await expect(folder).not.toBeVisible(wait);
 });
+
+test('long explorer reveals the selected document after portal layout settles', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 600 });
+  let selected = await note(page, 'Long explorer seed');
+  const favorites: { key: string; sourceId: string }[] = [];
+  for (let index = 0; index < 35; index++) {
+    const response = await page.request.post(`/api/workspaces/${selected.workspaceId}/documents`, { data: { title: `Long explorer ${index}`, markdown: 'Body' } });
+    expect(response.ok()).toBe(true);
+    const document = await response.json();
+    if (index < 4) favorites.push({ key: `favorite:${document.documentId}`, sourceId: document.sourceId });
+    selected = { ...document, workspaceId: selected.workspaceId, href: `/w/${selected.workspaceId}/knowledge/${document.sourceId}/${document.documentId}` };
+  }
+  let releaseFavorites!: () => void;
+  const loadedFavorites = new Promise<void>(resolve => { releaseFavorites = resolve; });
+  await page.route(`**/api/workspaces/${selected.workspaceId}/personal`, async route => {
+    await loadedFavorites;
+    await route.fulfill({ json: favorites });
+  });
+  await page.goto(selected.href);
+  const row = page.getByRole('treeitem', { name: 'Long explorer 34', exact: true });
+  try {
+    await expect(row).toHaveAttribute('aria-current', 'page');
+    await expect(row).toBeInViewport();
+  } finally { releaseFavorites(); }
+  await expect(page.getByRole('region', { name: 'Favorites' }).getByRole('link')).toHaveCount(4);
+  await expect(row).toBeInViewport();
+  expect(await page.getByRole('region', { name: 'Document content', exact: true }).evaluate(el => el.scrollTop)).toBe(0);
+});

@@ -72,3 +72,14 @@ Rebase 後重新通過 typecheck、lint、99 個 unit test files／1,468 tests�
 本次修改後 typecheck、lint、production build 與 `linear-remediation`、`keyboard-shortcuts` 共 23 個 E2E tests 通過。新增幾何驗證涵蓋文件樹頂端對齊、288px 寬度與主導覽收合後可見且高度不變；既有讀寫對齊、持久化收合、手機 row/context menu 與無 JS 初始窄版檢查也通過。
 
 Topbar 也恢復原本配置：Knowledge Hub／收合按鈕區域跟隨主導覽的 160px／48px 寬度，Workspace 為獨立 288px 區域，其後為 Search。新增瀏覽器位置驗證確認 Workspace 起點 160px／48px、Search 起點 448px／336px。Typecheck、lint、production build 與上述 23 個 E2E tests 再次通過。
+
+## Full CI E2E failure investigation
+
+`5d96807` 的完整 CI 出現 23 個 E2E failures，分為四類：
+
+- 18 個 organize／move 案例共用的 selected-row viewport 檢查：帳號收藏非同步載入後，Favorites 區塊使文件樹位移，原本的 reveal effect 沒有依賴這個版面變化。控制收藏 response 的重現確認載入前 selected row 可見、載入後落出 viewport。KnowledgeTree 現在依側欄區塊的開關與列數重新執行 bounded reveal；只調整 Document tree 的 scrollTop。
+- 3 個 Company SSO import governance 案例仍要求已被設計替換的原生 file input 可見，改為要求 Choose folder 按鈕可見；撤權、封存與網路錯誤時移除匯入控制項的驗證仍保留。
+- Root routing 假設所有前序測試都未建立個人文件。現在驗證 API 提供的個人工作區 ID 與 knowledge route；空工作區提示另以新建 Team 驗證，避免依賴共享資料的執行順序。
+- Graph SVG link 的 bounding box 含有 pointer-events:none 的文字，中心可能落在節點之外。Hover／click 以實際繪製的 circle 為目標，保留真實 pointer hit-testing 與 card/navigation assertions，沒有使用 force。
+
+新增回歸測試用 35 份文件與受控的延遲 Favorites response，要求 selected row 載入前後均在 viewport，且文章 scrollTop 保持 0。

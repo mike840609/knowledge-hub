@@ -247,6 +247,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
                   workspaceId={workspaceId}
                   sourceId={candidate.id}
                   selectedDocumentId={resolvedDocumentId}
+                  revealLayoutKey={`${favoritesOpen}:${favoriteKeys.length}:${recentOpen}:${recentKeys.length}:${filterOpen}`}
                   includeArchived={showArchived}
                   query={candidate.name.toLowerCase().includes(needle) ? "" : query}
                   favoriteDocumentIds={favoriteDocumentIds}
