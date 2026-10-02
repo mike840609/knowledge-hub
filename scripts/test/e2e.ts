@@ -1,6 +1,8 @@
-import { rm } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { preparePhase3Application, seedPhase3Identities } from "../../tests/e2e/fixtures/phase3-server";
 import { PHASE3_PROVIDER, phase3PersonaNames, phase3UserId } from "../../tests/e2e/fixtures/phase3-identities";
+import path from "node:path";
+import { e2eTeamWorkspacesEnabled, requiredE2eServices } from "./e2e-services";
 import { spawn, type ChildProcess } from "node:child_process";
 import { databaseConfig } from "@/infrastructure/database/mariadb/config";
 import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
@@ -13,7 +15,7 @@ const environmentNames = [
   "KM_IDENTITY_PROVIDER", "NODE_ENV", "PORT", "KM_E2E_PORT", "KM_DB_HOST", "KM_DB_PORT", "KM_DB_USER", "KM_DB_PASSWORD", "KM_DB_NAME",
   "KM_E2E_DB_HOST", "KM_E2E_DB_PORT", "KM_E2E_DB_USER", "KM_E2E_DB_PASSWORD", "KM_E2E_DB_NAME",
   "KM_LOCAL_IDENTITY_ENABLED", "KM_LOCAL_ID", "KM_LOCAL_EMP_ID", "KM_LOCAL_NAME", "KM_LOCAL_ORG_CODE",
-  "KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION",
+  "KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION", "KM_TEAM_WORKSPACES_ENABLED",
 ];
 
 function createCancellation() {
@@ -34,19 +36,22 @@ function createCancellation() {
   return {
     check,
     dispose() { process.off("SIGINT", interrupt); process.off("SIGTERM", terminate); },
-    async run(command: string, args: string[], environment: NodeJS.ProcessEnv, cwd = projectRoot): Promise<void> {
+    async run(command: string, args: string[], environment: NodeJS.ProcessEnv, cwd = projectRoot, capture = false): Promise<string> {
       check();
+      let output = "";
       await new Promise<void>((resolve, reject) => {
-        const running = spawn(process.execPath, [command, ...args], { cwd, env: environment, stdio: "inherit" });
+        const running = spawn(process.execPath, [command, ...args], { cwd, env: environment, stdio: capture ? ["ignore", "pipe", "inherit"] : "inherit" });
+        if (capture) running.stdout?.on("data", (chunk: Buffer) => { output += chunk.toString(); });
         child = running;
         running.once("error", (error) => { child = undefined; reject(error); });
-        running.once("exit", (code, childSignal) => {
+        running.once("close", (code, childSignal) => {
           child = undefined;
           if (code === 0) resolve();
           else reject(new Error(`${command} exited with ${code ?? `signal ${childSignal ?? "unknown"}`}.`));
         });
       });
       check();
+      return output;
     },
   };
 }
@@ -56,8 +61,34 @@ async function main(): Promise<void> {
   const cancellation = createCancellation();
   let handle: Awaited<ReturnType<typeof provisionIsolatedDatabase>> | undefined;
   let phase3Root: string | undefined;
+  const started = performance.now();
+  async function timed<T>(label: string, action: () => Promise<T>): Promise<T> {
+    const before = performance.now();
+    try { return await action(); }
+    finally { console.log(`[e2e] ${label}: ${((performance.now() - before) / 1000).toFixed(2)}s`); }
+  }
   try {
-    handle = await provisionIsolatedDatabase("e2e");
+    // Let Playwright resolve file filters/grep/projects, avoiding a second selector implementation.
+    const teamMode = e2eTeamWorkspacesEnabled(process.env);
+    const listingEnvironment = { ...process.env, KM_TEAM_WORKSPACES_ENABLED: teamMode, KM_PHASE3_APP_ROOT: undefined, KM_E2E_UNCONFIGURED_SERVER: "false", KM_E2E_TEAMS_CLOSED_SERVER: "false", PLAYWRIGHT_JSON_OUTPUT_FILE: undefined, PLAYWRIGHT_JSON_OUTPUT_DIR: undefined, PLAYWRIGHT_JSON_OUTPUT_NAME: undefined };
+    const listing = JSON.parse(await timed("test discovery", () => cancellation.run("node_modules/@playwright/test/cli.js", ["test", ...process.argv.slice(2), "--list", "--reporter=json"], listingEnvironment, projectRoot, true))) as { suites: Array<{ file?: string; specs?: unknown[]; suites?: unknown[] }>; errors?: unknown[] };
+    if (listing.errors?.length) throw new Error("Playwright test discovery failed.");
+    const files = new Set<string>();
+    function collect(suites: typeof listing.suites) {
+      for (const suite of suites) {
+        if (suite.file && suite.specs?.length) files.add(path.resolve(projectRoot, "tests/e2e", suite.file));
+        collect((suite.suites ?? []) as typeof listing.suites);
+      }
+    }
+    collect(listing.suites);
+    if (!files.size) throw new Error("No E2E tests selected.");
+    const services = requiredE2eServices(await Promise.all([...files].map((file) => readFile(file, "utf8"))));
+    if (process.env.KM_E2E_PERSONAL_ONLY === "true" && services.personas) {
+      throw new Error("Selected tests require SSO personas; remove KM_E2E_PERSONAL_ONLY=true.");
+    }
+    console.log(`[e2e] mode: ${teamMode === "true" ? "Team-enabled" : "personal-only"}`);
+    console.log(`[e2e] services: local${services.teamsClosed ? ", teams-closed" : ""}${services.personas ? ", SSO personas" : ""}${services.unconfigured ? ", unconfigured" : ""}`);
+    handle = await timed("database provisioning", () => provisionIsolatedDatabase("e2e"));
     cancellation.check();
     const e2ePort = process.env.KM_E2E_PORT ?? "3101";
     const dbHost = process.env.KM_E2E_DB_HOST ?? process.env.KM_TEST_DB_HOST ?? "127.0.0.1";
@@ -77,7 +108,7 @@ async function main(): Promise<void> {
       NODE_ENV: "production",
       KM_IDENTITY_PROVIDER: "local",
       ...identity,
-      KM_TEAM_WORKSPACES_ENABLED: process.env.KM_TEAM_WORKSPACES_ENABLED ?? "true",
+      KM_TEAM_WORKSPACES_ENABLED: teamMode,
       KM_E2E_PORT: e2ePort,
       KM_E2E_DB_HOST: dbHost,
       KM_E2E_DB_PORT: dbPort,
@@ -93,18 +124,18 @@ async function main(): Promise<void> {
     Object.assign(process.env, commonEnvironment);
     const migrationPool = createDatabasePool(databaseConfig("e2e"));
     try {
-      await runMigrations(migrationPool);
+      await timed("database migrations", () => runMigrations(migrationPool));
     } finally {
       await migrationPool.end();
     }
     cancellation.check();
-    await seedDevelopmentDatabase();
+    await timed("development fixtures", () => seedDevelopmentDatabase());
     cancellation.check();
     const fixturePool = createDatabasePool(databaseConfig("e2e"));
-    try { await seedPhase3Identities(fixturePool); } finally { await fixturePool.end(); }
+    try { if (services.personas) await timed("SSO fixtures", () => seedPhase3Identities(fixturePool)); } finally { await fixturePool.end(); }
     cancellation.check();
-    await cancellation.run("node_modules/next/dist/bin/next", ["build"], { ...commonEnvironment, NODE_ENV: "production" });
-    if (process.env.KM_E2E_PERSONAL_ONLY !== "true") phase3Root = await preparePhase3Application(projectRoot);
+    await timed("application build", () => cancellation.run("node_modules/next/dist/bin/next", ["build"], { ...commonEnvironment, NODE_ENV: "production" }));
+    if (services.personas) phase3Root = await timed("SSO application preparation", () => preparePhase3Application(projectRoot));
     cancellation.check();
     const phase3Environment = {
       ...commonEnvironment, KM_IDENTITY_PROVIDER: "company-sso", KM_COMPANY_SSO_PROVIDER: PHASE3_PROVIDER,
@@ -113,19 +144,25 @@ async function main(): Promise<void> {
       KM_PHASE3_SERVER_PERSONA: "owner",
     };
     cancellation.check();
-    if (phase3Root) await cancellation.run("node_modules/next/dist/bin/next", ["build"], phase3Environment, phase3Root);
+    if (phase3Root) await timed("SSO application build", () => cancellation.run("node_modules/next/dist/bin/next", ["build"], phase3Environment, phase3Root));
     cancellation.check();
-    await cancellation.run("node_modules/@playwright/test/cli.js", ["test", ...process.argv.slice(2)], {
+    await timed("server readiness and browser tests", () => cancellation.run("node_modules/@playwright/test/cli.js", ["test", ...process.argv.slice(2)], {
       ...commonEnvironment, NODE_ENV: "production", PORT: e2ePort,
       KM_PHASE3_APP_ROOT: phase3Root,
+      KM_E2E_TEAMS_CLOSED_SERVER: String(services.teamsClosed),
+      KM_E2E_UNCONFIGURED_SERVER: String(services.unconfigured),
       KM_COMPANY_SSO_ROLLOUT_USER_IDS: phase3Environment.KM_COMPANY_SSO_ROLLOUT_USER_IDS,
-    });
+    }));
   } finally {
     try {
       if (phase3Root) await rm(phase3Root, { recursive: true, force: true });
     } finally {
-      try { if (handle) await disposeIsolatedDatabase(handle); }
+      try {
+        const database = handle;
+        if (database) await timed("database cleanup", () => disposeIsolatedDatabase(database));
+      }
       finally {
+        console.log(`[e2e] total: ${((performance.now() - started) / 1000).toFixed(2)}s`);
         cancellation.dispose();
         for (const name of environmentNames) {
           const value = previous.get(name);
