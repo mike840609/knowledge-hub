@@ -159,4 +159,45 @@ describe("folder import stops writes when authorization changes", () => {
     expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({ method: "DELETE", keepalive: true });
   });
 
+
+  it("lets non-idempotent session creation finish so cancellation can abandon the returned snapshot", async () => {
+    const controller = new AbortController();
+    let finishCreate: ((response: Response) => void) | undefined;
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockImplementationOnce((_url, init) => new Promise<Response>((resolve, reject) => {
+        finishCreate = resolve;
+        init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+      }))
+      .mockResolvedValueOnce(response({ abandoned: true }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const importing = runFolderImport({
+      target,
+      files: markdownFiles(1),
+      sourceName: "Notes",
+      onProgress: vi.fn(),
+      assertAllowed: () => {
+        if (controller.signal.aborted) {
+          throw Object.assign(new Error("Import cancelled."), { code: "IMPORT_CANCELLED" });
+        }
+      },
+      signal: controller.signal,
+    });
+
+    for (let attempt = 0; attempt < 20 && finishCreate === undefined; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    expect(finishCreate).toBeDefined();
+
+    controller.abort();
+    finishCreate!(response({ snapshotId: "snapshot" }, 201));
+
+    await expect(importing).rejects.toMatchObject({ code: "IMPORT_CANCELLED" });
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeUndefined();
+    expect(fetchMock.mock.calls.map(([url, init]) => [String(url), init?.method ?? "GET"])).toEqual([
+      ["/api/workspaces/workspace/source-imports", "POST"],
+      ["/api/source-imports/snapshot", "DELETE"],
+    ]);
+  });
+
 });
