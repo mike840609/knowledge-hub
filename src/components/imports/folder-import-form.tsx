@@ -100,7 +100,11 @@ export function readErrorCode(body: unknown, fallback: string): { code: string; 
   return { code: envelope.code, message: envelope.message ?? fallback };
 }
 
-async function postJson(url: string, payload: unknown): Promise<{ ok: boolean; status: number; body: unknown }> {
+async function postJson(
+  url: string,
+  payload: unknown,
+  options: { knownSnapshot?: boolean } = {},
+): Promise<{ ok: boolean; status: number; body: unknown }> {
   const response = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -112,7 +116,13 @@ async function postJson(url: string, payload: unknown): Promise<{ ok: boolean; s
   } catch {
     body = null;
   }
-  if (!response.ok) requestWorkspaceAccessCheck(response.status, readErrorEnvelope(body)?.code);
+  // Once a snapshot id is known, a 404 means that import session is missing,
+  // expired/cleaned up, or not owned by this caller. Revoked Workspace access
+  // for a known snapshot is intentionally translated by the server to 403.
+  // Do not turn an import-session 404 into a Workspace-wide access pause.
+  if (!response.ok && !(options.knownSnapshot && response.status === 404)) {
+    requestWorkspaceAccessCheck(response.status, readErrorEnvelope(body)?.code);
+  }
   return { ok: response.ok, status: response.status, body };
 }
 
@@ -151,7 +161,9 @@ async function uploadMarkdownBatches(
       const response = await fetch(`/api/source-imports/${snapshotId}/entries`, { method: "POST", body: form });
       if (!response.ok) {
         const body = await response.json().catch(() => null);
-        requestWorkspaceAccessCheck(response.status, readErrorEnvelope(body)?.code);
+        if (response.status !== 404) {
+          requestWorkspaceAccessCheck(response.status, readErrorEnvelope(body)?.code);
+        }
         const failure = readErrorCode(body, "Uploading folder entries failed.");
         throw Object.assign(new Error(failure.message), { code: failure.code });
       }
@@ -202,7 +214,7 @@ export async function runFolderImport(input: {
   );
   assertAllowed();
   onProgress({ kind: "FINALIZING" });
-  const finalized = await postJson(`/api/source-imports/${snapshotId}/finalize`, {});
+  const finalized = await postJson(`/api/source-imports/${snapshotId}/finalize`, {}, { knownSnapshot: true });
   if (!finalized.ok) {
     const failure = readErrorCode(finalized.body, "Finalizing the import preview failed.");
     onProgress({ kind: "ERROR", code: failure.code, message: failure.message });
@@ -225,8 +237,18 @@ export function FolderImportForm({ target }: { target: FolderImportTarget }): Re
   const allowed = confirmed && access.actions.canImport;
   const allowedRef = useRef(allowed);
   allowedRef.current = allowed;
-  useEffect(() => () => { allowedRef.current = false; }, []);
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    // React Strict Mode intentionally runs setup → cleanup → setup once in
+    // development. Resetting this flag in setup makes that probe harmless;
+    // permission state stays exclusively in allowedRef.
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
   const assertAllowed = () => {
+    if (!mountedRef.current) {
+      throw Object.assign(new Error("Import was cancelled because this page is no longer active."), { code: "IMPORT_CANCELLED" });
+    }
     if (!allowedRef.current) throw Object.assign(new Error("Workspace access changed. Import is paused."), { code: "WORKSPACE_ACCESS_CHANGED" });
   };
   const [state, setState] = useState<ImportUiState>({ kind: "IDLE" });
@@ -244,6 +266,9 @@ export function FolderImportForm({ target }: { target: FolderImportTarget }): Re
       const code = error instanceof Error && "code" in error && typeof (error as { code: unknown }).code === "string"
         ? (error as { code: string }).code
         : "IMPORT_REQUEST_FAILED";
+      // An actual page leave is cancellation, not an authorization failure,
+      // and there is no mounted UI left to update.
+      if (!mountedRef.current || code === "IMPORT_CANCELLED") return;
       setState({ kind: "ERROR", code, message: error instanceof Error ? error.message : "Importing the folder failed." });
     }
   }
