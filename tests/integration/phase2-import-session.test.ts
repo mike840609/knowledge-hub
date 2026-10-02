@@ -8,6 +8,7 @@ import { CreateFolderImportService, type ImportManifestEntry } from "@/modules/s
 import { UploadFolderImportEntriesService } from "@/modules/sources/application/upload-folder-import-entries";
 import { FinalizeFolderImportService } from "@/modules/sources/application/finalize-folder-import";
 import { ApplyFolderImportService } from "@/modules/sources/application/apply-folder-import";
+import { AbandonFolderImportService } from "@/modules/sources/application/abandon-folder-import";
 import { DEFAULT_IMPORT_LIMITS } from "@/modules/sources/domain/import-limits";
 import { toImportErrorResponse } from "@/server/http-error-response";
 import { parseInitialImportBody } from "@/server/import-route-adapters";
@@ -44,6 +45,7 @@ function services() {
     upload: new UploadFolderImportEntriesService(uow, { limits: DEFAULT_IMPORT_LIMITS, now: clock }),
     finalize: new FinalizeFolderImportService(uow, { limits: DEFAULT_IMPORT_LIMITS, now: clock }),
     apply: new ApplyFolderImportService(uow, { now: clock }),
+    abandon: new AbandonFolderImportService(uow),
   };
 }
 
@@ -59,6 +61,46 @@ async function insertReady(workspaceId: string, createdBy: string): Promise<void
 }
 
 describe("Phase 2 BUILDING import sessions", () => {
+  it("only abandons creator-owned BUILDING staging, cascades entries, and frees quota immediately", async () => {
+    const fixture = await createSourceFixture(pool);
+    const { create, abandon } = services();
+    const base = { workspaceId: fixture.workspaceId, sourceName: "Draft", rootName: "wiki", manifest: markdownManifest() };
+    const created = await create.createInitial(fixtureCaller(), base);
+    await create.createInitial(fixtureCaller(), base);
+    await create.createInitial(fixtureCaller(), base);
+    await expect(create.createInitial(fixtureCaller(), base)).rejects.toMatchObject({ code: "IMPORT_BUILDING_QUOTA_EXCEEDED" });
+    await expect(abandon.abandon(fixtureCaller(secondFixtureIdentity), created.snapshotId)).resolves.toEqual({ abandoned: false });
+    await expect(abandon.abandon(fixtureCaller(), created.snapshotId)).resolves.toEqual({ abandoned: true });
+    await expect(abandon.abandon(fixtureCaller(), created.snapshotId)).resolves.toEqual({ abandoned: false });
+    expect(await pool.query("SELECT id FROM source_import_snapshot_entries WHERE snapshot_id=?", [created.snapshotId])).toHaveLength(0);
+    await expect(create.createInitial(fixtureCaller(), base)).resolves.toMatchObject({ state: "BUILDING" });
+  });
+
+  it("preserves finalized and applied snapshots when cleanup races a lost finalize response", async () => {
+    const fixture = await createSourceFixture(pool);
+    const { create, finalize, apply, abandon } = services();
+    const created = await create.createInitial(fixtureCaller(), {
+      workspaceId: fixture.workspaceId, sourceName: "Assets", rootName: "wiki", manifest: assetManifest(),
+    });
+    await finalize.finalize(fixtureCaller(), created.snapshotId);
+    await expect(abandon.abandon(fixtureCaller(), created.snapshotId)).resolves.toEqual({ abandoned: false });
+    await apply.apply(fixtureCaller(), created.snapshotId);
+    await expect(abandon.abandon(fixtureCaller(), created.snapshotId)).resolves.toEqual({ abandoned: false });
+    expect((await pool.query<{ state: string }[]>("SELECT state FROM source_import_snapshots WHERE id=?", [created.snapshotId]))[0].state).toBe("APPLIED");
+    expect(await pool.query("SELECT id FROM source_import_snapshot_entries WHERE snapshot_id=?", [created.snapshotId])).toHaveLength(1);
+  });
+
+  it("allows the creator to discard private staging after Workspace membership is revoked", async () => {
+    const fixture = await createSourceFixture(pool);
+    const { create, abandon } = services();
+    const created = await create.createInitial(fixtureCaller(), {
+      workspaceId: fixture.workspaceId, sourceName: "Draft", rootName: "wiki", manifest: markdownManifest(),
+    });
+    await new MariaDbUnitOfWork(pool).run(({ workspaceMemberships }) => workspaceMemberships.remove(fixture.workspaceId, fixtureIdentity.id));
+    await expect(abandon.abandon(fixtureCaller(), created.snapshotId)).resolves.toEqual({ abandoned: true });
+    expect(await pool.query("SELECT id FROM source_import_snapshots WHERE id=?", [created.snapshotId])).toHaveLength(0);
+  });
+
   it("creates an initial BUILDING snapshot without creating a Source", async () => {
     const fixture = await createSourceFixture(pool);
     const before = Number((await pool.query<{ count: unknown }[]>("SELECT COUNT(*) AS count FROM knowledge_sources"))[0].count);
@@ -187,6 +229,9 @@ describe("Phase 2 BUILDING import sessions", () => {
       "SELECT COUNT(*) AS count FROM source_import_snapshots",
     ))[0].count);
     expect(count).toBe(0);
+    await expect(create.createInitial(fixtureCaller(), {
+      ...base, manifest: [asset("a1", "one.bin", 10), asset("a2", "two.bin", 5)],
+    })).resolves.toMatchObject({ state: "BUILDING" });
   });
 
   it("enforces upload batch byte boundaries independent of the file-count limit", async () => {

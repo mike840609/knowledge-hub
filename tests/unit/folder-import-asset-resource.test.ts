@@ -36,6 +36,53 @@ function stubDigest(): void {
 }
 
 describe("folder import asset manifest resource usage", () => {
+  it("rejects custom per-file and combined asset limits before reading any files", async () => {
+    stubDigest();
+    const arrayBuffer = vi.fn(async () => new Uint8Array([1]).buffer);
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", fetchMock);
+    const base = { target, sourceName: "Assets", onProgress: vi.fn(), limits: { maxAssetFileBytes: 10, maxAssetTotalBytes: 15 } };
+    await expect(runFolderImport({ ...base, files: [fakeAsset(0, { size: 11, arrayBuffer })] })).rejects.toMatchObject({ code: "IMPORT_LIMIT_EXCEEDED" });
+    await expect(runFolderImport({ ...base, files: [fakeAsset(0, { size: 8, arrayBuffer }), fakeAsset(1, { size: 8, arrayBuffer })] })).rejects.toMatchObject({ code: "IMPORT_LIMIT_EXCEEDED" });
+    expect(arrayBuffer).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("drains active hash workers and stops scheduling files after a read failure", async () => {
+    stubDigest();
+    let active = 0;
+    let reads = 0;
+    const files = Array.from({ length: 12 }, (_, index) => fakeAsset(index, {
+      arrayBuffer: async () => {
+        reads += 1;
+        if (index === 0) throw new Error("File became unreadable");
+        active += 1;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        active -= 1;
+        return new Uint8Array([index]).buffer;
+      },
+    }));
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(runFolderImport({ target, files, sourceName: "Assets", onProgress: vi.fn() })).rejects.toThrow("File became unreadable");
+    expect(active).toBe(0);
+    expect(reads).toBeLessThanOrEqual(4);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not create a snapshot when cancellation occurs during the last asset read", async () => {
+    stubDigest();
+    const controller = new AbortController();
+    const files = [fakeAsset(0, { arrayBuffer: async () => {
+      controller.abort();
+      return new Uint8Array([1]).buffer;
+    } })];
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(response({ snapshotId: "snapshot" }, 201));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(runFolderImport({ target, files, sourceName: "Assets", onProgress: vi.fn(), signal: controller.signal })).rejects.toMatchObject({ code: "IMPORT_CANCELLED" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("hashes assets with bounded concurrency instead of reading the whole folder into memory at once", async () => {
     stubDigest();
     let active = 0;

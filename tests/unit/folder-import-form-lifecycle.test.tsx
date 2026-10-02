@@ -44,6 +44,39 @@ afterEach(async () => {
 });
 
 describe("FolderImportForm lifecycle", () => {
+  it.each(["cancel button", "pagehide"])("abandons the active import on %s without navigating to a preview", async (trigger) => {
+    let uploadSignal: AbortSignal | undefined;
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(response({ snapshotId: "snapshot" }, 201))
+      .mockImplementationOnce((_url, init) => new Promise<Response>((_resolve, reject) => {
+        uploadSignal = init?.signal ?? undefined;
+        uploadSignal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+      }))
+      .mockResolvedValueOnce(response({ abandoned: true }));
+    vi.stubGlobal("fetch", fetchMock);
+    await act(async () => { root.render(<FolderImportForm target={{ kind: "new", workspaceId: "workspace" }} />); });
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    Object.defineProperty(input, "files", { configurable: true, value: [new File(["# Hello"], "hello.md")] });
+    await act(async () => {
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(uploadSignal).toBeDefined();
+    await act(async () => {
+      if (trigger === "pagehide") window.dispatchEvent(new Event("pagehide"));
+      else {
+        const cancel = [...container.querySelectorAll("button")].find((button) => button.textContent === "Cancel import");
+        expect(cancel).toBeDefined();
+        cancel!.click();
+      }
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(uploadSignal?.aborted).toBe(true);
+    expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({ method: "DELETE", keepalive: true });
+    expect(input.disabled).toBe(false);
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
   it("starts the first folder import under React Strict Mode instead of reporting an access change", async () => {
     const fetchMock = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(response({ snapshotId: "snapshot" }, 201))

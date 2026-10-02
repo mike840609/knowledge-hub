@@ -1,0 +1,40 @@
+# Folder import reliability verification — 2026-10-03
+
+## Branch split
+
+- PR #98: `fix/folder-import-access-refresh` restored exactly to `c3cc2156e1f5a347709d02920d1709fe6aff4fe8`; no changes to that commit's tree.
+- Original follow-up chain: all 35 commits from `6c8bf5d` through `7092c74f1f0c0d51abb138ab2740c4bf2a0ac0d2` preserved on `fix/folder-import-reliability-hardening`, descending directly from `c3cc2156`.
+- The previously rewritten remote head `73c03a4135096231ec25c9ff5128a20ebfb6da27` was saved to `backup/folder-import-access-refresh-before-split-20261003` before the lease-protected ref restoration.
+- Local work ran in an isolated worktree. Existing changes in the primary checkout were not modified.
+- Review base is `fix/folder-import-access-refresh`. The workflow now includes that stacked base in its pull-request triggers. Neither PR is merged. Existing PR #102 overlaps the core follow-up; it was not modified.
+
+## TDD and behavior
+
+The inherited 15 related unit cases passed on the recovered follow-up head. Added behavioral tests first reproduced four failures: pre-cancelled creation, cancellation during the last asset read, failure to retry a truncated successful finalize body, and hash workers remaining active after a file-read failure. Two additional rendered tests first failed for explicit Cancel import and pagehide. All six failures were fixed; the full unit suite passed afterward.
+
+Coverage also verifies custom asset total/per-file preflight, default and configured runtime limits, bounded retry exhaustion, cancellation without reusing an aborted signal for cleanup, creator-only deletion, cascading staging entries, immediate quota release, cleanup after membership revoke, and preservation of READY/APPLIED snapshots.
+
+The browser lost-response test commits the original fixture bytes with the browser's actual upload keys, aborts the first upload response, then checks the real browser replay returns `accepted: 0` with every Markdown entry idempotent. It also truncates the first successful finalize response and verifies the same snapshot reaches its preview after replay. Only one create request is sent.
+
+## Local checks
+
+Environment: Node v24.6.0, MariaDB 10.11. Integration and E2E runners provision and dispose isolated test databases.
+
+| Check | Result |
+| --- | --- |
+| `npm run test:unit` | PASS — 104 files, 1,492 tests |
+| `npm run test:integration` | PASS — 53 files, 617 tests |
+| `npm run typecheck` | PASS |
+| `npm run lint` | PASS |
+| `npm run build` | PASS |
+| `npm run test:e2e` | PASS — 223 passed, 2 existing personal-rollout cases conditionally skipped; 6.1 minutes |
+| `git diff --check` | PASS |
+| Workflow YAML parse and stacked-base trigger | PASS |
+
+The first E2E run exposed an inherited quota test expecting 409 rather than the existing 400 + `IMPORT_BUILDING_QUOTA_EXCEEDED` contract. Its failed assertion stranded snapshots and blocked later import cases; it now cleans up in `finally`. A Details inspector case passed on the subsequent full run without a source change.
+
+The next run exposed Playwright's disk-backed multipart forwarding omitting file bytes; the fault-injection test now sends the original bytes before dropping the response. The affected lost-response/cancel/asset scenarios passed in the focused run. That run also exposed a source-name collision in an existing fuzzy “Import folder” link locator; it now uses exact matching. Final verification used a fresh full run after those test corrections: all 9 source-import cases and the entire enabled suite passed, without retries.
+
+## Limits of recovery
+
+Upload/finalize receive one automatic replay; non-idempotent creation is not replayed. Abandon is best effort: offline or unknown-id creation failures retain the existing two-hour BUILDING TTL fallback. This change does not add persistence/resume across browser restarts or wire a cleanup scheduler.
