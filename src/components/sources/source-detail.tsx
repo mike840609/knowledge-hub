@@ -6,6 +6,7 @@ import { RefreshCw } from "lucide-react";
 import type { SourceDetailModel } from "@/server/source-read";
 import { isFolderSyncable } from "@/modules/knowledge/domain/source-policy";
 import { ImportHistory } from "@/components/sources/import-history";
+import { SyncNowButton } from "@/components/sources/sync-now-button";
 import { sourceTypeLabel } from "@/components/sources/source-list-row";
 import { TechnicalDetails } from "@/components/sources/technical-details";
 import { buttonClasses } from "@/components/ui/button";
@@ -21,7 +22,12 @@ export function SourceDetail({ model, showImportSuccess = false }: { model: Sour
         </p>
       ) : null}
       <PageHeader location="Sources" locationHref={`/w/${workspace.id}/sources`} title={source.name}
-        actions={syncable ? <WorkspaceImportLink href={`/w/${workspace.id}/sources/${source.id}/update`} className={buttonClasses({ variant: "secondary" })}><RefreshCw size={15} aria-hidden="true" />Update from folder</WorkspaceImportLink> : undefined}
+        actions={syncable ? (
+          <>
+            <WorkspaceImportLink href={`/w/${workspace.id}/sources/${source.id}/update`} className={buttonClasses({ variant: "secondary" })}><RefreshCw size={15} aria-hidden="true" />Update from folder</WorkspaceImportLink>
+            <SyncNowButton workspaceId={workspace.id} sourceId={source.id} />
+          </>
+        ) : undefined}
       />
       <p className="flex flex-wrap items-center gap-2 text-caption text-kh-text-muted">
         <span className="rounded-md border border-kh-border px-1.5 py-0.5">{sourceTypeLabel(source.sourceType)}</span>
