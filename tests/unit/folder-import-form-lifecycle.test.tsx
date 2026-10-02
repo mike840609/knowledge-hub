@@ -63,6 +63,7 @@ describe("FolderImportForm lifecycle", () => {
     const input = container.querySelector<HTMLInputElement>('input[type="file"]');
     expect(input).not.toBeNull();
     const file = new File(["# Hello\n"], "hello.md", { type: "text/markdown" });
+    Object.defineProperty(file, "webkitRelativePath", { configurable: true, value: "wiki/hello.md" });
     Object.defineProperty(input!, "files", { configurable: true, value: [file] });
 
     await act(async () => {
