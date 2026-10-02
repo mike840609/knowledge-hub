@@ -81,6 +81,14 @@ export class MariaDbImportSnapshotRepository implements ImportSnapshotRepository
     return Number(rows[0]?.count ?? 0);
   }
 
+  async deleteBuildingByIdForCreator(snapshotId: string, creatorId: string): Promise<boolean> {
+    const result = await this.connection.query(
+      "DELETE FROM source_import_snapshots WHERE id=? AND created_by=? AND state='BUILDING'",
+      [snapshotId, creatorId],
+    );
+    return affectedRows(result) === 1;
+  }
+
   async markReady(input: MarkImportSnapshotReadyInput): Promise<void> {
     const result = await this.connection.query(
       `UPDATE source_import_snapshots SET state='READY', snapshot_hash=?, plan_hash=?, summary=?, plan=?, has_blockers=?, finalized_at=?, expires_at=?
