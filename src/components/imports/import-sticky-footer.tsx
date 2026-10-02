@@ -135,9 +135,10 @@ export function ImportStickyFooter({
       ) : null}
       {state.kind === "ERROR" ? (
         <p role="alert" className="mx-auto mt-2 max-w-page text-body text-kh-danger">
-          {state.code}: {state.message}
+          {state.message}
         </p>
       ) : null}
+      {state.kind === "ERROR" ? <details className="mx-auto mt-2 max-w-page text-caption text-kh-text-muted"><summary className="cursor-pointer rounded-md kh-focus-ring">Technical details</summary><code>{state.code}</code></details> : null}
     </div>
   );
 }
