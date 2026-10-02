@@ -42,6 +42,12 @@ async function withKnownSnapshotAccess<T>(operation: () => Promise<T>): Promise<
   }
 }
 
+export async function abandonSourceImport(snapshotId: string): Promise<{ abandoned: boolean }> {
+  const services = applicationServices();
+  const { caller } = await services.establishTrustedCaller();
+  return services.imports.abandon.abandon(caller, snapshotId);
+}
+
 export async function createInitialSourceImport(workspaceId: string, input: InitialImportRequest): Promise<CreateImportResult> {
   const services = applicationServices();
   const { caller } = await services.establishTrustedCaller();
