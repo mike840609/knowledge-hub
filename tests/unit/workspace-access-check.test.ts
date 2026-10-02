@@ -14,10 +14,18 @@ describe("when a failed request makes the shell re-check access", () => {
     vi.unstubAllGlobals();
   });
   const checked = () => dispatched.mock.calls.filter(([event]) => (event as Event).type === "kh:workspace-access-check").length;
+  const refreshed = () => dispatched.mock.calls.filter(([event]) => (event as Event).type === "kh:workspace-access-refresh").length;
 
-  it.each([[403], [404], [409]])("re-checks for a %i, which may mean access changed", (status) => {
+  it.each([[403], [409]])("pauses and re-checks for a %i that may mean access changed", (status) => {
     requestWorkspaceAccessCheck(status);
     expect(checked()).toBe(1);
+    expect(refreshed()).toBe(0);
+  });
+
+  it("re-checks a 404 without pre-emptively pausing confirmed access", () => {
+    requestWorkspaceAccessCheck(404, "NOT_FOUND");
+    expect(checked()).toBe(0);
+    expect(refreshed()).toBe(1);
   });
 
   it("re-checks for a 409 that is about the workspace itself", () => {
@@ -37,13 +45,24 @@ describe("when a failed request makes the shell re-check access", () => {
     ["INVALID_PARENT"],
     ["TREE_CYCLE"],
     ["CROSS_SOURCE_MOVE"],
-  ])("does not re-check for %s: it is a conflict about content, and the caller's access is what it was", (code) => {
+    ["SOURCE_VERSION_CONFLICT"],
+    ["IDENTITY_STATE_CHANGED"],
+    ["IMPORT_SNAPSHOT_STALE"],
+    ["IMPORT_APPLY_RETRYABLE"],
+    ["UPLOAD_ENTRY_CONFLICT"],
+    ["SOME_FUTURE_CONTENT_CONFLICT"],
+  ])("does not re-check for coded content conflict %s", (code) => {
     requestWorkspaceAccessCheck(409, code);
     expect(checked()).toBe(0);
   });
 
-  it("still re-checks when a conflict's code is one it has not been told about", () => {
-    requestWorkspaceAccessCheck(409, "SOME_FUTURE_CODE");
+  it("re-checks for a lifecycle conflict", () => {
+    requestWorkspaceAccessCheck(409, "WORKSPACE_LIFECYCLE_VIOLATION");
+    expect(checked()).toBe(1);
+  });
+
+  it("keeps the conservative re-check for an uncoded 409", () => {
+    requestWorkspaceAccessCheck(409);
     expect(checked()).toBe(1);
   });
 });
