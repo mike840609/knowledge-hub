@@ -121,6 +121,45 @@ async function applySnapshot(request: APIRequestContext, snapshotId: string): Pr
   return (await response.json()) as { sourceId: string };
 }
 
+
+test("abandoning a BUILDING snapshot frees the creator quota immediately", async ({ request }) => {
+  const bytes = Buffer.from("# Draft\n");
+  const manifest: ImportManifestEntry[] = [{
+    uploadKey: "m1",
+    relativePath: "draft.md",
+    kind: "MARKDOWN",
+    size: bytes.length,
+  }];
+  const create = async (name: string) => request.post(
+    `/api/workspaces/${QUERY_MASTER_WORKSPACE_ID}/source-imports`,
+    { data: { sourceName: name, rootName: "wiki", manifest } },
+  );
+
+  const snapshots: string[] = [];
+  for (let index = 0; index < 3; index += 1) {
+    const response = await create(`Abandon quota ${index}`);
+    expect(response.status()).toBe(201);
+    snapshots.push(((await response.json()) as { snapshotId: string }).snapshotId);
+  }
+
+  const blocked = await create("Abandon quota blocked");
+  expect(blocked.status()).toBe(409);
+  expect(((await blocked.json()) as { error: { code: string } }).error.code).toBe("IMPORT_BUILDING_QUOTA_EXCEEDED");
+
+  const abandoned = await request.delete(`/api/source-imports/${snapshots[0]}`);
+  expect(abandoned.status()).toBe(200);
+  expect(await abandoned.json()).toEqual({ abandoned: true });
+
+  const replacement = await create("Abandon quota replacement");
+  expect(replacement.status()).toBe(201);
+  snapshots.push(((await replacement.json()) as { snapshotId: string }).snapshotId);
+
+  for (const snapshotId of snapshots.slice(1)) {
+    const cleanup = await request.delete(`/api/source-imports/${snapshotId}`);
+    expect(cleanup.status()).toBe(200);
+  }
+});
+
 test("imports basic-v1 through the directory input and applies the grouped preview", async ({ page }) => {
   await page.goto(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources`);
   await page.getByRole("link", { name: "Import folder" }).click();
