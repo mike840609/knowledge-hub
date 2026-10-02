@@ -152,6 +152,43 @@ describe("Phase 2 BUILDING import sessions", () => {
     await expect(create.createInitial(fixtureCaller(), { ...base, manifest: exact })).resolves.toMatchObject({ state: "BUILDING" });
   });
 
+
+  it("enforces asset file and total byte limits before creating a snapshot", async () => {
+    const fixture = await createSourceFixture(pool);
+    const uow = new MariaDbUnitOfWork(pool);
+    const limits = {
+      ...DEFAULT_IMPORT_LIMITS,
+      maxAssetFileBytes: 10,
+      maxAssetTotalBytes: 15,
+    };
+    const create = new CreateFolderImportService(uow, { limits, now: clock });
+    const asset = (uploadKey: string, path: string, size: number): ImportManifestEntry => ({
+      uploadKey,
+      relativePath: path,
+      kind: "ASSET",
+      size,
+      contentHash: "a".repeat(64),
+      mimeType: "application/octet-stream",
+      lastModified: null,
+    });
+    const base = { workspaceId: fixture.workspaceId, sourceName: "Wiki", rootName: "wiki" };
+
+    await expect(create.createInitial(fixtureCaller(), {
+      ...base,
+      manifest: [asset("a1", "big.bin", 11)],
+    })).rejects.toMatchObject({ code: "IMPORT_LIMIT_EXCEEDED" });
+
+    await expect(create.createInitial(fixtureCaller(), {
+      ...base,
+      manifest: [asset("a1", "one.bin", 8), asset("a2", "two.bin", 8)],
+    })).rejects.toMatchObject({ code: "IMPORT_LIMIT_EXCEEDED" });
+
+    const count = Number((await pool.query<{ count: unknown }[]>(
+      "SELECT COUNT(*) AS count FROM source_import_snapshots",
+    ))[0].count);
+    expect(count).toBe(0);
+  });
+
   it("enforces upload batch byte boundaries independent of the file-count limit", async () => {
     const fixture = await createSourceFixture(pool);
     const uow = new MariaDbUnitOfWork(pool);
