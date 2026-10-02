@@ -77,14 +77,17 @@ function updateLink(): HTMLAnchorElement | null {
   return container.querySelector('a[href="/w/ws-1/sources/src-1/update"]');
 }
 
-it("renders Update from folder as primary when no folder is remembered", async () => {
+it("renders Update from folder as an icon-only primary link when no folder is remembered", async () => {
   store.meta = null;
   await renderActions();
   const link = updateLink();
-  expect(link?.textContent).toContain("Update from folder");
+  expect(link?.getAttribute("aria-label")).toBe("Update from folder");
+  expect(link?.textContent?.trim()).toBe("");
+  expect(link?.querySelector("svg")).not.toBeNull();
   expect(link?.className).toContain("bg-kh-primary");
   expect(link?.className).not.toContain("bg-transparent");
-  expect(container.textContent).not.toContain("Sync now");
+  expect(link?.className).toContain("kh-icon-control");
+  expect(container.querySelector('button[aria-label="Sync now"]')).toBeNull();
   expect(container.textContent).not.toContain("Last folder:");
 });
 
@@ -92,25 +95,28 @@ it("orders Sync now before Update when a folder is remembered (ghost Update, pri
   store.meta = { rootName: "notes", lastSyncAt: "2026-10-02T00:00:00.000Z" };
   await renderActions();
   const link = updateLink();
-  expect(link?.textContent).toContain("Update from folder");
+  expect(link?.getAttribute("aria-label")).toBe("Update from folder");
+  expect(link?.textContent?.trim()).toBe("");
   expect(link?.className).toContain("bg-transparent");
   expect(link?.className).not.toContain("bg-kh-primary");
+  expect(link?.className).toContain("kh-icon-control");
   // Integration-style: the real SyncNowButton renders alongside the link.
-  expect(container.textContent).toContain("Sync now");
+  const syncButton = container.querySelector('button[aria-label="Sync now"]');
+  expect(syncButton).not.toBeNull();
+  expect(link).not.toBeNull();
+  expect(syncButton?.textContent?.trim()).toBe("");
   expect(container.textContent).not.toContain("Last folder");
-  const syncIndex = container.innerHTML.indexOf("Sync now");
-  const updateIndex = container.innerHTML.indexOf("Update from folder");
-  expect(syncIndex).toBeGreaterThanOrEqual(0);
-  expect(updateIndex).toBeGreaterThanOrEqual(0);
-  expect(syncIndex).toBeLessThan(updateIndex);
+  if (syncButton && link) {
+    expect(syncButton.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  } else {
+    expect.unreachable("Sync now button and Update link both render when a folder is remembered");
+  }
 });
 
 it("renders the Sync now button with the primary variant when memory exists", async () => {
   store.meta = { rootName: "notes", lastSyncAt: "2026-10-02T00:00:00.000Z" };
   await renderActions();
-  const syncButton = [...container.querySelectorAll("button")].find((element) =>
-    element.textContent?.includes("Sync now"),
-  );
+  const syncButton = container.querySelector('button[aria-label="Sync now"]');
   expect(syncButton?.className).toContain("bg-kh-primary");
   expect(syncButton?.className).not.toContain("border-kh-border-strong");
 });
@@ -121,13 +127,25 @@ it("never renders the old secondary Update from folder", async () => {
   expect(updateLink()?.className).not.toContain("border-kh-border-strong");
 });
 
-it("server render shows a primary Update link and reads no browser storage", () => {
+it("server render shows an icon-only primary Update link and reads no browser storage", () => {
   const html = renderToString(<SourceSyncActions workspaceId="ws-1" sourceId="src-1" />);
-  expect(html).toContain("Update from folder");
+  expect(html).toContain('aria-label="Update from folder"');
   expect(html).toContain("bg-kh-primary");
+  expect(html).not.toContain(">Update from folder<");
   expect(html).not.toContain("Sync now");
   expect(store.isDirectoryPickerSupported).not.toHaveBeenCalled();
   expect(store.getRememberedFolderMeta).not.toHaveBeenCalled();
+});
+
+it("reveals the Update tip on keyboard focus", async () => {
+  store.meta = { rootName: "notes", lastSyncAt: "2026-10-02T00:00:00.000Z" };
+  await renderActions();
+  const link = updateLink();
+  expect(link).not.toBeNull();
+  await act(async () => {
+    link?.focus();
+  });
+  expect(document.body.textContent).toContain("Update from folder - pick a different folder");
 });
 
 it("hides Update from folder without the import capability (gate stays with WorkspaceImportLink)", async () => {

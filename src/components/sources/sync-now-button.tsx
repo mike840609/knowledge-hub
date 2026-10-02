@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tooltip } from "@/components/ui/tooltip";
 import { runFolderImport, type ImportUiState } from "@/components/imports/folder-import-form";
 import {
   collectHandleFiles,
@@ -92,9 +94,11 @@ export function SyncNowButton({ workspaceId, sourceId }: { workspaceId: string; 
   const updateHref = `/w/${workspaceId}/sources/${sourceId}/update`;
   return (
     <span className="flex flex-wrap items-center gap-2">
-      <Button type="button" variant="primary" disabled={busy} onClick={() => void handleSync()}>
-        {busy ? "Syncing…" : "Sync now"}
-      </Button>
+      <Tooltip label={`Sync now - re-scan ${meta.rootName}`}>
+        <Button type="button" variant="primary" icon disabled={busy} aria-label="Sync now" onClick={() => void handleSync()}>
+          <RefreshCw size={15} aria-hidden="true" />
+        </Button>
+      </Tooltip>
       {status ? (
         <span role="status" className="text-caption text-kh-text-muted">
           {status}

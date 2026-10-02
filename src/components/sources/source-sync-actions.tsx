@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { FolderUp } from "lucide-react";
 import { WorkspaceImportLink } from "@/components/shell/workspace-import-link";
 import { SyncNowButton } from "@/components/sources/sync-now-button";
+import { Tooltip } from "@/components/ui/tooltip";
 import {
   getRememberedFolderMeta,
   isDirectoryPickerSupported,
@@ -42,13 +43,15 @@ export function SourceSyncActions({
   return (
     <>
       <SyncNowButton workspaceId={workspaceId} sourceId={sourceId} />
-      <WorkspaceImportLink
-        href={updateHref}
-        className={buttonClasses({ variant: hasMemory ? "ghost" : "primary" })}
-      >
-        <RefreshCw size={15} aria-hidden="true" />
-        Update from folder
-      </WorkspaceImportLink>
+      <Tooltip label="Update from folder - pick a different folder">
+        <WorkspaceImportLink
+          href={updateHref}
+          aria-label="Update from folder"
+          className={buttonClasses({ variant: hasMemory ? "ghost" : "primary", icon: true })}
+        >
+          <FolderUp size={15} aria-hidden="true" />
+        </WorkspaceImportLink>
+      </Tooltip>
     </>
   );
 }

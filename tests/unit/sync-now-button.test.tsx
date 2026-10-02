@@ -80,11 +80,13 @@ async function renderButton() {
   });
 }
 
-function click(text: string): void {
-  const button = [...container.querySelectorAll("button")].find((element) =>
-    element.textContent?.includes(text),
-  );
-  if (!button) throw new Error(`Button "${text}" not found`);
+function syncButton(): HTMLButtonElement | null {
+  return container.querySelector('button[aria-label="Sync now"]');
+}
+
+function clickSync(): void {
+  const button = syncButton();
+  if (!button) throw new Error('Button "Sync now" not found');
   act(() => {
     button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
@@ -114,12 +116,41 @@ it("renders nothing when no folder is remembered", async () => {
   expect(container.innerHTML).toBe("");
 });
 
-it("shows Sync now without a Forget control and without the folder caption (caption lives in the header actions)", async () => {
+it("renders an icon-only Sync now button: accessible name, no visible text, icon shape", async () => {
   await renderButton();
-  expect(container.textContent).toContain("Sync now");
+  const button = syncButton();
+  expect(button).not.toBeNull();
+  expect(button?.textContent?.trim()).toBe("");
+  expect(button?.className).toContain("kh-icon-control");
+  expect(button?.className).toContain("bg-kh-primary");
+  expect(button?.querySelector("svg")).not.toBeNull();
   expect(container.textContent).not.toContain("Last folder: notes");
   expect(container.textContent).not.toContain("Forget");
-  expect(container.querySelector("button")).not.toBeNull();
+});
+
+it("reveals the re-scan tip on keyboard focus", async () => {
+  await renderButton();
+  const button = syncButton();
+  expect(button).not.toBeNull();
+  await act(async () => {
+    button?.focus();
+  });
+  expect(document.body.textContent).toContain("Sync now - re-scan notes");
+});
+
+it("reveals the re-scan tip on hover", async () => {
+  await renderButton();
+  const button = syncButton();
+  expect(button).not.toBeNull();
+  await act(async () => {
+    // Base UI opens hover tooltips off native mouseenter + a rest delay, and
+    // only for mouse-like pointers (pointerenter seeds the pointer type).
+    button?.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse" }));
+    button?.dispatchEvent(new MouseEvent("mouseenter", { bubbles: false }));
+    button?.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, movementX: 8, movementY: 8 }));
+    await new Promise((resolve) => setTimeout(resolve, 900));
+  });
+  expect(document.body.textContent).toContain("Sync now - re-scan notes");
 });
 
 it("loads the remembered folder in an effect: server render shows nothing and reads no browser storage", () => {
@@ -141,7 +172,7 @@ it("renders no Forget control", async () => {
 it("asks to pick the folder again when the saved handle is unavailable", async () => {
   store.handle = null;
   await renderButton();
-  click("Sync now");
+  clickSync();
   await act(async () => {});
   const status = container.querySelector('[role="status"]');
   expect(status?.textContent).toContain("Saved folder is unavailable - pick the folder again");
@@ -151,7 +182,7 @@ it("asks to pick the folder again when the saved handle is unavailable", async (
 
 it("syncs through the remembered handle and opens the preview", async () => {
   await renderButton();
-  click("Sync now");
+  clickSync();
   await act(async () => {});
   expect(store.loadRememberedHandle).toHaveBeenCalledWith("src-1");
   expect(store.collectHandleFiles).toHaveBeenCalledWith(store.handle);
@@ -167,7 +198,7 @@ it("syncs through the remembered handle and opens the preview", async () => {
 it("reports a sync failure in a status message instead of crashing", async () => {
   folderImport.runFolderImport.mockRejectedValueOnce(new Error("Uploading folder entries failed."));
   await renderButton();
-  click("Sync now");
+  clickSync();
   await act(async () => {});
   const status = container.querySelector('[role="status"]');
   expect(status?.textContent).toContain("Uploading folder entries failed.");
