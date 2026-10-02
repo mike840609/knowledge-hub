@@ -78,15 +78,6 @@ export async function uploadSourceImportEntries(
   return withKnownSnapshotAccess(() => services.imports.upload.upload(caller, { snapshotId, entries }));
 }
 
-export async function abandonSourceImport(snapshotId: string): Promise<{ abandoned: boolean }> {
-  const services = applicationServices();
-  const { caller } = await services.establishTrustedCaller();
-  const abandoned = await services.unitOfWork.run((repositories) =>
-    repositories.importSnapshots.deleteBuildingByCreator(snapshotId, caller.identity.id),
-  );
-  return { abandoned };
-}
-
 export async function finalizeSourceImport(snapshotId: string): Promise<ImportPreview> {
   const services = applicationServices();
   const { caller } = await services.establishTrustedCaller();
