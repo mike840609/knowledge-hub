@@ -374,7 +374,10 @@ export function FolderImportForm({
 
   async function handleFiles(files: FileList | null): Promise<void> {
     if (!files || files.length === 0) return;
-    setSelection({ name: files[0].webkitRelativePath.split("/")[0] || "Selected folder", count: files.length });
+    const selectedPath = relativePathOf(files[0]);
+    const separator = selectedPath.indexOf("/");
+    const selectedName = separator >= 0 ? selectedPath.slice(0, separator) : selectedPath;
+    setSelection({ name: selectedName || "Selected folder", count: files.length });
     const controller = new AbortController();
     activeImportRef.current?.abort();
     activeImportRef.current = controller;
