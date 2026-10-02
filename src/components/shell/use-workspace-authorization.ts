@@ -24,8 +24,10 @@ export function useWorkspaceAuthorization() {
  * those as access changes pauses in-flight work and hides the real domain error.
  *
  * An uncoded 409 remains conservative because the caller has not given us enough
- * information to distinguish lifecycle from content. 403/404 keep their existing
- * re-check semantics because both may intentionally hide a revoked Workspace.
+ * information to distinguish lifecycle from content. A 403 is an explicit denial
+ * and pauses immediately. A 404 is intentionally ambiguous (it may hide revocation
+ * or simply mean a nested resource disappeared), so it revalidates without first
+ * discarding the last confirmed Workspace authorization.
  */
 const WORKSPACE_CONFLICTS_REQUIRING_REFRESH: ReadonlySet<string> = new Set([
   "WORKSPACE_ARCHIVED",
@@ -33,8 +35,12 @@ const WORKSPACE_CONFLICTS_REQUIRING_REFRESH: ReadonlySet<string> = new Set([
 ]);
 
 export function requestWorkspaceAccessCheck(status: number, code?: string) {
+  if (status === 404) {
+    window.dispatchEvent(new Event("kh:workspace-access-refresh"));
+    return;
+  }
   if (status === 409 && code !== undefined && !WORKSPACE_CONFLICTS_REQUIRING_REFRESH.has(code)) return;
-  if ([403, 404, 409].includes(status)) window.dispatchEvent(new Event("kh:workspace-access-check"));
+  if (status === 403 || status === 409) window.dispatchEvent(new Event("kh:workspace-access-check"));
 }
 
 /** Navigation and capabilities are re-read for the affected browser, not just the actor. */
@@ -126,6 +132,7 @@ export function useWorkspaceAuthorizationRefresh(initialAccess: WorkspaceAccessV
     window.addEventListener("focus", trigger);
     document.addEventListener("visibilitychange", visible);
     window.addEventListener("kh:workspace-mutation", trigger);
+    window.addEventListener("kh:workspace-access-refresh", trigger);
     window.addEventListener("kh:workspace-access-check", denied);
     return () => {
       ++generation.current;
@@ -134,6 +141,7 @@ export function useWorkspaceAuthorizationRefresh(initialAccess: WorkspaceAccessV
       window.removeEventListener("focus", trigger);
       document.removeEventListener("visibilitychange", visible);
       window.removeEventListener("kh:workspace-mutation", trigger);
+      window.removeEventListener("kh:workspace-access-refresh", trigger);
       window.removeEventListener("kh:workspace-access-check", denied);
     };
   }, [refresh]);
