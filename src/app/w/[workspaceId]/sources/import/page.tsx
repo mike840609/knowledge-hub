@@ -2,6 +2,7 @@ import Link from "next/link";
 import { FolderImportForm } from "@/components/imports/folder-import-form";
 import { getSourceListModel } from "@/server/source-read";
 import { StatusMessage } from "@/components/ui/status-message";
+import { importRuntimeConfig } from "@/server/import-config";
 
 export default async function WorkspaceSourceImportPage({
   params,
@@ -10,6 +11,7 @@ export default async function WorkspaceSourceImportPage({
 }) {
   const { workspaceId } = await params;
   const model = await getSourceListModel(workspaceId);
+  const importLimits = importRuntimeConfig().limits;
   if (!model) {
     return (
       <main className="flex min-h-screen flex-col justify-center">
@@ -31,7 +33,10 @@ export default async function WorkspaceSourceImportPage({
         the Hub only previews the deterministic diff before anything is applied.
       </p>
       <div className="mt-5">
-        {model.actions.canImport ? <FolderImportForm target={{ kind: "new", workspaceId }} /> : <p role="status">This workspace is read-only. Import is unavailable.</p>}
+        {model.actions.canImport ? <FolderImportForm
+          target={{ kind: "new", workspaceId }}
+          limits={{ maxAssetFileBytes: importLimits.maxAssetFileBytes, maxAssetTotalBytes: importLimits.maxAssetTotalBytes }}
+        /> : <p role="status">This workspace is read-only. Import is unavailable.</p>}
       </div>
     </main>
   );
