@@ -289,8 +289,8 @@ export async function runFolderImport(input: {
       sourceName: sourceName.trim() || selection.rootName,
       rootName: selection.rootName,
       manifest,
-    }, { signal })
-    : await postJson(`/api/sources/${target.sourceId}/source-imports`, { rootName: selection.rootName, manifest }, { signal });
+    })
+    : await postJson(`/api/sources/${target.sourceId}/source-imports`, { rootName: selection.rootName, manifest });
   if (!session.ok || !session.body || typeof session.body !== "object" || !("snapshotId" in session.body)) {
     const failure = readErrorCode(session.body, "Creating the import session failed.");
     onProgress({ kind: "ERROR", code: failure.code, message: failure.message });
@@ -298,6 +298,10 @@ export async function runFolderImport(input: {
   }
   const snapshotId = (session.body as { snapshotId: string }).snapshotId;
   try {
+    // Session creation is intentionally non-abortable: unlike upload/finalize,
+    // it is not idempotent. If cancellation happened while it was in flight,
+    // first obtain the snapshot id, then abandon that BUILDING session.
+    assertAllowed();
     onProgress({ kind: "UPLOADING", uploaded: 0, total: selection.staged.filter((entry) => entry.markdown).length });
     await uploadMarkdownBatches(snapshotId, selection.staged, (uploaded, total) =>
       onProgress({ kind: "UPLOADING", uploaded, total }), assertAllowed, signal,
