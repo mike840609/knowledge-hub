@@ -77,13 +77,18 @@ The `fontSize`, `borderRadius`, `boxShadow`, `transitionDuration`,
 `transitionTimingFunction`, `padding`, `margin`, `gap` and `space` scales in
 `tailwind.config.ts` are **replaced**, not extended.
 
-Tailwind therefore emits no class for a value the system does not name.
-`text-[13px]`, `rounded-xl`, `shadow-sm` and `p-7` produce no CSS. `borderRadius`
-carries no `DEFAULT` key, so a bare `rounded` does not compile either.
+Tailwind emits no ordinary utility for a value the replaced scales do not name:
+`p-7`, `shadow-sm` and `text-xl` produce no CSS. `rounded-xl` is a valid 12px
+radius token. Tailwind still compiles arbitrary values, including `text-[13px]`;
+replacing a scale does not disable that feature.
 
-This is what makes the rest of this document binding rather than advisory. A
-contributor cannot introduce an off-scale value without noticing, and a
-reviewer does not have to catch it by eye.
+ESLint `design/contract` rejects arbitrary type, radius, elevation, motion and
+spacing utilities in both literals and template strings. Widths/heights/insets
+used for pane geometry, viewports and truncation may be arbitrary. Native form
+fields must use Input/Select/Textarea; hidden pickers, native checkboxes and
+radio controls are allowed. Unframed composer, palette, tree-filter and move
+search surfaces are explicit exceptions in `scripts/eslint/design-contract.mjs`.
+New exceptions require a concrete reason here and in the rule.
 
 Adding a token is a change to this contract. Make it here and in the config
 together, and say what job the new token does that no existing one covers.
@@ -1092,3 +1097,7 @@ divider and a control boundary. Depth is added when a surface needs a
 distinction that cannot be made with what exists, not to match a count.
 - One focus idiom across the codebase.
 - Light and dark themes resolve every token.
+
+## October 2026 remediation
+
+Desktop navigation keeps a 160px primary rail, collapsible to 48px, beside an independent 288px contextual explorer. The explorer starts below the global header and retains its full height when the primary rail collapses. Narrow screens use one Menu drawer. The topbar retains its original order: brand/collapse region matching the primary rail width, a separate workspace selector matching the 288px explorer width, then Search. Reader/composer share DocumentPane geometry and the composer pins Save/Cancel/Markdown and draft status inside its scrolling pane. See `2026-10-02-linear-remediation-design.md` for the coordinated contract. Kbd and graph action hints use `text-muted` to meet small-text contrast. Desktop controls retain 24/32/40px heights; coarse pointers get at least 40px physical targets through the shared control classes.

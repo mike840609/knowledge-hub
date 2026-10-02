@@ -4,11 +4,9 @@ import { openPalette } from "./fixtures/palette";
 import { showMarkdown } from "./composer-helpers";
 
 /**
- * Creates documents in the E2E user's own My Space, and the specs share one
- * database and run in file-name order. phase2.5-routing.spec.ts asserts that a
- * fresh My Space is empty, so this file must sort after it — which is why it is
- * named `reading-…` and not `document-…`. share-link.spec.ts relies on the same
- * ordering for the same reason.
+ * Creates documents in the E2E user's own My Space. Specs still share one
+ * database and run serially; root routing now accepts a populated My Space.
+ * Other graph/layout fixtures still require care before parallelizing.
  */
 
 // Same budget and reasoning as phase5-authoring.spec.ts.
@@ -199,7 +197,7 @@ test.describe("wikilinks and backlinks in My Space", () => {
 });
 
 test.describe("a shared document does not resolve links", () => {
-  test.skip(!process.env.KM_PHASE3_APP_ROOT, "Run npm run test:e2e to provision the no-sign-in origin.");
+  test.skip(!process.env.KM_PHASE3_APP_ROOT && process.env.KM_E2E_UNCONFIGURED_SERVER !== "true", "Run npm run test:e2e to provision the no-sign-in origin.");
 
   test("[[wikilinks]] on a /s/:token page read as text, with no link into the workspace", async ({ page, context, playwright }) => {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);

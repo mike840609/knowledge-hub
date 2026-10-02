@@ -3,7 +3,17 @@
 import { useRouter } from "next/navigation";
 import { requestWorkspaceAccessCheck, useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { useEffect, useRef, useState } from "react";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  collectHandleFiles,
+  forgetRememberedFolder,
+  getRememberedFolderMeta,
+  isDirectoryPickerSupported,
+  rememberFolderHandle,
+  stashPendingHandle,
+  type FileSystemDirectoryHandle,
+} from "@/components/imports/folder-handle-store";
 import type { ImportManifestEntry } from "@/modules/sources/application/create-folder-import";
 import { DEFAULT_IMPORT_LIMITS, type ImportLimits } from "@/modules/sources/domain/import-limits";
 
@@ -360,7 +370,7 @@ function statusText(state: ImportUiState): string | null {
   if (state.kind === "PREPARING") return "Preparing the folder manifest…";
   if (state.kind === "UPLOADING") return `Uploading Markdown files… ${state.uploaded}/${state.total}`;
   if (state.kind === "FINALIZING") return "Analyzing the folder and building the preview…";
-  if (state.kind === "ERROR") return `${state.code}: ${state.message}`;
+  if (state.kind === "ERROR") return state.message;
   return null;
 }
 
@@ -399,14 +409,37 @@ export function FolderImportForm({
   };
   const [state, setState] = useState<ImportUiState>({ kind: "IDLE" });
   const [sourceName, setSourceName] = useState("");
+  const picker = useRef<HTMLInputElement>(null);
+  const [selection, setSelection] = useState<{ name: string; count: number } | null>(null);
+  const [rememberedRoot, setRememberedRoot] = useState<string | null>(null);
+  const rememberedSourceId = target.kind === "existing" ? target.sourceId : null;
+  useEffect(() => {
+    if (!rememberedSourceId) return;
+    try {
+      setRememberedRoot(getRememberedFolderMeta(rememberedSourceId)?.rootName ?? null);
+    } catch {
+      setRememberedRoot(null);
+    }
+  }, [rememberedSourceId]);
   const busy = state.kind === "PREPARING" || state.kind === "UPLOADING" || state.kind === "FINALIZING";
   const status = statusText(state);
+
+  function reportImportError(error: unknown): void {
+    const code = error instanceof Error && "code" in error && typeof (error as { code: unknown }).code === "string"
+      ? (error as { code: string }).code
+      : "IMPORT_REQUEST_FAILED";
+    // Page leave cancels both folder picker paths without updating an unmounted UI.
+    if (!mountedRef.current) return;
+    if (code === "IMPORT_CANCELLED") { setState({ kind: "IDLE" }); return; }
+    setState({ kind: "ERROR", code, message: error instanceof Error ? error.message : "Importing the folder failed." });
+  }
 
   async function handleFiles(files: FileList | null): Promise<void> {
     if (!files || files.length === 0) return;
     const controller = new AbortController();
     activeImportRef.current?.abort();
     activeImportRef.current = controller;
+    setSelection({ name: relativePathOf(files[0]).split("/")[0] || "Selected folder", count: files.length });
     try {
       const snapshotId = await runFolderImport({
         target,
@@ -420,19 +453,76 @@ export function FolderImportForm({
       assertAllowed();
       router.push(`/w/${target.workspaceId}/sources/imports/${snapshotId}`);
     } catch (error) {
-      const code = error instanceof Error && "code" in error && typeof (error as { code: unknown }).code === "string"
-        ? (error as { code: string }).code
-        : "IMPORT_REQUEST_FAILED";
-      // An actual page leave is cancellation, not an authorization failure,
-      // and there is no mounted UI left to update.
-      if (!mountedRef.current) return;
-      if (code === "IMPORT_CANCELLED") {
-        setState({ kind: "IDLE" });
-        return;
-      }
-      setState({ kind: "ERROR", code, message: error instanceof Error ? error.message : "Importing the folder failed." });
+      reportImportError(error);
     } finally {
       if (activeImportRef.current === controller) activeImportRef.current = null;
+    }
+  }
+
+  async function handlePickedDirectory(): Promise<void> {
+    const showDirectoryPicker = (window as unknown as {
+      showDirectoryPicker?: (options: { mode: "read" }) => Promise<FileSystemDirectoryHandle>;
+    }).showDirectoryPicker;
+    if (typeof showDirectoryPicker !== "function") {
+      picker.current?.click();
+      return;
+    }
+    let handle: FileSystemDirectoryHandle;
+    try {
+      assertAllowed();
+      handle = await showDirectoryPicker({ mode: "read" });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      if (error instanceof Error && "code" in error && (error as { code: unknown }).code === "WORKSPACE_ACCESS_CHANGED") {
+        reportImportError(error);
+        return;
+      }
+      picker.current?.click();
+      return;
+    }
+    const controller = new AbortController();
+    activeImportRef.current?.abort();
+    activeImportRef.current = controller;
+    const checkActive = () => { assertNotCancelled(controller.signal); assertAllowed(); };
+    try {
+      checkActive();
+      setState({ kind: "PREPARING" });
+      const files = await collectHandleFiles(handle);
+      checkActive();
+      if (files.length === 0) { setState({ kind: "IDLE" }); return; }
+      setSelection({ name: handle.name || "Selected folder", count: files.length });
+      const snapshotId = await runFolderImport({ target, files, sourceName, onProgress: setState, assertAllowed: checkActive, limits, signal: controller.signal });
+      checkActive();
+      if (target.kind === "existing") {
+        await rememberFolderHandle(target.sourceId, handle, handle.name);
+        checkActive();
+      } else {
+        await stashPendingHandle(snapshotId, handle, handle.name);
+        checkActive();
+      }
+      router.push(`/w/${target.workspaceId}/sources/imports/${snapshotId}`);
+    } catch (error) {
+      reportImportError(error);
+    } finally {
+      if (activeImportRef.current === controller) activeImportRef.current = null;
+    }
+  }
+
+  function handleChooseFolder(): void {
+    if (isDirectoryPickerSupported()) {
+      void handlePickedDirectory();
+    } else {
+      picker.current?.click();
+    }
+  }
+
+  async function handleForget(): Promise<void> {
+    if (!rememberedSourceId) return;
+    setRememberedRoot(null);
+    try {
+      await forgetRememberedFolder(rememberedSourceId);
+    } catch {
+      // Forgetting is best-effort; the hint is already cleared.
     }
   }
 
@@ -443,9 +533,9 @@ export function FolderImportForm({
       {target.kind === "new" ? (
         <>
           <label className="block text-body font-medium text-kh-text" htmlFor="import-source-name">Source name</label>
-          <input
+          <Input
             id="import-source-name"
-            className="mt-1 w-full rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-body text-kh-text outline-none placeholder:text-kh-text-muted focus:border-kh-focus kh-focus-ring"
+            className="mt-1"
             value={sourceName}
             disabled={busy}
             onChange={(event) => setSourceName(event.target.value)}
@@ -456,24 +546,39 @@ export function FolderImportForm({
         <p className="text-body text-kh-text-muted">
           Re-select the full folder of <span className="font-medium text-kh-text">{target.sourceName}</span> to preview the next sync.
           The source folder stays authoritative; nothing is applied until you confirm the preview.
+          {rememberedRoot ? (
+            <> Last synced folder: <span className="font-medium text-kh-text">{rememberedRoot}</span></>
+          ) : null}
         </p>
       )}
-      <label className="mt-3 block text-body font-medium text-kh-text" htmlFor="import-folder">Folder</label>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <Button type="button" variant="secondary" disabled={busy} aria-describedby="import-folder-selection" onClick={handleChooseFolder}>Choose folder</Button>
+        <p id="import-folder-selection" className="text-body text-kh-text-muted">{selection ? `${selection.name} · ${selection.count} files` : "No folder selected"}</p>
+      </div>
+      {rememberedSourceId && rememberedRoot ? (
+        <div className="mt-2">
+          <Button type="button" variant="link" onClick={() => void handleForget()}>Forget remembered folder</Button>
+        </div>
+      ) : null}
       <input
         id="import-folder"
         type="file"
         disabled={busy}
+        hidden
+        tabIndex={-1}
+        aria-hidden="true"
         ref={(element) => {
+          picker.current = element;
           if (element) element.setAttribute("webkitdirectory", "");
         }}
         onChange={(event) => {
           void handleFiles(event.target.files);
           event.target.value = "";
         }}
-        className="mt-1 w-full rounded-md text-body text-kh-text outline-none kh-focus-ring"
       />
       {status ? <p role="status" className="mt-3 text-body text-kh-text-muted">{status}</p> : null}
       {busy ? <Button variant="secondary" className="mt-3" onClick={() => activeImportRef.current?.abort()}>Cancel import</Button> : null}
+      {state.kind === "ERROR" ? <details className="mt-2 text-caption text-kh-text-muted"><summary className="cursor-pointer rounded-md kh-focus-ring">Technical details</summary><code>{state.code}</code></details> : null}
     </div>
   );
 }

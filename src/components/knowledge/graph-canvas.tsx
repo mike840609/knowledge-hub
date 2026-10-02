@@ -380,7 +380,7 @@ export function GraphCanvas({
                 Unresolved
               </span>
             ) : null}
-            <span className="hidden text-kh-text-faint sm:inline">Scroll to zoom · drag to pan</span>
+            <span className="hidden text-kh-text-muted sm:inline">Scroll to zoom · drag to pan</span>
           </div>
           <div role="group" aria-label="Zoom" className="absolute bottom-3 right-3 flex items-center rounded-md border border-kh-border bg-kh-bg">
             <Tooltip label="Zoom out" keys="−" side="top"><button type="button" aria-label="Zoom out" onClick={() => zoomAt(null, null, 1 / ZOOM_STEP)} className={buttonClasses({ variant: "ghost", icon: true, size: "sm" })}>

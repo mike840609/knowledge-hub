@@ -1,15 +1,16 @@
+import type { FolderImportClientLimits } from "@/components/imports/folder-import-form";
+import { PageHeader } from "@/components/shell/page-header";
 import { Status } from "@/components/ui/status";
-import { WorkspaceImportLink } from "@/components/shell/workspace-import-link";
 import Link from "next/link";
-import { RefreshCw } from "lucide-react";
 import type { SourceDetailModel } from "@/server/source-read";
 import { isFolderSyncable } from "@/modules/knowledge/domain/source-policy";
 import { ImportHistory } from "@/components/sources/import-history";
+import { RememberedFolderRow } from "@/components/sources/remembered-folder-row";
+import { SourceSyncActions } from "@/components/sources/source-sync-actions";
 import { sourceTypeLabel } from "@/components/sources/source-list-row";
 import { TechnicalDetails } from "@/components/sources/technical-details";
-import { buttonClasses } from "@/components/ui/button";
 
-export function SourceDetail({ model, showImportSuccess = false }: { model: SourceDetailModel; showImportSuccess?: boolean }) {
+export function SourceDetail({ model, showImportSuccess = false, limits }: { model: SourceDetailModel; showImportSuccess?: boolean; limits?: FolderImportClientLimits }) {
   const { workspace, source, runs } = model;
   const syncable = isFolderSyncable(source);
   return (
@@ -19,25 +20,15 @@ export function SourceDetail({ model, showImportSuccess = false }: { model: Sour
           Import applied successfully.
         </p>
       ) : null}
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-heading font-semibold text-kh-text">{source.name}</h1>
-          <p className="mt-1 flex flex-wrap items-center gap-2 text-caption text-kh-text-muted">
-            <span className="rounded-md border border-kh-border px-1.5 py-0.5">{sourceTypeLabel(source.sourceType)}</span>
-            <span className="rounded-md border border-kh-border px-1.5 py-0.5">
-              <Status kind={source.status === "ARCHIVED" ? "archived" : "active"}>{source.status === "ARCHIVED" ? "Archived" : "Active"}</Status>
-            </span>
-          </p>
-        </div>
-        {syncable ? (
-          <WorkspaceImportLink href={`/w/${workspace.id}/sources/${source.id}/update`}
-              className={buttonClasses({ variant: "secondary" })}
-            >
-              <RefreshCw size={15} aria-hidden="true" />
-              Update from folder
-          </WorkspaceImportLink>
-        ) : null}
-      </header>
+      <PageHeader location="Sources" locationHref={`/w/${workspace.id}/sources`} title={source.name}
+        actions={syncable ? (
+          <SourceSyncActions workspaceId={workspace.id} sourceId={source.id} limits={limits} />
+        ) : undefined}
+      />
+      <p className="flex flex-wrap items-center gap-2 text-caption text-kh-text-muted">
+        <span className="rounded-md border border-kh-border px-1.5 py-0.5">{sourceTypeLabel(source.sourceType)}</span>
+        <Status kind={source.status === "ARCHIVED" ? "archived" : "active"}>{source.status === "ARCHIVED" ? "Archived" : "Active"}</Status>
+      </p>
 
       <section aria-labelledby="source-overview-heading" className="rounded-md border border-kh-border bg-kh-bg p-4">
         <h2 id="source-overview-heading" className="text-body font-semibold text-kh-text">Overview</h2>
@@ -58,6 +49,7 @@ export function SourceDetail({ model, showImportSuccess = false }: { model: Sour
             <dt className="w-24 shrink-0 text-kh-text-muted">Sync runs</dt>
             <dd className="text-kh-text">{runs.length}</dd>
           </div>
+          <RememberedFolderRow sourceId={source.id} />
         </dl>
       </section>
 

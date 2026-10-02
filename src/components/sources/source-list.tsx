@@ -1,3 +1,5 @@
+"use client";
+import { navigateListRows } from "@/lib/list-row-navigation";
 import { Database } from "lucide-react";
 import type { SourceListItemModel } from "@/server/source-read";
 import { SourceListRow } from "@/components/sources/source-list-row";
@@ -25,7 +27,7 @@ export function SourceList({ workspaceId, items }: { workspaceId: string; items:
     );
   }
   return (
-    <ul className="flex flex-col gap-1">
+    <ul onKeyDown={navigateListRows} className="flex flex-col gap-1">
       {items.map((item) => (
         <SourceListRow key={item.source.id} workspaceId={workspaceId} item={item} />
       ))}

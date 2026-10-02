@@ -48,15 +48,15 @@ test.describe("narrow knowledge layout", () => {
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(`/w/${WORKSPACE}/knowledge/${SOURCE}`);
-    await expect(page.getByRole("button", { name: "Browse" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Open menu" })).toBeVisible();
 
-    await page.getByRole("button", { name: "Browse" }).click();
-    await expect(page.getByRole("dialog", { name: "Browse knowledge" })).toBeVisible();
+    await page.getByRole("button", { name: "Open menu" }).click();
+    await expect(page.getByRole("dialog", { name: "Menu" })).toBeVisible();
 
     // The right-hand drawer covers the document toolbar at this width.
     // Close it through its visible control before opening document details.
-    await page.getByRole("dialog", { name: "Browse knowledge" }).getByRole("button", { name: "Close panel" }).click();
-    await expect(page.getByRole("dialog", { name: "Browse knowledge" })).toHaveCount(0);
+    await page.getByRole("dialog", { name: "Menu" }).getByRole("button", { name: "Close panel" }).click();
+    await expect(page.getByRole("dialog", { name: "Menu" })).toHaveCount(0);
     await page.locator("main").getByRole("button", { name: "Details" }).click();
     await expect(page.getByRole("dialog", { name: "Document details" })).toBeVisible();
     expect(errors.filter((error) => /hydration|server rendered HTML/i.test(error))).toEqual([]);

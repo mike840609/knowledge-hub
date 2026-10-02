@@ -1,6 +1,6 @@
 # Folder import reliability verification — 2026-10-03
 
-## Branch split
+## Initial branch split (historical)
 
 - PR #98: `fix/folder-import-access-refresh` restored exactly to `c3cc2156e1f5a347709d02920d1709fe6aff4fe8`; no changes to that commit's tree.
 - Original follow-up chain: all 35 commits from `6c8bf5d` through `7092c74f1f0c0d51abb138ab2740c4bf2a0ac0d2` preserved on `fix/folder-import-reliability-hardening`, descending directly from `c3cc2156`.
@@ -16,7 +16,7 @@ Coverage also verifies custom asset total/per-file preflight, default and config
 
 The browser lost-response test commits the original fixture bytes with the browser's actual upload keys, aborts the first upload response, then checks the real browser replay returns `accepted: 0` with every Markdown entry idempotent. It also truncates the first successful finalize response and verifies the same snapshot reaches its preview after replay. Only one create request is sent.
 
-## Local checks
+## Initial local checks (historical)
 
 Environment: Node v24.6.0, MariaDB 10.11. Integration and E2E runners provision and dispose isolated test databases.
 
@@ -38,3 +38,9 @@ The next run exposed Playwright's disk-backed multipart forwarding omitting file
 ## Limits of recovery
 
 Upload/finalize receive one automatic replay; non-idempotent creation is not replayed. Abandon is best effort: offline or unknown-id creation failures retain the existing two-hour BUILDING TTL fallback. This change does not add persistence/resume across browser restarts or wire a cleanup scheduler.
+
+## Integration after #98 and #101
+
+After #98 merged, #103 was retargeted to main and integrated main at `5356da1`. Native directory picking now uses the same abort signal, runtime asset limits and cleanup flow as the fallback picker. Remembered-folder Sync now receives server runtime limits, cancels on pagehide/unmount, and separates Strict Mode lifecycle from permission state.
+
+Two new remembered-folder regression cases failed before implementation: the first Strict Mode click and pagehide cancellation. Coverage also checks forwarding custom limits, rejecting oversized native-picker assets before reads/session creation, and cancelling native folder collection before snapshot creation or handle persistence. Unit verification passed 1,585 tests; lint and typecheck passed. The full integration/E2E suites and GitHub CI are rerun for this merged tree before PR integration.
