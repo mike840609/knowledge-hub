@@ -108,12 +108,12 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
     if (!document) return null;
     const selected = document.documentId === resolvedDocumentId;
     return <li key={key} className={`kh-interactive-row group flex min-h-8 items-center ${selected ? "bg-kh-bg-selected hover:bg-kh-bg-selected" : ""}`}>
-      <Link href={`/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}${showArchived ? "?includeArchived=true" : ""}`} prefetch={selected ? false : undefined} title={`${document.label} · ${document.sourceName}`} aria-current={selected ? "page" : undefined} className={`flex min-h-8 min-w-0 flex-1 items-center gap-2 px-2 text-body kh-focus-ring ${selected ? "font-medium text-kh-selected-text" : "text-kh-text-muted"}`}>
+      <Link href={`/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}${showArchived ? "?includeArchived=true" : ""}`} prefetch={selected ? false : undefined} title={`${document.label} · ${document.sourceName}`} aria-current={selected ? "page" : undefined} className={`kh-control flex min-h-8 min-w-0 flex-1 items-center gap-2 px-2 text-body kh-focus-ring ${selected ? "font-medium text-kh-selected-text" : "text-kh-text-muted"}`}>
         {favorite ? <FileText size={14} className="shrink-0" aria-hidden="true" /> : <Clock3 size={14} className="shrink-0" aria-hidden="true" />}
         <span className="truncate">{document.label}</span>
       </Link>
       <Tooltip label={favorite ? "Remove from favorites" : "Add to favorites"}>
-        <button type="button" onClick={() => toggleFavorite(document.sourceId, document.documentId)} aria-label={`${favorite ? "Remove from" : "Add to"} favorites: ${document.label}`} className={`mr-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-kh-text-muted kh-focus-ring ${favorite ? "opacity-80" : "kh-row-action"}`}>
+        <button type="button" onClick={() => toggleFavorite(document.sourceId, document.documentId)} aria-label={`${favorite ? "Remove from" : "Add to"} favorites: ${document.label}`} className={`mr-1 inline-flex kh-control kh-icon-control h-6 w-6 shrink-0 items-center justify-center rounded-md text-kh-text-muted kh-focus-ring ${favorite ? "opacity-80" : "kh-row-action"}`}>
           <Star size={14} fill={favorite ? "currentColor" : "none"} aria-hidden="true" />
         </button>
       </Tooltip>
@@ -148,7 +148,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
   }
 
   return (
-    <aside aria-label="Knowledge explorer" className="kh-sidebar-surface flex h-full min-h-0 w-full shrink-0 flex-col gap-3 border-r border-kh-border bg-kh-bg-sunken p-3 lg:w-72">
+    <aside aria-label="Knowledge explorer" className="kh-sidebar-surface flex h-full min-h-0 w-full shrink-0 flex-col gap-3 border-t border-kh-border lg:border-r lg:border-t-0 bg-kh-bg-sunken p-3">
       <div className="flex shrink-0 items-center justify-between gap-2">
         <h2 className="px-2 text-caption font-medium text-kh-text-muted">Documents</h2>
         <div className="flex items-center gap-0.5">
@@ -180,7 +180,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
       {filterOpen ? <div className="shrink-0"><TreeFilter value={query} onChange={setQuery} onClose={closeFilter} /></div> : null}
       <nav aria-label="Document tree" className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain">
         {!needle && favoriteKeys.length > 0 ? <section aria-label="Favorites" className="pb-1">
-          <h3><button type="button" aria-expanded={favoritesOpen} onClick={() => setFavoritesOpen((open) => !open)} className="kh-interactive-row flex min-h-8 w-full items-center gap-2 px-2 text-left text-caption font-medium text-kh-text-muted">
+          <h3><button type="button" aria-expanded={favoritesOpen} onClick={() => setFavoritesOpen((open) => !open)} className="kh-control kh-interactive-row flex min-h-8 w-full items-center gap-2 px-2 text-left text-caption font-medium text-kh-text-muted">
             {favoritesOpen ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
             <span>Favorites</span>
           </button></h3>
@@ -188,7 +188,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
             {favoritesInPlaceKeys.map((key) => shortcutRow(key, true))}
             {favoritesTotal !== null ? <li>
               <MenuRoot>
-                <MenuTrigger className="kh-interactive-row kh-focus-ring flex min-h-8 w-full items-center gap-2 px-2 text-left text-caption font-medium text-kh-text-muted">
+                <MenuTrigger className="kh-control kh-interactive-row kh-focus-ring flex min-h-8 w-full items-center gap-2 px-2 text-left text-caption font-medium text-kh-text-muted">
                   <MoreHorizontal size={14} className="shrink-0" aria-hidden="true" />
                   <span>Show all {favoritesTotal}</span>
                 </MenuTrigger>
@@ -215,7 +215,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
           </ul> : null}
         </section> : null}
         {!needle && recentKeys.length > 0 ? <section aria-label="Recent documents" className="pb-1">
-          <h3><button type="button" aria-expanded={recentOpen} onClick={() => setRecentOpen((open) => !open)} className="kh-interactive-row flex min-h-8 w-full items-center gap-2 px-2 text-left text-caption font-medium text-kh-text-muted">
+          <h3><button type="button" aria-expanded={recentOpen} onClick={() => setRecentOpen((open) => !open)} className="kh-control kh-interactive-row flex min-h-8 w-full items-center gap-2 px-2 text-left text-caption font-medium text-kh-text-muted">
             {recentOpen ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
             <span>Recent</span>
           </button></h3>
@@ -234,7 +234,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
           return (
             <section key={candidate.id} aria-label={`${candidate.name} documents`}>
               <div className="flex items-center gap-1">
-                <button type="button" aria-expanded={open} aria-controls={`collection-${candidate.id}`} onClick={() => setExpanded((previous) => ({ ...previous, [candidate.id]: !open }))} title={candidate.name} className="flex min-h-8 min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 text-left text-body font-medium text-kh-text hover:bg-kh-bg-hover kh-focus-ring">
+                <button type="button" aria-expanded={open} aria-controls={`collection-${candidate.id}`} onClick={() => setExpanded((previous) => ({ ...previous, [candidate.id]: !open }))} title={candidate.name} className="kh-control flex min-h-8 min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 text-left text-body font-medium text-kh-text hover:bg-kh-bg-hover kh-focus-ring">
                   <Icon size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />
                   <span className="truncate">{candidate.name}</span>
                   {candidate.status === "ARCHIVED" ? <Status kind="archived" className="ml-auto text-caption font-normal text-kh-text-muted">Archived</Status> : null}
@@ -247,6 +247,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
                   workspaceId={workspaceId}
                   sourceId={candidate.id}
                   selectedDocumentId={resolvedDocumentId}
+                  revealLayoutKey={`${favoritesOpen}:${favoriteKeys.length}:${recentOpen}:${recentKeys.length}:${filterOpen}`}
                   includeArchived={showArchived}
                   query={candidate.name.toLowerCase().includes(needle) ? "" : query}
                   favoriteDocumentIds={favoriteDocumentIds}

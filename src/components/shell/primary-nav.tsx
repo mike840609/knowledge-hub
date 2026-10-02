@@ -47,7 +47,7 @@ export function PrimaryNav({
             onClick={onNavigate}
             aria-current={selected ? "page" : undefined}
             aria-label={compact ? name : undefined}
-            className={`flex h-8 items-center rounded-md px-2 text-body transition kh-focus-ring ${compact ? "justify-center" : "gap-2"} ${selected ? "bg-kh-bg-selected font-medium text-kh-selected-text hover:bg-kh-bg-selected" : "text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text"}`}
+            className={`kh-control flex h-8 items-center rounded-md px-2 text-body transition kh-focus-ring ${compact ? "justify-center" : "gap-2"} ${selected ? "bg-kh-bg-selected font-medium text-kh-selected-text hover:bg-kh-bg-selected" : "text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text"}`}
           >
             <Icon size={15} aria-hidden="true" />
             {compact ? null : <span>{name}</span>}

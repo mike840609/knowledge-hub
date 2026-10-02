@@ -67,7 +67,7 @@ for (const scenario of [
       const prefetched = page.waitForResponse((response) =>
         new URL(response.url()).pathname === destination && Boolean(response.request().headers()["next-router-prefetch"]),
       );
-      await page.getByRole("button", { name: "Browse", exact: true }).click();
+      await page.getByRole("button", { name: "Open menu", exact: true }).click();
       const document = page.getByRole("treeitem", { name: withOutlineTitle, exact: true });
       await document.scrollIntoViewIfNeeded();
       await prefetched;

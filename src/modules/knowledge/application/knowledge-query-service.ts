@@ -9,7 +9,7 @@ import type { KnowledgeRevision } from "../domain/revision";
 import type { SourcePolicy } from "../domain/source-policy";
 import { collectAncestors } from "../domain/tree-rules";
 import { requireSourcePolicy, requireVisibleDocument } from "./internal/require-visible-document";
-import type { TreeViewNode } from "../ports/tree-repository";
+import type { DocumentSummary, TreeViewNode } from "../ports/tree-repository";
 import type { KnowledgeUnitOfWork } from "../ports/unit-of-work";
 
 export type SourceView = {
@@ -55,6 +55,7 @@ export type KnowledgeRevisionView = {
 };
 
 export interface KnowledgeQueryService {
+  listDocumentSummaries(caller: CallerContext, workspaceId: string, input?: { includeArchived?: boolean }): Promise<DocumentSummary[]>;
   listSources(caller: CallerContext, workspaceId: string, input?: { includeArchived?: boolean }): Promise<SourceView[]>;
   getSource(caller: CallerContext, sourceId: string, input?: { includeArchived?: boolean }): Promise<SourceView>;
   listTree(caller: CallerContext, sourceId: string, input?: { includeArchived?: boolean }): Promise<KnowledgeTreeItem[]>;
@@ -118,6 +119,14 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
 
   constructor(unitOfWork: KnowledgeUnitOfWork) {
     this.unitOfWork = unitOfWork;
+  }
+
+  async listDocumentSummaries(caller: CallerContext, workspaceId: string, input: { includeArchived?: boolean } = {}): Promise<DocumentSummary[]> {
+    return this.unitOfWork.run(async (repositories) => {
+      await repositories.users.upsertIdentity(caller.identity);
+      await repositories.workspaceAccess.requireWorkspaceRead(caller, workspaceId);
+      return repositories.tree.listDocumentsByWorkspace(workspaceId, input.includeArchived ?? false);
+    });
   }
 
   async listSources(caller: CallerContext, workspaceId: string, input: { includeArchived?: boolean } = {}): Promise<SourceView[]> {

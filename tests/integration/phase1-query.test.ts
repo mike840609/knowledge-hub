@@ -271,3 +271,25 @@ describe("knowledge query not-found contract", () => {
     expect(ancestors.map((item) => item.id)).toEqual([scope.folderX, scope.childFolderId]);
   });
 });
+
+
+describe("Home metadata summaries", () => {
+  it("scopes summaries by workspace, enforces membership, and preserves archive filtering", async () => {
+    const scope = await setupQueryScope();
+    const { queries, hub, sources } = queryServices();
+    const member = callerFromIdentity(rdMember);
+    const summaries = await queries.listDocumentSummaries(member, scope.workspaceX);
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]).toMatchObject({ documentId: scope.documentId, sourceId: scope.sourceX, title: "Secret Title", ownership: "HUB_MANAGED", status: "ACTIVE", sourceStatus: "ACTIVE" });
+    expect(summaries[0].updatedAt).toBeInstanceOf(Date);
+    expect(summaries[0]).not.toHaveProperty("markdown");
+    await expect(queries.listDocumentSummaries(member, scope.workspaceY)).resolves.toEqual([]);
+    await expect(queries.listDocumentSummaries(callerFromIdentity(hrOutsider), scope.workspaceX)).rejects.toMatchObject({ code: "WORKSPACE_NOT_FOUND" });
+    await hub.archiveDocument(member, scope.documentId);
+    await expect(queries.listDocumentSummaries(member, scope.workspaceX)).resolves.toEqual([]);
+    expect((await queries.listDocumentSummaries(member, scope.workspaceX, { includeArchived: true }))[0].status).toBe("ARCHIVED");
+    await sources.archiveSource(member, scope.sourceX);
+    await expect(queries.listDocumentSummaries(member, scope.workspaceX)).resolves.toEqual([]);
+    expect((await queries.listDocumentSummaries(member, scope.workspaceX, { includeArchived: true }))[0].sourceStatus).toBe("ARCHIVED");
+  });
+});

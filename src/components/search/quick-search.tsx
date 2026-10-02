@@ -16,6 +16,7 @@ import {
   matchActions,
   type Action,
 } from "@/components/actions/action-registry";
+import { prioritizePaletteActions } from "@/lib/palette-actions";
 import { plainSearchSnippet } from "@/lib/search-snippet";
 import { documentIdInPath, recentDocumentIds, toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import { buttonClasses } from "@/components/ui/button";
@@ -102,7 +103,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
     [workspaceId, access.workspace.type, access.actions, confirmed, reading, shortcuts.favorites],
   );
 
-  const matched = useMemo(() => matchActions(actions, trimmed), [actions, trimmed]);
+  const matched = useMemo(() => prioritizePaletteActions(matchActions(actions, trimmed), pathname, trimmed), [actions, trimmed, pathname]);
   // Recent documents come first while nothing is typed: the default row is then the document opened before
   // this one, which is the thing most often wanted from an empty palette. With none, it is what it always was.
   // Of what the server has answered, only the documents asked for last: an answer to an earlier question — one that
