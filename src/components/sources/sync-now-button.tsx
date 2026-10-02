@@ -104,7 +104,7 @@ export function SyncNowButton({ workspaceId, sourceId }: { workspaceId: string; 
   const updateHref = `/w/${workspaceId}/sources/${sourceId}/update`;
   return (
     <span className="flex flex-wrap items-center gap-2">
-      <Button type="button" variant="secondary" disabled={busy} onClick={() => void handleSync()}>
+      <Button type="button" variant="primary" disabled={busy} onClick={() => void handleSync()}>
         {busy ? "Syncing…" : "Sync now"}
       </Button>
       <span className="text-caption text-kh-text-muted">Last folder: {meta.rootName}</span>
