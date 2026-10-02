@@ -31,7 +31,7 @@ test.describe("document share link", () => {
     return { workspaceId };
   }
 
-  test("owner shares, an anonymous reader follows the edits, and revoking ends it", async ({ page, context, playwright }) => {
+  test("owner shares, an anonymous reader follows the edits, and revoking ends it", { tag: "@smoke-team" }, async ({ page, context, playwright }) => {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     const title = `Shared Runbook ${Date.now()}`;
     const { workspaceId } = await createMySpaceDocument(page, title, "first shared body");

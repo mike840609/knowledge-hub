@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 const QUERY_MASTER_WORKSPACE = "0199f100-0000-7000-8000-000000000001";
 const OBSIDIAN_SOURCE = "0199f100-0000-7000-8000-000000000101";
 
-test("root resolves deterministically into My Space", async ({ page }) => {
+test("root resolves deterministically into My Space", { tag: ["@smoke-team", "@smoke-personal"] }, async ({ page }) => {
   await page.goto("/");
   const navigation = await (await page.request.get("/api/workspaces")).json();
   const personal = navigation.items.find((item: { type: string }) => item.type === "PERSONAL");

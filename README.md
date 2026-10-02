@@ -312,3 +312,11 @@ docs/superpowers/
 ```
 
 **Current behavior 以對應 Phase canonical spec + implementation plan 為準。** Architecture history 用來保存決策演進，不作為需要套用在 canonical 文件上的 patch layer。
+
+日常快速檢查可跑 `npm run test:e2e:smoke`（Team：8 個關鍵流程）與 `npm run test:e2e:smoke:personal`（個人模式：3 個流程）。兩者都建立真實 production build、獨立資料庫並操作瀏覽器；完整回歸仍使用 `npm run test:e2e`，CI 保留完整測試。Smoke 只標記個別案例，不刪除完整套件的案例。
+
+每次 runner 會輸出 artifact 路徑：`playwright-report/e2e-runs/<suite>/<UUID>/`。`runner.json` 保存 discovery、資料庫、build、server/browser、cleanup 的毫秒耗時與最終狀態；`tests.json` 保存各案例 outcome／耗時／retry 與 counts。Build 或 discovery 提早失敗時仍有 runner 報告，counts 為 null；smoke 有 skipped／flaky 也會失敗。報告不包含伺服器 config 或環境變數，目錄已被 Git 忽略；CI 成功或失敗都上傳報告與 `test-results/`。
+
+覆蓋盤點與後續加速候選見 [E2E 覆蓋矩陣](docs/superpowers/verification/2026-10-02-e2e-coverage-matrix.md)；目前保留全部瀏覽器案例。
+
+可照常傳 `--reporter=line`／`--reporter html`；runner 以 `--add-reporter` 保留必要的 JSON 結果。HTML 在 runner 管理的 `playwright-report/html/` 輸出（覆蓋 `PLAYWRIGHT_HTML_OUTPUT_DIR`），避免 HTML reporter 清掉同目錄下先前的 UUID run 報告。

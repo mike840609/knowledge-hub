@@ -4,7 +4,7 @@ import { PHASE3_TEAM_ID, phase3Origin, phase3UserId, phase3UnconfiguredOrigin } 
 test.describe("trusted Phase 3 HTTP identity harness", () => {
   test.skip(!process.env.KM_PHASE3_APP_ROOT, "Run npm run test:e2e to provision the isolated persona applications.");
 
-  test("ordinary production entry cannot enable a fixture reader with environment variables", async ({ playwright }) => {
+  test("ordinary production entry cannot enable a fixture reader with environment variables", { tag: "@smoke-team" }, async ({ playwright }) => {
     const normal = await playwright.request.newContext({ baseURL: phase3UnconfiguredOrigin() });
     try {
       const response = await normal.get("/api/workspaces");
@@ -13,7 +13,7 @@ test.describe("trusted Phase 3 HTTP identity harness", () => {
     } finally { await normal.dispose(); }
   });
 
-  test("server persona controls Team creation; browser claims cannot elevate a noncreator", async ({ playwright }) => {
+  test("server persona controls Team creation; browser claims cannot elevate a noncreator", { tag: "@smoke-team" }, async ({ playwright }) => {
     const owner = await playwright.request.newContext({ baseURL: phase3Origin("owner") });
     const ordinary = await playwright.request.newContext({ baseURL: phase3Origin("nonCreator") });
     try {
@@ -29,7 +29,7 @@ test.describe("trusted Phase 3 HTTP identity harness", () => {
     } finally { await owner.dispose(); await ordinary.dispose(); }
   });
 
-  test("real grant changes propagate between independent fixed server sessions", async ({ playwright }) => {
+  test("real grant changes propagate between independent fixed server sessions", { tag: "@smoke-team" }, async ({ playwright }) => {
     const owner = await playwright.request.newContext({ baseURL: phase3Origin("owner") });
     const affected = await playwright.request.newContext({ baseURL: phase3Origin("nonCreator") });
     try {
