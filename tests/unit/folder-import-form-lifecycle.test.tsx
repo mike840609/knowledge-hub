@@ -78,4 +78,45 @@ describe("FolderImportForm lifecycle", () => {
     expect(container.textContent).not.toContain("WORKSPACE_ACCESS_CHANGED");
     expect(mocks.push).toHaveBeenCalledWith("/w/workspace/sources/imports/snapshot");
   });
+
+  it("aborts the in-flight upload when the import form unmounts", async () => {
+    let uploadSignal: AbortSignal | undefined;
+    let releaseUpload: ((response: Response) => void) | undefined;
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(response({ snapshotId: "snapshot" }, 201))
+      .mockImplementationOnce(async (_url, init) => {
+        uploadSignal = init?.signal instanceof AbortSignal ? init.signal : undefined;
+        return new Promise<Response>((resolve) => { releaseUpload = resolve; });
+      })
+      .mockResolvedValue(response({ abandoned: true }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<FolderImportForm target={{ kind: "new", workspaceId: "workspace" }} />);
+      await Promise.resolve();
+    });
+
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [new File(["# Hello\n"], "hello.md", { type: "text/markdown" })],
+    });
+
+    await act(async () => {
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      for (let attempt = 0; attempt < 20 && releaseUpload === undefined; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+    });
+    expect(releaseUpload).toBeDefined();
+
+    await act(async () => root.unmount());
+    releaseUpload!(response({}));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(uploadSignal).toBeDefined();
+    expect(uploadSignal?.aborted).toBe(true);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/entries"))).toHaveLength(1);
+  });
+
 });
