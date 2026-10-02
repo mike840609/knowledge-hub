@@ -39,14 +39,17 @@ export function Topbar({
   const share = contextual.find(action => action.id === "document.share");
   return (
     <header className="flex h-12 shrink-0 items-center border-b border-kh-border bg-kh-bg-raised">
-      <div className="flex h-full min-w-0 shrink-0 items-center gap-2 px-3 lg:w-72 lg:border-r lg:border-kh-border lg:bg-kh-bg-sunken">
+      <div className={`flex shrink-0 items-center gap-2 px-3 lg:h-full lg:border-r lg:border-kh-border lg:bg-kh-bg-sunken ${navCollapsed ? "lg:w-12 lg:px-2" : "lg:w-40"}`}>
         {onMenuClick ? <button type="button" aria-label="Open menu" onClick={onMenuClick} className={buttonClasses({ variant: "ghost", icon: true, className: "lg:hidden" })}><Menu className="h-4 w-4" aria-hidden="true" /></button> : null}
         <Tooltip label={navCollapsed ? "Expand navigation" : "Collapse navigation"} shortcut={NAV_TOGGLE_SHORTCUT}>
           <button type="button" onClick={onToggleNav} aria-label={navCollapsed ? "Expand navigation" : "Collapse navigation"} aria-keyshortcuts={NAV_TOGGLE_SHORTCUT} className={buttonClasses({ variant: "ghost", icon: true, className: "max-lg:hidden" })}>
             {navCollapsed ? <PanelLeftOpen className="h-4 w-4" aria-hidden="true" /> : <PanelLeftClose className="h-4 w-4" aria-hidden="true" />}
           </button>
         </Tooltip>
-        <div className="w-28 min-w-0 sm:w-48 lg:min-w-0 lg:flex-1"><WorkspaceSelector workspaceId={model.workspace.id} /></div>
+        <span className={`hidden whitespace-nowrap text-caption font-semibold text-kh-text sm:block ${navCollapsed ? "lg:hidden" : ""}`}>Knowledge Hub</span>
+      </div>
+      <div className="flex h-full w-28 min-w-0 shrink-0 items-center pr-2 sm:w-64 sm:px-3 lg:w-72">
+        <WorkspaceSelector workspaceId={model.workspace.id} />
       </div>
       <QuickSearch workspaceId={model.workspace.id} />
       <div aria-hidden={!visible} inert={!visible}

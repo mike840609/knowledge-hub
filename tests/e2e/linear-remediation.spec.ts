@@ -37,10 +37,16 @@ test('reader and composer keep their column and expose commands during long scro
   const expandedExplorer = (await explorer.boundingBox())!;
   expect(expandedExplorer.y).toBe((await page.locator('main').boundingBox())!.y);
   expect(expandedExplorer.width).toBe(288);
+  const workspace = page.getByRole('button', { name: /^Workspace:/ }).locator('..');
+  expect((await workspace.boundingBox())!.x).toBe(160);
+  expect((await workspace.boundingBox())!.width).toBe(288);
+  expect((await page.getByRole('button', { name: 'Quick search', exact: true }).boundingBox())!.x).toBe(448);
   await page.screenshot({ path: info.outputPath('reader-navigation-expanded.png') });
   await page.getByRole('button', { name: 'Collapse navigation' }).click();
   await expect(explorer).toBeVisible();
   expect((await explorer.boundingBox())!.x).toBe(48);
+  expect((await workspace.boundingBox())!.x).toBe(48);
+  expect((await page.getByRole('button', { name: 'Quick search', exact: true }).boundingBox())!.x).toBe(336);
   expect((await explorer.boundingBox())!.height).toBe(expandedExplorer.height);
   await page.screenshot({ path: info.outputPath('reader-navigation-collapsed.png') });
   await page.getByRole('button', { name: 'Expand navigation' }).click();

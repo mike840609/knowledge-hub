@@ -70,3 +70,5 @@ Rebase 後重新通過 typecheck、lint、99 個 unit test files／1,468 tests�
 桌面主導覽恢復 160px 展開／48px 收合，Knowledge explorer 放回 main 左側的獨立 288px 區域。文件樹與 main 頂端對齊，主導覽收合後其高度保持不變且文件仍可見。手機單一 Menu、讀寫欄位對齊與其他 remediation 保留。
 
 本次修改後 typecheck、lint、production build 與 `linear-remediation`、`keyboard-shortcuts` 共 23 個 E2E tests 通過。新增幾何驗證涵蓋文件樹頂端對齊、288px 寬度與主導覽收合後可見且高度不變；既有讀寫對齊、持久化收合、手機 row/context menu 與無 JS 初始窄版檢查也通過。
+
+Topbar 也恢復原本配置：Knowledge Hub／收合按鈕區域跟隨主導覽的 160px／48px 寬度，Workspace 為獨立 288px 區域，其後為 Search。新增瀏覽器位置驗證確認 Workspace 起點 160px／48px、Search 起點 448px／336px。Typecheck、lint、production build 與上述 23 個 E2E tests 再次通過。
