@@ -23,3 +23,15 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
     return NextResponse.json(mapped.body, { status: mapped.status });
   }
 }
+
+
+export async function DELETE(_request: NextRequest, context: { params: Promise<{ snapshotId: string }> }) {
+  try {
+    const { snapshotId } = await context.params;
+    const result = await abandonSourceImport(snapshotId);
+    return NextResponse.json(result);
+  } catch (error) {
+    const mapped = toImportErrorResponse(error);
+    return NextResponse.json(mapped.body, { status: mapped.status });
+  }
+}
