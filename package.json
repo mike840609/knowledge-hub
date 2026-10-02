@@ -20,7 +20,9 @@
     "db:reindex-document-links": "tsx scripts/db/reindex-document-links.ts",
     "db:report-escaped-wikilinks": "tsx scripts/db/report-escaped-wikilinks.ts",
     "admin:recover-team-workspace-governance": "tsx scripts/admin/recover-team-workspace-governance.ts",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "test:e2e:smoke": "KM_E2E_SUITE=team-smoke tsx scripts/test/e2e.ts --grep @smoke-team",
+    "test:e2e:smoke:personal": "KM_E2E_SUITE=personal-smoke KM_E2E_PERSONAL_ONLY=true tsx scripts/test/e2e.ts --grep @smoke-personal"
   },
   "dependencies": {
     "@base-ui-components/react": "1.0.0-rc.0",

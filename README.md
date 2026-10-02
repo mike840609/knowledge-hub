@@ -312,3 +312,5 @@ docs/superpowers/
 ```
 
 **Current behavior 以對應 Phase canonical spec + implementation plan 為準。** Architecture history 用來保存決策演進，不作為需要套用在 canonical 文件上的 patch layer。
+
+日常快速檢查可跑 `npm run test:e2e:smoke`（Team：8 個關鍵流程）與 `npm run test:e2e:smoke:personal`（個人模式：3 個流程）。兩者都建立真實 production build、獨立資料庫並操作瀏覽器；完整回歸仍使用 `npm run test:e2e`，CI 保留完整測試。Smoke 只標記個別案例，不刪除完整套件的案例。

@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 test.skip(process.env.KM_TEAM_WORKSPACES_ENABLED !== "false", "Runs with the personal-only rollout.");
 const wait = { timeout: 15000 };
-test("personal rollout: disabled teams, drafts across browsers, organize, export, restore and favorites", async ({ page, browser }, testInfo) => {
+test("personal rollout: disabled teams, drafts across browsers, organize, export, restore and favorites", { tag: "@smoke-personal" }, async ({ page, browser }, testInfo) => {
   await page.goto("/"); await expect(page).toHaveURL(/\/home$/, wait);
   const navigation = await (await page.request.get("/api/workspaces")).json();
   expect(navigation.teamsOpen).toBe(false); expect(navigation.items).toHaveLength(1);
@@ -52,7 +52,7 @@ test("personal rollout: disabled teams, drafts across browsers, organize, export
   await other.close();
 });
 
-test("a new-note draft survives closing its tab and can be resumed from Home", async ({ page, context }) => {
+test("a new-note draft survives closing its tab and can be resumed from Home", { tag: "@smoke-personal" }, async ({ page, context }) => {
   await page.goto("/");
   const nav = await (await page.request.get("/api/workspaces")).json(); const workspaceId = nav.items[0].id;
   await page.goto(`/w/${workspaceId}/knowledge/new`);

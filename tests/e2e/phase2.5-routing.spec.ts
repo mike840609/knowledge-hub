@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 const QUERY_MASTER_WORKSPACE = "0199f100-0000-7000-8000-000000000001";
 const OBSIDIAN_SOURCE = "0199f100-0000-7000-8000-000000000101";
 
-test("root resolves deterministically into My Space", async ({ page }) => {
+test("root resolves deterministically into My Space", { tag: ["@smoke-team", "@smoke-personal"] }, async ({ page }) => {
   await page.goto("/");
   const personalOnly = process.env.KM_TEAM_WORKSPACES_ENABLED === "false";
   await expect(page).toHaveURL(personalOnly ? /\/w\/[^/]+\/home$/ : /\/w\/[^/]+\/knowledge(?:\/[^/?]+){0,2}(?:\?.*)?$/);

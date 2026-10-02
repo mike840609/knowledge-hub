@@ -135,7 +135,7 @@ function pressSaveBeforeOutputRenders(words: string[]) {
   }) as typeof window.setTimeout;
 }
 
-test("the rendered editor mounts without hydration or page errors", async ({ page }) => {
+test("the rendered editor mounts without hydration or page errors", { tag: "@smoke-team" }, async ({ page }) => {
   const problems: string[] = [];
   page.on("pageerror", (error) => problems.push(error.message));
   page.on("console", (message) => {
@@ -198,7 +198,7 @@ test("an untouched rendered editor is not a modification: Esc leaves it", async 
   await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
 });
 
-test("typing Markdown syntax writes a heading and a list, and Create saves it", async ({ page }) => {
+test("typing Markdown syntax writes a heading and a list, and Create saves it", { tag: "@smoke-team" }, async ({ page }) => {
   const title = unique("Typed Heading");
   await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
   const surface = surfaceOf(page);
@@ -225,7 +225,7 @@ test("typing Markdown syntax writes a heading and a list, and Create saves it", 
   await expect(page.getByRole("treeitem", { name: title, exact: true })).toBeVisible(ROUND_TRIP);
 });
 
-test("⌘Enter saves from inside the rendered editor", async ({ page }) => {
+test("⌘Enter saves from inside the rendered editor", { tag: "@smoke-team" }, async ({ page }) => {
   const title = unique("Save Shortcut");
   const url = await createNote(page, title, `# ${title}\n\nbody\n`);
   const surface = await openEditor(page, url);
