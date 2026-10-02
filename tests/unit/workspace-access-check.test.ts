@@ -37,13 +37,24 @@ describe("when a failed request makes the shell re-check access", () => {
     ["INVALID_PARENT"],
     ["TREE_CYCLE"],
     ["CROSS_SOURCE_MOVE"],
-  ])("does not re-check for %s: it is a conflict about content, and the caller's access is what it was", (code) => {
+    ["SOURCE_VERSION_CONFLICT"],
+    ["IDENTITY_STATE_CHANGED"],
+    ["IMPORT_SNAPSHOT_STALE"],
+    ["IMPORT_APPLY_RETRYABLE"],
+    ["UPLOAD_ENTRY_CONFLICT"],
+    ["SOME_FUTURE_CONTENT_CONFLICT"],
+  ])("does not re-check for coded content conflict %s", (code) => {
     requestWorkspaceAccessCheck(409, code);
     expect(checked()).toBe(0);
   });
 
-  it("still re-checks when a conflict's code is one it has not been told about", () => {
-    requestWorkspaceAccessCheck(409, "SOME_FUTURE_CODE");
+  it("re-checks for a lifecycle conflict", () => {
+    requestWorkspaceAccessCheck(409, "WORKSPACE_LIFECYCLE_VIOLATION");
+    expect(checked()).toBe(1);
+  });
+
+  it("keeps the conservative re-check for an uncoded 409", () => {
+    requestWorkspaceAccessCheck(409);
     expect(checked()).toBe(1);
   });
 });
