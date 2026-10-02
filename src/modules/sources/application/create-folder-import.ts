@@ -63,7 +63,6 @@ function validateManifest(manifest: readonly ImportManifestEntry[], limits: Impo
   const paths = new Set<string>();
   let markdownBytes = 0;
   let assetBytes = 0;
-  let assetBytes = 0;
   for (const raw of manifest) {
     if (!raw || typeof raw.uploadKey !== "string" || !raw.uploadKey || raw.uploadKey.length > 512) {
       throw importError("INVALID_IMPORT_MANIFEST", "Every manifest entry requires a non-empty uploadKey up to 512 characters.");
@@ -86,7 +85,7 @@ function validateManifest(manifest: readonly ImportManifestEntry[], limits: Impo
     }
 
     if (raw.size > limits.maxAssetFileBytes) {
-      throw importError("IMPORT_LIMIT_EXCEEDED", "Asset file exceeds the per-file byte limit.");
+      throw importError("IMPORT_LIMIT_EXCEEDED", "Asset exceeds the per-file byte limit.");
     }
     assetBytes += raw.size;
     if (assetBytes > limits.maxAssetTotalBytes) {
@@ -94,13 +93,6 @@ function validateManifest(manifest: readonly ImportManifestEntry[], limits: Impo
     }
 
     const asset = raw as Partial<Extract<ImportManifestEntry, { kind: "ASSET" }>>;
-    if (raw.size > limits.maxAssetFileBytes) {
-      throw importError("IMPORT_LIMIT_EXCEEDED", "Asset exceeds the per-file byte limit.");
-    }
-    assetBytes += raw.size;
-    if (assetBytes > limits.maxAssetTotalBytes) {
-      throw importError("IMPORT_LIMIT_EXCEEDED", "Assets exceed the total import byte limit.");
-    }
     if (typeof asset.contentHash !== "string" || !SHA256.test(asset.contentHash.toLowerCase())) {
       throw importError("INVALID_ASSET_MANIFEST", "Non-Markdown assets require a SHA-256 content hash.");
     }
