@@ -9,6 +9,7 @@ import {
   getRememberedFolderMeta,
   isDirectoryPickerSupported,
   rememberFolderHandle,
+  stashPendingHandle,
 } from "@/components/imports/folder-handle-store";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -26,6 +27,7 @@ vi.mock("@/components/imports/folder-handle-store", () => ({
   isDirectoryPickerSupported: vi.fn(),
   getRememberedFolderMeta: vi.fn(),
   rememberFolderHandle: vi.fn(),
+  stashPendingHandle: vi.fn(),
   loadRememberedHandle: vi.fn(),
   forgetRememberedFolder: vi.fn(),
   collectHandleFiles: vi.fn(),
@@ -151,18 +153,29 @@ describe("folder import directory picker", () => {
     expect(container.querySelector("#import-folder")).not.toBeNull();
   });
 
-  it("leaves the new-source flow on the legacy input even when the picker is supported", async () => {
+  it("stashes the picked handle under the new snapshot id for kind=new, then navigates to the preview", async () => {
     vi.mocked(isDirectoryPickerSupported).mockReturnValue(true);
-    const clickSpy = vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(() => {});
-    const fetchMock = vi.fn<typeof fetch>();
+    const handle = { name: "Notes" };
+    const showDirectoryPicker = vi.fn().mockResolvedValue(handle);
+    Object.defineProperty(window, "showDirectoryPicker", { value: showDirectoryPicker, configurable: true });
+    const files = [new File(["# hello"], "hello.md")];
+    vi.mocked(collectHandleFiles).mockResolvedValue(files);
+    vi.mocked(stashPendingHandle).mockResolvedValue(undefined);
+    const fetchMock = stubImportSession("snap-new");
     vi.stubGlobal("fetch", fetchMock);
 
     renderForm({ kind: "new", workspaceId: "w1" });
     await clickChooseFolder();
 
-    expect(clickSpy).toHaveBeenCalled();
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(collectHandleFiles).not.toHaveBeenCalled();
+    expect(showDirectoryPicker).toHaveBeenCalledWith({ mode: "read" });
+    expect(collectHandleFiles).toHaveBeenCalledWith(handle);
+    expect(stashPendingHandle).toHaveBeenCalledWith("snap-new", handle, "Notes");
     expect(rememberFolderHandle).not.toHaveBeenCalled();
+    expect(push).toHaveBeenCalledWith("/w/w1/sources/imports/snap-new");
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      "/api/workspaces/w1/source-imports",
+      "/api/source-imports/snap-new/entries",
+      "/api/source-imports/snap-new/finalize",
+    ]);
   });
 });

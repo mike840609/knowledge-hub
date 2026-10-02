@@ -10,6 +10,7 @@ import {
   getRememberedFolderMeta,
   isDirectoryPickerSupported,
   rememberFolderHandle,
+  stashPendingHandle,
   type FileSystemDirectoryHandle,
 } from "@/components/imports/folder-handle-store";
 import type { ImportManifestEntry } from "@/modules/sources/application/create-folder-import";
@@ -300,6 +301,9 @@ export function FolderImportForm({ target }: { target: FolderImportTarget }): Re
       if (target.kind === "existing") {
         await rememberFolderHandle(target.sourceId, handle, handle.name);
         assertAllowed();
+      } else {
+        await stashPendingHandle(snapshotId, handle, handle.name);
+        assertAllowed();
       }
       router.push(`/w/${target.workspaceId}/sources/imports/${snapshotId}`);
     } catch (error) {
@@ -308,7 +312,7 @@ export function FolderImportForm({ target }: { target: FolderImportTarget }): Re
   }
 
   function handleChooseFolder(): void {
-    if (target.kind === "existing" && isDirectoryPickerSupported()) {
+    if (isDirectoryPickerSupported()) {
       void handlePickedDirectory();
     } else {
       picker.current?.click();

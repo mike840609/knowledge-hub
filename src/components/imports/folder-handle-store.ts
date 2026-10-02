@@ -330,6 +330,100 @@ function removeMeta(sourceId: string): void {
 }
 
 /**
+ * Pending-handle two-phase flow for newly imported sources.
+ *
+ * A kind=new import has no sourceId at pick time, so the picked handle is
+ * stashed under `pending:${snapshotId}` and adopted onto the real sourceId
+ * once Apply resolves. Both the IndexedDB entry and the localStorage meta
+ * reuse the same store/key scheme as remembered handles, so Sync now needs
+ * no other change to find them after adoption.
+ */
+function pendingKey(snapshotId: string): string {
+  return `pending:${snapshotId}`;
+}
+
+const PENDING_META_PREFIX = "km:folder-handle:pending:";
+
+/**
+ * Removes every stashed pending handle except the one for `exceptSnapshotId`.
+ * Preview pages expire (READY 30 minutes), so abandoned pending keys must be
+ * swept rather than left forever. Best-effort: never throws.
+ */
+async function sweepOtherPendingHandles(exceptSnapshotId: string): Promise<void> {
+  const store = storage();
+  if (!store) return;
+  const keys: string[] = [];
+  try {
+    for (let index = 0; index < store.length; index += 1) {
+      const key = store.key(index);
+      if (key && key.startsWith(PENDING_META_PREFIX)) keys.push(key);
+    }
+  } catch {
+    return;
+  }
+  const current = metaKey(pendingKey(exceptSnapshotId));
+  for (const key of keys) {
+    if (key === current) continue;
+    const staleSnapshotId = key.slice(PENDING_META_PREFIX.length);
+    try {
+      await deleteHandle(pendingKey(staleSnapshotId));
+    } catch {
+      // Deletion is best-effort; callers must never see a throw.
+    }
+    try {
+      const latest = storage();
+      latest?.removeItem(key);
+    } catch {
+      // Removal is best-effort cleanup.
+    }
+  }
+}
+
+/**
+ * Stashes a picked folder handle under a pending key until Apply creates the
+ * source. Reuses the remember path (including its orphan cleanup when the
+ * meta write fails) and sweeps other abandoned pending keys. Never throws:
+ * a storage failure simply means no Sync now shortcut later.
+ */
+export async function stashPendingHandle(
+  snapshotId: string,
+  handle: FileSystemDirectoryHandle,
+  rootName: string,
+): Promise<void> {
+  try {
+    await rememberFolderHandle(pendingKey(snapshotId), handle, rootName);
+    await sweepOtherPendingHandles(snapshotId);
+  } catch {
+    // Stash is best-effort; the import itself already succeeded.
+  }
+}
+
+/**
+ * Moves a stashed handle+meta onto the real sourceId via the existing
+ * remember path, then deletes the pending key. No-ops when nothing was
+ * stashed for the snapshot. Never throws.
+ */
+export async function adoptPendingHandle(snapshotId: string, sourceId: string): Promise<void> {
+  try {
+    const pending = pendingKey(snapshotId);
+    const meta = getRememberedFolderMeta(pending);
+    const handle = await getHandle(pending);
+    if (!meta || !handle) {
+      if (meta || handle) {
+        await deleteHandle(pending);
+        removeMeta(pending);
+      }
+      return;
+    }
+    await rememberFolderHandle(sourceId, handle, meta.rootName);
+    await deleteHandle(pending);
+    removeMeta(pending);
+  } catch {
+    // Adoption is best-effort; callers must never see a throw.
+  }
+}
+
+/**
  * Returns the remembered handle when the picker exists, a meta is stored, a
  * directory handle is stored, and read permission holds (after at most one
  * requestPermission attempt). Stale entries discovered along the way — meta

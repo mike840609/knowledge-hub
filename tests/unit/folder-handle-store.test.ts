@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  adoptPendingHandle,
   collectHandleFiles,
   forgetRememberedFolder,
   getRememberedFolderMeta,
   isDirectoryPickerSupported,
   loadRememberedHandle,
   rememberFolderHandle,
+  stashPendingHandle,
 } from "@/components/imports/folder-handle-store";
 import type {
   FileSystemDirectoryHandle,
@@ -430,5 +432,73 @@ describe("folder-handle-store", () => {
     await expect(rememberFolderHandle("src-1", handle, "wiki")).resolves.toBeUndefined();
     expect(await loadRememberedHandle("src-1")).toBeNull();
     await expect(forgetRememberedFolder("src-1")).resolves.toBeUndefined();
+  });
+});
+
+describe("pending folder handles (new-source two-phase flow)", () => {
+  const PENDING_META_KEY = (snapshotId: string): string => `km:folder-handle:pending:${snapshotId}`;
+
+  beforeEach(() => {
+    localStorage.clear();
+    unstubPicker();
+    stubPicker();
+    vi.stubGlobal("indexedDB", createFakeIndexedDB().factory);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    unstubPicker();
+  });
+
+  function wikiHandle(name = "wiki"): FileSystemDirectoryHandle {
+    return makeDirHandle(name, [{ kind: "file", name: "a.md", content: "# a" }]);
+  }
+
+  it("stashes under the pending key, isolated from real source keys", async () => {
+    await stashPendingHandle("snap-1", wikiHandle(), "wiki");
+
+    expect(getRememberedFolderMeta("pending:snap-1")?.rootName).toBe("wiki");
+    expect(getRememberedFolderMeta("src-1")).toBeNull();
+    // The pending entry is not loadable as a source handle.
+    expect(await loadRememberedHandle("src-1")).toBeNull();
+  });
+
+  it("adopt moves the handle+meta to the source key and cleans the pending key", async () => {
+    const handle = wikiHandle();
+    await stashPendingHandle("snap-1", handle, "wiki");
+    await adoptPendingHandle("snap-1", "src-9");
+
+    const loaded = await loadRememberedHandle("src-9");
+    expect(loaded?.rootName).toBe("wiki");
+    expect(loaded?.handle.name).toBe("wiki");
+    expect(localStorage.getItem(PENDING_META_KEY("snap-1"))).toBeNull();
+    expect(getRememberedFolderMeta("pending:snap-1")).toBeNull();
+  });
+
+  it("adopt no-ops when nothing was stashed, creating no source entry", async () => {
+    await expect(adoptPendingHandle("snap-missing", "src-9")).resolves.toBeUndefined();
+    expect(getRememberedFolderMeta("src-9")).toBeNull();
+    expect(await loadRememberedHandle("src-9")).toBeNull();
+  });
+
+  it("stashing a new snapshot sweeps abandoned pending keys but keeps the current one", async () => {
+    await stashPendingHandle("snap-old", wikiHandle("old-root"), "old-root");
+    expect(localStorage.getItem(PENDING_META_KEY("snap-old"))).not.toBeNull();
+
+    await stashPendingHandle("snap-new", wikiHandle("new-root"), "new-root");
+
+    expect(localStorage.getItem(PENDING_META_KEY("snap-old"))).toBeNull();
+    expect(getRememberedFolderMeta("pending:snap-old")).toBeNull();
+    expect(getRememberedFolderMeta("pending:snap-new")?.rootName).toBe("new-root");
+    // A real source entry is never swept.
+    await rememberFolderHandle("src-1", wikiHandle(), "wiki");
+    await stashPendingHandle("snap-newer", wikiHandle(), "wiki");
+    expect(getRememberedFolderMeta("src-1")?.rootName).toBe("wiki");
+  });
+
+  it("stash and adopt never throw when storage is unavailable", async () => {
+    vi.stubGlobal("indexedDB", undefined);
+    await expect(stashPendingHandle("snap-1", wikiHandle(), "wiki")).resolves.toBeUndefined();
+    await expect(adoptPendingHandle("snap-1", "src-9")).resolves.toBeUndefined();
   });
 });
