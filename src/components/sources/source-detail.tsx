@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { SourceDetailModel } from "@/server/source-read";
 import { isFolderSyncable } from "@/modules/knowledge/domain/source-policy";
 import { ImportHistory } from "@/components/sources/import-history";
+import { RememberedFolderRow } from "@/components/sources/remembered-folder-row";
 import { SourceSyncActions } from "@/components/sources/source-sync-actions";
 import { sourceTypeLabel } from "@/components/sources/source-list-row";
 import { TechnicalDetails } from "@/components/sources/technical-details";
@@ -47,6 +48,7 @@ export function SourceDetail({ model, showImportSuccess = false }: { model: Sour
             <dt className="w-24 shrink-0 text-kh-text-muted">Sync runs</dt>
             <dd className="text-kh-text">{runs.length}</dd>
           </div>
+          <RememberedFolderRow sourceId={source.id} />
         </dl>
       </section>
 
