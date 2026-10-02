@@ -143,7 +143,7 @@ test.describe("Phase 3 Workspace product acceptance", () => {
     } finally { await owner.context.close(); await affected.context.close(); }
   });
 
-  test("network failures pause mutation without false revoke, then focus recovers", async ({ browser }) => {
+  test("advisory refresh failures keep the last confirmed access, then focus recovers", async ({ browser }) => {
     const owner = await session(browser, "owner");
     try {
       const id = await createTeam(owner.context.request);
@@ -151,12 +151,14 @@ test.describe("Phase 3 Workspace product acceptance", () => {
       await expect(owner.page.getByRole("button", { name: "Choose folder", exact: true })).toBeVisible();
       await owner.page.route("**/api/workspaces", route => route.fulfill({ status: 503, body: "Unavailable" }));
       await refresh(owner.context);
-      await expect(owner.page.getByRole("alert").filter({ hasText: "Unable to confirm workspace access" })).toBeVisible();
+      // A focus/timer refresh is advisory: a transient 503 is not evidence
+      // that authorization changed, so keep the last server-confirmed access.
+      await expect(owner.page.getByRole("alert").filter({ hasText: "Unable to confirm workspace access" })).toHaveCount(0);
       await expect(owner.page).toHaveURL(new RegExp(`/w/${id}/sources/import$`));
-      await expect(owner.page.locator('input[type="file"]')).toHaveCount(0);
+      await expect(owner.page.getByRole("button", { name: "Choose folder", exact: true })).toBeEnabled();
       await owner.page.unroute("**/api/workspaces");
-      await owner.page.getByRole("button", { name: "Retry", exact: true }).click();
-      await expect(owner.page.getByRole("button", { name: "Choose folder", exact: true })).toBeVisible();
+      await refresh(owner.context);
+      await expect(owner.page.getByRole("button", { name: "Choose folder", exact: true })).toBeEnabled();
     } finally { await owner.context.close(); }
   });
 

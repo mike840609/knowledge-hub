@@ -19,23 +19,28 @@ export function useWorkspaceAuthorization() {
 }
 
 /**
- * Conflicts about content, not access: re-checking would pause every mutation in the shell — and say
- * "Unable to confirm workspace" while it did — for an answer that says nothing about authorization.
- * A folder that is not empty, a parent that is archived, a move into itself: the caller can still do
- * everything they could a moment ago, and is being told about the tree.
+ * Only lifecycle-level 409s say anything about Workspace authorization. Import,
+ * editor and tree commands also use 409 for ordinary content conflicts; treating
+ * those as access changes pauses in-flight work and hides the real domain error.
+ *
+ * An uncoded 409 remains conservative because the caller has not given us enough
+ * information to distinguish lifecycle from content. A 403 is an explicit denial
+ * and pauses immediately. A 404 is intentionally ambiguous (it may hide revocation
+ * or simply mean a nested resource disappeared), so it revalidates without first
+ * discarding the last confirmed Workspace authorization.
  */
-const CONFLICTS_ABOUT_CONTENT: ReadonlySet<string> = new Set([
-  "REVISION_CONFLICT",
-  "SHARE_LINK_LIMIT_REACHED",
-  "FOLDER_NOT_EMPTY",
-  "INVALID_PARENT",
-  "TREE_CYCLE",
-  "CROSS_SOURCE_MOVE",
+const WORKSPACE_CONFLICTS_REQUIRING_REFRESH: ReadonlySet<string> = new Set([
+  "WORKSPACE_ARCHIVED",
+  "WORKSPACE_LIFECYCLE_VIOLATION",
 ]);
 
 export function requestWorkspaceAccessCheck(status: number, code?: string) {
-  if (code !== undefined && CONFLICTS_ABOUT_CONTENT.has(code)) return;
-  if ([403, 404, 409].includes(status)) window.dispatchEvent(new Event("kh:workspace-access-check"));
+  if (status === 404) {
+    window.dispatchEvent(new Event("kh:workspace-access-refresh"));
+    return;
+  }
+  if (status === 409 && code !== undefined && !WORKSPACE_CONFLICTS_REQUIRING_REFRESH.has(code)) return;
+  if (status === 403 || status === 409) window.dispatchEvent(new Event("kh:workspace-access-check"));
 }
 
 /** Navigation and capabilities are re-read for the affected browser, not just the actor. */
@@ -63,12 +68,13 @@ export function useWorkspaceAuthorizationRefresh(initialAccess: WorkspaceAccessV
       const nav = await navResponse.json() as WorkspaceNavigationModel;
       const mySpace = nav.items.find((item) => item.type === "PERSONAL");
       if (!mySpace) throw new Error("Personal workspace unavailable.");
-      const visible = nav.items.some((item) => item.id === workspaceId);
-      const response = visible
-        ? await fetch(`/api/workspaces/${workspaceId}`, { cache: "no-store", signal: abort.signal })
-        : null;
-      if (response && !response.ok && response.status !== 404) throw new Error("Could not refresh workspace access.");
-      const fresh = response?.ok ? await response.json() as WorkspaceAccessView : null;
+      // Navigation is a projection, not the authorization authority. A focus
+      // refresh can race SSO/group/navigation data and momentarily omit an
+      // otherwise accessible Workspace. Always verify the current Workspace
+      // directly before treating an omission as revocation.
+      const response = await fetch(`/api/workspaces/${workspaceId}`, { cache: "no-store", signal: abort.signal });
+      if (!response.ok && response.status !== 404) throw new Error("Could not refresh workspace access.");
+      const fresh = response.ok ? await response.json() as WorkspaceAccessView : null;
       if (request !== generation.current) return;
       // A save dispatches `kh:workspace-mutation`, so this refresh usually
       // resolves inside save's push transition carrying values identical to
@@ -101,7 +107,11 @@ export function useWorkspaceAuthorizationRefresh(initialAccess: WorkspaceAccessV
         router.refresh();
       }
     } catch {
-      if (request === generation.current && !abort.signal.aborted) setConfirmed(false);
+      // A timer/focus refresh is advisory. Keep the last confirmed access on a
+      // transient network/server failure; every mutation is still authorized by
+      // the server. A request that actually looked like access loss goes through
+      // the "denied" event below, which sets confirmed=false before refreshing,
+      // so a failed verification remains safely paused.
     }
   }, [workspaceId, pathname, router]);
 
@@ -122,6 +132,7 @@ export function useWorkspaceAuthorizationRefresh(initialAccess: WorkspaceAccessV
     window.addEventListener("focus", trigger);
     document.addEventListener("visibilitychange", visible);
     window.addEventListener("kh:workspace-mutation", trigger);
+    window.addEventListener("kh:workspace-access-refresh", trigger);
     window.addEventListener("kh:workspace-access-check", denied);
     return () => {
       ++generation.current;
@@ -130,6 +141,7 @@ export function useWorkspaceAuthorizationRefresh(initialAccess: WorkspaceAccessV
       window.removeEventListener("focus", trigger);
       document.removeEventListener("visibilitychange", visible);
       window.removeEventListener("kh:workspace-mutation", trigger);
+      window.removeEventListener("kh:workspace-access-refresh", trigger);
       window.removeEventListener("kh:workspace-access-check", denied);
     };
   }, [refresh]);

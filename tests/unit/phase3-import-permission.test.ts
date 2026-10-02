@@ -65,7 +65,7 @@ describe("folder import stops writes when authorization changes", () => {
       assertAllowed: () => {},
     })).rejects.toMatchObject({ code: "INSUFFICIENT_WORKSPACE_CAPABILITY" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(requestWorkspaceAccessCheck).toHaveBeenCalledWith(403);
+    expect(requestWorkspaceAccessCheck).toHaveBeenCalledWith(403, "INSUFFICIENT_WORKSPACE_CAPABILITY");
   });
 
   it("does not send another batch after the upload API denies access", async () => {
@@ -76,6 +76,37 @@ describe("folder import stops writes when authorization changes", () => {
       assertAllowed: () => {},
     })).rejects.toMatchObject({ code: "WORKSPACE_ARCHIVED" });
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(requestWorkspaceAccessCheck).toHaveBeenCalledWith(409);
+    expect(requestWorkspaceAccessCheck).toHaveBeenCalledWith(409, "WORKSPACE_ARCHIVED");
   });
+
+  it("passes import conflict codes to the access checker instead of treating every 409 as an access change", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(response({ snapshotId: "snapshot" }, 201))
+      .mockResolvedValueOnce(response({ error: { code: "UPLOAD_ENTRY_CONFLICT", message: "Entry already uploaded." } }, 409));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(runFolderImport({ target, files: markdownFiles(1), sourceName: "Notes", onProgress: vi.fn(),
+      assertAllowed: () => {},
+    })).rejects.toMatchObject({ code: "UPLOAD_ENTRY_CONFLICT" });
+    expect(requestWorkspaceAccessCheck).toHaveBeenCalledWith(409, "UPLOAD_ENTRY_CONFLICT");
+  });
+  it("keeps a missing snapshot as an import error instead of pausing Workspace access during upload", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(response({ snapshotId: "snapshot" }, 201))
+      .mockResolvedValueOnce(response({ error: { code: "NOT_FOUND", message: "The requested resource was not found." } }, 404));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(runFolderImport({ target, files: markdownFiles(1), sourceName: "Notes", onProgress: vi.fn(),
+      assertAllowed: () => {},
+    })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(requestWorkspaceAccessCheck).not.toHaveBeenCalled();
+  });
+
+  it("keeps a missing snapshot as an import error instead of pausing Workspace access during finalize", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(response({ snapshotId: "snapshot" }, 201))
+      .mockResolvedValueOnce(response({}))
+      .mockResolvedValueOnce(response({ error: { code: "NOT_FOUND", message: "The requested resource was not found." } }, 404));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(runFolderImport({ target, files: markdownFiles(1), sourceName: "Notes", onProgress: vi.fn(),
+      assertAllowed: () => {},
+    })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(requestWorkspaceAccessCheck).not.toHaveBeenCalled();
+  });
+
 });
