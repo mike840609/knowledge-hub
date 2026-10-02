@@ -284,11 +284,13 @@ Select Workspace/Source
 | `KM_IMPORT_MAX_PATH_BYTES` | 2 KiB |
 | `KM_IMPORT_MAX_MARKDOWN_FILE_BYTES` | 5 MiB |
 | `KM_IMPORT_MAX_MARKDOWN_TOTAL_BYTES` | 256 MiB |
+| `KM_IMPORT_MAX_ASSET_FILE_BYTES` | 64 MiB |
+| `KM_IMPORT_MAX_ASSET_TOTAL_BYTES` | 512 MiB |
 | `KM_IMPORT_MAX_METADATA_BYTES` | 256 KiB |
 | `KM_IMPORT_MAX_UPLOAD_BATCH_FILES` / `KM_IMPORT_MAX_UPLOAD_BATCH_BYTES` | 20 / 10 MiB |
 | `KM_IMPORT_MAX_BUILDING_PER_USER` / `KM_IMPORT_MAX_READY_PER_USER` | 3 / 10 |
 
-- **Staging retention 與 cleanup**：BUILDING 2 小時、READY 自 finalize 起 30 分鐘、STALE/APPLIED 24 小時；過期 staging 只刪 snapshot/entries，不動 canonical Knowledge history：
+- **Staging retention 與 cleanup**：BUILDING 2 小時、READY 自 finalize 起 30 分鐘、STALE/APPLIED 24 小時；client 在已知 BUILDING session 失敗／取消時會 best-effort abandon 立即釋放 quota，過期 staging 仍由 cleanup 作最後保底；只刪 snapshot/entries，不動 canonical Knowledge history：
 
 ```bash
 npx tsx scripts/db/cleanup-import-snapshots.ts
