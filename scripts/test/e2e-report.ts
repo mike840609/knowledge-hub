@@ -48,3 +48,9 @@ export async function recordE2eRun(
   if (errors.length === 1) throw errors[0];
   if (errors.length > 1) throw new AggregateError(errors, "E2E run and cleanup/report writing failed.");
 }
+
+export function e2eReporterArguments(args: string[]): string[] {
+  // An additive reporter survives --reporter overrides without changing their output.
+  return [...args, "--add-reporter", path.resolve("scripts/test/e2e-json-reporter.ts")];
+}
+export function e2eHtmlReportDirectory(projectRoot: string): string { return path.join(projectRoot, "playwright-report/html"); }

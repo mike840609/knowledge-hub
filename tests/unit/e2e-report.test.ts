@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
-import { assertE2eCounts, createE2eRunDirectory, recordE2eRun, writeE2eRunReport, type E2eRunReport } from "../../scripts/test/e2e-report";
+import { assertE2eCounts, createE2eRunDirectory, e2eHtmlReportDirectory, e2eReporterArguments, recordE2eRun, writeE2eRunReport, type E2eRunReport } from "../../scripts/test/e2e-report";
 
 const temporary: string[] = [];
 async function directory() { const dir = await mkdtemp(path.join(os.tmpdir(), "e2e-report-test-")); temporary.push(dir); return dir; }
@@ -72,6 +72,27 @@ describe("E2E result artifacts", () => {
     expect(saved.tests.find((t: {title: string}) => t.title.endsWith("flaky")).retry).toBe(1);
     expect(raw).not.toContain("do-not-copy-secret"); expect(saved).not.toHaveProperty("config");
     expect(saved.tests.every((t: {durationMs: number}) => t.durationMs >= 0)).toBe(true);
+  }, 15000);
+  test.each([["--reporter=line"], ["--reporter", "line"]])("CLI override %j still emits required outcomes", async (...args) => {
+    const dir = await directory();
+    await writeFile(path.join(dir, "fixture.spec.cjs"), `const {test}=require(${JSON.stringify(path.resolve("node_modules/@playwright/test"))});test('pass',()=>{});`);
+    const config = path.join(dir, "config.cjs");
+    await writeFile(config, `module.exports={testDir:${JSON.stringify(dir)},reporter:[['list'],[${JSON.stringify(path.resolve("scripts/test/e2e-json-reporter.ts"))}]]};`);
+    execFileSync(process.execPath, [path.resolve("node_modules/@playwright/test/cli.js"), "test", "--config", config, ...e2eReporterArguments(args)], { cwd: dir, env: { ...process.env, KM_E2E_RUN_REPORT_DIR: dir }, stdio: "pipe" });
+    expect(JSON.parse(await readFile(path.join(dir,"tests.json"),"utf8")).counts).toEqual({passed:1,failed:0,flaky:0,skipped:0});
+  }, 15000);
+  test("HTML generation preserves previous UUID run artifacts", async () => {
+    const dir = await directory();
+    const previous = path.join(dir,"playwright-report/e2e-runs/full/previous");
+    await mkdir(previous,{recursive:true}); await writeFile(path.join(previous,"runner.json"),"previous report");
+    const current = await createE2eRunDirectory(path.join(dir,"playwright-report/e2e-runs"),"full");
+    await writeFile(path.join(dir,"fixture.spec.cjs"), `const {test}=require(${JSON.stringify(path.resolve("node_modules/@playwright/test"))});test('pass',()=>{});`);
+    const config = path.join(dir,"config.cjs");
+    await writeFile(config, `module.exports={testDir:${JSON.stringify(dir)},testMatch:'fixture.spec.cjs',reporter:[['list']]};`);
+    execFileSync(process.execPath, [path.resolve("node_modules/@playwright/test/cli.js"),"test","--config",config,...e2eReporterArguments(["--reporter=html"])], {cwd:dir,env:{...process.env,KM_E2E_RUN_REPORT_DIR:current,PLAYWRIGHT_HTML_OPEN:"never",PLAYWRIGHT_HTML_OUTPUT_DIR:e2eHtmlReportDirectory(dir)},stdio:"pipe"});
+    expect(await readFile(path.join(previous,"runner.json"),"utf8")).toBe("previous report");
+    expect(JSON.parse(await readFile(path.join(current,"tests.json"),"utf8")).counts.passed).toBe(1);
+    expect(await readFile(path.join(e2eHtmlReportDirectory(dir),"index.html"),"utf8")).toContain("html");
   }, 15000);
   test("successful real Playwright fixture exits zero and records a pass", async () => {
     const dir = await directory();

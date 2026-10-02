@@ -17,7 +17,7 @@ const teamsClosedServer = {
   env: { ...localServer.env, PORT: new URL(teamsClosedOrigin()).port, KM_TEAM_WORKSPACES_ENABLED: "false" },
 };
 export default defineConfig({
-  testDir: "./tests/e2e", timeout: 30_000, fullyParallel: false, workers: 1, reporter: process.env.KM_E2E_RUN_REPORT_DIR ? [["list"], ["./scripts/test/e2e-json-reporter.ts"]] : [["list"]],
+  testDir: "./tests/e2e", timeout: 30_000, fullyParallel: false, workers: 1, reporter: [["list"]],
   webServer: [localServer, ...(process.env.KM_E2E_TEAMS_CLOSED_SERVER === "false" ? [] : [teamsClosedServer]), ...(phase3Root ? phase3PersonaNames.map((persona) => ({
     command: `${process.execPath} node_modules/next/dist/bin/next start --hostname 127.0.0.1`,
     cwd: phase3Root, url: `${phase3Origin(persona)}/`, timeout: 60_000, reuseExistingServer: false,

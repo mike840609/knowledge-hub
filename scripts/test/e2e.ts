@@ -2,7 +2,7 @@ import { readFile, rm } from "node:fs/promises";
 import { preparePhase3Application, seedPhase3Identities } from "../../tests/e2e/fixtures/phase3-server";
 import { PHASE3_PROVIDER, phase3PersonaNames, phase3UserId } from "../../tests/e2e/fixtures/phase3-identities";
 import path from "node:path";
-import { assertE2eCounts, createE2eRunDirectory, recordE2eRun, type E2eCounts, type E2eRunReport } from "./e2e-report";
+import { assertE2eCounts, createE2eRunDirectory, e2eHtmlReportDirectory, e2eReporterArguments, recordE2eRun, type E2eCounts, type E2eRunReport } from "./e2e-report";
 import { e2eTeamWorkspacesEnabled, requiredE2eServices } from "./e2e-services";
 import { spawn, type ChildProcess } from "node:child_process";
 import { databaseConfig } from "@/infrastructure/database/mariadb/config";
@@ -158,9 +158,10 @@ async function main(): Promise<void> {
       cancellation.check();
       if (phase3Root) await timed("SSO application build", () => cancellation.run("node_modules/next/dist/bin/next", ["build"], phase3Environment, phase3Root));
       cancellation.check();
-      await timed("server readiness and browser tests", () => cancellation.run("node_modules/@playwright/test/cli.js", ["test", ...process.argv.slice(2)], {
+      await timed("server readiness and browser tests", () => cancellation.run("node_modules/@playwright/test/cli.js", ["test", ...e2eReporterArguments(process.argv.slice(2))], {
         ...commonEnvironment, NODE_ENV: "production", PORT: e2ePort,
         KM_E2E_RUN_REPORT_DIR: reportDirectory,
+        PLAYWRIGHT_HTML_OUTPUT_DIR: e2eHtmlReportDirectory(projectRoot),
         KM_PHASE3_APP_ROOT: phase3Root,
         KM_E2E_TEAMS_CLOSED_SERVER: String(services.teamsClosed),
         KM_E2E_UNCONFIGURED_SERVER: String(services.unconfigured),
