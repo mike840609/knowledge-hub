@@ -27,8 +27,17 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+function stubDigest(): void {
+  vi.stubGlobal("crypto", {
+    subtle: {
+      digest: vi.fn(async () => new Uint8Array(32).buffer),
+    },
+  });
+}
+
 describe("folder import asset manifest resource usage", () => {
   it("hashes assets with bounded concurrency instead of reading the whole folder into memory at once", async () => {
+    stubDigest();
     let active = 0;
     let maxActive = 0;
     const files = Array.from({ length: 8 }, (_, index) => fakeAsset(index, {
@@ -57,6 +66,7 @@ describe("folder import asset manifest resource usage", () => {
   });
 
   it("rejects an oversized asset before reading any bytes or creating a snapshot", async () => {
+    stubDigest();
     const arrayBuffer = vi.fn(async () => new Uint8Array([1]).buffer);
     const fetchMock = vi.fn<typeof fetch>();
     vi.stubGlobal("fetch", fetchMock);
