@@ -81,7 +81,12 @@ export function ImportStickyFooter({
       const response = await fetch(`/api/source-imports/${preview.snapshotId}/apply`, { method: "POST" });
       const body = await response.json().catch(() => null);
       if (!response.ok || !body || typeof body !== "object" || !("sourceId" in body)) {
-        requestWorkspaceAccessCheck(response.status);
+        // A known snapshot's 404 is an import-session problem, not evidence
+        // that Workspace authorization changed. Known-snapshot revocation is
+        // translated by the server to 403 ACCESS_DENIED.
+        if (response.status !== 404) {
+          requestWorkspaceAccessCheck(response.status, readEnvelope(body)?.code);
+        }
         const failure = classifyApplyError(response.status, body);
         if (failure.latchStale) setVersionConflict(true);
         setState({ kind: "ERROR", code: failure.code, message: failure.message });
