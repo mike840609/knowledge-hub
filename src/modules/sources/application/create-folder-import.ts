@@ -62,6 +62,7 @@ function validateManifest(manifest: readonly ImportManifestEntry[], limits: Impo
   const keys = new Set<string>();
   const paths = new Set<string>();
   let markdownBytes = 0;
+  let assetBytes = 0;
   for (const raw of manifest) {
     if (!raw || typeof raw.uploadKey !== "string" || !raw.uploadKey || raw.uploadKey.length > 512) {
       throw importError("INVALID_IMPORT_MANIFEST", "Every manifest entry requires a non-empty uploadKey up to 512 characters.");
@@ -81,6 +82,14 @@ function validateManifest(manifest: readonly ImportManifestEntry[], limits: Impo
       markdownBytes += raw.size;
       if (markdownBytes > limits.maxMarkdownTotalBytes) throw importError("IMPORT_LIMIT_EXCEEDED", "Markdown files exceed the total import byte limit.");
       continue;
+    }
+
+    if (raw.size > limits.maxAssetFileBytes) {
+      throw importError("IMPORT_LIMIT_EXCEEDED", "Asset file exceeds the per-file byte limit.");
+    }
+    assetBytes += raw.size;
+    if (assetBytes > limits.maxAssetTotalBytes) {
+      throw importError("IMPORT_LIMIT_EXCEEDED", "Assets exceed the total import byte limit.");
     }
 
     const asset = raw as Partial<Extract<ImportManifestEntry, { kind: "ASSET" }>>;
