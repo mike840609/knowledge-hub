@@ -10,7 +10,7 @@ import { FolderNameDialogHost } from "./folder-name-dialog";
 import { MoveDialogHost } from "./move-dialog";
 import { ShareLinkDialogHost } from "./share-link-dialog";
 import { InspectorContext } from "./inspector-context";
-import { DocumentSkeleton } from "./knowledge-skeletons";
+import { DocumentSkeleton, TreeSkeleton } from "./knowledge-skeletons";
 import { useScrollRestoration } from "./use-scroll-restoration";
 
 export function KnowledgeLayout({
@@ -27,6 +27,7 @@ export function KnowledgeLayout({
   children: ReactNode;
 }) {
   const navigation = useContext(NavigationContext);
+  const [explorerTarget, setExplorerTarget] = useState<HTMLElement | null>(null);
   const pathname = usePathname();
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -53,10 +54,13 @@ export function KnowledgeLayout({
   return (
     <InspectorContext.Provider value={{ open: inspectorOpen, setOpen: setInspectorOpen }}>
     <div className="flex h-full min-h-0 overflow-hidden">
+      <div ref={setExplorerTarget} className="hidden h-full w-72 shrink-0 lg:block">
+        {!explorerTarget ? <div className="h-full border-r border-kh-border bg-kh-bg-sunken p-3"><TreeSkeleton /></div> : null}
+      </div>
       {/* One explorer instance: avoid duplicate filter IDs and competing persisted state. */}
       {navigation?.mobileExplorerTarget ? createPortal(<div className="h-full" onClick={(event) => {
         if ((event.target as HTMLElement).closest("a") && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) navigation.closeNavigation();
-      }}>{sidebar}</div>, navigation.mobileExplorerTarget) : navigation?.explorerTarget ? createPortal(sidebar, navigation.explorerTarget) : null}
+      }}>{sidebar}</div>, navigation.mobileExplorerTarget) : explorerTarget ? createPortal(sidebar, explorerTarget) : null}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <div ref={contentRef} className="min-h-0 flex-1 overflow-hidden overscroll-contain [&:not(:has([data-document-pane]))]:overflow-y-auto">
           <Suspense fallback={<DocumentSkeleton />}>{children}</Suspense>

@@ -7,7 +7,7 @@
 | Finding | 結果與證據 |
 | --- | --- |
 | F01 分享頁捲動 | 移除全域 body 捲動鎖定，AppShell 保留自己的 viewport。Production browser 35-section 分享文章可以捲到最後一節。 |
-| F02 雙側欄 | 合併為單一 288px 導覽區：Primary navigation 加 Knowledge explorer；折疊後為 48px。手機使用一個 Menu drawer。1850px viewport 的 main 起點為 288px。 |
+| F02 雙側欄 | 桌面保留可收合主導覽（160px／48px）與獨立 288px 文件樹；文件樹從頂端開始，主導覽收合後仍保持完整高度。手機維持單一 Menu drawer。讀寫欄位對齊修正保留。 |
 | F03 讀寫位移與長文操作 | Composer 使用同一個 DocumentPane 與 outline 預留區。Breadcrumb 起點差小於 2px；捲到底時 Save 仍在 viewport。Save/Cancel/Markdown 與個人草稿狀態置於 sticky header。Reader 捲動後可從 topbar 執行 Edit/Share/Details；手機收進文件操作選單。 |
 | F04 Home 層級與文件列 | 整理、匯出及匯出範圍移入 Home actions；New note 保持主要操作。文件列接入 action registry/menu，手機保留日期；空 Drafts/Favorites 不佔據首頁。Move 仍由 Organize documents 進入，沒有在 Home 放置無法執行的 Move action。 |
 | F05 匯入控制項 | Source name 使用 Input，實際高度 32px；Choose folder 使用 Button 與隱藏 directory picker，顯示資料夾名稱／數量並允許重新選取。既有真實 import/apply E2E 通過。 |
@@ -64,3 +64,9 @@ Home 仍會列出工作區所有 metadata；Personal service 的既有逐項權�
 PR 準備時再次 fetch 並 rebase 到 `add48f0`（main 的搜尋／tooltip 修正）。Workspace selector 衝突保留 main 移除原生 tooltip 的行為，並保留 `kh-control` 觸控尺寸。
 
 Rebase 後重新通過 typecheck、lint、99 個 unit test files／1,468 tests，以及 production build 與 `linear-remediation`、`row-actions` 共 18 個 E2E tests。原先 integration 與其他 E2E 結果屬於上述實作驗證階段，未於此次 handoff 全量重跑。
+
+## Desktop sidebar configuration restored
+
+桌面主導覽恢復 160px 展開／48px 收合，Knowledge explorer 放回 main 左側的獨立 288px 區域。文件樹與 main 頂端對齊，主導覽收合後其高度保持不變且文件仍可見。手機單一 Menu、讀寫欄位對齊與其他 remediation 保留。
+
+本次修改後 typecheck、lint、production build 與 `linear-remediation`、`keyboard-shortcuts` 共 23 個 E2E tests 通過。新增幾何驗證涵蓋文件樹頂端對齊、288px 寬度與主導覽收合後可見且高度不變；既有讀寫對齊、持久化收合、手機 row/context menu 與無 JS 初始窄版檢查也通過。
