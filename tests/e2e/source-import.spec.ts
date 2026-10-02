@@ -136,29 +136,29 @@ test("abandoning a BUILDING snapshot frees the creator quota immediately", async
   );
 
   const snapshots: string[] = [];
-  for (let index = 0; index < 3; index += 1) {
-    const response = await create(`Abandon quota ${index}`);
-    expect(response.status()).toBe(201);
-    snapshots.push(((await response.json()) as { snapshotId: string }).snapshotId);
-  }
+  try {
+    for (let index = 0; index < 3; index += 1) {
+      const response = await create(`Abandon quota ${index}`);
+      expect(response.status()).toBe(201);
+      snapshots.push(((await response.json()) as { snapshotId: string }).snapshotId);
+    }
 
-  const blocked = await create("Abandon quota blocked");
-  // Quota exhaustion is a request/resource-limit error, not a concurrent
-  // state conflict, so the import HTTP contract reports it as 400.
-  expect(blocked.status()).toBe(400);
-  expect(((await blocked.json()) as { error: { code: string } }).error.code).toBe("IMPORT_BUILDING_QUOTA_EXCEEDED");
+    const blocked = await create("Abandon quota blocked");
+    expect(blocked.status()).toBe(400);
+    expect(((await blocked.json()) as { error: { code: string } }).error.code).toBe("IMPORT_BUILDING_QUOTA_EXCEEDED");
 
-  const abandoned = await request.delete(`/api/source-imports/${snapshots[0]}`);
-  expect(abandoned.status()).toBe(200);
-  expect(await abandoned.json()).toEqual({ abandoned: true });
+    const abandoned = await request.delete(`/api/source-imports/${snapshots[0]}`);
+    expect(abandoned.status()).toBe(200);
+    expect(await abandoned.json()).toEqual({ abandoned: true });
+    snapshots.shift();
 
-  const replacement = await create("Abandon quota replacement");
-  expect(replacement.status()).toBe(201);
-  snapshots.push(((await replacement.json()) as { snapshotId: string }).snapshotId);
-
-  for (const snapshotId of snapshots.slice(1)) {
-    const cleanup = await request.delete(`/api/source-imports/${snapshotId}`);
-    expect(cleanup.status()).toBe(200);
+    const replacement = await create("Abandon quota replacement");
+    expect(replacement.status()).toBe(201);
+    snapshots.push(((await replacement.json()) as { snapshotId: string }).snapshotId);
+  } finally {
+    for (const snapshotId of snapshots) {
+      await request.delete(`/api/source-imports/${snapshotId}`);
+    }
   }
 });
 
@@ -238,7 +238,10 @@ test("shows the malformed frontmatter blocker and disables apply", async ({ page
     `/w/${QUERY_MASTER_WORKSPACE_ID}/sources/imports/${bad.snapshotId}`,
   );
   await expect(page.getByRole("heading", { name: "Import preview" })).toBeVisible();
-  await expect(page.getByText("INVALID_FRONTMATTER")).toBeVisible();
+  const blocker = page.locator("details").filter({ has: page.getByText("INVALID_FRONTMATTER", { exact: true }) }).first();
+  await expect(blocker).toContainText("INVALID_FRONTMATTER");
+  await blocker.locator("summary").click();
+  await expect(blocker.getByText("INVALID_FRONTMATTER", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Apply changes" })).toBeDisabled();
   await expect(page.getByRole("button", { name: /force/i })).toHaveCount(0);
 
@@ -250,6 +253,7 @@ test("shows the malformed frontmatter blocker and disables apply", async ({ page
   await page.getByLabel("Filter changes").selectOption("warnings");
   const warningGroup = page.getByRole("region", { name: "Unchanged" });
   await expect(warningGroup.getByRole("button", { name: /Unchanged/ })).toHaveAttribute("aria-expanded", "true");
+  await warningGroup.locator("details").filter({ has: page.getByText("INVALID_FRONTMATTER", { exact: true }) }).locator("summary").click();
   await expect(warningGroup.getByText("INVALID_FRONTMATTER")).toBeVisible();
 });
 
@@ -295,6 +299,8 @@ test("previews identity-only adoption without counting a content update and bloc
   const conflict = await importFolder(request, { sourceId, files: files("guide-002") });
   expect(conflict.preview.hasBlockers).toBe(true);
   await page.goto(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources/imports/${conflict.snapshotId}`);
-  await expect(page.getByText(/IDENTITY_CONFLICT/).first()).toBeVisible();
+  const conflictDetails = page.locator("details").filter({ has: page.getByText("IDENTITY_CONFLICT", { exact: true }) }).first();
+  await conflictDetails.locator("summary").click();
+  await expect(conflictDetails.getByText("IDENTITY_CONFLICT", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Apply changes" })).toBeDisabled();
 });
