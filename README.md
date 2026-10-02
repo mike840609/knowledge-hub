@@ -66,10 +66,16 @@ make dev         # 啟動 dev server
 個人模式瀏覽器驗證：
 
 ```bash
-KM_TEAM_WORKSPACES_ENABLED=false KM_E2E_PERSONAL_ONLY=true npm run test:e2e -- personal-workspace.spec.ts
+KM_E2E_PERSONAL_ONLY=true npm run test:e2e -- personal-workspace.spec.ts
 ```
 
 既有 Team E2E 與 integration 測試明確使用 Team-enabled 模式；個人 rollout 測試另外驗證關閉與重新開放。
+
+E2E runner 明確管理測試模式：預設開啟 Team，不沿用 `.env` 的個人開發預設；`KM_E2E_PERSONAL_ONLY=true` 才關閉 Team。個人模式下，routing spec 的首頁案例仍執行，Team fixture 路由案例明確跳過。完整回歸需跑預設模式，再另外跑個人 rollout。
+
+單跑範例：`npm run test:e2e -- share-link.spec.ts`。runner 先用 Playwright 列出選定的 spec，再依其中引用的 origin helper 決定服務：一般案例只啟動 local；匿名分享另啟動未設定 SSO 的伺服器；Team availability 另啟動 Team 關閉的伺服器；SSO 治理案例才建立第二份測試 app 與身份伺服器。混合 spec 用 `--grep` 選單一案例時仍保留整份 spec 的服務需求，以涵蓋動態身份選擇。
+
+每次仍會建立隔離資料庫及執行必要的 production build，不使用可能過期的建置。輸出中的 `[e2e]` 顯示 discovery、DB 初始化、build、伺服器 readiness＋瀏覽器測試、cleanup 及總耗時；失敗也會保留階段計時。worker 仍為 1，其他 spec 的共用資料與順序依賴尚未全面隔離，不宜直接增加並行。
 
 ## 文件入口
 

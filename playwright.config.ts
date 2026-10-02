@@ -18,7 +18,7 @@ const teamsClosedServer = {
 };
 export default defineConfig({
   testDir: "./tests/e2e", timeout: 30_000, fullyParallel: false, workers: 1, reporter: [["list"]],
-  webServer: [localServer, teamsClosedServer, ...(phase3Root ? phase3PersonaNames.map((persona) => ({
+  webServer: [localServer, ...(process.env.KM_E2E_TEAMS_CLOSED_SERVER === "false" ? [] : [teamsClosedServer]), ...(phase3Root ? phase3PersonaNames.map((persona) => ({
     command: `${process.execPath} node_modules/next/dist/bin/next start --hostname 127.0.0.1`,
     cwd: phase3Root, url: `${phase3Origin(persona)}/`, timeout: 60_000, reuseExistingServer: false,
     env: {
@@ -26,7 +26,7 @@ export default defineConfig({
       KM_IDENTITY_PROVIDER: "company-sso", KM_COMPANY_SSO_PROVIDER: PHASE3_PROVIDER,
       KM_COMPANY_SSO_TEAM_CREATE_GROUPS: "phase3-creators", KM_PHASE3_SERVER_PERSONA: persona,
     } as Record<string, string>,
-  })) : []), ...(phase3Root ? [{
+  })) : []), ...((process.env.KM_E2E_UNCONFIGURED_SERVER === "true" || (phase3Root && process.env.KM_E2E_UNCONFIGURED_SERVER !== "false")) ? [{
     ...localServer,
     // Static readiness probe lets an intentionally fail-closed Company server boot.
     url: `${phase3UnconfiguredOrigin()}/_next/static/${readFileSync(".next/BUILD_ID", "utf8").trim()}/_buildManifest.js`,
