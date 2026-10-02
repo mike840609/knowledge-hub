@@ -143,7 +143,9 @@ test("abandoning a BUILDING snapshot frees the creator quota immediately", async
   }
 
   const blocked = await create("Abandon quota blocked");
-  expect(blocked.status()).toBe(409);
+  // Quota exhaustion is a request/resource-limit error, not a concurrent
+  // state conflict, so the import HTTP contract reports it as 400.
+  expect(blocked.status()).toBe(400);
   expect(((await blocked.json()) as { error: { code: string } }).error.code).toBe("IMPORT_BUILDING_QUOTA_EXCEEDED");
 
   const abandoned = await request.delete(`/api/source-imports/${snapshots[0]}`);
