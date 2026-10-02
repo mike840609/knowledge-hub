@@ -87,4 +87,24 @@ describe("workspace authorization refresh failures", () => {
     });
     expect(container.textContent).toBe("paused");
   });
+  it("verifies the current Workspace directly before treating a navigation omission as revocation", async () => {
+    const personal = { id: "personal", name: "My Space", type: "PERSONAL", lifecycleState: "ACTIVE" } as const;
+    const navWithoutCurrent = { canCreateTeam: false, teamsOpen: true, items: [personal] } satisfies WorkspaceNavigationModel;
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(navWithoutCurrent))
+      .mockResolvedValueOnce(Response.json(initialAccess));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<Probe />);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      "/api/workspaces",
+      "/api/workspaces/workspace",
+    ]);
+    expect(container.textContent).toBe("confirmed");
+  });
+
 });
