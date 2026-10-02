@@ -24,8 +24,10 @@ describe("folder import stops writes when authorization changes", () => {
     await expect(runFolderImport({ target, files: markdownFiles(45), sourceName: "Notes", onProgress: vi.fn(),
       assertAllowed: () => { if (!allowed) throw revoked; },
     })).rejects.toMatchObject({ code: "WORKSPACE_ACCESS_CHANGED" });
-    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
-      "/api/workspaces/workspace/source-imports", "/api/source-imports/snapshot/entries",
+    expect(fetchMock.mock.calls.map(([url, init]) => [url, init?.method ?? "GET"])).toEqual([
+      ["/api/workspaces/workspace/source-imports", "POST"],
+      ["/api/source-imports/snapshot/entries", "POST"],
+      ["/api/source-imports/snapshot", "DELETE"],
     ]);
     const form = fetchMock.mock.calls[1][1]?.body as FormData;
     expect(JSON.parse(String(form.get("entries")))).toHaveLength(20);
@@ -39,8 +41,10 @@ describe("folder import stops writes when authorization changes", () => {
     await expect(runFolderImport({ target, files: markdownFiles(1), sourceName: "Notes", onProgress: vi.fn(),
       assertAllowed: () => { if (!allowed) throw revoked; },
     })).rejects.toMatchObject({ code: "WORKSPACE_ACCESS_CHANGED" });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/finalize"))).toBe(false);
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/source-imports/snapshot");
+    expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({ method: "DELETE", keepalive: true });
   });
 
   it("does not create a session when access changes while the asset manifest is being prepared", async () => {
@@ -75,7 +79,9 @@ describe("folder import stops writes when authorization changes", () => {
     await expect(runFolderImport({ target, files: markdownFiles(45), sourceName: "Notes", onProgress: vi.fn(),
       assertAllowed: () => {},
     })).rejects.toMatchObject({ code: "WORKSPACE_ARCHIVED" });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/source-imports/snapshot");
+    expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({ method: "DELETE", keepalive: true });
     expect(requestWorkspaceAccessCheck).toHaveBeenCalledWith(409, "WORKSPACE_ARCHIVED");
   });
 
@@ -107,6 +113,50 @@ describe("folder import stops writes when authorization changes", () => {
       assertAllowed: () => {},
     })).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(requestWorkspaceAccessCheck).not.toHaveBeenCalled();
+  });
+
+  it("retries a transient upload failure against the same snapshot instead of creating another session", async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(response({ snapshotId: "snapshot" }, 201))
+      .mockResolvedValueOnce(response({ error: { code: "TEMPORARY_FAILURE", message: "Try again." } }, 503))
+      .mockResolvedValueOnce(response({ accepted: 1, idempotent: 0, diagnostics: [] }))
+      .mockResolvedValueOnce(response({ snapshotId: "snapshot" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(runFolderImport({
+      target,
+      files: markdownFiles(1),
+      sourceName: "Notes",
+      onProgress: vi.fn(),
+      assertAllowed: () => {},
+    })).resolves.toBe("snapshot");
+
+    const calls = fetchMock.mock.calls.map(([url, init]) => [String(url), init?.method ?? "GET"]);
+    expect(calls).toEqual([
+      ["/api/workspaces/workspace/source-imports", "POST"],
+      ["/api/source-imports/snapshot/entries", "POST"],
+      ["/api/source-imports/snapshot/entries", "POST"],
+      ["/api/source-imports/snapshot/finalize", "POST"],
+    ]);
+  });
+
+  it("abandons a known BUILDING snapshot after a terminal upload failure", async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(response({ snapshotId: "snapshot" }, 201))
+      .mockResolvedValueOnce(response({ error: { code: "UPLOAD_SIZE_MISMATCH", message: "Bad upload." } }, 400))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(runFolderImport({
+      target,
+      files: markdownFiles(1),
+      sourceName: "Notes",
+      onProgress: vi.fn(),
+      assertAllowed: () => {},
+    })).rejects.toMatchObject({ code: "UPLOAD_SIZE_MISMATCH" });
+
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/source-imports/snapshot");
+    expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({ method: "DELETE", keepalive: true });
   });
 
 });
