@@ -81,7 +81,7 @@ export function ImportStickyFooter({
       const response = await fetch(`/api/source-imports/${preview.snapshotId}/apply`, { method: "POST" });
       const body = await response.json().catch(() => null);
       if (!response.ok || !body || typeof body !== "object" || !("sourceId" in body)) {
-        requestWorkspaceAccessCheck(response.status);
+        requestWorkspaceAccessCheck(response.status, readEnvelope(body)?.code);
         const failure = classifyApplyError(response.status, body);
         if (failure.latchStale) setVersionConflict(true);
         setState({ kind: "ERROR", code: failure.code, message: failure.message });
