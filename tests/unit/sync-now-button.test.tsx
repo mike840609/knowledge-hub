@@ -122,7 +122,9 @@ it("renders an icon-only Sync now button: accessible name, no visible text, icon
   expect(button).not.toBeNull();
   expect(button?.textContent?.trim()).toBe("");
   expect(button?.className).toContain("kh-icon-control");
-  expect(button?.className).toContain("bg-kh-primary");
+  expect(button?.className).toContain("bg-kh-bg-selected");
+  expect(button?.className).toContain("text-kh-selected-text");
+  expect(button?.className).not.toContain("bg-kh-primary");
   expect(button?.querySelector("svg")).not.toBeNull();
   expect(container.textContent).not.toContain("Last folder: notes");
   expect(container.textContent).not.toContain("Forget");

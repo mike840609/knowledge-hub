@@ -91,7 +91,7 @@ it("renders Update from folder as an icon-only primary link when no folder is re
   expect(container.textContent).not.toContain("Last folder:");
 });
 
-it("orders Sync now before Update when a folder is remembered (ghost Update, primary Sync, no header caption)", async () => {
+it("orders Sync now before Update when a folder is remembered (ghost Update, soft Sync, no header caption)", async () => {
   store.meta = { rootName: "notes", lastSyncAt: "2026-10-02T00:00:00.000Z" };
   await renderActions();
   const link = updateLink();
@@ -113,11 +113,13 @@ it("orders Sync now before Update when a folder is remembered (ghost Update, pri
   }
 });
 
-it("renders the Sync now button with the primary variant when memory exists", async () => {
+it("renders the Sync now button with the soft variant when memory exists", async () => {
   store.meta = { rootName: "notes", lastSyncAt: "2026-10-02T00:00:00.000Z" };
   await renderActions();
   const syncButton = container.querySelector('button[aria-label="Sync now"]');
-  expect(syncButton?.className).toContain("bg-kh-primary");
+  expect(syncButton?.className).toContain("bg-kh-bg-selected");
+  expect(syncButton?.className).toContain("text-kh-selected-text");
+  expect(syncButton?.className).not.toContain("bg-kh-primary");
   expect(syncButton?.className).not.toContain("border-kh-border-strong");
 });
 

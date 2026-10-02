@@ -95,7 +95,7 @@ export function SyncNowButton({ workspaceId, sourceId }: { workspaceId: string; 
   return (
     <span className="flex flex-wrap items-center gap-2">
       <Tooltip label={`Sync now - re-scan ${meta.rootName}`}>
-        <Button type="button" variant="primary" icon disabled={busy} aria-label="Sync now" onClick={() => void handleSync()}>
+        <Button type="button" variant="soft" icon disabled={busy} aria-label="Sync now" onClick={() => void handleSync()}>
           <RefreshCw size={15} aria-hidden="true" />
         </Button>
       </Tooltip>
