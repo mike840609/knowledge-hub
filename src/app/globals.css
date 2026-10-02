@@ -121,10 +121,7 @@ body {
   background: var(--kh-bg-sunken);
   color: var(--kh-text);
   font-family: var(--kh-font-sans), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  /* App shell owns all scrolling (inner panes). A window-level scrollbar would
-     move the topbar/sidebars together, so lock the viewport. Inner scroll
-     containers (AppShell main, document pane, tree nav) are unaffected. */
-  overflow: hidden;
+  /* AppShell locks its own viewport; standalone readers use document scrolling. */
 }
 
 @media print {
@@ -433,3 +430,15 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .group:focus-within .kh-row-action,
   .kh-row-action[data-popup-open] { opacity: 1; }
 }
+
+/* Dense desktop chrome keeps its ladder; touch gets a usable physical target. */
+@media (pointer: coarse) {
+  .kh-control { min-height: 40px; }
+  .kh-icon-control { min-width: 40px; }
+  .kh-row-action { opacity: 1; }
+  .kh-tree-row-actions { right: 44px; }
+  .kh-tree-document-link, .kh-tree-folder-button { padding-inline-end: 48px; }
+}
+
+/* Search icon clearance: left inset + icon width + gutter, not spacing rhythm. */
+.kh-search-field { padding-inline-start: 2.25rem; }

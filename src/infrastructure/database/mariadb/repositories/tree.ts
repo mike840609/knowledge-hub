@@ -1,7 +1,7 @@
 import type { KnowledgeTreeNode } from "@/modules/knowledge/domain/tree-node";
-import type { TreeRepository, TreeViewNode } from "@/modules/knowledge/ports/tree-repository";
+import type { DocumentSummary, TreeRepository, TreeViewNode } from "@/modules/knowledge/ports/tree-repository";
 import type { QueryConnection, DbRow } from "./shared";
-import { affectedRows, asNumber, asRequiredString } from "./shared";
+import { affectedRows, asDate, asNumber, asRequiredString } from "./shared";
 
 function mapNode(row: DbRow): KnowledgeTreeNode {
   return {
@@ -15,6 +15,25 @@ function mapNode(row: DbRow): KnowledgeTreeNode {
 
 export class MariaDbTreeRepository implements TreeRepository {
   constructor(private readonly connection: QueryConnection) {}
+
+  async listDocumentsByWorkspace(workspaceId: string, includeArchived: boolean): Promise<DocumentSummary[]> {
+    const rows = await this.connection.query<DbRow[]>(
+      `SELECT d.id AS document_id, d.source_id, r.title, r.created_at AS updated_at,
+              s.ownership, s.status AS source_status, d.status
+       FROM knowledge_documents d
+       JOIN knowledge_sources s ON s.id = d.source_id
+       JOIN knowledge_tree_nodes n ON n.document_id = d.id AND n.source_id = s.id
+       JOIN knowledge_revisions r ON r.id = d.current_revision_id AND r.document_id = d.id
+       WHERE s.workspace_id = ? AND (? = 1 OR (s.status = 'ACTIVE' AND d.status = 'ACTIVE' AND n.status = 'ACTIVE'))
+       ORDER BY r.created_at DESC, d.id ASC`, [workspaceId, includeArchived ? 1 : 0],
+    );
+    return rows.map((row) => ({
+      documentId: String(row.document_id), sourceId: String(row.source_id),
+      title: asRequiredString(row.title, "document summary title"), updatedAt: asDate(row.updated_at),
+      ownership: String(row.ownership) as DocumentSummary["ownership"],
+      status: String(row.status) as DocumentSummary["status"], sourceStatus: String(row.source_status) as DocumentSummary["sourceStatus"],
+    }));
+  }
 
   async insert(node: KnowledgeTreeNode): Promise<void> {
     await this.connection.query(

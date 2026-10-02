@@ -6,6 +6,7 @@ const variantClasses = {
   primary: "border-transparent bg-kh-primary text-kh-on-primary hover:bg-kh-primary-hover",
   secondary: "border-kh-border-strong bg-kh-bg text-kh-text hover:bg-kh-bg-hover",
   ghost: "border-transparent bg-transparent text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text",
+  soft: "border-transparent bg-kh-bg-selected text-kh-selected-text hover:bg-kh-bg-selected",
   danger: "border-transparent bg-kh-danger-solid text-kh-on-primary hover:bg-kh-danger-solid-hover",
   link: "border-transparent bg-transparent text-kh-link underline underline-offset-2 hover:text-kh-text",
 } as const;
@@ -56,7 +57,7 @@ export function buttonClasses({
     : icon
       ? iconSizeClasses[size]
       : sizeClasses[size];
-  return `kh-focus-ring inline-flex shrink-0 items-center justify-center rounded-md border font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 ${shape} ${variantClasses[variant]} ${className}`;
+  return `${variant === "link" ? "" : "kh-control"} ${icon ? "kh-icon-control" : ""} kh-focus-ring inline-flex shrink-0 items-center justify-center rounded-md border font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 ${shape} ${variantClasses[variant]} ${className}`;
 }
 
 type ButtonProps = ComponentProps<typeof BaseButton> & ButtonAppearance;

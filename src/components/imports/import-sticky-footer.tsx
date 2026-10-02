@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { requestWorkspaceAccessCheck, useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { useEffect, useState } from "react";
 import type { ImportPreview } from "@/modules/sources/application/reconcile-import-snapshot";
+import { adoptPendingHandle } from "@/components/imports/folder-handle-store";
 import { buttonClasses } from "@/components/ui/button";
 
 export type ApplyFailure = { code: string; message: string; latchStale: boolean };
@@ -93,6 +94,11 @@ export function ImportStickyFooter({
         return;
       }
       const sourceId = (body as { sourceId: string }).sourceId;
+      try {
+        await adoptPendingHandle(preview.snapshotId, sourceId);
+      } catch {
+        // Best-effort: a storage failure must never block navigation.
+      }
       router.push(`/w/${workspaceId}/sources/${sourceId}?import=success`);
     } catch (error) {
       setState({ kind: "ERROR", code: "IMPORT_APPLY_FAILED", message: error instanceof Error ? error.message : GENERIC_GUIDANCE });
@@ -135,9 +141,10 @@ export function ImportStickyFooter({
       ) : null}
       {state.kind === "ERROR" ? (
         <p role="alert" className="mx-auto mt-2 max-w-page text-body text-kh-danger">
-          {state.code}: {state.message}
+          {state.message}
         </p>
       ) : null}
+      {state.kind === "ERROR" ? <details className="mx-auto mt-2 max-w-page text-caption text-kh-text-muted"><summary className="cursor-pointer rounded-md kh-focus-ring">Technical details</summary><code>{state.code}</code></details> : null}
     </div>
   );
 }

@@ -160,3 +160,11 @@ describe("the classes the highlighter emits", () => {
     expect(PLAIN_ON_PURPOSE.filter((scope) => styled.has(scope))).toEqual([]);
   });
 });
+
+
+it.each(["light", "dark"] as const)("legible keyboard and graph hints on %s surfaces", theme => {
+  const declared = properties(theme);
+  for (const background of ["--kh-bg", "--kh-bg-subtle", "--kh-bg-sunken"]) {
+    expect(contrast(declared["--kh-text-muted"], declared[background])).toBeGreaterThanOrEqual(4.5);
+  }
+});

@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import config from "../../tailwind.config";
 
 /**
- * §3 says the scales are replaced, not extended, so an off-scale spelling
- * compiles to nothing. That property is what makes the contract binding, and
- * nothing checked it: a scale moved under `extend` would keep every old
+ * §3 says the scales are replaced, not extended, so an unnamed ordinary utility
+ * compiles to nothing. Arbitrary values still compile and are checked by
+ * design/contract instead. This test checks config replacement: a scale moved under `extend` would keep every old
  * spelling working and the only symptom would be drift nobody notices.
  */
 const theme = config.theme as Record<string, unknown>;

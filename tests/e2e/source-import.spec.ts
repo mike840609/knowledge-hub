@@ -197,7 +197,10 @@ test("shows the malformed frontmatter blocker and disables apply", async ({ page
     `/w/${QUERY_MASTER_WORKSPACE_ID}/sources/imports/${bad.snapshotId}`,
   );
   await expect(page.getByRole("heading", { name: "Import preview" })).toBeVisible();
-  await expect(page.getByText("INVALID_FRONTMATTER")).toBeVisible();
+  const blocker = page.locator("details").filter({ has: page.getByText("INVALID_FRONTMATTER", { exact: true }) }).first();
+  await expect(blocker).toContainText("INVALID_FRONTMATTER");
+  await blocker.locator("summary").click();
+  await expect(blocker.getByText("INVALID_FRONTMATTER", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Apply changes" })).toBeDisabled();
   await expect(page.getByRole("button", { name: /force/i })).toHaveCount(0);
 
@@ -209,6 +212,7 @@ test("shows the malformed frontmatter blocker and disables apply", async ({ page
   await page.getByLabel("Filter changes").selectOption("warnings");
   const warningGroup = page.getByRole("region", { name: "Unchanged" });
   await expect(warningGroup.getByRole("button", { name: /Unchanged/ })).toHaveAttribute("aria-expanded", "true");
+  await warningGroup.locator("details").filter({ has: page.getByText("INVALID_FRONTMATTER", { exact: true }) }).locator("summary").click();
   await expect(warningGroup.getByText("INVALID_FRONTMATTER")).toBeVisible();
 });
 
@@ -254,6 +258,8 @@ test("previews identity-only adoption without counting a content update and bloc
   const conflict = await importFolder(request, { sourceId, files: files("guide-002") });
   expect(conflict.preview.hasBlockers).toBe(true);
   await page.goto(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources/imports/${conflict.snapshotId}`);
-  await expect(page.getByText(/IDENTITY_CONFLICT/).first()).toBeVisible();
+  const conflictDetails = page.locator("details").filter({ has: page.getByText("IDENTITY_CONFLICT", { exact: true }) }).first();
+  await conflictDetails.locator("summary").click();
+  await expect(conflictDetails.getByText("IDENTITY_CONFLICT", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Apply changes" })).toBeDisabled();
 });
