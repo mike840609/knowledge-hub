@@ -14,7 +14,7 @@ const ROUND_TRIP = { timeout: 15_000 };
  * database.
  */
 test.describe("document share link", () => {
-  test.skip(!process.env.KM_PHASE3_APP_ROOT, "Run npm run test:e2e to provision the no-sign-in origin.");
+  test.skip(!process.env.KM_PHASE3_APP_ROOT && process.env.KM_E2E_UNCONFIGURED_SERVER !== "true", "Run npm run test:e2e to provision the no-sign-in origin.");
 
   async function createMySpaceDocument(page: Page, title: string, body: string): Promise<{ workspaceId: string }> {
     await page.goto("/");
