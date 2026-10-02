@@ -236,9 +236,16 @@ export function FolderImportForm({ target }: { target: FolderImportTarget }): Re
   const [sourceName, setSourceName] = useState("");
   const picker = useRef<HTMLInputElement>(null);
   const [selection, setSelection] = useState<{ name: string; count: number } | null>(null);
-  const [rememberedRoot] = useState<string | null>(() =>
-    target.kind === "existing" ? (getRememberedFolderMeta(target.sourceId)?.rootName ?? null) : null,
-  );
+  const [rememberedRoot, setRememberedRoot] = useState<string | null>(null);
+  const rememberedSourceId = target.kind === "existing" ? target.sourceId : null;
+  useEffect(() => {
+    if (!rememberedSourceId) return;
+    try {
+      setRememberedRoot(getRememberedFolderMeta(rememberedSourceId)?.rootName ?? null);
+    } catch {
+      setRememberedRoot(null);
+    }
+  }, [rememberedSourceId]);
   const busy = state.kind === "PREPARING" || state.kind === "UPLOADING" || state.kind === "FINALIZING";
   const status = statusText(state);
 

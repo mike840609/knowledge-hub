@@ -84,7 +84,7 @@ export function isDirectoryPickerSupported(): boolean {
   return typeof candidate.showDirectoryPicker === "function";
 }
 
-/** Reads the localStorage display meta; null on missing/corrupt. */
+/** Reads the localStorage display meta; null on missing/corrupt. Corrupt entries are removed so the documented cleanup contract holds. */
 export function getRememberedFolderMeta(sourceId: string): RememberedFolderMeta | null {
   const store = storage();
   if (!store) return null;
@@ -97,13 +97,18 @@ export function getRememberedFolderMeta(sourceId: string): RememberedFolderMeta 
   if (!raw) return null;
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== "object" || parsed === null) return null;
+    if (typeof parsed !== "object" || parsed === null) {
+      removeMeta(sourceId);
+      return null;
+    }
     const record = parsed as Record<string, unknown>;
     if (typeof record["rootName"] !== "string" || typeof record["lastSyncAt"] !== "string") {
+      removeMeta(sourceId);
       return null;
     }
     return { rootName: record["rootName"], lastSyncAt: record["lastSyncAt"] };
   } catch {
+    removeMeta(sourceId);
     return null;
   }
 }
@@ -269,7 +274,8 @@ function deleteHandle(sourceId: string): Promise<void> {
 /**
  * Persists the handle in IndexedDB and the display meta in localStorage.
  * Storage failures (private mode, quota) are swallowed: the entry simply
- * will not be there for a later load.
+ * will not be there for a later load. When the meta write is unavailable or
+ * fails, the just-written handle is deleted so no orphaned entry remains.
  */
 export async function rememberFolderHandle(
   sourceId: string,
@@ -278,7 +284,10 @@ export async function rememberFolderHandle(
 ): Promise<void> {
   await putHandle(sourceId, handle);
   const store = storage();
-  if (!store) return;
+  if (!store) {
+    await deleteHandle(sourceId);
+    return;
+  }
   try {
     store.setItem(
       metaKey(sourceId),

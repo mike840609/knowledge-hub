@@ -38,13 +38,16 @@ export function SyncNowButton({ workspaceId, sourceId }: { workspaceId: string; 
       });
     }
   };
-  const [meta] = useState<RememberedMeta | null>(() => {
+  const [meta, setMeta] = useState<RememberedMeta | null>(null);
+  const [pickerSupported, setPickerSupported] = useState(false);
+  useEffect(() => {
+    setPickerSupported(isDirectoryPickerSupported());
     try {
-      return getRememberedFolderMeta(sourceId);
+      setMeta(getRememberedFolderMeta(sourceId));
     } catch {
-      return null;
+      setMeta(null);
     }
-  });
+  }, [sourceId]);
   const [forgotten, setForgotten] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -94,7 +97,7 @@ export function SyncNowButton({ workspaceId, sourceId }: { workspaceId: string; 
     }
   }
 
-  if (!isDirectoryPickerSupported()) return null;
+  if (!pickerSupported) return null;
   if (!confirmed || !access.actions.canImport) return null;
   if (forgotten || !meta) return null;
 

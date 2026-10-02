@@ -227,13 +227,15 @@ describe("folder-handle-store", () => {
     expect(isDirectoryPickerSupported()).toBe(true);
   });
 
-  it("returns null meta when nothing was remembered, and null on corrupt meta", () => {
+  it("returns null meta when nothing was remembered, and removes corrupt meta", () => {
     stubPicker();
     expect(getRememberedFolderMeta("src-1")).toBeNull();
     localStorage.setItem(META_KEY("src-1"), "not-json{{{");
     expect(getRememberedFolderMeta("src-1")).toBeNull();
+    expect(localStorage.getItem(META_KEY("src-1"))).toBeNull();
     localStorage.setItem(META_KEY("src-1"), JSON.stringify({ rootName: 42 }));
     expect(getRememberedFolderMeta("src-1")).toBeNull();
+    expect(localStorage.getItem(META_KEY("src-1"))).toBeNull();
   });
 
   it("rememberFolderHandle persists the meta with rootName and an ISO lastSyncAt", async () => {
@@ -246,6 +248,47 @@ describe("folder-handle-store", () => {
     expect(meta?.rootName).toBe("wiki");
     expect(typeof meta?.lastSyncAt).toBe("string");
     expect(Number.isNaN(Date.parse(meta?.lastSyncAt ?? ""))).toBe(false);
+  });
+
+  it("rememberFolderHandle deletes the just-written handle when the meta write throws", async () => {
+    stubPicker();
+    const handle = makeDirHandle("wiki", [{ kind: "file", name: "a.md", content: "# a" }]);
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("quota exceeded");
+    });
+    try {
+      await rememberFolderHandle("src-orphan", handle, "wiki");
+    } finally {
+      setItem.mockRestore();
+    }
+
+    // The meta write failed, so the handle must be gone too. Planting a valid
+    // meta proves it: a leftover handle would load here.
+    localStorage.setItem(
+      META_KEY("src-orphan"),
+      JSON.stringify({ rootName: "wiki", lastSyncAt: new Date().toISOString() }),
+    );
+    expect(await loadRememberedHandle("src-orphan")).toBeNull();
+    expect(getRememberedFolderMeta("src-orphan")).toBeNull();
+  });
+
+  it("rememberFolderHandle deletes the just-written handle when localStorage is unavailable", async () => {
+    stubPicker();
+    const handle = makeDirHandle("wiki", [{ kind: "file", name: "a.md", content: "# a" }]);
+    const originalLocalStorage = globalThis.localStorage;
+    vi.stubGlobal("localStorage", undefined);
+    try {
+      await rememberFolderHandle("src-nostore", handle, "wiki");
+    } finally {
+      vi.stubGlobal("localStorage", originalLocalStorage);
+    }
+
+    localStorage.setItem(
+      META_KEY("src-nostore"),
+      JSON.stringify({ rootName: "wiki", lastSyncAt: new Date().toISOString() }),
+    );
+    expect(await loadRememberedHandle("src-nostore")).toBeNull();
+    expect(getRememberedFolderMeta("src-nostore")).toBeNull();
   });
 
   it("loadRememberedHandle returns the stored handle and rootName when readable", async () => {
@@ -354,6 +397,30 @@ describe("folder-handle-store", () => {
       const full = relativePathOf(file);
       expect(full.slice(0, full.indexOf("/"))).toBe(handle.name);
     }
+  });
+
+  it("collectHandleFiles preserves File type, size, and lastModified from getFile()", async () => {
+    const lastModified = 1727740800000;
+    const source = new File(["# hello"], "note.md", { type: "text/markdown", lastModified });
+    const fileHandle: FileSystemFileHandle = {
+      kind: "file",
+      name: "note.md",
+      getFile: async () => source,
+    };
+    const handle: FileSystemDirectoryHandle = {
+      kind: "directory",
+      name: "wiki",
+      values: async function* (): AsyncIterableIterator<FileSystemHandle> {
+        yield fileHandle;
+      },
+    };
+
+    const files = await collectHandleFiles(handle);
+    expect(files).toHaveLength(1);
+    expect(files[0].type).toBe("text/markdown");
+    expect(files[0].size).toBe(source.size);
+    expect(files[0].lastModified).toBe(lastModified);
+    expect(relativePathOf(files[0])).toBe("wiki/note.md");
   });
 
   it("resolves null / no-ops instead of throwing when IndexedDB is unavailable", async () => {

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act, createElement } from "react";
+import { renderToString } from "react-dom/server";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FolderImportForm } from "@/components/imports/folder-import-form";
@@ -85,6 +86,13 @@ async function clickChooseFolder() {
 }
 
 describe("folder import directory picker", () => {
+  it("loads the remembered root in an effect: server render shows nothing and reads no browser storage", () => {
+    vi.mocked(getRememberedFolderMeta).mockReturnValue({ rootName: "Notes", lastSyncAt: "2026-10-01T00:00:00.000Z" });
+    const html = renderToString(createElement(FolderImportForm, { target: existingTarget }));
+    expect(html).not.toContain("Last synced folder");
+    expect(vi.mocked(getRememberedFolderMeta)).not.toHaveBeenCalled();
+  });
+
   it("collects picked files, remembers the handle after success, then navigates to the preview", async () => {
     vi.mocked(isDirectoryPickerSupported).mockReturnValue(true);
     vi.mocked(getRememberedFolderMeta).mockReturnValue({ rootName: "Notes", lastSyncAt: "2026-10-01T00:00:00.000Z" });

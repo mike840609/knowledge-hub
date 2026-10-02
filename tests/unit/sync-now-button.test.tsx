@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act } from "react";
+import { renderToString } from "react-dom/server";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { SyncNowButton } from "@/components/sources/sync-now-button";
@@ -118,6 +119,13 @@ it("shows Sync now with the remembered folder caption and a Forget action", asyn
   expect(container.textContent).toContain("Sync now");
   expect(container.textContent).toContain("Last folder: notes");
   expect(container.textContent).toContain("Forget");
+});
+
+it("loads the remembered folder in an effect: server render shows nothing and reads no browser storage", () => {
+  const html = renderToString(<SyncNowButton workspaceId="ws-1" sourceId="src-1" />);
+  expect(html).toBe("");
+  expect(store.isDirectoryPickerSupported).not.toHaveBeenCalled();
+  expect(store.getRememberedFolderMeta).not.toHaveBeenCalled();
 });
 
 it("forgets the remembered folder and hides itself", async () => {
