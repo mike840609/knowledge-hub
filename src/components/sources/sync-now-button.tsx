@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
-import { runFolderImport, type ImportUiState } from "@/components/imports/folder-import-form";
+import { runFolderImport, type ImportUiState, type FolderImportClientLimits } from "@/components/imports/folder-import-form";
 import {
   collectHandleFiles,
   getRememberedFolderMeta,
@@ -23,16 +23,28 @@ type RememberedMeta = NonNullable<ReturnType<typeof getRememberedFolderMeta>>;
  * caller may import, and a folder is remembered for this source. The existing
  * "Update from folder" link keeps its own gate and is untouched.
  */
-export function SyncNowButton({ workspaceId, sourceId }: { workspaceId: string; sourceId: string }): React.JSX.Element | null {
+export function SyncNowButton({ workspaceId, sourceId, limits }: { workspaceId: string; sourceId: string; limits?: FolderImportClientLimits }): React.JSX.Element | null {
   const router = useRouter();
   const { access, confirmed } = useWorkspaceAuthorization();
   const allowed = confirmed && access.actions.canImport;
   const allowedRef = useRef(allowed);
   allowedRef.current = allowed;
-  useEffect(() => () => {
-    allowedRef.current = false;
+  const mountedRef = useRef(false);
+  const activeImportRef = useRef<AbortController | null>(null);
+  useEffect(() => {
+    mountedRef.current = true;
+    const cancel = () => activeImportRef.current?.abort();
+    window.addEventListener("pagehide", cancel);
+    return () => {
+      mountedRef.current = false;
+      window.removeEventListener("pagehide", cancel);
+      cancel();
+    };
   }, []);
   const assertAllowed = () => {
+    if (!mountedRef.current || activeImportRef.current?.signal.aborted) {
+      throw Object.assign(new Error("Import was cancelled."), { code: "IMPORT_CANCELLED" });
+    }
     if (!allowedRef.current) {
       throw Object.assign(new Error("Workspace access changed. Import is paused."), {
         code: "WORKSPACE_ACCESS_CHANGED",
@@ -55,11 +67,15 @@ export function SyncNowButton({ workspaceId, sourceId }: { workspaceId: string; 
 
   async function handleSync(): Promise<void> {
     if (busy) return;
+    const controller = new AbortController();
+    activeImportRef.current = controller;
     setBusy(true);
     setNeedsReselect(false);
     setStatus("Preparing the folder manifest…");
     try {
+      assertAllowed();
       const remembered = await loadRememberedHandle(sourceId);
+      assertAllowed();
       if (!remembered) {
         setStatus("Saved folder is unavailable - pick the folder again");
         setNeedsReselect(true);
@@ -71,19 +87,26 @@ export function SyncNowButton({ workspaceId, sourceId }: { workspaceId: string; 
         files,
         sourceName: "",
         onProgress: (state: ImportUiState) => {
+          if (!mountedRef.current) return;
           if (state.kind === "PREPARING") setStatus("Preparing the folder manifest…");
           else if (state.kind === "UPLOADING") setStatus(`Uploading Markdown files… ${state.uploaded}/${state.total}`);
           else if (state.kind === "FINALIZING") setStatus("Analyzing the folder and building the preview…");
         },
         assertAllowed,
+        limits,
+        signal: controller.signal,
       });
       assertAllowed();
       await rememberFolderHandle(sourceId, remembered.handle, remembered.rootName);
+      assertAllowed();
       router.push(`/w/${workspaceId}/sources/imports/${snapshotId}`);
     } catch (error) {
+      if (!mountedRef.current) return;
+      if (controller.signal.aborted) { setStatus(null); return; }
       setStatus(error instanceof Error ? error.message : "Syncing the remembered folder failed.");
     } finally {
-      setBusy(false);
+      if (activeImportRef.current === controller) activeImportRef.current = null;
+      if (mountedRef.current) setBusy(false);
     }
   }
 

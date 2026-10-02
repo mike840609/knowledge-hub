@@ -11,6 +11,8 @@ import {
 } from "@/components/imports/folder-handle-store";
 import { buttonClasses } from "@/components/ui/button";
 
+import type { FolderImportClientLimits } from "@/components/imports/folder-import-form";
+
 type RememberedMeta = NonNullable<ReturnType<typeof getRememberedFolderMeta>>;
 
 /**
@@ -24,9 +26,11 @@ type RememberedMeta = NonNullable<ReturnType<typeof getRememberedFolderMeta>>;
 export function SourceSyncActions({
   workspaceId,
   sourceId,
+  limits,
 }: {
   workspaceId: string;
   sourceId: string;
+  limits?: FolderImportClientLimits;
 }): React.JSX.Element {
   const [meta, setMeta] = useState<RememberedMeta | null>(null);
   const [pickerSupported, setPickerSupported] = useState(false);
@@ -42,7 +46,7 @@ export function SourceSyncActions({
   const updateHref = `/w/${workspaceId}/sources/${sourceId}/update`;
   return (
     <>
-      <SyncNowButton workspaceId={workspaceId} sourceId={sourceId} />
+      <SyncNowButton workspaceId={workspaceId} sourceId={sourceId} limits={limits} />
       <Tooltip label="Update from folder - pick a different folder">
         <WorkspaceImportLink
           href={updateHref}

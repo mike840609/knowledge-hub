@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { StrictMode, act } from "react";
 import { renderToString } from "react-dom/server";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -205,4 +205,41 @@ it("reports a sync failure in a status message instead of crashing", async () =>
   const status = container.querySelector('[role="status"]');
   expect(status?.textContent).toContain("Uploading folder entries failed.");
   expect(navigation.push).not.toHaveBeenCalled();
+});
+
+it("syncs on the first click under Strict Mode with a cancellable session", async () => {
+  folderImport.runFolderImport.mockImplementationOnce(async (...args: unknown[]) => {
+    const input = args[0] as { assertAllowed: () => void; signal: AbortSignal };
+    input.assertAllowed();
+    expect(input.signal.aborted).toBe(false);
+    return "snap-strict";
+  });
+  await act(async () => { root.render(<StrictMode><SyncNowButton workspaceId="ws-1" sourceId="src-1" /></StrictMode>); });
+  clickSync();
+  await act(async () => {});
+  expect(navigation.push).toHaveBeenCalledWith("/w/ws-1/sources/imports/snap-strict");
+});
+
+it("cancels a remembered-folder import on pagehide without navigating", async () => {
+  let signal: AbortSignal | undefined;
+  folderImport.runFolderImport.mockImplementationOnce(async (...args: unknown[]) => {
+    signal = (args[0] as { signal?: AbortSignal }).signal;
+    return new Promise<string>((_resolve, reject) => {
+      signal?.addEventListener("abort", () => reject(Object.assign(new Error("Cancelled"), { code: "IMPORT_CANCELLED" })));
+    });
+  });
+  await renderButton();
+  clickSync();
+  await act(async () => {});
+  await act(async () => { window.dispatchEvent(new Event("pagehide")); });
+  expect(signal?.aborted).toBe(true);
+  expect(navigation.push).not.toHaveBeenCalled();
+});
+
+it("passes the configured runtime asset limits to remembered-folder imports", async () => {
+  const limits = { maxAssetFileBytes: 8, maxAssetTotalBytes: 16 };
+  await act(async () => { root.render(<SyncNowButton workspaceId="ws-1" sourceId="src-1" limits={limits} />); });
+  clickSync();
+  await act(async () => {});
+  expect(folderImport.runFolderImport).toHaveBeenCalledWith(expect.objectContaining({ limits }));
 });

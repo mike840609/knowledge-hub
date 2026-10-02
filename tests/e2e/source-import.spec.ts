@@ -121,9 +121,146 @@ async function applySnapshot(request: APIRequestContext, snapshotId: string): Pr
   return (await response.json()) as { sourceId: string };
 }
 
+
+test("abandoning a BUILDING snapshot frees the creator quota immediately", async ({ request }) => {
+  const bytes = Buffer.from("# Draft\n");
+  const manifest: ImportManifestEntry[] = [{
+    uploadKey: "m1",
+    relativePath: "draft.md",
+    kind: "MARKDOWN",
+    size: bytes.length,
+  }];
+  const create = async (name: string) => request.post(
+    `/api/workspaces/${QUERY_MASTER_WORKSPACE_ID}/source-imports`,
+    { data: { sourceName: name, rootName: "wiki", manifest } },
+  );
+
+  const snapshots: string[] = [];
+  try {
+    for (let index = 0; index < 3; index += 1) {
+      const response = await create(`Abandon quota ${index}`);
+      expect(response.status()).toBe(201);
+      snapshots.push(((await response.json()) as { snapshotId: string }).snapshotId);
+    }
+    const blocked = await create("Abandon quota blocked");
+    expect(blocked.status()).toBe(400);
+    expect(((await blocked.json()) as { error: { code: string } }).error.code).toBe("IMPORT_BUILDING_QUOTA_EXCEEDED");
+    const abandoned = await request.delete(`/api/source-imports/${snapshots[0]}`);
+    expect(abandoned.status()).toBe(200);
+    expect(await abandoned.json()).toEqual({ abandoned: true });
+    snapshots.shift();
+    const replacement = await create("Abandon quota replacement");
+    expect(replacement.status()).toBe(201);
+    snapshots.push(((await replacement.json()) as { snapshotId: string }).snapshotId);
+  } finally {
+    for (const snapshotId of snapshots) {
+      const cleanup = await request.delete(`/api/source-imports/${snapshotId}`);
+      expect(cleanup.status()).toBe(200);
+    }
+  }
+});
+
+test("retries committed upload and finalize responses using one snapshot", async ({ page, request }) => {
+  let creates = 0;
+  let manifest: ImportManifestEntry[] = [];
+  const fixture = readFixtureTree("basic-v1");
+  const uploads: string[] = [];
+  const finalizes: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "POST" && new URL(request.url()).pathname === `/api/workspaces/${QUERY_MASTER_WORKSPACE_ID}/source-imports`) {
+      creates += 1;
+      manifest = request.postDataJSON().manifest;
+    }
+  });
+  await page.route("**/api/source-imports/*/entries", async (route) => {
+    uploads.push(route.request().url());
+    if (uploads.length === 1) {
+      // Chromium's intercepted multipart postData omits disk-backed File
+      // bytes. Commit the original fixture bytes with the browser's actual
+      // upload keys, then drop its response; the browser replay stays intact.
+      const markdown = manifest.filter((entry) => entry.kind === "MARKDOWN");
+      const multipart: Record<string, string | { name: string; mimeType: string; buffer: Buffer }> = {
+        entries: JSON.stringify(markdown.map((entry, index) => ({ uploadKey: entry.uploadKey, field: `file-${index}` }))),
+      };
+      markdown.forEach((entry, index) => {
+        multipart[`file-${index}`] = {
+          name: path.basename(entry.relativePath), mimeType: "text/markdown",
+          buffer: fixture.files.find((file) => file.relativePath === entry.relativePath)!.bytes,
+        };
+      });
+      const committed = await request.post(route.request().url(), { multipart });
+      expect(committed.ok()).toBeTruthy();
+      await route.abort("failed");
+    } else await route.continue();
+  });
+  await page.route("**/api/source-imports/*/finalize", async (route) => {
+    finalizes.push(route.request().url());
+    if (finalizes.length === 1) {
+      const committed = await route.fetch();
+      expect(committed.ok()).toBeTruthy();
+      await route.fulfill({ response: committed, body: '{"snapshotId":' });
+    } else await route.continue();
+  });
+  await page.goto(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources/import`);
+  await page.getByLabel("Source name").fill("E2E Reliable Import");
+  const replayedUpload = page.waitForResponse((response) => response.url().endsWith("/entries") && response.ok());
+  await page.locator('input[type="file"]').setInputFiles(path.join(FIXTURE_ROOT, "basic-v1"));
+  await expect(page.getByRole("heading", { name: "Import preview" })).toBeVisible({ timeout: 30_000 });
+  expect(creates).toBe(1);
+  expect(uploads).toHaveLength(2);
+  expect(uploads[0]).toBe(uploads[1]);
+  expect(await (await replayedUpload).json()).toMatchObject({ accepted: 0, idempotent: manifest.filter((entry) => entry.kind === "MARKDOWN").length });
+  expect(finalizes).toHaveLength(2);
+  expect(finalizes[0]).toBe(finalizes[1]);
+  const snapshotId = new URL(page.url()).pathname.split("/").pop()!;
+  const abandon = await request.delete(`/api/source-imports/${snapshotId}`);
+  expect(await abandon.json()).toEqual({ abandoned: false });
+  await applySnapshot(request, snapshotId);
+});
+
+test("cancels an upload from the form and removes its BUILDING snapshot", async ({ page, request }) => {
+  let snapshotId: string | undefined;
+  let release: (() => void) | undefined;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  await page.route("**/api/source-imports/*/entries", async (route) => {
+    snapshotId = new URL(route.request().url()).pathname.split("/")[3];
+    await gate;
+    await route.abort().catch(() => {});
+  });
+  try {
+    await page.goto(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources/import`);
+    await page.locator('input[type="file"]').setInputFiles(path.join(FIXTURE_ROOT, "basic-v1"));
+    await expect.poll(() => snapshotId).toBeTruthy();
+    const discarded = page.waitForResponse((response) => response.request().method() === "DELETE" && response.url().endsWith(`/api/source-imports/${snapshotId}`));
+    await page.getByRole("button", { name: "Cancel import" }).click();
+    expect(await (await discarded).json()).toEqual({ abandoned: true });
+    await expect(page.locator('input[type="file"]')).toBeEnabled();
+    await expect(page).toHaveURL(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources/import`);
+    expect((await request.get(`/api/source-imports/${snapshotId}`)).status()).toBe(404);
+  } finally { release!(); }
+});
+
+test("enforces asset file and total byte limits at the HTTP boundary", async ({ request }) => {
+  const asset = (index: number, size: number) => ({
+    uploadKey: `a${index}`, relativePath: `asset-${index}.bin`, kind: "ASSET", size,
+    contentHash: "a".repeat(64), mimeType: null, lastModified: null,
+  });
+  const maxFile = 64 * 1024 * 1024;
+  for (const manifest of [
+    [asset(0, maxFile + 1)],
+    [...Array.from({ length: 8 }, (_, index) => asset(index, maxFile)), asset(8, 1)],
+  ]) {
+    const rejected = await request.post(`/api/workspaces/${QUERY_MASTER_WORKSPACE_ID}/source-imports`, {
+      data: { sourceName: "Oversized assets", rootName: "wiki", manifest },
+    });
+    expect(rejected.status()).toBe(400);
+    expect((await rejected.json()).error.code).toBe("IMPORT_LIMIT_EXCEEDED");
+  }
+});
+
 test("imports basic-v1 through the directory input and applies the grouped preview", async ({ page }) => {
   await page.goto(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources`);
-  await page.getByRole("link", { name: "Import folder" }).click();
+  await page.getByRole("link", { name: "Import folder", exact: true }).click();
   await expect(page).toHaveURL(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources/import`);
 
   await page.getByLabel("Source name").fill("E2E Folder Import");

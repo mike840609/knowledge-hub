@@ -203,3 +203,37 @@ describe("folder import directory picker", () => {
     expect(container.textContent).not.toContain("Forget remembered folder");
   });
 });
+
+it("enforces runtime asset limits in the native directory picker before reading or creating a snapshot", async () => {
+  vi.mocked(isDirectoryPickerSupported).mockReturnValue(true);
+  Object.defineProperty(window, "showDirectoryPicker", { value: vi.fn().mockResolvedValue({ name: "Notes" }), configurable: true });
+  const file = new File(["oversized"], "image.png");
+  const read = vi.fn();
+  Object.defineProperty(file, "arrayBuffer", { value: read });
+  vi.mocked(collectHandleFiles).mockResolvedValue([file]);
+  const fetchMock = vi.fn<typeof fetch>();
+  vi.stubGlobal("fetch", fetchMock);
+  act(() => { root.render(<FolderImportForm target={existingTarget} limits={{ maxAssetFileBytes: 1, maxAssetTotalBytes: 2 }} />); });
+  await clickChooseFolder();
+  expect(fetchMock).not.toHaveBeenCalled();
+  expect(read).not.toHaveBeenCalled();
+  expect(container.textContent).toContain("IMPORT_LIMIT_EXCEEDED");
+});
+
+it("cancels native folder collection before it can create a snapshot or remember a handle", async () => {
+  vi.mocked(isDirectoryPickerSupported).mockReturnValue(true);
+  Object.defineProperty(window, "showDirectoryPicker", { value: vi.fn().mockResolvedValue({ name: "Notes" }), configurable: true });
+  let finish: ((files: File[]) => void) | undefined;
+  vi.mocked(collectHandleFiles).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+  const fetchMock = vi.fn<typeof fetch>();
+  vi.stubGlobal("fetch", fetchMock);
+  renderForm();
+  await clickChooseFolder();
+  const cancel = [...container.querySelectorAll("button")].find((button) => button.textContent === "Cancel import");
+  expect(cancel).toBeDefined();
+  await act(async () => { cancel!.click(); finish!([new File(["hello"], "hello.md")]); });
+  expect(fetchMock).not.toHaveBeenCalled();
+  expect(rememberFolderHandle).not.toHaveBeenCalled();
+  expect(push).not.toHaveBeenCalled();
+  expect(container.textContent).not.toContain("Cancel import");
+});

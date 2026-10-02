@@ -1,3 +1,4 @@
+import { importRuntimeConfig } from "@/server/import-config";
 import { SourceDetail } from "@/components/sources/source-detail";
 import { getSourceDetailModel } from "@/server/source-read";
 import { StatusMessage } from "@/components/ui/status-message";
@@ -22,9 +23,10 @@ export default async function WorkspaceSourceDetailPage({
       </main>
     );
   }
+  const limits = importRuntimeConfig().limits;
   return (
     <main className="kh-page py-6">
-      <SourceDetail model={model} showImportSuccess={importParam === "success"} />
+      <SourceDetail limits={{ maxAssetFileBytes: limits.maxAssetFileBytes, maxAssetTotalBytes: limits.maxAssetTotalBytes }} model={model} showImportSuccess={importParam === "success"} />
     </main>
   );
 }

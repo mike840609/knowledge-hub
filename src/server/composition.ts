@@ -13,6 +13,7 @@ import { KnowledgeLinkServiceImpl } from "@/modules/knowledge/application/knowle
 import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
 import { DocumentShareService } from "@/modules/knowledge/application/document-share-service";
 import { RandomShareTokenIssuer } from "@/infrastructure/security/random-share-token-issuer";
+import { AbandonFolderImportService } from "@/modules/sources/application/abandon-folder-import";
 import { ApplyFolderImportService } from "@/modules/sources/application/apply-folder-import";
 import { CreateFolderImportService } from "@/modules/sources/application/create-folder-import";
 import { FinalizeFolderImportService } from "@/modules/sources/application/finalize-folder-import";
@@ -105,6 +106,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
   };
   const importConfig = importRuntimeConfig();
   const imports = {
+    abandon: new AbandonFolderImportService(unitOfWork),
     create: new CreateFolderImportService(unitOfWork, { limits: importConfig.limits, buildingTtlMs: importConfig.buildingTtlMs }),
     upload: new UploadFolderImportEntriesService(unitOfWork, { limits: importConfig.limits }),
     finalize: new FinalizeFolderImportService(unitOfWork, { limits: importConfig.limits, readyTtlMs: importConfig.readyTtlMs }),

@@ -1,3 +1,4 @@
+import type { FolderImportClientLimits } from "@/components/imports/folder-import-form";
 import { PageHeader } from "@/components/shell/page-header";
 import { Status } from "@/components/ui/status";
 import Link from "next/link";
@@ -9,7 +10,7 @@ import { SourceSyncActions } from "@/components/sources/source-sync-actions";
 import { sourceTypeLabel } from "@/components/sources/source-list-row";
 import { TechnicalDetails } from "@/components/sources/technical-details";
 
-export function SourceDetail({ model, showImportSuccess = false }: { model: SourceDetailModel; showImportSuccess?: boolean }) {
+export function SourceDetail({ model, showImportSuccess = false, limits }: { model: SourceDetailModel; showImportSuccess?: boolean; limits?: FolderImportClientLimits }) {
   const { workspace, source, runs } = model;
   const syncable = isFolderSyncable(source);
   return (
@@ -21,7 +22,7 @@ export function SourceDetail({ model, showImportSuccess = false }: { model: Sour
       ) : null}
       <PageHeader location="Sources" locationHref={`/w/${workspace.id}/sources`} title={source.name}
         actions={syncable ? (
-          <SourceSyncActions workspaceId={workspace.id} sourceId={source.id} />
+          <SourceSyncActions workspaceId={workspace.id} sourceId={source.id} limits={limits} />
         ) : undefined}
       />
       <p className="flex flex-wrap items-center gap-2 text-caption text-kh-text-muted">

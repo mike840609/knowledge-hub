@@ -15,6 +15,7 @@ import {
   type FileSystemDirectoryHandle,
 } from "@/components/imports/folder-handle-store";
 import type { ImportManifestEntry } from "@/modules/sources/application/create-folder-import";
+import { DEFAULT_IMPORT_LIMITS, type ImportLimits } from "@/modules/sources/domain/import-limits";
 
 export type FolderImportTarget =
   | { kind: "new"; workspaceId: string }
@@ -35,6 +36,14 @@ export type ImportUiState =
 const MARKDOWN_EXTENSION = /\.(?:md|markdown)$/iu;
 const MAX_BATCH_FILES = 20;
 const MAX_BATCH_BYTES = 10 * 1024 * 1024;
+const ASSET_HASH_CONCURRENCY = 4;
+const TRANSIENT_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+
+export type FolderImportClientLimits = Pick<ImportLimits, "maxAssetFileBytes" | "maxAssetTotalBytes">;
+const DEFAULT_CLIENT_LIMITS: FolderImportClientLimits = {
+  maxAssetFileBytes: DEFAULT_IMPORT_LIMITS.maxAssetFileBytes,
+  maxAssetTotalBytes: DEFAULT_IMPORT_LIMITS.maxAssetTotalBytes,
+};
 
 type StagedFile = { uploadKey: string; relativePath: string; file: File; markdown: boolean };
 
@@ -71,24 +80,75 @@ function toHex(bytes: ArrayBuffer): string {
   return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-async function buildManifest(staged: StagedFile[]): Promise<ImportManifestEntry[]> {
-  return Promise.all(
-    staged.map(async (entry): Promise<ImportManifestEntry> => {
-      if (entry.markdown) {
-        return { uploadKey: entry.uploadKey, relativePath: entry.relativePath, kind: "MARKDOWN", size: entry.file.size };
+function importLimitError(message: string): Error & { code: string } {
+  return Object.assign(new Error(message), { code: "IMPORT_LIMIT_EXCEEDED" });
+}
+
+function assertNotCancelled(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw Object.assign(new Error("Import was cancelled."), { code: "IMPORT_CANCELLED" });
+  }
+}
+
+async function buildManifest(
+  staged: StagedFile[],
+  limits: FolderImportClientLimits,
+  signal?: AbortSignal,
+): Promise<ImportManifestEntry[]> {
+  let assetTotalBytes = 0;
+  const assetIndexes: number[] = [];
+  const manifest = new Array<ImportManifestEntry>(staged.length);
+
+  staged.forEach((entry, index) => {
+    if (entry.markdown) {
+      manifest[index] = { uploadKey: entry.uploadKey, relativePath: entry.relativePath, kind: "MARKDOWN", size: entry.file.size };
+      return;
+    }
+    if (entry.file.size > limits.maxAssetFileBytes) {
+      throw importLimitError("Asset file exceeds the configured per-file byte limit.");
+    }
+    assetTotalBytes += entry.file.size;
+    if (assetTotalBytes > limits.maxAssetTotalBytes) {
+      throw importLimitError("Assets exceed the configured total byte limit.");
+    }
+    assetIndexes.push(index);
+  });
+
+  let cursor = 0;
+  let failed = false;
+  const workers = Array.from({ length: Math.min(ASSET_HASH_CONCURRENCY, assetIndexes.length) }, async () => {
+    while (!failed && cursor < assetIndexes.length) {
+      const position = cursor;
+      cursor += 1;
+      const index = assetIndexes[position];
+      const entry = staged[index];
+      try {
+        assertNotCancelled(signal);
+        const bytes = await entry.file.arrayBuffer();
+        assertNotCancelled(signal);
+        const digest = await crypto.subtle.digest("SHA-256", bytes);
+        assertNotCancelled(signal);
+        manifest[index] = {
+          uploadKey: entry.uploadKey,
+          relativePath: entry.relativePath,
+          kind: "ASSET",
+          size: entry.file.size,
+          contentHash: toHex(digest),
+          mimeType: entry.file.type || null,
+          lastModified: entry.file.lastModified ? new Date(entry.file.lastModified) : null,
+        };
+      } catch (error) {
+        failed = true;
+        throw error;
       }
-      const digest = await crypto.subtle.digest("SHA-256", await entry.file.arrayBuffer());
-      return {
-        uploadKey: entry.uploadKey,
-        relativePath: entry.relativePath,
-        kind: "ASSET",
-        size: entry.file.size,
-        contentHash: toHex(digest),
-        mimeType: entry.file.type || null,
-        lastModified: entry.file.lastModified ? new Date(entry.file.lastModified) : null,
-      };
-    }),
-  );
+    }
+  });
+  // File reads and WebCrypto digests cannot be aborted. Drain the bounded
+  // workers before returning so a subsequent selection cannot overlap them.
+  const results = await Promise.allSettled(workers);
+  const failure = results.find((result) => result.status === "rejected");
+  if (failure?.status === "rejected") throw failure.reason;
+  return manifest;
 }
 
 /**
@@ -111,30 +171,71 @@ export function readErrorCode(body: unknown, fallback: string): { code: string; 
   return { code: envelope.code, message: envelope.message ?? fallback };
 }
 
+async function fetchWithTransientRetry<T = Response>(
+  url: string,
+  init: RequestInit,
+  readResponse: (response: Response) => Promise<T> = async (response) => response as T,
+  assertAllowed: () => void = () => {},
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    assertNotCancelled(init.signal ?? undefined);
+    assertAllowed();
+    try {
+      const response = await fetch(url, init);
+      if (attempt === 1 || !TRANSIENT_HTTP_STATUSES.has(response.status)) return await readResponse(response);
+      // Release the discarded response before replaying the same request.
+      await response.body?.cancel().catch(() => {});
+    } catch (error) {
+      lastError = error;
+      assertNotCancelled(init.signal ?? undefined);
+      if (attempt === 1) throw error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Import request failed.");
+}
+
+async function bestEffortAbandonImport(snapshotId: string): Promise<void> {
+  try {
+    await fetch(`/api/source-imports/${snapshotId}`, { method: "DELETE", keepalive: true });
+  } catch {
+    // The BUILDING TTL is the final fallback if the browser is already offline.
+  }
+}
+
 async function postJson(
   url: string,
   payload: unknown,
-  options: { knownSnapshot?: boolean } = {},
+  options: { knownSnapshot?: boolean; retryTransient?: boolean; signal?: AbortSignal; assertAllowed?: () => void } = {},
 ): Promise<{ ok: boolean; status: number; body: unknown }> {
-  const response = await fetch(url, {
+  const init: RequestInit = {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
-  });
-  let body: unknown = null;
-  try {
-    body = await response.json();
-  } catch {
-    body = null;
-  }
+    signal: options.signal,
+  };
+  const readResponse = async (response: Response) => {
+    let body: unknown = null;
+    try {
+      body = await response.json();
+    } catch (error) {
+      // A lost/truncated successful finalize body is safe to replay against
+      // the same snapshot. Domain error responses retain their original code.
+      if (response.ok && options.retryTransient) throw error;
+    }
+    return { ok: response.ok, status: response.status, body };
+  };
+  const result = options.retryTransient
+    ? await fetchWithTransientRetry(url, init, readResponse, options.assertAllowed)
+    : await readResponse(await fetch(url, init));
   // Once a snapshot id is known, a 404 means that import session is missing,
   // expired/cleaned up, or not owned by this caller. Revoked Workspace access
   // for a known snapshot is intentionally translated by the server to 403.
   // Do not turn an import-session 404 into a Workspace-wide access pause.
-  if (!response.ok && !(options.knownSnapshot && response.status === 404)) {
-    requestWorkspaceAccessCheck(response.status, readErrorEnvelope(body)?.code);
+  if (!result.ok && !(options.knownSnapshot && result.status === 404)) {
+    requestWorkspaceAccessCheck(result.status, readErrorEnvelope(result.body)?.code);
   }
-  return { ok: response.ok, status: response.status, body };
+  return result;
 }
 
 async function uploadMarkdownBatches(
@@ -142,6 +243,7 @@ async function uploadMarkdownBatches(
   staged: StagedFile[],
   onProgress: (uploaded: number, total: number) => void,
   assertAllowed: () => void,
+  signal?: AbortSignal,
 ): Promise<void> {
   const markdown = staged.filter((entry) => entry.markdown);
   let uploaded = 0;
@@ -169,7 +271,12 @@ async function uploadMarkdownBatches(
         JSON.stringify(chunk.map((entry, index) => ({ uploadKey: entry.uploadKey, field: `file-${index}` }))),
       );
       chunk.forEach((entry, index) => form.set(`file-${index}`, entry.file));
-      const response = await fetch(`/api/source-imports/${snapshotId}/entries`, { method: "POST", body: form });
+      const response = await fetchWithTransientRetry(
+        `/api/source-imports/${snapshotId}/entries`,
+        { method: "POST", body: form, signal },
+        async (response) => response,
+        assertAllowed,
+      );
       if (!response.ok) {
         const body = await response.json().catch(() => null);
         if (response.status !== 404) {
@@ -199,12 +306,23 @@ export async function runFolderImport(input: {
   sourceName: string;
   onProgress: (state: ImportUiState) => void;
   assertAllowed?: () => void;
+  limits?: FolderImportClientLimits;
+  signal?: AbortSignal;
 }): Promise<string> {
-  const { target, files, sourceName, onProgress, assertAllowed = () => {} } = input;
+  const {
+    target,
+    files,
+    sourceName,
+    onProgress,
+    assertAllowed: checkPermission = () => {},
+    limits = DEFAULT_CLIENT_LIMITS,
+    signal,
+  } = input;
+  const assertAllowed = () => { assertNotCancelled(signal); checkPermission(); };
   assertAllowed();
   onProgress({ kind: "PREPARING" });
   const selection = selectFolder(files);
-  const manifest = await buildManifest(selection.staged);
+  const manifest = await buildManifest(selection.staged, limits, signal);
   assertAllowed();
   const session = target.kind === "new"
     ? await postJson(`/api/workspaces/${target.workspaceId}/source-imports`, {
@@ -219,19 +337,33 @@ export async function runFolderImport(input: {
     throw Object.assign(new Error(failure.message), { code: failure.code });
   }
   const snapshotId = (session.body as { snapshotId: string }).snapshotId;
-  onProgress({ kind: "UPLOADING", uploaded: 0, total: selection.staged.filter((entry) => entry.markdown).length });
-  await uploadMarkdownBatches(snapshotId, selection.staged, (uploaded, total) =>
-    onProgress({ kind: "UPLOADING", uploaded, total }), assertAllowed,
-  );
-  assertAllowed();
-  onProgress({ kind: "FINALIZING" });
-  const finalized = await postJson(`/api/source-imports/${snapshotId}/finalize`, {}, { knownSnapshot: true });
-  if (!finalized.ok) {
-    const failure = readErrorCode(finalized.body, "Finalizing the import preview failed.");
-    onProgress({ kind: "ERROR", code: failure.code, message: failure.message });
-    throw Object.assign(new Error(failure.message), { code: failure.code });
+  try {
+    // Session creation is intentionally non-abortable: unlike upload/finalize,
+    // it is not idempotent. If cancellation happened while it was in flight,
+    // first obtain the snapshot id, then abandon that BUILDING session.
+    assertAllowed();
+    onProgress({ kind: "UPLOADING", uploaded: 0, total: selection.staged.filter((entry) => entry.markdown).length });
+    await uploadMarkdownBatches(snapshotId, selection.staged, (uploaded, total) =>
+      onProgress({ kind: "UPLOADING", uploaded, total }), assertAllowed, signal,
+    );
+    assertAllowed();
+    onProgress({ kind: "FINALIZING" });
+    const finalized = await postJson(
+      `/api/source-imports/${snapshotId}/finalize`,
+      {},
+      { knownSnapshot: true, retryTransient: true, signal, assertAllowed },
+    );
+    if (!finalized.ok) {
+      const failure = readErrorCode(finalized.body, "Finalizing the import preview failed.");
+      onProgress({ kind: "ERROR", code: failure.code, message: failure.message });
+      throw Object.assign(new Error(failure.message), { code: failure.code });
+    }
+    assertAllowed();
+    return snapshotId;
+  } catch (error) {
+    await bestEffortAbandonImport(snapshotId);
+    throw error;
   }
-  return snapshotId;
 }
 
 function statusText(state: ImportUiState): string | null {
@@ -242,19 +374,32 @@ function statusText(state: ImportUiState): string | null {
   return null;
 }
 
-export function FolderImportForm({ target }: { target: FolderImportTarget }): React.JSX.Element {
+export function FolderImportForm({
+  target,
+  limits = DEFAULT_CLIENT_LIMITS,
+}: {
+  target: FolderImportTarget;
+  limits?: FolderImportClientLimits;
+}): React.JSX.Element {
   const router = useRouter();
   const { access, confirmed } = useWorkspaceAuthorization();
   const allowed = confirmed && access.actions.canImport;
   const allowedRef = useRef(allowed);
   allowedRef.current = allowed;
   const mountedRef = useRef(false);
+  const activeImportRef = useRef<AbortController | null>(null);
   useEffect(() => {
     // React Strict Mode intentionally runs setup → cleanup → setup once in
     // development. Resetting this flag in setup makes that probe harmless;
     // permission state stays exclusively in allowedRef.
     mountedRef.current = true;
-    return () => { mountedRef.current = false; };
+    const cancel = () => activeImportRef.current?.abort();
+    window.addEventListener("pagehide", cancel);
+    return () => {
+      mountedRef.current = false;
+      window.removeEventListener("pagehide", cancel);
+      cancel();
+    };
   }, []);
   const assertAllowed = () => {
     if (!mountedRef.current) {
@@ -284,19 +429,33 @@ export function FolderImportForm({ target }: { target: FolderImportTarget }): Re
       ? (error as { code: string }).code
       : "IMPORT_REQUEST_FAILED";
     // Page leave cancels both folder picker paths without updating an unmounted UI.
-    if (!mountedRef.current || code === "IMPORT_CANCELLED") return;
+    if (!mountedRef.current) return;
+    if (code === "IMPORT_CANCELLED") { setState({ kind: "IDLE" }); return; }
     setState({ kind: "ERROR", code, message: error instanceof Error ? error.message : "Importing the folder failed." });
   }
 
   async function handleFiles(files: FileList | null): Promise<void> {
     if (!files || files.length === 0) return;
-    setSelection({ name: files[0].webkitRelativePath.split("/")[0] || "Selected folder", count: files.length });
+    const controller = new AbortController();
+    activeImportRef.current?.abort();
+    activeImportRef.current = controller;
+    setSelection({ name: relativePathOf(files[0]).split("/")[0] || "Selected folder", count: files.length });
     try {
-      const snapshotId = await runFolderImport({ target, files, sourceName, onProgress: setState, assertAllowed });
+      const snapshotId = await runFolderImport({
+        target,
+        files,
+        sourceName,
+        onProgress: setState,
+        assertAllowed,
+        limits,
+        signal: controller.signal,
+      });
       assertAllowed();
       router.push(`/w/${target.workspaceId}/sources/imports/${snapshotId}`);
     } catch (error) {
       reportImportError(error);
+    } finally {
+      if (activeImportRef.current === controller) activeImportRef.current = null;
     }
   }
 
@@ -321,24 +480,31 @@ export function FolderImportForm({ target }: { target: FolderImportTarget }): Re
       picker.current?.click();
       return;
     }
+    const controller = new AbortController();
+    activeImportRef.current?.abort();
+    activeImportRef.current = controller;
+    const checkActive = () => { assertNotCancelled(controller.signal); assertAllowed(); };
     try {
-      assertAllowed();
+      checkActive();
+      setState({ kind: "PREPARING" });
       const files = await collectHandleFiles(handle);
-      assertAllowed();
-      if (files.length === 0) return;
+      checkActive();
+      if (files.length === 0) { setState({ kind: "IDLE" }); return; }
       setSelection({ name: handle.name || "Selected folder", count: files.length });
-      const snapshotId = await runFolderImport({ target, files, sourceName, onProgress: setState, assertAllowed });
-      assertAllowed();
+      const snapshotId = await runFolderImport({ target, files, sourceName, onProgress: setState, assertAllowed: checkActive, limits, signal: controller.signal });
+      checkActive();
       if (target.kind === "existing") {
         await rememberFolderHandle(target.sourceId, handle, handle.name);
-        assertAllowed();
+        checkActive();
       } else {
         await stashPendingHandle(snapshotId, handle, handle.name);
-        assertAllowed();
+        checkActive();
       }
       router.push(`/w/${target.workspaceId}/sources/imports/${snapshotId}`);
     } catch (error) {
       reportImportError(error);
+    } finally {
+      if (activeImportRef.current === controller) activeImportRef.current = null;
     }
   }
 
@@ -411,6 +577,7 @@ export function FolderImportForm({ target }: { target: FolderImportTarget }): Re
         }}
       />
       {status ? <p role="status" className="mt-3 text-body text-kh-text-muted">{status}</p> : null}
+      {busy ? <Button variant="secondary" className="mt-3" onClick={() => activeImportRef.current?.abort()}>Cancel import</Button> : null}
       {state.kind === "ERROR" ? <details className="mt-2 text-caption text-kh-text-muted"><summary className="cursor-pointer rounded-md kh-focus-ring">Technical details</summary><code>{state.code}</code></details> : null}
     </div>
   );

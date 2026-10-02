@@ -3,6 +3,8 @@ export type ImportLimits = {
   maxPathBytes: number;
   maxMarkdownFileBytes: number;
   maxMarkdownTotalBytes: number;
+  maxAssetFileBytes: number;
+  maxAssetTotalBytes: number;
   maxMetadataBytes: number;
   maxUploadBatchFiles: number;
   maxUploadBatchBytes: number;
@@ -15,6 +17,8 @@ export const DEFAULT_IMPORT_LIMITS: ImportLimits = {
   maxPathBytes: 2 * 1024,
   maxMarkdownFileBytes: 5 * 1024 * 1024,
   maxMarkdownTotalBytes: 256 * 1024 * 1024,
+  maxAssetFileBytes: 64 * 1024 * 1024,
+  maxAssetTotalBytes: 512 * 1024 * 1024,
   maxMetadataBytes: 256 * 1024,
   maxUploadBatchFiles: 20,
   maxUploadBatchBytes: 10 * 1024 * 1024,
