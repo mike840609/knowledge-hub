@@ -21,7 +21,6 @@ export interface ImportSnapshotRepository {
   markReady(input: MarkImportSnapshotReadyInput): Promise<void>;
   markApplied(input: { snapshotId: string; sourceId: string; resultVersion: number; appliedAt: Date }): Promise<void>;
   markStale(input: { snapshotId: string; staleAt: Date }): Promise<void>;
-  deleteBuildingByCreator(snapshotId: string, creatorId: string): Promise<boolean>;
   listCleanupCandidates(now: Date, limit: number): Promise<string[]>;
   deleteIfCleanupEligible(snapshotId: string, now: Date): Promise<boolean>;
 }
