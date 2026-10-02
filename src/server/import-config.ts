@@ -22,6 +22,8 @@ export function importRuntimeConfig(): ImportRuntimeConfig {
       maxPathBytes: positiveInt("KM_IMPORT_MAX_PATH_BYTES", DEFAULT_IMPORT_LIMITS.maxPathBytes),
       maxMarkdownFileBytes: positiveInt("KM_IMPORT_MAX_MARKDOWN_FILE_BYTES", DEFAULT_IMPORT_LIMITS.maxMarkdownFileBytes),
       maxMarkdownTotalBytes: positiveInt("KM_IMPORT_MAX_MARKDOWN_TOTAL_BYTES", DEFAULT_IMPORT_LIMITS.maxMarkdownTotalBytes),
+      maxAssetFileBytes: positiveInt("KM_IMPORT_MAX_ASSET_FILE_BYTES", DEFAULT_IMPORT_LIMITS.maxAssetFileBytes),
+      maxAssetTotalBytes: positiveInt("KM_IMPORT_MAX_ASSET_TOTAL_BYTES", DEFAULT_IMPORT_LIMITS.maxAssetTotalBytes),
       maxMetadataBytes: positiveInt("KM_IMPORT_MAX_METADATA_BYTES", DEFAULT_IMPORT_LIMITS.maxMetadataBytes),
       maxUploadBatchFiles: positiveInt("KM_IMPORT_MAX_UPLOAD_BATCH_FILES", DEFAULT_IMPORT_LIMITS.maxUploadBatchFiles),
       maxUploadBatchBytes: positiveInt("KM_IMPORT_MAX_UPLOAD_BATCH_BYTES", DEFAULT_IMPORT_LIMITS.maxUploadBatchBytes),
