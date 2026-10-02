@@ -114,6 +114,14 @@ export class MariaDbImportSnapshotRepository implements ImportSnapshotRepository
     if (affectedRows(result) !== 1) throw importError("IMPORT_SNAPSHOT_STATE_CONFLICT", "Import snapshot state changed concurrently.");
   }
 
+  async deleteBuildingByCreator(snapshotId: string, creatorId: string): Promise<boolean> {
+    const result = await this.connection.query(
+      "DELETE FROM source_import_snapshots WHERE id=? AND created_by=? AND state='BUILDING'",
+      [snapshotId, creatorId],
+    );
+    return affectedRows(result) === 1;
+  }
+
   async listCleanupCandidates(now: Date, limit: number): Promise<string[]> {
     const rows = await this.connection.query<{ id: unknown }[]>(
       `SELECT id FROM source_import_snapshots
