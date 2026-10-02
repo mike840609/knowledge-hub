@@ -14,10 +14,18 @@ describe("when a failed request makes the shell re-check access", () => {
     vi.unstubAllGlobals();
   });
   const checked = () => dispatched.mock.calls.filter(([event]) => (event as Event).type === "kh:workspace-access-check").length;
+  const refreshed = () => dispatched.mock.calls.filter(([event]) => (event as Event).type === "kh:workspace-access-refresh").length;
 
-  it.each([[403], [404], [409]])("re-checks for a %i, which may mean access changed", (status) => {
+  it.each([[403], [409]])("pauses and re-checks for a %i that may mean access changed", (status) => {
     requestWorkspaceAccessCheck(status);
     expect(checked()).toBe(1);
+    expect(refreshed()).toBe(0);
+  });
+
+  it("re-checks a 404 without pre-emptively pausing confirmed access", () => {
+    requestWorkspaceAccessCheck(404, "NOT_FOUND");
+    expect(checked()).toBe(0);
+    expect(refreshed()).toBe(1);
   });
 
   it("re-checks for a 409 that is about the workspace itself", () => {
