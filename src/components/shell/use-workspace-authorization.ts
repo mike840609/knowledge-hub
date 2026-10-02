@@ -62,12 +62,13 @@ export function useWorkspaceAuthorizationRefresh(initialAccess: WorkspaceAccessV
       const nav = await navResponse.json() as WorkspaceNavigationModel;
       const mySpace = nav.items.find((item) => item.type === "PERSONAL");
       if (!mySpace) throw new Error("Personal workspace unavailable.");
-      const visible = nav.items.some((item) => item.id === workspaceId);
-      const response = visible
-        ? await fetch(`/api/workspaces/${workspaceId}`, { cache: "no-store", signal: abort.signal })
-        : null;
-      if (response && !response.ok && response.status !== 404) throw new Error("Could not refresh workspace access.");
-      const fresh = response?.ok ? await response.json() as WorkspaceAccessView : null;
+      // Navigation is a projection, not the authorization authority. A focus
+      // refresh can race SSO/group/navigation data and momentarily omit an
+      // otherwise accessible Workspace. Always verify the current Workspace
+      // directly before treating an omission as revocation.
+      const response = await fetch(`/api/workspaces/${workspaceId}`, { cache: "no-store", signal: abort.signal });
+      if (!response.ok && response.status !== 404) throw new Error("Could not refresh workspace access.");
+      const fresh = response.ok ? await response.json() as WorkspaceAccessView : null;
       if (request !== generation.current) return;
       // A save dispatches `kh:workspace-mutation`, so this refresh usually
       // resolves inside save's push transition carrying values identical to
