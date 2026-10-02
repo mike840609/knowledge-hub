@@ -87,17 +87,26 @@ async function buildManifest(staged: StagedFile[]): Promise<ImportManifestEntry[
  * on. HTTP 409 covers four distinct import codes, so a bare status can never
  * stand in for one of them — an envelope without a code is simply unknown.
  */
-export function readErrorCode(body: unknown, fallback: string): { code: string; message: string } {
-  if (body && typeof body === "object" && "error" in body) {
-    const error = (body as { error: { code?: unknown; message?: unknown } }).error;
-    if (error && typeof error === "object" && typeof error.code === "string" && error.code.length > 0) {
-      return { code: error.code, message: typeof error.message === "string" && error.message.length > 0 ? error.message : fallback };
-    }
-  }
-  return { code: "IMPORT_REQUEST_FAILED", message: fallback };
+function readErrorEnvelope(body: unknown): { code: string; message?: string } | null {
+  if (!body || typeof body !== "object" || !("error" in body)) return null;
+  const error = (body as { error: unknown }).error;
+  if (!error || typeof error !== "object" || !("code" in error)) return null;
+  const { code, message } = error as { code: unknown; message?: unknown };
+  if (typeof code !== "string" || code.length === 0) return null;
+  return { code, ...(typeof message === "string" && message.length > 0 ? { message } : {}) };
 }
 
-async function postJson(url: string, payload: unknown): Promise<{ ok: boolean; status: number; body: unknown }> {
+export function readErrorCode(body: unknown, fallback: string): { code: string; message: string } {
+  const envelope = readErrorEnvelope(body);
+  if (!envelope) return { code: "IMPORT_REQUEST_FAILED", message: fallback };
+  return { code: envelope.code, message: envelope.message ?? fallback };
+}
+
+async function postJson(
+  url: string,
+  payload: unknown,
+  options: { knownSnapshot?: boolean } = {},
+): Promise<{ ok: boolean; status: number; body: unknown }> {
   const response = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -109,7 +118,12 @@ async function postJson(url: string, payload: unknown): Promise<{ ok: boolean; s
   } catch {
     body = null;
   }
-  if (!response.ok) requestWorkspaceAccessCheck(response.status);
+  // Once a snapshot id is known, a 404 means that import session is missing,
+  // expired/cleaned up, or not owned by this caller. Revoked Workspace access
+  // for a known snapshot is translated by the server to 403.
+  if (!response.ok && !(options.knownSnapshot && response.status === 404)) {
+    requestWorkspaceAccessCheck(response.status, readErrorEnvelope(body)?.code);
+  }
   return { ok: response.ok, status: response.status, body };
 }
 
@@ -147,8 +161,11 @@ async function uploadMarkdownBatches(
       chunk.forEach((entry, index) => form.set(`file-${index}`, entry.file));
       const response = await fetch(`/api/source-imports/${snapshotId}/entries`, { method: "POST", body: form });
       if (!response.ok) {
-        requestWorkspaceAccessCheck(response.status);
-        const failure = readErrorCode(await response.json().catch(() => null), "Uploading folder entries failed.");
+        const body = await response.json().catch(() => null);
+        if (response.status !== 404) {
+          requestWorkspaceAccessCheck(response.status, readErrorEnvelope(body)?.code);
+        }
+        const failure = readErrorCode(body, "Uploading folder entries failed.");
         throw Object.assign(new Error(failure.message), { code: failure.code });
       }
       uploaded += chunk.length;
@@ -198,7 +215,7 @@ export async function runFolderImport(input: {
   );
   assertAllowed();
   onProgress({ kind: "FINALIZING" });
-  const finalized = await postJson(`/api/source-imports/${snapshotId}/finalize`, {});
+  const finalized = await postJson(`/api/source-imports/${snapshotId}/finalize`, {}, { knownSnapshot: true });
   if (!finalized.ok) {
     const failure = readErrorCode(finalized.body, "Finalizing the import preview failed.");
     onProgress({ kind: "ERROR", code: failure.code, message: failure.message });
@@ -221,8 +238,18 @@ export function FolderImportForm({ target }: { target: FolderImportTarget }): Re
   const allowed = confirmed && access.actions.canImport;
   const allowedRef = useRef(allowed);
   allowedRef.current = allowed;
-  useEffect(() => () => { allowedRef.current = false; }, []);
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    // React Strict Mode intentionally runs setup → cleanup → setup once in
+    // development. Resetting this flag in setup makes that probe harmless;
+    // permission state stays exclusively in allowedRef.
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
   const assertAllowed = () => {
+    if (!mountedRef.current) {
+      throw Object.assign(new Error("Import was cancelled because this page is no longer active."), { code: "IMPORT_CANCELLED" });
+    }
     if (!allowedRef.current) throw Object.assign(new Error("Workspace access changed. Import is paused."), { code: "WORKSPACE_ACCESS_CHANGED" });
   };
   const [state, setState] = useState<ImportUiState>({ kind: "IDLE" });
@@ -243,6 +270,9 @@ export function FolderImportForm({ target }: { target: FolderImportTarget }): Re
       const code = error instanceof Error && "code" in error && typeof (error as { code: unknown }).code === "string"
         ? (error as { code: string }).code
         : "IMPORT_REQUEST_FAILED";
+      // An actual page leave is cancellation, not an authorization failure,
+      // and there is no mounted UI left to update.
+      if (!mountedRef.current || code === "IMPORT_CANCELLED") return;
       setState({ kind: "ERROR", code, message: error instanceof Error ? error.message : "Importing the folder failed." });
     }
   }
