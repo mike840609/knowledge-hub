@@ -3,7 +3,9 @@
 import dynamic from "next/dynamic";
 import { PersistentDraft, type DraftStatus } from "@/lib/persistent-draft";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type KeyboardEvent, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { DocumentPane } from "./document-pane";
+import { useScrollRestoration } from "./use-scroll-restoration";
+import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -120,6 +122,9 @@ export function DocumentComposer({
   footer?: (state: { busy: boolean }) => ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const paneRef = useRef<HTMLDivElement>(null);
+  useScrollRestoration(paneRef, pathname);
   const { confirmed, access } = useWorkspaceAuthorization();
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   const [draftStatus, setDraftStatus] = useState<DraftStatus>("loading");
@@ -530,7 +535,7 @@ export function DocumentComposer({
     resolved.source === "H1" && !untitled && resolved.title !== initialTitle;
 
   return (
-    <>
+    <DocumentPane contentRef={paneRef}>
       <form
         onBlur={() => {
           // Leaving a field flushes pending rendered output, so a revert
@@ -543,8 +548,9 @@ export function DocumentComposer({
         onKeyDown={onKeyDown}
         onSubmit={(event) => { event.preventDefault(); void save(); }}
       >
-        <div className="kh-reading-column pb-3 pt-5">
-          <div className="flex min-w-0 items-center justify-between gap-3">
+        <div className="sticky top-0 z-10 border-b border-kh-border bg-kh-bg">
+        <div className="kh-reading-column py-3">
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
             <DocumentBreadcrumb segments={[...location, { label: resolved.title || untitledLabel }]} />
             <div className="flex shrink-0 items-center gap-2">
               <Button
@@ -574,17 +580,18 @@ export function DocumentComposer({
             </div>
           </div>
           {resolved.source === "METADATA" ? (
-            <p className="mt-1.5 text-caption text-kh-text-muted">標題來自上傳檔案的 frontmatter</p>
+            <p className="mt-1.5 text-caption text-kh-text-muted">Title comes from the uploaded file’s frontmatter</p>
           ) : null}
           {renamesOnSave ? (
-            <p className="mt-1.5 text-caption text-kh-text-muted">儲存會將標題改為「{resolved.title}」</p>
+            <p className="mt-1.5 text-caption text-kh-text-muted">Saving will rename this document to “{resolved.title}”</p>
           ) : null}
-        </div>
-        <div className="kh-reading-column space-y-4 py-6">
           {durableDraft && <p role="status" className="text-caption text-kh-text-muted">
             {({ loading: "Loading draft…", saved: "Draft saved to your account", saving: "Saving draft…", local: "Draft kept on this device · syncing…", error: "Draft sync failed. Keep this page open and retry.", conflict: "Draft changed on another device. Your text is preserved here; copy it before loading another draft." })[draftStatus]}
             {draftStatus === "error" && <Button type="button" variant="link" onClick={() => void persistent.current?.retry()}>Retry draft save</Button>}
           </p>}
+        </div>
+        </div>
+        <div className="kh-reading-column space-y-4 py-6">
           {/* The live region stays mounted while empty: a region created together with its text is
               often not announced. Empty it is `sr-only` — still in the accessibility tree, but with
               no footprint (an empty box would add a `space-y` gap). The restore effect fills it a
@@ -592,21 +599,21 @@ export function DocumentComposer({
           <p role="status" className={restored ? "flex flex-wrap items-center gap-2 rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2 text-body text-kh-text" : "sr-only"}>
             {restored ? (
               <>
-                {restored === "stale" ? "這份文件在你離開後被更新過，已還原你未存的修改。" : "已還原未存的修改。"}
-                <Button type="button" variant="link" onClick={discardDraft}>捨棄</Button>
+                {restored === "stale" ? "The document changed while you were away. Your unsaved changes were restored." : "Your unsaved changes were restored."}
+                <Button type="button" variant="link" onClick={discardDraft}>Discard draft</Button>
               </>
             ) : null}
           </p>
           {editorFailed ? (
             <p role="status" className="rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2 text-body text-kh-text">
-              這份文件的排版無法在渲染模式下編輯，已改用 Markdown 模式。
-              <Button type="button" variant="link" className="ml-2" onClick={retryRenderedEditor}>重試渲染模式</Button>
+              Rendered editing is unavailable for this document. Your text is available in Markdown mode.
+              <Button type="button" variant="link" className="ml-2" onClick={retryRenderedEditor}>Retry rendered editing</Button>
             </p>
           ) : null}
           {conflict ? (
             <div role="alert" className="rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2 text-body text-kh-text">
-              這份文件已被其他人更新。你的輸入仍保留在表單中。
-              <Button type="button" variant="link" className="ml-2" onClick={loadLatest}>載入最新版本（捨棄你的修改）</Button>
+              Someone updated this document. Your changes are still here.
+              <Button type="button" variant="link" className="ml-2" onClick={loadLatest}>Load latest version (discard your changes)</Button>
             </div>
           ) : (
             <GovernanceError error={error} />
@@ -681,6 +688,6 @@ export function DocumentComposer({
         onConfirm={leaveDiscarding}
       />
       {footer ? <div className="kh-reading-column pb-6">{footer({ busy })}</div> : null}
-    </>
+    </DocumentPane>
   );
 }

@@ -108,7 +108,7 @@ test.describe("Phase 3 Workspace product acceptance", () => {
       await grant(owner.context.request, id, "editor", "EDITOR");
       await affected.page.clock.install();
       await affected.page.goto(`/w/${id}/sources/import`);
-      await expect(affected.page.locator('input[type="file"]')).toBeVisible();
+      await expect(affected.page.getByRole("button", { name: "Choose folder", exact: true })).toBeVisible();
       expect((await owner.context.request.delete(`/api/workspaces/${id}/members/${phase3UserId("editor")}`)).ok()).toBe(true);
       await affected.page.clock.fastForward(30_001);
       await expect(affected.page.getByRole("status").filter({ hasText: "You no longer have access to this workspace." })).toBeVisible();
@@ -148,7 +148,7 @@ test.describe("Phase 3 Workspace product acceptance", () => {
     try {
       const id = await createTeam(owner.context.request);
       await owner.page.goto(`/w/${id}/sources/import`);
-      await expect(owner.page.locator('input[type="file"]')).toBeVisible();
+      await expect(owner.page.getByRole("button", { name: "Choose folder", exact: true })).toBeVisible();
       await owner.page.route("**/api/workspaces", route => route.fulfill({ status: 503, body: "Unavailable" }));
       await refresh(owner.context);
       await expect(owner.page.getByRole("alert").filter({ hasText: "Unable to confirm workspace access" })).toBeVisible();
@@ -156,7 +156,7 @@ test.describe("Phase 3 Workspace product acceptance", () => {
       await expect(owner.page.locator('input[type="file"]')).toHaveCount(0);
       await owner.page.unroute("**/api/workspaces");
       await owner.page.getByRole("button", { name: "Retry", exact: true }).click();
-      await expect(owner.page.locator('input[type="file"]')).toBeVisible();
+      await expect(owner.page.getByRole("button", { name: "Choose folder", exact: true })).toBeVisible();
     } finally { await owner.context.close(); }
   });
 
@@ -261,7 +261,7 @@ test.describe("Phase 3 Workspace product acceptance", () => {
     try {
       const id = await createTeam(owner.context.request);
       await owner.page.goto(`/w/${id}/sources/import`);
-      await expect(owner.page.locator('input[type="file"]')).toBeVisible();
+      await expect(owner.page.getByRole("button", { name: "Choose folder", exact: true })).toBeVisible();
       let held = false;
       let intercepted = false;
       await owner.page.route(`**/api/workspaces/${id}`, async route => {

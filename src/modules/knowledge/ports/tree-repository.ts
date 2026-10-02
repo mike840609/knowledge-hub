@@ -2,7 +2,15 @@ import type { KnowledgeTreeNode } from "../domain/tree-node";
 
 export type TreeViewNode = KnowledgeTreeNode & { title: string | null; documentStatus: "ACTIVE" | "ARCHIVED" | null; currentRevisionId: string | null };
 
+export type DocumentSummary = {
+  documentId: string; sourceId: string; title: string; updatedAt: Date;
+  ownership: "SOURCE_MANAGED" | "HUB_MANAGED";
+  status: "ACTIVE" | "ARCHIVED"; sourceStatus: "ACTIVE" | "ARCHIVED";
+};
+
 export interface TreeRepository {
+  /** Current metadata only; never loads document bodies. */
+  listDocumentsByWorkspace(workspaceId: string, includeArchived: boolean): Promise<DocumentSummary[]>;
   insert(node: KnowledgeTreeNode): Promise<void>;
   findById(id: string): Promise<KnowledgeTreeNode | null>;
   lockById(id: string): Promise<KnowledgeTreeNode | null>;

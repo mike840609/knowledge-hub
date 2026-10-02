@@ -24,7 +24,7 @@ const POPUP =
 
 /** Rows sit on the control height so a menu reads as part of the same system. */
 const ROW =
-  "kh-focus-ring flex min-h-8 w-full cursor-default select-none items-center gap-2 rounded-md px-2 text-body text-kh-text " +
+  "kh-control kh-focus-ring flex min-h-8 w-full cursor-default select-none items-center gap-2 rounded-md px-2 text-body text-kh-text " +
   "data-[highlighted]:bg-kh-bg-hover data-[disabled]:pointer-events-none data-[disabled]:opacity-50";
 
 export const MenuRoot = BaseMenu.Root;
@@ -41,7 +41,8 @@ export function MenuContent({
 }: ComponentProps<typeof BaseMenu.Positioner> & { children: ReactNode; className?: string }) {
   return (
     <BaseMenu.Portal>
-      <BaseMenu.Positioner align={align} sideOffset={sideOffset} {...props}>
+      {/* The positioned portal owns its stacking context, including when opened from a drawer. */}
+      <BaseMenu.Positioner className="z-50" align={align} sideOffset={sideOffset} {...props}>
         <BaseMenu.Popup className={`${POPUP} ${className}`}>{children}</BaseMenu.Popup>
       </BaseMenu.Positioner>
     </BaseMenu.Portal>
@@ -75,7 +76,7 @@ export function ContextMenuContent({
 }: ComponentProps<typeof BaseContextMenu.Positioner> & { children: ReactNode; className?: string }) {
   return (
     <BaseContextMenu.Portal>
-      <BaseContextMenu.Positioner {...props}>
+      <BaseContextMenu.Positioner className="z-50" {...props}>
         {/* Anchored to a point rather than a control, so it sizes to its rows. */}
         <BaseContextMenu.Popup className={`${POPUP} min-w-48 ${className}`}>{children}</BaseContextMenu.Popup>
       </BaseContextMenu.Positioner>

@@ -27,6 +27,7 @@ export function SourceListRow({ workspaceId, item }: { workspaceId: string; item
   return (
     <li>
       <Link
+        data-list-row
         href={`/w/${workspaceId}/sources/${source.id}`}
         className="kh-interactive-row flex min-h-11 items-center gap-3 px-3 py-2.5"
       >

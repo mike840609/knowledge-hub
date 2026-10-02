@@ -5,8 +5,10 @@ const OBSIDIAN_SOURCE = "0199f100-0000-7000-8000-000000000101";
 
 test("root resolves deterministically into My Space", async ({ page }) => {
   await page.goto("/");
+  const navigation = await (await page.request.get("/api/workspaces")).json();
+  const personal = navigation.items.find((item: { type: string }) => item.type === "PERSONAL");
   const personalOnly = process.env.KM_TEAM_WORKSPACES_ENABLED === "false";
-  await expect(page).toHaveURL(personalOnly ? /\/w\/[^/]+\/home$/ : /\/w\/[^/]+\/knowledge(?:\/[^/?]+){0,2}(?:\?.*)?$/);
+  await expect(page).toHaveURL(new RegExp(`/w/${personal.id}/${personalOnly ? "home$" : "knowledge(?:/|$)"}`));
   await expect(page.getByLabel("Workspace: My Space", { exact: true })).toBeVisible();
   // Routing does not depend on whether earlier specs populated this workspace.
   await expect(page.getByRole("navigation", { name: "Primary", exact: true })

@@ -28,6 +28,7 @@ async function createMySpaceDocument(page: Page, title: string, body: string): P
   await (await showMarkdown(form)).fill(body);
   await expect(page.getByRole("button", { name: "Create document" })).toBeEnabled(ROUND_TRIP);
   await page.getByRole("button", { name: "Create document" }).click();
+  await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/knowledge/[^/]+/[^/?]+$`), ROUND_TRIP);
   await expect(page.getByRole("region", { name: "Document content" })).toBeVisible(ROUND_TRIP);
   return { workspaceId };
 }

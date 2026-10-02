@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { MarkdownRenderer } from "@/components/knowledge/markdown-renderer";
+import { markdownOpensWithHeading } from "@/lib/markdown-title";
 import { Timestamp } from "@/components/ui/timestamp";
 import { getSharedDocument } from "@/server/share-read";
 
@@ -30,7 +31,7 @@ export default async function SharedDocumentPage({ params }: SharedPageProps) {
     <main className="min-h-screen bg-kh-bg">
       <header>
         <div className="kh-reading-column pb-3 pt-5">
-          <h1 className="text-heading font-semibold tracking-tight text-kh-text">{shared.title}</h1>
+          {!markdownOpensWithHeading(shared.markdown) ? <h1 className="text-heading font-semibold tracking-tight text-kh-text">{shared.title}</h1> : null}
           <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-kh-text-muted">
             <span>{`Shared by ${shared.sharedByName}`}</span>
             <span aria-hidden="true">·</span>
