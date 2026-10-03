@@ -62,3 +62,10 @@ it("offers just one action when the folder is remembered",async () => {
   await render([source("one")]);expect(container.querySelector('button[aria-label="Sync now: Source one"]')).not.toBeNull();
   expect(container.querySelector('a[aria-label="Update from folder: Source one"]')).toBeNull();
 });
+
+it("puts sync before the detail link in keyboard order", async () => {
+  await render([source("one")]);
+  const controls = [...container.querySelectorAll("button, a")];
+  expect(controls[0]?.getAttribute("aria-label")).toBe("Sync now: Source one");
+  expect(controls[1]?.getAttribute("href")).toBe("/w/ws/sources/one");
+});

@@ -23,7 +23,7 @@ type RememberedMeta = NonNullable<ReturnType<typeof getRememberedFolderMeta>>;
  * caller may import, and a folder is remembered for this source. The existing
  * "Update from folder" link keeps its own gate and is untouched.
  */
-export function SyncNowButton({ workspaceId, sourceId, sourceName, limits }: { workspaceId: string; sourceId: string; sourceName?: string; limits?: FolderImportClientLimits }): React.JSX.Element | null {
+export function SyncNowButton({ workspaceId, sourceId, sourceName, limits, compact = false }: { workspaceId: string; sourceId: string; sourceName?: string; limits?: FolderImportClientLimits; compact?: boolean }): React.JSX.Element | null {
   const router = useRouter();
   const { access, confirmed } = useWorkspaceAuthorization();
   const allowed = confirmed && access.actions.canImport;
@@ -116,14 +116,14 @@ export function SyncNowButton({ workspaceId, sourceId, sourceName, limits }: { w
 
   const updateHref = `/w/${workspaceId}/sources/${sourceId}/update`;
   return (
-    <span className="flex flex-wrap items-center gap-2">
+    <span className={compact ? "contents" : "flex flex-wrap items-center gap-2"}>
       <Tooltip label={`Sync now - re-scan ${meta.rootName}`}>
-        <Button type="button" variant="soft" icon disabled={busy} aria-label={sourceName ? `Sync now: ${sourceName}` : "Sync now"} onClick={() => void handleSync()}>
-          <RefreshCw size={15} aria-hidden="true" />
+        <Button type="button" variant={compact ? "ghost" : "soft"} className={compact ? "group hover:!bg-kh-bg-selected hover:!text-kh-selected-text focus-visible:!bg-kh-bg-selected focus-visible:!text-kh-selected-text" : undefined} icon disabled={busy} aria-label={sourceName ? `Sync now: ${sourceName}` : "Sync now"} onClick={() => void handleSync()}>
+          <RefreshCw size={15} aria-hidden="true" className={busy ? "animate-spin motion-reduce:animate-none" : compact ? "transition-transform duration-500 ease-out group-hover:rotate-[360deg] group-hover:scale-125 group-focus-visible:rotate-[360deg] group-focus-visible:scale-125 motion-reduce:transform-none motion-reduce:transition-none" : undefined} />
         </Button>
       </Tooltip>
       {status ? (
-        <span role="status" className="text-caption text-kh-text-muted">
+        <span role="status" className={compact ? "col-span-2 row-start-2 pb-2 text-caption text-kh-text-muted" : "text-caption text-kh-text-muted"}>
           {status}
           {needsReselect ? (
             <>
