@@ -11,8 +11,7 @@
 第一波包括五個階段，最終交付必須涵蓋全部階段。階段可獨立驗證，但不能只完成首頁文案便宣稱第一波完成。
 不重新開發搜尋、收藏、最近閱讀、圖譜或同步按鈕；使用既有能力並補齊它們之間的銜接。
 
-圖片範圍暫採：支援匯入本機 PNG/JPEG/WebP/GIF 並在授權文章內閱讀，其他附件提供清楚的缺漏／不支援提示。
-此選項仍待使用者回覆；在審閱時可改為本波只診斷缺漏。兩個範圍不能混稱為完整附件支援。
+使用者已明確選擇「先不用管圖片」。圖片 binary 儲存、渲染與缺漏診斷新增功能本波不做，附件 binary 服務亦留待後續。沿用現有圖片安全政策，不宣稱第一波完整支援本機圖片。
 
 ## 程式盤點
 
@@ -103,17 +102,7 @@ Source history 的 APPLIED run 可開啟同一頁；文章可開啟當時 revisi
 
 相對 Markdown links 與 wikilinks 使用既有解析與穩定 Document ID；補上同名、子資料夾、移動及 unresolved cases 的驗收。
 
-圖片若採完整圖片範圍：
-- 本機 PNG/JPEG/WebP/GIF 在 upload 階段依檔案內容驗證，限制單檔 10 MiB、單次總量 100 MiB，且不能超過既有更小的 runtime limits。
-- 第一版使用資料庫中依 content hash 去重的 immutable bytes 儲存，reference 在 Apply 交易中綁定 source/path，避免依賴開發機本地 filesystem。
-- staged bytes 與 canonical references 分開；cancel/expired cleanup 只移除未被 canonical 引用的資料。
-- reader 以文件相對路徑解析到 source asset，拒絕跳出 source root 的 path；相同名稱不同 source 不可混用。
-- 私有圖片端點檢查 workspace/source 讀取權限，回應固定驗證後的 Content-Type、nosniff、private cache；不得用公共 `/assets` 靜態路徑。
-- SVG、HTML、scriptable content 不自動呈現；未支援附件顯示檔名與原因。外部圖片繼續沿用現有預設阻擋政策。
-- 已有公開分享不可因圖片功能繞過授權；本波私有資產不隨分享公開，shared reader 顯示附件不可用。
-- binary 儲存只保留仍被有效資產／保留 revision 引用的 blobs；清理與 rollback 必須有整合測試。歷史圖片不能默默換成同路徑的新 bytes，需 revision 解析資料或明確 unavailable。
-
-若選擇只做診斷：閱讀頁及健康清單顯示 local image/attachment unavailable，不宣稱本機圖片已支援。
+本波閱讀品質聚焦 Markdown 文字、標題與 metadata、相對文章連結、wikilinks、同名文章辨識及來源路徑。圖片沿用既有行為，驗收報告清楚列出尚未支援的部分。
 
 ## 五、Updates 與來源健康
 
@@ -130,9 +119,9 @@ Home 顯示最近 3 批，每批最多 5 篇；完整 Updates 頁採 cursor 分�
 
 ### 來源健康
 
-來源 detail 提供 Health 入口，彙整目前文件的 unresolved links、圖片／附件缺漏、最新有效匯入警告。
+來源 detail 提供 Health 入口，彙整目前文件的 unresolved links 與最新有效匯入警告。
 每項可開啟對應文章，顯示原因及相對路徑；健康診斷不應阻擋正常閱讀，也不自動修改來源。
-清單分頁，使用可批次查詢的現有 link／asset 資料；避免每次首頁逐篇解析全部 Markdown。
+清單分頁，使用可批次查詢的現有 link 與匯入警告資料；避免每次首頁逐篇解析全部 Markdown。
 所有資料透過現有來源與 workspace 權限；僅展示當前使用者可讀的文件。
 
 ## 交付順序與回歸界線
@@ -140,20 +129,20 @@ Home 顯示最近 3 批，每批最多 5 篇；完整 Updates 頁採 cursor 分�
 1. 永久 run-change/read-revision 資料契約、migration 與授權讀取。
 2. diff、高風險確認、準確狀態、取消／恢復與同步結果頁。
 3. Home/My folders/Updates 接上正式資料。
-4. 本機圖片或缺漏診斷、來源健康與閱讀契約驗收。
+4. 來源健康與 Markdown 文字／內部連結閱讀契約驗收。
 5. 完整回歸與前後截圖。
 
 保留 source-managed 唯讀、workspace permission gates、keyboard navigation、收藏／草稿、Team source 流程與 Apply 原子性。
-本波不加入自動背景同步、CLI、MCP、AI Chat、Collections、路徑／日期搜尋新篩選或分享管理新頁面。
+本波不加入自動背景同步、CLI、MCP、AI Chat、Collections、路徑／日期搜尋新篩選或分享管理新頁面；圖片與附件 binary 支援另行開發。
 
 ## 驗證與截图
 
 - Domain/unit：diff metadata、risk threshold/empty folder/stable moves、狀態與取消、read-revision monotonicity、來源路徑解析。
-- 真實 MariaDB integration：Apply rollback/idempotency、持久變更在 staging cleanup 後存在、history revision、read marker 授權、risk acknowledgment 伺服器強制、binary 若採用則涵蓋 cleanup 與內容驗證。
-- E2E：初次匯入→成功摘要→閱讀→再次掃描→diff→高風險拒絕／確認→Apply→Updates 未讀→閱讀後已讀；同名與相對圖片案例。
+- 真實 MariaDB integration：Apply rollback/idempotency、持久變更在 staging cleanup 後存在、history revision、read marker 授權、risk acknowledgment 伺服器強制。
+- E2E：初次匯入→成功摘要→閱讀→再次掃描→diff→高風險拒絕／確認→Apply→Updates 未讀→閱讀後已讀；同名文章與相對文章連結案例。
 - 完整 unit/integration、相關 Team 與 Personal E2E、typecheck/lint/production build；正式報告列出已跑範圍及任何未解決失敗。
 - 前後比較固定基準 main `15c8b77`、同一組示範資料、1440px light viewport、相同瀏覽器與語系；不把 demo fixtures 寫入使用者資料。
-- 至少截 Home、預覽正文 diff／高風險警示、Apply 成功摘要、Updates、來源健康與圖片閱讀頁。新頁面標示「修改前無此頁面」，與原流程最接近的畫面比較。
+- 至少截 Home、預覽正文 diff／高風險警示、Apply 成功摘要、Updates、來源健康與文章閱讀頁。新頁面標示「修改前無此頁面」，與原流程最接近的畫面比較。
 - 可補 hover／取消錄影；截圖不作為功能驗證的替代。
 
 驗收完成：使用者能匯入自己的 folder，找到並讀懂文章，再次檢查時知道差異且能避開誤封存，正式套用後知道有哪些新知識可讀，並能在 staging 清理後回看同步歷史。
