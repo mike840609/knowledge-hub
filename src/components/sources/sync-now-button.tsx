@@ -23,7 +23,7 @@ type RememberedMeta = NonNullable<ReturnType<typeof getRememberedFolderMeta>>;
  * caller may import, and a folder is remembered for this source. The existing
  * "Update from folder" link keeps its own gate and is untouched.
  */
-export function SyncNowButton({ workspaceId, sourceId, limits }: { workspaceId: string; sourceId: string; limits?: FolderImportClientLimits }): React.JSX.Element | null {
+export function SyncNowButton({ workspaceId, sourceId, sourceName, limits }: { workspaceId: string; sourceId: string; sourceName?: string; limits?: FolderImportClientLimits }): React.JSX.Element | null {
   const router = useRouter();
   const { access, confirmed } = useWorkspaceAuthorization();
   const allowed = confirmed && access.actions.canImport;
@@ -118,7 +118,7 @@ export function SyncNowButton({ workspaceId, sourceId, limits }: { workspaceId: 
   return (
     <span className="flex flex-wrap items-center gap-2">
       <Tooltip label={`Sync now - re-scan ${meta.rootName}`}>
-        <Button type="button" variant="soft" icon disabled={busy} aria-label="Sync now" onClick={() => void handleSync()}>
+        <Button type="button" variant="soft" icon disabled={busy} aria-label={sourceName ? `Sync now: ${sourceName}` : "Sync now"} onClick={() => void handleSync()}>
           <RefreshCw size={15} aria-hidden="true" />
         </Button>
       </Tooltip>

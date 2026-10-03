@@ -1,3 +1,6 @@
+import type { FolderImportClientLimits } from "@/components/imports/folder-import-form";
+import { SourceSyncActions } from "@/components/sources/source-sync-actions";
+import { isFolderSyncable } from "@/modules/knowledge/domain/source-policy";
 import Link from "next/link";
 import { ChevronRight, Database } from "lucide-react";
 import type { SourceListItemModel } from "@/server/source-read";
@@ -22,14 +25,14 @@ export function syncStatusKind(status: string): StatusKind {
   return "pending";
 }
 
-export function SourceListRow({ workspaceId, item }: { workspaceId: string; item: SourceListItemModel }) {
+export function SourceListRow({ workspaceId, item, limits }: { workspaceId: string; item: SourceListItemModel; limits?: FolderImportClientLimits }) {
   const { source, latestRun } = item;
   return (
-    <li>
+    <li className="flex flex-wrap items-center gap-2">
       <Link
         data-list-row
         href={`/w/${workspaceId}/sources/${source.id}`}
-        className="kh-interactive-row flex min-h-11 items-center gap-3 px-3 py-2.5"
+        className="kh-interactive-row flex min-w-0 flex-1 min-h-11 items-center gap-3 px-3 py-2.5"
       >
         <Database size={16} aria-hidden="true" className="shrink-0 text-kh-text-muted" />
         <span className="min-w-0 flex-1 truncate text-body font-medium text-kh-text">{source.name}</span>
@@ -47,6 +50,11 @@ export function SourceListRow({ workspaceId, item }: { workspaceId: string; item
         )}
         <ChevronRight size={15} aria-hidden="true" className="shrink-0 text-kh-text-muted" />
       </Link>
+      {isFolderSyncable(source) ? (
+        <div className="max-w-full">
+          <SourceSyncActions compact workspaceId={workspaceId} sourceId={source.id} sourceName={source.name} limits={limits} />
+        </div>
+      ) : null}
     </li>
   );
 }

@@ -1,3 +1,4 @@
+import { importRuntimeConfig } from "@/server/import-config";
 import { notFound } from "next/navigation";
 import { WorkspaceImportLink } from "@/components/shell/workspace-import-link";
 import { SourceList } from "@/components/sources/source-list";
@@ -13,6 +14,7 @@ export default async function WorkspaceSourcesPage({
   const { workspaceId } = await params;
   const model = await getSourceListModel(workspaceId);
   if (!model) notFound();
+  const limits = importRuntimeConfig().limits;
   return (
     <main className="kh-page py-6">
       <PageHeader
@@ -29,7 +31,7 @@ export default async function WorkspaceSourcesPage({
         </WorkspaceImportLink>}
       />
       <div className="mt-6">
-        <SourceList workspaceId={workspaceId} items={model.items} />
+        <SourceList workspaceId={workspaceId} items={model.items} limits={{ maxAssetFileBytes: limits.maxAssetFileBytes, maxAssetTotalBytes: limits.maxAssetTotalBytes }} />
       </div>
     </main>
   );

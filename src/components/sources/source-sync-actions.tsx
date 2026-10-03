@@ -27,10 +27,15 @@ export function SourceSyncActions({
   workspaceId,
   sourceId,
   limits,
+  sourceName,
+  compact = false,
 }: {
   workspaceId: string;
   sourceId: string;
   limits?: FolderImportClientLimits;
+  sourceName?: string;
+  /** List rows offer one action: sync the remembered folder, or pick one. */
+  compact?: boolean;
 }): React.JSX.Element {
   const [meta, setMeta] = useState<RememberedMeta | null>(null);
   const [pickerSupported, setPickerSupported] = useState(false);
@@ -46,16 +51,18 @@ export function SourceSyncActions({
   const updateHref = `/w/${workspaceId}/sources/${sourceId}/update`;
   return (
     <>
-      <SyncNowButton workspaceId={workspaceId} sourceId={sourceId} limits={limits} />
-      <Tooltip label="Update from folder - pick a different folder">
-        <WorkspaceImportLink
-          href={updateHref}
-          aria-label="Update from folder"
-          className={buttonClasses({ variant: hasMemory ? "ghost" : "primary", icon: true })}
-        >
-          <FolderUp size={15} aria-hidden="true" />
-        </WorkspaceImportLink>
-      </Tooltip>
+      <SyncNowButton workspaceId={workspaceId} sourceId={sourceId} sourceName={sourceName} limits={limits} />
+      {!compact || !hasMemory ? (
+        <Tooltip label="Update from folder - pick a different folder">
+          <WorkspaceImportLink
+            href={updateHref}
+            aria-label={sourceName ? `Update from folder: ${sourceName}` : "Update from folder"}
+            className={buttonClasses({ variant: compact ? "soft" : hasMemory ? "ghost" : "primary", icon: true })}
+          >
+            <FolderUp size={15} aria-hidden="true" />
+          </WorkspaceImportLink>
+        </Tooltip>
+      ) : null}
     </>
   );
 }
