@@ -103,8 +103,8 @@ describe("Phase 2 folder import Apply", () => {
     const snapshotId = await readyInitial(fixture.workspaceId);
     const first = await services().apply.apply(fixtureCaller(), snapshotId);
     const second = await services().apply.apply(fixtureCaller(), snapshotId);
-    expect(second).toMatchObject({ kind:"APPLIED", alreadyApplied:true, resultVersion:1, runId:null });
     if (first.kind !== "APPLIED") throw new Error("expected APPLIED");
+    expect(second).toMatchObject({ kind:"APPLIED", alreadyApplied:true, resultVersion:1, runId:first.runId });
     expect(await pool.query("SELECT id FROM sync_runs WHERE source_id=?", [first.sourceId])).toHaveLength(1);
     expect((await pool.query<{ sync_version:number }[]>("SELECT sync_version FROM knowledge_sources WHERE id=?", [first.sourceId]))[0].sync_version).toBe(1);
   });

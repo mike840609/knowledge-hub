@@ -104,6 +104,7 @@ export type CanonicalDocumentState = {
   status: "ACTIVE" | "ARCHIVED";
   currentRevision: {
     id: string;
+    revisionNo?: number;
     title: string;
     markdown: string;
     metadata: KnowledgeMetadata;

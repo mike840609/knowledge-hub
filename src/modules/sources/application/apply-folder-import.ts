@@ -9,6 +9,8 @@ import type { SourceUnitOfWork } from "@/modules/sources/ports/unit-of-work";
 import { DomainError } from "@/shared/domain/errors";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import { executeFolderImportPlan, type ImportApplyFailurePoint } from "./source-import-plan-executor";
+import { captureAppliedChanges } from "./record-sync-run-changes";
+import { requireKnownSnapshotWorkspaceRead } from "./import-snapshot-access";
 import { translateKnownSnapshotAccessError } from "./import-snapshot-access";
 
 export type ApplyFolderImportResult =
@@ -67,7 +69,9 @@ export class ApplyFolderImportService {
 
         if (snapshot.state === "APPLIED") {
           if (!snapshot.resultSourceId || snapshot.resultVersion === null) throw importError("IMPORT_SNAPSHOT_INVALID", "Applied snapshot is missing its persisted result.");
-          return { kind: "APPLIED", sourceId: snapshot.resultSourceId, resultVersion: snapshot.resultVersion, runId: null, alreadyApplied: true };
+          await requireKnownSnapshotWorkspaceRead(repositories.workspaceAccess, caller, snapshot.workspaceId);
+          const run=await repositories.syncRuns.findAppliedBySnapshotId(snapshot.resultSourceId,snapshot.id);
+          return { kind: "APPLIED", sourceId: snapshot.resultSourceId, resultVersion: snapshot.resultVersion, runId: run?.id??null, alreadyApplied: true };
         }
         if (snapshot.state === "STALE") throw importError("IMPORT_SNAPSHOT_STALE", "Import snapshot is stale and cannot be applied.");
         if (snapshot.state !== "READY" || !snapshot.plan || !snapshot.summary) throw importError("IMPORT_SNAPSHOT_NOT_READY", "Only READY snapshots can be applied.");
@@ -120,6 +124,7 @@ export class ApplyFolderImportService {
           }
 
           failedAttempt.value = { sourceId: source.id, basedOnVersion, summary: snapshot.summary, provenance, callerId: caller.identity.id };
+          const before=await repositories.importCanonicalState.load(source.id);
           await executeFolderImportPlan(repositories, caller, source, snapshot.plan, { stagingEntriesByUploadKey, failurePoint: this.failurePoint, now: this.now });
           if (this.failurePoint === "before-run") throw importError("TEST_IMPORT_FAILURE", "Injected import failure before SyncRun.");
           const resultVersion = await repositories.sources.guardAndAdvanceVersion(source.id, basedOnVersion, caller.identity.id);
@@ -136,6 +141,8 @@ export class ApplyFolderImportService {
             startedAt: timestamp,
             completedAt: this.now(),
           });
+          const changes=await captureAppliedChanges(repositories,source,snapshot.plan,before);
+          await repositories.syncRunChanges.insertMany(changes.map((change,index)=>({...change,id:uuidv7(),runId,sourceId:source.id,workspaceId:source.workspaceId,ordinal:index+1})));
           await repositories.importSnapshots.markApplied({ snapshotId: snapshot.id, sourceId: source.id, resultVersion, appliedAt: this.now() });
           failedAttempt.value = null;
           return { kind: "APPLIED", sourceId: source.id, resultVersion, runId, alreadyApplied: false };
@@ -164,6 +171,7 @@ export class ApplyFolderImportService {
           updatedAt: timestamp,
         };
         await repositories.sources.insert(source);
+        const before={documents:[],folders:[],assets:[]};
         await executeFolderImportPlan(repositories, caller, source, snapshot.plan, { stagingEntriesByUploadKey, failurePoint: this.failurePoint, now: this.now });
         if (this.failurePoint === "before-run") throw importError("TEST_IMPORT_FAILURE", "Injected import failure before SyncRun.");
         const resultVersion = await repositories.sources.guardAndAdvanceVersion(source.id, 0, caller.identity.id);
@@ -180,6 +188,8 @@ export class ApplyFolderImportService {
           startedAt: timestamp,
           completedAt: this.now(),
         });
+        const changes=await captureAppliedChanges(repositories,source,snapshot.plan,before);
+        await repositories.syncRunChanges.insertMany(changes.map((change,index)=>({...change,id:uuidv7(),runId,sourceId:source.id,workspaceId:source.workspaceId,ordinal:index+1})));
         await repositories.importSnapshots.markApplied({ snapshotId: snapshot.id, sourceId: source.id, resultVersion, appliedAt: this.now() });
         return { kind: "APPLIED", sourceId: source.id, resultVersion, runId, alreadyApplied: false };
       });

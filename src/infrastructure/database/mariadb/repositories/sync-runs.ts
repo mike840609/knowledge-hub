@@ -22,6 +22,11 @@ export class MariaDbSyncRunRepository implements SyncRunRepository {
     );
   }
 
+  async findAppliedBySnapshotId(sourceId: string, snapshotId: string): Promise<SyncRun | null> {
+    const rows=await this.connection.query<DbRow[]>("SELECT * FROM sync_runs WHERE source_id=? AND status='APPLIED' AND JSON_UNQUOTE(JSON_EXTRACT(summary,'$.snapshotId'))=? ORDER BY completed_at DESC,id DESC LIMIT 1",[sourceId,snapshotId]);
+    return rows[0]?mapSyncRun(rows[0]):null;
+  }
+
   async findById(runId: string): Promise<SyncRun | null> {
     const rows = await this.connection.query<DbRow[]>("SELECT * FROM sync_runs WHERE id = ?", [runId]);
     return rows[0] ? mapSyncRun(rows[0]) : null;

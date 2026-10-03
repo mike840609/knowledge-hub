@@ -505,7 +505,7 @@ describe("Phase 2 folder import reconciliation", () => {
     const query = vi.fn().mockResolvedValueOnce([{
       entry_id: "entry:old.md", external_id: null, source_path: "old.md", entry_type: "DOCUMENT", entry_status: "ACTIVE",
       document_id: "document:old.md", tree_node_id: "tree:old.md", tree_node_type: "DOCUMENT",
-      revision_id: "legacy", title: "Stable title", markdown: "Stable body\n",
+      revision_id: "legacy", revision_no: 1, title: "Stable title", markdown: "Stable body\n",
       metadata: JSON.stringify({ knowledge_id: "K1", owner: "platform" }), content_hash: "legacy-hash",
     }]).mockResolvedValueOnce([]);
     const state = await new MariaDbImportCanonicalStateRepository({ query }).load("source");
