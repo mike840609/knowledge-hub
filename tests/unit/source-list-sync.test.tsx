@@ -29,7 +29,7 @@ const limits = {maxAssetFileBytes:8,maxAssetTotalBytes:16};
 async function render(items=[source("one"),source("two")]) {await act(async () => root.render(<SourceList workspaceId="ws" items={items} limits={limits} />));}
 it("syncs only the clicked source and opens its preview without nesting the button in the detail link",async () => {
   await render();
-  const button=container.querySelector<HTMLButtonElement>('button[aria-label="Sync now: Source two"]');
+  const button=container.querySelector<HTMLButtonElement>('button[aria-label="Check for changes: Source two"]');
   expect(button).not.toBeNull();expect(button!.closest("a")).toBeNull();
   expect(container.querySelector('a[data-list-row][href="/w/ws/sources/two"]')).not.toBeNull();
   await act(async () => button!.click());
@@ -46,7 +46,7 @@ it.each(["canImport","confirmed","supported","remembered"] as const)("keeps sync
 });
 it("disables a running source and keeps row keyboard navigation out of the secondary action",async () => {
   let resolve!: (snapshot:string)=>void;state.run.mockImplementationOnce(() => new Promise<string>(r => {resolve=r;}));
-  await render();const button=container.querySelector<HTMLButtonElement>('button[aria-label="Sync now: Source one"]');expect(button).not.toBeNull();
+  await render();const button=container.querySelector<HTMLButtonElement>('button[aria-label="Check for changes: Source one"]');expect(button).not.toBeNull();
   const arrow=new KeyboardEvent("keydown",{key:"ArrowDown",bubbles:true,cancelable:true});await act(async () => {button!.focus();button!.dispatchEvent(arrow);});expect(arrow.defaultPrevented).toBe(false);expect(document.activeElement).toBe(button);
   await act(async () => button!.click());expect(button!.disabled).toBe(true);expect(container.querySelector('[role="status"]')).not.toBeNull();
   await act(async () => button!.click());expect(state.run).toHaveBeenCalledTimes(1);
@@ -60,21 +60,21 @@ it.each(["supported","remembered"] as const)("offers folder selection in the row
   expect(link!.hasAttribute("data-list-row")).toBe(false);
 });
 it("offers just one action when the folder is remembered",async () => {
-  await render([source("one")]);expect(container.querySelector('button[aria-label="Sync now: Source one"]')).not.toBeNull();
+  await render([source("one")]);expect(container.querySelector('button[aria-label="Check for changes: Source one"]')).not.toBeNull();
   expect(container.querySelector('a[aria-label="Update from folder: Source one"]')).toBeNull();
 });
 
 it("puts sync before the detail link in keyboard order", async () => {
   await render([source("one")]);
   const controls = [...container.querySelectorAll("button, a")];
-  expect(controls[0]?.getAttribute("aria-label")).toBe("Sync now: Source one");
+  expect(controls[0]?.getAttribute("aria-label")).toBe("Check for changes: Source one");
   expect(controls[1]?.getAttribute("href")).toBe("/w/ws/sources/one");
 });
 
 it("explains source sync and the preview/apply step on focus", async () => {
   await render([source("one")]);
   await act(async () => container.querySelector<HTMLButtonElement>("button")!.focus());
-  expect(document.body.textContent).toContain("Sync this source");
+  expect(document.body.textContent).toContain("Check for changes");
   expect(document.body.textContent).toContain("preview changes before Apply");
 });
 it("explains folder selection separately on focus", async () => {
@@ -97,7 +97,7 @@ it("shows last successful apply even when the latest attempt failed", async () =
 });
 it("offers a source-scoped retry after a failed sync", async () => {
   state.run.mockRejectedValueOnce(new Error("Upload failed"));await render([source("one")]);
-  await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label^="Sync now"]')!.click());
+  await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label^="Check for changes"]')!.click());
   expect(container.querySelector('[role="status"]')?.textContent).toContain("Upload failed");
   const retry=container.querySelector<HTMLButtonElement>('button[aria-label="Retry sync: Source one"]');
   expect(retry).not.toBeNull();await act(async () => retry!.click());

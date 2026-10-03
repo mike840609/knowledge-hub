@@ -17,7 +17,7 @@ describe("classifyApplyError", () => {
       const failure = classifyApplyError(409, envelope(code));
       expect(failure.code, code).toBe(code);
       expect(failure.latchStale, code).toBe(true);
-      expect(failure.message, code).toMatch(/refresh the preview/iu);
+      expect(failure.message, code).toMatch(/check for changes again/iu);
     }
   });
 

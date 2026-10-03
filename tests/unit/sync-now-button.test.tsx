@@ -81,12 +81,12 @@ async function renderButton() {
 }
 
 function syncButton(): HTMLButtonElement | null {
-  return container.querySelector('button[aria-label="Sync now"]');
+  return container.querySelector('button[aria-label="Check for changes"]');
 }
 
 function clickSync(): void {
   const button = syncButton();
-  if (!button) throw new Error('Button "Sync now" not found');
+  if (!button) throw new Error('Button "Check for changes" not found');
   act(() => {
     button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
@@ -116,7 +116,7 @@ it("renders nothing when no folder is remembered", async () => {
   expect(container.innerHTML).toBe("");
 });
 
-it("renders an icon-only Sync now button: accessible name, no visible text, icon shape", async () => {
+it("renders an icon-only Check for changes button: accessible name, no visible text, icon shape", async () => {
   await renderButton();
   const button = syncButton();
   expect(button).not.toBeNull();
@@ -137,7 +137,7 @@ it("reveals the re-scan tip on keyboard focus", async () => {
   await act(async () => {
     button?.focus();
   });
-  expect(document.body.textContent).toContain("Sync now - re-scan notes");
+  expect(document.body.textContent).toContain("Check for changes - re-scan notes");
 });
 
 it("reveals the re-scan tip on hover", async () => {
@@ -152,7 +152,7 @@ it("reveals the re-scan tip on hover", async () => {
     button?.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, movementX: 8, movementY: 8 }));
     await new Promise((resolve) => setTimeout(resolve, 900));
   });
-  expect(document.body.textContent).toContain("Sync now - re-scan notes");
+  expect(document.body.textContent).toContain("Check for changes - re-scan notes");
 });
 
 it("loads the remembered folder in an effect: server render shows nothing and reads no browser storage", () => {

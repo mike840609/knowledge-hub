@@ -10,7 +10,7 @@ import { buttonClasses } from "@/components/ui/button";
 
 export type ApplyFailure = { code: string; message: string; latchStale: boolean };
 
-const STALE_GUIDANCE = "The preview no longer matches the source. Refresh the preview for a fresh diff.";
+const STALE_GUIDANCE = "The source was updated by another sync. Check for changes again to create a fresh preview.";
 const RETRYABLE_GUIDANCE = "A transient database conflict interrupted the apply. Nothing was changed — try again.";
 const GENERIC_GUIDANCE = "Applying the import preview failed.";
 
@@ -77,6 +77,22 @@ export function ImportStickyFooter({
     ? `/w/${workspaceId}/sources/${preview.sourceId}/update`
     : `/w/${workspaceId}/sources/import`;
 
+  async function openResult(body:{sourceId:string;runId?:string|null}):Promise<void>{
+    try{await adoptPendingHandle(preview.snapshotId,body.sourceId);}catch{}
+    router.push(body.runId?`/w/${workspaceId}/sources/${body.sourceId}/runs/${body.runId}`:`/w/${workspaceId}/sources/${body.sourceId}?import=success`);
+  }
+  async function recover():Promise<boolean>{
+    try{
+      const status=await fetch(`/api/source-imports/${preview.snapshotId}`,{cache:"no-store"});
+      if(!status.ok)return false;
+      const current=await status.json();
+      if(current.state!=="APPLIED")return false;
+      const response=await fetch(`/api/source-imports/${preview.snapshotId}/apply`,{method:"POST"});
+      const body=await response.json();
+      if(!response.ok||typeof body.sourceId!=="string")return false;
+      await openResult(body);return true;
+    }catch{return false;}
+  }
   async function apply(): Promise<void> {
     if (disabled || state.kind === "APPLYING" || new Date(preview.expiresAt).getTime() <= Date.now()) return;
     setState({ kind: "APPLYING" });
@@ -91,20 +107,16 @@ export function ImportStickyFooter({
         if (response.status !== 404) {
           requestWorkspaceAccessCheck(response.status, readEnvelope(body)?.code);
         }
+        if((response.status>=500||response.ok)&&await recover())return;
         const failure = classifyApplyError(response.status, body);
         if (failure.latchStale) setVersionConflict(true);
         setState({ kind: "ERROR", code: failure.code, message: failure.message });
         return;
       }
-      const sourceId = (body as { sourceId: string }).sourceId;
-      try {
-        await adoptPendingHandle(preview.snapshotId, sourceId);
-      } catch {
-        // Best-effort: a storage failure must never block navigation.
-      }
-      router.push(`/w/${workspaceId}/sources/${sourceId}?import=success`);
+      await openResult(body as {sourceId:string;runId?:string|null});
     } catch (error) {
-      setState({ kind: "ERROR", code: "IMPORT_APPLY_FAILED", message: error instanceof Error ? error.message : GENERIC_GUIDANCE });
+      if(await recover())return;
+      setState({ kind: "ERROR", code: "IMPORT_APPLY_FAILED", message: "The Apply result could not be confirmed. Retry safely to recover the same sync result." });
     }
   }
 
@@ -138,8 +150,7 @@ export function ImportStickyFooter({
       </div>
       {effectiveState === "STALE" || expired ? (
         <p className="mx-auto mt-2 max-w-page text-body text-kh-danger">
-          This preview is stale: the source changed after it was created. There is no Force Apply — create a fresh
-          preview.
+          {expired ? "This preview expired. Check for changes again to create a fresh preview." : "The source was updated by another sync. Check for changes again to create a fresh preview."}
         </p>
       ) : null}
       {effectiveState === "APPLIED" ? (

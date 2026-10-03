@@ -63,6 +63,10 @@ export class MariaDbImportSnapshotRepository implements ImportSnapshotRepository
     );
   }
 
+  async findLatestReadyBySourceForCreator(sourceId:string,creatorId:string,now:Date,basedOnVersion:number):Promise<ImportSnapshot|null>{
+    const rows=await this.connection.query<DbRow[]>("SELECT * FROM source_import_snapshots WHERE source_id=? AND created_by=? AND state='READY' AND expires_at>? AND based_on_version=? ORDER BY finalized_at DESC,id DESC LIMIT 1",[sourceId,creatorId,now,basedOnVersion]);
+    return rows[0]?mapSnapshot(rows[0]):null;
+  }
   async findById(snapshotId: string): Promise<ImportSnapshot | null> {
     const rows = await this.connection.query<DbRow[]>("SELECT * FROM source_import_snapshots WHERE id = ?", [snapshotId]);
     return rows[0] ? mapSnapshot(rows[0]) : null;

@@ -73,7 +73,7 @@ export function SyncNowButton({ workspaceId, sourceId, sourceName, limits, compa
     setBusy(true);
     setNeedsReselect(false);
     setFailed(false);
-    setStatus("Scanning the folder… Changes will open in a preview; Apply is required to update this source.");
+    setStatus("Checking the folder… Changes will open in a preview; Apply is required to update this source.");
     try {
       assertAllowed();
       const remembered = await loadRememberedHandle(sourceId);
@@ -105,10 +105,10 @@ export function SyncNowButton({ workspaceId, sourceId, sourceName, limits, compa
       router.push(`/w/${workspaceId}/sources/imports/${snapshotId}`);
     } catch (error) {
       if (!mountedRef.current) return;
-      if (controller.signal.aborted) { setStatus(null); return; }
+      if (controller.signal.aborted) { setStatus("Checking cancelled. No changes were applied."); return; }
       setFailed(true);
       if (error instanceof DOMException && (error.name === "NotAllowedError" || error.name === "NotFoundError")) setNeedsReselect(true);
-      setStatus(error instanceof Error ? error.message : "Syncing the remembered folder failed.");
+      setStatus(`${error instanceof Error ? error.message : "Checking the folder failed."} No changes were applied.`);
     } finally {
       if (activeImportRef.current === controller) activeImportRef.current = null;
       if (mountedRef.current) setBusy(false);
@@ -122,11 +122,12 @@ export function SyncNowButton({ workspaceId, sourceId, sourceName, limits, compa
   const updateHref = `/w/${workspaceId}/sources/${sourceId}/update`;
   return (
     <span className={compact ? "contents" : "flex flex-wrap items-center gap-2"}>
-      <Tooltip label={compact ? `Sync this source — scan ${meta.rootName}, then preview changes before Apply` : `Sync now - re-scan ${meta.rootName}`}>
-        <Button type="button" variant={compact ? "ghost" : "soft"} className={compact ? "group hover:!bg-kh-bg-selected hover:!text-kh-selected-text focus-visible:!bg-kh-bg-selected focus-visible:!text-kh-selected-text" : undefined} icon disabled={busy} aria-label={sourceName ? `Sync now: ${sourceName}` : "Sync now"} onClick={() => void handleSync()}>
+      <Tooltip label={compact ? `Check for changes — scan ${meta.rootName}, then preview changes before Apply` : `Check for changes - re-scan ${meta.rootName}`}>
+        <Button type="button" variant={compact ? "ghost" : "soft"} className={compact ? "group hover:!bg-kh-bg-selected hover:!text-kh-selected-text focus-visible:!bg-kh-bg-selected focus-visible:!text-kh-selected-text" : undefined} icon disabled={busy} aria-label={sourceName ? `Check for changes: ${sourceName}` : "Check for changes"} onClick={() => void handleSync()}>
           <RefreshCw size={15} aria-hidden="true" className={busy ? "animate-spin motion-reduce:animate-none" : compact ? "transition-transform duration-200 ease-out group-hover:rotate-12 group-hover:scale-110 group-focus-visible:rotate-12 group-focus-visible:scale-110 motion-reduce:transform-none motion-reduce:transition-none" : undefined} />
         </Button>
       </Tooltip>
+      {busy ? <Button type="button" variant="link" onClick={()=>activeImportRef.current?.abort()}>Cancel checking</Button> : null}
       {status ? (
         <span role="status" className={compact ? "col-span-2 row-start-2 pb-2 text-caption text-kh-text-muted" : "text-caption text-kh-text-muted"}>
           {status}

@@ -27,6 +27,10 @@ it("requires the correct snapshot plan and source name on server before archivin
 it("assesses ordinary and legacy previews without depending on client safety fields",async()=>{
  const initial=await prepareReadingImport(uow,workspaceId,null,files);const applied=await s.imports.apply.apply(fixtureCaller(),initial);if(applied.kind!=="APPLIED")throw new Error("fixture failed");
  const snapshot=await prepareReadingImport(uow,workspaceId,applied.sourceId,files.map(f=>({...f,path:f.path.replace("docs/","moved/")})));
+ expect((await uow.run(r=>r.importSnapshots.findLatestReadyBySourceForCreator(applied.sourceId,fixtureCaller().identity.id,new Date(),1)))?.id).toBe(snapshot);
+ expect(await uow.run(r=>r.importSnapshots.findLatestReadyBySourceForCreator(applied.sourceId,"0199f000-0000-7000-8000-000000009999",new Date(),1))).toBeNull();
+ expect(await uow.run(r=>r.importSnapshots.findLatestReadyBySourceForCreator(applied.sourceId,fixtureCaller().identity.id,new Date(Date.now()+86400_000),1))).toBeNull();
+ expect(await uow.run(r=>r.importSnapshots.findLatestReadyBySourceForCreator(applied.sourceId,fixtureCaller().identity.id,new Date(),2))).toBeNull();
  const preview=await s.imports.preview.get(fixtureCaller(),snapshot);expect(preview.safety).toMatchObject({matchedDocuments:10,archivedDocuments:0,highRisk:false});
  expect((await s.imports.apply.apply(fixtureCaller(),snapshot)).kind).toBe("APPLIED");
 });

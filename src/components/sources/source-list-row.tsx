@@ -61,6 +61,7 @@ export function SourceListRow({ workspaceId, item, limits }: { workspaceId: stri
         ) : null}
         <ChevronRight size={15} aria-hidden="true" className="shrink-0 text-kh-text-muted" />
       </Link>
+      {item.pendingPreviewId ? <Link className="col-start-2 pb-2 text-caption text-kh-link" href={`/w/${workspaceId}/sources/imports/${item.pendingPreviewId}`}>Awaiting Apply · Review preview</Link> : null}
     </li>
   );
 }
