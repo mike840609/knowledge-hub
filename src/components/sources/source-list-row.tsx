@@ -26,7 +26,8 @@ export function syncStatusKind(status: string): StatusKind {
 }
 
 export function SourceListRow({ workspaceId, item, limits }: { workspaceId: string; item: SourceListItemModel; limits?: FolderImportClientLimits }) {
-  const { source, latestRun } = item;
+  const { source, latestRun, latestSuccessfulRun } = item;
+  const lastSyncedAt = latestSuccessfulRun?.completedAt ?? (latestRun?.status === "APPLIED" ? latestRun.completedAt : null);
   return (
     <li className="kh-interactive-row grid grid-cols-[2rem_minmax(0,1fr)] items-center gap-x-1 px-3">
       {isFolderSyncable(source) ? (
@@ -45,15 +46,19 @@ export function SourceListRow({ workspaceId, item, limits }: { workspaceId: stri
         <span className="shrink-0 rounded-md border border-kh-border px-1.5 py-0.5 text-caption text-kh-text-muted">
           {sourceTypeLabel(source.sourceType)}
         </span>
-        {latestRun ? (
+        {source.sourceType !== "HUB" ? (
           <span className="hidden shrink-0 items-center gap-1 text-caption text-kh-text-muted sm:inline-flex">
-            <Status kind={syncStatusKind(latestRun.status)}>{syncStatusLabel(latestRun.status)}</Status>
-            <span aria-hidden="true">·</span>
-            <Timestamp value={latestRun.startedAt} />
+            {latestRun ? <Status kind={syncStatusKind(latestRun.status)}>{syncStatusLabel(latestRun.status)}</Status> : null}
+            {lastSyncedAt ? (
+              <>
+                {latestRun ? <span aria-hidden="true">·</span> : null}
+                <span>Last synced <Timestamp value={lastSyncedAt} variant="relative" /></span>
+              </>
+            ) : (
+              <span>Never synced</span>
+            )}
           </span>
-        ) : (
-          <Status kind="none" className="hidden shrink-0 text-caption text-kh-text-muted sm:inline-flex">Never synced</Status>
-        )}
+        ) : null}
         <ChevronRight size={15} aria-hidden="true" className="shrink-0 text-kh-text-muted" />
       </Link>
     </li>

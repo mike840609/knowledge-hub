@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { SSR_TIME_ZONE, formatDate, formatDateTime } from "@/lib/format-date";
+import { SSR_TIME_ZONE, formatDate, formatDateTime, formatRelativeTime } from "@/lib/format-date";
 
 /**
  * A moment in time, shown in the reader's own zone.
@@ -37,18 +37,25 @@ export function Timestamp({
 }: {
   value: Date | string;
   /** `date` drops the time and moves it to the tooltip, for narrow columns. */
-  variant?: "datetime" | "date";
+  variant?: "datetime" | "date" | "relative";
   className?: string;
 }) {
   const zone = useDisplayTimeZone();
   const date = value instanceof Date ? value : new Date(value);
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    if (variant !== "relative") return;
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, [variant]);
   return (
     <time
       dateTime={date.toISOString()}
-      title={variant === "date" ? formatDateTime(date, zone) : undefined}
+      title={variant !== "datetime" ? formatDateTime(date, zone) : undefined}
       className={className}
     >
-      {variant === "date" ? formatDate(date, zone) : formatDateTime(date, zone)}
+      {variant === "relative" && now !== null ? formatRelativeTime(Math.max(0, now - date.getTime())) : variant === "date" ? formatDate(date, zone) : formatDateTime(date, zone)}
     </time>
   );
 }

@@ -27,13 +27,13 @@ export class MariaDbSyncRunRepository implements SyncRunRepository {
     return rows[0] ? mapRun(rows[0]) : null;
   }
 
-  async listBySourceId(sourceId: string, limit: number): Promise<SyncRun[]> {
+  async listBySourceId(sourceId: string, limit: number, status?: SyncRunStatus): Promise<SyncRun[]> {
     if (!Number.isSafeInteger(limit) || limit <= 0) {
       throw new Error("Sync run limit must be a positive integer.");
     }
     const rows = await this.connection.query<DbRow[]>(
-      `SELECT * FROM sync_runs WHERE source_id = ? ORDER BY started_at DESC, id DESC LIMIT ?`,
-      [sourceId, limit],
+      `SELECT * FROM sync_runs WHERE source_id = ?${status ? " AND status = ?" : ""} ORDER BY ${status === "APPLIED" ? "completed_at" : "started_at"} DESC, id DESC LIMIT ?`,
+      status ? [sourceId, status, limit] : [sourceId, limit],
     );
     return rows.map(mapRun);
   }

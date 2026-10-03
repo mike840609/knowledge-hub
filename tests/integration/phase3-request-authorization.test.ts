@@ -88,6 +88,22 @@ async function finish(snapshotId: string) {
 }
 
 describe("Phase 3 real request adapters with a trusted test session reader", () => {
+  it("keeps the last successful sync visible beyond twenty newer failed attempts", async () => {
+    const {workspace}=await team();
+    const response=await createThroughRoute(workspace.id);
+    const {snapshotId}=await response.json();
+    const applied=await finish(snapshotId);
+    const {caller}=await services.establishTrustedCaller();
+    const completedAt=new Date("2026-01-01T01:00:00Z");
+    await pool.query("UPDATE sync_runs SET started_at = ?, completed_at = ? WHERE source_id = ? AND status = 'APPLIED'",[new Date("2026-01-01T00:00:00Z"),completedAt,applied.sourceId]);
+    await services.unitOfWork.run(async r=>{
+      for(let i=0;i<21;i++) await r.syncRuns.insert({id:uuidv7(),sourceId:applied.sourceId,triggeredBy:caller.identity.id,basedOnVersion:1,resultVersion:null,status:"FAILED",summary:{},startedAt:new Date(Date.UTC(2026,1,1,0,i)),completedAt:new Date(Date.UTC(2026,1,1,0,i))});
+    });
+    const item=(await getSourceListModel(workspace.id))?.items.find(item=>item.source.id===applied.sourceId);
+    expect(item?.latestRun?.status).toBe("FAILED");
+    expect(item?.latestSuccessfulRun).toMatchObject({status:"APPLIED",completedAt});
+  });
+
   it.each(["EDITOR", "ADMIN"] as const)("bootstraps deep links and completes initial/resync import for group-only %s", async (role) => {
     const { workspace } = await team(role);
     // A real deep-link adapter must resolve a new Hub identity and provision

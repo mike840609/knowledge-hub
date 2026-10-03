@@ -53,7 +53,7 @@ export function SourceSyncActions({
     <>
       <SyncNowButton workspaceId={workspaceId} sourceId={sourceId} sourceName={sourceName} limits={limits} compact={compact} />
       {!compact || !hasMemory ? (
-        <Tooltip label="Update from folder - pick a different folder">
+        <Tooltip label={compact ? "Choose a folder to sync — preview changes before Apply" : "Update from folder - pick a different folder"}>
           <WorkspaceImportLink
             href={updateHref}
             aria-label={sourceName ? `Update from folder: ${sourceName}` : "Update from folder"}
