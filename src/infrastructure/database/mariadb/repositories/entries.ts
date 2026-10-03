@@ -18,6 +18,10 @@ function mapEntry(row: DbRow): SourceEntry {
 export class MariaDbEntryRepository implements EntryRepository {
   constructor(private readonly connection: QueryConnection) {}
 
+  async findByDocumentIds(documentIds:string[]):Promise<SourceEntry[]>{
+    const result:SourceEntry[]=[];const ids=[...new Set(documentIds)];
+    for(let i=0;i<ids.length;i+=500){const batch=ids.slice(i,i+500);const rows=await this.connection.query<DbRow[]>(`SELECT * FROM source_entries WHERE document_id IN (${batch.map(()=>"?").join(",")})`,batch);result.push(...rows.map(mapEntry));}return result;
+  }
   async countActiveDocuments(sourceId: string): Promise<number> {
     const rows=await this.connection.query<DbRow[]>("SELECT COUNT(*) AS count FROM source_entries WHERE source_id=? AND entry_type='DOCUMENT' AND status='ACTIVE'",[sourceId]);
     return asNumber(rows[0].count,"active document count");
