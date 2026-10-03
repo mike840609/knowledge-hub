@@ -1,0 +1,27 @@
+import {beforeAll,afterAll,expect,it} from "vitest";
+import type {Pool} from "mariadb";
+import {provisionIsolatedDatabase,disposeIsolatedDatabase} from "../../scripts/db/test-database";
+import {runMigrations,type IsolatedDatabaseHandle} from "../../scripts/db/migrate";
+import {createDatabasePool} from "@/infrastructure/database/mariadb/pool";
+import {databaseConfig} from "@/infrastructure/database/mariadb/config";
+import {MariaDbUnitOfWork} from "@/infrastructure/database/mariadb/transaction";
+import {createSourceFixture,fixtureCaller} from "../fixtures/knowledge";
+import {prepareReadingImport} from "../fixtures/folder-reading";
+import {buildApplicationServices} from "@/server/composition";
+let pool:Pool,handle:IsolatedDatabaseHandle,uow:MariaDbUnitOfWork,s:ReturnType<typeof buildApplicationServices>,workspaceId:string;
+beforeAll(async()=>{handle=await provisionIsolatedDatabase("test");pool=createDatabasePool({...databaseConfig("test"),database:handle.databaseName});await runMigrations(pool);uow=new MariaDbUnitOfWork(pool);workspaceId=(await createSourceFixture(pool)).workspaceId;await pool.query("UPDATE workspaces SET name='My Space',workspace_type='PERSONAL',personal_owner_user_id=? WHERE id=?",[fixtureCaller().identity.id,workspaceId]);s=buildApplicationServices(pool);});
+afterAll(async()=>{await pool?.end();if(handle)await disposeIsolatedDatabase(handle);});
+it("tracks immutable revision reads and excludes move-only updates",async()=>{
+ const file=(text:string,path="a.md")=>[{path,text:`---\nknowledge_id: stable\n---\n# Article\n${text}`}];
+ const a=await s.imports.apply.apply(fixtureCaller(),await prepareReadingImport(uow,workspaceId,null,file("one")));if(a.kind!=="APPLIED")throw Error("fixture");
+ await s.imports.apply.apply(fixtureCaller(),await prepareReadingImport(uow,workspaceId,a.sourceId,file("two")));
+ const page=await s.folderUpdates.list(fixtureCaller(),workspaceId,{limit:20});
+ const latest=page.runs[0].changes[0];expect(latest.unread).toBe(true);expect(latest.afterRevisionNo).toBe(2);
+ const rev1=await s.queries.getRevision(fixtureCaller(),latest.documentId!,1);
+ await s.documentReadProgress.markRead(fixtureCaller(),{workspaceId,documentId:latest.documentId!,revisionId:rev1.id});
+ expect((await s.folderUpdates.list(fixtureCaller(),workspaceId,{limit:20,unreadOnly:true})).runs[0].changes[0].afterRevisionNo).toBe(2);
+ await s.documentReadProgress.markRead(fixtureCaller(),{workspaceId,documentId:latest.documentId!,revisionId:latest.afterRevisionId!});
+ expect((await s.folderUpdates.list(fixtureCaller(),workspaceId,{limit:20,unreadOnly:true})).runs).toHaveLength(0);
+ await s.imports.apply.apply(fixtureCaller(),await prepareReadingImport(uow,workspaceId,a.sourceId,file("two","moved/a.md")));
+ expect((await s.folderUpdates.list(fixtureCaller(),workspaceId,{limit:20})).runs).toHaveLength(2);
+});
