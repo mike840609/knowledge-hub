@@ -11,6 +11,7 @@ export const SOURCE_RUN_DETAIL_LIMIT = 50;
 export type SourceListItemModel = {
   source: SourceView;
   latestRun: SyncRun | null;
+  latestSuccessfulRun?: SyncRun | null;
 };
 
 export type SourceListModel = {
@@ -51,7 +52,8 @@ export async function getSourceListModel(workspaceId: string): Promise<SourceLis
     Promise.all(
       sources.map(async (source) => {
         const runs = await repositories.syncRuns.listBySourceId(source.id, SOURCE_RUN_LIST_LIMIT);
-        return { source, latestRun: runs[0] ?? null };
+        const successfulRuns = source.sourceType === "HUB" ? [] : await repositories.syncRuns.listBySourceId(source.id, 1, "APPLIED");
+        return { source, latestRun: runs[0] ?? null, latestSuccessfulRun: successfulRuns[0] ?? null };
       }),
     ),
   );

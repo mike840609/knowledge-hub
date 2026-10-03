@@ -400,3 +400,18 @@ test("previews identity-only adoption without counting a content update and bloc
   await expect(conflictDetails.getByText("IDENTITY_CONFLICT", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Apply changes" })).toBeDisabled();
 });
+
+test("sources list offers a source-scoped sync entry without opening detail first", async ({ page, request }) => {
+  const sourceName = `List sync ${Date.now()}`;
+  const imported = await importFolder(request, { workspaceId: QUERY_MASTER_WORKSPACE_ID, sourceName, fixture: "basic-v1" });
+  const { sourceId } = await applySnapshot(request, imported.snapshotId);
+  await page.goto(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources`);
+  // An HTTP-created source has no remembered browser folder: the same single
+  // row action falls back to selecting one before entering the normal preview.
+  const sync = page.getByRole("link", { name: `Update from folder: ${sourceName}`, exact: true });
+  await expect(sync).toBeVisible();
+  await expect(sync).toHaveAttribute("href", `/w/${QUERY_MASTER_WORKSPACE_ID}/sources/${sourceId}/update`);
+  await sync.click();
+  await expect(page).toHaveURL(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources/${sourceId}/update`);
+  await expect(page.getByRole("heading", { name: "Update from folder", exact: true })).toBeVisible();
+});

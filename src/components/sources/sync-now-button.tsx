@@ -23,7 +23,7 @@ type RememberedMeta = NonNullable<ReturnType<typeof getRememberedFolderMeta>>;
  * caller may import, and a folder is remembered for this source. The existing
  * "Update from folder" link keeps its own gate and is untouched.
  */
-export function SyncNowButton({ workspaceId, sourceId, limits }: { workspaceId: string; sourceId: string; limits?: FolderImportClientLimits }): React.JSX.Element | null {
+export function SyncNowButton({ workspaceId, sourceId, sourceName, limits, compact = false }: { workspaceId: string; sourceId: string; sourceName?: string; limits?: FolderImportClientLimits; compact?: boolean }): React.JSX.Element | null {
   const router = useRouter();
   const { access, confirmed } = useWorkspaceAuthorization();
   const allowed = confirmed && access.actions.canImport;
@@ -64,14 +64,16 @@ export function SyncNowButton({ workspaceId, sourceId, limits }: { workspaceId: 
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [needsReselect, setNeedsReselect] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   async function handleSync(): Promise<void> {
-    if (busy) return;
+    if (activeImportRef.current) return;
     const controller = new AbortController();
     activeImportRef.current = controller;
     setBusy(true);
     setNeedsReselect(false);
-    setStatus("Preparing the folder manifest…");
+    setFailed(false);
+    setStatus("Scanning the folder… Changes will open in a preview; Apply is required to update this source.");
     try {
       assertAllowed();
       const remembered = await loadRememberedHandle(sourceId);
@@ -88,7 +90,7 @@ export function SyncNowButton({ workspaceId, sourceId, limits }: { workspaceId: 
         sourceName: "",
         onProgress: (state: ImportUiState) => {
           if (!mountedRef.current) return;
-          if (state.kind === "PREPARING") setStatus("Preparing the folder manifest…");
+          if (state.kind === "PREPARING") setStatus("Preparing files for upload…");
           else if (state.kind === "UPLOADING") setStatus(`Uploading Markdown files… ${state.uploaded}/${state.total}`);
           else if (state.kind === "FINALIZING") setStatus("Analyzing the folder and building the preview…");
         },
@@ -99,10 +101,13 @@ export function SyncNowButton({ workspaceId, sourceId, limits }: { workspaceId: 
       assertAllowed();
       await rememberFolderHandle(sourceId, remembered.handle, remembered.rootName);
       assertAllowed();
+      setStatus("Opening preview… Review changes and select Apply to update this source.");
       router.push(`/w/${workspaceId}/sources/imports/${snapshotId}`);
     } catch (error) {
       if (!mountedRef.current) return;
       if (controller.signal.aborted) { setStatus(null); return; }
+      setFailed(true);
+      if (error instanceof DOMException && (error.name === "NotAllowedError" || error.name === "NotFoundError")) setNeedsReselect(true);
       setStatus(error instanceof Error ? error.message : "Syncing the remembered folder failed.");
     } finally {
       if (activeImportRef.current === controller) activeImportRef.current = null;
@@ -116,22 +121,26 @@ export function SyncNowButton({ workspaceId, sourceId, limits }: { workspaceId: 
 
   const updateHref = `/w/${workspaceId}/sources/${sourceId}/update`;
   return (
-    <span className="flex flex-wrap items-center gap-2">
-      <Tooltip label={`Sync now - re-scan ${meta.rootName}`}>
-        <Button type="button" variant="soft" icon disabled={busy} aria-label="Sync now" onClick={() => void handleSync()}>
-          <RefreshCw size={15} aria-hidden="true" />
+    <span className={compact ? "contents" : "flex flex-wrap items-center gap-2"}>
+      <Tooltip label={compact ? `Sync this source — scan ${meta.rootName}, then preview changes before Apply` : `Sync now - re-scan ${meta.rootName}`}>
+        <Button type="button" variant={compact ? "ghost" : "soft"} className={compact ? "group hover:!bg-kh-bg-selected hover:!text-kh-selected-text focus-visible:!bg-kh-bg-selected focus-visible:!text-kh-selected-text" : undefined} icon disabled={busy} aria-label={sourceName ? `Sync now: ${sourceName}` : "Sync now"} onClick={() => void handleSync()}>
+          <RefreshCw size={15} aria-hidden="true" className={busy ? "animate-spin motion-reduce:animate-none" : compact ? "transition-transform duration-200 ease-out group-hover:rotate-12 group-hover:scale-110 group-focus-visible:rotate-12 group-focus-visible:scale-110 motion-reduce:transform-none motion-reduce:transition-none" : undefined} />
         </Button>
       </Tooltip>
       {status ? (
-        <span role="status" className="text-caption text-kh-text-muted">
+        <span role="status" className={compact ? "col-span-2 row-start-2 pb-2 text-caption text-kh-text-muted" : "text-caption text-kh-text-muted"}>
           {status}
           {needsReselect ? (
             <>
               {" "}
-              <a className="rounded-md text-kh-link underline underline-offset-4 kh-focus-ring" href={updateHref}>
+              <a className="rounded-md text-kh-link underline underline-offset-4 kh-focus-ring" href={updateHref} aria-label={sourceName ? `Choose folder to sync: ${sourceName}` : "Choose folder to sync"}>
                 Pick the folder again
               </a>
             </>
+          ) : failed && !busy ? (
+            <Button type="button" variant="link" disabled={!allowed} aria-label={sourceName ? `Retry sync: ${sourceName}` : "Retry sync"} className="ml-2" onClick={() => void handleSync()}>
+              Retry
+            </Button>
           ) : null}
         </span>
       ) : null}

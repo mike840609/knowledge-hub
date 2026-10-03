@@ -1,4 +1,5 @@
 "use client";
+import type { FolderImportClientLimits } from "@/components/imports/folder-import-form";
 import { navigateListRows } from "@/lib/list-row-navigation";
 import { Database } from "lucide-react";
 import type { SourceListItemModel } from "@/server/source-read";
@@ -7,7 +8,7 @@ import { WorkspaceImportLink } from "@/components/shell/workspace-import-link";
 import { buttonClasses } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 
-export function SourceList({ workspaceId, items }: { workspaceId: string; items: SourceListItemModel[] }) {
+export function SourceList({ workspaceId, items, limits }: { workspaceId: string; items: SourceListItemModel[]; limits?: FolderImportClientLimits }) {
   if (items.length === 0) {
     return (
       <EmptyState
@@ -29,7 +30,7 @@ export function SourceList({ workspaceId, items }: { workspaceId: string; items:
   return (
     <ul onKeyDown={navigateListRows} className="flex flex-col gap-1">
       {items.map((item) => (
-        <SourceListRow key={item.source.id} workspaceId={workspaceId} item={item} />
+        <SourceListRow key={item.source.id} workspaceId={workspaceId} item={item} limits={limits} />
       ))}
     </ul>
   );
