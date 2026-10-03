@@ -1,3 +1,4 @@
+import type { ImportSafetySummary } from "../domain/import-safety";
 import { importError } from "@/modules/sources/domain/import-errors";
 import { compareImportText } from "@/modules/sources/domain/import-path";
 import type { ImportSnapshot } from "@/modules/sources/domain/import-snapshot";
@@ -12,6 +13,8 @@ import type {
 
 export type ImportPreview = {
   snapshotId: string;
+  planHash?: string | null;
+  safety?: ImportSafetySummary;
   state: "READY" | "APPLIED" | "STALE";
   expired: boolean;
   workspaceId: string;
@@ -111,6 +114,7 @@ export function previewFromSnapshot(snapshot: ImportSnapshot, now: Date): Import
   }
   return {
     snapshotId: snapshot.id,
+    planHash: snapshot.planHash,
     state: snapshot.state,
     expired: snapshot.expiresAt.getTime() <= now.getTime(),
     workspaceId: snapshot.workspaceId,

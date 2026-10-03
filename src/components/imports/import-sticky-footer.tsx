@@ -57,6 +57,8 @@ export function ImportStickyFooter({
   const { access, confirmed } = useWorkspaceAuthorization();
   const allowed = confirmed && access.actions.canImport;
   const [state, setState] = useState<{ kind: "IDLE" } | { kind: "APPLYING" } | { kind: "ERROR"; code: string; message: string }>({ kind: "IDLE" });
+  const [sourceConfirmation,setSourceConfirmation]=useState("");
+  const riskConfirmed=!preview.safety?.highRisk || (!!preview.planHash && sourceConfirmation===preview.sourceName);
   const [versionConflict, setVersionConflict] = useState(false);
   const [expired, setExpired] = useState(preview.expired);
   useEffect(() => {
@@ -67,7 +69,7 @@ export function ImportStickyFooter({
   }, [preview.expired, preview.expiresAt]);
   const effectiveState = versionConflict ? "STALE" : preview.state;
   const stale = effectiveState === "STALE" || effectiveState === "APPLIED" || expired;
-  const disabled = !allowed || preview.hasBlockers || stale || effectiveState !== "READY";
+  const disabled = !riskConfirmed || !allowed || preview.hasBlockers || stale || effectiveState !== "READY";
   const cancelHref = preview.sourceId
     ? `/w/${workspaceId}/sources/${preview.sourceId}`
     : `/w/${workspaceId}/sources`;
@@ -79,7 +81,8 @@ export function ImportStickyFooter({
     if (disabled || state.kind === "APPLYING" || new Date(preview.expiresAt).getTime() <= Date.now()) return;
     setState({ kind: "APPLYING" });
     try {
-      const response = await fetch(`/api/source-imports/${preview.snapshotId}/apply`, { method: "POST" });
+      const request:RequestInit=preview.safety?.highRisk?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({riskAcknowledgment:{planHash:preview.planHash,sourceName:sourceConfirmation}})}:{method:"POST"};
+      const response = await fetch(`/api/source-imports/${preview.snapshotId}/apply`, request);
       const body = await response.json().catch(() => null);
       if (!response.ok || !body || typeof body !== "object" || !("sourceId" in body)) {
         // A known snapshot's 404 is an import-session problem, not evidence
@@ -107,6 +110,9 @@ export function ImportStickyFooter({
 
   return (
     <div className="sticky bottom-0 -mx-6 border-t border-kh-border bg-kh-bg px-6 py-3">
+      {preview.safety?.highRisk && allowed ? <label className="mx-auto mb-3 block max-w-page text-body">Type <strong>{preview.sourceName}</strong> to confirm this folder scope
+        <input aria-label="Confirm source name" value={sourceConfirmation} onChange={e=>setSourceConfirmation(e.target.value)} autoComplete="off" className="ml-2 rounded-md border border-kh-border bg-kh-bg px-2 py-1 text-kh-text kh-focus-ring" />
+      </label> : null}
       <div className="mx-auto flex max-w-page flex-wrap items-center justify-between gap-3">
         <Link
           href={cancelHref}

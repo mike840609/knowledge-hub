@@ -1,6 +1,7 @@
 import type { SourceEntry } from "../domain/source-entry";
 
 export interface EntryRepository {
+  countActiveDocuments(sourceId: string): Promise<number>;
   findBySourcePath(sourceId: string, sourcePath: string): Promise<SourceEntry | null>;
   findById(entryId: string): Promise<SourceEntry | null>;
   findByExternalId(sourceId: string, externalId: string): Promise<SourceEntry | null>;

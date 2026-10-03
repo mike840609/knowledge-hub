@@ -1,3 +1,5 @@
+import { safetyForPlan } from "./import-plan-safety";
+import type { ImportRiskAcknowledgment } from "../domain/import-safety";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { lockWorkspaceForMutation } from "@/modules/workspaces/application/workspace-mutation-guard";
 import { importError } from "@/modules/sources/domain/import-errors";
@@ -60,7 +62,7 @@ export class ApplyFolderImportService {
     this.failurePoint = options.failurePoint;
   }
 
-  async apply(caller: CallerContext, snapshotId: string): Promise<ApplyFolderImportResult> {
+  async apply(caller: CallerContext, snapshotId: string, riskAcknowledgment?: ImportRiskAcknowledgment): Promise<ApplyFolderImportResult> {
     const failedAttempt: { value: FailedAttempt | null } = { value: null };
     try {
       return await this.uow.run(async (repositories) => {
@@ -123,6 +125,8 @@ export class ApplyFolderImportService {
             return { kind: "VERSION_CONFLICT", sourceId: source.id, snapshotVersion: basedOnVersion, currentVersion: source.syncVersion };
           }
 
+          const safety=await safetyForPlan(repositories,source.id,snapshot.plan);
+          if(safety.highRisk && (riskAcknowledgment?.planHash!==snapshot.planHash || riskAcknowledgment?.sourceName!==source.name)) throw importError("IMPORT_RISK_CONFIRMATION_REQUIRED","Confirm the source name before applying these archive changes.",{safety});
           failedAttempt.value = { sourceId: source.id, basedOnVersion, summary: snapshot.summary, provenance, callerId: caller.identity.id };
           const before=await repositories.importCanonicalState.load(source.id);
           await executeFolderImportPlan(repositories, caller, source, snapshot.plan, { stagingEntriesByUploadKey, failurePoint: this.failurePoint, now: this.now });
