@@ -1,3 +1,4 @@
+import { DocumentReadProgressService } from "@/modules/personal/application/document-read-progress-service";
 import { PersonalService } from "@/modules/personal/application/personal-service";
 import { MariaDbPersonalStore } from "@/infrastructure/database/mariadb/repositories/personal-items";
 import { WorkspaceAdminService } from "./workspace-admin";
@@ -69,6 +70,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
   const hub = new HubKnowledgeCommandServiceImpl(unitOfWork);
   const queries = new KnowledgeQueryServiceImpl(unitOfWork);
   const links = new KnowledgeLinkServiceImpl(unitOfWork);
+  const documentReadProgress = new DocumentReadProgressService(unitOfWork, queries);
   const personal = new PersonalService(new MariaDbPersonalStore(databasePool), queries, unitOfWork);
   const shares = new DocumentShareService(unitOfWork, new RandomShareTokenIssuer());
   const sources = new SourceApplicationService(unitOfWork);
@@ -113,7 +115,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
     preview: new GetFolderImportPreviewService(unitOfWork),
     apply: new ApplyFolderImportService(unitOfWork),
   };
-  return { personal, workspaceAdmin, teams, governance, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, links, shares, sources, workspaces, search, imports };
+  return { documentReadProgress, personal, workspaceAdmin, teams, governance, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, links, shares, sources, workspaces, search, imports };
 }
 
 export function applicationServices() {
