@@ -1,3 +1,5 @@
+import type { SyncRunChangeRepository } from "./sync-run-change-repository";
+import type { DocumentReadProgressRepository } from "@/modules/personal/ports/document-read-progress-repository";
 import type { KnowledgeRepositories } from "@/modules/knowledge/ports/unit-of-work";
 import type { AssetRepository } from "./asset-repository";
 import type { EntryRepository } from "./entry-repository";
@@ -18,6 +20,8 @@ export type SourceRepositories = KnowledgeRepositories & {
   entries: EntryRepository;
   assets: AssetRepository;
   syncRuns: SyncRunRepository;
+  syncRunChanges: SyncRunChangeRepository;
+  documentReadProgress: DocumentReadProgressRepository;
   importSnapshots: ImportSnapshotRepository;
   importSnapshotEntries: ImportSnapshotEntryRepository;
   importCanonicalState: ImportCanonicalStateRepository;
