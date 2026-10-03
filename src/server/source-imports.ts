@@ -95,3 +95,5 @@ export async function applySourceImport(snapshotId: string): Promise<ApplyFolder
   const { caller } = await services.establishTrustedCaller();
   return withKnownSnapshotAccess(() => services.imports.apply.apply(caller, snapshotId));
 }
+
+export async function getSourceImportDiff(snapshotId:string,sourcePath:string){const s=applicationServices();const {caller}=await s.establishTrustedCaller();return s.imports.diff.get(caller,snapshotId,sourcePath);}

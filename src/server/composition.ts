@@ -1,3 +1,4 @@
+import { GetFolderImportDiffService } from "@/modules/sources/application/get-folder-import-diff";
 import { DocumentReadProgressService } from "@/modules/personal/application/document-read-progress-service";
 import { PersonalService } from "@/modules/personal/application/personal-service";
 import { MariaDbPersonalStore } from "@/infrastructure/database/mariadb/repositories/personal-items";
@@ -113,6 +114,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
     upload: new UploadFolderImportEntriesService(unitOfWork, { limits: importConfig.limits }),
     finalize: new FinalizeFolderImportService(unitOfWork, { limits: importConfig.limits, readyTtlMs: importConfig.readyTtlMs }),
     preview: new GetFolderImportPreviewService(unitOfWork),
+    diff: new GetFolderImportDiffService(unitOfWork),
     apply: new ApplyFolderImportService(unitOfWork),
   };
   return { documentReadProgress, personal, workspaceAdmin, teams, governance, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, links, shares, sources, workspaces, search, imports };

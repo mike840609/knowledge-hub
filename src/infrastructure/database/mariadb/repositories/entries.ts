@@ -18,6 +18,11 @@ function mapEntry(row: DbRow): SourceEntry {
 export class MariaDbEntryRepository implements EntryRepository {
   constructor(private readonly connection: QueryConnection) {}
 
+  async findBySourcePath(sourceId: string, sourcePath: string): Promise<SourceEntry | null> {
+    const rows=await this.connection.query<DbRow[]>("SELECT * FROM source_entries WHERE source_id=? AND BINARY source_path=BINARY ? LIMIT 1",[sourceId,sourcePath]);
+    return rows[0]?mapEntry(rows[0]):null;
+  }
+
   async findById(entryId: string): Promise<SourceEntry | null> {
     const rows = await this.connection.query<DbRow[]>("SELECT * FROM source_entries WHERE id = ?", [entryId]);
     return rows[0] ? mapEntry(rows[0]) : null;

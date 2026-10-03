@@ -126,6 +126,7 @@ export function ImportPreview({
         <ImportChangeGroup
           key={`${filter}-${group.key}`}
           title={group.title}
+          snapshotId={preview.snapshotId}
           changes={groups[group.key]}
           defaultExpanded={filter !== "all" || group.key !== "unchanged"}
         />
