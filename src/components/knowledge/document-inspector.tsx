@@ -1,4 +1,6 @@
 "use client";
+import {CopySourcePath} from "./copy-source-path";
+
 
 import Link from "next/link";
 import { useRefreshOnArrival } from "@/components/shell/refresh-on-arrival";
@@ -48,6 +50,7 @@ export type DocumentInspectorData = {
   workspaceName: string;
   sourceId: string;
   sourceName: string;
+  sourcePath?:string|null;
   documentId: string;
   status: "ACTIVE" | "ARCHIVED";
   revisions: KnowledgeRevisionView[];
@@ -159,6 +162,7 @@ function InspectorTabs({
           <div>
             <dt className="text-caption text-kh-text-muted">Source</dt>
             <dd className="text-kh-text">{data.sourceName}</dd>
+            {data.sourcePath?<dd className="mt-2"><CopySourcePath path={data.sourcePath}/></dd>:null}
             {access.actions.canInspectSources ? <dd className="mt-1"><Link href={`/w/${data.workspaceId}/sources/${data.sourceId}`} className="rounded-md text-kh-link underline underline-offset-4 kh-focus-ring">Manage source</Link></dd> : null}
           </div>
           <div>

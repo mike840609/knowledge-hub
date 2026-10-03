@@ -1,3 +1,4 @@
+import {GetSourceHealthService} from "@/modules/sources/application/get-source-health";
 import { ListFolderUpdatesService } from "@/modules/personal/application/list-folder-updates";
 import { GetSyncRunDetailService } from "@/modules/sources/application/get-sync-run-detail";
 import { GetFolderImportDiffService } from "@/modules/sources/application/get-folder-import-diff";
@@ -119,7 +120,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
     diff: new GetFolderImportDiffService(unitOfWork),
     apply: new ApplyFolderImportService(unitOfWork),
   };
-  return { folderUpdates:new ListFolderUpdatesService(unitOfWork), syncReading: new GetSyncRunDetailService(unitOfWork), documentReadProgress, personal, workspaceAdmin, teams, governance, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, links, shares, sources, workspaces, search, imports };
+  return { sourceHealth:new GetSourceHealthService(unitOfWork), folderUpdates:new ListFolderUpdatesService(unitOfWork), syncReading: new GetSyncRunDetailService(unitOfWork), documentReadProgress, personal, workspaceAdmin, teams, governance, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, links, shares, sources, workspaces, search, imports };
 }
 
 export function applicationServices() {

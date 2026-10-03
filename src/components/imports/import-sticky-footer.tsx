@@ -1,5 +1,6 @@
 "use client";
 
+import {Input} from "@/components/ui/input";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { requestWorkspaceAccessCheck, useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
@@ -114,7 +115,7 @@ export function ImportStickyFooter({
         return;
       }
       await openResult(body as {sourceId:string;runId?:string|null});
-    } catch (error) {
+    } catch {
       if(await recover())return;
       setState({ kind: "ERROR", code: "IMPORT_APPLY_FAILED", message: "The Apply result could not be confirmed. Retry safely to recover the same sync result." });
     }
@@ -123,7 +124,7 @@ export function ImportStickyFooter({
   return (
     <div className="sticky bottom-0 -mx-6 border-t border-kh-border bg-kh-bg px-6 py-3">
       {preview.safety?.highRisk && allowed ? <label className="mx-auto mb-3 block max-w-page text-body">Type <strong>{preview.sourceName}</strong> to confirm this folder scope
-        <input aria-label="Confirm source name" value={sourceConfirmation} onChange={e=>setSourceConfirmation(e.target.value)} autoComplete="off" className="ml-2 rounded-md border border-kh-border bg-kh-bg px-2 py-1 text-kh-text kh-focus-ring" />
+        <Input aria-label="Confirm source name" value={sourceConfirmation} onChange={e=>setSourceConfirmation(e.target.value)} autoComplete="off" className="ml-2 rounded-md border border-kh-border bg-kh-bg px-2 py-1 text-kh-text kh-focus-ring" />
       </label> : null}
       <div className="mx-auto flex max-w-page flex-wrap items-center justify-between gap-3">
         <Link

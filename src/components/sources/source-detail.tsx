@@ -58,6 +58,7 @@ export function SourceDetail({ model, showImportSuccess = false, limits }: { mod
         <ImportHistory runs={runs} workspaceId={workspace.id} />
       </section>
 
+      <Link className="text-body text-kh-link" href={`/w/${workspace.id}/sources/${source.id}/health`}>Check source health</Link>
       <TechnicalDetails source={source} />
     </div>
   );

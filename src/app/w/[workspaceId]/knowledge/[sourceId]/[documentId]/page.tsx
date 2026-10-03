@@ -1,3 +1,4 @@
+import {getDocumentSourcePath} from "@/server/sync-reading";
 import { ReadRevisionMarker } from "@/components/knowledge/read-revision-marker";
 import { RevisionRestore } from "@/components/knowledge/revision-restore";
 import { getKnowledgeDocumentModel, getKnowledgeExplorerModel, getWorkspaceShellModel } from "@/server/knowledge-read";
@@ -103,6 +104,7 @@ export default async function KnowledgeDocumentPage({
     workspaceName: shell?.workspace.name ?? workspaceId,
     sourceId,
     sourceName: explorer?.source.name ?? sourceId,
+    sourcePath:await getDocumentSourcePath(workspaceId,documentId),
     documentId,
     status: view.status,
     revisions: model.revisions,

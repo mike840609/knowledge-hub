@@ -16,7 +16,7 @@ export class ListFolderUpdatesService{
    const selected=runs.slice(0,limit),groups:FolderUpdatesPage["runs"]=[];
    for(const run of selected){
     const source=await r.sources.findById(run.sourceId);if(!source||source.workspaceId!==workspaceId||source.status!=="ACTIVE")continue;
-    let changes:SyncRunChange[]=[],after=0;
+    const changes:SyncRunChange[]=[];let after=0;
     // Read bounded batches; history may have more than 1,000 entries.
     for(;;){const batch=await r.syncRunChanges.listByRun(run.id,after,500);changes.push(...batch.filter(c=>c.kind==="DOCUMENT"&&c.documentId&&c.afterRevisionNo!==null&&(c.labels.includes("ADDED")||c.labels.includes("UPDATED"))&&c.afterRevisionNo>(c.beforeRevisionNo??0)));if(batch.length<500)break;after=batch[batch.length-1].ordinal;}
     const progress=await r.documentReadProgress.getMany(caller.identity.id,workspaceId,changes.map(c=>c.documentId!));const read=new Map(progress.map(p=>[p.documentId,p.revisionNo]));
