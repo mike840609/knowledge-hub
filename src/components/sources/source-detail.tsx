@@ -55,7 +55,7 @@ export function SourceDetail({ model, showImportSuccess = false, limits }: { mod
 
       <section aria-labelledby="import-history-heading" className="flex flex-col gap-3">
         <h2 id="import-history-heading" className="text-body font-semibold text-kh-text">Import history</h2>
-        <ImportHistory runs={runs} />
+        <ImportHistory runs={runs} workspaceId={workspace.id} />
       </section>
 
       <TechnicalDetails source={source} />

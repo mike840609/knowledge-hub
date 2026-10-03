@@ -1,3 +1,4 @@
+import { GetSyncRunDetailService } from "@/modules/sources/application/get-sync-run-detail";
 import { GetFolderImportDiffService } from "@/modules/sources/application/get-folder-import-diff";
 import { DocumentReadProgressService } from "@/modules/personal/application/document-read-progress-service";
 import { PersonalService } from "@/modules/personal/application/personal-service";
@@ -117,7 +118,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
     diff: new GetFolderImportDiffService(unitOfWork),
     apply: new ApplyFolderImportService(unitOfWork),
   };
-  return { documentReadProgress, personal, workspaceAdmin, teams, governance, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, links, shares, sources, workspaces, search, imports };
+  return { syncReading: new GetSyncRunDetailService(unitOfWork), documentReadProgress, personal, workspaceAdmin, teams, governance, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, links, shares, sources, workspaces, search, imports };
 }
 
 export function applicationServices() {
