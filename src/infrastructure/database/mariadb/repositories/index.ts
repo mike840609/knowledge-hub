@@ -1,3 +1,4 @@
+import { MariaDbPersonalProfileRepository } from "./personal-profile";
 import { MariaDbSyncRunChangeRepository } from "./sync-run-changes";
 import { MariaDbDocumentReadProgressRepository } from "./document-read-progress";
 import type { DatabaseConnection } from "../pool";
@@ -36,6 +37,7 @@ export function createRepositories(connection: DatabaseConnection): SourceReposi
   const groupMappings = new MariaDbWorkspaceGroupMappingRepository(connection);
   const workspaceAccess = new WorkspaceMembershipPolicy(workspaceMemberships, groupMappings);
   return {
+    personalProfile: new MariaDbPersonalProfileRepository(connection),
     users,
     sources,
     entries: new MariaDbEntryRepository(connection),

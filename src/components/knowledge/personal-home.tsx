@@ -1,4 +1,6 @@
 "use client";
+import {PersonalStatsSummary} from "@/components/personal/personal-stats-summary";
+import type {ProfileCounts} from "@/modules/personal/domain/personal-profile";
 import {Input} from "@/components/ui/input";
 import type { FolderImportClientLimits } from "@/components/imports/folder-import-form";
 import {HomeFolderList} from "./home-folder-list";
@@ -80,7 +82,7 @@ function Row({ href, icon, title, updatedAt, provenance, trailing, actions = [],
   );
 }
 
-export function PersonalHome({ workspaceId, documents, drafts, limits, folders=[], updates={runs:[],nextCursor:null} }: { workspaceId: string; documents: Doc[]; drafts: Draft[];limits?:FolderImportClientLimits;folders?:SourceListItemModel[];updates?:FolderUpdatesPage }) {
+export function PersonalHome({ workspaceId, documents, drafts, limits, profileCounts, folders=[], updates={runs:[],nextCursor:null} }: { workspaceId: string; profileCounts?:ProfileCounts; documents: Doc[]; drafts: Draft[];limits?:FolderImportClientLimits;folders?:SourceListItemModel[];updates?:FolderUpdatesPage }) {
   const { shortcuts, update } = useDocumentShortcuts(workspaceId);
   const hydrated = useHydrated();
   const { access, confirmed } = useWorkspaceAuthorization();
@@ -152,6 +154,7 @@ export function PersonalHome({ workspaceId, documents, drafts, limits, folders=[
           <WorkspaceImportLink className={buttonClasses()} href={`/w/${workspaceId}/sources/import`}>Import folder</WorkspaceImportLink>
         </>}
       />
+      {profileCounts?<PersonalStatsSummary workspaceId={workspaceId} counts={profileCounts}/>:null}
       <form action={`/w/${workspaceId}/search`} role="search" className="px-3">
         <label className="sr-only" htmlFor="my-space-search">Search My Space</label>
         <div className="flex gap-2"><Input id="my-space-search" name="q" placeholder="Search your knowledge…" className="min-w-0 flex-1 rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-body kh-focus-ring"/><Input type="hidden" name="scope" value="workspace"/><button className={buttonClasses({variant:"secondary"})}>Search</button></div>
