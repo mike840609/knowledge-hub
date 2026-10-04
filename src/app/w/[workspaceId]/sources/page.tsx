@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { FeedbackReport } from "@/components/knowledge/feedback-report";
 import { importRuntimeConfig } from "@/server/import-config";
 import { notFound } from "next/navigation";
 import { WorkspaceImportLink } from "@/components/shell/workspace-import-link";
@@ -30,9 +32,11 @@ export default async function WorkspaceSourcesPage({
           Import folder
         </WorkspaceImportLink>}
       />
+      {model.workspace.type === "PERSONAL" ? <div className="mt-3"><Link className={buttonClasses({variant:"secondary"})} href={`/w/${workspaceId}/sources/health`}>Check source health</Link></div> : null}
       <div className="mt-6">
         <SourceList workspaceId={workspaceId} items={model.items} limits={{ maxAssetFileBytes: limits.maxAssetFileBytes, maxAssetTotalBytes: limits.maxAssetTotalBytes }} />
       </div>
+      {model.workspace.type === "PERSONAL" ? <div className="mt-6"><FeedbackReport /></div> : null}
     </main>
   );
 }

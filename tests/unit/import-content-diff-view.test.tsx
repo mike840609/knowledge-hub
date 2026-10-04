@@ -121,3 +121,17 @@ it("offers retry when the lazy request fails", async () => {
   await act(async () => retry!.click());
   expect(container.textContent).toContain("<script>new</script>");
 });
+
+it("reveals large diffs in batches without fetching again", async () => {
+  fetcher.mockResolvedValueOnce(new Response(JSON.stringify({ ...response, lines: Array.from({length:205}, (_,i)=>({kind:"added",text:`line ${i}`})) })));
+  await act(async()=>root.render(<ImportPreview workspaceId="ws" preview={preview}/>));
+  await act(async()=>container.querySelector<HTMLButtonElement>('button[aria-label="View changes: docs/readme.md"]')!.click());
+  expect(container.querySelectorAll("pre > span")).toHaveLength(100);
+  const more=()=>[...container.querySelectorAll<HTMLButtonElement>("button")].find(b=>b.textContent==="Show more changed lines");
+  await act(async()=>more()!.click());
+  expect(container.querySelectorAll("pre > span")).toHaveLength(200);
+  await act(async()=>more()!.click());
+  expect(container.querySelectorAll("pre > span")).toHaveLength(205);
+  expect(more()).toBeUndefined();
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});

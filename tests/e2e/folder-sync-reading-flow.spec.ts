@@ -18,6 +18,20 @@ test("folder preview → durable result → revision-aware personal reading", as
     page.getByRole("heading", { name: "Folder synced" }),
   ).toBeVisible();
   const source = page.url().match(/sources\/([^/]+)\//)![1];
+  await page.goto(`/w/${ws}/home`);
+  await expect(page.getByText("Your local folder is the source of truth.", {exact:false})).toBeVisible();
+  await page.setViewportSize({width:390,height:844});
+  await expect(page.getByText("Last synced", {exact:false}).first()).toBeVisible();
+  await page.goto(`/w/${ws}/sources`);
+  await page.getByRole("link", {name:"Check source health"}).click();
+  await page.getByRole("link", {name:"Reading workflow",exact:true}).click();
+  await expect(page).toHaveURL(new RegExp(`/sources/${source}/health$`));
+  await page.goto(`/w/${ws}/sources/${source}/update`);
+  await page.getByText("Excluded paths", {exact:true}).click();
+  await page.getByRole("textbox",{name:"One file or folder path per line, relative to the selected folder"}).fill("private");
+  await page.getByRole("button",{name:"Save exclusions"}).click();
+  await expect(page.getByText("Saved on this browser.",{exact:false})).toBeVisible();
+  await page.setViewportSize({width:1280,height:900});
   const second = await stageReadingFolder(request, {
     workspaceId: ws,
     sourceId: source,

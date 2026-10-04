@@ -13,6 +13,7 @@ export function ImportContentDiff({
     [diff, setDiff] = useState<Diff | null>(null),
     [error, setError] = useState<string | null>(null),
     [busy, setBusy] = useState(false);
+  const [visibleLines, setVisibleLines] = useState(100);
   const active = useRef<AbortController | null>(null);
   useEffect(
     () => () => {
@@ -99,7 +100,7 @@ export function ImportContentDiff({
                 </p>
               ) : null}
               <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words text-caption">
-                {diff.lines.map((line, i) => (
+                {diff.lines.slice(0, visibleLines).map((line, i) => (
                   <span
                     key={i}
                     className={`block ${line.kind === "added" ? "bg-kh-bg-selected text-kh-selected-text" : line.kind === "removed" ? "text-kh-danger" : "text-kh-text-muted"}`}
@@ -115,6 +116,11 @@ export function ImportContentDiff({
                   </span>
                 ))}
               </pre>
+              {visibleLines < diff.lines.length ? (
+                <Button type="button" variant="secondary" onClick={() => setVisibleLines(count => count + 100)}>
+                  Show more changed lines
+                </Button>
+              ) : null}
             </>
           ) : null}
         </div>

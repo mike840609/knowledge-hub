@@ -1,5 +1,6 @@
 "use client";
 import {Input} from "@/components/ui/input";
+import type { FolderImportClientLimits } from "@/components/imports/folder-import-form";
 import {HomeFolderList} from "./home-folder-list";
 import {UpdatesList} from "./updates-list";
 import {WorkspaceImportLink} from "@/components/shell/workspace-import-link";
@@ -79,7 +80,7 @@ function Row({ href, icon, title, updatedAt, provenance, trailing, actions = [],
   );
 }
 
-export function PersonalHome({ workspaceId, documents, drafts, folders=[], updates={runs:[],nextCursor:null} }: { workspaceId: string; documents: Doc[]; drafts: Draft[];folders?:SourceListItemModel[];updates?:FolderUpdatesPage }) {
+export function PersonalHome({ workspaceId, documents, drafts, limits, folders=[], updates={runs:[],nextCursor:null} }: { workspaceId: string; documents: Doc[]; drafts: Draft[];limits?:FolderImportClientLimits;folders?:SourceListItemModel[];updates?:FolderUpdatesPage }) {
   const { shortcuts, update } = useDocumentShortcuts(workspaceId);
   const hydrated = useHydrated();
   const { access, confirmed } = useWorkspaceAuthorization();
@@ -155,7 +156,7 @@ export function PersonalHome({ workspaceId, documents, drafts, folders=[], updat
         <label className="sr-only" htmlFor="my-space-search">Search My Space</label>
         <div className="flex gap-2"><Input id="my-space-search" name="q" placeholder="Search your knowledge…" className="min-w-0 flex-1 rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-body kh-focus-ring"/><Input type="hidden" name="scope" value="workspace"/><button className={buttonClasses({variant:"secondary"})}>Search</button></div>
       </form>
-      <Section title="My folders"><HomeFolderList workspaceId={workspaceId} items={folders}/><Link className="block px-3 pt-2 text-caption text-kh-link" href={`/w/${workspaceId}/sources`}>Manage sources</Link></Section>
+      <Section title="My folders"><HomeFolderList workspaceId={workspaceId} items={folders} limits={limits}/><Link className="block px-3 pt-2 text-caption text-kh-link" href={`/w/${workspaceId}/sources`}>Manage sources</Link></Section>
       {recent.length > 0 && <Section title="Continue reading">{documentRows(recent.slice(0, 4))}</Section>}
       <Section title="Updates"><UpdatesList workspaceId={workspaceId} page={updates}/><Link className="block px-3 pt-2 text-caption text-kh-link" href={`/w/${workspaceId}/updates`}>View all updates</Link></Section>
       {favorites.length > 0 ? <Section title="Favorites">

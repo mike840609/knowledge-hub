@@ -33,4 +33,6 @@ it("puts scoped search and folders before reading updates and keeps writing seco
   expect(html).toContain("New note");
   expect(html.indexOf("My folders")).toBeLessThan(html.indexOf("Updates"));
   expect(html).not.toContain("Continue writing");
+  expect(html).toContain("Your local folder is the source of truth");
+  expect(html).toContain("review the Preview");
 });
