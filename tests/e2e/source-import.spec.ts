@@ -278,8 +278,8 @@ test("imports basic-v1 through the directory input and applies the grouped previ
   await expect(page.getByRole("button", { name: "Apply changes" })).toBeEnabled();
   await page.getByRole("button", { name: "Apply changes" }).click();
 
-  await expect(page).toHaveURL(new RegExp(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources/[0-9a-f-]+\\?import=success`), { timeout: 30_000 });
-  await expect(page.getByText("Import applied successfully")).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources/[0-9a-f-]+/runs/[0-9a-f-]+`), { timeout: 30_000 });
+  await expect(page.getByRole("heading",{name:"Folder synced"})).toBeVisible();
 });
 
 test("syncs v1 to v2 with grouped moved, updated, archived, and added sections", async ({ page, request }) => {
@@ -318,8 +318,8 @@ test("syncs v1 to v2 with grouped moved, updated, archived, and added sections",
     .toHaveAttribute("aria-expanded", "true");
 
   await page.getByRole("button", { name: "Apply changes" }).click();
-  await expect(page).toHaveURL(new RegExp(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources/${sourceId}\\?import=success`), { timeout: 30_000 });
-  await expect(page.getByText("Import applied successfully")).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources/${sourceId}/runs/[0-9a-f-]+`), { timeout: 30_000 });
+  await expect(page.getByRole("heading",{name:"Folder synced"})).toBeVisible();
 });
 
 test("shows the malformed frontmatter blocker and disables apply", async ({ page, request }) => {
@@ -372,7 +372,7 @@ test("stale preview loses to the second preview with no force apply", async ({ p
   await page.goto(
     `/w/${QUERY_MASTER_WORKSPACE_ID}/sources/imports/${older.snapshotId}`,
   );
-  await expect(page.getByText("There is no Force Apply")).toBeVisible();
+  await expect(page.getByText("The source was updated by another sync. Check for changes again to create a fresh preview.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Apply changes" })).toBeDisabled();
   await expect(page.getByRole("link", { name: "Refresh preview" })).toBeVisible();
 });
@@ -391,7 +391,7 @@ test("previews identity-only adoption without counting a content update and bloc
   await expect(page.getByText("Identity adopted: guide-001")).toBeVisible();
   await expect(page.getByRole("button", { name: "Apply changes" })).toBeEnabled();
   await page.getByRole("button", { name: "Apply changes" }).click();
-  await expect(page).toHaveURL(new RegExp(`/sources/${sourceId}\\?import=success`));
+  await expect(page).toHaveURL(new RegExp(`/sources/${sourceId}/runs/[0-9a-f-]+`));
   const conflict = await importFolder(request, { sourceId, files: files("guide-002") });
   expect(conflict.preview.hasBlockers).toBe(true);
   await page.goto(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources/imports/${conflict.snapshotId}`);
