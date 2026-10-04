@@ -14,6 +14,7 @@ export type MarkImportSnapshotReadyInput = {
 
 export interface ImportSnapshotRepository {
   insert(snapshot: ImportSnapshot): Promise<void>;
+  findLatestReadyBySourceForCreator(sourceId:string,creatorId:string,now:Date,basedOnVersion:number):Promise<ImportSnapshot|null>;
   findById(snapshotId: string): Promise<ImportSnapshot | null>;
   lockById(snapshotId: string): Promise<ImportSnapshot | null>;
   countActiveByCreatorAndState(creatorId: string, state: "BUILDING" | "READY", now: Date): Promise<number>;

@@ -36,7 +36,17 @@ export interface DocumentLinkRepository {
    * in the same transaction that wrote the revision, with the document lock
    * held, so it replaces rather than merges.
    */
-  replaceForDocument(input: { documentId: string; revisionId: string; links: readonly ExtractedLink[] }): Promise<void>;
+  loadHealthEdges(
+    workspaceId: string,
+    sourceId: string,
+    cursor: { documentId: string; ordinal: number } | null,
+    limit: number,
+  ): Promise<{ documentId: string; link: ExtractedLink }[]>;
+  replaceForDocument(input: {
+    documentId: string;
+    revisionId: string;
+    links: readonly ExtractedLink[];
+  }): Promise<void>;
 
   /** ACTIVE documents in ACTIVE sources of one Workspace, as link targets. */
   loadCatalog(workspaceId: string): Promise<CatalogDocument[]>;
@@ -54,7 +64,10 @@ export interface DocumentLinkRepository {
   countIndexState(workspaceId: string): Promise<LinkIndexState>;
 
   /** Current Markdown of documents in one Workspace, for showing where a link sits. */
-  loadCurrentMarkdown(workspaceId: string, documentIds: readonly string[]): Promise<Map<string, string>>;
+  loadCurrentMarkdown(
+    workspaceId: string,
+    documentIds: readonly string[],
+  ): Promise<Map<string, string>>;
 
   /**
    * Documents (any status) whose index row is missing or no longer matches

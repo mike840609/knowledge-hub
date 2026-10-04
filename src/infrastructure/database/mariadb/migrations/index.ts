@@ -1,3 +1,4 @@
+import { folderSyncReadingMigration } from "./014-folder-sync-reading";
 import { personalItemsMigration } from "./013-personal-items";
 import { coreMigration } from "./001-core";
 import { currentRevisionMigration } from "./002-current-revision";
@@ -26,4 +27,5 @@ export const migrations = [
   documentShareLinksMigration,
   documentLinkIndexMigration,
   personalItemsMigration,
+  folderSyncReadingMigration,
 ] as const;

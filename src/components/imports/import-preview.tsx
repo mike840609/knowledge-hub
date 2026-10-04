@@ -1,5 +1,6 @@
 "use client";
 
+import { ImportSafetyWarning } from "./import-safety-warning";
 import { useMemo, useState } from "react";
 import type { ImportPreview } from "@/modules/sources/application/reconcile-import-snapshot";
 import type { ImportPreviewChange } from "@/modules/sources/domain/import-plan";
@@ -96,6 +97,7 @@ export function ImportPreview({
   return (
     <div className="flex flex-col gap-4 pb-6">
       <ImportSummary preview={preview} />
+      {preview.safety ? <ImportSafetyWarning safety={preview.safety} /> : null}
       <ImportWarningSummary preview={preview} />
       <div className="flex items-center gap-2 text-body">
         <label htmlFor="import-change-filter" className="font-medium text-kh-text-muted">
@@ -126,6 +128,7 @@ export function ImportPreview({
         <ImportChangeGroup
           key={`${filter}-${group.key}`}
           title={group.title}
+          snapshotId={preview.snapshotId}
           changes={groups[group.key]}
           defaultExpanded={filter !== "all" || group.key !== "unchanged"}
         />

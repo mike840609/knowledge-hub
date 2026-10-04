@@ -1,3 +1,4 @@
+import type { ImportRiskAcknowledgment } from "@/modules/sources/domain/import-safety";
 import type { ApplyFolderImportResult } from "@/modules/sources/application/apply-folder-import";
 import type { CreateImportResult, ImportManifestEntry } from "@/modules/sources/application/create-folder-import";
 import { translateKnownSnapshotAccessError } from "@/modules/sources/application/import-snapshot-access";
@@ -90,8 +91,10 @@ export async function getSourceImportPreview(snapshotId: string): Promise<Import
   return withKnownSnapshotAccess(() => services.imports.preview.get(caller, snapshotId));
 }
 
-export async function applySourceImport(snapshotId: string): Promise<ApplyFolderImportResult> {
+export async function applySourceImport(snapshotId: string, riskAcknowledgment?: ImportRiskAcknowledgment): Promise<ApplyFolderImportResult> {
   const services = applicationServices();
   const { caller } = await services.establishTrustedCaller();
-  return withKnownSnapshotAccess(() => services.imports.apply.apply(caller, snapshotId));
+  return withKnownSnapshotAccess(() => services.imports.apply.apply(caller, snapshotId, riskAcknowledgment));
 }
+
+export async function getSourceImportDiff(snapshotId:string,sourcePath:string){const s=applicationServices();const {caller}=await s.establishTrustedCaller();return s.imports.diff.get(caller,snapshotId,sourcePath);}

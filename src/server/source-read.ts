@@ -11,6 +11,7 @@ export const SOURCE_RUN_DETAIL_LIMIT = 50;
 export type SourceListItemModel = {
   source: SourceView;
   latestRun: SyncRun | null;
+  pendingPreviewId?: string|null;
   latestSuccessfulRun?: SyncRun | null;
 };
 
@@ -53,7 +54,8 @@ export async function getSourceListModel(workspaceId: string): Promise<SourceLis
       sources.map(async (source) => {
         const runs = await repositories.syncRuns.listBySourceId(source.id, SOURCE_RUN_LIST_LIMIT);
         const successfulRuns = source.sourceType === "HUB" ? [] : await repositories.syncRuns.listBySourceId(source.id, 1, "APPLIED");
-        return { source, latestRun: runs[0] ?? null, latestSuccessfulRun: successfulRuns[0] ?? null };
+        const pending = source.sourceType === "HUB" ? null : await repositories.importSnapshots.findLatestReadyBySourceForCreator(source.id,caller.identity.id,new Date(),source.syncVersion);
+        return { pendingPreviewId:pending?.id??null, source, latestRun: runs[0] ?? null, latestSuccessfulRun: successfulRuns[0] ?? null };
       }),
     ),
   );

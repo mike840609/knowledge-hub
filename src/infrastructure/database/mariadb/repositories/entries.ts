@@ -1,7 +1,7 @@
 import type { SourceEntry, SourceEntryType } from "@/modules/sources/domain/source-entry";
 import type { EntryRepository } from "@/modules/sources/ports/entry-repository";
 import type { QueryConnection, DbRow } from "./shared";
-import { asDate, asRequiredString } from "./shared";
+import { asDate, asNumber, asRequiredString } from "./shared";
 
 function mapEntry(row: DbRow): SourceEntry {
   return {
@@ -17,6 +17,20 @@ function mapEntry(row: DbRow): SourceEntry {
 
 export class MariaDbEntryRepository implements EntryRepository {
   constructor(private readonly connection: QueryConnection) {}
+
+  async findByDocumentIds(documentIds:string[]):Promise<SourceEntry[]>{
+    const result:SourceEntry[]=[];const ids=[...new Set(documentIds)];
+    for(let i=0;i<ids.length;i+=500){const batch=ids.slice(i,i+500);const rows=await this.connection.query<DbRow[]>(`SELECT * FROM source_entries WHERE document_id IN (${batch.map(()=>"?").join(",")})`,batch);result.push(...rows.map(mapEntry));}return result;
+  }
+  async countActiveDocuments(sourceId: string): Promise<number> {
+    const rows=await this.connection.query<DbRow[]>("SELECT COUNT(*) AS count FROM source_entries WHERE source_id=? AND entry_type='DOCUMENT' AND status='ACTIVE'",[sourceId]);
+    return asNumber(rows[0].count,"active document count");
+  }
+
+  async findBySourcePath(sourceId: string, sourcePath: string): Promise<SourceEntry | null> {
+    const rows=await this.connection.query<DbRow[]>("SELECT * FROM source_entries WHERE source_id=? AND BINARY source_path=BINARY ? LIMIT 1",[sourceId,sourcePath]);
+    return rows[0]?mapEntry(rows[0]):null;
+  }
 
   async findById(entryId: string): Promise<SourceEntry | null> {
     const rows = await this.connection.query<DbRow[]>("SELECT * FROM source_entries WHERE id = ?", [entryId]);

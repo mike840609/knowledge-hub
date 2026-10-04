@@ -47,6 +47,7 @@ export function SearchResultRow({
             <span className="block truncate text-body font-medium text-kh-text">
               <Highlighted text={hit.title} terms={terms} />
             </span>
+            {hit.sourcePath ? <span className="block truncate text-caption text-kh-text-muted">{hit.sourcePath}</span> : null}
             {snippet && (
               <span className="mt-0.5 block line-clamp-2 text-body-sm text-kh-text-secondary">
                 <Highlighted text={snippet} terms={terms} />

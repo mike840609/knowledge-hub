@@ -59,7 +59,10 @@ export async function getSearchPageModel(workspaceId: string, input: SearchPageI
       includeArchived: input.includeArchived,
       page: input.page,
     });
-    return { ...base, result, timedOut: false };
+    if(!result.hits.length)return {...base,result,timedOut:false};
+    const locations=await services.unitOfWork.run(r=>r.entries.findByDocumentIds(result.hits.map(hit=>hit.documentId)));
+    const paths=new Map(locations.map(e=>[e.documentId,e.sourcePath]));
+    return { ...base, result:{...result,hits:result.hits.map(hit=>({...hit,sourcePath:paths.get(hit.documentId)}))}, timedOut: false };
   } catch (error) {
     if (error instanceof SearchTimeoutError) return { ...base, result: null, timedOut: true };
     throw error;

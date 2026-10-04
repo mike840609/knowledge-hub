@@ -1,3 +1,5 @@
+import {getDocumentSourcePath} from "@/server/sync-reading";
+import { ReadRevisionMarker } from "@/components/knowledge/read-revision-marker";
 import { RevisionRestore } from "@/components/knowledge/revision-restore";
 import { getKnowledgeDocumentModel, getKnowledgeExplorerModel, getWorkspaceShellModel } from "@/server/knowledge-read";
 import { documentLocation } from "@/server/document-location";
@@ -102,6 +104,7 @@ export default async function KnowledgeDocumentPage({
     workspaceName: shell?.workspace.name ?? workspaceId,
     sourceId,
     sourceName: explorer?.source.name ?? sourceId,
+    sourcePath:await getDocumentSourcePath(workspaceId,documentId),
     documentId,
     status: view.status,
     revisions: model.revisions,
@@ -152,6 +155,7 @@ export default async function KnowledgeDocumentPage({
     >
       <div className="kh-reading-column py-6">
         {isHistorical && <RevisionRestore documentId={documentId} href={`/w/${workspaceId}/knowledge/${sourceId}/${documentId}`} historical={selectedRevision} current={view.currentRevision} editable={!sourceManaged && view.status === "ACTIVE" && explorer?.source.status === "ACTIVE"} />}
+        {shell?.workspace.type === "PERSONAL" ? <ReadRevisionMarker workspaceId={workspaceId} documentId={documentId} revisionId={selectedRevision.id}/> : null}
         <DocumentViewer view={view} selectedRevision={selectedRevision} links={linkView ? renderedLinksFrom(linkView, createLinks) : undefined} />
         {linkView ? <BacklinksFooter view={linkView} /> : null}
       </div>

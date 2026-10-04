@@ -1,4 +1,6 @@
 "use client";
+import { isExcludedImportPath, readExcludedPaths } from "@/lib/import-exclusions";
+import { ImportExclusionsSettings } from "./import-exclusions-settings";
 
 import { useRouter } from "next/navigation";
 import { requestWorkspaceAccessCheck, useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
@@ -322,6 +324,9 @@ export async function runFolderImport(input: {
   assertAllowed();
   onProgress({ kind: "PREPARING" });
   const selection = selectFolder(files);
+  const exclusions = target.kind === "existing" ? readExcludedPaths(target.workspaceId, target.sourceId) : [];
+  selection.staged = selection.staged.filter(entry => !isExcludedImportPath(entry.relativePath, exclusions));
+  if (selection.staged.length === 0) throw Object.assign(new Error("No files remain after exclusions. Nothing was synced."), { code: "INVALID_IMPORT_MANIFEST" });
   const manifest = await buildManifest(selection.staged, limits, signal);
   assertAllowed();
   const session = target.kind === "new"
@@ -551,6 +556,8 @@ export function FolderImportForm({
           ) : null}
         </p>
       )}
+      <p className="mt-3 text-caption text-kh-text-muted">.git and .obsidian directories are excluded from import.</p>
+      {target.kind === "existing" ? <ImportExclusionsSettings workspaceId={target.workspaceId} sourceId={target.sourceId} disabled={busy} /> : null}
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <Button type="button" variant="secondary" disabled={busy} aria-describedby="import-folder-selection" onClick={handleChooseFolder}>Choose folder</Button>
         <p id="import-folder-selection" className="text-body text-kh-text-muted">{selection ? `${selection.name} · ${selection.count} files` : "No folder selected"}</p>

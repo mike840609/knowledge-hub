@@ -1,5 +1,6 @@
 "use client";
 
+import { ImportContentDiff } from "./import-content-diff";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ImportDiagnosticMessage } from "./import-diagnostic-message";
@@ -15,10 +16,12 @@ export function ImportChangeGroup({
   title,
   changes,
   defaultExpanded,
+  snapshotId,
 }: {
   title: string;
   changes: ImportPreviewChange[];
   defaultExpanded: boolean;
+  snapshotId?: string;
 }): React.JSX.Element {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [visible, setVisible] = useState(50);
@@ -56,6 +59,7 @@ export function ImportChangeGroup({
                   </span>
                   <span className="text-caption text-kh-text-muted">{labelText(change)}</span>
                 </div>
+                {snapshotId && change.kind === "DOCUMENT" && (change.labels.includes("UPDATED") || change.labels.includes("ADDED")) ? <ImportContentDiff snapshotId={snapshotId} sourcePath={change.sourcePath} /> : null}
                 {change.identity ? (
                   <p className="mt-1 break-all text-caption text-kh-text-muted">
                     Identity adopted: <span className="font-medium">{change.identity.adoptedExternalId}</span>

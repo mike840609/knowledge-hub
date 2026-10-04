@@ -5,6 +5,7 @@ export type KnowledgeSearchRow = {
   workspaceId: string;
   title: string;
   sourceName: string;
+  sourcePath?:string|null;
   workspaceName: string;
   snippet: string;
   status: "ACTIVE" | "ARCHIVED";

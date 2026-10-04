@@ -3,7 +3,7 @@ import type { SyncRunRepository } from "@/modules/sources/ports/sync-run-reposit
 import type { QueryConnection, DbRow } from "./shared";
 import { asDate, asJsonObject, asNumber, asNullableDate } from "./shared";
 
-function mapRun(row: DbRow): SyncRun {
+export function mapSyncRun(row: DbRow): SyncRun {
   return {
     id: String(row.id), sourceId: String(row.source_id), triggeredBy: String(row.triggered_by), basedOnVersion: asNumber(row.based_on_version, "base source version"),
     resultVersion: row.result_version === null ? null : asNumber(row.result_version, "result source version"), status: String(row.status) as SyncRunStatus,
@@ -22,9 +22,14 @@ export class MariaDbSyncRunRepository implements SyncRunRepository {
     );
   }
 
+  async findAppliedBySnapshotId(sourceId: string, snapshotId: string): Promise<SyncRun | null> {
+    const rows=await this.connection.query<DbRow[]>("SELECT * FROM sync_runs WHERE source_id=? AND status='APPLIED' AND JSON_UNQUOTE(JSON_EXTRACT(summary,'$.snapshotId'))=? ORDER BY completed_at DESC,id DESC LIMIT 1",[sourceId,snapshotId]);
+    return rows[0]?mapSyncRun(rows[0]):null;
+  }
+
   async findById(runId: string): Promise<SyncRun | null> {
     const rows = await this.connection.query<DbRow[]>("SELECT * FROM sync_runs WHERE id = ?", [runId]);
-    return rows[0] ? mapRun(rows[0]) : null;
+    return rows[0] ? mapSyncRun(rows[0]) : null;
   }
 
   async listBySourceId(sourceId: string, limit: number, status?: SyncRunStatus): Promise<SyncRun[]> {
@@ -35,6 +40,6 @@ export class MariaDbSyncRunRepository implements SyncRunRepository {
       `SELECT * FROM sync_runs WHERE source_id = ?${status ? " AND status = ?" : ""} ORDER BY ${status === "APPLIED" ? "completed_at" : "started_at"} DESC, id DESC LIMIT ?`,
       status ? [sourceId, status, limit] : [sourceId, limit],
     );
-    return rows.map(mapRun);
+    return rows.map(mapSyncRun);
   }
 }

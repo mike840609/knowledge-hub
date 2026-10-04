@@ -4,7 +4,7 @@ import { fingerprintReconciliationContent } from "@/modules/sources/domain/recon
 import { importError } from "@/modules/sources/domain/import-errors";
 import type { CanonicalAssetState, CanonicalDocumentState, CanonicalFolderState, CanonicalImportState } from "@/modules/sources/domain/import-plan";
 import type { ImportCanonicalStateRepository } from "@/modules/sources/ports/import-canonical-state-repository";
-import type { DbRow, QueryConnection } from "./shared";
+import { asNumber, type DbRow, type QueryConnection } from "./shared";
 
 function jsonObject(value: unknown): Record<string, unknown> {
   const parsed = typeof value === "string" ? JSON.parse(value) : value;
@@ -21,7 +21,7 @@ export class MariaDbImportCanonicalStateRepository implements ImportCanonicalSta
     const rows = await this.connection.query<DbRow[]>(
       `SELECT e.id AS entry_id, e.external_id, e.source_path, e.entry_type, e.status AS entry_status,
               e.document_id, e.tree_node_id,
-              r.id AS revision_id, r.title, r.markdown, r.metadata, r.content_hash,
+              r.id AS revision_id, r.revision_no, r.title, r.markdown, r.metadata, r.content_hash,
               t.node_type AS tree_node_type
        FROM source_entries e
        LEFT JOIN knowledge_documents d ON d.id=e.document_id AND d.source_id=e.source_id
@@ -68,6 +68,7 @@ export class MariaDbImportCanonicalStateRepository implements ImportCanonicalSta
         status: String(row.entry_status) as "ACTIVE" | "ARCHIVED",
         currentRevision: {
           id: String(row.revision_id),
+          revisionNo: asNumber(row.revision_no, "canonical revision"),
           title: String(row.title),
           markdown,
           metadata,

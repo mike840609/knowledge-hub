@@ -87,11 +87,11 @@ it("renders Update from folder as an icon-only primary link when no folder is re
   expect(link?.className).toContain("bg-kh-primary");
   expect(link?.className).not.toContain("bg-transparent");
   expect(link?.className).toContain("kh-icon-control");
-  expect(container.querySelector('button[aria-label="Sync now"]')).toBeNull();
+  expect(container.querySelector('button[aria-label="Check for changes"]')).toBeNull();
   expect(container.textContent).not.toContain("Last folder:");
 });
 
-it("orders Sync now before Update when a folder is remembered (ghost Update, soft Sync, no header caption)", async () => {
+it("orders Check for changes before Update when a folder is remembered (ghost Update, soft Sync, no header caption)", async () => {
   store.meta = { rootName: "notes", lastSyncAt: "2026-10-02T00:00:00.000Z" };
   await renderActions();
   const link = updateLink();
@@ -101,7 +101,7 @@ it("orders Sync now before Update when a folder is remembered (ghost Update, sof
   expect(link?.className).not.toContain("bg-kh-primary");
   expect(link?.className).toContain("kh-icon-control");
   // Integration-style: the real SyncNowButton renders alongside the link.
-  const syncButton = container.querySelector('button[aria-label="Sync now"]');
+  const syncButton = container.querySelector('button[aria-label="Check for changes"]');
   expect(syncButton).not.toBeNull();
   expect(link).not.toBeNull();
   expect(syncButton?.textContent?.trim()).toBe("");
@@ -109,14 +109,14 @@ it("orders Sync now before Update when a folder is remembered (ghost Update, sof
   if (syncButton && link) {
     expect(syncButton.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   } else {
-    expect.unreachable("Sync now button and Update link both render when a folder is remembered");
+    expect.unreachable("Check for changes button and Update link both render when a folder is remembered");
   }
 });
 
-it("renders the Sync now button with the soft variant when memory exists", async () => {
+it("renders the Check for changes button with the soft variant when memory exists", async () => {
   store.meta = { rootName: "notes", lastSyncAt: "2026-10-02T00:00:00.000Z" };
   await renderActions();
-  const syncButton = container.querySelector('button[aria-label="Sync now"]');
+  const syncButton = container.querySelector('button[aria-label="Check for changes"]');
   expect(syncButton?.className).toContain("bg-kh-bg-selected");
   expect(syncButton?.className).toContain("text-kh-selected-text");
   expect(syncButton?.className).not.toContain("bg-kh-primary");
@@ -134,7 +134,7 @@ it("server render shows an icon-only primary Update link and reads no browser st
   expect(html).toContain('aria-label="Update from folder"');
   expect(html).toContain("bg-kh-primary");
   expect(html).not.toContain(">Update from folder<");
-  expect(html).not.toContain("Sync now");
+  expect(html).not.toContain("Check for changes");
   expect(store.isDirectoryPickerSupported).not.toHaveBeenCalled();
   expect(store.getRememberedFolderMeta).not.toHaveBeenCalled();
 });

@@ -1,0 +1,58 @@
+import Link from "next/link";
+import type { SourceHealthPage } from "@/modules/sources/application/get-source-health";
+import { PageHeader } from "@/components/shell/page-header";
+import { CopySourcePath } from "@/components/knowledge/copy-source-path";
+export function SourceHealth({ model }: { model: SourceHealthPage }) {
+  return (
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        location={model.sourceName}
+        locationHref={`/w/${model.workspaceId}/sources/${model.sourceId}`}
+        title="Source health"
+      />
+      {model.indexIncomplete ? (
+        <p role="status" className="text-body text-kh-text-muted">
+          Link checks are incomplete because some workspace indexes are missing
+          or stale. The issues below may be incomplete.
+        </p>
+      ) : null}
+      {model.legacyWarnings ? (
+        <p className="text-body">
+          The latest sync recorded {model.legacyWarnings} warnings without
+          article details.
+        </p>
+      ) : null}
+      {model.diagnostics.length ? (
+        <ul className="divide-y divide-kh-border">
+          {model.diagnostics.map((d) => (
+            <li key={d.id} className="py-3">
+              {d.href ? (
+                <Link className="text-body text-kh-link" href={d.href}>
+                  {d.title}
+                </Link>
+              ) : (
+                <p>{d.title}</p>
+              )}
+              <p className="text-body text-kh-text-secondary">{d.message}</p>
+              {d.sourcePath ? <CopySourcePath path={d.sourcePath} /> : null}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-body text-kh-text-muted">
+          {model.indexIncomplete
+            ? "No issues found in the available indexes."
+            : "No link issues or recorded import warnings."}
+        </p>
+      )}
+      {model.nextCursor ? (
+        <Link
+          className="text-kh-link"
+          href={`?after=${encodeURIComponent(model.nextCursor)}`}
+        >
+          Next issues
+        </Link>
+      ) : null}
+    </div>
+  );
+}

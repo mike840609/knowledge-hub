@@ -1,4 +1,12 @@
 "use client";
+import {Input} from "@/components/ui/input";
+import type { FolderImportClientLimits } from "@/components/imports/folder-import-form";
+import {HomeFolderList} from "./home-folder-list";
+import {UpdatesList} from "./updates-list";
+import {WorkspaceImportLink} from "@/components/shell/workspace-import-link";
+import type {SourceListItemModel} from "@/server/source-read";
+import type {FolderUpdatesPage} from "@/modules/personal/application/list-folder-updates";
+
 import Link from "next/link";
 import { FileText, PenLine, Star, MoreHorizontal } from "lucide-react";
 import { navigateListRows } from "@/lib/list-row-navigation";
@@ -15,7 +23,7 @@ import { MenuRoot, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/me
 import { ShareLinkDialogHost } from "./share-link-dialog";
 import { useHydrated } from "@/components/shell/use-hydrated";
 
-type Doc = { documentId: string; sourceId: string; title: string; updatedAt: string; ownership: "SOURCE_MANAGED" | "HUB_MANAGED"; status: "ACTIVE" | "ARCHIVED"; sourceStatus: "ACTIVE" | "ARCHIVED" };
+type Doc = { sourceName?:string; sourcePath?:string|null; documentId: string; sourceId: string; title: string; updatedAt: string; ownership: "SOURCE_MANAGED" | "HUB_MANAGED"; status: "ACTIVE" | "ARCHIVED"; sourceStatus: "ACTIVE" | "ARCHIVED" };
 type Draft = { key: string; title: string; sourceId: string | null; updatedAt: string };
 
 /**
@@ -41,11 +49,12 @@ function EmptyLine({ children }: { children: React.ReactNode }) {
  * results are. The favourite toggle sits beside the link rather than inside
  * it, so it is its own target and a click on it never navigates.
  */
-function Row({ href, icon, title, updatedAt, trailing, actions = [], onRun = () => {} }: {
+function Row({ href, icon, title, updatedAt, provenance, trailing, actions = [], onRun = () => {} }: {
   href: string;
   icon: React.ReactNode;
   title: string;
   updatedAt: string;
+  provenance?:string;
   trailing?: React.ReactNode;
   actions?: readonly Action[];
   onRun?: (action: Action) => void;
@@ -60,6 +69,7 @@ function Row({ href, icon, title, updatedAt, trailing, actions = [], onRun = () 
         <span className="shrink-0 text-kh-text-muted">{icon}</span>
         <span className="min-w-0 flex-1 py-1">
           <span className="block truncate text-body font-medium text-kh-text">{title}</span>
+          {provenance?<span className="block truncate text-caption text-kh-text-muted">{provenance}</span>:null}
           <Timestamp value={updatedAt} variant="date" className="block text-caption text-kh-text-muted sm:hidden" />
         </span>
         <Timestamp value={updatedAt} variant="date" className="hidden shrink-0 text-caption text-kh-text-muted sm:block" />
@@ -70,7 +80,7 @@ function Row({ href, icon, title, updatedAt, trailing, actions = [], onRun = () 
   );
 }
 
-export function PersonalHome({ workspaceId, documents, drafts }: { workspaceId: string; documents: Doc[]; drafts: Draft[] }) {
+export function PersonalHome({ workspaceId, documents, drafts, limits, folders=[], updates={runs:[],nextCursor:null} }: { workspaceId: string; documents: Doc[]; drafts: Draft[];limits?:FolderImportClientLimits;folders?:SourceListItemModel[];updates?:FolderUpdatesPage }) {
   const { shortcuts, update } = useDocumentShortcuts(workspaceId);
   const hydrated = useHydrated();
   const { access, confirmed } = useWorkspaceAuthorization();
@@ -98,6 +108,7 @@ export function PersonalHome({ workspaceId, documents, drafts }: { workspaceId: 
               icon={<FileText size={14} aria-hidden="true" />}
               title={doc.title}
               updatedAt={doc.updatedAt}
+              provenance={[doc.sourceName,doc.sourcePath].filter(Boolean).join(" · ")}
               actions={actions}
               onRun={runAction}
               trailing={
@@ -128,7 +139,7 @@ export function PersonalHome({ workspaceId, documents, drafts }: { workspaceId: 
         location="My Space"
         locationHref={`/w/${workspaceId}/home`}
         title="Home"
-        description="Continue writing, revisit a favorite, or start a note."
+        description="Find knowledge, check your folders, and continue reading."
         actions={<>
           <MenuRoot>
             <MenuTrigger aria-label="Home actions" className={buttonClasses({ variant: "ghost", icon: true })}><MoreHorizontal size={16} aria-hidden="true" /></MenuTrigger>
@@ -138,10 +149,20 @@ export function PersonalHome({ workspaceId, documents, drafts }: { workspaceId: 
               <p className="px-3 py-2 text-caption text-kh-text-muted">Export includes saved and archived notes. Drafts, history and attachments are excluded.</p>
             </MenuContent>
           </MenuRoot>
-          <Link className={buttonClasses()} href={`/w/${workspaceId}/knowledge/new`}>New note</Link>
+          <WorkspaceImportLink className={buttonClasses()} href={`/w/${workspaceId}/sources/import`}>Import folder</WorkspaceImportLink>
         </>}
       />
-      {drafts.length > 0 ? <Section title="Drafts">
+      <form action={`/w/${workspaceId}/search`} role="search" className="px-3">
+        <label className="sr-only" htmlFor="my-space-search">Search My Space</label>
+        <div className="flex gap-2"><Input id="my-space-search" name="q" placeholder="Search your knowledge…" className="min-w-0 flex-1 rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-body kh-focus-ring"/><Input type="hidden" name="scope" value="workspace"/><button className={buttonClasses({variant:"secondary"})}>Search</button></div>
+      </form>
+      <Section title="My folders"><HomeFolderList workspaceId={workspaceId} items={folders} limits={limits}/><Link className="block px-3 pt-2 text-caption text-kh-link" href={`/w/${workspaceId}/sources`}>Manage sources</Link></Section>
+      {recent.length > 0 && <Section title="Continue reading">{documentRows(recent.slice(0, 4))}</Section>}
+      <Section title="Updates"><UpdatesList workspaceId={workspaceId} page={updates}/><Link className="block px-3 pt-2 text-caption text-kh-link" href={`/w/${workspaceId}/updates`}>View all updates</Link></Section>
+      {favorites.length > 0 ? <Section title="Favorites">
+        {documentRows(favorites)}
+      </Section> : null}
+            {drafts.length > 0 ? <Section title="Drafts">
         <ul onKeyDown={navigateListRows} className="space-y-0.5">
             {drafts.map((draft) => (
               <Row
@@ -156,12 +177,8 @@ export function PersonalHome({ workspaceId, documents, drafts }: { workspaceId: 
             ))}
           </ul>
       </Section> : null}
-      {recent.length > 0 && <Section title="Continue reading">{documentRows(recent.slice(0, 4))}</Section>}
-      {favorites.length > 0 ? <Section title="Favorites">
-        {documentRows(favorites)}
-      </Section> : null}
-      <Section title="Recently edited">
-        {documents.length ? documentRows(documents.slice(0, 12)) : (
+      <Section title="Your notes"><Link className="block px-3 py-2 text-caption text-kh-link" href={`/w/${workspaceId}/knowledge/new`}>New note</Link>
+        {documents.some(d=>d.ownership==="HUB_MANAGED") ? documentRows(documents.filter(d=>d.ownership==="HUB_MANAGED").slice(0, 12)) : (
           <EmptyLine>
             Create your first note or <Link className="rounded-md text-kh-link underline underline-offset-2 kh-focus-ring" href={`/w/${workspaceId}/sources/import`}>import a folder</Link>.
           </EmptyLine>

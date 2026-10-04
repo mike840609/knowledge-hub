@@ -1,3 +1,5 @@
+import { MariaDbSyncRunChangeRepository } from "./sync-run-changes";
+import { MariaDbDocumentReadProgressRepository } from "./document-read-progress";
 import type { DatabaseConnection } from "../pool";
 import { MariaDbUserRepository } from "./users";
 import { MariaDbSourceRepository } from "./sources";
@@ -39,6 +41,8 @@ export function createRepositories(connection: DatabaseConnection): SourceReposi
     entries: new MariaDbEntryRepository(connection),
     assets: new MariaDbAssetRepository(connection),
     syncRuns: new MariaDbSyncRunRepository(connection),
+    syncRunChanges: new MariaDbSyncRunChangeRepository(connection),
+    documentReadProgress: new MariaDbDocumentReadProgressRepository(connection),
     importSnapshots: new MariaDbImportSnapshotRepository(connection),
     importSnapshotEntries: new MariaDbImportSnapshotEntryRepository(connection),
     importCanonicalState: new MariaDbImportCanonicalStateRepository(connection),

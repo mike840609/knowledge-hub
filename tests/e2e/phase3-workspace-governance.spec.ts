@@ -186,10 +186,14 @@ test.describe("Phase 3 Workspace product acceptance", () => {
       expect((await owner.context.request.post(`/api/workspaces/${id}/restore`)).ok()).toBe(true);
       await affected.page.goto(`/w/${id}/sources/imports/${snapshot}`);
       await affected.page.getByRole("button", { name: "Apply changes" }).click();
-      await expect(affected.page.getByText("Import applied successfully.")).toBeVisible();
-      await expect(affected.page.getByRole("link", { name: "Update from folder" })).toBeVisible();
-      await affected.page.getByRole("link", { name: "Knowledge", exact: true }).click();
-      await expect(affected.page.locator("main").first()).toContainText("Imported knowledge.");
+      await expect(affected.page).toHaveURL(new RegExp(`/w/${id}/sources/[^/]+/runs/[^/]+$`));
+      await expect(affected.page.getByRole("heading", { name: "Folder synced", exact: true })).toBeVisible();
+      await expect(affected.page.getByText("Added 1 · Updated 0 · Archived 0 · Warnings 0", { exact: true })).toBeVisible();
+      const sourceId = new URL(affected.page.url()).pathname.split("/")[4]!;
+      await affected.page.getByRole("link", { name: "Read this update", exact: true }).click();
+      await expect(affected.page.getByRole("article")).toContainText("Imported knowledge.");
+      await affected.page.goto(`/w/${id}/sources/${sourceId}`);
+      await expect(affected.page.getByRole("link", { name: "Update from folder", exact: true })).toBeVisible();
     } finally { await owner.context.close(); await affected.context.close(); await rm(folder, { recursive: true, force: true }); }
   });
 

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { History } from "lucide-react";
 import type { SyncRun } from "@/modules/sources/domain/sync-run";
 import { Status } from "@/components/ui/status";
@@ -9,7 +10,7 @@ function describeRun(run: SyncRun): string {
   return `from version ${run.basedOnVersion} → ${result}`;
 }
 
-export function ImportHistory({ runs }: { runs: SyncRun[] }) {
+export function ImportHistory({ runs, workspaceId }: { runs: SyncRun[]; workspaceId?: string }) {
   if (runs.length === 0) {
     return <p className="text-body text-kh-text-muted">No sync runs recorded for this source yet.</p>;
   }
@@ -22,6 +23,7 @@ export function ImportHistory({ runs }: { runs: SyncRun[] }) {
         >
           <History size={15} aria-hidden="true" className="shrink-0 text-kh-text-muted" />
           <div className="min-w-0 flex-1">
+            {workspaceId ? <Link className="text-caption text-kh-link" href={`/w/${workspaceId}/sources/${run.sourceId}/runs/${run.id}`}>View sync details</Link> : null}
             <p className="text-body font-medium text-kh-text">
               <Status kind={syncStatusKind(run.status)}>{syncStatusLabel(run.status)}</Status> <span className="font-normal text-kh-text-muted">{describeRun(run)}</span>
             </p>

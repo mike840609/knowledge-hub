@@ -103,3 +103,12 @@ describe("import sticky footer pending-handle adoption", () => {
     expect(container.querySelector('[role="alert"]')).toBeNull();
   });
 });
+
+it("opens the recorded run and recovers a committed Apply after response loss",async()=>{
+ const fetchMock=vi.fn<typeof fetch>().mockRejectedValueOnce(new TypeError("Network error")).mockResolvedValueOnce(Response.json({state:"APPLIED"})).mockResolvedValueOnce(Response.json({sourceId:"src-9",runId:"run-9"}));
+ vi.stubGlobal("fetch",fetchMock);
+ act(()=>root.render(createElement(ImportStickyFooter,{workspaceId:"w1",preview:readyPreview()})));
+ await act(async()=>{applyButton().click();});
+ expect(push).toHaveBeenCalledWith("/w/w1/sources/src-9/runs/run-9");
+ expect(fetchMock.mock.calls[1][0]).toBe("/api/source-imports/snap-new");
+});

@@ -1,5 +1,6 @@
 "use client";
 
+import {Input} from "@/components/ui/input";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { requestWorkspaceAccessCheck, useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
@@ -10,7 +11,7 @@ import { buttonClasses } from "@/components/ui/button";
 
 export type ApplyFailure = { code: string; message: string; latchStale: boolean };
 
-const STALE_GUIDANCE = "The preview no longer matches the source. Refresh the preview for a fresh diff.";
+const STALE_GUIDANCE = "The source was updated by another sync. Check for changes again to create a fresh preview.";
 const RETRYABLE_GUIDANCE = "A transient database conflict interrupted the apply. Nothing was changed — try again.";
 const GENERIC_GUIDANCE = "Applying the import preview failed.";
 
@@ -57,6 +58,8 @@ export function ImportStickyFooter({
   const { access, confirmed } = useWorkspaceAuthorization();
   const allowed = confirmed && access.actions.canImport;
   const [state, setState] = useState<{ kind: "IDLE" } | { kind: "APPLYING" } | { kind: "ERROR"; code: string; message: string }>({ kind: "IDLE" });
+  const [sourceConfirmation,setSourceConfirmation]=useState("");
+  const riskConfirmed=!preview.safety?.highRisk || (!!preview.planHash && sourceConfirmation===preview.sourceName);
   const [versionConflict, setVersionConflict] = useState(false);
   const [expired, setExpired] = useState(preview.expired);
   useEffect(() => {
@@ -67,7 +70,7 @@ export function ImportStickyFooter({
   }, [preview.expired, preview.expiresAt]);
   const effectiveState = versionConflict ? "STALE" : preview.state;
   const stale = effectiveState === "STALE" || effectiveState === "APPLIED" || expired;
-  const disabled = !allowed || preview.hasBlockers || stale || effectiveState !== "READY";
+  const disabled = !riskConfirmed || !allowed || preview.hasBlockers || stale || effectiveState !== "READY";
   const cancelHref = preview.sourceId
     ? `/w/${workspaceId}/sources/${preview.sourceId}`
     : `/w/${workspaceId}/sources`;
@@ -75,11 +78,28 @@ export function ImportStickyFooter({
     ? `/w/${workspaceId}/sources/${preview.sourceId}/update`
     : `/w/${workspaceId}/sources/import`;
 
+  async function openResult(body:{sourceId:string;runId?:string|null}):Promise<void>{
+    try{await adoptPendingHandle(preview.snapshotId,body.sourceId);}catch{}
+    router.push(body.runId?`/w/${workspaceId}/sources/${body.sourceId}/runs/${body.runId}`:`/w/${workspaceId}/sources/${body.sourceId}?import=success`);
+  }
+  async function recover():Promise<boolean>{
+    try{
+      const status=await fetch(`/api/source-imports/${preview.snapshotId}`,{cache:"no-store"});
+      if(!status.ok)return false;
+      const current=await status.json();
+      if(current.state!=="APPLIED")return false;
+      const response=await fetch(`/api/source-imports/${preview.snapshotId}/apply`,{method:"POST"});
+      const body=await response.json();
+      if(!response.ok||typeof body.sourceId!=="string")return false;
+      await openResult(body);return true;
+    }catch{return false;}
+  }
   async function apply(): Promise<void> {
     if (disabled || state.kind === "APPLYING" || new Date(preview.expiresAt).getTime() <= Date.now()) return;
     setState({ kind: "APPLYING" });
     try {
-      const response = await fetch(`/api/source-imports/${preview.snapshotId}/apply`, { method: "POST" });
+      const request:RequestInit=preview.safety?.highRisk?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({riskAcknowledgment:{planHash:preview.planHash,sourceName:sourceConfirmation}})}:{method:"POST"};
+      const response = await fetch(`/api/source-imports/${preview.snapshotId}/apply`, request);
       const body = await response.json().catch(() => null);
       if (!response.ok || !body || typeof body !== "object" || !("sourceId" in body)) {
         // A known snapshot's 404 is an import-session problem, not evidence
@@ -88,25 +108,24 @@ export function ImportStickyFooter({
         if (response.status !== 404) {
           requestWorkspaceAccessCheck(response.status, readEnvelope(body)?.code);
         }
+        if((response.status>=500||response.ok)&&await recover())return;
         const failure = classifyApplyError(response.status, body);
         if (failure.latchStale) setVersionConflict(true);
         setState({ kind: "ERROR", code: failure.code, message: failure.message });
         return;
       }
-      const sourceId = (body as { sourceId: string }).sourceId;
-      try {
-        await adoptPendingHandle(preview.snapshotId, sourceId);
-      } catch {
-        // Best-effort: a storage failure must never block navigation.
-      }
-      router.push(`/w/${workspaceId}/sources/${sourceId}?import=success`);
-    } catch (error) {
-      setState({ kind: "ERROR", code: "IMPORT_APPLY_FAILED", message: error instanceof Error ? error.message : GENERIC_GUIDANCE });
+      await openResult(body as {sourceId:string;runId?:string|null});
+    } catch {
+      if(await recover())return;
+      setState({ kind: "ERROR", code: "IMPORT_APPLY_FAILED", message: "The Apply result could not be confirmed. Retry safely to recover the same sync result." });
     }
   }
 
   return (
     <div className="sticky bottom-0 -mx-6 border-t border-kh-border bg-kh-bg px-6 py-3">
+      {preview.safety?.highRisk && allowed ? <label className="mx-auto mb-3 block max-w-page text-body">Type <strong>{preview.sourceName}</strong> to confirm this folder scope
+        <Input aria-label="Confirm source name" value={sourceConfirmation} onChange={e=>setSourceConfirmation(e.target.value)} autoComplete="off" className="ml-2 rounded-md border border-kh-border bg-kh-bg px-2 py-1 text-kh-text kh-focus-ring" />
+      </label> : null}
       <div className="mx-auto flex max-w-page flex-wrap items-center justify-between gap-3">
         <Link
           href={cancelHref}
@@ -132,8 +151,7 @@ export function ImportStickyFooter({
       </div>
       {effectiveState === "STALE" || expired ? (
         <p className="mx-auto mt-2 max-w-page text-body text-kh-danger">
-          This preview is stale: the source changed after it was created. There is no Force Apply — create a fresh
-          preview.
+          {expired ? "This preview expired. Check for changes again to create a fresh preview." : "The source was updated by another sync. Check for changes again to create a fresh preview."}
         </p>
       ) : null}
       {effectiveState === "APPLIED" ? (

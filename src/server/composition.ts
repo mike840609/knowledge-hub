@@ -1,3 +1,8 @@
+import {GetSourceHealthService} from "@/modules/sources/application/get-source-health";
+import { ListFolderUpdatesService } from "@/modules/personal/application/list-folder-updates";
+import { GetSyncRunDetailService } from "@/modules/sources/application/get-sync-run-detail";
+import { GetFolderImportDiffService } from "@/modules/sources/application/get-folder-import-diff";
+import { DocumentReadProgressService } from "@/modules/personal/application/document-read-progress-service";
 import { PersonalService } from "@/modules/personal/application/personal-service";
 import { MariaDbPersonalStore } from "@/infrastructure/database/mariadb/repositories/personal-items";
 import { WorkspaceAdminService } from "./workspace-admin";
@@ -69,6 +74,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
   const hub = new HubKnowledgeCommandServiceImpl(unitOfWork);
   const queries = new KnowledgeQueryServiceImpl(unitOfWork);
   const links = new KnowledgeLinkServiceImpl(unitOfWork);
+  const documentReadProgress = new DocumentReadProgressService(unitOfWork, queries);
   const personal = new PersonalService(new MariaDbPersonalStore(databasePool), queries, unitOfWork);
   const shares = new DocumentShareService(unitOfWork, new RandomShareTokenIssuer());
   const sources = new SourceApplicationService(unitOfWork);
@@ -111,9 +117,10 @@ export function buildApplicationServices(databasePool: Pool, options: {
     upload: new UploadFolderImportEntriesService(unitOfWork, { limits: importConfig.limits }),
     finalize: new FinalizeFolderImportService(unitOfWork, { limits: importConfig.limits, readyTtlMs: importConfig.readyTtlMs }),
     preview: new GetFolderImportPreviewService(unitOfWork),
+    diff: new GetFolderImportDiffService(unitOfWork),
     apply: new ApplyFolderImportService(unitOfWork),
   };
-  return { personal, workspaceAdmin, teams, governance, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, links, shares, sources, workspaces, search, imports };
+  return { sourceHealth:new GetSourceHealthService(unitOfWork), folderUpdates:new ListFolderUpdatesService(unitOfWork), syncReading: new GetSyncRunDetailService(unitOfWork), documentReadProgress, personal, workspaceAdmin, teams, governance, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, links, shares, sources, workspaces, search, imports };
 }
 
 export function applicationServices() {
