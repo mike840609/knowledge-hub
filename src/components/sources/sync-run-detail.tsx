@@ -5,6 +5,10 @@ import { Timestamp } from "@/components/ui/timestamp";
 export function SyncRunDetailView({ detail }: { detail: SyncRunDetail }) {
   const { source, run, changes } = detail,
     base = `/w/${source.workspaceId}`;
+  const docs=run.summary.documents;
+  const documentSummary=docs&&typeof docs==="object" ? docs as Record<string,unknown> : null;
+  const count=(key:string)=>typeof documentSummary?.[key]==="number"?documentSummary[key]:"Not recorded";
+  const summaryText=documentSummary?`Added ${count("added")} · Updated ${count("updated")} · Archived ${count("archived")} · Warnings ${typeof run.summary.warnings==="number"?run.summary.warnings:"Not recorded"}`:null;
   const readable = changes.find(
     (c) =>
       c.href && (c.labels.includes("ADDED") || c.labels.includes("UPDATED")),
@@ -20,6 +24,7 @@ export function SyncRunDetailView({ detail }: { detail: SyncRunDetail }) {
         {run.status} · Version {run.resultVersion ?? run.basedOnVersion} ·{" "}
         <Timestamp value={run.completedAt ?? run.startedAt} />
       </p>
+      {summaryText?<p className="text-body text-kh-text-secondary">{summaryText}</p>:null}
       <div className="flex flex-wrap gap-4 text-body text-kh-link">
         {readable?.href ? (
           <Link href={readable.href}>Read this update</Link>
