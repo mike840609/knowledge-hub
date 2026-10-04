@@ -72,8 +72,7 @@ no key change were made on this basis.
 This remains open for a person to do by hand: open the editor in Firefox,
 place the caret in the text, press `Ctrl⇧P` (Windows/Linux) or `⌘⇧P` (macOS),
 and note (a) whether the preview toggles and (b) whether a private window
-also opens. Recorded in spec §6 as `2026-09-29：尚未在 Firefox 實測（見
-verification 紀錄）。`
+also opens. Recorded in spec §6 as `2026-09-29: not yet tested in Firefox (see the verification record).`
 
 ## Known intermittent failure: `phase5-authoring.spec.ts` sidebar case
 
@@ -395,7 +394,7 @@ limits and deferrals, recorded as they stand. Item 13 was not run.
    Firefox, put the caret in the text, press `Ctrl+/`, and note (a) whether
    the editor switches between rendered and Markdown and (b) whether Firefox
    does anything else with the key.
-2. **Chinese (注音) input in the rendered editor, including the typing
+2. **Chinese (Zhuyin) input in the rendered editor, including the typing
    conversions.** Not performed; needs a person. In the rendered editor,
    type `# ` and `- ` while an input method is composing and check that the
    heading and list conversions do not fire mid-composition and that the

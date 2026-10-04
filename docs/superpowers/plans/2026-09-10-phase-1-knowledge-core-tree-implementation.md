@@ -19,7 +19,7 @@
 - Public application read/write services receive `CallerContext` explicitly as the first parameter; caller identity does not come from command/query payload or ambient global request state.
 - Existing resource operations resolve authoritative Source → Workspace and enforce Workspace policy. UI workspace selection or a client-supplied workspaceId is never authorization evidence.
 - Phase 0–2 WorkspaceMembership is a local/mock foundation guard. Company production multi-user governance requires Phase 3.
-- Preserve stable `KnowledgeDocument.id`; path, filename, title, hash, TreeNode ID, Workspace ID, external ID, and tKMS ID never replace Document identity.
+- Preserve stable `KnowledgeDocument.id`; path, filename, title, hash, TreeNode ID, Workspace ID, external ID, and external publishing platform ID never replace Document identity.
 - Revision content is exactly `title + markdown + metadata`; hierarchy, path, position, locator, Workspace navigation state, and lifecycle are not revision content.
 - SOURCE_MANAGED canonical Title Resolution is Phase 2 responsibility.
 - KnowledgeRevision is immutable; no update/delete revision repository method is allowed.
@@ -35,7 +35,7 @@
 - Default reads exclude archived Sources/Documents/Tree nodes unless `includeArchived: true` is explicitly requested.
 - Every canonical mutation transaction uses READ COMMITTED on one MariaDB connection plus required Source/Document `FOR UPDATE` locks.
 - Tests that claim concurrency safety use at least two real MariaDB connections, not mocks.
-- Phase 1 does not add folder upload/scanning, Title Resolution, matching heuristics, diff, Preview/Confirm/Apply, Workspace administration, rich editor, keyword search, vectors, Company SSO, tKMS, MCP, binary storage, Agent actor modeling, or Agent Memory.
+- Phase 1 does not add folder upload/scanning, Title Resolution, matching heuristics, diff, Preview/Confirm/Apply, Workspace administration, rich editor, keyword search, vectors, Company SSO, external publishing platform, MCP, binary storage, Agent actor modeling, or Agent Memory.
 
 ---
 

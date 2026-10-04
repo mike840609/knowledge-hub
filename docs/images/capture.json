@@ -1,0 +1,39 @@
+{
+  "capturedDate": "2026-10-05",
+  "timezone": "Asia/Taipei",
+  "remote": "origin/main",
+  "commit": "3739efb12906e1cb2e6abc1b5eea7727914a08ab",
+  "buildId": "p61B410H6oSgHi5044IHC",
+  "runtime": "next build followed by next start, loopback-only",
+  "viewport": {
+    "width": 767,
+    "height": 951
+  },
+  "account": "Documentation Demo (synthetic)",
+  "localSourceChanges": [
+    "src/app/layout.tsx: organization-neutral browser title and description only; rendered UI components match remote main"
+  ],
+  "verification": {
+    "pageContentRendered": true,
+    "errorOverlay": false,
+    "consoleObservation": "One React hydration warning (error #418) observed during the session; rendered pages remained usable."
+  },
+  "images": {
+    "document-reader.jpg": {
+      "sha256": "e829dcfb447bd6fea9aac87b94a8f9090776b79b5ec88a6e65d5c8b0b2d51394",
+      "bytes": 67901
+    },
+    "personal-home.jpg": {
+      "sha256": "7594d8cabfe128e4fef20a2b05b39d25399ad2ae08768efe1fbc6d20a1ca3bbf",
+      "bytes": 55003
+    },
+    "knowledge-graph.jpg": {
+      "sha256": "ba674515d7740ebc005f1341ae30a36f444139fe9483679bea382ed59030c149",
+      "bytes": 35615
+    },
+    "source-history.jpg": {
+      "sha256": "baf48a5d7e24c04b1bf7852fa34aa0917aa4fcca7a76e305a8c9a824ef6ecfb2",
+      "bytes": 36689
+    }
+  }
+}

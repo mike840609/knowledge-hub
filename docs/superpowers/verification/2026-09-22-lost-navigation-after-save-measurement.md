@@ -1,72 +1,72 @@
-# 存檔後導航遺失 — 量測紀錄
+# Lost Navigation after Saving — Measurement Record
 
-| 項目 | 內容 |
+| Item | Details |
 | --- | --- |
-| 日期 | 2026-09-22 |
-| 類型 | 量測紀錄（實跑數據，非提案） |
-| 結論 | `router.push()` 後面緊接的 `router.refresh()` 會把它要更新的那次導航丟掉 |
-| 修正 | `src/components/knowledge/document-editor.tsx` 移除該行 |
+| Date | 2026-09-22 |
+| Type | Measurement record (actual run data, not a proposal) |
+| Conclusion | A `router.refresh()` immediately after `router.push()` discards the navigation it is intended to refresh |
+| Fix | Remove that line in `src/components/knowledge/document-editor.tsx` |
 
-## 1. 症狀
+## 1. Symptoms
 
-文件編輯器按下 Save 之後，PATCH 成功了，但讀者留在編輯器上，文件頁永遠沒有出現。
+After clicking Save in the document editor, PATCH succeeds, but the reader remains in the editor and the document page never appears.
 
-這在 CI 上以 `phase5-authoring` 逾時的形式出現過，在本機整套 e2e 也大約每兩次就撞到一次。它一直被當成「負載下的不穩定測試」——那支 spec 的檔頭註解甚至記著這些斷言「在 `main` 上也輸過」。**它不是不穩定，是一個真的 bug，只是觸發機率跟負載有關。**
+This appeared in CI as a `phase5-authoring` timeout and locally in the complete e2e suite roughly once every two runs. It had always been treated as “test flakiness under load”—the spec's file-header comment even recorded that these assertions had “also failed on `main`.” **It is a real bug, with a trigger probability related to load.**
 
-## 2. 量測方法
+## 2. Measurement method
 
-正式 build（`next start`），不是 dev server；瀏覽器端不對 app 做任何插樁。全部訊號都是從外面觀察得到的：
+Production build (`next start`), rather than a dev server; no browser-side instrumentation of the app. Every signal is externally observable:
 
-- PATCH 請求
-- App Router 的 RSC 請求（`RSC: 1` 標頭），用路徑區分 push 的目標與 refresh 的當前頁，用 `next-router-prefetch` 標頭區分預抓
-- `framenavigated` 事件
-- 最終網址
+- PATCH requests
+- App Router RSC requests (`RSC: 1` header), distinguishing the push destination from the refresh's current page by path and prefetch by the `next-router-prefetch` header
+- `framenavigated` events
+- Final URL
 
-每批 30 次，並記錄 **PATCH 發生時間的中位數**當作負載代理值——這個失敗對負載極度敏感（同一份程式碼在較空閒時量到過 20%、35%、70%），兩批數據只有在負載相近時才可比。
+30 runs per batch, recording **median PATCH occurrence time** as a load proxy—this failure is extremely load-sensitive (the same code has measured 20%, 35%, and 70% at less busy times), so two batches are comparable only under similar load.
 
-## 3. 失敗的形態
+## 3. Shape of the failure
 
 ```text
-成功： PATCH · RSC 目標頁 · NAV → 文件頁
-失敗： PATCH · RSC 目標頁 · （沒有了）
+Success: PATCH · destination-page RSC · NAV → document page
+Failure: PATCH · destination-page RSC · (nothing further)
 ```
 
-payload 抓到了，導航從來沒有 commit。
+The payload was fetched; navigation never committed.
 
-這一併排除了兩個原本的嫌疑犯：
+This also ruled out two original suspects:
 
-- **背景分頁 throttling** —— 失敗的測試只開一個分頁，不需要第二個分頁就會失敗。
-- **授權輪詢再送一次 refresh** —— PATCH 之後完全沒有對當前網址的 RSC 請求，那條路徑沒有任何網路痕跡。
+- **Background-tab throttling** — the failing test opens only one tab and can fail without a second tab.
+- **Authorization polling sending another refresh** — there is no RSC request to the current URL after PATCH; that path leaves no network trace.
 
-## 4. A/B/A 對照
+## 4. A/B/A comparison
 
-同一支腳本、同一台機器、同一段時間內交錯執行：
+Interleaved runs using the same script, machine, and time period:
 
-| 批次 | `router.refresh()` | 卡住 / 總數 | 比率 | PATCH 中位數 |
+| Batch | `router.refresh()` | Stuck / total | Rate | Median PATCH |
 | --- | --- | --- | --- | --- |
-| A1 | 有 | 5 / 30 | 17% | 831ms |
-| B1 | 無 | 0 / 30 | 0% | 821ms |
-| A2 | 有 | 5 / 30 | 17% | 830ms |
-| B0（稍早） | 無 | 1 / 30 | 3% | ~850ms |
+| A1 | Present | 5 / 30 | 17% | 831ms |
+| B1 | Absent | 0 / 30 | 0% | 821ms |
+| A2 | Present | 5 / 30 | 17% | 830ms |
+| B0 (earlier) | Absent | 1 / 30 | 3% | ~850ms |
 
-負載代理值三批幾乎相同（821–831ms），所以這次的比較是站得住的。合計：**有 10/60，無 1/60。**
+The load proxy is nearly identical across three batches (821–831ms), making this comparison defensible. Totals: **present 10/60, absent 1/60.**
 
-A1 與 A2 得到完全相同的 5/30，重現性很好。
+A1 and A2 produced exactly the same 5/30, showing good reproducibility.
 
-## 5. 為什麼移除它是對的，而不只是有效
+## 5. Why removing it is correct, beyond merely effective
 
-那行 `router.refresh()` 的用意應該是確保文件頁顯示新的 revision 而不是快取。**但它是多餘的**：網路紀錄顯示每一次 push 都在 PATCH 之後真的去抓了目標路由的 RSC payload，而不是重播稍早的預抓。新鮮度來自 push 本身。
+That `router.refresh()` was presumably intended to ensure the document page shows the new revision rather than cached content. **It is redundant**: network records show every push actually fetching the destination route's RSC payload after PATCH, rather than replaying an earlier prefetch. Freshness comes from push itself.
 
-而且測試也證明了這點——`edits a hub-managed document` 斷言的是頁面上出現 `updated body`，不是只看網址。修正後該測試連跑 20 次全過（修正前 20 次中有 3 次失敗）。
+The test also proves this—`edits a hub-managed document` asserts that `updated body` appears on the page, beyond checking the URL. After the fix, the test passed 20 consecutive runs (3 failures out of 20 before the fix).
 
-多餘 + 有害 = 移除。
+Redundant + harmful = remove.
 
-## 6. 修正後
+## 6. After the fix
 
-- 先前失敗的測試：20/20 通過（之前 3/20 失敗）
-- 整套 e2e：連續兩次 77/77 通過（之前大約每兩次撞一次）
-- `make verify`：369 unit、typecheck、lint、build 全過
+- Previously failing test: 20/20 passed (previously 3/20 failed)
+- Complete e2e suite: two consecutive 77/77 passes (previously failed roughly once every two runs)
+- `make verify`: 369 unit tests, typecheck, lint, and build all passed
 
-## 7. 沒有做的事
+## 7. What was not done
 
-沒有去動 `use-workspace-authorization`。它一度是嫌疑犯，但量測把它排除了，而它是每個頁面都會經過的共用程式碼——在沒有證據的情況下改它，是拿整個 app 去賭一個猜測。
+`use-workspace-authorization` was left untouched. It was once a suspect, but measurements ruled it out, and it is shared code traversed by every page—changing it without evidence would wager the whole app on a guess.

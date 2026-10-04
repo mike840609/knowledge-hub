@@ -4,8 +4,8 @@ import { inter } from "./fonts";
 import { THEME_PRE_PAINT_SCRIPT } from "./theme-script";
 
 export const metadata: Metadata = {
-  title: "TSMC Knowledge Hub",
-  description: "Phase 0 foundation for source governed team knowledge.",
+  title: "Knowledge Hub",
+  description: "A Markdown knowledge workspace for writing, linking, and sharing.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

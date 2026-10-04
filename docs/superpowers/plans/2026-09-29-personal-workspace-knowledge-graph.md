@@ -1,93 +1,93 @@
-# Personal Workspace 知識連結與圖譜 — 實作計畫
+# Personal Workspace Knowledge Links and Graph — Implementation Plan
 
-| 項目 | 內容 |
+| Item | Content |
 | --- | --- |
-| 日期 | 2026-09-29 |
-| 設計規格 | [`2026-09-29-personal-workspace-knowledge-graph-design.md`](../specs/2026-09-29-personal-workspace-knowledge-graph-design.md)（以下 §n 都指它） |
-| 前置 | Phase 0–5、文件分享連結、keyboard shortcuts（PR #52–#60）已在 `main` |
-| 基準 | 開工前：unit 427、integration 444、e2e 91 全綠；`tsc --noEmit`、`eslint .` 乾淨。完成後：unit 590、integration 486、e2e 105（[verification](../verification/2026-09-29-personal-workspace-knowledge-graph-verification.md)） |
-| 分支 | `claude/keen-cannon-7axign`；每個切片一個 commit 系列，可獨立回退 |
+| Date | 2026-09-29 |
+| Design specification | [`2026-09-29-personal-workspace-knowledge-graph-design.md`](../specs/2026-09-29-personal-workspace-knowledge-graph-design.md)(all §n references below refer to it) |
+| Prerequisites | Phase 0–5, document share links, and keyboard shortcuts (PR #52–#60) are already on `main` |
+| Baseline | Before work: unit 427, integration 444, and e2e 91 all passed; `tsc --noEmit` and `eslint .` were clean. After completion: unit 590, integration 486, and e2e 105([verification](../verification/2026-09-29-personal-workspace-knowledge-graph-verification.md)) |
+| Branch | `claude/keen-cannon-7axign`; One commit series per slice, independently revertible |
 
-## 0. 共同規則
+## 0. Shared Rules
 
-- **每個切片結束時**都跑 `make verify`（unit + typecheck + lint + build）；涉及 DB 的切片另跑 `make test-integration`；涉及畫面的切片另跑對應 e2e（`make test-e2e` 需要 `make browsers` 與本機 MariaDB）。
-- **先寫測試再寫實作**適用於所有純函式（抽取、slug、解析、圖、layout）——它們是這份計畫的核心風險所在，也是最容易用測試釘住的部分。
-- **只用 token 名稱**（`text-body`、`rounded-md`、`shadow-popover`…）；`tests/unit/design-tokens.test.ts` 與 `eslint.config.mjs` 會擋掉越界的寫法。
-- **不新增產生 revision 的路徑而不掛索引**；`tests/integration/link-index-write-points.test.ts`（切片 2）掃描原始碼強制這點。
-- 每個切片結束更新 §Verification 表（本檔末），最後產出 verification 紀錄。
+- Run `make verify` (unit + typecheck + lint + build) **at the end of every slice**; DB slices also run `make test-integration`; UI slices also run the relevant e2e tests (`make test-e2e` requires `make browsers` and local MariaDB).
+- **Write tests before implementation** for all pure functions (extraction, slugs, resolution, graphs, and layout): they hold this plan's core risks and are the easiest parts to pin down with tests.
+- **Use only token names** (`text-body`, `rounded-md`, `shadow-popover`, …); `tests/unit/design-tokens.test.ts` and `eslint.config.mjs` reject violations.
+- **Do not add a revision-producing path without indexing it**; `tests/integration/link-index-write-points.test.ts` (slice 2) enforces this through a source scan.
+- Update the §Verification table (at the end of this file) after every slice, and produce a verification record at the end.
 
-## 1. 切片 1 — TOC 與標題錨點（無資料變更）
+## 1. Slice 1 — TOC and Heading Anchors (No Data Changes)
 
-| # | 任務 | 檔案 | 測試 |
+| # | Task | Files | Tests |
 | --- | --- | --- | --- |
-| 1.1 | 明確宣告 `unified`、`remark-parse`（版本與 lockfile 內現有的一致），共用解析設定 `parseMarkdown(markdown)`（remark-parse + remark-gfm） | `package.json`、`src/shared/markdown/parse.ts` | `tests/unit/markdown-parse.test.ts` |
-| 1.2 | `headingSlug`、`assignHeadingSlugs(tree)`（GitHub 相容、CJK、重複後綴） | `src/shared/markdown/heading-slug.ts` | `tests/unit/heading-slug.test.ts`：英文、CJK、標點、重複、空、超長、含行內 code／強調／GFM 刪除線 |
-| 1.3 | `extractOutline(markdown)`（深度 1–4、上限 200、縮排深度） | `src/shared/markdown/outline.ts` | `tests/unit/markdown-outline.test.ts`：跳級標題、code fence 內的 `#`、setext 標題、空文件 |
-| 1.4 | `remarkHeadingIds` plugin 掛進 `MarkdownRenderer`；標題加 `scroll-mt-4` | `src/components/knowledge/markdown-renderer.tsx` | `tests/unit/markdown-renderer-headings.test.tsx`：渲染結果的 `id` 與 `extractOutline` 逐項相等 |
-| 1.5 | `useActiveHeading(ids, scrollRoot)`（IntersectionObserver）、`DocumentOutline`（`nav`＋`ol`、`aria-current`、reduced motion） | `src/components/knowledge/use-active-heading.ts`、`document-outline.tsx` | 元件以 `react-dom/server` 渲染的結構測試；捲動同步在 e2e |
-| 1.6 | 版面：rail（`min-[1280px]`、inspector 關閉時）、inspector「Outline」分頁、窄螢幕 `<details>`；文件頁把選定 revision 的 outline 傳下去 | `document-inspector.tsx`、`[documentId]/page.tsx`、`document-viewer.tsx` | e2e `tests/e2e/reading-outline.spec.ts` |
-| 1.7 | 掃描現有 `id=` 用法確認與標題 id 無衝突（§15 風險） | — | 一次性檢查，結果記在 verification |
+| 1.1 | Explicitly declare `unified` and `remark-parse` (matching the existing lockfile versions), with shared parsing configuration `parseMarkdown(markdown)` (remark-parse + remark-gfm) | `package.json`, `src/shared/markdown/parse.ts` | `tests/unit/markdown-parse.test.ts` |
+| 1.2 | `headingSlug`, `assignHeadingSlugs(tree)`(GitHub-compatible, CJK, duplicate suffixes) | `src/shared/markdown/heading-slug.ts` | `tests/unit/heading-slug.test.ts`: English, CJK, punctuation, duplicates, empty, overlong, inline code/emphasis/GFM strikethrough |
+| 1.3 | `extractOutline(markdown)`(depth 1–4, limit 200, indentation depth) | `src/shared/markdown/outline.ts` | `tests/unit/markdown-outline.test.ts`: skipped heading levels, `#` within code fences, setext headings, empty documents |
+| 1.4 | `remarkHeadingIds` plugin wired into `MarkdownRenderer`; add `scroll-mt-4` to headings | `src/components/knowledge/markdown-renderer.tsx` | `tests/unit/markdown-renderer-headings.test.tsx`: each rendered `id` matches `extractOutline` |
+| 1.5 | `useActiveHeading(ids, scrollRoot)`(IntersectionObserver), `DocumentOutline`(`nav` + `ol`, `aria-current`, reduced motion) | `src/components/knowledge/use-active-heading.ts`, `document-outline.tsx` | Structural tests render components with `react-dom/server`; scroll synchronization is covered by e2e |
+| 1.6 | Layout: rail (`min-[1280px]`, when inspector is closed), inspector “Outline” tab, narrow-screen `<details>`; the document page passes down the selected revision's outline | `document-inspector.tsx`, `[documentId]/page.tsx`, `document-viewer.tsx` | e2e `tests/e2e/reading-outline.spec.ts` |
+| 1.7 | Scan existing `id=` usage to confirm no heading ID collisions (risk in §15) | — | One-time check; record results in verification |
 
-**驗收：** 見 §13 切片 1。`make verify` 綠；e2e：四個標題的文件出現四項目錄、點第三項後 `location.hash` 變更且該標題在視窗內、`<2` 個標題不出現目錄、歷史 revision 顯示該版目錄。
+**Acceptance:** See §13 slice 1. `make verify` passes; e2e: four headings produce four TOC entries, clicking the third changes `location.hash` and brings it into view, fewer than two headings shows no TOC, and historical revisions display their own TOC.
 
-## 2. 切片 2 — 連結模型與索引（migration 012）
+## 2. Slice 2 — Link Model and Index(migration 012)
 
-| # | 任務 | 檔案 | 測試 |
+| # | Task | Files | Tests |
 | --- | --- | --- | --- |
-| 2.1 | Domain：`extractDocumentLinks`、`ExtractedLink`、`LINK_EXTRACTOR_VERSION`、限制常數 | `src/modules/knowledge/domain/document-links.ts` | `tests/unit/document-links-extract.test.ts`：§5 規則表逐列（wikilink 各形態、alias、fragment、`#^block`、embed 忽略、code／inline code／html 內忽略、GFM 表格內 `\|`、相對 `.md`、URL 編碼、外部／非 md／純錨點忽略、上限、行號、順序） |
-| 2.2 | Domain：`normalizeLinkKey`、`buildResolver(catalog)`（`resolveWiki`、`resolvePath`）、決定性排名 | `src/modules/knowledge/domain/link-resolution.ts` | `tests/unit/link-resolution.test.ts`：標題／檔名主幹、路徑後綴、同 Source 優先、完全相同優先、tie-break 全序、相對路徑 `..`、跳出根、不分大小寫退而求其次、自連結、封存不在目錄 |
-| 2.3 | Migration `012-document-link-index`（§7.1）；登記到 `migrations/index.ts` | `migrations/012-document-link-index.ts`、`index.ts` | `tests/integration/link-index-schema.test.ts`：表與 FK、`ck_kind`、`RESTRICT`、標記列缺失時子列插入被拒；`phase1-migration-runner` 的版本清單同步 |
-| 2.4 | Port `DocumentLinkRepository`（`replaceForDocument`、`loadCatalog`、`loadValidEdges`、`countIndexState`、`listStaleDocuments`、`loadCurrentMarkdown`）與 MariaDB 實作；加進 `KnowledgeRepositories`／`createRepositories` | `ports/document-link-repository.ts`、`repositories/document-links.ts`、`ports/unit-of-work.ts`、`repositories/index.ts` | `tests/integration/link-index-repository.test.ts`：替換而非累加、`link_count` 一致、有效性（revision 不符／版本過期）、catalog 只含 ACTIVE 且限定 Workspace |
-| 2.5 | 四個寫入點掛上 `links.replaceForDocument`（NOOP 不重建） | `create-document.ts`、`create-revision.ts`、`source-knowledge-projection-service.ts`（兩處） | `tests/integration/link-index-write-points.test.ts`：四條路徑各一；再掃描原始碼，`revisions.insert(` 的檔案必須同時含 `links.replaceForDocument`；`phase2-import-apply-perf` 的 stub 補上 `links` |
-| 2.6 | 抽出 `requireVisibleDocument`（行為不變），`KnowledgeQueryServiceImpl` 改用它 | `application/internal/require-visible-document.ts`、`knowledge-query-service.ts` | 既有 `phase1-query`、`phase1-workspace-access` 不改動仍綠 |
-| 2.7 | `KnowledgeLinkService.getDocumentLinks`（outgoing 現算、backlinks 由邊、context、index state）；註冊到 composition root | `application/knowledge-link-service.ts`、`src/server/composition.ts` | `tests/integration/knowledge-link-service.test.ts`：非成員被拒；跨 Workspace 連結不解析且與「不存在」不可區分；封存來源不出現在 backlinks；歷史 revision 的 outgoing；context 截斷；`SOURCE_MANAGED` 來源的連結同樣被索引 |
-| 2.8 | `scripts/db/reindex-document-links.ts`、`npm run db:reindex-document-links`、`make db-reindex-links`；`db:migrate` 尾端提示 | `scripts/db/`、`package.json`、`Makefile` | `tests/integration/link-index-reindex.test.ts`：清空索引後 reindex 全數還原；冪等；與同時進行的存檔競爭時，索引永遠對應最後成為目前的那個 revision（鎖住文件後才讀 revision） |
-| 2.9 | 營運說明：部署順序與 reindex（migration → reindex → 開放） | `docs/operations/document-link-index-rollout.md` | — |
-| 2.10 | Domain：圖與 backlink 建構器（`resolveEdges`、`buildWorkspaceGraph`、`buildLocalGraph`、`backlinksTo`）與 `linkContext`——原本排在切片 4，因為 service 需要而提前 | `link-graph.ts`、`link-context.ts` | `link-graph.test.ts`、`link-context.test.ts` |
+| 2.1 | Domain: `extractDocumentLinks`, `ExtractedLink`, `LINK_EXTRACTOR_VERSION`, limit constants | `src/modules/knowledge/domain/document-links.ts` | `tests/unit/document-links-extract.test.ts`: every row of the §5 rules table (wikilink forms, aliases, fragments, `#^block`, ignore embeds, ignore inside code/inline code/html, `\|` in GFM tables, relative `.md`, URL encoding, ignore external/non-md/pure anchors, limits, line numbers, order) |
+| 2.2 | Domain: `normalizeLinkKey`, `buildResolver(catalog)`(`resolveWiki`, `resolvePath`), deterministic ranking | `src/modules/knowledge/domain/link-resolution.ts` | `tests/unit/link-resolution.test.ts`: titles/filename stems, path suffixes, same-Source preference, exact-match preference, total tie-break ordering, relative `..`, root escapes, case-insensitive fallback, self-links, archived entries absent from catalog |
+| 2.3 | Migration `012-document-link-index`(§7.1); register in `migrations/index.ts` | `migrations/012-document-link-index.ts`, `index.ts` | `tests/integration/link-index-schema.test.ts`: tables and FKs, `ck_kind`, `RESTRICT`, child insertion rejected when marker row is absent; synchronize the `phase1-migration-runner` version list |
+| 2.4 | Port `DocumentLinkRepository`(`replaceForDocument`, `loadCatalog`, `loadValidEdges`, `countIndexState`, `listStaleDocuments`, `loadCurrentMarkdown` ) and MariaDB implementation; add to `KnowledgeRepositories`/`createRepositories` | `ports/document-link-repository.ts`, `repositories/document-links.ts`, `ports/unit-of-work.ts`, `repositories/index.ts` | `tests/integration/link-index-repository.test.ts`: replace rather than append, consistent `link_count`, validity (revision mismatch/outdated version), catalog contains only ACTIVE entries scoped to Workspace |
+| 2.5 | Wire `links.replaceForDocument` into four write points (no rebuild on NOOP) | `create-document.ts`, `create-revision.ts`, `source-knowledge-projection-service.ts`(two locations) | `tests/integration/link-index-write-points.test.ts`: One for each of four paths; scan source so files with `revisions.insert(` must also contain `links.replaceForDocument`; add `links` to the `phase2-import-apply-perf` stub |
+| 2.6 | Extract `requireVisibleDocument` (unchanged behavior), and use it in `KnowledgeQueryServiceImpl` | `application/internal/require-visible-document.ts`, `knowledge-query-service.ts` | Existing `phase1-query` and `phase1-workspace-access` remain unchanged and passing |
+| 2.7 | `KnowledgeLinkService.getDocumentLinks`(outgoing calculated on demand, backlinks from edges, context, index state); register in composition root | `application/knowledge-link-service.ts`, `src/server/composition.ts` | `tests/integration/knowledge-link-service.test.ts`: reject non-members; cross-Workspace links do not resolve and are indistinguishable from nonexistent links; archived sources absent from backlinks; outgoing for historical revisions; context truncation; index links from `SOURCE_MANAGED` sources too |
+| 2.8 | `scripts/db/reindex-document-links.ts`, `npm run db:reindex-document-links`, `make db-reindex-links`; message at the end of `db:migrate` | `scripts/db/`, `package.json`, `Makefile` | `tests/integration/link-index-reindex.test.ts`: reindex restores everything after index clearing; idempotent; when racing a concurrent save, the index always corresponds to the revision that ultimately becomes current (read revision only after locking the document) |
+| 2.9 | Operations instructions: deployment order and reindex (migration → reindex → enable access) | `docs/operations/document-link-index-rollout.md` | — |
+| 2.10 | Domain: Graph and backlink builders(`resolveEdges`, `buildWorkspaceGraph`, `buildLocalGraph`, `backlinksTo`)and `linkContext` — originally scheduled in slice 4, moved earlier because the service needs them | `link-graph.ts`, `link-context.ts` | `link-graph.test.ts`, `link-context.test.ts` |
 
-**驗收：** 見 §13 切片 2。`make verify` 與 `make test-integration` 綠。
+**Acceptance:** See §13 slice 2. `make verify` and `make test-integration` pass.
 
-## 3. 切片 3 — 連結渲染與 Backlinks
+## 3. Slice 3 — Link Rendering and Backlinks
 
-| # | 任務 | 檔案 | 測試 |
+| # | Task | Files | Tests |
 | --- | --- | --- | --- |
-| 3.1 | `remarkKnowledgeLinks` plugin：把 `[[…]]` 變成帶 `data-kh-wikilink` 的 link 節點；`MarkdownRenderer` 新增可選 `links` prop（key → 解析結果）；無 `links` 時輸出純文字 | `src/shared/markdown/remark-knowledge-links.ts`、`markdown-renderer.tsx` | `tests/unit/markdown-renderer-links.test.tsx`：resolved／unresolved／ambiguous 三種輸出；alias、fragment→`#slug`；相對 `.md` 連結；無 `links` 時純文字；code 內不轉換；`data-*` 屬性確實傳到 `a` 元件 |
-| 3.2 | 文件頁呼叫 `getDocumentLinks`，把解析結果傳給 viewer；`getKnowledgeDocumentModel` 之外新增 `getDocumentLinkModel` | `src/server/link-graph-read.ts`、`[documentId]/page.tsx`、`document-viewer.tsx` | e2e |
-| 3.3 | `DocumentLinksPanel`（inspector「Links」分頁：Backlinks／Outgoing／Unresolved；索引更新中提示） | `document-links-panel.tsx`、`document-inspector.tsx` | 結構測試 + e2e |
-| 3.4 | `BacklinksFooter`（「Linked from N documents」，含上下文） | `backlinks-footer.tsx` | e2e |
-| 3.5 | 動作註冊表：`document.backlinks`（僅 palette）；`kh:request-details` 事件帶 `tab`，inspector 分頁改為受控 | `action-registry.ts`、`action-menu.tsx`、`document-inspector.tsx` | `tests/unit/action-registry.test.ts`（+5） |
-| 3.8 | 跨文件標題錨點：Next client navigation 在文件仍是 Suspense 骨架時就結束 hash 捲動，改為文件掛載後依網址 hash 捲到標題（e2e 發現） | `use-scroll-to-hash.ts` | `reading-links.spec.ts` 第 4 案 |
-| 3.6 | 分享頁維持純文字，並加守門測試：`s/[token]` 樹不 import 連結服務 | `tests/unit/share-link-single-exception.test.ts`（新增一項） | 同左 |
-| 3.7 | seed fixtures：Query Master 內加幾份互相連結的文件，供 e2e 與手動驗證 | `scripts/db/seed.ts` | e2e |
+| 3.1 | `remarkKnowledgeLinks` plugin: turn `[[…]]` into link nodes with `data-kh-wikilink`; add optional `links` prop to `MarkdownRenderer` (key → resolution result); output plain text without `links` | `src/shared/markdown/remark-knowledge-links.ts`, `markdown-renderer.tsx` | `tests/unit/markdown-renderer-links.test.tsx`: resolved/unresolved/ambiguous outputs; aliases, fragment→`#slug`; relative `.md` links; plain text without `links`; no conversion inside code; `data-*` attributes reach the `a` component |
+| 3.2 | The document page calls `getDocumentLinks`, passing resolution results to the viewer; add `getDocumentLinkModel` alongside `getKnowledgeDocumentModel` | `src/server/link-graph-read.ts`, `[documentId]/page.tsx`, `document-viewer.tsx` | e2e |
+| 3.3 | `DocumentLinksPanel`(inspector “Links” tab: Backlinks/Outgoing/Unresolved; index updating notice) | `document-links-panel.tsx`, `document-inspector.tsx` | Structural tests + e2e |
+| 3.4 | `BacklinksFooter`(“Linked from N documents”, with context) | `backlinks-footer.tsx` | e2e |
+| 3.5 | Action registry: `document.backlinks` (palette only); `kh:request-details` event carries `tab`, and inspector tabs become controlled | `action-registry.ts`, `action-menu.tsx`, `document-inspector.tsx` | `tests/unit/action-registry.test.ts`(+5) |
+| 3.8 | Cross-document heading anchors: Next client navigation completes hash scrolling while the document is still a Suspense skeleton; instead scroll to the heading using the URL hash after document mount (found by e2e) | `use-scroll-to-hash.ts` | `reading-links.spec.ts` case 4 |
+| 3.6 | Keep share pages as plain text and add a guard test: the `s/[token]` tree does not import the link service | `tests/unit/share-link-single-exception.test.ts`(one new case) | Same as left |
+| 3.7 | Seed fixtures: add several mutually linked documents to Query Master for e2e and manual verification | `scripts/db/seed.ts` | e2e |
 
-**驗收：** 見 §13 切片 3；`tests/e2e/reading-links.spec.ts`。
+**Acceptance:** See §13 slice 3; `tests/e2e/reading-links.spec.ts`.
 
-## 4. 切片 4 — 圖譜
+## 4. Slice 4 — Graph
 
-| # | 任務 | 檔案 | 測試 |
+| # | Task | Files | Tests |
 | --- | --- | --- | --- |
-| 4.1 | 明確加入 `d3-force`（僅 server 使用）與 `@types/d3-force` | `package.json` | — |
-| 4.2 | Domain：`buildWorkspaceGraph`（節點、合併邊、degree、orphan、unresolved 節點、上限與 truncated）、`buildLocalGraph`（BFS、深度、60 節點上限） | `src/modules/knowledge/domain/link-graph.ts` | `tests/unit/link-graph.test.ts` |
-| 4.3 | `layoutGraph`（固定種子、依 id 排序、固定 tick） | `src/lib/graph/layout.ts` | `tests/unit/graph-layout.test.ts`：同輸入同座標、有限數值、無重疊下限、單節點／空圖、1000 節點時間上限 |
-| 4.4 | `KnowledgeLinkService.getWorkspaceGraph`／`getLocalGraph` | `knowledge-link-service.ts` | `tests/integration/knowledge-link-graph.test.ts`：授權、Source 過濾、封存排除、跨 Workspace 不出現、上限 |
-| 4.5 | `GraphCanvas`（SVG、平移、縮放、hover 高亮、SVG `<a>` 節點）、`GraphControls`、`GraphListView` | `src/components/knowledge/graph-*.tsx` | 結構測試 + e2e |
-| 4.6 | 頁面 `/w/[workspaceId]/graph`（search params：`source`、`orphans`、`unresolved`、`focus`）、`loading.tsx`、錯誤邊界 | `src/app/w/[workspaceId]/graph/` | e2e |
-| 4.7 | inspector Local graph、「Open in graph」；主導覽「Graph」；`navigate.graph` 動作 | `document-links-panel.tsx`、`primary-nav.tsx`、`action-registry.ts` | 更新 registry 測試 |
-| 4.8 | 空狀態、索引更新中、truncated 提示 | `graph-*.tsx` | e2e |
+| 4.1 | Explicitly add `d3-force` (server only) and `@types/d3-force` | `package.json` | — |
+| 4.2 | Domain: `buildWorkspaceGraph`(nodes, merged edges, degree, orphans, unresolved nodes, limits and truncated), `buildLocalGraph`(BFS, depth, 60-node limit) | `src/modules/knowledge/domain/link-graph.ts` | `tests/unit/link-graph.test.ts` |
+| 4.3 | `layoutGraph`(fixed seed, sorted by id, fixed ticks) | `src/lib/graph/layout.ts` | `tests/unit/graph-layout.test.ts`: same coordinates for same input, finite values, minimum non-overlap spacing, single-node/empty graphs, 1000-node time limit |
+| 4.4 | `KnowledgeLinkService.getWorkspaceGraph`/`getLocalGraph` | `knowledge-link-service.ts` | `tests/integration/knowledge-link-graph.test.ts`: authorization, Source filtering, archived exclusions, cross-Workspace absence, limits |
+| 4.5 | `GraphCanvas`(SVG, pan, zoom, hover highlighting, SVG `<a>` nodes), `GraphControls`, `GraphListView` | `src/components/knowledge/graph-*.tsx` | Structural tests + e2e |
+| 4.6 | Page `/w/[workspaceId]/graph`(search params: `source`, `orphans`, `unresolved`, `focus`), `loading.tsx`, error boundary | `src/app/w/[workspaceId]/graph/` | e2e |
+| 4.7 | inspector Local graph, “Open in graph”; primary navigation “Graph”; `navigate.graph` action | `document-links-panel.tsx`, `primary-nav.tsx`, `action-registry.ts` | Update registry tests |
+| 4.8 | Empty state, index updating, truncated notices | `graph-*.tsx` | e2e |
 
-**驗收：** §13 切片 4 與整體驗收場景；`tests/e2e/workspace-graph.spec.ts`。
+**Acceptance:** §13 slice 4 and overall acceptance scenarios; `tests/e2e/workspace-graph.spec.ts`.
 
-## 5. 收尾
+## 5. Wrap-up
 
-- README「目前狀態」與「Current canonical documents」加入本規格與本計畫；roadmap 的文件狀態表加一列；`CLAUDE.md` 在 Invariants 之後加一小段（連結索引是 derived data、新增產生 revision 的路徑必須掛索引）。
-- Frontend Design Language §18：第 1 項（palette 只有導航）補記新增的兩個動作；不改其他。
-- verification 紀錄 `docs/superpowers/verification/2026-09-29-personal-workspace-knowledge-graph-verification.md`：每個切片跑了什麼、結果、量測數字（§14）、未達成的項目。
+- Add this specification and plan to README “Current status” and “Current canonical documents”; add a row to the roadmap document status table; add a short paragraph after Invariants in `CLAUDE.md` (link indexes are derived data, and new revision-producing paths must be indexed).
+- Frontend Design Language §18: update item 1 (palette only navigates) to record the two new actions; leave the rest unchanged.
+- Verification record `docs/superpowers/verification/2026-09-29-personal-workspace-knowledge-graph-verification.md`: What ran in each slice, results, measurements (§14), and unmet items.
 
-## Verification（隨進度填寫）
+## Verification(Fill as Work Progresses)
 
-| 切片 | unit | integration | e2e | build | 備註 |
+| Slice | unit | integration | e2e | build | Notes |
 | --- | --- | --- | --- | --- | --- |
-| 1 TOC | 462（+35） | 不受影響 | `reading-outline.spec.ts` 4/4 | 通過 | 1.7 已檢查：應用程式自有 id（`tree-filter`、`search-q` 等）可能與標題 slug 相同，outline 改在 `article` 內查找，不用全頁 `getElementById` |
-| 2 索引 | 主要新增：extract 28、resolution 25、graph 19、context 8、write-points 2 | 444 → 485（link-index 18、reindex 5、service 18；之後 local graph 再加 1 → 486） | 不受影響 | 通過 | 效能測試 stub 補上 `links` 並斷言每份文件恰一次索引寫入（已驗證移除 hook 會失敗） |
-| 3 渲染／Backlinks | 主要新增：renderer links 19、registry +5、shared-page guard +1 | 不受影響 | `reading-links.spec.ts` 5/5（含真實 `/s/:token` 無 `/w/` 連結）＋ outline 4/4 | 通過 | 畫面已目視確認（rail、resolved／unresolved 連結、Linked from、Links 分頁）；folder-sync 相對 `.md` 連結由 integration 覆蓋，未做 e2e 匯入流程 |
-| 4 圖譜 | 主要新增：graph-layout 11、graph-model 8 | 486（+1：local graph 隨 getDocumentLinks 回傳） | `workspace-graph.spec.ts` 5/5；**全套 105/105** | 通過 | layout 1000 節點約 1.0 s；`prefetch` 陷阱與 e2e 檔案順序見 verification §4 |
+| 1 TOC | 462(+35) | Unaffected | `reading-outline.spec.ts` 4/4 | Passed | 1.7 checked: application IDs (`tree-filter`, `search-q`, etc.) may match heading slugs, so outline lookup is scoped to `article` rather than page-wide `getElementById` |
+| 2 Index | Main additions: extract 28, resolution 25, graph 19, context 8, write-points 2 | 444 → 485(link-index 18, reindex 5, service 18; later local graph adds 1 → 486) | Unaffected | Passed | Add `links` to performance test stubs and assert exactly one index write per document (verified that removing the hook causes failure) |
+| 3 Rendering/Backlinks | Main additions: renderer links 19, registry +5, shared-page guard +1 | Unaffected | `reading-links.spec.ts` 5/5(including a real `/s/:token` with no `/w/` links) + outline 4/4 | Passed | Visually checked UI (rail, resolved/unresolved links, Linked from, Links tab); integration covers folder-sync relative `.md` links; no e2e import flow performed |
+| 4 Graph | Main additions: graph-layout 11, graph-model 8 | 486(+1: local graph returned with getDocumentLinks) | `workspace-graph.spec.ts` 5/5; **Full suite 105/105** | Passed | Layout of 1000 nodes takes approximately 1.0 s; see verification §4 for the `prefetch` pitfall and e2e file order |

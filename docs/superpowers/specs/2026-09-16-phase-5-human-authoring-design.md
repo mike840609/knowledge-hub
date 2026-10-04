@@ -1,69 +1,69 @@
 # Knowledge Hub — Phase 5 Human Authoring Design
 
-| 項目 | 內容 |
+| Item | Content |
 | --- | --- |
-| 日期 | 2026-09-16 |
-| 文件定位 | Phase 5 canonical design：HUB_MANAGED Knowledge 的 Web 建立／編輯與單篇 Markdown upload |
-| 決策依據 | Phase 1 已落地的 Hub command 路徑、Phase 3 capability model、Phase 2 title resolution、Phase 4 交付面慣例 |
-| 前置條件 | Phase 4 Discovery & Read API 已合併至 `main`（commit `5ee5816`） |
-| 專案入口 | [README](../../../README.md) |
+| Date | 2026-09-16 |
+| Document role | Phase 5 canonical design: Web creation/editing of HUB_MANAGED Knowledge and single Markdown uploads |
+| Decision basis | Implemented Phase 1 Hub command paths, Phase 3 capability model, Phase 2 title resolution, and Phase 4 delivery conventions |
+| Prerequisite | Phase 4 Discovery & Read API merged into `main` (commit `5ee5816`) |
+| Project entry point | [README](../../../README.md) |
 
-## 1. 決策摘要
+## 1. Decision Summary
 
-Phase 5 是**交付層 phase**，不是 domain phase。
+Phase 5 is a **delivery-layer phase**, rather than a domain phase.
 
-roadmap Phase 5 列出的四條主要交付裡，有三條的規則在 Phase 1 就已經實作並被測試鎖住。本 Phase 不重寫它們，只是把它們接到 HTTP 與 UI 上。
+Of the four main deliverables listed in roadmap Phase 5, three already have their rules implemented and protected by tests in Phase 1. This phase wires them to HTTP and UI without rewriting them.
 
 ```text
-使用者在文件頁按 Edit
-→ 既有的 createRevision(caller, { documentId, expectedCurrentRevisionId, title, markdown })
-→ 既有的 capability + HUB_MANAGED guard
-→ 既有的 immutable Revision 寫入
+The user presses Edit on the document page
+→ existing createRevision(caller, { documentId, expectedCurrentRevisionId, title, markdown })
+→ existing capability + HUB_MANAGED guard
+→ existing immutable Revision write
 ```
 
-**不新增 schema、不新增 migration、不新增 domain 規則、不新增 port。** 新增的只有：一個 Source provisioning 規則、兩條 HTTP 路由、一個編輯頁。
+**No new schema, migrations, domain rules, or ports.** The only additions are one Source provisioning rule, two HTTP routes, and one editing page.
 
-## 2. 目標
+## 2. Goals
 
-- 使用者可以在 Web 上建立與編輯 HUB_MANAGED 文件，變更保存為 immutable Revision。
-- 使用者可以上傳單篇 `.md`，title 解析行為與 folder import 完全一致。
-- 兩人同時編輯時，後送出者得到明確的衝突提示，不覆蓋對方的內容。
-- SOURCE_MANAGED 內容在 UI 上不出現編輯入口，直接打 API 也被擋。
+- Users can create and edit HUB_MANAGED documents on the Web, with changes saved as immutable Revisions.
+- Users can upload a single `.md`; title resolution behaves exactly as in folder import.
+- When two people edit concurrently, the later submission receives a clear conflict message without overwriting the other person's content.
+- SOURCE_MANAGED content has no editing entry point in the UI; direct API calls are also blocked.
 
-## 3. 非目標
+## 3. Non-goals
 
-- Markdown merge、三方合併、自動解衝突：roadmap Phase 5「範圍外」已明列。
-- metadata（frontmatter）編輯介面：目前沒有既定 key 慣例，與 Phase 4 spec §3 的判斷一致，等真實需求出現再加。
-- 樹狀操作 UI（新增資料夾、改名、移動、封存／還原）：application 方法已存在，但不在 roadmap Phase 5 交付清單內。
-- 多個 Hub Source 的手動建立與命名：見 §5 的升級路徑。
-- ownership conversion（SOURCE_MANAGED ↔ HUB_MANAGED）、雙向 sync：roadmap 範圍外。
-- 富文字編輯器、即時預覽、自動儲存。
+- Markdown merge, three-way merge, and automatic conflict resolution: explicitly listed as out of scope in roadmap Phase 5.
+- A metadata (frontmatter) editing interface: no established key conventions exist. As decided in Phase 4 spec §3, add it when real requirements emerge.
+- Tree operation UI (create folder, rename, move, archive/restore): application methods already exist, but these are not roadmap Phase 5 deliverables.
+- Manual creation and naming of multiple Hub Sources: see the upgrade path in §5.
+- Ownership conversion (SOURCE_MANAGED ↔ HUB_MANAGED) and bidirectional sync: outside roadmap scope.
+- Rich text editor, live preview, or autosave.
 
-## 4. 既有基礎盤點
+## 4. Existing Foundation Inventory
 
-這一節是本 Phase 範圍判斷的依據，每一列都經程式碼確認。
+This section is the basis for this phase's scope decision; every row has been verified against the code.
 
-| roadmap 交付 | 既有實作 | 位置 |
+| Roadmap deliverable | Existing implementation | Location |
 | --- | --- | --- |
-| 單篇 Markdown upload | `parseGenericMarkdownText`（frontmatter + 第一個 H1）與 `resolveImportTitle`（FRONTMATTER → H1 → FILENAME 優先序）皆已匯出 | `src/modules/sources/adapters/generic-markdown-folder-adapter.ts:86`、`src/modules/sources/domain/import-title.ts:6` |
-| Web create／edit | `createDocument` 與 `createRevision`，各自在單一 READ COMMITTED transaction 內完成 | `src/modules/knowledge/application/internal/create-document.ts:26`、`internal/create-revision.ts:32` |
-| 變更建立 immutable Revision | `fingerprintRevisionContent` → N+1 insert → `setCurrentRevision`；內容未變則回 `changed: false` 且不產生新版本 | `internal/create-revision.ts:51-63` |
-| stale-editor conflict | `expectedCurrentRevisionId` 與鎖定後的 current revision 不符即丟 `RevisionConflictError` | `internal/create-revision.ts:50` |
-| 先過 Workspace capability，再驗 HUB_MANAGED ownership | `lockWorkspaceForMutation(…, "content-write")` 檢查 `document.write`；`source.ownership !== "HUB_MANAGED"` 丟 `SourceReadOnlyError` | `src/modules/workspaces/application/workspace-mutation-guard.ts:57`、`internal/create-revision.ts:43` |
-| SOURCE_MANAGED read-only guard | 四條 Hub 寫入路徑都有同一組 ACTIVE + HUB_MANAGED 檢查 | `internal/create-document.ts:34-35` 等 |
-| My Space 可寫 | `assertPersonalMutationAllowed` 對 `content-write` 直接放行，只凍結治理操作 | `src/modules/workspaces/application/personal-workspace-service.ts:38` |
+| Single Markdown upload | `parseGenericMarkdownText` (frontmatter + first H1) and `resolveImportTitle` (FRONTMATTER → H1 → FILENAME precedence) are both exported | `src/modules/sources/adapters/generic-markdown-folder-adapter.ts:86`, `src/modules/sources/domain/import-title.ts:6` |
+| Web create/edit | `createDocument` and `createRevision`, each completed in a single READ COMMITTED transaction | `src/modules/knowledge/application/internal/create-document.ts:26`, `internal/create-revision.ts:32` |
+| Changes create immutable Revisions | `fingerprintRevisionContent` → N+1 insert → `setCurrentRevision`; unchanged content returns `changed: false` and creates no new version | `internal/create-revision.ts:51-63` |
+| Stale-editor conflict | A mismatch between `expectedCurrentRevisionId` and the locked current revision throws `RevisionConflictError` | `internal/create-revision.ts:50` |
+| Check Workspace capability before HUB_MANAGED ownership | `lockWorkspaceForMutation(…, "content-write")` checks `document.write`; `source.ownership !== "HUB_MANAGED"` throws `SourceReadOnlyError` | `src/modules/workspaces/application/workspace-mutation-guard.ts:57`, `internal/create-revision.ts:43` |
+| SOURCE_MANAGED read-only guard | All four Hub write paths have the same ACTIVE + HUB_MANAGED checks | `internal/create-document.ts:34-35` and others |
+| My Space is writable | `assertPersonalMutationAllowed` directly permits `content-write`, freezing only governance operations | `src/modules/workspaces/application/personal-workspace-service.ts:38` |
 
-因此 Phase 5 的實際缺口只有三個：
+Phase 5 therefore has only three actual gaps:
 
-1. `src/app/api/` 底下**沒有任何 knowledge 寫入路由**。
-2. `src/components/` 底下**沒有任何 authoring 元件**。
-3. **HUB_MANAGED Source 沒有任何建立管道**：`repositories.sources.insert` 的呼叫者只有 folder import 的 apply（`apply-folder-import.ts:163`）與 `scripts/db/seed.ts`。使用者在 UI 上無法開一個 Hub Source，所以「新文件放哪」必須由本 Phase 解掉。
+1. `src/app/api/` has **no knowledge write routes**.
+2. `src/components/` has **no authoring components**.
+3. **HUB_MANAGED Sources have no creation path**: the only callers of `repositories.sources.insert` are folder import apply (`apply-folder-import.ts:163`) and `scripts/db/seed.ts`. Users cannot create a Hub Source in the UI, so this phase must resolve where a new document goes.
 
-## 5. 預設 Hub Source lazy provisioning
+## 5. Lazy Provisioning of the Default Hub Source
 
-### 5.1 規則
+### 5.1 Rules
 
-每個 Workspace 有一個名為 `Notes` 的預設 Hub Source，在**第一次建立文件時** lazy 建立：
+Each Workspace has a default Hub Source named `Notes`, created lazily **when the first document is created**:
 
 ```text
 POST /api/workspaces/{id}/documents
@@ -71,148 +71,148 @@ POST /api/workspaces/{id}/documents
 → createDocument(caller, { sourceId, parentId: null, title, markdown, metadata: {} })   ← transaction 2
 ```
 
-`ensureDefaultHubSource` 的內容：鎖 Workspace row → 在該 Workspace 內找 `sourceType = "HUB"`、`status = "ACTIVE"` 且 `name = "Notes"` 的 Source → 找到就回其 id，沒有就以 `uuidv7()` 建立後回傳。
+`ensureDefaultHubSource`: lock the Workspace row → find a Source in that Workspace with `sourceType = "HUB"`, `status = "ACTIVE"`, and `name = "Notes"` → return its id if found; otherwise create one with `uuidv7()` and return it.
 
-模組歸屬：`src/modules/sources/application/ensure-default-hub-source.ts`，跑在 `SourceUnitOfWork` 上。`SourceRepositories` 已經是 `KnowledgeRepositories & { sources, workspaces, workspaceMemberships, groupMappings, … }`（`src/modules/sources/ports/unit-of-work.ts:16`），`sources.insert` 與 `lockWorkspaceForMutation` 所需的 repositories 全都拿得到，**不需要任何 port 變更**。Source 的建立留在 sources 模組，knowledge 模組不會長出建立 Source 的能力。
+Module ownership: `src/modules/sources/application/ensure-default-hub-source.ts`, running on `SourceUnitOfWork`. `SourceRepositories` is already `KnowledgeRepositories & { sources, workspaces, workspaceMemberships, groupMappings, … }` (`src/modules/sources/ports/unit-of-work.ts:16`), providing all repositories needed by `sources.insert` and `lockWorkspaceForMutation`; **no port changes are needed**. Source creation stays in the sources module; the knowledge module does not acquire Source creation capabilities.
 
-### 5.2 為什麼是獨立 transaction
+### 5.2 Why a Separate Transaction
 
-現行全域鎖序是 `Snapshot → Source → Workspace → deeper`（`workspace-mutation-guard.ts:22`）。建立新 Source 時沒有 Source 可鎖，必須反過來先鎖 Workspace。
+The current global lock order is `Snapshot → Source → Workspace → deeper` (`workspace-mutation-guard.ts:22`). Creating a new Source has no Source to lock, requiring Workspace to be locked first instead.
 
-拆成獨立 transaction 後，provisioning 只持有 Workspace 鎖、`createDocument` 照舊先鎖 Source 再鎖 Workspace，兩者不會同時持有兩個鎖，因此不構成 deadlock 環，也不必修改四條既有寫入路徑。代價是兩次 round trip 與「Source 建了但文件建立失敗」會留下一個空 Source——一個空的 `Notes` Source 沒有副作用，下次建立會重用它，不需要補償交易。
+With a separate transaction, provisioning holds only a Workspace lock, while `createDocument` still locks Source before Workspace. They do not hold both locks simultaneously, so no deadlock cycle arises, and the four existing write paths need no changes. The cost is two round trips and an empty Source if Source creation succeeds but document creation fails. An empty `Notes` Source has no side effects and is reused on the next creation; no compensating transaction is required.
 
-### 5.3 併發
+### 5.3 Concurrency
 
-兩個請求同時對同一個 Workspace 建立第一篇文件時，`lockWorkspaceForMutation` 的 Workspace row lock 序列化兩者：先到者建立，後到者在拿到鎖後讀到已存在的 `Notes` 並重用。不依賴唯一鍵，因為 `knowledge_sources` 沒有 `(workspace_id, name)` 唯一約束，本 Phase 也不新增。
+When two requests concurrently create the first document in the same Workspace, the Workspace row lock in `lockWorkspaceForMutation` serializes them: the first creates `Notes`; after acquiring the lock, the second reads and reuses it. This does not rely on a unique key, because `knowledge_sources` has no `(workspace_id, name)` unique constraint and this phase does not add one.
 
-### 5.4 授權動詞
+### 5.4 Authorization Verb
 
-provisioning 使用 `"content-write"`（要求 `document.write`），不是 `"source-import"`（要求 `source.manage`）。理由：使用者的動作是撰寫文件，Source 建立只是附帶結果，授權判斷應對齊使用者實際意圖。現行角色模型下 EDITOR 以上同時具備兩者，所以這個選擇目前不可觀測；明確寫下是為了未來拆分角色時不會誤判。
+Provisioning uses `"content-write"` (requiring `document.write`), rather than `"source-import"` (requiring `source.manage`). The user's action is authoring a document; Source creation is incidental, so authorization should align with that actual intent. In the current role model, EDITOR and above have both capabilities, making the distinction currently unobservable; documenting it prevents mistakes if roles are split later.
 
-### 5.5 升級路徑
+### 5.5 Upgrade Path
 
-需要多個 Hub Source 分類時，再於 Sources 頁加「New Hub source」建立流程，與既有的「Import folder」對稱；`ensureDefaultHubSource` 屆時退化為「沒有任何 Hub Source 時的預設值」。本 Phase 不預先建立這條路徑。
+When multiple Hub Sources are needed for categorization, add a “New Hub source” creation flow on the Sources page, symmetrical to “Import folder”; `ensureDefaultHubSource` then becomes the default when no Hub Source exists. This phase does not prebuild that path.
 
-## 6. HTTP 交付面
+## 6. HTTP Delivery Surface
 
-### 6.1 兩條路由
+### 6.1 Two Routes
 
-沿用 `workspaceHttp` + `requestFields`（`src/server/workspace-http.ts`）：
+Reuse `workspaceHttp` + `requestFields` (`src/server/workspace-http.ts`):
 
-| 路由 | body | 行為 |
+| Route | body | Behavior |
 | --- | --- | --- |
-| `POST /api/workspaces/[workspaceId]/documents` | `{ title, markdown }` | `ensureDefaultHubSource` → `createDocument`，回 `{ documentId, sourceId }` |
-| `POST /api/workspaces/[workspaceId]/documents` | `{ filename, markdown }` | 單篇 upload：`parseGenericMarkdownText` + `resolveImportTitle` 得 title，其餘同上 |
-| `PATCH /api/documents/[documentId]` | `{ title, markdown, expectedCurrentRevisionId }` | `createRevision`，回 `{ revisionId, revisionNo, changed }` |
+| `POST /api/workspaces/[workspaceId]/documents` | `{ title, markdown }` | `ensureDefaultHubSource` → `createDocument`, returning `{ documentId, sourceId }` |
+| `POST /api/workspaces/[workspaceId]/documents` | `{ filename, markdown }` | Single upload: `parseGenericMarkdownText` + `resolveImportTitle` resolve the title; the rest is as above |
+| `PATCH /api/documents/[documentId]` | `{ title, markdown, expectedCurrentRevisionId }` | `createRevision`, returning `{ revisionId, revisionNo, changed }` |
 
-### 6.2 upload 不另開路由
+### 6.2 No Separate Upload Route
 
-瀏覽器以 `<input type="file" accept=".md,.markdown">` 讀成字串後送同一條 JSON 路由，帶 `filename` 就走 title resolution，帶 `title` 就直接用。不收 multipart、不加解析依賴。
+The browser reads a string through `<input type="file" accept=".md,.markdown">` and sends it to the same JSON route. `filename` invokes title resolution; `title` is used directly. No multipart input or parser dependency is added.
 
-`title` 與 `filename` 互斥：兩者皆給或皆不給都回 `INVALID_REQUEST`。
+`title` and `filename` are mutually exclusive: providing both or neither returns `INVALID_REQUEST`.
 
-帶 `filename` 上傳時，儲存行為與 folder import 完全一致（`finalize-folder-import.ts:181,192-193`）：`parseGenericMarkdownText` 解出的 body（frontmatter 已從內容中移除）存為 `markdown`，解出的 frontmatter 存為 `metadata`——不是把原始檔案內容原封不動存下來。同一份 `.md` 檔不論走 import 還是走 upload，儲存結果必須一致。帶明確 `title`（無 `filename`）的路徑沒有檔案可解析 frontmatter，維持原樣：`markdown` 為呼叫端給的原文、`metadata` 為 `{}`。
+For uploads with `filename`, storage behaves exactly as folder import (`finalize-folder-import.ts:181,192-193`): the body parsed by `parseGenericMarkdownText` (with frontmatter removed) is stored as `markdown`, and parsed frontmatter as `metadata`, rather than storing the raw file unchanged. The same `.md` file must produce identical storage results through import or upload. The explicit `title` path (without `filename`) has no file from which to parse frontmatter and keeps the existing behavior: `markdown` is the caller's original text and `metadata` is `{}`.
 
-### 6.3 requestFields 零變更
+### 6.3 No Changes to requestFields
 
-四個欄位（`title`／`filename`／`markdown`／`expectedCurrentRevisionId`）都是 string，`requestFields` 現行只支援 string 欄位的限制剛好不構成阻礙。`metadata` 不開放編輯（§3），一律以 `{}` 傳入；既有文件的 metadata 在編輯時**原樣保留**——`createRevision` 的呼叫端先讀出 current revision 的 metadata 再原樣回填，避免編輯一次就清空 folder import 帶進來的 frontmatter。
+All four fields (`title`/`filename`/`markdown`/`expectedCurrentRevisionId`) are strings, so the current string-only limitation of `requestFields` is no obstacle. `metadata` is not editable (§3) and is passed as `{}`; existing document metadata is **preserved unchanged** on edits: the `createRevision` caller reads the current revision's metadata and passes it back unchanged, preventing an edit from clearing frontmatter brought in through folder import.
 
-這裡的「一律以 `{}` 傳入」指的是**編輯**（`PATCH`）路徑：metadata 不是使用者可編輯的欄位，所以編輯表單沒有 metadata 輸入，送出時沒有新值可傳。這與**上傳建立**（§6.2）無關——上傳一份帶 frontmatter 的 `.md` 時，metadata 來自解析結果，不是 `{}`；「不開放編輯」不等於「上傳時捨棄 frontmatter」。
+“Passed as `{}`” here refers to the **editing** (`PATCH`) path: metadata is not user-editable, so the editing form has no metadata input and no new value to submit. This does not apply to **upload creation** (§6.2): when uploading a `.md` with frontmatter, metadata comes from parsing, rather than `{}`. “Not editable” does not mean discarding frontmatter during upload.
 
-### 6.4 上限
+### 6.4 Limits
 
-`title` 512 字元、`markdown` 5 MiB，與 `KM_IMPORT_MAX_MARKDOWN_FILE_BYTES` 的預設值一致，超過回 `INVALID_REQUEST`。
+`title`: 512 characters; `markdown`: 5 MiB, matching the default `KM_IMPORT_MAX_MARKDOWN_FILE_BYTES`. Exceeding these limits returns `INVALID_REQUEST`.
 
-## 7. 授權與錯誤映射
+## 7. Authorization and Error Mapping
 
-### 7.1 授權
+### 7.1 Authorization
 
-完全沿用，不新增授權概念。寫入一律經 `lockWorkspaceForMutation(…, "content-write")` → `document.write`；VIEWER 不具備。route 與 body 裡的 ID 只是導覽範圍，不是授權證明。
+Fully reuse existing authorization without adding concepts. All writes go through `lockWorkspaceForMutation(…, "content-write")` → `document.write`, which VIEWER lacks. IDs in routes and bodies are navigation scope, not proof of authorization.
 
-### 7.2 錯誤映射必須擴充
+### 7.2 Error Mapping Must Be Extended
 
-`toWorkspaceErrorResponse`（`src/server/http-error-response.ts:61`）目前以三份 code 清單決定狀態碼，**未列出的 DomainError 一律落到 500**。Phase 5 的兩個關鍵錯誤都不在清單內，所以這不是「沿用既有映射」就能成立的：
+`toWorkspaceErrorResponse` (`src/server/http-error-response.ts:61`) currently selects status codes from three code lists; **all unlisted DomainErrors become 500**. Neither of Phase 5's two key errors is listed, so simply reusing the existing mapping is insufficient:
 
-| code | 現況 | 本 Phase 要求 |
+| code | Current behavior | Phase requirement |
 | --- | --- | --- |
-| `REVISION_CONFLICT` | 500 | **409** — stale-editor 衝突是使用者可修正的狀態，不是伺服器錯誤 |
-| `SOURCE_MANAGED_READ_ONLY` | 500 | **409** — 對 SOURCE_MANAGED 內容寫入 |
+| `REVISION_CONFLICT` | 500 | **409** — a stale-editor conflict is a user-correctable condition, not a server error |
+| `SOURCE_MANAGED_READ_ONLY` | 500 | **409** — writing to SOURCE_MANAGED content |
 | `INVALID_TITLE`／`INVALID_METADATA` | 500 | **400** |
-| `DOCUMENT_NOT_FOUND`／`SOURCE_NOT_FOUND` | 500 | **404**（非列舉語意，與既有 `HIDDEN_NOT_FOUND` 一致） |
+| `DOCUMENT_NOT_FOUND` / `SOURCE_NOT_FOUND` | 500 | **404** (non-enumeration semantics, consistent with existing `HIDDEN_NOT_FOUND`) |
 | `SOURCE_ARCHIVED`／`DOCUMENT_ARCHIVED` | 500 | **409** |
-| `WORKSPACE_ACCESS_DENIED` | 404 | 維持 404 — 沿用既有非列舉慣例；UI 本來就不對 VIEWER 顯示編輯入口 |
+| `WORKSPACE_ACCESS_DENIED` | 404 | Keep 404 — reuse the existing non-enumeration convention; the UI already hides editing entry points from VIEWER |
 
 ## 8. UI
 
 ### 8.1 actions
 
-`WorkspaceActions` 增加 `canWrite: has("document.write")`，與 `canSearch` 同一套模式（`src/server/workspace-admin.ts:46`）。導覽／按鈕的顯示與否不是 security boundary，server 端仍獨立授權（Phase 4 spec §7.4 同一原則）。
+Add `canWrite: has("document.write")` to `WorkspaceActions`, following the `canSearch` pattern (`src/server/workspace-admin.ts:46`). Navigation/button visibility is not a security boundary; the server authorizes independently (the same principle as Phase 4 spec §7.4).
 
-### 8.2 編輯頁
+### 8.2 Editing Page
 
-新頁 `/w/[workspaceId]/knowledge/[sourceId]/[documentId]/edit`，元件 `src/components/knowledge/document-editor.tsx`：
+New page `/w/[workspaceId]/knowledge/[sourceId]/[documentId]/edit`, component `src/components/knowledge/document-editor.tsx`:
 
-- title 用既有 `ui/input.tsx`，markdown 用既有 `ui/textarea.tsx`，**不引入編輯器依賴**。
-- 表單持有載入當下的 `expectedCurrentRevisionId`。
-- Save → `PATCH`，成功後導回文件頁並 `router.refresh()`；Cancel → 直接導回。
-- `changed: false`（內容未變）不視為錯誤，行為與成功相同。
+- Title uses existing `ui/input.tsx`; markdown uses existing `ui/textarea.tsx`; **no editor dependency is introduced**.
+- The form holds `expectedCurrentRevisionId` from the time of loading.
+- Save → `PATCH`; on success, navigate back to the document page and call `router.refresh()`; Cancel → navigate back directly.
+- `changed: false` (unchanged content) is not an error; it behaves like success.
 
-### 8.3 入口
+### 8.3 Entry Points
 
-- 文件頁已同時載入 `explorer`（`SourceView` 帶 `ownership`）與 `shell`（帶 `access.actions`），見 `src/app/w/[workspaceId]/knowledge/[sourceId]/[documentId]/page.tsx:77-78`，因此 Edit 按鈕不需要新的 read model。
-- 顯示條件：`canWrite && source.ownership === "HUB_MANAGED" && status === "ACTIVE" && 非歷史版本檢視`。
-- `DocumentHeader` 目前寫死 `<Badge variant="outline">Read only</Badge>`（`document-header.tsx:72`），改為依 ownership 呈現：SOURCE_MANAGED 保留 Read only，HUB_MANAGED 不顯示該 badge 並顯示 Edit。
-- Knowledge 頁加 `New document` 與 `Upload .md`，沿用 Sources 頁 `Import folder` 的按鈕樣式與 `kh-*` token。
+- The document page already loads both `explorer` (`SourceView` includes `ownership`) and `shell` (includes `access.actions`), as shown in `src/app/w/[workspaceId]/knowledge/[sourceId]/[documentId]/page.tsx:77-78`; the Edit button therefore needs no new read model.
+- Display condition: `canWrite && source.ownership === "HUB_MANAGED" && status === "ACTIVE"` and not viewing a historical version.
+- `DocumentHeader` currently hardcodes `<Badge variant="outline">Read only</Badge>` (`document-header.tsx:72`); change it to render by ownership: SOURCE_MANAGED keeps Read only; HUB_MANAGED hides that badge and displays Edit.
+- Add `New document` and `Upload .md` to the Knowledge page, reusing the Sources page's `Import folder` button styling and `kh-*` tokens.
 
-### 8.4 衝突呈現
+### 8.4 Conflict Presentation
 
-409 `REVISION_CONFLICT` 顯示「這份文件已被其他人更新」，附「重新載入最新版本」連結。**不自動覆蓋、不自動合併、不保留使用者草稿到伺服器**；使用者的輸入留在表單內，由使用者自行取捨。
+409 `REVISION_CONFLICT` displays “This document has been updated by someone else,” with a “Reload the latest version” link. **No automatic overwrite, automatic merge, or server-side retention of the user's draft**; input stays in the form for the user to decide what to keep.
 
-## 9. 測試計畫
+## 9. Test Plan
 
-### 9.1 單元測試（不需 DB）
+### 9.1 Unit Tests (No DB Required)
 
-| # | 需求來源 | 測試 |
+| # | Requirement source | Test |
 | --- | --- | --- |
-| U1 | §8.1 | `deriveWorkspaceActions`：具 `document.write` 時 `canWrite` 為 true，VIEWER 為 false |
-| U2 | §6.1、§6.2 | body 驗證：缺欄位、非字串、`title` 與 `filename` 同時給、兩者都不給 |
-| U3 | §6.2 | `filename` 分支：frontmatter title 優先於 H1，皆無則用檔名去副檔名 |
+| U1 | §8.1 | `deriveWorkspaceActions`: `canWrite` is true with `document.write`, false for VIEWER |
+| U2 | §6.1、§6.2 | Body validation: missing fields, non-strings, both `title` and `filename`, or neither |
+| U3 | §6.2 | `filename` branch: frontmatter title takes precedence over H1; if both are absent, use the filename without its extension |
 | U4 | §7.2 | `toWorkspaceErrorResponse`：`REVISION_CONFLICT` → 409、`SOURCE_MANAGED_READ_ONLY` → 409、`INVALID_TITLE` → 400、`DOCUMENT_NOT_FOUND` → 404 |
-| U5 | §6.4 | 上限：`title` 超過 512、`markdown` 超過 5 MiB 回 `INVALID_REQUEST` |
+| U5 | §6.4 | Limits: `title` over 512 or `markdown` over 5 MiB returns `INVALID_REQUEST` |
 
-### 9.2 整合測試（需 DB）
+### 9.2 Integration Tests (DB Required)
 
-| # | 需求來源 | 測試 |
+| # | Requirement source | Test |
 | --- | --- | --- |
-| I1 | §5.1 | 空 Workspace 建立第一篇文件：自動產生 `Notes` Source，文件掛在其 root |
-| I2 | §5.3 | `ensureDefaultHubSource` 冪等：連呼兩次回同一個 sourceId，`knowledge_sources` 只增加一列 |
-| I3 | §4 | 建立產生 revision 1；編輯產生 revision 2，且 revision 1 內容不變 |
-| I4 | §4 | **內容未變不產生新版本**：以相同 title/markdown 再送一次，`changed: false` 且版本數不變 |
-| I5 | §4 | stale `expectedCurrentRevisionId` → `REVISION_CONFLICT`，且文件的 current revision 未被覆蓋 |
-| I6 | §7.1 | VIEWER 建立與編輯皆被拒 |
-| I7 | §4 | SOURCE_MANAGED 文件的編輯被拒（`SOURCE_MANAGED_READ_ONLY`） |
-| I8 | §6.3 | metadata 保留：對一份帶 frontmatter metadata 的文件編輯後，新 revision 的 metadata 與舊版相同 |
-| I9 | §5.4 | My Space（PERSONAL workspace）可建立與編輯 |
-| I10 | §6.2 | 單篇 upload：frontmatter title、H1、檔名三種來源各產生預期 title |
+| I1 | §5.1 | Create the first document in an empty Workspace: automatically create a `Notes` Source, with the document under its root |
+| I2 | §5.3 | `ensureDefaultHubSource` is idempotent: two consecutive calls return the same sourceId, adding only one row to `knowledge_sources` |
+| I3 | §4 | Creation produces revision 1; editing produces revision 2, leaving revision 1 content unchanged |
+| I4 | §4 | **Unchanged content creates no version**: resubmit the same title/markdown; `changed: false` and version count unchanged |
+| I5 | §4 | Stale `expectedCurrentRevisionId` → `REVISION_CONFLICT`, without overwriting the document's current revision |
+| I6 | §7.1 | VIEWER creation and editing are both denied |
+| I7 | §4 | Editing SOURCE_MANAGED documents is denied (`SOURCE_MANAGED_READ_ONLY`) |
+| I8 | §6.3 | Metadata preservation: after editing a document with frontmatter metadata, the new revision's metadata equals the old revision's |
+| I9 | §5.4 | My Space (PERSONAL workspace) allows creation and editing |
+| I10 | §6.2 | Single upload: frontmatter title, H1, and filename each produce the expected title |
 
 ### 9.3 E2E（Playwright）
 
-| # | 測試 |
+| # | Test |
 | --- | --- |
-| E1 | 在 Workspace 建立新文件 → 出現在 Tree → 開啟後內容正確 |
-| E2 | 編輯既有 HUB_MANAGED 文件 → 版本歷史出現兩版 |
-| E3 | SOURCE_MANAGED 文件頁看不到 Edit 按鈕，且顯示 Read only |
-| E4 | 上傳一份 `.md` → title 取自 frontmatter |
+| E1 | Create a new document in a Workspace → appears in the Tree → opens with correct content |
+| E2 | Edit an existing HUB_MANAGED document → version history shows two versions |
+| E3 | SOURCE_MANAGED document pages hide Edit and display Read only |
+| E4 | Upload a `.md` → title comes from frontmatter |
 
 ### 9.4 Fixture
 
-重用 seed 既有的 HUB_MANAGED 與 SOURCE_MANAGED Source。E2E 需要一個**完全沒有 Hub Source 的 Workspace** 來覆蓋 I1 的 lazy provisioning 路徑；依 Phase 4 verification 記錄的教訓，新 fixture 必須加在 `seedBrowserFixtures` 既有的「是否為全新資料庫」空表判斷**之後**，以獨立 `unitOfWork.run` 區塊寫入。
+Reuse the seed's existing HUB_MANAGED and SOURCE_MANAGED Sources. E2E needs a **Workspace with no Hub Source at all** to cover I1's lazy provisioning path. Following the lesson recorded in Phase 4 verification, add the new fixture **after** the existing empty-table check for a brand-new database in `seedBrowserFixtures`, writing it in a separate `unitOfWork.run` block.
 
-## 10. 驗收條件
+## 10. Acceptance Criteria
 
-- 建立與編輯都產生 immutable Revision，內容未變不產生新版本（I3、I4）。
-- 兩人同時編輯，後送出者得到 409 且不覆蓋對方內容（I5）。
-- VIEWER 與 SOURCE_MANAGED 的寫入一律被拒，UI 上也沒有入口（I6、I7、E3）。
-- 既有 metadata 不因編輯而遺失（I8）。
-- 單篇 upload 的 title 解析與 folder import 一致（I10、E4）。
-- §9 所有測試案例通過；`make verify`、`npm run test:integration`、`npm run test:e2e` 三個 gate 全綠。
+- Creation and editing produce immutable Revisions; unchanged content creates no new version (I3, I4).
+- With concurrent editing, the later submission gets 409 without overwriting the other person's content (I5).
+- VIEWER and SOURCE_MANAGED writes are always denied, and the UI has no entry point (I6, I7, E3).
+- Existing metadata is not lost on editing (I8).
+- Single-upload title resolution matches folder import (I10, E4).
+- All §9 test cases pass; all three gates, `make verify`, `npm run test:integration`, and `npm run test:e2e`, are green.

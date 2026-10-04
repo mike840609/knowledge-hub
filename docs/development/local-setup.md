@@ -1,5 +1,7 @@
 # Local setup and verification
 
+**English** | [繁體中文](local-setup.zh-TW.md)
+
 Phase 0 runs with Node.js `>=20.19.0 <25`, npm, Docker, and the MariaDB 10.11 Compose service. The checked runtime was Node.js `v24.19.0`; the database reported MariaDB `10.11.19-MariaDB`.
 
 ## Start the local stack

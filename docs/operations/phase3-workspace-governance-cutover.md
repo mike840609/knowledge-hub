@@ -153,7 +153,6 @@ passes the gate (fresh installs migrate straight to 009).
 - DDL failures keep the FAILED/RUNNING ledger diagnostics: repair the schema
   explicitly and clear only the affected ledger row — never edit checksums.
 
-
 ## Development before company SSO integration
 
 Local development uses `KM_IDENTITY_PROVIDER=local` and the existing

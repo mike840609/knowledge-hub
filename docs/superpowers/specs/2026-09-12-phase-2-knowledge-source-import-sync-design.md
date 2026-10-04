@@ -1,21 +1,21 @@
 # Knowledge Hub — Phase 2 Knowledge Source Import & Sync Design
 
-| 項目 | 內容 |
+| Item | Content |
 | --- | --- |
-| 日期 | 2026-09-12 |
+| Date | 2026-09-12 |
 | Phase | 2 |
-| 名稱 | Knowledge Source Import & Sync |
-| 狀態 | Approved and implemented |
-| 前置 | Phase 0 Foundation & Architecture、Phase 1 Knowledge Core & Tree |
-| 後續 | Phase 3 Identity, Workspace Admin & Governance |
+| Name | Knowledge Source Import & Sync |
+| Status | Approved and implemented |
+| Prerequisites | Phase 0 Foundation & Architecture, Phase 1 Knowledge Core & Tree |
+| Next | Phase 3 Identity, Workspace Admin & Governance |
 
 ## 1. Goal
 
-Phase 2 的目標是讓使用者可以把本機 generic Markdown folder 安全匯入既有 Knowledge Hub，並在之後以完整 folder snapshot 重新同步同一個 `SOURCE_MANAGED` KnowledgeSource。
+Phase 2 lets users safely import local generic Markdown folders into the existing Knowledge Hub, then resync the same `SOURCE_MANAGED` KnowledgeSource using a complete folder snapshot.
 
-Phase 2 不取代既有公司 Wiki/TKMS，也不做 production SSO、Workspace administration、MCP、embedding 或 agent memory。它建立的是 AI-native Knowledge Hub 的 ingestion/sync foundation：來源 folder 是 authority，Hub 保存 canonical Knowledge projection，之後人與 Agent 都可在同一份 Knowledge Core 上消費內容。
+Phase 2 does not replace existing organizational wikis/external publishing platforms or implement production SSO, Workspace administration, MCP, embedding, or agent memory. It establishes the AI-native Knowledge Hub ingestion/sync foundation: the source folder is authoritative, Hub stores its canonical Knowledge projection, and humans and Agents can later consume the same Knowledge Core.
 
-完成後的主要流程：
+Main flow after completion:
 
 ```text
 Initial import
@@ -47,7 +47,7 @@ Confirm
 Apply atomically, sync_version N → N+1
 ```
 
-Phase 2 的核心成功條件：Preview 看見什麼，Confirm 就只能套用那一份 immutable snapshot 與 action plan；任何 canonical Apply 不是全部成功，就是全部 rollback。
+Phase 2's core success condition: Confirm applies only the immutable snapshot and action plan shown in Preview; every canonical Apply either fully succeeds or fully rolls back.
 
 ## 2. Scope
 
@@ -59,11 +59,11 @@ Phase 2 的核心成功條件：Preview 看見什麼，Confirm 就只能套用�
 - Server-authoritative path normalization、Markdown/frontmatter parsing、title resolution。
 - Persistent immutable staging snapshot。
 - Preview / Confirm / Apply。
-- Deterministic reconciliation 與 diff。
+- Deterministic reconciliation and diff.
 - Added / Updated / Moved / Renamed / Archived / Restored / Unchanged semantics。
 - Stable Document/SourceEntry/TreeNode identity preservation where safe。
 - Conservative rename/move detection。
-- Asset metadata/reference projection；不存 binary。
+- Asset metadata/reference projection; no binary storage.
 - Full transactional Apply。
 - `sync_version` concurrency guard。
 - SyncRun APPLIED/FAILED history where a canonical Source exists。
@@ -91,7 +91,7 @@ Phase 2 的核心成功條件：Preview 看見什麼，Confirm 就只能套用�
 
 ## 3. Architecture Decision
 
-Phase 2 採用 Sources module 內的 ingestion orchestration layer，而不是另建一套會直接操作 Knowledge tables 的 ingestion subsystem。
+Phase 2 uses an ingestion orchestration layer inside Sources, rather than a separate ingestion subsystem directly manipulating Knowledge tables.
 
 ```text
 Browser folder payload
@@ -117,7 +117,7 @@ Canonical Source / Entry / Tree / Document / Revision / Asset
 
 ### 3.1 Module boundary
 
-建議結構：
+Suggested structure:
 
 ```text
 src/modules/sources/
@@ -142,13 +142,13 @@ src/modules/sources/
 
 ### 3.2 Hard boundaries
 
-1. Scanner/parser 不寫 canonical Knowledge tables。
-2. Preview 前最多只寫 staging snapshot。
-3. Reconciler 必須 pure、deterministic、side-effect free。
-4. Apply 不重新讀 local folder、不重新 parse upload、不重新猜 identity。
-5. Apply 只能吃 persisted READY snapshot + persisted server-generated plan。
-6. Apply 不繞過 Phase 1 projection/mapping/tree/revision invariants。
-7. `SOURCE_MANAGED` 沒有 `force=true`、`skipOwnershipCheck` 等 escape hatch。
+1. Scanner/parser writes no canonical Knowledge tables.
+2. Before Preview, write at most a staging snapshot.
+3. Reconciler must be pure, deterministic, and side-effect-free.
+4. Apply does not reread local folders, reparse uploads, or re-guess identity.
+5. Apply accepts only persisted READY snapshots + persisted server-generated plans.
+6. Apply does not bypass Phase 1 projection/mapping/tree/revision invariants.
+7. `SOURCE_MANAGED` has no escape hatches such as `force=true` or `skipOwnershipCheck`.
 
 ## 4. Import Session and Snapshot Lifecycle
 
@@ -163,14 +163,14 @@ APPLIED
 STALE
 ```
 
-`EXPIRED` 不存成 state；由 `expires_at <= NOW()` derived。
+`EXPIRED` is not a stored state; derive it from `expires_at <= NOW()`.
 
-語意：
+Semantics:
 
-- `BUILDING`：manifest 已建立，Markdown bytes 仍在上傳或等待 finalize。
-- `READY`：完整 upload、server parsing、diagnostics、reconciliation 與 action plan 已完成。可 Preview；只有 `has_blockers=false` 才可 Apply。
-- `APPLIED`：此 snapshot 已成功消費一次；再次 Apply 回 idempotent success，不重跑 canonical mutation。
-- `STALE`：existing Source 在 Preview 後 version 已改變；永遠不可 Apply。
+- `BUILDING`: manifest created; Markdown bytes still uploading or awaiting finalize.
+- `READY`: full upload, server parsing, diagnostics, reconciliation, and action plan complete. Preview is available; Apply requires `has_blockers=false`.
+- `APPLIED`: snapshot successfully consumed once; another Apply returns idempotent success without repeating canonical mutation.
+- `STALE`: existing Source version changed after Preview; can never Apply.
 
 ### 4.2 Initial import binding
 
@@ -181,11 +181,11 @@ based_on_version = NULL
 proposed_source_name = immutable after READY
 ```
 
-Source 直到 Confirm 才建立。
+Source is created only on Confirm.
 
 ### 4.3 Existing Source resync binding
 
-Client 只提供 `source_id` route scope。Server resolve：
+Client supplies only `source_id` route scope. Server resolves:
 
 ```text
 workspace_id = Source.workspace_id
@@ -200,23 +200,23 @@ mismatch before loading canonical state, so a drifted plan is never built or
 persisted. Apply's version compare remains the final gate for races between
 finalize and apply.
 
-Normal sync 不接受 client supplied Workspace transfer。
+Normal sync accepts no client-supplied Workspace transfer.
 
 ### 4.4 Source creation timing
 
-Initial import 採：
+Initial import uses:
 
-> Source 只在 Confirm 時建立，而且 Create Source + all canonical Apply + first APPLIED SyncRun + snapshot consumption 在同一 canonical transaction。
+> Create Source only on Confirm; Create Source + all canonical Apply + first APPLIED SyncRun + snapshot consumption share one canonical transaction.
 
-若任何一步失敗，Source 不存在，不留下 empty Source。
+If any step fails, Source does not exist; no empty Source remains.
 
 ## 5. Browser Upload and Generic Adapter
 
 ### 5.1 Folder selection
 
-MVP 使用 browser folder selection (`webkitdirectory` / equivalent browser-supported directory selection)。Client 取得 relative paths，但 relative path 僅是 untrusted input；server 做 authoritative normalization。
+MVP uses browser folder selection (`webkitdirectory` / equivalent supported directory selection). Client obtains relative paths, but they are untrusted input; server performs authoritative normalization.
 
-首次 Import UI：
+First Import UI:
 
 ```text
 Workspace (selected)
@@ -237,7 +237,7 @@ Folder
 
 ### 5.2 Staged upload
 
-採 staged session，不採單一巨大 multipart request：
+Use staged sessions rather than one huge multipart request:
 
 ```text
 create BUILDING snapshot + manifest rows
@@ -246,13 +246,13 @@ create BUILDING snapshot + manifest rows
 → READY
 ```
 
-Asset binary Phase 2 不上傳；只傳 metadata/reference fingerprint。
+Phase 2 uploads no asset binaries, only metadata/reference fingerprints.
 
 ### 5.3 Markdown bytes and UTF-8 authority
 
-Markdown upload 必須傳 raw `File` bytes（例如 bounded `multipart/form-data` batches），不能只傳已解碼 JSON string。理由是 server 必須能用 fatal UTF-8 decoding 驗證原始 bytes。
+Markdown uploads must send raw `File` bytes (for example, bounded `multipart/form-data` batches), not merely decoded JSON strings. The server must validate original bytes using fatal UTF-8 decoding.
 
-流程：
+Flow:
 
 ```text
 browser File bytes
@@ -261,11 +261,11 @@ browser File bytes
 → valid text stored temporarily in staging
 ```
 
-UTF-8 BOM 可移除。Invalid UTF-8 是 blocking `INVALID_MARKDOWN_ENCODING`。不自動猜 Big5、Shift-JIS、UTF-16。
+UTF-8 BOM may be removed. Invalid UTF-8 is blocking `INVALID_MARKDOWN_ENCODING`. Do not automatically guess Big5, Shift-JIS, or UTF-16.
 
 ### 5.4 Asset transport
 
-Asset Phase 2 只傳：
+Phase 2 assets send only:
 
 ```text
 relativePath
@@ -275,29 +275,29 @@ MIME hint
 lastModified
 ```
 
-這些欄位是 source-provided metadata，不是 trusted binary integrity/security proof。未來真的保存 binary 時必須 server-side hash 與 MIME detection。
+These fields are source-provided metadata, not trusted binary integrity/security proof. Future binary persistence requires server-side hashing and MIME detection.
 
 ## 6. Path Normalization and Ignore Rules
 
 ### 6.1 Canonical source path
 
-Server 將 locator normalization 成 POSIX relative path：
+Server normalizes locators to POSIX relative paths:
 
 - `\` → `/`。
 - remove `.` segments。
 - reject absolute paths。
 - reject `..` / root escape。
 - reject NUL/control characters (`U+0000–U+001F`, `U+007F`)。
-- 不做 Unicode NFC/NFD rewrite。
+- No Unicode NFC/NFD rewriting.
 - case-sensitive comparison。
-- path 只作 locator，永遠不是 Document ID。
+- Path is only a locator, never Document ID.
 - normalized path collision = blocking `PATH_COLLISION`。
 
-Canonical `source_entries.source_path` 目前不是 DB unique key；Phase 2 必須在 reconciliation preflight 檢測 existing canonical duplicate source paths。如果同一 Source 出現兩個 current mappings 佔用同一 normalized path，視為 blocking/integrity conflict，而不是任意挑一筆。
+Canonical `source_entries.source_path` is currently not a DB unique key; Phase 2 reconciliation preflight must detect existing duplicate canonical source paths. If two current mappings in one Source occupy the same normalized path, treat it as a blocking/integrity conflict rather than choosing arbitrarily.
 
 ### 6.2 Ignore rules
 
-固定忽略：
+Always ignore:
 
 ```text
 .git/**
@@ -308,33 +308,33 @@ Thumbs.db
 any hidden path segment (.xxx)
 ```
 
-Client 可先 filter 減少傳輸，但 server 仍重新判斷。
+Client may prefilter to reduce transfer, but server reevaluates.
 
 ### 6.3 Symlink policy
 
-不 follow file/directory symlink。遇到可辨識 symlink 時 skip + `SYMLINK_SKIPPED` warning。Selection root 是 security boundary。
+Do not follow file/directory symlinks. Skip recognizable symlinks with `SYMLINK_SKIPPED` warning. Selection root is the security boundary.
 
 ### 6.4 Empty directories
 
-Pure empty directories 不 materialize。Folder nodes 只由實際 included Document/Asset path deterministic derive。
+Do not materialize empty directories. Derive Folder nodes deterministically only from actually included Document/Asset paths.
 
 ## 7. Markdown Parsing and Canonical Content
 
 ### 7.1 Markdown extensions
 
-`.md`、`.markdown` case-insensitive classification 為 Document；path identity 本身仍 case-sensitive。
+Classify `.md`, `.markdown` as Documents case-insensitively; path identity itself remains case-sensitive.
 
-其他 regular files進 Asset metadata projection。
+Other regular files enter Asset metadata projection.
 
 ### 7.2 Frontmatter
 
-使用安全、成熟的 YAML/frontmatter parser；禁止 unsafe constructors/custom executable tags/filesystem includes。
+Use a safe, mature YAML/frontmatter parser; forbid unsafe constructors, custom executable tags, and filesystem includes.
 
-Frontmatter root 必須是 JSON-compatible map/object。Malformed YAML = blocking `INVALID_FRONTMATTER`；non-object root = blocking `FRONTMATTER_NOT_OBJECT`。
+Frontmatter root must be a JSON-compatible map/object. Malformed YAML = blocking `INVALID_FRONTMATTER`; non-object root = blocking `FRONTMATTER_NOT_OBJECT`.
 
 ### 7.3 Canonical storage
 
-Frontmatter 與 body 分開：
+Separate frontmatter and body:
 
 ```text
 frontmatter → Revision.metadata
@@ -342,13 +342,13 @@ body        → Revision.markdown
 resolved title → Revision.title
 ```
 
-`Revision.markdown` 不保存 YAML frontmatter serialization。這避免 YAML key ordering / formatting-only change 被誤判成 Markdown body change。
+`Revision.markdown` stores no YAML frontmatter serialization, preventing YAML key ordering/formatting-only changes from appearing as Markdown body changes.
 
-`title` metadata key仍保留在 metadata；canonical title 是獨立欄位。
+Retain the `title` metadata key in metadata; canonical title is a separate field.
 
 ### 7.4 Title resolution
 
-優先順序：
+Precedence:
 
 ```text
 valid frontmatter.title
@@ -356,45 +356,45 @@ valid frontmatter.title
 → filename stem
 ```
 
-規則：
+Rules:
 
-- `frontmatter.title` 必須是 non-empty string；invalid/empty 只 warning 並 fallback。
-- H1 必須由 Markdown AST 判斷，不用 regex，因此 fenced code 裡的 `#` 不算 heading。
-- frontmatter title 與 H1 不同：frontmatter wins，`TITLE_CONFLICT` warning，不 blocking。
-- filename fallback 只 trim，不做 prettification。
+- `frontmatter.title` must be a nonempty string; invalid/empty produces only a warning and fallback.
+- Detect H1 through Markdown AST rather than regex, so `#` inside fenced code is not a heading.
+- Different frontmatter title and H1: frontmatter wins, with nonblocking `TITLE_CONFLICT` warning.
+- Filename fallback only trims, without prettification.
 - filename fallback empty = blocking。
 
 ## 8. Fingerprints
 
-Phase 2 明確維持兩種 fingerprint，責任不同。
+Phase 2 explicitly maintains two fingerprints with different responsibilities.
 
 ### 8.1 Revision content fingerprint
 
-沿用 Phase 1 canonical revision equality：
+Reuse Phase 1 canonical revision equality:
 
 ```text
 hash(title + markdown body + canonical metadata)
 ```
 
-決定是否建立新 Revision。
+Determines whether to create a new Revision.
 
 ### 8.2 Reconciliation fingerprint
 
-Phase 2 另外計算：
+Phase 2 also calculates:
 
 ```text
 hash(markdown body + canonical metadata)
 ```
 
-刻意排除 resolved title。
+Deliberately excludes resolved title.
 
-理由：若 title 來自 filename fallback，`foo.md → bar.md` 會讓 canonical title 改變，但 body/metadata 未變；這時仍應能 conservative 地辨識 stable Document identity，再於 Apply 建立新的 title Revision。
+If title comes from filename fallback, `foo.md → bar.md` changes canonical title but leaves body/metadata unchanged; stable Document identity should still be conservatively recognized, then Apply creates a new title Revision.
 
-Reconciliation fingerprint 可從 current Revision 的 markdown + metadata即時計算；MVP 不必新增 canonical DB column。
+Compute reconciliation fingerprint from current Revision markdown + metadata on demand; MVP needs no new canonical DB column.
 
 ## 9. Identity Reconciliation
 
-Document matching 固定四個 pass：
+Document matching has four fixed passes:
 
 ```text
 1. external_id exact match
@@ -403,34 +403,34 @@ Document matching 固定四個 pass：
 4. otherwise new Document
 ```
 
-Generic Markdown adapter 不把 frontmatter `id`、`uuid`、`slug` 自動當 external_id；它們仍只是 metadata。Generic adapter 的 external_id 為 null。Adapter contract保留 optional external ID 給未來 documented source-specific adapters。
+Generic Markdown adapter does not automatically treat frontmatter `id`, `uuid`, or `slug` as external_id; they remain metadata. Generic adapter external_id is null. Adapter contract reserves optional external IDs for future documented source-specific adapters.
 
 ### 9.1 Conservative matching
 
-Fingerprint fallback 必須 exactly one unmatched candidate 才 reuse identity。
+Fingerprint fallback reuses identity only with exactly one unmatched candidate.
 
 0 candidate → ADDED。
 
-2+ candidates → 不猜：new path ADDED；所有 unmatched old entries 依 snapshot absence 最後 ARCHIVED；加 `AMBIGUOUS_IDENTITY` warning。
+2+ candidates → no guessing: new path ADDED; all unmatched old entries eventually ARCHIVED based on snapshot absence; add `AMBIGUOUS_IDENTITY` warning.
 
-不做 filename similarity、edit distance、subtree guessing、LLM guessing。
+No filename similarity, edit distance, subtree guessing, or LLM guessing.
 
 ### 9.2 Identity conflict
 
-若未來 adapter 提供 stable external ID，但：
+If a future adapter provides stable external IDs, but:
 
 ```text
 external ID → Document A
 same incoming path → Document B
 ```
 
-這不是 ambiguity，而是 contract contradiction，blocking `IDENTITY_CONFLICT`。
+This is a contract contradiction rather than ambiguity: blocking `IDENTITY_CONFLICT`.
 
-Duplicate external_id in same snapshot同樣 blocking。
+Duplicate external_id in one snapshot is also blocking.
 
 ## 10. Diff Model
 
-內部 diff 不用 mutually-exclusive giant enum；採 compositional model：
+Internal diff uses a compositional model rather than a giant mutually exclusive enum:
 
 ```text
 identity: NEW | EXISTING_ACTIVE | EXISTING_ARCHIVED
@@ -440,7 +440,7 @@ filenameChanged
 contentChanged
 ```
 
-UI labels由上述狀態 derive：
+Derive UI labels from these states:
 
 - ADDED
 - UPDATED
@@ -450,14 +450,14 @@ UI labels由上述狀態 derive：
 - RESTORED
 - UNCHANGED
 
-一個 Document 可同時 `MOVED + RENAMED + UPDATED`；summary counters可重疊，另提供 distinct affected-document count。
+A Document may be `MOVED + RENAMED + UPDATED` simultaneously; summary counters may overlap, with a separate distinct affected-document count.
 
 ### 10.1 Revision semantics
 
-- path-only move/rename本身不建立 Revision。
-- resolved title / markdown / metadata 任一 canonical content 改變才建立 Revision。
-- filename rename如果 title 使用 filename fallback，resolved title 會改，因此是 `RENAMED + UPDATED` 並建立 Revision。
-- UNCHANGED 不建立 Revision。
+- Path-only move/rename itself creates no Revision.
+- Create a Revision only if resolved title / markdown / metadata canonical content changes.
+- Filename rename changes resolved title if using filename fallback, producing `RENAMED + UPDATED` and a Revision.
+- UNCHANGED creates no Revision.
 
 ### 10.2 Archive / restore
 
@@ -469,15 +469,15 @@ Document    → ARCHIVED
 TreeNode    → ARCHIVED
 ```
 
-Archive不建立 Revision。
+Archive creates no Revision.
 
-Archived entry reappears並成功 match：reuse same SourceEntry ID / Document ID / TreeNode ID。Same content只 restore；changed content = restore + new Revision。
+Archived entry reappears and matches successfully: reuse SourceEntry ID / Document ID / TreeNode ID. Same content only restores; changed content = restore + new Revision.
 
 ## 11. Folder Reconciliation
 
-Generic folder identity只用 normalized folder path，不跨 path 猜 rename/move。
+Generic folder identity uses only normalized folder path, without guessing rename/move across paths.
 
-Snapshot從 included entries derive required folder set。例如：
+Snapshot derives required folders from included entries. For example:
 
 ```text
 platform/k8s/ingress.md
@@ -492,38 +492,38 @@ platform/k8s
 platform/db
 ```
 
-規則：
+Rules:
 
 - same active path → reuse folder mapping。
 - same archived path → restore。
 - required missing path → create。
 - existing no longer required → archive bottom-up。
 
-若 `docs/k8s/ → platform/k8s/`，folder preview 是 old Archived + new Added；其 descendant Document若能透過 fingerprint match，可保留 Document identity並顯示 MOVED。
+For `docs/k8s/ → platform/k8s/`, folder preview is old Archived + new Added; descendant Documents matching by fingerprint may retain identity and show MOVED.
 
-不做 subtree similarity / descendant overlap inference。
+No subtree similarity / descendant-overlap inference.
 
 ## 12. Asset Model
 
-Phase 2 定義 `knowledge_assets` 為 current source reference projection，不是 immutable knowledge history entity。
+Phase 2 defines `knowledge_assets` as current source-reference projection, not an immutable knowledge-history entity.
 
-規則：
+Rules:
 
 - same path + same hash/metadata → unchanged。
 - same path + changed hash/metadata → update current projection。
 - new path → insert。
 - missing path → remove current projection。
-- same hash + different path → old remove + new add；不推測 rename。
+- Same hash + different path → remove old + add new; no inferred rename.
 
-Phase 2 不建立 Asset Revision、SourceEntry、TreeNode 或 archive lifecycle。
+Phase 2 creates no Asset Revision, SourceEntry, TreeNode, or archive lifecycle.
 
 ## 13. Snapshot Persistence
 
-新增 staging migration `006-phase-2-import-staging`。
+Add staging migration `006-phase-2-import-staging`.
 
 ### 13.1 `source_import_snapshots`
 
-建議欄位：
+Suggested fields:
 
 ```text
 id UUID PK
@@ -552,11 +552,11 @@ result_source_id UUID NULL
 result_version INT UNSIGNED NULL
 ```
 
-DB CHECK constraints要保護 initial-vs-resync shape、state/result shape與 JSON validity。
+DB CHECK constraints protect initial-vs-resync shape, state/result shape, and JSON validity.
 
 ### 13.2 `source_import_snapshot_entries`
 
-同一 table 承擔 manifest + upload staging + parsed READY payload：
+One table holds manifest + upload staging + parsed READY payload:
 
 ```text
 id UUID PK
@@ -584,11 +584,11 @@ diagnostics JSON NOT NULL
 preview_change JSON NULL
 ```
 
-Finalize完成 canonical parsed fields與 plan後，在 transition READY前把 `raw_markdown = NULL`，降低 staging storage。
+After Finalize completes canonical parsed fields and plan, set `raw_markdown = NULL` before transitioning READY to reduce staging storage.
 
 ### 13.3 Staging indexes
 
-至少：
+At least:
 
 ```text
 snapshots:
@@ -603,7 +603,7 @@ entries:
   INDEX(snapshot_id, upload_status)
 ```
 
-`source_path_hash = SHA-256(normalized source_path)` 用來在長 TEXT path 上建立 bounded uniqueness；application仍比較實際 path，極端 hash collision視為 integrity failure。
+`source_path_hash = SHA-256(normalized source_path)` establishes bounded uniqueness for long TEXT paths; application still compares actual paths and treats extreme hash collisions as integrity failures.
 
 ### 13.4 FK and deletion
 
@@ -615,11 +615,11 @@ snapshot.result_source_id → knowledge_sources.id nullable
 entry.snapshot_id → snapshot.id ON DELETE CASCADE
 ```
 
-Snapshot/entries 是 staging，可 TTL physical delete；這不套用 canonical Knowledge no-hard-delete lifecycle。
+Snapshots/entries are staging and may be physically deleted by TTL; canonical Knowledge no-hard-delete lifecycle does not apply.
 
 ## 14. Asset Schema Refinement
 
-新增 `007-phase-2-asset-projection`：
+Add `007-phase-2-asset-projection`:
 
 ```text
 knowledge_assets.source_path_hash CHAR(64) NOT NULL
@@ -627,17 +627,17 @@ knowledge_assets.updated_at DATETIME(6) NOT NULL
 UNIQUE(source_id, source_path_hash)
 ```
 
-Asset repository支援 current projection upsert/update/remove。
+Asset repository supports current-projection upsert/update/remove.
 
-不新增 asset status/revision/history。
+No new asset status/revision/history.
 
 ## 15. Snapshot Hash and Persisted Action Plan
 
-READY snapshot 保存 server-generated `FolderImportPlan` JSON 與 `plan_hash`。
+READY snapshots store server-generated `FolderImportPlan` JSON and `plan_hash`.
 
 ### 15.1 Snapshot hash
 
-對每個 canonicalized staging entry計算 deterministic digest，再依 normalized relative path排序。Snapshot hash至少涵蓋：
+Calculate a deterministic digest for each canonicalized staging entry, then sort by normalized relative path. Snapshot hash covers at least:
 
 ```text
 adapter type/version
@@ -651,11 +651,11 @@ asset metadata hashes
 resolved title / canonical metadata inputs needed for Apply
 ```
 
-Browser upload order不得影響 hash。
+Browser upload order must not affect hashes.
 
 ### 15.2 Action plan
 
-Reconciler輸出 domain plan，不輸出 SQL：
+Reconciler outputs a domain plan, not SQL:
 
 ```text
 FolderImportPlan
@@ -666,19 +666,19 @@ FolderImportPlan
   summary
 ```
 
-Plan本身不包含預先生成的 canonical UUID。Canonical UUIDv7只在 Apply transaction真正 create entity 時生成。
+The plan contains no pregenerated canonical UUIDs. Generate canonical UUIDv7 only when actually creating an entity in Apply transactions.
 
-Document create/revise 的內容以 `uploadKey` 參照 staging entry，不內嵌全文 Markdown——全文只存一份在 `source_import_snapshot_entries.markdown`，否則 §19 上限內的 snapshot 就會超過 `max_allowed_packet` 使 finalize 硬失敗。Apply 在同一 transaction 內按 key 讀取並以 `contentHash` 驗證後才執行；讀不到或對不上即 integrity failure。
+Document create/revise content references staging entries through `uploadKey`, without embedding full Markdown; store full text only once in `source_import_snapshot_entries.markdown`, otherwise snapshots within §19 limits would exceed `max_allowed_packet` and hard-fail finalize. Apply reads by key and verifies `contentHash` in the same transaction before execution; missing/mismatching content is an integrity failure.
 
-`plan_version` 允許未來 plan schema演進。
+`plan_version` permits future plan-schema evolution.
 
-Apply不重新 reconcile；它驗證 snapshot/plan hash後執行 persisted plan。
+Apply does not reconcile again; it validates snapshot/plan hashes and executes the persisted plan.
 
 ## 16. Apply Transaction
 
-一次 Confirm = 一次 whole-source transaction = `sync_version +1 exactly once` = 一筆 APPLIED SyncRun。
+One Confirm = one whole-source transaction = `sync_version +1 exactly once` = one APPLIED SyncRun.
 
-不能逐 entry 呼叫 Phase 1 `applyKnownEntry()`，因為該 API 是 Phase 1 known-entry operation，會 per-operation advance version/run。Phase 2只 reuse它下層 transaction-bound projection/mapping primitives。
+Do not call Phase 1 `applyKnownEntry()` per entry: that known-entry API advances version/run per operation. Phase 2 reuses only its underlying transaction-bound projection/mapping primitives.
 
 ### 16.1 Existing Source apply order
 
@@ -728,11 +728,11 @@ snapshot READY → APPLIED
 COMMIT
 ```
 
-任何 failure rollback後 Source不存在。
+After any failure rollback, Source does not exist.
 
 ### 16.3 No-op sync
 
-成功 Confirm即使所有 content都 UNCHANGED，仍：
+Successful Confirm, even when all content is UNCHANGED, still:
 
 ```text
 sync_version N → N+1
@@ -740,13 +740,13 @@ one APPLIED SyncRun
 summary.changed = false
 ```
 
-`sync_version` 表示 authoritative full-source snapshot application epoch，不是 Document revision count。
+`sync_version` represents the authoritative full-source snapshot application epoch, not Document revision count.
 
 ## 17. Concurrency and Version Conflict
 
-MariaDB繼續使用 `READ COMMITTED`；不升 SERIALIZABLE、不引入 Redis/distributed lock。
+MariaDB continues using `READ COMMITTED`; no upgrade to SERIALIZABLE or Redis/distributed locks.
 
-Concurrency靠：
+Concurrency relies on:
 
 ```text
 snapshot row lock
@@ -754,13 +754,13 @@ Source row lock
 sync_version optimistic token
 ```
 
-所有 Phase 2 Apply統一 lock order：snapshot → Source → Workspace。
+All Phase 2 Applies use lock order snapshot → Source → Workspace.
 
 ### 17.1 Two previews
 
-A/B 都 based_on=7。A先成功 → Source=8。B取得 Source lock後發現 8 != 7。
+A/B both have based_on=7. A succeeds first → Source=8. B acquires Source lock and finds 8 != 7.
 
-Version conflict是 expected business outcome，不在 UoW裡直接 throw導致全部 rollback；transaction內：
+Version conflict is an expected business outcome; do not throw inside UoW causing complete rollback. Within the transaction:
 
 ```text
 snapshot READY → STALE
@@ -768,13 +768,13 @@ insert FAILED SyncRun(failureCode=SOURCE_VERSION_CONFLICT)
 COMMIT
 ```
 
-HTTP layer commit後映射為 `409 SOURCE_VERSION_CONFLICT`。
+After commit, HTTP layer maps to `409 SOURCE_VERSION_CONFLICT`.
 
-B的 canonical Knowledge不變。
+B's canonical Knowledge is unchanged.
 
 ### 17.2 Double Apply
 
-同 snapshot並行 Apply時先競爭 snapshot row lock。第一個 READY→APPLIED；第二個取得 lock後看到 APPLIED，回 idempotent success：
+Concurrent Applies of the same snapshot first compete for its row lock. The first transitions READY→APPLIED; the second acquires the lock, sees APPLIED, and returns idempotent success:
 
 ```text
 alreadyApplied=true
@@ -782,50 +782,50 @@ sourceId
 resultVersion
 ```
 
-不建立第二筆 SyncRun、不再增 version、不再建 Revision。
+No second SyncRun, version increment, or Revision.
 
 ### 17.3 Unexpected failure
 
-Unexpected DB/invariant failure：整個 canonical transaction rollback。
+Unexpected DB/invariant failure: roll back the whole canonical transaction.
 
-- Existing Source：snapshot維持 READY；可在 rollback後用 separate transaction寫 FAILED SyncRun；retry同 snapshot允許。
-- Initial import：因 Source不存在且 `sync_runs.source_id NOT NULL`，不建立 phantom FAILED SyncRun；snapshot維持 READY，供 retry/operational diagnostics。
-- Deadlock / lock wait timeout映射 `IMPORT_APPLY_RETRYABLE`；MVP不做 domain-level automatic multi-retry。
+- Existing Source: snapshot stays READY; a separate transaction may write FAILED SyncRun after rollback; retrying the same snapshot is allowed.
+- Initial import: because Source does not exist and `sync_runs.source_id NOT NULL`, create no phantom FAILED SyncRun; snapshot stays READY for retry/operational diagnostics.
+- Deadlock / lock wait timeout maps to `IMPORT_APPLY_RETRYABLE`; MVP has no domain-level automatic multiple retries.
 
 ## 18. Authorization and Security
 
 ### 18.1 Caller authority
 
-所有 actor identity來自 trusted `CallerContext`，client不能指定 `created_by`、`triggered_by`、actor、membership或ownership。
+All actor identity comes from trusted `CallerContext`; clients cannot specify `created_by`, `triggered_by`, actor, membership, or ownership.
 
-Initial import需要 caller是 target Workspace member。
+Initial import requires caller membership in the target Workspace.
 
-Resync：server resolve Source → Workspace，再檢查 membership、ACTIVE、SOURCE_MANAGED。
+Resync: server resolves Source → Workspace, then checks membership, ACTIVE, SOURCE_MANAGED.
 
-Apply再次驗證 membership；Preview不是 authorization cache。
+Apply revalidates membership; Preview is no authorization cache.
 
 ### 18.2 Snapshot privacy
 
-Snapshot是 creator-private temporary resource。所有 GET/upload/finalize/apply都要求：
+Snapshot is a creator-private temporary resource. All GET/upload/finalize/apply require:
 
 ```text
 snapshot.created_by == caller.identity.id
 and caller still has Workspace access
 ```
 
-其他人即使同 Workspace也不能讀另一人的 staging Markdown。Unauthorized/unknown resource對外用 non-enumerating not-found semantics。
+Others cannot read another person's staging Markdown even in the same Workspace. Unauthorized/unknown resources use non-enumerating not-found semantics externally.
 
 ### 18.3 Parser/network safety
 
 - no eval / unsafe YAML constructors / custom executable tags。
-- parser不 follow `file://`、HTTP links、Markdown image URLs、includes。
-- Phase 2 ingestion不發 outbound request，不讀 server local file path。
-- Markdown/raw HTML保存 source content；rendering layer負責 safe rendering/sanitization。Store faithfully, render safely。
-- source path只進 parameterized SQL；不拼 SQL、不傳 shell、不寫本機 filesystem。
+- Parser follows no `file://`, HTTP links, Markdown image URLs, or includes.
+- Phase 2 ingestion makes no outbound requests and reads no server-local paths.
+- Markdown/raw HTML retains source content; rendering layer handles safe rendering/sanitization. Store faithfully, render safely.
+- Source paths enter only parameterized SQL; no SQL concatenation, shell passing, or local filesystem writes.
 
 ### 18.4 Logging
 
-Operational logs不印 raw Markdown/frontmatter body。只記 snapshot/source/workspace/actor IDs、counts、state、failure code、duration等 metadata。
+Operational logs never print raw Markdown/frontmatter bodies; record only metadata such as snapshot/source/workspace/actor IDs, counts, state, failure code, duration.
 
 ## 19. Limits and Retention
 
@@ -842,7 +842,7 @@ max BUILDING snapshots/user   3
 max READY snapshots/user      10
 ```
 
-這些是 configurable application limits，不是核心 domain semantics。
+These are configurable application limits, not core domain semantics.
 
 Retention：
 
@@ -853,9 +853,9 @@ STALE: 24 hours
 APPLIED: 24 hours
 ```
 
-Cleanup bounded batch physical-delete staging snapshots；entries cascade delete。Canonical Source/Document/Revision/SyncRun不受影響。
+Cleanup physically deletes staging snapshots in bounded batches; entries cascade-delete. Canonical Source/Document/Revision/SyncRun remain unaffected.
 
-Cleanup與Apply都使用 short row-lock/conditional-delete semantics避免 race。
+Cleanup and Apply both use short row-lock/conditional-delete semantics to avoid races.
 
 ## 20. API Contract
 
@@ -865,7 +865,7 @@ Cleanup與Apply都使用 short row-lock/conditional-delete semantics避免 race�
 POST /api/workspaces/:workspaceId/source-imports
 ```
 
-包含 source name、root name、manifest。Server建立 BUILDING snapshot。
+Includes source name, root name, manifest. Server creates a BUILDING snapshot.
 
 ### 20.2 Existing-source session
 
@@ -873,7 +873,7 @@ POST /api/workspaces/:workspaceId/source-imports
 POST /api/sources/:sourceId/source-imports
 ```
 
-Server resolve workspace與 based_on_version；client不提供 authoritative workspace/version。
+Server resolves workspace and based_on_version; client supplies no authoritative workspace/version.
 
 ### 20.3 Upload entries
 
@@ -882,7 +882,7 @@ POST /api/source-imports/:snapshotId/entries
 Content-Type: multipart/form-data
 ```
 
-Bounded batch raw File bytes。`uploadKey + same payload hash` retry idempotent；同 uploadKey不同 bytes = `UPLOAD_ENTRY_CONFLICT`。
+Bounded batches of raw File bytes. Retrying `uploadKey + same payload hash` is idempotent; same uploadKey with different bytes = `UPLOAD_ENTRY_CONFLICT`.
 
 ### 20.4 Finalize
 
@@ -890,9 +890,9 @@ Bounded batch raw File bytes。`uploadKey + same payload hash` retry idempotent�
 POST /api/source-imports/:snapshotId/finalize
 ```
 
-完成 manifest completeness、path normalization、ignore、UTF-8 decode、Markdown/frontmatter parse、title resolution、fingerprints、diagnostics、reconciliation、plan/hash persistence，然後 BUILDING→READY。
+Complete manifest completeness, path normalization, ignore rules, UTF-8 decoding, Markdown/frontmatter parsing, title resolution, fingerprints, diagnostics, reconciliation, and plan/hash persistence, then BUILDING→READY.
 
-Blocking diagnostics仍可 READY + `has_blockers=true`，讓使用者看到問題；只是不能 Apply。
+Blocking diagnostics may still produce READY + `has_blockers=true` so users see problems; Apply is forbidden.
 
 ### 20.5 Preview
 
@@ -900,7 +900,7 @@ Blocking diagnostics仍可 READY + `has_blockers=true`，讓使用者看到問�
 GET /api/source-imports/:snapshotId
 ```
 
-返回 target metadata、expiry、summary、changes、diagnostics。
+Return target metadata, expiry, summary, changes, diagnostics.
 
 ### 20.6 Apply
 
@@ -908,7 +908,7 @@ GET /api/source-imports/:snapshotId
 POST /api/source-imports/:snapshotId/apply
 ```
 
-Request不重傳 folder/workspace/source/diff/version。Server只使用 bound immutable snapshot + plan。
+Request does not resend folder/workspace/source/diff/version. Server uses only the bound immutable snapshot + plan.
 
 ### 20.7 Error envelope
 
@@ -925,9 +925,9 @@ Request不重傳 folder/workspace/source/diff/version。Server只使用 bound im
 }
 ```
 
-UI依 machine-readable `code` 判斷，不 parse message。
+UI branches on machine-readable `code`, without parsing messages.
 
-主要 codes：
+Main codes:
 
 ```text
 IMPORT_SNAPSHOT_NOT_FOUND
@@ -973,20 +973,20 @@ IMPORT_APPLY_RETRYABLE
 IMPORT_APPLY_FAILED
 ```
 
-上述 codes 均已對 shipped source 逐字驗證（`src/modules/sources/` + `src/server/http-error-response.ts` +
-`src/app/api/`）：`SOURCE_IMPORT_NOT_ALLOWED` 取代本節舊草稿的 `SOURCE_NOT_ACTIVE` /
-`SOURCE_NOT_SOURCE_MANAGED`（兩者合併為單一 code，舊名在 source 中不存在）；
-`IMPORT_BUILDING_QUOTA_EXCEEDED` / `IMPORT_READY_QUOTA_EXCEEDED` 取代舊草稿的
-`IMPORT_SESSION_LIMIT`（舊名在 source 中不存在）；READY blocker/diagnostic codes
+The codes above were verified verbatim against shipped source (`src/modules/sources/` + `src/server/http-error-response.ts` +
+`src/app/api/`): `SOURCE_IMPORT_NOT_ALLOWED` replaces the earlier draft's `SOURCE_NOT_ACTIVE` /
+`SOURCE_NOT_SOURCE_MANAGED` (merged into one code; old names do not exist in source);
+`IMPORT_BUILDING_QUOTA_EXCEEDED` / `IMPORT_READY_QUOTA_EXCEEDED` replace the earlier draft's
+`IMPORT_SESSION_LIMIT` (old name absent from source); READY blocker/diagnostic codes
 （`IMPORT_SNAPSHOT_BLOCKED`、`SOURCE_PATH_TYPE_CONFLICT`、
 `CANONICAL_SOURCE_PATH_CONFLICT`、`TITLE_TOO_LONG`、`METADATA_TOO_LARGE`、
 `INVALID_FOLDER_NAME`、`IMPORT_PLAN_*`、`UPLOAD_*`、`INVALID_*_MANIFEST`、
-`IMPORT_LIMIT_EXCEEDED`）沿 400-preserving branch 透出 machine-readable code，
-供 UI 直接分支。
+`IMPORT_LIMIT_EXCEEDED`) expose machine-readable codes through the 400-preserving branch,
+for direct UI branching.
 
 ## 21. Preview UX
 
-Human flow保持簡單：
+Keep Human flow simple:
 
 ```text
 Choose folder
@@ -996,38 +996,38 @@ Choose folder
 → Done
 ```
 
-Preview header顯示 Workspace、Source/New Source、based-on version、expiry。
+Preview header shows Workspace, Source/New Source, based-on version, expiry.
 
-Summary顯示 Documents/Folders/Assets changes，以及 warning/blocking counts。
+Summary shows Documents/Folders/Assets changes and warning/blocking counts.
 
-Change list預設只顯示 affected entries，可 filter Added/Updated/Moved/Renamed/Archived/Warnings/All。
+Change list defaults to affected entries, filterable by Added/Updated/Moved/Renamed/Archived/Warnings/All.
 
-Warnings不阻塞 Apply；blocking errors disable Apply。
+Warnings do not block Apply; blocking errors disable it.
 
-SOURCE_MANAGED blocker修正方式是回來源 folder修正並重新建立 Preview，不在 Hub Preview裡編輯 canonical source content。
+Fix SOURCE_MANAGED blockers in the source folder and create a new Preview; do not edit canonical source content within Hub Preview.
 
-Version conflict UI清楚顯示 stale preview並要求重新選 folder / generate fresh preview；Phase 2無 Force Apply。
+Version-conflict UI clearly shows stale preview and requires reselecting folder / generating a fresh preview; Phase 2 has no Force Apply.
 
-Snapshot DB persistence允許 refresh/close/reopen Preview URL，只要尚未 cleanup且 caller仍有權限。
+Snapshot DB persistence permits refreshing/closing/reopening Preview URLs while not cleaned up and caller remains authorized.
 
 ## 22. SyncRun Semantics
 
-Preview不寫 `sync_runs`。現有 `sync_runs.source_id NOT NULL` 維持，不為首次 Preview建立 phantom Source。
+Preview writes no `sync_runs`. Retain `sync_runs.source_id NOT NULL`; create no phantom Source for first Preview.
 
 Canonical history：
 
 - successful Initial Import：APPLIED SyncRun，based=0/result=1。
 - successful resync：APPLIED SyncRun，based=N/result=N+1。
-- successful no-op resync：同樣 APPLIED，version +1，`changed=false`。
+- Successful no-op resync: still APPLIED, version +1, `changed=false`.
 - existing-source version conflict：FAILED SyncRun，result_version=null。
-- existing-source unexpected Apply failure：rollback後可 separate transaction記 FAILED run。
-- initial-import failed transaction：無 Source，因此無 canonical FAILED SyncRun。
+- Existing-source unexpected Apply failure: a separate transaction may record FAILED run after rollback.
+- Failed initial-import transaction: no Source, thus no canonical FAILED SyncRun.
 
-SyncRun summary保存 snapshot ID/hash、counts與 failure code；snapshot TTL刪除後 canonical history仍可理解。
+SyncRun summary stores snapshot ID/hash, counts, failure code; canonical history remains understandable after snapshot TTL deletion.
 
 ## 23. Tree Ordering
 
-Folder sync不使用 browser upload order。
+Folder sync does not use browser upload order.
 
 Sibling ordering deterministic：
 
@@ -1037,38 +1037,38 @@ documents second
 within each group: case-sensitive name/path ascending
 ```
 
-套用後使用 Phase 1 contiguous position rules。
+After Apply, use Phase 1 contiguous-position rules.
 
-Phase 2不支援 frontmatter.order / custom ordering。
+Phase 2 does not support frontmatter.order / custom ordering.
 
 ## 24. Repository and Transaction Ports
 
-新增：
+Add:
 
 ```text
 ImportSnapshotRepository
 ImportSnapshotEntryRepository
 ```
 
-並加入既有 `SourceRepositories` / `SourceUnitOfWork` transaction context，使 Apply 能在同一 MariaDB transaction lock snapshot + Source + mutate canonical Knowledge + SyncRun + snapshot state。
+Add to existing `SourceRepositories` / `SourceUnitOfWork` transaction context so Apply can lock snapshot + Source and mutate canonical Knowledge + SyncRun + snapshot state in one MariaDB transaction.
 
-不建立第二套 transaction framework。
+Create no second transaction framework.
 
-Phase 1 `bindSourceProjection()`、SourceEntry mapping primitives、tree validation與revision comparison繼續是 canonical mutation authority。
+Phase 1 `bindSourceProjection()`, SourceEntry mapping primitives, tree validation, and revision comparison remain canonical mutation authorities.
 
 ## 25. Testing Strategy
 
 ### 25.1 Pure unit tests
 
-Path / ignore / UTF-8 / frontmatter / title resolution / Markdown AST heading / fingerprints / reconciler / folders / assets全部大量使用 pure unit tests。
+Path / ignore / UTF-8 / frontmatter / title resolution / Markdown AST headings / fingerprints / reconciler / folders / assets all extensively use pure unit tests.
 
-重要 fingerprint test：filename-derived title在 rename後讓 revision fingerprint改變，但 reconciliation fingerprint保持不變。
+Key fingerprint test: filename-derived title changes revision fingerprint after rename, while reconciliation fingerprint stays unchanged.
 
-重要 reconciler tests：UNCHANGED、UPDATED、MOVED、RENAMED、MOVED+UPDATED、ARCHIVED、RESTORED、RESTORED+UPDATED、ambiguous identity、external-id/path conflict、deterministic repeated output。
+Key reconciler tests: UNCHANGED, UPDATED, MOVED, RENAMED, MOVED+UPDATED, ARCHIVED, RESTORED, RESTORED+UPDATED, ambiguous identity, external-id/path conflict, deterministic repeated output.
 
 ### 25.2 Integration tests
 
-使用現有 isolated MariaDB + migrations測：
+Test with existing isolated MariaDB + migrations:
 
 - BUILDING→READY snapshot lifecycle。
 - upload retry idempotency。
@@ -1077,7 +1077,7 @@ Path / ignore / UTF-8 / frontmatter / title resolution / Markdown AST heading / 
 - first successful version = 1。
 - whole sync version advances exactly once regardless of entry count。
 - no-op sync still version +1 / APPLIED run changed=false。
-- unchanged docs不新增 Revision。
+- Unchanged documents create no Revision.
 - full rollback fault injection at folder/document/revision/asset/run checkpoints。
 - version conflict commits STALE + FAILED run with no Knowledge mutation。
 - double Apply idempotency。
@@ -1088,12 +1088,12 @@ Path / ignore / UTF-8 / frontmatter / title resolution / Markdown AST heading / 
 
 ### 25.3 E2E
 
-至少：
+At least:
 
 1. First Import happy path：Workspace → folder → Preview → Apply → Source Tree/Document visible。
-2. Resync fixture v1→v2：Preview/Apply Added、Updated、Moved、Archived等語意。
+2. Resync fixture v1→v2: Preview/Apply Added, Updated, Moved, Archived, etc. semantics.
 3. Blocking malformed-frontmatter Preview：error visible、Apply disabled。
-4. Stale Preview/version conflict：顯示 source changed、不可 force apply。
+4. Stale Preview/version conflict: show source changed; no force apply.
 
 ### 25.4 Fixtures
 
@@ -1114,9 +1114,9 @@ fixture is needed.
 
 ### 25.5 Performance acceptance
 
-至少有 1,000 Markdown files smoke fixture，Finalize/Reconcile不得 OOM、timeout或明顯 O(n²) matching。
+Provide a smoke fixture of at least 1,000 Markdown files; Finalize/Reconcile must not OOM, time out, or exhibit obvious O(n²) matching.
 
-Reconciler應建立 lookup maps：
+Reconciler should build lookup maps:
 
 ```text
 externalId → entry
@@ -1124,35 +1124,35 @@ path → entry
 fingerprint → candidate[]
 ```
 
-主要 matching接近 O(n)。
+Main matching approaches O(n).
 
 ## 26. Acceptance Criteria
 
-Phase 2 merge前必須滿足：
+Before Phase 2 merge, require:
 
-- Accessible Workspace可整個 folder建立 persistent immutable Preview。
-- Preview能顯示 Added / Updated / Moved / Renamed / Archived / Restored / Unchanged、assets與diagnostics。
-- Warning可 Apply；任何 blocker不可 Apply。
-- First Import只在 Confirm transaction建立 SOURCE_MANAGED Source。
-- Existing sync只接受 source scope，Workspace server-side derive，不能 transfer Source。
-- 一次 Confirm是單一 canonical transaction、single SyncRun、single `sync_version +1`。
-- No-op confirmed sync同樣 version +1，`changed=false`。
-- UNCHANGED Document不建 Revision。
-- path-only move/rename不建 Revision，除非 resolved canonical title因此改變。
-- Archive/reappearance安全 match時 reuse stable SourceEntry/Document/TreeNode IDs。
-- Ambiguous rename不猜 identity。
-- Folder rename不做 subtree identity guessing。
-- Asset只保存 current metadata/reference，不保存 binary/revision history。
-- Failed Apply不留下 partial canonical state。
-- Version conflict使 snapshot STALE，不可 force apply。
-- Double Apply不重複 mutation/version/run。
-- Snapshot creator-private且Apply重新驗證 Workspace membership。
-- Snapshot可 TTL physical cleanup而不傷 canonical history。
-- Unit/integration/E2E全部通過。
+- Accessible Workspaces can create persistent immutable Preview from an entire folder.
+- Preview shows Added / Updated / Moved / Renamed / Archived / Restored / Unchanged, assets, diagnostics.
+- Warnings permit Apply; any blocker forbids it.
+- First Import creates SOURCE_MANAGED Source only in the Confirm transaction.
+- Existing sync accepts only source scope, deriving Workspace server-side, without Source transfer.
+- One Confirm is one canonical transaction, single SyncRun, single `sync_version +1`.
+- Confirmed no-op sync also increments version +1 with `changed=false`.
+- UNCHANGED Document creates no Revision.
+- Path-only move/rename creates no Revision unless resolved canonical title changes as a result.
+- Archive/reappearance with safe matching reuses stable SourceEntry/Document/TreeNode IDs.
+- Ambiguous rename does not guess identity.
+- Folder rename has no subtree identity guessing.
+- Assets store only current metadata/reference, without binary/revision history.
+- Failed Apply leaves no partial canonical state.
+- Version conflict makes snapshots STALE; no force apply.
+- Double Apply repeats no mutation/version/run.
+- Snapshots are creator-private; Apply revalidates Workspace membership.
+- Snapshots allow TTL physical cleanup without damaging canonical history.
+- All unit/integration/E2E pass.
 
 ## 27. Implementation Slicing
 
-Written design approved後，implementation plan按依賴順序細化：
+After written design approval, the implementation plan expands in dependency order:
 
 ```text
 Slice 1  domain primitives: path/title/parser/fingerprints/reconciler
@@ -1166,11 +1166,11 @@ Slice 8  cleanup + operational limits
 Slice 9  E2E / performance / regression hardening
 ```
 
-詳細 file-by-file、test-first implementation steps由 Superpowers `writing-plans` 在本 spec 最終核准後產生；本文件不提前進入 implementation。
+Superpowers `writing-plans` produces detailed file-by-file, test-first steps after final spec approval; this document does not prematurely begin implementation.
 
 ## 28. Final Design Invariants
 
-Phase 2 最終必須能用以下幾條話描述：
+Phase 2 must ultimately be describable by these statements:
 
 ```text
 Source folder is authority.
@@ -1185,4 +1185,4 @@ Authorization is re-checked at mutation time.
 Staging can disappear; canonical Knowledge history cannot.
 ```
 
-這些 invariant 是 Phase 2 實作、review 與後續 Phase 3+ 演進時的判斷基準。
+These invariants guide Phase 2 implementation/review and later Phase 3+ evolution.

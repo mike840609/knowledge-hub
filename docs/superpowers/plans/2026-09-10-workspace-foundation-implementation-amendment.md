@@ -1,17 +1,17 @@
 # Knowledge Hub — Workspace Foundation Implementation History
 
-| 項目 | 內容 |
+| Item | Content |
 | --- | --- |
-| 日期 | 2026-09-10 |
-| 文件類型 | Implementation change history |
-| 狀態 | **Historical record — not an executable implementation plan** |
-| Current plans | [Phase 0 Plan](2026-09-10-phase-0-foundation-implementation.md)、[Phase 1 Plan](2026-09-10-phase-1-knowledge-core-tree-implementation.md) |
+| Date | 2026-09-10 |
+| Document type | Implementation change history |
+| Status | **Historical record — not an executable implementation plan** |
+| Current plans | [Phase 0 Plan](2026-09-10-phase-0-foundation-implementation.md), [Phase 1 Plan](2026-09-10-phase-1-knowledge-core-tree-implementation.md) |
 
-> **重要：** Workspace foundation changes 已直接整合進 Phase 0/1 current implementation plans。本文件不再提供需要套用的 task override；Agent 執行工作時應直接使用 current Phase plan。
+> **Important:** Workspace foundation changes have been integrated directly into the current Phase 0/1 implementation plans. This document no longer supplies task overrides to apply; agents should execute the current Phase plan directly.
 
 ## 1. Why the Plans Changed
 
-Architecture review 把 Knowledge access scope 從 company organization identity 拆出，建立：
+Architecture review separated Knowledge access scope from company organization identity, establishing:
 
 ```text
 User
@@ -21,44 +21,44 @@ User
 → Tree / Document
 ```
 
-`User.org_code` 繼續存在，但只作 identity / governance input，不直接作 Knowledge ACL。
+`User.org_code` remains, but serves only as identity / governance input, not directly as the Knowledge ACL.
 
 ## 2. Phase 0 Implementation Delta Recorded
 
-這次變更曾要求 Phase 0 增加或調整：
+This change required Phase 0 to add or adjust:
 
-- 新增 `workspaces` module。
-- 新增 `workspaces`、`workspace_memberships` tables。
-- `KnowledgeSource` 使用 `workspace_id` 作 authoritative Source scope。
-- Local seed 建立 User → WorkspaceMembership → Workspace → Source。
-- 加入 cross-org member allow、same-org non-member deny、multi-Workspace caller fixtures。
-- Direct Source/Document UUID lookup 必須重新解析 Workspace policy。
-- Minimal Web flow 增加 Workspace selector。
-- Workspace selector 不是 authorization evidence。
-- Phase 0 canonical domain baseline 由原 Knowledge/Source core tables擴充成十張 domain tables。
+- Add the `workspaces` module.
+- Add the `workspaces` and `workspace_memberships` tables.
+- `KnowledgeSource` uses `workspace_id` as the authoritative Source scope.
+- The local seed establishes User → WorkspaceMembership → Workspace → Source.
+- Add cross-org member allow, same-org non-member deny, and multi-Workspace caller fixtures.
+- Direct Source/Document UUID lookup must resolve Workspace policy again.
+- Add a Workspace selector to the minimal Web flow.
+- The Workspace selector is not authorization evidence.
+- Expand the Phase 0 canonical domain baseline from the original Knowledge/Source core tables to ten domain tables.
 
-上述內容已存在 current [Phase 0 Implementation Plan](2026-09-10-phase-0-foundation-implementation.md)，**不得再依本 history 重複建立第二套 migration/module/task**。
+These changes are already present in the current [Phase 0 Implementation Plan](2026-09-10-phase-0-foundation-implementation.md). **Do not use this history to create a duplicate set of migrations/modules/tasks.**
 
 ## 3. Phase 1 Implementation Delta Recorded
 
-這次變更曾要求 Phase 1：
+This change required Phase 1 to:
 
-- 繼承 Phase 0 Workspace/Membership foundation。
-- Query/command 由 resource → Source → Workspace 做 access check。
-- `WorkspaceQueryService.listWorkspaces(caller)` 提供 selector data。
-- `KnowledgeQueryService.listSources(caller, workspaceId, ...)` 使用 Workspace 作 query scope。
-- Resource-specific reads 不接受額外 workspaceId 作 authorization proof。
-- Browser 改為 `Workspace → Source → Tree → Document / Revision`。
-- E2E 增加 cross-org member、same-org non-member、multi-Workspace 與 direct unauthorized URL cases。
-- 普通 Tree/Sync operation 不可偷偷 transfer Source 到另一 Workspace。
+- Inherit the Phase 0 Workspace/Membership foundation.
+- Perform query/command access checks through resource → Source → Workspace.
+- `WorkspaceQueryService.listWorkspaces(caller)` supplies selector data.
+- `KnowledgeQueryService.listSources(caller, workspaceId, ...)` uses Workspace as the query scope.
+- Resource-specific reads do not accept an additional workspaceId as authorization proof.
+- Change the browser to `Workspace → Source → Tree → Document / Revision`.
+- Add E2E cases for cross-org members, same-org non-members, multi-Workspace callers, and direct unauthorized URLs.
+- Ordinary Tree/Sync operations must not silently transfer a Source to another Workspace.
 
-上述內容已存在 current [Phase 1 Implementation Plan](2026-09-10-phase-1-knowledge-core-tree-implementation.md)。
+These changes are already present in the current [Phase 1 Implementation Plan](2026-09-10-phase-1-knowledge-core-tree-implementation.md).
 
 ## 4. Workspace Lifecycle Responsibility Added
 
-Architecture review 後又發現：既然 Workspace 已是 first-class domain，就必須有明確 Phase owner 負責 lifecycle；否則 Phase 2 會假設 Workspace 已存在，卻沒有正式 provisioning path。
+A subsequent architecture review found that, because Workspace is now a first-class domain, an explicit Phase owner must own its lifecycle; otherwise Phase 2 assumes Workspaces exist without a formal provisioning path.
 
-因此 current roadmap / Phase 0 / Phase 1 handoff 已統一指定 **Phase 3** 負責：
+The current roadmap and Phase 0 / Phase 1 handoffs therefore consistently assign **Phase 3** responsibility for:
 
 ```text
 Workspace provisioning / create
@@ -74,34 +74,34 @@ production audit
 Company SSO adapter
 ```
 
-規則：
+Rules:
 
-- Phase 0 只建最小 Workspace/Membership schema、seed、query/policy foundation。
-- Phase 1 只 consume Workspace access foundation並提供 selector/browser。
-- Phase 2 只讓 new Source 選 target Workspace；不建立 Workspace admin feature。
-- Workspace MVP 不 hard delete。
-- accountable org/team metadata 如果需要，由 Phase 3 governance 設計，但不是 authorization shortcut。
-- Company production multi-user governance 需 Phase 3 完成。
+- Phase 0 builds only the minimal Workspace/Membership schema, seed, and query/policy foundation.
+- Phase 1 only consumes the Workspace access foundation and supplies the selector/browser.
+- Phase 2 only lets a new Source choose its target Workspace; it does not build Workspace administration features.
+- The Workspace MVP does not hard delete.
+- If accountable org/team metadata is needed, Phase 3 governance designs it; it is not an authorization shortcut.
+- Company production multi-user governance requires completion of Phase 3.
 
 ## 5. What Did Not Change
 
-本次 plan correction 沒有改變：
+This plan correction did not change:
 
-- UUIDv7 + MariaDB native UUID。
-- READ COMMITTED canonical transactions。
-- Source/Document row locks。
-- stable Document identity。
-- immutable Revision。
-- SourceEntry mapping。
-- one-document-one-TreeNode。
-- `SOURCE_MANAGED / HUB_MANAGED` mutation authority。
-- Knowledge `ACTIVE / ARCHIVED` lifecycle。
-- Preview → Confirm → Apply / `sync_version` safety。
-- Phase 2 Title Resolution responsibility。
+- UUIDv7 + MariaDB native UUID.
+- READ COMMITTED canonical transactions.
+- Source/Document row locks.
+- stable Document identity.
+- immutable Revision.
+- SourceEntry mapping.
+- one-document-one-TreeNode.
+- `SOURCE_MANAGED / HUB_MANAGED` mutation authority.
+- Knowledge `ACTIVE / ARCHIVED` lifecycle.
+- Preview → Confirm → Apply / `sync_version` safety.
+- Phase 2 Title Resolution responsibility.
 
 ## 6. Execution Rule for Agents
 
-Agent 要實作 Phase 0 或 Phase 1 時：
+When an agent implements Phase 0 or Phase 1:
 
 ```text
 1. Read current Phase Design
@@ -110,7 +110,7 @@ Agent 要實作 Phase 0 或 Phase 1 時：
 4. Use verification evidence before claiming completion
 ```
 
-不要：
+Do not combine:
 
 ```text
 current plan
@@ -118,4 +118,4 @@ current plan
 + old plan assumptions
 ```
 
-這個 history file 只用於追查「為什麼 Workspace work 被加入 plan」與「哪些責任後來交給 Phase 3」，不應產生任何額外 implementation task。
+This history file exists only to trace why Workspace work was added to the plans and which responsibilities were later assigned to Phase 3; it must not generate additional implementation tasks.

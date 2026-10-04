@@ -1042,7 +1042,6 @@ the earlier deferred-product decisions on these operations. Team navigation
 remains visible but disabled, labelled Coming soon, until server configuration
 explicitly enables it. Disabled controls have no navigation or click action.
 
-
 1. The palette is mostly navigation, and that is a product gap rather than a
    UI one. Counted against the code it can offer about fourteen entries, of
    which the majority are ways to get somewhere; a command palette does not
