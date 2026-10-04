@@ -8,12 +8,20 @@ import {databaseConfig} from "../../src/infrastructure/database/mariadb/config";
 test("freshness preference persists and reminders link to source actions",async({page,request})=>{
  const nav=await(await request.get("/api/workspaces")).json();
  const ws=nav.items.find((w:{type:string})=>w.type==="PERSONAL").id;
+ const endpoint=`/api/workspaces/${ws}/personal/freshness`;
+ const initial=await(await request.get(endpoint)).json();
+ expect((await request.put(endpoint,{data:{value:{thresholdDays:14},version:initial.version}})).ok()).toBe(true);
  const sources:Record<string,string>={};
  for(const name of ["Older folder","Failed folder","Pending folder","Never imported folder"]){
   const snapshot=await stageReadingFolder(request,{workspaceId:ws,sourceName:name,fixture:"reading-flow-v1"});
   const result=await request.post(`/api/source-imports/${snapshot}/apply`,{data:{}});expect(result.ok()).toBe(true);sources[name]=(await result.json()).sourceId;
  }
  const pending=await stageReadingFolder(request,{workspaceId:ws,sourceName:"Pending folder",sourceId:sources["Pending folder"],fixture:"reading-flow-v1"});
+ // Keep an unrelated pending preview so standalone runs exercise duplicate action labels too.
+ const unrelated=await stageReadingFolder(request,{workspaceId:ws,sourceName:"Unrelated pending folder",fixture:"reading-flow-v1"});
+ const unrelatedApply=await request.post(`/api/source-imports/${unrelated}/apply`,{data:{}});
+ expect(unrelatedApply.ok()).toBe(true);
+ await stageReadingFolder(request,{workspaceId:ws,sourceName:"Unrelated pending folder",sourceId:(await unrelatedApply.json()).sourceId,fixture:"reading-flow-v1"});
  // Deterministic import-history fixtures in the engineering wrapper's isolated database.
  const pool=createDatabasePool(databaseConfig("e2e"));
  try {
@@ -24,19 +32,22 @@ test("freshness preference persists and reminders link to source actions",async(
  } finally {await pool.end();}
  await page.goto(`/w/${ws}/home`);
  const region=page.getByRole("region",{name:"Knowledge freshness"});
- await expect(region.getByText("Import may be outdated",{exact:false})).toBeVisible();
- await expect(region.getByText("Latest sync failed",{exact:false})).toBeVisible();
- await expect(region.getByText("Never imported",{exact:true})).toBeVisible();
- await expect(region.getByRole("link",{name:"Review preview"})).toHaveAttribute("href",`/w/${ws}/sources/imports/${pending}`);
- await expect(region.getByRole("link",{name:"Retry import"})).toHaveAttribute("href",`/w/${ws}/sources/${sources["Failed folder"]}/update`);
+ // Other full-suite tests may leave pending or old folders in the shared workspace.
+ expect(await region.getByRole("link",{name:"Review preview"}).count()).toBeGreaterThan(1);
+ const row=(name:string)=>region.getByRole("listitem").filter({has:page.locator(`a[href="/w/${ws}/sources/${sources[name]}"]`)});
+ await expect(row("Older folder").getByText("Import may be outdated",{exact:false})).toBeVisible();
+ await expect(row("Failed folder").getByText("Latest sync failed",{exact:false})).toBeVisible();
+ await expect(row("Never imported folder").getByText("Never imported",{exact:true})).toBeVisible();
+ await expect(row("Pending folder").getByRole("link",{name:"Review preview"})).toHaveAttribute("href",`/w/${ws}/sources/imports/${pending}`);
+ await expect(row("Failed folder").getByRole("link",{name:"Retry import"})).toHaveAttribute("href",`/w/${ws}/sources/${sources["Failed folder"]}/update`);
  const saved=page.waitForResponse(r=>r.url().endsWith("/personal/freshness")&&r.request().method()==="PUT");
  await region.getByLabel("Freshness threshold").selectOption("30");expect((await saved).ok()).toBe(true);
- await expect(region.getByText("Import may be outdated",{exact:false})).toHaveCount(0);
+ await expect(row("Older folder").getByText("Import may be outdated",{exact:false})).toHaveCount(0);
  await page.reload();await expect(region.getByLabel("Freshness threshold")).toHaveValue("30");
  const changed=page.waitForResponse(r=>r.url().endsWith("/personal/freshness")&&r.request().method()==="PUT");await region.getByLabel("Freshness threshold").selectOption("7");expect((await changed).ok()).toBe(true);
- await expect(region.getByText("Import may be outdated",{exact:false})).toBeVisible();
+ await expect(row("Older folder").getByText("Import may be outdated",{exact:false})).toBeVisible();
  const output=path.resolve("docs/ui-comparisons/mvp-freshness");await mkdir(output,{recursive:true});
  await page.setViewportSize({width:1440,height:1100});await page.screenshot({path:path.join(output,"desktop.png"),fullPage:true,animations:"disabled"});
  await page.setViewportSize({width:390,height:844});await region.scrollIntoViewIfNeeded();await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:path.join(output,"mobile.png"),fullPage:true,animations:"disabled"});
- await region.getByRole("link",{name:"Review preview"}).click();await expect(page).toHaveURL(new RegExp(`/sources/imports/${pending}$`));
+ await row("Pending folder").getByRole("link",{name:"Review preview"}).click();await expect(page).toHaveURL(new RegExp(`/sources/imports/${pending}$`));
 });
