@@ -168,6 +168,10 @@ test("the row menu shows each action's key, without truncating its label, and no
 
   await row(page, "Runbooks").click({ button: "right" });
   const menu = page.getByRole("menu");
+  // The key is announced by aria-keyshortcuts, so the visible hint must stay out of the accessible name.
+  for (const name of ["Edit document", "Add to favorites", "Move document…"]) {
+    await expect(menu.getByRole("menuitem", { name, exact: true })).toBeVisible();
+  }
   await expect(menu.getByRole("menuitem", { name: /Edit document/ }).locator("kbd")).toHaveText("E");
   await expect(menu.getByRole("menuitem", { name: /Add to favorites/ }).locator("kbd")).toHaveText("F");
   await expect(menu.getByRole("menuitem", { name: /Move document/ }).locator("kbd")).toHaveText("M");

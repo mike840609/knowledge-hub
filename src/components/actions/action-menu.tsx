@@ -160,7 +160,12 @@ export function ActionMenuItems({
         <MenuItem key={action.id} aria-keyshortcuts={action.shortcut} onClick={() => onRun(action)}>
           <ActionIcon name={action.icon} />
           <span className="min-w-0 flex-1 truncate">{action.label}</span>
-          {action.shortcut ? <Kbd className="shrink-0">{shortcutLabel(action.shortcut)}</Kbd> : null}
+          {action.shortcut ? (
+            // aria-keyshortcuts announces the key; the visible hint stays out of the item's name.
+            <span aria-hidden="true" className="shrink-0">
+              <Kbd>{shortcutLabel(action.shortcut)}</Kbd>
+            </span>
+          ) : null}
         </MenuItem>
       ))}
     </>
