@@ -12,12 +12,12 @@ export function PersonalStatsSummary({workspaceId,counts}:{workspaceId:string;co
     {name:"Unread updates",count:counts.unread,href:`${base}/articles?filter=unread`},
   ];
   return <section aria-label="Personal statistics" className={`${styles.summary} px-3`}>
-    <div className={styles.stats}>
-      {stats.map(stat=><Link key={stat.name} href={stat.href} className={`${styles.stat} kh-focus-ring`} aria-label={`${stat.name}: ${stat.count}`}>
-        <div className={styles.value}>{stat.count.toLocaleString("en-US")}</div>
-        <div className={styles.label}>{stat.name}<ArrowRight size={13} className={styles.arrow} aria-hidden="true"/></div>
+    <div className={styles.summaryStats}>
+      {stats.map(stat=><Link key={stat.name} href={stat.href} className={`${styles.summaryStat} kh-focus-ring`} aria-label={`${stat.name}: ${stat.count}`}>
+        <span className={styles.summaryValue}>{stat.count.toLocaleString("en-US")}</span>
+        <span className={styles.summaryLabel}>{stat.name}<ArrowRight size={13} className={styles.arrow} aria-hidden="true"/></span>
       </Link>)}
     </div>
-    <Link href={base} className="kh-focus-ring mt-3 inline-flex items-center gap-1 rounded text-caption text-kh-link">View all insights<ArrowRight size={12} aria-hidden="true"/></Link>
+    <Link href={base} className="kh-focus-ring inline-flex items-center gap-1 rounded text-caption text-kh-link">View all insights<ArrowRight size={12} aria-hidden="true"/></Link>
   </section>;
 }

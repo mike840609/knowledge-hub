@@ -1,8 +1,9 @@
 # Personal profile dashboard
 
 `Insights` appears in Personal workspace navigation at `/w/{workspaceId}/profile`.
-Home shows the same four core counts with a View all insights link; it remains
-the reading and import entry. Detailed trends stay on Insights. Team workspaces and other
+Home shows a compact row of four core counts with a View all insights link; it remains
+the reading and import entry. Detailed statistics stay on Insights, which opens with a title and period selector
+instead of a repeated identity header or the four Home counters. Team workspaces and other
 users' Personal workspaces cannot access these statistics or their detail pages.
 
 ## Count definitions
