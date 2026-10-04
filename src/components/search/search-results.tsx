@@ -17,7 +17,7 @@ export function SearchResults({ model }: { model: SearchPageModel }) {
   if (model.timedOut) {
     return (
       <p role="alert" className="rounded-md border border-kh-border p-6 text-body text-kh-danger">
-        搜尋逾時，請縮小範圍後再試一次。
+        Search timed out. Narrow the scope or add filters, then try again.
       </p>
     );
   }

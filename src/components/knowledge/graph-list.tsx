@@ -1,3 +1,6 @@
+"use client";
+import { ArrowDown, ArrowUp } from "lucide-react";
+import { useState } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { matchesQuery, type GraphViewData } from "./graph-model";
@@ -9,7 +12,13 @@ import { matchesQuery, type GraphViewData } from "./graph-model";
  * phone), not a secondary view: everything the graph offers is here.
  */
 export function GraphList({ data, query }: { data: GraphViewData; query: string }) {
-  const rows = data.nodes.filter((node) => matchesQuery(node, query));
+  const [sort, setSort] = useState<{key: "title" | "inDegree" | "outDegree"; ascending: boolean}>({key:"title",ascending:true});
+  function order(key: typeof sort.key) { setSort(current => ({key, ascending:current.key === key ? !current.ascending : key === "title"})); }
+  const heading = (key: typeof sort.key, label: string) => <button type="button" className="kh-focus-ring inline-flex items-center gap-1 rounded-md" onClick={() => order(key)}>{label}{sort.key === key ? (sort.ascending ? <ArrowUp size={12} aria-hidden="true" /> : <ArrowDown size={12} aria-hidden="true" />) : ""}</button>;
+  const rows = data.nodes.filter((node) => matchesQuery(node, query)).sort((a,b) => {
+    const delta = sort.key === "title" ? a.title.localeCompare(b.title) : a[sort.key] - b[sort.key];
+    return (sort.ascending ? delta : -delta) || a.id.localeCompare(b.id);
+  });
   if (rows.length === 0) {
     return <p className="px-3 py-6 text-body text-kh-text-muted">{query.trim() === "" ? "No documents to list." : "No document matches."}</p>;
   }
@@ -19,10 +28,10 @@ export function GraphList({ data, query }: { data: GraphViewData; query: string 
         <caption className="sr-only">Documents and how many links come in and go out</caption>
         <thead>
           <tr className="text-left text-caption text-kh-text-muted">
-            <th scope="col" className="sticky top-0 border-b border-kh-border bg-kh-bg-subtle px-3 py-2 font-medium">Document</th>
-            <th scope="col" className="sticky top-0 border-b border-kh-border bg-kh-bg-subtle px-3 py-2 font-medium">Source</th>
-            <th scope="col" className="sticky top-0 border-b border-kh-border bg-kh-bg-subtle px-3 py-2 text-right font-medium">Links in</th>
-            <th scope="col" className="sticky top-0 border-b border-kh-border bg-kh-bg-subtle px-3 py-2 text-right font-medium">Links out</th>
+            <th scope="col" aria-sort={sort.key === "title" ? (sort.ascending ? "ascending" : "descending") : "none"} className="sticky top-0 border-b border-kh-border bg-kh-bg-subtle px-3 py-2 font-medium">{heading("title", "Document")}</th>
+            <th scope="col" className="sticky top-0 hidden border-b border-kh-border bg-kh-bg-subtle px-3 py-2 font-medium sm:table-cell">Source</th>
+            <th scope="col" aria-sort={sort.key === "inDegree" ? (sort.ascending ? "ascending" : "descending") : "none"} className="sticky top-0 border-b border-kh-border bg-kh-bg-subtle px-3 py-2 text-right font-medium">{heading("inDegree", "Links in")}</th>
+            <th scope="col" aria-sort={sort.key === "outDegree" ? (sort.ascending ? "ascending" : "descending") : "none"} className="sticky top-0 border-b border-kh-border bg-kh-bg-subtle px-3 py-2 text-right font-medium">{heading("outDegree", "Links out")}</th>
           </tr>
         </thead>
         <tbody>
@@ -50,8 +59,9 @@ export function GraphList({ data, query }: { data: GraphViewData; query: string 
                     ) : null}
                   </span>
                 )}
+                <span className="block truncate text-caption text-kh-text-muted sm:hidden">{node.sourceName ?? "—"}</span>
               </th>
-              <td className="px-3 py-2 text-kh-text-muted">{node.sourceName ?? "—"}</td>
+              <td className="hidden px-3 py-2 text-kh-text-muted sm:table-cell">{node.sourceName ?? "—"}</td>
               <td className="px-3 py-2 text-right tabular-nums text-kh-text">{node.inDegree}</td>
               <td className="px-3 py-2 text-right tabular-nums text-kh-text">{node.outDegree}</td>
             </tr>
