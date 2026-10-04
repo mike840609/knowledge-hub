@@ -99,7 +99,16 @@ export type LinkTargetsView = {
   truncated: boolean;
 };
 
+export type LinkHealthReport = {
+  workspaceId: string;
+  index: LinkIndexState;
+  total: number;
+  truncated: boolean;
+  items: { documentId: string; sourceId: string; title: string; sourcePath: string | null; target: string; kind: LinkKind; line: number; count: number }[];
+};
+
 export interface KnowledgeLinkService {
+  getLinkHealth(caller: CallerContext, workspaceId: string): Promise<LinkHealthReport>;
   /**
    * What a document links to and what links to it. `revisionNo` selects the
    * revision whose links are shown (the one on screen when a historical
@@ -141,6 +150,28 @@ export class KnowledgeLinkServiceImpl implements KnowledgeLinkService {
     private readonly unitOfWork: KnowledgeUnitOfWork,
     private readonly options: { linkTargetLimit?: number } = {},
   ) {}
+
+  async getLinkHealth(caller: CallerContext, workspaceId: string): Promise<LinkHealthReport> {
+    return this.unitOfWork.run(async repositories => {
+      await repositories.users.upsertIdentity(caller.identity);
+      await repositories.workspaceAccess.requireWorkspaceRead(caller, workspaceId);
+      const catalog = await repositories.links.loadCatalog(workspaceId);
+      const documents = new Map(catalog.map(document => [document.documentId, document]));
+      const edges = resolveEdges(catalog, await repositories.links.loadValidEdges(workspaceId));
+      const unresolved = new Map<string, LinkHealthReport["items"][number]>();
+      for (const edge of edges) {
+        if (edge.resolution.status !== "UNRESOLVED") continue;
+        const document = documents.get(edge.from);
+        if (!document) continue;
+        const key = `${edge.from}:${linkLookupKey(edge.link.kind, edge.link.target)}`;
+        const existing = unresolved.get(key);
+        if (existing) { existing.count++; continue; }
+        unresolved.set(key, { documentId: document.documentId, sourceId: document.sourceId, title: document.title, sourcePath: document.sourcePath, target: edge.link.target, kind: edge.link.kind, line: edge.link.line, count: 1 });
+      }
+      const items = [...unresolved.values()].sort((a,b) => (a.sourcePath ?? a.title).localeCompare(b.sourcePath ?? b.title) || a.documentId.localeCompare(b.documentId) || a.line-b.line);
+      return { workspaceId, index: await repositories.links.countIndexState(workspaceId), total: items.length, truncated: items.length > 500, items: items.slice(0,500) };
+    });
+  }
 
   async getDocumentLinks(
     caller: CallerContext,

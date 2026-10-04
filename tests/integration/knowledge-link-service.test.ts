@@ -4,7 +4,7 @@ import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction
 import { KnowledgeLinkServiceImpl } from "@/modules/knowledge/application/knowledge-link-service";
 import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 import { DocumentNotFoundError, RevisionNotFoundError } from "@/modules/knowledge/domain/errors";
-import { WorkspaceAccessDeniedError } from "@/modules/workspaces/domain/errors";
+import { WorkspaceAccessDeniedError, WorkspaceNotFoundError } from "@/modules/workspaces/domain/errors";
 import {
   hubDocument,
   linkOutsider,
@@ -356,5 +356,21 @@ describe("getLocalGraph", () => {
     const scope = await setupLinkScope(pool);
     const doc = await hubDocument(pool, scope, "Private", "x");
     await expect(service.getLocalGraph(outsider, doc.documentId)).rejects.toBeInstanceOf(WorkspaceAccessDeniedError);
+  });
+});
+
+describe("personal link health report",()=>{
+  it("lists unresolved document links and heals after the target is created",async()=>{
+    const scope=await setupLinkScope(pool);
+    const from=await hubDocument(pool,scope,"Runbook","[[Missing]] and [Guide](guide.md)");
+    const report=await service.getLinkHealth(owner,scope.workspaceId);
+    expect(report.items.filter(i=>i.documentId===from.documentId).map(i=>i.target)).toEqual(["Missing","guide.md"]);
+    await hubDocument(pool,scope,"Missing","Found");
+    const healed=await service.getLinkHealth(owner,scope.workspaceId);
+    expect(healed.items.filter(i=>i.documentId===from.documentId).map(i=>i.target)).toEqual(["guide.md"]);
+  });
+  it("does not reveal another workspace's broken links",async()=>{
+    const scope=await setupLinkScope(pool);await hubDocument(pool,scope,"Secret","[[Missing]]");
+    await expect(service.getLinkHealth(outsider,scope.workspaceId)).rejects.toBeInstanceOf(WorkspaceNotFoundError);
   });
 });

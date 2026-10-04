@@ -77,7 +77,7 @@ function renderForm(target: typeof existingTarget | { kind: "new"; workspaceId: 
 }
 
 function chooseFolderButton(): HTMLButtonElement {
-  const button = container.querySelector("button");
+  const button = [...container.querySelectorAll("button")].find(button => button.textContent === "Choose folder");
   if (!button || button.textContent !== "Choose folder") throw new Error("Choose folder button not found");
   return button as HTMLButtonElement;
 }
@@ -194,7 +194,7 @@ describe("folder import directory picker", () => {
     });
     expect(vi.mocked(forgetRememberedFolder)).toHaveBeenCalledWith("s1");
     expect(container.textContent).not.toContain("Last synced folder");
-    expect(container.querySelector("button")?.textContent).toContain("Choose folder");
+    expect(chooseFolderButton().textContent).toContain("Choose folder");
   });
 
   it("hides the forget control when no folder is remembered", () => {
