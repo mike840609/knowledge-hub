@@ -86,6 +86,7 @@ test("searches as the reader types, and a filter change searches too", async ({ 
   await expect(page.locator("a[data-search-result]").first()).toBeVisible();
   await expect(page.locator("#search-q")).toBeFocused();
 
+  await page.getByText("Advanced filters", {exact:true}).click();
   await page.getByLabel("Scope").selectOption("all");
   await expect(page).toHaveURL(/[?&]scope=all(&|$)/);
   await expect(page).toHaveURL(/[?&]q=Query\+Master(&|$)/);

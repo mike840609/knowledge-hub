@@ -94,7 +94,7 @@ test.describe("document share link", () => {
       await expect(managed).toContainText("for the reader");
       await managed.getByRole("button", { name: `Share actions for ${title} · for the reader`, exact: true }).click();
       await page.getByRole("menuitem", { name: "Revoke", exact: true }).click();
-      await managed.getByRole("button", { name: "Confirm revoke" }).click();
+      await page.getByRole("alertdialog", { name: "Revoke share link?" }).getByRole("button", { name: "Confirm revoke" }).click();
       await expect(page.getByText("No shares match these filters.")).toBeVisible(ROUND_TRIP);
       await page.getByLabel("Status", { exact: true }).selectOption("revoked");
       await page.locator("main").getByRole("button", { name: "Search", exact: true }).click();

@@ -1,6 +1,7 @@
 import type { SearchFilterInput } from "@/modules/knowledge/domain/search-filters";
 import { SearchDateZone } from "./search-date-zone";
 import type { SourceView } from "@/modules/knowledge/application/knowledge-query-service";
+import Link from "next/link";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -22,6 +23,7 @@ export function SearchForm({
   sources: SourceView[];
   teamsEnabled?: boolean;
 }) {
+  const active = [filters.path && `Path: ${filters.path}`, filters.from && `From: ${filters.from}`, filters.to && `To: ${filters.to}`, filters.sort && filters.sort !== "relevance" && `Sort: ${filters.sort}`, scope === "all" && "All workspaces", sourceId && `Source: ${sources.find(s => s.id === sourceId)?.name ?? sourceId}`, includeArchived && "Archived included"].filter(Boolean);
   // The query field and its submit button sit side by side on the `lg` rung
   // rather than nesting the button inside a shared border box. That box was
   // the reason this form carried a 44px input and a button reshaped through
@@ -40,7 +42,10 @@ export function SearchForm({
         </div>
         <LiveSearchSubmit />
       </div>
-      <div className="flex flex-wrap items-center gap-3">
+      {active.length ? <div className="flex flex-wrap items-center gap-2 text-caption text-kh-text-secondary" aria-label="Active search filters"><span>{active.join(" · ")}</span><Link className="kh-focus-ring rounded-md text-kh-link" href={`/w/${workspaceId}/search?${new URLSearchParams({q})}`}>Clear filters</Link></div> : null}
+      <details open={active.length > 0} className="border-b border-kh-border pb-3">
+      <summary className="kh-focus-ring w-fit cursor-pointer rounded-md text-body-sm text-kh-text-secondary">Advanced filters{active.length ? ` (${active.length})` : ""}</summary>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
         <label htmlFor="search-path" className="text-caption text-kh-text-muted">Path
           <Input id="search-path" name="path" defaultValue={filters.path ?? ""} placeholder="docs/runbooks" className="mt-1" />
         </label>
@@ -81,6 +86,7 @@ export function SearchForm({
           Include archived
         </label>
       </div>
+      </details>
     </form>
   );
 }

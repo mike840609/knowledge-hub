@@ -1,13 +1,14 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { MoreHorizontal, Search, RefreshCw } from "lucide-react";
+import { Copy, MoreHorizontal, Search, RefreshCw } from "lucide-react";
 import { MenuRoot, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/menu";
 import { buttonClasses } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shell/page-header";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Timestamp } from "@/components/ui/timestamp";
 import { useToast } from "@/components/ui/toast";
@@ -34,6 +35,8 @@ export function ShareManagementView({ workspaceId, model, filterError }: { works
     const field = fields.current.get(manualCopy.id)?.querySelector("input");
     field?.focus(); field?.select();
   }, [manualCopy]);
+  const confirmedItem = model.items.find(item => item.id === confirming);
+  const filtered = !!model.query.q || model.query.status !== "all" || model.query.page > 1;
   const href = (page: number) => `/w/${workspaceId}/shares?${new URLSearchParams({ q: model.query.q, status: model.query.status, page: String(page) })}`;
   async function revoke(id: string) {
     if (pending.current) return;
@@ -61,22 +64,24 @@ export function ShareManagementView({ workspaceId, model, filterError }: { works
       <Select id="shares-status" name="status" defaultValue={model.query.status}><option value="all">All statuses</option>{Object.entries(labels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
       <Button type="submit" variant="secondary">Search</Button>
       <Button type="button" variant="ghost" icon aria-label="Refresh shares" disabled={busy !== null} onClick={() => router.refresh()}><RefreshCw size={15} aria-hidden="true" /></Button>
+      {filtered ? <Link className="kh-focus-ring rounded-md text-body-sm text-kh-link" href={`/w/${workspaceId}/shares?status=all`}>Clear filters</Link> : null}
     </form>
     {filterError ? <p role="alert" className="mt-3 text-body text-kh-danger">{filterError}</p> : null}
     <GovernanceError error={error} />
-    {!filterError && model.items.length === 0 ? <div className="mt-6 space-y-2"><p className="text-body text-kh-text-muted">No shares match these filters.</p><p className="text-caption text-kh-text-muted">Create a share link from a document’s Share action, or choose All statuses to see older links.</p><Link className="kh-focus-ring rounded-md text-body text-kh-link" href={`/w/${workspaceId}/knowledge`}>Browse documents</Link></div> : null}
-    {model.items.length > 0 ? <div aria-hidden="true" className="mt-4 hidden grid-cols-[minmax(0,1fr)_6rem_7rem_4rem_2rem] items-center gap-3 border-b border-kh-border px-3 py-2 text-caption text-kh-text-muted md:grid"><span>Document / link</span><span>Status</span><span>Expires</span><span className="text-right">Views</span><span /></div> : null}
+    {!filterError && model.items.length === 0 ? <div className="mt-6 space-y-2"><p className="text-body text-kh-text-muted">{!model.query.q && model.query.page === 1 && model.query.status === "active" ? "No active share links." : filtered ? "No shares match these filters." : "No share links yet."}</p><p className="text-caption text-kh-text-muted">Create a share link from a document’s Share action, or choose All statuses to see older links.</p><Link className="kh-focus-ring rounded-md text-body text-kh-link" href={`/w/${workspaceId}/knowledge`}>Browse documents</Link></div> : null}
+    {model.items.length > 0 ? <div aria-hidden="true" className="mt-4 hidden grid-cols-[minmax(0,1fr)_6rem_7rem_4rem_6rem] items-center gap-3 border-b border-kh-border px-3 py-2 text-caption text-kh-text-muted md:grid"><span>Document / link</span><span>Status</span><span>Expires</span><span className="text-right">Views</span><span /></div> : null}
     <ul aria-label="Share links" onKeyDown={navigateListRows} className="mt-4 space-y-2 md:mt-0 md:space-y-0">
       {model.items.map(item => {
         const status = revoked.has(item.id) ? "revoked" : item.status;
         const actionLabel = `Share actions for ${item.title} · ${item.label ?? "Untitled link"}`;
         return <li key={item.id} className="group rounded-md border border-kh-border bg-kh-bg p-3 hover:bg-kh-bg-hover focus-within:bg-kh-bg-hover md:rounded-none md:border-x-0 md:border-t-0 md:py-2">
-          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 md:grid-cols-[minmax(0,1fr)_6rem_7rem_4rem_2rem] md:gap-y-0">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 md:grid-cols-[minmax(0,1fr)_6rem_7rem_4rem_6rem] md:gap-y-0">
             <div className="min-w-0"><Link data-list-row className="kh-focus-ring block truncate rounded-md text-body font-medium text-kh-text hover:text-kh-link" href={`/w/${workspaceId}/knowledge/${item.sourceId}/${item.documentId}?includeArchived=true`}>{item.title}</Link><p className="truncate text-caption text-kh-text-muted" title={`${item.sourceName} · ${item.label ?? "Untitled link"}`}>{item.sourceName} · {item.label ?? "Untitled link"}</p></div>
             <span className="row-start-2 text-caption text-kh-text-muted md:row-auto"><span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${status === "active" ? "bg-kh-primary" : "bg-kh-text-muted"}`} />{labels[status]}</span></span>
             <span className="col-span-2 text-caption text-kh-text-muted md:col-span-1"><span className="md:sr-only">Expires </span><Timestamp value={item.expiresAt} variant="date" /></span>
             <span className="col-start-2 row-start-2 whitespace-nowrap text-right text-caption tabular-nums text-kh-text-muted md:col-auto md:row-auto">{item.totalViews.toLocaleString()}<span className="md:sr-only"> {item.totalViews === 1 ? "view" : "views"}</span></span>
-            <div className="col-start-2 row-start-1 justify-self-end md:col-auto md:row-auto">
+            <div className="col-start-2 row-start-1 flex items-center gap-1 justify-self-end md:col-auto md:row-auto">
+              {status === "active" ? <Button variant="ghost" size="sm" icon aria-label={`Copy link for ${item.title} · ${item.label ?? "Untitled link"}`} disabled={busy !== null} onClick={() => void copy(item)}><Copy size={15} aria-hidden="true" /></Button> : null}
               <MenuRoot>
                 <MenuTrigger aria-label={actionLabel} disabled={busy !== null} className={buttonClasses({ variant: "ghost", icon: true, size: "sm", className: "kh-row-action" })}><MoreHorizontal size={15} aria-hidden="true" /></MenuTrigger>
                 <MenuContent align="end" className="min-w-40">
@@ -93,10 +98,11 @@ export function ShareManagementView({ workspaceId, model, filterError }: { works
             {status === "unavailable" ? <p className="text-caption text-kh-text-muted">Sharing is paused. Restoring the document or its source may reactivate this link until expiry. Revoke it to end sharing permanently.</p> : null}
             {status === "active" ? <div ref={field => { if (field) fields.current.set(item.id, field); else fields.current.delete(item.id); }}><Input readOnly size="sm" aria-label={`Share URL for ${item.title} · ${item.label ?? "Untitled link"}`} value={`${origin}${item.path}`} onFocus={event => event.currentTarget.select()} /></div> : null}
           </div> : null}
-          {status !== "revoked" && confirming === item.id ? <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-kh-border pt-3"><span className="text-caption text-kh-text-muted">Revoke this link permanently?</span><Button size="sm" variant="danger" disabled={busy !== null} onClick={() => void revoke(item.id)}>{busy === item.id ? "Revoking…" : "Confirm revoke"}</Button><Button size="sm" variant="ghost" disabled={busy !== null} onClick={() => setConfirming(null)}>Keep</Button></div> : null}
+
         </li>;
       })}
     </ul>
+    <ConfirmDialog open={!!confirmedItem} onOpenChange={open => { if (!open) setConfirming(null); }} title="Revoke share link?" description={<>Revoke “{confirmedItem?.label ?? "Untitled link"}” for {confirmedItem?.title}? Anyone holding this link will lose access. This cannot be undone.</>} cancelLabel="Keep" confirmLabel="Confirm revoke" onConfirm={() => { if (confirming) void revoke(confirming); }} />
     <nav aria-label="Share pages" className="mt-4 flex items-center gap-4 text-body"><span className="text-kh-text-muted">Page {model.query.page}</span>{model.query.page > 1 ? <Link className="kh-focus-ring rounded-md text-kh-link" href={href(model.query.page - 1)}>Previous</Link> : null}{model.hasNext ? <Link className="kh-focus-ring rounded-md text-kh-link" href={href(model.query.page + 1)}>Next</Link> : null}</nav>
   </main>;
 }
