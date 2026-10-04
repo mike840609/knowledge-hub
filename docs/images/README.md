@@ -1,7 +1,5 @@
 # README screenshot provenance
 
-**English** | [繁體中文](README.zh-TW.md)
-
 These screenshots were freshly captured on **2026-10-05 (Asia/Taipei)** from a production build after fetching and fast-forwarding to remote main [`3739efb12906e1cb2e6abc1b5eea7727914a08ab`](https://github.com/mike840609/knowledge-hub/commit/3739efb12906e1cb2e6abc1b5eea7727914a08ab). They replace the October 2 screenshots formerly used by the main README.
 
 - Build ID: `p61B410H6oSgHi5044IHC`; `npm run build` passed, including lint and type validation.
