@@ -1,7 +1,5 @@
 # Sources and Settings presentation
 
-**English** | [繁體中文](README.zh-TW.md)
-
 Sources provides a Needs attention filter and sorting by attention, name or latest successful sync. Pending Apply guidance is clearer, and Import scope shows exclusion counts and when rules are saved. Settings uses Active/Archived labels, collapsible member/group forms, compact lists and explanations of direct versus SSO permissions. Audit uses a timeline with loaded-event target filters and expandable technical details. Mobile member/group layouts stack vertically while preserving roles and actions.
 
 ## Verification

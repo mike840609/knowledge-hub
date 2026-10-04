@@ -1,7 +1,5 @@
 # Copy for Agent selection flow
 
-**English** | [繁體中文](README.zh-TW.md)
-
 Available and selected documents are presented separately. Selected items show their title, source, path and “Outside current results” status, and can be removed individually. Candidate lists have a bounded height; the action area is sticky on desktop and follows the content on mobile. Clearing the selection cancels pending requests; any selection change still invalidates the preview.
 
 ## Verification

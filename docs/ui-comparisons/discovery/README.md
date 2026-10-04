@@ -1,7 +1,5 @@
 # Graph, Search and Shares interaction feedback
 
-**English** | [繁體中文](README.zh-TW.md)
-
 Graph explains how Find differs between modes, shows match counts and filter reset, supports title or incoming/outgoing-link sorting, and places the source beneath the title on mobile. Search collapses advanced filters, shows active conditions and clears filters while preserving the keyword. Shares adds direct copy, filter clearing and distinct empty states; permanent revocation uses the shared confirmation dialog with Keep focused by default.
 
 ## Verification

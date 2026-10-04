@@ -1,7 +1,5 @@
 # Insights and Home design consistency
 
-**English** | [繁體中文](README.zh-TW.md)
-
 Insights uses the shared PageHeader and kh-page layout, with shadow-free segmented period controls. Typography, spacing and radii follow existing design scales; ordinary control shadows and unused styles are removed. Home search uses the Input primitive for borders, sizing and focus treatment.
 
 ## Verification
