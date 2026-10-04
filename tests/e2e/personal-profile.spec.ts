@@ -6,8 +6,10 @@ import {stageReadingFolder} from "./fixtures/folder-reading";
 test("personal profile counts, detail links, themes and mobile layout",async({page,request},testInfo)=>{
  const errors:string[]=[];page.on("pageerror",error=>errors.push(error.message));
  const nav=await (await request.get("/api/workspaces")).json();const ws=nav.items.find((w:{type:string})=>w.type==="PERSONAL").id;
- await page.goto(`/w/${ws}/profile`);
- await expect(page.getByRole("link",{name:"My profile",exact:true})).toHaveAttribute("aria-current","page");
+ await page.goto(`/w/${ws}/home`);
+ await expect(page.getByRole("region",{name:"Personal statistics"})).toBeVisible();
+ await page.getByRole("link",{name:"View all insights",exact:true}).click();
+ await expect(page.getByRole("link",{name:"Insights",exact:true})).toHaveAttribute("aria-current","page");
  const count=async(name:string)=>Number((await page.getByRole("link",{name:new RegExp(`^${name}:`)}).getAttribute("aria-label"))!.split(": ").at(-1));
  const baseline={articles:await count("Knowledge articles"),folders:await count("Synced folders"),favorites:await count("Favorites"),unread:await count("Unread updates")};
  let source:string="";
@@ -24,14 +26,16 @@ test("personal profile counts, detail links, themes and mobile layout",async({pa
  await page.goto(`/w/${ws}/profile`);await page.getByRole("link",{name:/^Unread updates:/}).click();
  const marked=page.waitForResponse(r=>r.url().endsWith("/read")&&r.request().method()==="POST");
  await page.getByRole("link",{name:/Team guide.*Work Wiki/}).click();expect((await marked).status()).toBe(204);
- await page.getByRole("link",{name:"My profile",exact:true}).click();expect(await count("Unread updates")).toBe(baseline.unread+7);
+ await page.getByRole("link",{name:"Insights",exact:true}).click();expect(await count("Unread updates")).toBe(baseline.unread+7);
  await page.getByRole("link",{name:"30 days",exact:true}).click();await expect(page).toHaveURL(/days=30$/);await expect(page.getByText("Recorded folder changes in the past 30 days.", {exact:true})).toBeVisible();
  await page.getByRole("link",{name:/^Awaiting Apply:/}).click();await expect(page.getByRole("link",{name:/Product docs.*Review preview before Apply/})).toBeVisible();
  await page.goto(`/w/${ws}/profile?days=7`);
  await page.getByText("How counts work",{exact:true}).click();await expect(page.getByText("When these statistics were requested.",{exact:false})).toBeVisible();await page.getByText("How counts work",{exact:true}).click();
  const oldTime=await page.locator("footer time").getAttribute("datetime");await page.getByRole("button",{name:"Refresh statistics"}).click();await expect(page.locator("footer time")).not.toHaveAttribute("datetime",oldTime!);
  const output=process.env.KM_PROFILE_SCREENSHOTS??testInfo.outputPath("profile");await mkdir(output,{recursive:true});
- await page.setViewportSize({width:1440,height:1280});await page.screenshot({path:path.join(output,"desktop-light.png"),fullPage:true,animations:"disabled"});
+ await page.setViewportSize({width:1440,height:1280});
+ await page.goto(`/w/${ws}/home`);expect(await count("Knowledge articles")).toBe(baseline.articles+9);expect(await count("Unread updates")).toBe(baseline.unread+7);await page.screenshot({path:path.join(output,"home-light.png"),fullPage:true,animations:"disabled"});await page.getByRole("link",{name:"View all insights",exact:true}).click();
+ await page.screenshot({path:path.join(output,"desktop-light.png"),fullPage:true,animations:"disabled"});
  await page.getByRole("button",{name:"Personal preferences"}).click();await page.getByRole("menuitemradio",{name:"Dark",exact:true}).click();await page.keyboard.press("Escape");await expect(page.locator("html")).toHaveAttribute("data-theme","dark");await page.screenshot({path:path.join(output,"desktop-dark.png"),fullPage:true,animations:"disabled"});
  await page.getByRole("button",{name:"Personal preferences"}).click();await page.getByRole("menuitemradio",{name:"Light",exact:true}).click();await page.keyboard.press("Escape");
  await page.setViewportSize({width:390,height:844});await expect(page.getByRole("link",{name:/^Knowledge articles:/})).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
@@ -41,5 +45,5 @@ test("personal profile counts, detail links, themes and mobile layout",async({pa
 
 test("Team workspace has no personal profile route or navigation entry",async({page,request})=>{
  const nav=await (await request.get("/api/workspaces")).json();const team=nav.items.find((w:{type:string})=>w.type==="TEAM");test.skip(!team,"Personal-only rollout has no Team workspace.");
- await page.goto(`/w/${team.id}/profile`);await expect(page.getByRole("heading",{name:"Not found or no access"})).toBeVisible();await expect(page.getByRole("link",{name:"My profile",exact:true})).toHaveCount(0);await expect(page.getByRole("heading",{name:"Your knowledge",exact:true})).toHaveCount(0);
+ await page.goto(`/w/${team.id}/profile`);await expect(page.getByRole("heading",{name:"Not found or no access"})).toBeVisible();await expect(page.getByRole("link",{name:"Insights",exact:true})).toHaveCount(0);await expect(page.getByRole("heading",{name:"Your knowledge",exact:true})).toHaveCount(0);
 });

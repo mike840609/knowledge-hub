@@ -34,7 +34,7 @@ export function PrimaryNav({
       href: `/w/${workspaceId}/sources`,
       Icon: Database,
     }] : []),
-    ...(access.workspace.type === "PERSONAL" ? [{name: "My profile", href: `/w/${workspaceId}/profile`, Icon: UserRound}] : []),
+    ...(access.workspace.type === "PERSONAL" ? [{name: "Insights", href: `/w/${workspaceId}/profile`, Icon: UserRound}] : []),
     ...(access.actions.canOpenSettings ? [{name: "Settings", href: `/w/${workspaceId}/settings`, Icon: Settings}] : []),
   ];
   return (
