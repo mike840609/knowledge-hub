@@ -29,8 +29,7 @@ test("folder preview → durable result → revision-aware personal reading", as
   await page.goto(`/w/${ws}/sources/${source}/update`);
   await page.getByText("Excluded paths", {exact:true}).click();
   await page.getByRole("textbox",{name:"One file or folder path per line, relative to the selected folder"}).fill("private");
-  await page.getByRole("button",{name:"Save exclusions"}).click();
-  await expect(page.getByText("Saved on this browser.",{exact:false})).toBeVisible();
+  await expect(page.getByText("These rules are saved to the source only after Apply succeeds",{exact:false})).toBeVisible();
   await page.setViewportSize({width:1280,height:900});
   const second = await stageReadingFolder(request, {
     workspaceId: ws,

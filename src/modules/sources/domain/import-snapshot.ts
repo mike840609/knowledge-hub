@@ -30,6 +30,7 @@ export type ImportSnapshot = {
   basedOnVersion: number | null;
   createdBy: string;
   rootName: string;
+  importScope?: import("./import-scope").ImportScope;
   proposedSourceName: string | null;
   adapterType: "GENERIC_MARKDOWN_FOLDER";
   adapterVersion: ImportAdapterVersion;

@@ -14,7 +14,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ so
       throw importError("INVALID_IMPORT_MANIFEST", "Request body must be JSON.");
     }
     const { rootName, manifest } = parseResyncImportBody(body);
-    const result = await createSourceResync(sourceId, { rootName: rootName as string, manifest: manifest as [] });
+    const result = await createSourceResync(sourceId, { rootName: rootName as string, manifest: manifest as [], importScope: (body as { importScope?: unknown }).importScope, expectedSourceVersion: (body as { expectedSourceVersion?: number }).expectedSourceVersion });
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     const mapped = toImportErrorResponse(error);

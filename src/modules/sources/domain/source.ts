@@ -8,6 +8,8 @@ export type KnowledgeSource = {
   ownership: SourceOwnership;
   status: "ACTIVE" | "ARCHIVED";
   syncVersion: number;
+  /** Null/undefined means no source-level settings have been applied yet. */
+  excludedPaths?: string[] | null;
   createdBy: string;
   updatedBy: string;
   archivedBy: string | null;

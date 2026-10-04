@@ -6,6 +6,7 @@ import type { LinkedEntryRepository, LinkedSourceEntry } from "@/modules/knowled
 function mapLinkedEntry(row: DbRow): LinkedSourceEntry {
   return {
     id: String(row.id), sourceId: String(row.source_id),
+    sourcePath: row.source_path == null ? null : String(row.source_path),
     documentId: row.document_id === null ? null : String(row.document_id),
     treeNodeId: row.tree_node_id === null || row.tree_node_id === undefined ? null : String(row.tree_node_id),
     status: String(row.status) as KnowledgeLifecycle,

@@ -17,6 +17,7 @@ function mapSnapshot(row: DbRow): ImportSnapshot {
     basedOnVersion: row.based_on_version === null ? null : asNumber(row.based_on_version, "based_on_version"),
     createdBy: String(row.created_by),
     rootName: String(row.root_name),
+    ...(row.import_scope == null ? {} : { importScope: json<NonNullable<ImportSnapshot["importScope"]>>(row.import_scope)! }),
     proposedSourceName: row.proposed_source_name === null ? null : String(row.proposed_source_name),
     adapterType: "GENERIC_MARKDOWN_FOLDER",
     adapterVersion: String(row.adapter_version) as ImportSnapshot["adapterVersion"],
@@ -50,15 +51,15 @@ export class MariaDbImportSnapshotRepository implements ImportSnapshotRepository
       `INSERT INTO source_import_snapshots (
         id, workspace_id, source_id, based_on_version, created_by, root_name, proposed_source_name,
         adapter_type, adapter_version, plan_version, state, manifest_hash, snapshot_hash, plan_hash,
-        has_blockers, summary, plan, created_at, finalized_at, expires_at, applied_at, stale_at, result_source_id, result_version
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        has_blockers, summary, plan, created_at, finalized_at, expires_at, applied_at, stale_at, result_source_id, result_version, import_scope
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         snapshot.id, snapshot.workspaceId, snapshot.sourceId, snapshot.basedOnVersion, snapshot.createdBy, snapshot.rootName,
         snapshot.proposedSourceName, snapshot.adapterType, snapshot.adapterVersion, snapshot.planVersion, snapshot.state,
         snapshot.manifestHash, snapshot.snapshotHash, snapshot.planHash, snapshot.hasBlockers,
         snapshot.summary === null ? null : JSON.stringify(snapshot.summary), snapshot.plan === null ? null : JSON.stringify(snapshot.plan),
         snapshot.createdAt, snapshot.finalizedAt, snapshot.expiresAt, snapshot.appliedAt, snapshot.staleAt,
-        snapshot.resultSourceId, snapshot.resultVersion,
+        snapshot.resultSourceId, snapshot.resultVersion, snapshot.importScope === undefined ? null : JSON.stringify(snapshot.importScope),
       ],
     );
   }

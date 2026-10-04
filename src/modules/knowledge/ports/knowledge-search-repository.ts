@@ -15,6 +15,7 @@ export type KnowledgeSearchRow = {
 export type KnowledgeSearchCriteria = {
   /** Already parsed and de-duplicated; every term must match (AND). */
   terms: readonly string[];
+  filters?: import("../domain/search-filters").SearchFilters;
   /** Workspaces the caller may READ. An empty list must produce no rows. */
   workspaceIds: readonly string[];
   sourceId: string | null;

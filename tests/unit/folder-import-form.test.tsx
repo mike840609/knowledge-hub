@@ -16,6 +16,7 @@ import {
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const push = vi.fn();
+vi.mock("@/lib/source-import-scope", () => ({ loadSourceImportScope: vi.fn(async () => ({ paths: [], configured: true, syncVersion: 1 })) }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push, refresh: vi.fn() }) }));
 vi.mock("@/components/shell/use-workspace-authorization", () => ({
   requestWorkspaceAccessCheck: vi.fn(),
@@ -83,6 +84,7 @@ function chooseFolderButton(): HTMLButtonElement {
 }
 
 async function clickChooseFolder() {
+  await act(async () => {});
   await act(async () => {
     chooseFolderButton().click();
   });

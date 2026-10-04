@@ -10,6 +10,7 @@ export default async function WorkspaceSearchPage({
 }: {
   params: Promise<{ workspaceId: string }>;
   searchParams?: Promise<{
+    path?: SearchParamValue; from?: SearchParamValue; to?: SearchParamValue; offset?: SearchParamValue; sort?: SearchParamValue;
     q?: SearchParamValue;
     scope?: SearchParamValue;
     source?: SearchParamValue;
@@ -26,6 +27,7 @@ export default async function WorkspaceSearchPage({
   const page = firstSearchParam(query?.page);
   const parsedPage = Number.parseInt(page ?? "1", 10);
   const model = await getSearchPageModel(workspaceId, {
+    path: firstSearchParam(query?.path), from: firstSearchParam(query?.from), to: firstSearchParam(query?.to), offset: firstSearchParam(query?.offset), sort: firstSearchParam(query?.sort),
     q: q ?? "",
     scope: scope === "all" ? "all" : "workspace",
     sourceId: source ? source : null,
@@ -42,6 +44,7 @@ export default async function WorkspaceSearchPage({
           scope={model.scope}
           sourceId={model.sourceId}
           includeArchived={model.includeArchived}
+          filters={model}
           sources={model.sources}
           teamsEnabled={process.env.KM_TEAM_WORKSPACES_ENABLED === "true"}
         />

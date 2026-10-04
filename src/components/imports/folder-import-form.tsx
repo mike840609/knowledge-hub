@@ -1,5 +1,6 @@
 "use client";
-import { isExcludedImportPath, readExcludedPaths } from "@/lib/import-exclusions";
+import { loadSourceImportScope } from "@/lib/source-import-scope";
+import { isExcludedImportPath, parseExcludedPaths } from "@/lib/import-exclusions";
 import { ImportExclusionsSettings } from "./import-exclusions-settings";
 
 import { useRouter } from "next/navigation";
@@ -310,6 +311,8 @@ export async function runFolderImport(input: {
   assertAllowed?: () => void;
   limits?: FolderImportClientLimits;
   signal?: AbortSignal;
+  excludedPaths?: string[];
+  expectedSourceVersion?: number;
 }): Promise<string> {
   const {
     target,
@@ -324,7 +327,11 @@ export async function runFolderImport(input: {
   assertAllowed();
   onProgress({ kind: "PREPARING" });
   const selection = selectFolder(files);
-  const exclusions = target.kind === "existing" ? readExcludedPaths(target.workspaceId, target.sourceId) : [];
+  const savedScope = target.kind === "existing" ? await loadSourceImportScope(target.workspaceId, target.sourceId, signal) : null;
+  assertAllowed();
+  if (input.expectedSourceVersion !== undefined && input.expectedSourceVersion !== savedScope?.syncVersion) throw Object.assign(new Error("Source settings changed; reload and check the folder again."), { code: "SOURCE_VERSION_CONFLICT" });
+  const exclusions = parseExcludedPaths((input.excludedPaths ?? savedScope?.paths ?? []).join("\n"));
+  const selectedCount = selection.staged.length;
   selection.staged = selection.staged.filter(entry => !isExcludedImportPath(entry.relativePath, exclusions));
   if (selection.staged.length === 0) throw Object.assign(new Error("No files remain after exclusions. Nothing was synced."), { code: "INVALID_IMPORT_MANIFEST" });
   const manifest = await buildManifest(selection.staged, limits, signal);
@@ -334,8 +341,9 @@ export async function runFolderImport(input: {
       sourceName: sourceName.trim() || selection.rootName,
       rootName: selection.rootName,
       manifest,
+      importScope: { paths: exclusions, excludedCount: selectedCount - selection.staged.length },
     })
-    : await postJson(`/api/sources/${target.sourceId}/source-imports`, { rootName: selection.rootName, manifest });
+    : await postJson(`/api/sources/${target.sourceId}/source-imports`, { rootName: selection.rootName, manifest, importScope: { paths: exclusions, excludedCount: selectedCount - selection.staged.length }, expectedSourceVersion: savedScope!.syncVersion });
   if (!session.ok || !session.body || typeof session.body !== "object" || !("snapshotId" in session.body)) {
     const failure = readErrorCode(session.body, "Creating the import session failed.");
     onProgress({ kind: "ERROR", code: failure.code, message: failure.message });
@@ -414,6 +422,21 @@ export function FolderImportForm({
   };
   const [state, setState] = useState<ImportUiState>({ kind: "IDLE" });
   const [sourceName, setSourceName] = useState("");
+  const [exclusionText, setExclusionText] = useState("");
+  const [legacyPaths, setLegacyPaths] = useState<string[]>([]);
+  const [scopeVersion, setScopeVersion] = useState<number>();
+  const [scopeReady, setScopeReady] = useState(target.kind === "new");
+  const [scopeError, setScopeError] = useState<string | null>(null);
+  useEffect(() => {
+    if (target.kind === "new") { setScopeReady(true); return; }
+    const controller = new AbortController();
+    setScopeReady(false);
+    loadSourceImportScope(target.workspaceId, target.sourceId, controller.signal).then(scope => {
+      if (controller.signal.aborted) return;
+      setLegacyPaths(scope.legacyPaths ?? []); setExclusionText(scope.paths.join("\n")); setScopeVersion(scope.syncVersion); setScopeReady(true); setScopeError(null);
+    }).catch(error => { if (!controller.signal.aborted) setScopeError(error instanceof Error ? error.message : "Could not load exclusions."); });
+    return () => controller.abort();
+  }, [target.kind, target.workspaceId, target.kind === "existing" ? target.sourceId : null]);
   const picker = useRef<HTMLInputElement>(null);
   const [selection, setSelection] = useState<{ name: string; count: number } | null>(null);
   const [rememberedRoot, setRememberedRoot] = useState<string | null>(null);
@@ -454,6 +477,7 @@ export function FolderImportForm({
         assertAllowed,
         limits,
         signal: controller.signal,
+        excludedPaths: parseExcludedPaths(exclusionText), expectedSourceVersion: scopeVersion,
       });
       assertAllowed();
       router.push(`/w/${target.workspaceId}/sources/imports/${snapshotId}`);
@@ -496,7 +520,7 @@ export function FolderImportForm({
       checkActive();
       if (files.length === 0) { setState({ kind: "IDLE" }); return; }
       setSelection({ name: handle.name || "Selected folder", count: files.length });
-      const snapshotId = await runFolderImport({ target, files, sourceName, onProgress: setState, assertAllowed: checkActive, limits, signal: controller.signal });
+      const snapshotId = await runFolderImport({ target, files, sourceName, onProgress: setState, assertAllowed: checkActive, limits, signal: controller.signal, excludedPaths: parseExcludedPaths(exclusionText), expectedSourceVersion: scopeVersion });
       checkActive();
       if (target.kind === "existing") {
         await rememberFolderHandle(target.sourceId, handle, handle.name);
@@ -557,9 +581,11 @@ export function FolderImportForm({
         </p>
       )}
       <p className="mt-3 text-caption text-kh-text-muted">.git and .obsidian directories are excluded from import.</p>
-      {target.kind === "existing" ? <ImportExclusionsSettings workspaceId={target.workspaceId} sourceId={target.sourceId} disabled={busy} /> : null}
+      {legacyPaths.length > 0 ? <div className="space-y-2"><p className="text-caption text-kh-text-muted">This browser has older exclusion settings. Review them before using them: {legacyPaths.join(", ")}</p><Button type="button" variant="secondary" disabled={busy || !scopeReady} onClick={() => { setExclusionText(legacyPaths.join("\n")); setLegacyPaths([]); }}>Use browser exclusions</Button></div> : null}
+      <ImportExclusionsSettings value={exclusionText} onChange={setExclusionText} disabled={busy || !scopeReady} />
+      {scopeError ? <p role="alert" className="mt-2 text-body text-kh-danger">{scopeError} Reload this page to retry.</p> : null}
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        <Button type="button" variant="secondary" disabled={busy} aria-describedby="import-folder-selection" onClick={handleChooseFolder}>Choose folder</Button>
+        <Button type="button" variant="secondary" disabled={busy || !scopeReady} aria-describedby="import-folder-selection" onClick={handleChooseFolder}>Choose folder</Button>
         <p id="import-folder-selection" className="text-body text-kh-text-muted">{selection ? `${selection.name} · ${selection.count} files` : "No folder selected"}</p>
       </div>
       {rememberedSourceId && rememberedRoot ? (

@@ -1,3 +1,5 @@
+import type { SearchFilterInput } from "@/modules/knowledge/domain/search-filters";
+import { SearchDateZone } from "./search-date-zone";
 import type { SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -9,8 +11,9 @@ import { LiveSearchSubmit } from "./live-search-submit";
  * JavaScript it searches as the reader types (`LiveSearchSubmit`).
  */
 export function SearchForm({
-  workspaceId, q, scope, sourceId, includeArchived, sources, teamsEnabled = true,
+  workspaceId, q, scope, sourceId, includeArchived, sources, teamsEnabled = true, filters = {},
 }: {
+  filters?: SearchFilterInput;
   workspaceId: string;
   q: string;
   scope: "workspace" | "all";
@@ -37,6 +40,23 @@ export function SearchForm({
         </div>
         <LiveSearchSubmit />
       </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <label htmlFor="search-path" className="text-caption text-kh-text-muted">Path
+          <Input id="search-path" name="path" defaultValue={filters.path ?? ""} placeholder="docs/runbooks" className="mt-1" />
+        </label>
+        <label htmlFor="search-from" className="text-caption text-kh-text-muted">Updated from
+          <Input id="search-from" name="from" type="date" defaultValue={filters.from ?? ""} className="mt-1" />
+        </label>
+        <label htmlFor="search-to" className="text-caption text-kh-text-muted">Updated to
+          <Input id="search-to" name="to" type="date" defaultValue={filters.to ?? ""} className="mt-1" />
+        </label>
+        <label htmlFor="search-sort" className="text-caption text-kh-text-muted">Sort
+          <Select id="search-sort" name="sort" defaultValue={filters.sort ?? "relevance"} className="mt-1">
+            <option value="relevance">Relevance</option><option value="newest">Newest first</option><option value="oldest">Oldest first</option>
+          </Select>
+        </label>
+      </div>
+      <SearchDateZone offset={filters.offset} />
       <div className="flex flex-wrap items-center gap-3">
         <label className="inline-flex items-center gap-2 text-caption text-kh-text-muted" htmlFor="search-scope">
           Scope

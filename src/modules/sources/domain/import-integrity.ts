@@ -154,7 +154,7 @@ function compareDigestOrder(left: DigestInput, right: DigestInput): number {
 type DigestInput = { sourcePath: string | null; serialized: string };
 
 export function hashReadyImportSnapshot(
-  snapshot: Pick<ImportSnapshot, "adapterType" | "adapterVersion" | "planVersion" | "workspaceId" | "sourceId" | "basedOnVersion">,
+  snapshot: Pick<ImportSnapshot, "adapterType" | "adapterVersion" | "planVersion" | "workspaceId" | "sourceId" | "basedOnVersion" | "importScope">,
   entries: readonly ImportSnapshotEntry[],
 ): string {
   const orderedEntries = entries
@@ -169,6 +169,7 @@ export function hashReadyImportSnapshot(
       sourceId: snapshot.sourceId,
       basedOnVersion: snapshot.basedOnVersion,
     },
+    ...(snapshot.importScope === undefined ? {} : { importScope: snapshot.importScope }),
     entries: orderedEntries.map((entry) => entry.serialized),
   }));
 }

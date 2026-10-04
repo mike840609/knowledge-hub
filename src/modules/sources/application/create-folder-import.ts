@@ -1,6 +1,8 @@
+import { normalizeImportScope, isExcludedImportPath, type ImportScope } from "../domain/import-scope";
 import { createHash } from "node:crypto";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { lockWorkspaceForMutation } from "@/modules/workspaces/application/workspace-mutation-guard";
+import { normalizeImportPath } from "../domain/import-path";
 import { compareImportText } from "@/modules/sources/domain/import-path";
 import { importError } from "@/modules/sources/domain/import-errors";
 import { DEFAULT_IMPORT_LIMITS, type ImportLimits } from "@/modules/sources/domain/import-limits";
@@ -150,9 +152,10 @@ export class CreateFolderImportService {
 
   private buildSnapshot(caller: CallerContext, input: {
     workspaceId: string; sourceId: string | null; basedOnVersion: number | null; proposedSourceName: string | null;
-    rootName: string; manifest: ImportManifestEntry[];
+    rootName: string; manifest: ImportManifestEntry[]; importScope?: ImportScope;
   }): { snapshot: ImportSnapshot; entries: ImportSnapshotEntry[] } {
     validateManifest(input.manifest, this.limits);
+    if (input.importScope && input.manifest.some(e => isExcludedImportPath(normalizeImportPath(e.relativePath).sourcePath, input.importScope!.paths))) throw importError("INVALID_IMPORT_MANIFEST", "Manifest includes an excluded path.");
     const rootName = nonemptyName(input.rootName, "rootName");
     const proposedSourceName = input.proposedSourceName === null ? null : nonemptyName(input.proposedSourceName, "sourceName");
     const now = this.now();
@@ -160,7 +163,8 @@ export class CreateFolderImportService {
     const snapshotId = uuidv7();
     const snapshot: ImportSnapshot = {
       id: snapshotId, workspaceId: input.workspaceId, sourceId: input.sourceId, basedOnVersion: input.basedOnVersion,
-      createdBy: caller.identity.id, rootName, proposedSourceName, adapterType: "GENERIC_MARKDOWN_FOLDER",
+      createdBy: caller.identity.id, rootName, proposedSourceName,
+      ...(input.importScope === undefined ? {} : { importScope: input.importScope }), adapterType: "GENERIC_MARKDOWN_FOLDER",
       adapterVersion: "phase2:v2", planVersion: "phase2:v2", state: "BUILDING",
       manifestHash: canonicalManifestHash(input.manifest), snapshotHash: null, planHash: null, hasBlockers: false,
       summary: null, plan: null, createdAt: now, finalizedAt: null, expiresAt, appliedAt: null, staleAt: null,
@@ -171,7 +175,7 @@ export class CreateFolderImportService {
 
   private async createBound(caller: CallerContext, input: {
     workspaceId: string; sourceId: string | null; basedOnVersion: number | null; proposedSourceName: string | null;
-    rootName: string; manifest: ImportManifestEntry[];
+    rootName: string; manifest: ImportManifestEntry[]; importScope?: ImportScope;
   }): Promise<CreateImportResult> {
     const { snapshot, entries } = this.buildSnapshot(caller, input);
     await this.uow.runWithCreatorQuotaLock(caller.identity.id, this.quotaLockTimeoutSeconds, async (repositories) => {
@@ -183,14 +187,15 @@ export class CreateFolderImportService {
     return { snapshotId: snapshot.id, state: "BUILDING", expiresAt: snapshot.expiresAt };
   }
 
-  async createInitial(caller: CallerContext, input: { workspaceId: string; sourceName: string; rootName: string; manifest: ImportManifestEntry[] }): Promise<CreateImportResult> {
+  async createInitial(caller: CallerContext, input: { workspaceId: string; sourceName: string; rootName: string; manifest: ImportManifestEntry[]; importScope?: unknown; expectedSourceVersion?: number }): Promise<CreateImportResult> {
     return this.createBound(caller, {
       workspaceId: input.workspaceId, sourceId: null, basedOnVersion: null,
       proposedSourceName: input.sourceName, rootName: input.rootName, manifest: input.manifest,
+      importScope: input.importScope === undefined ? undefined : normalizeImportScope(input.importScope, []),
     });
   }
 
-  async createResync(caller: CallerContext, input: { sourceId: string; rootName: string; manifest: ImportManifestEntry[] }): Promise<CreateImportResult> {
+  async createResync(caller: CallerContext, input: { sourceId: string; rootName: string; manifest: ImportManifestEntry[]; importScope?: unknown; expectedSourceVersion?: number }): Promise<CreateImportResult> {
     return this.uow.runWithCreatorQuotaLock(caller.identity.id, this.quotaLockTimeoutSeconds, async (repositories) => {
       const source = await repositories.sources.lockById(input.sourceId);
       if (!source) throw importError("IMPORT_SOURCE_NOT_FOUND", "Import source was not found.");
@@ -198,9 +203,11 @@ export class CreateFolderImportService {
         throw importError("SOURCE_IMPORT_NOT_ALLOWED", "Only active SOURCE_MANAGED folder sources can be resynced.");
       }
       await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "source-import");
+      if (input.expectedSourceVersion !== undefined && (!Number.isSafeInteger(input.expectedSourceVersion) || input.expectedSourceVersion !== source.syncVersion)) throw importError("SOURCE_VERSION_CONFLICT", "Source settings changed; reload and check the folder again.");
       const { snapshot, entries } = this.buildSnapshot(caller, {
         workspaceId: source.workspaceId, sourceId: input.sourceId, basedOnVersion: source.syncVersion,
         proposedSourceName: null, rootName: input.rootName, manifest: input.manifest,
+        importScope: input.importScope === undefined ? (source.excludedPaths == null ? undefined : normalizeImportScope({ paths: source.excludedPaths, excludedCount: 0 }, source.excludedPaths)) : normalizeImportScope(input.importScope, source.excludedPaths ?? []),
       });
       await this.assertQuota(repositories, caller, snapshot.createdAt);
       await repositories.importSnapshots.insert(snapshot);

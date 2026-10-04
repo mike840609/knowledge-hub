@@ -77,9 +77,9 @@ test("opens the focused result with Enter", async ({ page }) => {
 
 test("searches as the reader types, and a filter change searches too", async ({ page }) => {
   await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/search`);
-  // The submit button goes once the form can search on its own; waiting for
-  // that is waiting for hydration, so typing below is not lost to a race.
-  await expect(page.getByRole("button", { name: "Search", exact: true })).toHaveCount(0);
+  // Wait until the live-search listeners are attached before typing.
+  await expect(page.getByRole("search")).toHaveAttribute("data-live-search-ready", "true");
+  await expect(page.getByRole("button", { name: "Search", exact: true })).toBeVisible();
 
   await page.locator("#search-q").fill("Query Master");
   await expect(page).toHaveURL(/[?&]q=Query\+Master(&|$)/);

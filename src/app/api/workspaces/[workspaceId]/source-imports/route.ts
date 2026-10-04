@@ -18,6 +18,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
       sourceName: sourceName as string,
       rootName: rootName as string,
       manifest: manifest as [],
+      importScope: (body as { importScope?: unknown }).importScope,
     });
     return NextResponse.json(result, { status: 201 });
   } catch (error) {

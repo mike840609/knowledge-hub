@@ -6,8 +6,8 @@ import type { ImportPreview } from "@/modules/sources/application/reconcile-impo
 import type { UploadImportResult } from "@/modules/sources/application/upload-folder-import-entries";
 import { applicationServices } from "@/server/composition";
 
-export type InitialImportRequest = { sourceName: string; rootName: string; manifest: ImportManifestEntry[] };
-export type ResyncRequest = { rootName: string; manifest: ImportManifestEntry[] };
+export type InitialImportRequest = { sourceName: string; rootName: string; manifest: ImportManifestEntry[]; importScope?: unknown; expectedSourceVersion?: number };
+export type ResyncRequest = { rootName: string; manifest: ImportManifestEntry[]; importScope?: unknown; expectedSourceVersion?: number };
 
 /**
  * Caller identity comes only from the trusted provider; payloads carry folder content, never actor overrides.
@@ -57,6 +57,8 @@ export async function createInitialSourceImport(workspaceId: string, input: Init
     sourceName: input.sourceName,
     rootName: input.rootName,
     manifest: reviveManifest(input.manifest),
+    importScope: input.importScope,
+    expectedSourceVersion: input.expectedSourceVersion,
   });
 }
 
@@ -67,6 +69,8 @@ export async function createSourceResync(sourceId: string, input: ResyncRequest)
     sourceId,
     rootName: input.rootName,
     manifest: reviveManifest(input.manifest),
+    importScope: input.importScope,
+    expectedSourceVersion: input.expectedSourceVersion,
   });
 }
 

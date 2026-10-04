@@ -143,6 +143,7 @@ export function PersonalHome({ workspaceId, documents, drafts, limits, profileCo
         title="Home"
         description="Find knowledge, check your folders, and continue reading."
         actions={<>
+          <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/agent-context`}>Copy for Agent</Link>
           <MenuRoot>
             <MenuTrigger aria-label="Home actions" className={buttonClasses({ variant: "ghost", icon: true })}><MoreHorizontal size={16} aria-hidden="true" /></MenuTrigger>
             <MenuContent align="end" className="w-72">

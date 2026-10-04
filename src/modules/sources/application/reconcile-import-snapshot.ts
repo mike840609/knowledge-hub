@@ -13,6 +13,7 @@ import type {
 
 export type ImportPreview = {
   snapshotId: string;
+  importScope?: import("../domain/import-scope").ImportScope;
   planHash?: string | null;
   safety?: ImportSafetySummary;
   state: "READY" | "APPLIED" | "STALE";
@@ -114,6 +115,7 @@ export function previewFromSnapshot(snapshot: ImportSnapshot, now: Date): Import
   }
   return {
     snapshotId: snapshot.id,
+    ...(snapshot.importScope ? { importScope: snapshot.importScope } : {}),
     planHash: snapshot.planHash,
     state: snapshot.state,
     expired: snapshot.expiresAt.getTime() <= now.getTime(),
