@@ -43,7 +43,7 @@ export function SourceListRow({ workspaceId, item, limits }: { workspaceId: stri
         className="kh-focus-ring col-start-2 row-start-1 flex min-w-0 min-h-11 flex-wrap items-center gap-x-3 gap-y-1 rounded-md py-2.5"
       >
         <span className="min-w-0 flex-1 truncate text-body font-medium text-kh-text">{source.name}</span>
-        <span className="shrink-0 rounded-md border border-kh-border px-1.5 py-0.5 text-caption text-kh-text-muted">
+        <span className="shrink-0 text-caption text-kh-text-muted">
           {sourceTypeLabel(source.sourceType)}
         </span>
         {source.sourceType !== "HUB" ? (
@@ -61,7 +61,7 @@ export function SourceListRow({ workspaceId, item, limits }: { workspaceId: stri
         ) : null}
         <ChevronRight size={15} aria-hidden="true" className="shrink-0 text-kh-text-muted" />
       </Link>
-      {item.pendingPreviewId ? <Link className="col-start-2 pb-2 text-caption text-kh-link" href={`/w/${workspaceId}/sources/imports/${item.pendingPreviewId}`}>Awaiting Apply · Review preview</Link> : null}
+      {item.pendingPreviewId ? <Link className="kh-focus-ring col-start-2 w-fit rounded-md pb-2 text-body-sm font-medium text-kh-link hover:underline" href={`/w/${workspaceId}/sources/imports/${item.pendingPreviewId}`}>Awaiting Apply · Review preview</Link> : null}
     </li>
   );
 }

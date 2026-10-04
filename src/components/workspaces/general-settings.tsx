@@ -51,7 +51,7 @@ export function GeneralSettings({ team }: { team: TeamWorkspaceView }) {
   return (
     <section className="max-w-panel space-y-6">
       <h2 className="text-title font-semibold">General</h2>
-      <p className="text-body">State: {access.workspace.lifecycleState}</p>
+      <p className="text-body">State: {access.workspace.lifecycleState === "ACTIVE" ? "Active" : "Archived"}</p>
       {actions.canRename ? (
         <form
           className="space-y-3"

@@ -44,12 +44,14 @@ test.describe("Phase 3 Workspace product acceptance", () => {
       const workspaceId = new URL(page.url()).pathname.split("/")[2]!;
       await page.goto(`/w/${workspaceId}/settings/groups`);
       await expect(page.getByText("No SSO group mappings yet.")).toBeVisible();
+      await page.locator("summary").filter({hasText:"Add group mapping"}).click();
       await expect(page.getByLabel("New group role").locator("option")).toHaveText(["ADMIN", "EDITOR", "VIEWER"]);
       await page.getByLabel("External group ID").fill("phase3-ui-viewers");
       await page.getByLabel("New group role").selectOption("VIEWER");
       await page.getByRole("button", { name: "Add group mapping", exact: true }).click();
       await expect(page.getByRole("cell", { name: "phase3-ui-viewers", exact: true })).toBeVisible();
       await page.goto(`/w/${workspaceId}/settings/members`);
+      await page.locator("summary").filter({hasText:"Add member"}).click();
       await page.getByLabel("Search existing users").fill("P3-105");
       await page.getByRole("button", { name: "Search", exact: true }).click();
       await page.getByLabel("User to add").selectOption(phase3UserId("viewer"));
@@ -65,10 +67,10 @@ test.describe("Phase 3 Workspace product acceptance", () => {
       // Archiving is reversible, so it acts at once and offers undo rather
       // than asking twice.
       await page.getByRole("button", { name: "Archive workspace", exact: true }).click();
-      await expect(page.getByText("State: ARCHIVED")).toBeVisible();
+      await expect(page.getByText("State: Archived")).toBeVisible();
       await expect(page.getByRole("button", { name: "Save name" })).toHaveCount(0);
       await page.getByRole("button", { name: "Restore workspace", exact: true }).first().click();
-      await expect(page.getByText("State: ACTIVE")).toBeVisible();
+      await expect(page.getByText("State: Active")).toBeVisible();
       await page.goto(`/w/${workspaceId}/settings/audit`);
       await expect(page.getByRole("heading", { name: "Audit", exact: true })).toBeVisible();
       await expect(page.locator("main").first()).toContainText(/archive/i);
@@ -82,8 +84,10 @@ test.describe("Phase 3 Workspace product acceptance", () => {
       await grant(owner.context.request, id, "admin", "ADMIN");
       await grant(owner.context.request, id, "viewer", "VIEWER");
       await admin.page.goto(`/w/${id}/settings/groups`);
+      await admin.page.locator("summary").filter({hasText:"Add group mapping"}).click();
       await expect(admin.page.getByLabel("New group role").locator("option")).toHaveText(["EDITOR", "VIEWER"]);
       await admin.page.goto(`/w/${id}/settings/members`);
+      await admin.page.locator("summary").filter({hasText:"Add member"}).click();
       await admin.page.getByLabel("Search existing users").fill("P3-102");
       await admin.page.getByRole("button", { name: "Search", exact: true }).click();
       await expect(admin.page.getByLabel("New member role").locator("option")).toHaveText(["EDITOR", "VIEWER"]);

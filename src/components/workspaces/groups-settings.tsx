@@ -55,8 +55,9 @@ export function GroupsSettings({
         signed-in user’s trusted session.
       </p>
       {canAdd && (
+        <details className="max-w-panel border-b border-kh-border pb-3"><summary className="kh-focus-ring w-fit cursor-pointer rounded-md text-body font-medium">Add group mapping</summary>
         <form
-          className="max-w-panel space-y-3 rounded-md border border-kh-border p-4"
+          className="mt-3 space-y-3"
           onSubmit={async (event) => {
             event.preventDefault();
             if (!confirmed || busy || !externalGroupId.trim() || !chosenRole) return;
@@ -78,7 +79,7 @@ export function GroupsSettings({
             }
           }}
         >
-          <h3 className="font-medium">Add group mapping</h3>
+
           <label className="block text-body">
             External group ID
             <Input
@@ -106,6 +107,7 @@ export function GroupsSettings({
             Add group mapping
           </Button>
         </form>
+        </details>
       )}
       <GovernanceError error={error} />
       {groups.length === 0 ? (
@@ -113,21 +115,21 @@ export function GroupsSettings({
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-body">
-            <thead>
+            <thead className="hidden sm:table-header-group">
               <tr>
                 {["External group ID", "Role", "Actions"].map((label) => (
-                  <th className="border-b border-kh-border p-3" key={label}>
+                  <th className="border-b border-kh-border px-3 py-2 text-caption font-medium text-kh-text-muted" key={label}>
                     {label}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody>
+            <tbody className="block sm:table-row-group">
               {groups.map((group) => (
-                <tr className="border-b border-kh-border" key={group.externalGroupId}>
-                  <td className="p-3 align-top break-all">{group.externalGroupId}</td>
-                  <td className="p-3 align-top">{group.role}</td>
-                  <td className="p-3 align-top">
+                <tr className="grid grid-cols-2 gap-x-3 border-b border-kh-border py-2 sm:table-row sm:py-0" key={group.externalGroupId}>
+                  <td className="block px-3 py-2 align-top break-all sm:table-cell">{group.externalGroupId}</td>
+                  <td className="block px-3 py-2 align-top sm:table-cell"><span className="block text-caption text-kh-text-muted sm:hidden">Role</span>{group.role}</td>
+                  <td className="col-span-2 block px-3 py-2 align-top sm:table-cell">
                     <GrantRowActions
                       role={group.role}
                       roles={group.assignableRoles}
