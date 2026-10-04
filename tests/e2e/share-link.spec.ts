@@ -86,10 +86,19 @@ test.describe("document share link", () => {
       expect(await (await reader.get(path!)).text()).toContain("second shared body");
 
       // Revoking takes two steps, and then the link is gone for everyone.
-      await page.locator("main").getByRole("button", { name: "Share link…" }).click();
-      await dialog.getByRole("button", { name: "Revoke" }).click();
-      await dialog.getByRole("button", { name: "Confirm revoke" }).click();
-      await expect(dialog.getByText("No active links.")).toBeVisible(ROUND_TRIP);
+      await page.goto(`/w/${workspaceId}/shares`);
+      await page.getByLabel("Find shares").fill(title);
+      await page.locator("main").getByRole("button", { name: "Search", exact: true }).click();
+      const managed = page.getByRole("list", { name: "Share links" });
+      await expect(managed.getByRole("link", { name: title, exact: true })).toBeVisible(ROUND_TRIP);
+      await expect(managed).toContainText("for the reader");
+      await managed.getByRole("button", { name: `Share actions for ${title} · for the reader`, exact: true }).click();
+      await page.getByRole("menuitem", { name: "Revoke", exact: true }).click();
+      await managed.getByRole("button", { name: "Confirm revoke" }).click();
+      await expect(page.getByText("No shares match these filters.")).toBeVisible(ROUND_TRIP);
+      await page.getByLabel("Status", { exact: true }).selectOption("revoked");
+      await page.locator("main").getByRole("button", { name: "Search", exact: true }).click();
+      await expect(managed).toContainText("Revoked", ROUND_TRIP);
       const revoked = await reader.get(path!);
       expect(revoked.status()).toBe(404);
       expect(await revoked.text()).toContain("This link is not available");

@@ -1,3 +1,4 @@
+import { parseShareManagementQuery, SHARE_MANAGEMENT_PAGE_SIZE, type ShareManagementInput } from "../domain/share-management";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import {
@@ -50,6 +51,17 @@ export class DocumentShareService {
     private readonly tokens: ShareTokenIssuer,
     private readonly clock: () => Date = () => new Date(),
   ) {}
+
+  async listManagement(caller: CallerContext, workspaceId: string, input: ShareManagementInput) {
+    return this.unitOfWork.run(async r => {
+      await r.workspaceAccess.requireWorkspaceRead(caller, workspaceId);
+      const workspace = await r.workspaces.findById(workspaceId);
+      if (!workspace || workspace.workspaceType !== "PERSONAL" || workspace.personalOwnerUserId !== caller.identity.id || workspace.lifecycleState !== "ACTIVE") throw new DocumentNotFoundError();
+      const query = parseShareManagementQuery(input);
+      const rows = await r.shareLinks.listForWorkspace(workspaceId, caller.identity.id, query, this.clock(), SHARE_MANAGEMENT_PAGE_SIZE + 1, (query.page - 1) * SHARE_MANAGEMENT_PAGE_SIZE);
+      return { query, items: rows.slice(0, SHARE_MANAGEMENT_PAGE_SIZE), hasNext: rows.length > SHARE_MANAGEMENT_PAGE_SIZE };
+    });
+  }
 
   async create(caller: CallerContext, input: { documentId: string; label?: unknown; expiresInDays?: unknown }): Promise<ShareLinkView> {
     return this.unitOfWork.run(async (repositories) => {
