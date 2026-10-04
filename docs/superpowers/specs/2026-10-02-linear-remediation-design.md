@@ -1,7 +1,5 @@
 # Linear alignment remediation
 
-**English** | [繁體中文](2026-10-02-linear-remediation-design.zh-TW.md)
-
 The October 2 audit is the backlog; baseline is main `1cf8114`. The user authorized implementation in the recommended order. Preserve the incumbent typography, semantic light/dark palette, authorization, ownership, drafts, revisions, shortcuts, and knowledge model.
 
 ## Navigation and writing

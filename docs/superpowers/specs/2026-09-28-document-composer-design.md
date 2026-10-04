@@ -1,7 +1,5 @@
 # Document Composer — design specification
 
-**English** | [繁體中文](2026-09-28-document-composer-design.zh-TW.md)
-
 | Item | Content |
 | --- | --- |
 | Date | 2026-09-28 |

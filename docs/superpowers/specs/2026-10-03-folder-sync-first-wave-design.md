@@ -1,7 +1,5 @@
 # Folder Sync first wave: from synchronization to reading
 
-**English** | [繁體中文](2026-10-03-folder-sync-first-wave-design.zh-TW.md)
-
 Status: user confirmed the design; implementation plan awaiting review, not yet implemented.
 Baseline: main `15c8b7786239735ece7112bb663760346b33a580` (PR #104).
 

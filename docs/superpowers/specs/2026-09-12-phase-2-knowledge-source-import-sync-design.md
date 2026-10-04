@@ -1,7 +1,5 @@
 # Knowledge Hub — Phase 2 Knowledge Source Import & Sync Design
 
-**English** | [繁體中文](2026-09-12-phase-2-knowledge-source-import-sync-design.zh-TW.md)
-
 | Item | Content |
 | --- | --- |
 | Date | 2026-09-12 |

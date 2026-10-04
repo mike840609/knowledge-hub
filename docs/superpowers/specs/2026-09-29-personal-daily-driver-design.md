@@ -1,7 +1,5 @@
 # Personal daily-driver package, first batch — design specification
 
-**English** | [繁體中文](2026-09-29-personal-daily-driver-design.zh-TW.md)
-
 > 2026-09-30 update: the Team flag originally restricted only the switcher. The later [Personal workspace rollout](2026-09-30-personal-workspace-design.md) adds server-side personal-only authorization. Organization/archive are complete on main; subsequent account favorites, drafts, export, revision restore, and Home behavior follow that rollout specification.
 
 | Item | Content |

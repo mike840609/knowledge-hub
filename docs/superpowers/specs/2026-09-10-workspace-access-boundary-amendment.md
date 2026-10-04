@@ -1,7 +1,5 @@
 # Knowledge Hub — Workspace Access Boundary Architecture History
 
-**English** | [繁體中文](2026-09-10-workspace-access-boundary-amendment.zh-TW.md)
-
 | Item | Content |
 | --- | --- |
 | Date | 2026-09-10 |

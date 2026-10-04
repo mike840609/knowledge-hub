@@ -1,7 +1,5 @@
 # Resource Visibility & Access-Denial Semantics Amendment
 
-**English** | [繁體中文](2026-09-14-resource-visibility-access-semantics-amendment.zh-TW.md)
-
 **Date:** 2026-09-14
 
 **Status:** Accepted pre-Phase-3 amendment

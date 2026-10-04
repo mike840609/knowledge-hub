@@ -1,7 +1,5 @@
 # Knowledge Hub — Frontend Design Language
 
-**English** | [繁體中文](frontend-design-language.zh-TW.md)
-
 | Item | Value |
 | --- | --- |
 | Type | Living contract |
@@ -1043,7 +1041,6 @@ personal drafts and account favorites. The personal rollout spec supersedes
 the earlier deferred-product decisions on these operations. Team navigation
 remains visible but disabled, labelled Coming soon, until server configuration
 explicitly enables it. Disabled controls have no navigation or click action.
-
 
 1. The palette is mostly navigation, and that is a product gap rather than a
    UI one. Counted against the code it can offer about fourteen entries, of

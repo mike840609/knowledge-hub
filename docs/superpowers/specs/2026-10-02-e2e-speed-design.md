@@ -1,7 +1,5 @@
 # E2E performance design draft
 
-**English** | [繁體中文](2026-10-02-e2e-speed-design.zh-TW.md)
-
 Goal: shorten daily feedback and full regression time while retaining real browser, identity, and authorization-boundary verification. Based on the runner from PR #99. The original full regression recorded 219 passed and 2 skipped, totaling 454.82 seconds, with readiness plus browser at 399.16 seconds. The original temporary log no longer exists; historical one-off case durations are not a current ranking.
 
 ## Approach and trade-offs

@@ -1,7 +1,5 @@
 # Document share links — design specification
 
-**English** | [繁體中文](2026-09-23-document-share-link-design.zh-TW.md)
-
 | Item | Content |
 | --- | --- |
 | Date | 2026-09-23 |

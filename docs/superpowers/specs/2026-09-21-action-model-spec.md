@@ -1,7 +1,5 @@
 # Action model — design specification
 
-**English** | [繁體中文](2026-09-21-action-model-spec.zh-TW.md)
-
 | Item | Content |
 | --- | --- |
 | Date | 2026-09-21 |

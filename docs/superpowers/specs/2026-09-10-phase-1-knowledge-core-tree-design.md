@@ -1,7 +1,5 @@
 # Knowledge Hub — Phase 1 Knowledge Core & Tree Design
 
-**English** | [繁體中文](2026-09-10-phase-1-knowledge-core-tree-design.zh-TW.md)
-
 | Item | Content |
 | --- | --- |
 | Date | 2026-09-10 |
@@ -311,7 +309,6 @@ npx tsx scripts/db/backfill-source-tree-mapping.ts --mapping /path/to/verified-m
 npx tsx scripts/db/backfill-source-tree-mapping.ts --mapping /path/to/verified-mapping.json --apply
 npm run db:migrate -- --to 5
 ```
-
 
 If populated DB still has entries to backfill, argument-free `npm run db:migrate` completes 004, then safely stops at the 005 gate; 004 stays APPLIED and 005 creates no ledger row. This is an expected recoverable stop: backfill and rerun, without repairing checksum or ledger. With no pending entries it passes directly. Tests must cover this argument-free path.
 

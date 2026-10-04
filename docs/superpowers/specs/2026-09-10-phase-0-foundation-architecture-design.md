@@ -1,7 +1,5 @@
 # Knowledge Hub — Phase 0 Foundation & Architecture Design
 
-**English** | [繁體中文](2026-09-10-phase-0-foundation-architecture-design.zh-TW.md)
-
 | Item | Content |
 | --- | --- |
 | Document date | 2026-09-10 |

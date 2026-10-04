@@ -1,7 +1,5 @@
 # Personal Workspace knowledge links and graphs — design specification
 
-**English** | [繁體中文](2026-09-29-personal-workspace-knowledge-graph-design.zh-TW.md)
-
 | Item | Content |
 | --- | --- |
 | Date | 2026-09-29 |

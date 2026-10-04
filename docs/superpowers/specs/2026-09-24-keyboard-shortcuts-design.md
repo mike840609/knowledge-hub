@@ -1,7 +1,5 @@
 # Keyboard shortcuts — design specification
 
-**English** | [繁體中文](2026-09-24-keyboard-shortcuts-design.zh-TW.md)
-
 | Item | Content |
 | --- | --- |
 | Date | 2026-09-24 |

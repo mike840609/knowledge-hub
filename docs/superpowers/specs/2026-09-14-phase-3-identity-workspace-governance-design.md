@@ -1,7 +1,5 @@
 # Knowledge Hub — Phase 3 Identity, Workspace Administration & Governance Design
 
-**English** | [繁體中文](2026-09-14-phase-3-identity-workspace-governance-design.zh-TW.md)
-
 | Item | Content |
 | --- | --- |
 | Document date | 2026-09-14 |

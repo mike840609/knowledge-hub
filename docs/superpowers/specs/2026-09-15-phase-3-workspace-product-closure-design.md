@@ -1,7 +1,5 @@
 # Knowledge Hub — Phase 3 Workspace Product Closure Design
 
-**English** | [繁體中文](2026-09-15-phase-3-workspace-product-closure-design.zh-TW.md)
-
 | Item | Content |
 | --- | --- |
 | Document date | 2026-09-15 |

@@ -1,7 +1,5 @@
 # Knowledge Hub — Phase 4 Discovery & Read API Design
 
-**English** | [繁體中文](2026-09-16-phase-4-discovery-read-api-design.zh-TW.md)
-
 | Item | Content |
 | --- | --- |
 | Date | 2026-09-16 |

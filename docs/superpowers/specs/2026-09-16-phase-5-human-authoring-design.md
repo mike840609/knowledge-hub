@@ -1,7 +1,5 @@
 # Knowledge Hub — Phase 5 Human Authoring Design
 
-**English** | [繁體中文](2026-09-16-phase-5-human-authoring-design.zh-TW.md)
-
 | Item | Content |
 | --- | --- |
 | Date | 2026-09-16 |

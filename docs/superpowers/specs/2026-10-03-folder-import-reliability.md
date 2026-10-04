@@ -1,7 +1,5 @@
 # Folder import reliability hardening
 
-**English** | [繁體中文](2026-10-03-folder-import-reliability.zh-TW.md)
-
 This follow-up starts at PR #98's verified `c3cc2156e1f5a347709d02920d1709fe6aff4fe8` and preserves its authorization and Strict Mode fixes.
 
 ## Session behavior
