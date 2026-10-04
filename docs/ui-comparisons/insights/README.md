@@ -1,6 +1,6 @@
 # Insights／Home 設計一致性
 
-Insights 使用共用 PageHeader、tabClasses 與 kh-page；字級、間距和圓角回到既有設計尺度，移除普通控制項陰影及未使用樣式。Home 搜尋框改由 Input primitive 提供邊框、尺寸與 focus 樣式。
+Insights 使用共用 PageHeader 與 kh-page，期間使用無陰影的分段切換；字級、間距和圓角回到既有設計尺度，移除普通控制項陰影及未使用樣式。Home 搜尋框改由 Input primitive 提供邊框、尺寸與 focus 樣式。
 
 ## 驗證
 
