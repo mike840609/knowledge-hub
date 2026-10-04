@@ -1,35 +1,115 @@
-import {beforeAll,afterAll,expect,it} from "vitest";
-import type {Pool} from "mariadb";
-import {provisionIsolatedDatabase,disposeIsolatedDatabase} from "../../scripts/db/test-database";
-import {runMigrations,type IsolatedDatabaseHandle} from "../../scripts/db/migrate";
-import {createDatabasePool} from "@/infrastructure/database/mariadb/pool";
-import {databaseConfig} from "@/infrastructure/database/mariadb/config";
-import {MariaDbUnitOfWork} from "@/infrastructure/database/mariadb/transaction";
-import {createSourceFixture,fixtureCaller,secondFixtureIdentity} from "../fixtures/knowledge";
-import {prepareReadingImport} from "../fixtures/folder-reading";
-import {buildApplicationServices} from "@/server/composition";
-let pool:Pool,handle:IsolatedDatabaseHandle,uow:MariaDbUnitOfWork,s:ReturnType<typeof buildApplicationServices>,workspaceId:string;
-beforeAll(async()=>{handle=await provisionIsolatedDatabase("test");pool=createDatabasePool({...databaseConfig("test"),database:handle.databaseName});await runMigrations(pool);uow=new MariaDbUnitOfWork(pool);workspaceId=(await createSourceFixture(pool)).workspaceId;s=buildApplicationServices(pool);});
-afterAll(async()=>{await pool?.end();if(handle)await disposeIsolatedDatabase(handle);});
-it("loads the exact old revision and moved staged article without confusing duplicate filenames",async()=>{
- const initial=await prepareReadingImport(uow,workspaceId,null,[{path:"a/readme.md",text:"---\nknowledge_id: a\n---\n# A\nold"},{path:"b/readme.md",text:"# B\nother"}]);
- const applied=await s.imports.apply.apply(fixtureCaller(),initial);if(applied.kind!=="APPLIED")throw new Error("fixture failed");
- const snapshot=await prepareReadingImport(uow,workspaceId,applied.sourceId,[{path:"c/readme.md",text:"---\nknowledge_id: a\nowner: two\n---\n# A\nnew"},{path:"b/readme.md",text:"# B\nother"}]);
- const diff=await s.imports.diff.get(fixtureCaller(),snapshot,"c/readme.md");
- expect(diff).toMatchObject({snapshotId:snapshot,basedOnVersion:1,beforePath:"a/readme.md",afterPath:"c/readme.md"});
- expect(diff.beforeRevisionId).toBeTruthy();expect(diff.afterUploadKey).toBeTruthy();
- expect(diff.lines).toContainEqual({kind:"removed",text:"old"});expect(diff.lines).toContainEqual({kind:"added",text:"new"});
- expect(diff.lines.some(l=>l.text==="other")).toBe(false);
- await expect(s.imports.diff.get(fixtureCaller(secondFixtureIdentity),snapshot,"c/readme.md")).rejects.toMatchObject({code:"IMPORT_SNAPSHOT_NOT_FOUND"});
- await expect(s.imports.diff.get(fixtureCaller(),snapshot,"unlisted.md")).rejects.toMatchObject({code:"UPLOAD_ENTRY_NOT_FOUND"});
- await pool.query("UPDATE knowledge_sources SET sync_version=sync_version+1 WHERE id=?",[applied.sourceId]);
- await expect(s.imports.diff.get(fixtureCaller(),snapshot,"c/readme.md")).rejects.toMatchObject({code:"SOURCE_VERSION_CONFLICT"});
+import { beforeAll, afterAll, expect, it } from "vitest";
+import type { Pool } from "mariadb";
+import {
+  provisionIsolatedDatabase,
+  disposeIsolatedDatabase,
+} from "../../scripts/db/test-database";
+import {
+  runMigrations,
+  type IsolatedDatabaseHandle,
+} from "../../scripts/db/migrate";
+import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
+import { databaseConfig } from "@/infrastructure/database/mariadb/config";
+import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction";
+import {
+  createSourceFixture,
+  fixtureCaller,
+  secondFixtureIdentity,
+} from "../fixtures/knowledge";
+import { prepareReadingImport } from "../fixtures/folder-reading";
+import { buildApplicationServices } from "@/server/composition";
+let pool: Pool,
+  handle: IsolatedDatabaseHandle,
+  uow: MariaDbUnitOfWork,
+  s: ReturnType<typeof buildApplicationServices>,
+  workspaceId: string;
+beforeAll(async () => {
+  handle = await provisionIsolatedDatabase("test");
+  pool = createDatabasePool({
+    ...databaseConfig("test"),
+    database: handle.databaseName,
+  });
+  await runMigrations(pool);
+  uow = new MariaDbUnitOfWork(pool);
+  workspaceId = (await createSourceFixture(pool)).workspaceId;
+  s = buildApplicationServices(pool);
 });
-it("rejects expired snapshots and revoked workspace access before returning text",async()=>{
- const snapshot=await prepareReadingImport(uow,workspaceId,null,[{path:"secret.md",text:"# Secret"}]);
- await pool.query("UPDATE source_import_snapshots SET expires_at=DATE_SUB(NOW(),INTERVAL 1 HOUR) WHERE id=?",[snapshot]);
- await expect(s.imports.diff.get(fixtureCaller(),snapshot,"secret.md")).rejects.toMatchObject({code:"IMPORT_SNAPSHOT_EXPIRED"});
- const next=await prepareReadingImport(uow,workspaceId,null,[{path:"secret.md",text:"# Secret"}]);
- await pool.query("DELETE FROM workspace_memberships WHERE workspace_id=? AND user_id=?",[workspaceId,fixtureCaller().identity.id]);
- await expect(s.imports.diff.get(fixtureCaller(),next,"secret.md")).rejects.toMatchObject({code:"IMPORT_SNAPSHOT_ACCESS_DENIED"});
+afterAll(async () => {
+  await pool?.end();
+  if (handle) await disposeIsolatedDatabase(handle);
+});
+it("loads the exact old revision and moved staged article without confusing duplicate filenames", async () => {
+  const initial = await prepareReadingImport(uow, workspaceId, null, [
+    { path: "a/readme.md", text: "---\nknowledge_id: a\n---\n# A\nold" },
+    { path: "b/readme.md", text: "# B\nother" },
+  ]);
+  const applied = await s.imports.apply.apply(fixtureCaller(), initial);
+  if (applied.kind !== "APPLIED") throw new Error("fixture failed");
+  const snapshot = await prepareReadingImport(
+    uow,
+    workspaceId,
+    applied.sourceId,
+    [
+      {
+        path: "c/readme.md",
+        text: "---\nknowledge_id: a\nowner: two\n---\n# A\nnew",
+      },
+      { path: "b/readme.md", text: "# B\nother" },
+    ],
+  );
+  const diff = await s.imports.diff.get(
+    fixtureCaller(),
+    snapshot,
+    "c/readme.md",
+  );
+  expect(diff).toMatchObject({
+    snapshotId: snapshot,
+    basedOnVersion: 1,
+    beforePath: "a/readme.md",
+    afterPath: "c/readme.md",
+  });
+  expect(diff.beforeRevisionId).toBeTruthy();
+  expect(diff.afterUploadKey).toBeTruthy();
+  expect(diff.lines).toContainEqual({ kind: "removed", text: "old" });
+  expect(diff.lines).toContainEqual({ kind: "added", text: "new" });
+  expect(diff.lines.some((l) => l.text === "other")).toBe(false);
+  await expect(
+    s.imports.diff.get(
+      fixtureCaller(secondFixtureIdentity),
+      snapshot,
+      "c/readme.md",
+    ),
+  ).rejects.toMatchObject({ code: "IMPORT_SNAPSHOT_NOT_FOUND" });
+  await expect(
+    s.imports.diff.get(fixtureCaller(), snapshot, "unlisted.md"),
+  ).rejects.toMatchObject({ code: "UPLOAD_ENTRY_NOT_FOUND" });
+  await pool.query(
+    "UPDATE knowledge_sources SET sync_version=sync_version+1 WHERE id=?",
+    [applied.sourceId],
+  );
+  await expect(
+    s.imports.diff.get(fixtureCaller(), snapshot, "c/readme.md"),
+  ).rejects.toMatchObject({ code: "SOURCE_VERSION_CONFLICT" });
+});
+it("rejects expired snapshots and revoked workspace access before returning text", async () => {
+  const snapshot = await prepareReadingImport(uow, workspaceId, null, [
+    { path: "secret.md", text: "# Secret" },
+  ]);
+  await pool.query(
+    "UPDATE source_import_snapshots SET expires_at=DATE_SUB(NOW(),INTERVAL 1 HOUR) WHERE id=?",
+    [snapshot],
+  );
+  await expect(
+    s.imports.diff.get(fixtureCaller(), snapshot, "secret.md"),
+  ).rejects.toMatchObject({ code: "IMPORT_SNAPSHOT_EXPIRED" });
+  const next = await prepareReadingImport(uow, workspaceId, null, [
+    { path: "secret.md", text: "# Secret" },
+  ]);
+  await pool.query(
+    "DELETE FROM workspace_memberships WHERE workspace_id=? AND user_id=?",
+    [workspaceId, fixtureCaller().identity.id],
+  );
+  await expect(
+    s.imports.diff.get(fixtureCaller(), next, "secret.md"),
+  ).rejects.toMatchObject({ code: "IMPORT_SNAPSHOT_ACCESS_DENIED" });
 });

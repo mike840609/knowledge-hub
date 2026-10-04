@@ -1,6 +1,7 @@
 import type { Migration } from "./types";
 export const folderSyncReadingMigration: Migration = {
-  version: 14, name: "folder-sync-reading",
+  version: 14,
+  name: "folder-sync-reading",
   statements: [
     `CREATE TABLE sync_run_changes (
       id UUID NOT NULL PRIMARY KEY, run_id UUID NOT NULL, source_id UUID NOT NULL, workspace_id UUID NOT NULL,

@@ -14,6 +14,10 @@ export type SyncRunChangeDraft = {
   diagnostics: ImportDiagnostic[];
 };
 export type SyncRunChange = SyncRunChangeDraft & {
-  id: string; runId: string; sourceId: string; workspaceId: string; ordinal: number;
+  id: string;
+  runId: string;
+  sourceId: string;
+  workspaceId: string;
+  ordinal: number;
 };
 export type RunCursor = { completedAt: string; runId: string };
