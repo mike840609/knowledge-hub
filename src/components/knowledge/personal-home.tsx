@@ -158,7 +158,7 @@ export function PersonalHome({ workspaceId, documents, drafts, limits, profileCo
       {profileCounts?<PersonalStatsSummary workspaceId={workspaceId} counts={profileCounts}/>:null}
       <form action={`/w/${workspaceId}/search`} role="search" className="px-3">
         <label className="sr-only" htmlFor="my-space-search">Search My Space</label>
-        <div className="flex gap-2"><Input id="my-space-search" name="q" placeholder="Search your knowledge…" className="min-w-0 flex-1 rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-body kh-focus-ring"/><Input type="hidden" name="scope" value="workspace"/><button className={buttonClasses({variant:"secondary"})}>Search</button></div>
+        <div className="flex gap-2"><Input id="my-space-search" name="q" placeholder="Search your knowledge…" className="min-w-0 flex-1"/><Input type="hidden" name="scope" value="workspace"/><button className={buttonClasses({variant:"secondary"})}>Search</button></div>
       </form>
       <Section title="My folders"><HomeFolderList workspaceId={workspaceId} items={folders} limits={limits}/><Link className="block px-3 pt-2 text-caption text-kh-link" href={`/w/${workspaceId}/sources`}>Manage sources</Link></Section>
       {recent.length > 0 && <Section title="Continue reading">{documentRows(recent.slice(0, 4))}</Section>}

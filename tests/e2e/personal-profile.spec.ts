@@ -38,7 +38,7 @@ test("personal profile counts, detail links, themes and mobile layout",async({pa
  await page.screenshot({path:path.join(output,"desktop-light.png"),fullPage:true,animations:"disabled"});
  await page.getByRole("button",{name:/^Account:/}).click();await page.getByRole("menuitemradio",{name:"Dark",exact:true}).click();await page.keyboard.press("Escape");await expect(page.locator("html")).toHaveAttribute("data-theme","dark");await page.screenshot({path:path.join(output,"desktop-dark.png"),fullPage:true,animations:"disabled"});
  await page.getByRole("button",{name:/^Account:/}).click();await page.getByRole("menuitemradio",{name:"Light",exact:true}).click();await page.keyboard.press("Escape");
- await page.setViewportSize({width:390,height:844});await expect(page.getByRole("heading",{name:"Insights",exact:true})).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.setViewportSize({width:390,height:844});await expect(page.getByRole("heading",{name:"Insights",exact:true})).toBeVisible();await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.screenshot({path:path.join(output,"mobile-top.png"),animations:"disabled"});await page.getByRole("heading",{name:"Sync overview",exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:path.join(output,"mobile-bottom.png"),animations:"disabled"});
  expect(errors).toEqual([]);
 });
