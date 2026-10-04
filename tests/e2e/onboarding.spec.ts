@@ -8,7 +8,9 @@ test("first folder guidance persists dismissal and rejects invalid or inaccessib
   const initial = await (await request.get(endpoint)).json();
   expect((await request.put(endpoint, { data: { value: { schemaVersion: 1, dismissed: false }, version: initial.version } })).ok()).toBe(true);
   await page.goto(`/w/${ws}/home`);
-  await expect(page.getByRole("region", { name: "Get started", exact: true })).toHaveCount(0);
+  // The full suite shares this workspace: earlier tests may already have imported folders.
+  const emptyFolders = await page.getByText("Import a Markdown folder to bring your knowledge into My Space.", { exact: false }).isVisible();
+  await expect(page.getByRole("region", { name: "Get started", exact: true })).toHaveCount(emptyFolders ? 0 : 1);
   const snapshot = await stageReadingFolder(request, { workspaceId: ws, sourceName: "Onboarding folder", fixture: "reading-flow-v1" });
   await page.goto(`/w/${ws}/sources/imports/${snapshot}`);
   await page.getByRole("button", { name: "Apply changes" }).click();
