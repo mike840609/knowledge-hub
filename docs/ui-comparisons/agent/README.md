@@ -19,4 +19,3 @@ Before 為 main `668aa03f`；After 為本分支。使用相同隔離資料及狀
 |---|---|---|
 | desktop | ![Before agent-context desktop](before/agent-context-desktop.png) | ![After agent-context desktop](after/agent-context-desktop.png) |
 | mobile | ![Before agent-context mobile](before/agent-context-mobile.png) | ![After agent-context mobile](after/agent-context-mobile.png) |
-
