@@ -78,8 +78,8 @@ export function MembersSettings({
     <section className="space-y-6">
       <h2 className="text-title font-semibold">Members</h2>
       {canAdd && (
-        <div className="max-w-panel rounded-md border border-kh-border p-4">
-          <h3 className="font-medium">Add member</h3>
+        <details className="max-w-panel border-b border-kh-border pb-3">
+          <summary className="kh-focus-ring w-fit cursor-pointer rounded-md text-body font-medium">Add member</summary>
           <form
             className="mt-3 flex gap-2"
             onSubmit={(event) => {
@@ -164,29 +164,30 @@ export function MembersSettings({
               </Button>
             </form>
           )}
-        </div>
+        </details>
       )}
+      <p className="text-caption text-kh-text-muted">{members.length} members · Direct roles can be changed here. Group access comes from SSO and is managed in SSO Groups.</p>
       <GovernanceError error={error} />
       <div className="overflow-x-auto">
         <table className="w-full text-left text-body">
-          <thead>
+          <thead className="hidden sm:table-header-group">
             <tr>
               {["Name", "Direct role", "Group access", "Actions"].map((label) => (
-                <th className="border-b border-kh-border p-3" key={label}>
+                <th className="border-b border-kh-border px-3 py-2 text-caption font-medium text-kh-text-muted" key={label}>
                   {label}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody>
+          <tbody className="block sm:table-row-group">
             {members.map((member) => (
-              <tr className="border-b border-kh-border" key={member.user.id}>
-                <td className="p-3 align-top">
+              <tr className="grid grid-cols-2 gap-x-3 border-b border-kh-border py-2 sm:table-row sm:py-0" key={member.user.id}>
+                <td className="block px-3 py-2 align-top sm:table-cell">
                   {member.user.name}
                   <span className="block text-caption text-kh-text-muted">{member.user.empId}</span>
                 </td>
-                <td className="p-3 align-top">{member.access.directRole ?? "No direct role"}</td>
-                <td className="p-3 align-top">
+                <td className="block px-3 py-2 align-top sm:table-cell"><span className="block text-caption text-kh-text-muted sm:hidden">Direct role</span>{member.access.directRole ?? "No direct role"}</td>
+                <td className="col-span-2 block px-3 py-2 align-top sm:table-cell"><span className="block text-caption text-kh-text-muted sm:hidden">Group access</span>
                   {member.access.groupAccess === "UNKNOWN_NOT_EVALUATED"
                     ? "Group access not evaluated"
                     : member.access.matchedGroups?.length
@@ -195,7 +196,7 @@ export function MembersSettings({
                           .join(", ")
                       : "No matching group grants"}
                 </td>
-                <td className="p-3 align-top">
+                <td className="col-span-2 block px-3 py-2 align-top sm:table-cell">
                   <GrantRowActions
                     role={member.access.directRole ?? ""}
                     roles={member.assignableRoles}

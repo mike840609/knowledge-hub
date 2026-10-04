@@ -48,7 +48,7 @@ it("disables a running source and keeps row keyboard navigation out of the secon
   let resolve!: (snapshot:string)=>void;state.run.mockImplementationOnce(() => new Promise<string>(r => {resolve=r;}));
   await render();const button=container.querySelector<HTMLButtonElement>('button[aria-label="Check for changes: Source one"]');expect(button).not.toBeNull();
   const arrow=new KeyboardEvent("keydown",{key:"ArrowDown",bubbles:true,cancelable:true});await act(async () => {button!.focus();button!.dispatchEvent(arrow);});expect(arrow.defaultPrevented).toBe(false);expect(document.activeElement).toBe(button);
-  await act(async () => button!.click());expect(button!.disabled).toBe(true);expect(container.querySelector('[role="status"]')).not.toBeNull();
+  await act(async () => button!.click());expect(button!.disabled).toBe(true);expect(container.querySelector('li [role="status"]')).not.toBeNull();
   await act(async () => button!.click());expect(state.run).toHaveBeenCalledTimes(1);
   await act(async () => resolve("preview-1"));
 });
@@ -98,7 +98,7 @@ it("shows last successful apply even when the latest attempt failed", async () =
 it("offers a source-scoped retry after a failed sync", async () => {
   state.run.mockRejectedValueOnce(new Error("Upload failed"));await render([source("one")]);
   await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label^="Check for changes"]')!.click());
-  expect(container.querySelector('[role="status"]')?.textContent).toContain("Upload failed");
+  expect(container.querySelector('li [role="status"]')?.textContent).toContain("Upload failed");
   const retry=container.querySelector<HTMLButtonElement>('button[aria-label="Retry sync: Source one"]');
   expect(retry).not.toBeNull();await act(async () => retry!.click());
   expect(state.push).toHaveBeenCalledWith("/w/ws/sources/imports/preview-1");
@@ -116,11 +116,11 @@ it("shows scanning, upload counts, preview preparation, and the required Apply s
   await render([source("one")]);
   await act(async () => container.querySelector<HTMLButtonElement>("button")!.click());
   const progress=state.run.mock.calls[0][0].onProgress;
-  expect(container.querySelector('[role="status"]')?.textContent).toContain("Apply is required");
+  expect(container.querySelector('li [role="status"]')?.textContent).toContain("Apply is required");
   await act(async () => progress({kind:"UPLOADING",uploaded:2,total:5}));
-  expect(container.querySelector('[role="status"]')?.textContent).toContain("2/5");
+  expect(container.querySelector('li [role="status"]')?.textContent).toContain("2/5");
   await act(async () => progress({kind:"FINALIZING"}));
-  expect(container.querySelector('[role="status"]')?.textContent).toContain("building the preview");
+  expect(container.querySelector('li [role="status"]')?.textContent).toContain("building the preview");
   await act(async () => resolve("preview-1"));
-  expect(container.querySelector('[role="status"]')?.textContent).toContain("select Apply");
+  expect(container.querySelector('li [role="status"]')?.textContent).toContain("select Apply");
 });
