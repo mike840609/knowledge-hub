@@ -151,7 +151,7 @@ npm run start
 
 部署時需配置獨立資料庫憑證、資料備份、HTTPS 與可信任的 session 整合。`start` script 綁定 `127.0.0.1`，可搭配同機 reverse proxy；容器部署需自行調整啟動介面的 bind address。勿將範例開發資料庫憑證或測試設定公開使用。
 
-既有資料庫升級請先閱讀 [Workspace governance cutover](docs/operations/phase3-workspace-governance-cutover.zh-TW.md)，部分 migration 有資料 readiness gate。文件連結索引可依 [rollout 文件](docs/operations/document-link-index-rollout.zh-TW.md) 使用 `npm run db:reindex-document-links` 回填或修復。Team 開關操作見 [Team workspace availability](docs/operations/team-workspaces-availability.zh-TW.md)。
+既有資料庫升級請先閱讀 [Workspace governance cutover](docs/operations/phase3-workspace-governance-cutover.md)，部分 migration 有資料 readiness gate。文件連結索引可依 [rollout 文件](docs/operations/document-link-index-rollout.md) 使用 `npm run db:reindex-document-links` 回填或修復。Team 開關操作見 [Team workspace availability](docs/operations/team-workspaces-availability.md)。
 
 ## 技術與架構
 
