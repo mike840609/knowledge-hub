@@ -1,7 +1,5 @@
 # Keyboard Shortcuts Implementation Plan
 
-**English** | [繁體中文](2026-09-24-keyboard-shortcuts.zh-TW.md)
-
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add `C` (Add to Notes), `E` (Edit document), `/` (open palette), and `⌘Enter`/`Esc` in the two document forms, and show each shortcut in the palette and on button tooltips.

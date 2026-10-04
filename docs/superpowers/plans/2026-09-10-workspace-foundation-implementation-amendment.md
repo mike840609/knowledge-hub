@@ -1,7 +1,5 @@
 # Knowledge Hub — Workspace Foundation Implementation History
 
-**English** | [繁體中文](2026-09-10-workspace-foundation-implementation-amendment.zh-TW.md)
-
 | Item | Content |
 | --- | --- |
 | Date | 2026-09-10 |

@@ -1,7 +1,5 @@
 # Phase 2 Stable Source Identity Amendment Implementation Plan
 
-**English** | [繁體中文](2026-09-17-phase-2-stable-source-identity-amendment.zh-TW.md)
-
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Let Generic Markdown folder sources optionally provide a stable `knowledge_id` that maps to `SourceEntry.externalId`, survives rename/move plus content edits, and can be safely adopted by existing documents without creating synthetic revisions.

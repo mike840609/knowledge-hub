@@ -1,7 +1,5 @@
 # Phase 5 Human Authoring Implementation Plan
 
-**English** | [繁體中文](2026-09-16-phase-5-human-authoring.zh-TW.md)
-
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Let users create, upload, and edit HUB_MANAGED documents on the Web, preserving changes as immutable Revisions and showing explicit conflicts during concurrent editing.

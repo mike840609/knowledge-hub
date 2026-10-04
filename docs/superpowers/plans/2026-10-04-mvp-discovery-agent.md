@@ -1,7 +1,5 @@
 # MVP Discovery and Agent Implementation Plan
 
-**English** | [繁體中文](2026-10-04-mvp-discovery-agent.zh-TW.md)
-
 > **For agentic workers:** Use superpowers:executing-plans to implement sequentially in the current session. The user requested execution.
 
 **Goal:** Reliable source scope, precise discovery, and bounded manual Agent context.

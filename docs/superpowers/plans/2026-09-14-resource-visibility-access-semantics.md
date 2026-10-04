@@ -1,7 +1,5 @@
 # Resource Visibility & Access Semantics Implementation Plan
 
-**English** | [繁體中文](2026-09-14-resource-visibility-access-semantics.zh-TW.md)
-
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Preserve non-enumerating 404 behavior for unknown/foreign resources while returning an explicit access-denied state for resources the caller is already allowed to know exist.

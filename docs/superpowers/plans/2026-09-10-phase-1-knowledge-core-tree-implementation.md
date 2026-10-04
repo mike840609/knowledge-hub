@@ -1,7 +1,5 @@
 # Phase 1 Knowledge Core & Tree Implementation Plan
 
-**English** | [繁體中文](2026-09-10-phase-1-knowledge-core-tree-implementation.zh-TW.md)
-
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Complete Knowledge Core & Tree behavior on top of the Phase 0 Workspace foundation so Knowledge Hub has stable UUIDv7 document identity, immutable revisions, safe hierarchy mutation, lifecycle provenance, source mapping primitives, Workspace-aware caller access, and a read-only browser that Phase 2 can reuse without bypassing core rules.

@@ -1,7 +1,5 @@
 # Knowledge Hub — Phase 0 Foundation Implementation Plan
 
-**English** | [繁體中文](2026-09-10-phase-0-foundation-implementation.zh-TW.md)
-
 | Item | Content |
 | --- | --- |
 | Date | 2026-09-10 |

@@ -1,7 +1,5 @@
 # E2E Smoke and Coverage Inventory Implementation Plan
 
-**English** | [繁體中文](2026-10-02-e2e-speed-phase1.zh-TW.md)
-
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Provide executable Team/Personal smoke suites, persist test and stage outcomes for every run, and inventory coverage case by case to inform subsequent case streamlining and isolation.

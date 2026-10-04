@@ -1,7 +1,5 @@
 # Personal Workspace Knowledge Links and Graph — Implementation Plan
 
-**English** | [繁體中文](2026-09-29-personal-workspace-knowledge-graph.zh-TW.md)
-
 | Item | Content |
 | --- | --- |
 | Date | 2026-09-29 |

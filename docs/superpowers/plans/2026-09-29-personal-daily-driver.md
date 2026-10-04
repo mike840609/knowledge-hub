@@ -1,7 +1,5 @@
 # Personal Daily Driver (First Batch) — Implementation Plan
 
-**English** | [繁體中文](2026-09-29-personal-daily-driver.zh-TW.md)
-
 Chinese wikilinks below are preserved as literal input examples.
 
 Corresponding specification: [`specs/2026-09-29-personal-daily-driver-design.md`](../specs/2026-09-29-personal-daily-driver-design.md). Decision IDs (D1…D13) and section references (§) refer to that specification.

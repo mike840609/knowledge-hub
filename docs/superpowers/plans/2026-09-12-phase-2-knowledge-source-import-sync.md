@@ -1,7 +1,5 @@
 # Phase 2 Knowledge Source Import & Sync Implementation Plan
 
-**English** | [繁體中文](2026-09-12-phase-2-knowledge-source-import-sync.zh-TW.md)
-
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build the Phase 2 whole-folder Markdown import and re-sync flow from raw browser folder input through immutable Preview to one atomic `SOURCE_MANAGED` canonical Apply.

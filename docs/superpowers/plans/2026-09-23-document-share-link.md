@@ -1,7 +1,5 @@
 # Document Share Link Implementation Plan
 
-**English** | [繁體中文](2026-09-23-document-share-link.zh-TW.md)
-
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** My Space owners can create expiring, revocable read-only links for individual documents; anyone with a link can read the document's current revision at `/s/:token` without signing in.

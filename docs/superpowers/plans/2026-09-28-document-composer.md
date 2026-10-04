@@ -1,7 +1,5 @@
 # Document Composer Implementation Plan
 
-**English** | [繁體中文](2026-09-28-document-composer.zh-TW.md)
-
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the two form pages (edit, new) with one composer laid out like the reader — title that follows the content, a preview toggle, and unsaved drafts kept in the tab.

@@ -1,7 +1,5 @@
 # Phase 4 Discovery & Read API Implementation Plan
 
-**English** | [繁體中文](2026-09-16-phase-4-discovery-read-api.zh-TW.md)
-
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Let users search Knowledge they are authorized to read by keyword in the Web UI, including mixed Chinese/English content, without search results ever exposing unreadable content.
