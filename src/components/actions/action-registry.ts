@@ -20,6 +20,8 @@ import type { WorkspaceActions } from "@/server/workspace-admin";
 export type ActionId =
   | "navigate.toggle-nav"
   | "navigate.home"
+  | "navigate.agent-context"
+  | "document.agent-context"
   | "navigate.knowledge"
   | "navigate.search"
   | "navigate.graph"
@@ -213,6 +215,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
   const actions: Action[] = [];
   if (context.workspaceType === "PERSONAL") actions.push({ id: "navigate.home", label: "Go to My Space home", group: "navigate", icon: "knowledge", keywords: ["drafts", "favorites", "recent", "export"], surfaces: ["palette"], effect: { kind: "navigate", href: `/w/${workspaceId}/home` } });
 
+  if (context.workspaceType === "PERSONAL" && can.canSearch) actions.push({ id: "navigate.agent-context", label: "Copy for Agent", group: "navigate", icon: "copy-link", keywords: ["agent", "context", "markdown"], surfaces: ["palette"], effect: { kind: "navigate", href: `/w/${workspaceId}/agent-context` } });
   actions.push({
     id: "navigate.knowledge",
     label: "Go to Knowledge",
@@ -321,6 +324,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
   }
 
   if (target) {
+    if (context.workspaceType === "PERSONAL" && can.canSearch && target.status === "ACTIVE" && target.sourceStatus === "ACTIVE" && target.revision === "CURRENT") actions.push({ id: "document.agent-context", label: "Copy for Agent", group: "document", icon: "copy-link", keywords: ["agent", "context", "markdown"], surfaces: ["palette", "row"], effect: { kind: "navigate", href: `/w/${workspaceId}/agent-context?document=${target.documentId}` } });
     actions.push({ id: "document.export", label: "Download Markdown", group: "document", icon: "open", keywords: ["export", "download", "markdown"], surfaces: ["palette", "row"], effect: { kind: "download", href: `/api/documents/${target.documentId}/export` } });
     const documentHref = `/w/${workspaceId}/knowledge/${target.sourceId}/${target.documentId}${suffix}`;
     actions.push({

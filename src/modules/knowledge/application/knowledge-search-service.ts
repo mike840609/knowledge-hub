@@ -1,6 +1,7 @@
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { evaluateWorkspaceCapabilities } from "@/modules/workspaces/application/workspace-authorization";
 import type { WorkspaceQueryService } from "@/modules/workspaces/application/workspace-query-service";
+import { parseSearchFilters, hasSearchFilters, type SearchFilterInput } from "../domain/search-filters";
 import { parseSearchQuery } from "../domain/search-query";
 import type { KnowledgeSearchRow } from "../ports/knowledge-search-repository";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "../ports/unit-of-work";
@@ -10,7 +11,7 @@ export const SEARCH_MAX_PAGE = 50;
 
 export type SearchScope = { kind: "workspace"; workspaceId: string } | { kind: "all" };
 
-export type KnowledgeSearchInput = {
+export type KnowledgeSearchInput = SearchFilterInput & {
   q: string;
   scope: SearchScope;
   sourceId?: string | null;
@@ -40,9 +41,10 @@ export class KnowledgeSearchService {
 
   async search(caller: CallerContext, input: KnowledgeSearchInput): Promise<KnowledgeSearchResult> {
     const parsed = parseSearchQuery(input.q);
+    const filters = parseSearchFilters(input);
     const page = Math.min(Math.max(input.page ?? 1, 1), SEARCH_MAX_PAGE);
     const includeArchived = input.includeArchived ?? false;
-    if (parsed.tooLong || parsed.terms.length === 0) {
+    if (parsed.tooLong || (parsed.terms.length === 0 && !hasSearchFilters(filters) && !input.sourceId)) {
       return { terms: parsed.terms, hits: [], page, hasNext: false, tooLong: parsed.tooLong };
     }
     // The accessible list is read outside the search transaction, exactly as
@@ -59,6 +61,7 @@ export class KnowledgeSearchService {
           );
       const rows = await repositories.search.search({
         terms: parsed.terms,
+        filters,
         workspaceIds,
         sourceId: input.sourceId ?? null,
         includeArchived,
@@ -67,6 +70,7 @@ export class KnowledgeSearchService {
       });
       return {
         terms: parsed.terms,
+        filters,
         hits: rows.slice(0, SEARCH_PAGE_SIZE),
         page,
         hasNext: rows.length > SEARCH_PAGE_SIZE,

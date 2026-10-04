@@ -12,6 +12,7 @@ import type { KnowledgeLifecycle } from "../domain/lifecycle";
 export type LinkedSourceEntry = {
   id: string;
   sourceId: string;
+  sourcePath?: string | null;
   documentId: string | null;
   treeNodeId: string | null;
   status: KnowledgeLifecycle;

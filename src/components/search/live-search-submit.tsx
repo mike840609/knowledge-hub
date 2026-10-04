@@ -3,22 +3,12 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { useHydrated } from "@/components/shell/use-hydrated";
 
-/**
- * The search form's submit button, and what replaces it once JavaScript runs.
- *
- * Before hydration (and with JavaScript off) this is an ordinary submit
- * button on a GET form, so search still works. Once mounted, the form
- * searches as the reader types: a pause, or a change to Scope, Source or
- * Include archived, replaces the URL with the form's current values. The
- * button then goes, because there is nothing left for it to do; Enter still
- * runs the search at once rather than waiting out the pause.
- */
+/** GET fallback and debounced live search share the same form values.
+ * The visible submit button also supports Enter across multiple text fields. */
 export function LiveSearchSubmit() {
   const ref = useRef<HTMLSpanElement>(null);
   const router = useRouter();
-  const hydrated = useHydrated();
 
   useEffect(() => {
     const form = ref.current?.closest("form");
@@ -50,12 +40,9 @@ export function LiveSearchSubmit() {
     };
   }, [router]);
 
-  // Removed rather than `hidden`: the button's own inline-flex outranks the
-  // attribute. With the query as the form's only text field, Enter still
-  // submits without a button, and the handler above takes it.
   return (
     <span ref={ref} className="contents">
-      {hydrated ? null : <Button type="submit" size="lg">Search</Button>}
+      <Button type="submit" size="lg">Search</Button>
     </span>
   );
 }

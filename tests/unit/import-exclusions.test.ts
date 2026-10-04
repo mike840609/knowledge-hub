@@ -21,13 +21,15 @@ it("does not create a destructive empty snapshot when all selected files are exc
 it("filters saved source-relative prefixes before manifest creation and upload",async()=>{
   vi.stubGlobal("localStorage",{getItem:()=>"private"});
   const requests: {url:string;init:RequestInit}[]=[];
-  vi.stubGlobal("fetch",vi.fn(async(url:string,init:RequestInit)=>{requests.push({url,init});return Response.json(url.endsWith("source-imports")?{snapshotId:"snap"}:{});}));
+  vi.stubGlobal("fetch",vi.fn(async(url:string,init:RequestInit)=>{if (url.endsWith("import-scope")) return Response.json({ paths: ["private"], configured: true, syncVersion: 1 });requests.push({url,init});return Response.json(url.endsWith("source-imports")?{snapshotId:"snap"}:{});}));
   await runFolderImport({target:{kind:"existing",workspaceId:"ws",sourceId:"source",sourceName:"Wiki"},files:[file("private/secret.md"),file("public/guide.md")],sourceName:"",onProgress:()=>{}});
   const manifest=JSON.parse(String(requests[0].init.body)).manifest;
   expect(manifest.map((e:{relativePath:string})=>e.relativePath)).toEqual(["public/guide.md"]);
   const form=requests[1].init.body as FormData;expect(JSON.parse(String(form.get("entries")))).toHaveLength(1);
 });
-it("refuses sync when saved rules are corrupt instead of uploading files without the intended exclusions",async()=>{
-  vi.stubGlobal("localStorage",{getItem:()=>"../private"});const fetch=vi.fn();vi.stubGlobal("fetch",fetch);
-  await expect(runFolderImport({target:{kind:"existing",workspaceId:"ws",sourceId:"source",sourceName:"Wiki"},files:[file("private/secret.md")],sourceName:"",onProgress:()=>{}})).rejects.toThrow("Saved exclusions could not be read");expect(fetch).not.toHaveBeenCalled();
+it("keeps invalid legacy preferences from blocking authoritative source rules",async()=>{
+  vi.stubGlobal("localStorage",{getItem:()=>"../private"});
+  vi.stubGlobal("fetch",vi.fn(async()=>Response.json({ paths: [], configured: false, syncVersion: 1 })));
+  const {loadSourceImportScope}=await import("@/lib/source-import-scope");
+  expect(await loadSourceImportScope("ws","source")).toMatchObject({paths:[],configured:false});
 });

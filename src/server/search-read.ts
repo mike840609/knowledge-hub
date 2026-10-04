@@ -2,13 +2,14 @@ import { notFound } from "next/navigation";
 import { sortSourcesByName } from "@/lib/knowledge-navigation";
 import type { SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import type { KnowledgeSearchResult } from "@/modules/knowledge/application/knowledge-search-service";
-import { SearchTimeoutError } from "@/modules/knowledge/domain/errors";
+import { parseSearchFilters, hasSearchFilters, type SearchFilterInput } from "@/modules/knowledge/domain/search-filters";
+import { SearchTimeoutError, ValidationError } from "@/modules/knowledge/domain/errors";
 import { applicationServices } from "@/server/composition";
 import { DomainError } from "@/shared/domain/errors";
 
 const AUTHORIZATION_NOT_FOUND_CODES = ["WORKSPACE_NOT_FOUND", "WORKSPACE_ACCESS_DENIED", "INSUFFICIENT_WORKSPACE_CAPABILITY"];
 
-export type SearchPageInput = {
+export type SearchPageInput = SearchFilterInput & {
   q: string;
   scope: "workspace" | "all";
   sourceId: string | null;
@@ -22,6 +23,7 @@ export type SearchPageModel = SearchPageInput & {
   sources: SourceView[];
   result: KnowledgeSearchResult | null;
   timedOut: boolean;
+  filterError?: string;
 };
 
 /**
@@ -50,9 +52,11 @@ export async function getSearchPageModel(workspaceId: string, input: SearchPageI
     await services.queries.listSources(caller, workspaceId, { includeArchived: input.includeArchived }),
   );
   const base = { ...input, workspaceId, workspaceName: workspace.name, sources };
-  if (input.q.trim() === "") return { ...base, result: null, timedOut: false };
   try {
+    const filters = parseSearchFilters(input);
+    if (input.q.trim() === "" && !hasSearchFilters(filters) && !input.sourceId) return { ...base, result: null, timedOut: false };
     const result = await services.search.search(caller, {
+      ...input,
       q: input.q,
       scope: input.scope === "all" ? { kind: "all" } : { kind: "workspace", workspaceId },
       sourceId: input.scope === "all" ? null : input.sourceId,
@@ -64,6 +68,7 @@ export async function getSearchPageModel(workspaceId: string, input: SearchPageI
     const paths=new Map(locations.map(e=>[e.documentId,e.sourcePath]));
     return { ...base, result:{...result,hits:result.hits.map(hit=>({...hit,sourcePath:paths.get(hit.documentId)}))}, timedOut: false };
   } catch (error) {
+    if (error instanceof ValidationError) return { ...base, result: null, timedOut: false, filterError: error.message };
     if (error instanceof SearchTimeoutError) return { ...base, result: null, timedOut: true };
     throw error;
   }

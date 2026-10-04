@@ -1,3 +1,4 @@
+import { hasSearchFilters } from "@/modules/knowledge/domain/search-filters";
 import { SearchTimeoutError } from "@/modules/knowledge/domain/errors";
 import { toLikePattern } from "@/modules/knowledge/domain/search-query";
 import type {
@@ -42,12 +43,12 @@ export class MariaDbKnowledgeSearchRepository implements KnowledgeSearchReposito
    * and the snippet is computed in the same pass so no second query is needed.
    */
   async search(criteria: KnowledgeSearchCriteria): Promise<KnowledgeSearchRow[]> {
-    if (criteria.terms.length === 0 || criteria.workspaceIds.length === 0) return [];
-    const anchor = criteria.terms[0];
+    if (criteria.workspaceIds.length === 0 || (criteria.terms.length === 0 && !criteria.sourceId && !(criteria.filters && hasSearchFilters(criteria.filters)))) return [];
+    const anchor = criteria.terms[0] ?? "";
     const parameters: unknown[] = [anchor, anchor, SNIPPET_LEAD, SNIPPET_LENGTH, SNIPPET_LENGTH];
     const titleHits = criteria.terms
       .map(() => "(r.title COLLATE utf8mb4_unicode_ci LIKE ? ESCAPE '!')")
-      .join(" + ");
+      .join(" + ") || "0";
     for (const term of criteria.terms) parameters.push(toLikePattern(term));
     parameters.push(...criteria.workspaceIds);
     parameters.push(criteria.includeArchived ? 1 : 0);
@@ -59,10 +60,19 @@ export class MariaDbKnowledgeSearchRepository implements KnowledgeSearchReposito
       const pattern = toLikePattern(term);
       parameters.push(pattern, pattern);
     }
+    const filterClauses: string[] = [];
+    if (criteria.filters?.path) {
+      const literal = toLikePattern(criteria.filters.path).slice(1, -1);
+      filterClauses.push("EXISTS (SELECT 1 FROM source_entries e WHERE e.document_id = d.id AND e.source_id = d.source_id AND (e.source_path = ? OR e.source_path LIKE ? ESCAPE '!'))");
+      parameters.push(criteria.filters.path, `${literal}/%`);
+    }
+    if (criteria.filters?.updatedFrom) { filterClauses.push("r.created_at >= ?"); parameters.push(criteria.filters.updatedFrom); }
+    if (criteria.filters?.updatedBefore) { filterClauses.push("r.created_at < ?"); parameters.push(criteria.filters.updatedBefore); }
+    const order = criteria.filters?.sort === "newest" ? "r.created_at DESC, d.id ASC" : criteria.filters?.sort === "oldest" ? "r.created_at ASC, d.id ASC" : "title_hits DESC, r.created_at DESC, d.id ASC";
     parameters.push(criteria.limit, criteria.offset);
     const sql = `SET STATEMENT max_statement_time=${SEARCH_TIMEOUT_SECONDS} FOR
       SELECT d.id AS document_id, d.source_id AS source_id, s.workspace_id AS workspace_id, r.title AS title,
-             s.name AS source_name, w.name AS workspace_name, d.status AS status, d.updated_at AS updated_at,
+             s.name AS source_name, w.name AS workspace_name, d.status AS status, r.created_at AS updated_at,
              CASE WHEN LOCATE(?, r.markdown COLLATE utf8mb4_unicode_ci) > 0
                   THEN SUBSTRING(r.markdown, GREATEST(LOCATE(?, r.markdown COLLATE utf8mb4_unicode_ci) - ?, 1), ?)
                   ELSE SUBSTRING(r.markdown, 1, ?) END AS snippet,
@@ -75,8 +85,8 @@ export class MariaDbKnowledgeSearchRepository implements KnowledgeSearchReposito
       WHERE s.workspace_id IN (${criteria.workspaceIds.map(() => "?").join(", ")})
         AND (? = 1 OR (d.status = 'ACTIVE' AND s.status = 'ACTIVE' AND n.status = 'ACTIVE'))
         AND (? = 1 OR d.source_id = ?)
-        AND ${termClauses.join(" AND ")}
-      ORDER BY title_hits DESC, d.updated_at DESC, d.id ASC
+        ${[...termClauses, ...filterClauses].map(clause => `AND ${clause}`).join("\n        ")}
+      ORDER BY ${order}
       LIMIT ? OFFSET ?`;
     try {
       const rows = await this.connection.query<DbRow[]>(sql, parameters);

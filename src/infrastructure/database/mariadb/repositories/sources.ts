@@ -10,6 +10,7 @@ function mapSource(row: DbRow): KnowledgeSource {
     id: String(row.id), name: String(row.name), workspaceId: String(row.workspace_id),
     sourceType: String(row.source_type) as SourceType, ownership: String(row.ownership) as SourceOwnership,
     status: String(row.status) as "ACTIVE" | "ARCHIVED", syncVersion: Number(row.sync_version),
+    excludedPaths: row.excluded_paths == null ? null : (typeof row.excluded_paths === "string" ? JSON.parse(row.excluded_paths) : row.excluded_paths) as string[],
     createdBy: String(row.created_by), updatedBy: asRequiredString(row.updated_by, "source updated_by"),
     archivedBy: row.archived_by === null ? null : String(row.archived_by),
     archivedAt: row.archived_at === null ? null : asDate(row.archived_at),
@@ -59,13 +60,13 @@ export class MariaDbSourceRepository implements SourceRepository {
     if (affectedRows(result) !== 1) throw new IntegrityViolationError("Source lifecycle could not be updated.");
   }
 
-  async guardAndAdvanceVersion(sourceId: string, basedOnVersion: number, actorId: string): Promise<number | null> {
+  async guardAndAdvanceVersion(sourceId: string, basedOnVersion: number, actorId: string, excludedPaths?: readonly string[]): Promise<number | null> {
     const result = await this.connection.query(
       `UPDATE knowledge_sources
-       SET sync_version = sync_version + 1, updated_by = ?, updated_at = CURRENT_TIMESTAMP(6)
+       SET sync_version = sync_version + 1, updated_by = ?, updated_at = CURRENT_TIMESTAMP(6)${excludedPaths === undefined ? "" : ", excluded_paths = ?"}
        WHERE id = ? AND sync_version = ? AND source_type = 'FOLDER_SYNC'
          AND ownership = 'SOURCE_MANAGED' AND status = 'ACTIVE'`,
-      [actorId, sourceId, basedOnVersion],
+      [actorId, ...(excludedPaths === undefined ? [] : [JSON.stringify(excludedPaths)]), sourceId, basedOnVersion],
     );
     if (affectedRows(result) !== 1) return null;
     const source = await this.findById(sourceId);
