@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, Moon, Sun, UserRound } from "lucide-react";
+import { ChevronDown, Moon, Sun, UserRound, Settings } from "lucide-react";
 import { buttonClasses } from "@/components/ui/button";
 import {
   MenuContent,
@@ -22,18 +22,18 @@ import { useTheme, type Theme } from "./use-theme";
  * not belong in Settings either — that surface is workspace governance, and
  * the theme is a personal preference held in this browser.
  */
-export function UserMenu({ identityName }: { identityName: string }) {
+export function UserMenu({ identityName, trigger = "account" }: { identityName: string; trigger?: "account" | "preferences" }) {
   const { theme, setTheme } = useTheme();
 
   return (
     <MenuRoot>
       <MenuTrigger
-        aria-label={`Account: ${identityName}`}
-        className={buttonClasses({ variant: "ghost", className: "max-w-[14rem]" })}
+        aria-label={trigger === "preferences" ? "Personal preferences" : `Account: ${identityName}`}
+        className={buttonClasses({ variant: trigger === "preferences" ? "secondary" : "ghost", className: trigger === "preferences" ? "rounded-full" : "max-w-[14rem]" })}
       >
-        <UserRound className="h-4 w-4 shrink-0" aria-hidden="true" />
+        {trigger === "preferences" ? <><Settings className="h-4 w-4 shrink-0" aria-hidden="true"/><span className="profile-preferences-label">Preferences</span></> : <><UserRound className="h-4 w-4 shrink-0" aria-hidden="true" />
         <span className="hidden min-w-0 truncate sm:inline">{identityName}</span>
-        <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
+        <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" /></>}
       </MenuTrigger>
       <MenuContent align="end" className="w-56">
         <MenuGroup>
