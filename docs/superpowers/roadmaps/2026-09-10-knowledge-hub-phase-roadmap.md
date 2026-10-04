@@ -1,7 +1,5 @@
 # Knowledge Hub — Phase 0–9 Goals and Roadmap
 
-**English** | [繁體中文](2026-09-10-knowledge-hub-phase-roadmap.zh-TW.md)
-
 | Item | Details |
 | --- | --- |
 | Date | 2026-09-10 |

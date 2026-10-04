@@ -1,7 +1,5 @@
 # Phase 3 Authorization Clarification — Discover vs Read
 
-**English** | [繁體中文](2026-09-14-phase-3-authorization-clarification.zh-TW.md)
-
 **Date:** 2026-09-14
 
 **Status:** Accepted clarification to the Phase 0–9 roadmap before Phase 3 design.
