@@ -15,7 +15,7 @@ Knowledge Hub 是開源、可自行部署的知識管理應用。你可以直接
 
 ## 介面預覽
 
-以下截圖於 **2026 年 10 月 5 日（Asia/Taipei）**，從最新取得的 remote main [`3739efb1`](https://github.com/mike840609/knowledge-hub/commit/3739efb12906e1cb2e6abc1b5eea7727914a08ab) 的全新 production build 擷取，使用獨立展示帳號與合成英文筆記。畫面為瀏覽器 767 × 951 viewport 下的響應式配置。版本與驗證細節見[截圖來源紀錄](docs/images/README.zh-TW.md)。
+以下截圖於 **2026 年 10 月 5 日（Asia/Taipei）**，從最新取得的 remote main [`3739efb1`](https://github.com/mike840609/knowledge-hub/commit/3739efb12906e1cb2e6abc1b5eea7727914a08ab) 的全新 production build 擷取，使用獨立展示帳號與合成英文筆記。畫面為瀏覽器 767 × 951 viewport 下的響應式配置。版本與驗證細節見[截圖來源紀錄](docs/images/README.md)。
 
 ### 個人首頁
 
@@ -218,7 +218,7 @@ npm run test:e2e
 KM_E2E_PERSONAL_ONLY=true npm run test:e2e -- personal-workspace.spec.ts
 ```
 
-測試 runner 自行管理測試模式與所需伺服器，不沿用 `.env` 的 Team 預設值。報告輸出至 `playwright-report/e2e-runs/<suite>/<UUID>/` 與 `test-results/`，不提交至 Git。覆蓋範圍見 [E2E coverage matrix](docs/superpowers/verification/2026-10-02-e2e-coverage-matrix.zh-TW.md)。
+測試 runner 自行管理測試模式與所需伺服器，不沿用 `.env` 的 Team 預設值。報告輸出至 `playwright-report/e2e-runs/<suite>/<UUID>/` 與 `test-results/`，不提交至 Git。覆蓋範圍見 [E2E coverage matrix](docs/superpowers/verification/2026-10-02-e2e-coverage-matrix.md)。
 
 ### Next.js patch
 
@@ -237,7 +237,7 @@ KM_E2E_PERSONAL_ONLY=true npm run test:e2e -- personal-workspace.spec.ts
 
 ## 文件與參與
 
-專案文件以英文為主，每份 Markdown 文件提供相鄰 `*.zh-TW.md` 中文入口。原本以英文撰寫的部分歷史文件，在中文閱讀導引下保留完整英文技術原文，並明確註明。
+專案文件以英文為主，專案指南提供相鄰 `*.zh-TW.md` 中文入口；`docs/superpowers/` 下的設計、計畫與驗證文件僅提供英文版。原本以英文撰寫的部分歷史文件，在中文閱讀導引下保留完整英文技術原文，並明確註明。
 
 - [貢獻指南](CONTRIBUTING.zh-TW.md)：回報問題、提出功能與送出 Pull Request。
 - [安全性回報](SECURITY.zh-TW.md)：私下回報漏洞與部署注意事項。
@@ -254,20 +254,20 @@ KM_E2E_PERSONAL_ONLY=true npm run test:e2e -- personal-workspace.spec.ts
 
 | 領域 | 設計 | 計畫 | 範圍 |
 | --- | --- | --- | --- |
-| 基礎與架構 | [規格](docs/superpowers/specs/2026-09-10-phase-0-foundation-architecture-design.zh-TW.md) | [計畫](docs/superpowers/plans/2026-09-10-phase-0-foundation-implementation.zh-TW.md) | 模組邊界、schema、transactions、工作空間存取。 |
-| 知識核心與樹 | [規格](docs/superpowers/specs/2026-09-10-phase-1-knowledge-core-tree-design.zh-TW.md) | [計畫](docs/superpowers/plans/2026-09-10-phase-1-knowledge-core-tree-implementation.zh-TW.md) | 文件身分、版本、樹位置與生命週期。 |
-| Folder 匯入與同步 | [規格](docs/superpowers/specs/2026-09-12-phase-2-knowledge-source-import-sync-design.zh-TW.md) | [計畫](docs/superpowers/plans/2026-09-12-phase-2-knowledge-source-import-sync.zh-TW.md) | 暫存、預覽、原子套用與來源所有權。 |
-| 身分與工作空間治理 | [規格](docs/superpowers/specs/2026-09-14-phase-3-identity-workspace-governance-design.zh-TW.md) | [計畫](docs/superpowers/plans/2026-09-14-phase-3-identity-workspace-governance.zh-TW.md) | 角色、能力、成員資格、SSO 與切換。 |
-| 探索與讀取 API | [規格](docs/superpowers/specs/2026-09-16-phase-4-discovery-read-api-design.zh-TW.md) | [計畫](docs/superpowers/plans/2026-09-16-phase-4-discovery-read-api.zh-TW.md) | 授權搜尋與有界文件讀取。 |
-| 人工撰寫 | [規格](docs/superpowers/specs/2026-09-16-phase-5-human-authoring-design.zh-TW.md) | [計畫](docs/superpowers/plans/2026-09-16-phase-5-human-authoring.zh-TW.md) | 上傳、建立、編輯與版本衝突。 |
-| 文件分享 | [規格](docs/superpowers/specs/2026-09-23-document-share-link-design.zh-TW.md) | [計畫](docs/superpowers/plans/2026-09-23-document-share-link.zh-TW.md) | 可到期、可撤銷的單篇文件讀取。 |
-| 文件編輯器 | [規格](docs/superpowers/specs/2026-09-28-document-composer-design.zh-TW.md) | [計畫](docs/superpowers/plans/2026-09-28-document-composer.zh-TW.md) | 渲染編輯與 Markdown 原始碼模式。 |
-| 知識連結與圖譜 | [規格](docs/superpowers/specs/2026-09-29-personal-workspace-knowledge-graph-design.zh-TW.md) | [計畫](docs/superpowers/plans/2026-09-29-personal-workspace-knowledge-graph.zh-TW.md) | Wikilinks、反向連結、標題錨點與衍生圖譜資料。 |
-| 個人日用功能 | [規格](docs/superpowers/specs/2026-09-29-personal-daily-driver-design.zh-TW.md) | [計畫](docs/superpowers/plans/2026-09-29-personal-daily-driver.zh-TW.md) | Wikilink 保留、自動完成、程式碼區塊與整理。 |
-| 個人工作空間推出 | [規格](docs/superpowers/specs/2026-09-30-personal-workspace-design.zh-TW.md) | [計畫](docs/superpowers/plans/2026-09-30-personal-workspace.zh-TW.md) | 帳號草稿、收藏、版本還原與匯出。 |
-| 探索與 Copy for Agent | [規格](docs/superpowers/specs/2026-10-04-mvp-discovery-agent-design.zh-TW.md) | [計畫](docs/superpowers/plans/2026-10-04-mvp-discovery-agent.zh-TW.md) | Folder 範圍、搜尋篩選與經檢視的 Markdown bundles。 |
+| 基礎與架構 | [規格](docs/superpowers/specs/2026-09-10-phase-0-foundation-architecture-design.md) | [計畫](docs/superpowers/plans/2026-09-10-phase-0-foundation-implementation.md) | 模組邊界、schema、transactions、工作空間存取。 |
+| 知識核心與樹 | [規格](docs/superpowers/specs/2026-09-10-phase-1-knowledge-core-tree-design.md) | [計畫](docs/superpowers/plans/2026-09-10-phase-1-knowledge-core-tree-implementation.md) | 文件身分、版本、樹位置與生命週期。 |
+| Folder 匯入與同步 | [規格](docs/superpowers/specs/2026-09-12-phase-2-knowledge-source-import-sync-design.md) | [計畫](docs/superpowers/plans/2026-09-12-phase-2-knowledge-source-import-sync.md) | 暫存、預覽、原子套用與來源所有權。 |
+| 身分與工作空間治理 | [規格](docs/superpowers/specs/2026-09-14-phase-3-identity-workspace-governance-design.md) | [計畫](docs/superpowers/plans/2026-09-14-phase-3-identity-workspace-governance.md) | 角色、能力、成員資格、SSO 與切換。 |
+| 探索與讀取 API | [規格](docs/superpowers/specs/2026-09-16-phase-4-discovery-read-api-design.md) | [計畫](docs/superpowers/plans/2026-09-16-phase-4-discovery-read-api.md) | 授權搜尋與有界文件讀取。 |
+| 人工撰寫 | [規格](docs/superpowers/specs/2026-09-16-phase-5-human-authoring-design.md) | [計畫](docs/superpowers/plans/2026-09-16-phase-5-human-authoring.md) | 上傳、建立、編輯與版本衝突。 |
+| 文件分享 | [規格](docs/superpowers/specs/2026-09-23-document-share-link-design.md) | [計畫](docs/superpowers/plans/2026-09-23-document-share-link.md) | 可到期、可撤銷的單篇文件讀取。 |
+| 文件編輯器 | [規格](docs/superpowers/specs/2026-09-28-document-composer-design.md) | [計畫](docs/superpowers/plans/2026-09-28-document-composer.md) | 渲染編輯與 Markdown 原始碼模式。 |
+| 知識連結與圖譜 | [規格](docs/superpowers/specs/2026-09-29-personal-workspace-knowledge-graph-design.md) | [計畫](docs/superpowers/plans/2026-09-29-personal-workspace-knowledge-graph.md) | Wikilinks、反向連結、標題錨點與衍生圖譜資料。 |
+| 個人日用功能 | [規格](docs/superpowers/specs/2026-09-29-personal-daily-driver-design.md) | [計畫](docs/superpowers/plans/2026-09-29-personal-daily-driver.md) | Wikilink 保留、自動完成、程式碼區塊與整理。 |
+| 個人工作空間推出 | [規格](docs/superpowers/specs/2026-09-30-personal-workspace-design.md) | [計畫](docs/superpowers/plans/2026-09-30-personal-workspace.md) | 帳號草稿、收藏、版本還原與匯出。 |
+| 探索與 Copy for Agent | [規格](docs/superpowers/specs/2026-10-04-mvp-discovery-agent-design.md) | [計畫](docs/superpowers/plans/2026-10-04-mvp-discovery-agent.md) | Folder 範圍、搜尋篩選與經檢視的 Markdown bundles。 |
 
-另見[階段路線圖](docs/superpowers/roadmaps/2026-09-10-knowledge-hub-phase-roadmap.zh-TW.md)、[動作模型](docs/superpowers/specs/2026-09-21-action-model-spec.zh-TW.md)、[快捷鍵](docs/superpowers/specs/2026-09-24-keyboard-shortcuts-design.zh-TW.md)，以及持續原地更新、不附日期的[前端設計語言](docs/superpowers/specs/frontend-design-language.zh-TW.md)。
+另見[階段路線圖](docs/superpowers/roadmaps/2026-09-10-knowledge-hub-phase-roadmap.md)、[動作模型](docs/superpowers/specs/2026-09-21-action-model-spec.md)、[快捷鍵](docs/superpowers/specs/2026-09-24-keyboard-shortcuts-design.md)，以及持續原地更新、不附日期的[前端設計語言](docs/superpowers/specs/frontend-design-language.md)。
 
 ## 授權
 
