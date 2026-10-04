@@ -11,7 +11,7 @@ Same local development identity and seeded review Wiki, 1440 × 1000, browser ti
 | First-use Home | ![](home-before.png) | ![](home-after.png) |
 | Home with imported source | ![](sources-before.png) | ![](sources-after.png) |
 
-Mobile result: ![](mobile-after.png)
+| Mobile Home | ![](mobile-before.png) | ![](mobile-after.png) |
 
 ## Verification
 
