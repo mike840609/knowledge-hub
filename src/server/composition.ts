@@ -1,3 +1,4 @@
+import { PersonalPreferencesService } from "@/modules/personal/application/personal-preferences-service";
 import { PersonalProfileService } from "@/modules/personal/application/personal-profile-service";
 import { AgentContextService } from "@/modules/knowledge/application/agent-context-service";
 import { GetImportScopeService } from "@/modules/sources/application/get-import-scope";
@@ -78,6 +79,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
   const queries = new KnowledgeQueryServiceImpl(unitOfWork);
   const links = new KnowledgeLinkServiceImpl(unitOfWork);
   const documentReadProgress = new DocumentReadProgressService(unitOfWork, queries);
+  const personalPreferences = new PersonalPreferencesService(new MariaDbPersonalStore(databasePool), unitOfWork);
   const personal = new PersonalService(new MariaDbPersonalStore(databasePool), queries, unitOfWork);
   const shares = new DocumentShareService(unitOfWork, new RandomShareTokenIssuer());
   const sources = new SourceApplicationService(unitOfWork);
@@ -126,7 +128,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
   return {
     personalProfile: new PersonalProfileService(unitOfWork),
     agentContext: new AgentContextService(unitOfWork),
-    importScope: new GetImportScopeService(unitOfWork), sourceHealth:new GetSourceHealthService(unitOfWork), folderUpdates:new ListFolderUpdatesService(unitOfWork), syncReading: new GetSyncRunDetailService(unitOfWork), documentReadProgress, personal, workspaceAdmin, teams, governance, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, links, shares, sources, workspaces, search, imports };
+    importScope: new GetImportScopeService(unitOfWork), sourceHealth:new GetSourceHealthService(unitOfWork), folderUpdates:new ListFolderUpdatesService(unitOfWork), syncReading: new GetSyncRunDetailService(unitOfWork), documentReadProgress, personal, personalPreferences, workspaceAdmin, teams, governance, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, links, shares, sources, workspaces, search, imports };
 }
 
 export function applicationServices() {

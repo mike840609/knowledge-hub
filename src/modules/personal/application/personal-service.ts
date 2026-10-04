@@ -27,6 +27,7 @@ export class PersonalService {
     const items = await this.store.list(caller.identity.id, workspaceId);
     const result = [];
     for (const item of items) {
+      if (item.key.startsWith("prefs:")) continue;
       if (item.key === "draft:new") { result.push(item); continue; }
       try {
         const doc = await this.queries.getDocument(caller, item.key.split(":")[1], { includeArchived: true });
