@@ -15,6 +15,10 @@ import { MenuRoot, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/me
 import { ShareLinkDialogHost } from "./share-link-dialog";
 import { useHydrated } from "@/components/shell/use-hydrated";
 
+import { PersonalSyncOverview } from "./personal-sync-overview";
+import type { SourceListItemModel } from "@/server/source-read";
+import type { FolderImportClientLimits } from "@/components/imports/folder-import-form";
+
 type Doc = { documentId: string; sourceId: string; title: string; updatedAt: string; ownership: "SOURCE_MANAGED" | "HUB_MANAGED"; status: "ACTIVE" | "ARCHIVED"; sourceStatus: "ACTIVE" | "ARCHIVED" };
 type Draft = { key: string; title: string; sourceId: string | null; updatedAt: string };
 
@@ -70,7 +74,7 @@ function Row({ href, icon, title, updatedAt, trailing, actions = [], onRun = () 
   );
 }
 
-export function PersonalHome({ workspaceId, documents, drafts }: { workspaceId: string; documents: Doc[]; drafts: Draft[] }) {
+export function PersonalHome({ workspaceId, documents, drafts, sources = [], limits }: { workspaceId: string; documents: Doc[]; drafts: Draft[]; sources?: SourceListItemModel[]; limits?: FolderImportClientLimits }) {
   const { shortcuts, update } = useDocumentShortcuts(workspaceId);
   const hydrated = useHydrated();
   const { access, confirmed } = useWorkspaceAuthorization();
@@ -141,6 +145,7 @@ export function PersonalHome({ workspaceId, documents, drafts }: { workspaceId: 
           <Link className={buttonClasses()} href={`/w/${workspaceId}/knowledge/new`}>New note</Link>
         </>}
       />
+      <PersonalSyncOverview workspaceId={workspaceId} items={sources} limits={limits} />
       {drafts.length > 0 ? <Section title="Drafts">
         <ul onKeyDown={navigateListRows} className="space-y-0.5">
             {drafts.map((draft) => (

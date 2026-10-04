@@ -40,14 +40,14 @@ export function SourceListRow({ workspaceId, item, limits }: { workspaceId: stri
       <Link
         data-list-row
         href={`/w/${workspaceId}/sources/${source.id}`}
-        className="kh-focus-ring col-start-2 row-start-1 flex min-w-0 min-h-11 items-center gap-3 rounded-md py-2.5"
+        className="kh-focus-ring col-start-2 row-start-1 flex min-w-0 min-h-11 flex-wrap items-center gap-x-3 gap-y-1 rounded-md py-2.5"
       >
         <span className="min-w-0 flex-1 truncate text-body font-medium text-kh-text">{source.name}</span>
         <span className="shrink-0 rounded-md border border-kh-border px-1.5 py-0.5 text-caption text-kh-text-muted">
           {sourceTypeLabel(source.sourceType)}
         </span>
         {source.sourceType !== "HUB" ? (
-          <span className="hidden shrink-0 items-center gap-1 text-caption text-kh-text-muted sm:inline-flex">
+          <span className="order-last inline-flex w-full flex-wrap items-center gap-1 text-caption text-kh-text-muted sm:order-none sm:w-auto sm:shrink-0">
             {latestRun ? <Status kind={syncStatusKind(latestRun.status)}>{syncStatusLabel(latestRun.status)}</Status> : null}
             {lastSyncedAt ? (
               <>

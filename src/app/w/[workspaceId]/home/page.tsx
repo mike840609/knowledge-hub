@@ -1,3 +1,5 @@
+import { getSourceListModel } from "@/server/source-read";
+import { importRuntimeConfig } from "@/server/import-config";
 import { resolveAuthoredTitle } from "@/lib/authored-title";
 import { applicationServices } from "@/server/composition";
 import { PersonalHome } from "@/components/knowledge/personal-home";
@@ -9,5 +11,7 @@ export default async function PersonalHomePage({ params }: { params: Promise<{ w
   const items = await s.personal.list(caller, workspaceId);
   const documents = (await s.queries.listDocumentSummaries(caller, workspaceId)).map(doc => ({ ...doc, updatedAt: doc.updatedAt.toISOString() }));
   const drafts = items.filter(i => i.key.startsWith("draft:") && i.value).map(i => ({ key: i.key, title: resolveAuthoredTitle({ metadataTitle: undefined, markdown: String(i.value?.markdown ?? ""), typedTitle: String(i.value?.title ?? "") }).title || "Untitled draft", sourceId: "sourceId" in i ? String(i.sourceId) : null, updatedAt: i.updatedAt }));
-  return <PersonalHome workspaceId={workspaceId} documents={documents} drafts={drafts} />;
+  const sources = await getSourceListModel(workspaceId);
+  const { maxAssetFileBytes, maxAssetTotalBytes } = importRuntimeConfig().limits;
+  return <PersonalHome workspaceId={workspaceId} documents={documents} drafts={drafts} sources={sources?.items ?? []} limits={{ maxAssetFileBytes, maxAssetTotalBytes }} />;
 }
