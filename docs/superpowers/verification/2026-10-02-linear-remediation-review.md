@@ -1,7 +1,5 @@
 # Linear remediation — independent code review
 
-**English** | [繁體中文](2026-10-02-linear-remediation-review.zh-TW.md)
-
 Date: 2026-10-02. Base: `1cf8114`. Branch: `codex/linear-uiux-remediation`.
 
 An independent reviewer (`/root/independent_review`) was arranged using the requesting-code-review skill explicitly invoked by the user, with focused requirements, change boundaries, and existing verification records. The reviewer read the tracked diff and new source/scripts without editing files. The review covered navigation/portals/drawers, Composer/scroll/drafts, Home queries/ownership/authorization, action menus, revision diffs, import batching, and design lint.

@@ -1,7 +1,5 @@
 # Workspace-Switch Flash — Measurement
 
-**English** | [繁體中文](2026-09-22-workspace-switch-flash-measurement.zh-TW.md)
-
 | Item | Details |
 | --- | --- |
 | Date | 2026-09-22 |

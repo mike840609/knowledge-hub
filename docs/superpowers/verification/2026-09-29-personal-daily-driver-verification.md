@@ -1,7 +1,5 @@
 # Personal Daily Driver (First Batch) — Verification Record
 
-**English** | [繁體中文](2026-09-29-personal-daily-driver-verification.zh-TW.md)
-
 Corresponds to [design spec](../specs/2026-09-29-personal-daily-driver-design.md) and [implementation plan](../plans/2026-09-29-personal-daily-driver.md). Add a section after each slice: test counts, measurements, **mutation verification deliberately breaking behavior to confirm test failure**, and faithfully recorded failures/deviations.
 
 Currently includes slice 0, slice C, and slice A-1.
@@ -459,7 +457,6 @@ Within error. `MoveDialogHost` enters knowledge layout, charging all knowledge p
 - **Contiguous-position assumption** rests on renumbering Hub siblings after every create/move and randomized test; future paths (e.g. import into Hub) leaving gaps bias `reorderStep`, possibly one-row discrepancy. Server clamps excessive indexes, preventing corruption but not imprecision.
 - **Two-tab races:** E2E destination archived while dialog open; simultaneous sibling reorder untested, relies on service locks; retain-last-key handles one tab only.
 - **Reorder failure presentation:** jsdom tests no position announcement/focus restoration; browser failure-toast behavior lacks E2E.
-
 
 ## Slice D — `[[` autocomplete and creating from broken links
 

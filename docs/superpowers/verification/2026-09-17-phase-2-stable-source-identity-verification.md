@@ -1,7 +1,5 @@
 # Phase 2 Stable Source Identity — Verification
 
-**English** | [繁體中文](2026-09-17-phase-2-stable-source-identity-verification.zh-TW.md)
-
 Date: 2026-09-17. Branch: `implement/pr37-stable-source-identity`.
 Implementation is in the working tree on top of PR #37 (`4d69a62`); no implementation commit or remote PR update has been made.
 Environment: Node v24.6.0, npm, local Docker MariaDB, Playwright Chromium.

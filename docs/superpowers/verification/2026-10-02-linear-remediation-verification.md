@@ -1,7 +1,5 @@
 # Linear UI/UX Fixes and Verification
 
-**English** | [繁體中文](2026-10-02-linear-remediation-verification.zh-TW.md)
-
 Base: `1cf8114` on `origin/main`. Implementation branch: `codex/linear-uiux-remediation`. This record continues the [original audit](2026-10-02-linear-ui-ux-audit.md) and [remediation design](../specs/2026-10-02-linear-remediation-design.md); the original audit's version and scores remain historical snapshots.
 
 ## Fix comparison

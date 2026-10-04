@@ -1,7 +1,5 @@
 # Document composer verification
 
-**English** | [繁體中文](2026-09-28-document-composer-verification.zh-TW.md)
-
 Date: 2026-09-29
 
 - Spec: `docs/superpowers/specs/2026-09-28-document-composer-design.md`

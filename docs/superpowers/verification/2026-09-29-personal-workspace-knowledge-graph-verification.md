@@ -1,7 +1,5 @@
 # Personal Workspace Knowledge Links and Graph — Verification Record
 
-**English** | [繁體中文](2026-09-29-personal-workspace-knowledge-graph-verification.zh-TW.md)
-
 | Item | Details |
 | --- | --- |
 | Date | 2026-09-29 |

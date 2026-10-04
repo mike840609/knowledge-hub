@@ -1,7 +1,5 @@
 # Lost Navigation after Saving — Measurement Record
 
-**English** | [繁體中文](2026-09-22-lost-navigation-after-save-measurement.zh-TW.md)
-
 | Item | Details |
 | --- | --- |
 | Date | 2026-09-22 |

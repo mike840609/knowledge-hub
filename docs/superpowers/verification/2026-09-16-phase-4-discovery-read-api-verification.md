@@ -1,7 +1,5 @@
 # Phase 4 Discovery & Read API — Verification
 
-**English** | [繁體中文](2026-09-16-phase-4-discovery-read-api-verification.zh-TW.md)
-
 | Item | Details |
 | --- | --- |
 | Date | 2026-09-16 |

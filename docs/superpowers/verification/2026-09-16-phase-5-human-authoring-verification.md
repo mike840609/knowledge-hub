@@ -1,7 +1,5 @@
 # Phase 5 Human Authoring — Verification
 
-**English** | [繁體中文](2026-09-16-phase-5-human-authoring-verification.zh-TW.md)
-
 | Item | Details |
 | --- | --- |
 | Date | 2026-09-17 |

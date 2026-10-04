@@ -1,7 +1,5 @@
 # Phase 1 Knowledge Core & Tree verification
 
-**English** | [繁體中文](2026-09-11-phase-1-knowledge-core-tree-verification.zh-TW.md)
-
 Date: 2026-09-11 (Asia/Taipei)
 
 Code HEAD verified: `7d09536` (post-PR-review fixes on top of Task 10:

@@ -1,7 +1,5 @@
 # Folder import reliability verification — 2026-10-03
 
-**English** | [繁體中文](2026-10-03-folder-import-reliability.zh-TW.md)
-
 ## Initial branch split (historical)
 
 - PR #98: `fix/folder-import-access-refresh` restored exactly to `c3cc2156e1f5a347709d02920d1709fe6aff4fe8`; no changes to that commit's tree.

@@ -1,7 +1,5 @@
 # Navigation Latency — Measurement
 
-**English** | [繁體中文](2026-09-21-navigation-latency-measurement.zh-TW.md)
-
 | Item | Details |
 | --- | --- |
 | Date | 2026-09-21 |

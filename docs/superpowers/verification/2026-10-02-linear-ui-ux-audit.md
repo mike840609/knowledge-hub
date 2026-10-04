@@ -2,8 +2,6 @@ Method: dual-agent (A: /root/design_review · B: /root/detector_evidence)
 
 # Linear UI/UX alignment — repository audit
 
-**English** | [繁體中文](2026-10-02-linear-ui-ux-audit.zh-TW.md)
-
 | Item | Details |
 | --- | --- |
 | Report date | 2026-10-02, Asia/Taipei |

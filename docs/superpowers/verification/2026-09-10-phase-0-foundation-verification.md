@@ -1,7 +1,5 @@
 # Phase 0 foundation verification
 
-**English** | [繁體中文](2026-09-10-phase-0-foundation-verification.zh-TW.md)
-
 Date: 2026-09-10 (Asia/Taipei)
 
 ## Environment

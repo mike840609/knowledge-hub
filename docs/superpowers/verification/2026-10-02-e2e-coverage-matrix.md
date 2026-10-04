@@ -1,7 +1,5 @@
 # E2E Coverage Matrix (First Batch, 2026-10-02)
 
-**English** | [繁體中文](2026-10-02-e2e-coverage-matrix.zh-TW.md)
-
 No cases in this batch can be deleted directly. Unit/integration assertions already cover the same business rules, but the E2E tests below still check visuals, focus, navigation, event timing, or Undo wiring; these do not duplicate function/API tests. “Speed up preparation only” means fixtures may later be created through APIs while retaining original UI interactions/assertions. This stage changes no preparation, deletes no cases, and adds no workers.
 
 All composer cases below are in `tests/e2e/document-composer.spec.ts`; organize cases are in `tests/e2e/zz-organize.spec.ts`. Alternative-test paths are repo-relative, and case titles are exact originals. “Defects caught” lists only defects existing alternative assertions actually catch, without implying they replace the entire E2E.

@@ -1,7 +1,5 @@
 # Linear Design Alignment — Audit Record
 
-**English** | [繁體中文](2026-09-20-linear-design-alignment-audit.zh-TW.md)
-
 | Item | Details |
 | --- | --- |
 | Date | 2026-09-20 |
