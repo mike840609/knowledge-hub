@@ -26,4 +26,3 @@ Before 為 main `668aa03f`；After 為本分支。使用相同隔離資料及狀
 |---|---|---|
 | desktop | ![Before home desktop](before/home-desktop.png) | ![After home desktop](after/home-desktop.png) |
 | mobile | ![Before home mobile](before/home-mobile.png) | ![After home mobile](after/home-mobile.png) |
-
