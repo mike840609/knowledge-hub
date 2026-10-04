@@ -2,7 +2,7 @@
 
 [English](document-link-index-rollout.md) | **繁體中文**
 
-適用於 migration `012-document-link-index` 及讀取此索引的功能（backlinks、link graph）。設計文件：[`personal-workspace-knowledge-graph-design`](../superpowers/specs/2026-09-29-personal-workspace-knowledge-graph-design.zh-TW.md) §7。
+適用於 migration `012-document-link-index` 及讀取此索引的功能（backlinks、link graph）。設計文件：[`personal-workspace-knowledge-graph-design`](../superpowers/specs/2026-09-29-personal-workspace-knowledge-graph-design.md) §7。
 
 ## 變更內容
 
