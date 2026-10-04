@@ -383,8 +383,8 @@ defect, and both the search results page and every menu shipped that way once.
 
 `Action.shortcut` in the registry is the one place a shortcut is defined. The
 same value binds the key, is the `aria-keyshortcuts` on the button that does
-the same thing, and is the hint shown beside the action in the palette
-(`shortcutLabel`), so the three cannot disagree. Adding a shortcut is filling
+the same thing, and is the hint shown beside the action in the palette and in
+the row menu (`shortcutLabel`), so the three cannot disagree. Adding a shortcut is filling
 that field.
 
 **A control with no visible label names itself in a `Tooltip`, not in `title=`**
@@ -402,7 +402,7 @@ time, and a disabled control whose title says *why* it is disabled — a disable
 button receives no pointer events, so a tooltip over it would never open. A menu
 trigger takes no tooltip either, since it would sit on the menu it opens.
 
-A single key (`C`, `E`, `/`) is also a character, so it acts only when
+A single key (for example `C`, `E`, `F`, `M`, `R`, `/`) is also a character, so it acts only when
 `isSingleKeyShortcut` in `lib/shortcut-keys.ts` says so: no `⌘`, `Ctrl` or
 `Alt`; not mid-composition in an input method (a letter typed while composing
 Chinese is text, not a command); not inside a field, a dialog, a menu or a
