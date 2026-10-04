@@ -1,7 +1,5 @@
 # Document link index — rollout
 
-**English** | [繁體中文](document-link-index-rollout.zh-TW.md)
-
 Applies to migration `012-document-link-index` and the features that read it
 (backlinks, the link graph). Design:
 [`personal-workspace-knowledge-graph-design`](../superpowers/specs/2026-09-29-personal-workspace-knowledge-graph-design.md) §7.

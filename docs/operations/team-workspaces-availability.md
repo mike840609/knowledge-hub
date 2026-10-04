@@ -1,7 +1,5 @@
 # Team workspaces: announced, not yet available
 
-**English** | [繁體中文](team-workspaces-availability.zh-TW.md)
-
 *September 30, 2026. Personal-first rollout; this document updates the earlier approach that restricted only the workspace switcher.*
 
 ## Current state
