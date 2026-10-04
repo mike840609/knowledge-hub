@@ -33,10 +33,12 @@ export function LiveSearchSubmit() {
     };
     form.addEventListener("input", later);
     form.addEventListener("submit", now);
+    form.dataset.liveSearchReady = "true";
     return () => {
       window.clearTimeout(timer);
       form.removeEventListener("input", later);
       form.removeEventListener("submit", now);
+      delete form.dataset.liveSearchReady;
     };
   }, [router]);
 

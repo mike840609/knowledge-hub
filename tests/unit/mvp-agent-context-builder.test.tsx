@@ -7,7 +7,7 @@ vi.mock("@/components/ui/toast", () => ({ useToast: () => vi.fn() }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 afterEach(() => vi.unstubAllGlobals());
 it("prepares the selected saved content, offers manual clipboard fallback and invalidates changed selections", async () => {
-  const fetch = vi.fn(async (_url: string, _init?: RequestInit) => Response.json({ markdown: "# Saved context\nbody", bytes: 20, documentCount: 1 })); vi.stubGlobal("fetch", fetch);
+  const fetch = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(async () => Response.json({ markdown: "# Saved context\nbody", bytes: 20, documentCount: 1 })); vi.stubGlobal("fetch", fetch);
   const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
   const click = async (name: string) => { const button = [...host.querySelectorAll("button")].find(b => b.textContent === name)!; await act(async () => { button.click(); }); };
   try {
