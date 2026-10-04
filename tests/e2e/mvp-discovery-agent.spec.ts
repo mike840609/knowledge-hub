@@ -25,7 +25,7 @@ test("source exclusions, filter-only search and reviewed Agent context", async (
     await page.getByText("Excluded paths", { exact: true }).click();
     await expect(page.getByRole("textbox", { name: "One file or folder path per line, relative to the selected folder" })).toHaveValue("private");
     await page.goto(`/w/${ws}/search?source=${source}&path=docs&sort=newest&offset=480`);
-    await expect(page.getByRole("link", { name: "MVP guide", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^MVP guide docs\/guide\.md/ })).toBeVisible();
     await expect(page.getByText("Excluded secret", { exact: true })).toHaveCount(0);
     await expect(page.getByText("Dates are inclusive in UTC+08:00", { exact: false })).toBeVisible();
     await page.goto(`/w/${ws}/agent-context`);
@@ -34,10 +34,12 @@ test("source exclusions, filter-only search and reviewed Agent context", async (
     await page.getByRole("button", { name: "Prepare context" }).click();
     const preview = page.getByLabel("Markdown preview");
     await expect(preview).toHaveValue(/Agent reference body\./);
-    await expect(preview).toHaveValue(new RegExp(`http://127.0.0.1:3101/w/${ws}/knowledge/`));
+    // Next.js may normalize the loopback request hostname to localhost.
+    const port = new URL(page.url()).port;
+    await expect(preview).toHaveValue(new RegExp(`Original: http://(?:127\\.0\\.0\\.1|localhost):${port}/w/${ws}/knowledge/${source}/[a-f0-9-]+\\?revision=1`));
     await page.evaluate(() => { Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => { throw new Error("denied"); } } }); });
     await page.getByRole("button", { name: "Copy for Agent", exact: true }).click();
-    await expect(page.getByRole("alert")).toContainText("copy it manually");
+    await expect(page.getByRole("alert").filter({ hasText: "copy it manually" })).toBeVisible();
     await expect(preview).toBeFocused();
     await page.getByRole("checkbox", { name: /Select MVP guide/ }).uncheck();
     await expect(preview).toHaveCount(0);
