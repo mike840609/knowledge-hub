@@ -108,6 +108,25 @@ describe("a key on the row in focus", () => {
     expect(event.defaultPrevented).toBe(false);
   });
 
+  it("takes E and F on a folder row too, for the document being read must not answer them", () => {
+    const { onRunAction } = render({ folderActions: () => [newHereAction] });
+    for (const key of ["e", "f"]) {
+      const event = press(rowFor("F"), key);
+      expect(event.defaultPrevented).toBe(true);
+    }
+    expect(onRunAction).not.toHaveBeenCalled();
+  });
+
+  it("still runs the folder's own C, and leaves C on a document row alone", () => {
+    const { onRunAction } = render();
+    const folderEvent = press(rowFor("F"), "c");
+    expect(folderEvent.defaultPrevented).toBe(true);
+    expect(onRunAction).toHaveBeenCalledTimes(1);
+    expect(onRunAction).toHaveBeenCalledWith(newHereAction);
+    expect(press(rowFor("A"), "c").defaultPrevented).toBe(false);
+    expect(onRunAction).toHaveBeenCalledTimes(1);
+  });
+
   it("does not act on a modified key, a held key or a composed one", () => {
     const { onRunAction } = render();
     press(rowFor("A"), "e", { metaKey: true });

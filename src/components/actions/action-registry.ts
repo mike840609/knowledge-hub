@@ -136,13 +136,19 @@ export const rowShortcuts = {
   "folder.new-document": "C",
   "folder.move": "M",
   "folder.rename": "R",
-} as const;
+} as const satisfies Partial<Record<ActionId, string>>;
 
-/** The keys, lower-cased, that a focused row of this kind takes for itself. */
+/**
+ * The keys, lower-cased, that a focused row of this kind takes for itself. A folder row takes the
+ * document keys too: with no row in focus they act on the document being read, so a key pressed on a
+ * folder must never reach that document. `C` is the exception that stays a document row's to leave: it
+ * is Create document globally, and only a folder row (`folder.new-document`) claims it.
+ */
 export function claimedRowKeys(kind: "document" | "folder"): ReadonlySet<string> {
+  const prefixes = kind === "folder" ? ["folder.", "document."] : ["document."];
   return new Set(
     Object.entries(rowShortcuts)
-      .filter(([id]) => id.startsWith(`${kind}.`))
+      .filter(([id]) => prefixes.some((prefix) => id.startsWith(prefix)))
       .map(([, key]) => key.toLowerCase()),
   );
 }

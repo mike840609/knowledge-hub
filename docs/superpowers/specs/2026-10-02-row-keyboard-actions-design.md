@@ -26,13 +26,13 @@
 | 按鍵 | 焦點列是文件 | 焦點列是資料夾 |
 | --- | --- | --- |
 | `j` / `k` | 下一列／上一列（`↓` / `↑` 的別名） | 同左 |
-| `E` | `document.edit` | — |
-| `F` | `document.favorite` | — |
+| `E` | `document.edit` | 無動作（鍵被接管，見第 4.2 節） |
+| `F` | `document.favorite` | 無動作（鍵被接管，見第 4.2 節） |
 | `M` | `document.move` | `folder.move` |
-| `R` | — | `folder.rename` |
+| `R` | 無動作（只有資料夾有重新命名） | `folder.rename` |
 | `C` | 照舊：全域 `create.document` | `folder.new-document`（在該資料夾內新增文件） |
 
-**每個鍵只有在該列的 registry 動作可用時才執行。** `SOURCE_MANAGED`、封存、歷史版本、唯讀的列，registry 本來就不提供對應動作，按鍵沒有反應（第 4.2 節說明為什麼這樣也不會落到別份文件上）。封存不配單鍵：它有確認對話框、會讓指向它的連結失效，走選單就好。
+**每個鍵只有在該列的 registry 動作可用時才執行。** `SOURCE_MANAGED`、封存、歷史版本、唯讀的列，registry 本來就不提供對應動作，按鍵沒有反應（第 4.2 節說明為什麼這樣也不會落到別份文件上）。表中「無動作」的格子也一樣：焦點在資料夾上按 `E`、`F`，鍵被樹接管而什麼都不做，不會落到正在讀的文件。封存不配單鍵：它有確認對話框、會讓指向它的連結失效，走選單就好。
 
 **不在範圍內**，逐項記錄是為了不被當成遺漏：
 
@@ -90,6 +90,12 @@ export function claimedRowKeys(kind: "document" | "folder"): ReadonlySet<string>
 
 結果：文件列按 `C` 照舊新增文件；資料夾列按 `C` 在該資料夾內新增；唯讀列按 `E` 無事發生。
 
+**修訂（最終審查發現）：資料夾列也接管文件的鍵。** 上面「不在裡面，不碰，交給全域」原本只考慮了 `C`。若資料夾列只接管 `folder.*` 的鍵（`c`、`m`、`r`），焦點在資料夾上按 `F` 或 `E` 時，樹不處理，頁面的 `window` 監聽器就會找到 `document.favorite` / `document.edit`，對**正在讀的那份文件**執行：收藏另一份文件，或進入它的編輯頁。這違反第 3 節第 1 點（事件來自 `treeitem` 時目標是焦點列）與第 2 節表中資料夾欄的「無動作」。因此：
+
+- `claimedRowKeys("folder")` 是 `folder.*` 與 `document.*` 兩組鍵的聯集：`{c, e, f, m, r}`；`claimedRowKeys("document")` 仍只有 `document.*`：`{e, f, m}`。仍由 `rowShortcuts` 推導，不另設第二份清單。
+- 理由是：沒有焦點列時這些鍵作用在正在讀的文件，所以只要焦點在某個資料夾上，它們就不得觸發。文件列不接管 `c`，`C` 在文件列上仍是全域的 Create document；資料夾列保留 `c`（`folder.new-document`）。
+- 規則改寫為：樹接管「該列種類能被按到的所有列動作鍵」；真正留給頁面的，只有不屬於任何列動作的鍵，以及文件列上的 `C`。
+
 ### 4.3 `shortcut` 是掛在 Action 上，不分表面
 
 `document.favorite` 與 `document.move` 同時列在 palette 與列的選單（`surfaces: ["palette", "row"]`）。給它們配鍵後，**沒有焦點列時**（例如在文件頁），按 `F` 會收藏正在閱讀的那份，按 `M` 開那份的 Move 對話框，與今天的 `E` 完全一致。這是刻意的，也是對外可見的行為變更，寫在這裡而不是留給實作時發現。
@@ -109,12 +115,14 @@ export function claimedRowKeys(kind: "document" | "folder"): ReadonlySet<string>
   - `rowShortcuts` 的鍵在**同一種目標**內不重複：文件為 `E`、`F`、`M`；資料夾為 `C`、`M`、`R`。`C` 在兩種目標與全域 `create.document` 上意義不同，所以不能做全域唯一檢查。
   - 每個帶 `rowShortcuts` 鍵的動作，其 `shortcut` 等於該表的值（單一來源）。
   - 唯讀的目標（`SOURCE_MANAGED`、`ARCHIVED`、`HISTORICAL`）取得的動作清單裡沒有 `document.edit`，但 `claimedRowKeys("document")` 仍含 `E`。
+  - `claimedRowKeys("document")` 為 `{e, f, m}`，`claimedRowKeys("folder")` 為 `{c, e, f, m, r}`（第 4.2 節的修訂）；文件列不接管 `c`。
 
 ### 6.2 E2E（`tests/e2e/zz-row-keyboard-actions.spec.ts`）
 
 - 焦點在樹的列 A，正在讀文件 B：按 `E` 進的是 A 的編輯頁，不是 B 的。
 - 焦點在 `SOURCE_MANAGED` 的列上按 `E`：網址不變（沒有落到正在讀的那份）。
 - 文件列按 `C`：仍到 `/knowledge/new`。資料夾列按 `C`：在該資料夾內新增。
+- 資料夾列按 `E`、`F`：網址不變、沒有對話框、正在讀的文件沒有被收藏（鍵被樹接管，沒有落到頁面）。
 - 文件列按 `F`：收藏，選單隨之顯示 Remove from favorites。`M`：開 Move 對話框，關閉後焦點回到那一列。資料夾列按 `R`：開重新命名。
 - `j`/`k` 與方向鍵移動到同一列；帶 `Alt` 的 `Alt+↓` 仍是重排，不被 `j`/`k` 規則吃掉。
 - 沒有焦點列時（在文件頁正文）按 `F`：收藏正在讀的那份。

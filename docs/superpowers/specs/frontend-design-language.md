@@ -415,8 +415,10 @@ row is. The tree (`knowledge-tree.tsx`) takes the keys `rowShortcuts` declares
 for the kind of row it is on (`E`, `F`, `M` for a document; `C`, `M`, `R` for a
 folder), runs the row's own action for it, and takes the key even where the
 registry offers the row nothing, so `E` on a read-only row does nothing and
-does not edit the document being read. A key the kind has not declared is left
-to the page: `C` on a document row is still Create document. The page's listener
+does not edit the document being read. A folder row also takes the document
+keys (`E`, `F`), because with no row in focus they act on the document being
+read and must never fire for a folder. A document row does not take `C`: it
+is left to the page, where it is still Create document. The page's listener
 (`quick-search.tsx`) binds the rest from the actions the palette lists, so with
 no row in focus `E`, `F` and `M` act on the document being read, when the
 registry's three availability axes allow it. `j` and `k` are the arrows' other

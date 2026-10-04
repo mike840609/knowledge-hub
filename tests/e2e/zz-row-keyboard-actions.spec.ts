@@ -116,6 +116,18 @@ test("C on a folder starts a document inside it, and on a document it is still C
   await expect(page).toHaveURL(/\/knowledge\/new$/, ROUND_TRIP);
 });
 
+test("E and F on a focused folder do nothing, and do not reach the document being read", async ({ page }) => {
+  const { a, folder } = await setUp(page);
+  const reading = await page.getByRole("region", { name: "Document content" }).getByRole("heading").first().innerText();
+  const before = page.url();
+  await armTree(page, row(page, a));
+  await row(page, folder).focus();
+  await page.keyboard.press("f");
+  await page.keyboard.press("e");
+  await expectUntouched(page, reading, before, 0);
+  await expect(row(page, folder)).toBeFocused();
+});
+
 test("with no row in focus, F favourites the document being read", async ({ page }) => {
   const { a, docA, workspaceId } = await setUp(page);
   await page.goto(`/w/${workspaceId}/knowledge/${docA.sourceId}/${docA.documentId}`);

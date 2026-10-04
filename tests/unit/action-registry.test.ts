@@ -323,7 +323,8 @@ describe("action registry — shortcuts", () => {
 
   it("claims a kind's keys even where the registry offers none of them, so a read-only row keeps its keys", () => {
     expect([...claimedRowKeys("document")].sort()).toEqual(["e", "f", "m"]);
-    expect([...claimedRowKeys("folder")].sort()).toEqual(["c", "m", "r"]);
+    // A folder row also takes the document keys: they act on the document being read when no row is in focus.
+    expect([...claimedRowKeys("folder")].sort()).toEqual(["c", "e", "f", "m", "r"]);
     const readOnly = availableActions(context({ target: target({ ownership: "SOURCE_MANAGED" }) }));
     expect(readOnly.some((action) => action.id === "document.edit")).toBe(false);
     expect(claimedRowKeys("document").has("e")).toBe(true);
