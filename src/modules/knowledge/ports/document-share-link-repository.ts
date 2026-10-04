@@ -1,8 +1,10 @@
+import type { ManagedShareLink, ShareManagementQuery } from "../domain/share-management";
 import type { DocumentShareLink } from "../domain/document-share-link";
 
 export type ShareLinkViewTotals = { totalViews: number; lastViewedAt: Date | null };
 
 export interface DocumentShareLinkRepository {
+  listForWorkspace(workspaceId: string, callerId: string, query: ShareManagementQuery, now: Date, limit: number, offset: number): Promise<ManagedShareLink[]>;
   insert(link: DocumentShareLink): Promise<void>;
   findByToken(token: string): Promise<DocumentShareLink | null>;
   lockById(id: string): Promise<DocumentShareLink | null>;

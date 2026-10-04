@@ -1,3 +1,6 @@
+import type { ManagedShareLink, ShareManagementQuery } from "@/modules/knowledge/domain/share-management";
+import { toLikePattern } from "@/modules/knowledge/domain/search-query";
+import { shareLinkPath } from "@/modules/knowledge/domain/document-share-link";
 import { IntegrityViolationError } from "@/modules/knowledge/domain/errors";
 import type { DocumentShareLink } from "@/modules/knowledge/domain/document-share-link";
 import type { DocumentShareLinkRepository, ShareLinkViewTotals } from "@/modules/knowledge/ports/document-share-link-repository";
@@ -20,6 +23,38 @@ function mapLink(row: DbRow): DocumentShareLink {
 
 export class MariaDbDocumentShareLinkRepository implements DocumentShareLinkRepository {
   constructor(private readonly connection: QueryConnection) {}
+
+  async listForWorkspace(workspaceId: string, callerId: string, query: ShareManagementQuery, now: Date, limit: number, offset: number): Promise<ManagedShareLink[]> {
+    // Status follows the bearer reader's validity rules. The owner and workspace
+    // predicates remain inside the query so pagination never mixes scopes.
+    const state = `CASE WHEN l.revoked_at IS NOT NULL THEN 'revoked'
+      WHEN l.expires_at <= ? THEN 'expired'
+      WHEN d.status <> 'ACTIVE' OR s.status <> 'ACTIVE' OR w.lifecycle_state <> 'ACTIVE' OR m.user_id IS NULL THEN 'unavailable'
+      ELSE 'active' END`;
+    const rows = await this.connection.query<DbRow[]>(
+      `SET STATEMENT max_statement_time=5 FOR SELECT scoped.*
+       FROM (
+         SELECT l.*, d.source_id, r.title, s.name AS source_name, ${state} AS link_status
+         FROM document_share_links l
+         JOIN knowledge_documents d ON d.id = l.document_id
+         JOIN knowledge_revisions r ON r.id = d.current_revision_id
+         JOIN knowledge_sources s ON s.id = d.source_id
+         JOIN workspaces w ON w.id = s.workspace_id
+         LEFT JOIN workspace_memberships m ON m.workspace_id = w.id AND m.user_id = l.created_by
+         WHERE s.workspace_id = ? AND l.created_by = ? AND w.workspace_type = 'PERSONAL' AND w.personal_owner_user_id = ?
+           AND (? = '' OR r.title COLLATE utf8mb4_unicode_ci LIKE ? ESCAPE '!' OR l.label COLLATE utf8mb4_unicode_ci LIKE ? ESCAPE '!')
+       ) scoped
+       WHERE (? = 'all' OR scoped.link_status = ?)
+       ORDER BY scoped.created_at DESC, scoped.id DESC LIMIT ? OFFSET ?`,
+      [now, workspaceId, callerId, callerId, query.q, toLikePattern(query.q), toLikePattern(query.q), query.status, query.status, limit, offset],
+    );
+    const totals = await this.viewTotals(rows.map(row => String(row.id)));
+    return rows.map(row => ({
+      id: String(row.id), documentId: String(row.document_id), sourceId: String(row.source_id), title: String(row.title), sourceName: String(row.source_name),
+      label: row.label === null ? null : String(row.label), path: shareLinkPath(String(row.token)), status: String(row.link_status) as ManagedShareLink["status"],
+      createdAt: asDate(row.created_at), expiresAt: asDate(row.expires_at), revokedAt: asNullableDate(row.revoked_at), totalViews: totals.get(String(row.id))?.totalViews ?? 0, lastViewedAt: totals.get(String(row.id))?.lastViewedAt ?? null,
+    }));
+  }
 
   async insert(link: DocumentShareLink): Promise<void> {
     await this.connection.query(

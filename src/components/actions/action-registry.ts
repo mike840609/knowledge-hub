@@ -20,6 +20,7 @@ import type { WorkspaceActions } from "@/server/workspace-admin";
 export type ActionId =
   | "navigate.toggle-nav"
   | "navigate.home"
+  | "navigate.shares"
   | "navigate.agent-context"
   | "document.agent-context"
   | "navigate.knowledge"
@@ -215,6 +216,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
   const actions: Action[] = [];
   if (context.workspaceType === "PERSONAL") actions.push({ id: "navigate.home", label: "Go to My Space home", group: "navigate", icon: "knowledge", keywords: ["drafts", "favorites", "recent", "export"], surfaces: ["palette"], effect: { kind: "navigate", href: `/w/${workspaceId}/home` } });
 
+  if (context.workspaceType === "PERSONAL" && can.canSearch) actions.push({ id: "navigate.shares", label: "Manage shares", group: "navigate", icon: "share", keywords: ["sharing", "links", "revoke", "expired"], surfaces: ["palette"], effect: { kind: "navigate", href: `/w/${workspaceId}/shares` } });
   if (context.workspaceType === "PERSONAL" && can.canSearch) actions.push({ id: "navigate.agent-context", label: "Copy for Agent", group: "navigate", icon: "copy-link", keywords: ["agent", "context", "markdown"], surfaces: ["palette"], effect: { kind: "navigate", href: `/w/${workspaceId}/agent-context` } });
   actions.push({
     id: "navigate.knowledge",

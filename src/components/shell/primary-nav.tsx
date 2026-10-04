@@ -4,7 +4,7 @@ import { useWorkspaceAuthorization } from "./use-workspace-authorization";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Tooltip } from "@/components/ui/tooltip";
-import { BookOpenText, Database, Network, Settings, Home, UserRound } from "lucide-react";
+import { BookOpenText, Database, Network, Settings, Home, UserRound, Share2 } from "lucide-react";
 
 export function PrimaryNav({
   workspaceId,
@@ -34,6 +34,7 @@ export function PrimaryNav({
       href: `/w/${workspaceId}/sources`,
       Icon: Database,
     }] : []),
+    ...(access.workspace.type === "PERSONAL" && access.actions.canSearch ? [{ name: "Shares", href: `/w/${workspaceId}/shares`, Icon: Share2 }] : []),
     ...(access.workspace.type === "PERSONAL" ? [{name: "Insights", href: `/w/${workspaceId}/profile`, Icon: UserRound}] : []),
     ...(access.actions.canOpenSettings ? [{name: "Settings", href: `/w/${workspaceId}/settings`, Icon: Settings}] : []),
   ];
