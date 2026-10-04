@@ -24,6 +24,7 @@ export type SearchPageModel = SearchPageInput & {
   result: KnowledgeSearchResult | null;
   timedOut: boolean;
   filterError?: string;
+  isPersonal?: boolean;
 };
 
 /**
@@ -35,7 +36,7 @@ export type SearchPageModel = SearchPageInput & {
 export async function getSearchPageModel(workspaceId: string, input: SearchPageInput): Promise<SearchPageModel> {
   const services = applicationServices();
   const { caller } = await services.establishTrustedCaller();
-  let workspace: { name: string };
+  let workspace: { name: string; type?: string };
   try {
     const navigation = await services.workspaceAdmin.navigation(caller);
     const found = navigation.items.find((item) => item.id === workspaceId);
@@ -51,7 +52,7 @@ export async function getSearchPageModel(workspaceId: string, input: SearchPageI
   const sources = sortSourcesByName(
     await services.queries.listSources(caller, workspaceId, { includeArchived: input.includeArchived }),
   );
-  const base = { ...input, workspaceId, workspaceName: workspace.name, sources };
+  const base = { ...input, workspaceId, workspaceName: workspace.name, isPersonal: workspace.type === "PERSONAL", sources };
   try {
     const filters = parseSearchFilters(input);
     if (input.q.trim() === "" && !hasSearchFilters(filters) && !input.sourceId) return { ...base, result: null, timedOut: false };
