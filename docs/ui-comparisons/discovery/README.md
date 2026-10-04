@@ -33,4 +33,3 @@ Before 為 main `668aa03f`；After 為本分支。使用相同隔離資料及狀
 |---|---|---|
 | desktop | ![Before shares desktop](before/shares-desktop.png) | ![After shares desktop](after/shares-desktop.png) |
 | mobile | ![Before shares mobile](before/shares-mobile.png) | ![After shares mobile](after/shares-mobile.png) |
-
