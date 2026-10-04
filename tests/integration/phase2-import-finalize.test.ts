@@ -406,3 +406,19 @@ describe("Phase 2 import finalization", () => {
     await expect(finalize.finalize(fixtureCaller(), session.snapshotId)).rejects.toMatchObject({ code: "IMPORT_SNAPSHOT_ACCESS_DENIED" });
   });
 });
+it("reads a selected staged content diff from immutable before/after revisions without applying",async()=>{
+  const before=new TextEncoder().encode("# Runbook\n\nBefore\n");
+  const after=new TextEncoder().encode("# Runbook\n\nAfter\n");
+  const initial=await initialSession([{uploadKey:"before",path:"runbook.md",bytes:before}]);
+  await initial.finalize.finalize(fixtureCaller(),initial.session.snapshotId);
+  const uow=new MariaDbUnitOfWork(pool);
+  const applied=await new ApplyFolderImportService(uow,{now:clock}).apply(fixtureCaller(),initial.session.snapshotId);
+  const s=services();
+  const resync=await s.create.createResync(fixtureCaller(),{sourceId:applied.sourceId,rootName:"wiki",manifest:[markdownEntry("after","runbook.md",after)]});
+  await s.upload.upload(fixtureCaller(),{snapshotId:resync.snapshotId,entries:[{uploadKey:"after",bytes:after}]});
+  await s.finalize.finalize(fixtureCaller(),resync.snapshotId);
+  const {GetFolderImportPreviewService}=await import("@/modules/sources/application/get-folder-import-preview");
+  const diff=await new GetFolderImportPreviewService(uow,{now:clock}).getContentDiff(fixtureCaller(),resync.snapshotId,"runbook.md");
+  expect(diff.before.markdown).toContain("Before");expect(diff.after.markdown).toContain("After");
+  const [row]=await pool.query<{sync_version:number}[]>("SELECT sync_version FROM knowledge_sources WHERE id=?",[applied.sourceId]);expect(row.sync_version).toBe(1);
+});

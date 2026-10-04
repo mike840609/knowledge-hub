@@ -96,6 +96,7 @@ export function ImportPreview({
   return (
     <div className="flex flex-col gap-4 pb-6">
       <ImportSummary preview={preview} />
+      {preview.summary.documents.archived > 0 ? <p className="rounded-md border border-kh-border px-4 py-3 text-body text-kh-warning">Applying this sync will archive {preview.summary.documents.archived} document(s) missing from the selected folder. Check that you selected the complete folder. Their history is retained; reintroducing the files restores them.</p> : null}
       <ImportWarningSummary preview={preview} />
       <div className="flex items-center gap-2 text-body">
         <label htmlFor="import-change-filter" className="font-medium text-kh-text-muted">
@@ -125,6 +126,7 @@ export function ImportPreview({
       {GROUP_META.filter((group) => filter === "all" || groups[group.key].length > 0).map((group) => (
         <ImportChangeGroup
           key={`${filter}-${group.key}`}
+          snapshotId={preview.state === "READY" && !preview.expired ? preview.snapshotId : undefined}
           title={group.title}
           changes={groups[group.key]}
           defaultExpanded={filter !== "all" || group.key !== "unchanged"}
