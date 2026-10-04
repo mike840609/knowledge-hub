@@ -259,9 +259,14 @@ test.describe("Alt+↑ and Alt+↓", () => {
     const folder = unique("Ordered");
     const folderId = await apiFolder(page, workspaceId, folder);
     const documents: Record<string, string> = {};
-    for (const title of titles) documents[title] = (await apiDocument(page, workspaceId, title, folderId)).documentId;
+    let sourceId = "";
+    for (const title of titles) {
+      const document = await apiDocument(page, workspaceId, title, folderId);
+      documents[title] = document.documentId;
+      sourceId = document.sourceId;
+    }
     await openKnowledge(page, workspaceId);
-    return { workspaceId, folder, documents };
+    return { workspaceId, sourceId, folder, documents };
   }
 
   test("move the focused row among its siblings, keep the focus on it, and say where it is now", async ({ page }) => {
@@ -300,9 +305,9 @@ test.describe("Alt+↑ and Alt+↓", () => {
 
   test("step over a sibling that is archived and out of sight", async ({ page }) => {
     const [a, hidden, c, d] = [unique("Alpha"), unique("Hidden"), unique("Charlie"), unique("Delta")];
-    const { workspaceId, folder, documents } = await folderOf(page, [a, hidden, c, d]);
+    const { workspaceId, sourceId, folder, documents } = await folderOf(page, [a, hidden, c, d]);
     expect((await page.request.post(`/api/documents/${documents[hidden]}/archive`)).status()).toBe(200);
-    await page.goto(`/w/${workspaceId}/knowledge`);
+    await page.goto(`/w/${workspaceId}/knowledge/${sourceId}/${documents[a]}`);
     await expectOrder(row(page, folder), [a, c, d]);
 
     await focusRow(row(page, a));

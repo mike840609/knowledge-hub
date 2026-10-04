@@ -20,14 +20,14 @@ test("personal profile counts, detail links, themes and mobile layout",async({pa
  await stageReadingFolder(request,{workspaceId:ws,sourceId:source,sourceName:"Product docs",fixture:"reading-flow-v1"});
  await page.goto(`/w/${ws}/home`);
  expect(await count("Knowledge articles")).toBe(baseline.articles+9);expect(await count("Synced folders")).toBe(baseline.folders+4);expect(await count("Favorites")).toBe(baseline.favorites+1);expect(await count("Unread updates")).toBe(baseline.unread+8);
- await page.getByRole("link",{name:new RegExp(`^Favorites:`)}).click();await expect(page.getByRole("link",{name:/Dashboard favorite/})).toBeVisible();
- await page.goto(`/w/${ws}/home`);await page.getByRole("link",{name:/^Unread updates:/}).click();
+ await page.getByRole("link",{name:new RegExp(`^Favorites:`)}).click();await expect(page).toHaveURL(new RegExp(`/w/${ws}/profile/articles\\?filter=favorites$`));await expect(page.getByRole("heading",{name:"Favorites",exact:true,level:1})).toBeVisible();await expect(page.getByRole("link",{name:/Dashboard favorite/})).toBeVisible();
+ await page.goto(`/w/${ws}/home`);await page.getByRole("link",{name:/^Unread updates:/}).click();await expect(page).toHaveURL(new RegExp(`/w/${ws}/profile/articles\\?filter=unread$`));await expect(page.getByRole("heading",{name:"Unread updates",exact:true,level:1})).toBeVisible();
  const marked=page.waitForResponse(r=>r.url().endsWith("/read")&&r.request().method()==="POST");
  await page.getByRole("link",{name:/Team guide.*Work Wiki/}).click();expect((await marked).status()).toBe(204);
  await page.getByRole("link",{name:"Home",exact:true}).click();expect(await count("Unread updates")).toBe(baseline.unread+7);
  await page.getByRole("link",{name:"View all insights",exact:true}).click();await expect(page.getByRole("heading",{name:"Insights",exact:true})).toBeVisible();await expect(page.getByRole("link",{name:/^Knowledge articles:/})).toHaveCount(0);
  await page.getByRole("link",{name:"30 days",exact:true}).click();await expect(page).toHaveURL(/days=30$/);await expect(page.getByText("Recorded folder changes in the past 30 days.", {exact:true})).toBeVisible();
- await page.getByRole("link",{name:/^Awaiting Apply:/}).click();await expect(page.getByRole("link",{name:/Product docs.*Review preview before Apply/})).toBeVisible();
+ await page.getByRole("link",{name:/^Awaiting Apply:/}).click();await expect(page).toHaveURL(new RegExp(`/w/${ws}/profile/sync\\?filter=pending$`));await expect(page.getByRole("heading",{name:"Awaiting Apply",exact:true,level:1})).toBeVisible();await expect(page.getByRole("link",{name:/Product docs.*Review preview before Apply/})).toBeVisible();
  await page.goto(`/w/${ws}/profile?days=7`);
  await page.getByText("How counts work",{exact:true}).click();await expect(page.getByText("When these statistics were requested.",{exact:false})).toBeVisible();await page.getByText("How counts work",{exact:true}).click();
  const oldTime=await page.locator("footer time").getAttribute("datetime");await page.getByRole("button",{name:"Refresh statistics"}).click();await expect(page.locator("footer time")).not.toHaveAttribute("datetime",oldTime!);
