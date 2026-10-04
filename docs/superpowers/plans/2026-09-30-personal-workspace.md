@@ -1,5 +1,7 @@
 # Personal workspace delivery
 
+**English** | [繁體中文](2026-09-30-personal-workspace.zh-TW.md)
+
 - [x] Team rollout gate: trusted caller scope, authorization and navigation; disabled Coming soon entries; off/on boundary tests.
 - [x] Persistent drafts: durable account-scoped storage and recovery UI, explicit save status/failures; browser recovery and conflict tests.
 - [x] Document organization: reuse the remote mainline's Knowledge tree controls and authorized routes; Home links to the tree. Existing ownership, placement and archive/restore tests cover this batch.

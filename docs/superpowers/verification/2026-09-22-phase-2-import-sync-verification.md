@@ -1,5 +1,7 @@
 # Phase 2 Knowledge Source Import & Sync verification
 
+**English** | [繁體中文](2026-09-22-phase-2-import-sync-verification.zh-TW.md)
+
 Date: 2026-09-22 (Asia/Taipei)
 
 Code HEAD verified: `af18eef` (branch `docs/verification-backfill`, = main @

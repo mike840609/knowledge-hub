@@ -1,5 +1,7 @@
 # Open PR integration into #108
 
+**English** | [繁體中文](2026-10-04-open-pr-integration.zh-TW.md)
+
 The approved recommendation uses #108 as the primary Folder Sync implementation and selectively incorporates the independent UX work from #105, #106 and #107. These branches are based on main, not stacked dependencies; their complete commits should not subsequently be merged unchanged.
 
 ## Integration mapping

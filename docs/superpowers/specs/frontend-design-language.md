@@ -1,5 +1,7 @@
 # Knowledge Hub — Frontend Design Language
 
+**English** | [繁體中文](frontend-design-language.zh-TW.md)
+
 | Item | Value |
 | --- | --- |
 | Type | Living contract |

@@ -1,5 +1,7 @@
 # Phase 3 Workspace Product Closure Implementation Plan
 
+**English** | [繁體中文](2026-09-15-phase-3-workspace-product-closure.zh-TW.md)
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Complete Phase 3 Tasks 12–14 so My Space, Workspace switching, Team governance, revoke/archive/restore behavior, semantic errors, and release acceptance are fully operable through the product UI before Phase 4.

@@ -1,5 +1,7 @@
 # Phase 3 Identity, Workspace Administration & Governance verification
 
+**English** | [繁體中文](2026-09-22-phase-3-governance-verification.zh-TW.md)
+
 Date: 2026-09-22 (Asia/Taipei)
 
 Code HEAD verified: `af18eef` (branch `docs/verification-backfill`, = main @

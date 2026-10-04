@@ -1,225 +1,226 @@
-# 鍵盤快捷鍵 — 設計規格
+# Keyboard shortcuts — design specification
 
-| 項目 | 內容 |
+**English** | [繁體中文](2026-09-24-keyboard-shortcuts-design.zh-TW.md)
+
+| Item | Content |
 | --- | --- |
-| 日期 | 2026-09-24 |
-| 類型 | 設計規格，供實作前審查 |
-| 回應 | 對照 Linear 設計語言的 UI/UX 審查第 1 項：鍵盤操作是目前體感差距最大的地方 |
-| 對照契約 | `docs/superpowers/specs/frontend-design-language.md` §10（Focus and keyboard）、§15（One registry decides what can be done） |
-| 對照規格 | `docs/superpowers/specs/2026-09-21-action-model-spec.md`（`Action.shortcut` 欄位的由來） |
-| 狀態 | 已實作。第 9 節記錄實作時發現並一併修正的既存缺陷。 |
+| Date | 2026-09-24 |
+| Type | Design specification for pre-implementation review |
+| Addresses | Item 1 of the UI/UX review against the Linear design language: keyboard interaction is the largest perceived gap |
+| Reference contract | `docs/superpowers/specs/frontend-design-language.md` §10 (Focus and keyboard), §15 (One registry decides what can be done) |
+| Reference specification | `docs/superpowers/specs/2026-09-21-action-model-spec.md` (origin of `Action.shortcut`) |
+| Status | Implemented. Section 9 records existing defects discovered and fixed during implementation. |
 
-## 1. 現況（實測，非引述）
+## 1. Current state (measured, not quoted)
 
-對照 `main` @ `43fc857`。
+Compared against `main` at `43fc857`.
 
-**快捷鍵全站只有兩個，各自在元件裡掛 `window` 監聽：**
+**Only two site-wide shortcuts exist, each attaching a `window` listener in its component:**
 
 ```text
-⌘K / Ctrl K   打開 palette        src/components/search/quick-search.tsx:112–120
-⌘I / Ctrl I   打開 Details 面板    src/components/knowledge/document-inspector.tsx:276–286
+⌘K / Ctrl K   Open palette         src/components/search/quick-search.tsx:112–120
+⌘I / Ctrl I   Open Details panel   src/components/knowledge/document-inspector.tsx:276–286
 ```
 
-**registry 已經有 `Action.shortcut` 欄位，但沒有人讀。** 欄位寫明是 `aria-keyshortcuts` 的拼法（`src/components/actions/action-registry.ts:74`），全部動作中只有 `document.details` 填了 `"Meta+I Control+I"`。palette 的列（`quick-search.tsx` 約 245–258 行）只畫圖示與標籤，不畫快捷鍵；右鍵選單也不畫。一個讀者沒有任何管道發現 `⌘I` 存在，除非把滑鼠停在 Details 按鈕上讀 tooltip。
+**The registry has `Action.shortcut`, but nothing reads it.** The field specifies `aria-keyshortcuts` syntax (`src/components/actions/action-registry.ts:74`). Only `document.details` sets it, to `"Meta+I Control+I"`. Palette rows (`quick-search.tsx`, approximately lines 245–258) show icons and labels but no shortcuts; context menus also omit them. Readers can discover `⌘I` only by hovering over Details and reading its tooltip.
 
-**表單沒有鍵盤存檔或取消。** 編輯文件（`src/components/knowledge/document-editor.tsx`）與新增文件（`src/components/knowledge/new-document-form.tsx`）都是 `onSubmit` 加 Save／Cancel 按鈕。新增表單的 Cancel 在已輸入內容時會跳出原生 `window.confirm("Discard this draft?")`（`new-document-form.tsx:81`，僅 `variant="empty"`）。
+**Forms have no keyboard save or cancel.** Editing (`src/components/knowledge/document-editor.tsx`) and creation (`src/components/knowledge/new-document-form.tsx`) use `onSubmit` with Save/Cancel buttons. Creation Cancel uses native `window.confirm("Discard this draft?")` when content is present (`new-document-form.tsx:81`, only `variant="empty"`).
 
-**`canSearch` 等於「能讀文件」。** `src/server/workspace-admin.ts:47`：`canSearch: has("document.read")`。這決定了快捷鍵可以掛在 QuickSearch 裡（第 3 節）。
+**`canSearch` means document read capability.** `src/server/workspace-admin.ts:47` defines `canSearch: has("document.read")`. This permits attaching shortcuts inside QuickSearch (§3).
 
-## 2. 範圍
+## 2. Scope
 
-五個快捷鍵，加上在 palette 與按鈕 tooltip 上顯示它們。
+Five shortcuts, displayed in palette rows and button tooltips.
 
-| 按鍵 | 作用 | 生效位置 |
+| Key | Action | Applies where |
 | --- | --- | --- |
-| `C` | Create document（`create.document`） | 任何頁面，registry 提供 `create.document` 時 |
-| `E` | Edit document（`document.edit`） | 正在閱讀的文件，registry 提供 `document.edit` 時 |
-| `/` | 打開 palette（與 `⌘K` 同一個） | 任何頁面 |
-| `⌘Enter` / `Ctrl Enter` | 儲存 | 編輯文件、新增文件兩個表單內 |
-| `Esc` | 取消（內容沒改過時） | 同上 |
+| `C` | Create document (`create.document`) | Any page where the registry offers `create.document` |
+| `E` | Edit document (`document.edit`) | The document being read, when the registry offers `document.edit` |
+| `/` | Open the same palette as `⌘K` | Any page |
+| `⌘Enter` / `Ctrl Enter` | Save | Edit and create forms |
+| `Esc` | Cancel when content is unchanged | The same forms |
 
-**不在範圍內**，逐項記錄是為了不被當成遺漏：
+**Out of scope**, explicitly recorded so these are not mistaken for omissions:
 
-- `?` 快捷鍵總覽對話框。palette 已經在每列顯示快捷鍵，五個鍵不需要另一張表。
-- `G` 開頭的兩鍵導覽序列（`G K`、`G S`…）。需要按鍵序列的計時與狀態，等快捷鍵多到單鍵不夠用再說。
-- `E` 作用在鍵盤焦點所在的列。決定是只作用在正在閱讀的文件（第 3.2 節）。
+- A `?` shortcut reference dialog. Palette rows already show shortcuts; five keys do not require another table.
+- Two-key navigation sequences starting with `G` (`G K`, `G S`, etc.). They require sequence timing and state; defer until single keys are insufficient.
+- Applying `E` to the keyboard-focused row. It applies only to the document being read (§3.2).
 
-## 3. 全域單鍵：`C`、`E`、`/`
+## 3. Global single keys: `C`, `E`, `/`
 
-### 3.1 掛在哪裡
+### 3.1 Listener placement
 
-在 QuickSearch 既有的 `keydown` 監聽裡擴充，不新增元件或 hook。
+Extend QuickSearch's existing `keydown` listener rather than adding a component or hook.
 
-QuickSearch 已經具備這層需要的三樣東西：以 `actionsFor("palette", …)` 算好的可用動作（含正在閱讀的文件作為 target）、執行動作的 `useActionRunner`、以及 `⌘K` 的 `window` 監聽。另起一層就得把「可用動作」再算一次，或抽出共用 hook 讓兩邊讀，兩者都比多寫一個分支重。
+QuickSearch already has the three required pieces: available actions from `actionsFor("palette", …)` including the open document target, `useActionRunner`, and the `⌘K` window listener. A separate layer would recompute available actions or require a shared hook, both heavier than another branch.
 
-QuickSearch 只在 `confirmed && canSearch` 時啟用（`quick-search.tsx:55`）。`canSearch` 就是 `document.read`，連讀都不行的人本來就不能新增或編輯，所以快捷鍵跟著它關閉不會拿走任何人的能力。`confirmed` 為 false 時 registry 本來就不提供會 mutate 的動作，兩者一致。
+QuickSearch is enabled only when `confirmed && canSearch` (`quick-search.tsx:55`). `canSearch` is `document.read`: callers without read access cannot create or edit, so this gate removes no capability. When `confirmed` is false, the registry already excludes mutating actions; the rules agree.
 
-### 3.2 綁定規則
+### 3.2 Binding rules
 
-- registry：`create.document` 加 `shortcut: "C"`，`document.edit` 加 `shortcut: "E"`。
-- 按 `C` 或 `E`：在 palette 的可用動作中找 `shortcut` 相符者，找到就用 `useActionRunner` 執行，找不到就不做事、也不 `preventDefault`。
-- **`E` 的可用條件完全由 registry 決定。** `document.edit` 只在三軸同時成立時出現：`canWrite && confirmed`、`HUB_MANAGED`、`ACTIVE` 且為目前版本（`action-registry.ts` 的 `document.edit` 區塊）。快捷鍵不重寫這組條件，所以 `SOURCE_MANAGED`、封存、歷史版本上按 `E` 什麼都不會發生。
-- **`E` 只作用在正在閱讀的文件**，也就是 palette 的 target：`topbar.pathname === pathname` 時的 `topbar.target`。不在文件頁時沒有 target，`document.edit` 不存在，`E` 不做事。
-- 按 `/`：打開 palette，並 `preventDefault`，避免 `/` 被打進剛獲得焦點的輸入框。
-- `⌘K` 與 `⌘I` 行為不變。
+- Set `shortcut: "C"` on `create.document` and `shortcut: "E"` on `document.edit`.
+- On `C` or `E`, find the matching shortcut among available palette actions and run it through `useActionRunner`. If absent, do nothing and do not call `preventDefault`.
+- **The registry completely determines `E` availability.** `document.edit` requires all three axes: `canWrite && confirmed`, `HUB_MANAGED`, and `ACTIVE` current content (`action-registry.ts`, `document.edit`). Do not duplicate these checks in the shortcut. `E` therefore does nothing on `SOURCE_MANAGED`, archived, or historical content.
+- **`E` applies only to the document being read**, the palette target: `topbar.target` when `topbar.pathname === pathname`. Outside a document page there is no target, no `document.edit`, and no effect.
+- `/` opens the palette and calls `preventDefault` so the character is not inserted into its newly focused input.
+- Existing `⌘K` and `⌘I` behavior remains unchanged.
 
-**這仍然不是授權。** registry 決定的是顯示與快捷鍵是否觸發；`C` 與 `E` 最終都只是導航到 `/knowledge/new` 與 `/edit`，寫入時由 application service 重新驗證，與按鈕路徑相同。
+**This is still not authorization.** The registry determines visibility and triggering. `C` and `E` merely navigate to `/knowledge/new` and `/edit`; application services re-verify writes exactly as for buttons.
 
-### 3.3 觸發條件
+### 3.3 Trigger conditions
 
-單鍵快捷鍵只在以下**全部**成立時觸發。判斷抽成純函式 `isSingleKeyShortcut(event)`，放在 `src/lib/shortcut-keys.ts`，理由見第 6 節。
+Single-key shortcuts trigger only when **all** conditions hold. Extract the pure predicate `isSingleKeyShortcut(event)` into `src/lib/shortcut-keys.ts`; §6 explains why.
 
-1. 沒按 `⌘`、`Ctrl`、`Alt`。
-2. **不在輸入法組字中**（`event.isComposing`）。中文使用者以注音、拼音組字時，打的字母與 `/` 不能被當成快捷鍵。
-3. 事件目標不在可輸入的元素內：`input`、`textarea`、`select`、`contenteditable`（不含 `contenteditable="false"`）。
-4. 事件目標不在對話框或選單內：`[role="dialog"]`、`[role="menu"]`、`[role="listbox"]`。palette 本身是對話框，所以 palette 開著時單鍵不會觸發。
-5. 不是長按產生的重複事件（`event.repeat`）。
-6. 字母鍵不帶 Shift；`/` 允許 Shift。
+1. No `⌘`, `Ctrl`, or `Alt` modifier.
+2. **No IME composition** (`event.isComposing`). Letters and `/` entered during Chinese phonetic or Pinyin composition must not become shortcuts.
+3. The target is outside editable elements: `input`, `textarea`, `select`, or `contenteditable`, excluding `contenteditable="false"`.
+4. The target is outside dialogs and menus: `[role="dialog"]`, `[role="menu"]`, `[role="listbox"]`. The palette itself is a dialog, so opening it suppresses single-key shortcuts.
+5. No key-repeat event (`event.repeat`).
+6. Letters have no Shift modifier; `/` may use Shift.
 
-比對用 `event.key`（轉小寫），不用 `event.code`：前者是使用者看到的字，非 QWERTY 配置也對得上。`/` 允許 Shift，是因為德文等配置要按 Shift+7 才打得出 `/`，此時 `event.key` 仍是 `"/"`。
+Match lowercase `event.key`, not `event.code`, so the character the user sees also works on non-QWERTY layouts. `/` allows Shift because layouts such as German require Shift+7; `event.key` remains `"/"`.
 
-## 4. 顯示快捷鍵
+## 4. Displaying shortcuts
 
-### 4.1 palette
+### 4.1 Palette
 
-有 `shortcut` 的列在右側顯示按鍵：Create document 顯示 `C`，Edit document 顯示 `E`，Open details 顯示 `⌘I`。
+Rows with `shortcut` display keys on the right: Create document shows `C`, Edit document `E`, and Open details `⌘I`.
 
-顯示文字由 `shortcut` 欄位推導：取第一組（空白分隔），`Meta` 轉 `⌘`、`Control` 轉 `Ctrl`，`+` 去掉。`"Meta+I Control+I"` 顯示為 `⌘I`，`"E"` 顯示為 `E`。沿用介面上既有的寫法（`⌘K`、`⌘/Ctrl I`），不做平台偵測。轉換函式與第 3.3 節的判斷放在同一個檔案。
+Derive display text from the field: take its first space-separated alternative, replace `Meta` with `⌘` and `Control` with `Ctrl`, and remove `+`. `"Meta+I Control+I"` becomes `⌘I`; `"E"` becomes `E`. Keep existing interface notation (`⌘K`, `⌘/Ctrl I`) without platform detection. Place this formatter beside the predicate from §3.3.
 
-`shortcut` 欄位因此是唯一來源：同一個值決定綁定、`aria-keyshortcuts` 與畫面上的字，三者不會不同步。
+`shortcut` is thus the single source for binding, `aria-keyshortcuts`, and visible labels.
 
 ### 4.2 `Kbd` primitive
 
-新增 `src/components/ui/kbd.tsx`。palette 的列與頂欄搜尋按鈕上現有的 `⌘K` 都改用它。
+Add `src/components/ui/kbd.tsx`. Use it for palette rows and the top-bar search button's existing `⌘K`.
 
-圓角照契約 §5 用 `sm`（inline chrome：`kbd`、inline code、badge）。現有的 `⌘K` 寫的是 `rounded-md`（`quick-search.tsx:193`），是對契約的偏離，這次一併修正。
+Use radius `sm` per contract §5 for inline chrome (`kbd`, inline code, badges). The existing `⌘K` uses `rounded-md` (`quick-search.tsx:193`), a contract deviation fixed here.
 
-### 4.3 按鈕 tooltip 與 `aria-keyshortcuts`
+### 4.3 Button tooltips and `aria-keyshortcuts`
 
-| 按鈕 | 位置 | `title` | `aria-keyshortcuts` |
+| Button | Location | `title` | `aria-keyshortcuts` |
 | --- | --- | --- | --- |
 | Edit | `document-header.tsx` | `Edit (E)` | `E` |
-| `+`（Create document） | `source-sidebar.tsx:115` | `Create document (C)` | `C` |
+| `+` (Create document) | `source-sidebar.tsx:115` | `Create document (C)` | `C` |
 | Quick search | `quick-search.tsx` | `Quick search (⌘K or /)` | `Meta+K Control+K /` |
 
-### 4.4 右鍵選單不顯示
+### 4.4 No shortcut labels in context menus
 
-右鍵選單操作的是被點的那一列，`E` 操作的是正在閱讀的文件。在每一列的 Edit document 旁標 `E`，除了正在閱讀的那一列之外都是錯的：在別列的選單裡看到 `E`、按下去，編輯到的是另一份文件。選單裡其他動作（開新分頁、複製連結、收藏）沒有快捷鍵，所以選單上不會有任何提示。
+A context menu targets the clicked row, while `E` targets the document being read. Showing `E` beside every row's Edit document would be wrong except on the open document's row: pressing it from another row would edit a different document. Other context-menu actions (new tab, copy link, favorite) have no shortcuts, so no hints appear.
 
-若日後改為「`E` 作用在焦點所在的列」，屆時選單的提示就是正確的，再加上。
+If `E` later targets the focused row, context-menu hints can be added then.
 
-## 5. 表單：`⌘Enter` 與 `Esc`
+## 5. Forms: `⌘Enter` and `Esc`
 
-> 2026-09-28：兩個表單已合併為文件編輯器；2026-09-29 起預設為渲染編輯，並以 `⌘/Ctrl /` 切換 Markdown 原始碼（取代先前的 `⌘⇧P` 預覽）。現行規則見 `2026-09-28-document-composer-design.md` 第 11.6 節；本節保留當時的決定。
+> 2026-09-28: both forms were merged into the document composer. Since 2026-09-29, rendered editing is the default and `⌘/Ctrl /` toggles Markdown source, replacing the previous `⌘⇧P` preview. See `2026-09-28-document-composer-design.md` §11.6 for current rules; this section preserves the original decision.
 
-### 5.1 掛在哪裡
+### 5.1 Listener placement
 
-編輯文件與新增文件兩個表單，共用 `src/components/knowledge/use-form-keys.ts`。回傳一個掛在 `<form>` 上的 `onKeyDown`：焦點在表單內才生效，不掛全域監聽，因此不會與 palette 或選單衝突（palette 以 portal 渲染在表單之外，事件不會冒泡進表單）。
+Edit and create forms share `src/components/knowledge/use-form-keys.ts`, returning an `onKeyDown` handler on `<form>`. It applies only with focus inside the form and attaches no global listener, avoiding palette/menu conflicts. The palette is portaled outside the form, so events do not bubble into it.
 
-### 5.2 `⌘Enter` / `Ctrl Enter`：儲存
+### 5.2 `⌘Enter` / `Ctrl Enter`: save
 
-- 在標題欄與內文框內都生效。
-- 找到表單的 `button[type="submit"]`，**只在它沒有 disabled 時**呼叫 `form.requestSubmit(button)`。`requestSubmit()` 不帶參數時不理會按鈕的 disabled 狀態，所以一定要檢查按鈕，也因此不需要另寫一套條件：未 hydrate、儲存中、存取權確認中、標題空白，按鈕上已經有。
-- 輸入法組字中不觸發。
+- Works in both title and body fields.
+- Find `button[type="submit"]` and call `form.requestSubmit(button)` **only when that button is enabled**. Without an argument, `requestSubmit()` ignores button-disabled state, so check it. This also reuses existing conditions for pre-hydration, saving, access confirmation, and empty titles rather than duplicating them.
+- Do not trigger during IME composition.
 
-### 5.3 `Esc`：取消
+### 5.3 `Esc`: cancel
 
-- **內容沒改過**：等同按 Cancel。
-- **內容改過**：什麼都不做。要離開只能按 Cancel 按鈕，所以 `Esc` 永遠不會丟掉草稿。
-- 輸入法組字中不觸發：中文輸入法以 `Esc` 取消組字。
-- 儲存中不觸發（Cancel 按鈕此時也是 disabled）。
+- **Unchanged content**: act like Cancel.
+- **Changed content**: do nothing. Leaving requires the Cancel button, so `Esc` never discards drafts.
+- Do not trigger during IME composition; Chinese IMEs use `Esc` to cancel composition.
+- Do not trigger while saving, when Cancel is also disabled.
 
-「改過」的定義：
+Definition of changed content:
 
-| 表單 | 改過 |
+| Form | Changed condition |
 | --- | --- |
-| 編輯文件 | `title !== initialTitle` 或 `markdown !== initialMarkdown` |
-| 新增文件 | `title` 或 `markdown` 非空（與現有 Cancel 的判斷相同） |
+| Edit document | `title !== initialTitle` or `markdown !== initialMarkdown` |
+| Create document | Nonempty `title` or `markdown`, matching existing Cancel logic |
 
-「等同按 Cancel」照各表單既有的 Cancel 行為：編輯文件回到文件頁；新增文件 `variant="empty"` 回到 Knowledge，其他 variant 收起表單。內容沒改過，所以新增表單 Cancel 的原生確認本來就不會出現。
+“Act like Cancel” uses each form's existing behavior: edit returns to the document; create with `variant="empty"` returns to Knowledge, while other variants collapse the form. Unchanged creation content does not invoke its native confirmation anyway.
 
-**考慮過並否決的做法：**「改過時按兩次 `Esc` 才離開」。它需要一個「已按過一次」的狀態、一行提示、以及「再打字就重置」的規則，換來的只是少按一次 Cancel；而一次誤觸兩下 `Esc` 仍然會丟掉草稿。`Esc` 從不丟草稿更簡單，也更安全。新增表單 Cancel 上的原生 `confirm` 因此維持原樣：丟草稿的唯一入口仍是 Cancel，它的確認不受這份規格影響。
+**Considered and rejected:** pressing `Esc` twice to discard changed content. This requires an “already pressed” state, a hint, and a reset-on-typing rule merely to save one Cancel click; an accidental double press could still discard the draft. Never discarding drafts on `Esc` is simpler and safer. Creation Cancel's native `confirm` remains unchanged: Cancel is still the sole discard entry point, and its confirmation is unaffected.
 
-### 5.4 按鈕 tooltip
+### 5.4 Button tooltips
 
-Save 與 Create document 顯示 `title="Save (⌘Enter)"`／`"Create document (⌘Enter)"`，Cancel 顯示 `title="Cancel (Esc)"`。
+Save and Create document use `title="Save (⌘Enter)"` and `"Create document (⌘Enter)"`; Cancel uses `title="Cancel (Esc)"`.
 
-## 6. 測試
+## 6. Tests
 
 ### 6.1 Unit
 
-`src/lib/shortcut-keys.ts` 是純函式，以事件形狀的物件測試，不需要 DOM。這組條件最容易默默出錯，所以直接測，而不是只靠 e2e 間接碰到。
+`src/lib/shortcut-keys.ts` contains pure functions tested with event-shaped objects, without a DOM. These conditions are prone to silent errors, so test directly rather than relying only on incidental E2E coverage.
 
-- `isSingleKeyShortcut`：每一條觸發條件各至少一個反例（`metaKey`、`ctrlKey`、`altKey`、`isComposing`、目標為 `input`／`textarea`／`select`／`contenteditable`、目標在 `[role="dialog"]` 內、`repeat`、Shift 加字母），以及正例（單純 `c`、`e`、`/`、Shift 加 `/`）。目標以 `closest()` 判斷，測試用最小的假物件提供 `closest`。
-- 顯示轉換：`"E"` → `E`、`"Meta+I Control+I"` → `⌘I`、`"Meta+K Control+K /"` → `⌘K`。
-- registry：`create.document` 帶 `shortcut: "C"`、`document.edit` 帶 `shortcut: "E"`；`SOURCE_MANAGED`、`ARCHIVED`、`HISTORICAL` 三種 target 都沒有帶 `E` 的動作。
+- `isSingleKeyShortcut`: at least one negative case for each condition (`metaKey`, `ctrlKey`, `altKey`, `isComposing`, `input`/`textarea`/`select`/`contenteditable` targets, targets in `[role="dialog"]`, `repeat`, Shift with a letter), and positive cases for `c`, `e`, `/`, Shift with `/`. Use `closest()` for target checks and minimal fake objects implementing it.
+- Display formatting: `"E"` → `E`, `"Meta+I Control+I"` → `⌘I`, `"Meta+K Control+K /"` → `⌘K`.
+- Registry: `create.document` has `shortcut: "C"`; `document.edit` has `shortcut: "E"`; `SOURCE_MANAGED`, `ARCHIVED`, and `HISTORICAL` targets offer no action with `E`.
 
 ### 6.2 E2E
 
-新增 `tests/e2e/keyboard-shortcuts.spec.ts`：
+Add `tests/e2e/keyboard-shortcuts.spec.ts`:
 
-- Knowledge 頁按 `C`，到 `/knowledge/new`。
-- 在文件樹篩選框輸入 `c`：網址不變，篩選框內容為 `c`。
-- `HUB_MANAGED` 文件頁按 `E`，到 `/edit`；`SOURCE_MANAGED` 文件頁按 `E`，網址不變。
-- 按 `/`：palette 打開，查詢框為空（`/` 沒被打進去），Create document 列顯示 `C`。
-- 編輯頁：改標題後按 `⌘Enter`，回到文件頁且標題為新值。
-- 編輯頁：沒改內容按 `Esc`，回到文件頁。
-- 編輯頁：改過內容按 `Esc`，仍在 `/edit` 且內容保留。
+- Press `C` on Knowledge and navigate to `/knowledge/new`.
+- Type `c` in the tree filter; URL stays unchanged and the input contains `c`.
+- Press `E` on a `HUB_MANAGED` document and navigate to `/edit`; on `SOURCE_MANAGED`, URL stays unchanged.
+- Press `/`: palette opens with an empty query, `/` was not inserted, and Create document displays `C`.
+- Edit: change title, press `⌘Enter`, return to the document with the new title.
+- Edit: press `Esc` with unchanged content and return to the document.
+- Edit: press `Esc` after changes and stay on `/edit` with content intact.
 
-輸入法組字無法在 Playwright 中可靠模擬，由 6.1 的 `isComposing` 反例覆蓋。
+Playwright cannot reliably simulate IME composition; cover it with §6.1's negative `isComposing` case.
 
-## 7. 契約修訂
+## 7. Contract amendments
 
-§10（Focus and keyboard）新增一段，記錄：
+Add a paragraph to §10 (Focus and keyboard) recording:
 
-- 單鍵快捷鍵的觸發條件（第 3.3 節），以及它們由 `isSingleKeyShortcut` 統一判斷。
-- `Action.shortcut` 是綁定、`aria-keyshortcuts` 與顯示文字的唯一來源；新增快捷鍵就是在 registry 上填這個欄位。
-- 右鍵選單不顯示快捷鍵的理由（第 4.4 節）。
-- 表單內 `Esc` 從不丟草稿（第 5.3 節）。
+- Single-key trigger conditions (§3.3), checked centrally by `isSingleKeyShortcut`.
+- `Action.shortcut` as the single source for binding, `aria-keyshortcuts`, and display; add shortcuts through that field.
+- Why context menus omit shortcut hints (§4.4).
+- Form `Esc` never discards drafts (§5.3).
 
-§5 不需修改：`kbd` 用 `sm` 本來就是契約的規定，這次只是讓實作符合。
+No §5 amendment is needed: `kbd` already requires `sm`; this aligns implementation.
 
-## 8. 影響的檔案
+## 8. Affected files
 
 ```text
-新增  src/lib/shortcut-keys.ts
-新增  src/components/ui/kbd.tsx
-新增  src/components/knowledge/use-form-keys.ts
-新增  tests/unit/shortcut-keys.test.ts
-新增  tests/e2e/keyboard-shortcuts.spec.ts
-修改  src/components/actions/action-registry.ts      C、E 的 shortcut
-修改  src/components/search/quick-search.tsx         /、C、E 綁定；列上的 Kbd；按鈕 tooltip
-修改  src/components/knowledge/document-header.tsx   Edit 的 title 與 aria-keyshortcuts
-修改  src/components/knowledge/source-sidebar.tsx    + 的 title 與 aria-keyshortcuts
-修改  src/components/knowledge/document-editor.tsx   use-form-keys；按鈕 tooltip
-修改  src/components/knowledge/new-document-form.tsx use-form-keys；按鈕 tooltip
-修改  tests/unit/action-registry.test.ts              shortcut 斷言
-修改  docs/superpowers/specs/frontend-design-language.md  §10
+Add     src/lib/shortcut-keys.ts
+Add     src/components/ui/kbd.tsx
+Add     src/components/knowledge/use-form-keys.ts
+Add     tests/unit/shortcut-keys.test.ts
+Add     tests/e2e/keyboard-shortcuts.spec.ts
+Modify  src/components/actions/action-registry.ts      C/E shortcuts
+Modify  src/components/search/quick-search.tsx         /, C, E bindings; row Kbd; button tooltip
+Modify  src/components/knowledge/document-header.tsx   Edit title and aria-keyshortcuts
+Modify  src/components/knowledge/source-sidebar.tsx    + title and aria-keyshortcuts
+Modify  src/components/knowledge/document-editor.tsx   use-form-keys; button tooltips
+Modify  src/components/knowledge/new-document-form.tsx use-form-keys; button tooltips
+Modify  tests/unit/action-registry.test.ts              shortcut assertions
+Modify  docs/superpowers/specs/frontend-design-language.md  §10
 ```
 
-## 9. 實作時的發現
+## 9. Findings during implementation
 
-`E` 的 e2e（按 `E` 進編輯頁、改標題、存檔）失敗：存檔確實成功，回到文件頁卻顯示舊標題，直到重新整理。以兩個探測測試隔離變因：用 client 端導航進編輯頁再按 Save 按鈕，同樣失敗；用整頁載入進編輯頁再按 `⌘Enter`，通過。所以缺陷不在 `⌘Enter`，而在「client 端導航進編輯頁」：文件頁留在 router cache，存檔後的 push 回到了過期的副本。
+The `E` E2E flow (enter edit with `E`, change title, save) failed: save succeeded but the document showed its old title until refresh. Two probes isolated the cause: client navigation into edit followed by clicking Save also failed; full-page navigation into edit followed by `⌘Enter` passed. The defect was client navigation into edit, not `⌘Enter`: the document remained in router cache and post-save push used its stale copy.
 
-這是**既存缺陷**。palette 與右鍵選單從提供 Edit document 起（#47、#50）就走 `router.push`；既有測試全部從文件頁首的 Edit 進入，而那是純 `<a>`，整頁載入，所以從未踩到。
+This was an **existing defect**. Palette and context-menu Edit document had used `router.push` since #47/#50; prior tests entered through the header's plain `<a>`, triggering a full load and missing this path.
 
-初版修法是繞道：`document.edit` 改用整頁載入（`{ kind: "load" }`）。其後追到根因並改為從源頭修正，繞道已移除：
+The initial workaround made `document.edit` use full-page loading (`{ kind: "load" }`). Later investigation fixed the root cause and removed the workaround:
 
-- **根因。** 閱讀文件時，側欄指向**這份文件本身**的 `<Link>` 會 prefetch 它。從自己這頁 prefetch 自己，伺服器回的是整頁（沒有 loading 邊界可切），而 Next 15 對一筆 prefetch 的**第一次使用**會直接套用其內容，不論多舊（`navigate-reducer`：`stale` 狀態只在非首次讀取時才改為 lazy fetch）。存檔後的 `router.push` 正是第一次使用，於是顯示存檔前的內容。
-- **證據。** 網路紀錄：client 端進編輯頁再存檔，存檔後沒有任何文件頁的 RSC 請求；整頁載入進編輯頁再存檔，有一次導航請求（`prefetch=-`）。後者在 `/edit` 上同樣 prefetch 過文件頁，但從別頁 prefetch 的只到 loading 邊界，首次使用時會補抓資料。擋掉文件頁對自己的 prefetch，前者即改為顯示新內容。
-- **修法。** 樹與 Favorites／Recent 中「目前這份文件」的連結 `prefetch={false}`。prefetch 自己所在的頁本來就沒有用途。
-- **為何不用 `router.refresh()`。** Next 的 action queue 在 refresh 尚未完成時收到 navigate，會把 refresh 標為 discarded，連同它清空 prefetch cache 的效果一起丟掉；這也是 #49 看到 refresh 與 push 互搶的原因。
+- **Cause.** The sidebar `<Link>` to the **currently open document itself** prefetched it. Self-prefetch returns a full page, with no loading boundary to split it. Next 15 uses prefetched content on its **first consumption**, regardless of age (`navigate-reducer`: stale triggers lazy fetch only after first consumption). Post-save push was that first consumption, displaying old content.
+- **Evidence.** Network logs showed no post-save document RSC request after client navigation into edit, but one navigation request (`prefetch=-`) after full loading into edit. The latter also prefetched the document from `/edit`, but prefetch from another page stops at a loading boundary and fetches remaining data on consumption. Disabling self-prefetch made the former show fresh content.
+- **Fix.** Set `prefetch={false}` for the current document's tree and Favorites/Recent links. Prefetching the page already open is unnecessary.
+- **Why not `router.refresh()`?** If navigation arrives before refresh finishes, Next's action queue discards refresh together with its prefetch-cache invalidation. This explains the refresh/push competition observed in #49.
 
-**命名修訂。** `create.document` 的標籤由「Add to Notes」改為「Create document」，新增頁標題改為「New document」。快捷鍵是 `C`，而「Add to」讓人聯想不到 `C`；名詞沿用產品其他地方的 document（Edit document、Open document、表單按鈕 Create document），去處 Notes 改為 palette 關鍵字（`add`、`notes`）。
+**Naming update.** Rename `create.document` from “Add to Notes” to “Create document” and the creation heading to “New document”. The shortcut is `C`, which “Add to” does not suggest. Use document consistently with Edit document, Open document, and the Create document button; keep destination Notes as palette keywords (`add`, `notes`).
 
-## 10. 之後加的：`⌘\` 收合／展開導覽（2026-09-30）
+## 10. Later addition: `⌘\` toggles navigation (2026-09-30)
 
-主導覽（左邊 Knowledge／Graph／Sources 那一欄）原本只有頂欄的按鈕能收合。現在 `⌘\`（其他平台 `Ctrl \`）也可以，定義在 registry 的 `NAV_TOGGLE_SHORTCUT`；規則見 `frontend-design-language.md` §10 的 Shortcuts。
+Primary navigation (the left Knowledge/Graph/Sources column) previously collapsed only through its top-bar button. `⌘\` (`Ctrl \` on other platforms) now also toggles it, defined by registry `NAV_TOGGLE_SHORTCUT`. See the Shortcuts subsection in `frontend-design-language.md` §10.
 
-- **為什麼是 `⌘\`。** `⌘/` 在 composer 是「渲染⇄原始碼」，`⌘B` 是粗體。`⌘\` 沒有任何綁定，編輯器也不吃它，所以在 composer 裡也能用（沒有欄位會打出它，因此不需要單鍵那組「輸入中不觸發」的規則；`matchesShortcut` 只排除輸入法組字與按住不放）。
-- **開著的 dialog 或 menu 留著自己的鍵**：palette 開著時按 `⌘\` 不會動到後面的頁面。
-- **沒有側欄的視窗**（小於 `lg`）：開關的是取代它的 Menu 抽屜。
-- **知識樹沒有收合功能**，所以這個快捷鍵碰不到它；要收知識樹得先做那個功能（文件頁還有右側 inspector，寬度要重新分配）。
-- **`aria-keyshortcuts` 是 `"Meta+\\ Control+\\"`**（字面上兩個反斜線是 JS 字串的跳脫，實際是 `\`）。
-- 鍵盤配置：`event.key` 為 `\` 才算；US 與注音鍵盤都有這個鍵。某些配置（如德文）要按 AltGr，我沒有在那些配置上試過。
-
+- **Why `⌘\`.** Composer uses `⌘/` for rendered/source mode and `⌘B` for bold. `⌘\` has no other binding and the editor does not consume it, so it works inside the composer too. It inserts no text, so single-key editable-target exclusions are unnecessary; `matchesShortcut` excludes only composition and repeat.
+- **Open dialogs or menus retain their keys:** pressing `⌘\` with the palette open does not change the underlying page.
+- **Without a sidebar** (below `lg`), it toggles the replacement Menu drawer.
+- **The knowledge tree has no collapse feature**, so this shortcut cannot affect it. Adding tree collapse requires that feature first and reallocating width alongside the right inspector.
+- **`aria-keyshortcuts` is `"Meta+\\ Control+\\"`**: the two literal backslashes escape a JS string; the actual key is `\`.
+- Layout matching requires `event.key === "\\"`. US and Zhuyin keyboards have it; some layouts such as German require AltGr, and were not tested.

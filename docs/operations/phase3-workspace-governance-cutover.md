@@ -1,5 +1,7 @@
 # Phase 3 Workspace Governance — Production Cutover Runbook
 
+**English** | [繁體中文](phase3-workspace-governance-cutover.zh-TW.md)
+
 Spec authority: `docs/superpowers/specs/2026-09-14-phase-3-identity-workspace-governance-design.md`
 §15 (legacy bootstrap, staged migration, readiness) and §19 (production
 cutover strategy). This runbook describes the **eventual production

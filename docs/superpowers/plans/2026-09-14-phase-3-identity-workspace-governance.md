@@ -1,5 +1,7 @@
 # Phase 3 Identity, Workspace Administration & Governance Implementation Plan
 
+**English** | [繁體中文](2026-09-14-phase-3-identity-workspace-governance.zh-TW.md)
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Upgrade the Phase 0–2 binary WorkspaceMembership foundation into production Workspace governance with My Space, fixed RBAC, trusted Company SSO claims, durable external identity linking to Hub-owned UUID users, lifecycle-safe mutation serialization, direct + group grants, auditable governance, and Phase 2.5 administration UI without changing canonical Knowledge identity.

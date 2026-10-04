@@ -1,85 +1,87 @@
-# Linear UI/UX 修正與驗證
+# Linear UI/UX Fixes and Verification
 
-基底：`origin/main` 的 `1cf8114`。實作分支：`codex/linear-uiux-remediation`。這份紀錄接續 [原始稽核](2026-10-02-linear-ui-ux-audit.md) 與 [修正設計](../specs/2026-10-02-linear-remediation-design.md)，原始稽核的版本與分數保持為歷史快照。
+**English** | [繁體中文](2026-10-02-linear-remediation-verification.zh-TW.md)
 
-## 修正對照
+Base: `1cf8114` on `origin/main`. Implementation branch: `codex/linear-uiux-remediation`. This record continues the [original audit](2026-10-02-linear-ui-ux-audit.md) and [remediation design](../specs/2026-10-02-linear-remediation-design.md); the original audit's version and scores remain historical snapshots.
 
-| Finding | 結果與證據 |
+## Fix comparison
+
+| Finding | Outcome and evidence |
 | --- | --- |
-| F01 分享頁捲動 | 移除全域 body 捲動鎖定，AppShell 保留自己的 viewport。Production browser 35-section 分享文章可以捲到最後一節。 |
-| F02 雙側欄 | 桌面保留可收合主導覽（160px／48px）與獨立 288px 文件樹；文件樹從頂端開始，主導覽收合後仍保持完整高度。手機維持單一 Menu drawer。讀寫欄位對齊修正保留。 |
-| F03 讀寫位移與長文操作 | Composer 使用同一個 DocumentPane 與 outline 預留區。Breadcrumb 起點差小於 2px；捲到底時 Save 仍在 viewport。Save/Cancel/Markdown 與個人草稿狀態置於 sticky header。Reader 捲動後可從 topbar 執行 Edit/Share/Details；手機收進文件操作選單。 |
-| F04 Home 層級與文件列 | 整理、匯出及匯出範圍移入 Home actions；New note 保持主要操作。文件列接入 action registry/menu，手機保留日期；空 Drafts/Favorites 不佔據首頁。Move 仍由 Organize documents 進入，沒有在 Home 放置無法執行的 Move action。 |
-| F05 匯入控制項 | Source name 使用 Input，實際高度 32px；Choose folder 使用 Button 與隱藏 directory picker，顯示資料夾名稱／數量並允許重新選取。既有真實 import/apply E2E 通過。 |
-| F06 提示對比 | Kbd、graph zoom hint 改用 muted text。單元測試確認明暗主題在 canvas/subtle/sunken 背景均達 4.5:1。 |
-| F07 Palette 排序 | Recent 保持在前；空 query 的文件／資料夾操作優先於 create 和 navigation，移除目前 section 的重複導航。Typed query 保留完整匹配。Recents 失敗、空清單、非預期回覆、選取位置與鍵盤操作均有回歸測試。 |
-| F08 Sources 鍵盤 | 接入與 Home/Search 共用的列表導航，保留原生 link。瀏覽器確認 ArrowDown 可將焦點移到下一列。 |
-| F09 文案與診斷 | Composer 使用既有介面的英文主語系。Import message/path 在前，code/details 保留於 Technical details；audit 將已知 event/target 轉為易讀 label，未知值採 readable fallback，原始 code/ID/payload 可展開。未改動 domain diagnostic codes 或錯誤分類。 |
-| F10 Responsive / touch | 桌面側欄透過 CSS 在 hydration 前決定是否可見；390px 初始 main 與 loading pane 不預留桌面 explorer。手機導覽與 explorer 合併，選文件後關閉。coarse pointer 的共用按鈕、menu、主要導覽與 tree controls 至少 40px；常用 row actions 保持可見，星號與選單觸控區不重疊。一次僅掛載一個 explorer，避免重複 filter ID。 |
-| F11 大量資料 | Home 改成單一 metadata join 查詢，省去每份文件的 current-revision Markdown 讀取。真實 DB 確認 workspace 權限、scope、封存文件／來源與 includeArchived 行為。20,000 個 import changes 初次僅建立 50 列 DOM，diagnostic summary 同樣每批 50 筆，提供 Show more。這是可驗證的 query/DOM 改善，沒有宣稱 production latency 或記憶體已完成全面量測。 |
-| F12 Revision 比較 | 顯示新增／移除行數、兩個版本時間、title change、line numbers 與差異上下文。LCS 上限 500,000 cells，大幅重寫退回精確 replacement block；先顯示 100 行，可展開更多。全文 Markdown 保留於 disclosure，restore 新增 revision／conflict guard 保持原行為。 |
-| F13 Favorites Show all | 最新 main 已修正；保留原實作，Show all 的完整清單及 4 筆上限回歸測試通過。 |
-| F14 分享重複標題 | 與 reader 採相同 opening-H1 ownership helper；分享文章只有一個 opening H1。 |
-| F15 Design enforcement | 修正文檔與 Tailwind 註解：arbitrary values 仍會編譯。新增 ESLint `design/contract` 檢查 arbitrary type/radius/shadow/motion/spacing 與可見 native form fields，保留 editor/search/tree 例外與 geometry。實際 ESLint probe 驗證 literal/template classes 被阻擋、有效 geometry 可通過。Search icon clearance 改為語意 CSS class。 |
-| F16 Palette 風格 | 保留 living contract 明確選定的 cool neutral 與 blue accent。這是可選的品牌方向，並非缺陷；暖灰替換沒有混入功能修正。明暗模式均檢視代表畫面。 |
+| F01 Share-page scrolling | Removed the global body scroll lock; AppShell retains its own viewport. A production-browser 35-section shared article can scroll to the final section. |
+| F02 Two sidebars | Desktop retains collapsible primary navigation (160px / 48px) and an independent 288px document tree; the tree starts at the top and retains its full height when primary navigation collapses. Mobile keeps a single Menu drawer. The reading/editing column alignment fix is preserved. |
+| F03 Reading/editing displacement and long-document operations | Composer uses the same DocumentPane and reserved outline area. Breadcrumb starting positions differ by less than 2px; Save stays in the viewport at the bottom of a document. Save/Cancel/Markdown and personal draft status are in the sticky header. After scrolling, Reader supports Edit/Share/Details from the topbar; mobile groups them in a document-actions menu. |
+| F04 Home hierarchy and document rows | Organize, export, and export scope move into Home actions; New note remains the primary action. Document rows connect to the action registry/menu, and mobile retains dates; empty Drafts/Favorites do not occupy Home. Move remains accessible through Organize documents; Home does not show an unusable Move action. |
+| F05 Import controls | Source name uses Input with an actual 32px height; Choose folder uses Button and a hidden directory picker, displays folder name/count, and permits reselection. Existing real import/apply E2E passes. |
+| F06 Hint contrast | Kbd and graph zoom hint use muted text. Unit tests confirm 4.5:1 across canvas/subtle/sunken backgrounds in light and dark themes. |
+| F07 Palette ordering | Recent stays first; with an empty query, document/folder actions precede create and navigation, and duplicate navigation to the current section is removed. Typed queries retain full matching. Regression tests cover recents failure, empty lists, unexpected responses, selection position, and keyboard operations. |
+| F08 Sources keyboard | Connects to shared list navigation used by Home/Search, preserving native links. Browser verification confirms ArrowDown moves focus to the next row. |
+| F09 Copy and diagnostics | Composer uses the existing interface's primary English language. Import message/path come first, with code/details retained under Technical details; audit converts known event/target values into readable labels and uses readable fallbacks for unknown values, with expandable raw code/ID/payload. Domain diagnostic codes and error classification are unchanged. |
+| F10 Responsive / touch | CSS determines desktop-sidebar visibility before hydration; at 390px, initial main and loading pane reserve no desktop-explorer space. Mobile navigation and explorer are combined and close after selecting a document. Shared buttons, menus, primary navigation, and tree controls are at least 40px on coarse pointers; common row actions remain visible, and star/menu touch areas do not overlap. Only one explorer mounts at a time, avoiding duplicate filter IDs. |
+| F11 Large datasets | Home uses a single metadata-join query, eliminating current-revision Markdown reads for each document. Real-DB verification confirms workspace permissions, scope, archived documents/sources, and includeArchived behavior. 20,000 import changes initially create only 50 DOM rows; diagnostic summaries likewise use batches of 50 with Show more. These are verifiable query/DOM improvements, without claiming comprehensive production-latency or memory measurements. |
+| F12 Revision comparison | Shows added/removed line counts, timestamps for both versions, title change, line numbers, and diff context. LCS is capped at 500,000 cells; large rewrites fall back to an exact replacement block. Initially shows 100 lines with expansion available. Full Markdown remains in a disclosure; restore's new revision/conflict guard retains existing behavior. |
+| F13 Favorites Show all | Already fixed on latest main; the original implementation is retained, and regression tests for the full Show all list and 4-item cap pass. |
+| F14 Duplicate share title | Uses the same opening-H1 ownership helper as reader; shared articles have one opening H1. |
+| F15 Design enforcement | Corrected documentation and Tailwind comments: arbitrary values still compile. Added ESLint `design/contract` checks for arbitrary type/radius/shadow/motion/spacing and visible native form fields, retaining editor/search/tree exceptions and geometry. Actual ESLint probes verify literal/template classes are blocked and valid geometry passes. Search icon clearance uses a semantic CSS class. |
+| F16 Palette style | Retains the cool neutral and blue accent explicitly chosen by the living contract. This is an optional brand direction rather than a defect; warm-gray replacement was not mixed into functional fixes. Representative screens were inspected in light and dark modes. |
 
-## 驗證
+## Verification
 
 - TypeScript：`npm run typecheck`。
-- ESLint：`npm run lint`，包含新 design contract rule。
-- Unit：99 files、1,468 tests 通過。新增 diff correctness/context/large rewrite、palette context、20,000-change presentation、拒絕存取時不讀取摘要、ESLint enforcement 與 light/dark hint contrast。
-- Integration：53 files、614 tests 通過；隔離 MariaDB，含新 Home summary 權限、scope 與 archive filtering 測試。
-- Production build：E2E harness 執行 `next build` 成功。
-- Browser 核心驗收：`linear-remediation.spec.ts` 的 8 個情境通過，涵蓋分享捲動與 title、1850px 讀寫位置／sticky Save、390px Menu／捲動後文件操作、Home、Sources keys/import field、coarse-pointer 明暗模式與初始 CSS geometry。
-- 既有 browser 回歸：composer 42、authoring 8、imports 5、outline 4、recents/favorites 9、keyboard shortcuts 13、knowledge explorer 6、reading loading 5 個情境通過。使用當前狀態的成功證據；只在變更或失敗涉及的範圍重跑。
-- Personal-only browser：另以 `KM_TEAM_WORKSPACES_ENABLED=false` 驗證跨瀏覽器草稿、整理／匯出／還原／收藏與關閉分頁後從 Home 續寫，2 個完整情境通過。核心與既有回歸合計 102 個不同 browser 情境，分批驗證，非一次完整 E2E suite。
-- 最後 layout mechanical scan：shell、Home、composer、revision restore、imports 範圍，輸出 `[]`；`git diff --check` 通過。
+- ESLint: `npm run lint`, including the new design contract rule.
+- Unit: 99 files, 1,468 tests passed. Added diff correctness/context/large rewrite, palette context, 20,000-change presentation, no summary reads on access refusal, ESLint enforcement, and light/dark hint contrast.
+- Integration: 53 files, 614 tests passed; isolated MariaDB, including new Home-summary permission, scope, and archive-filtering tests.
+- Production build: the E2E harness successfully ran `next build`.
+- Browser core acceptance: 8 scenarios in `linear-remediation.spec.ts` passed, covering share scrolling/title, 1850px reading/editing position and sticky Save, 390px Menu/document actions after scrolling, Home, Sources keys/import field, coarse-pointer light/dark modes, and initial CSS geometry.
+- Existing browser regressions: composer 42, authoring 8, imports 5, outline 4, recents/favorites 9, keyboard shortcuts 13, knowledge explorer 6, and reading loading 5 scenarios passed. Uses successful evidence for the current state; reruns were limited to areas affected by changes or failures.
+- Personal-only browser: additionally verified cross-browser drafts, organize/export/restore/favorites, and resuming from Home after closing a tab with `KM_TEAM_WORKSPACES_ENABLED=false`; 2 complete scenarios passed. Core and existing regressions total 102 distinct browser scenarios, verified in batches rather than one complete E2E suite.
+- Final layout mechanical scan: shell, Home, composer, revision restore, and imports scope produced `[]`; `git diff --check` passed.
 
-初期 browser failures 分別來自舊文案／舊排序斷言、codes 已收進 disclosure、新測試誤用 Team workspace 的 personal-only 功能、Next 隱藏 flight segments 的未 scoped locator、浮點座標、Home link 的日期 metadata accessible name，以及初始 streaming fallback 的 assertion。修正對應斷言與 fixture；沒有移除產品情境。Outline helper 原本只等待 region 出現，新 composer 同樣擁有 region，因此另等待 create navigation 完成，避免讀到 `/new` 作為 document URL。
+Early browser failures came from old copy/order assertions, codes moved into disclosures, a new test incorrectly using personal-only functionality in a Team workspace, unscoped locators matching Next's hidden flight segments, floating-point coordinates, date metadata in Home-link accessible names, and initial streaming-fallback assertions. Corresponding assertions and fixtures were corrected without removing product scenarios. The outline helper originally waited only for its region; because the new composer also has that region, it now additionally waits for create navigation to finish, avoiding recording `/new` as the document URL.
 
-## 畫面與結構檢視
+## Visual and structural inspection
 
-- 桌面主要路徑：導覽區在左，breadcrumb 與文件內容在中央，outline 預留區在右；primary navigation 與 explorer 以 divider 分組，不再保留雙 rail。
-- 讀寫密度：沿用 reading column 與原文字 token；sticky command 區保持短而明確，文件內容捲動，外層 topbar 固定。
-- 手機：導覽集中於同一左側 Menu；文件操作於頂列收成選單，常用 tree actions 的觸控區獨立。沒有 document-level 橫向 overflow。
-- 極端內容：35-section 分享文與 composer、20,000-change import、1000-line diff replacement 均有適合該層級的測試。
-- DOM/focus：原生 links 與共用 menu/dialog primitives 保留；Sources keys、navigation shortcuts、drawer 關閉和 rendered editor keyboard workflows 有 browser 回歸。
+- Main desktop path: navigation on the left, breadcrumb/document content in the center, reserved outline area on the right; primary navigation and explorer are grouped by dividers, removing the double rail.
+- Reading/editing density: retains the reading column and original text tokens; the sticky command area stays short and clear, document content scrolls, and the outer topbar stays fixed.
+- Mobile: navigation is consolidated in the same left Menu; document actions collapse into a top-row menu, and common tree actions have independent touch areas. No document-level horizontal overflow.
+- Extreme content: appropriate tests cover 35-section shared articles and composer, 20,000-change imports, and 1000-line diff replacements.
+- DOM/focus: native links and shared menu/dialog primitives are retained; Sources keys, navigation shortcuts, drawer closure, and rendered-editor keyboard workflows have browser regressions.
 
-## 驗證界限
+## Verification boundaries
 
-這次沒有宣稱完整 WCAG conformance，也未進行全路由 screen-reader 或各 viewport/theme 的笛卡兒矩陣。Audit labels 採 source review；Company SSO 的獨立 browser servers 沒有在此次啟動，治理與授權由完整 integration suite 驗證。
+No complete WCAG conformance is claimed, and screen-reader tests across all routes or the Cartesian viewport/theme matrix were not performed. Audit labels were source-reviewed; independent external SSO browser servers were not started in this run, and governance/authorization were verified through the full integration suite.
 
-初始窄版測試停用 JavaScript，用來檢查 CSS 幾何；Next streaming reader 此時留在 loading fallback，不代表 JavaScript-free 完整閱讀已支援。
+The initial narrow-screen test disabled JavaScript to inspect CSS geometry; Next's streaming reader remains in its loading fallback in this state, which does not establish complete JavaScript-free reading support.
 
-Home 仍會列出工作區所有 metadata；Personal service 的既有逐項權限查詢、import payload 大小、scroll 到多次 Show more 後的 DOM 上限，以及真實 production P95 latency 未在此擴大重構或建立 benchmark。Revision 的大幅重寫 fallback 精確呈現內容，但可能比最小 diff 顯示更多 changed lines。
+Home still lists all workspace metadata; the Personal service's existing per-item permission queries, import payload size, DOM limits after repeated Show more, and real production P95 latency were not expanded into refactors or benchmarks here. Revision's large-rewrite fallback presents exact content but may show more changed lines than a minimal diff.
 
-實作驗證完成時，變更維持於本地工作分支，尚未提交／推送。測試使用可丟棄資料庫；harness 完成後移除 DB 並停止 server。
+At implementation-verification completion, changes remained in the local working branch without commit/push. Tests used disposable databases; the harness removed the DB and stopped servers after finishing.
 
-## 獨立 review 後續
+## Independent review follow-up
 
-見 [independent code review](2026-10-02-linear-remediation-review.md)：確認並修正手機 explorer menu 的 stacking／pointer blocking regression，新增 2 個 browser scenarios，包含一般及 context menu、dialog focus／Escape／送出。原有 102 個情境是 initial implementation 的分批驗證紀錄，不代表 review 前已覆蓋這兩個新情境。
+See [independent code review](2026-10-02-linear-remediation-review.md): confirmed and fixed the mobile explorer-menu stacking/pointer-blocking regression, adding 2 browser scenarios covering regular/context menus and dialog focus/Escape/submission. The original 102 scenarios document batched verification of the initial implementation; they do not imply pre-review coverage of these two new scenarios.
 
 ## PR handoff verification
 
-PR 準備時再次 fetch 並 rebase 到 `add48f0`（main 的搜尋／tooltip 修正）。Workspace selector 衝突保留 main 移除原生 tooltip 的行為，並保留 `kh-control` 觸控尺寸。
+During PR preparation, fetched again and rebased onto `add48f0` (main's search/tooltip fixes). The Workspace selector conflict retained main's removal of native tooltips and the `kh-control` touch size.
 
-Rebase 後重新通過 typecheck、lint、99 個 unit test files／1,468 tests，以及 production build 與 `linear-remediation`、`row-actions` 共 18 個 E2E tests。原先 integration 與其他 E2E 結果屬於上述實作驗證階段，未於此次 handoff 全量重跑。
+After rebasing, typecheck, lint, 99 unit-test files / 1,468 tests, production build, and 18 E2E tests across `linear-remediation` and `row-actions` passed again. Earlier integration and other E2E results belong to the implementation-verification stage above and were not all rerun for this handoff.
 
 ## Desktop sidebar configuration restored
 
-桌面主導覽恢復 160px 展開／48px 收合，Knowledge explorer 放回 main 左側的獨立 288px 區域。文件樹與 main 頂端對齊，主導覽收合後其高度保持不變且文件仍可見。手機單一 Menu、讀寫欄位對齊與其他 remediation 保留。
+Desktop primary navigation returns to 160px expanded / 48px collapsed, with Knowledge explorer restored to an independent 288px area left of main. The document tree aligns with main's top, retains its height after primary-navigation collapse, and keeps documents visible. Mobile's single Menu, reading/editing alignment, and other remediation are retained.
 
-本次修改後 typecheck、lint、production build 與 `linear-remediation`、`keyboard-shortcuts` 共 23 個 E2E tests 通過。新增幾何驗證涵蓋文件樹頂端對齊、288px 寬度與主導覽收合後可見且高度不變；既有讀寫對齊、持久化收合、手機 row/context menu 與無 JS 初始窄版檢查也通過。
+After this change, typecheck, lint, production build, and 23 E2E tests across `linear-remediation` and `keyboard-shortcuts` passed. New geometry verification covers document-tree top alignment, 288px width, visibility and unchanged height after primary-navigation collapse; existing reading/editing alignment, persisted collapse, mobile row/context menus, and initial narrow-screen checks without JS also passed.
 
-Topbar 也恢復原本配置：Knowledge Hub／收合按鈕區域跟隨主導覽的 160px／48px 寬度，Workspace 為獨立 288px 區域，其後為 Search。新增瀏覽器位置驗證確認 Workspace 起點 160px／48px、Search 起點 448px／336px。Typecheck、lint、production build 與上述 23 個 E2E tests 再次通過。
+Topbar also returns to its original arrangement: the Knowledge Hub/collapse-button area follows primary navigation's 160px / 48px width, Workspace occupies an independent 288px area, followed by Search. New browser-position verification confirms Workspace starts at 160px / 48px and Search at 448px / 336px. Typecheck, lint, production build, and the same 23 E2E tests passed again.
 
 ## Full CI E2E failure investigation
 
-`5d96807` 的完整 CI 出現 23 個 E2E failures，分為四類：
+The complete CI run for `5d96807` had 23 E2E failures, divided into four categories:
 
-- 18 個 organize／move 案例共用的 selected-row viewport 檢查：帳號收藏非同步載入後，Favorites 區塊使文件樹位移，原本的 reveal effect 沒有依賴這個版面變化。控制收藏 response 的重現確認載入前 selected row 可見、載入後落出 viewport。KnowledgeTree 現在依側欄區塊的開關與列數重新執行 bounded reveal；只調整 Document tree 的 scrollTop。
-- 3 個 Company SSO import governance 案例仍要求已被設計替換的原生 file input 可見，改為要求 Choose folder 按鈕可見；撤權、封存與網路錯誤時移除匯入控制項的驗證仍保留。
-- Root routing 假設所有前序測試都未建立個人文件。現在驗證 API 提供的個人工作區 ID 與 knowledge route；空工作區提示另以新建 Team 驗證，避免依賴共享資料的執行順序。
-- Graph SVG link 的 bounding box 含有 pointer-events:none 的文字，中心可能落在節點之外。Hover／click 以實際繪製的 circle 為目標，保留真實 pointer hit-testing 與 card/navigation assertions，沒有使用 force。
+- 18 organize/move cases shared the selected-row viewport check: asynchronously loaded account favorites shifted the document tree, and the original reveal effect did not depend on this layout change. A reproduction controlling the favorites response confirmed the selected row was visible before loading and outside the viewport afterward. KnowledgeTree now reruns bounded reveal based on sidebar-section toggles and row counts; it changes only Document tree's scrollTop.
+- 3 external SSO import-governance cases still required visibility of the native file input replaced by the design; they now require the Choose folder button to be visible. Verification that import controls disappear after access revocation, archiving, and network errors remains.
+- Root routing assumed no preceding tests had created personal documents. It now verifies the personal-workspace ID provided by the API and the knowledge route; the empty-workspace prompt is separately tested with a newly created Team, avoiding dependence on shared-data execution order.
+- A graph SVG link's bounding box includes text with pointer-events:none, so its center may lie outside the node. Hover/click targets the actual painted circle, retaining real pointer hit-testing and card/navigation assertions without force.
 
-新增回歸測試用 35 份文件與受控的延遲 Favorites response，要求 selected row 載入前後均在 viewport，且文章 scrollTop 保持 0。
+A new regression test uses 35 documents and a controlled delayed Favorites response, requiring the selected row to remain in the viewport before and after loading and article scrollTop to remain 0.

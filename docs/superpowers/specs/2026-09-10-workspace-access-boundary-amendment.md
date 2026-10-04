@@ -1,19 +1,21 @@
 # Knowledge Hub — Workspace Access Boundary Architecture History
 
-| 項目 | 內容 |
-| --- | --- |
-| 日期 | 2026-09-10 |
-| 文件類型 | Architecture history / decision record |
-| 狀態 | **Historical record — not an active overlay** |
-| Current truth | [Phase 0 Design](2026-09-10-phase-0-foundation-architecture-design.md)、[Phase 1 Design](2026-09-10-phase-1-knowledge-core-tree-design.md)、[Roadmap](../roadmaps/2026-09-10-knowledge-hub-phase-roadmap.md) |
+**English** | [繁體中文](2026-09-10-workspace-access-boundary-amendment.zh-TW.md)
 
-> **重要：** Workspace correction 已直接整合到 Phase 0/1 canonical spec/plan。實作者與 Agent 不應把本文件當成要疊加到 current spec 上的 patch，也不應以本文件覆蓋 canonical documents。本文件只回答「為什麼從 org-scoped model 改成 Workspace model」。
+| Item | Content |
+| --- | --- |
+| Date | 2026-09-10 |
+| Document type | Architecture history / decision record |
+| Status | **Historical record — not an active overlay** |
+| Current truth | [Phase 0 Design](2026-09-10-phase-0-foundation-architecture-design.md), [Phase 1 Design](2026-09-10-phase-1-knowledge-core-tree-design.md), [Roadmap](../roadmaps/2026-09-10-knowledge-hub-phase-roadmap.md) |
+
+> **Important:** The Workspace correction has been integrated directly into the Phase 0/1 canonical specs/plans. Implementers and agents must not treat this document as a patch to overlay on the current spec or use it to override canonical documents. It only explains why the org-scoped model became the Workspace model.
 
 ## 1. Decision Background
 
-早期設計將公司組織歸屬與 Knowledge access scope 綁得太緊，無法自然表達跨部門／跨組織專案合作，也可能讓「同 org」被誤解成「自動有相同 Knowledge 權限」。
+The early design coupled company organizational affiliation too tightly to Knowledge access scope. It could not naturally express projects spanning departments or organizations, and could cause “same org” to be mistaken for “automatically has the same Knowledge permissions.”
 
-Architecture review 因此拆開兩個概念：
+The architecture review therefore separated two concepts:
 
 ```text
 Organization identity
@@ -21,7 +23,7 @@ Organization identity
 Knowledge collaboration/access scope
 ```
 
-Current canonical model：
+Current canonical model:
 
 ```text
 User
@@ -39,29 +41,29 @@ User
                 └── Tree / Document / Revision
 ```
 
-核心決策：
+Core decisions:
 
-- `User.org_code` 保留作 SSO/HR identity 與未來 governance input。
-- Workspace 是 Knowledge collaboration/access scope。
-- Cross-org Workspace membership 合法。
-- Same-org user 不自動取得 Workspace access。
-- KnowledgeSource 必須且只屬於一個 Workspace。
-- Document scope 由 `Document → Source → Workspace` 推導，不重複保存 `workspace_id`。
-- Source 仍是自己的 Tree root；Workspace 不是 synthetic folder。
-- Workspace access 與 `SOURCE_MANAGED / HUB_MANAGED` content ownership 是不同概念。
+- `User.org_code` remains an SSO/HR identity attribute and an input to future governance.
+- Workspace is the Knowledge collaboration/access scope.
+- Cross-org Workspace membership is valid.
+- Same-org users do not automatically receive Workspace access.
+- A KnowledgeSource must belong to exactly one Workspace.
+- Document scope is derived through `Document → Source → Workspace`; `workspace_id` is not stored redundantly.
+- A Source remains its own Tree root; a Workspace is not a synthetic folder.
+- Workspace access and `SOURCE_MANAGED / HUB_MANAGED` content ownership are separate concepts.
 
 ## 2. Phase 0 Foundation Decision
 
-Phase 0 因此加入：
+Phase 0 therefore adds:
 
 ```text
 workspaces
 workspace_memberships
 ```
 
-Current Phase 0 canonical schema 共十張 domain tables，並以 `knowledge_sources.workspace_id` 表達 Source scope。
+The current Phase 0 canonical schema contains ten domain tables and expresses Source scope through `knowledge_sources.workspace_id`.
 
-Workspace Phase 0 保持最小：
+Phase 0 keeps Workspace minimal:
 
 ```text
 Workspace
@@ -76,13 +78,13 @@ WorkspaceMembership
 └── created_at
 ```
 
-Phase 0 不強制 Workspace 有單一 owning organization。若治理上需要 accountable org/team，Phase 3 可以加入 governance metadata，但該 metadata 不得直接等同 authorization。
+Phase 0 does not require a Workspace to have a single owning organization. If governance requires an accountable org/team, Phase 3 may add governance metadata, but that metadata must not directly equal authorization.
 
-Phase 0–2 membership 只是 local/mock MVP foundation。Company production multi-user governance 需由 Phase 3 完成。
+Phase 0–2 membership is only a local/mock MVP foundation. Phase 3 must complete production multi-user governance for the company.
 
 ## 3. Authorization Boundary Decision
 
-Current resource path：
+Current resource path:
 
 ```text
 CallerContext
@@ -92,23 +94,23 @@ CallerContext
   → Knowledge operation
 ```
 
-重要安全原則：
+Key security principles:
 
-- `org_code` 不作 Knowledge allow/deny shortcut。
-- 知道 Workspace/Source/Document UUID 不代表取得 access。
-- UI Workspace selector 是 navigation state，不是 security evidence。
-- Existing resource operation 由 authoritative relation 反查 Workspace。
-- Search/derived index 不得成為 authorization truth。
+- `org_code` is not a shortcut for Knowledge allow/deny decisions.
+- Knowing a Workspace/Source/Document UUID does not grant access.
+- The UI Workspace selector is navigation state, not security evidence.
+- Operations on existing resources resolve Workspace through authoritative relationships.
+- Search/derived indexes must not become the authorization source of truth.
 
 ## 4. Phase Responsibility Consequences
 
 ### Phase 0
 
-建立 Workspace/Membership schema、repository/policy foundation、local fixtures，以及 cross-org member allow / same-org non-member deny 的基本證據。
+Establish the Workspace/Membership schema, repository/policy foundation, local fixtures, and basic evidence that cross-org members are allowed and same-org non-members are denied.
 
 ### Phase 1
 
-Knowledge Browser 採：
+The Knowledge Browser uses:
 
 ```text
 Workspace selector
@@ -117,15 +119,15 @@ Workspace selector
 → Document / Revision
 ```
 
-Knowledge/Tree/Revision operations 都繼承 Workspace access foundation。
+Knowledge/Tree/Revision operations all inherit the Workspace access foundation.
 
 ### Phase 2
 
-第一次 Folder Import 明確選 target Workspace，再建立 Source；更新既有 Source 時由 Source 自己的 `workspace_id` 決定 scope。普通 sync 不負責 Source transfer。
+The first Folder Import explicitly selects a target Workspace before creating a Source. Updates to an existing Source derive scope from its own `workspace_id`. Ordinary sync does not transfer Sources.
 
 ### Phase 3
 
-Phase 3 是 Workspace production lifecycle / governance 的 owner，明確負責：
+Phase 3 owns the Workspace production lifecycle / governance and explicitly covers:
 
 ```text
 Workspace provisioning / create
@@ -142,15 +144,15 @@ Company SSO adapter
 optional accountable owner/team/org metadata
 ```
 
-Workspace MVP 不 hard delete。若未來需要 hard delete，必須另行設計 retention、stable references 與 audit semantics。
+The Workspace MVP does not hard delete. If hard deletion is needed later, retention, stable references, and audit semantics require a separate design.
 
 ### Phase 4+
 
-Search、Authoring、Publishing、MCP、Semantic Retrieval 都必須沿用 Workspace policy boundary。Publishing Tree 是否只屬於單一 Workspace不在 foundation 決定；Phase 6 設計。Agent delegation vs generalized Principal 在 Phase 7 設計。
+Search, Authoring, Publishing, MCP, and Semantic Retrieval must all reuse the Workspace policy boundary. The foundation does not decide whether a Publishing Tree belongs to only one Workspace; Phase 6 designs that. Phase 7 designs agent delegation versus a generalized Principal.
 
 ## 5. Decisions That Did Not Change
 
-Workspace correction 沒有推翻：
+The Workspace correction does not overturn:
 
 - application-generated UUIDv7 + MariaDB native UUID。
 - Stable Document ID。
@@ -160,7 +162,7 @@ Workspace correction 沒有推翻：
 - Source as Tree root。
 - one-document-one-TreeNode。
 - `SOURCE_MANAGED / HUB_MANAGED`。
-- Knowledge `ACTIVE / ARCHIVED`、no hard delete。
+- Knowledge `ACTIVE / ARCHIVED`, no hard delete。
 - READ COMMITTED + explicit row locks。
 - Preview → Confirm → Apply。
 - `sync_version` optimistic guard。
@@ -168,13 +170,13 @@ Workspace correction 沒有推翻：
 
 ## 6. ADR-018 — Workspace Is the Knowledge Access Boundary
 
-- **Context:** company organization identity 無法完整表示跨組織 Knowledge collaboration/access。
-- **Decision:** 保留 `User.org_code` 作 identity attribute；新增 Workspace + WorkspaceMembership；KnowledgeSource 屬於 Workspace；基本 access 依 Workspace policy，而非 org equality。
-- **Consequences:** Phase 0 增加 Workspace foundation；Phase 1 browser 有 Workspace selector；Phase 2 import 選 target Workspace；Phase 3 擁有 Workspace lifecycle/admin 與 production governance；後續 Search/Publishing/MCP reuse 相同 Workspace policy。
+- **Context:** company organizational identity cannot fully represent cross-org Knowledge collaboration/access.
+- **Decision:** retain `User.org_code` as an identity attribute; add Workspace + WorkspaceMembership; KnowledgeSource belongs to Workspace; basic access follows Workspace policy rather than org equality.
+- **Consequences:** Phase 0 adds the Workspace foundation; the Phase 1 browser has a Workspace selector; Phase 2 import selects a target Workspace; Phase 3 owns Workspace lifecycle/admin and production governance; later Search/Publishing/MCP reuse the same Workspace policy.
 
 ## 7. Current Documentation Rule
 
-Current implementation decisions **只從 canonical documents 讀取**：
+Read current implementation decisions **only from canonical documents**:
 
 ```text
 README
@@ -183,4 +185,4 @@ README
 → Phase 1 Design / Plan
 ```
 
-本 history record 可以被引用來解釋 ADR-018 的背景，但不得作為第二套 schema、API 或 phase-scope truth。若未來架構再次修改，應先更新 canonical spec/plan，再另留新的 decision history。
+This history record may be cited to explain the background of ADR-018, but must not serve as a second source of truth for schema, API, or phase scope. If the architecture changes again, update the canonical spec/plan first, then record a new decision history.

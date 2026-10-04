@@ -1,5 +1,7 @@
 # MVP: Folder scope, search filters and Copy for Agent
 
+**English** | [繁體中文](2026-10-04-mvp-discovery-agent-design.zh-TW.md)
+
 User instruction: execute the three recommended MVP additions. Scope is approved in the conversation; implement in this session. No images, editor changes, external model calls, deployment or main merge.
 
 ## Folder scope

@@ -1,178 +1,180 @@
 # Linear Design Alignment — Audit Record
 
-| 項目 | 內容 |
+**English** | [繁體中文](2026-09-20-linear-design-alignment-audit.zh-TW.md)
+
+| Item | Details |
 | --- | --- |
-| 日期 | 2026-09-20 |
-| 類型 | 稽核紀錄（定點快照，非追蹤清單） |
-| 受測分支 | `claude/ui-ux-linear-alignment-uqvmj4`，HEAD `4dfdb95` |
-| 相關 PR | [#42](https://github.com/mike840609/knowledge-hub/pull/42)，10 commits，69 檔案 +1254/−279 |
-| 對照契約 | `docs/superpowers/specs/frontend-design-language.md`（living contract） |
+| Date | 2026-09-20 |
+| Type | Audit record (point-in-time snapshot, not a tracking list) |
+| Branch tested | `claude/ui-ux-linear-alignment-uqvmj4`, HEAD `4dfdb95` |
+| Related PR | [#42](https://github.com/mike840609/knowledge-hub/pull/42), 10 commits, 69 files +1254/−279 |
+| Reference contract | `docs/superpowers/specs/frontend-design-language.md` (living contract) |
 
-## 這份文件的定位
+## Purpose of this document
 
-這是一次 UI/UX 稽核的**歷史紀錄**：發現了什麼、處理了什麼、當下還剩什麼。
+This is a **historical record** of a UI/UX audit: findings, resolutions, and what remained at that time.
 
-**未完成項目的 canonical 來源是 living contract 的「Open items」章節，不是這裡。** 這份文件的未完成欄位是稽核當下的快照，會隨時間失準；要知道「現在還有什麼沒做」請讀契約。這個分工跟 README 對 canonical spec 與 architecture history 的區分一致。
+**The canonical source for unfinished items is the living contract's “Open items” section, rather than this record.** Unfinished fields here are snapshots from the audit and become outdated; read the contract for current outstanding work. This follows README's distinction between canonical specs and architecture history.
 
-稽核起因是一次對「設計語言是否對齊 Linear 原則」的檢視。過程中發現真正的問題不只是缺少系統，而是**既有契約沒有被遵守**——Phase 2.5 §25–30 早就寫下了視覺規則，但它埋在帶日期的階段文件裡，所以既有實作與本次第一輪修改都在不知情的狀況下違反了它。契約的搬遷（finding 22）是這次的根因修復。
+The audit began by examining alignment with Linear design principles. It found a deeper issue than a missing system: **the existing contract was not followed**—Phase 2.5 §25–30 already specified visual rules, but they were buried in a dated phase document, so existing implementation and this work's first revision unknowingly violated them. Moving the contract (finding 22) addressed the root cause.
 
 ---
 
-## 總覽
+## Overview
 
-| 類別 | 已完成 | 未完成 | 小計 |
+| Category | Complete | Incomplete | Subtotal |
 | --- | --- | --- | --- |
-| 1. Token 系統 | 6 | 1 | 7 |
-| 2. 元件系統 | 4 | 4 | 8 |
-| 3. 主題與色彩 | 4 | 0 | 4 |
-| 4. 互動模型 | 3 | 5 | 8 |
-| 5. 版面與文件 | 3 | 4 | 7 |
-| **設計發現合計** | **20** | **14** | **34** |
-| 6. 驗證缺口 | — | 3 | 3 |
+| 1. Token system | 6 | 1 | 7 |
+| 2. Component system | 4 | 4 | 8 |
+| 3. Themes and colors | 4 | 0 | 4 |
+| 4. Interaction model | 3 | 5 | 8 |
+| 5. Layout and documentation | 3 | 4 | 7 |
+| **Total design findings** | **20** | **14** | **34** |
+| 6. Verification gaps | — | 3 | 3 |
 
 ---
 
-## 1. Token 系統
+## 1. Token system
 
-| # | 發現 | 狀態 | 依據 |
+| # | Finding | Status | Evidence |
 | --- | --- | --- | --- |
-| 1 | 字級 9 種：`text-sm`/`xs`/`2xl`/`[13px]`/`[15px]`/`[11px]`/`[10px]`/`lg`/`xl`/`base` 混用。同層級標題因路徑而異——`PageHeader` 20px，14 個頁面手刻 24px | ✅ 已完成 | `601b948` |
-| 2 | 圓角 5 種拼法 | ✅ 已完成 | `601b948` |
-| 3 | 陰影無 elevation 系統，`sm/md/lg/xl` 各用 1–2 次 | ✅ 已完成 | `601b948` |
-| 4 | 焦點兩套 idiom 並存：22 處 `focus-visible:outline` vs 54 處 `ring-2`，`knowledge-empty-state` 兩顆相鄰按鈕各用一套 | ✅ 已完成 | `601b948` |
-| 5 | 硬寫顏色繞過 token：`amber-50`、`red-200`、`red-700`、三種 `bg-black/*` | ✅ 已完成 | `601b948` |
-| 6 | 無 motion 系統：全庫 5 個 transition、1 個 animation，overlay 瞬間跳出；`prefers-reduced-motion` 只有 1 處照顧 | ✅ 已完成 | `a1c82a7` |
-| 7 | `spacing` 是唯一未被 replace 的 scale，gap/padding 仍不受約束 | ❌ 未完成 | 契約 Open items |
+| 1 | 9 font sizes: mixed `text-sm`/`xs`/`2xl`/`[13px]`/`[15px]`/`[11px]`/`[10px]`/`lg`/`xl`/`base`. Same-level headings vary by route—`PageHeader` 20px, 14 pages manually set 24px | ✅ Complete | `601b948` |
+| 2 | 5 spellings for corner radii | ✅ Complete | `601b948` |
+| 3 | Shadows lack an elevation system; `sm/md/lg/xl` each used 1–2 times | ✅ Complete | `601b948` |
+| 4 | Two focus idioms coexist: 22 `focus-visible:outline` uses versus 54 `ring-2`; two adjacent buttons in `knowledge-empty-state` use different idioms | ✅ Complete | `601b948` |
+| 5 | Hardcoded colors bypass tokens: `amber-50`, `red-200`, `red-700`, three `bg-black/*` values | ✅ Complete | `601b948` |
+| 6 | No motion system: 5 transitions and 1 animation across the repo, overlays appear instantly; only 1 `prefers-reduced-motion` accommodation | ✅ Complete | `a1c82a7` |
+| 7 | `spacing` is the only unreplaced scale, leaving gap/padding unconstrained | ❌ Incomplete | Contract Open items |
 
-**採用的手法**：`tailwind.config.ts` 中的 scale 一律**替換**而非 extend，因此 `text-[13px]`、`rounded-xl`、`shadow-sm` 編譯不出任何 CSS，`borderRadius` 不設 `DEFAULT` 所以裸 `rounded` 也不成立。這是讓規則從「靠 review 把關」變成「靠編譯器把關」的關鍵。
+**Approach adopted**: all scales in `tailwind.config.ts` **replace** rather than extend, so `text-[13px]`, `rounded-xl`, and `shadow-sm` compile to no CSS; `borderRadius` has no `DEFAULT`, so bare `rounded` also fails. This is the key to moving enforcement from review to the compiler.
 
 ---
 
-## 2. 元件系統
+## 2. Component system
 
-| # | 發現 | 狀態 | 依據 |
+| # | Finding | Status | Evidence |
 | --- | --- | --- | --- |
-| 8 | 共用 `Button` 是 `min-h-10`(40px)，但 shell 實際控制項是 32/36px，導致 **21 處手刻** `inline-flex … rounded-md …` 而非 import | ✅ 已完成 | `287c220` |
-| 9 | 只有 primary/secondary 兩個 variant，缺 ghost/danger/link | ✅ 已完成 | `287c220` |
-| 10 | 破壞性操作用主色：Archive workspace／Confirm archive 以紫色 primary 呈現 | ✅ 已完成 | `287c220` |
-| 11 | Badge 狀態不可掃視：success/warning/danger 共用 `bg-kh-bg-hover`，只差文字色 | ✅ 已完成 | `0a70605` |
-| 12 | `search-form.tsx:22` 以 `className="m-1 min-h-9 px-4 py-1.5"` 覆寫 `<Button>` 的形狀——正是 button 系統要擋的漂移，因為不是手刻 `inline-flex` 而從 finding 8 的掃描漏掉 | ❌ 未完成 | 契約 Open items |
-| 13 | `Input` 40px、`search-form` input 44px，都沒有上 Button 的 size scale，表單並排對不齊 | ❌ 未完成 | 契約 Open items |
-| 14 | 選單是原生 `<details>` 手刻（`workspace-selector`、`source-sidebar`），Base UI 的 `Menu` 未使用（僅用 button/dialog/tabs）。無方向鍵導航、無 roving focus。**違反契約自己的「每個 list 可方向鍵導航」規則** | ❌ 未完成 | 契約 Open items |
-| 15 | Loading 三種寫法：骨架屏、`Loading documents…`、`Searching…`；且 `knowledge-layout` 的 `DocumentRegionSkeleton` 與 `loading.tsx` 幾乎逐行重複 | ❌ 未完成 | 契約 Open items |
+| 8 | Shared `Button` is `min-h-10` (40px), while shell controls are actually 32/36px, causing **21 manually written** `inline-flex … rounded-md …` controls instead of imports | ✅ Complete | `287c220` |
+| 9 | Only primary/secondary variants, missing ghost/danger/link | ✅ Complete | `287c220` |
+| 10 | Destructive operations use the primary color: Archive workspace/Confirm archive shown in purple primary | ✅ Complete | `287c220` |
+| 11 | Badge states cannot be scanned: success/warning/danger share `bg-kh-bg-hover`, differing only in text color | ✅ Complete | `0a70605` |
+| 12 | `search-form.tsx:22` overrides `<Button>` shape with `className="m-1 min-h-9 px-4 py-1.5"`—exactly the drift the button system should prevent, missed by finding 8's scan because it is not manually written `inline-flex` | ❌ Incomplete | Contract Open items |
+| 13 | `Input` 40px and `search-form` input 44px do not use Button's size scale, leaving adjacent form controls misaligned | ❌ Incomplete | Contract Open items |
+| 14 | Menus manually use native `<details>` (`workspace-selector`, `source-sidebar`); Base UI `Menu` unused (only button/dialog/tabs used). No arrow navigation or roving focus. **Violates the contract's own “every list supports arrow navigation” rule** | ❌ Incomplete | Contract Open items |
+| 15 | Three loading patterns: skeletons, `Loading documents…`, `Searching…`; `knowledge-layout`'s `DocumentRegionSkeleton` and `loading.tsx` almost duplicate line by line | ❌ Incomplete | Contract Open items |
 
 ---
 
-## 3. 主題與色彩
+## 3. Themes and colors
 
-| # | 發現 | 狀態 | 依據 |
+| # | Finding | Status | Evidence |
 | --- | --- | --- | --- |
-| 16 | **完全沒有 dark mode**：`color-scheme: light` 寫死，全庫 0 個 `dark:` | ✅ 已完成 | `26f42bf` |
-| 17 | 中性色非同一色相：4 個近似灰，`--kh-reading-bg` 偏暖而其餘偏冷，且在 topbar↔nav 接縫處並置 | ✅ 已完成 | `601b948` |
-| 18 | 暗色分割線過亮：border L\* **18.44** > hover 填色 L\* **15.19**，靜態結構線比互動狀態亮，階層反轉 | ✅ 已完成 | `2caef27` |
-| 19 | 控制項邊框不符 WCAG 1.4.11：`Input`/`Textarea`/secondary button 的背景等同畫布，border 是唯一邊界，但暗色 **1.34:1**、亮色 **1.24:1**（需 3:1）。**兩個主題都失敗，且為既存問題** | ✅ 已完成 | `2caef27` |
+| 16 | **No dark mode at all**: hardcoded `color-scheme: light`, 0 `dark:` uses across repo | ✅ Complete | `26f42bf` |
+| 17 | Neutrals differ in hue: 4 near-gray colors, warm `--kh-reading-bg` against otherwise cool tones, juxtaposed at the topbar↔nav seam | ✅ Complete | `601b948` |
+| 18 | Dark dividers too bright: border L\* **18.44** > hover fill L\* **15.19**, static structural lines brighter than interaction states, reversing hierarchy | ✅ Complete | `2caef27` |
+| 19 | Control borders fail WCAG 1.4.11: `Input`/`Textarea`/secondary-button background matches canvas, making border the only boundary, but dark **1.34:1**, light **1.24:1** (3:1 required). **Both themes fail; existing issue** | ✅ Complete | `2caef27` |
 
-**選值方法**：顏色決策以 relative luminance、L\* 與對比度計算，不靠目視。`border-strong` 對**每一種可能相鄰的表面**驗證——第一組候選在畫布上合格（3.25/3.23）但在 `subtle`/`sunken` 上失敗（2.91/2.88）。
+**Value selection**: color decisions use relative luminance, L\*, and contrast calculations rather than visual judgment. `border-strong` is checked against **every potentially adjacent surface**—first candidates pass on canvas (3.25/3.23) but fail on `subtle`/`sunken` (2.91/2.88).
 
 ---
 
-## 4. 互動模型
+## 4. Interaction model
 
-| # | 發現 | 狀態 | 依據 |
+| # | Finding | Status | Evidence |
 | --- | --- | --- | --- |
-| 20 | 全文搜尋頁零鍵盤導航：⌘K palette 有完整方向鍵/Enter/`aria-activedescendant`，`/search` 完全沒有——退化的那套落在結果更多、更需要鍵盤的地方 | ✅ 已完成 | `4dfdb95` |
-| 21 | 捲動位置一律歸零，退回列表丟失閱讀位置 | ✅ 已完成 | `4dfdb95` |
-| 22 | 搜尋結果 metadata 串成一句話無法垂直掃描（對照組 `source-list-row` 就在同 repo 且做對了） | ✅ 已完成 | `4dfdb95` |
-| 23 | ⌘K 只執行搜尋，不執行動作。新增筆記／切換 archived／開啟 Details 無鍵盤路徑，也無快捷鍵總覽 | ❌ 未完成 | 契約 Open items |
-| 24 | 無 toast/undo 層。回饋是會撐開版面的 `role="status"` 段落，**`aria-live` 全庫 0 處**；破壞性操作是 inline 兩段確認而非「做了再給 undo」 | ❌ 未完成 | 契約 Open items |
-| 25 | 零 context menu。重新命名／封存／複製連結都要先進文件頁 | ❌ 未完成 | 契約 Open items |
-| 26 | tree 展開、source 展開、filter 文字皆為 `useState`，重新整理即丟失 | ❌ 未完成 | 契約 Open items |
-| 27 | **導航非瞬間**：每次點文件都是 server round trip，全 app 僅一個 `loading.tsx` 邊界。**體感差距最大、且是唯一的架構題**——需要量測後決定 prefetch/caching 策略，不是 CSS 改動 | ❌ 未完成 | 契約 Open items |
+| 20 | Full-text search page has no keyboard navigation: ⌘K palette supports arrows/Enter/`aria-activedescendant`, while `/search` has none—the weaker implementation is where more results create greater keyboard need | ✅ Complete | `4dfdb95` |
+| 21 | Scroll position always resets to zero; returning to lists loses reading position | ✅ Complete | `4dfdb95` |
+| 22 | Search-result metadata forms one sentence, preventing vertical scanning (the same repo's `source-list-row` is a correct comparison) | ✅ Complete | `4dfdb95` |
+| 23 | ⌘K searches only, with no actions. New note/toggle archived/open Details lack keyboard paths and shortcut overview | ❌ Incomplete | Contract Open items |
+| 24 | No toast/undo layer. Feedback uses layout-expanding `role="status"` paragraphs; **0 explicit `aria-live` uses across repo**; destructive actions require inline two-stage confirmation instead of “act then offer undo” | ❌ Incomplete | Contract Open items |
+| 25 | No context menus. Rename/archive/copy link require opening the document page | ❌ Incomplete | Contract Open items |
+| 26 | Tree expansion, source expansion, and filter text use `useState`, lost on reload | ❌ Incomplete | Contract Open items |
+| 27 | **Navigation is not instant**: each document click makes a server round trip, with only one `loading.tsx` boundary across the app. **Largest perceived gap and the only architecture issue**—measure before deciding prefetch/caching strategy, rather than a CSS change | ❌ Incomplete | Contract Open items |
 
 ---
 
-## 5. 版面與文件
+## 5. Layout and documentation
 
-| # | 發現 | 狀態 | 依據 |
+| # | Finding | Status | Evidence |
 | --- | --- | --- | --- |
-| 28 | 違反既有 §26：`ui/textarea` 帶陰影（規定 normal surface 不用陰影）、panel 使用 overlay 圓角、側欄 dropdown 未用 overlay 圓角 | ✅ 已完成 | `0c8ac6a` |
-| 29 | **設計契約埋在帶日期的階段文件裡**：Phase 2.5 §25–30 寫下了視覺語言、tokens、component 架構、state 策略與 domain 邊界，但沒人在 Phase 2.5 結束後讀它——**這是本次所有漂移的根因** | ✅ 已完成 | `76c3619` |
-| 30 | 無 `CLAUDE.md` | ✅ 已完成 | `76c3619` |
-| 31 | Settings 導航無 active state、未用既有 `ui/tabs`；容器寬度 **7 種**、頁面內距 3 種 | ❌ 未完成 | 契約 Open items |
-| 32 | 空狀態／錯誤狀態僅標題加段落；knowledge 空狀態並列兩個等重 CTA | ❌ 未完成 | 契約 Open items |
-| 33 | `error.tsx`/`not-found.tsx` 只覆蓋 `knowledge/[sourceId]/` 一條路由；`/search`、`/sources`、`/settings` 無邊界，也無 `global-error.tsx` | ❌ 未完成 | 契約 Open items |
-| 34 | 日期格式硬寫 `en-US`（3 處） | ❌ 未完成 | 契約 Open items |
+| 28 | Violates existing §26: `ui/textarea` has a shadow (normal surfaces should not), panels use overlay radii, sidebar dropdowns do not use overlay radii | ✅ Complete | `0c8ac6a` |
+| 29 | **Design contract buried in a dated phase document**: Phase 2.5 §25–30 specifies visual language, tokens, component architecture, state strategy, and domain boundaries, but no one reads it after Phase 2.5—**the root cause of all drift in this audit** | ✅ Complete | `76c3619` |
+| 30 | No `CLAUDE.md` | ✅ Complete | `76c3619` |
+| 31 | Settings navigation has no active state and does not use existing `ui/tabs`; **7** container widths and 3 page-padding values | ❌ Incomplete | Contract Open items |
+| 32 | Empty/error states consist only of heading plus paragraph; knowledge empty state has two equally weighted CTAs | ❌ Incomplete | Contract Open items |
+| 33 | `error.tsx`/`not-found.tsx` cover only `knowledge/[sourceId]/`; `/search`, `/sources`, `/settings` have no boundaries, nor is there `global-error.tsx` | ❌ Incomplete | Contract Open items |
+| 34 | Hardcoded `en-US` date formats (3 locations) | ❌ Incomplete | Contract Open items |
 
 ---
 
-## 6. 驗證缺口
+## 6. Verification gaps
 
-稽核當下記錄的三項證據不足之處，**現已全部補上**。原始記錄保留，因為「當時沒有」本身是這份紀錄的一部分。
+Three evidence deficiencies recorded at audit time **have now all been filled**. Original records remain because their absence then is itself part of this history.
 
-| 項目 | 稽核當下 | 現況 |
+| Item | At audit time | Current status |
 | --- | --- | --- |
-| 暗色主題目視檢查 | ⚠️ 僅一次人工檢視 | ✅ app 接真實資料庫跑起來，明暗兩主題、改動前後皆截圖比對 |
-| 鍵盤導航自動化測試 | ❌ 無 | ✅ `phase4-search.spec.ts` 新增兩個 case：方向鍵在列間移動、上鍵離開列表回到查詢框、Home/End、Enter 開啟 |
-| UI primitive render 測試 | ❌ 無 | ✅ `tests/unit/ui-primitives.test.tsx` 11 個 case 覆蓋 `buttonClasses` 的 variant × size × icon 矩陣與 `Button`／`Badge` 的實際 render |
+| Dark-theme visual inspection | ⚠️ Only one manual inspection | ✅ App running against real database; screenshot comparisons in light/dark themes before/after changes |
+| Automated keyboard-navigation tests | ❌ None | ✅ Two cases added to `phase4-search.spec.ts`: arrows between rows, Up returns from list to query input, Home/End, Enter opens |
+| UI primitive render tests | ❌ None | ✅ 11 cases in `tests/unit/ui-primitives.test.tsx` cover `buttonClasses` variant × size × icon matrix and actual `Button`/`Badge` renders |
 
-補測試時的兩點值得記著：
+Two useful lessons from adding coverage:
 
-- **沒有新增任何依賴。** 用既有 `react-dom` 的 `renderToStaticMarkup` 即可覆蓋純呈現型 primitive，不需要 testing-library 或 jsdom。
-- `tsconfig.json` 的 `jsx: "preserve"` 是給 Next 用的，會讓 esbuild 停在 classic runtime，render 時噴 `React is not defined`。`vitest.config.ts` 因此指定 `esbuild: { jsx: "automatic" }`，只影響測試。
+- **No dependencies added.** Existing `react-dom`'s `renderToStaticMarkup` covers pure presentation primitives without testing-library or jsdom.
+- `tsconfig.json`'s `jsx: "preserve"` is for Next, leaving esbuild on classic runtime and causing `React is not defined` on render. `vitest.config.ts` therefore sets `esbuild: { jsx: "automatic" }`, affecting tests only.
 
-Badge 那個 case 明確鎖住它修正過的回歸：斷言 success／warning／danger 的背景 token **互不相同**——它們曾經共用 `bg-kh-bg-hover`，只差文字色。
+The Badge case explicitly locks down the corrected regression: success/warning/danger background tokens must **all differ**—they once shared `bg-kh-bg-hover`, differing only in text color.
 
-## 後續更新
+## Subsequent updates
 
-稽核當下的狀態欄是 `4dfdb95` 的快照，**不隨後續工作更新**——canonical 來源仍是契約的 Open items。這一節只記錄快照之後發生了什麼，讓讀者知道上面的 ❌ 有哪些已經不成立。
+Audit status fields snapshot `4dfdb95` and **are not updated for later work**—the contract's Open items remain canonical. This section records later events, explaining which ❌ findings above no longer apply.
 
-| # | 發現 | 處理 |
+| # | Finding | Resolution |
 | --- | --- | --- |
-| 14 | 選單手刻 `<details>`，無方向鍵導航 | ✅ [#43](https://github.com/mike840609/knowledge-hub/pull/43) — `ui/menu.tsx` 包 Base UI `Menu`，兩個選單轉換完成 |
-| 12 | `search-form` 以 `className` 覆寫 Button 形狀 | ✅ 本批次 |
-| 13 | `Input`/`Textarea` 未上 size scale | ✅ 本批次 — 高度階梯抽到 `ui/control.ts`，buttons 與 fields 共讀 |
-| 15 | Loading 三種寫法、骨架屏重複 | ✅ 本批次 |
-| 33 | error/not-found 只覆蓋一條路由 | ✅ 本批次 |
-| 34 | 日期硬寫 `en-US` | ✅ 本批次 — 全部收進 `lib/format-date.ts` |
+| 14 | Manually written `<details>` menus lack arrow navigation | ✅ [#43](https://github.com/mike840609/knowledge-hub/pull/43) — `ui/menu.tsx` wraps Base UI `Menu`, both menus converted |
+| 12 | `search-form` overrides Button shape through `className` | ✅ This batch |
+| 13 | `Input`/`Textarea` lack size scale | ✅ This batch — height scale extracted to `ui/control.ts`, shared by buttons/fields |
+| 15 | Three loading patterns, duplicate skeletons | ✅ This batch |
+| 33 | error/not-found cover one route only | ✅ This batch |
+| 34 | Hardcoded `en-US` dates | ✅ This batch — consolidated in `lib/format-date.ts` |
 
-修 12 的時候發現它比紀錄的更廣：`search-form` 不只覆寫 Button，它的 input 是 44px、兩個 `<select>` 是手刻的。順著查下去，**全庫五個手刻 `<select>` 全部用 `border` 而非 `border-strong`**——也就是 finding 19 修的 WCAG 1.4.11 問題在 select 上原封不動地存在，只因為當時的掃描對象是「有 `Input`/`Textarea` import 的檔案」。契約 §6 因此改寫成規則而非元件清單。
+Fixing 12 revealed a broader problem: beyond overriding Button, `search-form` has a 44px input and two manually written `<select>` controls. Further investigation found **all five manually written `<select>` controls use `border` rather than `border-strong`**—finding 19's WCAG 1.4.11 issue remained unchanged in selects, missed because the scan covered only files importing `Input`/`Textarea`. Contract §6 was consequently rewritten as a rule rather than a component list.
 
-### 兩處措辭更正
+### Two wording corrections
 
-原文保留，更正記在這裡：
+Original text retained; corrections recorded here:
 
-- **finding 24「`aria-live` 全庫 0 處」**在字面上正確，但誇大了缺口。`role="status"` 本身帶隱含的 `aria-live="polite"`，而 repo 有在用；真正缺的是 toast/undo 層，不是「完全沒有播報」。契約 Open items 已改寫。
-- **finding 34 記「3 處」，實際是 5 處**：另有 `search-result-row` 的第二個 formatter，以及 `document-header` 裡每次 render 都重建的 `new Intl.RelativeTimeFormat("en")`。
+- **Finding 24's “0 `aria-live` uses across repo”** is literally correct but overstates the gap. `role="status"` has implicit `aria-live="polite"` and is used in this repo; the missing feature is a toast/undo layer, rather than all announcements. Contract Open items rewritten.
+- **Finding 34 records “3 locations,” actually 5**: the second formatter in `search-result-row` and `new Intl.RelativeTimeFormat("en")` recreated on every render in `document-header` also count.
 
-### 這批工作自己找到的新缺口
+### New gap discovered by this batch
 
-時間戳記用 runtime 自己的時區格式化，server 與 client 不同區時會產生 hydration mismatch。實測 `Mar 4, 2026, 9:05 PM`（UTC）對 `Mar 5, 2026, 5:05 AM`（Asia/Taipei）——連日期都不同。已進契約 Open items，**未修**：跟 locale 一樣是產品決定（server 端解析，或改成只在 client render），不是格式化問題。
+Timestamps use the runtime's own timezone, causing hydration mismatch when server/client timezones differ. Actual comparison: `Mar 4, 2026, 9:05 PM` (UTC) versus `Mar 5, 2026, 5:05 AM` (Asia/Taipei)—even the dates differ. Added to contract Open items, **unfixed**: like locale, this is a product decision (resolve server-side or render only on client), rather than a formatting issue.
 
-## 執行紀錄
+## Execution record
 
-10 個 commit，每個獨立可 review 且各自綠燈：
+10 commits, each independently reviewable and green:
 
-| Commit | 內容 |
+| Commit | Changes |
 | --- | --- |
-| `601b948` | Token 化字級、圓角、elevation、焦點與中性色 ramp |
-| `287c220` | 統一 button 系統 |
-| `0a70605` | Badge 狀態色調 |
-| `a1c82a7` | Motion 系統 |
-| `83d20d3` | 載入 Inter、等寬數字 |
+| `601b948` | Tokenize font sizes, radii, elevation, focus, and neutral ramp |
+| `287c220` | Unify button system |
+| `0a70605` | Badge state tones |
+| `a1c82a7` | Motion system |
+| `83d20d3` | Load Inter and tabular numerals |
 | `26f42bf` | Dark theme |
-| `0c8ac6a` | 修正 §26 違規 |
-| `76c3619` | 契約升格為 living contract；新增 CLAUDE.md |
-| `2caef27` | 調暗暗色分割線；拆出 `border-strong` |
-| `4dfdb95` | 搜尋頁鍵盤導航、捲動還原、可掃視列 |
+| `0c8ac6a` | Fix §26 violations |
+| `76c3619` | Promote contract to living contract; add CLAUDE.md |
+| `2caef27` | Darken dark dividers; extract `border-strong` |
+| `4dfdb95` | Search-page keyboard navigation, scroll restoration, scannable rows |
 
-CI 四個 job（`unit`／`build`／`integration`／`e2e`）在每一個 head 上皆通過。`lint`、`typecheck`、`build` 與 316 個 unit test 在每次 push 前於本地執行。
+All four CI jobs (`unit`/`build`/`integration`/`e2e`) passed at every head. `lint`, `typecheck`, `build`, and 316 unit tests ran locally before each push.
 
-## 後續建議順序
+## Recommended follow-up order
 
-1. **finding 12、14** — 這兩項是本次工作自己留下的漏洞（一個系統漏洞、一個契約漏洞），優先於其餘未完成項
-2. **finding 15、33** — 便宜，順手
-3. **finding 7、31、34** — 機械性，手法已驗證
-4. **finding 23、24、25** — 改變行為，依 CLAUDE.md「substantive design changes get a spec before code」需先寫 spec
-5. **finding 27** — 獨立的架構決定，建議先量測再決定範圍
+1. **Findings 12, 14** — gaps left by this work itself (one system gap, one contract gap), prioritized above remaining items
+2. **Findings 15, 33** — inexpensive and convenient
+3. **Findings 7, 31, 34** — mechanical, using a verified approach
+4. **Findings 23, 24, 25** — behavior changes; CLAUDE.md's “substantive design changes get a spec before code” requires a spec first
+5. **Finding 27** — independent architecture decision; measure before deciding scope
 
-完成第 1–3 組後，presentational 層面的對齊工作大致告一段落；剩餘真正影響體感的只有 finding 27。
+After groups 1–3, presentation alignment is largely complete; only finding 27 materially affects perceived responsiveness.

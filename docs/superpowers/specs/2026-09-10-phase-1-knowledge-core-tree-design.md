@@ -1,19 +1,21 @@
 # Knowledge Hub — Phase 1 Knowledge Core & Tree Design
 
-| 項目 | 內容 |
+**English** | [繁體中文](2026-09-10-phase-1-knowledge-core-tree-design.zh-TW.md)
+
+| Item | Content |
 | --- | --- |
-| 日期 | 2026-09-10 |
+| Date | 2026-09-10 |
 | Phase | 1 |
-| 名稱 | Knowledge Core & Tree |
-| 狀態 | Approved Design；已整合 Phase 0 Workspace foundation |
-| 前置 | Phase 0 Foundation & Architecture |
-| 後續 | Phase 2 Knowledge Source Import & Sync |
+| Name | Knowledge Core & Tree |
+| Status | Approved Design; Phase 0 Workspace foundation integrated |
+| Prerequisite | Phase 0 Foundation & Architecture |
+| Next | Phase 2 Knowledge Source Import & Sync |
 
 ## 1. Goal
 
-Phase 1 的目標是讓 Knowledge Hub 擁有一套完整、可靠且不依賴 ingestion、Web UI 或 MCP 的 Knowledge Core，同時繼承 Phase 0 已建立的 Workspace access foundation。
+Phase 1 gives Knowledge Hub a complete, reliable Knowledge Core independent of ingestion, Web UI, and MCP, inheriting Phase 0's Workspace access foundation.
 
-完成後系統必須能保證：
+After completion, the system must guarantee:
 
 ```text
 User
@@ -27,41 +29,41 @@ User
                          └── immutable Revisions
 ```
 
-其中：
+Where:
 
-- `User.org_code` = 公司組織 identity attribute，不直接作 Knowledge ACL。
+- `User.org_code` = company organizational identity attribute, not a direct Knowledge ACL.
 - Workspace = Knowledge container + basic access scope。
 - WorkspaceMembership = Phase 0–2 local/mock access foundation。
-- Source = source scope、content ownership 與來源邊界；每個 Source 只屬一個 Workspace。
-- Tree = 文件目前位於哪裡。
-- Document = 文件穩定 identity。
-- Revision = 文件內容版本。
-- SourceEntry = 外部來源 identity 與 Hub object 的 mapping。
+- Source = source scope, content ownership, and source boundary; each Source belongs to one Workspace.
+- Tree = where the document currently resides.
+- Document = stable document identity.
+- Revision = document content version.
+- SourceEntry = mapping between external source identity and Hub object.
 
-Document ID 不因 rename、move、archive、restore、Workspace navigation state 或 revision 而改變。Document 不重複保存 `workspace_id`；其 scope 由 `Document → Source → Workspace` 推導。
+Document ID does not change with rename, move, archive, restore, Workspace navigation state, or revision. Document does not redundantly store `workspace_id`; scope derives through `Document → Source → Workspace`.
 
-Phase 1 繼承 Phase 0 已固定的 foundation contracts：Workspace/WorkspaceMembership、`knowledge_sources.workspace_id`、application-generated UUIDv7 + MariaDB native `UUID`、顯式 `CallerContext`、canonical mutation 的 `READ COMMITTED` transaction、lifecycle current provenance，以及 one-document-one-TreeNode uniqueness。Phase 1 不重新發明這些規則，只完成完整 Knowledge behavior。
+Phase 1 inherits Phase 0's fixed foundation contracts: Workspace/WorkspaceMembership, `knowledge_sources.workspace_id`, application-generated UUIDv7 + MariaDB native `UUID`, explicit `CallerContext`, canonical mutation `READ COMMITTED` transactions, current lifecycle provenance, and one-document-one-TreeNode uniqueness. It completes full Knowledge behavior without reinventing those rules.
 
 ## 2. Phase 1 Scope
 
 ### 2.1 In Scope
 
-Phase 1 完成：
+Phase 1 completes:
 
-- KnowledgeSource core behavior，且 Source scope 為 Workspace。
+- KnowledgeSource core behavior, with Workspace as Source scope.
 - KnowledgeDocument lifecycle。
 - Immutable KnowledgeRevision。
 - Knowledge Tree。
 - Folder / Document hierarchy。
 - Stable Document identity。
 - SourceEntry mapping contract。
-- Archive / restore 與目前 lifecycle provenance。
+- Archive / restore and current lifecycle provenance.
 - Move / reorder。
 - Revision history。
 - Current revision resolution。
 - Archived filtering。
 - SOURCE_MANAGED / HUB_MANAGED mutation guard。
-- Workspace membership foundation 在 read/write application services 的一致套用。
+- Consistent Workspace membership foundation in read/write application services.
 - Transactional invariants。
 - Concurrency protection。
 - Caller-aware read/write application services。
@@ -69,7 +71,7 @@ Phase 1 完成：
 
 ### 2.2 Out of Scope
 
-Phase 1 不做：
+Phase 1 does not implement:
 
 - Folder upload / scanning。
 - Folder Sync。
@@ -77,25 +79,25 @@ Phase 1 不做：
 - Diff algorithm。
 - Rename detection algorithm。
 - SOURCE_MANAGED Title Resolution / Markdown parser。
-- Workspace provisioning/create/rename/archive/restore 管理 UI。
+- Workspace provisioning/create/rename/archive/restore administration UI.
 - Workspace roles/capabilities、membership administration、Team/SSO Group mapping、granular ACL。
 - Rich text editor。
 - Web authoring。
 - Keyword search。
 - Embedding / vector search。
 - Company SSO。
-- tKMS publishing。
+- external publishing publishing。
 - MCP。
 - Agent actor / Principal model。
 - Agent Memory。
 
-Workspace administration 與 production governance 屬 Phase 3；Phase 1 只 consume Phase 0 membership foundation。
+Workspace administration and production governance belong to Phase 3; Phase 1 only consumes Phase 0's membership foundation.
 
 ## 3. Architecture Decision
 
 ### 3.1 Option A — CRUD Core
 
-直接在 Phase 0 repositories 上補：
+Add directly to Phase 0 repositories:
 
 ```text
 createDocument()
@@ -104,19 +106,19 @@ moveNode()
 archiveDocument()
 ```
 
-優點是簡單，但 Phase 2 很容易演變成：
+This is simple, but Phase 2 could easily evolve into:
 
 ```text
 Sync Service
    ↓
-直接修改 Knowledge tables
+directly modify Knowledge tables
 ```
 
-這會讓 Folder Sync 繞過 Knowledge invariants與 Workspace policy，因此不採用。
+This would let Folder Sync bypass Knowledge invariants and Workspace policy, so it is rejected.
 
 ### 3.2 Option B — Domain Commands + Mutation Authority Separation
 
-採用：
+Use:
 
 ```text
                     Workspace Access Policy
@@ -133,7 +135,7 @@ HUB_MANAGED                      SOURCE_MANAGED
 Phase 5 Web Authoring             Phase 2 Folder Sync
 ```
 
-兩邊共用：
+Both sides share:
 
 ```text
 CallerContext
@@ -146,13 +148,13 @@ Repositories
 READ COMMITTED Transactions
 ```
 
-但 SOURCE_MANAGED 不提供 `force=true`、`bypassOwnership=true` 等 escape hatch。
+SOURCE_MANAGED offers no escape hatches such as `force=true` or `bypassOwnership=true`.
 
 ### 3.3 Decision
 
-採 Option B。
+Choose Option B.
 
-Phase 2 因此形成：
+Phase 2 therefore forms:
 
 ```text
 Authorized Workspace
@@ -170,7 +172,7 @@ SourceProjectionCommands
 Knowledge Core
 ```
 
-而不是另建一套 Knowledge mutation logic。
+Rather than building separate Knowledge mutation logic.
 
 ## 4. Core Domain Model
 
@@ -194,9 +196,9 @@ Workspace
                     └── Revision N ← current_revision_id
 ```
 
-Source 本身就是其 Tree root，不建立 synthetic root folder；Workspace 是 Source container，不是 TreeNode。
+Source itself is its Tree root, with no synthetic root folder; Workspace is a Source container, not a TreeNode.
 
-例如：
+For example:
 
 ```text
 Workspace: Query Master
@@ -210,11 +212,11 @@ Workspace: Query Master
 
 ## 5. Schema Refinement
 
-Phase 0 的十張 domain tables 繼續保留：原八張 Knowledge/Source tables加上 `workspaces` 與 `workspace_memberships`。所有 stable entity IDs 使用 MariaDB native `UUID`，`knowledge_sources.workspace_id` 是 Source authoritative Workspace scope，Document TreeNode uniqueness 與 lifecycle provenance 已是 foundation。Phase 1 不重做 foundation schema，只補 SourceEntry 對 TreeNode 的必要 stable mapping。
+Retain Phase 0's ten domain tables: the original eight Knowledge/Source tables plus `workspaces` and `workspace_memberships`. All stable entity IDs use MariaDB native `UUID`; `knowledge_sources.workspace_id` is the authoritative Source Workspace scope; Document TreeNode uniqueness and lifecycle provenance are already foundation contracts. Phase 1 does not redo foundation schema, adding only necessary stable SourceEntry-to-TreeNode mapping.
 
-### 5.1 SourceEntry 增加 `tree_node_id`
+### 5.1 Add `tree_node_id` to SourceEntry
 
-Phase 0 的 `source_entries` 主要有：
+Phase 0 `source_entries` mainly contains:
 
 ```text
 source_entries
@@ -225,17 +227,17 @@ source_entries
 └── ...
 ```
 
-Phase 1 增加：
+Phase 1 adds:
 
 ```text
 tree_node_id nullable FK → knowledge_tree_nodes.id
 ```
 
-欄位型別沿用 Phase 0 native `UUID` contract。
+The field type follows Phase 0's native `UUID` contract.
 
-原因是 Folder 本身沒有 Document。
+A Folder itself has no Document.
 
-若只有：
+With only:
 
 ```text
 Folder SourceEntry
@@ -243,7 +245,7 @@ source_path = docs/backend
 document_id = null
 ```
 
-當 folder rename：
+When a folder is renamed:
 
 ```text
 docs/backend
@@ -251,9 +253,9 @@ docs/backend
 docs/server
 ```
 
-系統沒有穩定 reference 指向原 TreeNode。
+The system has no stable reference to the original TreeNode.
 
-增加 mapping 後：
+After adding the mapping:
 
 ```text
 SourceEntry
@@ -263,7 +265,7 @@ SourceEntry
      TreeNode #abc
 ```
 
-path 改變但 TreeNode identity 不變。
+Path changes but TreeNode identity stays unchanged.
 
 ### 5.2 SourceEntry invariants
 
@@ -289,19 +291,19 @@ tree_node.node_type = DOCUMENT
 tree_node.document_id = source_entry.document_id
 ```
 
-Hub-native documents 可以沒有 SourceEntry。SourceEntry 是 source mapping，不是 Knowledge identity。
+Hub-native documents may have no SourceEntry. SourceEntry is source mapping, not Knowledge identity.
 
-### 5.3 Phase 0 資料升級
+### 5.3 Phase 0 Data Upgrade
 
-升級分成固定 DDL、獨立資料回填、固定約束三段；001–003 與其 checksum 不變，不以清空資料作為一般升級路徑。
+Upgrade has three stages: fixed DDL, separate data backfill, fixed constraints. 001–003 and their checksums remain unchanged; clearing data is not the normal upgrade path.
 
-1. 停止 canonical writes、備份。獨立 `scripts/db/backfill-source-tree-mapping.ts` 先以 dry-run 盤點 ACTIVE／ARCHIVED entries。DOCUMENT 以 `(source_id, document_id)` 對應唯一既有 DOCUMENT node；FOLDER 由 operator 提供 JSON entry ID → existing Folder TreeNode ID 對照。驗證完整性、同 Source、型別、document 相等與 node 不重複；不猜 path/name/hash，不建立替代 node。錯配 preflight 不改資料或 schema。
-2. 固定 migration `004-phase-1-tree-mapping.ts` 只新增 nullable `tree_node_id UUID`，不含環境資料。擴充 runner 的 target-version 選項，載入完整 manifest 驗證既有 ledger，但只執行到指定版本；不得截短 manifest，否則會誤判較新已套用版本為 unknown。target 低於已套用版本時清楚拒絕，不 rollback。
-3. 同一獨立 script 以參數化 SQL 在一個 DML transaction 回填；輸入不進 migration manifest、statements 或 checksum。已正確回填的 row 為 NOOP；既有不一致 mapping 拒絕，不覆寫。執行與 dry-run 都重新驗證全體 mapping，失敗整次 DML rollback。
-4. 固定 migration `005-phase-1-tree-mapping-constraints.ts` 收緊 `tree_node_id NOT NULL`，加 same-source FK、`UNIQUE(source_id, tree_node_id)`。DOCUMENT equality 由 `(document_id, tree_node_id)` FK → TreeNode `(document_id, id)` 保護，明確新增對應 `UNIQUE(document_id, id)` 作 referenced key；保留原 `UNIQUE(document_id)`，兩者用途不同。Folder 的 document_id=NULL 使此 FK 不檢查該組，因此 Folder entry 必須指向 FOLDER node 由 application assertion 驗證；preflight 同樣驗證所有既有 rows。entry type/document null shape 由既有 CHECK 保護。
-5. Migration 型別增加 optional `beforeApply` hook（固定程式碼、接收 runner 同一 connection 的唯讀 query contract）；005 掛載 mapping-readiness hook，runner 在 migration lock 內、寫入 RUNNING ledger 前呼叫。checksum 仍只 hash statements，hook 不接受 operator input、不寫資料、不產生動態 manifest。執行固定的唯讀 mapping-readiness gate（非 operator 資料、非動態 statements）。不完整即退出，005 ledger 不新增，補完回填後可重跑。普通 migrate 不得自動跳過回填或直接將未就緒的 005 記 FAILED。空 DB 以同一份 004／005 manifest 執行，gate 自然通過。
+1. Stop canonical writes and back up. Separate `scripts/db/backfill-source-tree-mapping.ts` first inventories ACTIVE/ARCHIVED entries in dry-run mode. DOCUMENT maps `(source_id, document_id)` to the unique existing DOCUMENT node; for FOLDER, the operator supplies a JSON entry ID → existing Folder TreeNode ID mapping. Verify completeness, same Source, types, document equality, and no duplicate nodes; do not guess from path/name/hash or create replacement nodes. A mismatched preflight changes neither data nor schema.
+2. Fixed migration `004-phase-1-tree-mapping.ts` only adds nullable `tree_node_id UUID`, containing no environment data. Extend the runner with target-version support: load the full manifest to validate the existing ledger, but execute only through the target. Do not truncate the manifest, which would misclassify newer applied versions as unknown. Clearly reject targets below applied versions without rollback.
+3. The same separate script backfills through parameterized SQL in one DML transaction; input does not enter the migration manifest, statements, or checksum. Correctly backfilled rows are NOOP; reject inconsistent existing mappings without overwriting. Both execution and dry-run revalidate all mappings; failure rolls back the entire DML transaction.
+4. Fixed migration `005-phase-1-tree-mapping-constraints.ts` tightens `tree_node_id NOT NULL`, adding same-source FK and `UNIQUE(source_id, tree_node_id)`. DOCUMENT equality is protected by `(document_id, tree_node_id)` FK → TreeNode `(document_id, id)`, explicitly adding `UNIQUE(document_id, id)` as the referenced key; retain original `UNIQUE(document_id)` because the two serve different purposes. Folder document_id=NULL skips this FK tuple check, so application assertions verify Folder entries point to FOLDER nodes; preflight also checks every existing row. Existing CHECK protects entry type/document null shape.
+5. Add an optional `beforeApply` hook to the Migration type (fixed code receiving a read-only query contract on the runner's same connection). 005 installs a mapping-readiness hook, called within the migration lock before writing RUNNING ledger. Checksum still hashes only statements; the hook accepts no operator input, writes no data, and creates no dynamic manifest. Execute a fixed read-only mapping-readiness gate (neither operator data nor dynamic statements). If incomplete, exit without adding 005 ledger; rerun after backfill. Ordinary migrate cannot skip backfill automatically or mark unready 005 FAILED. Empty DB uses the same 004/005 manifest and naturally passes the gate.
 
-預定命令（須在 Task 2 實作 CLI 支援後才能執行）：
+Planned commands (runnable only after Task 2 implements CLI support):
 
 ```sh
 npm run db:migrate -- --to 4
@@ -311,27 +313,27 @@ npm run db:migrate -- --to 5
 ```
 
 
-若 populated DB 尚有待回填 entries，直接執行無參數 `npm run db:migrate` 會先完成 004，再由 005 gate 安全停止；004 保持 APPLIED、005 不產生 ledger row。這是預期且可恢復的停點：執行回填後重跑即可，不需修 checksum 或 ledger。沒有待回填 entries 時可直接通過。測試需涵蓋此無參數路徑。
+If populated DB still has entries to backfill, argument-free `npm run db:migrate` completes 004, then safely stops at the 005 gate; 004 stays APPLIED and 005 creates no ledger row. This is an expected recoverable stop: backfill and rerun, without repairing checksum or ledger. With no pending entries it passes directly. Tests must cover this argument-free path.
 
-步驟 1 在首次 DDL 前也可執行同一 dry-run；script 支援欄位尚不存在的盤點狀態。沒有 Folder entries 時提供空對照即可。backfill script 的資料交易不宣稱涵蓋 DDL；DDL 中斷沿用 FAILED/RUNNING 診斷與明確修復程序，不能盲目重跑或修改已套用 checksum。
+Step 1 may run the same dry-run before first DDL; the script supports inventory before the field exists. Supply an empty mapping if there are no Folder entries. The backfill data transaction does not cover DDL; interrupted DDL follows FAILED/RUNNING diagnostics and explicit repair procedures, without blind reruns or changes to applied checksums.
 
-驗收：populated 001–003 → 004 → backfill → 005、archived rows、Folder 對照、preflight 零修改、backfill rollback／重跑、005 gate 不污染 ledger、全量 migrate 重跑 checksum 相同、空 DB 與 populated DB 使用完全相同 manifest，以及 DDL 中斷診斷。所有 fixtures／seed／writers 提供 tree_node_id。
+Acceptance: populated 001–003 → 004 → backfill → 005, archived rows, Folder mappings, zero-change preflight, backfill rollback/rerun, 005 gate leaves ledger untouched, full-migrate reruns retain checksums, identical manifests for empty/populated DB, and interrupted-DDL diagnostics. All fixtures/seed/writers supply tree_node_id.
 
 ## 6. Tree Invariants
 
 ### 6.1 Document TreeNode
 
-每個 KnowledgeDocument 在 Knowledge Tree 中只能有一個 node。
+Each KnowledgeDocument has only one node in Knowledge Tree.
 
-此 invariant 已提升為 Phase 0 foundation：`knowledge_tree_nodes.document_id` 對非 NULL 值建立 uniqueness protection。Phase 1 必須保留並驗證此 constraint，不應另建第二套 migration 或僅以 application validation 取代 DB protection。
+This invariant is now Phase 0 foundation: uniqueness protection on non-NULL `knowledge_tree_nodes.document_id`. Phase 1 must retain and verify it, without a second migration scheme or application-only validation replacing DB protection.
 
-Document move 是：
+Document move is:
 
 ```text
 UPDATE tree_node.parent_id
 ```
 
-而不是刪除舊 node 再建立新 node，因此 Document TreeNode identity 也保持穩定。
+Rather than deleting the old node and creating a new one, so Document TreeNode identity also remains stable.
 
 ### 6.2 Folder TreeNode
 
@@ -342,13 +344,13 @@ document_id = null
 name = required
 ```
 
-Folder 自己保存 name。
+Folder stores its own name.
 
 ### 6.3 Document display name
 
-DOCUMENT node 不保存第二份 title truth。
+DOCUMENT nodes store no second title truth.
 
-顯示時：
+When displaying:
 
 ```text
 TreeNode
@@ -358,7 +360,7 @@ Document.current_revision_id
 KnowledgeRevision.title
 ```
 
-因此：
+Therefore:
 
 ```text
 Folder rename
@@ -368,20 +370,20 @@ Article title rename
 → Revision change
 ```
 
-不會產生兩份 title 不一致。
+There are no two inconsistent title copies.
 
-`knowledge_tree_nodes.name` 的有效規則：
+Valid rules for `knowledge_tree_nodes.name`:
 
 ```text
 FOLDER → required
 DOCUMENT → null
 ```
 
-SOURCE_MANAGED 文件的 canonical title 如何從 frontmatter、Markdown heading 或 filename 解析，仍屬 Phase 2 ingestion design。Phase 1 只保證 canonical title 一旦改變就建立新 Revision，filename/path rename 本身不建立 revision。
+Phase 2 ingestion design still owns canonical title resolution from frontmatter, Markdown heading, or filename for SOURCE_MANAGED documents. Phase 1 only guarantees a canonical title change creates a new Revision; filename/path rename itself creates none.
 
 ## 7. Tree Operations
 
-Phase 1 提供 caller-aware operations：
+Phase 1 provides caller-aware operations:
 
 ```text
 listTree(caller, sourceId)
@@ -396,21 +398,21 @@ restoreFolder(caller, ...)
 getAncestors(caller, ...)
 ```
 
-所有 Tree operation 必須驗證：
+Every Tree operation must verify:
 
-- caller 來自可信 `CallerContext`。
-- Source 存在並解析出 authoritative `workspace_id`。
-- caller 通過該 Workspace 的 foundation access policy。
-- parent 存在。
-- parent 是 FOLDER。
+- Caller comes from trusted `CallerContext`.
+- Source exists and resolves authoritative `workspace_id`.
+- Caller passes that Workspace's foundation access policy.
+- Parent exists.
+- Parent is FOLDER.
 - parent ACTIVE。
-- parent 與 node 位於同 Source。
-- node 不可移到自己下面。
-- node 不可移到 descendant。
-- Document 不可跨 Source move。
-- Tree operation 不可改變 Source 的 Workspace。
+- Parent and node are in the same Source.
+- Node cannot move beneath itself.
+- Node cannot move to a descendant.
+- Document cannot move across Sources.
+- Tree operations cannot change Source's Workspace.
 
-因此以下操作禁止：
+The following operations are therefore forbidden:
 
 ```text
 Source A / Document X
@@ -418,7 +420,7 @@ Source A / Document X
 Source B
 ```
 
-以及：
+And:
 
 ```text
 Source A @ Workspace X
@@ -426,11 +428,11 @@ Source A @ Workspace X
 Workspace Y
 ```
 
-若未來需要跨 Source 或跨 Workspace 搬移，必須設計明確 migration / transfer 流程，不能把一般 tree move 當 source transfer。
+Future cross-Source or cross-Workspace moves require explicit migration / transfer flows; ordinary tree moves cannot act as source transfers.
 
 ## 8. Tree Ordering
 
-Phase 1 維持簡單：
+Phase 1 keeps it simple:
 
 ```text
 position INT
@@ -442,13 +444,13 @@ Sibling query：
 ORDER BY position, id
 ```
 
-Phase 1 不引入 Fractional indexing、LexoRank 或 CRDT。Move / reorder transaction 內重算受影響 sibling positions。
+Phase 1 introduces no Fractional indexing, LexoRank, or CRDT. Recompute affected sibling positions within move/reorder transactions.
 
 ## 9. Tree Concurrency
 
-Tree mutation 採 Source-level serialization，且 canonical mutation UoW 繼承 Phase 0 的 **READ COMMITTED** isolation。
+Tree mutations use Source-level serialization, and canonical mutation UoW inherits Phase 0's **READ COMMITTED** isolation.
 
-在 READ COMMITTED UoW 內解析 Source 後先取得 Source lock，再以同 connection 的 WorkspaceAccessPolicy 完成 access check，最後驗證 hierarchy 並寫入：
+Within READ COMMITTED UoW, resolve Source and acquire its lock first, perform access checks through WorkspaceAccessPolicy on the same connection, then validate hierarchy and write:
 
 ```sql
 SELECT ...
@@ -457,20 +459,20 @@ WHERE id = ?
 FOR UPDATE;
 ```
 
-同一 Source 的 Tree mutation 因此 serial execution。READ COMMITTED 避免後續 ancestry/plain read 依賴較早建立的 REPEATABLE READ consistent snapshot；`FOR UPDATE` row lock 仍不可省略。
+Tree mutations of the same Source thus execute serially. READ COMMITTED prevents later ancestry/plain reads from depending on an earlier REPEATABLE READ consistent snapshot; `FOR UPDATE` row locks remain mandatory.
 
-這能避免：
+This prevents:
 
 ```text
 A: folder1 → folder2
 B: folder2 → folder1
 ```
 
-兩個 concurrent requests 分別驗證通過，最後形成 cycle。不同 Source 仍可平行操作。先 lock 後 membership check 沿用 Phase 0；代價是未授權 caller 也可能短暫持有 Source lock。檢查與失敗 rollback 必須立即完成，不在其中等待外部 I/O；Source lock 不等於 membership lock，也不宣稱解決未來 membership revocation concurrency。
+Two concurrent requests independently passing validation and eventually forming a cycle. Different Sources may still operate concurrently. Lock-before-membership-check follows Phase 0; an unauthorized caller may briefly hold a Source lock as a tradeoff. Complete checks and failure rollback immediately without waiting for external I/O; Source lock is not membership lock and does not claim to solve future membership-revocation concurrency.
 
 ## 10. Revision Model
 
-Revision 保存：
+Revision stores:
 
 ```text
 id
@@ -484,13 +486,13 @@ created_by
 created_at
 ```
 
-Revision 建立後 immutable。`created_by` 在 Phase 0–2 仍指向可信 User identity；Phase 1 不提前改成 `actor_kind + actor_id` polymorphic model。若未來 Agent 被允許寫入 canonical Knowledge，再由對應 phase 設計 Principal/Actor model。
+Revision is immutable after creation. Phase 0–2 `created_by` still points to trusted User identity; Phase 1 does not prematurely change it to polymorphic `actor_kind + actor_id`. If future Agents may write canonical Knowledge, the corresponding phase designs Principal/Actor.
 
-不存在 `updateRevision()`；只有 `createRevision()`。
+There is no `updateRevision()`, only `createRevision()`.
 
 ## 11. Revision Creation
 
-流程：
+Flow:
 
 ```text
 SET TRANSACTION ISOLATION LEVEL READ COMMITTED
@@ -514,11 +516,11 @@ update Document.current_revision_id
 COMMIT
 ```
 
-兩個 concurrent writers 不會建立相同 `revision_no`。DB 同時保留 `UNIQUE(document_id, revision_no)` 作為資料庫層保護。
+Two concurrent writers do not create the same `revision_no`. DB also retains `UNIQUE(document_id, revision_no)` as database-level protection.
 
 ## 12. Revision Content Boundary
 
-以下屬於版本內容：
+The following are versioned content:
 
 ```text
 title
@@ -526,7 +528,7 @@ markdown
 metadata
 ```
 
-以下不屬於版本內容：
+The following are not versioned content:
 
 ```text
 path
@@ -552,7 +554,7 @@ archive status
 
 ## 13. Content Hash
 
-Phase 1 固定 hash contract，避免 Phase 2 自行發明。
+Phase 1 fixes the hash contract so Phase 2 does not invent its own.
 
 ```text
 SHA-256(
@@ -574,24 +576,24 @@ title
 
 markdown
 → CRLF → LF
-→ 其他 whitespace 不修改
+→ leave other whitespace unchanged
 
 metadata
 → JSON object
 → recursively sort keys
 ```
 
-不把 Markdown formatter 或語意 normalization 放進 hash。因此純格式差異仍可能形成不同內容；Phase 1 不做 semantic deduplication。
+Do not include Markdown formatting or semantic normalization in hashing. Pure formatting differences may therefore yield different content; Phase 1 does no semantic deduplication.
 
-### 13.1 舊 Revision 與 hash 相容
+### 13.1 Legacy Revision and Hash Compatibility
 
-Phase 0 的 `contentFingerprint` 是未加前綴的 SHA-256；title 與 Markdown 原樣保存。Phase 1 不重寫歷史 revision 的內容、hash、ID 或 revision number，也不直接用舊 stored hash 與新 hash 判定變更。
+Phase 0 `contentFingerprint` is unprefixed SHA-256; title and Markdown are stored unchanged. Phase 1 rewrites no historical revision content, hash, ID, or revision number, and does not compare old stored hashes directly to new hashes to detect changes.
 
-更新時先在 Document lock 內驗證 expected current revision，candidate 使用嚴格 normalization（trim 後 title 必須非空）；stored revision 使用獨立 comparison normalization：trim title、CRLF→LF、排序 metadata，但不對舊 title 施加 non-empty 驗證。比較兩者 canonical payload。相同即回傳原 revision（包含其原 stored hash），不寫 revision，也不偷偷更新顯示內容。不同才建立採新 hash contract 的 N+1。舊 whitespace-only title 是 Phase 0 合法資料：read/history 保留原樣；stored comparison payload 的 title 可為空字串，因此能與合法 candidate 比較並形成新 revision，不得讓舊資料無法被修正。
+On updates, validate expected current revision within the Document lock first. Candidates use strict normalization (trimmed title must be nonempty); stored revisions use separate comparison normalization: trim title, CRLF→LF, sort metadata, but do not require old titles to be nonempty. Compare canonical payloads. Equal payloads return the original revision (including original stored hash), without writing a revision or silently changing displayed content. Different payloads create N+1 with the new hash contract. Legacy whitespace-only titles are valid Phase 0 data: reads/history preserve them unchanged; comparison payload titles may be empty, allowing comparison with valid candidates and new revision creation. Legacy data must remain correctable.
 
-SourceEntry.content_hash 不作跨版本 NOOP 或 identity 判斷依據；既有值保留，受控同步成功後才更新成 candidate 的新 fingerprint。Phase 2 比較內容沿用此 core comparator，不以不同 hash 演算法造成假變更。
+SourceEntry.content_hash is not a cross-version NOOP or identity criterion; retain existing values until successful controlled sync updates them to the candidate's new fingerprint. Phase 2 reuses this core content comparator, preventing different hash algorithms from causing false changes.
 
-驗收必須用 Phase 0 encoder 建立 fixture：一般相同內容、title 外側空白、CRLF、metadata key order 均能正確 NOOP；真正內容修改產生 N+1；舊 whitespace-only title 可讀且可修正；歷史 rows byte-stable。
+Acceptance fixtures must use the Phase 0 encoder: ordinary identical content, outer title whitespace, CRLF, and metadata key order correctly produce NOOP; actual content changes create N+1; old whitespace-only titles remain readable/correctable; historical rows are byte-stable.
 
 ## 14. Document Creation
 
@@ -612,13 +614,13 @@ set Document.current_revision_id
 COMMIT
 ```
 
-必須 atomic。不存在 committed `Document.current_revision_id = null` 的完成狀態。
+Must be atomic. No completed committed state has `Document.current_revision_id = null`.
 
 ## 15. Mutation Authority
 
-這是 Phase 1 最重要的 boundary。Public application services 都顯式接收 `CallerContext`；caller 不可由 command payload、form、query、org_code、workspace selector 或 `force` flag 指定。
+This is Phase 1's most important boundary. Public application services explicitly receive `CallerContext`; callers cannot be specified by command payload, form, query, org_code, Workspace selector, or `force` flag.
 
-所有 Hub/Source mutation 都先完成：
+Every Hub/Source mutation first completes:
 
 ```text
 resource/source
@@ -633,7 +635,7 @@ resource/source
 HubKnowledgeCommandService
 ```
 
-可執行：
+May execute:
 
 ```text
 createDocument(caller, input)
@@ -644,7 +646,7 @@ archiveDocument(caller, documentId)
 restoreDocument(caller, documentId)
 ```
 
-但必須同時滿足 Workspace access，且：
+But must also satisfy Workspace access, and:
 
 ```text
 source.ownership == HUB_MANAGED
@@ -652,13 +654,13 @@ source.ownership == HUB_MANAGED
 
 ### 15.2 Source Projection Commands
 
-提供給未來 Phase 2：
+Provided for future Phase 2:
 
 ```text
 SourceKnowledgeProjectionService
 ```
 
-可執行：
+May execute:
 
 ```text
 projectDocument(caller, input)
@@ -669,48 +671,48 @@ archiveProjectedDocument(caller, documentId)
 restoreProjectedDocument(caller, documentId)
 ```
 
-但必須同時滿足 Source Workspace access，且：
+But must also satisfy Source Workspace access, and:
 
 ```text
 source.ownership == SOURCE_MANAGED
 ```
 
-此 interface 為 internal application boundary，不由 Web API 直接 expose。Phase 2 orchestration 傳入的是已由可信 transport/application boundary 建立的 CallerContext，不是 source folder 自帶的 actor identity。
+This interface is an internal application boundary, not directly exposed through Web APIs. Phase 2 orchestration passes CallerContext established by a trusted transport/application boundary, not actor identity supplied by a source folder.
 
 ### 15.3 Transaction-scoped projection
 
-Sources orchestration 擁有整次 Apply 的 SourceUnitOfWork。於同一 connection 取得 Source lock、解析 Workspace 並通過 transaction-scoped WorkspaceAccessPolicy 後，建立綁定該 transaction 的 projection commands；commands 不另開 UoW、不 commit、不接受 Web 傳入 repository 或 authority token。每次 command 的 resource 必須屬於已授權 Source，並重新驗證 ownership/lifecycle。
+Sources orchestration owns SourceUnitOfWork for the entire Apply. After acquiring Source lock, resolving Workspace, and passing transaction-scoped WorkspaceAccessPolicy on the same connection, it creates projection commands bound to that transaction. Commands open no separate UoW, do not commit, and accept no Web-provided repository or authority token. Every command resource must belong to the authorized Source and revalidate ownership/lifecycle.
 
-Document／Folder projection 與 SourceEntry mapping 在同交易建立，sourceEntryId 可以預先配置但不是已存在 mapping 的要求。回傳前 mapping 必須完整，不能留下半成品 committed entry。同一 Apply 的所有 projection、mapping、assets、sync_version 與 APPLIED run 一起 commit／rollback；FAILED run 在 rollback 後另存。Phase 1 以多筆 transaction fixture 驗證，完整 sync 產品流程仍屬 Phase 2。
+Create Document/Folder projections and SourceEntry mappings in one transaction; sourceEntryId may be preallocated without requiring an existing mapping. Mappings must be complete before return, leaving no partially committed entry. All projections, mappings, assets, sync_version, and APPLIED run in one Apply commit/roll back together; store FAILED run separately after rollback. Phase 1 verifies this with multi-record transaction fixtures; full sync product flow remains Phase 2.
 
-Source projection 同時提供 renameProjectedFolder、archiveProjectedFolder、restoreProjectedFolder；Folder archive 採無 ACTIVE children 規則，Phase 2 可在同交易由葉至根 archive。restore 由祖先至子節點恢復，驗證完整 ACTIVE ancestry。Folder mapping 與 TreeNode lifecycle/provenance 同交易更新。
+Source projection also provides renameProjectedFolder, archiveProjectedFolder, and restoreProjectedFolder. Folder archive requires no ACTIVE children; Phase 2 may archive leaf-to-root within one transaction. Restore proceeds ancestor-to-child, validating full ACTIVE ancestry. Folder mapping and TreeNode lifecycle/provenance update in one transaction.
 
-## 16. 禁止 Force Flag
+## 16. Force Flags Forbidden
 
-不設計：
+Do not design:
 
 ```ts
 updateDocument({ force: true })
 ```
 
-或：
+Or:
 
 ```ts
 bypassOwnership: true
 ```
 
-Mutation authority 由不同 application interface 表達，避免未來 Web / Agent 誤用繞過 ownership rule。也不得接受 `workspaceId`/`org_code` 作為「已授權」證明。
+Different application interfaces express mutation authority, preventing future Web / Agent misuse that bypasses ownership rules. `workspaceId`/`org_code` must not be accepted as proof of authorization either.
 
 ## 17. Lifecycle
 
-Lifecycle 僅有：
+Lifecycle has only:
 
 ```text
 ACTIVE
 ARCHIVED
 ```
 
-沒有：
+There is no:
 
 ```text
 DELETED
@@ -718,9 +720,9 @@ MISSING
 TRASHED
 ```
 
-Phase 1 延續 Phase 0 的 current lifecycle provenance：Source、SourceEntry、TreeNode、Document 的 lifecycle transition 同交易維護 `updated_by`、`archived_by`、`archived_at`。這些欄位不提供完整多次 archive/restore event history；完整 append-only audit 留 Phase 3。
+Phase 1 continues Phase 0's current lifecycle provenance: Source, SourceEntry, TreeNode, and Document transitions maintain `updated_by`, `archived_by`, `archived_at` in one transaction. These fields do not provide complete repeated archive/restore event history; full append-only audit belongs to Phase 3.
 
-Workspace lifecycle 不在 Phase 1 實作；Phase 3 明確負責 Workspace provision/create、rename、archive/restore 與 administration semantics。Workspace MVP 不 hard delete。
+Phase 1 does not implement Workspace lifecycle; Phase 3 explicitly owns Workspace provision/create, rename, archive/restore, and administration semantics. Workspace MVP has no hard delete.
 
 ## 18. Archive Document
 
@@ -747,7 +749,7 @@ linked SourceEntry.updated_by / archived_by / archived_at = caller / now
 COMMIT
 ```
 
-Revision 不動。
+Revision is unchanged.
 
 ## 19. Restore Document
 
@@ -780,11 +782,11 @@ linked SourceEntry.archived_at = null
 COMMIT
 ```
 
-Document ID 不變，current_revision_id 不變。
+Document ID and current_revision_id remain unchanged.
 
 ## 20. Folder Archive
 
-Phase 1 不做模糊 cascade semantics。
+Phase 1 has no ambiguous cascade semantics.
 
 Hub command：
 
@@ -792,19 +794,19 @@ Hub command：
 archiveFolder(caller, treeNodeId)
 ```
 
-先由 TreeNode → Source → Workspace 做 access check，只允許 archive 沒有 ACTIVE children 的 folder。成功時該 Folder TreeNode 同交易更新 status 與 lifecycle provenance。
+First check access via TreeNode → Source → Workspace; archive only folders without ACTIVE children. On success, update Folder TreeNode status and lifecycle provenance in the same transaction.
 
-如果仍有 children：
+If children remain:
 
 ```text
 FOLDER_NOT_EMPTY
 ```
 
-Phase 2 Folder Sync 若整個 subtree 消失，會明確對 snapshot 中每個 entry 執行 batch lifecycle transition。Phase 5 若需要「刪除整個 folder」UX，再另外設計 explicit cascade preview。
+If an entire subtree disappears, Phase 2 Folder Sync explicitly performs batch lifecycle transitions for each snapshot entry. If Phase 5 needs delete-entire-folder UX, separately design an explicit cascade preview.
 
 ## 21. Source Lifecycle
 
-Source lifecycle operation 先由 `Source.workspace_id` 執行 Workspace access check。
+Source lifecycle operations first check Workspace access through `Source.workspace_id`.
 
 Archive Source：
 
@@ -815,13 +817,13 @@ KnowledgeSource.archived_by = caller.identity.id
 KnowledgeSource.archived_at = now
 ```
 
-不 cascade 修改所有 descendants。
+Do not cascade changes to all descendants.
 
 Read path：
 
 ```text
 Source ARCHIVED
-→ 整棵 Tree 預設不可見
+→ the entire Tree is hidden by default
 ```
 
 Restore Source：
@@ -833,13 +835,13 @@ KnowledgeSource.archived_by = null
 KnowledgeSource.archived_at = null
 ```
 
-原本 child lifecycle 保留原值。因此 Source archive 是 container visibility gate，不是大量 child lifecycle update，也不是 Workspace lifecycle。
+Child lifecycle retains its original value. Source archive is thus a container visibility gate, not a bulk child lifecycle update or Workspace lifecycle.
 
-Source lifecycle 由 Sources application service 提供 `archiveSource(caller, sourceId)`／`restoreSource(caller, sourceId)`，適用兩種 ownership；這是 container 操作，不允許藉此改寫 SOURCE_MANAGED 內容。同 transaction 的 Workspace policy 與 Source lock 為必要條件。此階段沒有 Source lifecycle Web controls。
+Sources application service provides `archiveSource(caller, sourceId)`/`restoreSource(caller, sourceId)` for both ownership modes; these container operations cannot rewrite SOURCE_MANAGED content. Workspace policy and Source lock in the same transaction are required. This phase has no Source lifecycle Web controls.
 
 ## 22. Read Application Services
 
-Phase 1 提供顯式 caller-aware read contract。
+Phase 1 provides explicit caller-aware read contracts.
 
 Workspace query：
 
@@ -847,7 +849,7 @@ Workspace query：
 listWorkspaces(caller)
 ```
 
-只回 caller 可見 Workspace。
+Return only caller-visible Workspaces.
 
 Knowledge query：
 
@@ -882,25 +884,25 @@ listRevisions(caller, documentId, includeArchived = false)
 getAncestors(caller, nodeId, includeArchived = false)
 ```
 
-`listSources` 的 workspaceId 是 query scope；server 必須驗證 caller access。`getSource / listTree / getDocument / revision reads` 不把 client 額外提供的 workspaceId 當 proof，而是從 resource relationship 解析 Workspace 再做 policy check。
+`listSources` workspaceId is query scope; server must validate caller access. `getSource / listTree / getDocument / revision reads` do not treat additional client-provided workspaceId as proof; they resolve Workspace from resource relationships before policy checks.
 
-Phase 1 尚未實作 production roles/capabilities，但 Workspace membership foundation 已是 application contract 的必要檢查；Phase 3 在相同 resource/policy boundary 上補 production governance。
+Phase 1 has no production roles/capabilities yet, but Workspace membership foundation is already a required application-contract check; Phase 3 adds production governance on the same resource/policy boundary.
 
-這些 application services不依賴 React、HTTP、MCP 或 scanner，也不從 ambient/global request state自行取得 caller。Phase 4 HTTP Read API 與 Phase 7 MCP 可直接 reuse。
+These application services depend on neither React, HTTP, MCP, nor scanners, and do not obtain callers from ambient/global request state. Phase 4 HTTP Read API and Phase 7 MCP may reuse them directly.
 
-Source listing 統一由 KnowledgeQueryService 提供 required workspaceId + includeArchived contract。Task 8 將 SourceApplicationService.listSources 的所有 consumers（含 Knowledge page）遷入後移除舊 application 方法；repository 新增 workspace-scoped archived-aware 查詢，保留的 active-only helper 只能委派到同一實作。不得留下兩條語意不同的公開 listing 路徑。
+KnowledgeQueryService uniformly provides Source listing with required workspaceId + includeArchived. Task 8 migrates all SourceApplicationService.listSources consumers (including Knowledge page) and removes the old application method; repository adds a workspace-scoped archive-aware query, with any retained active-only helper delegating to that same implementation. No two public listing paths with different semantics may remain.
 
 ### 22.1 Missing／archived query contract
 
-`getSource`、`getDocument`、`getCurrentRevision`、`getRevision` 與 `getAncestors` 採非 nullable 回傳：不存在或被預設 archived filtering 隱藏時，分別拋 SOURCE_NOT_FOUND、DOCUMENT_NOT_FOUND、REVISION_NOT_FOUND 或 TREE_NODE_NOT_FOUND。revision lookup 先驗證 Document 存在且可見，Document 不可見回 DOCUMENT_NOT_FOUND；Document 可見但指定 revision 不存在才回 REVISION_NOT_FOUND。listRevisions 對不可見 Document 同樣拋 DOCUMENT_NOT_FOUND，其他合法空集合回 []。已存在但無 Workspace membership 的資源仍由 WorkspaceAccessDeniedError 拒絕。
+`getSource`, `getDocument`, `getCurrentRevision`, `getRevision`, and `getAncestors` return non-nullable values: absent resources or resources hidden by default archive filtering throw SOURCE_NOT_FOUND, DOCUMENT_NOT_FOUND, REVISION_NOT_FOUND, or TREE_NODE_NOT_FOUND respectively. Revision lookup first checks Document existence/visibility: invisible Document returns DOCUMENT_NOT_FOUND; only visible Document with absent specified revision returns REVISION_NOT_FOUND. listRevisions also throws DOCUMENT_NOT_FOUND for invisible Documents; other valid empty sets return []. Existing resources without Workspace membership remain denied with WorkspaceAccessDeniedError.
 
-Browser adapter 明確將 not-found codes 轉成 Next `notFound()`，不再依靠 `if (!view)`；access denial 沿用不洩漏內容的既有處理，不能把所有例外都吞成 404。Core 不 import Next。此變更須同步更新 Phase 0 null assertions、view shape 及所有 query consumers。
+Browser adapter explicitly maps not-found codes to Next `notFound()`, no longer relying on `if (!view)`; access denial retains existing non-leaking handling, without swallowing every exception as 404. Core does not import Next. Update Phase 0 null assertions, view shapes, and all query consumers together.
 
 ## 23. Tree Read Model
 
-UI 不直接拿 DB rows。
+UI does not receive DB rows directly.
 
-Application 組成：
+Application assembles:
 
 ```ts
 type KnowledgeTreeItem =
@@ -924,11 +926,11 @@ type KnowledgeTreeItem =
     };
 ```
 
-Document：`label = current revision title`；Folder：`label = TreeNode.name`。所有 ID 在 application surface 以標準 UUID string 表達；storage layer 使用 MariaDB native `UUID`。
+Document: `label = current revision title`; Folder: `label = TreeNode.name`. Application surfaces represent all IDs as standard UUID strings; storage uses MariaDB native `UUID`.
 
 ## 24. Phase 1 Minimal UI
 
-Phase 1 提供 read-only Knowledge Browser：
+Phase 1 provides a read-only Knowledge Browser:
 
 ```text
 ┌───────────────────────────────────────────────────────┐
@@ -944,16 +946,16 @@ Phase 1 提供 read-only Knowledge Browser：
 └─────────────────┴─────────────────────────────────────┘
 ```
 
-支援：
+Supports:
 
-- Workspace selector，只顯示 caller-authorized Workspace。
-- Source selector，只顯示目前 Workspace 下的可見 Sources。
+- Workspace selector showing only caller-authorized Workspaces.
+- Source selector showing only visible Sources in the current Workspace.
 - Folder tree。
 - Document viewer。
 - Revision history。
 - Archived toggle。
 
-不支援：
+Does not support:
 
 - Workspace create/rename/archive/member management。
 - Edit。
@@ -962,17 +964,17 @@ Phase 1 提供 read-only Knowledge Browser：
 - Delete。
 - Sync。
 
-這讓 Phase 1 可以實際驗證 Knowledge Core 與 Workspace-scoped read path，但不提前做 Phase 3/5。
+This lets Phase 1 verify Knowledge Core and Workspace-scoped reads without prematurely implementing Phase 3/5.
 
-### 24.1 Phase 0 smoke flow 銜接
+### 24.1 Phase 0 Smoke Flow Transition
 
-Phase 1 正式 Browser 移除 Phase 0 create form 與其 Web mutation action，application 建立文件能力保留給測試與未來 authoring。Phase 0 原 E2E 不原封不動保留：改以 application fixture 建立文件，驗證 stable URL、reload 與 Tree navigation；caller spoofing 由 application／可信 identity adapter 測試保留，並驗證 Browser 無 mutation controls／入口。
+The Phase 1 Browser removes Phase 0's create form and Web mutation action; application document creation remains for tests and future authoring. Update original Phase 0 E2E rather than retaining it unchanged: create documents through application fixtures and verify stable URLs, reload, and Tree navigation; retain caller-spoofing coverage through application/trusted-identity adapter tests and verify Browser has no mutation controls/entry points.
 
-Task 1 執行原 Phase 0 baseline；Phase 1 最終驗收保留其 domain/access/transaction guarantees，使用更新後的唯讀 E2E。不可同時要求原建立表單 E2E 通過與 Browser 沒有建立表單。
+Task 1 runs the original Phase 0 baseline; final Phase 1 acceptance retains its domain/access/transaction guarantees through updated read-only E2E. Do not simultaneously require original create-form E2E to pass and Browser to have no create form.
 
 ## 25. SourceEntry Core
 
-Phase 1 完成 mapping primitives：
+Phase 1 completes mapping primitives:
 
 ```text
 createSourceEntryMapping()
@@ -983,7 +985,7 @@ archiveSourceEntry()
 restoreSourceEntry()
 ```
 
-但不做：
+But does not implement:
 
 ```text
 matchUnknownEntry()
@@ -992,19 +994,19 @@ detectMove()
 resolveCanonicalTitle()
 ```
 
-這些屬於 Phase 2。
+These belong to Phase 2.
 
 ## 26. `external_id` Rule
 
-若來源提供 stable external ID：
+If the source provides stable external IDs:
 
 ```text
 UNIQUE(source_id, external_id)
 ```
 
-`external_id = NULL` 可以有多筆。
+Multiple rows may have `external_id = NULL`.
 
-`source_path` 仍只是 locator：
+`source_path` remains only a locator:
 
 ```text
 external_id → identity hint
@@ -1013,11 +1015,11 @@ content_hash → content comparison
 Document.id → Hub identity
 ```
 
-任何一個都不能互相冒充。
+None may masquerade as another.
 
 ## 27. Error Model
 
-Phase 1 統一 domain / application errors。至少：
+Phase 1 unifies domain / application errors, including at least:
 
 ```text
 WORKSPACE_NOT_FOUND
@@ -1046,13 +1048,13 @@ INVALID_TITLE
 INVALID_METADATA
 ```
 
-UI / HTTP adapter 再自行 mapping presentation / status code。Core 不回 transport-specific HTTP status、toast message 或 SQL driver error。
+UI / HTTP adapters map presentation/status codes themselves. Core returns no transport-specific HTTP status, toast message, or SQL driver error.
 
-錯誤遷移由 plan Task 1 統一負責：完整路徑為 `src/modules/knowledge/domain/errors.ts`、`src/modules/workspaces/domain/errors.ts`、`src/shared/domain/errors.ts`。保留 DomainError、WorkspaceAccessDeniedError 的責任邊界；新 semantic codes 不代表把 source sync VERSION_CONFLICT 改成 revision conflict。
+Plan Task 1 centrally owns error migration: full paths are `src/modules/knowledge/domain/errors.ts`, `src/modules/workspaces/domain/errors.ts`, `src/shared/domain/errors.ts`. Preserve DomainError/WorkspaceAccessDeniedError responsibility boundaries; new semantic codes do not turn source-sync VERSION_CONFLICT into revision conflict.
 
 ## 28. Revision Concurrency
 
-Phase 5 未來編輯時需要避免 lost update，因此 Phase 1 command contract 預留：
+Future Phase 5 editing must avoid lost updates, so Phase 1 command contracts reserve:
 
 ```text
 createRevision(caller, {
@@ -1064,11 +1066,11 @@ createRevision(caller, {
 })
 ```
 
-如果 `expectedCurrentRevisionId != actualCurrentRevisionId`，回 `REVISION_CONFLICT`。這是 Core correctness，不是 Phase 5 UI feature；Phase 2 sync 也能 reuse。
+If `expectedCurrentRevisionId != actualCurrentRevisionId`, return `REVISION_CONFLICT`. This is Core correctness rather than a Phase 5 UI feature; Phase 2 sync may reuse it.
 
 ## 29. Transaction Boundaries
 
-以下操作必須在 **READ COMMITTED** 下 atomic；所有參與的 repository 與 WorkspaceAccessPolicy 使用同一 MariaDB connection；BEGIN 後解析 authoritative scope 並檢查 membership，任何 transaction 外的 preflight 都不能取代此檢查。Workspace access 必須在 mutation execution 前依 authoritative resource scope 驗證；UI state 不取代 policy。
+The following operations must be atomic under **READ COMMITTED**; all participating repositories and WorkspaceAccessPolicy use one MariaDB connection. Resolve authoritative scope and check membership after BEGIN; no preflight outside the transaction replaces this check. Validate Workspace access against authoritative resource scope before mutation execution; UI state does not replace policy.
 
 ### 29.1 Create Document
 
@@ -1107,49 +1109,49 @@ node
 affected sibling positions
 ```
 
-任何 canonical mutation 失敗：`ROLLBACK ALL`。READ COMMITTED 不取代 Source/Document locking read；兩者共同構成 Phase 1 concurrency contract。
+Any failed canonical mutation: `ROLLBACK ALL`. READ COMMITTED does not replace Source/Document locking reads; together they form Phase 1's concurrency contract.
 
 ## 30. Default Archived Filtering
 
-預設 `includeArchived = false`，適用 `listSources`、`listTree`、`getDocument`。Revision reads 與 getAncestors 同樣預設排除 archived scope；Historical explicit lookup 可以 `includeArchived = true`，但仍不得繞過 Workspace access。
+Default `includeArchived = false` applies to `listSources`, `listTree`, `getDocument`. Revision reads and getAncestors likewise exclude archived scope by default; explicit historical lookup may use `includeArchived = true` but cannot bypass Workspace access.
 
-未來 Search、MCP 與 Agent 都必須沿用相同 default，並透過 CallerContext + Workspace policy 進入 application query boundary。
+Future Search, MCP, and Agents must reuse the same defaults and enter application query boundaries through CallerContext + Workspace policy.
 
 ## 31. Core Invariants
 
-Phase 1 完成後必須保證：
+After Phase 1, guarantee:
 
-1. 每個 Source 永遠屬於一個 Workspace。
-2. `User.org_code` 不作 Knowledge authorization shortcut。
-3. Cross-org WorkspaceMembership 合法；same-org non-member 不自動 access。
-4. Resource ID / UI Workspace selection 不能繞過 Workspace policy。
-5. Document 永遠屬於一個 Source，workspace scope 由 Source 推導。
-6. Document ID 為 UUIDv7 stable identity，不受 hierarchy 變更影響。
+1. Each Source always belongs to one Workspace.
+2. `User.org_code` is no Knowledge authorization shortcut.
+3. Cross-org WorkspaceMembership is valid; same-org non-members have no automatic access.
+4. Resource IDs / UI Workspace selection cannot bypass Workspace policy.
+5. Document always belongs to one Source; Workspace scope derives from Source.
+6. Document ID is stable UUIDv7 identity, unaffected by hierarchy changes.
 7. Revision immutable。
-8. current revision 一定屬於該 Document。
-9. Revision number 單調增加且唯一。
-10. 相同內容不建立 duplicate revision。
-11. 一個 Document 只有一個 Knowledge TreeNode，DB uniqueness 已從 Phase 0 保護。
-12. Folder 不建立 fake Document。
-13. Document node title 來自 current Revision。
-14. Tree parent 必須同 Source。
-15. Tree 不可形成 cycle。
-16. Document 不可跨 Source move。
-17. 普通 Tree/Sync operation 不可改變 Source Workspace。
-18. SOURCE_MANAGED 不接受 Hub mutation。
-19. Source mutation 不可由 public `force` bypass。
-20. Archive 不 hard delete，且目前 archive actor/time 可追溯。
-21. Restore 沿用原 Document ID 並清除目前 archive provenance。
-22. SourceEntry mapping 不因 path rename 自動換 identity。
+8. Current revision always belongs to that Document.
+9. Revision numbers increase monotonically and are unique.
+10. Identical content creates no duplicate revision.
+11. One Document has one Knowledge TreeNode, protected by DB uniqueness since Phase 0.
+12. Folder creates no fake Document.
+13. Document node title comes from current Revision.
+14. Tree parent must be in the same Source.
+15. Tree cannot form cycles.
+16. Document cannot move across Sources.
+17. Ordinary Tree/Sync operations cannot change Source Workspace.
+18. SOURCE_MANAGED accepts no Hub mutations.
+19. Public `force` cannot bypass Source mutation rules.
+20. Archive does not hard delete; current archive actor/time is traceable.
+21. Restore retains original Document ID and clears current archive provenance.
+22. SourceEntry mapping does not automatically change identity on path rename.
 23. Tree / Document / SourceEntry lifecycle transactionally consistent。
-24. Canonical mutation 使用 READ COMMITTED + explicit row locks，不散落 SQL。
-25. Public read/write services 顯式接收 CallerContext。
-26. Web / future MCP 共用相同 application services + Workspace policy。
-27. Phase 1 不提前建立 Workspace administration、production role model 或 Agent actor_kind / Principal model。
+24. Canonical mutations use READ COMMITTED + explicit row locks, without scattered SQL.
+25. Public read/write services explicitly receive CallerContext.
+26. Web / future MCP share application services + Workspace policy.
+27. Phase 1 does not prematurely build Workspace administration, production role models, or Agent actor_kind / Principal models.
 
 ## 32. Acceptance Tests
 
-Phase 1 至少覆蓋以下核心 scenario。
+Phase 1 covers at least the following core scenarios.
 
 ### 32.1 Workspace / Caller
 
@@ -1230,18 +1232,18 @@ Phase 1 至少覆蓋以下核心 scenario。
 
 ## 33. Phase 2 Handoff Contract
 
-Phase 1 完成後，Phase 2 不再決定：
+After Phase 1, Phase 2 no longer decides:
 
-- Workspace access foundation 如何進入 application boundary。
-- Document 如何產生 revision。
-- Archive/Restore 如何執行與保存 current provenance。
-- Tree move 如何執行。
-- Source content ownership 如何限制。
-- CallerContext 如何進入 application boundary。
-- Document identity 如何保存。
-- Duplicate revision 如何避免。
+- How Workspace access foundation enters application boundaries.
+- How Documents create revisions.
+- How Archive/Restore executes and retains current provenance.
+- How Tree moves execute.
+- How Source content ownership restricts operations.
+- How CallerContext enters application boundaries.
+- How Document identity is preserved.
+- How duplicate revisions are prevented.
 
-Phase 2 只負責：
+Phase 2 owns only:
 
 ```text
 Select authorized Workspace for new Source
@@ -1265,13 +1267,13 @@ Confirm
 Create Source(workspace_id) + Source Projection Commands
 ```
 
-更新既有 Source 時只指定 `source_id`；Workspace 從 Source relationship 決定，sync 不提供 target Workspace override。
+Updates to existing Sources specify only `source_id`; Source relationships determine Workspace, and sync offers no target Workspace override.
 
-也就是：Phase 2 決定「這次來源發生什麼改變、來源內容如何解析成 canonical candidate」，Phase 1 決定「這些改變如何在授權 Workspace scope 下安全地成為 Knowledge」。
+Phase 2 decides what changed in the source and how source content parses into canonical candidates; Phase 1 decides how those changes safely become Knowledge within authorized Workspace scope.
 
 ## 34. Definition of Done
 
-Phase 1 完成的判斷不是「Tree UI 看得到」，而是以下流程全部成立：
+Phase 1 completion requires all the following flows to work, beyond merely seeing the Tree UI:
 
 ```text
 CallerContext
@@ -1299,57 +1301,57 @@ Restore
 same Document ID + same history
 ```
 
-並且 SOURCE_MANAGED 已存在正式、安全的 internal mutation boundary，足以讓 Phase 2 接入。Phase 1 不聲稱公司 production governance 已完成；正式 multi-user governance 需要 Phase 3。
+SOURCE_MANAGED must also have a formal, safe internal mutation boundary sufficient for Phase 2 integration. Phase 1 does not claim completed company production governance; production multi-user governance requires Phase 3.
 
 ## 35. ADR Summary
 
 ### ADR-P1-01 — Source as Tree Root
 
-KnowledgeSource 本身作為 Tree root，不建立 synthetic folder；Workspace 是 Source container，不是 Tree node。
+KnowledgeSource itself is Tree root, without a synthetic folder; Workspace is a Source container, not a Tree node.
 
 ### ADR-P1-02 — One Document, One TreeNode
 
-每個 Document 在 Knowledge Tree 中只有一個 Document TreeNode；此 uniqueness 已提升為 Phase 0 foundation，Phase 1 保留並驗證。
+Each Document has one Document TreeNode in Knowledge Tree; this uniqueness is Phase 0 foundation, retained and verified in Phase 1.
 
 ### ADR-P1-03 — Revision Title Is Canonical
 
-Document node label 來自 current Revision title，不複製 title 到 Tree；SOURCE_MANAGED title resolution 留給 Phase 2。
+Document node label comes from current Revision title, without copying title to Tree; SOURCE_MANAGED title resolution belongs to Phase 2.
 
 ### ADR-P1-04 — Stable Folder Mapping
 
-增加 `SourceEntry.tree_node_id`，建立 Folder entry 的穩定 mapping。
+Add `SourceEntry.tree_node_id` for stable Folder-entry mapping.
 
 ### ADR-P1-05 — Mutation Authority Separation
 
-Hub mutation 與 Source projection 使用不同 application interfaces，不提供 bypass flag；兩者都必須先通過 Workspace policy。
+Hub mutations and Source projections use different application interfaces without bypass flags; both first pass Workspace policy.
 
 ### ADR-P1-06 — Source-level Tree Lock + READ COMMITTED
 
-Tree mutation 使用 Phase 0 READ COMMITTED UoW + Source-level database lock 防止 concurrent hierarchy corruption。
+Tree mutations use Phase 0 READ COMMITTED UoW + Source-level DB locks to prevent concurrent hierarchy corruption.
 
 ### ADR-P1-07 — Revision Concurrency
 
-Revision mutation使用 Document-level lock 加 optimistic expected revision。
+Revision mutations use Document-level locks plus optimistic expected revision.
 
 ### ADR-P1-08 — Revision Hash Boundary
 
-Revision hash 只涵蓋 title、Markdown、metadata。
+Revision hash covers only title, Markdown, metadata.
 
 ### ADR-P1-09 — Explicit Folder Lifecycle
 
-Folder archive 不隱式 cascade；bulk lifecycle 由 caller 明確描述；current archive provenance 同 transition 保存。
+Folder archive has no implicit cascade; caller explicitly describes bulk lifecycle; current archive provenance is stored with transitions.
 
 ### ADR-P1-10 — Source Archive as Visibility Gate
 
-Source archive 是 visibility gate，不 cascade 修改全部 Knowledge records。
+Source archive is a visibility gate, without cascading changes to all Knowledge records.
 
 ### ADR-P1-11 — CallerContext + Workspace Scope Are Explicit
 
-Public Knowledge read/write services 以 CallerContext 作顯式第一參數，resource 透過 Source → Workspace 解析 access scope；Phase 3 在此 policy boundary 補 production governance。
+Public Knowledge read/write services take CallerContext as explicit first argument; resources resolve access scope through Source → Workspace; Phase 3 adds production governance at this policy boundary.
 
 ### ADR-P1-12 — No Premature Agent Actor Model
 
-Phase 0–2 provenance 仍引用 user identity；Phase 1 不引入 `actor_kind`。Agent write 若成為需求，由 Agent/Authoring 對應 phase 設計 Principal/Actor。
+Phase 0–2 provenance still references user identity; Phase 1 adds no `actor_kind`. If Agent writes become required, the corresponding Agent/Authoring phase designs Principal/Actor.
 
 ## 36. Final Architecture
 
@@ -1399,4 +1401,4 @@ Workspace
               └──────────► SourceKnowledgeProjectionService
 ```
 
-這是 Phase 1 的正式 architecture boundary。Phase 2 的 scanner、Title Resolution、snapshot、matching、diff、preview 與 apply orchestration 必須建立在這個 boundary 之上，而不是直接修改 canonical Knowledge tables。Phase 3 再補 Workspace provisioning/lifecycle、roles/capabilities、membership administration 與 enterprise mapping；不需要把 `org_code` 重新拉回 Knowledge access boundary。
+This is Phase 1's formal architecture boundary. Phase 2 scanners, Title Resolution, snapshots, matching, diff, preview, and apply orchestration must build on it, without directly modifying canonical Knowledge tables. Phase 3 adds Workspace provisioning/lifecycle, roles/capabilities, membership administration, and enterprise mapping; `org_code` need not reenter the Knowledge access boundary.

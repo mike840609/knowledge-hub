@@ -1,81 +1,83 @@
 # Navigation Latency — Measurement
 
-| 項目 | 內容 |
+**English** | [繁體中文](2026-09-21-navigation-latency-measurement.zh-TW.md)
+
+| Item | Details |
 | --- | --- |
-| 日期 | 2026-09-21 |
-| 類型 | 量測紀錄（證據，不是決定） |
-| 受測版本 | `main` @ `930290b` |
-| 起因 | 契約 Open item 6 稱導航是「體感差距最大、且唯一的架構題」，需要先量測再決定 prefetch/caching 策略 |
-| 結論 | **那個描述是錯的。瓶頸不是伺服器，也不是 prefetch，是我們自己的骨架屏。** |
+| Date | 2026-09-21 |
+| Type | Measurement record (evidence, not a decision) |
+| Version tested | `main` @ `930290b` |
+| Motivation | Contract Open item 6 described navigation as “the largest perceived gap and the only architecture issue,” requiring measurement before choosing a prefetch/caching strategy |
+| Conclusion | **That description was wrong. The bottleneck is our own skeleton screen, rather than the server or prefetch.** |
 
-## 方法
+## Method
 
-Production build、真實資料庫、單一 Chromium。量測對象是知識樹中文件之間的切換（`/w/:ws/knowledge/:src/:doc`）。
+Production build, real database, one Chromium instance. The measurement concerns switching between documents in the knowledge tree (`/w/:ws/knowledge/:src/:doc`).
 
-三個數字分別來自不同工具，避免互相污染：
+The three numbers come from separate tools to avoid contaminating one another:
 
-- **內容進入 DOM 的時間**：頁面內的 `MutationObserver`，在點擊前歸零。不用 Playwright 的 locator 斷言——那會把輪詢間隔算進去，初期量到的 412ms 有一部分是這個假象。
-- **網路時間**：`PerformanceResourceTiming` 的 `responseEnd`，涵蓋 RSC 回應與客戶端的兩個 `/api/workspaces` 呼叫。
-- **JS 執行時間**：`PerformanceObserver` 的 `longtask`。
+- **Time until content enters the DOM**: an in-page `MutationObserver`, reset before clicking. Playwright locator assertions are not used—they include the polling interval; part of the initially measured 412ms was this artifact.
+- **Network time**: `PerformanceResourceTiming`'s `responseEnd`, covering the RSC response and the client's two `/api/workspaces` calls.
+- **JS execution time**: `PerformanceObserver`'s `longtask`.
 
-## 結果
+## Results
 
-每個數字 n=6，同一份方法。
-
-| | p50 | max |
-| --- | --- | --- |
-| 內容進入 DOM | **383ms** | 403ms |
-| 最後一個網路位元組 | ~130ms | 171ms |
-| 長工作總時長 | **0ms** | 0ms |
-
-伺服器單獨量（同一路由、繞過瀏覽器）：**RSC 48ms、完整 HTML 65ms**（各 5 次的中位數）。
-
-也就是說：**所有資料在 ~130ms 就到齊，主執行緒完全沒有在工作，內容卻要到 383ms 才出現。中間 250ms 是純等待。**
-
-那個等待的長度異常穩定——347、350、351、351、347ms——這是計時器的特徵，不是可變工作量。
-
-## 對照實驗
-
-拿掉文件區域的兩個骨架屏（路由的 `loading.tsx` 與 `knowledge-layout` 的 `Suspense` fallback），其餘完全不動，同一份量測方法：
+Each number has n=6, using the same method.
 
 | | p50 | max |
 | --- | --- | --- |
-| 有骨架屏（現況） | 383ms | 403ms |
-| 無骨架屏 | **141ms** | 193ms |
+| Content enters DOM | **383ms** | 403ms |
+| Last network byte | ~130ms | 171ms |
+| Total long-task duration | **0ms** | 0ms |
 
-**快 2.7 倍。** 網路時間兩邊相同。
+Measured separately on the server (same route, bypassing the browser): **RSC 48ms, full HTML 65ms** (median of 5 runs each).
 
-## 為什麼
+In other words: **all data has arrived by ~130ms, the main thread is doing no work at all, yet content does not appear until 383ms. The intervening 250ms is pure waiting.**
 
-Next 的 `<Link>` 預設會 prefetch 動態路由的 **loading 邊界**，但不會 prefetch 頁面資料。所以點擊當下骨架屏立刻出現，資料則在 ~130ms 後到達。
+The length of that wait is unusually consistent—347, 350, 351, 351, 347ms—a timer's signature, rather than variable workload.
 
-React 為了避免閃爍，對 Suspense fallback → 內容的切換有節流：fallback 一旦顯示，就不會馬上被換掉。於是**為了一個 130ms 的等待而顯示骨架屏，反而讓使用者多等了 250ms**。
+## Controlled experiment
 
-骨架屏本身就是延遲。
+Remove the two skeleton screens in the document area (the route's `loading.tsx` and the `knowledge-layout` `Suspense` fallback), changing nothing else and using the same measurement method:
 
-## 這推翻了什麼
+| | p50 | max |
+| --- | --- | --- |
+| With skeleton screens (current behavior) | 383ms | 403ms |
+| Without skeleton screens | **141ms** | 193ms |
 
-契約 Open item 6 寫著「需要量測後決定 prefetch/caching 策略，不是 CSS 改動」。量測結果是：
+**2.7 times faster.** Network time is the same on both sides.
 
-- prefetch 最多省下 ~130ms 中的一部分，**不是主要成本**
-- caching 同理
-- 沒有任何架構問題需要處理
+## Why
 
-真正的槓桿是一個設計決定：**一個 130ms 的等待該顯示什麼。** 這是刪掉一個檔案的量級，不是重構的量級。
+Next's `<Link>` prefetches the **loading boundary** of dynamic routes by default, but does not prefetch page data. The skeleton therefore appears immediately on click, while data arrives ~130ms later.
 
-## 決定：骨架屏保留
+To avoid flicker, React throttles the switch from a Suspense fallback to content: once a fallback appears, it is not immediately replaced. Consequently, **showing a skeleton for a 130ms wait makes the user wait another 250ms**.
 
-量測之後的設計決定是**保留骨架屏**，程式碼不動。這是在知道代價的前提下做的選擇，不是沒發現。
+The skeleton itself is the delay.
 
-記在這裡是因為這份紀錄的數字讀起來很像一份行動建議，而結論是不行動。下一個人看到 383ms 和「快 2.7 倍」時，應該同時看到這件事已經被決定過。
+## What this overturns
 
-順帶記下兩個當時查清楚的事實，免得重查：
+Contract Open item 6 says “measure before deciding a prefetch/caching strategy; this is not a CSS change.” The measurements show:
 
-- **沒有中間選項。** 延遲顯示或先隱藏的 fallback 一樣會 commit，而 commit 會把前一份文件卸載——結果是空白，比骨架屏更糟。
-- **唯一能同時保留骨架屏又去掉成本的槓桿**是 prefetch 文件資料本身（現在只 prefetch loading 邊界）。資料若已在 router cache，導航根本不會走到 fallback。**這個沒有量過**，代價是每個可見的樹節點多一個 prefetch 請求。
+- prefetch can save at most part of ~130ms, **not the main cost**
+- the same applies to caching
+- no architecture issue needs to be addressed
 
-## 方法上的一個更正
+The real lever is a design decision: **what to show during a 130ms wait.** This is on the scale of deleting one file, rather than refactoring.
 
-第一版量到 412ms，其中一部分是**做量測的那個 Playwright 斷言的輪詢間隔**——工具跑進了結果裡。最終數字改用頁面內的 `MutationObserver`，並以 `waitForFunction` 讀取，所以量測工具不在結果中。
+## Decision: retain the skeleton screens
 
-412 與 383 的差距不大，但方法上的差別是：前者無法回答「那 250ms 是什麼」，後者可以。
+The design decision after measuring was to **retain the skeleton screens**, leaving code unchanged. This choice was made with awareness of its cost; the cost was not overlooked.
+
+This is recorded here because the numbers look like a recommendation to act, while the conclusion is to take no action. The next person seeing 383ms and “2.7 times faster” should also see that this has already been decided.
+
+Two facts established at the time are also recorded to avoid repeating the investigation:
+
+- **There is no intermediate option.** A delayed or initially hidden fallback still commits, and committing unmounts the previous document—resulting in a blank area, worse than a skeleton.
+- **The only lever that retains skeletons while removing the cost** is prefetching document data itself (currently only the loading boundary is prefetched). If data is already in the router cache, navigation never reaches the fallback. **This has not been measured**; the cost is one additional prefetch request per visible tree node.
+
+## A correction to the method
+
+The first version measured 412ms, partly from **the polling interval of the Playwright assertion used to measure it**—the tool entered the result. The final numbers use an in-page `MutationObserver`, read with `waitForFunction`, keeping the measurement tool out of the result.
+
+The difference between 412 and 383 is small, but the methodological difference is that the former cannot answer “what is that 250ms?” and the latter can.

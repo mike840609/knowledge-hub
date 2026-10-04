@@ -1,5 +1,7 @@
 # Personal workspace verification — 2026-09-30
 
+**English** | [繁體中文](2026-09-30-personal-workspace.zh-TW.md)
+
 Implementation: `/Users/chuntsai/.codex/worktrees/personal-workspace/HCM-KM`, branch `codex/personal-workspace`, rebased onto `origin/main` at `00df011` (the remote has no `master` branch). All six authorized batches are implemented. No merge, deployment, or migration of the user's development database was performed. Existing primary-checkout edits were preserved. The remote mainline had already supplied the Team Coming soon selector and full tree-based organization, so the separate Organize page and API were removed.
 
 ## Successful checks

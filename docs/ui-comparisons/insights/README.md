@@ -1,28 +1,32 @@
-# Insights／Home 設計一致性
+# Insights and Home design consistency
 
-Insights 使用共用 PageHeader 與 kh-page，期間使用無陰影的分段切換；字級、間距和圓角回到既有設計尺度，移除普通控制項陰影及未使用樣式。Home 搜尋框改由 Input primitive 提供邊框、尺寸與 focus 樣式。
+**English** | [繁體中文](README.zh-TW.md)
 
-## 驗證
+Insights uses the shared PageHeader and kh-page layout, with shadow-free segmented period controls. Typography, spacing and radii follow existing design scales; ordinary control shadows and unused styles are removed. Home search uses the Input primitive for borders, sizing and focus treatment.
 
-- 每個 PR 均從 main `668aa03f` 分出，互不相依。
-- 完整 unit suite：1,658 tests passed。
-- lint、typecheck 及 Next production build 通過。
-- 瀏覽器驗證：個人統計、明細連結、7/30 天切換、刷新、明暗主題與手機版；Home 搜尋與既有 overview。
+## Verification
 
-## 前後截圖
+These are historical verification results from the original comparison PR:
 
-Before 為 main `668aa03f`；After 為本分支。使用相同隔離資料及狀態，桌面 1280×900、手機 390×844，light theme。時間戳記及 UUID 依各次測試產生。Settings 使用固定 Team owner persona；Audit 比較資料包含兩筆 workspace rename。
+- Each PR branched independently from main `668aa03f`.
+- Full unit suite: 1,658 tests passed.
+- Lint, typecheck and Next production build passed.
+- Browser verification: Personal statistics, detail links, 7/30-day switching, refresh, light/dark themes and mobile layout; Home search and the existing overview.
+
+## Before and after screenshots
+
+Before uses main `668aa03f`; After uses the respective comparison branch. Captures use equivalent isolated data and state, desktop 1280×900 and mobile 390×844, in the light theme. Timestamps and UUIDs are generated per test run. Settings uses a fixed Team-owner persona; Audit comparison data includes two workspace-renaming events. These historical comparisons are separate from the freshly captured main README screenshots.
 
 ### profile
 
-| 畫面 | 修正前 | 修正後 |
+| View | Before | After |
 |---|---|---|
 | desktop | ![Before profile desktop](before/profile-desktop.png) | ![After profile desktop](after/profile-desktop.png) |
 | mobile | ![Before profile mobile](before/profile-mobile.png) | ![After profile mobile](after/profile-mobile.png) |
 
 ### home
 
-| 畫面 | 修正前 | 修正後 |
+| View | Before | After |
 |---|---|---|
 | desktop | ![Before home desktop](before/home-desktop.png) | ![After home desktop](after/home-desktop.png) |
 | mobile | ![Before home mobile](before/home-mobile.png) | ![After home mobile](after/home-mobile.png) |

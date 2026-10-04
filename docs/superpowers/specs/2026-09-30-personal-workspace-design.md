@@ -1,5 +1,7 @@
 # Personal workspace rollout
 
+**English** | [繁體中文](2026-09-30-personal-workspace-design.zh-TW.md)
+
 Approved direction: keep Team entry points visible but disabled, labelled Coming soon. Deliver persistent drafts, document organization and Markdown export, followed by revision restoration, a personal home and account-synced favorites.
 
 ## Contracts

@@ -1,148 +1,152 @@
-# Folder Sync 第一波：從同步到閱讀
+# Folder Sync first wave: from synchronization to reading
 
-狀態：使用者已確認設計；實作計畫待審閱，尚未實作。
-基準：main `15c8b7786239735ece7112bb663760346b33a580`（PR #104）。
+**English** | [繁體中文](2026-10-03-folder-sync-first-wave-design.zh-TW.md)
 
-## 目標與已選定方向
+Status: user confirmed the design; implementation plan awaiting review, not yet implemented.
+Baseline: main `15c8b7786239735ece7112bb663760346b33a580` (PR #104).
 
-依使用者提供的第一波建議，完成「匯入 folder → 找到並讀懂知識 → 檢查差異 → 安心 Apply → 回來閱讀更新」流程。
-沿用既有輕量列表、compact PageHeader、design tokens 與 workspace 授權。首頁不改成大型卡片 dashboard。
+## Goal and chosen direction
 
-第一波包括五個階段，最終交付必須涵蓋全部階段。階段可獨立驗證，但不能只完成首頁文案便宣稱第一波完成。
-不重新開發搜尋、收藏、最近閱讀、圖譜或同步按鈕；使用既有能力並補齊它們之間的銜接。
+Implement the first-wave workflow requested by the user: import a folder → find and understand knowledge → inspect differences → apply confidently → return to read updates.
+Keep existing lightweight lists, compact PageHeader, design tokens, and workspace authorization. Do not turn Home into a large card dashboard.
 
-使用者已明確選擇「先不用管圖片」。圖片 binary 儲存、渲染與缺漏診斷新增功能本波不做，附件 binary 服務亦留待後續。沿用現有圖片安全政策，不宣稱第一波完整支援本機圖片。
+The first wave has five stages, all required for final delivery. Stages may be verified independently, but changing Home copy alone is not completion.
+Reuse existing search, favorites, recent reading, graph, and sync buttons, completing connections between them rather than rebuilding them.
 
-## 程式盤點
+The user explicitly chose to defer images. This wave adds no image binary storage, rendering, or missing-image diagnostics; binary attachment service remains future work. Keep existing image security policy and do not claim complete local-image support.
 
-- `personal-home.tsx` 目前主 CTA 為 New note，描述 Continue writing，主要清單 Recently edited。
-- 個人首頁已取得 document summaries 與 drafts，最近閱讀保存在裝置，收藏由既有帳號同步機制提供。
-- `ImportPreview` 提供路徑、標籤與摘要，尚未提供正文差異。
-- Apply 回傳 sourceId/resultVersion/runId，但頁面成功後導向 source detail。
-- `SyncRun.summary` 保存計數與 snapshotHash/planHash；terminal staging 保留 24 小時，不能用 staging 做永久歷史。
-- 列表已有正式套用時間、個別同步、進度與 Retry；表單與列表需統一狀態、取消與錯誤說明。
-- 附件目前僅 metadata/hash，upload service 只接受 Markdown bytes。圖片 renderer 並未將 source-relative path 解析成已授權的資產端點。
-- `PersonalService` 目前驗證 draft/favorite keys，不具 read-revision 契約。
+## Code inventory
 
-## 方案選擇
+- `personal-home.tsx` currently emphasizes New note, Continue writing, and Recently edited.
+- Personal Home already receives document summaries and drafts; recent reading is device-local, while favorites use account synchronization.
+- `ImportPreview` provides paths, labels, and summaries, but no body diff.
+- Apply returns sourceId/resultVersion/runId, but success navigates to source detail.
+- `SyncRun.summary` stores counts and snapshotHash/planHash. Terminal staging lasts 24 hours and cannot serve as permanent history.
+- Lists already have formal applied time, individual sync, progress, and Retry. Forms/lists need consistent states, cancellation, and error explanations.
+- Attachments store metadata/hash only; upload accepts Markdown bytes only. The image renderer does not resolve source-relative paths to authorized asset endpoints.
+- `PersonalService` validates draft/favorite keys but has no read-revision contract.
 
-推薦：分階段完成同一條同步到閱讀流程。先建立永久同步變更與 revision 參照，再把首頁、成功頁、歷史和 Updates 接到同一資料來源。
+## Alternatives
 
-替代一：只改首頁和成功訊息，開發較小，但無法提供長期歷史與可信的未讀更新，不符合此次第一波要求。
-替代二：一次重寫首頁、匯入及 reader，改動面過大，容易破壞現有快捷鍵、來源唯讀與授權行為，不採用。
+Recommended: deliver stages of one sync-to-reading workflow. First establish permanent sync changes and revision references, then connect Home, success, history, and Updates to that data.
 
-## 一、閱讀導向的 My Space
+Alternative 1: change only Home and success messages. Smaller development effort, but no durable history or trustworthy unread updates; does not satisfy this wave.
+Alternative 2: rewrite Home, import, and reader together. Excessive scope risks shortcuts, source read-only behavior, and authorization; rejected.
 
-頁面順序：Search → My folders → Continue reading → Updates → Favorites → 其他入口。
+## 1. Reading-oriented My Space
 
-- Search 使用既有 workspace search，預設搜尋目前 My Space；不複製一套搜尋引擎。
-- 主 CTA 為 Import folder。New note、drafts、organize、export 仍有清楚的次要入口。
-- My folders 只顯示 Folder Sync 來源，包含名稱、最後正式同步時間、待套用／失敗／需重新授權提示與 Check for changes。
-- Home 的 folder 操作沿用來源列表的 compact action，保留 hover 12°/10% 與 busy 旋轉、permission gate、folder-selection fallback。
-- Recently updated 用正式套用且目前可讀的文章更新，不將本機草稿或掃描誤當同步成果。
-- 同名文章在首頁、Updates 與搜尋結果顯示來源及相對路徑。
-- 無來源時引導匯入；無更新時呈現平靜的空狀態，不假造示範數據。
-- My folders 的待套用資訊僅來自目前使用者可讀的有效 READY preview；未讀或失效 snapshot 不應洩漏其他使用者資訊。
+Page order: Search → My folders → Continue reading → Updates → Favorites → other entry points.
 
-## 二、內容 diff 與同步防護
+- Search reuses workspace search and defaults to current My Space; no duplicate engine.
+- Primary CTA is Import folder; New note, drafts, organize, and export retain clear secondary entry points.
+- My folders lists only Folder Sync sources: name, last formal sync, awaiting-apply/failure/access-renewal hints, and Check for changes.
+- Home folder actions reuse compact source-list actions, preserving 12°/10% hover and busy rotation, permission gates, and folder-selection fallback.
+- Recently updated uses formally applied, currently readable article updates, never local drafts or scans as sync results.
+- Same-title articles show source and relative path on Home, Updates, and search results.
+- No sources guides import; no updates shows a quiet empty state, without fabricated demo data.
+- Awaiting-apply information comes only from valid READY previews readable by the current user. Unreadable/invalid snapshots must not leak another user's information.
 
-### 正文、標題與 metadata 差異
+## 2. Content diff and sync safeguards
 
-Updated 與同時 renamed/moved+updated 的 document 可展開唯讀差異。採行級新增／刪除比較，並獨立比較標題與 metadata；單純移動可顯示前後路徑。
-不變更 source-managed 文件，亦不將原始 Markdown 當 HTML 執行。
+### Body, title, and metadata differences
 
-差異按文章惰性取得，不把 20,000 項 manifest 的所有正文塞進 preview JSON。每次只讀已授權 snapshot 的指定 change。
-舊正文使用 plan 指定的 expected revision，新正文使用相應 staged upload key；回應必須帶 basedOnVersion 與 revision 參照。
-預覽逾期或來源已變更時停用 Apply，清楚告知使用者差異只是該次掃描結果，需重新檢查。
-大文件採有界的 diff 計算與輸出：最多 2,000 行或 200 KiB 的呈現，超過則顯示截斷提示與前後唯讀文字，避免無界二次方運算；不因此刪除變更。
+Updated documents, including renamed/moved+updated, can expand read-only differences. Compare added/deleted lines and separately title/metadata. Pure moves may show before/after paths.
+Do not modify source-managed documents or execute raw Markdown as HTML.
 
-### 選錯 folder 與大量封存
+Fetch diffs lazily per article; never put every body in a 20,000-entry preview JSON. Read only the requested change from an authorized snapshot.
+Old body comes from the plan's expected revision; new body from its staged upload key. Return basedOnVersion and revision references.
+Expired previews or changed sources disable Apply and explain that differences reflect that scan and require another check.
+Bound computation/output to 2,000 lines or 200 KiB of presentation. Beyond this, show truncation notice and read-only before/after text, avoiding unbounded quadratic work without deleting changes.
 
-預覽顯示先前有效文件數、此次文件數、匹配文件數、archive 數與比例。
-匹配採 canonical path 或既有穩定 external identity；已確認的移動不應被算成低重疊。rootName 只是提示。
+### Wrong folder and mass archiving
 
-以下任一條件為高風險：
-- 有既有文件但此次文件數為零。
-- 封存至少 5 篇且達既有有效文件 30%。
-- 既有至少 5 篇、匹配率低於 20%，且有文件會被封存。
+Show previous active document count, current count, matched count, archive count, and ratio.
+Match canonical paths or existing stable external identities; confirmed moves must not count as low overlap. rootName is only a hint.
 
-高風險 preview 顯示明確警示，要求在 Apply 前輸入來源名稱，確認這次範圍符合預期。小來源全部封存同樣需要確認。
-風險與 acknowledgment 都要在伺服器驗證；不能只有前端 checkbox。確認綁定 snapshot/plan hash，不能用其他 preview 的確認套用。
-一般 preview 維持原本一次 Apply，不增加通用確認框。異常門檻是第一版產品設定，可由後續使用回饋調整。
+Any condition below is high risk:
 
-### 狀態與恢復
+- Existing documents but zero current documents.
+- At least 5 archives and at least 30% of existing active documents.
+- At least 5 existing documents, below 20% matches, and any planned archives.
 
-統一詞彙：Checking → Awaiting Apply → Synced / Failed / Folder access needed。
-入口改名 Check for changes，tooltip 清楚說明只掃描、Apply 才更新。
-列表與首頁提供取消；取消使用現有 AbortController 與 import cleanup，不取消已提交的 Apply。
-掃描失敗顯示「尚未套用變更」與 Retry／Choose folder；Apply 失敗依交易結果或重新查詢狀態告知，不能一律宣稱沒有變更。
-區分 expired preview 與 source version conflict，兩者均提供直接 Check again。Apply 網路回應丟失時用既有冪等結果恢復。
+High-risk previews clearly warn and require entering the source name before Apply to confirm intended scope. Archiving all of a small source also requires confirmation.
+Validate risk and acknowledgment on the server, not merely through a checkbox. Bind acknowledgment to snapshot/plan hash; one preview's confirmation cannot authorize another.
+Normal previews retain one-step Apply without generic confirmation. Initial thresholds are product settings subject to later usage feedback.
 
-## 三、永久同步變更與成功後閱讀
+### States and recovery
 
-新增可索引的 run-change 儲存，而不是將完整正文塞進 summary JSON。每個變更保留：
+Use consistent terms: Checking → Awaiting Apply → Synced / Failed / Folder access needed.
+Rename the entry to Check for changes, with tooltip explaining that scanning alone changes nothing until Apply.
+Lists and Home offer cancellation using existing AbortController/import cleanup, without canceling submitted Apply.
+Scan failure states no changes applied and offers Retry/Choose folder. Apply failure describes transaction outcome or re-queried status; never universally claim no changes.
+Distinguish expired preview from source version conflict and offer Check again for both. Lost Apply responses recover through existing idempotent results.
 
-- run/source/workspace 參照與可排序鍵。
-- kind、labels、前後 source path、當時標題。
-- documentId、beforeRevisionId、afterRevisionId；非文件變更不假造 document 參照。
+## 3. Permanent sync changes and reading after success
 
-成功 Apply 在同一交易中寫入變更與正式結果；rollback 時不留下成功 Updates。重試／alreadyApplied 不建立重複事件。
-歷史引用 canonical immutable revisions，可在 snapshot 清理後繼續閱讀和比较；警告保存必要 code/path 摘要，不持久化暫存憑證或 directory handles。
-既有歷史不憑空回填逐篇資訊；對只有 summary 的舊 run 顯示「此紀錄沒有文章變更明細」。
+Add indexable run-change storage rather than full bodies in summary JSON. Each change retains:
 
-成功後導向該 run 的摘要頁，顯示新增、更新、移動、封存與警告，以及：
-- Read this update：進入本次新增／更新的文章清單。
-- Browse this folder：現有 Knowledge explorer、指定 source。
-- Back to My Space：PERSONAL 回首頁；TEAM 提供 workspace 相應入口，不假設皆有 PersonalHome。
+- Run/source/workspace references and a sortable key.
+- Kind, labels, before/after source paths, title at the time.
+- documentId, beforeRevisionId, afterRevisionId; non-document changes fabricate no document reference.
 
-Source history 的 APPLIED run 可開啟同一頁；文章可開啟當時 revision 與差異，不強制導向 current revision。
-封存文章仍依既有 includeArchived 授權政策可讀；若文章或 revision 已真正不可讀，顯示 unavailable，不洩漏本文。
+Successful Apply writes changes and formal outcome in one transaction; rollback leaves no successful Updates. Retry/alreadyApplied creates no duplicate events.
+History references canonical immutable revisions, supporting reading/comparison after snapshot cleanup. Persist necessary warning code/path summaries, not staging credentials or directory handles.
+Do not invent per-document information for legacy history. Summary-only old runs explicitly say they have no article-change details.
 
-## 四、Markdown folder 閱讀契約
+Success navigates to the run summary, displaying additions, updates, moves, archives, warnings, and:
 
-相對 Markdown links 與 wikilinks 使用既有解析與穩定 Document ID；補上同名、子資料夾、移動及 unresolved cases 的驗收。
+- Read this update: list this run's added/updated articles.
+- Browse this folder: existing Knowledge explorer scoped to source.
+- Back to My Space: PERSONAL returns Home; TEAM uses its workspace entry, without assuming PersonalHome.
 
-本波閱讀品質聚焦 Markdown 文字、標題與 metadata、相對文章連結、wikilinks、同名文章辨識及來源路徑。圖片沿用既有行為，驗收報告清楚列出尚未支援的部分。
+APPLIED runs in source history open the same page. Articles can open historical revisions and differences without forcing current revision.
+Archived articles follow existing includeArchived authorization. If a document/revision is genuinely unreadable, show unavailable without exposing content.
 
-## 五、Updates 與來源健康
+## 4. Markdown folder reading contract
+
+Relative Markdown links and wikilinks reuse existing resolution/stable Document IDs. Add acceptance for same titles, subfolders, moves, and unresolved cases.
+
+Reading quality in this wave covers Markdown text, titles/metadata, relative article links, wikilinks, disambiguation, and source paths. Images retain existing behavior, with unsupported parts explicitly listed in acceptance reporting.
+
+## 5. Updates and source health
 
 ### Updates
 
-以正式 APPLIED run 分組，可按來源及未讀篩選；顯示新增／更新計數、文章、來源、路徑與時間。
-文件變更依 revision 判斷更新。移動或封存不自動算成新的閱讀內容，仍可在 run summary 中查看。
+Group by formal APPLIED run, filter by source/unread, and show added/updated counts, articles, source, paths, and time.
+Determine content updates through revisions. Moves/archives are not automatically new reading content, but remain visible in run summaries.
 
-新增帳號層級 read-revision 契約，綁定 user/workspace/document；伺服器驗證該 revision 屬於此可讀文件。
-在 current reader 正文成功顯示後記錄目前 revision 已讀；歷史 reader 只記錄當時 revision，不將 current revision 讀掉。
-採文件內 revision 序號或等價穩定排序，而非依時間猜測順序：讀過新版時，較舊事件也已讀；新版更新後重新顯示未讀。
-另一個裝置／tab 的較舊讀取不得倒退閱讀進度。收藏 API 不改用途；最近閱讀跨裝置同步仍屬後續範圍。
-Home 顯示最近 3 批，每批最多 5 篇；完整 Updates 頁採 cursor 分頁（20 批），避免首頁載入全部歷史。
+Add account-level read-revision state tied to user/workspace/document. Server verifies that the revision belongs to that readable document.
+After current reader body renders successfully, mark the current revision read. Historical reading marks only that historical revision, not current.
+Use document revision sequence or equivalent stable ordering, not timestamps: reading a newer revision marks older events read; another update becomes unread.
+An older read on another device/tab cannot regress progress. Do not repurpose favorites API; cross-device recent-reading sync remains future scope.
+Home shows the latest 3 batches, at most 5 articles each. Full Updates uses cursor pagination (20 batches), avoiding loading all history on Home.
 
-### 來源健康
+### Source health
 
-來源 detail 提供 Health 入口，彙整目前文件的 unresolved links 與最新有效匯入警告。
-每項可開啟對應文章，顯示原因及相對路徑；健康診斷不應阻擋正常閱讀，也不自動修改來源。
-清單分頁，使用可批次查詢的現有 link 與匯入警告資料；避免每次首頁逐篇解析全部 Markdown。
-所有資料透過現有來源與 workspace 權限；僅展示當前使用者可讀的文件。
+Source detail provides Health, collecting current documents' unresolved links and latest valid import warnings.
+Each item opens its article and shows reason/relative path. Diagnostics neither block ordinary reading nor automatically edit sources.
+Paginate and batch-query existing links/warnings; avoid reparsing every Markdown body on Home.
+All data follows source/workspace permissions and includes only documents readable by the current user.
 
-## 交付順序與回歸界線
+## Delivery order and regression boundaries
 
-1. 永久 run-change/read-revision 資料契約、migration 與授權讀取。
-2. diff、高風險確認、準確狀態、取消／恢復與同步結果頁。
-3. Home/My folders/Updates 接上正式資料。
-4. 來源健康與 Markdown 文字／內部連結閱讀契約驗收。
-5. 完整回歸與前後截圖。
+1. Permanent run-change/read-revision contracts, migration, authorized reads.
+2. Diff, high-risk confirmation, accurate states, cancellation/recovery, result page.
+3. Connect Home/My folders/Updates to formal data.
+4. Source health and Markdown/internal-link reading acceptance.
+5. Full regression and before/after screenshots.
 
-保留 source-managed 唯讀、workspace permission gates、keyboard navigation、收藏／草稿、Team source 流程與 Apply 原子性。
-本波不加入自動背景同步、CLI、MCP、AI Chat、Collections、路徑／日期搜尋新篩選或分享管理新頁面；圖片與附件 binary 支援另行開發。
+Preserve source-managed read-only behavior, workspace permission gates, keyboard navigation, favorites/drafts, Team source flows, and atomic Apply.
+Do not add automatic background sync, CLI, MCP, AI Chat, Collections, new path/date search filters, or a share-management page. Image/attachment binaries are separate future work.
 
-## 驗證與截图
+## Verification and screenshots
 
-- Domain/unit：diff metadata、risk threshold/empty folder/stable moves、狀態與取消、read-revision monotonicity、來源路徑解析。
-- 真實 MariaDB integration：Apply rollback/idempotency、持久變更在 staging cleanup 後存在、history revision、read marker 授權、risk acknowledgment 伺服器強制。
-- E2E：初次匯入→成功摘要→閱讀→再次掃描→diff→高風險拒絕／確認→Apply→Updates 未讀→閱讀後已讀；同名文章與相對文章連結案例。
-- 完整 unit/integration、相關 Team 與 Personal E2E、typecheck/lint/production build；正式報告列出已跑範圍及任何未解決失敗。
-- 前後比較固定基準 main `15c8b77`、同一組示範資料、1440px light viewport、相同瀏覽器與語系；不把 demo fixtures 寫入使用者資料。
-- 至少截 Home、預覽正文 diff／高風險警示、Apply 成功摘要、Updates、來源健康與文章閱讀頁。新頁面標示「修改前無此頁面」，與原流程最接近的畫面比較。
-- 可補 hover／取消錄影；截圖不作為功能驗證的替代。
+- Domain/unit: metadata diff, risk thresholds/empty folders/stable moves, states/cancellation, read-revision monotonicity, source path resolution.
+- Real MariaDB integration: Apply rollback/idempotency, durable changes after staging cleanup, historical revisions, read-marker authorization, server-enforced risk acknowledgment.
+- E2E: initial import → success summary → read → rescan → diff → high-risk refusal/confirmation → Apply → unread Updates → read status; same-title and relative-link cases.
+- Full unit/integration, relevant Team/Personal E2E, typecheck/lint/production build. Report actual scope and unresolved failures.
+- Before/after comparisons use baseline main `15c8b77`, identical demo data, 1440px light viewport, same browser/locale. Do not write demo fixtures into user data.
+- Capture at least Home, preview body diff/high-risk warning, Apply summary, Updates, source health, and reader. Label new pages as absent before and compare the nearest original-flow screen.
+- Hover/cancellation recordings are optional; screenshots do not replace functional verification.
 
-驗收完成：使用者能匯入自己的 folder，找到並讀懂文章，再次檢查時知道差異且能避開誤封存，正式套用後知道有哪些新知識可讀，並能在 staging 清理後回看同步歷史。
+Acceptance: users can import their own folder, find and understand articles, inspect later differences and avoid mistaken archives, identify new knowledge after Apply, and revisit sync history after staging cleanup.

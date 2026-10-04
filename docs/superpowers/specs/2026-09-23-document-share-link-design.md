@@ -1,75 +1,77 @@
-# 文件分享連結 — 設計規格
+# Document share links — design specification
 
-| 項目 | 內容 |
+**English** | [繁體中文](2026-09-23-document-share-link-design.zh-TW.md)
+
+| Item | Content |
 | --- | --- |
-| 日期 | 2026-09-23 |
-| 類型 | 設計規格，供實作前審查 |
-| 範圍 | My Space 單篇文件的唯讀分享連結（`/s/:token`），持有連結即可閱讀，不需登入 |
-| 修改的契約 | `CLAUDE.md`「Knowing an ID is not authorization」、Phase 3 spec §13「Workspace-only authorization boundary」——見 §3 |
-| 對照文件 | Phase 3 governance spec、Phase 2.5 §24.1、動作模型規格、`frontend-design-language.md` |
-| 狀態 | **已拍板（§12），已實作。** 實作計畫：`docs/superpowers/plans/2026-09-23-document-share-link.md`；驗證紀錄：`docs/superpowers/verification/2026-09-23-document-share-link-verification.md` |
+| Date | 2026-09-23 |
+| Type | Design specification for pre-implementation review |
+| Scope | Read-only links for individual My Space documents (`/s/:token`); possession grants reading without sign-in |
+| Contracts amended | `CLAUDE.md` “Knowing an ID is not authorization” and Phase 3 §13 “Workspace-only authorization boundary”; see §3 |
+| References | Phase 3 governance, Phase 2.5 §24.1, action model, `frontend-design-language.md` |
+| Status | **Decided (§12) and implemented.** Plan: `docs/superpowers/plans/2026-09-23-document-share-link.md`; verification: `docs/superpowers/verification/2026-09-23-document-share-link-verification.md` |
 
-## 1. 要解決的問題
+## 1. Problem
 
-產品是 personal-first：登入預設進 My Space，大部分知識先在那裡寫成。但 My Space 被設計成單人空間——`assertPersonalMutationAllowed` 擋掉所有成員與群組操作——所以今天**沒有任何方法讓別人看到 My Space 裡的一份文件**。
+The product is personal-first: sign-in defaults to My Space, where most knowledge starts. My Space is deliberately single-user: `assertPersonalMutationAllowed` blocks membership/group operations. Consequently there is **no way to show someone else a document in My Space**.
 
-現有和已規劃的出口都不對應「給別人看一下」這個需求：
+Existing and planned entry points do not meet this lightweight sharing need:
 
-| 出口 | 狀態 | 為什麼不適合這個需求 |
+| Entry point | Status | Why it does not fit |
 | --- | --- | --- |
-| Team Workspace | 已實作 | 需要 `workspace.create_team`（限定 SSO group），而且是為長期協作設計的治理單位，不是臨時分享 |
-| Promote（Phase 3 §18） | 只有一句規格 | 會複製出一份新文件、轉交 Team 治理；對「看一下」來說太重，而且兩份會開始分歧 |
-| tKMS Publishing（Phase 6） | 未設計 | 正式、長期、經過編排的全公司發布出口 |
-| Inspector 的 `Copy` | 已實作 | 複製的是 **ID**，別人拿到也打不開（動作模型規格 §2 已記錄） |
+| Team Workspace | Implemented | Requires `workspace.create_team`, restricted by SSO group; a governance unit for lasting collaboration rather than temporary sharing |
+| Promote (Phase 3 §18) | One specification sentence | Copies a new document into Team governance; too heavy for a quick read and the copies diverge |
+| External publishing (Phase 6) | Not designed | Formal, durable, curated organization-wide publication |
+| Inspector `Copy` | Implemented | Copies an **ID**, which does not grant access; recorded in action model §2 |
 
-這份規格加入第四種出口：**擁有者刻意發出、有期限、可撤銷的唯讀連結**。任何持有連結的人都可以讀到該文件的目前版本，**不需要登入**；除此之外什麼都拿不到。
+Add a fourth entry point: **an owner-issued, expiring, revocable read-only link**. Anyone holding it can read the document's current revision **without signing in**, and nothing else.
 
-三者的分工因此是：
+Responsibilities:
 
 ```text
-「給別人看一下我的文件」  → 分享連結（本規格）   不複製、即時、臨時
-「把這份交給團隊維護」    → Promote              複製、換治理單位
-「正式發布給全公司」      → tKMS（Phase 6）      編排、長期、正式
+Show someone my document        → Share link (this specification): no copy, current, temporary
+Hand maintenance to a team      → Promote: copy, different governance
+Publish formally organization-wide → External publishing (Phase 6): curated, durable, formal
 ```
 
-## 2. 非目標
+## 2. Non-goals
 
-- **Team Workspace 的文件。** v1 只開放 My Space。理由見 §11。
-- **透過連結編輯、留言。** 連結只讀。
-- **指定對象的邀請**（「分享給 Alice」）。那是 Document ACL，Phase 3 §2 明列不做。
-- **快照連結**（固定某個 revision）。一律顯示目前版本，見 §5.3。
-- **即時推送。** 擁有者更新後，檢視者重新整理頁面才會看到；不做 WebSocket／SSE 推送。
-- **延長期限。** 要更久就建立新連結。
-- **通知**（email、站內通知）。
-- **API／MCP 透過 token 讀取。** 只有 `/s/:token` 頁面接受 token。
-- **資料分類**（禁止分享敏感內容）。系統目前沒有分類機制，見 §14。
+- **Team documents:** v1 supports only My Space (§11).
+- **Editing or comments through the link:** read-only.
+- **Named invitations** such as sharing with Alice: Document ACL, explicitly excluded in Phase 3 §2.
+- **Revision snapshots:** always current content (§5.3).
+- **Live push:** after owner updates, readers refresh; no WebSocket/SSE.
+- **Extending expiry:** create another link for a longer period.
+- **Email or in-app notifications.**
+- **API/MCP token reads:** only `/s/:token` accepts the token.
+- **Classification preventing sensitive shares:** no classification system exists (§14).
 
-**誰拿得到內容，由網路可達性決定。** 本規格不要求登入，所以「持有連結的人」實際上等於「持有連結、而且連得到 Hub 主機的人」。Hub 只部署在內網時，範圍是公司網路；Hub 對外開放時，範圍是整個網際網路。這是部署決定，本規格不改變它，但 §15 的上線檢查清單要求明確記錄。
+**Network reachability determines who can obtain content.** With no login required, “link holder” means a holder who can reach the Hub host. An internal deployment limits reach to that network; an externally reachable deployment extends it to the internet. This is a deployment decision, unchanged here, but §15 requires explicitly recording it.
 
-## 3. 契約修改
+## 3. Contract amendments
 
-這一節是這份規格裡最需要審查的部分，因為它修改的是 `CLAUDE.md` 列為「easy to break」的不變式，而且這個例外**不需要任何身分**。依 `CLAUDE.md` 的文件流程，偏離 canonical spec 必須記錄而非默默進行。
+This is the most consequential review section: it amends an invariant listed as easy to break in `CLAUDE.md`, with an exception requiring **no identity**. The documentation workflow requires recording canonical-spec deviations instead of introducing them silently.
 
-### 3.1 為什麼這不是「知道 ID 就能看」
+### 3.1 Why this is not reading by ID
 
-現有不變式的目的是：**可猜測、會出現在 URL 與 log 裡、不是為授權而產生的識別碼，不能被當成權限**。分享連結的 token 在每一個面向上都與 ID 相反：
+The existing invariant prevents guessing or incidental identifiers in URLs/logs, generated for identification rather than authorization, from becoming authority. Share tokens differ in every respect:
 
-| | Document ID | 分享連結 token |
+| Property | Document ID | Share token |
 | --- | --- | --- |
-| 產生目的 | 識別 | 授權 |
-| 誰決定產生 | 系統，建立文件時 | 擁有者，刻意操作 |
-| 可猜測性 | UUIDv7，前 48 bit 是時間戳 | UUIDv4，122 bit 隨機 |
-| 與實體的關係 | 就是實體本身的主鍵 | 獨立欄位，無法從任何實體 ID 推導 |
-| 期限 | 永久 | 必填，最長 90 天 |
-| 撤銷 | 不可 | 隨時 |
-| 稽核 | 無 | 建立、撤銷有治理紀錄；檢視有匿名計數 |
-| 接受它的地方 | 所有 read service（搭配 membership） | **只有** `/s/:token` 的讀取路徑 |
+| Purpose | Identification | Authorization |
+| Issued by | System on document creation | Owner's explicit action |
+| Guessability | UUIDv7 with 48-bit timestamp | UUIDv4 with 122 random bits |
+| Entity relationship | Entity primary key | Independent field, not derived from any entity ID |
+| Lifetime | Permanent | Required, at most 90 days |
+| Revocation | None | Anytime |
+| Audit | None | Governance events for issue/revoke, anonymous view counts |
+| Accepted by | Read services with membership | **Only** `/s/:token` read path |
 
-所以不變式不需要推翻，但需要**寫出唯一的例外**，否則下一個讀到 `CLAUDE.md` 的人會合理地認為這個功能違規。
+Retain the invariant but **write its sole exception**, or future readers of `CLAUDE.md` will reasonably consider this feature a violation.
 
-### 3.2 `CLAUDE.md` 修改後的文字
+### 3.2 Updated `CLAUDE.md` wording
 
-拍板後，實作 PR 把該條改為：
+After the decision, the implementation PR changes the invariant to:
 
 > - **Knowing an ID is not authorization.** Possessing a `workspace_id`,
 >   `source_id` or `document_id` grants nothing. URL parameters are navigation
@@ -85,167 +87,166 @@
 >   revision of one document — never search, tree, history, MCP, or any write.
 >   No other code path may serve document content without a caller.
 
-### 3.3 Phase 3 spec §13 的修改
+### 3.3 Phase 3 §13 amendment
 
-§13 目前寫「Phase 3 不做 Source/Document ACL。需要不同成員集合就拆另一個 Team Workspace。」拍板後在其下加一段：
+§13 says Phase 3 provides no Source/Document ACL and different membership requires another Team Workspace. Add:
 
-> **例外（2026-09-23）：** 文件分享連結是單篇、唯讀、有期限、不需登入的 bearer grant，不是 ACL——它不指定對象、不擴張任何 Workspace capability、不進入 `evaluateEffectiveCapabilities`。規則見 share link spec。
+> **Exception (2026-09-23):** a document share link is an expiring, single-document, read-only bearer grant without login, not an ACL. It names no recipient, expands no Workspace capability, and does not participate in `evaluateEffectiveCapabilities`. See this specification.
 
-§2 non-goals 的「Source-level 或 Document-level ACL」維持不變：分享連結不是具名的 ACL entry。
+The §2 non-goal excluding Source/Document ACL remains: a share link is not a named ACL entry.
 
-## 4. 使用流程
+## 4. User flow
 
-**擁有者：**
+**Owner:**
 
 ```text
-My Space 文件列 → 右鍵（或 ⋯、或 ⌘K）→「Share link…」
-→ 對話框：
-    說明文字：「任何持有此連結的人都能閱讀這份文件，不需要登入。
-              他們會看到你之後的每一次修改，但無法編輯，也看不到 My Space 的其他內容。
-              請只分享你願意被轉傳的內容。」
-    標籤（選填，例如「給後端小組」）
-    期限：1 天 / 7 天 / 30 天（預設）/ 90 天
-    [建立連結]
-→ 顯示完整連結與 [複製]。複製只在使用者自己按下時執行，不在建立請求回來後自動執行：
-   等過網路往返的剪貼簿寫入，部分瀏覽器會視為沒有使用者操作而拒絕。完整連結以唯讀欄位顯示，
-   剪貼簿被拒時仍可手動選取複製。
-→ 對話框下半部列出這份文件所有連結：標籤、建立時間、到期時間、檢視次數、[複製]、[撤銷]
-   之後任何時候打開對話框，都能再複製同一條連結
+My Space document row → right-click (or ⋯ or ⌘K) → Share link…
+→ Dialog:
+    Anyone holding this link can read this document without signing in.
+    They will see your future changes, but cannot edit or view other My Space content.
+    Share only content you are comfortable having forwarded.
+    Optional label, for example “Backend group”
+    Expiry: 1 / 7 / 30 (default) / 90 days
+    [Create link]
+→ Full link and [Copy]
+→ Lower half lists all document links: label, creation, expiry, views, [Copy], [Revoke]
 ```
 
-**檢視者：**
+Copy only on the user's click, not automatically when the creation response arrives: after a network round trip, some browsers reject clipboard writes without a current user gesture. Show a read-only full-link field for manual selection/copy if clipboard access fails. Reopening the dialog always permits copying the same link.
+
+**Reader:**
 
 ```text
-點連結 → /s/:token（不經 SSO，不需要 Hub 帳號）
-→ 單篇唯讀頁：標題、Markdown 內文、「由 <擁有者> 分享 · 最後更新 <時間> · 連結到期 <時間>」
-→ 擁有者更新後，重新整理即看到新版本
-→ 任何失效情況 → 統一的「連結無法使用」頁（§6.3）
+Open link → /s/:token without SSO or a Hub account
+→ Single read-only page: title, Markdown, shared-by owner, updated time, expiry
+→ Refresh after owner updates to see current content
+→ Any invalid condition → uniform “Link unavailable” page (§6.3)
 ```
 
-## 5. 領域規則
+## 5. Domain rules
 
-### 5.1 建立
+### 5.1 Creation
 
-呼叫者（已登入的擁有者）必須同時滿足：
+The authenticated owner must satisfy all conditions:
 
-1. 文件存在，且 `status = ACTIVE`；所屬 Source `status = ACTIVE`。
-2. 文件所屬 Workspace（由 `Document → Source → Workspace` 推導）`workspace_type = PERSONAL`，且 `personal_owner_user_id = caller.identity.id`。
-3. Workspace `lifecycle_state = ACTIVE`。
-4. 該文件目前有效（未撤銷且未到期）的連結少於 **10** 條。
-5. `expiresInDays ∈ {1, 7, 30, 90}`；標籤可省略，最長 200 字元。
+1. Document and its Source exist and are `ACTIVE`.
+2. Derived Workspace (`Document → Source → Workspace`) is `PERSONAL`, with `personal_owner_user_id = caller.identity.id`.
+3. Workspace `lifecycle_state = ACTIVE`.
+4. Fewer than **10** currently valid, unrevoked, unexpired links for this document.
+5. `expiresInDays ∈ {1, 7, 30, 90}`; optional label at most 200 characters.
 
-**所有權（`SOURCE_MANAGED` / `HUB_MANAGED`）不影響是否能分享。** 分享是閱讀，所有權回答的是「誰能寫」。依 `CLAUDE.md`，這兩個問題不能混為一談——這裡要刻意寫明它**不是**條件，免得實作者順手加上。
+**`SOURCE_MANAGED` / `HUB_MANAGED` ownership does not affect sharing.** Sharing is reading; ownership determines writing. Explicitly exclude ownership from these conditions to avoid conflating them, as required by `CLAUDE.md`.
 
-### 5.2 有效性（每次檢視都重新判斷）
+### 5.2 Validity, re-evaluated on every view
 
-以下全部成立，連結才有效。任一不成立就是「無法使用」，不區分原因：
+All conditions must hold. Any failure is uniformly unavailable:
 
-1. `token` 存在。
-2. `revoked_at IS NULL`。
-3. `expires_at > now`。
-4. 文件 `status = ACTIVE`。
-5. 文件所屬 Source `status = ACTIVE`。
-6. 文件所屬 Workspace `lifecycle_state = ACTIVE`。
-7. **連結建立者仍有該文件的讀取權**：以建立者的 **direct membership** 重新評估 `document.read`。對 PERSONAL 而言就是 `OWNER / SYSTEM_PERSONAL` 那一列仍存在。
+1. Token exists.
+2. `revoked_at IS NULL`.
+3. `expires_at > now`.
+4. Document is `ACTIVE`.
+5. Source is `ACTIVE`.
+6. Workspace lifecycle is `ACTIVE`.
+7. **Issuer still has document read access**, re-evaluated using their **direct membership**. For PERSONAL, the `OWNER / SYSTEM_PERSONAL` row must still exist.
 
-檢視者的身分**不在**條件裡：不呼叫 `establishTrustedCaller`，也不讀取 SSO session。
+Reader identity is **not** a condition. Do not call `establishTrustedCaller` or read SSO session.
 
-第 7 條只看 direct role，因為 group grant 依賴當次 session 的 validated group IDs，檢視時拿不到建立者的 session。v1 只有 PERSONAL，沒有差別；這條限制是 Team 延後的原因之一（§11）。
+Condition 7 uses direct role because group grants depend on validated group IDs from the issuer's current session, unavailable during anonymous reads. In PERSONAL v1 this makes no difference, but helps explain deferring Team (§11).
 
-有效性判斷寫成 `modules/knowledge/domain` 裡的純函式，不含 I/O，讓每一條都能單獨被單元測試鎖住。
+Implement validity as a pure function under `modules/knowledge/domain`, without I/O, so every condition has an isolated unit test.
 
-### 5.3 顯示目前版本（已拍板）
+### 5.3 Current revision (decided)
 
-連結永遠解析到文件的 `current_revision`：擁有者每次儲存產生新的 revision 後，檢視者下一次載入就看到新內容。
+Always resolve `current_revision`. After each owner save creates a revision, the next reader load sees it.
 
-- 這是刻意的：對方看到的應該是擁有者「現在」的版本，修正錯字後不該還看到舊的錯誤內容。
-- 不做快取：§6.4 的 `Cache-Control: no-store` 保證重新整理一定重新讀取。
-- 不做即時推送：見 §2。
-- **代價**：擁有者之後寫進去的所有內容，持有連結的人都看得到。對話框的說明文字明講這一點（§4）。
-- **不暴露 revision 歷史**：頁面只顯示 current revision 的標題與 Markdown，不顯示 revision 清單、metadata、`createdBy`、source 名稱或 tree 位置。
+- Deliberate: readers should see the owner's current document, including typo corrections.
+- No caching: §6.4 `Cache-Control: no-store` forces re-read on refresh.
+- No live push (§2).
+- **Cost:** every future addition becomes visible to link holders. The dialog explicitly explains this (§4).
+- **No history exposure:** show only current title/Markdown, not revision list, metadata, `createdBy`, source name, or tree location.
 
-### 5.4 撤銷
+### 5.4 Revocation
 
-- 只有建立者可以撤銷。
-- 撤銷是最終的：`revoked_at` 一旦寫入就不清除。
-- 依動作模型規格 §6：無法 undo 且後果重大（會讓別人手上的連結失效）→ 使用兩段式行內確認，而不是先做再給 undo。
+- Only the issuer may revoke.
+- Final: never clear `revoked_at` after writing it.
+- Per action model §6, consequential actions without undo use two-step inline confirmation, rather than act-then-undo.
 
-### 5.5 沒有 hard delete
+### 5.5 No hard deletion
 
-符合 lifecycle 不變式：連結列與檢視計數永不刪除。過期、撤銷只是狀態。
+Keep link rows and view counts forever; expiry/revocation are states, preserving lifecycle invariants.
 
-## 6. 讀取路徑
+## 6. Read path
 
-### 6.1 唯一的入口
+### 6.1 Sole entry point
 
 ```text
-GET /s/:token   （server component，不在 /w/ layout 之下）
-  → 不呼叫 establishTrustedCaller          ← 刻意：檢視者可以是任何人
+GET /s/:token (server component, outside /w/ layout)
+  → No establishTrustedCaller: anonymous readers are intentional
   → shareLinks.readShared(token)
-       ├─ 格式不是 UUID → 直接視為無效，不查 DB
-       ├─ 以 token 查 unique index
-       ├─ 讀 link、document、source、workspace、建立者的 direct membership
-       ├─ 套用 §5.2 純函式
-       ├─ 累加檢視計數（§7.2）   ← 另一個 transaction；失敗只記 log，照常顯示內容（A5）
-       └─ 回傳 { title, markdown, sharedByName, updatedAt, expiresAt }
-  → 任何錯誤 → §6.3 的統一頁面，HTTP 404
+       ├─ Invalid UUID format → unavailable, no DB query
+       ├─ Unique-index token lookup
+       ├─ Read link, document, source, workspace, issuer direct membership
+       ├─ Apply §5.2 pure predicate
+       ├─ Increment view count (§7.2), separate transaction; log failure only (A5)
+       └─ Return { title, markdown, sharedByName, updatedAt, expiresAt }
+  → Any error → uniform page (§6.3), HTTP 404
 ```
 
-`readShared` **沒有 caller 參數**，也不呼叫 `workspaceAccess.requireMembership`。這正是它存在的原因，也因此它必須是整個 codebase 裡**唯一**不經 caller 就回傳文件內容的方法。完成判準（§13）要求用測試斷言這一點。
+`readShared` takes **no caller**, and never calls `workspaceAccess.requireMembership`. It must be the **only** content-returning method without a caller in the codebase, tested under §13.
 
-**組裝要求：** `/s/:token` 取得 `DocumentShareService` 的路徑不能經過 identity provider 的建構或 production readiness 檢查。現有的 `applicationServices()` 在 `company-sso` 模式下缺少 session reader 時會在建構階段就丟錯（`identity-provider-factory.ts`），所以 composition root 要提供一個只組裝 unit of work 與分享服務的獨立入口。E2E 以沒有設定 SSO session reader 的伺服器（`phase3UnconfiguredOrigin()`）開啟連結來證明這一點。
+**Composition:** constructing `DocumentShareService` for this route must bypass identity-provider construction and production readiness. Existing `applicationServices()` throws during construction in `company-sso` mode without a session reader (`identity-provider-factory.ts`), so provide a composition-root entry wiring only unit of work and sharing. E2E opens the link on `phase3UnconfiguredOrigin()` without an SSO reader to prove it.
 
-**部署要求：** 公司 SSO 在應用程式之前的 gateway／reverse proxy 必須放行兩個 prefix，而且**只**放行這兩個：
+**Deployment:** an SSO gateway/reverse proxy preceding the app must allow exactly these prefixes:
 
-- `/s/*`：分享頁本身。
-- `/_next/static/*`：Next.js 的建置產物（CSS、JS chunk、字型）。分享頁的樣式、字型和時間戳在瀏覽器端的換算都靠它們；只放行 `/s/*` 會讓匿名讀者拿到沒有樣式的頁面。這個 prefix 只有建置時產生的靜態檔案，不含任何使用者資料。
+- `/s/*`, the share page.
+- `/_next/static/*`, build-time CSS/JS/fonts needed for styles and browser timestamp conversion. Allowing only `/s/*` yields unstyled anonymous pages. This static prefix contains no user data.
 
-放行範圍寫錯（例如放行 `/s` 開頭的所有路徑、整個 `/_next`，或整個 `/api`）會讓其他頁面也不需登入；應用程式內的每條其他路由仍會呼叫 `establishTrustedCaller`，但不應該把這當成唯一防線。
+Do not allow every path beginning with `/s`, all of `/_next`, or `/api`. Those broaden anonymous entry. Other application routes still establish trusted callers, but that should not be the sole defense.
 
-### 6.2 不擴散到其他讀取面
+### 6.2 No expansion to other read surfaces
 
-分享連結不授予任何 Workspace capability，所以下列行為**不需要改程式**就成立，但每一條都要有測試斷言：
+No Workspace capability is granted. These hold without other code changes, but each needs assertions:
 
-- 持有連結的人，若也是 Hub 使用者，其搜尋（Phase 4）不會出現這份文件。
-- 其 Workspace selector 不會出現分享者的 My Space。
-- 以同一個 document ID 打 `/w/:workspaceId/knowledge/...` 或 `/api/documents/:id` 仍然得到 404。
-- 未來的 MCP（Phase 7）與 retrieval（Phase 8）只會繼承 Workspace policy，不會碰到分享連結。
+- A link-holding Hub user's Phase 4 search does not reveal this document.
+- Their workspace selector does not show the issuer's My Space.
+- The same document ID under `/w/:workspaceId/knowledge/...` or `/api/documents/:id` still returns 404.
+- Future MCP (Phase 7) and retrieval (Phase 8) inherit Workspace policy, not share links.
 
-### 6.3 失效頁面
+### 6.3 Invalid page
 
-所有失效情況——token 不存在、撤銷、過期、文件封存、擁有者失去存取權——顯示同一頁面、回傳同一狀態碼（404），文字涵蓋所有可能：
+Missing, revoked, expired, archived, or no-longer-authorized links use the same page and HTTP 404:
 
 ```text
-這個連結無法使用
-它可能已過期、已被撤銷，或從未存在。如果你需要這份文件，請聯絡分享者。
+This link is unavailable
+It may have expired, been revoked, or never existed. Contact the person who shared it if you need the document.
 ```
 
-沿用 Phase 2.5 §24.1「不洩漏資源是否存在」的原則。對匿名存取而言這更重要：不能讓任何人藉由回應差異，分辨一條連結是「曾經有效」還是「從未存在」。
+Follow Phase 2.5 §24.1's non-disclosure rule. Anonymous response differences must not distinguish formerly valid from never-existing links.
 
-### 6.4 回應標頭
+### 6.4 Response headers
 
-`next.config.ts` 為 `/s/:path*` 追加：
+Add for `/s/:path*` in `next.config.ts`:
 
-| Header | 值 | 原因 |
+| Header | Value | Reason |
 | --- | --- | --- |
-| `Referrer-Policy` | `no-referrer` | 內文裡的外部連結被點擊時，token 不能經由 `Referer` 洩漏給外站 |
-| `Cache-Control` | `private, no-store` | 撤銷後不能再由任何快取送出內容；擁有者更新後重新整理一定拿到新版本（§5.3） |
-| `X-Robots-Tag` | `noindex, nofollow` | 防止搜尋引擎或內部爬蟲收錄 |
-| `Content-Security-Policy` | `img-src 'self'; frame-ancestors 'none'` | 匿名頁面不能被別的網站嵌入 iframe，且保留全站的圖片限制 |
+| `Referrer-Policy` | `no-referrer` | External links must not leak the token through `Referer` |
+| `Cache-Control` | `private, no-store` | No cached content after revocation; refreshing reads owner updates (§5.3) |
+| `X-Robots-Tag` | `noindex, nofollow` | Discourage search engines and internal crawlers |
+| `Content-Security-Policy` | `img-src 'self'; frame-ancestors 'none'` | Prevent iframe embedding and retain global image restrictions |
 
-`markdown-image-policy` 照常套用。CSP 必須是**一個** header 同時帶兩個 directive：Next.js 對同一個 key 只保留最後一條符合的規則，所以 `/s/*` 若只設 `frame-ancestors`，會把全站的 `img-src 'self'`（Issue #20）蓋掉，而這正好是唯一不需登入的頁面。E2E 斷言完整的 header 值。
+Retain `markdown-image-policy`. CSP must be **one header containing both directives**: Next.js keeps only the last matching rule for a key, so setting only frame-ancestors would override global `img-src 'self'` (Issue #20) on the sole anonymous page. E2E asserts the full header.
 
-### 6.5 頁面本身
+### 6.5 Page
 
-- 單欄閱讀頁，重用既有的 `MarkdownRenderer`。不掛 app shell、tree、workspace selector、inspector。
-- **不放任何進入 Hub 的連結。** 檢視者多半沒有 Hub 帳號，連回 `/` 只會把他帶到 SSO 登入頁。
-- 不輸出 Open Graph／Twitter card 的 meta tag：聊天工具的連結預覽不應該拿到內文摘要（見 §14 第 3 點）。`<title>` 仍是文件標題。
-- 內文裡的相對連結、Hub 內部連結，對檢視者會是 404——這是正確行為，不做改寫。
-- 樣式依 `frontend-design-language.md`：只用契約列出的 token，顏色只來自 `globals.css` 的 CSS 變數。
+- Single-column reading using existing `MarkdownRenderer`; no app shell, tree, selector, or inspector.
+- **No Hub entry links:** most readers have no account; linking `/` sends them to SSO.
+- No Open Graph/Twitter card tags: chat previews should not expose body summaries (§14-3). `<title>` remains the document title.
+- Relative/internal Hub links return 404 for these readers; correct behavior, no rewriting.
+- Follow `frontend-design-language.md` tokens and `globals.css` color variables.
 
-## 7. 資料模型
+## 7. Data model
 
-新增 migration `011-document-share-links`。
+Add migration `011-document-share-links`.
 
 ### 7.1 `document_share_links`
 
@@ -253,7 +254,7 @@ GET /s/:token   （server component，不在 /w/ layout 之下）
 CREATE TABLE document_share_links (
   id           UUID        NOT NULL,
   document_id  UUID        NOT NULL,
-  token        UUID        NOT NULL,   -- UUIDv4，見 §8
+  token        UUID        NOT NULL,   -- UUIDv4; see §8
   label        VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL,
   created_by   UUID        NOT NULL,
   created_at   DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
@@ -271,11 +272,11 @@ CREATE TABLE document_share_links (
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
-**刻意不存 `workspace_id` 或 `source_id`。** 依「Scope is derived, never stored twice」，範圍一律從 `Document → Source → Workspace` 推導。存一份副本只會製造兩者不一致的可能。
+**Do not store `workspace_id` or `source_id`.** Scope is derived from Document → Source → Workspace, never duplicated into potentially inconsistent copies.
 
 ### 7.2 `document_share_link_views`
 
-檢視者是匿名的，所以只記錄**次數**，不記錄是誰：
+Readers are anonymous; record **counts**, not identity:
 
 ```sql
 CREATE TABLE document_share_link_views (
@@ -289,104 +290,104 @@ CREATE TABLE document_share_link_views (
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
-每次檢視執行 `INSERT … ON DUPLICATE KEY UPDATE last_viewed_at = …, view_count = view_count + 1`。
+Each view executes `INSERT … ON DUPLICATE KEY UPDATE last_viewed_at = …, view_count = view_count + 1`.
 
-**不記錄 IP、User-Agent 或任何可識別檢視者的資料。** 那些是個人資料，保存它們需要另一套保存期限與存取規則；而且在匿名、可轉傳的前提下，它們也無法可靠地回答「誰看過」。擁有者從計數得到的是「這條連結有沒有被用、用得多頻繁」，這足以決定要不要撤銷。
+**No IP, User-Agent, or identifying reader data.** Personal data would need separate retention/access rules and cannot reliably identify readers of forwarded anonymous links. Usage/frequency counts suffice for deciding whether to revoke.
 
-**為什麼不寫進 `workspace_audit_events`：** 那張表記錄的是治理 mutation，一次操作一列，由 Team 的 OWNER/ADMIN 在 Audit 頁閱讀。檢視是高頻的讀取事件，逐筆寫入會淹沒治理紀錄，而且 My Space 本來就沒有 Audit 頁（Phase 3 §17）。
+**Not `workspace_audit_events`:** that table holds one row per governance mutation for Team OWNER/ADMIN audit. High-frequency reads would overwhelm it, and My Space has no Audit page (Phase 3 §17).
 
-### 7.3 治理事件
+### 7.3 Governance events
 
-建立與撤銷**仍然**寫入 `workspace_audit_events`，並與 mutation 同一個 transaction（Phase 3 §16 的原子性要求）：
+Create/revoke still write `workspace_audit_events` **in the mutation transaction**, per Phase 3 §16:
 
 | `event_type` | `target_type` | `target_id` | `payload` |
 | --- | --- | --- | --- |
 | `DOCUMENT_SHARE_LINK_CREATED` | `DOCUMENT_SHARE_LINK` | link id | `{ documentId, expiresAt, label }` |
 | `DOCUMENT_SHARE_LINK_REVOKED` | `DOCUMENT_SHARE_LINK` | link id | `{ documentId }` |
 
-`workspace_id` 在寫入當下推導。payload 絕不包含 token：audit 的讀者不一定是連結的擁有者，不能藉此取得可用的連結。
+Derive `workspace_id` at write time. Never include tokens in payload: audit readers need not own the link and must not obtain working links from it.
 
 ## 8. Token
 
-- 產生：`crypto.randomUUID()`（UUIDv4，122 bit 隨機），URL 為 `/s/<token>`。
-- **不可以用 codebase 慣用的 `uuidv7()`。** 連結本身的主鍵 `id` 仍然用 UUIDv7，但 token 不行，原因依嚴重程度：
-  1. **同一毫秒內是連號的。** `src/shared/ids/uuidv7.ts` 為了單調遞增，同一毫秒內把上一個值的隨機部分加 1。`create` 在同一個 transaction 裡依序產生連結 `id`、token、audit 事件 `id`，三者實測為 `…d31e`、`…d31f`、`…d320`——看得到連結 ID（撤銷 API 的 URL、access log）或 audit 事件 ID 的人，就能算出 token。同一個 Node 程序裡，不同使用者在同一毫秒建立的連結也會相鄰。
-  2. 前 48 bit 是時間戳，會洩漏連結的建立時間，隨機部分最多約 74 bit。
-  3. token 與系統裡所有 ID 長得一樣，容易被當成一般 ID 寫進 log 或 payload。
+- Generate with `crypto.randomUUID()`: UUIDv4, 122 random bits, `/s/<token>`.
+- **Never use the usual `uuidv7()` for tokens.** Link primary key `id` remains UUIDv7, but tokens cannot, in descending severity:
+  1. **Sequential within a millisecond.** `src/shared/ids/uuidv7.ts` increments the preceding random portion for monotonicity. Creation sequentially issues link ID, token, and audit ID in one transaction; measured endings `…d31e`, `…d31f`, `…d320` allow deriving the token from an ID visible in revoke URLs/logs/audit. Different users in one process/millisecond can also receive adjacent values.
+  2. A 48-bit timestamp reveals issue time and leaves at most roughly 74 random bits.
+  3. Tokens resemble normal IDs and may be logged or placed in payloads accidentally.
 
-  UUIDv4 的代價只有 index 插入區域性較差，這張表的規模可以忽略。實作須加一個測試：連續建立兩條連結，斷言兩個 token 之差不是 1，且 token 的 version 欄位為 4。
-- 儲存：明文存在 `token` 欄位（MariaDB native `UUID`），unique index 查詢。
-- 擁有者隨時可以從對話框再複製同一條連結。
-- 產生由新的 port（`ShareTokenIssuer`）提供，domain 與 application 層不直接依賴 `node:crypto`，測試可注入固定值。
+  UUIDv4 costs poorer index locality, negligible for this table. Test consecutive links for token difference not equal to 1 and version equal to 4.
+- Store plaintext in independent native MariaDB `UUID` token column with unique index.
+- Owners can copy the same link whenever needed.
+- New `ShareTokenIssuer` port supplies generation; domain/application do not directly depend on `node:crypto`, and tests inject values.
 
-不需登入的前提下，token 是**唯一**的防線，所以不接受擁有者自訂 slug，也不接受縮短。
+Without login, the token is the **sole** defense. No owner-chosen slugs or shortening.
 
-**為什麼明文保存而不是只存 hash：** 只存 hash 時，擁有者建立連結後就再也複製不到它，要再分享只能建立新連結——這與「打開分享對話框、按複製」的預期不符。明文保存的代價是「能讀資料庫的人能拿到可用的連結」；但能讀資料庫的人本來就讀得到所有文件內容，多出來的只是「還能透過連結看到之後的更新」，而這由期限與撤銷限制。為此引入 hash 或密鑰管理不划算（決定 A3）。
+**Why plaintext rather than hash-only:** hashes prevent copying a link after creation, forcing a new link for every later share, contrary to the dialog workflow. Database readers can already read all content; plaintext additionally gives access to future updates, bounded by expiry/revocation. Hash/key management is not justified here (A3).
 
-每份文件最多 10 條有效連結的上限仍保留：分享給不同對象時用不同連結，可以個別撤銷、個別看檢視次數。
+Keep at most 10 active links per document, allowing separate recipients' links, revocation, and view counts.
 
-## 9. 應用層與 HTTP
+## 9. Application and HTTP
 
-### 9.1 放在哪個模組
+### 9.1 Module
 
-放在 `knowledge` 模組。分享連結是「讀取一份文件」的另一種授權方式，而 `KnowledgeRepositories` 已經帶有 `workspaces`、`workspaceMemberships`、`sourcePolicy`，可以在不跨越 lint 邊界的情況下完成 §5 的所有檢查。不新增第五個模組。
+Use `knowledge`: sharing is another authorization path for reading a document. `KnowledgeRepositories` already has `workspaces`, `workspaceMemberships`, and `sourcePolicy`, allowing §5 checks without violating lint boundaries. Add no fifth module.
 
 ```text
-src/modules/knowledge/domain/document-share-link.ts          實體、§5.1 / §5.2 純函式、錯誤
+src/modules/knowledge/domain/document-share-link.ts          Entity, §5.1/§5.2 predicates, errors
 src/modules/knowledge/ports/document-share-link-repository.ts
 src/modules/knowledge/ports/share-token-issuer.ts
-src/modules/knowledge/application/document-share-service.ts   create / list / revoke / readShared
+src/modules/knowledge/application/document-share-service.ts   create/list/revoke/readShared
 src/infrastructure/database/mariadb/repositories/document-share-links.ts
 src/infrastructure/database/mariadb/migrations/011-document-share-links.ts
-src/server/share-read.ts                                      /s/:token 的 read projection
-src/server/composition.ts                                     wiring
+src/server/share-read.ts                                      /s/:token read projection
+src/server/composition.ts                                     Wiring
 ```
 
-### 9.2 Service 介面
+### 9.2 Service interface
 
 ```ts
 interface DocumentShareService {
-  create(caller, { documentId, label?, expiresInDays }): Promise<ShareLinkView>;   // 含 path
-  list(caller, documentId): Promise<ShareLinkView[]>;   // 含 path 與每日檢視計數
+  create(caller, { documentId, label?, expiresInDays }): Promise<ShareLinkView>; // Includes path
+  list(caller, documentId): Promise<ShareLinkView[]>; // Includes path and daily view counts
   revoke(caller, linkId): Promise<void>;
-  readShared(token): Promise<SharedDocumentView>;       // 沒有 caller：唯一不經 membership 的內容讀取
+  readShared(token): Promise<SharedDocumentView>; // No caller: sole content read without membership
 }
 ```
 
-`create`、`list`、`revoke` 都需要已登入的 caller，並走 §5.1 的條件 2（必須是 My Space 擁有者），不接受任何由 client 傳入的 workspace ID。
+Create/list/revoke require authenticated caller and §5.1-2 My Space ownership; accept no client-supplied workspace ID.
 
-`readShared` 刻意不接受 `CallerContext`：即使檢視者碰巧已登入，也不能讓他的身分影響結果，否則同一條連結對不同人會有不同行為，測試與推理都會變複雜。
+`readShared` deliberately accepts no `CallerContext`. An incidentally signed-in reader must not change outcomes, complicating tests or giving different behavior for the same link.
 
-### 9.3 鎖定順序
+### 9.3 Lock order
 
-建立與撤銷遵循 Phase 3 §14.2 的「non-import existing Source」路徑：
+Create/revoke follow Phase 3 §14.2's non-import existing Source path:
 
 ```text
-Source FOR UPDATE → Workspace FOR UPDATE → 重新驗證 §5.1 → insert/update link + audit
+Source FOR UPDATE → Workspace FOR UPDATE → Recheck §5.1 → Insert/update link + audit
 ```
 
-與 resync（Source → Workspace）同序，不會造成 lock inversion。`readShared` 不取 row lock：它是讀取，而 §5.2 每次都重新判斷，文件在檢視後一瞬間被封存，下一次檢視自然失效。
+This matches re-sync and avoids inversion. `readShared` takes no row lock: recheck §5.2 every time; if archived just after reading, the next view is invalid.
 
-### 9.4 路由
+### 9.4 Routes
 
-| 方法 | 路徑 | 需要登入 | 回應 |
+| Method | Path | Sign-in | Response |
 | --- | --- | --- | --- |
-| `POST` | `/api/documents/:documentId/share-links` | 是 | `201 { link }`，`link.path` 為 `/s/<token>` |
-| `GET` | `/api/documents/:documentId/share-links` | 是 | `200 { links }`，每條都含 `path` |
-| `POST` | `/api/share-links/:linkId/revoke` | 是 | `204` |
-| `GET` | `/s/:token` | **否** | 頁面；失效一律 404 |
+| `POST` | `/api/documents/:documentId/share-links` | Yes | `201 { link }`, `link.path = /s/<token>` |
+| `GET` | `/api/documents/:documentId/share-links` | Yes | `200 { links }`, each includes `path` |
+| `POST` | `/api/share-links/:linkId/revoke` | Yes | `204` |
+| `GET` | `/s/:token` | **No** | Page; all invalid links return 404 |
 
-API 回傳路徑而不是完整 URL：伺服器在 reverse proxy 後面看到的 `Host` 不一定是使用者看到的網址，而且 `Host` 可由請求偽造。完整連結由瀏覽器以 `window.location.origin` 組成。
+Return paths, not full URLs: reverse-proxy Host may differ from public origin and can be forged. Browser uses `window.location.origin`.
 
-撤銷用 `POST …/revoke` 而不是 `DELETE`：沒有 hard delete，路由不該暗示有。
+Use POST revoke, not DELETE: no hard deletion is implied.
 
-錯誤對應沿用 `http-error-response.ts`：文件不存在或呼叫者無權 → 404；非 PERSONAL、文件已封存、超過 10 條上限 → 409 並附明確原因。
+Reuse `http-error-response.ts`: missing/inaccessible document → 404; non-PERSONAL, archived document, or over 10 links → 409 with explicit reason.
 
 ## 10. UI
 
-### 10.1 動作登錄
+### 10.1 Action registry
 
-依動作模型規格，所有出口都從 `action-registry.ts` 讀取。新增：
+All surfaces use `action-registry.ts` per action model. Add:
 
 ```ts
 {
@@ -400,125 +401,125 @@ API 回傳路徑而不是完整 URL：伺服器在 reverse proxy 後面看到的
 }
 ```
 
-在三個軸上的可用性（動作模型規格 §4.1）：
+Availability across action model §4.1's axes:
 
-1. **工作區能力**：`workspaceType === "PERSONAL"` 且 `confirmed`。
-2. **Source 所有權**：**不看**。見 §5.1 最後一段。
-3. **目標狀態**：`status === "ACTIVE"` 且 `revision === "CURRENT"`。在歷史版本上提供分享，會讓人以為分享的是那個版本。`status` 同時反映文件所屬 source 的狀態：source 封存時，裡面仍是 ACTIVE 的文件也視為 ARCHIVED，因為建立會被 §5.1 第 1 條拒絕。
+1. **Workspace capability:** `workspaceType === "PERSONAL"` and `confirmed`.
+2. **Source ownership:** **not checked**, per §5.1.
+3. **Target:** `status === "ACTIVE"` and `revision === "CURRENT"`. Offering share on history misleadingly implies snapshot sharing. Status incorporates source state; an ACTIVE document in an archived source is effectively ARCHIVED because §5.1-1 rejects creation.
 
-`available()` 決定顯示什麼，service 決定發生什麼：§13 要求分別斷言兩者。
+`available()` controls display, service controls execution; §13 asserts both separately.
 
-文件頁標頭也提供同一個動作（從 registry 取），與 Edit 並列。標頭只放圖標，`aria-label` 與 tooltip 仍是「Share link…」：標頭沒有 Copy link 可以混淆，點下去只會開啟對話框，建立連結前對話框會說明後果。圖標用 `Share2` 而不是鏈結，因為 Copy link 已經用了鏈結圖標，兩者在右鍵選單裡並列。
+Header also uses the registry action beside Edit. Icon-only with “Share link…” label/tooltip: no header Copy link ambiguity, and the dialog explains consequences before creation. Use `Share2`, not chain icon already used by Copy link beside it in row menus.
 
-### 10.2 用詞
+### 10.2 Wording
 
-標籤是「Share link…」，不是「Share」。「Share」在其他產品裡通常包含邀請特定人、給予編輯權；這裡只做一件事，就是產生一條唯讀連結。刪節號表示會先開對話框。
+Use “Share link…”, not “Share”, which elsewhere suggests invitations/edit grants. This action only creates a read-only link; ellipsis indicates a dialog.
 
-對話框的說明文字（§4）必須明寫「不需要登入」與「會看到你之後的修改」這兩點。這是擁有者做決定時唯一看得到的風險說明，不能為了簡潔而省略。
+Dialog must explicitly say **no sign-in** and **future changes are visible** (§4). This is the owner's available risk information; do not omit it for brevity.
 
-### 10.3 回饋
+### 10.3 Feedback
 
-- 建立成功：結果本身（連結 + 複製按鈕）就顯示在對話框裡，不另外跳 toast——同動作模型規格 §6「會導航到結果本身的操作不給 toast」的精神。
-- 撤銷成功：toast，不提供 undo（§5.4）。
-- 失敗：錯誤留在對話框的控制項旁。
+- Create success displays link/Copy in dialog, without an additional toast, consistent with action model §6's result-oriented feedback.
+- Revoke success shows toast without undo (§5.4).
+- Failures stay beside dialog controls.
 
-## 11. Team Workspace 為什麼延後
+## 11. Why Team sharing is deferred
 
-不是做不到，而是有三個問題 v1 不應該順便決定：
+Three decisions should not be incidental v1 choices:
 
-1. **治理繞道。** Team 的成員集合由 OWNER/ADMIN 管理。任何 EDITOR 都能把 Team 文件以不需登入的連結送出去，等於繞過整套治理。需要一個由 OWNER 控制的 Workspace 設定（例如 `shareLinksAllowed`），以及「誰能建立」的規則（`document.write`？ADMIN 以上？）。
-2. **建立者的授權無法離線評估。** §5.2 第 7 條只能看 direct role。在 Team 裡，靠 SSO group 取得存取權的建立者，檢視時無法重新評估——要嘛只允許有 direct role 的人建立，要嘛接受「group 被移除後連結仍有效直到過期」。
-3. **稽核可見性。** Team 的 OWNER/ADMIN 應該能在 Audit 頁看到並撤銷成員發出的連結，那是新的治理權限。
+1. **Governance bypass:** Team OWNER/ADMIN controls membership. Any EDITOR issuing anonymous links would bypass governance. Need OWNER-controlled Workspace setting such as `shareLinksAllowed` and issuer authority rules (`document.write`? ADMIN+?).
+2. **Issuer authority cannot be evaluated offline:** §5.2-7 sees only direct role. Group-derived Team access cannot be rechecked without issuer session. Either require direct role or accept continued validity after group removal until expiry.
+3. **Audit visibility:** Team OWNER/ADMIN should inspect/revoke member links through Audit, adding governance authority.
 
-這三點應該是一份獨立規格，在 v1 的使用資料出來之後再寫（決定 A6）。
+Write a separate specification after v1 usage evidence (A6).
 
-### 11.1 第二階段的起點（未拍板）
+### 11.1 Suggested phase-2 starting point (undecided)
 
-以下是寫 Team 規格時的建議起點，**不是**本規格的決定，第二階段的規格必須重新審查每一條：
+These are proposals, **not this specification's decisions**, and require fresh review:
 
-| 問題 | 建議 |
+| Question | Proposal |
 | --- | --- |
-| Team 能不能用 | OWNER 在 Team 設定中開關，預設關閉 |
-| 誰能建立 | 具 **direct role** 且有 `document.write` 的成員（EDITOR 以上）；只靠 SSO group 取得權限者不能建立（對應上方第 2 點） |
-| 誰能撤銷 | 建立者本人，以及該 Team 的 OWNER／ADMIN |
-| 誰看得到連結清單 | OWNER／ADMIN 看全部，其他人只看自己建立的 |
-| 稽核 | 建立與撤銷事件出現在 Team 的 Audit 頁 |
-| 自動失效 | 建立者被移出 Team 或失去讀取權時，其連結即失效（§5.2 第 7 條已涵蓋） |
+| Team availability | OWNER-controlled setting, off by default |
+| Issuers | Members with **direct role** and `document.write` (EDITOR+); group-only members excluded |
+| Revocation | Issuer and Team OWNER/ADMIN |
+| Link list | OWNER/ADMIN sees all; others see their own |
+| Audit | Create/revoke events in Team Audit |
+| Automatic invalidation | Issuer removed or loses read access (§5.2-7 already covers it) |
 
-本規格的資料模型不需要為此預留欄位：連結不存 scope，Team 的開關屬於 `workspaces` 表，建立者與撤銷者已有欄位。
+No extra link-model fields are needed: links store no scope, settings belong to `workspaces`, and issuer/revoker fields already exist.
 
-## 12. 決定
+## 12. Decisions
 
-所有決定均已拍板，沒有待決事項。
+All decided; no open decisions.
 
-### 已拍板（2026-09-23）
+### Confirmed 2026-09-23
 
-| # | 決定 | 內容 |
+| # | Decision | Content |
 | --- | --- | --- |
-| A0 | 使用對象 | 一般開發者的知識分享，不是專為特定敏感資料領域設計；因此不設全域開關，檢視計數是統計用途而非稽核 |
-| A1 | 檢視不需登入 | 持有連結即可閱讀；`/s/:token` 不經 SSO、不需要 Hub 帳號。影響見 §2 最後一段、§6.1 部署要求、§7.2、§14 |
-| A2 | 顯示目前版本 | 擁有者更新後，檢視者重新整理即看到新版本；不做快照、不做即時推送（§5.3） |
-| A3 | Token 形式 | 隨機 UUIDv4，明文保存於獨立的 unique 欄位；擁有者可隨時再複製（§8） |
-| A4 | 期限 | 1 / 7 / 30 / 90 天，必填，預設 30 天 |
-| A5 | 檢視計數寫入失敗 | fail open：在獨立的 transaction 寫入，失敗只記 log（不含 token），照常顯示內容 |
-| A6 | 分階段 | 第一階段只做 My Space；Team 在第一階段上線、有使用資料後另寫規格（§11） |
+| A0 | Audience | General developer knowledge sharing, not a specific sensitive-data domain; no global flag; view counts are statistics, not audit |
+| A1 | Anonymous reads | Possession grants reading without SSO/account; impacts §2, §6.1, §7.2, §14 |
+| A2 | Current content | Refresh sees updates; no snapshots or live push (§5.3) |
+| A3 | Token | Random UUIDv4, plaintext independent unique field, repeatable owner copying (§8) |
+| A4 | Expiry | Required 1/7/30/90 days, default 30 |
+| A5 | Count-write failure | Fail open: independent transaction, log without token, still display content |
+| A6 | Staging | My Space first; specify Team later using first-wave usage evidence (§11) |
 
-## 13. 完成判準
+## 13. Acceptance criteria
 
-**領域（單元測試，無 DB）**
+**Domain, unit without DB**
 
-- §5.2 的每一條條件各有一個「只有這條不成立 → 無效」的案例。
-- §5.1 的每一條條件各有一個拒絕案例；`SOURCE_MANAGED` 文件**可以**建立分享。
-- `action-registry`：PERSONAL + ACTIVE + CURRENT 才出現 `document.share`；TEAM、ARCHIVED、HISTORICAL、`confirmed = false` 都不出現。
+- Each §5.2 condition has a case where only that condition fails.
+- Each §5.1 condition has a refusal case; `SOURCE_MANAGED` sharing **succeeds**.
+- Registry offers `document.share` only for PERSONAL/ACTIVE/CURRENT; exclude TEAM/ARCHIVED/HISTORICAL/unconfirmed.
 
-**整合（MariaDB）**
+**MariaDB integration**
 
-- 非擁有者、Team 文件、封存文件、第 11 條連結：`create` 被拒，且沒有寫入任何 link 或 audit 列。
-- `create` 與 `DOCUMENT_SHARE_LINK_CREATED` 在同一 transaction：模擬 audit 寫入失敗時，link 也不存在。
-- token 是 UUIDv4（version 欄位為 4），且不等於同一列的 `id` 或 `document_id`；audit payload 不含 token。
-- 格式不是 UUID 的 `/s/:token` 回傳失效頁，且不發出任何 DB 查詢。
-- 撤銷後、到期後、文件經 resync 變成 ARCHIVED 後、Source 封存後，`readShared` 一律失敗。
-- 模擬檢視計數寫入失敗：`readShared` 仍回傳內容。
-- 擁有者建立新 revision 後，`readShared` 回傳新的內容。
-- 同一天檢視三次 → 一列，`view_count = 3`；表中沒有任何可識別檢視者的欄位。
-- 並行：resync apply 與 `create` 同時執行不會死結。
+- Reject nonowners, Team documents, archived documents, and the 11th link without link/audit writes.
+- Create/audit share one transaction; simulate audit failure and assert no link.
+- Tokens have version 4 and differ from row/document IDs; audit payload excludes token.
+- Invalid UUID routes return unavailable without any DB query.
+- Revoke, expiry, resync archive, and source archive all make `readShared` fail.
+- Count-write failure still returns content.
+- New owner revision returns new content.
+- Three views in one day create one row with `view_count = 3`; no identifying columns.
+- Concurrent re-sync Apply/create avoids deadlock.
 
-**不擴散（整合或 e2e）**
+**Non-expansion, integration or E2E**
 
-- 另一位 Hub 使用者持有有效連結時：搜尋不到該文件、selector 沒有分享者的 My Space、`/w/.../knowledge/...` 與 `/api/documents/:id` 都是 404。
-- 以程式掃描斷言：除了 `readShared`，knowledge 模組中所有回傳 revision 內容的 public 方法都接受 `CallerContext` 並經過 `requireMembership`（或既有的 `requireVisibleDocument`）。
-- 除了 `/s/*`，所有頁面與 API 在沒有 session 時都失敗（以 e2e 的無 session browser context 抽查各類路由）。
+- Another signed-in link holder cannot find document in search/selector or read it through `/w/.../knowledge/...` or `/api/documents/:id`; both 404.
+- Scan programmatically: all public knowledge methods returning revision content except `readShared` accept `CallerContext` and require membership or `requireVisibleDocument`.
+- Sample route classes without session; every page/API outside `/s/*` fails.
 
-**E2E（Playwright）**
+**Playwright E2E**
 
-- 擁有者右鍵 → Share link… → 建立 → 在**沒有任何 session 的 browser context** 開啟連結 → 看到內容與「由 X 分享」。
-- 擁有者編輯文件 → 匿名檢視者重新整理 → 看到新內容。
-- 擁有者撤銷（含兩段式確認）→ 匿名檢視者重新整理 → 統一的失效頁，HTTP 404。
-- `/s/*` 回應帶有 §6.4 的四個 header，且頁面沒有 Open Graph meta tag。
+- Owner row Share link → create → open in **session-free context**, showing content/shared-by.
+- Owner edit → anonymous refresh shows new content.
+- Two-step revoke → anonymous refresh gets uniform unavailable page/404.
+- Assert all four §6.4 headers and absence of Open Graph tags.
 
-## 14. 已知限制
+## 14. Known limitations
 
-1. **任何拿到連結的人都能看，包括已離職的人。** 不需登入代表 Hub 無法區分檢視者，SSO 的離職處理也擋不住他們。擁有者離職時，他發出的連結同樣存活到過期。必填期限（A4）與擁有者隨時撤銷，是本規格對這一點的緩解。
-2. **轉寄沒有邊界。** 連結可以被轉到公司外；能不能打開只取決於網路可達性（§2）。檢視計數能讓擁有者發現「次數比預期多」，但無法得知是誰。
-3. **聊天工具的連結預覽會抓取頁面。** 貼到 Slack／Teams 時，對方伺服器會先抓一次頁面來產生預覽：`<title>`（文件標題）會出現在聊天室裡，而且算一次檢視。§6.5 不輸出 Open Graph tag，所以內文摘要不會出現在預覽裡，但標題會。
-4. **token 在 URL 裡。** 會出現在瀏覽器歷史紀錄，也可能出現在反向代理的 access log。部署時應遮罩 `/s/` 路徑。
-5. **沒有資料分類。** 系統無法得知一份文件是否含敏感資料，也就無法禁止分享它。若之後引入分類，分享連結是第一個應該接上的地方。
-6. **相對連結與圖片對檢視者無效。** Assets 目前只存 metadata，Hub 內部連結檢視者也打不開。
-7. **沒有速率限制。** 122 bit 隨機的 token 無法被暴力猜中，但匿名端點仍可能被大量請求。速率限制放在 gateway 層（§15），不在應用程式內實作。
+1. **Anyone with the link can read, including former employees.** No login means SSO offboarding cannot identify/block readers. Issuer offboarding also leaves links alive until expiry. Required expiry (A4) and owner revocation are the mitigations.
+2. **Forwarding is unbounded.** External forwarding is limited only by network reachability (§2). Counts can reveal unexpected frequency, not identity.
+3. **Chat previews fetch pages.** Slack/Teams servers fetch the page, expose document `<title>` in chat, and count a view. No Open Graph tags (§6.5) prevents supplied body-summary previews, but title remains.
+4. **URL tokens** enter browser history and potentially proxy access logs. Mask `/s/` paths in deployment.
+5. **No classification:** system cannot identify/prohibit sensitive shares. Sharing should be an early integration point if classification is added.
+6. **Relative links/images do not work for these readers:** assets are metadata-only and internal documents remain inaccessible.
+7. **No application rate limiting:** 122 random bits prevent practical guessing, but anonymous requests can still flood the endpoint. Enforce limits at gateway (§15).
 
-## 15. 拍板後要同步修改的文件與設定
+## 15. Documents and settings to update after decision
 
-**文件**——實作 PR 必須在同一個 PR 內完成，避免規格與契約分開漂移：
+**Documentation, in the same implementation PR to prevent drift:**
 
-- `CLAUDE.md`：§3.2 的文字。
-- Phase 3 spec §13：§3.3 的例外段落。
-- `README.md` 的 canonical documents 表：加入本規格與對應的 implementation plan。
-- `frontend-design-language.md`：如果 `share` 圖示或閱讀頁需要新的 token，依契約規定一併修改。
+- `CLAUDE.md`: §3.2 wording.
+- Phase 3 §13: §3.3 exception.
+- README canonical table: this specification and plan.
+- `frontend-design-language.md`: update together if share icon/reader needs tokens.
 
-**上線檢查清單**——不在程式範圍內，但上線前必須逐項確認並記錄在 `docs/superpowers/verification/`：
+**Deployment checklist**, outside code scope but required before rollout, recorded in `docs/superpowers/verification/`:
 
-- [ ] SSO gateway 只對 `/s/*` 與 `/_next/static/*` 放行，其餘路徑仍強制登入（附設定片段，§6.1）。
-- [ ] 記錄 Hub 主機的網路可達範圍（內網／對外）；對外時，分享連結等同網際網路公開。
-- [ ] Reverse proxy 的 access log 遮罩 `/s/` 之後的 token。
-- [ ] Gateway 對 `/s/*` 設定速率限制。
-- [ ] 資安單位知悉此功能提供不需登入的讀取路徑。
+- [ ] SSO gateway allows only `/s/*` and `/_next/static/*`, with login on other paths; attach configuration (§6.1).
+- [ ] Record internal/external network reachability; externally reachable links are internet-readable.
+- [ ] Mask tokens after `/s/` in proxy access logs.
+- [ ] Gateway rate-limits `/s/*`.
+- [ ] Security stakeholders know this anonymous read path exists.

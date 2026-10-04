@@ -1,5 +1,7 @@
 # Folder Sync First Wave Implementation Plan
 
+**English** | [繁體中文](2026-10-03-folder-sync-first-wave.zh-TW.md)
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Complete a safe folder-check → preview → Apply → read-updates workflow, with a reading-oriented My Space and before/after screenshots.

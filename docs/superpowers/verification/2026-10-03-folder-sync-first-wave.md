@@ -1,5 +1,7 @@
 # Folder Sync first-wave verification
 
+**English** | [繁體中文](2026-10-03-folder-sync-first-wave.zh-TW.md)
+
 Completed 2026-10-04. Approved scope: folder checks → readable preview → safe Apply → durable sync history → personal reading updates, excluding images and attachment binaries.
 
 Baseline application: `15c8b7786239735ece7112bb663760346b33a580` (main/PR #104).

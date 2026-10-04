@@ -1,5 +1,7 @@
 # Knowledge Hub — Phase 2 Stable Source Identity Amendment
 
+**English** | [繁體中文](2026-09-17-phase-2-stable-source-identity-amendment-design.zh-TW.md)
+
 | Item | Value |
 | --- | --- |
 | Date | 2026-09-17 |

@@ -1,63 +1,67 @@
 # Phase 4 Discovery & Read API Implementation Plan
 
+**English** | [繁體中文](2026-09-16-phase-4-discovery-read-api.zh-TW.md)
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 讓使用者在 Web UI 以關鍵字搜尋自己有權閱讀的 Knowledge，中英混合內容皆可搜，且搜尋結果永不外洩無權閱讀的內容。
+**Goal:** Let users search Knowledge they are authorized to read by keyword in the Web UI, including mixed Chinese/English content, without search results ever exposing unreadable content.
 
-**Architecture:** 不新增 schema、不新增 derived index、不新增外部服務。搜尋是一個單一 SQL：在「呼叫者具 `document.read` 的 Workspace 集合」內，對每份 Document 的**目前版本**標題與本文做 `COLLATE utf8mb4_unicode_ci LIKE` 子字串比對，依標題命中數與更新時間排序，並在同一查詢內用 `LOCATE`／`SUBSTRING` 取 snippet。查詢以 `max_statement_time=5` 設上限。
+**Architecture:** No new schema, derived index, or external service. Search uses one SQL query: within Workspaces where the caller has `document.read`, substring-match each Document's **current revision** title and body using `COLLATE utf8mb4_unicode_ci LIKE`, sort by title match count and update time, and extract snippets with `LOCATE` / `SUBSTRING` in the same query. Bound the query with `max_statement_time=5`.
 
-**Tech Stack:** TypeScript、Next.js 15 App Router（server components）、MariaDB 10.11（`mariadb` driver）、vitest（unit／integration）、Playwright（E2E）、Tailwind。**不新增任何 npm 套件。**
+**Tech Stack:** TypeScript, Next.js 15 App Router (server components), MariaDB 10.11 (`mariadb` driver), vitest (unit/integration), Playwright (E2E), Tailwind. **No new npm packages.**
 
 **Spec:** `docs/superpowers/specs/2026-09-16-phase-4-discovery-read-api-design.md`
 
+Chinese text in code examples and quoted interface copy is preserved as literal test input or UI examples.
+
 ## Global Constraints
 
-- **不新增 npm 依賴。** 搜尋完全建構在既有 stack 上。
-- **資料庫是 MariaDB 10.11**，且該環境**沒有任何 full-text parser plugin**（無 ngram、無 Mroonga），所以不得使用 `FULLTEXT` / `MATCH ... AGAINST`。
-- **比對一律用 `COLLATE utf8mb4_unicode_ci`，不得使用 `LOWER()`**：實測 `LOWER()` 慢約 36%，且無法處理全形字元。
-- **搜尋只在呼叫者具 `document.read` 的 Workspace 內進行。** 只能 discover 的 Workspace 不得產生任何命中、筆數或名稱。
-- **LIKE 的跳脫字元固定為 `!`**，SQL 一律寫 `LIKE ? ESCAPE '!'`。
-- **每個查詢都要包在 `SET STATEMENT max_statement_time=5 FOR ...`**；逾時 errno 為 `1969`。
-- **預設可見性等同 Knowledge Tree**：`knowledge_tree_nodes`、`knowledge_documents`、`knowledge_sources` 三者都必須是 `ACTIVE`。
-- **只搜目前版本**（`knowledge_documents.current_revision_id`），歷史版本永不進入搜尋。
-- 分頁固定：每頁 20 筆、實取 21 筆判斷下一頁、`page` 上限 50。
-- 查詢上限：`q` 200 字元、5 個詞、單詞 64 字元。
-- route 與 query string 的 ID 只是導覽範圍，**永遠不是授權證明**。
+- **No new npm dependencies.** Build search entirely on the existing stack.
+- **The database is MariaDB 10.11**, and the environment has **no full-text parser plugins** (no ngram or Mroonga), so do not use `FULLTEXT` / `MATCH ... AGAINST`.
+- **Always match with `COLLATE utf8mb4_unicode_ci`; do not use `LOWER()`**: measured `LOWER()` performance is approximately 36% slower and cannot handle full-width characters.
+- **Search only Workspaces where the caller has `document.read`.** Discover-only Workspaces must produce no hits, counts, or names.
+- **The LIKE escape character is always `!`**; always write SQL as `LIKE ? ESCAPE '!'`.
+- **Wrap every query in `SET STATEMENT max_statement_time=5 FOR ...`**; the timeout errno is `1969`.
+- **Default visibility matches the Knowledge Tree**: `knowledge_tree_nodes`, `knowledge_documents`, and `knowledge_sources` must all be `ACTIVE`.
+- **Search only the current revision** (`knowledge_documents.current_revision_id`); historical revisions never enter search.
+- Fixed pagination: 20 rows per page, fetch 21 to determine whether another page exists, maximum `page` 50.
+- Query limits: `q` 200 characters, 5 terms, 64 characters per term.
+- Route and query-string IDs provide navigation scope; **they are never authorization proof**.
 
-**測試指令的既有限制（照抄即可，不要自行改造）：**
+**Existing test-command constraints (copy directly; do not redesign):**
 
-- 單元測試可指定單檔：`npx vitest run --config vitest.config.ts <檔案>`
-- **整合測試不能指定單檔**：`scripts/test/integration.ts` 把 vitest 參數寫死，只能整組跑 `npm run test:integration`（腳本會自建、自清隔離資料庫）。
-- E2E 可指定單一 spec：`npm run test:e2e -- tests/e2e/phase4-search.spec.ts`（`scripts/test/e2e.ts:117` 會把參數轉給 Playwright）。E2E 會先跑 `seedDevelopmentDatabase()`，所以 fixture 加在 `scripts/db/seed.ts` 就會生效。
+- Unit tests can target one file: `npx vitest run --config vitest.config.ts <file>`
+- **Integration tests cannot target one file**: `scripts/test/integration.ts` hardcodes vitest arguments; run the whole suite with `npm run test:integration` (the script creates and cleans up its own isolated database).
+- E2E can target one spec: `npm run test:e2e -- tests/e2e/phase4-search.spec.ts` (`scripts/test/e2e.ts:117` forwards arguments to Playwright). E2E first runs `seedDevelopmentDatabase()`, so fixtures added to `scripts/db/seed.ts` take effect.
 
 ---
 
 ## File Structure
 
-| 檔案 | 責任 |
+| File | Responsibility |
 | --- | --- |
-| `src/modules/knowledge/domain/search-query.ts` | 查詢解析、LIKE 跳脫、snippet highlight 切段。純函式，不碰 DB。 |
-| `src/modules/knowledge/ports/knowledge-search-repository.ts` | 搜尋 port 與列型別。 |
-| `src/infrastructure/database/mariadb/repositories/knowledge-search.ts` | 唯一一段搜尋 SQL 與逾時轉譯。 |
-| `src/modules/knowledge/application/knowledge-search-service.ts` | 授權集合計算、分頁、呼叫 repository。 |
-| `src/server/search-read.ts` | 頁面 read model，授權失敗轉 `notFound()`。 |
-| `src/app/w/[workspaceId]/search/page.tsx` | 搜尋頁（server component）。 |
-| `src/components/search/search-form.tsx` | GET 表單。 |
-| `src/components/search/search-results.tsx` | 結果清單與空狀態。 |
-| `src/components/search/search-result-row.tsx` | 單列結果與 `<mark>` highlight。 |
+| `src/modules/knowledge/domain/search-query.ts` | Query parsing, LIKE escaping, and snippet highlight segmentation. Pure functions, no DB access. |
+| `src/modules/knowledge/ports/knowledge-search-repository.ts` | Search port and row types. |
+| `src/infrastructure/database/mariadb/repositories/knowledge-search.ts` | The single search SQL statement and timeout translation. |
+| `src/modules/knowledge/application/knowledge-search-service.ts` | Compute authorized scope, paginate, and call the repository. |
+| `src/server/search-read.ts` | Page read model; convert authorization failure to `notFound()`. |
+| `src/app/w/[workspaceId]/search/page.tsx` | Search page (server component). |
+| `src/components/search/search-form.tsx` | GET form. |
+| `src/components/search/search-results.tsx` | Results list and empty state. |
+| `src/components/search/search-result-row.tsx` | Single result row and `<mark>` highlighting. |
 
-既有檔案改動：`src/modules/knowledge/domain/errors.ts`（新增 `SearchTimeoutError`）、`src/modules/knowledge/ports/unit-of-work.ts`（`KnowledgeRepositories` 增加 `search`）、`src/infrastructure/database/mariadb/repositories/index.ts`（接上）、`src/server/composition.ts`（暴露 `search`）、`src/server/workspace-admin.ts`（`WorkspaceActions` 增加 `canSearch`）、`src/components/shell/primary-nav.tsx`（Search 導覽）、`scripts/db/seed.ts`（中英混合 fixture）。
+Changes to existing files: `src/modules/knowledge/domain/errors.ts`(add `SearchTimeoutError`)、`src/modules/knowledge/ports/unit-of-work.ts`(add `search` to `KnowledgeRepositories`)、`src/infrastructure/database/mariadb/repositories/index.ts`(wire up)、`src/server/composition.ts`(expose `search`)、`src/server/workspace-admin.ts`(add `canSearch` to `WorkspaceActions`)、`src/components/shell/primary-nav.tsx`(Search navigation)、`scripts/db/seed.ts`(mixed Chinese/English fixtures)。
 
 ---
 
-### Task 1: 查詢解析、跳脫與 highlight（純函式）
+### Task 1: Query Parsing, Escaping, and Highlighting (Pure Functions)
 
 **Files:**
 - Create: `src/modules/knowledge/domain/search-query.ts`
 - Test: `tests/unit/phase4-search-query.test.ts`
 
 **Interfaces:**
-- Consumes: 無（本任務不依賴其他任務）
+- Consumes: None (this task has no dependencies)
 - Produces:
   - `SEARCH_MAX_QUERY_LENGTH = 200`、`SEARCH_MAX_TERMS = 5`、`SEARCH_MAX_TERM_LENGTH = 64`
   - `type ParsedSearchQuery = { terms: string[]; tooLong: boolean }`
@@ -66,9 +70,9 @@
   - `type SnippetSegment = { text: string; match: boolean }`
   - `highlightSnippet(snippet: string, terms: readonly string[]): SnippetSegment[]`
 
-- [ ] **Step 1: 寫失敗的測試**
+- [ ] **Step 1: Write failing tests**
 
-建立 `tests/unit/phase4-search-query.test.ts`：
+Create `tests/unit/phase4-search-query.test.ts`：
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -149,17 +153,17 @@ describe("highlightSnippet", () => {
 });
 ```
 
-- [ ] **Step 2: 執行測試，確認 RED**
+- [ ] **Step 2: Run tests and confirm RED**
 
 ```bash
 npx vitest run --config vitest.config.ts tests/unit/phase4-search-query.test.ts
 ```
 
-Expected: FAIL，錯誤訊息類似 `Failed to resolve import "@/modules/knowledge/domain/search-query"`。
+Expected: FAIL, with an error such as `Failed to resolve import "@/modules/knowledge/domain/search-query"`。
 
-- [ ] **Step 3: 實作**
+- [ ] **Step 3: Implement**
 
-建立 `src/modules/knowledge/domain/search-query.ts`：
+Create `src/modules/knowledge/domain/search-query.ts`：
 
 ```ts
 /**
@@ -234,13 +238,13 @@ export function highlightSnippet(snippet: string, terms: readonly string[]): Sni
 }
 ```
 
-- [ ] **Step 4: 執行測試，確認 PASS**
+- [ ] **Step 4: Run tests and confirm PASS**
 
 ```bash
 npx vitest run --config vitest.config.ts tests/unit/phase4-search-query.test.ts
 ```
 
-Expected: PASS（15 個 assertion 全過）。
+Expected: PASS (all 15 assertions pass).
 
 - [ ] **Step 5: Commit**
 
@@ -251,19 +255,19 @@ git commit -m "feat: add Phase 4 search query parsing and escaping" -m "Claude-S
 
 ---
 
-### Task 2: `canSearch` 能力推導與 discover/read 警報
+### Task 2: `canSearch` Capability Derivation and Discover/Read Tripwire
 
 **Files:**
-- Modify: `src/server/workspace-admin.ts:10-14`（`WorkspaceActions` 型別）與 `src/server/workspace-admin.ts:38-52`（`deriveWorkspaceActions`）
+- Modify: `src/server/workspace-admin.ts:10-14`(`WorkspaceActions` type) and  `src/server/workspace-admin.ts:38-52`(`deriveWorkspaceActions`)
 - Test: `tests/unit/phase4-search-capability.test.ts`
 
 **Interfaces:**
-- Consumes: 無
-- Produces: `WorkspaceActions.canSearch: boolean`，由 `deriveWorkspaceActions` 以 `capabilities.has("document.read")` 推導。Task 5 的導覽與 read model 依賴這個欄位。
+- Consumes: None
+- Produces: `WorkspaceActions.canSearch: boolean`, derived by `deriveWorkspaceActions` using `capabilities.has("document.read")`. Task 5 navigation and read model depend on this field.
 
-- [ ] **Step 1: 寫失敗的測試**
+- [ ] **Step 1: Write failing tests**
 
-建立 `tests/unit/phase4-search-capability.test.ts`：
+Create `tests/unit/phase4-search-capability.test.ts`：
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -323,17 +327,17 @@ describe("discover-vs-read tripwire", () => {
 });
 ```
 
-- [ ] **Step 2: 執行測試，確認 RED**
+- [ ] **Step 2: Run tests and confirm RED**
 
 ```bash
 npx vitest run --config vitest.config.ts tests/unit/phase4-search-capability.test.ts
 ```
 
-Expected: FAIL，前三個測試因 `canSearch` 為 `undefined` 而失敗（`expected undefined to be true`）；tripwire 測試會通過。
+Expected: FAIL; the first three tests fail because `canSearch` is `undefined` (`expected undefined to be true`); the tripwire test passes.
 
-- [ ] **Step 3: 實作**
+- [ ] **Step 3: Implement**
 
-在 `src/server/workspace-admin.ts` 的 `WorkspaceActions` 型別加入 `canSearch`：
+Add `canSearch` to `WorkspaceActions` in `src/server/workspace-admin.ts`:
 
 ```ts
 export type WorkspaceActions = {
@@ -345,20 +349,20 @@ export type WorkspaceActions = {
 };
 ```
 
-在 `deriveWorkspaceActions` 的回傳物件加入一行（放在 `canInspectSources` 那一行之後）：
+Add a line to the object returned by `deriveWorkspaceActions` (after `canInspectSources`):
 
 ```ts
     canSearch: has("document.read"),
 ```
 
-- [ ] **Step 4: 執行測試與型別檢查，確認 PASS**
+- [ ] **Step 4: Run tests and typecheck; confirm PASS**
 
 ```bash
 npx vitest run --config vitest.config.ts tests/unit/phase4-search-capability.test.ts
 npm run typecheck
 ```
 
-Expected: 測試 PASS；`typecheck` 無錯誤（`WorkspaceActions` 是由 `deriveWorkspaceActions` 建構的，沒有其他地方需要補欄位）。
+Expected: tests PASS; `typecheck` has no errors (`WorkspaceActions` is built by `deriveWorkspaceActions`; no other site needs the field added).
 
 - [ ] **Step 5: Commit**
 
@@ -369,18 +373,18 @@ git commit -m "feat: derive canSearch from document.read" -m "Claude-Session: ht
 
 ---
 
-### Task 3: 搜尋 port、SQL repository 與 UnitOfWork 接線
+### Task 3: Search Port, SQL Repository, and UnitOfWork Wiring
 
 **Files:**
 - Create: `src/modules/knowledge/ports/knowledge-search-repository.ts`
 - Create: `src/infrastructure/database/mariadb/repositories/knowledge-search.ts`
-- Modify: `src/modules/knowledge/domain/errors.ts`（檔尾新增 `SearchTimeoutError`）
-- Modify: `src/modules/knowledge/ports/unit-of-work.ts:12-30`（`KnowledgeRepositories` 增加 `search`）
-- Modify: `src/infrastructure/database/mariadb/repositories/index.ts:23-53`（建立並回傳 `search`）
+- Modify: `src/modules/knowledge/domain/errors.ts`(add `SearchTimeoutError` at the end)
+- Modify: `src/modules/knowledge/ports/unit-of-work.ts:12-30`(add `search` to `KnowledgeRepositories`)
+- Modify: `src/infrastructure/database/mariadb/repositories/index.ts:23-53`(create and return `search`)
 - Test: `tests/integration/phase4-search-repository.test.ts`
 
 **Interfaces:**
-- Consumes: Task 1 的 `toLikePattern`
+- Consumes: Task 1 `toLikePattern`
 - Produces:
   - `type KnowledgeSearchRow = { documentId: string; sourceId: string; workspaceId: string; title: string; sourceName: string; workspaceName: string; snippet: string; status: "ACTIVE" | "ARCHIVED"; updatedAt: Date }`
   - `type KnowledgeSearchCriteria = { terms: readonly string[]; workspaceIds: readonly string[]; sourceId: string | null; includeArchived: boolean; limit: number; offset: number }`
@@ -388,9 +392,9 @@ git commit -m "feat: derive canSearch from document.read" -m "Claude-Session: ht
   - `KnowledgeRepositories.search: KnowledgeSearchRepository`
   - `class SearchTimeoutError`（code `SEARCH_TIMEOUT`）
 
-- [ ] **Step 1: 寫失敗的測試**
+- [ ] **Step 1: Write failing tests**
 
-建立 `tests/integration/phase4-search-repository.test.ts`：
+Create `tests/integration/phase4-search-repository.test.ts`：
 
 ```ts
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -553,17 +557,17 @@ describe("Phase 4 search repository", () => {
 });
 ```
 
-- [ ] **Step 2: 執行整合測試，確認 RED**
+- [ ] **Step 2: Run integration tests and confirm RED**
 
 ```bash
 npm run test:integration
 ```
 
-Expected: FAIL。新檔案因 `Failed to resolve import "@/modules/knowledge/ports/knowledge-search-repository"` 而無法載入；既有整合測試仍然通過。
+Expected: FAIL. The new file cannot load due to `Failed to resolve import "@/modules/knowledge/ports/knowledge-search-repository"`; existing integration tests still pass.
 
-- [ ] **Step 3: 新增 port 型別**
+- [ ] **Step 3: Add port types**
 
-建立 `src/modules/knowledge/ports/knowledge-search-repository.ts`：
+Create `src/modules/knowledge/ports/knowledge-search-repository.ts`：
 
 ```ts
 /** Phase 4 spec §6.2: one row per matching Document, already scoped by the caller's readable Workspaces. */
@@ -595,9 +599,9 @@ export interface KnowledgeSearchRepository {
 }
 ```
 
-- [ ] **Step 4: 新增逾時錯誤型別**
+- [ ] **Step 4: Add timeout error type**
 
-在 `src/modules/knowledge/domain/errors.ts` 檔尾加入：
+Add at the end of `src/modules/knowledge/domain/errors.ts`:
 
 ```ts
 /**
@@ -613,9 +617,9 @@ export class SearchTimeoutError extends DomainError {
 }
 ```
 
-- [ ] **Step 5: 實作 MariaDB repository**
+- [ ] **Step 5: Implement MariaDB repository**
 
-建立 `src/infrastructure/database/mariadb/repositories/knowledge-search.ts`：
+Create `src/infrastructure/database/mariadb/repositories/knowledge-search.ts`：
 
 ```ts
 import { SearchTimeoutError } from "@/modules/knowledge/domain/errors";
@@ -709,41 +713,41 @@ export class MariaDbKnowledgeSearchRepository implements KnowledgeSearchReposito
 }
 ```
 
-- [ ] **Step 6: 接上 UnitOfWork**
+- [ ] **Step 6: Wire up UnitOfWork**
 
-在 `src/modules/knowledge/ports/unit-of-work.ts` 的 import 區加入：
+Add to the imports in `src/modules/knowledge/ports/unit-of-work.ts`:
 
 ```ts
 import type { KnowledgeSearchRepository } from "./knowledge-search-repository";
 ```
 
-並在 `KnowledgeRepositories` 型別內（`sourcePolicy` 之後）加入：
+Add to `KnowledgeRepositories` (after `sourcePolicy`):
 
 ```ts
   /** Phase 4 keyword discovery; read-only and never used by mutation paths. */
   search: KnowledgeSearchRepository;
 ```
 
-在 `src/infrastructure/database/mariadb/repositories/index.ts` 的 import 區加入：
+Add to the imports in `src/infrastructure/database/mariadb/repositories/index.ts`:
 
 ```ts
 import { MariaDbKnowledgeSearchRepository } from "./knowledge-search";
 ```
 
-並在 `createRepositories` 的回傳物件內（`sourcePolicy` 那一行之後）加入：
+Add to the object returned by `createRepositories` (after the `sourcePolicy` line):
 
 ```ts
     search: new MariaDbKnowledgeSearchRepository(connection),
 ```
 
-- [ ] **Step 7: 執行整合測試與型別檢查，確認 PASS**
+- [ ] **Step 7: Run integration tests and typecheck; confirm PASS**
 
 ```bash
 npm run typecheck
 npm run test:integration
 ```
 
-Expected: `typecheck` 無錯誤；整合測試全部 PASS，包含新檔案的 9 個測試。
+Expected: `typecheck` has no errors; all integration tests PASS, including the new file's 9 tests.
 
 - [ ] **Step 8: Commit**
 
@@ -758,15 +762,15 @@ git commit -m "feat: add Phase 4 knowledge search repository" -m "Claude-Session
 
 ---
 
-### Task 4: 搜尋 application service（授權邊界）
+### Task 4: Search Application Service (Authorization Boundary)
 
 **Files:**
 - Create: `src/modules/knowledge/application/knowledge-search-service.ts`
-- Modify: `src/server/composition.ts:61-96`（建立並回傳 `search`）
+- Modify: `src/server/composition.ts:61-96`(create and return `search`)
 - Test: `tests/integration/phase4-search-service.test.ts`
 
 **Interfaces:**
-- Consumes: Task 1 的 `parseSearchQuery`；Task 3 的 `KnowledgeSearchRow`、`repositories.search`
+- Consumes: Task 1 `parseSearchQuery`; Task 3 `KnowledgeSearchRow`, `repositories.search`
 - Produces:
   - `SEARCH_PAGE_SIZE = 20`、`SEARCH_MAX_PAGE = 50`
   - `type SearchScope = { kind: "workspace"; workspaceId: string } | { kind: "all" }`
@@ -775,9 +779,9 @@ git commit -m "feat: add Phase 4 knowledge search repository" -m "Claude-Session
   - `class KnowledgeSearchService { constructor(unitOfWork: KnowledgeUnitOfWork, workspaces: WorkspaceQueryService); search(caller, input): Promise<KnowledgeSearchResult> }`
   - `applicationServices().search`
 
-- [ ] **Step 1: 寫失敗的測試**
+- [ ] **Step 1: Write failing tests**
 
-建立 `tests/integration/phase4-search-service.test.ts`：
+Create `tests/integration/phase4-search-service.test.ts`：
 
 ```ts
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -915,7 +919,7 @@ describe("Phase 4 search authorization", () => {
 });
 ```
 
-- [ ] **Step 2: 執行整合測試，確認 RED**
+- [ ] **Step 2: Run integration tests and confirm RED**
 
 ```bash
 npm run test:integration
@@ -923,9 +927,9 @@ npm run test:integration
 
 Expected: FAIL，`Failed to resolve import "@/modules/knowledge/application/knowledge-search-service"`。
 
-- [ ] **Step 3: 實作 service**
+- [ ] **Step 3: Implement service**
 
-建立 `src/modules/knowledge/application/knowledge-search-service.ts`：
+Create `src/modules/knowledge/application/knowledge-search-service.ts`：
 
 ```ts
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
@@ -1030,34 +1034,34 @@ async function readableWorkspaces(
 }
 ```
 
-- [ ] **Step 4: 接上 composition**
+- [ ] **Step 4: Wire up composition**
 
-在 `src/server/composition.ts` 的 import 區加入：
+Add to the imports in `src/server/composition.ts`:
 
 ```ts
 import { KnowledgeSearchService } from "@/modules/knowledge/application/knowledge-search-service";
 ```
 
-在 `buildApplicationServices` 內，`const workspaces = new WorkspaceQueryService(unitOfWork);` 之後加入：
+In `buildApplicationServices`, add after `const workspaces = new WorkspaceQueryService(unitOfWork);`:
 
 ```ts
   const search = new KnowledgeSearchService(unitOfWork, workspaces);
 ```
 
-並把 `search` 加進回傳物件（放在 `workspaces` 之後）：
+Add `search` to the returned object (after `workspaces`):
 
 ```ts
   return { workspaceAdmin, teams, governance, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, sources, workspaces, search, imports };
 ```
 
-- [ ] **Step 5: 執行整合測試與型別檢查，確認 PASS**
+- [ ] **Step 5: Run integration tests and typecheck; confirm PASS**
 
 ```bash
 npm run typecheck
 npm run test:integration
 ```
 
-Expected: 皆通過，新檔案 7 個測試全數 PASS。
+Expected: all pass, including all 7 tests in the new file.
 
 - [ ] **Step 6: Commit**
 
@@ -1069,7 +1073,7 @@ git commit -m "feat: add Phase 4 workspace-scoped search service" -m "Claude-Ses
 
 ---
 
-### Task 5: 搜尋頁面、導覽入口與 fixture
+### Task 5: Search Page, Navigation Entry, and Fixtures
 
 **Files:**
 - Create: `src/server/search-read.ts`
@@ -1078,18 +1082,18 @@ git commit -m "feat: add Phase 4 workspace-scoped search service" -m "Claude-Ses
 - Create: `src/components/search/search-results.tsx`
 - Create: `src/components/search/search-result-row.tsx`
 - Modify: `src/components/shell/primary-nav.tsx:14-26`
-- Modify: `scripts/db/seed.ts:20-51`（ID 與文案常數）與 `scripts/db/seed.ts` 的 `seedBrowserFixtures`
+- Modify: `scripts/db/seed.ts:20-51`(ID and copy constants)and `seedBrowserFixtures` in `scripts/db/seed.ts`
 - Test: `tests/e2e/phase4-search.spec.ts`
 
 **Interfaces:**
-- Consumes: Task 1 的 `highlightSnippet`；Task 2 的 `actions.canSearch`；Task 4 的 `applicationServices().search`、`KnowledgeSearchResult`
-- Produces：`getSearchPageModel(workspaceId, input)`、`SearchPageModel`、`/w/:workspaceId/search` 路由、`BROWSER_FIXTURE_IDS.searchDocument`、`BROWSER_FIXTURES.searchTitle` / `searchBody`
+- Consumes: Task 1 `highlightSnippet`; Task 2 `actions.canSearch`; Task 4 `applicationServices().search`, `KnowledgeSearchResult`
+- Produces: `getSearchPageModel(workspaceId, input)`, `SearchPageModel`, `/w/:workspaceId/search` route, `BROWSER_FIXTURE_IDS.searchDocument`, `BROWSER_FIXTURES.searchTitle` / `searchBody`
 
-**注意（與 spec §9.3 E5 的差異）：** spec 的 E5 前半句「`canSearch` 為 false 時導覽不顯示 Search」在現行角色模型下**不可達**，因為四個可指派角色都含 `document.read`。推導邏輯已由 Task 2 的 U6 單元測試覆蓋；E2E 只驗證可達的部分：非成員直接輸入搜尋網址得到 404。
+**Note (difference from spec §9.3 E5):** The first clause of E5, “navigation hides Search when `canSearch` is false,” is **unreachable** in the current role model because all four assignable roles include `document.read`. Task 2 unit test U6 covers derivation; E2E verifies the reachable portion: a non-member entering the search URL directly receives 404.
 
-- [ ] **Step 1: 新增 seed fixture**
+- [ ] **Step 1: Add seed fixture**
 
-在 `scripts/db/seed.ts` 的 `BROWSER_FIXTURE_IDS` 物件內加入兩個 ID：
+Add two IDs to `BROWSER_FIXTURE_IDS` in `scripts/db/seed.ts`:
 
 ```ts
   searchDocument: "0199f100-0000-7000-8000-000000000207",
@@ -1097,7 +1101,7 @@ git commit -m "feat: add Phase 4 workspace-scoped search service" -m "Claude-Ses
   searchNode: "0199f100-0000-7000-8000-000000000209",
 ```
 
-在 `BROWSER_FIXTURES` 物件內加入三個常數：
+Add three constants to `BROWSER_FIXTURES`:
 
 ```ts
   searchTitle: "請假流程 SWFP Leave Policy",
@@ -1105,7 +1109,7 @@ git commit -m "feat: add Phase 4 workspace-scoped search service" -m "Claude-Ses
   searchMissTitle: "Retired Notes",
 ```
 
-在 `seedBrowserFixtures` 內，緊接在 secret document 那個 `if (!(await repositories.documents.findById(BROWSER_FIXTURE_IDS.secretDocument))) { ... }` 區塊之後，於同一個 `unitOfWork.run` 內加入（固定 ID + 存在檢查，因此可重複執行）：
+In `seedBrowserFixtures`, directly after the secret document block `if (!(await repositories.documents.findById(BROWSER_FIXTURE_IDS.secretDocument))) { ... }`, add within the same `unitOfWork.run` (fixed IDs plus existence checks make it repeatable):
 
 ```ts
     if (!(await repositories.documents.findById(BROWSER_FIXTURE_IDS.searchDocument))) {
@@ -1128,9 +1132,9 @@ git commit -m "feat: add Phase 4 workspace-scoped search service" -m "Claude-Ses
     }
 ```
 
-- [ ] **Step 2: 寫失敗的 E2E**
+- [ ] **Step 2: Write failing E2E tests**
 
-建立 `tests/e2e/phase4-search.spec.ts`（常數照既有慣例手抄，Playwright 無法解析 `@/` alias）：
+Create `tests/e2e/phase4-search.spec.ts`(copy constants manually following existing conventions; Playwright cannot resolve the `@/` alias)：
 
 ```ts
 import { expect, test } from "@playwright/test";
@@ -1178,17 +1182,17 @@ test("keeps archived mode on result links", async ({ page }) => {
 });
 ```
 
-- [ ] **Step 3: 執行 E2E，確認 RED**
+- [ ] **Step 3: Run E2E and confirm RED**
 
 ```bash
 npm run test:e2e -- tests/e2e/phase4-search.spec.ts
 ```
 
-Expected: FAIL。`/w/:id/search` 尚不存在，第一個測試在找不到 `Search` 導覽連結時逾時。
+Expected: FAIL. `/w/:id/search` does not exist yet; the first test times out looking for the `Search` navigation link.
 
-- [ ] **Step 4: 實作 read model**
+- [ ] **Step 4: Implement read model**
 
-建立 `src/server/search-read.ts`：
+Create `src/server/search-read.ts`：
 
 ```ts
 import { notFound } from "next/navigation";
@@ -1252,9 +1256,9 @@ export async function getSearchPageModel(workspaceId: string, input: SearchPageI
 }
 ```
 
-- [ ] **Step 5: 實作元件**
+- [ ] **Step 5: Implement components**
 
-建立 `src/components/search/search-form.tsx`：
+Create `src/components/search/search-form.tsx`：
 
 ```tsx
 import type { SourceView } from "@/modules/knowledge/application/knowledge-query-service";
@@ -1317,7 +1321,7 @@ export function SearchForm({
 }
 ```
 
-建立 `src/components/search/search-result-row.tsx`：
+Create `src/components/search/search-result-row.tsx`：
 
 ```tsx
 import Link from "next/link";
@@ -1364,7 +1368,7 @@ export function SearchResultRow({
 }
 ```
 
-建立 `src/components/search/search-results.tsx`：
+Create `src/components/search/search-results.tsx`：
 
 ```tsx
 import Link from "next/link";
@@ -1412,9 +1416,9 @@ export function SearchResults({ model }: { model: SearchPageModel }) {
 }
 ```
 
-- [ ] **Step 6: 實作頁面與導覽入口**
+- [ ] **Step 6: Implement page and navigation entry**
 
-建立 `src/app/w/[workspaceId]/search/page.tsx`：
+Create `src/app/w/[workspaceId]/search/page.tsx`：
 
 ```tsx
 import { SearchForm } from "@/components/search/search-form";
@@ -1460,13 +1464,13 @@ export default async function WorkspaceSearchPage({
 }
 ```
 
-在 `src/components/shell/primary-nav.tsx` 把 icon import 改為：
+In `src/components/shell/primary-nav.tsx`, change icon imports to:
 
 ```tsx
 import { BookOpenText, Database, Search, Settings } from "lucide-react";
 ```
 
-並在 `items` 陣列的 Knowledge 之後插入：
+Insert after Knowledge in the `items` array:
 
 ```tsx
     ...(access.actions.canSearch ? [{
@@ -1476,7 +1480,7 @@ import { BookOpenText, Database, Search, Settings } from "lucide-react";
     }] : []),
 ```
 
-- [ ] **Step 7: 執行 E2E 與型別檢查，確認 PASS**
+- [ ] **Step 7: Run E2E and typecheck; confirm PASS**
 
 ```bash
 npm run typecheck
@@ -1484,7 +1488,7 @@ npm run lint
 npm run test:e2e -- tests/e2e/phase4-search.spec.ts
 ```
 
-Expected: 皆通過，5 個 E2E 測試全數 PASS。
+Expected: all pass, including all 5 E2E tests.
 
 - [ ] **Step 8: Commit**
 
@@ -1496,16 +1500,16 @@ git commit -m "feat: add Phase 4 workspace search page" -m "Claude-Session: http
 
 ---
 
-### Task 6: 完整驗收與 verification 記錄
+### Task 6: Complete Acceptance and Verification Record
 
 **Files:**
 - Create: `docs/superpowers/verification/2026-09-16-phase-4-discovery-read-api-verification.md`
 
 **Interfaces:**
-- Consumes: Task 1–5 的全部交付
-- Produces: 可重現的 Phase 4 驗收記錄與效能基準
+- Consumes: All Task 1–5 deliverables
+- Produces: Reproducible Phase 4 acceptance record and performance baseline
 
-- [ ] **Step 1: 跑完整的本地 gate**
+- [ ] **Step 1: Run the complete local gate**
 
 ```bash
 make verify
@@ -1513,50 +1517,50 @@ npm run test:integration
 npm run test:e2e
 ```
 
-Expected: 全部通過。任何失敗都必須修好，不得在 verification 記錄裡標記為已通過。
+Expected: all pass. Fix every failure; do not mark failures as passed in the verification record.
 
-- [ ] **Step 2: 重跑效能基準**
+- [ ] **Step 2: Rerun performance baseline**
 
-在本機 MariaDB 容器上重跑 spec §4.2 的基準（20,000 份中英混合文件、276 MB），記錄冷／熱查詢耗時。基準語料建立在**拋棄式資料庫**中，跑完即刪，不得污染 dev 或 test 資料庫。
+Rerun the spec §4.2 baseline (20,000 mixed Chinese/English documents, 276 MB) on the local MariaDB container; record cold/warm query timings. Build the corpus in a **disposable database**, delete it afterwards, and do not contaminate dev or test databases.
 
-- [ ] **Step 3: 寫 verification 記錄**
+- [ ] **Step 3: Write verification record**
 
-建立 `docs/superpowers/verification/2026-09-16-phase-4-discovery-read-api-verification.md`，內容至少包含：
+Create `docs/superpowers/verification/2026-09-16-phase-4-discovery-read-api-verification.md`, containing at least:
 
 ```markdown
 # Phase 4 Discovery & Read API — Verification
 
-| 項目 | 內容 |
+| Item | Content |
 | --- | --- |
-| 日期 | <實際執行日期> |
+| Date | <actual execution date> |
 | Spec | docs/superpowers/specs/2026-09-16-phase-4-discovery-read-api-design.md |
 | Plan | docs/superpowers/plans/2026-09-16-phase-4-discovery-read-api.md |
 
-## 指令與結果
+## Commands and Results
 
-| 指令 | 結果 |
+| Command | Result |
 | --- | --- |
-| `make verify` | <PASS/FAIL 與摘要> |
-| `npm run test:integration` | <PASS/FAIL 與測試數> |
-| `npm run test:e2e` | <PASS/FAIL 與測試數> |
+| `make verify` | <PASS/FAIL and summary> |
+| `npm run test:integration` | <PASS/FAIL and test count> |
+| `npm run test:e2e` | <PASS/FAIL and test count> |
 
-## 需求對應
+## Requirement Mapping
 
-<spec §9 的 U1–U6、I1–I12、E1–E5 逐項列出對應的測試檔與結果>
+<For each U1–U6, I1–I12, E1–E5 in spec §9, list the corresponding test files and results>
 
-## 效能基準
+## Performance Baseline
 
-| 查詢 | 本次實測 | spec §4.2 基準 |
+| Query | Current measurement | Spec §4.2 baseline |
 | --- | --- | --- |
-| 本文 LIKE（cold） | <ms> | 2,272 ms |
-| 本文 LIKE（warm） | <ms> | 1,940 ms |
-| 標題 LIKE | <ms> | 3 ms |
+| Body LIKE (cold) | <ms> | 2,272 ms |
+| Body LIKE (warm) | <ms> | 1,940 ms |
+| Title LIKE | <ms> | 3 ms |
 
-升級觸發條件：production p95 超過 1 秒（spec §10）。
+Upgrade trigger: production p95 exceeds 1 second (spec §10).
 
-## 前置條件狀態
+## Prerequisite Status
 
-Phase 3 Product Acceptance：<PASS / 尚未完成>（product closure spec §27）
+Phase 3 Product Acceptance: <PASS / incomplete> (product closure spec §27)
 ```
 
 - [ ] **Step 4: Commit**
@@ -1568,33 +1572,33 @@ git commit -m "docs: record Phase 4 verification evidence" -m "Claude-Session: h
 
 ---
 
-## Self-Review 結果
+## Self-Review Results
 
-**Spec 覆蓋：**
+**Spec coverage:**
 
-| Spec 章節 | 對應任務 |
+| Spec section | Corresponding task |
 | --- | --- |
-| §5.1 比對即閱讀 | Task 4（service 只取具 `document.read` 的 Workspace）、I2/I3 |
-| §5.2 授權集合計算 | Task 4 `scopedWorkspace` / `readableWorkspaces` |
-| §5.3 授權失敗呈現 | Task 5 `getSearchPageModel` 的 `notFound()`；Task 2 警報測試 |
-| §5.4 Source 篩選 | Task 3 SQL、I9 |
-| §5.5 封存語意 | Task 3（node/document/source）、Task 4（Workspace lifecycle）、I6/I7 |
-| §5.6 只比對目前版本 | Task 3 SQL 的 `current_revision_id` join、I8 |
-| §6.1 查詢解析與跳脫 | Task 1、U1/U2、I12 |
+| §5.1 Matching Is Reading | Task 4(service takes only Workspaces with `document.read`)、I2/I3 |
+| §5.2 Authorized Scope Computation | Task 4 `scopedWorkspace` / `readableWorkspaces` |
+| §5.3 Authorization Failure Presentation | Task 5 `getSearchPageModel` `notFound()`; Task 2 tripwire test |
+| §5.4 Source Filtering | Task 3 SQL、I9 |
+| §5.5 Archive Semantics | Task 3（node/document/source）、Task 4（Workspace lifecycle）、I6/I7 |
+| §5.6 Match Only Current Revision | Task 3 SQL `current_revision_id` join, I8 |
+| §6.1 Query Parsing and Escaping | Task 1、U1/U2、I12 |
 | §6.2 SQL | Task 3 |
-| §6.3 排序 | Task 3 SQL、I10 |
-| §6.4 Snippet 與 highlight | Task 1 `highlightSnippet`、Task 3 SQL、Task 5 `<mark>` |
-| §6.5 分頁 | Task 4、Task 5、I11 |
-| §6.6 逾時 | Task 3 `SearchTimeoutError`、Task 5 逾時畫面 |
-| §7.1–7.3 檔案與頁面 | Task 5 |
-| §7.4 導覽可見性 | Task 2 `canSearch`、Task 5 導覽、E5 |
-| §8 錯誤處理 | Task 3、Task 4、Task 5 |
-| §9 測試計畫 | Task 1–5 各自的測試 |
-| §10 效能驗收 | Task 6 |
-| §11 驗收條件 | Task 6 |
+| §6.3 Ordering | Task 3 SQL、I10 |
+| §6.4 Snippet and Highlighting | Task 1 `highlightSnippet`、Task 3 SQL、Task 5 `<mark>` |
+| §6.5 Pagination | Task 4、Task 5、I11 |
+| §6.6 Timeout | Task 3 `SearchTimeoutError`、Task 5 timeout screen |
+| §7.1–7.3 Files and Pages | Task 5 |
+| §7.4 Navigation Visibility | Task 2 `canSearch`、Task 5 navigation、E5 |
+| §8 Error Handling | Task 3、Task 4、Task 5 |
+| §9 Test Plan | Task 1–5 respective tests |
+| §10 Performance Acceptance | Task 6 |
+| §11 Acceptance Criteria | Task 6 |
 
-**Placeholder 掃描：** 無 TBD／TODO；每個程式碼步驟都有完整可貼上的內容。Task 6 的 verification 模板刻意保留 `<實際執行日期>` 等尖括號欄位，因為那是執行時才會產生的實測數字，不是未決的設計。
+**Placeholder scan:** No TBD/TODO; every code step provides complete pasteable content. Task 6's verification template intentionally keeps angle-bracket fields such as `<actual execution date>` because those measurements arise only during execution, not from unresolved design.
 
-**型別一致性：** `KnowledgeSearchRow`（Task 3 定義）被 Task 4 的 `KnowledgeSearchResult.hits` 與 Task 5 的 `SearchResultRow` 沿用；`canSearch`（Task 2）被 Task 5 的 read model 與導覽沿用；`toLikePattern` / `highlightSnippet` / `parseSearchQuery`（Task 1）分別被 Task 3、Task 5、Task 4 使用，名稱與簽章一致。
+**Type consistency:** `KnowledgeSearchRow` (defined in Task 3) is reused by Task 4 `KnowledgeSearchResult.hits` and Task 5 `SearchResultRow`; `canSearch` (Task 2) is reused by Task 5 read model and navigation; `toLikePattern` / `highlightSnippet` / `parseSearchQuery` (Task 1) are used by Task 3, Task 5, and Task 4 respectively, with consistent names and signatures.
 
-**已知偏離 spec 之處（刻意，且已記錄）：** spec §9.3 的 E5 前半句不可達，改由 Task 2 的單元測試覆蓋推導邏輯，E2E 只驗證非成員 404。
+**Known spec deviation (intentional and recorded):** The first clause of spec §9.3 E5 is unreachable; Task 2 unit tests cover derivation, and E2E verifies only non-member 404.

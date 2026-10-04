@@ -1,5 +1,7 @@
 # Document Composer Implementation Plan
 
+**English** | [繁體中文](2026-09-28-document-composer.zh-TW.md)
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the two form pages (edit, new) with one composer laid out like the reader — title that follows the content, a preview toggle, and unsaved drafts kept in the tab.
@@ -9,6 +11,8 @@
 **Tech Stack:** Next.js 15 (App Router), React 19, TypeScript, Tailwind (replaced scales), Base UI, `mdast-util-from-markdown` + `mdast-util-to-string` (already dependencies), Vitest (node environment, no jsdom), Playwright (Chromium only).
 
 **Spec:** `docs/superpowers/specs/2026-09-28-document-composer-design.md`
+
+Chinese text in the code examples and quoted UI copy below is preserved as literal test input or interface examples.
 
 ## Global Constraints
 
@@ -1604,26 +1608,26 @@ If §18 contains the item that begins "Editing is a different page from reading"
 
 - [ ] **Step 3: Point the keyboard spec at the composer**
 
-In `docs/superpowers/specs/2026-09-24-keyboard-shortcuts-design.md`, directly under `## 5. 表單：\`⌘Enter\` 與 \`Esc\``, insert:
+In `docs/superpowers/specs/2026-09-24-keyboard-shortcuts-design.md`, directly under `## 5. Forms: \`⌘Enter\` and \`Esc\``, insert:
 
 ```markdown
-> 2026-09-28：兩個表單已合併為文件編輯器，並新增 `⌘⇧P` 預覽與預覽中的 `Esc`。現行規則見 `2026-09-28-document-composer-design.md` 第 6 節；本節保留當時的決定。
+> 2026-09-28: The two forms have been merged into the document composer, adding `⌘⇧P` preview and `Esc` within preview. Current rules are in Section 6 of `2026-09-28-document-composer-design.md`; this section preserves the decisions made at the time.
 ```
 
 - [ ] **Step 4: Bring the composer spec up to date**
 
 In `docs/superpowers/specs/2026-09-28-document-composer-design.md`:
-- Status row: `已實作。驗證見 docs/superpowers/verification/2026-09-28-document-composer-verification.md。`
-- §3 table: delete the `useDraft` row, and change the draft store row's 職責 to `純函式：讀、寫、刪，注入 Storage；browserDraftStorage() 取得分頁的 sessionStorage`. Under the table add: `實作時把 useDraft 併入 draft store：三個呼叫不需要一個 hook。`
-- §8 unit list: change `只有圖片的 H1 → TYPED` to `只有圖片且 alt 為空的 H1 → TYPED（alt 文字會被取用，與匯入相同）`.
+- Status row: `Implemented. See docs/superpowers/verification/2026-09-28-document-composer-verification.md for verification.`
+- §3 table: delete the `useDraft` row, and change the draft store row's Responsibility to `Pure functions: read, write, and delete, with injected Storage; browserDraftStorage() obtains the tab's sessionStorage`. Under the table add: `During implementation, merge useDraft into the draft store: three calls do not need a hook.`
+- §8 unit list: change `An H1 containing only an image → TYPED` to `An H1 containing only an image whose alt is empty → TYPED (alt text is extracted, as with import)`.
 
 - [ ] **Step 5: README canonical table**
 
 After the Keyboard Shortcuts rows in the "Current canonical documents" table (or after the Document Share Link rows if those rows are not on this branch yet), add:
 
 ```markdown
-| [Document Composer Design](docs/superpowers/specs/2026-09-28-document-composer-design.md) | 新增與編輯共用的文件編輯器：閱讀版面、標題跟著 H1、預覽、分頁內暫存 |
-| [Document Composer Implementation Plan](docs/superpowers/plans/2026-09-28-document-composer.md) | composer tasks 與測試 |
+| [Document Composer Design](docs/superpowers/specs/2026-09-28-document-composer-design.md) | Document composer shared by creation and editing: reading layout, title follows H1, preview, and per-tab drafts |
+| [Document Composer Implementation Plan](docs/superpowers/plans/2026-09-28-document-composer.md) | Composer tasks and tests |
 ```
 
 - [ ] **Step 6: Write the verification record**

@@ -1,5 +1,7 @@
 # Rendered Editing Implementation Plan
 
+**English** | [繁體中文](2026-09-29-rendered-editing.zh-TW.md)
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** The document composer edits the rendered document by default and can switch to the Markdown source (today's textarea), so writing feels like Linear's editor.
@@ -9,6 +11,8 @@
 **Tech Stack:** Next.js 15 (App Router), React 19, TypeScript, Tailwind (replaced scales), `@milkdown/kit` 7.22.2 (ProseMirror + remark), Vitest with `jsdom` for the editor's unit tests, Playwright (Chromium).
 
 **Spec:** `docs/superpowers/specs/2026-09-28-document-composer-design.md` §11 (§1–10 are already implemented on this branch, `feat/document-composer`).
+
+Chinese text in the code examples and quoted UI copy below is preserved as literal test input or interface examples.
 
 ## Global Constraints
 
@@ -2272,10 +2276,10 @@ In §18 item 3, replace `field), preview toggles in place, and the navigation gu
 In `docs/superpowers/specs/2026-09-24-keyboard-shortcuts-design.md`, the note under §5 (`> 2026-09-28：…`) becomes:
 
 ```markdown
-> 2026-09-28：兩個表單已合併為文件編輯器；2026-09-29 起預設為渲染編輯，並以 `⌘/Ctrl /` 切換 Markdown 原始碼（取代先前的 `⌘⇧P` 預覽）。現行規則見 `2026-09-28-document-composer-design.md` 第 11.6 節；本節保留當時的決定。
+> 2026-09-28: The two forms have been merged into the document composer; from 2026-09-29, rendered editing is the default, with `⌘/Ctrl /` toggling Markdown source (replacing the earlier `⌘⇧P` preview). Current rules are in Section 11.6 of `2026-09-28-document-composer-design.md`; this section preserves the decisions made at the time.
 ```
 
-In `docs/superpowers/specs/2026-09-28-document-composer-design.md`, the 狀態 row becomes: `已實作。驗證見 docs/superpowers/verification/2026-09-28-document-composer-verification.md。第 11 節（2026-09-29 修訂）取代決定 1、決定 3，以及第 6 節的預覽與快捷鍵。`
+In `docs/superpowers/specs/2026-09-28-document-composer-design.md`, the Status row becomes: `Implemented. See docs/superpowers/verification/2026-09-28-document-composer-verification.md for verification. Section 11 (revised 2026-09-29) supersedes Decision 1, Decision 3, and the preview and shortcuts in Section 6.`
 
 - [ ] **Step 3: The verification record**
 
@@ -2284,7 +2288,7 @@ Append to `docs/superpowers/verification/2026-09-28-document-composer-verificati
 - the commands and results of: `make verify` (unit count), the full `make test-e2e` (counts; note if the known sidebar case failed and how you re-ran), `document-composer.spec.ts` with `--repeat-each=15`;
 - the `First Load JS` figures of the edit page and the new page **before** and **after** (from `.superpowers/build-before.log` and `build-after.log`), and the reading page's figure unchanged;
 - the round-trip table: which writings stay, which are rewritten (copy the `unchanged` and `rewritten` lists from `tests/unit/markdown-editor.test.ts`), the image-title failure and its patch, and the `-` / `---` output settings;
-- a list of **what was not verified**: the Firefox `Ctrl /` behaviour, Chinese (注音) input in the rendered editor including the typing conversions, and the appearance of a real imported document — state each as "not performed; needs a person" with the steps (open the editor in Firefox and press Ctrl+/ with the caret in the text; type `# ` and `- ` while an input method is composing; open a real imported document and compare before and after saving).
+- a list of **what was not verified**: the Firefox `Ctrl /` behaviour, Chinese (Bopomofo) input in the rendered editor including the typing conversions, and the appearance of a real imported document — state each as "not performed; needs a person" with the steps (open the editor in Firefox and press Ctrl+/ with the caret in the text; type `# ` and `- ` while an input method is composing; open a real imported document and compare before and after saving).
 
 - [ ] **Step 4: The whole suite, and clean-up**
 

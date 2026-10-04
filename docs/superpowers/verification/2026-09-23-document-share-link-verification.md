@@ -1,5 +1,7 @@
 # Document share link verification
 
+**English** | [繁體中文](2026-09-23-document-share-link-verification.zh-TW.md)
+
 Date: 2026-09-23
 
 - Spec: `docs/superpowers/specs/2026-09-23-document-share-link-design.md`

@@ -1,34 +1,36 @@
 # Linear remediation — independent code review
 
-日期：2026-10-02。基底：`1cf8114`。分支：`codex/linear-uiux-remediation`。
+**English** | [繁體中文](2026-10-02-linear-remediation-review.zh-TW.md)
 
-依使用者明確 invoked requesting-code-review skill 安排獨立 reviewer（`/root/independent_review`），提供 focused requirements、變更邊界與既有驗證紀錄。Reviewer 讀取 tracked diff 與新 source/scripts，沒有編輯檔案。Review 包含導航／portal／drawer、Composer／scroll／draft、Home query／ownership／authorization、action menus、revision diff、import batching 與設計 lint。
+Date: 2026-10-02. Base: `1cf8114`. Branch: `codex/linear-uiux-remediation`.
 
-## Finding：手機 explorer 操作選單被 Drawer 攔截（P1，已修正）
+An independent reviewer (`/root/independent_review`) was arranged using the requesting-code-review skill explicitly invoked by the user, with focused requirements, change boundaries, and existing verification records. The reviewer read the tracked diff and new source/scripts without editing files. The review covered navigation/portals/drawers, Composer/scroll/drafts, Home queries/ownership/authorization, action menus, revision diffs, import batching, and design lint.
 
-觸發：390px viewport，打開 Menu → 文件列 Actions → 點 Add to favorites。
+## Finding: mobile explorer action menus intercepted by the Drawer (P1, fixed)
 
-修正前 production Playwright regression 確認：menu item 可見且可被 accessibility role 查詢，但 pointer click 持續被 Drawer 的 `Document tree` nav 攔截，直到逾時。只檢查選單可見或鍵盤 focus 無法發現這個問題。
+Trigger: at a 390px viewport, open Menu → document-row Actions → click Add to favorites.
 
-原因：explorer 在 KnowledgeLayout 中建立，portal 到 modal Drawer。Explorer menu 的 portal 仍位於 body，Base UI Positioner 的 transform 建立自己的 stacking context；只有內層 Popup 的 `z-50` 無法將整個 menu 提到 Drawer 之上。
+The production Playwright regression confirmed the behavior before the fix: the menu item was visible and queryable by accessibility role, but pointer clicks kept being intercepted by the Drawer's `Document tree` nav until timeout. Checking only menu visibility or keyboard focus cannot detect this problem.
 
-修正：`src/components/ui/menu.tsx` 的 `MenuContent` 與 `ContextMenuContent` 將 `z-50` 加在 outer Positioner；caller 的 className 仍套用在 Popup。獨立 reviewer 核對此最小修正及其 stacking 行為。
+Cause: the explorer is created in KnowledgeLayout and portaled into a modal Drawer. The explorer menu's portal still lives in body, and the Base UI Positioner's transform creates its own stacking context; `z-50` on only the inner Popup cannot raise the entire menu above the Drawer.
 
-## 驗證結果
+Fix: in `src/components/ui/menu.tsx`, `MenuContent` and `ContextMenuContent` put `z-50` on the outer Positioner; the caller's className still applies to the Popup. The independent reviewer checked this minimal fix and its stacking behavior.
 
-新增兩個 regression scenarios，放在 `tests/e2e/linear-remediation.spec.ts`：
+## Verification results
 
-1. 手機 Document display options：menuitemcheckbox 可見，ArrowDown 可以取得焦點，Escape 關閉 menu 後返回 trigger，Drawer 保持開啟。
-2. 文件列一般 menu 可以加入收藏，context menu 可以移除收藏；New folder input 自動取得焦點，Escape 只關閉上層 folder dialog 並保留 Drawer；重新開啟後可輸入並成功建立資料夾。
+Two regression scenarios were added to `tests/e2e/linear-remediation.spec.ts`:
 
-上述兩個情境在正式 build 與隔離 DB 中通過。另重跑核心 UI、keyboard shortcuts、recents/favorites：31 個情境通過。新增 row-action test 初次因舊 menu 的關閉動畫仍在 DOM，立即開啟 context menu 時 locator 同時匹配兩個 item；補上等待舊 menu 關閉後，完整情境通過。合計 32 個不同 browser 情境有修正後成功證據，分批驗證，沒有將先前失敗的整批宣稱為一次全部通過。
+1. Mobile Document display options: menuitemcheckbox is visible, ArrowDown can focus it, Escape closes the menu and returns focus to the trigger, and the Drawer stays open.
+2. A document row's regular menu can add a favorite and its context menu can remove it; the New folder input automatically receives focus, Escape closes only the top folder dialog and preserves the Drawer; reopening allows typing and successful folder creation.
 
-相關 unit tests：`ui-primitives`、`ui-feedback-primitives`、`linear-remediation`，3 files／45 tests 通過。Production build、最後 TypeScript、ESLint 與 `git diff --check` 通過。
+Both scenarios passed against a production build and isolated DB. Core UI, keyboard shortcuts, and recents/favorites were rerun: 31 scenarios passed. The new row-action test initially matched two items when opening the context menu immediately because the old menu's closing animation was still in the DOM; after waiting for the old menu to close, the full scenario passed. A total of 32 distinct browser scenarios have successful post-fix evidence, verified in batches; the previously failing full batch was not claimed to have passed in a single run.
 
-## Review 結論與界限
+Related unit tests: `ui-primitives`, `ui-feedback-primitives`, and `linear-remediation`: 3 files / 45 tests passed. Production build, final TypeScript, ESLint, and `git diff --check` passed.
 
-確認一項手機操作阻擋 regression，已修正並補上 pointer interaction coverage。Reviewer 沒有再確認其他 consequential defects。最初對 Base UI focus context 的疑點，經顯示選單與 folder dialog 的焦點／Escape／送出實測，未重現焦點管理故障。
+## Review conclusion and boundaries
 
-Home summary 的 archived ancestor filtering 與原本 listTree 語意相同，沒有列為這次引入的問題。此 review 不代表完成全路由 screen-reader、Company SSO browser 或全部 viewport/theme 矩陣，沿用 [實作驗證紀錄](2026-10-02-linear-remediation-verification.md) 的界限。
+One regression blocking mobile interactions was confirmed, fixed, and covered with pointer interaction tests. The reviewer confirmed no further consequential defects. The initial concern about Base UI focus context did not reproduce a focus-management failure in actual menu and folder-dialog focus/Escape/submission tests.
 
-Review 完成時，尚未 commit、push、建立 PR 或 merge。測試 DB 與 server 由 harness 結束後清理。
+Home summary's archived-ancestor filtering has the same semantics as the original listTree and was not listed as a problem introduced by this change. This review does not establish complete coverage of screen readers across all routes, external SSO browsers, or all viewport/theme combinations; it inherits the boundaries in the [implementation verification record](2026-10-02-linear-remediation-verification.md).
+
+At review completion, there had been no commit, push, PR creation, or merge. The harness cleaned up the test DB and server after finishing.
