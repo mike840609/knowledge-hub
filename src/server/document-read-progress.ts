@@ -1,3 +1,4 @@
+import { recordOnboardingStep } from "@/server/onboarding-progress";
 import { applicationServices } from "./composition";
 export async function markDocumentRead(input: {
   workspaceId: string;
@@ -7,4 +8,5 @@ export async function markDocumentRead(input: {
   const s = applicationServices();
   const { caller } = await s.establishTrustedCaller();
   await s.documentReadProgress.markRead(caller, input);
+  await recordOnboardingStep(s.personalPreferences, caller, input.workspaceId, "read");
 }

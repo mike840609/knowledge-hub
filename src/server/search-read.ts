@@ -1,3 +1,4 @@
+import { recordOnboardingStep } from "@/server/onboarding-progress";
 import { notFound } from "next/navigation";
 import { sortSourcesByName } from "@/lib/knowledge-navigation";
 import type { SourceView } from "@/modules/knowledge/application/knowledge-query-service";
@@ -63,6 +64,7 @@ export async function getSearchPageModel(workspaceId: string, input: SearchPageI
       includeArchived: input.includeArchived,
       page: input.page,
     });
+    if (input.scope === "workspace" && input.q.trim()) await recordOnboardingStep(services.personalPreferences, caller, workspaceId, "search");
     if(!result.hits.length)return {...base,result,timedOut:false};
     const locations=await services.unitOfWork.run(r=>r.entries.findByDocumentIds(result.hits.map(hit=>hit.documentId)));
     const paths=new Map(locations.map(e=>[e.documentId,e.sourcePath]));

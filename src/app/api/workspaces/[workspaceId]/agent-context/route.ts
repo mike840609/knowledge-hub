@@ -1,3 +1,4 @@
+import { recordOnboardingStep } from "@/server/onboarding-progress";
 import { workspaceHttp, type WorkspaceRouteContext } from "@/server/workspace-http";
 import { DomainError } from "@/shared/domain/errors";
 export async function POST(request: Request, context: WorkspaceRouteContext) {
@@ -8,6 +9,9 @@ export async function POST(request: Request, context: WorkspaceRouteContext) {
     let body: unknown;
     try { body = JSON.parse(text); } catch { throw new DomainError("INVALID_REQUEST", "Provide a JSON selection."); }
     if (!body || typeof body !== "object" || Array.isArray(body)) throw new DomainError("INVALID_REQUEST", "Provide a JSON selection.");
-    return s.agentContext.build(caller, (await context.params).workspaceId, (body as Record<string, unknown>).documentIds, new URL(request.url).origin);
+    const { workspaceId } = await context.params;
+    const result = await s.agentContext.build(caller, workspaceId, (body as Record<string, unknown>).documentIds, new URL(request.url).origin);
+    await recordOnboardingStep(s.personalPreferences, caller, workspaceId, "context");
+    return result;
   });
 }

@@ -1,3 +1,4 @@
+import { recordOnboardingStep } from "@/server/onboarding-progress";
 import { revalidatePath } from "next/cache";
 import { workspaceHttp, requestFields } from "@/server/workspace-http";
 export async function POST(
@@ -12,6 +13,7 @@ export async function POST(
       documentId,
       revisionId,
     });
+    await recordOnboardingStep(s.personalPreferences, caller, workspaceId, "read");
     revalidatePath(`/w/${workspaceId}/home`);
     revalidatePath(`/w/${workspaceId}/updates`);
   }, 204);
