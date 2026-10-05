@@ -26,6 +26,7 @@ export type SearchPageModel = SearchPageInput & {
   timedOut: boolean;
   filterError?: string;
   isPersonal?: boolean;
+  hasDocuments?: boolean;
 };
 
 /**
@@ -54,9 +55,13 @@ export async function getSearchPageModel(workspaceId: string, input: SearchPageI
     await services.queries.listSources(caller, workspaceId, { includeArchived: input.includeArchived }),
   );
   const base = { ...input, workspaceId, workspaceName: workspace.name, isPersonal: workspace.type === "PERSONAL", sources };
+  // Content presence matters only for an empty personal search, not every live query.
+  const emptyState = async () => workspace.type === "PERSONAL" && input.scope === "workspace"
+    ? { hasDocuments: (await services.queries.listDocumentSummaries(caller, workspaceId, { includeArchived: true })).length > 0 }
+    : {};
   try {
     const filters = parseSearchFilters(input);
-    if (input.q.trim() === "" && !hasSearchFilters(filters) && !input.sourceId) return { ...base, result: null, timedOut: false };
+    if (input.q.trim() === "" && !hasSearchFilters(filters) && !input.sourceId) return { ...base, ...await emptyState(), result: null, timedOut: false };
     const result = await services.search.search(caller, {
       ...input,
       q: input.q,
@@ -66,7 +71,7 @@ export async function getSearchPageModel(workspaceId: string, input: SearchPageI
       page: input.page,
     });
     if (input.scope === "workspace" && input.q.trim()) await recordOnboardingStep(services.personalPreferences, caller, workspaceId, "search");
-    if(!result.hits.length)return {...base,result,timedOut:false};
+    if (!result.hits.length) return { ...base, ...(!result.tooLong ? await emptyState() : {}), result, timedOut: false };
     const locations=await services.unitOfWork.run(r=>r.entries.findByDocumentIds(result.hits.map(hit=>hit.documentId)));
     const paths=new Map(locations.map(e=>[e.documentId,e.sourcePath]));
     return { ...base, result:{...result,hits:result.hits.map(hit=>({...hit,sourcePath:paths.get(hit.documentId)}))}, timedOut: false };

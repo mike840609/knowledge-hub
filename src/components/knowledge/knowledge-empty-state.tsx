@@ -22,13 +22,15 @@ import { shortcutLabel } from "@/lib/shortcut-keys";
  */
 export function KnowledgeEmptyState() {
   const { access, confirmed } = useWorkspaceAuthorization();
-  const actions = actionsFor("empty", {
+  const available = actionsFor("empty", {
     workspaceId: access.workspace.id,
     workspaceType: access.workspace.type,
     can: access.actions,
     confirmed,
     onboarding: true,
   });
+  const actions = [...available];
+  if (access.workspace.type === "PERSONAL") actions.sort((a, b) => Number(b.id === "create.import") - Number(a.id === "create.import"));
   const first = actions[0];
 
   return (
@@ -38,7 +40,7 @@ export function KnowledgeEmptyState() {
         title="No documents yet"
         description={
           actions.length > 0
-            ? "Add a note or import a folder to get started."
+            ? "Browse and read your saved knowledge here. Import a Markdown folder or create a note to add your first document."
             : "You can read this workspace; adding to it needs edit access."
         }
         action={

@@ -1,5 +1,10 @@
 "use client";
 
+import { Network } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
+import { WorkspaceContentActions } from "./workspace-content-actions";
+import { buttonClasses } from "@/components/ui/button";
+
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useOptimistic, useState, useTransition } from "react";
@@ -82,6 +87,8 @@ export function GraphExplorer({
     });
   const matches = data.nodes.filter(node => matchesQuery(node, query)).length;
   const links = data.edges.length;
+  const hasFilters = Boolean(filters.sourceId || !filters.orphans || filters.unresolved);
+  const firstDocumentHref = data.nodes.find(node => node.kind === "DOCUMENT" && node.href)?.href;
   const summary = `Knowledge graph, ${data.nodes.length} ${data.nodes.length === 1 ? "node" : "nodes"}, ${links} ${links === 1 ? "link" : "links"}`;
 
   return (
@@ -152,7 +159,11 @@ export function GraphExplorer({
         aria-busy={pending}
         className={`min-h-[24rem] flex-1 overflow-hidden rounded-md border border-kh-border bg-kh-bg transition-opacity ${pending ? "opacity-60" : ""}`}
       >
-        {filters.view === "list" ? (
+        {data.nodes.length === 0 ? (
+          <div data-graph-empty className="px-3">
+            <EmptyState icon={Network} title={hasFilters ? "No documents match these filters" : "Add documents to build your graph"} description={hasFilters ? "Reset the graph filters to include documents without links and other sources." : "Explore connections between your documents here. Import a folder or create a note to get started."} action={hasFilters ? <Button variant="secondary" onClick={() => change({ sourceId: null, orphans: true, unresolved: false, focusId: null })}>Show all documents</Button> : <WorkspaceContentActions workspaceId={workspaceId} />} />
+          </div>
+        ) : filters.view === "list" ? (
           <div className="h-full overflow-y-auto">
             <GraphList data={data} query={query} />
           </div>
@@ -160,8 +171,9 @@ export function GraphExplorer({
           <div className="flex h-full flex-col items-center justify-center px-6 text-center" data-graph-empty>
             <p className="text-title font-semibold text-kh-text">No links between documents yet</p>
             <p className="mt-2 max-w-panel text-body text-kh-text-muted">
-              Write <code className="rounded-md bg-kh-bg-subtle px-1 py-0.5 font-mono text-body-sm">[[Document title]]</code> in a document and the relationship appears here.
+              Connect two saved documents by writing <code className="rounded-md bg-kh-bg-subtle px-1 py-0.5 font-mono text-body-sm">[[Document title]]</code> in a document. Save the note, or reimport the edited folder, to see the relationship here.
             </p>
+            {firstDocumentHref ? <Link className={buttonClasses({ variant: "secondary", className: "mt-4" })} href={firstDocumentHref}>Open a document</Link> : null}
             {data.nodes.length > 0 ? (
               <Link href={`/w/${workspaceId}/graph${graphQuery({ ...filters, view: "list" })}`} prefetch={false} className="mt-4 rounded-md text-body text-kh-link underline underline-offset-2 kh-focus-ring">
                 See the {data.nodes.length} {data.nodes.length === 1 ? "document" : "documents"} as a list

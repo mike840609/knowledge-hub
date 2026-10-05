@@ -1,3 +1,4 @@
+import { stageReadingFolder } from "./fixtures/folder-reading";
 import { expect, test, type Page } from "@playwright/test";
 import { openPalette } from "./fixtures/palette";
 import { showMarkdown } from "./composer-helpers";
@@ -11,7 +12,6 @@ import { showMarkdown } from "./composer-helpers";
  */
 
 // Mirrors scripts/db/seed.ts BROWSER_FIXTURE_IDS (Playwright cannot resolve `@/` aliases).
-const EMPTY_WORKSPACE = "0199f100-0000-7000-8000-000000000004";
 const RESTRICTED_WORKSPACE = "0199f100-0000-7000-8000-000000000003";
 
 // Same budget and reasoning as phase5-authoring.spec.ts.
@@ -146,11 +146,21 @@ test.describe("the workspace graph", () => {
     await expect(page.getByRole("link", { name: new RegExp(`^${centre}`) }).first()).toBeVisible(ROUND_TRIP);
   });
 
-  test("says so, rather than drawing a scatter of dots, when nothing is linked", async ({ page }) => {
-    await page.goto(`/w/${EMPTY_WORKSPACE}/graph`);
+  test("explains documents without links independently of other test data", async ({ page, request }) => {
+    const nav = await (await request.get("/api/workspaces")).json();
+    const workspaceId = nav.items.find((item: { type: string }) => item.type === "PERSONAL").id;
+    const snapshot = await stageReadingFolder(request, { workspaceId, sourceName: "Graph without links", fixture: "wrong-folder" });
+    const applied = await (await request.post(`/api/source-imports/${snapshot}/apply`, { data: {} })).json();
+    expect(applied.kind).toBe("APPLIED");
+    await page.goto(`/w/${workspaceId}/graph?source=${applied.sourceId}`);
     const empty = page.locator("[data-graph-empty]");
     await expect(empty.getByText("No links between documents yet")).toBeVisible(ROUND_TRIP);
     await expect(empty.getByText("[[Document title]]")).toBeVisible();
+    await expect(empty.getByRole("link", { name: "Open a document", exact: true })).toBeVisible();
+    await page.goto(`/w/${workspaceId}/graph?source=${applied.sourceId}&orphans=0`);
+    await expect(page.getByRole("heading", { name: "No documents match these filters", exact: true })).toBeVisible(ROUND_TRIP);
+    await page.getByRole("button", { name: "Show all documents", exact: true }).click();
+    await expect(page).toHaveURL(`/w/${workspaceId}/graph`);
   });
 
   test("is the command palette's Open graph", async ({ page }) => {

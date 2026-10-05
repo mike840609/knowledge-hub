@@ -1,4 +1,8 @@
 "use client";
+
+import { Share2 } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
+import { WorkspaceContentActions } from "./workspace-content-actions";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Copy, MoreHorizontal, Search, RefreshCw } from "lucide-react";
@@ -18,7 +22,7 @@ import { navigateListRows } from "@/lib/list-row-navigation";
 import type { ManagedShareLink, ShareManagementQuery, ShareManagementStatus } from "@/modules/knowledge/domain/share-management";
 const labels: Record<ShareManagementStatus, string> = { active: "Active", expired: "Expired", revoked: "Revoked", unavailable: "Unavailable" };
 export type ShareManagementModel = { query: ShareManagementQuery; items: ManagedShareLink[]; hasNext: boolean };
-export function ShareManagementView({ workspaceId, model, filterError }: { workspaceId: string; model: ShareManagementModel; filterError?: string }) {
+export function ShareManagementView({ workspaceId, model, filterError, hasDocuments = true }: { workspaceId: string; model: ShareManagementModel; filterError?: string; hasDocuments?: boolean }) {
   const router = useRouter(), toast = useToast();
   const [origin, setOrigin] = useState("");
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -68,7 +72,7 @@ export function ShareManagementView({ workspaceId, model, filterError }: { works
     </form>
     {filterError ? <p role="alert" className="mt-3 text-body text-kh-danger">{filterError}</p> : null}
     <GovernanceError error={error} />
-    {!filterError && model.items.length === 0 ? <div className="mt-6 space-y-2"><p className="text-body text-kh-text-muted">{!model.query.q && model.query.page === 1 && model.query.status === "active" ? "No active share links." : filtered ? "No shares match these filters." : "No share links yet."}</p><p className="text-caption text-kh-text-muted">Create a share link from a document’s Share action, or choose All statuses to see older links.</p><Link className="kh-focus-ring rounded-md text-body text-kh-link" href={`/w/${workspaceId}/knowledge`}>Browse documents</Link></div> : null}
+    {!filterError && model.items.length === 0 ? <EmptyState icon={Share2} title={!model.query.q && model.query.page === 1 && model.query.status === "active" ? "No active share links." : filtered ? "No shares match these filters." : "No share links yet."} description={filtered && (model.query.q || model.query.page > 1 || model.query.status !== "active") ? "Clear the filters to see links with other titles or statuses." : hasDocuments ? "Open a document and use its Share action to create a link. Created links appear here, where you can check their status or revoke access." : "Add your first document, then use its Share action to create a link. You can manage and revoke your links here."} action={filtered && (model.query.q || model.query.page > 1 || model.query.status !== "active") ? <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/shares?status=all`}>Show all shares</Link> : hasDocuments ? <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/knowledge`}>Browse documents</Link> : <WorkspaceContentActions workspaceId={workspaceId} />} /> : null}
     {model.items.length > 0 ? <div aria-hidden="true" className="mt-4 hidden grid-cols-[minmax(0,1fr)_6rem_7rem_4rem_6rem] items-center gap-3 border-b border-kh-border px-3 py-2 text-caption text-kh-text-muted md:grid"><span>Document / link</span><span>Status</span><span>Expires</span><span className="text-right">Views</span><span /></div> : null}
     <ul aria-label="Share links" onKeyDown={navigateListRows} className="mt-4 space-y-2 md:mt-0 md:space-y-0">
       {model.items.map(item => {

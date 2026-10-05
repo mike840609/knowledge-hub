@@ -12,5 +12,5 @@ it("renders analysis without duplicating Home identity and counters and matching
 });
 it("renders useful empty states and explains incomplete legacy history",()=>{
  const html=renderToStaticMarkup(<PersonalProfileView profile={{...profile,counts:{articles:0,synced:0,notes:0,archived:0,folders:0,favorites:0,unread:0},sources:[],legacyChangesUnavailable:true}}/>);
- expect(html).toContain("Import your first folder");expect(html).toContain("Older syncs");expect(html).not.toContain("NaN");expect(html).not.toContain("Infinity");
+ expect(html).toContain("Review pending previews");expect(html).toContain("Older syncs");expect(html).not.toContain("NaN");expect(html).not.toContain("Infinity");
 });

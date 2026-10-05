@@ -10,7 +10,8 @@ export default async function SharesPage({ params, searchParams }: { params: Pro
   const input = { q: firstSearchParam(query.q), status: firstSearchParam(query.status), page: firstSearchParam(query.page) };
   try {
     const model = await s.shares.listManagement(caller, workspaceId, input);
-    return <ShareManagementView key={JSON.stringify(model.query)} workspaceId={workspaceId} model={model} />;
+    const hasDocuments = model.items.length > 0 || (await s.queries.listDocumentSummaries(caller, workspaceId, { includeArchived: true })).length > 0;
+    return <ShareManagementView hasDocuments={hasDocuments} key={JSON.stringify(model.query)} workspaceId={workspaceId} model={model} />;
   } catch (error) {
     if (error instanceof ValidationError) return <ShareManagementView workspaceId={workspaceId} filterError={error.message} model={{ query: { q: input.q ?? "", status: "all", page: 1 }, items: [], hasNext: false }} />;
     if (error instanceof DomainError && ["DOCUMENT_NOT_FOUND", "WORKSPACE_NOT_FOUND", "WORKSPACE_ACCESS_DENIED", "INSUFFICIENT_WORKSPACE_CAPABILITY"].includes(error.code)) notFound();

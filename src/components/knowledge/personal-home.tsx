@@ -1,4 +1,6 @@
 "use client";
+
+import { ReopenGuidanceMenuItem } from "./reopen-guidance-menu-item";
 import type { ReactNode } from "react";
 import {PersonalStatsSummary} from "@/components/personal/personal-stats-summary";
 import type {ProfileCounts} from "@/modules/personal/domain/personal-profile";
@@ -148,6 +150,7 @@ export function PersonalHome({ workspaceId, documents, drafts, limits, profileCo
           <MenuRoot>
             <MenuTrigger aria-label="Home actions" className={buttonClasses({ variant: "ghost", icon: true })}><MoreHorizontal size={16} aria-hidden="true" /></MenuTrigger>
             <MenuContent align="end" className="w-72">
+              <ReopenGuidanceMenuItem workspaceId={workspaceId} />
               <MenuItem render={<Link href={`/w/${workspaceId}/knowledge`} />}>Organize documents</MenuItem>
               <MenuItem render={<a href={`/api/workspaces/${workspaceId}/export`} />}>Export Markdown ZIP</MenuItem>
               <p className="px-3 py-2 text-caption text-kh-text-muted">Export includes saved and archived notes. Drafts, history and attachments are excluded.</p>

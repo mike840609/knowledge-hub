@@ -1,3 +1,7 @@
+import { Search, FileText } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
+import { buttonClasses } from "@/components/ui/button";
+import { WorkspaceContentActions } from "@/components/knowledge/workspace-content-actions";
 import Link from "next/link";
 import type { SearchPageModel } from "@/server/search-read";
 import { SearchResultRow } from "@/components/search/search-result-row";
@@ -21,15 +25,18 @@ export function SearchResults({ model }: { model: SearchPageModel }) {
       </p>
     );
   }
+  if (model.result?.tooLong) {
+    return <p role="alert" className="rounded-md border border-kh-border p-6 text-body text-kh-danger">Query is too long; use at most 200 characters.</p>;
+  }
+  if (model.hasDocuments === false && model.scope === "workspace") return <EmptyState icon={FileText} title="No saved documents yet" description="Search finds words in your saved documents. Import a Markdown folder or create a note, then search for a phrase from its content." action={<WorkspaceContentActions workspaceId={model.workspaceId} />} />;
   const result = model.result;
   if (result === null) {
     return <p className="rounded-md bg-kh-bg-subtle p-6 text-body text-kh-text-muted">Enter a keyword or choose a source, path or date range.</p>;
   }
-  if (result.tooLong) {
-    return <p role="alert" className="rounded-md border border-kh-border p-6 text-body text-kh-danger">Query is too long; use at most 200 characters.</p>;
-  }
   if (result.hits.length === 0) {
-    return <p className="rounded-md bg-kh-bg-subtle p-6 text-body text-kh-text-muted">No results for this query.</p>;
+    const filtered = Boolean(model.sourceId || model.path || model.from || model.to || model.includeArchived || model.page > 1);
+    const params = new URLSearchParams({ q: model.q, scope: model.scope });
+    return <EmptyState icon={Search} title="No results for this query." description={filtered ? "Keep your keyword and remove the source, path or date filters to search more broadly." : "Try a shorter keyword or a phrase from a document. You can also browse your saved knowledge."} action={filtered ? <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${model.workspaceId}/search?${params}`}>Search without filters</Link> : <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${model.workspaceId}/knowledge`}>Browse documents</Link>} />;
   }
   return (
     <>
