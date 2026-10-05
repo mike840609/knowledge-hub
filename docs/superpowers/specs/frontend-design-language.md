@@ -500,6 +500,19 @@ it is chosen from has already closed; the clipboard can refuse, and says so.
 This was missed on the first pass and found by reading the product rather than
 the diff: middle-click still worked, so nothing looked broken.
 
+**A row's menu is grouped by what the reader is doing**: open, change, export,
+remove, in that order, with a rule between sections. Remove is last and alone,
+because Archive and Restore are what looks hardest to take back and a menu keeps
+those where a stray click is least likely to land. The sections follow a
+`section` field on the registry's row actions; the palette keeps its own
+`group`, which answers a different question (what the action is *about*), and
+neither field stands in for the other. A rule is drawn only between two sections
+that both have something in them, so a row the reader may only read never
+begins, ends or doubles up on a rule. *Open document* is not offered on a row:
+the row is a link, so a click or Enter already opens it, and it was the only item
+that duplicated a gesture rather than adding one. *Open in new tab* and *Copy
+link* stay, for the reason above.
+
 That trigger is floated over the row's own background rather than given a
 column of its own. A second reserved control slot re-truncates every label in
 the tree to buy a button that is invisible most of the time; a float costs
