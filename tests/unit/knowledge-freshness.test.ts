@@ -23,7 +23,8 @@ describe("knowledge freshness",()=>{
  it("excludes archived folders and nonfolders regardless of failure",()=>{
   expect(knowledgeFreshness([ {...item(null),source:{...item(null).source,status:"ARCHIVED"}}, {...item(null),source:{...item(null).source,sourceType:"FILE_UPLOAD"}}, {...item(null),source:{...item(null).source,ownership:"HUB_MANAGED"}} ],14,now)).toEqual([]);
  });
+ it.each([7,14,30])("preserves saved threshold %s",thresholdDays=>expect(freshnessThreshold({thresholdDays})).toBe(thresholdDays));
  it.each([7,14,30])("validates threshold %s",thresholdDays=>expect(validateFreshnessValue({thresholdDays})).toEqual({thresholdDays}));
  it.each([null,{},[],{thresholdDays:8},{thresholdDays:"14"},{thresholdDays:14,other:true}])("rejects malformed value %j",value=>expect(()=>validateFreshnessValue(value)).toThrow());
- it("defaults invalid stored preferences to 14 days",()=>expect(freshnessThreshold(null)).toBe(14));
+ it("defaults missing or invalid stored preferences to 30 days",()=>expect(freshnessThreshold(null)).toBe(30));
 });

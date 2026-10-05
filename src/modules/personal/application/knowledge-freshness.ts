@@ -12,7 +12,7 @@ export function validateFreshnessValue(value: unknown): { thresholdDays: Freshne
   return { thresholdDays: value.thresholdDays as FreshnessThreshold };
 }
 export function freshnessThreshold(value: unknown): FreshnessThreshold {
-  try { return validateFreshnessValue(value).thresholdDays; } catch { return 14; }
+  try { return validateFreshnessValue(value).thresholdDays; } catch { return 30; }
 }
 export type FreshnessReminder = { sourceId: string; sourceName: string; status: "pending" | "failed" | "never" | "old"; previewId: string | null; lastImportedAt: string | null };
 /** Pending preview takes priority, then failed attempt, then never imported, then age. */

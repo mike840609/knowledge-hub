@@ -24,14 +24,14 @@ export function FreshnessReminders({workspaceId,items,preference,now}: {workspac
   return <section aria-label="Knowledge freshness" className="px-3 space-y-2">
     <div className="flex flex-wrap items-center justify-between gap-2">
       <h2 className="text-caption font-medium text-kh-text-muted">Knowledge freshness</h2>
-      <label className="flex items-center gap-2 text-caption text-kh-text-muted">Remind after<Select aria-label="Freshness threshold" value={setting.thresholdDays} disabled={saving} onChange={e=>void save(Number(e.target.value) as FreshnessThreshold)}>{FRESHNESS_THRESHOLDS.map(days=><option key={days} value={days}>{days} days</option>)}</Select></label>
+      <label className="flex items-center gap-2 text-caption text-kh-text-muted">Review folders after<Select aria-label="Freshness threshold" value={setting.thresholdDays} disabled={saving} onChange={e=>void save(Number(e.target.value) as FreshnessThreshold)}>{FRESHNESS_THRESHOLDS.map(days=><option key={days} value={days}>{days === 7 ? "1 week" : days === 14 ? "2 weeks" : "1 month"}</option>)}</Select></label>
     </div>
-    <p className="text-caption text-kh-text-muted">Age reflects the last applied import. External folders are not checked automatically.</p>
+    <p className="text-caption text-kh-text-muted">Folders not reimported within this period appear here for review. Age reflects the last applied import; external folders are not checked automatically.</p>
     {error?<p role="alert" className="text-body-sm text-kh-text">{error}</p>:null}
     {saving?<p role="status" className="text-caption text-kh-text-muted">Saving reminder preference…</p>:null}
     {reminders.length?<ul className="space-y-0.5">{reminders.map(item=><li key={item.sourceId} className="kh-interactive-row flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md px-3 py-2">
       <Link className="kh-focus-ring min-w-0 basis-full break-words rounded-md text-body font-medium sm:basis-auto sm:flex-1 text-kh-text" href={`/w/${workspaceId}/sources/${item.sourceId}`}>{item.sourceName}</Link>
-      <span className="text-caption text-kh-text-muted">{item.status==="pending"?"Awaiting Apply":item.status==="failed"?"Latest sync failed":item.status==="never"?"Never imported":"Import may be outdated"}{item.lastImportedAt?<> · Last imported <Timestamp value={item.lastImportedAt} variant="relative"/></>:null}</span>
+      <span className="text-caption text-kh-text-muted">{item.status==="pending"?"Awaiting Apply":item.status==="failed"?"Latest sync failed":item.status==="never"?"Never imported":"Check for folder updates"}{item.lastImportedAt?<> · Last imported <Timestamp value={item.lastImportedAt} variant="relative"/></>:null}</span>
       <Link className="kh-focus-ring rounded-md text-body-sm text-kh-link" href={item.previewId?`/w/${workspaceId}/sources/imports/${item.previewId}`:`/w/${workspaceId}/sources/${item.sourceId}/update`}>{item.status==="pending"?"Review preview":item.status==="failed"?"Retry import":"Update from folder"}</Link>
     </li>)}</ul>:<p className="text-body-sm text-kh-text-muted">No folders need a freshness reminder.</p>}
   </section>;

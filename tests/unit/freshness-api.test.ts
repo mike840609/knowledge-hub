@@ -5,7 +5,7 @@ import {GET,PUT} from "@/app/api/workspaces/[workspaceId]/personal/freshness/rou
 const context={params:Promise.resolve({workspaceId:"personal"})};
 beforeEach(()=>{state.get.mockReset().mockResolvedValue({value:null,version:0});state.put.mockReset().mockResolvedValue({version:1});});
 it("uses the fixed key and trusted caller for read and defaults",async()=>{
- expect(await GET(new Request("http://local?key=prefs:other"),context)).toEqual({thresholdDays:14,version:0});
+ expect(await GET(new Request("http://local?key=prefs:other"),context)).toEqual({thresholdDays:30,version:0});
  expect(state.get).toHaveBeenCalledWith({identity:{id:"owner"}},"personal","prefs:freshness");
 });
 it("authorizes before validation and propagates ownership denial",async()=>{
