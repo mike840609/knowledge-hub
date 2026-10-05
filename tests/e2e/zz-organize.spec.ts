@@ -315,7 +315,7 @@ test.describe("what cannot be done", () => {
     const vault = page.getByRole("button", { name: "Vendor Compliance Vault", exact: true });
     if ((await vault.getAttribute("aria-expanded")) !== "true") await vault.click();
     await row(page, "Compliance Policy").click({ button: "right" });
-    await expect(page.getByRole("menuitem", { name: "Open document" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Open in new tab" })).toBeVisible();
     for (const gone of ["Archive document", "Restore document", "Edit document"]) {
       await expect(page.getByRole("menuitem", { name: gone })).toHaveCount(0);
     }

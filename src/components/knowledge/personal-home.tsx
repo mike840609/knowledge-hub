@@ -1,4 +1,5 @@
 "use client";
+import type { ReactNode } from "react";
 import {PersonalStatsSummary} from "@/components/personal/personal-stats-summary";
 import type {ProfileCounts} from "@/modules/personal/domain/personal-profile";
 import {Input} from "@/components/ui/input";
@@ -82,7 +83,7 @@ function Row({ href, icon, title, updatedAt, provenance, trailing, actions = [],
   );
 }
 
-export function PersonalHome({ workspaceId, documents, drafts, limits, profileCounts, folders=[], updates={runs:[],nextCursor:null} }: { workspaceId: string; profileCounts?:ProfileCounts; documents: Doc[]; drafts: Draft[];limits?:FolderImportClientLimits;folders?:SourceListItemModel[];updates?:FolderUpdatesPage }) {
+export function PersonalHome({ workspaceId, documents, drafts, limits, profileCounts, folders=[], updates={runs:[],nextCursor:null}, slots }: { slots?: { guidance?: ReactNode; reminders?: ReactNode }; workspaceId: string; profileCounts?:ProfileCounts; documents: Doc[]; drafts: Draft[];limits?:FolderImportClientLimits;folders?:SourceListItemModel[];updates?:FolderUpdatesPage }) {
   const { shortcuts, update } = useDocumentShortcuts(workspaceId);
   const hydrated = useHydrated();
   const { access, confirmed } = useWorkspaceAuthorization();
@@ -155,12 +156,14 @@ export function PersonalHome({ workspaceId, documents, drafts, limits, profileCo
           <WorkspaceImportLink className={buttonClasses()} href={`/w/${workspaceId}/sources/import`}>Import folder</WorkspaceImportLink>
         </>}
       />
+      {slots?.guidance}
       {profileCounts?<PersonalStatsSummary workspaceId={workspaceId} counts={profileCounts}/>:null}
       <form action={`/w/${workspaceId}/search`} role="search" className="px-3">
         <label className="sr-only" htmlFor="my-space-search">Search My Space</label>
         <div className="flex gap-2"><Input id="my-space-search" name="q" placeholder="Search your knowledge…" className="min-w-0 flex-1"/><Input type="hidden" name="scope" value="workspace"/><button className={buttonClasses({variant:"secondary"})}>Search</button></div>
       </form>
       <Section title="My folders"><HomeFolderList workspaceId={workspaceId} items={folders} limits={limits}/><Link className="block px-3 pt-2 text-caption text-kh-link" href={`/w/${workspaceId}/sources`}>Manage sources</Link></Section>
+      {slots?.reminders}
       {recent.length > 0 && <Section title="Continue reading">{documentRows(recent.slice(0, 4))}</Section>}
       <Section title="Updates"><UpdatesList workspaceId={workspaceId} page={updates}/><Link className="block px-3 pt-2 text-caption text-kh-link" href={`/w/${workspaceId}/updates`}>View all updates</Link></Section>
       {favorites.length > 0 ? <Section title="Favorites">

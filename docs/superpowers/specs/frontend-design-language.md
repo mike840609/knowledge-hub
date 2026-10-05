@@ -383,8 +383,8 @@ defect, and both the search results page and every menu shipped that way once.
 
 `Action.shortcut` in the registry is the one place a shortcut is defined. The
 same value binds the key, is the `aria-keyshortcuts` on the button that does
-the same thing, and is the hint shown beside the action in the palette
-(`shortcutLabel`), so the three cannot disagree. Adding a shortcut is filling
+the same thing, and is the hint shown beside the action in the palette and in
+the row menu (`shortcutLabel`), so the three cannot disagree. Adding a shortcut is filling
 that field.
 
 **A control with no visible label names itself in a `Tooltip`, not in `title=`**
@@ -402,7 +402,7 @@ time, and a disabled control whose title says *why* it is disabled — a disable
 button receives no pointer events, so a tooltip over it would never open. A menu
 trigger takes no tooltip either, since it would sit on the menu it opens.
 
-A single key (`C`, `E`, `/`) is also a character, so it acts only when
+A single key (for example `C`, `E`, `F`, `M`, `R`, `/`) is also a character, so it acts only when
 `isSingleKeyShortcut` in `lib/shortcut-keys.ts` says so: no `⌘`, `Ctrl` or
 `Alt`; not mid-composition in an input method (a letter typed while composing
 Chinese is text, not a command); not inside a field, a dialog, a menu or a
@@ -410,12 +410,21 @@ listbox; not a key repeat; and no Shift, except for `/`, which some layouts
 only type with it. Keys are compared by `event.key`, what the reader sees on
 the keycap, not by position.
 
-Single keys are bound in the palette (`quick-search.tsx`), from the same
-actions it lists, so `E` exists exactly when "Edit document" is offered there:
-on the document being read, when the registry's three availability axes allow
-it. The row menu shows no hints. It acts on the row it was opened from, and a
-row's "Edit document" beside an `E` that edits a different document would be
-a lie on every row but one.
+Single keys act on the row in focus, and on the document being read when no
+row is. The tree (`knowledge-tree.tsx`) takes the keys `rowShortcuts` declares
+for the kind of row it is on (`E`, `F`, `M` for a document; `C`, `M`, `R` for a
+folder), runs the row's own action for it, and takes the key even where the
+registry offers the row nothing, so `E` on a read-only row does nothing and
+does not edit the document being read. A folder row also takes the document
+keys (`E`, `F`), because with no row in focus they act on the document being
+read and must never fire for a folder. A document row does not take `C`: it
+is left to the page, where it is still Create document. The page's listener
+(`quick-search.tsx`) binds the rest from the actions the palette lists, so with
+no row in focus `E`, `F` and `M` act on the document being read, when the
+registry's three availability axes allow it. `j` and `k` are the arrows' other
+spelling inside the tree. The row menu shows each action's key: it is opened
+from a row, and the key does that thing when that row has the focus. Row keys
+spec: `docs/superpowers/specs/2026-10-02-row-keyboard-actions-design.md`.
 
 In the document composer (new and edit share it), ⌘Enter saves through the
 form's own submit button, and only when that button is enabled. ⌘/ switches
@@ -490,6 +499,19 @@ copies the page being read, and it reports through the toast because the menu
 it is chosen from has already closed; the clipboard can refuse, and says so.
 This was missed on the first pass and found by reading the product rather than
 the diff: middle-click still worked, so nothing looked broken.
+
+**A row's menu is grouped by what the reader is doing**: open, change, export,
+remove, in that order, with a rule between sections. Remove is last and alone,
+because Archive and Restore are what looks hardest to take back and a menu keeps
+those where a stray click is least likely to land. The sections follow a
+`section` field on the registry's row actions; the palette keeps its own
+`group`, which answers a different question (what the action is *about*), and
+neither field stands in for the other. A rule is drawn only between two sections
+that both have something in them, so a row the reader may only read never
+begins, ends or doubles up on a rule. *Open document* is not offered on a row:
+the row is a link, so a click or Enter already opens it, and it was the only item
+that duplicated a gesture rather than adding one. *Open in new tab* and *Copy
+link* stay, for the reason above.
 
 That trigger is floated over the row's own background rather than given a
 column of its own. A second reserved control slot re-truncates every label in
@@ -1074,12 +1096,12 @@ explicitly enables it. Disabled controls have no navigation or click action.
     and the Knowledge explorer (`src/components/knowledge/source-sidebar.tsx`,
     `w-72`). The reference has one. Merging them changes the shell every page
     sits in, so it comes after item 3.
- 5. Two things are deferred on purpose, each with the condition that reopens
-    it. List pages sit in `kh-page` rather than spanning the window; widen
-    them when the Sources list is long enough that the width costs a reader
-    something. `E` acts only on the document being read, not on the focused
-    row (`docs/superpowers/specs/2026-09-24-keyboard-shortcuts-design.md`
-    §3.2); revisit if rows gain actions a reader reaches by focus.
+ 5. One thing is deferred on purpose, with the condition that reopens it. List
+    pages sit in `kh-page` rather than spanning the window; widen them when the
+    Sources list is long enough that the width costs a reader something. (`E`
+    acting only on the document being read, not on the focused row, was the
+    other half of this item; it closed when rows gained keys a reader reaches
+    by focus: `docs/superpowers/specs/2026-10-02-row-keyboard-actions-design.md`.)
 
 ## 19. Completion criteria
 

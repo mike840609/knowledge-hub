@@ -248,7 +248,7 @@ test.describe("the Move dialog", () => {
     const vault = page.getByRole("button", { name: "Vendor Compliance Vault", exact: true });
     if ((await vault.getAttribute("aria-expanded")) !== "true") await vault.click();
     await row(page, "Compliance Policy").click({ button: "right" });
-    await expect(page.getByRole("menuitem", { name: "Open document" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Open in new tab" })).toBeVisible();
     await expect(page.getByRole("menuitem", { name: "Move document…" })).toHaveCount(0);
   });
 });
