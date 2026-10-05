@@ -140,7 +140,7 @@ describe("actionForKey", () => {
   const edit: Fixture = { id: "document.edit", shortcut: "E" };
   const move: Fixture = { id: "document.move", shortcut: "M" };
   const details: Fixture = { id: "document.details", shortcut: "Meta+I Control+I" };
-  const plain: Fixture = { id: "document.open" };
+  const plain: Fixture = { id: "document.copy-link" };
   const actions = [plain, edit, details, move];
 
   it("finds the action whose single-key shortcut is the key", () => {

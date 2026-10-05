@@ -173,6 +173,22 @@ test("E on a read-only row does nothing, and does not edit the document being re
   expect(page.url()).toBe(here);
 });
 
+const RULE = "---";
+
+/** The menu top to bottom: each item's label (not its key hint), and a rule where a separator is drawn. */
+async function menuShape(menu: Locator) {
+  return menu.locator('[role="menuitem"], [role="separator"]').evaluateAll((nodes) =>
+    nodes.map((node) => (node.getAttribute("role") === "separator" ? "---" : (node.querySelector("span.truncate")?.textContent ?? "").trim())),
+  );
+}
+
+/** Never leading, trailing or doubled. */
+function expectRulesOnlyBetweenItems(shape: readonly string[]) {
+  expect(shape[0]).not.toBe(RULE);
+  expect(shape.at(-1)).not.toBe(RULE);
+  for (let i = 1; i < shape.length; i += 1) expect(shape[i] === RULE && shape[i - 1] === RULE).toBe(false);
+}
+
 test("the row menu shows each action's key, without truncating its label, and nothing for what is not offered", async ({ page }) => {
   await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${OBSIDIAN_SOURCE}`);
   await expect(row(page, "Runbooks")).toBeVisible(ROUND_TRIP);
@@ -187,6 +203,11 @@ test("the row menu shows each action's key, without truncating its label, and no
   await expect(menu.getByRole("menuitem", { name: /Edit document/ }).locator("kbd")).toHaveText("E");
   await expect(menu.getByRole("menuitem", { name: /Add to favorites/ }).locator("kbd")).toHaveText("F");
   await expect(menu.getByRole("menuitem", { name: /Move document/ }).locator("kbd")).toHaveText("M");
+  // Grouped by what the reader is doing (open, change, export, remove), one rule between each pair of sections.
+  const shape = await menuShape(menu);
+  expect(shape).toEqual(["Open in new tab", "Copy link", RULE, "Edit document", "Add to favorites", "Move document…", RULE, "Download Markdown", RULE, "Archive document"]);
+  expectRulesOnlyBetweenItems(shape);
+  expect(await menu.getByRole("separator").count()).toBe(3);
   const labels = menu.getByRole("menuitem").locator("span.truncate");
   expect(await labels.count()).toBeGreaterThan(0);
   expect(await labels.count()).toBe(await menu.getByRole("menuitem").count());
@@ -198,8 +219,22 @@ test("the row menu shows each action's key, without truncating its label, and no
   await page.getByRole("button", { name: "Vendor Compliance Vault", exact: true }).click();
   await row(page, "Compliance Policy").click({ button: "right" });
   await expect(page.getByRole("menu")).toBeVisible(ROUND_TRIP);
-  await expect(page.getByRole("menuitem", { name: /Open document/ })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: /Open in new tab/ })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: /Edit document/ })).toHaveCount(0);
+  for (const gone of ["Move document…", "Archive document"]) await expect(page.getByRole("menuitem", { name: gone })).toHaveCount(0);
+  // Only what is offered is drawn, and a rule only between two sections that both have something in them.
+  const readOnlyShape = await menuShape(page.getByRole("menu"));
+  expect(readOnlyShape).toEqual(["Open in new tab", "Copy link", RULE, "Add to favorites", RULE, "Download Markdown"]);
+  expectRulesOnlyBetweenItems(readOnlyShape);
+});
+
+test("a folder row's menu is its actions, a rule, then Archive alone", async ({ page }) => {
+  const { folder } = await setUp(page);
+  await row(page, folder).click({ button: "right" });
+  await expect(page.getByRole("menu")).toBeVisible(ROUND_TRIP);
+  const shape = await menuShape(page.getByRole("menu"));
+  expect(shape).toEqual(["New document here", "New folder here", "Rename folder", "Move folder…", RULE, "Archive folder"]);
+  expectRulesOnlyBetweenItems(shape);
 });
 
 test("right-clicking a row makes it the row the keys act on once the menu closes", async ({ page }) => {

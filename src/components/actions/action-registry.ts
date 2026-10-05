@@ -32,7 +32,6 @@ export type ActionId =
   | "create.folder"
   | "create.import"
   | "document.export"
-  | "document.open"
   | "document.open-new-tab"
   | "document.copy-link"
   | "document.edit"
@@ -51,6 +50,12 @@ export type ActionId =
   | "folder.restore";
 
 export type ActionGroup = "navigate" | "create" | "document" | "folder";
+
+/**
+ * What the reader is doing when they pick a row action: the row menu's own grouping. It is not
+ * `ActionGroup`, which is the palette's (what an action is *about*); neither stands in for the other.
+ */
+export type ActionSection = "open" | "edit" | "export" | "remove";
 
 /**
  * Where an action may be offered. A surface renders nothing it did not ask for. `create` is the
@@ -163,6 +168,8 @@ export type Action = {
   keywords: readonly string[];
   /** `aria-keyshortcuts` spelling, where one exists. */
   shortcut?: string;
+  /** The row menu's section; set on every action that has the `row` surface. */
+  section?: ActionSection;
   surfaces: readonly ActionSurface[];
   effect: ActionEffect;
 };
@@ -319,7 +326,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
     actions.push({
       id: "create.document",
       // "Create", because the key is C. The noun is the one the rest of the
-      // product uses (Edit document, Open document); where it goes, Notes,
+      // product uses (Edit document, Move document); where it goes, Notes,
       // is a keyword rather than the label.
       label: "Create document",
       group: "create",
@@ -357,18 +364,9 @@ export function availableActions(context: ActionContext): readonly Action[] {
   }
 
   if (target) {
-    if (context.workspaceType === "PERSONAL" && can.canSearch && target.status === "ACTIVE" && target.sourceStatus === "ACTIVE" && target.revision === "CURRENT") actions.push({ id: "document.agent-context", label: "Copy for Agent", group: "document", icon: "copy-link", keywords: ["agent", "context", "markdown"], surfaces: ["palette", "row"], effect: { kind: "navigate", href: `/w/${workspaceId}/agent-context?document=${target.documentId}` } });
-    actions.push({ id: "document.export", label: "Download Markdown", group: "document", icon: "open", keywords: ["export", "download", "markdown"], surfaces: ["palette", "row"], effect: { kind: "download", href: `/api/documents/${target.documentId}/export` } });
+    if (context.workspaceType === "PERSONAL" && can.canSearch && target.status === "ACTIVE" && target.sourceStatus === "ACTIVE" && target.revision === "CURRENT") actions.push({ id: "document.agent-context", label: "Copy for Agent", group: "document", icon: "copy-link", keywords: ["agent", "context", "markdown"], section: "export", surfaces: ["palette", "row"], effect: { kind: "navigate", href: `/w/${workspaceId}/agent-context?document=${target.documentId}` } });
+    actions.push({ id: "document.export", label: "Download Markdown", group: "document", icon: "open", keywords: ["export", "download", "markdown"], section: "export", surfaces: ["palette", "row"], effect: { kind: "download", href: `/api/documents/${target.documentId}/export` } });
     const documentHref = `/w/${workspaceId}/knowledge/${target.sourceId}/${target.documentId}${suffix}`;
-    actions.push({
-      id: "document.open",
-      label: "Open document",
-      group: "document",
-      icon: "open",
-      keywords: [target.label],
-      surfaces: ["row"],
-      effect: { kind: "navigate", href: documentHref },
-    });
     // A row's link used to answer right-click with the browser's own menu,
     // which offers these two. Replacing that menu took them away, so the
     // replacement has to give them back — a context menu that is poorer than
@@ -379,6 +377,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
       group: "document",
       icon: "new-tab",
       keywords: ["tab", "window", target.label],
+      section: "open",
       surfaces: ["row"],
       effect: { kind: "open-new-tab", href: documentHref },
     });
@@ -388,6 +387,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
       group: "document",
       icon: "copy-link",
       keywords: ["share", "url", "address", target.label],
+      section: "open",
       // The palette's target is the document being read, so this is also
       // "copy a link to this page" — which has no other home.
       surfaces: ["palette", "row"],
@@ -409,6 +409,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
         icon: "edit",
         keywords: ["rename", "title", "write", target.label],
         shortcut: rowShortcuts["document.edit"],
+        section: "edit",
         surfaces: ["palette", "row"],
         effect: { kind: "navigate", href: `${documentHref.split("?")[0]}/edit` },
       });
@@ -429,6 +430,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
         group: "document",
         icon: "share",
         keywords: ["link", "share", "copy link", "public", target.label],
+        section: "edit",
         surfaces: ["palette", "row"],
         effect: {
           kind: "command",
@@ -445,6 +447,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
       icon: "favorite",
       keywords: ["star", "bookmark", target.label],
       shortcut: rowShortcuts["document.favorite"],
+      section: "edit",
       surfaces: ["palette", "row"],
       effect: {
         kind: "command",
@@ -499,6 +502,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
         icon: "move",
         keywords: ["folder", "relocate", "put", "organize", "file", target.label],
         shortcut: rowShortcuts["document.move"],
+        section: "edit",
         surfaces: ["palette", "row"],
         effect: { kind: "move", sourceId: target.sourceId, label: target.label, node: { type: "document", documentId: target.documentId } },
       });
@@ -516,6 +520,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
           group: "document",
           icon: "archive",
           keywords: ["delete", "remove", "hide", "trash", target.label],
+          section: "remove",
           surfaces: ["palette", "row"],
           effect: { kind: "command", command: "document.archive", documentId: target.documentId, sourceId: target.sourceId, label: target.label },
         });
@@ -526,6 +531,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
           group: "document",
           icon: "restore",
           keywords: ["unarchive", "undo", "bring back", target.label],
+          section: "remove",
           surfaces: ["palette", "row"],
           effect: { kind: "command", command: "document.restore", documentId: target.documentId, sourceId: target.sourceId, label: target.label },
         });
@@ -543,6 +549,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
         icon: "new-document",
         keywords: ["create", "add", "note", "write", folder.label],
         shortcut: rowShortcuts["folder.new-document"],
+        section: "edit",
         surfaces: ["row"],
         effect: { kind: "navigate", href: `/w/${workspaceId}/knowledge/new?folder=${folder.nodeId}` },
       });
@@ -552,6 +559,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
         group: "folder",
         icon: "new-folder",
         keywords: ["create", "add", "subfolder", "nest", folder.label],
+        section: "edit",
         surfaces: ["row"],
         effect: { kind: "create-folder", sourceId: folder.sourceId, parentId: folder.nodeId, parentLabel: folder.label },
       });
@@ -562,6 +570,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
         icon: "rename",
         keywords: ["name", "title", folder.label],
         shortcut: rowShortcuts["folder.rename"],
+        section: "edit",
         surfaces: ["row"],
         effect: { kind: "folder-command", command: "folder.rename", ...identity },
       });
@@ -572,6 +581,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
         icon: "move",
         keywords: ["relocate", "put", "nest", "organize", folder.label],
         shortcut: rowShortcuts["folder.move"],
+        section: "edit",
         surfaces: ["row"],
         effect: { kind: "move", sourceId: folder.sourceId, label: folder.label, node: { type: "folder", nodeId: folder.nodeId } },
       });
@@ -581,6 +591,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
         group: "folder",
         icon: "archive",
         keywords: ["delete", "remove", "hide", folder.label],
+        section: "remove",
         surfaces: ["row"],
         effect: { kind: "folder-command", command: "folder.archive", ...identity },
       });
@@ -591,6 +602,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
         group: "folder",
         icon: "restore",
         keywords: ["unarchive", "undo", "bring back", folder.label],
+        section: "remove",
         surfaces: ["row"],
         effect: { kind: "folder-command", command: "folder.restore", ...identity },
       });
@@ -603,6 +615,20 @@ export function availableActions(context: ActionContext): readonly Action[] {
 /** The actions one surface may show, in registry order. */
 export function actionsFor(surface: ActionSurface, context: ActionContext): readonly Action[] {
   return availableActions(context).filter((action) => action.surfaces.includes(surface));
+}
+
+/** The row menu's sections, in the order they are drawn. */
+const rowSectionOrder: readonly ActionSection[] = ["open", "edit", "export", "remove"];
+
+/**
+ * A row's actions as the menu draws them: sections in a fixed order, each action keeping the order it
+ * arrived in, and a section with nothing in it gone. A rule belongs between two of what this returns,
+ * so one is never leading, trailing or doubled however little the caller may do.
+ */
+export function rowMenuSections(actions: readonly Action[]): readonly (readonly Action[])[] {
+  return rowSectionOrder
+    .map((section) => actions.filter((action) => action.section === section))
+    .filter((group) => group.length > 0);
 }
 
 /**

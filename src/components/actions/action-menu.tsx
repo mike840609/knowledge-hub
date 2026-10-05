@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { Fragment, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { MoreHorizontal } from "lucide-react";
 import { buttonClasses } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import {
   MenuContent,
   MenuItem,
   MenuRoot,
+  MenuSeparator,
   MenuTrigger,
 } from "@/components/ui/menu";
 import { requestFolderName } from "@/components/knowledge/folder-name-request";
@@ -21,7 +22,7 @@ import { requestNavToggle } from "@/components/shell/nav-toggle";
 import { useTreeMutations } from "@/components/knowledge/use-tree-mutations";
 import { shortcutLabel } from "@/lib/shortcut-keys";
 import { ActionIcon } from "./action-icon";
-import type { Action } from "./action-registry";
+import { rowMenuSections, type Action } from "./action-registry";
 
 export const SHARE_REQUEST_EVENT = "kh:request-share";
 
@@ -156,17 +157,22 @@ export function ActionMenuItems({
 }) {
   return (
     <>
-      {actions.map((action) => (
-        <MenuItem key={action.id} aria-keyshortcuts={action.shortcut} onClick={() => onRun(action)}>
-          <ActionIcon name={action.icon} />
-          <span className="min-w-0 flex-1 truncate">{action.label}</span>
-          {action.shortcut ? (
-            // aria-keyshortcuts announces the key; the visible hint stays out of the item's name.
-            <span aria-hidden="true" className="shrink-0">
-              <Kbd>{shortcutLabel(action.shortcut)}</Kbd>
-            </span>
-          ) : null}
-        </MenuItem>
+      {rowMenuSections(actions).map((section, index) => (
+        <Fragment key={section[0].section}>
+          {index > 0 ? <MenuSeparator /> : null}
+          {section.map((action) => (
+            <MenuItem key={action.id} aria-keyshortcuts={action.shortcut} onClick={() => onRun(action)}>
+              <ActionIcon name={action.icon} />
+              <span className="min-w-0 flex-1 truncate">{action.label}</span>
+              {action.shortcut ? (
+                // aria-keyshortcuts announces the key; the visible hint stays out of the item's name.
+                <span aria-hidden="true" className="shrink-0">
+                  <Kbd>{shortcutLabel(action.shortcut)}</Kbd>
+                </span>
+              ) : null}
+            </MenuItem>
+          ))}
+        </Fragment>
       ))}
     </>
   );

@@ -6,6 +6,7 @@ import {
   claimedRowKeys,
   groupActions,
   matchActions,
+  rowMenuSections,
   rowShortcuts,
   type ActionContext,
   type ActionSurface,
@@ -105,7 +106,7 @@ describe("action registry — the source ownership axis", () => {
   it("does not offer Edit on source-managed content, however capable the caller", () => {
     const managed = availableActions(context({ target: target({ ownership: "SOURCE_MANAGED" }) }));
     expect(ids(managed)).not.toContain("document.edit");
-    expect(ids(managed)).toContain("document.open");
+    expect(ids(managed)).toContain("document.copy-link");
   });
 
   it("offers Edit on hub-managed content", () => {
@@ -179,23 +180,23 @@ describe("action registry — what the browser's own menu used to offer", () => 
     expect(palette).not.toContain("document.open-new-tab");
   });
 
-  it("points both at the same place Open document does", () => {
+  it("points both at the document itself, the place a click on the row goes", () => {
     const actions = availableActions(context({ includeArchived: true, target: target() }));
     const href = (id: string) => {
       const effect = actions.find((action) => action.id === id)?.effect;
       return effect && "href" in effect ? effect.href : undefined;
     };
-    expect(href("document.open-new-tab")).toBe(href("document.open"));
-    expect(href("document.copy-link")).toBe(href("document.open"));
+    expect(href("document.open-new-tab")).toBe("/w/w1/knowledge/s1/d1?includeArchived=true");
+    expect(href("document.copy-link")).toBe("/w/w1/knowledge/s1/d1?includeArchived=true");
   });
 });
 
 describe("action registry — hrefs", () => {
   it("keeps an archived view archived when it links onwards", () => {
     const archived = availableActions(context({ includeArchived: true, target: target() }));
-    const open = archived.find((action) => action.id === "document.open");
+    const open = archived.find((action) => action.id === "document.open-new-tab");
     expect(open?.effect).toEqual({
-      kind: "navigate",
+      kind: "open-new-tab",
       href: "/w/w1/knowledge/s1/d1?includeArchived=true",
     });
   });
@@ -584,5 +585,162 @@ describe("action registry — SOURCE_MANAGED content is read-only in the Hub, on
       );
       expect(offered.filter((id) => LIFECYCLE_ACTIONS.includes(id))).toEqual([]);
     }
+  });
+});
+
+describe("action registry — Open document is not a row action (the row itself opens the document)", () => {
+  it("is offered on no surface, for a document in any state", () => {
+    const states = [target(), target({ ownership: "SOURCE_MANAGED" }), target({ status: "ARCHIVED" }), target({ revision: "HISTORICAL" })];
+    for (const state of states) {
+      const all = availableActions(context({ workspaceType: "PERSONAL", target: state }));
+      expect(all.map((action) => action.label)).not.toContain("Open document");
+      expect(ids(all)).not.toContain("document.open");
+    }
+  });
+});
+
+describe("action registry — the row menu's sections (frontend-design-language §10)", () => {
+  const personal = { workspaceType: "PERSONAL" } as const;
+  const sectionsOf = (ctx: ActionContext) => rowMenuSections(actionsFor("row", ctx)).map(ids);
+
+  it("gives every row action a section, in a document's every state and in a folder's", () => {
+    const readOnlyCaller = { ...allCapabilities, canWrite: false };
+    const contexts = [
+      context({ ...personal, target: target() }),
+      context({ ...personal, target: target({ ownership: "SOURCE_MANAGED" }) }),
+      context({ ...personal, target: target({ status: "ARCHIVED" }) }),
+      context({ ...personal, target: target({ status: "ARCHIVED", sourceStatus: "ARCHIVED" }) }),
+      context({ ...personal, target: target({ revision: "HISTORICAL" }) }),
+      context({ ...personal, can: readOnlyCaller, target: target() }),
+      context({ folder: folder() }),
+      context({ folder: folder({ status: "ARCHIVED" }) }),
+    ];
+    for (const ctx of contexts) {
+      const rows = actionsFor("row", ctx);
+      expect(rows.length).toBeGreaterThan(0);
+      for (const action of rows) expect(action.section, action.id).toBeDefined();
+    }
+  });
+
+  it("puts the actions in the sections the design names", () => {
+    const sectionById = Object.fromEntries(
+      [...availableActions(context({ ...personal, target: target(), folder: folder() })), ...availableActions(context({ ...personal, target: target({ status: "ARCHIVED" }), folder: folder({ status: "ARCHIVED" }) }))]
+        .filter((action) => action.surfaces.includes("row"))
+        .map((action) => [action.id, action.section]),
+    );
+    expect(sectionById).toEqual({
+      "document.open-new-tab": "open",
+      "document.copy-link": "open",
+      "document.edit": "edit",
+      "document.share": "edit",
+      "document.favorite": "edit",
+      "document.move": "edit",
+      "folder.new-document": "edit",
+      "folder.new-folder": "edit",
+      "folder.rename": "edit",
+      "folder.move": "edit",
+      "document.agent-context": "export",
+      "document.export": "export",
+      "document.archive": "remove",
+      "document.restore": "remove",
+      "folder.archive": "remove",
+      "folder.restore": "remove",
+    });
+  });
+
+  it("groups an editable document: open, change, export, remove, each in its own order", () => {
+    expect(sectionsOf(context({ ...personal, target: target() }))).toEqual([
+      ["document.open-new-tab", "document.copy-link"],
+      ["document.edit", "document.share", "document.favorite", "document.move"],
+      ["document.agent-context", "document.export"],
+      ["document.archive"],
+    ]);
+  });
+
+  it("leaves out Copy for Agent where it is not offered, without leaving a hole", () => {
+    expect(sectionsOf(context({ target: target() }))).toEqual([
+      ["document.open-new-tab", "document.copy-link"],
+      ["document.edit", "document.favorite", "document.move"],
+      ["document.export"],
+      ["document.archive"],
+    ]);
+  });
+
+  it("has no change or remove section for a read-only (source-managed) document, and no empty section", () => {
+    const sections = sectionsOf(context({ ...personal, target: target({ ownership: "SOURCE_MANAGED" }) }));
+    expect(sections).toEqual([
+      ["document.open-new-tab", "document.copy-link"],
+      ["document.share", "document.favorite"],
+      ["document.agent-context", "document.export"],
+    ]);
+    expect(sections.every((section) => section.length > 0)).toBe(true);
+  });
+
+  it("drops every section a caller who cannot write may not use, down to the one that is left", () => {
+    const none = { canWrite: false, canImport: false, canSearch: false, canInspectSources: false, canOpenSettings: false };
+    expect(sectionsOf(context({ can: none, confirmed: false, target: target({ status: "ARCHIVED", revision: "HISTORICAL" }) }))).toEqual([
+      ["document.open-new-tab", "document.copy-link"],
+      ["document.favorite"],
+      ["document.export"],
+    ]);
+  });
+
+  it("puts Restore alone at the end for an archived document", () => {
+    expect(sectionsOf(context({ ...personal, target: target({ status: "ARCHIVED" }) }))).toEqual([
+      ["document.open-new-tab", "document.copy-link"],
+      ["document.favorite"],
+      ["document.export"],
+      ["document.restore"],
+    ]);
+  });
+
+  it("groups a folder: what to make or change, then Archive alone", () => {
+    expect(sectionsOf(context({ folder: folder() }))).toEqual([
+      ["folder.new-document", "folder.new-folder", "folder.rename", "folder.move"],
+      ["folder.archive"],
+    ]);
+  });
+
+  it("gives an archived folder Restore and nothing else", () => {
+    expect(sectionsOf(context({ folder: folder({ status: "ARCHIVED" }) }))).toEqual([["folder.restore"]]);
+  });
+
+  it("returns no sections for no actions", () => {
+    expect(rowMenuSections([])).toEqual([]);
+  });
+
+  it("orders by section whatever order the actions arrive in, and keeps the arrival order inside a section", () => {
+    const rows = actionsFor("row", context({ ...personal, target: target() }));
+    const shuffled = [...rows].reverse();
+    const sections = rowMenuSections(shuffled).map(ids);
+    expect(sections.map((section) => section.length)).toEqual([2, 4, 2, 1]);
+    expect(sections[0]).toEqual(["document.copy-link", "document.open-new-tab"]);
+  });
+
+  it("leaves the palette's own grouping and order alone", () => {
+    expect(ids(actionsFor("palette", context({ ...personal, target: target() })))).toEqual([
+      "navigate.home",
+      "navigate.shares",
+      "navigate.agent-context",
+      "navigate.knowledge",
+      "navigate.graph",
+      "navigate.search",
+      "navigate.sources",
+      "navigate.settings",
+      "navigate.toggle-nav",
+      "create.document",
+      "create.folder",
+      "create.import",
+      "document.agent-context",
+      "document.export",
+      "document.copy-link",
+      "document.edit",
+      "document.share",
+      "document.favorite",
+      "document.details",
+      "document.backlinks",
+      "document.move",
+      "document.archive",
+    ]);
   });
 });
