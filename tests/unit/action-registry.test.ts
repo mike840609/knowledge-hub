@@ -603,19 +603,20 @@ describe("action registry — the row menu's sections (frontend-design-language 
   const personal = { workspaceType: "PERSONAL" } as const;
   const sectionsOf = (ctx: ActionContext) => rowMenuSections(actionsFor("row", ctx)).map(ids);
 
+  const readOnlyCaller = { ...allCapabilities, canWrite: false };
+  const rowContexts = [
+    context({ ...personal, target: target() }),
+    context({ ...personal, target: target({ ownership: "SOURCE_MANAGED" }) }),
+    context({ ...personal, target: target({ status: "ARCHIVED" }) }),
+    context({ ...personal, target: target({ status: "ARCHIVED", sourceStatus: "ARCHIVED" }) }),
+    context({ ...personal, target: target({ revision: "HISTORICAL" }) }),
+    context({ ...personal, can: readOnlyCaller, target: target() }),
+    context({ folder: folder() }),
+    context({ folder: folder({ status: "ARCHIVED" }) }),
+  ];
+
   it("gives every row action a section, in a document's every state and in a folder's", () => {
-    const readOnlyCaller = { ...allCapabilities, canWrite: false };
-    const contexts = [
-      context({ ...personal, target: target() }),
-      context({ ...personal, target: target({ ownership: "SOURCE_MANAGED" }) }),
-      context({ ...personal, target: target({ status: "ARCHIVED" }) }),
-      context({ ...personal, target: target({ status: "ARCHIVED", sourceStatus: "ARCHIVED" }) }),
-      context({ ...personal, target: target({ revision: "HISTORICAL" }) }),
-      context({ ...personal, can: readOnlyCaller, target: target() }),
-      context({ folder: folder() }),
-      context({ folder: folder({ status: "ARCHIVED" }) }),
-    ];
-    for (const ctx of contexts) {
+    for (const ctx of rowContexts) {
       const rows = actionsFor("row", ctx);
       expect(rows.length).toBeGreaterThan(0);
       for (const action of rows) expect(action.section, action.id).toBeDefined();
@@ -703,6 +704,30 @@ describe("action registry — the row menu's sections (frontend-design-language 
 
   it("gives an archived folder Restore and nothing else", () => {
     expect(sectionsOf(context({ folder: folder({ status: "ARCHIVED" }) }))).toEqual([["folder.restore"]]);
+  });
+
+  it("loses no action: what goes in comes out, in every context", () => {
+    for (const ctx of rowContexts) {
+      const rows = actionsFor("row", ctx);
+      expect(rowMenuSections(rows).flat()).toHaveLength(rows.length);
+    }
+  });
+
+  it("keeps an action that has no section, in the edit section, rather than dropping it", () => {
+    const rows = actionsFor("row", context({ ...personal, target: target() }));
+    const unsectioned = { ...rows[0], id: "document.details", section: undefined } as const;
+    const sections = rowMenuSections([...rows, unsectioned]).map(ids);
+    expect(sections.flat()).toHaveLength(rows.length + 1);
+    expect(sections[1]).toContain("document.details");
+    expect(sections[0]).not.toContain("document.details");
+  });
+
+  it("keeps an action whose section is not one the menu knows, in the edit section", () => {
+    const rows = actionsFor("row", context({ ...personal, target: target() }));
+    const unknown = { ...rows[0], id: "document.details", section: "bogus" } as unknown as (typeof rows)[number];
+    const sections = rowMenuSections([...rows, unknown]).map(ids);
+    expect(sections.flat()).toHaveLength(rows.length + 1);
+    expect(sections[1]).toContain("document.details");
   });
 
   it("returns no sections for no actions", () => {

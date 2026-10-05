@@ -626,8 +626,10 @@ const rowSectionOrder: readonly ActionSection[] = ["open", "edit", "export", "re
  * so one is never leading, trailing or doubled however little the caller may do.
  */
 export function rowMenuSections(actions: readonly Action[]): readonly (readonly Action[])[] {
+  // An action with no known section lands in "edit", in arrival order, rather than vanishing from the menu.
+  const sectionOf = (action: Action): ActionSection => (action.section && rowSectionOrder.includes(action.section) ? action.section : "edit");
   return rowSectionOrder
-    .map((section) => actions.filter((action) => action.section === section))
+    .map((section) => actions.filter((action) => sectionOf(action) === section))
     .filter((group) => group.length > 0);
 }
 

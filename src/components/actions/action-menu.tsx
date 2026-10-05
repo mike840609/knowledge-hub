@@ -158,7 +158,7 @@ export function ActionMenuItems({
   return (
     <>
       {rowMenuSections(actions).map((section, index) => (
-        <Fragment key={section[0].section}>
+        <Fragment key={index}>
           {index > 0 ? <MenuSeparator /> : null}
           {section.map((action) => (
             <MenuItem key={action.id} aria-keyshortcuts={action.shortcut} onClick={() => onRun(action)}>
