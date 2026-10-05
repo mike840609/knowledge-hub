@@ -1,0 +1,19 @@
+{
+  "baseline": "1ab16c2b1f338c62f1560e0f57ae4558921a47af",
+  "capturedAt": "2026-10-05T11:14:56.741Z",
+  "rendering": "Next.js development servers, actual application components, isolated synthetic database",
+  "viewports": {
+    "desktop": {
+      "width": 1440,
+      "height": 900
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844
+    }
+  },
+  "beforeSearchCspBlocked": true,
+  "beforeNativeClearWorks": true,
+  "afterSearchCspBlocked": false,
+  "afterNativeClearWorks": true
+}

@@ -1,0 +1,79 @@
+{
+  "baseline": "Local Home before simplification, including earlier UI fixes",
+  "capturedAt": "2026-10-05T11:47:33.452Z",
+  "rendering": "Next.js development servers, actual application components, isolated synthetic database",
+  "viewports": {
+    "desktop": {
+      "width": 1440,
+      "height": 900
+    },
+    "narrowDesktop": {
+      "width": 1280,
+      "height": 800
+    }
+  },
+  "desktop-light": {
+    "headings": [
+      "Continue reading",
+      "Updates"
+    ],
+    "columns": {
+      "left": {
+        "x": 376,
+        "y": 184,
+        "width": 549.328125,
+        "height": 375
+      },
+      "right": {
+        "x": 949.328125,
+        "y": 184,
+        "width": 274.65625,
+        "height": 375
+      }
+    },
+    "horizontalOverflow": false
+  },
+  "desktop-dark": {
+    "headings": [
+      "Continue reading",
+      "Updates"
+    ],
+    "columns": {
+      "left": {
+        "x": 376,
+        "y": 184,
+        "width": 549.328125,
+        "height": 375
+      },
+      "right": {
+        "x": 949.328125,
+        "y": 184,
+        "width": 274.65625,
+        "height": 375
+      }
+    },
+    "horizontalOverflow": false
+  },
+  "desktop-1280": {
+    "headings": [
+      "Continue reading",
+      "Updates"
+    ],
+    "columns": {
+      "left": {
+        "x": 296,
+        "y": 184,
+        "width": 549.328125,
+        "height": 375
+      },
+      "right": {
+        "x": 869.328125,
+        "y": 184,
+        "width": 274.65625,
+        "height": 375
+      }
+    },
+    "horizontalOverflow": false
+  },
+  "sourceSettingsMoved": true
+}

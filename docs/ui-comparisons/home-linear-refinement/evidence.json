@@ -1,0 +1,84 @@
+{
+  "baseline": "Three-block Home before the four refinements",
+  "capturedAt": "2026-10-05T12:06:50.350Z",
+  "rendering": "Next.js development servers, actual application components, isolated synthetic database",
+  "viewports": {
+    "desktop": {
+      "width": 1440,
+      "height": 900
+    },
+    "narrowDesktop": {
+      "width": 1280,
+      "height": 800
+    }
+  },
+  "desktop-light": {
+    "headings": [
+      "Continue reading",
+      "Updates"
+    ],
+    "columns": {
+      "left": {
+        "x": 376,
+        "y": 184,
+        "width": 549.328125,
+        "height": 366
+      },
+      "right": {
+        "x": 949.328125,
+        "y": 184,
+        "width": 274.65625,
+        "height": 366
+      }
+    },
+    "horizontalOverflow": false
+  },
+  "desktop-dark": {
+    "headings": [
+      "Continue reading",
+      "Updates"
+    ],
+    "columns": {
+      "left": {
+        "x": 376,
+        "y": 184,
+        "width": 549.328125,
+        "height": 366
+      },
+      "right": {
+        "x": 949.328125,
+        "y": 184,
+        "width": 274.65625,
+        "height": 366
+      }
+    },
+    "horizontalOverflow": false
+  },
+  "desktop-1280": {
+    "headings": [
+      "Continue reading",
+      "Updates"
+    ],
+    "columns": {
+      "left": {
+        "x": 296,
+        "y": 184,
+        "width": 549.328125,
+        "height": 366
+      },
+      "right": {
+        "x": 869.328125,
+        "y": 184,
+        "width": 274.65625,
+        "height": 366
+      }
+    },
+    "horizontalOverflow": false
+  },
+  "sourceSettingsMoved": true,
+  "failureWarning": {
+    "className": "kh-focus-ring mb-3 block rounded-md border px-3 py-3 text-body-sm border-kh-warning-border bg-kh-warning-bg text-kh-warning",
+    "href": "/w/01a10bf5-b6ad-7b75-8eec-24fb1212f657/sources"
+  },
+  "readTimeRecordedAndDisplayed": true
+}

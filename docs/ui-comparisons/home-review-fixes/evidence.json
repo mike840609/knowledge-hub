@@ -1,0 +1,86 @@
+{
+  "baseline": "Current Home with the two review fixes",
+  "capturedAt": "2026-10-05T12:56:29.104Z",
+  "rendering": "Next.js development servers, actual application components, isolated synthetic database",
+  "viewports": {
+    "desktop": {
+      "width": 1440,
+      "height": 900
+    },
+    "narrowDesktop": {
+      "width": 1280,
+      "height": 800
+    }
+  },
+  "openTimePreservedByFilter": {
+    "documentId": "01a10c23-4f90-7ba6-ba23-d9eb9f367660",
+    "initial": "2026-10-05T12:57:02.834Z",
+    "afterFilter": "2026-10-05T12:57:02.834Z",
+    "route": "http://127.0.0.1:3211/w/01a10c23-3775-767e-b0be-5734b8c670b5/knowledge/01a10c23-4f2d-7c1e-97ad-742f8a154431/01a10c23-4f90-7ba6-ba23-d9eb9f367660?includeArchived=true"
+  },
+  "reopeningRecordsNewTime": {
+    "initial": "2026-10-05T12:57:02.834Z",
+    "reopened": "2026-10-05T12:57:05.037Z"
+  },
+  "legacyRecentDatesOmitted": true,
+  "width1440": {
+    "horizontalOverflow": false,
+    "metadata": [
+      {
+        "status": "Added · Unread",
+        "statusFits": true,
+        "sourceClipped": true
+      },
+      {
+        "status": "Added · Read",
+        "statusFits": true,
+        "sourceClipped": true
+      },
+      {
+        "status": "Added · Unread",
+        "statusFits": true,
+        "sourceClipped": false
+      }
+    ]
+  },
+  "width1280": {
+    "horizontalOverflow": false,
+    "metadata": [
+      {
+        "status": "Added · Unread",
+        "statusFits": true,
+        "sourceClipped": true
+      },
+      {
+        "status": "Added · Read",
+        "statusFits": true,
+        "sourceClipped": true
+      },
+      {
+        "status": "Added · Unread",
+        "statusFits": true,
+        "sourceClipped": false
+      }
+    ]
+  },
+  "width1100": {
+    "horizontalOverflow": false,
+    "metadata": [
+      {
+        "status": "Added · Unread",
+        "statusFits": true,
+        "sourceClipped": false
+      },
+      {
+        "status": "Added · Read",
+        "statusFits": true,
+        "sourceClipped": false
+      },
+      {
+        "status": "Added · Unread",
+        "statusFits": true,
+        "sourceClipped": false
+      }
+    ]
+  }
+}

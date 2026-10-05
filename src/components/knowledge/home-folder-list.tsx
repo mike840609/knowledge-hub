@@ -1,5 +1,4 @@
 import type { FolderImportClientLimits } from "@/components/imports/folder-import-form";
-import Link from "next/link";
 import type { SourceListItemModel } from "@/server/source-read";
 import { SourceListRow } from "@/components/sources/source-list-row";
 import { navigateListRows } from "@/lib/list-row-navigation";
@@ -26,10 +25,7 @@ export function HomeFolderList({
     </ul>
   ) : (
     <p className="px-3 py-2 text-body text-kh-text-muted">
-      Import a Markdown folder to bring your knowledge into My Space.{" "}
-      <Link className="text-kh-link" href={`/w/${workspaceId}/sources/import`}>
-        Import folder
-      </Link>
+      No synced folders yet. Add and manage folders in Sources.
     </p>
   )}<p className="px-3 pt-3 text-caption text-kh-text-muted">Your local folder is the source of truth. Edit locally, check for changes, review the Preview, then select Apply. Updates are checked manually.</p></div>;
 }

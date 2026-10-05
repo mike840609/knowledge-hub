@@ -38,6 +38,7 @@ export class MariaDbPersonalProfileRepository implements PersonalProfileReposito
      COALESCE(SUM(${active} AND s.ownership='HUB_MANAGED'),0) notes,
      COALESCE(SUM(${archived}),0) archived,
      COALESCE(SUM(${active} AND ${favorite}),0) favorites,
+     COUNT(DISTINCT CASE WHEN ${active} AND p.document_id IS NOT NULL THEN d.id END) browsed,
      COALESCE(SUM(${active} AND ${unread}),0) unread ${documentsFrom}),
 sync_stats AS (SELECT COUNT(*) folders,COALESCE(SUM(last_status='APPLIED'),0) successful,COALESCE(SUM(last_status='FAILED'),0) failed,COALESCE(SUM(last_status IS NULL),0) never_synced FROM (SELECT s.id,${latestAttempt} last_status FROM knowledge_sources s WHERE s.workspace_id=? AND s.status='ACTIVE' AND s.source_type='FOLDER_SYNC') states),
 pending_stats AS (SELECT COUNT(*) total ${pendingFrom}),
@@ -60,7 +61,7 @@ SELECT article_stats.*,sync_stats.*,pending_stats.total pending_total,
     const changes=[{added:row.changed_added,updated:row.changed_updated,archived:row.changed_archived}];
     const legacy=[{missing:row.missing}];
     const sources:DbRow[]=typeof row.source_json==='string'?JSON.parse(row.source_json):row.source_json??[];
-    return {counts:{articles:count(row,"articles"),synced:count(row,"synced"),notes:count(row,"notes"),archived:count(row,"archived"),folders:count(syncRow,"folders"),favorites:count(row,"favorites"),unread:count(row,"unread")},changes:{added:count(changes[0],"added"),updated:count(changes[0],"updated"),archived:count(changes[0],"archived")},sync:{successful:count(syncRow,"successful"),failed:count(syncRow,"failed"),neverSynced:count(syncRow,"never_synced"),pending:count(pending[0],"total")},sources:sources.map(source=>({sourceId:String(source.id),name:String(source.name),articles:count(source,"articles"),lastSyncedAt:asNullableDate(source.last_synced_at)?.toISOString()??null})),legacyChangesUnavailable:Boolean(count(legacy[0],"missing"))};
+    return {counts:{articles:count(row,"articles"),synced:count(row,"synced"),notes:count(row,"notes"),archived:count(row,"archived"),folders:count(syncRow,"folders"),favorites:count(row,"favorites"),unread:count(row,"unread"),browsed:count(row,"browsed")},changes:{added:count(changes[0],"added"),updated:count(changes[0],"updated"),archived:count(changes[0],"archived")},sync:{successful:count(syncRow,"successful"),failed:count(syncRow,"failed"),neverSynced:count(syncRow,"never_synced"),pending:count(pending[0],"total")},sources:sources.map(source=>({sourceId:String(source.id),name:String(source.name),articles:count(source,"articles"),lastSyncedAt:asNullableDate(source.last_synced_at)?.toISOString()??null})),legacyChangesUnavailable:Boolean(count(legacy[0],"missing"))};
   }
   async documents(scope:ProfileScope,filter:ProfileDocumentFilter,after?:string):Promise<ProfilePage<ProfileDocument>>{
     const from=`${documentsFrom} AND (${documentPredicate(filter)})`,params=documentParameters(scope,filter);

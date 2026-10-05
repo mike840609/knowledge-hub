@@ -5,7 +5,9 @@ export async function GET(_request: Request, context: WorkspaceRouteContext) {
   return workspaceHttp(async (services, caller) => {
     const { workspaceId } = await context.params;
     const item = await services.personalPreferences.get(caller, workspaceId, ONBOARDING_KEY);
-    return { value: item.value === null ? { schemaVersion: 1, dismissed: false } : parseOnboardingPreference(item.value), version: item.version };
+    // Missing preferences are hidden until Home enrols an empty workspace,
+    // or the owner explicitly opens Getting started from the menu.
+    return { value: item.value === null ? { schemaVersion: 1, dismissed: true } : parseOnboardingPreference(item.value), version: item.version };
   });
 }
 export async function PUT(request: Request, context: WorkspaceRouteContext) {

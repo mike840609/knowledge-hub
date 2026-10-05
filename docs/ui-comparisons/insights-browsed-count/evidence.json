@@ -1,0 +1,18 @@
+{
+  "baseline": "Browsed article count moved to Insights",
+  "capturedAt": "2026-10-05T13:25:26.664Z",
+  "rendering": "Next.js development servers, actual application components, isolated synthetic database",
+  "viewports": {
+    "desktop": {
+      "width": 1440,
+      "height": 900
+    }
+  },
+  "checks": [
+    "Home counter removed",
+    "Insights shows 0, 1, 2 from DB",
+    "30-day and 7-day totals identical",
+    "fresh browser shows same total",
+    "light and dark desktop captures"
+  ]
+}
