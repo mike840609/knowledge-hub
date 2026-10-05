@@ -4,12 +4,14 @@ New users can enter any major page and find its purpose and next action. Existin
 
 - **Knowledge:** explain browsing and reading; prioritize import in My Space, with note creation as the secondary action. Empty sources explain review/apply and link to Sources.
 - **Search:** distinguish an empty personal workspace from a no-hit query. Remove filters while preserving the keyword and scope. Errors remain visible, and successful live search results do not fetch another document list.
-- **Copy for Agent:** explain the select → prepare → review → copy flow. When a document filter has no matches, Clear search retains selected documents.
-- **Graph:** distinguish no documents, documents without links, and filters excluding all documents. Explain `[[Document title]]`, saving notes or reimporting files, and offer an existing document to open.
+- **Copy for Agent:** a small SVG example shows selected documents becoming a Markdown preview. Explain the select → prepare → review → copy flow. When a document filter has no matches, Clear search retains selected documents.
+- **Graph:** a small SVG example shows linked and unlinked documents. Distinguish no documents, documents without links, and filters excluding all documents. Explain `[[Document title]]`, saving notes or reimporting files, and offer an existing document to open.
 - **Shares:** guide first share creation from a document; filtered empty results offer Show all shares.
 - **Insights:** explain what produces statistics. Pending previews lead to review/apply; archived-only content leads to archived articles. A completely empty space avoids a dashboard of zero-value charts.
 - **Import result:** explain the next step and promote the existing Read this update link after a successful import.
 - **Home:** Getting started in Home actions reopens the guide using the latest dismissal version, preserving completion. Users who create a note first can follow read/search/context links before importing a folder.
+
+The two diagrams use existing semantic colors and are explicitly labeled as examples. They appear only for first-use states; filtered zero-result states retain compact icons.
 
 Baseline screenshots use main commit `19e50725` in a separate worktree. Updated screenshots use the new-user browser test in an isolated database and production build. Viewports: desktop 1440 × 1000; mobile 390 × 844. The tests check mobile horizontal overflow.
 
@@ -43,3 +45,5 @@ Baseline screenshots use main commit `19e50725` in a separate worktree. Updated 
 | Successful import | ![Import result before](before-import-next-step.png) | ![Import next step](after-import-next-step.png) |
 
 Validation: typecheck and lint passed; 1770 unit tests passed; production build and 20 browser tests passed, covering the six first-use pages, guidance hide/reopen with progress preserved, import-to-reading, no-hit recovery, preserved context selections, graph distinctions, live and no-JavaScript search, saved searches, and access denial. The design detector reported no findings.
+
+Illustration update validation: typecheck and lint passed; 13 affected unit tests passed; production build and 2 browser flows passed, including first-use desktop/mobile captures and retained search/context/guidance behavior.

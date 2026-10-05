@@ -1,5 +1,6 @@
 "use client";
 
+import { OnboardingIllustration } from "./onboarding-illustration";
 import { Network } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { WorkspaceContentActions } from "./workspace-content-actions";
@@ -161,7 +162,7 @@ export function GraphExplorer({
       >
         {data.nodes.length === 0 ? (
           <div data-graph-empty className="px-3">
-            <EmptyState icon={Network} title={hasFilters ? "No documents match these filters" : "Add documents to build your graph"} description={hasFilters ? "Reset the graph filters to include documents without links and other sources." : "Explore connections between your documents here. Import a folder or create a note to get started."} action={hasFilters ? <Button variant="secondary" onClick={() => change({ sourceId: null, orphans: true, unresolved: false, focusId: null })}>Show all documents</Button> : <WorkspaceContentActions workspaceId={workspaceId} />} />
+            <EmptyState icon={Network} illustration={!hasFilters ? <OnboardingIllustration kind="graph" /> : undefined} title={hasFilters ? "No documents match these filters" : "Add documents to build your graph"} description={hasFilters ? "Reset the graph filters to include documents without links and other sources." : "Explore connections between your documents here. Import a folder or create a note to get started."} action={hasFilters ? <Button variant="secondary" onClick={() => change({ sourceId: null, orphans: true, unresolved: false, focusId: null })}>Show all documents</Button> : <WorkspaceContentActions workspaceId={workspaceId} />} />
           </div>
         ) : filters.view === "list" ? (
           <div className="h-full overflow-y-auto">

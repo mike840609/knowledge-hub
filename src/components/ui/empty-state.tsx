@@ -20,18 +20,20 @@ export function EmptyState({
   description,
   action,
   hint,
+  illustration,
 }: {
   icon: LucideIcon;
   title: string;
   description: ReactNode;
   action?: ReactNode;
   hint?: ReactNode;
+  illustration?: ReactNode;
 }) {
   return (
     <div className="kh-reading-column flex flex-col items-center py-16 text-center">
-      <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-kh-bg-subtle text-kh-text-muted">
+      {illustration ?? <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-kh-bg-subtle text-kh-text-muted">
         <Icon aria-hidden="true" className="h-5 w-5" />
-      </span>
+      </span>}
       <h2 className="mt-4 text-title font-semibold text-kh-text">{title}</h2>
       <p className="mt-1 max-w-panel text-body text-kh-text-muted">{description}</p>
       {action ? <div className="mt-6 flex flex-wrap justify-center gap-2">{action}</div> : null}
