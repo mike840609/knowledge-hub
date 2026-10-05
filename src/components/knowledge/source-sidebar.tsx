@@ -82,10 +82,18 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
   const recentKeys = shortcuts.recent.filter((key) => documents.has(key) && !shortcuts.favorites.includes(key) && key !== `${source.id}:${resolvedDocumentId}`).slice(0, 4);
   const favoriteDocumentIds = new Set(shortcuts.favorites.map((key) => documents.get(key)?.documentId).filter((id): id is string => Boolean(id)));
 
+  const recordedOpen = useRef<string | null>(null);
   useEffect(() => {
     const key = resolvedDocumentId ? documentShortcutKey(source.id, resolvedDocumentId) : null;
-    if (key && documents.has(key)) updateShortcuts((previous) => rememberDocument(previous, key));
-  }, [source.id, resolvedDocumentId, documents, updateShortcuts]);
+    const visit = key ? `${workspaceId}:${key}` : null;
+    // Explorer refreshes and display filters rebuild `documents` while the
+    // reader stays on the same document. Only entering it records an open.
+    if (recordedOpen.current !== visit) recordedOpen.current = null;
+    if (key && documents.has(key) && recordedOpen.current !== visit) {
+      recordedOpen.current = visit;
+      updateShortcuts((previous) => rememberDocument(previous, key));
+    }
+  }, [workspaceId, source.id, resolvedDocumentId, documents, updateShortcuts]);
 
   const toggleFavorite = useCallback((sourceId: string, documentId: string) => {
     updateShortcuts((previous) => toggleFavoriteDocument(previous, documentShortcutKey(sourceId, documentId)));

@@ -1,0 +1,34 @@
+{
+  "baseline": "Home with database-backed browsed article count",
+  "capturedAt": "2026-10-05T13:10:21.106Z",
+  "rendering": "Next.js development servers, actual application components, isolated synthetic database",
+  "viewports": {
+    "desktop": {
+      "width": 1440,
+      "height": 900
+    },
+    "narrowDesktop": {
+      "width": 1280,
+      "height": 800
+    }
+  },
+  "sameCountInFreshBrowserWithoutLocalHistory": true,
+  "countSequence": [
+    0,
+    1,
+    1,
+    2,
+    1,
+    0
+  ],
+  "checks": [
+    "initial zero",
+    "first document",
+    "same document counted once",
+    "second document",
+    "archived document excluded",
+    "archived source excluded",
+    "counter visible on both tabs",
+    "1440/1280 desktop without horizontal overflow"
+  ]
+}

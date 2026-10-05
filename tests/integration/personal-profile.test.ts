@@ -21,7 +21,7 @@ it("counts active articles, favorites and folders without loading Markdown or co
   await s.personal.put(fixtureCaller(),ws,"draft:new",{title:"Unsaved",markdown:"draft",baseRevisionId:null},0);
   await apply(files(3));
   const result=await s.personalProfile.get(fixtureCaller(),ws,7);
-  expect(result.counts).toEqual({articles:4,synced:3,notes:1,archived:0,folders:1,favorites:1,unread:3});
+  expect(result.counts).toEqual({articles:4,synced:3,notes:1,archived:0,folders:1,favorites:1,unread:3,browsed:0});
   expect(result.sync).toEqual({successful:1,failed:0,neverSynced:0,pending:0});
   expect(result.sources[0].articles).toBe(3);
   expect((await s.personalProfile.documents(fixtureCaller(),ws,{filter:"favorites",days:7})).total).toBe(1);

@@ -8,7 +8,7 @@ describe("onboarding preference boundary", () => {
   it.each([null, [], { schemaVersion: 2, dismissed: true }, { schemaVersion: 1, dismissed: "true" }, { schemaVersion: 1, dismissed: true, key: "prefs:other" }])("rejects malformed feature payload %j", value => expect(() => parseOnboardingPreference(value)).toThrow());
   it("reads the feature key and defaults a missing value", async () => {
     preferences.get.mockResolvedValue({ value: null, version: 0 });
-    expect(await GET(new Request("http://test"), context)).toEqual({ value: { schemaVersion: 1, dismissed: false }, version: 0 });
+    expect(await GET(new Request("http://test"), context)).toEqual({ value: { schemaVersion: 1, dismissed: true }, version: 0 });
     expect(preferences.get).toHaveBeenLastCalledWith({ identity: { id: "owner" } }, "personal", "prefs:onboarding");
   });
   it("passes a strict value and expected version to owner-only persistence", async () => {

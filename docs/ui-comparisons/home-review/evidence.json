@@ -1,0 +1,48 @@
+{
+  "baseline": "Current Home after the four refinements",
+  "capturedAt": "2026-10-05T12:27:02.334Z",
+  "rendering": "Next.js development servers, actual application components, isolated synthetic database",
+  "viewports": {
+    "desktop": {
+      "width": 1440,
+      "height": 900
+    },
+    "narrowDesktop": {
+      "width": 1280,
+      "height": 800
+    }
+  },
+  "openTimeRewrittenByFilter": {
+    "documentId": "01a10c08-4036-7f3d-adca-f56cd198f670",
+    "initial": "2026-10-05T12:27:18.030Z",
+    "afterFilter": "2026-10-05T12:27:20.341Z",
+    "route": "http://127.0.0.1:3211/w/01a10c08-353a-74ff-baa0-712d851c5be4/knowledge/01a10c08-4022-7eb4-a0f2-f0b589e458cc/01a10c08-4036-7f3d-adca-f56cd198f670?includeArchived=true"
+  },
+  "legacyRecentDatesOmitted": true,
+  "width1440": {
+    "horizontalOverflow": false
+  },
+  "width1280": {
+    "horizontalOverflow": false
+  },
+  "width1100": {
+    "horizontalOverflow": false
+  },
+  "updateMetaAt1100": [
+    {
+      "text": "Engineering architecture, deployment and troubleshooting knowledge repository \u00b7 Added \u00b7 Unread",
+      "scrollWidth": 824,
+      "clientWidth": 824
+    },
+    {
+      "text": "Engineering architecture, deployment and troubleshooting knowledge repository \u00b7 Added \u00b7 Read",
+      "scrollWidth": 824,
+      "clientWidth": 824
+    },
+    {
+      "text": "Engineering handbook \u00b7 Added \u00b7 Unread",
+      "scrollWidth": 824,
+      "clientWidth": 824
+    }
+  ]
+}

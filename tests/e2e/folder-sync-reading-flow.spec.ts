@@ -19,7 +19,9 @@ test("folder preview → durable result → revision-aware personal reading", as
   ).toBeVisible();
   const source = page.url().match(/sources\/([^/]+)\//)![1];
   await page.goto(`/w/${ws}/home`);
-  await expect(page.getByText(/^Your local folder is the source of truth\. Edit locally,/)).toBeVisible();
+  await expect(page.getByRole("region", {name:"Continue reading"})).toBeVisible();
+  await expect(page.getByRole("region", {name:"Updates"})).toBeVisible();
+  await page.goto(`/w/${ws}/sources`);
   await page.setViewportSize({width:390,height:844});
   await expect(page.getByText("Last synced", {exact:false}).first()).toBeVisible();
   await page.goto(`/w/${ws}/sources`);

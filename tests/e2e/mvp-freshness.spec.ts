@@ -13,7 +13,7 @@ test("freshness preference persists and reminders link to source actions",async(
  const endpoint=`/api/workspaces/${ws}/personal/freshness`;
  const initial=await(await request.get(endpoint)).json();
  expect((await request.put(endpoint,{data:{value:{thresholdDays:14},version:initial.version}})).ok()).toBe(true);
- await page.goto(`/w/${ws}/home`);
+ await page.goto(`/w/${ws}/sources`);
  await expect(page.getByLabel("Freshness threshold")).toHaveValue("14");
  await expect(page.getByLabel("Freshness threshold").getByRole("option",{name:"1 month",exact:true})).toHaveAttribute("value","30");
  const sources:Record<string,string>={};
@@ -37,7 +37,7 @@ test("freshness preference persists and reminders link to source actions",async(
   await pool.query("DELETE FROM sync_run_changes WHERE source_id=?",[sources["Never imported folder"]]);
   await pool.query("DELETE FROM sync_runs WHERE source_id=?",[sources["Never imported folder"]]);
  } finally {await pool.end();}
- await page.goto(`/w/${ws}/home`);
+ await page.goto(`/w/${ws}/sources`);
  const region=page.getByRole("region",{name:"Knowledge freshness"});
  // Other full-suite tests may leave pending or old folders in the shared workspace.
  expect(await region.getByRole("link",{name:"Review preview"}).count()).toBeGreaterThan(1);
@@ -53,6 +53,11 @@ test("freshness preference persists and reminders link to source actions",async(
  await page.reload();await expect(region.getByLabel("Freshness threshold")).toHaveValue("30");
  const changed=page.waitForResponse(r=>r.url().endsWith("/personal/freshness")&&r.request().method()==="PUT");await region.getByLabel("Freshness threshold").selectOption("7");expect((await changed).ok()).toBe(true);
  await expect(row("Older folder").getByText("Check for folder updates",{exact:false})).toBeVisible();
+ await page.goto(`/w/${ws}/home`);
+ await expect(page.getByRole("region",{name:"Knowledge freshness"})).toHaveCount(0);
+ await expect(page.getByRole("region",{name:"Updates"}).getByRole("link",{name:/sources need attention/})).toHaveAttribute("href",`/w/${ws}/sources`);
+ await page.goto(`/w/${ws}/sources`);
+ await expect(region.getByLabel("Freshness threshold")).toHaveValue("7");
  const output=path.resolve("docs/ui-comparisons/mvp-freshness");await mkdir(output,{recursive:true});
  await page.setViewportSize({width:1440,height:1100});await page.screenshot({path:path.join(output,"desktop.png"),fullPage:true,animations:"disabled"});
  await page.setViewportSize({width:390,height:844});await region.scrollIntoViewIfNeeded();await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:path.join(output,"mobile.png"),fullPage:true,animations:"disabled"});

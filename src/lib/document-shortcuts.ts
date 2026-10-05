@@ -1,4 +1,4 @@
-export type DocumentShortcuts = { recent: string[]; favorites: string[] };
+export type DocumentShortcuts = { recent: string[]; favorites: string[]; openedAt?: Record<string, string> };
 
 export const emptyDocumentShortcuts: DocumentShortcuts = { recent: [], favorites: [] };
 
@@ -13,14 +13,24 @@ export function parseDocumentShortcuts(raw: string | null): DocumentShortcuts {
     const value: unknown = JSON.parse(raw);
     if (!value || typeof value !== "object") return emptyDocumentShortcuts;
     const record = value as Record<string, unknown>;
-    return { recent: uniqueKeys(record.recent, 8), favorites: uniqueKeys(record.favorites, 10_000) };
+    const recent = uniqueKeys(record.recent, 8);
+    const openedAt = Object.fromEntries(recent.flatMap(key => {
+      const value = record.openedAt && typeof record.openedAt === "object" ? (record.openedAt as Record<string, unknown>)[key] : undefined;
+      return typeof value === "string" && Number.isFinite(Date.parse(value)) ? [[key, value]] : [];
+    }));
+    return { recent, favorites: uniqueKeys(record.favorites, 10_000), ...(Object.keys(openedAt).length ? { openedAt } : {}) };
   } catch {
     return emptyDocumentShortcuts;
   }
 }
 
 export function rememberDocument(shortcuts: DocumentShortcuts, key: string): DocumentShortcuts {
-  return { ...shortcuts, recent: [key, ...shortcuts.recent.filter((item) => item !== key)].slice(0, 8) };
+  const recent = [key, ...shortcuts.recent.filter((item) => item !== key)].slice(0, 8);
+  const openedAt = Object.fromEntries(recent.flatMap(item => {
+    const value = item === key ? new Date().toISOString() : shortcuts.openedAt?.[item];
+    return value ? [[item, value]] : [];
+  }));
+  return { ...shortcuts, recent, openedAt };
 }
 
 /**
