@@ -1,3 +1,4 @@
+import { SavedSearches } from "@/components/search/saved-searches";
 import { SearchForm } from "@/components/search/search-form";
 import { SearchResults } from "@/components/search/search-results";
 import { firstSearchParam, type SearchParamValue } from "@/lib/search-params";
@@ -49,6 +50,7 @@ export default async function WorkspaceSearchPage({
           teamsEnabled={process.env.KM_TEAM_WORKSPACES_ENABLED === "true"}
         />
       </div>
+      {model.isPersonal && <SavedSearches workspaceId={model.workspaceId} />}
       <div className="mt-6">
         <SearchResults model={model} />
       </div>
