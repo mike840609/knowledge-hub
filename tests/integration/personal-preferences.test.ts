@@ -1,3 +1,4 @@
+import { getOnboardingProgress, recordOnboardingStep } from "@/server/onboarding-progress";
 import { beforeAll, afterAll, expect, it } from "vitest";
 import type { Pool } from "mariadb";
 import { provisionIsolatedDatabase, disposeIsolatedDatabase } from "../../scripts/db/test-database";
@@ -36,4 +37,17 @@ it("denies other users and Team workspaces before accessing preferences", async 
   await expect(services.personalPreferences.get(fixtureCaller(secondFixtureIdentity), workspaceId, "prefs:onboarding")).rejects.toMatchObject({ code: "WORKSPACE_NOT_FOUND" });
   const team = await createSourceFixture(pool);
   await expect(services.personalPreferences.put(fixtureCaller(), team.workspaceId, "prefs:freshness", { days: 7 }, 0)).rejects.toMatchObject({ code: "WORKSPACE_NOT_FOUND" });
+});
+
+it("persists concurrent onboarding steps across service restarts without changing dismissal", async () => {
+  await Promise.all([
+    recordOnboardingStep(services.personalPreferences, fixtureCaller(), workspaceId, "read"),
+    recordOnboardingStep(services.personalPreferences, fixtureCaller(), workspaceId, "read"),
+    recordOnboardingStep(services.personalPreferences, fixtureCaller(), workspaceId, "search"),
+    recordOnboardingStep(services.personalPreferences, fixtureCaller(), workspaceId, "context"),
+  ]);
+  const restored = buildApplicationServices(pool);
+  expect(await getOnboardingProgress(restored.personalPreferences, fixtureCaller(), workspaceId)).toEqual({ read: true, search: true, context: true });
+  expect(await restored.personalPreferences.get(fixtureCaller(), workspaceId, "prefs:onboarding")).toMatchObject({ value: { dismissed: true }, version: 1 });
+  expect(await restored.personal.list(fixtureCaller(), workspaceId)).toEqual([]);
 });

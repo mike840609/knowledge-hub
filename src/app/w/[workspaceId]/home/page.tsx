@@ -1,3 +1,4 @@
+import { getOnboardingProgress } from "@/server/onboarding-progress";
 import type { ReactNode } from "react";
 import { importRuntimeConfig } from "@/server/import-config";
 import { getSourceListModel } from "@/server/source-read";
@@ -24,7 +25,8 @@ export default async function PersonalHomePage({ params }: { params: Promise<{ w
   const folderModel=await getSourceListModel(workspaceId);
   const folderIds = new Set(folderModel?.items.filter(item => item.source.sourceType === "FOLDER_SYNC").map(item => item.source.id));
   const firstImportedDocument = documents.find(doc => folderIds.has(doc.sourceId));
-  if (folderIds.size > 0) slots.guidance = <FirstUseGuidance workspaceId={workspaceId} initial={onboarding} firstDocumentHref={firstImportedDocument ? `/w/${workspaceId}/knowledge/${firstImportedDocument.sourceId}/${firstImportedDocument.documentId}` : undefined} />;
+  const progress = await getOnboardingProgress(s.personalPreferences, caller, workspaceId);
+  slots.guidance = <FirstUseGuidance workspaceId={workspaceId} initial={onboarding} imported={folderIds.size > 0} progress={progress} firstDocumentHref={firstImportedDocument ? `/w/${workspaceId}/knowledge/${firstImportedDocument.sourceId}/${firstImportedDocument.documentId}` : undefined} />;
   const updates=await s.folderUpdates.list(caller,workspaceId,{limit:3,documentsPerRun:5});
   const locations=await s.unitOfWork.run(r=>r.entries.findByDocumentIds(documents.map(d=>d.documentId)));
   const paths=new Map(locations.map(e=>[e.documentId,e.sourcePath]));
