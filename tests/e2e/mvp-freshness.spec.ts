@@ -6,7 +6,7 @@ import {createDatabasePool} from "../../src/infrastructure/database/mariadb/pool
 import {databaseConfig} from "../../src/infrastructure/database/mariadb/config";
 
 test("freshness preference persists and reminders link to source actions",async({page,request})=>{
- const previewsToAbandon:string[]=[];
+ const previewsToApply:string[]=[];
  try {
  const nav=await(await request.get("/api/workspaces")).json();
  const ws=nav.items.find((w:{type:string})=>w.type==="PERSONAL").id;
@@ -19,13 +19,13 @@ test("freshness preference persists and reminders link to source actions",async(
   const result=await request.post(`/api/source-imports/${snapshot}/apply`,{data:{}});expect(result.ok()).toBe(true);sources[name]=(await result.json()).sourceId;
  }
  const pending=await stageReadingFolder(request,{workspaceId:ws,sourceName:"Pending folder",sourceId:sources["Pending folder"],fixture:"reading-flow-v1"});
- previewsToAbandon.push(pending);
+ previewsToApply.push(pending);
  // Keep an unrelated pending preview so standalone runs exercise duplicate action labels too.
  const unrelated=await stageReadingFolder(request,{workspaceId:ws,sourceName:"Unrelated pending folder",fixture:"reading-flow-v1"});
  const unrelatedApply=await request.post(`/api/source-imports/${unrelated}/apply`,{data:{}});
  expect(unrelatedApply.ok()).toBe(true);
  const unrelatedPending=await stageReadingFolder(request,{workspaceId:ws,sourceName:"Unrelated pending folder",sourceId:(await unrelatedApply.json()).sourceId,fixture:"reading-flow-v1"});
- previewsToAbandon.push(unrelatedPending);
+ previewsToApply.push(unrelatedPending);
  // Deterministic import-history fixtures in the engineering wrapper's isolated database.
  const pool=createDatabasePool(databaseConfig("e2e"));
  try {
@@ -55,9 +55,11 @@ test("freshness preference persists and reminders link to source actions",async(
  await page.setViewportSize({width:390,height:844});await region.scrollIntoViewIfNeeded();await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:path.join(output,"mobile.png"),fullPage:true,animations:"disabled"});
  await row("Pending folder").getByRole("link",{name:"Review preview"}).click();await expect(page).toHaveURL(new RegExp(`/sources/imports/${pending}$`));
  } finally {
-  // READY quotas are per user across workspaces; release only this test's previews.
-  for(const snapshot of previewsToAbandon) {
-   expect((await request.delete(`/api/source-imports/${snapshot}`)).ok()).toBe(true);
+  // Cancellation protects READY previews; apply only this test's unchanged previews to release quota.
+  for(const snapshot of previewsToApply) {
+   const applied=await request.post(`/api/source-imports/${snapshot}/apply`,{data:{}});
+   expect(applied.ok()).toBe(true);
+   expect((await applied.json()).kind).toBe("APPLIED");
   }
  }
 });
