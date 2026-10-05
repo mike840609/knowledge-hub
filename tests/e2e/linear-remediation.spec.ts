@@ -87,12 +87,16 @@ test('mobile menu contains contextual navigation and closes after selecting a do
 
 test('Home keeps secondary tools in a menu and document operations on each row', async ({ page }) => {
   const doc = await note(page, 'Home body');
+  // Continue reading contains visited articles, so open this test's document first.
+  const marked = page.waitForResponse(r => r.url().endsWith(`/documents/${doc.documentId}/read`) && r.request().method() === 'POST');
+  await page.goto(doc.href);
+  expect((await marked).status()).toBe(204);
   await page.goto(`/w/${doc.workspaceId}/home`);
   await expect(page.getByRole('link', { name: 'Export Markdown ZIP' })).not.toBeVisible();
   await page.getByRole('button', { name: 'Home actions' }).click();
   await expect(page.getByRole('menuitem', { name: 'Export Markdown ZIP' })).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.locator('[data-list-row]').first()).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Continue reading' }).locator(`[data-list-row][href="${doc.href}"]`)).toBeVisible();
 });
 
 test('history presents changed lines before optional full Markdown', async ({ page }) => {
