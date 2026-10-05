@@ -24,9 +24,9 @@ export default async function PersonalHomePage({ params }: { params: Promise<{ w
   const drafts = items.filter(i => i.key.startsWith("draft:") && i.value).map(i => ({ key: i.key, title: resolveAuthoredTitle({ metadataTitle: undefined, markdown: String(i.value?.markdown ?? ""), typedTitle: String(i.value?.title ?? "") }).title || "Untitled draft", sourceId: "sourceId" in i ? String(i.sourceId) : null, updatedAt: i.updatedAt }));
   const folderModel=await getSourceListModel(workspaceId);
   const folderIds = new Set(folderModel?.items.filter(item => item.source.sourceType === "FOLDER_SYNC").map(item => item.source.id));
-  const firstImportedDocument = documents.find(doc => folderIds.has(doc.sourceId));
+  const firstReadableDocument = documents.find(doc => folderIds.has(doc.sourceId)) ?? documents[0];
   const progress = await getOnboardingProgress(s.personalPreferences, caller, workspaceId);
-  slots.guidance = <FirstUseGuidance workspaceId={workspaceId} initial={onboarding} imported={folderIds.size > 0} progress={progress} firstDocumentHref={firstImportedDocument ? `/w/${workspaceId}/knowledge/${firstImportedDocument.sourceId}/${firstImportedDocument.documentId}` : undefined} />;
+  slots.guidance = <FirstUseGuidance key={onboarding.version} workspaceId={workspaceId} initial={onboarding} imported={folderIds.size > 0} progress={progress} firstDocumentHref={firstReadableDocument ? `/w/${workspaceId}/knowledge/${firstReadableDocument.sourceId}/${firstReadableDocument.documentId}` : undefined} />;
   const updates=await s.folderUpdates.list(caller,workspaceId,{limit:3,documentsPerRun:5});
   const locations=await s.unitOfWork.run(r=>r.entries.findByDocumentIds(documents.map(d=>d.documentId)));
   const paths=new Map(locations.map(e=>[e.documentId,e.sourcePath]));

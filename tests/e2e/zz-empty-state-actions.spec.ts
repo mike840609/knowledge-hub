@@ -1,0 +1,50 @@
+import { test, expect } from "@playwright/test";
+import { mkdir } from "node:fs/promises";
+import { stageReadingFolder } from "./fixtures/folder-reading";
+
+test("empty-result recovery preserves work and successful imports lead to reading", async ({ page, request }) => {
+  const nav = await (await request.get("/api/workspaces")).json();
+  const ws = nav.items.find((item: { type: string }) => item.type === "PERSONAL").id;
+  const snapshot = await stageReadingFolder(request, { workspaceId: ws, sourceName: "Empty state reading folder", fixture: "reading-flow-v1" });
+  await page.goto(`/w/${ws}/sources/imports/${snapshot}`);
+  await page.getByRole("button", { name: "Apply changes" }).click();
+  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
+  await expect(page.getByText("Your changes are saved.", { exact: false })).toBeVisible();
+  await mkdir("docs/ui-comparisons/empty-state-guidance", { recursive: true });
+  await page.screenshot({ path: "docs/ui-comparisons/empty-state-guidance/after-import-next-step.png", fullPage: true });
+  const read = page.waitForResponse(response => response.url().endsWith("/read") && response.status() === 204);
+  await page.getByRole("link", { name: "Read this update", exact: true }).click();
+  await read;
+  await expect(page).toHaveURL(/\/knowledge\/[0-9a-f-]+\/[0-9a-f-]+\?revision=/);
+  await page.goto(`/w/${ws}/search?scope=workspace&q=empty-state-no-hit-742&path=absent-folder`);
+  await expect(page.getByRole("heading", { name: "No results for this query.", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Search without filters", exact: true }).click();
+  await expect(page).toHaveURL(url => url.searchParams.get("q") === "empty-state-no-hit-742" && url.searchParams.get("scope") === "workspace" && !url.searchParams.has("path"));
+  await page.goto(`/w/${ws}/agent-context`);
+  await page.getByLabel("Find documents").fill("Empty state reading folder");
+  await page.getByRole("checkbox", { name: /^Select / }).first().check();
+  await page.getByLabel("Find documents").fill("empty-state-no-hit-742");
+  await expect(page.getByRole("heading", { name: "No matching documents.", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Clear search", exact: true }).click();
+  await expect(page.getByLabel("Find documents")).toHaveValue("");
+  await expect(page.getByRole("checkbox", { name: /^Select / }).first()).toBeVisible();
+  expect(await page.getByRole("checkbox", { name: /^Select / }).evaluateAll(nodes => nodes.filter(node => (node as HTMLInputElement).checked).length)).toBe(1);
+  await page.goto(`/w/${ws}/home`);
+  const guide = page.getByRole("region", { name: "Get started", exact: true });
+  const preference = await (await request.get(`/api/workspaces/${ws}/onboarding`)).json();
+  if (preference.value.dismissed) {
+    await page.getByRole("button", { name: "Home actions" }).click();
+    await page.getByRole("menuitem", { name: "Getting started", exact: true }).click();
+    await expect(guide).toBeVisible();
+  }
+  const progress = await guide.getByText(/of 4 steps complete/).textContent();
+  await guide.getByRole("button", { name: "Hide guidance" }).click();
+  await expect(guide).toHaveCount(0);
+  await page.getByRole("button", { name: "Home actions" }).click();
+  await page.getByRole("menuitem", { name: "Getting started", exact: true }).click();
+  await expect(guide.getByText(progress!, { exact: true })).toBeVisible();
+  await page.goto(`/w/${ws}/shares?q=empty-state-no-hit-742&status=revoked`);
+  await expect(page.getByRole("heading", { name: "No shares match these filters.", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Show all shares", exact: true }).click();
+  await expect(page).toHaveURL(url => url.searchParams.get("status") === "all" && !url.searchParams.has("q"));
+});

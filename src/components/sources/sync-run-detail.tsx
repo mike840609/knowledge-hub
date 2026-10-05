@@ -1,3 +1,4 @@
+import { buttonClasses } from "@/components/ui/button";
 import Link from "next/link";
 import type { SyncRunDetail } from "@/modules/sources/application/get-sync-run-detail";
 import { PageHeader } from "@/components/shell/page-header";
@@ -25,9 +26,10 @@ export function SyncRunDetailView({ detail }: { detail: SyncRunDetail }) {
         <Timestamp value={run.completedAt ?? run.startedAt} />
       </p>
       {summaryText?<p className="text-body text-kh-text-secondary">{summaryText}</p>:null}
-      <div className="flex flex-wrap gap-4 text-body text-kh-link">
-        {readable?.href ? (
-          <Link href={readable.href}>Read this update</Link>
+      {run.status === "APPLIED" && readable?.href ? <p className="text-body text-kh-text-muted">Your changes are saved. Open an imported document to check its content, then search for a phrase from it.</p> : null}
+      <div aria-label="Next steps" className="flex flex-wrap items-center gap-3 text-body text-kh-link">
+        {run.status === "APPLIED" && readable?.href ? (
+          <Link className={buttonClasses()} href={readable.href}>Read this update</Link>
         ) : null}
         <Link href={`${base}/knowledge/${source.id}?includeArchived=true`}>
           Browse this folder

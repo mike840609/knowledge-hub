@@ -1,3 +1,5 @@
+import { FileText } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { findFirstReadableDocument } from "@/lib/knowledge-navigation";
@@ -33,9 +35,10 @@ export default async function SourceKnowledgePage({
   return (
     <main className="flex min-h-full flex-col justify-center">
       <RefreshOnArrival pathname={`/w/${workspaceId}/knowledge/${sourceId}`} />
-      <StatusMessage
-        title={model.source.name}
-        description="This source does not contain any readable documents."
+      <EmptyState
+        icon={FileText}
+        title="No readable documents in this source"
+        description={model.source.sourceType === "FOLDER_SYNC" ? "Your saved folder documents appear here after you review and apply an import. Open Sources to check the folder status or review a pending preview." : "This source has no saved documents to read. Open Sources to check its contents, or create a note from the workspace."}
         action={
           <Link
             className={buttonClasses({ variant: "secondary", size: "lg" })}

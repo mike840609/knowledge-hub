@@ -42,7 +42,7 @@ export function SearchForm({
         </div>
         <LiveSearchSubmit />
       </div>
-      {active.length ? <div className="flex flex-wrap items-center gap-2 text-caption text-kh-text-secondary" aria-label="Active search filters"><span>{active.join(" · ")}</span><Link className="kh-focus-ring rounded-md text-kh-link" href={`/w/${workspaceId}/search?${new URLSearchParams({q})}`}>Clear filters</Link></div> : null}
+      {active.length ? <div className="flex flex-wrap items-center gap-2 text-caption text-kh-text-secondary" aria-label="Active search filters"><span>{active.join(" · ")}</span><Link className="kh-focus-ring rounded-md text-kh-link" href={`/w/${workspaceId}/search?${new URLSearchParams({q, scope})}`}>Clear filters</Link></div> : null}
       <details open={active.length > 0} className="border-b border-kh-border pb-3">
       <summary className="kh-focus-ring w-fit cursor-pointer rounded-md text-body-sm text-kh-text-secondary">Advanced filters{active.length ? ` (${active.length})` : ""}</summary>
       <div className="mt-3 flex flex-wrap items-center gap-3">
