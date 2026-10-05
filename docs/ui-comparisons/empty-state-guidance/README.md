@@ -47,3 +47,7 @@ Baseline screenshots use main commit `19e50725` in a separate worktree. Updated 
 Validation: typecheck and lint passed; 1770 unit tests passed; production build and 20 browser tests passed, covering the six first-use pages, guidance hide/reopen with progress preserved, import-to-reading, no-hit recovery, preserved context selections, graph distinctions, live and no-JavaScript search, saved searches, and access denial. The design detector reported no findings.
 
 Illustration update validation: typecheck and lint passed; 13 affected unit tests passed; production build and 2 browser flows passed, including first-use desktop/mobile captures and retained search/context/guidance behavior.
+
+## Complete state gallery
+
+[All 19 desktop empty-state variants and 2 related guidance screens](GALLERY.md), including pending previews, archived-only insights, empty sources, filtered results, unlinked documents, and retained context selections. Captured at 1440 × 1000 in an isolated E2E database; production build and screenshot flow passed.
