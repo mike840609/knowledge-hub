@@ -267,7 +267,7 @@ These documents define the core contracts and their implementation plans. Later 
 | Personal workspace rollout | [Spec](docs/superpowers/specs/2026-09-30-personal-workspace-design.md) | [Plan](docs/superpowers/plans/2026-09-30-personal-workspace.md) | Account drafts, favorites, revision restoration and export. |
 | Discovery and Copy for Agent | [Spec](docs/superpowers/specs/2026-10-04-mvp-discovery-agent-design.md) | [Plan](docs/superpowers/plans/2026-10-04-mvp-discovery-agent.md) | Folder scope, filtered search and reviewed Markdown bundles. |
 
-Also consult the [phase roadmap](docs/superpowers/roadmaps/2026-09-10-knowledge-hub-phase-roadmap.md), [action model](docs/superpowers/specs/2026-09-21-action-model-spec.md), [keyboard shortcuts](docs/superpowers/specs/2026-09-24-keyboard-shortcuts-design.md), and the undated [frontend design language](docs/superpowers/specs/frontend-design-language.md), which is updated in place.
+Also consult the [phase roadmap](docs/superpowers/roadmaps/2026-09-10-knowledge-hub-phase-roadmap.md), [action model](docs/superpowers/specs/2026-09-21-action-model-spec.md), [keyboard shortcuts](docs/superpowers/specs/2026-09-24-keyboard-shortcuts-design.md), [row keyboard actions](docs/superpowers/specs/2026-10-02-row-keyboard-actions-design.md), and the undated [frontend design language](docs/superpowers/specs/frontend-design-language.md), which is updated in place.
 
 ## License
 

@@ -7,7 +7,7 @@
 | Addresses | Item 1 of the UI/UX review against the Linear design language: keyboard interaction is the largest perceived gap |
 | Reference contract | `docs/superpowers/specs/frontend-design-language.md` §10 (Focus and keyboard), §15 (One registry decides what can be done) |
 | Reference specification | `docs/superpowers/specs/2026-09-21-action-model-spec.md` (origin of `Action.shortcut`) |
-| Status | Implemented. Section 9 records existing defects discovered and fixed during implementation. |
+| Status | Implemented. Section 9 records existing defects discovered and fixed during implementation. The target of `E` (§2, the table row "E — the document being read" and the out-of-scope bullet about applying `E` to the focused row; §3.2) and the row menu showing no shortcuts (§4.4) are superseded by `2026-10-02-row-keyboard-actions-design.md`: the target follows keyboard focus, and the menu shows the keys. |
 
 ## 1. Current state (measured, not quoted)
 

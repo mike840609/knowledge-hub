@@ -37,7 +37,7 @@ test("a row's actions open by right-click and by its button, with the same items
 
   await row.click({ button: "right" });
   const contextMenu = page.getByRole("menu");
-  await expect(contextMenu.getByRole("menuitem", { name: "Open document" })).toBeVisible();
+  await expect(contextMenu.getByRole("menuitem", { name: "Open in new tab" })).toBeVisible();
   await expect(contextMenu.getByRole("menuitem", { name: "Edit document" })).toBeVisible();
   await expect(contextMenu.getByRole("menuitem", { name: "Add to favorites" })).toBeVisible();
   await closeMenu(page);
@@ -47,7 +47,7 @@ test("a row's actions open by right-click and by its button, with the same items
   await row.hover();
   await page.getByRole("button", { name: "Actions for Architecture" }).click();
   const buttonMenu = page.getByRole("menu");
-  await expect(buttonMenu.getByRole("menuitem", { name: "Open document" })).toBeVisible();
+  await expect(buttonMenu.getByRole("menuitem", { name: "Open in new tab" })).toBeVisible();
   await expect(buttonMenu.getByRole("menuitem", { name: "Edit document" })).toBeVisible();
   await expect(buttonMenu.getByRole("menuitem", { name: "Add to favorites" })).toBeVisible();
 });
@@ -62,8 +62,10 @@ test("source-managed content offers no Edit, however capable the caller", async 
   await closeMenu(page);
 
   await page.getByRole("treeitem", { name: "Compliance Policy", exact: true }).click({ button: "right" });
-  await expect(page.getByRole("menuitem", { name: "Open document" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Open in new tab" })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "Edit document" })).toHaveCount(0);
+  // The row is the link that opens the document, so the menu does not repeat it.
+  await expect(page.getByRole("menuitem", { name: "Open document" })).toHaveCount(0);
 });
 
 test("a row action runs: Edit opens the editor", async ({ page }) => {
