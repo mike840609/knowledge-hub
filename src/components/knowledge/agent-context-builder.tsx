@@ -1,5 +1,6 @@
 "use client";
 
+import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { OnboardingIllustration } from "./onboarding-illustration";
 import { FileText, Search } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -13,6 +14,12 @@ import { useToast } from "@/components/ui/toast";
 import { navigateListRows } from "@/lib/list-row-navigation";
 export type ContextChoice = { documentId: string; sourceId: string; title: string; sourceName: string; sourcePath: string | null };
 export function AgentContextBuilder({ workspaceId, documents, initialDocumentId }: { workspaceId: string; documents: ContextChoice[]; initialDocumentId?: string }) {
+  const { access, confirmed } = useWorkspaceAuthorization();
+  const accessConfirmed = confirmed && access.workspace.id === workspaceId;
+  const canAddDocuments = accessConfirmed && (access.actions.canImport || access.actions.canWrite);
+  const readOnlyGuidance = access.workspace.lifecycleState === "ARCHIVED"
+    ? "This workspace is archived. Ask a workspace owner to restore it before adding documents. Saved documents can still be used to prepare context."
+    : "Ask a member with edit access to add documents. You can then select saved documents and prepare Markdown for your AI agent.";
   const [selected, setSelected] = useState<string[]>(() => documents.some(d => d.documentId === initialDocumentId) ? [initialDocumentId!] : []);
   const [query, setQuery] = useState("");
   const [bundle, setBundle] = useState<{ markdown: string; bytes: number; documentCount: number } | null>(null);
@@ -47,7 +54,7 @@ export function AgentContextBuilder({ workspaceId, documents, initialDocumentId 
   const normalized = query.trim().toLocaleLowerCase();
   const matches = documents.filter(d => [d.title, d.sourceName, d.sourcePath].some(value => value?.toLocaleLowerCase().includes(normalized)));
   const visible = matches.slice(0, 100);
-  if (!documents.length) return <EmptyState icon={FileText} illustration={<OnboardingIllustration kind="context" />} title="Add documents to prepare AI context" description="Turn saved documents into Markdown your AI agent can use. Import a folder or create a note, then select documents and prepare a preview." action={<WorkspaceContentActions workspaceId={workspaceId} />} />;
+  if (!documents.length) return <EmptyState icon={FileText} illustration={<OnboardingIllustration kind="context" />} title={canAddDocuments ? "Add documents to prepare AI context" : "No documents available for AI context"} description={!accessConfirmed ? "Checking workspace access…" : canAddDocuments ? "Turn saved documents into Markdown your AI agent can use. Import a folder or create a document, then select documents and prepare a preview." : readOnlyGuidance} action={canAddDocuments ? <WorkspaceContentActions workspaceId={workspaceId} /> : undefined} />;
   return <div className="space-y-4">
     <p className="text-body text-kh-text-secondary">Select up to 20 saved documents to prepare Markdown for your Agent. Maximum 256 KiB. Review the content before copying.</p>
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">

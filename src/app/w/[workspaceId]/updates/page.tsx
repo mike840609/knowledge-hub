@@ -66,7 +66,7 @@ export default async function UpdatesPage({
         </label>
         <button className="text-kh-link">Filter</button>
       </form>
-      <UpdatesList workspaceId={workspaceId} page={page} />
+      <UpdatesList workspaceId={workspaceId} page={page} filters={{ sourceId: q.source, unreadOnly: q.unread === "true", paginated: Boolean(q.time && q.run) }} />
       {page.nextCursor ? (
         <Link
           className="text-kh-link"

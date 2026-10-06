@@ -1,4 +1,5 @@
 "use client";
+import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { useState } from "react";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,9 @@ import { buttonClasses } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 
 export function SourceList({ workspaceId, items, limits }: { workspaceId: string; items: SourceListItemModel[]; limits?: FolderImportClientLimits }) {
+  const { access, confirmed } = useWorkspaceAuthorization();
+  const accessConfirmed = confirmed && access.workspace.id === workspaceId;
+  const canImport = accessConfirmed && access.actions.canImport;
   const [attentionOnly, setAttentionOnly] = useState(false);
   const [sort, setSort] = useState("attention");
   const needsAttention = (item: SourceListItemModel) => !!item.pendingPreviewId || item.latestRun?.status === "FAILED";
@@ -26,16 +30,15 @@ export function SourceList({ workspaceId, items, limits }: { workspaceId: string
       <EmptyState
         icon={Database}
         title="No sources yet"
-        description="A source is a folder of Markdown the Hub keeps in sync. Import one and its documents appear in Knowledge."
-        action={
-          // Absent for a reader who cannot import, rather than a button that would be refused.
+        description={!accessConfirmed ? "Checking workspace access…" : canImport ? "A source is a folder of Markdown the Hub keeps in sync. Import one and its documents appear in Knowledge." : access.workspace.lifecycleState === "ARCHIVED" ? "This workspace is archived. Ask a workspace owner to restore it before importing a folder." : "A source is a folder of Markdown the Hub keeps in sync. Ask a member with import access to add a folder; its documents will appear in Knowledge."}
+        action={canImport ? (
           <WorkspaceImportLink
             className={buttonClasses({ variant: "primary" })}
             href={`/w/${workspaceId}/sources/import`}
           >
             Import folder
           </WorkspaceImportLink>
-        }
+        ) : undefined}
       />
     );
   }

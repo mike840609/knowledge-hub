@@ -3,6 +3,9 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
 import { AgentContextBuilder } from "@/components/knowledge/agent-context-builder";
+vi.mock("@/components/shell/use-workspace-authorization", () => ({
+  useWorkspaceAuthorization: () => ({ confirmed: true, access: { workspace: { id: "ws", lifecycleState: "ACTIVE" }, actions: { canImport: true, canWrite: true } } }),
+}));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => vi.fn() }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 afterEach(() => vi.unstubAllGlobals());

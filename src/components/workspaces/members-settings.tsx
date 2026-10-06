@@ -31,6 +31,7 @@ export function MembersSettings({
   const [busy, setBusy] = useState(false);
   const [searching, setSearching] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [matchedUserCount, setMatchedUserCount] = useState(0);
   const searchGeneration = useRef(0);
   const [error, setError] = useState<GovernanceFailure | null>(null);
   const roles = team.grantOptions.newMemberAssignableRoles;
@@ -56,6 +57,8 @@ export function MembersSettings({
   async function search() {
     const generation = ++searchGeneration.current;
     setSearching(true);
+    setSearched(false);
+    setCandidates([]);
     setError(null);
     setSelected("");
     try {
@@ -63,6 +66,7 @@ export function MembersSettings({
         `/api/users?query=${encodeURIComponent(query.trim())}&limit=20`,
       );
       if (generation === searchGeneration.current) {
+        setMatchedUserCount(users.length);
         setCandidates(
           users.filter((user) => !members.some((member) => member.user.id === user.id)),
         );
@@ -106,7 +110,7 @@ export function MembersSettings({
             </Button>
           </form>
           {searched && candidates.length === 0 && (
-            <p className="mt-2 text-body">No existing users found to add.</p>
+            <p role="status" className="mt-2 text-body">{matchedUserCount > 0 ? "Matching users are already members of this workspace. Try another name or employee ID." : "No users match this search. Try another name or employee ID."}</p>
           )}
           {candidates.length > 0 && (
             <form
