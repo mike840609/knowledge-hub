@@ -3,10 +3,10 @@
 | Item | Content |
 | --- | --- |
 | Date | 2026-10-06 |
-| Type | Design specification, for review before implementation |
+| Type | Design specification |
 | Why | The first-use guide starts at "Import your first folder" and assumes the reader already has one. A new user without a Markdown folder is stuck at step 0, and the person running the MVP becomes the only support. |
 | Related | `docs/superpowers/specs/2026-10-04-mvp-discovery-agent-design.md` (folder scope, Copy for Agent), `README.md` "Your first workflow" |
-| Status | Approved in conversation; implementation plan: `docs/superpowers/plans/2026-10-06-sample-wiki-import-guide.md` |
+| Status | Implemented. Plan: `docs/superpowers/plans/2026-10-06-sample-wiki-import-guide.md`. Exists: `public/sample-wiki/` (en, zh-TW, `manifest.json`); the **Try with a sample wiki** control (`src/components/imports/sample-wiki-import.tsx`, `sample-wiki.ts`); the guide at `/w/<workspaceId>/sources/import/guide` (`import-guide.tsx`, `import-guide-content.ts`); unit tests `sample-wiki`, `sample-wiki-loader`, `sample-wiki-import-form`, `import-guide-content` and e2e `sample-wiki-import.spec.ts`. |
 
 ## 1. What it delivers
 
@@ -20,8 +20,8 @@ Out of scope: a tutorial for any third-party wiki generator. Those tools change 
 ### 2.1 Where it lives and how it is imported
 
 - Files live in `public/sample-wiki/<locale>/…` (`en`, `zh-TW`), served statically. This is the only copy; the README and the guide point at it.
-- `public/sample-wiki/manifest.json` lists, per locale, the root folder name, the default source name and the file paths. A unit test fails if the manifest and the directory disagree.
-- The import page (new-source mode only) gets a **"Try with a sample wiki"** control with one button per language. Pressing it fetches the manifest and the files in the browser, builds `File` objects whose `webkitRelativePath` is `<root>/<path>`, and passes them to **the same import flow** a picked folder uses (`handleFiles` → `runFolderImport`). No new server path, no new write path, and no special case in the importer.
+- `public/sample-wiki/manifest.json` lists, per locale, the button label, the root folder name, the default source name and the file paths. A unit test fails if the manifest and the directory disagree.
+- The import page (new-source mode only) gets a **"Try with a sample wiki"** control with one button per language. The button labels ("English", "繁體中文") are static constants, because the buttons are drawn before any fetch; a unit test keeps them equal to the manifest's `label`. Pressing a button fetches the manifest and the files in the browser, builds `File` objects whose `webkitRelativePath` is `<root>/<path>`, and passes them, with the manifest's source name, to **the same import flow** a picked folder uses (`handleFiles(files, sourceName)` → `runFolderImport`). Either every file loads or none is imported; a failed load shows one inline message and starts no import, and the buttons and the folder picker stay locked from the click until the import request returns. No new server path, no new write path, and no special case in the importer.
 - The reader therefore sees the normal **Preview**, then **Apply**. That is deliberate: the sample also teaches the flow.
 - The source is named from the manifest ("Sample wiki" / "範例知識庫"), not from the root folder name.
 - Importing twice creates a second source. The form already allows two imports of the same folder; the sample does not special-case it.
@@ -53,7 +53,7 @@ The sample contains no attachments, no `.git` or `.obsidian` directory, and ever
 
 ## 3. In-app guide
 
-Route: `/w/[workspaceId]/sources/import/guide`, a child of the import page. Language by `?lang=en|zh-TW` (default English) with a visible switch. Content is a TSX component with two content objects, not a Markdown file read from disk: a `docs/` file may be missing from a deployed bundle, and the app has no i18n layer to hang a Markdown pipeline on.
+Route: `/w/[workspaceId]/sources/import/guide`, a child of the import page. Language by `?lang=en|zh-TW` (default English; any other value falls back to English) with a visible switch. Content is a TSX component with two content objects, not a Markdown file read from disk: a `docs/` file may be missing from a deployed bundle, and the app has no i18n layer to hang a Markdown pipeline on.
 
 The numeric limits are **read from the server's import configuration** (`importRuntimeConfig().limits`), so the page cannot disagree with what the server enforces.
 
@@ -61,15 +61,15 @@ Sections:
 
 1. What you need: a folder of `.md` files. Try the sample first.
 2. From an Obsidian vault: works as is; `.obsidian` and `.git` are skipped.
-3. From a tool or agent that writes Markdown into a folder: a checklist (a title in frontmatter or an H1, link forms the importer resolves, files under the size limit, no attachments, relative paths without `..`).
-4. Import → Preview → Apply: what Preview shows, how to read the diagnostics, what Apply changes.
+3. From a tool or agent that writes Markdown into a folder: a six-item checklist (a title in frontmatter or an H1; link forms the importer resolves; files under the size limit; no attachments to rely on; every file inside the chosen folder, while links between files may still use `../`; do not rely on dot-prefixed names, `node_modules` or `Thumbs.db`, which are skipped silently).
+4. Import → Preview → Apply: what Preview shows, how to read the diagnostics, what Apply changes. States that choosing a folder uploads its Markdown files to build a temporary Preview that expires, and that nothing becomes a document until Apply.
 5. Keeping it in sync: one-way, the local folder is authoritative, imported documents are read-only in the Hub, removed files become archived documents; select the folder again to re-sync.
-6. Read, search (path and date filters) and Copy for Agent (1–20 documents).
+6. Read, search (path and date filters) and Copy for Agent (1–20 documents; offered in the personal workspace only).
 7. Limits and common messages.
 
 Facts the guide states, all verified in the code on `main` at the time of writing:
 
-- `.git` and `.obsidian` are always excluded; up to 50 exact paths can be excluded additionally, no wildcards.
+- `.git` and `.obsidian` are always excluded, as is every name that starts with a dot, `node_modules` and `Thumbs.db`, at any depth, without a warning; up to 50 exact paths can be excluded additionally, no wildcards. Skipped paths are still listed in the upload and count toward the file-count and size limits before they are dropped, so the guide says to move or exclude a large `node_modules` or hidden folder first.
 - Title precedence: frontmatter `title`, then the first H1, then the file name; a difference between the first two is a warning and frontmatter wins.
 - Links: `[[Title]]`, `[[folder/Note]]` (shortest-path form), relative `.md` links; heading anchors follow GitHub's slugging and keep non-Latin text.
 - Assets are stored as metadata and references only; there is no binary attachment storage.
@@ -77,7 +77,7 @@ Facts the guide states, all verified in the code on `main` at the time of writin
 
 ## 4. Links in
 
-- Import page: a line under the intro, "Not sure what a folder should look like? Read the guide, or try a sample wiki."
+- Import page: a line under the intro, "Not sure what a folder should look like? Read the guide, or try a sample wiki below."
 - README "Your first workflow" step 1: mention the guide and the sample.
 - No change to the first-use guidance component in this slice; it already links to the import page.
 

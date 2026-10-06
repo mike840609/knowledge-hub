@@ -105,7 +105,7 @@ npm run dev
 
 ### 第一次使用
 
-1. 選擇 **New note** 建立筆記，或 **Import folder** 匯入 Markdown 資料夾。
+1. 選擇 **New note** 建立筆記，或 **Import folder** 匯入 Markdown 資料夾。匯入頁面附有站內指南〈把你的維基帶進 Knowledge Hub〉，也提供 **Try with a sample wiki**：可匯入一份現成的資料夾（英文或繁體中文，位於 `public/sample-wiki/`），並走一般的 Preview → Apply 流程。
 2. 匯入時檢查 Preview 的新增、更新、封存與診斷，再套用變更。
 3. 在可編輯的筆記中使用 `[[文件標題]]` 連結其他文件；到 Graph 查看關係。
 4. 儲存筆記後可使用文件分享選單建立唯讀連結，或下載 Markdown。

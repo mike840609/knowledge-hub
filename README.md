@@ -105,7 +105,7 @@ npm run dev
 
 ### Your first workflow
 
-1. Choose **New note** to write a note, or **Import folder** to bring in a Markdown folder.
+1. Choose **New note** to write a note, or **Import folder** to bring in a Markdown folder. The import page links to an in-app guide, "Bring your wiki into Knowledge Hub", and offers **Try with a sample wiki**: it imports a ready-made folder (English or Traditional Chinese, from `public/sample-wiki/`) through the normal Preview → Apply flow.
 2. For imports, review additions, updates, archives, and diagnostics in Preview before applying changes.
 3. Use `[[Document title]]` in editable notes to link documents, then open Graph to explore relationships.
 4. Save a note before creating a read-only share link or downloading its Markdown.
