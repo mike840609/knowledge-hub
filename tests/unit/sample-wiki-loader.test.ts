@@ -94,6 +94,20 @@ describe("loadSampleWiki failures", () => {
     );
   });
 
+  it.each(["text/html", "text/HTML; charset=utf-8"])(
+    "says that sentence when one file is answered by a 200 HTML login page (%s), never importing it",
+    async (contentType) => {
+      const disk = diskFetcher();
+      const fetcher = (async (input: RequestInfo | URL) =>
+        String(input).endsWith("/handbook/onboarding.md")
+          ? new Response("<!doctype html><title>Sign in</title>", { status: 200, headers: { "content-type": contentType } })
+          : disk(input)) as typeof fetch;
+      await expect(loadSampleWiki("en", fetcher)).rejects.toThrow(
+        "Could not load the sample wiki. Your session may have expired — reload the page and try again.",
+      );
+    },
+  );
+
   it.each([
     ["files missing", { label: "English", sourceName: "S", root: "r" }],
     ["files not an array", { label: "English", sourceName: "S", root: "r", files: "index.md" }],

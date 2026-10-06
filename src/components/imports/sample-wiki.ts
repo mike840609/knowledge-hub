@@ -57,8 +57,11 @@ export async function loadSampleWiki(locale: SampleLocale, fetcher: typeof fetch
   const files = await Promise.all(
     entry.files.map(async (relativePath) => {
       const url = `${BASE}/${locale}/${relativePath.split("/").map(encodeURIComponent).join("/")}`;
+      const response = await fetchOk(fetcher, url, relativePath);
+      // A proxy's login page answers 200 too; importing it as Markdown would be worse than failing.
+      if (/^text\/html\b/i.test(response.headers.get("content-type") ?? "")) throw new Error(UNREADABLE);
       // Raw bytes, so a sample file is byte-identical to a picked one (BOM included).
-      const bytes = await (await fetchOk(fetcher, url, relativePath)).arrayBuffer();
+      const bytes = await response.arrayBuffer();
       const file = new File([bytes], relativePath.split("/").pop() ?? relativePath, { type: "text/markdown" });
       Object.defineProperty(file, "webkitRelativePath", { value: `${entry.root}/${relativePath}`, enumerable: true });
       return file;
