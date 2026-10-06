@@ -42,7 +42,7 @@ reference/glossary.md          short; links back to the others
 
 It must exercise, with real links that resolve inside the sample:
 
-- `[[Title]]`, a bare stem, and Obsidian's shortest-path form `[[concepts/links]]`;
+- `[[Title]]`, a bare stem, and a path-qualified form `[[concepts/links]]` (Obsidian's shortest-path form is `[[links]]`, adding a folder only when needed);
 - a relative `.md` link and a link to a heading anchor (GitHub-compatible slug, including a Chinese heading in zh-TW);
 - a title from frontmatter and a title from the first H1;
 - nested folders.
@@ -71,7 +71,7 @@ Facts the guide states, all verified in the code on `main` at the time of writin
 
 - `.git` and `.obsidian` are always excluded, as is every name that starts with a dot, `node_modules` and `Thumbs.db`, at any depth, without a warning; up to 50 exact paths can be excluded additionally, no wildcards. Skipped paths are still listed in the upload and count toward the file-count and size limits before they are dropped, so the guide says to move or exclude a large `node_modules` or hidden folder first.
 - Title precedence: frontmatter `title`, then the first H1, then the file name; a difference between the first two is a warning and frontmatter wins.
-- Links: `[[Title]]`, `[[folder/Note]]` (shortest-path form), relative `.md` links; heading anchors follow GitHub's slugging and keep non-Latin text.
+- Links: `[[Title]]`, `[[folder/Note]]` (path-qualified form), relative `.md` links; heading anchors follow GitHub's slugging and keep non-Latin text.
 - Assets are stored as metadata and references only; there is no binary attachment storage.
 - Remembered-folder one-click re-sync uses the browser's File System Access API (`showDirectoryPicker`); without it the form falls back to a plain directory input. **Inferred from code and not tested in Firefox or Safari**, so the guide says "Chrome or Edge" for one-click re-sync and does not promise more.
 

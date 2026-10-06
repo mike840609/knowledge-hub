@@ -86,7 +86,7 @@ function english(limits: GuideLimits): GuideContent {
           },
           {
             kind: "p",
-            text: "Obsidian's `[[wikilinks]]` are understood, including the shortest-path form `[[folder/Note]]`. Images and other attachments are recorded as references only (see Limits).",
+            text: "Obsidian's `[[wikilinks]]` are understood, including a path-qualified form `[[folder/Note]]`. Images and other attachments are recorded as references only (see Limits).",
           },
         ],
       },
@@ -231,7 +231,7 @@ function traditionalChinese(limits: GuideLimits): GuideContent {
           },
           {
             kind: "p",
-            text: "還沒有資料夾嗎？在「匯入資料夾」頁面的「Try with a sample wiki」下選一種語言，就能匯入一份小型團隊手冊。它走的預覽（Preview）與套用（Apply）流程和你自己的資料夾完全相同，可以先看過整個流程，再換成真正的檔案。",
+            text: "還沒有資料夾嗎？在 Import folder（匯入資料夾）頁面的「Try with a sample wiki」下選一種語言，就能匯入一份小型團隊手冊。它走的預覽（Preview）與套用（Apply）流程和你自己的資料夾完全相同，可以先看過整個流程，再換成真正的檔案。",
           },
         ],
       },
@@ -245,7 +245,7 @@ function traditionalChinese(limits: GuideLimits): GuideContent {
           },
           {
             kind: "p",
-            text: "系統看得懂 Obsidian 的維基連結（wikilink），寫成 `[[標題]]`，也看得懂包含資料夾的最短路徑寫法 `[[folder/Note]]`。圖片等附件只會記錄為參照（詳見「限制」）。",
+            text: "系統看得懂 Obsidian 的維基連結（wikilink），寫成 `[[標題]]`，也看得懂含資料夾路徑的寫法 `[[folder/Note]]`。圖片等附件只會記錄為參照（詳見「限制」）。",
           },
         ],
       },
