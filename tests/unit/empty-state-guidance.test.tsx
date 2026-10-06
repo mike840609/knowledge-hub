@@ -17,7 +17,7 @@ describe("contextual empty-state recovery", () => {
     expect(renderToStaticMarkup(<WorkspaceContentActions workspaceId="ws" />)).toContain("Import folder");
     auth.canImport = false;
     const readOnlyImport = renderToStaticMarkup(<WorkspaceContentActions workspaceId="ws" />);
-    expect(readOnlyImport).not.toContain("Import folder"); expect(readOnlyImport).toContain("Create note");
+    expect(readOnlyImport).not.toContain("Import folder"); expect(readOnlyImport).toContain("Create document");
     auth.canWrite = false;
     expect(renderToStaticMarkup(<WorkspaceContentActions workspaceId="ws" />)).toBe("");
     auth.canWrite = true; auth.confirmed = false;
