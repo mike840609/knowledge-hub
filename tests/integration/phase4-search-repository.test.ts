@@ -152,6 +152,31 @@ describe("Phase 4 search repository", () => {
     expect(bodyHit.snippet.length).toBeLessThanOrEqual(160);
     expect(titleHit.sourceName).toBe("Search Source");
     expect(titleHit.workspaceName).toBe(`Search ${workspaceId}`);
+    // The window starts at the body's start but stops before its end; a short body fits whole.
+    expect(titleHit.snippetClipped).toEqual({ start: false, end: true });
+    expect(bodyHit.snippetClipped).toEqual({ start: false, end: false });
+  });
+
+  it("reports a snippet cut from the middle of a long body at both ends, counting characters", async () => {
+    const { workspaceId, sourceId } = await createScope();
+    const hub = new HubKnowledgeCommandServiceImpl(new MariaDbUnitOfWork(pool));
+    // CJK and an emoji ahead of the match: a UTF-16 count would misplace the window.
+    const body = `${"前言內容🙂".repeat(30)} middleneedle ${"後續 text ".repeat(40)}`;
+    await hub.createDocument(callerFromIdentity(owner), { sourceId, parentId: null, title: "Middle", markdown: body, metadata: {} });
+
+    const [hit] = await search({ terms: ["middleneedle"], workspaceIds: [workspaceId] });
+    expect(hit.snippet).toContain("middleneedle");
+    expect(hit.snippetClipped).toEqual({ start: true, end: true });
+  });
+
+  it("does not report an end cut when the window reaches the body's last character", async () => {
+    const { workspaceId, sourceId } = await createScope();
+    const hub = new HubKnowledgeCommandServiceImpl(new MariaDbUnitOfWork(pool));
+    await hub.createDocument(callerFromIdentity(owner), { sourceId, parentId: null, title: "Tail", markdown: `${"x ".repeat(100)}tailneedle`, metadata: {} });
+
+    const [hit] = await search({ terms: ["tailneedle"], workspaceIds: [workspaceId] });
+    expect(hit.snippet.trimEnd().endsWith("tailneedle")).toBe(true);
+    expect(hit.snippetClipped).toEqual({ start: true, end: false });
   });
 
   it("applies limit and offset for pagination", async () => {

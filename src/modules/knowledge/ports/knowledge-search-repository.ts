@@ -8,6 +8,8 @@ export type KnowledgeSearchRow = {
   sourcePath?:string|null;
   workspaceName: string;
   snippet: string;
+  /** Whether `snippet` was cut out of a longer body at either end, so a reader can mark the cut. */
+  snippetClipped?: { start: boolean; end: boolean };
   status: "ACTIVE" | "ARCHIVED";
   updatedAt: Date;
 };

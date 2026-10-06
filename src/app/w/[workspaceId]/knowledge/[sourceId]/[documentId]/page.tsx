@@ -149,6 +149,7 @@ export default async function KnowledgeDocumentPage({
       editHref={editHref}
       sourceStatus={explorer?.source.status ?? "ARCHIVED"}
       readOnly={sourceManaged}
+      syncHref={explorer?.source.sourceType === "FOLDER_SYNC" && explorer.source.status === "ACTIVE" ? `/w/${workspaceId}/sources/${sourceId}/update` : null}
       ownership={explorer?.source.ownership ?? "SOURCE_MANAGED"}
       contentOwnsTitle={contentOwnsTitle}
       outline={extractOutline(selectedRevision.markdown)}

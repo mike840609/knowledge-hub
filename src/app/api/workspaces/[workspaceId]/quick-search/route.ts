@@ -19,6 +19,7 @@ export async function GET(request: Request, context: { params: Promise<{ workspa
       title: hit.title,
       sourceName: hit.sourceName,
       snippet: hit.snippet,
+      snippetClipped: hit.snippetClipped,
     })) ?? [],
     tooLong: model.result?.tooLong ?? false,
     timedOut: model.timedOut,

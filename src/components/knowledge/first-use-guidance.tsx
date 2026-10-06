@@ -3,6 +3,7 @@ import type { OnboardingProgress } from "@/server/onboarding-progress";
 import { WorkspaceImportLink } from "@/components/shell/workspace-import-link";
 import { useState } from "react";
 import Link from "next/link";
+import { Circle, CircleCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useHydrated } from "@/components/shell/use-hydrated";
 import type { OnboardingPreference } from "@/modules/personal/domain/onboarding";
@@ -24,7 +25,7 @@ export function FirstUseGuidance({ workspaceId, initial, firstDocumentHref, impo
   }
   const hasContent = imported || Boolean(firstDocumentHref);
   const count = Number(imported) + Number(progress.read) + Number(progress.search) + Number(progress.context);
-  const status = (complete: boolean) => <span className="mr-2 text-caption text-kh-text-muted">{complete ? "✓ Completed" : "○ To do"}</span>;
+  const status = (complete: boolean) => <span className="mr-2 inline-flex align-[-2px] text-kh-text-muted">{complete ? <CircleCheck size={14} aria-hidden="true" className="text-kh-success" /> : <Circle size={14} aria-hidden="true" />}<span className="sr-only">{complete ? "Completed: " : "To do: "}</span></span>;
   return <section aria-label="Get started" className="border-b border-kh-border px-3 pb-4">
     <div className="flex items-center justify-between gap-3"><h2 className="text-body font-medium text-kh-text">{count === 4 ? "Your workspace is ready" : hasContent ? (imported ? "Get started with your folder" : "Get started with your documents") : "Turn your folder into a knowledge workspace"}</h2><Button variant="ghost" size="sm" disabled={!hydrated || saving} onClick={dismiss}>{saving ? "Saving…" : "Hide guidance"}</Button></div>
     <p className="mt-1 text-body text-kh-text-muted">{imported ? "Your local folder is the source of truth. Edit files there, then sync the folder here. Changes arrive only after you review the Preview and apply it." : hasContent ? "Your saved notes are ready to read, search, and use as AI context. You can also import a Markdown folder." : "Import Markdown files to browse, search, and prepare context for your AI agent. Choose a folder, review the Preview, then apply it. Your original files stay in your local folder."}</p>

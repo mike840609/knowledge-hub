@@ -2,7 +2,6 @@
 
 import { ReopenGuidanceMenuItem } from "./reopen-guidance-menu-item";
 import { useState, type ReactNode } from "react";
-import {Input} from "@/components/ui/input";
 import { HomeUpdates } from "./home-updates";
 import type {FolderUpdatesPage} from "@/modules/personal/application/list-folder-updates";
 
@@ -142,11 +141,9 @@ export function PersonalHome({ workspaceId, documents, drafts, updates={runs:[],
           <MenuRoot>
             <MenuTrigger aria-label="Home actions" className={buttonClasses({ variant: "ghost", icon: true })}><MoreHorizontal size={16} aria-hidden="true" /></MenuTrigger>
             <MenuContent align="end" className="w-72">
+              {/* Only what the primary nav does not already offer: Sources, Insights and Knowledge live there. */}
               <MenuItem render={<Link href={`/w/${workspaceId}/agent-context`} />}>Copy for Agent</MenuItem>
-              <MenuItem render={<Link href={`/w/${workspaceId}/sources`} />}>Manage sources</MenuItem>
-              <MenuItem render={<Link href={`/w/${workspaceId}/profile`} />}>View insights</MenuItem>
               <ReopenGuidanceMenuItem workspaceId={workspaceId} />
-              <MenuItem render={<Link href={`/w/${workspaceId}/knowledge`} />}>Organize documents</MenuItem>
               <MenuItem render={<a href={`/api/workspaces/${workspaceId}/export`} />}>Export Markdown ZIP</MenuItem>
               <p className="px-3 py-2 text-caption text-kh-text-muted">Export includes saved and archived notes. Drafts, history and attachments are excluded.</p>
             </MenuContent>
@@ -154,10 +151,6 @@ export function PersonalHome({ workspaceId, documents, drafts, updates={runs:[],
         </>}
       />
       {slots?.guidance}
-      <form action={`/w/${workspaceId}/search`} role="search" aria-label="Search My Space" className="px-3">
-        <label className="sr-only" htmlFor="my-space-search">Search My Space</label>
-        <div className="flex gap-2"><Input id="my-space-search" name="q" placeholder="Search your knowledge…" className="min-w-0 flex-1"/><Input type="hidden" name="scope" value="workspace"/><button className={buttonClasses({variant:"secondary"})}>Search</button></div>
-      </form>
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <Section title="Continue reading">
           <TabsRoot value={workTab} onValueChange={value => setWorkTab(String(value))}>

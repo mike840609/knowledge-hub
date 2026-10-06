@@ -6,7 +6,7 @@ import styles from "./profile.module.css";
 export function PersonalStatsSummary({workspaceId,counts}:{workspaceId:string;counts:ProfileCounts}) {
   const base=`/w/${workspaceId}/profile`;
   const stats=[
-    {name:"Knowledge articles",count:counts.articles,href:`${base}/articles?filter=all`},
+    {name:"Knowledge documents",count:counts.articles,href:`${base}/articles?filter=all`},
     {name:"Synced folders",count:counts.folders,href:`${base}/sync?filter=folders`},
     {name:"Favorites",count:counts.favorites,href:`${base}/articles?filter=favorites`},
     {name:"Unread updates",count:counts.unread,href:`${base}/articles?filter=unread`},

@@ -23,6 +23,7 @@ export function DocumentHeader({
   editHref,
   onShareClick,
   readOnly,
+  syncHref,
   contentOwnsTitle,
 }: {
   breadcrumb: DocumentBreadcrumbSegment[];
@@ -39,6 +40,8 @@ export function DocumentHeader({
   /** Opens the share-link dialog; null where sharing is not offered (share-link spec §10.1). */
   onShareClick: (() => void) | null;
   readOnly: boolean;
+  /** Where a read-only folder-synced document is updated from; null for any other source. */
+  syncHref: string | null;
   contentOwnsTitle: boolean;
 }) {
 
@@ -105,21 +108,29 @@ export function DocumentHeader({
         )}
         <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-kh-text-muted">
           {readOnly ? <span className="inline-flex items-center gap-1"><LockKeyhole className="h-3 w-3" aria-hidden="true" />Read only</span> : null}
+          {readOnly ? (
+            // Source ownership decides who may write: say where the edit happens instead of only refusing it.
+            <span>
+              {syncHref ? <>Edit the file in your folder, then{" "}
+                <Link href={syncHref} className="kh-focus-ring rounded-md text-kh-link underline-offset-2 hover:underline">update from folder</Link></> : "Managed by its source"}
+            </span>
+          ) : null}
           {status === "ARCHIVED" ? <Badge variant="warning">Archived</Badge> : null}
           <time dateTime={new Date(updatedAt).toISOString()} title={formatDateTime(updatedAt, zone)}>Updated {relative}</time>
           {linkSummary ? (
             // The padding makes a 24px target (WCAG 2.5.8) and the negative
             // margins give it back, so a document with links is not a row taller
             // than one without and the header does not jump between them.
+            <Tooltip label="Show links in the details panel">
             <button
               type="button"
               onClick={onLinksClick}
-              title="Show links in the details panel"
               className="-mx-1.5 -my-1 inline-flex h-6 items-center gap-1 rounded-md px-1.5 tabular-nums hover:bg-kh-bg-hover hover:text-kh-text kh-focus-ring"
             >
               <ActionIcon name="graph" className="h-3 w-3 shrink-0" />
               {linkSummary}
             </button>
+            </Tooltip>
           ) : null}
         </div>
         {revisionBanner ? (

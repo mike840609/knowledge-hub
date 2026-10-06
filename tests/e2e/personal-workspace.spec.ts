@@ -29,8 +29,7 @@ test("personal rollout: disabled teams, drafts across browsers, organize, export
   await expect(resumed).toHaveURL(new RegExp(`${doc.documentId}$`), wait);
   await expect(resumed.getByRole("region", { name: "Document content", exact: true }).getByRole("article").getByText("Persistent draft body", { exact: true })).toBeVisible(wait);
   await page.goto(`/w/${workspaceId}/home`);
-  await page.getByRole("button", { name: "Home actions" }).click();
-  await page.getByRole("menuitem", { name: "Organize documents" }).click();
+  await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Knowledge" }).click();
   await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/knowledge(?:/|$)`), wait);
   await page.goto(`${href}?revision=1`);
   const content = page.getByRole("region", { name: "Document content", exact: true });

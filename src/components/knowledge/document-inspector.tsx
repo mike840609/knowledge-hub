@@ -319,6 +319,7 @@ export function DocumentDetailClient({
   editHref,
   sourceStatus,
   readOnly,
+  syncHref,
   ownership,
   contentOwnsTitle,
   outline,
@@ -338,6 +339,7 @@ export function DocumentDetailClient({
    */
   sourceStatus: "ACTIVE" | "ARCHIVED";
   readOnly: boolean;
+  syncHref: string | null;
   /** Passed rather than inferred from `readOnly`: the two happen to agree today. */
   ownership: "SOURCE_MANAGED" | "HUB_MANAGED";
   contentOwnsTitle: boolean;
@@ -456,6 +458,7 @@ export function DocumentDetailClient({
           editHref={editHref}
           onShareClick={canShare ? () => requestShare(inspectorData.documentId) : null}
           readOnly={readOnly}
+          syncHref={syncHref}
           contentOwnsTitle={contentOwnsTitle}
         />
       </div>
