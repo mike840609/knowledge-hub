@@ -104,6 +104,15 @@ describe("guideContent limits are live", () => {
     }
   });
 
+  it("types no default number anywhere in the prose when given other limits", () => {
+    for (const locale of LOCALES) {
+      const all = allText(guideContent(locale, CUSTOM));
+      for (const stale of ["20,000", "5 MiB", "256 MiB"]) {
+        expect(all, `${locale} still says ${stale}`).not.toContain(stale);
+      }
+    }
+  });
+
   it("shows the default limits when given the defaults", () => {
     const limits = sectionText(guideContent("en", DEFAULT_IMPORT_LIMITS), "limits");
     for (const text of ["20,000", "2 KiB", "5 MiB", "256 MiB"]) expect(limits).toContain(text);
@@ -150,11 +159,30 @@ describe("guideContent facts", () => {
     expect(text).toMatch(/frontmatter[\s\S]*first H1[\s\S]*file name/i);
   });
 
-  it("from-a-tool: a five-item checklist", () => {
+  it("from-a-tool: says dot-prefixed names are skipped without a warning, in both locales", () => {
+    expect(en("from-a-tool")).toMatch(/names start with a dot[\s\S]*skipped without a warning/);
+    expect(en("from-a-tool")).toContain("node_modules");
+    expect(zh("from-a-tool")).toContain("以點開頭");
+    expect(zh("from-a-tool")).toContain("node_modules");
+  });
+
+  it("from-a-tool: the file-location item does not ban ../ in links", () => {
+    expect(en("from-a-tool")).toContain("links between files may still use `../`");
+    expect(zh("from-a-tool")).toContain("`../`");
+  });
+
+  it("says the Preview upload is temporary and that Copy for Agent is for the personal workspace", () => {
+    expect(en("import-preview-apply")).toMatch(/sends the Markdown files[\s\S]*temporary Preview/);
+    expect(en("read-search-agent")).toMatch(/personal workspace/);
+    expect(zh("read-search-agent")).toContain("個人工作區");
+    expect(zh("import-preview-apply")).toContain("上傳");
+  });
+
+  it("from-a-tool: a six-item checklist", () => {
     for (const locale of LOCALES) {
       const section = guideContent(locale, DEFAULT_IMPORT_LIMITS).sections.find((s) => s.id === "from-a-tool")!;
       const lists = section.body.filter((b): b is Extract<GuideBlock, { kind: "ul" | "ol" }> => b.kind === "ul" || b.kind === "ol");
-      expect(lists.some((l) => l.items.length === 5), locale).toBe(true);
+      expect(lists.some((l) => l.items.length === 6), locale).toBe(true);
     }
   });
 
@@ -187,6 +215,9 @@ describe("guideContent facts", () => {
     const text = guideContent("zh-TW", DEFAULT_IMPORT_LIMITS);
     const all = allText(text);
     expect(all).toContain("維基連結（wikilink）");
+    expect(all).toContain("筆記庫（vault）");
+    expect(all).not.toContain("資料庫");
+    expect(all).not.toContain("（wikilink）`[[wikilinks]]`");
     expect(all).toContain("預覽（Preview）");
     expect(all).toContain("套用（Apply）");
   });

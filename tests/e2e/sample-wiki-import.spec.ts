@@ -80,7 +80,7 @@ for (const sample of SAMPLES) {
 test.describe("import guide", () => {
   const SECTION_HEADINGS = {
     en: ["What you need", "From an Obsidian vault", "From a tool or agent that writes Markdown", "Import, Preview, Apply", "Keeping it in sync", "Read, search, and Copy for Agent", "Limits"],
-    zhTW: ["你需要準備什麼", "從 Obsidian 資料庫匯入", "從會寫出 Markdown 的工具或代理匯入", "匯入、預覽、套用", "保持同步", "閱讀、搜尋與 Copy for Agent", "限制"],
+    zhTW: ["你需要準備什麼", "從 Obsidian 筆記庫（vault）匯入", "從會寫出 Markdown 的工具或代理匯入", "匯入、預覽、套用", "保持同步", "閱讀、搜尋與 Copy for Agent", "限制"],
   };
 
   test("the import page links to the guide", async ({ page }) => {
@@ -99,10 +99,11 @@ test.describe("import guide", () => {
 
     const limits = page.getByRole("table");
     const row = (name: string) => limits.getByRole("row").filter({ has: page.getByRole("rowheader", { name, exact: true }) });
-    await expect(row("Files in one import")).toContainText(DEFAULT_IMPORT_LIMITS.maxManifestEntries.toLocaleString("en-US"));
-    await expect(row("Size of one Markdown file")).toContainText(formatGuideBytes(DEFAULT_IMPORT_LIMITS.maxMarkdownFileBytes));
-    await expect(row("Total size of Markdown files in one import")).toContainText(formatGuideBytes(DEFAULT_IMPORT_LIMITS.maxMarkdownTotalBytes));
-    await expect(row("Length of one file path")).toContainText(formatGuideBytes(DEFAULT_IMPORT_LIMITS.maxPathBytes));
+    const value = (name: string) => row(name).getByRole("cell");
+    await expect(value("Files in one import")).toHaveText(DEFAULT_IMPORT_LIMITS.maxManifestEntries.toLocaleString("en-US"));
+    await expect(value("Size of one Markdown file")).toHaveText(formatGuideBytes(DEFAULT_IMPORT_LIMITS.maxMarkdownFileBytes));
+    await expect(value("Total size of Markdown files in one import")).toHaveText(formatGuideBytes(DEFAULT_IMPORT_LIMITS.maxMarkdownTotalBytes));
+    await expect(value("Length of one file path")).toHaveText(formatGuideBytes(DEFAULT_IMPORT_LIMITS.maxPathBytes));
 
     const nav = page.getByRole("navigation", { name: "Guide language" });
     await expect(nav.getByRole("link", { name: "English" })).toHaveAttribute("aria-current", "page");
@@ -125,7 +126,7 @@ test.describe("import guide", () => {
     const nav = page.getByRole("navigation", { name: "Guide language" });
     await expect(nav.getByRole("link", { name: "繁體中文" })).toHaveAttribute("aria-current", "page");
     await expect(nav.getByRole("link", { name: "English" })).not.toHaveAttribute("aria-current", /.+/);
-    await expect(page.getByRole("table")).toContainText(DEFAULT_IMPORT_LIMITS.maxManifestEntries.toLocaleString("en-US"));
+    await expect(page.getByRole("cell", { name: DEFAULT_IMPORT_LIMITS.maxManifestEntries.toLocaleString("en-US"), exact: true })).toBeVisible();
   });
 
   test("Try the sample wiki returns to the import page with the control in view", async ({ page }) => {

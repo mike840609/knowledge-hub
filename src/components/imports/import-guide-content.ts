@@ -102,10 +102,11 @@ function english(limits: GuideLimits): GuideContent {
             kind: "ol",
             items: [
               "A title for every file: a `title` in the frontmatter, or a first `# H1` heading.",
-              "Links in a form the importer resolves: `[[Title]]`, `[[folder/Note]]`, or a relative `.md` link such as `[text](../folder/note.md)`.",
-              `Each Markdown file under ${fileLimit}.`,
+              "Links in a form Knowledge Hub resolves: `[[Title]]`, `[[folder/Note]]`, or a relative `.md` link such as `[text](../folder/note.md)`.",
+              `No Markdown file larger than ${fileLimit}.`,
               "No attachments to rely on: images and other non-Markdown files are kept as references only; there is no binary attachment storage.",
-              "Relative paths without `..` segments, so every file stays inside the folder you choose.",
+              "Keep every file inside the folder you choose (links between files may still use `../`).",
+              "Do not rely on files or folders whose names start with a dot, or on `node_modules` folders and `Thumbs.db` files, at any depth: a folder such as `.wiki/` is skipped without a warning.",
             ],
           },
           {
@@ -118,7 +119,7 @@ function english(limits: GuideLimits): GuideContent {
           },
           {
             kind: "p",
-            text: `The folders \`.git\` and \`.obsidian\` are always skipped. You can exclude up to ${MAX_EXCLUDED_PATHS} more paths in the import form, as exact relative paths with no wildcards.`,
+            text: `The folders \`.git\` and \`.obsidian\` are always skipped (like any name that starts with a dot). You can exclude up to ${MAX_EXCLUDED_PATHS} more paths in the import form, as exact relative paths with no wildcards.`,
           },
         ],
       },
@@ -128,7 +129,7 @@ function english(limits: GuideLimits): GuideContent {
         body: [
           {
             kind: "p",
-            text: "Choose the folder. Knowledge Hub reads it in your browser and opens a Preview. Nothing in your workspace changes until you press Apply changes.",
+            text: "Choose the folder. Knowledge Hub reads it in your browser, sends the Markdown files to Knowledge Hub to build the Preview, and opens it. That upload is only a temporary Preview that expires; nothing becomes a document in your workspace until you press Apply changes.",
           },
           {
             kind: "ul",
@@ -185,7 +186,7 @@ function english(limits: GuideLimits): GuideContent {
           },
           {
             kind: "p",
-            text: "Copy for Agent builds one Markdown bundle from 1–20 documents you select, ready to paste into an agent.",
+            text: "Copy for Agent, available in your personal workspace (My Space), builds one Markdown bundle from 1–20 documents you select, ready to paste into an agent.",
           },
         ],
       },
@@ -236,15 +237,15 @@ function traditionalChinese(limits: GuideLimits): GuideContent {
       },
       {
         id: "from-obsidian",
-        title: "從 Obsidian 資料庫匯入",
+        title: "從 Obsidian 筆記庫（vault）匯入",
         body: [
           {
             kind: "p",
-            text: "Obsidian 資料庫不必修改就能匯入：直接選取資料庫資料夾即可。`.obsidian` 設定資料夾與 `.git` 資料夾一律會被略過。",
+            text: "Obsidian 筆記庫（vault）不必修改就能匯入：直接選取筆記庫資料夾即可。`.obsidian` 設定資料夾與 `.git` 資料夾一律會被略過。",
           },
           {
             kind: "p",
-            text: "系統看得懂 Obsidian 的維基連結（wikilink）`[[wikilinks]]`，包含最短路徑寫法 `[[folder/Note]]`。圖片等附件只會記錄為參照（詳見「限制」）。",
+            text: "系統看得懂 Obsidian 的維基連結（wikilink），寫成 `[[標題]]`，也看得懂包含資料夾的最短路徑寫法 `[[folder/Note]]`。圖片等附件只會記錄為參照（詳見「限制」）。",
           },
         ],
       },
@@ -260,10 +261,11 @@ function traditionalChinese(limits: GuideLimits): GuideContent {
             kind: "ol",
             items: [
               "每個檔案都有標題：frontmatter 裡的 `title`，或是第一個 `# H1` 標題。",
-              "連結要用匯入程式讀得懂的寫法：`[[Title]]`、`[[folder/Note]]`，或相對路徑的 `.md` 連結，例如 `[文字](../folder/note.md)`。",
-              `每個 Markdown 檔案都不超過 ${fileLimit}。`,
+              "連結要用 Knowledge Hub 解析得了的寫法：`[[Title]]`、`[[folder/Note]]`，或相對路徑的 `.md` 連結，例如 `[文字](../folder/note.md)`。",
+              `沒有任何 Markdown 檔案大於 ${fileLimit}。`,
               "不要依賴附件：圖片與其他非 Markdown 檔案只會保留為參照，系統不儲存二進位附件。",
-              "使用不含 `..` 的相對路徑，讓每個檔案都留在你所選的資料夾之內。",
+              "讓每個檔案都留在你所選的資料夾之內（檔案之間的連結仍然可以使用 `../`）。",
+              "不要依賴名稱以點開頭的檔案或資料夾，也不要依賴任何層級的 `node_modules` 資料夾與 `Thumbs.db` 檔案：像 `.wiki/` 這樣的資料夾會被略過，而且不會出現警告。",
             ],
           },
           {
@@ -276,7 +278,7 @@ function traditionalChinese(limits: GuideLimits): GuideContent {
           },
           {
             kind: "p",
-            text: `\`.git\` 與 \`.obsidian\` 資料夾一律會被略過。你還可以在匯入表單中再排除最多 ${MAX_EXCLUDED_PATHS} 個路徑，必須是精確的相對路徑，不支援萬用字元。`,
+            text: `\`.git\` 與 \`.obsidian\` 資料夾一律會被略過（名稱以點開頭的路徑都是如此）。你還可以在匯入表單中再排除最多 ${MAX_EXCLUDED_PATHS} 個路徑，必須是精確的相對路徑，不支援萬用字元。`,
           },
         ],
       },
@@ -286,7 +288,7 @@ function traditionalChinese(limits: GuideLimits): GuideContent {
         body: [
           {
             kind: "p",
-            text: "選取資料夾後，Knowledge Hub 會在你的瀏覽器中讀取，並開啟預覽（Preview）。在你按下套用（Apply）之前，工作區裡不會有任何變動。",
+            text: "選取資料夾後，Knowledge Hub 會在你的瀏覽器中讀取，並把 Markdown 檔案上傳到 Knowledge Hub 以產生預覽（Preview）。這份上傳只是會過期的暫時預覽；在你按下套用（Apply）之前，不會有任何內容成為工作區裡的文件。",
           },
           {
             kind: "ul",
@@ -343,7 +345,7 @@ function traditionalChinese(limits: GuideLimits): GuideContent {
           },
           {
             kind: "p",
-            text: "Copy for Agent 會把你選取的 1–20 份文件整理成一份 Markdown，方便貼給代理使用。",
+            text: "Copy for Agent 只在你的個人工作區（My Space）提供，會把你選取的 1–20 份文件整理成一份 Markdown，方便貼給代理使用。",
           },
         ],
       },
