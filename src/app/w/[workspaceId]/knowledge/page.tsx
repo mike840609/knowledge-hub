@@ -13,9 +13,7 @@ export default async function WorkspaceKnowledgePage({
   const { caller } = await services.establishTrustedCaller();
   const workspaces = await services.workspaces.listWorkspaces(caller);
   if (!workspaces.some((workspace) => workspace.id === workspaceId)) notFound();
-  const sources = await services.queries
-    .listSources(caller, workspaceId)
-    .catch(() => []);
+  const sources = await services.queries.listSources(caller, workspaceId);
   if (sources.length === 0) return <KnowledgeEmptyState />;
   const target = await getDefaultKnowledgeTarget(workspaceId);
   if (target) redirect(`/w/${workspaceId}/knowledge/${target.sourceId}/${target.documentId}`);

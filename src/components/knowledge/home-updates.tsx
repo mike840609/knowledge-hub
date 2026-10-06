@@ -11,7 +11,7 @@ export function HomeUpdates({ workspaceId, page }: { workspaceId: string; page: 
       seen.add(change.documentId);
       return true;
     }).slice(0, 3);
-  if (!changes.length) return <p className="px-3 py-2 text-body text-kh-text-muted">No new folder updates.</p>;
+  if (!changes.length) return <p className="px-3 py-2 text-body text-kh-text-muted">No recorded folder changes to show.</p>;
   return <ul className="space-y-1">{changes.map(change => <li key={change.documentId}>
     <Link className="kh-interactive-row kh-focus-ring block rounded-md px-3 py-3" href={`/w/${workspaceId}/knowledge/${change.sourceId}/${change.documentId}?revision=${change.afterRevisionNo}`}>
       <span className="block truncate text-body text-kh-text">{change.title}</span>

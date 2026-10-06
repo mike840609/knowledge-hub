@@ -17,6 +17,7 @@ import { GraphList } from "./graph-list";
 import { Button } from "@/components/ui/button";
 import { matchesQuery, type GraphViewData } from "./graph-model";
 import { LinkIndexNote } from "./link-index-note";
+import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 
 export type GraphFilters = {
   sourceId: string | null;
@@ -72,6 +73,12 @@ export function GraphExplorer({
   truncated: { shown: number; total: number } | null;
   staleDocuments: number;
 }) {
+  const { access, confirmed } = useWorkspaceAuthorization();
+  const accessConfirmed = confirmed && access.workspace.id === workspaceId;
+  const canAddDocuments = accessConfirmed && (access.actions.canImport || access.actions.canWrite);
+  const readOnlyGuidance = access.workspace.lifecycleState === "ARCHIVED"
+    ? "This workspace is archived. Its documents and links remain read-only until a workspace owner restores it."
+    : "You can explore this workspace. Ask a member with edit access to add documents or connect them with links.";
   const router = useRouter();
   const pathname = usePathname();
   const [query, setQuery] = useState("");
@@ -162,7 +169,13 @@ export function GraphExplorer({
       >
         {data.nodes.length === 0 ? (
           <div data-graph-empty className="px-3">
-            <EmptyState icon={Network} illustration={!hasFilters ? <OnboardingIllustration kind="graph" /> : undefined} title={hasFilters ? "No documents match these filters" : "Add documents to build your graph"} description={hasFilters ? "Reset the graph filters to include documents without links and other sources." : "Explore connections between your documents here. Import a folder or create a note to get started."} action={hasFilters ? <Button variant="secondary" onClick={() => change({ sourceId: null, orphans: true, unresolved: false, focusId: null })}>Show all documents</Button> : <WorkspaceContentActions workspaceId={workspaceId} />} />
+            <EmptyState
+              icon={Network}
+              illustration={!hasFilters ? <OnboardingIllustration kind="graph" /> : undefined}
+              title={hasFilters ? "No documents match these filters" : canAddDocuments ? "Add documents to build your graph" : "No documents to show"}
+              description={hasFilters ? "Reset the graph filters to include documents without links and other sources." : !accessConfirmed ? "Checking workspace access…" : canAddDocuments ? "Explore connections between your documents here. Import a folder or create a note to get started." : readOnlyGuidance}
+              action={hasFilters ? <Button variant="secondary" onClick={() => change({ sourceId: null, orphans: true, unresolved: false, focusId: null })}>Show all documents</Button> : canAddDocuments ? <WorkspaceContentActions workspaceId={workspaceId} /> : undefined}
+            />
           </div>
         ) : filters.view === "list" ? (
           <div className="h-full overflow-y-auto">
@@ -172,7 +185,7 @@ export function GraphExplorer({
           <div className="flex h-full flex-col items-center justify-center px-6 text-center" data-graph-empty>
             <p className="text-title font-semibold text-kh-text">No links between documents yet</p>
             <p className="mt-2 max-w-panel text-body text-kh-text-muted">
-              Connect two saved documents by writing <code className="rounded-md bg-kh-bg-subtle px-1 py-0.5 font-mono text-body-sm">[[Document title]]</code> in a document. Save the note, or reimport the edited folder, to see the relationship here.
+              {!accessConfirmed ? "Checking workspace access…" : canAddDocuments ? <>Connect two saved documents by writing <code className="rounded-md bg-kh-bg-subtle px-1 py-0.5 font-mono text-body-sm">[[Document title]]</code> in a document. Save the note, or reimport the edited folder, to see the relationship here.</> : readOnlyGuidance}
             </p>
             {firstDocumentHref ? <Link className={buttonClasses({ variant: "secondary", className: "mt-4" })} href={firstDocumentHref}>Open a document</Link> : null}
             {data.nodes.length > 0 ? (

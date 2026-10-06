@@ -1,13 +1,27 @@
 import Link from "next/link";
 import type { FolderUpdatesPage } from "@/modules/personal/application/list-folder-updates";
+import { buttonClasses } from "@/components/ui/button";
 import { Timestamp } from "@/components/ui/timestamp";
 export function UpdatesList({
   page,
   workspaceId,
+  filters = {},
 }: {
   page: FolderUpdatesPage;
   workspaceId: string;
+  filters?: { sourceId?: string; unreadOnly?: boolean; paginated?: boolean };
 }) {
+  const filtered = Boolean(filters.sourceId || filters.unreadOnly);
+  const partialHistory = Boolean(filters.paginated || page.nextCursor);
+  let emptyTitle = "No recorded folder changes to show.";
+  if (filters.unreadOnly) {
+    emptyTitle = partialHistory ? "No unread updates on this page." : "No unread folder updates match these filters.";
+  } else if (partialHistory) {
+    emptyTitle = "No recorded folder changes on this page.";
+  } else if (filtered) {
+    emptyTitle = "No folder updates match these filters.";
+  }
+  const showAll = filtered || filters.paginated;
   return page.runs.length ? (
     <div className="flex flex-col gap-4">
       {page.runs.map(
@@ -56,6 +70,17 @@ export function UpdatesList({
       )}
     </div>
   ) : (
-    <p className="text-body text-kh-text-muted">No folder updates to read.</p>
+    <div className="space-y-3">
+      <p className="text-body font-medium text-kh-text">
+        {emptyTitle}
+      </p>
+      <p className="text-body text-kh-text-muted">
+        {filtered ? "Show all updates to include read changes and other folders." : "Applied folder imports that add or update active documents appear here."}
+        {page.nextCursor ? " Older updates may contain more changes." : ""}
+      </p>
+      <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/${showAll ? "updates" : "sources"}`}>
+        {showAll ? "Show all updates" : "Manage folders"}
+      </Link>
+    </div>
   );
 }

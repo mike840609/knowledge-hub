@@ -3,12 +3,22 @@ export function OnboardingIllustration({ kind }: { kind: "graph" | "context" }) 
   return <figure className="w-64 max-w-full">
     <svg viewBox="0 0 256 96" className="h-24 w-full" aria-hidden="true" focusable="false" fill="none" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       {kind === "graph" ? <>
-        <path d="M55 44H119" className="stroke-kh-primary" />
-        {[23, 119, 207].map((x, index) => <g key={x}>
-          <rect x={x} y="24" width="32" height="40" rx="4" className={index === 2 ? "fill-kh-bg stroke-kh-border-strong" : "fill-kh-bg-selected stroke-kh-primary"} />
-          <path d={`M${x + 8} 37h16 M${x + 8} 44h16 M${x + 8} 51h10`} className="stroke-kh-text-muted" />
-        </g>)}
-        <circle cx="87" cy="44" r="3" className="fill-kh-primary stroke-kh-primary" />
+        {/* Draw links first so the opaque document shapes hide their endpoints. */}
+        <path d="M97 19L64 76.158H130L97 19" className="stroke-kh-primary" />
+        <path d="M48 20V28 M44 24H52 M151 36V42 M148 39H154" className="stroke-kh-primary" opacity="0.45" />
+        {[{ x: 81, y: 0 }, { x: 48, y: 57.158 }, { x: 114, y: 57.158 }, { x: 210, y: 29 }].map(({ x, y }, index) => {
+          const unlinked = index === 3;
+          const outline = unlinked ? "stroke-kh-border-strong" : "stroke-kh-primary";
+          return <g key={x} transform={`translate(${x} ${y})`}>
+            <path
+              d="M6 0H22Q23 0 24 1L31 8Q32 9 32 11V32Q32 38 26 38H6Q0 38 0 32V6Q0 0 6 0Z"
+              className={`${unlinked ? "fill-kh-bg" : "fill-kh-bg-selected"} ${outline}`}
+            />
+            <path d="M23 1V6Q23 9 26 9H31" className={outline} />
+            <path d="M8 16H21" className="stroke-kh-text-muted" opacity="0.55" />
+            <path d="M8 23H24 M8 29H19" className="stroke-kh-text-muted" />
+          </g>;
+        })}
       </> : <>
         <rect x="8" y="12" width="88" height="72" rx="6" className="fill-kh-bg stroke-kh-border-strong" />
         {[28, 48, 68].map((y, index) => <g key={y}>
