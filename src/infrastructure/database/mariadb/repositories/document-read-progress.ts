@@ -1,3 +1,4 @@
+import { readingDate } from "@/modules/personal/domain/reading-activity";
 import type { DocumentReadProgress } from "@/modules/personal/domain/document-read-progress";
 import type { DocumentReadProgressRepository } from "@/modules/personal/ports/document-read-progress-repository";
 import { asDate, asNumber, type DbRow, type QueryConnection } from "./shared";
@@ -6,6 +7,12 @@ export class MariaDbDocumentReadProgressRepository
 {
   constructor(private readonly connection: QueryConnection) {}
   async advance(progress: DocumentReadProgress): Promise<void> {
+    // Keep one visit per article/day, including revisits to the same revision.
+    await this.connection.query(
+      `INSERT INTO document_read_activity (user_id,workspace_id,document_id,activity_date,opened_at)
+       VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE opened_at=LEAST(opened_at,VALUES(opened_at))`,
+      [progress.userId, progress.workspaceId, progress.documentId, readingDate(progress.readAt), progress.readAt],
+    );
     await this.connection.query(
       `INSERT INTO document_read_progress (user_id,workspace_id,document_id,revision_id,revision_no,read_at) VALUES (?,?,?,?,?,?)
        ON DUPLICATE KEY UPDATE

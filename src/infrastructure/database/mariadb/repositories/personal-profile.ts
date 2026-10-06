@@ -1,3 +1,4 @@
+import { readingDates } from "@/modules/personal/domain/reading-activity";
 import type {PersonalProfileRepository,ProfileScope} from "@/modules/personal/ports/personal-profile-repository";
 import type {PersonalProfileStats,ProfileDocumentFilter,ProfileDocument,ProfilePage,ProfileSyncFilter,ProfileSyncItem} from "@/modules/personal/domain/personal-profile";
 import {asNumber,asNullableDate,type QueryConnection,type DbRow} from "./shared";
@@ -31,6 +32,7 @@ function page<T>(rows:T[],total:number,cursor:(item:T)=>string):ProfilePage<T>{c
 export class MariaDbPersonalProfileRepository implements PersonalProfileRepository {
   constructor(private readonly connection:QueryConnection){}
   async overview(scope:ProfileScope):Promise<PersonalProfileStats>{
+    const dates = readingDates(scope.now, Math.round((scope.now.getTime() - scope.since.getTime()) / 86400000));
     // One statement gives every statistic the same InnoDB read view, even during sync.
     const rows=await this.connection.query<DbRow[]>(`WITH article_stats AS (SELECT
      COALESCE(SUM(${active}),0) articles,
@@ -54,14 +56,20 @@ change_stats AS (SELECT
 legacy_stats AS (SELECT EXISTS(SELECT 1 FROM sync_runs run JOIN knowledge_sources s ON s.id=run.source_id WHERE s.workspace_id=? AND run.status='APPLIED' AND run.completed_at>=? AND run.completed_at<=? AND COALESCE(JSON_CONTAINS(run.summary,'false','$.changed'),0)=0 AND NOT EXISTS(SELECT 1 FROM sync_run_changes c WHERE c.run_id=run.id)) missing)
 SELECT article_stats.*,sync_stats.*,pending_stats.total pending_total,
  change_stats.added changed_added,change_stats.updated changed_updated,change_stats.archived changed_archived,legacy_stats.missing,
+ (SELECT COUNT(DISTINCT document_id) FROM document_read_activity WHERE user_id=? AND workspace_id=? AND activity_date BETWEEN ? AND ? AND opened_at<=?) reading_articles,
+ (SELECT JSON_ARRAYAGG(JSON_OBJECT('date',DATE_FORMAT(activity_date,'%Y-%m-%d'),'articles',articles)) FROM
+   (SELECT activity_date,COUNT(*) articles FROM document_read_activity WHERE user_id=? AND workspace_id=? AND activity_date BETWEEN ? AND ? AND opened_at<=? GROUP BY activity_date) daily) reading_daily,
+ (SELECT started_at FROM reading_activity_tracking WHERE id=1) tracked_since,
  (SELECT JSON_ARRAYAGG(JSON_OBJECT('id',id,'name',name,'articles',articles,'last_synced_at',DATE_FORMAT(last_synced_at,'%Y-%m-%dT%H:%i:%s.%fZ')) ORDER BY articles DESC,name,id) FROM source_stats) source_json
- FROM article_stats CROSS JOIN sync_stats CROSS JOIN pending_stats CROSS JOIN change_stats CROSS JOIN legacy_stats`,[scope.userId,scope.userId,scope.workspaceId,scope.workspaceId,scope.workspaceId,scope.userId,scope.now,scope.workspaceId,scope.workspaceId,scope.since,scope.now,scope.workspaceId,scope.since,scope.now]);
+ FROM article_stats CROSS JOIN sync_stats CROSS JOIN pending_stats CROSS JOIN change_stats CROSS JOIN legacy_stats`,[scope.userId,scope.userId,scope.workspaceId,scope.workspaceId,scope.workspaceId,scope.userId,scope.now,scope.workspaceId,scope.workspaceId,scope.since,scope.now,scope.workspaceId,scope.since,scope.now,scope.userId,scope.workspaceId,dates[0],dates.at(-1),scope.now,scope.userId,scope.workspaceId,dates[0],dates.at(-1),scope.now]);
     const row=rows[0],syncRow=row;
     const pending=[{total:row.pending_total}];
     const changes=[{added:row.changed_added,updated:row.changed_updated,archived:row.changed_archived}];
     const legacy=[{missing:row.missing}];
     const sources:DbRow[]=typeof row.source_json==='string'?JSON.parse(row.source_json):row.source_json??[];
-    return {counts:{articles:count(row,"articles"),synced:count(row,"synced"),notes:count(row,"notes"),archived:count(row,"archived"),folders:count(syncRow,"folders"),favorites:count(row,"favorites"),unread:count(row,"unread"),browsed:count(row,"browsed")},changes:{added:count(changes[0],"added"),updated:count(changes[0],"updated"),archived:count(changes[0],"archived")},sync:{successful:count(syncRow,"successful"),failed:count(syncRow,"failed"),neverSynced:count(syncRow,"never_synced"),pending:count(pending[0],"total")},sources:sources.map(source=>({sourceId:String(source.id),name:String(source.name),articles:count(source,"articles"),lastSyncedAt:asNullableDate(source.last_synced_at)?.toISOString()??null})),legacyChangesUnavailable:Boolean(count(legacy[0],"missing"))};
+    const dailyRows: { date: string; articles: number }[] = typeof row.reading_daily === "string" ? JSON.parse(row.reading_daily) : row.reading_daily ?? [];
+    const daily = dates.map(date => ({date, articles: Number(dailyRows.find(item => item.date === date)?.articles ?? 0)}));
+    return {reading: {articles: count(row,"reading_articles"), activeDays: daily.filter(day => day.articles > 0).length, trackedSince: asNullableDate(row.tracked_since)?.toISOString() ?? null, daily},counts:{articles:count(row,"articles"),synced:count(row,"synced"),notes:count(row,"notes"),archived:count(row,"archived"),folders:count(syncRow,"folders"),favorites:count(row,"favorites"),unread:count(row,"unread"),browsed:count(row,"browsed")},changes:{added:count(changes[0],"added"),updated:count(changes[0],"updated"),archived:count(changes[0],"archived")},sync:{successful:count(syncRow,"successful"),failed:count(syncRow,"failed"),neverSynced:count(syncRow,"never_synced"),pending:count(pending[0],"total")},sources:sources.map(source=>({sourceId:String(source.id),name:String(source.name),articles:count(source,"articles"),lastSyncedAt:asNullableDate(source.last_synced_at)?.toISOString()??null})),legacyChangesUnavailable:Boolean(count(legacy[0],"missing"))};
   }
   async documents(scope:ProfileScope,filter:ProfileDocumentFilter,after?:string):Promise<ProfilePage<ProfileDocument>>{
     const from=`${documentsFrom} AND (${documentPredicate(filter)})`,params=documentParameters(scope,filter);

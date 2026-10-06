@@ -1,3 +1,4 @@
+import type { ReadingActivity } from "./reading-activity";
 export const PROFILE_DOCUMENT_FILTERS = ["all", "synced", "notes", "favorites", "unread", "archived", "added", "updated", "recent-archived"] as const;
 export type ProfileDocumentFilter = typeof PROFILE_DOCUMENT_FILTERS[number];
 export const PROFILE_SYNC_FILTERS = ["folders", "successful", "failed", "pending"] as const;
@@ -7,7 +8,7 @@ export type ProfileCounts = { articles: number; synced: number; notes: number; a
 export type ProfileChanges = { added: number; updated: number; archived: number };
 export type ProfileSyncCounts = { successful: number; failed: number; neverSynced: number; pending: number };
 export type ProfileSource = { sourceId: string; name: string; articles: number; lastSyncedAt: string | null };
-export type PersonalProfileStats = { counts: ProfileCounts; changes: ProfileChanges; sync: ProfileSyncCounts; sources: ProfileSource[]; legacyChangesUnavailable: boolean };
+export type PersonalProfileStats = { reading: ReadingActivity; counts: ProfileCounts; changes: ProfileChanges; sync: ProfileSyncCounts; sources: ProfileSource[]; legacyChangesUnavailable: boolean };
 export type PersonalProfile = PersonalProfileStats & { workspaceId: string; identityName: string; days: ProfilePeriod; since: string; generatedAt: string };
 export type ProfileDocument = { documentId: string; sourceId: string; title: string; sourceName: string; sourcePath: string | null; archived: boolean };
 export type ProfileSyncItem = { id: string; sourceId: string | null; name: string; previewId: string | null; lastSyncedAt: string | null };

@@ -114,3 +114,27 @@ it("keeps detail totals and items consistent when an article appears during the 
   await raw.commit();
  }finally{await raw.rollback();raw.release();}
 });
+
+it("records unique daily article views without rewriting history or inflating period totals",async()=>{
+ const one=await createDocumentFixture(pool,noteSource,folder);
+ const two=await createDocumentFixture(pool,noteSource,folder);
+ const {readingDate,readingDates}=await import("@/modules/personal/domain/reading-activity");
+ const now=new Date(),dates=readingDates(now,30);
+ const record=(doc:typeof one,date:Date)=>uow.run(r=>r.documentReadProgress.advance({userId:fixtureCaller().identity.id,workspaceId:ws,documentId:doc.documentId,revisionId:doc.revisionId,revisionNo:1,readAt:date}));
+ await record(one,now);await record(one,now);await record(two,now);
+ await record(one,new Date(now.getTime()-86400000));
+ await record(two,new Date(now.getTime()-10*86400000));
+ const week=await s.personalProfile.get(fixtureCaller(),ws,7);
+ expect(week.reading).toMatchObject({articles:2,activeDays:2});
+ expect(week.reading.daily).toHaveLength(7);
+ expect(week.reading.daily.at(-1)).toEqual({date:readingDate(now),articles:2});
+ expect(week.reading.daily.reduce((total,day)=>total+day.articles,0)).toBe(3);
+ expect(week.reading.trackedSince).toBeTruthy();
+ const month=await s.personalProfile.get(fixtureCaller(),ws,30);
+ expect(month.reading).toMatchObject({articles:2,activeDays:3});
+ expect(month.reading.daily.map(day=>day.date)).toEqual(dates);
+ await uow.run(r=>r.documents.updateStatus(one.documentId,"ARCHIVED",fixtureCaller().identity.id));
+ const archived=await s.personalProfile.get(fixtureCaller(),ws,7);
+ expect(archived.reading.articles).toBe(2);expect(archived.counts.browsed).toBe(1);
+ expect(Number((await pool.query("SELECT COUNT(*) total FROM document_read_activity WHERE workspace_id=?",[ws]))[0].total)).toBe(4);
+});
