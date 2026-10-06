@@ -1,0 +1,16 @@
+{
+  "locales": {
+    "en": {
+      "label": "English",
+      "sourceName": "Sample wiki",
+      "root": "sample-wiki-en",
+      "files": ["index.md", "handbook/onboarding.md", "handbook/leave-policy.md", "handbook/title-mismatch.md", "concepts/links.md", "concepts/sync.md", "reference/glossary.md"]
+    },
+    "zh-TW": {
+      "label": "繁體中文",
+      "sourceName": "範例知識庫",
+      "root": "sample-wiki-zh-TW",
+      "files": ["index.md", "handbook/onboarding.md", "handbook/leave-policy.md", "handbook/title-mismatch.md", "concepts/links.md", "concepts/sync.md", "reference/glossary.md"]
+    }
+  }
+}
