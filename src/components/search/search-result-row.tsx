@@ -31,7 +31,7 @@ export function SearchResultRow({
   showWorkspace: boolean;
 }) {
   const href = `/w/${hit.workspaceId}/knowledge/${hit.sourceId}/${hit.documentId}${includeArchived ? "?includeArchived=true" : ""}`;
-  const snippet = plainSearchSnippet(hit.snippet);
+  const snippet = plainSearchSnippet(hit.snippet, hit.snippetClipped);
   const updatedAt = asDate(hit.updatedAt);
   return (
     <li>

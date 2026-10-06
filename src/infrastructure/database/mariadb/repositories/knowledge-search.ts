@@ -16,7 +16,12 @@ const SNIPPET_LENGTH = 160;
 const SNIPPET_LEAD = 60;
 
 function mapRow(row: DbRow): KnowledgeSearchRow {
+  // Mirrors the SQL window: SUBSTRING counts characters, so compare in code points, not UTF-16 units.
+  const anchorAt = Number(row.anchor_at ?? 0);
+  const start = anchorAt > 0 ? Math.max(anchorAt - SNIPPET_LEAD, 1) : 1;
+  const snippetLength = row.snippet === null || row.snippet === undefined ? 0 : [...String(row.snippet)].length;
   return {
+    snippetClipped: { start: start > 1, end: start - 1 + snippetLength < Number(row.markdown_length ?? 0) },
     documentId: String(row.document_id),
     sourceId: String(row.source_id),
     workspaceId: String(row.workspace_id),
@@ -45,7 +50,7 @@ export class MariaDbKnowledgeSearchRepository implements KnowledgeSearchReposito
   async search(criteria: KnowledgeSearchCriteria): Promise<KnowledgeSearchRow[]> {
     if (criteria.workspaceIds.length === 0 || (criteria.terms.length === 0 && !criteria.sourceId && !(criteria.filters && hasSearchFilters(criteria.filters)))) return [];
     const anchor = criteria.terms[0] ?? "";
-    const parameters: unknown[] = [anchor, anchor, SNIPPET_LEAD, SNIPPET_LENGTH, SNIPPET_LENGTH];
+    const parameters: unknown[] = [anchor, anchor, anchor, SNIPPET_LEAD, SNIPPET_LENGTH, SNIPPET_LENGTH];
     const titleHits = criteria.terms
       .map(() => "(r.title COLLATE utf8mb4_unicode_ci LIKE ? ESCAPE '!')")
       .join(" + ") || "0";
@@ -73,6 +78,7 @@ export class MariaDbKnowledgeSearchRepository implements KnowledgeSearchReposito
     const sql = `SET STATEMENT max_statement_time=${SEARCH_TIMEOUT_SECONDS} FOR
       SELECT d.id AS document_id, d.source_id AS source_id, s.workspace_id AS workspace_id, r.title AS title,
              s.name AS source_name, w.name AS workspace_name, d.status AS status, r.created_at AS updated_at,
+             LOCATE(?, r.markdown COLLATE utf8mb4_unicode_ci) AS anchor_at, CHAR_LENGTH(r.markdown) AS markdown_length,
              CASE WHEN LOCATE(?, r.markdown COLLATE utf8mb4_unicode_ci) > 0
                   THEN SUBSTRING(r.markdown, GREATEST(LOCATE(?, r.markdown COLLATE utf8mb4_unicode_ci) - ?, 1), ?)
                   ELSE SUBSTRING(r.markdown, 1, ?) END AS snippet,

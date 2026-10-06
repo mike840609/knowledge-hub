@@ -30,6 +30,7 @@ type QuickHit = {
   title: string;
   sourceName: string;
   snippet: string;
+  snippetClipped?: { start: boolean; end: boolean };
 };
 
 type QuickResponse = { hits: QuickHit[]; tooLong: boolean; timedOut: boolean };
@@ -271,7 +272,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
   const documentRow = (hit: QuickHit, index: number) => (
     <button type="button" onClick={() => choose({ kind: "hit", hit })} onMouseEnter={() => setActiveIndex(index)} className={`w-full rounded-md px-3 py-2 text-left kh-focus-ring ${index === activeIndex ? "bg-kh-bg-selected" : "hover:bg-kh-bg-hover"}`}>
       <span className={`block truncate text-body font-medium ${index === activeIndex ? "text-kh-selected-text" : "text-kh-text"}`}>{hit.title}</span>
-      <span className="block truncate text-caption text-kh-text-muted">{hit.sourceName}{hit.snippet ? ` · ${plainSearchSnippet(hit.snippet)}` : ""}</span>
+      <span className="block truncate text-caption text-kh-text-muted">{hit.sourceName}{hit.snippet ? ` · ${plainSearchSnippet(hit.snippet, hit.snippetClipped)}` : ""}</span>
     </button>
   );
 
