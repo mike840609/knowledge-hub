@@ -62,3 +62,61 @@ describe("the vendored React's ping handling", () => {
     expect(pkg.scripts?.postinstall ?? "").toContain("patch-package");
   });
 });
+
+/**
+ * The same vendored React commits an *incomplete* tree after error recovery: an error thrown in a
+ * Retry lane (a redirect streamed behind `loading.tsx`) starts a synchronous retry over every pending
+ * lane; if that retry includes a navigation still loading, Next's Router suspends at the shell
+ * (status 6), and React commits the Router with only the hooks it ran before suspending. Its next
+ * render throws "Rendered more hooks than during the previous render" (#310) — the whole page
+ * becomes "Application error". React fixed it upstream by treating status 6 like an error there
+ * (facebook/react#36911); `patches/next+15.5.25.patch` carries that one condition. Investigation:
+ * `tests/e2e/router-redirect-during-navigation.spec.ts`.
+ *
+ * Every build the patch touches is checked, so a re-made patch that misses one fails here.
+ */
+const RECOVERY_BUILDS = [
+  "react-dom-client.production.js",
+  "react-dom-client.development.js",
+  // `next build --profile`.
+  "react-dom-profiling.profiling.js",
+  "react-dom-profiling.development.js",
+];
+
+/** The condition deciding whether the synchronous error-recovery retry counts as recovered. */
+function recoveryCondition(build: string): string {
+  const path = join(process.cwd(), "node_modules/next/dist/compiled/react-dom/cjs", build);
+  const source = readFileSync(path, "utf8");
+  const start = source.indexOf("function performWorkOnRoot(");
+  expect(start, `${build} has no performWorkOnRoot — has Next changed how it vendors React?`).toBeGreaterThan(-1);
+  // The recovered branch is the only place that checks for a ping listener against a dehydrated root.
+  const marker = source.indexOf("!wasRootDehydrated", start);
+  expect(marker, `${build}: could not find the error-recovery branch of performWorkOnRoot`).toBeGreaterThan(start);
+  const condition = source.lastIndexOf("if (", source.lastIndexOf("if (", marker) - 1);
+  return source.slice(condition, marker);
+}
+
+describe("the vendored React's error recovery", () => {
+  it.each(RECOVERY_BUILDS)("%s does not commit a retry that suspended at the shell", (build) => {
+    const condition = recoveryCondition(build);
+    expect(condition, `${build}: recovery condition not found`).toMatch(/RootErrored|2 !==/);
+    expect(
+      /RootSuspendedAtTheShell|6 !==/.test(condition),
+      [
+        `${build}: the error-recovery retry treats "suspended at the shell" as recovered:`,
+        `  ${condition.trim().replace(/\s+/g, " ")}`,
+        "Either postinstall did not run — run `npx patch-package` — or Next was upgraded and the patch",
+        "no longer applies. If the new Next vendors a React with facebook/react#36911 this passes by",
+        "itself; otherwise re-make patches/next+<version>.patch (README, \"Next.js patch\").",
+      ].join("\n"),
+    ).toBe(true);
+  });
+
+  it("covers every react-dom build the patch touches", () => {
+    let patch = "";
+    try { patch = readFileSync(join(process.cwd(), "patches/next+15.5.25.patch"), "utf8"); } catch { return; }
+    const touched = [...patch.matchAll(/^diff --git a\/node_modules\/next\/dist\/compiled\/react-dom\/cjs\/(\S+)/gm)].map((m) => m[1]);
+    expect(touched.length).toBeGreaterThan(0);
+    for (const build of touched) expect(RECOVERY_BUILDS).toContain(build);
+  });
+});

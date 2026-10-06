@@ -222,9 +222,11 @@ The test runner manages its own mode and required servers rather than inheriting
 
 ### Next.js patch
 
-The `npm ci` postinstall step uses `patch-package` to apply [`patches/next+15.5.25.patch`](patches/next+15.5.25.patch). It fixes lost render pings in Next.js's bundled React during page navigation. Keep install scripts enabled; if you installed with `--ignore-scripts`, run `npx patch-package` afterward.
+The `npm ci` postinstall step uses `patch-package` to apply [`patches/next+15.5.25.patch`](patches/next+15.5.25.patch). It fixes two bugs in Next.js's bundled React (`19.2.0-canary-0bdb9206-20250818`). The first is lost render pings during page navigation. The second makes the page crash with "Application error" (React #310, "Rendered more hooks than during the previous render", thrown from Next's `Router`) when a redirect or other error lands during render while another navigation is still loading. An example is clicking a document while "Browse documents" is still redirecting. Without the fix, React's error recovery commits the Router half-rendered; the patch adds the one condition from [facebook/react#36911](https://github.com/facebook/react/pull/36911) to the four `react-dom` client and profiling builds. Keep install scripts enabled; if you installed with `--ignore-scripts`, run `npx patch-package` afterward.
 
-When upgrading Next.js, check whether the patch is still required. After updating or removing it, clear `.next/cache` before rebuilding. Related test: [`vendored-react-ping-fix.test.ts`](tests/unit/vendored-react-ping-fix.test.ts).
+The second fix was checked against the upstream diff of #36911, and [vercel/next.js#95368](https://github.com/vercel/next.js/pull/95368) brings it into Next canary (React `ec0fca31-20260701`). The issues those PRs reference (vercel/next.js#63121 and #78396, facebook/react#33580) were read only as summaries and were not reproduced here. The `experimental` React channel under `next/dist/compiled/react-dom-experimental` is unpatched: it is only loaded when experimental React features are enabled in `next.config.ts`, which this project does not do.
+
+When upgrading Next.js, check whether the patch is still required: [`vendored-react-ping-fix.test.ts`](tests/unit/vendored-react-ping-fix.test.ts) checks the bundled source for both fixes, and passes without the patch once Next bundles a React that already has them. [`router-redirect-during-navigation.spec.ts`](tests/e2e/router-redirect-during-navigation.spec.ts) reproduces the crash in the browser. After updating or removing the patch, clear `.next/cache` before rebuilding.
 
 ## Troubleshooting
 

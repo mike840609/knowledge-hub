@@ -1,8 +1,20 @@
 diff --git a/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js b/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js
-index 4376913..4995c84 100644
+index 4376913..a7225e3 100644
 --- a/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js
 +++ b/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js
-@@ -16469,8 +16469,9 @@
+@@ -15035,7 +15035,10 @@
+                   errorRetryLanes$jscomp$0,
+                   !1
+                 );
+-                if (errorRetryLanes$jscomp$0 !== RootErrored) {
++                if (
++                  errorRetryLanes$jscomp$0 !== RootErrored &&
++                  errorRetryLanes$jscomp$0 !== RootSuspendedAtTheShell
++                ) {
+                   if (
+                     workInProgressRootDidAttachPingListener &&
+                     !wasRootDehydrated
+@@ -16469,8 +16472,9 @@
            (workInProgressRootRenderLanes & 62914560) ===
              workInProgressRootRenderLanes &&
            now$1() - globalMostRecentFallbackTime < FALLBACK_THROTTLE_MS)
@@ -15,9 +27,18 @@ index 4376913..4995c84 100644
          workInProgressSuspendedRetryLanes === workInProgressRootRenderLanes &&
            (workInProgressSuspendedRetryLanes = 0));
 diff --git a/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.production.js b/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.production.js
-index 755076a..8ba8622 100644
+index 755076a..345cf0e 100644
 --- a/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.production.js
 +++ b/node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.production.js
+@@ -10632,7 +10632,7 @@ function performWorkOnRoot(root$jscomp$0, lanes, forceSync) {
+               JSCompiler_inline_result,
+               !1
+             );
+-            if (2 !== JSCompiler_inline_result) {
++            if (2 !== JSCompiler_inline_result && 6 !== JSCompiler_inline_result) {
+               if (
+                 workInProgressRootDidAttachPingListener &&
+                 !wasRootDehydrated
 @@ -11733,7 +11733,9 @@ function pingSuspendedRoot(root, wakeable, pingedLanes) {
        (workInProgressRootRenderLanes & 62914560) ===
          workInProgressRootRenderLanes &&
@@ -30,10 +51,22 @@ index 755076a..8ba8622 100644
      workInProgressSuspendedRetryLanes === workInProgressRootRenderLanes &&
        (workInProgressSuspendedRetryLanes = 0));
 diff --git a/node_modules/next/dist/compiled/react-dom/cjs/react-dom-profiling.development.js b/node_modules/next/dist/compiled/react-dom/cjs/react-dom-profiling.development.js
-index 43d0363..a03eab0 100644
+index 43d0363..5e715e3 100644
 --- a/node_modules/next/dist/compiled/react-dom/cjs/react-dom-profiling.development.js
 +++ b/node_modules/next/dist/compiled/react-dom/cjs/react-dom-profiling.development.js
-@@ -16477,8 +16477,9 @@
+@@ -15043,7 +15043,10 @@
+                   errorRetryLanes$jscomp$0,
+                   !1
+                 );
+-                if (errorRetryLanes$jscomp$0 !== RootErrored) {
++                if (
++                  errorRetryLanes$jscomp$0 !== RootErrored &&
++                  errorRetryLanes$jscomp$0 !== RootSuspendedAtTheShell
++                ) {
+                   if (
+                     workInProgressRootDidAttachPingListener &&
+                     !wasRootDehydrated
+@@ -16477,8 +16480,9 @@
            (workInProgressRootRenderLanes & 62914560) ===
              workInProgressRootRenderLanes &&
            now$1() - globalMostRecentFallbackTime < FALLBACK_THROTTLE_MS)
@@ -46,9 +79,18 @@ index 43d0363..a03eab0 100644
          workInProgressSuspendedRetryLanes === workInProgressRootRenderLanes &&
            (workInProgressSuspendedRetryLanes = 0));
 diff --git a/node_modules/next/dist/compiled/react-dom/cjs/react-dom-profiling.profiling.js b/node_modules/next/dist/compiled/react-dom/cjs/react-dom-profiling.profiling.js
-index 85185b0..3001351 100644
+index 85185b0..247384d 100644
 --- a/node_modules/next/dist/compiled/react-dom/cjs/react-dom-profiling.profiling.js
 +++ b/node_modules/next/dist/compiled/react-dom/cjs/react-dom-profiling.profiling.js
+@@ -11172,7 +11172,7 @@ function performWorkOnRoot(root$jscomp$0, lanes, forceSync) {
+               JSCompiler_inline_result,
+               !1
+             );
+-            if (2 !== JSCompiler_inline_result) {
++            if (2 !== JSCompiler_inline_result && 6 !== JSCompiler_inline_result) {
+               if (
+                 workInProgressRootDidAttachPingListener &&
+                 !wasRootDehydrated
 @@ -12404,7 +12404,9 @@ function pingSuspendedRoot(root, wakeable, pingedLanes) {
        (workInProgressRootRenderLanes & 62914560) ===
          workInProgressRootRenderLanes &&
