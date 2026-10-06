@@ -553,32 +553,40 @@ export function DocumentComposer({
           <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
             <DocumentBreadcrumb segments={[...location, { label: resolved.title || untitledLabel }]} />
             <div className="flex shrink-0 items-center gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                aria-pressed={showing === "source"}
-                aria-keyshortcuts="Meta+/ Control+/"
-                title={editorFailed ? "Rendered editing is not available for this document" : "Show Markdown source (⌘/)"}
-                className="aria-pressed:bg-kh-bg-selected aria-pressed:text-kh-text"
-                disabled={!hydrated || editorFailed}
-                onClick={toggleMode}
-              >
-                Markdown
-              </Button>
+              {/* A disabled button shows no tooltip; the failed-editor notice below says why instead. */}
+              <Tooltip label="Show Markdown source" shortcut="Meta+/ Control+/">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  aria-pressed={showing === "source"}
+                  aria-keyshortcuts="Meta+/ Control+/"
+                  className="aria-pressed:bg-kh-bg-selected aria-pressed:text-kh-text"
+                  disabled={!hydrated || editorFailed}
+                  onClick={toggleMode}
+                >
+                  Markdown
+                </Button>
+              </Tooltip>
               <Tooltip label="Cancel" keys="Esc">
                 <Button type="button" variant="secondary" disabled={busy || blocked} onClick={cancel}>
                   Cancel
                 </Button>
               </Tooltip>
-              <Button
-                type="submit"
-                title={untitled ? "Add a title, or start the document with a # heading" : `${submitLabel} (⌘Enter)`}
-                disabled={!ready || !confirmed || untitled}
-              >
-                {busy ? busyLabel : submitLabel}
-              </Button>
+              <Tooltip label={submitLabel} shortcut="Meta+Enter Control+Enter">
+                <Button
+                  type="submit"
+                  aria-describedby={untitled ? "composer-untitled-hint" : undefined}
+                  disabled={!ready || !confirmed || untitled}
+                >
+                  {busy ? busyLabel : submitLabel}
+                </Button>
+              </Tooltip>
             </div>
           </div>
+          {/* Visible, not a `title`: a disabled button's reason must reach keyboard and touch users too (§10). */}
+          {untitled ? (
+            <p id="composer-untitled-hint" className="mt-1.5 text-caption text-kh-text-muted">Add a title, or start the document with a # heading, to save</p>
+          ) : null}
           {resolved.source === "METADATA" ? (
             <p className="mt-1.5 text-caption text-kh-text-muted">Title comes from the uploaded file’s frontmatter</p>
           ) : null}
@@ -611,7 +619,7 @@ export function DocumentComposer({
             </p>
           ) : null}
           {conflict ? (
-            <div role="alert" className="rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2 text-body text-kh-text">
+            <div role="alert" className="rounded-md border border-kh-warning-border bg-kh-warning-bg px-3 py-2 text-body text-kh-text">
               Someone updated this document. Your changes are still here.
               <Button type="button" variant="link" className="ml-2" onClick={loadLatest}>Load latest version (discard your changes)</Button>
             </div>

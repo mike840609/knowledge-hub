@@ -24,11 +24,12 @@ vi.mock("@/components/actions/action-menu", () => ({
 vi.mock("@/components/knowledge/share-link-dialog", () => ({
   ShareLinkDialogHost: () => null,
 }));
-it("keeps scoped search, reading and updates as the Home entry points", () => {
+it("keeps reading and updates as the Home entry points, leaving search to the topbar's ⌘K", () => {
   const html = renderToStaticMarkup(
     <PersonalHome workspaceId="ws" documents={[]} drafts={[]} />,
   );
-  expect(html).toContain('action="/w/ws/search"');
+  // A second search field on Home duplicated the topbar's and split where people search.
+  expect(html).not.toContain('role="search"');
   expect(html).not.toContain('/sources/import');
   expect(html).toContain("New note");
   expect(html.indexOf("Continue reading")).toBeLessThan(html.indexOf("Updates"));

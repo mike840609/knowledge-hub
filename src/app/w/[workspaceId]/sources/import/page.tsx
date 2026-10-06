@@ -29,8 +29,8 @@ export default async function WorkspaceSourceImportPage({
       </Link>
       <h1 className="mt-3 text-heading font-semibold text-kh-text">Import folder</h1>
       <p className="mt-1 text-body text-kh-text-muted">
-        Choose a local folder to create a source in {model.workspace.name}. The source folder stays authoritative;
-        the Hub only previews the deterministic diff before anything is applied.
+        Choose a local folder to create a source in {model.workspace.name}. Your files stay in that folder;
+        you review a preview of every change before anything is applied.
       </p>
       <p className="mt-2 text-body text-kh-text-muted">
         Not sure what a folder should look like?{" "}

@@ -9,7 +9,7 @@ test("personal profile counts, detail links, themes and mobile layout",async({pa
  const detailCount=async(filter:string)=>{
   await page.goto(`/w/${ws}/profile/articles?filter=${filter}`);
   const text=await page.locator("main header p").textContent();
-  expect(text).toMatch(/^\d+ articles?$/);
+  expect(text).toMatch(/^\d+ documents?$/);
   return Number(text!.split(" ")[0]);
  };
  const overview=async()=>{
@@ -20,8 +20,8 @@ test("personal profile counts, detail links, themes and mobile layout",async({pa
    await expect(page.getByRole("heading",{name:"See your knowledge grow",exact:true})).toBeVisible();
    return {articles:0,folders:0,browsed:0};
   }
-  const articles=Number((await page.getByText(/^\d[\d,]* active articles in My Space\.$/).textContent())!.split(" ")[0].replaceAll(",",""));
-  const distribution=await page.getByText(/^\d+ articles across \d+ synced folders\.$/).textContent();
+  const articles=Number((await page.getByText(/^\d[\d,]* active documents in My Space\.$/).textContent())!.split(" ")[0].replaceAll(",",""));
+  const distribution=await page.getByText(/^\d+ documents across \d+ synced folders\.$/).textContent();
   const folders=Number(distribution!.match(/across (\d+)/)![1]);
   const browsed=Number(await page.locator("[data-browsed-count]").getAttribute("data-browsed-count"));
   return {articles,folders,browsed};
@@ -62,7 +62,7 @@ test("personal profile counts, detail links, themes and mobile layout",async({pa
  await expect(page.locator("[data-browsed-count]")).toHaveCount(0);
  await expect(page.getByRole("region",{name:"Continue reading"}).getByRole("link",{name:/Team guide/})).toBeVisible();
  await page.screenshot({path:path.join(output,"home-light.png"),fullPage:true,animations:"disabled"});
- await page.getByRole("button",{name:"Home actions"}).click();await page.getByRole("menuitem",{name:"View insights",exact:true}).click();
+ await page.getByRole("navigation",{name:"Primary"}).getByRole("link",{name:"Insights"}).click();
  await expect(page.locator("[data-browsed-count]")).toHaveAttribute("data-browsed-count",String(baseline.browsed+1));
  await expect(page.getByRole("heading",{name:"Insights",exact:true})).toBeVisible();await expect(page.getByRole("heading",{name:"Sync overview",exact:true})).toBeVisible();
  await page.screenshot({path:path.join(output,"desktop-light.png"),fullPage:true,animations:"disabled"});
