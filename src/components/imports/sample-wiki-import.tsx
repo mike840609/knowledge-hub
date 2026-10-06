@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { loadSampleWiki, SAMPLE_LOCALES, type SampleLocale, type SampleWiki } from "./sample-wiki";
 
@@ -11,26 +11,38 @@ import { loadSampleWiki, SAMPLE_LOCALES, type SampleLocale, type SampleWiki } fr
 export function SampleWikiImport({
   disabled,
   onLoaded,
+  onLoadingChange,
 }: {
   disabled: boolean;
+  /** Hands the files to the import flow; resolves when that import has settled. */
   onLoaded: (sample: SampleWiki) => Promise<void>;
+  /** True from the click until the import has settled, so siblings can lock too. */
+  onLoadingChange?: (loading: boolean) => void;
 }): React.JSX.Element {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const running = useRef(false);
+
+  function settle(): void {
+    running.current = false;
+    setLoading(false);
+    onLoadingChange?.(false);
+  }
+
   async function choose(locale: SampleLocale): Promise<void> {
+    if (running.current) return;
+    running.current = true;
     setError(null);
     setLoading(true);
-    let sample: SampleWiki;
+    onLoadingChange?.(true);
     try {
-      sample = await loadSampleWiki(locale);
+      await onLoaded(await loadSampleWiki(locale));
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Could not load the sample wiki.");
-      setLoading(false);
-      return;
+    } finally {
+      settle();
     }
-    setLoading(false);
-    await onLoaded(sample);
   }
 
   return (

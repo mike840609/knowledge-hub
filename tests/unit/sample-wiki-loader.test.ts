@@ -11,12 +11,13 @@ const LOCALES: Array<{ locale: SampleLocale; root: string; sourceName: string; l
   { locale: "zh-TW", root: "sample-wiki-zh-TW", sourceName: "範例知識庫", label: "繁體中文" },
 ];
 
-function readText(file: File): Promise<string> {
+/** jsdom's Blob has no arrayBuffer()/text(), so read the exact bytes through FileReader. */
+function readBytes(file: File): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
+    reader.onload = () => resolve(Buffer.from(reader.result as ArrayBuffer));
     reader.onerror = () => reject(reader.error);
-    reader.readAsText(file);
+    reader.readAsArrayBuffer(file);
   });
 }
 
@@ -46,7 +47,8 @@ describe.each(LOCALES)("loadSampleWiki($locale)", ({ locale, root, sourceName, l
     for (const [index, file] of sample.files.entries()) {
       expect(file.name).toBe(paths[index].split("/").pop());
       expect(file.type).toBe("text/markdown");
-      expect(await readText(file)).toBe(readFileSync(path.join(PUBLIC, "sample-wiki", locale, paths[index]), "utf8"));
+      const onDisk = readFileSync(path.join(PUBLIC, "sample-wiki", locale, paths[index]));
+      expect((await readBytes(file)).equals(onDisk)).toBe(true);
     }
   });
 
@@ -72,6 +74,44 @@ describe("SAMPLE_LOCALES", () => {
 });
 
 describe("loadSampleWiki failures", () => {
+  it("keeps a byte-order mark: the file is the served bytes, not decoded text", async () => {
+    const bom = Buffer.from([0xef, 0xbb, 0xbf, ...Buffer.from("# Title\n")]);
+    const fetcher = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("manifest.json")) {
+        return Response.json({ locales: { en: { label: "English", sourceName: "S", root: "r", files: ["a.md"] } } });
+      }
+      return new Response(bom);
+    }) as typeof fetch;
+    const [file] = (await loadSampleWiki("en", fetcher)).files;
+    expect((await readBytes(file)).equals(bom)).toBe(true);
+  });
+
+  it("says one plain sentence when a proxy answers the manifest with a 200 HTML login page", async () => {
+    const login = (async () => new Response("<!doctype html><title>Sign in</title>", { status: 200, headers: { "content-type": "text/html" } })) as typeof fetch;
+    await expect(loadSampleWiki("en", login)).rejects.toThrow(
+      "Could not load the sample wiki. Your session may have expired — reload the page and try again.",
+    );
+  });
+
+  it.each([
+    ["files missing", { label: "English", sourceName: "S", root: "r" }],
+    ["files not an array", { label: "English", sourceName: "S", root: "r", files: "index.md" }],
+    ["root missing", { label: "English", sourceName: "S", files: ["a.md"] }],
+  ])("says that sentence when the manifest entry is malformed (%s), returning nothing", async (_name, entry) => {
+    const requested: string[] = [];
+    const fetcher = (async (input: RequestInfo | URL) => {
+      requested.push(String(input));
+      return Response.json({ locales: { en: entry } });
+    }) as typeof fetch;
+    await expect(loadSampleWiki("en", fetcher)).rejects.toThrow(/session may have expired/);
+    expect(requested).toEqual(["/sample-wiki/manifest.json"]);
+  });
+
+  it("still reports the real reason for a genuine 404 file, not the session sentence", async () => {
+    await expect(loadSampleWiki("en", diskFetcher(["index.md"]))).rejects.toThrow(/index\.md.*HTTP 404/);
+  });
+
   it("rejects when the manifest request fails", async () => {
     await expect(loadSampleWiki("en", diskFetcher(["manifest.json"]))).rejects.toThrow(/manifest/i);
   });

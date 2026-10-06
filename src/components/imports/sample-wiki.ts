@@ -16,22 +16,50 @@ async function fetchOk(fetcher: typeof fetch, url: string, what: string): Promis
   return response;
 }
 
+const UNREADABLE =
+  "Could not load the sample wiki. Your session may have expired — reload the page and try again.";
+
+/**
+ * A proxy that answers 200 with a login page, or a manifest of the wrong
+ * shape, is one failure to the reader: say so in one sentence.
+ */
+async function readManifestEntry(fetcher: typeof fetch, locale: SampleLocale): Promise<ManifestLocale> {
+  const response = await fetchOk(fetcher, `${BASE}/manifest.json`, "the sample wiki manifest");
+  let manifest: { locales?: Partial<Record<SampleLocale, ManifestLocale>> } | null;
+  try {
+    manifest = await response.json();
+  } catch {
+    throw new Error(UNREADABLE);
+  }
+  const locales = manifest?.locales;
+  if (locales && typeof locales === "object" && !(locale in locales)) {
+    throw new Error(`The sample wiki manifest has no entry for ${locale}.`);
+  }
+  const entry = locales?.[locale];
+  const valid =
+    !!entry &&
+    typeof entry.root === "string" &&
+    typeof entry.sourceName === "string" &&
+    typeof entry.label === "string" &&
+    Array.isArray(entry.files) &&
+    entry.files.every((file) => typeof file === "string");
+  if (!entry || !valid) throw new Error(UNREADABLE);
+  return entry;
+}
+
 /**
  * Fetches the bundled sample wiki as `File`s that look, to the folder-import
  * flow, exactly like a picked folder: `webkitRelativePath` is `<root>/<path>`.
  * Either every file loads or this throws; there is no partial result.
  */
 export async function loadSampleWiki(locale: SampleLocale, fetcher: typeof fetch = fetch): Promise<SampleWiki> {
-  const manifest = (await (await fetchOk(fetcher, `${BASE}/manifest.json`, "the sample wiki manifest")).json()) as {
-    locales?: Partial<Record<SampleLocale, ManifestLocale>>;
-  };
-  const entry = manifest.locales?.[locale];
-  if (!entry) throw new Error(`The sample wiki manifest has no entry for ${locale}.`);
+  const entry = await readManifestEntry(fetcher, locale);
   const files = await Promise.all(
     entry.files.map(async (relativePath) => {
       const url = `${BASE}/${locale}/${relativePath.split("/").map(encodeURIComponent).join("/")}`;
-      const text = await (await fetchOk(fetcher, url, relativePath)).text();
-      const file = new File([text], relativePath.split("/").pop() ?? relativePath, { type: "text/markdown" });
+      // Raw bytes, so a sample file is byte-identical to a picked one (BOM included).
+      const bytes = await (await fetchOk(fetcher, url, relativePath)).arrayBuffer();
+      const file = new File([bytes], relativePath.split("/").pop() ?? relativePath, { type: "text/markdown" });
       Object.defineProperty(file, "webkitRelativePath", { value: `${entry.root}/${relativePath}`, enumerable: true });
       return file;
     }),

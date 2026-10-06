@@ -66,6 +66,43 @@ function render(target: Parameters<typeof FolderImportForm>[0]["target"]) {
 const newTarget = { kind: "new", workspaceId: "w1" } as const;
 const existingTarget = { kind: "existing", workspaceId: "w1", sourceId: "s1", sourceName: "Notes" } as const;
 
+function chooseFolder(): HTMLButtonElement {
+  const button = [...container.querySelectorAll("button")].find((b) => b.textContent === "Choose folder");
+  if (!button) throw new Error("Choose folder button not found");
+  return button as HTMLButtonElement;
+}
+
+/** Polls a condition inside act() until it holds; fails loudly instead of sleeping a fixed time. */
+async function waitFor(condition: () => boolean, timeoutMs = 2000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!condition()) {
+    if (Date.now() > deadline) throw new Error("Timed out waiting for the condition.");
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 5)); });
+  }
+}
+
+/**
+ * Wraps the stubbed fetch so the first request matching `match` pauses until
+ * released. `reached` resolves the moment that request arrives.
+ */
+function gateRequest(match: (url: string) => boolean) {
+  let release: () => void = () => {};
+  const open = new Promise<void>((resolve) => { release = resolve; });
+  let arrived: () => void = () => {};
+  const reached = new Promise<void>((resolve) => { arrived = resolve; });
+  let hits = 0;
+  const base = globalThis.fetch;
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (match(decodeURI(String(input)))) {
+      hits += 1;
+      arrived();
+      await open;
+    }
+    return base(input, init);
+  }));
+  return { reached, release, count: () => hits };
+}
+
 function sampleButton(label: string): HTMLButtonElement {
   const button = [...container.querySelectorAll("#sample-wiki button")].find((b) => b.textContent === label);
   if (!button) throw new Error(`${label} button not found`);
@@ -116,21 +153,41 @@ describe("Try with a sample wiki", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
-  it("disables the buttons while an import runs", async () => {
+  it("re-enables the buttons and the picker after a failed load", async () => {
+    stubNetwork(["concepts/sync.md"]);
+    render(newTarget);
+    await click("English");
+    expect(sampleButton("English").disabled).toBe(false);
+    expect(sampleButton("繁體中文").disabled).toBe(false);
+    expect(chooseFolder().disabled).toBe(false);
+  });
+
+  it("locks the sample buttons and the picker while the sample is still being fetched, and a second click does nothing", async () => {
     stubNetwork();
     render(newTarget);
-    let release: () => void = () => {};
-    const gate = new Promise<void>((resolve) => { release = resolve; });
-    const base = globalThis.fetch;
-    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (String(input) === "/api/workspaces/w1/source-imports") await gate;
-      return base(input, init);
-    }));
+    const gate = gateRequest((url) => url === "/sample-wiki/manifest.json");
     await act(async () => { sampleButton("English").click(); });
-    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    await gate.reached;
     expect(sampleButton("English").disabled).toBe(true);
     expect(sampleButton("繁體中文").disabled).toBe(true);
-    release();
-    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    expect(chooseFolder().disabled).toBe(true);
+    await act(async () => { sampleButton("English").click(); sampleButton("繁體中文").click(); });
+    expect(gate.count()).toBe(1);
+    await act(async () => { gate.release(); });
+    await waitFor(() => push.mock.calls.length > 0);
+    expect(sessionBodies).toHaveLength(1);
+  });
+
+  it("keeps everything locked from the first click until the import request returns, with no enabled gap between", async () => {
+    stubNetwork();
+    render(newTarget);
+    const gate = gateRequest((url) => url === "/api/workspaces/w1/source-imports");
+    await act(async () => { sampleButton("English").click(); });
+    await gate.reached;
+    expect(sampleButton("English").disabled).toBe(true);
+    expect(sampleButton("繁體中文").disabled).toBe(true);
+    expect(chooseFolder().disabled).toBe(true);
+    await act(async () => { gate.release(); });
+    await waitFor(() => push.mock.calls.length > 0);
   });
 });

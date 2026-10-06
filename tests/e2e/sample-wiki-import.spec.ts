@@ -8,6 +8,7 @@ const SAMPLES = [
   {
     button: "English",
     sourceName: "Sample wiki",
+    indexTitle: "Team handbook",
     indexLink: "handbook/onboarding",
     onboardingTitle: "Onboarding",
     anchorLink: "how to request leave",
@@ -17,6 +18,7 @@ const SAMPLES = [
   {
     button: "繁體中文",
     sourceName: "範例知識庫",
+    indexTitle: "團隊手冊",
     indexLink: "handbook/onboarding",
     onboardingTitle: "新人報到",
     anchorLink: "怎麼申請請假",
@@ -58,7 +60,7 @@ for (const sample of SAMPLES) {
 
     // index: a real click on its wikilink (rendered as the text it was written with) to the onboarding page.
     const tree = page.getByRole("tree", { name: "Knowledge tree" });
-    await tree.getByRole("treeitem", { name: "Team handbook" }).or(tree.getByRole("treeitem", { name: "團隊手冊" })).locator("a").first().click();
+    await tree.getByRole("treeitem", { name: sample.indexTitle, exact: true }).locator("a").first().click();
     const article = page.locator("article").first();
     await article.getByRole("link", { name: sample.indexLink, exact: true }).first().click();
     await expect(page.getByRole("heading", { level: 1, name: sample.onboardingTitle, exact: true })).toBeVisible(ROUND_TRIP);

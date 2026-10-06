@@ -450,6 +450,7 @@ export function FolderImportForm({
       setRememberedRoot(null);
     }
   }, [rememberedSourceId]);
+  const [sampleLoading, setSampleLoading] = useState(false);
   const busy = state.kind === "PREPARING" || state.kind === "UPLOADING" || state.kind === "FINALIZING";
   const status = statusText(state);
 
@@ -587,7 +588,7 @@ export function FolderImportForm({
       <ImportExclusionsSettings value={exclusionText} onChange={setExclusionText} disabled={busy || !scopeReady} />
       {scopeError ? <p role="alert" className="mt-2 text-body text-kh-danger">{scopeError} Reload this page to retry.</p> : null}
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        <Button type="button" variant="secondary" disabled={busy || !scopeReady} aria-describedby="import-folder-selection" onClick={handleChooseFolder}>Choose folder</Button>
+        <Button type="button" variant="secondary" disabled={busy || sampleLoading || !scopeReady} aria-describedby="import-folder-selection" onClick={handleChooseFolder}>Choose folder</Button>
         <p id="import-folder-selection" className="text-body text-kh-text-muted">{selection ? `${selection.name} · ${selection.count} files` : "No folder selected"}</p>
       </div>
       {rememberedSourceId && rememberedRoot ? (
@@ -612,7 +613,7 @@ export function FolderImportForm({
         }}
       />
       {target.kind === "new" ? (
-        <SampleWikiImport disabled={busy} onLoaded={(sample) => handleFiles(sample.files, sample.sourceName)} />
+        <SampleWikiImport disabled={busy} onLoadingChange={setSampleLoading} onLoaded={(sample) => handleFiles(sample.files, sample.sourceName)} />
       ) : null}
       {status ? <p role="status" className="mt-3 text-body text-kh-text-muted">{status}</p> : null}
       {busy ? <Button variant="secondary" className="mt-3" onClick={() => activeImportRef.current?.abort()}>Cancel import</Button> : null}
