@@ -40,7 +40,8 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm run build
+      - name: Build without network access
+        run: npm run build:offline
 
   e2e:
     runs-on: ubuntu-latest
