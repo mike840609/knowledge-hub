@@ -32,6 +32,13 @@ export default async function WorkspaceSourceImportPage({
         Choose a local folder to create a source in {model.workspace.name}. The source folder stays authoritative;
         the Hub only previews the deterministic diff before anything is applied.
       </p>
+      <p className="mt-2 text-body text-kh-text-muted">
+        Not sure what a folder should look like?{" "}
+        <Link className="rounded-md font-medium text-kh-link underline-offset-4 hover:underline kh-focus-ring" href={`/w/${workspaceId}/sources/import/guide`}>
+          Read the guide
+        </Link>
+        , or try a sample wiki below.
+      </p>
       <div className="mt-5">
         {model.actions.canImport ? <FolderImportForm
           target={{ kind: "new", workspaceId }}

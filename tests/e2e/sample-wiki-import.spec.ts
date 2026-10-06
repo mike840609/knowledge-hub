@@ -1,4 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
+import { formatGuideBytes } from "../../src/components/imports/import-guide-content";
+import { DEFAULT_IMPORT_LIMITS } from "../../src/modules/sources/domain/import-limits";
 
 // The sample wiki goes through the same flow as a picked folder (fetch in the
 // browser, then Preview, then Apply); nothing here stubs a request.
@@ -72,3 +74,74 @@ for (const sample of SAMPLES) {
     await expect.poll(() => decodeURIComponent(new URL(page.url()).hash)).toBe(sample.anchorHash);
   });
 }
+
+// The guide reads its limits from the server's import config; this run sets no
+// override, so the values on the page are the defaults, formatted by the same helper.
+test.describe("import guide", () => {
+  const SECTION_HEADINGS = {
+    en: ["What you need", "From an Obsidian vault", "From a tool or agent that writes Markdown", "Import, Preview, Apply", "Keeping it in sync", "Read, search, and Copy for Agent", "Limits"],
+    zhTW: ["你需要準備什麼", "從 Obsidian 資料庫匯入", "從會寫出 Markdown 的工具或代理匯入", "匯入、預覽、套用", "保持同步", "閱讀、搜尋與 Copy for Agent", "限制"],
+  };
+
+  test("the import page links to the guide", async ({ page }) => {
+    const ws = await personalWorkspaceId(page);
+    await page.goto(`/w/${ws}/sources/import`);
+    await page.getByRole("link", { name: "Read the guide" }).click();
+    await expect(page).toHaveURL(new RegExp(`/w/${ws}/sources/import/guide$`));
+    await expect(page.getByRole("heading", { level: 1, name: "Bring your wiki into Knowledge Hub" })).toBeVisible();
+  });
+
+  test("English: seven sections in order, with the configured limits", async ({ page }) => {
+    const ws = await personalWorkspaceId(page);
+    await page.goto(`/w/${ws}/sources/import/guide`);
+    await expect(page.locator("[lang='en']").first()).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2 })).toHaveText(SECTION_HEADINGS.en);
+
+    const limits = page.getByRole("table");
+    const row = (name: string) => limits.getByRole("row").filter({ has: page.getByRole("rowheader", { name, exact: true }) });
+    await expect(row("Files in one import")).toContainText(DEFAULT_IMPORT_LIMITS.maxManifestEntries.toLocaleString("en-US"));
+    await expect(row("Size of one Markdown file")).toContainText(formatGuideBytes(DEFAULT_IMPORT_LIMITS.maxMarkdownFileBytes));
+    await expect(row("Total size of Markdown files in one import")).toContainText(formatGuideBytes(DEFAULT_IMPORT_LIMITS.maxMarkdownTotalBytes));
+    await expect(row("Length of one file path")).toContainText(formatGuideBytes(DEFAULT_IMPORT_LIMITS.maxPathBytes));
+
+    const nav = page.getByRole("navigation", { name: "Guide language" });
+    await expect(nav.getByRole("link", { name: "English" })).toHaveAttribute("aria-current", "page");
+    await expect(nav.getByRole("link", { name: "繁體中文" })).not.toHaveAttribute("aria-current", /.+/);
+  });
+
+  test("unknown ?lang falls back to English", async ({ page }) => {
+    const ws = await personalWorkspaceId(page);
+    await page.goto(`/w/${ws}/sources/import/guide?lang=fr`);
+    await expect(page.getByRole("heading", { level: 2 }).first()).toHaveText(SECTION_HEADINGS.en[0]);
+  });
+
+  test("?lang=zh-TW renders Chinese and the switch marks it current", async ({ page }) => {
+    const ws = await personalWorkspaceId(page);
+    await page.goto(`/w/${ws}/sources/import/guide`);
+    await page.getByRole("navigation", { name: "Guide language" }).getByRole("link", { name: "繁體中文" }).click();
+    await expect(page).toHaveURL(/[?]lang=zh-TW$/);
+    await expect(page.getByRole("heading", { level: 2 })).toHaveText(SECTION_HEADINGS.zhTW);
+    await expect(page.locator("[lang='zh-TW']").filter({ has: page.getByRole("heading", { level: 1 }) })).toBeVisible();
+    const nav = page.getByRole("navigation", { name: "Guide language" });
+    await expect(nav.getByRole("link", { name: "繁體中文" })).toHaveAttribute("aria-current", "page");
+    await expect(nav.getByRole("link", { name: "English" })).not.toHaveAttribute("aria-current", /.+/);
+    await expect(page.getByRole("table")).toContainText(DEFAULT_IMPORT_LIMITS.maxManifestEntries.toLocaleString("en-US"));
+  });
+
+  test("Try the sample wiki returns to the import page with the control in view", async ({ page }) => {
+    const ws = await personalWorkspaceId(page);
+    await page.goto(`/w/${ws}/sources/import/guide`);
+    await page.getByRole("link", { name: "Try the sample wiki" }).click();
+    await expect(page).toHaveURL(new RegExp(`/w/${ws}/sources/import#sample-wiki$`));
+    const sample = page.getByRole("group", { name: "Try with a sample wiki" });
+    await expect(sample).toBeVisible();
+    await expect(sample).toBeInViewport();
+  });
+
+  test("a caller with no access to the workspace sees no guide", async ({ page }) => {
+    await page.goto("/w/00000000-0000-4000-8000-000000000000/sources/import/guide");
+    // The workspace layout answers first (not found); the page's own StatusMessage is the second gate.
+    await expect(page.getByRole("heading", { level: 1, name: /^(Page not found|No workspace access)$/ })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "Limits" })).toHaveCount(0);
+  });
+});
