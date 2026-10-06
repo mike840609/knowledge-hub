@@ -1,3 +1,4 @@
+import { readingActivityMigration } from "./016-reading-activity";
 import { sourceImportScopeMigration } from "./015-source-import-scope";
 import { folderSyncReadingMigration } from "./014-folder-sync-reading";
 import { personalItemsMigration } from "./013-personal-items";
@@ -30,4 +31,5 @@ export const migrations = [
   personalItemsMigration,
   folderSyncReadingMigration,
   sourceImportScopeMigration,
+  readingActivityMigration,
 ] as const;
