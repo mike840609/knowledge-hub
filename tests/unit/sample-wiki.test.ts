@@ -102,6 +102,11 @@ describe("sample wiki titles and diagnostics", () => {
     ]);
   });
 
+  it.each(locales)("%s: handbook/title-mismatch.md takes its title from frontmatter", (locale) => {
+    const mismatch = importLocale(locale).find(({ path }) => path === "handbook/title-mismatch.md");
+    expect(mismatch?.entry.titleSource).toBe("FRONTMATTER");
+  });
+
   it.each(locales)("%s: index.md takes its title from frontmatter and another file from the first H1", (locale) => {
     const docs = importLocale(locale);
     expect(docs.find(({ path }) => path === "index.md")?.entry.titleSource).toBe("FRONTMATTER");
@@ -133,11 +138,11 @@ describe("sample wiki links", () => {
     const wiki = links.filter((link) => link.kind === "WIKI");
     const bare = wiki.filter((link) => !link.target.includes("/"));
 
-    expect(wiki.some((link) => bare.includes(link) && titles.has(normalizeLinkKey(link.target)) && !stems.has(normalizeLinkKey(link.target)))).toBe(true);
+    expect(bare.some((link) => titles.has(normalizeLinkKey(link.target)) && !stems.has(normalizeLinkKey(link.target)))).toBe(true);
     expect(bare.some((link) => stems.has(normalizeLinkKey(link.target)))).toBe(true);
     expect(wiki.some((link) => link.target.includes("/"))).toBe(true);
     expect(links.some((link) => link.kind === "PATH")).toBe(true);
-    expect(links.some((link) => link.fragment !== null)).toBe(true);
+    expect(links.some((link) => link.kind === "PATH" && link.fragment !== null)).toBe(true);
   });
 
   it.each(locales)("%s: every anchor link names a heading that exists in its target", (locale) => {
