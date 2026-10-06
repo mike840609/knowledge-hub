@@ -162,8 +162,28 @@ describe("guideContent facts", () => {
   it("from-a-tool: says dot-prefixed names are skipped without a warning, in both locales", () => {
     expect(en("from-a-tool")).toMatch(/names start with a dot[\s\S]*skipped without a warning/);
     expect(en("from-a-tool")).toContain("node_modules");
-    expect(zh("from-a-tool")).toContain("以點開頭");
+    expect(zh("from-a-tool")).toMatch(/名稱以點開頭[\s\S]*會被略過，而且不會出現警告/);
     expect(zh("from-a-tool")).toContain("node_modules");
+  });
+
+  it("from-a-tool: skipped paths still count toward the limits, so move or exclude them first", () => {
+    expect(en("from-a-tool")).toMatch(/still listed in the upload and count toward the file-count and size limits/);
+    expect(en("from-a-tool")).toMatch(/move it out of the folder, or add it to the excluded paths/);
+    expect(zh("from-a-tool")).toMatch(/仍會列在上傳清單中，並在被捨棄之前計入檔案數與大小限制/);
+    expect(zh("from-a-tool")).toContain("排除路徑");
+  });
+
+  it("limits table: the always-skipped row matches the checklist", () => {
+    const row = (locale: "en" | "zh-TW") => {
+      const table = guideContent(locale, DEFAULT_IMPORT_LIMITS).sections.find((x) => x.id === "limits")!.body.find((b) => b.kind === "table");
+      if (table?.kind !== "table") throw new Error("no table");
+      return table.rows.find((r) => /Always skipped|一律略過/.test(r[0]))![1];
+    };
+    for (const locale of LOCALES) {
+      for (const name of [".git", ".obsidian", "node_modules", "Thumbs.db"]) expect(row(locale), `${locale} ${name}`).toContain(name);
+    }
+    expect(row("en")).toMatch(/start with a dot/);
+    expect(row("zh-TW")).toContain("以點開頭");
   });
 
   it("from-a-tool: the file-location item does not ban ../ in links", () => {
