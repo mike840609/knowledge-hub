@@ -2,6 +2,7 @@
 import { loadSourceImportScope } from "@/lib/source-import-scope";
 import { isExcludedImportPath, parseExcludedPaths } from "@/lib/import-exclusions";
 import { ImportExclusionsSettings } from "./import-exclusions-settings";
+import { SampleWikiImport } from "./sample-wiki-import";
 
 import { useRouter } from "next/navigation";
 import { requestWorkspaceAccessCheck, useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
@@ -61,7 +62,7 @@ function relativePathOf(file: File): string {
   return raw.replace(/\\/g, "/");
 }
 
-function selectFolder(files: FileList | File[]): FolderSelection {
+export function selectFolder(files: FileList | File[]): FolderSelection {
   const sorted = [...files].sort((left, right) => compareRawText(relativePathOf(left), relativePathOf(right)) || compareRawText(left.name, right.name));
   const first = sorted[0] ? relativePathOf(sorted[0]) : "";
   const rootName = first.includes("/") ? first.slice(0, first.indexOf("/")) : first || "import";
@@ -449,6 +450,7 @@ export function FolderImportForm({
       setRememberedRoot(null);
     }
   }, [rememberedSourceId]);
+  const [sampleLoading, setSampleLoading] = useState(false);
   const busy = state.kind === "PREPARING" || state.kind === "UPLOADING" || state.kind === "FINALIZING";
   const status = statusText(state);
 
@@ -462,7 +464,7 @@ export function FolderImportForm({
     setState({ kind: "ERROR", code, message: error instanceof Error ? error.message : "Importing the folder failed." });
   }
 
-  async function handleFiles(files: FileList | null): Promise<void> {
+  async function handleFiles(files: FileList | File[] | null, sourceNameOverride?: string): Promise<void> {
     if (!files || files.length === 0) return;
     const controller = new AbortController();
     activeImportRef.current?.abort();
@@ -472,7 +474,8 @@ export function FolderImportForm({
       const snapshotId = await runFolderImport({
         target,
         files,
-        sourceName,
+        // A sample's name comes from the manifest; state is stale in the same tick.
+        sourceName: sourceNameOverride ?? sourceName,
         onProgress: setState,
         assertAllowed,
         limits,
@@ -585,7 +588,7 @@ export function FolderImportForm({
       <ImportExclusionsSettings value={exclusionText} onChange={setExclusionText} disabled={busy || !scopeReady} />
       {scopeError ? <p role="alert" className="mt-2 text-body text-kh-danger">{scopeError} Reload this page to retry.</p> : null}
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        <Button type="button" variant="secondary" disabled={busy || !scopeReady} aria-describedby="import-folder-selection" onClick={handleChooseFolder}>Choose folder</Button>
+        <Button type="button" variant="secondary" disabled={busy || sampleLoading || !scopeReady} aria-describedby="import-folder-selection" onClick={handleChooseFolder}>Choose folder</Button>
         <p id="import-folder-selection" className="text-body text-kh-text-muted">{selection ? `${selection.name} · ${selection.count} files` : "No folder selected"}</p>
       </div>
       {rememberedSourceId && rememberedRoot ? (
@@ -609,6 +612,9 @@ export function FolderImportForm({
           event.target.value = "";
         }}
       />
+      {target.kind === "new" ? (
+        <SampleWikiImport disabled={busy} onLoadingChange={setSampleLoading} onLoaded={(sample) => handleFiles(sample.files, sample.sourceName)} />
+      ) : null}
       {status ? <p role="status" className="mt-3 text-body text-kh-text-muted">{status}</p> : null}
       {busy ? <Button variant="secondary" className="mt-3" onClick={() => activeImportRef.current?.abort()}>Cancel import</Button> : null}
       {state.kind === "ERROR" ? <details className="mt-2 text-caption text-kh-text-muted"><summary className="cursor-pointer rounded-md kh-focus-ring">Technical details</summary><code>{state.code}</code></details> : null}

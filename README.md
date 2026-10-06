@@ -105,7 +105,7 @@ npm run dev
 
 ### Your first workflow
 
-1. Choose **New note** to write a note, or **Import folder** to bring in a Markdown folder.
+1. Choose **New note** to write a note, or **Import folder** to bring in a Markdown folder. The import page links to an in-app guide, "Bring your wiki into Knowledge Hub", and offers **Try with a sample wiki**: it imports a ready-made folder (English or Traditional Chinese, from `public/sample-wiki/`) through the normal Preview → Apply flow.
 2. For imports, review additions, updates, archives, and diagnostics in Preview before applying changes.
 3. Use `[[Document title]]` in editable notes to link documents, then open Graph to explore relationships.
 4. Save a note before creating a read-only share link or downloading its Markdown.
@@ -150,6 +150,8 @@ npm run start
 The application provides a generic `company-sso` adapter contract. Deployers must implement a trusted [`CompanySsoSessionReader`](src/modules/identity/ports/company-sso-session-reader.ts) and register it through [`configureCompanySsoSessionReader`](src/server/composition.ts) before application services are created. Setting `KM_IDENTITY_PROVIDER=company-sso` alone does not provide an OAuth/OIDC login page or identity service.
 
 Configure separate database credentials, backups, HTTPS, and a trusted session integration. The `start` script binds to `127.0.0.1`, suitable for a reverse proxy on the same host. Container deployments need an appropriate bind address in their startup command. Do not expose example development credentials or test settings in production.
+
+The import page's "Try with a sample wiki" fetches static files from `/sample-wiki/*` (`manifest.json` and the Markdown files), so a reverse proxy or SSO allow-list must serve that path to signed-in users. The URLs are absolute, so deploying under a Next.js `basePath` is not supported.
 
 Before upgrading an existing database, read the [workspace governance cutover guide](docs/operations/phase3-workspace-governance-cutover.md); some migrations enforce data readiness gates. Follow the [document link index rollout guide](docs/operations/document-link-index-rollout.md) to backfill or repair links with `npm run db:reindex-document-links`. See [Team workspace availability](docs/operations/team-workspaces-availability.md) for feature flag operations.
 
@@ -222,9 +224,11 @@ The test runner manages its own mode and required servers rather than inheriting
 
 ### Next.js patch
 
-The `npm ci` postinstall step uses `patch-package` to apply [`patches/next+15.5.25.patch`](patches/next+15.5.25.patch). It fixes lost render pings in Next.js's bundled React during page navigation. Keep install scripts enabled; if you installed with `--ignore-scripts`, run `npx patch-package` afterward.
+The `npm ci` postinstall step uses `patch-package` to apply [`patches/next+15.5.25.patch`](patches/next+15.5.25.patch). It fixes two bugs in Next.js's bundled React (`19.2.0-canary-0bdb9206-20250818`). The first is lost render pings during page navigation. The second makes the page crash with "Application error" (React #310, "Rendered more hooks than during the previous render", thrown from Next's `Router`) when a redirect or other error lands during render while another navigation is still loading. An example is clicking a document while "Browse documents" is still redirecting. Without the fix, React's error recovery commits the Router half-rendered; the patch adds the one condition from [facebook/react#36911](https://github.com/facebook/react/pull/36911) to the four `react-dom` client and profiling builds. Keep install scripts enabled; if you installed with `--ignore-scripts`, run `npx patch-package` afterward.
 
-When upgrading Next.js, check whether the patch is still required. After updating or removing it, clear `.next/cache` before rebuilding. Related test: [`vendored-react-ping-fix.test.ts`](tests/unit/vendored-react-ping-fix.test.ts).
+The second fix was checked against the upstream diff of #36911, and [vercel/next.js#95368](https://github.com/vercel/next.js/pull/95368) brings it into Next canary (React `ec0fca31-20260701`). The issues those PRs reference (vercel/next.js#63121 and #78396, facebook/react#33580) were read only as summaries and were not reproduced here. The `experimental` React channel under `next/dist/compiled/react-dom-experimental` is unpatched: it is only loaded when experimental React features are enabled in `next.config.ts`, which this project does not do.
+
+When upgrading Next.js, check whether the patch is still required: [`vendored-react-ping-fix.test.ts`](tests/unit/vendored-react-ping-fix.test.ts) checks the bundled source for both fixes, and passes without the patch once Next bundles a React that already has them. [`router-redirect-during-navigation.spec.ts`](tests/e2e/router-redirect-during-navigation.spec.ts) reproduces the crash in the browser; evidence is in the [verification record](docs/superpowers/verification/2026-10-06-react-310-redirect-recovery-verification.md). After updating or removing the patch, clear `.next/cache` before rebuilding.
 
 ## Troubleshooting
 
@@ -266,6 +270,7 @@ These documents define the core contracts and their implementation plans. Later 
 | Personal daily use | [Spec](docs/superpowers/specs/2026-09-29-personal-daily-driver-design.md) | [Plan](docs/superpowers/plans/2026-09-29-personal-daily-driver.md) | Wikilink preservation, completion, code blocks and organization. |
 | Personal workspace rollout | [Spec](docs/superpowers/specs/2026-09-30-personal-workspace-design.md) | [Plan](docs/superpowers/plans/2026-09-30-personal-workspace.md) | Account drafts, favorites, revision restoration and export. |
 | Discovery and Copy for Agent | [Spec](docs/superpowers/specs/2026-10-04-mvp-discovery-agent-design.md) | [Plan](docs/superpowers/plans/2026-10-04-mvp-discovery-agent.md) | Folder scope, filtered search and reviewed Markdown bundles. |
+| Sample wiki and import guide | [Spec](docs/superpowers/specs/2026-10-06-sample-wiki-import-guide-design.md) | [Plan](docs/superpowers/plans/2026-10-06-sample-wiki-import-guide.md) | Bundled bilingual sample wiki and the in-app import guide with live limits. |
 
 Also consult the [phase roadmap](docs/superpowers/roadmaps/2026-09-10-knowledge-hub-phase-roadmap.md), [action model](docs/superpowers/specs/2026-09-21-action-model-spec.md), [keyboard shortcuts](docs/superpowers/specs/2026-09-24-keyboard-shortcuts-design.md), [row keyboard actions](docs/superpowers/specs/2026-10-02-row-keyboard-actions-design.md), and the undated [frontend design language](docs/superpowers/specs/frontend-design-language.md), which is updated in place.
 
