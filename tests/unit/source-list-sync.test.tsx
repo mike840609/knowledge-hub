@@ -8,7 +8,7 @@ import type { SourceListItemModel } from "@/server/source-read";
 
 const state = vi.hoisted(() => ({ canImport: true, confirmed: true, supported: true, remembered: true, handleAvailable: true, push: vi.fn(), run: vi.fn<typeof runFolderImport>(async () => "preview-1") }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: state.push }) }));
-vi.mock("@/components/shell/use-workspace-authorization", () => ({ useWorkspaceAuthorization: () => ({ confirmed: state.confirmed, access: { actions: { canImport: state.canImport } } }) }));
+vi.mock("@/components/shell/use-workspace-authorization", () => ({ useWorkspaceAuthorization: () => ({ confirmed: state.confirmed, access: { workspace: { id: "ws", lifecycleState: "ACTIVE" }, actions: { canImport: state.canImport } } }) }));
 vi.mock("@/components/imports/folder-handle-store", () => ({
   isDirectoryPickerSupported: () => state.supported,
   getRememberedFolderMeta: () => state.remembered ? {rootName:"notes",lastSyncAt:"2026-10-02T00:00:00Z"} : null,
