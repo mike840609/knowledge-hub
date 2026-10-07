@@ -111,35 +111,58 @@ describe("Phase 2 Markdown adapter frontmatter root", () => {
     expect(result.resolvedTitle).toBe("Heading");
   });
 
-  it("rejects a non-object frontmatter root", () => {
-    for (const yamlText of ["42", "- a\n- b", '"text"', "text", "true", "[1, 2]"]) {
-      expect(() => parse("docs/a.md", `---\n${yamlText}\n---\n# Heading\n`)).toThrowError(
-        expect.objectContaining({ code: "FRONTMATTER_NOT_OBJECT" }),
-      );
+  // Spec §7.2 (amended 2026-10-07): unreadable frontmatter is a warning. The note imports
+  // with its body and no properties, so one mistyped file cannot block a whole folder.
+  const parseForSync = (text: string) =>
+    parseGenericMarkdownText({ sourcePath: "docs/a.md", text, sourceFileHash: createHash("sha256").update(text).digest("hex"), unreadableFrontmatter: "warn" });
+
+  function expectUnreadable(text: string, code: "INVALID_FRONTMATTER" | "FRONTMATTER_NOT_OBJECT", body: string) {
+    const result = parseForSync(text);
+    expect(result.metadata).toEqual({});
+    expect(result.markdown).toBe(body);
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({ code, severity: "WARNING", sourcePath: "docs/a.md" }));
+    expect(result.diagnostics.some((diagnostic) => diagnostic.severity === "BLOCKING")).toBe(false);
+    return result;
+  }
+
+  it("imports a note whose frontmatter root is not an object, with a warning", () => {
+    for (const yamlText of ["42", "- a\n- b", '"text"', "text", "true", "[1, 2]", "null", "~"]) {
+      expectUnreadable(`---\n${yamlText}\n---\n# Heading\n`, "FRONTMATTER_NOT_OBJECT", "# Heading\n");
     }
   });
 
-  // An explicit null literal stays blocking: the author wrote a value, so this
-  // is a malformed root rather than the "no properties" case an empty fence means.
-  it("rejects an explicit null frontmatter root", () => {
-    for (const yamlText of ["null", "~", "Null", "NULL"]) {
-      expect(() => parse("docs/a.md", `---\n${yamlText}\n---\n# Heading\n`)).toThrowError(
-        expect.objectContaining({ code: "FRONTMATTER_NOT_OBJECT" }),
-      );
-    }
-  });
-
-  it("still rejects malformed frontmatter YAML", () => {
+  it("imports a note with malformed frontmatter YAML, with a warning and the reason", () => {
     for (const yamlText of ["a: [1, 2", "a:\n\tb: 1", "a: 1\na: 2"]) {
-      expect(() => parse("docs/a.md", `---\n${yamlText}\n---\n# Heading\n`)).toThrowError(
-        expect.objectContaining({ code: "INVALID_FRONTMATTER" }),
-      );
+      expectUnreadable(`---\n${yamlText}\n---\n# Heading\n`, "INVALID_FRONTMATTER", "# Heading\n");
     }
   });
 
-  it("still rejects an unclosed frontmatter fence", () => {
-    expect(() => parse("docs/a.md", "---\ntitle: A\n# Heading\n")).toThrowError(
-      expect.objectContaining({ code: "INVALID_FRONTMATTER" }),
+  it("imports the frontmatter mistakes real vaults make, titled by their H1", () => {
+    const cases = [
+      ["unquoted colon in a title", "title: Git: tips and tricks"],
+      ["tab-indented list", "tags:\n\t- a\n\t- b"],
+      ["a key written twice", "tags: [a]\ntags: [b]"],
+    ];
+    for (const [name, yamlText] of cases) {
+      const result = expectUnreadable(`---\n${yamlText}\n---\n# Real title\nBody\n`, "INVALID_FRONTMATTER", "# Real title\nBody\n");
+      expect(result.resolvedTitle, name).toBe("Real title");
+      expect(result.diagnostics.find((diagnostic) => diagnostic.code === "INVALID_FRONTMATTER")?.message, name).toMatch(/imported without its properties/);
+    }
+  });
+
+  it("treats a file whose opening fence never closes as body, with a warning", () => {
+    expectUnreadable("---\ntitle: A\n# Heading\n", "INVALID_FRONTMATTER", "---\ntitle: A\n# Heading\n");
+  });
+
+  it("still rejects unreadable frontmatter by default, as a single uploaded file needs", () => {
+    for (const text of ["---\ntitle: Git: tips\n---\n# H\n", "---\n- a\n---\n# H\n", "---\ntitle: A\n# H\n"]) {
+      expect(() => parse("docs/a.md", text)).toThrowError(expect.objectContaining({ code: expect.stringMatching(/^(INVALID_FRONTMATTER|FRONTMATTER_NOT_OBJECT)$/) }));
+    }
+  });
+
+  it("still blocks a knowledge_id it cannot use, because identity decides which document this is", () => {
+    expect(() => parseForSync("---\nknowledge_id: 123\n---\n# Heading\n")).toThrowError(
+      expect.objectContaining({ code: "INVALID_KNOWLEDGE_ID" }),
     );
   });
 });

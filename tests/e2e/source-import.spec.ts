@@ -322,11 +322,11 @@ test("syncs v1 to v2 with grouped moved, updated, archived, and added sections",
   await expect(page.getByRole("heading",{name:"Folder synced"})).toBeVisible();
 });
 
-test("shows the malformed frontmatter blocker and disables apply", async ({ page, request }) => {
+test("shows a blocker and disables apply", async ({ page, request }) => {
   const bad = await importFolder(request, {
     workspaceId: QUERY_MASTER_WORKSPACE_ID,
-    sourceName: "E2E Malformed Import",
-    fixture: "malformed-frontmatter",
+    sourceName: "E2E Blocked Import",
+    fixture: "invalid-knowledge-id",
   });
   expect(bad.preview.hasBlockers).toBe(true);
 
@@ -334,10 +334,10 @@ test("shows the malformed frontmatter blocker and disables apply", async ({ page
     `/w/${QUERY_MASTER_WORKSPACE_ID}/sources/imports/${bad.snapshotId}`,
   );
   await expect(page.getByRole("heading", { name: "Import preview" })).toBeVisible();
-  const blocker = page.locator("details").filter({ has: page.getByText("INVALID_FRONTMATTER", { exact: true }) }).first();
-  await expect(blocker).toContainText("INVALID_FRONTMATTER");
+  const blocker = page.locator("details").filter({ has: page.getByText("INVALID_KNOWLEDGE_ID", { exact: true }) }).first();
+  await expect(blocker).toContainText("INVALID_KNOWLEDGE_ID");
   await blocker.locator("summary").click();
-  await expect(blocker.getByText("INVALID_FRONTMATTER", { exact: true })).toBeVisible();
+  await expect(blocker.getByText("INVALID_KNOWLEDGE_ID", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Apply changes" })).toBeDisabled();
   await expect(page.getByRole("button", { name: /force/i })).toHaveCount(0);
 
@@ -349,8 +349,23 @@ test("shows the malformed frontmatter blocker and disables apply", async ({ page
   await page.getByLabel("Filter changes").selectOption("warnings");
   const warningGroup = page.getByRole("region", { name: "Unchanged" });
   await expect(warningGroup.getByRole("button", { name: /Unchanged/ })).toHaveAttribute("aria-expanded", "true");
-  await warningGroup.locator("details").filter({ has: page.getByText("INVALID_FRONTMATTER", { exact: true }) }).locator("summary").click();
-  await expect(warningGroup.getByText("INVALID_FRONTMATTER")).toBeVisible();
+  await warningGroup.locator("details").filter({ has: page.getByText("INVALID_KNOWLEDGE_ID", { exact: true }) }).locator("summary").click();
+  await expect(warningGroup.getByText("INVALID_KNOWLEDGE_ID")).toBeVisible();
+});
+
+test("imports a note with malformed frontmatter with a warning, and Apply stays available", async ({ page, request }) => {
+  // Spec §7.2 (amended 2026-10-07): unreadable frontmatter is a warning, not a blocker.
+  const malformed = await importFolder(request, {
+    workspaceId: QUERY_MASTER_WORKSPACE_ID,
+    sourceName: "E2E Malformed Frontmatter",
+    fixture: "malformed-frontmatter",
+  });
+  expect(malformed.preview.hasBlockers).toBe(false);
+
+  await page.goto(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources/imports/${malformed.snapshotId}`);
+  await expect(page.getByRole("heading", { name: "Import preview" })).toBeVisible();
+  await expect(page.getByText(/imported without its properties/).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Apply changes" })).toBeEnabled();
 });
 
 test("stale preview loses to the second preview with no force apply", async ({ page, request }) => {
