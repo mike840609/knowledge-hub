@@ -603,6 +603,39 @@ function applyFolderNameRules(plan: FolderImportPlan, desiredFolders: string[]):
   }
 }
 
+/**
+ * A file renamed or moved *and* edited in one sync matches nothing by knowledge_id, path or fingerprint, so it
+ * arrives as an added document beside an archived one. Warn when the pair shares a file name
+ * or a title: the new document will not inherit the old one's share links or history.
+ * ponytail: name/title equality only; no content similarity.
+ */
+function flagPossibleRenames(plan: FolderImportPlan, incomingDocuments: ReadyImportDocument[], currentDocuments: CanonicalDocumentState[]): void {
+  if (plan.documents.archive.length === 0) return;
+  const currentById = new Map(currentDocuments.map((document) => [document.documentId, document]));
+  const archived = plan.documents.archive.map((entry) => currentById.get(entry.documentId)!);
+  const incomingByPath = new Map(incomingDocuments.map((document) => [document.sourcePath, document]));
+  for (const change of plan.preview) {
+    if (change.kind !== "DOCUMENT" || !change.labels.includes("ADDED")) continue;
+    // AMBIGUOUS_IDENTITY already explains why this file was not matched.
+    if (change.diagnostics.some((diagnostic) => diagnostic.code === "AMBIGUOUS_IDENTITY")) continue;
+    const incoming = incomingByPath.get(change.sourcePath);
+    if (!incoming || incoming.externalId !== null) continue;
+    const previous = archived.find((old) => basename(old.sourcePath) === basename(incoming.sourcePath))
+      ?? archived.find((old) => old.currentRevision.title === incoming.title);
+    if (!previous) continue;
+    const keep = previous.externalId
+      ? `add "knowledge_id: ${previous.externalId}" to its frontmatter`
+      : "rename or move it in one sync and edit it in the next";
+    change.diagnostics.push({
+      code: "POSSIBLE_RENAME",
+      severity: "WARNING",
+      sourcePath: change.sourcePath,
+      message: `This looks like "${previous.sourcePath}" renamed or moved and edited. It will be added as a new document and the old one archived; share links and history will not carry over. To keep them, ${keep}.`,
+      details: { previousPath: previous.sourcePath },
+    });
+  }
+}
+
 function summarize(plan: FolderImportPlan): void {
   const summary = emptySummary();
 
@@ -649,6 +682,7 @@ export function reconcileFolderImport(snapshot: ReadyImportContent, current: Can
   buildOrdering(plan, snapshot, desiredFolders, currentFoldersByPath, documentMatches);
   applyCrossTypePathRules(plan, snapshot, current, desiredFolders);
   applyFolderNameRules(plan, desiredFolders);
+  flagPossibleRenames(plan, snapshot.documents, current.documents);
   summarize(plan);
   return plan;
 }

@@ -794,3 +794,40 @@ describe("Phase 2 folder import reconciliation", () => {
     expect(plan.summary.blockers).toBeGreaterThan(0);
   });
 });
+
+describe("possible rename hint", () => {
+  const hints = (incoming: ReadyImportDocument[], current: CanonicalDocumentState[]) =>
+    reconcileFolderImport(snapshot(incoming), canonical({ documents: current })).preview
+      .flatMap((change) => change.diagnostics.filter((d) => d.code === "POSSIBLE_RENAME").map((d) => ({ path: change.sourcePath, ...d })));
+
+  it("warns, without blocking, when a file moved and edited arrives as new beside its archived self", () => {
+    const plan = reconcileFolderImport(
+      snapshot([incomingDocument("new/leave.md", "edited", { title: "Leave v2" })]),
+      canonical({ documents: [currentDocument("old/leave.md", "original", { currentRevision: { id: "r", title: "Leave", markdown: "x", metadata: {}, contentHash: "h" } })] }),
+    );
+    const added = plan.preview.find((change) => change.sourcePath === "new/leave.md")!;
+    expect(added.labels).toEqual(["ADDED"]);
+    expect(added.diagnostics).toEqual([expect.objectContaining({ code: "POSSIBLE_RENAME", severity: "WARNING", details: { previousPath: "old/leave.md" } })]);
+    expect(added.diagnostics[0].message).toContain("in one sync and edit it in the next");
+    expect(plan.summary).toMatchObject({ warnings: 1, blockers: 0 });
+  });
+
+  it("warns when a renamed and edited file keeps its title", () => {
+    expect(hints([incomingDocument("policy-2026.md", "edited")], [currentDocument("policy.md", "original")]))
+      .toEqual([expect.objectContaining({ path: "policy-2026.md", details: { previousPath: "policy.md" } })]);
+  });
+
+  it("names the old knowledge_id when the archived document has one", () => {
+    const [hint] = hints([incomingDocument("b.md", "edited")], [currentDocument("a.md", "original", { externalId: "kid-42" })]);
+    expect(hint.message).toContain('add "knowledge_id: kid-42"');
+  });
+
+  it("stays quiet when neither the file name nor the title matches", () => {
+    expect(hints([incomingDocument("b.md", "new", { title: "Other" })], [currentDocument("a.md", "old")])).toEqual([]);
+  });
+
+  it("stays quiet for a new file that carries its own knowledge_id, or when nothing is archived", () => {
+    expect(hints([incomingDocument("b.md", "new", { externalId: "fresh" })], [currentDocument("a.md", "old")])).toEqual([]);
+    expect(hints([incomingDocument("b.md", "new")], [])).toEqual([]);
+  });
+});
