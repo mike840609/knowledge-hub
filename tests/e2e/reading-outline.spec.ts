@@ -20,7 +20,7 @@ const filler = (count: number) =>
 async function createMySpaceDocument(page: Page, title: string, body: string): Promise<{ workspaceId: string }> {
   const workspaces = await page.request.get("/api/workspaces");
   expect(workspaces.ok()).toBe(true);
-  const workspaceId = ((await workspaces.json()) as { id: string; type: string }[])
+  const workspaceId = ((await workspaces.json()) as { items: { id: string; type: string }[] }).items
     .find((workspace) => workspace.type === "PERSONAL")?.id;
   if (!workspaceId) throw new Error("Personal workspace not found");
   const created = await page.request.post(`/api/workspaces/${workspaceId}/documents`, {
