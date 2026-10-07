@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/shell/page-header";
 import { Timestamp } from "@/components/ui/timestamp";
 import { Status } from "@/components/ui/status";
 import { syncStatusKind, syncStatusLabel } from "@/components/sources/source-list-row";
+import { changeLabelText } from "@/lib/sync-wording";
 export function SyncRunDetailView({ detail }: { detail: SyncRunDetail }) {
   const { source, run, changes } = detail,
     base = `/w/${source.workspaceId}`;
@@ -55,7 +56,7 @@ export function SyncRunDetailView({ detail }: { detail: SyncRunDetail }) {
             <li key={c.id} className="py-3">
               <div className="flex gap-3 text-body">
                 <span className="text-caption text-kh-text-muted">
-                  {c.labels.join(" · ")}
+                  {changeLabelText(c.labels)}
                 </span>
                 {c.href ? (
                   <Link className="text-kh-link" href={c.href}>

@@ -1,4 +1,5 @@
 import { sortSourcesByName } from "@/lib/knowledge-navigation";
+import { UNKNOWN_RUN_ACTOR } from "@/lib/sync-wording";
 import type { SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import type { SyncRun } from "@/modules/sources/domain/sync-run";
 import type { WorkspaceActions } from "@/server/workspace-admin";
@@ -64,7 +65,7 @@ export async function getSourceListModel(workspaceId: string): Promise<SourceLis
   return { workspace, actions, items };
 }
 
-export const UNKNOWN_RUN_ACTOR = "an unknown user";
+export { UNKNOWN_RUN_ACTOR };
 
 /** One lookup per distinct actor: the caller is "you", anyone else their name, a missing user a neutral fallback. */
 export async function resolveRunActors(

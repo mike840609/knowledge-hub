@@ -10,3 +10,10 @@ it("shows the persisted document summary before the reading actions",()=>{
  expect(html).toContain(">Synced<");expect(html).not.toContain("APPLIED");
  expect(html).toContain("Document details were not recorded");expect(html).not.toMatch(/[Aa]rticle/);
 });
+it("names each recorded change in words, never as its stored label codes",()=>{
+ const change={id:"c1",labels:["MOVED","ADDED"],title:"Leave policy",href:"/w/w/knowledge/s/d",previousPath:"old/leave.md",sourcePath:"hr/leave.md",diagnostics:[],diff:null,revisionUnavailable:false};
+ const detail={source:{id:"s",workspaceId:"w",name:"Folder"},run:{id:"r",status:"APPLIED",resultVersion:2,basedOnVersion:1,summary:{documents:{added:1},warnings:0},startedAt:new Date("2026-10-03"),completedAt:new Date("2026-10-03")},workspaceType:"PERSONAL",hasRecordedChanges:true,changes:[change],nextOrdinal:null} as unknown as SyncRunDetail;
+ const html=renderToStaticMarkup(<SyncRunDetailView detail={detail}/>);
+ expect(html).toContain("Added + Moved");
+ for (const code of ["ADDED","MOVED"]) expect(html).not.toContain(code);
+});

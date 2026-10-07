@@ -4,6 +4,7 @@ import type { SyncRun } from "@/modules/sources/domain/sync-run";
 import { Status } from "@/components/ui/status";
 import { syncStatusKind, syncStatusLabel } from "@/components/sources/source-list-row";
 import { Timestamp } from "@/components/ui/timestamp";
+import { UNKNOWN_RUN_ACTOR } from "@/lib/sync-wording";
 
 function describeRun(run: SyncRun): string {
   const result = run.resultVersion === null ? "no new version" : `version ${run.resultVersion}`;
@@ -36,7 +37,7 @@ export function ImportHistory({ runs, workspaceId, actors = {} }: { runs: SyncRu
                 </>
               ) : null}
               {" · started by "}
-              {actors[run.triggeredBy] ?? "an unknown user"}
+              {actors[run.triggeredBy] ?? UNKNOWN_RUN_ACTOR}
             </p>
           </div>
         </li>
