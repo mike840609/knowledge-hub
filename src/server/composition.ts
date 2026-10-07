@@ -24,6 +24,7 @@ import { DocumentShareService } from "@/modules/knowledge/application/document-s
 import { RandomShareTokenIssuer } from "@/infrastructure/security/random-share-token-issuer";
 import { AbandonFolderImportService } from "@/modules/sources/application/abandon-folder-import";
 import { ApplyFolderImportService } from "@/modules/sources/application/apply-folder-import";
+import { ImportMemoryBudget } from "@/modules/sources/application/import-memory-budget";
 import { CreateFolderImportService } from "@/modules/sources/application/create-folder-import";
 import { CleanupFolderImportsService } from "@/modules/sources/application/cleanup-folder-imports";
 import { FinalizeFolderImportService } from "@/modules/sources/application/finalize-folder-import";
@@ -117,14 +118,17 @@ export function buildApplicationServices(databasePool: Pool, options: {
     return trusted;
   };
   const importConfig = importRuntimeConfig();
+  // One budget for both phases, sized to one import at the Markdown limit (import-memory-budget.ts).
+  // ponytail: `next dev` HMR builds a fresh one per reload; harmless outside dev.
+  const memoryBudget = new ImportMemoryBudget(importConfig.limits.maxMarkdownTotalBytes);
   const imports = {
     abandon: new AbandonFolderImportService(unitOfWork),
     create: new CreateFolderImportService(unitOfWork, { limits: importConfig.limits, buildingTtlMs: importConfig.buildingTtlMs }),
     upload: new UploadFolderImportEntriesService(unitOfWork, { limits: importConfig.limits }),
-    finalize: new FinalizeFolderImportService(unitOfWork, { limits: importConfig.limits, readyTtlMs: importConfig.readyTtlMs }),
+    finalize: new FinalizeFolderImportService(unitOfWork, { limits: importConfig.limits, readyTtlMs: importConfig.readyTtlMs, memoryBudget }),
     preview: new GetFolderImportPreviewService(unitOfWork),
     diff: new GetFolderImportDiffService(unitOfWork),
-    apply: new ApplyFolderImportService(unitOfWork),
+    apply: new ApplyFolderImportService(unitOfWork, { memoryBudget }),
     cleanup: new CleanupFolderImportsService(unitOfWork),
   };
   return {
