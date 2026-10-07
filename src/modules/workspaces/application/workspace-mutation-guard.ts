@@ -16,10 +16,14 @@ export type WorkspaceMutationRepositories = {
 };
 
 /**
- * Spec §14.2 parent-Workspace serialization for content/import writers.
- * Locks the Workspace row FOR UPDATE, revalidates lifecycle on the locked
- * row (archive wins: no post-archive commit), then revalidates membership
- * on the same connection. Callers must acquire Snapshot/Source locks
+ * Spec §14.2 parent-Workspace serialization for content/import writers, as
+ * amended by the workspace shared write lock design: writers hold the
+ * Workspace row LOCK IN SHARE MODE, so they do not queue behind one another
+ * (a folder Apply holds it for its whole transaction), while archive,
+ * restore, rename and membership changes take FOR UPDATE and still wait for
+ * every writer. Pass `exclusive` for a writer whose check-then-insert has no
+ * unique key behind it. Lifecycle is revalidated on the locked row (archive
+ * wins: no post-archive commit), then membership on the same connection. Callers must acquire Snapshot/Source locks
  * first so the global order stays Snapshot → Source → Workspace → deeper.
  *
  * The membership gate deliberately keeps the Phase 1 error contract
@@ -36,8 +40,12 @@ export async function lockWorkspaceForMutation(
   caller: CallerContext,
   workspaceId: string,
   operation: TeamMutationOperation,
+  options: { exclusive?: boolean } = {},
 ): Promise<Workspace> {
-  const locked = await repositories.workspaces.lockById(workspaceId);
+  const writer = operation === "content-write" || operation === "source-import";
+  const locked = writer && !options.exclusive
+    ? await repositories.workspaces.lockSharedById(workspaceId)
+    : await repositories.workspaces.lockById(workspaceId);
   if (!locked) throw new WorkspaceNotFoundError();
   assertTeamMutationAllowed(locked, operation);
   await repositories.workspaceAccess.requireMembership(caller, workspaceId);

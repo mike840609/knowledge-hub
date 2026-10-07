@@ -25,7 +25,9 @@ export async function ensureDefaultHubSource(
 ): Promise<string> {
   return unitOfWork.run(async (repositories) => {
     await repositories.users.upsertIdentity(caller.identity);
-    await lockWorkspaceForMutation(repositories, caller, workspaceId, "content-write");
+    // Exclusive: no unique key backs this check-then-insert, so two first requests
+    // under a shared lock could each create a Hub Source (shared write lock design).
+    await lockWorkspaceForMutation(repositories, caller, workspaceId, "content-write", { exclusive: true });
     const existing = (await repositories.sourcePolicy.listByWorkspaceId(workspaceId))
       .find((source) => source.sourceType === "HUB" && source.status === "ACTIVE" && source.name === DEFAULT_HUB_SOURCE_NAME);
     if (existing) return existing.id;

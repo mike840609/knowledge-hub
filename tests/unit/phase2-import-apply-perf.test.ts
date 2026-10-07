@@ -84,11 +84,13 @@ function stubRepositories(source: KnowledgeSource) {
       },
     },
     workspaces: {
-      lockById: async (id: string) => {
+      // Apply is a writer: it takes the Workspace row shared, never exclusive.
+      lockSharedById: async (id: string) => {
         counts.workspaceLockById += 1;
         if (id !== source.workspaceId) return null;
         return { id, name: "ws", workspaceType: "TEAM", lifecycleState: "ACTIVE" };
       },
+      lockById: async () => { throw new Error("Apply must not lock the Workspace row exclusively"); },
     },
     workspaceAccess: {
       requireMembership: async () => undefined,

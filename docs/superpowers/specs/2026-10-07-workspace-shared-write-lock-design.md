@@ -1,7 +1,7 @@
 # Workspace writes take a shared lock
 
-Status: **proposed, awaiting confirmation.** Amends the Phase 3 canonical lock protocol
-(`2026-09-14-phase-3-identity-workspace-governance-design.md` §14.2). Nothing is implemented.
+Status: **implemented** (2026-10-07). Amends the Phase 3 canonical lock protocol
+(`2026-09-14-phase-3-identity-workspace-governance-design.md` §14.2), which now points here.
 
 ## Problem
 
@@ -109,3 +109,21 @@ Behavioural, against real MariaDB (concurrency tests already cover §14.2 in Pha
 6. No writer path locks the Workspace row twice.
 7. The measurement above, re-run: a save during a 6,000-note Apply succeeds well under
    the lock wait.
+
+## Verification results
+
+- `tests/integration/workspace-shared-write-lock.test.ts`: a note in another Source commits
+  while an import holds its Source and the Workspace (item 1); a write to the same Source
+  still waits (item 5); archive cannot proceed while a write is in flight and writes are
+  refused once archived (item 2); two racing `ensure-default-hub-source` calls create one
+  Hub Source, made deterministic by pausing each after its existence check (item 4).
+- The existing Phase 3 suites cover items 2 and 3 for every writer path (post-archive
+  commits, membership and group-grant revocation re-read after waiting); the revocation
+  cases now observe the writer at `lockSharedById`.
+- `tests/unit/workspace-lock-modes.test.ts` (item 6): the exclusive `lockById` appears only
+  in governance services and the guard's exclusive branch, and `{ exclusive: true }` only in
+  `ensure-default-hub-source`.
+- Mutation-checked: making writers exclusive again fails item 1; making
+  `ensure-default-hub-source` shared fails item 4 (and the existing Phase 5 test).
+- Item 7, re-measured: during a 45-second Apply of 6,000 notes, a note saved in another
+  Source committed in 0.02 s (before: waited 50 s and failed).

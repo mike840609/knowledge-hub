@@ -9,6 +9,12 @@ export interface WorkspaceRepository {
    * lifecycle/capability on the locked row.
    */
   lockById(workspaceId: string): Promise<Workspace | null>;
+  /**
+   * The same row LOCK IN SHARE MODE (workspace shared write lock design).
+   * Content and import writers hold it so they do not queue behind one
+   * another, while governance's FOR UPDATE still waits for every writer.
+   */
+  lockSharedById(workspaceId: string): Promise<Workspace | null>;
   insert(workspace: WorkspaceInsert): Promise<void>;
   /**
    * The caller's My Space by owner (spec §4.1). Requires migration 008;

@@ -210,7 +210,8 @@ async function lockOwnedScope(repositories: KnowledgeRepositories, caller: Calle
   if (!document) throw new DocumentNotFoundError();
   const source = await repositories.sourcePolicy.lockById(document.sourceId);
   if (!source) throw new DocumentNotFoundError();
-  const workspace = await repositories.workspaces.lockById(source.workspaceId);
+  // Shared, like every writer: the Source lock above already orders writes to its documents.
+  const workspace = await repositories.workspaces.lockSharedById(source.workspaceId);
   if (!workspace) throw new DocumentNotFoundError();
   await repositories.workspaceAccess.requireMembership(caller, workspace.id);
   return { document, source, workspace };
