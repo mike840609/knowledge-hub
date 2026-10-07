@@ -131,6 +131,7 @@ export function SyncNowButton({ workspaceId, sourceId, sourceName, limits, compa
       {status ? (
         <span role="status" className={compact ? "col-span-2 row-start-2 pb-2 text-caption text-kh-text-muted" : "text-caption text-kh-text-muted"}>
           {status}
+          {failed && !busy ? <a href={`/w/${workspaceId}/help#troubleshooting`} className="ml-2 rounded-md text-kh-link hover:underline kh-focus-ring">Sync troubleshooting</a> : null}
           {needsReselect ? (
             <>
               {" "}

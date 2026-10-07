@@ -13,6 +13,16 @@ The current version is **0.1.0 and under active development**. A personal worksp
 
 [Quick start](#quick-start) · [Features](#features) · [Configuration](#configuration) · [Development and testing](#development-and-testing) · [Contributing](CONTRIBUTING.md) · [License](#license)
 
+## User guide
+
+Open the account menu in the bottom of the sidebar and select **Help & guides** (`/w/{workspaceId}/help`).
+The in-app English and Traditional Chinese manual covers first import, repeat sync,
+permissions and recovery, reading, statistics, sharing and export. Preview and sync
+errors link to the relevant sections. The existing **Import folder → Read the guide**
+continues to cover Markdown structure, `knowledge_id` and configured import limits.
+
+Maintain both languages in `src/components/help/user-guide-content.ts` when workflows change.
+
 ## Screenshots
 
 Captured on **October 5, 2026 (Asia/Taipei)** from a fresh production build of remote main [`3739efb1`](https://github.com/mike840609/knowledge-hub/commit/3739efb12906e1cb2e6abc1b5eea7727914a08ab), using a dedicated demo account and synthetic English notes. The responsive layout shown uses the browser's 767 × 951 viewport. See the [capture provenance](docs/images/README.md) for version and verification details.

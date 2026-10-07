@@ -187,6 +187,7 @@ export function ImportStickyFooter({
           {state.message}
         </p>
       ) : null}
+      {state.kind === "ERROR" || effectiveState === "STALE" || expired ? <p className="mx-auto mt-2 max-w-page text-body"><Link href={`/w/${workspaceId}/help#troubleshooting`} className="kh-focus-ring rounded-md text-kh-link hover:underline">Sync troubleshooting</Link></p> : null}
       {state.kind === "ERROR" ? <details className="mx-auto mt-2 max-w-page text-caption text-kh-text-muted"><summary className="cursor-pointer rounded-md kh-focus-ring">Technical details</summary><code>{state.code}</code></details> : null}
     </div>
   );
