@@ -123,7 +123,8 @@ describe("Phase 3 real request adapters with a trusted test session reader", () 
     expect(await pool.query("SELECT id FROM workspaces WHERE personal_owner_user_id = ?", [caller.identity.id])).toHaveLength(1);
     expect(await services.unitOfWork.run((r) => r.workspaceMemberships.find(personalWorkspace.id, caller.identity.id))).toMatchObject({ role: "OWNER", membershipSource: "SYSTEM_PERSONAL" });
     expect(await getSourceListModel(workspace.id)).toMatchObject({ workspace: { id: workspace.id } });
-    expect(await getSourceDetailModel(workspace.id, first.sourceId)).toMatchObject({ source: { id: first.sourceId } });
+    // Both runs were started by this caller: shown as "you", never as the identity id.
+    expect(await getSourceDetailModel(workspace.id, first.sourceId)).toMatchObject({ source: { id: first.sourceId }, runActors: { [caller.identity.id]: "you" } });
     const explorer = await getKnowledgeExplorerModel(workspace.id, first.sourceId);
     const document = explorer?.tree.find((item) => item.type === "document");
     if (!document) throw new Error("Imported document missing from the explorer");

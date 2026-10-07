@@ -55,7 +55,7 @@ export function SourceDetail({ model, showImportSuccess = false, limits }: { mod
 
       <section aria-labelledby="import-history-heading" className="flex flex-col gap-3">
         <h2 id="import-history-heading" className="text-body font-semibold text-kh-text">Import history</h2>
-        <ImportHistory runs={runs} workspaceId={workspace.id} />
+        <ImportHistory runs={runs} workspaceId={workspace.id} actors={model.runActors} />
       </section>
 
       <Link className="text-body text-kh-link" href={`/w/${workspace.id}/sources/${source.id}/health`}>Check source health</Link>

@@ -26,6 +26,8 @@ export type SourceDetailModel = {
   actions: WorkspaceActions;
   source: SourceView;
   runs: SyncRun[];
+  /** Who started each run, by identity id: "you", a name, or a neutral fallback — never the raw id. */
+  runActors: Record<string, string>;
 };
 
 /**
@@ -62,6 +64,21 @@ export async function getSourceListModel(workspaceId: string): Promise<SourceLis
   return { workspace, actions, items };
 }
 
+export const UNKNOWN_RUN_ACTOR = "an unknown user";
+
+/** One lookup per distinct actor: the caller is "you", anyone else their name, a missing user a neutral fallback. */
+export async function resolveRunActors(
+  runs: readonly Pick<SyncRun, "triggeredBy">[],
+  callerId: string,
+  findName: (identityId: string) => Promise<string | null>,
+): Promise<Record<string, string>> {
+  const actors: Record<string, string> = {};
+  for (const actorId of new Set(runs.map((run) => run.triggeredBy))) {
+    actors[actorId] = actorId === callerId ? "you" : (await findName(actorId)) ?? UNKNOWN_RUN_ACTOR;
+  }
+  return actors;
+}
+
 export async function getSourceDetailModel(
   workspaceId: string,
   sourceId: string,
@@ -78,10 +95,12 @@ export async function getSourceDetailModel(
     if (source.workspaceId !== workspaceId) return null;
     const sources = await services.queries.listSources(caller, workspaceId);
     if (!sources.some((candidate) => candidate.id === sourceId)) return null;
-    const runs = await services.unitOfWork.run(async (repositories) =>
-      repositories.syncRuns.listBySourceId(sourceId, SOURCE_RUN_DETAIL_LIMIT),
-    );
-    return { workspace, actions, source, runs };
+    const { runs, runActors } = await services.unitOfWork.run(async (repositories) => {
+      const runs = await repositories.syncRuns.listBySourceId(sourceId, SOURCE_RUN_DETAIL_LIMIT);
+      const runActors = await resolveRunActors(runs, caller.identity.id, async (id) => (await repositories.users.findById(id))?.name ?? null);
+      return { runs, runActors };
+    });
+    return { workspace, actions, source, runs, runActors };
   } catch {
     return null;
   }

@@ -10,7 +10,7 @@ function describeRun(run: SyncRun): string {
   return `from version ${run.basedOnVersion} → ${result}`;
 }
 
-export function ImportHistory({ runs, workspaceId }: { runs: SyncRun[]; workspaceId?: string }) {
+export function ImportHistory({ runs, workspaceId, actors = {} }: { runs: SyncRun[]; workspaceId?: string; actors?: Record<string, string> }) {
   if (runs.length === 0) {
     return <p className="text-body text-kh-text-muted">No sync runs recorded for this source yet.</p>;
   }
@@ -35,8 +35,8 @@ export function ImportHistory({ runs, workspaceId }: { runs: SyncRun[]; workspac
                   <Timestamp value={run.completedAt} />
                 </>
               ) : null}
-              {" · triggered by "}
-              {run.triggeredBy}
+              {" · started by "}
+              {actors[run.triggeredBy] ?? "an unknown user"}
             </p>
           </div>
         </li>
