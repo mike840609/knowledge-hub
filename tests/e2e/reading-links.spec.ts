@@ -1,7 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { phase3UnconfiguredOrigin } from "./fixtures/phase3-identities";
 import { openPalette } from "./fixtures/palette";
-import { showMarkdown } from "./composer-helpers";
 
 /**
  * Creates documents in the E2E user's own My Space. Specs still share one
@@ -14,19 +13,13 @@ const ROUND_TRIP = { timeout: 15_000 };
 
 /** Creates a document in the E2E user's own My Space and returns where it is. */
 async function createMySpaceDocument(page: Page, title: string, body: string): Promise<{ workspaceId: string; url: string }> {
-  await page.goto("/");
-  await page.waitForURL(/\/w\/[^/]+\/knowledge/);
-  const workspaceId = new URL(page.url()).pathname.split("/")[2];
-  await page.goto(`/w/${workspaceId}/knowledge/new`);
-  // The composer opens in rendered editing; exact Markdown is typed in its source view (composer-helpers).
-  const form = page.locator("main form").first();
-  await form.getByLabel("Title", { exact: true }).fill(title);
-  await (await showMarkdown(form)).fill(body);
-  await expect(page.getByRole("button", { name: "Create document" })).toBeEnabled(ROUND_TRIP);
-  await page.getByRole("button", { name: "Create document" }).click();
-  await expect(page.getByRole("region", { name: "Document content" })).toBeVisible(ROUND_TRIP);
-  await expect(page.locator("article").first()).toBeVisible(ROUND_TRIP);
-  return { workspaceId, url: page.url() };
+  const navigation = await page.request.get("/api/workspaces");
+  expect(navigation.ok()).toBe(true);
+  const workspaceId = (await navigation.json()).items.find((workspace: { type: string }) => workspace.type === "PERSONAL").id as string;
+  const response = await page.request.post(`/api/workspaces/${workspaceId}/documents`, { data: { title, markdown: body } });
+  expect(response.status()).toBe(201);
+  const created = await response.json() as { sourceId: string; documentId: string };
+  return { workspaceId, url: new URL(`/w/${workspaceId}/knowledge/${created.sourceId}/${created.documentId}`, response.url()).href };
 }
 
 test.describe("wikilinks and backlinks in My Space", () => {
@@ -40,6 +33,8 @@ test.describe("wikilinks and backlinks in My Space", () => {
       sourceTitle,
       `Intro line.\n\nSee [[${targetTitle}]] for the details, and [[No Such Note ${stamp}]] which does not exist yet.\n\nAlso [[${targetTitle}|the alias]].`,
     );
+
+    await page.goto(source.url);
 
     // The source document: one link that goes somewhere, one that is marked, one with an alias.
     const article = page.locator("article").first();
@@ -165,6 +160,7 @@ test.describe("wikilinks and backlinks in My Space", () => {
     const newTitle = `After Rename ${stamp}`;
     const renamed = await createMySpaceDocument(page, oldTitle, "content");
     const linker = await createMySpaceDocument(page, `Renamer ${stamp}`, `Points at [[${oldTitle}]].`);
+    await page.goto(linker.url);
     await expect(page.locator("article").first().getByRole("link", { name: oldTitle })).toBeVisible();
 
     await page.goto(`${renamed.url}/edit`);
@@ -189,7 +185,8 @@ test.describe("wikilinks and backlinks in My Space", () => {
     const stamp = Date.now();
     const targetTitle = `Anchored ${stamp}`;
     const target = await createMySpaceDocument(page, targetTitle, `Intro.\n\n## Setup\n\n${"filler paragraph\n\n".repeat(60)}## Local Setup\n\nHere.`);
-    await createMySpaceDocument(page, `Anchor Linker ${stamp}`, `Go to [[${targetTitle}#Local Setup|the setup]].`);
+    const linker = await createMySpaceDocument(page, `Anchor Linker ${stamp}`, `Go to [[${targetTitle}#Local Setup|the setup]].`);
+    await page.goto(linker.url);
     await page.locator("article").first().getByRole("link", { name: "the setup" }).click();
     await expect(page).toHaveURL(`${target.url}#local-setup`, ROUND_TRIP);
     await expect(page.locator("#local-setup")).toBeInViewport(ROUND_TRIP);
@@ -204,8 +201,9 @@ test.describe("a shared document does not resolve links", () => {
     const stamp = Date.now();
     const neighbour = `Neighbour ${stamp}`;
     await createMySpaceDocument(page, neighbour, "a neighbour that exists");
-    await createMySpaceDocument(page, `Shared With Links ${stamp}`, `Reads [[${neighbour}]] and [[Nothing ${stamp}]] and [rel](../rel.md).`);
+    const shared = await createMySpaceDocument(page, `Shared With Links ${stamp}`, `Reads [[${neighbour}]] and [[Nothing ${stamp}]] and [rel](../rel.md).`);
 
+    await page.goto(shared.url);
     await page.locator("main").getByRole("button", { name: "Share link…" }).click();
     const dialog = page.getByRole("dialog", { name: "Share link" });
     await dialog.getByRole("button", { name: "Create link" }).click();
