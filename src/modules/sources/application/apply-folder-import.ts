@@ -1,4 +1,6 @@
+import { createHash } from "node:crypto";
 import { safetyForPlan } from "./import-plan-safety";
+import { extractDocumentLinks, type ExtractedLink } from "@/modules/knowledge/domain/document-links";
 import type { ImportRiskAcknowledgment } from "../domain/import-safety";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { lockWorkspaceForMutation } from "@/modules/workspaces/application/workspace-mutation-guard";
@@ -62,8 +64,30 @@ export class ApplyFolderImportService {
     this.failurePoint = options.failurePoint;
   }
 
+  /**
+   * Extracting links parses every note in full, about half of Apply's time, and depends only on
+   * the Markdown. Doing it here, before the transaction that holds the Source and Workspace,
+   * shortens how long those stay locked. Keyed by the Markdown's own hash, so a body that
+   * differs inside the transaction (or a snapshot this caller cannot apply) just misses and
+   * is parsed there as before; the transaction still verifies every body.
+   */
+  private async linksBeforeLocking(caller: CallerContext, snapshotId: string): Promise<(markdown: string) => ExtractedLink[]> {
+    // Only a speed-up: if this read fails, the transaction parses in place and meets (and
+    // reports under Apply's own codes) whatever went wrong.
+    const bodies = await this.uow.run(async (repositories) => {
+      const snapshot = await repositories.importSnapshots.findById(snapshotId);
+      if (!snapshot || snapshot.createdBy !== caller.identity.id || snapshot.state !== "READY") return [];
+      const entries = await repositories.importSnapshotEntries.listBySnapshotId(snapshotId);
+      return entries.flatMap((entry) => (entry.entryType === "DOCUMENT" && entry.markdown !== null ? [entry.markdown] : []));
+    }).catch(() => [] as string[]);
+    const hash = (markdown: string) => createHash("sha256").update(markdown, "utf8").digest("base64");
+    const byHash = new Map(bodies.map((markdown) => [hash(markdown), extractDocumentLinks(markdown)]));
+    return (markdown) => byHash.get(hash(markdown)) ?? extractDocumentLinks(markdown);
+  }
+
   async apply(caller: CallerContext, snapshotId: string, riskAcknowledgment?: ImportRiskAcknowledgment): Promise<ApplyFolderImportResult> {
     const failedAttempt: { value: FailedAttempt | null } = { value: null };
+    const linksOf = await this.linksBeforeLocking(caller, snapshotId);
     try {
       return await this.uow.run(async (repositories) => {
         const snapshot = await repositories.importSnapshots.lockById(snapshotId);
@@ -129,7 +153,7 @@ export class ApplyFolderImportService {
           if(safety.highRisk && (riskAcknowledgment?.planHash!==snapshot.planHash || riskAcknowledgment?.sourceName!==source.name)) throw importError("IMPORT_RISK_CONFIRMATION_REQUIRED","Confirm the source name before applying these archive changes.",{safety});
           failedAttempt.value = { sourceId: source.id, basedOnVersion, summary: snapshot.summary, provenance, callerId: caller.identity.id };
           const before=await repositories.importCanonicalState.load(source.id);
-          await executeFolderImportPlan(repositories, caller, source, snapshot.plan, { stagingEntriesByUploadKey, failurePoint: this.failurePoint, now: this.now });
+          await executeFolderImportPlan(repositories, caller, source, snapshot.plan, { stagingEntriesByUploadKey, failurePoint: this.failurePoint, now: this.now, linksOf });
           if (this.failurePoint === "before-run") throw importError("TEST_IMPORT_FAILURE", "Injected import failure before SyncRun.");
           const resultVersion = await repositories.sources.guardAndAdvanceVersion(source.id, basedOnVersion, caller.identity.id, snapshot.importScope?.paths);
           if (resultVersion === null) throw importError("SOURCE_VERSION_CONFLICT", "Source version changed while applying the persisted plan.");
@@ -176,7 +200,7 @@ export class ApplyFolderImportService {
         };
         await repositories.sources.insert(source);
         const before={documents:[],folders:[],assets:[]};
-        await executeFolderImportPlan(repositories, caller, source, snapshot.plan, { stagingEntriesByUploadKey, failurePoint: this.failurePoint, now: this.now });
+        await executeFolderImportPlan(repositories, caller, source, snapshot.plan, { stagingEntriesByUploadKey, failurePoint: this.failurePoint, now: this.now, linksOf });
         if (this.failurePoint === "before-run") throw importError("TEST_IMPORT_FAILURE", "Injected import failure before SyncRun.");
         const resultVersion = await repositories.sources.guardAndAdvanceVersion(source.id, 0, caller.identity.id, snapshot.importScope?.paths);
         if (resultVersion !== 1) throw importError("IMPORT_VERSION_ADVANCE_FAILED", "Initial Source could not advance to sync version 1.");

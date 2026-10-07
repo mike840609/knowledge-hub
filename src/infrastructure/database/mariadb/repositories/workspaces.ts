@@ -43,6 +43,8 @@ function mapWorkspace(row: DbRow): Workspace {
   };
 }
 
+export const EXCLUSIVE_LOCK_WAIT_SECONDS = 5;
+
 export class MariaDbWorkspaceRepository implements WorkspaceRepository {
   constructor(private readonly connection: QueryConnection) {}
 
@@ -60,7 +62,10 @@ export class MariaDbWorkspaceRepository implements WorkspaceRepository {
   }
 
   async lockById(workspaceId: string): Promise<Workspace | null> {
-    const rows = await this.connection.query<DbRow[]>("SELECT * FROM workspaces WHERE id = ? FOR UPDATE", [workspaceId]);
+    // A pending FOR UPDATE queues every later shared request behind it, so behind a long
+    // Apply it would stall all writers for the full 50 s lock wait. Give up after 5 s as
+    // WORKSPACE_BUSY instead (2026-10-07 shared write lock design).
+    const rows = await this.connection.query<DbRow[]>(`SELECT * FROM workspaces WHERE id = ? FOR UPDATE WAIT ${EXCLUSIVE_LOCK_WAIT_SECONDS}`, [workspaceId]);
     return rows[0] ? mapWorkspace(rows[0]) : null;
   }
 

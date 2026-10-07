@@ -111,14 +111,33 @@ function unreadableFrontmatter(code: "INVALID_FRONTMATTER" | "FRONTMATTER_NOT_OB
   };
 }
 
-function firstH1(markdown: string): string | null {
-  const tree = fromMarkdown(markdown);
-  for (const node of tree.children) {
+function h1In(markdown: string): string | null {
+  for (const node of fromMarkdown(markdown).children) {
     if (node.type !== "heading" || node.depth !== 1) continue;
     const text = toString(node).trim();
     if (text) return text;
   }
   return null;
+}
+
+/** A line that can make an H1: an ATX "# " heading or a setext "===" underline. */
+// `$` under the m flag also ends a line before "\r", so CRLF notes match too.
+const H1_CANDIDATE = /^ {0,3}(?:#(?:[ \t]|$)|=+[ \t]*$)/m;
+
+/**
+ * Parsing a whole note just to find its H1 was most of finalize's time. CommonMark settles a
+ * line's block structure from the lines before it, so the text up to the first candidate line
+ * parses there exactly as the whole note does. A heading containing "[" may hold a reference
+ * link whose definition comes later, and a candidate that is no top-level H1 (in a code block,
+ * a list) leaves the answer further on; both read the whole note.
+ */
+function firstH1(markdown: string): string | null {
+  const candidate = H1_CANDIDATE.exec(markdown);
+  if (!candidate) return null;
+  const lineEnd = markdown.indexOf("\n", candidate.index);
+  if (lineEnd === -1) return h1In(markdown);
+  const early = h1In(markdown.slice(0, lineEnd));
+  return early !== null && !early.includes("[") ? early : h1In(markdown);
 }
 
 export function parseGenericMarkdownText(input: {

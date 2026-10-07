@@ -98,16 +98,19 @@ unique key would also work but needs a migration over existing data; not propose
 ## What this does not change
 
 - **Governance still waits behind a long Apply.** Archiving or changing members during a
-  20,000-note Apply waits up to the lock timeout and then fails as `WORKSPACE_BUSY`. That
-  is rare and now reads correctly. Shortening Apply (about 9 ms per note today, one
-  transaction) is separate work.
+  20,000-note Apply fails as `WORKSPACE_BUSY` (after 5 s, below) and can be retried once
+  the import ends. Shortening Apply is separate work; link extraction, about half of it,
+  now runs before the transaction.
 - **While governance waits, new writers wait behind it.** MariaDB queues a pending
   `FOR UPDATE` ahead of later `LOCK IN SHARE MODE` requests (reproduced in review), so an
   archive or member change issued during a long Apply stalls new writes in that Workspace
-  until it is granted or gives up (50 s). Rare, but worth a follow-up: governance could set
-  a short `innodb_lock_wait_timeout` (e.g. 5 s) so a pending request fails fast as
-  `WORKSPACE_BUSY` instead of holding writers back. Not done here; it changes how
-  governance behaves.
+  until it is granted or gives up. **Amended 2026-10-07:** the exclusive lock now waits at
+  most 5 s (`SELECT … FOR UPDATE WAIT 5`, one statement, no session state left on a pooled
+  connection), then fails as `WORKSPACE_BUSY`, so queued writers resume within seconds
+  instead of 50. Covers every `lockById` caller: governance and the default Hub create step.
+  `tests/integration/workspace-shared-write-lock.test.ts` holds an import open, starts an
+  archive and then a save, and requires the archive to fail as `WORKSPACE_BUSY` and the save
+  to commit (fails, by timeout, without the `WAIT`).
 - **Writes to the same Source still queue,** by design. For a folder Source that is
   correct; its documents are read-only outside sync.
 - **Finalize still parses under the lock.** With a shared lock that no longer blocks other
