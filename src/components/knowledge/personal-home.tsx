@@ -150,6 +150,7 @@ export function PersonalHome({ workspaceId, documents, drafts, updates={runs:[],
           </MenuRoot>
         </>}
       />
+      <p className="px-3 text-caption text-kh-text-muted">Need help? <Link className="kh-focus-ring rounded-md text-kh-link hover:underline" href={`/w/${workspaceId}/help#quick-start`}>Quick start guide</Link></p>
       {slots?.guidance}
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <Section title="Continue reading">

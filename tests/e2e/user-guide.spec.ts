@@ -1,0 +1,29 @@
+import {mkdir} from "node:fs/promises";
+import {test,expect} from "@playwright/test";
+
+test("Home help covers first import, repeat sync and recovery in both languages",async({page,request})=>{
+  const nav=await (await request.get("/api/workspaces")).json();
+  const ws=nav.items.find((w:{type:string})=>w.type==="PERSONAL").id;
+  await page.goto(`/w/${ws}/home`);
+  await page.getByRole("link",{name:"Quick start guide",exact:true}).click();
+  await expect(page.getByRole("heading",{name:"User guide",exact:true})).toBeVisible();
+  await expect(page).toHaveURL(/\/help#quick-start$/);
+  await expect(page.getByRole("heading",{name:"Daily sync: check, preview, apply",exact:true})).toBeAttached();
+  await page.getByRole("link",{name:"Troubleshooting",exact:true}).click();
+  await expect(page).toHaveURL(/#troubleshooting$/);
+  await expect(page.getByText(/Only an explicit Nothing was changed error/)).toBeVisible();
+  await page.getByRole("link",{name:"繁體中文",exact:true}).click();
+  await expect(page.getByRole("heading",{name:"使用者操作手冊",exact:true})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"遇到問題時",exact:true})).toBeAttached();
+  await expect(page.getByText(/規則在 Apply 成功後保存到來源/)).toBeAttached();
+  await page.getByRole("link",{name:"Markdown 格式、knowledge_id 與匯入限制",exact:true}).click();
+  await expect(page).toHaveURL(/\/sources\/import\/guide\?lang=zh-TW$/);
+  await page.getByRole("link",{name:"日常操作與疑難排解手冊",exact:true}).click();
+  await expect(page.getByRole("heading",{name:"使用者操作手冊",exact:true})).toBeVisible();
+  const output=process.env.KM_GUIDE_SCREENSHOTS;
+  if(output)await mkdir(output,{recursive:true});
+  await page.setViewportSize({width:1440,height:1100});if(output)await page.screenshot({path:`${output}/desktop-zh.png`,animations:"disabled"});
+  await page.setViewportSize({width:390,height:844});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  if(output)await page.screenshot({path:`${output}/mobile-zh.png`,animations:"disabled"});
+});

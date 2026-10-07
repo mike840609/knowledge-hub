@@ -99,6 +99,7 @@ export function ImportGuide({
           </section>
         ))}
       </div>
+      <p className="mt-6 text-body"><Link className={LINK} href={`/w/${workspaceId}/help?lang=${locale}`}>{locale==="zh-TW"?"日常操作與疑難排解手冊":"Daily operations and troubleshooting"}</Link></p>
       <p className="mt-6 text-body">
         <Link className="rounded-md font-medium text-kh-link underline-offset-4 hover:underline kh-focus-ring" href={`/w/${workspaceId}/sources/import#sample-wiki`}>
           Try the sample wiki
@@ -107,3 +108,5 @@ export function ImportGuide({
     </main>
   );
 }
+
+export {Block as GuideContentBlock};

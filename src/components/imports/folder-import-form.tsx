@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { loadSourceImportScope } from "@/lib/source-import-scope";
 import { isExcludedImportPath, isIgnoredImportPath, matchesExcludedRule, parseExcludedPaths } from "@/lib/import-exclusions";
 import { ImportExclusionsSettings } from "./import-exclusions-settings";
@@ -659,6 +660,7 @@ export function FolderImportForm({
       ) : null}
       {status ? <p role="status" className="mt-3 text-body text-kh-text-muted">{status}</p> : null}
       {busy ? <Button variant="secondary" className="mt-3" onClick={() => activeImportRef.current?.abort()}>Cancel import</Button> : null}
+      {state.kind === "ERROR" ? <p className="mt-2 text-body"><Link href={`/w/${target.workspaceId}/help#troubleshooting`} className="kh-focus-ring rounded-md text-kh-link hover:underline">Sync troubleshooting</Link></p> : null}
       {state.kind === "ERROR" ? <details className="mt-2 text-caption text-kh-text-muted"><summary className="cursor-pointer rounded-md kh-focus-ring">Technical details</summary><code>{state.code}</code></details> : null}
     </div>
   );

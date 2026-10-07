@@ -13,6 +13,17 @@ Knowledge Hub 是開源、可自行部署的知識管理應用。你可以直接
 
 [快速開始](#快速開始) · [功能](#功能) · [設定](#設定) · [開發與測試](#開發與測試) · [參與貢獻](CONTRIBUTING.zh-TW.md) · [授權](#授權)
 
+## 使用者操作手冊
+
+從 My Space 的 **Help** 或 Home 的 **Quick start guide** 開啟產品內手冊
+（`/w/{workspaceId}/help`），可切換英文與繁體中文。
+
+涵蓋首次匯入、日常同步、授權與錯誤恢復、閱讀、統計、分享與匯出。
+匯入預覽與同步錯誤提供對應章節入口；Markdown 格式、`knowledge_id` 與匯入限制
+沿用 **Import folder → Read the guide**，兩份指南互相連結。
+
+操作流程變更時，請同步維護 `src/components/help/user-guide-content.ts` 的兩種語言。
+
 ## 介面預覽
 
 以下截圖於 **2026 年 10 月 5 日（Asia/Taipei）**，從最新取得的 remote main [`3739efb1`](https://github.com/mike840609/knowledge-hub/commit/3739efb12906e1cb2e6abc1b5eea7727914a08ab) 的全新 production build 擷取，使用獨立展示帳號與合成英文筆記。畫面為瀏覽器 767 × 951 viewport 下的響應式配置。版本與驗證細節見[截圖來源紀錄](docs/images/README.md)。

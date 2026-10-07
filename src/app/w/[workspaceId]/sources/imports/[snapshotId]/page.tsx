@@ -36,6 +36,7 @@ export default async function WorkspaceSourceImportPreviewPage({
       <p className="mt-1 text-body text-kh-text-muted">
         Review the immutable staged diff. Warnings may proceed; blockers never apply.
       </p>
+      <p className="mt-2 text-body"><Link className="kh-focus-ring rounded-md text-kh-link hover:underline" href={`/w/${workspaceId}/help#sync`}>How to review and apply changes</Link></p>
       <div className="mt-4">
         <ImportPreview workspaceId={workspaceId} preview={preview} />
       </div>
