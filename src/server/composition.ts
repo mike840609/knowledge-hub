@@ -25,6 +25,7 @@ import { RandomShareTokenIssuer } from "@/infrastructure/security/random-share-t
 import { AbandonFolderImportService } from "@/modules/sources/application/abandon-folder-import";
 import { ApplyFolderImportService } from "@/modules/sources/application/apply-folder-import";
 import { CreateFolderImportService } from "@/modules/sources/application/create-folder-import";
+import { CleanupFolderImportsService } from "@/modules/sources/application/cleanup-folder-imports";
 import { FinalizeFolderImportService } from "@/modules/sources/application/finalize-folder-import";
 import { GetFolderImportPreviewService } from "@/modules/sources/application/get-folder-import-preview";
 import { UploadFolderImportEntriesService } from "@/modules/sources/application/upload-folder-import-entries";
@@ -124,6 +125,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
     preview: new GetFolderImportPreviewService(unitOfWork),
     diff: new GetFolderImportDiffService(unitOfWork),
     apply: new ApplyFolderImportService(unitOfWork),
+    cleanup: new CleanupFolderImportsService(unitOfWork),
   };
   return {
     personalProfile: new PersonalProfileService(unitOfWork),
