@@ -12,6 +12,7 @@ export interface TreeRepository {
   /** Current metadata only; never loads document bodies. */
   listDocumentsByWorkspace(workspaceId: string, includeArchived: boolean): Promise<DocumentSummary[]>;
   insert(node: KnowledgeTreeNode): Promise<void>;
+  insertMany(nodes: readonly KnowledgeTreeNode[]): Promise<void>;
   findById(id: string): Promise<KnowledgeTreeNode | null>;
   lockById(id: string): Promise<KnowledgeTreeNode | null>;
   listBySource(sourceId: string): Promise<TreeViewNode[]>;

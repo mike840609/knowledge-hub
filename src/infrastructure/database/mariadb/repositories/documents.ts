@@ -2,7 +2,7 @@ import { IntegrityViolationError } from "@/modules/knowledge/domain/errors";
 import type { KnowledgeDocument } from "@/modules/knowledge/domain/document";
 import type { DocumentRepository } from "@/modules/knowledge/ports/document-repository";
 import type { QueryConnection, DbRow } from "./shared";
-import { affectedRows, asDate, asRequiredString } from "./shared";
+import { affectedRows, asDate, asRequiredString, insertBatches } from "./shared";
 
 function mapDocument(row: DbRow): KnowledgeDocument {
   return {
@@ -25,6 +25,17 @@ export class MariaDbDocumentRepository implements DocumentRepository {
     );
   }
 
+  async insertDrafts(documents: readonly KnowledgeDocument[]): Promise<void> {
+    if (documents.some((document) => document.currentRevisionId !== null)) throw new IntegrityViolationError("A document draft must not have a current revision.");
+    for (const batch of insertBatches(documents)) {
+      await this.connection.query(
+        `INSERT INTO knowledge_documents (id, source_id, current_revision_id, status, created_by, updated_by, archived_by, archived_at, created_at, updated_at)
+         VALUES ${batch.map(() => "(?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)").join(", ")}`,
+        batch.flatMap((document) => [document.id, document.sourceId, document.status, document.createdBy, document.updatedBy, document.archivedBy, document.archivedAt, document.createdAt, document.updatedAt]),
+      );
+    }
+  }
+
   async findById(id: string): Promise<KnowledgeDocument | null> {
     const rows = await this.connection.query<DbRow[]>("SELECT * FROM knowledge_documents WHERE id = ?", [id]);
     return rows[0] ? mapDocument(rows[0]) : null;
@@ -41,6 +52,32 @@ export class MariaDbDocumentRepository implements DocumentRepository {
       [revisionId, updatedBy, documentId],
     );
     if (affectedRows(result) !== 1) throw new IntegrityViolationError("Document current revision could not be updated.");
+  }
+
+  async setFirstRevisions(documentIds: readonly string[], updatedBy: string): Promise<void> {
+    for (const batch of insertBatches(documentIds)) {
+      const result = await this.connection.query(
+        `UPDATE knowledge_documents d JOIN knowledge_revisions r ON r.document_id = d.id
+         SET d.current_revision_id = r.id, d.updated_by = ?, d.updated_at = CURRENT_TIMESTAMP(6)
+         WHERE d.id IN (${batch.map(() => "?").join(", ")}) AND d.current_revision_id IS NULL`,
+        [updatedBy, ...batch],
+      );
+      if (affectedRows(result) !== batch.length) throw new IntegrityViolationError("Document current revision could not be updated.");
+    }
+  }
+
+  async assertCompleteMany(documentIds: readonly string[]): Promise<void> {
+    for (const batch of insertBatches(documentIds)) {
+      const rows = await this.connection.query<DbRow[]>(
+        `SELECT COUNT(*) AS complete FROM knowledge_documents d
+         JOIN knowledge_revisions r ON r.id = d.current_revision_id AND r.document_id = d.id
+         WHERE d.id IN (${batch.map(() => "?").join(", ")})`,
+        [...batch],
+      );
+      if (Number(rows[0]?.complete) !== batch.length) {
+        throw new IntegrityViolationError("A committed Knowledge document must have a current revision belonging to itself.");
+      }
+    }
   }
 
   async assertComplete(documentId: string): Promise<void> {

@@ -1,6 +1,7 @@
 import type { SourceEntry, SourceEntryType } from "@/modules/sources/domain/source-entry";
 import type { EntryRepository } from "@/modules/sources/ports/entry-repository";
 import type { QueryConnection, DbRow } from "./shared";
+import { insertBatches, valueRows } from "./shared";
 import { asDate, asNumber, asRequiredString } from "./shared";
 
 function mapEntry(row: DbRow): SourceEntry {
@@ -58,6 +59,16 @@ export class MariaDbEntryRepository implements EntryRepository {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [entry.id, entry.sourceId, entry.externalId, entry.sourcePath, entry.entryType, entry.contentHash, entry.documentId, entry.treeNodeId, entry.status, entry.updatedBy, entry.archivedBy, entry.archivedAt, entry.firstSeenAt, entry.lastSeenAt],
     );
+  }
+
+  async insertMany(entries: readonly SourceEntry[]): Promise<void> {
+    for (const batch of insertBatches(entries)) {
+      await this.connection.query(
+        `INSERT INTO source_entries (id, source_id, external_id, source_path, entry_type, content_hash, document_id, tree_node_id, status, updated_by, archived_by, archived_at, first_seen_at, last_seen_at)
+         VALUES ${valueRows(batch.length, 14)}`,
+        batch.flatMap((entry) => [entry.id, entry.sourceId, entry.externalId, entry.sourcePath, entry.entryType, entry.contentHash, entry.documentId, entry.treeNodeId, entry.status, entry.updatedBy, entry.archivedBy, entry.archivedAt, entry.firstSeenAt, entry.lastSeenAt]),
+      );
+    }
   }
 
   async update(entry: SourceEntry): Promise<void> {

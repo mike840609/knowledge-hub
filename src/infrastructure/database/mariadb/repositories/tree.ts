@@ -1,7 +1,7 @@
 import type { KnowledgeTreeNode } from "@/modules/knowledge/domain/tree-node";
 import type { DocumentSummary, TreeRepository, TreeViewNode } from "@/modules/knowledge/ports/tree-repository";
 import type { QueryConnection, DbRow } from "./shared";
-import { affectedRows, asDate, asNumber, asRequiredString } from "./shared";
+import { affectedRows, asDate, asNumber, asRequiredString, insertBatches, valueRows } from "./shared";
 
 function mapNode(row: DbRow): KnowledgeTreeNode {
   return {
@@ -41,6 +41,16 @@ export class MariaDbTreeRepository implements TreeRepository {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [node.id, node.sourceId, node.parentId, node.nodeType, node.name, node.documentId, node.position, node.status, node.updatedBy, node.archivedBy, node.archivedAt],
     );
+  }
+
+  async insertMany(nodes: readonly KnowledgeTreeNode[]): Promise<void> {
+    for (const batch of insertBatches(nodes)) {
+      await this.connection.query(
+        `INSERT INTO knowledge_tree_nodes (id, source_id, parent_id, node_type, name, document_id, position, status, updated_by, archived_by, archived_at)
+         VALUES ${valueRows(batch.length, 11)}`,
+        batch.flatMap((node) => [node.id, node.sourceId, node.parentId, node.nodeType, node.name, node.documentId, node.position, node.status, node.updatedBy, node.archivedBy, node.archivedAt]),
+      );
+    }
   }
 
   async findById(id: string): Promise<KnowledgeTreeNode | null> {

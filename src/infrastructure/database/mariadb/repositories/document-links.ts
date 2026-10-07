@@ -11,7 +11,7 @@ import type {
   LinkTargetRow,
 } from "@/modules/knowledge/ports/document-link-repository";
 import type { DbRow, QueryConnection } from "./shared";
-import { asDate, asNumber, asRequiredString } from "./shared";
+import { asDate, asNumber, asRequiredString, insertBatches, valueRows } from "./shared";
 
 /** Rows per multi-row INSERT: 7 parameters each, well inside the packet and placeholder limits. */
 const INSERT_CHUNK = 500;
@@ -59,6 +59,37 @@ export class MariaDbDocumentLinkRepository implements DocumentLinkRepository {
       },
     }));
   }
+  async indexNewDocuments(documents: readonly { documentId: string; revisionId: string; links: readonly ExtractedLink[] }[]): Promise<void> {
+    // Markers first: every edge's foreign key points at its document's marker.
+    for (const batch of insertBatches(documents)) {
+      await this.connection.query(
+        `INSERT INTO knowledge_link_index (document_id, revision_id, extractor_version, link_count) VALUES ${valueRows(batch.length, 4)}`,
+        batch.flatMap((document) => [document.documentId, document.revisionId, LINK_EXTRACTOR_VERSION, document.links.length]),
+      );
+    }
+    // Edges are built a batch at a time: a large import has millions, and holding them all as
+    // one array cost hundreds of MiB at the import limit.
+    let parameters: unknown[] = [];
+    let rows = 0;
+    const flush = async () => {
+      if (rows === 0) return;
+      await this.connection.query(
+        `INSERT INTO knowledge_document_links (document_id, ordinal, link_kind, target_text, target_fragment, display_text, line_no) VALUES ${valueRows(rows, 7)}`,
+        parameters,
+      );
+      parameters = [];
+      rows = 0;
+    };
+    for (const document of documents) {
+      for (const link of document.links) {
+        parameters.push(document.documentId, link.ordinal, link.kind, link.target, link.fragment, link.display, link.line);
+        rows += 1;
+        if (rows === INSERT_CHUNK) await flush();
+      }
+    }
+    await flush();
+  }
+
   async replaceForDocument(input: {
     documentId: string;
     revisionId: string;

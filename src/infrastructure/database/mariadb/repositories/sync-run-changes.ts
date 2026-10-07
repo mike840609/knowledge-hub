@@ -5,7 +5,7 @@ import type {
 import type { SyncRunChangeRepository } from "@/modules/sources/ports/sync-run-change-repository";
 import type { SyncRun } from "@/modules/sources/domain/sync-run";
 import { mapSyncRun } from "./sync-runs";
-import { asNumber, type DbRow, type QueryConnection } from "./shared";
+import { asNumber, insertBatches, valueRows, type DbRow, type QueryConnection } from "./shared";
 function jsonArray<T>(value: unknown): T[] {
   const parsed = typeof value === "string" ? JSON.parse(value) : value;
   if (!Array.isArray(parsed))
@@ -98,28 +98,16 @@ export class MariaDbSyncRunChangeRepository implements SyncRunChangeRepository {
     return rows.map(mapChange);
   }
   async insertMany(changes: SyncRunChange[]): Promise<void> {
-    for (const c of changes)
+    const rows = changes.map((c) => ({ c, labels: JSON.stringify(c.labels), diagnostics: JSON.stringify(c.diagnostics) }));
+    for (const batch of insertBatches(rows, (row) => row.diagnostics.length + (row.c.title?.length ?? 0) * 3)) {
       await this.connection.query(
-        `INSERT INTO sync_run_changes (id,run_id,source_id,workspace_id,ordinal,kind,labels,source_path,previous_path,title,document_id,before_revision_id,after_revision_id,before_revision_no,after_revision_no,diagnostics) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [
-          c.id,
-          c.runId,
-          c.sourceId,
-          c.workspaceId,
-          c.ordinal,
-          c.kind,
-          JSON.stringify(c.labels),
-          c.sourcePath,
-          c.previousPath,
-          c.title,
-          c.documentId,
-          c.beforeRevisionId,
-          c.afterRevisionId,
-          c.beforeRevisionNo,
-          c.afterRevisionNo,
-          JSON.stringify(c.diagnostics),
-        ],
+        `INSERT INTO sync_run_changes (id,run_id,source_id,workspace_id,ordinal,kind,labels,source_path,previous_path,title,document_id,before_revision_id,after_revision_id,before_revision_no,after_revision_no,diagnostics) VALUES ${valueRows(batch.length, 16)}`,
+        batch.flatMap(({ c, labels, diagnostics }) => [
+          c.id, c.runId, c.sourceId, c.workspaceId, c.ordinal, c.kind, labels, c.sourcePath, c.previousPath, c.title,
+          c.documentId, c.beforeRevisionId, c.afterRevisionId, c.beforeRevisionNo, c.afterRevisionNo, diagnostics,
+        ]),
       );
+    }
   }
   async listByRun(
     runId: string,

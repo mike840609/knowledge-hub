@@ -24,7 +24,7 @@ function filesUnder(root: string): string[] {
 describe("revision writers and the link index", () => {
   const writers = filesUnder("src")
     .filter((file) => !file.includes(`${path.sep}infrastructure${path.sep}`))
-    .filter((file) => /\.revisions\.insert\(/.test(readFileSync(file, "utf8")));
+    .filter((file) => /\.revisions\.insert(Many)?\(/.test(readFileSync(file, "utf8")));
 
   it("finds the four writers this was written against", () => {
     expect(writers.map((file) => path.basename(file)).sort()).toEqual([
@@ -40,6 +40,10 @@ describe("revision writers and the link index", () => {
       const inserts = source.match(/\.revisions\.insert\(/g)?.length ?? 0;
       const replacements = source.match(/\.links\.replaceForDocument\(/g)?.length ?? 0;
       expect(replacements, `${file}: ${inserts} revision inserts, ${replacements} link replacements`).toBe(inserts);
+      // A bulk create writes many first revisions at once; it indexes them at once too.
+      const bulkInserts = source.match(/\.revisions\.insertMany\(/g)?.length ?? 0;
+      const bulkIndexes = source.match(/\.links\.indexNewDocuments\(/g)?.length ?? 0;
+      expect(bulkIndexes, `${file}: ${bulkInserts} bulk revision inserts, ${bulkIndexes} bulk link indexes`).toBe(bulkInserts);
     }
   });
 });

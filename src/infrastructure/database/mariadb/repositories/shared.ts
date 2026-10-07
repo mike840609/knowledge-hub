@@ -85,3 +85,32 @@ export function affectedRows(result: unknown): number {
   if (typeof result !== "object" || result === null || !("affectedRows" in result)) return 0;
   return Number((result as { affectedRows: number }).affectedRows);
 }
+
+/**
+ * Splits rows for multi-row INSERTs: at most `maxRows` a statement, and about `maxBytes` of
+ * payload, well under MariaDB's 16 MiB max_allowed_packet. A single row larger than that still
+ * goes alone, as a one-row insert always did.
+ */
+export function insertBatches<T>(items: readonly T[], bytesOf: (item: T) => number = () => 0, maxRows = 500, maxBytes = 4 * 1024 * 1024): T[][] {
+  const batches: T[][] = [];
+  let current: T[] = [];
+  let bytes = 0;
+  for (const item of items) {
+    const size = bytesOf(item);
+    if (current.length > 0 && (current.length >= maxRows || bytes + size > maxBytes)) {
+      batches.push(current);
+      current = [];
+      bytes = 0;
+    }
+    current.push(item);
+    bytes += size;
+  }
+  if (current.length > 0) batches.push(current);
+  return batches;
+}
+
+/** `(?, ?, …), (?, ?, …)` for `rows` rows of `columns` parameters. */
+export function valueRows(rows: number, columns: number): string {
+  const row = `(${Array(columns).fill("?").join(", ")})`;
+  return Array(rows).fill(row).join(", ");
+}
