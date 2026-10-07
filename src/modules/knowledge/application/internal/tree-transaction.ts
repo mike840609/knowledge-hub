@@ -16,7 +16,7 @@ import type { SourcePolicy } from "../../domain/source-policy";
 /**
  * Shared Tree mutation preamble (plan §6): trusted CallerContext → resolve
  * and lock Source on this connection → Source ACTIVE + ownership →
- * lock parent Workspace FOR UPDATE → revalidate lifecycle + capability on
+ * lock parent Workspace (shared) → revalidate lifecycle + capability on
  * the locked row. No knowledge writes happen before authorization
  * (caller identity provisioning is not a knowledge write); every
  * hierarchy decision below re-reads the latest locked state, because READ
@@ -33,7 +33,7 @@ export async function requireHubManagedSource(
 /**
  * Source projection preamble (spec §15.3, plan §6): same ordering as the Hub
  * path — trusted CallerContext → resolve and lock Source on this connection
- * → Source ACTIVE + SOURCE_MANAGED → lock parent Workspace FOR UPDATE →
+ * → Source ACTIVE + SOURCE_MANAGED → lock parent Workspace (shared) →
  * revalidate lifecycle + capability.
  * HUB_MANAGED sources are rejected with HUB_MANAGED_OPERATION_REQUIRED; no
  * force/bypass/isSync escape flag exists.

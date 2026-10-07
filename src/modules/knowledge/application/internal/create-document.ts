@@ -19,7 +19,7 @@ export type CreateHubDocumentInput = RevisionContentInput & {
  * Hub-managed document creation bound to an already-open canonical transaction.
  *
  * Path (§6): trusted CallerContext → resolve/lock Source on this connection →
- * Source ACTIVE + HUB_MANAGED → lock parent Workspace FOR UPDATE →
+ * Source ACTIVE + HUB_MANAGED → lock parent Workspace (shared) →
  * revalidate lifecycle + capability → parent validation → atomic Document +
  * R1 + TreeNode + pointer writes.
  * Never opens a nested unit of work; the owning service commits once.

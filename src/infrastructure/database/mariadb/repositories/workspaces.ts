@@ -64,6 +64,12 @@ export class MariaDbWorkspaceRepository implements WorkspaceRepository {
     return rows[0] ? mapWorkspace(rows[0]) : null;
   }
 
+  async lockSharedById(workspaceId: string): Promise<Workspace | null> {
+    // MariaDB 10.11 rejects MySQL's FOR SHARE as a parse error.
+    const rows = await this.connection.query<DbRow[]>("SELECT * FROM workspaces WHERE id = ? LOCK IN SHARE MODE", [workspaceId]);
+    return rows[0] ? mapWorkspace(rows[0]) : null;
+  }
+
   async findPersonalByOwnerUserId(ownerUserId: string): Promise<Workspace | null> {
     let rows: DbRow[];
     try {

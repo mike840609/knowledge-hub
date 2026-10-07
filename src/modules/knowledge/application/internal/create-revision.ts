@@ -25,7 +25,7 @@ export type CreateRevisionInput = RevisionContentInput & {
  *
  * Path (spec §11, plan §6): trusted CallerContext → authoritative
  * Document→Source→Workspace resolution on this connection → lock Source →
- * Source HUB_MANAGED/ACTIVE validation → lock parent Workspace FOR UPDATE →
+ * Source HUB_MANAGED/ACTIVE validation → lock parent Workspace (shared) →
  * revalidate lifecycle + capability → lock Document → expected-revision
  * check → canonicalization → NOOP → N+1 insert + pointer update.
  * Never opens a nested unit of work; the owning service commits once.

@@ -305,11 +305,13 @@ describe("Phase 3 real request adapters with a trusted test session reader", () 
       const write = operation === "governance"
         ? new TeamGovernanceService(writerUow).addDirectMember(caller, workspace.id, { userId: target.id, role: "VIEWER" })
         : services.unitOfWork.run(async (r) => {
+            // Writers take the parent row shared (workspace shared write lock design); it still
+            // waits for the revocation's FOR UPDATE, which is what this case proves.
             const repositories = { ...r, workspaces: new Proxy(r.workspaces, {
               get(target, key, receiver) {
-                if (key === "lockById") return async (id: string) => {
+                if (key === "lockSharedById") return async (id: string) => {
                   writerReachedLock.resolve();
-                  return target.lockById(id);
+                  return target.lockSharedById(id);
                 };
                 return Reflect.get(target, key, receiver);
               },

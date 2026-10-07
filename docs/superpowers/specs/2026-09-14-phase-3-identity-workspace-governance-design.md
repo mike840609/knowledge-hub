@@ -395,6 +395,8 @@ ARCHIVED blocked：Source import/sync/create/mutation、Knowledge authoring/muta
 
 Every Workspace-scoped mutation must hold parent Workspace `FOR UPDATE` and revalidate lifecycle/capability before actual mutation.
 
+> **Amended (2026-10-07):** content and import writers now hold the parent Workspace `LOCK IN SHARE MODE`; governance (archive/restore, rename, membership and group changes) keeps `FOR UPDATE`, so it still waits for every in-flight writer and this section's guarantees hold. `ensure-default-hub-source` stays exclusive. See the [workspace shared write lock design](2026-10-07-workspace-shared-write-lock-design.md).
+
 #### Pre-Snapshot creation
 
 ```text
