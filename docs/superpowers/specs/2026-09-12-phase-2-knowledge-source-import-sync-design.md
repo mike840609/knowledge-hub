@@ -417,6 +417,8 @@ Fingerprint fallback reuses identity only with exactly one unmatched candidate.
 
 No filename similarity, edit distance, subtree guessing, or LLM guessing.
 
+**Amendment (2026-10-07): a rename hint, not a match.** A file renamed or moved *and* edited in one sync matches nothing, so it is ADDED and its old entry ARCHIVED, losing share links and history. When an ADDED document without its own `knowledge_id` has the same file name, or else the same title, as a document this preview archives, it carries a `POSSIBLE_RENAME` WARNING naming the old path. The warning tells the user to add the old `knowledge_id` when there is one, or otherwise to rename or move in one sync and edit in the next. It never changes the match. It is skipped where `AMBIGUOUS_IDENTITY` already explains the outcome.
+
 ### 9.2 Identity conflict
 
 If a future adapter provides stable external IDs, but:
