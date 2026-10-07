@@ -135,6 +135,36 @@ describe("governance still waits for writers", () => {
   });
 });
 
+describe("governance behind a long import", () => {
+  it("gives up after a few seconds, releasing the writers queued behind it", async () => {
+    const hub = await createSourceFixture(pool);
+    const folder = await addFolderSource(hub.workspaceId);
+    const importing = holdOpen(async (repositories) => {
+      await repositories.sources.lockById(folder.source.id);
+      await lockWorkspaceForMutation(repositories, fixtureCaller(), hub.workspaceId, "source-import");
+    });
+    await importing.ready;
+    try {
+      // Both use the default 50 s session lock wait: only the statement's own WAIT bounds them.
+      const started = performance.now();
+      const archive = new TeamWorkspaceService(new MariaDbUnitOfWork(pool)).archiveTeamWorkspace(fixtureCaller(), hub.workspaceId)
+        .then(() => "archived", (error: { code?: string }) => ({ code: error.code, seconds: (performance.now() - started) / 1000 }));
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Queued behind the pending FOR UPDATE, not behind the import.
+      const save = new HubKnowledgeCommandServiceImpl(new MariaDbUnitOfWork(pool))
+        .createDocument(fixtureCaller(), { sourceId: hub.source.id, parentId: null, title: "Behind governance", markdown: "body", metadata: {} });
+      const outcome = await archive;
+      expect(outcome).toMatchObject({ code: "WORKSPACE_BUSY" });
+      expect((outcome as { seconds: number }).seconds).toBeLessThan(15);
+      await expect(save).resolves.toMatchObject({ documentId: expect.any(String) });
+      expect(await countTitled(hub.source.id, "Behind governance")).toBe(1);
+    } finally {
+      importing.release();
+      await importing.done;
+    }
+  }, 30_000);
+});
+
 describe("the default Hub source", () => {
   it("creates exactly one when two first requests race", async () => {
     const fixture = await createSourceFixture(pool);
