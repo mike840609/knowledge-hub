@@ -1,11 +1,20 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runFolderImport } from "@/components/imports/folder-import-form";
 
 vi.mock("@/components/shell/use-workspace-authorization", () => ({
   requestWorkspaceAccessCheck: vi.fn(),
 }));
 
-afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+// Retries wait (1, 2, 4 s, with jitter); fake clocks keep the suite instant. Math.random
+// 0.5 makes the jitter factor exactly 1.
+beforeEach(() => { vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] }); vi.spyOn(Math, "random").mockReturnValue(0.5); });
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+/** Runs the import to completion, firing retry timers as they come due. */
+async function settled<T>(run: Promise<T>): Promise<PromiseSettledResult<T>> {
+  const outcome = Promise.allSettled([run]).then(([result]) => result);
+  await vi.runAllTimersAsync();
+  return outcome;
+}
 const input = {
   target: { kind: "new", workspaceId: "workspace" } as const,
   files: [new File(["# Hello"], "hello.md")],
@@ -45,7 +54,7 @@ describe("folder import retries and cancellation", () => {
     else fetchMock.mockResolvedValueOnce(new Response('{"snapshotId":', { status: 200 }));
     fetchMock.mockResolvedValueOnce(response({ snapshotId: "snapshot" }));
     vi.stubGlobal("fetch", fetchMock);
-    await expect(runFolderImport(input)).resolves.toBe("snapshot");
+    expect(await settled(runFolderImport(input))).toEqual({ status: "fulfilled", value: "snapshot" });
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
       "/api/workspaces/workspace/source-imports",
       "/api/source-imports/snapshot/entries",
@@ -67,15 +76,62 @@ describe("folder import retries and cancellation", () => {
     expect(fetchMock.mock.calls[2][1]?.signal).toBeUndefined();
   });
 
-  it("bounds exhausted upload retries and preserves the original failure if cleanup is offline", async () => {
+  it("gives up on a batch after four attempts, abandoning the import and keeping the original failure", async () => {
     const fetchMock = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(response({ snapshotId: "snapshot" }, 201))
       .mockRejectedValue(new TypeError("Offline"));
     vi.stubGlobal("fetch", fetchMock);
-    await expect(runFolderImport(input)).rejects.toThrow("Offline");
+    const result = await settled(runFolderImport(input));
+    expect(result).toMatchObject({ status: "rejected", reason: { message: "Offline" } });
     expect(fetchMock.mock.calls.map(([url, init]) => [url, init?.method])).toEqual([
       ["/api/workspaces/workspace/source-imports", "POST"],
-      ["/api/source-imports/snapshot/entries", "POST"],
+      ...Array(4).fill(["/api/source-imports/snapshot/entries", "POST"]),
+      ["/api/source-imports/snapshot", "DELETE"],
+    ]);
+  });
+
+  it("rides out a batch failing three times in a row, waiting longer each time", async () => {
+    const waits: number[] = [];
+    const realSetTimeout = globalThis.setTimeout;
+    vi.spyOn(globalThis, "setTimeout").mockImplementation(((handler: () => void, ms?: number) => { waits.push(ms ?? 0); return realSetTimeout(handler, ms); }) as typeof setTimeout);
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(response({ snapshotId: "snapshot" }, 201))
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce(response({ code: "BUSY" }, 503))
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce(response({}))
+      .mockResolvedValueOnce(response({ snapshotId: "snapshot" }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await settled(runFolderImport(input))).toEqual({ status: "fulfilled", value: "snapshot" });
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/entries"))).toHaveLength(4);
+    expect(waits).toEqual([1_000, 2_000, 4_000]);
+  });
+
+  it("does not replay a request the server refused for good", async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(response({ snapshotId: "snapshot" }, 201))
+      .mockResolvedValueOnce(response({ error: { code: "UPLOAD_ENTRY_CONFLICT", message: "Changed bytes." } }, 409))
+      .mockResolvedValueOnce(response({ abandoned: true }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await settled(runFolderImport(input))).toMatchObject({ status: "rejected", reason: { code: "UPLOAD_ENTRY_CONFLICT" } });
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/entries"))).toHaveLength(1);
+  });
+
+  it("stops waiting to retry the moment the import is cancelled", async () => {
+    const controller = new AbortController();
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(response({ snapshotId: "snapshot" }, 201))
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValue(response({ abandoned: true }));
+    vi.stubGlobal("fetch", fetchMock);
+    const run = Promise.allSettled([runFolderImport({ ...input, signal: controller.signal })]);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    controller.abort();
+    // No timer is advanced: the wait must end on the abort alone.
+    const [result] = await run;
+    expect(result).toMatchObject({ status: "rejected", reason: { code: "IMPORT_CANCELLED" } });
+    expect(fetchMock.mock.calls.map(([url, init]) => [url, init?.method])).toEqual([
+      ["/api/workspaces/workspace/source-imports", "POST"],
       ["/api/source-imports/snapshot/entries", "POST"],
       ["/api/source-imports/snapshot", "DELETE"],
     ]);

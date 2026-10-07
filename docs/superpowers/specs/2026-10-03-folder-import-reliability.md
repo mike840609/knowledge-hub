@@ -4,7 +4,9 @@ This follow-up starts at PR #98's verified `c3cc2156e1f5a347709d02920d1709fe6aff
 
 ## Session behavior
 
-- Replay transient network failures and HTTP 408/425/429/500/502/503/504 at most once for an upload batch or finalize, against the same snapshot and identical batch. Recheck cancellation and permission before every attempt.
+- Replay transient network failures and HTTP 408/425/429/500/502/503/504 for an upload batch or finalize, against the same snapshot and identical batch. Recheck cancellation and permission before every attempt.
+  - **Amended 2026-10-08:** up to three replays (four attempts), waiting about 1, 2 and 4 s before them, each scaled by a random 0.5–1.5. Cancelling ends a wait at once.
+  - Was: at most one immediate replay. A folder at the limit uploads in about a thousand batches, so one batch failing twice in a row during a brief network drop abandoned the whole import.
 - Treat an unreadable successful finalize body as a lost response and replay finalize. The server already makes both upload and finalize idempotent.
 - Session creation is not retried or aborted because it is non-idempotent. Obtain the returned id before discarding a cancelled creation.
 - Explicit Cancel import, component unmount and pagehide abort subsequent work. On terminal failure/cancellation, send a best-effort keepalive DELETE for the known snapshot. Offline/unknown-id failures retain the existing two-hour BUILDING TTL fallback.

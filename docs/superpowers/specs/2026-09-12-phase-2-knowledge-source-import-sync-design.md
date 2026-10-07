@@ -797,7 +797,7 @@ Unexpected DB/invariant failure: roll back the whole canonical transaction.
 - Existing Source: snapshot stays READY; a separate transaction may write FAILED SyncRun after rollback; retrying the same snapshot is allowed.
 - Initial import: because Source does not exist and `sync_runs.source_id NOT NULL`, create no phantom FAILED SyncRun; snapshot stays READY for retry/operational diagnostics.
 - Deadlock / lock wait timeout maps to `IMPORT_APPLY_RETRYABLE`; MVP has no domain-level automatic multiple retries.
-- (2026-10-07) The database layer reports a deadlock or lock wait timeout as `WORKSPACE_BUSY` (HTTP 503) for every write, since any write can meet one — a note saved while a large Apply holds the workspace is the common case. Apply translates it back to `IMPORT_APPLY_RETRYABLE`, so this section's contract is unchanged. Import upload and finalize now return 503 `WORKSPACE_BUSY`, which the browser retries once (folder-import reliability spec).
+- (2026-10-07) The database layer reports a deadlock or lock wait timeout as `WORKSPACE_BUSY` (HTTP 503) for every write, since any write can meet one — a note saved while a large Apply holds the workspace is the common case. Apply translates it back to `IMPORT_APPLY_RETRYABLE`, so this section's contract is unchanged. Import upload and finalize now return 503 `WORKSPACE_BUSY`, which the browser retries with backoff (folder-import reliability spec).
 
 ## 18. Authorization and Security
 
