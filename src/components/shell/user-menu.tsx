@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
 
-import { ChevronDown, Moon, Sun, UserRound, Settings, CircleHelp } from "lucide-react";
+import { ChevronUp, Moon, Sun, UserRound, Settings, CircleHelp } from "lucide-react";
+import {Tooltip} from "@/components/ui/tooltip";
 import { buttonClasses } from "@/components/ui/button";
 import {
   MenuContent,
@@ -24,20 +25,22 @@ import { useTheme, type Theme } from "./use-theme";
  * not belong in Settings either — that surface is workspace governance, and
  * the theme is a personal preference held in this browser.
  */
-export function UserMenu({ identityName, workspaceId, trigger = "account" }: { identityName: string; workspaceId?: string; trigger?: "account" | "preferences" }) {
+export function UserMenu({ identityName, workspaceId, compact = false, trigger = "account" }: { identityName: string; workspaceId?: string; compact?: boolean; trigger?: "account" | "preferences" }) {
   const { theme, setTheme } = useTheme();
 
-  return (
-    <MenuRoot>
+  const accountTrigger=(
       <MenuTrigger
         aria-label={trigger === "preferences" ? "Personal preferences" : `Account: ${identityName}`}
-        className={buttonClasses({ variant: trigger === "preferences" ? "secondary" : "ghost", className: trigger === "preferences" ? "rounded-full" : "max-w-[14rem]" })}
+        className={buttonClasses({ variant: trigger === "preferences" ? "secondary" : "ghost", className: trigger === "preferences" ? "rounded-full" : compact ? "w-full justify-center px-0" : "w-full justify-start gap-2" })}
       >
         {trigger === "preferences" ? <><Settings className="h-4 w-4 shrink-0" aria-hidden="true"/><span className="profile-preferences-label">Preferences</span></> : <><UserRound className="h-4 w-4 shrink-0" aria-hidden="true" />
-        <span className="hidden min-w-0 truncate sm:inline">{identityName}</span>
-        <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" /></>}
+        {!compact ? <><span className="min-w-0 flex-1 truncate text-left">{identityName}</span><ChevronUp className="h-4 w-4 shrink-0" aria-hidden="true" /></> : null}</>}
       </MenuTrigger>
-      <MenuContent align="end" className="w-56">
+  );
+  return (
+    <MenuRoot>
+      {compact ? <Tooltip label={identityName} side="right">{accountTrigger}</Tooltip> : accountTrigger}
+      <MenuContent side="top" align="start" className="w-56">
         <MenuGroup>
           <MenuGroupLabel>Signed in as</MenuGroupLabel>
           <p className="truncate px-2 pb-1 text-body text-kh-text" title={identityName}>

@@ -7,7 +7,6 @@ import { Menu, MoreHorizontal, PanelLeftClose, PanelLeftOpen, PanelRight } from 
 import type { WorkspaceShellModel } from "@/server/knowledge-read";
 import { WorkspaceSelector } from "@/components/shell/workspace-selector";
 import { QuickSearch } from "@/components/search/quick-search";
-import { UserMenu } from "@/components/shell/user-menu";
 import { buttonClasses } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { MenuRoot, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/menu";
@@ -75,9 +74,7 @@ export function Topbar({
           </MenuContent>
         </MenuRoot> : null}
       </div>
-      <div className="ml-auto flex shrink-0 items-center px-3">
-        <UserMenu identityName={model.identityName} workspaceId={model.workspace.id} />
-      </div>
+
     </header>
   );
 }

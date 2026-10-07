@@ -15,7 +15,7 @@ The current version is **0.1.0 and under active development**. A personal worksp
 
 ## User guide
 
-Open the account menu in the upper-right corner and select **Help & guides** (`/w/{workspaceId}/help`).
+Open the account menu in the bottom of the sidebar and select **Help & guides** (`/w/{workspaceId}/help`).
 The in-app English and Traditional Chinese manual covers first import, repeat sync,
 permissions and recovery, reading, statistics, sharing and export. Preview and sync
 errors link to the relevant sections. The existing **Import folder → Read the guide**

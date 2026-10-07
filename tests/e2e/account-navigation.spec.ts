@@ -1,0 +1,33 @@
+import {test,expect} from "@playwright/test";
+import {mkdir} from "node:fs/promises";
+
+test("account stays at the sidebar bottom in expanded, collapsed and mobile navigation",async({page,request})=>{
+  const nav=await (await request.get("/api/workspaces")).json();
+  const ws=nav.items.find((w:{type:string})=>w.type==="PERSONAL").id;
+  await page.setViewportSize({width:1440,height:1000});
+  await page.goto(`/w/${ws}/home`);
+  await expect(page.getByRole("heading",{name:"Home",exact:true})).toBeVisible();
+  const account=()=>page.getByRole("button",{name:/^Account:/});
+  await expect(page.locator("header").getByRole("button",{name:/^Account:/})).toHaveCount(0);
+  await expect(account()).toBeVisible();
+  const bounds=await account().boundingBox();expect(bounds!.x).toBeLessThan(160);expect(bounds!.y).toBeGreaterThan(900);
+  const output=process.env.KM_ACCOUNT_SCREENSHOTS;if(output)await mkdir(output,{recursive:true});
+  await account().click();await expect(page.getByRole("menuitem",{name:"Help & guides",exact:true})).toBeVisible();
+  const menu=await page.getByRole("menu").boundingBox();expect(menu!.y+menu!.height).toBeLessThan(bounds!.y);
+  if(output)await page.screenshot({path:`${output}/desktop-menu.png`,animations:"disabled"});
+  await page.keyboard.press("Escape");await expect(account()).toBeFocused();
+  await page.getByRole("button",{name:"Collapse navigation",exact:true}).click();
+  await expect(page.getByRole("button",{name:"Expand navigation",exact:true})).toBeVisible();
+  const compact=await account().boundingBox();expect(compact!.width).toBeLessThan(48);
+  if(output)await page.screenshot({path:`${output}/desktop-collapsed.png`,animations:"disabled"});
+  await page.getByRole("button",{name:"Expand navigation",exact:true}).click();
+  await page.setViewportSize({width:390,height:844});await expect(account()).toBeHidden();
+  await page.getByRole("button",{name:"Open menu",exact:true}).click();
+  await expect(account()).toBeVisible();const mobile=await account().boundingBox();expect(mobile!.y).toBeGreaterThan(700);
+  await account().click();await expect(page.getByRole("menuitem",{name:"Help & guides",exact:true})).toBeVisible();
+  if(output)await page.screenshot({path:`${output}/mobile-menu.png`,animations:"disabled"});
+  await page.getByRole("menuitem",{name:"Help & guides",exact:true}).click();
+  await expect(page.getByRole("heading",{name:"User guide",exact:true})).toBeVisible();
+  await expect(page.getByRole("dialog",{name:"Menu",exact:true})).toHaveCount(0);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
