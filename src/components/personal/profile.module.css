@@ -1,6 +1,6 @@
 /* Insights follows the compact workbench type and spacing ladders. */
-.profile{color:var(--kh-text);--reading-color:#617591;--reading-hover:#526681;--source-color:#82758c;--notes-color:#66837b}
-:global([data-theme="dark"]) .profile{--reading-color:#7b8da7;--reading-hover:#91a2ba;--source-color:#988aa3;--notes-color:#7e9a90}
+/* Series colours are the chart tokens (design language §8); each theme resolves its own. */
+.profile{color:var(--kh-text);--reading-color:var(--kh-chart-1);--reading-hover:var(--kh-chart-1-hover);--source-color:var(--kh-chart-2);--notes-color:var(--kh-chart-3)}
 .pair{display:grid;grid-template-columns:1fr 1fr;gap:24px;border-bottom:1px solid var(--kh-border);padding:24px 0}
 .sectiontitle{font-size:14px;line-height:20px;font-weight:600;margin:0}
 .caption{font-size:12px;line-height:16px;color:var(--kh-text-muted);margin-top:8px}

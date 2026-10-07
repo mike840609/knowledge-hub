@@ -103,6 +103,7 @@ together, and say what job the new token does that no existing one covers.
 | Elevation | `popover`, `modal` | floating surfaces only |
 | Border | `border`, `border-strong` | see §6 |
 | Syntax colour | `--kh-syntax-{keyword,string,number,comment,function,type,variable,meta}` | fenced code in the reader and on a shared page; see §8 |
+| Chart colour | `--kh-chart-1`, `--kh-chart-1-hover`, `--kh-chart-2`, `--kh-chart-3` | series marks in data displays (Insights); see §8 |
 | Container | `page`, `wide`, `reading`, `panel` | see §7; the `maxWidth` scale is replaced, so `max-w-4xl` does not compile |
 | Spacing rhythm | `0`, `px`, `0.5`–`6` every half step, `auto` (margin), `16` (padding) | paddings, margins and gaps; `16` is `StatusMessage` and `EmptyState` only, see §7 |
 | Control height | `sm`, `md`, `lg` (24 / 32 / 40) | see §15; buttons and fields read the same ladder |
@@ -314,6 +315,39 @@ announces itself.
 
 The rendered editor's code blocks are not coloured (daily-driver spec §5);
 they are the editor's, and its decorations are a different piece of work.
+
+### Chart colour
+
+Data displays draw their series from four tokens, declared for both themes
+next to the rest of the palette:
+
+```text
+chart-1        slate blue  — the primary series (daily reading)
+chart-1-hover  one step deeper (light) or lighter (dark), for the column under the pointer or focus
+chart-2        dusk mauve  — the first categorical series (synced folders)
+chart-3        sage        — the second categorical series (personal notes)
+```
+
+They are deliberately muted and sit apart from the accent. A chart is read
+alongside chrome that already uses the accent for selection and focus; a
+series in the accent would read as selected. Saturation is held low so a bar
+never outranks the number it illustrates.
+
+Each meets **3:1** against `bg` and `bg-subtle` (the track an unfilled bar sits
+on) in both themes, the WCAG 1.4.11 bar for graphical objects. They are not
+text colours and do not meet 4.5:1 everywhere; a label is never set in one.
+`tests/unit/chart-colors.test.ts` checks both from the stylesheet.
+
+`chart-2` and `chart-3` differ by hue, not lightness (about 1.05:1 between
+them), so colour alone cannot tell the two series apart for every reader.
+Every chart that shows more than one series therefore names each in text — a
+legend with the value beside it, as Insights' composition bar does. A new
+chart that cannot carry such a legend needs a distinction in form (pattern,
+gap, position), not a fourth colour.
+
+They were first written as values local to Insights' stylesheet, outside the
+token layer, and promoted here unchanged. A component reads them as
+`var(--kh-chart-*)` and declares no series colour of its own.
 
 ### On ladder depth
 
