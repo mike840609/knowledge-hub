@@ -34,7 +34,7 @@ export type ImportUiState =
   | { kind: "IDLE" }
   | { kind: "PREPARING" }
   | { kind: "UPLOADING"; uploaded: number; total: number }
-  | { kind: "FINALIZING" }
+  | { kind: "FINALIZING"; files: number; startedAt: number }
   | { kind: "ERROR"; code: string; message: string };
 
 const MARKDOWN_EXTENSION = /\.(?:md|markdown)$/iu;
@@ -363,7 +363,7 @@ export async function runFolderImport(input: {
       onProgress({ kind: "UPLOADING", uploaded, total }), assertAllowed, signal,
     );
     assertAllowed();
-    onProgress({ kind: "FINALIZING" });
+    onProgress({ kind: "FINALIZING", files: selection.staged.filter((entry) => entry.markdown).length, startedAt: Date.now() });
     const finalized = await postJson(
       `/api/source-imports/${snapshotId}/finalize`,
       {},
@@ -382,10 +382,21 @@ export async function runFolderImport(input: {
   }
 }
 
-function statusText(state: ImportUiState): string | null {
+/**
+ * Finalize is one request with no progress of its own, and a large folder takes a
+ * while (about 11 s for 6,000 notes). Saying how many files and how long so far shows
+ * it is working; the elapsed part is left out where there is no clock to tick it.
+ */
+export function finalizingText(files: number, elapsedSeconds?: number): string {
+  const count = `${files.toLocaleString("en-US")} Markdown ${files === 1 ? "file" : "files"}`;
+  const elapsed = elapsedSeconds === undefined ? "" : ` ${elapsedSeconds} s`;
+  return `Analyzing ${count} and building the preview…${elapsed}`;
+}
+
+function statusText(state: ImportUiState, now: number): string | null {
   if (state.kind === "PREPARING") return "Preparing the folder manifest…";
   if (state.kind === "UPLOADING") return `Uploading Markdown files… ${state.uploaded}/${state.total}`;
-  if (state.kind === "FINALIZING") return "Analyzing the folder and building the preview…";
+  if (state.kind === "FINALIZING") return finalizingText(state.files, Math.max(0, Math.floor((now - state.startedAt) / 1000)));
   if (state.kind === "ERROR") return state.message;
   return null;
 }
@@ -454,7 +465,15 @@ export function FolderImportForm({
   }, [rememberedSourceId]);
   const [sampleLoading, setSampleLoading] = useState(false);
   const busy = state.kind === "PREPARING" || state.kind === "UPLOADING" || state.kind === "FINALIZING";
-  const status = statusText(state);
+  // Ticks once a second while finalizing so the elapsed time moves; idle otherwise.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (state.kind !== "FINALIZING") return;
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [state.kind]);
+  const status = statusText(state, now);
 
   function reportImportError(error: unknown): void {
     const code = error instanceof Error && "code" in error && typeof (error as { code: unknown }).code === "string"
