@@ -1,9 +1,11 @@
 "use client";
+import Link from "next/link";
 
-import { ChevronDown, Moon, Sun, UserRound, Settings } from "lucide-react";
+import { ChevronDown, Moon, Sun, UserRound, Settings, CircleHelp } from "lucide-react";
 import { buttonClasses } from "@/components/ui/button";
 import {
   MenuContent,
+  MenuItem,
   MenuGroup,
   MenuGroupLabel,
   MenuRadioGroup,
@@ -22,7 +24,7 @@ import { useTheme, type Theme } from "./use-theme";
  * not belong in Settings either — that surface is workspace governance, and
  * the theme is a personal preference held in this browser.
  */
-export function UserMenu({ identityName, trigger = "account" }: { identityName: string; trigger?: "account" | "preferences" }) {
+export function UserMenu({ identityName, workspaceId, trigger = "account" }: { identityName: string; workspaceId?: string; trigger?: "account" | "preferences" }) {
   const { theme, setTheme } = useTheme();
 
   return (
@@ -65,6 +67,7 @@ export function UserMenu({ identityName, trigger = "account" }: { identityName: 
             </MenuRadioItem>
           </MenuRadioGroup>
         </MenuGroup>
+        {workspaceId ? <><MenuSeparator /><MenuItem render={<Link href={`/w/${workspaceId}/help`} />}><span className="flex items-center gap-2"><CircleHelp className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />Help &amp; guides</span></MenuItem></> : null}
       </MenuContent>
     </MenuRoot>
   );

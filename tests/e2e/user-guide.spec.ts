@@ -5,9 +5,12 @@ test("Home help covers first import, repeat sync and recovery in both languages"
   const nav=await (await request.get("/api/workspaces")).json();
   const ws=nav.items.find((w:{type:string})=>w.type==="PERSONAL").id;
   await page.goto(`/w/${ws}/home`);
-  await page.getByRole("link",{name:"Quick start guide",exact:true}).click();
+  await expect(page.getByRole("navigation",{name:"Primary"}).getByRole("link",{name:"Help",exact:true})).toHaveCount(0);
+  await expect(page.getByRole("link",{name:"Quick start guide",exact:true})).toHaveCount(0);
+  await page.getByRole("button",{name:/^Account:/}).click();
+  await page.getByRole("menuitem",{name:"Help & guides",exact:true}).click();
   await expect(page.getByRole("heading",{name:"User guide",exact:true})).toBeVisible();
-  await expect(page).toHaveURL(/\/help#quick-start$/);
+  await expect(page).toHaveURL(/\/help$/);
   await expect(page.getByRole("heading",{name:"Daily sync: check, preview, apply",exact:true})).toBeAttached();
   await page.getByRole("link",{name:"Troubleshooting",exact:true}).click();
   await expect(page).toHaveURL(/#troubleshooting$/);

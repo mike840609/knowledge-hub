@@ -76,7 +76,7 @@ export function Topbar({
         </MenuRoot> : null}
       </div>
       <div className="ml-auto flex shrink-0 items-center px-3">
-        <UserMenu identityName={model.identityName} />
+        <UserMenu identityName={model.identityName} workspaceId={model.workspace.id} />
       </div>
     </header>
   );

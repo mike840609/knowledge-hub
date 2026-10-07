@@ -15,7 +15,7 @@ Knowledge Hub 是開源、可自行部署的知識管理應用。你可以直接
 
 ## 使用者操作手冊
 
-從 My Space 的 **Help** 或 Home 的 **Quick start guide** 開啟產品內手冊
+從右上角帳號選單的 **Help & guides** 開啟產品內手冊
 （`/w/{workspaceId}/help`），可切換英文與繁體中文。
 
 涵蓋首次匯入、日常同步、授權與錯誤恢復、閱讀、統計、分享與匯出。
