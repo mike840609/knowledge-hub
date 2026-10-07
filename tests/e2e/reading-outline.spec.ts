@@ -18,17 +18,18 @@ const filler = (count: number) =>
 
 /** Creates a document in the E2E user's own My Space and lands on it. */
 async function createMySpaceDocument(page: Page, title: string, body: string): Promise<{ workspaceId: string }> {
-  await page.goto("/");
-  await page.waitForURL(/\/w\/[^/]+\/knowledge/);
-  const workspaceId = new URL(page.url()).pathname.split("/")[2];
-  await page.goto(`/w/${workspaceId}/knowledge/new`);
-  // The composer opens in rendered editing; exact Markdown is typed in its source view (composer-helpers).
-  const form = page.locator("main form").first();
-  await form.getByLabel("Title", { exact: true }).fill(title);
-  await (await showMarkdown(form)).fill(body);
-  await expect(page.getByRole("button", { name: "Create document" })).toBeEnabled(ROUND_TRIP);
-  await page.getByRole("button", { name: "Create document" }).click();
-  await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/knowledge/[^/]+/[^/?]+$`), ROUND_TRIP);
+  const workspaces = await page.request.get("/api/workspaces");
+  expect(workspaces.ok()).toBe(true);
+  const workspaceId = ((await workspaces.json()) as { items: { id: string; type: string }[] }).items
+    .find((workspace) => workspace.type === "PERSONAL")?.id;
+  if (!workspaceId) throw new Error("Personal workspace not found");
+  const created = await page.request.post(`/api/workspaces/${workspaceId}/documents`, {
+    data: { title, markdown: body },
+  });
+  expect(created.status()).toBe(201);
+  const document = (await created.json()) as { sourceId: string; documentId: string };
+  // Outline interactions start on a settled document, without the composer's arrival refresh.
+  await page.goto(`/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}`);
   await expect(page.getByRole("region", { name: "Document content" })).toBeVisible(ROUND_TRIP);
   return { workspaceId };
 }

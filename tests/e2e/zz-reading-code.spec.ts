@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { personalWorkspaceId as mySpace } from "./fixtures/my-space";
 
 // Server-bound assertions only; see the note in phase5-authoring.spec.ts.
 const ROUND_TRIP = { timeout: 15_000 };
@@ -29,11 +30,6 @@ const ENDS_IN_NEWLINE = "line one\nline two\n";
 
 const MARKDOWN = ["Before.", "", "```sql", SQL, "```", "", "```", ENDS_IN_NEWLINE, "```", "", "```python", "def f():", "    return 1", "```", "", "After."].join("\n");
 
-async function mySpace(page: Page): Promise<string> {
-  await page.goto("/");
-  await page.waitForURL(/\/w\/[^/]+\/knowledge/);
-  return new URL(page.url()).pathname.split("/")[2];
-}
 
 /** Creates a note through the API, so its Markdown is exactly what is written here, and returns where it is. */
 async function createNote(page: Page, title: string, markdown: string) {

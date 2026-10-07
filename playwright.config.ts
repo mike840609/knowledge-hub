@@ -1,10 +1,21 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
+import path from "node:path";
 import { defineConfig, devices } from "@playwright/test";
+import { balancedE2eGroups, E2E_GROUP_COUNT } from "./scripts/test/e2e-shards";
 import { PHASE3_PROVIDER, phase3Origin, phase3PersonaNames, phase3UnconfiguredOrigin } from "./tests/e2e/fixtures/phase3-identities";
 import { teamsClosedOrigin } from "./tests/e2e/fixtures/teams-closed";
 
 const port = Number(process.env.KM_E2E_PORT ?? "3101");
 const phase3Root = process.env.KM_PHASE3_APP_ROOT;
+const group = process.env.KM_E2E_GROUP;
+if (group && !/^[12]$/.test(group)) throw new Error(`KM_E2E_GROUP must be between 1 and ${E2E_GROUP_COUNT}`);
+const files = group ? readdirSync(path.join(process.cwd(), "tests/e2e"), { recursive: true, withFileTypes: true })
+  .filter((entry) => entry.isFile() && entry.name.endsWith(".spec.ts"))
+  .map((entry) => {
+    const absolute = path.join(entry.parentPath, entry.name);
+    return { file: path.relative(path.join(process.cwd(), "tests/e2e"), absolute).replaceAll(path.sep, "/"), source: readFileSync(absolute, "utf8") };
+  }) : [];
+const groups = balancedE2eGroups(files);
 const localServer = {
   command: `${process.execPath} node_modules/next/dist/bin/next start --hostname 127.0.0.1`,
   url: `http://127.0.0.1:${port}/`, timeout: 60_000, reuseExistingServer: false,
@@ -18,6 +29,7 @@ const teamsClosedServer = {
 };
 export default defineConfig({
   testDir: "./tests/e2e", timeout: 30_000, fullyParallel: false, workers: 1, reporter: [["list"]],
+  ...(group ? { testMatch: files.filter(({ file }) => groups.get(file) === Number(group)).map(({ file }) => `**/${file}`) } : {}),
   webServer: [localServer, ...(process.env.KM_E2E_TEAMS_CLOSED_SERVER === "false" ? [] : [teamsClosedServer]), ...(phase3Root ? phase3PersonaNames.map((persona) => ({
     command: `${process.execPath} node_modules/next/dist/bin/next start --hostname 127.0.0.1`,
     cwd: phase3Root, url: `${phase3Origin(persona)}/`, timeout: 60_000, reuseExistingServer: false,

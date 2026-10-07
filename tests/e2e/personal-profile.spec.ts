@@ -8,7 +8,7 @@ test("personal profile counts, detail links, themes and mobile layout",async({pa
  const nav=await (await request.get("/api/workspaces")).json();const ws=nav.items.find((w:{type:string})=>w.type==="PERSONAL").id;
  const detailCount=async(filter:string)=>{
   await page.goto(`/w/${ws}/profile/articles?filter=${filter}`);
-  const text=await page.locator("main header p").textContent();
+  const text=await page.locator("main header p").filter({visible:true}).textContent();
   expect(text).toMatch(/^\d+ documents?$/);
   return Number(text!.split(" ")[0]);
  };
@@ -20,10 +20,10 @@ test("personal profile counts, detail links, themes and mobile layout",async({pa
    await expect(page.getByRole("heading",{name:"See your knowledge grow",exact:true})).toBeVisible();
    return {articles:0,folders:0,browsed:0};
   }
-  const articles=Number((await page.getByText(/^\d[\d,]* active documents in My Space\.$/).textContent())!.split(" ")[0].replaceAll(",",""));
-  const distribution=await page.getByText(/^\d+ documents across \d+ synced folders\.$/).textContent();
+  const articles=Number((await composition.getByText(/^\d[\d,]* active documents in My Space\.$/).textContent())!.split(" ")[0].replaceAll(",",""));
+  const distribution=await page.getByText(/^\d+ documents across \d+ synced folders\.$/).filter({visible:true}).textContent();
   const folders=Number(distribution!.match(/across (\d+)/)![1]);
-  const browsed=Number(await page.locator("[data-browsed-count]").getAttribute("data-browsed-count"));
+  const browsed=Number(await page.locator("[data-browsed-count]").filter({visible:true}).getAttribute("data-browsed-count"));
   return {articles,folders,browsed};
  };
  const baseline={...await overview(),favorites:await detailCount("favorites"),unread:await detailCount("unread")};
@@ -50,20 +50,20 @@ test("personal profile counts, detail links, themes and mobile layout",async({pa
  const reopened=page.waitForResponse(r=>r.url().endsWith("/read")&&r.request().method()==="POST");
  await page.goto(articleHref);expect((await reopened).status()).toBe(204);
  expect((await overview()).browsed).toBe(baseline.browsed+1);
- await page.getByRole("link",{name:"30 days",exact:true}).click();await expect(page).toHaveURL(/days=30$/);await expect(page.getByText("Recorded folder changes in the past 30 days.", {exact:true})).toBeVisible();await expect(page.locator("[data-browsed-count]")).toHaveAttribute("data-browsed-count",String(baseline.browsed+1));
+ await page.getByRole("link",{name:"30 days",exact:true}).click();await expect(page).toHaveURL(/days=30$/);await expect(page.getByText("Recorded folder changes in the past 30 days.", {exact:true}).filter({visible:true})).toBeVisible();await expect(page.locator("[data-browsed-count]").filter({visible:true})).toHaveAttribute("data-browsed-count",String(baseline.browsed+1));
  await page.getByRole("link",{name:/^Awaiting Apply:/}).click();await expect(page).toHaveURL(new RegExp(`/w/${ws}/profile/sync\\?filter=pending$`));await expect(page.getByRole("heading",{name:"Awaiting Apply",exact:true,level:1})).toBeVisible();await expect(page.getByRole("link",{name:/Product docs.*Review preview before Apply/})).toBeVisible();
  await page.goto(`/w/${ws}/profile?days=7`);
- await page.getByText("How counts work",{exact:true}).click();await expect(page.getByText("When these statistics were requested.",{exact:false})).toBeVisible();await page.getByText("How counts work",{exact:true}).click();
- const oldTime=await page.locator("footer time").getAttribute("datetime");await page.getByRole("button",{name:"Refresh statistics"}).click();await expect(page.locator("footer time")).not.toHaveAttribute("datetime",oldTime!);
+ await page.getByText("How counts work",{exact:true}).filter({visible:true}).click();await expect(page.getByText("When these statistics were requested.",{exact:false}).filter({visible:true})).toBeVisible();await page.getByText("How counts work",{exact:true}).filter({visible:true}).click();
+ const oldTime=await page.locator("footer time").filter({visible:true}).getAttribute("datetime");await page.getByRole("button",{name:"Refresh statistics"}).click();await expect(page.locator("footer time").filter({visible:true})).not.toHaveAttribute("datetime",oldTime!);
  const output=process.env.KM_PROFILE_SCREENSHOTS??testInfo.outputPath("profile");await mkdir(output,{recursive:true});
  await page.setViewportSize({width:1440,height:1280});
  await page.goto(`/w/${ws}/home`);
  await expect(page.getByRole("region",{name:"Personal statistics"})).toHaveCount(0);
- await expect(page.locator("[data-browsed-count]")).toHaveCount(0);
+ await expect(page.locator("[data-browsed-count]").filter({visible:true})).toHaveCount(0);
  await expect(page.getByRole("region",{name:"Continue reading"}).getByRole("link",{name:/Team guide/})).toBeVisible();
  await page.screenshot({path:path.join(output,"home-light.png"),fullPage:true,animations:"disabled"});
  await page.getByRole("navigation",{name:"Primary"}).getByRole("link",{name:"Insights"}).click();
- await expect(page.locator("[data-browsed-count]")).toHaveAttribute("data-browsed-count",String(baseline.browsed+1));
+ await expect(page.locator("[data-browsed-count]").filter({visible:true})).toHaveAttribute("data-browsed-count",String(baseline.browsed+1));
  await expect(page.getByRole("heading",{name:"Insights",exact:true})).toBeVisible();await expect(page.getByRole("heading",{name:"Sync overview",exact:true})).toBeVisible();
  await page.screenshot({path:path.join(output,"desktop-light.png"),fullPage:true,animations:"disabled"});
  await page.getByRole("button",{name:/^Account:/}).click();await page.getByRole("menuitemradio",{name:"Dark",exact:true}).click();await page.keyboard.press("Escape");await expect(page.locator("html")).toHaveAttribute("data-theme","dark");await page.screenshot({path:path.join(output,"desktop-dark.png"),fullPage:true,animations:"disabled"});

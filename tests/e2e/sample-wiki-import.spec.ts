@@ -59,17 +59,23 @@ for (const sample of SAMPLES) {
     await page.getByRole("link", { name: "Browse documents" }).click();
     const documentLinks = page.getByRole("tree", { name: "Knowledge tree" }).locator(`a[href*="/knowledge/${sourceId}/"]`);
     await expect(documentLinks).toHaveCount(7, ROUND_TRIP);
+    // The source landing page streams its tree before redirecting to its first document.
+    // Wait for that arrival so its late redirect cannot replace the next document click.
+    await expect(page).toHaveURL(new RegExp(`/knowledge/${sourceId}/[a-f0-9-]+$`), ROUND_TRIP);
 
     // index: a real click on its wikilink (rendered as the text it was written with) to the onboarding page.
     const tree = page.getByRole("tree", { name: "Knowledge tree" });
+    await expect(tree).toHaveAttribute("aria-busy", "false", ROUND_TRIP);
     await tree.getByRole("treeitem", { name: sample.indexTitle, exact: true }).locator("a").first().click();
-    const article = page.locator("article").first();
+    const content = page.getByRole("region", { name: "Document content", exact: true });
+    const article = content.getByRole("article");
+    await expect(content.getByRole("heading", { level: 1, name: sample.indexTitle, exact: true })).toBeVisible(ROUND_TRIP);
     await article.getByRole("link", { name: sample.indexLink, exact: true }).first().click();
     await expect(page.getByRole("heading", { level: 1, name: sample.onboardingTitle, exact: true })).toBeVisible(ROUND_TRIP);
     await expect(page).toHaveURL(new RegExp(`/knowledge/${sourceId}/[a-f0-9-]+`));
 
     // onboarding: a link to a heading anchor in the leave policy keeps the slug in the URL.
-    await page.locator("article").first().getByRole("link", { name: sample.anchorLink, exact: true }).click();
+    await article.getByRole("link", { name: sample.anchorLink, exact: true }).click();
     await expect(page.getByRole("heading", { level: 1, name: sample.anchorTargetTitle, exact: true })).toBeVisible(ROUND_TRIP);
     await expect.poll(() => decodeURIComponent(new URL(page.url()).hash)).toBe(sample.anchorHash);
   });

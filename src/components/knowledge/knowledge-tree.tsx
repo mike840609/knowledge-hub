@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronRight, FileText, Star } from "lucide-react";
 import {
@@ -29,6 +29,8 @@ export type KnowledgeTreeProps = {
   selectedDocumentId?: string;
   /** Sidebar sections above the tree can change height after persisted state arrives. */
   revealLayoutKey?: string;
+  /** Persisted sidebar sections and initial favorite synchronization have settled. */
+  sidebarReady?: boolean;
   /** Client-local filter text; ancestors stay visible and expansion is restored on clear. */
   query?: string;
   favoriteDocumentIds: ReadonlySet<string>;
@@ -216,6 +218,7 @@ export function KnowledgeTree({
   sourceId,
   selectedDocumentId,
   revealLayoutKey,
+  sidebarReady = true,
   query = "",
   favoriteDocumentIds,
   onToggleFavorite,
@@ -228,7 +231,7 @@ export function KnowledgeTree({
   const treeRef = useRef<HTMLUListElement>(null);
   // Collapsed folders are per source: the same workspace can hold several
   // trees, and collapsing one should not fold another.
-  const [collapsedList, setCollapsedList] = usePersistedJson<string[]>(
+  const [collapsedList, setCollapsedList, collapsedReady] = usePersistedJson<string[]>(
     `kh:tree-collapsed:${workspaceId}:${sourceId}`,
     EMPTY_COLLAPSED,
     isStringArray,
@@ -253,16 +256,32 @@ export function KnowledgeTree({
 
   // Reveal only the hidden portion of the selected row, without moving the
   // document pane or recentering a row that is already visible.
-  useEffect(() => {
+  useLayoutEffect(() => {
     const tree = treeRef.current;
-    const selected = tree?.querySelector<HTMLElement>('[aria-current="page"]');
-    const scroller = tree?.closest("nav");
-    if (!selected || !scroller) return;
-    const row = selected.getBoundingClientRect();
-    const viewport = scroller.getBoundingClientRect();
-    if (row.top < viewport.top) scroller.scrollTop += row.top - viewport.top;
-    else if (row.bottom > viewport.bottom) scroller.scrollTop += row.bottom - viewport.bottom;
-  }, [selectedDocumentId, effectiveCollapsed, roots, revealLayoutKey]);
+    if (!tree) return;
+    tree.setAttribute("aria-busy", "true");
+    if (!collapsedReady) return;
+    const selected = tree.querySelector<HTMLElement>('[aria-current="page"]');
+    const scroller = tree.closest("nav");
+    if (selected && scroller) {
+      const row = selected.getBoundingClientRect();
+      const viewport = scroller.getBoundingClientRect();
+      if (row.top < viewport.top) scroller.scrollTop += row.top - viewport.top;
+      else if (row.bottom > viewport.bottom) scroller.scrollTop += row.bottom - viewport.bottom;
+    }
+    // Reveal immediately even when favorite synchronization is slow; only readiness waits for it.
+    if (!sidebarReady) return;
+    // Ancestor expansion runs in an effect. A newer layout cancels these frames before readiness is exposed.
+    // Only the accessibility attribute changes here; settling geometry must not re-render an arriving route.
+    let second: number | undefined;
+    const first = window.requestAnimationFrame(() => {
+      second = window.requestAnimationFrame(() => tree.setAttribute("aria-busy", "false"));
+    });
+    return () => {
+      window.cancelAnimationFrame(first);
+      if (second !== undefined) window.cancelAnimationFrame(second);
+    };
+  }, [selectedDocumentId, effectiveCollapsed, roots, revealLayoutKey, sidebarReady, collapsedReady]);
 
   const itemById = useMemo(() => {
     const map = new Map<string, KnowledgeTreeItem>();
@@ -484,6 +503,8 @@ export function KnowledgeTree({
       ref={treeRef}
       role="tree"
       aria-label="Knowledge tree"
+      // The layout effect owns this attribute after hydration, resetting it for each new layout.
+      aria-busy="true"
       onKeyDown={handleKeyDown}
       className="space-y-0.5"
     >

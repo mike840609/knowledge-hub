@@ -1,4 +1,4 @@
-import { readFile, rm } from "node:fs/promises";
+import { cp, readFile, rm, writeFile } from "node:fs/promises";
 import { preparePhase3Application, seedPhase3Identities } from "../../tests/e2e/fixtures/phase3-server";
 import { PHASE3_PROVIDER, phase3PersonaNames, phase3UserId } from "../../tests/e2e/fixtures/phase3-identities";
 import path from "node:path";
@@ -13,7 +13,7 @@ import { seedDevelopmentDatabase } from "../db/seed";
 
 const projectRoot = process.cwd();
 const environmentNames = [
-  "KM_IDENTITY_PROVIDER", "NODE_ENV", "PORT", "KM_E2E_PORT", "KM_DB_HOST", "KM_DB_PORT", "KM_DB_USER", "KM_DB_PASSWORD", "KM_DB_NAME",
+  "NEXT_TELEMETRY_DISABLED", "KM_IDENTITY_PROVIDER", "NODE_ENV", "PORT", "KM_E2E_PORT", "KM_DB_HOST", "KM_DB_PORT", "KM_DB_USER", "KM_DB_PASSWORD", "KM_DB_NAME",
   "KM_E2E_DB_HOST", "KM_E2E_DB_PORT", "KM_E2E_DB_USER", "KM_E2E_DB_PASSWORD", "KM_E2E_DB_NAME",
   "KM_LOCAL_IDENTITY_ENABLED", "KM_LOCAL_ID", "KM_LOCAL_EMP_ID", "KM_LOCAL_NAME", "KM_LOCAL_ORG_CODE",
   "KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION", "KM_TEAM_WORKSPACES_ENABLED",
@@ -81,8 +81,24 @@ async function main(): Promise<void> {
   try {
     await recordE2eRun(reportDirectory, suite, teamMode === "true" ? "Team-enabled" : "personal-only", async (report) => {
       runReport = report;
+      if (process.env.KM_E2E_GROUP && process.argv.slice(2).some((argument) => argument.startsWith("--shard"))) {
+        throw new Error("Use KM_E2E_GROUP or Playwright --shard, not both.");
+      }
       // Let Playwright resolve file filters/grep/projects, avoiding a second selector implementation.
       const listingEnvironment = { ...process.env, KM_TEAM_WORKSPACES_ENABLED: teamMode, KM_PHASE3_APP_ROOT: undefined, KM_E2E_UNCONFIGURED_SERVER: "false", KM_E2E_TEAMS_CLOSED_SERVER: "false", PLAYWRIGHT_JSON_OUTPUT_FILE: undefined, PLAYWRIGHT_JSON_OUTPUT_DIR: undefined, PLAYWRIGHT_JSON_OUTPUT_NAME: undefined };
+      if (process.env.KM_E2E_GROUP) {
+        type DiscoverySuite = { specs?: { id: string }[]; suites?: DiscoverySuite[] };
+        const complete = JSON.parse(await timed("complete test discovery", () => cancellation.run("node_modules/@playwright/test/cli.js", ["test", "--list", "--reporter=json"], { ...listingEnvironment, KM_E2E_GROUP: undefined }, projectRoot, true))) as { suites: DiscoverySuite[]; errors?: unknown[] };
+        if (complete.errors?.length) throw new Error("Complete E2E discovery failed.");
+        const ids: string[] = [];
+        const collectIds = (suites: DiscoverySuite[]) => {
+          for (const entry of suites) { ids.push(...(entry.specs ?? []).map((spec) => spec.id)); collectIds(entry.suites ?? []); }
+        };
+        collectIds(complete.suites);
+        if (!ids.length || new Set(ids).size !== ids.length) throw new Error("Invalid complete E2E discovery IDs.");
+        const playwright = JSON.parse(await readFile(path.join(projectRoot, "node_modules/@playwright/test/package.json"), "utf8")) as { version: string };
+        await writeFile(path.join(reportDirectory, "discovery.json"), JSON.stringify({ version: 1, commit: process.env.GITHUB_SHA ?? null, playwrightVersion: playwright.version, ids: ids.sort() }, null, 2) + "\n");
+      }
       const listing = JSON.parse(await timed("test discovery", () => cancellation.run("node_modules/@playwright/test/cli.js", ["test", ...process.argv.slice(2), "--list", "--reporter=json"], listingEnvironment, projectRoot, true))) as { suites: Array<{ file?: string; specs?: unknown[]; suites?: unknown[] }>; errors?: unknown[] };
       if (listing.errors?.length) throw new Error("Playwright test discovery failed.");
       const files = new Set<string>();
@@ -118,6 +134,7 @@ async function main(): Promise<void> {
       const commonEnvironment: NodeJS.ProcessEnv = {
         ...process.env,
         NODE_ENV: "production",
+        NEXT_TELEMETRY_DISABLED: "1",
         KM_IDENTITY_PROVIDER: "local",
         ...identity,
         KM_TEAM_WORKSPACES_ENABLED: teamMode,
@@ -148,6 +165,12 @@ async function main(): Promise<void> {
       cancellation.check();
       await timed("application build", () => cancellation.run("node_modules/next/dist/bin/next", ["build"], { ...commonEnvironment, NODE_ENV: "production" }));
       if (services.personas) phase3Root = await timed("SSO application preparation", () => preparePhase3Application(projectRoot));
+      const ssoCache = process.env.KM_E2E_BUILD_CACHE === "true" ? path.join(projectRoot, ".cache/e2e-sso") : undefined;
+      if (phase3Root && ssoCache) await timed("SSO cache restore", async () => {
+        await cp(ssoCache, path.join(phase3Root!, ".next/cache"), { recursive: true }).catch((error: NodeJS.ErrnoException) => {
+          if (error.code !== "ENOENT") throw error;
+        });
+      });
       cancellation.check();
       const phase3Environment = {
         ...commonEnvironment, KM_IDENTITY_PROVIDER: "company-sso", KM_COMPANY_SSO_PROVIDER: PHASE3_PROVIDER,
@@ -157,6 +180,10 @@ async function main(): Promise<void> {
       };
       cancellation.check();
       if (phase3Root) await timed("SSO application build", () => cancellation.run("node_modules/next/dist/bin/next", ["build"], phase3Environment, phase3Root));
+      if (phase3Root && ssoCache) await timed("SSO cache save", async () => {
+        await rm(ssoCache, { recursive: true, force: true });
+        await cp(path.join(phase3Root!, ".next/cache"), ssoCache, { recursive: true });
+      });
       cancellation.check();
       await timed("server readiness and browser tests", () => cancellation.run("node_modules/@playwright/test/cli.js", ["test", ...e2eReporterArguments(process.argv.slice(2))], {
         ...commonEnvironment, NODE_ENV: "production", PORT: e2ePort,

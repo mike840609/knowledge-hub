@@ -50,13 +50,14 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
   // The filter is work in progress rather than an arrangement, so it lasts
   // for the session: worth keeping across a refresh, not worth greeting
   // someone with a week later. Everything else below is a choice, and keeps.
-  const [query, setQuery] = usePersistedJson(`kh:tree-filter:${workspaceId}`, "", isString, "session");
-  const [filterOpen, setFilterOpen] = usePersistedJson(`kh:tree-filter-open:${workspaceId}`, false, isBoolean, "session");
+  const [query, setQuery, queryReady] = usePersistedJson(`kh:tree-filter:${workspaceId}`, "", isString, "session");
+  const [filterOpen, setFilterOpen, filterReady] = usePersistedJson(`kh:tree-filter-open:${workspaceId}`, false, isBoolean, "session");
   const filterTriggerRef = useRef<HTMLButtonElement>(null);
-  const [expanded, setExpanded] = usePersistedJson<Record<string, boolean>>(`kh:tree-expanded:${workspaceId}`, {}, isBooleanRecord);
-  const { shortcuts, update: updateShortcuts } = useDocumentShortcuts(workspaceId);
-  const [favoritesOpen, setFavoritesOpen] = usePersistedJson(`kh:sidebar-favorites:${workspaceId}`, false, isBoolean);
-  const [recentOpen, setRecentOpen] = usePersistedJson(`kh:sidebar-recent:${workspaceId}`, false, isBoolean);
+  const [expanded, setExpanded, expandedReady] = usePersistedJson<Record<string, boolean>>(`kh:tree-expanded:${workspaceId}`, {}, isBooleanRecord);
+  const { shortcuts, update: updateShortcuts, ready: shortcutsReady } = useDocumentShortcuts(workspaceId);
+  const [favoritesOpen, setFavoritesOpen, favoritesReady] = usePersistedJson(`kh:sidebar-favorites:${workspaceId}`, false, isBoolean);
+  const [recentOpen, setRecentOpen, recentReady] = usePersistedJson(`kh:sidebar-recent:${workspaceId}`, false, isBoolean);
+  const sidebarReady = queryReady && filterReady && expandedReady && shortcutsReady && favoritesReady && recentReady;
   const showArchived = searchParams.get("includeArchived") === "true";
   const resolvedDocumentId = selectedDocumentId ?? (typeof routeParams?.documentId === "string" ? routeParams.documentId : undefined);
   const needle = query.trim().toLowerCase();
@@ -156,7 +157,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
   }
 
   return (
-    <aside aria-label="Knowledge explorer" className="kh-sidebar-surface flex h-full min-h-0 w-full shrink-0 flex-col gap-3 border-t border-kh-border lg:border-r lg:border-t-0 bg-kh-bg-sunken p-3">
+    <aside aria-label="Knowledge explorer" aria-busy={!sidebarReady} className="kh-sidebar-surface flex h-full min-h-0 w-full shrink-0 flex-col gap-3 border-t border-kh-border lg:border-r lg:border-t-0 bg-kh-bg-sunken p-3">
       <div className="flex shrink-0 items-center justify-between gap-2">
         <h2 className="px-2 text-caption font-medium text-kh-text-muted">Documents</h2>
         <div className="flex items-center gap-0.5">
@@ -252,6 +253,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
               <div id={`collection-${candidate.id}`} hidden={!open} className="mt-1 pl-2">
                 {open ? <KnowledgeTree
                   items={tree}
+                  sidebarReady={sidebarReady}
                   workspaceId={workspaceId}
                   sourceId={candidate.id}
                   selectedDocumentId={resolvedDocumentId}

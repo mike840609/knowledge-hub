@@ -63,6 +63,8 @@ jobs:
           --health-timeout=5s
           --health-retries=20
     env:
+      KM_E2E_BUILD_CACHE: "true"
+      KM_E2E_GROUP: ${{ matrix.shard }}
       KM_TEST_DB_HOST: 127.0.0.1
       KM_TEST_DB_PORT: 3307
       KM_TEST_DB_USER: root
@@ -77,12 +79,22 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Restore application compiler caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            .next/cache
+            .cache/e2e-sso
+          key: e2e-next-${{ runner.os }}-${{ runner.arch }}-${{ matrix.shard }}-${{ hashFiles('package-lock.json', 'next.config.ts', 'tsconfig.json', 'postcss.config.mjs', 'tailwind.config.ts', 'patches/**') }}-${{ hashFiles('src/**', 'tests/e2e/fixtures/phase3-*.ts') }}
+          restore-keys: |
+            e2e-next-${{ runner.os }}-${{ runner.arch }}-${{ matrix.shard }}-${{ hashFiles('package-lock.json', 'next.config.ts', 'tsconfig.json', 'postcss.config.mjs', 'tailwind.config.ts', 'patches/**') }}-
       - run: npx playwright install --with-deps --only-shell chromium
-      - run: npm run test:e2e -- --shard=${{ matrix.shard }}/2 --reporter=list,blob
+      - run: npm run test:e2e -- --reporter=list,blob
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: e2e-test-results-${{ matrix.shard }}
+          overwrite: true
           path: |
             test-results/
             playwright-report/e2e-runs/
@@ -101,7 +113,9 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - run: npm ci
+          cache-dependency-path: scripts/test/reporting/package-lock.json
+      - run: npm ci --ignore-scripts
+        working-directory: scripts/test/reporting
       - uses: actions/download-artifact@v4
         with:
           pattern: e2e-test-results-*
@@ -113,11 +127,12 @@ jobs:
         run: |
           mkdir -p all-blob-reports
           find e2e-shards -type d -name blob-report -exec sh -c 'cp -R "$1/." all-blob-reports/' _ {} \;
-          npx playwright merge-reports --reporter=html all-blob-reports
+          node scripts/test/reporting/node_modules/@playwright/test/cli.js merge-reports --reporter=html all-blob-reports
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
           name: e2e-summary
+          overwrite: true
           path: |
             playwright-report/
             e2e-summary.json

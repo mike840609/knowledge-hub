@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { personalWorkspaceId as mySpace } from "./fixtures/my-space";
 import { openPalette } from "./fixtures/palette";
 
 // Server-bound assertions only; see the note in phase5-authoring.spec.ts.
@@ -15,11 +16,6 @@ function unique(label: string) {
   return `${label}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
-async function mySpace(page: Page): Promise<string> {
-  await page.goto("/");
-  await page.waitForURL(/\/w\/[^/]+\/knowledge/);
-  return new URL(page.url()).pathname.split("/")[2];
-}
 
 async function createNote(page: Page, workspaceId: string, title: string) {
   const response = await page.request.post(`/api/workspaces/${workspaceId}/documents`, { data: { title, markdown: "Some words." } });
@@ -160,35 +156,42 @@ test.describe("the palette, before anything is typed", () => {
     await read(page, notes.b, b);
     await read(page, notes.c, c);
     // The answer is late: what is showing is the actions, and the person is already on the way down them.
+    let releaseRecent!: () => void;
+    const recentResponse = new Promise<void>((resolve) => { releaseRecent = resolve; });
     await page.route("**/recent-documents?*", async (route) => {
-      await new Promise((resolve) => setTimeout(resolve, 1_500));
+      await recentResponse;
       await route.continue();
     });
 
-    await openPalette(page, { settled: false });
-    const list = listbox(page);
-    await expect(list).toHaveAttribute("aria-busy", "true");
-    await expect(options(page).first()).toHaveAttribute("aria-selected", "true");
-    await page.keyboard.press("ArrowDown");
-    const chosen = options(page).nth(1);
-    await expect(chosen).toHaveAttribute("aria-selected", "true");
-    const label = await chosen.innerText();
-    expect(label).not.toContain(b);
+    try {
+      await openPalette(page, { settled: false });
+      const list = listbox(page);
+      await expect(list).toHaveAttribute("aria-busy", "true");
+      await expect(options(page).first()).toHaveAttribute("aria-selected", "true");
+      await page.keyboard.press("ArrowDown");
+      const chosen = options(page).nth(1);
+      await expect(chosen).toHaveAttribute("aria-selected", "true");
+      const label = await chosen.innerText();
+      expect(label).not.toContain(b);
 
-    // Beta and Alpha arrive above it (and whatever else was opened lately). It is still the row that was
-    // chosen, further down, not the one that happens to be second: what Enter does is what the person last picked.
-    await expect(recentHeading(page)).toBeVisible(ROUND_TRIP);
-    await expect(list).toHaveAttribute("aria-busy", "false");
-    await expect(options(page).nth(0)).toContainText(b);
-    await expect(options(page).nth(0)).toHaveAttribute("aria-selected", "false");
-    await expect(options(page).nth(1)).toHaveAttribute("aria-selected", "false");
-    const selected = list.locator('[role="option"][aria-selected="true"]');
-    await expect(selected).toHaveCount(1);
-    expect(await selected.innerText()).toBe(label);
+      releaseRecent();
+
+      // Beta and Alpha arrive above it (and whatever else was opened lately). It is still the row that was
+      // chosen, further down, not the one that happens to be second: what Enter does is what the person last picked.
+      await expect(recentHeading(page)).toBeVisible(ROUND_TRIP);
+      await expect(list).toHaveAttribute("aria-busy", "false");
+      await expect(options(page).nth(0)).toContainText(b);
+      await expect(options(page).nth(0)).toHaveAttribute("aria-selected", "false");
+      await expect(options(page).nth(1)).toHaveAttribute("aria-selected", "false");
+      const selected = list.locator('[role="option"][aria-selected="true"]');
+      await expect(selected).toHaveCount(1);
+      expect(await selected.innerText()).toBe(label);
+    } finally { releaseRecent(); }
   });
 
   test("with no recent documents, contextual actions lead", async ({ page }) => {
-    await mySpace(page);
+    const workspaceId = await mySpace(page);
+    await page.goto(`/w/${workspaceId}/knowledge`);
     await expect(page.getByRole("treeitem").first()).toBeVisible(ROUND_TRIP);
     await openPalette(page);
     await expect(recentHeading(page)).toBeHidden();

@@ -35,6 +35,7 @@ export function documentShortcutKey(sourceId: string, documentId: string): strin
 export function useDocumentShortcuts(workspaceId: string): {
   shortcuts: DocumentShortcuts;
   update: (change: (previous: DocumentShortcuts) => DocumentShortcuts) => void;
+  ready: boolean;
 } {
   const { access } = useWorkspaceAuthorization();
   const personal = access.workspace.type === "PERSONAL";
@@ -42,6 +43,7 @@ export function useDocumentShortcuts(workspaceId: string): {
   const generation = useRef(0);
   const storageKey = `kh:document-shortcuts:${workspaceId}`;
   const [shortcuts, setShortcuts] = useState<DocumentShortcuts>(emptyDocumentShortcuts);
+  const [settledFor, setSettledFor] = useState<string | null>(null);
   // `update` must not depend on the current value, or every caller would have
   // to re-create its effects whenever a star moved.
   const current = useRef(shortcuts);
@@ -70,10 +72,13 @@ export function useDocumentShortcuts(workspaceId: string): {
     };
     window.addEventListener(CHANGED, onChange);
     let live = true;
+    let pending = 0;
     const refresh = async () => {
-      if (!personal) return;
+      pending++;
+      startTransition(() => setSettledFor(null));
       const requestGeneration = generation.current;
       try {
+        if (!personal) return;
         await migrateLocalFavorites(workspaceId);
         await pendingFavoriteWrites(workspaceId).catch(() => {});
         const response = await fetch(`/api/workspaces/${workspaceId}/personal`, { cache: "no-store" });
@@ -87,6 +92,11 @@ export function useDocumentShortcuts(workspaceId: string): {
         }
         writeStored("local", storageKey, JSON.stringify(next));
       } catch { if (live) toast({ message: "Favorites could not sync. Showing this device’s saved list.", tone: "danger" }); }
+      finally {
+        pending--;
+        // Failure still leaves a usable local list; late requests from old workspaces do not mark it ready.
+        if (live && pending === 0) startTransition(() => setSettledFor(storageKey));
+      }
     };
     void refresh();
     window.addEventListener("focus", refresh);
@@ -132,5 +142,5 @@ export function useDocumentShortcuts(workspaceId: string): {
     [storageKey, workspaceId, personal, toast],
   );
 
-  return { shortcuts, update };
+  return { shortcuts, update, ready: settledFor === storageKey };
 }

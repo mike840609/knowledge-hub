@@ -1,23 +1,7 @@
-import { execFileSync } from "node:child_process";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const root = path.resolve(process.argv[2] ?? "e2e-shards");
-const listing = JSON.parse(execFileSync(process.execPath, ["node_modules/@playwright/test/cli.js", "test", "--list", "--reporter=json"], {
-  encoding: "utf8",
-  maxBuffer: 16 * 1024 * 1024,
-  env: { ...process.env, KM_TEAM_WORKSPACES_ENABLED: "true", KM_PHASE3_APP_ROOT: "", KM_E2E_UNCONFIGURED_SERVER: "false", KM_E2E_TEAMS_CLOSED_SERVER: "false", PLAYWRIGHT_JSON_OUTPUT_FILE: "", PLAYWRIGHT_JSON_OUTPUT_DIR: "", PLAYWRIGHT_JSON_OUTPUT_NAME: "" },
-}));
-if (listing.errors?.length) throw new Error("Full test discovery failed.");
-const expected = new Set();
-function collect(suites) {
-  for (const suite of suites) {
-    for (const spec of suite.specs ?? []) expected.add(spec.id);
-    collect(suite.suites ?? []);
-  }
-}
-collect(listing.suites);
-if (!expected.size) throw new Error("No tests discovered.");
 async function find(directory, name) {
   const files = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -29,7 +13,20 @@ async function find(directory, name) {
 }
 const reports = await find(root, "tests.json");
 const runners = await find(root, "runner.json");
-if (reports.length !== 2 || runners.length !== 2) throw new Error("Expected exactly two completed shard reports.");
+const discoveries = await find(root, "discovery.json");
+if (reports.length !== 2 || runners.length !== 2 || discoveries.length !== 2) throw new Error("Expected exactly two completed shard reports and discovery manifests.");
+const manifests = await Promise.all(discoveries.map(async file => JSON.parse(await readFile(file, "utf8"))));
+const locked = JSON.parse(await readFile(new URL("../../package-lock.json", import.meta.url), "utf8")).packages["node_modules/@playwright/test"].version;
+const reportingVersion = JSON.parse(await readFile(new URL("./reporting/package-lock.json", import.meta.url), "utf8")).packages["node_modules/@playwright/test"].version;
+if (reportingVersion !== locked) throw new Error("Report merger's Playwright version differs from application lockfile.");
+for (const manifest of manifests) {
+  if (manifest.version !== 1 || !Array.isArray(manifest.ids) || !manifest.ids.length || manifest.ids.some(id => typeof id !== "string" || !id)) throw new Error("Invalid discovery manifest.");
+  if (new Set(manifest.ids).size !== manifest.ids.length) throw new Error("Duplicate discovery IDs.");
+  if (manifest.playwrightVersion !== locked) throw new Error("Discovery used an unexpected Playwright version.");
+  if (process.env.GITHUB_SHA && manifest.commit !== process.env.GITHUB_SHA) throw new Error("Discovery is from a different commit.");
+}
+if (manifests[0].commit !== manifests[1].commit || JSON.stringify([...manifests[0].ids].sort()) !== JSON.stringify([...manifests[1].ids].sort())) throw new Error("Shards disagree about complete test discovery.");
+const expected = new Set(manifests[0].ids);
 const seen = new Set();
 const counts = { passed: 0, failed: 0, flaky: 0, skipped: 0 };
 const tests = [];

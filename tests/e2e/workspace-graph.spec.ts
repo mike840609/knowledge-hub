@@ -153,7 +153,7 @@ test.describe("the workspace graph", () => {
     const applied = await (await request.post(`/api/source-imports/${snapshot}/apply`, { data: {} })).json();
     expect(applied.kind).toBe("APPLIED");
     await page.goto(`/w/${workspaceId}/graph?source=${applied.sourceId}`);
-    const empty = page.locator("[data-graph-empty]");
+    const empty = page.locator("[data-graph-empty]").filter({ visible: true });
     await expect(empty.getByText("No links between documents yet")).toBeVisible(ROUND_TRIP);
     await expect(empty.getByText("[[Document title]]")).toBeVisible();
     await expect(empty.getByRole("link", { name: "Open a document", exact: true })).toBeVisible();

@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
+import { personalWorkspaceId as mySpace } from "./fixtures/my-space";
 import { phase3Origin, phase3UserId, type Phase3Persona } from "./fixtures/phase3-identities";
 import { openPalette } from "./fixtures/palette";
 
@@ -22,11 +23,6 @@ function unique(label: string) {
 
 const composer = (page: Page) => page.locator("main form").first();
 
-async function mySpace(page: Page): Promise<string> {
-  await page.goto("/");
-  await page.waitForURL(/\/w\/[^/]+\/knowledge/);
-  return new URL(page.url()).pathname.split("/")[2];
-}
 
 async function createNote(page: Page, workspaceId: string, title: string, markdown: string) {
   const response = await page.request.post(`/api/workspaces/${workspaceId}/documents`, { data: { title, markdown } });

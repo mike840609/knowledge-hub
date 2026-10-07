@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { personalWorkspaceId as mySpace } from "./fixtures/my-space";
 
 // Server-bound assertions only; see the note in phase5-authoring.spec.ts.
 const ROUND_TRIP = { timeout: 15_000 };
@@ -40,11 +41,6 @@ function surfaceOf(page: Page) {
 }
 
 /** The E2E user's own My Space. */
-async function mySpace(page: Page): Promise<string> {
-  await page.goto("/");
-  await page.waitForURL(/\/w\/[^/]+\/knowledge/);
-  return new URL(page.url()).pathname.split("/")[2];
-}
 
 /** Creates a note through the API — these tests are about the editor, not the new-document page — and returns its URL. */
 async function createNote(page: Page, workspaceId: string, title: string, markdown: string) {
