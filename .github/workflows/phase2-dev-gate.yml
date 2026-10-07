@@ -112,7 +112,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           mkdir -p all-blob-reports
-          find e2e-shards -name '*.zip' -path '*/blob-report/*' -exec cp {} all-blob-reports/ \;
+          find e2e-shards -type d -name blob-report -exec sh -c 'cp -R "$1/." all-blob-reports/' _ {} \;
           npx playwright merge-reports --reporter=html all-blob-reports
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
