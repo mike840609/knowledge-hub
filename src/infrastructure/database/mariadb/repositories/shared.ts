@@ -1,5 +1,6 @@
 import { IntegrityError, IntegrityViolationError } from "@/modules/knowledge/domain/errors";
 import { importError } from "@/modules/sources/domain/import-errors";
+import { WorkspaceBusyError } from "@/shared/domain/errors";
 import type { DatabaseConnection } from "../pool";
 
 export type DbRow = Record<string, unknown>;
@@ -41,9 +42,10 @@ const INTEGRITY_CODES = ["ER_DUP_ENTRY", "ER_NO_REFERENCED_ROW_2", "ER_ROW_IS_RE
 const INTEGRITY_ERRNOS = [1062, 1452, 1451, 3819, 1216, 4025];
 
 /**
- * Design §17.3: deadlock / lock wait timeout is a retryable apply failure, not
- * an internal error — the transaction rolled back, so nothing changed and the
- * same snapshot can be applied again. `mariadb`'s `SqlError` sets both `errno`
+ * Deadlock / lock wait timeout is retryable, not an internal error: the
+ * transaction rolled back, so nothing changed and the same request can run
+ * again. It is reported as WORKSPACE_BUSY for every caller; Apply maps it to
+ * its own IMPORT_APPLY_RETRYABLE (design §17.3). `mariadb`'s `SqlError` sets both `errno`
  * (1213 / 1205) and the `code` string it derives from `errno`, but `code` falls
  * back to `"UNKNOWN"` when the errno is absent from the driver's table, so both
  * are matched here.
@@ -66,7 +68,7 @@ export function mapDatabaseError(error: unknown): Error {
   const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
   const errno = typeof error === "object" && error !== null && "errno" in error ? Number(error.errno) : Number.NaN;
   if (RETRYABLE_CODES.includes(code) || RETRYABLE_ERRNOS.includes(errno)) {
-    return importError("IMPORT_APPLY_RETRYABLE", "A transient database conflict interrupted the operation; retry the request.");
+    return new WorkspaceBusyError();
   }
   if (DATA_BOUND_CODES.includes(code) || DATA_BOUND_ERRNOS.includes(errno)) {
     return importError("INVALID_IMPORT_MANIFEST", "Import manifest contains a value that exceeds the database storage limit.");
