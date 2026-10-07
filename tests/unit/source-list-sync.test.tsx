@@ -15,7 +15,7 @@ vi.mock("@/components/imports/folder-handle-store", () => ({
   loadRememberedHandle: async () => state.handleAvailable ? ({handle:{},rootName:"notes"}) : null,
   collectHandleFiles: async () => [], rememberFolderHandle: async () => {},
 }));
-vi.mock("@/components/imports/folder-import-form", () => ({ runFolderImport: state.run }));
+vi.mock("@/components/imports/folder-import-form", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/components/imports/folder-import-form")>()), runFolderImport: state.run }));
 let root: Root; let container: HTMLDivElement;
 const source = (id: string, overrides = {}): SourceListItemModel => ({ source: {id,workspaceId:"ws",name:`Source ${id}`,sourceType:"FOLDER_SYNC",ownership:"SOURCE_MANAGED",status:"ACTIVE",syncVersion:1,...overrides}, latestRun:null });
 beforeEach(() => {
@@ -119,8 +119,8 @@ it("shows scanning, upload counts, preview preparation, and the required Apply s
   expect(container.querySelector('li [role="status"]')?.textContent).toContain("Apply is required");
   await act(async () => progress({kind:"UPLOADING",uploaded:2,total:5}));
   expect(container.querySelector('li [role="status"]')?.textContent).toContain("2/5");
-  await act(async () => progress({kind:"FINALIZING"}));
-  expect(container.querySelector('li [role="status"]')?.textContent).toContain("building the preview");
+  await act(async () => progress({kind:"FINALIZING",files:6000,startedAt:Date.now()}));
+  expect(container.querySelector('li [role="status"]')?.textContent).toContain("Analyzing 6,000 Markdown files and building the preview");
   await act(async () => resolve("preview-1"));
   expect(container.querySelector('li [role="status"]')?.textContent).toContain("select Apply");
 });

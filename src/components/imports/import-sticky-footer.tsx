@@ -31,6 +31,18 @@ function readEnvelope(body: unknown): { code: string; message: string } | null {
  * (§17.3) rolled back cleanly, so Apply must stay enabled for a retry.
  * A 409 with no readable envelope keeps the old conservative latch.
  */
+const FINAL_MINUTES_MS = 5 * 60 * 1000;
+
+/**
+ * A preview lasts 30 minutes, and an expired one means scanning and uploading the
+ * folder again, so the time left is shown while it can still be applied.
+ */
+export function previewTimeLeft(msLeft: number): string {
+  if (msLeft < 60_000) return "This preview expires in less than a minute. Apply it now, or check for changes again later.";
+  const minutes = Math.floor(msLeft / 60_000);
+  return `This preview expires in ${minutes} ${minutes === 1 ? "minute" : "minutes"}.`;
+}
+
 export function classifyApplyError(status: number, body: unknown): ApplyFailure {
   const envelope = readEnvelope(body);
   if (!envelope) {
@@ -62,6 +74,14 @@ export function ImportStickyFooter({
   const riskConfirmed=!preview.safety?.highRisk || (!!preview.planHash && sourceConfirmation===preview.sourceName);
   const [versionConflict, setVersionConflict] = useState(false);
   const [expired, setExpired] = useState(preview.expired);
+  // Read after mount (the server's clock is not the reader's) and refreshed twice a minute.
+  const [msLeft, setMsLeft] = useState<number | null>(null);
+  useEffect(() => {
+    const update = () => setMsLeft(new Date(preview.expiresAt).getTime() - Date.now());
+    update();
+    const timer = window.setInterval(update, 30_000);
+    return () => window.clearInterval(timer);
+  }, [preview.expiresAt]);
   useEffect(() => {
     const remaining = new Date(preview.expiresAt).getTime() - Date.now();
     setExpired(preview.expired || remaining <= 0);
@@ -149,6 +169,11 @@ export function ImportStickyFooter({
           </button> : <p role="status" className="text-body text-kh-text-muted">This preview is read-only. Applying is unavailable.</p>}
         </div>
       </div>
+      {msLeft !== null && !expired && effectiveState === "READY" ? (
+        <p className={`mx-auto mt-2 max-w-page text-caption ${msLeft <= FINAL_MINUTES_MS ? "text-kh-warning" : "text-kh-text-muted"}`}>
+          {previewTimeLeft(msLeft)}
+        </p>
+      ) : null}
       {effectiveState === "STALE" || expired ? (
         <p className="mx-auto mt-2 max-w-page text-body text-kh-danger">
           {expired ? "This preview expired. Check for changes again to create a fresh preview." : "The source was updated by another sync. Check for changes again to create a fresh preview."}

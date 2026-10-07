@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
-import { runFolderImport, type ImportUiState, type FolderImportClientLimits } from "@/components/imports/folder-import-form";
+import { finalizingText, runFolderImport, type ImportUiState, type FolderImportClientLimits } from "@/components/imports/folder-import-form";
 import {
   collectHandleFiles,
   getRememberedFolderMeta,
@@ -92,7 +92,7 @@ export function SyncNowButton({ workspaceId, sourceId, sourceName, limits, compa
           if (!mountedRef.current) return;
           if (state.kind === "PREPARING") setStatus("Preparing files for upload…");
           else if (state.kind === "UPLOADING") setStatus(`Uploading Markdown files… ${state.uploaded}/${state.total}`);
-          else if (state.kind === "FINALIZING") setStatus("Analyzing the folder and building the preview…");
+          else if (state.kind === "FINALIZING") setStatus(finalizingText(state.files));
         },
         assertAllowed,
         limits,
