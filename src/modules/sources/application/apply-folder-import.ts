@@ -12,6 +12,7 @@ import { DomainError, WorkspaceBusyError } from "@/shared/domain/errors";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import { executeFolderImportPlan, type ImportApplyFailurePoint } from "./source-import-plan-executor";
 import { captureAppliedChanges } from "./record-sync-run-changes";
+import type { ImportMemoryBudget } from "./import-memory-budget";
 import { requireKnownSnapshotWorkspaceRead } from "./import-snapshot-access";
 import { translateKnownSnapshotAccessError } from "./import-snapshot-access";
 
@@ -19,7 +20,7 @@ export type ApplyFolderImportResult =
   | { kind: "APPLIED"; sourceId: string; resultVersion: number; runId: string | null; alreadyApplied: boolean }
   | { kind: "VERSION_CONFLICT"; sourceId: string; snapshotVersion: number; currentVersion: number };
 
-type Options = { now?: () => Date; failurePoint?: ImportApplyFailurePoint };
+type Options = { now?: () => Date; failurePoint?: ImportApplyFailurePoint; memoryBudget?: ImportMemoryBudget };
 
 /**
  * Snapshot provenance every SyncRun carries (spec §22). Snapshots are deleted
@@ -56,13 +57,22 @@ function assertImportableSource(source: KnowledgeSource): void {
 export class ApplyFolderImportService {
   private readonly now: () => Date;
   private readonly failurePoint?: ImportApplyFailurePoint;
+  private readonly memoryBudget?: ImportMemoryBudget;
 
   constructor(private readonly uow: SourceUnitOfWork, options: Options = {}) {
     this.now = options.now ?? (() => new Date());
     this.failurePoint = options.failurePoint;
+    this.memoryBudget = options.memoryBudget;
   }
 
   async apply(caller: CallerContext, snapshotId: string, riskAcknowledgment?: ImportRiskAcknowledgment): Promise<ApplyFolderImportResult> {
+    const budget = this.memoryBudget;
+    if (!budget) return this.applyNow(caller, snapshotId, riskAcknowledgment);
+    const bytes = await this.uow.run((repositories) => repositories.importSnapshotEntries.markdownBytes(snapshotId));
+    return budget.run(bytes, () => this.applyNow(caller, snapshotId, riskAcknowledgment));
+  }
+
+  private async applyNow(caller: CallerContext, snapshotId: string, riskAcknowledgment?: ImportRiskAcknowledgment): Promise<ApplyFolderImportResult> {
     const failedAttempt: { value: FailedAttempt | null } = { value: null };
     try {
       return await this.uow.run(async (repositories) => {

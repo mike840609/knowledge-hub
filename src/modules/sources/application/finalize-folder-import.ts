@@ -10,6 +10,7 @@ import type { FolderImportPlan, ImportDiffSummary, ReadyImportAsset, ReadyImport
 import type { FinalizedImportSnapshotEntry, ImportSnapshot, ImportSnapshotEntry } from "@/modules/sources/domain/import-snapshot";
 import type { SourceRepositories, SourceUnitOfWork } from "@/modules/sources/ports/unit-of-work";
 import { translateKnownSnapshotAccessError } from "./import-snapshot-access";
+import type { ImportMemoryBudget } from "./import-memory-budget";
 import {
   blockedImportPlan,
   previewFromSnapshot,
@@ -20,7 +21,7 @@ import {
 
 export type { ImportPreview } from "./reconcile-import-snapshot";
 
-type Options = { limits?: ImportLimits; now?: () => Date; readyTtlMs?: number };
+type Options = { limits?: ImportLimits; now?: () => Date; readyTtlMs?: number; memoryBudget?: ImportMemoryBudget };
 
 type NormalizedEntry = {
   staged: ImportSnapshotEntry;
@@ -117,15 +118,24 @@ export class FinalizeFolderImportService {
   private readonly limits: ImportLimits;
   private readonly now: () => Date;
   private readonly readyTtlMs: number;
+  private readonly memoryBudget?: ImportMemoryBudget;
   private readonly quotaLockTimeoutSeconds = 10;
 
   constructor(private readonly uow: SourceUnitOfWork, options: Options = {}) {
     this.limits = options.limits ?? DEFAULT_IMPORT_LIMITS;
     this.now = options.now ?? (() => new Date());
     this.readyTtlMs = options.readyTtlMs ?? 30 * 60 * 1000;
+    this.memoryBudget = options.memoryBudget;
   }
 
   async finalize(caller: CallerContext, snapshotId: string): Promise<ImportPreview> {
+    const budget = this.memoryBudget;
+    if (!budget) return this.finalizeNow(caller, snapshotId);
+    const bytes = await this.uow.run((repositories) => repositories.importSnapshotEntries.markdownBytes(snapshotId));
+    return budget.run(bytes, () => this.finalizeNow(caller, snapshotId));
+  }
+
+  private async finalizeNow(caller: CallerContext, snapshotId: string): Promise<ImportPreview> {
     const now = this.now();
     // Lock order in both phases is snapshot → Source → Workspace. Phase A
     // holds no quota lock; only Phase B runs under runWithCreatorQuotaLock.

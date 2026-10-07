@@ -851,6 +851,11 @@ max READY snapshots/user      10
 
 These are configurable application limits, not core domain semantics.
 
+**Server-wide admission (2026-10-07).** Per-user limits do not bound the server. Finalize and Apply each hold a whole import in memory; at the Markdown limit one was measured at 1.7–2.4 GB RSS. They therefore share one byte budget per server process, equal to max total Markdown (`ImportMemoryBudget`, wired in `src/server/composition.ts`).
+- Each phase is admitted by its snapshot's declared Markdown bytes; assets are not loaded, so they do not count. Admission is first come, first served.
+- Imports that fit run side by side. One that does not fit **waits**, never fails, because a refused finalize makes the browser abandon the upload. An import larger than the budget runs alone.
+- Several server processes each have their own budget.
+
 Retention：
 
 ```text

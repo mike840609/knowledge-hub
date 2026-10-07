@@ -112,6 +112,11 @@ export class MariaDbImportSnapshotEntryRepository implements ImportSnapshotEntry
     await flush();
   }
 
+  async markdownBytes(snapshotId: string): Promise<number> {
+    const rows = await this.connection.query<DbRow[]>("SELECT COALESCE(SUM(declared_size), 0) AS bytes FROM source_import_snapshot_entries WHERE snapshot_id = ? AND entry_type = 'DOCUMENT'", [snapshotId]);
+    return Number(rows[0].bytes);
+  }
+
   async listBySnapshotId(snapshotId: string): Promise<ImportSnapshotEntry[]> {
     const rows = await this.connection.query<DbRow[]>(
       "SELECT * FROM source_import_snapshot_entries WHERE snapshot_id=? ORDER BY client_relative_path, upload_key",
