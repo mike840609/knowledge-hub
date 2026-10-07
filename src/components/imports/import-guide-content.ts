@@ -176,7 +176,7 @@ function english(limits: GuideLimits): GuideContent {
           },
           {
             kind: "p",
-            text: "To keep a document the same through renames and edits, give it a `knowledge_id` in its frontmatter: any text up to 512 characters, unique within the folder. Add it to an existing file in a sync of its own, before renaming, so that sync still matches the file by its path. Once a document has one, keep it: removing or changing it, or reusing it in another file, blocks the next Preview.",
+            text: "To keep a document the same through renames and edits, give it a `knowledge_id` in its frontmatter: a text value up to 512 characters, unique within the folder (quote it if it is only digits, such as `\"2024\"`, or the import refuses it as a number). Add it to an existing file in a sync of its own, before renaming, so that sync still matches the file by its path. Once a document has one, keep it: removing or changing it, or reusing it in another file, blocks the next Preview.",
           },
           {
             kind: "code",
@@ -347,7 +347,7 @@ function traditionalChinese(limits: GuideLimits): GuideContent {
           },
           {
             kind: "p",
-            text: "想讓文件在改名、編輯後仍是同一份，請在它的 frontmatter 加上 `knowledge_id`：任何 512 個字元以內、在資料夾中不重複的文字。要替既有檔案加上它時，請先單獨同步一次再改名，讓那次同步仍能用路徑認出這個檔案。文件一旦有了 `knowledge_id` 就請保留：移除或修改它，或在另一個檔案重複使用，都會讓下一次預覽無法套用。",
+            text: "想讓文件在改名、編輯後仍是同一份，請在它的 frontmatter 加上 `knowledge_id`：512 個字元以內、在資料夾中不重複的文字值（若只有數字，例如 `\"2024\"`，請加上引號，否則會被當成數字而無法匯入）。要替既有檔案加上它時，請先單獨同步一次再改名，讓那次同步仍能用路徑認出這個檔案。文件一旦有了 `knowledge_id` 就請保留：移除或修改它，或在另一個檔案重複使用，都會讓下一次預覽無法套用。",
           },
           {
             kind: "code",

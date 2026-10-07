@@ -1,6 +1,6 @@
 "use client";
 import { loadSourceImportScope } from "@/lib/source-import-scope";
-import { isExcludedImportPath, parseExcludedPaths } from "@/lib/import-exclusions";
+import { isExcludedImportPath, isIgnoredImportPath, matchesExcludedRule, parseExcludedPaths } from "@/lib/import-exclusions";
 import { ImportExclusionsSettings } from "./import-exclusions-settings";
 import { SampleWikiImport } from "./sample-wiki-import";
 
@@ -332,7 +332,9 @@ export async function runFolderImport(input: {
   assertAllowed();
   if (input.expectedSourceVersion !== undefined && input.expectedSourceVersion !== savedScope?.syncVersion) throw Object.assign(new Error("Source settings changed; reload and check the folder again."), { code: "SOURCE_VERSION_CONFLICT" });
   const exclusions = parseExcludedPaths((input.excludedPaths ?? savedScope?.paths ?? []).join("\n"));
-  const selectedCount = selection.staged.length;
+  // Counted against the source's own rules only, so the number means the same in every browser:
+  // the native picker never lists ignored files, the fallback input lists them all.
+  const excludedCount = selection.staged.filter(entry => !isIgnoredImportPath(entry.relativePath) && matchesExcludedRule(entry.relativePath, exclusions)).length;
   selection.staged = selection.staged.filter(entry => !isExcludedImportPath(entry.relativePath, exclusions));
   if (selection.staged.length === 0) throw Object.assign(new Error("No files remain after exclusions. Nothing was synced."), { code: "INVALID_IMPORT_MANIFEST" });
   const manifest = await buildManifest(selection.staged, limits, signal);
@@ -342,9 +344,9 @@ export async function runFolderImport(input: {
       sourceName: sourceName.trim() || selection.rootName,
       rootName: selection.rootName,
       manifest,
-      importScope: { paths: exclusions, excludedCount: selectedCount - selection.staged.length },
+      importScope: { paths: exclusions, excludedCount },
     })
-    : await postJson(`/api/sources/${target.sourceId}/source-imports`, { rootName: selection.rootName, manifest, importScope: { paths: exclusions, excludedCount: selectedCount - selection.staged.length }, expectedSourceVersion: savedScope!.syncVersion });
+    : await postJson(`/api/sources/${target.sourceId}/source-imports`, { rootName: selection.rootName, manifest, importScope: { paths: exclusions, excludedCount }, expectedSourceVersion: savedScope!.syncVersion });
   if (!session.ok || !session.body || typeof session.body !== "object" || !("snapshotId" in session.body)) {
     const failure = readErrorCode(session.body, "Creating the import session failed.");
     onProgress({ kind: "ERROR", code: failure.code, message: failure.message });

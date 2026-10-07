@@ -69,7 +69,8 @@ Sections:
 
 Facts the guide states, all verified in the code on `main` at the time of writing:
 
-- `.git` and `.obsidian` are always excluded, as is every name that starts with a dot, `node_modules` and `Thumbs.db`, at any depth, without a warning; up to 50 exact paths can be excluded additionally, no wildcards. Skipped paths are still listed in the upload and count toward the file-count and size limits before they are dropped, so the guide says to move or exclude a large `node_modules` or hidden folder first.
+- `.git` and `.obsidian` are always excluded, as is every name that starts with a dot, `node_modules` and `Thumbs.db`, at any depth, without a warning; up to 50 exact paths can be excluded additionally, no wildcards. Skipped paths are never read or uploaded and do not count toward the file-count or size limits (amended 2026-10-07: the browser now prefilters every ignored path, Phase 2 spec §6.2); the guide no longer tells users to move or exclude a large `node_modules` or hidden folder first.
+- Keeping it in sync (added 2026-10-07): a file is recognized across syncs by its path, or by unchanged content when the path changed; a rename or move plus an edit in one sync makes a new document and archives the old one with its share links, favorites and history. A frontmatter `knowledge_id` (a text value up to 512 characters, unique in the folder) keeps it the same; removing, changing or reusing one blocks the next Preview (stable source identity amendment §5).
 - Title precedence: frontmatter `title`, then the first H1, then the file name; a difference between the first two is a warning and frontmatter wins.
 - Links: `[[Title]]`, `[[folder/Note]]` (path-qualified form), relative `.md` links; heading anchors follow GitHub's slugging and keep non-Latin text.
 - Assets are stored as metadata and references only; there is no binary attachment storage.

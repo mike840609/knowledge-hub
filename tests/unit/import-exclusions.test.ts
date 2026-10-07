@@ -45,6 +45,13 @@ it("drops node_modules and hidden folders before reading, hashing, counting or u
   const uploads=requests.filter(r=>r.url.endsWith("/entries"));
   expect(uploads).toHaveLength(1);expect(JSON.parse(String((uploads[0].init.body as FormData).get("entries")))).toHaveLength(1);
 });
+it("reports only the files the source's own rules excluded, not the ignored ones",async()=>{
+  const requests: {url:string;init:RequestInit}[]=[];
+  vi.stubGlobal("fetch",vi.fn(async(url:string,init:RequestInit)=>{requests.push({url,init});return Response.json(url.endsWith("source-imports")?{snapshotId:"snap"}:{});}));
+  // The fallback input lists ignored files; the count must not depend on which browser listed them.
+  await runFolderImport({target:{kind:"new",workspaceId:"ws"},files:[file("node_modules/a/README.md"),file(".trash/old.md"),file("private/secret.md"),file("notes/keep.md")],sourceName:"Wiki",excludedPaths:["private"],onProgress:()=>{}});
+  expect(JSON.parse(String(requests[0].init.body)).importScope).toEqual({paths:["private"],excludedCount:1});
+});
 it("refuses a folder whose only files are ignored, before contacting the server",async()=>{
   const fetch=vi.fn();vi.stubGlobal("fetch",fetch);
   await expect(runFolderImport({target:{kind:"new",workspaceId:"ws"},files:[file("node_modules/a/README.md"),file(".git/HEAD.md")],sourceName:"Wiki",onProgress:()=>{}})).rejects.toMatchObject({code:"INVALID_IMPORT_MANIFEST"});
