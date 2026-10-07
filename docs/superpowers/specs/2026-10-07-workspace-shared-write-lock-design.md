@@ -47,7 +47,7 @@ Governance keeps `FOR UPDATE`:
 | Content writes, share links | shared | `FOR UPDATE`, unchanged |
 | Import create / upload / finalize / Apply | shared | `FOR UPDATE`, unchanged |
 | Archive, restore, rename, member/group changes | `FOR UPDATE`, unchanged | none |
-| `ensure-default-hub-source` (see below) | `FOR UPDATE`, unchanged | none |
+| `ensure-default-hub-source` (see below) | shared to look up; `FOR UPDATE` only to create | none |
 
 MariaDB 10.11 rejects MySQL's `FOR SHARE` as a parse error; the statement is
 `SELECT … FROM workspaces WHERE id = ? LOCK IN SHARE MODE`.
@@ -65,22 +65,35 @@ they end.
   governance commits reads the new lifecycle and capabilities and is refused.
 - Lock order is unchanged (Snapshot → Source → Workspace → deeper); only the mode of the
   Workspace step changes.
+- **This rests on READ COMMITTED.** Every transaction sets it (`transaction.ts`), so each
+  statement after the lock reads what governance committed while the writer waited. Under
+  REPEATABLE READ a plain read earlier in the transaction (several writers do one, e.g. a
+  tree lookup) would pin the writer's snapshot, and it would read the pre-revocation
+  membership even after waiting — with either lock mode (reproduced in review). A test does
+  a plain membership read before the lock and requires the revocation to be seen.
 
 ### Deadlocks
 
 Two shared holders deadlock only if one later asks for `FOR UPDATE` on the same row. No
 writer does: the only statements that write the `workspaces` row are rename and
 lifecycle (`repositories/workspaces.ts`), both reached from governance services that
-take `FOR UPDATE` directly. Implementation must keep a test that fails if a writer path
-locks the Workspace row twice.
+take `FOR UPDATE` directly. The hazard is a shared lock followed by `FOR UPDATE` on the
+same row in one transaction; `ensure-default-hub-source`'s two steps are separate
+transactions. A test fails if `FOR UPDATE` on the Workspace appears outside governance and
+the guard's exclusive branch, or `{ exclusive: true }` outside `ensure-default-hub-source`.
 
 ### The one check-then-insert that stays exclusive
 
 `ensure-default-hub-source` looks for an active "Hub" Source and inserts one when there
 is none. No unique key backs that check (`knowledge_sources` has none on workspace plus
-type or name), so under a shared lock two first requests could each insert one. It keeps
-`FOR UPDATE`; it runs once per Workspace, so the cost is nil. (A unique key would also
-work but needs a migration over existing data; not proposed here.)
+type or name), so under a shared lock two first requests could each insert one.
+
+It runs on **every** "New document", and on "New folder" without a Source (corrected after
+review: an earlier draft said "once per Workspace"). Taking `FOR UPDATE` each time would
+fail behind a long Apply and, while queued, hold back every other writer (below). So it
+looks the Source up under the shared lock like any writer and returns it when present; only
+when it is missing does a second transaction take `FOR UPDATE`, re-check and insert. (A
+unique key would also work but needs a migration over existing data; not proposed here.)
 
 ## What this does not change
 
@@ -88,6 +101,13 @@ work but needs a migration over existing data; not proposed here.)
   20,000-note Apply waits up to the lock timeout and then fails as `WORKSPACE_BUSY`. That
   is rare and now reads correctly. Shortening Apply (about 9 ms per note today, one
   transaction) is separate work.
+- **While governance waits, new writers wait behind it.** MariaDB queues a pending
+  `FOR UPDATE` ahead of later `LOCK IN SHARE MODE` requests (reproduced in review), so an
+  archive or member change issued during a long Apply stalls new writes in that Workspace
+  until it is granted or gives up (50 s). Rare, but worth a follow-up: governance could set
+  a short `innodb_lock_wait_timeout` (e.g. 5 s) so a pending request fails fast as
+  `WORKSPACE_BUSY` instead of holding writers back. Not done here; it changes how
+  governance behaves.
 - **Writes to the same Source still queue,** by design. For a folder Source that is
   correct; its documents are read-only outside sync.
 - **Finalize still parses under the lock.** With a shared lock that no longer blocks other
@@ -125,5 +145,12 @@ Behavioural, against real MariaDB (concurrency tests already cover §14.2 in Pha
   `ensure-default-hub-source`.
 - Mutation-checked: making writers exclusive again fails item 1; making
   `ensure-default-hub-source` shared fails item 4 (and the existing Phase 5 test).
+- After review: `ensure-default-hub-source` returning an existing Hub Source while an import
+  holds the Workspace (fast path); the race test now pairs every existence check, so both
+  the shared look-up and the exclusive create are raced; a plain membership read before
+  the lock still sees a revocation committed while the writer waited (READ COMMITTED);
+  blocked calls are asserted to fail by their lock wait, not by any error.
 - Item 7, re-measured: during a 45-second Apply of 6,000 notes, a note saved in another
-  Source committed in 0.02 s (before: waited 50 s and failed).
+  Source committed in 0.02 s (before: waited 50 s and failed). After the fast path, "New
+  document" (default Hub look-up plus create) during a 41-second Apply of 6,000 notes also
+  committed in 0.02 s.

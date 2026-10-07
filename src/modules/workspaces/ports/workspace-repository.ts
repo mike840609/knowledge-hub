@@ -4,9 +4,10 @@ export interface WorkspaceRepository {
   findById(workspaceId: string): Promise<Workspace | null>;
   listForUser(userId: string): Promise<Workspace[]>;
   /**
-   * Spec §14.2: every Workspace-scoped mutation must hold the parent
-   * Workspace row FOR UPDATE before mutating, then revalidate
-   * lifecycle/capability on the locked row.
+   * The Workspace row FOR UPDATE: governance (archive/restore, rename, member and
+   * group changes) and a writer's create-if-missing step. Content and import
+   * writers take lockSharedById instead (workspace shared write lock design);
+   * either way the caller revalidates lifecycle/capability on the locked row.
    */
   lockById(workspaceId: string): Promise<Workspace | null>;
   /**

@@ -7,7 +7,7 @@ import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/
 import { ensureDefaultHubSource, DEFAULT_HUB_SOURCE_NAME } from "@/modules/sources/application/ensure-default-hub-source";
 import { lockWorkspaceForMutation } from "@/modules/workspaces/application/workspace-mutation-guard";
 import { TeamWorkspaceService } from "@/modules/workspaces/application/team-workspace-service";
-import { createSourceFixture, fixtureCaller, fixtureIdentity } from "../fixtures/knowledge";
+import { createSourceFixture, fixtureCaller, fixtureIdentity, secondFixtureIdentity } from "../fixtures/knowledge";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 
 /**
@@ -17,6 +17,9 @@ import { uuidv7 } from "@/shared/ids/uuidv7";
  * holds it. Waiting connections use a 1-second lock wait so a blocked call fails fast
  * instead of after MariaDB's default 50 seconds.
  */
+/** A lock wait that timed out: WORKSPACE_BUSY once #135 lands, IMPORT_APPLY_RETRYABLE before it. */
+const LOCK_WAIT_CODE = expect.stringMatching(/^(WORKSPACE_BUSY|IMPORT_APPLY_RETRYABLE)$/);
+
 let pool: Pool;
 let waiterPool: Pool;
 
@@ -97,7 +100,7 @@ describe("writers share the workspace lock", () => {
     });
     await writing.ready;
     try {
-      await expect(saveNote(fixture.source.id, "Same source")).rejects.toBeDefined();
+      await expect(saveNote(fixture.source.id, "Same source")).rejects.toMatchObject({ code: LOCK_WAIT_CODE });
       expect(await countTitled(fixture.source.id, "Same source")).toBe(0);
     } finally {
       writing.release();
@@ -118,7 +121,7 @@ describe("governance still waits for writers", () => {
     });
     await writing.ready;
     try {
-      await expect(archive()).rejects.toBeDefined();
+      await expect(archive()).rejects.toMatchObject({ code: LOCK_WAIT_CODE });
       expect(await lifecycle()).toBe("ACTIVE");
     } finally {
       writing.release();
@@ -132,16 +135,15 @@ describe("governance still waits for writers", () => {
   });
 });
 
-describe("the check-then-insert that stays exclusive", () => {
-  it("creates exactly one default Hub source when two first requests race", async () => {
+describe("the default Hub source", () => {
+  it("creates exactly one when two first requests race", async () => {
     const fixture = await createSourceFixture(pool);
-    // Each request pauses right after its "does it exist?" read, for up to 1.5 s, until the
-    // other has read too. Under the exclusive lock the other is still waiting on the
-    // Workspace row and never reads, so the pause times out and only one request inserts.
-    // Under a shared lock both read "none" and both insert, and this test fails.
-    let reads = 0;
-    let bothRead!: () => void;
-    const rendezvous = new Promise<void>((resolve) => { bothRead = resolve; });
+    // Each existence check waits up to 1.5 s for the next one, then both go on together.
+    // The first, shared look-up pairs up and both find nothing. In the create step, under
+    // FOR UPDATE, the other request is still waiting on the Workspace row and never
+    // reads, so the wait times out and only one inserts; the other then re-reads and
+    // reuses it. Were that step shared, both would read "none" together and both insert.
+    let waiting: (() => void) | null = null;
     const racing = {
       run: (work: Parameters<MariaDbUnitOfWork["run"]>[0]) => new MariaDbUnitOfWork(pool).run((repositories) => work({
         ...repositories,
@@ -150,9 +152,16 @@ describe("the check-then-insert that stays exclusive", () => {
             if (key !== "listByWorkspaceId") return Reflect.get(target, key, receiver);
             return async (workspaceId: string) => {
               const listed = await target.listByWorkspaceId(workspaceId);
-              reads += 1;
-              if (reads === 2) bothRead();
-              await Promise.race([rendezvous, new Promise((resolve) => setTimeout(resolve, 1500))]);
+              if (waiting) {
+                const release = waiting;
+                waiting = null;
+                release();
+              } else {
+                await new Promise<void>((resolve) => {
+                  const timer = setTimeout(() => { waiting = null; resolve(); }, 1500);
+                  waiting = () => { clearTimeout(timer); resolve(); };
+                });
+              }
               return listed;
             };
           },
@@ -170,5 +179,56 @@ describe("the check-then-insert that stays exclusive", () => {
     );
     expect(Number(rows[0].n)).toBe(1);
     expect(ids[0]).toBe(ids[1]);
+  });
+
+  it("is found without the exclusive lock, so New document works while an import holds the workspace", async () => {
+    const fixture = await createSourceFixture(pool);
+    const hubId = await ensureDefaultHubSource(new MariaDbUnitOfWork(pool), fixtureCaller(), fixture.workspaceId);
+    const folder = await addFolderSource(fixture.workspaceId);
+    const importing = holdOpen(async (repositories) => {
+      await repositories.sources.lockById(folder.source.id);
+      await lockWorkspaceForMutation(repositories, fixtureCaller(), fixture.workspaceId, "source-import");
+    });
+    await importing.ready;
+    try {
+      // The waiting pool gives up after 1 s: an exclusive look-up would fail here.
+      await expect(ensureDefaultHubSource(new MariaDbUnitOfWork(waiterPool), fixtureCaller(), fixture.workspaceId)).resolves.toBe(hubId);
+    } finally {
+      importing.release();
+      await importing.done;
+    }
+  });
+});
+
+describe("what a writer reads after waiting", () => {
+  it("sees a revocation committed while it waited, even after reading membership before the lock", async () => {
+    // The guarantee rests on READ COMMITTED (transaction.ts): under REPEATABLE READ an
+    // earlier plain read would pin the writer to the pre-revocation membership.
+    const fixture = await createSourceFixture(pool);
+    const governance = await pool.getConnection();
+    let readBeforeLock!: () => void;
+    const hasRead = new Promise<void>((resolve) => { readBeforeLock = resolve; });
+    let goLock!: () => void;
+    const mayLock = new Promise<void>((resolve) => { goLock = resolve; });
+    try {
+      // Order: the writer reads membership (still a member), then governance holds the row
+      // and deletes the membership, then the writer asks for the lock and waits behind it.
+      const write = new MariaDbUnitOfWork(pool).run(async (repositories) => {
+        expect(await repositories.workspaceMemberships.find(fixture.workspaceId, secondFixtureIdentity.id)).not.toBeNull();
+        readBeforeLock();
+        await mayLock;
+        await lockWorkspaceForMutation(repositories, fixtureCaller(secondFixtureIdentity), fixture.workspaceId, "content-write");
+      });
+      await hasRead;
+      await governance.beginTransaction();
+      await governance.query("SELECT id FROM workspaces WHERE id = ? FOR UPDATE", [fixture.workspaceId]);
+      await governance.query("DELETE FROM workspace_memberships WHERE workspace_id = ? AND user_id = ?", [fixture.workspaceId, secondFixtureIdentity.id]);
+      goLock();
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      await governance.commit();
+      await expect(write).rejects.toMatchObject({ code: "WORKSPACE_ACCESS_DENIED" });
+    } finally {
+      governance.release();
+    }
   });
 });
