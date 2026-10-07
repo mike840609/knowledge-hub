@@ -855,7 +855,7 @@ APPLIED: 24 hours
 
 Cleanup physically deletes staging snapshots in bounded batches; entries cascade-delete. Canonical Source/Document/Revision/SyncRun remain unaffected.
 
-Cleanup runs without an operator (2026-10-07): starting an import (initial or resync) begins a background sweep after the session is created, at most once per 10 minutes per server process and never two at once in one process; it never delays or fails that request. `scripts/db/cleanup-import-snapshots.ts` remains for on-demand cleanup.
+Cleanup runs without an operator while imports keep happening (2026-10-07): starting an import (initial or resync) begins a background sweep after the session is created, at most once per 10 minutes per server process and never two at once in one process; it never delays or fails that request. Staging left by the last imports on an idle instance stays until the next import or a run of `scripts/db/cleanup-import-snapshots.ts`, which remains for on-demand cleanup.
 
 Cleanup and Apply both use short row-lock/conditional-delete semantics to avoid races.
 

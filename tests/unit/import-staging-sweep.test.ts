@@ -32,7 +32,7 @@ describe("import staging sweep", () => {
   it("returns before the sweep finishes, and never runs two at once", async () => {
     const sweep = createImportStagingSweep(0);
     let finish: () => void = () => {};
-    const cleanup = vi.fn(() => new Promise<void>((resolve) => { finish = resolve; }));
+    const cleanup = vi.fn(() => new Promise<{ deleted: number }>((resolve) => { finish = () => resolve({ deleted: 0 }); }));
 
     expect(sweep(cleanup, 1)).toBe(true);
     await flush();
@@ -42,6 +42,19 @@ describe("import staging sweep", () => {
     finish();
     await flush();
     expect(sweep(cleanup, 3)).toBe(true);
+  });
+
+  it("logs how many snapshots a sweep deleted, and stays quiet when it deleted none", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    const sweep = createImportStagingSweep();
+
+    sweep(async () => ({ deleted: 0 }), 0);
+    await flush();
+    expect(info).not.toHaveBeenCalled();
+
+    sweep(async () => ({ deleted: 7 }), IMPORT_STAGING_SWEEP_INTERVAL_MS);
+    await flush();
+    expect(info).toHaveBeenCalledWith("Import staging cleanup deleted expired snapshots", 7);
   });
 
   it("swallows a failed sweep, logs only its code, and can sweep again later", async () => {

@@ -41,6 +41,12 @@ describe("starting an import sweeps expired staging", () => {
     expect(cleanup).toHaveBeenCalledTimes(1);
   });
 
+  it("returns the created import without waiting for a sweep that never finishes", async () => {
+    cleanup.mockImplementationOnce(() => new Promise(() => {}));
+    const { createInitialSourceImport } = await import("@/server/source-imports");
+    await expect(createInitialSourceImport("ws", { sourceName: "Wiki", rootName: "wiki", manifest: [] })).resolves.toBe(created);
+  });
+
   it("does not sweep when the import could not be created", async () => {
     createInitial.mockRejectedValue(new Error("refused"));
     const { createInitialSourceImport } = await import("@/server/source-imports");
