@@ -39,8 +39,4 @@ export function normalizeImportPath(rawPath: string): { sourcePath: string; sour
   return { sourcePath, sourcePathHash };
 }
 
-export function isIgnoredImportPath(path: string): boolean {
-  const parts = path.replace(/\\/g, "/").split("/").filter(Boolean);
-  const leaf = parts.at(-1);
-  return parts.some((part) => part.startsWith(".")) || parts.includes("node_modules") || leaf === "Thumbs.db";
-}
+export { isIgnoredImportPath } from "./import-scope";

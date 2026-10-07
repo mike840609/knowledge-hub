@@ -310,6 +310,8 @@ any hidden path segment (.xxx)
 
 Client may prefilter to reduce transfer, but server reevaluates.
 
+The browser client prefilters every ignored path above (2026-10-07): it does not descend into ignored folders and never reads, hashes, counts or uploads an ignored file, so a folder holding `node_modules` or a large `.git` beside its notes stays within the manifest limits. The server is unchanged: it accepts a manifest that still lists ignored paths, counts them toward the limits, and drops them at finalize. Its check that a manifest omits the source's excluded paths applies only the source's own rules, never this ignore list.
+
 ### 6.3 Symlink policy
 
 Do not follow file/directory symlinks. Skip recognizable symlinks with `SYMLINK_SKIPPED` warning. Selection root is the security boundary.

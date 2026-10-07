@@ -371,6 +371,32 @@ describe("folder-handle-store", () => {
     await expect(forgetRememberedFolder("src-missing")).resolves.toBeUndefined();
   });
 
+  it("collectHandleFiles never descends into ignored folders or opens ignored files", async () => {
+    // A folder the walk must not enter: iterating it fails the test.
+    const untouchable = (name: string): FileSystemDirectoryHandle => ({
+      kind: "directory",
+      name,
+      values: () => { throw new Error(`${name} was walked`); },
+      queryPermission: async () => "granted",
+      requestPermission: async () => "granted",
+    });
+    const handle = makeDirHandle("repo", [
+      { kind: "file", name: "readme.md", content: "# r" },
+      { kind: "file", name: ".DS_Store", content: "x" },
+      { kind: "directory", name: "docs", children: [{ kind: "file", name: "a.md", content: "# a" }, { kind: "file", name: "Thumbs.db", content: "x" }] },
+    ]);
+    const children = handle.values;
+    handle.values = async function* () {
+      yield* children.call(handle);
+      yield untouchable(".git");
+      yield untouchable("node_modules");
+      yield untouchable(".trash");
+    };
+
+    const files = await collectHandleFiles(handle);
+    expect(files.map(relativePathOf).sort()).toEqual(["repo/docs/a.md", "repo/readme.md"]);
+  });
+
   it("collectHandleFiles walks nested folders and prefixes webkitRelativePath with the root name", async () => {
     const handle = makeDirHandle("wiki", [
       { kind: "file", name: "top.md", content: "# top" },

@@ -166,11 +166,21 @@ describe("guideContent facts", () => {
     expect(zh("from-a-tool")).toContain("node_modules");
   });
 
-  it("from-a-tool: skipped paths still count toward the limits, so move or exclude them first", () => {
-    expect(en("from-a-tool")).toMatch(/still listed in the upload and count toward the file-count and size limits/);
-    expect(en("from-a-tool")).toMatch(/move it out of the folder, or add it to the excluded paths/);
-    expect(zh("from-a-tool")).toMatch(/仍會列在上傳清單中，並在被捨棄之前計入檔案數與大小限制/);
-    expect(zh("from-a-tool")).toContain("排除路徑");
+  it("keep-in-sync: says a rename plus edit starts a new document, and how knowledge_id prevents it", () => {
+    expect(en("keep-in-sync")).toMatch(/rename or move a file and also edit it before the next sync, it becomes a new document/);
+    expect(en("keep-in-sync")).toMatch(/share links, favorites and history stay with the archived copy/);
+    expect(en("keep-in-sync")).toMatch(/`knowledge_id`.*up to 512 characters, unique within the folder/);
+    expect(en("keep-in-sync")).toMatch(/removing or changing it, or reusing it in another file, blocks the next Preview/);
+    expect(zh("keep-in-sync")).toMatch(/同時改名（或移動）並編輯.*會變成一份新文件/);
+    expect(zh("keep-in-sync")).toContain("`knowledge_id`");
+    expect(zh("keep-in-sync")).toMatch(/移除或修改它，或在另一個檔案重複使用，都會讓下一次預覽無法套用/);
+  });
+
+  it("from-a-tool: skipped paths are never uploaded and do not count toward the limits", () => {
+    expect(en("from-a-tool")).toMatch(/never read or uploaded, and they do not count toward the file-count or size limits/);
+    expect(en("from-a-tool")).not.toMatch(/still listed in the upload/);
+    expect(zh("from-a-tool")).toMatch(/不會被讀取或上傳，也不計入檔案數與大小限制/);
+    expect(zh("from-a-tool")).not.toMatch(/仍會列在上傳清單中/);
   });
 
   it("limits table: the always-skipped row matches the checklist", () => {

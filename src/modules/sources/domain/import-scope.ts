@@ -11,9 +11,23 @@ export function parseExcludedPaths(text: string): string[] {
   }
   return rules;
 }
-export function isExcludedImportPath(path: string, rules: readonly string[]): boolean {
-  if (path.split("/").some(part => part === ".git" || part === ".obsidian")) return true;
+/**
+ * Paths no folder import ever reads (Phase 2 spec §6.2): any hidden segment
+ * (`.git`, `.obsidian`, `.trash`, `.DS_Store`), `node_modules`, `Thumbs.db`.
+ * Kept here, free of `node:crypto`, so the browser drops them before reading,
+ * hashing or counting a file and the server applies the same rule.
+ */
+export function isIgnoredImportPath(path: string): boolean {
+  const parts = path.replace(/\\/g, "/").split("/").filter(Boolean);
+  const leaf = parts.at(-1);
+  return parts.some((part) => part.startsWith(".")) || parts.includes("node_modules") || leaf === "Thumbs.db";
+}
+/** Only the source's own excluded-path rules, without the built-in ignore rule. */
+export function matchesExcludedRule(path: string, rules: readonly string[]): boolean {
   return rules.some(rule => path === rule || path.startsWith(`${rule}/`));
+}
+export function isExcludedImportPath(path: string, rules: readonly string[]): boolean {
+  return isIgnoredImportPath(path) || matchesExcludedRule(path, rules);
 }
 export function normalizeImportScope(raw: unknown, previousPaths: readonly string[]): ImportScope {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw importError("INVALID_IMPORT_MANIFEST", "Provide import scope settings.");

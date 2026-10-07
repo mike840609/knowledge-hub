@@ -13,6 +13,8 @@
  * see are I/O errors from collectHandleFiles while reading files.
  */
 
+import { isIgnoredImportPath } from "@/lib/import-exclusions";
+
 // Minimal File System Access API surface this module needs. Declared here so
 // no DOM lib version or ambient @types dependency decides the shape.
 export interface FileSystemPermissionDescriptor {
@@ -467,6 +469,9 @@ export async function collectHandleFiles(handle: FileSystemDirectoryHandle): Pro
   const walk = async (dir: FileSystemDirectoryHandle, prefix: string): Promise<void> => {
     const entries = dir.values();
     for await (const entry of entries) {
+      // Never open an ignored file or descend into an ignored folder (`.git`,
+      // `node_modules`): the import discards them, and walking them is the slow part.
+      if (isIgnoredImportPath(prefix ? `${prefix}/${entry.name}` : entry.name)) continue;
       if (entry.kind === "file") {
         const fileHandle = entry as FileSystemFileHandle;
         const file = await fileHandle.getFile();

@@ -1,4 +1,4 @@
-export { parseExcludedPaths, isExcludedImportPath } from "@/modules/sources/domain/import-scope";
+export { parseExcludedPaths, isExcludedImportPath, isIgnoredImportPath } from "@/modules/sources/domain/import-scope";
 import { parseExcludedPaths } from "@/modules/sources/domain/import-scope";
 
 function key(workspaceId:string,sourceId:string){return `km:import-exclusions:${workspaceId}:${sourceId}`;}

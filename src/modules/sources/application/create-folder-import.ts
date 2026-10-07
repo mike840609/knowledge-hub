@@ -1,4 +1,4 @@
-import { normalizeImportScope, isExcludedImportPath, type ImportScope } from "../domain/import-scope";
+import { normalizeImportScope, matchesExcludedRule, type ImportScope } from "../domain/import-scope";
 import { createHash } from "node:crypto";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { lockWorkspaceForMutation } from "@/modules/workspaces/application/workspace-mutation-guard";
@@ -155,7 +155,7 @@ export class CreateFolderImportService {
     rootName: string; manifest: ImportManifestEntry[]; importScope?: ImportScope;
   }): { snapshot: ImportSnapshot; entries: ImportSnapshotEntry[] } {
     validateManifest(input.manifest, this.limits);
-    if (input.importScope && input.manifest.some(e => isExcludedImportPath(normalizeImportPath(e.relativePath).sourcePath, input.importScope!.paths))) throw importError("INVALID_IMPORT_MANIFEST", "Manifest includes an excluded path.");
+    if (input.importScope && input.manifest.some(e => matchesExcludedRule(normalizeImportPath(e.relativePath).sourcePath, input.importScope!.paths))) throw importError("INVALID_IMPORT_MANIFEST", "Manifest includes an excluded path.");
     const rootName = nonemptyName(input.rootName, "rootName");
     const proposedSourceName = input.proposedSourceName === null ? null : nonemptyName(input.proposedSourceName, "sourceName");
     const now = this.now();
