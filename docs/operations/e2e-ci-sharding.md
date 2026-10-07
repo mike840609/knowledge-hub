@@ -19,6 +19,6 @@ Compiler caches are restored per platform, shard, dependency/configuration hash,
 
 Reading-link fixtures create documents through the API and explicitly navigate to the document under test. Document creation and rename UI coverage remains in the authoring tests and the rename scenario. Recent/favorite fixtures already create documents through the API; workspace lookup also uses the API, while reading and starring remain UI actions. Delayed recent results are released by the test after selecting an action instead of using a fixed delay.
 
-The organize helper waits for the hydrated sidebar's persisted recent-document entry and stable row geometry rather than global network idleness. Assertion budgets remain unchanged.
+The organize helper retains network idleness and also checks row geometry before coordinate-based actions. A recent-document storage entry was not a reliable readiness signal in warm CI, so removing the network-idle guard is deferred until a dedicated readiness signal is available. Assertion budgets remain unchanged. Reading-outline prerequisites also use the real API to avoid the composer's arrival refresh racing with anchor navigation.
 
 These optimizations do not increase workers, reuse incompatible SSO build outputs, shorten assertion timeouts, or remove test coverage.
