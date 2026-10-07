@@ -106,7 +106,7 @@ function english(limits: GuideLimits): GuideContent {
               `No Markdown file larger than ${fileLimit}.`,
               "No attachments to rely on: images and other non-Markdown files are kept as references only; there is no binary attachment storage.",
               "Keep every file inside the folder you choose (links between files may still use `../`).",
-              "Do not rely on files or folders whose names start with a dot, or on `node_modules` folders and `Thumbs.db` files, at any depth: a folder such as `.wiki/` is skipped without a warning. Those skipped paths (unlike `.git` and `.obsidian`) are still listed in the upload and count toward the file-count and size limits before they are dropped, so a large `node_modules` or hidden folder can still trip a limit: move it out of the folder, or add it to the excluded paths in the import form, first.",
+              "Do not rely on files or folders whose names start with a dot, or on `node_modules` folders and `Thumbs.db` files, at any depth: a folder such as `.wiki/` is skipped without a warning. Skipped paths are never read or uploaded, and they do not count toward the file-count or size limits.",
             ],
           },
           {
@@ -169,6 +169,18 @@ function english(limits: GuideLimits): GuideContent {
           {
             kind: "p",
             text: "In Chrome or Edge, Knowledge Hub can remember the folder, and a one-click Check for changes button on the source re-scans it and opens a new Preview. Selecting the folder again always works.",
+          },
+          {
+            kind: "p",
+            text: "Each sync recognizes a file by its path, or, when the path changed, by unchanged content. If you rename or move a file and also edit it before the next sync, it becomes a new document: the old one is archived, and its share links, favorites and history stay with the archived copy.",
+          },
+          {
+            kind: "p",
+            text: "To keep a document the same through renames and edits, give it a `knowledge_id` in its frontmatter: a text value up to 512 characters, unique within the folder (quote it if it is only digits, such as `\"2024\"`, or the import refuses it as a number). Add it to an existing file in a sync of its own, before renaming, so that sync still matches the file by its path. Once a document has one, keep it: removing or changing it, or reusing it in another file, blocks the next Preview.",
+          },
+          {
+            kind: "code",
+            text: "---\nknowledge_id: leave-policy\n---\n# How to request leave",
           },
         ],
       },
@@ -265,7 +277,7 @@ function traditionalChinese(limits: GuideLimits): GuideContent {
               `沒有任何 Markdown 檔案大於 ${fileLimit}。`,
               "不要依賴附件：圖片與其他非 Markdown 檔案只會保留為參照，系統不儲存二進位附件。",
               "讓每個檔案都留在你所選的資料夾之內（檔案之間的連結仍然可以使用 `../`）。",
-              "不要依賴名稱以點開頭的檔案或資料夾，也不要依賴任何層級的 `node_modules` 資料夾與 `Thumbs.db` 檔案：像 `.wiki/` 這樣的資料夾會被略過，而且不會出現警告。這些被略過的路徑（與 `.git`、`.obsidian` 不同）仍會列在上傳清單中，並在被捨棄之前計入檔案數與大小限制，所以過大的 `node_modules` 或隱藏資料夾仍可能超過限制：請先把它移出資料夾，或在匯入表單的排除路徑中加入它。",
+              "不要依賴名稱以點開頭的檔案或資料夾，也不要依賴任何層級的 `node_modules` 資料夾與 `Thumbs.db` 檔案：像 `.wiki/` 這樣的資料夾會被略過，而且不會出現警告。被略過的路徑不會被讀取或上傳，也不計入檔案數與大小限制。",
             ],
           },
           {
@@ -328,6 +340,18 @@ function traditionalChinese(limits: GuideLimits): GuideContent {
           {
             kind: "p",
             text: "在 Chrome 或 Edge 中，Knowledge Hub 可以記住該資料夾，來源頁面上的「Check for changes」按鈕只要點一下就會重新掃描並開啟新的預覽。重新選取資料夾則永遠可用。",
+          },
+          {
+            kind: "p",
+            text: "每次同步會用路徑辨認同一個檔案；路徑改變時，則用沒有變動的內容來辨認。如果你在下次同步前同時改名（或移動）並編輯了某個檔案，它會變成一份新文件：舊文件會被封存，它的分享連結、收藏與歷史紀錄都留在封存的那一份。",
+          },
+          {
+            kind: "p",
+            text: "想讓文件在改名、編輯後仍是同一份，請在它的 frontmatter 加上 `knowledge_id`：512 個字元以內、在資料夾中不重複的文字值（若只有數字，例如 `\"2024\"`，請加上引號，否則會被當成數字而無法匯入）。要替既有檔案加上它時，請先單獨同步一次再改名，讓那次同步仍能用路徑認出這個檔案。文件一旦有了 `knowledge_id` 就請保留：移除或修改它，或在另一個檔案重複使用，都會讓下一次預覽無法套用。",
+          },
+          {
+            kind: "code",
+            text: "---\nknowledge_id: leave-policy\n---\n# 如何請假",
           },
         ],
       },

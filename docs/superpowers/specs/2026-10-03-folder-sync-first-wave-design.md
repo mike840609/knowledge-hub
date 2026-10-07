@@ -1,6 +1,6 @@
 # Folder Sync first wave: from synchronization to reading
 
-Status: user confirmed the design; implementation plan awaiting review, not yet implemented.
+Status: implemented (PR #108, "complete folder sync preview-to-reading workflow"): delivery stages 1–4 below shipped. This design remains the canonical description of that behavior.
 Baseline: main `15c8b7786239735ece7112bb663760346b33a580` (PR #104).
 
 ## Goal and chosen direction
