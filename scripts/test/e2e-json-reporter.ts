@@ -17,6 +17,7 @@ export default class E2eJsonReporter implements Reporter {
       const status = outcome === "expected" ? "passed" : outcome === "unexpected" ? "failed" : outcome;
       counts[status]++;
       return {
+        id: test.id,
         file: path.relative(this.root, test.location.file), title: test.titlePath().slice(1).join(" › "), status,
         durationMs: test.results.reduce((total, attempt) => total + attempt.duration, 0),
         retry: Math.max(0, ...test.results.map(attempt => attempt.retry)),
