@@ -43,9 +43,13 @@ jobs:
       - name: Build without network access
         run: npm run build:offline
 
-  e2e:
+  e2e-shard:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     services:
       mariadb:
         image: mariadb:10.11
@@ -73,15 +77,50 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+      - run: npx playwright install --with-deps --only-shell chromium
+      - run: npm run test:e2e -- --shard=${{ matrix.shard }}/2 --reporter=list,blob
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: e2e-test-results
+          name: e2e-test-results-${{ matrix.shard }}
           path: |
             test-results/
             playwright-report/e2e-runs/
+            blob-report/
+          retention-days: 7
+
+  e2e:
+    name: e2e
+    needs: e2e-shard
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: e2e-test-results-*
+          path: e2e-shards
+      - name: Verify every selected test ran exactly once
+        run: node scripts/test/verify-e2e-shards.mjs e2e-shards
+      - name: Merge Playwright reports
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p all-blob-reports
+          find e2e-shards -type d -name blob-report -exec sh -c 'cp -R "$1/." all-blob-reports/' _ {} \;
+          npx playwright merge-reports --reporter=html all-blob-reports
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: e2e-summary
+          path: |
+            playwright-report/
+            e2e-summary.json
           retention-days: 7
 
   integration:
