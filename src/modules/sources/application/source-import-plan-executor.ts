@@ -8,7 +8,7 @@ import type { KnowledgeSource } from "@/modules/sources/domain/source";
 import type { SourceRepositories } from "@/modules/sources/ports/unit-of-work";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import { adoptSourceExternalId } from "./source-entry-mapping-service";
-import { bindSourceProjection } from "./source-knowledge-projection-service";
+import { bindSourceProjection, type BoundProjectionHints } from "./source-knowledge-projection-service";
 
 export type ImportApplyFailurePoint =
   | "after-folders"
@@ -21,6 +21,7 @@ export type ExecuteFolderImportPlanOptions = {
   stagingEntriesByUploadKey: ReadonlyMap<string, ImportSnapshotEntry>;
   failurePoint?: ImportApplyFailurePoint;
   now?: () => Date;
+  linksOf?: BoundProjectionHints["linksOf"];
 };
 
 function failAt(options: ExecuteFolderImportPlanOptions, point: ImportApplyFailurePoint): void {
@@ -69,7 +70,7 @@ export async function executeFolderImportPlan(
   // view is in scope; post-Apply verification reads stay on the database.
   const boundPolicy = await requireSourceManagedSource(repositories, caller, source.id);
   const treeView: TreeViewNode[] = await repositories.tree.listBySource(source.id);
-  const projection = bindSourceProjection(repositories, { id: source.id, workspaceId: source.workspaceId }, { boundPolicy, treeView });
+  const projection = bindSourceProjection(repositories, { id: source.id, workspaceId: source.workspaceId }, { boundPolicy, treeView, linksOf: options.linksOf });
   const current = await repositories.importCanonicalState.load(source.id);
   const folderNodeByPath = new Map(current.folders.map((folder) => [folder.sourcePath, folder.treeNodeId]));
   const createdNodeByKey = new Map<string, string>();
