@@ -19,7 +19,7 @@ export function SourceHealth({ model }: { model: SourceHealthPage }) {
       {model.legacyWarnings ? (
         <p className="text-body">
           The latest sync recorded {model.legacyWarnings} warnings without
-          article details.
+          document details.
         </p>
       ) : null}
       {model.diagnostics.length ? (

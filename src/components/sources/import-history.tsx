@@ -4,13 +4,14 @@ import type { SyncRun } from "@/modules/sources/domain/sync-run";
 import { Status } from "@/components/ui/status";
 import { syncStatusKind, syncStatusLabel } from "@/components/sources/source-list-row";
 import { Timestamp } from "@/components/ui/timestamp";
+import { UNKNOWN_RUN_ACTOR } from "@/lib/sync-wording";
 
 function describeRun(run: SyncRun): string {
   const result = run.resultVersion === null ? "no new version" : `version ${run.resultVersion}`;
   return `from version ${run.basedOnVersion} → ${result}`;
 }
 
-export function ImportHistory({ runs, workspaceId }: { runs: SyncRun[]; workspaceId?: string }) {
+export function ImportHistory({ runs, workspaceId, actors = {} }: { runs: SyncRun[]; workspaceId?: string; actors?: Record<string, string> }) {
   if (runs.length === 0) {
     return <p className="text-body text-kh-text-muted">No sync runs recorded for this source yet.</p>;
   }
@@ -35,8 +36,8 @@ export function ImportHistory({ runs, workspaceId }: { runs: SyncRun[]; workspac
                   <Timestamp value={run.completedAt} />
                 </>
               ) : null}
-              {" · triggered by "}
-              {run.triggeredBy}
+              {" · started by "}
+              {actors[run.triggeredBy] ?? UNKNOWN_RUN_ACTOR}
             </p>
           </div>
         </li>

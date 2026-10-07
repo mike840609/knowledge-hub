@@ -6,11 +6,8 @@ import { Button } from "@/components/ui/button";
 import { ImportDiagnosticMessage } from "./import-diagnostic-message";
 import { ChevronDown } from "lucide-react";
 import type { ImportPreviewChange } from "@/modules/sources/domain/import-plan";
+import { changeLabelText } from "@/lib/sync-wording";
 
-function labelText(change: ImportPreviewChange): string {
-  if (change.labels.length === 0) return "Changed";
-  return [...change.labels].sort().map(label => label.charAt(0) + label.slice(1).toLowerCase()).join(" + ");
-}
 
 export function ImportChangeGroup({
   title,
@@ -57,7 +54,7 @@ export function ImportChangeGroup({
                   <span className="font-medium text-kh-text">
                     {change.previousPath ? `${change.previousPath} → ${change.sourcePath}` : change.sourcePath}
                   </span>
-                  <span className="text-caption text-kh-text-muted">{labelText(change)}</span>
+                  <span className="text-caption text-kh-text-muted">{changeLabelText(change.labels)}</span>
                 </div>
                 {snapshotId && change.kind === "DOCUMENT" && (change.labels.includes("UPDATED") || change.labels.includes("ADDED")) ? <ImportContentDiff snapshotId={snapshotId} sourcePath={change.sourcePath} /> : null}
                 {change.identity ? (

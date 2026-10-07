@@ -105,7 +105,9 @@ test("folder preview → durable result → revision-aware personal reading", as
   ).toBeEnabled();
   await page.getByRole("button", { name: "Apply changes" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
+  // The run page words each recorded change; the stored code never reaches the reader.
   await expect(
-    page.getByText("ARCHIVED", { exact: true }).first(),
+    page.getByText("Archived", { exact: true }).first(),
   ).toBeVisible();
+  await expect(page.getByText("ARCHIVED", { exact: true })).toHaveCount(0);
 });

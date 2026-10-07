@@ -3,6 +3,9 @@ import Link from "next/link";
 import type { SyncRunDetail } from "@/modules/sources/application/get-sync-run-detail";
 import { PageHeader } from "@/components/shell/page-header";
 import { Timestamp } from "@/components/ui/timestamp";
+import { Status } from "@/components/ui/status";
+import { syncStatusKind, syncStatusLabel } from "@/components/sources/source-list-row";
+import { changeLabelText } from "@/lib/sync-wording";
 export function SyncRunDetailView({ detail }: { detail: SyncRunDetail }) {
   const { source, run, changes } = detail,
     base = `/w/${source.workspaceId}`;
@@ -22,7 +25,7 @@ export function SyncRunDetailView({ detail }: { detail: SyncRunDetail }) {
         title={run.status === "APPLIED" ? "Folder synced" : "Sync history"}
       />
       <p className="text-body text-kh-text-muted">
-        {run.status} · Version {run.resultVersion ?? run.basedOnVersion} ·{" "}
+        <Status kind={syncStatusKind(run.status)}>{syncStatusLabel(run.status)}</Status> · Version {run.resultVersion ?? run.basedOnVersion} ·{" "}
         <Timestamp value={run.completedAt ?? run.startedAt} />
       </p>
       {summaryText?<p className="text-body text-kh-text-secondary">{summaryText}</p>:null}
@@ -44,7 +47,7 @@ export function SyncRunDetailView({ detail }: { detail: SyncRunDetail }) {
       </div>
       {!detail.hasRecordedChanges ? (
         <p className="text-body text-kh-text-muted">
-          Article details were not recorded for this sync. Its original summary
+          Document details were not recorded for this sync. Its original summary
           is still available.
         </p>
       ) : (
@@ -53,7 +56,7 @@ export function SyncRunDetailView({ detail }: { detail: SyncRunDetail }) {
             <li key={c.id} className="py-3">
               <div className="flex gap-3 text-body">
                 <span className="text-caption text-kh-text-muted">
-                  {c.labels.join(" · ")}
+                  {changeLabelText(c.labels)}
                 </span>
                 {c.href ? (
                   <Link className="text-kh-link" href={c.href}>
@@ -115,7 +118,7 @@ export function SyncRunDetailView({ detail }: { detail: SyncRunDetail }) {
                   {c.diff.truncated ? (
                     <p>
                       Comparison truncated. Open the recorded revision to read
-                      the complete article.
+                      the complete document.
                     </p>
                   ) : null}
                 </details>
