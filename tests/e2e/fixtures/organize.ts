@@ -34,12 +34,23 @@ export async function openKnowledge(page: Page, workspaceId: string) {
   // Hydration restores recents and collapsed folders and then reveals the selected row.
   // Those requests and effects move the scroll container after SSR is already visible;
   // a right-click before they settle can land on a different row in a long tree.
-  await page.goto(`/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}`, { waitUntil: "networkidle" });
+  await page.goto(`/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}`);
   await expect(page.getByRole("region", { name: "Document content" })).toBeVisible(ROUND_TRIP);
   await expect(page.getByRole("complementary", { name: "Knowledge explorer" })).toBeVisible(ROUND_TRIP);
   await expect(page.getByRole("button", { name: "Create folder" }).first()).toBeVisible(ROUND_TRIP);
   await expect(row(page, title)).toHaveAttribute("aria-current", "page", ROUND_TRIP);
   await expect(row(page, title)).toBeInViewport(ROUND_TRIP);
+  // This write is made by the hydrated sidebar after restoring persisted state.
+  await expect.poll(() => page.evaluate(([key, id]) => {
+    return (JSON.parse(localStorage.getItem(key) ?? "{}").recent ?? [])[0]?.endsWith(`:${id}`) === true;
+  }, [`kh:document-shortcuts:${workspaceId}`, document.documentId]), ROUND_TRIP).toBe(true);
+  // Right-click helpers read row coordinates. Wait for layout stability rather than all network traffic.
+  await expect.poll(() => row(page, title).evaluate(async (element) => {
+    const before = element.getBoundingClientRect();
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    const after = element.getBoundingClientRect();
+    return Math.abs(before.top - after.top) < 0.5 && Math.abs(before.left - after.left) < 0.5;
+  }), ROUND_TRIP).toBe(true);
 }
 
 export const row = (page: Page, name: string) => page.getByRole("treeitem", { name, exact: true });
