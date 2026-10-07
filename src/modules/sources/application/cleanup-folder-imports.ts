@@ -28,7 +28,7 @@ export class CleanupFolderImportsService {
     // pass ever holds snapshot-row + cascaded-entry locks across up to 500 rows.
     // Each DELETE re-checks the full eligibility predicate inside the statement, so
     // a snapshot finalized concurrently after the list pass is never wrongly
-    // deleted; leftovers are picked up by the next cron pass (batch-cap semantics
+    // deleted; leftovers are picked up by the next sweep (batch-cap semantics
     // unchanged).
     const candidates = await this.uow.run(async (repositories) => {
       return repositories.importSnapshots.listCleanupCandidates(now, limit);

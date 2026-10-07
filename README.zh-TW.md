@@ -126,7 +126,7 @@ npm run dev
 | `KM_IMPORT_*` | 匯入檔案數、大小、batch 與 snapshot quota |
 | `KM_TEST_DB_*`／`KM_E2E_DB_PREFIX` | 隔離測試資料庫設定；測試帳號需可建立與刪除指定 prefix 的資料庫 |
 
-匯入預設上限為 20,000 個 manifest entries、單篇 Markdown 5 MiB、Markdown 總量 256 MiB。完整上限以 `.env.example` 為準。Snapshot retention：BUILDING 2 小時、READY 30 分鐘、STALE／APPLIED 24 小時。可定期清除過期 staging：
+匯入預設上限為 20,000 個 manifest entries、單篇 Markdown 5 MiB、Markdown 總量 256 MiB。完整上限以 `.env.example` 為準。Snapshot retention：BUILDING 2 小時、READY 30 分鐘、STALE／APPLIED 24 小時。有人開始匯入時，伺服器會在背景清除過期的 staging，每個程序最多每 10 分鐘一次。若要立即清除（例如沒有人在匯入的站台），可執行：
 
 ```bash
 npx tsx scripts/db/cleanup-import-snapshots.ts

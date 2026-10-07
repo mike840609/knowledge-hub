@@ -5,6 +5,9 @@ import { translateKnownSnapshotAccessError } from "@/modules/sources/application
 import type { ImportPreview } from "@/modules/sources/application/reconcile-import-snapshot";
 import type { UploadImportResult } from "@/modules/sources/application/upload-folder-import-entries";
 import { applicationServices } from "@/server/composition";
+import { createImportStagingSweep } from "@/server/import-staging-sweep";
+
+const sweepImportStagingSoon = createImportStagingSweep();
 
 export type InitialImportRequest = { sourceName: string; rootName: string; manifest: ImportManifestEntry[]; importScope?: unknown; expectedSourceVersion?: number };
 export type ResyncRequest = { rootName: string; manifest: ImportManifestEntry[]; importScope?: unknown; expectedSourceVersion?: number };
@@ -52,7 +55,7 @@ export async function abandonSourceImport(snapshotId: string): Promise<{ abandon
 export async function createInitialSourceImport(workspaceId: string, input: InitialImportRequest): Promise<CreateImportResult> {
   const services = applicationServices();
   const { caller } = await services.establishTrustedCaller();
-  return services.imports.create.createInitial(caller, {
+  const created = await services.imports.create.createInitial(caller, {
     workspaceId,
     sourceName: input.sourceName,
     rootName: input.rootName,
@@ -60,18 +63,22 @@ export async function createInitialSourceImport(workspaceId: string, input: Init
     importScope: input.importScope,
     expectedSourceVersion: input.expectedSourceVersion,
   });
+  sweepImportStagingSoon(() => services.imports.cleanup.cleanup());
+  return created;
 }
 
 export async function createSourceResync(sourceId: string, input: ResyncRequest): Promise<CreateImportResult> {
   const services = applicationServices();
   const { caller } = await services.establishTrustedCaller();
-  return services.imports.create.createResync(caller, {
+  const created = await services.imports.create.createResync(caller, {
     sourceId,
     rootName: input.rootName,
     manifest: reviveManifest(input.manifest),
     importScope: input.importScope,
     expectedSourceVersion: input.expectedSourceVersion,
   });
+  sweepImportStagingSoon(() => services.imports.cleanup.cleanup());
+  return created;
 }
 
 export async function uploadSourceImportEntries(

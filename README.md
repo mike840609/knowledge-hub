@@ -126,7 +126,7 @@ See [`.env.example`](.env.example) for local development settings and import lim
 | `KM_IMPORT_*` | Import file counts, sizes, batch limits, and snapshot quotas |
 | `KM_TEST_DB_*` / `KM_E2E_DB_PREFIX` | Isolated test database settings; the test account must be able to create and drop databases with the designated prefixes |
 
-Default import limits include 20,000 manifest entries, 5 MiB per Markdown file, and 256 MiB of Markdown in total. See `.env.example` for the full limits. Snapshot retention is 2 hours for BUILDING, 30 minutes for READY, and 24 hours for STALE/APPLIED. Periodically clean up expired staging data with:
+Default import limits include 20,000 manifest entries, 5 MiB per Markdown file, and 256 MiB of Markdown in total. See `.env.example` for the full limits. Snapshot retention is 2 hours for BUILDING, 30 minutes for READY, and 24 hours for STALE/APPLIED. The server deletes expired staging data in the background when someone starts an import, at most once every 10 minutes per process. To clean up on demand, for example on an instance nobody imports into, run:
 
 ```bash
 npx tsx scripts/db/cleanup-import-snapshots.ts
