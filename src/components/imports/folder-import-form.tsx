@@ -181,22 +181,43 @@ async function fetchWithTransientRetry<T = Response>(
   readResponse: (response: Response) => Promise<T> = async (response) => response as T,
   assertAllowed: () => void = () => {},
 ): Promise<T> {
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  for (let attempt = 0; ; attempt += 1) {
     assertNotCancelled(init.signal ?? undefined);
     assertAllowed();
+    const last = attempt === RETRY_DELAYS_MS.length;
     try {
       const response = await fetch(url, init);
-      if (attempt === 1 || !TRANSIENT_HTTP_STATUSES.has(response.status)) return await readResponse(response);
+      if (last || !TRANSIENT_HTTP_STATUSES.has(response.status)) return await readResponse(response);
       // Release the discarded response before replaying the same request.
       await response.body?.cancel().catch(() => {});
     } catch (error) {
-      lastError = error;
       assertNotCancelled(init.signal ?? undefined);
-      if (attempt === 1) throw error;
+      if (last) throw error;
     }
+    await pauseBeforeRetry(RETRY_DELAYS_MS[attempt], init.signal);
   }
-  throw lastError instanceof Error ? lastError : new Error("Import request failed.");
+}
+
+/**
+ * Waits before each replay. A large folder uploads in about a thousand batches, and one batch
+ * failing twice in a row used to abandon the whole import; a brief network drop now gets about
+ * seven seconds to pass. Replays are safe: the server accepts the same bytes for an upload key
+ * again, and finalize returns the existing preview.
+ */
+const RETRY_DELAYS_MS = [1_000, 2_000, 4_000];
+
+function pauseBeforeRetry(ms: number, signal?: AbortSignal | null): Promise<void> {
+  return new Promise((resolve) => {
+    // Jitter, so tabs that failed together do not all retry together.
+    const timer = setTimeout(done, ms * (0.5 + Math.random()));
+    function done() {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", done);
+      resolve();
+    }
+    // Cancelling ends the wait at once; the next attempt then reports the cancellation.
+    signal?.addEventListener("abort", done, { once: true });
+  });
 }
 
 async function bestEffortAbandonImport(snapshotId: string): Promise<void> {
