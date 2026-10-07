@@ -1,4 +1,4 @@
-import { readFile, rm } from "node:fs/promises";
+import { cp, readFile, rm } from "node:fs/promises";
 import { preparePhase3Application, seedPhase3Identities } from "../../tests/e2e/fixtures/phase3-server";
 import { PHASE3_PROVIDER, phase3PersonaNames, phase3UserId } from "../../tests/e2e/fixtures/phase3-identities";
 import path from "node:path";
@@ -13,7 +13,7 @@ import { seedDevelopmentDatabase } from "../db/seed";
 
 const projectRoot = process.cwd();
 const environmentNames = [
-  "KM_IDENTITY_PROVIDER", "NODE_ENV", "PORT", "KM_E2E_PORT", "KM_DB_HOST", "KM_DB_PORT", "KM_DB_USER", "KM_DB_PASSWORD", "KM_DB_NAME",
+  "NEXT_TELEMETRY_DISABLED", "KM_IDENTITY_PROVIDER", "NODE_ENV", "PORT", "KM_E2E_PORT", "KM_DB_HOST", "KM_DB_PORT", "KM_DB_USER", "KM_DB_PASSWORD", "KM_DB_NAME",
   "KM_E2E_DB_HOST", "KM_E2E_DB_PORT", "KM_E2E_DB_USER", "KM_E2E_DB_PASSWORD", "KM_E2E_DB_NAME",
   "KM_LOCAL_IDENTITY_ENABLED", "KM_LOCAL_ID", "KM_LOCAL_EMP_ID", "KM_LOCAL_NAME", "KM_LOCAL_ORG_CODE",
   "KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION", "KM_TEAM_WORKSPACES_ENABLED",
@@ -118,6 +118,7 @@ async function main(): Promise<void> {
       const commonEnvironment: NodeJS.ProcessEnv = {
         ...process.env,
         NODE_ENV: "production",
+        NEXT_TELEMETRY_DISABLED: "1",
         KM_IDENTITY_PROVIDER: "local",
         ...identity,
         KM_TEAM_WORKSPACES_ENABLED: teamMode,
@@ -148,6 +149,12 @@ async function main(): Promise<void> {
       cancellation.check();
       await timed("application build", () => cancellation.run("node_modules/next/dist/bin/next", ["build"], { ...commonEnvironment, NODE_ENV: "production" }));
       if (services.personas) phase3Root = await timed("SSO application preparation", () => preparePhase3Application(projectRoot));
+      const ssoCache = process.env.KM_E2E_BUILD_CACHE === "true" ? path.join(projectRoot, ".cache/e2e-sso") : undefined;
+      if (phase3Root && ssoCache) await timed("SSO cache restore", async () => {
+        await cp(ssoCache, path.join(phase3Root!, ".next/cache"), { recursive: true }).catch((error: NodeJS.ErrnoException) => {
+          if (error.code !== "ENOENT") throw error;
+        });
+      });
       cancellation.check();
       const phase3Environment = {
         ...commonEnvironment, KM_IDENTITY_PROVIDER: "company-sso", KM_COMPANY_SSO_PROVIDER: PHASE3_PROVIDER,
@@ -157,6 +164,10 @@ async function main(): Promise<void> {
       };
       cancellation.check();
       if (phase3Root) await timed("SSO application build", () => cancellation.run("node_modules/next/dist/bin/next", ["build"], phase3Environment, phase3Root));
+      if (phase3Root && ssoCache) await timed("SSO cache save", async () => {
+        await rm(ssoCache, { recursive: true, force: true });
+        await cp(path.join(phase3Root!, ".next/cache"), ssoCache, { recursive: true });
+      });
       cancellation.check();
       await timed("server readiness and browser tests", () => cancellation.run("node_modules/@playwright/test/cli.js", ["test", ...e2eReporterArguments(process.argv.slice(2))], {
         ...commonEnvironment, NODE_ENV: "production", PORT: e2ePort,

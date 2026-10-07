@@ -63,6 +63,7 @@ jobs:
           --health-timeout=5s
           --health-retries=20
     env:
+      KM_E2E_BUILD_CACHE: "true"
       KM_TEST_DB_HOST: 127.0.0.1
       KM_TEST_DB_PORT: 3307
       KM_TEST_DB_USER: root
@@ -77,6 +78,15 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Restore application compiler caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            .next/cache
+            .cache/e2e-sso
+          key: e2e-next-${{ runner.os }}-${{ runner.arch }}-${{ matrix.shard }}-${{ hashFiles('package-lock.json', 'next.config.ts', 'tsconfig.json', 'postcss.config.mjs', 'tailwind.config.ts', 'patches/**') }}-${{ hashFiles('src/**', 'tests/e2e/fixtures/phase3-*.ts') }}
+          restore-keys: |
+            e2e-next-${{ runner.os }}-${{ runner.arch }}-${{ matrix.shard }}-${{ hashFiles('package-lock.json', 'next.config.ts', 'tsconfig.json', 'postcss.config.mjs', 'tailwind.config.ts', 'patches/**') }}-
       - run: npx playwright install --with-deps --only-shell chromium
       - run: npm run test:e2e -- --shard=${{ matrix.shard }}/2 --reporter=list,blob
       - uses: actions/upload-artifact@v4
