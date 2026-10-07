@@ -332,7 +332,9 @@ Other regular files enter Asset metadata projection.
 
 Use a safe, mature YAML/frontmatter parser; forbid unsafe constructors, custom executable tags, and filesystem includes.
 
-Frontmatter root must be a JSON-compatible map/object. Malformed YAML = blocking `INVALID_FRONTMATTER`; non-object root = blocking `FRONTMATTER_NOT_OBJECT`.
+Frontmatter root must be a JSON-compatible map/object. Malformed YAML = `INVALID_FRONTMATTER`; non-object root = `FRONTMATTER_NOT_OBJECT`.
+
+**Amended (2026-10-07): both are warnings, not blockers.** The note imports with its body and empty metadata (title from the first H1, then the file name), and the warning names the parser's reason. An opening `---` with no closing `---` is the same warning, and the whole file is body. Reason: under the whole-snapshot rule one mistyped file (an unquoted colon in a title, a tab-indented list, a key written twice) blocked every Apply of its folder until someone edited that file. Still blocking: `INVALID_KNOWLEDGE_ID`, `INVALID_MARKDOWN_ENCODING`, and identity loss — a document whose established `knowledge_id` can no longer be read because its frontmatter is unreadable is refused by reconciliation as `IDENTITY_CONFLICT` (stable identity amendment §5.8).
 
 ### 7.3 Canonical storage
 

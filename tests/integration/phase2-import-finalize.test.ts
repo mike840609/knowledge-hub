@@ -175,13 +175,19 @@ describe("Phase 2 import finalization", () => {
     expect((await pool.query<{ state: string }[]>("SELECT state FROM source_import_snapshots WHERE id=?", [session.snapshotId]))[0].state).toBe("BUILDING");
   });
 
-  it("turns malformed frontmatter and invalid UTF-8 into READY blockers instead of failing finalization", async () => {
-    const malformed = new TextEncoder().encode("---\ntitle: [broken\n---\n# Broken\n");
+  it("imports a note with malformed frontmatter as an Apply-able change with a warning (spec §7.2, amended)", async () => {
+    const malformed = new TextEncoder().encode("---\ntitle: [broken\n---\n# Broken\nBody\n");
     const malformedSession = await initialSession([{ uploadKey: "bad", path: "bad.md", bytes: malformed }]);
     const malformedPreview = await malformedSession.finalize.finalize(fixtureCaller(), malformedSession.session.snapshotId);
     expect(malformedPreview.state).toBe("READY");
-    expect(malformedPreview.hasBlockers).toBe(true);
-    expect(malformedPreview.changes.flatMap((change) => change.diagnostics).map((diagnostic) => diagnostic.code)).toContain("INVALID_FRONTMATTER");
+    expect(malformedPreview.hasBlockers).toBe(false);
+    expect(malformedPreview.summary.documents.added).toBe(1);
+    const row = malformedPreview.changes.find((change) => change.sourcePath === "bad.md");
+    expect(row?.labels).toEqual(["ADDED"]);
+    expect(row?.diagnostics).toContainEqual(expect.objectContaining({ code: "INVALID_FRONTMATTER", severity: "WARNING" }));
+  });
+
+  it("still turns invalid UTF-8 into a READY blocker instead of failing finalization", async () => {
 
     const fixture = await createSourceFixture(pool);
     const { create, upload, finalize } = services();
@@ -340,7 +346,8 @@ describe("Phase 2 import finalization", () => {
     const existingEntry = await createEntryFixture(pool, fixture.source.id, existing.documentId, "existing");
     await pool.query("UPDATE source_entries SET source_path='guide.md', external_id=NULL WHERE id=?", [existingEntry.entryId]);
 
-    const bytes = new TextEncoder().encode("---\ntitle: [broken\n---\n# Broken\n");
+    // A knowledge_id of the wrong type still blocks (unreadable YAML no longer does).
+    const bytes = new TextEncoder().encode("---\nknowledge_id: 123\n---\n# Broken\n");
     const { create, upload, finalize } = services();
     const session = await create.createResync(fixtureCaller(), {
       sourceId: fixture.source.id, rootName: "wiki", manifest: [markdownEntry("m1", "guide.md", bytes)],
@@ -353,16 +360,40 @@ describe("Phase 2 import finalization", () => {
     const rows = preview.changes.filter((change) => change.sourcePath === "guide.md");
     expect(rows).toHaveLength(1);
     expect(rows[0].labels).toEqual([]);
-    expect(rows[0].diagnostics.map((diagnostic) => diagnostic.code)).toContain("INVALID_FRONTMATTER");
+    expect(rows[0].diagnostics.map((diagnostic) => diagnostic.code)).toContain("INVALID_KNOWLEDGE_ID");
     expect(preview.summary.documents.archived).toBe(0);
     expect(preview.changes.some((change) => change.labels.includes("ARCHIVED"))).toBe(false);
+  });
+
+  it("still blocks when unreadable frontmatter hides an established knowledge_id", async () => {
+    // Downgrading unreadable YAML to a warning must not let a document silently lose its
+    // stable identity: the id can no longer be read, so reconciliation refuses it.
+    const fixture = await createSourceFixture(pool, { managed: true });
+    const existing = await createDocumentForAnySource(pool, fixture.source.id, fixture.folderId);
+    const existingEntry = await createEntryFixture(pool, fixture.source.id, existing.documentId, "existing");
+    await pool.query("UPDATE source_entries SET source_path='guide.md', external_id='guide-001' WHERE id=?", [existingEntry.entryId]);
+
+    const bytes = new TextEncoder().encode("---\nknowledge_id: guide-001\ntitle: Guide: setup\n---\n# Guide\n");
+    const { create, upload, finalize } = services();
+    const session = await create.createResync(fixtureCaller(), {
+      sourceId: fixture.source.id, rootName: "wiki", manifest: [markdownEntry("m1", "guide.md", bytes)],
+    });
+    await upload.upload(fixtureCaller(), { snapshotId: session.snapshotId, entries: [{ uploadKey: "m1", bytes }] });
+    const preview = await finalize.finalize(fixtureCaller(), session.snapshotId);
+
+    expect(preview.hasBlockers).toBe(true);
+    const diagnostics = preview.changes.flatMap((change) => change.diagnostics);
+    expect(diagnostics).toContainEqual(expect.objectContaining({ code: "IDENTITY_CONFLICT", severity: "BLOCKING" }));
+    expect(diagnostics).toContainEqual(expect.objectContaining({ code: "INVALID_FRONTMATTER", severity: "WARNING" }));
+    expect(preview.summary.documents.archived).toBe(0);
   });
 
   it("does not archive a canonical folder shadowed by a blocked file at the same path", async () => {
     const fixture = await createSourceFixture(pool, { managed: true });
     await createFolderEntryFixture(pool, fixture.source.id, fixture.folderId, "guide.md");
 
-    const bytes = new TextEncoder().encode("---\ntitle: [broken\n---\n# Broken\n");
+    // A knowledge_id of the wrong type still blocks (unreadable YAML no longer does).
+    const bytes = new TextEncoder().encode("---\nknowledge_id: 123\n---\n# Broken\n");
     const { create, upload, finalize } = services();
     const session = await create.createResync(fixtureCaller(), {
       sourceId: fixture.source.id, rootName: "wiki", manifest: [markdownEntry("m1", "guide.md", bytes)],
@@ -372,7 +403,7 @@ describe("Phase 2 import finalization", () => {
 
     expect(preview.state).toBe("READY");
     expect(preview.hasBlockers).toBe(true);
-    expect(preview.changes.flatMap((change) => change.diagnostics).map((diagnostic) => diagnostic.code)).toContain("INVALID_FRONTMATTER");
+    expect(preview.changes.flatMap((change) => change.diagnostics).map((diagnostic) => diagnostic.code)).toContain("INVALID_KNOWLEDGE_ID");
     expect(preview.summary.folders.archived).toBe(0);
     expect(preview.changes.some((change) => change.kind === "FOLDER" && change.labels.includes("ARCHIVED"))).toBe(false);
   });

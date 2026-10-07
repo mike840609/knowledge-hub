@@ -205,7 +205,7 @@ export class FinalizeFolderImportService {
       if (entry.staged.entryType === "DOCUMENT") {
         if (!hasBlocker(entry.diagnostics) && entry.sourcePath !== null && entry.staged.rawMarkdown !== null && entry.staged.sourceFileHash !== null) {
           try {
-            const parsed = parseGenericMarkdownText({ sourcePath: entry.sourcePath, text: entry.staged.rawMarkdown, sourceFileHash: entry.staged.sourceFileHash });
+            const parsed = parseGenericMarkdownText({ sourcePath: entry.sourcePath, text: entry.staged.rawMarkdown, sourceFileHash: entry.staged.sourceFileHash, unreadableFrontmatter: "warn" });
             const diagnostics = [...entry.diagnostics, ...parsed.diagnostics];
             if (new TextEncoder().encode(JSON.stringify(parsed.metadata)).byteLength > this.limits.maxMetadataBytes) {
               diagnostics.push(blocker("METADATA_TOO_LARGE", entry.sourcePath, "Parsed frontmatter metadata exceeds the configured byte limit."));
