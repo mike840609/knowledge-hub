@@ -11,7 +11,7 @@ npm run test:e2e -- --shard=2/2 --reporter=list,blob
 
 The runner passes the shard selection to discovery and execution, so only required application services are prepared. CI installs Chromium headless shell with `--only-shell`.
 
-Each shard uploads `e2e-test-results-<index>` with traces, sanitized test/runner JSON, and Playwright blob results. The final `e2e` job preserves the original check name, verifies the union of recorded test IDs against full test discovery, rejects missing/duplicate/failed/flaky tests or incomplete runners, and merges the blob reports into HTML. Existing intentional skips remain visible in the counts; tests are not removed to shorten CI.
+Each shard uploads `e2e-test-results-<index>-attempt-<attempt>` with traces, sanitized test/runner JSON, and Playwright blob results. Attempt-scoped artifact names preserve prior diagnostics and keep reruns from mixing old and new results. The final `e2e` job preserves the original check name, verifies the union of recorded test IDs against full test discovery, rejects missing/duplicate/failed/flaky tests or incomplete runners, and merges the blob reports into HTML. Existing intentional skips remain visible in the counts; tests are not removed to shorten CI.
 
 Compare browser time, runner stages, the slowest shard, and total CI runner usage over multiple runs before increasing the shard count. File-level sharding balances neither historical durations nor shared-state dependencies automatically. Keep empty-workspace tests before tests that populate the same user's workspace. Changes to test ordering must be checked in the complete shard, not just the edited spec.
 

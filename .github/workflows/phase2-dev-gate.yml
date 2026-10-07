@@ -92,7 +92,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: e2e-test-results-${{ matrix.shard }}
+          name: e2e-test-results-${{ matrix.shard }}-attempt-${{ github.run_attempt }}
           path: |
             test-results/
             playwright-report/e2e-runs/
@@ -114,7 +114,7 @@ jobs:
       - run: npm ci
       - uses: actions/download-artifact@v4
         with:
-          pattern: e2e-test-results-*
+          pattern: e2e-test-results-*-attempt-${{ github.run_attempt }}
           path: e2e-shards
       - name: Verify every selected test ran exactly once
         run: node scripts/test/verify-e2e-shards.mjs e2e-shards
@@ -127,7 +127,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
-          name: e2e-summary
+          name: e2e-summary-attempt-${{ github.run_attempt }}
           path: |
             playwright-report/
             e2e-summary.json
