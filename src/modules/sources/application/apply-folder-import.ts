@@ -8,7 +8,7 @@ import type { ImportDiffSummary } from "@/modules/sources/domain/import-plan";
 import type { KnowledgeSource } from "@/modules/sources/domain/source";
 import type { SyncRun } from "@/modules/sources/domain/sync-run";
 import type { SourceUnitOfWork } from "@/modules/sources/ports/unit-of-work";
-import { DomainError } from "@/shared/domain/errors";
+import { DomainError, WorkspaceBusyError } from "@/shared/domain/errors";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import { executeFolderImportPlan, type ImportApplyFailurePoint } from "./source-import-plan-executor";
 import { captureAppliedChanges } from "./record-sync-run-changes";
@@ -197,7 +197,11 @@ export class ApplyFolderImportService {
         await repositories.importSnapshots.markApplied({ snapshotId: snapshot.id, sourceId: source.id, resultVersion, appliedAt: this.now() });
         return { kind: "APPLIED", sourceId: source.id, resultVersion, runId, alreadyApplied: false };
       });
-    } catch (error) {
+    } catch (caught) {
+      // A busy workspace rolled back cleanly; Apply reports it under its own retry contract (§17.3).
+      const error = caught instanceof WorkspaceBusyError
+        ? importError("IMPORT_APPLY_RETRYABLE", "Another change in this workspace interrupted Apply. Nothing was applied; apply again in a moment.")
+        : caught;
       const attempt = failedAttempt.value;
       if (attempt !== null) {
         try {

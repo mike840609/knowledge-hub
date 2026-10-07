@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { IntegrityViolationError } from "@/modules/knowledge/domain/errors";
 import { SourceImportError } from "@/modules/sources/domain/import-errors";
 import { mapDatabaseError } from "@/infrastructure/database/mariadb/repositories/shared";
-import { toImportErrorResponse } from "@/server/http-error-response";
+import { toImportErrorResponse, toWorkspaceErrorResponse } from "@/server/http-error-response";
+import { WorkspaceBusyError } from "@/shared/domain/errors";
 
 /**
  * `mapDatabaseError` is the only boundary that turns a driver error into a
@@ -28,14 +29,16 @@ describe("mapDatabaseError", () => {
     }
   });
 
-  it("maps deadlock and lock wait timeout to IMPORT_APPLY_RETRYABLE by string code", () => {
+  it("maps deadlock and lock wait timeout to WORKSPACE_BUSY by string code, for any write", () => {
     for (const [code, errno] of [
       ["ER_LOCK_DEADLOCK", 1213],
       ["ER_LOCK_WAIT_TIMEOUT", 1205],
     ] as const) {
       const mapped = mapDatabaseError(sqlError(code, errno));
-      expect(mapped, code).toBeInstanceOf(SourceImportError);
-      expect((mapped as SourceImportError).code).toBe("IMPORT_APPLY_RETRYABLE");
+      expect(mapped, code).toBeInstanceOf(WorkspaceBusyError);
+      expect((mapped as WorkspaceBusyError).code).toBe("WORKSPACE_BUSY");
+      // Not an import error: a plain note save meets this too.
+      expect(mapped).not.toBeInstanceOf(SourceImportError);
       expect(mapped.message).not.toContain("SQLState");
     }
   });
@@ -43,8 +46,7 @@ describe("mapDatabaseError", () => {
   it("maps deadlock and lock wait timeout by numeric errno when the string code is absent", () => {
     for (const errno of [1213, 1205]) {
       const mapped = mapDatabaseError(Object.assign(new Error("lock failure"), { errno }));
-      expect(mapped, String(errno)).toBeInstanceOf(SourceImportError);
-      expect((mapped as SourceImportError).code).toBe("IMPORT_APPLY_RETRYABLE");
+      expect(mapped, String(errno)).toBeInstanceOf(WorkspaceBusyError);
     }
   });
 
@@ -79,10 +81,13 @@ describe("mapDatabaseError", () => {
     expect((mapped as IntegrityViolationError).code).toBe("INTEGRITY_VIOLATION");
   });
 
-  it("maps a retryable driver error to a 409 response with the machine-readable code", () => {
-    const mapped = toImportErrorResponse(mapDatabaseError(sqlError("ER_LOCK_DEADLOCK", 1213)));
-    expect(mapped.status).toBe(409);
-    expect(mapped.body.error.code).toBe("IMPORT_APPLY_RETRYABLE");
+  it("answers a busy workspace with 503 and its code on both import and workspace routes", () => {
+    const busy = mapDatabaseError(sqlError("ER_LOCK_WAIT_TIMEOUT", 1205));
+    for (const response of [toImportErrorResponse(busy), toWorkspaceErrorResponse(busy)]) {
+      expect(response.status).toBe(503);
+      expect(response.body.error.code).toBe("WORKSPACE_BUSY");
+      expect(response.body.error.message).toMatch(/try again in a moment/);
+    }
   });
 
   it("wraps unknown database errors without leaking the driver message", () => {
