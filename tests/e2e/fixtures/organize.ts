@@ -30,12 +30,14 @@ export async function openKnowledge(page: Page, workspaceId: string) {
   // Hydration restores recents and collapsed folders and then reveals the selected row.
   // Those requests and effects move the scroll container after SSR is already visible;
   // a right-click before they settle can land on a different row in a long tree.
-  await page.goto(`/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}`, { waitUntil: "networkidle" });
+  await page.goto(`/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}`);
   await expect(page.getByRole("region", { name: "Document content" })).toBeVisible(ROUND_TRIP);
   await expect(page.getByRole("complementary", { name: "Knowledge explorer" })).toBeVisible(ROUND_TRIP);
+  await expect(page.getByRole("complementary", { name: "Knowledge explorer" })).toHaveAttribute("aria-busy", "false", ROUND_TRIP);
   await expect(page.getByRole("button", { name: "Create folder" }).first()).toBeVisible(ROUND_TRIP);
   await expect(row(page, title)).toHaveAttribute("aria-current", "page", ROUND_TRIP);
   await expect(row(page, title)).toBeInViewport(ROUND_TRIP);
+  await expect(page.getByRole("tree", { name: "Knowledge tree" }).filter({ has: row(page, title) })).toHaveAttribute("aria-busy", "false", ROUND_TRIP);
   // Right-click helpers read row coordinates. Wait for layout stability rather than all network traffic.
   await expect.poll(() => row(page, title).evaluate(async (element) => {
     const before = element.getBoundingClientRect();

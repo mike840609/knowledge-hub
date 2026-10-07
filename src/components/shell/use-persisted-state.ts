@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * State that survives a refresh, for the arrangement a reader has made.
@@ -70,8 +70,9 @@ export function usePersistedJson<T>(
   fallback: T,
   isValid: (value: unknown) => value is T,
   area: Area = "local",
-): [T, (update: T | ((previous: T) => T)) => void] {
+): [T, (update: T | ((previous: T) => T)) => void, boolean] {
   const [value, setValue] = useState<T>(fallback);
+  const [restoredFor, setRestoredFor] = useState<string | null>(null);
   // Which key the current value came from. Writes are refused until this
   // matches, so a render before the read cannot clobber stored state.
   const readKey = useRef<string | null>(null);
@@ -86,6 +87,8 @@ export function usePersistedJson<T>(
     }
     readKey.current = key;
     setValue(isValid(parsed) ? parsed : fallback);
+    // Readiness must commit even when the restored value equals the fallback.
+    startTransition(() => setRestoredFor(`${area}:${key}`));
     // Deliberately keyed on `key` and `area` alone. `fallback` and `isValid`
     // are constants at every call site, and listing them would re-read
     // storage on every render and fight the writes below.
@@ -102,7 +105,7 @@ export function usePersistedJson<T>(
     [key, area],
   );
 
-  return [value, update];
+  return [value, update, restoredFor === `${area}:${key}`];
 }
 
 export function isBoolean(value: unknown): value is boolean {
