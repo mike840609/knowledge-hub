@@ -1,4 +1,4 @@
-import { cp, readFile, rm } from "node:fs/promises";
+import { cp, readFile, rm, writeFile } from "node:fs/promises";
 import { preparePhase3Application, seedPhase3Identities } from "../../tests/e2e/fixtures/phase3-server";
 import { PHASE3_PROVIDER, phase3PersonaNames, phase3UserId } from "../../tests/e2e/fixtures/phase3-identities";
 import path from "node:path";
@@ -81,8 +81,24 @@ async function main(): Promise<void> {
   try {
     await recordE2eRun(reportDirectory, suite, teamMode === "true" ? "Team-enabled" : "personal-only", async (report) => {
       runReport = report;
+      if (process.env.KM_E2E_GROUP && process.argv.slice(2).some((argument) => argument.startsWith("--shard"))) {
+        throw new Error("Use KM_E2E_GROUP or Playwright --shard, not both.");
+      }
       // Let Playwright resolve file filters/grep/projects, avoiding a second selector implementation.
       const listingEnvironment = { ...process.env, KM_TEAM_WORKSPACES_ENABLED: teamMode, KM_PHASE3_APP_ROOT: undefined, KM_E2E_UNCONFIGURED_SERVER: "false", KM_E2E_TEAMS_CLOSED_SERVER: "false", PLAYWRIGHT_JSON_OUTPUT_FILE: undefined, PLAYWRIGHT_JSON_OUTPUT_DIR: undefined, PLAYWRIGHT_JSON_OUTPUT_NAME: undefined };
+      if (process.env.KM_E2E_GROUP) {
+        type DiscoverySuite = { specs?: { id: string }[]; suites?: DiscoverySuite[] };
+        const complete = JSON.parse(await timed("complete test discovery", () => cancellation.run("node_modules/@playwright/test/cli.js", ["test", "--list", "--reporter=json"], { ...listingEnvironment, KM_E2E_GROUP: undefined }, projectRoot, true))) as { suites: DiscoverySuite[]; errors?: unknown[] };
+        if (complete.errors?.length) throw new Error("Complete E2E discovery failed.");
+        const ids: string[] = [];
+        const collectIds = (suites: DiscoverySuite[]) => {
+          for (const entry of suites) { ids.push(...(entry.specs ?? []).map((spec) => spec.id)); collectIds(entry.suites ?? []); }
+        };
+        collectIds(complete.suites);
+        if (!ids.length || new Set(ids).size !== ids.length) throw new Error("Invalid complete E2E discovery IDs.");
+        const playwright = JSON.parse(await readFile(path.join(projectRoot, "node_modules/@playwright/test/package.json"), "utf8")) as { version: string };
+        await writeFile(path.join(reportDirectory, "discovery.json"), JSON.stringify({ version: 1, commit: process.env.GITHUB_SHA ?? null, playwrightVersion: playwright.version, ids: ids.sort() }, null, 2) + "\n");
+      }
       const listing = JSON.parse(await timed("test discovery", () => cancellation.run("node_modules/@playwright/test/cli.js", ["test", ...process.argv.slice(2), "--list", "--reporter=json"], listingEnvironment, projectRoot, true))) as { suites: Array<{ file?: string; specs?: unknown[]; suites?: unknown[] }>; errors?: unknown[] };
       if (listing.errors?.length) throw new Error("Playwright test discovery failed.");
       const files = new Set<string>();

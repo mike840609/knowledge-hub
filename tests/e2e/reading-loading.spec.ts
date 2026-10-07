@@ -1,4 +1,5 @@
 import { expect, test as base } from "@playwright/test";
+import { personalWorkspaceId } from "./fixtures/my-space";
 
 // The suite shares My Space across files. Keep these temporary documents out
 // of later graph layouts and explorer menus, even when an assertion fails.
@@ -28,9 +29,7 @@ for (const scenario of [
 ]) {
   test(`document loading keeps the reading column aligned: ${scenario.name}`, async ({ page, loadingDocuments }) => {
     await page.setViewportSize({ width: scenario.width, height: 900 });
-    await page.goto("/");
-    await page.waitForURL(/\/w\/[^/]+\/knowledge/);
-    const workspaceId = new URL(page.url()).pathname.split("/")[2];
+    const workspaceId = await personalWorkspaceId(page);
     const stamp = `${scenario.width}-${Date.now()}`;
     const withOutlineTitle = `Loading outline ${stamp}`;
     const plainTitle = `Loading plain ${stamp}`;

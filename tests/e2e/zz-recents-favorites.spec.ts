@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { personalWorkspaceId as mySpace } from "./fixtures/my-space";
 import { openPalette } from "./fixtures/palette";
 
 // Server-bound assertions only; see the note in phase5-authoring.spec.ts.
@@ -15,11 +16,6 @@ function unique(label: string) {
   return `${label}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
-async function mySpace(page: Page): Promise<string> {
-  const response = await page.request.get("/api/workspaces");
-  expect(response.ok()).toBe(true);
-  return (await response.json()).items.find((workspace: { type: string }) => workspace.type === "PERSONAL").id as string;
-}
 
 async function createNote(page: Page, workspaceId: string, title: string) {
   const response = await page.request.post(`/api/workspaces/${workspaceId}/documents`, { data: { title, markdown: "Some words." } });

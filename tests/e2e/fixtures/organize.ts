@@ -13,11 +13,7 @@ export function unique(label: string) {
   return `${label} ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 }
 
-export async function mySpace(page: Page): Promise<string> {
-  await page.goto("/");
-  await page.waitForURL(/\/w\/[^/]+\/knowledge/);
-  return new URL(page.url()).pathname.split("/")[2];
-}
+export { personalWorkspaceId as mySpace } from "./my-space";
 
 /**
  * The knowledge explorer of a workspace, once it is there to act on. A workspace with nothing in it

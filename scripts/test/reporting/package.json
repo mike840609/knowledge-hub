@@ -1,0 +1,9 @@
+{
+  "name": "knowledge-hub-e2e-reporting",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pinned dependencies for merging E2E blob reports without installing the application",
+  "dependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}

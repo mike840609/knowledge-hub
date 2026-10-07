@@ -48,7 +48,7 @@ async function setUp(page: Page) {
   await apiDocument(page, workspaceId, b);
   const folderId = await apiFolder(page, workspaceId, folder);
   await openKnowledge(page, workspaceId);
-  await page.reload();
+  // openKnowledge already loads the current tree; armTree verifies keyboard listeners before use.
   await expect(row(page, a)).toBeVisible(ROUND_TRIP);
   // The document being read is not `a`, so a key that reaches `a` can only have come from the tree's claim.
   expect(page.url()).not.toContain(docA.documentId);
