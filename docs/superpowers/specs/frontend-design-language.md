@@ -652,6 +652,19 @@ the same weight (`.kh-select`), drawn as two gradient strokes in
 not an SVG: `img-src 'self'` refuses `data:` images, which is the Markdown
 image policy doing its job, not something to loosen for a glyph.
 
+### Brand mark
+
+The product has one mark: a hub joined by three uneven links to three
+satellites of three sizes. It is filled and round where the interface icons
+are outlined and thin, so it does not borrow Lucide's weight. Its proportions
+are deliberately full (a large hub, short heavy links) so it holds at 16px.
+
+Today it appears only as the browser-tab icon, `src/app/icon.svg`. The topbar
+keeps the wordmark alone. A favicon cannot inherit a colour, so the file
+carries `text` for each scheme in a `prefers-color-scheme` query;
+`tests/unit/brand-mark.test.ts` fails if those colours leave `--kh-text`.
+It is never used for an action.
+
 ## 14. Frontend technology
 
 ```text
