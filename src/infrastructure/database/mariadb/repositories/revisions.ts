@@ -1,7 +1,7 @@
 import type { KnowledgeRevision } from "@/modules/knowledge/domain/revision";
 import type { RevisionRepository } from "@/modules/knowledge/ports/revision-repository";
 import type { QueryConnection, DbRow } from "./shared";
-import { asDate, asJsonObject, asNumber } from "./shared";
+import { asDate, asJsonObject, asNumber, insertBatches, valueRows } from "./shared";
 
 function mapRevision(row: DbRow): KnowledgeRevision {
   return {
@@ -20,6 +20,18 @@ export class MariaDbRevisionRepository implements RevisionRepository {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [revision.id, revision.documentId, revision.revisionNo, revision.title, revision.markdown, JSON.stringify(revision.metadata), revision.contentHash, revision.createdBy, revision.createdAt],
     );
+  }
+
+  async insertMany(revisions: readonly KnowledgeRevision[]): Promise<void> {
+    const sized = revisions.map((revision) => ({ revision, metadata: JSON.stringify(revision.metadata) }));
+    const bytes = ({ revision, metadata }: (typeof sized)[number]) => Buffer.byteLength(revision.markdown) + Buffer.byteLength(revision.title) + Buffer.byteLength(metadata);
+    for (const batch of insertBatches(sized, bytes)) {
+      await this.connection.query(
+        `INSERT INTO knowledge_revisions (id, document_id, revision_no, title, markdown, metadata, content_hash, created_by, created_at)
+         VALUES ${valueRows(batch.length, 9)}`,
+        batch.flatMap(({ revision, metadata }) => [revision.id, revision.documentId, revision.revisionNo, revision.title, revision.markdown, metadata, revision.contentHash, revision.createdBy, revision.createdAt]),
+      );
+    }
   }
 
   async findById(id: string): Promise<KnowledgeRevision | null> {

@@ -113,23 +113,24 @@ export async function executeFolderImportPlan(
   }
   failAt(options, "after-folders");
 
-  for (const action of plan.documents.create) {
+  // One bulk projection: about a dozen statements per new document were most of a large Apply.
+  const creates = plan.documents.create.map((action) => {
     const parentId = action.parentPath === null ? null : folderNodeByPath.get(action.parentPath);
     if (action.parentPath !== null && !parentId) throw importError("IMPORT_PLAN_PARENT_MISSING", `Document parent ${action.parentPath} is unavailable.`);
     touchedParents.add(parentId ?? null);
-    const sourceEntryId = uuidv7();
     const content = resolveContent(options.stagingEntriesByUploadKey, action.content);
-    const projected = await projection.projectDocument(caller, {
+    return {
       sourceId: source.id,
       parentId: parentId ?? null,
       position: action.desiredPosition,
       title: content.title,
       markdown: content.markdown,
       metadata: content.metadata,
-      mapping: { sourceEntryId, externalId: action.externalId, sourcePath: action.sourcePath },
-    });
-    createdNodeByKey.set(`document:${action.sourcePath}`, projected.treeNodeId);
-  }
+      mapping: { sourceEntryId: uuidv7(), externalId: action.externalId, sourcePath: action.sourcePath },
+    };
+  });
+  const projectedDocuments = await projection.projectDocuments(caller, creates);
+  plan.documents.create.forEach((action, index) => createdNodeByKey.set(`document:${action.sourcePath}`, projectedDocuments[index].treeNodeId));
   for (const action of plan.documents.restore) {
     await touchGroupOf(action.treeNodeId);
     const move = moveByTreeNodeId.get(action.treeNodeId);

@@ -9,5 +9,6 @@ export interface EntryRepository {
   findByDocumentId(documentId: string): Promise<SourceEntry | null>;
   findByTreeNodeId(treeNodeId: string): Promise<SourceEntry | null>;
   insert(entry: SourceEntry): Promise<void>;
+  insertMany(entries: readonly SourceEntry[]): Promise<void>;
   update(entry: SourceEntry): Promise<void>;
 }

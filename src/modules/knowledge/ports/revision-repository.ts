@@ -2,6 +2,8 @@ import type { KnowledgeRevision } from "../domain/revision";
 
 export interface RevisionRepository {
   insert(revision: KnowledgeRevision): Promise<void>;
+  /** Many revisions in few statements; for a bulk create in one transaction. */
+  insertMany(revisions: readonly KnowledgeRevision[]): Promise<void>;
   findById(id: string): Promise<KnowledgeRevision | null>;
   findCurrent(documentId: string): Promise<KnowledgeRevision | null>;
   findByRevisionNo(documentId: string, revisionNo: number): Promise<KnowledgeRevision | null>;

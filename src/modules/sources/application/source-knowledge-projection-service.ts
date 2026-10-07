@@ -18,8 +18,10 @@ import {
 import { isRevisionContentUnchanged } from "@/modules/knowledge/domain/revision";
 import type { SourcePolicy } from "@/modules/knowledge/domain/source-policy";
 import type { KnowledgeTreeNode } from "@/modules/knowledge/domain/tree-node";
+import type { KnowledgeDocument } from "@/modules/knowledge/domain/document";
+import type { KnowledgeRevision } from "@/modules/knowledge/domain/revision";
 import type { TreeViewNode } from "@/modules/knowledge/ports/tree-repository";
-import { normalizeFolderName, normalizeTreePosition } from "@/modules/knowledge/domain/tree-rules";
+import { normalizeFolderName, normalizeTreePosition, orderSiblingsByPosition } from "@/modules/knowledge/domain/tree-rules";
 import type {
   CreateHubDocumentInput,
   CreateRevisionInput,
@@ -49,6 +51,11 @@ export type SourceMappingInput = {
 
 export interface SourceKnowledgeProjectionService {
   projectDocument(caller: CallerContext, input: CreateHubDocumentInput & { mapping: SourceMappingInput }): Promise<{ documentId: string; revisionId: string; treeNodeId: string }>;
+  /**
+   * `projectDocument` for many documents at once, in order: the same rows, tree positions and
+   * checks, written in a few multi-row statements instead of about a dozen per document.
+   */
+  projectDocuments(caller: CallerContext, inputs: readonly (CreateHubDocumentInput & { mapping: SourceMappingInput })[]): Promise<{ documentId: string; revisionId: string; treeNodeId: string }[]>;
   projectRevision(caller: CallerContext, input: CreateRevisionInput): Promise<{ revisionId: string; revisionNo: number; changed: boolean }>;
   projectFolder(caller: CallerContext, input: { sourceId: string; mapping: SourceMappingInput; parentId: string | null; name: string; position?: number }): Promise<{ treeNodeId: string }>;
   renameProjectedFolder(caller: CallerContext, input: { nodeId: string; name: string }): Promise<void>;
@@ -294,6 +301,99 @@ export function bindSourceProjection(
         throw new InvalidSourceMappingError("Projected document mapping is incomplete.");
       }
       return { documentId, revisionId, treeNodeId };
+    },
+
+    async projectDocuments(caller, inputs) {
+      if (inputs.length === 0) return [];
+      const source = await requireBoundSource(repositories, caller, bound, hints);
+      const view = hints?.treeView ?? [...(await repositories.tree.listBySource(source.id))];
+      const now = new Date();
+      const actor = caller.identity.id;
+      const documents: KnowledgeDocument[] = [];
+      const revisions: KnowledgeRevision[] = [];
+      const indexed: { documentId: string; revisionId: string; links: ExtractedLink[] }[] = [];
+      const nodes: KnowledgeTreeNode[] = [];
+      const entries: Parameters<SourceRepositories["entries"]["insert"]>[0][] = [];
+      const created = new Set<string>();
+      const externalIds = new Set<string>();
+      const checkedParents = new Set<string>();
+      // Each parent's children in position order, kept as placeNodeAtIndex would leave them.
+      const childrenOf = new Map<string | null, TreeViewNode[]>();
+      const originalPositions = new Map<string, number>();
+      const children = (parentId: string | null) => {
+        let ordered = childrenOf.get(parentId);
+        if (!ordered) {
+          ordered = orderSiblingsByPosition(view.filter((node) => node.parentId === parentId));
+          for (const node of ordered) originalPositions.set(node.id, node.position);
+          childrenOf.set(parentId, ordered);
+        }
+        return ordered;
+      };
+      const results: { documentId: string; revisionId: string; treeNodeId: string }[] = [];
+
+      for (const input of inputs) {
+        if (input.sourceId !== bound.id) throw new InvalidSourceMappingError("Projected documents must target the bound authorized source.");
+        requireMapping(input.mapping);
+        if (input.mapping.externalId !== null) {
+          if (externalIds.has(input.mapping.externalId)) throw new SourceEntryConflictError();
+          externalIds.add(input.mapping.externalId);
+          await requireUniqueExternalId(repositories, source.id, input.mapping.externalId);
+        }
+        if (input.parentId !== null && !checkedParents.has(input.parentId)) {
+          await assertActiveFolderAncestry(repositories, source.id, input.parentId, view);
+          checkedParents.add(input.parentId);
+        }
+        const siblings = children(input.parentId);
+        const position = input.position === undefined ? undefined : normalizeTreePosition(input.position);
+        const index = position === undefined ? siblings.length : Math.min(position, siblings.length);
+        const { normalized: content, contentHash } = fingerprintRevisionContent(input);
+        const documentId = uuidv7();
+        const revisionId = uuidv7();
+        const treeNodeId = uuidv7();
+        documents.push({
+          id: documentId, sourceId: source.id, currentRevisionId: null, status: "ACTIVE",
+          createdBy: actor, updatedBy: actor, archivedBy: null, archivedAt: null, createdAt: now, updatedAt: now,
+        });
+        revisions.push({ id: revisionId, documentId, revisionNo: 1, ...content, contentHash, createdBy: actor, createdAt: now });
+        indexed.push({ documentId, revisionId, links: (hints?.linksOf ?? extractDocumentLinks)(content.markdown) });
+        const node: TreeViewNode = {
+          id: treeNodeId, sourceId: source.id, parentId: input.parentId, nodeType: "DOCUMENT",
+          name: null, documentId, position: index, status: "ACTIVE",
+          updatedBy: actor, archivedBy: null, archivedAt: null,
+          title: content.title, documentStatus: "ACTIVE", currentRevisionId: revisionId,
+        };
+        pushViewNode(node);
+        if (!hints?.treeView) view.push(node);
+        siblings.splice(index, 0, node);
+        for (const [at, sibling] of siblings.entries()) sibling.position = at;
+        created.add(treeNodeId);
+        nodes.push(node);
+        entries.push({
+          id: input.mapping.sourceEntryId, sourceId: source.id, externalId: input.mapping.externalId,
+          sourcePath: input.mapping.sourcePath, entryType: "DOCUMENT", contentHash, documentId, treeNodeId,
+          status: "ACTIVE", updatedBy: actor, archivedBy: null, archivedAt: null, firstSeenAt: now, lastSeenAt: now,
+        });
+        results.push({ documentId, revisionId, treeNodeId });
+      }
+
+      // The same rows projectDocument writes, children after the rows they point at.
+      await repositories.documents.insertDrafts(documents);
+      await repositories.revisions.insertMany(revisions);
+      await repositories.documents.setFirstRevisions(documents.map((document) => document.id), actor);
+      await repositories.links.indexNewDocuments(indexed);
+      // The view's own nodes: their positions are already final after every insert above.
+      await repositories.tree.insertMany(nodes);
+      // Existing siblings shifted to make room, as placeNodeAtIndex would have moved them.
+      for (const ordered of childrenOf.values()) {
+        for (const sibling of ordered) {
+          if (!created.has(sibling.id) && sibling.position !== originalPositions.get(sibling.id)) {
+            await repositories.tree.updatePosition(sibling.id, sibling.position, actor);
+          }
+        }
+      }
+      await repositories.documents.assertCompleteMany(documents.map((document) => document.id));
+      await repositories.entries.insertMany(entries);
+      return results;
     },
 
     async projectRevision(caller, input) {

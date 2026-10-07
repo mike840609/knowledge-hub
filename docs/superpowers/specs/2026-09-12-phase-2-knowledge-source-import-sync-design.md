@@ -720,6 +720,12 @@ archive obsolete folders bottom-up
 normalize sibling positions
 ```
 
+**Amendment (2026-10-08): "create documents" is one bulk step.** Measured at the limit, each new document cost about a dozen statements, roughly 26,000 for 2,000 notes. Most of that was the transaction holding the Source and Workspace. `projectDocuments` now creates them all at once:
+- Positions are computed in memory exactly as `placeNodeAtIndex` would leave them, one document after another.
+- The rows are then written in multi-row statements: documents, first revisions, current-revision pointers, link index, tree nodes and source entries. Any existing sibling that moved is updated, and completeness is checked once per batch.
+- The resulting rows and tree are the same as creating one at a time; `tests/integration/bulk-document-projection.test.ts` compares the two.
+- Every other step in the order above is unchanged and still runs per entry.
+
 ### 16.2 Initial import
 
 ```text

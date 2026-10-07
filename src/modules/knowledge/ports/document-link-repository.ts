@@ -47,6 +47,11 @@ export interface DocumentLinkRepository {
     revisionId: string;
     links: readonly ExtractedLink[];
   }): Promise<void>;
+  /**
+   * `replaceForDocument` for documents created in this transaction, which have no edges yet:
+   * the same rows, written for many documents in few statements.
+   */
+  indexNewDocuments(documents: readonly { documentId: string; revisionId: string; links: readonly ExtractedLink[] }[]): Promise<void>;
 
   /** ACTIVE documents in ACTIVE sources of one Workspace, as link targets. */
   loadCatalog(workspaceId: string): Promise<CatalogDocument[]>;

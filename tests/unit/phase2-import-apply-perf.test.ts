@@ -55,7 +55,7 @@ function buildPlan(sourceId: string, workspaceId: string): FolderImportPlan {
 
 /** In-memory counting stub: emulates the tx-local tree/document/entry state. */
 function stubRepositories(source: KnowledgeSource) {
-  const counts = { listBySource: 0, upsertIdentity: 0, sourcePolicyLockById: 0, workspaceLockById: 0 };
+  const counts = { listBySource: 0, upsertIdentity: 0, sourcePolicyLockById: 0, workspaceLockById: 0, bulkWrites: 0 };
   const linkIndexWrites: { documentId: string; revisionId: string; links: number }[] = [];
   const nodes = new Map<string, TreeViewNode>();
   const documents = new Map<string, KnowledgeDocument>();
@@ -105,6 +105,10 @@ function stubRepositories(source: KnowledgeSource) {
       insert: async (node: KnowledgeTreeNode) => {
         nodes.set(node.id, { ...node, title: null, documentStatus: "ACTIVE", currentRevisionId: null });
       },
+      insertMany: async (many: KnowledgeTreeNode[]) => {
+        counts.bulkWrites += 1;
+        for (const node of many) nodes.set(node.id, { ...node, title: null, documentStatus: "ACTIVE", currentRevisionId: null });
+      },
       findById: async (id: string) => nodes.get(id) ?? null,
       lockById: async (id: string) => nodes.get(id) ?? null,
       listBySource: async (sourceId: string) => {
@@ -132,6 +136,18 @@ function stubRepositories(source: KnowledgeSource) {
       insertDraft: async (document: KnowledgeDocument) => {
         documents.set(document.id, { ...document });
       },
+      insertDrafts: async (many: KnowledgeDocument[]) => {
+        counts.bulkWrites += 1;
+        for (const document of many) documents.set(document.id, { ...document });
+      },
+      setFirstRevisions: async (documentIds: string[]) => {
+        for (const documentId of documentIds) {
+          documents.get(documentId)!.currentRevisionId = [...revisions.values()].find((revision) => revision.documentId === documentId)!.id;
+        }
+      },
+      assertCompleteMany: async (documentIds: string[]) => {
+        if (documentIds.some((documentId) => !documents.get(documentId)?.currentRevisionId)) throw new Error("incomplete document");
+      },
       findById: async (id: string) => documents.get(id) ?? null,
       lockById: async (id: string) => documents.get(id) ?? null,
       setCurrentRevision: async (documentId: string, revisionId: string) => {
@@ -147,6 +163,9 @@ function stubRepositories(source: KnowledgeSource) {
     revisions: {
       insert: async (revision: KnowledgeRevision) => {
         revisions.set(revision.id, { ...revision });
+      },
+      insertMany: async (many: KnowledgeRevision[]) => {
+        for (const revision of many) revisions.set(revision.id, { ...revision });
       },
       findCurrent: async (documentId: string) => {
         const rows = [...revisions.values()].filter((revision) => revision.documentId === documentId);
@@ -165,6 +184,9 @@ function stubRepositories(source: KnowledgeSource) {
       insert: async (entry: SourceEntry) => {
         entries.set(entry.id, { ...entry });
       },
+      insertMany: async (many: SourceEntry[]) => {
+        for (const entry of many) entries.set(entry.id, { ...entry });
+      },
       update: async (entry: SourceEntry) => {
         entries.set(entry.id, { ...entry });
       },
@@ -174,6 +196,9 @@ function stubRepositories(source: KnowledgeSource) {
     links: {
       replaceForDocument: async (input: { documentId: string; revisionId: string; links: readonly unknown[] }) => {
         linkIndexWrites.push({ documentId: input.documentId, revisionId: input.revisionId, links: input.links.length });
+      },
+      indexNewDocuments: async (many: { documentId: string; revisionId: string; links: readonly unknown[] }[]) => {
+        for (const input of many) linkIndexWrites.push({ documentId: input.documentId, revisionId: input.revisionId, links: input.links.length });
       },
     },
     assets: {
@@ -222,6 +247,8 @@ describe("executeFolderImportPlan read amplification (issue #9 item 17a)", () =>
     expect(counts.upsertIdentity).toBe(1);
     expect(counts.sourcePolicyLockById).toBe(1);
     expect(counts.workspaceLockById).toBe(1);
+    // New documents and their tree nodes are written in bulk: one call each, whatever the count.
+    expect(counts.bulkWrites).toBe(2);
 
     // Indexing adds a constant amount of work per document, not per link and not
     // per Apply: one replacement for each revision written, each against the
