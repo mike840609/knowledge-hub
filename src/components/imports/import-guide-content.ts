@@ -55,7 +55,7 @@ function formatCount(value: number): string {
   return value.toLocaleString("en-US");
 }
 
-function english(limits: GuideLimits): GuideContent {
+function english(limits: GuideLimits, imagesStored: boolean): GuideContent {
   const fileLimit = formatGuideBytes(limits.maxMarkdownFileBytes);
   return {
     title: "Bring your wiki into Knowledge Hub",
@@ -86,7 +86,9 @@ function english(limits: GuideLimits): GuideContent {
           },
           {
             kind: "p",
-            text: "Obsidian's `[[wikilinks]]` are understood, including a path-qualified form `[[folder/Note]]`. Images and other attachments are recorded as references only (see Limits).",
+            text: imagesStored
+              ? "Obsidian's `[[wikilinks]]` are understood, including a path-qualified form `[[folder/Note]]`. Images written as `![alt](path)` are stored and shown; Obsidian embeds (`![[image.png]]`) and other attachments are recorded as references only."
+              : "Obsidian's `[[wikilinks]]` are understood, including a path-qualified form `[[folder/Note]]`. Images and other attachments are recorded as references only (see Limits).",
           },
         ],
       },
@@ -104,7 +106,9 @@ function english(limits: GuideLimits): GuideContent {
               "A title for every file: a `title` in the frontmatter, or a first `# H1` heading.",
               "Links in a form Knowledge Hub resolves: `[[Title]]`, `[[folder/Note]]`, or a relative `.md` link such as `[text](../folder/note.md)`.",
               `No Markdown file larger than ${fileLimit}.`,
-              "No attachments to rely on: images and other non-Markdown files are kept as references only; there is no binary attachment storage.",
+              imagesStored
+                ? "Images as `![alt](path)` with a `png`, `jpg`, `jpeg`, `gif`, `webp`, `avif` or `svg` file inside the folder. Other attachments are kept as references only."
+                : "No attachments to rely on: images and other non-Markdown files are kept as references only; there is no binary attachment storage.",
               "Keep every file inside the folder you choose (links between files may still use `../`).",
               "Do not rely on files or folders whose names start with a dot, or on `node_modules` folders and `Thumbs.db` files, at any depth: a folder such as `.wiki/` is skipped without a warning. Skipped paths are never read or uploaded, and they do not count toward the file-count or size limits.",
             ],
@@ -217,7 +221,7 @@ function english(limits: GuideLimits): GuideContent {
               ["Total size of Markdown files in one import", formatGuideBytes(limits.maxMarkdownTotalBytes)],
               ["Extra excluded paths", `Up to ${MAX_EXCLUDED_PATHS}, exact paths, no wildcards`],
               ["Always skipped", "Names that start with a dot (including `.git` and `.obsidian`), `node_modules`, `Thumbs.db`"],
-              ["Assets and attachments", "References only; no binary attachment storage"],
+              ["Assets and attachments", imagesStored ? "Images are stored and shown; other attachments are references only" : "References only; no binary attachment storage"],
             ],
           },
         ],
@@ -226,7 +230,7 @@ function english(limits: GuideLimits): GuideContent {
   };
 }
 
-function traditionalChinese(limits: GuideLimits): GuideContent {
+function traditionalChinese(limits: GuideLimits, imagesStored: boolean): GuideContent {
   const fileLimit = formatGuideBytes(limits.maxMarkdownFileBytes);
   return {
     title: "把你的維基帶進 Knowledge Hub",
@@ -257,7 +261,9 @@ function traditionalChinese(limits: GuideLimits): GuideContent {
           },
           {
             kind: "p",
-            text: "系統看得懂 Obsidian 的維基連結（wikilink），寫成 `[[標題]]`，也看得懂含資料夾路徑的寫法 `[[folder/Note]]`。圖片等附件只會記錄為參照（詳見「限制」）。",
+            text: imagesStored
+              ? "系統看得懂 Obsidian 的維基連結（wikilink），寫成 `[[標題]]`，也看得懂含資料夾路徑的寫法 `[[folder/Note]]`。以 `![alt](path)` 寫的圖片會被儲存並顯示；Obsidian 的嵌入語法（`![[image.png]]`）與其他附件只會記錄為參照。"
+              : "系統看得懂 Obsidian 的維基連結（wikilink），寫成 `[[標題]]`，也看得懂含資料夾路徑的寫法 `[[folder/Note]]`。圖片等附件只會記錄為參照（詳見「限制」）。",
           },
         ],
       },
@@ -275,7 +281,9 @@ function traditionalChinese(limits: GuideLimits): GuideContent {
               "每個檔案都有標題：frontmatter 裡的 `title`，或是第一個 `# H1` 標題。",
               "連結要用 Knowledge Hub 解析得了的寫法：`[[Title]]`、`[[folder/Note]]`，或相對路徑的 `.md` 連結，例如 `[文字](../folder/note.md)`。",
               `沒有任何 Markdown 檔案大於 ${fileLimit}。`,
-              "不要依賴附件：圖片與其他非 Markdown 檔案只會保留為參照，系統不儲存二進位附件。",
+              imagesStored
+                ? "圖片請用 `![alt](path)`，檔案為資料夾內的 `png`、`jpg`、`jpeg`、`gif`、`webp`、`avif` 或 `svg`。其他附件只會保留為參照。"
+                : "不要依賴附件：圖片與其他非 Markdown 檔案只會保留為參照，系統不儲存二進位附件。",
               "讓每個檔案都留在你所選的資料夾之內（檔案之間的連結仍然可以使用 `../`）。",
               "不要依賴名稱以點開頭的檔案或資料夾，也不要依賴任何層級的 `node_modules` 資料夾與 `Thumbs.db` 檔案：像 `.wiki/` 這樣的資料夾會被略過，而且不會出現警告。被略過的路徑不會被讀取或上傳，也不計入檔案數與大小限制。",
             ],
@@ -388,7 +396,7 @@ function traditionalChinese(limits: GuideLimits): GuideContent {
               ["一次匯入的 Markdown 檔案總大小", formatGuideBytes(limits.maxMarkdownTotalBytes)],
               ["額外排除的路徑", `最多 ${MAX_EXCLUDED_PATHS} 個，須為精確路徑，不支援萬用字元`],
               ["一律略過", "名稱以點開頭的路徑（包含 `.git` 與 `.obsidian`）、`node_modules`、`Thumbs.db`"],
-              ["資源與附件", "只保留參照，不儲存二進位附件"],
+              ["資源與附件", imagesStored ? "圖片會儲存並顯示；其他附件只保留參照" : "只保留參照，不儲存二進位附件"],
             ],
           },
         ],
@@ -397,6 +405,7 @@ function traditionalChinese(limits: GuideLimits): GuideContent {
   };
 }
 
-export function guideContent(locale: GuideLocale, limits: GuideLimits): GuideContent {
-  return locale === "zh-TW" ? traditionalChinese(limits) : english(limits);
+/** `imagesStored`: whether this server keeps a synced folder's images (`KM_BLOB_DIR`), or references only. */
+export function guideContent(locale: GuideLocale, limits: GuideLimits, imagesStored = false): GuideContent {
+  return locale === "zh-TW" ? traditionalChinese(limits, imagesStored) : english(limits, imagesStored);
 }

@@ -2119,8 +2119,8 @@ test("a synced folder's images show to its reader and on a shared page, and nowh
 
   const shareResponse = await request.post(`/api/documents/${documentId}/share-links`, { data: { label: "Pictures" } });
   expect(shareResponse.ok()).toBe(true);
-  const share = await shareResponse.json();
-  const token = String(share.token ?? new URL(share.url, "http://hub.test").pathname.split("/").pop());
+  const { link } = await shareResponse.json();
+  const token = String(link.path).split("/").pop()!;
 
   const anonymous = await browser.newContext({ storageState: { cookies: [], origins: [] } });
   const visitor = await anonymous.newPage();
@@ -2132,14 +2132,13 @@ test("a synced folder's images show to its reader and on a shared page, and nowh
   // In the folder, not on the page: the token does not reach it.
   expect((await anonymous.request.get(`/s/${token}/asset?src=${encodeURIComponent("img/secret.png")}`)).status()).toBe(404);
 
-  const linkId = String(share.id ?? share.linkId);
-  expect((await request.delete(`/api/share-links/${linkId}`)).ok()).toBe(true);
+  expect((await request.post(`/api/share-links/${link.id}/revoke`)).status()).toBe(204);
   expect((await anonymous.request.get(`/s/${token}/asset?src=${encodeURIComponent("img/pixel.png")}`)).status()).toBe(404);
   await anonymous.close();
 });
 ```
 
-Before running, confirm three names against the code and fix the test, not the product, if they differ: the share-link create response's field for the token (`src/app/api/documents/[documentId]/share-links/route.ts`), the revoke route (`find src/app/api/share-links -name route.ts`), and whether opening `/w/:ws/knowledge/:sourceId` redirects to the folder's first document (it does for a one-document folder; see `tests/e2e/router-redirect-during-navigation.spec.ts`).
+The create route answers `{ link: { id, path } }` with `path` being `/s/<token>`, and a link is revoked with `POST /api/share-links/:id/revoke` (204). Before running, confirm whether opening `/w/:ws/knowledge/:sourceId` redirects to the folder's first document (it does for a one-document folder; see `tests/e2e/router-redirect-during-navigation.spec.ts`).
 
 - [ ] **Step 3: Run it**
 
