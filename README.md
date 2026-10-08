@@ -58,7 +58,7 @@ Explore links between documents, find a note, and filter the graph by source.
 | Personal workspace | My Space, personal notes, drafts, favorites, and recently read documents; reading history stays on the device |
 | Markdown editing | Rendered editing and Markdown source modes, code blocks, a table of contents, and keyboard shortcuts |
 | Drafts and revisions | Account-backed autosave, local recovery on failure, immutable revision history, comparison and restore, and stale-editor conflict checks |
-| Import and sync | Import a Markdown folder through Preview → Confirm → Apply; select the folder again to review and apply later changes. Images in the folder are stored and shown when the server has an image volume (`KM_BLOB_DIR`) |
+| Import and sync | Import a Markdown folder through Preview → Confirm → Apply; select the folder again to review and apply later changes. Images in the folder are stored and shown when the server has an image store ([Images](#images)) |
 | Organization | Document and folder trees, move, rename, archive, and restore; source-managed content is updated through sync |
 | Search | Workspace-scoped keyword search and quick search with `⌘K` / `Ctrl+K` |
 | Knowledge links | `[[wikilinks]]`, relative `.md` links, backlinks, and workspace and local graphs |
@@ -76,7 +76,7 @@ A preview is a fixed staged snapshot. Resolve blocking diagnostics before applyi
 
 ### Current limitations and future direction
 
-- Images in a synced folder are stored when `KM_BLOB_DIR` is set (see [Images](#images)). Other attachments, Obsidian image embeds (`![[image.png]]`) and images in notes written in the Hub keep references only.
+- Images in a synced folder are stored when an image store is configured (see [Images](#images)). Other attachments, Obsidian image embeds (`![[image.png]]`) and images in notes written in the Hub keep references only.
 - ZIP exports include the latest saved versions of archived documents, but exclude drafts, revision history, and attachment bytes. The limit is 64 MiB / 9,999 documents.
 - Documents use archive and restore for their lifecycle; there is no general end-user permanent deletion flow.
 - Search is currently keyword-based. An MCP server, semantic/hybrid retrieval, and advanced agent memory are future directions, not shipped features.
@@ -134,7 +134,7 @@ See [`.env.example`](.env.example) for local development settings and import lim
 | `KM_TEAM_WORKSPACES_ENABLED` | Defaults to `false`; set to `true` to enable Team navigation and access |
 | `KM_IDENTITY_PROVIDER` | Defaults to `local`; production uses `company-sso` with a session reader integration |
 | `KM_IMPORT_*` | Import file counts, sizes, batch limits, and snapshot quotas |
-| `KM_BLOB_DIR` | Directory on a persistent volume where synced folders' images are stored. Unset keeps images as references only. The server refuses to start if it is set and not an existing writable directory |
+| `KM_BLOB_S3_*` or `KM_BLOB_DIR` | Where synced folders' images are stored: an S3-compatible bucket such as MinIO, or a directory. See [Images](#images). Neither set keeps images as references only |
 | `KM_TEST_DB_*` / `KM_E2E_DB_PREFIX` | Isolated test database settings; the test account must be able to create and drop databases with the designated prefixes |
 
 Default import limits include 20,000 manifest entries, 5 MiB per Markdown file, and 256 MiB of Markdown in total. See `.env.example` for the full limits. Snapshot retention is 2 hours for BUILDING, 30 minutes for READY, and 24 hours for STALE/APPLIED. The server deletes expired staging data in the background when someone starts an import, at most once every 10 minutes per process. To clean up on demand, for example on an instance nobody imports into, run:
@@ -147,11 +147,51 @@ This cleanup removes import staging data only, preserving canonical document his
 
 ### Images
 
-With `KM_BLOB_DIR` set, a folder's `png`, `jpg`, `jpeg`, `gif`, `webp`, `avif` and `svg` files are uploaded at import and shown in documents and on shared pages. A source imported before the setting was added gets its images on its next sync. Images written as Obsidian embeds (`![[image.png]]`) are not shown; use `![alt](path)`. An image has no history: an older revision shows the folder's current file.
+When an image store is configured, a folder's `png`, `jpg`, `jpeg`, `gif`, `webp`, `avif` and `svg` files are uploaded at import and shown in documents and on shared pages. A source imported before the store was configured gets its images on its next sync. Images written as Obsidian embeds (`![[image.png]]`) are not shown; use `![alt](path)`. An image has no history: an older revision shows the folder's current file.
 
-Back up the database first and the image directory second. Files are only added, so a directory copied after the database holds everything the database refers to. After a restore, `make blobs-verify` lists images whose file is missing and `make blobs-verify REPAIR=1` makes the next sync upload them again. `make blobs-gc` removes files nothing refers to; the server also does this in the background.
+Configure **one** of two stores. With neither, images stay references only; with both, the server refuses to start.
 
-One application server per image directory. Several servers need a shared filesystem.
+| Store | Settings | Use it when |
+| --- | --- | --- |
+| S3-compatible bucket (MinIO) | `KM_BLOB_S3_ENDPOINT`, `KM_BLOB_S3_BUCKET`, `KM_BLOB_S3_ACCESS_KEY`, `KM_BLOB_S3_SECRET_KEY`; optional `KM_BLOB_S3_PREFIX`, `KM_BLOB_S3_REGION` | Object storage is already run for you. Any number of application servers can share it |
+| Directory | `KM_BLOB_DIR` | Local development, or a single server with a persistent volume |
+
+**MinIO or another S3-compatible service.** Create the bucket first; the application does not. The key pair needs to read, write, delete and list objects in that bucket (`s3:GetObject`, `s3:PutObject`, `s3:DeleteObject`, `s3:ListBucket`). Objects are addressed path-style, `<endpoint>/<bucket>/<prefix>sha256/…`, and requests are signed with Signature Version 4. Set `KM_BLOB_S3_PREFIX` (for example `knowledge-hub/prod`) to share a bucket between deployments. For an endpoint with a certificate from an internal CA, point Node at it with `NODE_EXTRA_CA_CERTS`. At start-up the server checks the bucket: wrong keys or a missing bucket stop it, while an endpoint that cannot be reached is logged and the server starts, so an outage of the image store does not take document text offline.
+
+```bash
+KM_BLOB_S3_ENDPOINT=https://minio.example.internal:9000
+KM_BLOB_S3_BUCKET=knowledge-hub
+KM_BLOB_S3_ACCESS_KEY=...
+KM_BLOB_S3_SECRET_KEY=...
+KM_BLOB_S3_PREFIX=knowledge-hub/prod
+```
+
+**Local development.** `make setup` (or `make images-dir`) creates `.data/blobs` and writes `KM_BLOB_DIR` into `.env`. To develop against object storage instead, `make storage-up` starts a MinIO container from `compose.yaml` and creates its bucket; then remove `KM_BLOB_DIR` from `.env` and uncomment the four `KM_BLOB_S3_*` lines copied from `.env.example`. Moving from the local MinIO to a company one changes those values and nothing else. The MinIO console is at `http://127.0.0.1:9001`.
+
+**A directory on Kubernetes.** Mount a PersistentVolumeClaim and point `KM_BLOB_DIR` at the mount path. The directory must exist before the server starts, so do not create it in the image: a missing mount should fail fast, not write into the container layer.
+
+```yaml
+spec:
+  strategy: { type: Recreate }          # a ReadWriteOnce volume cannot be mounted by the old and new pod at once
+  template:
+    spec:
+      securityContext: { fsGroup: 1000 } # the non-root user must be able to write
+      containers:
+        - name: knowledge-hub
+          env:
+            - { name: KM_BLOB_DIR, value: /var/lib/knowledge-hub/blobs }
+          volumeMounts:
+            - { name: blobs, mountPath: /var/lib/knowledge-hub/blobs }
+      volumes:
+        - name: blobs
+          persistentVolumeClaim: { claimName: knowledge-hub-blobs }
+```
+
+A `ReadWriteOnce` claim means one replica. More replicas need a `ReadWriteMany` storage class or the S3 store. Keep images on a claim of their own, so a full image volume cannot stop MariaDB.
+
+**Moving between stores.** Objects are named by their content hash, so a move is a copy of the `sha256/` tree with no database change: for example `mc mirror /var/lib/knowledge-hub/blobs/sha256 company/knowledge-hub/knowledge-hub/prod/sha256`.
+
+**Backup and repair.** Back up the database first and the images second. Images are only added, so a copy taken after the database holds everything the database refers to. After a restore, `make blobs-verify` lists images whose file is missing and `make blobs-verify REPAIR=1` makes the next sync upload them again. `make blobs-gc` removes images nothing refers to; the server also does this in the background. These commands use whichever store `.env` configures.
 
 ## Deployment
 
@@ -255,7 +295,7 @@ When upgrading Next.js, check whether the patch is still required: [`vendored-re
 - **Team navigation is unavailable**: Coming soon is the default. Set `KM_TEAM_WORKSPACES_ENABLED=true` and restart.
 - **Production identity error**: Local identity does not provide production login. Integrate an SSO session reader.
 - **Import cannot be applied**: resolve blockers in Preview. A 409 version conflict requires a new preview; there is no Force Apply.
-- **Images do not appear**: check `KM_BLOB_DIR` is set, sync the folder again, and run `make blobs-verify`.
+- **Images do not appear**: check that an image store is configured ([Images](#images)), sync the folder again, and run `make blobs-verify`.
 - **Links or graph entries are missing**: ensure migrations are complete, then run `make db-reindex-links`. Fix wikilinks in synced documents at the original source.
 - **Resetting development data**: `make db-reset` deletes the development database volume and all its contents. Back up anything you need before running it.
 

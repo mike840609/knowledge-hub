@@ -6,7 +6,7 @@
 | Type | Design specification |
 | Why | A synced folder's images are recorded as references only (Phase 2 spec §5.4, §12; first-wave spec, "the user explicitly chose to defer images"). A reader who imports a vault with screenshots or diagrams gets a successful import and broken pages. It is the one gap in Folder Sync that damages content rather than convenience. |
 | Related | `2026-09-12-phase-2-knowledge-source-import-sync-design.md` (§5.4 asset transport, §12 asset model), `2026-10-03-folder-sync-first-wave-design.md`, `2026-10-03-folder-import-reliability.md` (asset limits, retry), `2026-09-23-document-share-link-design.md`, `src/components/knowledge/markdown-image-policy.ts` |
-| Status | Implemented (plan: `docs/superpowers/plans/2026-10-08-folder-sync-images.md`). Store: `src/modules/sources/ports/blob-store.ts`, `src/infrastructure/storage/filesystem-blob-store.ts`, `src/server/blob-store.ts`. Import: `create-folder-import.ts`, `upload-folder-import-asset.ts`, `finalize-folder-import.ts`, `PUT /api/source-imports/:snapshotId/asset`. Reading: `document-image-service.ts`, `src/server/document-images.ts`, `GET /api/documents/:documentId/asset`, `markdown-image-base.tsx`. Shared pages: `DocumentShareService.readSharedImage`, `GET /s/:token/asset`. Maintenance: `blob-maintenance.ts`, `scripts/storage/blobs.ts`. Tests: unit `image-path`, `image-sources`, `filesystem-blob-store`, `blob-store-config`, `stored-image`, `document-images`, `markdown-image-base`, `folder-import-images`, `share-link-single-exception`; integration `folder-images-import`, `-read`, `-share`, `-maintenance`; e2e `zz-folder-images.spec.ts`. |
+| Status | Implemented (plan: `docs/superpowers/plans/2026-10-08-folder-sync-images.md`). Store: `src/modules/sources/ports/blob-store.ts`, `src/infrastructure/storage/filesystem-blob-store.ts`, `src/server/blob-store.ts`. Import: `create-folder-import.ts`, `upload-folder-import-asset.ts`, `finalize-folder-import.ts`, `PUT /api/source-imports/:snapshotId/asset`. Reading: `document-image-service.ts`, `src/server/document-images.ts`, `GET /api/documents/:documentId/asset`, `markdown-image-base.tsx`. Shared pages: `DocumentShareService.readSharedImage`, `GET /s/:token/asset`. Maintenance: `blob-maintenance.ts`, `scripts/storage/blobs.ts`. S3 store: `s3-blob-store.ts`, unit `s3-signature`, integration `s3-blob-store` (real MinIO). Tests: unit `image-path`, `image-sources`, `filesystem-blob-store`, `blob-store-config`, `stored-image`, `document-images`, `markdown-image-base`, `folder-import-images`, `share-link-single-exception`; integration `folder-images-import`, `-read`, `-share`, `-maintenance`; e2e `zz-folder-images.spec.ts`. |
 
 ## 1. What it delivers
 
@@ -56,6 +56,18 @@ The key is the content's SHA-256. Content under a key never changes, so `put` of
 - `KM_BLOB_DIR` **set but missing or not writable**: the server refuses to start and names the path. This is the guard against a container that was deployed without its volume, which would otherwise accept images into a layer that disappears on the next deploy.
 
 One process, one disk. Several application servers need a shared filesystem or the S3 adapter; the README will say so.
+
+### 3.3 The S3-compatible adapter
+
+Added 2026-10-08, when the deployment target turned out to run MinIO already. `src/infrastructure/storage/s3-blob-store.ts`, selected by `KM_BLOB_S3_BUCKET` with `KM_BLOB_S3_ENDPOINT`, `KM_BLOB_S3_ACCESS_KEY`, `KM_BLOB_S3_SECRET_KEY`, and optionally `KM_BLOB_S3_PREFIX` and `KM_BLOB_S3_REGION`.
+
+- **One store.** `KM_BLOB_S3_BUCKET` and `KM_BLOB_DIR` together stop the server. Neither: the feature is off.
+- **Same keys.** An object is `<prefix>sha256/<2 hex>/<2 hex>/<hash>`, the layout of the directory store, so moving between the two is a copy.
+- **No SDK.** Five operations (put, get, head, delete, list) over Node's HTTP client with Signature Version 4, path-style addressing. The signer is checked against AWS's published examples and the adapter against a real MinIO in the integration job. The alternative was the AWS SDK: about a megabyte of dependency for five requests, with default checksum behaviour that S3-compatible servers have rejected.
+- **The store verifies too.** S3's signed payload hash is the SHA-256 of the body, which is the object's key. `put` sends it as `x-amz-content-sha256`, so the bucket refuses bytes that do not match, on top of the adapter's own check while streaming.
+- **Start-up.** A bucket that answers and refuses (wrong keys, no such bucket) stops the server. One that cannot be reached is logged and the server starts: an outage of the image store must not take document text offline.
+- **The bucket is not created by the application**, except by `blobs.ts create-bucket` for local development and CI.
+- **Local stand-in.** `compose.yaml` has a `minio` service (`make storage-up`) using the `pgsty/minio` community fork, because MinIO Inc. withdrew `minio/minio` from Docker Hub and Quay in September 2026. It mimics a company MinIO; it is not a recommendation for production.
 
 ## 4. Data model
 
@@ -205,7 +217,6 @@ Changed together with the code, in one commit, never ahead of it:
 - **Obsidian embeds, `![[image.png]]`.** The link extractor deliberately treats an embed as "not a link" and the renderer does not draw one. Supporting it touches the Markdown pipeline and the wikilink round-trip rule. Standard `![alt](path)` covers generated wikis and vaults with wikilinks turned off; default Obsidian vaults will still show no images.
 - **Hub-managed notes.** There is no image upload in the editor.
 - **Non-image attachments** (PDF, archives). Different rendering and a different risk profile.
-- **S3-compatible adapter.** The port is shaped for it. Build it when a deployment has no persistent disk or more than one application server.
 - **Source health for images.** Listing missing or unsupported images per source needs image references in the link index. The reader's placeholder is the only signal for now.
 - **Database BLOB.** Up to 512 MiB of binary per import in the database makes every backup, restore and test environment carry it.
 
@@ -231,3 +242,4 @@ Recorded 2026-10-08, after reading the import code for the implementation plan (
 | Apply re-checks every blob | It does not (§5.3) | Cleanup already cannot remove a blob a live snapshot refers to |
 | No base in context renders a placeholder | The `src` is written as today (§6.2) | Changes nothing for existing renderers |
 | A 0-byte image | Recorded, never stored | An upload needs a body |
+| S3-compatible adapter left out | Built (§3.3) | The deployment target already runs MinIO, which removes the cost that argued for waiting |

@@ -17,7 +17,7 @@ const environmentNames = [
   "NEXT_TELEMETRY_DISABLED", "KM_IDENTITY_PROVIDER", "NODE_ENV", "PORT", "KM_E2E_PORT", "KM_DB_HOST", "KM_DB_PORT", "KM_DB_USER", "KM_DB_PASSWORD", "KM_DB_NAME",
   "KM_E2E_DB_HOST", "KM_E2E_DB_PORT", "KM_E2E_DB_USER", "KM_E2E_DB_PASSWORD", "KM_E2E_DB_NAME",
   "KM_LOCAL_IDENTITY_ENABLED", "KM_LOCAL_ID", "KM_LOCAL_EMP_ID", "KM_LOCAL_NAME", "KM_LOCAL_ORG_CODE",
-  "KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION", "KM_TEAM_WORKSPACES_ENABLED", "KM_BLOB_DIR",
+  "KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION", "KM_TEAM_WORKSPACES_ENABLED", "KM_BLOB_DIR", "KM_BLOB_S3_BUCKET", "KM_BLOB_S3_ENDPOINT", "KM_BLOB_S3_ACCESS_KEY", "KM_BLOB_S3_SECRET_KEY", "KM_BLOB_S3_PREFIX",
 ];
 
 function createCancellation() {
@@ -137,7 +137,11 @@ async function main(): Promise<void> {
       blobDirectory = await mkdtemp(path.join(tmpdir(), "km-e2e-blobs-"));
       const commonEnvironment: NodeJS.ProcessEnv = {
         ...process.env,
-        KM_BLOB_DIR: blobDirectory,
+        // A temp directory by default. With KM_TEST_S3_ENDPOINT set (make storage-up), the same
+        // suites run against that bucket instead, which is how the S3 store is exercised end to end.
+        ...(process.env.KM_TEST_S3_ENDPOINT
+          ? { KM_BLOB_DIR: "", KM_BLOB_S3_ENDPOINT: process.env.KM_TEST_S3_ENDPOINT, KM_BLOB_S3_BUCKET: process.env.KM_TEST_S3_BUCKET, KM_BLOB_S3_ACCESS_KEY: process.env.KM_TEST_S3_ACCESS_KEY, KM_BLOB_S3_SECRET_KEY: process.env.KM_TEST_S3_SECRET_KEY, KM_BLOB_S3_PREFIX: `e2e-${Date.now()}` }
+          : { KM_BLOB_DIR: blobDirectory, KM_BLOB_S3_BUCKET: "" }),
         NODE_ENV: "production",
         NEXT_TELEMETRY_DISABLED: "1",
         KM_IDENTITY_PROVIDER: "local",
