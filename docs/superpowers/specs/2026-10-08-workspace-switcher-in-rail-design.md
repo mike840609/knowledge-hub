@@ -20,10 +20,11 @@ search field.
   unchanged and still carries "Knowledge Hub" alone; the brand mark rules in
   the design language are untouched.
 - **The workspace switcher moves to the top of the primary rail**, above the
-  navigation it scopes, separated from it by a divider. Expanded it shows the
-  workspace name and a chevron, without the "Workspace" caption. Collapsed
-  (48px) it shows the name's first letter in a 32px square, with the name in a
-  tooltip. Its accessible name stays `Workspace: <name>` and its menu is the
+  navigation it scopes, separated from it by spacing rather than a rule. In
+  both rail states it carries the workspace's mark — the name's first letter
+  in a small square. Expanded, the mark is followed by the name and a chevron,
+  without the "Workspace" caption; collapsed (48px) the mark stands alone, with
+  the name in a tooltip. Its accessible name stays `Workspace: <name>` and its menu is the
   same menu, Team "Coming soon" row included — what it offers does not change.
 - **On narrow screens** the switcher is the first thing in the Menu drawer,
   above primary navigation. The topbar no longer carries it at any width.
