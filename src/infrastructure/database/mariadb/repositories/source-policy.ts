@@ -1,9 +1,13 @@
-import type { SourcePolicy, SourceType, SourceOwnership } from "@/modules/knowledge/domain/source-policy";
+import type { SourcePolicy, SourceType, SourceOwnership, StoredImage } from "@/modules/knowledge/domain/source-policy";
+import { isStoredImage } from "@/modules/sources/domain/stored-image";
+import type { AssetRepository } from "@/modules/sources/ports/asset-repository";
+import type { EntryRepository } from "@/modules/sources/ports/entry-repository";
+import { imageContentType, resolveImagePath } from "@/shared/markdown/image-path";
 import type { SourcePolicyPort } from "@/modules/knowledge/ports/source-policy";
 import type { SourceRepository } from "@/modules/sources/ports/source-repository";
 
 export class MariaDbSourcePolicyRepository implements SourcePolicyPort {
-  constructor(private readonly sources: SourceRepository) {}
+  constructor(private readonly sources: SourceRepository, private readonly entries: EntryRepository, private readonly assets: AssetRepository) {}
 
   private map(source: Awaited<ReturnType<SourceRepository["findById"]>>): SourcePolicy | null {
     if (!source) return null;
@@ -18,6 +22,17 @@ export class MariaDbSourcePolicyRepository implements SourcePolicyPort {
       const mapped = this.map(source);
       return mapped ? [mapped] : [];
     });
+  }
+
+  async findStoredImage(documentId: string, src: string): Promise<StoredImage | null> {
+    const entry = await this.entries.findByDocumentId(documentId);
+    if (!entry) return null;
+    const sourcePath = resolveImagePath(entry.sourcePath, src);
+    const contentType = sourcePath === null ? null : imageContentType(sourcePath);
+    if (sourcePath === null || contentType === null) return null;
+    const asset = await this.assets.findByPath(entry.sourceId, sourcePath);
+    if (!asset || !isStoredImage(asset)) return null;
+    return { contentHash: asset.contentHash!, contentType, sourcePath, documentPath: entry.sourcePath };
   }
 
   async findById(sourceId: string): Promise<SourcePolicy | null> { return this.map(await this.sources.findById(sourceId)); }

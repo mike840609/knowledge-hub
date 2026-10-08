@@ -21,3 +21,6 @@ export function isHubManaged(policy: SourcePolicy): boolean {
 export function isFolderSyncable(policy: SourcePolicy): boolean {
   return policy.status === "ACTIVE" && policy.sourceType === "FOLDER_SYNC" && policy.ownership === "SOURCE_MANAGED";
 }
+
+/** A stored image in a document's own source. `documentPath` lets a caller resolve other sources the same way. */
+export type StoredImage = { contentHash: string; contentType: string; sourcePath: string; documentPath: string };

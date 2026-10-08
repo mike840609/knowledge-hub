@@ -44,6 +44,14 @@ export class MariaDbAssetRepository implements AssetRepository {
     return rows.map(mapAsset);
   }
 
+  async findByPath(sourceId: string, sourcePath: string): Promise<KnowledgeAsset | null> {
+    const rows = await this.connection.query<DbRow[]>(
+      "SELECT * FROM knowledge_assets WHERE source_id = ? AND source_path_hash = ?",
+      [sourceId, createHash("sha256").update(sourcePath, "utf8").digest("hex")],
+    );
+    return rows[0] ? mapAsset(rows[0]) : null;
+  }
+
   async upsertByPath(asset: KnowledgeAsset): Promise<void> {
     await this.connection.query(
       `INSERT INTO knowledge_assets (id, source_id, source_path, source_path_hash, mime_type, content_hash, metadata, created_at, updated_at)
