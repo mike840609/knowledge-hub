@@ -168,6 +168,13 @@ test('history presents changed lines before optional full Markdown', async ({ pa
 test('Sources support row keys and importing uses the shared field and folder trigger', async ({ page }) => {
   const workspace = '0199f100-0000-7000-8000-000000000001';
   await page.goto(`/w/${workspace}/sources`);
+  // A page that opens with PageHeader puts its location › title on the rail's top line, as a document does.
+  const heading = page.getByRole('heading', { level: 1, name: 'Sources', exact: true });
+  await expect(heading).toBeVisible();
+  const middle = async (locator: ReturnType<Page['locator']>) => { const box = (await locator.boundingBox())!; return box.y + box.height / 2; };
+  expect(Math.abs(await middle(heading) - await middle(page.getByText('Knowledge Hub', { exact: true }).filter({ visible: true })))).toBeLessThanOrEqual(1);
+  // The rail marks the current page with a neutral step, not the accent the explorer's selection uses.
+  await expect(page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Sources', exact: true })).toHaveCSS('background-color', 'rgb(228, 231, 236)');
   const rows = page.locator('[data-list-row]');
   await expect(rows.nth(1)).toBeVisible();
   await rows.first().focus();
@@ -200,7 +207,7 @@ test('touch tree controls stay visible, usable and separated in both themes', as
     expect(actionsBox.x + actionsBox.width).toBeLessThanOrEqual(starBox.x);
     await mobile.screenshot({ path: info.outputPath('mobile-menu-light.png') });
     await mobile.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
-    await expect(menu.getByRole('link', { name: 'Knowledge', exact: true })).toHaveCSS('background-color', 'rgb(35, 37, 61)');
+    await expect(menu.getByRole('link', { name: 'Knowledge', exact: true })).toHaveCSS('background-color', 'rgb(43, 46, 53)');
     await mobile.screenshot({ path: info.outputPath('mobile-menu-dark.png') });
   } finally { await context.close(); }
 });
@@ -294,4 +301,18 @@ test('long explorer reveals the selected document after portal layout settles', 
   await expect(page.getByRole('region', { name: 'Favorites' }).getByRole('link')).toHaveCount(4);
   await expect(row).toBeInViewport();
   expect(await page.getByRole('region', { name: 'Document content', exact: true }).evaluate(el => el.scrollTop)).toBe(0);
+  // Opening or closing Favorites or Recent is the reader's own layout change: the explorer stays where they
+  // left it rather than scrolling back to the document being read.
+  const scroller = page.getByRole('navigation', { name: 'Document tree', exact: true });
+  await scroller.evaluate(el => { el.scrollTop = 0; });
+  await expect(row).not.toBeInViewport();
+  for (const name of ['Favorites', 'Recent']) {
+    const toggle = page.getByRole('button', { name, exact: true });
+    if (await toggle.count() === 0) continue;
+    for (let i = 0; i < 2; i++) {
+      await toggle.click();
+      await page.waitForTimeout(150);
+      expect(await scroller.evaluate(el => el.scrollTop)).toBe(0);
+    }
+  }
 });

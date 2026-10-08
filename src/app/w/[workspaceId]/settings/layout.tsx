@@ -25,7 +25,7 @@ export default async function SettingsLayout({
   }));
 
   return (
-    <main className="kh-page-wide py-6">
+    <main className="kh-page-wide pb-6">
       <PageHeader location={team.name} locationHref={`/w/${workspaceId}/knowledge`} title="Settings" />
       <div className="my-6">
         <NavTabs label="Team settings" tabs={tabs} />

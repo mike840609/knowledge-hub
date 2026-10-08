@@ -15,16 +15,16 @@ export function SourceDetail({ model, showImportSuccess = false, limits }: { mod
   const syncable = isFolderSyncable(source);
   return (
     <div className="flex flex-col gap-6">
-      {showImportSuccess ? (
-        <p role="status" className="rounded-md border border-kh-success/40 bg-kh-bg px-3 py-2 text-body text-kh-success">
-          Import applied successfully.
-        </p>
-      ) : null}
       <PageHeader location="Sources" locationHref={`/w/${workspace.id}/sources`} title={source.name}
         actions={syncable ? (
           <SourceSyncActions workspaceId={workspace.id} sourceId={source.id} limits={limits} />
         ) : undefined}
       />
+      {showImportSuccess ? (
+        <p role="status" className="rounded-md border border-kh-success/40 bg-kh-bg px-3 py-2 text-body text-kh-success">
+          Import applied successfully.
+        </p>
+      ) : null}
       <p className="flex flex-wrap items-center gap-2 text-caption text-kh-text-muted">
         <span className="rounded-md border border-kh-border px-1.5 py-0.5">{sourceTypeLabel(source.sourceType)}</span>
         <Status kind={source.status === "ARCHIVED" ? "archived" : "active"}>{source.status === "ARCHIVED" ? "Archived" : "Active"}</Status>

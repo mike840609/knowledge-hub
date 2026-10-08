@@ -25,7 +25,7 @@ export default async function WorkspaceSourceDetailPage({
   }
   const limits = importRuntimeConfig().limits;
   return (
-    <main className="kh-page py-6">
+    <main className="kh-page pb-6">
       <SourceDetail limits={{ maxAssetFileBytes: limits.maxAssetFileBytes, maxAssetTotalBytes: limits.maxAssetTotalBytes }} model={model} showImportSuccess={importParam === "success"} />
     </main>
   );

@@ -232,8 +232,12 @@ where it sits, the way the document header names a document, rather than
 announced above it. A form page may add one line saying what it does; a list
 page does not restate its own name.
 
-Page padding is `py-6`. `py-8` appeared on four sources pages for no reason
-anyone recorded. The `py-16` of a centred message state belongs to
+`PageHeader`'s line is 48px and is the first thing on its page: a page that
+opens with one has no top padding (`pb-6`, not `py-6`), so the line is centred
+on the same top line as the rail's wordmark row and a document's breadcrumb —
+with no topbar, that line is the window's top edge. A page that does not open
+with `PageHeader` keeps `py-6`. `py-8` appeared on four sources pages for no
+reason anyone recorded. The `py-16` of a centred message state belongs to
 `StatusMessage` and `EmptyState`, not to the pages that show one.
 
 ### Divergence: this ramp is tinted, the reference's is not
@@ -253,8 +257,11 @@ not correctness.
 
 ## 8. Colour
 
-One restrained accent, used for selected state, focus, primary action and
-active navigation. Hierarchy relies on weight, size, spacing and foreground
+One restrained accent, used for selected state, focus and primary action.
+The primary rail's current item is not one of them: it is marked with a neutral
+step above hover (`bg-hover-strong`, full-strength text, medium weight), so the
+accent on screen is the explorer's selected document rather than two accent
+blocks side by side competing for the eye. Hierarchy relies on weight, size, spacing and foreground
 level rather than decorative colour.
 
 ### Foreground levels
