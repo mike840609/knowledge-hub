@@ -8,6 +8,7 @@ import { Topbar } from "@/components/shell/topbar";
 import {UserMenu} from "./user-menu";
 import { PrimaryNav } from "@/components/shell/primary-nav";
 import { WorkspaceSelector } from "@/components/shell/workspace-selector";
+import { SearchNavItem } from "@/components/search/search-nav-item";
 import { WorkspaceAuthorizationContext, useWorkspaceAuthorizationRefresh } from "./use-workspace-authorization";
 import { ArchivedWorkspaceBanner } from "@/components/workspaces/archived-workspace-banner";
 import { Drawer } from "@/components/ui/drawer";
@@ -93,7 +94,10 @@ export function AppShell({ model, children }: { model: WorkspaceShellModel; chil
       {authorization.access.workspace.lifecycleState === "ARCHIVED" && <ArchivedWorkspaceBanner workspaceId={model.workspace.id} canRestore={authorization.confirmed && authorization.access.actions.canRestore} />}
       <div className="flex min-h-0 flex-1">
         <aside className={`hidden shrink-0 border-r border-kh-border bg-kh-bg-sunken lg:flex lg:flex-col ${navCollapsed ? "w-12" : "w-40"}`}>
-          <div className="shrink-0 px-2 pt-2"><WorkspaceSelector workspaceId={model.workspace.id} compact={navCollapsed} /></div>
+          <div className="flex shrink-0 flex-col gap-0.5 px-2 pt-2">
+            <WorkspaceSelector workspaceId={model.workspace.id} compact={navCollapsed} />
+            <SearchNavItem compact={navCollapsed} />
+          </div>
           <div className="min-h-0 flex-1 overflow-y-auto"><PrimaryNav workspaceId={model.workspace.id} compact={navCollapsed} /></div>
           <div className="shrink-0 border-t border-kh-border p-2"><UserMenu identityName={model.identityName} workspaceId={model.workspace.id} compact={navCollapsed}/></div>
         </aside>

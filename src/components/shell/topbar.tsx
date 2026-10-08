@@ -46,10 +46,8 @@ export function Topbar({
         </Tooltip>
         <span className={`hidden whitespace-nowrap text-caption font-semibold text-kh-text sm:block ${navCollapsed ? "lg:hidden" : ""}`}>Knowledge Hub</span>
       </div>
-      {/* Aligned with the 288px explorer below it; the workspace switcher heads the rail instead. */}
-      <div className="flex h-full w-32 min-w-0 shrink-0 items-center pr-2 sm:w-64 sm:px-3 lg:w-72">
-        <QuickSearch workspaceId={model.workspace.id} />
-      </div>
+      {/* The palette lives here once; on a wide screen the rail's Search row opens it and this shows nothing. */}
+      <QuickSearch workspaceId={model.workspace.id} />
       <div aria-hidden={!visible} inert={!visible}
         className={`flex min-w-0 flex-1 items-center gap-2 px-3 transition-opacity duration-120 ease-out ${visible ? "opacity-100" : "pointer-events-none opacity-0"}`}>
         <span className="min-w-0 flex-1 truncate text-body font-semibold text-kh-text" title={active ? state.title : undefined}>

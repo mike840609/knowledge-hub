@@ -37,21 +37,25 @@ test('reader and composer keep their column and expose commands during long scro
   const expandedExplorer = (await explorer.boundingBox())!;
   expect(expandedExplorer.y).toBe((await page.locator('main').boundingBox())!.y);
   expect(expandedExplorer.width).toBe(288);
-  // The workspace switcher heads the rail; Search takes the slot aligned with the explorer.
+  // The rail opens with the workspace switcher, then Search, then the navigation; the topbar holds neither.
   const workspace = page.getByRole('button', { name: /^Workspace:/ });
+  const search = page.getByRole('button', { name: 'Quick search', exact: true });
   const primary = page.getByRole('navigation', { name: 'Primary' });
-  const inRail = async (rail: number) => { const box = (await workspace.boundingBox())!; expect(box.x).toBe(8); expect(box.x + box.width).toBeLessThanOrEqual(rail - 8); };
+  const inRail = async (rail: number) => {
+    for (const control of [workspace, search]) { const box = (await control.boundingBox())!; expect(box.x).toBe(8); expect(box.x + box.width).toBeLessThanOrEqual(rail - 8); }
+    expect((await workspace.boundingBox())!.y).toBeLessThan((await search.boundingBox())!.y);
+    expect((await search.boundingBox())!.y).toBeLessThan((await primary.boundingBox())!.y);
+  };
   await inRail(160);
-  expect((await workspace.boundingBox())!.y).toBeLessThan((await primary.boundingBox())!.y);
-  const search = page.getByRole('button', { name: 'Quick search', exact: true }).locator('..');
-  expect((await search.boundingBox())!.x).toBe(160);
-  expect((await search.boundingBox())!.width).toBe(288);
+  await expect(page.locator('header').getByRole('button', { name: 'Quick search', exact: true })).toHaveCount(0);
   await page.screenshot({ path: info.outputPath('reader-navigation-expanded.png') });
   await page.getByRole('button', { name: 'Collapse navigation' }).click();
   await expect(explorer).toBeVisible();
   expect((await explorer.boundingBox())!.x).toBe(48);
   await inRail(48);
-  expect((await search.boundingBox())!.x).toBe(48);
+  await search.click();
+  await expect(page.getByRole('dialog', { name: 'Search and actions' })).toBeVisible();
+  await page.keyboard.press('Escape');
   expect((await explorer.boundingBox())!.height).toBe(expandedExplorer.height);
   await page.screenshot({ path: info.outputPath('reader-navigation-collapsed.png') });
   await page.getByRole('button', { name: 'Expand navigation' }).click();
@@ -80,6 +84,11 @@ test('mobile menu contains contextual navigation and closes after selecting a do
   await expect(menu.getByRole('link', { name: 'Home', exact: true })).toBeVisible();
   await expect(menu.getByRole('button', { name: /^Workspace:/ })).toBeVisible();
   await expect(page.locator('header').getByRole('button', { name: /^Workspace:/ })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await page.locator('header').getByRole('button', { name: 'Quick search', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Search and actions' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Open menu', exact: true }).click();
   await menu.locator('a').filter({ hasText: /Remediation/ }).last().click();
   await expect(menu).not.toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

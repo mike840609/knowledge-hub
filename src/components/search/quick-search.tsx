@@ -23,6 +23,7 @@ import { buttonClasses } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { Tooltip } from "@/components/ui/tooltip";
 import { actionForKey, isSingleKeyShortcut, shortcutLabel } from "@/lib/shortcut-keys";
+import { OPEN_SEARCH_EVENT } from "./search-nav-item";
 
 type QuickHit = {
   documentId: string;
@@ -171,8 +172,14 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
       event.preventDefault();
       runAction(action);
     };
+    // The rail's Search row asks by event; this is the one palette.
+    const onRequest = () => setOpen(true);
     window.addEventListener("keydown", onShortcut);
-    return () => window.removeEventListener("keydown", onShortcut);
+    window.addEventListener(OPEN_SEARCH_EVENT, onRequest);
+    return () => {
+      window.removeEventListener("keydown", onShortcut);
+      window.removeEventListener(OPEN_SEARCH_EVENT, onRequest);
+    };
   }, [enabled, actions, runAction]);
 
   // The documents to list while nothing is typed. They are asked of the server rather than read back from
@@ -281,17 +288,16 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
 
   return (
     <>
+      {/* Where the rail is on screen its Search row is the way in; a narrow window keeps this icon. */}
       <Tooltip label="Search and actions" keys="/">
         <button
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Quick search"
           aria-keyshortcuts="Meta+K Control+K /"
-          className="kh-control kh-focus-ring flex min-h-8 w-full min-w-0 items-center gap-2 rounded-md border border-transparent bg-kh-bg-hover px-2.5 text-kh-text-muted transition-colors hover:border-kh-border hover:text-kh-text"
+          className={buttonClasses({ variant: "ghost", icon: true, className: "lg:hidden" })}
         >
-          <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <span className="min-w-0 flex-1 truncate text-left text-body">Search<span className="hidden sm:inline">…</span></span>
-          <Kbd className="hidden shrink-0 lg:inline">⌘K</Kbd>
+          <Search className="h-4 w-4" aria-hidden="true" />
         </button>
       </Tooltip>
       <Dialog.Root open={open} onOpenChange={setOpen}>
