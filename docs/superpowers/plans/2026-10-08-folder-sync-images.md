@@ -96,7 +96,7 @@ describe("resolveImagePath", () => {
     expect(resolveImagePath("a.md", "my%20image.png?v=2#x")).toBe("my image.png");
   });
   it("returns null for anything that leaves the root or is not a relative path", () => {
-    for (const src of ["../a.png", "/../a.png", "a/../../b.png", "https://x.test/a.png", "//x.test/a.png", "data:image/png;base64,AA", "a\\b.png", "%E0%A4%A", "a%00.png", "", "   ", "?x", "."]) {
+    for (const src of ["../../a.png", "/../a.png", "a/../../../b.png", "https://x.test/a.png", "//x.test/a.png", "data:image/png;base64,AA", "a\\b.png", "%E0%A4%A", "a%00.png", "", "   ", "?x", "."]) {
       expect(resolveImagePath("guides/setup.md", src), src).toBeNull();
     }
     expect(resolveImagePath("setup.md", "../a.png")).toBeNull();
@@ -115,7 +115,7 @@ it("lists inline and reference-style images once each, in the order written", ()
   expect(extractImageSources(markdown)).toEqual(["img/a.png", "../b.svg"]);
 });
 it("ignores links, code, Obsidian embeds and an unresolved reference", () => {
-  const markdown = "[link](a.png)\n\n`![x](code.png)`\n\n```\n![y](fenced.png)\n```\n\n![[embed.png]]\n\n![z][missing]\n";
+  const markdown = "[link](a.png)\n\n`![x](code.png)`\n\n~~~\n![y](fenced.png)\n~~~\n\n![[embed.png]]\n\n![z][missing]\n";
   expect(extractImageSources(markdown)).toEqual([]);
 });
 ```
