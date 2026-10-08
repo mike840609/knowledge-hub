@@ -92,6 +92,7 @@ export function SyncNowButton({ workspaceId, sourceId, sourceName, limits, compa
           if (!mountedRef.current) return;
           if (state.kind === "PREPARING") setStatus("Preparing files for upload…");
           else if (state.kind === "UPLOADING") setStatus(`Uploading Markdown files… ${state.uploaded}/${state.total}`);
+          else if (state.kind === "UPLOADING_IMAGES") setStatus(`Uploading images… ${state.uploaded}/${state.total}`);
           else if (state.kind === "FINALIZING") setStatus(finalizingText(state.files));
         },
         assertAllowed,
