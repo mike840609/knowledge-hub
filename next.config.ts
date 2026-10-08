@@ -30,6 +30,16 @@ const nextConfig: NextConfig = {
           { key: "Content-Security-Policy", value: "img-src 'self'; frame-ancestors 'none'" },
         ],
       },
+      // Image bytes (folder-sync images spec §6.1). Last, so they win: a
+      // directly opened SVG must get the sandboxing policy, not the page one.
+      ...["/api/documents/:documentId/asset", "/s/:token/asset"].map((source) => ({
+        source,
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Content-Security-Policy", value: "default-src 'none'; style-src 'unsafe-inline'; sandbox" },
+          { key: "Content-Disposition", value: "inline" },
+        ],
+      })),
     ];
   },
 };

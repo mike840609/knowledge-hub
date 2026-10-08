@@ -36,12 +36,14 @@ export function createRepositories(connection: DatabaseConnection): SourceReposi
   const workspaceMemberships = new MariaDbWorkspaceMembershipRepository(connection);
   const groupMappings = new MariaDbWorkspaceGroupMappingRepository(connection);
   const workspaceAccess = new WorkspaceMembershipPolicy(workspaceMemberships, groupMappings);
+  const entries = new MariaDbEntryRepository(connection);
+  const assets = new MariaDbAssetRepository(connection);
   return {
     personalProfile: new MariaDbPersonalProfileRepository(connection),
     users,
     sources,
-    entries: new MariaDbEntryRepository(connection),
-    assets: new MariaDbAssetRepository(connection),
+    entries,
+    assets,
     syncRuns: new MariaDbSyncRunRepository(connection),
     syncRunChanges: new MariaDbSyncRunChangeRepository(connection),
     documentReadProgress: new MariaDbDocumentReadProgressRepository(connection),
@@ -52,7 +54,7 @@ export function createRepositories(connection: DatabaseConnection): SourceReposi
     revisions,
     tree,
     linkedEntries: new MariaDbLinkedEntryRepository(connection),
-    sourcePolicy: new MariaDbSourcePolicyRepository(sources),
+    sourcePolicy: new MariaDbSourcePolicyRepository(sources, entries, assets),
     search: new MariaDbKnowledgeSearchRepository(connection),
     workspaces,
     workspaceMemberships,

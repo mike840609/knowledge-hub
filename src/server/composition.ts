@@ -21,6 +21,7 @@ import { KnowledgeSearchService } from "@/modules/knowledge/application/knowledg
 import { KnowledgeLinkServiceImpl } from "@/modules/knowledge/application/knowledge-link-service";
 import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
 import { DocumentShareService } from "@/modules/knowledge/application/document-share-service";
+import { DocumentImageService } from "@/modules/knowledge/application/document-image-service";
 import { RandomShareTokenIssuer } from "@/infrastructure/security/random-share-token-issuer";
 import { AbandonFolderImportService } from "@/modules/sources/application/abandon-folder-import";
 import { ApplyFolderImportService } from "@/modules/sources/application/apply-folder-import";
@@ -140,6 +141,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
   };
   return {
     blobs,
+    documentImages: new DocumentImageService(unitOfWork),
     personalProfile: new PersonalProfileService(unitOfWork),
     agentContext: new AgentContextService(unitOfWork),
     importScope: new GetImportScopeService(unitOfWork), sourceHealth:new GetSourceHealthService(unitOfWork), folderUpdates:new ListFolderUpdatesService(unitOfWork), syncReading: new GetSyncRunDetailService(unitOfWork), documentReadProgress, personal, personalPreferences, workspaceAdmin, teams, governance, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, links, shares, sources, workspaces, search, imports };
