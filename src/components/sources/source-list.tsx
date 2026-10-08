@@ -1,4 +1,6 @@
 "use client";
+import { WorkspaceEmptyIllustration } from "@/components/knowledge/workspace-empty-illustration";
+
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { useState } from "react";
 import { Select } from "@/components/ui/select";
@@ -28,7 +30,7 @@ export function SourceList({ workspaceId, items, limits }: { workspaceId: string
   if (items.length === 0) {
     return (
       <EmptyState
-        icon={Database}
+        icon={Database} illustration={<WorkspaceEmptyIllustration kind="sources" />}
         title="No sources yet"
         description={!accessConfirmed ? "Checking workspace access…" : canImport ? "A source is a folder of Markdown the Hub keeps in sync. Import one and its documents appear in Knowledge." : access.workspace.lifecycleState === "ARCHIVED" ? "This workspace is archived. Ask a workspace owner to restore it before importing a folder." : "A source is a folder of Markdown the Hub keeps in sync. Ask a member with import access to add a folder; its documents will appear in Knowledge."}
         action={canImport ? (

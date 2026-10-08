@@ -90,3 +90,21 @@ describe("graph access and update recovery", () => {
     expect(html).toContain("Older updates may contain more changes");
   });
 });
+
+it("explains all four first-use steps with labeled examples rather than workspace data", () => {
+  const html = renderToStaticMarkup(<FirstUseGuidance workspaceId="ws" initial={{value:{schemaVersion:1,dismissed:false},version:0}} imported={false} progress={{read:false,search:false,context:false}} />);
+  for (const caption of ["Example: folder → Preview → Apply", "Example: document and source path", "Example: search and matching documents", "Example: selected documents → Markdown preview"]) expect(html).toContain(caption);
+  expect(html).toContain("0 of 4 steps complete");
+  expect(html).not.toContain('href="/w/ws/agent-context"');
+});
+
+it("uses a search example only for a workspace with no content, keeping query recovery compact", () => {
+  expect(renderToStaticMarkup(<SearchResults model={{ ...base, hasDocuments: false }} />)).toContain("Example: search your saved documents");
+  expect(renderToStaticMarkup(<SearchResults model={{ ...base, hasDocuments: true }} />)).not.toContain("<figure");
+  expect(renderToStaticMarkup(<SearchResults model={{ ...base, hasDocuments: false, timedOut: true }} />)).not.toContain("<figure");
+});
+it("shows update examples only for the initial empty history", () => {
+  const props = { workspaceId: "ws", page: { runs: [], nextCursor: null } };
+  expect(renderToStaticMarkup(<UpdatesList {...props} />)).toContain("Example: new and updated documents after Apply");
+  expect(renderToStaticMarkup(<UpdatesList {...props} filters={{ unreadOnly: true }} />)).not.toContain("<figure");
+});

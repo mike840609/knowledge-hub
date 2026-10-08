@@ -1,4 +1,6 @@
 "use client";
+import { WorkspaceEmptyIllustration } from "@/components/knowledge/workspace-empty-illustration";
+
 import Link from "next/link";
 import { FileText } from "lucide-react";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
@@ -36,7 +38,7 @@ export function KnowledgeEmptyState() {
   return (
     <section>
       <EmptyState
-        icon={FileText}
+        icon={FileText} illustration={<WorkspaceEmptyIllustration kind="knowledge" />}
         title="No documents yet"
         description={
           actions.length > 0

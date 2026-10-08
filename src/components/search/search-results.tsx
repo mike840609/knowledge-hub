@@ -1,3 +1,4 @@
+import { WorkspaceEmptyIllustration } from "@/components/knowledge/workspace-empty-illustration";
 import { Search, FileText } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { buttonClasses } from "@/components/ui/button";
@@ -28,7 +29,7 @@ export function SearchResults({ model }: { model: SearchPageModel }) {
   if (model.result?.tooLong) {
     return <p role="alert" className="rounded-md border border-kh-border p-6 text-body text-kh-danger">Query is too long; use at most 200 characters.</p>;
   }
-  if (model.hasDocuments === false && model.scope === "workspace") return <EmptyState icon={FileText} title="No saved documents yet" description="Search finds words in your saved documents. Import a Markdown folder or create a note, then search for a phrase from its content." action={<WorkspaceContentActions workspaceId={model.workspaceId} />} />;
+  if (model.hasDocuments === false && model.scope === "workspace") return <EmptyState icon={FileText} title="No saved documents yet" illustration={<WorkspaceEmptyIllustration kind="search" />} description="Search finds words in your saved documents. Import a Markdown folder or create a note, then search for a phrase from its content." action={<WorkspaceContentActions workspaceId={model.workspaceId} />} />;
   const result = model.result;
   if (result === null) {
     return <p className="rounded-md bg-kh-bg-subtle p-6 text-body text-kh-text-muted">Enter a keyword or choose a source, path or date range.</p>;

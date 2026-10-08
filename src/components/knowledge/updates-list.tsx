@@ -1,3 +1,4 @@
+import { WorkspaceEmptyIllustration } from "./workspace-empty-illustration";
 import Link from "next/link";
 import type { FolderUpdatesPage } from "@/modules/personal/application/list-folder-updates";
 import { buttonClasses } from "@/components/ui/button";
@@ -71,6 +72,7 @@ export function UpdatesList({
     </div>
   ) : (
     <div className="space-y-3">
+      {!filtered && !partialHistory ? <WorkspaceEmptyIllustration kind="updates" /> : null}
       <p className="text-body font-medium text-kh-text">
         {emptyTitle}
       </p>
