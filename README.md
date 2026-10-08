@@ -156,15 +156,22 @@ Configure **one** of two stores. With neither, images stay references only; with
 | S3-compatible bucket (MinIO) | `KM_BLOB_S3_ENDPOINT`, `KM_BLOB_S3_BUCKET`, `KM_BLOB_S3_ACCESS_KEY`, `KM_BLOB_S3_SECRET_KEY`; optional `KM_BLOB_S3_PREFIX`, `KM_BLOB_S3_REGION` | Object storage is already run for you. Any number of application servers can share it |
 | Directory | `KM_BLOB_DIR` | A single server with a persistent volume and no object storage |
 
-**MinIO or another S3-compatible service.** Create the bucket first; the application does not. The key pair needs to read, write, delete and list objects in that bucket (`s3:GetObject`, `s3:PutObject`, `s3:DeleteObject`, `s3:ListBucket`). Objects are addressed path-style, `<endpoint>/<bucket>/<prefix>sha256/…`, and requests are signed with Signature Version 4. Set `KM_BLOB_S3_PREFIX` (for example `knowledge-hub/prod`) to share a bucket between deployments. For an endpoint with a certificate from an internal CA, point Node at it with `NODE_EXTRA_CA_CERTS`. At start-up the server checks the bucket: wrong keys or a missing bucket stop it, while an endpoint that cannot be reached is logged and the server starts, so an outage of the image store does not take document text offline.
+**MinIO or another S3-compatible service.** Create the bucket first; the application does not. The key pair needs to read, write, delete and list objects in that bucket (`s3:GetObject`, `s3:PutObject`, `s3:DeleteObject`, `s3:ListBucket`). Objects are addressed path-style, `<endpoint>/<bucket>/<prefix>sha256/…`, and requests are signed with Signature Version 4. Set `KM_BLOB_S3_PREFIX` (for example `knowledge-hub`) to keep the images in one folder of the bucket. For an endpoint with a certificate from an internal CA, point Node at it with `NODE_EXTRA_CA_CERTS`. At start-up the server checks the bucket: wrong keys or a missing bucket stop it, while an endpoint that cannot be reached is logged and the server starts, so an outage of the image store does not take document text offline.
 
 ```bash
 KM_BLOB_S3_ENDPOINT=https://minio.example.internal:9000
 KM_BLOB_S3_BUCKET=knowledge-hub
 KM_BLOB_S3_ACCESS_KEY=...
 KM_BLOB_S3_SECRET_KEY=...
-KM_BLOB_S3_PREFIX=knowledge-hub/prod
+KM_BLOB_S3_PREFIX=knowledge-hub
 ```
+
+**Bucket layout and rules.** An image is one object at `<bucket>/<prefix>/sha256/<2 hex>/<2 hex>/<64 hex>`, named by the SHA-256 of its content, with no extension and nothing from the original file name. Use a prefix that names the application, such as `knowledge-hub`, so the bucket can hold other things later; an environment level is not needed when each environment has its own MinIO.
+
+- **One prefix, one database.** Cleanup decides what is unused from the database it is connected to, so two deployments on one prefix delete each other's images. A copy of a database needs its own copy of the images.
+- **Only the application writes there**, at import, after checking the bytes against their hash; MinIO checks them again. The same content is stored once and never changes.
+- **Only cleanup deletes**: images nothing refers to, once they are 48 hours old. Do not delete objects by hand, and do not put a lifecycle expiry rule on the prefix; it cannot know which images are still in use.
+- **Bucket settings**: no public or anonymous access (the application checks each read and never hands out a storage URL). Versioning off, or with a rule that expires non-current versions, since cleanup would otherwise leave them behind. Server-side encryption managed by the store is fine; encryption with a key supplied per request is not supported.
 
 **Local development** uses MinIO too, so images are stored the way they are in production. `.env.example` carries the four `KM_BLOB_S3_*` settings for the MinIO container in `compose.yaml`, and `make dev` starts that container and creates its bucket (`make storage-up`). An `.env` created before these settings existed needs those four lines copied in. Moving from the local MinIO to a company one changes those values and nothing else. The MinIO console is at `http://127.0.0.1:9001`.
 
@@ -189,7 +196,7 @@ spec:
 
 A `ReadWriteOnce` claim means one replica. More replicas need a `ReadWriteMany` storage class or the S3 store. Keep images on a claim of their own, so a full image volume cannot stop MariaDB.
 
-**Moving between stores.** Objects are named by their content hash, so a move is a copy of the `sha256/` tree with no database change: for example `mc mirror /var/lib/knowledge-hub/blobs/sha256 company/knowledge-hub/knowledge-hub/prod/sha256`.
+**Moving between stores.** Objects are named by their content hash, so a move is a copy of the `sha256/` tree with no database change: for example `mc mirror /var/lib/knowledge-hub/blobs/sha256 company/<bucket>/knowledge-hub/sha256`.
 
 **Backup and repair.** Back up the database first and the images second. Images are only added, so a copy taken after the database holds everything the database refers to. After a restore, `make blobs-verify` lists images whose file is missing and `make blobs-verify REPAIR=1` makes the next sync upload them again. `make blobs-gc` removes images nothing refers to; the server also does this in the background. These commands use whichever store `.env` configures.
 
