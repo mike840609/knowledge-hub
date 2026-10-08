@@ -30,6 +30,9 @@ import { CleanupFolderImportsService } from "@/modules/sources/application/clean
 import { FinalizeFolderImportService } from "@/modules/sources/application/finalize-folder-import";
 import { GetFolderImportPreviewService } from "@/modules/sources/application/get-folder-import-preview";
 import { UploadFolderImportEntriesService } from "@/modules/sources/application/upload-folder-import-entries";
+import { UploadFolderImportAssetService } from "@/modules/sources/application/upload-folder-import-asset";
+import type { BlobStore } from "@/modules/sources/ports/blob-store";
+import { configuredBlobStore } from "@/server/blob-store";
 import { SourceApplicationService } from "@/modules/sources/application/source-version-guard";
 import { WorkspaceQueryService } from "@/modules/workspaces/application/workspace-query-service";
 import { PersonalWorkspaceService } from "@/modules/workspaces/application/personal-workspace-service";
@@ -71,6 +74,8 @@ function getPool(): Pool {
 
 export function buildApplicationServices(databasePool: Pool, options: {
   companySessionReader?: CompanySsoSessionReader;
+  /** Where images are stored; `null` keeps them reference-only. Defaults to `KM_BLOB_DIR`. */
+  blobStore?: BlobStore | null;
 } = {}) {
   const unitOfWork = new MariaDbUnitOfWork(databasePool);
   const identityProvider = createIdentityProvider(options);
@@ -118,13 +123,15 @@ export function buildApplicationServices(databasePool: Pool, options: {
     return trusted;
   };
   const importConfig = importRuntimeConfig();
+  const blobs = options.blobStore === undefined ? configuredBlobStore() : options.blobStore;
   // One budget for both phases, sized to one import at the Markdown limit (import-memory-budget.ts).
   // ponytail: `next dev` HMR builds a fresh one per reload; harmless outside dev.
   const memoryBudget = new ImportMemoryBudget(importConfig.limits.maxMarkdownTotalBytes);
   const imports = {
     abandon: new AbandonFolderImportService(unitOfWork),
-    create: new CreateFolderImportService(unitOfWork, { limits: importConfig.limits, buildingTtlMs: importConfig.buildingTtlMs }),
+    create: new CreateFolderImportService(unitOfWork, { limits: importConfig.limits, buildingTtlMs: importConfig.buildingTtlMs, storeImages: blobs !== null }),
     upload: new UploadFolderImportEntriesService(unitOfWork, { limits: importConfig.limits }),
+    uploadAsset: blobs ? new UploadFolderImportAssetService(unitOfWork, blobs) : null,
     finalize: new FinalizeFolderImportService(unitOfWork, { limits: importConfig.limits, readyTtlMs: importConfig.readyTtlMs, memoryBudget }),
     preview: new GetFolderImportPreviewService(unitOfWork),
     diff: new GetFolderImportDiffService(unitOfWork),
@@ -132,6 +139,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
     cleanup: new CleanupFolderImportsService(unitOfWork),
   };
   return {
+    blobs,
     personalProfile: new PersonalProfileService(unitOfWork),
     agentContext: new AgentContextService(unitOfWork),
     importScope: new GetImportScopeService(unitOfWork), sourceHealth:new GetSourceHealthService(unitOfWork), folderUpdates:new ListFolderUpdatesService(unitOfWork), syncReading: new GetSyncRunDetailService(unitOfWork), documentReadProgress, personal, personalPreferences, workspaceAdmin, teams, governance, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, links, shares, sources, workspaces, search, imports };

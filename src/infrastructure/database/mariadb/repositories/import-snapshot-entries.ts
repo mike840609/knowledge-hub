@@ -140,6 +140,13 @@ export class MariaDbImportSnapshotEntryRepository implements ImportSnapshotEntry
     );
   }
 
+  async markAssetReceived(entryId: string, contentHash: string): Promise<void> {
+    await this.connection.query(
+      "UPDATE source_import_snapshot_entries SET upload_status='RECEIVED', source_file_hash=? WHERE id=? AND entry_type='ASSET'",
+      [contentHash, entryId],
+    );
+  }
+
   async replaceFinalizedEntries(snapshotId: string, entries: FinalizedImportSnapshotEntry[]): Promise<void> {
     await this.connection.query("DELETE FROM source_import_snapshot_entries WHERE snapshot_id=?", [snapshotId]);
     await this.insertMany(entries);
