@@ -157,15 +157,22 @@ npx tsx scripts/db/cleanup-import-snapshots.ts
 | S3 相容的 bucket（MinIO） | `KM_BLOB_S3_ENDPOINT`、`KM_BLOB_S3_BUCKET`、`KM_BLOB_S3_ACCESS_KEY`、`KM_BLOB_S3_SECRET_KEY`；選用 `KM_BLOB_S3_PREFIX`、`KM_BLOB_S3_REGION` | 已經有人維運物件儲存。任意數量的應用伺服器都能共用 |
 | 目錄 | `KM_BLOB_DIR` | 單一伺服器搭配持久化 volume，且沒有物件儲存 |
 
-**MinIO 或其他 S3 相容服務。** 請先建立 bucket，應用程式不會自動建立。金鑰需要能在該 bucket 讀取、寫入、刪除與列出物件（`s3:GetObject`、`s3:PutObject`、`s3:DeleteObject`、`s3:ListBucket`）。物件以 path-style 定址：`<endpoint>/<bucket>/<prefix>sha256/…`，請求以 Signature Version 4 簽章。設定 `KM_BLOB_S3_PREFIX`（例如 `knowledge-hub/prod`）可以讓多個部署共用同一個 bucket。endpoint 若使用內部 CA 簽發的憑證，請用 `NODE_EXTRA_CA_CERTS` 讓 Node 信任它。伺服器啟動時會檢查 bucket：金鑰錯誤或 bucket 不存在會讓伺服器停止啟動；endpoint 完全連不上則只記錄警告並照常啟動，避免圖片儲存中斷時連文件內容都無法閱讀。
+**MinIO 或其他 S3 相容服務。** 請先建立 bucket，應用程式不會自動建立。金鑰需要能在該 bucket 讀取、寫入、刪除與列出物件（`s3:GetObject`、`s3:PutObject`、`s3:DeleteObject`、`s3:ListBucket`）。物件以 path-style 定址：`<endpoint>/<bucket>/<prefix>sha256/…`，請求以 Signature Version 4 簽章。設定 `KM_BLOB_S3_PREFIX`（例如 `knowledge-hub`）可以把圖片集中在 bucket 的一個資料夾內。endpoint 若使用內部 CA 簽發的憑證，請用 `NODE_EXTRA_CA_CERTS` 讓 Node 信任它。伺服器啟動時會檢查 bucket：金鑰錯誤或 bucket 不存在會讓伺服器停止啟動；endpoint 完全連不上則只記錄警告並照常啟動，避免圖片儲存中斷時連文件內容都無法閱讀。
 
 ```bash
 KM_BLOB_S3_ENDPOINT=https://minio.example.internal:9000
 KM_BLOB_S3_BUCKET=knowledge-hub
 KM_BLOB_S3_ACCESS_KEY=...
 KM_BLOB_S3_SECRET_KEY=...
-KM_BLOB_S3_PREFIX=knowledge-hub/prod
+KM_BLOB_S3_PREFIX=knowledge-hub
 ```
+
+**Bucket 配置與規則。** 每張圖片是一個物件，位於 `<bucket>/<prefix>/sha256/<2 碼>/<2 碼>/<64 碼>`，以內容的 SHA-256 命名，沒有副檔名，也不含原始檔名。建議 prefix 使用應用程式名稱（例如 `knowledge-hub`），讓 bucket 日後可以放其他內容；各環境有各自的 MinIO 時，不需要再加環境這一層。
+
+- **一個 prefix 只對應一個資料庫。** 清理功能依它所連接的資料庫判斷哪些圖片沒人使用，所以兩個部署共用同一個 prefix 時會互相刪除對方的圖片。複製資料庫時，圖片也要另外複製一份。
+- **只有應用程式會寫入**，時機是匯入時，並先以雜湊驗證內容；MinIO 會再驗證一次。相同內容只存一份，且不會變動。
+- **只有清理功能會刪除**：沒有被引用、且超過 48 小時的圖片。請勿手動刪除物件，也不要對這個 prefix 設定生命週期過期規則，因為它無從得知哪些圖片仍在使用。
+- **Bucket 設定**：關閉公開與匿名存取（每次讀取都由應用程式檢查權限，不會給出儲存位址）。版本控制請關閉，或加上清除非當前版本的規則，否則清理後舊版本仍會留存。由儲存端管理的伺服器端加密可以使用；每次請求自帶金鑰的加密不支援。
 
 **本機開發**同樣使用 MinIO，讓圖片的儲存方式與正式環境一致。`.env.example` 已帶有對應 `compose.yaml` 中 MinIO 容器的四個 `KM_BLOB_S3_*` 設定，`make dev` 會啟動該容器並建立 bucket（`make storage-up`）。在這些設定出現之前建立的 `.env`，需要自行把那四行複製進去。從本機 MinIO 換成公司的 MinIO，只需要改這幾個值。MinIO 管理介面在 `http://127.0.0.1:9001`。
 
@@ -190,7 +197,7 @@ spec:
 
 `ReadWriteOnce` 的 claim 代表只能有一個副本；要多副本需要 `ReadWriteMany` 的 storage class，或改用 S3 儲存。圖片請使用獨立的 claim，避免圖片寫滿時連帶影響 MariaDB。
 
-**在兩種儲存之間搬移。** 物件以內容雜湊命名，所以搬移只是複製 `sha256/` 目錄樹，資料庫不需要更動，例如：`mc mirror /var/lib/knowledge-hub/blobs/sha256 company/knowledge-hub/knowledge-hub/prod/sha256`。
+**在兩種儲存之間搬移。** 物件以內容雜湊命名，所以搬移只是複製 `sha256/` 目錄樹，資料庫不需要更動，例如：`mc mirror /var/lib/knowledge-hub/blobs/sha256 company/<bucket>/knowledge-hub/sha256`。
 
 **備份與修復。** 先備份資料庫、再備份圖片。圖片只會新增，所以比資料庫晚的備份一定包含資料庫引用的所有檔案。還原後，`make blobs-verify` 會列出檔案遺失的圖片，`make blobs-verify REPAIR=1` 會讓下次同步重新上傳。`make blobs-gc` 會移除沒有被引用的圖片；伺服器也會在背景自動執行。這些指令會使用 `.env` 所設定的那一種儲存。
 
