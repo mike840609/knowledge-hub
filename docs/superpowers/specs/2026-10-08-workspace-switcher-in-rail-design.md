@@ -30,8 +30,11 @@ search field.
   to the top of the reading column while the rest of the header scrolls away.
   Once it has, its lower edge is a short fade (`.kh-fade-below`, 16px from
   `--kh-bg` to transparent) rather than a rule, so the text passes softly under
-  it. It replaces the topbar's scrolled-away
-  copy of the title and actions, so the reader never loses where they are.
+  it; the composer's pinned command line takes the same edge. The breadcrumb
+  line is 48px, centred on the same line as the rail's wordmark row and the
+  explorer's "Documents" row, so with no topbar the three columns still share
+  one top edge. It replaces the topbar's scrolled-away copy of the title and
+  actions, so the reader never loses where they are.
   (`DocumentTopbarContext` still carries the document's state; the palette and
   the narrow topbar read it as before.) *(The first revision of this change laid
   a separate title bar over the pane once the header scrolled away; pinning the

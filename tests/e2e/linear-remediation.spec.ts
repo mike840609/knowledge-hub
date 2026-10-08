@@ -51,6 +51,11 @@ test('reader and composer keep their column and expose commands during long scro
   };
   await inRail(160);
   expect((await page.getByText('Knowledge Hub', { exact: true }).filter({ visible: true }).boundingBox())!.y).toBeLessThan((await workspace.boundingBox())!.y);
+  // With no topbar, the rail's wordmark, the explorer's first row and the breadcrumb share one top line.
+  const centre = async (locator: ReturnType<Page['locator']>) => { const box = (await locator.boundingBox())!; return box.y + box.height / 2; };
+  const line = await centre(breadcrumb);
+  expect(Math.abs(await centre(page.getByText('Knowledge Hub', { exact: true }).filter({ visible: true })) - line)).toBeLessThanOrEqual(1);
+  expect(Math.abs(await centre(explorer.getByRole('heading', { name: 'Documents', exact: true })) - line)).toBeLessThanOrEqual(1);
   await page.screenshot({ path: info.outputPath('reader-navigation-expanded.png') });
   // Scrolling pins the breadcrumb line — location › title, and its actions — to the top of the reading column.
   const regionBox = (await region.boundingBox())!;
@@ -92,6 +97,12 @@ test('reader and composer keep their column and expose commands during long scro
   await expect(form.getByRole('textbox', { name: 'Content' })).toBeEditable(wait);
   const source = await showMarkdown(form);
   await source.fill(longMarkdown + '\n\nExtra line');
+  await region.evaluate(el => { el.scrollTop = el.scrollHeight; });
+  // The composer's pinned command line fades the scrolled document in, as the reader's does; not at rest.
+  const commands = form.locator('.kh-fade-below');
+  await expect(commands).toHaveAttribute('data-pinned', 'true');
+  await region.evaluate(el => { el.scrollTop = 0; });
+  await expect(commands).not.toHaveAttribute('data-pinned');
   await region.evaluate(el => { el.scrollTop = el.scrollHeight; });
   await expect(form.getByRole('button', { name: 'Save', exact: true })).toBeInViewport();
   await page.screenshot({ path: info.outputPath('composer-commands.png') });
