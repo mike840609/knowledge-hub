@@ -47,7 +47,7 @@ export function DocumentHeader({
   contentOwnsTitle: boolean;
   /** The part of the header that scrolls away; the shell watches it to know when the document is scrolled. */
   headerRef?: Ref<HTMLElement>;
-  /** The header has scrolled away under the pinned breadcrumb, which then draws its bottom edge. */
+  /** The header has scrolled away under the pinned breadcrumb, whose lower edge then fades the content in. */
   pinned?: boolean;
 }) {
 
@@ -68,7 +68,7 @@ export function DocumentHeader({
       {/* The location › title line and its actions stay pinned to the top of the pane on a wide screen while
           the rest of the header scrolls away. It sits outside <header> so that sticky is bounded by the whole
           document rather than by the header's own height. */}
-      <div className={`z-10 bg-kh-bg lg:sticky lg:top-0 ${pinned ? "lg:border-b lg:border-kh-border" : "lg:border-b lg:border-transparent"}`}>
+      <div data-pinned={pinned || undefined} className="z-10 bg-kh-bg lg:kh-fade-below lg:sticky lg:top-0">
       <div className="kh-reading-column flex min-w-0 items-center justify-between gap-3 pb-2 pt-4">
         <DocumentBreadcrumb segments={breadcrumb} />
         {/* Icon-only so the header stays light; each keeps its name as

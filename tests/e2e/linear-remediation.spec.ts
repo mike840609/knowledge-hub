@@ -55,6 +55,9 @@ test('reader and composer keep their column and expose commands during long scro
   // Scrolling pins the breadcrumb line — location › title, and its actions — to the top of the reading column.
   const regionBox = (await region.boundingBox())!;
   const restingY = (await breadcrumb.boundingBox())!.y;
+  // Its lower edge fades the content in only while it is pinned; at rest there is nothing under it.
+  const pinnedLine = region.locator('.lg\\:kh-fade-below');
+  await expect(pinnedLine).not.toHaveAttribute('data-pinned');
   await region.evaluate(el => { el.scrollTop = 1500; });
   await expect(breadcrumb).toBeInViewport();
   await expect(breadcrumb.getByText(/^Remediation /)).toBeVisible();
@@ -62,7 +65,11 @@ test('reader and composer keep their column and expose commands during long scro
   expect((await breadcrumb.boundingBox())!.y).toBeGreaterThanOrEqual(regionBox.y);
   const details = region.getByRole('button', { name: 'Details', exact: true });
   await expect(details).toBeInViewport();
+  await expect(pinnedLine).toHaveAttribute('data-pinned', 'true');
+  await expect.poll(() => pinnedLine.evaluate(el => getComputedStyle(el, '::after').opacity)).toBe('1');
+  expect(await pinnedLine.evaluate(el => getComputedStyle(el, '::after').pointerEvents)).toBe('none');
   await page.screenshot({ path: info.outputPath('reader-scrolled.png') });
+  await page.screenshot({ path: info.outputPath('reader-scrolled-edge.png'), clip: { x: regionBox.x, y: regionBox.y, width: 1000, height: 160 } });
   await details.click();
   await expect(page.getByRole('complementary', { name: 'Document details', exact: true })).toBeVisible();
   await page.keyboard.press('Meta+i');

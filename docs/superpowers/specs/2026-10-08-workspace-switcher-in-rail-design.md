@@ -27,8 +27,10 @@ search field.
   control alone. The brand mark rules in the design language are untouched.
 - **The reader's breadcrumb line is pinned on wide screens.** The document
   header's first line — location › title, with Edit / Share / Details — sticks
-  to the top of the reading column while the rest of the header scrolls away,
-  and draws its bottom edge once it has. It replaces the topbar's scrolled-away
+  to the top of the reading column while the rest of the header scrolls away.
+  Once it has, its lower edge is a short fade (`.kh-fade-below`, 16px from
+  `--kh-bg` to transparent) rather than a rule, so the text passes softly under
+  it. It replaces the topbar's scrolled-away
   copy of the title and actions, so the reader never loses where they are.
   (`DocumentTopbarContext` still carries the document's state; the palette and
   the narrow topbar read it as before.) *(The first revision of this change laid
@@ -36,8 +38,8 @@ search field.
   breadcrumb itself keeps the path in view and shows one bar, not two.)*
 - **Narrow screens keep a topbar**: Menu, the wordmark (≥640px), a search icon,
   and, once the header scrolls away, the document's title and actions
-  (`DocumentContextBar`); the breadcrumb is not pinned there. The palette stays mounted there, once, at every
-  width.
+  (`DocumentContextBar`); the breadcrumb is not pinned there. The palette
+  stays mounted there, once, at every width.
 - **The workspace switcher moves to the top of the primary rail**, above the
   navigation it scopes, separated from it by spacing rather than a rule. In
   both rail states it carries the workspace's mark — the name's first letter
