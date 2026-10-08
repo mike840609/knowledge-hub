@@ -1,7 +1,7 @@
 /* Insights follows the compact workbench type and spacing ladders. */
 /* Series colours are the chart tokens (design language §8); each theme resolves its own. */
 .profile{color:var(--kh-text);--reading-color:var(--kh-chart-1);--reading-hover:var(--kh-chart-1-hover);--source-color:var(--kh-chart-2);--notes-color:var(--kh-chart-3)}
-.pair{display:grid;grid-template-columns:1fr 1fr;gap:24px;border-bottom:1px solid var(--kh-border);padding:24px 0}
+.pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;border-bottom:1px solid var(--kh-border);padding:24px 0}
 .sectiontitle{font-size:14px;line-height:20px;font-weight:600;margin:0}
 .caption{font-size:12px;line-height:16px;color:var(--kh-text-muted);margin-top:8px}
 .composition{display:flex;height:8px;border-radius:4px;overflow:hidden;margin-top:20px;gap:2px;background:var(--kh-bg-subtle)}
@@ -9,11 +9,12 @@
 .legend{margin-top:16px;display:flex;justify-content:space-between;gap:12px;font-size:12px;line-height:16px;color:var(--kh-text-muted)}
 .legend strong{color:var(--kh-text);font-weight:500;margin-left:4px}
 .dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;background:var(--source-color)}.dotSoft{background:var(--notes-color)}
-.archive{margin-top:24px;display:flex;justify-content:space-between;font-size:12px;line-height:16px;color:var(--kh-text-muted)}.archive strong{font-weight:500;color:var(--kh-text)}
+.archive{margin-top:24px;display:flex;justify-content:space-between;font-size:12px;line-height:16px;color:var(--kh-text-muted)}.archive strong{font-weight:500;color:var(--kh-text)}.archiveNext{margin-top:12px}
 .source{display:block;margin-top:16px;border-radius:6px}.source:hover .sourceName{text-decoration:underline;text-underline-offset:3px}
 .sourceLabel{display:flex;justify-content:space-between;gap:12px;font-size:12px;line-height:16px;margin-bottom:8px}
 .sourceName{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sourceCount{flex-shrink:0;color:var(--kh-text-muted)}
-.track{height:4px;border-radius:4px;background:var(--kh-bg-subtle);overflow:hidden}.fill{height:100%;background:var(--source-color);border-radius:4px}
+.track{height:4px;border-radius:4px;background:var(--kh-bg-subtle);overflow:hidden}/* Part of a whole: the folder at 35%, the viewed share at full strength (design language §8). */
+.fill{position:relative;height:100%;border-radius:4px;overflow:hidden}.fill::before{content:"";position:absolute;inset:0;background:var(--source-color);opacity:.35}.fillViewed{position:relative;height:100%;background:var(--source-color)}
 .lastSync{font-size:11px;line-height:14px;color:var(--kh-text-muted);margin-top:4px}
 .activity{padding:24px 0;border-bottom:1px solid var(--kh-border)}.sectionhead{display:flex;align-items:center;justify-content:space-between;gap:16px}
 .changeStats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-top:20px;gap:12px}
@@ -30,7 +31,7 @@
 .definitions{margin-top:16px;font-size:12px;color:var(--kh-text-muted);line-height:16px}.definitions summary{width:fit-content;cursor:pointer;text-decoration:underline;text-underline-offset:3px;border-radius:4px}.definitions dl{margin-top:12px;display:grid;grid-template-columns:8rem 1fr;gap:8px 16px}.definitions dt{font-weight:500;color:var(--kh-text-secondary)}
 .empty{margin-top:20px;font-size:13px;line-height:18px;color:var(--kh-text-muted)}.import{display:inline-block;margin-top:12px;color:var(--kh-text);text-decoration:underline;text-underline-offset:3px;border-radius:4px}.legacy{margin-top:16px;font-size:12px;color:var(--kh-warning);line-height:16px}
 .arrow{opacity:0}
-@media(max-width:640px){.pair{grid-template-columns:1fr;gap:24px}.change{gap:8px}.changeIcon{width:24px;height:24px}.syncGrid{grid-template-columns:1fr;gap:8px}.syncItem{display:flex;align-items:center;justify-content:space-between}.syncCount{margin:0}.footer{align-items:flex-start}.definitions dl{grid-template-columns:1fr;gap:4px}.definitions dd{margin-bottom:12px}}
+@media(max-width:640px){.pair{grid-template-columns:minmax(0,1fr);gap:24px}.change{gap:8px}.changeIcon{width:24px;height:24px}.syncGrid{grid-template-columns:1fr;gap:8px}.syncItem{display:flex;align-items:center;justify-content:space-between}.syncCount{margin:0}.footer{align-items:flex-start}.definitions dl{grid-template-columns:1fr;gap:4px}.definitions dd{margin-bottom:12px}}
 @media(prefers-reduced-motion:reduce){.syncItem{transition:none}}
 .summary{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding-bottom:16px;border-bottom:1px solid var(--kh-border)}
 .summaryStats{display:flex;flex-wrap:wrap;gap:8px 20px}.summaryStat{display:flex;align-items:baseline;gap:6px;border-radius:6px}.summaryValue{font-size:16px;font-weight:600;font-variant-numeric:tabular-nums}.summaryLabel{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--kh-text-muted)}.summaryStat:hover .arrow,.summaryStat:focus-visible .arrow{opacity:1}

@@ -21,7 +21,7 @@ it("counts active articles, favorites and folders without loading Markdown or co
   await s.personal.put(fixtureCaller(),ws,"draft:new",{title:"Unsaved",markdown:"draft",baseRevisionId:null},0);
   await apply(files(3));
   const result=await s.personalProfile.get(fixtureCaller(),ws,7);
-  expect(result.counts).toEqual({articles:4,synced:3,notes:1,archived:0,folders:1,favorites:1,unread:3,browsed:0});
+  expect(result.counts).toEqual({articles:4,synced:3,notes:1,archived:0,folders:1,favorites:1,unread:3,browsed:0,syncedBrowsed:0});
   expect(result.sync).toEqual({successful:1,failed:0,neverSynced:0,pending:0});
   expect(result.sources[0].articles).toBe(3);
   expect((await s.personalProfile.documents(fixtureCaller(),ws,{filter:"favorites",days:7})).total).toBe(1);
@@ -137,4 +137,22 @@ it("records unique daily article views without rewriting history or inflating pe
  const archived=await s.personalProfile.get(fixtureCaller(),ws,7);
  expect(archived.reading.articles).toBe(2);expect(archived.counts.browsed).toBe(1);
  expect(Number((await pool.query("SELECT COUNT(*) total FROM document_read_activity WHERE workspace_id=?",[ws]))[0].total)).toBe(4);
+});
+it("reports how much of each synced folder has been viewed",async()=>{
+ const note=await createDocumentFixture(pool,noteSource,folder);
+ const source=await apply(files(3));
+ const docs=(await s.personalProfile.documents(fixtureCaller(),ws,{filter:"synced",days:7})).items;
+ const read=async(documentId:string)=>{const doc=await s.queries.getDocument(fixtureCaller(),documentId);await s.documentReadProgress.markRead(fixtureCaller(),{workspaceId:ws,documentId,revisionId:doc.currentRevision.id});};
+ let result=await s.personalProfile.get(fixtureCaller(),ws,7);
+ expect(result.sources).toMatchObject([{sourceId:source.sourceId,articles:3,viewed:0}]);
+ await read(docs[0].documentId);await read(docs[0].documentId);await read(docs[1].documentId);await read(note.documentId);
+ // Another user's read of the same document is not the caller's.
+ await pool.query("INSERT INTO document_read_progress (user_id,workspace_id,document_id,revision_id,revision_no,read_at) SELECT ?,workspace_id,?,revision_id,revision_no,read_at FROM document_read_progress WHERE document_id=? LIMIT 1",[secondFixtureIdentity.id,docs[2].documentId,docs[0].documentId]);
+ result=await s.personalProfile.get(fixtureCaller(),ws,7);
+ expect(result.sources).toMatchObject([{articles:3,viewed:2}]);
+ expect(result.counts).toMatchObject({browsed:3,syncedBrowsed:2,unread:1});
+ await uow.run(r=>r.documents.updateStatus(docs[0].documentId,"ARCHIVED",fixtureCaller().identity.id));
+ result=await s.personalProfile.get(fixtureCaller(),ws,7);
+ expect(result.sources).toMatchObject([{articles:2,viewed:1}]);
+ expect(result.counts).toMatchObject({browsed:2,syncedBrowsed:1});
 });

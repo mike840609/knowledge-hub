@@ -45,7 +45,7 @@ export function userGuideContent(locale:GuideLocale):GuideContent {
       ]),
       section("insights","Home 與 Insights 的數字",[
         "Home 提供文章、同步來源、收藏與未讀摘要；點數字可進對應清單，View all insights 開啟完整分析。",
-        "Insights 顯示目前知識組成、來源分布與同步狀態。頂部 7 days／30 days 只影響近期變更，不會把整頁切成歷史快照。",
+        "Insights 顯示目前知識組成、未讀更新、來源分布（含各資料夾已開啟過的文件數）與同步狀態。頂部 7 days／30 days 只影響閱讀活動與近期變更，不會把整頁切成歷史快照。",
         "新增、更新與封存各自計算期間內不同文章，同一篇可能出現在多個分類，因此三者相加不是文章總數。草稿與已封存內容不列入活躍文章總數。",
         "未讀數只計入有永久變更紀錄的目前同步版本；舊匯入缺少紀錄時會提示，不補造歷史。Refresh 更新統計，頁尾 Updated 是查詢時間，來源的 Last synced 才是同步時間。",
       ]),
@@ -97,7 +97,7 @@ export function userGuideContent(locale:GuideLocale):GuideContent {
       ]),
       section("insights","Understand Home and Insights",[
         "Home summarizes articles, synced folders, favorites and unread updates. Click a number for its list, or View all insights for detailed analysis.",
-        "Insights shows current knowledge composition, source distribution and sync status. The 7 days / 30 days selector affects recent changes only, not a historical snapshot of the whole page.",
+        "Insights shows current knowledge composition, unread updates, source distribution (with how many documents in each folder you have opened) and sync status. The 7 days / 30 days selector affects reading activity and recent changes only, not a historical snapshot of the whole page.",
         "Added, updated and archived each count distinct documents in the period. One article can appear in multiple categories; their sum is not your total article count. Active totals exclude drafts and archived content.",
         "Unread counts require recorded changes on the current synced revision. Missing legacy history is explained rather than invented. Refresh retrieves current statistics; Updated is the query time, while Last synced is the source's successful sync time.",
       ]),
