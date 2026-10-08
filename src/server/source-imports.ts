@@ -4,6 +4,7 @@ import type { CreateImportResult, ImportManifestEntry } from "@/modules/sources/
 import { translateKnownSnapshotAccessError } from "@/modules/sources/application/import-snapshot-access";
 import type { ImportPreview } from "@/modules/sources/application/reconcile-import-snapshot";
 import type { UploadImportResult } from "@/modules/sources/application/upload-folder-import-entries";
+import { importError } from "@/modules/sources/domain/import-errors";
 import { applicationServices } from "@/server/composition";
 import { createImportStagingSweep } from "@/server/import-staging-sweep";
 
@@ -88,6 +89,18 @@ export async function uploadSourceImportEntries(
   const services = applicationServices();
   const { caller } = await services.establishTrustedCaller();
   return withKnownSnapshotAccess(() => services.imports.upload.upload(caller, { snapshotId, entries }));
+}
+
+export async function uploadSourceImportAsset(
+  snapshotId: string,
+  input: { uploadKey: string; body: ReadableStream<Uint8Array>; contentLength: number },
+): Promise<{ accepted: boolean }> {
+  const services = applicationServices();
+  const { caller } = await services.establishTrustedCaller();
+  const uploadAsset = services.imports.uploadAsset;
+  // Images are not stored on this server, so no manifest entry is waiting for bytes.
+  if (!uploadAsset) throw importError("UPLOAD_ENTRY_NOT_FOUND", "Upload key does not identify an image manifest entry.");
+  return withKnownSnapshotAccess(() => uploadAsset.upload(caller, { snapshotId, ...input }));
 }
 
 export async function finalizeSourceImport(snapshotId: string): Promise<ImportPreview> {

@@ -626,6 +626,9 @@ beforeAll(async () => {
   s = buildApplicationServices(pool, { blobStore: blobs });
 });
 beforeEach(async () => {
+  // Tests leave snapshots BUILDING or READY on purpose; the per-user quota is 3 and 10.
+  await pool.query("DELETE FROM source_import_snapshots WHERE state IN ('BUILDING','READY')");
+  await rm(path.join(root, "sha256"), { recursive: true, force: true });
   if (ws) await pool.query("UPDATE workspaces SET workspace_type='TEAM',personal_owner_user_id=NULL WHERE id=?", [ws]);
   ws = (await createSourceFixture(pool)).workspaceId;
   await pool.query("UPDATE workspaces SET name='My Space',workspace_type='PERSONAL',personal_owner_user_id=? WHERE id=?", [fixtureCaller().identity.id, ws]);
@@ -940,7 +943,7 @@ git commit -m "feat(images): stage synced images and accept their verified bytes
 Append to `tests/integration/folder-images-import.test.ts` (add `prepareImageImport` to the fixture import):
 
 ```ts
-const assetRows = async (sourceId: string) => (await pool.query("SELECT source_path, content_hash, JSON_EXTRACT(metadata,'$.stored') stored FROM knowledge_assets WHERE source_id=? ORDER BY source_path", [sourceId]))
+const assetRows = async (sourceId: string): Promise<{ path: string; hash: string; stored: boolean }[]> => (await pool.query("SELECT source_path, content_hash, JSON_EXTRACT(metadata,'$.stored') stored FROM knowledge_assets WHERE source_id=? ORDER BY source_path", [sourceId]))
   .map((row: { source_path: string; content_hash: string; stored: unknown }) => ({ path: row.source_path, hash: row.content_hash, stored: row.stored === true || row.stored === 1 || row.stored === "true" }));
 const applied = async (snapshotId: string) => { const result = await s.imports.apply.apply(fixtureCaller(), snapshotId); if (result.kind !== "APPLIED") throw Error("fixture"); return result; };
 

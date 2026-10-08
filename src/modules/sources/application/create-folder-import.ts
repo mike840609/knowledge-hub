@@ -1,3 +1,5 @@
+import { imageContentType } from "@/shared/markdown/image-path";
+import { isStoredImage, needsImageBytes } from "@/modules/sources/domain/stored-image";
 import { normalizeImportScope, matchesExcludedRule, type ImportScope } from "../domain/import-scope";
 import { createHash } from "node:crypto";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
@@ -14,9 +16,9 @@ export type ImportManifestEntry =
   | { uploadKey: string; relativePath: string; kind: "MARKDOWN"; size: number }
   | { uploadKey: string; relativePath: string; kind: "ASSET"; size: number; contentHash: string; mimeType: string | null; lastModified: Date | null };
 
-export type CreateImportResult = { snapshotId: string; state: "BUILDING"; expiresAt: Date };
+export type CreateImportResult = { snapshotId: string; state: "BUILDING"; expiresAt: Date; assetUploads: string[] };
 
-type Options = { limits?: ImportLimits; now?: () => Date; buildingTtlMs?: number };
+type Options = { limits?: ImportLimits; now?: () => Date; buildingTtlMs?: number; storeImages?: boolean };
 const MARKDOWN_EXTENSION = /\.(?:md|markdown)$/iu;
 const SHA256 = /^[a-f0-9]{64}$/u;
 const MAX_ASSET_MIME_CHARS = 255;
@@ -112,18 +114,24 @@ function validateManifest(manifest: readonly ImportManifestEntry[], limits: Impo
   }
 }
 
-function stagingEntries(snapshotId: string, manifest: readonly ImportManifestEntry[]): ImportSnapshotEntry[] {
+/** `storedHashes` is null when images are not stored on this server. */
+function stagingEntries(snapshotId: string, manifest: readonly ImportManifestEntry[], storedHashes: ReadonlySet<string> | null): ImportSnapshotEntry[] {
   return manifest.map((raw) => {
     const markdown = MARKDOWN_EXTENSION.test(raw.relativePath);
     const asset = raw as Partial<Extract<ImportManifestEntry, { kind: "ASSET" }>>;
+    const contentHash = markdown ? null : String(asset.contentHash).toLowerCase();
+    const image = contentHash !== null && storedHashes !== null && raw.size > 0 && imageContentType(raw.relativePath) !== null;
+    const pending = image && needsImageBytes({ relativePath: raw.relativePath, size: raw.size, contentHash: contentHash! }, storedHashes!);
     return {
       id: uuidv7(), snapshotId, uploadKey: raw.uploadKey, clientRelativePath: raw.relativePath,
       sourcePath: null, sourcePathHash: null, externalId: null, entryType: markdown ? "DOCUMENT" : "ASSET",
-      uploadStatus: markdown ? "PENDING" : "RECEIVED", declaredSize: raw.size, sourceFileHash: null,
+      uploadStatus: markdown || pending ? "PENDING" : "RECEIVED", declaredSize: raw.size,
+      // For an image, the hash here means "this source's possession of these bytes is proven".
+      sourceFileHash: image && !pending ? contentHash : null,
       rawMarkdown: null, resolvedTitle: null, titleSource: null, markdown: null, metadata: null,
       revisionContentHash: null, reconciliationFingerprint: null,
       mimeType: markdown ? null : (asset.mimeType ?? null),
-      assetContentHash: markdown ? null : String(asset.contentHash).toLowerCase(),
+      assetContentHash: contentHash,
       assetSize: markdown ? null : raw.size,
       assetLastModified: markdown ? null : (asset.lastModified ?? null),
       diagnostics: [], previewChange: null,
@@ -136,11 +144,13 @@ export class CreateFolderImportService {
   private readonly now: () => Date;
   private readonly buildingTtlMs: number;
   private readonly quotaLockTimeoutSeconds = 10;
+  private readonly storeImages: boolean;
 
   constructor(private readonly uow: SourceUnitOfWork, options: Options = {}) {
     this.limits = options.limits ?? DEFAULT_IMPORT_LIMITS;
     this.now = options.now ?? (() => new Date());
     this.buildingTtlMs = options.buildingTtlMs ?? 2 * 60 * 60 * 1000;
+    this.storeImages = options.storeImages ?? false;
   }
 
   private async assertQuota(repositories: Parameters<Parameters<SourceUnitOfWork["run"]>[0]>[0], caller: CallerContext, now: Date): Promise<void> {
@@ -153,7 +163,7 @@ export class CreateFolderImportService {
   private buildSnapshot(caller: CallerContext, input: {
     workspaceId: string; sourceId: string | null; basedOnVersion: number | null; proposedSourceName: string | null;
     rootName: string; manifest: ImportManifestEntry[]; importScope?: ImportScope;
-  }): { snapshot: ImportSnapshot; entries: ImportSnapshotEntry[] } {
+  }): ImportSnapshot {
     validateManifest(input.manifest, this.limits);
     if (input.importScope && input.manifest.some(e => matchesExcludedRule(normalizeImportPath(e.relativePath).sourcePath, input.importScope!.paths))) throw importError("INVALID_IMPORT_MANIFEST", "Manifest includes an excluded path.");
     const rootName = nonemptyName(input.rootName, "rootName");
@@ -170,21 +180,32 @@ export class CreateFolderImportService {
       summary: null, plan: null, createdAt: now, finalizedAt: null, expiresAt, appliedAt: null, staleAt: null,
       resultSourceId: null, resultVersion: null,
     };
-    return { snapshot, entries: stagingEntries(snapshotId, input.manifest) };
+    return snapshot;
   }
 
   private async createBound(caller: CallerContext, input: {
     workspaceId: string; sourceId: string | null; basedOnVersion: number | null; proposedSourceName: string | null;
     rootName: string; manifest: ImportManifestEntry[]; importScope?: ImportScope;
   }): Promise<CreateImportResult> {
-    const { snapshot, entries } = this.buildSnapshot(caller, input);
-    await this.uow.runWithCreatorQuotaLock(caller.identity.id, this.quotaLockTimeoutSeconds, async (repositories) => {
+    const snapshot = this.buildSnapshot(caller, input);
+    return this.uow.runWithCreatorQuotaLock(caller.identity.id, this.quotaLockTimeoutSeconds, async (repositories) => {
       await lockWorkspaceForMutation(repositories, caller, input.workspaceId, "source-import");
       await this.assertQuota(repositories, caller, snapshot.createdAt);
-      await repositories.importSnapshots.insert(snapshot);
-      await repositories.importSnapshotEntries.insertMany(entries);
+      return this.stage(repositories, snapshot, input.manifest);
     });
-    return { snapshotId: snapshot.id, state: "BUILDING", expiresAt: snapshot.expiresAt };
+  }
+
+  /** Inserts the snapshot and its entries, and names the images whose bytes the server needs. */
+  private async stage(repositories: Parameters<Parameters<SourceUnitOfWork["run"]>[0]>[0], snapshot: ImportSnapshot, manifest: readonly ImportManifestEntry[]): Promise<CreateImportResult> {
+    const stored = !this.storeImages ? null
+      : new Set(snapshot.sourceId === null ? [] : (await repositories.assets.listBySourceId(snapshot.sourceId)).filter(isStoredImage).map((asset) => asset.contentHash!));
+    const entries = stagingEntries(snapshot.id, manifest, stored);
+    await repositories.importSnapshots.insert(snapshot);
+    await repositories.importSnapshotEntries.insertMany(entries);
+    return {
+      snapshotId: snapshot.id, state: "BUILDING", expiresAt: snapshot.expiresAt,
+      assetUploads: entries.filter((entry) => entry.entryType === "ASSET" && entry.uploadStatus === "PENDING").map((entry) => entry.uploadKey),
+    };
   }
 
   async createInitial(caller: CallerContext, input: { workspaceId: string; sourceName: string; rootName: string; manifest: ImportManifestEntry[]; importScope?: unknown; expectedSourceVersion?: number }): Promise<CreateImportResult> {
@@ -204,15 +225,13 @@ export class CreateFolderImportService {
       }
       await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "source-import");
       if (input.expectedSourceVersion !== undefined && (!Number.isSafeInteger(input.expectedSourceVersion) || input.expectedSourceVersion !== source.syncVersion)) throw importError("SOURCE_VERSION_CONFLICT", "Source settings changed; reload and check the folder again.");
-      const { snapshot, entries } = this.buildSnapshot(caller, {
+      const snapshot = this.buildSnapshot(caller, {
         workspaceId: source.workspaceId, sourceId: input.sourceId, basedOnVersion: source.syncVersion,
         proposedSourceName: null, rootName: input.rootName, manifest: input.manifest,
         importScope: input.importScope === undefined ? (source.excludedPaths == null ? undefined : normalizeImportScope({ paths: source.excludedPaths, excludedCount: 0 }, source.excludedPaths)) : normalizeImportScope(input.importScope, source.excludedPaths ?? []),
       });
       await this.assertQuota(repositories, caller, snapshot.createdAt);
-      await repositories.importSnapshots.insert(snapshot);
-      await repositories.importSnapshotEntries.insertMany(entries);
-      return { snapshotId: snapshot.id, state: "BUILDING" as const, expiresAt: snapshot.expiresAt };
+      return this.stage(repositories, snapshot, input.manifest);
     });
   }
 }
