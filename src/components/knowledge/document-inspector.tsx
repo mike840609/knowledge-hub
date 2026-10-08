@@ -27,7 +27,6 @@ import { Drawer } from "@/components/ui/drawer";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/components/ui/tabs";
 import { DocumentHeader } from "./document-header";
 import { DocumentPane } from "./document-pane";
-import { DocumentContextBar } from "@/components/shell/document-context-bar";
 import type { DocumentBreadcrumbSegment } from "./document-breadcrumb";
 import { buttonClasses } from "@/components/ui/button";
 import { Status } from "@/components/ui/status";
@@ -351,7 +350,9 @@ export function DocumentDetailClient({
   const inspector = useContext(InspectorContext);
   const setDocumentTopbar = useContext(DocumentTopbarContext)?.setDocument;
   const pathname = usePathname();
-  const headerRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
+  // The header has scrolled away under the pinned breadcrumb.
+  const [scrolledPast, setScrolledPast] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   useScrollRestoration(contentRef, inspectorData.documentId);
   useScrollToHash(inspectorData.documentId);
@@ -430,6 +431,7 @@ export function DocumentDetailClient({
     startTransition(() => setDocumentTopbar(state));
     const observer = new IntersectionObserver(([entry]) => {
       const visible = !entry.isIntersecting && entry.boundingClientRect.bottom <= (entry.rootBounds?.top ?? 0);
+      setScrolledPast(visible);
       const next = { pathname, title, visible, onDetailsClick: openInspector, target };
       startTransition(() => setDocumentTopbar(next));
     }, { root, threshold: 0 });
@@ -442,13 +444,13 @@ export function DocumentDetailClient({
   return (
     <DocumentPane
       contentRef={contentRef}
-      bar={<DocumentContextBar workspaceId={inspectorData.workspaceId} className="absolute inset-x-0 top-0 z-10 h-12 border-b border-kh-border bg-kh-bg px-6 max-lg:hidden" />}
       outline={<OutlineRail entries={outline} activeSlug={activeSlug} />}
       inspectorOpen={inspectorOpen}
       inspector={<DocumentInspector open={inspectorOpen} onOpenChange={(open) => setInspectorOpen?.(open)} data={inspectorData} outline={outline} activeSlug={activeSlug} requestedTab={requestedTab} />}
     >
-      <div ref={headerRef}>
         <DocumentHeader
+          headerRef={headerRef}
+          pinned={scrolledPast}
           breadcrumb={breadcrumb}
           title={title}
           status={status}
@@ -463,7 +465,6 @@ export function DocumentDetailClient({
           syncHref={syncHref}
           contentOwnsTitle={contentOwnsTitle}
         />
-      </div>
       <OutlineDisclosure entries={outline} activeSlug={activeSlug} />
       {children}
     </DocumentPane>

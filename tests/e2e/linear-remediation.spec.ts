@@ -52,21 +52,21 @@ test('reader and composer keep their column and expose commands during long scro
   await inRail(160);
   expect((await page.getByText('Knowledge Hub', { exact: true }).filter({ visible: true }).boundingBox())!.y).toBeLessThan((await workspace.boundingBox())!.y);
   await page.screenshot({ path: info.outputPath('reader-navigation-expanded.png') });
-  // Once the document's header scrolls away, its title and actions are laid across the top of the pane.
-  const details = page.getByRole('button', { name: 'Document details', exact: true });
-  await expect(details).toHaveCount(0);
-  await region.evaluate(el => { el.scrollTop = 1500; });
-  await expect(details).toBeVisible();
+  // Scrolling pins the breadcrumb line — location › title, and its actions — to the top of the reading column.
   const regionBox = (await region.boundingBox())!;
-  expect((await details.boundingBox())!.y).toBeLessThan(regionBox.y + 48);
-  expect((await details.boundingBox())!.x).toBeGreaterThan(regionBox.x);
-  await expect(details.locator('..')).toHaveCSS('opacity', '1');
+  const restingY = (await breadcrumb.boundingBox())!.y;
+  await region.evaluate(el => { el.scrollTop = 1500; });
+  await expect(breadcrumb).toBeInViewport();
+  await expect(breadcrumb.getByText(/^Remediation /)).toBeVisible();
+  await expect.poll(async () => (await breadcrumb.boundingBox())!.y).toBeLessThanOrEqual(restingY);
+  expect((await breadcrumb.boundingBox())!.y).toBeGreaterThanOrEqual(regionBox.y);
+  const details = region.getByRole('button', { name: 'Details', exact: true });
+  await expect(details).toBeInViewport();
   await page.screenshot({ path: info.outputPath('reader-scrolled.png') });
   await details.click();
   await expect(page.getByRole('complementary', { name: 'Document details', exact: true })).toBeVisible();
   await page.keyboard.press('Meta+i');
   await region.evaluate(el => { el.scrollTop = 0; });
-  await expect(details).toHaveCount(0);
   await page.getByRole('button', { name: 'Collapse navigation' }).click();
   await expect(explorer).toBeVisible();
   expect((await explorer.boundingBox())!.x).toBe(48);

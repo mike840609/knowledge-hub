@@ -10,7 +10,6 @@ export function DocumentPane({
   inspectorOpen = false,
   contentRef,
   loading = false,
-  bar,
 }: {
   children: ReactNode;
   outline?: ReactNode;
@@ -18,13 +17,9 @@ export function DocumentPane({
   inspectorOpen?: boolean;
   contentRef?: Ref<HTMLDivElement>;
   loading?: boolean;
-  /** Laid over the top of the reading column: the title and actions shown once the header scrolls away. */
-  bar?: ReactNode;
 }) {
   return (
     <div data-document-pane className="flex h-full min-h-0 overflow-hidden bg-kh-bg">
-      <div className="relative flex min-h-0 min-w-0 flex-1">
-      {bar}
       <div ref={contentRef} role="region" aria-label="Document content" aria-busy={loading || undefined} tabIndex={0}
         className="kh-document-pane min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain contain-layout kh-focus-ring">
         <div className="flex items-start">
@@ -33,7 +28,6 @@ export function DocumentPane({
               Its presence must not move the reading column during navigation. */}
           <div className="kh-outline-rail w-56 shrink-0 self-stretch">{outline}</div>
         </div>
-      </div>
       </div>
       {/* CSS reserves an open inspector's width before its media-query effect
           runs, and the loading state uses the same slot. Narrow drawers portal

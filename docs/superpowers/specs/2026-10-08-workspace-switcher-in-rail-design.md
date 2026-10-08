@@ -25,14 +25,18 @@ search field.
 - **The wordmark stays, at the head of the rail.** The rail's first row is
   "Knowledge Hub" with the collapse control at its end; collapsed (48px), the
   control alone. The brand mark rules in the design language are untouched.
-- **The reader's contextual bar moves into the document pane.** The title and
-  Edit / Share / Details that the topbar showed once the document header
-  scrolled away are laid across the top of the reading column instead, with
-  the same visibility rule and the same actions (`DocumentContextBar`). Its
-  state still travels through `DocumentTopbarContext`, which the palette reads
-  as before.
+- **The reader's breadcrumb line is pinned on wide screens.** The document
+  header's first line — location › title, with Edit / Share / Details — sticks
+  to the top of the reading column while the rest of the header scrolls away,
+  and draws its bottom edge once it has. It replaces the topbar's scrolled-away
+  copy of the title and actions, so the reader never loses where they are.
+  (`DocumentTopbarContext` still carries the document's state; the palette and
+  the narrow topbar read it as before.) *(The first revision of this change laid
+  a separate title bar over the pane once the header scrolled away; pinning the
+  breadcrumb itself keeps the path in view and shows one bar, not two.)*
 - **Narrow screens keep a topbar**: Menu, the wordmark (≥640px), a search icon,
-  and the same contextual bar. The palette stays mounted there, once, at every
+  and, once the header scrolls away, the document's title and actions
+  (`DocumentContextBar`); the breadcrumb is not pinned there. The palette stays mounted there, once, at every
   width.
 - **The workspace switcher moves to the top of the primary rail**, above the
   navigation it scopes, separated from it by spacing rather than a rule. In

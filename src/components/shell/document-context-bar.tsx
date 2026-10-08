@@ -14,8 +14,8 @@ import { requestShare } from "@/components/actions/action-menu";
 import { actionsFor } from "@/components/actions/action-registry";
 
 /**
- * The document's title and its Edit / Share / Details, shown once the document's own header has scrolled
- * away. A wide screen draws it across the top of the document pane; a narrow one, in the topbar.
+ * The document's title and its Edit / Share / Details, shown in a narrow window's topbar once the document's
+ * own header has scrolled away. A wide window needs none: the document pins its breadcrumb line instead.
  */
 export function DocumentContextBar({ workspaceId, className = "" }: { workspaceId: string; className?: string }) {
   const state = useContext(DocumentTopbarContext)?.document;

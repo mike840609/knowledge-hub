@@ -75,10 +75,10 @@ export function OutlineList({
 export function OutlineRail({ entries, activeSlug }: { entries: readonly OutlineEntry[]; activeSlug: string | null }) {
   if (entries.length === 0) return null;
   return (
-    // Stuck clear of the 48px bar the document pane lays over its top once the header scrolls away.
+    // Stuck clear of the document's breadcrumb, which a wide screen pins to the top of the pane (56px).
     <aside
       aria-label="On this page"
-      className="sticky top-8 max-h-[calc(100vh-8rem)] overflow-y-auto overscroll-contain py-6 pr-4"
+      className="sticky top-10 max-h-[calc(100vh-8rem)] overflow-y-auto overscroll-contain py-6 pr-4"
     >
       <h2 className="mb-2 text-caption font-medium text-kh-text-muted">On this page</h2>
       <OutlineList entries={entries} activeSlug={activeSlug} />
