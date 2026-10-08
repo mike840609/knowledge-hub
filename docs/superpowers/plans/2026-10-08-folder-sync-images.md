@@ -1854,7 +1854,8 @@ it("reports stored images whose bytes are gone, and repairs them so the next syn
   expect((await maintenance.verify()).missing).toEqual([]);
   await blobs.remove(sha256(png("kept")));
   const report = await maintenance.verify();
-  expect(report.missing).toMatchObject([{ sourceId: applied.sourceId, sourcePath: "img/d.png" }]);
+  // The report covers every source; an earlier test's source stores the same file.
+  expect(report.missing.filter((item) => item.sourceId === applied.sourceId)).toMatchObject([{ sourcePath: "img/d.png" }]);
   // Without repair the source still claims the hash, so a sync asks for no bytes and the image stays broken.
   expect((await stageImageImport(uow, blobs, ws, applied.sourceId, files)).assetUploads).toEqual([]);
   await maintenance.verify({ repair: true });

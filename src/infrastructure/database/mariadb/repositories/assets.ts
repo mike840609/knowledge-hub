@@ -64,4 +64,13 @@ export class MariaDbAssetRepository implements AssetRepository {
   async deleteById(assetId: string): Promise<void> {
     await this.connection.query("DELETE FROM knowledge_assets WHERE id = ?", [assetId]);
   }
+
+  async listStored(): Promise<KnowledgeAsset[]> {
+    const rows = await this.connection.query<DbRow[]>("SELECT * FROM knowledge_assets WHERE content_hash IS NOT NULL AND JSON_CONTAINS(metadata,'true','$.stored') ORDER BY source_id, source_path");
+    return rows.map(mapAsset);
+  }
+
+  async clearStored(assetId: string): Promise<void> {
+    await this.connection.query("UPDATE knowledge_assets SET metadata = JSON_REMOVE(metadata,'$.stored') WHERE id = ?", [assetId]);
+  }
 }

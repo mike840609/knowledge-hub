@@ -10,6 +10,13 @@ import { createImportStagingSweep } from "@/server/import-staging-sweep";
 
 const sweepImportStagingSoon = createImportStagingSweep();
 
+/** Expired staging first: deleting it is what releases the blobs a preview was holding. */
+async function sweep(services: ReturnType<typeof applicationServices>): Promise<{ deleted: number }> {
+  const result = await services.imports.cleanup.cleanup();
+  await services.blobMaintenance?.gc();
+  return result;
+}
+
 export type InitialImportRequest = { sourceName: string; rootName: string; manifest: ImportManifestEntry[]; importScope?: unknown; expectedSourceVersion?: number };
 export type ResyncRequest = { rootName: string; manifest: ImportManifestEntry[]; importScope?: unknown; expectedSourceVersion?: number };
 
@@ -64,7 +71,7 @@ export async function createInitialSourceImport(workspaceId: string, input: Init
     importScope: input.importScope,
     expectedSourceVersion: input.expectedSourceVersion,
   });
-  sweepImportStagingSoon(() => services.imports.cleanup.cleanup());
+  sweepImportStagingSoon(() => sweep(services));
   return created;
 }
 
@@ -78,7 +85,7 @@ export async function createSourceResync(sourceId: string, input: ResyncRequest)
     importScope: input.importScope,
     expectedSourceVersion: input.expectedSourceVersion,
   });
-  sweepImportStagingSoon(() => services.imports.cleanup.cleanup());
+  sweepImportStagingSoon(() => sweep(services));
   return created;
 }
 
