@@ -27,7 +27,8 @@ export type KnowledgeTreeProps = {
   workspaceId: string;
   sourceId: string;
   selectedDocumentId?: string;
-  /** Sidebar sections above the tree can change height after persisted state arrives. */
+  /** Changes when sections above the tree change height on their own (data arriving, a section opening itself), so the
+   *  selected row is revealed again. A reader opening or closing a section does not change it: that must not scroll. */
   revealLayoutKey?: string;
   /** Persisted sidebar sections and initial favorite synchronization have settled. */
   sidebarReady?: boolean;

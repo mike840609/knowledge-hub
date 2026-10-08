@@ -301,4 +301,18 @@ test('long explorer reveals the selected document after portal layout settles', 
   await expect(page.getByRole('region', { name: 'Favorites' }).getByRole('link')).toHaveCount(4);
   await expect(row).toBeInViewport();
   expect(await page.getByRole('region', { name: 'Document content', exact: true }).evaluate(el => el.scrollTop)).toBe(0);
+  // Opening or closing Favorites or Recent is the reader's own layout change: the explorer stays where they
+  // left it rather than scrolling back to the document being read.
+  const scroller = page.getByRole('navigation', { name: 'Document tree', exact: true });
+  await scroller.evaluate(el => { el.scrollTop = 0; });
+  await expect(row).not.toBeInViewport();
+  for (const name of ['Favorites', 'Recent']) {
+    const toggle = page.getByRole('button', { name, exact: true });
+    if (await toggle.count() === 0) continue;
+    for (let i = 0; i < 2; i++) {
+      await toggle.click();
+      await page.waitForTimeout(150);
+      expect(await scroller.evaluate(el => el.scrollTop)).toBe(0);
+    }
+  }
 });
