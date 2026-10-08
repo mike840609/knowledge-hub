@@ -6,7 +6,6 @@
 
 COMPOSE := docker compose
 ENV_FILE := .env
-BLOB_DIR := $(CURDIR)/.data/blobs
 # Local MinIO from compose.yaml; the same four settings a company MinIO needs.
 MINIO_ENDPOINT := http://127.0.0.1:9000
 MINIO_ACCESS_KEY := hcm_km_minio
@@ -23,14 +22,6 @@ help: ## Show this help.
 setup: ## Install dependencies and create .env from example (first time).
 	npm ci
 	@if [ ! -f $(ENV_FILE) ]; then cp .env.example $(ENV_FILE) && echo "Created $(ENV_FILE) from .env.example."; else echo "$(ENV_FILE) already exists, leaving it alone."; fi
-	@$(MAKE) --no-print-directory images-dir
-
-.PHONY: images-dir
-images-dir: ## Store synced folders' images locally: create .data/blobs and point KM_BLOB_DIR in .env at it.
-	@mkdir -p $(BLOB_DIR)
-	@if [ ! -f $(ENV_FILE) ]; then echo "$(ENV_FILE) is missing; run 'make setup' first."; exit 1; fi
-	@if grep -q '^KM_BLOB_DIR=' $(ENV_FILE); then echo "KM_BLOB_DIR is already set in $(ENV_FILE), leaving it alone."; \
-	else printf '\n# Local image storage, written by make images-dir. Absolute, so it works from any working directory.\nKM_BLOB_DIR=%s\n' "$(BLOB_DIR)" >> $(ENV_FILE) && echo "Set KM_BLOB_DIR=$(BLOB_DIR) in $(ENV_FILE)."; fi
 
 .PHONY: browsers
 browsers: ## Install Playwright Chromium (needed once for e2e tests).
@@ -41,7 +32,7 @@ db-up: ## Start MariaDB in Docker (waits until healthy).
 	$(COMPOSE) up -d --wait mariadb
 
 .PHONY: storage-up
-storage-up: ## Start local MinIO (S3-compatible image storage) and create its dev and test buckets.
+storage-up: ## Start local MinIO (image storage, as in production) and create its dev and test buckets.
 	$(COMPOSE) up -d minio
 	@for i in $$(seq 1 60); do curl -sf $(MINIO_ENDPOINT)/minio/health/live >/dev/null && break; [ $$i -eq 60 ] && { echo "MinIO did not become ready at $(MINIO_ENDPOINT)."; exit 1; }; sleep 1; done
 	@$(call minio_env,$(MINIO_DEV_BUCKET)) npx tsx scripts/storage/blobs.ts create-bucket
@@ -72,11 +63,11 @@ db-seed: db-migrate ## Load dev fixtures (idempotent, safe to re-run).
 	npm run db:seed
 
 .PHONY: bootstrap
-bootstrap: setup db-seed ## First-time setup: install, start DB, migrate, seed.
+bootstrap: setup db-seed storage-up ## First-time setup: install, start DB and MinIO, migrate, seed.
 	@echo "Done. Run 'make dev' and open http://127.0.0.1:3000/knowledge"
 
 .PHONY: dev
-dev: db-up ## Start the dev server at http://127.0.0.1:3000/knowledge.
+dev: db-up storage-up ## Start the dev server at http://127.0.0.1:3000/knowledge.
 	npm run dev
 
 .PHONY: build
@@ -84,7 +75,7 @@ build: ## Production build.
 	npm run build
 
 .PHONY: start
-start: db-up ## Serve the production build (run 'make build' first).
+start: db-up storage-up ## Serve the production build (run 'make build' first).
 	npm run start
 
 .PHONY: lint

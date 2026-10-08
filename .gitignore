@@ -20,9 +20,6 @@ test-results/
 # typescript
 *.tsbuildinfo
 
-# local image storage (make images-dir)
-.data/
-
 # env
 .env
 .env.local

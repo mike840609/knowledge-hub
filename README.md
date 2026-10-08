@@ -154,7 +154,7 @@ Configure **one** of two stores. With neither, images stay references only; with
 | Store | Settings | Use it when |
 | --- | --- | --- |
 | S3-compatible bucket (MinIO) | `KM_BLOB_S3_ENDPOINT`, `KM_BLOB_S3_BUCKET`, `KM_BLOB_S3_ACCESS_KEY`, `KM_BLOB_S3_SECRET_KEY`; optional `KM_BLOB_S3_PREFIX`, `KM_BLOB_S3_REGION` | Object storage is already run for you. Any number of application servers can share it |
-| Directory | `KM_BLOB_DIR` | Local development, or a single server with a persistent volume |
+| Directory | `KM_BLOB_DIR` | A single server with a persistent volume and no object storage |
 
 **MinIO or another S3-compatible service.** Create the bucket first; the application does not. The key pair needs to read, write, delete and list objects in that bucket (`s3:GetObject`, `s3:PutObject`, `s3:DeleteObject`, `s3:ListBucket`). Objects are addressed path-style, `<endpoint>/<bucket>/<prefix>sha256/…`, and requests are signed with Signature Version 4. Set `KM_BLOB_S3_PREFIX` (for example `knowledge-hub/prod`) to share a bucket between deployments. For an endpoint with a certificate from an internal CA, point Node at it with `NODE_EXTRA_CA_CERTS`. At start-up the server checks the bucket: wrong keys or a missing bucket stop it, while an endpoint that cannot be reached is logged and the server starts, so an outage of the image store does not take document text offline.
 
@@ -166,7 +166,7 @@ KM_BLOB_S3_SECRET_KEY=...
 KM_BLOB_S3_PREFIX=knowledge-hub/prod
 ```
 
-**Local development.** `make setup` (or `make images-dir`) creates `.data/blobs` and writes `KM_BLOB_DIR` into `.env`. To develop against object storage instead, `make storage-up` starts a MinIO container from `compose.yaml` and creates its bucket; then remove `KM_BLOB_DIR` from `.env` and uncomment the four `KM_BLOB_S3_*` lines copied from `.env.example`. Moving from the local MinIO to a company one changes those values and nothing else. The MinIO console is at `http://127.0.0.1:9001`.
+**Local development** uses MinIO too, so images are stored the way they are in production. `.env.example` carries the four `KM_BLOB_S3_*` settings for the MinIO container in `compose.yaml`, and `make dev` starts that container and creates its bucket (`make storage-up`). An `.env` created before these settings existed needs those four lines copied in. Moving from the local MinIO to a company one changes those values and nothing else. The MinIO console is at `http://127.0.0.1:9001`.
 
 **A directory on Kubernetes.** Mount a PersistentVolumeClaim and point `KM_BLOB_DIR` at the mount path. The directory must exist before the server starts, so do not create it in the image: a missing mount should fail fast, not write into the container layer.
 
