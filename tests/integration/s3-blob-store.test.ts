@@ -89,6 +89,18 @@ describe.skipIf(!endpoint)("S3 blob store against a real bucket", () => {
     expect((missing as S3RequestError).status).toBe(404);
     expect((missing as S3RequestError).message).not.toContain(process.env.KM_TEST_S3_SECRET_KEY);
   });
+  it("check asks only about its own prefix, so keys limited to one folder of a shared bucket pass", async () => {
+    const store = new S3BlobStore(config({ prefix: "team-a/prod/" }));
+    const requested: string[] = [];
+    const send = (store as unknown as { send: (...args: unknown[]) => unknown }).send.bind(store);
+    (store as unknown as { send: (...args: unknown[]) => unknown }).send = (...args: unknown[]) => {
+      requested.push(JSON.stringify(args[2] ?? {}));
+      return send(...args);
+    };
+    await store.check();
+    expect(requested).toHaveLength(1);
+    expect(JSON.parse(requested[0]).query).toMatchObject({ prefix: "team-a/prod/sha256/", "max-keys": "1" });
+  });
   it("creating a bucket that exists is not an error", async () => {
     await expect(new S3BlobStore(config()).createBucket()).resolves.toBeUndefined();
   });

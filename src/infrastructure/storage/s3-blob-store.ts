@@ -183,9 +183,14 @@ export class S3BlobStore implements BlobStore {
     } while (token);
   }
 
-  /** Reaches the bucket with these credentials, or throws: an `S3RequestError` when the store answered and refused. */
+  /**
+   * Reaches the bucket with these credentials, or throws: an `S3RequestError`
+   * when the store answered and refused. It lists under this store's own
+   * prefix, the same request `list` makes: keys are often allowed to list one
+   * folder of a shared bucket and nothing else.
+   */
   async check(): Promise<void> {
-    const { status, response } = await this.call("GET", null, { "list-type": "2", "max-keys": "1" });
+    const { status, response } = await this.call("GET", null, { "list-type": "2", "max-keys": "1", prefix: `${this.config.prefix}sha256/` });
     const body = await text(response);
     if (status !== 200) throw new S3RequestError("bucket check", status, errorCode(body));
   }
