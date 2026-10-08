@@ -231,7 +231,7 @@ import { BlobMismatchError } from "@/modules/sources/ports/blob-store";
 
 const bytes = new TextEncoder().encode("not really a png");
 const sha = createHash("sha256").update(bytes).digest("hex");
-const body = (data: Uint8Array = bytes) => new Blob([data]).stream() as ReadableStream<Uint8Array>;
+const body = (data: Uint8Array = bytes) => new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(data); controller.close(); } });
 const text = async (stream: ReadableStream<Uint8Array>) => new Response(stream).text();
 let root: string, store: FilesystemBlobStore;
 beforeEach(async () => { root = await mkdtemp(path.join(tmpdir(), "km-blob-")); store = new FilesystemBlobStore(root); });
@@ -563,7 +563,7 @@ import { fixtureCaller } from "./knowledge";
 export type FixtureFile = { path: string; text: string } | { path: string; bytes: Uint8Array };
 export const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 export const png = (seed: string) => new TextEncoder().encode(`png:${seed}`);
-export const stream = (bytes: Uint8Array) => new Blob([bytes]).stream() as ReadableStream<Uint8Array>;
+export const stream = (bytes: Uint8Array) => new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(bytes); controller.close(); } });
 
 /** Creates a snapshot. `upload: false` stops before any image is sent. Returns the snapshot and what the server asked for. */
 export async function stageImageImport(uow: MariaDbUnitOfWork, blobs: BlobStore | null, workspaceId: string, sourceId: string | null, files: FixtureFile[], caller = fixtureCaller()) {
