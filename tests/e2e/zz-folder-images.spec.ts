@@ -1,4 +1,7 @@
 import { createHash } from "node:crypto";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { test, expect, type APIRequestContext } from "@playwright/test";
 
 // A real 1×1 PNG, so the browser decodes it and naturalWidth proves it loaded.
@@ -75,4 +78,32 @@ test("a synced folder's images show to its reader and on a shared page, and nowh
   expect((await request.post(`/api/share-links/${link.id}/revoke`)).status()).toBe(204);
   expect((await anonymous.request.get(`/s/${token}/asset?src=${encodeURIComponent("img/pixel.png")}`)).status()).toBe(404);
   await anonymous.close();
+});
+
+test("the import form uploads a folder's images and the reader shows them", async ({ page }) => {
+  const nav = await (await page.request.get("/api/workspaces")).json();
+  const ws = nav.items.find((workspace: { type: string }) => workspace.type === "PERSONAL").id;
+  const root = await mkdtemp(path.join(tmpdir(), "km-form-images-"));
+  try {
+    await mkdir(path.join(root, "img"));
+    await writeFile(path.join(root, "form-guide.md"), "# Form guide\n\n![pixel](img/pixel.png)\n");
+    await writeFile(path.join(root, "img", "pixel.png"), PNG);
+    const uploads: string[] = [];
+    page.on("request", (sent) => { if (sent.method() === "PUT" && sent.url().includes("/asset?uploadKey=")) uploads.push(sent.url()); });
+    await page.goto(`/w/${ws}/sources/import`);
+    await page.getByLabel("Source name", { exact: true }).fill("Form picture folder");
+    await page.locator("#import-folder").setInputFiles(root);
+    await expect(page).toHaveURL(/\/sources\/imports\//);
+    // The browser, not the test, sent the image: one PUT, for the one image in the folder.
+    expect(uploads).toHaveLength(1);
+    expect(decodeURIComponent(uploads[0])).toContain("pixel.png");
+    await page.getByRole("button", { name: "Apply changes" }).click();
+    await expect(page).toHaveURL(/\/runs\//);
+    const source = page.url().match(/sources\/([^/]+)\//)![1];
+    await page.goto(`/w/${ws}/knowledge/${source}`);
+    await expect(page.getByRole("heading", { name: "Form guide", level: 1 })).toBeVisible();
+    await expect.poll(() => page.getByRole("img", { name: "pixel" }).evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
