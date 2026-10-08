@@ -5,7 +5,7 @@ import type { ReadingActivity } from "@/modules/personal/domain/reading-activity
 import { readingDate } from "@/modules/personal/domain/reading-activity";
 import styles from "./profile.module.css";
 
-export function ReadingActivityView({ activity, cumulative, days }: { activity: ReadingActivity; cumulative: number; days: number }) {
+export function ReadingActivityView({ activity, cumulative, total, days }: { activity: ReadingActivity; cumulative: number; total: number; days: number }) {
   const [focusedDay, setFocusedDay] = useState(0);
   const activeIndex = Math.min(focusedDay, Math.max(0, activity.daily.length - 1));
   function navigate(event: KeyboardEvent<HTMLDivElement>, index: number) {
@@ -24,7 +24,7 @@ export function ReadingActivityView({ activity, cumulative, days }: { activity: 
     <dl className={styles.readingMetrics}>
       <div><dt>Documents viewed</dt><dd data-period-articles={activity.articles}>{activity.articles}<span> distinct documents</span></dd></div>
       <div><dt>Active days</dt><dd>{activity.activeDays}<span> of {days} days</span></dd></div>
-      <div className={styles.readingTotal} data-browsed-count={cumulative}><dt>Viewed in your current library</dt><dd>{cumulative}<span> across all time</span></dd></div>
+      <div className={styles.readingTotal} data-browsed-count={cumulative}><dt>Viewed in your current library</dt><dd>{cumulative}<span> of {total} documents, all time</span></dd></div>
     </dl>
     <p className="sr-only" id="reading-chart-help">Use left and right arrow keys to explore daily document views.</p>
     <div className={styles.readingPlot}>

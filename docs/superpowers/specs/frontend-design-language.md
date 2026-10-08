@@ -345,6 +345,11 @@ legend with the value beside it, as Insights' composition bar does. A new
 chart that cannot carry such a legend needs a distinction in form (pattern,
 gap, position), not a fourth colour.
 
+A single series split into part and whole (Insights' folder bars: documents
+viewed, of documents in the folder) draws the whole in the series colour at 35%
+opacity and the part at full strength. The tint is below 3:1, so the bar is
+never the only carrier: the "n of m" figure sits beside it in text.
+
 They were first written as values local to Insights' stylesheet, outside the
 token layer, and promoted here unchanged. A component reads them as
 `var(--kh-chart-*)` and declares no series colour of its own.
