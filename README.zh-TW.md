@@ -59,7 +59,7 @@ Knowledge Hub 是開源、可自行部署的知識管理應用。你可以直接
 | 個人工作空間 | My Space、個人筆記、草稿、收藏與最近閱讀；最近閱讀保留於裝置 |
 | Markdown 編輯 | 渲染式編輯器與 Markdown 原始碼切換、程式碼區塊、文件目錄與鍵盤快捷鍵 |
 | 草稿與版本 | 帳號草稿自動保存、失敗時本機恢復副本、不可變版本歷史、版本比較與還原、過期編輯衝突檢查 |
-| 匯入與同步 | Markdown folder 經 Preview → Confirm → Apply 匯入；再次選取來源資料夾以檢查與套用變更 |
+| 匯入與同步 | Markdown folder 經 Preview → Confirm → Apply 匯入；再次選取來源資料夾以檢查與套用變更。伺服器設有圖片 volume（`KM_BLOB_DIR`）時，資料夾內的圖片會被儲存並顯示 |
 | 文件整理 | 文件／資料夾樹、移動、更名、封存與還原；來源管理的內容透過重新同步更新 |
 | 搜尋 | Workspace 範圍內的關鍵字搜尋與快速搜尋（`⌘K`／`Ctrl+K`） |
 | 知識連結 | `[[wikilink]]`、相對 `.md` 連結、Backlinks、Workspace／Local graph |
@@ -77,7 +77,7 @@ Preview 是固定的 staged snapshot。阻擋性診斷必須先處理；若來�
 
 ### 目前限制與未來方向
 
-- 資產目前只儲存 metadata／reference，尚無附件 binary 儲存服務。
+- 設定 `KM_BLOB_DIR` 後會儲存同步資料夾內的圖片（見[圖片](#圖片)）。其他附件、Obsidian 圖片嵌入語法（`![[image.png]]`）與在 Hub 內撰寫的筆記中的圖片，仍只保留參照。
 - ZIP 匯出包含封存文件的最新已存版本，不包含草稿、版本歷史或附件 bytes；上限 64 MiB／9,999 份文件。
 - 文件以封存／還原管理生命週期，沒有一般使用者的永久刪除流程。
 - 搜尋目前以關鍵字為主。MCP server、semantic／hybrid retrieval 與進階 Agent memory 是未來方向，並非現有功能。
@@ -135,6 +135,7 @@ npm run dev
 | `KM_TEAM_WORKSPACES_ENABLED` | 預設 `false`；設為 `true` 開啟 Team 導覽與存取 |
 | `KM_IDENTITY_PROVIDER` | 預設 `local`；正式環境使用 `company-sso` 並接入 session reader |
 | `KM_IMPORT_*` | 匯入檔案數、大小、batch 與 snapshot quota |
+| `KM_BLOB_DIR` | 儲存同步資料夾圖片的目錄，需位於持久化 volume。未設定時圖片只保留參照；設定了但不是已存在且可寫入的目錄時，伺服器會拒絕啟動 |
 | `KM_TEST_DB_*`／`KM_E2E_DB_PREFIX` | 隔離測試資料庫設定；測試帳號需可建立與刪除指定 prefix 的資料庫 |
 
 匯入預設上限為 20,000 個 manifest entries、單篇 Markdown 5 MiB、Markdown 總量 256 MiB。完整上限以 `.env.example` 為準。Snapshot retention：BUILDING 2 小時、READY 30 分鐘、STALE／APPLIED 24 小時。有人開始匯入時，伺服器會在背景清除過期的 staging，每個程序最多每 10 分鐘一次。若要立即清除（例如沒有人在匯入的站台），可執行：
@@ -144,6 +145,14 @@ npx tsx scripts/db/cleanup-import-snapshots.ts
 ```
 
 此清理只處理匯入 staging，不刪除正式文件歷史。
+
+### 圖片
+
+設定 `KM_BLOB_DIR` 後，資料夾內的 `png`、`jpg`、`jpeg`、`gif`、`webp`、`avif`、`svg` 檔案會在匯入時上傳，並顯示在文件與分享頁上。在設定之前就匯入的來源，下次同步時會補上圖片。以 Obsidian 嵌入語法（`![[image.png]]`）寫的圖片不會顯示，請改用 `![alt](path)`。圖片沒有版本：舊版本顯示的是資料夾目前的檔案。
+
+備份時先備份資料庫、再備份圖片目錄。檔案只會新增，所以比資料庫晚複製的目錄一定包含資料庫引用的所有檔案。還原後，`make blobs-verify` 會列出檔案遺失的圖片，`make blobs-verify REPAIR=1` 會讓下次同步重新上傳。`make blobs-gc` 會移除沒有被引用的檔案；伺服器也會在背景自動執行。
+
+一個圖片目錄只對應一台應用伺服器；多台伺服器需要共用檔案系統。
 
 ## 部署
 
@@ -247,6 +256,7 @@ KM_E2E_PERSONAL_ONLY=true npm run test:e2e -- personal-workspace.spec.ts
 - **Team 入口無法使用**：預設 Coming soon；設定 `KM_TEAM_WORKSPACES_ENABLED=true` 並重啟。
 - **production 身分錯誤**：Local identity 不提供正式部署登入；需接入 SSO session reader。
 - **匯入無法 Apply**：先處理 Preview 的 blockers；409 版本衝突需重建 Preview，沒有 Force Apply。
+- **圖片沒有顯示**：確認已設定 `KM_BLOB_DIR`，再同步一次該資料夾，並執行 `make blobs-verify`。
 - **連結或圖譜缺少資料**：確認 migrations 已完成，再執行 `make db-reindex-links`；同步文件的 wikilink 問題請回來源修改。
 - **需要重建本機示範資料**：`make db-reset` 會刪除開發資料庫 volume 及其中全部內容，執行前先備份。
 

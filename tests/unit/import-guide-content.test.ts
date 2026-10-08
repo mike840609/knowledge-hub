@@ -259,4 +259,15 @@ describe("guideContent facts", () => {
       expect(all, locale).not.toContain("obsidian-wiki");
     }
   });
+
+  it("says images are stored only when the server stores them", () => {
+    for (const locale of LOCALES) {
+      const off = allText(guideContent(locale, DEFAULT_IMPORT_LIMITS));
+      const on = allText(guideContent(locale, DEFAULT_IMPORT_LIMITS, true));
+      expect(off, locale).not.toContain("![alt](path)");
+      expect(on, locale).toContain("![alt](path)");
+      expect(on, locale).toContain("![[image.png]]");
+      expect(on, locale).not.toMatch(/no binary attachment storage|不儲存二進位附件/);
+    }
+  });
 });

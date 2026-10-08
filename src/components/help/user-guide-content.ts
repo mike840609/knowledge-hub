@@ -34,7 +34,7 @@ export function userGuideContent(locale:GuideLocale):GuideContent {
         "檢查或上傳失敗：查看訊息，使用 Retry 或重新選 folder。只有預覽建立並成功 Apply 後才會改變來源內容。",
         "套用結果無法確認：先查看來源的同步歷史。畫面提供重試時，可重試同一個預覽以恢復結果；不要直接建立重複來源。只有明確顯示 Nothing was changed 的錯誤，才能認定這次未套用。",
         "文章找不到：確認搜尋來源與路徑，並查看封存項目。封存不會刪除本機檔案；同步文章的恢復應先修正本機文件或排除規則，再檢查並 Apply。個人筆記可從封存檢視還原。",
-        "連結無法解析或圖片不顯示：查看來源的健康清單、匯入警告與原始相對路徑。目前附件以參照與 metadata 為主，並不保證本機圖片或附件能完整在線上開啟。",
+        "連結無法解析或圖片不顯示：查看來源的健康清單、匯入警告與原始相對路徑。伺服器有設定圖片儲存時，以 `![alt](path)` 寫的圖片會顯示；沒有顯示時請再同步一次該資料夾。Obsidian 的嵌入語法（`![[image.png]]`）與其他附件只保留參照。",
         "Insights 暫時無法載入：選 Try again 或 Refresh。仍可從 Home、Knowledge 與 Sources 閱讀與操作；不要把統計載入失敗理解成文章遺失。",
       ]),
       section("reading","閱讀、搜尋與整理",[
@@ -86,7 +86,7 @@ export function userGuideContent(locale:GuideLocale):GuideContent {
         "Check or upload failed: inspect the message, use Retry or choose the folder again. Source content changes only after a preview is successfully applied.",
         "Apply outcome could not be confirmed: inspect source sync history first. If offered, retry the same preview to recover its result rather than creating another source. Only an explicit Nothing was changed error confirms that this attempt was not applied.",
         "Missing article: check its source and original path, then archived items. Archiving does not delete local files. Restore synced content by correcting local files or exclusions and applying a fresh preview; restore personal notes through the archived view.",
-        "Unresolved links or missing images: inspect source health, import warnings and relative paths. Attachments currently retain references and metadata; local images and attachments are not guaranteed to be readable online.",
+        "Unresolved links or missing images: inspect source health, import warnings and relative paths. Images written as `![alt](path)` appear when the server stores images; if they do not, sync the folder again. Obsidian embeds (`![[image.png]]`) and other attachments keep references only.",
         "Insights unavailable: use Try again or Refresh. Home, Knowledge and Sources remain your reading and operation entries; a failed statistics request does not mean articles were lost.",
       ]),
       section("reading","Read, search and organize",[

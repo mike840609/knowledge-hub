@@ -58,7 +58,7 @@ Explore links between documents, find a note, and filter the graph by source.
 | Personal workspace | My Space, personal notes, drafts, favorites, and recently read documents; reading history stays on the device |
 | Markdown editing | Rendered editing and Markdown source modes, code blocks, a table of contents, and keyboard shortcuts |
 | Drafts and revisions | Account-backed autosave, local recovery on failure, immutable revision history, comparison and restore, and stale-editor conflict checks |
-| Import and sync | Import a Markdown folder through Preview → Confirm → Apply; select the folder again to review and apply later changes |
+| Import and sync | Import a Markdown folder through Preview → Confirm → Apply; select the folder again to review and apply later changes. Images in the folder are stored and shown when the server has an image volume (`KM_BLOB_DIR`) |
 | Organization | Document and folder trees, move, rename, archive, and restore; source-managed content is updated through sync |
 | Search | Workspace-scoped keyword search and quick search with `⌘K` / `Ctrl+K` |
 | Knowledge links | `[[wikilinks]]`, relative `.md` links, backlinks, and workspace and local graphs |
@@ -76,7 +76,7 @@ A preview is a fixed staged snapshot. Resolve blocking diagnostics before applyi
 
 ### Current limitations and future direction
 
-- Assets store metadata and references only; there is no binary attachment storage service yet.
+- Images in a synced folder are stored when `KM_BLOB_DIR` is set (see [Images](#images)). Other attachments, Obsidian image embeds (`![[image.png]]`) and images in notes written in the Hub keep references only.
 - ZIP exports include the latest saved versions of archived documents, but exclude drafts, revision history, and attachment bytes. The limit is 64 MiB / 9,999 documents.
 - Documents use archive and restore for their lifecycle; there is no general end-user permanent deletion flow.
 - Search is currently keyword-based. An MCP server, semantic/hybrid retrieval, and advanced agent memory are future directions, not shipped features.
@@ -134,6 +134,7 @@ See [`.env.example`](.env.example) for local development settings and import lim
 | `KM_TEAM_WORKSPACES_ENABLED` | Defaults to `false`; set to `true` to enable Team navigation and access |
 | `KM_IDENTITY_PROVIDER` | Defaults to `local`; production uses `company-sso` with a session reader integration |
 | `KM_IMPORT_*` | Import file counts, sizes, batch limits, and snapshot quotas |
+| `KM_BLOB_DIR` | Directory on a persistent volume where synced folders' images are stored. Unset keeps images as references only. The server refuses to start if it is set and not an existing writable directory |
 | `KM_TEST_DB_*` / `KM_E2E_DB_PREFIX` | Isolated test database settings; the test account must be able to create and drop databases with the designated prefixes |
 
 Default import limits include 20,000 manifest entries, 5 MiB per Markdown file, and 256 MiB of Markdown in total. See `.env.example` for the full limits. Snapshot retention is 2 hours for BUILDING, 30 minutes for READY, and 24 hours for STALE/APPLIED. The server deletes expired staging data in the background when someone starts an import, at most once every 10 minutes per process. To clean up on demand, for example on an instance nobody imports into, run:
@@ -143,6 +144,14 @@ npx tsx scripts/db/cleanup-import-snapshots.ts
 ```
 
 This cleanup removes import staging data only, preserving canonical document history.
+
+### Images
+
+With `KM_BLOB_DIR` set, a folder's `png`, `jpg`, `jpeg`, `gif`, `webp`, `avif` and `svg` files are uploaded at import and shown in documents and on shared pages. A source imported before the setting was added gets its images on its next sync. Images written as Obsidian embeds (`![[image.png]]`) are not shown; use `![alt](path)`. An image has no history: an older revision shows the folder's current file.
+
+Back up the database first and the image directory second. Files are only added, so a directory copied after the database holds everything the database refers to. After a restore, `make blobs-verify` lists images whose file is missing and `make blobs-verify REPAIR=1` makes the next sync upload them again. `make blobs-gc` removes files nothing refers to; the server also does this in the background.
+
+One application server per image directory. Several servers need a shared filesystem.
 
 ## Deployment
 
@@ -246,6 +255,7 @@ When upgrading Next.js, check whether the patch is still required: [`vendored-re
 - **Team navigation is unavailable**: Coming soon is the default. Set `KM_TEAM_WORKSPACES_ENABLED=true` and restart.
 - **Production identity error**: Local identity does not provide production login. Integrate an SSO session reader.
 - **Import cannot be applied**: resolve blockers in Preview. A 409 version conflict requires a new preview; there is no Force Apply.
+- **Images do not appear**: check `KM_BLOB_DIR` is set, sync the folder again, and run `make blobs-verify`.
 - **Links or graph entries are missing**: ensure migrations are complete, then run `make db-reindex-links`. Fix wikilinks in synced documents at the original source.
 - **Resetting development data**: `make db-reset` deletes the development database volume and all its contents. Back up anything you need before running it.
 
