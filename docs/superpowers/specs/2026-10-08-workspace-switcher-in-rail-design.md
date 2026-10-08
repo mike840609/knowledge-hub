@@ -1,8 +1,9 @@
-# Workspace switcher and search in the rail
+# The rail carries the shell; wide screens drop the topbar
 
-Amends the topbar order fixed by `2026-10-02-linear-remediation-design.md`
-("brand/collapse region, separate workspace selector, then Search"). That
-sentence is superseded by this document; the rest of the remediation stands.
+Amends `2026-10-02-linear-remediation-design.md` in two sentences — the topbar
+order ("brand/collapse region, separate workspace selector, then Search") and
+the reader's contextual actions staying "in the topbar" — both superseded by
+this document. The rest of the remediation stands.
 
 ## Problem
 
@@ -16,9 +17,23 @@ search field.
 
 ## Decision
 
-- **The wordmark stays.** The brand/collapse region (160px, 48px collapsed) is
-  unchanged and still carries "Knowledge Hub" alone; the brand mark rules in
-  the design language are untouched.
+- **Wide screens (≥1024px) have no topbar.** Once the switcher and Search had
+  moved into the rail, the topbar held only the wordmark, the collapse control
+  and — after the document header scrolled away — the document's title and
+  actions; on every other page it was an empty band. It is removed at that
+  width, and rail, explorer and content all start at the top of the window.
+- **The wordmark stays, at the head of the rail.** The rail's first row is
+  "Knowledge Hub" with the collapse control at its end; collapsed (48px), the
+  control alone. The brand mark rules in the design language are untouched.
+- **The reader's contextual bar moves into the document pane.** The title and
+  Edit / Share / Details that the topbar showed once the document header
+  scrolled away are laid across the top of the reading column instead, with
+  the same visibility rule and the same actions (`DocumentContextBar`). Its
+  state still travels through `DocumentTopbarContext`, which the palette reads
+  as before.
+- **Narrow screens keep a topbar**: Menu, the wordmark (≥640px), a search icon,
+  and the same contextual bar. The palette stays mounted there, once, at every
+  width.
 - **The workspace switcher moves to the top of the primary rail**, above the
   navigation it scopes, separated from it by spacing rather than a rule. In
   both rail states it carries the workspace's mark — the name's first letter
@@ -28,7 +43,7 @@ search field.
   same menu, Team "Coming soon" row included — what it offers does not change.
 - **On narrow screens** the switcher is the first thing in the Menu drawer,
   above primary navigation. The topbar no longer carries it at any width.
-- **Search is the rail's second row**, under the switcher and above the
+- **Search is the rail's row after the switcher**, under it and above the
   navigation, drawn like a navigation item (search icon, "Search", `⌘K` at its
   end); collapsed it is the icon alone with "Search ⌘K" in a tooltip. It opens
   the same palette, which stays mounted once in the topbar and owns its dialog
@@ -39,8 +54,6 @@ search field.
   as a filled field. It read as the loudest thing in an otherwise empty bar, and
   the explorer it aligned with exists only on document pages; it was replaced
   the same day.)*
-- The topbar is now the brand/collapse region followed by the document title
-  and its contextual actions.
 
 ## Not changed
 

@@ -37,7 +37,10 @@ test('reader and composer keep their column and expose commands during long scro
   const expandedExplorer = (await explorer.boundingBox())!;
   expect(expandedExplorer.y).toBe((await page.locator('main').boundingBox())!.y);
   expect(expandedExplorer.width).toBe(288);
-  // The rail opens with the workspace switcher, then Search, then the navigation; the topbar holds neither.
+  // A wide window has no topbar: rail, explorer and content start at its top edge.
+  await expect(page.locator('header').first()).toBeHidden();
+  expect(expandedExplorer.y).toBe(0);
+  // The rail opens with the wordmark, then the workspace switcher, then Search, then the navigation.
   const workspace = page.getByRole('button', { name: /^Workspace:/ });
   const search = page.getByRole('button', { name: 'Quick search', exact: true });
   const primary = page.getByRole('navigation', { name: 'Primary' });
@@ -47,8 +50,23 @@ test('reader and composer keep their column and expose commands during long scro
     expect((await search.boundingBox())!.y).toBeLessThan((await primary.boundingBox())!.y);
   };
   await inRail(160);
-  await expect(page.locator('header').getByRole('button', { name: 'Quick search', exact: true })).toHaveCount(0);
+  expect((await page.getByText('Knowledge Hub', { exact: true }).filter({ visible: true }).boundingBox())!.y).toBeLessThan((await workspace.boundingBox())!.y);
   await page.screenshot({ path: info.outputPath('reader-navigation-expanded.png') });
+  // Once the document's header scrolls away, its title and actions are laid across the top of the pane.
+  const details = page.getByRole('button', { name: 'Document details', exact: true });
+  await expect(details).toHaveCount(0);
+  await region.evaluate(el => { el.scrollTop = 1500; });
+  await expect(details).toBeVisible();
+  const regionBox = (await region.boundingBox())!;
+  expect((await details.boundingBox())!.y).toBeLessThan(regionBox.y + 48);
+  expect((await details.boundingBox())!.x).toBeGreaterThan(regionBox.x);
+  await expect(details.locator('..')).toHaveCSS('opacity', '1');
+  await page.screenshot({ path: info.outputPath('reader-scrolled.png') });
+  await details.click();
+  await expect(page.getByRole('complementary', { name: 'Document details', exact: true })).toBeVisible();
+  await page.keyboard.press('Meta+i');
+  await region.evaluate(el => { el.scrollTop = 0; });
+  await expect(details).toHaveCount(0);
   await page.getByRole('button', { name: 'Collapse navigation' }).click();
   await expect(explorer).toBeVisible();
   expect((await explorer.boundingBox())!.x).toBe(48);

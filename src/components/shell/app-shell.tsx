@@ -14,7 +14,9 @@ import { ArchivedWorkspaceBanner } from "@/components/workspaces/archived-worksp
 import { Drawer } from "@/components/ui/drawer";
 import { isBoolean, readStored, removeStored, usePersistedJson } from "@/components/shell/use-persisted-state";
 import { ToastProvider } from "@/components/ui/toast";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { Tooltip, TooltipProvider } from "@/components/ui/tooltip";
+import { buttonClasses } from "@/components/ui/button";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { NAV_TOGGLE_SHORTCUT } from "@/components/actions/action-registry";
 import { matchesShortcut } from "@/lib/shortcut-keys";
 import { TOGGLE_NAV_EVENT } from "./nav-toggle";
@@ -88,13 +90,22 @@ export function AppShell({ model, children }: { model: WorkspaceShellModel; chil
     <ToastProvider>
     <TooltipProvider delay={500} closeDelay={0}>
     <div className="flex h-screen overflow-hidden flex-col bg-kh-bg-subtle text-kh-text supports-[height:100dvh]:h-dvh">
-      <Topbar model={model} onMenuClick={openNav} navCollapsed={navCollapsed} onToggleNav={toggleNav} />
+      <Topbar model={model} onMenuClick={openNav} />
       {accessNotice && <p role="status" className="border-b border-kh-border bg-kh-bg p-3 text-body">You no longer have access to this workspace.<button aria-label="Dismiss access notice" className="ml-3 underline" onClick={() => setAccessNotice(false)}>Dismiss</button></p>}
       {!authorization.confirmed && !authorization.revoked && <p role="alert" className="bg-kh-bg p-3 text-body text-kh-danger">Unable to confirm workspace access. Changes are paused. <button className="underline" onClick={() => void authorization.refresh()}>Retry</button></p>}
       {authorization.access.workspace.lifecycleState === "ARCHIVED" && <ArchivedWorkspaceBanner workspaceId={model.workspace.id} canRestore={authorization.confirmed && authorization.access.actions.canRestore} />}
       <div className="flex min-h-0 flex-1">
         <aside className={`hidden shrink-0 border-r border-kh-border bg-kh-bg-sunken lg:flex lg:flex-col ${navCollapsed ? "w-12" : "w-40"}`}>
-          <div className="flex shrink-0 flex-col gap-0.5 px-2 pt-2">
+          {/* The wordmark and the rail's own collapse control head it; there is no wide-screen topbar. */}
+          <div className={`flex h-12 shrink-0 items-center gap-2 ${navCollapsed ? "justify-center px-2" : "px-4 pr-2"}`}>
+            {navCollapsed ? null : <span className="min-w-0 flex-1 truncate whitespace-nowrap text-caption font-semibold text-kh-text">Knowledge Hub</span>}
+            <Tooltip label={navCollapsed ? "Expand navigation" : "Collapse navigation"} shortcut={NAV_TOGGLE_SHORTCUT} side={navCollapsed ? "right" : "bottom"}>
+              <button type="button" onClick={toggleNav} aria-label={navCollapsed ? "Expand navigation" : "Collapse navigation"} aria-keyshortcuts={NAV_TOGGLE_SHORTCUT} className={buttonClasses({ variant: "ghost", icon: true })}>
+                {navCollapsed ? <PanelLeftOpen className="h-4 w-4" aria-hidden="true" /> : <PanelLeftClose className="h-4 w-4" aria-hidden="true" />}
+              </button>
+            </Tooltip>
+          </div>
+          <div className="flex shrink-0 flex-col gap-0.5 px-2">
             <WorkspaceSelector workspaceId={model.workspace.id} compact={navCollapsed} />
             <SearchNavItem compact={navCollapsed} />
           </div>

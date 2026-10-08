@@ -27,7 +27,7 @@ test.describe("Team-enabled fixture routes", () => {
 
   test("renders the persistent Workspace shell", async ({ page }) => {
     await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge`);
-    await expect(page.getByText("Knowledge Hub", { exact: true })).toBeVisible();
+    await expect(page.getByText("Knowledge Hub", { exact: true }).filter({ visible: true })).toBeVisible();
     await expect(page.getByLabel("Workspace: Query Master", { exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "Knowledge" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Sources" })).toBeVisible();
