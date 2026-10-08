@@ -15,6 +15,7 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from "@/components/ui/menu";
+import { Tooltip } from "@/components/ui/tooltip";
 import { useWorkspaceAuthorization } from "./use-workspace-authorization";
 
 type NavigationItem = ReturnType<typeof useWorkspaceAuthorization>["navigation"]["items"][number];
@@ -23,7 +24,9 @@ function displayName(entry: NavigationItem): string {
   return entry.type === "PERSONAL" ? "My Space" : entry.name;
 }
 
-export function WorkspaceSelector({ workspaceId }: { workspaceId: string }) {
+// It heads the primary rail (and the Menu drawer), above the navigation it scopes. Collapsed, the rail
+// is 48px and the switcher is the name's first letter, with the name in a tooltip.
+export function WorkspaceSelector({ workspaceId, compact = false }: { workspaceId: string; compact?: boolean }) {
   const router = useRouter();
   const { navigation, confirmed, refresh } = useWorkspaceAuthorization();
   const [creating, setCreating] = useState(false);
@@ -58,14 +61,26 @@ export function WorkspaceSelector({ workspaceId }: { workspaceId: string }) {
   return (
     <>
       <MenuRoot>
-        <MenuTrigger
-          aria-label={`Workspace: ${currentName}`}
-          className="kh-control kh-focus-ring flex min-h-8 w-full min-w-0 items-center gap-2 rounded-md px-3 text-body transition-colors hover:bg-kh-bg-hover data-[popup-open]:bg-kh-bg-hover"
-        >
-          <span className="hidden shrink-0 text-caption text-kh-text-muted sm:inline">Workspace</span>
-          <span className="min-w-0 flex-1 truncate text-left font-medium">{currentName}</span>
-          <ChevronDown className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />
-        </MenuTrigger>
+        {compact ? (
+          <Tooltip label={currentName} side="right">
+            <MenuTrigger
+              aria-label={`Workspace: ${currentName}`}
+              className="kh-control kh-focus-ring flex h-8 w-full items-center justify-center rounded-md transition-colors hover:bg-kh-bg-hover data-[popup-open]:bg-kh-bg-hover"
+            >
+              <span aria-hidden="true" className="flex h-6 w-6 items-center justify-center rounded-sm bg-kh-bg-selected text-caption font-semibold text-kh-selected-text">
+                {currentName.charAt(0).toUpperCase()}
+              </span>
+            </MenuTrigger>
+          </Tooltip>
+        ) : (
+          <MenuTrigger
+            aria-label={`Workspace: ${currentName}`}
+            className="kh-control kh-focus-ring flex min-h-8 w-full min-w-0 items-center gap-2 rounded-md px-2 text-body transition-colors hover:bg-kh-bg-hover data-[popup-open]:bg-kh-bg-hover"
+          >
+            <span className="min-w-0 flex-1 truncate text-left font-medium text-kh-text" title={currentName}>{currentName}</span>
+            <ChevronDown className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />
+          </MenuTrigger>
+        )}
         <MenuContent className="max-h-[min(24rem,calc(100dvh-5rem))] w-64 max-w-[calc(100vw-5rem)] overflow-auto">
           {personal.map(item)}
           <MenuGroup>

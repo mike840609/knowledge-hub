@@ -7,6 +7,7 @@ import { DocumentTopbarContext, type DocumentTopbarState } from "./document-topb
 import { Topbar } from "@/components/shell/topbar";
 import {UserMenu} from "./user-menu";
 import { PrimaryNav } from "@/components/shell/primary-nav";
+import { WorkspaceSelector } from "@/components/shell/workspace-selector";
 import { WorkspaceAuthorizationContext, useWorkspaceAuthorizationRefresh } from "./use-workspace-authorization";
 import { ArchivedWorkspaceBanner } from "@/components/workspaces/archived-workspace-banner";
 import { Drawer } from "@/components/ui/drawer";
@@ -92,6 +93,7 @@ export function AppShell({ model, children }: { model: WorkspaceShellModel; chil
       {authorization.access.workspace.lifecycleState === "ARCHIVED" && <ArchivedWorkspaceBanner workspaceId={model.workspace.id} canRestore={authorization.confirmed && authorization.access.actions.canRestore} />}
       <div className="flex min-h-0 flex-1">
         <aside className={`hidden shrink-0 border-r border-kh-border bg-kh-bg-sunken lg:flex lg:flex-col ${navCollapsed ? "w-12" : "w-40"}`}>
+          <div className="shrink-0 border-b border-kh-border p-2"><WorkspaceSelector workspaceId={model.workspace.id} compact={navCollapsed} /></div>
           <div className="min-h-0 flex-1 overflow-y-auto"><PrimaryNav workspaceId={model.workspace.id} compact={navCollapsed} /></div>
           <div className="shrink-0 border-t border-kh-border p-2"><UserMenu identityName={model.identityName} workspaceId={model.workspace.id} compact={navCollapsed}/></div>
         </aside>
@@ -101,6 +103,7 @@ export function AppShell({ model, children }: { model: WorkspaceShellModel; chil
         <div className="flex h-full min-h-0 flex-col" onClick={(event) => {
           if ((event.target as HTMLElement).closest("a") && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) setNavOpen(false);
         }}>
+          <div className="shrink-0 border-b border-kh-border pb-2"><WorkspaceSelector workspaceId={model.workspace.id} /></div>
           <PrimaryNav workspaceId={model.workspace.id} />
           <div ref={setMobileExplorerTarget} className="min-h-0 flex-1 overflow-y-auto" />
           <div className="shrink-0 border-t border-kh-border pt-3"><UserMenu identityName={model.identityName} workspaceId={model.workspace.id}/></div>

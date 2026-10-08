@@ -287,11 +287,11 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
           onClick={() => setOpen(true)}
           aria-label="Quick search"
           aria-keyshortcuts="Meta+K Control+K /"
-          className={buttonClasses({ variant: "ghost" })}
+          className="kh-control kh-focus-ring flex min-h-8 w-full min-w-0 items-center gap-2 rounded-md border border-transparent bg-kh-bg-hover px-2.5 text-kh-text-muted transition-colors hover:border-kh-border hover:text-kh-text"
         >
-          <Search className="h-4 w-4" aria-hidden="true" />
-          <span className="hidden text-body-sm sm:inline">Search</span>
-          <Kbd className="ml-3 hidden lg:inline">⌘K</Kbd>
+          <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1 truncate text-left text-body">Search<span className="hidden sm:inline">…</span></span>
+          <Kbd className="hidden shrink-0 lg:inline">⌘K</Kbd>
         </button>
       </Tooltip>
       <Dialog.Root open={open} onOpenChange={setOpen}>
