@@ -53,7 +53,7 @@ export default async function WorkspaceGraphPage({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col px-6 py-4">
+    <div className="flex h-full min-h-0 flex-col px-6 pb-4">
       <PageHeader location={shell.workspace.name} locationHref={`/w/${workspaceId}/knowledge`} title="Graph" />
       <div className="mt-3 min-h-0 flex-1">
         <GraphExplorer

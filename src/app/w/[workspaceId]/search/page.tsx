@@ -36,7 +36,7 @@ export default async function WorkspaceSearchPage({
     page: Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1,
   });
   return (
-    <main className="kh-page py-6">
+    <main className="kh-page pb-6">
       <PageHeader location={model.workspaceName} locationHref={`/w/${workspaceId}/knowledge`} title="Search" />
       <div className="mt-6">
         <SearchForm

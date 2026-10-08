@@ -13,7 +13,7 @@ export default async function HealthPage({
   const model = await getSourceHealth(workspaceId, sourceId, after);
   if (!model) notFound();
   return (
-    <main className="kh-page py-6">
+    <main className="kh-page pb-6">
       <SourceHealth model={model} />
     </main>
   );

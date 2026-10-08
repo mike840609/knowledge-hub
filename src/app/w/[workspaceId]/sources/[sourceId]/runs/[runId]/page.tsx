@@ -18,7 +18,7 @@ export default async function RunPage({
   );
   if (!detail) notFound();
   return (
-    <main className="kh-page py-6">
+    <main className="kh-page pb-6">
       <SyncRunDetailView detail={detail} />
     </main>
   );

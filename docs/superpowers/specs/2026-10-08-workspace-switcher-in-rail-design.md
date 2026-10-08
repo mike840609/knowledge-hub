@@ -64,6 +64,19 @@ search field.
   the explorer it aligned with exists only on document pages; it was replaced
   the same day.)*
 
+## Follow-ups in the same change
+
+- **Every page shares the top line.** `PageHeader`'s line is 48px and pages
+  that open with it drop their top padding, so a list or form page's
+  `location › title` sits on the rail's top line as a document's breadcrumb
+  does. (Before, it sat between 32px and 44px down, depending on the page.)
+- **The rail's current item is neutral.** It took the accent, as the explorer's
+  selected document does, and the two blue blocks side by side competed. It now
+  takes `bg-hover-strong` with full-strength text; the accent stays on the
+  explorer's selection, focus and primary actions.
+- **The account name has a tooltip at both rail widths**, since 160px usually
+  cuts it off.
+
 ## Not changed
 
 Shortcuts (`⌘K`, `/`, `⌘\`), the palette itself, the explorer's tree filter,

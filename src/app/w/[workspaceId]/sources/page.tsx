@@ -26,7 +26,7 @@ export default async function WorkspaceSourcesPage({
   })() : null;
   const limits = importRuntimeConfig().limits;
   return (
-    <main className="kh-page py-6">
+    <main className="kh-page pb-6">
       <PageHeader
         location={model.workspace.name}
         locationHref={`/w/${workspaceId}/knowledge`}
