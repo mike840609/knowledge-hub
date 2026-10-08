@@ -67,7 +67,7 @@ Added 2026-10-08, when the deployment target turned out to run MinIO already. `s
 - **The store verifies too.** S3's signed payload hash is the SHA-256 of the body, which is the object's key. `put` sends it as `x-amz-content-sha256`, so the bucket refuses bytes that do not match, on top of the adapter's own check while streaming.
 - **Start-up.** A bucket that answers and refuses (wrong keys, no such bucket) stops the server. One that cannot be reached is logged and the server starts: an outage of the image store must not take document text offline.
 - **The bucket is not created by the application**, except by `blobs.ts create-bucket` for local development and CI.
-- **Local stand-in.** `compose.yaml` has a `minio` service (`make storage-up`) using the `pgsty/minio` community fork, because MinIO Inc. withdrew `minio/minio` from Docker Hub and Quay in September 2026. It mimics a company MinIO; it is not a recommendation for production.
+- **Local stand-in.** `compose.yaml` has a `minio` service (`make storage-up`) using the `pgsty/minio` community fork, because MinIO Inc. withdrew `minio/minio` from Docker Hub and Quay in September 2026. It mimics a company MinIO; it is not a recommendation for production. Local development uses it by default (`.env.example`, `make dev`), so images are stored the same way in development as in production; e2e runs use a temporary directory unless `KM_TEST_S3_ENDPOINT` is set.
 
 ## 4. Data model
 

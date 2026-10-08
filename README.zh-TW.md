@@ -155,7 +155,7 @@ npx tsx scripts/db/cleanup-import-snapshots.ts
 | 儲存方式 | 設定 | 適用情況 |
 | --- | --- | --- |
 | S3 相容的 bucket（MinIO） | `KM_BLOB_S3_ENDPOINT`、`KM_BLOB_S3_BUCKET`、`KM_BLOB_S3_ACCESS_KEY`、`KM_BLOB_S3_SECRET_KEY`；選用 `KM_BLOB_S3_PREFIX`、`KM_BLOB_S3_REGION` | 已經有人維運物件儲存。任意數量的應用伺服器都能共用 |
-| 目錄 | `KM_BLOB_DIR` | 本機開發，或單一伺服器搭配持久化 volume |
+| 目錄 | `KM_BLOB_DIR` | 單一伺服器搭配持久化 volume，且沒有物件儲存 |
 
 **MinIO 或其他 S3 相容服務。** 請先建立 bucket，應用程式不會自動建立。金鑰需要能在該 bucket 讀取、寫入、刪除與列出物件（`s3:GetObject`、`s3:PutObject`、`s3:DeleteObject`、`s3:ListBucket`）。物件以 path-style 定址：`<endpoint>/<bucket>/<prefix>sha256/…`，請求以 Signature Version 4 簽章。設定 `KM_BLOB_S3_PREFIX`（例如 `knowledge-hub/prod`）可以讓多個部署共用同一個 bucket。endpoint 若使用內部 CA 簽發的憑證，請用 `NODE_EXTRA_CA_CERTS` 讓 Node 信任它。伺服器啟動時會檢查 bucket：金鑰錯誤或 bucket 不存在會讓伺服器停止啟動；endpoint 完全連不上則只記錄警告並照常啟動，避免圖片儲存中斷時連文件內容都無法閱讀。
 
@@ -167,7 +167,7 @@ KM_BLOB_S3_SECRET_KEY=...
 KM_BLOB_S3_PREFIX=knowledge-hub/prod
 ```
 
-**本機開發。** `make setup`（或 `make images-dir`）會建立 `.data/blobs` 並把 `KM_BLOB_DIR` 寫進 `.env`。若要改用物件儲存開發，`make storage-up` 會從 `compose.yaml` 啟動一個 MinIO 容器並建立 bucket；接著從 `.env` 移除 `KM_BLOB_DIR`，並把 `.env.example` 裡的四行 `KM_BLOB_S3_*` 複製過去取消註解。從本機 MinIO 換成公司的 MinIO，只需要改這幾個值。MinIO 管理介面在 `http://127.0.0.1:9001`。
+**本機開發**同樣使用 MinIO，讓圖片的儲存方式與正式環境一致。`.env.example` 已帶有對應 `compose.yaml` 中 MinIO 容器的四個 `KM_BLOB_S3_*` 設定，`make dev` 會啟動該容器並建立 bucket（`make storage-up`）。在這些設定出現之前建立的 `.env`，需要自行把那四行複製進去。從本機 MinIO 換成公司的 MinIO，只需要改這幾個值。MinIO 管理介面在 `http://127.0.0.1:9001`。
 
 **在 Kubernetes 上使用目錄。** 掛載一個 PersistentVolumeClaim，並把 `KM_BLOB_DIR` 指到掛載路徑。目錄必須在伺服器啟動前就存在，所以不要在映像檔裡預先建立它：沒掛上 volume 時應該直接啟動失敗，而不是寫進容器的檔案層。
 
