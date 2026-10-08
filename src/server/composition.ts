@@ -31,6 +31,7 @@ import { CleanupFolderImportsService } from "@/modules/sources/application/clean
 import { FinalizeFolderImportService } from "@/modules/sources/application/finalize-folder-import";
 import { GetFolderImportPreviewService } from "@/modules/sources/application/get-folder-import-preview";
 import { UploadFolderImportEntriesService } from "@/modules/sources/application/upload-folder-import-entries";
+import { BlobMaintenanceService } from "@/modules/sources/application/blob-maintenance";
 import { UploadFolderImportAssetService } from "@/modules/sources/application/upload-folder-import-asset";
 import type { BlobStore } from "@/modules/sources/ports/blob-store";
 import { configuredBlobStore } from "@/server/blob-store";
@@ -141,6 +142,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
   };
   return {
     blobs,
+    blobMaintenance: blobs ? new BlobMaintenanceService(unitOfWork, blobs) : null,
     documentImages: new DocumentImageService(unitOfWork),
     personalProfile: new PersonalProfileService(unitOfWork),
     agentContext: new AgentContextService(unitOfWork),

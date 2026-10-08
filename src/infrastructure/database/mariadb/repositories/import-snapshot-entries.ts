@@ -151,4 +151,13 @@ export class MariaDbImportSnapshotEntryRepository implements ImportSnapshotEntry
     await this.connection.query("DELETE FROM source_import_snapshot_entries WHERE snapshot_id=?", [snapshotId]);
     await this.insertMany(entries);
   }
+
+  async listActiveAssetHashes(): Promise<string[]> {
+    const rows = await this.connection.query<DbRow[]>(
+      `SELECT DISTINCT e.asset_content_hash hash FROM source_import_snapshot_entries e
+       JOIN source_import_snapshots s ON s.id = e.snapshot_id
+       WHERE e.entry_type = 'ASSET' AND e.asset_content_hash IS NOT NULL AND s.state IN ('BUILDING','READY')`,
+    );
+    return rows.map((row) => String(row.hash));
+  }
 }

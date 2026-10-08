@@ -99,3 +99,11 @@ db-reset: ## DANGER: wipe the dev database volume, then re-migrate + reseed.
 	$(COMPOSE) up -d --wait mariadb
 	npm run db:migrate
 	npm run db:seed
+
+.PHONY: blobs-gc
+blobs-gc: ## Remove stored images nothing refers to (older than 48 h).
+	npx tsx scripts/storage/blobs.ts gc
+
+.PHONY: blobs-verify
+blobs-verify: ## List stored images whose file is missing; `make blobs-verify REPAIR=1` re-uploads them on next sync.
+	npx tsx scripts/storage/blobs.ts verify $(if $(REPAIR),--repair,)
