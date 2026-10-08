@@ -1429,7 +1429,9 @@ async function shared(text = v1) {
   const result = await s.imports.apply.apply(fixtureCaller(), (await prepareImageImport(uow, blobs, ws, null, files(text))).snapshotId);
   if (result.kind !== "APPLIED") throw Error("fixture");
   const documentId = String((await pool.query("SELECT document_id FROM source_entries WHERE source_id=? AND source_path='guide.md'", [result.sourceId]))[0].document_id);
-  const link = await s.shares.create(fixtureCaller(), documentId, { label: "review" });
+  // The view carries the path `/s/<token>`, not the bare token.
+  const view = await s.shares.create(fixtureCaller(), { documentId, label: "review" });
+  const link = { id: view.id, token: view.path.split("/").pop()! };
   return { sourceId: result.sourceId, documentId, link };
 }
 const denied = (token: string, src: string) => expect(s.shares.readSharedImage(token, src)).rejects.toBeInstanceOf(ShareLinkNotFoundError);
@@ -1470,7 +1472,7 @@ it("refuses everything for a revoked, expired or malformed token and an archived
 });
 ```
 
-Before writing code, open `document-share-service.ts` and confirm the names this test uses: `create(caller, documentId, { label })` returning an object with `id` and `token`, and `revoke(caller, linkId)`. Adjust the three call sites if the signatures differ; the assertions do not change.
+`create` takes `(caller, { documentId, label })` and returns a view whose `path` is `/s/<token>`; `revoke` takes `(caller, linkId)`.
 
 In `tests/unit/share-link-single-exception.test.ts`:
 - first test: title becomes `"...except readShared and readSharedImage"` and the expectation `expect(offenders).toEqual(["document-share-service.ts#readShared", "document-share-service.ts#readSharedImage"]);`

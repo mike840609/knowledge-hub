@@ -69,12 +69,12 @@ const requiresCaller = (parameters: string) =>
 const namesCaller = (parameters: string) => /\bCallerContext\b/.test(parameters);
 
 describe("the share link is the single caller-less content path", () => {
-  it("every knowledge application entry that reads content takes a CallerContext, except readShared", () => {
+  it("every knowledge application entry that reads content takes a CallerContext, except readShared and readSharedImage", () => {
     const offenders = filesUnder("src/modules/knowledge/application")
       .flatMap(callables)
       .filter((callable) => readsContent(callable.body) && !requiresCaller(callable.parameters))
       .map((callable) => `${path.basename(callable.file)}#${callable.name}`);
-    expect(offenders).toEqual(["document-share-service.ts#readShared"]);
+    expect(offenders).toEqual(["document-share-service.ts#readShared", "document-share-service.ts#readSharedImage"]);
   });
 
   it("the web layer never reads revision repositories directly", () => {
@@ -104,7 +104,7 @@ describe("the share link is the single caller-less content path", () => {
     const callers = ["src/server", "src/app", "src/components"]
       .flatMap(filesUnder)
       .filter((file) => !file.endsWith(path.join("server", "composition.ts")))
-      .filter((file) => /\breadShared\s*\(|\bshareReadService\s*\(/.test(readFileSync(file, "utf8")));
+      .filter((file) => /\breadShared(?:Image)?\s*\(|\bshareReadService\s*\(/.test(readFileSync(file, "utf8")));
     expect(callers).toEqual([path.join("src", "server", "share-read.ts")]);
   });
 
@@ -161,4 +161,12 @@ describe("the share link is the single caller-less content path", () => {
     }
   });
 
+  it("blob bytes leave the store only through the image response", () => {
+    // Opening a blob takes a hash and no caller. Deciding who may see which
+    // image happens before it, in DocumentImageService and readSharedImage.
+    const openers = ["src/server", "src/app", "src/components"]
+      .flatMap(filesUnder)
+      .filter((file) => /\bblobs\.open\s*\(/.test(readFileSync(file, "utf8")));
+    expect(openers).toEqual([path.join("src", "server", "document-images.ts")]);
+  });
 });

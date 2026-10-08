@@ -87,8 +87,12 @@ pass.
   re-verify policy regardless of what the UI allowed. A UI selector is not an
   access check.
   A **document share link** is an owner-issued random UUIDv4, expiring,
-  revocable grant with three narrow paths: anonymous current-document read via
-  `/s/:token` and `DocumentShareService.readShared`, and review-record access
+  revocable grant with four narrow paths: anonymous current-document read via
+  `/s/:token` and `DocumentShareService.readShared`; the images that page
+  draws, via `/s/:token/asset` and `DocumentShareService.readSharedImage`,
+  limited to images the current revision references
+  (`docs/superpowers/specs/2026-10-08-folder-sync-images-design.md` §6.4);
+  review-record access
   via `/api/share-review/*`: query reads require a live token only; writes additionally require a trusted caller;
   and recipient-owned saved-share access via `/api/saved-shares/*` and the
   personal workspace saved-shares list. Saved-share operations always require a
@@ -101,11 +105,13 @@ pass.
   Review access never grants Workspace membership, search, tree, history,
   MCP, Markdown edits or revision writes. Review responses include only
   validated current-revision selected-text fragments; hidden bodies and
-  outdated quotes are excluded. Exactly two entries answer without a caller:
-  `readShared`, which serves the document, and `DocumentReviewService.queryForLink`,
-  which serves the visible discussion and those fragments. Every other entry,
-  and every write, requires one; `tests/unit/share-link-single-exception.test.ts`
-  enforces it.
+  outdated quotes are excluded. Exactly three entries answer without a caller:
+  `readShared`, which serves the document; `readSharedImage`, which serves an
+  image that document's current revision references and no other file; and
+  `DocumentReviewService.queryForLink`, which serves the visible discussion and
+  those fragments. Every other entry, and every write, requires one, and no
+  other code path may serve image bytes without a caller;
+  `tests/unit/share-link-single-exception.test.ts` enforces it.
 - **`org_code` does not decide access.** It answers which company org a user
   belongs to; workspace membership answers what they can open. Cross-org
   membership is legal and same-org membership is not automatic.

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { buttonClasses } from "@/components/ui/button";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { MarkdownImageBaseProvider } from "@/components/knowledge/markdown-image-base";
 import { MarkdownRenderer } from "@/components/knowledge/markdown-renderer";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
 import { Timestamp } from "@/components/ui/timestamp";
@@ -55,7 +56,9 @@ export default async function SharedDocumentPage({ params }: SharedPageProps) {
       </header>
       <SharedReviewPanel token={token} revisionId={shared.revisionId} markdown={shared.markdown}>
       <article data-review-document className="kh-reading-column min-w-0 pb-6 pt-6 [&>div>:first-child]:mt-0">
-        <MarkdownRenderer markdown={shared.markdown} />
+        <MarkdownImageBaseProvider base={`/s/${token}/asset`}>
+          <MarkdownRenderer markdown={shared.markdown} />
+        </MarkdownImageBaseProvider>
       </article>
       </SharedReviewPanel>
       <footer className="kh-reading-column pb-10 pt-4">
