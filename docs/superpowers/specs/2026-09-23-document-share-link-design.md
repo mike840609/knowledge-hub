@@ -177,6 +177,8 @@ Keep link rows and view counts forever; expiry/revocation are states, preserving
 
 ### 6.1 Sole entry point
 
+> **Amended 2026-10-08:** the page's images are a second caller-less route, `/s/:token/asset`, limited to the images the current revision draws. See `2026-10-08-folder-sync-images-design.md` §6.4.
+
 ```text
 GET /s/:token (server component, outside /w/ layout)
   → No establishTrustedCaller: anonymous readers are intentional
@@ -202,6 +204,8 @@ GET /s/:token (server component, outside /w/ layout)
 Do not allow every path beginning with `/s`, all of `/_next`, or `/api`. Those broaden anonymous entry. Other application routes still establish trusted callers, but that should not be the sole defense.
 
 ### 6.2 No expansion to other read surfaces
+
+> **Amended 2026-10-08:** the page's images are a second caller-less route, `/s/:token/asset`, limited to the images the current revision draws. See `2026-10-08-folder-sync-images-design.md` §6.4.
 
 No Workspace capability is granted. These hold without other code changes, but each needs assertions:
 

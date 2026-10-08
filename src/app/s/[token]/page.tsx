@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { MarkdownImageBaseProvider } from "@/components/knowledge/markdown-image-base";
 import { MarkdownRenderer } from "@/components/knowledge/markdown-renderer";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
 import { Timestamp } from "@/components/ui/timestamp";
@@ -25,7 +26,8 @@ export async function generateMetadata({ params }: SharedPageProps): Promise<Met
 }
 
 export default async function SharedDocumentPage({ params }: SharedPageProps) {
-  const shared = await getSharedDocument((await params).token);
+  const { token } = await params;
+  const shared = await getSharedDocument(token);
   if (!shared) notFound();
   return (
     <main className="min-h-screen bg-kh-bg">
@@ -42,7 +44,9 @@ export default async function SharedDocumentPage({ params }: SharedPageProps) {
         </div>
       </header>
       <article className="kh-reading-column min-w-0 pb-6 pt-6 [&>div>:first-child]:mt-0">
-        <MarkdownRenderer markdown={shared.markdown} />
+        <MarkdownImageBaseProvider base={`/s/${token}/asset`}>
+          <MarkdownRenderer markdown={shared.markdown} />
+        </MarkdownImageBaseProvider>
       </article>
     </main>
   );
