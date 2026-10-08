@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { ImageOff } from "lucide-react";
+import { MarkdownImageBase, imageUrl } from "./markdown-image-base";
 import { isAllowedMarkdownImageSrc } from "./markdown-image-policy";
 
 export function MarkdownImage({ src, alt }: { src?: string; alt?: string }) {
+  const base = useContext(MarkdownImageBase);
   const [failed, setFailed] = useState(false);
   // Issue #20: default-deny remote images. Blocked URLs render a "blocked"
   // placeholder and are never passed to <img>, so the browser issues no
@@ -37,7 +39,7 @@ export function MarkdownImage({ src, alt }: { src?: string; alt?: string }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={src}
+      src={imageUrl(base, src)}
       alt={alt ?? ""}
       loading="lazy"
       onError={() => setFailed(true)}
