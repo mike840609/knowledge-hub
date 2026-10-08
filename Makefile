@@ -6,6 +6,14 @@
 
 COMPOSE := docker compose
 ENV_FILE := .env
+BLOB_DIR := $(CURDIR)/.data/blobs
+# Local MinIO from compose.yaml; the same four settings a company MinIO needs.
+MINIO_ENDPOINT := http://127.0.0.1:9000
+MINIO_ACCESS_KEY := hcm_km_minio
+MINIO_SECRET_KEY := hcm_km_minio_dev
+MINIO_DEV_BUCKET := knowledge-hub-dev
+MINIO_TEST_BUCKET := knowledge-hub-test
+minio_env = KM_BLOB_DIR= KM_BLOB_S3_ENDPOINT=$(MINIO_ENDPOINT) KM_BLOB_S3_ACCESS_KEY=$(MINIO_ACCESS_KEY) KM_BLOB_S3_SECRET_KEY=$(MINIO_SECRET_KEY) KM_BLOB_S3_BUCKET=$(1)
 
 .PHONY: help
 help: ## Show this help.
@@ -15,6 +23,14 @@ help: ## Show this help.
 setup: ## Install dependencies and create .env from example (first time).
 	npm ci
 	@if [ ! -f $(ENV_FILE) ]; then cp .env.example $(ENV_FILE) && echo "Created $(ENV_FILE) from .env.example."; else echo "$(ENV_FILE) already exists, leaving it alone."; fi
+	@$(MAKE) --no-print-directory images-dir
+
+.PHONY: images-dir
+images-dir: ## Store synced folders' images locally: create .data/blobs and point KM_BLOB_DIR in .env at it.
+	@mkdir -p $(BLOB_DIR)
+	@if [ ! -f $(ENV_FILE) ]; then echo "$(ENV_FILE) is missing; run 'make setup' first."; exit 1; fi
+	@if grep -q '^KM_BLOB_DIR=' $(ENV_FILE); then echo "KM_BLOB_DIR is already set in $(ENV_FILE), leaving it alone."; \
+	else printf '\n# Local image storage, written by make images-dir. Absolute, so it works from any working directory.\nKM_BLOB_DIR=%s\n' "$(BLOB_DIR)" >> $(ENV_FILE) && echo "Set KM_BLOB_DIR=$(BLOB_DIR) in $(ENV_FILE)."; fi
 
 .PHONY: browsers
 browsers: ## Install Playwright Chromium (needed once for e2e tests).
@@ -23,6 +39,13 @@ browsers: ## Install Playwright Chromium (needed once for e2e tests).
 .PHONY: db-up
 db-up: ## Start MariaDB in Docker (waits until healthy).
 	$(COMPOSE) up -d --wait mariadb
+
+.PHONY: storage-up
+storage-up: ## Start local MinIO (S3-compatible image storage) and create its dev and test buckets.
+	$(COMPOSE) up -d minio
+	@for i in $$(seq 1 60); do curl -sf $(MINIO_ENDPOINT)/minio/health/live >/dev/null && break; [ $$i -eq 60 ] && { echo "MinIO did not become ready at $(MINIO_ENDPOINT)."; exit 1; }; sleep 1; done
+	@$(call minio_env,$(MINIO_DEV_BUCKET)) npx tsx scripts/storage/blobs.ts create-bucket
+	@$(call minio_env,$(MINIO_TEST_BUCKET)) npx tsx scripts/storage/blobs.ts create-bucket
 
 .PHONY: db-down
 db-down: ## Stop MariaDB (keeps the data volume).
@@ -77,8 +100,8 @@ test-unit: ## Unit tests (no database needed).
 	npm run test:unit
 
 .PHONY: test-integration
-test-integration: db-up ## Integration tests (needs MariaDB; uses root creds from .env.example defaults).
-	npm run test:integration
+test-integration: db-up storage-up ## Integration tests (needs MariaDB and MinIO; uses root creds from .env.example defaults).
+	KM_TEST_S3_ENDPOINT=$(MINIO_ENDPOINT) KM_TEST_S3_ACCESS_KEY=$(MINIO_ACCESS_KEY) KM_TEST_S3_SECRET_KEY=$(MINIO_SECRET_KEY) KM_TEST_S3_BUCKET=$(MINIO_TEST_BUCKET) npm run test:integration
 
 .PHONY: test-e2e
 test-e2e: db-up ## E2E tests: provisions an isolated DB, builds, runs Playwright (needs 'make browsers' once).
