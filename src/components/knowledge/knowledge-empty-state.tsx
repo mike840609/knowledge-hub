@@ -1,4 +1,5 @@
 "use client";
+import { PageHeader } from "@/components/shell/page-header";
 import { WorkspaceEmptyIllustration } from "@/components/knowledge/workspace-empty-illustration";
 
 import Link from "next/link";
@@ -36,7 +37,8 @@ export function KnowledgeEmptyState() {
   const first = actions[0];
 
   return (
-    <section>
+    <section className="kh-page pb-6">
+      <PageHeader location={access.workspace.type === "PERSONAL" ? "My Space" : access.workspace.name} locationHref={`/w/${access.workspace.id}/${access.workspace.type === "PERSONAL" ? "home" : "sources"}`} title="Knowledge" />
       <EmptyState
         icon={FileText} illustration={<WorkspaceEmptyIllustration kind="knowledge" />}
         title="No documents yet"

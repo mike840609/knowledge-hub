@@ -626,7 +626,6 @@ export function FolderImportForm({
           ) : null}
         </p>
       )}
-      <p className="mt-3 text-caption text-kh-text-muted">Hidden files and folders (such as .git, .obsidian and .trash) and node_modules are skipped.</p>
       {legacyPaths.length > 0 ? <div className="space-y-2"><p className="text-caption text-kh-text-muted">This browser has older exclusion settings. Review them before using them: {legacyPaths.join(", ")}</p><Button type="button" variant="secondary" disabled={busy || !scopeReady} onClick={() => { setExclusionText(legacyPaths.join("\n")); setLegacyPaths([]); }}>Use browser exclusions</Button></div> : null}
       <ImportExclusionsSettings value={exclusionText} onChange={setExclusionText} disabled={busy || !scopeReady} />
       {scopeError ? <p role="alert" className="mt-2 text-body text-kh-danger">{scopeError} Reload this page to retry.</p> : null}

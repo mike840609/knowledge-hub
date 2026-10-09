@@ -1,5 +1,6 @@
 "use client";
 
+import { GuidanceVisibilityContext } from "./guidance-visibility";
 import { ReopenGuidanceMenuItem } from "./reopen-guidance-menu-item";
 import { useState, type ReactNode } from "react";
 import { HomeUpdates } from "./home-updates";
@@ -76,7 +77,8 @@ function Row({ href, icon, title, timestamp, timeLabel, provenance, trailing, ac
   );
 }
 
-export function PersonalHome({ workspaceId, documents, drafts, updates={runs:[],nextCursor:null}, slots }: { slots?: { guidance?: ReactNode; reminders?: ReactNode }; workspaceId: string; documents: Doc[]; drafts: Draft[]; updates?:FolderUpdatesPage }) {
+export function PersonalHome({ workspaceId, documents, drafts, updates={runs:[],nextCursor:null}, slots, guidanceDismissed = false }: { guidanceDismissed?: boolean; slots?: { guidance?: ReactNode; reminders?: ReactNode }; workspaceId: string; documents: Doc[]; drafts: Draft[]; updates?:FolderUpdatesPage }) {
+  const [dismissed, setDismissed] = useState(guidanceDismissed);
   const { shortcuts, update } = useDocumentShortcuts(workspaceId);
   const hydrated = useHydrated();
   const { access, confirmed } = useWorkspaceAuthorization();
@@ -131,6 +133,7 @@ export function PersonalHome({ workspaceId, documents, drafts, updates={runs:[],
   }
 
   return (
+    <GuidanceVisibilityContext.Provider value={{ dismissed, setDismissed }}>
     <div className="kh-page space-y-6 pb-6">
       <PageHeader
         location="My Space"
@@ -159,7 +162,7 @@ export function PersonalHome({ workspaceId, documents, drafts, updates={runs:[],
               <TabsTab value="drafts" className="aria-selected:border-kh-primary aria-selected:text-kh-selected-text">Drafts{drafts.length > 0 ? ` ${drafts.length}` : ""}</TabsTab>
             </TabsList>
             <TabsPanel value="recent">
-              {recent.length > 0 ? documentRows(recent.slice(0, 5)) : <EmptyLine>Documents you open will appear here.</EmptyLine>}
+              {recent.length > 0 ? documentRows(recent.slice(0, 5)) : <EmptyLine>Documents you open will appear here.{documents.length === 0 && dismissed ? <ReopenGuidanceMenuItem workspaceId={workspaceId} surface="empty" /> : null}</EmptyLine>}
             </TabsPanel>
             <TabsPanel value="drafts">
               {resumeDrafts.length > 0 ? <ul onKeyDown={navigateListRows} className="space-y-0.5">
@@ -181,5 +184,6 @@ export function PersonalHome({ workspaceId, documents, drafts, updates={runs:[],
       </div>
       <ShareLinkDialogHost />
     </div>
+    </GuidanceVisibilityContext.Provider>
   );
 }

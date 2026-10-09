@@ -46,10 +46,14 @@ test("new users get actionable guidance on every empty page and can reopen Home 
   await expect(guide.getByText("0 of 4 steps complete", { exact: false })).toBeVisible();
   await guide.getByRole("button", { name: "Hide guidance" }).click();
   await expect(guide).toHaveCount(0);
+  await page.getByRole("button", { name: "Show getting started guide", exact: true }).click();
+  await expect(guide).toBeVisible();
+  await guide.getByRole("button", { name: "Hide guidance" }).click();
+  await expect(guide).toHaveCount(0);
   await page.getByRole("button", { name: "Home actions" }).click();
-  await expect(page.getByRole("menuitem", { name: "Getting started", exact: true })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Show getting started guide", exact: true })).toBeVisible();
   await page.screenshot({ path: `${output}/after-home-menu.png`, fullPage: false, animations: "disabled" });
-  await page.getByRole("menuitem", { name: "Getting started", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Show getting started guide", exact: true }).click();
   await expect(guide).toBeVisible();
   await page.reload();
   await expect(guide.getByText("0 of 4 steps complete", { exact: false })).toBeVisible();

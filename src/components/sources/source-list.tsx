@@ -18,11 +18,12 @@ export function SourceList({ workspaceId, items, limits }: { workspaceId: string
   const { access, confirmed } = useWorkspaceAuthorization();
   const accessConfirmed = confirmed && access.workspace.id === workspaceId;
   const canImport = accessConfirmed && access.actions.canImport;
+  const [showArchived, setShowArchived] = useState(false);
   const [attentionOnly, setAttentionOnly] = useState(false);
   const [sort, setSort] = useState("attention");
   const needsAttention = (item: SourceListItemModel) => !!item.pendingPreviewId || item.latestRun?.status === "FAILED";
   const attentionCount = items.filter(needsAttention).length;
-  const visible = items.filter(item => !attentionOnly || needsAttention(item)).sort((a,b) => {
+  const visible = items.filter(item => (showArchived || item.source.status === "ACTIVE") && (!attentionOnly || needsAttention(item))).sort((a,b) => {
     if (sort === "attention") return Number(needsAttention(b)) - Number(needsAttention(a)) || a.source.name.localeCompare(b.source.name);
     if (sort === "recent") return (b.latestSuccessfulRun?.completedAt?.getTime() ?? 0) - (a.latestSuccessfulRun?.completedAt?.getTime() ?? 0) || a.source.name.localeCompare(b.source.name);
     return a.source.name.localeCompare(b.source.name);
@@ -48,10 +49,11 @@ export function SourceList({ workspaceId, items, limits }: { workspaceId: string
     <div className="space-y-3">
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-kh-border pb-3">
       <label className="flex min-h-8 items-center gap-2 text-body-sm"><input className="kh-focus-ring accent-kh-primary" type="checkbox" checked={attentionOnly} onChange={e => setAttentionOnly(e.target.checked)} />Needs attention ({attentionCount})</label>
+    <label className="flex items-center gap-2 text-body-sm"><input type="checkbox" className="kh-focus-ring accent-kh-primary" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} />Show archived</label>
       <label className="flex items-center gap-2 text-caption text-kh-text-muted">Sort sources<Select aria-label="Sort sources" value={sort} onChange={e => setSort(e.target.value)}><option value="attention">Attention first</option><option value="name">Name</option><option value="recent">Last successful sync</option></Select></label>
     </div>
     <p role="status" className="text-caption text-kh-text-muted">{visible.length} of {items.length} sources{attentionOnly ? " · failed sync or awaiting Apply" : ""}</p>
-    {!visible.length ? <div className="space-y-2"><p className="text-body text-kh-text-muted">No sources need attention.</p><Button variant="ghost" size="sm" onClick={() => setAttentionOnly(false)}>Show all sources</Button></div> : null}
+    {!visible.length ? <div className="space-y-2"><p className="text-body text-kh-text-muted">No sources match these filters.</p>{attentionOnly ? <Button variant="ghost" size="sm" onClick={() => setAttentionOnly(false)}>Show all sources</Button> : null}</div> : null}
     <ul onKeyDown={navigateListRows} className="flex flex-col gap-1">
       {visible.map((item) => (
         <SourceListRow key={item.source.id} workspaceId={workspaceId} item={item} limits={limits} />

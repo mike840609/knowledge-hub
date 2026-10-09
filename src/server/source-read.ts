@@ -48,7 +48,7 @@ export async function getSourceListModel(workspaceId: string): Promise<SourceLis
   if (!actions.canInspectSources) return null;
   let sources: SourceView[];
   try {
-    sources = sortSourcesByName(await services.queries.listSources(caller, workspaceId));
+    sources = sortSourcesByName(await services.queries.listSources(caller, workspaceId, { includeArchived: true }));
   } catch {
     return null;
   }
@@ -92,9 +92,9 @@ export async function getSourceDetailModel(
     if (!workspace) return null;
     const { actions } = await services.workspaceAdmin.workspaceState(caller, workspaceId);
     if (!actions.canInspectSources) return null;
-    const source = await services.queries.getSource(caller, sourceId);
+    const source = await services.queries.getSource(caller, sourceId, { includeArchived: true });
     if (source.workspaceId !== workspaceId) return null;
-    const sources = await services.queries.listSources(caller, workspaceId);
+    const sources = await services.queries.listSources(caller, workspaceId, { includeArchived: true });
     if (!sources.some((candidate) => candidate.id === sourceId)) return null;
     const { runs, runActors } = await services.unitOfWork.run(async (repositories) => {
       const runs = await repositories.syncRuns.listBySourceId(sourceId, SOURCE_RUN_DETAIL_LIMIT);

@@ -48,9 +48,6 @@ export function SampleWikiImport({
   return (
     <div id="sample-wiki" role="group" aria-labelledby="sample-wiki-heading" className="mt-4 border-t border-kh-border pt-4">
       <h2 id="sample-wiki-heading" className="text-body font-medium text-kh-text">Try with a sample wiki</h2>
-      <p className="mt-1 text-body text-kh-text-muted">
-        Not sure what a folder should look like? Import a ready-made one and see Preview before anything is saved.
-      </p>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {SAMPLE_LOCALES.map(({ locale, label }) => (
           <Button key={locale} type="button" variant="secondary" lang={locale} disabled={disabled || loading} onClick={() => void choose(locale)}>

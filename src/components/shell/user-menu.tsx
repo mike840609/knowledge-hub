@@ -1,7 +1,9 @@
 "use client";
+import { useRef, useState } from "react";
+import { FeedbackReport } from "@/components/knowledge/feedback-report";
 import Link from "next/link";
 
-import { ChevronUp, Moon, Sun, UserRound, Settings, CircleHelp } from "lucide-react";
+import { ChevronUp, Moon, Sun, UserRound, Settings, CircleHelp, MessageSquareWarning } from "lucide-react";
 import {Tooltip} from "@/components/ui/tooltip";
 import { buttonClasses } from "@/components/ui/button";
 import {
@@ -26,10 +28,13 @@ import { useTheme, type Theme } from "./use-theme";
  * the theme is a personal preference held in this browser.
  */
 export function UserMenu({ identityName, workspaceId, compact = false, trigger = "account" }: { identityName: string; workspaceId?: string; compact?: boolean; trigger?: "account" | "preferences" }) {
+  const [reportOpen, setReportOpen] = useState(false);
+  const accountRef = useRef<HTMLButtonElement>(null);
   const { theme, setTheme } = useTheme();
 
   const accountTrigger=(
       <MenuTrigger
+        ref={accountRef}
         aria-label={trigger === "preferences" ? "Personal preferences" : `Account: ${identityName}`}
         className={buttonClasses({ variant: trigger === "preferences" ? "secondary" : "ghost", className: trigger === "preferences" ? "rounded-full" : compact ? "w-full justify-center px-0" : "w-full justify-start gap-2" })}
       >
@@ -38,6 +43,7 @@ export function UserMenu({ identityName, workspaceId, compact = false, trigger =
       </MenuTrigger>
   );
   return (
+    <>
     <MenuRoot>
       {/* The rail is 160px, so a full name is usually cut off; the tooltip says it whole, expanded or not. */}
       {trigger === "account" ? <Tooltip label={identityName} side={compact ? "right" : "top"}>{accountTrigger}</Tooltip> : accountTrigger}
@@ -72,7 +78,10 @@ export function UserMenu({ identityName, workspaceId, compact = false, trigger =
           </MenuRadioGroup>
         </MenuGroup>
         {workspaceId ? <><MenuSeparator /><MenuItem render={<Link href={`/w/${workspaceId}/help`} />}><span className="flex items-center gap-2"><CircleHelp className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />Help &amp; guides</span></MenuItem></> : null}
+        <MenuItem onClick={() => setReportOpen(true)}><span className="flex items-center gap-2"><MessageSquareWarning className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />Report a problem</span></MenuItem>
       </MenuContent>
     </MenuRoot>
+    <FeedbackReport open={reportOpen} onOpenChange={setReportOpen} returnFocus={accountRef} />
+    </>
   );
 }

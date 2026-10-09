@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { GuidanceVisibilityContext } from "./guidance-visibility";
+import { useContext, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MenuItem } from "@/components/ui/menu";
 import { useToast } from "@/components/ui/toast";
 
-export function ReopenGuidanceMenuItem({ workspaceId }: { workspaceId: string }) {
+export function ReopenGuidanceMenuItem({ workspaceId, surface = "menu" }: { workspaceId: string; surface?: "menu" | "empty" }) {
+  const visibility = useContext(GuidanceVisibilityContext);
   const [busy, setBusy] = useState(false);
   const router = useRouter();
   const toast = useToast();
@@ -22,13 +25,15 @@ export function ReopenGuidanceMenuItem({ workspaceId }: { workspaceId: string })
           method: "PUT", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ value: { schemaVersion: 1, dismissed: false }, version: preference.version }),
         });
-        if (!saved.ok) throw new Error("Unable to reopen guidance. Try Getting started again.");
+        if (!saved.ok) throw new Error("Unable to reopen guidance. Try showing the guide again.");
       }
+      visibility.setDismissed(false);
       router.refresh();
       toast({ message: "Getting started guide is open on Home." });
     } catch (error) {
       toast({ tone: "danger", message: error instanceof Error ? error.message : "Unable to reopen guidance. Try again." });
     } finally { setBusy(false); }
   }
-  return <MenuItem disabled={busy} onClick={() => void reopen()}>{busy ? "Opening guide…" : "Getting started"}</MenuItem>;
+  if (surface === "empty") return <Button variant="ghost" size="sm" disabled={busy} onClick={() => void reopen()}>{busy ? "Opening guide…" : "Show getting started guide"}</Button>;
+  return <MenuItem disabled={busy} onClick={() => void reopen()}>{busy ? "Opening guide…" : "Show getting started guide"}</MenuItem>;
 }

@@ -119,7 +119,7 @@ describe("Try with a sample wiki", () => {
     const group = container.querySelector("#sample-wiki");
     expect(group?.getAttribute("role")).toBe("group");
     expect(group?.textContent).toContain("Try with a sample wiki");
-    expect(group?.textContent).toContain("Not sure what a folder should look like? Import a ready-made one and see Preview before anything is saved.");
+    expect(group?.textContent).not.toContain("Not sure what a folder should look like?");
     expect([...group!.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["English", "繁體中文"]);
   });
 

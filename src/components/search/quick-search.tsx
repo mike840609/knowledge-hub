@@ -17,6 +17,8 @@ import {
   type Action,
 } from "@/components/actions/action-registry";
 import { prioritizePaletteActions } from "@/lib/palette-actions";
+import { HighlightedSearchText } from "./highlighted-search-text";
+import { parseSearchQuery } from "@/modules/knowledge/domain/search-query";
 import { plainSearchSnippet } from "@/lib/search-snippet";
 import { documentIdInPath, recentDocumentIds, toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import { buttonClasses } from "@/components/ui/button";
@@ -74,6 +76,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const trimmed = query.trim();
+  const terms = useMemo(() => parseSearchQuery(trimmed).terms, [trimmed]);
   const allHref = `/w/${workspaceId}/search${trimmed ? `?q=${encodeURIComponent(trimmed)}` : ""}`;
 
   const runAction = useActionRunner({
@@ -278,8 +281,8 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
   // search, the line that matched).
   const documentRow = (hit: QuickHit, index: number) => (
     <button type="button" onClick={() => choose({ kind: "hit", hit })} onMouseEnter={() => setActiveIndex(index)} className={`w-full rounded-md px-3 py-2 text-left kh-focus-ring ${index === activeIndex ? "bg-kh-bg-selected" : "hover:bg-kh-bg-hover"}`}>
-      <span className={`block truncate text-body font-medium ${index === activeIndex ? "text-kh-selected-text" : "text-kh-text"}`}>{hit.title}</span>
-      <span className="block truncate text-caption text-kh-text-muted">{hit.sourceName}{hit.snippet ? ` · ${plainSearchSnippet(hit.snippet, hit.snippetClipped)}` : ""}</span>
+      <span className={`block truncate text-body font-medium ${index === activeIndex ? "text-kh-selected-text" : "text-kh-text"}`}><HighlightedSearchText text={hit.title} terms={terms} /></span>
+      <span className="block truncate text-caption text-kh-text-muted">{hit.sourceName}{hit.snippet ? <> · <HighlightedSearchText text={plainSearchSnippet(hit.snippet, hit.snippetClipped)} terms={terms} /></> : null}</span>
     </button>
   );
 

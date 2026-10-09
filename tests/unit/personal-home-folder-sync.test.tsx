@@ -21,6 +21,8 @@ vi.mock("@/components/actions/action-menu", () => ({
   ),
   RowActionsTrigger: () => null,
 }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => {} }) }));
+vi.mock("@/components/ui/toast", () => ({ useToast: () => () => {} }));
 vi.mock("@/components/knowledge/share-link-dialog", () => ({
   ShareLinkDialogHost: () => null,
 }));
@@ -39,4 +41,12 @@ it("keeps reading and updates as the Home entry points, leaving search to the to
   expect(html).not.toContain("Knowledge freshness");
   expect(html).toContain("Browse knowledge");
   expect(html).toContain("Documents you open will appear here.");
+});
+
+it("offers inline guide recovery only when dismissed and the workspace has no documents", () => {
+  const render = (dismissed: boolean, documents: React.ComponentProps<typeof PersonalHome>["documents"] = []) =>
+    renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={documents} drafts={[]} guidanceDismissed={dismissed} />);
+  expect(render(true)).toContain("Show getting started guide");
+  expect(render(false)).not.toContain("Show getting started guide");
+  expect(render(true, [{ sourceId: "source", documentId: "doc", title: "Unread note", ownership: "HUB_MANAGED", status: "ACTIVE", sourceStatus: "ACTIVE", updatedAt: "2026-10-09T00:00:00Z" }])).not.toContain("Show getting started guide");
 });
