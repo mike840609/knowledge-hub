@@ -46,6 +46,7 @@ export function SourceListRow({ workspaceId, item, limits }: { workspaceId: stri
         <span className="shrink-0 text-caption text-kh-text-muted">
           {sourceTypeLabel(source.sourceType)}
         </span>
+        {source.status === "ARCHIVED" ? <Status kind="archived">Archived</Status> : null}
         {source.sourceType !== "HUB" ? (
           <span className="order-last inline-flex w-full flex-wrap items-center gap-1 text-caption text-kh-text-muted sm:order-none sm:w-auto sm:shrink-0">
             {latestRun ? <Status kind={syncStatusKind(latestRun.status)}>{syncStatusLabel(latestRun.status)}</Status> : null}

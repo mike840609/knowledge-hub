@@ -8,6 +8,7 @@ import { ImportHistory } from "@/components/sources/import-history";
 import { RememberedFolderRow } from "@/components/sources/remembered-folder-row";
 import { SourceSyncActions } from "@/components/sources/source-sync-actions";
 import { sourceTypeLabel } from "@/components/sources/source-list-row";
+import { SourceLifecycleActions } from "./source-lifecycle-actions";
 import { TechnicalDetails } from "@/components/sources/technical-details";
 
 export function SourceDetail({ model, showImportSuccess = false, limits }: { model: SourceDetailModel; showImportSuccess?: boolean; limits?: FolderImportClientLimits }) {
@@ -16,9 +17,7 @@ export function SourceDetail({ model, showImportSuccess = false, limits }: { mod
   return (
     <div className="flex flex-col gap-6">
       <PageHeader location="Sources" locationHref={`/w/${workspace.id}/sources`} title={source.name}
-        actions={syncable ? (
-          <SourceSyncActions workspaceId={workspace.id} sourceId={source.id} limits={limits} />
-        ) : undefined}
+        actions={<><span className="flex items-center gap-2">{syncable ? <SourceSyncActions workspaceId={workspace.id} sourceId={source.id} limits={limits} /> : null}<SourceLifecycleActions workspaceId={workspace.id} sourceId={source.id} sourceName={source.name} status={source.status} /></span></>}
       />
       {showImportSuccess ? (
         <p role="status" className="rounded-md border border-kh-success/40 bg-kh-bg px-3 py-2 text-body text-kh-success">
