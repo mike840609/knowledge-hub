@@ -279,6 +279,18 @@ input[type="search"]::-webkit-search-cancel-button:hover {
     @apply hidden;
   }
 
+  /* A pinned bar's lower edge: the content scrolling under it fades into the bar instead of meeting a rule.
+     Drawn below the bar (it never covers the bar itself), short enough not to swallow a line of text, and
+     click-through so what it lies over can still be selected and followed. Shown while `data-pinned`. */
+  .kh-fade-below::after {
+    content: "";
+    @apply pointer-events-none absolute inset-x-0 top-full h-4 opacity-0 transition-opacity duration-160 ease-out;
+    background: linear-gradient(to bottom, var(--kh-bg), transparent);
+  }
+  .kh-fade-below[data-pinned]::after {
+    @apply opacity-100;
+  }
+
   /* Three page containers, each with one job. Anything that fills a page
      uses one of them rather than spelling a width out. */
   .kh-reading-column {

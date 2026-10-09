@@ -20,7 +20,7 @@ test("keeps an active doc under an archived source readable in archived mode", a
   );
 
   // Persistent shell and persistent Source Tree survive on the archived route.
-  await expect(page.getByText("Knowledge Hub", { exact: true })).toBeVisible();
+  await expect(page.getByText("Knowledge Hub", { exact: true }).filter({ visible: true })).toBeVisible();
   const tree = page.getByRole("tree", { name: "Knowledge tree" });
   await expect(tree).toBeVisible();
   await page.getByRole("complementary", { name: "Knowledge explorer" }).getByLabel("Document display options").click();

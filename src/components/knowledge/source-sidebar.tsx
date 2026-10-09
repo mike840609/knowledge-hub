@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronRight, Clock3, FileText, MoreHorizontal, Plus, ListFilter, Star } from "lucide-react";
@@ -104,8 +104,15 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
   // from here, so the section reveals itself whenever the list grows rather
   // than only when this component was the one that did it.
   const previousFavorites = useRef(shortcuts.favorites);
+  // Counts the times the sections above the tree changed height on their own — the section opening itself here —
+  // as opposed to the reader opening or closing one. Only the former asks the tree to re-reveal the document
+  // being read: re-revealing after a reader's own click scrolled the explorer away from where they were.
+  const [shortcutsAutoOpened, setShortcutsAutoOpened] = useState(0);
   useEffect(() => {
-    if (shortcuts.favorites.length > previousFavorites.current.length) setFavoritesOpen(true);
+    if (shortcuts.favorites.length > previousFavorites.current.length) {
+      setFavoritesOpen(true);
+      setShortcutsAutoOpened((count) => count + 1);
+    }
     previousFavorites.current = shortcuts.favorites;
   }, [shortcuts.favorites, setFavoritesOpen]);
 
@@ -157,7 +164,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
   }
 
   return (
-    <aside aria-label="Knowledge explorer" aria-busy={!sidebarReady} className="kh-sidebar-surface flex h-full min-h-0 w-full shrink-0 flex-col gap-3 border-t border-kh-border lg:border-r lg:border-t-0 bg-kh-bg-sunken p-3">
+    <aside aria-label="Knowledge explorer" aria-busy={!sidebarReady} className="kh-sidebar-surface flex h-full min-h-0 w-full shrink-0 flex-col gap-3 border-t border-kh-border lg:border-r lg:border-t-0 bg-kh-bg-sunken px-3 pb-3 pt-2">
       <div className="flex shrink-0 items-center justify-between gap-2">
         <h2 className="px-2 text-caption font-medium text-kh-text-muted">Documents</h2>
         <div className="flex items-center gap-0.5">
@@ -257,7 +264,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
                   workspaceId={workspaceId}
                   sourceId={candidate.id}
                   selectedDocumentId={resolvedDocumentId}
-                  revealLayoutKey={`${favoritesOpen}:${favoriteKeys.length}:${recentOpen}:${recentKeys.length}:${filterOpen}`}
+                  revealLayoutKey={`${shortcutsAutoOpened}:${favoriteKeys.length}:${recentKeys.length}:${filterOpen}`}
                   includeArchived={showArchived}
                   query={candidate.name.toLowerCase().includes(needle) ? "" : query}
                   favoriteDocumentIds={favoriteDocumentIds}

@@ -350,7 +350,9 @@ export function DocumentDetailClient({
   const inspector = useContext(InspectorContext);
   const setDocumentTopbar = useContext(DocumentTopbarContext)?.setDocument;
   const pathname = usePathname();
-  const headerRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
+  // The header has scrolled away under the pinned breadcrumb.
+  const [scrolledPast, setScrolledPast] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   useScrollRestoration(contentRef, inspectorData.documentId);
   useScrollToHash(inspectorData.documentId);
@@ -429,6 +431,7 @@ export function DocumentDetailClient({
     startTransition(() => setDocumentTopbar(state));
     const observer = new IntersectionObserver(([entry]) => {
       const visible = !entry.isIntersecting && entry.boundingClientRect.bottom <= (entry.rootBounds?.top ?? 0);
+      setScrolledPast(visible);
       const next = { pathname, title, visible, onDetailsClick: openInspector, target };
       startTransition(() => setDocumentTopbar(next));
     }, { root, threshold: 0 });
@@ -445,8 +448,9 @@ export function DocumentDetailClient({
       inspectorOpen={inspectorOpen}
       inspector={<DocumentInspector open={inspectorOpen} onOpenChange={(open) => setInspectorOpen?.(open)} data={inspectorData} outline={outline} activeSlug={activeSlug} requestedTab={requestedTab} />}
     >
-      <div ref={headerRef}>
         <DocumentHeader
+          headerRef={headerRef}
+          pinned={scrolledPast}
           breadcrumb={breadcrumb}
           title={title}
           status={status}
@@ -461,7 +465,6 @@ export function DocumentDetailClient({
           syncHref={syncHref}
           contentOwnsTitle={contentOwnsTitle}
         />
-      </div>
       <OutlineDisclosure entries={outline} activeSlug={activeSlug} />
       {children}
     </DocumentPane>

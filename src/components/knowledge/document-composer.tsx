@@ -125,6 +125,16 @@ export function DocumentComposer({
   const pathname = usePathname();
   const paneRef = useRef<HTMLDivElement>(null);
   useScrollRestoration(paneRef, pathname);
+  // Whether the document has scrolled under the pinned command line, whose lower edge then fades it in.
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const pane = paneRef.current;
+    if (!pane) return;
+    const onScroll = () => setScrolled(pane.scrollTop > 0);
+    onScroll();
+    pane.addEventListener("scroll", onScroll, { passive: true });
+    return () => pane.removeEventListener("scroll", onScroll);
+  }, []);
   const { confirmed, access } = useWorkspaceAuthorization();
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   const [draftStatus, setDraftStatus] = useState<DraftStatus>("loading");
@@ -548,8 +558,8 @@ export function DocumentComposer({
         onKeyDown={onKeyDown}
         onSubmit={(event) => { event.preventDefault(); void save(); }}
       >
-        <div className="sticky top-0 z-10 border-b border-kh-border bg-kh-bg">
-        <div className="kh-reading-column py-3">
+        <div data-pinned={scrolled || undefined} className="kh-fade-below sticky top-0 z-10 bg-kh-bg">
+        <div className="kh-reading-column py-2">
           <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
             <DocumentBreadcrumb segments={[...location, { label: resolved.title || untitledLabel }]} />
             <div className="flex shrink-0 items-center gap-2">

@@ -131,7 +131,7 @@ export function PersonalHome({ workspaceId, documents, drafts, updates={runs:[],
   }
 
   return (
-    <div className="kh-page space-y-6 py-6">
+    <div className="kh-page space-y-6 pb-6">
       <PageHeader
         location="My Space"
         locationHref={`/w/${workspaceId}/home`}

@@ -7,6 +7,9 @@ import { ChevronRight } from "lucide-react";
  * right: a page is named where it sits rather than announced above it. It
  * was a breadcrumb, a 20px title and a subtitle stacked over ~76px, which
  * made every list and form page open like a document.
+ *
+ * That line is 48px and is the first thing on the page — the page adds no padding above it — so it sits on
+ * the same top line as the rail's wordmark row, as a document's breadcrumb does.
  */
 export function PageHeader({
   location,
@@ -24,7 +27,7 @@ export function PageHeader({
 }) {
   return (
     <header>
-      <div className="flex min-h-8 min-w-0 flex-wrap items-center justify-between gap-3">
+      <div className="flex min-h-12 min-w-0 flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-1 text-body">
           <nav aria-label="Breadcrumb" className="shrink-0 text-kh-text-muted">
             <Link href={locationHref} className="rounded-md hover:text-kh-text hover:underline kh-focus-ring">

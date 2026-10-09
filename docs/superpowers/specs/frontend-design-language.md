@@ -232,8 +232,12 @@ where it sits, the way the document header names a document, rather than
 announced above it. A form page may add one line saying what it does; a list
 page does not restate its own name.
 
-Page padding is `py-6`. `py-8` appeared on four sources pages for no reason
-anyone recorded. The `py-16` of a centred message state belongs to
+`PageHeader`'s line is 48px and is the first thing on its page: a page that
+opens with one has no top padding (`pb-6`, not `py-6`), so the line is centred
+on the same top line as the rail's wordmark row and a document's breadcrumb —
+with no topbar, that line is the window's top edge. A page that does not open
+with `PageHeader` keeps `py-6`. `py-8` appeared on four sources pages for no
+reason anyone recorded. The `py-16` of a centred message state belongs to
 `StatusMessage` and `EmptyState`, not to the pages that show one.
 
 ### Divergence: this ramp is tinted, the reference's is not
@@ -253,8 +257,11 @@ not correctness.
 
 ## 8. Colour
 
-One restrained accent, used for selected state, focus, primary action and
-active navigation. Hierarchy relies on weight, size, spacing and foreground
+One restrained accent, used for selected state, focus and primary action.
+The primary rail's current item is not one of them: it is marked with a neutral
+step above hover (`bg-hover-strong`, full-strength text, medium weight), so the
+accent on screen is the explorer's selected document rather than two accent
+blocks side by side competing for the eye. Hierarchy relies on weight, size, spacing and foreground
 level rather than decorative colour.
 
 ### Foreground levels
@@ -1173,4 +1180,4 @@ distinction that cannot be made with what exists, not to match a count.
 
 ## October 2026 remediation
 
-Desktop navigation keeps a 160px primary rail, collapsible to 48px, beside an independent 288px contextual explorer. The explorer starts below the global header and retains its full height when the primary rail collapses. Narrow screens use one Menu drawer. The topbar retains its original order: brand/collapse region matching the primary rail width, a separate workspace selector matching the 288px explorer width, then Search. Reader/composer share DocumentPane geometry and the composer pins Save/Cancel/Markdown and draft status inside its scrolling pane. See `2026-10-02-linear-remediation-design.md` for the coordinated contract. Kbd and graph action hints use `text-muted` to meet small-text contrast. Desktop controls retain 24/32/40px heights; coarse pointers get at least 40px physical targets through the shared control classes.
+Desktop navigation keeps a 160px primary rail, collapsible to 48px, beside an independent 288px contextual explorer. Wide screens have no topbar: rail, explorer and content all start at the top of the window, and the explorer retains its full height when the primary rail collapses. The primary rail opens with the wordmark and its collapse control, then the workspace switcher, then a Search row drawn like navigation. The reader pins its breadcrumb line (location › title, with Edit/Share/Details) to the top of the reading column while the rest of its header scrolls away. A pinned bar's lower edge is not a rule: while it is pinned, the content scrolling under it fades into it through a 16px gradient from `--kh-bg` to transparent (`.kh-fade-below`, in `globals.css`), drawn below the bar, click-through, and never taller than would swallow a line of text. The composer's pinned command line uses the same edge. The rule is for a page's pinned *top line* over reading or writing; a sticky table header and a pinned bottom action bar keep their rule, which separates a header from its rows and an action bar from the form it acts on. On a document page the rail's first row (wordmark), the explorer's first row (Documents) and the document's breadcrumb line are each 48px and centred on one line, so the three columns share one top edge. Narrow screens keep a topbar (Menu, search icon, and the document's title and actions once its header scrolls away) and one Menu drawer headed by the switcher (`2026-10-08-workspace-switcher-in-rail-design.md`). Reader/composer share DocumentPane geometry and the composer pins Save/Cancel/Markdown and draft status inside its scrolling pane. See `2026-10-02-linear-remediation-design.md` for the coordinated contract. Kbd and graph action hints use `text-muted` to meet small-text contrast. Desktop controls retain 24/32/40px heights; coarse pointers get at least 40px physical targets through the shared control classes.

@@ -35,7 +35,7 @@ export default async function UpdatesPage({
     next.set("run", page.nextCursor.runId);
   }
   return (
-    <main className="kh-page flex flex-col gap-5 py-6">
+    <main className="kh-page flex flex-col gap-5 pb-6">
       <PageHeader
         location="My Space"
         locationHref={`/w/${workspaceId}`}

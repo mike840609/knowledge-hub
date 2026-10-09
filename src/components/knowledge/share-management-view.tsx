@@ -58,7 +58,7 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
     if (await writeLinkToClipboard(item.path)) { toast({ message: "Link copied." }); setError(null); }
     else { setDetails(item.id); setManualCopy({ id: item.id }); setError({ code: "COPY_FAILED", message: "Clipboard unavailable. The link is selected; copy it manually." }); }
   }
-  return <main className="kh-page py-6">
+  return <main className="kh-page pb-6">
     <PageHeader location="My Space" locationHref={`/w/${workspaceId}/home`} title="Shares" description="Manage links to your documents. Anyone holding an active link can read its latest saved content without signing in." />
     <form action={`/w/${workspaceId}/shares`} method="get" className="mt-4 flex flex-wrap items-center gap-2" aria-label="Filter shares">
       <div className="relative min-w-0 basis-full sm:flex-1 sm:basis-auto">
