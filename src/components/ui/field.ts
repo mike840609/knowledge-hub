@@ -7,9 +7,13 @@ import { controlHeight, type ControlSize } from "./control";
  * fills with the canvas colour, so its border is the only thing that says a
  * control is there, and WCAG 1.4.11 asks for 3:1 on such a boundary. Every
  * field that was hand-rolled instead of imported got `border` and failed it.
+ *
+ * A field marked `aria-invalid` takes the danger colour on that same border, focused or not: three
+ * fields set the attribute and looked exactly as before. `font-normal` because a `Label` that wraps
+ * its field is medium, and form controls inherit weight.
  */
 const fieldBase =
-  "kh-focus-ring rounded-md border border-kh-border-strong bg-kh-bg text-kh-text transition-colors placeholder:text-kh-text-muted focus:border-kh-focus disabled:cursor-not-allowed disabled:opacity-50";
+  "kh-focus-ring rounded-md border border-kh-border-strong bg-kh-bg font-normal text-kh-text transition-colors placeholder:text-kh-text-muted focus:border-kh-focus aria-[invalid=true]:border-kh-danger disabled:cursor-not-allowed disabled:opacity-50";
 
 const fieldSizeClasses: Record<ControlSize, string> = {
   sm: `${controlHeight.sm} px-2 text-body-sm`,

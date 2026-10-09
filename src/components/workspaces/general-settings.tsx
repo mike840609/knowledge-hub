@@ -12,6 +12,7 @@ import {
   governanceRequest,
   type GovernanceFailure,
 } from "./governance-error";
+import { Label } from "@/components/ui/label";
 
 export function GeneralSettings({ team }: { team: TeamWorkspaceView }) {
   const router = useRouter();
@@ -66,7 +67,7 @@ export function GeneralSettings({ team }: { team: TeamWorkspaceView }) {
             });
           }}
         >
-          <label className="block text-body">
+          <Label>
             Team name
             <Input
               value={name}
@@ -76,7 +77,7 @@ export function GeneralSettings({ team }: { team: TeamWorkspaceView }) {
               aria-invalid={error?.field === "name"}
               onChange={(event) => setName(event.target.value)}
             />
-          </label>
+          </Label>
           <Button type="submit" disabled={busy || !confirmed || !name.trim()}>
             Save name
           </Button>

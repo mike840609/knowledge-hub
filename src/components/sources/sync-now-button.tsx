@@ -124,7 +124,7 @@ export function SyncNowButton({ workspaceId, sourceId, sourceName, limits, compa
     <span className={compact ? "contents" : "flex flex-wrap items-center gap-2"}>
       <Tooltip label={compact ? `Check for changes — scan ${meta.rootName}, then preview changes before Apply` : `Check for changes - re-scan ${meta.rootName}`}>
         <Button type="button" variant={compact ? "ghost" : "soft"} className={compact ? "group hover:!bg-kh-bg-selected hover:!text-kh-selected-text focus-visible:!bg-kh-bg-selected focus-visible:!text-kh-selected-text" : undefined} icon disabled={busy} aria-label={sourceName ? `Check for changes: ${sourceName}` : "Check for changes"} onClick={() => void handleSync()}>
-          <RefreshCw size={15} aria-hidden="true" className={busy ? "animate-spin motion-reduce:animate-none" : compact ? "transition-transform duration-200 ease-out group-hover:rotate-12 group-hover:scale-110 group-focus-visible:rotate-12 group-focus-visible:scale-110 motion-reduce:transform-none motion-reduce:transition-none" : undefined} />
+          <RefreshCw size={15} aria-hidden="true" className={busy ? "animate-spin motion-reduce:animate-none" : compact ? "transition-transform duration-160 ease-out group-hover:rotate-12 group-hover:scale-110 group-focus-visible:rotate-12 group-focus-visible:scale-110 motion-reduce:transform-none motion-reduce:transition-none" : undefined} />
         </Button>
       </Tooltip>
       {busy ? <Button type="button" variant="link" onClick={()=>activeImportRef.current?.abort()}>Cancel checking</Button> : null}

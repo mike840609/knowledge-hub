@@ -1,10 +1,11 @@
 "use client";
 import {useState} from "react";
 import Link from "next/link";
-import {Select} from "@/components/ui/select";
+import { SelectMenu } from "@/components/ui/select-menu";
 import {Timestamp} from "@/components/ui/timestamp";
 import {FRESHNESS_THRESHOLDS, knowledgeFreshness, type FreshnessThreshold} from "@/modules/personal/application/knowledge-freshness";
 import type {SourceListItemModel} from "@/server/source-read";
+import { Label } from "@/components/ui/label";
 
 export function FreshnessReminders({workspaceId,items,preference,now}: {workspaceId:string;items:SourceListItemModel[];preference:{thresholdDays:FreshnessThreshold;version:number};now:string}) {
   const [setting,setSetting]=useState(preference);
@@ -27,7 +28,7 @@ export function FreshnessReminders({workspaceId,items,preference,now}: {workspac
     <details>
       <summary className="kh-focus-ring w-fit cursor-pointer rounded-md text-caption text-kh-text-muted">Freshness reminder settings</summary>
       <div className="mt-2 space-y-2">
-        <label className="flex flex-wrap items-center gap-2 text-caption text-kh-text-muted">Review folders after<Select aria-label="Freshness threshold" value={setting.thresholdDays} disabled={saving} onChange={e=>void save(Number(e.target.value) as FreshnessThreshold)}>{FRESHNESS_THRESHOLDS.map(days=><option key={days} value={days}>{days === 7 ? "1 week" : days === 14 ? "2 weeks" : "1 month"}</option>)}</Select></label>
+        <Label inline className="flex-wrap">Review folders after<SelectMenu aria-label="Freshness threshold" value={setting.thresholdDays} disabled={saving} onValueChange={days=>void save(days)} options={FRESHNESS_THRESHOLDS.map(days=>({value:days,label:days === 7 ? "1 week" : days === 14 ? "2 weeks" : "1 month"}))} /></Label>
         <p className="text-caption text-kh-text-muted">Age reflects the last applied import. External folders are not checked automatically.</p>
       </div>
     </details>

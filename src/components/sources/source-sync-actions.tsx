@@ -59,7 +59,7 @@ export function SourceSyncActions({
             aria-label={sourceName ? `Update from folder: ${sourceName}` : "Update from folder"}
             className={buttonClasses({ variant: compact ? "ghost" : hasMemory ? "ghost" : "primary", icon: true, className: compact ? "group hover:!bg-kh-bg-selected hover:!text-kh-selected-text focus-visible:!bg-kh-bg-selected focus-visible:!text-kh-selected-text" : undefined })}
           >
-            <FolderUp size={15} aria-hidden="true" className={compact ? "transition-transform duration-200 ease-out group-hover:-translate-y-1 group-hover:scale-125 group-focus-visible:-translate-y-1 group-focus-visible:scale-125 motion-reduce:transform-none motion-reduce:transition-none" : undefined} />
+            <FolderUp size={15} aria-hidden="true" className={compact ? "transition-transform duration-160 ease-out group-hover:-translate-y-1 group-hover:scale-125 group-focus-visible:-translate-y-1 group-focus-visible:scale-125 motion-reduce:transform-none motion-reduce:transition-none" : undefined} />
           </WorkspaceImportLink>
         </Tooltip>
       ) : null}

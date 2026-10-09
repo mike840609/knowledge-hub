@@ -16,15 +16,20 @@ import type { ComponentProps, ReactNode } from "react";
  * modals and the command palette — and `popover` is the elevation.
  */
 
-const POPUP =
+export const menuPopupClasses =
   "z-50 min-w-[var(--anchor-width)] rounded-lg border border-kh-border bg-kh-bg p-1 shadow-popover outline-none " +
   "transition-[opacity,transform] duration-120 ease-out " +
   "data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0 " +
   "data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0";
 
-/** Rows sit on the control height so a menu reads as part of the same system. */
-const ROW =
-  "kh-control kh-focus-ring flex min-h-8 w-full cursor-default select-none items-center gap-2 rounded-md px-2 text-body text-kh-text " +
+/**
+ * Rows sit on the control height so a menu reads as part of the same system. `SelectMenu` reads both.
+ *
+ * No focus ring: the library moves focus to the row in force and marks it `data-highlighted`, so the
+ * fill is the focus indicator, for pointer and keys alike. A ring on top of it drew the row twice (§10).
+ */
+export const menuRowClasses =
+  "kh-control flex min-h-8 w-full cursor-default select-none items-center gap-2 rounded-md px-2 text-body text-kh-text outline-none " +
   "data-[highlighted]:bg-kh-bg-hover data-[disabled]:pointer-events-none data-[disabled]:opacity-50";
 
 export const MenuRoot = BaseMenu.Root;
@@ -43,14 +48,14 @@ export function MenuContent({
     <BaseMenu.Portal>
       {/* The positioned portal owns its stacking context, including when opened from a drawer. */}
       <BaseMenu.Positioner className="z-50" align={align} sideOffset={sideOffset} {...props}>
-        <BaseMenu.Popup className={`${POPUP} ${className}`}>{children}</BaseMenu.Popup>
+        <BaseMenu.Popup className={`${menuPopupClasses} ${className}`}>{children}</BaseMenu.Popup>
       </BaseMenu.Positioner>
     </BaseMenu.Portal>
   );
 }
 
 export function MenuItem({ className = "", ...props }: ComponentProps<typeof BaseMenu.Item>) {
-  return <BaseMenu.Item className={`${ROW} ${className}`} {...props} />;
+  return <BaseMenu.Item className={`${menuRowClasses} ${className}`} {...props} />;
 }
 
 /**
@@ -78,7 +83,7 @@ export function ContextMenuContent({
     <BaseContextMenu.Portal>
       <BaseContextMenu.Positioner className="z-50" {...props}>
         {/* Anchored to a point rather than a control, so it sizes to its rows. */}
-        <BaseContextMenu.Popup className={`${POPUP} min-w-48 ${className}`}>{children}</BaseContextMenu.Popup>
+        <BaseContextMenu.Popup className={`${menuPopupClasses} min-w-48 ${className}`}>{children}</BaseContextMenu.Popup>
       </BaseContextMenu.Positioner>
     </BaseContextMenu.Portal>
   );
@@ -87,7 +92,7 @@ export function ContextMenuContent({
 export function MenuGroupLabel({ className = "", ...props }: ComponentProps<typeof BaseMenu.GroupLabel>) {
   return (
     <BaseMenu.GroupLabel
-      className={`px-2 pb-1 pt-2 text-caption font-semibold text-kh-text-muted ${className}`}
+      className={`px-2 pb-1 pt-2 text-caption font-medium text-kh-text-muted ${className}`}
       {...props}
     />
   );
@@ -119,7 +124,7 @@ export function MenuRadioItem({
   ...props
 }: ComponentProps<typeof BaseMenu.RadioItem> & { children: ReactNode }) {
   return (
-    <BaseMenu.RadioItem className={`${ROW} ${className}`} closeOnClick={closeOnClick} {...props}>
+    <BaseMenu.RadioItem className={`${menuRowClasses} ${className}`} closeOnClick={closeOnClick} {...props}>
       <span className="flex h-4 w-4 shrink-0 items-center justify-center">
         <BaseMenu.RadioItemIndicator>
           <Check className="h-4 w-4 text-kh-selected-text" aria-hidden="true" />
@@ -137,7 +142,7 @@ export function MenuCheckboxItem({
   ...props
 }: ComponentProps<typeof BaseMenu.CheckboxItem> & { children: ReactNode }) {
   return (
-    <BaseMenu.CheckboxItem className={`${ROW} ${className}`} closeOnClick={closeOnClick} {...props}>
+    <BaseMenu.CheckboxItem className={`${menuRowClasses} ${className}`} closeOnClick={closeOnClick} {...props}>
       <span className="flex h-4 w-4 shrink-0 items-center justify-center">
         <BaseMenu.CheckboxItemIndicator>
           <Check className="h-4 w-4 text-kh-selected-text" aria-hidden="true" />
@@ -155,7 +160,7 @@ export function MenuSubTrigger({
   ...props
 }: ComponentProps<typeof BaseMenu.SubmenuTrigger> & { children: ReactNode }) {
   return (
-    <BaseMenu.SubmenuTrigger className={`${ROW} ${className}`} {...props}>
+    <BaseMenu.SubmenuTrigger className={`${menuRowClasses} ${className}`} {...props}>
       <span className="min-w-0 flex-1 truncate">{children}</span>
       <ChevronRight className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />
     </BaseMenu.SubmenuTrigger>

@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
+import { SelectMenu } from "@/components/ui/select-menu";
 import { useToast } from "@/components/ui/toast";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import type { GroupAdminView, TeamWorkspaceView } from "@/server/workspace-admin";
@@ -14,6 +14,7 @@ import {
   type GovernanceFailure,
 } from "./governance-error";
 import { GrantRowActions } from "./grant-row-actions";
+import { Label } from "@/components/ui/label";
 export function GroupsSettings({
   team,
   groups,
@@ -80,7 +81,7 @@ export function GroupsSettings({
           }}
         >
 
-          <label className="block text-body">
+          <Label>
             External group ID
             <Input
               value={externalGroupId}
@@ -88,21 +89,18 @@ export function GroupsSettings({
               disabled={busy || !confirmed}
               onChange={(event) => setExternalGroupId(event.target.value)}
             />
-          </label>
-          <label className="block text-body">
+          </Label>
+          <Label>
             Role
-            <Select
+            <SelectMenu
               className="ml-3"
               aria-label="New group role"
               value={chosenRole}
               disabled={busy || !confirmed}
-              onChange={(event) => setRole(event.target.value)}
-            >
-              {roles.map((value) => (
-                <option key={value}>{value}</option>
-              ))}
-            </Select>
-          </label>
+              onValueChange={setRole}
+              options={roles.map((value) => ({ value, label: value }))}
+            />
+          </Label>
           <Button type="submit" disabled={busy || !confirmed || !externalGroupId.trim()}>
             Add group mapping
           </Button>

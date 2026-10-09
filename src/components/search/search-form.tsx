@@ -6,6 +6,7 @@ import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { LiveSearchSubmit } from "./live-search-submit";
+import { Label } from "@/components/ui/label";
 
 /**
  * A plain GET form: shareable URLs, and it works without JavaScript. With
@@ -46,32 +47,32 @@ export function SearchForm({
       <details open={active.length > 0} className="border-b border-kh-border pb-3">
       <summary className="kh-focus-ring w-fit cursor-pointer rounded-md text-body-sm text-kh-text-secondary">Advanced filters{active.length ? ` (${active.length})` : ""}</summary>
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        <label htmlFor="search-path" className="text-caption text-kh-text-muted">Path
+        <Label htmlFor="search-path">Path
           <Input id="search-path" name="path" defaultValue={filters.path ?? ""} placeholder="docs/runbooks" className="mt-1" />
-        </label>
-        <label htmlFor="search-from" className="text-caption text-kh-text-muted">Updated from
+        </Label>
+        <Label htmlFor="search-from">Updated from
           <Input id="search-from" name="from" type="date" defaultValue={filters.from ?? ""} className="mt-1" />
-        </label>
-        <label htmlFor="search-to" className="text-caption text-kh-text-muted">Updated to
+        </Label>
+        <Label htmlFor="search-to">Updated to
           <Input id="search-to" name="to" type="date" defaultValue={filters.to ?? ""} className="mt-1" />
-        </label>
-        <label htmlFor="search-sort" className="text-caption text-kh-text-muted">Sort
-          <Select id="search-sort" name="sort" defaultValue={filters.sort ?? "relevance"} className="mt-1">
+        </Label>
+        <Label inline htmlFor="search-sort">Sort
+          <Select id="search-sort" name="sort" defaultValue={filters.sort ?? "relevance"}>
             <option value="relevance">Relevance</option><option value="newest">Newest first</option><option value="oldest">Oldest first</option>
           </Select>
-        </label>
+        </Label>
       </div>
       <SearchDateZone offset={filters.offset} />
       <div className="flex flex-wrap items-center gap-3">
-        <label className="inline-flex items-center gap-2 text-caption text-kh-text-muted" htmlFor="search-scope">
+        <Label inline htmlFor="search-scope">
           Scope
           <Select id="search-scope" name="scope" defaultValue={scope} className="max-w-[11rem]">
             <option value="workspace">This workspace</option>
             <option value="all" disabled={!teamsEnabled}>All my workspaces{teamsEnabled ? "" : " · Teams coming soon"}</option>
           </Select>
-        </label>
+        </Label>
         {scope === "workspace" && (
-          <label className="inline-flex items-center gap-2 text-caption text-kh-text-muted" htmlFor="search-source">
+          <Label inline htmlFor="search-source">
             Source
             <Select id="search-source" name="source" defaultValue={sourceId ?? ""} className="max-w-[11rem]">
               <option value="">All sources</option>
@@ -79,10 +80,10 @@ export function SearchForm({
                 <option key={source.id} value={source.id}>{source.name}</option>
               ))}
             </Select>
-          </label>
+          </Label>
         )}
         <label className="inline-flex min-h-8 items-center gap-2 rounded-md px-2 text-caption text-kh-text-muted hover:bg-kh-bg-hover">
-          <input type="checkbox" name="archived" value="1" defaultChecked={includeArchived} className="accent-kh-primary" />
+          <input type="checkbox" name="archived" value="1" defaultChecked={includeArchived} />
           Include archived
         </label>
       </div>

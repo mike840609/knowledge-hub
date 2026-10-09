@@ -1,4 +1,5 @@
 import {test,expect} from "@playwright/test";
+import {chooseOption,expectChosen} from "./fixtures/select-menu";
 import {mkdir} from "node:fs/promises";
 import path from "node:path";
 import {stageReadingFolder} from "./fixtures/folder-reading";
@@ -49,16 +50,16 @@ test("freshness preference persists and reminders link to source actions",async(
  await expect(row("Pending folder").getByRole("link",{name:"Review preview"})).toHaveAttribute("href",`/w/${ws}/sources/imports/${pending}`);
  await expect(row("Failed folder").getByRole("link",{name:"Retry import"})).toHaveAttribute("href",`/w/${ws}/sources/${sources["Failed folder"]}/update`);
  const saved=page.waitForResponse(r=>r.url().endsWith("/personal/freshness")&&r.request().method()==="PUT");
- await region.getByLabel("Freshness threshold").selectOption("30");expect((await saved).ok()).toBe(true);
+ await chooseOption(region.getByLabel("Freshness threshold"), "30");expect((await saved).ok()).toBe(true);
  await expect(row("Older folder").getByText("Check for folder updates",{exact:false})).toHaveCount(0);
- await page.reload();await region.getByText("Freshness reminder settings", {exact:true}).click();await expect(region.getByLabel("Freshness threshold")).toHaveValue("30");
- const changed=page.waitForResponse(r=>r.url().endsWith("/personal/freshness")&&r.request().method()==="PUT");await region.getByLabel("Freshness threshold").selectOption("7");expect((await changed).ok()).toBe(true);
+ await page.reload();await region.getByText("Freshness reminder settings", {exact:true}).click();await expectChosen(region.getByLabel("Freshness threshold"), "30");
+ const changed=page.waitForResponse(r=>r.url().endsWith("/personal/freshness")&&r.request().method()==="PUT");await chooseOption(region.getByLabel("Freshness threshold"), "7");expect((await changed).ok()).toBe(true);
  await expect(row("Older folder").getByText("Check for folder updates",{exact:false})).toBeVisible();
  await page.goto(`/w/${ws}/home`);
  await expect(page.getByRole("region",{name:"Knowledge freshness"})).toHaveCount(0);
  await expect(page.getByRole("region",{name:"Updates"}).getByRole("link",{name:/sources need attention/})).toHaveAttribute("href",`/w/${ws}/sources`);
  await page.goto(`/w/${ws}/sources`);
- await expect(region.getByLabel("Freshness threshold")).toHaveValue("7");
+ await expectChosen(region.getByLabel("Freshness threshold"), "7");
  const output=path.resolve("docs/ui-comparisons/mvp-freshness");await mkdir(output,{recursive:true});
  await page.setViewportSize({width:1440,height:1100});await page.screenshot({path:path.join(output,"desktop.png"),fullPage:true,animations:"disabled"});
  await page.setViewportSize({width:390,height:844});await region.scrollIntoViewIfNeeded();await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:path.join(output,"mobile.png"),fullPage:true,animations:"disabled"});

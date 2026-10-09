@@ -25,7 +25,7 @@ export function RevisionRestore({ documentId, href, historical, current, editabl
     } catch (e) { setError(governanceFailure(e)); setBusy(false); }
   }
   return <section className="mb-4 space-y-3 border-b border-kh-border pb-4">
-    <details><summary className="kh-focus-ring cursor-pointer text-body text-kh-link">Compare revision {historical.revisionNo} with current revision {current.revisionNo}</summary>
+    <details><summary className="kh-focus-ring rounded-md text-body text-kh-link">Compare revision {historical.revisionNo} with current revision {current.revisionNo}</summary>
       <div className="mt-3 space-y-3">
         <p className="text-caption text-kh-text-muted">{added} lines added · {removed} lines removed</p>
         <p className="text-caption text-kh-text-muted">Revision {historical.revisionNo}{historical.createdAt ? <> · <Timestamp value={historical.createdAt} /></> : null} → Revision {current.revisionNo}{current.createdAt ? <> · <Timestamp value={current.createdAt} /></> : null}</p>

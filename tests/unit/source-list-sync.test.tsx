@@ -66,14 +66,14 @@ it("offers just one action when the folder is remembered",async () => {
 
 it("puts sync before the detail link in keyboard order", async () => {
   await render([source("one")]);
-  const controls = [...container.querySelectorAll("button, a")];
+  const controls = [...container.querySelectorAll("li button, li a")];
   expect(controls[0]?.getAttribute("aria-label")).toBe("Check for changes: Source one");
   expect(controls[1]?.getAttribute("href")).toBe("/w/ws/sources/one");
 });
 
 it("explains source sync and the preview/apply step on focus", async () => {
   await render([source("one")]);
-  await act(async () => container.querySelector<HTMLButtonElement>("button")!.focus());
+  await act(async () => container.querySelector<HTMLButtonElement>("li button")!.focus());
   expect(document.body.textContent).toContain("Check for changes");
   expect(document.body.textContent).toContain("preview changes before Apply");
 });
@@ -105,7 +105,7 @@ it("offers a source-scoped retry after a failed sync", async () => {
 });
 it("offers folder reselection instead of retry when the saved folder is unavailable", async () => {
   state.handleAvailable=false;await render([source("one")]);
-  await act(async () => container.querySelector<HTMLButtonElement>("button")!.click());
+  await act(async () => container.querySelector<HTMLButtonElement>("li button")!.click());
   expect(container.querySelector('a[aria-label="Choose folder to sync: Source one"]')?.getAttribute("href")).toBe("/w/ws/sources/one/update");
   expect(container.querySelector('button[aria-label^="Retry sync"]')).toBeNull();
 });
@@ -114,7 +114,7 @@ it("shows scanning, upload counts, preview preparation, and the required Apply s
   let resolve!: (snapshot:string)=>void;
   state.run.mockImplementationOnce(() => new Promise<string>(r=>{resolve=r;}));
   await render([source("one")]);
-  await act(async () => container.querySelector<HTMLButtonElement>("button")!.click());
+  await act(async () => container.querySelector<HTMLButtonElement>("li button")!.click());
   const progress=state.run.mock.calls[0][0].onProgress;
   expect(container.querySelector('li [role="status"]')?.textContent).toContain("Apply is required");
   await act(async () => progress({kind:"UPLOADING",uploaded:2,total:5}));

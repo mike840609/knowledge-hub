@@ -21,6 +21,7 @@ import {
 } from "@/components/imports/folder-handle-store";
 import type { ImportManifestEntry } from "@/modules/sources/application/create-folder-import";
 import { DEFAULT_IMPORT_LIMITS, type ImportLimits } from "@/modules/sources/domain/import-limits";
+import { Label } from "@/components/ui/label";
 
 export type FolderImportTarget =
   | { kind: "new"; workspaceId: string }
@@ -607,7 +608,7 @@ export function FolderImportForm({
     <div className="rounded-md border border-kh-border bg-kh-bg p-4">
       {target.kind === "new" ? (
         <>
-          <label className="block text-body font-medium text-kh-text" htmlFor="import-source-name">Source name</label>
+          <Label htmlFor="import-source-name">Source name</Label>
           <Input
             id="import-source-name"
             className="mt-1"

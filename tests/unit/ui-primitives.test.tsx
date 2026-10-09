@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { dialogBackdropClasses, dialogPopupClasses, dialogSurfaceClasses } from "@/components/ui/dialog";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonClasses } from "@/components/ui/button";
@@ -6,7 +7,10 @@ import { controlHeight } from "@/components/ui/control";
 import { fieldClasses } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Kbd } from "@/components/ui/kbd";
+import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { SelectMenu } from "@/components/ui/select-menu";
+import { menuPopupClasses, menuRowClasses } from "@/components/ui/menu";
 import { Textarea } from "@/components/ui/textarea";
 import { selectableTabClasses, tabClasses, tabListClasses } from "@/components/ui/tab";
 
@@ -208,5 +212,124 @@ describe("Kbd", () => {
     expect(html).toMatch(/^<kbd class="[^"]*\brounded-sm\b[^"]*\bml-3"/);
     expect(html).toContain(">⌘K</kbd>");
     expect(html).not.toContain("rounded-md");
+  });
+});
+
+describe("button states", () => {
+  it("keeps a menu trigger lit while its menu is open", () => {
+    for (const variant of ["ghost", "secondary"] as const) {
+      expect(buttonClasses({ variant })).toContain("data-[popup-open]:bg-kh-bg-hover");
+    }
+  });
+
+  it("answers a press on the neutral variants with the step above hover", () => {
+    for (const variant of ["ghost", "secondary"] as const) {
+      expect(buttonClasses({ variant })).toContain("active:bg-kh-bg-hover-strong");
+    }
+  });
+
+  it("gives every filled or tinted variant a hover that differs from rest", () => {
+    for (const variant of ["primary", "secondary", "ghost", "soft", "danger"] as const) {
+      const classes = buttonClasses({ variant }).split(/\s+/);
+      const rest = classes.find((name) => name.startsWith("bg-"));
+      const hover = classes.find((name) => name.startsWith("hover:bg-"));
+      expect(hover).toBeDefined();
+      expect(hover).not.toBe(`hover:${rest}`);
+    }
+  });
+});
+
+describe("dialog surface", () => {
+  it("is the modal surface: xl radius and modal elevation, and nothing else decides them", () => {
+    for (const classes of [dialogSurfaceClasses, dialogPopupClasses("w-[min(26rem,92vw)]")]) {
+      expect(classes).toContain("rounded-xl");
+      expect(classes).toContain("shadow-modal");
+      expect(classes).toContain("outline-none");
+    }
+  });
+
+  it("centres a dialog and keeps the caller's width", () => {
+    const classes = dialogPopupClasses("w-[min(26rem,92vw)]");
+    expect(classes).toContain("top-1/2");
+    expect(classes).toContain("w-[min(26rem,92vw)]");
+  });
+
+  it("lets the palette name its own backdrop layer", () => {
+    expect(dialogBackdropClasses()).toContain("z-40");
+    expect(dialogBackdropClasses("z-50")).not.toContain("z-40");
+  });
+});
+
+describe("SelectMenu", () => {
+  const options = [{ value: "name", label: "Name" }, { value: "recent", label: "Last successful sync" }];
+  const html = renderToStaticMarkup(
+    <SelectMenu aria-label="Sort sources" value="recent" onValueChange={() => {}} options={options} />,
+  );
+
+  it("is a field while closed: the shared shape, boundary, height and focus idiom", () => {
+    expect(html).toContain("border-kh-border-strong");
+    expect(html).toContain("kh-focus-ring");
+    expect(html).toContain(controlHeight.md);
+    expect(html).toContain("rounded-md");
+  });
+
+  it("is not the native element, and names itself", () => {
+    expect(html).not.toContain("<select");
+    expect(html).toContain('aria-label="Sort sources"');
+  });
+
+  it("shows the label of what is chosen and carries its value", () => {
+    expect(html).toContain("Last successful sync");
+    expect(html).toContain('data-value="recent"');
+  });
+
+  it("keeps a disabled field disabled", () => {
+    const disabled = renderToStaticMarkup(
+      <SelectMenu aria-label="Sort sources" value="name" disabled onValueChange={() => {}} options={options} />,
+    );
+    expect(disabled).toMatch(/disabled|data-disabled/);
+  });
+
+  it("opens as a menu: the popup and rows are the menu's own", () => {
+    expect(menuPopupClasses).toContain("rounded-lg");
+    expect(menuPopupClasses).toContain("shadow-popover");
+    expect(menuRowClasses).toContain("min-h-8");
+  });
+
+  it("shows a row's focus as its fill alone, with no ring and no browser outline", () => {
+    expect(menuRowClasses).toContain("data-[highlighted]:bg-kh-bg-hover");
+    expect(menuRowClasses).toContain("outline-none");
+    expect(menuRowClasses).not.toContain("kh-focus-ring");
+  });
+});
+
+describe("field states and labels", () => {
+  it("marks an invalid field on its border, in the danger token, and only when it is invalid", () => {
+    expect(fieldClasses()).toContain("aria-[invalid=true]:border-kh-danger");
+    expect(fieldClasses({ multiline: true })).toContain("aria-[invalid=true]:border-kh-danger");
+  });
+
+  it("keeps what is typed at regular weight inside a medium label", () => {
+    expect(fieldClasses()).toContain("font-normal");
+  });
+
+  it("sets a multi-line field in the interface face unless the caller asks for code", () => {
+    expect(renderToStaticMarkup(<Textarea aria-label="Notes" />)).not.toContain("font-mono");
+    expect(renderToStaticMarkup(<Textarea aria-label="Paths" className="font-mono" />)).toContain("font-mono");
+  });
+
+  it("names a field above it: one step under body, medium, secondary", () => {
+    const html = renderToStaticMarkup(<Label htmlFor="name">Name</Label>);
+    expect(html).toMatch(/^<label class="block text-body-sm font-medium text-kh-text-secondary\s*" for="name">Name<\/label>$/);
+  });
+
+  it("captions a control beside it: caption size, muted, on one line", () => {
+    const html = renderToStaticMarkup(<Label inline>Sort sources</Label>);
+    expect(html).toContain("inline-flex items-center gap-2 text-caption text-kh-text-muted");
+    expect(html).not.toContain("font-medium");
+  });
+
+  it("keeps the caller's layout classes", () => {
+    expect(renderToStaticMarkup(<Label className="min-w-0 flex-1">Label</Label>)).toContain("min-w-0 flex-1");
   });
 });

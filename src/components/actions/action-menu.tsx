@@ -202,7 +202,6 @@ export function RowActionsTrigger({
     <MenuRoot>
       <MenuTrigger
         aria-label={`Actions for ${label}`}
-        title="Actions"
         className={buttonClasses({ variant: "ghost", icon: true, size: "sm", className })}
       >
         <MoreHorizontal size={15} aria-hidden="true" />

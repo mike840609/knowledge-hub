@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { chooseOption } from "./fixtures/select-menu";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type APIRequestContext } from "@playwright/test";
@@ -346,7 +347,7 @@ test("shows a blocker and disables apply", async ({ page, request }) => {
   // so it groups under "Unchanged" — the one group that starts collapsed under
   // the default All filter. Nothing else covers the filter select, so without
   // this the group would silently render collapsed and look empty.
-  await page.getByLabel("Filter changes").selectOption("warnings");
+  await chooseOption(page.getByLabel("Filter changes"), "warnings");
   const warningGroup = page.getByRole("region", { name: "Unchanged" });
   await expect(warningGroup.getByRole("button", { name: /Unchanged/ })).toHaveAttribute("aria-expanded", "true");
   await warningGroup.locator("details").filter({ has: page.getByText("INVALID_KNOWLEDGE_ID", { exact: true }) }).locator("summary").click();

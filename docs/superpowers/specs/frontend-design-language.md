@@ -523,6 +523,17 @@ the `lg` radius and `popover` elevation that §5 and §6 give floating surfaces.
 A section long enough that it should not sit open becomes a submenu rather
 than a nested disclosure.
 
+**A row in a menu shows focus as its fill, not as the ring.** This is the second
+place without the ring, after the composer's text (below), and for a different
+reason: Base UI moves focus to the row in force and marks it `data-highlighted`,
+for the pointer and the keys alike, so the hover fill already *is* the focus
+indicator. With the ring as well, a row reached by arrow key was drawn twice, a
+fill inside a 2px accent frame, and was the loudest thing on the surface. The
+reference shows the fill alone. The cost is stated rather than hidden: the fill
+is a quiet step against the popup, and a keyboard reader has less to see than
+the ring gave. `SelectMenu`'s rows are the same rows. The trigger that opens a
+menu keeps the ring.
+
 Choosing an option closes the menu. The exception is a choice whose effect is
 visible in the menu itself — picking a theme is the one case — where staying
 open lets the reader see what they did.
@@ -723,6 +734,22 @@ it is harder to catch than a hand-rolled copy because the import looks right.
 escaped the sweep that found the other twenty-one. If a call site needs a
 shape the primitive does not offer, the primitive gains a prop.
 
+**A dialog takes its surface from `components/ui/dialog.ts`.** The modal
+surface (`xl`, `modal`, the one enter and leave) was spelled out in six places:
+five dialogs and the command palette. `dialogPopupClasses()` is a centred
+dialog and takes only its width; `dialogSurfaceClasses` is the surface alone,
+for the palette, which is placed and padded differently. `Dialog` and
+`AlertDialog` are different roots, so it is the look that is shared, as with
+tabs.
+
+**A button says what state it is in.** Hover, pressed, and "my menu is open"
+are three states. The neutral variants (`ghost`, `secondary`) take the step
+above hover while pressed (`bg-hover-strong`) and keep the hover fill for as
+long as the menu they opened is showing (`data-popup-open`), so a menu never
+hangs off a trigger that looks idle. No variant's hover may equal its rest:
+`soft` shipped that way, and now deepens to `highlight`, the one accent tint
+above `bg-selected`. No colour token was added or changed for any of this.
+
 ### Controls sit on one height ladder
 
 24 / 32 / 40, named `sm` / `md` / `lg`, defined once in
@@ -752,14 +779,61 @@ opens from it and the button beside it were three unrelated heights. The
 reference's sidebar is denser still, at roughly 28px; `md` is the nearest rung,
 and a rung is not added for one surface.
 
-Every form field is `Input`, `Select` or `Textarea`, which share their shape
-through `fieldClasses()` in `components/ui/field.ts`. `Select` is a native
-`<select>`: the search page is a plain GET form that works without JavaScript,
+Every form field is `Input`, `Select`, `SelectMenu` or `Textarea`, which share
+their shape through `fieldClasses()` in `components/ui/field.ts`.
+
+**A choice among options has two spellings, and which one is decided by whether
+the form must work without JavaScript.** `SelectMenu`
+(`components/ui/select-menu.tsx`, Base UI's Select) is the default in a client
+component: closed it is a field, open it is a menu, with the popup and rows of
+`ui/menu.tsx` (`lg`, `popover`, rows on the control height), opening under the
+field. A native `<select>` gives its list to the platform, so the design
+language stopped at the moment the control was used; twelve such fields in
+settings, imports, the graph and the share dialog were native for no reason
+beyond having been written that way. It reports through `onValueChange` and has
+no `name`. It has no filter field; one is added when a list outgrows type-ahead.
+
+`Select` stays a native `<select>`, for a form that submits by GET: the search
+page, the Updates source filter and the shares status filter. For the first of
+those: the search page is a plain GET form that works without JavaScript,
 and every hand-rolled copy it replaces was native already. With JavaScript,
 that form searches as the reader types and its submit button goes
 (`LiveSearchSubmit`); the URL is still the state, so a search stays
 shareable, and without JavaScript the button and the GET remain. A multi-line field
 takes its height from `rows` rather than the ladder; only its padding scales.
+
+**A field has a name, and one way to be wrong.** `Label` (`components/ui/label.tsx`)
+is the name: above a field it is `body-sm`, medium, `text-secondary`; beside a
+control in a toolbar (`inline`) it is a `caption` in `text-muted`. The primitive
+existed and nothing used it, and twenty-four labels were spelled a dozen ways,
+most of them at body size in the primary colour, where a name read as a value.
+A label on a checkbox or radio row is the row and stays its own; a `sr-only`
+label is not seen. A field marked `aria-invalid` takes `danger` on its border,
+from `fieldClasses()`: three fields set the attribute and looked no different.
+The message still sits beside the field (see Feedback, below); the border says
+which field. `Textarea` is set in the interface face; a field for paths or
+Markdown asks for `font-mono` itself. It had been monospace for every caller,
+including the one that asks what went wrong.
+
+**A disclosure and a checkbox stay native, and are drawn.** `<details>` opens
+without script and a native checkbox keeps its checked state, its keys and its
+label's click; neither is rebuilt. What the platform drew is replaced, by two
+element rules in `globals.css`, so that no call site can be without them:
+
+- `summary` loses the platform's triangle and gains the icon set's chevron,
+  which turns a quarter as the disclosure opens (§9's short duration). Nineteen
+  disclosures each showed the browser's own marker. Every `summary` carries the
+  focus ring; two did not, and a test now reads the sources for it.
+- `input[type="checkbox"]` is a 14px box at the `sm` radius: `border-strong`
+  while empty, since the border is all that says a control is there (§6), and
+  the primary fill with a check in `on-primary` once ticked. `accent-color` on
+  the platform's box is gone; it coloured a shape that was still the operating
+  system's. The editor's task marker is the same box, where it had been the
+  glyphs `☐` and `☑`.
+
+Both glyphs are masks over a colour token, from files in `public/icons`, for
+the reason the select's chevron is a gradient: `img-src 'self'` refuses `data:`
+images (§13).
 
 ### Tabs come in two kinds and share only their look
 

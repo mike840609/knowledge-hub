@@ -36,7 +36,7 @@ export function UserMenu({ identityName, workspaceId, compact = false, trigger =
       <MenuTrigger
         ref={accountRef}
         aria-label={trigger === "preferences" ? "Personal preferences" : `Account: ${identityName}`}
-        className={buttonClasses({ variant: trigger === "preferences" ? "secondary" : "ghost", className: trigger === "preferences" ? "rounded-full" : compact ? "w-full justify-center px-0" : "w-full justify-start gap-2" })}
+        className={buttonClasses({ variant: trigger === "preferences" ? "secondary" : "ghost", className: trigger === "preferences" ? "" : compact ? "w-full justify-center px-0" : "w-full justify-start gap-2" })}
       >
         {trigger === "preferences" ? <><Settings className="h-4 w-4 shrink-0" aria-hidden="true"/><span className="profile-preferences-label">Preferences</span></> : <><UserRound className="h-4 w-4 shrink-0" aria-hidden="true" />
         {!compact ? <><span className="min-w-0 flex-1 truncate text-left">{identityName}</span><ChevronUp className="h-4 w-4 shrink-0" aria-hidden="true" /></> : null}</>}

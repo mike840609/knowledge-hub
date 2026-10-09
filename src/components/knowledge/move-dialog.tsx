@@ -9,6 +9,7 @@ import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/applicat
 import { organizeFailure } from "./organize-messages";
 import { MOVE_REQUEST_EVENT, requestRevealFolder, type MoveRequest } from "./move-request";
 import { useTreeMutations } from "./use-tree-mutations";
+import { dialogBackdropClasses, dialogPopupClasses } from "@/components/ui/dialog";
 
 type Collections = { source: SourceView; tree: KnowledgeTreeItem[] }[];
 
@@ -110,8 +111,8 @@ function MoveDialog({ request, collections, onClose }: { request: MoveRequest | 
   return (
     <Dialog.Root open={request !== null} onOpenChange={(next) => { if (!next && !busy) onClose(); }}>
       <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 z-40 bg-kh-overlay transition-opacity duration-120 ease-out data-[starting-style]:opacity-0 data-[ending-style]:opacity-0" />
-        <Dialog.Popup className="fixed left-1/2 top-1/2 z-50 w-[min(26rem,92vw)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-kh-border bg-kh-bg p-6 shadow-modal outline-none transition-[opacity,transform] duration-120 ease-out data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0">
+        <Dialog.Backdrop className={dialogBackdropClasses()} />
+        <Dialog.Popup className={dialogPopupClasses("w-[min(26rem,92vw)]")}>
           <Dialog.Title className="text-title font-semibold">{kind === "folder" ? "Move folder" : "Move document"}</Dialog.Title>
           {found ? (
             <>

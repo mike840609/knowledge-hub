@@ -182,7 +182,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
             </button>
           </Tooltip>
           <MenuRoot>
-            <MenuTrigger aria-label="Document display options" title="Document display options" className={buttonClasses({ variant: "ghost", icon: true })}>
+            <MenuTrigger aria-label="Document display options" className={buttonClasses({ variant: "ghost", icon: true })}>
               <MoreHorizontal size={17} aria-hidden="true" />
             </MenuTrigger>
             <MenuContent align="end" className="w-52">
