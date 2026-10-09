@@ -80,7 +80,7 @@ export function SyncRunDetailView({ detail }: { detail: SyncRunDetail }) {
               ))}
               {c.diff ? (
                 <details className="mt-2 text-caption">
-                  <summary className="cursor-pointer text-kh-link">
+                  <summary className="kh-focus-ring rounded-md text-kh-link">
                     View changes
                   </summary>
                   {c.diff.titleChanges ? (
@@ -128,7 +128,7 @@ export function SyncRunDetailView({ detail }: { detail: SyncRunDetail }) {
         </ul>
       )}
       <details className="text-caption">
-        <summary className="cursor-pointer">Sync summary</summary>
+        <summary className="kh-focus-ring rounded-md">Sync summary</summary>
         <pre className="overflow-auto">
           {JSON.stringify(run.summary, null, 2)}
         </pre>

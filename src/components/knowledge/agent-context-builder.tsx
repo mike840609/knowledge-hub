@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { navigateListRows } from "@/lib/list-row-navigation";
+import { Label } from "@/components/ui/label";
 export type ContextChoice = { documentId: string; sourceId: string; title: string; sourceName: string; sourcePath: string | null };
 export function AgentContextBuilder({ workspaceId, documents, initialDocumentId }: { workspaceId: string; documents: ContextChoice[]; initialDocumentId?: string }) {
   const { access, confirmed } = useWorkspaceAuthorization();
@@ -59,13 +60,13 @@ export function AgentContextBuilder({ workspaceId, documents, initialDocumentId 
     <p className="text-body text-kh-text-secondary">Select up to 20 saved documents to prepare Markdown for your Agent. Maximum 256 KiB. Review the content before copying.</p>
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
     <section aria-label="Available documents" className="min-w-0 space-y-3">
-    <label htmlFor="context-search" className="block text-caption text-kh-text-muted">Find documents<Input id="context-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Title, source or path" className="mt-1" /></label>
+    <Label htmlFor="context-search">Find documents<Input id="context-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Title, source or path" className="mt-1" /></Label>
     <p className="text-caption text-kh-text-muted">{selected.length} selected · {matches.length} matching documents{matches.length > 100 ? " · showing the first 100; narrow your search" : ""}</p>
 
     <ul aria-label="Documents for Agent" className="max-h-[28rem] space-y-0.5 overflow-y-auto overscroll-contain" onKeyDown={navigateListRows}>
       {visible.map(d => <li key={d.documentId} className="flex items-center gap-3 rounded-md px-3 py-2 hover:bg-kh-bg-hover">
         <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-body">
-          <input type="checkbox" className="kh-focus-ring accent-kh-primary" aria-label={`Select ${d.title} · ${d.sourceName}${d.sourcePath ? ` · ${d.sourcePath}` : ""}`} checked={selected.includes(d.documentId)} disabled={busy || (!selected.includes(d.documentId) && selected.length >= 20)} onChange={() => toggle(d.documentId)} />
+          <input type="checkbox" aria-label={`Select ${d.title} · ${d.sourceName}${d.sourcePath ? ` · ${d.sourcePath}` : ""}`} checked={selected.includes(d.documentId)} disabled={busy || (!selected.includes(d.documentId) && selected.length >= 20)} onChange={() => toggle(d.documentId)} />
           <span className="min-w-0"><span className="block truncate text-kh-text">{d.title}</span><span className="block truncate text-caption text-kh-text-muted">{[d.sourceName, d.sourcePath].filter(Boolean).join(" · ")}</span></span>
         </label>
         <Link data-list-row className="kh-focus-ring rounded-md text-caption text-kh-link" href={`/w/${workspaceId}/knowledge/${d.sourceId}/${d.documentId}`}>Read</Link>
@@ -80,6 +81,6 @@ export function AgentContextBuilder({ workspaceId, documents, initialDocumentId 
     </aside>
     </div>
     {error ? <p role="alert" className="text-body text-kh-danger">{error}</p> : null}
-    {bundle ? <section aria-label="Context preview" className="space-y-2"><p className="text-caption text-kh-text-muted">{bundle.documentCount} documents · {bundle.bytes.toLocaleString()} bytes · saved revisions only</p><label htmlFor="agent-context-preview" className="block text-body">Markdown preview</label><div ref={preview}><Textarea id="agent-context-preview" value={bundle.markdown} readOnly rows={16} /></div></section> : null}
+    {bundle ? <section aria-label="Context preview" className="space-y-2"><p className="text-caption text-kh-text-muted">{bundle.documentCount} documents · {bundle.bytes.toLocaleString()} bytes · saved revisions only</p><Label htmlFor="agent-context-preview">Markdown preview</Label><div ref={preview}><Textarea id="agent-context-preview" className="font-mono" value={bundle.markdown} readOnly rows={16} /></div></section> : null}
   </div>;
 }

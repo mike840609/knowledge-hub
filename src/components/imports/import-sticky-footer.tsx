@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import type { ImportPreview } from "@/modules/sources/application/reconcile-import-snapshot";
 import { adoptPendingHandle } from "@/components/imports/folder-handle-store";
 import { buttonClasses } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 
 export type ApplyFailure = { code: string; message: string; latchStale: boolean };
 
@@ -143,9 +144,9 @@ export function ImportStickyFooter({
 
   return (
     <div className="sticky bottom-0 -mx-6 border-t border-kh-border bg-kh-bg px-6 py-3">
-      {preview.safety?.highRisk && allowed ? <label className="mx-auto mb-3 block max-w-page text-body">Type <strong>{preview.sourceName}</strong> to confirm this folder scope
+      {preview.safety?.highRisk && allowed ? <Label className="mx-auto mb-3 max-w-page">Type <strong>{preview.sourceName}</strong> to confirm this folder scope
         <Input aria-label="Confirm source name" value={sourceConfirmation} onChange={e=>setSourceConfirmation(e.target.value)} autoComplete="off" className="ml-2 rounded-md border border-kh-border bg-kh-bg px-2 py-1 text-kh-text kh-focus-ring" />
-      </label> : null}
+      </Label> : null}
       <div className="mx-auto flex max-w-page flex-wrap items-center justify-between gap-3">
         <Link
           href={cancelHref}

@@ -7,8 +7,9 @@ import type { ImportPreviewChange } from "@/modules/sources/domain/import-plan";
 import { ImportChangeGroup } from "@/components/imports/import-change-group";
 import { ImportStickyFooter } from "@/components/imports/import-sticky-footer";
 import { ImportSummary } from "@/components/imports/import-summary";
-import { Select } from "@/components/ui/select";
+import { SelectMenu } from "@/components/ui/select-menu";
 import { ImportWarningSummary } from "@/components/imports/import-warning-summary";
+import { Label } from "@/components/ui/label";
 
 type ChangeGroupKey = "added" | "updated" | "moved" | "archived" | "unchanged";
 
@@ -108,21 +109,15 @@ export function ImportPreview({
       {preview.safety ? <ImportSafetyWarning safety={preview.safety} /> : null}
       <ImportWarningSummary preview={preview} />
       <div className="flex items-center gap-2 text-body">
-        <label htmlFor="import-change-filter" className="font-medium text-kh-text-muted">
+        <Label inline htmlFor="import-change-filter">
           Filter changes
-        </label>
-        <Select
+        </Label>
+        <SelectMenu
           id="import-change-filter"
-         
           value={filter}
-          onChange={(event) => setFilter(event.target.value as ChangeFilter)}
-        >
-          {FILTER_META.map((option, index) => (
-            <option key={option.value} value={option.value}>
-              {option.label} ({counts[index]})
-            </option>
-          ))}
-        </Select>
+          onValueChange={setFilter}
+          options={FILTER_META.map((option, index) => ({ value: option.value, label: `${option.label} (${counts[index]})` }))}
+        />
       </div>
       {/*
         Under an explicit filter every surviving group is what the user asked

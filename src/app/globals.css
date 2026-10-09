@@ -176,6 +176,47 @@ input[type="search"]::-webkit-search-cancel-button:hover {
     @apply kh-focus-ring rounded-md transition-colors hover:bg-kh-bg-hover focus-within:bg-kh-bg-hover;
   }
 
+  /* A disclosure is the native <details>: it opens without script and the browser owns its keys and its
+     state. Only the marker is ours — the platform's triangle is swapped for the icon set's chevron, which
+     turns as it opens. Drawn as a mask, like the search field's clear button, so it takes its colour from
+     a token and `img-src 'self'` is not loosened. An element rule, so no disclosure can be without it. */
+  summary {
+    @apply cursor-pointer list-none;
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+  summary::before {
+    content: "";
+    @apply mr-1 inline-block h-3.5 w-3.5 shrink-0 bg-kh-text-muted transition-transform duration-120 ease-out;
+    vertical-align: -2px;
+    -webkit-mask: url("/icons/chevron-right.svg") center / contain no-repeat;
+    mask: url("/icons/chevron-right.svg") center / contain no-repeat;
+  }
+  details[open] > summary::before {
+    transform: rotate(90deg);
+  }
+
+  /* A checkbox is the native input, drawn: `sm` radius (inline chrome), the control boundary while empty,
+     the primary fill and a check in `on-primary` once ticked. Checked state, keys and the label's click
+     stay the browser's. An element rule for the same reason as the disclosure's. */
+  input[type="checkbox"] {
+    @apply kh-focus-ring inline-grid h-3.5 w-3.5 shrink-0 cursor-pointer appearance-none place-content-center rounded-sm border border-kh-border-strong bg-kh-bg transition-colors;
+    vertical-align: -2px;
+  }
+  input[type="checkbox"]:checked {
+    @apply border-kh-primary bg-kh-primary;
+  }
+  input[type="checkbox"]:checked::after {
+    content: "";
+    @apply h-2.5 w-2.5 bg-kh-on-primary;
+    -webkit-mask: url("/icons/check.svg") center / contain no-repeat;
+    mask: url("/icons/check.svg") center / contain no-repeat;
+  }
+  input[type="checkbox"]:disabled {
+    @apply cursor-not-allowed opacity-50;
+  }
+
   /* The rendered editor (composer spec §11). The reader's prose classes are on the
      element itself; these are the parts React gives the reader as components. */
   .kh-editor {
@@ -236,12 +277,21 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-editor li[data-item-type="task"] {
     @apply relative list-none pl-6;
   }
+  /* The marker is the checkbox above, drawn on the item: the editor has no input here to style. */
   .kh-editor li[data-item-type="task"]::before {
-    content: "☐";
-    @apply absolute left-0 text-kh-text-muted;
+    content: "";
+    @apply absolute left-0 h-3.5 w-3.5 rounded-sm border border-kh-border-strong bg-kh-bg;
+    top: 7px;
   }
   .kh-editor li[data-item-type="task"][data-checked="true"]::before {
-    content: "☑";
+    @apply border-kh-primary bg-kh-primary;
+  }
+  .kh-editor li[data-item-type="task"][data-checked="true"]::after {
+    content: "";
+    @apply absolute left-0.5 h-2.5 w-2.5 bg-kh-on-primary;
+    top: 9px;
+    -webkit-mask: url("/icons/check.svg") center / contain no-repeat;
+    mask: url("/icons/check.svg") center / contain no-repeat;
   }
   /* An empty document says what to do, as the old textarea's placeholder did. */
   .kh-editor > p:first-child:last-child:has(> br:only-child)::before {
@@ -448,7 +498,9 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-row-action { opacity: 0; }
   .group:hover .kh-row-action,
   .group:focus-within .kh-row-action,
-  .kh-row-action[data-popup-open] { opacity: 1; }
+  .kh-row-action[data-popup-open],
+  /* In the tree the class is on the wrapper and the trigger is inside it. */
+  .kh-row-action:has([data-popup-open]) { opacity: 1; }
 }
 
 /* Dense desktop chrome keeps its ladder; touch gets a usable physical target. */

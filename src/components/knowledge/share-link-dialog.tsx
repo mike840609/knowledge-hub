@@ -5,7 +5,7 @@ import { Dialog } from "@base-ui-components/react/dialog";
 import { SHARE_REQUEST_EVENT, writeLinkToClipboard } from "@/components/actions/action-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { SelectMenu } from "@/components/ui/select-menu";
 import { Timestamp } from "@/components/ui/timestamp";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -14,6 +14,8 @@ import {
   governanceRequest,
   type GovernanceFailure,
 } from "@/components/workspaces/governance-error";
+import { dialogBackdropClasses, dialogPopupClasses } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 
 type ShareLink = {
   id: string;
@@ -121,8 +123,8 @@ export function ShareLinkDialog({
   return (
     <Dialog.Root open={documentId !== null} onOpenChange={(next) => { if (!busy) onOpenChange(next); }}>
       <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 z-40 bg-kh-overlay transition-opacity duration-120 ease-out data-[starting-style]:opacity-0 data-[ending-style]:opacity-0" />
-        <Dialog.Popup className="fixed left-1/2 top-1/2 z-50 max-h-[85vh] w-[min(36rem,92vw)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-kh-border bg-kh-bg p-6 shadow-modal outline-none transition-[opacity,transform] duration-120 ease-out data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0">
+        <Dialog.Backdrop className={dialogBackdropClasses()} />
+        <Dialog.Popup className={dialogPopupClasses("max-h-[85vh] w-[min(36rem,92vw)] overflow-y-auto")}>
           <Dialog.Title className="text-title font-semibold">Share link</Dialog.Title>
           <Dialog.Description className="mt-1 text-body text-kh-text-muted">
             Anyone with this link can read this document without signing in. They will see every change you make
@@ -154,16 +156,20 @@ export function ShareLinkDialog({
               }
             }}
           >
-            <label className="block min-w-0 flex-1 text-body">
+            <Label className="min-w-0 flex-1">
               Label <span className="text-kh-text-muted">(optional)</span>
               <Input className="mt-1" value={label} maxLength={200} disabled={busy} placeholder="For the backend team" onChange={(event) => setLabel(event.target.value)} />
-            </label>
-            <label className="block text-body">
+            </Label>
+            <Label>
               Expires after
-              <Select className="mt-1 block" value={expiresInDays} disabled={busy} onChange={(event) => setExpiresInDays(Number(event.target.value))}>
-                {EXPIRY_OPTIONS.map((option) => <option key={option.days} value={option.days}>{option.label}</option>)}
-              </Select>
-            </label>
+              <SelectMenu
+                className="mt-1 flex w-full"
+                value={expiresInDays}
+                disabled={busy}
+                onValueChange={setExpiresInDays}
+                options={EXPIRY_OPTIONS.map((option) => ({ value: option.days, label: option.label }))}
+              />
+            </Label>
             <Button type="submit" disabled={busy || !documentId}>{busy ? "Creating…" : "Create link"}</Button>
           </form>
           <div className="mt-3"><GovernanceError error={error} /></div>

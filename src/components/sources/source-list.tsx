@@ -3,7 +3,7 @@ import { WorkspaceEmptyIllustration } from "@/components/knowledge/workspace-emp
 
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { useState } from "react";
-import { Select } from "@/components/ui/select";
+import { SelectMenu } from "@/components/ui/select-menu";
 import { Button } from "@/components/ui/button";
 import type { FolderImportClientLimits } from "@/components/imports/folder-import-form";
 import { navigateListRows } from "@/lib/list-row-navigation";
@@ -13,6 +13,7 @@ import { SourceListRow } from "@/components/sources/source-list-row";
 import { WorkspaceImportLink } from "@/components/shell/workspace-import-link";
 import { buttonClasses } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Label } from "@/components/ui/label";
 
 export function SourceList({ workspaceId, items, limits }: { workspaceId: string; items: SourceListItemModel[]; limits?: FolderImportClientLimits }) {
   const { access, confirmed } = useWorkspaceAuthorization();
@@ -47,8 +48,8 @@ export function SourceList({ workspaceId, items, limits }: { workspaceId: string
   return (
     <div className="space-y-3">
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-kh-border pb-3">
-      <label className="flex min-h-8 items-center gap-2 text-body-sm"><input className="kh-focus-ring accent-kh-primary" type="checkbox" checked={attentionOnly} onChange={e => setAttentionOnly(e.target.checked)} />Needs attention ({attentionCount})</label>
-      <label className="flex items-center gap-2 text-caption text-kh-text-muted">Sort sources<Select aria-label="Sort sources" value={sort} onChange={e => setSort(e.target.value)}><option value="attention">Attention first</option><option value="name">Name</option><option value="recent">Last successful sync</option></Select></label>
+      <label className="flex min-h-8 items-center gap-2 text-body-sm"><input type="checkbox" checked={attentionOnly} onChange={e => setAttentionOnly(e.target.checked)} />Needs attention ({attentionCount})</label>
+      <Label inline>Sort sources<SelectMenu aria-label="Sort sources" value={sort} onValueChange={setSort} options={[{ value: "attention", label: "Attention first" }, { value: "name", label: "Name" }, { value: "recent", label: "Last successful sync" }]} /></Label>
     </div>
     <p role="status" className="text-caption text-kh-text-muted">{visible.length} of {items.length} sources{attentionOnly ? " · failed sync or awaiting Apply" : ""}</p>
     {!visible.length ? <div className="space-y-2"><p className="text-body text-kh-text-muted">No sources need attention.</p><Button variant="ghost" size="sm" onClick={() => setAttentionOnly(false)}>Show all sources</Button></div> : null}

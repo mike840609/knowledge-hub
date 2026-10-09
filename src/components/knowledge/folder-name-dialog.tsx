@@ -8,6 +8,8 @@ import { MAX_FOLDER_NAME_LENGTH } from "@/modules/knowledge/domain/tree-rules";
 import { FOLDER_NAME_REQUEST_EVENT, type FolderNameRequest } from "./folder-name-request";
 import { folderNameProblem } from "./organize-messages";
 import { useTreeMutations } from "./use-tree-mutations";
+import { dialogBackdropClasses, dialogPopupClasses } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 
 /**
  * Mounted once by the knowledge layout. One dialog for both jobs that need a name from the reader —
@@ -69,8 +71,8 @@ function FolderNameDialog({ request, onClose }: { request: FolderNameRequest | n
   return (
     <Dialog.Root open={request !== null} onOpenChange={(next) => { if (!next && !busy) onClose(); }}>
       <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 z-40 bg-kh-overlay transition-opacity duration-120 ease-out data-[starting-style]:opacity-0 data-[ending-style]:opacity-0" />
-        <Dialog.Popup className="fixed left-1/2 top-1/2 z-50 w-[min(26rem,92vw)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-kh-border bg-kh-bg p-6 shadow-modal outline-none transition-[opacity,transform] duration-120 ease-out data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0">
+        <Dialog.Backdrop className={dialogBackdropClasses()} />
+        <Dialog.Popup className={dialogPopupClasses("w-[min(26rem,92vw)]")}>
           <Dialog.Title className="text-title font-semibold">{creating ? "New folder" : "Rename folder"}</Dialog.Title>
           <Dialog.Description className="mt-1 text-body text-kh-text-muted">
             {request?.mode === "create"
@@ -86,7 +88,7 @@ function FolderNameDialog({ request, onClose }: { request: FolderNameRequest | n
               void submit();
             }}
           >
-            <label className="block text-body">
+            <Label>
               Name
               <Input
                 className="mt-1"
@@ -100,7 +102,7 @@ function FolderNameDialog({ request, onClose }: { request: FolderNameRequest | n
                   setProblem(null);
                 }}
               />
-            </label>
+            </Label>
             {problem ? (
               <p id={errorId} role="alert" className="mt-2 text-body text-kh-danger">
                 {problem}

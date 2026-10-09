@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
+import { SelectMenu } from "@/components/ui/select-menu";
 import { useToast } from "@/components/ui/toast";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import type { HubUserLookup, MemberAdminView, TeamWorkspaceView } from "@/server/workspace-admin";
@@ -140,29 +140,23 @@ export function MembersSettings({
                 }
               }}
             >
-              <Select
+              <SelectMenu
                 aria-label="User to add"
                 value={selected}
                 disabled={busy || !confirmed}
-                onChange={(event) => setSelected(event.target.value)}
-              >
-                <option value="">Select a user</option>
-                {candidates.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.name} ({user.empId})
-                  </option>
-                ))}
-              </Select>
-              <Select
+                onValueChange={setSelected}
+                options={[
+                  { value: "", label: "Select a user" },
+                  ...candidates.map((user) => ({ value: user.id, label: `${user.name} (${user.empId})` })),
+                ]}
+              />
+              <SelectMenu
                 aria-label="New member role"
                 value={chosenRole}
                 disabled={busy || !confirmed}
-                onChange={(event) => setRole(event.target.value)}
-              >
-                {roles.map((value) => (
-                  <option key={value}>{value}</option>
-                ))}
-              </Select>
+                onValueChange={setRole}
+                options={roles.map((value) => ({ value, label: value }))}
+              />
               <Button type="submit" disabled={busy || !confirmed || !selected}>
                 Add member
               </Button>

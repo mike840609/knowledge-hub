@@ -24,6 +24,7 @@ import { Kbd } from "@/components/ui/kbd";
 import { Tooltip } from "@/components/ui/tooltip";
 import { actionForKey, isSingleKeyShortcut, shortcutLabel } from "@/lib/shortcut-keys";
 import { OPEN_SEARCH_EVENT } from "./search-nav-item";
+import { dialogBackdropClasses, dialogSurfaceClasses } from "@/components/ui/dialog";
 
 type QuickHit = {
   documentId: string;
@@ -302,8 +303,8 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
       </Tooltip>
       <Dialog.Root open={open} onOpenChange={setOpen}>
         <Dialog.Portal>
-          <Dialog.Backdrop className="fixed inset-0 z-50 bg-kh-overlay transition-opacity duration-120 ease-out data-[starting-style]:opacity-0 data-[ending-style]:opacity-0" />
-          <Dialog.Popup className="fixed left-1/2 top-[min(14vh,120px)] z-[60] flex max-h-[75vh] w-[min(640px,calc(100vw-24px))] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-kh-border bg-kh-bg shadow-modal outline-none transition-[opacity,transform] duration-120 ease-out data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0">
+          <Dialog.Backdrop className={dialogBackdropClasses("z-50")} />
+          <Dialog.Popup className={`${dialogSurfaceClasses} top-[min(14vh,120px)] z-[60] flex max-h-[75vh] w-[min(640px,calc(100vw-24px))] flex-col overflow-hidden`}>
             <Dialog.Title className="sr-only">Search and actions</Dialog.Title>
             <div className="flex items-center gap-3 border-b border-kh-border px-4">
               <Search className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />

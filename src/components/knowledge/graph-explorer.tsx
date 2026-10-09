@@ -10,7 +10,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useOptimistic, useState, useTransition } from "react";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { SelectMenu } from "@/components/ui/select-menu";
 import { tabClasses } from "@/components/ui/tab";
 import { GraphCanvas } from "./graph-canvas";
 import { GraphList } from "./graph-list";
@@ -44,7 +44,7 @@ export function graphQuery(filters: GraphFilters): string {
 function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
   return (
     <label className="flex h-8 items-center gap-2 text-body-sm text-kh-text-secondary">
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="accent-kh-primary" />
+      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
       {label}
     </label>
   );
@@ -140,12 +140,13 @@ export function GraphExplorer({
           {sources.length > 1 ? (
             <div className="w-44">
               <label className="sr-only" htmlFor="graph-source">Source</label>
-              <Select id="graph-source" value={shown.sourceId ?? ""} onChange={(event) => change({ sourceId: event.target.value || null })}>
-                <option value="">All sources</option>
-                {sources.map((source) => (
-                  <option key={source.id} value={source.id}>{source.name}</option>
-                ))}
-              </Select>
+              <SelectMenu
+                id="graph-source"
+                className="w-full"
+                value={shown.sourceId ?? ""}
+                onValueChange={(sourceId) => change({ sourceId: sourceId || null })}
+                options={[{ value: "", label: "All sources" }, ...sources.map((source) => ({ value: source.id, label: source.name }))]}
+              />
             </div>
           ) : null}
           <Toggle label="Orphans" checked={shown.orphans} onChange={(orphans) => change({ orphans })} />

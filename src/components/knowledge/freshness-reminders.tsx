@@ -1,10 +1,11 @@
 "use client";
 import {useState} from "react";
 import Link from "next/link";
-import {Select} from "@/components/ui/select";
+import { SelectMenu } from "@/components/ui/select-menu";
 import {Timestamp} from "@/components/ui/timestamp";
 import {FRESHNESS_THRESHOLDS, knowledgeFreshness, type FreshnessThreshold} from "@/modules/personal/application/knowledge-freshness";
 import type {SourceListItemModel} from "@/server/source-read";
+import { Label } from "@/components/ui/label";
 
 export function FreshnessReminders({workspaceId,items,preference,now}: {workspaceId:string;items:SourceListItemModel[];preference:{thresholdDays:FreshnessThreshold;version:number};now:string}) {
   const [setting,setSetting]=useState(preference);
@@ -24,7 +25,7 @@ export function FreshnessReminders({workspaceId,items,preference,now}: {workspac
   return <section aria-label="Knowledge freshness" className="px-3 space-y-2">
     <div className="flex flex-wrap items-center justify-between gap-2">
       <h2 className="text-caption font-medium text-kh-text-muted">Knowledge freshness</h2>
-      <label className="flex items-center gap-2 text-caption text-kh-text-muted">Review folders after<Select aria-label="Freshness threshold" value={setting.thresholdDays} disabled={saving} onChange={e=>void save(Number(e.target.value) as FreshnessThreshold)}>{FRESHNESS_THRESHOLDS.map(days=><option key={days} value={days}>{days === 7 ? "1 week" : days === 14 ? "2 weeks" : "1 month"}</option>)}</Select></label>
+      <Label inline>Review folders after<SelectMenu aria-label="Freshness threshold" value={setting.thresholdDays} disabled={saving} onValueChange={days=>void save(days)} options={FRESHNESS_THRESHOLDS.map(days=>({value:days,label:days === 7 ? "1 week" : days === 14 ? "2 weeks" : "1 month"}))} /></Label>
     </div>
     <p className="text-caption text-kh-text-muted">Folders not reimported within this period appear here for review. Age reflects the last applied import; external folders are not checked automatically.</p>
     {error?<p role="alert" className="text-body-sm text-kh-text">{error}</p>:null}

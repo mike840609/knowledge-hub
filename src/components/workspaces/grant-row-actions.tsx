@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
+import { SelectMenu } from "@/components/ui/select-menu";
 import { useToast } from "@/components/ui/toast";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import {
@@ -77,21 +77,16 @@ export function GrantRowActions({
         <div className="flex flex-wrap gap-2">
           {roles.length > 0 && (
             <>
-              <Select
+              <SelectMenu
                 aria-label={`Role for ${label}`}
                 value={nextRole}
                 disabled={busy}
-                onChange={(event) => setNextRole(event.target.value)}
-              >
-                {!roles.includes(role) && (
-                  <option value={role} disabled>
-                    {role}
-                  </option>
-                )}
-                {roles.map((value) => (
-                  <option key={value}>{value}</option>
-                ))}
-              </Select>
+                onValueChange={setNextRole}
+                options={[
+                  ...(roles.includes(role) ? [] : [{ value: role, label: role, disabled: true }]),
+                  ...roles.map((value) => ({ value, label: value })),
+                ]}
+              />
               <Button
                 disabled={busy || nextRole === role || !roles.includes(nextRole)}
                 onClick={() => {

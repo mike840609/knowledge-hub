@@ -3,6 +3,7 @@
 import { AlertDialog } from "@base-ui-components/react/alert-dialog";
 import type { ReactNode } from "react";
 import { buttonClasses } from "@/components/ui/button";
+import { dialogBackdropClasses, dialogPopupClasses } from "@/components/ui/dialog";
 
 /**
  * A question that has to be answered before anything happens, for the one
@@ -44,8 +45,8 @@ export function ConfirmDialog({
   return (
     <AlertDialog.Root open={open} onOpenChange={onOpenChange}>
       <AlertDialog.Portal>
-        <AlertDialog.Backdrop className="fixed inset-0 z-40 bg-kh-overlay transition-opacity duration-120 ease-out data-[starting-style]:opacity-0 data-[ending-style]:opacity-0" />
-        <AlertDialog.Popup className="fixed left-1/2 top-1/2 z-50 w-[min(26rem,92vw)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-kh-border bg-kh-bg p-6 shadow-modal outline-none transition-[opacity,transform] duration-120 ease-out data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0">
+        <AlertDialog.Backdrop className={dialogBackdropClasses()} />
+        <AlertDialog.Popup className={dialogPopupClasses("w-[min(26rem,92vw)]")}>
           <AlertDialog.Title className="text-title font-semibold text-kh-text">{title}</AlertDialog.Title>
           <AlertDialog.Description className="mt-1 text-body text-kh-text-muted">{description}</AlertDialog.Description>
           <div className="mt-5 flex justify-end gap-2">

@@ -9,6 +9,8 @@ import {
   governanceRequest,
   type GovernanceFailure,
 } from "./governance-error";
+import { dialogBackdropClasses, dialogPopupClasses } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 
 export function CreateTeamDialog({
   open,
@@ -40,8 +42,8 @@ export function CreateTeamDialog({
       }}
     >
       <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 z-40 bg-kh-overlay transition-opacity duration-120 ease-out data-[starting-style]:opacity-0 data-[ending-style]:opacity-0" />
-        <Dialog.Popup className="fixed left-1/2 top-1/2 z-50 w-[min(28rem,90vw)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-kh-border bg-kh-bg p-6 shadow-modal outline-none transition-[opacity,transform] duration-120 ease-out data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0 data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0">
+        <Dialog.Backdrop className={dialogBackdropClasses()} />
+        <Dialog.Popup className={dialogPopupClasses("w-[min(28rem,90vw)]")}>
           <Dialog.Title className="text-title font-semibold">Create team</Dialog.Title>
           <Dialog.Description className="mt-1 text-body text-kh-text-muted">
             Create a shared knowledge workspace. You can add members and SSO groups in Settings.
@@ -69,7 +71,7 @@ export function CreateTeamDialog({
               }
             }}
           >
-            <label className="block text-body">
+            <Label>
               Team name
               <Input
                 autoFocus
@@ -80,7 +82,7 @@ export function CreateTeamDialog({
                 aria-invalid={error?.field === "name"}
                 onChange={(event) => setName(event.target.value)}
               />
-            </label>
+            </Label>
             <GovernanceError error={error} />
             {!canCreateTeam && (
               <p role="status" className="text-body">

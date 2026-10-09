@@ -3,7 +3,8 @@ import {useState} from "react";
 import {feedbackReport} from "@/lib/feedback-report";
 import {Button} from "@/components/ui/button";
 import {Textarea} from "@/components/ui/textarea";
-import {Select} from "@/components/ui/select";
+import { SelectMenu } from "@/components/ui/select-menu";
+import { Label } from "@/components/ui/label";
 export function FeedbackReport(){
   const [category,setCategory]=useState("Sync");const [description,setDescription]=useState("");const [saved,setSaved]=useState(false);
   function download(){
@@ -11,8 +12,8 @@ export function FeedbackReport(){
   }
   return <details className="rounded-md border border-kh-border p-3"><summary className="kh-focus-ring cursor-pointer rounded-md text-body">Report a problem</summary><div className="mt-3 space-y-3">
     <p className="text-caption text-kh-text-muted">Download a Markdown report and send it to your maintainer. Nothing is submitted automatically; document content is not included.</p>
-    <label className="block text-body" htmlFor="feedback-category">Category</label><Select id="feedback-category" value={category} onChange={e=>{setCategory(e.target.value);setSaved(false);}}>{["Sync","Search","Reading","Other"].map(value=><option key={value}>{value}</option>)}</Select>
-    <label className="block text-body" htmlFor="feedback-description">What happened?</label><Textarea id="feedback-description" maxLength={5000} value={description} onChange={e=>{setDescription(e.target.value);setSaved(false);}} placeholder="Steps to reproduce, what you expected, and any error message" />
+    <Label htmlFor="feedback-category">Category</Label><SelectMenu id="feedback-category" className="flex" value={category} onValueChange={value=>{setCategory(value);setSaved(false);}} options={["Sync","Search","Reading","Other"].map(value=>({value,label:value}))} />
+    <Label htmlFor="feedback-description">What happened?</Label><Textarea id="feedback-description" maxLength={5000} value={description} onChange={e=>{setDescription(e.target.value);setSaved(false);}} placeholder="Steps to reproduce, what you expected, and any error message" />
     <Button variant="secondary" disabled={!description.trim()} onClick={download}>Download feedback report</Button>
     {saved?<p className="text-caption text-kh-text-muted">Report prepared for download. Send the file to your maintainer.</p>:null}
   </div></details>;

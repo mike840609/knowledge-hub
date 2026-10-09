@@ -9,7 +9,7 @@ export function Textarea({
 }: TextareaHTMLAttributes<HTMLTextAreaElement> & { size?: ControlSize }) {
   return (
     <textarea
-      className={fieldClasses({ size, multiline: true, className: `min-h-36 w-full font-mono ${className}` })}
+      className={fieldClasses({ size, multiline: true, className: `min-h-36 w-full ${className}` })}
       {...props}
     />
   );
