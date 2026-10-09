@@ -31,5 +31,5 @@ export default async function PersonalHomePage({ params }: { params: Promise<{ w
   const paths=new Map(locations.map(e=>[e.documentId,e.sourcePath]));
   const sourceNames=new Map(folderModel?.items.map(i=>[i.source.id,i.source.name])??[]);
   slots.reminders = <HomeSourceAttention workspaceId={workspaceId} reminders={knowledgeFreshness(folderModel?.items ?? [], freshnessThreshold(freshness.value), new Date())} />;
-  return <PersonalHome slots={slots} workspaceId={workspaceId} documents={documents.map(d=>({...d,sourceName:sourceNames.get(d.sourceId),sourcePath:paths.get(d.documentId)}))} drafts={drafts} updates={updates} />;
+  return <PersonalHome guidanceDismissed={onboarding.value.dismissed} slots={slots} workspaceId={workspaceId} documents={documents.map(d=>({...d,sourceName:sourceNames.get(d.sourceId),sourcePath:paths.get(d.documentId)}))} drafts={drafts} updates={updates} />;
 }

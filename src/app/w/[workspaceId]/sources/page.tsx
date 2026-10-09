@@ -2,7 +2,6 @@ import { applicationServices } from "@/server/composition";
 import { FreshnessReminders } from "@/components/knowledge/freshness-reminders";
 import { FRESHNESS_KEY, freshnessThreshold } from "@/modules/personal/application/knowledge-freshness";
 import Link from "next/link";
-import { FeedbackReport } from "@/components/knowledge/feedback-report";
 import { importRuntimeConfig } from "@/server/import-config";
 import { notFound } from "next/navigation";
 import { WorkspaceImportLink } from "@/components/shell/workspace-import-link";
@@ -45,7 +44,6 @@ export default async function WorkspaceSourcesPage({
         <SourceList workspaceId={workspaceId} items={model.items} limits={{ maxAssetFileBytes: limits.maxAssetFileBytes, maxAssetTotalBytes: limits.maxAssetTotalBytes }} />
       </div>
       {preference ? <div className="mt-6"><FreshnessReminders workspaceId={workspaceId} items={model.items} preference={{thresholdDays: freshnessThreshold(preference.value), version: preference.version}} now={new Date().toISOString()} /></div> : null}
-      {model.workspace.type === "PERSONAL" ? <div className="mt-6"><FeedbackReport /></div> : null}
     </main>
   );
 }

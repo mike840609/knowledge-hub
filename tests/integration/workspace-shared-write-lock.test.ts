@@ -249,6 +249,9 @@ describe("what a writer reads after waiting", () => {
         await mayLock;
         await lockWorkspaceForMutation(repositories, fixtureCaller(secondFixtureIdentity), fixture.workspaceId, "content-write");
       });
+      // Attach the rejection handler before releasing either barrier: CI may finish
+      // the writer before the test resumes after governance commits.
+      const denied = expect(write).rejects.toMatchObject({ code: "WORKSPACE_ACCESS_DENIED" });
       await hasRead;
       await governance.beginTransaction();
       await governance.query("SELECT id FROM workspaces WHERE id = ? FOR UPDATE", [fixture.workspaceId]);
@@ -256,7 +259,7 @@ describe("what a writer reads after waiting", () => {
       goLock();
       await new Promise((resolve) => setTimeout(resolve, 300));
       await governance.commit();
-      await expect(write).rejects.toMatchObject({ code: "WORKSPACE_ACCESS_DENIED" });
+      await denied;
     } finally {
       governance.release();
     }

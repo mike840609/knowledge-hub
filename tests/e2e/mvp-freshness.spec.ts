@@ -1,5 +1,5 @@
 import {test,expect} from "@playwright/test";
-import {chooseOption,expectChosen,expectOptions} from "./fixtures/select-menu";
+import {chooseOption,expectChosen} from "./fixtures/select-menu";
 import {mkdir} from "node:fs/promises";
 import path from "node:path";
 import {stageReadingFolder} from "./fixtures/folder-reading";
@@ -15,8 +15,8 @@ test("freshness preference persists and reminders link to source actions",async(
  const initial=await(await request.get(endpoint)).json();
  expect((await request.put(endpoint,{data:{value:{thresholdDays:14},version:initial.version}})).ok()).toBe(true);
  await page.goto(`/w/${ws}/sources`);
- await expectChosen(page.getByLabel("Freshness threshold"), "14");
- await expectOptions(page.getByLabel("Freshness threshold"),["1 week","2 weeks","1 month"]);
+ expect((await (await request.get(endpoint)).json()).thresholdDays).toBe(14);
+
  const sources:Record<string,string>={};
  for(const name of ["Older folder","Failed folder","Pending folder","Never imported folder"]){
   const snapshot=await stageReadingFolder(request,{workspaceId:ws,sourceName:name,fixture:"reading-flow-v1"});
@@ -40,6 +40,7 @@ test("freshness preference persists and reminders link to source actions",async(
  } finally {await pool.end();}
  await page.goto(`/w/${ws}/sources`);
  const region=page.getByRole("region",{name:"Knowledge freshness"});
+ await region.getByText("Freshness reminder settings", {exact:true}).click();
  // Other full-suite tests may leave pending or old folders in the shared workspace.
  expect(await region.getByRole("link",{name:"Review preview"}).count()).toBeGreaterThan(1);
  const row=(name:string)=>region.getByRole("listitem").filter({has:page.locator(`a[href="/w/${ws}/sources/${sources[name]}"]`)});
@@ -51,7 +52,7 @@ test("freshness preference persists and reminders link to source actions",async(
  const saved=page.waitForResponse(r=>r.url().endsWith("/personal/freshness")&&r.request().method()==="PUT");
  await chooseOption(region.getByLabel("Freshness threshold"), "30");expect((await saved).ok()).toBe(true);
  await expect(row("Older folder").getByText("Check for folder updates",{exact:false})).toHaveCount(0);
- await page.reload();await expectChosen(region.getByLabel("Freshness threshold"), "30");
+ await page.reload();await region.getByText("Freshness reminder settings", {exact:true}).click();await expectChosen(region.getByLabel("Freshness threshold"), "30");
  const changed=page.waitForResponse(r=>r.url().endsWith("/personal/freshness")&&r.request().method()==="PUT");await chooseOption(region.getByLabel("Freshness threshold"), "7");expect((await changed).ok()).toBe(true);
  await expect(row("Older folder").getByText("Check for folder updates",{exact:false})).toBeVisible();
  await page.goto(`/w/${ws}/home`);

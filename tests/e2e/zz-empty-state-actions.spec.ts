@@ -34,14 +34,14 @@ test("empty-result recovery preserves work and successful imports lead to readin
   const preference = await (await request.get(`/api/workspaces/${ws}/onboarding`)).json();
   if (preference.value.dismissed) {
     await page.getByRole("button", { name: "Home actions" }).click();
-    await page.getByRole("menuitem", { name: "Getting started", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Show getting started guide", exact: true }).click();
     await expect(guide).toBeVisible();
   }
   const progress = await guide.getByText(/of 4 steps complete/).textContent();
   await guide.getByRole("button", { name: "Hide guidance" }).click();
   await expect(guide).toHaveCount(0);
   await page.getByRole("button", { name: "Home actions" }).click();
-  await page.getByRole("menuitem", { name: "Getting started", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Show getting started guide", exact: true }).click();
   await expect(guide.getByText(progress!, { exact: true })).toBeVisible();
   await page.goto(`/w/${ws}/shares?q=empty-state-no-hit-742&status=revoked`);
   await expect(page.getByRole("heading", { name: "No shares match these filters.", exact: true })).toBeVisible();

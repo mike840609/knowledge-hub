@@ -1,0 +1,34 @@
+import { expect, test } from "@playwright/test";
+
+test("archives a sample source and restores it from Show archived", async ({ page }) => {
+  const navigation = await (await page.request.get("/api/workspaces")).json();
+  const ws = navigation.items.find((item: { type: string }) => item.type === "PERSONAL").id;
+  await page.goto(`/w/${ws}/sources/import`);
+  await page.getByRole("group", { name: "Try with a sample wiki" }).getByRole("button", { name: "English", exact: true }).click();
+  await expect(page).toHaveURL(/\/sources\/imports\//, { timeout: 15_000 });
+  await page.getByRole("button", { name: "Apply changes" }).click();
+  await expect(page).toHaveURL(/\/runs\//, { timeout: 15_000 });
+  const sourceId = page.url().match(/sources\/([^/]+)\//)![1];
+  const detail = `/w/${ws}/sources/${sourceId}`;
+  await page.goto(`/w/${ws}/sources`);
+  const actions = () => page.locator(`li`).filter({ has: page.locator(`a[data-list-row][href="${detail}"]`) }).getByRole("button", { name: "Source actions: Sample wiki", exact: true });
+  await actions().click();
+  await page.getByRole("menuitem", { name: "Archive source" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Cancel" }).click();
+  await expect(page.locator(`a[data-list-row][href="${detail}"]`)).toBeVisible();
+  await actions().click();
+  await page.getByRole("menuitem", { name: "Archive source" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Archive source" }).click();
+  await expect(page.locator(`a[data-list-row][href="${detail}"]`)).toHaveCount(0);
+  await page.goto(`/w/${ws}/sources`);
+  const source = page.locator(`a[data-list-row][href="${detail}"]`);
+  await expect(source).toHaveCount(0);
+  await page.getByRole("checkbox", { name: "Show archived" }).check();
+  await expect(source).toBeVisible();
+  await actions().click();
+  await page.getByRole("menuitem", { name: "Restore source" }).click();
+  await expect(source).not.toContainText("Archived");
+  await source.click();
+  await page.getByRole("link", { name: "Browse documents" }).click();
+  await expect(page.getByRole("tree", { name: "Knowledge tree" }).locator(`a[href*="/knowledge/${sourceId}/"]`)).toHaveCount(7);
+});

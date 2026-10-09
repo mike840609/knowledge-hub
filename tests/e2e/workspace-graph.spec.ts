@@ -179,3 +179,17 @@ test.describe("the workspace graph", () => {
     await expect(page.locator("svg[role='group']")).toHaveCount(0);
   });
 });
+
+test("the source filter stays inside its slot and clear of the toggles beside it", async ({ page }) => {
+  // Query Master has two sources, so the filter is offered. A native select sizes itself to its longest
+  // option; drawn wider than its 176px slot, it lay over the Orphans toggle.
+  await page.goto("/w/0199f100-0000-7000-8000-000000000001/graph");
+  const select = page.locator("#graph-source");
+  await expect(select).toBeVisible(ROUND_TRIP);
+  const box = (await select.boundingBox())!;
+  const slot = (await select.locator("..").boundingBox())!;
+  expect(box.x + box.width).toBeLessThanOrEqual(slot.x + slot.width + 0.5);
+  const orphans = (await page.getByText("Orphans", { exact: true }).boundingBox())!;
+  const sameRow = Math.abs((box.y + box.height / 2) - (orphans.y + orphans.height / 2)) < 8;
+  if (sameRow) expect(box.x + box.width).toBeLessThanOrEqual(orphans.x);
+});

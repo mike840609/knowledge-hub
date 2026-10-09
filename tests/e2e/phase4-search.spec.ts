@@ -13,6 +13,7 @@ test("finds a mixed Chinese/English document and opens it", async ({ page }) => 
 
   const hit = page.getByRole("button", { name: new RegExp(SEARCH_TITLE) });
   await expect(hit).toBeVisible();
+  await expect(hit.locator("mark").first()).toHaveText("請假");
   await hit.click();
   await expect(page.getByRole("heading", { name: SEARCH_TITLE })).toBeVisible();
 });

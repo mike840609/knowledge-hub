@@ -92,7 +92,7 @@ test.describe("import guide", () => {
   test("the import page links to the guide", async ({ page }) => {
     const ws = await personalWorkspaceId(page);
     await page.goto(`/w/${ws}/sources/import`);
-    await page.getByRole("link", { name: "Read the guide" }).click();
+    await page.getByRole("link", { name: "Folder format guide" }).click();
     await expect(page).toHaveURL(new RegExp(`/w/${ws}/sources/import/guide$`));
     await expect(page.getByRole("heading", { level: 1, name: "Bring your wiki into Knowledge Hub" })).toBeVisible();
   });
@@ -151,4 +151,25 @@ test.describe("import guide", () => {
     await expect(page.getByRole("heading", { level: 1, name: /^(Page not found|No workspace access)$/ })).toBeVisible();
     await expect(page.getByRole("heading", { level: 2, name: "Limits" })).toHaveCount(0);
   });
+});
+
+test("import flow guide stays collapsed and opens on desktop and mobile", async ({ page }, testInfo) => {
+  const ws = await personalWorkspaceId(page);
+  await page.goto(`/w/${ws}/sources/import`);
+  const steps = page.getByRole("list", { name: "Folder import steps" });
+  await expect(steps).toBeHidden();
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.screenshot({ path: testInfo.outputPath("import-guide-collapsed-desktop.png"), fullPage: true });
+  await page.getByText("How import works", { exact: true }).click();
+  await expect(steps).toBeVisible();
+  await expect(steps.getByRole("listitem")).toHaveCount(3);
+  await expect(steps).toContainText("Choose folder");
+  await expect(steps).toContainText("Preview");
+  await expect(steps).toContainText("Apply");
+  await page.screenshot({ path: testInfo.outputPath("import-guide-expanded-desktop.png"), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("import-guide-expanded-mobile.png"), fullPage: true });
+  await page.getByText("How import works", { exact: true }).click();
+  await expect(steps).toBeHidden();
 });

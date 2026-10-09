@@ -38,10 +38,10 @@ it("syncs only the clicked source and opens its preview without nesting the butt
   expect(state.push).toHaveBeenCalledWith("/w/ws/sources/imports/preview-1");
 });
 it.each([{sourceType:"HUB",ownership:"HUB_MANAGED"},{sourceType:"FILE_UPLOAD"},{status:"ARCHIVED"},{ownership:"HUB_MANAGED"}])("does not offer folder sync for ineligible source %j",async overrides => {
-  await render([source("one",overrides)]);expect(container.querySelector("li button")).toBeNull();
+  await render([source("one",overrides)]);expect(container.querySelector('button[aria-label^="Check for changes:"]')).toBeNull();
 });
 it.each(["canImport","confirmed","supported","remembered"] as const)("keeps sync hidden when %s is false",async key => {
-  state[key]=false;await render();expect(container.querySelector("li button")).toBeNull();
+  state[key]=false;await render();expect(container.querySelector('button[aria-label^="Check for changes:"]')).toBeNull();
   if (key === "canImport" || key === "confirmed") expect(container.querySelector('a[aria-label^="Update from folder"]')).toBeNull();
 });
 it("disables a running source and keeps row keyboard navigation out of the secondary action",async () => {

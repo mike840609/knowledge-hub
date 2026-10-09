@@ -559,7 +559,7 @@ export function DocumentComposer({
         onSubmit={(event) => { event.preventDefault(); void save(); }}
       >
         <div data-pinned={scrolled || undefined} className="kh-fade-below sticky top-0 z-10 bg-kh-bg">
-        <div className="kh-reading-column py-2">
+        <div className="kh-reading-column min-h-12 py-2">
           <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
             <DocumentBreadcrumb segments={[...location, { label: resolved.title || untitledLabel }]} />
             <div className="flex shrink-0 items-center gap-2">

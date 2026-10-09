@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/shell/page-header";
 import Link from "next/link";
 import type { GuideBlock, GuideContent, GuideLocale } from "./import-guide-content";
 
@@ -74,8 +75,8 @@ export function ImportGuide({
 }): React.JSX.Element {
   const guideHref = `/w/${workspaceId}/sources/import/guide`;
   return (
-    <main className="kh-page py-6">
-      <Link className={LINK} href={`/w/${workspaceId}/sources/import`}>Back to Import folder</Link>
+    <main className="kh-page pb-6" lang={locale}>
+      <PageHeader location="Import folder" locationHref={`/w/${workspaceId}/sources/import`} title={content.title} />
       <nav aria-label="Guide language" className="mt-3 flex flex-wrap items-center gap-3 text-body">
         {LANGUAGES.map((language) => (
           <Link
@@ -90,7 +91,6 @@ export function ImportGuide({
         ))}
       </nav>
       <div lang={locale} className="mt-4 max-w-reading">
-        <h1 className="text-heading font-semibold text-kh-text">{content.title}</h1>
         <p className="mt-1 text-body text-kh-text-muted">{content.intro}</p>
         {content.sections.map((section) => (
           <section key={section.id} id={section.id} aria-labelledby={`${section.id}-heading`} className="mt-6">

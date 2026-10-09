@@ -9,11 +9,11 @@ vi.mock("@/components/ui/toast", () => ({ useToast: () => mocks.toast }));
 vi.mock("@/components/ui/menu", () => ({ MenuItem: (props: React.ComponentProps<"button">) => <button {...props} /> }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 afterEach(() => { vi.unstubAllGlobals(); vi.clearAllMocks(); });
-async function open() {
+async function open(surface: "menu" | "empty" = "menu") {
   const host = document.createElement("div"); document.body.append(host);
   const root = createRoot(host);
   try {
-    await act(async () => root.render(<ReopenGuidanceMenuItem workspaceId="ws" />));
+    await act(async () => root.render(<ReopenGuidanceMenuItem workspaceId="ws" surface={surface} />));
     await act(async () => host.querySelector("button")!.click());
   } finally { await act(async () => root.unmount()); host.remove(); }
 }
@@ -30,10 +30,18 @@ it("shows a retry message on a conflict and does not report success", async () =
   vi.stubGlobal("fetch", vi.fn(async (_url: string, init?: RequestInit) => init?.method === "PUT" ? new Response(null, { status: 409 }) : Response.json({ value: { schemaVersion: 1, dismissed: true }, version: 4 })));
   await open();
   expect(mocks.refresh).not.toHaveBeenCalled();
-  expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ tone: "danger", message: expect.stringContaining("Try Getting started again") }));
+  expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ tone: "danger", message: expect.stringContaining("Try showing the guide again") }));
 });
 it("refreshes an already visible guide without another preference write", async () => {
   const fetch = vi.fn(async () => Response.json({ value: { schemaVersion: 1, dismissed: false }, version: 5 }));
   vi.stubGlobal("fetch", fetch); await open();
   expect(fetch).toHaveBeenCalledOnce(); expect(mocks.refresh).toHaveBeenCalledOnce();
+});
+
+it("restores the saved preference from the empty-state button", async () => {
+  const fetch = vi.fn(async (_url: string, init?: RequestInit) => Response.json(init?.method === "PUT" ? { version: 5 } : { value: { schemaVersion: 1, dismissed: true }, version: 4 }));
+  vi.stubGlobal("fetch", fetch);
+  await open("empty");
+  expect(JSON.parse(fetch.mock.calls[1][1]!.body as string).value.dismissed).toBe(false);
+  expect(mocks.refresh).toHaveBeenCalledOnce();
 });

@@ -22,18 +22,22 @@ export function FreshnessReminders({workspaceId,items,preference,now}: {workspac
     } catch (error) {setError(error instanceof Error?error.message:"Could not save. Reload and try again.");}
     finally {setSaving(false);}
   }
+  if (!items.some(item => item.source.sourceType === "FOLDER_SYNC" && item.source.status === "ACTIVE")) return null;
   return <section aria-label="Knowledge freshness" className="px-3 space-y-2">
-    <div className="flex flex-wrap items-center justify-between gap-2">
-      <h2 className="text-caption font-medium text-kh-text-muted">Knowledge freshness</h2>
-      <Label inline>Review folders after<SelectMenu aria-label="Freshness threshold" value={setting.thresholdDays} disabled={saving} onValueChange={days=>void save(days)} options={FRESHNESS_THRESHOLDS.map(days=>({value:days,label:days === 7 ? "1 week" : days === 14 ? "2 weeks" : "1 month"}))} /></Label>
-    </div>
-    <p className="text-caption text-kh-text-muted">Folders not reimported within this period appear here for review. Age reflects the last applied import; external folders are not checked automatically.</p>
+    {reminders.length > 0 ? <h2 className="text-caption font-medium text-kh-text-muted">Folders to review</h2> : null}
+    <details>
+      <summary className="kh-focus-ring w-fit cursor-pointer rounded-md text-caption text-kh-text-muted">Freshness reminder settings</summary>
+      <div className="mt-2 space-y-2">
+        <Label inline className="flex-wrap">Review folders after<SelectMenu aria-label="Freshness threshold" value={setting.thresholdDays} disabled={saving} onValueChange={days=>void save(days)} options={FRESHNESS_THRESHOLDS.map(days=>({value:days,label:days === 7 ? "1 week" : days === 14 ? "2 weeks" : "1 month"}))} /></Label>
+        <p className="text-caption text-kh-text-muted">Age reflects the last applied import. External folders are not checked automatically.</p>
+      </div>
+    </details>
     {error?<p role="alert" className="text-body-sm text-kh-text">{error}</p>:null}
     {saving?<p role="status" className="text-caption text-kh-text-muted">Saving reminder preference…</p>:null}
     {reminders.length?<ul className="space-y-0.5">{reminders.map(item=><li key={item.sourceId} className="kh-interactive-row flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md px-3 py-2">
       <Link className="kh-focus-ring min-w-0 basis-full break-words rounded-md text-body font-medium sm:basis-auto sm:flex-1 text-kh-text" href={`/w/${workspaceId}/sources/${item.sourceId}`}>{item.sourceName}</Link>
       <span className="text-caption text-kh-text-muted">{item.status==="pending"?"Awaiting Apply":item.status==="failed"?"Latest sync failed":item.status==="never"?"Never imported":"Check for folder updates"}{item.lastImportedAt?<> · Last imported <Timestamp value={item.lastImportedAt} variant="relative"/></>:null}</span>
       <Link className="kh-focus-ring rounded-md text-body-sm text-kh-link" href={item.previewId?`/w/${workspaceId}/sources/imports/${item.previewId}`:`/w/${workspaceId}/sources/${item.sourceId}/update`}>{item.status==="pending"?"Review preview":item.status==="failed"?"Retry import":"Update from folder"}</Link>
-    </li>)}</ul>:<p className="text-body-sm text-kh-text-muted">No folders need a freshness reminder.</p>}
+    </li>)}</ul>:null}
   </section>;
 }

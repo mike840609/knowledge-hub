@@ -290,7 +290,7 @@ test.describe("Phase 3 Workspace product acceptance", () => {
       await expect(owner.page.getByLabel("Archived workspace", { exact: true })).toBeVisible();
       release();
       await expect(owner.page.locator('input[type="file"]')).toHaveCount(0);
-      await expect(owner.page.getByRole("link", { name: "Sources", exact: true })).toBeVisible();
+      await expect(owner.page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Sources", exact: true })).toBeVisible();
     } finally { release(); await owner.context.close(); }
   });
 

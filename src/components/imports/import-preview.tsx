@@ -100,7 +100,7 @@ export function ImportPreview({
       <ImportSummary preview={preview} />
       {preview.importScope ? <section aria-label="Import scope" className="rounded-md border border-kh-border p-3 text-body space-y-2">
         <p>{preview.importScope.excludedCount} files excluded during this folder scan.</p>
-        <p className="text-caption text-kh-text-muted">Excluded paths: {preview.importScope.paths.join(", ") || "None"}. Hidden files and folders and node_modules are always skipped.</p>
+        <details><summary className="kh-focus-ring w-fit cursor-pointer rounded-md text-caption text-kh-text-muted">Excluded paths</summary><p className="mt-2 text-caption text-kh-text-muted">Excluded paths: {preview.importScope.paths.join(", ") || "None"}. Hidden files and folders and node_modules are always skipped.</p></details>
         {JSON.stringify(preview.importScope.paths) !== JSON.stringify(preview.importScope.previousPaths) ? <>
           <p className="text-caption text-kh-text-muted">Previously: {preview.importScope.previousPaths.join(", ") || "None"}</p>
           <p className="text-caption text-kh-warning">Exclusion rules changed. Review archived documents below. Apply saves these rules for future syncs on all devices.</p>

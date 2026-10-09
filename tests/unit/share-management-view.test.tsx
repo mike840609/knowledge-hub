@@ -38,3 +38,24 @@ it("selects the full share URL when clipboard writing is denied", async () => {
     expect(field.selectionEnd).toBe(field.value.length); expect(host.querySelector('[role="alert"]')?.textContent).toContain("copy it manually");
   } finally { await act(async () => root.unmount()); host.remove(); }
 });
+
+it.each([
+  { page: 1, hasNext: false, visible: false, previous: false, next: false },
+  { page: 1, hasNext: true, visible: true, previous: false, next: true },
+  { page: 2, hasNext: false, visible: true, previous: true, next: false },
+  { page: 2, hasNext: true, visible: true, previous: true, next: true },
+])("shows pagination only when navigation is available: $page / $hasNext", async ({ page, hasNext, visible, previous, next }) => {
+  const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+  try {
+    await act(async () => root.render(<ShareManagementView workspaceId="ws" model={{ items: [], query: { q: "guide", status: "all", page }, hasNext }} />));
+    const pagination = host.querySelector('nav[aria-label="Share pages"]');
+    expect(Boolean(pagination)).toBe(visible);
+    if (visible) {
+      expect(pagination!.textContent).toContain(`Page ${page}`);
+      const links = [...pagination!.querySelectorAll("a")];
+      expect(links.some(link => link.textContent === "Previous")).toBe(previous);
+      expect(links.some(link => link.textContent === "Next")).toBe(next);
+      for (const link of links) expect(link.href).toContain("q=guide");
+    }
+  } finally { await act(async () => root.unmount()); host.remove(); }
+});

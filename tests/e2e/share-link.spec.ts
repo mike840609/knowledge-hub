@@ -52,6 +52,12 @@ test.describe("document share link", () => {
     const path = await item.getAttribute("data-share-link");
     expect(path).toMatch(/^\/s\/[0-9a-f-]{36}$/);
 
+    const originalDocumentUrl = page.url();
+    await page.goto(path!);
+    await page.getByRole("link", { name: "Open in Knowledge Hub", exact: true }).click();
+    await expect(page).toHaveURL(originalDocumentUrl);
+    await page.locator("main").getByRole("button", { name: "Share link…" }).click();
+
     const reader = await playwright.request.newContext({ baseURL: phase3UnconfiguredOrigin() });
     try {
       const shared = await reader.get(path!);
@@ -60,6 +66,9 @@ test.describe("document share link", () => {
       expect(html).toContain(title);
       expect(html).toContain("first shared body");
       expect(html).toContain("Shared by E2E Knowledge User");
+      expect(html).toContain("Open in Knowledge Hub");
+      expect(html).toContain("Keep useful knowledge within reach.");
+      expect(html).toContain(`${path}/open`);
       expect(html).not.toMatch(/property="og:/);
       const headers = shared.headers();
       expect(headers["referrer-policy"]).toBe("no-referrer");
