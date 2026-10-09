@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { FileText } from "lucide-react";
-import { highlightSnippet } from "@/modules/knowledge/domain/search-query";
+import { HighlightedSearchText } from "./highlighted-search-text";
 import { plainSearchSnippet } from "@/lib/search-snippet";
 import type { KnowledgeSearchRow } from "@/modules/knowledge/ports/knowledge-search-repository";
 import { Timestamp } from "@/components/ui/timestamp";
@@ -9,17 +9,6 @@ function asDate(value: Date): Date {
   return value instanceof Date ? value : new Date(value);
 }
 
-function Highlighted({ text, terms }: { text: string; terms: readonly string[] }) {
-  return (
-    <>
-      {highlightSnippet(text, terms).map((segment, index) =>
-        segment.match
-          ? <mark key={index} className="rounded-sm bg-kh-highlight text-kh-text">{segment.text}</mark>
-          : <span key={index}>{segment.text}</span>,
-      )}
-    </>
-  );
-}
 
 export function SearchResultRow({
   hit, terms, includeArchived, showWorkspace,
@@ -45,12 +34,12 @@ export function SearchResultRow({
         <span className="min-w-0 flex-1 sm:flex sm:items-start sm:gap-3">
           <span className="block min-w-0 sm:flex-1">
             <span className="block truncate text-body font-medium text-kh-text">
-              <Highlighted text={hit.title} terms={terms} />
+              <HighlightedSearchText text={hit.title} terms={terms} />
             </span>
             {hit.sourcePath ? <span className="block truncate text-caption text-kh-text-muted">{hit.sourcePath}</span> : null}
             {snippet && (
               <span className="mt-0.5 block line-clamp-2 text-body-sm text-kh-text-secondary">
-                <Highlighted text={snippet} terms={terms} />
+                <HighlightedSearchText text={snippet} terms={terms} />
               </span>
             )}
           </span>
