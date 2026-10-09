@@ -34,7 +34,8 @@ test('find feedback, sortable graph, search disclosure and safe share cancellati
  await page.keyboard.press('Escape');await expect(report).toBeHidden();
  await expect(page.getByRole('button',{name:/^Account:/})).toBeFocused();
  await page.goto(`/w/${ws}/graph?view=list`);await page.getByLabel('Find a document').fill('Feedback guide');
- await expect(page.locator('#graph-find-help')).toContainText('1 match');
+ const findHelpId = await page.getByLabel('Find a document').getAttribute('aria-describedby');
+ await expect(page.locator(`[id="${findHelpId}"]`)).toContainText('1 match');
  await expect(page.locator('tbody tr')).toHaveCount(1);
  await page.getByRole('button',{name:/^Account:/}).click();
  await page.getByRole('menuitem',{name:'Report a problem',exact:true}).click();

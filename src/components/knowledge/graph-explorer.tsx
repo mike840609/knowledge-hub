@@ -8,7 +8,7 @@ import { buttonClasses } from "@/components/ui/button";
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useOptimistic, useState, useTransition } from "react";
+import { useId, useOptimistic, useState, useTransition } from "react";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { tabClasses } from "@/components/ui/tab";
@@ -81,6 +81,7 @@ export function GraphExplorer({
     : "You can explore this workspace. Ask a member with edit access to add documents or connect them with links.";
   const router = useRouter();
   const pathname = usePathname();
+  const findHelpId = useId();
   const [query, setQuery] = useState("");
   // A filter is answered by the server (it lays the graph out), which takes a
   // round trip; the control shows the reader's choice at once and settles on
@@ -133,7 +134,7 @@ export function GraphExplorer({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={filters.view === "list" ? "Filter documents" : "Highlight documents"}
-              aria-describedby="graph-find-help"
+              aria-describedby={findHelpId}
             />
           </div>
           {sources.length > 1 ? (
@@ -162,7 +163,7 @@ export function GraphExplorer({
           {shown.sourceId || !shown.orphans || shown.unresolved ? <Button variant="ghost" size="sm" onClick={() => change({sourceId:null,orphans:true,unresolved:false,focusId:null})}>Reset</Button> : null}
         </div>
       </div>
-      <p id="graph-find-help" className="text-caption text-kh-text-muted" role="status">{query.trim() ? `${matches} ${matches === 1 ? "match" : "matches"} · ` : ""}{filters.view === "list" ? "Find filters the rows below." : "Find highlights matching nodes; other nodes remain visible."}</p>
+      <p id={findHelpId} data-graph-find-help className="text-caption text-kh-text-muted" role="status">{query.trim() ? `${matches} ${matches === 1 ? "match" : "matches"} · ` : ""}{filters.view === "list" ? "Find filters the rows below." : "Find highlights matching nodes; other nodes remain visible."}</p>
       <details className="text-caption text-kh-text-muted"><summary className="kh-focus-ring w-fit cursor-pointer rounded-md">About graph filters</summary><p className="mt-2">Orphans have no links. Unresolved targets have no saved document.</p></details>
       <LinkIndexNote stale={staleDocuments} />
       {truncated ? (

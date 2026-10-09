@@ -11,11 +11,12 @@ test("archives a sample source and restores it from Show archived", async ({ pag
   const sourceId = page.url().match(/sources\/([^/]+)\//)![1];
   const detail = `/w/${ws}/sources/${sourceId}`;
   await page.goto(`/w/${ws}/sources`);
-  await page.getByRole("button", { name: "Source actions: Sample wiki", exact: true }).click();
+  const actions = () => page.locator(`li`).filter({ has: page.locator(`a[data-list-row][href="${detail}"]`) }).getByRole("button", { name: "Source actions: Sample wiki", exact: true });
+  await actions().click();
   await page.getByRole("menuitem", { name: "Archive source" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Cancel" }).click();
   await expect(page.locator(`a[data-list-row][href="${detail}"]`)).toBeVisible();
-  await page.getByRole("button", { name: "Source actions: Sample wiki", exact: true }).click();
+  await actions().click();
   await page.getByRole("menuitem", { name: "Archive source" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Archive source" }).click();
   await expect(page.locator(`a[data-list-row][href="${detail}"]`)).toHaveCount(0);
@@ -24,7 +25,7 @@ test("archives a sample source and restores it from Show archived", async ({ pag
   await expect(source).toHaveCount(0);
   await page.getByRole("checkbox", { name: "Show archived" }).check();
   await expect(source).toBeVisible();
-  await page.getByRole("button", { name: "Source actions: Sample wiki", exact: true }).click();
+  await actions().click();
   await page.getByRole("menuitem", { name: "Restore source" }).click();
   await expect(source).not.toContainText("Archived");
   await source.click();
