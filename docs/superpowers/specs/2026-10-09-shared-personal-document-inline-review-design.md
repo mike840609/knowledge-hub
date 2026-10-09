@@ -3,11 +3,12 @@
 | Item | Decision |
 | --- | --- |
 | Date | 2026-10-09 |
-| Status | **Proposed for review; not implemented** |
+| Status | **Design complete for review; feature not implemented** |
 | Method | Superpowers-style brainstorming → design specification; writing-plans and execution follow review |
 | Scope | My Space documents exposed through existing expiring/revocable share links |
 | Baseline | 2026-09-23 document-share-link design, Phase 3 identity and Workspace access, Phase 5 revision model, frontend design language |
 | Explicitly out of scope | System / Module hierarchy, Team Workspace collaboration, simultaneous Markdown editing, Git integration |
+| Company SSO integration | **Deferred to the company's internal environment.** Reuse the trusted identity/session interface; no OAuth callback, IdP integration or fake production login in this scope. |
 
 ## 1. Problem and outcome
 
@@ -46,7 +47,7 @@ This is *review and decision discussion*, not Google Docs-style concurrent text 
 ### 3.2 Reviewer
 
 1. Opens /s/:token. Without signing in, the current Markdown is displayed as today; a **Review comments — Sign in** affordance appears but neither reviewer names nor comment bodies load.
-2. Signing in returns to the same share link. Only a **server-validated** authenticated principal can retrieve threads.
+2. **When the company's SSO entry point is configured**, signing in returns to the same share link; only a **server-validated** authenticated principal can retrieve threads. Until then, production remains read-only for reviewers: no broken sign-in link or local-account fallback. Local development may use the repository's existing local identity test mode, clearly labelled development-only.
 3. After login, selecting text inside one eligible rendered text block shows **Comment**. Clicking it opens the right-hand rail with the quoted selection and composer.
 4. Creating a thread shows author, timestamp, quote highlight, body, and Open state. Any other signed-in holder of a currently valid link to the same document can see and reply.
 5. Selecting a highlight focuses its discussion; selecting a discussion scrolls/focuses its text when the anchor still matches. An Outdated thread remains accessible in the side rail.
@@ -69,7 +70,7 @@ Open → Resolved ↔ Open. **Outdated is a derived anchor state, not a destruct
 - Anonymous valid link → read the current document only; no comment bodies, author names, counts implying reviewers, or writes.
 - Invalid/expired/revoked link → no linked read or review capability, whether logged in or not.
 
-No implicit permissions from a browser-supplied employee ID, email, display name, org code, user ID, document ID, or link ID. Company deployments must use the configured Company SSO provider plus the server-side session reader and HubIdentityResolver. Local identity mode remains a development/test fixture only; no production fallback. A company-managed PC is **not** authentication by itself.
+No implicit permissions from a browser-supplied employee ID, email, display name, org code, user ID, document ID, or link ID. Company deployments must use the configured Company SSO provider plus the server-side session reader and HubIdentityResolver. Local identity mode remains a development/test fixture only; no production fallback. A company-managed PC is **not** authentication by itself. **Company-specific SSO login/callback integration is intentionally deferred**; this design defines the boundary without claiming enterprise login works today.
 
 A link holder does not become a My Space member, cannot see the tree or other documents, and cannot use the token to call ordinary Workspace or revision APIs. The backend re-evaluates link validity, document/source/workspace lifecycle and issuer read access on **every** review read/write. An authorization check in the UI is never sufficient.
 
@@ -92,6 +93,18 @@ Keep /s/:token server-rendered and anonymous. Comment API operations establish a
 - Limit to 200 threads per document, 100 replies per thread, and 30 new thread/reply writes per user per hour per document; enforce server-side and return 429 for rate limits. Specify storage-backed enforcement in implementation plan rather than in-memory limits on horizontally scaled instances.
 - Do not use share tokens as persistent reviewer grants: each request supplies a live token, which is checked again.
 
+### 4.4 SSO adapter boundary and staged delivery (decided)
+
+**This is a design specification, not an SSO implementation.** The repository already defines `CompanySsoSessionReader`, `configureCompanySsoSessionReader`, `createIdentityProvider`, `HubIdentityResolver`, and `establishTrustedCaller`. It does **not** ship a company OAuth/OIDC login UI, callback endpoint, or deployed SSO gateway. Review services must consume the existing trusted `CallerContext`, not invent a parallel identity abstraction.
+
+1. **Review-feature implementation:** build review services around `CallerContext`. Provide a server-derived login capability/return-navigation interface for the UI; if no trusted company login entry is available, keep the anonymous reader working and explain that comments require configured sign-in. No hard-coded IdP URL, browser-provided employee ID, fake production login or untrusted bypass.
+2. **Development and CI:** use existing explicitly enabled local identity mode or injected `CompanySsoSessionReader` test doubles to exercise two real distinct Hub users, authorization and errors. A simulated principal verifies only the **interface**, never a deployed corporate sign-in. Test fixtures must not become a production authentication path.
+3. **Later company integration:** an authorized deployer implements corporate sign-in initiation/return and a verified server-side session reader using corporate issuer/audience/expiry and trusted-session validation as applicable. Map verified claims through `HubIdentityResolver`. Restore only an allowlisted same-origin `/s/:token` destination; never leak bearer tokens into IdP URLs, external analytics, logs or unsafe provider state.
+4. **Fail closed:** when the corporate identity reader is unconfigured/untrusted/unavailable, review operations requiring identity do not run. Do not use local identity as fallback. An absent user session is 401 `AUTH_REQUIRED`; an unavailable trusted provider/session integration is 503 `AUTH_UNAVAILABLE`. Neither leaks document/link existence.
+5. **Separate release gates:** core review/API/test-suite acceptance can pass with deterministic trusted test callers before internal deployment. Production enablement and live corporate end-to-end sign-in/return acceptance are **deferred** until that integration is supplied and tested on the company network.
+
+The eventual SSO provider may change, but the policy does not: **valid current share link + server-verified caller** on every reviewer request.
+
 ## 5. Data model (MariaDB additive migration)
 
 Use the **next available migration version**, not a hard-coded number without checking main. Extend Knowledge module domain/ports/application/MariaDB adapter; preserve repository import boundaries.
@@ -102,6 +115,8 @@ Use the **next available migration version**, not a hard-coded number without ch
 - document_id UUID FK knowledge_documents, NOT NULL (scope is derived from document/source; do not duplicate workspace_id)
 - created_revision_id UUID FK document revisions, NOT NULL
 - created_by UUID FK users, NOT NULL
+- creation_idempotency_key VARCHAR(64) NOT NULL
+- creation_request_hash CHAR(64) NOT NULL (SHA-256 of canonical validated creation payload, excluding raw share token)
 - origin_share_link_id UUID FK document_share_links, NULL (audit provenance only; **not** the authorization or visibility boundary)
 - anchor_json JSON NOT NULL, schemaVersion=1
 - status ENUM('OPEN','RESOLVED') NOT NULL DEFAULT 'OPEN'
@@ -109,6 +124,7 @@ Use the **next available migration version**, not a hard-coded number without ch
 - created_at DATETIME(6) NOT NULL
 - updated_at DATETIME(6) NOT NULL
 - indexes (document_id, status, created_at), (created_by, created_at)
+- UNIQUE(document_id, created_by, creation_idempotency_key) enforced by the database, not in-memory
 - DB CHECK constraints for resolution consistency where supported
 
 ### review_comments
@@ -119,9 +135,10 @@ Use the **next available migration version**, not a hard-coded number without ch
 - body TEXT NOT NULL (application validates 1–3,000 chars)
 - created_at DATETIME(6) NOT NULL
 - idempotency_key VARCHAR(64) NOT NULL; UNIQUE(thread_id, author_user_id, idempotency_key)
+- request_hash CHAR(64) NOT NULL (SHA-256 of canonical validated reply payload)
 - index (thread_id, created_at, id)
 
-The initial message is the first review_comments row in the new thread, in the **same transaction**. Owner resolution creates an audit event with actor/time. No hard delete of review history in v1; this matches current document/link lifecycle conventions. Employee names are read from stored Hub users for display and never trusted from client payloads.
+The initial message is the first review_comments row in the new thread, in the **same transaction**. **New thread creation needs its own idempotency key:** a uniqueness constraint on the first comment inside a newly generated thread ID does not prevent two duplicate threads. Same (document, creator, creation key) + identical canonical request returns the same thread and first comment after *fresh* link/identity authorization. Reusing a key with different payload returns 409 `IDEMPOTENCY_KEY_REUSED`. Replies use (thread, author, key) and compare payload hashes before returning a previous reply. DB uniqueness handles concurrent races; check-then-insert alone is insufficient. Never return previous content through a revoked link. Keys must be validated, bounded and unpredictable (e.g. UUIDv4). Owner resolution creates an audit event with actor/time. No hard delete of review history in v1; this matches current document/link lifecycle conventions. Employee names are read from stored Hub users for display and never trusted from client payloads.
 
 ## 6. Anchoring and revisions
 
@@ -171,17 +188,17 @@ Share tokens for comment APIs are in an HTTPS **JSON request body**, not new GET
 | Method | Path | Auth & behavior |
 | --- | --- | --- |
 | POST | /api/share-review/threads/query | Authenticated + valid token in JSON body. Returns bounded threads/comments for **one** document with safe current-revision anchor projections. |
-| POST | /api/share-review/threads | Authenticated + valid token. Creates thread + first comment; requires expectedRevisionId, selected anchor, body, idempotency key. |
-| POST | /api/share-review/threads/{threadId}/replies | Authenticated + valid token. Resolves thread-to-document and verifies token covers the *same* document; appends reply to Open thread. |
+| POST | /api/share-review/threads | Authenticated + valid token. Creates thread + first comment atomically; requires expectedRevisionId, selected anchor, body and **thread-creation idempotency key**. Safe retry returns the original thread only for identical payload. |
+| POST | /api/share-review/threads/{threadId}/replies | Authenticated + valid token. Resolves thread-to-document and verifies token covers the *same* document; appends reply to Open thread with its own reply idempotency key (changed payload under same key: 409). |
 | GET | /api/documents/{documentId}/review-threads | Authenticated document owner through normal Workspace authorization. May view history/anchor quote. |
 | POST | /api/documents/{documentId}/review-threads/{threadId}/replies | Authenticated owner only. Append reply without needing a share link. |
 | POST | /api/documents/{documentId}/review-threads/{threadId}/resolution | Authenticated owner only. status=OPEN or RESOLVED; idempotent updates and audit. |
 
 The list endpoint is POST to avoid putting the bearer token in a URL; this is a deliberate read-via-POST exception. The public share page can remain a Server Component, with a small client-side review island loaded after authentication. No implicit call to Workspace APIs from anonymous /s/:token.
 
-Authentication status for review endpoints: 401 (not signed in), 404 uniform (invalid/inaccessible link/document/thread without revealing existence), 400 (invalid input/selection), 409 (stale revision or resolved thread reply), 429 (quota), 503 (trusted SSO integration unavailable), and 5xx generic for unexpected failures. Existing anonymous share-link route keeps uniform 404. Never return different error messages revealing why a token is invalid.
+Authentication status for review endpoints: 401 (not signed in), 404 uniform (invalid/inaccessible link/document/thread without revealing existence), 400 (invalid input/selection), 409 (stale revision, resolved thread reply, or changed payload under reused idempotency key), 429 (quota), 503 (trusted SSO integration unavailable), and 5xx generic for unexpected failures. Existing anonymous share-link route keeps uniform 404. Never return different error messages revealing why a token is invalid.
 
-**Transaction and locking:** follow existing share revocation lock order to prevent a post-revocation write from committing: lock link row first for link-based mutations, then source, then shared Workspace lock and relevant thread, revalidating lifecycle/issuer access *after* locks. No Workspace owner membership is granted to reviewer. A revoke waits for in-flight comment mutation, or mutation sees revoked state and fails. Owner-only thread writes use Source → Workspace → Thread; do not invert these locks in any new path. Keep MariaDB READ COMMITTED semantics and integrate with the existing UnitOfWork pattern. Add idempotency on retries so a flaky connection cannot duplicate a reply.
+**Transaction and locking:** follow existing share revocation lock order to prevent a post-revocation write from committing: lock link row first for link-based mutations, then source, then shared Workspace lock and relevant thread, revalidating lifecycle/issuer access *after* locks. No Workspace owner membership is granted to reviewer. A revoke waits for in-flight comment mutation, or mutation sees revoked state and fails. Owner-only thread writes use Source → Workspace → Thread; do not invert these locks in any new path. Keep MariaDB READ COMMITTED semantics and integrate with the existing UnitOfWork pattern. Database-enforced idempotency protects **both** new-thread creation and replies (§5); retry-race recovery must recheck live link authorization before returning an existing result.
 
 ## 8. Implementation boundaries
 
@@ -198,21 +215,21 @@ No System or Module model, Team Workspace write access, external collaborative e
 ## 9. Acceptance criteria and required tests
 
 1. **Anonymous unchanged:** a valid /s/:token opens current Markdown without SSO, and anonymous attempts to query/create/reply to comments get no comment data and cannot write.
-2. **SSO provenance:** signed-in reviewer from trusted claims can post; submitted employee/user/author fields are ignored or rejected; a missing/untrusted Company SSO session cannot post (including production fail-closed).
+2. **SSO provenance and deferral:** injected trusted corporate-session claims and development-only identities can exercise commenting; submitted employee/user/author fields are ignored or rejected; missing/untrusted Company SSO cannot post (production fails closed). No deployed corporate login, callback or live SSO E2E is claimed; company sign-in is a later separate release gate (§4.4).
 3. **One document scope:** a valid token for Document A cannot query, reply to, or change a thread on Document B, even with guessed UUIDs. A link provides no access to owner Workspace tree/search/history/MCP/other documents.
 4. **Multi-link collaboration:** two different valid links to the same document show the same threads to authenticated users; revoking one removes its holders' review access but does not erase threads for the other link or owner.
 5. **Owner controls:** only document owner can resolve/reopen and access the owner-only comments endpoint; owner can review after every link expires.
 6. **Sync-safe:** SOURCE_MANAGED Folder Sync changes source Markdown; comments remain in DB; no diff or import conflicts attributable to review data; unchanged quotes re-anchor and missing/ambiguous quotes become Outdated without mis-highlighting.
-7. **Stale safety:** a client POST with a superseded revision fails 409; same idempotency key retried after response loss creates one comment.
+7. **Stale/idempotency safety:** superseded revision fails 409; same thread-creation key and payload retried after response loss creates exactly one **thread and first comment**; same reply key creates one reply. Different keys can create separate threads. Changed payload with same key fails 409, keys across users stay isolated, and revoked links cannot retrieve replayed data. Verify concurrent MariaDB races.
 8. **History/privacy:** outdated reviewer payload never includes older exact quote/prefix/suffix or old Markdown, while owner retains enough provenance to triage.
 9. **Security:** invalid/expired/revoked/archived links uniformly deny; CSRF/origin, no-store, token log redaction, rate limits and escaping are tested.
 10. **UX/accessibility:** pointer and keyboard selection, focus/scroll between highlight and thread, reply/resolve states, mobile drawer, and screen-reader announcement pass E2E.
-11. **CI:** unit tests (authorization/anchors), integration (MariaDB transaction/revoke race), E2E (anonymous→SSO review→owner resolve→sync→outdated), typecheck, lint, build and current repository regression gates pass.
+11. **CI:** unit tests (authorization/anchors), integration (MariaDB idempotency races/transactions/revocation), E2E (anonymous → **test-session-authenticated** review → owner resolve → sync → outdated), typecheck, lint, build and existing regression gates pass **when implemented**. Live corporate SSO E2E is a deferred gate (§4.4).
 
 ## 10. Implementation order after design approval
 
 1. **writing-plans:** produce a task-by-task plan in docs/superpowers/plans, with migration rollback/roll-forward notes and file-level test steps.
-2. **Backend foundation:** domain/ports, migration, repository tests, capability/identity/CSRF boundary.
+2. **Backend foundation:** domain/ports, migration, repository tests, capability/identity/CSRF boundary against existing identity interfaces only; no corporate SSO login integration.
 3. **Read and write API:** idempotency, link-revoke race, owner-only endpoints, error mapping.
 4. **Anchoring:** text-projection contract, selection validation, safe read-time remapping, stale handling.
 5. **UX:** share reader sidebar and owner review panel, E2E accessibility/SSO flows.
@@ -220,7 +237,7 @@ No System or Module model, Team Workspace write access, external collaborative e
 
 ## 11. Open implementation details (not blockers for the product decision)
 
-- Determine the production-approved SSO sign-in initiation / return URL from the existing company gateway; do not invent a client-side provider bypass.
+- **Deferred company task, not an MVP design blocker:** supply the company-approved SSO sign-in initiation/return handling through the existing trusted session seam. Until wired, production review UI must explain that commenting sign-in is unavailable, not offer a broken link or test-account fallback.
 - Pin the exact AST-visible-text canonicalization and block identity implementation with round-trip tests before accepting real anchors.
 - Choose an existing distributed/shared rate limiter or a MariaDB rate-limit ledger consistent with internal deployment needs.
 - Confirm layout placement and responsive styling through screenshots after the implementation branch exists.
