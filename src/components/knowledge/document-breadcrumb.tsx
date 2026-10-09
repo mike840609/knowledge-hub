@@ -10,7 +10,7 @@ export type DocumentBreadcrumbSegment = {
 export function DocumentBreadcrumb({ segments }: { segments: DocumentBreadcrumbSegment[] }) {
   return (
     <nav aria-label="Breadcrumb" className="min-w-0 flex-1">
-      <ol className="flex min-w-0 items-center gap-1 text-body-sm text-kh-text-muted">
+      <ol className="flex min-w-0 items-center gap-1 text-body text-kh-text-muted">
         {segments.map((segment, index) => {
           const isLast = index === segments.length - 1;
           return (

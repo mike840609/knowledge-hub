@@ -1,7 +1,8 @@
 "use client";
 import type { OnboardingProgress } from "@/server/onboarding-progress";
 import { WorkspaceImportLink } from "@/components/shell/workspace-import-link";
-import { useState } from "react";
+import { GuidanceVisibilityContext } from "./guidance-visibility";
+import { useContext, useState } from "react";
 import Link from "next/link";
 import { FirstUseIllustration } from "./first-use-illustration";
 import { Circle, CircleCheck } from "lucide-react";
@@ -10,6 +11,7 @@ import { useHydrated } from "@/components/shell/use-hydrated";
 import type { OnboardingPreference } from "@/modules/personal/domain/onboarding";
 export type OnboardingState = { value: OnboardingPreference; version: number };
 export function FirstUseGuidance({ workspaceId, initial, firstDocumentHref, imported, progress }: { workspaceId: string; initial: OnboardingState; firstDocumentHref?: string; imported: boolean; progress: OnboardingProgress }) {
+  const visibility = useContext(GuidanceVisibilityContext);
   const [state, setState] = useState(initial);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -20,7 +22,9 @@ export function FirstUseGuidance({ workspaceId, initial, firstDocumentHref, impo
     try {
       const response = await fetch(`/api/workspaces/${workspaceId}/onboarding`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ value: { schemaVersion: 1, dismissed: true }, version: state.version }) });
       if (!response.ok) throw new Error("Unable to hide guidance. Reload and try again.");
-      setState(await response.json());
+      const saved = await response.json();
+      setState(saved);
+      visibility.setDismissed(saved.value.dismissed);
     } catch (failure) { setError(failure instanceof Error ? failure.message : "Unable to hide guidance."); }
     finally { setSaving(false); }
   }

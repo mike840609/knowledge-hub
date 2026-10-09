@@ -1,0 +1,63 @@
+{
+  "baseline": "743d7b3071190d52ef762e239348bd3608cfbdab",
+  "capturedAt": "2026-10-09T04:06:15.188Z",
+  "rendering": "Next.js development servers, actual application components, isolated synthetic database",
+  "viewports": {
+    "desktop": {
+      "width": 1440,
+      "height": 1000
+    }
+  },
+  "sourceId": "01a11ed7-3fc7-702e-baa4-1d7e53b161b0",
+  "snapshot": "01a11ed7-5727-7c1d-8b8d-00ac01692f7e",
+  "pages": [
+    [
+      "sources",
+      "Sources",
+      "/sources",
+      "常駐提醒設定與說明改為收合；回報區塊移到帳號選單。"
+    ],
+    [
+      "import",
+      "Import folder",
+      "/sources/import",
+      "合併頁首說明，移除 sample 重複段落，排除規則收合。"
+    ],
+    [
+      "update",
+      "Update from folder",
+      "/sources/01a11ed7-3fc7-702e-baa4-1d7e53b161b0/update",
+      "移除重複的完整資料夾指示與頁首同步版本。"
+    ],
+    [
+      "graph",
+      "Graph",
+      "/graph?view=list",
+      "篩選器定義移到 About graph filters。"
+    ],
+    [
+      "context",
+      "Copy for Agent",
+      "/agent-context",
+      "流程只說明一次，限制放到 Prepare context 旁。"
+    ],
+    [
+      "health",
+      "Source health",
+      "/sources/health",
+      "合併重複的頁首介绍。"
+    ],
+    [
+      "preview",
+      "Import preview",
+      "/sources/imports/01a11ed7-5727-7c1d-8b8d-00ac01692f7e",
+      "教學與完整排除路徑收合；警告仍可見。"
+    ],
+    [
+      "insights",
+      "Insights",
+      "/profile",
+      "統計定義移到 How counts work。"
+    ]
+  ]
+}

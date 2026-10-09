@@ -1,4 +1,6 @@
+import { PageHeader } from "@/components/shell/page-header";
 import Link from "next/link";
+import { ImportFlowGuide } from "@/components/imports/import-flow-guide";
 import { FolderImportForm } from "@/components/imports/folder-import-form";
 import { getSourceListModel } from "@/server/source-read";
 import { StatusMessage } from "@/components/ui/status-message";
@@ -23,22 +25,13 @@ export default async function WorkspaceSourceImportPage({
     );
   }
   return (
-    <main className="kh-page py-6">
-      <Link className="w-fit rounded-md text-body font-medium text-kh-text-muted underline-offset-4 hover:underline kh-focus-ring" href={`/w/${workspaceId}/sources`}>
-        Back to Sources
-      </Link>
-      <h1 className="mt-3 text-heading font-semibold text-kh-text">Import folder</h1>
+    <main className="kh-page pb-6">
+      <PageHeader location="Sources" locationHref={`/w/${workspaceId}/sources`} title="Import folder" />
       <p className="mt-1 text-body text-kh-text-muted">
-        Choose a local folder to create a source in {model.workspace.name}. Your files stay in that folder;
-        you review a preview of every change before anything is applied.
+        Your local files stay unchanged.{" "}
+        <Link className="rounded-md text-kh-link underline-offset-4 hover:underline kh-focus-ring" href={`/w/${workspaceId}/sources/import/guide`}>Folder format guide</Link>
       </p>
-      <p className="mt-2 text-body text-kh-text-muted">
-        Not sure what a folder should look like?{" "}
-        <Link className="rounded-md font-medium text-kh-link underline-offset-4 hover:underline kh-focus-ring" href={`/w/${workspaceId}/sources/import/guide`}>
-          Read the guide
-        </Link>
-        , or try a sample wiki below.
-      </p>
+      <ImportFlowGuide />
       <div className="mt-5">
         {model.actions.canImport ? <FolderImportForm
           target={{ kind: "new", workspaceId }}

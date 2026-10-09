@@ -109,6 +109,6 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
       })}
     </ul>
     <ConfirmDialog open={!!confirmedItem} onOpenChange={open => { if (!open) setConfirming(null); }} title="Revoke share link?" description={<>Revoke “{confirmedItem?.label ?? "Untitled link"}” for {confirmedItem?.title}? Anyone holding this link will lose access. This cannot be undone.</>} cancelLabel="Keep" confirmLabel="Confirm revoke" onConfirm={() => { if (confirming) void revoke(confirming); }} />
-    <nav aria-label="Share pages" className="mt-4 flex items-center gap-4 text-body"><span className="text-kh-text-muted">Page {model.query.page}</span>{model.query.page > 1 ? <Link className="kh-focus-ring rounded-md text-kh-link" href={href(model.query.page - 1)}>Previous</Link> : null}{model.hasNext ? <Link className="kh-focus-ring rounded-md text-kh-link" href={href(model.query.page + 1)}>Next</Link> : null}</nav>
+    {model.query.page > 1 || model.hasNext ? <nav aria-label="Share pages" className="mt-4 flex items-center gap-4 text-body"><span className="text-kh-text-muted">Page {model.query.page}</span>{model.query.page > 1 ? <Link className="kh-focus-ring rounded-md text-kh-link" href={href(model.query.page - 1)}>Previous</Link> : null}{model.hasNext ? <Link className="kh-focus-ring rounded-md text-kh-link" href={href(model.query.page + 1)}>Next</Link> : null}</nav> : null}
   </main>;
 }

@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/shell/page-header";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ResourceAccessDenied } from "@/components/errors/resource-access-denied";
@@ -28,15 +29,12 @@ export default async function WorkspaceSourceImportPreviewPage({
   // context only. A mismatch gets the same inaccessible/not-found treatment.
   if (preview.workspaceId !== workspaceId) notFound();
   return (
-    <main className="kh-page min-h-screen py-6">
-      <Link className="w-fit rounded-md text-body font-medium text-kh-link underline-offset-4 hover:underline kh-focus-ring" href={`/w/${workspaceId}/sources`}>
-        Back to Sources
-      </Link>
-      <h1 className="mt-2 text-heading font-semibold text-kh-text">Import preview</h1>
+    <main className="kh-page min-h-screen pb-6">
+      <PageHeader location="Sources" locationHref={`/w/${workspaceId}/sources`} title="Import preview" />
       <p className="mt-1 text-body text-kh-text-muted">
-        Review the immutable staged diff. Warnings may proceed; blockers never apply.
+        Review changes before applying. Resolve blockers to continue.
       </p>
-      <p className="mt-2 text-body"><Link className="kh-focus-ring rounded-md text-kh-link hover:underline" href={`/w/${workspaceId}/help#sync`}>How to review and apply changes</Link></p>
+      <details className="mt-2 text-body"><summary className="kh-focus-ring w-fit cursor-pointer rounded-md text-kh-text-muted">Preview help</summary><Link className="kh-focus-ring rounded-md text-kh-link hover:underline" href={`/w/${workspaceId}/help#sync`}>How to review and apply changes</Link></details>
       <div className="mt-4">
         <ImportPreview workspaceId={workspaceId} preview={preview} />
       </div>
