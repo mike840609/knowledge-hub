@@ -1,4 +1,5 @@
 import type { FolderImportClientLimits } from "@/components/imports/folder-import-form";
+import { SourceLifecycleActions } from "./source-lifecycle-actions";
 import { SourceSyncActions } from "@/components/sources/source-sync-actions";
 import { isFolderSyncable } from "@/modules/knowledge/domain/source-policy";
 import Link from "next/link";
@@ -29,7 +30,7 @@ export function SourceListRow({ workspaceId, item, limits }: { workspaceId: stri
   const { source, latestRun, latestSuccessfulRun } = item;
   const lastSyncedAt = latestSuccessfulRun?.completedAt ?? (latestRun?.status === "APPLIED" ? latestRun.completedAt : null);
   return (
-    <li className="kh-interactive-row grid grid-cols-[2rem_minmax(0,1fr)] items-center gap-x-1 px-3">
+    <li className="kh-interactive-row grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-1 px-3">
       {isFolderSyncable(source) ? (
         <SourceSyncActions compact workspaceId={workspaceId} sourceId={source.id} sourceName={source.name} limits={limits} />
       ) : (
@@ -62,6 +63,7 @@ export function SourceListRow({ workspaceId, item, limits }: { workspaceId: stri
         ) : null}
         <ChevronRight size={15} aria-hidden="true" className="shrink-0 text-kh-text-muted" />
       </Link>
+      <div className="col-start-3 row-start-1"><SourceLifecycleActions workspaceId={workspaceId} sourceId={source.id} sourceName={source.name} status={source.status} label={`Source actions: ${source.name}`} /></div>
       {item.pendingPreviewId ? <Link className="kh-focus-ring col-start-2 w-fit rounded-md pb-2 text-body-sm font-medium text-kh-link hover:underline" href={`/w/${workspaceId}/sources/imports/${item.pendingPreviewId}`}>Awaiting Apply · Review preview</Link> : null}
     </li>
   );
