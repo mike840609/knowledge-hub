@@ -34,7 +34,7 @@ export function SourceLifecycleActions({ workspaceId, sourceId, sourceName, stat
   };
   return <div>
     <MenuRoot>
-      <MenuTrigger disabled={busy} aria-label={label} className={buttonClasses({ variant: "ghost", icon: true })}><MoreHorizontal size={16} /></MenuTrigger>
+      <MenuTrigger disabled={busy} aria-label={label} title="Source actions" className={buttonClasses({ variant: "ghost", icon: true, className: "min-h-11 min-w-11" })}><MoreHorizontal size={16} /></MenuTrigger>
       <MenuContent align="end"><MenuItem onClick={() => archived ? void changeStatus() : setConfirm(true)}>{archived ? "Restore source" : "Archive source"}</MenuItem></MenuContent>
     </MenuRoot>
     <ConfirmDialog open={confirm} onOpenChange={setConfirm} title={`Archive ${sourceName}?`} description="This source and its documents will be hidden from normal browsing, search and Graph. Documents and import history are retained. You can restore it from Sources → Show archived." confirmLabel="Archive source" tone="primary" onConfirm={() => void changeStatus()} />

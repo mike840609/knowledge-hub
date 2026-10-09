@@ -3,7 +3,7 @@ import { SourceLifecycleActions } from "./source-lifecycle-actions";
 import { SourceSyncActions } from "@/components/sources/source-sync-actions";
 import { isFolderSyncable } from "@/modules/knowledge/domain/source-policy";
 import Link from "next/link";
-import { ChevronRight, Database } from "lucide-react";
+import { Database } from "lucide-react";
 import type { SourceListItemModel } from "@/server/source-read";
 import { Status, type StatusKind } from "@/components/ui/status";
 import { Timestamp } from "@/components/ui/timestamp";
@@ -30,7 +30,7 @@ export function SourceListRow({ workspaceId, item, limits }: { workspaceId: stri
   const { source, latestRun, latestSuccessfulRun } = item;
   const lastSyncedAt = latestSuccessfulRun?.completedAt ?? (latestRun?.status === "APPLIED" ? latestRun.completedAt : null);
   return (
-    <li className="kh-interactive-row grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-1 px-3">
+    <li className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-2 px-1">
       {isFolderSyncable(source) ? (
         <SourceSyncActions compact workspaceId={workspaceId} sourceId={source.id} sourceName={source.name} limits={limits} />
       ) : (
@@ -41,9 +41,9 @@ export function SourceListRow({ workspaceId, item, limits }: { workspaceId: stri
       <Link
         data-list-row
         href={`/w/${workspaceId}/sources/${source.id}`}
-        className="kh-focus-ring col-start-2 row-start-1 flex min-w-0 min-h-11 flex-wrap items-center gap-x-3 gap-y-1 rounded-md py-2.5"
+        className="group kh-focus-ring col-start-2 row-start-1 flex min-w-0 min-h-11 flex-wrap items-center gap-x-3 gap-y-1 rounded-md px-2 py-2.5 transition-colors hover:bg-kh-bg-hover focus-visible:bg-kh-bg-hover"
       >
-        <span className="min-w-0 flex-1 truncate text-body font-medium text-kh-text">{source.name}</span>
+        <span className="min-w-0 flex-1 truncate text-body font-medium text-kh-text group-hover:text-kh-link group-hover:underline group-focus-visible:text-kh-link group-focus-visible:underline">{source.name}</span>
         <span className="shrink-0 text-caption text-kh-text-muted">
           {sourceTypeLabel(source.sourceType)}
         </span>
@@ -61,9 +61,8 @@ export function SourceListRow({ workspaceId, item, limits }: { workspaceId: stri
             )}
           </span>
         ) : null}
-        <ChevronRight size={15} aria-hidden="true" className="shrink-0 text-kh-text-muted" />
       </Link>
-      <div className="col-start-3 row-start-1"><SourceLifecycleActions workspaceId={workspaceId} sourceId={source.id} sourceName={source.name} status={source.status} label={`Source actions: ${source.name}`} /></div>
+      <div className="col-start-3 row-start-1 ml-1 flex min-w-11 justify-center"><SourceLifecycleActions workspaceId={workspaceId} sourceId={source.id} sourceName={source.name} status={source.status} label={`Source actions: ${source.name}`} /></div>
       {item.pendingPreviewId ? <Link className="kh-focus-ring col-start-2 w-fit rounded-md pb-2 text-body-sm font-medium text-kh-link hover:underline" href={`/w/${workspaceId}/sources/imports/${item.pendingPreviewId}`}>Awaiting Apply · Review preview</Link> : null}
     </li>
   );
