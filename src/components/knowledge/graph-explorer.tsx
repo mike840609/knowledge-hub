@@ -124,7 +124,7 @@ export function GraphExplorer({
           ))}
         </nav>
         <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1 py-1">
-          {/* The field primitives fill their container, so the width belongs to a wrapper. */}
+          {/* The width belongs to a wrapper; the field fills it (`Input` does by default, `Select` is told to below). */}
           <div className="w-56">
             <label className="sr-only" htmlFor="graph-find">Find a document</label>
             <Input
@@ -140,7 +140,9 @@ export function GraphExplorer({
           {sources.length > 1 ? (
             <div className="w-44">
               <label className="sr-only" htmlFor="graph-source">Source</label>
-              <Select id="graph-source" value={shown.sourceId ?? ""} onChange={(event) => change({ sourceId: event.target.value || null })}>
+              {/* A native select sizes itself to its longest option; filling the wrapper keeps a long source name
+                  inside the 176px it was given rather than over the toggles beside it. */}
+              <Select id="graph-source" className="w-full" value={shown.sourceId ?? ""} onChange={(event) => change({ sourceId: event.target.value || null })}>
                 <option value="">All sources</option>
                 {sources.map((source) => (
                   <option key={source.id} value={source.id}>{source.name}</option>
