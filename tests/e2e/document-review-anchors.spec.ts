@@ -24,7 +24,8 @@ test("owner and shared readers agree on emoji, formatting and duplicate block of
   await page.getByText("Comments", { exact: true }).filter({ visible: true }).click();
   await page.getByRole("button", { name: "😀 bold", exact: true }).click();
   await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe("😀 bold");
-  const ownerSelection = await page.locator("[data-review-document]").evaluate(root => { const selection = window.getSelection()!; const range = selection.getRangeAt(0); const paragraph = root.querySelector("p")!; const before = range.cloneRange(); before.selectNodeContents(paragraph); before.setEnd(range.startContainer, range.startOffset); return { exact: selection.toString(), startUtf16: before.toString().length }; });
+  // The page streams in: for a moment after load React's not-yet-swapped hidden segment holds a second copy.
+  const ownerSelection = await page.locator("[data-review-document]").filter({ visible: true }).evaluate(root => { const selection = window.getSelection()!; const range = selection.getRangeAt(0); const paragraph = root.querySelector("p")!; const before = range.cloneRange(); before.selectNodeContents(paragraph); before.setEnd(range.startContainer, range.startOffset); return { exact: selection.toString(), startUtf16: before.toString().length }; });
   expect(ownerSelection).toEqual({ exact: "😀 bold", startUtf16: 2 });
   await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
   for (const index of [2, 3]) {

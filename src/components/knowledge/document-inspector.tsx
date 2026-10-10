@@ -22,7 +22,7 @@ import type { DocumentLinkView } from "@/modules/knowledge/application/knowledge
 import type { GraphViewData } from "./graph-model";
 import type { OutlineEntry } from "@/shared/markdown/outline";
 import { Check, Copy, X } from "lucide-react";
-import type { KnowledgeRevisionView } from "@/modules/knowledge/application/knowledge-query-service";
+import type { RevisionSummary } from "@/server/knowledge-read";
 import { Drawer } from "@/components/ui/drawer";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/components/ui/tabs";
 import { DocumentHeader } from "./document-header";
@@ -53,7 +53,7 @@ export type DocumentInspectorData = {
   sourcePath?:string|null;
   documentId: string;
   status: "ACTIVE" | "ARCHIVED";
-  revisions: KnowledgeRevisionView[];
+  revisions: RevisionSummary[];
   selectedRevisionNo: number;
   includeArchived: boolean;
   /** What links here and what this links to; `null` when it could not be read. */
