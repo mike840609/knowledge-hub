@@ -45,3 +45,40 @@ test("mobile comments can retry after a temporary loading failure", async ({ pag
   await expect(drawer.getByRole("button", { name: "Comment on selection" })).toBeVisible();
   await expect(drawer.getByRole("status")).toHaveCount(0);
 });
+
+test("on a screen too narrow for the rail, discussions are reachable from anywhere in a long document", async ({ page, request }) => {
+  const markdown = Array.from({ length: 120 }, (_, index) => `Paragraph ${index + 1} of a long document that a reader scrolls through.`).join("\n\n");
+  const doc = await createReviewDocument(request, markdown);
+  // A monitor turned to portrait: wide enough to read, too narrow for the reading column and a rail.
+  await page.setViewportSize({ width: 1080, height: 1920 });
+  await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
+  const open = page.getByRole("button", { name: "Open discussions" });
+  const article = page.locator("[data-review-document]").filter({ visible: true });
+  await expect(article.locator("p")).toHaveCount(120);
+  expect(await page.evaluate(() => document.documentElement.scrollHeight > window.innerHeight * 2), "the document must be long enough to scroll").toBe(true);
+
+  // Before any scrolling: on screen, above the text and not over it.
+  await expect(open).toBeInViewport();
+  const atTop = (await open.boundingBox())!;
+  expect(atTop.y + atTop.height).toBeLessThanOrEqual((await article.boundingBox())!.y);
+
+  // In the middle of the document it has followed the reader.
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight / 2));
+  await expect(open).toBeInViewport();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await open.click();
+  await expect(page.getByRole("dialog")).toHaveCSS("opacity", "1");
+});
+
+test("on a wide screen the rail still sits beside the document, with no drawer button", async ({ page, request }) => {
+  const doc = await createReviewDocument(request);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
+  const rail = page.getByRole("complementary", { name: "Document discussions" });
+  const article = page.locator("[data-review-document]").filter({ visible: true });
+  await expect(rail.getByRole("button", { name: "Comment on selection" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open discussions" })).toBeHidden();
+  const railBox = (await rail.boundingBox())!;
+  const articleBox = (await article.boundingBox())!;
+  expect(railBox.x).toBeGreaterThanOrEqual(articleBox.x + articleBox.width - 1);
+});
