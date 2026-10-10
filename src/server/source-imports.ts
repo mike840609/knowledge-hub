@@ -4,10 +4,18 @@ import type { CreateImportResult, ImportManifestEntry } from "@/modules/sources/
 import { translateKnownSnapshotAccessError } from "@/modules/sources/application/import-snapshot-access";
 import type { ImportPreview } from "@/modules/sources/application/reconcile-import-snapshot";
 import type { UploadImportResult } from "@/modules/sources/application/upload-folder-import-entries";
+import { importError } from "@/modules/sources/domain/import-errors";
 import { applicationServices } from "@/server/composition";
 import { createImportStagingSweep } from "@/server/import-staging-sweep";
 
 const sweepImportStagingSoon = createImportStagingSweep();
+
+/** Expired staging first: deleting it is what releases the blobs a preview was holding. */
+async function sweep(services: ReturnType<typeof applicationServices>): Promise<{ deleted: number }> {
+  const result = await services.imports.cleanup.cleanup();
+  await services.blobMaintenance?.gc();
+  return result;
+}
 
 export type InitialImportRequest = { sourceName: string; rootName: string; manifest: ImportManifestEntry[]; importScope?: unknown; expectedSourceVersion?: number };
 export type ResyncRequest = { rootName: string; manifest: ImportManifestEntry[]; importScope?: unknown; expectedSourceVersion?: number };
@@ -63,7 +71,7 @@ export async function createInitialSourceImport(workspaceId: string, input: Init
     importScope: input.importScope,
     expectedSourceVersion: input.expectedSourceVersion,
   });
-  sweepImportStagingSoon(() => services.imports.cleanup.cleanup());
+  sweepImportStagingSoon(() => sweep(services));
   return created;
 }
 
@@ -77,7 +85,7 @@ export async function createSourceResync(sourceId: string, input: ResyncRequest)
     importScope: input.importScope,
     expectedSourceVersion: input.expectedSourceVersion,
   });
-  sweepImportStagingSoon(() => services.imports.cleanup.cleanup());
+  sweepImportStagingSoon(() => sweep(services));
   return created;
 }
 
@@ -88,6 +96,18 @@ export async function uploadSourceImportEntries(
   const services = applicationServices();
   const { caller } = await services.establishTrustedCaller();
   return withKnownSnapshotAccess(() => services.imports.upload.upload(caller, { snapshotId, entries }));
+}
+
+export async function uploadSourceImportAsset(
+  snapshotId: string,
+  input: { uploadKey: string; body: ReadableStream<Uint8Array>; contentLength: number },
+): Promise<{ accepted: boolean }> {
+  const services = applicationServices();
+  const { caller } = await services.establishTrustedCaller();
+  const uploadAsset = services.imports.uploadAsset;
+  // Images are not stored on this server, so no manifest entry is waiting for bytes.
+  if (!uploadAsset) throw importError("UPLOAD_ENTRY_NOT_FOUND", "Upload key does not identify an image manifest entry.");
+  return withKnownSnapshotAccess(() => uploadAsset.upload(caller, { snapshotId, ...input }));
 }
 
 export async function finalizeSourceImport(snapshotId: string): Promise<ImportPreview> {

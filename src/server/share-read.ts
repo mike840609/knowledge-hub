@@ -1,6 +1,7 @@
 import { cache } from "react";
 import type { SharedDocumentView } from "@/modules/knowledge/application/document-share-service";
 import { ShareLinkNotFoundError } from "@/modules/knowledge/domain/document-share-link";
+import type { StoredImage } from "@/modules/knowledge/domain/source-policy";
 import { shareReadService } from "./composition";
 
 /**
@@ -24,3 +25,15 @@ export const getSharedDocument = cache(async (token: string): Promise<SharedDocu
     return null;
   }
 });
+
+/** An image on a shared page. Null for every failure, as the page itself is. */
+export async function getSharedImage(token: string, src: string): Promise<StoredImage | null> {
+  try {
+    return await shareReadService().readSharedImage(token, src);
+  } catch (error) {
+    if (!(error instanceof ShareLinkNotFoundError)) {
+      console.error("Shared image could not be read.", error instanceof Error ? error.name : "UnknownError");
+    }
+    return null;
+  }
+}

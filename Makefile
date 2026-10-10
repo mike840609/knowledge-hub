@@ -6,6 +6,13 @@
 
 COMPOSE := docker compose
 ENV_FILE := .env
+# Local MinIO from compose.yaml; the same four settings a company MinIO needs.
+MINIO_ENDPOINT := http://127.0.0.1:9000
+MINIO_ACCESS_KEY := hcm_km_minio
+MINIO_SECRET_KEY := hcm_km_minio_dev
+MINIO_DEV_BUCKET := knowledge-hub-dev
+MINIO_TEST_BUCKET := knowledge-hub-test
+minio_env = KM_BLOB_DIR= KM_BLOB_S3_ENDPOINT=$(MINIO_ENDPOINT) KM_BLOB_S3_ACCESS_KEY=$(MINIO_ACCESS_KEY) KM_BLOB_S3_SECRET_KEY=$(MINIO_SECRET_KEY) KM_BLOB_S3_BUCKET=$(1)
 
 .PHONY: help
 help: ## Show this help.
@@ -23,6 +30,13 @@ browsers: ## Install Playwright Chromium (needed once for e2e tests).
 .PHONY: db-up
 db-up: ## Start MariaDB in Docker (waits until healthy).
 	$(COMPOSE) up -d --wait mariadb
+
+.PHONY: storage-up
+storage-up: ## Start local MinIO (image storage, as in production) and create its dev and test buckets.
+	$(COMPOSE) up -d minio
+	@for i in $$(seq 1 60); do curl -sf $(MINIO_ENDPOINT)/minio/health/live >/dev/null && break; [ $$i -eq 60 ] && { echo "MinIO did not become ready at $(MINIO_ENDPOINT)."; exit 1; }; sleep 1; done
+	@$(call minio_env,$(MINIO_DEV_BUCKET)) npx tsx scripts/storage/blobs.ts create-bucket
+	@$(call minio_env,$(MINIO_TEST_BUCKET)) npx tsx scripts/storage/blobs.ts create-bucket
 
 .PHONY: db-down
 db-down: ## Stop MariaDB (keeps the data volume).
@@ -49,11 +63,11 @@ db-seed: db-migrate ## Load dev fixtures (idempotent, safe to re-run).
 	npm run db:seed
 
 .PHONY: bootstrap
-bootstrap: setup db-seed ## First-time setup: install, start DB, migrate, seed.
+bootstrap: setup db-seed storage-up ## First-time setup: install, start DB and MinIO, migrate, seed.
 	@echo "Done. Run 'make dev' and open http://127.0.0.1:3000/knowledge"
 
 .PHONY: dev
-dev: db-up ## Start the dev server at http://127.0.0.1:3000/knowledge.
+dev: db-up storage-up ## Start the dev server at http://127.0.0.1:3000/knowledge.
 	npm run dev
 
 .PHONY: build
@@ -61,7 +75,7 @@ build: ## Production build.
 	npm run build
 
 .PHONY: start
-start: db-up ## Serve the production build (run 'make build' first).
+start: db-up storage-up ## Serve the production build (run 'make build' first).
 	npm run start
 
 .PHONY: lint
@@ -77,8 +91,8 @@ test-unit: ## Unit tests (no database needed).
 	npm run test:unit
 
 .PHONY: test-integration
-test-integration: db-up ## Integration tests (needs MariaDB; uses root creds from .env.example defaults).
-	npm run test:integration
+test-integration: db-up storage-up ## Integration tests (needs MariaDB and MinIO; uses root creds from .env.example defaults).
+	KM_TEST_S3_ENDPOINT=$(MINIO_ENDPOINT) KM_TEST_S3_ACCESS_KEY=$(MINIO_ACCESS_KEY) KM_TEST_S3_SECRET_KEY=$(MINIO_SECRET_KEY) KM_TEST_S3_BUCKET=$(MINIO_TEST_BUCKET) npm run test:integration
 
 .PHONY: test-e2e
 test-e2e: db-up ## E2E tests: provisions an isolated DB, builds, runs Playwright (needs 'make browsers' once).
@@ -99,3 +113,11 @@ db-reset: ## DANGER: wipe the dev database volume, then re-migrate + reseed.
 	$(COMPOSE) up -d --wait mariadb
 	npm run db:migrate
 	npm run db:seed
+
+.PHONY: blobs-gc
+blobs-gc: ## Remove stored images nothing refers to (older than 48 h).
+	npx tsx scripts/storage/blobs.ts gc
+
+.PHONY: blobs-verify
+blobs-verify: ## List stored images whose file is missing; `make blobs-verify REPAIR=1` re-uploads them on next sync.
+	npx tsx scripts/storage/blobs.ts verify $(if $(REPAIR),--repair,)

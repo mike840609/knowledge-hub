@@ -19,5 +19,23 @@ services:
       timeout: 5s
       retries: 30
 
+  # Local stand-in for a company MinIO / S3 bucket (image storage). Started by
+  # `make storage-up`, not by `make db-up`. Console: http://127.0.0.1:9001
+  # The community fork: MinIO Inc. withdrew `minio/minio` from Docker Hub and
+  # Quay in September 2026. Same server command, variables and S3 API.
+  minio:
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: hcm_km_minio
+      MINIO_ROOT_PASSWORD: hcm_km_minio_dev
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - hcm_km_minio_data:/data
+
 volumes:
   hcm_km_mariadb_data:
+  hcm_km_minio_data:

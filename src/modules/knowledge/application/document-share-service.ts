@@ -14,6 +14,9 @@ import {
 import { DocumentNotFoundError, IntegrityViolationError, SourceNotFoundError } from "../domain/errors";
 import type { ShareTokenIssuer } from "../ports/share-token-issuer";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "../ports/unit-of-work";
+import type { StoredImage } from "../domain/source-policy";
+import { resolveImagePath } from "@/shared/markdown/image-path";
+import { extractImageSources } from "@/shared/markdown/image-sources";
 
 export type ShareLinkView = {
   id: string;
@@ -153,6 +156,29 @@ export class DocumentShareService {
     });
   }
 
+  /** One evaluation for the page and its images, so the two cannot drift apart. */
+  private async validLink(repositories: KnowledgeRepositories, token: string, now: Date) {
+    const link = await repositories.shareLinks.findByToken(token);
+    if (!link) throw new ShareLinkNotFoundError();
+    const document = await repositories.documents.findById(link.documentId);
+    if (!document) throw new ShareLinkNotFoundError();
+    const source = await repositories.sourcePolicy.findById(document.sourceId);
+    if (!source) throw new ShareLinkNotFoundError();
+    const workspace = await repositories.workspaces.findById(source.workspaceId);
+    if (!workspace) throw new ShareLinkNotFoundError();
+    const membership = await repositories.workspaceMemberships.find(workspace.id, link.createdBy);
+    const verdict = evaluateShareLinkValidity({
+      link,
+      documentStatus: document.status,
+      sourceStatus: source.status,
+      workspaceLifecycle: workspace.lifecycleState,
+      creatorDirectRole: membership ? membership.role ?? null : undefined,
+      now,
+    });
+    if (!verdict.valid) throw new ShareLinkNotFoundError();
+    return { link, document };
+  }
+
   /**
    * The single caller-less content read (spec §6.1). Every failure is the
    * same ShareLinkNotFoundError so no response distinguishes a link that
@@ -162,24 +188,7 @@ export class DocumentShareService {
     if (!isShareToken(token)) throw new ShareLinkNotFoundError();
     const now = this.clock();
     const { linkId, view } = await this.unitOfWork.run(async (repositories) => {
-      const link = await repositories.shareLinks.findByToken(token);
-      if (!link) throw new ShareLinkNotFoundError();
-      const document = await repositories.documents.findById(link.documentId);
-      if (!document) throw new ShareLinkNotFoundError();
-      const source = await repositories.sourcePolicy.findById(document.sourceId);
-      if (!source) throw new ShareLinkNotFoundError();
-      const workspace = await repositories.workspaces.findById(source.workspaceId);
-      if (!workspace) throw new ShareLinkNotFoundError();
-      const membership = await repositories.workspaceMemberships.find(workspace.id, link.createdBy);
-      const verdict = evaluateShareLinkValidity({
-        link,
-        documentStatus: document.status,
-        sourceStatus: source.status,
-        workspaceLifecycle: workspace.lifecycleState,
-        creatorDirectRole: membership ? membership.role ?? null : undefined,
-        now,
-      });
-      if (!verdict.valid) throw new ShareLinkNotFoundError();
+      const { link, document } = await this.validLink(repositories, token, now);
       const revision = await repositories.revisions.findCurrent(document.id);
       if (!revision) throw new IntegrityViolationError("Document current revision is missing.");
       const creator = await repositories.users.findById(link.createdBy);
@@ -197,6 +206,28 @@ export class DocumentShareService {
       console.warn("Share link view count was not recorded.");
     }
     return view;
+  }
+
+  /**
+   * An image the shared page draws (folder-sync images spec §6.4). The token
+   * grants the images its document's current revision writes and no other
+   * file: without that test a holder could walk the folder by guessing paths.
+   * Like readShared, every failure is the same ShareLinkNotFoundError, and it
+   * records no view: a view is a page load.
+   */
+  async readSharedImage(token: string, src: string): Promise<StoredImage> {
+    if (!isShareToken(token)) throw new ShareLinkNotFoundError();
+    const now = this.clock();
+    return this.unitOfWork.run(async (repositories) => {
+      const { document } = await this.validLink(repositories, token, now);
+      const image = await repositories.sourcePolicy.findStoredImage(document.id, src);
+      if (!image) throw new ShareLinkNotFoundError();
+      const revision = await repositories.revisions.findCurrent(document.id);
+      if (!revision) throw new IntegrityViolationError("Document current revision is missing.");
+      const drawn = extractImageSources(revision.markdown).some((written) => resolveImagePath(image.documentPath, written) === image.sourcePath);
+      if (!drawn) throw new ShareLinkNotFoundError();
+      return image;
+    });
   }
 }
 

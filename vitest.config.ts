@@ -3,6 +3,8 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     environment: "node",
+    // A developer's .env must not switch image storage on in unit tests.
+    env: { KM_BLOB_DIR: "", KM_BLOB_S3_BUCKET: "" },
     include: ["tests/unit/**/*.test.{ts,tsx}"],
     globals: false,
     restoreMocks: true,

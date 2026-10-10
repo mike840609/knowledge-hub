@@ -2,6 +2,7 @@ import Link from "next/link";
 import { buttonClasses } from "@/components/ui/button";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { MarkdownImageBaseProvider } from "@/components/knowledge/markdown-image-base";
 import { MarkdownRenderer } from "@/components/knowledge/markdown-renderer";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
 import { Timestamp } from "@/components/ui/timestamp";
@@ -51,7 +52,9 @@ export default async function SharedDocumentPage({ params }: SharedPageProps) {
         </div>
       </header>
       <article className="kh-reading-column min-w-0 pb-6 pt-6 [&>div>:first-child]:mt-0">
-        <MarkdownRenderer markdown={shared.markdown} />
+        <MarkdownImageBaseProvider base={`/s/${token}/asset`}>
+          <MarkdownRenderer markdown={shared.markdown} />
+        </MarkdownImageBaseProvider>
       </article>
       <footer className="kh-reading-column pb-10 pt-4">
         <div className="flex flex-wrap items-center justify-between gap-4 border-t border-kh-border pt-5">

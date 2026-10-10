@@ -1,4 +1,5 @@
-import { cp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { preparePhase3Application, seedPhase3Identities } from "../../tests/e2e/fixtures/phase3-server";
 import { PHASE3_PROVIDER, phase3PersonaNames, phase3UserId } from "../../tests/e2e/fixtures/phase3-identities";
 import path from "node:path";
@@ -16,7 +17,7 @@ const environmentNames = [
   "NEXT_TELEMETRY_DISABLED", "KM_IDENTITY_PROVIDER", "NODE_ENV", "PORT", "KM_E2E_PORT", "KM_DB_HOST", "KM_DB_PORT", "KM_DB_USER", "KM_DB_PASSWORD", "KM_DB_NAME",
   "KM_E2E_DB_HOST", "KM_E2E_DB_PORT", "KM_E2E_DB_USER", "KM_E2E_DB_PASSWORD", "KM_E2E_DB_NAME",
   "KM_LOCAL_IDENTITY_ENABLED", "KM_LOCAL_ID", "KM_LOCAL_EMP_ID", "KM_LOCAL_NAME", "KM_LOCAL_ORG_CODE",
-  "KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION", "KM_TEAM_WORKSPACES_ENABLED",
+  "KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION", "KM_TEAM_WORKSPACES_ENABLED", "KM_BLOB_DIR", "KM_BLOB_S3_BUCKET", "KM_BLOB_S3_ENDPOINT", "KM_BLOB_S3_ACCESS_KEY", "KM_BLOB_S3_SECRET_KEY", "KM_BLOB_S3_PREFIX",
 ];
 
 function createCancellation() {
@@ -67,6 +68,7 @@ async function main(): Promise<void> {
   const cancellation = createCancellation();
   let handle: Awaited<ReturnType<typeof provisionIsolatedDatabase>> | undefined;
   let phase3Root: string | undefined;
+  let blobDirectory: string | undefined;
   let runReport: E2eRunReport;
   async function timed<T>(label: string, action: () => Promise<T>): Promise<T> {
     const before = performance.now();
@@ -131,8 +133,15 @@ async function main(): Promise<void> {
         KM_LOCAL_NAME: "E2E Knowledge User",
         KM_LOCAL_ORG_CODE: "E2E",
       };
+      // Images are stored for the whole run (folder-sync images spec); the directory goes with the database.
+      blobDirectory = await mkdtemp(path.join(tmpdir(), "km-e2e-blobs-"));
       const commonEnvironment: NodeJS.ProcessEnv = {
         ...process.env,
+        // A temp directory by default. With KM_TEST_S3_ENDPOINT set (make storage-up), the same
+        // suites run against that bucket instead, which is how the S3 store is exercised end to end.
+        ...(process.env.KM_TEST_S3_ENDPOINT
+          ? { KM_BLOB_DIR: "", KM_BLOB_S3_ENDPOINT: process.env.KM_TEST_S3_ENDPOINT, KM_BLOB_S3_BUCKET: process.env.KM_TEST_S3_BUCKET, KM_BLOB_S3_ACCESS_KEY: process.env.KM_TEST_S3_ACCESS_KEY, KM_BLOB_S3_SECRET_KEY: process.env.KM_TEST_S3_SECRET_KEY, KM_BLOB_S3_PREFIX: `e2e-${Date.now()}` }
+          : { KM_BLOB_DIR: blobDirectory, KM_BLOB_S3_BUCKET: "" }),
         NODE_ENV: "production",
         NEXT_TELEMETRY_DISABLED: "1",
         KM_IDENTITY_PROVIDER: "local",
@@ -207,6 +216,8 @@ async function main(): Promise<void> {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") cleanupErrors.push(error);
       }
       try { if (phase3Root) await timed("SSO application cleanup", () => rm(phase3Root!, { recursive: true, force: true })); }
+      catch (error) { cleanupErrors.push(error); }
+      try { if (blobDirectory) await rm(blobDirectory, { recursive: true, force: true }); }
       catch (error) { cleanupErrors.push(error); }
       try { if (handle) await timed("database cleanup", () => disposeIsolatedDatabase(handle!)); }
       catch (error) { cleanupErrors.push(error); }

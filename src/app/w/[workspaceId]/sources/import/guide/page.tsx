@@ -1,3 +1,4 @@
+import { configuredBlobStore } from "@/server/blob-store";
 import { ImportGuide } from "@/components/imports/import-guide";
 import { guideContent, type GuideLocale } from "@/components/imports/import-guide-content";
 import { StatusMessage } from "@/components/ui/status-message";
@@ -29,5 +30,5 @@ export default async function WorkspaceSourceImportGuidePage({
     );
   }
   const locale = localeOf(lang);
-  return <ImportGuide workspaceId={workspaceId} locale={locale} content={guideContent(locale, importRuntimeConfig().limits)} />;
+  return <ImportGuide workspaceId={workspaceId} locale={locale} content={guideContent(locale, importRuntimeConfig().limits, configuredBlobStore() !== null)} />;
 }

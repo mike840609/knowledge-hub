@@ -265,6 +265,8 @@ UTF-8 BOM may be removed. Invalid UTF-8 is blocking `INVALID_MARKDOWN_ENCODING`.
 
 ### 5.4 Asset transport
 
+> **Amended 2026-10-08:** image assets carry bytes when the server has an image store. See `2026-10-08-folder-sync-images-design.md`.
+
 Phase 2 assets send only:
 
 ```text
@@ -510,6 +512,8 @@ For `docs/k8s/ → platform/k8s/`, folder preview is old Archived + new Added; d
 No subtree similarity / descendant-overlap inference.
 
 ## 12. Asset Model
+
+> **Amended 2026-10-08:** image assets carry bytes when the server has an image store. See `2026-10-08-folder-sync-images-design.md`.
 
 Phase 2 defines `knowledge_assets` as current source-reference projection, not an immutable knowledge-history entity.
 
