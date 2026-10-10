@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./fixtures/test";
 import { personalWorkspaceId as mySpace } from "./fixtures/my-space";
 import { openPalette } from "./fixtures/palette";
 

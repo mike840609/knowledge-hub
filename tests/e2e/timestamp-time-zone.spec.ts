@@ -1,4 +1,4 @@
-import { expect, test, type Browser, type Page } from "@playwright/test";
+import { expect, test, type Browser, type Page } from "./fixtures/test";
 
 // Mirrors scripts/db/seed.ts BROWSER_FIXTURE_IDS.
 const WORKSPACE = "0199f100-0000-7000-8000-000000000001";

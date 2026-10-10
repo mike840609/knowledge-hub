@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./fixtures/test";
 import { teamsClosedOrigin } from "./fixtures/teams-closed";
 
 // Mirrors scripts/db/seed.ts BROWSER_FIXTURE_IDS: a Team workspace the E2E user belongs to.

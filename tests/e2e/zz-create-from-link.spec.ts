@@ -1,4 +1,4 @@
-import { expect, test, type Browser, type Page } from "@playwright/test";
+import { expect, test, type Browser, type Page } from "./fixtures/test";
 import { personalWorkspaceId as mySpace } from "./fixtures/my-space";
 import { phase3Origin, phase3UserId, type Phase3Persona } from "./fixtures/phase3-identities";
 import { openPalette } from "./fixtures/palette";

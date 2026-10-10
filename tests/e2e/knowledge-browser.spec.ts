@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/test";
 
 // Workspace-scoped Knowledge Explorer acceptance (Task 11 rewrite of the
 // legacy /knowledge browser spec). Canonical route:

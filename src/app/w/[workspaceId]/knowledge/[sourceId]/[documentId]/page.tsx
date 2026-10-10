@@ -1,5 +1,4 @@
 import { OwnerReviewPanel } from "@/components/knowledge/owner-review-panel";
-import {getDocumentSourcePath} from "@/server/sync-reading";
 import { ReadRevisionMarker } from "@/components/knowledge/read-revision-marker";
 import { RevisionRestore } from "@/components/knowledge/revision-restore";
 import { getKnowledgeDocumentModel, getKnowledgeExplorerModel, getWorkspaceShellModel } from "@/server/knowledge-read";
@@ -66,9 +65,12 @@ export default async function KnowledgeDocumentPage({
   // What this document links to and what links to it, for the revision on
   // screen. Absent, the page still renders: links are then just their text.
   const graphDepth: 1 | 2 = query?.graph === "2" ? 2 : 1;
-  const linkView = await getDocumentLinkModel(workspaceId, documentId, { includeArchived, revisionNo, localGraphDepth: graphDepth });
-  const explorer = await getKnowledgeExplorerModel(workspaceId, sourceId, { includeArchived: true });
-  const shell = await getWorkspaceShellModel(workspaceId);
+  // Independent reads, each authorized on its own, so none waits for another.
+  const [linkView, explorer, shell] = await Promise.all([
+    getDocumentLinkModel(workspaceId, documentId, { includeArchived, revisionNo, localGraphDepth: graphDepth }),
+    getKnowledgeExplorerModel(workspaceId, sourceId, { includeArchived: true }),
+    getWorkspaceShellModel(workspaceId),
+  ]);
   // Badge visibility is ownership, not editability (spec §8.3): a HUB_MANAGED
   // document is never "Read only" even when this particular view (e.g. a
   // historical revision, or a viewer without canWrite) cannot be edited right
@@ -105,7 +107,7 @@ export default async function KnowledgeDocumentPage({
     workspaceName: shell?.workspace.name ?? workspaceId,
     sourceId,
     sourceName: explorer?.source.name ?? sourceId,
-    sourcePath:await getDocumentSourcePath(workspaceId,documentId),
+    sourcePath: model.sourcePath,
     documentId,
     status: view.status,
     revisions: model.revisions,

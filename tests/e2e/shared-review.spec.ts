@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/test";
 import { phase3Origin, phase3NoSessionOrigin, phase3UnconfiguredOrigin, phase3UserId } from "./fixtures/phase3-identities";
 import { createReviewDocument, selectPassage } from "./fixtures/document-review";
 

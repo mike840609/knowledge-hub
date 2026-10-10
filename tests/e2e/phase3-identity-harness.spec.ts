@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/test";
 import { PHASE3_TEAM_ID, phase3Origin, phase3UserId, phase3UnconfiguredOrigin } from "./fixtures/phase3-identities";
 
 test.describe("trusted Phase 3 HTTP identity harness", () => {

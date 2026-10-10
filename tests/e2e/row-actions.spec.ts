@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/test";
 import { toast } from "./fixtures/organize";
 import { openPalette } from "./fixtures/palette";
 

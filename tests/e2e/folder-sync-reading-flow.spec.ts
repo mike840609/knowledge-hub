@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures/test";
 import { stageReadingFolder } from "./fixtures/folder-reading";
 test("folder preview → durable result → revision-aware personal reading", async ({
   page,

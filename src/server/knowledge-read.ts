@@ -1,5 +1,6 @@
+import { cache } from "react";
 import { findFirstReadableDocument, sortSourcesByName } from "@/lib/knowledge-navigation";
-import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
+import type { KnowledgeRevisionView, KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import type { WorkspaceAccessView, WorkspaceNavigationModel, WorkspaceNavigationItem } from "@/server/workspace-admin";
 import { applicationServices } from "@/server/composition";
 
@@ -11,9 +12,17 @@ export type KnowledgeDocumentModel = {
     status: "ACTIVE" | "ARCHIVED";
     currentRevision: import("@/modules/knowledge/application/knowledge-query-service").KnowledgeRevisionView;
   };
-  revisions: import("@/modules/knowledge/application/knowledge-query-service").KnowledgeRevisionView[];
+  revisions: RevisionSummary[];
   selectedRevision: import("@/modules/knowledge/application/knowledge-query-service").KnowledgeRevisionView;
+  /** Where a synced document lives in its folder; `null` for one written in the Hub. */
+  sourcePath: string | null;
 };
+
+/**
+ * One row of a document's history. The page hands the whole history to the
+ * browser, so it carries what the list shows and no revision's body.
+ */
+export type RevisionSummary = Pick<KnowledgeRevisionView, "id" | "revisionNo" | "createdAt">;
 
 /**
  * Task 5 read model: Workspace/Source-scoped Document load. Trusted caller
@@ -33,12 +42,24 @@ export async function getKnowledgeDocumentModel(
     const services = applicationServices();
     const { caller } = await services.establishTrustedCaller();
     const view = await services.queries.getDocument(caller, documentId, { includeArchived: input.includeArchived });
-    const revisions = await services.queries.listRevisions(caller, documentId, { includeArchived: input.includeArchived });
-    const selectedRevision = input.revisionNo === undefined
-      ? view.currentRevision
-      : await services.queries.getRevision(caller, documentId, input.revisionNo, { includeArchived: input.includeArchived });
     if (view.workspaceId !== workspaceId || view.sourceId !== sourceId) return null;
-    return { view, revisions, selectedRevision };
+    const [revisions, selectedRevision, sourcePath] = await Promise.all([
+      services.queries.listRevisions(caller, documentId, { includeArchived: input.includeArchived }),
+      input.revisionNo === undefined
+        ? view.currentRevision
+        : services.queries.getRevision(caller, documentId, input.revisionNo, { includeArchived: input.includeArchived }),
+      // Read by id only here, after getDocument has let this caller see the
+      // document. A path is a caption: failing to read it must not fail the page.
+      services.unitOfWork
+        .run(async (repositories) => (await repositories.entries.findByDocumentId(documentId))?.sourcePath ?? null)
+        .catch(() => null),
+    ]);
+    return {
+      view,
+      revisions: revisions.map(({ id, revisionNo, createdAt }) => ({ id, revisionNo, createdAt })),
+      selectedRevision,
+      sourcePath,
+    };
   } catch {
     return null;
   }
@@ -66,10 +87,12 @@ export type KnowledgeExplorerModel = {
  * Task 2 read models: Workspace-scoped resolvers. Trusted caller identity
  * comes from the provider; route IDs are navigation scope only. Inaccessible
  * IDs return null and must not silently fall back to another Workspace/Source.
+ *
+ * Cached per request: the workspace layout and the pages under it both ask.
  */
-export async function getWorkspaceShellModel(
+export const getWorkspaceShellModel = cache(async (
   workspaceId: string,
-): Promise<WorkspaceShellModel | null> {
+): Promise<WorkspaceShellModel | null> => {
   const services = applicationServices();
   const { caller, identity } = await services.establishTrustedCaller();
   const navigation = await services.workspaceAdmin.navigation(caller);
@@ -86,7 +109,7 @@ export async function getWorkspaceShellModel(
     workspaces,
     workspace,
   };
-}
+});
 
 export async function getKnowledgeExplorerModel(
   workspaceId: string,

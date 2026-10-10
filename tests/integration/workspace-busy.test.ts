@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import mariadb, { type Pool } from "mariadb";
 import { databaseConfig } from "@/infrastructure/database/mariadb/config";
-import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
+import { createDatabasePool, SESSION_ISOLATION_SQL } from "@/infrastructure/database/mariadb/pool";
 import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction";
 import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
 import { WorkspaceBusyError } from "@/shared/domain/errors";
@@ -23,7 +23,7 @@ beforeAll(() => {
   waiterPool = mariadb.createPool({
     host: config.host, port: config.port, user: config.user, password: config.password, database: config.database,
     connectionLimit: 2, timezone: "Z", bigIntAsNumber: true,
-    initSql: "SET SESSION innodb_lock_wait_timeout = 1",
+    initSql: [SESSION_ISOLATION_SQL, "SET SESSION innodb_lock_wait_timeout = 1"],
   });
 });
 afterAll(async () => {

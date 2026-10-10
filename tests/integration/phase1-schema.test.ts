@@ -343,7 +343,9 @@ describe("phase 1 source mapping schema upgrade", () => {
     const fresh = await createIsolatedPool();
     const upgraded = await createIsolatedPool();
     try {
-      await runMigrations(fresh.pool, migrations);
+      // Both stop at 008, where the upgraded pool has to (see below): a later
+      // migration that touches these tables would otherwise show on one side only.
+      await runMigrations(fresh.pool, migrations, { to: 8 });
       await runMigrations(upgraded.pool, phase0Manifest);
       const ids = await seedPhase0Populated(upgraded.pool);
       await runMigrations(upgraded.pool, migrations, { to: 4 });

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./fixtures/test";
 
 // Server-bound assertions only; see the note in phase5-authoring.spec.ts.
 const ROUND_TRIP = { timeout: 15_000 };

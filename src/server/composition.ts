@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { DocumentReviewService } from "@/modules/knowledge/application/document-review-service";
 import { AuthUnavailableError } from "@/modules/identity/domain/identity-session-errors";
 import { DomainError } from "@/shared/domain/errors";
@@ -106,7 +107,11 @@ export function buildApplicationServices(databasePool: Pool, options: {
       rolloutHubUserIds,
     });
   let readiness: Promise<ProductionReadinessSummary> | undefined;
-  const establishTrustedCaller = async () => {
+  // One identity per server render: the layouts and the page each ask, and
+  // every ask is two transactions. This remembers who is asking, never what
+  // they may do — each service call still checks policy. Outside a render
+  // (route handlers, scripts, tests) React calls straight through.
+  const establishTrustedCaller = cache(async () => {
     // Company traffic cannot bypass the startup gate. Cache success for this
     // service instance; a failed cutover check can be retried after repair.
     if (providerKind === "company-sso") {
@@ -122,7 +127,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
       trusted.caller.personalWorkspaceOnly = trusted.personalWorkspace.id;
     }
     return trusted;
-  };
+  });
   const importConfig = importRuntimeConfig();
   // One budget for both phases, sized to one import at the Markdown limit (import-memory-budget.ts).
   // ponytail: `next dev` HMR builds a fresh one per reload; harmless outside dev.

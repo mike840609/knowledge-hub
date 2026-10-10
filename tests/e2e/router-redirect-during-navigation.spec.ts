@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/test";
 import { stageReadingFolder } from "./fixtures/folder-reading";
 
 // "Browse documents" opens /knowledge/<source>, which redirects on the server to the first document.

@@ -2,7 +2,7 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { chooseOption, expectOptions } from "./fixtures/select-menu";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { expect, test, type APIRequestContext, type Browser, type BrowserContext } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Browser, type BrowserContext } from "./fixtures/test";
 import { phase3Origin, phase3UserId, type Phase3Persona } from "./fixtures/phase3-identities";
 
 async function session(browser: Browser, persona: Phase3Persona) {

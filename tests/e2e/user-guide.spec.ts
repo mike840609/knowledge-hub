@@ -1,5 +1,5 @@
 import {mkdir} from "node:fs/promises";
-import {test,expect} from "@playwright/test";
+import {test,expect} from "./fixtures/test";
 
 test("Home help covers first import, repeat sync and recovery in both languages",async({page,request})=>{
   const nav=await (await request.get("/api/workspaces")).json();

@@ -14,7 +14,6 @@ export class MariaDbUnitOfWork implements KnowledgeUnitOfWork, SourceUnitOfWork,
   async run<T>(work: (repositories: SourceRepositories) => Promise<T>): Promise<T> {
     const connection = await this.pool.getConnection();
     try {
-      await connection.query("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
       await connection.beginTransaction();
       const repositories = createRepositories(connection);
       const result = await work(repositories);
@@ -37,7 +36,6 @@ export class MariaDbUnitOfWork implements KnowledgeUnitOfWork, SourceUnitOfWork,
     const connection = await this.pool.getConnection();
     const lockName = creatorQuotaLockName(creatorId);
     try {
-      await connection.query("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
       const acquired = await connection.query<{ acquired: unknown }[]>("SELECT GET_LOCK(?, ?) AS acquired", [lockName, timeoutSeconds]);
       if (Number(acquired[0]?.acquired ?? 0) !== 1) {
         throw importError("IMPORT_APPLY_RETRYABLE", "Import quota could not be checked; retry the request.");

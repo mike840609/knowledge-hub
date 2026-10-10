@@ -1,3 +1,4 @@
+import { lookupIndexesMigration } from "./018-lookup-indexes";
 import { documentReviewMigration } from "./017-document-review";
 import { readingActivityMigration } from "./016-reading-activity";
 import { sourceImportScopeMigration } from "./015-source-import-scope";
@@ -34,4 +35,5 @@ export const migrations = [
   sourceImportScopeMigration,
   readingActivityMigration,
   documentReviewMigration,
+  lookupIndexesMigration,
 ] as const;
