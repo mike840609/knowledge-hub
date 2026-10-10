@@ -16,7 +16,7 @@ const environmentNames = [
   "NEXT_TELEMETRY_DISABLED", "KM_IDENTITY_PROVIDER", "NODE_ENV", "PORT", "KM_E2E_PORT", "KM_DB_HOST", "KM_DB_PORT", "KM_DB_USER", "KM_DB_PASSWORD", "KM_DB_NAME",
   "KM_E2E_DB_HOST", "KM_E2E_DB_PORT", "KM_E2E_DB_USER", "KM_E2E_DB_PASSWORD", "KM_E2E_DB_NAME",
   "KM_LOCAL_IDENTITY_ENABLED", "KM_LOCAL_ID", "KM_LOCAL_EMP_ID", "KM_LOCAL_NAME", "KM_LOCAL_ORG_CODE",
-  "KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION", "KM_TEAM_WORKSPACES_ENABLED",
+  "KM_REVIEW_WRITES_ENABLED", "KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION", "KM_TEAM_WORKSPACES_ENABLED",
 ];
 
 function createCancellation() {
@@ -115,7 +115,7 @@ async function main(): Promise<void> {
         throw new Error("Selected tests require SSO personas; remove KM_E2E_PERSONAL_ONLY=true.");
       }
       console.log(`[e2e] mode: ${teamMode === "true" ? "Team-enabled" : "personal-only"}`);
-      console.log(`[e2e] services: local${services.teamsClosed ? ", teams-closed" : ""}${services.personas ? ", SSO personas" : ""}${services.unconfigured ? ", unconfigured" : ""}`);
+      console.log(`[e2e] services: local${services.teamsClosed ? ", teams-closed" : ""}${services.personas ? ", SSO personas" : ""}${services.unconfigured ? ", unconfigured" : ""}${services.noSession ? ", no-session" : ""}`);
       handle = await timed("database provisioning", () => provisionIsolatedDatabase("e2e"));
       cancellation.check();
       const e2ePort = process.env.KM_E2E_PORT ?? "3101";
@@ -135,7 +135,7 @@ async function main(): Promise<void> {
         ...process.env,
         NODE_ENV: "production",
         NEXT_TELEMETRY_DISABLED: "1",
-        KM_IDENTITY_PROVIDER: "local",
+        KM_IDENTITY_PROVIDER: "local", KM_REVIEW_WRITES_ENABLED: "true",
         ...identity,
         KM_TEAM_WORKSPACES_ENABLED: teamMode,
         KM_E2E_PORT: e2ePort,
@@ -192,6 +192,7 @@ async function main(): Promise<void> {
         KM_PHASE3_APP_ROOT: phase3Root,
         KM_E2E_TEAMS_CLOSED_SERVER: String(services.teamsClosed),
         KM_E2E_UNCONFIGURED_SERVER: String(services.unconfigured),
+        KM_E2E_NO_SESSION_SERVER: String(services.noSession),
         KM_COMPANY_SSO_ROLLOUT_USER_IDS: phase3Environment.KM_COMPANY_SSO_ROLLOUT_USER_IDS,
       }));
       const browserReport = JSON.parse(await readFile(path.join(reportDirectory, "tests.json"), "utf8")) as { counts: E2eCounts };

@@ -16,7 +16,7 @@ export function DocumentViewer({
 }) {
   const displayed = selectedRevision ?? view.currentRevision;
   return (
-    <article className={MARKDOWN_ARTICLE}>
+    <article data-review-document className={MARKDOWN_ARTICLE}>
       <MarkdownRenderer markdown={displayed.markdown} links={links} />
     </article>
   );

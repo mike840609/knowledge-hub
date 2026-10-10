@@ -24,9 +24,9 @@ export async function preparePhase3Application(projectRoot: string): Promise<str
     await writeFile(path.join(root, "src/server/phase3-fixture-reader.ts"), `
 import { phase3PersonaNames, phase3Session, type Phase3Persona } from "./phase3-identities";
 const persona = process.env.KM_PHASE3_SERVER_PERSONA as Phase3Persona;
-if (!phase3PersonaNames.includes(persona)) throw new Error("Missing fixed Phase 3 server persona.");
-const fixedSession = phase3Session(persona);
-export const fixtureReader = { async readSession() { return { ...fixedSession, externalGroupIds: [...fixedSession.externalGroupIds] }; } };
+if (persona !== ("noSession" as Phase3Persona) && !phase3PersonaNames.includes(persona)) throw new Error("Missing fixed Phase 3 server persona.");
+const fixedSession = persona === ("noSession" as Phase3Persona) ? null : phase3Session(persona);
+export const fixtureReader = { async readSession() { return fixedSession ? { ...fixedSession, externalGroupIds: [...fixedSession.externalGroupIds] } : null; } };
 `);
     const compositionPath = path.join(root, "src/server/composition.ts");
     const composition = await readFile(compositionPath, "utf8");

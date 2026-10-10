@@ -90,3 +90,25 @@ export function isProductionEnvironment(): boolean {
 export function allowLocalIdentityInProduction(): boolean {
   return process.env.KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION === "true";
 }
+
+export function reviewWritesEnabled(): boolean { return process.env.KM_REVIEW_WRITES_ENABLED === "true"; }
+
+/**
+ * The origin browsers reach the Hub at (`KM_PUBLIC_ORIGIN`, e.g. `https://km.example.com`). Behind the
+ * Gateway the server cannot learn it from the request: Next builds the request URL from its bind
+ * address, and forwarding headers are the client's to forge. Unset means the Hub is reached directly
+ * at its bind address. A value that is not an http(s) URL is a deployment error and throws, rather
+ * than quietly comparing against something no browser sends (or against `null`, which some do).
+ */
+export function publicOrigin(): string | undefined {
+  const raw = (process.env.KM_PUBLIC_ORIGIN ?? "").trim();
+  if (!raw) return undefined;
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error("KM_PUBLIC_ORIGIN must be an absolute http(s) URL.");
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error("KM_PUBLIC_ORIGIN must be an absolute http(s) URL.");
+  return url.origin;
+}

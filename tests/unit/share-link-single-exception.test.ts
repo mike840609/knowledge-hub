@@ -4,7 +4,8 @@ import { describe, expect, it } from "vitest";
 
 /**
  * Share-link spec §6.1 and the CLAUDE.md exception: readShared is the only
- * path that returns document content without a caller. Two layers can serve
+ * path that returns the document without a caller, and the review query
+ * (queryForLink) the only other entry that answers without one. Two layers can serve
  * content, so both are checked:
  *
  * - the knowledge application services, where content is read: every public
@@ -59,11 +60,19 @@ function callables(file: string): Callable[] {
 
 const readsContent = (body: string) => /\bmarkdown\b|\.revisions\.|\brevision\.(title|markdown)\b/.test(body);
 
+/**
+ * A parameter that is a caller and cannot be absent. `caller: CallerContext | null`
+ * and `caller?: CallerContext` name the type and promise nothing.
+ */
+const requiresCaller = (parameters: string) =>
+  parameters.split(",").some((parameter) => /^\s*\w+\s*:\s*CallerContext\s*$/.test(parameter));
+const namesCaller = (parameters: string) => /\bCallerContext\b/.test(parameters);
+
 describe("the share link is the single caller-less content path", () => {
   it("every knowledge application entry that reads content takes a CallerContext, except readShared", () => {
     const offenders = filesUnder("src/modules/knowledge/application")
       .flatMap(callables)
-      .filter((callable) => readsContent(callable.body) && !/:\s*CallerContext\b/.test(callable.parameters))
+      .filter((callable) => readsContent(callable.body) && !requiresCaller(callable.parameters))
       .map((callable) => `${path.basename(callable.file)}#${callable.name}`);
     expect(offenders).toEqual(["document-share-service.ts#readShared"]);
   });
@@ -98,4 +107,51 @@ describe("the share link is the single caller-less content path", () => {
       .filter((file) => /\breadShared\s*\(|\bshareReadService\s*\(/.test(readFileSync(file, "utf8")));
     expect(callers).toEqual([path.join("src", "server", "share-read.ts")]);
   });
+
+  it("review routes use services and never expose revision, tree or search repositories", () => {
+    const routeFiles = filesUnder("src/app/api").filter((file) =>
+      file.includes(`${path.sep}share-review${path.sep}`) || file.includes(`${path.sep}review-threads${path.sep}`),
+    );
+    expect(routeFiles.length).toBeGreaterThanOrEqual(8);
+    for (const file of routeFiles) {
+      const source = readFileSync(file, "utf8");
+      expect(source).not.toMatch(/repositories|readShared|shareReadService|\.revisions\.|\.tree\.|\.search\./);
+      expect(source).toMatch(/reviewHttp|reviewReadHttp|workspaceHttp|ownerReviewHttp/);
+    }
+  });
+
+  it("an optional caller is offered by exactly one entry, the review query", () => {
+    // The check above reads method bodies, and a body that delegates to a private
+    // helper shows it nothing. So the entries that can run with no caller at all
+    // are named here, whatever they go on to read.
+    const optional = filesUnder("src/modules/knowledge/application")
+      .flatMap(callables)
+      .filter((callable) => namesCaller(callable.parameters) && !requiresCaller(callable.parameters))
+      .map((callable) => `${path.basename(callable.file)}#${callable.name}`);
+    expect(optional).toEqual(["document-review-service.ts#queryForLink"]);
+  });
+
+  it("every review entry but the query requires a trusted caller", () => {
+    const methods = callables("src/modules/knowledge/application/document-review-service.ts");
+    expect(methods.length).toBeGreaterThanOrEqual(7);
+    const callerless = methods.filter((method) => !requiresCaller(method.parameters)).map((method) => method.name);
+    expect(callerless).toEqual(["queryForLink"]);
+  });
+
+  it("only the review read boundary reaches the identity-free review service", () => {
+    const callers = ["src/server", "src/app", "src/components"]
+      .flatMap(filesUnder)
+      .filter((file) => !file.endsWith(path.join("server", "composition.ts")))
+      .filter((file) => /\breviewReadService\s*\(/.test(readFileSync(file, "utf8")));
+    expect(callers).toEqual([path.join("src", "server", "review-http.ts")]);
+  });
+
+  it("the guard tells a required caller from an optional one", () => {
+    expect(requiresCaller("caller: CallerContext, token: string")).toBe(true);
+    expect(requiresCaller("caller:CallerContext,input:{documentId:string}")).toBe(true);
+    for (const parameters of ["caller: CallerContext | null, token: string", "caller: CallerContext | undefined", "caller?: CallerContext", "token: string", ""]) {
+      expect(requiresCaller(parameters), parameters).toBe(false);
+    }
+  });
+
 });

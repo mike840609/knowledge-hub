@@ -8,8 +8,8 @@ test.describe("trusted Phase 3 HTTP identity harness", () => {
     const normal = await playwright.request.newContext({ baseURL: phase3UnconfiguredOrigin() });
     try {
       const response = await normal.get("/api/workspaces");
-      expect(response.status()).toBe(500);
-      expect((await response.json()).error.code).toBe("INTERNAL_ERROR");
+      expect(response.status()).toBe(503);
+      expect((await response.json()).error.code).toBe("AUTH_UNAVAILABLE");
     } finally { await normal.dispose(); }
   });
 

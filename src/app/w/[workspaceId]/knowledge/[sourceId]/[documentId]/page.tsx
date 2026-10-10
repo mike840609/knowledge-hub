@@ -1,3 +1,4 @@
+import { OwnerReviewPanel } from "@/components/knowledge/owner-review-panel";
 import {getDocumentSourcePath} from "@/server/sync-reading";
 import { ReadRevisionMarker } from "@/components/knowledge/read-revision-marker";
 import { RevisionRestore } from "@/components/knowledge/revision-restore";
@@ -158,6 +159,7 @@ export default async function KnowledgeDocumentPage({
         {isHistorical && <RevisionRestore documentId={documentId} href={`/w/${workspaceId}/knowledge/${sourceId}/${documentId}`} historical={selectedRevision} current={view.currentRevision} editable={!sourceManaged && view.status === "ACTIVE" && explorer?.source.status === "ACTIVE"} />}
         {shell?.workspace.type === "PERSONAL" ? <ReadRevisionMarker workspaceId={workspaceId} documentId={documentId} revisionId={selectedRevision.id}/> : null}
         <DocumentViewer view={view} selectedRevision={selectedRevision} links={linkView ? renderedLinksFrom(linkView, createLinks) : undefined} />
+        {shell?.workspace.type === "PERSONAL" && !isHistorical && <OwnerReviewPanel readOnly={view.status !== "ACTIVE" || explorer?.source.status !== "ACTIVE"} documentId={documentId} revisionId={view.currentRevision.id} markdown={view.currentRevision.markdown} />}
         {linkView ? <BacklinksFooter view={linkView} /> : null}
       </div>
     </DocumentDetailClient>

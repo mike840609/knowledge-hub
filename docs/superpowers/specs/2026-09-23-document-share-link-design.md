@@ -9,6 +9,8 @@
 | References | Phase 3 governance, Phase 2.5 §24.1, action model, `frontend-design-language.md` |
 | Status | **Decided (§12) and implemented.** Plan: `docs/superpowers/plans/2026-09-23-document-share-link.md`; verification: `docs/superpowers/verification/2026-09-23-document-share-link-verification.md` |
 
+> **2026-10-09 amendment:** the original anonymous document reader remains intact. [Inline review](2026-10-09-shared-personal-document-inline-review-design.md) adds a separate compound grant (live token for reads, plus trusted caller for writes) for review records only. Corporate Gateway/login integration is deferred; new threads and replies default off via `KM_REVIEW_WRITES_ENABLED`.
+
 ## 1. Problem
 
 The product is personal-first: sign-in defaults to My Space, where most knowledge starts. My Space is deliberately single-user: `assertPersonalMutationAllowed` blocks membership/group operations. Consequently there is **no way to show someone else a document in My Space**.
@@ -35,13 +37,13 @@ Publish formally organization-wide → External publishing (Phase 6): curated, d
 ## 2. Non-goals
 
 - **Team documents:** v1 supports only My Space (§11).
-- **Editing or comments through the link:** read-only.
+- **Editing through the link:** no Markdown/revision writes. Authenticated discussions are the narrow inline-review amendment; anonymous readers receive no discussion data.
 - **Named invitations** such as sharing with Alice: Document ACL, explicitly excluded in Phase 3 §2.
 - **Revision snapshots:** always current content (§5.3).
 - **Live push:** after owner updates, readers refresh; no WebSocket/SSE.
 - **Extending expiry:** create another link for a longer period.
 - **Email or in-app notifications.**
-- **API/MCP token reads:** only `/s/:token` accepts the token.
+- **General API/MCP token reads:** denied. Only `/s/:token` serves anonymous content; exact `/api/share-review/threads/query` permits anonymous visible review reads with a live token; review writes require a trusted caller and live token for review records and validated current selection fragments.
 - **Classification preventing sensitive shares:** no classification system exists (§14).
 
 **Network reachability determines who can obtain content.** With no login required, “link holder” means a holder who can reach the Hub host. An internal deployment limits reach to that network; an externally reachable deployment extends it to the internet. This is a deployment decision, unchanged here, but §15 requires explicitly recording it.
@@ -63,7 +65,7 @@ The existing invariant prevents guessing or incidental identifiers in URLs/logs,
 | Lifetime | Permanent | Required, at most 90 days |
 | Revocation | None | Anytime |
 | Audit | None | Governance events for issue/revoke, anonymous view counts |
-| Accepted by | Read services with membership | **Only** `/s/:token` read path |
+| Accepted by | Read services with membership | `/s/:token` anonymous read; exact review APIs with trusted caller |
 
 Retain the invariant but **write its sole exception**, or future readers of `CLAUDE.md` will reasonably consider this feature a violation.
 
@@ -82,7 +84,9 @@ After the decision, the implementation PR changes the invariant to:
 >   revocable token that the document's owner issues on purpose. It requires
 >   no sign-in. It is accepted by
 >   exactly one read path (`/s/:token`) and grants whoever holds it the current
->   revision of one document — never search, tree, history, MCP, or any write.
+>   revision of one document — never search, tree, history, MCP, or content writes.
+>   A live token plus trusted caller separately authorizes review-record access
+>   through the exact review APIs; it never grants Workspace membership.
 >   No other code path may serve document content without a caller.
 
 ### 3.3 Phase 3 §13 amendment
@@ -103,6 +107,8 @@ My Space document row → right-click (or ⋯ or ⌘K) → Share link…
     Anyone holding this link can read this document without signing in.
     They will see your future changes, but cannot edit or view other My Space content.
     Share only content you are comfortable having forwarded.
+    If review reads are enabled: all valid-link holders see visible discussions.
+    Only if writes are enabled: reviewers can add comments.
     Optional label, for example “Backend group”
     Expiry: 1 / 7 / 30 (default) / 90 days
     [Create link]
@@ -147,7 +153,7 @@ All conditions must hold. Any failure is uniformly unavailable:
 6. Workspace lifecycle is `ACTIVE`.
 7. **Issuer still has document read access**, re-evaluated using their **direct membership**. For PERSONAL, the `OWNER / SYSTEM_PERSONAL` row must still exist.
 
-Reader identity is **not** a condition. Do not call `establishTrustedCaller` or read SSO session.
+For anonymous `readShared`, reader identity is **not** a condition: do not call `establishTrustedCaller` or read SSO session. Review APIs additionally require a trusted caller on every request, without relaxing any link validity condition.
 
 Condition 7 uses direct role because group grants depend on validated group IDs from the issuer's current session, unavailable during anonymous reads. In PERSONAL v1 this makes no difference, but helps explain deferring Team (§11).
 
@@ -186,7 +192,7 @@ GET /s/:token (server component, outside /w/ layout)
        ├─ Read link, document, source, workspace, issuer direct membership
        ├─ Apply §5.2 pure predicate
        ├─ Increment view count (§7.2), separate transaction; log failure only (A5)
-       └─ Return { title, markdown, sharedByName, updatedAt, expiresAt }
+       └─ Return { title, markdown, revisionId, sharedByName, updatedAt, expiresAt }
   → Any error → uniform page (§6.3), HTTP 404
 ```
 
@@ -199,9 +205,13 @@ GET /s/:token (server component, outside /w/ layout)
 - `/s/*`, the share page.
 - `/_next/static/*`, build-time CSS/JS/fonts needed for styles and browser timestamp conversion. Allowing only `/s/*` yields unstyled anonymous pages. This static prefix contains no user data.
 
+For the later corporate review rollout, add passive/optional authentication only to `/api/share-review/*`: validate any session, strip client identity headers, forward absent sessions without an IdP redirect, and restrict the upstream. Real login nonce/continuation is a separate release gate.
+
 Do not allow every path beginning with `/s`, all of `/_next`, or `/api`. Those broaden anonymous entry. Other application routes still establish trusted callers, but that should not be the sole defense.
 
 ### 6.2 No expansion to other read surfaces
+
+The compound review grant returns no Markdown/history/tree/search, does not authorize ordinary APIs, and excludes hidden content and outdated quotes.
 
 No Workspace capability is granted. These hold without other code changes, but each needs assertions:
 
@@ -381,6 +391,8 @@ Use POST revoke, not DELETE: no hard deletion is implied.
 
 Reuse `http-error-response.ts`: missing/inaccessible document → 404; non-PERSONAL, archived document, or over 10 links → 409 with explicit reason.
 
+The exact review API paths, authentication, Origin checks, no-store responses, idempotency and owner moderation routes are defined in [inline review §7](2026-10-09-shared-personal-document-inline-review-design.md#7-api-boundaries-proposed). Token-bearing queries use POST JSON, never query parameters.
+
 ## 10. UI
 
 ### 10.1 Action registry
@@ -412,6 +424,8 @@ Header also uses the registry action beside Edit. Icon-only with “Share link�
 ### 10.2 Wording
 
 Use “Share link…”, not “Share”, which elsewhere suggests invitations/edit grants. This action only creates a read-only link; ellipsis indicates a dialog.
+
+Dialog review wording is conditional on trusted server capabilities: readable discussions are visible to all valid-link holders; only enabled writes permit adding comments. No corporate sign-in link is shown until a real adapter exists.
 
 Dialog must explicitly say **no sign-in** and **future changes are visible** (§4). This is the owner's available risk information; do not omit it for brevity.
 
@@ -486,7 +500,8 @@ All decided; no open decisions.
 
 - Another signed-in link holder cannot find document in search/selector or read it through `/w/.../knowledge/...` or `/api/documents/:id`; both 404.
 - Scan programmatically: all public knowledge methods returning revision content except `readShared` accept `CallerContext` and require membership or `requireVisibleDocument`.
-- Sample route classes without session; every page/API outside `/s/*` fails.
+- Sample route classes without session; ordinary page/APIs outside `/s/*` fail. Review APIs return JSON 401 for no session or 503 for unavailable identity integration, with private/no-store and no comment data.
+- Review routes require callers, cannot directly read revision repositories, and never return old quotes, hidden bodies or Markdown.
 
 **Playwright E2E**
 
@@ -516,8 +531,10 @@ All decided; no open decisions.
 
 **Deployment checklist**, outside code scope but required before rollout, recorded in `docs/superpowers/verification/`:
 
-- [ ] SSO gateway allows only `/s/*` and `/_next/static/*`, with login on other paths; attach configuration (§6.1).
+- [ ] Anonymous reader gate: allow only `/s/*` and `/_next/static/*`. Corporate review gate: passive auth on exact review APIs, strip forged headers, protect upstream and verify JSON 401/503; real login nonce/continuation remains deferred (§6.1 and inline-review §4.5).
 - [ ] Record internal/external network reachability; externally reachable links are internet-readable.
 - [ ] Mask tokens after `/s/` in proxy access logs.
 - [ ] Gateway rate-limits `/s/*`.
 - [ ] Security stakeholders know this anonymous read path exists.
+
+Review operations: apply the additive migration before code rollout; keep writes disabled until corporate integration evidence exists. Emergency stop disables new threads/replies while owner reads/moderation remain available. Rollback preserves review/audit tables; hiding is projection redaction, not physical erasure. See the inline-review plan and verification record.

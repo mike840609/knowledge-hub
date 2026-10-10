@@ -62,7 +62,7 @@ Explore links between documents, find a note, and filter the graph by source.
 | Organization | Document and folder trees, move, rename, archive, and restore; source-managed content is updated through sync |
 | Search | Workspace-scoped keyword search and quick search with `⌘K` / `Ctrl+K` |
 | Knowledge links | `[[wikilinks]]`, relative `.md` links, backlinks, and workspace and local graphs |
-| Sharing | Revocable, anonymous read-only links for individual My Space documents; shares expose saved content, not drafts |
+| Sharing | Anonymous My Space document links; all valid-link holders can read shared discussions; signed-in holders may comment when writes are enabled; owner resolution and moderation |
 | Export | Individual Markdown downloads and a My Space ZIP with directory structure and a stable ID/path manifest |
 | Agent context | Copy for Agent and workspace-scoped read/context APIs that follow the application's access rules |
 | Team workspaces (opt-in) | Workspace administration, membership, roles and capabilities, external group mapping, and audit records |
@@ -275,6 +275,7 @@ These documents define the core contracts and their implementation plans. Later 
 | Discovery and read API | [Spec](docs/superpowers/specs/2026-09-16-phase-4-discovery-read-api-design.md) | [Plan](docs/superpowers/plans/2026-09-16-phase-4-discovery-read-api.md) | Authorized search and bounded document reads. |
 | Human authoring | [Spec](docs/superpowers/specs/2026-09-16-phase-5-human-authoring-design.md) | [Plan](docs/superpowers/plans/2026-09-16-phase-5-human-authoring.md) | Upload, create, edit and revision conflicts. |
 | Document sharing | [Spec](docs/superpowers/specs/2026-09-23-document-share-link-design.md) | [Plan](docs/superpowers/plans/2026-09-23-document-share-link.md) | Expiring, revocable single-document read access. |
+| Inline document review | [Spec](docs/superpowers/specs/2026-10-09-shared-personal-document-inline-review-design.md) | [Plan](docs/superpowers/plans/2026-10-09-shared-personal-document-inline-review.md) | Anonymous discussion reads, authenticated writes, owner moderation and sync-safe anchors; corporate rollout gated. |
 | Document composer | [Spec](docs/superpowers/specs/2026-09-28-document-composer-design.md) | [Plan](docs/superpowers/plans/2026-09-28-document-composer.md) | Rendered editing and Markdown source mode. |
 | Knowledge links and graph | [Spec](docs/superpowers/specs/2026-09-29-personal-workspace-knowledge-graph-design.md) | [Plan](docs/superpowers/plans/2026-09-29-personal-workspace-knowledge-graph.md) | Wikilinks, backlinks, heading anchors and derived graph data. |
 | Personal daily use | [Spec](docs/superpowers/specs/2026-09-29-personal-daily-driver-design.md) | [Plan](docs/superpowers/plans/2026-09-29-personal-daily-driver.md) | Wikilink preservation, completion, code blocks and organization. |
@@ -287,3 +288,9 @@ Also consult the [phase roadmap](docs/superpowers/roadmaps/2026-09-10-knowledge-
 ## License
 
 Knowledge Hub is licensed under the **[MIT License](LICENSE)**. You may use, modify, and distribute it, retaining the original copyright and license notices when redistributing. Third-party dependencies retain their respective licenses.
+
+### Document review deployment
+
+Discussions are stored separately from Markdown and Folder Sync. `KM_REVIEW_WRITES_ENABLED` defaults off; existing discussion reads and owner moderation remain available while new threads/replies are disabled. Behind a Gateway or reverse proxy, set `KM_PUBLIC_ORIGIN` to the origin browsers use (for example `https://km.example.com`); without it every discussion request is refused as cross-origin. Company SSO/Gateway and login continuation require separate corporate integration evidence before production writes are enabled. Hiding content does not physically erase stored data.
+
+[Inline review design](docs/superpowers/specs/2026-10-09-shared-personal-document-inline-review-design.md) · [Implementation plan](docs/superpowers/plans/2026-10-09-shared-personal-document-inline-review.md) · [Verification](docs/superpowers/verification/2026-10-09-shared-personal-document-inline-review.md)

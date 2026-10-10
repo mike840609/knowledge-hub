@@ -1,3 +1,6 @@
+import { MariaDbDocumentReviewThreadsRepository } from "./document-review-threads";
+import { MariaDbDocumentReviewCommentsRepository } from "./document-review-comments";
+import { MariaDbDocumentReviewWriteLedger } from "./document-review-write-ledger";
 import { MariaDbPersonalProfileRepository } from "./personal-profile";
 import { MariaDbSyncRunChangeRepository } from "./sync-run-changes";
 import { MariaDbDocumentReadProgressRepository } from "./document-read-progress";
@@ -37,6 +40,9 @@ export function createRepositories(connection: DatabaseConnection): SourceReposi
   const groupMappings = new MariaDbWorkspaceGroupMappingRepository(connection);
   const workspaceAccess = new WorkspaceMembershipPolicy(workspaceMemberships, groupMappings);
   return {
+    reviewThreads: new MariaDbDocumentReviewThreadsRepository(connection),
+    reviewComments: new MariaDbDocumentReviewCommentsRepository(connection),
+    reviewWriteLedger: new MariaDbDocumentReviewWriteLedger(connection),
     personalProfile: new MariaDbPersonalProfileRepository(connection),
     users,
     sources,
