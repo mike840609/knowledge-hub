@@ -40,6 +40,9 @@ test("owner moderation survives link revocation and document archive", async ({ 
   await page.getByRole("button", { name: "Comment options", exact: true }).click();
   await page.getByRole("menuitem", { name: "Hide thread", exact: true }).click();
   await page.getByRole("button", { name: "Confirm hide", exact: true }).click();
-  const moderated = await (await request.get(`${owner}/api/documents/${doc.documentId}/review-threads`)).json();
-  expect(moderated.threads.find((item: { id: string }) => item.id === thread.id).visibility).toBe("HIDDEN");
+  // The click starts the write; a read takes no lock and does not wait for it, so ask until it has landed.
+  await expect.poll(async () => {
+    const moderated = await (await request.get(`${owner}/api/documents/${doc.documentId}/review-threads`)).json();
+    return moderated.threads.find((item: { id: string }) => item.id === thread.id)?.visibility;
+  }).toBe("HIDDEN");
 });

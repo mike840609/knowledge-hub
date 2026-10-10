@@ -22,7 +22,10 @@ test("two trusted people use different links for the same discussion", async ({ 
   const response = await request.post(`${phase3Origin("reviewOwner")}/api/share-review/threads/query`, { headers: { Origin: phase3Origin("reviewOwner") }, data: { token: doc.links[0].path.split("/").pop(), emp_id: "forged" } });
   const result = await response.json();
   expect(result.callerUserId).toBe(phase3UserId("reviewOwner"));
-  expect(result.threads[0].comments[0].authorUserId).toBe(phase3UserId("viewer"));
+  // The other link names who wrote the comment and hands over no user ID but the reader's own.
+  expect(result.threads[0].comments[0].authorName).toBe("Phase3 viewer");
+  expect(result.threads[0].comments[0]).not.toHaveProperty("authorUserId");
+  expect(JSON.stringify(result.threads)).not.toContain(phase3UserId("viewer"));
   expect(result.threads).toHaveLength(1);
   await page.screenshot({ path: "/tmp/document-review-desktop.png", fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
