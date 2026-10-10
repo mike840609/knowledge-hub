@@ -292,7 +292,7 @@ Document and Source archive/restore never hard-delete review records; the owner-
 
 ## 13. Canonical contracts, code guards and rollout checklist
 
-**Canonical contracts amended with the core implementation (2026-10-09):** 
+**Canonical contracts amended with the core implementation (2026-10-09):**
 
 1. `CLAUDE.md`: replace the phrase that one share token allows exactly one caller-less read and "never any write" with **two narrowly disjoint grants**: anonymous document read via `/s/:token`, anonymous visible review query via its exact API, and authenticated token+trusted caller review writes. Document content/revisions, search, Workspace membership and MCP remain denied.
 2. `docs/superpowers/specs/2026-09-23-document-share-link-design.md`: amend §2 "Editing or comments through the link" and "API/MCP token reads" non-goals; §3.1 token-accepted-by table; §3.2 canonical wording; §4 and §10.2 Share dialog copy; §6.1 sole caller-less **document-content** read and Gateway routing; §6.2 non-expansion; §9.4 routes; §13 acceptance tests; §15 documentation and rollout checklist. Link still does not permit Markdown edit, and comment access still requires identity. Keep implementation history clear rather than rewriting its earlier shipped behavior as though it already included reviews.
