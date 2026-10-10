@@ -1,3 +1,6 @@
+import type { DocumentReviewThreadRepository } from "./document-review-thread-repository";
+import type { DocumentReviewCommentRepository } from "./document-review-comment-repository";
+import type { DocumentReviewWriteLedger } from "./document-review-write-ledger";
 import type { WorkspaceGroupMappingRepository } from "@/modules/workspaces/ports/workspace-group-mapping-repository";
 import type { UserRepository } from "@/modules/identity/ports/user-repository";
 import type { DocumentRepository } from "./document-repository";
@@ -14,6 +17,9 @@ import type { WorkspaceRepository } from "@/modules/workspaces/ports/workspace-r
 import type { WorkspaceAuditEventRepository } from "@/modules/workspaces/ports/workspace-audit-event-repository";
 
 export type KnowledgeRepositories = {
+  reviewThreads: DocumentReviewThreadRepository;
+  reviewComments: DocumentReviewCommentRepository;
+  reviewWriteLedger: DocumentReviewWriteLedger;
   users: UserRepository;
   documents: DocumentRepository;
   revisions: RevisionRepository;

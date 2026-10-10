@@ -79,6 +79,7 @@ export function ShareLinkDialog({
   const [confirmingRevoke, setConfirmingRevoke] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [created, setCreated] = useState<string | null>(null);
+  const [reviewCapability, setReviewCapability] = useState({ read: false, write: false });
   const [origin, setOrigin] = useState("");
   // The document the dialog is open for right now. A response for any other
   // document — the dialog was closed and reopened elsewhere before it
@@ -88,8 +89,8 @@ export function ShareLinkDialog({
 
   const load = useCallback(async (id: string) => {
     try {
-      const result = await governanceRequest<{ links: ShareLink[] }>(`/api/documents/${id}/share-links`);
-      if (current.current === id) setLinks(result.links);
+      const result = await governanceRequest<{ links: ShareLink[]; reviewReadAvailable?: boolean; reviewWritesEnabled?: boolean }>(`/api/documents/${id}/share-links`);
+      if (current.current === id) { setLinks(result.links); setReviewCapability({ read: result.reviewReadAvailable === true, write: result.reviewWritesEnabled === true }); }
     } catch (failure) {
       if (current.current === id) setError(governanceFailure(failure));
     }
@@ -98,6 +99,7 @@ export function ShareLinkDialog({
   useEffect(() => {
     setOrigin(window.location.origin);
     setLinks(null);
+    setReviewCapability({ read: false, write: false });
     setLabel("");
     setExpiresInDays(DEFAULT_EXPIRY_DAYS);
     setError(null);
@@ -130,6 +132,7 @@ export function ShareLinkDialog({
             Anyone with this link can read this document without signing in. They will see every change you make
             from now on, but they cannot edit it or see anything else in My Space. Share only what you are happy to
             see forwarded.
+            {reviewCapability.read && <> Anyone with a valid link can read existing comments.{reviewCapability.write ? " Signing in is required to add comments and replies." : " Adding comments is currently disabled."}</>}
           </Dialog.Description>
 
           <form

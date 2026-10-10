@@ -233,10 +233,10 @@ describe("Phase 3 real request adapters with a trusted test session reader", () 
   });
 
   it("refuses missing reader and gates actual requests on rollout readiness, then retries after repair", async () => {
-    expect(() => composition.buildApplicationServices(pool)).toThrow(/session reader/);
+    expect(() => composition.buildApplicationServices(pool)).toThrow(expect.objectContaining({ code: "AUTH_UNAVAILABLE" }));
     const legacy = { id: uuidv7(), emp_id: "LEGACY", name: "Legacy", org_code: "RD" };
     await services.unitOfWork.run((r) => r.users.insert(legacy));
-    await expect(getWorkspaceShellModel(uuidv7())).rejects.toMatchObject({ code: "PRODUCTION_READINESS_NOT_READY" });
+    await expect(getWorkspaceShellModel(uuidv7())).rejects.toMatchObject({ code: "AUTH_UNAVAILABLE" });
     expect(reader.readSession).not.toHaveBeenCalled();
     await services.unitOfWork.run((r) => r.identityLinks.insert({ id: uuidv7(), provider: "review-company", subject: "legacy", hubUserId: legacy.id, createdAt: new Date(), lastSeenAt: new Date() }));
     expect(await getWorkspaceShellModel(uuidv7())).toBeNull();
@@ -336,7 +336,7 @@ describe("Phase 3 real request adapters with a trusted test session reader", () 
 
   it("does not read a company session before migration 009 is ready", async () => {
     await pool.query("UPDATE schema_migrations SET state = 'FAILED' WHERE version = 9");
-    await expect(getWorkspaceShellModel(uuidv7())).rejects.toMatchObject({ code: "PRODUCTION_READINESS_NOT_READY" });
+    await expect(getWorkspaceShellModel(uuidv7())).rejects.toMatchObject({ code: "AUTH_UNAVAILABLE" });
     expect(reader.readSession).not.toHaveBeenCalled();
     expect(await pool.query("SELECT id FROM users")).toHaveLength(0);
   });

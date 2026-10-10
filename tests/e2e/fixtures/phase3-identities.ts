@@ -8,6 +8,7 @@ export const PHASE3_PERSONAS = {
   groupAdmin: { suffix: "106", groups: ["phase3-admins"] },
   groupEditor: { suffix: "107", groups: ["phase3-editors"] },
   mixedEditor: { suffix: "108", groups: ["phase3-viewers"] },
+  reviewOwner: { suffix: "109", groups: [] },
 } as const;
 export type Phase3Persona = keyof typeof PHASE3_PERSONAS;
 export const phase3PersonaNames = Object.keys(PHASE3_PERSONAS) as Phase3Persona[];
@@ -29,4 +30,9 @@ export function phase3Origin(persona: Phase3Persona): string {
 /** Ordinary production build, deliberately lacking a trusted Company SSO reader. */
 export function phase3UnconfiguredOrigin(): string {
   return `http://127.0.0.1:${Number(process.env.KM_E2E_PORT ?? "3101") + 1 + phase3PersonaNames.length}`;
+}
+
+/** Configured reader without a session; reserve the preceding port for teamsClosedOrigin. */
+export function phase3NoSessionOrigin(): string {
+  return `http://127.0.0.1:${Number(process.env.KM_E2E_PORT ?? "3101") + 3 + phase3PersonaNames.length}`;
 }

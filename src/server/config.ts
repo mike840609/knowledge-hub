@@ -90,3 +90,7 @@ export function isProductionEnvironment(): boolean {
 export function allowLocalIdentityInProduction(): boolean {
   return process.env.KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION === "true";
 }
+
+/** Corporate login initiation/continuation has a separate deployment gate. */
+export function reviewLoginAvailable(): boolean { return false; }
+export function reviewWritesEnabled(): boolean { return process.env.KM_REVIEW_WRITES_ENABLED === "true"; }

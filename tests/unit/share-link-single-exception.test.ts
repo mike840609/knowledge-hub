@@ -98,4 +98,24 @@ describe("the share link is the single caller-less content path", () => {
       .filter((file) => /\breadShared\s*\(|\bshareReadService\s*\(/.test(readFileSync(file, "utf8")));
     expect(callers).toEqual([path.join("src", "server", "share-read.ts")]);
   });
+
+  it("review routes use services and never expose revision, tree or search repositories", () => {
+    const routeFiles = filesUnder("src/app/api").filter((file) =>
+      file.includes(`${path.sep}share-review${path.sep}`) || file.includes(`${path.sep}review-threads${path.sep}`),
+    );
+    expect(routeFiles.length).toBeGreaterThanOrEqual(8);
+    for (const file of routeFiles) {
+      const source = readFileSync(file, "utf8");
+      expect(source).not.toMatch(/repositories|readShared|shareReadService|\.revisions\.|\.tree\.|\.search\./);
+      expect(source).toMatch(/reviewHttp|reviewReadHttp|workspaceHttp|ownerReviewHttp/);
+    }
+  });
+
+  it("review writes require trusted callers; link reads accept an optional caller", () => {
+    const methods = callables("src/modules/knowledge/application/document-review-service.ts")
+      .filter((method) => !["constructor"].includes(method.name));
+    expect(methods.length).toBeGreaterThanOrEqual(7);
+    for (const method of methods) expect(method.parameters, method.name).toMatch(/:\s*CallerContext\b/);
+  });
+
 });

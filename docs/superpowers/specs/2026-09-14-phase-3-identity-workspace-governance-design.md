@@ -379,7 +379,7 @@ All four assignable roles include read; retain the underlying discover/read dist
 
 Phase 3 has no Source/Document ACL. A different member set requires another Team Workspace.
 
-> **Exception (2026-09-23):** Document share links are single-document, read-only, expiring bearer grants without sign-in, rather than ACLs: they specify no recipient, expand no Workspace capability, and do not enter `evaluateEffectiveCapabilities`. See the [share link spec](2026-09-23-document-share-link-design.md).
+> **Exception (2026-09-23):** Document share links are single-document, read-only, expiring bearer grants without sign-in, rather than ACLs: they specify no recipient, expand no Workspace capability, and do not enter `evaluateEffectiveCapabilities`. See the [share link spec](2026-09-23-document-share-link-design.md). **Amendment (2026-10-09):** a live link permits anonymous reads of visible document-scoped review records and bounded current-revision selection fragments; new comments and replies additionally require a server-verified caller. This grants no membership, document editing, history, tree, search or MCP access. Owner moderation derives PERSONAL ownership independently of links. See the [inline review design](2026-10-09-shared-personal-document-inline-review-design.md).
 
 ## 14. Lifecycle and mutation serialization
 

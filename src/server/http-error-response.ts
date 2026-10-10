@@ -79,6 +79,13 @@ export function toImportErrorResponse(error: unknown): ImportHttpError {
 export type ApiErrorBody = { error: { code: string; message: string; field?: string } };
 export function toWorkspaceErrorResponse(error: unknown): { status: number; body: ApiErrorBody } {
   if (error instanceof DomainError) {
+    if (["AUTH_REQUIRED", "AUTH_UNAVAILABLE", "REVIEW_ORIGIN_DENIED", "REVIEW_RATE_LIMIT", "REVIEW_WRITES_DISABLED"].includes(error.code)) {
+      const status = error.code === "AUTH_REQUIRED" ? 401 : error.code === "AUTH_UNAVAILABLE" ? 503 : error.code === "REVIEW_RATE_LIMIT" ? 429 : 403;
+      return { status, body: { error: { code: error.code, message: error.message } } };
+    }
+    if (["IDEMPOTENCY_KEY_REUSED", "CAPACITY_EXCEEDED", "REVIEW_CONFLICT", "STALE_DOCUMENT_REVISION", "REVIEW_LIMIT_REACHED", "REVIEW_THREAD_CLOSED"].includes(error.code)) return { status: 409, body: { error: { code: error.code, message: error.message } } };
+    if (["INVALID_REVIEW_BODY", "INVALID_REVIEW_ANCHOR", "INVALID_REVIEW_IDEMPOTENCY_KEY"].includes(error.code)) return { status: 400, body: { error: { code: error.code, message: error.message } } };
+    if (error.code === "REVIEW_NOT_FOUND") return { status: 404, body: { error: { code: "NOT_FOUND", message: "The requested resource was not found." } } };
     if (WORKSPACE_HIDDEN_NOT_FOUND.has(error.code)) return { status: 404, body: { error: { code: "NOT_FOUND", message: "The requested resource was not found." } } };
     if (error.code === "WORKSPACE_BUSY") return { status: 503, body: { error: { code: error.code, message: error.message } } };
     const status = ["INSUFFICIENT_WORKSPACE_CAPABILITY", "TEAM_CREATION_DENIED", "PERSONAL_WORKSPACE_FROZEN"].includes(error.code) ? 403

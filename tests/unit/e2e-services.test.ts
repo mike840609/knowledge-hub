@@ -1,3 +1,5 @@
+import { phase3NoSessionOrigin, phase3UnconfiguredOrigin } from "../e2e/fixtures/phase3-identities";
+import { teamsClosedOrigin } from "../e2e/fixtures/teams-closed";
 import { describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
 import { e2eTeamWorkspacesEnabled, requiredE2eServices } from "../../scripts/test/e2e-services";
@@ -12,15 +14,20 @@ describe("E2E service requirements", () => {
     expect(e2eTeamWorkspacesEnabled({ KM_TEAM_WORKSPACES_ENABLED: "true", KM_E2E_PERSONAL_ONLY: "true" })).toBe("false");
   });
   test("personal workspace needs only the local application", () => {
-    expect(requiredE2eServices([source("personal-workspace.spec.ts")])).toEqual({ personas: false, unconfigured: false, teamsClosed: false });
+    expect(requiredE2eServices([source("personal-workspace.spec.ts")])).toEqual({ personas: false, unconfigured: false, noSession: false, teamsClosed: false });
   });
   test("anonymous share readers need the fail-closed server, not the SSO fixture build", () => {
-    expect(requiredE2eServices([source("share-link.spec.ts")])).toEqual({ personas: false, unconfigured: true, teamsClosed: false });
+    expect(requiredE2eServices([source("share-link.spec.ts")])).toEqual({ personas: false, unconfigured: true, noSession: false, teamsClosed: false });
+  });
+  test("a configured no-session origin requires its own fixture server", () => {
+    expect(new Set([phase3NoSessionOrigin(), phase3UnconfiguredOrigin(), teamsClosedOrigin()]).size).toBe(3);
+    expect(requiredE2eServices(["phase3NoSessionOrigin()"]).noSession).toBe(true);
+    expect(requiredE2eServices(["phase3NoSessionOrigin()"]).personas).toBe(true);
   });
   test("Team availability needs the closed-Team server", () => {
-    expect(requiredE2eServices([source("team-workspaces-coming-soon.spec.ts")])).toEqual({ personas: false, unconfigured: false, teamsClosed: true });
+    expect(requiredE2eServices([source("team-workspaces-coming-soon.spec.ts")])).toEqual({ personas: false, unconfigured: false, noSession: false, teamsClosed: true });
   });
   test("combines governance, anonymous-reader and availability coverage", () => {
-    expect(requiredE2eServices([source("phase3-workspace-governance.spec.ts"), source("share-link.spec.ts"), source("team-workspaces-coming-soon.spec.ts")])).toEqual({ personas: true, unconfigured: true, teamsClosed: true });
+    expect(requiredE2eServices([source("phase3-workspace-governance.spec.ts"), source("share-link.spec.ts"), source("team-workspaces-coming-soon.spec.ts")])).toEqual({ personas: true, unconfigured: true, noSession: false, teamsClosed: true });
   });
 });

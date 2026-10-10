@@ -1,3 +1,5 @@
+import { SharedReviewPanel } from "@/components/knowledge/shared-review-panel";
+import { reviewLoginAvailable } from "@/server/config";
 import Link from "next/link";
 import { buttonClasses } from "@/components/ui/button";
 import type { Metadata } from "next";
@@ -50,9 +52,12 @@ export default async function SharedDocumentPage({ params }: SharedPageProps) {
           </p>
         </div>
       </header>
-      <article className="kh-reading-column min-w-0 pb-6 pt-6 [&>div>:first-child]:mt-0">
+      <div className="mx-auto flex max-w-[1400px] flex-col items-start min-[1200px]:flex-row">
+      <article data-review-document className="kh-reading-column min-w-0 pb-6 pt-6 [&>div>:first-child]:mt-0">
         <MarkdownRenderer markdown={shared.markdown} />
       </article>
+      <SharedReviewPanel token={token} revisionId={shared.revisionId} markdown={shared.markdown} reviewLoginAvailable={reviewLoginAvailable()} />
+      </div>
       <footer className="kh-reading-column pb-10 pt-4">
         <div className="flex flex-wrap items-center justify-between gap-4 border-t border-kh-border pt-5">
           <div><p className="text-body font-medium text-kh-text">Keep useful knowledge within reach.</p><p className="mt-1 text-body-sm text-kh-text-muted">Organize documents and search your team’s knowledge in Knowledge Hub.</p></div>

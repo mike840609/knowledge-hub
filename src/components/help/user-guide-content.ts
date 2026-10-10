@@ -51,6 +51,7 @@ export function userGuideContent(locale:GuideLocale):GuideContent {
       ]),
       section("sharing-export","分享、匯出與使用範圍",[
         "My Space 是個人工作區。建立文章分享連結後，持有連結的人可免登入閱讀，並看到文章後續變更；請先確認內容可以公開給連結持有人。",
+        "持有有效分享連結即可免登入閱讀未隱藏的評論；新增評論與回覆需要可信登入身分。擁有者可回覆、解決或隱藏留言；評論不修改 Markdown，亦不影響 Folder Sync。公司登入尚未設定時仍可閱讀評論；新增留言需另外啟用。",
         "在文章 Share link 對話框管理期限與撤銷；Shares 可檢查目前分享狀態。撤銷後，既有連結無法再開啟文件。",
         "Home 的更多操作選單提供 Export Markdown ZIP。匯出包含已保存與封存的筆記；不包含草稿、歷史版本或附件，不應當作完整系統備份。",
         "Team workspace 是否可用由部署設定決定，操作也受角色與工作區狀態限制。Home、Insights 與本手冊的個人流程不代表 Team 成員一定能使用；唯讀或沒有權限時請依介面提示處理。",
@@ -103,6 +104,7 @@ export function userGuideContent(locale:GuideLocale):GuideContent {
       ]),
       section("sharing-export","Share, export and workspace scope",[
         "My Space is personal. Once you create an article share link, anyone holding it can read without signing in and see subsequent article changes. Verify that the content is suitable for link holders.",
+        "Anyone with a valid share link can read visible comments without signing in. Adding comments and replies requires a trusted sign-in. Owners can reply, resolve and hide comments without changing Markdown or Folder Sync. New comments require configured sign-in and enabled writes; reading comments does not.",
         "Manage expiry and revoke links in the article's Share link dialog. Shares helps review sharing status. Revoked links can no longer open the document.",
         "Home's more-actions menu offers Export Markdown ZIP. It includes saved and archived notes, excluding drafts, revision history and attachments. It is not a full system backup.",
         "Team availability depends on deployment settings, roles and workspace state. Personal Home, Insights and these personal flows do not imply access for Team members. Follow read-only or access-denied messages.",

@@ -1,3 +1,4 @@
+import { AuthRequiredError, AuthUnavailableError } from "@/modules/identity/domain/identity-session-errors";
 import { afterEach, describe, expect, it } from "vitest";
 import { LocalIdentityProvider } from "@/infrastructure/identity/local-identity-provider";
 import { CompanySsoIdentityProvider } from "@/infrastructure/identity/company-sso-identity-provider";
@@ -161,7 +162,7 @@ describe("Company SSO identity provider claims", () => {
     const reader = trackingReader({ subject: "", emp_id: "E1005", name: "No Subject", org_code: "RD", externalGroupIds: [] });
     await expect(
       new CompanySsoIdentityProvider(reader, { provider: "company-sso", teamCreateGroupIds: [] }).getCurrentClaims(),
-    ).rejects.toBeInstanceOf(IdentityError);
+    ).rejects.toBeInstanceOf(AuthUnavailableError);
   });
 
   it("rejects an unconfigured provider name instead of issuing claims", async () => {
@@ -203,7 +204,7 @@ describe("identity provider factory", () => {
   it("fails closed when Company SSO is selected without a server-side session reader", () => {
     process.env.KM_IDENTITY_PROVIDER = "company-sso";
     setNodeEnv("production");
-    expect(() => createIdentityProvider()).toThrow(IdentityError);
+    expect(() => createIdentityProvider()).toThrow(AuthUnavailableError);
   });
 
   it("wires the Company provider from server-side configuration when a reader is present", () => {
@@ -220,4 +221,10 @@ describe("identity provider factory", () => {
     setNodeEnv("test");
     expect(() => createIdentityProvider()).toThrow(IdentityError);
   });
+});
+
+it("distinguishes absent session from broken session integration",async()=>{
+ const options={provider:"company-sso",teamCreateGroupIds:[]};
+ await expect(new CompanySsoIdentityProvider({readSession:async()=>null},options).getCurrentClaims()).rejects.toBeInstanceOf(AuthRequiredError);
+ await expect(new CompanySsoIdentityProvider({readSession:async()=>{throw new Error("secret");}},options).getCurrentClaims()).rejects.toBeInstanceOf(AuthUnavailableError);
 });

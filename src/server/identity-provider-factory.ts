@@ -1,3 +1,4 @@
+import { AuthUnavailableError } from "@/modules/identity/domain/identity-session-errors";
 import { CompanySsoIdentityProvider } from "@/infrastructure/identity/company-sso-identity-provider";
 import { LocalIdentityProvider } from "@/infrastructure/identity/local-identity-provider";
 import type { IdentityProvider } from "@/modules/identity/ports/identity-provider";
@@ -25,9 +26,7 @@ export function createIdentityProvider(deps: IdentityProviderFactoryDeps = {}): 
   const kind = identityProviderKind();
   if (kind === "company-sso") {
     if (!deps.companySessionReader) {
-      throw new IdentityError(
-        "Company SSO provider is configured but no server-side session reader is wired; refusing to start without trusted session integration.",
-      );
+      throw new AuthUnavailableError();
     }
     return new CompanySsoIdentityProvider(deps.companySessionReader, {
       provider: companySsoProviderName(),

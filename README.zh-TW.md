@@ -63,7 +63,7 @@ Knowledge Hub 是開源、可自行部署的知識管理應用。你可以直接
 | 文件整理 | 文件／資料夾樹、移動、更名、封存與還原；來源管理的內容透過重新同步更新 |
 | 搜尋 | Workspace 範圍內的關鍵字搜尋與快速搜尋（`⌘K`／`Ctrl+K`） |
 | 知識連結 | `[[wikilink]]`、相對 `.md` 連結、Backlinks、Workspace／Local graph |
-| 分享 | My Space 單篇文件的匿名唯讀連結，可撤銷；分享顯示已儲存版本，不公開草稿 |
+| 分享 | My Space 匿名文件讀取；可信登入者持有效連結可查看共同討論，啟用寫入後可評論；擁有者可解決與隱藏留言 |
 | 匯出 | 單篇 Markdown 下載、My Space ZIP 匯出，保留目錄與穩定 ID/path manifest |
 | Agent context | Copy for Agent 與 Workspace 範圍的讀取／context API，沿用應用的存取規則 |
 | Team workspace（需開啟） | Workspace 管理、membership、角色與能力、外部群組映射及 audit |
@@ -276,6 +276,7 @@ KM_E2E_PERSONAL_ONLY=true npm run test:e2e -- personal-workspace.spec.ts
 | 探索與讀取 API | [規格](docs/superpowers/specs/2026-09-16-phase-4-discovery-read-api-design.md) | [計畫](docs/superpowers/plans/2026-09-16-phase-4-discovery-read-api.md) | 授權搜尋與有界文件讀取。 |
 | 人工撰寫 | [規格](docs/superpowers/specs/2026-09-16-phase-5-human-authoring-design.md) | [計畫](docs/superpowers/plans/2026-09-16-phase-5-human-authoring.md) | 上傳、建立、編輯與版本衝突。 |
 | 文件分享 | [規格](docs/superpowers/specs/2026-09-23-document-share-link-design.md) | [計畫](docs/superpowers/plans/2026-09-23-document-share-link.md) | 可到期、可撤銷的單篇文件讀取。 |
+| 文件評論 | [規格](docs/superpowers/specs/2026-10-09-shared-personal-document-inline-review-design.md) | [計畫](docs/superpowers/plans/2026-10-09-shared-personal-document-inline-review.md) | 有效連結可免登入閱讀評論、登入後留言、擁有者管理與同步錨點；公司環境另行驗證後啟用。 |
 | 文件編輯器 | [規格](docs/superpowers/specs/2026-09-28-document-composer-design.md) | [計畫](docs/superpowers/plans/2026-09-28-document-composer.md) | 渲染編輯與 Markdown 原始碼模式。 |
 | 知識連結與圖譜 | [規格](docs/superpowers/specs/2026-09-29-personal-workspace-knowledge-graph-design.md) | [計畫](docs/superpowers/plans/2026-09-29-personal-workspace-knowledge-graph.md) | Wikilinks、反向連結、標題錨點與衍生圖譜資料。 |
 | 個人日用功能 | [規格](docs/superpowers/specs/2026-09-29-personal-daily-driver-design.md) | [計畫](docs/superpowers/plans/2026-09-29-personal-daily-driver.md) | Wikilink 保留、自動完成、程式碼區塊與整理。 |
@@ -288,3 +289,9 @@ KM_E2E_PERSONAL_ONLY=true npm run test:e2e -- personal-workspace.spec.ts
 ## 授權
 
 Knowledge Hub 以 **[MIT License](LICENSE)** 授權，可使用、修改與散布。再散布時請保留原始版權與授權聲明。第三方依賴保留各自的授權條款。
+
+### 文件評論部署
+
+文件評論與 Markdown 分開儲存，不影響 Folder Sync。`KM_REVIEW_WRITES_ENABLED` 預設關閉；關閉時仍可讀取既有討論及由擁有者隱藏或解決留言。公司 SSO/Gateway 與登入回跳尚待公司環境整合，不應只因本機測試通過就啟用正式環境寫入。隱藏留言不等同刪除資料。
+
+[Inline review design](docs/superpowers/specs/2026-10-09-shared-personal-document-inline-review-design.md) · [Implementation plan](docs/superpowers/plans/2026-10-09-shared-personal-document-inline-review.md) · [Verification](docs/superpowers/verification/2026-10-09-shared-personal-document-inline-review.md)

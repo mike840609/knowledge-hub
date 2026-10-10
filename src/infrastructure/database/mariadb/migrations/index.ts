@@ -1,3 +1,4 @@
+import { documentReviewMigration } from "./017-document-review";
 import { readingActivityMigration } from "./016-reading-activity";
 import { sourceImportScopeMigration } from "./015-source-import-scope";
 import { folderSyncReadingMigration } from "./014-folder-sync-reading";
@@ -32,4 +33,5 @@ export const migrations = [
   folderSyncReadingMigration,
   sourceImportScopeMigration,
   readingActivityMigration,
+  documentReviewMigration,
 ] as const;

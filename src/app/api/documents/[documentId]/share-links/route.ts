@@ -1,3 +1,4 @@
+import { reviewWritesEnabled } from "@/server/config";
 import { DomainError } from "@/shared/domain/errors";
 import { workspaceHttp } from "@/server/workspace-http";
 
@@ -17,6 +18,6 @@ export async function POST(request: Request, context: ShareLinksRouteContext) {
 export async function GET(_request: Request, context: ShareLinksRouteContext) {
   return workspaceHttp(async (services, caller) => {
     const { documentId } = await context.params;
-    return { links: await services.shares.list(caller, documentId) };
+    return { links: await services.shares.list(caller, documentId), reviewReadAvailable: services.reviewReadAvailable, reviewWritesEnabled: reviewWritesEnabled() };
   });
 }

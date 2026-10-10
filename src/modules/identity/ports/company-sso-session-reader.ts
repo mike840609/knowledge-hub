@@ -12,5 +12,5 @@ export type CompanySsoSession = {
 };
 
 export interface CompanySsoSessionReader {
-  readSession(): Promise<CompanySsoSession>;
+  readSession(): Promise<CompanySsoSession | null>;
 }
