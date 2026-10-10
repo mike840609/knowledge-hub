@@ -1,3 +1,4 @@
+import { syncCallerIdentity } from "@/modules/identity/application/sync-caller-identity";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { lockWorkspaceForMutation } from "@/modules/workspaces/application/workspace-mutation-guard";
@@ -64,7 +65,7 @@ export class SourceApplicationService implements SourceLifecycleCommands {
     const runId = uuidv7();
     try {
       return await this.unitOfWork.run(async (repositories) => {
-        await repositories.users.upsertIdentity(caller.identity);
+        await syncCallerIdentity(repositories.users, caller);
         const source = await repositories.sources.lockById(input.sourceId);
         if (!source) throw new SourceNotFoundError();
         await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "source-import");
@@ -121,7 +122,7 @@ export class SourceApplicationService implements SourceLifecycleCommands {
     const runId = uuidv7();
     try {
       return await this.unitOfWork.run(async (repositories) => {
-        await repositories.users.upsertIdentity(caller.identity);
+        await syncCallerIdentity(repositories.users, caller);
         const source = await repositories.sources.lockById(input.sourceId);
         if (!source) throw new SourceNotFoundError();
         await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "source-import");
@@ -154,7 +155,7 @@ export class SourceApplicationService implements SourceLifecycleCommands {
 
   private async setSourceStatus(caller: CallerContext, sourceId: string, status: "ACTIVE" | "ARCHIVED"): Promise<void> {
     await this.unitOfWork.run(async (repositories) => {
-      await repositories.users.upsertIdentity(caller.identity);
+      await syncCallerIdentity(repositories.users, caller);
       const source = await repositories.sources.lockById(sourceId);
       if (!source) throw new SourceNotFoundError();
       await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "source-import");
@@ -166,7 +167,7 @@ export class SourceApplicationService implements SourceLifecycleCommands {
   async recordFailedRun(input: { id?: string; sourceId: string; caller: CallerContext; basedOnVersion: number; summary: Record<string, unknown> }): Promise<string> {
     const id = input.id ?? uuidv7();
     await this.unitOfWork.run(async (repositories) => {
-      await repositories.users.upsertIdentity(input.caller.identity);
+      await syncCallerIdentity(repositories.users, input.caller);
       const source = await repositories.sources.findById(input.sourceId);
       if (!source) throw new SourceNotFoundError();
       await repositories.workspaceAccess.requireMembership(input.caller, source.workspaceId);

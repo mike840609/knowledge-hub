@@ -266,6 +266,8 @@ TrustedCaller bootstrap
 
 `AuthenticatedPrincipal.identity` is always Hub UserIdentity.
 
+The bootstrap syncs the Hub user row (id, emp_id, name, org_code) before it builds the caller, and marks that caller `identitySynced`. A service asked by such a caller does not sync the row again; one asked by any other caller (a script, a test, a future non-Web entry) still does, through `syncCallerIdentity`. The mark records that the row is current for this request. It grants nothing, and only the bootstrap sets it.
+
 IdentityProvider validates sign-in sessions, external identity, group IDs, and server-side platform-capability mapping; it must not accept browser-supplied truth.
 
 - Local/dev may use a server-configured Local provider.

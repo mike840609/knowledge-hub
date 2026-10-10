@@ -1,3 +1,4 @@
+import { syncCallerIdentity } from "@/modules/identity/application/sync-caller-identity";
 import { parseShareManagementQuery, SHARE_MANAGEMENT_PAGE_SIZE, type ShareManagementInput } from "../domain/share-management";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { uuidv7 } from "@/shared/ids/uuidv7";
@@ -66,7 +67,7 @@ export class DocumentShareService {
 
   async create(caller: CallerContext, input: { documentId: string; label?: unknown; expiresInDays?: unknown }): Promise<ShareLinkView> {
     return this.unitOfWork.run(async (repositories) => {
-      await repositories.users.upsertIdentity(caller.identity);
+      await syncCallerIdentity(repositories.users, caller);
       const { document, source, workspace } = await lockOwnedScope(repositories, caller, input.documentId);
       const now = this.clock();
       const normalized = assertShareLinkCreation({
@@ -110,7 +111,7 @@ export class DocumentShareService {
 
   async list(caller: CallerContext, documentId: string): Promise<ShareLinkView[]> {
     return this.unitOfWork.run(async (repositories) => {
-      await repositories.users.upsertIdentity(caller.identity);
+      await syncCallerIdentity(repositories.users, caller);
       const document = await repositories.documents.findById(documentId);
       if (!document) throw new DocumentNotFoundError();
       const source = await repositories.sourcePolicy.findById(document.sourceId);
@@ -127,7 +128,7 @@ export class DocumentShareService {
 
   async revoke(caller: CallerContext, linkId: string): Promise<void> {
     await this.unitOfWork.run(async (repositories) => {
-      await repositories.users.upsertIdentity(caller.identity);
+      await syncCallerIdentity(repositories.users, caller);
       // No path locks a share link after Source/Workspace, so taking the link
       // first cannot invert the Phase 3 §14.2 order.
       const link = await repositories.shareLinks.lockById(linkId);

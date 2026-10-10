@@ -1,3 +1,4 @@
+import { syncCallerIdentity } from "@/modules/identity/application/sync-caller-identity";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { IntegrityViolationError, RevisionNotFoundError } from "../domain/errors";
 import { extractDocumentLinks, type LinkKind } from "../domain/document-links";
@@ -228,7 +229,7 @@ export class KnowledgeLinkServiceImpl implements KnowledgeLinkService {
 
   async listLinkTargets(caller: CallerContext, workspaceId: string): Promise<LinkTargetsView> {
     return this.unitOfWork.run(async (repositories) => {
-      await repositories.users.upsertIdentity(caller.identity);
+      await syncCallerIdentity(repositories.users, caller);
       await repositories.workspaceAccess.requireMembership(caller, workspaceId);
       const limit = this.options.linkTargetLimit ?? LINK_TARGET_LIMIT;
       // One more than the limit: whether there is one more is what "truncated" says.
@@ -250,7 +251,7 @@ export class KnowledgeLinkServiceImpl implements KnowledgeLinkService {
 
   async getWorkspaceGraph(caller: CallerContext, workspaceId: string, input: GraphOptions = {}): Promise<WorkspaceGraphView> {
     return this.unitOfWork.run(async (repositories) => {
-      await repositories.users.upsertIdentity(caller.identity);
+      await syncCallerIdentity(repositories.users, caller);
       await repositories.workspaceAccess.requireMembership(caller, workspaceId);
       const catalog = await repositories.links.loadCatalog(workspaceId);
       const edges = resolveEdges(catalog, await repositories.links.loadValidEdges(workspaceId));

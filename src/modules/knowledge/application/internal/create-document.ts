@@ -1,3 +1,4 @@
+import { syncCallerIdentity } from "@/modules/identity/application/sync-caller-identity";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { lockWorkspaceForMutation } from "@/modules/workspaces/application/workspace-mutation-guard";
 import { uuidv7 } from "@/shared/ids/uuidv7";
@@ -29,7 +30,7 @@ export async function createDocumentInTransaction(
   caller: CallerContext,
   input: CreateHubDocumentInput,
 ): Promise<{ documentId: string; revisionId: string; treeNodeId: string }> {
-  await repositories.users.upsertIdentity(caller.identity);
+  await syncCallerIdentity(repositories.users, caller);
   const source = await repositories.sourcePolicy.lockById(input.sourceId);
   if (!source) throw new SourceNotFoundError();
   if (source.status !== "ACTIVE") throw new SourceArchivedError();
