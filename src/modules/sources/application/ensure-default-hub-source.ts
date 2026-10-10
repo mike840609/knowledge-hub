@@ -1,3 +1,4 @@
+import { syncCallerIdentity } from "@/modules/identity/application/sync-caller-identity";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { lockWorkspaceForMutation } from "@/modules/workspaces/application/workspace-mutation-guard";
 import { uuidv7 } from "@/shared/ids/uuidv7";
@@ -38,7 +39,7 @@ export async function ensureDefaultHubSource(
   workspaceId: string,
 ): Promise<string> {
   const existing = await unitOfWork.run(async (repositories) => {
-    await repositories.users.upsertIdentity(caller.identity);
+    await syncCallerIdentity(repositories.users, caller);
     await lockWorkspaceForMutation(repositories, caller, workspaceId, "content-write");
     return findDefaultHub(await repositories.sourcePolicy.listByWorkspaceId(workspaceId));
   });

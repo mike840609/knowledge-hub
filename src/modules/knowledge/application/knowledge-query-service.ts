@@ -1,3 +1,4 @@
+import { syncCallerIdentity } from "@/modules/identity/application/sync-caller-identity";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import {
   IntegrityViolationError,
@@ -123,7 +124,7 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
 
   async listDocumentSummaries(caller: CallerContext, workspaceId: string, input: { includeArchived?: boolean } = {}): Promise<DocumentSummary[]> {
     return this.unitOfWork.run(async (repositories) => {
-      await repositories.users.upsertIdentity(caller.identity);
+      await syncCallerIdentity(repositories.users, caller);
       await repositories.workspaceAccess.requireWorkspaceRead(caller, workspaceId);
       return repositories.tree.listDocumentsByWorkspace(workspaceId, input.includeArchived ?? false);
     });
@@ -131,7 +132,7 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
 
   async listSources(caller: CallerContext, workspaceId: string, input: { includeArchived?: boolean } = {}): Promise<SourceView[]> {
     return this.unitOfWork.run(async (repositories) => {
-      await repositories.users.upsertIdentity(caller.identity);
+      await syncCallerIdentity(repositories.users, caller);
       await repositories.workspaceAccess.requireMembership(caller, workspaceId);
       const policies = await repositories.sourcePolicy.listByWorkspaceId(workspaceId, input);
       return policies.map(toSourceView);
@@ -140,7 +141,7 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
 
   async getSource(caller: CallerContext, sourceId: string, input: { includeArchived?: boolean } = {}): Promise<SourceView> {
     return this.unitOfWork.run(async (repositories) => {
-      await repositories.users.upsertIdentity(caller.identity);
+      await syncCallerIdentity(repositories.users, caller);
       const policy = await requireSourcePolicy(repositories, sourceId);
       await repositories.workspaceAccess.requireMembership(caller, policy.workspaceId);
       if (!input.includeArchived && policy.status !== "ACTIVE") throw new SourceNotFoundError();
@@ -151,7 +152,7 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
   async listTree(caller: CallerContext, sourceId: string, input: { includeArchived?: boolean } = {}): Promise<KnowledgeTreeItem[]> {
     const includeArchived = input.includeArchived ?? false;
     return this.unitOfWork.run(async (repositories) => {
-      await repositories.users.upsertIdentity(caller.identity);
+      await syncCallerIdentity(repositories.users, caller);
       const policy = await requireSourcePolicy(repositories, sourceId);
       await repositories.workspaceAccess.requireMembership(caller, policy.workspaceId);
       if (!includeArchived && policy.status !== "ACTIVE") return [];
@@ -211,7 +212,7 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
   async getAncestors(caller: CallerContext, nodeId: string, input: { includeArchived?: boolean } = {}): Promise<KnowledgeTreeItem[]> {
     const includeArchived = input.includeArchived ?? false;
     return this.unitOfWork.run(async (repositories) => {
-      await repositories.users.upsertIdentity(caller.identity);
+      await syncCallerIdentity(repositories.users, caller);
       const node = await repositories.tree.findById(nodeId);
       if (!node) throw new TreeNodeNotFoundError();
       const policy = await requireSourcePolicy(repositories, node.sourceId);

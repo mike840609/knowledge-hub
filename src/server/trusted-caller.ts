@@ -52,5 +52,6 @@ export async function establishTrustedCaller(dependencies: TrustedCallerDependen
     platformCapabilities: [...claims.platformCapabilities],
     refreshedAt: claims.refreshedAt,
   };
-  return { caller: callerFromPrincipal(principal), principal, identity, personalWorkspace };
+  // The upsert above has committed, and users are never deleted: services asked by this caller skip theirs.
+  return { caller: { ...callerFromPrincipal(principal), identitySynced: true }, principal, identity, personalWorkspace };
 }

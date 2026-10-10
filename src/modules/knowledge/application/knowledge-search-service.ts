@@ -1,3 +1,4 @@
+import { syncCallerIdentity } from "@/modules/identity/application/sync-caller-identity";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { evaluateWorkspaceCapabilities } from "@/modules/workspaces/application/workspace-authorization";
 import type { WorkspaceQueryService } from "@/modules/workspaces/application/workspace-query-service";
@@ -51,7 +52,7 @@ export class KnowledgeSearchService {
     // the existing read models do; capabilities are then re-checked per row.
     const accessible = input.scope.kind === "all" ? await this.workspaces.listWorkspaces(caller) : [];
     return this.unitOfWork.run(async (repositories) => {
-      await repositories.users.upsertIdentity(caller.identity);
+      await syncCallerIdentity(repositories.users, caller);
       const workspaceIds = input.scope.kind === "workspace"
         ? await scopedWorkspace(repositories, caller, input.scope.workspaceId)
         : await readableWorkspaces(

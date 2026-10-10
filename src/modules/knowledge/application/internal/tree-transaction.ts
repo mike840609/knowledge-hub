@@ -1,3 +1,4 @@
+import { syncCallerIdentity } from "@/modules/identity/application/sync-caller-identity";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { lockWorkspaceForMutation } from "@/modules/workspaces/application/workspace-mutation-guard";
 import {
@@ -52,7 +53,7 @@ async function requireOwnedSource(
   sourceId: string,
   ownership: "HUB_MANAGED" | "SOURCE_MANAGED",
 ): Promise<SourcePolicy> {
-  await repositories.users.upsertIdentity(caller.identity);
+  await syncCallerIdentity(repositories.users, caller);
   const source = await repositories.sourcePolicy.lockById(sourceId);
   if (!source) throw new SourceNotFoundError();
   if (source.status !== "ACTIVE") throw new SourceArchivedError();

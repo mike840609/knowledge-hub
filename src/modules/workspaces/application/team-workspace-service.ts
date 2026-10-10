@@ -1,3 +1,4 @@
+import { syncCallerIdentity } from "@/modules/identity/application/sync-caller-identity";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import type { Workspace } from "../domain/workspace";
@@ -85,7 +86,7 @@ export class TeamWorkspaceService {
     const now = new Date();
     const workspaceId = uuidv7();
     await this.unitOfWork.run(async (repositories) => {
-      await repositories.users.upsertIdentity(caller.identity);
+      await syncCallerIdentity(repositories.users, caller);
       await repositories.workspaces.insert(
         createTeamWorkspaceInsert({ id: workspaceId, name, createdBy: caller.identity.id, now }),
       );

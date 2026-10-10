@@ -1,3 +1,4 @@
+import { syncCallerIdentity } from "@/modules/identity/application/sync-caller-identity";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { DocumentNotFoundError, SourceNotFoundError } from "../../domain/errors";
 import type { SourcePolicy } from "../../domain/source-policy";
@@ -23,7 +24,7 @@ export async function requireVisibleDocument(
   documentId: string,
   includeArchived: boolean,
 ): Promise<{ document: { id: string; sourceId: string; status: "ACTIVE" | "ARCHIVED" }; policy: SourcePolicy }> {
-  await repositories.users.upsertIdentity(caller.identity);
+  await syncCallerIdentity(repositories.users, caller);
   const document = await repositories.documents.findById(documentId);
   if (!document) throw new DocumentNotFoundError();
   const policy = await requireSourcePolicy(repositories, document.sourceId);
