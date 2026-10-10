@@ -204,6 +204,7 @@ docs/                Design, operations, and verification records
 | Command | Purpose |
 | --- | --- |
 | `make dev` | Start the local development server |
+| `make dev-reviewer` | Start a second server as another local user on port 3001, for [two-person flows](docs/development/two-person-demo.md) |
 | `make build` / `make start` | Build / serve a production build (requires identity integration) |
 | `make db-up` / `make db-down` / `make db-logs` | Start, stop, or inspect database logs; `db-down` preserves the volume |
 | `make db-migrate` / `make db-seed` | Update the schema / load development fixtures |
