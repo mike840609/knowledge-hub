@@ -7,9 +7,15 @@ export type CurrentAnchorProjection = { match:"MATCHED"|"MOVED"|"OUTDATED"; anch
 type HiddenMetadata = { visibility:ReviewVisibility; hiddenBy:string|null; hiddenAt:Date|null; hiddenReason:string|null };
 export type ReviewThread = HiddenMetadata & { id:string; documentId:string; createdRevisionId:string; createdBy:string; creationIdempotencyKey:string; creationRequestHash:string; originShareLinkId:string|null; anchor:ReviewAnchor; status:ReviewStatus; resolvedBy:string|null; resolvedAt:Date|null; createdAt:Date; updatedAt:Date };
 export type ReviewComment = HiddenMetadata & { id:string; threadId:string; authorUserId:string; body:string; createdAt:Date; idempotencyKey:string; requestHash:string };
-export type ReviewCommentView = { id:string; threadId:string; authorUserId:string; authorName?:string; body:string; visibility:ReviewVisibility; createdAt:Date };
-export type ReviewThreadView = { id:string; documentId:string; createdBy:string; creatorName?:string; status:ReviewStatus; createdAt:Date; updatedAt:Date; currentAnchor:CurrentAnchorProjection; comments:ReviewCommentView[] };
-export type OwnerReviewThreadView = ReviewThreadView & { visibility:ReviewVisibility; hiddenBy:string|null; hiddenAt:Date|null; hiddenReason:string|null; originalAnchor:ReviewAnchor; resolvedBy:string|null; resolvedAt:Date|null; comments:(ReviewCommentView & { hiddenBy:string|null; hiddenAt:Date|null; hiddenReason:string|null })[] };
+/**
+ * What a share link reads. It names people by display name only and carries no user or document
+ * ID: a link holder is outside the Workspace, and the public page adds no identifier that reaches
+ * past its one document (share-link spec §6.1). The thread and comment IDs are the review's own.
+ */
+export type ReviewCommentView = { id:string; threadId:string; authorName?:string; body:string; visibility:ReviewVisibility; createdAt:Date };
+export type ReviewThreadView = { id:string; status:ReviewStatus; createdAt:Date; updatedAt:Date; currentAnchor:CurrentAnchorProjection; comments:ReviewCommentView[] };
+/** What the document's owner reads in My Space: the same threads, with who and what moderation needs. */
+export type OwnerReviewThreadView = ReviewThreadView & { documentId:string; createdBy:string; visibility:ReviewVisibility; hiddenBy:string|null; hiddenAt:Date|null; hiddenReason:string|null; originalAnchor:ReviewAnchor; resolvedBy:string|null; resolvedAt:Date|null; comments:(ReviewCommentView & { authorUserId:string; hiddenBy:string|null; hiddenAt:Date|null; hiddenReason:string|null })[] };
 export type CreateReviewThreadInput = { token:string; expectedRevisionId:string; anchor:ReviewAnchor; body:string; idempotencyKey:string };
 export type ReplyReviewInput = { token:string; threadId:string; body:string; idempotencyKey:string };
 export function validateReviewBody(body:unknown):string {
@@ -25,15 +31,15 @@ export function copyReviewAnchor(anchor:ReviewAnchor):ReviewAnchor {
  return {schemaVersion:1,blockPath:[...anchor.blockPath],blockKind:anchor.blockKind,startUtf16:anchor.startUtf16,endUtf16:anchor.endUtf16,exact:anchor.exact,prefix:anchor.prefix,suffix:anchor.suffix};
 }
 export function projectReviewComment(comment:ReviewComment):ReviewCommentView {
-  return { id:comment.id, threadId:comment.threadId, authorUserId:comment.authorUserId, createdAt:comment.createdAt, visibility:comment.visibility, body:comment.visibility==="HIDDEN"?"Comment hidden by document owner":comment.body };
+  return { id:comment.id, threadId:comment.threadId, createdAt:comment.createdAt, visibility:comment.visibility, body:comment.visibility==="HIDDEN"?"Comment hidden by document owner":comment.body };
 }
 function baseThread(thread:ReviewThread, currentAnchor:CurrentAnchorProjection):Omit<ReviewThreadView,"comments"> {
-  return {id:thread.id, documentId:thread.documentId, createdBy:thread.createdBy, status:thread.status, createdAt:thread.createdAt, updatedAt:thread.updatedAt, currentAnchor:currentAnchor.match==="OUTDATED"?{match:"OUTDATED"}:{match:currentAnchor.match,...(currentAnchor.anchor?{anchor:copyReviewAnchor(currentAnchor.anchor)}:{})}};
+  return {id:thread.id, status:thread.status, createdAt:thread.createdAt, updatedAt:thread.updatedAt, currentAnchor:currentAnchor.match==="OUTDATED"?{match:"OUTDATED"}:{match:currentAnchor.match,...(currentAnchor.anchor?{anchor:copyReviewAnchor(currentAnchor.anchor)}:{})}};
 }
 export function projectReviewerThread(thread:ReviewThread,comments:ReviewComment[],currentAnchor:CurrentAnchorProjection):ReviewThreadView|null {
   if(thread.visibility==="HIDDEN") return null;
   return {...baseThread(thread,currentAnchor),comments:comments.map(projectReviewComment)};
 }
 export function projectOwnerThread(thread:ReviewThread,comments:ReviewComment[],currentAnchor:CurrentAnchorProjection):OwnerReviewThreadView {
-  return {...baseThread(thread,currentAnchor),visibility:thread.visibility,hiddenBy:thread.hiddenBy,hiddenAt:thread.hiddenAt,hiddenReason:thread.hiddenReason, originalAnchor:copyReviewAnchor(thread.anchor),resolvedBy:thread.resolvedBy,resolvedAt:thread.resolvedAt,comments:comments.map(c=>({...projectReviewComment(c),body:c.body,hiddenBy:c.hiddenBy,hiddenAt:c.hiddenAt,hiddenReason:c.hiddenReason}))};
+  return {...baseThread(thread,currentAnchor),documentId:thread.documentId,createdBy:thread.createdBy,visibility:thread.visibility,hiddenBy:thread.hiddenBy,hiddenAt:thread.hiddenAt,hiddenReason:thread.hiddenReason, originalAnchor:copyReviewAnchor(thread.anchor),resolvedBy:thread.resolvedBy,resolvedAt:thread.resolvedAt,comments:comments.map(c=>({...projectReviewComment(c),authorUserId:c.authorUserId,body:c.body,hiddenBy:c.hiddenBy,hiddenAt:c.hiddenAt,hiddenReason:c.hiddenReason}))};
 }

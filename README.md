@@ -291,6 +291,6 @@ Knowledge Hub is licensed under the **[MIT License](LICENSE)**. You may use, mod
 
 ### Document review deployment
 
-Discussions are stored separately from Markdown and Folder Sync. `KM_REVIEW_WRITES_ENABLED` defaults off; existing discussion reads and owner moderation remain available while new threads/replies are disabled. Company SSO/Gateway and login continuation require separate corporate integration evidence before production writes are enabled. Hiding content does not physically erase stored data.
+Discussions are stored separately from Markdown and Folder Sync. `KM_REVIEW_WRITES_ENABLED` defaults off; existing discussion reads and owner moderation remain available while new threads/replies are disabled. Behind a Gateway or reverse proxy, set `KM_PUBLIC_ORIGIN` to the origin browsers use (for example `https://km.example.com`); without it every discussion request is refused as cross-origin. Company SSO/Gateway and login continuation require separate corporate integration evidence before production writes are enabled. Hiding content does not physically erase stored data.
 
 [Inline review design](docs/superpowers/specs/2026-10-09-shared-personal-document-inline-review-design.md) · [Implementation plan](docs/superpowers/plans/2026-10-09-shared-personal-document-inline-review.md) · [Verification](docs/superpowers/verification/2026-10-09-shared-personal-document-inline-review.md)

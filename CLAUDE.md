@@ -93,8 +93,11 @@ pass.
   Review access never grants Workspace membership, search, tree, history,
   MCP, Markdown edits or revision writes. Review responses include only
   validated current-revision selected-text fragments; hidden bodies and
-  outdated quotes are excluded. Only `readShared` serves document content
-  without a caller; `tests/unit/share-link-single-exception.test.ts` enforces it.
+  outdated quotes are excluded. Exactly two entries answer without a caller:
+  `readShared`, which serves the document, and `DocumentReviewService.queryForLink`,
+  which serves the visible discussion and those fragments. Every other entry,
+  and every write, requires one; `tests/unit/share-link-single-exception.test.ts`
+  enforces it.
 - **`org_code` does not decide access.** It answers which company org a user
   belongs to; workspace membership answers what they can open. Cross-org
   membership is legal and same-org membership is not automatic.

@@ -26,9 +26,9 @@ export class CompanySsoIdentityProvider implements IdentityProvider {
   }
 
   async getCurrentClaims(): Promise<TrustedIdentityClaims> {
-    const session = await this.sessionReader.readSession().catch(() => { throw new AuthUnavailableError(); });
+    const session = await this.sessionReader.readSession().catch((cause: unknown) => { throw new AuthUnavailableError({ cause }); });
     if (session === null) throw new AuthRequiredError();
-    if (!session || !Array.isArray(session.externalGroupIds)) throw new AuthUnavailableError();
+    if (!session || !Array.isArray(session.externalGroupIds)) throw new AuthUnavailableError({ cause: new IdentityError("Company SSO session is malformed: externalGroupIds is not a list.") });
     assertSessionField(session.subject, "subject");
     assertSessionField(session.emp_id, "emp_id");
     assertSessionField(session.name, "name");
@@ -56,8 +56,7 @@ export class CompanySsoIdentityProvider implements IdentityProvider {
 
 function assertSessionField(value: unknown, field: string): asserts value is string {
   if (typeof value !== "string" || value.length === 0) {
-    void field;
-    throw new AuthUnavailableError();
+    throw new AuthUnavailableError({ cause: new IdentityError(`Company SSO session is missing required identity field: ${field}.`) });
   }
 }
 

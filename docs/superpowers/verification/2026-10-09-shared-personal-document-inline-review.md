@@ -37,10 +37,11 @@ Final browser regression also confirmed the original anonymous share flow. Revie
 ## Rollout and rollback
 
 1. Back up the database, apply additive migration 017, then deploy the application.
-2. Keep `KM_REVIEW_WRITES_ENABLED=false` by default. Existing reads and owner moderation remain available with writes disabled. Turning the flag off blocks new threads and all new replies, including owner replies; exact successful retries create no new data.
-3. Corporate Gateway passive authentication, spoofed-header stripping, upstream protection, real verified session reader and nonce/cookie login continuation remain separate company deployment gates. Local persona success does not prove enterprise authentication.
-4. For rollback, disable new writes first and roll back application code as needed. Preserve review and audit tables. Schema deletion requires separate maintenance and backup authorization; no destructive automatic down migration exists.
-5. Hiding is projection redaction, not physical erasure of stored rows or backups.
+2. Set `KM_PUBLIC_ORIGIN` to the origin browsers use (for example `https://km.example.com`) on any deployment behind the Gateway. Without it every review request, anonymous reads and owner moderation included, is refused with `403 REVIEW_ORIGIN_DENIED`, because the server compares `Origin` with its bind address. This was found in review on 2026-10-10 and is covered by unit tests only; no run has yet gone through a real proxy.
+3. Keep `KM_REVIEW_WRITES_ENABLED=false` by default. Existing reads and owner moderation remain available with writes disabled. Turning the flag off blocks new threads and all new replies, including owner replies; exact successful retries create no new data.
+4. Corporate Gateway passive authentication, spoofed-header stripping, upstream protection, real verified session reader and nonce/cookie login continuation remain separate company deployment gates. Local persona success does not prove enterprise authentication.
+5. For rollback, disable new writes first and roll back application code as needed. Preserve review and audit tables. Schema deletion requires separate maintenance and backup authorization; no destructive automatic down migration exists.
+6. Hiding is projection redaction, not physical erasure of stored rows or backups.
 
 Operator ledger cleanup defaults to dry-run:
 
@@ -88,3 +89,17 @@ Unconfirmed performance observation: server `views()` reparses current Markdown 
 Addressed the repeated Markdown parsing observation: discussion views now use a request-scoped lazy anchor relocator, sharing one canonical block projection across threads in that query. No projection survives the query or crosses revisions. Existing matching, ambiguity, neighborhood, size limits and stale-quote redaction remain unchanged. A regression test verifies 200 mixed same/current-revision relocations invoke the Markdown parser once, and a separate revision invokes its own parse. This removes redundant parsing; worst-case end-to-end database/lock latency has not been benchmarked.
 
 Validation: all 172 unit files / 2,066 tests passed; the focused anchor/DOM suite passed 18 tests; TypeScript, targeted ESLint and git diff --check passed. No browser or MariaDB rerun was performed for this internal projection reuse.
+
+## 2026-10-10 review corrections
+
+A review of the pull request found the defects below; these were corrected on the branch and run as follows.
+
+- **Origin behind the Gateway.** Covered above under rollout step 2 (`KM_PUBLIC_ORIGIN`).
+- **Reads held write locks.** The anonymous query and the owner's query locked the share link, the Source and the Workspace on every page load, so a reader could queue the owner's edits and Folder Sync. Reads now take no locks, as `readShared` never did; writes keep the §7 lock order. One MariaDB test holds all three rows `FOR UPDATE` in another connection and requires both queries to answer within three seconds.
+- **Identity errors lost their reason.** `AUTH_UNAVAILABLE` replaced the readiness, session-reader and missing-field errors on every company-SSO route, with a message about document comments. The original error is now carried as `cause`, a failed readiness check logs its code, and the two messages name no feature. Status codes and error codes are unchanged.
+- **The caller-less guard could not tell a required caller from `CallerContext | null`.** It now can; the unused `listForLink` is removed, and `queryForLink` is named as the one entry besides `readShared` that answers without a caller. `CLAUDE.md` says the same.
+- **This specification contradicted its own 2026-10-10 amendment** in §3.1, §3.2, §4, §13.2 and the rollout checklist; those passages now agree that a live link reads visible discussion without signing in.
+- **The link projection carried internal identifiers.** A link holder received `authorUserId`, `createdBy` and `documentId`, against share-link spec §6.1. The link projection now names people by display name only; the owner's projection keeps those fields. No component read them. A MariaDB test requires an anonymous query to contain no user, document, Source, Workspace or share-link ID.
+- **Unread code removed.** `listForOwner`, `findByReplyKey`, `countReplies`, `creatorName`, four error codes nothing threw, and the `reviewLoginAvailable` flag and prop, a constant `false` that the panel accepted and never read; it returns with the login initiation it gates.
+
+Run on the corrected tree: `make verify` (172 unit files / 2,099 tests, TypeScript, ESLint, production build) and the whole MariaDB integration suite (75 files / 697 tests) passed. No browser run was made after these corrections, and nothing here has been exercised through a real Gateway. The per-thread and per-comment query pattern in the read path is unchanged and still unmeasured.

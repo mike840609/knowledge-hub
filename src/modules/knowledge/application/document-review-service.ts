@@ -12,17 +12,16 @@ function canonicalAnchor(a:ReviewAnchor) { if(!a || typeof a!=="object") fail("I
 const hash = (payload:unknown) => createHash("sha256").update(JSON.stringify(payload)).digest("hex");
 export class DocumentReviewService {
   constructor(private readonly uow:KnowledgeUnitOfWork, private readonly clock:()=>Date=()=>new Date(), private readonly writesEnabled:()=>boolean=()=>false) {}
-  async listForLink(caller:CallerContext | null, token:string) {
-    return this.uow.run(async r => { const scope=await this.linkScope(r,token); return this.views(r,scope.document.id,false); });
-  }
-  async listForOwner(caller:CallerContext, documentId:string) {
-    return this.uow.run(async r => { await this.ownerScope(r,caller,documentId); return this.views(r,documentId,true); });
-  }
+  /**
+   * The one entry that answers without a caller: a live share token reads the visible discussion.
+   * It takes no locks. A reader must never queue the owner's edits or a folder sync behind a page
+   * load, and it writes nothing a lock would protect; `readShared` reads the same way.
+   */
   async queryForLink(caller:CallerContext | null,token:string) {
-    return this.uow.run(async r => { const s=await this.linkScope(r,token); return {threads:await this.views(r,s.document.id,false),revisionId:s.document.currentRevisionId,writesEnabled:!!caller && this.writesEnabled(),callerUserId:caller?.identity.id ?? null}; });
+    return this.uow.run(async r => { const s=await this.linkScope(r,token,false); return {threads:await this.views(r,s.document.id,false),revisionId:s.document.currentRevisionId,writesEnabled:!!caller && this.writesEnabled(),callerUserId:caller?.identity.id ?? null}; });
   }
   async queryForOwner(caller:CallerContext,documentId:string) {
-    return this.uow.run(async r => { const s=await this.ownerScope(r,caller,documentId); return {threads:await this.views(r,documentId,true),revisionId:s.document.currentRevisionId,writesEnabled:this.writesEnabled(),callerUserId:caller.identity.id}; });
+    return this.uow.run(async r => { const s=await this.ownerScope(r,caller,documentId,false); return {threads:await this.views(r,documentId,true),revisionId:s.document.currentRevisionId,writesEnabled:this.writesEnabled(),callerUserId:caller.identity.id}; });
   }
   private views(r:KnowledgeRepositories,documentId:string,owner:true):Promise<OwnerReviewThreadView[]>;
   private views(r:KnowledgeRepositories,documentId:string,owner:false):Promise<ReviewThreadView[]>;
@@ -36,7 +35,11 @@ export class DocumentReviewService {
       const comments=await r.reviewComments.listByThread(thread.id);
       const anchor=relocateAnchor(thread.anchor,thread.createdRevisionId===revision.id);
       const view=owner?projectOwnerThread(thread,comments,anchor):projectReviewerThread(thread,comments,anchor);
-      if(view) { for(const comment of view.comments) comment.authorName=(await r.users.findById(comment.authorUserId))?.name; results.push(view); }
+      if(view) {
+        const authors=new Map(comments.map(comment=>[comment.id,comment.authorUserId]));
+        for(const comment of view.comments) comment.authorName=(await r.users.findById(authors.get(comment.id)!))?.name;
+        results.push(view);
+      }
     }
     return results.sort((a,b)=>{
       const left=a.currentAnchor.anchor,right=b.currentAnchor.anchor;
@@ -50,28 +53,29 @@ export class DocumentReviewService {
       return a.createdAt.getTime()-b.createdAt.getTime() || a.id.localeCompare(b.id);
     });
   }
-  private async scope(r:KnowledgeRepositories,documentId:string) {
+  /** `lock` is for writes (spec §7 lock order: link, source, workspace). Reads pass false and wait on nobody. */
+  private async scope(r:KnowledgeRepositories,documentId:string,lock=true) {
     const initial=await r.documents.findById(documentId);
     if(!initial) throw new ShareLinkNotFoundError();
-    const source=await r.sourcePolicy.lockById(initial.sourceId);
+    const source=lock?await r.sourcePolicy.lockById(initial.sourceId):await r.sourcePolicy.findById(initial.sourceId);
     if(!source) throw new ShareLinkNotFoundError();
-    const workspace=await r.workspaces.lockSharedById(source.workspaceId);
+    const workspace=lock?await r.workspaces.lockSharedById(source.workspaceId):await r.workspaces.findById(source.workspaceId);
     const document=await r.documents.findById(documentId);
     if(!workspace || !document || document.sourceId!==source.id || workspace.workspaceType!=="PERSONAL" || workspace.lifecycleState!=="ACTIVE") throw new ShareLinkNotFoundError();
     return {document,source,workspace};
   }
-  private async linkScope(r:KnowledgeRepositories,token:string) {
+  private async linkScope(r:KnowledgeRepositories,token:string,lock=true) {
     if(typeof token!=="string" || !isShareToken(token)) throw new ShareLinkNotFoundError();
     const found=await r.shareLinks.findByToken(token);
-    const link=found?await r.shareLinks.lockById(found.id):null;
+    const link=found&&lock?await r.shareLinks.lockById(found.id):found;
     if(!link || link.token!==token) throw new ShareLinkNotFoundError();
-    const scope=await this.scope(r,link.documentId);
+    const scope=await this.scope(r,link.documentId,lock);
     const membership=await r.workspaceMemberships.find(scope.workspace.id,link.createdBy);
     if(scope.workspace.personalOwnerUserId!==link.createdBy || !evaluateShareLinkValidity({link,documentStatus:scope.document.status,sourceStatus:scope.source.status,workspaceLifecycle:scope.workspace.lifecycleState,creatorDirectRole:membership?membership.role??null:undefined,now:this.clock()}).valid) throw new ShareLinkNotFoundError();
     return {...scope,link};
   }
-  private async ownerScope(r:KnowledgeRepositories,caller:CallerContext,documentId:string) {
-    const s=await this.scope(r,documentId);
+  private async ownerScope(r:KnowledgeRepositories,caller:CallerContext,documentId:string,lock=true) {
+    const s=await this.scope(r,documentId,lock);
     if(s.workspace.personalOwnerUserId!==caller.identity.id) throw new ShareLinkNotFoundError();
     return s;
   }

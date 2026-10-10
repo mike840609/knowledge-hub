@@ -26,7 +26,9 @@ export function createIdentityProvider(deps: IdentityProviderFactoryDeps = {}): 
   const kind = identityProviderKind();
   if (kind === "company-sso") {
     if (!deps.companySessionReader) {
-      throw new AuthUnavailableError();
+      throw new AuthUnavailableError({
+        cause: new IdentityError("Company SSO provider is configured but no server-side session reader is wired; refusing to start without trusted session integration."),
+      });
     }
     return new CompanySsoIdentityProvider(deps.companySessionReader, {
       provider: companySsoProviderName(),

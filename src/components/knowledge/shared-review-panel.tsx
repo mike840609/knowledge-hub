@@ -10,7 +10,7 @@ import { ReviewPanelShell } from "./review-panel-shell";
 import { focusReviewAnchor, selectedReviewAnchor } from "./review-selection";
 
 type DiscussionResult = { threads: ReviewThreadView[]; revisionId: string; writesEnabled: boolean; callerUserId: string | null };
-export function SharedReviewPanel({ token, revisionId, markdown }: { token: string; revisionId: string; markdown: string; reviewLoginAvailable: boolean }) {
+export function SharedReviewPanel({ token, revisionId, markdown }: { token: string; revisionId: string; markdown: string }) {
   const [result, setResult] = useState<DiscussionResult>();
   const [error, setError] = useState<string>();
   const revisionChanged = !!result && result.revisionId !== revisionId;

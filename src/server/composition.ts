@@ -1,5 +1,6 @@
 import { DocumentReviewService } from "@/modules/knowledge/application/document-review-service";
 import { AuthUnavailableError } from "@/modules/identity/domain/identity-session-errors";
+import { DomainError } from "@/shared/domain/errors";
 import { reviewWritesEnabled } from "./config";
 import { PersonalPreferencesService } from "@/modules/personal/application/personal-preferences-service";
 import { PersonalProfileService } from "@/modules/personal/application/personal-profile-service";
@@ -109,9 +110,10 @@ export function buildApplicationServices(databasePool: Pool, options: {
     // Company traffic cannot bypass the startup gate. Cache success for this
     // service instance; a failed cutover check can be retried after repair.
     if (providerKind === "company-sso") {
-      readiness ??= verifyReadiness().catch(() => {
+      readiness ??= verifyReadiness().catch((error: unknown) => {
         readiness = undefined;
-        throw new AuthUnavailableError();
+        console.error("Company SSO readiness check failed.", error instanceof DomainError ? error.code : error instanceof Error ? error.name : "UnknownError");
+        throw new AuthUnavailableError({ cause: error });
       });
       await readiness;
     }

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { NextRequest } from "next/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { assertReviewOrigin } from "@/server/review-origin";
-import { reviewWritesEnabled, reviewLoginAvailable } from "@/server/config";
+import { publicOrigin, reviewWritesEnabled } from "@/server/config";
 import { toWorkspaceErrorResponse } from "@/server/http-error-response";
 import { AuthRequiredError, AuthUnavailableError } from "@/modules/identity/domain/identity-session-errors";
 import { ShareLinkNotFoundError } from "@/modules/knowledge/domain/document-share-link";
@@ -17,8 +17,50 @@ describe("review request security",()=>{
   expect(()=>assertReviewOrigin(new Request(url,{headers:{Origin:"http://127.0.0.1:9999"}}))).toThrow();
   expect(()=>assertReviewOrigin(new Request(url))).toThrow();
  });
- it("keeps writes default off and real login unavailable",()=>{
-  vi.stubEnv("KM_REVIEW_WRITES_ENABLED","");expect(reviewWritesEnabled()).toBe(false);expect(reviewLoginAvailable()).toBe(false);
+ describe("behind a gateway, where the request URL is the bind address",()=>{
+  const bound="http://127.0.0.1:3000/api/share-review/threads/query";
+  const request=(origin?:string)=>new NextRequest(bound,{method:"POST",headers:origin?{Origin:origin}:{}});
+  it("accepts the configured public origin",()=>{
+   vi.stubEnv("KM_PUBLIC_ORIGIN","https://km.example.com");
+   expect(()=>assertReviewOrigin(request("https://km.example.com"))).not.toThrow();
+  });
+  it("without the setting, rejects the public origin (the defect this setting fixes)",()=>{
+   expect(()=>assertReviewOrigin(request("https://km.example.com"))).toThrow();
+  });
+  it.each(["http://127.0.0.1:3000","http://km.example.com","https://km.example.com:8443","https://evil.km.example.com","https://attacker.invalid","null",undefined])("rejects %s once a public origin is configured",origin=>{
+   vi.stubEnv("KM_PUBLIC_ORIGIN","https://km.example.com");
+   expect(()=>assertReviewOrigin(request(origin))).toThrow(/same-origin/);
+  });
+  it("ignores forwarding headers",()=>{
+   vi.stubEnv("KM_PUBLIC_ORIGIN","https://km.example.com");
+   const forged=new NextRequest(bound,{method:"POST",headers:{Origin:"https://attacker.invalid","X-Forwarded-Host":"attacker.invalid","X-Forwarded-Proto":"https",Host:"attacker.invalid"}});
+   expect(()=>assertReviewOrigin(forged)).toThrow(/same-origin/);
+  });
+  it.each([["https://km.example.com/","https://km.example.com"],[" https://km.example.com/knowledge ","https://km.example.com"],["https://KM.example.com:443","https://km.example.com"],["http://km.example.com:8080","http://km.example.com:8080"]])("reads %s as %s",(raw,expected)=>{
+   vi.stubEnv("KM_PUBLIC_ORIGIN",raw);expect(publicOrigin()).toBe(expected);
+  });
+  it.each(["","   "])("treats a blank setting as unset",raw=>{
+   vi.stubEnv("KM_PUBLIC_ORIGIN",raw);expect(publicOrigin()).toBeUndefined();
+   expect(()=>assertReviewOrigin(request("http://127.0.0.1:3000"))).not.toThrow();
+  });
+  it.each(["km.example.com","data:text/plain,x","file:///etc/hosts","null"])("refuses the malformed setting %s instead of accepting any origin",raw=>{
+   vi.stubEnv("KM_PUBLIC_ORIGIN",raw);
+   expect(()=>publicOrigin()).toThrow(/KM_PUBLIC_ORIGIN/);
+   expect(()=>assertReviewOrigin(request("null"))).toThrow();
+  });
+  it("lets an owner write through from the public origin and still refuses the bind address",async()=>{
+   vi.stubEnv("KM_PUBLIC_ORIGIN","https://km.example.com");
+   const url="http://127.0.0.1:3000/api/documents/x/review-threads/y/visibility";
+   const denied=await ownerReviewHttp(new NextRequest(url,{method:"POST",headers:{Origin:"http://127.0.0.1:3000"}}),vi.fn());
+   expect(denied.status).toBe(403);expect(mocks.services).not.toHaveBeenCalled();
+   const reviews={};const operation=vi.fn(async()=>({ok:true}));
+   mocks.services.mockReturnValue({reviews,establishTrustedCaller:async()=>({caller:{identity:{id:"trusted"}}})});
+   await reviewHttp(new NextRequest(bound,{method:"POST",headers:{Origin:"https://km.example.com"}}),operation);
+   expect(operation).toHaveBeenCalledTimes(1);
+  });
+ });
+ it("keeps writes default off",()=>{
+  vi.stubEnv("KM_REVIEW_WRITES_ENABLED","");expect(reviewWritesEnabled()).toBe(false);
   vi.stubEnv("KM_REVIEW_WRITES_ENABLED","true");expect(reviewWritesEnabled()).toBe(true);
  });
  it.each([[new AuthRequiredError(),401],[new AuthUnavailableError(),503],[new ShareLinkNotFoundError(),404]] as const)("maps typed errors privately",async(error,status)=>{

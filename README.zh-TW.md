@@ -292,6 +292,6 @@ Knowledge Hub 以 **[MIT License](LICENSE)** 授權，可使用、修改與散�
 
 ### 文件評論部署
 
-文件評論與 Markdown 分開儲存，不影響 Folder Sync。`KM_REVIEW_WRITES_ENABLED` 預設關閉；關閉時仍可讀取既有討論及由擁有者隱藏或解決留言。公司 SSO/Gateway 與登入回跳尚待公司環境整合，不應只因本機測試通過就啟用正式環境寫入。隱藏留言不等同刪除資料。
+文件評論與 Markdown 分開儲存，不影響 Folder Sync。`KM_REVIEW_WRITES_ENABLED` 預設關閉；關閉時仍可讀取既有討論及由擁有者隱藏或解決留言。部署在 Gateway 或反向代理之後時，必須將 `KM_PUBLIC_ORIGIN` 設為瀏覽器實際使用的 origin（例如 `https://km.example.com`），否則所有討論請求都會被視為跨來源而拒絕。公司 SSO/Gateway 與登入回跳尚待公司環境整合，不應只因本機測試通過就啟用正式環境寫入。隱藏留言不等同刪除資料。
 
 [Inline review design](docs/superpowers/specs/2026-10-09-shared-personal-document-inline-review-design.md) · [Implementation plan](docs/superpowers/plans/2026-10-09-shared-personal-document-inline-review.md) · [Verification](docs/superpowers/verification/2026-10-09-shared-personal-document-inline-review.md)

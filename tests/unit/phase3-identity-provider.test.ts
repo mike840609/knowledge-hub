@@ -228,3 +228,28 @@ it("distinguishes absent session from broken session integration",async()=>{
  await expect(new CompanySsoIdentityProvider({readSession:async()=>null},options).getCurrentClaims()).rejects.toBeInstanceOf(AuthRequiredError);
  await expect(new CompanySsoIdentityProvider({readSession:async()=>{throw new Error("secret");}},options).getCurrentClaims()).rejects.toBeInstanceOf(AuthUnavailableError);
 });
+
+describe("an unavailable identity provider keeps why, and tells the client nothing about it",()=>{
+ const options={provider:"company-sso",teamCreateGroupIds:[]};
+ const failure=async(reader:{readSession:()=>Promise<unknown>})=>new CompanySsoIdentityProvider(reader as never,options).getCurrentClaims().then(()=>{throw new Error("expected a rejection");},(error:unknown)=>error as AuthUnavailableError);
+ it("carries the session reader's own error as the cause",async()=>{
+  const cause=new Error("gateway socket closed");
+  const error=await failure({readSession:async()=>{throw cause;}});
+  expect(error).toBeInstanceOf(AuthUnavailableError);expect(error.cause).toBe(cause);expect(error.message).not.toContain("gateway");
+ });
+ it.each(["subject","emp_id","name"])("names the missing session field %s in the cause only",async field=>{
+  const session={subject:"s",emp_id:"e",name:"n",org_code:"o",externalGroupIds:[],[field]:""};
+  const error=await failure({readSession:async()=>session});
+  expect(error).toBeInstanceOf(AuthUnavailableError);expect(String((error.cause as Error).message)).toContain(field);expect(error.message).not.toContain(field);
+ });
+ it("says why an unwired session reader is unavailable",()=>{
+  process.env.KM_IDENTITY_PROVIDER="company-sso";
+  let thrown:unknown;try{createIdentityProvider();}catch(error){thrown=error;}
+  expect(thrown).toBeInstanceOf(AuthUnavailableError);expect(String(((thrown as AuthUnavailableError).cause as Error).message)).toContain("session reader");
+ });
+ it("has no cause when none is given, and messages that belong to no one feature",()=>{
+  expect(new AuthUnavailableError().cause).toBeUndefined();
+  for(const error of [new AuthUnavailableError(),new AuthRequiredError()])expect(error.message).not.toMatch(/comment|discussion|document/i);
+  expect(new AuthUnavailableError()).toMatchObject({code:"AUTH_UNAVAILABLE"});expect(new AuthRequiredError()).toMatchObject({code:"AUTH_REQUIRED"});
+ });
+});

@@ -32,3 +32,24 @@ it("allowlists every anchor field even for persisted JSON with extra metadata",(
  expect(JSON.stringify(result)).not.toContain("secret-token");
  expect(projectOwnerThread({...thread,anchor:tainted},[],{match:"OUTDATED"}).originalAnchor).toEqual(thread.anchor);
 });
+
+describe("who a projection names",()=>{
+ const identified:ReviewThread={...thread,documentId:"DOCUMENT-ID",createdBy:"CREATOR-ID",hiddenBy:"MODERATOR-ID",resolvedBy:"RESOLVER-ID",originShareLinkId:"LINK-ID",createdRevisionId:"REVISION-ID"};
+ const authored:ReviewComment={...comment,authorUserId:"AUTHOR-ID",hiddenBy:"MODERATOR-ID"};
+ const current={match:"MATCHED" as const,anchor:thread.anchor};
+ it("gives a link holder no user, document, revision or link identifier",()=>{
+  const view=projectReviewerThread(identified,[authored],current)!;
+  expect(Object.keys(view).sort()).toEqual(["comments","createdAt","currentAnchor","id","status","updatedAt"]);
+  expect(Object.keys(view.comments[0]).sort()).toEqual(["body","createdAt","id","threadId","visibility"]);
+  expect(JSON.stringify(view)).not.toMatch(/-ID"/);
+ });
+ it("gives the same to a reply's author through the link",()=>{
+  expect(JSON.stringify(projectReviewComment(authored))).not.toMatch(/-ID"/);
+ });
+ it("still tells the owner who wrote and moderated what",()=>{
+  const view=projectOwnerThread(identified,[authored],current);
+  expect(view).toMatchObject({documentId:"DOCUMENT-ID",createdBy:"CREATOR-ID",hiddenBy:"MODERATOR-ID",resolvedBy:"RESOLVER-ID"});
+  expect(view.comments[0]).toMatchObject({authorUserId:"AUTHOR-ID",hiddenBy:"MODERATOR-ID"});
+  expect(JSON.stringify(view)).not.toMatch(/LINK-ID|REVISION-ID/);
+ });
+});
