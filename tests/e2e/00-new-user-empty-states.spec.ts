@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures/test";
 import { mkdir } from "node:fs/promises";
 
 test("new users get actionable guidance on every empty page and can reopen Home guidance", async ({ page, request }) => {

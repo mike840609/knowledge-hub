@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/test";
 
 test("archives a sample source and restores it from Show archived", async ({ page }) => {
   const navigation = await (await page.request.get("/api/workspaces")).json();

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures/test';
 import { chooseOption } from './fixtures/select-menu';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';

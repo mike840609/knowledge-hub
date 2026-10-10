@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/test";
 
 // Regression for the archived-mode link bug: every document link must preserve
 // includeArchived=true while the browser is in archived mode, because an

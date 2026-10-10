@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./fixtures/test";
 import { formatGuideBytes } from "../../src/components/imports/import-guide-content";
 import { DEFAULT_IMPORT_LIMITS } from "../../src/modules/sources/domain/import-limits";
 

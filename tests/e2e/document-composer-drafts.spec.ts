@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/test";
 import { showMarkdown } from "./composer-helpers";
 import { ROUND_TRIP, unique, composer, createNote, leaveEditor, openEditor } from "./fixtures/document-composer";
 

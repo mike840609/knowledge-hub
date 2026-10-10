@@ -1,4 +1,4 @@
-import { expect, test as base } from "@playwright/test";
+import { expect, test as base } from "./fixtures/test";
 import { personalWorkspaceId } from "./fixtures/my-space";
 
 // The suite shares My Space across files. Keep these temporary documents out

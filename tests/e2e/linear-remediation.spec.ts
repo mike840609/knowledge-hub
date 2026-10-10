@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./fixtures/test";
 import { showMarkdown } from "./composer-helpers";
 const wait = { timeout: 15000 };
 async function note(page: Page, markdown: string) {

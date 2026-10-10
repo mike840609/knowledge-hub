@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures/test";
 import { stageReadingFolder } from "./fixtures/folder-reading";
 
 test("workspace page breadcrumbs share a desktop origin and document rows share its height", async ({ page, request }) => {

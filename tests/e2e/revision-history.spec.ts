@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/test";
 
 // Task 6 regression: Details/Revision Inspector on the Workspace-scoped
 // Document route. The Inspector is closed by default; the Details action

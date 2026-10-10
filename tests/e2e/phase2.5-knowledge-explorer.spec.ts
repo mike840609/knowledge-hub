@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/test";
 
 const WORKSPACE = "0199f100-0000-7000-8000-000000000001";
 const SOURCE = "0199f100-0000-7000-8000-000000000101";

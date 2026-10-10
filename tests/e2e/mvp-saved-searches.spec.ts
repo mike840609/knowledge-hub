@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures/test";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 test("personal saved search save, reload, reopen, rename, conflict and delete", async ({page, request}) => {

@@ -1,4 +1,4 @@
-import {test,expect} from "@playwright/test";
+import {test,expect} from "./fixtures/test";
 import {mkdir} from "node:fs/promises";
 
 test("account stays at the sidebar bottom in expanded, collapsed and mobile navigation",async({page,request})=>{

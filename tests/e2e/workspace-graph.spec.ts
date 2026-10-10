@@ -1,5 +1,5 @@
 import { stageReadingFolder } from "./fixtures/folder-reading";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./fixtures/test";
 import { openPalette } from "./fixtures/palette";
 import { showMarkdown } from "./composer-helpers";
 

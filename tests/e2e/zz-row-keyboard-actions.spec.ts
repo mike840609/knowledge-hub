@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "./fixtures/test";
 import { ROUND_TRIP, mySpace, openKnowledge, row, unique } from "./fixtures/organize";
 import { openPalette } from "./fixtures/palette";
 

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./fixtures/test";
 import { showMarkdown } from "./composer-helpers";
 import { ROUND_TRIP, childrenOf, createFolder, header, mySpace, openKnowledge, row, toast, unique } from "./fixtures/organize";
 

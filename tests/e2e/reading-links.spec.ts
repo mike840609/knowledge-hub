@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./fixtures/test";
 import { phase3UnconfiguredOrigin } from "./fixtures/phase3-identities";
 import { openPalette } from "./fixtures/palette";
 

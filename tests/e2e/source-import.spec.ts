@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { chooseOption } from "./fixtures/select-menu";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import { expect, test, type APIRequestContext } from "@playwright/test";
+import { expect, test, type APIRequestContext } from "./fixtures/test";
 
 // Phase 2 folder import acceptance. Helpers use the same HTTP contracts as the
 // browser launcher (session create, multipart batch upload, finalize, apply)

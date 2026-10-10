@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/test";
 import { phase3Origin } from "./fixtures/phase3-identities";
 
 test("an empty workspace offers its first import regardless of other test data", async ({ browser }) => {
