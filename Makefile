@@ -56,6 +56,14 @@ bootstrap: setup db-seed ## First-time setup: install, start DB, migrate, seed.
 dev: db-up ## Start the dev server at http://127.0.0.1:3000/knowledge.
 	npm run dev
 
+# A second local user on a second port, for trying what takes two people (sharing, comments).
+# The identity is this server's configuration, as it is for `make dev`; the browser chooses nothing.
+.PHONY: dev-reviewer
+dev-reviewer: db-up ## Start a second dev server as "Local Reviewer" at http://127.0.0.1:3001.
+	KM_LOCAL_ID=0199f000-0000-7000-8000-000000000002 KM_LOCAL_EMP_ID=LOCAL-0002 \
+	KM_LOCAL_NAME="Local Reviewer" KM_LOCAL_ORG_CODE=LOCAL \
+	KM_NEXT_DIST_DIR=.next-dev-reviewer npm run dev -- --port 3001
+
 .PHONY: build
 build: ## Production build.
 	npm run build

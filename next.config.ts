@@ -4,7 +4,9 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   // Keep the running dev server's chunks separate from `next build` output.
   // A production build can otherwise replace .next while dev still serves it.
-  distDir: process.env.NODE_ENV === "development" ? ".next-dev" : ".next",
+  // KM_NEXT_DIST_DIR lets a second dev server run beside the first without sharing its output
+  // (`make dev-reviewer`, docs/development/two-person-demo.md).
+  distDir: process.env.KM_NEXT_DIST_DIR ?? (process.env.NODE_ENV === "development" ? ".next-dev" : ".next"),
   // Issue #20 second layer: even if a remote image URL ever reaches markup,
   // the browser must refuse to load it. `img-src 'self'` allows only
   // same-origin / relative images (data: intentionally not allowed).

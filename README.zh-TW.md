@@ -205,6 +205,7 @@ docs/                設計、操作與驗證文件
 | 指令 | 用途 |
 | --- | --- |
 | `make dev` | 啟動本機開發伺服器 |
+| `make dev-reviewer` | 以另一個本機使用者在 port 3001 啟動第二台伺服器，用來試[兩個人的流程](docs/development/two-person-demo.zh-TW.md) |
 | `make build`／`make start` | 建置／執行 production build（需身分整合） |
 | `make db-up`／`make db-down`／`make db-logs` | 啟動、停止與查看資料庫 logs；`db-down` 保留 volume |
 | `make db-migrate`／`make db-seed` | 更新 schema／載入開發 fixtures |

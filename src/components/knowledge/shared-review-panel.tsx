@@ -35,7 +35,9 @@ export function SharedReviewPanel({ token, revisionId, markdown }: { token: stri
     setSelection(chosen);
     setError(chosen ? undefined : "Select text in a paragraph or heading to comment.");
   }
-  return <aside className="min-w-0 px-4 pb-6 min-[1200px]:sticky min-[1200px]:top-4 min-[1200px]:w-80 min-[1200px]:shrink-0" aria-label="Document discussions">
+  // Too narrow for a rail, this is the bar that opens the drawer. It goes above the document and stays at
+  // the top of the window: after the document, a reader met it only on reaching the end.
+  return <aside className="min-w-0 max-[1199px]:sticky max-[1199px]:top-0 max-[1199px]:z-10 max-[1199px]:order-first max-[1199px]:w-full max-[1199px]:border-b max-[1199px]:border-kh-border max-[1199px]:bg-kh-bg min-[1200px]:sticky min-[1200px]:top-4 min-[1200px]:w-80 min-[1200px]:shrink-0 min-[1200px]:px-4 min-[1200px]:pb-6" aria-label="Document discussions">
     <ReviewPanelShell><div>
       <div className={`mb-3 flex items-center justify-between ${result ? "max-[1199px]:hidden" : ""}`}><h2 className="text-body font-semibold max-[1199px]:sr-only">Comments</h2>{!result && <Button type="button" variant="ghost" icon aria-label="Refresh discussions" title="Refresh comments" onClick={() => void load()}><RefreshCw className="size-4" aria-hidden="true" /></Button>}</div>
       {error && <p role="status" className="mt-3 text-body-sm">{error}</p>}
