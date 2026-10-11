@@ -40,3 +40,8 @@ it("ignores previous article state when token changes",async()=>{
  let finish:(r:Response)=>void=()=>{};vi.stubGlobal("fetch",async(url:string)=>url.includes("token=old")?new Promise<Response>(r=>{finish=r;}):Response.json(state));
  await mount("old");await mount("new");await act(async()=>finish(Response.json({...state,saved:true,id:"old-record"})));expect(host.querySelector("button")?.getAttribute("aria-pressed")).toBe("false");
 });
+it("ignores delayed auth error parsing from a previous article",async()=>{
+ let finish:(value:unknown)=>void=()=>{};const old=new Response("",{status:503});vi.spyOn(old,"json").mockImplementation(()=>new Promise(r=>{finish=r;}));
+ vi.stubGlobal("fetch",async(url:string,init?:RequestInit)=>url.includes("token=old")?old:Response.json(init?.method==="POST"?{...state,saved:true,id:"new-record"}:state));
+ await mount("old");await mount("new");await act(async()=>finish({error:{code:"AUTH_UNAVAILABLE"}}));await click("Save share");expect(host.textContent).toContain("Saved to Shares");
+});

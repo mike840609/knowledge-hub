@@ -175,8 +175,8 @@ No Team workspace feature, Collections, ordinary favorites change, content copy,
 external-URL bookmarking, attachments, notifications, semantic search, MCP,
 login provider, or automatic login-and-save continuation is included.
 
-## Review status
+## Approval
 
-Written design prepared from the accepted conversational direction. Awaiting
-user review of this document before implementation planning, as required by
-the Superpowers architectural workflow. Product code has not been changed.
+The user approved this written design and then reviewed the implementation
+plan, choosing inline execution in the current session. Implementation and
+verification evidence accompany this specification.

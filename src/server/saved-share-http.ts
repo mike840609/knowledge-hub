@@ -11,6 +11,7 @@ export async function savedShareHttp(request: Request, work: (services: ReturnTy
     return status === 204 ? new NextResponse(null,{status,headers:{"Cache-Control":"private, no-store"}}) : NextResponse.json(result,{status,headers:{"Cache-Control":"private, no-store"}});
   } catch (error) {
     const mapped=toWorkspaceErrorResponse(error);
+    if(mapped.status===500) console.error("Saved share request failed.", error instanceof Error ? error.name : "UnknownError");
     return NextResponse.json(mapped.body,{status:mapped.status,headers:{"Cache-Control":"private, no-store"}});
   }
 }

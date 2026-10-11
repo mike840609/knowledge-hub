@@ -17,7 +17,7 @@ export function SaveShareButton({ token }: { token: string }) {
       const response=await fetch(`/api/saved-shares/state?${new URLSearchParams({token})}`,{cache:"no-store",signal});
       if(signal.aborted||generation.current!==version)return;
       if(response.status===401){setLoadState("signed-out");return;}
-      if(response.status===503){const body=await response.json();if(body.error?.code==="AUTH_UNAVAILABLE"){setLoadState("auth-unavailable");return;}throw new Error();}
+      if(response.status===503){const body=await response.json();if(signal.aborted||generation.current!==version)return;if(body.error?.code==="AUTH_UNAVAILABLE"){setLoadState("auth-unavailable");return;}throw new Error();}
       if(!response.ok)throw new Error();
       const body=await response.json() as SavedShareState;
       if(!signal.aborted&&generation.current===version){setResult(body);setLoadState("ready");}
@@ -39,7 +39,7 @@ export function SaveShareButton({ token }: { token: string }) {
       const response=await fetch(result.saved?`/api/saved-shares/${result.id}`:"/api/saved-shares",{method:result.saved?"DELETE":"POST",headers:{"Content-Type":"application/json"},...(result.saved?{}:{body:JSON.stringify({token})})});
       if(version!==generation.current)return;
       if(response.status===401){setLoadState("signed-out");setNotice("Sign in to save this share, then return here to save it.");return;}
-      if(!response.ok){const body=await response.json().catch(()=>null);if(body?.error?.code==="AUTH_UNAVAILABLE"){setLoadState("auth-unavailable");setNotice("Sign-in is unavailable right now.");return;}throw new Error();}
+      if(!response.ok){const body=await response.json().catch(()=>null);if(version!==generation.current)return;if(body?.error?.code==="AUTH_UNAVAILABLE"){setLoadState("auth-unavailable");setNotice("Sign-in is unavailable right now.");return;}throw new Error();}
       if(result.saved){setResult({...result,saved:false,id:null});setNotice("Removed from saved shares.");}
       else {const saved=await response.json() as SavedShareState;if(version===generation.current){setResult(saved);setNotice("Saved to Shares.");}}
     }catch{if(version===generation.current)setNotice(result.saved?"Could not remove this saved share. Try again.":"Could not save this share. Try again.");}

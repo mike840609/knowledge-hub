@@ -1,3 +1,5 @@
+// Request-bound private routes must bypass Next auto-mode Request proxies.
+export const dynamic = "force-dynamic";
 import { savedShareHttp } from "@/server/saved-share-http";
 export async function GET(request: Request, context: { params: Promise<{workspaceId:string}> }) {
   const query=new URL(request.url).searchParams;
