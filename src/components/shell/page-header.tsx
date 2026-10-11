@@ -27,8 +27,9 @@ export function PageHeader({
 }) {
   return (
     <header>
-      <div className="flex min-h-12 min-w-0 flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-1 text-body">
+      <div className="flex min-h-12 min-w-0 flex-wrap items-center justify-between gap-x-3">
+        {/* The title holds the 48px line itself, so it sits where every other page has it whether the actions are tall or wrap under it. */}
+        <div className="flex min-h-12 min-w-0 items-center gap-1 text-body">
           <nav aria-label="Breadcrumb" className="shrink-0 text-kh-text-muted">
             <Link href={locationHref} className="rounded-md hover:text-kh-text hover:underline kh-focus-ring">
               {location}
