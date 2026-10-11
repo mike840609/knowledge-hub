@@ -72,7 +72,7 @@ export function SearchResultList({ label, children }: { label: string; children:
   }
 
   return (
-    <ul ref={listRef} aria-label={label} onKeyDown={handleKeyDown} className="flex flex-col gap-0.5">
+    <ul ref={listRef} aria-label={label} onKeyDown={handleKeyDown} className="-mx-3 flex flex-col gap-0.5">
       {children}
     </ul>
   );

@@ -1,4 +1,6 @@
 import { Select } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import { getSourceListModel } from "@/server/source-read";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -41,9 +43,9 @@ export default async function UpdatesPage({
         locationHref={`/w/${workspaceId}`}
         title="Updates"
       />
-      <form className="flex flex-wrap gap-3 text-body">
-        <label>
-          Folder{" "}
+      <form className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-kh-border pb-3">
+        <Label inline>
+          Folder
           <Select name="source" defaultValue={q.source ?? ""}>
             <option value="">All folders</option>
             {sources?.items
@@ -54,17 +56,17 @@ export default async function UpdatesPage({
                 </option>
               ))}
           </Select>
-        </label>
-        <label>
+        </Label>
+        <label className="flex min-h-8 items-center gap-2 text-body-sm">
           <input
             type="checkbox"
             name="unread"
             value="true"
             defaultChecked={q.unread === "true"}
-          />{" "}
+          />
           Unread only
         </label>
-        <button className="text-kh-link">Filter</button>
+        <Button type="submit" variant="secondary">Filter</Button>
       </form>
       <UpdatesList workspaceId={workspaceId} page={page} filters={{ sourceId: q.source, unreadOnly: q.unread === "true", paginated: Boolean(q.time && q.run) }} />
       {page.nextCursor ? (

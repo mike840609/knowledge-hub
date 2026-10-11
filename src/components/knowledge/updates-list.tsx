@@ -24,11 +24,11 @@ export function UpdatesList({
   }
   const showAll = filtered || filters.paginated;
   return page.runs.length ? (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       {page.runs.map(
         ({ run, sourceName, changes, totalChanges, added, updated }) => (
-          <section key={run.id} className="rounded-md border border-kh-border">
-            <div className="flex items-center justify-between gap-3 border-b border-kh-border px-3 py-2">
+          <section key={run.id}>
+            <div className="flex items-baseline justify-between gap-3 pb-1">
               <Link
                 className="text-body font-medium text-kh-link"
                 href={`/w/${workspaceId}/sources/${run.sourceId}/runs/${run.id}`}
@@ -39,9 +39,9 @@ export function UpdatesList({
                 <Timestamp value={run.completedAt ?? run.startedAt} />
               </span>
             </div>
-            <ul className="divide-y divide-kh-border">
+            <ul className="-mx-3 space-y-0.5">
               {changes.map((c) => (
-                <li key={c.id} className="px-3 py-2">
+                <li key={c.id} className="kh-interactive-row px-3 py-2">
                   <Link
                     className="flex gap-2 text-body text-kh-link"
                     href={`/w/${workspaceId}/knowledge/${run.sourceId}/${c.documentId}?revision=${c.afterRevisionNo}`}
@@ -60,7 +60,7 @@ export function UpdatesList({
             </ul>
             {totalChanges > changes.length ? (
               <Link
-                className="block px-3 py-2 text-caption text-kh-link"
+                className="block py-2 text-caption text-kh-link"
                 href={`/w/${workspaceId}/sources/${run.sourceId}/runs/${run.id}`}
               >
                 View all changes

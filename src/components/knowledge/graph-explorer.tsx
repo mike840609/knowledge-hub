@@ -172,7 +172,7 @@ export function GraphExplorer({
       ) : null}
       <div
         aria-busy={pending}
-        className={`min-h-[24rem] flex-1 overflow-hidden rounded-md border border-kh-border bg-kh-bg transition-opacity ${pending ? "opacity-60" : ""}`}
+        className={`${filters.view === "list" && data.nodes.length > 0 ? "flex min-h-0 flex-col" : "min-h-[24rem] flex-1"} overflow-hidden rounded-md border border-kh-border bg-kh-bg transition-opacity ${pending ? "opacity-60" : ""}`}
       >
         {data.nodes.length === 0 ? (
           <div data-graph-empty className="px-3">
@@ -185,7 +185,7 @@ export function GraphExplorer({
             />
           </div>
         ) : filters.view === "list" ? (
-          <div className="h-full overflow-y-auto">
+          <div className="min-h-0 overflow-y-auto">
             <GraphList data={data} query={query} />
           </div>
         ) : data.edges.length === 0 ? (

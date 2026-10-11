@@ -16,15 +16,14 @@ export function ImportHistory({ runs, workspaceId, actors = {} }: { runs: SyncRu
     return <p className="text-body text-kh-text-muted">No sync runs recorded for this source yet.</p>;
   }
   return (
-    <ul className="flex flex-col gap-2">
+    <ul className="divide-y divide-kh-border border-t border-kh-border">
       {runs.map((run) => (
         <li
           key={run.id}
-          className="flex items-center gap-3 rounded-md border border-kh-border bg-kh-bg px-3 py-2.5"
+          className="flex items-center gap-3 py-2.5"
         >
           <History size={15} aria-hidden="true" className="shrink-0 text-kh-text-muted" />
           <div className="min-w-0 flex-1">
-            {workspaceId ? <Link className="text-caption text-kh-link" href={`/w/${workspaceId}/sources/${run.sourceId}/runs/${run.id}`}>View sync details</Link> : null}
             <p className="text-body font-medium text-kh-text">
               <Status kind={syncStatusKind(run.status)}>{syncStatusLabel(run.status)}</Status> <span className="font-normal text-kh-text-muted">{describeRun(run)}</span>
             </p>
@@ -40,6 +39,7 @@ export function ImportHistory({ runs, workspaceId, actors = {} }: { runs: SyncRu
               {actors[run.triggeredBy] ?? UNKNOWN_RUN_ACTOR}
             </p>
           </div>
+          {workspaceId ? <Link className="shrink-0 rounded-md text-caption text-kh-link kh-focus-ring" href={`/w/${workspaceId}/sources/${run.sourceId}/runs/${run.id}`}>View sync details</Link> : null}
         </li>
       ))}
     </ul>
