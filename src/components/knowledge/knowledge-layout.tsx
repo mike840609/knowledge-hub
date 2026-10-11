@@ -55,7 +55,7 @@ export function KnowledgeLayout({
     <InspectorContext.Provider value={{ open: inspectorOpen, setOpen: setInspectorOpen }}>
     <div className="flex h-full min-h-0 overflow-hidden">
       <div ref={setExplorerTarget} className="hidden h-full w-72 shrink-0 lg:block">
-        {!explorerTarget ? <div className="h-full border-r border-kh-border bg-kh-bg-sunken p-3"><TreeSkeleton /></div> : null}
+        {!explorerTarget ? <div className="h-full border-r border-kh-border bg-kh-bg-explorer p-3"><TreeSkeleton /></div> : null}
       </div>
       {/* One explorer instance: avoid duplicate filter IDs and competing persisted state. */}
       {navigation?.mobileExplorerTarget ? createPortal(<div className="h-full" onClick={(event) => {

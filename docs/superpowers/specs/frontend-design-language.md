@@ -185,14 +185,47 @@ Separator
 
 ## 7. Surfaces
 
-Four steps of one cool neutral hue, each with a single job:
+Neutral surfaces, named by role:
 
 ```text
 bg          canvas — document and page content
 bg-raised   chrome on the canvas — topbar, inspector panel
-bg-sunken   navigation rails — primary nav, knowledge sidebar
+bg-sunken   primary navigation rail
+bg-explorer secondary navigation — knowledge sidebar and its loading placeholder
 bg-subtle   inset fills — code blocks, table headers, kbd
 ```
+
+Primary navigation uses `bg-sunken`; the Knowledge explorer and its loading
+placeholder use `bg-explorer`, separated by the existing 1px border. Primary
+navigation selection uses a neutral hover fill; the selected document keeps
+the accent fill, so location within a folder is the stronger cue.
+
+`bg-explorer` aliases `bg-subtle` in light mode. In dark mode it is
+`#0e0f12`, between the primary rail (`#0a0b0e`) and canvas (`#131417`),
+so the secondary rail does not appear as a bright inset panel.
+
+
+### Navigation colour scheme
+
+In both themes, surfaces become progressively lighter from left to right:
+primary navigation → Knowledge explorer → reading canvas. Keep the existing
+1px separators; do not use shadows to distinguish these regions.
+
+| Region | Token | Light | Dark |
+| --- | --- | --- | --- |
+| Primary navigation | `bg-sunken` | `#f1f2f5` | `#0a0b0e` |
+| Knowledge explorer and loading placeholder | `bg-explorer` | `#f6f7f9` (alias of `bg-subtle`) | `#0e0f12` |
+| Reading canvas | `bg` | `#ffffff` | `#131417` |
+
+The primary navigation's current item uses `bg-hover` with `text`, so it
+remains neutral. The selected document uses `bg-selected` with
+`selected-text`, making the document location the stronger accent cue.
+Hover and focus states retain their existing tokens and focus rings.
+
+The darker `bg-sunken` value also applies to other surfaces already using
+that token, including the outer application background. Inset content
+continues to use `bg-subtle`; its dark value (`#1d1f24`) is deliberately not
+the explorer background.
 
 A document is content, so it sits on `bg` like every other page. The
 document pane had been painted `bg-raised` whole, header and body alike,
