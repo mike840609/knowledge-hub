@@ -30,7 +30,7 @@ test("two trusted people use different links for the same discussion", async ({ 
   await page.screenshot({ path: "/tmp/document-review-desktop.png", fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("button", { name: "Open discussions" }).click();
-  await expect(page.getByRole("dialog").getByRole("button", { name: "Refresh discussions" })).toBeVisible();
+  await expect(page.getByRole("dialog").getByRole("button", { name: "Refresh comments" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await expect(page.getByRole("dialog")).toHaveCSS("opacity", "1");
   await page.screenshot({ path: "/tmp/document-review-mobile.png", fullPage: true });

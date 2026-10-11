@@ -70,7 +70,7 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
       <Select id="shares-status" name="status" defaultValue={model.query.status}><option value="all">All statuses</option>{Object.entries(labels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
       <Button type="submit" variant="secondary">Search</Button>
       <Button type="button" variant="ghost" icon aria-label="Refresh shares" disabled={busy !== null} onClick={() => router.refresh()}><RefreshCw size={15} aria-hidden="true" /></Button>
-      {filtered ? <Link className="kh-focus-ring rounded-md text-body-sm text-kh-link" href={`/w/${workspaceId}/shares?status=all`}>Clear filters</Link> : null}
+      {model.query.q || model.query.status !== "active" || model.query.page > 1 ? <Link className="kh-focus-ring rounded-md text-body-sm text-kh-link" href={`/w/${workspaceId}/shares`}>Clear filters</Link> : null}
     </form>
     {filterError ? <p role="alert" className="mt-3 text-body text-kh-danger">{filterError}</p> : null}
     <GovernanceError error={error} />

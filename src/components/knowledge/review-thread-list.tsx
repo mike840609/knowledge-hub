@@ -9,6 +9,7 @@ import { Check, ChevronDown, MoreHorizontal } from "lucide-react";
 import { MenuRoot, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/menu";
 import { buttonClasses } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
+import { Tooltip } from "@/components/ui/tooltip";
 
 export async function reviewRequest<T>(url: string, body?: unknown): Promise<T> {
   const response = await fetch(url, { method: body === undefined ? "GET" : "POST", credentials: "same-origin", cache: "no-store", referrerPolicy: "origin", redirect: "error", headers: body === undefined ? undefined : { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -68,7 +69,7 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, canR
     {visible.length === 0 && <p className="py-6 text-body-sm text-kh-text-muted">{threads.length === 0 ? "No comments yet." : "No comments here."}</p>}
     {visible.map(thread => {
       const owner = "visibility" in thread ? thread : undefined;
-      return <section key={thread.id} data-review-thread={thread.id} tabIndex={-1} aria-label="Discussion thread" className="rounded-lg border border-kh-border bg-kh-bg p-4 kh-focus-ring focus:border-kh-primary">
+      return <section key={thread.id} data-review-thread={thread.id} tabIndex={-1} aria-label="Discussion thread" className="rounded-md border border-kh-border bg-kh-bg p-4 kh-focus-ring focus:border-kh-primary">
         {(thread.status === "RESOLVED" || owner?.visibility === "HIDDEN" || thread.currentAnchor.match === "OUTDATED") && <p className="mb-2 text-caption text-kh-text-muted">{[thread.status === "RESOLVED" ? "Resolved" : "", owner?.visibility === "HIDDEN" ? "Hidden from reviewers" : "", thread.currentAnchor.match === "OUTDATED" ? "Passage outdated" : ""].filter(Boolean).join(" · ")}</p>}
         {thread.currentAnchor.anchor && <blockquote className="mb-3 border-l border-kh-border pl-3 text-body-sm text-kh-text-muted"><button type="button" disabled={!focusAnchor} className="line-clamp-2 text-left kh-focus-ring hover:text-kh-text" onClick={() => { document.dispatchEvent(new Event("review-focus-passage")); requestAnimationFrame(() => requestAnimationFrame(() => focusAnchor?.(thread.currentAnchor.anchor!))); }}>{thread.currentAnchor.anchor.exact}</button></blockquote>}
         {owner && thread.currentAnchor.match === "OUTDATED" && <blockquote className="mb-3 border-l border-kh-border pl-3 text-body-sm text-kh-text-muted">Original passage (owner only): {owner.originalAnchor.exact}</blockquote>}
@@ -76,7 +77,7 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, canR
           <div className="mb-2 flex items-start gap-2">
             <span aria-hidden="true" className="flex size-8 shrink-0 items-center justify-center rounded-full bg-kh-bg-selected font-medium text-kh-selected-text">{(comment.authorName ?? "C").slice(0, 1).toUpperCase()}</span>
             <div className="min-w-0 flex-1"><p className="truncate font-medium">{comment.authorName ?? "Company colleague"}{comment.visibility === "HIDDEN" ? " · Hidden" : ""}</p><p className="text-caption text-kh-text-muted"><Timestamp value={comment.createdAt} /></p></div>
-            {moderate && index === 0 && <Button type="button" variant="ghost" icon aria-label={thread.status === "OPEN" ? "Resolve" : "Reopen"} title={thread.status === "OPEN" ? "Resolve" : "Reopen"} disabled={busy || !canResolve} onClick={() => void act(thread.id, "resolution", thread.status === "OPEN" ? "RESOLVED" : "OPEN")}><Check className="size-4" aria-hidden="true" /></Button>}
+            {moderate && index === 0 && <Tooltip label={thread.status === "OPEN" ? "Resolve" : "Reopen"}><Button type="button" variant="ghost" icon aria-label={thread.status === "OPEN" ? "Resolve" : "Reopen"} disabled={busy || !canResolve} onClick={() => void act(thread.id, "resolution", thread.status === "OPEN" ? "RESOLVED" : "OPEN")}><Check className="size-4" aria-hidden="true" /></Button></Tooltip>}
             {moderate && <MenuRoot><MenuTrigger aria-label={index === 0 ? "Comment options" : "Reply options"} className={buttonClasses({variant:"ghost",icon:true})}><MoreHorizontal className="size-4" aria-hidden="true" /></MenuTrigger><MenuContent align="end"><MenuItem disabled={busy} onClick={() => void act(thread.id, "visibility", index === 0 ? (owner?.visibility === "HIDDEN" ? "VISIBLE" : "HIDDEN") : (comment.visibility === "HIDDEN" ? "VISIBLE" : "HIDDEN"), index === 0 ? undefined : comment.id)}>{index === 0 ? (owner?.visibility === "HIDDEN" ? "Unhide thread" : "Hide thread") : comment.visibility === "HIDDEN" ? "Unhide reply" : "Hide reply"}</MenuItem></MenuContent></MenuRoot>}
           </div>
           <p className="whitespace-pre-wrap break-words">{comment.body}</p>

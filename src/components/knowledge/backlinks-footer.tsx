@@ -15,10 +15,10 @@ export function BacklinksFooter({ view }: { view: DocumentLinkView }) {
     <section aria-labelledby="linked-from-heading" data-backlinks className="mt-8 border-t border-kh-border pt-4">
       {view.backlinks.length > 0 ? (
         <>
-          <h2 id="linked-from-heading" className="text-body font-semibold text-kh-text">
+          <h2 id="linked-from-heading" className="text-body font-medium text-kh-text">
             Linked from {view.backlinkTotal} {view.backlinkTotal === 1 ? "document" : "documents"}
           </h2>
-          <ul className="mt-2 space-y-0.5">
+          <ul className="-mx-2 mt-2 space-y-0.5">
             {view.backlinks.map((backlink) => (
               <li key={backlink.documentId}>
                 <Link
@@ -35,7 +35,7 @@ export function BacklinksFooter({ view }: { view: DocumentLinkView }) {
               </li>
             ))}
           </ul>
-          {hidden > 0 ? <p className="mt-2 px-2 text-caption text-kh-text-muted">and {hidden} more</p> : null}
+          {hidden > 0 ? <p className="mt-2 text-caption text-kh-text-muted">and {hidden} more</p> : null}
         </>
       ) : (
         <h2 id="linked-from-heading" className="sr-only">Linked from</h2>

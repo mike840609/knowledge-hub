@@ -30,7 +30,7 @@ export function ImportChangeGroup({
         onClick={() => setExpanded((value) => !value)}
         className="flex w-full items-center justify-between gap-2 rounded-md px-4 py-3 text-left kh-focus-ring focus-visible:ring-inset"
       >
-        <h2 className="text-body font-semibold text-kh-text">
+        <h2 className="text-body font-medium text-kh-text">
           {title} <span className="font-normal text-kh-text-muted">({changes.length})</span>
         </h2>
         <ChevronDown

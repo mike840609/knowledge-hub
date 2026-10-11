@@ -10,8 +10,8 @@ const captions = {
 
 /** Static examples: no live data, controls, or simulated interaction. */
 export function FirstUseIllustration({ kind }: { kind: Step }) {
-  if (kind === "context") return <div className="flex min-h-40 items-center justify-center rounded-lg bg-kh-bg-subtle p-3"><OnboardingIllustration kind="context" /></div>;
-  return <figure className="flex min-h-40 flex-col justify-center rounded-lg bg-kh-bg-subtle p-3">
+  if (kind === "context") return <div className="flex min-h-40 items-center justify-center rounded-md bg-kh-bg-subtle p-3"><OnboardingIllustration kind="context" /></div>;
+  return <figure className="flex min-h-40 flex-col justify-center rounded-md bg-kh-bg-subtle p-3">
     <div aria-hidden="true" className="flex h-24 items-center justify-center gap-2 text-kh-text-muted">
       {kind === "import" ? <>
         <div className="flex flex-col items-center gap-2"><Folder size={30} strokeWidth={1.3} className="text-kh-primary" /><span className="text-caption">Folder</span></div>

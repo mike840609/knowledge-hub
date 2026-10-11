@@ -215,5 +215,5 @@ test("rejects a malformed UTF-8 upload instead of storing replacement characters
     mimeType: "text/markdown",
     buffer: Buffer.from([0x23, 0x20, 0xff, 0xfe, 0x0a]), // "# " then lone invalid bytes
   });
-  await expect(page.getByText("這個檔案不是有效的 UTF-8 文字，無法上傳。")).toBeVisible();
+  await expect(page.getByText("This file is not valid UTF-8 text and cannot be uploaded.")).toBeVisible();
 });

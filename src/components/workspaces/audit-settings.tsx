@@ -35,7 +35,7 @@ export function AuditSettings({
   const visible = page.items.filter(item => category === "all" || item.targetType === targetTypes[category]);
   return (
     <section className="space-y-4">
-      <h2 className="text-title font-semibold">Audit</h2>
+      <h2 className="text-title font-medium">Audit</h2>
       {page.items.length === 0 && <p>No audit events yet.</p>}
       <div className="flex flex-wrap items-center gap-3"><Label inline>Event type<SelectMenu aria-label="Audit event type" value={category} onValueChange={setCategory} options={[{ value: "all", label: "All events" }, { value: "workspace", label: "Workspace" }, { value: "members", label: "Members" }, { value: "groups", label: "SSO Groups" }]} /></Label><p role="status" className="text-caption text-kh-text-muted">{visible.length} of {page.items.length} loaded events · newest first</p></div>
       {page.items.length > 0 && !visible.length ? <p className="text-body text-kh-text-muted">No matching events in the loaded history. Choose All events{page.nextCursor ? " or load more history" : ""}.</p> : null}

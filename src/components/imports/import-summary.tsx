@@ -6,7 +6,7 @@ export function ImportSummary({ preview }: { preview: ImportPreview }): React.JS
   const assets = preview.summary.assets;
   return (
     <section aria-labelledby="import-summary-heading" className="rounded-md border border-kh-border bg-kh-bg p-4">
-      <h2 id="import-summary-heading" className="text-body font-semibold text-kh-text">
+      <h2 id="import-summary-heading" className="text-body font-medium text-kh-text">
         Summary
       </h2>
       <dl className="mt-3 grid gap-2 text-body sm:grid-cols-2">

@@ -30,7 +30,7 @@ type Draft = { key: string; title: string; sourceId: string | null; updatedAt: s
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section aria-label={title} className="min-w-0">
-      <h2 className="px-3 pb-3 text-body font-semibold text-kh-text">{title}</h2>
+      <h2 className="px-3 pb-3 text-body font-medium text-kh-text">{title}</h2>
       {children}
     </section>
   );
@@ -154,7 +154,7 @@ export function PersonalHome({ workspaceId, documents, drafts, updates={runs:[],
         </>}
       />
       {slots?.guidance}
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+      <div className="-mx-3 grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <Section title="Continue reading">
           <TabsRoot value={workTab} onValueChange={value => setWorkTab(String(value))}>
             <TabsList aria-label="Continue working" className="mx-3">

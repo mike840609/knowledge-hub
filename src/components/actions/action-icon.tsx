@@ -1,4 +1,6 @@
 import {
+  Bot,
+  Home,
   Archive,
   ArchiveRestore,
   CornerUpLeft,
@@ -30,6 +32,8 @@ import type { ActionIconName } from "./action-registry";
  */
 const icons: Record<ActionIconName, LucideIcon> = {
   "new-tab": ExternalLink,
+  home: Home,
+  agent: Bot,
   "copy-link": Link2,
   sidebar: PanelLeft,
   knowledge: FileText,

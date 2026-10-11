@@ -32,7 +32,7 @@ export function SearchResults({ model }: { model: SearchPageModel }) {
   if (model.hasDocuments === false && model.scope === "workspace") return <EmptyState icon={FileText} title="No saved documents yet" illustration={<WorkspaceEmptyIllustration kind="search" />} description="Search finds words in your saved documents. Import a Markdown folder or create a note, then search for a phrase from its content." action={<WorkspaceContentActions workspaceId={model.workspaceId} />} />;
   const result = model.result;
   if (result === null) {
-    return <p className="rounded-md bg-kh-bg-subtle p-6 text-body text-kh-text-muted">Enter a keyword or choose a source, path or date range.</p>;
+    return <p className="py-2 text-body text-kh-text-muted">Enter a keyword or choose a source, path or date range.</p>;
   }
   if (result.hits.length === 0) {
     const filtered = Boolean(model.sourceId || model.path || model.from || model.to || model.includeArchived || model.page > 1);
