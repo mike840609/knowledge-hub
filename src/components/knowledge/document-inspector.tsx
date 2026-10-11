@@ -364,6 +364,13 @@ export function DocumentDetailClient({
     setInspectorOpen?.(true);
     window.dispatchEvent(new CustomEvent("kh:open-inspector"));
   }, [setInspectorOpen]);
+  const toggleInspector = useCallback(() => {
+    if (inspectorOpen) {
+      setInspectorOpen?.(false);
+      return;
+    }
+    openInspector();
+  }, [inspectorOpen, openInspector, setInspectorOpen]);
   // A request is answered once. Left standing after the inspector closes, it
   // would beat the tab the reader has since chosen the next time it opens.
   useEffect(() => {
@@ -427,12 +434,12 @@ export function DocumentDetailClient({
     if (!header || !root || !setDocumentTopbar) return;
     // Shell chrome, not the document: it joins an in-flight navigation or
     // arrival refresh instead of rendering urgently inside it (#63, #64).
-    const state = { pathname, title, visible: false, onDetailsClick: openInspector, target };
+    const state = { pathname, title, visible: false, onDetailsClick: toggleInspector, target };
     startTransition(() => setDocumentTopbar(state));
     const observer = new IntersectionObserver(([entry]) => {
       const visible = !entry.isIntersecting && entry.boundingClientRect.bottom <= (entry.rootBounds?.top ?? 0);
       setScrolledPast(visible);
-      const next = { pathname, title, visible, onDetailsClick: openInspector, target };
+      const next = { pathname, title, visible, onDetailsClick: toggleInspector, target };
       startTransition(() => setDocumentTopbar(next));
     }, { root, threshold: 0 });
     observer.observe(header);
@@ -440,7 +447,7 @@ export function DocumentDetailClient({
       observer.disconnect();
       startTransition(() => setDocumentTopbar(null));
     };
-  }, [pathname, title, openInspector, setDocumentTopbar, target]);
+  }, [pathname, title, toggleInspector, setDocumentTopbar, target]);
   return (
     <DocumentPane
       contentRef={contentRef}
@@ -456,7 +463,7 @@ export function DocumentDetailClient({
           status={status}
           updatedAt={updatedAt}
           revisionBanner={revisionBanner}
-          onDetailsClick={openInspector}
+          onDetailsClick={toggleInspector}
           linkSummary={summariseLinks(inspectorData.links)}
           onLinksClick={openLinks}
           editHref={editHref}
