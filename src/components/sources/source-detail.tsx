@@ -2,6 +2,7 @@ import type { FolderImportClientLimits } from "@/components/imports/folder-impor
 import { PageHeader } from "@/components/shell/page-header";
 import { Status } from "@/components/ui/status";
 import Link from "next/link";
+import { buttonClasses } from "@/components/ui/button";
 import type { SourceDetailModel } from "@/server/source-read";
 import { isFolderSyncable } from "@/modules/knowledge/domain/source-policy";
 import { ImportHistory } from "@/components/sources/import-history";
@@ -17,7 +18,7 @@ export function SourceDetail({ model, showImportSuccess = false, limits }: { mod
   return (
     <div className="flex flex-col gap-6">
       <PageHeader location="Sources" locationHref={`/w/${workspace.id}/sources`} title={source.name}
-        actions={<><span className="flex items-center gap-2">{syncable ? <SourceSyncActions workspaceId={workspace.id} sourceId={source.id} limits={limits} /> : null}<SourceLifecycleActions workspaceId={workspace.id} sourceId={source.id} sourceName={source.name} status={source.status} /></span></>}
+        actions={<><Link className={buttonClasses({ variant: "ghost" })} href={`/w/${workspace.id}/sources/${source.id}/health`}>Check source health</Link><span className="flex items-center gap-2">{syncable ? <SourceSyncActions workspaceId={workspace.id} sourceId={source.id} limits={limits} /> : null}<SourceLifecycleActions workspaceId={workspace.id} sourceId={source.id} sourceName={source.name} status={source.status} /></span></>}
       />
       {showImportSuccess ? (
         <p role="status" className="rounded-md border border-kh-success/40 bg-kh-bg px-3 py-2 text-body text-kh-success">
@@ -29,7 +30,7 @@ export function SourceDetail({ model, showImportSuccess = false, limits }: { mod
         <Status kind={source.status === "ARCHIVED" ? "archived" : "active"}>{source.status === "ARCHIVED" ? "Archived" : "Active"}</Status>
       </p>
 
-      <section aria-labelledby="source-overview-heading" className="rounded-md border border-kh-border bg-kh-bg p-4">
+      <section aria-labelledby="source-overview-heading">
         <h2 id="source-overview-heading" className="text-body font-medium text-kh-text">Overview</h2>
         <dl className="mt-3 grid gap-2 text-body sm:grid-cols-2">
           <div className="flex gap-2">
@@ -57,7 +58,6 @@ export function SourceDetail({ model, showImportSuccess = false, limits }: { mod
         <ImportHistory runs={runs} workspaceId={workspace.id} actors={model.runActors} />
       </section>
 
-      <Link className="text-body text-kh-link" href={`/w/${workspace.id}/sources/${source.id}/health`}>Check source health</Link>
       <TechnicalDetails source={source} />
     </div>
   );

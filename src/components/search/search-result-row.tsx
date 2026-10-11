@@ -47,7 +47,7 @@ export function SearchResultRow({
             {showWorkspace && (
               <span className="max-w-[9rem] truncate">{hit.workspaceName}</span>
             )}
-            <span className="max-w-[10rem] truncate rounded-md border border-kh-border px-1.5 py-0.5">
+            <span className="max-w-[10rem] truncate">
               {hit.sourceName}
             </span>
             <Timestamp value={updatedAt} variant="date" className="sm:w-[7.5rem] sm:text-right" />

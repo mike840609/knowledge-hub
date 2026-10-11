@@ -10,7 +10,7 @@ export function TechnicalDetails({ source }: { source: SourceView }) {
     ["Sync version", String(source.syncVersion)],
   ];
   return (
-    <details className="rounded-md border border-kh-border bg-kh-bg px-3 py-2.5">
+    <details className="border-t border-kh-border pt-4">
       <summary className="cursor-pointer rounded-md text-body font-medium text-kh-text kh-focus-ring">Technical details</summary>
       <dl className="mt-3 flex flex-col gap-1.5">
         {entries.map(([term, value]) => (
