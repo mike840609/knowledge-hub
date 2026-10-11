@@ -9,7 +9,7 @@ export class SavedShareService {
   constructor(private readonly unitOfWork: KnowledgeUnitOfWork, private readonly clock: () => Date = () => new Date()) {}
   private async personal(r: KnowledgeRepositories, caller: CallerContext, workspaceId?: string) {
     const workspace = await r.workspaces.findPersonalByOwnerUserId(caller.identity.id);
-    if (!workspace || workspace.lifecycleState !== "ACTIVE" || (workspaceId !== undefined && workspace.id !== workspaceId)) throw new NotFoundError("Personal workspace unavailable.");
+    if (!workspace || workspace.lifecycleState !== "ACTIVE" || (workspaceId !== undefined && workspace.id !== workspaceId)) throw new NotFoundError("Personal workspace unavailable.", "WORKSPACE_NOT_FOUND");
     await r.workspaceAccess.requireWorkspaceRead(caller, workspace.id);
     return workspace.id;
   }
@@ -41,10 +41,10 @@ export class SavedShareService {
     });
   }
   async remove(caller: CallerContext, id: string): Promise<void> {
-    if (!isUuid(id)) throw new NotFoundError("Saved share unavailable.");
+    if (!isUuid(id)) throw new NotFoundError("Saved share unavailable.", "SAVED_SHARE_NOT_FOUND");
     await this.unitOfWork.run(async r => {
       await this.personal(r,caller);
-      if (!await r.savedShares.remove(caller.identity.id,id,this.clock())) throw new NotFoundError("Saved share unavailable.");
+      if (!await r.savedShares.remove(caller.identity.id,id,this.clock())) throw new NotFoundError("Saved share unavailable.", "SAVED_SHARE_NOT_FOUND");
     });
   }
   async list(caller: CallerContext, workspaceId: string, input: SavedShareInput): Promise<SavedShareList> {

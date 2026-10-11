@@ -30,6 +30,7 @@ const WORKSPACE_HIDDEN_NOT_FOUND = new Set([
   "DOCUMENT_NOT_FOUND",
   "SOURCE_NOT_FOUND",
   "SHARE_LINK_NOT_FOUND",
+  "SAVED_SHARE_NOT_FOUND",
   // A tree node is found by its own ID, so "no such node" must not be told apart from "not yours".
   "TREE_NODE_NOT_FOUND",
 ]);
