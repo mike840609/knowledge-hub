@@ -16,6 +16,7 @@ import {
 } from "@/components/workspaces/governance-error";
 import { dialogBackdropClasses, dialogPopupClasses } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { ShareLinksSkeleton } from "./knowledge-skeletons";
 
 type ShareLink = {
   id: string;
@@ -179,7 +180,7 @@ export function ShareLinkDialog({
 
           <section aria-label="Active links" className="mt-5">
             {links === null ? (
-              <p className="text-body-sm text-kh-text-muted">Loading links…</p>
+              <ShareLinksSkeleton />
             ) : active.length === 0 ? (
               <p className="text-body-sm text-kh-text-muted">No active links.</p>
             ) : (

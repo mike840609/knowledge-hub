@@ -366,7 +366,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
   }
 
   if (target) {
-    if (context.workspaceType === "PERSONAL" && can.canSearch && target.status === "ACTIVE" && target.sourceStatus === "ACTIVE" && target.revision === "CURRENT") actions.push({ id: "document.agent-context", label: "Copy for Agent", group: "document", icon: "copy-link", keywords: ["agent", "context", "markdown"], section: "export", surfaces: ["palette", "row"], effect: { kind: "navigate", href: `/w/${workspaceId}/agent-context?document=${target.documentId}` } });
+    if (context.workspaceType === "PERSONAL" && can.canSearch && target.status === "ACTIVE" && target.sourceStatus === "ACTIVE" && target.revision === "CURRENT") actions.push({ id: "document.agent-context", label: "Copy for Agent", group: "document", icon: "agent", keywords: ["agent", "context", "markdown"], section: "export", surfaces: ["palette", "row"], effect: { kind: "navigate", href: `/w/${workspaceId}/agent-context?document=${target.documentId}` } });
     actions.push({ id: "document.export", label: "Download Markdown", group: "document", icon: "open", keywords: ["export", "download", "markdown"], section: "export", surfaces: ["palette", "row"], effect: { kind: "download", href: `/api/documents/${target.documentId}/export` } });
     const documentHref = `/w/${workspaceId}/knowledge/${target.sourceId}/${target.documentId}${suffix}`;
     // A row's link used to answer right-click with the browser's own menu,
