@@ -30,20 +30,18 @@ export default async function WorkspaceSourcesPage({
         location={model.workspace.name}
         locationHref={`/w/${workspaceId}/knowledge`}
         title="Sources"
-        description={`${model.items.length} ${model.items.length === 1 ? "source" : "sources"}`}
         // The empty state carries the same action as its primary; two of them on one screen is one too many.
-        actions={model.items.length === 0 ? undefined : <WorkspaceImportLink
+        actions={<>{model.workspace.type === "PERSONAL" ? <Link className={buttonClasses({variant:"ghost"})} href={`/w/${workspaceId}/sources/health`}>Check source health</Link> : null}{model.items.length === 0 ? null : <WorkspaceImportLink
           className={buttonClasses({ variant: "secondary" })}
           href={`/w/${workspaceId}/sources/import`}
         >
           Import folder
-        </WorkspaceImportLink>}
+        </WorkspaceImportLink>}</>}
       />
-      {model.workspace.type === "PERSONAL" ? <div className="mt-3"><Link className={buttonClasses({variant:"secondary"})} href={`/w/${workspaceId}/sources/health`}>Check source health</Link></div> : null}
       <div className="mt-6">
         <SourceList workspaceId={workspaceId} items={model.items} limits={{ maxAssetFileBytes: limits.maxAssetFileBytes, maxAssetTotalBytes: limits.maxAssetTotalBytes }} />
       </div>
-      {preference ? <div className="mt-6"><FreshnessReminders workspaceId={workspaceId} items={model.items} preference={{thresholdDays: freshnessThreshold(preference.value), version: preference.version}} now={new Date().toISOString()} /></div> : null}
+      {preference ? <div className="-mx-3 mt-6"><FreshnessReminders workspaceId={workspaceId} items={model.items} preference={{thresholdDays: freshnessThreshold(preference.value), version: preference.version}} now={new Date().toISOString()} /></div> : null}
     </main>
   );
 }

@@ -80,7 +80,7 @@ export function MembersSettings({
   }
   return (
     <section className="space-y-6">
-      <h2 className="text-title font-semibold">Members</h2>
+      <h2 className="text-title font-medium">Members</h2>
       {canAdd && (
         <details className="max-w-panel border-b border-kh-border pb-3">
           <summary className="kh-focus-ring w-fit cursor-pointer rounded-md text-body font-medium">Add member</summary>

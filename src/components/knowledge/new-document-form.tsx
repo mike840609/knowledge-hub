@@ -57,7 +57,7 @@ export function NewDocumentForm({
       try {
         markdown = new TextDecoder("utf-8", { fatal: true }).decode(await file.arrayBuffer());
       } catch {
-        setUploadError({ code: "INVALID_ENCODING", message: "這個檔案不是有效的 UTF-8 文字，無法上傳。" });
+        setUploadError({ code: "INVALID_ENCODING", message: "This file is not valid UTF-8 text and cannot be uploaded." });
         return;
       }
       const href = await create({ filename: file.name, markdown });

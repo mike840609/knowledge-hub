@@ -30,7 +30,7 @@ export function SourceDetail({ model, showImportSuccess = false, limits }: { mod
       </p>
 
       <section aria-labelledby="source-overview-heading" className="rounded-md border border-kh-border bg-kh-bg p-4">
-        <h2 id="source-overview-heading" className="text-body font-semibold text-kh-text">Overview</h2>
+        <h2 id="source-overview-heading" className="text-body font-medium text-kh-text">Overview</h2>
         <dl className="mt-3 grid gap-2 text-body sm:grid-cols-2">
           <div className="flex gap-2">
             <dt className="w-24 shrink-0 text-kh-text-muted">Workspace</dt>
@@ -53,7 +53,7 @@ export function SourceDetail({ model, showImportSuccess = false, limits }: { mod
       </section>
 
       <section aria-labelledby="import-history-heading" className="flex flex-col gap-3">
-        <h2 id="import-history-heading" className="text-body font-semibold text-kh-text">Import history</h2>
+        <h2 id="import-history-heading" className="text-body font-medium text-kh-text">Import history</h2>
         <ImportHistory runs={runs} workspaceId={workspace.id} actors={model.runActors} />
       </section>
 

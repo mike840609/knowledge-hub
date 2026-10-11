@@ -67,6 +67,8 @@ export type ActionSurface = "palette" | "row" | "empty" | "create";
 /** Named rather than imported so this module stays free of component imports. */
 export type ActionIconName =
   | "new-tab"
+  | "home"
+  | "agent"
   | "copy-link"
   | "sidebar"
   | "knowledge"
@@ -252,10 +254,10 @@ export function availableActions(context: ActionContext): readonly Action[] {
   const archived = context.includeArchived === true;
   const suffix = archived ? "?includeArchived=true" : "";
   const actions: Action[] = [];
-  if (context.workspaceType === "PERSONAL") actions.push({ id: "navigate.home", label: "Go to My Space home", group: "navigate", icon: "knowledge", keywords: ["drafts", "favorites", "recent", "export"], surfaces: ["palette"], effect: { kind: "navigate", href: `/w/${workspaceId}/home` } });
+  if (context.workspaceType === "PERSONAL") actions.push({ id: "navigate.home", label: "Go to My Space home", group: "navigate", icon: "home", keywords: ["drafts", "favorites", "recent", "export"], surfaces: ["palette"], effect: { kind: "navigate", href: `/w/${workspaceId}/home` } });
 
   if (context.workspaceType === "PERSONAL" && can.canSearch) actions.push({ id: "navigate.shares", label: "Manage shares", group: "navigate", icon: "share", keywords: ["sharing", "links", "revoke", "expired"], surfaces: ["palette"], effect: { kind: "navigate", href: `/w/${workspaceId}/shares` } });
-  if (context.workspaceType === "PERSONAL" && can.canSearch) actions.push({ id: "navigate.agent-context", label: "Copy for Agent", group: "navigate", icon: "copy-link", keywords: ["agent", "context", "markdown"], surfaces: ["palette"], effect: { kind: "navigate", href: `/w/${workspaceId}/agent-context` } });
+  if (context.workspaceType === "PERSONAL" && can.canSearch) actions.push({ id: "navigate.agent-context", label: "Open Copy for Agent", group: "navigate", icon: "agent", keywords: ["agent", "context", "markdown"], surfaces: ["palette"], effect: { kind: "navigate", href: `/w/${workspaceId}/agent-context` } });
   actions.push({
     id: "navigate.knowledge",
     label: "Go to Knowledge",

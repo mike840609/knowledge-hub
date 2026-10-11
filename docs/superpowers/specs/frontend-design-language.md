@@ -240,6 +240,26 @@ with `PageHeader` keeps `py-6`. `py-8` appeared on four sources pages for no
 reason anyone recorded. The `py-16` of a centred message state belongs to
 `StatusMessage` and `EmptyState`, not to the pages that show one.
 
+### A row's fill hangs outside the column; its text does not
+
+A row that fills on hover carries padding so the fill has room around the
+text. That padding is hung outside the column (`-mx-3` on the list, matching
+the row's `px-3`), so the row's text starts on the same left edge as the
+heading above it and the page's header, and only the fill reaches past it. A
+list set inside its column instead puts every row 8–12px to the right of its
+own heading: Home, the Sources list and a document's "Linked from" all shipped
+that way.
+
+This does not move a page's header. Every page's breadcrumb keeps one desktop
+origin, whatever container its content needs, so it does not jump as the
+reader moves between pages (`tests/e2e/breadcrumb-alignment.spec.ts`). Graph's
+header therefore sits in `kh-page` over content in `kh-page-wide`, 64px apart,
+on purpose; aligning it to its content was tried and reverted for this reason.
+
+A toolbar puts what narrows the list at the left and what arranges it at the
+right. A control that clears filters appears only when something other than
+the default view is showing, and returns to that default.
+
 ### Divergence: this ramp is tinted, the reference's is not
 
 Measured, the reference's light surfaces are achromatic — `#f8f8f8`, `#f4f4f4`,
@@ -797,9 +817,10 @@ no `name`. It has no filter field; one is added when a list outgrows type-ahead.
 page, the Updates source filter and the shares status filter. For the first of
 those: the search page is a plain GET form that works without JavaScript,
 and every hand-rolled copy it replaces was native already. With JavaScript,
-that form searches as the reader types and its submit button goes
-(`LiveSearchSubmit`); the URL is still the state, so a search stays
-shareable, and without JavaScript the button and the GET remain. A multi-line field
+that form searches as the reader types (`LiveSearchSubmit`) and keeps its
+submit button, which is what Enter reaches from any of its text fields; the
+URL is still the state, so a search stays shareable, and without JavaScript
+the button and the GET are all there is. A multi-line field
 takes its height from `rows` rather than the ladder; only its padding scales.
 
 **A field has a name, and one way to be wrong.** `Label` (`components/ui/label.tsx`)

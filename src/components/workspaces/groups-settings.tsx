@@ -50,7 +50,7 @@ export function GroupsSettings({
   }
   return (
     <section className="space-y-6">
-      <h2 className="text-title font-semibold">SSO Groups</h2>
+      <h2 className="text-title font-medium">SSO Groups</h2>
       <p className="text-body text-kh-text-muted">
         Map canonical group IDs supplied by your company SSO. Group membership is evaluated from the
         signed-in user’s trusted session.

@@ -41,7 +41,7 @@ test("mobile comments can retry after a temporary loading failure", async ({ pag
   await page.getByRole("button", { name: "Open discussions" }).click();
   const drawer = page.getByRole("dialog");
   await expect(drawer.getByRole("status")).toContainText("unavailable");
-  await drawer.getByRole("button", { name: "Refresh discussions" }).click();
+  await drawer.getByRole("button", { name: "Refresh comments" }).click();
   await expect(drawer.getByRole("button", { name: "Comment on selection" })).toBeVisible();
   await expect(drawer.getByRole("status")).toHaveCount(0);
 });

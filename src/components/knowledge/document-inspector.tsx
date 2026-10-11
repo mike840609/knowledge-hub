@@ -276,7 +276,7 @@ export function DocumentInspector({
         className="hidden h-full min-h-0 w-full flex-col border-l border-kh-border/70 bg-kh-bg-raised min-[1440px]:flex"
       >
         <div className="flex shrink-0 items-start justify-between gap-2 border-b border-kh-border/70 px-4 py-3">
-          <h2 className="truncate text-body font-semibold text-kh-text">Document details</h2>
+          <h2 className="truncate text-body font-medium text-kh-text">Document details</h2>
           <button
             type="button"
             aria-label="Close details"

@@ -13,9 +13,11 @@ export function HomeUpdates({ workspaceId, page }: { workspaceId: string; page: 
     }).slice(0, 3);
   if (!changes.length) return <p className="px-3 py-2 text-body text-kh-text-muted">No recorded folder changes to show.</p>;
   return <ul className="space-y-1">{changes.map(change => <li key={change.documentId}>
-    <Link className="kh-interactive-row kh-focus-ring block rounded-md px-3 py-3" href={`/w/${workspaceId}/knowledge/${change.sourceId}/${change.documentId}?revision=${change.afterRevisionNo}`}>
-      <span className="block truncate text-body text-kh-text">{change.title}</span>
-      <span className="mt-1 block text-caption text-kh-text-muted">Updated <Timestamp value={change.updatedAt} variant="relative" /></span>
+    <Link className="kh-interactive-row kh-focus-ring block rounded-md px-3 py-2" href={`/w/${workspaceId}/knowledge/${change.sourceId}/${change.documentId}?revision=${change.afterRevisionNo}`}>
+      <span className="flex min-w-0 items-baseline gap-2">
+        <span className="min-w-0 flex-1 truncate text-body text-kh-text">{change.title}</span>
+        <span className="shrink-0 text-caption text-kh-text-muted">Updated <Timestamp value={change.updatedAt} variant="relative" /></span>
+      </span>
       <span className="mt-1 flex min-w-0 items-center gap-2 text-caption text-kh-text-muted">
         <span className="min-w-0 flex-1 truncate" title={change.sourceName}>{change.sourceName}</span>
         <span className="shrink-0">{change.labels.includes("ADDED") ? "Added" : "Updated"} · {change.unread ? "Unread" : "Read"}</span>
