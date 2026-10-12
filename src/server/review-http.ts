@@ -38,7 +38,7 @@ export async function reviewReadHttp(request: Request, operation: (service: Pick
   }
 }
 /** Owner review keeps the existing workspace authentication/error boundary. */
-export async function ownerReviewHttp(request: Request, operation:(service:DocumentReviewService,caller:CallerContext)=>Promise<unknown>):Promise<Response> {
+export async function ownerReviewHttp(request: Request, operation:(service:DocumentReviewService,caller:CallerContext)=>Promise<unknown>, status = 200):Promise<Response> {
   try {
     if(request.method!=="GET") assertReviewOrigin(request);
   } catch(error) {
@@ -46,7 +46,7 @@ export async function ownerReviewHttp(request: Request, operation:(service:Docum
     return NextResponse.json(mapped.body,{status:mapped.status,headers:{"Cache-Control":"private, no-store"}});
   }
   const { workspaceHttp } = await import("./workspace-http");
-  return workspaceHttp(async (services,caller)=>operation(services.reviews,caller));
+  return workspaceHttp(async (services,caller)=>operation(services.reviews,caller),status);
 }
 export async function reviewBody(request:Request):Promise<Record<string,unknown>> {
   const { DomainError } = await import("@/shared/domain/errors");

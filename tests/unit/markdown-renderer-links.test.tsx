@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { withoutReviewPaths } from "../fixtures/rendered-markdown";
 import { MarkdownRenderer } from "@/components/knowledge/markdown-renderer";
 import type { RenderedLinks } from "@/components/knowledge/rendered-links";
 import { linkLookupKey } from "@/modules/knowledge/domain/link-graph";
@@ -19,7 +20,7 @@ const links: RenderedLinks = {
   [linkLookupKey("PATH", "gone.md")]: { status: "UNRESOLVED" },
 };
 
-const render = (markdown: string) => renderToStaticMarkup(<MarkdownRenderer markdown={markdown} links={links} />);
+const render = (markdown: string) => withoutReviewPaths(renderToStaticMarkup(<MarkdownRenderer markdown={markdown} links={links} />));
 /** No resolutions at all — not the same as resolutions that found nothing, and a default parameter would blur the two. */
 const renderWithoutLinks = (markdown: string) => renderToStaticMarkup(<MarkdownRenderer markdown={markdown} />);
 

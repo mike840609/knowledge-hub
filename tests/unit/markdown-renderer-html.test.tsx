@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { withoutReviewPaths } from "../fixtures/rendered-markdown";
 import { MarkdownRenderer } from "@/components/knowledge/markdown-renderer";
 
 function render(markdown: string): string {
-  return renderToStaticMarkup(<MarkdownRenderer markdown={markdown} />);
+  return withoutReviewPaths(renderToStaticMarkup(<MarkdownRenderer markdown={markdown} />));
 }
 
 /**

@@ -9,6 +9,7 @@ import { linkLookupKey } from "@/modules/knowledge/domain/link-graph";
 import { headingSlug } from "@/shared/markdown/heading-slug";
 import { remarkHeadingIds } from "@/shared/markdown/remark-heading-ids";
 import { remarkKnownHtml } from "@/shared/markdown/remark-known-html";
+import { remarkReviewPaths } from "@/shared/markdown/remark-review-paths";
 import { MarkdownQuote } from "./markdown-callout";
 import { MarkdownDetails, MarkdownKbd, MarkdownMark, MarkdownSummary } from "./markdown-html";
 import { MarkdownImage } from "./markdown-image";
@@ -224,7 +225,8 @@ export function MarkdownBase({
   return (
     <div className={MARKDOWN_PROSE}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkHeadingIds, remarkKnowledgeLinks, remarkKnownHtml, ...remarkPlugins]}
+        // `remarkReviewPaths` first: it records each block's place before anything moves one.
+        remarkPlugins={[remarkGfm, remarkReviewPaths, remarkHeadingIds, remarkKnowledgeLinks, remarkKnownHtml, ...remarkPlugins]}
         rehypePlugins={rehypePlugins}
         components={{
           a: (props: AnchorProps) => <MarkdownAnchor {...props} links={links} />,

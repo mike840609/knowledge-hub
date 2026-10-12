@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { withoutReviewPaths } from "../fixtures/rendered-markdown";
 import { MarkdownBase } from "@/components/knowledge/markdown-base";
 import { MarkdownRenderer } from "@/components/knowledge/markdown-renderer";
 import { extractOutline } from "@/shared/markdown/outline";
 
-const render = (markdown: string) => renderToStaticMarkup(<MarkdownRenderer markdown={markdown} />);
+const render = (markdown: string) => withoutReviewPaths(renderToStaticMarkup(<MarkdownRenderer markdown={markdown} />));
 /** The page without the wrapper and without the classes and whitespace that are not the point. */
 const shape = (markdown: string) =>
   render(markdown)

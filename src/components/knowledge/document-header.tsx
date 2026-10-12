@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, type Ref } from "react";
-import { LockKeyhole, MessageSquare, PanelRight } from "lucide-react";
+import { LockKeyhole, MessageSquare, MessageSquarePlus, PanelRight } from "lucide-react";
 import { ActionIcon } from "@/components/actions/action-icon";
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
@@ -105,7 +105,22 @@ export function DocumentHeader({
           ) : null}
           {/* What is done to the document comes first; then the two that open something on the right,
               together and nearest to it: the discussions, and Details. */}
-          {review?.entry ? (
+          {/* Why what is selected cannot take a comment, where the control for one that can would be. */}
+          {review?.entry?.hint ? <p role="status" className="max-w-xs truncate text-body-sm text-kh-text-muted">{review.entry.hint}</p> : null}
+          {review?.entry?.comment ? (
+            <Tooltip label="Comment on selection">
+              <button
+                type="button"
+                aria-label="Comment on selection"
+                onPointerDown={(event) => event.preventDefault()}
+                onClick={review.entry.comment}
+                className={buttonClasses({ variant: "soft", icon: true })}
+              >
+                <MessageSquarePlus className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </Tooltip>
+          ) : null}
+          {review?.entry && (review.entry.count > 0 || review.entry.open) ? (
             <Tooltip label={review.entry.open ? "Hide comments" : `Comments · ${review.entry.awaiting} open, ${review.entry.count} total`}>
               <button
                 ref={review.buttonRef}

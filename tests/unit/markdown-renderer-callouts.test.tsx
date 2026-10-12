@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { withoutReviewPaths } from "../fixtures/rendered-markdown";
 import { MarkdownBase } from "@/components/knowledge/markdown-base";
 import { MarkdownRenderer } from "@/components/knowledge/markdown-renderer";
 
-const render = (markdown: string) => renderToStaticMarkup(<MarkdownRenderer markdown={markdown} />);
+const render = (markdown: string) => withoutReviewPaths(renderToStaticMarkup(<MarkdownRenderer markdown={markdown} />));
 const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 /** The callouts of a page: the kind each was given, and its opening tag. */
 const callouts = (html: string) => [...html.matchAll(/<(\w+)[^>]*\bdata-callout="([^"]*)"[^>]*>/g)].map((match) => ({ tag: match[1], kind: match[2], open: match[0] }));

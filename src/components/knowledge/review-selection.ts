@@ -1,57 +1,111 @@
-import { projectReviewBlocks } from "@/modules/knowledge/domain/review-anchor";
-import type { ReviewAnchor } from "@/modules/knowledge/domain/document-review";
+import { projectReviewBlocks, type CanonicalReviewBlock } from "@/modules/knowledge/domain/review-anchor";
+import { REVIEW_LIMITS, type ReviewAnchor } from "@/modules/knowledge/domain/document-review";
+import { REVIEW_ITEM_PARAGRAPH, REVIEW_PATH, reviewPathKey } from "@/shared/markdown/remark-review-paths";
 
-function leafElements(root: HTMLElement): HTMLElement[] {
-  return Array.from(root.querySelectorAll<HTMLElement>("p,h1,h2,h3,h4,h5,h6,li")).filter(element => element.tagName !== "LI" || !Array.from(element.children).some(child => child.tagName === "P"));
+/**
+ * The element each block of the Markdown is drawn as. The renderer says which on the element
+ * itself (`remark-review-paths.ts`), so a block is found by where it is in the document and never
+ * by counting the elements before it: what the reader draws differently somewhere else — a
+ * callout's marker, a task's checkbox, the footnotes moved to the foot — is that block's matter.
+ */
+const LEAF = `[${REVIEW_PATH}],li[${REVIEW_ITEM_PARAGRAPH}]`;
+const pathOf = (element: HTMLElement) => element.getAttribute(REVIEW_PATH) ?? element.getAttribute(REVIEW_ITEM_PARAGRAPH);
+const leafOf = (node: Node) => (node.nodeType === Node.ELEMENT_NODE ? node as HTMLElement : node.parentElement)?.closest<HTMLElement>(LEAF) ?? null;
+function leafElement(root: HTMLElement, key: string): HTMLElement | null {
+  // A loose list draws the item's paragraph as a paragraph; a tight one as the item.
+  return root.querySelector<HTMLElement>(`[${REVIEW_PATH}="${key}"]`) ?? root.querySelector<HTMLElement>(`li[${REVIEW_ITEM_PARAGRAPH}="${key}"]`);
 }
+function blocksByPath(markdown: string) {
+  return new Map(projectReviewBlocks(markdown).map(block => [reviewPathKey(block.path), block]));
+}
+
 /** Match the renderer's visible Markdown text, not generated link announcements/icons. */
 function readableText(node: HTMLElement | DocumentFragment): string {
   const copy = node.cloneNode(true) as HTMLElement | DocumentFragment;
   copy.querySelectorAll('.sr-only,[aria-hidden="true"]').forEach(extra => extra.remove());
   return copy.textContent ?? "";
 }
-function leafText(element: HTMLElement): string {
+const WHITESPACE = /[\t\n\r ]/;
+const flowed = (text: string) => text.replace(/[\t\n\r ]+/g, " ");
+/** Text as the block's canonical text has it: code as written, anything else with its whitespace run together. */
+const canonical = (block: CanonicalReviewBlock, text: string) => block.kind === "code" ? text : flowed(text);
+function leafText(element: HTMLElement, block: CanonicalReviewBlock): string {
   const copy = element.cloneNode(true) as HTMLElement;
   if (element.tagName === "LI") copy.querySelectorAll("ul,ol").forEach(list => list.remove());
   const text = readableText(copy);
+  // The renderer ends a code block with a newline the code does not have.
+  if (block.kind === "code") return text.replace(/\n$/, "");
   // ReactMarkdown emits structural newlines around nested tight lists; those
   // are not part of the parent paragraph's canonical text or selection offsets.
-  return element.tagName === "LI" ? text.replace(/[\t\n\r ]+$/, "") : text;
+  return flowed(element.tagName === "LI" ? text.replace(/[\t\n\r ]+$/, "") : text);
 }
-const normalized = (text: string) => text.replace(/[\t\n\r ]+/g, " ");
-/** DOM mapping is proven by complete leaf-block text and occurrence order, never a quote-only search. */
-export function selectedReviewAnchor(root: HTMLElement, markdown: string, selection: Selection | null): ReviewAnchor | null {
-  if (!selection || selection.rangeCount !== 1 || selection.isCollapsed) return null;
-  const range = selection.getRangeAt(0);
-  if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) return null;
-  const leaf = (node: Node): HTMLElement | null => (node.nodeType === Node.ELEMENT_NODE ? node as HTMLElement : node.parentElement)?.closest("p,h1,h2,h3,h4,h5,h6,li") ?? null;
-  const element = leaf(range.startContainer);
-  if (!element || element !== leaf(range.endContainer)) return null;
-  const elements = leafElements(root);
-  const blocks = projectReviewBlocks(markdown).filter(block => block.kind === "paragraph" || block.kind === "heading");
-  // Reject any renderer mismatch anywhere before this block, including injected controls.
-  const index = elements.indexOf(element);
-  if (index < 0 || blocks.length !== elements.length || blocks.some((block, i) => block.selectable && normalized(leafText(elements[i])) !== block.text)) return null;
-  const block = blocks[index];
-  if (!block.selectable) return null;
+
+/**
+ * Why a selection cannot take a comment. `none` is nothing to remark on — nothing selected, or
+ * nothing of the document; the others are a selection of the document that a reader meant.
+ */
+export type ReviewSelectionProblem = "none" | "across" | "long" | "unsupported";
+export type ReviewSelectionReading = { anchor: ReviewAnchor; problem?: undefined } | { anchor?: undefined; problem: ReviewSelectionProblem };
+
+/** What a reader is told when what they selected cannot take a comment. */
+export const REVIEW_SELECTION_HINTS: Record<Exclude<ReviewSelectionProblem, "none">, string> = {
+  across: "Select within one paragraph to comment.",
+  long: `Select ${REVIEW_LIMITS.quote} characters or fewer to comment.`,
+  unsupported: "This passage cannot take a comment.",
+};
+
+/**
+ * A selection ending at the very start of what follows its block — a triple click selects a
+ * paragraph that way — is a selection of that block: ended at the block's end.
+ */
+function withinLeaf(range: Range, element: HTMLElement): Range | null {
+  if (element.contains(range.endContainer)) return range;
+  const beyond = range.cloneRange();
+  beyond.setStartAfter(element);
+  if (beyond.toString().trim()) return null;
+  const clamped = range.cloneRange();
+  clamped.setEnd(element, element.childNodes.length);
+  return clamped;
+}
+
+/** DOM mapping is proven by the whole text of the block the selection is in, never a quote-only search. */
+export function readReviewSelection(root: HTMLElement, markdown: string, selection: Selection | null): ReviewSelectionReading {
+  if (!selection || selection.rangeCount !== 1 || selection.isCollapsed) return { problem: "none" };
+  const chosen = selection.getRangeAt(0);
+  if (!root.contains(chosen.startContainer) || !root.contains(chosen.endContainer) || !chosen.toString().trim()) return { problem: "none" };
+  const element = leafOf(chosen.startContainer);
+  if (!element) return { problem: leafOf(chosen.endContainer) ? "across" : "unsupported" };
+  const range = withinLeaf(chosen, element);
+  if (!range) return { problem: "across" };
+  const block = blocksByPath(markdown).get(pathOf(element) ?? "");
+  if (!block?.selectable || leafText(element, block) !== block.text) return { problem: "unsupported" };
   const before = range.cloneRange(); before.selectNodeContents(element); before.setEnd(range.startContainer, range.startOffset);
   const through = range.cloneRange(); through.selectNodeContents(element); through.setEnd(range.endContainer, range.endOffset);
-  const startUtf16 = normalized(readableText(before.cloneContents())).length;
-  const endUtf16 = normalized(readableText(through.cloneContents())).length;
+  const startUtf16 = canonical(block, readableText(before.cloneContents())).length;
+  const reached = canonical(block, readableText(through.cloneContents())).length;
+  const endUtf16 = Math.min(reached, block.text.length);
   const exact = block.text.slice(startUtf16, endUtf16);
-  if (!exact.trim() || [...exact].length > 512 || exact !== normalized(readableText(range.cloneContents()))) return null;
-  return { schemaVersion: 1, blockPath: block.path, blockKind: block.kind, startUtf16, endUtf16, exact, prefix: [...block.text.slice(0, startUtf16)].slice(-64).join(""), suffix: [...block.text.slice(endUtf16)].slice(0, 64).join("") };
+  const selected = canonical(block, readableText(range.cloneContents()));
+  // Past the block's text there is only what the renderer put after it: a code block's last
+  // newline, a tight item's nested list. The quote is what was selected up to there.
+  if (!exact.trim() || (reached > block.text.length ? !selected.startsWith(exact) : selected !== exact)) return { problem: "unsupported" };
+  if ([...exact].length > REVIEW_LIMITS.quote) return { problem: "long" };
+  const context = REVIEW_LIMITS.context;
+  return { anchor: { schemaVersion: 1, blockPath: block.path, blockKind: block.kind, startUtf16, endUtf16, exact, prefix: [...block.text.slice(0, startUtf16)].slice(-context).join(""), suffix: [...block.text.slice(endUtf16)].slice(0, context).join("") } };
+}
+
+export function selectedReviewAnchor(root: HTMLElement, markdown: string, selection: Selection | null): ReviewAnchor | null {
+  return readReviewSelection(root, markdown, selection).anchor ?? null;
 }
 
 /** Build a proven DOM range from canonical offsets, including collapsed soft whitespace.
  * Tight list text excludes nested lists, matching the AST paragraph leaf. */
 export function createReviewRangeResolver(root: HTMLElement, markdown: string) {
-  const blocks = projectReviewBlocks(markdown).filter(block => block.kind === "paragraph" || block.kind === "heading");
-  const elements = leafElements(root);
-  const byPath = new Map(blocks.map((block, index) => [JSON.stringify(block.path), { block, element: elements[index] }]));
+  const blocks = blocksByPath(markdown);
   return (anchor: ReviewAnchor): Range | null => {
-  const { block, element } = byPath.get(JSON.stringify(anchor.blockPath)) ?? {};
-  if (!element || !block?.selectable || normalized(leafText(element)) !== block.text || block.text.slice(anchor.startUtf16, anchor.endUtf16) !== anchor.exact) return null;
+  const key = reviewPathKey(anchor.blockPath);
+  const block = blocks.get(key), element = leafElement(root, key);
+  if (!element || !block?.selectable || leafText(element, block) !== block.text || block.text.slice(anchor.startUtf16, anchor.endUtf16) !== anchor.exact) return null;
   const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       const extra = node.parentElement?.closest('.sr-only,[aria-hidden="true"]');
@@ -66,17 +120,18 @@ export function createReviewRangeResolver(root: HTMLElement, markdown: string) {
     const node = walker.currentNode as Text;
     for (let offset = 0; offset < node.length; offset++) chars.push({ node, offset, value: node.data[offset] });
   }
+  const collapses = block.kind !== "code";
   const starts: {node: Text; offset: number}[] = [], ends: {node: Text; offset: number}[] = [];
   for (let i = 0; i < chars.length; i++) {
     const first = chars[i];
     starts.push({node:first.node, offset:first.offset});
-    if (/[\t\n\r ]/.test(first.value)) while (i + 1 < chars.length && /[\t\n\r ]/.test(chars[i + 1].value)) i++;
+    if (collapses && WHITESPACE.test(first.value)) while (i + 1 < chars.length && WHITESPACE.test(chars[i + 1].value)) i++;
     ends.push({node:chars[i].node,offset:chars[i].offset+1});
   }
   const begin = starts[anchor.startUtf16], end = ends[anchor.endUtf16-1];
   if (!begin || !end) return null;
   const range = document.createRange(); range.setStart(begin.node,begin.offset);range.setEnd(end.node,end.offset);
-  return normalized(readableText(range.cloneContents())) === anchor.exact ? range : null;
+  return canonical(block, readableText(range.cloneContents())) === anchor.exact ? range : null;
   };
 }
 
@@ -88,7 +143,7 @@ export function reviewAnchorRange(root: HTMLElement, markdown: string, anchor: R
 export function focusReviewAnchor(root: HTMLElement, markdown: string, anchor: ReviewAnchor) {
   const range = reviewAnchorRange(root,markdown,anchor);
   if (!range) return;
-  const element = range.startContainer.parentElement?.closest<HTMLElement>("p,h1,h2,h3,h4,h5,h6,li");
+  const element = leafOf(range.startContainer);
   if (!element) return;
   element.tabIndex = -1; element.focus({ preventScroll: true });
   const selection = window.getSelection(); selection?.removeAllRanges(); selection?.addRange(range);

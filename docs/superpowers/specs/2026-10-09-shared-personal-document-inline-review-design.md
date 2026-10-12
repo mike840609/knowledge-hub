@@ -29,7 +29,7 @@ This is *review and decision discussion*, not Google Docs-style concurrent text 
 | What ships first? | Personal document inline review | Adding System or Module now delays validation and alters information architecture. |
 | Who can read the document? | Anyone with a valid existing share link, without login | Preserve established share-link behavior. |
 | Who can read comments? | Valid link, with or without sign-in; document owner also sees them inside their My Space | The document share grant includes visible discussion history; the Share dialog states this scope. |
-| Who can create threads or reply? | Authenticated user holding a currently valid share link, including the owner | No per-reviewer invitations or new Workspace membership model. |
+| Who can create threads or reply? | Authenticated user holding a currently valid share link, including the owner; *since 2026-10-13 the owner also without a link, through the owner route* | No per-reviewer invitations or new Workspace membership model. |
 | Can reviewers resolve a thread? | No; document owner resolves/reopens | Responsibility for authoritative design stays with the owner; replies to resolved threads require reopening. |
 | Can harmful content be hidden? | Owner can hide a thread or an individual comment, with an audit trail | Sensitive mistakes and spam must not remain visible to link holders. |
 | What owns threads? | The **document ID**, not one link/token | Multiple links and later link rotation share one discussion history. |
@@ -58,7 +58,7 @@ This is *review and decision discussion*, not Google Docs-style concurrent text 
 5. Selecting a highlight focuses its discussion; selecting a discussion scrolls/focuses its text when the anchor still matches. An Outdated thread remains accessible in the side rail.
 6. On narrow screens, the rail is a drawer; keyboard and screen-reader users can invoke **Comment on selection** without requiring pointer hover. A hidden thread disappears from reviewer results; a hidden individual comment is shown as **Comment hidden by document owner** with no original body or quote. Reviewers cannot hide/unhide content.
 
-**Scope of eligible blocks:** headings, paragraphs, list-item text, and blockquote paragraphs, including inline emphasis and inline code. v1 does not allow creating a thread across multiple blocks or on code fences, diagrams, tables, embedded media, or a collapsed/unrendered source range. Those content types remain readable. Explain the selection limitation unobtrusively; never silently attach it to a wrong block.
+**Scope of eligible blocks:** headings, paragraphs, list-item text, and blockquote paragraphs, including inline emphasis and inline code. v1 does not allow creating a thread across multiple blocks or on code fences, diagrams, tables, embedded media, or a collapsed/unrendered source range. Those content types remain readable. Explain the selection limitation unobtrusively; never silently attach it to a wrong block. *Amended 2026-10-13 (`2026-10-13-review-anchors-and-owner-threads-design.md`): a table cell and a fenced code block are eligible; the element a selection is in is tied to its Markdown block by a path written at render, not by position; and the limitation is said in a sentence where the Comment control would be.*
 
 **No live collaboration requirement:** update on refresh or explicit Refresh discussions; optional polling can follow later. No notifications, mentions, assignments, comment editing/deletion, real-time cursors, or decision-record conversion in this release.
 
