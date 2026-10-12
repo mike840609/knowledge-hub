@@ -2,6 +2,7 @@ import {mkdir} from "node:fs/promises";
 import {test,expect} from "./fixtures/test";
 
 test("Home help covers first import, repeat sync and recovery in both languages",async({page,request})=>{
+  await page.setViewportSize({width:1440,height:1100});
   const nav=await (await request.get("/api/workspaces")).json();
   const ws=nav.items.find((w:{type:string})=>w.type==="PERSONAL").id;
   await page.goto(`/w/${ws}/home`);
@@ -11,14 +12,43 @@ test("Home help covers first import, repeat sync and recovery in both languages"
   await page.getByRole("menuitem",{name:"Help & guides",exact:true}).click();
   await expect(page.getByRole("heading",{name:"User guide",exact:true})).toBeVisible();
   await expect(page).toHaveURL(/\/help$/);
+  await expect(page.getByRole("figure")).toHaveCount(6);
+  await expect(page.getByRole("figure",{name:"Diagram · From folder to readable articles"})).toContainText("Choose folder");
   await expect(page.getByRole("heading",{name:"Daily sync: check, preview, apply",exact:true})).toBeAttached();
+  await expect(page.getByRole("link",{name:"Try the sample wiki",exact:true})).toHaveAttribute("href",`/w/${ws}/sources/import#sample-wiki`);
+  await page.getByRole("link",{name:"Read the import preview guide",exact:true}).click();
+  await expect(page).toHaveURL(/\/sources\/import\/guide\?lang=en#import-preview-apply$/);
+  await expect(page.locator("#import-preview-apply")).toBeVisible();
+  await page.goBack();
   await page.getByRole("link",{name:"Troubleshooting",exact:true}).click();
   await expect(page).toHaveURL(/#troubleshooting$/);
+  await expect(page.locator("#troubleshooting-heading")).toBeFocused();
   await expect(page.getByText(/Only an explicit Nothing was changed error/)).toBeVisible();
+  await expect(page.locator("details[open]")).toHaveCount(0);
+  await page.getByText("Disabled Apply, failed checks or expired previews",{exact:true}).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText(/Disabled Apply: follow the message/)).toBeVisible();
   await page.getByRole("link",{name:"繁體中文",exact:true}).click();
   await expect(page.getByRole("heading",{name:"使用者操作手冊",exact:true})).toBeVisible();
   await expect(page.getByRole("heading",{name:"遇到問題時",exact:true})).toBeAttached();
-  await expect(page.getByText(/規則在 Apply 成功後保存到來源/)).toBeAttached();
+  await expect(page.getByRole("figure")).toHaveCount(6);
+  await expect(page.getByRole("figure",{name:"示意圖 · 每次更新都需要 Apply"})).toContainText("不會在背景自動同步");
+  await expect(page.locator("details[open]")).toHaveCount(0);
+  await expect(page.getByText(/規則在 Apply 成功後保存到來源/)).toBeHidden();
+  await page.getByText("排除路徑與檔案改名",{exact:true}).click();
+  await expect(page.getByText(/規則在 Apply 成功後保存到來源/)).toBeVisible();
+  await expect(page.getByRole("link",{name:"選擇來源以設定排除路徑",exact:true})).toHaveAttribute("href",`/w/${ws}/sources`);
+  await page.getByRole("link",{name:"查看 knowledge_id 設定與改名範例",exact:true}).click();
+  await expect(page).toHaveURL(/\/sources\/import\/guide\?lang=zh-TW#keep-in-sync$/);
+  await expect(page.locator("#keep-in-sync pre")).toContainText("knowledge_id: leave-policy");
+  await page.getByRole("link",{name:"日常操作與疑難排解手冊",exact:true}).click();
+  await page.getByRole("link",{name:"試用範例 wiki",exact:true}).click();
+  await expect(page).toHaveURL(/\/sources\/import#sample-wiki$/);
+  await expect(page.getByRole("group",{name:"Try with a sample wiki",exact:true})).toBeVisible();
+  await page.goBack();
+  await page.getByRole("link",{name:"開啟 Sources，選擇要更新的來源",exact:true}).click();
+  await expect(page).toHaveURL(new RegExp(`/w/${ws}/sources$`));
+  await page.goBack();
   await page.getByRole("link",{name:"Markdown 格式、knowledge_id 與匯入限制",exact:true}).click();
   await expect(page).toHaveURL(/\/sources\/import\/guide\?lang=zh-TW$/);
   await page.getByRole("link",{name:"日常操作與疑難排解手冊",exact:true}).click();
@@ -26,7 +56,48 @@ test("Home help covers first import, repeat sync and recovery in both languages"
   const output=process.env.KM_GUIDE_SCREENSHOTS;
   if(output)await mkdir(output,{recursive:true});
   await page.setViewportSize({width:1440,height:1100});if(output)await page.screenshot({path:`${output}/desktop-zh.png`,animations:"disabled"});
+  if(output)await page.screenshot({path:`${output}/desktop-full-zh.png`,fullPage:true,animations:"disabled"});
+  await page.locator("#reading").evaluate(node=>node.scrollIntoView({block:"start"}));
+  const chapterNav=page.getByRole("navigation",{name:"手冊章節",exact:true});
+  await expect(chapterNav).toBeVisible();
+  await expect(chapterNav.getByRole("link",{name:"閱讀與整理",exact:true})).toHaveAttribute("aria-current","location");
+  if(output)await page.screenshot({path:`${output}/desktop-active-zh.png`,animations:"disabled"});
+  const chapterBox=await chapterNav.boundingBox();
+  expect(chapterBox!.y).toBeGreaterThanOrEqual(0);
+  expect(chapterBox!.y).toBeLessThan(100);
+  await page.locator("#sharing-export").evaluate(node=>node.scrollIntoView({block:"end"}));
+  await expect(chapterNav.getByRole("link",{name:"分享與匯出",exact:true})).toHaveAttribute("aria-current","location");
   await page.setViewportSize({width:390,height:844});
+  await page.evaluate(()=>window.scrollTo(0,0));
+  const contents=page.locator("summary").filter({hasText:"本頁章節"});
+  await contents.click();
+  await expect(page.getByRole("link",{name:"閱讀與整理",exact:true})).toBeVisible();
+  await page.getByRole("link",{name:"閱讀與整理",exact:true}).click();
+  await expect(page).toHaveURL(/#reading$/);
+  await expect(page.locator("#reading-heading")).toBeFocused();
+  await expect(contents.locator("..")).not.toHaveAttribute("open");
+  if(output)await page.screenshot({path:`${output}/mobile-selected-zh.png`,animations:"disabled"});
+  await expect(contents.locator("..").getByRole("link",{name:"閱讀與整理",exact:true,includeHidden:true})).toHaveAttribute("aria-current","location");
+  await contents.click();
+  await page.getByRole("link",{name:"開始使用",exact:true}).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#quick-start-heading")).toBeFocused();
+  await expect(contents.locator("..")).not.toHaveAttribute("open");
+  await page.evaluate(()=>window.scrollTo(0,0));
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   if(output)await page.screenshot({path:`${output}/mobile-zh.png`,animations:"disabled"});
+  for(const width of [390,1440]) {
+    await page.setViewportSize({width,height:900});
+    for(const theme of ["light","dark"]) {
+      await page.evaluate(value=>document.documentElement.setAttribute("data-theme",value),theme);
+      for(const id of ["quick-start","sync","troubleshooting","reading","insights","sharing-export"]) {
+        const figure=page.locator(`#${id} figure`);
+        await figure.scrollIntoViewIfNeeded();
+        await expect(figure).toBeVisible();
+        expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+        if(output&&width===1440&&theme==="light")await page.locator(`#${id}`).screenshot({path:`${output}/${id}-section.png`,animations:"disabled"});
+        if(output)await figure.screenshot({path:`${output}/${id}-${width}-${theme}.png`,animations:"disabled"});
+      }
+    }
+  }
 });
