@@ -134,6 +134,7 @@ export default async function KnowledgeDocumentPage({
       : null,
   };
 
+  const viewer = <DocumentViewer view={view} selectedRevision={selectedRevision} links={linkView ? renderedLinksFrom(linkView, createLinks) : undefined} />;
   return (
     <DocumentDetailClient
       breadcrumb={breadcrumb}
@@ -160,8 +161,10 @@ export default async function KnowledgeDocumentPage({
       <div className="kh-reading-column py-6">
         {isHistorical && <RevisionRestore documentId={documentId} href={`/w/${workspaceId}/knowledge/${sourceId}/${documentId}`} historical={selectedRevision} current={view.currentRevision} editable={!sourceManaged && view.status === "ACTIVE" && explorer?.source.status === "ACTIVE"} />}
         {shell?.workspace.type === "PERSONAL" ? <ReadRevisionMarker workspaceId={workspaceId} documentId={documentId} revisionId={selectedRevision.id}/> : null}
-        <DocumentViewer view={view} selectedRevision={selectedRevision} links={linkView ? renderedLinksFrom(linkView, createLinks) : undefined} />
-        {shell?.workspace.type === "PERSONAL" && !isHistorical && <OwnerReviewPanel readOnly={view.status !== "ACTIVE" || explorer?.source.status !== "ACTIVE"} documentId={documentId} revisionId={view.currentRevision.id} markdown={view.currentRevision.markdown} />}
+        {/* The owner's discussions go beside the article they are about, so the panel holds it. */}
+        {shell?.workspace.type === "PERSONAL" && !isHistorical
+          ? <OwnerReviewPanel readOnly={view.status !== "ACTIVE" || explorer?.source.status !== "ACTIVE"} documentId={documentId} revisionId={view.currentRevision.id} markdown={view.currentRevision.markdown}>{viewer}</OwnerReviewPanel>
+          : viewer}
         {linkView ? <BacklinksFooter view={linkView} /> : null}
       </div>
     </DocumentDetailClient>

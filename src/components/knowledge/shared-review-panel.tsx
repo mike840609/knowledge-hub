@@ -10,6 +10,7 @@ import { ReviewReplyForm, ReviewThreadList, reviewRequest } from "./review-threa
 import { ReviewPanelShell } from "./review-panel-shell";
 import { focusReviewAnchor, selectedReviewAnchor } from "./review-selection";
 import { ReviewPassageMarkers } from "./review-passage-markers";
+import { reviewRailInline, useReviewRailInline } from "./review-rail-mode";
 
 type DiscussionResult = { threads: ReviewThreadView[]; revisionId: string; writesEnabled: boolean; callerUserId: string | null };
 export function SharedReviewPanel({ token, revisionId, markdown, children }: { token: string; revisionId: string; markdown: string; children: ReactNode }) {
@@ -20,11 +21,12 @@ export function SharedReviewPanel({ token, revisionId, markdown, children }: { t
   const [hasSelection, setHasSelection] = useState(false);
   const entryRef = useRef<HTMLButtonElement>(null);
   const readingRef = useRef<HTMLDivElement>(null);
+  const inline = useReviewRailInline();
   const changeOpen = useCallback((next: boolean) => {
     setOpen(next);
     if (!next) {
       setActiveThreadId(undefined);
-      if (window.matchMedia("(min-width: 1200px)").matches) entryRef.current?.focus({ preventScroll: true });
+      if (reviewRailInline()) entryRef.current?.focus({ preventScroll: true });
     }
   }, []);
   const revisionChanged = !!result && result.revisionId !== revisionId;
@@ -72,15 +74,15 @@ export function SharedReviewPanel({ token, revisionId, markdown, children }: { t
       {error && <p role="status" className="text-body-sm">{error} <Button type="button" variant="ghost" aria-label="Refresh comments" onClick={() => void load()}><RefreshCw className="size-4" aria-hidden="true" />Retry</Button></p>}
       {revisionChanged && <p role="status" className="text-body-sm">Document changed. Refresh this page before selecting or locating a passage. You can still reply to existing discussions.</p>}
     </div>}
-    <div className="kh-shared-document" data-review-ready={result || error ? "" : undefined} data-review-open={open ? "" : undefined}>
+    <div className="kh-shared-document" data-review-ready={result || error ? "" : undefined} data-review-open={open ? "" : undefined} data-review-inline={inline ? "" : undefined}>
       <div ref={readingRef} className="kh-shared-reading">
         {children}
         <ReviewPassageMarkers readingRef={readingRef} markdown={markdown} threads={revisionChanged ? undefined : result?.threads} />
       </div>
-      <aside id="shared-document-discussions" className="kh-shared-review-panel" aria-label="Document discussions" onKeyDown={event => { if (!event.defaultPrevented && event.key === "Escape" && window.matchMedia("(min-width: 1200px)").matches) changeOpen(false); }}>
-    <ReviewPanelShell open={open} onOpenChange={changeOpen} returnFocus={() => entryRef.current?.focus({ preventScroll: true })}><div>
+      <aside id="shared-document-discussions" className="kh-shared-review-panel" aria-label="Document discussions" onKeyDown={event => { if (!event.defaultPrevented && event.key === "Escape" && reviewRailInline()) changeOpen(false); }}>
+    <ReviewPanelShell open={open} inline={inline} onOpenChange={changeOpen} returnFocus={() => entryRef.current?.focus({ preventScroll: true })}><div>
       <div className="kh-review-toolbar">
-      <div className="mb-3 hidden items-center justify-between min-[1200px]:flex"><h2 className="text-body font-medium">Comments</h2><Tooltip label="Hide discussions"><Button type="button" variant="ghost" icon aria-label="Collapse discussions" onClick={() => changeOpen(false)}><PanelRightClose className="size-4" aria-hidden="true" /></Button></Tooltip></div>
+      <div className="kh-review-rail-heading mb-3 items-center justify-between"><h2 className="text-body font-medium">Comments</h2><Tooltip label="Hide discussions"><Button type="button" variant="ghost" icon aria-label="Collapse discussions" onClick={() => changeOpen(false)}><PanelRightClose className="size-4" aria-hidden="true" /></Button></Tooltip></div>
       {!result && <Tooltip label="Refresh comments"><Button type="button" variant="ghost" icon aria-label="Refresh comments" onClick={() => void load()}><RefreshCw className="size-4" aria-hidden="true" /></Button></Tooltip>}
       {error && <p role="status" className="mt-3 text-body-sm">{error}</p>}
       {result && <div className="mt-3">

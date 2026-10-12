@@ -2,6 +2,7 @@
 
 import { useLayoutEffect, useRef, useState } from "react";
 import type { ReviewThreadView } from "@/modules/knowledge/domain/document-review";
+import { reviewRailInline, watchReviewRail } from "./review-rail-mode";
 import { createReviewRangeResolver } from "./review-selection";
 
 type RailItem = { id: string; top: number | null; height: number };
@@ -61,7 +62,6 @@ export function useReviewRailLayout(threads: ReviewThreadView[], markdown?: stri
       setLayout(previous => previous === undefined ? previous : undefined);
       return;
     }
-    const wide = window.matchMedia("(min-width: 1200px)");
     let frame = 0;
     const cards = Array.from(list.querySelectorAll<HTMLElement>("[data-review-thread]"));
     const resolve = createReviewRangeResolver(article, markdown);
@@ -69,7 +69,7 @@ export function useReviewRailLayout(threads: ReviewThreadView[], markdown?: stri
       thread.currentAnchor.match !== "OUTDATED" && thread.currentAnchor.anchor ? resolve(thread.currentAnchor.anchor) : null,
     ]));
     const measure = () => {
-      if (!wide.matches || !list.getClientRects().length) {
+      if (!reviewRailInline() || !list.getClientRects().length) {
         setLayout(previous => previous === undefined ? previous : undefined);
         return;
       }
@@ -90,16 +90,14 @@ export function useReviewRailLayout(threads: ReviewThreadView[], markdown?: stri
     cards.forEach(card => observer.observe(card));
     // The composer/status/filter above the list can move its origin without resizing a card.
     if (list.parentElement) observer.observe(list.parentElement);
-    window.addEventListener("resize", schedule);
-    wide.addEventListener("change", schedule);
+    const unwatch = watchReviewRail(schedule);
     document.fonts?.addEventListener("loadingdone", schedule);
     measure();
     return () => {
       measureRef.current = null;
       cancelAnimationFrame(frame);
       observer.disconnect();
-      window.removeEventListener("resize", schedule);
-      wide.removeEventListener("change", schedule);
+      unwatch();
       document.fonts?.removeEventListener("loadingdone", schedule);
     };
   }, [threads, markdown, activeId]);
