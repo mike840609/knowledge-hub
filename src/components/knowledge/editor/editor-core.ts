@@ -2,11 +2,12 @@ import { Editor, defaultValueCtx, editorViewCtx, editorViewOptionsCtx, remarkPlu
 import type { Ctx, MilkdownPlugin } from "@milkdown/kit/ctx";
 import { history } from "@milkdown/kit/plugin/history";
 import { listener, listenerCtx } from "@milkdown/kit/plugin/listener";
-import { commonmark, imageSchema } from "@milkdown/kit/preset/commonmark";
+import { commonmark, hardbreakFilterNodes, imageSchema } from "@milkdown/kit/preset/commonmark";
 import { gfm } from "@milkdown/kit/preset/gfm";
 import { Plugin, Selection, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { $ctx, $prose, getMarkdown, replaceAll } from "@milkdown/kit/utils";
+import { configureCellBreakStringify, remarkCellBreaks } from "./table-cell-breaks";
 import { configureWikiLinkStringify, wikiLinkPlugins } from "./wiki-link";
 
 /** The editor could not make a document of this Markdown; the caller should fall back to the source. */
@@ -131,6 +132,22 @@ function exitTrailingCodeBlock(view: EditorView): boolean {
   return true;
 }
 
+/**
+ * Shift+Enter in a table: a line break, always. Milkdown's own command turns a second one at the
+ * end of a paragraph into a new paragraph, which a cell cannot hold — the table comes apart in two.
+ */
+function breakInTable(view: EditorView): boolean {
+  const { state } = view;
+  const { $from } = state.selection;
+  if (!(state.selection instanceof TextSelection)) return false;
+  let inTable = false;
+  for (let depth = $from.depth; depth > 0; depth -= 1) inTable ||= $from.node(depth).type.name === "table";
+  if (!inTable) return false;
+  // The meta is Milkdown's: its plugins filter a break out of a code block and clear the marks it would carry.
+  view.dispatch(state.tr.setMeta("hardbreak", true).replaceSelectionWith(state.schema.nodes.hardbreak.create()).scrollIntoView());
+  return true;
+}
+
 export type EditorOptions = {  root: HTMLElement;
   markdown: string;
   /** Classes for the editable element (the reader's prose classes). */
@@ -209,7 +226,10 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
       // A `[[wikilink]]` is a node here, and has to be written back as it was: both halves are needed, and
       // this is the half that cannot be a plugin (the stringify options are read when the editor is built).
       configureWikiLinkStringify(ctx);
-      ctx.update(remarkPluginsCtx, (previous) => [...previous, { plugin: resolveImageReferences, options: {} }, { plugin: fillNullImageTitles, options: {} }] as typeof previous);
+      configureCellBreakStringify(ctx);
+      // Milkdown also refuses Shift+Enter in a table, where a break could only be written as a space. Here it has a writing.
+      ctx.set(hardbreakFilterNodes.key, ["code_block"]);
+      ctx.update(remarkPluginsCtx, (previous) => [...previous, { plugin: resolveImageReferences, options: {} }, { plugin: fillNullImageTitles, options: {} }, { plugin: remarkCellBreaks, options: {} }] as typeof previous);
       ctx.update(editorViewOptionsCtx, (previous) => ({
         ...previous,
         editable: () => editable,
@@ -217,8 +237,10 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
         // "exit" a code block or table on it, inserting an empty paragraph (written as `<br />`).
         // A direct prop runs before every plugin's keymap; claiming the key stops those, not the bubbling.
         // ArrowDown out of a trailing code block likewise leaves here: nowhere else handles it.
+        // Shift+Enter in a table is taken here too, before Milkdown's command can split the table.
         handleKeyDown: (view, event) => {
           if ((event.metaKey || event.ctrlKey) && event.key === "Enter") return true;
+          if (event.key === "Enter" && event.shiftKey && !event.altKey && !event.isComposing && event.keyCode !== 229 && breakInTable(view)) return true;
           if (
             event.key === "ArrowDown" &&
             !event.metaKey &&
