@@ -283,8 +283,8 @@ test("an outdated discussion's expansion button stays focused until activated", 
   await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
   await openReviewDiscussions(page);
   const card = page.locator("[data-review-thread]").filter({ visible: true });
-  const filter = page.getByRole("button", { name: "Filter discussions" });
-  await filter.focus();
+  // From the last control above the list, Tab reaches the card's button.
+  await page.getByRole("button", { name: "Comment on selection" }).focus();
   await page.keyboard.press("Tab");
   await expect(card.getByRole("button", { name: "Reply", exact: true })).toBeFocused();
   await expect(card).not.toHaveAttribute("aria-current", "true");
@@ -416,4 +416,33 @@ test("the shared page's byline wraps without leaving a separator at the end of a
   });
   // And none of it is written into the text, where it would be read out or left at a line's end.
   expect(await byline.textContent()).not.toContain("·");
+});
+
+test("the shared rail's heading is one row, as the owner's is: its name and filter, then refresh and a cross", async ({ page, request }) => {
+  const doc = await createReviewDocument(request);
+  await seedSimpleThread(request, doc);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
+  await openReviewDiscussions(page);
+  const rail = page.getByRole("complementary", { name: "Document discussions" });
+  const place = async (locator: ReturnType<typeof page.locator>) => { const box = (await locator.boundingBox())!; return { middle: box.y + box.height / 2, left: box.x, bottom: box.y + box.height }; };
+  const heading = await place(rail.locator("h2").filter({ visible: true }));
+  const [filter, refresh, close] = [await place(rail.getByRole("button", { name: "Filter discussions" })), await place(rail.getByRole("button", { name: "Refresh comments" })), await place(rail.getByRole("button", { name: "Collapse discussions" }))];
+  for (const control of [filter, refresh, close]) expect(Math.abs(control.middle - heading.middle)).toBeLessThan(6);
+  const lefts = [heading.left, filter.left, refresh.left, close.left];
+  expect(lefts).toEqual([...lefts].sort((a, b) => a - b));
+  // One refresh, not one per row.
+  await expect(rail.getByRole("button", { name: "Refresh comments" })).toHaveCount(1);
+  // Add comment is the row beneath: the one thing a reader does here that an owner does not.
+  expect((await place(rail.getByRole("button", { name: "Comment on selection" }))).middle).toBeGreaterThan(close.bottom);
+
+  // As a drawer, which names and closes itself, the row is the filter and refresh.
+  await page.getByRole("button", { name: "Collapse discussions" }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openReviewDiscussions(page);
+  const drawer = page.getByRole("dialog", { name: "Comments" });
+  await expect(drawer.getByRole("button", { name: "Collapse discussions" })).toHaveCount(0);
+  await expect(drawer.locator("h2").filter({ hasText: /^Comments$/ }).filter({ visible: true })).toHaveCount(1);
+  const [drawerFilter, drawerRefresh] = [await place(drawer.getByRole("button", { name: "Filter discussions" })), await place(drawer.getByRole("button", { name: "Refresh comments" }))];
+  expect(Math.abs(drawerFilter.middle - drawerRefresh.middle)).toBeLessThan(6);
 });
