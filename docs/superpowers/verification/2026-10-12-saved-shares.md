@@ -16,11 +16,11 @@
 
 | Check | Result |
 | --- | --- |
-| Full unit suite (`npm run test:unit`) | 178 files, 2,137 passed |
-| Full isolated integration suite (`npm run test:integration`) | 79 files, 714 passed |
+| Full unit suite (`npm run test:unit`) | 178 files, 2,138 passed |
+| Full isolated integration suite (`npm run test:integration`) | 79 files, 716 passed |
 | TypeScript (`npm run typecheck`) | Passed |
 | ESLint (`npm run lint`) | Passed after replacing native hidden input with Input |
-| Production build (`npm run build`) | Passed |
+| Production build (`npm run build`; final E2E production builds) | Passed |
 | Saved shares + existing sharing/review Playwright specs | 7 passed |
 | Final screenshot/recipient flow rerun | 1 passed; 16 timezone-aware captures; no horizontal overflow |
 
@@ -73,8 +73,42 @@ PLAYWRIGHT_BROWSERS_PATH=/workspace/.playwright-browsers KM_E2E_BUILD_CACHE=true
    Without it, production Next Request proxies break the native URL getter used
    by the origin validator, resulting in 500 responses instead of working saves.
 
-## Screenshots and review
+6. Added a single-statement snapshot-read port for save validity and metadata.
+   Separate READ COMMITTED reads could otherwise capture a private title published
+   after revocation. The snapshot includes grant inputs and only title/sender
+   metadata; no article body is copied.
 
-Synthetic desktop/mobile light/dark screenshots are in
-`docs/ui-comparisons/saved-shares/`. Whole-branch review and any findings will be
-recorded here before delivery.
+## Final independent review
+
+One fresh-context reviewer examined the whole branch against the agreed spec,
+plan and five review-focus scenarios. It found three Important issues, no
+Critical issues and no deferred Minor issues. All three were addressed in one
+fix pass with reproductions observed failing before the fixes:
+
+- Original saved title/sender stopped matching after a live article was renamed.
+  `search matches saved metadata and currently public metadata after a rename`
+  now passes. Invalid rows still cannot match later private metadata.
+- After another-tab sign-in, the existing Save control stayed signed out.
+  `can save after sign-in completes in another tab without reloading the article`
+  now passes; the explicit mutation rechecks the trusted identity.
+- Revocation plus a private revision between validation and metadata retrieval
+  could persist the private title as a saved snapshot.
+  `never snapshots a private title published between validation and metadata capture`
+  reproduced that leakage and now passes with one consistent snapshot read.
+
+After the complete fix pass: unit 2,138/2,138, integration 716/716, production
+sharing/review E2E 7/7. Typecheck and lint were rerun after the build finished.
+An earlier concurrent typecheck saw TS6053 while the E2E build regenerated
+`.next/types`; sequencing verification resolved it without a product-code change.
+
+The development database was additionally upgraded through the existing additive
+migrations from schema 13 to 19 with `npm run db:migrate`; the applied ledger
+and saved-share table were verified. No documents were deleted or rewritten.
+
+## Screenshots
+
+Sixteen synthetic desktop/mobile light/dark screenshots are in
+`docs/ui-comparisons/saved-shares/`. Browser timestamps use Asia/Taipei; all
+captures include a no-horizontal-overflow assertion. Public reader Save/Saved,
+My shares and Saved shares were captured. The synthetic databases were disposed
+by the test runner; screenshots contain no real content or active real grants.

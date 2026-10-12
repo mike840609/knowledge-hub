@@ -25,18 +25,11 @@ export class SavedShareService {
     if (!isShareToken(token)) throw new ShareLinkNotFoundError();
     return this.unitOfWork.run(async r => {
       await syncCallerIdentity(r.users,caller);
-      const workspaceId = await this.personal(r,caller), now = this.clock();
-      const link = await r.shareLinks.findByToken(token);
-      if (!link) throw new ShareLinkNotFoundError();
-      const document = await r.documents.findById(link.documentId);
-      const source = document ? await r.sourcePolicy.findById(document.sourceId) : null;
-      const workspace = source ? await r.workspaces.findById(source.workspaceId) : null;
-      if (!document || !source || !workspace) throw new ShareLinkNotFoundError();
-      const membership = await r.workspaceMemberships.find(workspace.id,link.createdBy);
-      if (!evaluateShareLinkValidity({ link, documentStatus:document.status,sourceStatus:source.status,workspaceLifecycle:workspace.lifecycleState,creatorDirectRole:membership ? membership.role ?? null : undefined,now }).valid) throw new ShareLinkNotFoundError();
-      const revision = await r.revisions.findCurrent(document.id), creator = await r.users.findById(link.createdBy);
-      if (!revision || !creator) throw new IntegrityViolationError("Share metadata is unavailable.");
-      const record = await r.savedShares.save({ id:uuidv7(),userId:caller.identity.id,shareLinkId:link.id,savedTitle:revision.title,savedSharedByName:creator.name,savedExpiresAt:link.expiresAt,savedAt:now,updatedAt:now,removedAt:null });
+      const workspaceId = await this.personal(r,caller);
+      const snapshot=await r.savedShares.findSnapshotByToken(token),now=this.clock();
+      if(!snapshot||!evaluateShareLinkValidity({link:snapshot.link,...snapshot.validity,now}).valid)throw new ShareLinkNotFoundError();
+      if(snapshot.title===null||snapshot.sharedByName===null)throw new IntegrityViolationError("Share metadata is unavailable.");
+      const record=await r.savedShares.save({id:uuidv7(),userId:caller.identity.id,shareLinkId:snapshot.link.id,savedTitle:snapshot.title,savedSharedByName:snapshot.sharedByName,savedExpiresAt:snapshot.link.expiresAt,savedAt:now,updatedAt:now,removedAt:null});
       return { saved:true,id:record.id,workspaceId };
     });
   }

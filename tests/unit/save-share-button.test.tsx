@@ -45,3 +45,7 @@ it("ignores delayed auth error parsing from a previous article",async()=>{
  vi.stubGlobal("fetch",async(url:string,init?:RequestInit)=>url.includes("token=old")?old:Response.json(init?.method==="POST"?{...state,saved:true,id:"new-record"}:state));
  await mount("old");await mount("new");await act(async()=>finish({error:{code:"AUTH_UNAVAILABLE"}}));await click("Save share");expect(host.textContent).toContain("Saved to Shares");
 });
+it("can save after sign-in completes in another tab without reloading the article",async()=>{
+ let signedIn=false;vi.stubGlobal("fetch",async(_url:string,init?:RequestInit)=>signedIn?Response.json(init?.method==="POST"?{...state,saved:true,id:"record"}:state):Response.json({error:{code:"AUTH_REQUIRED"}},{status:401}));
+ await mount();await click("Save share");expect(host.textContent).toContain("Sign in to save");signedIn=true;await click("Save share");expect(host.textContent).toContain("Saved to Shares");
+});

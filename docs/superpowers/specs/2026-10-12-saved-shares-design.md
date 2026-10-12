@@ -117,6 +117,10 @@ Add a saved-share port, MariaDB adapter, and application service through the
 existing unit-of-work/composition patterns. Every public service entry takes a
 required `CallerContext`. Save validates a live token with the same domain rule
 as the public reader, but does not call the caller-less reader or count a view.
+Validity inputs, current public title, and sender name must be captured by one
+consistent SQL read; separate reads under READ COMMITTED could snapshot a title
+published privately after revocation. Save evaluates the captured grant and
+persists only metadata from that same view.
 List checks link validity without serving Markdown or counting views. Batch
 load candidate validity/public metadata for bounded pages to avoid one complete
 public read per saved row. Keep the shared validity logic consistent; introduce

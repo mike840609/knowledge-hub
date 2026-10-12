@@ -1,7 +1,15 @@
+import type { DocumentShareLink } from "./document-share-link";
+import type { WorkspaceRole } from "@/modules/workspaces/domain/workspace-membership";
 import { ValidationError } from "./errors";
 export const SAVED_SHARE_PAGE_SIZE = 50;
 export type SavedShareInput = { q?: string; status?: string; page?: string };
 export type SavedShareQuery = { q: string; status: "all" | "available" | "unavailable"; page: number };
+/** Validity inputs and public metadata captured by one consistent read. */
+export type SavedShareSnapshot = {
+  link: DocumentShareLink;
+  validity: { documentStatus: "ACTIVE" | "ARCHIVED"; sourceStatus: "ACTIVE" | "ARCHIVED"; workspaceLifecycle: "ACTIVE" | "ARCHIVED" | null; creatorDirectRole: WorkspaceRole | null | undefined };
+  title: string | null; sharedByName: string | null;
+};
 export type SavedShareRecord = { id: string; userId: string; shareLinkId: string; savedTitle: string; savedSharedByName: string; savedExpiresAt: Date; savedAt: Date; updatedAt: Date; removedAt: Date | null };
 export type SavedShareView = { id: string; title: string; sharedByName: string; savedAt: Date; expiresAt: Date; updatedAt: Date | null; status: "available" | "expired" | "unavailable"; path: string | null };
 export type SavedShareState = { saved: boolean; id: string | null; workspaceId: string };

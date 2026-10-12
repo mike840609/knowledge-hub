@@ -105,3 +105,24 @@ it("paginates stably, searches literal characters and hides invalid tokens", asy
   expect(new Set([...first.items,...second.items].map(x => x.id)).size).toBe(52);
   await expect(reader.saved.save(reader.caller, "not-a-token")).rejects.toMatchObject({ code: "SHARE_LINK_NOT_FOUND" });
 });
+it("search matches saved metadata and currently public metadata after a rename",async()=>{
+ const owner=await fixture(),reader=await fixture();await reader.saved.save(reader.caller,owner.token);
+ const current=await owner.uow.run(r=>r.revisions.findCurrent(owner.documentId));
+ await new HubKnowledgeCommandServiceImpl(owner.uow).createRevision(owner.caller,{documentId:owner.documentId,expectedCurrentRevisionId:current!.id,title:"New public title",markdown:"updated body",metadata:{}});
+ await owner.uow.run(r=>r.users.upsertIdentity({...owner.caller.identity,name:"Updated sender"}));
+ for(const q of ["Saved %_! guide","Saved Owner","New public title","Updated sender"]){
+  const list=await reader.saved.list(reader.caller,reader.workspace.id,{q});expect(list.items).toHaveLength(1);expect(list.items[0]).toMatchObject({title:"New public title",sharedByName:"Updated sender"});
+ }
+});
+it("never snapshots a private title published between validation and metadata capture",async()=>{
+ const owner=await fixture(),reader=await fixture();
+ const current=await owner.uow.run(r=>r.revisions.findCurrent(owner.documentId));let mutated=false;
+ async function revokeAndEdit(){if(mutated)return;mutated=true;await owner.shares.revoke(owner.caller,owner.link.id);await new HubKnowledgeCommandServiceImpl(owner.uow).createRevision(owner.caller,{documentId:owner.documentId,expectedCurrentRevisionId:current!.id,title:"Private after revoke",markdown:"private revised body",metadata:{}});}
+ const raced=new SavedShareService({run:work=>reader.uow.run(r=>work({...r,
+  revisions:new Proxy(r.revisions,{get(target,key){const value=Reflect.get(target,key);if(key==="findCurrent")return async(id:string)=>{await revokeAndEdit();return target.findCurrent(id);};return typeof value==="function"?value.bind(target):value;}}),
+  savedShares:new Proxy(r.savedShares,{get(target,key){const value=Reflect.get(target,key);if(key==="findSnapshotByToken"&&typeof value==="function")return async(token:string)=>{const snapshot=await value.call(target,token);await revokeAndEdit();return snapshot;};return typeof value==="function"?value.bind(target):value;}}),
+ }))},()=>owner.now);
+ await raced.save(reader.caller,owner.token);expect(mutated).toBe(true);
+ const list=await reader.saved.list(reader.caller,reader.workspace.id,{});expect(list.items[0]).toMatchObject({title:"Saved %_! guide",status:"unavailable",path:null});
+ expect((await reader.saved.list(reader.caller,reader.workspace.id,{q:"Private after revoke"})).items).toHaveLength(0);
+});

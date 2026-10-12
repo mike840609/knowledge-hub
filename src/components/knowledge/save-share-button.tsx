@@ -31,18 +31,18 @@ export function SaveShareButton({ token }: { token: string }) {
   },[load,retry]);
   async function toggle(){
     if(busy.current)return;
-    if(loadState==="signed-out"){setNotice("Sign in to save this share, then return here to save it.");return;}
-    if(loadState==="auth-unavailable"){setNotice("Sign-in is unavailable right now. Try again later.");return;}
-    if(loadState!=="ready"||!result)return;
+    if(loadState==="loading"||loadState==="error")return;
+    // Recheck authentication through the mutation: a sign-in may have completed in another tab.
+    const previous=result, removing=!!previous?.saved;
     busy.current=true;setPending(true);setNotice("");const version=generation.current;
     try{
-      const response=await fetch(result.saved?`/api/saved-shares/${result.id}`:"/api/saved-shares",{method:result.saved?"DELETE":"POST",headers:{"Content-Type":"application/json"},...(result.saved?{}:{body:JSON.stringify({token})})});
+      const response=await fetch(removing?`/api/saved-shares/${previous!.id}`:"/api/saved-shares",{method:removing?"DELETE":"POST",headers:{"Content-Type":"application/json"},...(removing?{}:{body:JSON.stringify({token})})});
       if(version!==generation.current)return;
       if(response.status===401){setLoadState("signed-out");setNotice("Sign in to save this share, then return here to save it.");return;}
       if(!response.ok){const body=await response.json().catch(()=>null);if(version!==generation.current)return;if(body?.error?.code==="AUTH_UNAVAILABLE"){setLoadState("auth-unavailable");setNotice("Sign-in is unavailable right now.");return;}throw new Error();}
-      if(result.saved){setResult({...result,saved:false,id:null});setNotice("Removed from saved shares.");}
-      else {const saved=await response.json() as SavedShareState;if(version===generation.current){setResult(saved);setNotice("Saved to Shares.");}}
-    }catch{if(version===generation.current)setNotice(result.saved?"Could not remove this saved share. Try again.":"Could not save this share. Try again.");}
+      if(removing){setResult({...previous!,saved:false,id:null});setLoadState("ready");setNotice("Removed from saved shares.");}
+      else {const saved=await response.json() as SavedShareState;if(version===generation.current){setResult(saved);setLoadState("ready");setNotice("Saved to Shares.");}}
+    }catch{if(version===generation.current)setNotice(removing?"Could not remove this saved share. Try again.":"Could not save this share. Try again.");}
     finally{if(version===generation.current){busy.current=false;setPending(false);}}
   }
   const saved=!!result?.saved;
