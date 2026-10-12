@@ -51,6 +51,16 @@ describe("extractOutline", () => {
     expect(outline.map((entry) => entry.slug)).toEqual(["use-npm-ci-now", "a-gone-link"]);
   });
 
+  it("reads a <br> in a heading as a space and a comment as nothing", () => {
+    const outline = extractOutline(doc("## First<br>line <!-- note -->", "", "## Second<br />", "", "## A <u>b</u>"));
+    expect(outline.map(({ slug, text }) => [slug, text])).toEqual([
+      ["first-line", "First line"],
+      ["second", "Second"],
+      // Any other HTML is text on the page, so it is text here.
+      [outline[2].slug, "A <u>b</u>"],
+    ]);
+  });
+
   it("caps a very long outline", () => {
     const many = Array.from({ length: 300 }, (_, index) => `## Heading ${index}`).join("\n\n");
     expect(extractOutline(many)).toHaveLength(200);

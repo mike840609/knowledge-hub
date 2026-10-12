@@ -1,8 +1,9 @@
-import type { Heading, Root } from "mdast";
+import type { Heading, Nodes, Root } from "mdast";
 import { toString } from "mdast-util-to-string";
 import { visit } from "unist-util-visit";
 import { HeadingSlugger } from "./heading-slug";
 import { parseMarkdown } from "./parse";
+import { htmlAsText } from "./remark-known-html";
 
 export type OutlineEntry = {
   /** The heading's `id` in the rendered page, and the fragment that reaches it. */
@@ -23,6 +24,12 @@ export const OUTLINE_MAX_ENTRIES = 200;
 /** One heading is the page's title, not a table of contents. */
 export const OUTLINE_MIN_ENTRIES = 2;
 
+/** A heading's text as the page shows it: `toString`, but with the HTML the reader understands read as it renders. */
+function shownText(node: Nodes): string {
+  if (node.type === "html") return htmlAsText(node.value);
+  return "children" in node ? node.children.map(shownText).join("") : toString(node);
+}
+
 /**
  * Every heading of the tree in reading order, each with the slug it will be
  * given. This is the only place slugs are assigned: the renderer stamps them
@@ -33,7 +40,7 @@ export function collectHeadings(tree: Root): HeadingRecord[] {
   const slugger = new HeadingSlugger();
   const headings: HeadingRecord[] = [];
   visit(tree, "heading", (node) => {
-    const text = toString(node).trim();
+    const text = shownText(node).trim();
     headings.push({ node, slug: slugger.slug(text), text, depth: node.depth });
   });
   return headings;

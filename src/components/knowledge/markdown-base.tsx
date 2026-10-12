@@ -8,6 +8,7 @@ import { parseDocumentHref } from "@/modules/knowledge/domain/document-links";
 import { linkLookupKey } from "@/modules/knowledge/domain/link-graph";
 import { headingSlug } from "@/shared/markdown/heading-slug";
 import { remarkHeadingIds } from "@/shared/markdown/remark-heading-ids";
+import { remarkKnownHtml } from "@/shared/markdown/remark-known-html";
 import { MarkdownImage } from "./markdown-image";
 import { MARKDOWN_PROSE } from "./markdown-prose";
 import type { RenderedLinks } from "./rendered-links";
@@ -136,6 +137,8 @@ function MarkdownAnchor({ links, ...props }: AnchorProps & { links?: RenderedLin
 
 function MarkdownLink(props: DetailedHTMLProps<AnchorHTMLAttributes<HTMLAnchorElement>, HTMLAnchorElement>) {
   const { href, children, ...rest } = props;
+  // react-markdown hands every component its syntax node; spread on, it is a `node="[object Object]"` attribute.
+  delete (rest as { node?: unknown }).node;
   if (href && isExternalHref(href)) {
     return (
       <a
@@ -216,7 +219,7 @@ export function MarkdownBase({
   return (
     <div className={MARKDOWN_PROSE}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkHeadingIds, remarkKnowledgeLinks]}
+        remarkPlugins={[remarkGfm, remarkHeadingIds, remarkKnowledgeLinks, remarkKnownHtml]}
         rehypePlugins={rehypePlugins}
         components={{
           a: (props: AnchorProps) => <MarkdownAnchor {...props} links={links} />,

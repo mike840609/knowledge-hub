@@ -23,6 +23,7 @@ describe("heading ids in the rendered document", () => {
     "inline code and emphasis": "## Use `npm ci` **now**\n\n## _Emphasis_ first\n",
     "setext headings": "Title\n=====\n\nSub\n---\n\ntext\n",
     "heading inside a blockquote and a list": "> ## Quoted\n\n- item\n\n  ## Nested\n\n## Top\n",
+    "a line break and a comment in a heading": "## First<br>line <!-- note -->\n\n## Second<br />\n",
     "suffix collision": "## Setup\n\n## Setup\n\n## Setup 1\n\n## Setup\n",
   };
 
