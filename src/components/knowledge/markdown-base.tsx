@@ -9,6 +9,7 @@ import { linkLookupKey } from "@/modules/knowledge/domain/link-graph";
 import { headingSlug } from "@/shared/markdown/heading-slug";
 import { remarkHeadingIds } from "@/shared/markdown/remark-heading-ids";
 import { remarkKnownHtml } from "@/shared/markdown/remark-known-html";
+import { MarkdownQuote } from "./markdown-callout";
 import { MarkdownImage } from "./markdown-image";
 import { MARKDOWN_PROSE } from "./markdown-prose";
 import type { RenderedLinks } from "./rendered-links";
@@ -207,11 +208,14 @@ export function ScrollablePre({ children, action }: { children?: ReactNode; acti
 export function MarkdownBase({
   markdown,
   links,
+  remarkPlugins = [],
   rehypePlugins,
   pre = ScrollablePre,
 }: {
   markdown: string;
   links?: RenderedLinks;
+  /** Run after this file's own: what the reader shows and the editor does not (callouts). */
+  remarkPlugins?: PluggableList;
   rehypePlugins?: PluggableList;
   /** How a code block is drawn; `ScrollablePre` unless the caller has more to put in it. */
   pre?: ComponentType<{ children?: ReactNode }>;
@@ -219,7 +223,7 @@ export function MarkdownBase({
   return (
     <div className={MARKDOWN_PROSE}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkHeadingIds, remarkKnowledgeLinks, remarkKnownHtml]}
+        remarkPlugins={[remarkGfm, remarkHeadingIds, remarkKnowledgeLinks, remarkKnownHtml, ...remarkPlugins]}
         rehypePlugins={rehypePlugins}
         components={{
           a: (props: AnchorProps) => <MarkdownAnchor {...props} links={links} />,
@@ -234,6 +238,7 @@ export function MarkdownBase({
             <MarkdownImage src={typeof src === "string" ? src : undefined} alt={alt} />
           ),
           table: ResponsiveTable,
+          blockquote: MarkdownQuote,
           pre,
         }}
       >
