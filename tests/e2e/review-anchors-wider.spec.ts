@@ -47,7 +47,7 @@ const MIXED = [
   "[^1]: The note",
 ].join("\n");
 
-test("a reader comments on a paragraph, a table cell and code, in a document with a callout, a task and a footnote", async ({ page, request }) => {
+test("a reader comments on a paragraph, a table cell, code, a callout and a task, in a document that also has a footnote", async ({ page, request }) => {
   const doc = await createReviewDocument(request, MIXED);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
@@ -68,16 +68,32 @@ test("a reader comments on a paragraph, a table cell and code, in a document wit
   await comment(page, "On the code");
   expect((await code).postDataJSON().anchor).toMatchObject({ blockKind: "code", exact: "total = 1;\nconst next" });
 
+  // A callout's opening, whose Markdown starts with a marker the page does not show.
+  const callout = page.waitForRequest(sent => sent.url().endsWith("/api/share-review/threads") && sent.method() === "POST");
+  await selectText(page, "[data-callout] p", "Heads");
+  await comment(page, "On the callout");
+  expect((await callout).postDataJSON().anchor).toMatchObject({ blockKind: "paragraph", exact: "Heads", prefix: "[!NOTE] ", startUtf16: 8 });
+
+  // A task, which the page opens with a box.
+  const task = page.waitForRequest(sent => sent.url().endsWith("/api/share-review/threads") && sent.method() === "POST");
+  await selectText(page, "li", "a task");
+  await comment(page, "On the task");
+  expect((await task).postDataJSON().anchor).toMatchObject({ exact: "a task", startUtf16: 0 });
+
   // Each has its mark beside the article, and is found again from its card — after a reload too.
-  await expect(page.locator("[data-review-marker]")).toHaveCount(3);
+  await expect(page.locator("[data-review-marker]")).toHaveCount(5);
   await page.reload();
   await openReviewDiscussions(page);
-  await expect(page.locator("[data-review-marker]")).toHaveCount(3);
+  await expect(page.locator("[data-review-marker]")).toHaveCount(5);
   const quote = (text: string) => page.locator("[data-review-thread]").filter({ visible: true }).filter({ hasText: text }).locator("blockquote button");
   await quote("On the code").click();
   await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe("total = 1;\nconst next");
   await quote("On the cell").click();
   await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe("Owner");
+  await quote("On the callout").click();
+  await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe("Heads");
+  await quote("On the task").click();
+  await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe("a task");
 });
 
 test("a selection that cannot take a comment says why, where the button would have been", async ({ page, request }) => {

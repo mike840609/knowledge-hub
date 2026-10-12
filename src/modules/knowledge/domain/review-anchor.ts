@@ -1,8 +1,11 @@
 import type { Nodes } from "mdast";
 import { parseMarkdown } from "@/shared/markdown/parse";
+import { calloutMarker } from "@/shared/markdown/remark-callouts";
 import { ValidationError } from "./errors";
 import { copyReviewAnchor, REVIEW_LIMITS, type ReviewAnchor, type CurrentAnchorProjection } from "./document-review";
-export type CanonicalReviewBlock = { path:number[]; kind:ReviewAnchor["blockKind"]; text:string; selectable:boolean };
+export type CanonicalReviewBlock = { path:number[]; kind:ReviewAnchor["blockKind"]; text:string; selectable:boolean;
+  /** How much of the start of `text` the reader does not show: a callout's marker. No passage reaches into it. */
+  hidden:number };
 const kinds = new Set(["heading","paragraph","listItem","blockquote","tableCell","code"]);
 // What a passage can be chosen in: a block that holds text and no other block.
 const leaves = new Set(["heading","paragraph","tableCell"]);
@@ -27,16 +30,19 @@ function safeInline(node:Nodes):boolean {
 }
 export function projectReviewBlocks(markdown:string):CanonicalReviewBlock[] {
  const result:CanonicalReviewBlock[]=[];
- function walk(node:Nodes,path:number[]) {
+ function walk(node:Nodes,path:number[],hidden=0) {
    if(kinds.has(node.type)) {
      const code=node.type==="code";
      const text=code?node.value:textOf(node).replace(/\r\n?/g,"\n").replace(/[\t\n\r ]+/g," ");
      // Container blocks are deliberately unselectable: their nested leaf blocks
      // receive paths separately, preventing overlapping DOM anchor candidates.
      const selectable=code || (leaves.has(node.type) && "children" in node && node.children.every(n=>safeInline(n as Nodes)) && !/\[\[/.test(text));
-     result.push({path,kind:node.type as ReviewAnchor["blockKind"],text,selectable});
+     result.push({path,kind:node.type as ReviewAnchor["blockKind"],text,selectable,hidden});
    }
-   if("children" in node) node.children.forEach((n,i)=>walk(n as Nodes,[...path,i]));
+   // A callout's marker is in its opening paragraph's text and not on the page; the marker's line
+   // break is, like any other, one space of that text.
+   const marker=node.type==="blockquote"?calloutMarker(node)?.text.replace(/[\t\n\r ]+/g," ").length??0:0;
+   if("children" in node) node.children.forEach((n,i)=>walk(n as Nodes,[...path,i],i===0?marker:0));
  }
  walk(parseMarkdown(markdown),[]);return result;
 }
@@ -53,7 +59,7 @@ export function validateReviewAnchor(markdown:string,anchor:ReviewAnchor):Review
 function validateAnchorInBlocks(blocks:CanonicalReviewBlock[],anchor:ReviewAnchor):ReviewAnchor {
  if(!validShape(anchor)) throw new ValidationError("Invalid review anchor.");
  const block=blocks.find(b=>JSON.stringify(b.path)===JSON.stringify(anchor.blockPath));
- if(!block?.selectable || block.kind!==anchor.blockKind || anchor.endUtf16>block.text.length || block.text.slice(anchor.startUtf16,anchor.endUtf16)!==anchor.exact) throw new ValidationError("Selection does not match current document.");
+ if(!block?.selectable || block.kind!==anchor.blockKind || anchor.startUtf16<block.hidden || anchor.endUtf16>block.text.length || block.text.slice(anchor.startUtf16,anchor.endUtf16)!==anchor.exact) throw new ValidationError("Selection does not match current document.");
  const context=contexts(block.text,anchor.startUtf16,anchor.endUtf16);
  if(context.prefix!==anchor.prefix||context.suffix!==anchor.suffix) throw new ValidationError("Selection context does not match current document.");
  // Reject offsets through half of a surrogate pair.
@@ -77,7 +83,7 @@ export function createReviewAnchorRelocator(markdown:string) {
    // Relocate only within the original structural neighborhood. A quote that
    // disappeared here and happens to survive in a distant section is unsafe.
    if(Math.abs(block.path[0]-original.blockPath[0])>8 || block.path.length!==original.blockPath.length || block.path.slice(1,-1).some((part,i)=>part!==original.blockPath[i+1])) continue;
-   let pos=block.text.indexOf(original.exact);
+   let pos=block.text.indexOf(original.exact,block.hidden);
    while(pos>=0) {
      const end=pos+original.exact.length,context=contexts(block.text,pos,end);
      if(context.prefix===original.prefix&&context.suffix===original.suffix) candidates.push({...copyReviewAnchor(original),blockPath:block.path,startUtf16:pos,endUtf16:end,...context});

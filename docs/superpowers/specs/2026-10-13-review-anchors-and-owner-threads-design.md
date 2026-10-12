@@ -17,8 +17,8 @@ be attached to. Four changes, chosen from five proposed:
    one of its links.
 4. **A table cell and a fenced code block can be commented on.**
 
-Not asked for, and not done: the text *inside* a callout's opening paragraph, a
-task item or a footnote definition is still not selectable (§5).
+The fifth, asked for the same day and added here as §3a: the opening paragraph
+of a callout and the text of a task can be commented on.
 
 ## 1. Which block a selection is in
 
@@ -88,6 +88,29 @@ never produced and no stored anchor changes meaning. No migration.
 
 A quote from code is shown in the monospace face with its line breaks kept.
 
+## 3a. A callout's opening paragraph, and a task
+
+Both failed the whole-text proof, for opposite reasons.
+
+- **A callout.** The Markdown paragraph's text is `[!NOTE] Heads up`; the page
+  shows `Heads up`. The marker is real text of the block, so offsets keep
+  counting it — an anchor's place is a place in the Markdown, and the stored
+  format does not change. What changes is that the projection now says how much
+  of a block's start is not shown (`hidden`, the marker and its line break as one
+  space; `0` everywhere else), worked out by the same function the reader uses to
+  take the marker out (`calloutMarker` in `remark-callouts.ts`), so the two cannot
+  disagree about what a marker is. The page proves the block by the text after
+  `hidden`. **The server refuses an anchor that starts inside it**, and relocation
+  does not look there: the reader is never shown the marker, so no one can have
+  selected it.
+- **A task.** The Markdown parser already takes `[ ]` out of the paragraph's text;
+  the page then puts a box and a space before it. A block's text never starts
+  with a space (code aside), so the page drops one leading gap when reading any
+  non-code block. The proof is still the whole text.
+
+A marker followed by a hard line break leaves a paragraph with a break in it,
+which was and stays unselectable.
+
 ## 4. The owner starts a discussion
 
 `POST /api/documents/:documentId/review-threads`, beside the owner's existing
@@ -114,9 +137,9 @@ rail. A document with no discussion and no selection still shows nothing.
 
 ## 5. Limits that remain
 
-- A paragraph containing a wikilink or a footnote reference, a callout's opening
-  paragraph, a task item's text, a footnote definition, an image and
-  raw-HTML text still cannot be commented on. They now say so (§2).
+- A paragraph containing a wikilink, a footnote reference or a hard line break,
+  a footnote definition, an image and raw-HTML text still cannot be commented
+  on. They now say so (§2).
 - One block per comment.
 - The document header is pinned only in a wide pane; in a narrow one the owner's
   control scrolls away with it. The rail's "Add comment" row is the other way in.

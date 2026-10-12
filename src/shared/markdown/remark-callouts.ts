@@ -1,4 +1,4 @@
-import type { Root } from "mdast";
+import type { Blockquote, Paragraph, Root, Text } from "mdast";
 import type {} from "mdast-util-to-hast";
 import { visit } from "unist-util-visit";
 
@@ -19,6 +19,22 @@ export function calloutKind(line: string): CalloutKind | null {
 }
 
 /**
+ * The marker a quote opens with, when it is one: its kind, and the text of it that is taken out of
+ * what is shown. A marker is `[!NOTE]` (or another kind) alone on the quote's first line.
+ */
+export function calloutMarker(quote: Blockquote): { kind: CalloutKind; text: string } | null {
+  const paragraph = quote.children[0];
+  const first = paragraph?.type === "paragraph" ? paragraph.children[0] : undefined;
+  if (paragraph?.type !== "paragraph" || first?.type !== "text") return null;
+  const match = MARKER.exec(first.value);
+  if (!match) return null;
+  // The text ran out with the marker: what follows in the paragraph is on the same line unless it is a break.
+  const next = paragraph.children[1];
+  if (!match[0].endsWith("\n") && next && next.type !== "break") return null;
+  return { kind: match[1].toLowerCase() as CalloutKind, text: match[0] };
+}
+
+/**
  * Marks a quote that opens with `[!NOTE]` (or `TIP`, `IMPORTANT`, `WARNING`, `CAUTION`) alone on
  * its first line as a callout of that kind, and takes the marker out of what is shown. How it is
  * drawn is the renderer's (`markdown-callout.tsx`).
@@ -30,20 +46,13 @@ export function calloutKind(line: string): CalloutKind | null {
 export function remarkCallouts() {
   return (tree: Root) => {
     visit(tree, "blockquote", (quote) => {
-      const paragraph = quote.children[0];
-      const first = paragraph?.type === "paragraph" ? paragraph.children[0] : undefined;
-      if (paragraph?.type !== "paragraph" || first?.type !== "text") return;
-      const match = MARKER.exec(first.value);
-      if (!match) return;
-      // The text ran out with the marker: what follows in the paragraph is on the same line unless it is a break.
-      const lineEnded = match[0].endsWith("\n");
-      const next = paragraph.children[1];
-      if (!lineEnded && next && next.type !== "break") return;
-
-      first.value = first.value.slice(match[0].length);
-      if (first.value === "") paragraph.children.splice(0, lineEnded ? 1 : 2);
+      const marker = calloutMarker(quote);
+      if (!marker) return;
+      const paragraph = quote.children[0] as Paragraph, first = paragraph.children[0] as Text;
+      first.value = first.value.slice(marker.text.length);
+      if (first.value === "") paragraph.children.splice(0, marker.text.endsWith("\n") ? 1 : 2);
       if (paragraph.children.length === 0) quote.children.shift();
-      quote.data = { ...quote.data, hProperties: { ...quote.data?.hProperties, [CALLOUT_ATTRIBUTE]: match[1].toLowerCase() } };
+      quote.data = { ...quote.data, hProperties: { ...quote.data?.hProperties, [CALLOUT_ATTRIBUTE]: marker.kind } };
     });
   };
 }
