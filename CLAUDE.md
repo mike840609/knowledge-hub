@@ -143,8 +143,9 @@ pass.
   `remark-known-html.ts` or `remark-html-subset.ts` recognises it exactly and
   constructs the element itself: `<br>`, comments, and seven bare tags
   (`docs/superpowers/specs/2026-10-12-reader-html-subset-design.md`). Nothing the
-  author wrote is emitted as markup, and no Content-Security-Policy stands behind
-  the reader, shared pages included. Do not add `rehype-raw`, a sanitiser, or
+  author wrote is emitted as markup. The Content-Security-Policy (`next.config.ts`)
+  restricts images and framing only — it has no `script-src` — so it would not
+  stop markup that got through, on shared pages either. Do not add `rehype-raw`, a sanitiser, or
   `dangerouslySetInnerHTML` on document content to "support more HTML"; add an
   exact pattern, and its hostile cases to
   `tests/unit/markdown-renderer-html-subset.test.tsx`.

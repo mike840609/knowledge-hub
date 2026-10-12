@@ -33,7 +33,9 @@ reasons that come from this product rather than from taste.
    subtracts; its schema would also have to admit everything the pipeline
    already emits (wikilink attributes, heading ids, callouts, footnotes, table
    alignment). A mistake in it either breaks one of those or opens a hole.
-   There is no Content-Security-Policy behind the reader to catch the second.
+   The Content-Security-Policy would not catch the second: it is
+   `img-src 'self'`, plus `frame-ancestors 'none'` on shared pages
+   (`next.config.ts`), and has no `script-src`.
 
 So the plugin recognises and constructs. It matches an `html` node against a
 handful of exact patterns and, on a match, makes the element itself. No
@@ -144,7 +146,8 @@ No dependency is added.
 invariants. Adding a tag means adding an exact pattern and a constructed
 element here, with its cases in the test file. Adding `rehype-raw`, or
 `dangerouslySetInnerHTML` on document content, is a different design and needs
-a spec that answers the two points above and adds a Content-Security-Policy.
+a spec that answers the two points above and gives the Content-Security-Policy
+a `script-src`.
 
 ## Not in this change
 
