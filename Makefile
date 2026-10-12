@@ -38,6 +38,10 @@ storage-up: ## Start local MinIO (image storage, as in production) and create it
 	@$(call minio_env,$(MINIO_DEV_BUCKET)) npx tsx scripts/storage/blobs.ts create-bucket
 	@$(call minio_env,$(MINIO_TEST_BUCKET)) npx tsx scripts/storage/blobs.ts create-bucket
 
+.PHONY: storage-auto
+storage-auto: ## Start bundled MinIO only when selected by .env/exported image settings.
+	@node scripts/storage/local-minio.mjs "$(ENV_FILE)" "$(MAKE)"
+
 .PHONY: db-down
 db-down: ## Stop MariaDB (keeps the data volume).
 	$(COMPOSE) down
@@ -63,11 +67,12 @@ db-seed: db-migrate ## Load dev fixtures (idempotent, safe to re-run).
 	npm run db:seed
 
 .PHONY: bootstrap
-bootstrap: setup db-seed storage-up ## First-time setup: install, start DB and MinIO, migrate, seed.
+bootstrap: setup db-seed ## First-time setup: install, start DB, selected storage, migrate, seed.
+	@$(MAKE) storage-auto
 	@echo "Done. Run 'make dev' and open http://127.0.0.1:3000/knowledge"
 
 .PHONY: dev
-dev: db-up storage-up ## Start the dev server at http://127.0.0.1:3000/knowledge.
+dev: db-up storage-auto ## Start the dev server at http://127.0.0.1:3000/knowledge.
 	npm run dev
 
 # A second local user on a second port, for trying what takes two people (sharing, comments).
@@ -83,7 +88,7 @@ build: ## Production build.
 	npm run build
 
 .PHONY: start
-start: db-up storage-up ## Serve the production build (run 'make build' first).
+start: db-up storage-auto ## Serve the production build (run 'make build' first).
 	npm run start
 
 .PHONY: lint

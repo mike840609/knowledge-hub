@@ -1,3 +1,4 @@
+import { createServer } from "node:http";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -61,4 +62,34 @@ it("at start-up, a bucket that refuses stops the server and one that cannot be r
   await expect((await import("@/server/blob-store")).verifyBlobStore()).resolves.toBeUndefined();
   expect(warn).toHaveBeenCalledOnce();
   warn.mockRestore();
+});
+
+for (const status of [408, 429, 500, 502, 503, 504]) {
+  it(`starts with a warning when image storage returns HTTP ${status}`, async () => {
+    const server = createServer((_request, response) => { response.writeHead(status); response.end(); });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address() as { port: number };
+    stub({ ...s3, KM_BLOB_S3_ENDPOINT: `http://127.0.0.1:${address.port}` });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      await expect((await import("@/server/blob-store")).verifyBlobStore()).resolves.toBeUndefined();
+      expect(warn).toHaveBeenCalledOnce();
+    } finally { server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); }
+  });
+}
+for (const status of [400, 401, 403, 404]) {
+  it(`still rejects configuration errors (HTTP ${status})`, async () => {
+    const server = createServer((_request, response) => { response.writeHead(status); response.end(); });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    stub({ ...s3, KM_BLOB_S3_ENDPOINT: `http://127.0.0.1:${(server.address() as { port: number }).port}` });
+    try { await expect((await import("@/server/blob-store")).verifyBlobStore()).rejects.toThrow(`HTTP ${status}`); }
+    finally { server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); }
+  });
+}
+it("rejects invalid S3 request deadlines", async () => {
+  for (const value of ["0", "-1", "abc", "1.5", "300001"]) {
+    vi.resetModules();
+    stub({ ...s3, KM_BLOB_S3_TIMEOUT_MS: value });
+    await expect(load().then((configured) => configured())).rejects.toThrow("KM_BLOB_S3_TIMEOUT_MS");
+  }
 });

@@ -21,6 +21,7 @@ function s3Config(): S3Config | null {
     accessKey: required("KM_BLOB_S3_ACCESS_KEY"),
     secretKey: required("KM_BLOB_S3_SECRET_KEY"),
     region: process.env.KM_BLOB_S3_REGION || "us-east-1",
+    timeoutMs: process.env.KM_BLOB_S3_TIMEOUT_MS === undefined || process.env.KM_BLOB_S3_TIMEOUT_MS === "" ? undefined : Number(process.env.KM_BLOB_S3_TIMEOUT_MS),
     prefix: prefix ? `${prefix}/` : "",
   };
 }
@@ -52,8 +53,8 @@ export function configuredBlobStore(): BlobStore | null {
 
 /**
  * Start-up check. A configuration error stops the server: bad settings, or a
- * bucket that answers and refuses (wrong keys, no such bucket). A bucket that
- * cannot be reached at all is only logged: an outage of the image store must
+ * bucket that refuses authentication or does not exist. Network failures,
+ * deadlines and HTTP 408/429/5xx only warn: an outage of the image store must
  * not keep the text of every document offline.
  */
 export async function verifyBlobStore(): Promise<void> {
@@ -62,7 +63,7 @@ export async function verifyBlobStore(): Promise<void> {
   try {
     await configured.check();
   } catch (error) {
-    if (error instanceof S3RequestError) throw new Error(`${error.message} Check KM_BLOB_S3_BUCKET, KM_BLOB_S3_ACCESS_KEY and KM_BLOB_S3_SECRET_KEY.`);
-    console.warn("Image storage (S3) is unreachable; images will not load until it is.", error instanceof Error ? error.name : "UnknownError");
+    if (error instanceof S3RequestError && error.status !== 408 && error.status !== 429 && error.status < 500) throw new Error(`${error.message} Check KM_BLOB_S3_BUCKET, KM_BLOB_S3_ACCESS_KEY and KM_BLOB_S3_SECRET_KEY.`);
+    console.warn("Image storage (S3) is temporarily unavailable; text remains available. Image operations can be retried when storage recovers.", error instanceof S3RequestError ? error.message : error instanceof Error ? error.name : "UnknownError");
   }
 }

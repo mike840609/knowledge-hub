@@ -154,10 +154,10 @@ npx tsx scripts/db/cleanup-import-snapshots.ts
 
 | 儲存方式 | 設定 | 適用情況 |
 | --- | --- | --- |
-| S3 相容的 bucket（MinIO） | `KM_BLOB_S3_ENDPOINT`、`KM_BLOB_S3_BUCKET`、`KM_BLOB_S3_ACCESS_KEY`、`KM_BLOB_S3_SECRET_KEY`；選用 `KM_BLOB_S3_PREFIX`、`KM_BLOB_S3_REGION` | 已經有人維運物件儲存。任意數量的應用伺服器都能共用 |
+| S3 相容的 bucket（MinIO） | `KM_BLOB_S3_ENDPOINT`、`KM_BLOB_S3_BUCKET`、`KM_BLOB_S3_ACCESS_KEY`、`KM_BLOB_S3_SECRET_KEY`；選用 `KM_BLOB_S3_PREFIX`、`KM_BLOB_S3_REGION`、`KM_BLOB_S3_TIMEOUT_MS` | 已經有人維運物件儲存。任意數量的應用伺服器都能共用 |
 | 目錄 | `KM_BLOB_DIR` | 單一伺服器搭配持久化 volume，且沒有物件儲存 |
 
-**MinIO 或其他 S3 相容服務。** 請先建立 bucket，應用程式不會自動建立。金鑰需要能在該 bucket 讀取、寫入、刪除與列出物件（`s3:GetObject`、`s3:PutObject`、`s3:DeleteObject`、`s3:ListBucket`）。物件以 path-style 定址：`<endpoint>/<bucket>/<prefix>sha256/…`，請求以 Signature Version 4 簽章。設定 `KM_BLOB_S3_PREFIX`（例如 `knowledge-hub`）可以把圖片集中在 bucket 的一個資料夾內。endpoint 若使用內部 CA 簽發的憑證，請用 `NODE_EXTRA_CA_CERTS` 讓 Node 信任它。伺服器啟動時會檢查 bucket：金鑰錯誤或 bucket 不存在會讓伺服器停止啟動；endpoint 完全連不上則只記錄警告並照常啟動，避免圖片儲存中斷時連文件內容都無法閱讀。
+**MinIO 或其他 S3 相容服務。** 請先建立 bucket，應用程式不會自動建立。金鑰需要能在該 bucket 讀取、寫入、刪除與列出物件（`s3:GetObject`、`s3:PutObject`、`s3:DeleteObject`、`s3:ListBucket`）。物件以 path-style 定址：`<endpoint>/<bucket>/<prefix>sha256/…`，請求以 Signature Version 4 簽章。設定 `KM_BLOB_S3_PREFIX`（例如 `knowledge-hub`）可以把圖片集中在 bucket 的一個資料夾內。endpoint 若使用內部 CA 簽發的憑證，請用 `NODE_EXTRA_CA_CERTS` 讓 Node 信任它。伺服器啟動時會檢查 bucket：金鑰錯誤或 bucket 不存在仍會停止啟動；網路錯誤、逾時、HTTP 408／429 與 HTTP 5xx 則只記錄警告，讓儲存服務暫時中斷時仍能閱讀文字。每個 S3 請求從建立、上傳到讀完回應都有總時限，預設 30 秒，可透過 `KM_BLOB_S3_TIMEOUT_MS` 調整（整數 1–300000 毫秒）。圖片上傳會重試暫時性錯誤；若持續失敗，匯入會停止並提示稍後重試，不會套用這次變更。系統不會自動改成只保存參照或切換儲存後端。
 
 ```bash
 KM_BLOB_S3_ENDPOINT=https://minio.example.internal:9000
@@ -174,7 +174,7 @@ KM_BLOB_S3_PREFIX=knowledge-hub
 - **只有清理功能會刪除**：沒有被引用、且超過 48 小時的圖片。請勿手動刪除物件，也不要對這個 prefix 設定生命週期過期規則，因為它無從得知哪些圖片仍在使用。
 - **Bucket 設定**：關閉公開與匿名存取（每次讀取都由應用程式檢查權限，不會給出儲存位址）。版本控制請關閉，或加上清除非當前版本的規則，否則清理後舊版本仍會留存。由儲存端管理的伺服器端加密可以使用；每次請求自帶金鑰的加密不支援。
 
-**本機開發**同樣使用 MinIO，讓圖片的儲存方式與正式環境一致。`.env.example` 已帶有對應 `compose.yaml` 中 MinIO 容器的四個 `KM_BLOB_S3_*` 設定，`make dev` 會啟動該容器並建立 bucket（`make storage-up`）。在這些設定出現之前建立的 `.env`，需要自行把那四行複製進去。從本機 MinIO 換成公司的 MinIO，只需要改這幾個值。MinIO 管理介面在 `http://127.0.0.1:9001`。
+**本機開發**同樣使用 MinIO，讓圖片的儲存方式與正式環境一致。`.env.example` 已帶有對應 `compose.yaml` 中 MinIO 容器的四個 `KM_BLOB_S3_*` 設定，`make dev`、`make start` 與 `make bootstrap` 只在有效設定選擇本機 MinIO 時啟動該容器並建立 bucket。設定從 `.env` 讀取，已匯出的環境變數優先（包含刻意設成空值的設定）；使用目錄、遠端 S3 或關閉圖片儲存時會略過本機 MinIO。`make storage-up` 仍可明確啟動本機 MinIO，`make test-integration` 則會啟動它以測試 adapter。在這些設定出現之前建立的 `.env`，需要自行把那四行複製進去。從本機 MinIO 換成公司的 MinIO，只需要改這幾個值。MinIO 管理介面在 `http://127.0.0.1:9001`。
 
 **在 Kubernetes 上使用目錄。** 掛載一個 PersistentVolumeClaim，並把 `KM_BLOB_DIR` 指到掛載路徑。目錄必須在伺服器啟動前就存在，所以不要在映像檔裡預先建立它：沒掛上 volume 時應該直接啟動失敗，而不是寫進容器的檔案層。
 

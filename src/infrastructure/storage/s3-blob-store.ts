@@ -3,7 +3,7 @@ import http from "node:http";
 import https from "node:https";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { BlobMismatchError, type BlobBody, type BlobStore } from "@/modules/sources/ports/blob-store";
+import { BlobStorageUnavailableError, BlobMismatchError, type BlobBody, type BlobStore } from "@/modules/sources/ports/blob-store";
 
 export type S3Config = {
   /** `http(s)://host[:port]`, for example a MinIO service. Addressed path-style: `<endpoint>/<bucket>/<key>`. */
@@ -14,12 +14,15 @@ export type S3Config = {
   region: string;
   /** Empty, or a folder inside the bucket ending in `/`, so several deployments can share one bucket. */
   prefix: string;
+  /** Absolute deadline through the upload and response body, not an idle timeout. */
+  timeoutMs?: number;
 };
 
 /** A response from the store that was not the expected one. Carries no credentials and no object content. */
-export class S3RequestError extends Error {
+export class S3RequestError extends BlobStorageUnavailableError {
   constructor(readonly operation: string, readonly status: number, readonly code: string | null) {
-    super(`Image storage (S3) ${operation} failed: HTTP ${status}${code ? ` ${code}` : ""}.`);
+    super();
+    this.message = `Image storage (S3) ${operation} failed: HTTP ${status}${code ? ` ${code}` : ""}.`;
     this.name = "S3RequestError";
   }
 }
@@ -65,7 +68,9 @@ export function signS3Request(input: {
 
 async function text(response: http.IncomingMessage): Promise<string> {
   let body = "";
-  for await (const chunk of response) body += (chunk as Buffer).toString("utf8");
+  try {
+    for await (const chunk of response) body += (chunk as Buffer).toString("utf8");
+  } catch { throw new BlobStorageUnavailableError(); }
   return body;
 }
 const errorCode = (body: string) => /<Code>([^<]+)<\/Code>/.exec(body)?.[1] ?? null;
@@ -78,9 +83,12 @@ const errorCode = (body: string) => /<Code>([^<]+)<\/Code>/.exec(body)?.[1] ?? n
  */
 export class S3BlobStore implements BlobStore {
   private readonly url: URL;
+  private readonly timeoutMs: number;
 
   constructor(private readonly config: S3Config, private readonly now: () => Date = () => new Date()) {
     this.url = new URL(config.endpoint);
+    this.timeoutMs = config.timeoutMs ?? 30_000;
+    if (!Number.isInteger(this.timeoutMs) || this.timeoutMs < 1 || this.timeoutMs > 300_000) throw new Error("KM_BLOB_S3_TIMEOUT_MS must be an integer from 1 through 300000.");
   }
 
   private key(sha256: string): string {
@@ -103,7 +111,27 @@ export class S3BlobStore implements BlobStore {
       path: search ? `${path}?${search}` : path,
       headers: { ...headers, authorization, ...(options.contentLength === undefined ? {} : { "content-length": String(options.contentLength) }) },
     });
-    const response = new Promise<http.IncomingMessage>((resolve, reject) => { request.on("response", resolve); request.on("error", reject); });
+    let received: http.IncomingMessage | undefined;
+    // Keep the deadline until the body ends, including streamed GETs. A socket
+    // idle timeout alone would miss DNS/connect stalls and trickled responses.
+    const timer = setTimeout(() => {
+      const error = new BlobStorageUnavailableError();
+      request.destroy(error);
+      received?.destroy(error);
+    }, this.timeoutMs);
+    timer.unref();
+    const response = new Promise<http.IncomingMessage>((resolve, reject) => {
+      request.on("response", (message) => {
+        received = message;
+        message.once("end", () => clearTimeout(timer));
+        message.once("close", () => clearTimeout(timer));
+        resolve(message);
+      });
+      request.on("error", (error) => {
+        clearTimeout(timer);
+        reject(error instanceof BlobMismatchError || error instanceof BlobStorageUnavailableError ? error : new BlobStorageUnavailableError());
+      });
+    });
     return { request, response };
   }
 
@@ -134,7 +162,7 @@ export class S3BlobStore implements BlobStore {
       await pipeline(Readable.fromWeb(body as never), meter, request);
     } catch (error) {
       request.destroy();
-      throw error;
+      throw error instanceof BlobMismatchError || error instanceof BlobStorageUnavailableError ? error : new BlobStorageUnavailableError();
     }
     const received = await response;
     const answer = await text(received);

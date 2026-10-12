@@ -65,7 +65,7 @@ Added 2026-10-08, when the deployment target turned out to run MinIO already. `s
 - **Same keys.** An object is `<prefix>sha256/<2 hex>/<2 hex>/<hash>`, the layout of the directory store, so moving between the two is a copy.
 - **No SDK.** Five operations (put, get, head, delete, list) over Node's HTTP client with Signature Version 4, path-style addressing. The signer is checked against AWS's published examples and the adapter against a real MinIO in the integration job. The alternative was the AWS SDK: about a megabyte of dependency for five requests, with default checksum behaviour that S3-compatible servers have rejected.
 - **The store verifies too.** S3's signed payload hash is the SHA-256 of the body, which is the object's key. `put` sends it as `x-amz-content-sha256`, so the bucket refuses bytes that do not match, on top of the adapter's own check while streaming.
-- **Start-up.** A bucket that answers and refuses (wrong keys, no such bucket) stops the server. One that cannot be reached is logged and the server starts: an outage of the image store must not take document text offline.
+- **Start-up.** Authentication/configuration failures (such as wrong keys or a missing bucket) stop the server. Network errors, deadline expiry, HTTP 408/429 and HTTP 5xx only warn; text remains available. Every request has a 30-second absolute deadline through its response body (`KM_BLOB_S3_TIMEOUT_MS`, integer 1–300000 ms). See the resilience amendment below.
 - **The bucket is not created by the application**, except by `blobs.ts create-bucket` for local development and CI.
 - **Local stand-in.** `compose.yaml` has a `minio` service (`make storage-up`) using the `pgsty/minio` community fork, because MinIO Inc. withdrew `minio/minio` from Docker Hub and Quay in September 2026. It mimics a company MinIO; it is not a recommendation for production. Local development uses it by default (`.env.example`, `make dev`), so images are stored the same way in development as in production; e2e runs use a temporary directory unless `KM_TEST_S3_ENDPOINT` is set.
 
@@ -243,3 +243,10 @@ Recorded 2026-10-08, after reading the import code for the implementation plan (
 | No base in context renders a placeholder | The `src` is written as today (§6.2) | Changes nothing for existing renderers |
 | A 0-byte image | Recorded, never stored | An upload needs a body |
 | S3-compatible adapter left out | Built (§3.3) | The deployment target already runs MinIO, which removes the cost that argued for waiting |
+
+### Resilience amendment (2026-10-13)
+
+- Application Make targets start the bundled MinIO only when the effective image settings select its local endpoint and a bucket, with no directory store. Read `.env` at execution time (after bootstrap setup), with exported environment variables taking precedence, including explicit empty values. Remote S3, directory storage and disabled storage do not start local MinIO. Explicit `make storage-up` and MinIO integration tests retain their existing behaviour.
+- Every S3 request has an absolute deadline from creation through upload and response-body consumption, including streamed image reads. Default 30,000 ms; `KM_BLOB_S3_TIMEOUT_MS` accepts integers from 1 through 300,000. A deadline destroys the request and response, releasing resources. It cannot be extended indefinitely by trickled bytes.
+- Startup warns and continues for network errors, deadline expiry, HTTP 408/429 and HTTP 5xx. Other non-success responses (including authentication and missing buckets) still prevent startup. No automatic switch of storage backend or silent reference-only downgrade occurs.
+- Image operations report dependency failures as `IMAGE_STORAGE_UNAVAILABLE` / HTTP 503 with a safe retry message. The existing bounded image-upload retry flow retries these responses; persistent failures abandon the snapshot without finalizing or applying it. Subsequent requests can recover without a process restart.

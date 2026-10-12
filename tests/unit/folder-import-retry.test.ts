@@ -137,3 +137,33 @@ describe("folder import retries and cancellation", () => {
     ]);
   });
 });
+
+describe("image storage outages during folder import", () => {
+  it.each([true, false])("retries images and only finalizes after recovery (recovers=%s)", async (recovers) => {
+    vi.spyOn(globalThis.crypto.subtle, "digest").mockResolvedValue(new Uint8Array(32).buffer);
+    let imageAttempts = 0;
+    const fetchMock = vi.fn<typeof fetch>(async (url, init) => {
+      if (String(url).endsWith("/source-imports")) {
+        const manifest = JSON.parse(String(init?.body)).manifest as { uploadKey: string; relativePath: string }[];
+        return response({ snapshotId: "snapshot", assetUploads: manifest.filter((entry) => entry.relativePath.endsWith(".png")).map((entry) => entry.uploadKey) }, 201);
+      }
+      if (String(url).includes("/asset?")) {
+        imageAttempts += 1;
+        if (!recovers || imageAttempts < 3) return response({ error: { code: "IMAGE_STORAGE_UNAVAILABLE", message: "Image storage is unavailable. Please retry shortly." } }, 503);
+      }
+      return response(init?.method === "DELETE" ? { abandoned: true } : {});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await settled(runFolderImport({ ...input, files: [...input.files, new File(["image"], "image.png")] }));
+    if (recovers) {
+      expect(result).toMatchObject({ status: "fulfilled" });
+      expect(imageAttempts).toBe(3);
+      expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/finalize"))).toBe(true);
+    } else {
+      expect(result).toMatchObject({ status: "rejected", reason: { code: "IMAGE_STORAGE_UNAVAILABLE", message: expect.stringMatching(/retry/i) } });
+      expect(imageAttempts).toBe(4);
+      expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/finalize"))).toBe(false);
+      expect(fetchMock.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(true);
+    }
+  });
+});

@@ -1,3 +1,4 @@
+import { BlobStorageUnavailableError } from "@/modules/sources/ports/blob-store";
 import { DomainError } from "@/shared/domain/errors";
 import type { SourceImportError } from "@/modules/sources/domain/import-errors";
 
@@ -48,7 +49,13 @@ const CONFLICT = new Set([
   "UPLOAD_ENTRY_CONFLICT",
 ]);
 
+const storageUnavailable = () => ({ status: 503, body: { error: {
+  code: "IMAGE_STORAGE_UNAVAILABLE",
+  message: "Image storage is unavailable. Nothing was synced. Please retry the import shortly.",
+} } });
+
 export function toImportErrorResponse(error: unknown): ImportHttpError {
+  if (error instanceof BlobStorageUnavailableError) return storageUnavailable();
   if (error instanceof DomainError) {
     if (HIDDEN_NOT_FOUND.has(error.code)) {
       return { status: 404, body: { error: { code: "NOT_FOUND", message: "The requested resource was not found." } } };
@@ -79,6 +86,7 @@ export function toImportErrorResponse(error: unknown): ImportHttpError {
 
 export type ApiErrorBody = { error: { code: string; message: string; field?: string } };
 export function toWorkspaceErrorResponse(error: unknown): { status: number; body: ApiErrorBody } {
+  if (error instanceof BlobStorageUnavailableError) return storageUnavailable();
   if (error instanceof DomainError) {
     if (["AUTH_REQUIRED", "AUTH_UNAVAILABLE", "REVIEW_ORIGIN_DENIED", "REVIEW_RATE_LIMIT", "REVIEW_WRITES_DISABLED"].includes(error.code)) {
       const status = error.code === "AUTH_REQUIRED" ? 401 : error.code === "AUTH_UNAVAILABLE" ? 503 : error.code === "REVIEW_RATE_LIMIT" ? 429 : 403;

@@ -17,3 +17,11 @@ export interface BlobStore {
   remove(sha256: string): Promise<void>;
   list(): AsyncIterable<{ sha256: string; modifiedAt: Date }>;
 }
+
+/** Storage dependency failed; safe to retry without exposing backend details. */
+export class BlobStorageUnavailableError extends Error {
+  constructor() {
+    super("Image storage is unavailable. Nothing was synced. Please retry the import shortly.");
+    this.name = "BlobStorageUnavailableError";
+  }
+}
