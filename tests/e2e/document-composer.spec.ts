@@ -1,6 +1,6 @@
 import { expect, test } from "./fixtures/test";
 import { showMarkdown } from "./composer-helpers";
-import { EMPTY_WORKSPACE, ROUND_TRIP, unique, composer, createNote, readerTitle, EDITOR_CODE, holdEditorCode, openEditor } from "./fixtures/document-composer";
+import { EMPTY_WORKSPACE, ROUND_TRIP, unique, composer, createNote, readerTitle, EDITOR_CODE, HELD, holdEditorCode, openEditor } from "./fixtures/document-composer";
 
 test("the rendered editor mounts without hydration or page errors", { tag: "@smoke-team" }, async ({ page }) => {
   const problems: string[] = [];
@@ -194,7 +194,7 @@ test("Markdown the editor makes nothing of stays in the source, with the reason 
 test("the Markdown waits for the editor to load before it takes typing", async ({ page }) => {
   const url = await createNote(page, unique("Wait For Editor"), "body\n");
   const release = await holdEditorCode(page);
-  await page.goto(`${url}/edit`);
+  await page.goto(`${url}/edit`, HELD);
   const toggle = composer(page).getByRole("button", { name: "Markdown", exact: true });
   await expect(toggle).toBeEnabled(ROUND_TRIP);
   await toggle.click();
@@ -208,7 +208,7 @@ test("the Markdown waits for the editor to load before it takes typing", async (
 test("the editor arriving does not take the caret from a field the person moved to", async ({ page }) => {
   const url = await createNote(page, unique("Keep Focus"), "body\n");
   const release = await holdEditorCode(page);
-  await page.goto(`${url}/edit`);
+  await page.goto(`${url}/edit`, HELD);
   const toggle = composer(page).getByRole("button", { name: "Markdown", exact: true });
   await expect(toggle).toBeEnabled(ROUND_TRIP);
   await toggle.click();

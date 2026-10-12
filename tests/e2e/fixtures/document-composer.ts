@@ -60,7 +60,15 @@ export function readerTitle(page: Page) {
 /** The rendered editor's code: the app's only lazily loaded chunks (`<id>.<hash>.js`; first-load chunks are `<id>-<hash>.js`). */
 export const EDITOR_CODE = /\/_next\/static\/chunks\/[^/-]+\.[0-9a-f]+\.js$/;
 
-/** Holds the editor's code back until released, so the page can be used while the editor is still loading. */
+/**
+ * How to load a page whose editor code is held. Not to `load`, `goto`'s default: a chunk the page
+ * asks for before `load` holds that event back until it arrives, and hydration asks for the editor's
+ * some 50ms after it, so now and then before. The held chunk is released only after `goto` returns,
+ * and that load never ends.
+ */
+export const HELD = { waitUntil: "domcontentloaded" } as const;
+
+/** Holds the editor's code back until released, so the page can be used while the editor is still loading. Load the page with `HELD`. */
 export async function holdEditorCode(page: Page) {
   let release!: () => void;
   const held = new Promise<void>((resolve) => { release = resolve; });
