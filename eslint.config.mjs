@@ -6,6 +6,7 @@ const moduleBoundaryRestrictions = [
   { "group": ["next", "next/*", "react", "react/*"], "message": "Domain and application modules must not depend on web UI." },
   { "group": ["mariadb", "mariadb/**"], "message": "Domain and application modules must not depend on the database driver." },
   { "group": ["@/infrastructure/**", "../infrastructure/**", "../../infrastructure/**", "../../../infrastructure/**", "**/infrastructure/**"], "message": "Domain and application modules must depend on ports, not infrastructure." },
+  { "group": ["@/server/**", "../server/**", "../../server/**", "../../../server/**", "**/server/**"], "message": "Domain and application modules must not depend on the server layer; use ports or local models." },
 ];
 
 const knowledgeBoundaryRestrictions = [
@@ -36,7 +37,7 @@ const webAdapterRestrictions = [
 
 export default tseslint.config(
   {
-    ignores: [".next/**", ".next-dev/**", ".next-dev-reviewer/**", "node_modules/**", "playwright-report/**", "test-results/**", "next-env.d.ts"],
+    ignores: [".next/**", ".next-dev/**", ".next-dev-reviewer/**", "node_modules/**", "playwright-report/**", "test-results/**", "next-env.d.ts", "work/**"],
   },
   ...tseslint.configs.recommended,
   {

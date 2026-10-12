@@ -1,4 +1,5 @@
-import type { SourceListItemModel } from "@/server/source-read";
+import type { SourceView } from "@/modules/knowledge/application/knowledge-query-service";
+import type { SyncRun } from "@/modules/sources/domain/sync-run";
 import { isFolderSyncable } from "@/modules/knowledge/domain/source-policy";
 import { DomainError } from "@/shared/domain/errors";
 
@@ -15,8 +16,15 @@ export function freshnessThreshold(value: unknown): FreshnessThreshold {
   try { return validateFreshnessValue(value).thresholdDays; } catch { return 30; }
 }
 export type FreshnessReminder = { sourceId: string; sourceName: string; status: "pending" | "failed" | "never" | "old"; previewId: string | null; lastImportedAt: string | null };
+/** The slice of a source list item this computation reads; callers pass their own list models. */
+export type FreshnessSourceItem = {
+  source: SourceView;
+  latestRun: SyncRun | null;
+  pendingPreviewId?: string | null;
+  latestSuccessfulRun?: SyncRun | null;
+};
 /** Pending preview takes priority, then failed attempt, then never imported, then age. */
-export function knowledgeFreshness(items: SourceListItemModel[], thresholdDays: FreshnessThreshold, now: Date): FreshnessReminder[] {
+export function knowledgeFreshness(items: FreshnessSourceItem[], thresholdDays: FreshnessThreshold, now: Date): FreshnessReminder[] {
   return items.flatMap(item => {
     if (!isFolderSyncable(item.source)) return [];
     const applied = item.latestSuccessfulRun?.status === "APPLIED" ? item.latestSuccessfulRun : item.latestRun?.status === "APPLIED" ? item.latestRun : null;
