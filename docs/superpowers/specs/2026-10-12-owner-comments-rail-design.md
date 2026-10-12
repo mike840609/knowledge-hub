@@ -72,7 +72,16 @@ no step at all, because then no card can be level with its passage.
 
 **Collapsed.** The article, and the outline beside it where the pane is wide
 enough. A passage with a discussion is highlighted and has a count in the
-article's right margin. Above the article, at the right, `Comments (N)`.
+article's right margin. In the document's header, beside Edit, a comments
+control showing the count.
+
+**The way in is the header's.** It was first a row above the article, which had
+two costs: it did not travel with the reader, so in a long document a closed
+rail could only be reopened from a mark; and it appeared when the discussions
+loaded, moving the article down. The header is pinned on a wide screen and was
+already there. The panel publishes its count and state through
+`review-entry.tsx` and the header draws the control and receives focus back on
+closing.
 
 **Opening** — the entry, a mark, or a highlighted passage. Where the document
 pane is at least 60rem wide, the rail (320px) appears to the right of the
@@ -88,11 +97,9 @@ shared page uses, over the article.
 thread or a comment. An owner does not start a discussion, so there is no
 "Add comment" here.
 
-**A document with no discussion** shows no Comments entry and reserves no
-margin for marks. The entry appears once the discussions have loaded and there
-is at least one, which moves the article down by the entry's height on such a
-document. Reserving the row on every document, to avoid that, would put an
-empty band above every article for the sake of the few with comments.
+**A document with no discussion** shows no comments control and reserves no
+margin for marks. The control appears in the header once the discussions have
+loaded and there is at least one; nothing moves when it does.
 
 ## The pane decides, not the window
 
@@ -111,7 +118,7 @@ Five places asked the window (`matchMedia("(min-width: 1200px)")`): the drawer
 shell, the card layout, the highlight handler and two in the shared panel. They
 now ask one function, which asks the stylesheet:
 
-- `--review-rail` on `.kh-shared-document` is `drawer`, or `inline` — set by a
+- `--review-rail` on `.kh-review-document` is `drawer`, or `inline` — set by a
   media query under `.kh-share-page` and a container query under
   `.kh-document-pane`.
 - `review-rail-mode.ts` reads it (`reviewRailInline`), watches the window and
@@ -146,23 +153,25 @@ mark.
 - `globals.css` — the rail's rules restated around `data-review-inline`, plus
   the workspace's.
 
-The class names keep `shared` in them (`.kh-shared-document`,
-`.kh-shared-review-panel`) though the workspace uses them now; renaming them is
-a change to the shared page's tests and documents for no change in behaviour.
+The rail's classes were `kh-shared-*` while only the shared page used them. They
+are `kh-review-document`, `kh-review-reading` and `kh-review-panel` now that the
+workspace does too.
 
 ## Not in this change
 
 - The owner starting a discussion.
 - The rail and the outline side by side on a very wide pane.
-- A Comments control in the document header, which would be constant chrome and
-  spare the entry row.
+- The control in the narrow topbar's copy of the header's actions. On a narrow
+  screen the header is not pinned; the marks on the passages are the way in.
 
 ## Tests
 
 `tests/unit/review-auto-open.test.ts`: when the rail opens by itself — awaiting,
 resolved, hidden, closed-on, and a discussion arriving after a closing.
 
-`tests/e2e/owner-review.spec.ts`: the rail open on arrival without taking the
+`tests/e2e/owner-review.spec.ts`: the control in the header, on Edit's row and
+still in view at the end of a long document; the article not moving when the
+discussions arrive; the rail's name and controls on one row; the rail open on arrival without taking the
 scroll position; staying closed after a closing and opening for a new
 discussion; resolved discussions and a narrow pane not opening it; the list starting on
 Open, on All where nothing is open, and a mark leading to a resolved discussion;

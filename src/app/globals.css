@@ -557,73 +557,84 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 
 .kh-review-thread-list > [data-review-thread] + [data-review-thread] { margin-top: 12px; }
 
+/* A line of facts separated by dots that wraps without leaving a dot at a line's end. Each item
+   carries its dot before it, in a gutter to its left; the line is pulled left by that gutter and
+   clipped at its edge, so the dot of an item that starts a line falls outside and is not drawn.
+   Unlayered, with the search field's clearance above: geometry, not the spacing rhythm. */
+.kh-byline { overflow: hidden; }
+.kh-byline > span { display: flex; flex-wrap: wrap; row-gap: 4px; margin-inline-start: -1rem; }
+.kh-byline > span > span { position: relative; padding-inline-start: 1rem; }
+.kh-byline > span > span::before { content: "·"; position: absolute; inset-inline-start: 0; width: 1rem; text-align: center; }
+
 /* Discussions beside the article they are about: on a shared page and, for its owner, in the
    workspace. `--review-rail` is the one place that says where there is room for a rail; scripts
    read it (`review-rail-mode.ts`) and mirror it as `data-review-inline`, which the layout below
    keys on. Without room, the same discussions open in a drawer. */
-.kh-shared-document { --review-rail: drawer; width: 100%; max-width: theme("maxWidth.reading"); margin-inline: auto; }
-.kh-shared-reading { position: relative; min-width: 0; width: 100%; }
+.kh-review-document { --review-rail: drawer; width: 100%; max-width: theme("maxWidth.reading"); margin-inline: auto; }
+.kh-review-reading { position: relative; min-width: 0; width: 100%; }
 /* The passage markers sit in the article's right margin (28px wide, 4px in), so only that side is
    widened. The left stays the reading column's, or the article starts 8px inside the bar, the
    byline and the footer it sits between. */
-.kh-share-page .kh-shared-reading > article { padding-inline-end: 32px; }
+.kh-share-page .kh-review-reading > article { padding-inline-end: 32px; }
 /* In the workspace the margin is made only for an article that has a marker to put in it. */
-.kh-document-pane .kh-shared-reading:has([data-review-marker]) > article { padding-inline-end: 32px; }
-.kh-shared-review-panel,
+.kh-document-pane .kh-review-reading:has([data-review-marker]) > article { padding-inline-end: 32px; }
+.kh-review-panel,
 .kh-review-rail-heading { display: none; }
 
 /* A shared page is the whole window. */
 @media (min-width: 1200px) {
-  .kh-share-page .kh-shared-document { --review-rail: inline; }
+  .kh-share-page .kh-review-document { --review-rail: inline; }
 }
 /* In the workspace the document pane decides, as it does for the outline — and at the same width,
    because the rail takes the outline's place. */
 @container kh-document (min-width: 60rem) {
-  .kh-document-pane .kh-shared-document { --review-rail: inline; }
+  .kh-document-pane .kh-review-document { --review-rail: inline; }
 }
 
-.kh-shared-document[data-review-inline][data-review-open] { display: flex; max-width: calc(theme("maxWidth.reading") + 320px); }
-.kh-shared-document[data-review-inline][data-review-open] > .kh-shared-reading { flex: 1; }
-.kh-shared-document[data-review-inline][data-review-open] > .kh-shared-review-panel {
+.kh-review-document[data-review-inline][data-review-open] { display: flex; max-width: calc(theme("maxWidth.reading") + 320px); }
+.kh-review-document[data-review-inline][data-review-open] > .kh-review-reading { flex: 1; }
+.kh-review-document[data-review-inline][data-review-open] > .kh-review-panel {
   display: block;
   width: 320px;
   flex-shrink: 0;
   padding-inline: 12px;
   padding-bottom: 24px;
 }
-.kh-shared-document[data-review-inline] .kh-review-rail-heading { display: flex; }
+.kh-review-document[data-review-inline] .kh-review-rail-heading { display: flex; }
+/* What a drawer needs a row for and a rail has on its heading. The drawer's copy is outside the document. */
+.kh-review-document[data-review-inline] .kh-review-drawer-row { display: none; }
 /* Everything in the page's column widens with the document, the footer included: left behind in
    the narrower column it sat 160px inside the article it closes. */
-.kh-share-page:has(.kh-shared-document[data-review-inline][data-review-open]) .kh-share-heading,
-.kh-share-page:has(.kh-shared-document[data-review-inline][data-review-open]) .kh-review-entry,
-.kh-share-page:has(.kh-shared-document[data-review-inline][data-review-open]) > footer { max-width: calc(theme("maxWidth.reading") + 320px); }
+.kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) .kh-share-heading,
+.kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) .kh-review-entry,
+.kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) > footer { max-width: calc(theme("maxWidth.reading") + 320px); }
 /* The workspace's columns do the same, so the title and the article keep one left edge. The outline
    gives the rail its place and is shown above the article instead, as it is in a narrow pane; what
    follows the article in its column stays the article's width. */
-.kh-document-pane:has(.kh-shared-document[data-review-inline][data-review-open]) .kh-reading-column { max-width: calc(theme("maxWidth.reading") + 320px); }
-.kh-document-pane:has(.kh-shared-document[data-review-inline][data-review-open]) .kh-outline-rail { display: none; }
-.kh-document-pane:has(.kh-shared-document[data-review-inline][data-review-open]) .kh-outline-inline { display: block; }
-.kh-document-pane .kh-shared-document[data-review-inline][data-review-open] ~ * { max-width: calc(100% - 320px); }
+.kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-reading-column { max-width: calc(theme("maxWidth.reading") + 320px); }
+.kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-outline-rail { display: none; }
+.kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-outline-inline { display: block; }
+.kh-document-pane .kh-review-document[data-review-inline][data-review-open] ~ * { max-width: calc(100% - 320px); }
 
-.kh-shared-document[data-review-inline] .kh-review-thread-list[data-positioned] {
+.kh-review-document[data-review-inline] .kh-review-thread-list[data-positioned] {
   position: relative;
   height: var(--review-list-height);
 }
-.kh-shared-document[data-review-inline] .kh-review-thread-list[data-positioned] > [data-review-thread] {
+.kh-review-document[data-review-inline] .kh-review-thread-list[data-positioned] > [data-review-thread] {
   position: absolute;
   top: var(--review-thread-top);
   width: 100%;
   margin-top: 0;
 }
 /* Keep actions within reach without pinning the discussions away from their passages. */
-.kh-shared-document[data-review-inline] .kh-review-toolbar {
+.kh-review-document[data-review-inline] .kh-review-toolbar {
   position: sticky;
   top: 48px;
   z-index: 10;
   background: var(--kh-bg);
   padding-block: 16px 1px;
 }
-.kh-shared-document[data-review-inline] .kh-review-composer {
+.kh-review-document[data-review-inline] .kh-review-composer {
   position: sticky;
   top: 160px;
   z-index: 10;

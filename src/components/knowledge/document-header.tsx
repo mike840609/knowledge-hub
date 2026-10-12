@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, type Ref } from "react";
-import { LockKeyhole, PanelRight } from "lucide-react";
+import { LockKeyhole, MessageSquare, PanelRight } from "lucide-react";
 import { ActionIcon } from "@/components/actions/action-icon";
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { formatDateTime, formatRelativeTime } from "@/lib/format-date";
 import { useDisplayTimeZone } from "@/components/ui/timestamp";
 import { DocumentBreadcrumb, type DocumentBreadcrumbSegment } from "./document-breadcrumb";
+import { useReviewEntry } from "./review-entry";
 
 export function DocumentHeader({
   breadcrumb,
@@ -63,6 +64,8 @@ export function DocumentHeader({
   const elapsed = now === null ? null : Math.max(0, now - new Date(updatedAt).getTime());
   const relative = elapsed === null ? formatDateTime(updatedAt, zone) : formatRelativeTime(elapsed);
 
+  // The owner's discussions, when the document has any (`review-entry.tsx`).
+  const review = useReviewEntry();
   return (
     <>
       {/* The location › title line and its actions stay pinned to the top of the pane on a wide screen while
@@ -76,6 +79,23 @@ export function DocumentHeader({
             aria-label and tooltip. Details draws the same glyph as the
             narrow topbar's copy of this button. */}
         <div className="flex shrink-0 items-center gap-2">
+          {review?.entry ? (
+            <Tooltip label={review.entry.open ? "Hide comments" : "Comments"}>
+              <button
+                ref={review.buttonRef}
+                type="button"
+                aria-label={`${review.entry.open ? "Hide discussions" : "Open discussions"}, ${review.entry.count} comments`}
+                aria-expanded={review.entry.open}
+                aria-controls="owner-document-discussions"
+                onPointerDown={(event) => event.preventDefault()}
+                onClick={review.entry.toggle}
+                className={buttonClasses({ variant: "ghost" })}
+              >
+                <MessageSquare className="h-4 w-4" aria-hidden="true" />
+                <span aria-hidden="true">{review.entry.count}</span>
+              </button>
+            </Tooltip>
+          ) : null}
           {editHref ? (
             <Tooltip label="Edit" shortcut="E">
               <a

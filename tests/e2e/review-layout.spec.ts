@@ -362,7 +362,7 @@ test("the shared page keeps one left edge: its bar, its byline, its article and 
         range.selectNodeContents(document.querySelector(selector)!);
         return Math.round(range.getClientRects()[0].left);
       };
-      return { bar: textLeft(".kh-share-page > div:first-child span"), byline: textLeft(".kh-share-page header p"), article: textLeft("[data-review-document] p"), footer: textLeft(".kh-share-page footer p") };
+      return { bar: textLeft(".kh-share-page > div:first-child span"), byline: textLeft(".kh-share-page header .kh-byline > span > span"), article: textLeft("[data-review-document] p"), footer: textLeft(".kh-share-page footer p") };
     });
   const aligned = async () => {
     const { bar, byline, article, footer } = await edges();
@@ -382,4 +382,29 @@ test("the shared page keeps one left edge: its bar, its byline, its article and 
   await openReviewDiscussions(page);
   await expect(page.getByRole("complementary", { name: "Document discussions" })).toBeVisible();
   await aligned();
+});
+
+test("the shared page's byline wraps without leaving a separator at the end of a line", async ({ page, request }) => {
+  const doc = await createReviewDocument(request, "# A shared title\n\nA paragraph of the article.\n");
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
+  const byline = page.locator(".kh-share-page header .kh-byline");
+  await expect(byline).toContainText("Shared by");
+  const { clip, items } = await byline.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    return { clip: { left: box.left, overflow: getComputedStyle(element).overflowX }, items: Array.from(element.querySelectorAll(":scope > span > span")).map((item) => { const rect = item.getBoundingClientRect(); const dot = getComputedStyle(item, "::before"); return { top: Math.round(rect.top), left: rect.left, dot: dot.content, text: item.textContent }; }) };
+  });
+  expect(items.length).toBe(3);
+  expect(new Set(items.map((item) => item.top)).size).toBeGreaterThan(1);
+  // Each item carries its separator before it, and the byline clips what is left of its edge:
+  expect(clip.overflow).toBe("hidden");
+  for (const item of items) expect(item.dot).toContain("·");
+  // so an item that starts a line has its separator outside, and one that follows another has it inside.
+  items.forEach((item, index) => {
+    const startsLine = index === 0 || item.top !== items[index - 1].top;
+    if (startsLine) expect(item.left, item.text ?? "").toBeLessThan(clip.left);
+    else expect(item.left, item.text ?? "").toBeGreaterThan(clip.left);
+  });
+  // And none of it is written into the text, where it would be read out or left at a line's end.
+  expect(await byline.textContent()).not.toContain("·");
 });

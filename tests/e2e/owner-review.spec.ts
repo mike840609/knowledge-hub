@@ -100,13 +100,45 @@ test("a discussion that awaits the owner is open beside its passage when the doc
   // Nothing is pushed off the side of the pane.
   expect(await page.getByRole("region", { name: "Document content" }).evaluate((pane) => pane.scrollWidth <= pane.clientWidth)).toBe(true);
 
+  // The rail's own controls are one row: its name, refresh, collapse.
+  const rowOf = async (name: string) => { const box = (await rail.getByRole("button", { name }).boundingBox())!; return box.y + box.height / 2; };
+  expect(Math.abs(await rowOf("Refresh comments") - await rowOf("Collapse discussions"))).toBeLessThan(2);
+
   await page.getByRole("button", { name: "Collapse discussions" }).click();
   await expect(rail).toBeHidden();
   await expect(outlineRail).toBeVisible();
-  await expect(page.getByRole("button", { name: "Open discussions, 1 comments" })).toBeVisible();
-  // The mark on the passage is the way back in.
+  // The way back in is in the document's header, beside Edit — so it costs the article no room,
+  const entry = page.getByRole("button", { name: "Open discussions, 1 comments" });
+  await expect(entry).toBeVisible();
+  const [entryBox, editBox] = [(await entry.boundingBox())!, (await page.getByRole("link", { name: "Edit", exact: true }).boundingBox())!];
+  expect(Math.abs(entryBox.y + entryBox.height / 2 - (editBox.y + editBox.height / 2))).toBeLessThan(2);
+  await expect(entry).toContainText("1");
+  // and is still there at the end of a long document, where no mark is in sight.
+  await page.getByRole("region", { name: "Document content" }).evaluate((pane) => pane.scrollTo(0, pane.scrollHeight));
+  await expect(marker).not.toBeInViewport();
+  await expect(entry).toBeInViewport();
+  await entry.click();
+  await expect(rail).toBeVisible();
+  // The mark on the passage is another.
+  await page.getByRole("button", { name: "Collapse discussions" }).click();
+  await page.getByRole("region", { name: "Document content" }).evaluate((pane) => pane.scrollTo(0, 0));
   await marker.click();
   await expect(rail).toBeVisible();
+});
+
+test("the discussions arriving do not move the article", async ({ page, request }) => {
+  const doc = await documentWithDiscussion(request);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  // Held back, so the article can be measured before the discussions are known.
+  let release = () => {};
+  await page.route(`**/api/documents/${doc.documentId}/review-threads`, async (route) => { await new Promise<void>((resolve) => { release = resolve; }); await route.continue(); });
+  await page.goto(doc.href);
+  const top = async () => Math.round((await page.locator("[data-review-document]").boundingBox())!.y);
+  await expect(page.locator("[data-review-document] p").first()).toBeVisible();
+  const before = await top();
+  release();
+  await expect(page.getByRole("button", { name: "Open discussions, 1 comments" })).toBeVisible();
+  expect(await top()).toBe(before);
 });
 
 test("once the owner has closed the discussions they stay closed, until someone says something new", async ({ page, request }) => {
@@ -209,7 +241,7 @@ test("where the pane has no room for a rail, the owner's discussions open over t
   await page.setViewportSize({ width: 820, height: 800 });
   await page.goto(doc.href);
   // A drawer would cover the article the owner came to read, so here it waits to be asked for.
-  await expect(page.locator(".kh-shared-document")).toHaveAttribute("data-review-ready", "");
+  await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
   await expect(page.getByRole("button", { name: "Open discussions, 1 comments" })).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await openReviewDiscussions(page);
@@ -223,7 +255,7 @@ test("a document nobody has commented on shows the owner no way into discussions
   const doc = await createReviewDocument(request, "## Alpha\n\nA paragraph.\n\n## Beta\n\nAnother.\n");
   await page.setViewportSize({ width: 1680, height: 900 });
   await page.goto(doc.href);
-  await expect(page.locator(".kh-shared-document")).toHaveAttribute("data-review-ready", "");
+  await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
   await expect(page.getByRole("button", { name: /discussions/ })).toHaveCount(0);
   await expect(page.locator("[data-review-marker]")).toHaveCount(0);
   expect(await page.locator("[data-review-document]").evaluate((article) => getComputedStyle(article).paddingRight)).toBe("0px");

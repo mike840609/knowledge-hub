@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-const DOCUMENT = ".kh-shared-document";
+const DOCUMENT = ".kh-review-document";
 
 /**
  * Whether discussions are a rail beside the article here, or a drawer over it.
