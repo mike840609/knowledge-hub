@@ -4,6 +4,11 @@ import { SKIP, visit } from "unist-util-visit";
 const BR = /^<br\s*\/?>$/i;
 const COMMENT = /^<!--[\s\S]*-->$/;
 
+/** Whether a piece of HTML is `<br>`, however it is spelled. */
+export function isLineBreakHtml(value: string): boolean {
+  return BR.test(value.trim());
+}
+
 /**
  * What a piece of HTML reads as, where only text can be shown (a heading in the outline, its
  * slug): a `<br>` is a space, a comment is nothing, and anything else is itself — as on the page.

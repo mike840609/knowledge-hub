@@ -3,7 +3,7 @@ import { editorViewCtx, remarkPluginsCtx, serializerCtx } from "@milkdown/kit/co
 import { listenerCtx } from "@milkdown/kit/plugin/listener";
 import { DOMParser as ProseDOMParser, DOMSerializer, type Node as ProseNode } from "@milkdown/kit/prose/model";
 import { TextSelection } from "@milkdown/kit/prose/state";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { createMarkdownEditor, EditorParseError, parsedIntact, type EditorOptions, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
 import { matchesInitial } from "@/lib/composer-output";
 
@@ -108,6 +108,13 @@ const rewritten: Record<string, [input: string, output: string]> = {
   // sequence is dropped; reference links and images are inlined and their
   // definitions removed — the same inlining reference links already had.
   "an aligned table has its cells padded": ["| a   | b |\n|:----|----:|\n| 1   | 2 |\n", "| a  |  b |\n| :- | -: |\n| 1  |  2 |\n"],
+  // Syntax of other tools that is text here, and so has its `[` escaped. It reads the same in the Hub — the
+  // escape is not part of the text — but an exported file no longer means a callout or an embed to them.
+  "a callout marker has its bracket escaped": ["> [!NOTE]\n> hi\n", "> \\[!NOTE]\n> hi\n"],
+  "an embed has its brackets escaped": ["![[img.png]]\n", "!\\[\\[img.png]]\n"],
+  "a [TOC] marker has its bracket escaped": ["[TOC]\n", "\\[TOC]\n"],
+  // Held as a line break, which a table cell can only write as the tag (`table-cell-breaks.ts`).
+  "a <br> between text in a table cell becomes <br />": ["| a |\n| - |\n| one<br>two |\n", "| a            |\n| ------------ |\n| one<br />two |\n"],
   "an indented code block becomes fenced": ["    const a = 1;\n", "```\nconst a = 1;\n```\n"],
   "a tilde fence becomes backticks": ["~~~ts\nconst a = 1;\n~~~\n", "```ts\nconst a = 1;\n```\n"],
   "an ATX closing sequence is dropped": ["## Title ##\n", "## Title\n"],
@@ -404,5 +411,140 @@ describe("⌘/Ctrl Enter belongs to the form", () => {
       expect(calls.edits).toBe(0);
       expect(reachedForm).toHaveBeenCalledOnce();
     }
+  });
+});
+
+describe("a line break inside a table cell", () => {
+  // Markdown cannot hold a line ending inside a table row, so the serialiser wrote a break there
+  // as a space: the line a person broke with Shift+Enter came back joined. `<br />` is how a cell
+  // holds one, and what the reader shows as a break.
+  const table = (cell: string) => `| a |\n| - |\n| ${cell} |\n`;
+  const cellOf = (markdown: string) => markdown.trimEnd().split("\n").at(-1)!.replace(/^\|\s*|\s*\|$/g, "");
+  const nodesIn = (editor: MarkdownEditor) =>
+    editor.action((ctx) => {
+      const names: string[] = [];
+      ctx.get(editorViewCtx).state.doc.descendants((node) => { names.push(node.type.name); });
+      return names;
+    });
+
+  it("keeps the break a pasted table brings", async () => {
+    const { editor } = await open("x\n");
+    // What paste makes of clipboard HTML: the schema's parser.
+    editor.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      const holder = document.createElement("div");
+      holder.innerHTML = "<table><tr><th>a</th></tr><tr><td>one<br>two</td></tr></table>";
+      const pasted = ProseDOMParser.fromSchema(view.state.schema).parse(holder);
+      view.dispatch(view.state.tr.replaceWith(0, view.state.doc.content.size, pasted.content));
+    });
+    expect(nodesIn(editor)).toContain("hardbreak");
+    expect(cellOf(editor.getMarkdown())).toBe("one<br />two");
+  });
+
+  /** Shift+Enter at the end of the text `after`, as the keyboard sends it. */
+  function shiftEnter(editor: MarkdownEditor, after: string) {
+    editor.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      let caret = 0;
+      view.state.doc.descendants((node, pos) => {
+        const at = node.isText ? (node.text ?? "").indexOf(after) : -1;
+        if (!caret && at >= 0) caret = pos + at + after.length;
+      });
+      view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, caret)));
+      view.dom.focus();
+      view.dom.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", shiftKey: true, bubbles: true, cancelable: true }));
+    });
+  }
+  /** The command scrolls the caret into view, which asks for a layout jsdom does not have. */
+  function withLayout() {
+    const undo = [Range.prototype, Element.prototype].flatMap((proto) =>
+      (["getClientRects", "getBoundingClientRect"] as const).map((name) => {
+        const had = Object.getOwnPropertyDescriptor(proto, name);
+        Object.defineProperty(proto, name, { configurable: true, value: () => (name === "getClientRects" ? [new DOMRect()] : new DOMRect()) });
+        return () => (had ? Object.defineProperty(proto, name, had) : Reflect.deleteProperty(proto, name));
+      }),
+    );
+    onTestFinished(() => undo.forEach((restore) => restore()));
+  }
+
+  it("breaks the line on Shift+Enter", async () => {
+    withLayout();
+    const { editor } = await open(table("onetwo"));
+    shiftEnter(editor, "one");
+    expect(cellOf(editor.getMarkdown())).toBe("one<br />two");
+  });
+
+  it("keeps the table a table when Shift+Enter is pressed twice at the end of a cell", async () => {
+    withLayout();
+    const { editor } = await open(`| a | b |\n| - | - |\n| one | two |\n\nafter\n`);
+    shiftEnter(editor, "one");
+    shiftEnter(editor, "one");
+    const names = nodesIn(editor);
+    expect(names.filter((name) => name === "table")).toHaveLength(1);
+    expect(names.filter((name) => name === "table_cell")).toHaveLength(2);
+    expect(editor.getMarkdown()).toBe("| a   | b   |\n| --- | --- |\n| one | two |\n\nafter\n");
+  });
+
+  it("does not keep breaks typed at the end of a cell", async () => {
+    withLayout();
+    const { editor } = await open(table("one"));
+    shiftEnter(editor, "one");
+    shiftEnter(editor, "one");
+    shiftEnter(editor, "one");
+    expect(nodesIn(editor).filter((name) => name === "hardbreak")).toHaveLength(3);
+    expect(cellOf(editor.getMarkdown())).toBe("one");
+  });
+
+  it("keeps an empty line between two lines of a cell", async () => {
+    withLayout();
+    const { editor } = await open(table("onetwo"));
+    shiftEnter(editor, "one");
+    shiftEnter(editor, "one");
+    expect(cellOf(editor.getMarkdown())).toBe("one<br /><br />two");
+  });
+
+  it("still makes no break in a code block", async () => {
+    withLayout();
+    const { editor } = await open("```\nonetwo\n```\n");
+    shiftEnter(editor, "one");
+    expect(nodesIn(editor)).not.toContain("hardbreak");
+  });
+
+  it.each([["<br>"], ["<br/>"], ["<br />"], ["<BR>"]])("holds a %s written in a cell as a break, not as text", async (tag) => {
+    const { editor } = await open(table(`one${tag}two`));
+    const names = nodesIn(editor);
+    expect(names).toContain("hardbreak");
+    expect(names).not.toContain("html");
+    expect(cellOf(editor.getMarkdown())).toBe("one<br />two");
+  });
+
+  it("writes a document it saved back unchanged", async () => {
+    const saved = table("one<br />two<br />three");
+    const { editor } = await open(saved);
+    expect(editor.getMarkdown()).toBe(saved.replace("| a |\n| - |", "| a                       |\n| ----------------------- |"));
+  });
+
+  it("keeps a <br> that ends a cell: as a break it would be dropped on the way out", async () => {
+    const { editor } = await open(table("one<br>"));
+    expect(cellOf(editor.getMarkdown())).toBe("one<br>");
+  });
+
+  it("still holds a cell that is only a <br> as an empty cell", async () => {
+    const { editor } = await open(table("<br />"));
+    expect(nodesIn(editor)).not.toContain("hardbreak");
+    expect(cellOf(editor.getMarkdown())).toBe("");
+  });
+
+  it.each([
+    ["a break in a paragraph", "one\\\ntwo\n"],
+    ["a <br> in a paragraph", "one<br>two\n"],
+  ])("leaves %s as it was written", async (_name, markdown) => {
+    const { editor } = await open(markdown);
+    expect(editor.getMarkdown()).toBe(markdown);
+  });
+
+  it("leaves other HTML in a cell as it was written", async () => {
+    const { editor } = await open(table("one<u>two</u>"));
+    expect(cellOf(editor.getMarkdown())).toBe("one<u>two</u>");
   });
 });
