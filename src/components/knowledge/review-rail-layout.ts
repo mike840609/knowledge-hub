@@ -2,7 +2,7 @@
 
 import { useLayoutEffect, useRef, useState } from "react";
 import type { ReviewThreadView } from "@/modules/knowledge/domain/document-review";
-import { reviewAnchorRange } from "./review-selection";
+import { createReviewRangeResolver } from "./review-selection";
 
 type RailItem = { id: string; top: number | null; height: number };
 type RailLayout = { positions: Record<string, number>; height: number };
@@ -50,6 +50,10 @@ export function compareReviewPassages(a: ReviewThreadView, b: ReviewThreadView) 
 export function useReviewRailLayout(threads: ReviewThreadView[], markdown?: string, activeId?: string) {
   const ref = useRef<HTMLDivElement>(null);
   const [layout, setLayout] = useState<RailLayout>();
+  const measureRef = useRef<(() => void) | null>(null);
+  // A composer/status insertion can move the list without changing its size.
+  // Recheck the origin after every React commit, independently of ResizeObserver.
+  useLayoutEffect(() => { measureRef.current?.(); });
   useLayoutEffect(() => {
     const list = ref.current;
     const article = document.querySelector<HTMLElement>("[data-review-document]");
@@ -60,6 +64,10 @@ export function useReviewRailLayout(threads: ReviewThreadView[], markdown?: stri
     const wide = window.matchMedia("(min-width: 1200px)");
     let frame = 0;
     const cards = Array.from(list.querySelectorAll<HTMLElement>("[data-review-thread]"));
+    const resolve = createReviewRangeResolver(article, markdown);
+    const ranges = new Map(threads.map(thread => [thread.id,
+      thread.currentAnchor.match !== "OUTDATED" && thread.currentAnchor.anchor ? resolve(thread.currentAnchor.anchor) : null,
+    ]));
     const measure = () => {
       if (!wide.matches || !list.getClientRects().length) {
         setLayout(previous => previous === undefined ? previous : undefined);
@@ -69,13 +77,13 @@ export function useReviewRailLayout(threads: ReviewThreadView[], markdown?: stri
       const items = threads.flatMap(thread => {
         const card = cards.find(element => element.dataset.reviewThread === thread.id);
         if (!card) return [];
-        const range = thread.currentAnchor.match !== "OUTDATED" && thread.currentAnchor.anchor
-          ? reviewAnchorRange(article, markdown, thread.currentAnchor.anchor) : null;
+        const range = ranges.get(thread.id);
         return [{ id: thread.id, top: range ? range.getBoundingClientRect().top - listTop : null, height: card.getBoundingClientRect().height }];
       });
       const next = positionReviewThreads(items, activeId);
       setLayout(previous => JSON.stringify(previous) === JSON.stringify(next) ? previous : next);
     };
+    measureRef.current = measure;
     const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(measure); };
     const observer = new ResizeObserver(schedule);
     observer.observe(article);
@@ -87,6 +95,7 @@ export function useReviewRailLayout(threads: ReviewThreadView[], markdown?: stri
     document.fonts?.addEventListener("loadingdone", schedule);
     measure();
     return () => {
+      measureRef.current = null;
       cancelAnimationFrame(frame);
       observer.disconnect();
       window.removeEventListener("resize", schedule);

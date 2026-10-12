@@ -530,13 +530,13 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 
 .kh-review-thread-list > [data-review-thread] + [data-review-thread] { margin-top: 12px; }
 
-.kh-shared-document { width: 100%; max-width: 860px; margin-inline: auto; }
+.kh-shared-document { width: 100%; max-width: theme("maxWidth.reading"); margin-inline: auto; }
 .kh-shared-reading { position: relative; min-width: 0; width: 100%; }
-.kh-shared-reading > article { padding-inline-end: 40px; }
+.kh-shared-reading > article { padding-inline: 32px; }
 .kh-shared-review-panel { display: none; }
 
 @media (min-width: 1200px) {
-  .kh-shared-document[data-review-open] { display: flex; max-width: 1180px; }
+  .kh-shared-document[data-review-open] { display: flex; max-width: calc(theme("maxWidth.reading") + 320px); }
   .kh-shared-document[data-review-open] > .kh-shared-reading { flex: 1; }
   .kh-shared-document[data-review-open] > .kh-shared-review-panel {
     display: block;
@@ -546,7 +546,7 @@ input[type="search"]::-webkit-search-cancel-button:hover {
     padding-bottom: 24px;
   }
   .kh-share-page:has(.kh-shared-document[data-review-open]) .kh-share-heading,
-  .kh-share-page:has(.kh-shared-document[data-review-open]) .kh-review-entry { max-width: 1180px; }
+  .kh-share-page:has(.kh-shared-document[data-review-open]) .kh-review-entry { max-width: calc(theme("maxWidth.reading") + 320px); }
   .kh-review-thread-list[data-positioned] {
     position: relative;
     height: var(--review-list-height);

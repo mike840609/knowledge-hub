@@ -1,7 +1,7 @@
 "use client";
 import { useEffect } from "react";
 import type { ReviewThreadView, OwnerReviewThreadView } from "@/modules/knowledge/domain/document-review";
-import { reviewAnchorRange } from "./review-selection";
+import { createReviewRangeResolver } from "./review-selection";
 
 /** Native highlights never rewrite Markdown DOM or expose hidden/outdated quotes.
  * Browsers without the Highlight API retain the accessible quote buttons. */
@@ -9,9 +9,10 @@ export function useReviewHighlights(markdown: string, threads?: (ReviewThreadVie
   useEffect(() => {
     const root = document.querySelector<HTMLElement>("[data-review-document]");
     if (!root || !threads) return;
+    const resolve = createReviewRangeResolver(root, markdown);
     const ranges = threads.flatMap(thread => {
       if (("visibility" in thread && thread.visibility === "HIDDEN") || thread.currentAnchor.match === "OUTDATED" || !thread.currentAnchor.anchor) return [];
-      const range = reviewAnchorRange(root, markdown, thread.currentAnchor.anchor);
+      const range = resolve(thread.currentAnchor.anchor);
       return range ? [{ threadId: thread.id, range }] : [];
     });
     const registry = (globalThis.CSS as typeof CSS & { highlights?: Map<string, unknown> })?.highlights;
@@ -33,6 +34,7 @@ export function useReviewHighlights(markdown: string, threads?: (ReviewThreadVie
         const section = sections.find(item => item.dataset.reviewThread === target.threadId && item.getClientRects().length > 0);
         if (!section) return;
         const details = section.closest("details"); if (details) details.open = true;
+        if (section.closest("[data-review-rail]")) return; // Shared shell owns its focus handoff.
         section.focus({preventScroll:true});
         // The desktop card is placed beside this passage. Scrolling it into view can move
         // the very text the reader just clicked; only the drawer/owner list needs scrolling.

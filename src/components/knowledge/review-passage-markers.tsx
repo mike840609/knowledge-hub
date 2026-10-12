@@ -3,7 +3,7 @@
 import { useLayoutEffect, useState, type RefObject } from "react";
 import { MessageSquare } from "lucide-react";
 import type { ReviewThreadView } from "@/modules/knowledge/domain/document-review";
-import { reviewAnchorRange } from "./review-selection";
+import { createReviewRangeResolver } from "./review-selection";
 
 type Marker = { id: string; count: number; quote: string; top: number };
 
@@ -18,11 +18,12 @@ export function ReviewPassageMarkers({ readingRef, markdown, threads }: {
     const reading = readingRef.current;
     const article = reading?.querySelector<HTMLElement>("[data-review-document]");
     if (!reading || !article || !threads) { setMarkers([]); return; }
+    const resolve = createReviewRangeResolver(article, markdown);
     const groups = new Map<string, { id: string; count: number; quote: string; range: Range }>();
     for (const thread of threads) {
       if (thread.currentAnchor.match === "OUTDATED" || !thread.currentAnchor.anchor) continue;
       const anchor = thread.currentAnchor.anchor;
-      const range = reviewAnchorRange(article, markdown, anchor);
+      const range = resolve(anchor);
       if (!range) continue;
       const key = JSON.stringify(anchor.blockPath);
       const existing = groups.get(key);
@@ -54,7 +55,7 @@ export function ReviewPassageMarkers({ readingRef, markdown, threads }: {
   return <div className="pointer-events-none absolute inset-0" aria-label="Passage comments">
     {markers.map(marker => <button key={marker.id} type="button" data-review-marker={marker.id}
       aria-label={`${marker.count} ${marker.count === 1 ? "comment" : "comments"} on passage: ${marker.quote.slice(0, 80)}`}
-      className="pointer-events-auto absolute right-1 flex h-6 min-w-7 items-center justify-center gap-0.5 rounded text-caption text-kh-text-muted kh-focus-ring hover:bg-kh-bg-selected hover:text-kh-selected-text"
+      className="pointer-events-auto absolute right-1 flex h-6 min-w-7 items-center justify-center gap-0.5 rounded-sm text-caption text-kh-text-muted kh-focus-ring hover:bg-kh-bg-selected hover:text-kh-selected-text"
       style={{ top: marker.top }} onClick={() => document.dispatchEvent(new CustomEvent("review-focus-thread", { detail: marker.id }))}>
       <MessageSquare className="size-3" aria-hidden="true" /><span>{marker.count}</span>
     </button>)}

@@ -82,6 +82,7 @@ test("shared comments follow passage order and the selected card stays beside it
   await expect(addComment).toBeInViewport();
   await addComment.click();
   await expect(page.getByRole("textbox", { name: "Add comment" })).toBeInViewport();
+  await expect.poll(async () => Math.abs((await laterCard.boundingBox())!.y - await later.evaluate(textTop))).toBeLessThan(1);
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
 
   // Collapsing recovers the full centered reading layout without losing the passage.
@@ -210,4 +211,139 @@ test("wide screens default to centered reading and open a 320px rail on demand",
   await expect(rail).toBeHidden();
   await expect(page.getByRole("button", { name: "Open discussions" })).toBeFocused();
   expect((await article.boundingBox())!.x).toBeCloseTo(initialBox.x, 0);
+});
+
+async function seedSimpleThread(request: import("@playwright/test").APIRequestContext, doc: Awaited<ReturnType<typeof createReviewDocument>>) {
+  const origin = phase3Origin("viewer");
+  const response = await request.post(`${origin}/api/share-review/threads`, { headers: { Origin: origin }, data: {
+    token: doc.links[0].path.split("/").pop(), expectedRevisionId: doc.revisionId, idempotencyKey: crypto.randomUUID(), body: "Discussion to review",
+    anchor: { schemaVersion: 1, blockPath: [0], blockKind: "paragraph", startUtf16: 2, endUtf16: 9, exact: "😀 bold", prefix: "A ", suffix: " passage to review." },
+  } });
+  expect(response.status()).toBe(201);
+}
+
+test("keyboard expansion keeps a stable focus target and Escape preserves reply drafts", async ({ page, request }) => {
+  const doc = await createReviewDocument(request);
+  await seedSimpleThread(request, doc);
+  await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
+  await openReviewDiscussions(page);
+  const card = page.locator("[data-review-thread]").filter({ visible: true });
+  const expand = card.getByRole("button", { name: "Expand comment" });
+  await expand.focus();
+  await expect(expand).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(card.getByRole("button", { name: "😀 bold", exact: true })).toBeFocused();
+  // Reset to compact, then use keyboard activation instead of focus-triggered expansion.
+  await page.getByRole("button", { name: "Collapse discussions" }).click();
+  await openReviewDiscussions(page);
+  await expand.focus();
+  await page.keyboard.press("Enter");
+  await expect(card).toBeFocused();
+  await card.getByRole("button", { name: "Reply", exact: true }).click();
+  await card.getByRole("textbox", { name: "Reply" }).fill("Keep this draft");
+  await page.keyboard.press("Escape");
+  await expect(card.getByRole("textbox", { name: "Reply" })).toHaveValue("Keep this draft");
+  await expect(card.getByRole("textbox", { name: "Reply" })).toBeFocused();
+  await page.getByRole("button", { name: "Collapse discussions" }).click();
+  await openReviewDiscussions(page);
+  await expand.click();
+  await expect(card.getByRole("textbox", { name: "Reply" })).toHaveValue("Keep this draft");
+
+  // The same form key must not invoke the modal drawer's Escape dismissal.
+  await page.setViewportSize({ width: 390, height: 844 });
+  const drawer = page.getByRole("dialog");
+  await expect(drawer).toHaveCSS("opacity", "1");
+  await drawer.getByRole("button", { name: "Reply", exact: true }).click();
+  await drawer.getByRole("textbox", { name: "Reply" }).fill("Mobile draft");
+  await page.keyboard.press("Escape");
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByRole("textbox", { name: "Reply" })).toHaveValue("Mobile draft");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await drawer.getByRole("button", { name: "😀 bold", exact: true }).click();
+  await expect(drawer).toBeHidden();
+  await expect(page.locator("[data-review-document] p")).toBeFocused();
+});
+
+test("an outdated discussion's expansion button stays focused until activated", async ({ page, request }) => {
+  const doc = await createReviewDocument(request);
+  await seedSimpleThread(request, doc);
+  await page.route("**/api/share-review/threads/query", async route => {
+    const response = await route.fetch(); const json = await response.json();
+    json.threads[0].currentAnchor = { match: "OUTDATED", anchor: null };
+    await route.fulfill({ response, json });
+  });
+  await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
+  await openReviewDiscussions(page);
+  const card = page.locator("[data-review-thread]").filter({ visible: true });
+  const filter = page.getByRole("button", { name: "Filter discussions" });
+  await filter.focus();
+  await page.keyboard.press("Tab");
+  await expect(card.getByRole("button", { name: "Expand comment" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(card).toBeFocused();
+});
+
+test("collapsed selection offers Comment, and Escape preserves a new-comment draft", async ({ page, request }) => {
+  const doc = await createReviewDocument(request);
+  await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
+  await expect(page.getByRole("button", { name: "Open discussions, 0 comments", exact: true })).toBeVisible();
+  await selectPassage(page);
+  await page.getByRole("button", { name: "Comment on selection" }).click();
+  const input = page.getByRole("textbox", { name: "Add comment" });
+  await input.fill("New draft");
+  await page.keyboard.press("Escape");
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue("New draft");
+  await page.getByRole("button", { name: "Add comment", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Hide discussions, 1 comments", exact: true })).toBeVisible();
+});
+
+test("collapsed errors and stale revision notices remain visible, with stale replies enabled", async ({ page, request }) => {
+  const doc = await createReviewDocument(request);
+  await seedSimpleThread(request, doc);
+  let failed = true;
+  await page.route("**/api/share-review/threads/query", async route => {
+    if (failed) { failed = false; await route.fulfill({ status: 503, contentType: "application/json", body: "{}" }); return; }
+    const response = await route.fetch(); const json = await response.json();
+    await route.fulfill({ response, json: { ...json, revisionId: "new-revision" } });
+  });
+  await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
+  await expect(page.getByRole("status")).toContainText("unavailable");
+  await page.getByRole("button", { name: "Refresh comments" }).click();
+  await expect(page.getByRole("status")).toContainText("Document changed.");
+  await openReviewDiscussions(page);
+  const card = page.locator("[data-review-thread]").filter({ visible: true });
+  await card.getByRole("button", { name: "Expand comment" }).click();
+  await card.getByRole("button", { name: "Reply", exact: true }).click();
+  await card.getByRole("textbox", { name: "Reply" }).fill("Reply despite stale displayed revision");
+  await card.getByRole("button", { name: "Reply", exact: true }).click();
+  await expect(card).toContainText("Reply despite stale displayed revision");
+  await expect(page.getByRole("button", { name: "Comment on selection" })).toHaveCount(0);
+  await expect(page.locator("[data-review-marker]")).toHaveCount(0);
+});
+
+test("saved-share actions coexist with comments on mobile without overflow", async ({ page, request }) => {
+  const doc = await createReviewDocument(request);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
+  const save = page.getByRole("button", { name: "Save share", exact: true });
+  await expect(save).toBeEnabled();
+  try {
+  await save.click();
+  await expect(page.getByRole("button", { name: "Saved", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "View saved shares" })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  const saved = (await page.getByRole("button", { name: "Saved", exact: true }).boundingBox())!;
+  const entry = (await page.getByRole("button", { name: "Open discussions" }).boundingBox())!;
+  expect(saved.y + saved.height).toBeLessThanOrEqual(entry.y);
+  await openReviewDiscussions(page);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.getByRole("button", { name: "Close discussions" }).click();
+  await expect(page.getByRole("button", { name: "Open discussions" })).toBeFocused();
+  await page.screenshot({ path: "/tmp/document-review-saved-share-mobile.png", fullPage: true });
+  } finally {
+    const state = await request.get(`${phase3Origin("viewer")}/api/saved-shares/state?token=${doc.links[0].path.split("/").pop()}`);
+    const saved = await state.json();
+    if (saved.id) expect((await request.delete(`${phase3Origin("viewer")}/api/saved-shares/${saved.id}`, { headers: { Origin: phase3Origin("viewer") } })).ok()).toBe(true);
+  }
 });

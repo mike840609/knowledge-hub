@@ -34,3 +34,19 @@ test("document order is numeric, with outdated anchors at the end", () => {
   expect([thread("outdated"), thread("ten", [10]), thread("two-later", [2], 9), thread("two", [2]), thread("nested", [2, 0])]
     .sort(compareReviewPassages).map(item => item.id)).toEqual(["two", "two-later", "nested", "ten", "outdated"]);
 });
+
+test("one card clamps a passage above the toolbar and supports an active final card", () => {
+  expect(positionReviewThreads([{ id: "only", top: -20, height: 80 }], "only"))
+    .toEqual({ positions: { only: 0 }, height: 80 });
+  expect(positionReviewThreads([
+    { id: "first", top: 600, height: 100 },
+    { id: "middle", top: 600, height: 100 },
+    { id: "last", top: 600, height: 100 },
+  ], "last")).toEqual({ positions: { first: 376, middle: 488, last: 600 }, height: 700 });
+});
+
+test("same-passage cards remain ordered when their combined height exceeds the anchor offset", () => {
+  const items = Array.from({ length: 5 }, (_, index) => ({ id: String(index), top: 30, height: 100 }));
+  expect(positionReviewThreads(items, "4"))
+    .toEqual({ positions: { 0: 0, 1: 112, 2: 224, 3: 336, 4: 448 }, height: 548 });
+});

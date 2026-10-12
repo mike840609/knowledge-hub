@@ -31,7 +31,7 @@ export function ReviewReplyForm({ onSubmit, label = "Reply" }: { onSubmit: (body
   const [error, setError] = useState<string>();
   const request = useRef<{ body: string; key: string } | null>(null);
   if (!expanded) return <Button type="button" variant="ghost" className="mt-3" onClick={() => setExpanded(true)}>Reply</Button>;
-  return <form className="mt-3 space-y-2" onSubmit={async event => {
+  return <form className="mt-3 space-y-2" onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); } }} onSubmit={async event => {
     event.preventDefault(); if (busy || !body.trim()) return;
     if (!request.current || request.current.body !== body) request.current = { body, key: crypto.randomUUID() };
     setBusy(true); setError(undefined);
@@ -83,7 +83,7 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, canR
       return <section key={thread.id} data-review-thread={thread.id} data-active={active ? "" : undefined} tabIndex={-1} aria-label="Discussion thread" aria-current={active ? "true" : undefined} onFocus={event => {
         // A pointer focuses on mousedown. Moving the card then would move the button
         // out from under mouseup and swallow its click. Keyboard focus can activate now.
-        if (event.target.matches(":focus-visible")) onActivate?.(thread.id);
+        if (event.target.matches(":focus-visible") && (event.target === event.currentTarget || event.target.closest("blockquote"))) onActivate?.(thread.id);
       }} onClick={() => onActivate?.(thread.id)} style={layout ? { "--review-thread-top": `${layout.positions[thread.id] ?? 0}px` } as CSSProperties : undefined} className={`rounded-md border kh-focus-ring focus:border-kh-primary ${compact ? "p-3" : "p-4"} ${active ? "border-kh-primary bg-kh-bg-selected" : "border-kh-border bg-kh-bg"}`}>
         {(thread.status === "RESOLVED" || owner?.visibility === "HIDDEN" || thread.currentAnchor.match === "OUTDATED") && <p className="mb-2 text-caption text-kh-text-muted">{[thread.status === "RESOLVED" ? "Resolved" : "", owner?.visibility === "HIDDEN" ? "Hidden from reviewers" : "", thread.currentAnchor.match === "OUTDATED" ? "Passage outdated" : ""].filter(Boolean).join(" · ")}</p>}
         {thread.currentAnchor.anchor && <blockquote className="mb-3 border-l border-kh-border pl-3 text-body-sm text-kh-text-muted"><button type="button" disabled={!focusAnchor} className="line-clamp-2 text-left kh-focus-ring hover:text-kh-text" onClick={() => {
@@ -101,8 +101,8 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, canR
           </div>
           <p className={`whitespace-pre-wrap break-words ${compact ? "line-clamp-2" : ""}`}>{comment.body}</p>
         </li>)}</ol>
-        {compact && <Button type="button" variant="ghost" className="mt-2" onClick={() => onActivate?.(thread.id)}>{thread.comments.length > 1 ? `Show ${thread.comments.length - 1} ${thread.comments.length === 2 ? "reply" : "replies"}` : "Expand comment"}</Button>}
-        {!compact && thread.status === "OPEN" && owner?.visibility !== "HIDDEN" && writesEnabled && <ReviewReplyForm onSubmit={(body, key) => reply(thread.id, body, key)} />}
+        {compact && <Button type="button" variant="ghost" className="mt-2" onClick={event => { event.currentTarget.closest<HTMLElement>("[data-review-thread]")?.focus({ preventScroll: true }); onActivate?.(thread.id); }}>{thread.comments.length > 1 ? `Show ${thread.comments.length - 1} ${thread.comments.length === 2 ? "reply" : "replies"}` : "Expand comment"}</Button>}
+        {thread.status === "OPEN" && owner?.visibility !== "HIDDEN" && writesEnabled && <div hidden={compact}><ReviewReplyForm onSubmit={(body, key) => reply(thread.id, body, key)} /></div>}
       </section>;
     })}
     </div>

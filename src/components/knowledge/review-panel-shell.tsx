@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Drawer } from "@/components/ui/drawer";
 
-export function ReviewPanelShell({ children, open, onOpenChange }: { children: ReactNode; open: boolean; onOpenChange: (open: boolean) => void }) {
+export function ReviewPanelShell({ children, open, onOpenChange, returnFocus }: { children: ReactNode; open: boolean; onOpenChange: (open: boolean) => void; returnFocus: () => void }) {
   const [wide, setWide] = useState(false);
   const pendingThread = useRef<string | null>(null);
   const pendingPassage = useRef<(() => void) | null>(null);
@@ -54,10 +54,12 @@ export function ReviewPanelShell({ children, open, onOpenChange }: { children: R
       const locate = pendingPassage.current;
       pendingPassage.current = null;
       locate();
+    } else if (!isOpen && !wide) {
+      returnFocus();
     }
   }
   return <>
     <div className="hidden h-full min-[1200px]:block [&>div]:h-full">{children}</div>
-    <Drawer open={open && !wide} onOpenChange={onOpenChange} onOpenChangeComplete={afterTransition} finalFocus={pendingPassage.current ? false : undefined} title="Comments" label="Close discussions">{children}</Drawer>
+    <Drawer open={open && !wide} onOpenChange={onOpenChange} onOpenChangeComplete={afterTransition} finalFocus={false} title="Comments" label="Close discussions">{children}</Drawer>
   </>;
 }
