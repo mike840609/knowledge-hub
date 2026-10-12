@@ -138,6 +138,13 @@ describe("the share link is the single caller-less content path", () => {
     expect(callerless).toEqual(["queryForLink"]);
   });
 
+  it("every saved-share entry requires a trusted caller, including snapshot reads", () => {
+    const methods = callables("src/modules/knowledge/application/saved-share-service.ts");
+    expect(methods.length).toBeGreaterThanOrEqual(4);
+    const callerless = methods.filter(method => !requiresCaller(method.parameters)).map(method => method.name);
+    expect(callerless).toEqual([]);
+  });
+
   it("only the review read boundary reaches the identity-free review service", () => {
     const callers = ["src/server", "src/app", "src/components"]
       .flatMap(filesUnder)

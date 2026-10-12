@@ -112,3 +112,52 @@ Sixteen synthetic desktop/mobile light/dark screenshots are in
 captures include a no-horizontal-overflow assertion. Public reader Save/Saved,
 My shares and Saved shares were captured. The synthetic databases were disposed
 by the test runner; screenshots contain no real content or active real grants.
+
+## PR #167 review follow-up
+
+The follow-up review identified three contract/coverage issues. All were addressed:
+
+- Added an explicit trusted-caller guard for every public SavedShareService entry,
+  including reads through the snapshot port. A temporary caller-less `peek(token)`
+  mutation caused the new test to fail while the existing nine checks passed;
+  restoring the safe service made all ten boundary checks pass.
+- Updated CLAUDE.md to document the third token-driven path: authenticated,
+  recipient-owned saved-share metadata. The two anonymous entries remain the only
+  caller-less exceptions, and saving never grants workspace search or membership.
+- Reused `tabListClasses` and `tabClasses` for query-based Shares navigation,
+  preserving route links and aria-current while aligning with the tab contract.
+
+Also added the saved-shares canonical row to README.zh-TW.md and corrected the
+plan's nonexistent schema-test filename/checked-step description. Schema shape
+is reviewed in the migration; no separate automated schema snapshot test is claimed.
+
+Fresh local verification after these edits:
+
+| Check | Result |
+| --- | --- |
+| Full unit suite | 178 files, 2,139 passed |
+| Full isolated MariaDB integration suite | 79 files, 716 passed |
+| Saved-shares production E2E | 3 passed |
+| Typecheck and full lint | Passed |
+| Production builds used by E2E | Passed |
+
+Original-head GitHub CI at bbda6df was also independently inspected:
+https://github.com/mike840609/knowledge-hub/actions/runs/38188336043
+Unit, integration, build, both E2E shards and the aggregate E2E gate all passed.
+The external review's inability to run DB/browser checks in its own environment
+is distinct from these recorded local and CI results.
+
+### MariaDB query plan
+
+Ran EXPLAIN FORMAT=JSON against the actual repository list SQL in an isolated
+MariaDB database, using 150 synthetic share links/saved rows across recipients.
+The target recipient owned five rows; the returned list contained those five.
+
+- Recipient table `b`: range access through `idx_saved_share_recipient`, estimated 5 rows.
+- Link/document/revision/source/workspace/membership/user joins: `eq_ref` on PRIMARY,
+  estimated one row per lookup.
+- Neither derived table was materialized; the plan did not scan all share links.
+
+This is evidence for the tested MariaDB configuration/data distribution, not a
+promise that every future optimizer configuration or production distribution
+selects the same plan. All synthetic rows and the isolated database were disposed.
