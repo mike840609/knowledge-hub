@@ -46,8 +46,12 @@ export function useDocumentShortcuts(workspaceId: string): {
   const [settledFor, setSettledFor] = useState<string | null>(null);
   // `update` must not depend on the current value, or every caller would have
   // to re-create its effects whenever a star moved.
+  //
+  // The newest value, which state is not until its transition lands: everything that sets state
+  // sets this first. It is never set from state — a render that came before the transition would
+  // put the older value back, and the favourites request, coming home then, would write that over
+  // what was stored: the document just opened, gone from the recents on the next page.
   const current = useRef(shortcuts);
-  current.current = shortcuts;
 
   useEffect(() => {
     // Read in an effect, not in the initializer: the server renders this too,

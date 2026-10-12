@@ -11,6 +11,13 @@ export const CALLOUT_ATTRIBUTE = "data-callout";
 // The marker and nothing else on its line.
 const MARKER = new RegExp(`^\\[!(${CALLOUT_KINDS.join("|")})\\][ \\t]*(?:\\n|$)`, "i");
 
+const MARKER_LINE = new RegExp(`^\\[!(${CALLOUT_KINDS.join("|")})\\][ \\t]*$`, "i");
+
+/** The kind a line names, when it is the marker and nothing else. For the editor, which holds a quote's lines apart. */
+export function calloutKind(line: string): CalloutKind | null {
+  return (MARKER_LINE.exec(line)?.[1].toLowerCase() as CalloutKind | undefined) ?? null;
+}
+
 /**
  * Marks a quote that opens with `[!NOTE]` (or `TIP`, `IMPORTANT`, `WARNING`, `CAUTION`) alone on
  * its first line as a callout of that kind, and takes the marker out of what is shown. How it is

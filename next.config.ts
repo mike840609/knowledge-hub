@@ -10,6 +10,10 @@ const nextConfig: NextConfig = {
   // Issue #20 second layer: even if a remote image URL ever reaches markup,
   // the browser must refuse to load it. `img-src 'self'` allows only
   // same-origin / relative images (data: intentionally not allowed).
+  //
+  // A page gets its policy from `src/middleware.ts`, which sets this header again
+  // with a nonce for scripts and replaces what is set here. These values are what
+  // a path the middleware does not match is left with: API answers and static files.
   async headers() {
     return [
       {

@@ -11,3 +11,10 @@
  */
 export const THEME_PRE_PAINT_SCRIPT =
   `var d=document.documentElement;try{d.dataset.theme=localStorage.getItem("kh:theme")==="dark"?"dark":"light"}catch(e){d.dataset.theme="light"}`;
+
+/**
+ * The script's SHA-256, as a Content-Security-Policy source. `global-error` is a client component
+ * and cannot be handed the response's nonce, so its copy of the script is allowed by what it is.
+ * `tests/unit/content-security-policy.test.ts` fails when the script changes and this does not.
+ */
+export const THEME_PRE_PAINT_SCRIPT_HASH = "sha256-4XMUcdTonND2mta2axxz9RUS9ABay14bKTGF8ZOmYtc=";
