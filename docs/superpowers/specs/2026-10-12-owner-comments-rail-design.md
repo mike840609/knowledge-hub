@@ -128,6 +128,12 @@ what awaits, read a remark, answer it, settle it — and changed in five places.
 Left as they were: resolve before the menu (the common act before the rare
 one), refresh at the far right, and the shared page's bar.
 
+The shared page's rail was given the same heading row afterwards, so the two
+pages that share a card share what is above it: `Comments · All comments ▾ …
+refresh, close`, with Add comment — the one thing a reader does there that an
+owner does not — on the row beneath. It had three rows, and a panel glyph to
+close.
+
 ## The pane decides, not the window
 
 On a shared page the question "is there room for a rail?" is a matter of the

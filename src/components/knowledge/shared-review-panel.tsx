@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { ReviewAnchor, ReviewThreadView } from "@/modules/knowledge/domain/document-review";
 import { useReviewHighlights } from "./review-highlights";
-import { RefreshCw, MessageSquare, MessageSquarePlus, PanelRightClose } from "lucide-react";
+import { RefreshCw, MessageSquare, MessageSquarePlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
-import { ReviewReplyForm, ReviewThreadList, reviewRequest } from "./review-thread-list";
+import { ReviewFilterMenu, ReviewReplyForm, ReviewThreadList, reviewRequest, type ReviewFilter } from "./review-thread-list";
 import { ReviewPanelShell } from "./review-panel-shell";
 import { focusReviewAnchor, selectedReviewAnchor } from "./review-selection";
 import { ReviewPassageMarkers } from "./review-passage-markers";
@@ -22,6 +22,7 @@ export function SharedReviewPanel({ token, revisionId, markdown, children }: { t
   const entryRef = useRef<HTMLButtonElement>(null);
   const readingRef = useRef<HTMLDivElement>(null);
   const inline = useReviewRailInline();
+  const [filter, setFilter] = useState<ReviewFilter>("ALL");
   const changeOpen = useCallback((next: boolean) => {
     setOpen(next);
     if (!next) {
@@ -82,17 +83,23 @@ export function SharedReviewPanel({ token, revisionId, markdown, children }: { t
       <aside id="shared-document-discussions" className="kh-review-panel" aria-label="Document discussions" onKeyDown={event => { if (!event.defaultPrevented && event.key === "Escape" && reviewRailInline()) changeOpen(false); }}>
     <ReviewPanelShell open={open} inline={inline} onOpenChange={changeOpen} returnFocus={() => entryRef.current?.focus({ preventScroll: true })}><div>
       <div className="kh-review-toolbar">
-      <div className="kh-review-rail-only"><div className="mb-3 flex items-center justify-between"><h2 className="text-body font-medium">Comments</h2><Tooltip label="Hide discussions"><Button type="button" variant="ghost" icon aria-label="Collapse discussions" onClick={() => changeOpen(false)}><PanelRightClose className="size-4" aria-hidden="true" /></Button></Tooltip></div></div>
-      {!result && <Tooltip label="Refresh comments"><Button type="button" variant="ghost" icon aria-label="Refresh comments" onClick={() => void load()}><RefreshCw className="size-4" aria-hidden="true" /></Button></Tooltip>}
+      {/* One row, as the owner's rail has: what this is and which of it is listed, then what acts
+          on it. As a drawer the drawer names itself and closes itself, so the name and the cross
+          are the rail's alone. */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1"><h2 className="kh-review-rail-only text-body font-medium">Comments</h2>{result && result.threads.length > 0 && <ReviewFilterMenu value={filter} onChange={setFilter} />}</div>
+        <div className="flex shrink-0 items-center gap-1"><Tooltip label="Refresh comments"><Button type="button" variant="ghost" icon aria-label="Refresh comments" onClick={() => void load()}><RefreshCw className="size-4" aria-hidden="true" /></Button></Tooltip><span className="kh-review-rail-only"><Tooltip label="Hide comments"><Button type="button" variant="ghost" icon aria-label="Collapse discussions" onClick={() => changeOpen(false)}><X className="size-4" aria-hidden="true" /></Button></Tooltip></span></div>
+      </div>
       {error && <p role="status" className="mt-3 text-body-sm">{error}</p>}
       {result && <div className="mt-3">
         {revisionChanged && <p role="status" className="mb-3 text-body-sm">Document changed. Refresh this page before selecting or locating a passage. You can still reply to existing discussions.</p>}
-        <div className="mb-3 flex items-center justify-between gap-2">{result.writesEnabled && !revisionChanged && <Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={capture} aria-label="Comment on selection"><MessageSquarePlus className="size-4" aria-hidden="true" />Add comment</Button>}<Tooltip label="Refresh comments"><Button type="button" variant="ghost" icon aria-label="Refresh comments" onClick={() => void load()}><RefreshCw className="size-4" aria-hidden="true" /></Button></Tooltip></div>
+        {/* The one thing a reader does here that an owner does not, on a row of its own. */}
+        {result.writesEnabled && !revisionChanged && <div className="mb-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={capture} aria-label="Comment on selection"><MessageSquarePlus className="size-4" aria-hidden="true" />Add comment</Button></div>}
         {!result.writesEnabled && <p className="mb-3 text-body-sm text-kh-text-muted">{result.callerUserId === null ? "Sign in to add a comment." : "Adding comments is currently disabled."}</p>}
       </div>}
       </div>
       {selection && <div className="kh-review-composer mb-4 border border-kh-border bg-kh-bg p-4"><blockquote className="border-l border-kh-border pl-3 text-body-sm">{selection.exact}</blockquote><ReviewReplyForm label="Add comment" onSubmit={async (body, idempotencyKey) => { const created = await reviewRequest<{ id: string }>("/api/share-review/threads", { token, expectedRevisionId: revisionId, anchor: selection, body, idempotencyKey }); pendingSelection.current = null; setSelection(null); setActiveThreadId(created.id); await load(); }} /><Button type="button" variant="ghost" className="mt-2" onClick={() => { pendingSelection.current = null; setSelection(null); }}>Cancel</Button></div>}
-      {result && <ReviewThreadList railMarkdown={revisionChanged ? undefined : markdown} activeThreadId={activeThreadId} onActivate={setActiveThreadId} focusAnchor={revisionChanged ? undefined : anchor => { const root = document.querySelector<HTMLElement>("[data-review-document]"); if (root) focusReviewAnchor(root, markdown, anchor); }} threads={result.threads} writesEnabled={result.writesEnabled} reply={async (threadId, body, idempotencyKey) => { await reviewRequest(`/api/share-review/threads/${threadId}/replies`, { token, body, idempotencyKey }); await load(); }} />}
+      {result && <ReviewThreadList filter={filter} onFilterChange={setFilter} railMarkdown={revisionChanged ? undefined : markdown} activeThreadId={activeThreadId} onActivate={setActiveThreadId} focusAnchor={revisionChanged ? undefined : anchor => { const root = document.querySelector<HTMLElement>("[data-review-document]"); if (root) focusReviewAnchor(root, markdown, anchor); }} threads={result.threads} writesEnabled={result.writesEnabled} reply={async (threadId, body, idempotencyKey) => { await reviewRequest(`/api/share-review/threads/${threadId}/replies`, { token, body, idempotencyKey }); await load(); }} />}
     </div></ReviewPanelShell>
       </aside>
     </div>
