@@ -45,11 +45,12 @@ export function selectedReviewAnchor(root: HTMLElement, markdown: string, select
 
 /** Build a proven DOM range from canonical offsets, including collapsed soft whitespace.
  * Tight list text excludes nested lists, matching the AST paragraph leaf. */
-export function reviewAnchorRange(root: HTMLElement, markdown: string, anchor: ReviewAnchor): Range | null {
+export function createReviewRangeResolver(root: HTMLElement, markdown: string) {
   const blocks = projectReviewBlocks(markdown).filter(block => block.kind === "paragraph" || block.kind === "heading");
-  const index = blocks.findIndex(block => JSON.stringify(block.path) === JSON.stringify(anchor.blockPath));
-  const element = leafElements(root)[index];
-  const block = blocks[index];
+  const elements = leafElements(root);
+  const byPath = new Map(blocks.map((block, index) => [JSON.stringify(block.path), { block, element: elements[index] }]));
+  return (anchor: ReviewAnchor): Range | null => {
+  const { block, element } = byPath.get(JSON.stringify(anchor.blockPath)) ?? {};
   if (!element || !block?.selectable || normalized(leafText(element)) !== block.text || block.text.slice(anchor.startUtf16, anchor.endUtf16) !== anchor.exact) return null;
   const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
@@ -76,6 +77,11 @@ export function reviewAnchorRange(root: HTMLElement, markdown: string, anchor: R
   if (!begin || !end) return null;
   const range = document.createRange(); range.setStart(begin.node,begin.offset);range.setEnd(end.node,end.offset);
   return normalized(readableText(range.cloneContents())) === anchor.exact ? range : null;
+  };
+}
+
+export function reviewAnchorRange(root: HTMLElement, markdown: string, anchor: ReviewAnchor): Range | null {
+  return createReviewRangeResolver(root, markdown)(anchor);
 }
 
 /** Focus a current quote without inserting nodes into rendered Markdown. */

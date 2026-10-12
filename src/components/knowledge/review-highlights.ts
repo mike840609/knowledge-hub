@@ -1,25 +1,30 @@
 "use client";
 import { useEffect } from "react";
 import type { ReviewThreadView, OwnerReviewThreadView } from "@/modules/knowledge/domain/document-review";
-import { reviewAnchorRange } from "./review-selection";
+import { createReviewRangeResolver } from "./review-selection";
 
 /** Native highlights never rewrite Markdown DOM or expose hidden/outdated quotes.
  * Browsers without the Highlight API retain the accessible quote buttons. */
-export function useReviewHighlights(markdown: string, threads?: (ReviewThreadView | OwnerReviewThreadView)[]) {
+export function useReviewHighlights(markdown: string, threads?: (ReviewThreadView | OwnerReviewThreadView)[], activeThreadId?: string) {
   useEffect(() => {
     const root = document.querySelector<HTMLElement>("[data-review-document]");
     if (!root || !threads) return;
+    const resolve = createReviewRangeResolver(root, markdown);
     const ranges = threads.flatMap(thread => {
       if (("visibility" in thread && thread.visibility === "HIDDEN") || thread.currentAnchor.match === "OUTDATED" || !thread.currentAnchor.anchor) return [];
-      const range = reviewAnchorRange(root, markdown, thread.currentAnchor.anchor);
+      const range = resolve(thread.currentAnchor.anchor);
       return range ? [{ threadId: thread.id, range }] : [];
     });
     const registry = (globalThis.CSS as typeof CSS & { highlights?: Map<string, unknown> })?.highlights;
     const HighlightClass = (globalThis as typeof globalThis & { Highlight?: new (...ranges: Range[]) => unknown }).Highlight;
-    if (registry && HighlightClass) registry.set("document-review", new HighlightClass(...ranges.map(item => item.range)));
+    if (registry && HighlightClass) {
+      registry.set("document-review", new HighlightClass(...ranges.map(item => item.range)));
+      registry.set("document-review-active", new HighlightClass(...ranges.filter(item => item.threadId === activeThreadId).map(item => item.range)));
+    }
     function focusDiscussion(event: PointerEvent) {
       if (!window.getSelection()?.isCollapsed) return;
-      const target = ranges.find(({range}) => Array.from(range.getClientRects()).some(rect => event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom));
+      const candidates = ranges.filter(({range}) => Array.from(range.getClientRects()).some(rect => event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom));
+      const target = candidates.find(item => item.threadId === activeThreadId) ?? candidates[0];
       if (!target) return;
       document.dispatchEvent(new CustomEvent("review-focus-thread", { detail: target.threadId }));
       // The drawer mounts its contents in response to the event.
@@ -29,10 +34,14 @@ export function useReviewHighlights(markdown: string, threads?: (ReviewThreadVie
         const section = sections.find(item => item.dataset.reviewThread === target.threadId && item.getClientRects().length > 0);
         if (!section) return;
         const details = section.closest("details"); if (details) details.open = true;
-        section.focus({preventScroll:true}); section.scrollIntoView({block:"nearest",behavior:"smooth"});
+        if (section.closest("[data-review-rail]")) return; // Shared shell owns its focus handoff.
+        section.focus({preventScroll:true});
+        // The desktop card is placed beside this passage. Scrolling it into view can move
+        // the very text the reader just clicked; only the drawer/owner list needs scrolling.
+        if (!section.closest("[data-review-rail]") || !window.matchMedia("(min-width: 1200px)").matches) section.scrollIntoView({block:"nearest",behavior:"smooth"});
       }));
     }
     root.addEventListener("pointerup", focusDiscussion);
-    return () => { root.removeEventListener("pointerup", focusDiscussion); registry?.delete("document-review"); };
-  }, [markdown, threads]);
+    return () => { root.removeEventListener("pointerup", focusDiscussion); registry?.delete("document-review"); registry?.delete("document-review-active"); };
+  }, [markdown, threads, activeThreadId]);
 }

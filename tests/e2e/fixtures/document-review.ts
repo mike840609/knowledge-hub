@@ -27,3 +27,12 @@ export async function selectPassage(page: Page, text = "😀 bold") {
     const selection = window.getSelection()!; selection.removeAllRanges(); selection.addRange(range);
   }, text);
 }
+
+export async function openReviewDiscussions(page: Page) {
+  const entry = page.getByRole("button", { name: /^(Open|Hide) discussions/, includeHidden: true });
+  await expect(entry).toBeVisible();
+  await expect(page.locator(".kh-shared-document")).toHaveAttribute("data-review-ready", "");
+  if (await entry.getAttribute("aria-expanded") === "false") await entry.click();
+  await expect(entry).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("button", { name: "Refresh comments" })).toBeVisible();
+}
