@@ -32,15 +32,15 @@ export default async function SharedDocumentPage({ params }: SharedPageProps) {
   const shared = await getSharedDocument(token);
   if (!shared) notFound();
   return (
-    <main className="min-h-screen bg-kh-bg">
+    <main className="kh-share-page min-h-screen bg-kh-bg">
       <div className="border-b border-kh-border">
-        <div className="kh-reading-column flex min-h-14 items-center justify-between gap-3 py-2">
+        <div className="kh-share-heading kh-reading-column flex min-h-14 items-center justify-between gap-3 py-2">
           <span className="text-body font-semibold text-kh-text">Knowledge Hub</span>
           <Link prefetch={false} href={`/s/${token}/open`} className={buttonClasses({ variant: "ghost" })}>Open in Knowledge Hub</Link>
         </div>
       </div>
       <header>
-        <div className="kh-reading-column pb-3 pt-5">
+        <div className="kh-share-heading kh-reading-column pb-3 pt-5">
           {!markdownOpensWithHeading(shared.markdown) ? <h1 className="text-heading font-semibold tracking-tight text-kh-text">{shared.title}</h1> : null}
           <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-kh-text-muted">
             <span>{`Shared by ${shared.sharedByName}`}</span>
@@ -51,12 +51,11 @@ export default async function SharedDocumentPage({ params }: SharedPageProps) {
           </p>
         </div>
       </header>
-      <div className="mx-auto flex max-w-[1400px] flex-col items-start min-[1200px]:flex-row">
+      <SharedReviewPanel token={token} revisionId={shared.revisionId} markdown={shared.markdown}>
       <article data-review-document className="kh-reading-column min-w-0 pb-6 pt-6 [&>div>:first-child]:mt-0">
         <MarkdownRenderer markdown={shared.markdown} />
       </article>
-      <SharedReviewPanel token={token} revisionId={shared.revisionId} markdown={shared.markdown} />
-      </div>
+      </SharedReviewPanel>
       <footer className="kh-reading-column pb-10 pt-4">
         <div className="flex flex-wrap items-center justify-between gap-4 border-t border-kh-border pt-5">
           <div><p className="text-body font-medium text-kh-text">Keep useful knowledge within reach.</p><p className="mt-1 text-body-sm text-kh-text-muted">Organize documents and search your team’s knowledge in Knowledge Hub.</p></div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { OwnerReviewThreadView, ReviewThreadView } from "@/modules/knowledge/domain/document-review";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Timestamp } from "@/components/ui/timestamp";
@@ -10,6 +10,7 @@ import { MenuRoot, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/me
 import { buttonClasses } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
+import { compareReviewPassages, useReviewRailLayout } from "./review-rail-layout";
 
 export async function reviewRequest<T>(url: string, body?: unknown): Promise<T> {
   const response = await fetch(url, { method: body === undefined ? "GET" : "POST", credentials: "same-origin", cache: "no-store", referrerPolicy: "origin", redirect: "error", headers: body === undefined ? undefined : { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -43,13 +44,16 @@ export function ReviewReplyForm({ onSubmit, label = "Reply" }: { onSubmit: (body
   </form>;
 }
 
-export function ReviewThreadList({ threads, writesEnabled, reply, moderate, canResolve = true, focusAnchor }: {
+export function ReviewThreadList({ threads, writesEnabled, reply, moderate, canResolve = true, focusAnchor, railMarkdown, activeThreadId, onActivate }: {
   threads: (ReviewThreadView | OwnerReviewThreadView)[];
   writesEnabled: boolean;
   reply: (threadId: string, body: string, key: string) => Promise<void>;
   focusAnchor?: (anchor: NonNullable<ReviewThreadView["currentAnchor"]["anchor"]>) => void;
   canResolve?: boolean;
   moderate?: (threadId: string, action: "resolution" | "visibility", value: string, commentId?: string) => Promise<void>;
+  railMarkdown?: string;
+  activeThreadId?: string;
+  onActivate?: (threadId: string) => void;
 }) {
   const [pendingHide, setPendingHide] = useState<{ threadId: string; commentId?: string }>();
   const [filter, setFilter] = useState<"ALL" | "OPEN" | "RESOLVED">("ALL");
@@ -61,29 +65,46 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, canR
     setBusy(true); setError(undefined);
     try { await moderate?.(threadId, action, value, commentId); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not update discussion."); } finally { setBusy(false); setPendingHide(undefined); }
   }
-  const visible = threads.filter(thread => filter === "ALL" || thread.status === filter);
+  const visible = useMemo(() => {
+    const filtered = threads.filter(thread => filter === "ALL" || thread.status === filter);
+    return railMarkdown === undefined ? filtered : filtered.sort(compareReviewPassages);
+  }, [threads, filter, railMarkdown]);
+  const { ref: railRef, layout } = useReviewRailLayout(visible, railMarkdown, activeThreadId);
   return <div className="space-y-3">
     <ConfirmDialog open={!!pendingHide} onOpenChange={open => { if (!open) setPendingHide(undefined); }} title="Hide from reviewers?" description="This content will be hidden from all reviewers. It remains available to you for moderation." confirmLabel="Confirm hide" onConfirm={() => { if(pendingHide) void act(pendingHide.threadId,"visibility","HIDDEN",pendingHide.commentId,true); }} />
     {threads.length > 0 && <MenuRoot><MenuTrigger className={buttonClasses({ variant: "ghost" })} aria-label="Filter discussions">{filter === "ALL" ? "All comments" : filter === "OPEN" ? "Open" : "Resolved"}<ChevronDown className="size-4" aria-hidden="true" /></MenuTrigger><MenuContent>{(["ALL", "OPEN", "RESOLVED"] as const).map(value => <MenuItem key={value} onClick={() => setFilter(value)}>{value === "ALL" ? "All comments" : value === "OPEN" ? "Open" : "Resolved"}</MenuItem>)}</MenuContent></MenuRoot>}
     {error && <p role="alert" className="text-body-sm">{error}</p>}
     {visible.length === 0 && <p className="py-6 text-body-sm text-kh-text-muted">{threads.length === 0 ? "No comments yet." : "No comments here."}</p>}
+    <div ref={railRef} data-review-rail={railMarkdown !== undefined ? "" : undefined} data-positioned={layout ? "" : undefined} className="kh-review-thread-list" style={layout ? { "--review-list-height": `${layout.height}px` } as CSSProperties : undefined}>
     {visible.map(thread => {
       const owner = "visibility" in thread ? thread : undefined;
-      return <section key={thread.id} data-review-thread={thread.id} tabIndex={-1} aria-label="Discussion thread" className="rounded-md border border-kh-border bg-kh-bg p-4 kh-focus-ring focus:border-kh-primary">
+      const active = activeThreadId === thread.id;
+      const compact = !!onActivate && !active;
+      return <section key={thread.id} data-review-thread={thread.id} data-active={active ? "" : undefined} tabIndex={-1} aria-label="Discussion thread" aria-current={active ? "true" : undefined} onFocus={event => {
+        // A pointer focuses on mousedown. Moving the card then would move the button
+        // out from under mouseup and swallow its click. Keyboard focus can activate now.
+        if (event.target.matches(":focus-visible")) onActivate?.(thread.id);
+      }} onClick={() => onActivate?.(thread.id)} style={layout ? { "--review-thread-top": `${layout.positions[thread.id] ?? 0}px` } as CSSProperties : undefined} className={`rounded-md border kh-focus-ring focus:border-kh-primary ${compact ? "p-3" : "p-4"} ${active ? "border-kh-primary bg-kh-bg-selected" : "border-kh-border bg-kh-bg"}`}>
         {(thread.status === "RESOLVED" || owner?.visibility === "HIDDEN" || thread.currentAnchor.match === "OUTDATED") && <p className="mb-2 text-caption text-kh-text-muted">{[thread.status === "RESOLVED" ? "Resolved" : "", owner?.visibility === "HIDDEN" ? "Hidden from reviewers" : "", thread.currentAnchor.match === "OUTDATED" ? "Passage outdated" : ""].filter(Boolean).join(" · ")}</p>}
-        {thread.currentAnchor.anchor && <blockquote className="mb-3 border-l border-kh-border pl-3 text-body-sm text-kh-text-muted"><button type="button" disabled={!focusAnchor} className="line-clamp-2 text-left kh-focus-ring hover:text-kh-text" onClick={() => { document.dispatchEvent(new Event("review-focus-passage")); requestAnimationFrame(() => requestAnimationFrame(() => focusAnchor?.(thread.currentAnchor.anchor!))); }}>{thread.currentAnchor.anchor.exact}</button></blockquote>}
+        {thread.currentAnchor.anchor && <blockquote className="mb-3 border-l border-kh-border pl-3 text-body-sm text-kh-text-muted"><button type="button" disabled={!focusAnchor} className="line-clamp-2 text-left kh-focus-ring hover:text-kh-text" onClick={() => {
+          const locate = () => focusAnchor?.(thread.currentAnchor.anchor!);
+          const navigation = new CustomEvent("review-focus-passage", { cancelable: true, detail: locate });
+          if (document.dispatchEvent(navigation)) requestAnimationFrame(() => requestAnimationFrame(locate));
+        }}>{thread.currentAnchor.anchor.exact}</button></blockquote>}
         {owner && thread.currentAnchor.match === "OUTDATED" && <blockquote className="mb-3 border-l border-kh-border pl-3 text-body-sm text-kh-text-muted">Original passage (owner only): {owner.originalAnchor.exact}</blockquote>}
-        <ol className="space-y-4">{thread.comments.map((comment, index) => <li key={comment.id} className="text-body-sm">
+        <ol className="space-y-4">{(compact ? thread.comments.slice(0, 1) : thread.comments).map((comment, index) => <li key={comment.id} className="text-body-sm">
           <div className="mb-2 flex items-start gap-2">
-            <span aria-hidden="true" className="flex size-8 shrink-0 items-center justify-center rounded-full bg-kh-bg-selected font-medium text-kh-selected-text">{(comment.authorName ?? "C").slice(0, 1).toUpperCase()}</span>
-            <div className="min-w-0 flex-1"><p className="truncate font-medium">{comment.authorName ?? "Company colleague"}{comment.visibility === "HIDDEN" ? " · Hidden" : ""}</p><p className="text-caption text-kh-text-muted"><Timestamp value={comment.createdAt} /></p></div>
+            <span aria-hidden="true" className={`flex ${compact ? "size-6" : "size-8"} shrink-0 items-center justify-center rounded-full bg-kh-bg-selected font-medium text-kh-selected-text`}>{(comment.authorName ?? "C").slice(0, 1).toUpperCase()}</span>
+            <div className="min-w-0 flex-1"><p className="truncate font-medium">{comment.authorName ?? "Company colleague"}{comment.visibility === "HIDDEN" ? " · Hidden" : ""}</p>{!compact && <p className="text-caption text-kh-text-muted"><Timestamp value={comment.createdAt} /></p>}</div>
             {moderate && index === 0 && <Tooltip label={thread.status === "OPEN" ? "Resolve" : "Reopen"}><Button type="button" variant="ghost" icon aria-label={thread.status === "OPEN" ? "Resolve" : "Reopen"} disabled={busy || !canResolve} onClick={() => void act(thread.id, "resolution", thread.status === "OPEN" ? "RESOLVED" : "OPEN")}><Check className="size-4" aria-hidden="true" /></Button></Tooltip>}
             {moderate && <MenuRoot><MenuTrigger aria-label={index === 0 ? "Comment options" : "Reply options"} className={buttonClasses({variant:"ghost",icon:true})}><MoreHorizontal className="size-4" aria-hidden="true" /></MenuTrigger><MenuContent align="end"><MenuItem disabled={busy} onClick={() => void act(thread.id, "visibility", index === 0 ? (owner?.visibility === "HIDDEN" ? "VISIBLE" : "HIDDEN") : (comment.visibility === "HIDDEN" ? "VISIBLE" : "HIDDEN"), index === 0 ? undefined : comment.id)}>{index === 0 ? (owner?.visibility === "HIDDEN" ? "Unhide thread" : "Hide thread") : comment.visibility === "HIDDEN" ? "Unhide reply" : "Hide reply"}</MenuItem></MenuContent></MenuRoot>}
           </div>
-          <p className="whitespace-pre-wrap break-words">{comment.body}</p>
+          <p className={`whitespace-pre-wrap break-words ${compact ? "line-clamp-2" : ""}`}>{comment.body}</p>
         </li>)}</ol>
-        {thread.status === "OPEN" && owner?.visibility !== "HIDDEN" && writesEnabled && <ReviewReplyForm onSubmit={(body, key) => reply(thread.id, body, key)} />}
+        {compact && <Button type="button" variant="ghost" className="mt-2" onClick={() => onActivate?.(thread.id)}>{thread.comments.length > 1 ? `Show ${thread.comments.length - 1} ${thread.comments.length === 2 ? "reply" : "replies"}` : "Expand comment"}</Button>}
+        {!compact && thread.status === "OPEN" && owner?.visibility !== "HIDDEN" && writesEnabled && <ReviewReplyForm onSubmit={(body, key) => reply(thread.id, body, key)} />}
       </section>;
     })}
+    </div>
   </div>;
 }

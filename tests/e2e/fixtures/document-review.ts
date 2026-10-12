@@ -27,3 +27,8 @@ export async function selectPassage(page: Page, text = "😀 bold") {
     const selection = window.getSelection()!; selection.removeAllRanges(); selection.addRange(range);
   }, text);
 }
+
+export async function openReviewDiscussions(page: Page) {
+  const open = page.getByRole("button", { name: "Open discussions", exact: true });
+  if (await open.isVisible()) await open.click();
+}

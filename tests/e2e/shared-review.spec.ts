@@ -1,15 +1,16 @@
 import { expect, test } from "./fixtures/test";
 import { phase3Origin, phase3NoSessionOrigin, phase3UnconfiguredOrigin, phase3UserId } from "./fixtures/phase3-identities";
-import { createReviewDocument, selectPassage } from "./fixtures/document-review";
+import { createReviewDocument, openReviewDiscussions, selectPassage } from "./fixtures/document-review";
 
 test("two trusted people use different links for the same discussion", async ({ page, request }) => {
   const doc = await createReviewDocument(request);
   await page.goto(`${phase3Origin("viewer")}${doc.links[1].path}`);
+  await openReviewDiscussions(page);
   await selectPassage(page);
-  await page.locator("[data-review-document] p").first().evaluate(element => { (element as HTMLElement).tabIndex = -1; (element as HTMLElement).focus(); window.getSelection()!.collapseToStart(); });
-  for (let index = 0; index < 6; index++) await page.keyboard.press("Shift+ArrowRight");
-  // Focus via keyboard without discarding the browser text selection.
+  // Read-only article text does not support Shift+Arrow selection without caret browsing.
+  // Keep the selected passage while activating the comment action with the keyboard.
   await page.getByRole("button", { name: "Comment on selection" }).focus();
+  expect(await page.evaluate(() => window.getSelection()?.toString())).toBe("😀 bold");
   await page.keyboard.press("Enter");
   await page.getByRole("textbox", { name: "Add comment" }).fill("Reviewer observation <script>unsafe</script>");
   await page.getByRole("button", { name: "Add comment", exact: true }).click();
@@ -29,7 +30,7 @@ test("two trusted people use different links for the same discussion", async ({ 
   expect(result.threads).toHaveLength(1);
   await page.screenshot({ path: "/tmp/document-review-desktop.png", fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole("button", { name: "Open discussions" }).click();
+  await openReviewDiscussions(page);
   await expect(page.getByRole("dialog").getByRole("button", { name: "Refresh comments" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await expect(page.getByRole("dialog")).toHaveCSS("opacity", "1");
@@ -51,6 +52,7 @@ test("anonymous readers see comments but cannot create or reply, even without an
       expect(denied.status()).toBe(status); expect(JSON.stringify(await denied.json())).toContain(code);
     }
     await page.goto(`${origin}${doc.links[0].path}`);
+    await openReviewDiscussions(page);
     await expect(page.locator("[data-review-document]")).toContainText("bold");
     await expect(page.locator("[data-review-thread]")).toContainText("Visible without signing in");
     await expect(page.getByText("Sign in to add a comment.", { exact: true })).toBeVisible();

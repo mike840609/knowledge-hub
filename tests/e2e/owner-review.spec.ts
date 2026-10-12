@@ -1,10 +1,11 @@
 import { expect, test } from "./fixtures/test";
 import { phase3Origin } from "./fixtures/phase3-identities";
-import { createReviewDocument, selectPassage } from "./fixtures/document-review";
+import { createReviewDocument, openReviewDiscussions, selectPassage } from "./fixtures/document-review";
 
 test("owner replies, resolves, reopens and hides first comment without changing Markdown", async ({ page, request }) => {
   const doc = await createReviewDocument(request);
   await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
+  await openReviewDiscussions(page);
   await selectPassage(page); await page.getByRole("button", { name: "Comment on selection" }).click();
   await page.getByRole("textbox", { name: "Add comment" }).fill("Secret review comment"); await page.getByRole("button", { name: "Add comment", exact: true }).click();
   await expect(page.getByText("Secret review comment", { exact: true })).toBeVisible();
