@@ -1,3 +1,4 @@
+import { savedDocumentSharesMigration } from "./019-saved-document-shares";
 import { lookupIndexesMigration } from "./018-lookup-indexes";
 import { documentReviewMigration } from "./017-document-review";
 import { readingActivityMigration } from "./016-reading-activity";
@@ -36,4 +37,5 @@ export const migrations = [
   readingActivityMigration,
   documentReviewMigration,
   lookupIndexesMigration,
+  savedDocumentSharesMigration,
 ] as const;

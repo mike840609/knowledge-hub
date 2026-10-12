@@ -1,3 +1,4 @@
+import type { SavedShareRepository } from "./saved-share-repository";
 import type { DocumentReviewThreadRepository } from "./document-review-thread-repository";
 import type { DocumentReviewCommentRepository } from "./document-review-comment-repository";
 import type { DocumentReviewWriteLedger } from "./document-review-write-ledger";
@@ -40,6 +41,7 @@ export type KnowledgeRepositories = {
   workspaceMemberships: WorkspaceMembershipRepository;
   groupMappings: WorkspaceGroupMappingRepository;
   shareLinks: DocumentShareLinkRepository;
+  savedShares: SavedShareRepository;
   /**
    * The derived link index (graph spec §7). Every path that writes a revision
    * replaces the document's edges in the same transaction; reads use it for
