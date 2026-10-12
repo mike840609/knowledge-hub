@@ -379,6 +379,24 @@ which §8 rules out; a note and an important are neutral and told apart by
 glyph, word and the weight of their line. Should a sixth kind be wanted, it
 takes one of these rows' colours rather than a new one.
 
+### HTML in a document
+
+The reader draws seven HTML tags as what they mean and shows every other as
+text (`2026-10-12-reader-html-subset-design.md`). No token was added for them.
+
+```text
+u, sub, sup   the browser's own
+kbd           radius-sm, border, bg-subtle, mono at body-sm — a key, set like inline code with an edge
+mark          radius-sm, highlight behind selected-text — the one accent tint, as a text selection has
+details       the native disclosure; no fill and no box
+  summary     the disclosure chevron every `summary` has (`globals.css`), medium weight, the shared focus ring
+  body        indented on a 2px `border` line, as a quote is
+```
+
+A `<details>` stays the platform's control so that it opens with Enter and
+Space, is announced as a disclosure, and is found by the browser's in-page
+search — none of which a drawn substitute gets for free.
+
 ### Syntax colour
 
 Fenced code is coloured from eight tokens, `--kh-syntax-` plus `keyword`,

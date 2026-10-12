@@ -10,6 +10,7 @@ import { headingSlug } from "@/shared/markdown/heading-slug";
 import { remarkHeadingIds } from "@/shared/markdown/remark-heading-ids";
 import { remarkKnownHtml } from "@/shared/markdown/remark-known-html";
 import { MarkdownQuote } from "./markdown-callout";
+import { MarkdownDetails, MarkdownKbd, MarkdownMark, MarkdownSummary } from "./markdown-html";
 import { MarkdownImage } from "./markdown-image";
 import { MARKDOWN_PROSE } from "./markdown-prose";
 import type { RenderedLinks } from "./rendered-links";
@@ -239,6 +240,10 @@ export function MarkdownBase({
           ),
           table: ResponsiveTable,
           blockquote: MarkdownQuote,
+          details: MarkdownDetails,
+          summary: MarkdownSummary,
+          kbd: MarkdownKbd,
+          mark: MarkdownMark,
           pre,
         }}
       >

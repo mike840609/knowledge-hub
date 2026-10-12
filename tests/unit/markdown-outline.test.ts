@@ -52,12 +52,12 @@ describe("extractOutline", () => {
   });
 
   it("reads a <br> in a heading as a space and a comment as nothing", () => {
-    const outline = extractOutline(doc("## First<br>line <!-- note -->", "", "## Second<br />", "", "## A <u>b</u>"));
+    const outline = extractOutline(doc("## First<br>line <!-- note -->", "", "## Second<br />", "", "## A <span>b</span>"));
     expect(outline.map(({ slug, text }) => [slug, text])).toEqual([
       ["first-line", "First line"],
       ["second", "Second"],
-      // Any other HTML is text on the page, so it is text here.
-      [outline[2].slug, "A <u>b</u>"],
+      // HTML the reader does not draw is text on the page, so it is text here.
+      [outline[2].slug, "A <span>b</span>"],
     ]);
   });
 

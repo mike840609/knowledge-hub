@@ -3,6 +3,8 @@ import { SKIP, visit } from "unist-util-visit";
 
 const BR = /^<br\s*\/?>$/i;
 const COMMENT = /^<!--[\s\S]*-->$/;
+/** An opening or closing tag of the inline HTML the reader draws (`remark-html-subset.ts`), written bare. */
+export const INLINE_HTML_TAG = /^<(\/?)(u|sub|sup|kbd|mark)>$/i;
 
 /** Whether a piece of HTML is `<br>`, however it is spelled. */
 export function isLineBreakHtml(value: string): boolean {
@@ -11,12 +13,13 @@ export function isLineBreakHtml(value: string): boolean {
 
 /**
  * What a piece of HTML reads as, where only text can be shown (a heading in the outline, its
- * slug): a `<br>` is a space, a comment is nothing, and anything else is itself — as on the page.
+ * slug): a `<br>` is a space, a comment and an inline tag the reader draws are nothing, and anything
+ * else is itself — as on the page.
  */
 export function htmlAsText(value: string): string {
   const html = value.trim();
   if (BR.test(html)) return " ";
-  return COMMENT.test(html) ? "" : value;
+  return COMMENT.test(html) || INLINE_HTML_TAG.test(html) ? "" : value;
 }
 
 /**

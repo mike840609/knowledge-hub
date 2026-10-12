@@ -139,6 +139,16 @@ pass.
   The `[[` list writes through that same node and is held to the same rule
   (`tests/unit/wikilink-suggest.test.ts`, `tests/e2e/zz-composer-autocomplete.spec.ts`).
 
+- **The reader never passes HTML through.** A tag in a document is text unless
+  `remark-known-html.ts` or `remark-html-subset.ts` recognises it exactly and
+  constructs the element itself: `<br>`, comments, and seven bare tags
+  (`docs/superpowers/specs/2026-10-12-reader-html-subset-design.md`). Nothing the
+  author wrote is emitted as markup, and no Content-Security-Policy stands behind
+  the reader, shared pages included. Do not add `rehype-raw`, a sanitiser, or
+  `dangerouslySetInnerHTML` on document content to "support more HTML"; add an
+  exact pattern, and its hostile cases to
+  `tests/unit/markdown-renderer-html-subset.test.tsx`.
+
 ## Frontend design language
 
 `docs/superpowers/specs/frontend-design-language.md` is a living contract —
