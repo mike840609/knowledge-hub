@@ -2,6 +2,7 @@
 import { useEffect } from "react";
 import type { ReviewThreadView, OwnerReviewThreadView } from "@/modules/knowledge/domain/document-review";
 import { createReviewRangeResolver } from "./review-selection";
+import { reviewRailInline } from "./review-rail-mode";
 
 /** Native highlights never rewrite Markdown DOM or expose hidden/outdated quotes.
  * Browsers without the Highlight API retain the accessible quote buttons. */
@@ -38,7 +39,7 @@ export function useReviewHighlights(markdown: string, threads?: (ReviewThreadVie
         section.focus({preventScroll:true});
         // The desktop card is placed beside this passage. Scrolling it into view can move
         // the very text the reader just clicked; only the drawer/owner list needs scrolling.
-        if (!section.closest("[data-review-rail]") || !window.matchMedia("(min-width: 1200px)").matches) section.scrollIntoView({block:"nearest",behavior:"smooth"});
+        if (!section.closest("[data-review-rail]") || !reviewRailInline()) section.scrollIntoView({block:"nearest",behavior:"smooth"});
       }));
     }
     root.addEventListener("pointerup", focusDiscussion);

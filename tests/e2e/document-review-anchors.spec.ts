@@ -22,7 +22,7 @@ test("owner and shared readers agree on emoji, formatting and duplicate block of
   expect(body.anchor).toMatchObject({ startUtf16: 2, endUtf16: 9, exact: "😀 bold", blockPath: [0] });
   await expect(page.getByText("UTF-16 check", { exact: true })).toBeVisible();
   await page.goto(doc.href);
-  await page.getByText("Comments", { exact: true }).filter({ visible: true }).click();
+  await openReviewDiscussions(page);
   await page.getByRole("button", { name: "😀 bold", exact: true }).click();
   await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe("😀 bold");
   const ownerSelection = await page.locator("[data-review-document]").evaluate(root => { const selection = window.getSelection()!; const range = selection.getRangeAt(0); const paragraph = root.querySelector("p")!; const before = range.cloneRange(); before.selectNodeContents(paragraph); before.setEnd(range.startContainer, range.startOffset); return { exact: selection.toString(), startUtf16: before.toString().length }; });
@@ -52,8 +52,17 @@ test("new server revision disables mapping into an older displayed document", as
     const response = await route.fetch(); const json = await response.json();
     await route.fulfill({ response, json: { ...json, revisionId: "newer-server-revision" } });
   });
-  await page.goto(doc.href); await page.getByText("Comments", { exact: true }).filter({ visible: true }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Document changed." })).toContainText("Document changed. Refresh this page");
+  // The owner is shown a way into discussions only where there is one, so there has to be one.
+  const viewer = phase3Origin("viewer");
+  const created = await request.post(`${viewer}/api/share-review/threads`, { headers: { Origin: viewer }, data: {
+    token: doc.links[0].path.split("/").pop(), expectedRevisionId: doc.revisionId, idempotencyKey: crypto.randomUUID(), body: "A remark on the older text",
+    anchor: { schemaVersion: 1, blockPath: [0], blockKind: "paragraph", startUtf16: 0, endUtf16: 1, exact: "A", prefix: "", suffix: " 😀 bold passage to review." },
+  } });
+  expect(created.status()).toBe(201);
+  await page.goto(doc.href); await openReviewDiscussions(page);
+  await expect(page.getByRole("status").filter({ hasText: "Document changed." }).filter({ visible: true })).toContainText("Document changed. Refresh this page");
+  // And with the document changed underneath them, the discussions are not pinned to passages.
+  await expect(page.locator("[data-review-marker]")).toHaveCount(0);
 });
 
 test("external references and nested lists preserve commenting on unrelated paragraphs", async ({ page, request }) => {

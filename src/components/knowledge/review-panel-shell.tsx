@@ -1,24 +1,17 @@
 "use client";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Drawer } from "@/components/ui/drawer";
 
-export function ReviewPanelShell({ children, open, onOpenChange, returnFocus }: { children: ReactNode; open: boolean; onOpenChange: (open: boolean) => void; returnFocus: () => void }) {
-  const [wide, setWide] = useState(false);
+/** `inline`: the discussions are a rail beside the article (`review-rail-mode.ts`); otherwise they open as a drawer. */
+export function ReviewPanelShell({ children, open, inline: wide, onOpenChange, returnFocus }: { children: ReactNode; open: boolean; inline: boolean; onOpenChange: (open: boolean) => void; returnFocus: () => void }) {
   const pendingThread = useRef<string | null>(null);
   const pendingPassage = useRef<(() => void) | null>(null);
-  useEffect(() => {
-    const media = window.matchMedia("(min-width: 1200px)");
-    const update = () => setWide(media.matches);
-    update();
-    media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
-  }, []);
   useEffect(() => {
     const show = (event: Event) => {
       pendingThread.current = (event as CustomEvent<string>).detail;
       pendingPassage.current = null;
       onOpenChange(true);
-      if (window.matchMedia("(min-width: 1200px)").matches) {
+      if (wide) {
         const id = pendingThread.current;
         // Both native text highlights and margin buttons enter through this event.
         requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -59,7 +52,7 @@ export function ReviewPanelShell({ children, open, onOpenChange, returnFocus }: 
     }
   }
   return <>
-    <div className="hidden h-full min-[1200px]:block [&>div]:h-full">{children}</div>
+    <div className={wide ? "h-full [&>div]:h-full" : "hidden"}>{children}</div>
     <Drawer open={open && !wide} onOpenChange={onOpenChange} onOpenChangeComplete={afterTransition} finalFocus={false} title="Comments" label="Close discussions">{children}</Drawer>
   </>;
 }

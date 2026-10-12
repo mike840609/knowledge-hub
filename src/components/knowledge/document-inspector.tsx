@@ -11,6 +11,7 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState, startTra
 import { usePathname } from "next/navigation";
 import { DocumentTopbarContext } from "@/components/shell/document-topbar-context";
 import { InspectorContext } from "./inspector-context";
+import { ReviewEntryProvider } from "./review-entry";
 import { useScrollRestoration } from "./use-scroll-restoration";
 import { useActiveHeading } from "./use-active-heading";
 import { useScrollToHash } from "./use-scroll-to-hash";
@@ -449,31 +450,33 @@ export function DocumentDetailClient({
     };
   }, [pathname, title, toggleInspector, setDocumentTopbar, target]);
   return (
-    <DocumentPane
-      contentRef={contentRef}
-      outline={<OutlineRail entries={outline} activeSlug={activeSlug} />}
-      inspectorOpen={inspectorOpen}
-      inspector={<DocumentInspector open={inspectorOpen} onOpenChange={(open) => setInspectorOpen?.(open)} data={inspectorData} outline={outline} activeSlug={activeSlug} requestedTab={requestedTab} />}
-    >
-        <DocumentHeader
-          headerRef={headerRef}
-          pinned={scrolledPast}
-          breadcrumb={breadcrumb}
-          title={title}
-          status={status}
-          updatedAt={updatedAt}
-          revisionBanner={revisionBanner}
-          onDetailsClick={toggleInspector}
-          linkSummary={summariseLinks(inspectorData.links)}
-          onLinksClick={openLinks}
-          editHref={editHref}
-          onShareClick={canShare ? () => requestShare(inspectorData.documentId) : null}
-          readOnly={readOnly}
-          syncHref={syncHref}
-          contentOwnsTitle={contentOwnsTitle}
-        />
-      <OutlineDisclosure entries={outline} activeSlug={activeSlug} />
-      {children}
-    </DocumentPane>
+    <ReviewEntryProvider>
+      <DocumentPane
+        contentRef={contentRef}
+        outline={<OutlineRail entries={outline} activeSlug={activeSlug} />}
+        inspectorOpen={inspectorOpen}
+        inspector={<DocumentInspector open={inspectorOpen} onOpenChange={(open) => setInspectorOpen?.(open)} data={inspectorData} outline={outline} activeSlug={activeSlug} requestedTab={requestedTab} />}
+      >
+          <DocumentHeader
+            headerRef={headerRef}
+            pinned={scrolledPast}
+            breadcrumb={breadcrumb}
+            title={title}
+            status={status}
+            updatedAt={updatedAt}
+            revisionBanner={revisionBanner}
+            onDetailsClick={toggleInspector}
+            linkSummary={summariseLinks(inspectorData.links)}
+            onLinksClick={openLinks}
+            editHref={editHref}
+            onShareClick={canShare ? () => requestShare(inspectorData.documentId) : null}
+            readOnly={readOnly}
+            syncHref={syncHref}
+            contentOwnsTitle={contentOwnsTitle}
+          />
+        <OutlineDisclosure entries={outline} activeSlug={activeSlug} />
+        {children}
+      </DocumentPane>
+    </ReviewEntryProvider>
   );
 }

@@ -43,12 +43,13 @@ export default async function SharedDocumentPage({ params }: SharedPageProps) {
       <header>
         <div className="kh-share-heading kh-reading-column pb-3 pt-5">
           {!markdownOpensWithHeading(shared.markdown) ? <h1 className="text-heading font-semibold tracking-tight text-kh-text">{shared.title}</h1> : null}
-          <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-kh-text-muted">
-            <span>{`Shared by ${shared.sharedByName}`}</span>
-            <span aria-hidden="true">·</span>
-            <span>Updated <Timestamp value={shared.updatedAt} /></span>
-            <span aria-hidden="true">·</span>
-            <span>Link expires <Timestamp value={shared.expiresAt} variant="date" /></span>
+          {/* The dots between these are the stylesheet's (`.kh-byline`), so a line never ends on one. */}
+          <p className="kh-byline mt-1.5 text-caption text-kh-text-muted">
+            <span>
+              <span>{`Shared by ${shared.sharedByName}`}</span>
+              <span>Updated <Timestamp value={shared.updatedAt} /></span>
+              <span>Link expires <Timestamp value={shared.expiresAt} variant="date" /></span>
+            </span>
           </p>
         </div>
       </header>

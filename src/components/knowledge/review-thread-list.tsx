@@ -24,9 +24,10 @@ export async function reviewRequest<T>(url: string, body?: unknown): Promise<T> 
 }
 
 /** A failed submission retains its UUID so a retry after a lost response writes once. */
-export function ReviewReplyForm({ onSubmit, label = "Reply" }: { onSubmit: (body: string, key: string) => Promise<void>; label?: string }) {
+export function ReviewReplyForm({ onSubmit, label = "Reply", openRequest = 0 }: { onSubmit: (body: string, key: string) => Promise<void>; label?: string; /** Changes when the card's own Reply was pressed: open the form. */ openRequest?: number }) {
   const [body, setBody] = useState("");
   const [expanded, setExpanded] = useState(label !== "Reply");
+  useEffect(() => { if (openRequest > 0) setExpanded(true); }, [openRequest]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const request = useRef<{ body: string; key: string } | null>(null);
@@ -44,7 +45,15 @@ export function ReviewReplyForm({ onSubmit, label = "Reply" }: { onSubmit: (body
   </form>;
 }
 
-export function ReviewThreadList({ threads, writesEnabled, reply, moderate, canResolve = true, focusAnchor, railMarkdown, activeThreadId, onActivate }: {
+export type ReviewFilter = "ALL" | "OPEN" | "RESOLVED";
+const FILTER_NAMES: Record<ReviewFilter, string> = { ALL: "All comments", OPEN: "Open", RESOLVED: "Resolved" };
+
+/** Which discussions are listed. The list draws it above itself unless a panel takes it for its heading. */
+export function ReviewFilterMenu({ value, onChange }: { value: ReviewFilter; onChange: (value: ReviewFilter) => void }) {
+  return <MenuRoot><MenuTrigger className={buttonClasses({ variant: "ghost" })} aria-label="Filter discussions">{FILTER_NAMES[value]}<ChevronDown className="size-4" aria-hidden="true" /></MenuTrigger><MenuContent>{(Object.keys(FILTER_NAMES) as ReviewFilter[]).map(option => <MenuItem key={option} onClick={() => onChange(option)}>{FILTER_NAMES[option]}</MenuItem>)}</MenuContent></MenuRoot>;
+}
+
+export function ReviewThreadList({ threads, writesEnabled, reply, moderate, canResolve = true, focusAnchor, railMarkdown, activeThreadId, onActivate, filter: controlled, onFilterChange }: {
   threads: (ReviewThreadView | OwnerReviewThreadView)[];
   writesEnabled: boolean;
   reply: (threadId: string, body: string, key: string) => Promise<void>;
@@ -54,10 +63,18 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, canR
   railMarkdown?: string;
   activeThreadId?: string;
   onActivate?: (threadId: string) => void;
+  /** Given both, the filter is the caller's — state and control — and the list draws none of its own. */
+  filter?: ReviewFilter;
+  onFilterChange?: (filter: ReviewFilter) => void;
 }) {
   const [pendingHide, setPendingHide] = useState<{ threadId: string; commentId?: string }>();
-  const [filter, setFilter] = useState<"ALL" | "OPEN" | "RESOLVED">("ALL");
-  useEffect(() => { const show = () => setFilter("ALL"); document.addEventListener("review-focus-thread",show); return () => document.removeEventListener("review-focus-thread",show); }, []);
+  const [own, setOwn] = useState<ReviewFilter>("ALL");
+  const filter = controlled ?? own;
+  const setFilter = onFilterChange ?? setOwn;
+  // A mark or a highlight may lead to a discussion the filter is hiding.
+  useEffect(() => { const show = () => setFilter("ALL"); document.addEventListener("review-focus-thread",show); return () => document.removeEventListener("review-focus-thread",show); }, [setFilter]);
+  // The card whose own Reply was pressed, and a count so that pressing it again asks again.
+  const [replyRequest, setReplyRequest] = useState<{ threadId: string; nonce: number }>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   async function act(threadId: string, action: "resolution" | "visibility", value: string, commentId?: string, confirmed = false) {
@@ -72,7 +89,7 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, canR
   const { ref: railRef, layout } = useReviewRailLayout(visible, railMarkdown, activeThreadId);
   return <div className="space-y-3">
     <ConfirmDialog open={!!pendingHide} onOpenChange={open => { if (!open) setPendingHide(undefined); }} title="Hide from reviewers?" description="This content will be hidden from all reviewers. It remains available to you for moderation." confirmLabel="Confirm hide" onConfirm={() => { if(pendingHide) void act(pendingHide.threadId,"visibility","HIDDEN",pendingHide.commentId,true); }} />
-    {threads.length > 0 && <MenuRoot><MenuTrigger className={buttonClasses({ variant: "ghost" })} aria-label="Filter discussions">{filter === "ALL" ? "All comments" : filter === "OPEN" ? "Open" : "Resolved"}<ChevronDown className="size-4" aria-hidden="true" /></MenuTrigger><MenuContent>{(["ALL", "OPEN", "RESOLVED"] as const).map(value => <MenuItem key={value} onClick={() => setFilter(value)}>{value === "ALL" ? "All comments" : value === "OPEN" ? "Open" : "Resolved"}</MenuItem>)}</MenuContent></MenuRoot>}
+    {threads.length > 0 && !onFilterChange && <ReviewFilterMenu value={filter} onChange={setFilter} />}
     {error && <p role="alert" className="text-body-sm">{error}</p>}
     {visible.length === 0 && <p className="py-6 text-body-sm text-kh-text-muted">{threads.length === 0 ? "No comments yet." : "No comments here."}</p>}
     <div ref={railRef} data-review-rail={railMarkdown !== undefined ? "" : undefined} data-positioned={layout ? "" : undefined} className="kh-review-thread-list" style={layout ? { "--review-list-height": `${layout.height}px` } as CSSProperties : undefined}>
@@ -80,6 +97,7 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, canR
       const owner = "visibility" in thread ? thread : undefined;
       const active = activeThreadId === thread.id;
       const compact = !!onActivate && !active;
+      const canReply = thread.status === "OPEN" && owner?.visibility !== "HIDDEN" && writesEnabled;
       return <section key={thread.id} data-review-thread={thread.id} data-active={active ? "" : undefined} tabIndex={-1} aria-label="Discussion thread" aria-current={active ? "true" : undefined} onFocus={event => {
         // A pointer focuses on mousedown. Moving the card then would move the button
         // out from under mouseup and swallow its click. Keyboard focus can activate now.
@@ -101,8 +119,14 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, canR
           </div>
           <p className={`whitespace-pre-wrap break-words ${compact ? "line-clamp-2" : ""}`}>{comment.body}</p>
         </li>)}</ol>
-        {compact && <Button type="button" variant="ghost" className="mt-2" onClick={event => { event.currentTarget.closest<HTMLElement>("[data-review-thread]")?.focus({ preventScroll: true }); onActivate?.(thread.id); }}>{thread.comments.length > 1 ? `Show ${thread.comments.length - 1} ${thread.comments.length === 2 ? "reply" : "replies"}` : "Expand comment"}</Button>}
-        {thread.status === "OPEN" && owner?.visibility !== "HIDDEN" && writesEnabled && <div hidden={compact}><ReviewReplyForm onSubmit={(body, key) => reply(thread.id, body, key)} /></div>}
+        {/* A preview's one button. With replies to show, it shows them. With only the remark — which
+            the preview already is — opening the card would reveal nothing but Reply, so it is Reply:
+            one step from reading to answering, and focus lands in the form. Where no reply can be
+            made it opens the card, for the full text and its time. */}
+        {compact && (thread.comments.length === 1 && canReply
+          ? <Button type="button" variant="ghost" className="mt-2" onClick={() => { onActivate?.(thread.id); setReplyRequest(previous => ({ threadId: thread.id, nonce: (previous?.nonce ?? 0) + 1 })); }}>Reply</Button>
+          : <Button type="button" variant="ghost" className="mt-2" onClick={event => { event.currentTarget.closest<HTMLElement>("[data-review-thread]")?.focus({ preventScroll: true }); onActivate?.(thread.id); }}>{thread.comments.length > 1 ? `Show ${thread.comments.length - 1} ${thread.comments.length === 2 ? "reply" : "replies"}` : "Expand comment"}</Button>)}
+        {canReply && <div hidden={compact}><ReviewReplyForm openRequest={replyRequest?.threadId === thread.id ? replyRequest.nonce : 0} onSubmit={(body, key) => reply(thread.id, body, key)} /></div>}
       </section>;
     })}
     </div>
