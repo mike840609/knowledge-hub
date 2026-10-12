@@ -317,9 +317,12 @@ test("collapsed errors and stale revision notices remain visible, with stale rep
   await card.getByRole("button", { name: "Reply", exact: true }).click();
   await card.getByRole("textbox", { name: "Reply" }).fill("Reply despite stale displayed revision");
   await card.getByRole("button", { name: "Reply", exact: true }).click();
+  // Wait for the awaited mutation + refresh, not text still present in the draft textarea.
+  await expect(card.getByRole("textbox", { name: "Reply" })).toHaveCount(0);
   await expect(card).toContainText("Reply despite stale displayed revision");
   await expect(page.getByRole("button", { name: "Comment on selection" })).toHaveCount(0);
   await expect(page.locator("[data-review-marker]")).toHaveCount(0);
+  await page.unrouteAll({ behavior: "wait" });
 });
 
 test("saved-share actions coexist with comments on mobile without overflow", async ({ page, request }) => {

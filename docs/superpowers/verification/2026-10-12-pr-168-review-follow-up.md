@@ -28,3 +28,7 @@ Minor corrections include registered `rounded-sm`, symmetric article gutters, a 
 - The visual detector's sole warning is the pre-existing literal `<img class="ProseMirror-separator">` inside a CSS comment at `globals.css:229`; it is not a rendered image.
 
 GitHub's full gate is rerun on the updated PR head. Earlier pre-merge CI results are not used as evidence for this integration.
+
+## Full CI follow-up
+
+The first complete GitHub gate on `8774e27` passed unit/type/lint, offline build, integration and E2E shard 2. Shard 1 found a teardown race in the new stale-reply test: `toContainText` could match the draft textarea before the awaited mutation/query refresh finished, then the page context disposed an in-flight `route.fetch` response. The test now waits for the reply textarea to disappear (the form's successful submission state) before checking the persisted comment, and drains route handlers with `unrouteAll({ behavior: "wait" })` before teardown. No product assertion was removed and no retry was added. The updated head reruns the complete gate.
