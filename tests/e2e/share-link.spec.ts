@@ -74,9 +74,13 @@ test.describe("document share link", () => {
       expect(headers["referrer-policy"]).toBe("no-referrer");
       expect(headers["cache-control"]).toContain("no-store");
       expect(headers["x-robots-tag"]).toContain("noindex");
-      // Both directives, in one header: a second CSP rule would replace the
-      // global img-src lockdown rather than add to it.
-      expect(headers["content-security-policy"]).toBe("img-src 'self'; frame-ancestors 'none'");
+      // One header holds every directive (`middleware.ts`): the image lockdown, no framing of a
+      // page that needs no sign-in, and scripts by nonce — nothing inline, here least of all.
+      const policy = headers["content-security-policy"];
+      expect(policy).toContain("img-src 'self'");
+      expect(policy).toContain("frame-ancestors 'none'");
+      expect(policy).toMatch(/script-src 'self' 'nonce-[^']+' 'strict-dynamic'/);
+      expect(policy).not.toContain("unsafe-inline");
 
       // Everything else on that origin still requires signing in: a page and an API.
       const workspace = await reader.get(`/w/${workspaceId}/knowledge`);

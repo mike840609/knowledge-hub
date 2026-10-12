@@ -143,11 +143,22 @@ pass.
   `remark-known-html.ts` or `remark-html-subset.ts` recognises it exactly and
   constructs the element itself: `<br>`, comments, and seven bare tags
   (`docs/superpowers/specs/2026-10-12-reader-html-subset-design.md`). Nothing the
-  author wrote is emitted as markup, and no Content-Security-Policy stands behind
-  the reader, shared pages included. Do not add `rehype-raw`, a sanitiser, or
+  author wrote is emitted as markup. That is the first line; the
+  Content-Security-Policy is the second, not a substitute for it. Do not add `rehype-raw`, a sanitiser, or
   `dangerouslySetInnerHTML` on document content to "support more HTML"; add an
   exact pattern, and its hostile cases to
   `tests/unit/markdown-renderer-html-subset.test.tsx`.
+
+- **Scripts run by nonce.** `src/middleware.ts` gives every page a
+  Content-Security-Policy built by `src/lib/content-security-policy.ts`:
+  `script-src` by per-response nonce with `strict-dynamic`, never `unsafe-inline`
+  (and `unsafe-eval` in development only), beside `img-src 'self'` and, on
+  `/s/*`, `frame-ancestors 'none'`. An inline `<script>` needs the nonce from the
+  `x-nonce` request header, as the layout's theme script takes it, or — where no
+  server component can pass one, as in `global-error` — its hash in the policy.
+  An inline event handler (`onclick="…"` in markup) cannot be allowed at all.
+  The middleware's header replaces the one `next.config.ts` sets, so a directive
+  added in one place only is lost on pages.
 
 ## Frontend design language
 
