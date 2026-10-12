@@ -351,6 +351,34 @@ theme exists.
 
 No component declares a colour outside the token layer.
 
+### Callouts
+
+A quote that opens with `[!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]` or
+`[!CAUTION]` is shown in the reader as a callout
+(`2026-10-12-reader-callouts-design.md` says what counts as one). It keeps the
+quote's shape — a 2px line on the left, no fill, no box — and gains a title row:
+a 16px glyph and the kind's name, medium weight, with the body 4px beneath it
+rather than a paragraph's distance away.
+
+Only the line and the glyph are coloured, the same rule a state follows (§15):
+the title and the body are read in `text`, not the quote's `text-muted`, so
+colour is a second channel beside the word and never the only one.
+
+```text
+kind        glyph (Lucide)          line              glyph colour
+note        Info                    border-strong     text-muted
+tip         Lightbulb               success           success
+important   MessageSquareWarning    text-secondary    text
+warning     TriangleAlert           warning           warning
+caution     OctagonAlert            danger            danger
+```
+
+No token was added. There is no information blue and no emphasis purple in the
+palette, and five hues inside the reading column would be decorative colour,
+which §8 rules out; a note and an important are neutral and told apart by
+glyph, word and the weight of their line. Should a sixth kind be wanted, it
+takes one of these rows' colours rather than a new one.
+
 ### Syntax colour
 
 Fenced code is coloured from eight tokens, `--kh-syntax-` plus `keyword`,
