@@ -19,7 +19,10 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     // This silences that one attribute mismatch; it does not reach children.
     <html lang="en" className={inter.variable} suppressHydrationWarning>
       <head>
-        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: THEME_PRE_PAINT_SCRIPT }} />
+        {/* A browser keeps a script's nonce out of the attribute once the policy has read it, so the
+            element React hydrates has `nonce=""` where the server wrote the value. That is the
+            platform working; without this it is reported as a mismatch on every page. */}
+        <script nonce={nonce} suppressHydrationWarning dangerouslySetInnerHTML={{ __html: THEME_PRE_PAINT_SCRIPT }} />
       </head>
       <body className="antialiased">{children}</body>
     </html>
