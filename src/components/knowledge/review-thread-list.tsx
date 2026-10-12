@@ -44,7 +44,7 @@ export function ReviewReplyForm({ onSubmit, label = "Reply" }: { onSubmit: (body
   </form>;
 }
 
-export function ReviewThreadList({ threads, writesEnabled, reply, moderate, canResolve = true, focusAnchor, railMarkdown, activeThreadId, onActivate }: {
+export function ReviewThreadList({ threads, writesEnabled, reply, moderate, canResolve = true, focusAnchor, railMarkdown, activeThreadId, onActivate, openFirst = false }: {
   threads: (ReviewThreadView | OwnerReviewThreadView)[];
   writesEnabled: boolean;
   reply: (threadId: string, body: string, key: string) => Promise<void>;
@@ -54,9 +54,15 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, canR
   railMarkdown?: string;
   activeThreadId?: string;
   onActivate?: (threadId: string) => void;
+  /**
+   * Start on what is still open, where something is: the owner's list, where settled discussions
+   * would otherwise crowd the ones that want an answer away from their passages. With nothing open
+   * it starts on everything — an empty list would say there was nothing at all.
+   */
+  openFirst?: boolean;
 }) {
   const [pendingHide, setPendingHide] = useState<{ threadId: string; commentId?: string }>();
-  const [filter, setFilter] = useState<"ALL" | "OPEN" | "RESOLVED">("ALL");
+  const [filter, setFilter] = useState<"ALL" | "OPEN" | "RESOLVED">(() => (openFirst && threads.some(thread => thread.status === "OPEN") ? "OPEN" : "ALL"));
   useEffect(() => { const show = () => setFilter("ALL"); document.addEventListener("review-focus-thread",show); return () => document.removeEventListener("review-focus-thread",show); }, []);
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);

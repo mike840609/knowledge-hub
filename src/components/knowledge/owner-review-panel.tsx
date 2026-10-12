@@ -88,7 +88,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
             {error && <p role="alert" className="mt-3 text-body-sm">{error}</p>}
             {revisionChanged && <p role="status" className="mt-3 text-body-sm">Document changed. Refresh this page before locating a passage.</p>}
           </div>
-          {result && <div className="mt-3"><ReviewThreadList railMarkdown={revisionChanged ? undefined : markdown} activeThreadId={activeThreadId} onActivate={setActiveThreadId}
+          {result && <div className="mt-3"><ReviewThreadList openFirst railMarkdown={revisionChanged ? undefined : markdown} activeThreadId={activeThreadId} onActivate={setActiveThreadId}
             focusAnchor={revisionChanged ? undefined : anchor => { const root = document.querySelector<HTMLElement>("[data-review-document]"); if (root) focusReviewAnchor(root, markdown, anchor); }}
             threads={result.threads} writesEnabled={result.writesEnabled && !readOnly} canResolve={!readOnly}
             reply={async (threadId, body, idempotencyKey) => { await reviewRequest(`${base}/${threadId}/replies`, { body, idempotencyKey }); await load(); }}

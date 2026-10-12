@@ -48,6 +48,28 @@ never comment, and #168 chose reading first over an ever-present rail there.
 
 The rule is `opensOnArrival` in `review-auto-open.ts`.
 
+**What is open, first.** Asked what to do when there are many discussions: the
+rail keeps cards in document order without overlap, so a passage with several —
+or a document with a long history — pushes cards down, away from what they are
+about. Most of that crowd is settled. So the owner's list **starts on Open**
+where anything is open; resolved discussions are under the filter that was
+already there (All comments, Open, Resolved).
+
+- With nothing open the list starts on **All comments**: an empty list would
+  say there was nothing at all.
+- The Comments entry still counts every discussion.
+- A mark or a highlight on a passage whose discussion is resolved switches the
+  list to All, as it always did, so it still leads somewhere.
+- Resolving a discussion while the list is on Open takes its card out of the
+  list; Reopen is under Resolved.
+
+The shared page starts on All comments, as before: its readers are shown the
+discussion whole.
+
+Not done, and why: stacking the discussions of one passage into a single card
+is the next step if one passage draws many; a rail with a scroll of its own is
+no step at all, because then no card can be level with its passage.
+
 **Collapsed.** The article, and the outline beside it where the pane is wide
 enough. A passage with a discussion is highlighted and has a count in the
 article's right margin. Above the article, at the right, `Comments (N)`.
@@ -142,7 +164,9 @@ resolved, hidden, closed-on, and a discussion arriving after a closing.
 
 `tests/e2e/owner-review.spec.ts`: the rail open on arrival without taking the
 scroll position; staying closed after a closing and opening for a new
-discussion; resolved discussions and a narrow pane not opening it; the rail beside the article and level with
+discussion; resolved discussions and a narrow pane not opening it; the list starting on
+Open, on All where nothing is open, and a mark leading to a resolved discussion;
+the rail beside the article and level with
 its passage, in the outline's place, and the outline back on collapse; one left
 edge for the title and the article, open or not; the drawer in a narrow pane; a
 document without discussions unchanged; and the owner's reply, resolve and hide

@@ -18,7 +18,11 @@ test("owner replies, resolves, reopens and hides first comment without changing 
   await page.getByRole("textbox", { name: "Reply", exact: true }).fill("Owner response"); await page.getByRole("button", { name: "Reply", exact: true }).click();
   await expect(page.getByText("Owner response", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Resolve", exact: true }).click(); await expect(page.getByRole("textbox", { name: "Reply", exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Reopen", exact: true }).click(); await expect(page.getByRole("button", { name: "Reply", exact: true })).toBeVisible();
+  // Resolved, it leaves the list of what is open; it is under Resolved, and can be opened again from there.
+  await expect(page.getByText("Owner response", { exact: true }).filter({ visible: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Filter discussions" }).filter({ visible: true }).click(); await page.getByRole("menuitem", { name: "Resolved", exact: true }).click();
+  await page.getByRole("button", { name: "Reopen", exact: true }).click();
+  await page.getByRole("button", { name: "Filter discussions" }).filter({ visible: true }).click(); await page.getByRole("menuitem", { name: "Open", exact: true }).click(); await expect(page.getByRole("button", { name: "Reply", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Comment options", exact: true }).click();
   await page.getByRole("menuitem", { name: "Hide thread", exact: true }).click(); await page.getByRole("button", { name: "Confirm hide", exact: true }).click(); await expect(page.getByText("Hidden from reviewers", { exact: false }).filter({ visible: true })).toBeVisible();
   const response = await request.post(`${phase3Origin("viewer")}/api/share-review/threads/query`, { headers: { Origin: phase3Origin("viewer") }, data: { token: doc.links[1].path.split("/").pop() } });
@@ -130,6 +134,41 @@ test("once the owner has closed the discussions they stay closed, until someone 
   await expect(rail).toContainText("Something new");
 });
 
+test("the owner is shown what is still open; what is resolved is one choice away", async ({ page, request }) => {
+  const doc = await documentWithDiscussion(request);
+  const [owner, viewer] = [phase3Origin("reviewOwner"), phase3Origin("viewer")];
+  const { threads } = await (await request.get(`${owner}/api/documents/${doc.documentId}/review-threads`)).json();
+  expect((await request.post(`${owner}/api/documents/${doc.documentId}/review-threads/${threads[0].id}/resolution`, { headers: { Origin: owner }, data: { status: "RESOLVED" } })).ok()).toBe(true);
+  const block = projectReviewBlocks(doc.markdown).find((candidate) => candidate.text.startsWith("Paragraph 3:"))!;
+  expect((await request.post(`${viewer}/api/share-review/threads`, { headers: { Origin: viewer }, data: {
+    token: doc.links[0].path.split("/").pop(), expectedRevisionId: doc.revisionId, idempotencyKey: crypto.randomUUID(), body: "Still to be answered",
+    anchor: { schemaVersion: 1, blockPath: block.path, blockKind: block.kind, startUtf16: 0, endUtf16: 11, exact: block.text.slice(0, 11), prefix: "", suffix: block.text.slice(11, 75) },
+  } })).status()).toBe(201);
+
+  await page.setViewportSize({ width: 1680, height: 900 });
+  await page.goto(doc.href);
+  const rail = page.getByRole("complementary", { name: "Document discussions" });
+  const cards = rail.locator("[data-review-thread]").filter({ visible: true });
+  await expect(rail).toBeVisible();
+  // Both are counted; one is shown.
+  await expect(page.getByRole("button", { name: "Hide discussions, 2 comments" })).toBeVisible();
+  await expect(rail.getByRole("button", { name: "Filter discussions" })).toHaveText("Open");
+  await expect(cards).toHaveCount(1);
+  await expect(cards).toContainText("Still to be answered");
+
+  await rail.getByRole("button", { name: "Filter discussions" }).click();
+  await page.getByRole("menuitem", { name: "All comments", exact: true }).click();
+  await expect(cards).toHaveCount(2);
+
+  // A mark on a passage whose discussion is resolved still leads to it.
+  await rail.getByRole("button", { name: "Filter discussions" }).click();
+  await page.getByRole("menuitem", { name: "Open", exact: true }).click();
+  await expect(cards).toHaveCount(1);
+  await page.getByRole("button", { name: "1 comment on passage: Paragraph 8" }).click();
+  await expect(cards).toHaveCount(2);
+  await expect(rail).toContainText("A reviewer's remark");
+});
+
 test("discussions that are all resolved do not open by themselves", async ({ page, request }) => {
   const doc = await documentWithDiscussion(request);
   const owner = phase3Origin("reviewOwner");
@@ -138,8 +177,13 @@ test("discussions that are all resolved do not open by themselves", async ({ pag
   await page.setViewportSize({ width: 1680, height: 900 });
   await page.goto(doc.href);
   await expect(page.getByRole("button", { name: "Open discussions, 1 comments" })).toBeVisible();
-  await expect(page.getByRole("complementary", { name: "Document discussions" })).toBeHidden();
+  const rail = page.getByRole("complementary", { name: "Document discussions" });
+  await expect(rail).toBeHidden();
   await expect(page.getByRole("complementary", { name: "On this page" })).toBeVisible();
+  // Asked for, they are all there: with nothing open, an empty list would say there was nothing at all.
+  await openReviewDiscussions(page);
+  await expect(rail.getByRole("button", { name: "Filter discussions" })).toHaveText("All comments");
+  await expect(rail.locator("[data-review-thread]").filter({ visible: true })).toHaveCount(1);
 });
 
 test("the owner's page keeps one left edge for its title and its article, with discussions open or not", async ({ page, request }) => {
