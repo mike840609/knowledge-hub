@@ -13,14 +13,40 @@ Agreed with the user on 2026-10-12:
   passages**, as on the shared page.
 - **The rail takes the outline's place.** While it is open the outline is shown
   above the article, as it already is in a narrow pane.
-- **Collapsed by default.** Reading first; a mark on each passage that has a
-  discussion, and a Comments entry, open it.
+- **Collapsed by default** — amended the same day, below: open on arrival where
+  a discussion awaits the owner.
 
 Success means an owner can read a remark beside the sentence it is about, on
 the page they already use, and that a document nobody has commented on looks
 exactly as it did.
 
 ## Behaviour
+
+**Open on arrival.** Asked whether the rail should simply be open by default,
+the answer agreed on was narrower. The owner opens a document that has been
+commented on largely to read the comments, and a 28px mark is easy to miss; but
+a rail that is always open is an empty column on a document nobody has remarked
+on, a column of history on one where everything is settled, and it costs the
+outline its place every time. So:
+
+- The rail opens by itself when the document is opened **if a discussion awaits
+  the owner**: one that is open (not resolved) and that the owner has not
+  hidden.
+- **Only as a rail.** Where the discussions would be a drawer, they wait to be
+  asked for: a drawer would cover the article.
+- **Closing it is remembered**, per document, as the discussions it was closed
+  on (`localStorage`, `kh:review-dismissed:<document>`). It stays closed on
+  those, and opens again when a discussion arrives that was not among them.
+  Opening it by hand forgets the closing.
+- It is decided once, when the discussions first load. Resolving the last one
+  does not close the rail under the owner's hands; the next visit finds it
+  closed.
+- It sets the open state and nothing else: it does not move focus or scroll.
+
+The shared page is not changed. Its readers came for the article, most will
+never comment, and #168 chose reading first over an ever-present rail there.
+
+The rule is `opensOnArrival` in `review-auto-open.ts`.
 
 **Collapsed.** The article, and the outline beside it where the pane is wide
 enough. A passage with a discussion is highlighted and has a count in the
@@ -111,7 +137,12 @@ a change to the shared page's tests and documents for no change in behaviour.
 
 ## Tests
 
-`tests/e2e/owner-review.spec.ts`: the rail beside the article and level with
+`tests/unit/review-auto-open.test.ts`: when the rail opens by itself — awaiting,
+resolved, hidden, closed-on, and a discussion arriving after a closing.
+
+`tests/e2e/owner-review.spec.ts`: the rail open on arrival without taking the
+scroll position; staying closed after a closing and opening for a new
+discussion; resolved discussions and a narrow pane not opening it; the rail beside the article and level with
 its passage, in the outline's place, and the outline back on collapse; one left
 edge for the title and the article, open or not; the drawer in a narrow pane; a
 document without discussions unchanged; and the owner's reply, resolve and hide

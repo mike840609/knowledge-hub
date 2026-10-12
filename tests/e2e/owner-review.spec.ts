@@ -67,7 +67,7 @@ async function documentWithDiscussion(request: Parameters<typeof createReviewDoc
   return doc;
 }
 
-test("the owner reads a discussion beside the passage it is about, in the outline's place", async ({ page, request }) => {
+test("a discussion that awaits the owner is open beside its passage when the document is, in the outline's place", async ({ page, request }) => {
   const doc = await documentWithDiscussion(request);
   await page.setViewportSize({ width: 1680, height: 900 });
   await page.goto(doc.href);
@@ -75,16 +75,13 @@ test("the owner reads a discussion beside the passage it is about, in the outlin
   const outlineRail = page.getByRole("complementary", { name: "On this page" });
   const marker = page.getByRole("button", { name: "1 comment on passage: Paragraph 8" });
 
-  // Reading first: the article, its outline beside it, and a mark on the passage that has a discussion.
-  await expect(marker).toBeVisible();
-  await expect(rail).toBeHidden();
-  await expect(outlineRail).toBeVisible();
-  await expect(page.getByRole("button", { name: "Open discussions, 1 comments" })).toBeVisible();
-
-  await marker.click();
+  // Nothing was clicked: someone said something, and the owner has not seen it.
   await expect(rail).toBeVisible();
   const card = rail.locator("[data-review-thread]").filter({ visible: true });
   await expect(card).toContainText("A reviewer's remark");
+  await expect(marker).toBeVisible();
+  // It did not take the reader anywhere: the page is where it opened.
+  expect(await page.getByRole("region", { name: "Document content" }).evaluate((pane) => pane.scrollTop)).toBe(0);
   // Beside the article, not under it; and level with the passage.
   const article = page.locator("[data-review-document]");
   const passage = article.locator("p").nth(7);
@@ -102,28 +99,75 @@ test("the owner reads a discussion beside the passage it is about, in the outlin
   await page.getByRole("button", { name: "Collapse discussions" }).click();
   await expect(rail).toBeHidden();
   await expect(outlineRail).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open discussions, 1 comments" })).toBeVisible();
+  // The mark on the passage is the way back in.
+  await marker.click();
+  await expect(rail).toBeVisible();
+});
+
+test("once the owner has closed the discussions they stay closed, until someone says something new", async ({ page, request }) => {
+  const doc = await documentWithDiscussion(request);
+  await page.setViewportSize({ width: 1680, height: 900 });
+  await page.goto(doc.href);
+  const rail = page.getByRole("complementary", { name: "Document discussions" });
+  await expect(rail).toBeVisible();
+  await page.getByRole("button", { name: "Collapse discussions" }).click();
+  await expect(rail).toBeHidden();
+
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Open discussions, 1 comments" })).toBeVisible();
+  await expect(rail).toBeHidden();
+
+  const viewer = phase3Origin("viewer");
+  const block = projectReviewBlocks(doc.markdown).find((candidate) => candidate.text.startsWith("Paragraph 3:"))!;
+  const created = await request.post(`${viewer}/api/share-review/threads`, { headers: { Origin: viewer }, data: {
+    token: doc.links[0].path.split("/").pop(), expectedRevisionId: doc.revisionId, idempotencyKey: crypto.randomUUID(), body: "Something new",
+    anchor: { schemaVersion: 1, blockPath: block.path, blockKind: block.kind, startUtf16: 0, endUtf16: 11, exact: block.text.slice(0, 11), prefix: "", suffix: block.text.slice(11, 75) },
+  } });
+  expect(created.status()).toBe(201);
+  await page.reload();
+  await expect(rail).toBeVisible();
+  await expect(rail).toContainText("Something new");
+});
+
+test("discussions that are all resolved do not open by themselves", async ({ page, request }) => {
+  const doc = await documentWithDiscussion(request);
+  const owner = phase3Origin("reviewOwner");
+  const { threads } = await (await request.get(`${owner}/api/documents/${doc.documentId}/review-threads`)).json();
+  expect((await request.post(`${owner}/api/documents/${doc.documentId}/review-threads/${threads[0].id}/resolution`, { headers: { Origin: owner }, data: { status: "RESOLVED" } })).ok()).toBe(true);
+  await page.setViewportSize({ width: 1680, height: 900 });
+  await page.goto(doc.href);
+  await expect(page.getByRole("button", { name: "Open discussions, 1 comments" })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Document discussions" })).toBeHidden();
+  await expect(page.getByRole("complementary", { name: "On this page" })).toBeVisible();
 });
 
 test("the owner's page keeps one left edge for its title and its article, with discussions open or not", async ({ page, request }) => {
   const doc = await documentWithDiscussion(request);
   await page.setViewportSize({ width: 1680, height: 900 });
   await page.goto(doc.href);
+  const rail = page.getByRole("complementary", { name: "Document discussions" });
   const edges = () => page.evaluate(() => {
     const textLeft = (element: Element) => { const range = document.createRange(); range.selectNodeContents(element); return Math.round(range.getClientRects()[0].left); };
     return { title: textLeft(document.querySelector('[role="region"][aria-label="Document content"] h1')!), article: textLeft(document.querySelector("[data-review-document] p")!) };
   });
-  const closed = await edges();
-  expect(closed.article).toBe(closed.title);
-  await openReviewDiscussions(page);
-  await expect(page.getByRole("complementary", { name: "Document discussions" })).toBeVisible();
+  await expect(rail).toBeVisible();
   const open = await edges();
   expect(open.article).toBe(open.title);
+  await page.getByRole("button", { name: "Collapse discussions" }).click();
+  await expect(rail).toBeHidden();
+  const closed = await edges();
+  expect(closed.article).toBe(closed.title);
 });
 
 test("where the pane has no room for a rail, the owner's discussions open over the article instead", async ({ page, request }) => {
   const doc = await documentWithDiscussion(request);
   await page.setViewportSize({ width: 820, height: 800 });
   await page.goto(doc.href);
+  // A drawer would cover the article the owner came to read, so here it waits to be asked for.
+  await expect(page.locator(".kh-shared-document")).toHaveAttribute("data-review-ready", "");
+  await expect(page.getByRole("button", { name: "Open discussions, 1 comments" })).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await openReviewDiscussions(page);
   const drawer = page.getByRole("dialog", { name: "Comments" });
   await expect(drawer).toBeVisible();

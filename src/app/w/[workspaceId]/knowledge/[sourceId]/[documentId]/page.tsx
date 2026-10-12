@@ -163,7 +163,7 @@ export default async function KnowledgeDocumentPage({
         {shell?.workspace.type === "PERSONAL" ? <ReadRevisionMarker workspaceId={workspaceId} documentId={documentId} revisionId={selectedRevision.id}/> : null}
         {/* The owner's discussions go beside the article they are about, so the panel holds it. */}
         {shell?.workspace.type === "PERSONAL" && !isHistorical
-          ? <OwnerReviewPanel readOnly={view.status !== "ACTIVE" || explorer?.source.status !== "ACTIVE"} documentId={documentId} revisionId={view.currentRevision.id} markdown={view.currentRevision.markdown}>{viewer}</OwnerReviewPanel>
+          ? <OwnerReviewPanel key={documentId} readOnly={view.status !== "ACTIVE" || explorer?.source.status !== "ACTIVE"} documentId={documentId} revisionId={view.currentRevision.id} markdown={view.currentRevision.markdown}>{viewer}</OwnerReviewPanel>
           : viewer}
         {linkView ? <BacklinksFooter view={linkView} /> : null}
       </div>
