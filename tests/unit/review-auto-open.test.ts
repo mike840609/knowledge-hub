@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { awaitingOwner, opensOnArrival, parseDismissed } from "@/components/knowledge/review-auto-open";
 
-const thread = (id: string, status: "OPEN" | "RESOLVED" = "OPEN", visibility: "VISIBLE" | "HIDDEN" = "VISIBLE") => ({ id, status, visibility });
+const says = (authorUserId: string, visibility: "VISIBLE" | "HIDDEN" = "VISIBLE") => ({ authorUserId, visibility });
+const thread = (id: string, status: "OPEN" | "RESOLVED" = "OPEN", visibility: "VISIBLE" | "HIDDEN" = "VISIBLE", comments = [says("reader")]) => ({ id, status, visibility, comments });
+const OWNER = "owner";
 
 /**
  * When the owner's discussions open by themselves
@@ -9,7 +11,18 @@ const thread = (id: string, status: "OPEN" | "RESOLVED" = "OPEN", visibility: "V
  */
 describe("the owner's discussions on arrival", () => {
   it("await the owner where a discussion is open and has not been hidden", () => {
-    expect(awaitingOwner([thread("a"), thread("b", "RESOLVED"), thread("c", "OPEN", "HIDDEN"), thread("d")])).toEqual(["a", "d"]);
+    expect(awaitingOwner([thread("a"), thread("b", "RESOLVED"), thread("c", "OPEN", "HIDDEN"), thread("d")], OWNER)).toEqual(["a", "d"]);
+  });
+
+  it("do not await the owner where the owner spoke last", () => {
+    const own = thread("own", "OPEN", "VISIBLE", [says(OWNER)]);
+    const answered = thread("answered", "OPEN", "VISIBLE", [says("reader"), says(OWNER)]);
+    const replied = thread("replied", "OPEN", "VISIBLE", [says(OWNER), says("reader")]);
+    // A reply the owner hid has been dealt with: the last word that stands is the owner's.
+    const hidden = thread("hidden", "OPEN", "VISIBLE", [says(OWNER), says("reader", "HIDDEN")]);
+    expect(awaitingOwner([own, answered, replied, hidden], OWNER)).toEqual(["replied"]);
+    expect(opensOnArrival([own, answered, hidden], [], OWNER)).toBe(false);
+    expect(opensOnArrival([own, replied], [], OWNER)).toBe(true);
   });
 
   it.each([
@@ -23,7 +36,7 @@ describe("the owner's discussions on arrival", () => {
     ["a discussion has arrived since the owner closed the rail", [thread("a"), thread("b")], ["a"], true],
     ["one the owner closed the rail on was resolved and is open again", [thread("a")], ["a"], false],
   ])("open by themselves when %s: %s", (_name, threads, dismissed, opens) => {
-    expect(opensOnArrival(threads, dismissed)).toBe(opens);
+    expect(opensOnArrival(threads, dismissed, OWNER)).toBe(opens);
   });
 
   it.each([

@@ -111,6 +111,37 @@ Both failed the whole-text proof, for opposite reasons.
 A marker followed by a hard line break leaves a paragraph with a break in it,
 which was and stays unselectable.
 
+## 3b. A paragraph with a wikilink, or a hard line break
+
+Added 2026-10-13, asked for after the above. A paragraph holding one `[[link]]`
+was wholly out of reach, and in a knowledge base most paragraphs worth
+discussing hold one.
+
+- **A wikilink.** The page shows `that page` where the Markdown says
+  `[[Other page|that page]]`; the difference is in the middle of the text, so
+  no count of hidden characters at one end describes it. What a reader selects
+  is the words on the page, so **a block's text is now those words**: the
+  projection replaces each wikilink with what is shown for it before reading the
+  text, using the reader's own `replaceWikiLinks` and `shownText` (moved to
+  `src/modules/knowledge/domain/replace-wiki-links.ts`, beside `findWikiLinks`,
+  so the domain does not reach into the components). Which `[[…]]` is a link —
+  not in code, not unclosed — is therefore one decision. The page's side needed
+  no change: its text already was those words.
+  No stored anchor changes meaning: a block with `[[` in it could not be
+  anchored before. Whether the link resolves does not change its words; what the
+  owner's reader adds for a screen reader beside one that does not is skipped as
+  it already was.
+  A consequence: renaming an alias, or retargeting a link shown by its target,
+  changes the block's text like any other edit, and a quote over it goes
+  Outdated.
+- **A hard line break** (two spaces or a backslash at the line's end) is one
+  space of the block's text, as a soft one is. It was refused outright; the page
+  and the projection already agreed on it.
+
+`<br>` written as HTML, a relative `.md` link and a footnote reference are still
+refused: the first two for reasons the canonical review spec gives, the third
+because the page shows a number the Markdown does not have.
+
 ## 4. The owner starts a discussion
 
 `POST /api/documents/:documentId/review-threads`, beside the owner's existing
@@ -137,14 +168,17 @@ rail. A document with no discussion and no selection still shows nothing.
 
 ## 5. Limits that remain
 
-- A paragraph containing a wikilink, a footnote reference or a hard line break,
-  a footnote definition, an image and raw-HTML text still cannot be commented
-  on. They now say so (§2).
+- A paragraph containing a footnote reference, a relative `.md` link, an image
+  or raw HTML (`<br>` included), and a footnote definition, still cannot be
+  commented on. They now say so (§2).
 - One block per comment.
 - The document header is pinned only in a wide pane; in a narrow one the owner's
   control scrolls away with it. The rail's "Add comment" row is the other way in.
-- A discussion the owner started and left open counts as awaiting the owner for
-  the rail's open-on-arrival rule.
+- ~~A discussion the owner started and left open counts as awaiting the owner.~~
+  Fixed the same day: a discussion awaits the owner only where the last comment
+  still shown is someone else's (`awaitingOwner` in `review-auto-open.ts`). One
+  the owner started or answered waits for a reader, and opens the rail again
+  when a reader replies.
 
 ## 6. Verification
 

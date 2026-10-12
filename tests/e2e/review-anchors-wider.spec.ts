@@ -44,6 +44,7 @@ const MIXED = [
   "Plain passage to review.", "",
   "| Name | Role |", "|---|---|", "| Ada | Owner here |", "",
   "```js", "const total = 1;", "const next = total + 1;", "```", "",
+  "See [[Another page|that page]] for more,  ", "on its second line.", "",
   "[^1]: The note",
 ].join("\n");
 
@@ -80,11 +81,17 @@ test("a reader comments on a paragraph, a table cell, code, a callout and a task
   await comment(page, "On the task");
   expect((await task).postDataJSON().anchor).toMatchObject({ exact: "a task", startUtf16: 0 });
 
+  // Across a wikilink, shown by its alias, and a hard line break: the words on the page are the passage.
+  const linked = page.waitForRequest(sent => sent.url().endsWith("/api/share-review/threads") && sent.method() === "POST");
+  await selectText(page, "p", "that page", "p", "on its");
+  await comment(page, "On the link");
+  expect((await linked).postDataJSON().anchor).toMatchObject({ exact: "that page for more, on its", startUtf16: 4 });
+
   // Each has its mark beside the article, and is found again from its card — after a reload too.
-  await expect(page.locator("[data-review-marker]")).toHaveCount(5);
+  await expect(page.locator("[data-review-marker]")).toHaveCount(6);
   await page.reload();
   await openReviewDiscussions(page);
-  await expect(page.locator("[data-review-marker]")).toHaveCount(5);
+  await expect(page.locator("[data-review-marker]")).toHaveCount(6);
   const quote = (text: string) => page.locator("[data-review-thread]").filter({ visible: true }).filter({ hasText: text }).locator("blockquote button");
   await quote("On the code").click();
   await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe("total = 1;\nconst next");
@@ -94,10 +101,12 @@ test("a reader comments on a paragraph, a table cell, code, a callout and a task
   await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe("Heads");
   await quote("On the task").click();
   await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe("a task");
+  await quote("On the link").click();
+  await expect.poll(() => page.evaluate(() => window.getSelection()?.toString().replace(/\s+/g, " "))).toBe("that page for more, on its");
 });
 
 test("a selection that cannot take a comment says why, where the button would have been", async ({ page, request }) => {
-  const doc = await createReviewDocument(request, "See [[Another page]] here.\n\nFirst plain passage.\n\nSecond plain passage.");
+  const doc = await createReviewDocument(request, "See [another page](./another.md) here.\n\nFirst plain passage.\n\nSecond plain passage.");
   await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
   await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
   const entry = page.locator(".kh-review-entry");
@@ -122,7 +131,7 @@ test("a selection that cannot take a comment says why, where the button would ha
 });
 
 test("the owner starts a discussion on their own document, and a reader of its link answers it", async ({ page, request }) => {
-  const doc = await createReviewDocument(request, "The owner's own passage here.\n\nSee [[Another page]] too.");
+  const doc = await createReviewDocument(request, "The owner's own passage here.\n\nSee [another page](./another.md) too.");
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(doc.href);
   await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
@@ -143,6 +152,10 @@ test("the owner starts a discussion on their own document, and a reader of its l
   await expect(page.getByRole("button", { name: /^Hide discussions, 1 comments, 1 open/ })).toBeVisible();
   await expect(page.locator("[data-review-marker]")).toHaveCount(1);
 
+  // What the owner said themselves does not await them: on coming back the rail is shut.
+  await page.reload();
+  await expect(page.getByRole("button", { name: /^Open discussions, 1 comments, 1 open/ })).toBeVisible();
+
   // It is the document's, not a link's: every link reads it, by the owner's name, and may answer.
   await page.goto(`${phase3Origin("viewer")}${doc.links[1].path}`);
   await openReviewDiscussions(page);
@@ -153,6 +166,10 @@ test("the owner starts a discussion on their own document, and a reader of its l
   await page.getByRole("textbox", { name: "Reply", exact: true }).fill("Read, thanks");
   await page.getByRole("button", { name: "Reply", exact: true }).click();
   await expect(thread).toContainText("Read, thanks");
+
+  // Now a reader has answered, and it does: the rail is open when the owner comes back.
+  await page.goto(doc.href);
+  await expect(page.getByRole("button", { name: /^Hide discussions, 1 comments, 1 open/ })).toBeVisible();
 });
 
 test("only the owner starts one that way: not another person, not another site, not on an archived document", async ({ request }) => {

@@ -4,7 +4,18 @@ import { createReviewAnchorRelocator,projectReviewBlocks,validateReviewAnchor,re
 const anchor={schemaVersion:1 as const,blockPath:[0],blockKind:"paragraph" as const,startUtf16:0,endUtf16:2,exact:"😀",prefix:"",suffix:" hello"};
 describe("canonical review anchors",()=>{
  it("uses UTF16 and concatenates formatting",()=>{expect(projectReviewBlocks("😀 **hello**")[0].text).toBe("😀 hello");expect(validateReviewAnchor("😀 **hello**",anchor)).toEqual(anchor);});
- it("refuses wikilinks and relative links for whole block",()=>{for(const markdown of ["safe [[Wiki]]", "safe [doc](./file.md)","safe ![img](https://a/img)"]){expect(projectReviewBlocks(markdown)[0].selectable).toBe(false);}});
+ it("reads a wikilink as what is shown for it",()=>{
+  expect(projectReviewBlocks("see [[Wiki]] now")[0]).toMatchObject({text:"see Wiki now",selectable:true});
+  expect(projectReviewBlocks("see [[Wiki#Part|the part]] now")[0]).toMatchObject({text:"see the part now",selectable:true});
+  expect(projectReviewBlocks("see [[Wiki#Part]] now")[0]).toMatchObject({text:"see Wiki › Part now",selectable:true});
+  // Not a link: in code it is code, and unclosed it is the text it looks like.
+  expect(projectReviewBlocks("see `[[Wiki]]` now")[0]).toMatchObject({text:"see [[Wiki]] now",selectable:true});
+  expect(projectReviewBlocks("see [[Wiki now")[0]).toMatchObject({text:"see [[Wiki now",selectable:true});
+ });
+ it("reads a hard line break as the one space a soft one is",()=>{
+  expect(projectReviewBlocks("a  \nb")[0]).toMatchObject({text:"a b",selectable:true});
+ });
+ it("refuses relative links and images for whole block",()=>{for(const markdown of ["safe [doc](./file.md)","safe ![img](https://a/img)"]){expect(projectReviewBlocks(markdown)[0].selectable).toBe(false);}});
  it("never guesses between repeated quotes",()=>{expect(relocateReviewAnchor("😀 hello\n\n😀 hello",anchor,false)).toEqual({match:"OUTDATED"});});
 });
 it("rejects offset and context forgery including surrogate splits",()=>{
@@ -12,7 +23,7 @@ it("rejects offset and context forgery including surrogate splits",()=>{
 });
 it("normalizes whitespace deterministically and refuses complex/hard-break blocks",()=>{
  expect(projectReviewBlocks("a\r\nb **c** `d`")[0].text).toBe("a b c d");
- for(const markdown of ["a  \nb","a <span>x</span>","a [ref][a]\n\n[a]: ./file.md"]){expect(projectReviewBlocks(markdown)[0].selectable).toBe(false);}
+ for(const markdown of ["a <span>x</span>","a [ref][a]\n\n[a]: ./file.md"]){expect(projectReviewBlocks(markdown)[0].selectable).toBe(false);}
 });
 it("relocates a unique current quote and strips stale anchors on mismatch",()=>{
  expect(relocateReviewAnchor("# New heading\n\n😀 hello",anchor,false)).toMatchObject({match:"MOVED",anchor:{blockPath:[1]}});
@@ -56,7 +67,7 @@ describe("a passage in a table cell or a code block",()=>{
   expect(validateReviewAnchor(table,cell)).toEqual(cell);
  });
  it("a cell that holds what a paragraph may not is refused as the paragraph would be",()=>{
-  for(const markdown of ["| a |\n|---|\n| one<br>two |","| a |\n|---|\n| see [[Wiki]] |","| a |\n|---|\n| ![x](https://a/img) |"]) expect(projectReviewBlocks(markdown).filter(block=>block.kind==="tableCell").at(-1)!.selectable).toBe(false);
+  for(const markdown of ["| a |\n|---|\n| one<br>two |","| a |\n|---|\n| ![x](https://a/img) |"]) expect(projectReviewBlocks(markdown).filter(block=>block.kind==="tableCell").at(-1)!.selectable).toBe(false);
  });
  it("code is read as it was written: its line breaks and its spaces are its text",()=>{
   expect(projectReviewBlocks(fenced)[0]).toMatchObject({kind:"code",text:"if (a) {\n    b();\n}",selectable:true});

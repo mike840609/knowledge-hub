@@ -1,5 +1,6 @@
 import type { Nodes } from "mdast";
 import { parseMarkdown } from "@/shared/markdown/parse";
+import { replaceWikiLinks, shownText } from "./replace-wiki-links";
 import { calloutMarker } from "@/shared/markdown/remark-callouts";
 import { ValidationError } from "./errors";
 import { copyReviewAnchor, REVIEW_LIMITS, type ReviewAnchor, type CurrentAnchorProjection } from "./document-review";
@@ -11,7 +12,9 @@ const kinds = new Set(["heading","paragraph","listItem","blockquote","tableCell"
 const leaves = new Set(["heading","paragraph","tableCell"]);
 const inlineKinds = new Set(["text","inlineCode","emphasis","strong","delete","link","linkReference","break"]);
 // Paths are child indexes from the mdast root. Text is inline reading order,
-// CRLF normalized to LF, with soft line breaks/whitespace collapsed to one space.
+// CRLF normalized to LF, with line breaks — soft or hard — and whitespace collapsed
+// to one space. A `[[wikilink]]` is the text shown for it, which is what a reader
+// selects; how it is written is not on the page.
 // A fenced or indented code block is the exception: its text is its code as
 // written, since there a line break and a run of spaces are what was written.
 // Offsets are JavaScript UTF-16 offsets; quote/context caps count code points.
@@ -22,7 +25,7 @@ function textOf(node:Nodes):string {
   return "";
 }
 function safeInline(node:Nodes):boolean {
-  if(!inlineKinds.has(node.type) || node.type === "break") return false;
+  if(!inlineKinds.has(node.type)) return false;
   if(node.type==="link" && !/^(?:https?:|mailto:|tel:|#)/i.test(node.url)) return false;
   // Reference destinations depend on separate nodes; conservatively refuse.
   if(node.type==="linkReference") return false;
@@ -36,7 +39,7 @@ export function projectReviewBlocks(markdown:string):CanonicalReviewBlock[] {
      const text=code?node.value:textOf(node).replace(/\r\n?/g,"\n").replace(/[\t\n\r ]+/g," ");
      // Container blocks are deliberately unselectable: their nested leaf blocks
      // receive paths separately, preventing overlapping DOM anchor candidates.
-     const selectable=code || (leaves.has(node.type) && "children" in node && node.children.every(n=>safeInline(n as Nodes)) && !/\[\[/.test(text));
+     const selectable=code || (leaves.has(node.type) && "children" in node && node.children.every(n=>safeInline(n as Nodes)));
      result.push({path,kind:node.type as ReviewAnchor["blockKind"],text,selectable,hidden});
    }
    // A callout's marker is in its opening paragraph's text and not on the page; the marker's line
@@ -44,7 +47,9 @@ export function projectReviewBlocks(markdown:string):CanonicalReviewBlock[] {
    const marker=node.type==="blockquote"?calloutMarker(node)?.text.replace(/[\t\n\r ]+/g," ").length??0:0;
    if("children" in node) node.children.forEach((n,i)=>walk(n as Nodes,[...path,i],i===0?marker:0));
  }
- walk(parseMarkdown(markdown),[]);return result;
+ const tree=parseMarkdown(markdown);
+ replaceWikiLinks(tree,markdown,match=>({type:"text",value:shownText(match)}));
+ walk(tree,[]);return result;
 }
 function contexts(text:string,start:number,end:number) {
  return {prefix:[...text.slice(0,start)].slice(-REVIEW_LIMITS.context).join(""),suffix:[...text.slice(end)].slice(0,REVIEW_LIMITS.context).join("")};
