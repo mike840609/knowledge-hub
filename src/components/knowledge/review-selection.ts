@@ -29,6 +29,13 @@ const WHITESPACE = /[\t\n\r ]/;
 const flowed = (text: string) => text.replace(/[\t\n\r ]+/g, " ");
 /** Text as the block's canonical text has it: code as written, anything else with its whitespace run together. */
 const canonical = (block: CanonicalReviewBlock, text: string) => block.kind === "code" ? text : flowed(text);
+/**
+ * Text read from the start of a block's element, without the gap the page opens some blocks with —
+ * a task's, after its box. No block's own text starts with a space, code aside.
+ */
+const fromStart = (block: CanonicalReviewBlock, text: string) => block.kind === "code" ? text : flowed(text).replace(/^ /, "");
+/** The part of a block's text the page shows: all of it, but for a callout's marker. */
+const shown = (block: CanonicalReviewBlock) => block.text.slice(block.hidden);
 function leafText(element: HTMLElement, block: CanonicalReviewBlock): string {
   const copy = element.cloneNode(true) as HTMLElement;
   if (element.tagName === "LI") copy.querySelectorAll("ul,ol").forEach(list => list.remove());
@@ -37,7 +44,7 @@ function leafText(element: HTMLElement, block: CanonicalReviewBlock): string {
   if (block.kind === "code") return text.replace(/\n$/, "");
   // ReactMarkdown emits structural newlines around nested tight lists; those
   // are not part of the parent paragraph's canonical text or selection offsets.
-  return flowed(element.tagName === "LI" ? text.replace(/[\t\n\r ]+$/, "") : text);
+  return fromStart(block, element.tagName === "LI" ? text.replace(/[\t\n\r ]+$/, "") : text);
 }
 
 /**
@@ -78,14 +85,16 @@ export function readReviewSelection(root: HTMLElement, markdown: string, selecti
   const range = withinLeaf(chosen, element);
   if (!range) return { problem: "across" };
   const block = blocksByPath(markdown).get(pathOf(element) ?? "");
-  if (!block?.selectable || leafText(element, block) !== block.text) return { problem: "unsupported" };
+  if (!block?.selectable || leafText(element, block) !== shown(block)) return { problem: "unsupported" };
   const before = range.cloneRange(); before.selectNodeContents(element); before.setEnd(range.startContainer, range.startOffset);
   const through = range.cloneRange(); through.selectNodeContents(element); through.setEnd(range.endContainer, range.endOffset);
-  const startUtf16 = canonical(block, readableText(before.cloneContents())).length;
-  const reached = canonical(block, readableText(through.cloneContents())).length;
+  // Places are counted in the block's text, which a callout's marker is part of.
+  const led = fromStart(block, readableText(before.cloneContents()));
+  const startUtf16 = block.hidden + led.length;
+  const reached = block.hidden + fromStart(block, readableText(through.cloneContents())).length;
   const endUtf16 = Math.min(reached, block.text.length);
   const exact = block.text.slice(startUtf16, endUtf16);
-  const selected = canonical(block, readableText(range.cloneContents()));
+  const selected = led ? canonical(block, readableText(range.cloneContents())) : fromStart(block, readableText(range.cloneContents()));
   // Past the block's text there is only what the renderer put after it: a code block's last
   // newline, a tight item's nested list. The quote is what was selected up to there.
   if (!exact.trim() || (reached > block.text.length ? !selected.startsWith(exact) : selected !== exact)) return { problem: "unsupported" };
@@ -105,7 +114,7 @@ export function createReviewRangeResolver(root: HTMLElement, markdown: string) {
   return (anchor: ReviewAnchor): Range | null => {
   const key = reviewPathKey(anchor.blockPath);
   const block = blocks.get(key), element = leafElement(root, key);
-  if (!element || !block?.selectable || leafText(element, block) !== block.text || block.text.slice(anchor.startUtf16, anchor.endUtf16) !== anchor.exact) return null;
+  if (!element || !block?.selectable || leafText(element, block) !== shown(block) || anchor.startUtf16 < block.hidden || block.text.slice(anchor.startUtf16, anchor.endUtf16) !== anchor.exact) return null;
   const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       const extra = node.parentElement?.closest('.sr-only,[aria-hidden="true"]');
@@ -121,6 +130,8 @@ export function createReviewRangeResolver(root: HTMLElement, markdown: string) {
     for (let offset = 0; offset < node.length; offset++) chars.push({ node, offset, value: node.data[offset] });
   }
   const collapses = block.kind !== "code";
+  // The gap a block's element opens with is no part of its text.
+  if (collapses) while (chars.length && WHITESPACE.test(chars[0].value)) chars.shift();
   const starts: {node: Text; offset: number}[] = [], ends: {node: Text; offset: number}[] = [];
   for (let i = 0; i < chars.length; i++) {
     const first = chars[i];
@@ -128,7 +139,7 @@ export function createReviewRangeResolver(root: HTMLElement, markdown: string) {
     if (collapses && WHITESPACE.test(first.value)) while (i + 1 < chars.length && WHITESPACE.test(chars[i + 1].value)) i++;
     ends.push({node:chars[i].node,offset:chars[i].offset+1});
   }
-  const begin = starts[anchor.startUtf16], end = ends[anchor.endUtf16-1];
+  const begin = starts[anchor.startUtf16 - block.hidden], end = ends[anchor.endUtf16 - 1 - block.hidden];
   if (!begin || !end) return null;
   const range = document.createRange(); range.setStart(begin.node,begin.offset);range.setEnd(end.node,end.offset);
   return canonical(block, readableText(range.cloneContents())) === anchor.exact ? range : null;

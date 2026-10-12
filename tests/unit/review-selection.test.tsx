@@ -65,6 +65,13 @@ describe("a passage that can take a comment", () => {
     ["an item of a list in an item", "- Parent\n  - Child", "ul ul li", "Child", "paragraph"],
     ["a quotation", "> Quoted words", "blockquote p", "words", "paragraph"],
     ["the body of a callout", "> [!NOTE]\n> Heads up\n>\n> Second part", "[data-callout] p + p", "Second", "paragraph"],
+    ["the opening of a callout", "> [!NOTE]\n> Heads up there", "[data-callout] p", "Heads up", "paragraph"],
+    ["the opening of a callout, from its first letter", "> [!WARNING] \n> Heads up there", "[data-callout] p", "Heads", "paragraph"],
+    ["the opening of a callout written back by the editor", "> \\[!NOTE]\n> Heads **up** there", "[data-callout] p", "up there", "paragraph"],
+    ["a task", "- [ ] todo item\n- [x] done", "li", "todo item", "paragraph"],
+    ["a ticked task", "- [ ] todo\n- [x] done item", "li + li", "item", "paragraph"],
+    ["a task of a loose list", "- [ ] todo item\n\n- [x] done", "li p", "todo", "paragraph"],
+    ["a task that holds a list", "- [ ] parent task\n  - child", "li", "parent", "paragraph"],
     ["what a <details> holds", "<details>\n<summary>More</summary>\n\nInside it\n\n</details>", "details p", "Inside", "paragraph"],
     ["a table's heading cell", "| Name | Role |\n|---|---|\n| Ada | Owner |", "th + th", "Role", "tableCell"],
     ["a table's cell", "| Name | Role |\n|---|---|\n| Ada | **Owner** here |", "td + td", "Owner here", "tableCell"],
@@ -117,6 +124,20 @@ describe("a passage that can take a comment", () => {
     expect(reading.anchor).toMatchObject({ exact: "Whole paragraph", blockPath: [0] });
   });
 
+  test("a callout's place is counted in the Markdown's text, where its marker is", () => {
+    const markdown = "> [!NOTE]\n> Heads up there";
+    expect(choose(page(markdown), markdown, "[data-callout] p", "up").anchor).toMatchObject({ blockPath: [0, 0], startUtf16: 14, endUtf16: 16, prefix: "[!NOTE] Heads ", suffix: " there" });
+  });
+
+  test("a whole task is selected without the gap the page leaves after its box", () => {
+    const markdown = "- [ ] todo item";
+    const root = page(markdown);
+    const item = root.querySelector("li")!;
+    const reading = readReviewSelection(root, markdown, select({ node: item, offset: 0 }, { node: item, offset: item.childNodes.length }));
+    expect(reading.anchor).toMatchObject({ exact: "todo item", startUtf16: 0 });
+    expect(reviewAnchorRange(root, markdown, reading.anchor!)?.toString()).toBe("todo item");
+  });
+
   test("a whole code block is selected without the newline the page ends it with", () => {
     const markdown = "```\nall of it\n```\n\nafter";
     const root = page(markdown);
@@ -136,8 +157,6 @@ describe("a passage that cannot", () => {
     ["a paragraph with a drawn HTML tag", "Press <kbd>Ctrl</kbd> now", "p", "Press"],
     ["a paragraph with a footnote's number", "Text here[^1]\n\n[^1]: The note", "p", "Text"],
     ["a footnote", "Text here[^1]\n\n[^1]: The note", "section li p", "note"],
-    ["the opening of a callout", "> [!NOTE]\n> Heads up", "[data-callout] p", "Heads"],
-    ["a task", "- [ ] todo\n- [x] done", "li", "todo"],
     ["a table cell with a line break", "| a |\n|---|\n| one<br>two |", "td", "one"],
   ];
   test.each(refused)("%s — and says so", (_name, markdown, selector, text) => {

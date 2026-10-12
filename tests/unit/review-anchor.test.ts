@@ -77,3 +77,25 @@ describe("a passage in a table cell or a code block",()=>{
   expect(relocateReviewAnchor("```\nif (a) {\n  b();\n}\n```",code,false)).toEqual({match:"OUTDATED"});
  });
 });
+
+describe("the opening of a callout",()=>{
+  const markdown="> [!NOTE]\n> Heads up there";
+  const anchor=(startUtf16:number,endUtf16:number,exact:string,prefix:string,suffix:string)=>({schemaVersion:1 as const,blockPath:[0,0],blockKind:"paragraph" as const,startUtf16,endUtf16,exact,prefix,suffix});
+  it("takes a passage of what is shown",()=>{
+    const chosen=anchor(8,13,"Heads","[!NOTE] "," up there");
+    expect(validateReviewAnchor(markdown,chosen)).toEqual(chosen);
+  });
+  it("refuses one that reaches into the marker, which the reader is never shown",()=>{
+    expect(()=>validateReviewAnchor(markdown,anchor(0,7,"[!NOTE]",""," Heads up there"))).toThrow();
+    expect(()=>validateReviewAnchor(markdown,anchor(7,13," Heads","[!NOTE]"," up there"))).toThrow();
+  });
+  it("a quotation that only looks like one keeps all its text",()=>{
+    const plain="> [!NOTE] same line";
+    const chosen={...anchor(0,7,"[!NOTE]",""," same line")};
+    expect(validateReviewAnchor(plain,chosen)).toEqual(chosen);
+  });
+  it("is found again when the callout moves down the document",()=>{
+    const moved=relocateReviewAnchor("Added above\n\n"+markdown,anchor(8,13,"Heads","[!NOTE] "," up there"),false);
+    expect(moved).toMatchObject({match:"MOVED",anchor:{blockPath:[1,0],startUtf16:8,exact:"Heads"}});
+  });
+});
