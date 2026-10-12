@@ -1,3 +1,4 @@
+import { MariaDbSavedShareRepository } from "./saved-shares";
 import { MariaDbDocumentReviewThreadsRepository } from "./document-review-threads";
 import { MariaDbDocumentReviewCommentsRepository } from "./document-review-comments";
 import { MariaDbDocumentReviewWriteLedger } from "./document-review-write-ledger";
@@ -66,6 +67,7 @@ export function createRepositories(connection: DatabaseConnection): SourceReposi
     groupMappings,
     auditEvents: new MariaDbWorkspaceAuditEventRepository(connection),
     shareLinks: new MariaDbDocumentShareLinkRepository(connection),
+    savedShares: new MariaDbSavedShareRepository(connection),
     links: new MariaDbDocumentLinkRepository(connection),
     identityLinks: new MariaDbExternalIdentityLinkRepository(connection),
   };

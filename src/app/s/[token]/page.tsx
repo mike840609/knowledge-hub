@@ -1,3 +1,4 @@
+import { SaveShareButton } from "@/components/knowledge/save-share-button";
 import { SharedReviewPanel } from "@/components/knowledge/shared-review-panel";
 import Link from "next/link";
 import { buttonClasses } from "@/components/ui/button";
@@ -35,8 +36,8 @@ export default async function SharedDocumentPage({ params }: SharedPageProps) {
     <main className="kh-share-page min-h-screen bg-kh-bg">
       <div className="border-b border-kh-border">
         <div className="kh-share-heading kh-reading-column flex min-h-14 items-center justify-between gap-3 py-2">
-          <span className="text-body font-semibold text-kh-text">Knowledge Hub</span>
-          <Link prefetch={false} href={`/s/${token}/open`} className={buttonClasses({ variant: "ghost" })}>Open in Knowledge Hub</Link>
+          <span className="shrink-0 text-body font-semibold text-kh-text">Knowledge Hub</span>
+          <div className="flex min-w-0 flex-wrap items-start justify-end gap-2"><SaveShareButton token={token} /><Link prefetch={false} href={`/s/${token}/open`} className={buttonClasses({ variant: "ghost" })}>Open in Knowledge Hub</Link></div>
         </div>
       </div>
       <header>

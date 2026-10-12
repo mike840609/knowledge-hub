@@ -87,9 +87,17 @@ pass.
   re-verify policy regardless of what the UI allowed. A UI selector is not an
   access check.
   A **document share link** is an owner-issued random UUIDv4, expiring,
-  revocable grant with two narrow paths: anonymous current-document read via
+  revocable grant with three narrow paths: anonymous current-document read via
   `/s/:token` and `DocumentShareService.readShared`, and review-record access
-  via `/api/share-review/*`: query reads require a live token only; writes additionally require a trusted caller.
+  via `/api/share-review/*`: query reads require a live token only; writes additionally require a trusted caller;
+  and recipient-owned saved-share access via `/api/saved-shares/*` and the
+  personal workspace saved-shares list. Saved-share operations always require a
+  trusted caller. Saving captures grant validity and public title/sender metadata
+  in one SQL snapshot, then retains only that metadata and the link reference.
+  Saved-share search covers the recipient's saved metadata and currently public
+  title/sender metadata; unavailable links never disclose newer private metadata.
+  Saving never extends the link's lifetime or grants sender Workspace membership,
+  Workspace search, tree, history, MCP, Markdown edits or revision writes.
   Review access never grants Workspace membership, search, tree, history,
   MCP, Markdown edits or revision writes. Review responses include only
   validated current-revision selected-text fragments; hidden bodies and
