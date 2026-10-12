@@ -350,3 +350,36 @@ test("saved-share actions coexist with comments on mobile without overflow", asy
     if (saved.id) expect((await request.delete(`${phase3Origin("viewer")}/api/saved-shares/${saved.id}`, { headers: { Origin: phase3Origin("viewer") } })).ok()).toBe(true);
   }
 });
+
+test("the shared page keeps one left edge: its bar, its byline, its article and its footer", async ({ page, request }) => {
+  const doc = await createReviewDocument(request, "# A shared title\n\nA paragraph of the article.\n");
+  const origin = phase3Origin("viewer");
+  // Where each part's text starts, not where its box does: padding is what went wrong.
+  const edges = () =>
+    page.evaluate(() => {
+      const textLeft = (selector: string) => {
+        const range = document.createRange();
+        range.selectNodeContents(document.querySelector(selector)!);
+        return Math.round(range.getClientRects()[0].left);
+      };
+      return { bar: textLeft(".kh-share-page > div:first-child span"), byline: textLeft(".kh-share-page header p"), article: textLeft("[data-review-document] p"), footer: textLeft(".kh-share-page footer p") };
+    });
+  const aligned = async () => {
+    const { bar, byline, article, footer } = await edges();
+    expect({ byline, article, footer }).toEqual({ byline: bar, article: bar, footer: bar });
+  };
+
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`${origin}${doc.links[0].path}`);
+    await expect(page.locator("[data-review-document] p")).toBeVisible();
+    await aligned();
+  }
+
+  // With the discussions beside it the article moves left to make room, and everything moves with it.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${origin}${doc.links[0].path}`);
+  await openReviewDiscussions(page);
+  await expect(page.getByRole("complementary", { name: "Document discussions" })).toBeVisible();
+  await aligned();
+});
