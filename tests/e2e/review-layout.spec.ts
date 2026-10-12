@@ -47,7 +47,7 @@ test("shared comments follow passage order and the selected card stays beside it
 
   // A long reply expands one of the two cards on the same passage; its neighbor moves down.
   const earlierCard = page.locator(`[data-review-thread="${ids[1]}"]`).filter({ visible: true });
-  await earlierCard.getByRole("button", { name: "Expand comment", exact: true }).click();
+  // One step from reading a remark to answering it: the card's own button is Reply.
   await earlierCard.getByRole("button", { name: "Reply", exact: true }).click();
   await earlierCard.getByRole("textbox", { name: "Reply" }).fill("A detailed reply\n".repeat(12));
   await earlierCard.getByRole("button", { name: "Reply", exact: true }).click();
@@ -199,6 +199,9 @@ test("wide screens default to centered reading and open a 320px rail on demand",
   const initialBox = (await article.boundingBox())!;
   expect(initialBox.x + initialBox.width / 2).toBeCloseTo(720, 0);
   await openReviewDiscussions(page);
+  // The rail's name and its collapse control are one row.
+  const railRow = async (locator: ReturnType<typeof page.locator>) => { const box = (await locator.boundingBox())!; return box.y + box.height / 2; };
+  expect(Math.abs(await railRow(page.locator(".kh-review-panel h2").filter({ visible: true })) - await railRow(page.getByRole("button", { name: "Collapse discussions" })))).toBeLessThan(6);
   await expect(rail.getByRole("button", { name: "Comment on selection" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Hide discussions" })).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -228,9 +231,13 @@ test("keyboard expansion keeps a stable focus target and Escape preserves reply 
   await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
   await openReviewDiscussions(page);
   const card = page.locator("[data-review-thread]").filter({ visible: true });
-  const expand = card.getByRole("button", { name: "Expand comment" });
+  // The card's one button: Reply, since there is nothing more of this remark to show.
+  await expect(card.getByRole("button", { name: "Expand comment" })).toHaveCount(0);
+  const expand = card.getByRole("button", { name: "Reply", exact: true });
   await expand.focus();
   await expect(expand).toBeFocused();
+  // Focus alone opens nothing.
+  await expect(card.getByRole("textbox")).toHaveCount(0);
   await page.keyboard.press("Shift+Tab");
   await expect(card.getByRole("button", { name: "😀 bold", exact: true })).toBeFocused();
   // Reset to compact, then use keyboard activation instead of focus-triggered expansion.
@@ -238,8 +245,9 @@ test("keyboard expansion keeps a stable focus target and Escape preserves reply 
   await openReviewDiscussions(page);
   await expand.focus();
   await page.keyboard.press("Enter");
-  await expect(card).toBeFocused();
-  await card.getByRole("button", { name: "Reply", exact: true }).click();
+  // The button is gone once the card is open; focus is in the reply it asked for, not lost.
+  await expect(card).toHaveAttribute("aria-current", "true");
+  await expect(card.getByRole("textbox", { name: "Reply" })).toBeFocused();
   await card.getByRole("textbox", { name: "Reply" }).fill("Keep this draft");
   await page.keyboard.press("Escape");
   await expect(card.getByRole("textbox", { name: "Reply" })).toHaveValue("Keep this draft");
@@ -278,9 +286,11 @@ test("an outdated discussion's expansion button stays focused until activated", 
   const filter = page.getByRole("button", { name: "Filter discussions" });
   await filter.focus();
   await page.keyboard.press("Tab");
-  await expect(card.getByRole("button", { name: "Expand comment" })).toBeFocused();
+  await expect(card.getByRole("button", { name: "Reply", exact: true })).toBeFocused();
+  await expect(card).not.toHaveAttribute("aria-current", "true");
   await page.keyboard.press("Enter");
-  await expect(card).toBeFocused();
+  await expect(card).toHaveAttribute("aria-current", "true");
+  await expect(card.getByRole("textbox", { name: "Reply" })).toBeFocused();
 });
 
 test("collapsed selection offers Comment, and Escape preserves a new-comment draft", async ({ page, request }) => {
@@ -313,7 +323,6 @@ test("collapsed errors and stale revision notices remain visible, with stale rep
   await expect(page.getByRole("status")).toContainText("Document changed.");
   await openReviewDiscussions(page);
   const card = page.locator("[data-review-thread]").filter({ visible: true });
-  await card.getByRole("button", { name: "Expand comment" }).click();
   await card.getByRole("button", { name: "Reply", exact: true }).click();
   await card.getByRole("textbox", { name: "Reply" }).fill("Reply despite stale displayed revision");
   await card.getByRole("button", { name: "Reply", exact: true }).click();

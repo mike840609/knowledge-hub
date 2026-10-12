@@ -3,7 +3,13 @@
 import { createContext, useContext, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 
 /** What the document's header needs to offer a way into its discussions. */
-export type ReviewEntry = { count: number; open: boolean; toggle: () => void };
+export type ReviewEntry = {
+  /** Every discussion, and those still open — what the owner's list shows by default, so what the control shows. */
+  count: number;
+  awaiting: number;
+  open: boolean;
+  toggle: () => void;
+};
 
 type Shared = {
   entry: ReviewEntry | null;

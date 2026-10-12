@@ -101,6 +101,33 @@ thread or a comment. An owner does not start a discussion, so there is no
 margin for marks. The control appears in the header once the discussions have
 loaded and there is at least one; nothing moves when it does.
 
+## The order of the controls
+
+Reviewed against the order in which an owner uses them — open the document, see
+what awaits, read a remark, answer it, settle it — and changed in five places.
+
+- **Header: Edit, Share, Comments, Details.** What is done to the document
+  first; then the two that open something on the right, together and nearest to
+  it. The comments control had been leftmost, furthest from the rail it opens.
+- **The control's number is what is still open**, which is what the list opens
+  on. It had been every discussion, so it said 2 over a list of 1. With nothing
+  open it is the glyph alone; the total is in its name and tooltip.
+- **The rail closes with a cross.** It had the panel glyph, directly under
+  Details, which is the panel glyph and opens a different panel.
+- **A preview card's button is Reply** where the thread is one remark and can be
+  answered. It was "Expand comment", which revealed nothing the preview did not
+  already show except the Reply button: two steps to answer, the first
+  misnamed. It opens the card and the form, and focus lands in the form.
+  With replies to show it is still "Show N replies"; where no reply can be made
+  it is still "Expand comment". This is the shared card, so the shared page has
+  it too.
+- **The filter is on the rail's heading row**: `Comments · Open ▾ … refresh,
+  close`. On a row of its own it pushed the first card another 40px from its
+  passage.
+
+Left as they were: resolve before the menu (the common act before the rare
+one), refresh at the far right, and the shared page's bar.
+
 ## The pane decides, not the window
 
 On a shared page the question "is there room for a rail?" is a matter of the
@@ -169,7 +196,9 @@ workspace does too.
 `tests/unit/review-auto-open.test.ts`: when the rail opens by itself — awaiting,
 resolved, hidden, closed-on, and a discussion arriving after a closing.
 
-`tests/e2e/owner-review.spec.ts`: the control in the header, on Edit's row and
+`tests/e2e/owner-review.spec.ts`: the header's order and the control's number;
+the rail's name, filter and controls on one row; Reply from a preview in one
+step; the control in the header, on Edit's row and
 still in view at the end of a long document; the article not moving when the
 discussions arrive; the rail's name and controls on one row; the rail open on arrival without taking the
 scroll position; staying closed after a closing and opening for a new

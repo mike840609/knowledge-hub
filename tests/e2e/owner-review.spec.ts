@@ -12,8 +12,7 @@ test("owner replies, resolves, reopens and hides first comment without changing 
   await expect(page.getByText("Secret review comment", { exact: true })).toBeVisible();
   await page.goto(doc.href); await openReviewDiscussions(page);
   await expect(page.getByRole("textbox", { name: "Reply", exact: true })).toHaveCount(0);
-  // A card is a preview until it is opened, as on the shared page.
-  await page.getByRole("button", { name: "Expand comment", exact: true }).click();
+  // A card is a preview until it is opened; its button is the reply itself.
   await page.getByRole("button", { name: "Reply", exact: true }).click();
   await page.getByRole("textbox", { name: "Reply", exact: true }).fill("Owner response"); await page.getByRole("button", { name: "Reply", exact: true }).click();
   await expect(page.getByText("Owner response", { exact: true })).toBeVisible();
@@ -103,6 +102,7 @@ test("a discussion that awaits the owner is open beside its passage when the doc
   // The rail's own controls are one row: its name, refresh, collapse.
   const rowOf = async (name: string) => { const box = (await rail.getByRole("button", { name }).boundingBox())!; return box.y + box.height / 2; };
   expect(Math.abs(await rowOf("Refresh comments") - await rowOf("Collapse discussions"))).toBeLessThan(2);
+  expect(Math.abs(await rowOf("Filter discussions") - await rowOf("Collapse discussions"))).toBeLessThan(2);
 
   await page.getByRole("button", { name: "Collapse discussions" }).click();
   await expect(rail).toBeHidden();
@@ -113,6 +113,11 @@ test("a discussion that awaits the owner is open beside its passage when the doc
   const [entryBox, editBox] = [(await entry.boundingBox())!, (await page.getByRole("link", { name: "Edit", exact: true }).boundingBox())!];
   expect(Math.abs(entryBox.y + entryBox.height / 2 - (editBox.y + editBox.height / 2))).toBeLessThan(2);
   await expect(entry).toContainText("1");
+  // What is done to the document, then what is shown beside it: Edit, Share, Comments, Details —
+  // the two that open something on the right are together, at the right.
+  const left = async (control: ReturnType<typeof page.getByRole>) => (await control.boundingBox())!.x;
+  const order = [await left(page.getByRole("link", { name: "Edit", exact: true })), await left(page.getByRole("button", { name: "Share link…" })), await left(entry), await left(page.getByRole("button", { name: "Details", exact: true }))];
+  expect(order).toEqual([...order].sort((a, b) => a - b));
   // and is still there at the end of a long document, where no mark is in sight.
   await page.getByRole("region", { name: "Document content" }).evaluate((pane) => pane.scrollTo(0, pane.scrollHeight));
   await expect(marker).not.toBeInViewport();
@@ -182,8 +187,10 @@ test("the owner is shown what is still open; what is resolved is one choice away
   const rail = page.getByRole("complementary", { name: "Document discussions" });
   const cards = rail.locator("[data-review-thread]").filter({ visible: true });
   await expect(rail).toBeVisible();
-  // Both are counted; one is shown.
-  await expect(page.getByRole("button", { name: "Hide discussions, 2 comments" })).toBeVisible();
+  // The header says what the list shows: one is open. Both are in its name.
+  const entry = page.getByRole("button", { name: "Hide discussions, 2 comments, 1 open", exact: true });
+  await expect(entry).toBeVisible();
+  await expect(entry).toHaveText("1");
   await expect(rail.getByRole("button", { name: "Filter discussions" })).toHaveText("Open");
   await expect(cards).toHaveCount(1);
   await expect(cards).toContainText("Still to be answered");
@@ -208,7 +215,10 @@ test("discussions that are all resolved do not open by themselves", async ({ pag
   expect((await request.post(`${owner}/api/documents/${doc.documentId}/review-threads/${threads[0].id}/resolution`, { headers: { Origin: owner }, data: { status: "RESOLVED" } })).ok()).toBe(true);
   await page.setViewportSize({ width: 1680, height: 900 });
   await page.goto(doc.href);
-  await expect(page.getByRole("button", { name: "Open discussions, 1 comments" })).toBeVisible();
+  // Nothing awaits the owner, so the control carries no number.
+  const entry = page.getByRole("button", { name: "Open discussions, 1 comments, 0 open", exact: true });
+  await expect(entry).toBeVisible();
+  await expect(entry).toHaveText("");
   const rail = page.getByRole("complementary", { name: "Document discussions" });
   await expect(rail).toBeHidden();
   await expect(page.getByRole("complementary", { name: "On this page" })).toBeVisible();

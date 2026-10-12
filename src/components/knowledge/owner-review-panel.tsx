@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { PanelRightClose, RefreshCw } from "lucide-react";
+import { RefreshCw, X } from "lucide-react";
 import type { OwnerReviewThreadView } from "@/modules/knowledge/domain/document-review";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -13,7 +13,7 @@ import { ReviewPanelShell } from "./review-panel-shell";
 import { ReviewPassageMarkers } from "./review-passage-markers";
 import { reviewRailInline, useReviewRailInline } from "./review-rail-mode";
 import { focusReviewAnchor } from "./review-selection";
-import { ReviewThreadList, reviewRequest } from "./review-thread-list";
+import { ReviewFilterMenu, ReviewThreadList, reviewRequest, type ReviewFilter } from "./review-thread-list";
 
 /**
  * The owner's discussions, beside the article they are about (`children`).
@@ -28,6 +28,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
   const [error, setError] = useState<string>();
   const [open, setOpen] = useState(false);
   const [activeThreadId, setActiveThreadId] = useState<string>();
+  const [filter, setFilter] = useState<ReviewFilter>("ALL");
   // The way in is the document header's (`review-entry.tsx`), not a row of this panel's.
   const shared = useReviewEntry();
   const publish = shared?.publish;
@@ -51,6 +52,10 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
     threads.current = result.threads;
     if (arrived.current) return;
     arrived.current = true;
+    // The list starts on what is still open, where something is: settled discussions would
+    // otherwise crowd the ones that want an answer away from their passages. With nothing open it
+    // starts on everything — an empty list would say there was nothing at all.
+    setFilter(result.threads.some(thread => thread.status === "OPEN") ? "OPEN" : "ALL");
     if (reviewRailInline() && opensOnArrival(result.threads, parseDismissed(readStored("local", dismissedKey(documentId))))) setOpen(true);
   }, [result, documentId]);
   useEffect(() => {
@@ -70,11 +75,12 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
     }
   }, [documentId, entryRef]);
   const count = result?.threads.length ?? 0;
+  const awaiting = result?.threads.filter(thread => thread.status === "OPEN").length ?? 0;
   // Only where there is something to open: an owner does not start a discussion, so on a document
   // without one this would be a control that opens an empty panel, on every document.
   useEffect(() => {
-    publish?.(count > 0 ? { count, open, toggle: () => changeOpen(!open) } : null);
-  }, [publish, count, open, changeOpen]);
+    publish?.(count > 0 ? { count, awaiting, open, toggle: () => changeOpen(!open) } : null);
+  }, [publish, count, awaiting, open, changeOpen]);
   useEffect(() => () => publish?.(null), [publish]);
   const refresh = <Tooltip label="Refresh comments"><Button type="button" variant="ghost" icon aria-label="Refresh comments" onClick={() => void load()}><RefreshCw className="size-4" aria-hidden="true" /></Button></Tooltip>;
   return <>
@@ -87,13 +93,17 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
       <aside id="owner-document-discussions" className="kh-review-panel" aria-label="Document discussions" onKeyDown={event => { if (!event.defaultPrevented && event.key === "Escape" && reviewRailInline()) changeOpen(false); }}>
         <ReviewPanelShell open={open} inline={inline} onOpenChange={changeOpen} returnFocus={() => entryRef?.current?.focus({ preventScroll: true })}><div>
           <div className="kh-review-toolbar">
-            {/* As a rail: its name and its controls on one row. As a drawer the drawer names it and closes it, so refresh is a row of its own. */}
-            <div className="kh-review-rail-heading mb-3 items-center justify-between"><h2 className="text-body font-medium">Comments</h2><div className="flex items-center gap-1">{refresh}<Tooltip label="Hide discussions"><Button type="button" variant="ghost" icon aria-label="Collapse discussions" onClick={() => changeOpen(false)}><PanelRightClose className="size-4" aria-hidden="true" /></Button></Tooltip></div></div>
-            <div className="kh-review-drawer-row flex justify-end">{refresh}</div>
+            {/* One row: what this is and which of it is listed, then what acts on it. As a drawer the
+                drawer names itself and closes itself, so the name and the cross are the rail's alone.
+                A cross, not a panel glyph: Details, just above, is the panel glyph. */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-1"><h2 className="kh-review-rail-only text-body font-medium">Comments</h2>{count > 0 && <ReviewFilterMenu value={filter} onChange={setFilter} />}</div>
+              <div className="flex shrink-0 items-center gap-1">{refresh}<span className="kh-review-rail-only"><Tooltip label="Hide comments"><Button type="button" variant="ghost" icon aria-label="Collapse discussions" onClick={() => changeOpen(false)}><X className="size-4" aria-hidden="true" /></Button></Tooltip></span></div>
+            </div>
             {error && <p role="alert" className="mt-3 text-body-sm">{error}</p>}
             {revisionChanged && <p role="status" className="mt-3 text-body-sm">Document changed. Refresh this page before locating a passage.</p>}
           </div>
-          {result && <div className="mt-3"><ReviewThreadList openFirst railMarkdown={revisionChanged ? undefined : markdown} activeThreadId={activeThreadId} onActivate={setActiveThreadId}
+          {result && <div className="mt-3"><ReviewThreadList filter={filter} onFilterChange={setFilter} railMarkdown={revisionChanged ? undefined : markdown} activeThreadId={activeThreadId} onActivate={setActiveThreadId}
             focusAnchor={revisionChanged ? undefined : anchor => { const root = document.querySelector<HTMLElement>("[data-review-document]"); if (root) focusReviewAnchor(root, markdown, anchor); }}
             threads={result.threads} writesEnabled={result.writesEnabled && !readOnly} canResolve={!readOnly}
             reply={async (threadId, body, idempotencyKey) => { await reviewRequest(`${base}/${threadId}/replies`, { body, idempotencyKey }); await load(); }}

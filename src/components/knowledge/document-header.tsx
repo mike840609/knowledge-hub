@@ -79,23 +79,6 @@ export function DocumentHeader({
             aria-label and tooltip. Details draws the same glyph as the
             narrow topbar's copy of this button. */}
         <div className="flex shrink-0 items-center gap-2">
-          {review?.entry ? (
-            <Tooltip label={review.entry.open ? "Hide comments" : "Comments"}>
-              <button
-                ref={review.buttonRef}
-                type="button"
-                aria-label={`${review.entry.open ? "Hide discussions" : "Open discussions"}, ${review.entry.count} comments`}
-                aria-expanded={review.entry.open}
-                aria-controls="owner-document-discussions"
-                onPointerDown={(event) => event.preventDefault()}
-                onClick={review.entry.toggle}
-                className={buttonClasses({ variant: "ghost" })}
-              >
-                <MessageSquare className="h-4 w-4" aria-hidden="true" />
-                <span aria-hidden="true">{review.entry.count}</span>
-              </button>
-            </Tooltip>
-          ) : null}
           {editHref ? (
             <Tooltip label="Edit" shortcut="E">
               <a
@@ -117,6 +100,26 @@ export function DocumentHeader({
                 className={buttonClasses({ variant: "ghost", icon: true })}
               >
                 <ActionIcon name="share" className="h-4 w-4" />
+              </button>
+            </Tooltip>
+          ) : null}
+          {/* What is done to the document comes first; then the two that open something on the right,
+              together and nearest to it: the discussions, and Details. */}
+          {review?.entry ? (
+            <Tooltip label={review.entry.open ? "Hide comments" : `Comments · ${review.entry.awaiting} open, ${review.entry.count} total`}>
+              <button
+                ref={review.buttonRef}
+                type="button"
+                aria-label={`${review.entry.open ? "Hide discussions" : "Open discussions"}, ${review.entry.count} comments, ${review.entry.awaiting} open`}
+                aria-expanded={review.entry.open}
+                aria-controls="owner-document-discussions"
+                onPointerDown={(event) => event.preventDefault()}
+                onClick={review.entry.toggle}
+                className={buttonClasses({ variant: "ghost" })}
+              >
+                <MessageSquare className="h-4 w-4" aria-hidden="true" />
+                {/* The number is what awaits an answer, which is what the list opens on; none, and it is the glyph alone. */}
+                {review.entry.awaiting > 0 ? <span aria-hidden="true">{review.entry.awaiting}</span> : null}
               </button>
             </Tooltip>
           ) : null}

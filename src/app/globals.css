@@ -578,8 +578,10 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-share-page .kh-review-reading > article { padding-inline-end: 32px; }
 /* In the workspace the margin is made only for an article that has a marker to put in it. */
 .kh-document-pane .kh-review-reading:has([data-review-marker]) > article { padding-inline-end: 32px; }
-.kh-review-panel,
-.kh-review-rail-heading { display: none; }
+.kh-review-panel { display: none; }
+/* What a rail shows and a drawer has of its own: a name, and a way to close. The drawer's copy of
+   the panel is outside the document, so it is the default that hides these there. */
+.kh-review-rail-only { display: none; }
 
 /* A shared page is the whole window. */
 @media (min-width: 1200px) {
@@ -600,9 +602,9 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   padding-inline: 12px;
   padding-bottom: 24px;
 }
-.kh-review-document[data-review-inline] .kh-review-rail-heading { display: flex; }
-/* What a drawer needs a row for and a rail has on its heading. The drawer's copy is outside the document. */
-.kh-review-document[data-review-inline] .kh-review-drawer-row { display: none; }
+/* Back to the element's own display — so the class goes on a plain wrapper, a heading or a span,
+   never on something a utility lays out: there is no layer here for that utility to be restored from. */
+.kh-review-document[data-review-inline] .kh-review-rail-only { display: revert; }
 /* Everything in the page's column widens with the document, the footer included: left behind in
    the narrower column it sat 160px inside the article it closes. */
 .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) .kh-share-heading,
