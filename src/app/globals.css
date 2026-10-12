@@ -259,6 +259,33 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-editor .kh-wikilink {
     @apply cursor-default font-medium text-kh-link underline decoration-kh-link underline-offset-2;
   }
+  /* What the reader will make of a callout and of the inline HTML subset, hinted (`reader-hints.ts`).
+     The marker and the tags stay in the text; these are decorations and the colours are the reader's
+     (design language §8, "Callouts" and "HTML in a document"). */
+  .kh-editor blockquote[data-callout] {
+    @apply border-kh-border-strong text-kh-text;
+  }
+  .kh-editor blockquote[data-callout="tip"] {
+    @apply border-kh-success;
+  }
+  .kh-editor blockquote[data-callout="important"] {
+    @apply border-kh-text-secondary;
+  }
+  .kh-editor blockquote[data-callout="warning"] {
+    @apply border-kh-warning;
+  }
+  .kh-editor blockquote[data-callout="caution"] {
+    @apply border-kh-danger;
+  }
+  .kh-editor kbd {
+    @apply rounded-sm border border-kh-border bg-kh-bg-subtle px-1 font-mono text-body-sm;
+  }
+  .kh-editor mark {
+    @apply rounded-sm bg-kh-highlight px-0.5 text-kh-selected-text;
+  }
+  .kh-editor .kh-html-tag {
+    @apply font-mono text-body-sm text-kh-text-muted;
+  }
   .kh-editor .kh-wikilink.ProseMirror-selectednode {
     @apply rounded-sm bg-kh-bg-selected;
   }

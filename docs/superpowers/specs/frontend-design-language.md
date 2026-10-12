@@ -397,6 +397,12 @@ A `<details>` stays the platform's control so that it opens with Enter and
 Space, is announced as a disclosure, and is found by the browser's in-page
 search — none of which a drawn substitute gets for free.
 
+**In the editor** these and a callout are hinted, not drawn
+(`2026-10-12-editor-reader-hints-design.md`): the quote's line takes the kind's
+colour, and what is between a pair of tags is set as the reader sets it, while
+the marker and the tags stay in the text — the tags in mono at `body-sm`,
+`text-muted`. No glyph and no title row: there the marker is the title.
+
 ### Syntax colour
 
 Fenced code is coloured from eight tokens, `--kh-syntax-` plus `keyword`,
