@@ -130,3 +130,38 @@ describe("document review security, idempotency and moderation",()=>{
  });
 
 });
+
+describe("the owner starts a discussion on their own document",()=>{
+ const ownerInput=(f:Awaited<ReturnType<typeof fixture>>)=>({documentId:f.documentId,expectedRevisionId:f.input.expectedRevisionId,anchor:f.input.anchor,body:"OWNER NOTE",idempotencyKey:randomUUID()});
+ it("without a link, and everyone the document is shared with reads it",async()=>{
+  const f=await fixture();const t=await f.service.createForOwner(f.caller,ownerInput(f));
+  expect(t).toMatchObject({status:"OPEN",createdBy:f.caller.identity.id,currentAnchor:{match:"MATCHED",anchor:{exact:"secret passage"}}});expect(t.comments.map(c=>c.body)).toEqual(["OWNER NOTE"]);
+  expect((await f.uow.run(r=>r.reviewThreads.findById(t.id)))!.originShareLinkId).toBeNull();
+  const shared=(await f.service.queryForLink(null,f.token)).threads;expect(shared.map(x=>x.id)).toEqual([t.id]);expect(shared[0].comments[0]).toMatchObject({body:"OWNER NOTE",authorName:"Owner"});
+  // A reader of the link answers it as any other.
+  await f.service.replyForLink(f.viewer,{token:f.token,threadId:t.id,body:"seen",idempotencyKey:randomUUID()});expect((await f.service.queryForOwner(f.caller,f.documentId)).threads[0].comments).toHaveLength(2);
+ });
+ it("with every link gone",async()=>{
+  const f=await fixture();await f.shares.revoke(f.caller,f.a.id);await f.shares.revoke(f.caller,f.b.id);
+  expect((await f.service.createForOwner(f.caller,ownerInput(f))).status).toBe("OPEN");
+ });
+ it("and nobody else does: knowing the document is not owning it",async()=>{
+  const f=await fixture();
+  await expect(f.service.createForOwner(f.viewer,ownerInput(f))).rejects.toMatchObject({code:"SHARE_LINK_NOT_FOUND"});
+  const other=await fixture();await expect(f.service.createForOwner(other.caller,ownerInput(f))).rejects.toMatchObject({code:"SHARE_LINK_NOT_FOUND"});
+  expect((await f.service.queryForOwner(f.caller,f.documentId)).threads).toHaveLength(0);
+ });
+ it("held to what a reader's is: one for a retried request, the current revision, a passage that is there, the limits, the switch, an active document",async()=>{
+  const f=await fixture();const input=ownerInput(f);const first=await f.service.createForOwner(f.caller,input);
+  expect((await f.service.createForOwner(f.caller,input)).id).toBe(first.id);
+  await expect(f.service.createForOwner(f.caller,{...input,body:"different"})).rejects.toMatchObject({code:"IDEMPOTENCY_KEY_REUSED"});
+  await expect(f.service.createForOwner(f.caller,{...ownerInput(f),expectedRevisionId:uuidv7()})).rejects.toMatchObject({code:"STALE_DOCUMENT_REVISION"});
+  await expect(f.service.createForOwner(f.caller,{...ownerInput(f),anchor:{...f.input.anchor,exact:"not the passage"}})).rejects.toMatchObject({code:"VALIDATION_ERROR"});
+  await expect(f.service.createForOwner(f.caller,{...ownerInput(f),body:" "})).rejects.toMatchObject({code:"VALIDATION_ERROR"});
+  await expect(new DocumentReviewService(f.uow).createForOwner(f.caller,ownerInput(f))).rejects.toMatchObject({code:"REVIEW_WRITES_DISABLED"});
+  for(let i=1;i<20;i++)await f.service.createForOwner(f.caller,ownerInput(f));
+  await expect(f.service.createForOwner(f.caller,ownerInput(f))).rejects.toMatchObject({code:"CAPACITY_EXCEEDED"});
+  const archived=await fixture();await pool.query("UPDATE knowledge_documents SET status='ARCHIVED',archived_by=?,archived_at=? WHERE id=?",[archived.caller.identity.id,new Date(),archived.documentId]);
+  await expect(archived.service.createForOwner(archived.caller,ownerInput(archived))).rejects.toMatchObject({code:"REVIEW_CONFLICT"});
+ });
+});

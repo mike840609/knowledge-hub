@@ -3,10 +3,14 @@ import { parseMarkdown } from "@/shared/markdown/parse";
 import { ValidationError } from "./errors";
 import { copyReviewAnchor, REVIEW_LIMITS, type ReviewAnchor, type CurrentAnchorProjection } from "./document-review";
 export type CanonicalReviewBlock = { path:number[]; kind:ReviewAnchor["blockKind"]; text:string; selectable:boolean };
-const kinds = new Set(["heading","paragraph","listItem","blockquote"]);
+const kinds = new Set(["heading","paragraph","listItem","blockquote","tableCell","code"]);
+// What a passage can be chosen in: a block that holds text and no other block.
+const leaves = new Set(["heading","paragraph","tableCell"]);
 const inlineKinds = new Set(["text","inlineCode","emphasis","strong","delete","link","linkReference","break"]);
 // Paths are child indexes from the mdast root. Text is inline reading order,
 // CRLF normalized to LF, with soft line breaks/whitespace collapsed to one space.
+// A fenced or indented code block is the exception: its text is its code as
+// written, since there a line break and a run of spaces are what was written.
 // Offsets are JavaScript UTF-16 offsets; quote/context caps count code points.
 function textOf(node:Nodes):string {
   if(node.type==="break") return "\n";
@@ -25,10 +29,11 @@ export function projectReviewBlocks(markdown:string):CanonicalReviewBlock[] {
  const result:CanonicalReviewBlock[]=[];
  function walk(node:Nodes,path:number[]) {
    if(kinds.has(node.type)) {
-     const text=textOf(node).replace(/\r\n?/g,"\n").replace(/[\t\n\r ]+/g," ");
+     const code=node.type==="code";
+     const text=code?node.value:textOf(node).replace(/\r\n?/g,"\n").replace(/[\t\n\r ]+/g," ");
      // Container blocks are deliberately unselectable: their nested leaf blocks
      // receive paths separately, preventing overlapping DOM anchor candidates.
-     const selectable=(node.type==="heading"||node.type==="paragraph") && "children" in node && node.children.every(n=>safeInline(n as Nodes)) && !/\[\[/.test(text);
+     const selectable=code || (leaves.has(node.type) && "children" in node && node.children.every(n=>safeInline(n as Nodes)) && !/\[\[/.test(text));
      result.push({path,kind:node.type as ReviewAnchor["blockKind"],text,selectable});
    }
    if("children" in node) node.children.forEach((n,i)=>walk(n as Nodes,[...path,i]));

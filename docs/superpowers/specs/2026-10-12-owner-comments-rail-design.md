@@ -94,12 +94,15 @@ rail's collapse button closes it and puts the outline back.
 shared page uses, over the article.
 
 **What the owner may do is unchanged:** reply, resolve and reopen, hide a
-thread or a comment. An owner does not start a discussion, so there is no
-"Add comment" here.
+thread or a comment. *Amended 2026-10-13
+(`2026-10-13-review-anchors-and-owner-threads-design.md` §4):* the owner may
+also start a discussion — a control in the header while text is selected, and
+"Add comment" in the rail.
 
 **A document with no discussion** shows no comments control and reserves no
 margin for marks. The control appears in the header once the discussions have
-loaded and there is at least one; nothing moves when it does.
+loaded and there is at least one; nothing moves when it does. *(2026-10-13: selecting text
+that can take a comment also shows "Comment on selection" there.)*
 
 ## The order of the controls
 

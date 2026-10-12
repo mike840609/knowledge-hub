@@ -1,14 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import type { ReviewAnchor, ReviewThreadView } from "@/modules/knowledge/domain/document-review";
+import type { ReviewThreadView } from "@/modules/knowledge/domain/document-review";
 import { useReviewHighlights } from "./review-highlights";
 import { RefreshCw, MessageSquare, MessageSquarePlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
-import { ReviewFilterMenu, ReviewReplyForm, ReviewThreadList, reviewRequest, type ReviewFilter } from "./review-thread-list";
+import { ReviewFilterMenu, ReviewThreadList, reviewRequest, type ReviewFilter } from "./review-thread-list";
+import { ReviewComposer, useReviewSelection } from "./review-composer";
 import { ReviewPanelShell } from "./review-panel-shell";
-import { focusReviewAnchor, selectedReviewAnchor } from "./review-selection";
+import { focusReviewAnchor } from "./review-selection";
 import { ReviewPassageMarkers } from "./review-passage-markers";
 import { reviewRailInline, useReviewRailInline } from "./review-rail-mode";
 
@@ -18,7 +19,6 @@ export function SharedReviewPanel({ token, revisionId, markdown, children }: { t
   const [error, setError] = useState<string>();
   const [activeThreadId, setActiveThreadId] = useState<string>();
   const [open, setOpen] = useState(false);
-  const [hasSelection, setHasSelection] = useState(false);
   const entryRef = useRef<HTMLButtonElement>(null);
   const readingRef = useRef<HTMLDivElement>(null);
   const inline = useReviewRailInline();
@@ -31,42 +31,25 @@ export function SharedReviewPanel({ token, revisionId, markdown, children }: { t
     }
   }, []);
   const revisionChanged = !!result && result.revisionId !== revisionId;
+  const canComment = !!result?.writesEnabled && !revisionChanged;
   useReviewHighlights(markdown, revisionChanged ? undefined : result?.threads, activeThreadId);
-  const pendingSelection = useRef<ReviewAnchor | null>(null);
-  const [selection, setSelection] = useState<ReviewAnchor | null>(null);
+  const selection = useReviewSelection(readingRef, markdown, `${token}:${revisionId}`);
   const load = useCallback(async () => {
     setError(undefined);
     try { setResult(await reviewRequest<DiscussionResult>("/api/share-review/threads/query", { token })); } catch (failure) { setResult(undefined); setError(failure instanceof Error ? failure.message : "Discussions are unavailable."); }
   }, [token]);
   useEffect(() => { void load(); }, [load]);
-  useEffect(() => { pendingSelection.current = null; setSelection(null); }, [token, revisionId, markdown]);
   useEffect(() => { setActiveThreadId(undefined); }, [token, revisionId, markdown]);
   useEffect(() => {
     const activate = (event: Event) => setActiveThreadId((event as CustomEvent<string>).detail);
     document.addEventListener("review-focus-thread", activate);
     return () => document.removeEventListener("review-focus-thread", activate);
   }, []);
-  useEffect(() => {
-    const remember = () => {
-      const browserSelection = window.getSelection();
-      const root = readingRef.current?.querySelector<HTMLElement>("[data-review-document]");
-      const anchor = browserSelection && !browserSelection.isCollapsed && root ? selectedReviewAnchor(root, markdown, browserSelection) : null;
-      setHasSelection(!!anchor);
-      if (anchor || !browserSelection?.isCollapsed) pendingSelection.current = anchor;
-    };
-    document.addEventListener("selectionchange", remember); return () => document.removeEventListener("selectionchange", remember);
-  }, [markdown]);
-  function capture() {
-    const root = document.querySelector<HTMLElement>("[data-review-document]");
-    const browserSelection = window.getSelection();
-    const anchor = root ? selectedReviewAnchor(root, markdown, browserSelection) : null;
-    const chosen = browserSelection && !browserSelection.isCollapsed ? anchor : pendingSelection.current;
-    setSelection(chosen);
-    setError(chosen ? undefined : "Select text in a paragraph or heading to comment.");
-  }
   return <>
     <div className="kh-review-entry kh-reading-column sticky top-0 z-20 flex items-center justify-end gap-2 bg-kh-bg py-2">
-      {!open && hasSelection && result?.writesEnabled && !revisionChanged && <Button type="button" variant="soft" aria-label="Comment on selection" onPointerDown={event => event.preventDefault()} onClick={() => { capture(); changeOpen(true); }}><MessageSquarePlus className="size-4" aria-hidden="true" />Comment</Button>}
+      {/* Said where the button would have been: a selection that cannot take a comment, and why. */}
+      {canComment && !selection.ready && selection.hint && <p role="status" className="min-w-0 text-right text-body-sm text-kh-text-muted">{selection.hint}</p>}
+      {!open && selection.ready && canComment && <Button type="button" variant="soft" aria-label="Comment on selection" onPointerDown={event => event.preventDefault()} onClick={() => { selection.capture(); changeOpen(true); }}><MessageSquarePlus className="size-4" aria-hidden="true" />Comment</Button>}
       <Button ref={entryRef} type="button" variant="ghost" aria-label={`${open ? "Hide discussions" : "Open discussions"}${result ? `, ${result.threads.length} comments` : ""}`} aria-expanded={open} aria-controls="shared-document-discussions" onPointerDown={event => event.preventDefault()} onClick={() => changeOpen(!open)}>
         <MessageSquare className="size-4" aria-hidden="true" />Comments{result && result.threads.length > 0 ? ` (${result.threads.length})` : ""}
       </Button>
@@ -91,14 +74,18 @@ export function SharedReviewPanel({ token, revisionId, markdown, children }: { t
         <div className="flex shrink-0 items-center gap-1"><Tooltip label="Refresh comments"><Button type="button" variant="ghost" icon aria-label="Refresh comments" onClick={() => void load()}><RefreshCw className="size-4" aria-hidden="true" /></Button></Tooltip><span className="kh-review-rail-only"><Tooltip label="Hide comments"><Button type="button" variant="ghost" icon aria-label="Collapse discussions" onClick={() => changeOpen(false)}><X className="size-4" aria-hidden="true" /></Button></Tooltip></span></div>
       </div>
       {error && <p role="status" className="mt-3 text-body-sm">{error}</p>}
+      {selection.refusal && <p role="status" className="mt-3 text-body-sm">{selection.refusal}</p>}
       {result && <div className="mt-3">
         {revisionChanged && <p role="status" className="mb-3 text-body-sm">Document changed. Refresh this page before selecting or locating a passage. You can still reply to existing discussions.</p>}
         {/* The one thing a reader does here that an owner does not, on a row of its own. */}
-        {result.writesEnabled && !revisionChanged && <div className="mb-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={capture} aria-label="Comment on selection"><MessageSquarePlus className="size-4" aria-hidden="true" />Add comment</Button></div>}
+        {canComment && <div className="mb-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={selection.capture} aria-label="Comment on selection"><MessageSquarePlus className="size-4" aria-hidden="true" />Add comment</Button></div>}
         {!result.writesEnabled && <p className="mb-3 text-body-sm text-kh-text-muted">{result.callerUserId === null ? "Sign in to add a comment." : "Adding comments is currently disabled."}</p>}
       </div>}
       </div>
-      {selection && <div className="kh-review-composer mb-4 border border-kh-border bg-kh-bg p-4"><blockquote className="border-l border-kh-border pl-3 text-body-sm">{selection.exact}</blockquote><ReviewReplyForm label="Add comment" onSubmit={async (body, idempotencyKey) => { const created = await reviewRequest<{ id: string }>("/api/share-review/threads", { token, expectedRevisionId: revisionId, anchor: selection, body, idempotencyKey }); pendingSelection.current = null; setSelection(null); setActiveThreadId(created.id); await load(); }} /><Button type="button" variant="ghost" className="mt-2" onClick={() => { pendingSelection.current = null; setSelection(null); }}>Cancel</Button></div>}
+      {selection.chosen && <ReviewComposer anchor={selection.chosen} onCancel={selection.clear} onSubmit={async (body, idempotencyKey) => {
+        const created = await reviewRequest<{ id: string }>("/api/share-review/threads", { token, expectedRevisionId: revisionId, anchor: selection.chosen, body, idempotencyKey });
+        selection.clear(); setFilter(current => current === "RESOLVED" ? "OPEN" : current); setActiveThreadId(created.id); await load();
+      }} />}
       {result && <ReviewThreadList filter={filter} onFilterChange={setFilter} railMarkdown={revisionChanged ? undefined : markdown} activeThreadId={activeThreadId} onActivate={setActiveThreadId} focusAnchor={revisionChanged ? undefined : anchor => { const root = document.querySelector<HTMLElement>("[data-review-document]"); if (root) focusReviewAnchor(root, markdown, anchor); }} threads={result.threads} writesEnabled={result.writesEnabled} reply={async (threadId, body, idempotencyKey) => { await reviewRequest(`/api/share-review/threads/${threadId}/replies`, { token, body, idempotencyKey }); await load(); }} />}
     </div></ReviewPanelShell>
       </aside>

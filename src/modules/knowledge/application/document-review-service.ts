@@ -3,7 +3,7 @@ import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { DomainError } from "@/shared/domain/errors";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import { evaluateShareLinkValidity, isShareToken, ShareLinkNotFoundError } from "../domain/document-share-link";
-import { REVIEW_LIMITS, projectOwnerThread, projectReviewerThread, projectReviewComment, validateReviewBody, validateReviewIdempotencyKey, type ReviewThread, type ReviewComment, type ReviewAnchor, type ReviewStatus, type ReviewVisibility, type ReviewThreadView, type OwnerReviewThreadView, type CreateReviewThreadInput, type ReplyReviewInput } from "../domain/document-review";
+import { REVIEW_LIMITS, projectOwnerThread, projectReviewerThread, projectReviewComment, validateReviewBody, validateReviewIdempotencyKey, type ReviewThread, type ReviewComment, type ReviewAnchor, type ReviewStatus, type ReviewVisibility, type ReviewThreadView, type OwnerReviewThreadView, type CreateReviewThreadInput, type CreateOwnerReviewThreadInput, type ReplyReviewInput } from "../domain/document-review";
 import { createReviewAnchorRelocator, validateReviewAnchor } from "../domain/review-anchor";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "../ports/unit-of-work";
 
@@ -91,22 +91,32 @@ export class DocumentReviewService {
     if(await r.reviewThreads.countVisibleByDocument(documentId)>=REVIEW_LIMITS.visibleThreads || (open && await r.reviewThreads.countVisibleOpenByCreator(documentId,creatorId)>=REVIEW_LIMITS.visibleOpenPerCreator)) fail("CAPACITY_EXCEEDED","The visible discussion limit was reached.");
   }
   async createForLink(caller:CallerContext,input:CreateReviewThreadInput) {
+    const request=this.creation(input);
+    return this.uow.run(async r => { const s=await this.linkScope(r,input.token); return this.create(r,caller,s,s.link.id,request,async()=>(await this.views(r,s.document.id,false))); });
+  }
+  /** The owner's own discussion, on a passage of their own document. No link is involved, so none is recorded. */
+  async createForOwner(caller:CallerContext,input:CreateOwnerReviewThreadInput) {
+    const request=this.creation(input);
+    return this.uow.run(async r => { const s=await this.ownerScope(r,caller,input.documentId); return this.create(r,caller,s,null,request,async()=>(await this.views(r,s.document.id,true))); });
+  }
+  private creation(input:Pick<CreateReviewThreadInput,"expectedRevisionId"|"anchor"|"body"|"idempotencyKey">) {
     const body=validateReviewBody(input.body),key=validateReviewIdempotencyKey(input.idempotencyKey);
-    const requestHash=hash({expectedRevisionId:input.expectedRevisionId,anchor:canonicalAnchor(input.anchor),body});
-    return this.uow.run(async r => {
-      const s=await this.linkScope(r,input.token);
-      const existing=await r.reviewThreads.findByCreationKey(s.document.id,caller.identity.id,key);
-      if(existing) { if(existing.creationRequestHash!==requestHash) fail("IDEMPOTENCY_KEY_REUSED","The idempotency key was already used for a different request."); const view=(await this.views(r,s.document.id,false)).find(t=>t.id===existing.id); if(!view) throw new ShareLinkNotFoundError(); return view; }
-      this.enabled(); this.active(s);
-      const revision=await r.revisions.findCurrent(s.document.id);
-      if(!revision || revision.id!==input.expectedRevisionId) fail("STALE_DOCUMENT_REVISION","Refresh the document before selecting a passage.");
-      const anchor=validateReviewAnchor(revision.markdown,input.anchor);
-      await this.capacity(r,s.document.id,caller.identity.id); await this.quota(r,caller.identity.id,s.document.id);
-      const now=this.clock(); const thread:ReviewThread={id:uuidv7(),documentId:s.document.id,createdRevisionId:revision.id,createdBy:caller.identity.id,creationIdempotencyKey:key,creationRequestHash:requestHash,originShareLinkId:s.link.id,anchor,status:"OPEN",visibility:"VISIBLE",hiddenBy:null,hiddenAt:null,hiddenReason:null,resolvedBy:null,resolvedAt:null,createdAt:now,updatedAt:now};
-      await r.reviewThreads.insert(thread);
-      await r.reviewComments.insert(this.comment(thread.id,caller.identity.id,body,key,requestHash)); await this.charge(r,caller.identity.id,s.document.id);
-      return (await this.views(r,s.document.id,false)).find(t=>t.id===thread.id)!;
-    });
+    return {body,key,expectedRevisionId:input.expectedRevisionId,anchor:input.anchor,requestHash:hash({expectedRevisionId:input.expectedRevisionId,anchor:canonicalAnchor(input.anchor),body})};
+  }
+  /** One way to start a discussion, whoever starts it: the scope is what the caller was let in by. */
+  private async create<V extends ReviewThreadView>(r:KnowledgeRepositories,caller:CallerContext,s:Awaited<ReturnType<DocumentReviewService["scope"]>>,originShareLinkId:string|null,request:ReturnType<DocumentReviewService["creation"]>,views:()=>Promise<V[]>):Promise<V> {
+    const {body,key,requestHash}=request;
+    const existing=await r.reviewThreads.findByCreationKey(s.document.id,caller.identity.id,key);
+    if(existing) { if(existing.creationRequestHash!==requestHash) fail("IDEMPOTENCY_KEY_REUSED","The idempotency key was already used for a different request."); const view=(await views()).find(t=>t.id===existing.id); if(!view) throw new ShareLinkNotFoundError(); return view; }
+    this.enabled(); this.active(s);
+    const revision=await r.revisions.findCurrent(s.document.id);
+    if(!revision || revision.id!==request.expectedRevisionId) fail("STALE_DOCUMENT_REVISION","Refresh the document before selecting a passage.");
+    const anchor=validateReviewAnchor(revision.markdown,request.anchor);
+    await this.capacity(r,s.document.id,caller.identity.id); await this.quota(r,caller.identity.id,s.document.id);
+    const now=this.clock(); const thread:ReviewThread={id:uuidv7(),documentId:s.document.id,createdRevisionId:revision.id,createdBy:caller.identity.id,creationIdempotencyKey:key,creationRequestHash:requestHash,originShareLinkId,anchor,status:"OPEN",visibility:"VISIBLE",hiddenBy:null,hiddenAt:null,hiddenReason:null,resolvedBy:null,resolvedAt:null,createdAt:now,updatedAt:now};
+    await r.reviewThreads.insert(thread);
+    await r.reviewComments.insert(this.comment(thread.id,caller.identity.id,body,key,requestHash)); await this.charge(r,caller.identity.id,s.document.id);
+    return (await views()).find(t=>t.id===thread.id)!;
   }
   async replyForLink(caller:CallerContext,input:ReplyReviewInput) { return this.uow.run(async r=> {const s=await this.linkScope(r,input.token); return this.reply(r,caller,s,input);}); }
   async replyForOwner(caller:CallerContext,input:{documentId:string;threadId:string;body:string;idempotencyKey:string}) {return this.uow.run(async r=>{const s=await this.ownerScope(r,caller,input.documentId);return this.reply(r,caller,s,input);});}
