@@ -26,6 +26,10 @@ export type RenderedEditorProps = {
   onFail: () => void;
   onUserEdit: () => void;
   onMarkdown: (markdown: string) => void;
+  /** Where an image's source is fetched from (hub image upload spec §6); read at the moment an image is drawn. */
+  imageUrl?: (src: string) => string;
+  /** Pasted or dropped image files. Whether the editor takes them at all is decided once, when it is built. */
+  onImageFiles?: (files: File[]) => void;
 };
 
 /**
@@ -66,6 +70,8 @@ export function RenderedEditor(props: RenderedEditorProps) {
       onUserEdit: () => latest.current.onUserEdit(),
       onMarkdown: (markdown) => latest.current.onMarkdown(markdown),
       allowImage: (src) => isAllowedMarkdownImageSrc(src, { origin: window.location.origin }),
+      imageUrl: (src) => latest.current.imageUrl?.(src) ?? src,
+      onImageFiles: latest.current.onImageFiles ? (files) => latest.current.onImageFiles?.(files) : undefined,
       extraPlugins: [...toolbar.plugins, ...suggest.plugins],
       configure: (ctx) => {
         toolbar.configure(ctx);

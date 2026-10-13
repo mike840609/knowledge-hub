@@ -7,6 +7,7 @@ import { gfm } from "@milkdown/kit/preset/gfm";
 import { Plugin, Selection, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { $ctx, $prose, getMarkdown, replaceAll } from "@milkdown/kit/utils";
+import { imageFilesOf } from "@/lib/composer-images";
 import { readerHints } from "./reader-hints";
 import { configureCellBreakStringify, remarkCellBreaks } from "./table-cell-breaks";
 import { configureWikiLinkStringify, wikiLinkPlugins } from "./wiki-link";
@@ -210,11 +211,6 @@ export type MarkdownEditor = {
   destroy: () => Promise<void>;
 };
 
-/** The image files a paste or a drop carries. A browser reports their type; the server decides what they are. */
-function imageFiles(transfer: DataTransfer | null): File[] {
-  return Array.from(transfer?.files ?? []).filter((file) => file.type.startsWith("image/"));
-}
-
 /** Tears down a half-built editor without letting a failure of the teardown hide the error that caused it. */
 async function destroyAfterFailure(editor: Editor): Promise<void> {
   try {
@@ -265,14 +261,14 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
         // Image files go to the host to be uploaded. Anything else — text, a slice moved inside the
         // editor, files that are not images — is not touched.
         handlePaste: (view, event, slice) => {
-          const files = editable && options.onImageFiles ? imageFiles(event.clipboardData) : [];
+          const files = editable && options.onImageFiles ? imageFilesOf(event.clipboardData) : [];
           if (files.length === 0) return Boolean(previous.handlePaste?.(view, event, slice));
           event.preventDefault();
           options.onImageFiles!(files);
           return true;
         },
         handleDrop: (view, event, slice, moved) => {
-          const files = editable && !moved && options.onImageFiles ? imageFiles(event.dataTransfer) : [];
+          const files = editable && !moved && options.onImageFiles ? imageFilesOf(event.dataTransfer) : [];
           if (files.length === 0) return Boolean(previous.handleDrop?.(view, event, slice, moved));
           event.preventDefault();
           // The caret goes to the drop point now, and ProseMirror keeps it in place through
