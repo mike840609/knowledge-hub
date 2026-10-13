@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DocumentPreviewLink } from "./document-preview-link";
 import type { AnchorHTMLAttributes, ComponentType, DetailedHTMLProps, ImgHTMLAttributes, ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -12,7 +13,7 @@ import { remarkKnownHtml } from "@/shared/markdown/remark-known-html";
 import { remarkReviewPaths } from "@/shared/markdown/remark-review-paths";
 import { MarkdownQuote } from "./markdown-callout";
 import { MarkdownDetails, MarkdownKbd, MarkdownMark, MarkdownSummary } from "./markdown-html";
-import { MarkdownImage } from "./markdown-image";
+import { LinkedImageScope, MarkdownImage } from "./markdown-image";
 import { MARKDOWN_PROSE } from "./markdown-prose";
 import type { RenderedLinks } from "./rendered-links";
 import { remarkKnowledgeLinks, WIKILINK_ANCHOR, WIKILINK_FRAGMENT, WIKILINK_TARGET } from "./remark-knowledge-links";
@@ -69,12 +70,13 @@ function DocumentLink({
   fragment,
   children,
 }: {
-  target: { basePath: string; title: string; ambiguousWith: number };
+  target: { basePath: string; title: string; ambiguousWith: number; documentId?: string };
   fragment: string | null;
   children: React.ReactNode;
 }) {
   const hash = fragment === null || fragment === "" ? "" : `#${encodeURIComponent(fragment)}`;
   const shared = target.ambiguousWith > 0 ? `${target.ambiguousWith} other document${target.ambiguousWith === 1 ? "" : "s"} share this name` : undefined;
+  if (target.documentId) return <DocumentPreviewLink documentId={target.documentId} href={`${target.basePath}${hash}`} title={shared ?? target.title} className={INTERNAL_LINK_CLASS}>{children}</DocumentPreviewLink>;
   return (
     // Not prefetched: the renderer does not know which document it is in, and a
     // link to the page it is on (`[[This page's own title]]`) prefetched from
@@ -170,7 +172,7 @@ function MarkdownLink(props: DetailedHTMLProps<AnchorHTMLAttributes<HTMLAnchorEl
 
 function ResponsiveTable({ children }: { children?: React.ReactNode }) {
   return (
-    <div className="my-4 w-full overflow-x-auto rounded-md border border-kh-border">
+    <div role="region" aria-label="Table" tabIndex={0} className="kh-markdown-table my-4 w-full overflow-x-auto rounded-md border border-kh-border kh-focus-ring">
       <table className="w-full border-collapse text-body">{children}</table>
     </div>
   );
@@ -229,7 +231,7 @@ export function MarkdownBase({
         remarkPlugins={[remarkGfm, remarkReviewPaths, remarkHeadingIds, remarkKnowledgeLinks, remarkKnownHtml, ...remarkPlugins]}
         rehypePlugins={rehypePlugins}
         components={{
-          a: (props: AnchorProps) => <MarkdownAnchor {...props} links={links} />,
+          a: (props: AnchorProps) => <LinkedImageScope><MarkdownAnchor {...props} links={links} /></LinkedImageScope>,
           // Image URL policy (issue #20, see markdown-image-policy.ts):
           // default-deny remote images — only relative Knowledge Hub asset
           // URLs and same-origin absolute URLs render via MarkdownImage;

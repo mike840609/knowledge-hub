@@ -119,6 +119,7 @@ export function DocumentComposer({
   conflictHref: string | null;
   /** Another operation owns the page, e.g. an upload; nothing here may start. */
   blocked?: boolean;
+  /** Alternative entry point, shown only before a title or body has been entered. */
   footer?: (state: { busy: boolean }) => ReactNode;
 }) {
   const router = useRouter();
@@ -705,7 +706,7 @@ export function DocumentComposer({
         cancelLabel="Keep editing"
         onConfirm={leaveDiscarding}
       />
-      {footer ? <div className="kh-reading-column pb-6">{footer({ busy })}</div> : null}
+      {footer && !title.trim() && !markdown.trim() ? <div className="kh-reading-column pb-6">{footer({ busy })}</div> : null}
     </DocumentPane>
   );
 }

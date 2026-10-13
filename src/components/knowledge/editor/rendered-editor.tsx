@@ -7,6 +7,8 @@ import { governanceRequest } from "@/components/workspaces/governance-error";
 import type { LinkTargetsView } from "@/modules/knowledge/application/knowledge-link-service";
 import { createMarkdownEditor, type MarkdownEditor } from "./editor-core";
 import { selectionToolbar } from "./selection-toolbar";
+import { blockGutter } from "./block-gutter";
+import { slashCommands } from "./slash-commands";
 import { wikiLinkSuggest } from "./wikilink-suggest";
 
 export type RenderedEditorProps = {
@@ -51,6 +53,7 @@ export function RenderedEditor(props: RenderedEditorProps) {
     container.appendChild(host);
     let cancelled = false;
     const toolbar = selectionToolbar();
+    const slash = slashCommands();
     const suggest = wikiLinkSuggest({
       // Read through the ref at the moment of use, like every other prop here.
       loadTargets: () => governanceRequest<LinkTargetsView>(`/api/workspaces/${latest.current.workspaceId}/link-targets`),
@@ -66,10 +69,11 @@ export function RenderedEditor(props: RenderedEditorProps) {
       onUserEdit: () => latest.current.onUserEdit(),
       onMarkdown: (markdown) => latest.current.onMarkdown(markdown),
       allowImage: (src) => isAllowedMarkdownImageSrc(src, { origin: window.location.origin }),
-      extraPlugins: [...toolbar.plugins, ...suggest.plugins],
+      extraPlugins: [...toolbar.plugins, ...suggest.plugins, ...slash.plugins, blockGutter()],
       configure: (ctx) => {
         toolbar.configure(ctx);
         suggest.configure(ctx);
+        slash.configure(ctx);
       },
     }).then(
       (editor) => {

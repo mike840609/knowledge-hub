@@ -8,6 +8,7 @@ import type { DocumentLinkView } from "@/modules/knowledge/application/knowledge
 export type RenderedLinkTarget =
   | {
       status: "RESOLVED";
+      documentId?: string;
       /** The route of the target document, without a fragment. */
       basePath: string;
       title: string;
@@ -32,6 +33,7 @@ export function renderedLinksFrom(view: DocumentLinkView, createLinks: Readonly<
       link.resolution.status === "RESOLVED"
         ? {
             status: "RESOLVED",
+            documentId: link.resolution.documentId,
             basePath: documentPath(view.workspaceId, link.resolution.sourceId, link.resolution.documentId),
             title: link.resolution.title,
             ambiguousWith: link.resolution.ambiguousWith,
