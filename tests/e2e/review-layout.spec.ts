@@ -90,8 +90,8 @@ test("shared comments follow passage order and the selected card stays beside it
   await page.getByRole("button", { name: "Collapse discussions" }).click();
   await expect(page.getByRole("complementary", { name: "Document discussions" })).toBeHidden();
   expect(await page.evaluate(() => window.scrollY)).toBeCloseTo(beforeCollapse, 0);
-  const collapsedArticle = (await page.locator("[data-review-document]").boundingBox())!;
-  expect(collapsedArticle.x + collapsedArticle.width / 2).toBeCloseTo(720, 0);
+  // The column slides back to the centre; measure where it ends, not where it is mid-slide.
+  await expect.poll(async () => { const collapsedArticle = (await page.locator("[data-review-document]").boundingBox())!; return Math.round(collapsedArticle.x + collapsedArticle.width / 2); }).toBe(720);
   await page.getByRole("button", { name: "1 comment on passage: Paragraph 80" }).click();
   await expect(laterCard).toBeFocused();
 
@@ -213,7 +213,24 @@ test("wide screens default to centered reading and open a 320px rail on demand",
   await page.getByRole("button", { name: "Collapse discussions" }).click();
   await expect(rail).toBeHidden();
   await expect(page.getByRole("button", { name: "Open discussions" })).toBeFocused();
-  expect((await article.boundingBox())!.x).toBeCloseTo(initialBox.x, 0);
+  await expect.poll(async () => Math.round((await article.boundingBox())!.x)).toBe(Math.round(initialBox.x));
+});
+
+test("opening and closing the rail moves nothing under the pointer where the window has room for it", async ({ page, request }) => {
+  const doc = await createReviewDocument(request);
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
+  const article = page.locator("[data-review-document]").filter({ visible: true });
+  const entry = page.getByRole("button", { name: /^(Open|Hide) discussions/ });
+  const save = page.getByRole("button", { name: "Save share", exact: true });
+  const where = async () => ({ article: (await article.boundingBox())!.x, entry: (await entry.boundingBox())!.x, save: (await save.boundingBox())!.x });
+  const before = await where();
+  await openReviewDiscussions(page);
+  await expect(page.getByRole("complementary", { name: "Document discussions" })).toBeVisible();
+  // The column slides when it must; let a slide finish before measuring where it ended.
+  await expect.poll(where).toEqual(before);
+  await page.getByRole("button", { name: "Collapse discussions" }).click();
+  await expect.poll(where).toEqual(before);
 });
 
 async function seedSimpleThread(request: import("@playwright/test").APIRequestContext, doc: Awaited<ReturnType<typeof createReviewDocument>>) {
