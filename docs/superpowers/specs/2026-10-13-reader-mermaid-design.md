@@ -261,6 +261,11 @@ installed version, before anything else is built.
 | `suppressErrorRendering` keeps Mermaid's error graphic out of the page | Remove the element Mermaid leaves, by the id it was given |
 | No `eval` or `new Function` in production | The production build fails the e2e below, since `unsafe-eval` is development only; return here |
 
+Checked against `mermaid@12.2.0` (`../verification/2026-10-13-reader-mermaid.md`):
+the second row is false. A `%%{init: {"securityLevel": "loose", "htmlLabels": true, "flowchart": {"htmlLabels": true}}}%%`
+directive in the source made a flowchart come out with `<foreignObject>`. So a
+leading `%%{…}%%` directive is stripped before drawing. The other four rows hold.
+
 ## Shape of the change
 
 - `src/components/knowledge/mermaid-block.tsx`: the client component. The
