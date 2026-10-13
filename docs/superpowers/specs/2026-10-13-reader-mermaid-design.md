@@ -125,8 +125,9 @@ text happens to be a diagram. The reader does not guess a language
 
 It stays the code block it was, and one line under it says why. None of these
 is an error, and the page renders. Nothing the queue declines is a throw: that
-includes a failure to make or revoke the object URL, which is shown as
-`This kind of diagram cannot be drawn here yet.`
+includes a failure to make the object URL, which is shown as
+`This kind of diagram cannot be drawn here yet.` A failure to revoke one is
+ignored, and the block is still drawn.
 
 | Why | What it says |
 | --- | --- |
