@@ -7,12 +7,25 @@ import { createReviewRangeResolver } from "./review-selection";
 
 type Marker = { id: string; count: number; quote: string; top: number };
 
+/** The outermost closed `<details>` that hides `node` — its summary is always shown — or null. */
+function closedDisclosure(node: Node): Element | null {
+  const summary = node.parentElement?.closest("summary") ?? null;
+  let hidden: Element | null = null;
+  for (let element = node.parentElement; element; element = element.parentElement) {
+    if (element instanceof HTMLDetailsElement && !element.open && summary?.parentElement !== element) hidden = element;
+  }
+  return hidden;
+}
+
 /**
- * Where a quote is on the page. One inside a closed disclosure has no rectangle of its own — and
- * an empty range reports the top of the viewport, which put its marker wherever that happened to
- * be — so it is placed beside the nearest thing around it that is shown: the disclosure.
+ * Where a quote is on the page. One inside a closed disclosure is not shown, but a browser may still
+ * report a rectangle for it, laid out as if the disclosure were open (Chromium does, over whatever
+ * follows), and an empty range reports the top of the viewport. Either puts its marker somewhere
+ * unrelated, so it is placed beside the nearest thing around it that is shown: the disclosure.
  */
-function shownTop(range: Range): number {
+export function shownTop(range: Range): number {
+  const closed = closedDisclosure(range.startContainer);
+  if (closed) return closed.getBoundingClientRect().top;
   const rect = range.getClientRects()[0];
   if (rect) return rect.top;
   let host = range.startContainer.parentElement;
