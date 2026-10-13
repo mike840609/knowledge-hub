@@ -2,19 +2,12 @@ import type { PhrasingContent, Root } from "mdast";
 import type {} from "mdast-util-to-hast";
 import type { WikiLinkMatch } from "@/modules/knowledge/domain/document-links";
 import { headingSlug } from "@/shared/markdown/heading-slug";
-import { replaceWikiLinks } from "./replace-wiki-links";
+import { replaceWikiLinks, shownText } from "@/modules/knowledge/domain/replace-wiki-links";
 
 /** Attribute names the plugin puts on the link and `MarkdownAnchor` reads back. */
 export const WIKILINK_TARGET = "data-kh-wikilink";
 export const WIKILINK_FRAGMENT = "data-kh-fragment";
 export const WIKILINK_ANCHOR = "data-kh-anchor";
-
-/** What is shown for a link the author wrote as `[[Target#Heading|Alias]]` — in the reader, and in the editor. */
-export function shownText(match: Pick<WikiLinkMatch, "target" | "fragment" | "alias">): string {
-  if (match.alias !== null) return match.alias;
-  if (match.target === "") return match.fragment ?? "";
-  return match.fragment === null ? match.target : `${match.target} › ${match.fragment}`;
-}
 
 function linkNode(match: WikiLinkMatch): PhrasingContent {
   const properties: Record<string, string> = {};

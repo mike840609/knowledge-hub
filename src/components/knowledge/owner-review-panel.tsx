@@ -26,7 +26,7 @@ import { ReviewFilterMenu, ReviewThreadList, reviewRequest, type ReviewFilter } 
  * selecting a passage (docs/superpowers/specs/2026-10-13-review-anchors-and-owner-threads-design.md).
  */
 export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = false, children }: { documentId: string; revisionId: string; markdown: string; readOnly?: boolean; children: ReactNode }) {
-  const [result, setResult] = useState<{ threads: OwnerReviewThreadView[]; writesEnabled: boolean; revisionId: string }>();
+  const [result, setResult] = useState<{ threads: OwnerReviewThreadView[]; writesEnabled: boolean; revisionId: string; callerUserId: string }>();
   const [error, setError] = useState<string>();
   const [open, setOpen] = useState(false);
   const [activeThreadId, setActiveThreadId] = useState<string>();
@@ -51,16 +51,18 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
   // It sets the state and nothing else, so it takes neither the focus nor the scroll position.
   const threads = useRef<OwnerReviewThreadView[]>([]);
   const arrived = useRef(false);
+  const owner = useRef<string | null>(null);
   useEffect(() => {
     if (!result) return;
     threads.current = result.threads;
+    owner.current = result.callerUserId;
     if (arrived.current) return;
     arrived.current = true;
     // The list starts on what is still open, where something is: settled discussions would
     // otherwise crowd the ones that want an answer away from their passages. With nothing open it
     // starts on everything — an empty list would say there was nothing at all.
     setFilter(result.threads.some(thread => thread.status === "OPEN") ? "OPEN" : "ALL");
-    if (reviewRailInline() && opensOnArrival(result.threads, parseDismissed(readStored("local", dismissedKey(documentId))))) setOpen(true);
+    if (reviewRailInline() && opensOnArrival(result.threads, parseDismissed(readStored("local", dismissedKey(documentId))), result.callerUserId)) setOpen(true);
   }, [result, documentId]);
   useEffect(() => {
     const activate = (event: Event) => setActiveThreadId((event as CustomEvent<string>).detail);
@@ -72,7 +74,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
   const changeOpen = useCallback((next: boolean) => {
     setOpen(next);
     if (next) removeStored("local", dismissedKey(documentId));
-    else writeStored("local", dismissedKey(documentId), JSON.stringify(awaitingOwner(threads.current)));
+    else writeStored("local", dismissedKey(documentId), JSON.stringify(awaitingOwner(threads.current, owner.current)));
     if (!next) {
       setActiveThreadId(undefined);
       if (reviewRailInline()) entryRef?.current?.focus({ preventScroll: true });

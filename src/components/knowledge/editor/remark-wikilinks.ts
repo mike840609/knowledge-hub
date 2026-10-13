@@ -1,5 +1,5 @@
 import type { Root } from "mdast";
-import { replaceWikiLinks } from "../replace-wiki-links";
+import { replaceWikiLinks } from "@/modules/knowledge/domain/replace-wiki-links";
 
 /**
  * The mdast node the plugin makes. `value` is the link as it reads in the text,

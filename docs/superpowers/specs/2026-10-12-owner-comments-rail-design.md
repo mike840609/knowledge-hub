@@ -46,7 +46,9 @@ outline its place every time. So:
 The shared page is not changed. Its readers came for the article, most will
 never comment, and #168 chose reading first over an ever-present rail there.
 
-The rule is `opensOnArrival` in `review-auto-open.ts`.
+The rule is `opensOnArrival` in `review-auto-open.ts`. *Amended 2026-10-13: now that the
+owner can start a discussion, one awaits the owner only where the last comment still shown is
+someone else's — the owner's own note, or a thread the owner answered last, does not open the rail.*
 
 **What is open, first.** Asked what to do when there are many discussions: the
 rail keeps cards in document order without overlap, so a passage with several —

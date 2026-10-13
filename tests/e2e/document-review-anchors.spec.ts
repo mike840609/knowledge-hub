@@ -3,7 +3,7 @@ import { phase3Origin } from "./fixtures/phase3-identities";
 import { createReviewDocument, openReviewDiscussions, selectPassage } from "./fixtures/document-review";
 
 test("owner and shared readers agree on emoji, formatting and duplicate block offsets", async ({ page, request }) => {
-  const markdown = "A 😀 **bold** passage to review.\n\nA 😀 **bold** passage to review.\n\nOther [[Wiki]] text.\n\nA [relative](./document.md) link.";
+  const markdown = "A 😀 **bold** passage to review.\n\nA 😀 **bold** passage to review.\n\nOther <kbd>Wiki</kbd> text.\n\nA [relative](./document.md) link.";
   const doc = await createReviewDocument(request, markdown);
   await page.goto(doc.href);
   await expect(page.locator("[data-review-document] p")).toHaveCount(4);

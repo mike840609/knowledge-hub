@@ -6,7 +6,7 @@ import { Plugin } from "@milkdown/kit/prose/state";
 import { $inputRule, $node, $prose, $remark } from "@milkdown/kit/utils";
 import type { State } from "mdast-util-to-markdown";
 import { findWikiLinks, parseWikiLinkParts } from "@/modules/knowledge/domain/document-links";
-import { shownText } from "../remark-knowledge-links";
+import { shownText } from "@/modules/knowledge/domain/replace-wiki-links";
 import { remarkWikiLinks } from "./remark-wikilinks";
 
 /**

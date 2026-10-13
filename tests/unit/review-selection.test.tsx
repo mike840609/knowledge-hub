@@ -2,6 +2,7 @@
 import { describe, expect, test, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MarkdownRenderer } from "@/components/knowledge/markdown-renderer";
+import { linkLookupKey } from "@/modules/knowledge/domain/link-graph";
 import * as projection from "@/modules/knowledge/domain/review-anchor";
 import { validateReviewAnchor } from "@/modules/knowledge/domain/review-anchor";
 import { createReviewRangeResolver, readReviewSelection, reviewAnchorRange, selectedReviewAnchor } from "@/components/knowledge/review-selection";
@@ -72,6 +73,15 @@ describe("a passage that can take a comment", () => {
     ["a ticked task", "- [ ] todo\n- [x] done item", "li + li", "item", "paragraph"],
     ["a task of a loose list", "- [ ] todo item\n\n- [x] done", "li p", "todo", "paragraph"],
     ["a task that holds a list", "- [ ] parent task\n  - child", "li", "parent", "paragraph"],
+    ["a paragraph with a wikilink, after it", "See [[Other page]] now", "p", "now", "paragraph"],
+    ["a paragraph with a wikilink, across it", "See [[Other page]] now", "p", "See Other page now", "paragraph"],
+    ["a wikilink shown by its alias", "See [[Other page|that one]] now", "p", "that", "paragraph"],
+    ["a wikilink to a heading", "See [[Other page#Part two]] now", "p", "Other page › Part", "paragraph"],
+    ["a wikilink in emphasis", "See **[[Other page]] closely** now", "p", "page closely", "paragraph"],
+    ["a table cell with a wikilink", "| a |\n|---|\n| see [[Wiki page]] here |", "td", "page here", "tableCell"],
+    ["a paragraph with a hard line break, before it", "one line  \ntwo lines", "p", "one", "paragraph"],
+    ["a paragraph with a hard line break, after it", "one line  \ntwo lines", "p", "two lines", "paragraph"],
+    ["a paragraph with a backslash line break", "one line\\\ntwo lines", "p", "two", "paragraph"],
     ["what a <details> holds", "<details>\n<summary>More</summary>\n\nInside it\n\n</details>", "details p", "Inside", "paragraph"],
     ["a table's heading cell", "| Name | Role |\n|---|---|\n| Ada | Owner |", "th + th", "Role", "tableCell"],
     ["a table's cell", "| Name | Role |\n|---|---|\n| Ada | **Owner** here |", "td + td", "Owner here", "tableCell"],
@@ -138,6 +148,39 @@ describe("a passage that can take a comment", () => {
     expect(reviewAnchorRange(root, markdown, reading.anchor!)?.toString()).toBe("todo item");
   });
 
+  test("a wikilink's place is counted in what is shown for it, not in how it is written", () => {
+    const markdown = "See [[Other page#Part|that one]] now";
+    expect(choose(page(markdown), markdown, "p", "now").anchor).toMatchObject({ startUtf16: 13, endUtf16: 16, prefix: "See that one ", suffix: "" });
+  });
+
+  // The owner's reader is given where each link goes; a shared page is given nothing. The words are the same.
+  test.each([
+    ["one it can follow", { status: "RESOLVED" as const, basePath: "/w/w1/knowledge/s1/d1", title: "Other page", ambiguousWith: 0 }],
+    ["one of several it could mean", { status: "RESOLVED" as const, basePath: "/w/w1/knowledge/s1/d1", title: "Other page", ambiguousWith: 2 }],
+    ["one that leads nowhere", { status: "UNRESOLVED" as const }],
+  ])("a wikilink in the owner's reader, %s, is the same text", (_name, resolution) => {
+    const markdown = "See [[Other page]] now";
+    const links = { [linkLookupKey("WIKI", "Other page")]: resolution };
+    document.body.innerHTML = `<article>${renderToStaticMarkup(<MarkdownRenderer markdown={markdown} links={links} />)}</article>`;
+    const root = document.querySelector<HTMLElement>("article")!;
+    const paragraph = root.querySelector("p")!;
+    // From inside the link to past it, over what the page adds there for a screen reader.
+    const anchor = selectedReviewAnchor(root, markdown, select(span(paragraph, "page").from, span(paragraph, "now").to))!;
+    expect(anchor).toMatchObject({ exact: "page now", startUtf16: 10 });
+    expect(validateReviewAnchor(markdown, anchor)).toEqual(anchor);
+    expect(reviewAnchorRange(root, markdown, anchor)).not.toBeNull();
+  });
+
+  test("a selection across a hard line break is one space of the block's text", () => {
+    const markdown = "one line  \ntwo lines";
+    const root = page(markdown);
+    const paragraph = root.querySelector("p")!;
+    const anchor = selectedReviewAnchor(root, markdown, select(span(paragraph, "line").from, span(paragraph, "two").to))!;
+    expect(anchor).toMatchObject({ exact: "line two", startUtf16: 4 });
+    expect(validateReviewAnchor(markdown, anchor)).toEqual(anchor);
+    expect(reviewAnchorRange(root, markdown, anchor)).not.toBeNull();
+  });
+
   test("a whole code block is selected without the newline the page ends it with", () => {
     const markdown = "```\nall of it\n```\n\nafter";
     const root = page(markdown);
@@ -149,11 +192,9 @@ describe("a passage that can take a comment", () => {
 
 describe("a passage that cannot", () => {
   const refused: [name: string, markdown: string, selector: string, text: string][] = [
-    ["a paragraph with a wikilink", "See [[Other page]] now", "p", "now"],
     ["a paragraph with a link to another document", "See [doc](./other.md) now", "p", "now"],
     ["a paragraph with an image", "Look ![x](https://e.example/a.png) here", "p", "Look"],
     ["a paragraph with a <br>", "one<br>two", "p", "one"],
-    ["a paragraph with a hard line break", "one  \ntwo", "p", "one"],
     ["a paragraph with a drawn HTML tag", "Press <kbd>Ctrl</kbd> now", "p", "Press"],
     ["a paragraph with a footnote's number", "Text here[^1]\n\n[^1]: The note", "p", "Text"],
     ["a footnote", "Text here[^1]\n\n[^1]: The note", "section li p", "note"],
