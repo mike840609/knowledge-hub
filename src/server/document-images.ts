@@ -1,5 +1,5 @@
 import type { StoredImage } from "@/modules/knowledge/domain/source-policy";
-import type { BlobStore } from "@/modules/sources/ports/blob-store";
+import { BlobStorageUnavailableError, type BlobStore } from "@/modules/sources/ports/blob-store";
 
 /**
  * On every image response. `nosniff` and the sandboxing policy are what make
@@ -19,7 +19,16 @@ export async function imageResponse(request: Request, image: StoredImage | null,
   if (!image || !blobs) return notFound();
   const etag = `"${image.contentHash}"`;
   if (request.headers.get("if-none-match") === etag) return new Response(null, { status: 304, headers: { ...IMAGE_HEADERS, ETag: etag } });
-  const blob = await blobs.open(image.contentHash);
+  let blob;
+  try {
+    blob = await blobs.open(image.contentHash);
+  } catch (error) {
+    // The store is down, not the image missing. Answered here so the signed-in
+    // route and the shared page give the same thing: a 503 a browser will not
+    // cache, with nothing about the store in it.
+    if (!(error instanceof BlobStorageUnavailableError)) throw error;
+    return new Response(null, { status: 503, headers: { ...IMAGE_HEADERS, "Cache-Control": "no-store", "Retry-After": "30" } });
+  }
   if (!blob) return notFound();
   return new Response(blob.body, { headers: { ...IMAGE_HEADERS, ETag: etag, "Content-Type": image.contentType, "Content-Length": String(blob.size) } });
 }

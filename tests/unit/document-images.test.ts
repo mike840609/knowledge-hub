@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { imageResponse } from "@/server/document-images";
-import type { BlobStore } from "@/modules/sources/ports/blob-store";
+import { BlobStorageUnavailableError, type BlobStore } from "@/modules/sources/ports/blob-store";
 
 const hash = "b".repeat(64);
 const image = { contentHash: hash, contentType: "image/svg+xml", sourcePath: "a.svg", documentPath: "a.md" };
@@ -28,4 +28,15 @@ it("is one 404 for no image, no store and a missing blob", async () => {
     expect(await response.text()).toBe("");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
   }
+});
+it("answers 503, uncached and without detail, when the store is unavailable", async () => {
+  const down = { open: async () => { throw new BlobStorageUnavailableError(); } } as unknown as BlobStore;
+  const response = await imageResponse(get(), image, down);
+  expect(response.status).toBe(503);
+  expect(await response.text()).toBe("");
+  expect(Object.fromEntries(response.headers)).toMatchObject({ "cache-control": "no-store", "retry-after": "30", "x-content-type-options": "nosniff" });
+});
+it("does not hide an unexpected failure as an outage", async () => {
+  const broken = { open: async () => { throw new TypeError("bug"); } } as unknown as BlobStore;
+  await expect(imageResponse(get(), image, broken)).rejects.toThrow("bug");
 });
