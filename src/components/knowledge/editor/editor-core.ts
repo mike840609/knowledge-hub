@@ -29,6 +29,8 @@ export function parsedIntact(markdown: string, output: string): boolean {
 
 // Per editor, through the context, because the plugin list below is shared.
 const imagePolicyCtx = $ctx<(src: string) => boolean, "khImagePolicy">(() => false, "khImagePolicy");
+// Where an allowed image is fetched from. The document keeps the source as written; only the element differs.
+const imageUrlCtx = $ctx<(src: string) => string, "khImageUrl">((src) => src, "khImageUrl");
 
 /**
  * The reader never lets `<img>` fetch a source its policy refuses; neither may
@@ -41,6 +43,7 @@ const imagePolicyCtx = $ctx<(src: string) => boolean, "khImagePolicy">(() => fal
 const safeImageSchema = imageSchema.extendSchema((previous) => (ctx) => {
   const spec = previous(ctx);
   const allow = ctx.get(imagePolicyCtx.key);
+  const url = ctx.get(imageUrlCtx.key);
   const toDOM = spec.toDOM;
   if (!toDOM) return spec;
   return {
@@ -59,7 +62,8 @@ const safeImageSchema = imageSchema.extendSchema((previous) => (ctx) => {
     toDOM: (node) => {
       const [tag, attrs] = toDOM(node) as [string, Record<string, unknown>];
       const source = String(node.attrs.src ?? "");
-      return [tag, { ...attrs, src: allow(source) ? attrs.src : "", ...(source ? { "data-kh-src": source } : {}) }];
+      // `src` is what the browser loads; `data-kh-src` is what the document says, and what is read back.
+      return [tag, { ...attrs, src: allow(source) ? url(source) : "", ...(source ? { "data-kh-src": source } : {}) }];
     },
   };
 });
@@ -171,6 +175,17 @@ export type EditorOptions = {  root: HTMLElement;
    */
   onMarkdown: (markdown: string) => void;
   allowImage: (src: string) => boolean;
+  /**
+   * Where the editor fetches an allowed image from, when that is not its source as written: a Hub
+   * page's `/images/…` is served by a route. It changes the element only. The Markdown keeps the source.
+   */
+  imageUrl?: (src: string) => string;
+  /**
+   * Image files were pasted or dropped. The selection is already where they belong (the drop point,
+   * or where the caret was); the host uploads them and calls `insertImage`. Without this, a paste
+   * or a drop is left entirely to the editor.
+   */
+  onImageFiles?: (files: File[]) => void;
   extraPlugins?: MilkdownPlugin[];
   /** Runs with the editor context while it is being configured — for the extra plugins' settings. */
   configure?: (ctx: Ctx) => void;
@@ -185,6 +200,8 @@ export type MarkdownEditor = {
    */
   replaceMarkdown: (markdown: string) => void;
   setEditable: (editable: boolean) => void;
+  /** Puts an image at the selection, as the user's edit. It is written `![alt](src)`. */
+  insertImage: (src: string, alt: string) => void;
   /** Focus with the selection where it is. */
   focus: () => void;
   /** Focus with the caret at the very start of the document. */
@@ -192,6 +209,11 @@ export type MarkdownEditor = {
   action: <T>(fn: (ctx: Ctx) => T) => T;
   destroy: () => Promise<void>;
 };
+
+/** The image files a paste or a drop carries. A browser reports their type; the server decides what they are. */
+function imageFiles(transfer: DataTransfer | null): File[] {
+  return Array.from(transfer?.files ?? []).filter((file) => file.type.startsWith("image/"));
+}
 
 /** Tears down a half-built editor without letting a failure of the teardown hide the error that caused it. */
 async function destroyAfterFailure(editor: Editor): Promise<void> {
@@ -222,6 +244,7 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
       ctx.set(rootCtx, options.root);
       ctx.set(defaultValueCtx, options.markdown);
       ctx.set(imagePolicyCtx.key, options.allowImage);
+      if (options.imageUrl) ctx.set(imageUrlCtx.key, options.imageUrl);
       // Milkdown's defaults are `*` and `***`; most documents here use `-` and `---`.
       ctx.update(remarkStringifyOptionsCtx, (previous) => ({ ...previous, bullet: "-" as const, rule: "-" as const }));
       // A `[[wikilink]]` is a node here, and has to be written back as it was: both halves are needed, and
@@ -239,6 +262,26 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
         // A direct prop runs before every plugin's keymap; claiming the key stops those, not the bubbling.
         // ArrowDown out of a trailing code block likewise leaves here: nowhere else handles it.
         // Shift+Enter in a table is taken here too, before Milkdown's command can split the table.
+        // Image files go to the host to be uploaded. Anything else — text, a slice moved inside the
+        // editor, files that are not images — is not touched.
+        handlePaste: (view, event, slice) => {
+          const files = editable && options.onImageFiles ? imageFiles(event.clipboardData) : [];
+          if (files.length === 0) return Boolean(previous.handlePaste?.(view, event, slice));
+          event.preventDefault();
+          options.onImageFiles!(files);
+          return true;
+        },
+        handleDrop: (view, event, slice, moved) => {
+          const files = editable && !moved && options.onImageFiles ? imageFiles(event.dataTransfer) : [];
+          if (files.length === 0) return Boolean(previous.handleDrop?.(view, event, slice, moved));
+          event.preventDefault();
+          // The caret goes to the drop point now, and ProseMirror keeps it in place through
+          // whatever is typed while the upload runs.
+          const dropped = view.posAtCoords({ left: event.clientX, top: event.clientY });
+          if (dropped) view.dispatch(view.state.tr.setSelection(Selection.near(view.state.doc.resolve(dropped.pos))).setMeta("addToHistory", false));
+          options.onImageFiles!(files);
+          return true;
+        },
         handleKeyDown: (view, event) => {
           if ((event.metaKey || event.ctrlKey) && event.key === "Enter") return true;
           if (event.key === "Enter" && event.shiftKey && !event.altKey && !event.isComposing && event.keyCode !== 229 && breakInTable(view)) return true;
@@ -274,6 +317,7 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
     .use(commonmarkWithSafeImages)
     .use(safeImageSchema)
     .use(imagePolicyCtx)
+    .use(imageUrlCtx)
     .use(gfm)
     // In every host of the editor, not an extra: a document with a wikilink must survive being opened in it.
     .use(wikiLinkPlugins)
@@ -311,6 +355,14 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
       editable = next;
       editor.action((ctx) => ctx.get(editorViewCtx).setProps({ editable: () => editable }));
     },
+    insertImage: (src, alt) =>
+      editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        const image = view.state.schema.nodes.image.create({ src, alt, title: "" });
+        const at = view.state.selection.from;
+        // `replaceRangeWith` finds where an inline node may go: the caret can be between two blocks.
+        view.dispatch(view.state.tr.replaceRangeWith(at, at, image));
+      }),
     focus: () => editor.action((ctx) => ctx.get(editorViewCtx).focus()),
     focusStart: () =>
       editor.action((ctx) => {
