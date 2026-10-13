@@ -5,6 +5,7 @@ import { uuidv7 } from "@/shared/ids/uuidv7";
 import { evaluateShareLinkValidity, isShareToken, ShareLinkNotFoundError } from "../domain/document-share-link";
 import { REVIEW_LIMITS, isRetractedThread, projectOwnerThread, projectReviewerThread, projectReviewComment, validateReviewBody, validateReviewIdempotencyKey, type ReviewThread, type ReviewComment, type ReviewAnchor, type ReviewStatus, type ReviewVisibility, type ReviewThreadView, type OwnerReviewThreadView, type CreateReviewThreadInput, type CreateOwnerReviewThreadInput, type ReplyReviewInput } from "../domain/document-review";
 import { createReviewAnchorRelocator, validateReviewAnchor } from "../domain/review-anchor";
+import { projectShareCommentNotification } from "../domain/share-comment-event";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "../ports/unit-of-work";
 
 function fail(code:string, message:string):never { throw new DomainError(code,message); }
@@ -22,6 +23,29 @@ export class DocumentReviewService {
   }
   async queryForOwner(caller:CallerContext,documentId:string) {
     return this.uow.run(async r => { const s=await this.ownerScope(r,caller,documentId,false); return {threads:await this.views(r,documentId,true,caller.identity.id),revisionId:s.document.currentRevisionId,writesEnabled:this.writesEnabled(),callerUserId:caller.identity.id}; });
+  }
+  /** The owner's inbox: link-origin comments on their documents, newest first. The recipient is always the caller; no user id is accepted. */
+  async listUnreadForOwner(caller:CallerContext) {
+    return this.uow.run(async r => {
+      const events=await r.shareCommentEvents.listUnreadByRecipient(caller.identity.id);
+      const views=[];
+      for(const e of events) {
+        const revision=await r.revisions.findCurrent(e.documentId);
+        const comments=await r.reviewComments.listByThread(e.threadId);
+        const comment=comments.find(c=>c.id===e.commentId);
+        if(!revision || !comment || comment.deletedAt || comment.visibility==="HIDDEN") continue;
+        const author=await r.users.findById(e.createdByUserId);
+        views.push(projectShareCommentNotification({id:e.id,workspaceId:e.workspaceId,documentId:e.documentId,documentTitle:revision.title,threadId:e.threadId,commentId:e.commentId,authorName:author?.name,body:comment.body,createdAt:e.createdAt}));
+      }
+      return {notifications:views};
+    });
+  }
+  /** Marks this document's events read. Owner scope first: a non-owner reaches nothing. */
+  async markDocumentRead(caller:CallerContext,documentId:string) {
+    await this.uow.run(async r => {
+      await this.ownerScope(r,caller,documentId,false);
+      await r.shareCommentEvents.markDocumentRead(caller.identity.id,documentId,this.clock());
+    });
   }
   private views(r:KnowledgeRepositories,documentId:string,owner:true,callerUserId?:string):Promise<OwnerReviewThreadView[]>;
   private views(r:KnowledgeRepositories,documentId:string,owner:false,callerUserId?:string):Promise<ReviewThreadView[]>;
@@ -115,14 +139,16 @@ export class DocumentReviewService {
     const anchor=validateReviewAnchor(revision.markdown,request.anchor);
     await this.capacity(r,s.document.id,caller.identity.id); await this.quota(r,caller.identity.id,s.document.id);
     const now=this.clock(); const thread:ReviewThread={id:uuidv7(),documentId:s.document.id,createdRevisionId:revision.id,createdBy:caller.identity.id,creationIdempotencyKey:key,creationRequestHash:requestHash,originShareLinkId,anchor,status:"OPEN",visibility:"VISIBLE",hiddenBy:null,hiddenAt:null,hiddenReason:null,resolvedBy:null,resolvedAt:null,createdAt:now,updatedAt:now};
+    const firstComment=this.comment(thread.id,caller.identity.id,body,key,requestHash);
     await r.reviewThreads.insert(thread);
-    await r.reviewComments.insert(this.comment(thread.id,caller.identity.id,body,key,requestHash)); await this.charge(r,caller.identity.id,s.document.id);
+    await r.reviewComments.insert(firstComment); await this.charge(r,caller.identity.id,s.document.id);
+    if(originShareLinkId!==null) await r.shareCommentEvents.insert({id:uuidv7(),workspaceId:s.workspace.id,documentId:s.document.id,threadId:thread.id,commentId:firstComment.id,originShareLinkId,createdByUserId:caller.identity.id,mentionedUserId:null,createdAt:now,readAt:null});
     return (await views()).find(t=>t.id===thread.id)!;
   }
-  async replyForLink(caller:CallerContext,input:ReplyReviewInput) { return this.uow.run(async r=> {const s=await this.linkScope(r,input.token); return this.reply(r,caller,s,input);}); }
-  async replyForOwner(caller:CallerContext,input:{documentId:string;threadId:string;body:string;idempotencyKey:string}) {return this.uow.run(async r=>{const s=await this.ownerScope(r,caller,input.documentId);return this.reply(r,caller,s,input);});}
+  async replyForLink(caller:CallerContext,input:ReplyReviewInput) { return this.uow.run(async r=> {const s=await this.linkScope(r,input.token); return this.reply(r,caller,s,s.link.id,input);}); }
+  async replyForOwner(caller:CallerContext,input:{documentId:string;threadId:string;body:string;idempotencyKey:string}) {return this.uow.run(async r=>{const s=await this.ownerScope(r,caller,input.documentId);return this.reply(r,caller,s,null,input);});}
   private comment(threadId:string,userId:string,body:string,key:string,requestHash:string):ReviewComment {return {id:uuidv7(),threadId,authorUserId:userId,body,idempotencyKey:key,requestHash,createdAt:this.clock(),editedAt:null,deletedAt:null,visibility:"VISIBLE",hiddenBy:null,hiddenAt:null,hiddenReason:null};}
-  private async reply(r:KnowledgeRepositories,caller:CallerContext,s:Awaited<ReturnType<DocumentReviewService["scope"]>>,input:{threadId:string;body:string;idempotencyKey:string}) {
+  private async reply(r:KnowledgeRepositories,caller:CallerContext,s:Awaited<ReturnType<DocumentReviewService["scope"]>>,originShareLinkId:string|null,input:{threadId:string;body:string;idempotencyKey:string}) {
     const body=validateReviewBody(input.body),key=validateReviewIdempotencyKey(input.idempotencyKey),requestHash=hash({threadId:input.threadId,body});
     const thread=await r.reviewThreads.lockById(input.threadId);
     if(!thread || thread.documentId!==s.document.id || thread.visibility==="HIDDEN" || isRetractedThread(await r.reviewComments.listByThread(thread.id))) throw new ShareLinkNotFoundError();
@@ -132,7 +158,9 @@ export class DocumentReviewService {
     if(thread.status!=="OPEN") fail("REVIEW_THREAD_CLOSED","Reopen the discussion before replying.");
     if(await r.reviewComments.countByThread(thread.id)>REVIEW_LIMITS.replies) fail("CAPACITY_EXCEEDED","The discussion reply limit was reached.");
     await this.quota(r,caller.identity.id,s.document.id);
-    const comment=this.comment(thread.id,caller.identity.id,body,key,requestHash);await r.reviewComments.insert(comment);await this.charge(r,caller.identity.id,s.document.id);return projectReviewComment(comment,caller.identity.id);
+    const comment=this.comment(thread.id,caller.identity.id,body,key,requestHash);await r.reviewComments.insert(comment);await this.charge(r,caller.identity.id,s.document.id);
+    if(originShareLinkId!==null) await r.shareCommentEvents.insert({id:uuidv7(),workspaceId:s.workspace.id,documentId:s.document.id,threadId:thread.id,commentId:comment.id,originShareLinkId,createdByUserId:caller.identity.id,mentionedUserId:null,createdAt:this.clock(),readAt:null});
+    return projectReviewComment(comment,caller.identity.id);
   }
   async editForLink(caller:CallerContext,input:{token:string;threadId:string;commentId:string;body:string}) { return this.uow.run(async r=>this.edit(r,caller,await this.linkScope(r,input.token),input)); }
   async editForOwner(caller:CallerContext,input:{documentId:string;threadId:string;commentId:string;body:string}) { return this.uow.run(async r=>this.edit(r,caller,await this.ownerScope(r,caller,input.documentId),input)); }
