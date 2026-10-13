@@ -188,7 +188,7 @@ Use the **next available migration version**, not a hard-coded number without ch
 - visibility ENUM('VISIBLE','HIDDEN') NOT NULL DEFAULT 'VISIBLE'
 - hidden_by UUID FK users NULL; hidden_at DATETIME(6) NULL; hidden_reason VARCHAR(200) NULL
 - created_at DATETIME(6) NOT NULL
-- edited_at DATETIME(6) NULL; deleted_at DATETIME(6) NULL (migration 020; set by the author only, §3.3)
+- edited_at DATETIME(6) NULL; deleted_at DATETIME(6) NULL (migration 021; set by the author only, §3.3)
 - idempotency_key VARCHAR(64) NOT NULL; UNIQUE(thread_id, author_user_id, idempotency_key)
 - request_hash CHAR(64) NOT NULL (SHA-256 of canonical validated reply payload)
 - index (thread_id, created_at, id)

@@ -88,9 +88,12 @@ test("a discussion that awaits the owner is open beside its passage when the doc
   // Beside the article, not under it; and level with the passage.
   const article = page.locator("[data-review-document]");
   const passage = article.locator("p").nth(7);
-  const [articleBox, railBox] = [(await article.boundingBox())!, (await rail.boundingBox())!];
-  expect(railBox.x).toBeGreaterThanOrEqual(articleBox.x + articleBox.width - 1);
-  expect(railBox.width).toBe(320);
+  // The column's margin slides for 120ms as the rail opens, so measure once it has come to rest.
+  await expect.poll(async () => {
+    const [articleBox, railBox] = [(await article.boundingBox())!, (await rail.boundingBox())!];
+    return railBox.x - (articleBox.x + articleBox.width);
+  }).toBeGreaterThanOrEqual(-1);
+  expect((await rail.boundingBox())!.width).toBe(320);
   const textTop = (element: Element) => { const range = document.createRange(); range.setStart(element.firstChild!, 0); range.setEnd(element.firstChild!, 11); return range.getBoundingClientRect().top; };
   await expect.poll(async () => Math.abs((await card.boundingBox())!.y - await passage.evaluate(textTop))).toBeLessThan(2);
   // The outline gives up its place and is still there, above the article.
