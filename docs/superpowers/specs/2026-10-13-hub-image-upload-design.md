@@ -6,7 +6,7 @@
 | Type | Design specification |
 | Why | A page written in the Hub cannot hold an image. The editor accepts no file, and `![alt](path)` there points at nothing. Folder Sync images (`2026-10-08-folder-sync-images-design.md`) solved this only for content that arrives from a folder. Pasting a screenshot into a note is the most common way anyone adds a picture, and it does nothing. |
 | Related | `2026-10-08-folder-sync-images-design.md` (store, serving, shared pages), `2026-09-28-document-composer-design.md` (editor, image policy §198), `2026-09-29-personal-daily-driver-design.md` §1.1 (the editor writes back what it read), `CLAUDE.md` (source ownership; share-link grant) |
-| Status | **Proposed. Nothing here is implemented.** §10 lists the decisions to confirm. Builds on PR #151; it cannot land before it. |
+| Status | **Approved 2026-10-13, not implemented.** The five decisions in §10 were confirmed as written. Plan: `docs/superpowers/plans/2026-10-13-hub-image-upload.md`. Builds on PR #151; it cannot land before it. |
 
 ## 1. What it delivers
 
@@ -31,8 +31,11 @@ An uploaded image belongs to the **source**, not to a document, and is named by 
 ## 4. Upload
 
 ```text
-POST /api/sources/:sourceId/images      body: the image bytes      → 201 { "src": "/images/<sha256>.<ext>" }
+POST /api/sources/:sourceId/images           body: the image bytes   → 201 { "src": "/images/<sha256>.<ext>", "sourceId": "…" }
+POST /api/workspaces/:workspaceId/images     the same, for a note that is not saved yet
 ```
+
+A new note's source is chosen by the server when it is first saved: the workspace's default Hub source, created on first use. The second route does the same on first upload, with the authorization the first save would need, and returns the source so the editor can show the image. The new-note page passes that source's ID when it already exists (a lookup, never a creation), so a draft reopened later still shows its images.
 
 - **Who.** The caller must be allowed to write a document in that source: source `ACTIVE` and `HUB_MANAGED`, workspace writable, the same checks `createDocument` makes. A source-managed source answers as it does for an edit (`SourceReadOnlyError`).
 - **What.** `png`, `jpeg`, `gif`, `webp`, `avif`, decided by the file's leading bytes. The browser's `Content-Type` and any file name are ignored. SVG is not accepted here (§10).
@@ -93,7 +96,7 @@ Two additions to the rendered editor, and one to the Markdown source view.
 | Shared page: an uploaded image the current revision references is served; one uploaded to the same source but not referenced is the same 404 | integration |
 | Paste a PNG into a new note → it appears → save → reader shows it → share → the signed-out page shows it; with the store down, the paste reports the outage and the note still saves | e2e |
 
-## 10. Decisions to confirm
+## 10. Decisions (confirmed 2026-10-13)
 
 1. **No SVG upload.** SVG is text, so its type cannot be told from leading bytes the way the others can, and an author-supplied SVG is the riskiest image type. Synced folders keep accepting SVG. Say so if diagrams pasted as SVG matter.
 2. **Uploaded images are never deleted in this delivery** (§8).
