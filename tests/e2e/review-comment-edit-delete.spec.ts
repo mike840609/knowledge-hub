@@ -42,7 +42,9 @@ test("a reader edits and then deletes their own comment through the link; nobody
 
   // Deleted with nothing under it, the discussion goes with it — for the reader, the owner, and the link.
   await page.goto(`${viewer}${doc.links[0].path}`); await openReviewDiscussions(page);
-  await expect(thread.getByText("Second wording", { exact: true })).toBeVisible();
+  // A preview offers its one button and nothing else; the comment's own menu comes with the open card.
+  await expect(thread.getByRole("button", { name: "Comment options", exact: true })).toHaveCount(0);
+  await thread.getByText("Second wording", { exact: true }).click();
   await thread.getByRole("button", { name: "Comment options", exact: true }).click();
   await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
   await page.getByRole("button", { name: "Delete comment", exact: true }).click();

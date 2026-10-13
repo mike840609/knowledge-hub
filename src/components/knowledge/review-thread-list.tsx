@@ -120,7 +120,8 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
         }}>{thread.currentAnchor.anchor.exact}</button></blockquote>}
         {owner && thread.currentAnchor.match === "OUTDATED" && <blockquote className="mb-3 border-l border-kh-border pl-3 text-body-sm text-kh-text-muted">Original passage (owner only): {owner.originalAnchor.exact}</blockquote>}
         <ol className="space-y-4">{(compact ? thread.comments.slice(0, 1) : thread.comments).map((comment, index) => {
-          const mine = !!author && comment.own && !comment.deleted;
+          // A preview keeps its one button: what an author may do to their comment waits for the open card.
+          const mine = !!author && comment.own && !comment.deleted && !(compact && !moderate);
           // An edit is a write, held to what a reply is; a retraction is not.
           const canEdit = mine && canReply && comment.visibility !== "HIDDEN";
           const hides = !!moderate && (index === 0 || !comment.deleted);
