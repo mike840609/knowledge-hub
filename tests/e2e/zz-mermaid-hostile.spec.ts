@@ -25,6 +25,8 @@ const MATH = `$$x^2$$<video src=${ELSEWHERE}/m.mp4 preload=auto></video><img src
 const MATH_SEQUENCE = `sequenceDiagram\n  Alice->>Bob: ${MATH}`;
 const MATH_CLASS = `classDiagram\n  class A["${MATH}"]`;
 const IMAGE_SHAPE = `flowchart LR\n  A@{ img: "${ELSEWHERE}/shape.png", label: "x", w: 60, h: 60 }`;
+/** An author's `style` line is written into the page as CSS while the drawing is laid out; its `url()` is an image fetch. */
+const STYLE_URL = `classDiagram\n  class A\n  style A background:url(${ELSEWHERE}/style.png)`;
 const THEME_CSS = `%%{init: {"themeCSS": ".node rect{background-image:url(${ELSEWHERE}/themecss.png)}"}}%%\nflowchart LR\n  A-->B`;
 const FONT_FAMILY = `%%{init: {"fontFamily": "x; .node rect{background-image:url(${ELSEWHERE}/font.png)}"}}%%\nflowchart LR\n  A-->B`;
 
@@ -35,7 +37,7 @@ const NOT_DRAWN_HERE = [ARCHITECTURE, EVENT_MODEL];
 const REFUSED_AFTER = [MATH_SEQUENCE, MATH_CLASS];
 /** Its own config is not taken, so it is the plain flowchart beneath. */
 const CONFIG_IGNORED = [THEME_CSS, FONT_FAMILY];
-const CASES = [...PICTURES, ...NOT_DRAWN_HERE, ...REFUSED_AFTER, IMAGE_SHAPE, ...CONFIG_IGNORED];
+const CASES = [...PICTURES, ...NOT_DRAWN_HERE, ...REFUSED_AFTER, IMAGE_SHAPE, STYLE_URL, ...CONFIG_IGNORED];
 const MARKDOWN = ["A first paragraph.", "", ...CASES.flatMap((source) => [fence(source), ""]), "A last paragraph."].join("\n");
 const UNSUPPORTED = "This kind of diagram cannot be drawn here yet.";
 
@@ -114,7 +116,7 @@ test("no diagram puts an element, a script, a request or a style of its own onto
   }
   await expect(at(IMAGE_SHAPE).locator("[data-diagram-reason]")).toHaveText(/\S/);
   await expect(at(IMAGE_SHAPE).locator("details")).toHaveAttribute("open", "");
-  for (const source of CONFIG_IGNORED) await expect(at(source).locator("img[data-diagram]")).toBeVisible();
+  for (const source of [STYLE_URL, ...CONFIG_IGNORED]) await expect(at(source).locator("img[data-diagram]")).toBeVisible();
 
   // Click where a link or a callback would be.
   for (const picture of await visitor.locator("img[data-diagram]").all()) await picture.click({ position: { x: 20, y: 20 }, force: true });
@@ -147,10 +149,11 @@ test("no diagram puts an element, a script, a request or a style of its own onto
   // While Mermaid laid them out: no element of the author's choosing was ever in the page.
   expect(page_.seen.elements).toEqual([]);
   // What the policy had to stop, and did (spec, "What B does not cover"): the flowchart shape that loads an image
-  // by its URL, and a URL in the style or font a diagram's own config asked for.
-  const refused = [`${ELSEWHERE}/shape.png`, `${ELSEWHERE}/themecss.png`, `${ELSEWHERE}/font.png`];
-  expect(Array.from(new Set(page_.seen.violations)).sort()).toEqual(refused.map((target) => `img-src ${target}`).sort());
-  expect(Array.from(tried).sort()).toEqual(refused.map((target) => `image ${target}`).sort());
+  // by its URL, and the `url()` in an author's style line. The style and the font a diagram's own config asked
+  // for were never taken, so their URLs were never tried.
+  const stopped = [`${ELSEWHERE}/shape.png`, `${ELSEWHERE}/style.png`];
+  expect(Array.from(new Set(page_.seen.violations)).sort()).toEqual(stopped.map((target) => `img-src ${target}`));
+  expect(Array.from(tried).sort()).toEqual(stopped.map((target) => `image ${target}`));
   expect(page_.figuresAsBuilt).toBe(true);
   expect(page_.strays).toBe(0);
   expect(new Set(page_.imageSources)).toEqual(new Set(["blob:"]));
