@@ -9,6 +9,8 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { ReviewFilterMenu, ReviewThreadList, reviewRequest, type ReviewFilter } from "./review-thread-list";
 import { ReviewComposer, useReviewSelection } from "./review-composer";
 import { ReviewPanelShell } from "./review-panel-shell";
+import { useReviewToggleKey } from "./review-entry";
+import { REVIEW_TOGGLE_SHORTCUT } from "@/components/actions/action-registry";
 import { focusReviewAnchor } from "./review-selection";
 import { ReviewPassageMarkers } from "./review-passage-markers";
 import { reviewRailInline, useReviewRailInline } from "./review-rail-mode";
@@ -30,6 +32,8 @@ export function SharedReviewPanel({ token, revisionId, markdown, children }: { t
       if (reviewRailInline()) entryRef.current?.focus({ preventScroll: true });
     }
   }, []);
+  const toggle = useCallback(() => changeOpen(!open), [changeOpen, open]);
+  useReviewToggleKey(toggle);
   const revisionChanged = !!result && result.revisionId !== revisionId;
   const canComment = !!result?.writesEnabled && !revisionChanged;
   useReviewHighlights(markdown, revisionChanged ? undefined : result?.threads, activeThreadId);
@@ -50,7 +54,7 @@ export function SharedReviewPanel({ token, revisionId, markdown, children }: { t
       {/* Said where the button would have been: a selection that cannot take a comment, and why. */}
       {canComment && !selection.ready && selection.hint && <p role="status" className="min-w-0 text-right text-body-sm text-kh-text-muted">{selection.hint}</p>}
       {!open && selection.ready && canComment && <Button type="button" variant="soft" aria-label="Comment on selection" onPointerDown={event => event.preventDefault()} onClick={() => { selection.capture(); changeOpen(true); }}><MessageSquarePlus className="size-4" aria-hidden="true" />Comment</Button>}
-      <Button ref={entryRef} type="button" variant="ghost" aria-label={`${open ? "Hide discussions" : "Open discussions"}${result ? `, ${result.threads.length} comments` : ""}`} aria-expanded={open} aria-controls="shared-document-discussions" onPointerDown={event => event.preventDefault()} onClick={() => changeOpen(!open)}>
+      <Button ref={entryRef} type="button" variant="ghost" aria-label={`${open ? "Hide discussions" : "Open discussions"}${result ? `, ${result.threads.length} comments` : ""}`} aria-expanded={open} aria-keyshortcuts={REVIEW_TOGGLE_SHORTCUT} aria-controls="shared-document-discussions" onPointerDown={event => event.preventDefault()} onClick={toggle}>
         <MessageSquare className="size-4" aria-hidden="true" />Comments{result && result.threads.length > 0 ? ` (${result.threads.length})` : ""}
       </Button>
     </div>

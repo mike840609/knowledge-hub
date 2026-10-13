@@ -130,6 +130,14 @@ export type ActionEffect =
 export const NAV_TOGGLE_SHORTCUT = "Meta+\\ Control+\\";
 
 /**
+ * Open or close the comments of the document being read. Bound by the two review panels (the owner's
+ * and the shared page's, which has no palette), so it is a key here and not an action; the buttons
+ * that do the same thing take their `aria-keyshortcuts` and tooltip from this. `D` for discussions:
+ * `C` is Create document and `M` is Move.
+ */
+export const REVIEW_TOGGLE_SHORTCUT = "D";
+
+/**
  * The key each row action takes (row-keyboard-actions spec §4.2). An action reads its `shortcut`
  * from here, so binding, `aria-keyshortcuts` and the hint on screen still have one source. It is
  * data rather than a field on the built action because an action the caller may not run is not

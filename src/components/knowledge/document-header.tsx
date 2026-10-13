@@ -11,6 +11,7 @@ import { formatDateTime, formatRelativeTime } from "@/lib/format-date";
 import { useDisplayTimeZone } from "@/components/ui/timestamp";
 import { DocumentBreadcrumb, type DocumentBreadcrumbSegment } from "./document-breadcrumb";
 import { useReviewEntry } from "./review-entry";
+import { REVIEW_TOGGLE_SHORTCUT } from "@/components/actions/action-registry";
 
 export function DocumentHeader({
   breadcrumb,
@@ -121,12 +122,13 @@ export function DocumentHeader({
             </Tooltip>
           ) : null}
           {review?.entry && (review.entry.count > 0 || review.entry.open) ? (
-            <Tooltip label={review.entry.open ? "Hide comments" : `Comments · ${review.entry.awaiting} open, ${review.entry.count} total`}>
+            <Tooltip label={review.entry.open ? "Hide comments" : `Comments · ${review.entry.awaiting} open, ${review.entry.count} total`} shortcut={REVIEW_TOGGLE_SHORTCUT}>
               <button
                 ref={review.buttonRef}
                 type="button"
                 aria-label={`${review.entry.open ? "Hide discussions" : "Open discussions"}, ${review.entry.count} comments, ${review.entry.awaiting} open`}
                 aria-expanded={review.entry.open}
+                aria-keyshortcuts={REVIEW_TOGGLE_SHORTCUT}
                 aria-controls="owner-document-discussions"
                 onPointerDown={(event) => event.preventDefault()}
                 onClick={review.entry.toggle}

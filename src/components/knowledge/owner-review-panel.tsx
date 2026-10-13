@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { readStored, removeStored, writeStored } from "@/components/shell/use-persisted-state";
 import { awaitingOwner, dismissedKey, opensOnArrival, parseDismissed } from "./review-auto-open";
-import { useReviewEntry } from "./review-entry";
+import { useReviewEntry, useReviewToggleKey } from "./review-entry";
 import { useReviewHighlights } from "./review-highlights";
 import { ReviewComposer, useReviewSelection } from "./review-composer";
 import { ReviewPanelShell } from "./review-panel-shell";
@@ -81,6 +81,9 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
     }
   }, [documentId, entryRef]);
   const count = result?.threads.length ?? 0;
+  // The key is there when the header's control is: with discussions to open, or open ones to close.
+  const toggle = useCallback(() => changeOpen(!open), [changeOpen, open]);
+  useReviewToggleKey(count > 0 || open ? toggle : undefined);
   const awaiting = result?.threads.filter(thread => thread.status === "OPEN").length ?? 0;
   // Only where there is something for the header to offer: discussions to open, a selection to
   // comment on, or a word on why it cannot be. On a document with none of them this would be a
@@ -89,8 +92,8 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
   const startHere = canComment && ready && !open;
   const said = canComment && !ready ? hint : undefined;
   useEffect(() => {
-    publish?.(count > 0 || open || startHere || said ? { count, awaiting, open, toggle: () => changeOpen(!open), comment: startHere ? () => { capture(); changeOpen(true); } : undefined, hint: said } : null);
-  }, [publish, count, awaiting, open, changeOpen, startHere, said, capture]);
+    publish?.(count > 0 || open || startHere || said ? { count, awaiting, open, toggle, comment: startHere ? () => { capture(); changeOpen(true); } : undefined, hint: said } : null);
+  }, [publish, count, awaiting, open, toggle, changeOpen, startHere, said, capture]);
   useEffect(() => () => publish?.(null), [publish]);
   const refresh = <Tooltip label="Refresh comments"><Button type="button" variant="ghost" icon aria-label="Refresh comments" onClick={() => void load()}><RefreshCw className="size-4" aria-hidden="true" /></Button></Tooltip>;
   return <>
