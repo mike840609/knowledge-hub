@@ -43,7 +43,9 @@ function sizeOf(svg: string): { width: number; height: number } | null {
 /**
  * Draws the page's diagrams one at a time, in the order they ask, and keeps the URL each one is
  * shown from. The SVG Mermaid returns goes into `toUrl` and nowhere else: it is never parsed by
- * the page. Everything it declines is an outcome with a reason, never a throw.
+ * the page. Everything it declines is an outcome with a reason, never a throw. Only the newest
+ * request for a block is drawn: an older one that has not begun is dropped, and one under way
+ * makes no URL, so the picture a block shows lasts until its replacement exists.
  */
 export function createDiagramQueue(deps: DiagramDeps) {
   let engine: Promise<DiagramEngine> | undefined;
@@ -51,6 +53,7 @@ export function createDiagramQueue(deps: DiagramDeps) {
   let serial = 0;
   const urls = new Map<object, string>();
   const gone = new WeakSet<object>();
+  const newest = new WeakMap<object, number>();
 
   function release(key: object) {
     const url = urls.get(key);
@@ -84,11 +87,15 @@ export function createDiagramQueue(deps: DiagramDeps) {
     return { svg: result.svg, type: result.diagramType, ...size };
   }
 
-  async function one(key: object, source: string): Promise<DiagramOutcome> {
+  async function one(key: object, request: number, source: string): Promise<DiagramOutcome> {
+    // Nobody is waiting for the drawing of a block that went or has been asked for again: its
+    // URL, if it has one, is for whoever asked last (or `forget` has given it back).
+    const wanted = () => newest.get(key) === request && !gone.has(key);
+    if (!wanted()) return { reason: DIAGRAM_REASONS.unsupported };
     const result = await render(source);
+    if (!wanted()) return { reason: DIAGRAM_REASONS.unsupported };
     release(key);
     if ("reason" in result) return result;
-    if (gone.has(key)) return { reason: DIAGRAM_REASONS.unsupported };
     let url: string;
     try {
       url = deps.toUrl(result.svg);
@@ -103,9 +110,11 @@ export function createDiagramQueue(deps: DiagramDeps) {
   return {
     draw(key: object, index: number, source: string): Promise<DiagramOutcome> {
       gone.delete(key);
+      const request = (newest.get(key) ?? 0) + 1;
+      newest.set(key, request);
       if (index >= MAX_DIAGRAMS) return Promise.resolve({ reason: DIAGRAM_REASONS.many });
       if (source.length > MAX_DIAGRAM_CHARS) return Promise.resolve({ reason: DIAGRAM_REASONS.long });
-      const job = tail.then(() => one(key, source));
+      const job = tail.then(() => one(key, request, source));
       // `one` does not reject; pause failures are caught so they do not break the queue.
       tail = job.then(() => deps.pause()).catch(() => {});
       return job;

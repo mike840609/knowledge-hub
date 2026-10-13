@@ -210,3 +210,127 @@ describe("the URLs it makes", () => {
     expect(log.filter((line) => line.startsWith("revoke"))).toEqual(["revoke blob:1"]);
   });
 });
+
+/** A render that holds `slow` open until the test lets it finish; `started` settles once Mermaid has been asked for it. */
+function gated(slow: string) {
+  let open!: () => void, begin!: () => void;
+  const opened = new Promise<void>((resolve) => { open = resolve; });
+  const started = new Promise<void>((resolve) => { begin = resolve; });
+  const render: DiagramEngine["render"] = async (_id, source) => {
+    if (source === slow) { begin(); await opened; }
+    return { svg: svg(), diagramType: "pie" };
+  };
+  return { render, started, open };
+}
+
+describe("a drawing nobody is waiting for is not made", () => {
+  it("the same block asked twice before the first is drawn: Mermaid is asked once, for the later; the earlier still answers", async () => {
+    const { queue, log } = harness();
+    const block = {};
+    const [earlier, later] = await Promise.all([queue.draw(block, 0, "old"), queue.draw(block, 0, "new")]);
+    expect(log.filter((line) => line.startsWith("render"))).toEqual(["render new"]);
+    expect(later).toHaveProperty("drawn");
+    expect(earlier).toEqual({ reason: DIAGRAM_REASONS.unsupported });
+  });
+
+  it("the same block asked three times in a row: Mermaid is asked once", async () => {
+    const { queue, log } = harness();
+    const block = {};
+    const [first, second, third] = await Promise.all([queue.draw(block, 0, "a"), queue.draw(block, 0, "b"), queue.draw(block, 0, "c")]);
+    expect(log.filter((line) => line.startsWith("render"))).toEqual(["render c"]);
+    expect([first, second]).toEqual([{ reason: DIAGRAM_REASONS.unsupported }, { reason: DIAGRAM_REASONS.unsupported }]);
+    expect(third).toHaveProperty("drawn");
+  });
+
+  it("the block already shows a picture: a request that is not drawn leaves it be, and the one that replaces it gives it back", async () => {
+    const { queue, log } = harness();
+    const block = {};
+    expect(await queue.draw(block, 0, "a")).toHaveProperty("drawn");
+    const [superseded, replacing] = await Promise.all([queue.draw(block, 0, "a"), queue.draw(block, 0, "a")]);
+    expect(superseded).toHaveProperty("reason");
+    expect(replacing).toHaveProperty("drawn", expect.objectContaining({ url: "blob:2" }));
+    expect(log.filter((line) => /^(url|revoke)/.test(line)).map((line) => line.split(" ").slice(0, 2).join(" "))).toEqual(["url blob:1", "revoke blob:1", "url blob:2"]);
+  });
+
+  it("the picture a block shows is not given back while its replacement is still being made", async () => {
+    const gate = gated("slow");
+    const { queue, log } = harness(gate.render);
+    const block = {};
+    expect(await queue.draw(block, 0, "fast")).toHaveProperty("drawn");
+    const replacing = queue.draw(block, 0, "slow");
+    await gate.started;
+    expect(log.filter((line) => line.startsWith("revoke"))).toEqual([]);
+    gate.open();
+    expect(await replacing).toHaveProperty("drawn");
+    expect(log.filter((line) => line.startsWith("revoke"))).toEqual(["revoke blob:1"]);
+  });
+
+  it("a block that went while it waited behind another: Mermaid is never asked for it", async () => {
+    const gate = gated("first");
+    const { queue, log } = harness(gate.render);
+    const first = queue.draw({}, 0, "first");
+    const gone = {};
+    const waiting = queue.draw(gone, 1, "second");
+    await gate.started;
+    queue.forget(gone);
+    gate.open();
+    expect(await first).toHaveProperty("drawn");
+    expect(await waiting).toEqual({ reason: DIAGRAM_REASONS.unsupported });
+    expect(log.filter((line) => line.startsWith("render"))).toEqual(["render first"]);
+  });
+
+  it("a block asked again while its own drawing is under way: the first makes no URL, the second is drawn, and one URL is made in all", async () => {
+    const gate = gated("first");
+    const { queue, log } = harness(gate.render);
+    const block = {};
+    const earlier = queue.draw(block, 0, "first");
+    await gate.started;
+    const later = queue.draw(block, 0, "second");
+    gate.open();
+    expect(await earlier).toEqual({ reason: DIAGRAM_REASONS.unsupported });
+    expect(await later).toHaveProperty("drawn");
+    expect(log.filter((line) => line.startsWith("url"))).toHaveLength(1);
+    expect(log.filter((line) => line.startsWith("revoke"))).toEqual([]);
+  });
+
+  it("two different blocks asked back to back are both drawn: superseding is per block", async () => {
+    const { queue, log } = harness();
+    const [a, b] = await Promise.all([queue.draw({}, 0, "a"), queue.draw({}, 1, "b")]);
+    expect(a).toHaveProperty("drawn");
+    expect(b).toHaveProperty("drawn");
+    expect(log.filter((line) => line.startsWith("render"))).toEqual(["render a", "render b"]);
+  });
+
+  it("a block drawn, and then asked again once that is done: drawn again, not superseded by its own finished request", async () => {
+    const { queue, log } = harness();
+    const block = {};
+    expect(await queue.draw(block, 0, "a")).toHaveProperty("drawn");
+    expect(await queue.draw(block, 0, "a")).toHaveProperty("drawn");
+    expect(log.filter((line) => line.startsWith("render"))).toEqual(["render a", "render a"]);
+  });
+
+  it("a block that went and came back before it was drawn (strict mode): Mermaid is asked once", async () => {
+    const { queue, log } = harness();
+    const block = {};
+    const first = queue.draw(block, 0, "a");
+    queue.forget(block);
+    const second = queue.draw(block, 0, "a");
+    expect(await first).toHaveProperty("reason");
+    expect(await second).toHaveProperty("drawn");
+    expect(log.filter((line) => line.startsWith("render"))).toEqual(["render a"]);
+  });
+
+  it("a block that went while its drawing was under way: no URL is made, and the one it had was given back when it went", async () => {
+    const gate = gated("slow");
+    const { queue, log } = harness(gate.render);
+    const block = {};
+    await queue.draw(block, 0, "fast");
+    const under = queue.draw(block, 0, "slow");
+    await gate.started;
+    queue.forget(block);
+    gate.open();
+    expect(await under).toHaveProperty("reason");
+    expect(log.filter((line) => line.startsWith("url"))).toEqual([expect.stringMatching(/^url blob:1 /)]);
+    expect(log.filter((line) => line.startsWith("revoke"))).toEqual(["revoke blob:1"]);
+  });
+});
