@@ -1,0 +1,102 @@
+# Images in Hub pages: paste, drop, and keep
+
+| Item | Content |
+| --- | --- |
+| Date | 2026-10-13 |
+| Type | Design specification |
+| Why | A page written in the Hub cannot hold an image. The editor accepts no file, and `![alt](path)` there points at nothing. Folder Sync images (`2026-10-08-folder-sync-images-design.md`) solved this only for content that arrives from a folder. Pasting a screenshot into a note is the most common way anyone adds a picture, and it does nothing. |
+| Related | `2026-10-08-folder-sync-images-design.md` (store, serving, shared pages), `2026-09-28-document-composer-design.md` (editor, image policy §198), `2026-09-29-personal-daily-driver-design.md` §1.1 (the editor writes back what it read), `CLAUDE.md` (source ownership; share-link grant) |
+| Status | **Proposed. Nothing here is implemented.** §10 lists the decisions to confirm. Builds on PR #151; it cannot land before it. |
+
+## 1. What it delivers
+
+1. In the editor of a Hub-managed page, **pasting or dropping an image** uploads it and puts it in the page.
+2. The image shows in the editor, in the reader, in every past revision that used it, and on a shared page.
+3. Synced (source-managed) pages are unchanged: they stay read-only and their images still come from the folder.
+4. With no image store configured, or with the store down, the editor behaves as today and says why the image was not added.
+
+## 2. Bedrock constraints
+
+- **A new note has no document yet.** The composer keeps an unsaved note as the draft `draft:new`. An image pasted there needs an owner that exists before the document does.
+- **A Hub page has no source path.** `findStoredImage` resolves an image against the document's entry in `source_entries`; Hub documents have none.
+- **The editor must write back what it read.** Markdown is the stored form. Anything the editor shows differently from what it stores must not leak into the Markdown, or a page loses content on its next save.
+- **Revisions are immutable and must stay readable.** Unlike a synced folder, nothing outside the Hub holds an older copy of a Hub page's image.
+- **The image policy does not move.** Only same-origin image URLs load (`markdown-image-policy.ts`, `img-src 'self'`), in the reader and in the editor.
+- **The store wants the hash first.** `BlobStore.put` takes the SHA-256 before the bytes.
+
+## 3. The design in one paragraph
+
+An uploaded image belongs to the **source**, not to a document, and is named by its content: it is stored as the asset `images/<sha256>.<ext>` of the page's Hub-managed source, and the Markdown refers to it as `![alt](/images/<sha256>.<ext>)`. A source exists before any document in it, so drafts work. The path never changes meaning, so every revision keeps showing the image it was written with. And because it is an ordinary stored asset addressed by an ordinary path, the reader endpoint, the shared-page rule ("only images the current revision references") and the blob store from Folder Sync images all apply as they are, once a Hub document can be resolved without a source entry.
+
+## 4. Upload
+
+```text
+POST /api/sources/:sourceId/images      body: the image bytes      → 201 { "src": "/images/<sha256>.<ext>" }
+```
+
+- **Who.** The caller must be allowed to write a document in that source: source `ACTIVE` and `HUB_MANAGED`, workspace writable, the same checks `createDocument` makes. A source-managed source answers as it does for an edit (`SourceReadOnlyError`).
+- **What.** `png`, `jpeg`, `gif`, `webp`, `avif`, decided by the file's leading bytes. The browser's `Content-Type` and any file name are ignored. SVG is not accepted here (§10).
+- **How much.** At most 10 MiB, checked against `Content-Length` before reading and against the bytes read. Larger is 413.
+- **How.** The body is read into memory (bounded by the limit), hashed, its type detected, and passed to `BlobStore.put` with its own hash. Then one row is upserted in `knowledge_assets`: `source_path = images/<sha256>.<ext>`, `content_hash`, `metadata = { size, stored: true }`. Uploading the same image again changes nothing and returns the same `src`.
+- **When there is no store.** 404 with `IMAGE_STORAGE_NOT_CONFIGURED`; the editor is told at render time and does not intercept paste or drop at all.
+- **When the store is down.** The existing 503 `IMAGE_STORAGE_UNAVAILABLE`. The draft is untouched.
+
+Nothing is written to a document by an upload. The image enters a page only when the author saves Markdown that refers to it.
+
+## 5. Reading
+
+- **`findStoredImage` learns Hub documents.** With no source entry, the document is treated as sitting at the root of its own source, so `/images/<sha>.<ext>` resolves to the asset `images/<sha>.<ext>`. Everything after that is unchanged: the reader's `GET /api/documents/:id/asset`, its authorization, the response headers, and `readSharedImage` with its "the current revision draws it" test.
+- **The editor needs one more route**, because a draft has no document to ask through:
+
+  ```text
+  GET /api/sources/:sourceId/asset?src=<as written>
+  ```
+
+  Authorized by the right to read the source's workspace, resolved from the source root, answered by the same `imageResponse`. It serves stored images only, like the document route.
+
+- **History is right.** An old revision's Markdown names the hash of the image it was written with, and that asset is never replaced. This is better than synced folders, where history shows the folder's current file.
+
+## 6. The editor
+
+Two additions to the rendered editor, and one to the Markdown source view.
+
+- **Showing.** The image node gains a display mapping: where it writes `<img src>`, a relative source is sent to the source route above. The node's `src` attribute, which is what gets serialized, is untouched, and the real source keeps travelling in `data-kh-src` as it does now for copy and paste. So `![a](/images/x.png)` is read, shown and written back as `![a](/images/x.png)`.
+- **Adding.** A paste or drop that carries image files is taken by the editor instead of ProseMirror's default. Each file is uploaded; on success an image node with the returned `src` is inserted at the drop point or the selection. Its `alt` is the file's name without extension, or "Pasted image" for a clipboard image with no name. A paste or drop with no image files is not touched.
+- **Source view.** The same paste or drop into the Markdown textarea inserts `![alt](src)` at the caret.
+- **Feedback.** While an upload runs, a status line under the editor (`aria-live="polite"`) says "Uploading image…"; saving waits for it. A failure says why (too large, not an image, storage unavailable, no permission) and inserts nothing.
+- **Not in the first delivery.** A placeholder in the text while uploading, resizing, captions, an image button in the toolbar, and editing `alt` in the rendered view (it can be edited in the source view).
+
+## 7. What does not change
+
+- **Share links.** The grant is still the document's current revision and the images it references. No new caller-less path; `tests/unit/share-link-single-exception.test.ts` should pass unedited.
+- **Synced pages.** No upload: they are not editable in the Hub.
+- **Module boundaries.** The upload is a Sources operation (assets and the blob store live there). Knowledge reaches it through nothing new: the editor calls the route, and the Markdown it saves is plain Markdown.
+- **Export.** The ZIP still carries no attachment bytes; a page's `/images/…` links will not resolve offline. Stated in the export's existing limitation.
+
+## 8. Limits accepted for now
+
+- **Uploaded images are never deleted.** An image pasted and then removed, or uploaded into a draft that is discarded, stays in the store. Finding the unreferenced ones means searching every revision and draft for the path; nothing does that yet. `blobs gc` leaves them alone because their asset rows mark them stored. Growth is bounded only by the 10 MiB per-image limit.
+- **No per-user or per-workspace quota.** A member who can write can fill the store.
+- **A page's images live in its source.** A page cannot be moved to another source (already an error), so this does not bite today.
+
+## 9. Tests
+
+| Requirement | Layer |
+| --- | --- |
+| Type detection from leading bytes: each accepted type; SVG, PDF, HTML, empty and truncated input refused; `Content-Type` ignored | unit |
+| The rendered editor reads `![a](/images/x.png)`, shows it through the source route, and writes it back unchanged (the round-trip rule; runs the rendered editor, not the source view) | unit, with `tests/fixtures/link-markdown.ts`-style cases |
+| A pasted image and a dropped image each insert exactly `![alt](/images/<sha>.<ext>)`; a paste without files is left to the editor | unit (rendered editor) |
+| Upload: a writer gets a `src`; the same bytes twice give the same `src` and one asset row; a reader without write, a source-managed source, an archived source, another user's workspace are refused as a document write is | integration |
+| Upload: over the limit is 413 before the body is read; not-an-image is 400; no store is 404; store down is 503 | integration |
+| A Hub document's image resolves through `/api/documents/:id/asset`; a revision saved before the image was replaced in the text still shows the old one | integration |
+| Source route: member reads, non-member is refused as for the source, unknown path is 404 | integration |
+| Shared page: an uploaded image the current revision references is served; one uploaded to the same source but not referenced is the same 404 | integration |
+| Paste a PNG into a new note → it appears → save → reader shows it → share → the signed-out page shows it; with the store down, the paste reports the outage and the note still saves | e2e |
+
+## 10. Decisions to confirm
+
+1. **No SVG upload.** SVG is text, so its type cannot be told from leading bytes the way the others can, and an author-supplied SVG is the riskiest image type. Synced folders keep accepting SVG. Say so if diagrams pasted as SVG matter.
+2. **Uploaded images are never deleted in this delivery** (§8).
+3. **10 MiB per image**, a constant, not a setting.
+4. **Both views**: the rendered editor and the Markdown source view accept paste and drop.
+5. **Stacked on PR #151.** This cannot merge before it.
