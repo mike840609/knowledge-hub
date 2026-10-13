@@ -23,8 +23,8 @@ async function createNote(page: Page, title: string, markdown: string) {
   const workspaceId = await mySpace(page);
   const response = await page.request.post(`/api/workspaces/${workspaceId}/documents`, { data: { title, markdown } });
   expect(response.ok()).toBe(true);
-  const created = (await response.json()) as { sourceId: string; documentId: string };
-  return { url: `/w/${workspaceId}/knowledge/${created.sourceId}/${created.documentId}`, documentId: created.documentId };
+  const created = (await response.json()) as { sourceId: string; documentId: string; revisionId: string };
+  return { url: `/w/${workspaceId}/knowledge/${created.sourceId}/${created.documentId}`, documentId: created.documentId, revisionId: created.revisionId };
 }
 
 const figures = (page: Page) => page.locator("article figure[data-mermaid]");
@@ -130,6 +130,33 @@ test.describe("mermaid in the reader", () => {
     const box = image(figure).locator("xpath=..");
     expect(await box.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  });
+
+  test("when the server sends other source into the open page, the diagram is drawn from it, not left as it was", async ({ page }) => {
+    const note = await createNote(page, unique("Diagram refreshed"), fence(FLOW));
+    await page.goto(note.url);
+    await settled(page);
+    const figure = figures(page).first();
+    await expect(image(figure)).toHaveAttribute("alt", /^Diagram \(flowchart/);
+    // Marks this page load: a refresh must keep it, a full load would drop it. (Choosing `?revision=N` would not
+    // do: Next keys the page by its search params, so that remounts the block and the stale one never exists.)
+    await page.evaluate(() => { (window as unknown as { khLoaded: boolean }).khLoaded = true; });
+
+    const update = await page.request.patch(`/api/documents/${note.documentId}`, {
+      data: { title: unique("Diagram refreshed"), markdown: fence(SEQUENCE), expectedCurrentRevisionId: note.revisionId },
+    });
+    expect(update.ok()).toBe(true);
+
+    // Any tree change ends in `router.refresh()`, which sends the open document again.
+    await page.getByRole("button", { name: "Create folder" }).first().click();
+    const dialog = page.getByRole("dialog", { name: "New folder" });
+    await dialog.getByLabel("Name").fill(unique("Refresh folder"));
+    await dialog.getByRole("button", { name: "Create folder" }).click();
+    await expect(dialog).toHaveCount(0, ROUND_TRIP);
+
+    await expect(figure.locator("code")).toContainText("sequenceDiagram", ROUND_TRIP);
+    await expect(image(figure)).toHaveAttribute("alt", /^Diagram \(sequence\)/, DRAWN);
+    expect(await page.evaluate(() => (window as unknown as { khLoaded?: boolean }).khLoaded)).toBe(true);
   });
 
   test("a document with a diagram, edited in the rendered editor and saved, keeps the fence as written and is still drawn", async ({ page }) => {
