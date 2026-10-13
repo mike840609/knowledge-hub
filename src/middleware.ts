@@ -20,6 +20,7 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   // Pages only. An API answer and a static file are not documents a policy governs; they keep the
-  // static policy `next.config.ts` sets on every path.
-  matcher: ["/((?!api/|_next/static|_next/image|icon.svg|icons/).*)"],
+  // static policy `next.config.ts` sets on every path. A shared page's image (`/s/:token/asset`) is
+  // bytes, not a page: it must keep the sandboxing policy set for it there, which this one would replace.
+  matcher: ["/((?!api/|_next/static|_next/image|icon.svg|icons/|s/[^/]+/asset).*)"],
 };
