@@ -7,9 +7,9 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "@playwright/test";
 
-// Copies of the three lists in mermaid-queue.ts: keep them equal.
+// Copies of the three lists in mermaid-queue.ts. tests/unit/mermaid-assumptions-lists.test.ts fails when they differ.
 const DRAWN_TYPES = ["flowchart-v2", "sequence", "classDiagram", "stateDiagram", "er", "gantt", "pie", "mindmap", "timeline", "quadrantChart", "gitGraph", "requirement", "c4", "sankey", "xychart", "block", "kanban", "packet", "radar", "treemap"];
-const SECURE = ["secure", "securityLevel", "startOnLoad", "maxTextSize", "suppressErrorRendering", "maxEdges", "htmlLabels", "dompurifyConfig"];
+const SECURE = ["secure", "securityLevel", "startOnLoad", "maxTextSize", "suppressErrorRendering", "maxEdges", "htmlLabels", "dompurifyConfig", "themeCSS", "fontFamily", "altFontFamily", "theme", "themeVariables", "layout"];
 const SANITIZER = { ALLOWED_TAGS: ["br"], ALLOWED_ATTR: [] };
 
 const DIST = path.join("node_modules", "mermaid", "dist");
@@ -138,12 +138,15 @@ const browser = await chromium.launch();
 const context = await browser.newContext();
 /** Every request that left for another origin, of any kind. There must be none. */
 const abroad = [];
+/** Every file of Mermaid's the page asked for, in order. */
+const served = [];
 await context.route("**/*", async (route) => {
   const url = new URL(route.request().url());
   if (url.origin !== ORIGIN) { abroad.push(`${route.request().resourceType()} ${url.href}`); return route.abort(); }
   const name = url.pathname.slice(1);
   if (name === "") return route.fulfill({ contentType: "text/html", headers: { "Content-Security-Policy": POLICY }, body: "<!doctype html><title>t</title><body></body>" });
   try {
+    served.push(name);
     await route.fulfill({ contentType: "text/javascript", body: await readFile(path.join(DIST, name)) });
   } catch {
     await route.fulfill({ status: 404, body: "" });
@@ -310,7 +313,57 @@ for (const [name, source] of Object.entries({
   if (laid.foreign.length > 0) fail(`${name}: replaced the sanitiser: ${laid.foreign.join(", ")}`);
 }
 
-// 4. A block Mermaid cannot parse must reject, and leave nothing in the page.
+// The style, font, theme and layout are ours too. Each of these, carried by the text, must leave the drawing
+// exactly as it is without it: the same string, nothing refused by the policy, and no further file fetched
+// (a layout engine would be one).
+const plain = "flowchart LR\n  A[Start] --> B{Choice}";
+const css = `.node rect{background-image:url(${ELSEWHERE}/themecss.png)}`;
+const OURS = {
+  theme: { theme: "dark" },
+  themeVariables: { themeVariables: { primaryColor: "#ff0000", lineColor: "#00ff00" } },
+  themeCSS: { themeCSS: css },
+  fontFamily: { fontFamily: `x; ${css}` },
+  altFontFamily: { altFontFamily: `x; ${css}` },
+  layout: { layout: "elk" },
+  // At a depth: `secure` is applied to every object in the config, not to its top alone.
+  nested: { flowchart: { themeCSS: css, fontFamily: `x; ${css}`, layout: "elk", theme: "dark" } },
+};
+const yaml = (value, depth = 1) => Object.entries(value).map(([key, each]) => `${"  ".repeat(depth)}${key}:${typeof each === "object" ? `\n${yaml(each, depth + 1)}` : ` ${JSON.stringify(each)}`}`).join("\n");
+const baseline = await lay(plain, "check-ours");
+if (baseline.threw || !baseline.loads) fail(`the plain flowchart was not drawn: ${baseline.threw}`);
+for (const [name, config] of Object.entries(OURS)) {
+  for (const [form, source] of [["directive", `%%{init: ${JSON.stringify(config)}}%%\n${plain}`], ["frontmatter", `---\nconfig:\n${yaml(config)}\n---\n${plain}`]]) {
+    const before = served.length;
+    const laid = await lay(source, "check-ours");
+    const fetched = served.slice(before);
+    report.carried[`${name} by ${form}`] = { changedTheDrawing: laid.svg !== baseline.svg, violations: laid.violations, fetched, threw: laid.threw };
+    if (laid.threw) fail(`${name} by ${form}: was not laid out, so it is no evidence: ${laid.threw}`);
+    if (laid.svg !== baseline.svg) fail(`${name} by ${form}: changed the drawing`);
+    if (laid.violations.length > 0) fail(`${name} by ${form}: the policy had to refuse something: ${laid.violations.join(", ")}`);
+    if (fetched.length > 0) fail(`${name} by ${form}: fetched ${fetched.join(", ")}`);
+  }
+}
+
+// 4. What only the image policy stops. These reach the page while a drawn type is laid out, and nothing before
+//    layout can tell them apart with certainty: the flowchart shape that loads an image by its URL, and a `url()`
+//    in an author's `style` or `classDef` line, which Mermaid writes into the page as CSS. The assumption is that
+//    each is an image fetch, so that `img-src` refuses it elsewhere; a fetch of any other kind fails the run.
+const IMAGE_POLICY = {
+  "flowchart image shape": `flowchart LR\n  A@{ img: "https:${ELSEWHERE}/shape.png", label: "x", w: 60, h: 60 }`,
+  "class style": `classDiagram\n  class A\n  style A background:url(https:${ELSEWHERE}/s.png),fill:url(https:${ELSEWHERE}/p.svg#a)`,
+  "state classDef and style": `stateDiagram-v2\n  [*] --> s1\n  classDef evil background:url(https:${ELSEWHERE}/c.png)\n  class s1 evil\n  style s1 background:url(https:${ELSEWHERE}/t.png)`,
+  "block style and classDef": `block-beta\n  a["A"] b\n  style a background:url(https:${ELSEWHERE}/s.png)\n  classDef evil background:url(https:${ELSEWHERE}/c.png)\n  class b evil`,
+};
+report.onlyTheImagePolicy = {};
+for (const [name, source] of Object.entries(IMAGE_POLICY)) {
+  const laid = await lay(source);
+  report.onlyTheImagePolicy[name] = { violations: laid.violations, threw: laid.threw };
+  if (laid.foreign.length > 0) fail(`${name}: ${laid.foreign.join(", ")}`);
+  if (laid.violations.length === 0) fail(`${name}: nothing was refused, so this sample no longer shows what the policy stops`);
+  for (const each of laid.violations) if (!each.startsWith(`img-src https:${ELSEWHERE}/`)) fail(`${name}: a fetch the image policy does not cover: ${each}`);
+}
+
+// 5. A block Mermaid cannot parse must reject, and leave nothing in the page.
 const bad = await lay("this is not a diagram");
 if (!bad.threw) fail("an unparseable block did not reject");
 if (bad.left !== 0) fail(`${bad.left} element(s) left in the page by an unparseable block`);

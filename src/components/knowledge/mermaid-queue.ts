@@ -175,10 +175,14 @@ function themeVariables() {
 /**
  * The keys a diagram's own text (a `%%{init}%%` directive, YAML frontmatter `config:`) may not set, at any depth.
  * The first six are Mermaid's defaults. `htmlLabels` is here because a directive could otherwise turn HTML labels
- * back on, and `dompurifyConfig` so that the sanitiser below stays ours.
- * scripts/test/mermaid-assumptions.mjs checks each in a browser with a copy of this list: keep them equal.
+ * back on, and `dompurifyConfig` so that the sanitiser below stays ours. The last six keep a diagram from choosing
+ * its own style, font, theme or layout engine: `themeCSS` and the two fonts are written into the `<style>` Mermaid
+ * puts in this page while it lays a drawing out, where a `url()` is fetched, and the theme is the reader's.
+ * Our own `initialize` is not subject to the list, so the theme below still follows the page.
+ * scripts/test/mermaid-assumptions.mjs checks each in a browser with a copy of this list, and
+ * tests/unit/mermaid-assumptions-lists.test.ts fails when the two differ.
  */
-const SECURE = ["secure", "securityLevel", "startOnLoad", "maxTextSize", "suppressErrorRendering", "maxEdges", "htmlLabels", "dompurifyConfig"];
+const SECURE = ["secure", "securityLevel", "startOnLoad", "maxTextSize", "suppressErrorRendering", "maxEdges", "htmlLabels", "dompurifyConfig", "themeCSS", "fontFamily", "altFontFamily", "theme", "themeVariables", "layout"];
 
 /**
  * What Mermaid's sanitiser leaves of the tags in a label: a line break, and no attribute. Its default lets
