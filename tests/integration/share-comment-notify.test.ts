@@ -35,6 +35,7 @@ describe("share-comment notify: link-origin comments notify the owner",()=>{
   const {notifications}=await f.service.listUnreadForOwner(f.caller);
   expect(notifications).toHaveLength(1);
   expect(notifications[0]).toMatchObject({documentId:f.documentId,threadId:t.id,documentTitle:"Review",authorName:"Reviewer",excerpt:"PRIVATE COMMENT"});
+  expect(notifications[0].sourceId).toBe(f.sourceId);
  });
  it("owner writes, idempotent replays, edits, retractions and resolutions insert nothing",async()=>{
   const f=await fixture();

@@ -23,3 +23,22 @@ test("a share-page comment notifies the owner, and opening the panel clears it",
   await openReviewDiscussions(page);
   await expect(page.getByText("1 new", { exact: true })).toHaveCount(0);
 });
+
+test("home lists the unread discussion and jumps to its thread; a bogus thread id is ignored", async ({ page, request }) => {
+  const doc = await createReviewDocument(request);
+  const owner = phase3Origin("reviewOwner"), viewer = phase3Origin("viewer");
+  const token = doc.links[0].path.split("/").pop();
+  const query = await (await request.post(`${viewer}/api/share-review/threads/query`, { headers: { Origin: viewer }, data: { token } })).json();
+  const created = await request.post(`${viewer}/api/share-review/threads`, { headers: { Origin: viewer }, data: { token, expectedRevisionId: query.revisionId, anchor: { schemaVersion: 1, blockPath: [0], blockKind: "paragraph", startUtf16: 2, endUtf16: 9, exact: "😀 bold", prefix: "A ", suffix: " passage to review." }, body: "Holder observation", idempotencyKey: crypto.randomUUID() } });
+  expect(created.status()).toBe(201);
+  const thread = await created.json();
+  await page.goto(`${owner}/w/${doc.workspaceId}/home`);
+  const row = page.getByRole("list", { name: "Unread discussions" }).getByRole("link").first();
+  await expect(row).toContainText("Holder observation");
+  await row.click();
+  await expect(page).toHaveURL(new RegExp(`thread=${thread.id}`));
+  await expect(page.getByRole("region", { name: "Discussion thread" }).getByText("Holder observation", { exact: true })).toBeVisible();
+  await page.goto(`${doc.href}?thread=bogus`);
+  await openReviewDiscussions(page);
+  await expect(page.locator("[data-review-document]")).toContainText("bold");
+});

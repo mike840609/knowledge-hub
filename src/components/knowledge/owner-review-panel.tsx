@@ -66,6 +66,10 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
     // otherwise crowd the ones that want an answer away from their passages. With nothing open it
     // starts on everything — an empty list would say there was nothing at all.
     setFilter(result.threads.some(thread => thread.status === "OPEN") ? "OPEN" : "ALL");
+    // A `?thread=` deep link (e.g. from the home discussions list) selects its
+    // discussion and opens the rail; an unknown id is ignored, never an error.
+    const deep = new URLSearchParams(window.location.search).get("thread");
+    if (deep && result.threads.some(thread => thread.id === deep)) { setActiveThreadId(deep); setOpen(true); }
     if (reviewRailInline() && opensOnArrival(result.threads, parseDismissed(readStored("local", dismissedKey(documentId))), result.callerUserId)) setOpen(true);
   }, [result, documentId]);
   useEffect(() => {

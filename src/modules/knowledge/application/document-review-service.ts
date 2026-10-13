@@ -31,13 +31,14 @@ export class DocumentReviewService {
       const views=[];
       for(const e of events) {
         const thread=await r.reviewThreads.findById(e.threadId);
+        const document=await r.documents.findById(e.documentId);
         const revision=await r.revisions.findCurrent(e.documentId);
         const comments=await r.reviewComments.listByThread(e.threadId);
         const comment=comments.find(c=>c.id===e.commentId);
         if(!thread || thread.visibility==="HIDDEN" || isRetractedThread(comments)) continue;
-        if(!revision || !comment || comment.deletedAt || comment.visibility==="HIDDEN") continue;
+        if(!document || !revision || !comment || comment.deletedAt || comment.visibility==="HIDDEN") continue;
         const author=await r.users.findById(e.createdByUserId);
-        views.push(projectShareCommentNotification({id:e.id,workspaceId:e.workspaceId,documentId:e.documentId,documentTitle:revision.title,threadId:e.threadId,commentId:e.commentId,authorName:author?.name,body:comment.body,createdAt:e.createdAt}));
+        views.push(projectShareCommentNotification({id:e.id,workspaceId:e.workspaceId,documentId:e.documentId,sourceId:document.sourceId,documentTitle:revision.title,threadId:e.threadId,commentId:e.commentId,authorName:author?.name,body:comment.body,createdAt:e.createdAt}));
       }
       return {notifications:views};
     });
