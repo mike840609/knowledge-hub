@@ -1,6 +1,5 @@
 import { SaveShareButton } from "@/components/knowledge/save-share-button";
 import { SharedReviewPanel } from "@/components/knowledge/shared-review-panel";
-import Link from "next/link";
 import { buttonClasses } from "@/components/ui/button";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -8,6 +7,7 @@ import { MarkdownRenderer } from "@/components/knowledge/markdown-renderer";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
 import { Timestamp } from "@/components/ui/timestamp";
 import { getSharedDocument } from "@/server/share-read";
+import { publicOrigin } from "@/server/config";
 
 export const dynamic = "force-dynamic";
 
@@ -32,12 +32,17 @@ export default async function SharedDocumentPage({ params }: SharedPageProps) {
   const { token } = await params;
   const shared = await getSharedDocument(token);
   if (!shared) notFound();
+  // A full browser navigation to the protected origin lets the company Gateway initiate SSO.
+  // The public /s/* routes are exempt from that login challenge.
+  const returnTo = `/s/${token}/open`;
+  const origin = publicOrigin();
+  const platformEntry = origin ? `${origin}/?${new URLSearchParams({ returnTo })}` : returnTo;
   return (
     <main className="kh-share-page min-h-screen bg-kh-bg">
       <div className="border-b border-kh-border">
         <div className="kh-share-heading kh-reading-column flex min-h-14 items-center justify-between gap-3 py-2">
           <span className="shrink-0 text-body font-semibold text-kh-text">Knowledge Hub</span>
-          <div className="flex min-w-0 flex-wrap items-start justify-end gap-2"><SaveShareButton token={token} /><Link prefetch={false} href={`/s/${token}/open`} className={buttonClasses({ variant: "ghost" })}>Open in Knowledge Hub</Link></div>
+          <div className="flex min-w-0 flex-wrap items-start justify-end gap-2"><SaveShareButton token={token} /><a href={platformEntry} className={buttonClasses({ variant: "ghost" })}>Open in Knowledge Hub</a></div>
         </div>
       </div>
       <header>
@@ -61,7 +66,7 @@ export default async function SharedDocumentPage({ params }: SharedPageProps) {
       <footer className="kh-reading-column pb-10 pt-4">
         <div className="flex flex-wrap items-center justify-between gap-4 border-t border-kh-border pt-5">
           <div><p className="text-body font-medium text-kh-text">Keep useful knowledge within reach.</p><p className="mt-1 text-body-sm text-kh-text-muted">Organize documents and search your team’s knowledge in Knowledge Hub.</p></div>
-          <Link prefetch={false} href={`/s/${token}/open`} className={buttonClasses({ variant: "primary" })}>Get started</Link>
+          <a href={platformEntry} className={buttonClasses({ variant: "primary" })}>Get started</a>
         </div>
         <p className="mt-3 text-caption text-kh-text-muted">Continue with your company account. Workspace access is managed separately from this share link.</p>
       </footer>
