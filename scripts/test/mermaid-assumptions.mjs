@@ -38,7 +38,7 @@ await page.goto(`${ORIGIN}/`);
 
 const result = await page.evaluate(async (samples) => {
   const { default: mermaid } = await import("/mermaid.esm.min.mjs");
-  mermaid.initialize({ startOnLoad: false, securityLevel: "strict", htmlLabels: false, suppressErrorRendering: true, theme: "base", fontFamily: "ui-sans-serif, system-ui, sans-serif" });
+  mermaid.initialize({ startOnLoad: false, securityLevel: "strict", htmlLabels: false, suppressErrorRendering: true, secure: ["secure", "securityLevel", "startOnLoad", "maxTextSize", "suppressErrorRendering", "maxEdges", "htmlLabels"], theme: "base", fontFamily: "ui-sans-serif, system-ui, sans-serif" });
   const body = () => document.body.children.length;
   const before = body();
   const types = {};
@@ -59,12 +59,27 @@ const result = await page.evaluate(async (samples) => {
       types[name] = { threw: String(error).slice(0, 200) };
     }
   }
-  // A directive in the source must not undo the configuration.
-  const loosened = await mermaid.render("check-init", '%%{init: {"securityLevel": "loose", "htmlLabels": true, "flowchart": {"htmlLabels": true}}}%%\nflowchart LR\n  A["<b>bold</b>"] --> B');
+  // Config carried by a diagram's own text must not undo the configuration.
+  // A form that makes render throw is safe; one that yields a foreignObject is not.
+  const loose = '{"securityLevel": "loose", "htmlLabels": true, "flowchart": {"htmlLabels": true}}';
+  const forms = {
+    directive: `%%{init: ${loose}}%%\nflowchart LR\n  A["<b>bold</b>"] --> B`,
+    lateDirective: `flowchart LR\n%%{init: ${loose}}%%\n  A["<b>bold</b>"] --> B`,
+    frontmatter: '---\nconfig:\n  securityLevel: loose\n  htmlLabels: true\n  flowchart:\n    htmlLabels: true\n---\nflowchart LR\n  A["<b>bold</b>"] --> B',
+  };
+  const carried = {};
+  for (const [name, text] of Object.entries(forms)) {
+    try {
+      const out = await mermaid.render(`check-${name}`, text);
+      carried[name] = { gaveHtml: /<foreignObject[\s>]/i.test(out.svg) };
+    } catch (error) {
+      carried[name] = { gaveHtml: false, threw: String(error).slice(0, 200) };
+    }
+  }
   // A block Mermaid cannot parse must reject, and leave nothing in the page.
   let rejected = false;
   try { await mermaid.render("check-bad", "this is not a diagram"); } catch { rejected = true; }
-  return { types, directiveGaveHtml: /<foreignObject[\s>]/i.test(loosened.svg), rejected, leftInPage: body() - before };
+  return { types, directiveGaveHtml: carried.directive.gaveHtml, lateDirectiveGaveHtml: carried.lateDirective.gaveHtml, frontmatterGaveHtml: carried.frontmatter.gaveHtml, carried, rejected, leftInPage: body() - before };
 }, SAMPLES);
 
 await browser.close();
@@ -77,6 +92,8 @@ const failures = [
   ...core.filter((name) => result.types[name]?.foreignObject).map((name) => `${name}: foreignObject with htmlLabels off`),
   ...core.filter((name) => !result.types[name]?.loadsAsImage).map((name) => `${name}: does not load as an image`),
   ...(result.directiveGaveHtml ? ["an init directive turned html labels back on"] : []),
+  ...(result.lateDirectiveGaveHtml ? ["an init directive after the first line turned html labels back on"] : []),
+  ...(result.frontmatterGaveHtml ? ["frontmatter config turned html labels back on"] : []),
   ...(result.rejected ? [] : ["an unparseable block did not reject"]),
   ...(result.leftInPage === 0 ? [] : [`${result.leftInPage} element(s) left in the page`]),
   ...(refused.length === 0 ? [] : ["the script policy refused something (eval?)"]),

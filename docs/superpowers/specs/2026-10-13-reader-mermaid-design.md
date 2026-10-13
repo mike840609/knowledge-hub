@@ -262,9 +262,12 @@ installed version, before anything else is built.
 | No `eval` or `new Function` in production | The production build fails the e2e below, since `unsafe-eval` is development only; return here |
 
 Checked against `mermaid@12.2.0` (`../verification/2026-10-13-reader-mermaid.md`):
-the second row is false. A `%%{init: {"securityLevel": "loose", "htmlLabels": true, "flowchart": {"htmlLabels": true}}}%%`
-directive in the source made a flowchart come out with `<foreignObject>`. So a
-leading `%%{…}%%` directive is stripped before drawing. The other four rows hold.
+the second row was false by default. A `%%{init}%%` directive could turn HTML labels on, so a
+flowchart came out with `<foreignObject>`. Done: `htmlLabels` is added to Mermaid's `secure`
+list (the installed default is `secure`, `securityLevel`, `startOnLoad`, `maxTextSize`,
+`suppressErrorRendering`, `maxEdges`), and the check script tries a directive before the first
+line, a directive after it, and YAML frontmatter `config:`; none yields `<foreignObject>`. The
+`<foreignObject>` refusal stays as the backstop. The other four rows hold.
 
 ## Shape of the change
 

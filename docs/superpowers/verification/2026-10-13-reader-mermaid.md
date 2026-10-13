@@ -67,15 +67,32 @@ Installed: `mermaid@12.2.0`.
       "loadsAsImage": true
     }
   },
-  "directiveGaveHtml": true,
+  "directiveGaveHtml": false,
+  "lateDirectiveGaveHtml": false,
+  "frontmatterGaveHtml": false,
+  "carried": {
+    "directive": {
+      "gaveHtml": false
+    },
+    "lateDirective": {
+      "gaveHtml": false
+    },
+    "frontmatter": {
+      "gaveHtml": false
+    }
+  },
   "rejected": true,
   "leftInPage": 0,
   "refused": []
 }
 ```
 
-The script exited 1 with one line under `FAILED`: `an init directive turned html labels back on`.
-Every other check passed. By the spec's table that line is not a stop: a leading
-`%%{…}%%` directive is stripped before drawing (Task 3), and the spec's table says so.
+The script printed `OK` and exited 0. Mermaid is initialised with
+`secure: ["secure", "securityLevel", "startOnLoad", "maxTextSize", "suppressErrorRendering", "maxEdges", "htmlLabels"]`:
+the installed 12.2.0 default list plus `htmlLabels`. Without `htmlLabels` in that list, an
+`%%{init}%%` directive turned HTML labels on (first run of this script, which exited 1). With it, a
+directive before the first line, a directive after it, and YAML frontmatter `config:` each came out
+without `<foreignObject>` (`directiveGaveHtml`, `lateDirectiveGaveHtml`, `frontmatterGaveHtml` all
+false; none of the three threw).
 
 Diagram types turned away by the `<foreignObject>` rule: none of the eight tried.
