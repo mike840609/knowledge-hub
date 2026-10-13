@@ -30,7 +30,7 @@ it("says why an image was not added", () => {
   expect(imageUploadFailure(413, "IMAGE_TOO_LARGE")).toContain("10 MiB");
   expect(imageUploadFailure(503, "IMAGE_STORAGE_UNAVAILABLE")).toContain("Your text is safe");
   expect(imageUploadFailure(404, "IMAGE_STORAGE_NOT_CONFIGURED")).toContain("does not store images");
-  expect(imageUploadFailure(400, "INVALID_REQUEST")).toContain("PNG, JPEG");
+  expect(imageUploadFailure(400, "INVALID_REQUEST")).toContain("SVG up to 2 MiB");
   expect(imageUploadFailure(403, "WORKSPACE_ACCESS_DENIED")).toContain("cannot add images");
   expect(imageUploadFailure(500, undefined)).toContain("Try again");
 });

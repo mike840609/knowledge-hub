@@ -122,11 +122,25 @@ test("what is not an image is refused in words, the note is untouched, and the M
   await surface.click();
   await page.keyboard.type("Text stays.");
 
-  // The browser calls it an image; the server reads its bytes and disagrees.
-  await give(surface, "paste", { name: "drawing.svg", type: "image/svg+xml", text: '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>' });
-  await expect(form.getByText("Only PNG, JPEG, GIF, WebP and AVIF images can be added.")).toBeVisible();
+  // The browser calls it an image; the server reads its content and disagrees.
+  await give(surface, "paste", { name: "page.svg", type: "image/svg+xml", text: '<!doctype html><html><body><svg></svg><script>alert(1)</script></body></html>' });
+  await expect(form.getByText("Only PNG, JPEG, GIF, WebP and AVIF images, and SVG up to 2 MiB, can be added.")).toBeVisible();
   await expect(surface.locator("img[data-kh-src]")).toHaveCount(0);
   await expect(surface).toContainText("Text stays.");
+
+  // A real SVG is taken, drawn, and cannot run its script: in the page it is an <img>, and opened
+  // on its own it is served sandboxed.
+  await give(surface, "paste", { name: "Flow chart.svg", type: "image/svg+xml", text: `<svg xmlns="http://www.w3.org/2000/svg" width="6" height="6"><!-- ${unique("svg")} --><script>document.title="pwned"</script><rect width="6" height="6"/></svg>` });
+  const vector = surface.locator('img[alt="Flow chart"]');
+  await expect(vector).toHaveCount(1);
+  expect(await vector.getAttribute("data-kh-src")).toMatch(/^\/images\/[0-9a-f]{64}\.svg$/);
+  await expect.poll(() => decoded(vector)).toBe(6);
+  const served = await page.request.get((await vector.getAttribute("src"))!);
+  expect(served.headers()).toMatchObject({ "content-type": "image/svg+xml", "x-content-type-options": "nosniff", "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox" });
+  const alone = await page.context().newPage();
+  await alone.goto((await vector.getAttribute("src"))!);
+  expect(await alone.title()).not.toBe("pwned");
+  await alone.close();
 
   // A paste with no image file is the editor's own business.
   await surface.evaluate((element) => {

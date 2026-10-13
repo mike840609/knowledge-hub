@@ -37,7 +37,7 @@ export function imageUploadFailure(status: number, code: string | undefined): st
   if (code === "IMAGE_TOO_LARGE" || status === 413) return "That image is larger than 10 MiB and was not added.";
   if (code === "IMAGE_STORAGE_UNAVAILABLE" || status === 503) return "Image storage is unavailable right now, so the image was not added. Your text is safe; try again shortly.";
   if (code === "IMAGE_STORAGE_NOT_CONFIGURED") return "This server does not store images.";
-  if (status === 400) return "Only PNG, JPEG, GIF, WebP and AVIF images can be added.";
+  if (status === 400) return "Only PNG, JPEG, GIF, WebP and AVIF images, and SVG up to 2 MiB, can be added.";
   if (status === 401 || status === 403 || status === 404) return "You cannot add images here.";
   return "The image could not be added. Try again.";
 }

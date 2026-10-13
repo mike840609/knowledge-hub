@@ -27,7 +27,7 @@ export class UploadSourceImageService {
     const { sourceId, bytes } = input;
     if (bytes.byteLength === 0 || bytes.byteLength > MAX_UPLOADED_IMAGE_BYTES) throw new DomainError("INVALID_REQUEST", "An image must be between 1 byte and 10 MiB.");
     const extension = detectImageType(bytes);
-    if (!extension) throw new DomainError("INVALID_REQUEST", "Only PNG, JPEG, GIF, WebP and AVIF images can be added.");
+    if (!extension) throw new DomainError("INVALID_REQUEST", "Only PNG, JPEG, GIF, WebP and AVIF images, and SVG up to 2 MiB, can be added.");
     // Refused before anything is stored; checked again where the row is written.
     await this.uow.run((repositories) => this.authorize(repositories, caller, sourceId));
     const contentHash = sha256(bytes);

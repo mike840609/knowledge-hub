@@ -58,9 +58,17 @@ it("stores an uploaded image as an asset of the Source, named by its content", a
   expect(rows[0]).toMatchObject({ source_path: `images/${sha256(bytes)}.png`, content_hash: sha256(bytes) });
   expect(typeof rows[0].metadata === "string" ? JSON.parse(rows[0].metadata) : rows[0].metadata).toEqual({ size: bytes.byteLength, stored: true });
 });
+it("stores an SVG as it was given, and serves it as an SVG", async () => {
+  const markup = new TextEncoder().encode('<?xml version="1.0"?>\n<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 4"><script>alert(1)</script><rect width="4" height="4"/></svg>');
+  const { src } = await s.sourceImages!.upload(fixtureCaller(), { sourceId, bytes: markup });
+  expect(src).toBe(`/images/${sha256(markup)}.svg`);
+  expect(await s.documentImages.findInSource(fixtureCaller(), sourceId, src)).toMatchObject({ contentType: "image/svg+xml", contentHash: sha256(markup) });
+  // Not rewritten: what is stored is byte for byte what was uploaded.
+  expect(new Uint8Array(await new Response((await blobs.open(sha256(markup)))!.body).arrayBuffer())).toEqual(markup);
+});
 it("refuses what is not an image, is empty or is too large, and stores nothing", async () => {
   const send = (bytes: Uint8Array) => s.sourceImages!.upload(fixtureCaller(), { sourceId, bytes });
-  for (const bytes of [new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"/>'), new TextEncoder().encode("%PDF-1.7"), new Uint8Array(), new Uint8Array(MAX_UPLOADED_IMAGE_BYTES + 1)]) {
+  for (const bytes of [new TextEncoder().encode("<!doctype html><html><body><svg></svg></body></html>"), new TextEncoder().encode("%PDF-1.7"), new Uint8Array(), new Uint8Array(MAX_UPLOADED_IMAGE_BYTES + 1)]) {
     await expect(send(bytes)).rejects.toMatchObject({ code: "INVALID_REQUEST" });
   }
   expect(Number((await pool.query("SELECT COUNT(*) n FROM knowledge_assets WHERE source_id=?", [sourceId]))[0].n)).toBe(0);

@@ -149,7 +149,7 @@ This cleanup removes import staging data only, preserving canonical document his
 
 When an image store is configured, a folder's `png`, `jpg`, `jpeg`, `gif`, `webp`, `avif` and `svg` files are uploaded at import and shown in documents and on shared pages. A source imported before the store was configured gets its images on its next sync. Images written as Obsidian embeds (`![[image.png]]`) are not shown; use `![alt](path)`. An image has no history: an older revision shows the folder's current file.
 
-**In a page written in the Hub**, paste or drop an image into the editor (either view): PNG, JPEG, GIF, WebP or AVIF, up to 10 MiB each. It is stored once per Source under a name made from its content, and the page refers to it as `![alt](/images/<hash>.png)`, so every revision keeps the image it was written with. SVG cannot be added this way.
+**In a page written in the Hub**, paste or drop an image into the editor (either view): PNG, JPEG, GIF, WebP or AVIF up to 10 MiB each, or SVG up to 2 MiB. It is stored once per Source under a name made from its content, and the page refers to it as `![alt](/images/<hash>.png)`, so every revision keeps the image it was written with. An SVG is stored as given; it is shown as an image and served sandboxed, so a script inside it does not run.
 
 Configure **one** of two stores. With neither, images stay references only; with both, the server refuses to start.
 

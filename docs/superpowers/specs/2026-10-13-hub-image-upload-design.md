@@ -38,8 +38,8 @@ POST /api/workspaces/:workspaceId/images     the same, for a note that is not sa
 A new note's source is chosen by the server when it is first saved: the workspace's default Hub source, created on first use. The second route does the same on first upload, with the authorization the first save would need, and returns the source so the editor can show the image. The new-note page passes that source's ID when it already exists (a lookup, never a creation), so a draft reopened later still shows its images.
 
 - **Who.** The caller must be allowed to write a document in that source: source `ACTIVE` and `HUB_MANAGED`, workspace writable, the same checks `createDocument` makes. A source-managed source answers as it does for an edit (`SourceReadOnlyError`).
-- **What.** `png`, `jpeg`, `gif`, `webp`, `avif`, decided by the file's leading bytes. The browser's `Content-Type` and any file name are ignored. SVG is not accepted here (§10).
-- **How much.** At most 10 MiB, checked against `Content-Length` before reading and against the bytes read. Larger is 413.
+- **What.** `png`, `jpeg`, `gif`, `webp`, `avif`, decided by the file's leading bytes, and `svg`, decided by parsing it: well-formed XML whose root is `svg` (the `is-svg` package). The browser's `Content-Type` and any file name are ignored. An SVG is stored as given, not cleaned: what keeps a scripted one inert is how it is served and drawn, the same as an SVG from a synced folder.
+- **How much.** At most 10 MiB, checked against `Content-Length` before reading and against the bytes read. Larger is 413. An SVG is parsed only up to 2 MiB: parsing is synchronous, about 35 ms per MiB, and nothing else is answered meanwhile. A larger one is refused as "not an image".
 - **How.** The body is read into memory (bounded by the limit), hashed, its type detected, and passed to `BlobStore.put` with its own hash. Then one row is upserted in `knowledge_assets`: `source_path = images/<sha256>.<ext>`, `content_hash`, `metadata = { size, stored: true }`. Uploading the same image again changes nothing and returns the same `src`.
 - **When there is no store.** 404 with `IMAGE_STORAGE_NOT_CONFIGURED`; the editor is told at render time and does not intercept paste or drop at all.
 - **When the store is down.** The existing 503 `IMAGE_STORAGE_UNAVAILABLE`. The draft is untouched.
@@ -98,7 +98,7 @@ Two additions to the rendered editor, and one to the Markdown source view.
 
 ## 10. Decisions (confirmed 2026-10-13)
 
-1. **No SVG upload.** SVG is text, so its type cannot be told from leading bytes the way the others can, and an author-supplied SVG is the riskiest image type. Synced folders keep accepting SVG. Say so if diagrams pasted as SVG matter.
+1. ~~No SVG upload.~~ **Reversed 2026-10-13: SVG is accepted**, up to 2 MiB. The first draft refused it because its type cannot be told from leading bytes and it can carry script. The second reason did not hold: an uploaded SVG is served and drawn exactly as a synced one already is (`<img>`, `nosniff`, a sandboxing policy), and the e2e test opens one with a script and sees it not run. The first is answered by parsing. Entities are not expanded by the parser, so a "billion laughs" document costs nothing to check.
 2. **Uploaded images are never deleted in this delivery** (§8).
 3. **10 MiB per image**, a constant, not a setting.
 4. **Both views**: the rendered editor and the Markdown source view accept paste and drop.
