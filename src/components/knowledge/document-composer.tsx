@@ -84,6 +84,7 @@ export function DocumentComposer({
   submitLabel,
   busyLabel,
   cancelHref,
+  cancelLabel = "Cancel",
   onSubmit,
   conflictHref,
   blocked,
@@ -113,6 +114,7 @@ export function DocumentComposer({
   /** The submit's in-flight label, e.g. "Creating…" for a create, "Saving…" for an edit. */
   busyLabel: string;
   cancelHref: string;
+  cancelLabel?: string;
   /** Sends the document and returns where it now lives; throws on refusal. */
   onSubmit: (input: ComposerSubmit) => Promise<string>;
   /** Where "load the latest version" goes after a conflict; null when creating. */
@@ -578,9 +580,9 @@ export function DocumentComposer({
                   Markdown
                 </Button>
               </Tooltip>
-              <Tooltip label="Cancel" keys="Esc">
+              <Tooltip label={cancelLabel} keys="Esc">
                 <Button type="button" variant="secondary" disabled={busy || blocked} onClick={cancel}>
-                  Cancel
+                  {cancelLabel}
                 </Button>
               </Tooltip>
               <Tooltip label={submitLabel} shortcut="Meta+Enter Control+Enter">

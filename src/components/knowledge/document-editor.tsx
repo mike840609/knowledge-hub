@@ -16,6 +16,7 @@ export function DocumentEditor({
   currentRevisionId,
   initialTitle,
   initialMarkdown,
+  personal = false,
 }: {
   workspaceId: string;
   sourceId: string;
@@ -29,8 +30,10 @@ export function DocumentEditor({
   currentRevisionId: string;
   initialTitle: string;
   initialMarkdown: string;
+  personal?: boolean;
 }) {
   const documentHref = `/w/${workspaceId}/knowledge/${sourceId}/${documentId}`;
+  const readHref = personal ? `${documentHref}?mode=read` : documentHref;
   return (
     <DocumentComposer
       workspaceId={workspaceId}
@@ -44,11 +47,12 @@ export function DocumentEditor({
       currentRevisionId={currentRevisionId}
       submitLabel="Save"
       busyLabel="Saving…"
-      cancelHref={documentHref}
+      cancelHref={readHref}
+      cancelLabel={personal ? "Read" : "Cancel"}
       conflictHref={`${documentHref}/edit`}
       onSubmit={async ({ title, markdown, expectedRevisionId }) => {
         await governanceRequest(`/api/documents/${documentId}`, "PATCH", { title, markdown, expectedCurrentRevisionId: expectedRevisionId });
-        return documentHref;
+        return readHref;
       }}
     />
   );

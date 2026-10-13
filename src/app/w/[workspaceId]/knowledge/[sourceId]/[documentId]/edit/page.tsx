@@ -26,6 +26,7 @@ export default async function EditDocumentPage({
   const current = model.view.currentRevision;
   return (
     <DocumentEditor
+      personal={shell.workspace.type === "PERSONAL"}
       workspaceId={workspaceId}
       sourceId={sourceId}
       documentId={documentId}

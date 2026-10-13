@@ -1,3 +1,5 @@
+import { defaultDocumentEditing } from "@/lib/default-document-editing";
+import { redirect } from "next/navigation";
 import { OwnerReviewPanel } from "@/components/knowledge/owner-review-panel";
 import { ReadRevisionMarker } from "@/components/knowledge/read-revision-marker";
 import { RevisionRestore } from "@/components/knowledge/revision-restore";
@@ -19,7 +21,7 @@ export default async function KnowledgeDocumentPage({
   searchParams,
 }: {
   params: Promise<{ workspaceId: string; sourceId: string; documentId: string }>;
-  searchParams?: Promise<{ includeArchived?: string; revision?: string; graph?: string }>;
+  searchParams?: Promise<{ includeArchived?: string; revision?: string; graph?: string; mode?: string }>;
 }) {
   const { workspaceId, sourceId, documentId } = await params;
   const query = await searchParams;
@@ -82,6 +84,19 @@ export default async function KnowledgeDocumentPage({
     explorer?.source.ownership === "HUB_MANAGED" &&
     view.status === "ACTIVE" &&
     !isHistorical;
+  if (defaultDocumentEditing({
+    canEdit,
+    workspaceType: shell?.workspace.type,
+    lifecycleState: shell?.access.workspace.lifecycleState,
+    sourceType: explorer?.source.sourceType,
+    sourceStatus: explorer?.source.status,
+    mode: query?.mode,
+    revision: query?.revision,
+    graph: query?.graph,
+    includeArchived,
+  })) {
+    redirect(`/w/${workspaceId}/knowledge/${sourceId}/${documentId}/edit`);
+  }
   const editHref = canEdit ? `/w/${workspaceId}/knowledge/${sourceId}/${documentId}/edit` : null;
   // A new document goes to the workspace's own Notes whatever this one is (a synced source's document
   // included), so what decides whether a broken link offers to make it is the capability to write here.
@@ -95,6 +110,7 @@ export default async function KnowledgeDocumentPage({
   const documentHrefBase = `/w/${workspaceId}/knowledge/${sourceId}/${documentId}`;
   const withParams = (change: { graph: string | undefined }) => {
     const next = new URLSearchParams();
+    if (query?.mode === "read") next.set("mode", "read");
     if (includeArchived) next.set("includeArchived", "true");
     if (query?.revision !== undefined) next.set("revision", query.revision);
     if (change.graph !== undefined) next.set("graph", change.graph);

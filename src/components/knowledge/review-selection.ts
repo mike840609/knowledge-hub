@@ -160,3 +160,18 @@ export function focusReviewAnchor(root: HTMLElement, markdown: string, anchor: R
   const selection = window.getSelection(); selection?.removeAllRanges(); selection?.addRange(range);
   element.scrollIntoView({ behavior: "smooth", block: "center" });
 }
+
+/** A block control uses the same canonical path and DOM proof as text selection.
+ * Long paragraphs anchor their opening passage within the server's quote limit. */
+export function reviewBlockAnchor(element: HTMLElement, markdown: string): ReviewAnchor | null {
+  const block = blocksByPath(markdown).get(pathOf(element) ?? "");
+  if (!block?.selectable || leafText(element, block) !== shown(block)) return null;
+  const exact = [...shown(block)].slice(0, REVIEW_LIMITS.quote).join("");
+  if (!exact.trim()) return null;
+  const startUtf16 = block.hidden;
+  const endUtf16 = startUtf16 + exact.length;
+  return { schemaVersion: 1, blockPath: block.path, blockKind: block.kind,
+    startUtf16, endUtf16, exact,
+    prefix: [...block.text.slice(0, startUtf16)].slice(-REVIEW_LIMITS.context).join(""),
+    suffix: [...block.text.slice(endUtf16)].slice(0, REVIEW_LIMITS.context).join("") };
+}

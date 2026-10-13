@@ -725,3 +725,12 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-editor .kh-block-drag-source :is(th, td, pre, code) {
   background-color: transparent;
 }
+
+/* A reserved right gutter exposes paragraph comments without covering prose. */
+.kh-document-pane .kh-review-reading:has(.kh-block-comment-controls) > article { padding-inline-end: 64px; }
+.kh-block-comment-controls { right: 32px; }
+.kh-block-comment-button { opacity: 0; }
+.kh-block-comment-zone:hover .kh-block-comment-button,
+.kh-block-comment-button:focus { opacity: 1; }
+.kh-comment-block-selected { background-color: var(--kh-bg-selected); border-radius: 4px; outline: 2px solid var(--kh-bg-selected); }
+@media (hover: none) { .kh-block-comment-button { opacity: 1; } }
