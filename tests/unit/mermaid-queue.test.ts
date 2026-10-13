@@ -4,15 +4,19 @@ import { createDiagramQueue, DIAGRAM_REASONS, MAX_DIAGRAM_CHARS, MAX_DIAGRAMS, t
 const svg = (body = "", box = "0 0 120.4 60") => `<svg id="x" width="100%" xmlns="http://www.w3.org/2000/svg" viewBox="${box}">${body}</svg>`;
 
 /** The queue with everything a browser would give it replaced, and a record of what it asked for. */
-function harness(render: DiagramEngine["render"] = async () => ({ svg: svg(), diagramType: "flowchart-v2" }), load?: DiagramDeps["load"]) {
+function harness(
+  render: DiagramEngine["render"] = async () => ({ svg: svg(), diagramType: "flowchart-v2" }),
+  load?: DiagramDeps["load"],
+  overrides?: { toUrl?: (text: string) => string; revoke?: (url: string) => void; pause?: () => Promise<void> },
+) {
   const log: string[] = [];
   let made = 0;
   let loads = 0;
   const queue = createDiagramQueue({
     load: load ?? (async () => { loads++; return { render: async (id, source) => { log.push(`render ${source}`); const out = await render(id, source); log.push(`done ${source}`); return out; } }; }),
-    toUrl: (text) => { const url = `blob:${++made}`; log.push(`url ${url} ${text.length}`); return url; },
-    revoke: (url) => { log.push(`revoke ${url}`); },
-    pause: async () => { log.push("pause"); },
+    toUrl: overrides?.toUrl ?? ((text) => { const url = `blob:${++made}`; log.push(`url ${url} ${text.length}`); return url; }),
+    revoke: overrides?.revoke ?? ((url) => { log.push(`revoke ${url}`); }),
+    pause: overrides?.pause ?? (async () => { log.push("pause"); }),
   });
   return { queue, log, loads: () => loads };
 }
@@ -91,6 +95,65 @@ describe("a block that is not drawn says why, and is left as it was", () => {
     expect(first).toHaveProperty("drawn");
     expect(second).toHaveProperty("reason");
     expect(third).toHaveProperty("drawn");
+  });
+
+  it("toUrl throws for one block: that draw resolves with unsupported, and a block after it is still drawn", async () => {
+    let count = 0;
+    const h = harness(undefined, undefined, {
+      toUrl: () => {
+        count++;
+        if (count === 1) throw new Error("no blob");
+        return `blob:${count}`;
+      },
+    });
+    const [first, second] = await Promise.all([h.queue.draw({}, 0, "a"), h.queue.draw({}, 1, "b")]);
+    expect(first).toEqual({ reason: DIAGRAM_REASONS.unsupported });
+    expect(second).toHaveProperty("drawn");
+  });
+
+  it("revoke throws when a block is drawn again: draw still resolves to drawn, and a later block is still drawn", async () => {
+    let throwOnRevoke = false;
+    const h = harness(undefined, undefined, {
+      revoke: (url) => {
+        if (throwOnRevoke) throw new Error("revoke failed");
+        h.log.push(`revoke ${url}`);
+      },
+    });
+    const block = {};
+    const first = await h.queue.draw(block, 0, "a");
+    expect(first).toHaveProperty("drawn");
+    throwOnRevoke = true;
+    const second = await h.queue.draw(block, 0, "a");
+    expect(second).toHaveProperty("drawn");
+    const third = await h.queue.draw({}, 2, "c");
+    expect(third).toHaveProperty("drawn");
+  });
+
+  it("pause rejects after one block: the next block is still drawn", async () => {
+    let count = 0;
+    const h = harness(undefined, undefined, {
+      pause: async () => {
+        count++;
+        h.log.push("pause");
+        if (count === 1) throw new Error("pause failed");
+      },
+    });
+    const [first, second] = await Promise.all([h.queue.draw({}, 0, "a"), h.queue.draw({}, 1, "b")]);
+    expect(first).toHaveProperty("drawn");
+    expect(second).toHaveProperty("drawn");
+  });
+
+  it("forget does not throw when revoke throws", async () => {
+    const h = harness(undefined, undefined, {
+      revoke: () => {
+        throw new Error("revoke failed");
+      },
+    });
+    const block = {};
+    await h.queue.draw(block, 0, "a");
+    expect(() => {
+      h.queue.forget(block);
+    }).not.toThrow();
   });
 });
 

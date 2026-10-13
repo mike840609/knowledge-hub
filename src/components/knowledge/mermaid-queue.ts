@@ -56,7 +56,11 @@ export function createDiagramQueue(deps: DiagramDeps) {
     const url = urls.get(key);
     if (url === undefined) return;
     urls.delete(key);
-    deps.revoke(url);
+    try {
+      deps.revoke(url);
+    } catch {
+      // revoke failure does not stop the queue
+    }
   }
 
   async function render(source: string): Promise<{ svg: string; type: string; width: number; height: number } | { reason: string }> {
@@ -85,7 +89,13 @@ export function createDiagramQueue(deps: DiagramDeps) {
     release(key);
     if ("reason" in result) return result;
     if (gone.has(key)) return { reason: DIAGRAM_REASONS.unsupported };
-    const url = deps.toUrl(result.svg);
+    let url: string;
+    try {
+      url = deps.toUrl(result.svg);
+    } catch {
+      // toUrl failure prevents creating this diagram
+      return { reason: DIAGRAM_REASONS.unsupported };
+    }
     urls.set(key, url);
     return { drawn: { url, type: result.type, width: result.width, height: result.height } };
   }
@@ -96,8 +106,8 @@ export function createDiagramQueue(deps: DiagramDeps) {
       if (index >= MAX_DIAGRAMS) return Promise.resolve({ reason: DIAGRAM_REASONS.many });
       if (source.length > MAX_DIAGRAM_CHARS) return Promise.resolve({ reason: DIAGRAM_REASONS.long });
       const job = tail.then(() => one(key, source));
-      // `one` does not reject; the pause is the browser's turn between two drawings.
-      tail = job.then(deps.pause);
+      // `one` does not reject; pause failures are caught so they do not break the queue.
+      tail = job.then(() => deps.pause()).catch(() => {});
       return job;
     },
     forget(key: object) {
