@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { codeAsWritten } from "./copy-code-button";
-import { diagrams, readTheme, subscribeTheme, type DiagramOutcome } from "./mermaid-queue";
+import { DIAGRAM_REASONS, diagrams, readTheme, subscribeTheme, type DiagramOutcome } from "./mermaid-queue";
 
 /**
  * A `mermaid` code block, and its diagram once that is drawn (reader-mermaid spec).
@@ -19,33 +19,48 @@ export function MermaidBlock({ children }: { children?: ReactNode }) {
   const figure = useRef<HTMLElement>(null);
   const source = useRef<HTMLDetailsElement>(null);
   const wasDrawn = useRef(false);
+  // What the queue was last asked for, and which request that was.
+  const asked = useRef<{ theme: string; index: number; text: string } | null>(null);
+  const request = useRef(0);
   const [outcome, setOutcome] = useState<DiagramOutcome | null>(null);
   const theme = useSyncExternalStore(subscribeTheme, readTheme, () => "");
 
-  // Runs when the theme changes, and when the server sends other code into this place while the block
-  // stays mounted (a refresh after an edit): `children` is a new element then, and not for the block's
-  // own state. The picture on show stays until its replacement arrives.
+  // Runs when the theme changes, and when the server sends this place a code block again while the block stays
+  // mounted (every `router.refresh()` does: `children` is a new element then, and not for the block's own
+  // state). It asks for a drawing only when the theme, the source, or the block's place among the page's
+  // diagrams is other than what it last asked for: one drawing can hold the page for seconds, and the same
+  // three give the same picture. The picture on show stays until its replacement arrives.
   useEffect(() => {
     const element = figure.current;
     if (!element) return;
     // Read from the page, as the copy button reads it: a prop would send the code a second time.
     const text = codeAsWritten(element.querySelector("pre")?.textContent ?? "");
     const index = Array.from(document.querySelectorAll("[data-mermaid]")).indexOf(element);
-    let stale = false;
+    const last = asked.current;
+    if (last && last.theme === theme && last.index === index && last.text === text) return;
+    asked.current = { theme, index, text };
+    // Compared when the answer arrives, not cancelled when this effect runs again: a run that asks for nothing
+    // must leave the answer still on its way to be shown.
+    const mine = ++request.current;
     void diagrams().draw(element, index, text).then((result) => {
-      if (stale) return;
+      if (mine !== request.current) return;
+      // Not an answer about this source: Mermaid may load next time, so the next refresh asks again.
+      if ("reason" in result && result.reason === DIAGRAM_REASONS.unloaded) asked.current = null;
       const isDrawn = "drawn" in result;
       // Only when it changes: a redraw for a new theme must not close a source the reader opened.
       if (isDrawn !== wasDrawn.current && source.current) source.current.open = !isDrawn;
       wasDrawn.current = isDrawn;
       setOutcome(result);
     });
-    return () => { stale = true; };
   }, [theme, children]);
 
   useEffect(() => {
     const element = figure.current;
-    return () => { if (element) diagrams().forget(element); };
+    return () => {
+      // The queue drops whatever this block was waiting for, so a block mounted again must ask again.
+      asked.current = null;
+      if (element) diagrams().forget(element);
+    };
   }, []);
 
   const drawn = outcome && "drawn" in outcome ? outcome.drawn : null;
