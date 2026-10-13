@@ -156,6 +156,8 @@ export function focusReviewAnchor(root: HTMLElement, markdown: string, anchor: R
   if (!range) return;
   const element = leafOf(range.startContainer);
   if (!element) return;
+  // A quote in a closed disclosure has no box to scroll to: an author's `<details>`, or a diagram's source.
+  for (let closed = element.closest("details"); closed; closed = closed.parentElement?.closest("details") ?? null) closed.open = true;
   element.tabIndex = -1; element.focus({ preventScroll: true });
   const selection = window.getSelection(); selection?.removeAllRanges(); selection?.addRange(range);
   element.scrollIntoView({ behavior: "smooth", block: "center" });

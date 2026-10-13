@@ -5,7 +5,7 @@ import { MarkdownRenderer } from "@/components/knowledge/markdown-renderer";
 import { linkLookupKey } from "@/modules/knowledge/domain/link-graph";
 import * as projection from "@/modules/knowledge/domain/review-anchor";
 import { validateReviewAnchor } from "@/modules/knowledge/domain/review-anchor";
-import { createReviewRangeResolver, readReviewSelection, reviewAnchorRange, selectedReviewAnchor } from "@/components/knowledge/review-selection";
+import { createReviewRangeResolver, focusReviewAnchor, readReviewSelection, reviewAnchorRange, selectedReviewAnchor } from "@/components/knowledge/review-selection";
 
 // Every case is read off the page the reader really draws: the mapping is between that page and the
 // Markdown, and a hand-written page would only show that it agrees with itself.
@@ -281,5 +281,30 @@ describe("finding a passage again", () => {
     expect(reviewAnchorRange(root, markdown, anchor)?.toString()).toBe("Only");
     expect(reviewAnchorRange(root, markdown, { ...anchor, blockPath: [3] })).toBeNull();
     expect(reviewAnchorRange(root, markdown, { ...anchor, exact: "Onl" })).toBeNull();
+  });
+});
+
+describe("finding a quote that is inside a closed disclosure", () => {
+  const markdown = "<details>\n<summary>Outer</summary>\n\n<details>\n<summary>Inner</summary>\n\nA hidden passage.\n\n</details>\n\n</details>";
+
+  test("opens every disclosure around it before going to it", () => {
+    const root = page(markdown);
+    const anchor = choose(root, markdown, "details details p", "hidden").anchor!;
+    expect(anchor.exact).toBe("hidden");
+
+    const all = Array.from(root.querySelectorAll("details"));
+    expect(all).toHaveLength(2);
+    for (const each of all) each.open = false;
+    // jsdom lays nothing out, so it has no scrolling of its own.
+    const original = Element.prototype.scrollIntoView;
+    const scrolled = vi.fn();
+    Element.prototype.scrollIntoView = scrolled;
+    try {
+      focusReviewAnchor(root, markdown, anchor);
+
+      expect(all.map((each) => each.open)).toEqual([true, true]);
+      expect(scrolled).toHaveBeenCalledTimes(1);
+      expect(window.getSelection()!.toString()).toBe("hidden");
+    } finally { Element.prototype.scrollIntoView = original; }
   });
 });

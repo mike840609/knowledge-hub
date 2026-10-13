@@ -7,6 +7,19 @@ import { createReviewRangeResolver } from "./review-selection";
 
 type Marker = { id: string; count: number; quote: string; top: number };
 
+/**
+ * Where a quote is on the page. One inside a closed disclosure has no rectangle of its own — and
+ * an empty range reports the top of the viewport, which put its marker wherever that happened to
+ * be — so it is placed beside the nearest thing around it that is shown: the disclosure.
+ */
+function shownTop(range: Range): number {
+  const rect = range.getClientRects()[0];
+  if (rect) return rect.top;
+  let host = range.startContainer.parentElement;
+  while (host && host.getClientRects().length === 0) host = host.parentElement;
+  return (host ?? document.body).getBoundingClientRect().top;
+}
+
 /** Sibling controls leave the rendered Markdown and its canonical offsets untouched. */
 export function ReviewPassageMarkers({ readingRef, markdown, threads }: {
   readingRef: RefObject<HTMLDivElement | null>;
@@ -34,7 +47,7 @@ export function ReviewPassageMarkers({ readingRef, markdown, threads }: {
     const measure = () => {
       const origin = reading.getBoundingClientRect().top;
       const next = Array.from(groups.values()).map(({ range, ...group }) => ({
-        ...group, top: Math.round((range.getClientRects()[0]?.top ?? range.getBoundingClientRect().top) - origin - 2),
+        ...group, top: Math.round(shownTop(range) - origin - 2),
       }));
       setMarkers(previous => JSON.stringify(previous) === JSON.stringify(next) ? previous : next);
     };
