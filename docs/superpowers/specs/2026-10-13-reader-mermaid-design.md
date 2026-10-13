@@ -74,6 +74,21 @@ being turned into DOM by Mermaid's code in this origin. What guards it is
 `securityLevel: "strict"`, `htmlLabels: false`, and the policy's `script-src`,
 which refuses an inline script or handler whoever inserted it.
 
+Two things about those guards, plainly:
+
+- `htmlLabels: false` holds only because `htmlLabels` is in Mermaid's `secure`
+  list ("Assumed of Mermaid 12"). That is what stops a diagram's own text from
+  turning it back on. Without the entry the setting guards nothing.
+- While Mermaid lays a diagram out, it also puts a `<style>` holding the
+  author's `classDef` and `style` lines into the document, for that moment.
+  That is the very thing "The decision" holds against option A, and B does not
+  remove it from this moment; it only keeps it out of the page the reader is
+  left with. What confines it while it is there is Mermaid scoping its rules to
+  the drawing's own id (it compiles them under that selector; read in
+  12.2.0's `createUserStyles`), not `script-src`, which says nothing about
+  styles. If that scoping had a hole, nothing else here would confine that
+  moment.
+
 Laying out in a sandboxed frame of its own origin would close that too. It
 needs a route, a message protocol and a second copy of the script policy; it is
 not built. It becomes worth building when an advisory shows something at layout
@@ -167,8 +182,9 @@ moved: a comment is anchored in its DOM nodes, so what changes is the
 disclosure around it. Before a drawing arrives, and for good when there is
 none, the `<details>` is open and its `<summary>` is hidden, so the block reads
 as the code block it is today. When a drawing arrives the `<details>` closes
-and its `<summary>` shows `Source`. A redraw (a change of theme) does not close
-a source the reader has opened.
+and its `<summary>` shows `Source`. A redraw (a change of theme, or new source
+in the same place) does not close a source the reader has opened; when the new
+source cannot be drawn, the source opens and says why.
 
 `alt` is `Diagram (<type>). Its source follows.`, the type being what Mermaid
 reports. The source in the disclosure is the text alternative.
@@ -193,6 +209,16 @@ the same change as the code. A colour the author writes in the diagram
 
 **Theme.** When `data-theme` on `<html>` changes, each drawn block is drawn
 again, through the same queue. One `MutationObserver`, the queue's.
+
+**New source in the same place.** A block is also drawn again when the server
+sends it other source while it stays mounted, as a `router.refresh()` after an
+edit does: React keeps a block by its position, so the same `MermaidBlock`
+would otherwise show the new code beside the old picture. `MermaidBlock` draws
+when its theme or its `children` change, and `children` is a new element only
+when the server sends one, not when the block's own state changes. Until the
+replacement arrives the previous picture stays, as it does for a theme. Choosing
+`?revision=N` does not depend on this: Next keys the page by its search params,
+so that mounts a new block.
 
 **Font.** An image cannot use a font the page loaded, so a diagram is measured
 and drawn in `ui-sans-serif, system-ui, sans-serif`, not `--kh-font-sans`.
@@ -340,6 +366,13 @@ Each line is a requirement above.
   after it; the object URL is revoked on redraw and on unmount; and only the
   newest request for a block is drawn, so a block asked for twice, or one that
   left the page while it waited, costs Mermaid one call or none.
+- `MermaidBlock`, with the queue stubbed (`mermaid-block-client.test.tsx`): the
+  picture, `Source` and the reason as an outcome gives them; the code as
+  written and the block's place among the page's diagrams; a block asked again
+  for a theme and for new source in the same place, and not for the same
+  children; the picture of the old source kept until the new one arrives; a
+  late result not shown; the source opened when a drawn block's new source
+  cannot be drawn; `forget` on unmount; the code block's nodes unchanged.
 - The policy holds `img-src 'self' blob:` on a page and on `/s/*`, and
   `next.config.ts` says the same in both places.
 - `isAllowedMarkdownImageSrc("blob:…")` is still false.
@@ -360,13 +393,25 @@ Each line is a requirement above.
   and with `position:fixed`; and a label that closes the SVG and opens an
   `<img onerror>`. Across them: no flag was set on `window`, no dialog opened,
   no request left the origin, each figure holds only its image (in its box),
-  its `<details>` and, when not drawn, its reason line, the first paragraph and
-  the body keep their computed position and display, and nothing covers the
-  page's corner. One input is not drawn: the
+  its `<details>` and, when not drawn, its reason line, the first paragraph keeps
+  its computed position and display, the body its computed position, and
+  nothing covers the page's corner. One input is not drawn: the
   `fill:url(https://…)` one is refused by Mermaid's own parser ("Parse error"),
   as are `style` and `background:` forms of it, so for that input "no request
   left the origin" rests on Mermaid's refusal and on the image rule, not on a
   drawn diagram. The other nine were drawn.
+  What this test cannot see. An image request that the policy blocks never
+  appears as a request, so the list of requests is empty whether or not a
+  diagram tried one: for images, "no request left the origin" rests on the
+  policy (`img-src 'self' blob:`), not on this test. And it reads the page's
+  elements and styles after the diagrams have settled and been clicked, so it
+  does not observe the page while Mermaid lays a diagram out. What it does
+  cover from that moment is what that moment could leave behind (a flag on
+  `window`, a dialog, a non-image request, since those listeners are attached
+  before the page loads) and that nothing of the drawing remains afterwards.
+- Other source sent into the open page (a tree change's `router.refresh()`
+  after an edit through the API): the diagram is drawn from it, and the page is
+  not reloaded.
 - A comment on the source: open `Source`, select, comment, reload, choose the
   thread; the disclosure opens and the quote is selected.
 - The same for a quote inside an author's `<details>`.

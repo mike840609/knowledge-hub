@@ -123,3 +123,49 @@ Method: a throwaway Playwright spec (not committed) run through the e2e harness 
 - Browsers other than Chromium. The image approach rests on behaviour all three engines share, and it was run in one. The heading measurement above also depends on Chromium's scroll anchoring, and was not repeated in an engine without it.
 - The size of the chunks for any diagram type but a flowchart: other types may load further chunks.
 - Time to draw on a slow device. The one figure seen is from a fast machine: an image visible 443 ms after navigation for one flowchart, and ten diagrams settled in about 1.1 s (Task 6 run).
+
+## Final review fixes, 2026-10-14
+
+The whole-branch review found one defect, and its fix is below.
+
+**Fixed: a diagram whose source changes in place kept the old picture.** `MermaidBlock` drew in an effect
+that depended on the theme alone, and read the source from the page only when that effect ran. When the
+server sent other Markdown into the same position while the block stayed mounted, the `<code>` showed the
+new source and the `<img>` the old diagram. The effect now also depends on `children`, which is a new
+element when the server sends one and not when the block's own state changes.
+
+- `tests/unit/mermaid-block-client.test.tsx`, new, 13 tests: the component's first client-side test, with the
+  queue stubbed. Run on the code before the fix, 2 failed and 11 passed: the case that renders the block
+  again in place with other source (`draw` was called once, not twice) and the case in which a drawn block's
+  new source cannot be drawn (it needs that second `draw`); both are this one defect. After the fix, 13 passed.
+- `tests/e2e/zz-mermaid.spec.ts`, one new test: a note with a flowchart is opened, updated through
+  `PATCH /api/documents/:id` to a sequence diagram, and the open page is refreshed by a tree change (creating
+  a folder ends in `router.refresh()`). On the code before the fix it failed: the `<code>` showed
+  `sequenceDiagram` and the image still had the alt `Diagram (flowchart-v2)...`. After the fix it passes, and
+  the page was not reloaded (a marker on `window` survived).
+- **A switch of revision does not reproduce it.** A first browser test chose `?revision=1` from the History tab
+  and passed on the code before the fix: Next keys the page by its search params, so that navigation mounts a
+  new block and the stale one never exists. That test was dropped for the one above. The case that does reach
+  a mounted block is a refresh.
+
+Also in this wave, tests only: the two e2e policy assertions (`share-link.spec.ts`,
+`content-security-policy.spec.ts`) now require the whole directive `img-src 'self' blob:` rather than
+containing `img-src 'self'`; `tests/unit/review-marker-position.test.tsx` gains a case for a quote in no
+disclosure, so it has seven cases, not the six above.
+
+Runs, 2026-10-14, on the tree after all of the above:
+
+- `vitest run --config vitest.config.ts` (whole unit suite): 193 test files, 2513 tests passed. Exit 0.
+- `tsc --noEmit`: exit 0. `eslint .`: exit 0.
+- `command npm run test:e2e -- tests/e2e/zz-mermaid.spec.ts tests/e2e/zz-mermaid-hostile.spec.ts tests/e2e/share-link.spec.ts tests/e2e/content-security-policy.spec.ts`
+  (production build, the project's harness): 13 passed, exit 0. That is `zz-mermaid.spec.ts` 8,
+  `zz-mermaid-hostile.spec.ts` 1, `share-link.spec.ts` 1, `content-security-policy.spec.ts` 3.
+
+What this supersedes, and what it does not:
+
+- Superseded: "192 test files, 2499 unit tests" (now 193 and 2513), and "`zz-mermaid.spec.ts` 7,
+  `zz-mermaid-hostile.spec.ts` 1: 8 of 8" (now 8 and 1, with the two policy specs: 13 of 13).
+- Not superseded, and not run again: `make test-e2e`, 339 passed, 2 skipped, above. It ran before this wave, so
+  it does not cover the change to `mermaid-block.tsx`, the new test, or the two policy assertions as the whole
+  suite; only the four files above were run after them. `make verify` (which includes the build) was not run
+  again either; unit, `tsc` and `eslint` were run separately, and the production build was made by each e2e run.

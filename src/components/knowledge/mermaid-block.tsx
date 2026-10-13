@@ -22,8 +22,8 @@ export function MermaidBlock({ children }: { children?: ReactNode }) {
   const [outcome, setOutcome] = useState<DiagramOutcome | null>(null);
   const theme = useSyncExternalStore(subscribeTheme, readTheme, () => "");
 
-  // Runs when the theme changes, and when the server sends other code into this place (another
-  // revision, or a refresh after an edit): `children` is a new element then, and not for the block's
+  // Runs when the theme changes, and when the server sends other code into this place while the block
+  // stays mounted (a refresh after an edit): `children` is a new element then, and not for the block's
   // own state. The picture on show stays until its replacement arrives.
   useEffect(() => {
     const element = figure.current;
