@@ -586,6 +586,23 @@ Cancel is the one way to, and it asks first. ⌘K stays the global search and th
 editor does not bind it. The editor does bind ⌘B and ⌘I for its text; ⌘I is
 also the reading page's Open details, and the editing page has no such panel.
 
+In a comment form (a new comment, a reply, an edit of one's own comment — one
+form, `ReviewReplyForm`), ⌘Enter sends through the form's own submit button, and
+only when that button is enabled, as it saves in the composer; Enter alone stays
+a line of the comment. The button says so in its tooltip and `aria-keyshortcuts`.
+`Esc` in these forms never closes the comments and never discards: it leaves
+only an edit in which nothing was changed, the composer's rule again.
+
+`D` opens and closes the comments of the document being read, on the owner's
+page and on a shared one. It is `REVIEW_TOGGLE_SHORTCUT` in the registry — a key
+there and not an action, because the shared page has no palette to list it in —
+and the two panels bind it through `useReviewToggleKey`, held to
+`isSingleKeyShortcut` like every single key. The control that does the same
+thing takes its `aria-keyshortcuts` from it, and the owner's its tooltip. On the
+owner's page it acts when that control is there (discussions to open, or open
+ones to close). Where the comments are a drawer, the drawer is a dialog and keeps
+its keys: `D` opens it and `Esc` closes it. Not `C` (Create document) nor `M` (Move).
+
 ⌘\ (Ctrl \ elsewhere) collapses and expands the primary navigation, and is
 `NAV_TOGGLE_SHORTCUT` in the registry: the app shell reads the key from there,
 the collapse button takes its `aria-keyshortcuts` from there, and the palette's

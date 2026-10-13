@@ -11,6 +11,10 @@ import { buttonClasses } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { compareReviewPassages, useReviewRailLayout } from "./review-rail-layout";
+import { matchesShortcut } from "@/lib/shortcut-keys";
+
+/** Sends what is written, as it saves a document in the composer. Enter alone stays a line of the comment. */
+const SUBMIT_SHORTCUT = "Meta+Enter Control+Enter";
 
 export async function reviewRequest<T>(url: string, body?: unknown): Promise<T> {
   const response = await fetch(url, { method: body === undefined ? "GET" : "POST", credentials: "same-origin", cache: "no-store", referrerPolicy: "origin", redirect: "error", headers: body === undefined ? undefined : { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -32,7 +36,14 @@ export function ReviewReplyForm({ onSubmit, label = "Reply", openRequest = 0, in
   const [error, setError] = useState<string>();
   const request = useRef<{ body: string; key: string } | null>(null);
   if (!expanded) return <Button type="button" variant="ghost" className="mt-3" onClick={() => setExpanded(true)}>Reply</Button>;
-  return <form className="mt-3 space-y-2" onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); } }} onSubmit={async event => {
+  return <form className="mt-3 space-y-2" onKeyDown={event => {
+    // Through the form's own button, so the key does nothing the button would not.
+    if (matchesShortcut(event.nativeEvent, SUBMIT_SHORTCUT)) { event.preventDefault(); event.currentTarget.querySelector<HTMLButtonElement>('button[type="submit"]:not(:disabled)')?.click(); return; }
+    if (event.key !== "Escape") return;
+    // Esc never closes the rail from here, and never discards: it leaves only an edit nothing was changed in.
+    event.preventDefault(); event.stopPropagation();
+    if (onCancel && !busy && body === initial) onCancel();
+  }} onSubmit={async event => {
     event.preventDefault(); if (busy || !body.trim()) return;
     if (!request.current || request.current.body !== body) request.current = { body, key: crypto.randomUUID() };
     setBusy(true); setError(undefined);
@@ -41,7 +52,7 @@ export function ReviewReplyForm({ onSubmit, label = "Reply", openRequest = 0, in
     <Textarea aria-label={label} placeholder={label === "Reply" ? "Reply…" : "Add a comment…"} rows={2} autoFocus className="!min-h-20 resize-y" value={body} disabled={busy} onChange={event => setBody(event.target.value)} required maxLength={6000} />
     {[...body].length >= 2700 && <p className="text-caption text-kh-text-muted">{[...body].length}/3,000</p>}
     {error && <p role="alert" className="text-body-sm">{error}</p>}
-    <div className="flex justify-end gap-1">{(label === "Reply" || onCancel) && <Button type="button" variant="ghost" disabled={busy} onClick={onCancel ?? (() => setExpanded(false))}>Cancel</Button>}<Button type="submit" disabled={busy || !body.trim() || [...body].length > 3000}>{busy ? "Saving…" : submitLabel}</Button></div>
+    <div className="flex justify-end gap-1">{(label === "Reply" || onCancel) && <Button type="button" variant="ghost" disabled={busy} onClick={onCancel ?? (() => setExpanded(false))}>Cancel</Button>}<Tooltip label={submitLabel} shortcut={SUBMIT_SHORTCUT}><Button type="submit" aria-keyshortcuts={SUBMIT_SHORTCUT} disabled={busy || !body.trim() || [...body].length > 3000}>{busy ? "Saving…" : submitLabel}</Button></Tooltip></div>
   </form>;
 }
 
