@@ -172,8 +172,12 @@ export function createDiagramQueue(deps: DiagramDeps) {
       gone.delete(key);
       const request = (newest.get(key) ?? 0) + 1;
       newest.set(key, request);
-      if (index >= MAX_DIAGRAMS) return Promise.resolve({ reason: DIAGRAM_REASONS.many });
-      if (source.length > MAX_DIAGRAM_CHARS) return Promise.resolve({ reason: DIAGRAM_REASONS.long });
+      const declined = index >= MAX_DIAGRAMS ? DIAGRAM_REASONS.many : source.length > MAX_DIAGRAM_CHARS ? DIAGRAM_REASONS.long : null;
+      if (declined) {
+        // The block reads as code from here on: the picture it showed, if it had one, is given back.
+        release(key);
+        return Promise.resolve({ reason: declined });
+      }
       const job = tail.then(() => one(key, request, source));
       // `one` does not reject; pause failures are caught so they do not break the queue.
       tail = job.then(() => deps.pause()).catch(() => {});

@@ -1,6 +1,6 @@
 // Checks, in a real browser and under the production policy, what
 // docs/superpowers/specs/2026-10-13-reader-mermaid-design.md assumes of Mermaid.
-// Run before changing mermaid's version, and after:  node scripts/test/mermaid-assumptions.mjs
+// Run before changing mermaid's version, and after:  make test-mermaid-assumptions
 // It exits non-zero when an assumption fails. Nothing here is drawn by the product: it is the
 // evidence for the lists in src/components/knowledge/mermaid-queue.ts, which this file holds copies of.
 import { readFile } from "node:fs/promises";
