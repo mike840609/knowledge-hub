@@ -40,7 +40,14 @@ export type DiagramEngine = {
   render(id: string, source: string): Promise<{ svg: string; diagramType: string }>;
 };
 /** What the queue needs of a browser, handed to it so that its rules can be read without one. */
-export type DiagramDeps = { load(): Promise<DiagramEngine>; toUrl(svg: string): string; revoke(url: string): void; pause(): Promise<void> };
+export type DiagramDeps = {
+  load(): Promise<DiagramEngine>;
+  toUrl(svg: string): string;
+  /** Whether the browser can show what is at `url` as an image. */
+  decodes(url: string): Promise<boolean>;
+  revoke(url: string): void;
+  pause(): Promise<void>;
+};
 
 const MAX_REASON_CHARS = 200;
 
@@ -56,12 +63,27 @@ function sizeOf(svg: string): { width: number; height: number } | null {
   return width > 0 && height > 0 ? { width, height } : null;
 }
 
+const XLINK = 'xmlns:xlink="http://www.w3.org/1999/xlink"';
+
+/**
+ * The two things Mermaid 12.2.0 writes that an image cannot read, mended; nothing else is rewritten. An image
+ * is parsed as XML, and Mermaid's string is HTML's serialisation: a non-breaking space comes out as `&nbsp;`,
+ * an entity XML does not know, and a link (`click A href "…"`) as `xlink:href` with the prefix undeclared,
+ * since Mermaid declares it only when it is given a container. Either made the whole picture fail to load.
+ */
+function mended(svg: string): string {
+  const spaced = svg.replaceAll("&nbsp;", "&#160;");
+  const root = /<svg\b[^>]*>/.exec(spaced)?.[0] ?? "";
+  return spaced.includes("xlink:") && !root.includes("xmlns:xlink=") ? spaced.replace(/<svg\b/, `<svg ${XLINK}`) : spaced;
+}
+
 /**
  * Draws the page's diagrams one at a time, in the order they ask, and keeps the URL each one is
  * shown from. The SVG Mermaid returns goes into `toUrl` and nowhere else: it is never parsed by
  * the page. Everything it declines is an outcome with a reason, never a throw. Only the newest
  * request for a block is drawn: an older one that has not begun is dropped, and one under way
- * makes no URL, so the picture a block shows lasts until its replacement exists.
+ * keeps no URL, so the picture a block shows lasts until its replacement exists. A URL is kept only
+ * once the browser has shown it can load it as an image: a picture that would not load is refused.
  */
 export function createDiagramQueue(deps: DiagramDeps) {
   let engine: Promise<DiagramEngine> | undefined;
@@ -71,15 +93,19 @@ export function createDiagramQueue(deps: DiagramDeps) {
   const gone = new WeakSet<object>();
   const newest = new WeakMap<object, number>();
 
-  function release(key: object) {
-    const url = urls.get(key);
-    if (url === undefined) return;
-    urls.delete(key);
+  function discard(url: string) {
     try {
       deps.revoke(url);
     } catch {
       // revoke failure does not stop the queue
     }
+  }
+
+  function release(key: object) {
+    const url = urls.get(key);
+    if (url === undefined) return;
+    urls.delete(key);
+    discard(url);
   }
 
   async function render(source: string): Promise<{ svg: string; type: string; width: number; height: number } | { reason: string }> {
@@ -119,15 +145,24 @@ export function createDiagramQueue(deps: DiagramDeps) {
     if (!wanted()) return { reason: DIAGRAM_REASONS.unsupported };
     const result = await render(source);
     if (!wanted()) return { reason: DIAGRAM_REASONS.unsupported };
-    release(key);
-    if ("reason" in result) return result;
-    let url: string;
-    try {
-      url = deps.toUrl(result.svg);
-    } catch {
-      // toUrl failure prevents creating this diagram
-      return { reason: DIAGRAM_REASONS.unsupported };
+    if ("reason" in result) {
+      release(key);
+      return result;
     }
+    let url: string | undefined;
+    let loads = false;
+    try {
+      url = deps.toUrl(mended(result.svg));
+      // An `<img>` says nothing when its source is not an image: the reader would see a broken picture over a
+      // closed source. Asked here, while the block still reads as code.
+      loads = await deps.decodes(url);
+    } catch {
+      // a URL that cannot be made, or checked, is a drawing that cannot be shown
+    }
+    if (url !== undefined && !(loads && wanted())) discard(url);
+    if (!wanted()) return { reason: DIAGRAM_REASONS.unsupported };
+    release(key);
+    if (url === undefined || !loads) return { reason: DIAGRAM_REASONS.unsupported };
     urls.set(key, url);
     return { drawn: { url, type: result.type, width: result.width, height: result.height } };
   }
@@ -224,6 +259,12 @@ const browser: DiagramDeps = {
     };
   },
   toUrl: (svg) => URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" })),
+  decodes: (url) => new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => resolve(image.naturalWidth > 0);
+    image.onerror = () => resolve(false);
+    image.src = url;
+  }),
   revoke: (url) => URL.revokeObjectURL(url),
   pause: () => new Promise((resolve) => setTimeout(resolve)),
 };
