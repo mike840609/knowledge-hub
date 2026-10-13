@@ -27,6 +27,8 @@ export type ReviewEntry = {
   /** Every discussion, and those still open — what the owner's list shows by default, so what the control shows. */
   count: number;
   awaiting: number;
+  /** Share-link comments the owner has not seen; clears when the panel opens. */
+  unread: number;
   open: boolean;
   toggle: () => void;
   /** Starts a discussion on what is selected; absent while nothing selected can take one. */

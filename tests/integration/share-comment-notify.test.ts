@@ -1,4 +1,3 @@
-import type { KnowledgeUnitOfWork } from "@/modules/knowledge/ports/unit-of-work";
 import { randomUUID } from "node:crypto";
 import { beforeAll, afterAll, describe, it, expect } from "vitest";
 import type { Pool } from "mariadb";
@@ -53,6 +52,13 @@ describe("share-comment notify: link-origin comments notify the owner",()=>{
   expect(await f.unread()).toHaveLength(2);
   await f.service.setResolution(f.caller,{documentId:f.documentId,threadId:t.id,status:"RESOLVED"});
   expect(await f.unread()).toHaveLength(2);
+ });
+ it("hiding the thread afterwards removes its notification",async()=>{
+  const f=await fixture();
+  const t=await f.service.createForLink(f.viewer,{token:f.token,expectedRevisionId:f.revisionId,anchor:f.anchor,body:"PRIVATE COMMENT",idempotencyKey:randomUUID()});
+  expect((await f.service.listUnreadForOwner(f.caller)).notifications).toHaveLength(1);
+  await f.service.setVisibility(f.caller,{documentId:f.documentId,threadId:t.id,visibility:"HIDDEN",reason:"spam"});
+  expect((await f.service.listUnreadForOwner(f.caller)).notifications).toHaveLength(0);
  });
  it("markDocumentRead clears the badge and refuses non-owners",async()=>{
   const f=await fixture();

@@ -137,6 +137,7 @@ export function DocumentHeader({
                 <MessageSquare className="h-4 w-4" aria-hidden="true" />
                 {/* The number is what awaits an answer, which is what the list opens on; none, and it is the glyph alone. */}
                 {review.entry.awaiting > 0 ? <span aria-hidden="true">{review.entry.awaiting}</span> : null}
+                {review.entry.unread > 0 ? <Badge variant="warning" aria-label={`${review.entry.unread} unread share comments`}>{review.entry.unread} new</Badge> : null}
               </button>
             </Tooltip>
           ) : null}

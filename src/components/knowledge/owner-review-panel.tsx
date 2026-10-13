@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { MessageSquarePlus, RefreshCw, X } from "lucide-react";
 import type { OwnerReviewThreadView } from "@/modules/knowledge/domain/document-review";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { readStored, removeStored, writeStored } from "@/components/shell/use-persisted-state";
@@ -46,7 +45,9 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
   const canComment = !!result?.writesEnabled && !readOnly && !revisionChanged;
   const base = `/api/documents/${documentId}/review-threads`;
   const { unreadCount, markRead } = useShareCommentUnread(documentId);
-  const load = useCallback(async () => { try { setResult(await reviewRequest(base)); setError(undefined); await markRead(); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not load discussions."); } }, [base, markRead]);
+  const load = useCallback(async () => { try { setResult(await reviewRequest(base)); setError(undefined); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not load discussions."); } }, [base]);
+  // Opening the panel marks this document's notices read; a closed panel clears nothing.
+  useEffect(() => { if (open && result && !revisionChanged) void markRead(); }, [open, result, revisionChanged, markRead]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { setActiveThreadId(undefined); }, [documentId, revisionId]);
   // Open on arrival, once, where a discussion awaits the owner that they have not closed the rail
@@ -95,8 +96,8 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
   const startHere = canComment && ready && !open;
   const said = canComment && !ready ? hint : undefined;
   useEffect(() => {
-    publish?.(count > 0 || open || startHere || said ? { count, awaiting, open, toggle, comment: startHere ? () => { capture(); changeOpen(true); } : undefined, hint: said } : null);
-  }, [publish, count, awaiting, open, toggle, changeOpen, startHere, said, capture]);
+    publish?.(count > 0 || open || startHere || said || unreadCount > 0 ? { count, awaiting, unread: unreadCount, open, toggle, comment: startHere ? () => { capture(); changeOpen(true); } : undefined, hint: said } : null);
+  }, [publish, count, awaiting, unreadCount, open, toggle, changeOpen, startHere, said, capture]);
   useEffect(() => () => publish?.(null), [publish]);
   const refresh = <Tooltip label="Refresh comments"><Button type="button" variant="ghost" icon aria-label="Refresh comments" onClick={() => void load()}><RefreshCw className="size-4" aria-hidden="true" /></Button></Tooltip>;
   return <>
@@ -113,7 +114,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
                 drawer names itself and closes itself, so the name and the cross are the rail's alone.
                 A cross, not a panel glyph: Details, just above, is the panel glyph. */}
             <div className="flex items-center justify-between gap-2">
-              <div className="flex min-w-0 items-center gap-1"><h2 className="kh-review-rail-only text-body font-medium">Comments</h2>{unreadCount > 0 && <Badge variant="warning" aria-label={`${unreadCount} unread share comments`}>{unreadCount} new</Badge>}{count > 0 && <ReviewFilterMenu value={filter} onChange={setFilter} />}</div>
+              <div className="flex min-w-0 items-center gap-1"><h2 className="kh-review-rail-only text-body font-medium">Comments</h2>{count > 0 && <ReviewFilterMenu value={filter} onChange={setFilter} />}</div>
               <div className="flex shrink-0 items-center gap-1">{refresh}<span className="kh-review-rail-only"><Tooltip label="Hide comments"><Button type="button" variant="ghost" icon aria-label="Collapse discussions" onClick={() => changeOpen(false)}><X className="size-4" aria-hidden="true" /></Button></Tooltip></span></div>
             </div>
             {error && <p role="alert" className="mt-3 text-body-sm">{error}</p>}

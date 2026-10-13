@@ -30,9 +30,11 @@ export class DocumentReviewService {
       const events=await r.shareCommentEvents.listUnreadByRecipient(caller.identity.id);
       const views=[];
       for(const e of events) {
+        const thread=await r.reviewThreads.findById(e.threadId);
         const revision=await r.revisions.findCurrent(e.documentId);
         const comments=await r.reviewComments.listByThread(e.threadId);
         const comment=comments.find(c=>c.id===e.commentId);
+        if(!thread || thread.visibility==="HIDDEN" || isRetractedThread(comments)) continue;
         if(!revision || !comment || comment.deletedAt || comment.visibility==="HIDDEN") continue;
         const author=await r.users.findById(e.createdByUserId);
         views.push(projectShareCommentNotification({id:e.id,workspaceId:e.workspaceId,documentId:e.documentId,documentTitle:revision.title,threadId:e.threadId,commentId:e.commentId,authorName:author?.name,body:comment.body,createdAt:e.createdAt}));
