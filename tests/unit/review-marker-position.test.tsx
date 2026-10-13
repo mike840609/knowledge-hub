@@ -24,7 +24,14 @@ describe("where a passage marker sits", () => {
     expect(shownTop(rangeIn(document.getElementById("p")!, 520))).toBe(300);
   });
 
-  test("beside the outermost of two closed disclosures", () => {
+  test("beside the outermost of two closed disclosures, not the innermost", () => {
+    document.body.innerHTML = "<details id=o><summary>Outer</summary><details id=i><summary>Inner</summary><p id=p>hidden</p></details></details>";
+    at(document.getElementById("o")!, 100);
+    at(document.getElementById("i")!, 140);
+    expect(shownTop(rangeIn(document.getElementById("p")!, 400))).toBe(100);
+  });
+
+  test("beside the closed outer disclosure when the one inside it is open", () => {
     document.body.innerHTML = "<details id=o><summary>Outer</summary><details open id=i><summary>Inner</summary><p id=p>hidden</p></details></details>";
     at(document.getElementById("o")!, 100);
     at(document.getElementById("i")!, 140);
