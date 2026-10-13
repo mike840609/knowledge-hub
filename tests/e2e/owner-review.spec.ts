@@ -270,3 +270,30 @@ test("a document nobody has commented on shows the owner no way into discussions
   await expect(page.locator("[data-review-marker]")).toHaveCount(0);
   expect(await page.locator("[data-review-document]").evaluate((article) => getComputedStyle(article).paddingRight)).toBe("0px");
 });
+
+test("opening and closing the owner's discussions moves nothing under the pointer where the pane has room", async ({ page, request }) => {
+  const doc = await documentWithDiscussion(request);
+  const article = page.locator("[data-review-document]");
+  const crumb = page.getByRole("region", { name: "Document content", exact: true }).getByRole("navigation", { name: "Breadcrumb" });
+  const edit = page.getByRole("link", { name: "Edit", exact: true });
+  const where = async () => ({ crumb: Math.round((await crumb.boundingBox())!.x), article: Math.round((await article.boundingBox())!.x), edit: Math.round((await edit.boundingBox())!.x) });
+  // 1920: room for the rail beside the column as it stood. 1440: the pane is narrower than the reading
+  // width beside the outline, so the outline's slot is what the rail takes. Re-centred, the path line's
+  // controls leapt 224-272px right and the column slid 48px left.
+  for (const width of [1920, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(doc.href);
+    const rail = page.getByRole("complementary", { name: "Document discussions" });
+    await expect(rail).toBeVisible();
+    await page.getByRole("button", { name: "Collapse discussions" }).click();
+    await expect(rail).toBeHidden();
+    // Settled: the path line and the article share one left edge once any slide has finished.
+    await expect.poll(async () => { const at = await where(); return at.crumb === at.article; }).toBe(true);
+    const closed = await where();
+    await page.getByRole("button", { name: /^Open discussions/ }).click();
+    await expect(rail).toBeVisible();
+    // The column slides when it must; let a slide finish before measuring where it ended.
+    await expect.poll(where).toEqual(closed);
+    expect(await page.getByRole("region", { name: "Document content" }).evaluate((pane) => pane.scrollWidth <= pane.clientWidth)).toBe(true);
+  }
+});
