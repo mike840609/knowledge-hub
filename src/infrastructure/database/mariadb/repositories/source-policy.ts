@@ -3,11 +3,12 @@ import { isStoredImage } from "@/modules/sources/domain/stored-image";
 import type { AssetRepository } from "@/modules/sources/ports/asset-repository";
 import type { EntryRepository } from "@/modules/sources/ports/entry-repository";
 import { imageContentType, resolveImagePath } from "@/shared/markdown/image-path";
+import type { DocumentRepository } from "@/modules/knowledge/ports/document-repository";
 import type { SourcePolicyPort } from "@/modules/knowledge/ports/source-policy";
 import type { SourceRepository } from "@/modules/sources/ports/source-repository";
 
 export class MariaDbSourcePolicyRepository implements SourcePolicyPort {
-  constructor(private readonly sources: SourceRepository, private readonly entries: EntryRepository, private readonly assets: AssetRepository) {}
+  constructor(private readonly sources: SourceRepository, private readonly entries: EntryRepository, private readonly assets: AssetRepository, private readonly documents: Pick<DocumentRepository, "findById">) {}
 
   private map(source: Awaited<ReturnType<SourceRepository["findById"]>>): SourcePolicy | null {
     if (!source) return null;
@@ -26,13 +27,23 @@ export class MariaDbSourcePolicyRepository implements SourcePolicyPort {
 
   async findStoredImage(documentId: string, src: string): Promise<StoredImage | null> {
     const entry = await this.entries.findByDocumentId(documentId);
-    if (!entry) return null;
-    const sourcePath = resolveImagePath(entry.sourcePath, src);
+    if (entry) return this.storedImage(entry.sourceId, entry.sourcePath, src);
+    // A Hub page has no place in a folder. Its images are its Source's, read from the Source root.
+    const document = await this.documents.findById(documentId);
+    return document ? this.storedImage(document.sourceId, "", src) : null;
+  }
+
+  async findStoredSourceImage(sourceId: string, src: string): Promise<StoredImage | null> {
+    return this.storedImage(sourceId, "", src);
+  }
+
+  private async storedImage(sourceId: string, documentPath: string, src: string): Promise<StoredImage | null> {
+    const sourcePath = resolveImagePath(documentPath, src);
     const contentType = sourcePath === null ? null : imageContentType(sourcePath);
     if (sourcePath === null || contentType === null) return null;
-    const asset = await this.assets.findByPath(entry.sourceId, sourcePath);
+    const asset = await this.assets.findByPath(sourceId, sourcePath);
     if (!asset || !isStoredImage(asset)) return null;
-    return { contentHash: asset.contentHash!, contentType, sourcePath, documentPath: entry.sourcePath };
+    return { contentHash: asset.contentHash!, contentType, sourcePath, documentPath };
   }
 
   async findById(sourceId: string): Promise<SourcePolicy | null> { return this.map(await this.sources.findById(sourceId)); }

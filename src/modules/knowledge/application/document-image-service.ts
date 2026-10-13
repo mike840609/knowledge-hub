@@ -1,7 +1,8 @@
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import type { StoredImage } from "../domain/source-policy";
 import type { KnowledgeUnitOfWork } from "../ports/unit-of-work";
-import { requireVisibleDocument } from "./internal/require-visible-document";
+import { syncCallerIdentity } from "@/modules/identity/application/sync-caller-identity";
+import { requireSourcePolicy, requireVisibleDocument } from "./internal/require-visible-document";
 
 export class DocumentImageService {
   constructor(private readonly unitOfWork: KnowledgeUnitOfWork) {}
@@ -16,6 +17,19 @@ export class DocumentImageService {
     return this.unitOfWork.run(async (repositories) => {
       await requireVisibleDocument(repositories, caller, documentId, true);
       return repositories.sourcePolicy.findStoredImage(documentId, src);
+    });
+  }
+
+  /**
+   * An image of a Source, for the editor of a note that is not a document yet.
+   * The right to see it is the right to read the Source, as `getSource` checks it.
+   */
+  async findInSource(caller: CallerContext, sourceId: string, src: string): Promise<StoredImage | null> {
+    return this.unitOfWork.run(async (repositories) => {
+      await syncCallerIdentity(repositories.users, caller);
+      const policy = await requireSourcePolicy(repositories, sourceId);
+      await repositories.workspaceAccess.requireMembership(caller, policy.workspaceId);
+      return repositories.sourcePolicy.findStoredSourceImage(sourceId, src);
     });
   }
 }

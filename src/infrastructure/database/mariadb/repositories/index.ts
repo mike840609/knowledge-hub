@@ -61,7 +61,7 @@ export function createRepositories(connection: DatabaseConnection): SourceReposi
     revisions,
     tree,
     linkedEntries: new MariaDbLinkedEntryRepository(connection),
-    sourcePolicy: new MariaDbSourcePolicyRepository(sources, entries, assets),
+    sourcePolicy: new MariaDbSourcePolicyRepository(sources, entries, assets, documents),
     search: new MariaDbKnowledgeSearchRepository(connection),
     workspaces,
     workspaceMemberships,

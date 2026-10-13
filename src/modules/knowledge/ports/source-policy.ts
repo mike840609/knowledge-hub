@@ -10,4 +10,6 @@ export interface SourcePolicyPort {
    * already decided the reader may see this document.
    */
   findStoredImage(documentId: string, src: string): Promise<StoredImage | null>;
+  /** The same, read from the root of a Source: for an editor whose note is not a document yet. Authorizes nothing. */
+  findStoredSourceImage(sourceId: string, src: string): Promise<StoredImage | null>;
 }

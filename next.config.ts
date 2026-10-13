@@ -38,7 +38,7 @@ const nextConfig: NextConfig = {
       },
       // Image bytes (folder-sync images spec §6.1). Last, so they win: a
       // directly opened SVG must get the sandboxing policy, not the page one.
-      ...["/api/documents/:documentId/asset", "/s/:token/asset"].map((source) => ({
+      ...["/api/documents/:documentId/asset", "/api/sources/:sourceId/asset", "/s/:token/asset"].map((source) => ({
         source,
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },
