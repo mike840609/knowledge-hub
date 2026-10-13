@@ -87,3 +87,16 @@ Screenshots are local artifacts in `/tmp/user-guide-illustrations/`; original gu
   missing generated files; reran successfully after the build completed.
 - Inspected the updated desktop screenshot at `/tmp/user-guide-pr/desktop-zh.png`.
   Existing light/dark, mobile, focus, disclosure and contextual link assertions passed.
+
+## CI breadcrumb alignment fix
+
+- PR #181 run `38324631861` failed only in the breadcrumb alignment browser case:
+  Help's breadcrumb x=312 instead of the standard x=376 at 1440px. The e2e
+  aggregate failed because that shard failed; other jobs passed.
+- Cause: the guide's widened grid container also widened its PageHeader.
+- Fix: keep header/introduction/actions in `kh-page`; place only the navigation
+  and article grid in `kh-page-wide`, as required by the design contract.
+- Existing breadcrumb test unchanged. Targeted ESLint and whitespace checks passed.
+- Production build and both browser files passed (2/2): breadcrumb-alignment and
+  user-guide, run `53340171-a71d-4fc2-8527-db95a02c57b2` on isolated port 3127.
+- Updated desktop screenshot inspected at `/tmp/user-guide-ci-fix/desktop-zh.png`.

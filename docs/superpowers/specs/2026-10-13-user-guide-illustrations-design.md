@@ -58,3 +58,10 @@ explanation links to Sources and the existing `keep-in-sync` identity guidance.
 Preserve guide locale in guide links. Do not invent a source ID or route readers to
 new-source import for existing-source exclusions. Links only navigate; no sync,
 import or settings mutation is triggered.
+
+## Header alignment correction
+
+The guide's PageHeader, introduction and entry links retain the standard `kh-page`
+container to honor the cross-page breadcrumb origin. Only the chapter-navigation
+and article grid uses `kh-page-wide`, following the same composition as Graph.
+The existing breadcrumb alignment test remains unchanged.

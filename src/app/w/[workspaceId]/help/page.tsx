@@ -20,12 +20,14 @@ export default async function UserGuidePage({params,searchParams}:{params:Promis
   const personal=state.workspace.type==="PERSONAL";
   const locale=lang==="zh-TW"?"zh-TW":"en",zh=locale==="zh-TW",content=userGuideContent(locale),base=`/w/${workspaceId}`;
   const link="kh-focus-ring rounded-md text-kh-link underline-offset-4 hover:underline";
-  return <main className="kh-page-wide pb-6" lang={locale}>
+  return <main className="pb-6" lang={locale}>
+    <div className="kh-page">
     <PageHeader location={personal ? "Home" : "Sources"} locationHref={`${base}/${personal ? "home" : "sources"}`} title={content.title} actions={<nav aria-label="Guide language" className="flex gap-3">{[{lang:"en",label:"English"},{lang:"zh-TW",label:"繁體中文"}].map(l=><Link key={l.lang} lang={l.lang} className={link} href={`${base}/help?lang=${l.lang}`} aria-current={locale===l.lang?"page":undefined}>{l.label}</Link>)}</nav>} />
     <p className="mt-2 text-body text-kh-text-muted">{content.intro}</p>
     {!personal?<p className="mt-3 text-body text-kh-text-muted">{zh?"你目前位於 Team workspace。同步與疑難排解步驟依你的權限使用；Home、Insights 與個人整理章節適用 My Space。":"You are in a Team workspace. Sync and troubleshooting steps depend on your permissions; Home, Insights and personal organization sections apply to My Space."}</p>:null}
     <div className="mt-4 flex flex-wrap gap-4 text-body"><Link className={link} href={`${base}/sources/import`}>{zh?"開始匯入":"Import folder"}</Link><Link className={link} href={`${base}/sources/import/guide?lang=${locale}`}>{zh?"Markdown 格式、knowledge_id 與匯入限制":"Markdown format, knowledge_id and import limits"}</Link></div>
-    <div className="mt-6 grid min-w-0 gap-6 xl:grid-cols-[176px_minmax(0,1fr)]">
+    </div>
+    <div className="kh-page-wide mt-6 grid min-w-0 gap-6 xl:grid-cols-[176px_minmax(0,1fr)]">
       <aside className="min-w-0"><UserGuideNavigation sections={content.sections.map(({id,title})=>({id,title}))} locale={locale}/></aside>
       <div className="min-w-0 max-w-reading">{content.sections.map(s=><section key={s.id} id={s.id} aria-labelledby={`${s.id}-heading`} className="mt-6 scroll-mt-6 border-t border-kh-border pt-6 first:mt-0 first:border-t-0 first:pt-0">
         <h2 id={`${s.id}-heading`} tabIndex={-1} className="kh-focus-ring rounded-md text-title font-semibold">{s.title}</h2>
