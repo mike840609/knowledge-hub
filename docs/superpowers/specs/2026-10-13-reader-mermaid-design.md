@@ -57,7 +57,9 @@ leaves in the page that B does not:
 
 So the invariant holds as written: **nothing the author wrote is emitted as
 markup.** The SVG string is never parsed by the page and never assigned to
-`innerHTML`.
+`innerHTML`. That is the page the reader is left with; the moment Mermaid
+spends laying a diagram out is the exception, named under "What B does not
+cover".
 
 What B costs, accepted:
 
@@ -76,7 +78,7 @@ which refuses an inline script or handler whoever inserted it.
 
 Two things about those guards, plainly:
 
-- `htmlLabels: false` holds only because `htmlLabels` is in Mermaid's `secure`
+- `htmlLabels: false` holds only because `htmlLabels` is in the `secure`
   list ("Assumed of Mermaid 12"). That is what stops a diagram's own text from
   turning it back on. Without the entry the setting guards nothing.
 - While Mermaid lays a diagram out, it also puts a `<style>` holding the
@@ -219,6 +221,13 @@ when the server sends one, not when the block's own state changes. Until the
 replacement arrives the previous picture stays, as it does for a theme. Choosing
 `?revision=N` does not depend on this: Next keys the page by its search params,
 so that mounts a new block.
+
+A refresh sends a new element whether or not the source changed, so every
+`router.refresh()` — after a save, after a change to the tree — draws each
+mounted diagram once more: one layout each, no second download, the old picture
+in place until the new one exists. Accepted; at the cap of fifty that is
+seconds of intermittent work, extrapolated and not measured. A guard that
+skips unchanged source is not built.
 
 **Font.** An image cannot use a font the page loaded, so a diagram is measured
 and drawn in `ui-sans-serif, system-ui, sans-serif`, not `--kh-font-sans`.
