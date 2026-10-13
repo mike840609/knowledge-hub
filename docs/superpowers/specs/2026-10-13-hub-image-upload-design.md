@@ -6,7 +6,7 @@
 | Type | Design specification |
 | Why | A page written in the Hub cannot hold an image. The editor accepts no file, and `![alt](path)` there points at nothing. Folder Sync images (`2026-10-08-folder-sync-images-design.md`) solved this only for content that arrives from a folder. Pasting a screenshot into a note is the most common way anyone adds a picture, and it does nothing. |
 | Related | `2026-10-08-folder-sync-images-design.md` (store, serving, shared pages), `2026-09-28-document-composer-design.md` (editor, image policy §198), `2026-09-29-personal-daily-driver-design.md` §1.1 (the editor writes back what it read), `CLAUDE.md` (source ownership; share-link grant) |
-| Status | **Approved 2026-10-13, not implemented.** The five decisions in §10 were confirmed as written. Plan: `docs/superpowers/plans/2026-10-13-hub-image-upload.md`. Builds on PR #151; it cannot land before it. |
+| Status | Implemented (plan: `docs/superpowers/plans/2026-10-13-hub-image-upload.md`). Upload: `src/modules/sources/application/upload-source-image.ts`, `src/server/source-images.ts`, `POST /api/sources/:sourceId/images`, `POST /api/workspaces/:workspaceId/images`. Reading: `findStoredImage` / `findStoredSourceImage` in the source-policy port, `DocumentImageService.findInSource`, `GET /api/sources/:sourceId/asset`. Editor: `editor-core.ts` (`imageUrl`, `onImageFiles`, `insertImage`), `rendered-editor.tsx`, `document-composer.tsx`, `src/lib/composer-images.ts`. Tests: unit `detect-image-type`, `editor-images`, `composer-images`; integration `hub-images`; e2e `zz-hub-images.spec.ts`. The five decisions in §10 were confirmed as written. Builds on PR #151. |
 
 ## 1. What it delivers
 

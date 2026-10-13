@@ -76,7 +76,7 @@ A preview is a fixed staged snapshot. Resolve blocking diagnostics before applyi
 
 ### Current limitations and future direction
 
-- Images in a synced folder are stored when an image store is configured (see [Images](#images)). Other attachments, Obsidian image embeds (`![[image.png]]`) and images in notes written in the Hub keep references only.
+- Images are stored when an image store is configured (see [Images](#images)): those in a synced folder, and those pasted or dropped into a page written in the Hub. Other attachments and Obsidian image embeds (`![[image.png]]`) keep references only, and an image added in the Hub is never removed from storage.
 - ZIP exports include the latest saved versions of archived documents, but exclude drafts, revision history, and attachment bytes. The limit is 64 MiB / 9,999 documents.
 - Documents use archive and restore for their lifecycle; there is no general end-user permanent deletion flow.
 - Search is currently keyword-based. An MCP server, semantic/hybrid retrieval, and advanced agent memory are future directions, not shipped features.
@@ -148,6 +148,8 @@ This cleanup removes import staging data only, preserving canonical document his
 ### Images
 
 When an image store is configured, a folder's `png`, `jpg`, `jpeg`, `gif`, `webp`, `avif` and `svg` files are uploaded at import and shown in documents and on shared pages. A source imported before the store was configured gets its images on its next sync. Images written as Obsidian embeds (`![[image.png]]`) are not shown; use `![alt](path)`. An image has no history: an older revision shows the folder's current file.
+
+**In a page written in the Hub**, paste or drop an image into the editor (either view): PNG, JPEG, GIF, WebP or AVIF, up to 10 MiB each. It is stored once per Source under a name made from its content, and the page refers to it as `![alt](/images/<hash>.png)`, so every revision keeps the image it was written with. SVG cannot be added this way.
 
 Configure **one** of two stores. With neither, images stay references only; with both, the server refuses to start.
 
