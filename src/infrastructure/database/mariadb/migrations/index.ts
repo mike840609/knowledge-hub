@@ -1,3 +1,4 @@
+import { reviewCommentEditDeleteMigration } from "./020-review-comment-edit-delete";
 import { savedDocumentSharesMigration } from "./019-saved-document-shares";
 import { lookupIndexesMigration } from "./018-lookup-indexes";
 import { documentReviewMigration } from "./017-document-review";
@@ -38,4 +39,5 @@ export const migrations = [
   documentReviewMigration,
   lookupIndexesMigration,
   savedDocumentSharesMigration,
+  reviewCommentEditDeleteMigration,
 ] as const;

@@ -14,6 +14,8 @@
 
 > **2026-10-10 approved amendment:** A valid share link grants anonymous reading of current document content and visible review history. Only new threads, replies and owner moderation require a trusted identity. Query responses remain no-store, scoped to the live token, and exclude hidden/outdated content. Anonymous responses expose `callerUserId: null` and `writesEnabled: false`; missing SSO does not block reads. This supersedes earlier authenticated-read wording in the original implementation plan and deferred Gateway guidance.
 
+> **2026-10-13 approved amendment (an author's own comment):** The author of a comment — and nobody else, the document's owner included — may edit it or delete it. An edit keeps no earlier wording and marks the comment *Edited*. A delete is a retraction, not a hard delete: the row and its body remain, and no projection shows the body to anyone again. §3.2, §3.3, §5 and §7 carry the rules.
+
 ## 1. Problem and outcome
 
 Knowledge Hub currently supports a one-document, anonymous, read-only share link. A designer or reviewer can read an AI-generated technical design, but feedback moves into chat or meetings. The original owner then has to reconstruct which paragraph the question refers to; important design rationale is lost.
@@ -32,6 +34,7 @@ This is *review and decision discussion*, not Google Docs-style concurrent text 
 | Who can create threads or reply? | Authenticated user holding a currently valid share link, including the owner; *since 2026-10-13 the owner also without a link, through the owner route* | No per-reviewer invitations or new Workspace membership model. |
 | Can reviewers resolve a thread? | No; document owner resolves/reopens | Responsibility for authoritative design stays with the owner; replies to resolved threads require reopening. |
 | Can harmful content be hidden? | Owner can hide a thread or an individual comment, with an audit trail | Sensitive mistakes and spam must not remain visible to link holders. |
+| Can an author change what they wrote? *(2026-10-13)* | Yes: edit or delete their own comment only. The owner moderates by hiding, never by rewriting or deleting another person's words | A mistake or a secret pasted by accident must be the author's to take back; an owner who could rewrite a reviewer's comment would put words in their mouth. |
 | What owns threads? | The **document ID**, not one link/token | Multiple links and later link rotation share one discussion history. |
 | What happens when a link expires/revokes? | Access through that link stops, including comments; stored threads remain | Revocation removes the grant, not knowledge/audit history. |
 | What happens after Folder Sync? | Threads survive revisions; anchor is re-evaluated and can become Outdated | Editing Markdown or relying on fixed line numbers is fragile. |
@@ -65,6 +68,14 @@ This is *review and decision discussion*, not Google Docs-style concurrent text 
 ### 3.3 Comment lifecycle
 
 Open → Resolved ↔ Open. **Outdated is a derived anchor state, not a destructive thread state**; an Outdated thread can still be Open or Resolved. **Neither owner nor reviewer may reply to a Resolved thread**: owner must Reopen first; a reviewer who disagrees can start a fresh anchored discussion while allowed, but cannot reopen the original. A reply does not rewrite its original anchor. Moderation visibility (`VISIBLE` / `HIDDEN`) is independent of resolution and anchor state; only the owner may hide or unhide. Threads are ordered by document position when matched, then by creation time; the rail has Open / Resolved filters and an Outdated indicator.
+
+**Author edit and delete (2026-10-13).** Only a comment's author reaches these, through the same two doors as a reply: a live link plus a trusted caller, or the owner route for the owner's own comments. To anyone else the comment is uniformly not found (404).
+
+- **Edit** is a write, held to what a reply is: the write switch, an ACTIVE document, an Open and visible thread, a comment that is neither hidden nor deleted, the 1–3,000 character body, and the hourly write limit (an edit is charged as one write; saving the same body changes and charges nothing). It sets `edited_at`; no earlier body is kept and the anchor is untouched.
+- **Delete** is a retraction and adds nothing, so it is held to none of that: it is allowed on a Resolved thread, with the write switch off, and without quota. It sets `deleted_at` and is idempotent. The comment becomes a tombstone ("Comment deleted by author") in every projection — reviewer and owner alike receive an empty body and no `editedAt` — while the stored body is kept for the record, like every other review row (§12).
+- **A thread whose every comment is deleted is gone**: it appears in no projection, takes no reply, and counts toward neither thread limit. This is derived from the comments, not stored — so deleting an opener that nothing was said under removes the discussion, while an opener with replies under it leaves a tombstone above them and the thread, its anchor and the other people's replies stay. It is deliberately not `HIDDEN`: an owner can unhide, and must not be able to bring back what its author took down.
+- Projections say `own: true` on the caller's comments rather than naming the author, so the link projection still carries no user ID.
+- Neither action is a governance event: nothing is appended to `workspace_audit_events`; `edited_at` / `deleted_at` are the record.
 
 ## 4. Authorization and privacy contract
 
@@ -177,6 +188,7 @@ Use the **next available migration version**, not a hard-coded number without ch
 - visibility ENUM('VISIBLE','HIDDEN') NOT NULL DEFAULT 'VISIBLE'
 - hidden_by UUID FK users NULL; hidden_at DATETIME(6) NULL; hidden_reason VARCHAR(200) NULL
 - created_at DATETIME(6) NOT NULL
+- edited_at DATETIME(6) NULL; deleted_at DATETIME(6) NULL (migration 020; set by the author only, §3.3)
 - idempotency_key VARCHAR(64) NOT NULL; UNIQUE(thread_id, author_user_id, idempotency_key)
 - request_hash CHAR(64) NOT NULL (SHA-256 of canonical validated reply payload)
 - index (thread_id, created_at, id)
@@ -241,6 +253,10 @@ Share tokens for comment APIs are in an HTTPS **JSON request body**, not new GET
 | POST | /api/documents/{documentId}/review-threads/{threadId}/resolution | Authenticated owner only. status=OPEN or RESOLVED; no replies on resolved threads, even by owner, until reopened; idempotent updates and audit. |
 | POST | /api/documents/{documentId}/review-threads/{threadId}/visibility | Authenticated owner only. Hide/unhide entire thread; audit and capacity accounting in one transaction. |
 | POST | /api/documents/{documentId}/review-threads/{threadId}/comments/{commentId}/visibility | Authenticated owner only. Hide/unhide a reply, with audit; hiding the first comment atomically hides the whole thread to protect its anchor quote. Never expose hidden content in reviewer projections. |
+| POST | /api/share-review/threads/{threadId}/comments/{commentId}/body | Authenticated + valid token, author only. Replaces the body; 409 on a Resolved thread. *(2026-10-13)* |
+| POST | /api/share-review/threads/{threadId}/comments/{commentId}/deletion | Authenticated + valid token, author only. Retracts the comment; idempotent. *(2026-10-13)* |
+| POST | /api/documents/{documentId}/review-threads/{threadId}/comments/{commentId}/body | Authenticated owner, on the owner's own comment only. As above, without a link. *(2026-10-13)* |
+| POST | /api/documents/{documentId}/review-threads/{threadId}/comments/{commentId}/deletion | Authenticated owner, on the owner's own comment only. As above, without a link. *(2026-10-13)* |
 
 The list endpoint is POST to avoid putting the bearer token in a URL; this is a deliberate read-via-POST exception. The public share page can remain a Server Component, with a small client-side review island available with or without authentication. No implicit call to Workspace APIs from anonymous /s/:token. The API Gateway must use §4.5's exact review route exception so the structured 401 contract is reachable.
 

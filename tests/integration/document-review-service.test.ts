@@ -111,7 +111,7 @@ describe("document review security, idempotency and moderation",()=>{
  });
  it("counts hidden replies toward the lifetime reply cap",async()=>{
   const f=await fixture();const t=await f.service.createForLink(f.viewer,f.input);
-  await f.uow.run(async r=>{for(let i=0;i<100;i++)await r.reviewComments.insert({id:uuidv7(),threadId:t.id,authorUserId:f.viewer.identity.id,body:"hidden",visibility:"HIDDEN",hiddenBy:f.caller.identity.id,hiddenAt:new Date(),hiddenReason:null,createdAt:new Date(),idempotencyKey:randomUUID(),requestHash:"a".repeat(64)});});
+  await f.uow.run(async r=>{for(let i=0;i<100;i++)await r.reviewComments.insert({id:uuidv7(),threadId:t.id,authorUserId:f.viewer.identity.id,body:"hidden",visibility:"HIDDEN",hiddenBy:f.caller.identity.id,hiddenAt:new Date(),hiddenReason:null,createdAt:new Date(),editedAt:null,deletedAt:null,idempotencyKey:randomUUID(),requestHash:"a".repeat(64)});});
   await expect(f.service.replyForLink(f.viewer,{token:f.token,threadId:t.id,body:"too many",idempotencyKey:randomUUID()})).rejects.toMatchObject({code:"CAPACITY_EXCEEDED"});
   expect(await f.uow.run(r=>r.reviewComments.countByThread(t.id))).toBe(101);
  });
@@ -163,5 +163,110 @@ describe("the owner starts a discussion on their own document",()=>{
   await expect(f.service.createForOwner(f.caller,ownerInput(f))).rejects.toMatchObject({code:"CAPACITY_EXCEEDED"});
   const archived=await fixture();await pool.query("UPDATE knowledge_documents SET status='ARCHIVED',archived_by=?,archived_at=? WHERE id=?",[archived.caller.identity.id,new Date(),archived.documentId]);
   await expect(archived.service.createForOwner(archived.caller,ownerInput(archived))).rejects.toMatchObject({code:"REVIEW_CONFLICT"});
+ });
+});
+describe("an author edits or deletes their own comment",()=>{
+ const key=()=>randomUUID();
+ const body=async(id:string)=>(await pool.query("SELECT body,edited_at,deleted_at FROM document_review_comments WHERE id=?",[id]))[0];
+ async function discussion(){
+  const f=await fixture();const t=await f.service.createForLink(f.viewer,f.input);
+  const reply=await f.service.replyForOwner(f.caller,{documentId:f.documentId,threadId:t.id,body:"OWNER REPLY",idempotencyKey:key()});
+  return {...f,t,opener:t.comments[0],reply};
+ }
+ it("edits through the link: the new body is read by everyone, marked edited, and is the caller's own",async()=>{
+  const f=await discussion();
+  const edited=await f.service.editForLink(f.viewer,{token:f.token,threadId:f.t.id,commentId:f.opener.id,body:"REVISED COMMENT"});
+  expect(edited).toMatchObject({id:f.opener.id,body:"REVISED COMMENT",own:true,deleted:false});expect(edited.editedAt).toBeInstanceOf(Date);
+  const anonymous=(await f.service.queryForLink(null,f.token)).threads[0].comments;
+  expect(anonymous[0]).toMatchObject({body:"REVISED COMMENT",own:false});expect(anonymous[0].editedAt).not.toBeNull();expect(anonymous[1].editedAt).toBeNull();
+  expect((await f.service.queryForLink(f.viewer,f.token)).threads[0].comments.map(c=>c.own)).toEqual([true,false]);
+  expect((await f.service.queryForOwner(f.caller,f.documentId)).threads[0].comments.map(c=>c.own)).toEqual([false,true]);
+ });
+ it("the owner edits their own reply without a link",async()=>{
+  const f=await discussion();await f.shares.revoke(f.caller,f.a.id);await f.shares.revoke(f.caller,f.b.id);
+  await f.service.editForOwner(f.caller,{documentId:f.documentId,threadId:f.t.id,commentId:f.reply.id,body:"OWNER REVISED"});
+  expect((await f.service.queryForOwner(f.caller,f.documentId)).threads[0].comments[1]).toMatchObject({body:"OWNER REVISED",own:true});
+ });
+ it("nobody edits or deletes what they did not write: the owner included, and it reads as not found",async()=>{
+  const f=await discussion();
+  await expect(f.service.editForOwner(f.caller,{documentId:f.documentId,threadId:f.t.id,commentId:f.opener.id,body:"TAKEOVER"})).rejects.toMatchObject({code:"SHARE_LINK_NOT_FOUND"});
+  await expect(f.service.deleteForOwner(f.caller,{documentId:f.documentId,threadId:f.t.id,commentId:f.opener.id})).rejects.toMatchObject({code:"SHARE_LINK_NOT_FOUND"});
+  await expect(f.service.editForLink(f.viewer,{token:f.token,threadId:f.t.id,commentId:f.reply.id,body:"TAKEOVER"})).rejects.toMatchObject({code:"SHARE_LINK_NOT_FOUND"});
+  await expect(f.service.deleteForLink(f.viewer,{token:f.token,threadId:f.t.id,commentId:f.reply.id})).rejects.toMatchObject({code:"SHARE_LINK_NOT_FOUND"});
+  expect(await body(f.opener.id)).toMatchObject({body:"PRIVATE COMMENT",edited_at:null,deleted_at:null});
+  expect(await body(f.reply.id)).toMatchObject({body:"OWNER REPLY",edited_at:null,deleted_at:null});
+ });
+ it("an author's own comment is out of reach without a live link, through another document, or by a mismatched thread",async()=>{
+  const f=await discussion();const other=await fixture();const elsewhere=await other.service.createForLink(other.viewer,other.input);
+  await expect(f.service.editForLink(f.viewer,{token:other.token,threadId:f.t.id,commentId:f.opener.id,body:"X"})).rejects.toMatchObject({code:"SHARE_LINK_NOT_FOUND"});
+  await expect(f.service.editForLink(f.viewer,{token:f.token,threadId:elsewhere.id,commentId:f.opener.id,body:"X"})).rejects.toMatchObject({code:"SHARE_LINK_NOT_FOUND"});
+  await expect(f.service.deleteForLink(f.viewer,{token:"not-a-token",threadId:f.t.id,commentId:f.opener.id})).rejects.toMatchObject({code:"SHARE_LINK_NOT_FOUND"});
+  await f.shares.revoke(f.caller,f.a.id);
+  await expect(f.service.editForLink(f.viewer,{token:f.token,threadId:f.t.id,commentId:f.opener.id,body:"X"})).rejects.toMatchObject({code:"SHARE_LINK_NOT_FOUND"});
+  await expect(f.service.deleteForLink(f.viewer,{token:f.token,threadId:f.t.id,commentId:f.opener.id})).rejects.toMatchObject({code:"SHARE_LINK_NOT_FOUND"});
+  expect(await body(f.opener.id)).toMatchObject({body:"PRIVATE COMMENT",deleted_at:null});
+ });
+ it("an edit is a write: a valid body, an open thread, the switch on, a visible comment, the hourly limit",async()=>{
+  const f=await discussion();const edit=(text:string,service=f.service)=>service.editForLink(f.viewer,{token:f.token,threadId:f.t.id,commentId:f.opener.id,body:text});
+  await expect(edit("   ")).rejects.toMatchObject({code:"VALIDATION_ERROR"});await expect(edit("x".repeat(3001))).rejects.toMatchObject({code:"VALIDATION_ERROR"});
+  await expect(edit("off",new DocumentReviewService(f.uow))).rejects.toMatchObject({code:"REVIEW_WRITES_DISABLED"});
+  const before=(await pool.query("SELECT COUNT(*) AS n FROM document_review_write_events WHERE user_id=?",[f.viewer.identity.id]))[0].n;
+  await edit("counted");await edit("counted");
+  // Saving what is already there writes nothing, so it is neither marked again nor charged again.
+  expect(Number((await pool.query("SELECT COUNT(*) AS n FROM document_review_write_events WHERE user_id=?",[f.viewer.identity.id]))[0].n)).toBe(Number(before)+1);
+  await f.uow.run(async r=>{for(let i=0;i<30;i++)await r.reviewWriteLedger.record({id:uuidv7(),userId:f.viewer.identity.id,documentId:f.documentId,createdAt:new Date()});});
+  await expect(edit("over the limit")).rejects.toMatchObject({code:"REVIEW_RATE_LIMIT"});
+  await pool.query("DELETE FROM document_review_write_events WHERE user_id=?",[f.viewer.identity.id]);
+  await f.service.setVisibility(f.caller,{documentId:f.documentId,threadId:f.t.id,commentId:f.reply.id,visibility:"HIDDEN"});
+  await expect(f.service.editForOwner(f.caller,{documentId:f.documentId,threadId:f.t.id,commentId:f.reply.id,body:"hidden"})).rejects.toMatchObject({code:"SHARE_LINK_NOT_FOUND"});
+  await f.service.setResolution(f.caller,{documentId:f.documentId,threadId:f.t.id,status:"RESOLVED"});
+  await expect(edit("resolved")).rejects.toMatchObject({code:"REVIEW_THREAD_CLOSED"});
+  await f.service.setResolution(f.caller,{documentId:f.documentId,threadId:f.t.id,status:"OPEN"});
+  await f.service.setVisibility(f.caller,{documentId:f.documentId,threadId:f.t.id,visibility:"HIDDEN"});
+  await expect(edit("hidden thread")).rejects.toMatchObject({code:"SHARE_LINK_NOT_FOUND"});
+  expect(await body(f.opener.id)).toMatchObject({body:"counted"});
+ });
+ it("a deleted reply leaves a tombstone: no one reads the body again, and the row keeps it",async()=>{
+  const f=await discussion();
+  const mine=await f.service.replyForLink(f.viewer,{token:f.token,threadId:f.t.id,body:"RETRACTED SECRET",idempotencyKey:key()});
+  await f.service.deleteForLink(f.viewer,{token:f.token,threadId:f.t.id,commentId:mine.id});
+  for(const query of [await f.service.queryForLink(null,f.token),await f.service.queryForLink(f.viewer,f.token),await f.service.queryForOwner(f.caller,f.documentId)]) {
+   expect(JSON.stringify(query)).not.toContain("RETRACTED SECRET");
+   expect(query.threads[0].comments).toHaveLength(3);expect(query.threads[0].comments[2]).toMatchObject({id:mine.id,deleted:true,body:""});
+  }
+  const row=await body(mine.id);expect(row.body).toBe("RETRACTED SECRET");expect(row.deleted_at).toBeInstanceOf(Date);
+  // Deleting again changes nothing; editing what is deleted finds nothing.
+  await f.service.deleteForLink(f.viewer,{token:f.token,threadId:f.t.id,commentId:mine.id});expect((await body(mine.id)).deleted_at).toEqual(row.deleted_at);
+  await expect(f.service.editForLink(f.viewer,{token:f.token,threadId:f.t.id,commentId:mine.id,body:"back"})).rejects.toMatchObject({code:"SHARE_LINK_NOT_FOUND"});
+ });
+ it("a retraction is allowed where a new write is not: a resolved thread, the switch off, no quota left",async()=>{
+  const f=await discussion();await f.service.setResolution(f.caller,{documentId:f.documentId,threadId:f.t.id,status:"RESOLVED"});
+  await f.uow.run(async r=>{for(let i=0;i<30;i++)await r.reviewWriteLedger.record({id:uuidv7(),userId:f.caller.identity.id,documentId:f.documentId,createdAt:new Date()});});
+  await new DocumentReviewService(f.uow).deleteForOwner(f.caller,{documentId:f.documentId,threadId:f.t.id,commentId:f.reply.id});
+  expect((await f.service.queryForOwner(f.caller,f.documentId)).threads[0].comments[1]).toMatchObject({deleted:true,body:""});
+ });
+ it("a deleted opener with replies under it becomes a tombstone: the thread, its passage and the replies stay",async()=>{
+  const f=await discussion();await f.service.deleteForLink(f.viewer,{token:f.token,threadId:f.t.id,commentId:f.opener.id});
+  const thread=(await f.service.queryForLink(null,f.token)).threads[0];
+  expect(thread.id).toBe(f.t.id);expect(thread.currentAnchor.anchor?.exact).toBe("secret passage");
+  expect(thread.comments).toMatchObject([{deleted:true,body:""},{deleted:false,body:"OWNER REPLY"}]);
+  expect(JSON.stringify(await f.service.queryForOwner(f.caller,f.documentId))).not.toContain("PRIVATE COMMENT");
+  // The thread is still a discussion: it can be answered.
+  await f.service.replyForLink(f.viewer,{token:f.token,threadId:f.t.id,body:"still here",idempotencyKey:key()});
+ });
+ it("a deleted opener with nothing under it takes the thread with it, for everyone, and frees its place",async()=>{
+  const f=await fixture();const t=await f.service.createForLink(f.viewer,f.input);
+  const counts=()=>f.uow.run(async r=>[await r.reviewThreads.countVisibleByDocument(f.documentId),await r.reviewThreads.countVisibleOpenByCreator(f.documentId,f.viewer.identity.id)]);
+  expect(await counts()).toEqual([1,1]);
+  await f.service.deleteForLink(f.viewer,{token:f.token,threadId:t.id,commentId:t.comments[0].id});
+  expect((await f.service.queryForLink(f.viewer,f.token)).threads).toEqual([]);expect((await f.service.queryForOwner(f.caller,f.documentId)).threads).toEqual([]);
+  expect(await counts()).toEqual([0,0]);
+  await expect(f.service.replyForOwner(f.caller,{documentId:f.documentId,threadId:t.id,body:"into nothing",idempotencyKey:key()})).rejects.toMatchObject({code:"SHARE_LINK_NOT_FOUND"});
+  expect((await body(t.comments[0].id)).body).toBe("PRIVATE COMMENT");
+ });
+ it("the thread goes when its last comment does, whichever that is",async()=>{
+  const f=await discussion();
+  await f.service.deleteForLink(f.viewer,{token:f.token,threadId:f.t.id,commentId:f.opener.id});expect((await f.service.queryForOwner(f.caller,f.documentId)).threads).toHaveLength(1);
+  await f.service.deleteForOwner(f.caller,{documentId:f.documentId,threadId:f.t.id,commentId:f.reply.id});expect((await f.service.queryForOwner(f.caller,f.documentId)).threads).toEqual([]);
  });
 });

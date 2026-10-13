@@ -12,6 +12,8 @@ function map(row:DbRow):ReviewComment { return {
  hiddenAt: asNullableDate(row.hidden_at),
  hiddenReason: row.hidden_reason === null ? null : String(row.hidden_reason),
  createdAt: asDate(row.created_at),
+ editedAt: asNullableDate(row.edited_at),
+ deletedAt: asNullableDate(row.deleted_at),
  idempotencyKey: String(row.idempotency_key),
  requestHash: String(row.request_hash),
 };}
@@ -23,6 +25,8 @@ export class MariaDbDocumentReviewCommentsRepository implements DocumentReviewCo
  async findByIdempotencyKey(threadId:string,authorId:string,key:string){return this.find("SELECT * FROM document_review_comments WHERE thread_id=? AND author_user_id=? AND idempotency_key=?",[threadId,authorId,key]);}
  async listByThread(threadId:string){const rows=await this.connection.query<DbRow[]>("SELECT * FROM document_review_comments WHERE thread_id=? ORDER BY created_at,id",[threadId]);return rows.map(map);}
  async countByThread(threadId:string){const rows=await this.connection.query<DbRow[]>("SELECT COUNT(*) AS n FROM document_review_comments WHERE thread_id=?",[threadId]);return asNumber(rows[0].n,"comment count");}
+ async setBody(id:string,body:string,at:Date){await this.connection.query("UPDATE document_review_comments SET body=?,edited_at=? WHERE id=?",[body,at,id]);}
+ async markDeleted(id:string,at:Date){await this.connection.query("UPDATE document_review_comments SET deleted_at=? WHERE id=?",[at,id]);}
  async setVisibility(id:string,visibility:ReviewVisibility,actorId:string,at:Date,reason:string|null){
  const comment=await this.findById(id);if(!comment)throw new IntegrityViolationError("Comment not found."); const first=(await this.listByThread(comment.threadId))[0]; if(visibility==="HIDDEN"&&first?.id===id)throw new IntegrityViolationError("Hide the thread to hide its initial comment.");
  await this.connection.query("UPDATE document_review_comments SET visibility=?,hidden_by=?,hidden_at=?,hidden_reason=? WHERE id=?",[visibility,visibility==="HIDDEN"?actorId:null,visibility==="HIDDEN"?at:null,visibility==="HIDDEN"?reason:null,id]);

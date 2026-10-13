@@ -1,6 +1,6 @@
 import type { ReviewStatus, ReviewVisibility } from "@/modules/knowledge/domain/document-review";
 
-type Discussion = { id: string; status: ReviewStatus; visibility: ReviewVisibility; comments: readonly { authorUserId: string; visibility: ReviewVisibility }[] };
+type Discussion = { id: string; status: ReviewStatus; visibility: ReviewVisibility; comments: readonly { authorUserId: string; visibility: ReviewVisibility; deleted?: boolean }[] };
 
 /** Where the owner's closing of the rail on a document is remembered, as the discussions it was closed on. */
 export const dismissedKey = (documentId: string) => `kh:review-dismissed:${documentId}`;
@@ -10,7 +10,7 @@ export const dismissedKey = (documentId: string) => `kh:review-dismissed:${docum
  * word that stands is someone else's. One the owner started, or answered, waits for a reader.
  */
 export function awaitingOwner(threads: readonly Discussion[], ownerId: string | null): string[] {
-  const last = (thread: Discussion) => thread.comments.filter((comment) => comment.visibility === "VISIBLE").at(-1);
+  const last = (thread: Discussion) => thread.comments.filter((comment) => comment.visibility === "VISIBLE" && !comment.deleted).at(-1);
   return threads.filter((thread) => thread.status === "OPEN" && thread.visibility === "VISIBLE" && last(thread)?.authorUserId !== ownerId).map((thread) => thread.id);
 }
 

@@ -86,7 +86,11 @@ export function SharedReviewPanel({ token, revisionId, markdown, children }: { t
         const created = await reviewRequest<{ id: string }>("/api/share-review/threads", { token, expectedRevisionId: revisionId, anchor: selection.chosen, body, idempotencyKey });
         selection.clear(); setFilter(current => current === "RESOLVED" ? "OPEN" : current); setActiveThreadId(created.id); await load();
       }} />}
-      {result && <ReviewThreadList filter={filter} onFilterChange={setFilter} railMarkdown={revisionChanged ? undefined : markdown} activeThreadId={activeThreadId} onActivate={setActiveThreadId} focusAnchor={revisionChanged ? undefined : anchor => { const root = document.querySelector<HTMLElement>("[data-review-document]"); if (root) focusReviewAnchor(root, markdown, anchor); }} threads={result.threads} writesEnabled={result.writesEnabled} reply={async (threadId, body, idempotencyKey) => { await reviewRequest(`/api/share-review/threads/${threadId}/replies`, { token, body, idempotencyKey }); await load(); }} />}
+      {result && <ReviewThreadList filter={filter} onFilterChange={setFilter} railMarkdown={revisionChanged ? undefined : markdown} activeThreadId={activeThreadId} onActivate={setActiveThreadId} focusAnchor={revisionChanged ? undefined : anchor => { const root = document.querySelector<HTMLElement>("[data-review-document]"); if (root) focusReviewAnchor(root, markdown, anchor); }} threads={result.threads} writesEnabled={result.writesEnabled} reply={async (threadId, body, idempotencyKey) => { await reviewRequest(`/api/share-review/threads/${threadId}/replies`, { token, body, idempotencyKey }); await load(); }}
+        author={result.callerUserId === null ? undefined : {
+          edit: async (threadId, commentId, body) => { await reviewRequest(`/api/share-review/threads/${threadId}/comments/${commentId}/body`, { token, body }); await load(); },
+          remove: async (threadId, commentId) => { await reviewRequest(`/api/share-review/threads/${threadId}/comments/${commentId}/deletion`, { token }); await load(); },
+        }} />}
     </div></ReviewPanelShell>
       </aside>
     </div>

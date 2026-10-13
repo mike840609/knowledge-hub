@@ -49,3 +49,13 @@ describe("the owner's discussions on arrival", () => {
     expect(parseDismissed(stored)).toEqual(ids);
   });
 });
+
+describe("a comment its author deleted is not a word that stands", () => {
+  const gone = (authorUserId: string) => ({ ...says(authorUserId), deleted: true });
+  it("so a reader's retracted reply after the owner's answer does not call the owner back", () => {
+    expect(awaitingOwner([thread("a", "OPEN", "VISIBLE", [says("reader"), says(OWNER), gone("reader")])], OWNER)).toEqual([]);
+  });
+  it("and the owner's retracted answer leaves the reader's word waiting", () => {
+    expect(awaitingOwner([thread("a", "OPEN", "VISIBLE", [says("reader"), gone(OWNER)])], OWNER)).toEqual(["a"]);
+  });
+});
