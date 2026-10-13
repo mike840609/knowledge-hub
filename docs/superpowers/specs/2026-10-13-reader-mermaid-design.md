@@ -1,8 +1,10 @@
 # Mermaid diagrams in the reader
 
-**Status:** proposed 2026-10-13, awaiting the user's review. Nothing here is
-built. The three decisions marked **(to confirm)** were made while drafting,
-without being asked first; each says what the alternative was.
+**Status:** agreed with the user on 2026-10-13, including the three decisions
+first made in drafting; built by `../plans/2026-10-13-reader-mermaid.md`. Where
+the build found something other than what was drafted, the section says so in
+place: "Assumed of Mermaid 12", "How" (steps 3 and 4), "When a block is not
+drawn", "How it looks", "Comments" and "Tests".
 
 ## Intent
 
@@ -24,7 +26,7 @@ and that no document can put an element on the page through a diagram.
 repository's own Markdown does, and the database was not queried. If the answer
 is "almost none", this can stay deferred; the spec does not depend on it.
 
-## The decision: an image, not markup (to confirm)
+## The decision: an image, not markup
 
 Mermaid turns the author's text into an SVG string. How that string reaches
 the page is the whole design.
@@ -93,18 +95,26 @@ text happens to be a diagram. The reader does not guess a language
    (`markdown-renderer.tsx`) sees that its `<code>` carries `language-mermaid`
    and wraps the same code block in `MermaidBlock`, a client component. The
    page's HTML holds the code as text, with its `data-review-path`. Without
-   script, or before it runs, the block is the code block it is now.
+   script, or before it runs, the block is the code block it is now: the
+   server's markup for it is a `<figure>` holding an open `<details>` whose
+   `<summary>` is hidden, and the code block inside that (see "How it looks").
 2. **`MermaidBlock` asks for a drawing.** It reads the source from its own
    `<code>` when it mounts, as the copy button does, so the code is not sent a
    second time as a prop. It joins a queue that is one module's, for the page.
 3. **The queue loads Mermaid once**, by `import("mermaid")`, on the first
    request. A page with no `mermaid` block never loads it. It is configured
    once: `startOnLoad: false`, `securityLevel: "strict"`, `htmlLabels: false`,
-   `suppressErrorRendering: true`, `theme: "base"` with the variables below,
-   and the font below.
+   `suppressErrorRendering: true`, `secure` (the keys a diagram's own text may
+   not set, below), `theme: "base"` with the variables below, and the font
+   below.
 4. **One at a time, in document order**, yielding to the browser between
    drawings: Mermaid keeps state between calls, and a page must stay usable
-   while its diagrams arrive.
+   while its diagrams arrive. **Only the newest request for a block is drawn.**
+   A request that a newer one for the same block has superseded, or whose block
+   has left the page, is dropped before Mermaid is called
+   (`createDiagramQueue`, `mermaid-queue.ts`). The theme is read with a store
+   whose server value differs from the client's, so every hydrated page asks
+   twice; without this rule every diagram was drawn twice in production.
 5. **`mermaid.render` returns a string.** If it holds no `<foreignObject`, it
    becomes `new Blob([svg], { type: "image/svg+xml" })`, a URL from
    `URL.createObjectURL`, and the `src` of an `<img>`. The URL is revoked when
@@ -114,14 +124,16 @@ text happens to be a diagram. The reader does not guess a language
 ### When a block is not drawn
 
 It stays the code block it was, and one line under it says why. None of these
-is an error, and the page renders.
+is an error, and the page renders. Nothing the queue declines is a throw: that
+includes a failure to make or revoke the object URL, which is shown as
+`This kind of diagram cannot be drawn here yet.`
 
 | Why | What it says |
 | --- | --- |
 | Mermaid cannot parse it | `Could not draw this diagram:` and the first line of Mermaid's message, to 200 characters, as text |
 | Longer than 10,000 characters | `This diagram is too long to draw.` |
 | More than 50 diagrams before it in the document | `Too many diagrams on this page; this one is left as code.` |
-| The drawing holds a `<foreignObject>` | `This kind of diagram cannot be drawn here yet.` |
+| The drawing holds a `<foreignObject>`, gives no size, or its URL cannot be made | `This kind of diagram cannot be drawn here yet.` |
 | Mermaid could not be loaded | `Diagrams could not be loaded.` |
 
 The limits are constants beside the queue, as the highlighter's are beside it.
@@ -146,8 +158,16 @@ Drawn, a block is a `<figure>`:
   when it is wider than the column. Tables and code already do that; shrinking
   a wide diagram to fit makes it unreadable.
 - **`Source`**, a native `<details>`, closed, holding the code block as it was,
-  copy button included. It uses the disclosure the HTML subset draws
-  (`MarkdownDetails`).
+  copy button included. It carries the chevron every `summary` has
+  (`globals.css`); it is not `MarkdownDetails`.
+
+The code block is always inside that `<details>`, drawn or not, and is never
+moved: a comment is anchored in its DOM nodes, so what changes is the
+disclosure around it. Before a drawing arrives, and for good when there is
+none, the `<details>` is open and its `<summary>` is hidden, so the block reads
+as the code block it is today. When a drawing arrives the `<details>` closes
+and its `<summary>` shows `Source`. A redraw (a change of theme) does not close
+a source the reader has opened.
 
 `alt` is `Diagram (<type>). Its source follows.`, the type being what Mermaid
 reports. The source in the disclosure is the text alternative.
@@ -159,11 +179,11 @@ outside the CSS layer:
 | Mermaid | Token |
 | --- | --- |
 | background | none (transparent; the figure sits on the page) |
-| node fill | `--kh-bg-subtle` |
+| node and cluster fill | `--kh-bg-subtle` |
 | node and cluster border | `--kh-border-strong` |
 | text | `--kh-text` |
 | lines and arrowheads | `--kh-text-muted` |
-| note and highlight fill | `--kh-highlight` |
+| note fill | `--kh-highlight` |
 
 No token is added. The mapping, and the rule that a diagram takes colour from
 nowhere else, go into the design language as §8 "Diagrams in a document", in
@@ -183,9 +203,12 @@ for both does not.
 **Layout shift.** A block changes height when it is drawn. The review rail and
 the outline's active heading already follow size changes (`ResizeObserver`).
 A page opened at `#heading` below a diagram can land off by the difference;
-that is measured in verification, and left alone unless it is seen.
+that is measured in verification, and left alone unless it is seen. Measured in
+Chromium, it was not: the heading stayed 16 px from the top of the pane through
+the drawing, as the browser's scroll anchoring moved the pane to keep it there.
+Other engines were not measured.
 
-## Comments (to confirm)
+## Comments
 
 A comment on a `mermaid` block is a comment on its **source**, as on any code
 block (`2026-10-13-review-anchors-and-owner-threads-design.md` §3). The `<code>`
@@ -201,16 +224,23 @@ both equally true of an author's own `<details>`:
 
 - `focusReviewAnchor` opens every `<details>` the quote is inside before it
   scrolls to it. Today it scrolls to something with no box.
-- A passage marker for such a quote sits beside the closed disclosure, not
-  where a range with no rectangle says. The plan checks first what the marker
-  does there today and writes the failing test from that.
+- A passage marker for such a quote sits beside the outermost closed
+  disclosure around the quote, whatever rectangle the range reports. This was
+  first written as "not where a range with no rectangle says". Found in the
+  browser: Chromium does report rectangles for text inside a closed
+  `<details>`, laid out as if it were open, so the marker was placed over
+  whatever follows the figure (y=528 for a figure ending at 473). The marker is
+  therefore placed by the disclosure (`shownTop`, `review-passage-markers.tsx`),
+  not by testing for a missing rectangle, except for a quote in the
+  disclosure's own `<summary>`, which is shown. Unit test:
+  `tests/unit/review-marker-position.test.tsx`.
 
 ## Where
 
 | Surface | Drawn? |
 | --- | --- |
 | Reader, current and past revisions (`MarkdownRenderer`) | Yes |
-| Shared page `/s/:token` (the same renderer) **(to confirm)** | Yes |
+| Shared page `/s/:token` (the same renderer) | Yes |
 | Rendered editor | No. It is a code block there, and is written back as it was |
 | Composer's loading preview (`MarkdownBase`) | No. It stands in for the editor |
 
@@ -256,18 +286,25 @@ installed version, before anything else is built.
 | Assumed | If false |
 | --- | --- |
 | `render(id, text)` resolves to `{ svg, diagramType }` and does not need the result inserted into the page | B does not work as written; stop and return to this spec |
-| `securityLevel`, and the keys that matter, cannot be changed by `%%{init}%%` in the source | Strip a leading directive before drawing; say so here |
+| `securityLevel`, and the keys that matter, cannot be changed by `%%{init}%%` in the source | Keep the key out of the source's reach with `secure`; strip a directive only if that does not hold; say so here |
 | `htmlLabels: false` gives pure SVG for flowchart, sequence, class, state, ER, gantt and pie | The `<foreignObject>` rule turns those away; the feature is not worth shipping; return here |
 | `suppressErrorRendering` keeps Mermaid's error graphic out of the page | Remove the element Mermaid leaves, by the id it was given |
 | No `eval` or `new Function` in production | The production build fails the e2e below, since `unsafe-eval` is development only; return here |
 
 Checked against `mermaid@12.2.0` (`../verification/2026-10-13-reader-mermaid.md`):
-the second row was false by default. A `%%{init}%%` directive could turn HTML labels on, so a
-flowchart came out with `<foreignObject>`. Done: `htmlLabels` is added to Mermaid's `secure`
-list (the installed default is `secure`, `securityLevel`, `startOnLoad`, `maxTextSize`,
-`suppressErrorRendering`, `maxEdges`), and the check script tries a directive before the first
-line, a directive after it, and YAML frontmatter `config:`; none yields `<foreignObject>`. The
-`<foreignObject>` refusal stays as the backstop. The other four rows hold.
+the second row was false for `htmlLabels`. In 12.2.0 a diagram's own text can turn HTML
+labels on, by a `%%{init}%%` directive anywhere in the text or by YAML frontmatter `config:`,
+so a flowchart came out with `<foreignObject>`. Done: `htmlLabels` is added to Mermaid's
+`secure` list in `initialize` (`mermaid-queue.ts`), which is the installed default
+(`secure`, `securityLevel`, `startOnLoad`, `maxTextSize`, `suppressErrorRendering`,
+`maxEdges`) plus `htmlLabels`. No directive is stripped. `scripts/test/mermaid-assumptions.mjs`
+holds a copy of that list and tries a directive before the first line, a directive after it,
+and frontmatter `config:`: none yields `<foreignObject>`, and the script passes. The
+`<foreignObject>` refusal stays as the backstop. The other four rows held: `render` resolves
+to `{ svg, diagramType }` without the result being inserted into the page; flowchart,
+sequence, class, state, ER, gantt, pie and mindmap all came out as pure SVG that loads as an
+image; a block Mermaid cannot parse rejects and leaves nothing in the page; and the production
+script policy (no `unsafe-eval`) refused nothing, so there is no `eval`.
 
 ## Shape of the change
 
@@ -279,6 +316,11 @@ line, a directive after it, and YAML frontmatter `config:`; none yields `<foreig
 - `review-selection.ts`, `review-passage-markers.tsx`: the two changes above.
 - `content-security-policy.ts`, `next.config.ts`: `blob:`.
 - `markdown-image-policy.ts`: its comment, which names the directive.
+- `package.json`, `package-lock.json`: `mermaid`, `~12.2.0`.
+- `scripts/test/mermaid-assumptions.mjs`: the table above, run in a browser under
+  the production script policy; run it after installing or upgrading `mermaid`.
+- `tests/unit/review-marker-position.test.tsx`: where a marker sits for a quote
+  in a closed disclosure.
 
 ## Tests
 
@@ -293,7 +335,10 @@ Each line is a requirement above.
   block over 10,000 characters, the 51st block, a drawing with
   `<foreignObject>`, a `render` that throws and an `import` that fails each
   give their reason and leave the code; a later block is still drawn after an
-  earlier one fails; the object URL is revoked on redraw and on unmount.
+  earlier one fails; a `toUrl`, `revoke` or `pause` that throws stops nothing
+  after it; the object URL is revoked on redraw and on unmount; and only the
+  newest request for a block is drawn, so a block asked for twice, or one that
+  left the page while it waited, costs Mermaid one call or none.
 - The policy holds `img-src 'self' blob:` on a page and on `/s/*`, and
   `next.config.ts` says the same in both places.
 - `isAllowedMarkdownImageSrc("blob:…")` is still false.
@@ -306,13 +351,21 @@ Each line is a requirement above.
 - A block with a syntax error shows its code and the reason, and the block
   after it is drawn.
 - Switching theme gives each image a new source.
-- **Hostile**, in `tests/e2e/zz-mermaid-hostile.spec.ts`, on a shared page: a
-  label holding `<img src=x onerror=…>`; a label holding `<script>`; `click A
-  href "javascript:…"`; `%%{init: {"securityLevel":"loose"}}%%` before each of
-  those; `classDef` with `fill:url(https://example.invalid/x)` and with
-  `position:fixed`. For each: no flag was set on `window`, no request left the
-  origin, the figure holds one `<img>` and one `<details>` and nothing else,
-  and a control outside the figure has the computed style it had before.
+- **Hostile**, in `tests/e2e/zz-mermaid-hostile.spec.ts`, on a shared page, ten
+  blocks: a label holding `<img src=x onerror=…>`; a label holding `<script>`;
+  `click A href "javascript:…"`; the `%%{init}%%` directive that sets
+  `securityLevel: "loose"` and turns HTML labels on before each of those three;
+  `click A call alert()`; `classDef` with `fill:url(https://example.invalid/x)`
+  and with `position:fixed`; and a label that closes the SVG and opens an
+  `<img onerror>`. Across them: no flag was set on `window`, no dialog opened,
+  no request left the origin, each figure holds only its image (in its box),
+  its `<details>` and, when not drawn, its reason line, the first paragraph and
+  the body keep their computed position and display, and nothing covers the
+  page's corner. One input is not drawn: the
+  `fill:url(https://…)` one is refused by Mermaid's own parser ("Parse error"),
+  as are `style` and `background:` forms of it, so for that input "no request
+  left the origin" rests on Mermaid's refusal and on the image rule, not on a
+  drawn diagram. The other nine were drawn.
 - A comment on the source: open `Source`, select, comment, reload, choose the
   thread; the disclosure opens and the quote is selected.
 - The same for a quote inside an author's `<details>`.
