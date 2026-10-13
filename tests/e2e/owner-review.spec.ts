@@ -287,9 +287,11 @@ test("opening and closing the owner's discussions moves nothing under the pointe
     await expect(rail).toBeVisible();
     await page.getByRole("button", { name: "Collapse discussions" }).click();
     await expect(rail).toBeHidden();
-    // Settled: the path line and the article share one left edge once any slide has finished.
-    await expect.poll(async () => { const at = await where(); return at.crumb === at.article; }).toBe(true);
-    const closed = await where();
+    // Settled: the same place twice, a slide's length apart. A slide can still be under way here (the rail
+    // opened by itself on arrival), and one reading taken mid-slide is not where the column rests.
+    const settled = async () => { const first = await where(); await page.waitForTimeout(250); return JSON.stringify(first) === JSON.stringify(await where()) ? first : null; };
+    let closed: Awaited<ReturnType<typeof where>> | null = null;
+    await expect.poll(async () => (closed = await settled()) !== null).toBe(true);
     await page.getByRole("button", { name: /^Open discussions/ }).click();
     await expect(rail).toBeVisible();
     // The column slides when it must; let a slide finish before measuring where it ended.
