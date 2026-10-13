@@ -5,5 +5,7 @@ export interface DocumentReviewCommentRepository {
  findByIdempotencyKey(threadId:string,authorId:string,key:string):Promise<ReviewComment|null>;
  listByThread(threadId:string):Promise<ReviewComment[]>;
  countByThread(threadId:string):Promise<number>;
+ setBody(id:string,body:string,at:Date):Promise<void>;
+ markDeleted(id:string,at:Date):Promise<void>;
  setVisibility(id:string,visibility:ReviewVisibility,actorId:string,at:Date,reason:string|null):Promise<void>;
 }

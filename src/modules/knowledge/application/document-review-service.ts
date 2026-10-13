@@ -3,7 +3,7 @@ import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { DomainError } from "@/shared/domain/errors";
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import { evaluateShareLinkValidity, isShareToken, ShareLinkNotFoundError } from "../domain/document-share-link";
-import { REVIEW_LIMITS, projectOwnerThread, projectReviewerThread, projectReviewComment, validateReviewBody, validateReviewIdempotencyKey, type ReviewThread, type ReviewComment, type ReviewAnchor, type ReviewStatus, type ReviewVisibility, type ReviewThreadView, type OwnerReviewThreadView, type CreateReviewThreadInput, type CreateOwnerReviewThreadInput, type ReplyReviewInput } from "../domain/document-review";
+import { REVIEW_LIMITS, isRetractedThread, projectOwnerThread, projectReviewerThread, projectReviewComment, validateReviewBody, validateReviewIdempotencyKey, type ReviewThread, type ReviewComment, type ReviewAnchor, type ReviewStatus, type ReviewVisibility, type ReviewThreadView, type OwnerReviewThreadView, type CreateReviewThreadInput, type CreateOwnerReviewThreadInput, type ReplyReviewInput } from "../domain/document-review";
 import { createReviewAnchorRelocator, validateReviewAnchor } from "../domain/review-anchor";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "../ports/unit-of-work";
 
@@ -18,14 +18,14 @@ export class DocumentReviewService {
    * load, and it writes nothing a lock would protect; `readShared` reads the same way.
    */
   async queryForLink(caller:CallerContext | null,token:string) {
-    return this.uow.run(async r => { const s=await this.linkScope(r,token,false); return {threads:await this.views(r,s.document.id,false),revisionId:s.document.currentRevisionId,writesEnabled:!!caller && this.writesEnabled(),callerUserId:caller?.identity.id ?? null}; });
+    return this.uow.run(async r => { const s=await this.linkScope(r,token,false); return {threads:await this.views(r,s.document.id,false,caller?.identity.id),revisionId:s.document.currentRevisionId,writesEnabled:!!caller && this.writesEnabled(),callerUserId:caller?.identity.id ?? null}; });
   }
   async queryForOwner(caller:CallerContext,documentId:string) {
-    return this.uow.run(async r => { const s=await this.ownerScope(r,caller,documentId,false); return {threads:await this.views(r,documentId,true),revisionId:s.document.currentRevisionId,writesEnabled:this.writesEnabled(),callerUserId:caller.identity.id}; });
+    return this.uow.run(async r => { const s=await this.ownerScope(r,caller,documentId,false); return {threads:await this.views(r,documentId,true,caller.identity.id),revisionId:s.document.currentRevisionId,writesEnabled:this.writesEnabled(),callerUserId:caller.identity.id}; });
   }
-  private views(r:KnowledgeRepositories,documentId:string,owner:true):Promise<OwnerReviewThreadView[]>;
-  private views(r:KnowledgeRepositories,documentId:string,owner:false):Promise<ReviewThreadView[]>;
-  private async views(r:KnowledgeRepositories,documentId:string,owner:boolean):Promise<ReviewThreadView[]|OwnerReviewThreadView[]> {
+  private views(r:KnowledgeRepositories,documentId:string,owner:true,callerUserId?:string):Promise<OwnerReviewThreadView[]>;
+  private views(r:KnowledgeRepositories,documentId:string,owner:false,callerUserId?:string):Promise<ReviewThreadView[]>;
+  private async views(r:KnowledgeRepositories,documentId:string,owner:boolean,callerUserId?:string):Promise<ReviewThreadView[]|OwnerReviewThreadView[]> {
     const revision=await r.revisions.findCurrent(documentId);
     if(!revision) fail("REVIEW_NOT_FOUND","Document discussion was not found.");
     const relocateAnchor=createReviewAnchorRelocator(revision.markdown);
@@ -33,8 +33,9 @@ export class DocumentReviewService {
     for(const thread of await r.reviewThreads.listByDocument(documentId)) {
       if(!owner && thread.visibility==="HIDDEN") continue;
       const comments=await r.reviewComments.listByThread(thread.id);
+      if(isRetractedThread(comments)) continue;
       const anchor=relocateAnchor(thread.anchor,thread.createdRevisionId===revision.id);
-      const view=owner?projectOwnerThread(thread,comments,anchor):projectReviewerThread(thread,comments,anchor);
+      const view=owner?projectOwnerThread(thread,comments,anchor,callerUserId):projectReviewerThread(thread,comments,anchor,callerUserId);
       if(view) {
         const authors=new Map(comments.map(comment=>[comment.id,comment.authorUserId]));
         for(const comment of view.comments) comment.authorName=(await r.users.findById(authors.get(comment.id)!))?.name;
@@ -92,12 +93,12 @@ export class DocumentReviewService {
   }
   async createForLink(caller:CallerContext,input:CreateReviewThreadInput) {
     const request=this.creation(input);
-    return this.uow.run(async r => { const s=await this.linkScope(r,input.token); return this.create(r,caller,s,s.link.id,request,async()=>(await this.views(r,s.document.id,false))); });
+    return this.uow.run(async r => { const s=await this.linkScope(r,input.token); return this.create(r,caller,s,s.link.id,request,async()=>(await this.views(r,s.document.id,false,caller.identity.id))); });
   }
   /** The owner's own discussion, on a passage of their own document. No link is involved, so none is recorded. */
   async createForOwner(caller:CallerContext,input:CreateOwnerReviewThreadInput) {
     const request=this.creation(input);
-    return this.uow.run(async r => { const s=await this.ownerScope(r,caller,input.documentId); return this.create(r,caller,s,null,request,async()=>(await this.views(r,s.document.id,true))); });
+    return this.uow.run(async r => { const s=await this.ownerScope(r,caller,input.documentId); return this.create(r,caller,s,null,request,async()=>(await this.views(r,s.document.id,true,caller.identity.id))); });
   }
   private creation(input:Pick<CreateReviewThreadInput,"expectedRevisionId"|"anchor"|"body"|"idempotencyKey">) {
     const body=validateReviewBody(input.body),key=validateReviewIdempotencyKey(input.idempotencyKey);
@@ -120,18 +121,47 @@ export class DocumentReviewService {
   }
   async replyForLink(caller:CallerContext,input:ReplyReviewInput) { return this.uow.run(async r=> {const s=await this.linkScope(r,input.token); return this.reply(r,caller,s,input);}); }
   async replyForOwner(caller:CallerContext,input:{documentId:string;threadId:string;body:string;idempotencyKey:string}) {return this.uow.run(async r=>{const s=await this.ownerScope(r,caller,input.documentId);return this.reply(r,caller,s,input);});}
-  private comment(threadId:string,userId:string,body:string,key:string,requestHash:string):ReviewComment {return {id:uuidv7(),threadId,authorUserId:userId,body,idempotencyKey:key,requestHash,createdAt:this.clock(),visibility:"VISIBLE",hiddenBy:null,hiddenAt:null,hiddenReason:null};}
+  private comment(threadId:string,userId:string,body:string,key:string,requestHash:string):ReviewComment {return {id:uuidv7(),threadId,authorUserId:userId,body,idempotencyKey:key,requestHash,createdAt:this.clock(),editedAt:null,deletedAt:null,visibility:"VISIBLE",hiddenBy:null,hiddenAt:null,hiddenReason:null};}
   private async reply(r:KnowledgeRepositories,caller:CallerContext,s:Awaited<ReturnType<DocumentReviewService["scope"]>>,input:{threadId:string;body:string;idempotencyKey:string}) {
     const body=validateReviewBody(input.body),key=validateReviewIdempotencyKey(input.idempotencyKey),requestHash=hash({threadId:input.threadId,body});
     const thread=await r.reviewThreads.lockById(input.threadId);
-    if(!thread || thread.documentId!==s.document.id || thread.visibility==="HIDDEN") throw new ShareLinkNotFoundError();
+    if(!thread || thread.documentId!==s.document.id || thread.visibility==="HIDDEN" || isRetractedThread(await r.reviewComments.listByThread(thread.id))) throw new ShareLinkNotFoundError();
     const existing=await r.reviewComments.findByIdempotencyKey(thread.id,caller.identity.id,key);
-    if(existing) {if(existing.requestHash!==requestHash) fail("IDEMPOTENCY_KEY_REUSED","The idempotency key was already used for a different request."); return projectReviewComment(existing);}
+    if(existing) {if(existing.requestHash!==requestHash) fail("IDEMPOTENCY_KEY_REUSED","The idempotency key was already used for a different request."); return projectReviewComment(existing,caller.identity.id);}
     this.enabled();this.active(s);
     if(thread.status!=="OPEN") fail("REVIEW_THREAD_CLOSED","Reopen the discussion before replying.");
     if(await r.reviewComments.countByThread(thread.id)>REVIEW_LIMITS.replies) fail("CAPACITY_EXCEEDED","The discussion reply limit was reached.");
     await this.quota(r,caller.identity.id,s.document.id);
-    const comment=this.comment(thread.id,caller.identity.id,body,key,requestHash);await r.reviewComments.insert(comment);await this.charge(r,caller.identity.id,s.document.id);return projectReviewComment(comment);
+    const comment=this.comment(thread.id,caller.identity.id,body,key,requestHash);await r.reviewComments.insert(comment);await this.charge(r,caller.identity.id,s.document.id);return projectReviewComment(comment,caller.identity.id);
+  }
+  async editForLink(caller:CallerContext,input:{token:string;threadId:string;commentId:string;body:string}) { return this.uow.run(async r=>this.edit(r,caller,await this.linkScope(r,input.token),input)); }
+  async editForOwner(caller:CallerContext,input:{documentId:string;threadId:string;commentId:string;body:string}) { return this.uow.run(async r=>this.edit(r,caller,await this.ownerScope(r,caller,input.documentId),input)); }
+  async deleteForLink(caller:CallerContext,input:{token:string;threadId:string;commentId:string}) { await this.uow.run(async r=>this.retract(r,caller,await this.linkScope(r,input.token),input)); }
+  async deleteForOwner(caller:CallerContext,input:{documentId:string;threadId:string;commentId:string}) { await this.uow.run(async r=>this.retract(r,caller,await this.ownerScope(r,caller,input.documentId),input)); }
+  /** A comment as its author reaches it. To anyone else — the document's owner included — it is not there. */
+  private async authored(r:KnowledgeRepositories,caller:CallerContext,s:Awaited<ReturnType<DocumentReviewService["scope"]>>,input:{threadId:string;commentId:string}) {
+    const thread=await r.reviewThreads.lockById(input.threadId);
+    if(!thread || thread.documentId!==s.document.id || thread.visibility==="HIDDEN") throw new ShareLinkNotFoundError();
+    const comment=await r.reviewComments.findById(input.commentId);
+    if(!comment || comment.threadId!==thread.id || comment.authorUserId!==caller.identity.id) throw new ShareLinkNotFoundError();
+    return {thread,comment};
+  }
+  /** An edit is a write like a reply: the switch, an open thread, the hourly limit. No earlier body is kept. */
+  private async edit(r:KnowledgeRepositories,caller:CallerContext,s:Awaited<ReturnType<DocumentReviewService["scope"]>>,input:{threadId:string;commentId:string;body:string}) {
+    const body=validateReviewBody(input.body);
+    const {thread,comment}=await this.authored(r,caller,s,input);
+    if(comment.deletedAt || comment.visibility==="HIDDEN") throw new ShareLinkNotFoundError();
+    if(comment.body===body) return projectReviewComment(comment,caller.identity.id);
+    this.enabled();this.active(s);
+    if(thread.status!=="OPEN") fail("REVIEW_THREAD_CLOSED","Reopen the discussion before editing a comment.");
+    await this.quota(r,caller.identity.id,s.document.id);
+    const editedAt=this.clock();await r.reviewComments.setBody(comment.id,body,editedAt);await this.charge(r,caller.identity.id,s.document.id);
+    return projectReviewComment({...comment,body,editedAt},caller.identity.id);
+  }
+  /** A retraction adds nothing, so it is held to none of what a write is: not the switch, the status or the limit. */
+  private async retract(r:KnowledgeRepositories,caller:CallerContext,s:Awaited<ReturnType<DocumentReviewService["scope"]>>,input:{threadId:string;commentId:string}) {
+    const {comment}=await this.authored(r,caller,s,input);
+    if(!comment.deletedAt) await r.reviewComments.markDeleted(comment.id,this.clock());
   }
   async setResolution(caller:CallerContext,input:{documentId:string;threadId:string;status:ReviewStatus}) {
     if(!["OPEN","RESOLVED"].includes(input.status)) fail("INVALID_REQUEST","Invalid discussion status.");

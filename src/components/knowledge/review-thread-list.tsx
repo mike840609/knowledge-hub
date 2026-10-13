@@ -24,8 +24,8 @@ export async function reviewRequest<T>(url: string, body?: unknown): Promise<T> 
 }
 
 /** A failed submission retains its UUID so a retry after a lost response writes once. */
-export function ReviewReplyForm({ onSubmit, label = "Reply", openRequest = 0 }: { onSubmit: (body: string, key: string) => Promise<void>; label?: string; /** Changes when the card's own Reply was pressed: open the form. */ openRequest?: number }) {
-  const [body, setBody] = useState("");
+export function ReviewReplyForm({ onSubmit, label = "Reply", openRequest = 0, initial = "", submitLabel = label, onCancel }: { onSubmit: (body: string, key: string) => Promise<void>; label?: string; /** Changes when the card's own Reply was pressed: open the form. */ openRequest?: number; /** An edit starts from what the comment says. */ initial?: string; submitLabel?: string; onCancel?: () => void }) {
+  const [body, setBody] = useState(initial);
   const [expanded, setExpanded] = useState(label !== "Reply");
   useEffect(() => { if (openRequest > 0) setExpanded(true); }, [openRequest]);
   const [busy, setBusy] = useState(false);
@@ -41,7 +41,7 @@ export function ReviewReplyForm({ onSubmit, label = "Reply", openRequest = 0 }: 
     <Textarea aria-label={label} placeholder={label === "Reply" ? "Reply…" : "Add a comment…"} rows={2} autoFocus className="!min-h-20 resize-y" value={body} disabled={busy} onChange={event => setBody(event.target.value)} required maxLength={6000} />
     {[...body].length >= 2700 && <p className="text-caption text-kh-text-muted">{[...body].length}/3,000</p>}
     {error && <p role="alert" className="text-body-sm">{error}</p>}
-    <div className="flex justify-end gap-1">{label === "Reply" && <Button type="button" variant="ghost" disabled={busy} onClick={() => setExpanded(false)}>Cancel</Button>}<Button type="submit" disabled={busy || !body.trim() || [...body].length > 3000}>{busy ? "Saving…" : label}</Button></div>
+    <div className="flex justify-end gap-1">{(label === "Reply" || onCancel) && <Button type="button" variant="ghost" disabled={busy} onClick={onCancel ?? (() => setExpanded(false))}>Cancel</Button>}<Button type="submit" disabled={busy || !body.trim() || [...body].length > 3000}>{busy ? "Saving…" : submitLabel}</Button></div>
   </form>;
 }
 
@@ -53,13 +53,15 @@ export function ReviewFilterMenu({ value, onChange }: { value: ReviewFilter; onC
   return <MenuRoot><MenuTrigger className={buttonClasses({ variant: "ghost" })} aria-label="Filter discussions">{FILTER_NAMES[value]}<ChevronDown className="size-4" aria-hidden="true" /></MenuTrigger><MenuContent>{(Object.keys(FILTER_NAMES) as ReviewFilter[]).map(option => <MenuItem key={option} onClick={() => onChange(option)}>{FILTER_NAMES[option]}</MenuItem>)}</MenuContent></MenuRoot>;
 }
 
-export function ReviewThreadList({ threads, writesEnabled, reply, moderate, canResolve = true, focusAnchor, railMarkdown, activeThreadId, onActivate, filter: controlled, onFilterChange }: {
+export function ReviewThreadList({ threads, writesEnabled, reply, moderate, author, canResolve = true, focusAnchor, railMarkdown, activeThreadId, onActivate, filter: controlled, onFilterChange }: {
   threads: (ReviewThreadView | OwnerReviewThreadView)[];
   writesEnabled: boolean;
   reply: (threadId: string, body: string, key: string) => Promise<void>;
   focusAnchor?: (anchor: NonNullable<ReviewThreadView["currentAnchor"]["anchor"]>) => void;
   canResolve?: boolean;
   moderate?: (threadId: string, action: "resolution" | "visibility", value: string, commentId?: string) => Promise<void>;
+  /** What the caller may do to a comment of their own. The service decides again whose it is. */
+  author?: { edit: (threadId: string, commentId: string, body: string) => Promise<void>; remove: (threadId: string, commentId: string) => Promise<void> };
   railMarkdown?: string;
   activeThreadId?: string;
   onActivate?: (threadId: string) => void;
@@ -68,6 +70,12 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, canR
   onFilterChange?: (filter: ReviewFilter) => void;
 }) {
   const [pendingHide, setPendingHide] = useState<{ threadId: string; commentId?: string }>();
+  const [pendingDelete, setPendingDelete] = useState<{ threadId: string; commentId: string }>();
+  const [editing, setEditing] = useState<string>();
+  async function remove(target: { threadId: string; commentId: string }) {
+    setBusy(true); setError(undefined);
+    try { await author?.remove(target.threadId, target.commentId); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not delete comment."); } finally { setBusy(false); setPendingDelete(undefined); }
+  }
   const [own, setOwn] = useState<ReviewFilter>("ALL");
   const filter = controlled ?? own;
   const setFilter = onFilterChange ?? setOwn;
@@ -89,6 +97,7 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, canR
   const { ref: railRef, layout } = useReviewRailLayout(visible, railMarkdown, activeThreadId);
   return <div className="space-y-3">
     <ConfirmDialog open={!!pendingHide} onOpenChange={open => { if (!open) setPendingHide(undefined); }} title="Hide from reviewers?" description="This content will be hidden from all reviewers. It remains available to you for moderation." confirmLabel="Confirm hide" onConfirm={() => { if(pendingHide) void act(pendingHide.threadId,"visibility","HIDDEN",pendingHide.commentId,true); }} />
+    <ConfirmDialog open={!!pendingDelete} onOpenChange={open => { if (!open) setPendingDelete(undefined); }} title="Delete comment?" description="Your comment will be removed for everyone. This cannot be undone." confirmLabel="Delete comment" onConfirm={() => { if (pendingDelete) void remove(pendingDelete); }} />
     {threads.length > 0 && !onFilterChange && <ReviewFilterMenu value={filter} onChange={setFilter} />}
     {error && <p role="alert" className="text-body-sm">{error}</p>}
     {visible.length === 0 && <p className="py-6 text-body-sm text-kh-text-muted">{threads.length === 0 ? "No comments yet." : "No comments here."}</p>}
@@ -110,15 +119,25 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, canR
           if (document.dispatchEvent(navigation)) requestAnimationFrame(() => requestAnimationFrame(locate));
         }}>{thread.currentAnchor.anchor.exact}</button></blockquote>}
         {owner && thread.currentAnchor.match === "OUTDATED" && <blockquote className="mb-3 border-l border-kh-border pl-3 text-body-sm text-kh-text-muted">Original passage (owner only): {owner.originalAnchor.exact}</blockquote>}
-        <ol className="space-y-4">{(compact ? thread.comments.slice(0, 1) : thread.comments).map((comment, index) => <li key={comment.id} className="text-body-sm">
+        <ol className="space-y-4">{(compact ? thread.comments.slice(0, 1) : thread.comments).map((comment, index) => {
+          // A preview keeps its one button: what an author may do to their comment waits for the open card.
+          const mine = !!author && comment.own && !comment.deleted && !(compact && !moderate);
+          // An edit is a write, held to what a reply is; a retraction is not.
+          const canEdit = mine && canReply && comment.visibility !== "HIDDEN";
+          const hides = !!moderate && (index === 0 || !comment.deleted);
+          return <li key={comment.id} className="text-body-sm">
           <div className="mb-2 flex items-start gap-2">
             <span aria-hidden="true" className={`flex ${compact ? "size-6" : "size-8"} shrink-0 items-center justify-center rounded-full bg-kh-bg-selected font-medium text-kh-selected-text`}>{(comment.authorName ?? "C").slice(0, 1).toUpperCase()}</span>
-            <div className="min-w-0 flex-1"><p className="truncate font-medium">{comment.authorName ?? "Company colleague"}{comment.visibility === "HIDDEN" ? " · Hidden" : ""}</p>{!compact && <p className="text-caption text-kh-text-muted"><Timestamp value={comment.createdAt} /></p>}</div>
+            <div className="min-w-0 flex-1"><p className="truncate font-medium">{comment.authorName ?? "Company colleague"}{comment.visibility === "HIDDEN" ? " · Hidden" : ""}</p>{!compact && <p className="text-caption text-kh-text-muted"><Timestamp value={comment.createdAt} />{comment.editedAt ? " · Edited" : ""}</p>}</div>
             {moderate && index === 0 && <Tooltip label={thread.status === "OPEN" ? "Resolve" : "Reopen"}><Button type="button" variant="ghost" icon aria-label={thread.status === "OPEN" ? "Resolve" : "Reopen"} disabled={busy || !canResolve} onClick={() => void act(thread.id, "resolution", thread.status === "OPEN" ? "RESOLVED" : "OPEN")}><Check className="size-4" aria-hidden="true" /></Button></Tooltip>}
-            {moderate && <MenuRoot><MenuTrigger aria-label={index === 0 ? "Comment options" : "Reply options"} className={buttonClasses({variant:"ghost",icon:true})}><MoreHorizontal className="size-4" aria-hidden="true" /></MenuTrigger><MenuContent align="end"><MenuItem disabled={busy} onClick={() => void act(thread.id, "visibility", index === 0 ? (owner?.visibility === "HIDDEN" ? "VISIBLE" : "HIDDEN") : (comment.visibility === "HIDDEN" ? "VISIBLE" : "HIDDEN"), index === 0 ? undefined : comment.id)}>{index === 0 ? (owner?.visibility === "HIDDEN" ? "Unhide thread" : "Hide thread") : comment.visibility === "HIDDEN" ? "Unhide reply" : "Hide reply"}</MenuItem></MenuContent></MenuRoot>}
+            {(hides || mine) && <MenuRoot><MenuTrigger aria-label={index === 0 ? "Comment options" : "Reply options"} className={buttonClasses({variant:"ghost",icon:true})}><MoreHorizontal className="size-4" aria-hidden="true" /></MenuTrigger><MenuContent align="end">{canEdit && <MenuItem disabled={busy} onClick={() => setEditing(comment.id)}>Edit</MenuItem>}{mine && <MenuItem disabled={busy} onClick={() => setPendingDelete({ threadId: thread.id, commentId: comment.id })}>Delete</MenuItem>}{hides && <MenuItem disabled={busy} onClick={() => void act(thread.id, "visibility", index === 0 ? (owner?.visibility === "HIDDEN" ? "VISIBLE" : "HIDDEN") : (comment.visibility === "HIDDEN" ? "VISIBLE" : "HIDDEN"), index === 0 ? undefined : comment.id)}>{index === 0 ? (owner?.visibility === "HIDDEN" ? "Unhide thread" : "Hide thread") : comment.visibility === "HIDDEN" ? "Unhide reply" : "Hide reply"}</MenuItem>}</MenuContent></MenuRoot>}
           </div>
-          <p className={`whitespace-pre-wrap break-words ${compact ? "line-clamp-2" : ""}`}>{comment.body}</p>
-        </li>)}</ol>
+          {comment.deleted
+            ? <p className="text-kh-text-muted">Comment deleted by author</p>
+            : editing === comment.id && canEdit && !compact
+              ? <ReviewReplyForm label="Edit comment" submitLabel="Save" initial={comment.body} onCancel={() => setEditing(undefined)} onSubmit={async body => { await author!.edit(thread.id, comment.id, body); setEditing(undefined); }} />
+              : <p className={`whitespace-pre-wrap break-words ${compact ? "line-clamp-2" : ""}`}>{comment.body}</p>}
+        </li>; })}</ol>
         {/* A preview's one button. With replies to show, it shows them. With only the remark — which
             the preview already is — opening the card would reveal nothing but Reply, so it is Reply:
             one step from reading to answering, and focus lands in the form. Where no reply can be

@@ -21,3 +21,7 @@ it("review visibility and resolution have check constraints",async()=>{
  expect(rows.filter((r:{CHECK_CLAUSE:string})=>r.CHECK_CLAUSE.includes('hidden_at'))).toHaveLength(2);
  expect(rows.some((r:{CHECK_CLAUSE:string})=>r.CHECK_CLAUSE.includes('resolved_at'))).toBe(true);
 });
+it("a comment's edit and its author's retraction are nullable times beside the body, which no column replaces",async()=>{
+ const rows=await pool.query("SELECT COLUMN_NAME,IS_NULLABLE,COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='document_review_comments' AND COLUMN_NAME IN ('edited_at','deleted_at','body') ORDER BY COLUMN_NAME");
+ expect(rows).toMatchObject([{COLUMN_NAME:"body",IS_NULLABLE:"NO"},{COLUMN_NAME:"deleted_at",IS_NULLABLE:"YES",COLUMN_TYPE:"datetime(6)"},{COLUMN_NAME:"edited_at",IS_NULLABLE:"YES",COLUMN_TYPE:"datetime(6)"}]);
+});

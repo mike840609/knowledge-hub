@@ -21,7 +21,7 @@ async function fixture(){
  const document=await uow.run(r=>r.documents.findById(documentId));
  const now=new Date(),hidden={visibility:"VISIBLE" as const,hiddenBy:null,hiddenAt:null,hiddenReason:null};
  const thread:ReviewThread={id:uuidv7(),documentId,createdRevisionId:document!.currentRevisionId!,createdBy:id,creationIdempotencyKey:randomUUID(),creationRequestHash:"a".repeat(64),originShareLinkId:null,anchor:{schemaVersion:1,blockPath:[0],blockKind:"paragraph",startUtf16:0,endUtf16:5,exact:"Hello",prefix:"",suffix:""},status:"OPEN",resolvedBy:null,resolvedAt:null,createdAt:now,updatedAt:now,...hidden};
- const comment:ReviewComment={id:uuidv7(),threadId:thread.id,authorUserId:id,body:"Review body",createdAt:now,idempotencyKey:randomUUID(),requestHash:"b".repeat(64),...hidden};
+ const comment:ReviewComment={id:uuidv7(),threadId:thread.id,authorUserId:id,body:"Review body",createdAt:now,editedAt:null,deletedAt:null,idempotencyKey:randomUUID(),requestHash:"b".repeat(64),...hidden};
  await uow.run(async r=>{await r.reviewThreads.insert(thread);await r.reviewComments.insert(comment);});
  return{uow,id,thread,comment,now};
 }

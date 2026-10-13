@@ -20,6 +20,8 @@ function map(row:DbRow):ReviewThread { return {
  createdAt: asDate(row.created_at),
  updatedAt: asDate(row.updated_at),
 };}
+// A thread whose every comment its author deleted is listed for no one, so it holds no place either.
+const LIVE=" AND (EXISTS (SELECT 1 FROM document_review_comments c WHERE c.thread_id=document_review_threads.id AND c.deleted_at IS NULL) OR NOT EXISTS (SELECT 1 FROM document_review_comments c WHERE c.thread_id=document_review_threads.id))";
 export class MariaDbDocumentReviewThreadsRepository implements DocumentReviewThreadRepository {
  constructor(private readonly connection:QueryConnection){}
  async insert(value:ReviewThread):Promise<void>{ await this.connection.query("INSERT INTO document_review_threads (id,document_id,created_revision_id,created_by,creation_idempotency_key,creation_request_hash,origin_share_link_id,anchor_json,status,visibility,hidden_by,hidden_at,hidden_reason,resolved_by,resolved_at,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",[value.id,value.documentId,value.createdRevisionId,value.createdBy,value.creationIdempotencyKey,value.creationRequestHash,value.originShareLinkId,JSON.stringify(value.anchor),value.status,value.visibility,value.hiddenBy,value.hiddenAt,value.hiddenReason,value.resolvedBy,value.resolvedAt,value.createdAt,value.updatedAt]); }
@@ -28,8 +30,8 @@ export class MariaDbDocumentReviewThreadsRepository implements DocumentReviewThr
  async lockById(id:string){return this.find("SELECT * FROM document_review_threads WHERE id=? FOR UPDATE",[id]);}
  async findByCreationKey(documentId:string,authorId:string,key:string){return this.find("SELECT * FROM document_review_threads WHERE document_id=? AND created_by=? AND creation_idempotency_key=?",[documentId,authorId,key]);}
  async listByDocument(documentId:string){const rows=await this.connection.query<DbRow[]>("SELECT * FROM document_review_threads WHERE document_id=? ORDER BY created_at,id",[documentId]);return rows.map(map);}
- async countVisibleByDocument(documentId:string){const rows=await this.connection.query<DbRow[]>("SELECT COUNT(*) AS n FROM document_review_threads WHERE document_id=? AND visibility='VISIBLE'",[documentId]);return asNumber(rows[0].n,"thread count");}
- async countVisibleOpenByCreator(documentId:string,creatorId:string){const rows=await this.connection.query<DbRow[]>("SELECT COUNT(*) AS n FROM document_review_threads WHERE document_id=? AND created_by=? AND visibility='VISIBLE' AND status='OPEN'",[documentId,creatorId]);return asNumber(rows[0].n,"creator thread count");}
+ async countVisibleByDocument(documentId:string){const rows=await this.connection.query<DbRow[]>("SELECT COUNT(*) AS n FROM document_review_threads WHERE document_id=? AND visibility='VISIBLE'"+LIVE,[documentId]);return asNumber(rows[0].n,"thread count");}
+ async countVisibleOpenByCreator(documentId:string,creatorId:string){const rows=await this.connection.query<DbRow[]>("SELECT COUNT(*) AS n FROM document_review_threads WHERE document_id=? AND created_by=? AND visibility='VISIBLE' AND status='OPEN'"+LIVE,[documentId,creatorId]);return asNumber(rows[0].n,"creator thread count");}
  async setResolution(id:string,status:ReviewStatus,actorId:string,at:Date){await this.connection.query("UPDATE document_review_threads SET status=?,resolved_by=?,resolved_at=?,updated_at=? WHERE id=?",[status,status==="RESOLVED"?actorId:null,status==="RESOLVED"?at:null,at,id]);}
  async setVisibility(id:string,visibility:ReviewVisibility,actorId:string,at:Date,reason:string|null){
  await this.connection.query("UPDATE document_review_threads SET visibility=?,hidden_by=?,hidden_at=?,hidden_reason=?,updated_at=? WHERE id=?",[visibility,visibility==="HIDDEN"?actorId:null,visibility==="HIDDEN"?at:null,visibility==="HIDDEN"?reason:null,at,id]);
