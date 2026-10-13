@@ -29,7 +29,10 @@ arrived without saying who sent them, so a maintainer could not follow up.
   included."
 - **Endpoint:** `POST /api/feedback-reports` with exactly
   `{ category, description, pagePath }`; `201 { id }`. It requires a trusted
-  caller like every other private API. Any signed-in user may report; no
+  caller like every other private API, and a same-origin request
+  (`assertReviewOrigin`, as saved shares and review writes use): the body is
+  read without a Content-Type check, so without it another site could post a
+  report in a signed-in user's name with a `text/plain` form. Any signed-in user may report; no
   Workspace capability is involved, and the page path is a string the user
   sent, not something the server resolves or authorizes against.
 - **A modest per-user limit**: at most 20 reports in a rolling hour (counted with a plain read before the insert, so two sends racing at the limit may both land — it stops loops, it is not a quota); the 21st
