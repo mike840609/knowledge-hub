@@ -50,6 +50,12 @@ describe("where a passage marker sits", () => {
     expect(shownTop(rangeIn(document.getElementById("s")!, 305))).toBe(305);
   });
 
+  test("at the quote itself when it is in no disclosure at all", () => {
+    document.body.innerHTML = "<article id=a><p id=p>shown</p></article>";
+    at(document.getElementById("a")!, 50);
+    expect(shownTop(rangeIn(document.getElementById("p")!, 70))).toBe(70);
+  });
+
   test("beside the closed disclosure when the browser reports no rectangle at all", () => {
     document.body.innerHTML = "<details id=d><summary>Source</summary><p id=p>hidden</p></details>";
     at(document.getElementById("d")!, 300);
