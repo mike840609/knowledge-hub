@@ -823,7 +823,7 @@ default). No call site passes `strokeWidth`; the rule overrides it anyway.
 The one native control with a platform glyph, `<select>`, gets a chevron in
 the same weight (`.kh-select`), drawn as two gradient strokes in
 `text-muted`. It keeps native behaviour and needs no wrapper element. It is
-not an SVG: `img-src 'self'` refuses `data:` images, which is the Markdown
+not an SVG: `img-src 'self' blob:` refuses `data:` images, which is the Markdown
 image policy doing its job, not something to loosen for a glyph.
 
 ### Brand mark
@@ -984,7 +984,7 @@ element rules in `globals.css`, so that no call site can be without them:
   glyphs `☐` and `☑`.
 
 Both glyphs are masks over a colour token, from files in `public/icons`, for
-the reason the select's chevron is a gradient: `img-src 'self'` refuses `data:`
+the reason the select's chevron is a gradient: `img-src 'self' blob:` refuses `data:`
 images (§13).
 
 ### Tabs come in two kinds and share only their look
