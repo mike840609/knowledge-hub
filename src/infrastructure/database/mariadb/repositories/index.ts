@@ -4,6 +4,7 @@ import { MariaDbDocumentReviewCommentsRepository } from "./document-review-comme
 import { MariaDbDocumentReviewWriteLedger } from "./document-review-write-ledger";
 import { MariaDbPersonalProfileRepository } from "./personal-profile";
 import { MariaDbSyncRunChangeRepository } from "./sync-run-changes";
+import { MariaDbFeedbackReportRepository } from "./feedback-reports";
 import { MariaDbDocumentReadProgressRepository } from "./document-read-progress";
 import type { DatabaseConnection } from "../pool";
 import { MariaDbUserRepository } from "./users";
@@ -52,6 +53,7 @@ export function createRepositories(connection: DatabaseConnection): SourceReposi
     syncRuns: new MariaDbSyncRunRepository(connection),
     syncRunChanges: new MariaDbSyncRunChangeRepository(connection),
     documentReadProgress: new MariaDbDocumentReadProgressRepository(connection),
+    feedbackReports: new MariaDbFeedbackReportRepository(connection),
     importSnapshots: new MariaDbImportSnapshotRepository(connection),
     importSnapshotEntries: new MariaDbImportSnapshotEntryRepository(connection),
     importCanonicalState: new MariaDbImportCanonicalStateRepository(connection),

@@ -30,7 +30,7 @@ test('find feedback, sortable graph, search disclosure and safe share cancellati
  await page.getByRole('menuitem',{name:'Report a problem',exact:true}).click();
  const report=page.getByRole('dialog',{name:'Report a problem',exact:true});
  await expect(report).toBeVisible();
- await expect(report.getByRole('button',{name:'Download feedback report'})).toBeDisabled();
+ await expect(report.getByRole('button',{name:'Send report'})).toBeDisabled();
  await page.keyboard.press('Escape');await expect(report).toBeHidden();
  await expect(page.getByRole('button',{name:/^Account:/})).toBeFocused();
  await page.goto(`/w/${ws}/graph?view=list`);await page.getByLabel('Find a document').fill('Feedback guide');
@@ -40,10 +40,9 @@ test('find feedback, sortable graph, search disclosure and safe share cancellati
  await page.getByRole('button',{name:/^Account:/}).click();
  await page.getByRole('menuitem',{name:'Report a problem',exact:true}).click();
  await report.getByLabel('What happened?').fill('Graph issue');
- const downloading=page.waitForEvent('download');
- await report.getByRole('button',{name:'Download feedback report'}).click();
- expect((await downloading).suggestedFilename()).toBe('knowledge-hub-feedback.md');
- await expect(report.getByRole('status')).toContainText('Report prepared');
+ await report.getByRole('button',{name:'Send report'}).click();
+ await expect(report.getByRole('status')).toContainText('Report sent');
+ await expect(report.getByLabel('What happened?')).toHaveValue('');
  await report.getByRole('button',{name:'Close',exact:true}).click();
 
  await page.getByRole('button',{name:'Links in',exact:true}).click();

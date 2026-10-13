@@ -12,6 +12,7 @@ import {GetSourceHealthService} from "@/modules/sources/application/get-source-h
 import { ListFolderUpdatesService } from "@/modules/personal/application/list-folder-updates";
 import { GetSyncRunDetailService } from "@/modules/sources/application/get-sync-run-detail";
 import { GetFolderImportDiffService } from "@/modules/sources/application/get-folder-import-diff";
+import { FeedbackReportService } from "@/modules/personal/application/feedback-report-service";
 import { DocumentReadProgressService } from "@/modules/personal/application/document-read-progress-service";
 import { PersonalService } from "@/modules/personal/application/personal-service";
 import { MariaDbPersonalStore } from "@/infrastructure/database/mariadb/repositories/personal-items";
@@ -147,7 +148,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
   return {
     personalProfile: new PersonalProfileService(unitOfWork),
     agentContext: new AgentContextService(unitOfWork),
-    importScope: new GetImportScopeService(unitOfWork), sourceHealth:new GetSourceHealthService(unitOfWork), folderUpdates:new ListFolderUpdatesService(unitOfWork), syncReading: new GetSyncRunDetailService(unitOfWork), documentReadProgress, personal, personalPreferences, workspaceAdmin, teams, governance, reviewReadAvailable: true, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, links, shares, savedShares, reviews, sources, workspaces, search, imports };
+    importScope: new GetImportScopeService(unitOfWork), sourceHealth:new GetSourceHealthService(unitOfWork), folderUpdates:new ListFolderUpdatesService(unitOfWork), syncReading: new GetSyncRunDetailService(unitOfWork), documentReadProgress, feedbackReports: new FeedbackReportService(unitOfWork), personal, personalPreferences, workspaceAdmin, teams, governance, reviewReadAvailable: true, verifyProductionReadiness: verifyReadiness, identityProvider, unitOfWork, resolver, personalWorkspaces, establishTrustedCaller, hub, queries, links, shares, savedShares, reviews, sources, workspaces, search, imports };
 }
 
 export function applicationServices() {

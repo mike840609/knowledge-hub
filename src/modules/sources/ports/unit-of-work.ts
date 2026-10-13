@@ -1,5 +1,6 @@
 import type { PersonalProfileRepository } from "@/modules/personal/ports/personal-profile-repository";
 import type { SyncRunChangeRepository } from "./sync-run-change-repository";
+import type { FeedbackReportRepository } from "@/modules/personal/ports/feedback-report-repository";
 import type { DocumentReadProgressRepository } from "@/modules/personal/ports/document-read-progress-repository";
 import type { KnowledgeRepositories } from "@/modules/knowledge/ports/unit-of-work";
 import type { AssetRepository } from "./asset-repository";
@@ -23,6 +24,7 @@ export type SourceRepositories = KnowledgeRepositories & {
   syncRuns: SyncRunRepository;
   syncRunChanges: SyncRunChangeRepository;
   documentReadProgress: DocumentReadProgressRepository;
+  feedbackReports: FeedbackReportRepository;
   personalProfile: PersonalProfileRepository;
   importSnapshots: ImportSnapshotRepository;
   importSnapshotEntries: ImportSnapshotEntryRepository;
