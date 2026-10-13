@@ -50,6 +50,10 @@ export function DocumentEditor({
       cancelHref={readHref}
       cancelLabel={personal ? "Read" : "Cancel"}
       conflictHref={`${documentHref}/edit`}
+      onAutosave={personal ? async ({ title, markdown, expectedRevisionId }) => {
+        const result = await governanceRequest<{ revisionId: string }>(`/api/documents/${documentId}`, "PATCH", { title, markdown, expectedCurrentRevisionId: expectedRevisionId });
+        return result.revisionId;
+      } : undefined}
       onSubmit={async ({ title, markdown, expectedRevisionId }) => {
         await governanceRequest(`/api/documents/${documentId}`, "PATCH", { title, markdown, expectedCurrentRevisionId: expectedRevisionId });
         return readHref;

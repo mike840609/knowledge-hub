@@ -78,14 +78,15 @@ export function DocumentComposer({
   location,
   untitledLabel,
   metadataTitle,
-  initialTitle,
-  initialMarkdown,
+  initialTitle: openedTitle,
+  initialMarkdown: openedMarkdown,
   currentRevisionId,
   submitLabel,
   busyLabel,
   cancelHref,
   cancelLabel = "Cancel",
   onSubmit,
+  onAutosave,
   conflictHref,
   blocked,
   footer,
@@ -117,6 +118,8 @@ export function DocumentComposer({
   cancelLabel?: string;
   /** Sends the document and returns where it now lives; throws on refusal. */
   onSubmit: (input: ComposerSubmit) => Promise<string>;
+  /** Personal notes save revisions in place; returns the new revision id. */
+  onAutosave?: (input: ComposerSubmit) => Promise<string>;
   /** Where "load the latest version" goes after a conflict; null when creating. */
   conflictHref: string | null;
   /** Another operation owns the page, e.g. an upload; nothing here may start. */
@@ -149,6 +152,11 @@ export function DocumentComposer({
   const durableDraft = access.workspace.type === "PERSONAL" && !seeded;
   // Everything waits for hydration; see `use-hydrated` for what a native submit costs.
   const hydrated = useHydrated();
+  const [saved, setSaved] = useState({ title: openedTitle, markdown: openedMarkdown });
+  const initialTitle = saved.title, initialMarkdown = saved.markdown;
+  const [autosaving, setAutosaving] = useState(false);
+  const savingRef = useRef(false);
+  const revisionRef = useRef(currentRevisionId);
   const [title, setTitle] = useState(initialTitle);
   const [markdown, setMarkdown] = useState(initialMarkdown);
   const [baseRevisionId, setBaseRevisionId] = useState(currentRevisionId);
@@ -214,6 +222,7 @@ export function DocumentComposer({
       if (draft) {
         setContent({ markdown: draft.markdown, title: draft.title });
         setBaseRevisionId(draft.baseRevisionId);
+        revisionRef.current = draft.baseRevisionId;
         setRestored(draft.baseRevisionId === currentRevisionId ? "current" : "stale");
       }
       setRestoreChecked(true);
@@ -320,7 +329,7 @@ export function DocumentComposer({
     // Cancel and load-latest leave the fields editable while the page navigates; a keystroke there must not write back the draft they just cleared.
     if (leaving.current) return;
     if (persistent.current) {
-      persistent.current.change(nextTitle === initialTitle && nextMarkdown === initialMarkdown ? null : { title: nextTitle, markdown: nextMarkdown, baseRevisionId });
+      persistent.current.change(nextTitle === initialTitle && nextMarkdown === initialMarkdown ? null : { title: nextTitle, markdown: nextMarkdown, baseRevisionId: revisionRef.current });
     } else syncDraft(browserDraftStorage(), draftKey, { title: nextTitle, markdown: nextMarkdown, baseRevisionId }, initial);
   }
 
@@ -407,11 +416,12 @@ export function DocumentComposer({
     pendingRef.current = false;
     setTouched(false);
     setContent({ markdown: initialMarkdown, title: initialTitle });
-    setBaseRevisionId(currentRevisionId);
+    setBaseRevisionId(onAutosave ? revisionRef.current : currentRevisionId);
     setRestored(null);
   }
 
   function cancel() {
+    if (onAutosave) { void savePersonal(true); return; }
     // A revert inside the output debounce emits nothing, so `touched` may
     // still be set on an unchanged document: compare the flushed content
     // instead of trusting it (spec §11.2, #65).
@@ -450,7 +460,52 @@ export function DocumentComposer({
     window.location.assign(conflictHref);
   }
 
+  async function savePersonal(readAfter = false) {
+    if (!onAutosave || savingRef.current || !confirmed || !ready || leaving.current) return;
+    const snapshot = flush();
+    const final = resolveAuthoredTitle({ metadataTitle, markdown: snapshot.markdown, typedTitle: snapshot.title });
+    if (!final.title) return;
+    if (matchesInitial(snapshot, initial)) {
+      setTouched(false);
+      if (readAfter) { leaving.current = true; refreshOnArrival(cancelHref); leave(cancelHref); }
+      return;
+    }
+    savingRef.current = true;
+    setAutosaving(true);
+    if (readAfter) setBusy(true);
+    setError(null);
+    try {
+      const revisionId = await onAutosave({ title: final.title, markdown: snapshot.markdown, expectedRevisionId: revisionRef.current });
+      revisionRef.current = revisionId;
+      setBaseRevisionId(revisionId);
+      setSaved(snapshot);
+      setRestored(null);
+      const latest = flush();
+      const unchanged = matchesInitial(latest, snapshot);
+      // Replace the recovery draft with the latest text against the revision just saved.
+      // Do not await a draft deletion while the user is still typing.
+      persistent.current?.change(unchanged ? null : { ...latest, baseRevisionId: revisionId });
+      if (unchanged) { clearDraft(browserDraftStorage(), draftKey); setTouched(false); }
+      if (readAfter) { leaving.current = true; refreshOnArrival(cancelHref); leave(cancelHref); }
+    } catch (failure) {
+      setError(governanceFailure(failure));
+      setBusy(false);
+    } finally {
+      savingRef.current = false;
+      setAutosaving(false);
+    }
+  }
+
+  const autosaveRef = useRef(savePersonal);
+  autosaveRef.current = savePersonal;
+  useEffect(() => {
+    if (!onAutosave || !dirty || !ready || !confirmed || autosaving || error || restored === "stale" || draftStatus === "conflict") return;
+    const timer = window.setTimeout(() => { void autosaveRef.current(); }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [onAutosave, title, markdown, touched, dirty, ready, confirmed, autosaving, error, restored, draftStatus]);
+
   async function save() {
+    if (onAutosave) { await savePersonal(); return; }
     if (busy || !confirmed || !ready) return;
     // What was typed a moment ago has not reached `markdown` yet; save what is there.
     const snapshot = flush();
@@ -518,7 +573,7 @@ export function DocumentComposer({
   function onKeyDown(event: KeyboardEvent<HTMLFormElement>) {
     if (
       event.key === "Escape" &&
-      !busy &&
+      !busy && !autosaving &&
       !event.nativeEvent.isComposing &&
       event.keyCode !== 229 &&
       matchesInitial(flush(), initial)
@@ -580,8 +635,9 @@ export function DocumentComposer({
                   Markdown
                 </Button>
               </Tooltip>
+              {onAutosave && <span role="status" className="text-caption text-kh-text-muted">{error ? "Not saved" : autosaving ? "Saving…" : dirty ? "Unsaved changes" : "Saved"}</span>}
               <Tooltip label={cancelLabel} keys="Esc">
-                <Button type="button" variant="secondary" disabled={busy || blocked} onClick={cancel}>
+                <Button type="button" variant="secondary" disabled={busy || blocked || autosaving || (onAutosave !== undefined && !ready)} onClick={cancel}>
                   {cancelLabel}
                 </Button>
               </Tooltip>
@@ -589,9 +645,9 @@ export function DocumentComposer({
                 <Button
                   type="submit"
                   aria-describedby={untitled ? "composer-untitled-hint" : undefined}
-                  disabled={!ready || !confirmed || untitled}
+                  disabled={!ready || !confirmed || untitled || autosaving}
                 >
-                  {busy ? busyLabel : submitLabel}
+                  {busy ? busyLabel : onAutosave ? error ? "Retry save" : "Save now" : submitLabel}
                 </Button>
               </Tooltip>
             </div>
