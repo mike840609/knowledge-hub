@@ -191,6 +191,7 @@ test.describe("mermaid on a shared page", () => {
     const refused = refusals(visitor);
     const response = await visitor.goto(new URL(link.path, baseURL!).toString());
     expect(response!.headers()["content-security-policy"]).toContain("img-src 'self' blob:");
+    expect(response!.headers()["content-security-policy"]).toContain("media-src 'none'");
     await expectReadsAsOnePage(visitor);
     expect(refused).toEqual([]);
     await anonymous.close();

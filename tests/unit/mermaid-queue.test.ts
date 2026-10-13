@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDiagramQueue, DIAGRAM_REASONS, MAX_DIAGRAM_CHARS, MAX_DIAGRAMS, type DiagramDeps, type DiagramEngine } from "@/components/knowledge/mermaid-queue";
+import { createDiagramQueue, DIAGRAM_REASONS, DRAWN_TYPES, MAX_DIAGRAM_CHARS, MAX_DIAGRAMS, type DiagramDeps, type DiagramEngine } from "@/components/knowledge/mermaid-queue";
 
 const svg = (body = "", box = "0 0 120.4 60") => `<svg id="x" width="100%" xmlns="http://www.w3.org/2000/svg" viewBox="${box}">${body}</svg>`;
 
@@ -7,13 +7,13 @@ const svg = (body = "", box = "0 0 120.4 60") => `<svg id="x" width="100%" xmlns
 function harness(
   render: DiagramEngine["render"] = async () => ({ svg: svg(), diagramType: "flowchart-v2" }),
   load?: DiagramDeps["load"],
-  overrides?: { toUrl?: (text: string) => string; revoke?: (url: string) => void; pause?: () => Promise<void> },
+  overrides?: { toUrl?: (text: string) => string; revoke?: (url: string) => void; pause?: () => Promise<void>; inspect?: DiagramEngine["inspect"] },
 ) {
   const log: string[] = [];
   let made = 0;
   let loads = 0;
   const queue = createDiagramQueue({
-    load: load ?? (async () => { loads++; return { render: async (id, source) => { log.push(`render ${source}`); const out = await render(id, source); log.push(`done ${source}`); return out; } }; }),
+    load: load ?? (async () => { loads++; return { inspect: overrides?.inspect ?? (async () => ({ type: "flowchart-v2" })), render: async (id, source) => { log.push(`render ${source}`); const out = await render(id, source); log.push(`done ${source}`); return out; } }; }),
     toUrl: overrides?.toUrl ?? ((text) => { const url = `blob:${++made}`; log.push(`url ${url} ${text.length}`); return url; }),
     revoke: overrides?.revoke ?? ((url) => { log.push(`revoke ${url}`); }),
     pause: overrides?.pause ?? (async () => { log.push("pause"); }),
@@ -83,7 +83,7 @@ describe("a block that is not drawn says why, and is left as it was", () => {
     let attempts = 0;
     const { queue } = harness(undefined, async () => {
       if (++attempts === 1) throw new Error("chunk failed");
-      return { render: async () => ({ svg: svg(), diagramType: "pie" }) };
+      return { inspect: async () => ({ type: "pie" }), render: async () => ({ svg: svg(), diagramType: "pie" }) };
     });
     expect(await queue.draw({}, 0, "a")).toEqual({ reason: DIAGRAM_REASONS.unloaded });
     expect(await queue.draw({}, 1, "b")).toHaveProperty("drawn");
@@ -154,6 +154,83 @@ describe("a block that is not drawn says why, and is left as it was", () => {
     expect(() => {
       h.queue.forget(block);
     }).not.toThrow();
+  });
+});
+
+describe("what is drawn is decided before Mermaid lays anything out", () => {
+  /** A queue whose engine says `seen` of every block, and a count of the drawings it was then asked for. */
+  function gate(seen: Awaited<ReturnType<DiagramEngine["inspect"]>> | Error, drawn = "flowchart-v2") {
+    const asked: string[] = [];
+    const h = harness(async () => ({ svg: svg(), diagramType: drawn }), undefined, {
+      inspect: async (source) => { asked.push(`inspect ${source}`); if (seen instanceof Error) throw seen; return seen; },
+    });
+    const renders = () => h.log.filter((line) => line.startsWith("render"));
+    return { ...h, asked, renders };
+  }
+
+  it.each(DRAWN_TYPES.map((type) => [type]))("a %s is drawn", async (type) => {
+    const { queue } = gate({ type }, type);
+    expect(await queue.draw({}, 0, "a")).toHaveProperty("drawn", expect.objectContaining({ type }));
+  });
+
+  it("holds the types shown to lay out without HTML, by the ids Mermaid's detectors give them", () => {
+    expect(DRAWN_TYPES).toContain("flowchart-v2");
+    expect(DRAWN_TYPES).toContain("sequence");
+    for (const refused of ["architecture", "eventmodeling", "journey", "flowchart-elk", "error", "---"]) expect(DRAWN_TYPES).not.toContain(refused);
+  });
+
+  it.each([["architecture"], ["eventmodeling"], ["a type Mermaid gains later"]])("a type that is not on the list (%s) is refused, and Mermaid is never asked to draw it", async (type) => {
+    const { queue, log, renders, asked } = gate({ type });
+    expect(await queue.draw({}, 0, "a")).toEqual({ reason: DIAGRAM_REASONS.unsupported });
+    expect(asked).toEqual(["inspect a"]);
+    expect(renders()).toEqual([]);
+    expect(log.some((line) => line.startsWith("url"))).toBe(false);
+  });
+
+  it("a text whose type cannot be told is refused, and Mermaid is never asked to draw it", async () => {
+    const { queue, renders } = gate({ error: new Error("No diagram type detected matching given configuration for text: hello") });
+    expect(await queue.draw({}, 0, "hello")).toEqual({ reason: DIAGRAM_REASONS.unsupported });
+    expect(renders()).toEqual([]);
+  });
+
+  it("finding the type fails outright: refused, never drawn, and the block after it is still drawn", async () => {
+    let first = true;
+    const h = harness(undefined, undefined, { inspect: async () => { if (first) { first = false; throw new Error("no"); } return { type: "pie" }; } });
+    const [bad, good] = await Promise.all([h.queue.draw({}, 0, "a"), h.queue.draw({}, 1, "b")]);
+    expect(bad).toEqual({ reason: DIAGRAM_REASONS.unsupported });
+    expect(good).toHaveProperty("drawn");
+    expect(h.log.filter((line) => line.startsWith("render"))).toEqual(["render b"]);
+  });
+
+  it("a type on the list that does not parse says what Mermaid said, as before, without being laid out", async () => {
+    const { queue, renders } = gate({ type: "flowchart-v2", error: new Error("Parse error on line 2:\n...A --x") });
+    expect(await queue.draw({}, 0, "bad")).toEqual({ reason: `${DIAGRAM_REASONS.unparsed} Parse error on line 2:` });
+    expect(renders()).toEqual([]);
+  });
+
+  it("a type not on the list that does not parse is refused as its type, not for its syntax", async () => {
+    const { queue, renders } = gate({ type: "architecture", error: new Error("Parse error on line 2:") });
+    expect(await queue.draw({}, 0, "bad")).toEqual({ reason: DIAGRAM_REASONS.unsupported });
+    expect(renders()).toEqual([]);
+  });
+
+  it("the type is found first, and the drawing asked for only then", async () => {
+    const order: string[] = [];
+    const queue = createDiagramQueue({
+      load: async () => ({
+        inspect: async (source) => { order.push(`inspect ${source}`); return { type: "sequence" }; },
+        render: async (_id, source) => { order.push(`render ${source}`); return { svg: svg(), diagramType: "sequence" }; },
+      }),
+      toUrl: () => "blob:1", revoke: () => {}, pause: async () => {},
+    });
+    await Promise.all([queue.draw({}, 0, "a"), queue.draw({}, 1, "b")]);
+    expect(order).toEqual(["inspect a", "render a", "inspect b", "render b"]);
+  });
+
+  it("a drawing that comes back as a type not on the list is not shown", async () => {
+    const { queue, log } = gate({ type: "flowchart-v2" }, "architecture");
+    expect(await queue.draw({}, 0, "a")).toEqual({ reason: DIAGRAM_REASONS.unsupported });
+    expect(log.some((line) => line.startsWith("url"))).toBe(false);
   });
 });
 
