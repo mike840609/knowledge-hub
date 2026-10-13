@@ -194,6 +194,18 @@ await page.evaluate(async ({ secure, sanitizer }) => {
   };
   const configure = () => mermaid.initialize({ startOnLoad: false, securityLevel: "strict", htmlLabels: false, suppressErrorRendering: true, secure, dompurifyConfig: sanitizer, theme: "base", fontFamily: "ui-sans-serif, system-ui, sans-serif" });
   const said = (error) => `${error?.name ?? "Error"}: ${String(error?.message ?? error).split("\n")[0].slice(0, 120)}`;
+  const loads = (svg) => new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => resolve(image.naturalWidth > 0);
+    image.onerror = () => resolve(false);
+    image.src = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+  });
+  // What `mended` in mermaid-queue.ts does to a drawing before it is made a URL: the same two replacements.
+  const mended = (svg) => {
+    const spaced = svg.replaceAll("&nbsp;", "&#160;");
+    const root = /<svg\b[^>]*>/.exec(spaced)?.[0] ?? "";
+    return spaced.includes("xlink:") && !root.includes("xmlns:xlink=") ? spaced.replace(/<svg\b/, '<svg xmlns:xlink="http://www.w3.org/1999/xlink"') : spaced;
+  };
   let serial = 0;
   window.kh = {
     /** What the queue's `inspect` does: the type, by parsing, and what parsing put in the document (nothing). */
@@ -218,8 +230,9 @@ await page.evaluate(async ({ secure, sanitizer }) => {
         out.viewBox = /<svg[^>]*\sviewBox="[^"]+"/.test(drawn.svg);
         out.foreignObject = /<foreignObject[\s>]/i.test(drawn.svg);
         out.marked = drawn.svg.includes("khmark");
-        const image = new Image();
-        out.loads = await new Promise((resolve) => { image.onload = () => resolve(true); image.onerror = () => resolve(false); image.src = URL.createObjectURL(new Blob([drawn.svg], { type: "image/svg+xml" })); });
+        out.loads = await loads(drawn.svg);
+        out.loadsMended = await loads(mended(drawn.svg));
+        out.wrote = { nbsp: drawn.svg.includes("&nbsp;"), undeclaredXlink: drawn.svg.includes("xlink:") && !drawn.svg.includes("xmlns:xlink=") };
       } catch (error) {
         out.threw = said(error);
       }
@@ -260,6 +273,8 @@ for (const type of DRAWN_TYPES) {
     if (!laid.viewBox) fail(`${at}: no viewBox`);
     if (name === "plain" && laid.foreignObject) fail(`${at}: foreignObject with htmlLabels off`);
     if (name === "plain" && !laid.loads) fail(`${at}: does not load as an image`);
+    // Whatever is shown must load: with the two things mended, every drawing that is not refused for its `<foreignObject>` does.
+    if (!laid.foreignObject && !laid.loadsMended) fail(`${at}: does not load as an image, even mended`);
     if (laid.foreignObject) summary.refusedAfterLayout.push(name);
     laid.made.forEach((each) => summary.made.add(each));
     laid.violations.forEach((each) => { summary.violations.add(each); fail(`${at}: the policy had to refuse something: ${each}`); });
@@ -363,7 +378,30 @@ for (const [name, source] of Object.entries(IMAGE_POLICY)) {
   for (const each of laid.violations) if (!each.startsWith(`img-src https:${ELSEWHERE}/`)) fail(`${name}: a fetch the image policy does not cover: ${each}`);
 }
 
-// 5. A block Mermaid cannot parse must reject, and leave nothing in the page.
+// 5. The two things an image cannot read. A link and a non-breaking space each make Mermaid write a string that
+//    is not XML; mended as mermaid-queue.ts mends it, each loads. If one loads unmended, Mermaid has changed and
+//    the mending may go; if one does not load mended, there is a third thing.
+const UNREADABLE = {
+  "flowchart link": 'flowchart LR\n  A --> B\n  click A href "https://example.com/x" "tip"',
+  "class link": 'classDiagram\n  class A\n  link A "https://example.com/x" "tip"',
+  "state link": 'stateDiagram-v2\n  [*] --> s1\n  click s1 href "https://example.com/x"',
+  "sequence link": "sequenceDiagram\n  participant A\n  link A: Dash @ https://example.com/dash\n  A->>A: hi",
+  "sequence space": "sequenceDiagram\n  Alice->>Bob: a\u00a0b",
+  "sequence space entity": "sequenceDiagram\n  Alice->>Bob: a#nbsp;b",
+  "class space": "classDiagram\n  class A {\n    +String na\u00a0me\n  }",
+  "state space": "stateDiagram-v2\n  s1: a\u00a0b\n  [*] --> s1",
+  "gantt space": "gantt\n  dateFormat YYYY-MM-DD\n  section A\u00a0B\n  Task\u00a0one :a1, 2026-01-01, 3d",
+  "pie space": 'pie\n  "A\u00a0x" : 3',
+};
+report.unreadable = {};
+for (const [name, source] of Object.entries(UNREADABLE)) {
+  const laid = await lay(source);
+  report.unreadable[name] = { wrote: laid.wrote, loads: laid.loads, loadsMended: laid.loadsMended, threw: laid.threw };
+  if (laid.threw) fail(`${name}: was not laid out, so it is no evidence: ${laid.threw}`);
+  else if (!laid.loadsMended) fail(`${name}: does not load as an image, even mended`);
+}
+
+// 6. A block Mermaid cannot parse must reject, and leave nothing in the page.
 const bad = await lay("this is not a diagram");
 if (!bad.threw) fail("an unparseable block did not reject");
 if (bad.left !== 0) fail(`${bad.left} element(s) left in the page by an unparseable block`);

@@ -86,6 +86,21 @@ test.describe("mermaid in the reader", () => {
     expect(refused).toEqual([]);
   });
 
+  test("a diagram with a link in it, and one with a non-breaking space, are drawn", async ({ page }) => {
+    // Mermaid writes a link with an `xlink:` prefix it does not declare, and the space as `&nbsp;`: neither is
+    // XML an image can read, and each was a broken picture over a closed source.
+    const linked = 'flowchart LR\n  A[Start] --> B[Done]\n  click A href "https://example.com/x"';
+    const spaced = "sequenceDiagram\n  Alice->>Bob: non\u00a0breaking#nbsp;space";
+    const note = await createNote(page, unique("Diagram link and space"), [fence(linked), "", fence(spaced)].join("\n"));
+    await page.goto(note.url);
+    await settled(page);
+    await expectDrawn(figures(page).nth(0));
+    await expectDrawn(figures(page).nth(1));
+    // The link is in an image, so it goes nowhere.
+    await image(figures(page).nth(0)).click({ position: { x: 20, y: 20 } });
+    await expect(page).toHaveURL(new RegExp(`${note.url}$`));
+  });
+
   test("the source is one click away, and copies as written", async ({ page, context }) => {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     const note = await createNote(page, unique("Diagram source"), fence(FLOW));

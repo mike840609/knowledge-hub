@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createDiagramQueue, DIAGRAM_REASONS, DRAWN_TYPES, MAX_DIAGRAM_CHARS, MAX_DIAGRAMS, type DiagramDeps, type DiagramEngine } from "@/components/knowledge/mermaid-queue";
 
 const svg = (body = "", box = "0 0 120.4 60") => `<svg id="x" width="100%" xmlns="http://www.w3.org/2000/svg" viewBox="${box}">${body}</svg>`;
@@ -7,18 +7,20 @@ const svg = (body = "", box = "0 0 120.4 60") => `<svg id="x" width="100%" xmlns
 function harness(
   render: DiagramEngine["render"] = async () => ({ svg: svg(), diagramType: "flowchart-v2" }),
   load?: DiagramDeps["load"],
-  overrides?: { toUrl?: (text: string) => string; revoke?: (url: string) => void; pause?: () => Promise<void>; inspect?: DiagramEngine["inspect"] },
+  overrides?: { toUrl?: (text: string) => string; revoke?: (url: string) => void; pause?: () => Promise<void>; inspect?: DiagramEngine["inspect"]; decodes?: DiagramDeps["decodes"] },
 ) {
   const log: string[] = [];
+  const texts: string[] = [];
   let made = 0;
   let loads = 0;
   const queue = createDiagramQueue({
     load: load ?? (async () => { loads++; return { inspect: overrides?.inspect ?? (async () => ({ type: "flowchart-v2" })), render: async (id, source) => { log.push(`render ${source}`); const out = await render(id, source); log.push(`done ${source}`); return out; } }; }),
-    toUrl: overrides?.toUrl ?? ((text) => { const url = `blob:${++made}`; log.push(`url ${url} ${text.length}`); return url; }),
+    toUrl: overrides?.toUrl ?? ((text) => { const url = `blob:${++made}`; texts.push(text); log.push(`url ${url} ${text.length}`); return url; }),
+    decodes: overrides?.decodes ?? (async () => true),
     revoke: overrides?.revoke ?? ((url) => { log.push(`revoke ${url}`); }),
     pause: overrides?.pause ?? (async () => { log.push("pause"); }),
   });
-  return { queue, log, loads: () => loads };
+  return { queue, log, texts, loads: () => loads };
 }
 
 describe("a block that is drawn", () => {
@@ -221,7 +223,7 @@ describe("what is drawn is decided before Mermaid lays anything out", () => {
         inspect: async (source) => { order.push(`inspect ${source}`); return { type: "sequence" }; },
         render: async (_id, source) => { order.push(`render ${source}`); return { svg: svg(), diagramType: "sequence" }; },
       }),
-      toUrl: () => "blob:1", revoke: () => {}, pause: async () => {},
+      toUrl: () => "blob:1", decodes: async () => true, revoke: () => {}, pause: async () => {},
     });
     await Promise.all([queue.draw({}, 0, "a"), queue.draw({}, 1, "b")]);
     expect(order).toEqual(["inspect a", "render a", "inspect b", "render b"]);
@@ -234,13 +236,99 @@ describe("what is drawn is decided before Mermaid lays anything out", () => {
   });
 });
 
+describe("a drawing the browser cannot show as an image", () => {
+  it("is refused, its URL is given back, and the block after it is still drawn", async () => {
+    const h = harness(undefined, undefined, { decodes: async (url) => url !== "blob:1" });
+    const [broken, fine] = await Promise.all([h.queue.draw({}, 0, "a"), h.queue.draw({}, 1, "b")]);
+    expect(broken).toEqual({ reason: DIAGRAM_REASONS.unsupported });
+    expect(fine).toHaveProperty("drawn", expect.objectContaining({ url: "blob:2" }));
+    expect(h.log.filter((line) => line.startsWith("revoke"))).toEqual(["revoke blob:1"]);
+  });
+
+  it("is refused when the check itself fails", async () => {
+    const h = harness(undefined, undefined, { decodes: async () => { throw new Error("no image"); } });
+    expect(await h.queue.draw({}, 0, "a")).toEqual({ reason: DIAGRAM_REASONS.unsupported });
+    expect(h.log.filter((line) => line.startsWith("revoke"))).toEqual(["revoke blob:1"]);
+  });
+
+  it("gives back the picture the block showed before, as any drawing that cannot be made does", async () => {
+    let good = true;
+    const h = harness(undefined, undefined, { decodes: async () => good });
+    const block = {};
+    expect(await h.queue.draw(block, 0, "a")).toHaveProperty("drawn");
+    good = false;
+    expect(await h.queue.draw(block, 0, "b")).toEqual({ reason: DIAGRAM_REASONS.unsupported });
+    expect(h.log.filter((line) => line.startsWith("revoke")).sort()).toEqual(["revoke blob:1", "revoke blob:2"]);
+  });
+
+  it("keeps the picture a block shows until the new one is known to load", async () => {
+    let open!: (loads: boolean) => void;
+    const checking = new Promise<boolean>((resolve) => { open = resolve; });
+    let checks = 0;
+    const h = harness(undefined, undefined, { decodes: async () => (++checks === 1 ? true : checking) });
+    const block = {};
+    await h.queue.draw(block, 0, "a");
+    const replacing = h.queue.draw(block, 0, "b");
+    await vi.waitFor(() => expect(checks).toBe(2));
+    expect(h.log.filter((line) => line.startsWith("revoke"))).toEqual([]);
+    open(true);
+    expect(await replacing).toHaveProperty("drawn", expect.objectContaining({ url: "blob:2" }));
+    expect(h.log.filter((line) => line.startsWith("revoke"))).toEqual(["revoke blob:1"]);
+  });
+
+  it("a block that went while its picture was being checked keeps no URL", async () => {
+    let open!: (loads: boolean) => void;
+    const checking = new Promise<boolean>((resolve) => { open = resolve; });
+    let checks = 0;
+    const h = harness(undefined, undefined, { decodes: async () => { checks++; return checking; } });
+    const block = {};
+    const waiting = h.queue.draw(block, 0, "a");
+    await vi.waitFor(() => expect(checks).toBe(1));
+    h.queue.forget(block);
+    open(true);
+    expect(await waiting).toHaveProperty("reason");
+    expect(h.log.filter((line) => line.startsWith("revoke"))).toEqual(["revoke blob:1"]);
+  });
+});
+
+describe("the two things Mermaid writes that an image cannot read are mended, and nothing else is touched", () => {
+  const XLINK = 'xmlns:xlink="http://www.w3.org/1999/xlink"';
+  const drawnAs = async (text: string) => {
+    const h = harness(async () => ({ svg: text, diagramType: "flowchart-v2" }));
+    expect(await h.queue.draw({}, 0, "a")).toHaveProperty("drawn");
+    return h.texts[0];
+  };
+
+  it("a non-breaking space written as an HTML entity becomes a number XML knows", async () => {
+    expect(await drawnAs(svg("<text>a&nbsp;b&nbsp;c</text>"))).toBe(svg("<text>a&#160;b&#160;c</text>"));
+  });
+
+  it("a link's `xlink:` prefix is declared on the root when the root does not declare it", async () => {
+    const linked = svg('<a xlink:href="https://example.com/x"><rect/></a><svg><a xlink:href="#y"/></svg>');
+    const mended = await drawnAs(linked);
+    expect(mended).toBe(linked.replace("<svg ", `<svg ${XLINK} `));
+    expect(mended.split(XLINK)).toHaveLength(2);
+  });
+
+  it("a root that declares the prefix already is left as it is", async () => {
+    const declared = svg('<a xlink:href="#y"/>').replace("<svg ", `<svg ${XLINK} `);
+    expect(await drawnAs(declared)).toBe(declared);
+  });
+
+  it("a drawing with neither is the string Mermaid returned", async () => {
+    const plain = svg('<text>a &amp;nbsp; b &#160; &lt;xlink&gt;</text><a href="#y"/>');
+    expect(await drawnAs(plain)).toBe(plain);
+  });
+});
+
 describe("the URLs it makes", () => {
   it("are given back when the block is drawn again", async () => {
     const { queue, log } = harness();
     const block = {};
     await queue.draw(block, 0, "a");
     await queue.draw(block, 0, "a");
-    expect(log.filter((line) => /^(url|revoke)/.test(line)).map((line) => line.split(" ").slice(0, 2).join(" "))).toEqual(["url blob:1", "revoke blob:1", "url blob:2"]);
+    // The old one goes once the new one is known to load, not before: the picture on show is never a dead URL.
+    expect(log.filter((line) => /^(url|revoke)/.test(line)).map((line) => line.split(" ").slice(0, 2).join(" "))).toEqual(["url blob:1", "url blob:2", "revoke blob:1"]);
   });
 
   it("are given back when the block is drawn again and this time cannot be", async () => {
@@ -326,7 +414,7 @@ describe("a drawing nobody is waiting for is not made", () => {
     const [superseded, replacing] = await Promise.all([queue.draw(block, 0, "a"), queue.draw(block, 0, "a")]);
     expect(superseded).toHaveProperty("reason");
     expect(replacing).toHaveProperty("drawn", expect.objectContaining({ url: "blob:2" }));
-    expect(log.filter((line) => /^(url|revoke)/.test(line)).map((line) => line.split(" ").slice(0, 2).join(" "))).toEqual(["url blob:1", "revoke blob:1", "url blob:2"]);
+    expect(log.filter((line) => /^(url|revoke)/.test(line)).map((line) => line.split(" ").slice(0, 2).join(" "))).toEqual(["url blob:1", "url blob:2", "revoke blob:1"]);
   });
 
   it("the picture a block shows is not given back while its replacement is still being made", async () => {
