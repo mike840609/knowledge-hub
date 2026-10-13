@@ -341,6 +341,20 @@ describe("the URLs it makes", () => {
     expect(log).toContain("revoke blob:1");
   });
 
+  it.each([
+    ["has grown too long to draw", 0, "x".repeat(MAX_DIAGRAM_CHARS + 1), DIAGRAM_REASONS.long],
+    ["is now past the last diagram a page draws", MAX_DIAGRAMS, "a", DIAGRAM_REASONS.many],
+  ])("are given back when a block that was drawn %s", async (_name, index, source, reason) => {
+    const { queue, log } = harness();
+    const block = {};
+    expect(await queue.draw(block, 0, "a")).toHaveProperty("drawn");
+    expect(await queue.draw(block, index, source)).toEqual({ reason });
+    expect(log.filter((line) => line.startsWith("revoke"))).toEqual(["revoke blob:1"]);
+    // Once: there is nothing left to give back when the block goes.
+    queue.forget(block);
+    expect(log.filter((line) => line.startsWith("revoke"))).toEqual(["revoke blob:1"]);
+  });
+
   it("are given back when the block goes", async () => {
     const { queue, log } = harness();
     const block = {};

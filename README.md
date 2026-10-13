@@ -213,6 +213,7 @@ docs/                Design, operations, and verification records
 | `make test-integration` | Database integration tests; the runner creates and removes isolated databases |
 | `make browsers` | Install Chromium for E2E tests on first use |
 | `make test-e2e` | Provision an isolated database, build production assets, and run browser tests |
+| `make test-mermaid-assumptions` | Check in Chromium what the reader assumes of Mermaid; run before changing its version |
 | `make verify` | Unit tests, TypeScript, lint, and build |
 | `make help` | List all make commands |
 
@@ -240,6 +241,16 @@ The `npm ci` postinstall step uses `patch-package` to apply [`patches/next+15.5.
 The second fix was checked against the upstream diff of #36911, and [vercel/next.js#95368](https://github.com/vercel/next.js/pull/95368) brings it into Next canary (React `ec0fca31-20260701`). The issues those PRs reference (vercel/next.js#63121 and #78396, facebook/react#33580) were read only as summaries and were not reproduced here. The `experimental` React channel under `next/dist/compiled/react-dom-experimental` is unpatched: it is only loaded when experimental React features are enabled in `next.config.ts`, which this project does not do.
 
 When upgrading Next.js, check whether the patch is still required: [`vendored-react-ping-fix.test.ts`](tests/unit/vendored-react-ping-fix.test.ts) checks the bundled source for both fixes, and passes without the patch once Next bundles a React that already has them. [`router-redirect-during-navigation.spec.ts`](tests/e2e/router-redirect-during-navigation.spec.ts) reproduces the crash in the browser; evidence is in the [verification record](docs/superpowers/verification/2026-10-06-react-310-redirect-recovery-verification.md). After updating or removing the patch, clear `.next/cache` before rebuilding.
+
+### Mermaid version
+
+`mermaid` is pinned to `~12.2.0`. The reader draws a diagram only if its type is on a list, with a list of config keys a diagram's own text may not set and a sanitiser configuration of its own ([`mermaid-queue.ts`](src/components/knowledge/mermaid-queue.ts)); each of the three is there because of what that version was seen to do in a browser. Before changing the version, and again after, run:
+
+```bash
+make test-mermaid-assumptions
+```
+
+[`scripts/test/mermaid-assumptions.mjs`](scripts/test/mermaid-assumptions.mjs) lays every listed type out in Chromium with hostile text, under the production policy's fetch directives, and exits non-zero when an assumption no longer holds. It is not part of `make verify` or CI. The [spec](docs/superpowers/specs/2026-10-13-reader-mermaid-design.md) says what each assumption guards.
 
 ## Troubleshooting
 
