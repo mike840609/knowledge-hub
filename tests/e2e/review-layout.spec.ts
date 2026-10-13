@@ -90,8 +90,8 @@ test("shared comments follow passage order and the selected card stays beside it
   await page.getByRole("button", { name: "Collapse discussions" }).click();
   await expect(page.getByRole("complementary", { name: "Document discussions" })).toBeHidden();
   expect(await page.evaluate(() => window.scrollY)).toBeCloseTo(beforeCollapse, 0);
-  const collapsedArticle = (await page.locator("[data-review-document]").boundingBox())!;
-  expect(collapsedArticle.x + collapsedArticle.width / 2).toBeCloseTo(720, 0);
+  // The column slides back to the centre; measure where it ends, not where it is mid-slide.
+  await expect.poll(async () => { const collapsedArticle = (await page.locator("[data-review-document]").boundingBox())!; return Math.round(collapsedArticle.x + collapsedArticle.width / 2); }).toBe(720);
   await page.getByRole("button", { name: "1 comment on passage: Paragraph 80" }).click();
   await expect(laterCard).toBeFocused();
 
@@ -213,7 +213,7 @@ test("wide screens default to centered reading and open a 320px rail on demand",
   await page.getByRole("button", { name: "Collapse discussions" }).click();
   await expect(rail).toBeHidden();
   await expect(page.getByRole("button", { name: "Open discussions" })).toBeFocused();
-  expect((await article.boundingBox())!.x).toBeCloseTo(initialBox.x, 0);
+  await expect.poll(async () => Math.round((await article.boundingBox())!.x)).toBe(Math.round(initialBox.x));
 });
 
 test("opening and closing the rail moves nothing under the pointer where the window has room for it", async ({ page, request }) => {
