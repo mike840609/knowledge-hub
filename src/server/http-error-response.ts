@@ -80,8 +80,8 @@ export function toImportErrorResponse(error: unknown): ImportHttpError {
 export type ApiErrorBody = { error: { code: string; message: string; field?: string } };
 export function toWorkspaceErrorResponse(error: unknown): { status: number; body: ApiErrorBody } {
   if (error instanceof DomainError) {
-    if (["AUTH_REQUIRED", "AUTH_UNAVAILABLE", "REVIEW_ORIGIN_DENIED", "REVIEW_RATE_LIMIT", "REVIEW_WRITES_DISABLED"].includes(error.code)) {
-      const status = error.code === "AUTH_REQUIRED" ? 401 : error.code === "AUTH_UNAVAILABLE" ? 503 : error.code === "REVIEW_RATE_LIMIT" ? 429 : 403;
+    if (["AUTH_REQUIRED", "AUTH_UNAVAILABLE", "REVIEW_ORIGIN_DENIED", "REVIEW_RATE_LIMIT", "FEEDBACK_RATE_LIMITED", "REVIEW_WRITES_DISABLED"].includes(error.code)) {
+      const status = error.code === "AUTH_REQUIRED" ? 401 : error.code === "AUTH_UNAVAILABLE" ? 503 : ["REVIEW_RATE_LIMIT", "FEEDBACK_RATE_LIMITED"].includes(error.code) ? 429 : 403;
       return { status, body: { error: { code: error.code, message: error.message } } };
     }
     if (["IDEMPOTENCY_KEY_REUSED", "CAPACITY_EXCEEDED", "REVIEW_CONFLICT", "STALE_DOCUMENT_REVISION", "REVIEW_THREAD_CLOSED"].includes(error.code)) return { status: 409, body: { error: { code: error.code, message: error.message } } };
