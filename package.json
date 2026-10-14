@@ -15,6 +15,7 @@
     "test:unit": "vitest run --config vitest.config.ts",
     "test:integration": "tsx scripts/test/integration.ts",
     "test:e2e": "tsx scripts/test/e2e.ts",
+    "test:mermaid-assumptions": "node scripts/test/mermaid-assumptions.mjs",
     "db:migrate": "tsx scripts/db/migrate.ts",
     "db:seed": "tsx scripts/db/seed.ts",
     "db:backfill-personal-workspaces": "tsx scripts/db/backfill-personal-workspaces.ts",

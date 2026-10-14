@@ -11,12 +11,69 @@ const HANDLER = 'flowchart LR\n  A["<img src=x onerror=\'window.khPwned=1\'>"] -
 const SCRIPT = 'flowchart LR\n  A["<script>window.khPwned=2</script>"] --> B';
 const LINK = 'flowchart LR\n  A --> B\n  click A href "javascript:window.khPwned=3"';
 const CALLBACK = "flowchart LR\n  A --> B\n  click A call alert()";
-const REMOTE = "flowchart LR\n  A --> B\n  classDef evil fill:url(https://example.invalid/x)\n  class A evil";
 const COVER = "flowchart LR\n  A --> B\n  classDef evil position:fixed,top:0,left:0,width:100vw,height:100vh\n  class A evil";
 const BREAKOUT = 'flowchart LR\n  A["</text></g></svg><img src=x onerror=window.khPwned=4>"] --> B';
 
-const CASES = [HANDLER, LOOSE + HANDLER, SCRIPT, LOOSE + SCRIPT, LINK, LOOSE + LINK, CALLBACK, REMOTE, COVER, BREAKOUT];
+// Layout time: what a diagram could make the page do while Mermaid builds it, before any picture exists.
+const ELSEWHERE = "https://attacker.example";
+/** A type that writes its text into the page as HTML: an element with a `src` of the author's choosing. */
+const ARCHITECTURE = `architecture-beta\n    service s1"<p><video src=${ELSEWHERE}/v.mp4 preload=auto></video></p>"[T]`;
+const EVENT_MODEL = `eventmodeling\n\ntf 01 evt X { <img src=${ELSEWHERE}/e.png> }`;
+/** `$$` makes Mermaid write a label as HTML whatever `htmlLabels` says, in types that are drawn. */
+const MATH = `$$x^2$$<video src=${ELSEWHERE}/m.mp4 preload=auto></video><img src=${ELSEWHERE}/m.png>`;
+const MATH_SEQUENCE = `sequenceDiagram\n  Alice->>Bob: ${MATH}`;
+const MATH_CLASS = `classDiagram\n  class A["${MATH}"]`;
+const IMAGE_SHAPE = `flowchart LR\n  A@{ img: "${ELSEWHERE}/shape.png", label: "x", w: 60, h: 60 }`;
+/** An author's `style` line is written into the page as CSS while the drawing is laid out; its `url()` is an image fetch. */
+const STYLE_URL = `classDiagram\n  class A\n  style A background:url(${ELSEWHERE}/style.png)`;
+/**
+ * A `url()` in a `classDef` that really lays out (a state diagram takes one; the flowchart parser refuses it with a parse
+ * error, which proves nothing about the policy). It is drawn, and the policy refuses the fetch.
+ */
+const REMOTE = `stateDiagram-v2\n  [*] --> s1\n  classDef evil background:url(${ELSEWHERE}/remote.png)\n  class s1 evil`;
+/** A participant's `icon` property becomes an SVG \`<image href>\` in the page while the diagram is laid out. */
+const SEQUENCE_ICON = `sequenceDiagram\n participant A\n properties A: {"icon": "${ELSEWHERE}/x.png"}\n A->>A: hi`;
+/** A C4 style colour is used as a paint: \`//host\` takes the page's scheme. */
+const C4_STYLE = 'C4Context\n Person(a,"x","y")\n UpdateElementStyle(a, $bgColor="url(//attacker.example/b.svg#a)")';
+const THEME_CSS = `%%{init: {"themeCSS": ".node rect{background-image:url(${ELSEWHERE}/themecss.png)}"}}%%\nflowchart LR\n  A-->B`;
+const FONT_FAMILY = `%%{init: {"fontFamily": "x; .node rect{background-image:url(${ELSEWHERE}/font.png)}"}}%%\nflowchart LR\n  A-->B`;
+
+const PICTURES = [HANDLER, LOOSE + HANDLER, SCRIPT, LOOSE + SCRIPT, LINK, LOOSE + LINK, CALLBACK, COVER, BREAKOUT];
+/** Refused before Mermaid lays anything out: not a type the reader draws. */
+const NOT_DRAWN_HERE = [ARCHITECTURE, EVENT_MODEL];
+/** Laid out, and refused for the HTML label Mermaid made of it. */
+const REFUSED_AFTER = [MATH_SEQUENCE, MATH_CLASS];
+/** Its own config is not taken, so it is the plain flowchart beneath. */
+const CONFIG_IGNORED = [THEME_CSS, FONT_FAMILY];
+const CASES = [...PICTURES, ...NOT_DRAWN_HERE, ...REFUSED_AFTER, IMAGE_SHAPE, STYLE_URL, REMOTE, SEQUENCE_ICON, C4_STYLE, ...CONFIG_IGNORED];
 const MARKDOWN = ["A first paragraph.", "", ...CASES.flatMap((source) => [fence(source), ""]), "A last paragraph."].join("\n");
+const UNSUPPORTED = "This kind of diagram cannot be drawn here yet.";
+
+/**
+ * Runs before the page's own script. Records what the policy refused, and every HTML element that appears
+ * where Mermaid lays a diagram out (the `<div>` it adds to `<body>`, and the one it measures maths in) other
+ * than the ones Mermaid's own code makes: a bare `div`, `span`, `br` or `style`. An element the author's text
+ * chose (an `<img>`, a `<video>`, anything with a `src`) is recorded.
+ */
+function watchLayout() {
+  const seen = { violations: [] as string[], elements: [] as string[] };
+  (window as unknown as { khSeen: typeof seen }).khSeen = seen;
+  document.addEventListener("securitypolicyviolation", (event) => { seen.violations.push(`${event.effectiveDirective} ${event.blockedURI}`); });
+  const XHTML = "http://www.w3.org/1999/xhtml";
+  const top = (node: Node) => { let at = node; while (at.parentNode && at.parentNode !== document.body && at.parentNode.nodeType === 1) at = at.parentNode; return at as Element; };
+  const mermaids = (element: Element) =>
+    ["div", "span", "br", "style"].includes(element.localName) && Array.from(element.attributes).every((attribute) => ["id", "class", "style", "xmlns"].includes(attribute.name));
+  new MutationObserver((records) => {
+    for (const record of records) for (const node of Array.from(record.addedNodes)) {
+      if (!(node instanceof Element)) continue;
+      const root = record.target === document.body ? node : top(record.target);
+      if (!/^(dkh-diagram-|katex-temp$)/.test(root.id ?? "")) continue;
+      for (const element of [node, ...Array.from(node.querySelectorAll("*"))]) {
+        if (element.namespaceURI === XHTML && !mermaids(element)) seen.elements.push(`${element.localName}${Array.from(element.attributes).map((attribute) => `[${attribute.name}]`).join("")}`);
+      }
+    }
+  }).observe(document, { childList: true, subtree: true });
+}
 
 async function shareOf(page: Page, markdown: string) {
   const workspaceId = await mySpace(page);
@@ -29,17 +86,25 @@ async function shareOf(page: Page, markdown: string) {
   return new URL(link.path, page.url()).toString();
 }
 
-test("no diagram puts an element, a script, a request or a style of its own onto a shared page", async ({ page, browser }) => {
+test("no diagram puts an element, a script, a request or a style of its own onto a shared page, while it is laid out or after", async ({ page, browser }) => {
   await page.goto("/");
   const url = await shareOf(page, MARKDOWN);
 
   const anonymous = await browser.newContext();
-  const visitor = await anonymous.newPage();
   const origin = new URL(url).origin;
+  // What left the browser, of every kind, an image and a video as much as a script: nothing may.
   const abroad: string[] = [];
+  await anonymous.route((target) => target.origin !== origin && target.protocol !== "blob:" && target.protocol !== "data:", (route) => {
+    abroad.push(`${route.request().resourceType()} ${route.request().url()}`);
+    return route.abort();
+  });
+  await anonymous.addInitScript(watchLayout);
+  const visitor = await anonymous.newPage();
+  // What the page tried, including what the policy refused before it left: Chromium reports those too.
+  const tried = new Set<string>();
   visitor.on("request", (request) => {
     const target = request.url();
-    if (!target.startsWith(origin) && !target.startsWith("blob:") && !target.startsWith("data:")) abroad.push(target);
+    if (!target.startsWith(origin) && !target.startsWith("blob:") && !target.startsWith("data:")) tried.add(`${request.resourceType()} ${target}`);
   });
   const dialogs: string[] = [];
   visitor.on("dialog", (dialog) => { dialogs.push(dialog.message()); void dialog.dismiss(); });
@@ -49,6 +114,22 @@ test("no diagram puts an element, a script, a request or a style of its own onto
   await expect(figures).toHaveCount(CASES.length);
   // Each has settled one way or the other; which way is Mermaid's business, and either is safe.
   await expect(visitor.locator("article figure[data-mermaid]:not(:has(img[data-diagram])):not(:has([data-diagram-reason]))")).toHaveCount(0, DRAWN);
+
+  // What is not drawn is the code block it was, open, with why. Two are refused before anything is laid out.
+  const at = (source: string) => figures.nth(CASES.indexOf(source));
+  for (const source of [...NOT_DRAWN_HERE, ...REFUSED_AFTER]) {
+    await expect(at(source).locator("[data-diagram-reason]")).toHaveText(UNSUPPORTED);
+    await expect(at(source).locator("details")).toHaveAttribute("open", "");
+    await expect(at(source).locator("img")).toHaveCount(0);
+  }
+  await expect(at(IMAGE_SHAPE).locator("[data-diagram-reason]")).toHaveText(/\S/);
+  await expect(at(IMAGE_SHAPE).locator("details")).toHaveAttribute("open", "");
+  // These really lay out and carry a fetch of the author's choosing: each is drawn, with no reason (a parse error
+  // would be a reason), so what stops the fetch is the policy, which `stopped` below shows by its violations.
+  for (const source of [STYLE_URL, REMOTE, SEQUENCE_ICON, C4_STYLE, ...CONFIG_IGNORED]) {
+    await expect(at(source).locator("img[data-diagram]")).toBeVisible();
+    await expect(at(source).locator("[data-diagram-reason]")).toHaveCount(0);
+  }
 
   // Click where a link or a callback would be.
   for (const picture of await visitor.locator("img[data-diagram]").all()) await picture.click({ position: { x: 20, y: 20 }, force: true });
@@ -62,9 +143,10 @@ test("no diagram puts an element, a script, a request or a style of its own onto
     const first = document.querySelector("article p")!;
     return {
       pwned: (window as unknown as { khPwned?: number }).khPwned ?? null,
+      seen: (window as unknown as { khSeen: { violations: string[]; elements: string[] } }).khSeen,
       figuresAsBuilt: Array.from(document.querySelectorAll("figure[data-mermaid]")).every(allowed),
       // Nothing of a drawing is in the page: not in the article, and not left behind where Mermaid laid it out.
-      strays: document.querySelectorAll("article svg:not(button svg), article script, article style, foreignObject, [id^='kh-diagram'], [id^='dkh-diagram'], img[onerror], body > svg").length,
+      strays: document.querySelectorAll("article svg:not(button svg), article script, article style, foreignObject, [id^='kh-diagram'], [id^='dkh-diagram'], #katex-temp, img[onerror], body > svg").length,
       imageSources: Array.from(document.querySelectorAll("article img")).map((image) => new URL((image as HTMLImageElement).src).protocol),
       // A style that got out would show here: the first paragraph is still an ordinary one.
       paragraph: { position: getComputedStyle(first).position, display: getComputedStyle(first).display },
@@ -77,6 +159,18 @@ test("no diagram puts an element, a script, a request or a style of its own onto
   expect(page_.pwned).toBeNull();
   expect(dialogs).toEqual([]);
   expect(abroad).toEqual([]);
+  // While Mermaid laid them out: no element of the author's choosing was ever in the page.
+  expect(page_.seen.elements).toEqual([]);
+  // What the policy had to stop, and did (spec, "What B does not cover"): the flowchart shape that loads an image
+  // by its URL, a `url()` in an author's style or classDef line, a sequence participant's icon, and a C4 style colour.
+  // The style, the font and the link colour a diagram's own config asked for were never taken, so their URLs were
+  // never tried. The `//` one takes the page's scheme.
+  const stopped: Array<[kind: string, target: string]> = [
+    ["image", `${ELSEWHERE}/shape.png`], ["image", `${ELSEWHERE}/style.png`], ["image", `${ELSEWHERE}/remote.png`],
+    ["image", `${ELSEWHERE}/x.png`], ["other", `${new URL(url).protocol}//attacker.example/b.svg`],
+  ];
+  expect(Array.from(new Set(page_.seen.violations)).sort()).toEqual(stopped.map(([, target]) => `img-src ${target}`).sort());
+  expect(Array.from(tried).sort()).toEqual(stopped.map(([kind, target]) => `${kind} ${target}`).sort());
   expect(page_.figuresAsBuilt).toBe(true);
   expect(page_.strays).toBe(0);
   expect(new Set(page_.imageSources)).toEqual(new Set(["blob:"]));

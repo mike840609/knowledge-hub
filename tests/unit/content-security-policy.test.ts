@@ -33,14 +33,22 @@ describe("the Content-Security-Policy", () => {
     expect(policy["base-uri"]).toEqual(["'self'"]);
   });
 
+  it("loads no audio or video from anywhere: the product plays none, and a diagram being laid out must not fetch one", () => {
+    // reader-mermaid spec, "What B does not cover": with no `default-src`, a kind of fetch is open until it is named.
+    expect(policy["media-src"]).toEqual(["'none'"]);
+    expect(policy["default-src"]).toBeUndefined();
+  });
+
   it("says the same about images on a shared page, and where the middleware does not run", async () => {
     const shared = directives(contentSecurityPolicy({ nonce: "n", pathname: "/s/0b1c2d3e-0000-4000-8000-000000000000", development: false }));
     expect(shared["img-src"]).toEqual(["'self'", "blob:"]);
+    expect(shared["media-src"]).toEqual(["'none'"]);
     // next.config.ts writes the directive twice more; a change in one place only is lost on some responses.
     const { default: config } = await import("../../next.config");
     const values = (await config.headers!()).flatMap((rule) => rule.headers).filter((header) => header.key === "Content-Security-Policy").map((header) => header.value);
     expect(values).toHaveLength(2);
     for (const value of values) expect(directives(value)["img-src"]).toEqual(["'self'", "blob:"]);
+    for (const value of values) expect(directives(value)["media-src"]).toEqual(["'none'"]);
   });
 
   it.each([["/s/0b1c2d3e-0000-4000-8000-000000000000"], ["/s/x/y"]])("lets no site frame a shared page: %s", (pathname) => {

@@ -79,6 +79,8 @@ test.describe("document share link", () => {
       const policy = headers["content-security-policy"];
       // The whole directive, so a looser one cannot pass: this page's own images and the diagrams it makes itself.
       expect(policy).toMatch(/(^|;\s*)img-src 'self' blob:(\s*;|\s*$)/);
+      // No audio or video from anywhere: nothing here plays one, and a diagram being laid out must not fetch one.
+      expect(policy).toMatch(/(^|;\s*)media-src 'none'(\s*;|\s*$)/);
       expect(policy).toContain("frame-ancestors 'none'");
       expect(policy).toMatch(/script-src 'self' 'nonce-[^']+' 'strict-dynamic'/);
       expect(policy).not.toContain("unsafe-inline");

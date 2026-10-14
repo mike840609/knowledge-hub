@@ -17,6 +17,8 @@ test.describe("the Content-Security-Policy", () => {
     expect(policy).not.toContain("unsafe-eval");
     // The whole directive, so a looser one cannot pass: this page's own images and the diagrams it makes itself.
     expect(policy).toMatch(/(^|;\s*)img-src 'self' blob:(\s*;|\s*$)/);
+    // No audio or video from anywhere: nothing here plays one, and a diagram being laid out must not fetch one.
+    expect(policy).toMatch(/(^|;\s*)media-src 'none'(\s*;|\s*$)/);
 
     // The theme script ran before paint, and React attached: the palette opens only if it did.
     await expect(page.locator("html")).toHaveAttribute("data-theme", /^(light|dark)$/);

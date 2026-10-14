@@ -15,6 +15,9 @@ export const NONCE_HEADER = "x-nonce";
  * `img-src 'self' blob:` is issue #20's: a remote image URL that ever reached markup is not loaded.
  * `blob:` is for a drawn diagram (reader-mermaid spec): such a URL is minted only by script already
  * running here, and a document cannot name one (`markdown-image-policy.ts` refuses the scheme).
+ * `media-src 'none'`: the product plays no audio or video, and while Mermaid lays a diagram out the author's
+ * text is being made into DOM here, where an element with a `src` would fetch it (reader-mermaid spec, "What
+ * B does not cover"). There is no `default-src`, so a kind of fetch is open until a directive names it.
  * A shared page, which needs no sign-in, may not be framed (share-link spec §6.4).
  *
  * No `form-action`: whether production sign-in posts a form to the identity provider is not
@@ -24,7 +27,7 @@ export function contentSecurityPolicy({ nonce, pathname, development }: { nonce:
   const scripts = ["'self'", `'nonce-${nonce}'`, "'strict-dynamic'", `'${THEME_PRE_PAINT_SCRIPT_HASH}'`];
   // React's development build evaluates strings to rebuild stack traces; the production one does not.
   if (development) scripts.push("'unsafe-eval'");
-  const policy = [`script-src ${scripts.join(" ")}`, "img-src 'self' blob:", "object-src 'none'", "base-uri 'self'"];
+  const policy = [`script-src ${scripts.join(" ")}`, "img-src 'self' blob:", "media-src 'none'", "object-src 'none'", "base-uri 'self'"];
   if (pathname.startsWith("/s/")) policy.push("frame-ancestors 'none'");
   return policy.join("; ");
 }
