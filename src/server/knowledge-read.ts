@@ -142,6 +142,32 @@ export async function getKnowledgeExplorerModel(
   }
 }
 
+export type WorkspaceExplorerModel = {
+  collections: { source: SourceView; tree: KnowledgeTreeItem[] }[];
+};
+
+/**
+ * Every source's tree, for the sidebar on every workspace page. Read by the workspace layout, which is
+ * not re-fetched on navigation inside the workspace — only on entering it and on `router.refresh()`.
+ * Archived nodes are included; the sidebar hides them unless `?includeArchived=true`.
+ */
+export const getWorkspaceExplorerModel = cache(async (workspaceId: string): Promise<WorkspaceExplorerModel | null> => {
+  const services = applicationServices();
+  const { caller } = await services.establishTrustedCaller();
+  try {
+    const workspaces = await services.workspaces.listWorkspaces(caller);
+    if (!workspaces.some((workspace) => workspace.id === workspaceId)) return null;
+    const sources = sortSourcesByName(await services.queries.listSources(caller, workspaceId, { includeArchived: true }));
+    const collections = await Promise.all(sources.map(async (source) => ({
+      source,
+      tree: await services.queries.listTree(caller, source.id, { includeArchived: true }),
+    })));
+    return { collections };
+  } catch {
+    return null;
+  }
+});
+
 /**
  * The name of an active folder in one of this workspace's Hub sources, for the new-document page to
  * say where the document will go. Only ever a caption: the folder ID in the URL is a navigation input
