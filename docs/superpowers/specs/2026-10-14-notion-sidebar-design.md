@@ -1,7 +1,10 @@
 # One sidebar
 
-**Status:** agreed with the user on 2026-10-14, section by section. Nothing here
-is built.
+**Status:** agreed with the user on 2026-10-14; built by
+[../plans/2026-10-14-notion-sidebar.md](../plans/2026-10-14-notion-sidebar.md).
+Where the build differs from what was drafted, a **Built:** note sits in the
+section, and the text above it is left as drafted. Latency of entering a
+workspace: [2026-10-14-notion-sidebar-latency.md](../verification/2026-10-14-notion-sidebar-latency.md).
 
 ## Intent
 
@@ -75,6 +78,10 @@ reader already has changes meaning.
 - Not built: Notion's Inbox, Trash and Teamspaces. Nothing here corresponds to
   them.
 
+**Built:** every source section the reader has not toggled opens by default, on
+every route (`expanded[id] ?? true` in `source-sidebar.tsx`), not only the
+current source's as the draft implied; a toggle is kept per workspace in `kh:tree-expanded:<workspaceId>`.
+
 ## Width, collapse and peek
 
 **Width.** Default 256px; dragged between 220px and 400px; double-click the
@@ -106,6 +113,21 @@ everything peek does.
 
 Motion uses the contract's duration tokens and is off under
 `prefers-reduced-motion`.
+
+**Built:** four details differ from the draft's wording.
+
+- The frame keeps an in-flow placeholder (the only thing that holds the column
+  in the page's flow), and the `aside` is `fixed` whenever collapsed, even at
+  width 0, so a dismissed peek never puts it back in flow and pushes the page.
+- The 8px strip and » start a peek on `pointermove`, not on entry: after Esc the
+  pointer is still over them, and the boundary event the layout change fires
+  would bring the sidebar straight back.
+- Esc closes the innermost layer: while a menu opened from the sidebar is open
+  (`[data-popup-open]` inside it), Esc closes the menu and leaves the peek.
+- `data-nav-collapsed` is on `<main>`, and the 48px give-way applies to
+  `[data-top-line]`, which is on the page header (`page-header.tsx`), the
+  document header and the composer's top row, the three rows that sit on the
+  top line.
 
 Not built: collapsing automatically by window width (below 1024px is already
 the drawer), and keeping width on the server.
@@ -155,6 +177,14 @@ retry (`router.refresh()`).
 the model without collections. The current source and document come from
 `useParams()`; outside Knowledge both are absent, and the tree shows with
 nothing selected.
+
+**Built:** `getKnowledgeExplorerModel`'s `includeCollections` option is
+deleted, not left unused: the Knowledge layout read every source's tree with it
+before, and now reads only the current source's. `TreeSkeleton`, the explorer
+column's loading placeholder, is deleted with the column. Opening a document
+puts it in Recent through `DocumentOpenRecorder`, which `AppShell` mounts, so
+Recent is kept at every width; the narrow drawer's sidebar is unmounted while
+closed and a recorder inside it would miss documents opened there.
 
 | File | Change |
 | --- | --- |
