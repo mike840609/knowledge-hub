@@ -35,6 +35,7 @@ it.each([
   ['numbered', 'ordered_list', '1. New block'], ['to-do', 'bullet_list', '- [ ] New block'],
   ['quote', 'blockquote', '> New block'], ['code', 'code_block', 'New block'],
   ['divider', 'hr', '---'], ['text', 'paragraph', 'New block'],
+  ['table', 'table', 'New block'], ['toggle', 'paragraph', '<summary>'], ['callout', 'blockquote', '[!NOTE]'],
 ])('converts /%s as one undoable command and saves valid Markdown', async (query, type, markdown) => {
   const { editor, view } = await open();
   view.dispatch(view.state.tr.insertText('/' + query));
@@ -69,8 +70,42 @@ it('supports filtering, arrow navigation and Escape without leaving the editor',
   document.body.removeEventListener('keydown', bubbled);
 });
 
-it('leaves slash text in code and nested paragraphs alone, and hides when read-only', async () => {
-  for (const markdown of ['```\ncode\n```', '- item', '| A |\n| - |\n| B |']) {
+it('builds a 2x2 table with the caret in the first cell', async () => {
+  const { editor, view } = await open();
+  view.dispatch(view.state.tr.insertText('/table'));
+  key(view.dom, 'Enter');
+  const table = view.state.doc.firstChild;
+  expect(table?.type.name).toBe('table');
+  expect(table?.childCount).toBe(2);
+  expect(table?.firstChild?.type.name).toBe('table_header_row');
+  expect(table?.lastChild?.type.name).toBe('table_row');
+  view.dispatch(view.state.tr.insertText('New block'));
+  expect(editor.getMarkdown()).toContain('| New block');
+});
+
+it('inserts an empty toggle with the caret in its body', async () => {
+  const { editor, view } = await open();
+  view.dispatch(view.state.tr.insertText('/toggle'));
+  key(view.dom, 'Enter');
+  let opener = false;
+  view.state.doc.descendants((node) => {
+    if (node.type.name === "html" && String(node.attrs.value ?? "").startsWith("<details>")) opener = true;
+  });
+  expect(opener).toBe(true);
+  expect(editor.getMarkdown()).toContain('<details>');
+  const { $from } = view.state.selection;
+  expect($from.parent.type.name).toBe('paragraph');
+});
+
+it('inserts a callout marker with the caret after it', async () => {
+  const { editor, view } = await open();
+  view.dispatch(view.state.tr.insertText('/callout'));
+  key(view.dom, 'Enter');
+  view.dispatch(view.state.tr.insertText('New block'));
+  expect(editor.getMarkdown()).toContain('[!NOTE] New block');
+});
+
+it('leaves slash text in code and nested paragraphs alone, and hides when read-only', async () => {  for (const markdown of ['```\ncode\n```', '- item', '| A |\n| - |\n| B |']) {
     const { view } = await open(markdown);
     view.dispatch(view.state.tr.setSelection(TextSelection.atEnd(view.state.doc)).insertText('/code'));
     expect(menu().hidden).toBe(true);
