@@ -1,8 +1,8 @@
 /** Flips a details opening tag, or null when the value is not exactly one. */
 export function flipOpenTag(value: string): string | null {
   const text = value.trim();
-  if (/^<details>$/.test(text)) return "<details open>";
-  if (/^<details\s+open>$/.test(text)) return "<details>";
+  if (/^<details>/i.test(text)) return text.replace(/^<details>/i, "<details open>");
+  if (/^<details\s+open>/i.test(text)) return text.replace(/^<details\s+open>/i, "<details>");
   return null;
 }
 /** Summary text must not contain angle brackets: the subset parser reads them as tags. */
@@ -11,9 +11,10 @@ export function escapeSummaryText(text: string): string {
 }
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import type { EditorState } from "@milkdown/kit/prose/state";
-import { TextSelection } from "@milkdown/kit/prose/state";
+import { Plugin, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
-const DETAILS_OPEN = /^<details(\s+open)?>$/i;
+import { $prose } from "@milkdown/kit/utils";
+const DETAILS_OPEN = /^<details(\s+open)?>/i;
 const DETAILS_CLOSE = /^<\/details>$/i;
 /** Innermost details opener at or before pos whose body contains pos. */
 export function nearestDetailsOpener(state: EditorState, pos: number): { position: number; open: boolean } | null {
@@ -23,7 +24,7 @@ export function nearestDetailsOpener(state: EditorState, pos: number): { positio
     if (node.type.name !== "html") return;
     const text = String(node.attrs.value ?? "").trim();
     if (DETAILS_CLOSE.test(text)) {
-      stack.pop();
+      if (stack.length > 0) stack.pop();
       return;
     }
     const match = DETAILS_OPEN.exec(text);
@@ -63,3 +64,33 @@ export function convertBlockToDetails(view: EditorView): boolean {
   view.dispatch(tr.scrollIntoView());
   return true;
 }
+/** Rewrites the nearest opener at pos, or false when the caret is not in a toggle. */
+export function flipNearestDetails(view: EditorView, pos: number): boolean {
+  const found = nearestDetailsOpener(view.state, pos);
+  if (!found) return false;
+  const html = view.state.schema.nodes.html;
+  const node = view.state.doc.nodeAt(found.position);
+  if (!node || node.type.name !== "html" || !html) return false;
+  const flipped = flipOpenTag(String(node.attrs.value ?? ""));
+  if (!flipped) return false;
+  view.dispatch(view.state.tr.replaceWith(found.position, found.position + node.nodeSize, html.create({ value: flipped })));
+  return true;
+}
+/** Clicking a summary folds/unfolds without moving the caret (same $prose shape as readerHints). */
+export const detailsClickToggle = $prose(
+  () =>
+    new Plugin({
+      props: {
+        handleClick: (view, _pos, event) => {
+          const target = event.target as HTMLElement | null;
+          const summary = target?.closest?.("summary") ?? null;
+          if (!summary || !view.dom.contains(summary)) return false;
+          const coords = view.posAtCoords({ left: event.clientX, top: event.clientY });
+          if (!coords) return false;
+          if (!flipNearestDetails(view, coords.pos)) return false;
+          event.preventDefault();
+          return true;
+        },
+      },
+    }),
+);
