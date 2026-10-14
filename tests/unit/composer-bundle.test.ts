@@ -79,4 +79,23 @@ describe("what the composer sends to the browser", () => {
   it("does not reach lowlight or highlight.js", () => {
     expect([...full.packages].filter((name) => /^(lowlight|highlight\.js)(\/|$)/.test(name))).toEqual([]);
   });
+
+  it("does not reach the diagram block, its queue or mermaid at all", () => {
+    const allNames = [...full.files].map((file) => path.basename(file));
+    for (const forbidden of ["mermaid-block.tsx", "mermaid-queue.ts"]) expect(allNames, forbidden).not.toContain(forbidden);
+    expect([...full.packages].filter((name) => /^mermaid(\/|$)/.test(name))).toEqual([]);
+  });
+});
+
+describe("what the reader sends to the browser for a diagram", () => {
+  const entry = path.join("src", "components", "knowledge", "markdown-renderer.tsx");
+
+  it("is really being read: the walk reaches the queue, and through its import() reaches mermaid", () => {
+    expect([...reachable(entry).files].map((file) => path.basename(file))).toContain("mermaid-queue.ts");
+    expect([...reachable(entry).packages]).toContain("mermaid");
+  });
+
+  it("is not mermaid until a diagram asks: no static import reaches it", () => {
+    expect([...reachable(entry, false).packages].filter((name) => /^mermaid(\/|$)/.test(name))).toEqual([]);
+  });
 });

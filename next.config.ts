@@ -8,8 +8,8 @@ const nextConfig: NextConfig = {
   // (`make dev-reviewer`, docs/development/two-person-demo.md).
   distDir: process.env.KM_NEXT_DIST_DIR ?? (process.env.NODE_ENV === "development" ? ".next-dev" : ".next"),
   // Issue #20 second layer: even if a remote image URL ever reaches markup,
-  // the browser must refuse to load it. `img-src 'self'` allows only
-  // same-origin / relative images (data: intentionally not allowed).
+  // the browser must refuse to load it. `img-src 'self' blob:` allows only
+  // same-origin / relative images, and the diagrams the page itself draws (data: intentionally not allowed).
   //
   // A page gets its policy from `src/middleware.ts`, which sets this header again
   // with a nonce for scripts and replaces what is set here. These values are what
@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/:path*",
-        headers: [{ key: "Content-Security-Policy", value: "img-src 'self'" }],
+        headers: [{ key: "Content-Security-Policy", value: "img-src 'self' blob:" }],
       },
       {
         // Share links need no sign-in (share-link spec §6.4): the token must
@@ -33,7 +33,7 @@ const nextConfig: NextConfig = {
           { key: "Referrer-Policy", value: "no-referrer" },
           { key: "Cache-Control", value: "private, no-store" },
           { key: "X-Robots-Tag", value: "noindex, nofollow" },
-          { key: "Content-Security-Policy", value: "img-src 'self'; frame-ancestors 'none'" },
+          { key: "Content-Security-Policy", value: "img-src 'self' blob:; frame-ancestors 'none'" },
         ],
       },
     ];

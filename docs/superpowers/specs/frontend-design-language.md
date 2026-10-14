@@ -428,6 +428,35 @@ announces itself.
 The rendered editor's code blocks are not coloured (daily-driver spec §5);
 they are the editor's, and its decorations are a different piece of work.
 
+### Diagrams in a document
+
+A `mermaid` block is drawn by Mermaid's `base` theme, given these and nothing
+else, read from the page when the drawing is made
+(`mermaid-queue.ts`, `themeVariables`):
+
+| In the diagram | Token |
+| --- | --- |
+| background | none; the image is transparent and sits on the page |
+| node and cluster fill | `--kh-bg-subtle` |
+| node and cluster border | `--kh-border-strong` |
+| text | `--kh-text` |
+| lines and arrowheads | `--kh-text-muted` |
+| note fill | `--kh-highlight` |
+
+No token is added for diagrams, and a colour is not written into that
+function: it reads tokens. Changing theme draws each diagram again. A colour
+the author writes in a diagram (`style A fill:#f00`) is the author's and is
+kept, as a colour in an image they attached would be.
+
+The type is the system's (`ui-sans-serif, system-ui, sans-serif`), not the
+product's: the diagram is an image, an image cannot use a font the page loaded,
+and measuring in one face while drawing in another clips labels.
+
+Drawn, the block is the image, in a box that scrolls sideways when it is wider
+than the column, above a disclosure named `Source` that holds the code block
+unchanged. Not drawn, it is that code block and one line in `text-caption`,
+`text-muted`, saying why.
+
 ### Chart colour
 
 Data displays draw their series from four tokens, declared for both themes
@@ -794,7 +823,7 @@ default). No call site passes `strokeWidth`; the rule overrides it anyway.
 The one native control with a platform glyph, `<select>`, gets a chevron in
 the same weight (`.kh-select`), drawn as two gradient strokes in
 `text-muted`. It keeps native behaviour and needs no wrapper element. It is
-not an SVG: `img-src 'self'` refuses `data:` images, which is the Markdown
+not an SVG: `img-src 'self' blob:` refuses `data:` images, which is the Markdown
 image policy doing its job, not something to loosen for a glyph.
 
 ### Brand mark
@@ -955,7 +984,7 @@ element rules in `globals.css`, so that no call site can be without them:
   glyphs `☐` and `☑`.
 
 Both glyphs are masks over a colour token, from files in `public/icons`, for
-the reason the select's chevron is a gradient: `img-src 'self'` refuses `data:`
+the reason the select's chevron is a gradient: `img-src 'self' blob:` refuses `data:`
 images (§13).
 
 ### Tabs come in two kinds and share only their look
@@ -1391,3 +1420,7 @@ The shared reader uses `.kh-share-page` as its layout scope. `.kh-share-heading`
 Native `document-review` highlights keep the existing highlight/selected-text tokens. The selected discussion uses `document-review-active` with `--kh-primary` / `--kh-on-primary`; active cards use border-primary and bg-selected. Both themes inherit their existing palette. Passage controls use `rounded-sm`, muted text, the shared focus ring, and an accessible count and quote. No new color or radius token is introduced. Collapsed errors/revision notices remain readable, and selecting supported text offers Comment without requiring the reader to discover the rail first. Selecting text that cannot take one shows a single muted `text-body-sm` sentence (`role="status"`) in that control's place, after a 400 ms pause; in the owner's reader the control and the sentence are in the document header, before Comments (`2026-10-13-review-anchors-and-owner-threads-design.md`). A quote from a code block is set in the monospace face with its line breaks.
 
 See `2026-10-09-shared-personal-document-inline-review-design.md` §4.0.1 for focus, draft retention, stale-revision replies and measurement behavior. The Comments count belongs in the accessible name; keyboard focus never expands away its own control. Escape in a reply or new-comment form does not close the panel or discard the draft.
+
+### Diagrams in a document (2026-10-13)
+
+§8 gained "Diagrams in a document": a `mermaid` block is drawn as an image, with colour from six existing tokens and none added, the system's type, a `Source` disclosure under it, and one `text-caption` line when it cannot be drawn (`2026-10-13-reader-mermaid-design.md`). Nothing else in this document changed.

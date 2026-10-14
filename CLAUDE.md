@@ -148,11 +148,22 @@ pass.
   `dangerouslySetInnerHTML` on document content to "support more HTML"; add an
   exact pattern, and its hostile cases to
   `tests/unit/markdown-renderer-html-subset.test.tsx`.
+  A `mermaid` block is drawn the same way round: Mermaid's SVG goes into a `Blob`
+  and is shown by `<img>`, never set as markup
+  (`docs/superpowers/specs/2026-10-13-reader-mermaid-design.md`). Do not move it to
+  `innerHTML` to make its text selectable or its links work; as an image it runs
+  nothing and styles nothing, which inline it would. A diagram's own text cannot
+  change Mermaid's configuration: `secure` in `mermaid-queue.ts` lists the keys it
+  may not set, and `scripts/test/mermaid-assumptions.mjs` holds a copy of that list
+  and checks in a browser that a directive or frontmatter cannot undo it, so both
+  change together on a Mermaid upgrade. Its hostile cases
+  are `tests/e2e/zz-mermaid-hostile.spec.ts`.
 
 - **Scripts run by nonce.** `src/middleware.ts` gives every page a
   Content-Security-Policy built by `src/lib/content-security-policy.ts`:
   `script-src` by per-response nonce with `strict-dynamic`, never `unsafe-inline`
-  (and `unsafe-eval` in development only), beside `img-src 'self'` and, on
+  (and `unsafe-eval` in development only), beside `img-src 'self' blob:` (the
+  `blob:` is the drawn diagram, minted by this origin's script) and, on
   `/s/*`, `frame-ancestors 'none'`. An inline `<script>` needs the nonce from the
   `x-nonce` request header, as the layout's theme script takes it, or — where no
   server component can pass one, as in `global-error` — its hash in the policy.

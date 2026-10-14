@@ -1,20 +1,28 @@
-import type { ReactNode } from "react";
+import { Children, isValidElement, type ReactNode } from "react";
 import { remarkCallouts } from "@/shared/markdown/remark-callouts";
 import { remarkHtmlSubset } from "@/shared/markdown/remark-html-subset";
 import { codeHighlightPlugins } from "./code-highlight";
 import { CopyCodeButton } from "./copy-code-button";
 import { MarkdownBase, ScrollablePre } from "./markdown-base";
+import { MermaidBlock } from "./mermaid-block";
 import type { RenderedLinks } from "./rendered-links";
 
+/** Whether a `<pre>`'s code came from a fence whose first word is exactly `mermaid`. The reader does not guess a language. */
+function isMermaid(children: ReactNode): boolean {
+  const code = Children.toArray(children).find((child) => isValidElement<{ className?: string }>(child));
+  return isValidElement<{ className?: string }>(code) && (code.props.className ?? "").split(/\s+/).includes("language-mermaid");
+}
+
 function ReadingPre({ children }: { children?: ReactNode }) {
-  return <ScrollablePre action={<CopyCodeButton />}>{children}</ScrollablePre>;
+  const block = <ScrollablePre action={<CopyCodeButton />}>{children}</ScrollablePre>;
+  return isMermaid(children) ? <MermaidBlock>{block}</MermaidBlock> : block;
 }
 
 const readerRemarkPlugins = [remarkCallouts, remarkHtmlSubset];
 
 /**
  * Markdown as the reader and a shared page show it: the product's typesetting (`MarkdownBase`),
- * with fenced code coloured (`code-highlight.ts`), a button to copy each block, `> [!NOTE]` and
+ * with fenced code coloured (`code-highlight.ts`), a button to copy each block, a `mermaid` block drawn as its diagram (`mermaid-block.tsx`), `> [!NOTE]` and
  * its kin drawn as callouts, and a small subset of HTML drawn as what it means.
  *
  * Not for the composer, which is a client component and must not carry the highlighter: it uses

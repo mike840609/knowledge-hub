@@ -77,7 +77,8 @@ test.describe("document share link", () => {
       // One header holds every directive (`middleware.ts`): the image lockdown, no framing of a
       // page that needs no sign-in, and scripts by nonce — nothing inline, here least of all.
       const policy = headers["content-security-policy"];
-      expect(policy).toContain("img-src 'self'");
+      // The whole directive, so a looser one cannot pass: this page's own images and the diagrams it makes itself.
+      expect(policy).toMatch(/(^|;\s*)img-src 'self' blob:(\s*;|\s*$)/);
       expect(policy).toContain("frame-ancestors 'none'");
       expect(policy).toMatch(/script-src 'self' 'nonce-[^']+' 'strict-dynamic'/);
       expect(policy).not.toContain("unsafe-inline");
