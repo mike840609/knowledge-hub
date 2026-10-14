@@ -82,3 +82,11 @@ export function useActiveHeading(slugs: readonly string[], rootRef: RefObject<HT
 
   return active;
 }
+/** Opens closed ancestor disclosures so a jumped-to heading is actually visible. */
+export function openAncestorDetails(target: HTMLElement): void {
+  let ancestor = target.parentElement;
+  while (ancestor) {
+    if (ancestor instanceof HTMLDetailsElement) ancestor.open = true;
+    ancestor = ancestor.parentElement;
+  }
+}

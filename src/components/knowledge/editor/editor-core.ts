@@ -8,6 +8,7 @@ import { Plugin, Selection, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { $ctx, $prose, getMarkdown, replaceAll } from "@milkdown/kit/utils";
 import { readerHints } from "./reader-hints";
+import { flipNearestDetails } from "./details-toggle";
 import { configureCellBreakStringify, remarkCellBreaks } from "./table-cell-breaks";
 import { configureWikiLinkStringify, wikiLinkPlugins } from "./wiki-link";
 
@@ -241,6 +242,7 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
         // Shift+Enter in a table is taken here too, before Milkdown's command can split the table.
         handleKeyDown: (view, event) => {
           if ((event.metaKey || event.ctrlKey) && event.key === "Enter") return true;
+          if (event.key === "Enter" && event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.isComposing && event.keyCode !== 229 && flipNearestDetails(view, view.state.selection.$from.pos)) return true;
           if (event.key === "Enter" && event.shiftKey && !event.altKey && !event.isComposing && event.keyCode !== 229 && breakInTable(view)) return true;
           if (
             event.key === "ArrowDown" &&

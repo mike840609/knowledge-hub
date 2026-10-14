@@ -14,6 +14,7 @@ import {
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { buttonClasses } from "@/components/ui/button";
 import { fieldClasses } from "@/components/ui/field";
+import { convertBlockToDetails, inDetails } from "./details-toggle";
 
 const tooltip = tooltipFactory("khSelectionToolbar");
 
@@ -95,6 +96,18 @@ const items: Item[] = [
     active: (view) => currentList(view) === "ordered_list",
     disabled: (view) => currentList(view) === "bullet_list",
     run: (ctx, view) => ctx.get(commandsCtx).call(currentList(view) === "ordered_list" ? liftListItemCommand.key : wrapInOrderedListCommand.key),
+  },
+  {
+    label: "Toggle section",
+    text: "Toggle",
+    active: (view) => inDetails(view),
+    disabled: (view) => {
+      const parent = view.state.selection.$from.parent;
+      return parent.type.name !== "paragraph" && parent.type.name !== "heading";
+    },
+    run: (ctx, view) => {
+      convertBlockToDetails(view);
+    },
   },
 ];
 

@@ -2,7 +2,7 @@
 
 import type { MouseEvent } from "react";
 import type { OutlineEntry } from "@/shared/markdown/outline";
-import { findHeading } from "./use-active-heading";
+import { findHeading, openAncestorDetails } from "./use-active-heading";
 
 /** One step of indent per outline level. Geometry that depends on data, so it is a style rather than a class. */
 function indent(level: number): { paddingLeft: string } {
@@ -23,6 +23,7 @@ function goToHeading(event: MouseEvent<HTMLAnchorElement>, slug: string, onNavig
   if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
   const target = findHeading(slug);
   if (!target) return;
+  openAncestorDetails(target);
   event.preventDefault();
   target.scrollIntoView({ behavior: reduceMotion() ? "auto" : "smooth", block: "start" });
   window.history.replaceState(window.history.state, "", `#${encodeURIComponent(slug)}`);
