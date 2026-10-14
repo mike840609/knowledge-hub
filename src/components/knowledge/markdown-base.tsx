@@ -12,6 +12,7 @@ import { remarkKnownHtml } from "@/shared/markdown/remark-known-html";
 import { remarkReviewPaths } from "@/shared/markdown/remark-review-paths";
 import { MarkdownQuote } from "./markdown-callout";
 import { MarkdownDetails, MarkdownKbd, MarkdownMark, MarkdownSummary } from "./markdown-html";
+import { DocumentPreviewLink } from "./document-preview-link";
 import { LinkedImageScope, MarkdownImage } from "./markdown-image";
 import { MARKDOWN_PROSE } from "./markdown-prose";
 import type { RenderedLinks } from "./rendered-links";
@@ -69,12 +70,13 @@ function DocumentLink({
   fragment,
   children,
 }: {
-  target: { basePath: string; title: string; ambiguousWith: number };
+  target: { basePath: string; title: string; ambiguousWith: number; documentId?: string };
   fragment: string | null;
   children: React.ReactNode;
 }) {
   const hash = fragment === null || fragment === "" ? "" : `#${encodeURIComponent(fragment)}`;
   const shared = target.ambiguousWith > 0 ? `${target.ambiguousWith} other document${target.ambiguousWith === 1 ? "" : "s"} share this name` : undefined;
+  if (target.documentId) return <DocumentPreviewLink documentId={target.documentId} href={`${target.basePath}${hash}`} title={target.title} note={shared} className={INTERNAL_LINK_CLASS}>{children}</DocumentPreviewLink>;
   return (
     // Not prefetched: the renderer does not know which document it is in, and a
     // link to the page it is on (`[[This page's own title]]`) prefetched from

@@ -478,6 +478,26 @@ focus      the region is a tab stop named "Table", with the shared focus ring, s
 print      no height limit and no sticky header: the whole table is printed
 ```
 
+### A link to a document previews it
+
+A link the reader resolved to a document in this Workspace shows, on hover or
+focus after 400ms, that document's title and the first 280 characters of its
+prose, in a popup under the link: `bg-raised`, `border`, `radius-lg`,
+`shadow-popover`, `body-sm`, the title semibold and the rest `text-muted`. Where
+other documents share the name the popup says so, as the link's `title` did.
+
+The words come from `GET /api/documents/:id/preview`, asked for when the popup
+opens and again each time it does, so a reader who has lost access is shown
+"Preview unavailable" rather than what they once could read. It answers through
+the same read service as the document page — a trusted caller, membership
+re-checked from the document's Workspace, an archived document refused — with
+the title and the excerpt and nothing else, uncached, and the same 404 for a
+document that is missing and one that may not be read. The excerpt is prose only:
+no HTML, code block or link destination, read from the document's opening 16 KB.
+
+A shared page (`/s/:token`) resolves no links, so it has no previews. A link that
+did not resolve, and a link out of the Workspace, are as they were.
+
 ### Chart colour
 
 Data displays draw their series from four tokens, declared for both themes
@@ -1452,3 +1472,10 @@ See `2026-10-09-shared-personal-document-inline-review-design.md` §4.0.1 for fo
 dialog, and a table scrolls in its own box under a sticky header. Every table in
 every existing document and shared page changes with it — a 70vh height limit and
 an 8rem minimum column width. No token was added.
+
+### A link to a document previews it (2026-10-14)
+
+§8 gained "A link to a document previews it": a resolved link shows the
+document's title and opening in a popup, from a new read endpoint,
+`GET /api/documents/:id/preview`, held to the document page's own access check.
+No token was added.
