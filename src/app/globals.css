@@ -328,6 +328,12 @@ input[type="search"]::-webkit-search-cancel-button:hover {
     content: "Write here. Start with # to name the document.";
     @apply pointer-events-none float-left h-0 text-kh-text-muted;
   }
+  /* An empty paragraph the caret is in says which key opens the commands. Not in an empty
+     document, which has the sentence above. */
+  .kh-editor[contenteditable="true"] > p[data-placeholder]:not(:first-child:last-child)::before {
+    content: attr(data-placeholder);
+    @apply pointer-events-none float-left h-0 text-kh-text-muted;
+  }
 
   /* The toolbar over a selection. Milkdown's tooltip sets `left`/`top` and `data-show`. */
   .kh-selection-toolbar {
@@ -697,4 +703,37 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 @media print {
   .kh-markdown-table { max-height: none; overflow: visible; }
   .kh-markdown-table th { position: static; }
+}
+
+/* Block controls have a gutter of their own, inside the editor's left edge; prose stays selectable. */
+.kh-editor-blocks { padding-left: 3.5rem; }
+.kh-block-gutter { position: fixed; z-index: 30; display: flex; gap: 2px; }
+.kh-block-gutter[hidden], .kh-block-move-menu[hidden], .kh-slash-menu[hidden] { display: none; }
+.kh-block-gutter button {
+  @apply flex size-6 items-center justify-center rounded-md text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text kh-focus-ring;
+}
+.kh-block-gutter button[draggable] { cursor: grab; }
+.kh-block-gutter button[draggable]:active { cursor: grabbing; }
+.kh-block-move-menu, .kh-slash-menu {
+  @apply fixed z-50 rounded-lg border border-kh-border bg-kh-bg-raised p-1 shadow-popover;
+}
+.kh-block-move-menu { min-width: 10rem; }
+.kh-block-move-menu button {
+  @apply block w-full rounded-md px-3 py-2 text-left text-body-sm text-kh-text hover:bg-kh-bg-hover disabled:opacity-50 kh-focus-ring;
+}
+.kh-slash-menu { width: 18rem; max-width: calc(100vw - 1rem); max-height: min(24rem, 60vh); overflow-y: auto; }
+.kh-slash-option { @apply flex cursor-pointer flex-col rounded-md px-3 py-1.5 text-body-sm text-kh-text hover:bg-kh-bg-hover; }
+.kh-slash-option[aria-selected="true"] { @apply bg-kh-bg-selected text-kh-selected-text; }
+.kh-block-drop-line { position: fixed; z-index: 50; height: 2px; background: var(--kh-primary); pointer-events: none; }
+.kh-block-is-dragging { cursor: grabbing; }
+@media print { .kh-block-gutter, .kh-block-move-menu, .kh-slash-menu, .kh-block-drop-line { display: none; } }
+
+/* The whole block stays marked while it moves, nested content included. */
+.kh-editor .kh-block-drag-source {
+  background-color: var(--kh-bg-selected);
+  border-radius: theme("borderRadius.sm");
+  outline: 2px solid var(--kh-bg-selected);
+}
+.kh-editor .kh-block-drag-source :is(th, td, pre, code) {
+  background-color: transparent;
 }

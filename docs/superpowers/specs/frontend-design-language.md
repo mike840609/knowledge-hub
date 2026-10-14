@@ -789,6 +789,45 @@ there is more room there, and scrolling rather than covering the line when
 there is room on neither side. Its count is announced by a live region of its
 own: the page's one `role="status"` is the toast layer's.
 
+### Block controls and the `/` list
+
+The rendered editor has two more things drawn on `document.body`, `fixed`, for
+the reason the `[[` list is: a control beside the block the pointer is on
+(`editor/block-gutter.ts`) and a list of blocks under the caret after `/` on an
+empty line (`editor/slash-commands.ts`).
+
+**The editor keeps a 56px gutter on its left** (`.kh-editor-blocks`,
+`padding-left: 3.5rem`), and this is a recorded departure from
+`kh-reading-column`: while a document is being edited its text starts 56px
+inside the reader's left edge, and the measure is narrower by as much. The
+controls need somewhere the pointer can reach without leaving the editor, and
+the pane's own 24px padding does not hold two 24px controls. The reader is not
+changed. The gutter is where the pointer shows the controls; in the text it
+does nothing, so selecting prose is as it was.
+
+The controls are two `size-6` icon buttons in muted text with the shared focus
+ring: one adds a paragraph below, one is dragged to move the block and clicked
+for a menu of Move up and Move down. `Alt+F10` in the editor moves focus to
+them, and the editor says so (`aria-keyshortcuts`); Escape goes back to the
+text. While a block is dragged it is tinted `kh-bg-selected` and a 2px
+`--kh-primary` line marks where it will land. On a device with no hover the
+controls follow the block the caret is in.
+
+The `/` list takes what the `[[` list takes — the `lg` radius, a border, the
+`popover` elevation, the row in force in `kh-bg-selected` — and behaves as it
+does: focus stays in the document, the editor is a `combobox` while it is
+open, and the keys are the editor's. An empty paragraph the caret is in reads
+`Type "/" for commands` in muted text; an empty document keeps its own
+sentence instead.
+
+Layers: the controls sit at 30, under the app's popovers; the two menus and
+the drop line at 50. None of it is printed.
+
+Both rewrite the document through the rendered editor and are held to the
+wikilink rule (`tests/unit/editor-block-actions.test.ts` moves every case in
+`tests/fixtures/link-markdown.ts`; `tests/e2e/zz-editor-blocks.spec.ts` moves a
+linked paragraph, saves, and reads the backlink).
+
 ## 11. Navigation state
 
 A view returns to where it was left, not to the top. Scroll position is
@@ -1488,3 +1527,7 @@ day): `size-6`, `radius-sm`, `text-muted`, taking `bg-selected` and
 `selected-text` under the pointer, and the chosen paragraph is marked with
 `bg-selected`. The article's width and its 32px marker margin are as they were.
 No token was added.
+
+### Block controls and the `/` list (2026-10-14)
+
+§10 gained "Block controls and the `/` list": the rendered editor's 56px left gutter — a recorded departure from `kh-reading-column` while editing — the add and move controls in it, and the list `/` opens. No colour, radius or elevation token was added.
