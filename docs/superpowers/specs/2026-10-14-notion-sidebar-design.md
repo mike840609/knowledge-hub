@@ -80,7 +80,7 @@ reader already has changes meaning.
 
 **Built:** every source section the reader has not toggled opens by default, on
 every route (`expanded[id] ?? true` in `source-sidebar.tsx`), not only the
-current source's as the draft implied; a toggle is kept per workspace in `kh:tree-expanded:<workspaceId>`.
+current source's (the mockup shows ▸ for a source); a toggle is kept per workspace in `kh:tree-expanded:<workspaceId>`.
 
 ## Width, collapse and peek
 
@@ -225,3 +225,5 @@ A workspace with many sources or a large tree enters more slowly. The
 measurement above decides whether that matters. If it does, the fallback is to
 read the source list in the layout and each tree when its section is first
 expanded; it is not built ahead of the measurement.
+
+**Built:** measured in [the latency record](../verification/2026-10-14-notion-sidebar-latency.md); the fallback is not built, pending real workspace sizes.
