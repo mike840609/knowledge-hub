@@ -1,0 +1,29 @@
+import { expect, test } from "./fixtures/test";
+import { ROUND_TRIP, composer, createNote, openEditor, unique } from "./fixtures/document-composer";
+import { showMarkdown } from "./composer-helpers";
+
+test("a paragraph becomes a toggle, flips open, and folds in the reader", async ({ page }) => {
+  const url = await createNote(page, unique("Toggle"), "Fold me\n");
+  const surface = await openEditor(page, url);
+  await surface.locator("p").selectText();
+  const toolbar = page.getByRole("toolbar", { name: "Formatting" });
+  await expect(toolbar).toBeVisible(ROUND_TRIP);
+  await toolbar.getByRole("button", { name: "Toggle section" }).click();
+  const source = await showMarkdown(composer(page));
+  await expect.poll(() => source.inputValue(), ROUND_TRIP).toContain("<summary>Fold me</summary>");
+  await composer(page).getByRole("button", { name: "Markdown", exact: true }).click();
+  await expect(surface).toBeVisible();
+  await surface.focus();
+  await page.keyboard.press("Alt+Enter");
+  const reopened = await showMarkdown(composer(page));
+  await expect.poll(() => reopened.inputValue(), ROUND_TRIP).toContain("<details open>");
+  await composer(page).getByRole("button", { name: "Save" }).click();
+  await page.waitForURL(/\/knowledge\//);
+  const summary = page.locator("details summary").getByText("Fold me");
+  await expect(summary).toBeVisible();
+  await expect(page.locator("details[open]")).toHaveCount(1);
+  await summary.click();
+  await expect(page.locator("details[open]")).toHaveCount(0);
+  await summary.click();
+  await expect(page.locator("details[open]")).toHaveCount(1);
+});
