@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./fixtures/test";
 import { showMarkdown } from "./composer-helpers";
-import { ROUND_TRIP, childrenOf, createFolder, header, mySpace, openKnowledge, row, rowIn, toast, unique } from "./fixtures/organize";
+import { ROUND_TRIP, addToNotes, childrenOf, createFolder, header, mySpace, openKnowledge, row, rowIn, toast, unique } from "./fixtures/organize";
 
 // Mirrors scripts/db/seed.ts BROWSER_FIXTURE_IDS: a workspace with a SOURCE_MANAGED source in it, read here and never changed.
 const QUERY_MASTER_WORKSPACE = "0199f100-0000-7000-8000-000000000001";
@@ -126,7 +126,8 @@ test.describe("folders", () => {
   test("ask for a name in words, and keep the dialog open until there is one", async ({ page }) => {
     const workspaceId = await mySpace(page);
     await openKnowledge(page, workspaceId);
-    await page.getByRole("button", { name: "Create folder" }).first().click();
+    await addToNotes(page).click();
+    await page.getByRole("menuitem", { name: "Create folder" }).click();
     const dialog = page.getByRole("dialog", { name: "New folder" });
     await dialog.getByRole("button", { name: "Create folder" }).click();
     await expect(dialog.getByRole("alert")).toHaveText("Enter a folder name.");

@@ -177,6 +177,7 @@ function TreeNodeRow({
         {/* Floated over the header's own background, as a document row's is: a
             second control slot would have re-truncated every folder name. */}
         <div className="kh-row-action absolute right-1 top-1/2 flex -translate-y-1/2 items-center rounded-md bg-inherit">
+          <RowActionsTrigger actions={actions.filter((action) => action.id === "folder.new-document" || action.id === "folder.new-folder")} onRun={onRunAction} label={item.label} variant="add" />
           <RowActionsTrigger actions={actions} onRun={onRunAction} label={item.label} />
         </div>
       </RowContextMenu>

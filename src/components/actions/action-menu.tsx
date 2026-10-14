@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal, Plus } from "lucide-react";
 import { buttonClasses } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { useToast } from "@/components/ui/toast";
@@ -190,21 +190,24 @@ export function RowActionsTrigger({
   actions,
   onRun,
   label,
+  variant = "more",
   className = "",
 }: {
   actions: readonly Action[];
   onRun: (action: Action) => void;
   label: string;
+  /** `add` is the row's `+`: the same menu, holding only what can be made there. */
+  variant?: "more" | "add";
   className?: string;
 }) {
   if (actions.length === 0) return null;
   return (
     <MenuRoot>
       <MenuTrigger
-        aria-label={`Actions for ${label}`}
+        aria-label={variant === "add" ? `New in ${label}` : `Actions for ${label}`}
         className={buttonClasses({ variant: "ghost", icon: true, size: "sm", className })}
       >
-        <MoreHorizontal size={15} aria-hidden="true" />
+        {variant === "add" ? <Plus size={15} aria-hidden="true" /> : <MoreHorizontal size={15} aria-hidden="true" />}
       </MenuTrigger>
       <MenuContent align="end" className="w-56">
         <ActionMenuItems actions={actions} onRun={onRun} />

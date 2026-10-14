@@ -261,7 +261,8 @@ test('mobile explorer row actions and folder dialog remain operable', async ({ p
   await row.click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Remove from favorites', exact: true }).click();
   await expect(row.getByRole('button', { name: /Add to favorites:/ })).toBeVisible();
-  await drawer.getByRole('button', { name: 'Create folder', exact: true }).first().click();
+  await drawer.getByRole('button', { name: 'New in Notes', exact: true }).first().click();
+  await page.getByRole('menuitem', { name: 'Create folder', exact: true }).click();
   const folder = page.getByRole('dialog', { name: 'New folder', exact: true });
   await expect(folder).toBeVisible();
   const field = folder.getByRole('textbox');
@@ -269,7 +270,8 @@ test('mobile explorer row actions and folder dialog remain operable', async ({ p
   await page.keyboard.press('Escape');
   await expect(folder).not.toBeVisible();
   await expect(drawer).toBeVisible();
-  await drawer.getByRole('button', { name: 'Create folder', exact: true }).first().click();
+  await drawer.getByRole('button', { name: 'New in Notes', exact: true }).first().click();
+  await page.getByRole('menuitem', { name: 'Create folder', exact: true }).click();
   await expect(field).toBeFocused();
   await field.fill(`Reviewed folder ${Date.now()}`);
   await folder.getByRole('button', { name: 'Create folder', exact: true }).click();

@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures/test";
-import { mySpace } from "./fixtures/organize";
+import { createFolder, header, mySpace, openKnowledge, unique } from "./fixtures/organize";
 
 // Mirrors scripts/db/seed.ts BROWSER_FIXTURE_IDS.
 const QUERY_MASTER_WORKSPACE = "0199f100-0000-7000-8000-000000000001";
@@ -210,5 +210,34 @@ test.describe("one sidebar", () => {
     await page.keyboard.press("Escape");
     await expect(menu).toHaveCount(0);
     await expect(aside).not.toHaveAttribute("data-peeking", "", { timeout: 2_000 });
+  });
+
+  test("a folder's + makes a document inside it", async ({ page }) => {
+    const workspaceId = await mySpace(page);
+    await openKnowledge(page, workspaceId);
+    const name = unique("Plus");
+    await createFolder(page, name);
+    await header(page, name).hover();
+    await page.getByRole("button", { name: `New in ${name}`, exact: true }).click();
+    await page.getByRole("menuitem", { name: "New document here" }).click();
+    await page.waitForURL(/\/knowledge\/new\?folder=/, ROUND_TRIP);
+    await expect(page.getByText(name).first()).toBeVisible();
+  });
+
+  test("section controls are there on hover and on focus, not at rest", async ({ page }) => {
+    const workspaceId = await mySpace(page);
+    await openKnowledge(page, workspaceId);
+    const explorer = page.getByRole("complementary", { name: "Knowledge explorer" });
+    const heading = explorer.getByRole("heading", { name: "Documents" });
+    // The fade is on the group of controls beside the heading, not on the button: opacity is not inherited.
+    const controls = heading.locator("xpath=following-sibling::div");
+    const filter = controls.getByRole("button", { name: "Filter documents and sources" });
+    await page.mouse.move(900, 400);
+    await expect(controls).toHaveCSS("opacity", "0");
+    await heading.hover();
+    await expect(controls).toHaveCSS("opacity", "1");
+    await page.mouse.move(900, 400);
+    await filter.focus();
+    await expect(controls).toHaveCSS("opacity", "1");
   });
 });

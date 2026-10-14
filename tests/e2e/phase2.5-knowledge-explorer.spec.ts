@@ -1,5 +1,5 @@
 import { expect, test } from "./fixtures/test";
-import { openSource, treeOf } from "./fixtures/organize";
+import { addToNotes, openSource, treeOf } from "./fixtures/organize";
 
 const WORKSPACE = "0199f100-0000-7000-8000-000000000001";
 const SOURCE = "0199f100-0000-7000-8000-000000000101";
@@ -80,7 +80,8 @@ test("reading navigation separates collections from authoring and source managem
   await expect(page).toHaveURL(/\/knowledge\/0199f100-0000-7000-8000-000000000105\//);
   await expect(page.getByRole("heading", { name: "Compliance Policy", exact: true })).toBeVisible();
 
-  await page.getByRole("link", { name: "Create document", exact: true }).click();
+  await addToNotes(page).click();
+  await page.getByRole("menuitem", { name: "Create document", exact: true }).click();
   await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("New document");
   await expect(page.locator("main form").first().getByRole("textbox", { name: "Content" })).toBeVisible();
   await expect(page.locator('input[type="file"]')).toBeAttached();

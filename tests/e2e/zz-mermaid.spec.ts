@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from "./fixtures/test";
 import { personalWorkspaceId as mySpace } from "./fixtures/my-space";
 import { phase3Origin } from "./fixtures/phase3-identities";
+import { addToNotes } from "./fixtures/organize";
 import { createReviewDocument, openReviewDiscussions } from "./fixtures/document-review";
 
 // docs/superpowers/specs/2026-10-13-reader-mermaid-design.md
@@ -160,7 +161,8 @@ test.describe("mermaid in the reader", () => {
     // Any tree change ends in `router.refresh()`, which sends the open document again.
     const refreshByTreeChange = async () => {
       const name = unique("Refresh folder");
-      await page.getByRole("button", { name: "Create folder" }).first().click();
+      await addToNotes(page).click();
+      await page.getByRole("menuitem", { name: "Create folder" }).click();
       const dialog = page.getByRole("dialog", { name: "New folder" });
       await dialog.getByLabel("Name").fill(name);
       await dialog.getByRole("button", { name: "Create folder" }).click();

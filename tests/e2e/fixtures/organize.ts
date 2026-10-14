@@ -34,7 +34,7 @@ export async function openKnowledge(page: Page, workspaceId: string) {
   await expect(page.getByRole("region", { name: "Document content" })).toBeVisible(ROUND_TRIP);
   await expect(page.getByRole("complementary", { name: "Knowledge explorer" })).toBeVisible(ROUND_TRIP);
   await expect(page.getByRole("complementary", { name: "Knowledge explorer" })).toHaveAttribute("aria-busy", "false", ROUND_TRIP);
-  await expect(page.getByRole("button", { name: "Create folder" }).first()).toBeVisible(ROUND_TRIP);
+  await expect(addToNotes(page)).toBeAttached(ROUND_TRIP);
   await expect(row(page, title)).toHaveAttribute("aria-current", "page", ROUND_TRIP);
   await expect(row(page, title)).toBeInViewport(ROUND_TRIP);
   await expect(page.getByRole("tree", { name: "Knowledge tree" }).filter({ has: row(page, title) })).toHaveAttribute("aria-busy", "false", ROUND_TRIP);
@@ -47,6 +47,8 @@ export async function openKnowledge(page: Page, workspaceId: string) {
   }), ROUND_TRIP).toBe(true);
 }
 
+/** The `+` at the top of Notes, which holds Create document and Create folder. */
+export const addToNotes = (page: Page) => page.getByRole("complementary", { name: "Knowledge explorer" }).getByRole("button", { name: "New in Notes", exact: true }).first();
 export const row = (page: Page, name: string) => page.getByRole("treeitem", { name, exact: true });
 /** A row of one source's tree. Every source's tree is on the page (open unless the reader shut it), and titles repeat across sources. */
 export const rowIn = (page: Page, sourceId: string, name: string) => page.locator(`#collection-${sourceId}`).getByRole("treeitem", { name, exact: true });
@@ -63,7 +65,8 @@ export const toast = (page: Page, text: string | RegExp) => page.getByRole("stat
 
 /** Make a folder from the sidebar, as a reader does. */
 export async function createFolder(page: Page, name: string) {
-  await page.getByRole("button", { name: "Create folder" }).first().click();
+  await addToNotes(page).click();
+  await page.getByRole("menuitem", { name: "Create folder" }).click();
   const dialog = page.getByRole("dialog", { name: "New folder" });
   await dialog.getByLabel("Name").fill(name);
   await dialog.getByRole("button", { name: "Create folder" }).click();

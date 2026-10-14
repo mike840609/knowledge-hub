@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, ChevronRight, Clock3, FileText, MoreHorizontal, Plus, ListFilter, Star } from "lucide-react";
-import { ActionIcon } from "@/components/actions/action-icon";
+import { ChevronDown, ChevronRight, Clock3, FileText, MoreHorizontal, ListFilter, Star } from "lucide-react";
 import { favoritesInPlace, toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
@@ -17,7 +16,7 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { isBoolean, isBooleanRecord, isString, usePersistedJson } from "@/components/shell/use-persisted-state";
 import { documentShortcutKey, useDocumentShortcuts } from "./use-document-shortcuts";
 import { useTreeMutations } from "./use-tree-mutations";
-import { useActionRunner } from "@/components/actions/action-menu";
+import { RowActionsTrigger, useActionRunner } from "@/components/actions/action-menu";
 import { actionsFor, type ActionTarget, type FolderTarget } from "@/components/actions/action-registry";
 
 export type SourceSidebarProps = {
@@ -125,16 +124,10 @@ export function SourceSidebar({ workspaceId, currentSourceId, collections }: Sou
   const hasNotes = visibleCollections.some(({ source: candidate }) => candidate.sourceType === "HUB" && candidate.name === "Notes" && candidate.status === "ACTIVE");
   const canCreate = access.actions.canWrite && confirmed;
   const newNoteHref = `/w/${workspaceId}/knowledge/new`;
-  const addNote = <Tooltip label="Create document" shortcut="C"><Link href={newNoteHref} aria-label="Create document" aria-keyshortcuts="C" className={buttonClasses({ variant: "ghost", icon: true })}><Plus size={15} aria-hidden="true" /></Link></Tooltip>;
-  // What can be made here, from the registry like everything else: the button exists when the action does.
-  const createFolder = actionsFor("create", { workspaceId, workspaceType: access.workspace.type, can: access.actions, confirmed }).find((action) => action.id === "create.folder");
-  const addFolder = createFolder ? (
-    <Tooltip label="Create folder">
-      <button type="button" aria-label="Create folder" onClick={() => runAction(createFolder)} className={buttonClasses({ variant: "ghost", icon: true })}>
-        <ActionIcon name="new-folder" className="h-4 w-4 shrink-0" />
-      </button>
-    </Tooltip>
-  ) : null;
+  // What can be made at the top of Notes, from the registry like everything else.
+  const createActions = actionsFor("create", { workspaceId, workspaceType: access.workspace.type, can: access.actions, confirmed })
+    .filter((action) => action.id === "create.document" || action.id === "create.folder");
+  const addToNotes = <RowActionsTrigger actions={createActions} onRun={runAction} label="Notes" variant="add" />;
 
   function toggleArchived(checked: boolean) {
     const params = new URLSearchParams(searchParams.toString());
@@ -151,9 +144,9 @@ export function SourceSidebar({ workspaceId, currentSourceId, collections }: Sou
 
   return (
     <aside aria-label="Knowledge explorer" aria-busy={!sidebarReady} className="flex w-full flex-col gap-3 px-2">
-      <div className="flex shrink-0 items-center justify-between gap-2">
+      <div className="group flex shrink-0 items-center justify-between gap-2">
         <h2 className="px-2 text-caption font-medium text-kh-text-muted">Documents</h2>
-        <div className="flex items-center gap-0.5">
+        <div className={`flex items-center gap-0.5 ${filterOpen ? "" : "kh-row-action"}`}>
           <Tooltip label="Filter documents and sources">
             <button
               ref={filterTriggerRef}
@@ -177,14 +170,15 @@ export function SourceSidebar({ workspaceId, currentSourceId, collections }: Sou
               </MenuCheckboxItem>
             </MenuContent>
           </MenuRoot>
+          {canCreate ? addToNotes : null}
         </div>
       </div>
       {filterOpen ? <div className="shrink-0"><TreeFilter value={query} onChange={setQuery} onClose={closeFilter} /></div> : null}
       <nav aria-label="Document tree" className="space-y-1">
         {!needle && favoriteKeys.length > 0 ? <section aria-label="Favorites" className="pb-1">
-          <h3><button type="button" aria-expanded={favoritesOpen} onClick={() => setFavoritesOpen((open) => !open)} className="kh-control kh-interactive-row flex min-h-8 w-full items-center gap-2 px-2 text-left text-caption font-medium text-kh-text-muted">
-            {favoritesOpen ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
+          <h3><button type="button" aria-expanded={favoritesOpen} onClick={() => setFavoritesOpen((open) => !open)} className="group kh-control kh-interactive-row flex min-h-8 w-full items-center gap-2 px-2 text-left text-caption font-medium text-kh-text-muted">
             <span>Favorites</span>
+            <span className="kh-row-action">{favoritesOpen ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}</span>
           </button></h3>
           {favoritesOpen ? <ul className="mt-0.5 space-y-0.5">
             {favoritesInPlaceKeys.map((key) => shortcutRow(key, true))}
@@ -217,16 +211,16 @@ export function SourceSidebar({ workspaceId, currentSourceId, collections }: Sou
           </ul> : null}
         </section> : null}
         {!needle && recentKeys.length > 0 ? <section aria-label="Recent documents" className="pb-1">
-          <h3><button type="button" aria-expanded={recentOpen} onClick={() => setRecentOpen((open) => !open)} className="kh-control kh-interactive-row flex min-h-8 w-full items-center gap-2 px-2 text-left text-caption font-medium text-kh-text-muted">
-            {recentOpen ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
+          <h3><button type="button" aria-expanded={recentOpen} onClick={() => setRecentOpen((open) => !open)} className="group kh-control kh-interactive-row flex min-h-8 w-full items-center gap-2 px-2 text-left text-caption font-medium text-kh-text-muted">
             <span>Recent</span>
+            <span className="kh-row-action">{recentOpen ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}</span>
           </button></h3>
           {recentOpen ? <ul className="mt-0.5 space-y-0.5">{recentKeys.map((key) => shortcutRow(key, false))}</ul> : null}
         </section> : null}
         {!hasNotes && canCreate && (!needle || "notes".includes(needle)) ? (
-          <div className="flex items-center justify-between pl-2">
+          <div className="group flex items-center justify-between pl-2">
             <Link href={newNoteHref} className="rounded-md text-body font-medium text-kh-text hover:underline kh-focus-ring">Notes</Link>
-            <div className="flex items-center">{addFolder}{addNote}</div>
+            <div className="kh-row-action flex items-center">{addToNotes}</div>
           </div>
         ) : null}
         {matches.map(({ source: candidate, tree }) => {
@@ -235,13 +229,13 @@ export function SourceSidebar({ workspaceId, currentSourceId, collections }: Sou
           const isNotes = candidate.sourceType === "HUB" && candidate.name === "Notes" && candidate.status === "ACTIVE";
           return (
             <section key={candidate.id} aria-label={`${candidate.name} documents`}>
-              <div className="flex items-center gap-1">
+              <div className="group flex items-center gap-1">
                 <button type="button" aria-expanded={open} aria-controls={`collection-${candidate.id}`} onClick={() => setExpanded((previous) => ({ ...previous, [candidate.id]: !open }))} title={candidate.name} className="kh-control flex min-h-8 min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 text-left text-body font-medium text-kh-text hover:bg-kh-bg-hover kh-focus-ring">
                   <Icon size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />
                   <span className="truncate">{candidate.name}</span>
                   {candidate.status === "ARCHIVED" ? <Status kind="archived" className="ml-auto text-caption font-normal text-kh-text-muted">Archived</Status> : null}
                 </button>
-                {isNotes && canCreate ? <div className="flex items-center">{addFolder}{addNote}</div> : null}
+                {isNotes && canCreate ? <div className="kh-row-action flex items-center">{addToNotes}</div> : null}
               </div>
               <div id={`collection-${candidate.id}`} hidden={!open} className="mt-1 pl-2">
                 {open ? <KnowledgeTree
