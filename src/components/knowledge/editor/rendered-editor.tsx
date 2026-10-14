@@ -4,6 +4,8 @@ import { useEffect, useRef, type MouseEvent } from "react";
 import { isAllowedMarkdownImageSrc } from "@/components/knowledge/markdown-image-policy";
 import { MARKDOWN_PROSE } from "@/components/knowledge/markdown-prose";
 import { governanceRequest } from "@/components/workspaces/governance-error";
+import { blockGutter } from "./block-gutter";
+import { slashCommands } from "./slash-commands";
 import type { LinkTargetsView } from "@/modules/knowledge/application/knowledge-link-service";
 import { createMarkdownEditor, type MarkdownEditor } from "./editor-core";
 import { selectionToolbar } from "./selection-toolbar";
@@ -56,6 +58,7 @@ export function RenderedEditor(props: RenderedEditorProps) {
       loadTargets: () => governanceRequest<LinkTargetsView>(`/api/workspaces/${latest.current.workspaceId}/link-targets`),
       excludeDocumentId: () => latest.current.documentId,
     });
+    const slash = slashCommands();
     const openedWith = latest.current.markdown;
     createMarkdownEditor({
       root: host,
@@ -66,10 +69,11 @@ export function RenderedEditor(props: RenderedEditorProps) {
       onUserEdit: () => latest.current.onUserEdit(),
       onMarkdown: (markdown) => latest.current.onMarkdown(markdown),
       allowImage: (src) => isAllowedMarkdownImageSrc(src, { origin: window.location.origin }),
-      extraPlugins: [...toolbar.plugins, ...suggest.plugins],
+      extraPlugins: [...toolbar.plugins, ...suggest.plugins, ...slash.plugins, blockGutter()],
       configure: (ctx) => {
         toolbar.configure(ctx);
         suggest.configure(ctx);
+        slash.configure(ctx);
       },
     }).then(
       (editor) => {
