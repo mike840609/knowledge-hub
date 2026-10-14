@@ -14,6 +14,7 @@ import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-auth
 import { refreshOnArrival } from "@/components/shell/refresh-on-arrival";
 import { GovernanceError, governanceFailure, type GovernanceFailure } from "@/components/workspaces/governance-error";
 import { carryTitle, resolveAuthoredTitle } from "@/lib/authored-title";
+import { editorImageUrl, imageAlt, imageFilesOf, imageMarkdown, imageUploadFailure, insertAtCaret } from "@/lib/composer-images";
 import { matchesInitial } from "@/lib/composer-output";
 import { browserDraftStorage, clearDraft, readDraft, syncDraft, type DraftKey } from "@/lib/document-draft";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
@@ -88,9 +89,15 @@ export function DocumentComposer({
   conflictHref,
   blocked,
   footer,
+  images,
 }: {
   /** Where `[[` looks for documents to link to. */
   workspaceId: string;
+  /**
+   * Set when this page can hold images (hub image upload spec): where a pasted or dropped image is
+   * sent, and the Source its images are read from — null for a new note until the first upload names it.
+   */
+  images?: { uploadUrl: string; sourceId: string | null };
   draftKey: DraftKey;
   /**
    * What stands in for the rendered editor while it loads, rendered on the
@@ -160,6 +167,10 @@ export function DocumentComposer({
   // A new loader per attempt: the failed load must not be replayed from the cache.
   const RenderedEditor = useMemo(() => dynamic(() => importRenderedEditor(), { ssr: false }), [loadAttempt]);
   const [busy, setBusy] = useState(false);
+  // Images being uploaded, and why the last one was not added. Saving waits for the first.
+  const [uploadingImages, setUploadingImages] = useState(0);
+  const [imageNotice, setImageNotice] = useState<string | null>(null);
+  const imageSourceRef = useRef(images?.sourceId ?? null);
   const [error, setError] = useState<GovernanceFailure | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -181,6 +192,9 @@ export function DocumentComposer({
 
   // A failed editor leaves the Markdown source, which always works.
   const showing: Mode = editorFailed ? "source" : mode;
+  // The surface in use when an upload finishes, not when it started.
+  const showingRef = useRef<Mode>(showing);
+  showingRef.current = showing;
   const resolved = resolveAuthoredTitle({ metadataTitle, markdown, typedTitle: title });
   const dirty = title !== initialTitle || markdown !== initialMarkdown || touched;
   // Fields wait for the restore check too: enabling them the instant
@@ -447,8 +461,51 @@ export function DocumentComposer({
     window.location.assign(conflictHref);
   }
 
+  function insertImage(src: string, alt: string) {
+    const editor = editorRef.current;
+    if (showingRef.current === "rendered" && editor) {
+      editor.insertImage(src, alt);
+      return;
+    }
+    const textarea = textareaRef.current;
+    const current = latestRef.current.markdown;
+    const placed = insertAtCaret(current, textarea?.selectionStart ?? current.length, textarea?.selectionEnd ?? current.length, imageMarkdown(alt, src));
+    applyMarkdown(placed.text);
+    requestAnimationFrame(() => textarea?.setSelectionRange(placed.caret, placed.caret));
+  }
+
+  // One at a time: each lands where the caret is when it arrives, in the order they were given.
+  async function addImages(files: File[]) {
+    if (!images || files.length === 0) return;
+    setImageNotice(null);
+    setUploadingImages((count) => count + files.length);
+    for (const file of files) {
+      try {
+        const response = await fetch(images.uploadUrl, { method: "POST", body: file });
+        const body: { src?: string; sourceId?: string; error?: { code?: string } } | null = await response.json().catch(() => null);
+        if (response.ok && body?.src && body.sourceId) {
+          // Before the image is drawn: the editor asks this Source for it.
+          imageSourceRef.current = body.sourceId;
+          if (!leaving.current) insertImage(body.src, imageAlt(file));
+        } else setImageNotice(imageUploadFailure(response.status, body?.error?.code));
+      } catch {
+        setImageNotice("The image could not be added. Check your connection and try again.");
+      } finally {
+        setUploadingImages((count) => count - 1);
+      }
+    }
+  }
+
+  /** For the Markdown source: the textarea has no editor to take a paste or a drop. */
+  function takeImageFiles(event: { preventDefault: () => void }, transfer: DataTransfer | null) {
+    const files = images ? imageFilesOf(transfer) : [];
+    if (files.length === 0) return;
+    event.preventDefault();
+    void addImages(files);
+  }
+
   async function save() {
-    if (busy || !confirmed || !ready) return;
+    if (busy || !confirmed || !ready || uploadingImages > 0) return;
     // What was typed a moment ago has not reached `markdown` yet; save what is there.
     const snapshot = flush();
     const final = resolveAuthoredTitle({ metadataTitle, markdown: snapshot.markdown, typedTitle: snapshot.title });
@@ -586,7 +643,7 @@ export function DocumentComposer({
                 <Button
                   type="submit"
                   aria-describedby={untitled ? "composer-untitled-hint" : undefined}
-                  disabled={!ready || !confirmed || untitled}
+                  disabled={!ready || !confirmed || untitled || uploadingImages > 0}
                 >
                   {busy ? busyLabel : submitLabel}
                 </Button>
@@ -603,6 +660,7 @@ export function DocumentComposer({
           {renamesOnSave ? (
             <p className="mt-1.5 text-caption text-kh-text-muted">Saving will rename this document to “{resolved.title}”</p>
           ) : null}
+          {images ? <p role="status" aria-live="polite" className={uploadingImages > 0 || imageNotice ? "text-caption text-kh-text-muted" : "sr-only"}>{uploadingImages > 0 ? "Uploading image…" : imageNotice ?? ""}</p> : null}
           {durableDraft && <p role="status" className="text-caption text-kh-text-muted">
             {({ loading: "Loading draft…", saved: "Draft saved to your account", saving: "Saving draft…", local: "Draft kept on this device · syncing…", error: "Draft sync failed. Keep this page open and retry.", conflict: "Draft changed on another device. Your text is preserved here; copy it before loading another draft." })[draftStatus]}
             {draftStatus === "error" && <Button type="button" variant="link" onClick={() => void persistent.current?.retry()}>Retry draft save</Button>}
@@ -679,6 +737,8 @@ export function DocumentComposer({
                 onFail={handleEditorFail}
                 onUserEdit={handleUserEdit}
                 onMarkdown={handleEditorMarkdown}
+                imageUrl={(src) => editorImageUrl(imageSourceRef.current, src)}
+                onImageFiles={images ? (files) => void addImages(files) : undefined}
               />
             </div>
           ) : null}
@@ -691,6 +751,8 @@ export function DocumentComposer({
             disabled={!interactive || !sourceReady}
             hidden={showing !== "source"}
             onChange={(event) => applyMarkdown(event.target.value)}
+            onPaste={(event) => takeImageFiles(event, event.clipboardData)}
+            onDrop={(event) => takeImageFiles(event, event.dataTransfer)}
             className="min-h-[12rem] w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-reading text-kh-text outline-none placeholder:text-kh-text-muted"
           />
         </div>

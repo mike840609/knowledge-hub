@@ -1,3 +1,5 @@
+import { MarkdownImageBaseProvider } from "@/components/knowledge/markdown-image-base";
+import { configuredBlobStore } from "@/server/blob-store";
 import { notFound } from "next/navigation";
 import { DocumentEditor } from "@/components/knowledge/document-editor";
 import { MarkdownArticle } from "@/components/knowledge/markdown-article";
@@ -30,7 +32,8 @@ export default async function EditDocumentPage({
       sourceId={sourceId}
       documentId={documentId}
       userId={shell.identityId}
-      standIn={<MarkdownArticle markdown={current.markdown} />}
+      standIn={<MarkdownImageBaseProvider base={`/api/documents/${documentId}/asset`}><MarkdownArticle markdown={current.markdown} /></MarkdownImageBaseProvider>}
+      imagesStored={configuredBlobStore() !== null}
       location={documentLocation(workspaceId, sourceId, explorer.source.name, explorer.tree, documentId)}
       metadataTitle={current.metadata.title}
       currentRevisionId={current.id}

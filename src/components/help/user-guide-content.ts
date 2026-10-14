@@ -53,7 +53,7 @@ export function userGuideContent(locale:GuideLocale):UserGuideContent {
         {title:"文章找不到、連結或圖片無法開啟",items:[
           "先確認搜尋來源、原始路徑與封存項目。封存不會刪除本機檔案。",
           "同步文章：修正本機文件或排除規則，再檢查並 Apply。個人筆記：從封存檢視還原。",
-          "連結或圖片問題：查看來源健康清單、匯入警告與相對路徑。附件目前以參照與 metadata 為主，不保證本機圖片或附件能在線上開啟。",
+          "連結或圖片問題：查看來源健康清單、匯入警告與相對路徑。伺服器有設定圖片儲存時，以 `![alt](path)` 寫的圖片會顯示；沒有顯示時請再同步一次該資料夾。Obsidian 的嵌入語法（`![[image.png]]`）與其他附件只保留參照。",
         ]},
         {title:"Insights 無法載入",items:[
           "選 Try again 或 Refresh。仍可從 Home、Knowledge 與 Sources 閱讀與操作；統計載入失敗不代表文章遺失。",
@@ -137,7 +137,7 @@ export function userGuideContent(locale:GuideLocale):UserGuideContent {
         {title:"Missing articles, unresolved links or images",items:[
           "Check the source, original path and archived items. Archiving does not delete local files.",
           "For synced articles, correct local files or exclusions and Apply a fresh preview. Restore personal notes through the archived view.",
-          "For links or images, inspect source health, import warnings and relative paths. Attachments currently retain references and metadata; local images and attachments are not guaranteed to open online.",
+          "For links or images, inspect source health, import warnings and relative paths. Images written as `![alt](path)` appear when the server stores images; if they do not, sync the folder again. Obsidian embeds (`![[image.png]]`) and other attachments keep references only.",
         ]},
         {title:"Insights unavailable",items:[
           "Use Try again or Refresh. Home, Knowledge and Sources remain available for reading and operations; a failed statistics request does not mean articles were lost.",

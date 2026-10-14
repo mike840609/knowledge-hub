@@ -8,5 +8,9 @@ export interface ImportSnapshotEntryRepository {
   markdownBytes(snapshotId: string): Promise<number>;
   findByUploadKey(snapshotId: string, uploadKey: string): Promise<ImportSnapshotEntry | null>;
   markMarkdownReceived(input: { entryId: string; rawMarkdown: string | null; sourceFileHash: string; diagnostics: ImportDiagnostic[] }): Promise<void>;
+  /** A verified image upload: the entry is received and its bytes are proven to match `contentHash`. */
+  markAssetReceived(entryId: string, contentHash: string): Promise<void>;
+  /** Asset hashes in snapshots that may still be finalized or applied. */
+  listActiveAssetHashes(): Promise<string[]>;
   replaceFinalizedEntries(snapshotId: string, entries: FinalizedImportSnapshotEntry[]): Promise<void>;
 }

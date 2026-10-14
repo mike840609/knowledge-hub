@@ -59,7 +59,7 @@ Knowledge Hub 是開源、可自行部署的知識管理應用。你可以直接
 | 個人工作空間 | My Space、個人筆記、草稿、收藏與最近閱讀；最近閱讀保留於裝置 |
 | Markdown 編輯 | 渲染式編輯器與 Markdown 原始碼切換、程式碼區塊、文件目錄與鍵盤快捷鍵 |
 | 草稿與版本 | 帳號草稿自動保存、失敗時本機恢復副本、不可變版本歷史、版本比較與還原、過期編輯衝突檢查 |
-| 匯入與同步 | Markdown folder 經 Preview → Confirm → Apply 匯入；再次選取來源資料夾以檢查與套用變更 |
+| 匯入與同步 | Markdown folder 經 Preview → Confirm → Apply 匯入；再次選取來源資料夾以檢查與套用變更。伺服器設有圖片儲存時（見[圖片](#圖片)），資料夾內的圖片會被儲存並顯示 |
 | 文件整理 | 文件／資料夾樹、移動、更名、封存與還原；來源管理的內容透過重新同步更新 |
 | 搜尋 | Workspace 範圍內的關鍵字搜尋與快速搜尋（`⌘K`／`Ctrl+K`） |
 | 知識連結 | `[[wikilink]]`、相對 `.md` 連結、Backlinks、Workspace／Local graph |
@@ -77,7 +77,7 @@ Preview 是固定的 staged snapshot。阻擋性診斷必須先處理；若來�
 
 ### 目前限制與未來方向
 
-- 資產目前只儲存 metadata／reference，尚無附件 binary 儲存服務。
+- 設定圖片儲存後會儲存圖片（見[圖片](#圖片)）：同步資料夾內的圖片，以及在 Hub 內撰寫的頁面中貼上或拖曳進來的圖片。其他附件與 Obsidian 圖片嵌入語法（`![[image.png]]`）仍只保留參照；在 Hub 內加入的圖片不會從儲存空間移除。
 - ZIP 匯出包含封存文件的最新已存版本，不包含草稿、版本歷史或附件 bytes；上限 64 MiB／9,999 份文件。
 - 文件以封存／還原管理生命週期，沒有一般使用者的永久刪除流程。
 - 搜尋目前以關鍵字為主。MCP server、semantic／hybrid retrieval 與進階 Agent memory 是未來方向，並非現有功能。
@@ -135,6 +135,7 @@ npm run dev
 | `KM_TEAM_WORKSPACES_ENABLED` | 預設 `false`；設為 `true` 開啟 Team 導覽與存取 |
 | `KM_IDENTITY_PROVIDER` | 預設 `local`；正式環境使用 `company-sso` 並接入 session reader |
 | `KM_IMPORT_*` | 匯入檔案數、大小、batch 與 snapshot quota |
+| `KM_BLOB_S3_*` 或 `KM_BLOB_DIR` | 同步資料夾圖片的儲存位置：S3 相容的 bucket（例如 MinIO）或一個目錄，見[圖片](#圖片)。都不設定時圖片只保留參照 |
 | `KM_TEST_DB_*`／`KM_E2E_DB_PREFIX` | 隔離測試資料庫設定；測試帳號需可建立與刪除指定 prefix 的資料庫 |
 
 匯入預設上限為 20,000 個 manifest entries、單篇 Markdown 5 MiB、Markdown 總量 256 MiB。完整上限以 `.env.example` 為準。Snapshot retention：BUILDING 2 小時、READY 30 分鐘、STALE／APPLIED 24 小時。有人開始匯入時，伺服器會在背景清除過期的 staging，每個程序最多每 10 分鐘一次。若要立即清除（例如沒有人在匯入的站台），可執行：
@@ -144,6 +145,63 @@ npx tsx scripts/db/cleanup-import-snapshots.ts
 ```
 
 此清理只處理匯入 staging，不刪除正式文件歷史。
+
+### 圖片
+
+設定圖片儲存後，資料夾內的 `png`、`jpg`、`jpeg`、`gif`、`webp`、`avif`、`svg` 檔案會在匯入時上傳，並顯示在文件與分享頁上。在設定之前就匯入的來源，下次同步時會補上圖片。以 Obsidian 嵌入語法（`![[image.png]]`）寫的圖片不會顯示，請改用 `![alt](path)`。圖片沒有版本：舊版本顯示的是資料夾目前的檔案。
+
+**在 Hub 內撰寫的頁面**，可以把圖片貼上或拖曳到編輯器（兩種檢視都可以）：PNG、JPEG、GIF、WebP 或 AVIF 每張最多 10 MiB，SVG 最多 2 MiB。圖片在每個來源內只存一份，以內容產生的名稱命名，頁面以 `![alt](/images/<雜湊>.png)` 引用，所以每個版本都保有當時的圖片。SVG 會原樣儲存；它以圖片方式顯示，並以沙箱標頭提供，所以其中的腳本不會執行。
+
+兩種儲存方式**擇一**設定。都不設定時圖片只保留參照；兩者都設定時伺服器會拒絕啟動。
+
+| 儲存方式 | 設定 | 適用情況 |
+| --- | --- | --- |
+| S3 相容的 bucket（MinIO） | `KM_BLOB_S3_ENDPOINT`、`KM_BLOB_S3_BUCKET`、`KM_BLOB_S3_ACCESS_KEY`、`KM_BLOB_S3_SECRET_KEY`；選用 `KM_BLOB_S3_PREFIX`、`KM_BLOB_S3_REGION`、`KM_BLOB_S3_TIMEOUT_MS` | 已經有人維運物件儲存。任意數量的應用伺服器都能共用 |
+| 目錄 | `KM_BLOB_DIR` | 單一伺服器搭配持久化 volume，且沒有物件儲存 |
+
+**MinIO 或其他 S3 相容服務。** 請先建立 bucket，應用程式不會自動建立。金鑰需要能在該 bucket 讀取、寫入、刪除與列出物件（`s3:GetObject`、`s3:PutObject`、`s3:DeleteObject`、`s3:ListBucket`）。物件以 path-style 定址：`<endpoint>/<bucket>/<prefix>sha256/…`，請求以 Signature Version 4 簽章。設定 `KM_BLOB_S3_PREFIX`（例如 `knowledge-hub`）可以把圖片集中在 bucket 的一個資料夾內。endpoint 若使用內部 CA 簽發的憑證，請用 `NODE_EXTRA_CA_CERTS` 讓 Node 信任它。伺服器啟動時會檢查 bucket：金鑰錯誤或 bucket 不存在仍會停止啟動；網路錯誤、逾時、HTTP 408／429 與 HTTP 5xx 則只記錄警告，讓儲存服務暫時中斷時仍能閱讀文字。每個 S3 請求從建立、上傳到讀完回應都有總時限，預設 30 秒，可透過 `KM_BLOB_S3_TIMEOUT_MS` 調整（整數 1–300000 毫秒）。圖片上傳會重試暫時性錯誤；若持續失敗，匯入會停止並提示稍後重試，不會套用這次變更。系統不會自動改成只保存參照或切換儲存後端。
+
+```bash
+KM_BLOB_S3_ENDPOINT=https://minio.example.internal:9000
+KM_BLOB_S3_BUCKET=knowledge-hub
+KM_BLOB_S3_ACCESS_KEY=...
+KM_BLOB_S3_SECRET_KEY=...
+KM_BLOB_S3_PREFIX=knowledge-hub
+```
+
+**Bucket 配置與規則。** 每張圖片是一個物件，位於 `<bucket>/<prefix>/sha256/<2 碼>/<2 碼>/<64 碼>`，以內容的 SHA-256 命名，沒有副檔名，也不含原始檔名。建議 prefix 使用應用程式名稱（例如 `knowledge-hub`），讓 bucket 日後可以放其他內容；各環境有各自的 MinIO 時，不需要再加環境這一層。
+
+- **一個 prefix 只對應一個資料庫。** 清理功能依它所連接的資料庫判斷哪些圖片沒人使用，所以兩個部署共用同一個 prefix 時會互相刪除對方的圖片。複製資料庫時，圖片也要另外複製一份。
+- **只有應用程式會寫入**，時機是匯入時，並先以雜湊驗證內容；MinIO 會再驗證一次。相同內容只存一份，且不會變動。
+- **只有清理功能會刪除**：沒有被引用、且超過 48 小時的圖片。請勿手動刪除物件，也不要對這個 prefix 設定生命週期過期規則，因為它無從得知哪些圖片仍在使用。
+- **Bucket 設定**：關閉公開與匿名存取（每次讀取都由應用程式檢查權限，不會給出儲存位址）。版本控制請關閉，或加上清除非當前版本的規則，否則清理後舊版本仍會留存。由儲存端管理的伺服器端加密可以使用；每次請求自帶金鑰的加密不支援。
+
+**本機開發**同樣使用 MinIO，讓圖片的儲存方式與正式環境一致。`.env.example` 已帶有對應 `compose.yaml` 中 MinIO 容器的四個 `KM_BLOB_S3_*` 設定，`make dev`、`make start` 與 `make bootstrap` 只在有效設定選擇本機 MinIO 時啟動該容器並建立 bucket。設定從 `.env` 讀取，已匯出的環境變數優先（包含刻意設成空值的設定）；使用目錄、遠端 S3 或關閉圖片儲存時會略過本機 MinIO。`make storage-up` 仍可明確啟動本機 MinIO，`make test-integration` 則會啟動它以測試 adapter。在這些設定出現之前建立的 `.env`，需要自行把那四行複製進去。從本機 MinIO 換成公司的 MinIO，只需要改這幾個值。MinIO 管理介面在 `http://127.0.0.1:9001`。
+
+**在 Kubernetes 上使用目錄。** 掛載一個 PersistentVolumeClaim，並把 `KM_BLOB_DIR` 指到掛載路徑。目錄必須在伺服器啟動前就存在，所以不要在映像檔裡預先建立它：沒掛上 volume 時應該直接啟動失敗，而不是寫進容器的檔案層。
+
+```yaml
+spec:
+  strategy: { type: Recreate }          # ReadWriteOnce 的 volume 不能同時被新舊 Pod 掛載
+  template:
+    spec:
+      securityContext: { fsGroup: 1000 } # 非 root 使用者必須能寫入
+      containers:
+        - name: knowledge-hub
+          env:
+            - { name: KM_BLOB_DIR, value: /var/lib/knowledge-hub/blobs }
+          volumeMounts:
+            - { name: blobs, mountPath: /var/lib/knowledge-hub/blobs }
+      volumes:
+        - name: blobs
+          persistentVolumeClaim: { claimName: knowledge-hub-blobs }
+```
+
+`ReadWriteOnce` 的 claim 代表只能有一個副本；要多副本需要 `ReadWriteMany` 的 storage class，或改用 S3 儲存。圖片請使用獨立的 claim，避免圖片寫滿時連帶影響 MariaDB。
+
+**在兩種儲存之間搬移。** 物件以內容雜湊命名，所以搬移只是複製 `sha256/` 目錄樹，資料庫不需要更動，例如：`mc mirror /var/lib/knowledge-hub/blobs/sha256 company/<bucket>/knowledge-hub/sha256`。
+
+**備份與修復。** 先備份資料庫、再備份圖片。圖片只會新增，所以比資料庫晚的備份一定包含資料庫引用的所有檔案。還原後，`make blobs-verify` 會列出檔案遺失的圖片，`make blobs-verify REPAIR=1` 會讓下次同步重新上傳。`make blobs-gc` 會移除沒有被引用的圖片；伺服器也會在背景自動執行。這些指令會使用 `.env` 所設定的那一種儲存。
 
 ## 部署
 
@@ -248,6 +306,7 @@ KM_E2E_PERSONAL_ONLY=true npm run test:e2e -- personal-workspace.spec.ts
 - **Team 入口無法使用**：預設 Coming soon；設定 `KM_TEAM_WORKSPACES_ENABLED=true` 並重啟。
 - **production 身分錯誤**：Local identity 不提供正式部署登入；需接入 SSO session reader。
 - **匯入無法 Apply**：先處理 Preview 的 blockers；409 版本衝突需重建 Preview，沒有 Force Apply。
+- **圖片沒有顯示**：確認已設定圖片儲存（見[圖片](#圖片)），再同步一次該資料夾，並執行 `make blobs-verify`。
 - **連結或圖譜缺少資料**：確認 migrations 已完成，再執行 `make db-reindex-links`；同步文件的 wikilink 問題請回來源修改。
 - **需要重建本機示範資料**：`make db-reset` 會刪除開發資料庫 volume 及其中全部內容，執行前先備份。
 

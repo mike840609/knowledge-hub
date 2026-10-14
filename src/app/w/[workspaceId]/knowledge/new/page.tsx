@@ -3,6 +3,8 @@ import { MarkdownArticle } from "@/components/knowledge/markdown-article";
 import { NewDocumentForm } from "@/components/knowledge/new-document-form";
 import { parseSeedTitle } from "@/server/authoring-input";
 import { findHubFolderLabel, findReadableDocumentHref, getWorkspaceShellModel } from "@/server/knowledge-read";
+import { configuredBlobStore } from "@/server/blob-store";
+import { findDefaultHubSourceId } from "@/server/source-images";
 import { isUuid } from "@/shared/ids/uuidv7";
 
 /**
@@ -39,6 +41,7 @@ export default async function NewNotePage({
       folder={folderId ? { id: folderId, label: folderLabel } : null}
       seedTitle={seedTitle}
       cancelHref={cancelHref}
+      images={configuredBlobStore() !== null ? { sourceId: await findDefaultHubSourceId(workspaceId) } : undefined}
     />
   );
 }

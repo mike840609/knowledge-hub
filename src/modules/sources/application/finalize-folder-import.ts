@@ -197,8 +197,9 @@ export class FinalizeFolderImportService {
     }
 
     const staged = await repositories.importSnapshotEntries.listBySnapshotId(snapshot.id);
-    if (staged.some((entry) => entry.entryType === "DOCUMENT" && entry.uploadStatus !== "RECEIVED")) {
-      throw importError("UPLOAD_INCOMPLETE", "Every Markdown file must be received before finalization.");
+    // Images are PENDING until their bytes are verified (upload-folder-import-asset.ts).
+    if (staged.some((entry) => entry.uploadStatus !== "RECEIVED")) {
+      throw importError("UPLOAD_INCOMPLETE", "Every Markdown file and image must be received before finalization.");
     }
 
     const normalized = normalizeEntries(staged);
@@ -261,6 +262,8 @@ export class FinalizeFolderImportService {
           const metadata = {
             size: entry.staged.assetSize,
             lastModified: entry.staged.assetLastModified?.toISOString() ?? null,
+            // Present only when this snapshot proved the bytes; `isStoredImage` reads it.
+            ...(entry.staged.sourceFileHash !== null && entry.staged.sourceFileHash === entry.staged.assetContentHash ? { stored: true } : {}),
           };
           assets.push({
             sourcePath: entry.sourcePath,

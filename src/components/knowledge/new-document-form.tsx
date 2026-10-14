@@ -19,6 +19,7 @@ export function NewDocumentForm({
   folder = null,
   seedTitle = null,
   cancelHref = null,
+  images,
 }: {
   workspaceId: string;
   workspaceName: string;
@@ -32,6 +33,8 @@ export function NewDocumentForm({
   seedTitle?: string | null;
   /** Where Cancel goes instead of the list: the document whose link this is for. Already checked by the page. */
   cancelHref?: string | null;
+  /** Set when this server stores images: the Source a note's images are read from, null until the Workspace has its Notes. */
+  images?: { sourceId: string | null };
 }) {
   const router = useRouter();
   const { access, confirmed } = useWorkspaceAuthorization();
@@ -76,6 +79,7 @@ export function NewDocumentForm({
 
   return (
     <DocumentComposer
+      images={images ? { uploadUrl: `/api/workspaces/${workspaceId}/images`, sourceId: images.sourceId } : undefined}
       workspaceId={workspaceId}
       draftKey={seedTitle === null ? { kind: "new", userId, workspaceId } : { kind: "new", userId, workspaceId, title: seedTitle }}
       standIn={standIn}

@@ -36,6 +36,7 @@ export type ImportUiState =
   | { kind: "IDLE" }
   | { kind: "PREPARING" }
   | { kind: "UPLOADING"; uploaded: number; total: number }
+  | { kind: "UPLOADING_IMAGES"; uploaded: number; total: number }
   | { kind: "FINALIZING"; files: number; startedAt: number }
   | { kind: "ERROR"; code: string; message: string };
 
@@ -319,10 +320,52 @@ async function uploadMarkdownBatches(
 }
 
 /**
+ * Sends the images the server asked for, a few at a time. The server names
+ * them: it skips one this folder's source already stores, and asks for none
+ * when it keeps images as references only.
+ */
+async function uploadImages(
+  snapshotId: string,
+  staged: StagedFile[],
+  uploadKeys: readonly string[],
+  onProgress: (uploaded: number, total: number) => void,
+  assertAllowed: () => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const byKey = new Map(staged.map((entry) => [entry.uploadKey, entry]));
+  const wanted = uploadKeys.flatMap((key) => byKey.get(key) ?? []);
+  let next = 0;
+  let uploaded = 0;
+  onProgress(0, wanted.length);
+  const worker = async (): Promise<void> => {
+    while (next < wanted.length) {
+      const entry = wanted[next++];
+      assertAllowed();
+      const response = await fetchWithTransientRetry(
+        `/api/source-imports/${snapshotId}/asset?uploadKey=${encodeURIComponent(entry.uploadKey)}`,
+        { method: "PUT", body: entry.file, signal },
+        async (response) => response,
+        assertAllowed,
+      );
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        if (response.status !== 404) requestWorkspaceAccessCheck(response.status, readErrorEnvelope(body)?.code);
+        const failure = readErrorCode(body, "Uploading an image failed.");
+        throw Object.assign(new Error(failure.message), { code: failure.code });
+      }
+      uploaded += 1;
+      onProgress(uploaded, wanted.length);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(ASSET_HASH_CONCURRENCY, wanted.length) }, worker));
+}
+
+/**
  * Shared folder-import session flow. HTTP contracts are unchanged:
  * POST /api/workspaces/:workspaceId/source-imports (new source),
  * POST /api/sources/:sourceId/source-imports (existing source),
  * POST /api/source-imports/:snapshotId/entries,
+ * PUT /api/source-imports/:snapshotId/asset (each image the server asks for),
  * POST /api/source-imports/:snapshotId/finalize.
  * Resolves with the snapshot id; reports progress through `onProgress` and
  * throws an Error carrying the machine-readable `code` on upload failure.
@@ -376,6 +419,8 @@ export async function runFolderImport(input: {
     throw Object.assign(new Error(failure.message), { code: failure.code });
   }
   const snapshotId = (session.body as { snapshotId: string }).snapshotId;
+  const assetUploads = (session.body as { assetUploads?: unknown }).assetUploads;
+  const imageKeys = Array.isArray(assetUploads) ? assetUploads.filter((key): key is string => typeof key === "string") : [];
   try {
     // Session creation is intentionally non-abortable: unlike upload/finalize,
     // it is not idempotent. If cancellation happened while it was in flight,
@@ -385,6 +430,12 @@ export async function runFolderImport(input: {
     await uploadMarkdownBatches(snapshotId, selection.staged, (uploaded, total) =>
       onProgress({ kind: "UPLOADING", uploaded, total }), assertAllowed, signal,
     );
+    if (imageKeys.length > 0) {
+      assertAllowed();
+      await uploadImages(snapshotId, selection.staged, imageKeys, (uploaded, total) =>
+        onProgress({ kind: "UPLOADING_IMAGES", uploaded, total }), assertAllowed, signal,
+      );
+    }
     assertAllowed();
     onProgress({ kind: "FINALIZING", files: selection.staged.filter((entry) => entry.markdown).length, startedAt: Date.now() });
     const finalized = await postJson(
@@ -419,6 +470,7 @@ export function finalizingText(files: number, elapsedSeconds?: number): string {
 function statusText(state: ImportUiState, now: number): string | null {
   if (state.kind === "PREPARING") return "Preparing the folder manifest…";
   if (state.kind === "UPLOADING") return `Uploading Markdown files… ${state.uploaded}/${state.total}`;
+  if (state.kind === "UPLOADING_IMAGES") return `Uploading images… ${state.uploaded}/${state.total}`;
   if (state.kind === "FINALIZING") return finalizingText(state.files, Math.max(0, Math.floor((now - state.startedAt) / 1000)));
   if (state.kind === "ERROR") return state.message;
   return null;
@@ -487,7 +539,7 @@ export function FolderImportForm({
     }
   }, [rememberedSourceId]);
   const [sampleLoading, setSampleLoading] = useState(false);
-  const busy = state.kind === "PREPARING" || state.kind === "UPLOADING" || state.kind === "FINALIZING";
+  const busy = state.kind === "PREPARING" || state.kind === "UPLOADING" || state.kind === "UPLOADING_IMAGES" || state.kind === "FINALIZING";
   // Ticks once a second while finalizing so the elapsed time moves; idle otherwise.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {

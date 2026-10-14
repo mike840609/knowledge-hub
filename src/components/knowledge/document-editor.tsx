@@ -16,6 +16,7 @@ export function DocumentEditor({
   currentRevisionId,
   initialTitle,
   initialMarkdown,
+  imagesStored = false,
 }: {
   workspaceId: string;
   sourceId: string;
@@ -29,10 +30,13 @@ export function DocumentEditor({
   currentRevisionId: string;
   initialTitle: string;
   initialMarkdown: string;
+  /** Whether this server stores images: a paste or a drop is taken only then. */
+  imagesStored?: boolean;
 }) {
   const documentHref = `/w/${workspaceId}/knowledge/${sourceId}/${documentId}`;
   return (
     <DocumentComposer
+      images={imagesStored ? { uploadUrl: `/api/sources/${sourceId}/images`, sourceId } : undefined}
       workspaceId={workspaceId}
       draftKey={{ kind: "edit", userId, documentId }}
       standIn={standIn}
