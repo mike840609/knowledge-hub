@@ -165,6 +165,12 @@ This adds no caller-less entry: the two that exist (`readShared`,
 selection" control (or the sentence from §2) before the Comments control; the
 rail has the same "Add comment" row the shared page has. Starting one opens the
 rail. A document with no discussion and no selection still shows nothing.
+*Amended 2026-10-15:* the Comment control, and the sentence of §2 in its place,
+are no longer in the header, on either page: they float beside the selection,
+above its first line (below it where that line is at the article's top), in the
+reading box. Choosing it opens the rail with the comment box level with the
+passage (`2026-10-12-owner-comments-rail-design.md`, 2026-10-15). The rail's
+"Add comment" row stays, as the way in from the keyboard.
 
 ## 5. Limits that remain
 

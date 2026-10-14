@@ -109,7 +109,8 @@ test("a selection that cannot take a comment says why, where the button would ha
   const doc = await createReviewDocument(request, "See [another page](./another.md) here.\n\nFirst plain passage.\n\nSecond plain passage.");
   await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
   await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
-  const entry = page.locator(".kh-review-entry");
+  // Beside the selection, not in the page's bar.
+  const entry = page.locator(".kh-selection-bubble");
   const button = entry.getByRole("button", { name: "Comment on selection" });
 
   await selectText(page, "p", "here");
@@ -139,7 +140,7 @@ test("the owner starts a discussion on their own document, and a reader of its l
   await expect(page.getByRole("button", { name: /^(Open|Hide) discussions/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Comment on selection" })).toHaveCount(0);
 
-  // What cannot take a comment says so in the header, where the control would be.
+  // What cannot take a comment says so beside the selection, where the control would be.
   await selectText(page, "p", "too");
   await expect(page.getByRole("status").filter({ hasText: "This passage cannot take a comment." })).toBeVisible();
   await expect(page.getByRole("button", { name: "Comment on selection" })).toHaveCount(0);

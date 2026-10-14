@@ -7,7 +7,7 @@ import { RefreshCw, MessageSquare, MessageSquarePlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { ReviewFilterMenu, ReviewThreadList, reviewRequest, type ReviewFilter } from "./review-thread-list";
-import { ReviewComposer, useReviewSelection } from "./review-composer";
+import { ReviewComposer, ReviewSelectionBubble, useReviewSelection } from "./review-composer";
 import { ReviewPanelShell } from "./review-panel-shell";
 import { useReviewToggleKey } from "./review-entry";
 import { REVIEW_TOGGLE_SHORTCUT } from "@/components/actions/action-registry";
@@ -57,9 +57,6 @@ export function SharedReviewPanel({ token, revisionId, markdown, children }: { t
   const draft = composer && inline && !revisionChanged ? { anchor: selection.chosen!, composer } : undefined;
   return <>
     <div className="kh-review-entry kh-reading-column sticky top-0 z-20 flex items-center justify-end gap-2 bg-kh-bg py-2">
-      {/* Said where the button would have been: a selection that cannot take a comment, and why. */}
-      {canComment && !selection.ready && selection.hint && <p role="status" className="min-w-0 text-right text-body-sm text-kh-text-muted">{selection.hint}</p>}
-      {!open && selection.ready && canComment && <Button type="button" variant="soft" aria-label="Comment on selection" onPointerDown={event => event.preventDefault()} onClick={() => { selection.capture(); changeOpen(true); }}><MessageSquarePlus className="size-4" aria-hidden="true" />Comment</Button>}
       <Button ref={entryRef} type="button" variant="ghost" aria-label={`${open ? "Hide discussions" : "Open discussions"}${result ? `, ${result.threads.length} comments` : ""}`} aria-expanded={open} aria-keyshortcuts={REVIEW_TOGGLE_SHORTCUT} aria-controls="shared-document-discussions" onPointerDown={event => event.preventDefault()} onClick={toggle}>
         <MessageSquare className="size-4" aria-hidden="true" />Comments{result && result.threads.length > 0 ? ` (${result.threads.length})` : ""}
       </Button>
@@ -71,6 +68,7 @@ export function SharedReviewPanel({ token, revisionId, markdown, children }: { t
     <div className="kh-review-document" data-review-ready={result || error ? "" : undefined} data-review-open={open ? "" : undefined} data-review-inline={inline ? "" : undefined}>
       <div ref={readingRef} className="kh-review-reading">
         {children}
+        {canComment && <ReviewSelectionBubble place={selection.place} ready={selection.ready} hint={selection.hint} onComment={() => { selection.capture(); changeOpen(true); }} />}
         <ReviewPassageMarkers readingRef={readingRef} markdown={markdown} threads={revisionChanged ? undefined : result?.threads} />
       </div>
       <aside id="shared-document-discussions" className="kh-review-panel" aria-label="Document discussions" onKeyDown={event => { if (!event.defaultPrevented && event.key === "Escape" && reviewRailInline()) changeOpen(false); }}>
@@ -88,7 +86,7 @@ export function SharedReviewPanel({ token, revisionId, markdown, children }: { t
       {result && <div className="mt-3">
         {revisionChanged && <p role="status" className="mb-3 text-body-sm">Document changed. Refresh this page before selecting or locating a passage. You can still reply to existing discussions.</p>}
         {/* The one thing a reader does here that an owner does not, on a row of its own. */}
-        {canComment && <div className="mb-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={selection.capture} aria-label="Comment on selection"><MessageSquarePlus className="size-4" aria-hidden="true" />Add comment</Button></div>}
+        {canComment && <div className="mb-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={selection.capture} aria-label="Add comment from selected text"><MessageSquarePlus className="size-4" aria-hidden="true" />Add comment</Button></div>}
         {!result.writesEnabled && <p className="mb-3 text-body-sm text-kh-text-muted">{result.callerUserId === null ? "Sign in to add a comment." : "Adding comments is currently disabled."}</p>}
       </div>}
       </div>

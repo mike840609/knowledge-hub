@@ -10,7 +10,7 @@ import { awaitingOwner, dismissedKey, opensOnArrival, parseDismissed } from "./r
 import { useShareCommentUnread } from "./share-comment-notifications";
 import { useReviewEntry, useReviewToggleKey } from "./review-entry";
 import { useReviewHighlights } from "./review-highlights";
-import { ReviewComposer, useReviewSelection } from "./review-composer";
+import { ReviewComposer, ReviewSelectionBubble, useReviewSelection } from "./review-composer";
 import { ReviewPanelShell } from "./review-panel-shell";
 import { ReviewBlockComment } from "./review-block-comment";
 import { ReviewPassageMarkers } from "./review-passage-markers";
@@ -95,15 +95,12 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
   const toggle = useCallback(() => changeOpen(!open), [changeOpen, open]);
   useReviewToggleKey(count > 0 || open ? toggle : undefined);
   const awaiting = result?.threads.filter(thread => thread.status === "OPEN").length ?? 0;
-  // Only where there is something for the header to offer: discussions to open, a selection to
-  // comment on, or a word on why it cannot be. On a document with none of them this would be a
-  // control that opens an empty panel, on every document.
-  const { ready, hint, capture } = selection;
-  const startHere = canComment && ready && !open;
-  const said = canComment && !ready ? hint : undefined;
+  // Only where there is something for the header to offer: discussions to open. On a document with
+  // none this would be a control that opens an empty panel, on every document. A selection is
+  // offered its comment beside it (`ReviewSelectionBubble`), not here.
   useEffect(() => {
-    publish?.(count > 0 || open || startHere || said || unreadCount > 0 ? { count, awaiting, unread: unreadCount, open, toggle, comment: startHere ? () => { capture(); changeOpen(true); } : undefined, hint: said } : null);
-  }, [publish, count, awaiting, unreadCount, open, toggle, changeOpen, startHere, said, capture]);
+    publish?.(count > 0 || open || unreadCount > 0 ? { count, awaiting, unread: unreadCount, open, toggle } : null);
+  }, [publish, count, awaiting, unreadCount, open, toggle]);
   useEffect(() => () => publish?.(null), [publish]);
   const composer = selection.chosen && <ReviewComposer anchor={selection.chosen} onCancel={selection.clear} onSubmit={async (body, idempotencyKey) => {
     const created = await reviewRequest<{ id: string }>(base, { expectedRevisionId: revisionId, anchor: selection.chosen, body, idempotencyKey });
@@ -117,6 +114,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
     <div className="kh-review-document" data-review-ready={result || error ? "" : undefined} data-review-open={open ? "" : undefined} data-review-inline={inline ? "" : undefined}>
       <div ref={readingRef} className="kh-review-reading">
         {children}
+        {canComment && <ReviewSelectionBubble place={selection.place} ready={selection.ready} hint={selection.hint} onComment={() => { selection.capture(); changeOpen(true); }} />}
         {canComment && <ReviewBlockComment readingRef={readingRef} markdown={markdown} chosen={selection.chosen} onChoose={anchor => { selection.choose(anchor); changeOpen(true); }} />}
         <ReviewPassageMarkers readingRef={readingRef} markdown={markdown} threads={located} />
       </div>
@@ -133,7 +131,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
             {error && <p role="alert" className="mt-3 text-body-sm">{error}</p>}
             {selection.refusal && <p role="status" className="mt-3 text-body-sm">{selection.refusal}</p>}
             {revisionChanged && <p role="status" className="mt-3 text-body-sm">Document changed. Refresh this page before selecting or locating a passage.</p>}
-            {canComment && <div className="mt-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={selection.capture} aria-label="Comment on selection"><MessageSquarePlus className="size-4" aria-hidden="true" />Add comment</Button></div>}
+            {canComment && <div className="mt-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={selection.capture} aria-label="Add comment from selected text"><MessageSquarePlus className="size-4" aria-hidden="true" />Add comment</Button></div>}
           </div>
           {composer && !draft && <div className="mt-3">{composer}</div>}
           {result && <div className="mt-3"><ReviewThreadList draft={draft} filter={filter} onFilterChange={setFilter} railMarkdown={revisionChanged ? undefined : markdown} activeThreadId={activeThreadId} onActivate={setActiveThreadId}

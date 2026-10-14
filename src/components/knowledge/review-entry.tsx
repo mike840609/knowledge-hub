@@ -31,10 +31,6 @@ export type ReviewEntry = {
   unread: number;
   open: boolean;
   toggle: () => void;
-  /** Starts a discussion on what is selected; absent while nothing selected can take one. */
-  comment?: () => void;
-  /** Why what is selected cannot take one. */
-  hint?: string;
 };
 
 type Shared = {

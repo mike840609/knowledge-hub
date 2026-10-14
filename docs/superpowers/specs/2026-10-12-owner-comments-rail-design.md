@@ -125,7 +125,8 @@ the passage, the box stays at the drawer's top.
 **A document with no discussion** shows no comments control and reserves no
 margin for marks. The control appears in the header once the discussions have
 loaded and there is at least one; nothing moves when it does. *(2026-10-13: selecting text
-that can take a comment also shows "Comment on selection" there.)*
+that can take a comment also shows "Comment on selection" there. 2026-10-15: no longer — that
+control floats beside the selection instead; see the anchors spec §4.)*
 
 ## The order of the controls
 
