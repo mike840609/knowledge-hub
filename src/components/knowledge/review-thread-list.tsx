@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import type { OwnerReviewThreadView, ReviewThreadView } from "@/modules/knowledge/domain/document-review";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import type { OwnerReviewThreadView, ReviewAnchor, ReviewThreadView } from "@/modules/knowledge/domain/document-review";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Timestamp } from "@/components/ui/timestamp";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,7 +10,7 @@ import { MenuRoot, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/me
 import { buttonClasses } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
-import { compareReviewPassages, useReviewRailLayout } from "./review-rail-layout";
+import { compareReviewPassages, useReviewRailLayout, type RailCard } from "./review-rail-layout";
 import { matchesShortcut } from "@/lib/shortcut-keys";
 
 /** Sends what is written, as it saves a document in the composer. Enter alone stays a line of the comment. */
@@ -57,6 +57,8 @@ export function ReviewReplyForm({ onSubmit, label = "Reply", openRequest = 0, in
 }
 
 export type ReviewFilter = "ALL" | "OPEN" | "RESOLVED";
+/** The draft's place in the rail layout; no thread ID (a UUID) can equal it. */
+const DRAFT_ID = "draft";
 const FILTER_NAMES: Record<ReviewFilter, string> = { ALL: "All comments", OPEN: "Open", RESOLVED: "Resolved" };
 
 /** Which discussions are listed. The list draws it above itself unless a panel takes it for its heading. */
@@ -64,7 +66,7 @@ export function ReviewFilterMenu({ value, onChange }: { value: ReviewFilter; onC
   return <MenuRoot><MenuTrigger className={buttonClasses({ variant: "ghost" })} aria-label="Filter discussions">{FILTER_NAMES[value]}<ChevronDown className="size-4" aria-hidden="true" /></MenuTrigger><MenuContent>{(Object.keys(FILTER_NAMES) as ReviewFilter[]).map(option => <MenuItem key={option} onClick={() => onChange(option)}>{FILTER_NAMES[option]}</MenuItem>)}</MenuContent></MenuRoot>;
 }
 
-export function ReviewThreadList({ threads, writesEnabled, reply, moderate, author, canResolve = true, focusAnchor, railMarkdown, activeThreadId, onActivate, filter: controlled, onFilterChange }: {
+export function ReviewThreadList({ threads, writesEnabled, reply, moderate, author, canResolve = true, focusAnchor, railMarkdown, activeThreadId, onActivate, filter: controlled, onFilterChange, draft }: {
   threads: (ReviewThreadView | OwnerReviewThreadView)[];
   writesEnabled: boolean;
   reply: (threadId: string, body: string, key: string) => Promise<void>;
@@ -79,6 +81,8 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
   /** Given both, the filter is the caller's — state and control — and the list draws none of its own. */
   filter?: ReviewFilter;
   onFilterChange?: (filter: ReviewFilter) => void;
+  /** A new comment being written, placed in the rail level with its passage, ahead of every card. */
+  draft?: { anchor: ReviewAnchor; composer: ReactNode };
 }) {
   const [pendingHide, setPendingHide] = useState<{ threadId: string; commentId?: string }>();
   const [pendingDelete, setPendingDelete] = useState<{ threadId: string; commentId: string }>();
@@ -105,14 +109,20 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
     const filtered = threads.filter(thread => filter === "ALL" || thread.status === filter);
     return railMarkdown === undefined ? filtered : filtered.sort(compareReviewPassages);
   }, [threads, filter, railMarkdown]);
-  const { ref: railRef, layout } = useReviewRailLayout(visible, railMarkdown, activeThreadId);
+  // Keyed on the anchor: the composer element is new on every render, the place it needs is not.
+  const draftAnchor = draft?.anchor;
+  const placed = useMemo<RailCard[]>(() => !draftAnchor ? visible
+    : [...visible, { id: DRAFT_ID, currentAnchor: { match: "MATCHED" as const, anchor: draftAnchor } }].sort(compareReviewPassages), [visible, draftAnchor]);
+  const { ref: railRef, layout } = useReviewRailLayout(placed, railMarkdown, draft ? DRAFT_ID : activeThreadId);
   return <div className="space-y-3">
     <ConfirmDialog open={!!pendingHide} onOpenChange={open => { if (!open) setPendingHide(undefined); }} title="Hide from reviewers?" description="This content will be hidden from all reviewers. It remains available to you for moderation." confirmLabel="Confirm hide" onConfirm={() => { if(pendingHide) void act(pendingHide.threadId,"visibility","HIDDEN",pendingHide.commentId,true); }} />
     <ConfirmDialog open={!!pendingDelete} onOpenChange={open => { if (!open) setPendingDelete(undefined); }} title="Delete comment?" description="Your comment will be removed for everyone. This cannot be undone." confirmLabel="Delete comment" onConfirm={() => { if (pendingDelete) void remove(pendingDelete); }} />
     {threads.length > 0 && !onFilterChange && <ReviewFilterMenu value={filter} onChange={setFilter} />}
     {error && <p role="alert" className="text-body-sm">{error}</p>}
-    {visible.length === 0 && <p className="py-6 text-body-sm text-kh-text-muted">{threads.length === 0 ? "No comments yet." : "No comments here."}</p>}
+    {visible.length === 0 && !draft && <p className="py-6 text-body-sm text-kh-text-muted">{threads.length === 0 ? "No comments yet." : "No comments here."}</p>}
     <div ref={railRef} data-review-rail={railMarkdown !== undefined ? "" : undefined} data-positioned={layout ? "" : undefined} className="kh-review-thread-list" style={layout ? { "--review-list-height": `${layout.height}px` } as CSSProperties : undefined}>
+    {/* The box is placed before its field mounts: the field takes focus on mounting, and focused at the rail's top it scrolls the page away from the passage. */}
+    {draft && <section data-review-draft={DRAFT_ID} aria-label="New comment" style={layout ? { "--review-thread-top": `${layout.positions[DRAFT_ID] ?? 0}px` } as CSSProperties : undefined}>{layout?.positions[DRAFT_ID] !== undefined && draft.composer}</section>}
     {visible.map(thread => {
       const owner = "visibility" in thread ? thread : undefined;
       const active = activeThreadId === thread.id;

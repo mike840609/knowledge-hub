@@ -36,7 +36,10 @@ export function positionReviewThreads(items: RailItem[], activeId?: string): Rai
   };
 }
 
-export function compareReviewPassages(a: ReviewThreadView, b: ReviewThreadView) {
+/** What the rail places: a thread, or the new comment being written (`data-review-draft`). */
+export type RailCard = Pick<ReviewThreadView, "id" | "currentAnchor">;
+
+export function compareReviewPassages(a: RailCard, b: RailCard) {
   const left = a.currentAnchor.match === "OUTDATED" ? undefined : a.currentAnchor.anchor;
   const right = b.currentAnchor.match === "OUTDATED" ? undefined : b.currentAnchor.anchor;
   if (!left || !right) return left ? -1 : right ? 1 : 0;
@@ -48,7 +51,7 @@ export function compareReviewPassages(a: ReviewThreadView, b: ReviewThreadView) 
 }
 
 /** Measure live ranges, so wrapping, images, replies and font loading cannot stale the rail. */
-export function useReviewRailLayout(threads: ReviewThreadView[], markdown?: string, activeId?: string) {
+export function useReviewRailLayout(threads: RailCard[], markdown?: string, activeId?: string) {
   const ref = useRef<HTMLDivElement>(null);
   const [layout, setLayout] = useState<RailLayout>();
   const measureRef = useRef<(() => void) | null>(null);
@@ -63,7 +66,7 @@ export function useReviewRailLayout(threads: ReviewThreadView[], markdown?: stri
       return;
     }
     let frame = 0;
-    const cards = Array.from(list.querySelectorAll<HTMLElement>("[data-review-thread]"));
+    const cards = Array.from(list.querySelectorAll<HTMLElement>("[data-review-thread], [data-review-draft]"));
     const resolve = createReviewRangeResolver(article, markdown);
     const ranges = new Map(threads.map(thread => [thread.id,
       thread.currentAnchor.match !== "OUTDATED" && thread.currentAnchor.anchor ? resolve(thread.currentAnchor.anchor) : null,
@@ -75,7 +78,7 @@ export function useReviewRailLayout(threads: ReviewThreadView[], markdown?: stri
       }
       const listTop = list.getBoundingClientRect().top;
       const items = threads.flatMap(thread => {
-        const card = cards.find(element => element.dataset.reviewThread === thread.id);
+        const card = cards.find(element => (element.dataset.reviewThread ?? element.dataset.reviewDraft) === thread.id);
         if (!card) return [];
         const range = ranges.get(thread.id);
         return [{ id: thread.id, top: range ? range.getBoundingClientRect().top - listTop : null, height: card.getBoundingClientRect().height }];

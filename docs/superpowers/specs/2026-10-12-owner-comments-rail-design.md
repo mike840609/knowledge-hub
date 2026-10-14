@@ -112,11 +112,21 @@ goes through. A paragraph in a closed disclosure has no button, since it has no
 place on the page. Beside an open rail the buttons are not shown — that padding
 is the rail's — and "Add comment" there is the way in. Only the owner's page has
 them: a shared page's readers comment by selecting, as before.
+*Amended 2026-10-15:* where the discussions are a rail, the comment box for a
+new discussion is a card of the rail, level with the passage it is about — not
+pinned at the rail's top, where in a long document it sat a screen away from
+what was selected. It is placed as a selected card is, ahead of every other
+card, and the cards on or near the same passage move aside rather than under
+it; the caret goes into it without the page scrolling. This holds on the shared
+page too, and for each way in: the header's "Comment on selection", the rail's
+"Add comment", and the paragraph button. Where they are a drawer, which covers
+the passage, the box stays at the drawer's top.
 
 **A document with no discussion** shows no comments control and reserves no
 margin for marks. The control appears in the header once the discussions have
 loaded and there is at least one; nothing moves when it does. *(2026-10-13: selecting text
-that can take a comment also shows "Comment on selection" there.)*
+that can take a comment also shows "Comment on selection" there. 2026-10-15: no longer — that
+control floats beside the selection instead; see the anchors spec §4.)*
 
 ## The order of the controls
 
