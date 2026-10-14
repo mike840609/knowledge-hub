@@ -23,6 +23,25 @@ async function createMySpaceDocument(page: Page, title: string, body: string): P
 }
 
 test.describe("wikilinks and backlinks in My Space", () => {
+  test("a link to a document shows its title and opening on hover, asked for only then", async ({ page }) => {
+    const stamp = Date.now();
+    const targetTitle = `Previewed Note ${stamp}`;
+    await createMySpaceDocument(page, targetTitle, "# Opening\n\nThe first words of the target.\n\n```js\nnotShown()\n```");
+    const source = await createMySpaceDocument(page, `Previewing Note ${stamp}`, `See [[${targetTitle}]] for the details.`);
+    const asked: string[] = [];
+    page.on("request", (request) => { if (new URL(request.url()).pathname.endsWith("/preview")) asked.push(request.url()); });
+
+    await page.goto(source.url);
+    const link = page.locator("article").first().getByRole("link", { name: targetTitle, exact: true });
+    await expect(link).toBeVisible();
+    expect(asked).toHaveLength(0);
+
+    await link.hover();
+    await expect(page.getByText("Opening The first words of the target.", { exact: true })).toBeVisible(ROUND_TRIP);
+    await expect(page.getByText("notShown")).toHaveCount(0);
+    expect(asked).toHaveLength(1);
+  });
+
   test("a wikilink reaches its document, a missing one is marked, and the target lists what links to it", async ({ page }) => {
     const stamp = Date.now();
     const targetTitle = `Target Note ${stamp}`;
