@@ -33,7 +33,8 @@ export function SidebarFrame({ collapsed, onExpand, children }: { collapsed: boo
   useEffect(() => {
     if (!peeking) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !event.defaultPrevented) setPeeking(false);
+      // Esc closes the innermost layer: a menu opened from the sidebar takes it before the peek does.
+      if (event.key === "Escape" && !event.defaultPrevented && !asideRef.current?.querySelector("[data-popup-open]")) setPeeking(false);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -43,6 +44,8 @@ export function SidebarFrame({ collapsed, onExpand, children }: { collapsed: boo
     if (leaveTimer.current !== null) window.clearTimeout(leaveTimer.current);
   }, []);
 
+  // The edge and » start a peek on movement, not on entry: after Esc the pointer is still over them, and
+  // the boundary event the layout change fires would otherwise bring the sidebar straight back.
   function startPeek() {
     if (leaveTimer.current !== null) window.clearTimeout(leaveTimer.current);
     if (collapsed && window.matchMedia("(hover: hover)").matches) setPeeking(true);
@@ -51,8 +54,9 @@ export function SidebarFrame({ collapsed, onExpand, children }: { collapsed: boo
   function endPeek() {
     if (leaveTimer.current !== null) window.clearTimeout(leaveTimer.current);
     leaveTimer.current = window.setTimeout(() => {
-      // A menu opened from the sidebar draws outside it; going to it is not leaving.
-      if (asideRef.current?.querySelector("[data-popup-open]")) return;
+      // A menu opened from the sidebar draws outside it; going to it is not leaving. Look again
+      // once it closes: closing it with the pointer elsewhere fires no pointerleave to start over.
+      if (asideRef.current?.querySelector("[data-popup-open]")) return endPeek();
       setPeeking(false);
     }, PEEK_LEAVE_MS);
   }
@@ -87,42 +91,49 @@ export function SidebarFrame({ collapsed, onExpand, children }: { collapsed: boo
     setStoredWidth(next);
   }
 
-  const position = peeking ? "fixed inset-y-0 left-0 z-40 hidden border-r shadow-popover lg:block" : hidden ? "relative hidden lg:block" : "relative hidden border-r lg:block";
+  // The placeholder alone holds the column in the page's flow. Collapsed, the aside is an overlay even
+  // when hidden (width 0), so dismissing a peek never puts it back in flow to push the page.
+  const overlay = collapsed ? "fixed inset-y-0 left-0 z-40" : "relative";
+  const edge = !collapsed || peeking ? "border-r" : "";
+  const shadow = peeking ? "shadow-popover" : "";
+  const transition = dragWidth === null ? "transition-[width] duration-160 ease-out" : "";
   return (
     <>
-      <aside
-        ref={asideRef}
-        aria-label="Navigation"
-        inert={hidden}
-        data-peeking={peeking ? "" : undefined}
-        onPointerEnter={startPeek}
-        onPointerLeave={peeking ? endPeek : undefined}
-        style={{ width: hidden ? 0 : width }}
-        className={`shrink-0 overflow-hidden border-kh-border ${position} ${dragWidth === null ? "transition-[width] duration-160 ease-out" : ""}`}
-      >
-        <div className="h-full" style={{ width }}>{children}</div>
-        {!collapsed ? (
-          <div
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Resize navigation"
-            aria-valuemin={NAV_WIDTH.min}
-            aria-valuemax={NAV_WIDTH.max}
-            aria-valuenow={width}
-            tabIndex={0}
-            onPointerDown={onHandlePointerDown}
-            onKeyDown={onHandleKeyDown}
-            onDoubleClick={() => setStoredWidth(NAV_WIDTH.default)}
-            className="absolute inset-y-0 right-0 w-1 cursor-col-resize touch-none hover:bg-kh-border-strong focus-visible:bg-kh-border-strong focus-visible:outline-none"
-          />
-        ) : null}
-      </aside>
+      <div style={{ width: collapsed ? 0 : width }} className={`relative hidden shrink-0 overflow-hidden lg:flex ${transition}`}>
+        <aside
+          ref={asideRef}
+          aria-label="Navigation"
+          inert={hidden}
+          data-peeking={peeking ? "" : undefined}
+          onPointerEnter={startPeek}
+          onPointerLeave={peeking ? endPeek : undefined}
+          style={{ width: hidden ? 0 : width }}
+          className={`hidden shrink-0 overflow-hidden border-kh-border lg:block ${overlay} ${edge} ${shadow} ${transition}`}
+        >
+          <div className="h-full" style={{ width }}>{children}</div>
+          {!collapsed ? (
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize navigation"
+              aria-valuemin={NAV_WIDTH.min}
+              aria-valuemax={NAV_WIDTH.max}
+              aria-valuenow={width}
+              tabIndex={0}
+              onPointerDown={onHandlePointerDown}
+              onKeyDown={onHandleKeyDown}
+              onDoubleClick={() => setStoredWidth(NAV_WIDTH.default)}
+              className="absolute inset-y-0 right-0 w-1 cursor-col-resize touch-none hover:bg-kh-border-strong focus-visible:bg-kh-border-strong focus-visible:outline-none"
+            />
+          ) : null}
+        </aside>
+      </div>
       {collapsed ? (
         <>
-          <div aria-hidden="true" onPointerEnter={startPeek} onPointerLeave={endPeek} className="fixed inset-y-0 left-0 z-30 hidden w-2 lg:block" />
+          <div aria-hidden="true" onPointerMove={startPeek} onPointerLeave={endPeek} className="fixed inset-y-0 left-0 z-30 hidden w-2 lg:block" />
           <div className="fixed left-2 top-2 z-30 hidden lg:block">
             <Tooltip label="Expand navigation" shortcut={NAV_TOGGLE_SHORTCUT} side="right">
-              <button type="button" onClick={onExpand} onPointerEnter={startPeek} onPointerLeave={endPeek} aria-label="Expand navigation" aria-keyshortcuts={NAV_TOGGLE_SHORTCUT} className={buttonClasses({ variant: "ghost", icon: true })}>
+              <button type="button" onClick={onExpand} onPointerMove={startPeek} onPointerLeave={endPeek} aria-label="Expand navigation" aria-keyshortcuts={NAV_TOGGLE_SHORTCUT} className={buttonClasses({ variant: "ghost", icon: true })}>
                 <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
               </button>
             </Tooltip>

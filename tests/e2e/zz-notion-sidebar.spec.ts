@@ -1,9 +1,21 @@
+import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures/test";
 import { mySpace } from "./fixtures/organize";
 
 // Mirrors scripts/db/seed.ts BROWSER_FIXTURE_IDS.
 const QUERY_MASTER_WORKSPACE = "0199f100-0000-7000-8000-000000000001";
 const ROUND_TRIP = { timeout: 15_000 };
+
+/** Every distinct x that `main` has over the next `ms`, a frame at a time: a page that jumps and comes back shows both. */
+const mainXWithin = (page: Page, ms: number) => page.evaluate(async (window) => {
+  const main = document.querySelector("main")!;
+  const seen = new Set<number>();
+  for (const end = performance.now() + window; performance.now() < end;) {
+    seen.add(main.getBoundingClientRect().x);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+  }
+  return [...seen];
+}, ms);
 
 test.describe("one sidebar", () => {
   test("the tree is on a page that is not Knowledge, and opening a document from it keeps what was expanded", async ({ page }) => {
@@ -143,8 +155,12 @@ test.describe("one sidebar", () => {
     await expect(aside.getByRole("tree", { name: "Knowledge tree" }).first()).toBeVisible(ROUND_TRIP);
     expect((await main.boundingBox())!.x).toBe(mainLeft); // over the page, not pushing it
 
+    await expect.poll(async () => (await aside.boundingBox())?.width ?? 0).toBe(256);
+    const afterEsc = mainXWithin(page, 600); // the slide-out takes 160ms; the page must not move while it does
     await page.keyboard.press("Escape");
     await expect(aside).not.toHaveAttribute("data-peeking", "");
+    expect(await afterEsc).toEqual([mainLeft]);
+    await expect.poll(async () => (await aside.boundingBox())?.width ?? 0).toBe(0);
 
     await page.mouse.move(400, 400);
     await page.mouse.move(2, 400);
@@ -164,8 +180,35 @@ test.describe("one sidebar", () => {
     await expect(aside).toHaveAttribute("data-peeking", "");
     // The slide-in takes a moment; a pointer that moves in before it ends is still on the page.
     await expect.poll(async () => (await aside.boundingBox())?.width ?? 0).toBe(256);
+    const mainLeft = (await page.locator("main").boundingBox())!.x;
+    const afterLeave = mainXWithin(page, 1_000); // the 300ms wait plus the slide-out
     await page.mouse.move(100, 400);
     await page.mouse.move(800, 400);
+    await expect(aside).not.toHaveAttribute("data-peeking", "", { timeout: 2_000 });
+    expect(await afterLeave).toEqual([mainLeft]);
+  });
+
+  test("a peek that outlived a menu opened from it hides once the menu is closed with the pointer elsewhere", async ({ page }) => {
+    await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/graph`);
+    await page.getByRole("button", { name: "Collapse navigation" }).click();
+    const aside = page.getByRole("complementary", { name: "Navigation" });
+    await page.mouse.move(400, 400);
+    await page.mouse.move(2, 400);
+    await expect(aside).toHaveAttribute("data-peeking", "");
+    await expect.poll(async () => (await aside.boundingBox())?.width ?? 0).toBe(256);
+    const trigger = aside.getByRole("button", { name: /^Actions for / }).first();
+    await expect(trigger).toBeVisible(ROUND_TRIP);
+    await trigger.click();
+    const menu = page.getByRole("menu");
+    await expect(menu).toBeVisible();
+    await page.mouse.move(800, 400);
+    // A negative claim needs a window: the leave timer fires (300ms) while the menu is open, twice over.
+    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 800)));
+    await expect(aside).toHaveAttribute("data-peeking", "");
+    // Esc closes the menu, the layer on top, and leaves the peek to the leave timer; no pointer event
+    // reaches the sidebar to start that over.
+    await page.keyboard.press("Escape");
+    await expect(menu).toHaveCount(0);
     await expect(aside).not.toHaveAttribute("data-peeking", "", { timeout: 2_000 });
   });
 });
