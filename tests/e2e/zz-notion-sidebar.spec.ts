@@ -229,15 +229,17 @@ test.describe("one sidebar", () => {
   test("a folder imported while the sidebar is open appears in it without a reload", async ({ page, request }) => {
     const workspaceId = await mySpace(page);
     const sourceName = unique("Imported");
+    // A workspace with nothing in it has no explorer; a note gives the sidebar a tree to be stale.
+    expect((await request.post(`/api/workspaces/${workspaceId}/documents`, { data: { title: unique("Seed"), markdown: "seed" } })).ok()).toBe(true);
     const snapshotId = await stageReadingFolder(request, { workspaceId, sourceName, fixture: "reading-flow-v1" });
     // The workspace layout renders here, once; everything after is client navigation inside /w/:id.
     await page.goto(`/w/${workspaceId}/sources/imports/${snapshotId}`);
     const nav = page.getByRole("complementary", { name: "Navigation" });
-    await expect(nav.getByRole("region", { name: "Notes documents" })).toBeVisible(ROUND_TRIP);
-    await expect(nav.getByRole("region", { name: `${sourceName} documents` })).toHaveCount(0);
+    await expect(nav.getByRole("region", { name: "Notes documents", exact: true })).toBeVisible(ROUND_TRIP);
+    await expect(nav.getByRole("region", { name: `${sourceName} documents`, exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: "Apply changes" }).click();
     await page.waitForURL(/\/sources\/[^/]+\/runs\/[0-9a-f-]+$/, ROUND_TRIP);
-    await expect(nav.getByRole("region", { name: `${sourceName} documents` })).toBeVisible(ROUND_TRIP);
+    await expect(nav.getByRole("region", { name: `${sourceName} documents`, exact: true })).toBeVisible(ROUND_TRIP);
   });
 
   test("section controls are there on hover and on focus, not at rest", async ({ page }) => {
