@@ -457,6 +457,27 @@ than the column, above a disclosure named `Source` that holds the code block
 unchanged. Not drawn, it is that code block and one line in `text-caption`,
 `text-muted`, saying why.
 
+### Images and tables in a document
+
+An image the reader may load (`markdown-image-policy.ts` decides, unchanged) is a
+button that opens it larger: a `Dialog` with the image's `alt` as its title, zoom
+from 100% to 300% in steps of 50%, a link to the file itself, and Close. Escape
+closes it and focus returns to the image. An image the author put inside a link
+keeps that link and is not a button — one destination per image. A blocked or
+missing image is the placeholder it was, and opens nothing. No token was added;
+the dialog sits at `z-[90]`/`z-[100]`, above the page's other layers.
+
+A table is a region of its own that scrolls both ways (`.kh-markdown-table`):
+
+```text
+height     at most 70vh, then it scrolls inside its box
+header     sticky at the top of that box
+cell       at least 8rem wide; a long word wraps anywhere
+row        `bg-subtle` under the pointer
+focus      the region is a tab stop named "Table", with the shared focus ring, so it scrolls from the keyboard
+print      no height limit and no sticky header: the whole table is printed
+```
+
 ### Chart colour
 
 Data displays draw their series from four tokens, declared for both themes
@@ -1424,3 +1445,10 @@ See `2026-10-09-shared-personal-document-inline-review-design.md` §4.0.1 for fo
 ### Diagrams in a document (2026-10-13)
 
 §8 gained "Diagrams in a document": a `mermaid` block is drawn as an image, with colour from six existing tokens and none added, the system's type, a `Source` disclosure under it, and one `text-caption` line when it cannot be drawn (`2026-10-13-reader-mermaid-design.md`). Nothing else in this document changed.
+
+### Images and tables in a document (2026-10-14)
+
+§8 gained "Images and tables in a document": an allowed image opens larger in a
+dialog, and a table scrolls in its own box under a sticky header. Every table in
+every existing document and shared page changes with it — a 70vh height limit and
+an 8rem minimum column width. No token was added.
