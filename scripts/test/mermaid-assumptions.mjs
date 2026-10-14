@@ -9,8 +9,8 @@ import { chromium } from "@playwright/test";
 
 // Copies of the three lists in mermaid-queue.ts. tests/unit/mermaid-assumptions-lists.test.ts fails when they differ.
 const DRAWN_TYPES = ["flowchart-v2", "sequence", "classDiagram", "stateDiagram", "er", "gantt", "pie", "mindmap", "timeline", "quadrantChart", "gitGraph", "requirement", "c4", "sankey", "xychart", "block", "kanban", "packet", "radar", "treemap"];
-const SECURE = ["secure", "securityLevel", "startOnLoad", "maxTextSize", "suppressErrorRendering", "maxEdges", "htmlLabels", "dompurifyConfig", "themeCSS", "fontFamily", "altFontFamily", "theme", "themeVariables", "layout"];
-const SANITIZER = { ALLOWED_TAGS: ["br"], ALLOWED_ATTR: [] };
+const SECURE = ["secure", "securityLevel", "startOnLoad", "maxTextSize", "suppressErrorRendering", "maxEdges", "htmlLabels", "dompurifyConfig", "themeCSS", "fontFamily", "altFontFamily", "theme", "themeVariables", "layout", "linkColor"];
+const SANITIZER = { ALLOWED_TAGS: ["br"], ALLOWED_ATTR: [], ALLOW_DATA_ATTR: false, ALLOW_ARIA_ATTR: false };
 
 const DIST = path.join("node_modules", "mermaid", "dist");
 const ORIGIN = "http://mermaid.test";
@@ -328,6 +328,22 @@ for (const [name, source] of Object.entries({
   if (laid.foreign.length > 0) fail(`${name}: replaced the sanitiser: ${laid.foreign.join(", ")}`);
 }
 
+// The sanitiser leaves a line break and no attribute: `data-` and `aria-` ones are allowed by DOMPurify whatever
+// `ALLOWED_ATTR` says, unless it is told otherwise. `$$` makes the text an HTML label, which the sanitiser handles.
+// Where Mermaid makes an HTML element of the text (a sequence message, a class label) the line break is made bare;
+// a class label with `$$` is refused later for its `<foreignObject>`, but is laid out first.
+const BREAKS = {
+  sequence: [`sequenceDiagram\n  Alice->>Bob: $$x^2$$ a<br data-x=1 aria-label=y title=t>b`, true],
+  class: [`classDiagram\n  class A["$$x^2$$ a<br data-x=1 aria-label=y title=t>b"]`, false],
+};
+for (const [name, [source, makesBreak]] of Object.entries(BREAKS)) {
+  const laid = await lay(source);
+  report.carried[`break with attributes in ${name}`] = { bareBreakMade: laid.made.includes("br"), authorsHtml: laid.foreign, threw: laid.threw };
+  if (laid.threw) fail(`break with attributes in ${name}: was not laid out, so it is no evidence: ${laid.threw}`);
+  if (makesBreak && !laid.made.includes("br")) fail(`break with attributes in ${name}: no line break was made, so this sample no longer shows the sanitiser at work`);
+  if (laid.foreign.length > 0) fail(`break with attributes in ${name}: an attribute survived: ${laid.foreign.join(", ")}`);
+}
+
 // The style, font, theme and layout are ours too. Each of these, carried by the text, must leave the drawing
 // exactly as it is without it: the same string, nothing refused by the policy, and no further file fetched
 // (a layout engine would be one).
@@ -340,24 +356,39 @@ const OURS = {
   fontFamily: { fontFamily: `x; ${css}` },
   altFontFamily: { altFontFamily: `x; ${css}` },
   layout: { layout: "elk" },
+  // 12.2.0's default layout is ELK, so the line above changes nothing with or without the key; this one does (see report.layoutEngine).
+  layoutDagre: { layout: "dagre" },
   // At a depth: `secure` is applied to every object in the config, not to its top alone.
-  nested: { flowchart: { themeCSS: css, fontFamily: `x; ${css}`, layout: "elk", theme: "dark" } },
+  nested: { flowchart: { themeCSS: css, fontFamily: `x; ${css}`, layout: "dagre", theme: "dark" } },
 };
 const yaml = (value, depth = 1) => Object.entries(value).map(([key, each]) => `${"  ".repeat(depth)}${key}:${typeof each === "object" ? `\n${yaml(each, depth + 1)}` : ` ${JSON.stringify(each)}`}`).join("\n");
-const baseline = await lay(plain, "check-ours");
-if (baseline.threw || !baseline.loads) fail(`the plain flowchart was not drawn: ${baseline.threw}`);
-for (const [name, config] of Object.entries(OURS)) {
-  for (const [form, source] of [["directive", `%%{init: ${JSON.stringify(config)}}%%\n${plain}`], ["frontmatter", `---\nconfig:\n${yaml(config)}\n---\n${plain}`]]) {
-    const before = served.length;
-    const laid = await lay(source, "check-ours");
-    const fetched = served.slice(before);
-    report.carried[`${name} by ${form}`] = { changedTheDrawing: laid.svg !== baseline.svg, violations: laid.violations, fetched, threw: laid.threw };
-    if (laid.threw) fail(`${name} by ${form}: was not laid out, so it is no evidence: ${laid.threw}`);
-    if (laid.svg !== baseline.svg) fail(`${name} by ${form}: changed the drawing`);
-    if (laid.violations.length > 0) fail(`${name} by ${form}: the policy had to refuse something: ${laid.violations.join(", ")}`);
-    if (fetched.length > 0) fail(`${name} by ${form}: fetched ${fetched.join(", ")}`);
+/** A sankey numbers its nodes, links and gradients from a counter that outlives a drawing (`node-1`, then `node-6`): the number is not the drawing. */
+const sameDrawing = (svg) => svg?.replace(/\b(node|link|linearGradient)-\d+/g, "$1-N");
+/** Each config in `configs`, carried by `source` as a directive and as frontmatter, must leave the drawing of `source` as it is. */
+async function mustChangeNothing(label, source, configs) {
+  const baseline = await lay(source, "check-ours");
+  if (baseline.threw || !baseline.loads) fail(`${label}: the plain drawing was not made: ${baseline.threw}`);
+  for (const [name, config] of Object.entries(configs)) {
+    for (const [form, text] of [["directive", `%%{init: ${JSON.stringify(config)}}%%\n${source}`], ["frontmatter", `---\nconfig:\n${yaml(config)}\n---\n${source}`]]) {
+      const before = served.length;
+      const laid = await lay(text, "check-ours");
+      const fetched = served.slice(before);
+      const at = `${label}${name} by ${form}`;
+      report.carried[at] = { changedTheDrawing: sameDrawing(laid.svg) !== sameDrawing(baseline.svg), violations: laid.violations, fetched, threw: laid.threw };
+      if (laid.threw) fail(`${at}: was not laid out, so it is no evidence: ${laid.threw}`);
+      if (sameDrawing(laid.svg) !== sameDrawing(baseline.svg)) fail(`${at}: changed the drawing`);
+      if (laid.violations.length > 0) fail(`${at}: the policy had to refuse something: ${laid.violations.join(", ")}`);
+      if (fetched.length > 0) fail(`${at}: fetched ${fetched.join(", ")}`);
+    }
   }
 }
+await mustChangeNothing("", plain, OURS);
+// A sankey's `linkColor` is used as a paint, so a `url()` in it is a fetch that only the image policy would stop. In
+// `secure` it changes nothing, at any depth; the policy has nothing to refuse.
+await mustChangeNothing("sankey ", "sankey-beta\n\nA,B,10\nB,C,5", {
+  linkColor: { sankey: { linkColor: `url(https:${ELSEWHERE}/s.svg#a)` } },
+  linkColorTop: { linkColor: `url(https:${ELSEWHERE}/s.svg#a)` },
+});
 
 // 4. What only the image policy stops. These reach the page while a drawn type is laid out, and nothing before
 //    layout can tell them apart with certainty: the flowchart shape that loads an image by its URL, and a `url()`
@@ -376,6 +407,26 @@ for (const [name, source] of Object.entries(IMAGE_POLICY)) {
   if (laid.foreign.length > 0) fail(`${name}: ${laid.foreign.join(", ")}`);
   if (laid.violations.length === 0) fail(`${name}: nothing was refused, so this sample no longer shows what the policy stops`);
   for (const each of laid.violations) if (!each.startsWith(`img-src https:${ELSEWHERE}/`)) fail(`${name}: a fetch the image policy does not cover: ${each}`);
+}
+
+// What `layout` in `secure` does and does not do. Not an assumption: nothing fails on this, it is what the script saw.
+// 12.2.0's default layout is ELK, so a plain flowchart loads ELK's chunk (elkjs, EPL-2.0) whatever a diagram says;
+// what `layout` in `secure` keeps a diagram from is choosing another engine (the `layoutDagre` case above).
+report.layoutEngine = {};
+for (const [name, source] of Object.entries({ "flowchart": plain, "sequence": "sequenceDiagram\n  Alice->>Bob: Hello" })) {
+  const fresh = await context.newPage();
+  await fresh.goto(`${ORIGIN}/`);
+  const before = served.length;
+  const seen = await fresh.evaluate(async ({ secure, sanitizer, text }) => {
+    const { default: mermaid } = await import("/mermaid.esm.min.mjs");
+    mermaid.initialize({ startOnLoad: false, securityLevel: "strict", htmlLabels: false, suppressErrorRendering: true, secure, dompurifyConfig: sanitizer, theme: "base" });
+    await mermaid.render("check-engine", text);
+    return { defaultLayout: mermaid.mermaidAPI.defaultConfig.layout };
+  }, { secure: SECURE, sanitizer: SANITIZER, text: source });
+  const elk = served.slice(before).filter((each) => /elk/i.test(each));
+  const bytes = elk.length > 0 ? (await readFile(path.join(DIST, elk[0]))).length : 0;
+  report.layoutEngine[name] = { defaultLayout: seen.defaultLayout, elkChunks: elk, elkChunkBytesOnDisk: bytes };
+  await fresh.close();
 }
 
 // 5. The two things an image cannot read. A link and a non-breaking space each make Mermaid write a string that

@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-import { createDiagramQueue, DIAGRAM_REASONS, DRAWN_TYPES, MAX_DIAGRAM_CHARS, MAX_DIAGRAMS, type DiagramDeps, type DiagramEngine } from "@/components/knowledge/mermaid-queue";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createDiagramQueue, DECODE_TIMEOUT_MS, DIAGRAM_REASONS, DRAWN_TYPES, MAX_DIAGRAM_CHARS, MAX_DIAGRAMS, type DiagramDeps, type DiagramEngine } from "@/components/knowledge/mermaid-queue";
 
 const svg = (body = "", box = "0 0 120.4 60") => `<svg id="x" width="100%" xmlns="http://www.w3.org/2000/svg" viewBox="${box}">${body}</svg>`;
 
@@ -291,6 +291,46 @@ describe("a drawing the browser cannot show as an image", () => {
   });
 });
 
+describe("the check that a picture loads cannot hold the queue", () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  it("a check that never settles is a picture that did not load: refused after the timeout, its URL given back, and the next diagram drawn", async () => {
+    vi.useFakeTimers();
+    const h = harness(undefined, undefined, { decodes: (url) => (url === "blob:1" ? new Promise<boolean>(() => {}) : Promise.resolve(true)) });
+    const stuck = h.queue.draw({}, 0, "a");
+    const next = h.queue.draw({}, 1, "b");
+    await vi.advanceTimersByTimeAsync(DECODE_TIMEOUT_MS - 1);
+    expect(h.log.filter((line) => line.startsWith("revoke"))).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await stuck).toEqual({ reason: DIAGRAM_REASONS.unsupported });
+    expect(await next).toHaveProperty("drawn", expect.objectContaining({ url: "blob:2" }));
+    expect(h.log.filter((line) => line.startsWith("revoke"))).toEqual(["revoke blob:1"]);
+  });
+
+  it("a check that settles in time leaves no timer behind, whichever way it settles", async () => {
+    vi.useFakeTimers();
+    const yes = harness();
+    expect(await yes.queue.draw({}, 0, "a")).toHaveProperty("drawn");
+    const no = harness(undefined, undefined, { decodes: async () => false });
+    expect(await no.queue.draw({}, 0, "a")).toEqual({ reason: DIAGRAM_REASONS.unsupported });
+    const thrown = harness(undefined, undefined, { decodes: async () => { throw new Error("no image"); } });
+    expect(await thrown.queue.draw({}, 0, "a")).toEqual({ reason: DIAGRAM_REASONS.unsupported });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("a check that settles after the timeout changes nothing: the URL was given back once", async () => {
+    vi.useFakeTimers();
+    let settle!: (loads: boolean) => void;
+    const h = harness(undefined, undefined, { decodes: () => new Promise<boolean>((resolve) => { settle = resolve; }) });
+    const stuck = h.queue.draw({}, 0, "a");
+    await vi.advanceTimersByTimeAsync(DECODE_TIMEOUT_MS);
+    expect(await stuck).toEqual({ reason: DIAGRAM_REASONS.unsupported });
+    settle(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(h.log.filter((line) => line.startsWith("revoke"))).toEqual(["revoke blob:1"]);
+  });
+});
+
 describe("the two things Mermaid writes that an image cannot read are mended, and nothing else is touched", () => {
   const XLINK = 'xmlns:xlink="http://www.w3.org/1999/xlink"';
   const drawnAs = async (text: string) => {
@@ -511,5 +551,89 @@ describe("a drawing nobody is waiting for is not made", () => {
     expect(await under).toHaveProperty("reason");
     expect(log.filter((line) => line.startsWith("url"))).toEqual([expect.stringMatching(/^url blob:1 /)]);
     expect(log.filter((line) => line.startsWith("revoke"))).toEqual(["revoke blob:1"]);
+  });
+});
+
+describe("a request that is superseded or forgotten is not laid out at any step", () => {
+  /** A queue whose engine loads, and inspects, only when the test lets it; `at` says how far each has got. */
+  function steps() {
+    const at: string[] = [];
+    let openLoad!: () => void, openInspect!: () => void;
+    const loadOpened = new Promise<void>((resolve) => { openLoad = resolve; });
+    const inspectOpened = new Promise<void>((resolve) => { openInspect = resolve; });
+    const renders: string[] = [];
+    const revoked: string[] = [];
+    const queue = createDiagramQueue({
+      load: async () => { at.push("load"); await loadOpened; return {
+        inspect: async (source) => { at.push(`inspect ${source}`); if (source === "slow") await inspectOpened; return { type: "pie" }; },
+        render: async (_id, source) => { renders.push(source); return { svg: svg(), diagramType: "pie" }; },
+      }; },
+      toUrl: (() => { let made = 0; return () => `blob:${++made}`; })(), decodes: async () => true, revoke: (url) => { revoked.push(url); }, pause: async () => {},
+    });
+    return { queue, at, renders, revoked, openLoad, openInspect };
+  }
+
+  it("asked again while Mermaid loads: render is called once, with the newest source", async () => {
+    const h = steps();
+    const block = {};
+    const earlier = h.queue.draw(block, 0, "old");
+    await vi.waitFor(() => expect(h.at).toEqual(["load"]));
+    const later = h.queue.draw(block, 0, "new");
+    h.openLoad();
+    expect(await earlier).toEqual({ reason: DIAGRAM_REASONS.unsupported });
+    expect(await later).toHaveProperty("drawn");
+    expect(h.renders).toEqual(["new"]);
+  });
+
+  it("forgotten while Mermaid loads: render is never called", async () => {
+    const h = steps();
+    const block = {};
+    const waiting = h.queue.draw(block, 0, "a");
+    await vi.waitFor(() => expect(h.at).toEqual(["load"]));
+    h.queue.forget(block);
+    h.openLoad();
+    expect(await waiting).toEqual({ reason: DIAGRAM_REASONS.unsupported });
+    expect(h.renders).toEqual([]);
+    expect(h.at).toEqual(["load"]);
+  });
+
+  it("asked again while its type is being found: render is called once, with the newest source", async () => {
+    const h = steps();
+    h.openLoad();
+    const block = {};
+    const earlier = h.queue.draw(block, 0, "slow");
+    await vi.waitFor(() => expect(h.at).toContain("inspect slow"));
+    const later = h.queue.draw(block, 0, "new");
+    h.openInspect();
+    expect(await earlier).toEqual({ reason: DIAGRAM_REASONS.unsupported });
+    expect(await later).toHaveProperty("drawn");
+    expect(h.renders).toEqual(["new"]);
+  });
+
+  it("forgotten while its type is being found: render is never called", async () => {
+    const h = steps();
+    h.openLoad();
+    const block = {};
+    const waiting = h.queue.draw(block, 0, "slow");
+    await vi.waitFor(() => expect(h.at).toContain("inspect slow"));
+    h.queue.forget(block);
+    h.openInspect();
+    expect(await waiting).toEqual({ reason: DIAGRAM_REASONS.unsupported });
+    expect(h.renders).toEqual([]);
+  });
+
+  it("the request that was dropped does not give back the picture the block shows; the one that replaces it does", async () => {
+    const h = steps();
+    h.openLoad();
+    const block = {};
+    expect(await h.queue.draw(block, 0, "first")).toHaveProperty("drawn", expect.objectContaining({ url: "blob:1" }));
+    const dropped = h.queue.draw(block, 0, "slow");
+    await vi.waitFor(() => expect(h.at).toContain("inspect slow"));
+    const kept = h.queue.draw(block, 0, "new");
+    h.openInspect();
+    expect(await dropped).toEqual({ reason: DIAGRAM_REASONS.unsupported });
+    expect(h.revoked).toEqual([]);
+    expect(await kept).toHaveProperty("drawn", expect.objectContaining({ url: "blob:2" }));
+    expect(h.revoked).toEqual(["blob:1"]);
   });
 });
