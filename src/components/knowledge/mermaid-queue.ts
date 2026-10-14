@@ -5,6 +5,8 @@
  */
 export const MAX_DIAGRAM_CHARS = 10_000;
 export const MAX_DIAGRAMS = 50;
+/** How long the browser has to show it can load a drawing as an image; past it the drawing is refused. */
+export const DECODE_TIMEOUT_MS = 10_000;
 
 /**
  * An image cannot use a font the page loaded. Measuring in the product's and drawing in the
@@ -108,7 +110,12 @@ export function createDiagramQueue(deps: DiagramDeps) {
     discard(url);
   }
 
-  async function render(source: string): Promise<{ svg: string; type: string; width: number; height: number } | { reason: string }> {
+  /**
+   * `wanted` is asked after each step that waits, before the next: a request that has been superseded or
+   * forgotten returns at once with a reason nobody reads (`one` checks it again), so Mermaid is not asked to lay
+   * out what nobody is waiting for.
+   */
+  async function render(source: string, wanted: () => boolean): Promise<{ svg: string; type: string; width: number; height: number } | { reason: string }> {
     let loaded: DiagramEngine;
     try {
       loaded = await (engine ??= deps.load());
@@ -117,6 +124,7 @@ export function createDiagramQueue(deps: DiagramDeps) {
       engine = undefined;
       return { reason: DIAGRAM_REASONS.unloaded };
     }
+    if (!wanted()) return { reason: DIAGRAM_REASONS.unsupported };
     // Decided here, before anything is laid out: afterwards is too late, the page has already held the layout.
     let seen: { type?: string; error?: unknown };
     try {
@@ -124,6 +132,7 @@ export function createDiagramQueue(deps: DiagramDeps) {
     } catch {
       return { reason: DIAGRAM_REASONS.unsupported };
     }
+    if (!wanted()) return { reason: DIAGRAM_REASONS.unsupported };
     if (!seen.type || !DRAWN_TYPES.includes(seen.type)) return { reason: DIAGRAM_REASONS.unsupported };
     if ("error" in seen) return { reason: `${DIAGRAM_REASONS.unparsed} ${said(seen.error)}` };
     let result: { svg: string; diagramType: string };
@@ -138,12 +147,23 @@ export function createDiagramQueue(deps: DiagramDeps) {
     return { svg: result.svg, type: result.diagramType, ...size };
   }
 
+  /** Whether the browser showed, within `DECODE_TIMEOUT_MS`, that it can load `url` as an image. A check that never settles must not stop the queue. */
+  async function decoded(url: string): Promise<boolean> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const late = new Promise<boolean>((resolve) => { timer = setTimeout(() => resolve(false), DECODE_TIMEOUT_MS); });
+    try {
+      return await Promise.race([deps.decodes(url), late]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   async function one(key: object, request: number, source: string): Promise<DiagramOutcome> {
     // Nobody is waiting for the drawing of a block that went or has been asked for again: its
     // URL, if it has one, is for whoever asked last (or `forget` has given it back).
     const wanted = () => newest.get(key) === request && !gone.has(key);
     if (!wanted()) return { reason: DIAGRAM_REASONS.unsupported };
-    const result = await render(source);
+    const result = await render(source, wanted);
     if (!wanted()) return { reason: DIAGRAM_REASONS.unsupported };
     if ("reason" in result) {
       release(key);
@@ -155,7 +175,7 @@ export function createDiagramQueue(deps: DiagramDeps) {
       url = deps.toUrl(mended(result.svg));
       // An `<img>` says nothing when its source is not an image: the reader would see a broken picture over a
       // closed source. Asked here, while the block still reads as code.
-      loads = await deps.decodes(url);
+      loads = await decoded(url);
     } catch {
       // a URL that cannot be made, or checked, is a drawing that cannot be shown
     }
@@ -214,22 +234,24 @@ function themeVariables() {
 /**
  * The keys a diagram's own text (a `%%{init}%%` directive, YAML frontmatter `config:`) may not set, at any depth.
  * The first six are Mermaid's defaults. `htmlLabels` is here because a directive could otherwise turn HTML labels
- * back on, and `dompurifyConfig` so that the sanitiser below stays ours. The last six keep a diagram from choosing
+ * back on, and `dompurifyConfig` so that the sanitiser below stays ours. The next six keep a diagram from choosing
  * its own style, font, theme or layout engine: `themeCSS` and the two fonts are written into the `<style>` Mermaid
  * puts in this page while it lays a drawing out, where a `url()` is fetched, and the theme is the reader's.
+ * `linkColor`, a sankey's, is the last: it is used as a paint, where a `url()` is fetched too.
  * Our own `initialize` is not subject to the list, so the theme below still follows the page.
  * scripts/test/mermaid-assumptions.mjs checks each in a browser with a copy of this list, and
  * tests/unit/mermaid-assumptions-lists.test.ts fails when the two differ.
  */
-const SECURE = ["secure", "securityLevel", "startOnLoad", "maxTextSize", "suppressErrorRendering", "maxEdges", "htmlLabels", "dompurifyConfig", "themeCSS", "fontFamily", "altFontFamily", "theme", "themeVariables", "layout"];
+const SECURE = ["secure", "securityLevel", "startOnLoad", "maxTextSize", "suppressErrorRendering", "maxEdges", "htmlLabels", "dompurifyConfig", "themeCSS", "fontFamily", "altFontFamily", "theme", "themeVariables", "layout", "linkColor"];
 
 /**
- * What Mermaid's sanitiser leaves of the tags in a label: a line break, and no attribute. Its default lets
+ * What Mermaid's sanitiser leaves of the tags in a label: a line break, and no attribute (`data-` and `aria-`
+ * ones are allowed whatever `ALLOWED_ATTR` says, unless the two flags below say not). Its default lets
  * `<img>`, `<video>` and `<a>` through, and text holding `$$…$$` is written into the page as an HTML label
  * whatever `htmlLabels` says, so a sequence or class diagram could otherwise put such an element in this page
  * while it is laid out. With this, what is written there is text.
  */
-const SANITIZER = { ALLOWED_TAGS: ["br"], ALLOWED_ATTR: [] };
+const SANITIZER = { ALLOWED_TAGS: ["br"], ALLOWED_ATTR: [], ALLOW_DATA_ATTR: false, ALLOW_ARIA_ATTR: false };
 
 const browser: DiagramDeps = {
   // `import()`, so a page with no diagram never fetches Mermaid; tests/unit/composer-bundle.test.ts holds that.

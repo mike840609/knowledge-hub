@@ -21,11 +21,12 @@ describe("the lists mermaid-queue.ts and the assumptions script both hold", () =
     expect(strings(written(queue, "SECURE"))).toEqual(strings(written(script, "SECURE")));
   });
 
-  it("no key has left that list: Mermaid's six, html labels, the sanitiser, and the style, font, theme and layout", () => {
+  it("no key has left that list: Mermaid's six, html labels, the sanitiser, the style, font, theme and layout, and the sankey link colour", () => {
     expect(strings(written(queue, "SECURE"))).toEqual(expect.arrayContaining([
       "secure", "securityLevel", "startOnLoad", "maxTextSize", "suppressErrorRendering", "maxEdges",
       "htmlLabels", "dompurifyConfig",
       "themeCSS", "fontFamily", "altFontFamily", "theme", "themeVariables", "layout",
+      "linkColor",
     ]));
   });
 
@@ -34,8 +35,8 @@ describe("the lists mermaid-queue.ts and the assumptions script both hold", () =
     expect(strings(written(queue, "DRAWN_TYPES"))).toEqual(DRAWN_TYPES);
   });
 
-  it("the sanitiser's configuration is the same in both, and leaves a line break and no attribute", () => {
+  it("the sanitiser's configuration is the same in both, and leaves a line break and no attribute, `data-` and `aria-` included", () => {
     expect(written(queue, "SANITIZER")).toBe(written(script, "SANITIZER"));
-    expect(written(queue, "SANITIZER")).toBe('{ ALLOWED_TAGS: ["br"], ALLOWED_ATTR: [] }');
+    expect(written(queue, "SANITIZER")).toBe('{ ALLOWED_TAGS: ["br"], ALLOWED_ATTR: [], ALLOW_DATA_ATTR: false, ALLOW_ARIA_ATTR: false }');
   });
 });
