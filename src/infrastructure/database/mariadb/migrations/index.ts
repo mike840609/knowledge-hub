@@ -1,3 +1,4 @@
+import { shareCommentEventsMigration } from "./022-share-comment-events";
 import { reviewCommentEditDeleteMigration } from "./021-review-comment-edit-delete";
 import { feedbackReportsMigration } from "./020-feedback-reports";
 import { savedDocumentSharesMigration } from "./019-saved-document-shares";
@@ -42,4 +43,5 @@ export const migrations = [
   savedDocumentSharesMigration,
   feedbackReportsMigration,
   reviewCommentEditDeleteMigration,
+  shareCommentEventsMigration,
 ] as const;

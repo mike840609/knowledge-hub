@@ -86,6 +86,21 @@ test.describe("mermaid in the reader", () => {
     expect(refused).toEqual([]);
   });
 
+  test("a diagram with a link in it, and one with a non-breaking space, are drawn", async ({ page }) => {
+    // Mermaid writes a link with an `xlink:` prefix it does not declare, and the space as `&nbsp;`: neither is
+    // XML an image can read, and each was a broken picture over a closed source.
+    const linked = 'flowchart LR\n  A[Start] --> B[Done]\n  click A href "https://example.com/x"';
+    const spaced = "sequenceDiagram\n  Alice->>Bob: non\u00a0breaking#nbsp;space";
+    const note = await createNote(page, unique("Diagram link and space"), [fence(linked), "", fence(spaced)].join("\n"));
+    await page.goto(note.url);
+    await settled(page);
+    await expectDrawn(figures(page).nth(0));
+    await expectDrawn(figures(page).nth(1));
+    // The link is in an image, so it goes nowhere.
+    await image(figures(page).nth(0)).click({ position: { x: 20, y: 20 } });
+    await expect(page).toHaveURL(new RegExp(`${note.url}$`));
+  });
+
   test("the source is one click away, and copies as written", async ({ page, context }) => {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     const note = await createNote(page, unique("Diagram source"), fence(FLOW));
@@ -132,7 +147,7 @@ test.describe("mermaid in the reader", () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   });
 
-  test("when the server sends other source into the open page, the diagram is drawn from it, not left as it was", async ({ page }) => {
+  test("when the server sends the open page its source again, a diagram is drawn again only if the source is other than it was", async ({ page }) => {
     const note = await createNote(page, unique("Diagram refreshed"), fence(FLOW));
     await page.goto(note.url);
     await settled(page);
@@ -142,20 +157,33 @@ test.describe("mermaid in the reader", () => {
     // do: Next keys the page by its search params, so that remounts the block and the stale one never exists.)
     await page.evaluate(() => { (window as unknown as { khLoaded: boolean }).khLoaded = true; });
 
+    // Any tree change ends in `router.refresh()`, which sends the open document again.
+    const refreshByTreeChange = async () => {
+      const name = unique("Refresh folder");
+      await page.getByRole("button", { name: "Create folder" }).first().click();
+      const dialog = page.getByRole("dialog", { name: "New folder" });
+      await dialog.getByLabel("Name").fill(name);
+      await dialog.getByRole("button", { name: "Create folder" }).click();
+      await expect(dialog).toHaveCount(0, ROUND_TRIP);
+      // The refreshed tree is in the page, so the refreshed document is too.
+      await expect(page.getByText(name).first()).toBeVisible(ROUND_TRIP);
+    };
+
+    // The same source: the picture is the one already made. A drawing can hold the page for seconds.
+    const first = await image(figure).getAttribute("src");
+    await refreshByTreeChange();
+    await page.waitForTimeout(500);
+    expect(await image(figure).getAttribute("src")).toBe(first);
+
     const update = await page.request.patch(`/api/documents/${note.documentId}`, {
       data: { title: unique("Diagram refreshed"), markdown: fence(SEQUENCE), expectedCurrentRevisionId: note.revisionId },
     });
     expect(update.ok()).toBe(true);
-
-    // Any tree change ends in `router.refresh()`, which sends the open document again.
-    await page.getByRole("button", { name: "Create folder" }).first().click();
-    const dialog = page.getByRole("dialog", { name: "New folder" });
-    await dialog.getByLabel("Name").fill(unique("Refresh folder"));
-    await dialog.getByRole("button", { name: "Create folder" }).click();
-    await expect(dialog).toHaveCount(0, ROUND_TRIP);
+    await refreshByTreeChange();
 
     await expect(figure.locator("code")).toContainText("sequenceDiagram", ROUND_TRIP);
     await expect(image(figure)).toHaveAttribute("alt", /^Diagram \(sequence\)/, DRAWN);
+    expect(await image(figure).getAttribute("src")).not.toBe(first);
     expect(await page.evaluate(() => (window as unknown as { khLoaded?: boolean }).khLoaded)).toBe(true);
   });
 
@@ -191,6 +219,7 @@ test.describe("mermaid on a shared page", () => {
     const refused = refusals(visitor);
     const response = await visitor.goto(new URL(link.path, baseURL!).toString());
     expect(response!.headers()["content-security-policy"]).toContain("img-src 'self' blob:");
+    expect(response!.headers()["content-security-policy"]).toContain("media-src 'none'");
     await expectReadsAsOnePage(visitor);
     expect(refused).toEqual([]);
     await anonymous.close();

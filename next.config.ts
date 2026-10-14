@@ -10,6 +10,7 @@ const nextConfig: NextConfig = {
   // Issue #20 second layer: even if a remote image URL ever reaches markup,
   // the browser must refuse to load it. `img-src 'self' blob:` allows only
   // same-origin / relative images, and the diagrams the page itself draws (data: intentionally not allowed).
+  // `media-src 'none'`: nothing here plays audio or video, so none is fetched (reader-mermaid spec).
   //
   // A page gets its policy from `src/middleware.ts`, which sets this header again
   // with a nonce for scripts and replaces what is set here. These values are what
@@ -18,22 +19,22 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/:path*",
-        headers: [{ key: "Content-Security-Policy", value: "img-src 'self' blob:" }],
+        headers: [{ key: "Content-Security-Policy", value: "img-src 'self' blob:; media-src 'none'" }],
       },
       {
         // Share links need no sign-in (share-link spec §6.4): the token must
         // not leak through Referer, a revoked link must not be served from a
         // cache, crawlers must not index it, and no site may frame it.
         // Next.js keeps only the LAST matching header per key, so this CSP
-        // repeats the global img-src directive; setting frame-ancestors alone
-        // would silently drop the Issue #20 image lockdown on the one page
-        // that needs no sign-in.
+        // repeats the global img-src and media-src directives; setting
+        // frame-ancestors alone would silently drop the Issue #20 image lockdown
+        // on the one page that needs no sign-in.
         source: "/s/:path*",
         headers: [
           { key: "Referrer-Policy", value: "no-referrer" },
           { key: "Cache-Control", value: "private, no-store" },
           { key: "X-Robots-Tag", value: "noindex, nofollow" },
-          { key: "Content-Security-Policy", value: "img-src 'self' blob:; frame-ancestors 'none'" },
+          { key: "Content-Security-Policy", value: "img-src 'self' blob:; media-src 'none'; frame-ancestors 'none'" },
         ],
       },
     ];

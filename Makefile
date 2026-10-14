@@ -92,6 +92,10 @@ test-integration: db-up ## Integration tests (needs MariaDB; uses root creds fro
 test-e2e: db-up ## E2E tests: provisions an isolated DB, builds, runs Playwright (needs 'make browsers' once).
 	npm run test:e2e
 
+.PHONY: test-mermaid-assumptions
+test-mermaid-assumptions: ## What the reader assumes of Mermaid, checked in Chromium; run before changing its version (needs 'make browsers' once).
+	npm run test:mermaid-assumptions
+
 .PHONY: verify
 verify: test-unit typecheck lint build ## Local mirror of the CI DB-free gate.
 

@@ -152,19 +152,26 @@ pass.
   and is shown by `<img>`, never set as markup
   (`docs/superpowers/specs/2026-10-13-reader-mermaid-design.md`). Do not move it to
   `innerHTML` to make its text selectable or its links work; as an image it runs
-  nothing and styles nothing, which inline it would. A diagram's own text cannot
-  change Mermaid's configuration: `secure` in `mermaid-queue.ts` lists the keys it
-  may not set, and `scripts/test/mermaid-assumptions.mjs` holds a copy of that list
-  and checks in a browser that a directive or frontmatter cannot undo it, so both
-  change together on a Mermaid upgrade. Its hostile cases
-  are `tests/e2e/zz-mermaid-hostile.spec.ts`.
+  nothing and styles nothing, which inline it would. That is the page the reader
+  is left with. To lay a diagram out Mermaid first builds it in this page, and
+  three lists in `mermaid-queue.ts` guard that moment: `DRAWN_TYPES` (the type is
+  found by `mermaid.parse` before anything is laid out, and no other type is ever
+  handed to `render`), `SECURE` (the keys a diagram's own text may not set) and
+  `SANITIZER` (what Mermaid's sanitiser leaves of a label: a line break).
+  `scripts/test/mermaid-assumptions.mjs` is their evidence, from a browser, and
+  holds a copy of each (`make test-mermaid-assumptions`;
+  `tests/unit/mermaid-assumptions-lists.test.ts` fails when a copy differs). Run
+  it before changing Mermaid's version. A type goes on the list when the script
+  passes with it, never because it looks harmless, and refusing a drawing after
+  `render` does not undo what laying it out did. Its hostile cases are `tests/e2e/zz-mermaid-hostile.spec.ts`.
 
 - **Scripts run by nonce.** `src/middleware.ts` gives every page a
   Content-Security-Policy built by `src/lib/content-security-policy.ts`:
   `script-src` by per-response nonce with `strict-dynamic`, never `unsafe-inline`
   (and `unsafe-eval` in development only), beside `img-src 'self' blob:` (the
-  `blob:` is the drawn diagram, minted by this origin's script) and, on
-  `/s/*`, `frame-ancestors 'none'`. An inline `<script>` needs the nonce from the
+  `blob:` is the drawn diagram, minted by this origin's script), `media-src 'none'`
+  and, on `/s/*`, `frame-ancestors 'none'`. There is no `default-src`: a kind of
+  fetch is open until a directive names it. An inline `<script>` needs the nonce from the
   `x-nonce` request header, as the layout's theme script takes it, or — where no
   server component can pass one, as in `global-error` — its hash in the policy.
   An inline event handler (`onclick="…"` in markup) cannot be allowed at all.

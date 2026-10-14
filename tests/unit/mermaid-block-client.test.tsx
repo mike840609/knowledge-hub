@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, type ReactNode } from "react";
+import { act, StrictMode, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MermaidBlock } from "@/components/knowledge/mermaid-block";
@@ -15,7 +15,10 @@ const stub = vi.hoisted(() => ({
   listeners: new Set<() => void>(),
 }));
 
+const UNLOADED = "Diagrams could not be loaded.";
+
 vi.mock("@/components/knowledge/mermaid-queue", () => ({
+  DIAGRAM_REASONS: { unloaded: "Diagrams could not be loaded." },
   diagrams: () => ({
     draw: (key: object, index: number, source: string) =>
       new Promise<DiagramOutcome>((resolve) => { stub.calls.push({ key, index, source, resolve }); }),
@@ -164,6 +167,74 @@ describe("what a mermaid block asks to have drawn", () => {
     await show(same);
     await show(same);
     expect(stub.calls).toHaveLength(1);
+    expect(picture()!.getAttribute("src")).toBe("blob:one");
+  });
+
+  it("is not asked again when the server sends the same source again, as every refresh does, and an opened source stays open", async () => {
+    await show(code(FLOW));
+    await answer(stub.calls[0], drawn("blob:one"));
+    disclosure().open = true;
+    // A new element each time, holding the same code: what `router.refresh()` sends when nothing changed.
+    await resend(code(FLOW));
+    await resend(code(FLOW));
+    expect(stub.calls).toHaveLength(1);
+    expect(picture()!.getAttribute("src")).toBe("blob:one");
+    expect(disclosure().open).toBe(true);
+  });
+
+  it("still shows its first drawing when the same source is sent again before that drawing has arrived", async () => {
+    await show(code(FLOW));
+    await resend(code(FLOW));
+    expect(stub.calls).toHaveLength(1);
+    await answer(stub.calls[0], drawn("blob:one"));
+    expect(picture()!.getAttribute("src")).toBe("blob:one");
+    expect(disclosure().open).toBe(false);
+  });
+
+  it("is asked again when its place among the page's diagrams changes, though its source has not: the fifty count by place", async () => {
+    await show(code(FLOW));
+    await answer(stub.calls[0], drawn("blob:one"));
+    expect(stub.calls[0].index).toBe(0);
+    const earlier = document.createElement("figure");
+    earlier.setAttribute("data-mermaid", "");
+    document.body.insertBefore(earlier, container);
+    try {
+      await resend(code(FLOW));
+      expect(stub.calls).toHaveLength(2);
+      expect(stub.calls[1].index).toBe(1);
+      expect(stub.calls[1].source).toBe(FLOW);
+    } finally {
+      earlier.remove();
+    }
+  });
+
+  it("is asked again after Mermaid could not be loaded: that is not an answer about this source", async () => {
+    await show(code(FLOW));
+    await answer(stub.calls[0], { reason: UNLOADED });
+    expect(reasonLine()!.textContent).toBe(UNLOADED);
+    await resend(code(FLOW));
+    expect(stub.calls).toHaveLength(2);
+    await answer(stub.calls[1], drawn("blob:one"));
+    expect(picture()!.getAttribute("src")).toBe("blob:one");
+    expect(reasonLine()).toBeNull();
+  });
+
+  it("is not asked again for the same source after any other reason: the answer would be the same", async () => {
+    await show(code(FLOW));
+    await answer(stub.calls[0], { reason: "Could not draw this diagram: Parse error" });
+    await resend(code(FLOW));
+    expect(stub.calls).toHaveLength(1);
+    expect(reasonLine()!.textContent).toBe("Could not draw this diagram: Parse error");
+  });
+
+  it("is asked again when it is mounted a second time, as React's strict mode does, and that drawing is shown", async () => {
+    await act(async () => { root.render(<StrictMode><MermaidBlock>{code(FLOW)}</MermaidBlock></StrictMode>); });
+    // The first mount was given back to the queue (`forget`), so its request is one the queue will not draw.
+    expect(stub.forgotten).toEqual([figure()]);
+    expect(stub.calls).toHaveLength(2);
+    await answer(stub.calls[0], { reason: "This kind of diagram cannot be drawn here yet." });
+    expect(reasonLine()).toBeNull();
+    await answer(stub.calls[1], drawn("blob:one"));
     expect(picture()!.getAttribute("src")).toBe("blob:one");
   });
 

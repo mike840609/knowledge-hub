@@ -91,3 +91,13 @@ scripts carry a nonce.
 `img-src 'self'` became `img-src 'self' blob:` so that a page can show a diagram
 it drew itself. Why that admits nothing a document can name is in
 `2026-10-13-reader-mermaid-design.md`, "Content-Security-Policy".
+
+## Later: `media-src 'none'` (2026-10-14)
+
+`media-src 'none'` was added, in the three places the image directive is
+written. The product plays no audio or video. With no `default-src`, a kind of
+fetch is open until a directive names it, and a diagram being laid out put a
+`<video src>` in a shared page that was fetched from another origin. Why, and
+what else guards that moment, is in `2026-10-13-reader-mermaid-design.md`,
+"What B does not cover". A `default-src` is still not set: what it would break
+was not something that change could see.
