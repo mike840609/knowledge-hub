@@ -53,7 +53,8 @@ export function useReviewSelection(readingRef: RefObject<HTMLElement | null>, ma
     setRefusal(anchor ? undefined : reading.problem && reading.problem !== "none" ? REVIEW_SELECTION_HINTS[reading.problem] : "Select text in the document to comment.");
     return anchor;
   }, [read]);
-  return { ready, hint, chosen, refusal, capture, clear };
+  const choose = useCallback((anchor: ReviewAnchor) => { pending.current = anchor; setChosen(anchor); setRefusal(undefined); }, []);
+  return { ready, hint, chosen, refusal, capture, clear, choose };
 }
 
 /** The passage chosen, and the first thing said about it. */

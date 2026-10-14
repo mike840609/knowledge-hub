@@ -5,7 +5,7 @@ import { MarkdownRenderer } from "@/components/knowledge/markdown-renderer";
 import { linkLookupKey } from "@/modules/knowledge/domain/link-graph";
 import * as projection from "@/modules/knowledge/domain/review-anchor";
 import { validateReviewAnchor } from "@/modules/knowledge/domain/review-anchor";
-import { createReviewRangeResolver, focusReviewAnchor, readReviewSelection, reviewAnchorRange, selectedReviewAnchor } from "@/components/knowledge/review-selection";
+import { reviewBlockAnchor, createReviewRangeResolver, focusReviewAnchor, readReviewSelection, reviewAnchorRange, selectedReviewAnchor } from "@/components/knowledge/review-selection";
 
 // Every case is read off the page the reader really draws: the mapping is between that page and the
 // Markdown, and a hand-written page would only show that it agrees with itself.
@@ -281,6 +281,31 @@ describe("finding a passage again", () => {
     expect(reviewAnchorRange(root, markdown, anchor)?.toString()).toBe("Only");
     expect(reviewAnchorRange(root, markdown, { ...anchor, blockPath: [3] })).toBeNull();
     expect(reviewAnchorRange(root, markdown, { ...anchor, exact: "Onl" })).toBeNull();
+  });
+});
+
+
+describe("paragraph comment controls", () => {
+  test("anchors the whole formatted paragraph without a browser selection", () => {
+    const markdown = "Hello **world** and [link](https://example.com).";
+    const root = page(markdown);
+    const anchor = reviewBlockAnchor(root.querySelector("p")!, markdown)!;
+    expect(anchor.exact).toBe("Hello world and link.");
+    expect(anchor.startUtf16).toBe(0);
+    expect(reviewAnchorRange(root, markdown, anchor)).not.toBeNull();
+  });
+  test("bounds a long paragraph at complete Unicode characters", () => {
+    const markdown = "😀".repeat(600);
+    const root = page(markdown);
+    const anchor = reviewBlockAnchor(root.querySelector("p")!, markdown)!;
+    expect([...anchor.exact]).toHaveLength(512);
+    expect(anchor.endUtf16).toBe(1024);
+    expect(reviewAnchorRange(root, markdown, anchor)?.toString()).toBe(anchor.exact);
+  });
+  test("refuses a DOM paragraph that differs from the saved revision", () => {
+    const root = page("Saved text");
+    root.querySelector("p")!.textContent = "Unsaved change";
+    expect(reviewBlockAnchor(root.querySelector("p")!, "Saved text")).toBeNull();
   });
 });
 

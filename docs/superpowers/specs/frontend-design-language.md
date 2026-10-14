@@ -1479,3 +1479,12 @@ an 8rem minimum column width. No token was added.
 document's title and opening in a popup, from a new read endpoint,
 `GET /api/documents/:id/preview`, held to the document page's own access check.
 No token was added.
+
+### A comment button beside each paragraph (2026-10-14)
+
+On the owner's page each paragraph has a comment button in the reading column's
+24px right padding (`2026-10-12-owner-comments-rail-design.md`, amended the same
+day): `size-6`, `radius-sm`, `text-muted`, taking `bg-selected` and
+`selected-text` under the pointer, and the chosen paragraph is marked with
+`bg-selected`. The article's width and its 32px marker margin are as they were.
+No token was added.

@@ -12,6 +12,7 @@ import { useReviewEntry, useReviewToggleKey } from "./review-entry";
 import { useReviewHighlights } from "./review-highlights";
 import { ReviewComposer, useReviewSelection } from "./review-composer";
 import { ReviewPanelShell } from "./review-panel-shell";
+import { ReviewBlockComment } from "./review-block-comment";
 import { ReviewPassageMarkers } from "./review-passage-markers";
 import { reviewRailInline, useReviewRailInline } from "./review-rail-mode";
 import { focusReviewAnchor } from "./review-selection";
@@ -84,10 +85,11 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
     if (next) removeStored("local", dismissedKey(documentId));
     else writeStored("local", dismissedKey(documentId), JSON.stringify(awaitingOwner(threads.current, owner.current)));
     if (!next) {
+      selection.clear();
       setActiveThreadId(undefined);
       if (reviewRailInline()) entryRef?.current?.focus({ preventScroll: true });
     }
-  }, [documentId, entryRef]);
+  }, [documentId, entryRef, selection.clear]);
   const count = result?.threads.length ?? 0;
   // The key is there when the header's control is: with discussions to open, or open ones to close.
   const toggle = useCallback(() => changeOpen(!open), [changeOpen, open]);
@@ -109,6 +111,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
     <div className="kh-review-document" data-review-ready={result || error ? "" : undefined} data-review-open={open ? "" : undefined} data-review-inline={inline ? "" : undefined}>
       <div ref={readingRef} className="kh-review-reading">
         {children}
+        {canComment && <ReviewBlockComment readingRef={readingRef} markdown={markdown} chosen={selection.chosen} onChoose={anchor => { selection.choose(anchor); changeOpen(true); }} />}
         <ReviewPassageMarkers readingRef={readingRef} markdown={markdown} threads={located} />
       </div>
       <aside id="owner-document-discussions" className="kh-review-panel" aria-label="Document discussions" onKeyDown={event => { if (!event.defaultPrevented && event.key === "Escape" && reviewRailInline()) changeOpen(false); }}>
