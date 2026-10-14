@@ -95,4 +95,77 @@ test.describe("one sidebar", () => {
     // The one being read is not listed in its own Recent.
     await expect(recent.getByRole("link", { name: titleB })).toHaveCount(0);
   });
+
+  test("the arrow keys resize it, a reload keeps the width, and a double-click resets it", async ({ page }) => {
+    await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/graph`);
+    const aside = page.getByRole("complementary", { name: "Navigation" });
+    const handle = page.getByRole("separator", { name: "Resize navigation" });
+    await expect(handle).toHaveAttribute("aria-valuenow", "256");
+    await handle.focus();
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    await expect(handle).toHaveAttribute("aria-valuenow", "288");
+    await page.reload();
+    await expect(page.getByRole("separator", { name: "Resize navigation" })).toHaveAttribute("aria-valuenow", "288");
+    await expect.poll(async () => (await aside.boundingBox())?.width ?? 0).toBe(288);
+    await page.getByRole("separator", { name: "Resize navigation" }).dblclick();
+    await expect(page.getByRole("separator", { name: "Resize navigation" })).toHaveAttribute("aria-valuenow", "256");
+  });
+
+  test("dragging stays inside 220–400", async ({ page }) => {
+    await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/graph`);
+    const handle = page.getByRole("separator", { name: "Resize navigation" });
+    const box = (await handle.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + 200);
+    await page.mouse.down();
+    await page.mouse.move(900, box.y + 200, { steps: 5 });
+    await page.mouse.up();
+    await expect(handle).toHaveAttribute("aria-valuenow", "400");
+    const after = (await handle.boundingBox())!;
+    await page.mouse.move(after.x + after.width / 2, after.y + 200);
+    await page.mouse.down();
+    await page.mouse.move(10, after.y + 200, { steps: 5 });
+    await page.mouse.up();
+    await expect(handle).toHaveAttribute("aria-valuenow", "220");
+  });
+
+  test("collapsed, the left edge peeks it over the page; Esc hides it; ⌘\\ pins it", async ({ page }) => {
+    await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/graph`);
+    await page.getByRole("button", { name: "Collapse navigation" }).click();
+    const aside = page.getByRole("complementary", { name: "Navigation" });
+    await expect.poll(async () => (await aside.boundingBox())?.width ?? 0).toBe(0);
+    const main = page.locator("main");
+    const mainLeft = (await main.boundingBox())!.x;
+
+    await page.mouse.move(400, 400);
+    await page.mouse.move(2, 400);
+    await expect(aside).toHaveAttribute("data-peeking", "");
+    await expect(aside.getByRole("tree", { name: "Knowledge tree" }).first()).toBeVisible(ROUND_TRIP);
+    expect((await main.boundingBox())!.x).toBe(mainLeft); // over the page, not pushing it
+
+    await page.keyboard.press("Escape");
+    await expect(aside).not.toHaveAttribute("data-peeking", "");
+
+    await page.mouse.move(400, 400);
+    await page.mouse.move(2, 400);
+    await expect(aside).toHaveAttribute("data-peeking", "");
+    await page.keyboard.press("ControlOrMeta+Backslash");
+    await expect(page.getByRole("button", { name: "Collapse navigation" })).toBeAttached();
+    await expect(aside).not.toHaveAttribute("data-peeking", "");
+    await expect.poll(async () => (await aside.boundingBox())?.width ?? 0).toBe(256);
+  });
+
+  test("leaving the peeked sidebar hides it after a moment", async ({ page }) => {
+    await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/graph`);
+    await page.getByRole("button", { name: "Collapse navigation" }).click();
+    const aside = page.getByRole("complementary", { name: "Navigation" });
+    await page.mouse.move(400, 400);
+    await page.mouse.move(2, 400);
+    await expect(aside).toHaveAttribute("data-peeking", "");
+    // The slide-in takes a moment; a pointer that moves in before it ends is still on the page.
+    await expect.poll(async () => (await aside.boundingBox())?.width ?? 0).toBe(256);
+    await page.mouse.move(100, 400);
+    await page.mouse.move(800, 400);
+    await expect(aside).not.toHaveAttribute("data-peeking", "", { timeout: 2_000 });
+  });
 });
