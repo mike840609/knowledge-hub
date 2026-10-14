@@ -6,9 +6,9 @@ export type NavItem = { name: string; href: string; Icon: LucideIcon };
 export type NavAccess = Pick<WorkspaceAccessView, "workspace" | "actions">;
 
 /**
- * The sidebar's navigation. `top` sits above the tree and is always on screen; `bottom` scrolls after
- * it, because a group pinned to the bottom either floats far below a short tree or takes room from a
- * long one. There is no Knowledge item: the tree is the Knowledge navigation.
+ * The sidebar's navigation, in two labelled groups that both sit above the tree: `top` (Home, Graph) and
+ * `bottom` (the low-frequency destinations). Nothing follows the tree, whose length varies, so no item
+ * moves as it grows. There is no Knowledge item: the tree is the Knowledge navigation.
  */
 export function primaryNavItems(workspaceId: string, access: NavAccess, group: NavGroup): NavItem[] {
   const base = `/w/${workspaceId}`;

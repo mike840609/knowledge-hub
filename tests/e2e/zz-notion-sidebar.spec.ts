@@ -40,7 +40,7 @@ test.describe("one sidebar", () => {
     await expect(tree).toHaveAttribute("data-probe", "mounted-on-graph");
   });
 
-  test("there is no Knowledge item; low-frequency destinations follow the tree", async ({ page }) => {
+  test("there is no Knowledge item; low-frequency destinations sit above the tree, outside its scroll", async ({ page }) => {
     await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/graph`);
     await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Knowledge", exact: true })).toHaveCount(0);
     const tree = page.getByRole("tree", { name: "Knowledge tree" }).first();
@@ -48,7 +48,8 @@ test.describe("one sidebar", () => {
     const settings = page.getByRole("navigation", { name: "Workspace" }).getByRole("link", { name: "Settings", exact: true });
     await expect(settings).toBeAttached();
     const [treeBox, settingsBox] = [await tree.boundingBox(), await settings.boundingBox()];
-    expect(settingsBox!.y).toBeGreaterThan(treeBox!.y);
+    expect(settingsBox!.y).toBeLessThan(treeBox!.y);
+    expect(await settings.evaluate(el => el.closest("[data-sidebar-scroll]") === null)).toBe(true);
   });
 
   test("a team workspace shows no Home, Shares or Insights; My Space does", async ({ page }) => {

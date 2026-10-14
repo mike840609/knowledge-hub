@@ -42,6 +42,11 @@ reader already has changes meaning.
    the bottom** (raised by the user). A pinned group either floats far below a
    short tree or takes ~200px from a long one. Only the user menu, one row, is
    pinned.
+   **Revised 2026-10-15** (raised by the user on seeing the build): scrolling
+   after the tree made their position depend on the tree's length, so a long
+   tree pushed them out of reach. They now sit in the fixed head, beneath Home
+   and Graph, and the scroll region ends with the tree, the only part whose
+   length varies. The cost is four rows (~128px) of fixed height.
 
 ## Layout
 
@@ -51,6 +56,10 @@ reader already has changes meaning.
 │  🔍 Search            ⌘K   │  fixed
 │  🏠 Home                    │  (personal workspaces)
 │  ◎ Graph                    │
+│  ⛁ Sources                  │  each where its permission allows,
+│  ⇪ Shares                   │  as today (moved above the tree
+│  ◔ Insights                 │  2026-10-15, Decision 4)
+│  ⚙ Settings                 │
 ├ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┤  one scroll region from here
 │ Favorites                   │
 │ Recent                      │
@@ -58,12 +67,7 @@ reader already has changes meaning.
 │   ▾ Notes               +  │
 │     ▸ Folder          + ⋯  │
 │       · Doc           ☆ ⋯  │
-│   ▸ Synced source           │
-│                             │  16px gap, no rule
-│  ⛁ Sources                  │  each where its permission allows,
-│  ⇪ Shares                   │  as today
-│  ◔ Insights                 │
-│  ⚙ Settings                 │
+│   ▸ Synced source           │  the tree ends the region
 ├─────────────────────────────┤
 │  👤 Name                ⋯  │  the only pinned row
 └─────────────────────────────┘
