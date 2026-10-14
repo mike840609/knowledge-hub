@@ -4,7 +4,7 @@ import { lockWorkspaceForMutation } from "@/modules/workspaces/application/works
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import { fingerprintRevisionContent, type RevisionContentInput } from "../../domain/content";
 import { extractDocumentLinks } from "../../domain/document-links";
-import { DocumentNotFoundError, IntegrityViolationError, SourceArchivedError, SourceNotFoundError, SourceReadOnlyError } from "../../domain/errors";
+import { SourceArchivedError, SourceNotFoundError, SourceReadOnlyError } from "../../domain/errors";
 import { normalizeTreePosition } from "../../domain/tree-rules";
 import type { KnowledgeRepositories } from "../../ports/unit-of-work";
 import { assertActiveFolderAncestry } from "../tree-validation";
@@ -14,8 +14,6 @@ export type CreateHubDocumentInput = RevisionContentInput & {
   sourceId: string;
   parentId: string | null;
   position?: number;
-  /** Stable client id makes a retried creation safe after a lost response. */
-  documentId?: string;
 };
 
 /**
@@ -38,17 +36,6 @@ export async function createDocumentInTransaction(
   if (source.status !== "ACTIVE") throw new SourceArchivedError();
   if (source.ownership !== "HUB_MANAGED") throw new SourceReadOnlyError();
   await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "content-write");
-  if (input.documentId) {
-    const existing = await repositories.documents.findById(input.documentId);
-    if (existing) {
-      if (existing.sourceId !== source.id || existing.createdBy !== caller.identity.id || existing.status !== "ACTIVE") throw new DocumentNotFoundError();
-      const first = await repositories.revisions.findByRevisionNo(existing.id, 1);
-      const node = (await repositories.tree.listBySource(source.id)).find(node => node.documentId === existing.id);
-      if (!first || !node) throw new IntegrityViolationError("Document creation is incomplete.");
-      // Return the creation revision, never a newer revision another editor has written.
-      return { documentId: existing.id, revisionId: first.id, treeNodeId: node.id };
-    }
-  }
   let position: number | undefined;
   if (input.position !== undefined) {
     position = normalizeTreePosition(input.position);
@@ -58,7 +45,7 @@ export async function createDocumentInTransaction(
   const index = position === undefined ? siblings.length : Math.min(position, siblings.length);
   const { normalized: content, contentHash } = fingerprintRevisionContent(input);
   const now = new Date();
-  const documentId = input.documentId ?? uuidv7();
+  const documentId = uuidv7();
   const revisionId = uuidv7();
   const treeNodeId = uuidv7();
   await repositories.documents.insertDraft({

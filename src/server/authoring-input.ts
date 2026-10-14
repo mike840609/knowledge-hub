@@ -141,15 +141,14 @@ export function parseTreeNodePatchInput(body: unknown): TreeNodePatch {
   return { kind: "reorder", position: readPosition(record) };
 }
 
-export function parseCreateDocumentInput(body: unknown): { title: string; markdown: string; metadata: KnowledgeMetadata; parentId: string | null; documentId?: string } {
+export function parseCreateDocumentInput(body: unknown): { title: string; markdown: string; metadata: KnowledgeMetadata; parentId: string | null } {
   const record = readObject(body);
   const parentId = readOptionalParentId(record);
-  const documentId = record.documentId === undefined ? undefined : readId(record, "documentId");
   const hasTitle = record.title !== undefined;
   const hasFilename = record.filename !== undefined;
   if (hasTitle === hasFilename) invalid("Provide exactly one of title or filename.");
   const markdown = readMarkdown(record);
-  if (hasTitle) return { title: checkedTitle(readString(record, "title")), markdown, metadata: {}, parentId, ...(documentId ? { documentId } : {}) };
+  if (hasTitle) return { title: checkedTitle(readString(record, "title")), markdown, metadata: {}, parentId };
 
   // Upload path: the same frontmatter → H1 → filename precedence folder import uses,
   // and the same frontmatter-stripped body / frontmatter-as-metadata storage

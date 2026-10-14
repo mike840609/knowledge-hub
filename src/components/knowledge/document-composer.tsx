@@ -61,7 +61,6 @@ function fitHeight(textarea: HTMLTextAreaElement) {
   textarea.style.height = `${textarea.scrollHeight}px`;
 }
 
-export type AutosaveResult = string | { revisionId: string; documentId: string; editHref: string; readHref: string; creationStorageKey: string };
 export type ComposerSubmit = { title: string; markdown: string; expectedRevisionId: string | null };
 
 /**
@@ -74,21 +73,20 @@ export type ComposerSubmit = { title: string; markdown: string; expectedRevision
  */
 export function DocumentComposer({
   workspaceId,
-  draftKey: openedDraftKey,
+  draftKey,
   standIn,
   location,
   untitledLabel,
   metadataTitle,
-  initialTitle: openedTitle,
-  initialMarkdown: openedMarkdown,
+  initialTitle,
+  initialMarkdown,
   currentRevisionId,
   submitLabel,
   busyLabel,
   cancelHref,
   cancelLabel = "Cancel",
   onSubmit,
-  onAutosave,
-  conflictHref: openedConflictHref,
+  conflictHref,
   blocked,
   footer,
 }: {
@@ -119,24 +117,12 @@ export function DocumentComposer({
   cancelLabel?: string;
   /** Sends the document and returns where it now lives; throws on refusal. */
   onSubmit: (input: ComposerSubmit) => Promise<string>;
-  /** Personal notes save revisions in place; returns the new revision id. */
-  onAutosave?: (input: ComposerSubmit) => Promise<AutosaveResult>;
   /** Where "load the latest version" goes after a conflict; null when creating. */
   conflictHref: string | null;
   /** Another operation owns the page, e.g. an upload; nothing here may start. */
   blocked?: boolean;
-  /** Alternative entry point, shown only before a title or body has been entered. */
   footer?: (state: { busy: boolean }) => ReactNode;
 }) {
-  const [conflictHref, setConflictHref] = useState(openedConflictHref);
-  const mountedRef = useRef(true);
-  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
-  const activeDraftKey = useRef(openedDraftKey);
-  const draftKey = activeDraftKey.current;
-  const readHrefRef = useRef(cancelHref);
-  const flightRef = useRef<Promise<void> | null>(null);
-  const [offline, setOffline] = useState(false);
-  const retryAttempt = useRef(0);
   const router = useRouter();
   const pathname = usePathname();
   const paneRef = useRef<HTMLDivElement>(null);
@@ -162,11 +148,6 @@ export function DocumentComposer({
   const durableDraft = access.workspace.type === "PERSONAL" && !seeded;
   // Everything waits for hydration; see `use-hydrated` for what a native submit costs.
   const hydrated = useHydrated();
-  const [saved, setSaved] = useState({ title: openedTitle, markdown: openedMarkdown });
-  const initialTitle = saved.title, initialMarkdown = saved.markdown;
-  const [autosaving, setAutosaving] = useState(false);
-  const savingRef = useRef(false);
-  const revisionRef = useRef(currentRevisionId);
   const [title, setTitle] = useState(initialTitle);
   const [markdown, setMarkdown] = useState(initialMarkdown);
   const [baseRevisionId, setBaseRevisionId] = useState(currentRevisionId);
@@ -232,13 +213,12 @@ export function DocumentComposer({
       if (draft) {
         setContent({ markdown: draft.markdown, title: draft.title });
         setBaseRevisionId(draft.baseRevisionId);
-        revisionRef.current = draft.baseRevisionId;
         setRestored(draft.baseRevisionId === currentRevisionId ? "current" : "stale");
       }
       setRestoreChecked(true);
     };
     void restore();
-    return () => { live = false; restoreTried.current = false; persistent.current?.dispose(); };
+    return () => { live = false; restoreTried.current = false; remote?.dispose(); };
   }, [hydrated, currentRevisionId, access.workspace.id, access.workspace.type]);
 
   // Warn while text has not reached durable account storage. Legacy Team drafts
@@ -339,7 +319,7 @@ export function DocumentComposer({
     // Cancel and load-latest leave the fields editable while the page navigates; a keystroke there must not write back the draft they just cleared.
     if (leaving.current) return;
     if (persistent.current) {
-      persistent.current.change(nextTitle === initialTitle && nextMarkdown === initialMarkdown ? null : { title: nextTitle, markdown: nextMarkdown, baseRevisionId: revisionRef.current });
+      persistent.current.change(nextTitle === initialTitle && nextMarkdown === initialMarkdown ? null : { title: nextTitle, markdown: nextMarkdown, baseRevisionId });
     } else syncDraft(browserDraftStorage(), draftKey, { title: nextTitle, markdown: nextMarkdown, baseRevisionId }, initial);
   }
 
@@ -426,12 +406,11 @@ export function DocumentComposer({
     pendingRef.current = false;
     setTouched(false);
     setContent({ markdown: initialMarkdown, title: initialTitle });
-    setBaseRevisionId(onAutosave ? revisionRef.current : currentRevisionId);
+    setBaseRevisionId(currentRevisionId);
     setRestored(null);
   }
 
   function cancel() {
-    if (onAutosave) { void savePersonal(true); return; }
     // A revert inside the output debounce emits nothing, so `touched` may
     // still be set on an unchanged document: compare the flushed content
     // instead of trusting it (spec §11.2, #65).
@@ -470,136 +449,7 @@ export function DocumentComposer({
     window.location.assign(conflictHref);
   }
 
-  async function savePersonal(readAfter = false, destination?: string): Promise<void> {
-    if (readAfter && flightRef.current) {
-      await flightRef.current;
-      return autosaveRef.current(true, destination);
-    }
-    if (!onAutosave || savingRef.current || !confirmed || !ready || leaving.current || draftStatus === "conflict") return;
-    const snapshot = flush();
-    const final = resolveAuthoredTitle({ metadataTitle, markdown: snapshot.markdown, typedTitle: snapshot.title });
-    const savedTitle = final.title || "Untitled";
-    if (matchesInitial(snapshot, initial)) {
-      setTouched(false);
-      if (readAfter) { const href = destination ?? readHrefRef.current; leaving.current = true; refreshOnArrival(href); leave(href); }
-      return;
-    }
-    savingRef.current = true;
-    let finish!: () => void;
-    flightRef.current = new Promise<void>(resolve => { finish = resolve; });
-    setAutosaving(true);
-    if (readAfter) setBusy(true);
-    setError(null);
-    try {
-      const result = await onAutosave({ title: savedTitle, markdown: snapshot.markdown, expectedRevisionId: revisionRef.current });
-      const revisionId = typeof result === "string" ? result : result.revisionId;
-      if (typeof result !== "string" && activeDraftKey.current.kind === "new") {
-        const oldDraft = persistent.current;
-        const nextKey: DraftKey = { kind: "edit", userId: draftKey.userId, documentId: result.documentId };
-        const nextDraft = new PersistentDraft(`/api/workspaces/${workspaceId}/personal`, `draft:${result.documentId}`, setDraftStatus);
-        await nextDraft.load();
-        // Keep the editor mounted, and migrate its recovery text before changing the URL.
-        const latest = flush();
-        nextDraft.change({ ...latest, baseRevisionId: revisionId });
-        persistent.current = nextDraft;
-        activeDraftKey.current = nextKey;
-        clearDraft(browserDraftStorage(), draftKey);
-        void oldDraft?.clear().then(() => oldDraft.dispose());
-        readHrefRef.current = result.readHref;
-        setConflictHref(result.editHref);
-        if (mountedRef.current) window.history.replaceState(window.history.state, "", result.editHref);
-        try { sessionStorage.removeItem(result.creationStorageKey); } catch { /* storage unavailable */ }
-      }
-      retryAttempt.current = 0;
-      revisionRef.current = revisionId;
-      setBaseRevisionId(revisionId);
-      setSaved(snapshot);
-      setRestored(null);
-      const latest = flush();
-      const unchanged = matchesInitial(latest, snapshot);
-      // Replace the recovery draft with the latest text against the revision just saved.
-      // Do not await a draft deletion while the user is still typing.
-      persistent.current?.change(unchanged ? null : { ...latest, baseRevisionId: revisionId });
-      if (unchanged) { clearDraft(browserDraftStorage(), draftKey); setTouched(false); }
-      if (readAfter) { const href = destination ?? readHrefRef.current; leaving.current = true; refreshOnArrival(href); leave(href); }
-    } catch (failure) {
-      setError(governanceFailure(failure));
-      setBusy(false);
-    } finally {
-      savingRef.current = false;
-      flightRef.current = null;
-      finish();
-      setAutosaving(false);
-    }
-  }
-
-  const navigationDirtyRef = useRef(dirty);
-  navigationDirtyRef.current = dirty;
-  const keepRef = useRef(keep);
-  keepRef.current = keep;
-  const autosaveRef = useRef(savePersonal);
-  autosaveRef.current = savePersonal;
-  useEffect(() => {
-    if (!onAutosave || !dirty || !ready || !confirmed || autosaving || offline || error || restored === "stale" || draftStatus === "conflict") return;
-    const timer = window.setTimeout(() => { void autosaveRef.current(); }, 1000);
-    return () => window.clearTimeout(timer);
-  }, [onAutosave, title, markdown, touched, dirty, ready, confirmed, autosaving, offline, error, restored, draftStatus]);
-
-  useEffect(() => {
-    if (!onAutosave) return;
-    const reconnect = () => {
-      setOffline(!navigator.onLine);
-      if (!navigator.onLine) return;
-      void persistent.current?.retry();
-      setError(current => current?.code === "REQUEST_FAILED" ? null : current);
-    };
-    setOffline(!navigator.onLine);
-    window.addEventListener("online", reconnect);
-    window.addEventListener("offline", reconnect);
-    return () => { window.removeEventListener("online", reconnect); window.removeEventListener("offline", reconnect); };
-  }, [onAutosave]);
-
-  useEffect(() => {
-    if (!onAutosave || error?.code !== "REQUEST_FAILED" || offline) return;
-    const timer = window.setTimeout(() => {
-      retryAttempt.current++;
-      void persistent.current?.retry();
-      setError(null);
-    }, Math.min(30000, 2000 * 2 ** Math.min(retryAttempt.current, 4)));
-    return () => window.clearTimeout(timer);
-  }, [onAutosave, error, offline]);
-
-  useEffect(() => {
-    if (!onAutosave) return;
-    // Intercept normal in-app links before Next's Link starts navigation.
-    const navigate = (event: MouseEvent) => {
-      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || leaving.current) return;
-      if (!navigationDirtyRef.current && !savingRef.current) return;
-      const link = (event.target as Element)?.closest?.("a[href]");
-      if (!(link instanceof HTMLAnchorElement) || link.target === "_blank" || link.hasAttribute("download")) return;
-      const url = new URL(link.href);
-      if (url.origin !== window.location.origin || (url.pathname === window.location.pathname && url.search === window.location.search)) return;
-      event.preventDefault(); event.stopPropagation();
-      void autosaveRef.current(true, `${url.pathname}${url.search}${url.hash}`);
-    };
-    const persist = () => {
-      try { const latest = flushRef.current(); keepRef.current(latest.title, latest.markdown); } catch { /* editor may already be destroyed */ }
-      void persistent.current?.flush();
-      if (document.visibilityState === "hidden") void autosaveRef.current();
-    };
-    document.addEventListener("click", navigate, true);
-    window.addEventListener("pagehide", persist);
-    document.addEventListener("visibilitychange", persist);
-    return () => {
-      document.removeEventListener("click", navigate, true);
-      window.removeEventListener("pagehide", persist);
-      document.removeEventListener("visibilitychange", persist);
-      persist();
-    };
-  }, [onAutosave]);
-
   async function save() {
-    if (onAutosave) { await savePersonal(); return; }
     if (busy || !confirmed || !ready) return;
     // What was typed a moment ago has not reached `markdown` yet; save what is there.
     const snapshot = flush();
@@ -667,7 +517,7 @@ export function DocumentComposer({
   function onKeyDown(event: KeyboardEvent<HTMLFormElement>) {
     if (
       event.key === "Escape" &&
-      !busy && !autosaving &&
+      !busy &&
       !event.nativeEvent.isComposing &&
       event.keyCode !== 229 &&
       matchesInitial(flush(), initial)
@@ -689,7 +539,7 @@ export function DocumentComposer({
     else textareaRef.current?.focus();
   }
   const conflict = error?.code === "REVISION_CONFLICT";
-  const untitled = !resolved.title && !onAutosave;
+  const untitled = !resolved.title;
   // Issue #72: the title follows the H1 (composer spec §4), so opening a
   // document whose stored title differs from its H1 already shows the new
   // name in the breadcrumb. Say so, or saving renames it without a word.
@@ -729,20 +579,18 @@ export function DocumentComposer({
                   Markdown
                 </Button>
               </Tooltip>
-              {onAutosave && <span role="status" className="text-caption text-kh-text-muted">{!restoreChecked ? "Loading…" : draftStatus === "conflict" || error?.code === "REVISION_CONFLICT" ? "Sync conflict · changes kept here" : autosaving ? "Syncing…" : offline && dirty ? "Offline · sync pending" : error?.code === "REQUEST_FAILED" ? "Not synced · will retry" : error ? "Not saved · action required" : dirty ? "Saving…" : draftKey.kind === "new" ? "Start writing to save" : "All changes saved"}</span>}
-              <Tooltip label={onAutosave && draftKey.kind === "edit" ? "Read" : cancelLabel} keys="Esc">
-                <Button type="button" variant="secondary" disabled={busy || blocked || (onAutosave !== undefined && !ready)} onClick={cancel}>
-                  {onAutosave && draftKey.kind === "edit" ? "Read" : cancelLabel}
+              <Tooltip label={cancelLabel} keys="Esc">
+                <Button type="button" variant="secondary" disabled={busy || blocked} onClick={cancel}>
+                  {cancelLabel}
                 </Button>
               </Tooltip>
-              <Tooltip label={onAutosave ? "Save now" : submitLabel} shortcut="Meta+Enter Control+Enter">
+              <Tooltip label={submitLabel} shortcut="Meta+Enter Control+Enter">
                 <Button
                   type="submit"
-                  className={onAutosave && !error ? "sr-only" : undefined}
                   aria-describedby={untitled ? "composer-untitled-hint" : undefined}
-                  disabled={!ready || !confirmed || untitled || autosaving}
+                  disabled={!ready || !confirmed || untitled}
                 >
-                  {busy ? busyLabel : onAutosave ? error ? "Retry save" : "Save now" : submitLabel}
+                  {busy ? busyLabel : submitLabel}
                 </Button>
               </Tooltip>
             </div>
@@ -757,7 +605,7 @@ export function DocumentComposer({
           {renamesOnSave ? (
             <p className="mt-1.5 text-caption text-kh-text-muted">Saving will rename this document to “{resolved.title}”</p>
           ) : null}
-          {durableDraft && !onAutosave && <p role="status" className="text-caption text-kh-text-muted">
+          {durableDraft && <p role="status" className="text-caption text-kh-text-muted">
             {({ loading: "Loading draft…", saved: "Draft saved to your account", saving: "Saving draft…", local: "Draft kept on this device · syncing…", error: "Draft sync failed. Keep this page open and retry.", conflict: "Draft changed on another device. Your text is preserved here; copy it before loading another draft." })[draftStatus]}
             {draftStatus === "error" && <Button type="button" variant="link" onClick={() => void persistent.current?.retry()}>Retry draft save</Button>}
           </p>}
@@ -859,7 +707,7 @@ export function DocumentComposer({
         cancelLabel="Keep editing"
         onConfirm={leaveDiscarding}
       />
-      {footer && !title.trim() && !markdown.trim() ? <div className="kh-reading-column pb-6">{footer({ busy })}</div> : null}
+      {footer ? <div className="kh-reading-column pb-6">{footer({ busy })}</div> : null}
     </DocumentPane>
   );
 }

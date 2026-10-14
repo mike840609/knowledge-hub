@@ -266,14 +266,15 @@ test("where the pane has no room for a rail, the owner's discussions open over t
   await expect(page.getByRole("complementary", { name: "Document discussions" })).toBeHidden();
 });
 
-test("a document nobody has commented on shows the owner no way into discussions, and no margin for marks", async ({ page, request }) => {
+test("a document nobody has commented on shows the owner no way into discussions and no marks, only the gutter a paragraph is commented from", async ({ page, request }) => {
   const doc = await createReviewDocument(request, "## Alpha\n\nA paragraph.\n\n## Beta\n\nAnother.\n");
   await page.setViewportSize({ width: 1680, height: 900 });
   await page.goto(doc.href);
   await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
   await expect(page.getByRole("button", { name: /discussions/ })).toHaveCount(0);
   await expect(page.locator("[data-review-marker]")).toHaveCount(0);
-  expect(await page.locator("[data-review-document]").evaluate((article) => getComputedStyle(article).paddingRight)).toBe("0px");
+  // The owner can comment on any paragraph, and the buttons for that keep a gutter of their own beside the article.
+  expect(await page.locator("[data-review-document]").evaluate((article) => getComputedStyle(article).paddingRight)).toBe("64px");
 });
 
 test("opening and closing the owner's discussions moves nothing under the pointer where the pane has room", async ({ page, request }) => {

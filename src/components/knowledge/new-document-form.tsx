@@ -9,7 +9,7 @@ import { GovernanceError, governanceFailure, governanceRequest, type GovernanceF
 import { browserDraftStorage, clearDraft } from "@/lib/document-draft";
 import { DocumentComposer } from "./document-composer";
 
-type Created = { documentId: string; sourceId: string; revisionId: string };
+type Created = { documentId: string; sourceId: string };
 
 export function NewDocumentForm({
   workspaceId,
@@ -37,8 +37,6 @@ export function NewDocumentForm({
   const { access, confirmed } = useWorkspaceAuthorization();
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<GovernanceFailure | null>(null);
-  const createdRef = useRef<Created | null>(null);
-  const requestIdRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!access.actions.canWrite) return null;
@@ -91,26 +89,6 @@ export function NewDocumentForm({
       busyLabel="Creating…"
       cancelHref={cancelHref ?? listHref}
       conflictHref={null}
-      onAutosave={access.workspace.type === "PERSONAL" ? async ({ title, markdown, expectedRevisionId }) => {
-        const key = `kh:new-note:${userId}:${workspaceId}:${folder?.id ?? ""}:${seedTitle ?? ""}`;
-        if (!createdRef.current) {
-          if (!requestIdRef.current) {
-            try { requestIdRef.current = sessionStorage.getItem(key); } catch { /* storage unavailable */ }
-            requestIdRef.current ??= crypto.randomUUID();
-            try { sessionStorage.setItem(key, requestIdRef.current); } catch { /* in-memory retry remains safe */ }
-          }
-          createdRef.current = await governanceRequest<Created>(`/api/workspaces/${workspaceId}/documents`, "POST", {
-            title, markdown, documentId: requestIdRef.current, ...(folder ? { parentId: folder.id } : {}),
-          });
-        }
-        const created = createdRef.current;
-        // A replayed POST can return an earlier snapshot; PATCH saves the latest input safely.
-        const saved = await governanceRequest<{ revisionId: string }>(`/api/documents/${created.documentId}`, "PATCH", {
-          title, markdown, expectedCurrentRevisionId: expectedRevisionId ?? created.revisionId,
-        });
-        const href = `/w/${workspaceId}/knowledge/${created.sourceId}/${created.documentId}`;
-        return { revisionId: saved.revisionId, documentId: created.documentId, editHref: `${href}/edit`, readHref: href, creationStorageKey: key };
-      } : undefined}
       onSubmit={({ title, markdown }) => create({ title, markdown })}
       blocked={uploading}
       footer={({ busy }) => (

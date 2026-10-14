@@ -452,7 +452,6 @@ export function DocumentDetailClient({
   return (
     <ReviewEntryProvider>
       <DocumentPane
-        readingControls
         contentRef={contentRef}
         outline={<OutlineRail entries={outline} activeSlug={activeSlug} />}
         inspectorOpen={inspectorOpen}

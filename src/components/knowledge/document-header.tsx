@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, type Ref } from "react";
 import { LockKeyhole, MessageSquare, MessageSquarePlus, PanelRight } from "lucide-react";
+import { ReadingWidthToggle } from "./reading-width-toggle";
 import { ActionIcon } from "@/components/actions/action-icon";
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
@@ -104,6 +105,7 @@ export function DocumentHeader({
               </button>
             </Tooltip>
           ) : null}
+          <ReadingWidthToggle />
           {/* What is done to the document comes first; then the two that open something on the right,
               together and nearest to it: the discussions, and Details. */}
           {/* Why what is selected cannot take a comment, where the control for one that can would be. */}
