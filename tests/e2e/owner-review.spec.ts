@@ -216,6 +216,8 @@ test("discussions that are all resolved do not open by themselves", async ({ pag
   const owner = phase3Origin("reviewOwner");
   const { threads } = await (await request.get(`${owner}/api/documents/${doc.documentId}/review-threads`)).json();
   expect((await request.post(`${owner}/api/documents/${doc.documentId}/review-threads/${threads[0].id}/resolution`, { headers: { Origin: owner }, data: { status: "RESOLVED" } })).ok()).toBe(true);
+  // Resolved from the discussions, it would have been seen there; resolved here, its notice is read the same way.
+  expect((await request.post(`${owner}/api/review-notifications/mark-read`, { headers: { Origin: owner }, data: { documentId: doc.documentId } })).ok()).toBe(true);
   await page.setViewportSize({ width: 1680, height: 900 });
   await page.goto(doc.href);
   // Nothing awaits the owner, so the control carries no number.
