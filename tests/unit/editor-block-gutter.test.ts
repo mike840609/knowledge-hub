@@ -117,3 +117,19 @@ it('reveals controls only in the left gutter, not on focus, typing or prose hove
   view.dispatch(view.state.tr.insertText('Text'));
   expect(toolbar.hidden).toBe(true);
 });
+
+it('keeps the controls inside the pane when the gutter hangs past its left edge', async () => {
+  const pane = document.body.appendChild(document.createElement('div'));
+  pane.className = 'kh-document-pane';
+  pane.getBoundingClientRect = () => ({ ...rect(0, 900), left: 100, x: 100 });
+  const root = pane.appendChild(document.createElement('div'));
+  const editor = await createMarkdownEditor({ root, markdown: 'First', className: 'kh-editor', ariaLabel: 'Content', editable: true, onUserEdit: () => {}, onMarkdown: () => {}, allowImage: () => false, extraPlugins: [blockGutter()] });
+  opened.push(editor);
+  const view = editor.action(ctx => ctx.get(editorViewCtx));
+  // The text starts 24px inside the pane; the 56px gutter begins 32px before the pane does.
+  view.dom.getBoundingClientRect = () => ({ ...rect(40, 300), left: 68, x: 68 });
+  (view.dom.firstElementChild as HTMLElement).getBoundingClientRect = () => rect(40, 80);
+  view.focus();
+  view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'F10', altKey: true, bubbles: true, cancelable: true }));
+  expect(document.querySelector<HTMLElement>('.kh-block-gutter')!.style.left).toBe('104px');
+});

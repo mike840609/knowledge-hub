@@ -82,14 +82,15 @@ export function DocumentHeader({
         <div className="flex shrink-0 items-center gap-2">
           {editHref ? (
             <Tooltip label="Edit" shortcut="E">
-              <a
+              {/* A client navigation: the layout, and whether Details is open, carry over to the editor. */}
+              <Link
                 href={editHref}
                 aria-label="Edit"
                 aria-keyshortcuts="E"
                 className={buttonClasses({ variant: "ghost", icon: true })}
               >
                 <ActionIcon name="edit" className="h-4 w-4" />
-              </a>
+              </Link>
             </Tooltip>
           ) : null}
           {onShareClick ? (

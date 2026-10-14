@@ -1,9 +1,13 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { PanelRight } from "lucide-react";
 import { PersistentDraft, type DraftStatus } from "@/lib/persistent-draft";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type KeyboardEvent, type ReactNode } from "react";
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type KeyboardEvent, type ReactNode } from "react";
 import { DocumentPane } from "./document-pane";
+import { InspectorContext } from "./inspector-context";
+import { OutlineDisclosure, OutlineRail } from "./document-outline";
+import type { OutlineEntry } from "@/shared/markdown/outline";
 import { useScrollRestoration } from "./use-scroll-restoration";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -63,6 +67,8 @@ function fitHeight(textarea: HTMLTextAreaElement) {
 
 export type ComposerSubmit = { title: string; markdown: string; expectedRevisionId: string | null };
 
+const NO_OUTLINE: OutlineEntry[] = [];
+
 /**
  * Writing a document, laid out like reading one (composer spec). The header row
  * is the reader's with the actions swapped; the column is the reader's with the
@@ -75,6 +81,8 @@ export function DocumentComposer({
   workspaceId,
   draftKey,
   standIn,
+  initialOutline = NO_OUTLINE,
+  inspector,
   location,
   untitledLabel,
   metadataTitle,
@@ -100,6 +108,10 @@ export function DocumentComposer({
    * it with a skeleton until the editor arrives, rather than a stale article.
    */
   standIn: ReactNode;
+  /** The reader's outline of `initialMarkdown`, worked out on the server for the same reason as `standIn`. */
+  initialOutline?: OutlineEntry[];
+  /** The reader's Details panel for the document being edited; none for a new one. */
+  inspector?: ReactNode;
   /** Breadcrumb up to, not including, the document; the resolved title is appended. */
   location: DocumentBreadcrumbSegment[];
   /** The last breadcrumb segment while nothing supplies a title. */
@@ -182,6 +194,21 @@ export function DocumentComposer({
   // A failed editor leaves the Markdown source, which always works.
   const showing: Mode = editorFailed ? "source" : mode;
   const resolved = resolveAuthoredTitle({ metadataTitle, markdown, typedTitle: title });
+  // Whether Details is open is the layout's, shared with the reader (`knowledge-layout.tsx`).
+  const details = useContext(InspectorContext);
+  // The reader's outline of the text being written: the rail beside it or the disclosure above it. The
+  // server's opens the page; the Markdown stack that follows edits comes on demand, as the editor does.
+  const [outline, setOutline] = useState(initialOutline);
+  useEffect(() => {
+    if (markdown === initialMarkdown) { setOutline(initialOutline); return; }
+    // The source view changes `markdown` per keystroke and a long document takes a visible while to
+    // parse, so a burst of typing is parsed once, after it.
+    let current = true;
+    const timer = window.setTimeout(() => {
+      void import("@/shared/markdown/outline").then(({ extractOutline }) => { if (current) setOutline(extractOutline(markdown)); });
+    }, 300);
+    return () => { current = false; window.clearTimeout(timer); };
+  }, [markdown, initialMarkdown, initialOutline]);
   const dirty = title !== initialTitle || markdown !== initialMarkdown || touched;
   // Fields wait for the restore check too: enabling them the instant
   // hydration commits, before sessionStorage has been read, lets a keystroke
@@ -545,7 +572,7 @@ export function DocumentComposer({
     resolved.source === "H1" && !untitled && resolved.title !== initialTitle;
 
   return (
-    <DocumentPane contentRef={paneRef}>
+    <DocumentPane contentRef={paneRef} outline={<OutlineRail entries={outline} activeSlug={null} />} inspector={inspector} inspectorOpen={Boolean(inspector) && details?.open === true}>
       <form
         onBlur={() => {
           // Leaving a field flushes pending rendered output, so a revert
@@ -558,11 +585,14 @@ export function DocumentComposer({
         onKeyDown={onKeyDown}
         onSubmit={(event) => { event.preventDefault(); void save(); }}
       >
+        {/* The reader's page, line for line (`document-header.tsx`): the path line, then the title and one
+            muted line under it, then the article. What the composer has to say takes the reader's
+            "Updated" line, so nothing moves between reading and editing. */}
         <div data-pinned={scrolled || undefined} className="kh-fade-below sticky top-0 z-10 bg-kh-bg">
-        <div className="kh-reading-column min-h-12 py-2">
-          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+          <div className="kh-reading-column flex min-h-12 min-w-0 items-center justify-between gap-3 py-2">
             <DocumentBreadcrumb segments={[...location, { label: resolved.title || untitledLabel }]} />
-            <div className="flex shrink-0 items-center gap-2">
+            {/* Four controls fit a 320px phone only at the narrower gap. */}
+            <div className="flex shrink-0 items-center gap-1 sm:gap-2">
               {/* A disabled button shows no tooltip; the failed-editor notice below says why instead. */}
               <Tooltip label="Show Markdown source" shortcut="Meta+/ Control+/">
                 <Button
@@ -591,51 +621,18 @@ export function DocumentComposer({
                   {busy ? busyLabel : submitLabel}
                 </Button>
               </Tooltip>
+              {/* The reader's Details, in the reader's place. No ⌘I here: in the editor it is italic. */}
+              {inspector && details ? (
+                <Tooltip label="Details">
+                  <Button type="button" variant="ghost" icon aria-label="Details" aria-expanded={details.open} onClick={() => details.setOpen(!details.open)}>
+                    <PanelRight className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                </Tooltip>
+              ) : null}
             </div>
           </div>
-          {/* Visible, not a `title`: a disabled button's reason must reach keyboard and touch users too (§10). */}
-          {untitled ? (
-            <p id="composer-untitled-hint" className="mt-1.5 text-caption text-kh-text-muted">Add a title, or start the document with a # heading, to save</p>
-          ) : null}
-          {resolved.source === "METADATA" ? (
-            <p className="mt-1.5 text-caption text-kh-text-muted">Title comes from the uploaded file’s frontmatter</p>
-          ) : null}
-          {renamesOnSave ? (
-            <p className="mt-1.5 text-caption text-kh-text-muted">Saving will rename this document to “{resolved.title}”</p>
-          ) : null}
-          {durableDraft && <p role="status" className="text-caption text-kh-text-muted">
-            {({ loading: "Loading draft…", saved: "Draft saved to your account", saving: "Saving draft…", local: "Draft kept on this device · syncing…", error: "Draft sync failed. Keep this page open and retry.", conflict: "Draft changed on another device. Your text is preserved here; copy it before loading another draft." })[draftStatus]}
-            {draftStatus === "error" && <Button type="button" variant="link" onClick={() => void persistent.current?.retry()}>Retry draft save</Button>}
-          </p>}
         </div>
-        </div>
-        <div className="kh-reading-column space-y-4 py-6">
-          {/* The live region stays mounted while empty: a region created together with its text is
-              often not announced. Empty it is `sr-only` — still in the accessibility tree, but with
-              no footprint (an empty box would add a `space-y` gap). The restore effect fills it a
-              commit after hydration, so the announcement fires. */}
-          <p role="status" className={restored ? "flex flex-wrap items-center gap-2 rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2 text-body text-kh-text" : "sr-only"}>
-            {restored ? (
-              <>
-                {restored === "stale" ? "The document changed while you were away. Your unsaved changes were restored." : "Your unsaved changes were restored."}
-                <Button type="button" variant="link" onClick={discardDraft}>Discard draft</Button>
-              </>
-            ) : null}
-          </p>
-          {editorFailed ? (
-            <p role="status" className="rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2 text-body text-kh-text">
-              Rendered editing is unavailable for this document. Your text is available in Markdown mode.
-              <Button type="button" variant="link" className="ml-2" onClick={retryRenderedEditor}>Retry rendered editing</Button>
-            </p>
-          ) : null}
-          {conflict ? (
-            <div role="alert" className="rounded-md border border-kh-warning-border bg-kh-warning-bg px-3 py-2 text-body text-kh-text">
-              Someone updated this document. Your changes are still here.
-              <Button type="button" variant="link" className="ml-2" onClick={loadLatest}>Load latest version (discard your changes)</Button>
-            </div>
-          ) : (
-            <GovernanceError error={error} />
-          )}
+        <header className="kh-reading-column pb-3">
           {resolved.source === "TYPED" ? (
             <input
               ref={titleRef}
@@ -646,14 +643,53 @@ export function DocumentComposer({
               disabled={!ready}
               onChange={(event) => changeTitle(event.target.value)}
               onKeyDown={onTitleKeyDown}
-              className="w-full border-0 bg-transparent p-0 text-heading font-semibold tracking-tight text-kh-text outline-none placeholder:text-kh-text-muted"
+              className="mt-2 block w-full border-0 bg-transparent p-0 text-heading font-semibold tracking-tight text-kh-text outline-none placeholder:text-kh-text-muted"
             />
           ) : null}
           {/* The reader's rule: a title above the content unless the content opens with its own heading.
               TYPED has the title field above; METADATA has neither. */}
           {showing === "rendered" && resolved.source === "METADATA" && !markdownOpensWithHeading(markdown) ? (
-            <h1 className="text-heading font-semibold tracking-tight text-kh-text">{resolved.title}</h1>
+            <h1 className="mt-2 truncate text-heading font-semibold tracking-tight text-kh-text" title={resolved.title}>{resolved.title}</h1>
           ) : null}
+          {/* Always one line tall, as the reader's is, even with nothing to say. */}
+          <div className="mt-1.5 flex min-h-4 flex-wrap items-center gap-x-2 gap-y-1 text-caption text-kh-text-muted">
+            {/* Visible, not a `title`: a disabled button's reason must reach keyboard and touch users too (§10). */}
+            {untitled ? <span id="composer-untitled-hint">Add a title, or start the document with a # heading, to save</span> : null}
+            {resolved.source === "METADATA" ? <span>Title comes from the uploaded file’s frontmatter</span> : null}
+            {renamesOnSave ? <span>Saving will rename this document to “{resolved.title}”</span> : null}
+            {durableDraft && <span role="status">
+              {({ loading: "Loading draft…", saved: "Draft saved to your account", saving: "Saving draft…", local: "Draft kept on this device · syncing…", error: "Draft sync failed. Keep this page open and retry.", conflict: "Draft changed on another device. Your text is preserved here; copy it before loading another draft." })[draftStatus]}
+              {draftStatus === "error" && <Button type="button" variant="link" onClick={() => void persistent.current?.retry()}>Retry draft save</Button>}
+            </span>}
+          </div>
+        </header>
+        <OutlineDisclosure entries={outline} activeSlug={null} />
+        <div className="kh-reading-column py-6">
+          {/* The live region stays mounted while empty: a region created together with its text is
+              often not announced. Empty it is `sr-only` — still in the accessibility tree, but with
+              no footprint. The restore effect fills it a commit after hydration, so the announcement fires. */}
+          <p role="status" className={restored ? "mb-4 flex flex-wrap items-center gap-2 rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2 text-body text-kh-text" : "sr-only"}>
+            {restored ? (
+              <>
+                {restored === "stale" ? "The document changed while you were away. Your unsaved changes were restored." : "Your unsaved changes were restored."}
+                <Button type="button" variant="link" onClick={discardDraft}>Discard draft</Button>
+              </>
+            ) : null}
+          </p>
+          {editorFailed ? (
+            <p role="status" className="mb-4 rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2 text-body text-kh-text">
+              Rendered editing is unavailable for this document. Your text is available in Markdown mode.
+              <Button type="button" variant="link" className="ml-2" onClick={retryRenderedEditor}>Retry rendered editing</Button>
+            </p>
+          ) : null}
+          {conflict ? (
+            <div role="alert" className="mb-4 rounded-md border border-kh-warning-border bg-kh-warning-bg px-3 py-2 text-body text-kh-text">
+              Someone updated this document. Your changes are still here.
+              <Button type="button" variant="link" className="ml-2" onClick={loadLatest}>Load latest version (discard your changes)</Button>
+            </div>
+          ) : (
+            <div className="mb-4 empty:hidden"><GovernanceError error={error} /></div>
+          )}
           {/* Until the editor is ready the server's rendering stands in for it, so nothing flashes.
               It is what the composer opened with: restored text waits for the editor behind a
               skeleton rather than wearing the old revision as its face. */}

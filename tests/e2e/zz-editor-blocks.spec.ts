@@ -50,6 +50,74 @@ async function save(page: Page) {
 }
 
 test.describe("blocks in the rendered editor", () => {
+  test("the editor lays the page out as the reader does, from the title to the text", async ({ page }) => {
+    const stamp = unique("Measure");
+    const workspaceId = await mySpace(page);
+    const prose = "A paragraph long enough to fill the measure of the reading column, so its width says where the column ends as well as where it begins.";
+    const sections = `${prose}\n\n## First part\n\n${prose}\n\n## Second part\n\n${prose}`;
+    // One with the title above the text, one whose text opens with its own # heading.
+    const typed = await createNote(page, workspaceId, `Measure ${stamp}`, sections);
+    const owned = await createNote(page, workspaceId, `Owned ${stamp}`, `# Owned ${stamp}\n\n${sections}`);
+    const box = async (locator: ReturnType<Page["locator"]>) => {
+      if ((await locator.count()) === 0) return null;
+      const found = await locator.first().boundingBox();
+      return found && { x: Math.round(found.x), y: Math.round(found.y), width: Math.round(found.width) };
+    };
+    // A phone; a pane narrow enough for the outline to sit above the text; wide enough for its rail; very wide.
+    for (const width of [390, 1100, 1600, 2560]) {
+      for (const url of [typed, owned]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(url);
+        const article = page.locator("main article");
+        await expect(article.locator("p").first()).toBeVisible();
+        const read = {
+          title: await box(page.locator("main header h1")),
+          h1: await box(article.locator("h1")),
+          text: await box(article.locator("p")),
+          heading: await box(article.locator("h2")),
+        };
+        const surface = await openEditor(page, url);
+        const edit = {
+          title: await box(composer(page).getByRole("textbox", { name: "Title" })),
+          h1: await box(surface.locator("h1")),
+          text: await box(surface.locator("p")),
+          heading: await box(surface.locator("h2")),
+        };
+        expect(read.text, `at ${width}px`).not.toBeNull();
+        expect(edit, `${url} at ${width}px`).toEqual(read);
+      }
+    }
+  });
+
+  test("Details open while reading stays open while editing, and the text beside it stays put", async ({ page }) => {
+    const stamp = unique("Details");
+    const workspaceId = await mySpace(page);
+    const url = await createNote(page, workspaceId, `Details ${stamp}`, "A paragraph long enough to fill the measure of the reading column, so its width says where the column ends as well as where it begins.");
+    const panel = page.getByRole("complementary", { name: "Document details", exact: true });
+    const text = async (locator: ReturnType<Page["locator"]>) => {
+      const found = await locator.first().boundingBox();
+      return found && { x: Math.round(found.x), y: Math.round(found.y), width: Math.round(found.width) };
+    };
+    // Leave once by each way out: both return to the reader through the client router.
+    for (const [width, leave] of [[1600, "Cancel"], [1920, "Save"]] as const) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(url);
+      await expect(page.locator("main article p").first()).toBeVisible(ROUND_TRIP);
+      await page.getByRole("button", { name: "Details", exact: true }).first().click();
+      await expect(panel).toBeVisible();
+      const read = await text(page.locator("main article p"));
+      await page.getByRole("link", { name: "Edit" }).first().click();
+      const surface = composer(page).getByRole("textbox", { name: "Content" });
+      await expect(surface).toBeFocused(ROUND_TRIP);
+      await expect(panel).toBeVisible();
+      expect(await text(surface.locator("p")), `editing at ${width}px`).toEqual(read);
+      await composer(page).getByRole("button", { name: leave, exact: true }).click();
+      await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
+      await expect(panel).toBeVisible();
+      expect(await text(page.locator("main article p")), `back after ${leave} at ${width}px`).toEqual(read);
+    }
+  });
+
   test("a paragraph with a wikilink is moved from the keyboard, and the saved document still links", async ({ page }) => {
     const stamp = unique("Move");
     const target = `Target ${stamp}`;

@@ -2,6 +2,7 @@
 
 import { governanceRequest } from "@/components/workspaces/governance-error";
 import type { ReactNode } from "react";
+import type { OutlineEntry } from "@/shared/markdown/outline";
 import type { DocumentBreadcrumbSegment } from "./document-breadcrumb";
 import { DocumentComposer } from "./document-composer";
 
@@ -11,6 +12,8 @@ export function DocumentEditor({
   documentId,
   userId,
   standIn,
+  initialOutline,
+  inspector,
   location,
   metadataTitle,
   currentRevisionId,
@@ -24,6 +27,10 @@ export function DocumentEditor({
   userId: string;
   /** The server-rendered stand-in for the editor while it loads (see `DocumentComposer`). */
   standIn: ReactNode;
+  /** The reader's outline of the current revision (see `DocumentComposer`). */
+  initialOutline: OutlineEntry[];
+  /** The reader's Details panel (see `DocumentComposer`). */
+  inspector: ReactNode;
   location: DocumentBreadcrumbSegment[];
   metadataTitle: unknown;
   currentRevisionId: string;
@@ -36,6 +43,8 @@ export function DocumentEditor({
       workspaceId={workspaceId}
       draftKey={{ kind: "edit", userId, documentId }}
       standIn={standIn}
+      initialOutline={initialOutline}
+      inspector={inspector}
       location={location}
       untitledLabel="Untitled"
       metadataTitle={metadataTitle}
