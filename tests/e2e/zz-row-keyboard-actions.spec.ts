@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "./fixtures/test";
-import { ROUND_TRIP, mySpace, openKnowledge, row, unique } from "./fixtures/organize";
+import { ROUND_TRIP, mySpace, openKnowledge, openSource, row, rowIn, unique } from "./fixtures/organize";
 import { openPalette } from "./fixtures/palette";
 
 // Mirrors scripts/db/seed.ts BROWSER_FIXTURE_IDS: a workspace with a SOURCE_MANAGED source in it, read here and never changed.
@@ -155,11 +155,11 @@ test("a letter typed into the tree's filter stays in the filter", async ({ page 
 
 test("E on a read-only row does nothing, and does not edit the document being read", async ({ page }) => {
   await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${OBSIDIAN_SOURCE}`);
-  await expect(row(page, "Architecture")).toBeVisible(ROUND_TRIP);
+  await expect(rowIn(page, OBSIDIAN_SOURCE, "Architecture")).toBeVisible(ROUND_TRIP);
   await page.waitForURL(/\/knowledge\/[^/]+\/[^/]+$/);
   // The document being read is editable (Architecture): until it has rendered there is no Edit for the page's E to run.
   await expect(page.getByRole("heading", { name: "Architecture" })).toBeVisible(ROUND_TRIP);
-  await page.getByRole("button", { name: "Vendor Compliance Vault", exact: true }).click();
+  await openSource(page, "Vendor Compliance Vault");
   const policy = row(page, "Compliance Policy");
   await expect(policy).toBeVisible(ROUND_TRIP);
   await openPalette(page, { settled: false });
@@ -216,7 +216,7 @@ test("the row menu shows each action's key, without truncating its label, and no
   await page.keyboard.press("Escape");
   await expect(page.getByRole("menu")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Vendor Compliance Vault", exact: true }).click();
+  await openSource(page, "Vendor Compliance Vault");
   await row(page, "Compliance Policy").click({ button: "right" });
   await expect(page.getByRole("menu")).toBeVisible(ROUND_TRIP);
   await expect(page.getByRole("menuitem", { name: /Open in new tab/ })).toBeVisible();

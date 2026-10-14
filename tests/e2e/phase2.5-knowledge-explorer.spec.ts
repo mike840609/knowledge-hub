@@ -1,4 +1,5 @@
 import { expect, test } from "./fixtures/test";
+import { openSource, treeOf } from "./fixtures/organize";
 
 const WORKSPACE = "0199f100-0000-7000-8000-000000000001";
 const SOURCE = "0199f100-0000-7000-8000-000000000101";
@@ -10,7 +11,7 @@ async function openDocumentFilter(page: import("@playwright/test").Page) {
 
 test("keeps Source Tree visible while switching Documents", async ({ page }) => {
   await page.goto(`/w/${WORKSPACE}/knowledge/${SOURCE}`);
-  const tree = page.getByRole("tree", { name: "Knowledge tree" });
+  const tree = treeOf(page, SOURCE);
   await expect(tree).toBeVisible();
   await expect(page.getByRole("button", { name: "Obsidian Wiki", exact: true })).toHaveAttribute("aria-expanded", "true");
   await tree.getByRole("treeitem", { name: "Runbooks" }).click();
@@ -74,7 +75,7 @@ test("reading navigation separates collections from authoring and source managem
   await expect(explorer.getByRole("link", { name: "Update from folder" })).toHaveCount(0);
   await expect(explorer.getByLabel("Show archived")).not.toBeVisible();
 
-  await explorer.getByRole("button", { name: "Vendor Compliance Vault", exact: true }).click();
+  await openSource(page, "Vendor Compliance Vault");
   await explorer.getByRole("link", { name: "Compliance Policy", exact: true }).click();
   await expect(page).toHaveURL(/\/knowledge\/0199f100-0000-7000-8000-000000000105\//);
   await expect(page.getByRole("heading", { name: "Compliance Policy", exact: true })).toBeVisible();

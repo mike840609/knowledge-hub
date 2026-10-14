@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronRight, Clock3, FileText, MoreHorizontal, Plus, ListFilter, Star } from "lucide-react";
 import { ActionIcon } from "@/components/actions/action-icon";
-import { favoritesInPlace, rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
+import { favoritesInPlace, toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { MenuCheckboxItem, MenuContent, MenuItem, MenuRoot, MenuTrigger } from "@/components/ui/menu";
@@ -22,7 +22,7 @@ import { actionsFor, type ActionTarget, type FolderTarget } from "@/components/a
 
 export type SourceSidebarProps = {
   workspaceId: string;
-  /** The source being read, when the route names one; outside Knowledge every source starts open. */
+  /** The source being read, when the route names one; the document being read is left out of Recent. */
   currentSourceId?: string;
   collections: { source: SourceView; tree: KnowledgeTreeItem[] }[];
 };
@@ -81,19 +81,6 @@ export function SourceSidebar({ workspaceId, currentSourceId, collections }: Sou
   const { inPlace: favoritesInPlaceKeys, showAll: favoritesTotal } = favoritesInPlace(favoriteKeys);
   const recentKeys = shortcuts.recent.filter((key) => documents.has(key) && !shortcuts.favorites.includes(key) && key !== `${currentSourceId}:${resolvedDocumentId}`).slice(0, 4);
   const favoriteDocumentIds = new Set(shortcuts.favorites.map((key) => documents.get(key)?.documentId).filter((id): id is string => Boolean(id)));
-
-  const recordedOpen = useRef<string | null>(null);
-  useEffect(() => {
-    const key = currentSourceId && resolvedDocumentId ? documentShortcutKey(currentSourceId, resolvedDocumentId) : null;
-    const visit = key ? `${workspaceId}:${key}` : null;
-    // Explorer refreshes and display filters rebuild `documents` while the
-    // reader stays on the same document. Only entering it records an open.
-    if (recordedOpen.current !== visit) recordedOpen.current = null;
-    if (key && documents.has(key) && recordedOpen.current !== visit) {
-      recordedOpen.current = visit;
-      updateShortcuts((previous) => rememberDocument(previous, key));
-    }
-  }, [workspaceId, currentSourceId, resolvedDocumentId, documents, updateShortcuts]);
 
   const toggleFavorite = useCallback((sourceId: string, documentId: string) => {
     updateShortcuts((previous) => toggleFavoriteDocument(previous, documentShortcutKey(sourceId, documentId)));
@@ -243,7 +230,7 @@ export function SourceSidebar({ workspaceId, currentSourceId, collections }: Sou
           </div>
         ) : null}
         {matches.map(({ source: candidate, tree }) => {
-          const open = Boolean(needle) || (expanded[candidate.id] ?? (currentSourceId === undefined || candidate.id === currentSourceId));
+          const open = Boolean(needle) || (expanded[candidate.id] ?? true);
           const Icon = open ? ChevronDown : ChevronRight;
           const isNotes = candidate.sourceType === "HUB" && candidate.name === "Notes" && candidate.status === "ACTIVE";
           return (

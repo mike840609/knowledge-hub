@@ -21,7 +21,8 @@ test("keeps an active doc under an archived source readable in archived mode", a
 
   // Persistent shell and persistent Source Tree survive on the archived route.
   await expect(page.getByRole("button", { name: /^Workspace: / })).toBeVisible();
-  const tree = page.getByRole("tree", { name: "Knowledge tree" });
+  // Every source's tree is in the sidebar; this is the archived source's.
+  const tree = page.locator(`#collection-${ARCHIVED_SOURCE}`).getByRole("tree", { name: "Knowledge tree" });
   await expect(tree).toBeVisible();
   await page.getByRole("complementary", { name: "Knowledge explorer" }).getByLabel("Document display options").click();
   await expect(page.getByRole("menuitemcheckbox", { name: "Show archived" })).toHaveAttribute("aria-checked", "true");
@@ -59,8 +60,10 @@ test("switching to an archived Source preserves archived mode", async ({ page })
   await expect(page.getByRole("menuitemcheckbox", { name: "Show archived" })).toHaveAttribute("aria-checked", "true");
 
   await page.keyboard.press("Escape");
-  await page.locator(`button[aria-controls="collection-${ARCHIVED_SOURCE}"]`).click();
-  await page.getByRole("link", { name: ARCHIVED_ACTIVE_TITLE, exact: true }).click();
+  // Sources start open; open this one only if it is shut.
+  const archivedHeader = page.locator(`button[aria-controls="collection-${ARCHIVED_SOURCE}"]`);
+  if ((await archivedHeader.getAttribute("aria-expanded")) !== "true") await archivedHeader.click();
+  await page.locator(`#collection-${ARCHIVED_SOURCE}`).getByRole("link", { name: ARCHIVED_ACTIVE_TITLE, exact: true }).click();
 
   await expect(page).toHaveURL(
     new RegExp(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${ARCHIVED_SOURCE}/${ARCHIVED_ACTIVE_DOCUMENT}\\?includeArchived=true`),

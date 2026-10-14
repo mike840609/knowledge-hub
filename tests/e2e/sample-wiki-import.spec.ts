@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "./fixtures/test";
+import { treeOf } from "./fixtures/organize";
 import { formatGuideBytes } from "../../src/components/imports/import-guide-content";
 import { DEFAULT_IMPORT_LIMITS } from "../../src/modules/sources/domain/import-limits";
 
@@ -64,7 +65,8 @@ for (const sample of SAMPLES) {
     await expect(page).toHaveURL(new RegExp(`/knowledge/${sourceId}/[a-f0-9-]+$`), ROUND_TRIP);
 
     // index: a real click on its wikilink (rendered as the text it was written with) to the onboarding page.
-    const tree = page.getByRole("tree", { name: "Knowledge tree" });
+    // The imported source's own tree: the sidebar lists every source's.
+    const tree = treeOf(page, sourceId);
     await expect(tree).toHaveAttribute("aria-busy", "false", ROUND_TRIP);
     await tree.getByRole("treeitem", { name: sample.indexTitle, exact: true }).locator("a").first().click();
     const content = page.getByRole("region", { name: "Document content", exact: true });

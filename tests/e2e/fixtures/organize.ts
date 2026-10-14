@@ -48,6 +48,15 @@ export async function openKnowledge(page: Page, workspaceId: string) {
 }
 
 export const row = (page: Page, name: string) => page.getByRole("treeitem", { name, exact: true });
+/** A row of one source's tree. Every source's tree is on the page (open unless the reader shut it), and titles repeat across sources. */
+export const rowIn = (page: Page, sourceId: string, name: string) => page.locator(`#collection-${sourceId}`).getByRole("treeitem", { name, exact: true });
+/** A source's tree, which every workspace page lists. */
+export const treeOf = (page: Page, sourceId: string) => page.locator(`#collection-${sourceId}`).getByRole("tree", { name: "Knowledge tree" });
+/** Opens a source's header only if it is shut: sources start open, and a click on an open one would shut it. */
+export async function openSource(page: Page, name: string) {
+  const header = page.getByRole("button", { name, exact: true });
+  if ((await header.getAttribute("aria-expanded")) !== "true") await header.click();
+}
 /** A folder row's own header, which is where its menu is — the treeitem also holds everything inside it. */
 export const header = (page: Page, name: string) => row(page, name).locator(":scope > div").first();
 export const toast = (page: Page, text: string | RegExp) => page.getByRole("status").filter({ hasText: text });

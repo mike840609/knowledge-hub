@@ -17,6 +17,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ShareLinkDialogHost } from "@/components/knowledge/share-link-dialog";
 import { FolderNameDialogHost } from "@/components/knowledge/folder-name-dialog";
 import { MoveDialogHost } from "@/components/knowledge/move-dialog";
+import { DocumentOpenRecorder } from "@/components/knowledge/use-record-document-open";
 import { NAV_TOGGLE_SHORTCUT } from "@/components/actions/action-registry";
 import { matchesShortcut } from "@/lib/shortcut-keys";
 import { TOGGLE_NAV_EVENT } from "./nav-toggle";
@@ -109,6 +110,7 @@ export function AppShell({ model, explorer, children }: { model: WorkspaceShellM
           {!wide ? <Sidebar model={model} explorer={explorer} /> : null}
         </div>
       </Drawer>
+      <DocumentOpenRecorder workspaceId={model.workspace.id} collections={explorer?.collections ?? []} />
       <ShareLinkDialogHost />
       <FolderNameDialogHost />
       <MoveDialogHost collections={explorer?.collections ?? []} />

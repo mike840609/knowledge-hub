@@ -6,15 +6,23 @@ const QUERY_MASTER_WORKSPACE = "0199f100-0000-7000-8000-000000000001";
 const ROUND_TRIP = { timeout: 15_000 };
 
 test.describe("one sidebar", () => {
-  test("the tree is on a page that is not Knowledge, and opening a document from it keeps the tree mounted", async ({ page }) => {
+  test("the tree is on a page that is not Knowledge, and opening a document from it keeps what was expanded", async ({ page }) => {
     await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/graph`);
-    // Runbooks is a seeded document of Obsidian Wiki; the workspace has other sources, so scope to this one.
-    const tree = page.getByRole("region", { name: "Obsidian Wiki documents" }).getByRole("tree", { name: "Knowledge tree" });
+    // Runbooks is a seeded document of Obsidian Wiki; the workspace has other sources (a seeded SOURCE_MANAGED one).
+    const wiki = page.getByRole("region", { name: "Obsidian Wiki documents" });
+    const tree = wiki.getByRole("tree", { name: "Knowledge tree" });
     await expect(tree).toBeVisible(ROUND_TRIP);
+    const other = page.locator('section[aria-label$=" documents"]').filter({ hasNot: page.getByRole("button", { name: "Obsidian Wiki", exact: true }) }).first();
+    const otherToggle = other.locator('button[aria-controls^="collection-"]');
+    await expect(otherToggle).toBeVisible();
+    const before = await otherToggle.getAttribute("aria-expanded");
     await tree.evaluate((element) => { element.setAttribute("data-probe", "mounted-on-graph"); });
     await tree.getByRole("treeitem", { name: "Runbooks", exact: true }).getByRole("link").first().click();
     await page.waitForURL(/\/knowledge\/[^/]+\/[^/]+/, ROUND_TRIP);
     await expect(tree.getByRole("treeitem", { name: "Runbooks", exact: true })).toHaveAttribute("aria-current", "page");
+    // What was open stays open (and what was shut stays shut): going into Knowledge does not re-arrange the tree.
+    await expect(otherToggle).toHaveAttribute("aria-expanded", before!);
+    await expect(wiki.getByRole("button", { name: "Obsidian Wiki", exact: true })).toHaveAttribute("aria-expanded", "true");
     // The sidebar belongs to the workspace layout: the same tree element, not a new one with the same rows.
     await expect(tree).toHaveAttribute("data-probe", "mounted-on-graph");
   });
@@ -59,5 +67,32 @@ test.describe("one sidebar", () => {
     // One sidebar, in the menu only: every tree on the page is one of the menu's.
     await expect(page.getByRole("complementary", { name: "Navigation" })).toHaveCount(0);
     await expect(page.getByRole("tree", { name: "Knowledge tree" })).toHaveCount(await menuTrees.count());
+  });
+
+  test("a narrow window records the documents opened, though the menu holding the tree is closed", async ({ page, request }) => {
+    const personal = await mySpace(page);
+    const stamp = Date.now();
+    const make = async (title: string) => {
+      const response = await request.post(`/api/workspaces/${personal}/documents`, { data: { title, markdown: `# ${title}\n\nBody` } });
+      expect(response.ok()).toBe(true);
+      const document = await response.json();
+      return `/w/${personal}/knowledge/${document.sourceId}/${document.documentId}`;
+    };
+    const [titleA, titleB] = [`Recent A ${stamp}`, `Recent B ${stamp}`];
+    const [hrefA, hrefB] = [await make(titleA), await make(titleB)];
+    await page.setViewportSize({ width: 800, height: 900 });
+    // Open A, then B, by URL: the menu is never opened until the end, so only a recorder outside it can know.
+    await page.goto(hrefA);
+    await expect(page.getByRole("heading", { level: 1, name: titleA })).toBeVisible(ROUND_TRIP);
+    await page.goto(hrefB);
+    await expect(page.getByRole("heading", { level: 1, name: titleB })).toBeVisible(ROUND_TRIP);
+    await page.getByRole("button", { name: "Open menu" }).click();
+    const menu = page.getByRole("dialog", { name: "Menu" });
+    const recent = menu.getByRole("region", { name: "Recent documents" });
+    await expect(recent).toBeVisible(ROUND_TRIP);
+    await recent.getByRole("button", { name: "Recent" }).click();
+    await expect(recent.getByRole("link", { name: titleA })).toBeVisible();
+    // The one being read is not listed in its own Recent.
+    await expect(recent.getByRole("link", { name: titleB })).toHaveCount(0);
   });
 });

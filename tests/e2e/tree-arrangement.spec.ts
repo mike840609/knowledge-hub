@@ -1,4 +1,5 @@
 import { expect, test } from "./fixtures/test";
+import { treeOf } from "./fixtures/organize";
 
 // Mirrors scripts/db/seed.ts BROWSER_FIXTURE_IDS.
 const QUERY_MASTER_WORKSPACE = "0199f100-0000-7000-8000-000000000001";
@@ -27,7 +28,7 @@ test("the tree filter survives a reload but not a new session", async ({ page, c
   await page.getByLabel("Filter documents and sources").click();
   const field = page.getByPlaceholder(/filter/i);
   await field.fill("run");
-  const tree = page.getByRole("tree", { name: "Knowledge tree" });
+  const tree = treeOf(page, OBSIDIAN_SOURCE);
   await expect(tree.getByRole("treeitem", { name: "Runbooks", exact: true })).toBeVisible();
   await expect(tree.getByRole("treeitem", { name: "Architecture", exact: true })).toHaveCount(0);
 
@@ -39,7 +40,7 @@ test("the tree filter survives a reload but not a new session", async ({ page, c
   const fresh = await context.browser()!.newContext();
   const freshPage = await fresh.newPage();
   await freshPage.goto(`${page.url().split("/w/")[0]}${KNOWLEDGE}`);
-  await expect(freshPage.getByRole("tree", { name: "Knowledge tree" })
+  await expect(treeOf(freshPage, OBSIDIAN_SOURCE)
     .getByRole("treeitem", { name: "Architecture", exact: true })).toBeVisible();
   await fresh.close();
 });
@@ -63,7 +64,7 @@ test("keeps working when storage is unavailable", async ({ page }) => {
     }
   });
   await page.goto(KNOWLEDGE);
-  await expect(page.getByRole("tree", { name: "Knowledge tree" })).toBeVisible();
+  await expect(treeOf(page, OBSIDIAN_SOURCE)).toBeVisible();
 
   const header = page.getByRole("button", { name: "Obsidian Wiki", exact: true });
   await header.click();

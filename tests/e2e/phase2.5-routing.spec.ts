@@ -11,7 +11,7 @@ test("root resolves deterministically into My Space", { tag: ["@smoke-team", "@s
   await expect(page).toHaveURL(new RegExp(`/w/${personal.id}/${personalOnly ? "home$" : "knowledge(?:/|$)"}`));
   await expect(page.getByLabel("Workspace: My Space", { exact: true })).toBeVisible();
   // Routing does not depend on whether earlier specs populated this workspace.
-  await expect(page.getByRole("tree", { name: "Knowledge tree" })).toBeVisible();
+  await expect(page.getByRole("tree", { name: "Knowledge tree" }).first()).toBeVisible();
 });
 
 test.describe("Team-enabled fixture routes", () => {
@@ -28,7 +28,7 @@ test.describe("Team-enabled fixture routes", () => {
     await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge`);
     await expect(page.getByRole("button", { name: /^Workspace: / })).toBeVisible();
     await expect(page.getByLabel("Workspace: Query Master", { exact: true })).toBeVisible();
-    await expect(page.getByRole("tree", { name: "Knowledge tree" })).toBeVisible();
+    await expect(page.getByRole("tree", { name: "Knowledge tree" }).first()).toBeVisible();
     await expect(page.getByRole("link", { name: "Sources" })).toBeVisible();
     await expect(page.getByText(/Organization:/)).toHaveCount(0);
   });

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./fixtures/test";
 import { showMarkdown } from "./composer-helpers";
-import { ROUND_TRIP, childrenOf, createFolder, header, mySpace, openKnowledge, row, toast, unique } from "./fixtures/organize";
+import { ROUND_TRIP, childrenOf, createFolder, header, mySpace, openKnowledge, row, rowIn, toast, unique } from "./fixtures/organize";
 
 // Mirrors scripts/db/seed.ts BROWSER_FIXTURE_IDS: a workspace with a SOURCE_MANAGED source in it, read here and never changed.
 const QUERY_MASTER_WORKSPACE = "0199f100-0000-7000-8000-000000000001";
@@ -305,10 +305,10 @@ test.describe("what cannot be done", () => {
 
   test("a row in a source the Hub does not own offers nothing to arrange it with", async ({ page }) => {
     await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${OBSIDIAN_SOURCE}`);
-    await expect(row(page, "Architecture")).toBeVisible(ROUND_TRIP);
+    await expect(rowIn(page, OBSIDIAN_SOURCE, "Architecture")).toBeVisible(ROUND_TRIP);
     await page.waitForURL(/\/knowledge\/[^/]+\/[^/]+$/);
     // The same caller, one row apart: a Hub-managed document may be archived, a source-managed one may not.
-    await row(page, "Architecture").click({ button: "right" });
+    await rowIn(page, OBSIDIAN_SOURCE, "Architecture").click({ button: "right" });
     await expect(page.getByRole("menuitem", { name: "Archive document" })).toBeVisible();
     await closeMenu(page);
 

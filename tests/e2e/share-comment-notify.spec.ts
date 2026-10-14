@@ -18,6 +18,9 @@ test("a share-page comment notifies the owner, and opening the panel clears it",
   expect(typeof notices[0].documentTitle).toBe("string");
   expect(notices[0].documentTitle.length).toBeGreaterThan(0);
   expect(notices[0].authorName).toBe("Phase3 viewer");
+  // 1088 + the 256px sidebar leaves the pane the 832px it had beside the old rail and explorer, too narrow for the
+  // discussions to open by themselves on arrival (which would read the notice before this looks for it).
+  await page.setViewportSize({ width: 1088, height: 720 });
   await page.goto(doc.href);
   await expect(page.getByText("1 new", { exact: true })).toBeVisible();
   await openReviewDiscussions(page);

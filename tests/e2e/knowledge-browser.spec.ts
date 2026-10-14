@@ -1,4 +1,5 @@
 import { expect, test } from "./fixtures/test";
+import { treeOf } from "./fixtures/organize";
 
 // Workspace-scoped Knowledge Explorer acceptance (Task 11 rewrite of the
 // legacy /knowledge browser spec). Canonical route:
@@ -33,7 +34,7 @@ test("browses the persistent explorer with a stable canonical document URL", asy
   // Persistent shell: Workspace selector, document tree, and primary nav.
   await expect(page.getByRole("button", { name: /^Workspace: / })).toBeVisible();
   await expect(page.getByLabel("Workspace: Query Master", { exact: true })).toBeVisible();
-  await expect(page.getByRole("tree", { name: "Knowledge tree" })).toBeVisible();
+  await expect(treeOf(page, OBSIDIAN_SOURCE)).toBeVisible();
   await expect(page.getByRole("link", { name: "Sources" })).toBeVisible();
 
   // Legacy query-form controls are gone.
@@ -43,7 +44,7 @@ test("browses the persistent explorer with a stable canonical document URL", asy
 
   // Persistent Source Tree scoped to the current Source.
   await expect(page.getByRole("button", { name: "Obsidian Wiki", exact: true })).toHaveAttribute("aria-expanded", "true");
-  const tree = page.getByRole("tree", { name: "Knowledge tree" });
+  const tree = treeOf(page, OBSIDIAN_SOURCE);
   await expect(tree).toBeVisible();
   await expect(tree.getByRole("treeitem", { name: ARCHITECTURE_TITLE, exact: true })).toBeVisible();
   await expect(tree.getByRole("treeitem", { name: RUNBOOKS_TITLE, exact: true })).toBeVisible();
@@ -80,7 +81,7 @@ test("switches workspace through the shell selector", async ({ page }) => {
   );
   await expect(page.getByRole("heading", { name: SWFP_TITLE })).toBeVisible();
   await expect(page.locator("article").first().getByText(SWFP_BODY, { exact: true })).toBeVisible();
-  await expect(page.getByRole("tree", { name: "Knowledge tree" })).toBeVisible();
+  await expect(treeOf(page, SWFP_SOURCE)).toBeVisible();
   await expect(page.getByText(ARCHITECTURE_TITLE, { exact: true })).toHaveCount(0);
 });
 
@@ -92,7 +93,7 @@ test("reveals archived documents only with the archived toggle", async ({ page }
   // click issued mid-navigation is discarded (seen as an intermittent failure
   // under full-suite load, reproducing as a plain document URL with no query).
   await expect(page).toHaveURL(new RegExp(`/knowledge/${OBSIDIAN_SOURCE}/[0-9a-f-]+$`));
-  const tree = page.getByRole("tree", { name: "Knowledge tree" });
+  const tree = treeOf(page, OBSIDIAN_SOURCE);
   await expect(tree).toBeVisible();
   await expect(tree.getByText(RETIRED_TITLE, { exact: true })).toHaveCount(0);
 

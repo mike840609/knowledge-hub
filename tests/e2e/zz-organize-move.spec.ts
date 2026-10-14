@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "./fixtures/test";
-import { ROUND_TRIP, childrenOf, mySpace, openKnowledge, row, toast, unique } from "./fixtures/organize";
+import { ROUND_TRIP, childrenOf, mySpace, openKnowledge, row, rowIn, toast, unique } from "./fixtures/organize";
 import { openPalette } from "./fixtures/palette";
 
 // Mirrors scripts/db/seed.ts BROWSER_FIXTURE_IDS: a workspace with a SOURCE_MANAGED source in it, read here and never changed.
@@ -237,10 +237,10 @@ test.describe("the Move dialog", () => {
 
   test("is not offered for a row in a source the Hub does not own", async ({ page }) => {
     await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${OBSIDIAN_SOURCE}`);
-    await expect(row(page, "Architecture")).toBeVisible(ROUND_TRIP);
+    await expect(rowIn(page, OBSIDIAN_SOURCE, "Architecture")).toBeVisible(ROUND_TRIP);
     await page.waitForURL(/\/knowledge\/[^/]+\/[^/]+$/);
     // A Hub-managed document here may be moved; a source-managed one may not.
-    await row(page, "Architecture").click({ button: "right" });
+    await rowIn(page, OBSIDIAN_SOURCE, "Architecture").click({ button: "right" });
     await expect(page.getByRole("menuitem", { name: "Move document…" })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.getByRole("menu")).toHaveCount(0);
@@ -356,7 +356,7 @@ test.describe("Alt+↑ and Alt+↓", () => {
 
   test("do nothing on a row the Hub does not own, and ask the server for nothing", async ({ page }) => {
     await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${OBSIDIAN_SOURCE}`);
-    await expect(row(page, "Architecture")).toBeVisible(ROUND_TRIP);
+    await expect(rowIn(page, OBSIDIAN_SOURCE, "Architecture")).toBeVisible(ROUND_TRIP);
     await page.waitForURL(/\/knowledge\/[^/]+\/[^/]+$/);
     const vault = page.getByRole("button", { name: "Vendor Compliance Vault", exact: true });
     if ((await vault.getAttribute("aria-expanded")) !== "true") await vault.click();
