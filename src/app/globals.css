@@ -181,7 +181,8 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   /* A disclosure is the native <details>: it opens without script and the browser owns its keys and its
      state. Only the marker is ours — the platform's triangle is swapped for the icon set's chevron, which
      turns as it opens. Drawn as a mask, like the search field's clear button, so it takes its colour from
-     a token and `img-src 'self'` is not loosened. An element rule, so no disclosure can be without it. */
+     a token and needs no image source beyond the page's own (`img-src 'self' blob:`; the `blob:` is for
+     diagrams, not for this). An element rule, so no disclosure can be without it. */
   summary {
     @apply cursor-pointer list-none;
   }
@@ -434,7 +435,7 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 
 /* Native <select> with the platform arrow swapped for a chevron in the icon
    set's weight. Drawn as two gradient strokes rather than an SVG: the app's
-   `img-src 'self'` policy refuses data: images, and a gradient reads the
+   `img-src 'self' blob:` policy refuses data: images, and a gradient reads the
    colour token, so it follows the theme. Unlayered, like the rule below, so
    it wins over the field's px-* utility. */
 .kh-select {

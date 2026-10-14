@@ -51,6 +51,8 @@ Consequences:
 
 **Deferred to later batches:** images/screenshots (storage and new authorization surface require specification), Mermaid, templates/daily notes, tags/frontmatter display, export/editable import, revision diff, link-rewriting rename, hover previews, properties, drag organization.
 
+> Mermaid is no longer deferred: `2026-10-13-reader-mermaid-design.md` (2026-10-13). The line above is left as it was written.
+
 ## 3. Decisions
 
 | # | Decision | Rationale |

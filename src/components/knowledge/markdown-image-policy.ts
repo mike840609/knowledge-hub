@@ -19,8 +19,9 @@
  *   `data:` stays blocked unless a future use case explicitly justifies it.
  *
  * Defense in depth: `next.config.ts` additionally sends a restrictive
- * `img-src 'self'` Content-Security-Policy header, so even a policy bypass
+ * `img-src 'self' blob:` Content-Security-Policy header, so even a policy bypass
  * in markup cannot load a cross-origin image.
+ * `blob:` there is for diagrams the page draws; this function still refuses it from a document.
  *
  * Links (`<a href>`) are intentionally NOT subject to this policy: clicking a
  * link is an explicit user action, while `<img src>` fetches automatically.

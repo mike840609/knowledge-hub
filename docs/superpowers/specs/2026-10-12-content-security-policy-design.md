@@ -85,3 +85,9 @@ scripts carry a nonce.
   do not run.
 - `tests/e2e/share-link.spec.ts` — the shared page's header holds all three:
   the image lockdown, no framing, scripts by nonce.
+
+## Later: `blob:` in `img-src` (2026-10-13)
+
+`img-src 'self'` became `img-src 'self' blob:` so that a page can show a diagram
+it drew itself. Why that admits nothing a document can name is in
+`2026-10-13-reader-mermaid-design.md`, "Content-Security-Policy".

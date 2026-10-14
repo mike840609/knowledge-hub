@@ -15,7 +15,8 @@ test.describe("the Content-Security-Policy", () => {
     expect(policy).toMatch(/script-src 'self' 'nonce-[A-Za-z0-9+/=]+' 'strict-dynamic' 'sha256-[A-Za-z0-9+/=]+'(;|$)/);
     expect(policy).not.toContain("unsafe-inline");
     expect(policy).not.toContain("unsafe-eval");
-    expect(policy).toContain("img-src 'self'");
+    // The whole directive, so a looser one cannot pass: this page's own images and the diagrams it makes itself.
+    expect(policy).toMatch(/(^|;\s*)img-src 'self' blob:(\s*;|\s*$)/);
 
     // The theme script ran before paint, and React attached: the palette opens only if it did.
     await expect(page.locator("html")).toHaveAttribute("data-theme", /^(light|dark)$/);

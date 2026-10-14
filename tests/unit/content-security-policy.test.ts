@@ -26,10 +26,21 @@ describe("the Content-Security-Policy", () => {
     expect(dev["script-src"]).not.toContain("'unsafe-inline'");
   });
 
-  it("keeps the image lockdown (issue #20), and shuts plugins and <base>", () => {
-    expect(policy["img-src"]).toEqual(["'self'"]);
+  it("keeps the image lockdown (issue #20) but for images this origin's own script made, and shuts plugins and <base>", () => {
+    // `blob:` is the drawn diagram (reader-mermaid spec): a URL only script here can mint, and a document cannot name.
+    expect(policy["img-src"]).toEqual(["'self'", "blob:"]);
     expect(policy["object-src"]).toEqual(["'none'"]);
     expect(policy["base-uri"]).toEqual(["'self'"]);
+  });
+
+  it("says the same about images on a shared page, and where the middleware does not run", async () => {
+    const shared = directives(contentSecurityPolicy({ nonce: "n", pathname: "/s/0b1c2d3e-0000-4000-8000-000000000000", development: false }));
+    expect(shared["img-src"]).toEqual(["'self'", "blob:"]);
+    // next.config.ts writes the directive twice more; a change in one place only is lost on some responses.
+    const { default: config } = await import("../../next.config");
+    const values = (await config.headers!()).flatMap((rule) => rule.headers).filter((header) => header.key === "Content-Security-Policy").map((header) => header.value);
+    expect(values).toHaveLength(2);
+    for (const value of values) expect(directives(value)["img-src"]).toEqual(["'self'", "blob:"]);
   });
 
   it.each([["/s/0b1c2d3e-0000-4000-8000-000000000000"], ["/s/x/y"]])("lets no site frame a shared page: %s", (pathname) => {
