@@ -11,11 +11,8 @@ export default async function SourceExplorerLayout({
   children: ReactNode;
 }) {
   const { workspaceId, sourceId } = await params;
-  // Layouts cannot read search params, so load the inclusive dataset once and
-  // let the client sidebar keep archived nodes out of the DOM unless
-  // `?includeArchived=true` is present. The sidebar lives outside the child
-  // Document route, so Tree client state survives Document navigation.
-  const model = await getKnowledgeExplorerModel(workspaceId, sourceId, { includeArchived: true, includeCollections: true });
+  // Only decides whether this source is here to read; the sidebar's trees come from the workspace layout.
+  const model = await getKnowledgeExplorerModel(workspaceId, sourceId, { includeArchived: true });
   if (!model) {
     return (
       <main className="flex min-h-full flex-col justify-center">
@@ -26,14 +23,5 @@ export default async function SourceExplorerLayout({
       </main>
     );
   }
-  return (
-    <KnowledgeLayout
-      workspaceId={workspaceId}
-      source={model.source}
-      collections={model.collections}
-      includeArchived={model.includeArchived}
-    >
-      {children}
-    </KnowledgeLayout>
-  );
+  return <KnowledgeLayout>{children}</KnowledgeLayout>;
 }

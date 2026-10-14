@@ -104,7 +104,7 @@ export type FolderCommand = "folder.rename" | "folder.archive" | "folder.restore
 
 export type ActionEffect =
   | { kind: "download"; href: string }
-  /** Collapses or expands the app shell's navigation (or, where there is no rail, opens the menu). */
+  /** Collapses or expands the app shell's navigation (or, where there is no sidebar column, opens the menu). */
   | { kind: "toggle-nav" }
   | { kind: "navigate"; href: string }
   /** Leaves this tab where it is; what a middle-click on the row's link does. */

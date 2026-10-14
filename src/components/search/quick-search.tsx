@@ -176,7 +176,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
       event.preventDefault();
       runAction(action);
     };
-    // The rail's Search row asks by event; this is the one palette.
+    // The sidebar's Search row asks by event; this is the one palette.
     const onRequest = () => setOpen(true);
     window.addEventListener("keydown", onShortcut);
     window.addEventListener(OPEN_SEARCH_EVENT, onRequest);
@@ -292,7 +292,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
 
   return (
     <>
-      {/* Where the rail is on screen its Search row is the way in; a narrow window keeps this icon. */}
+      {/* Where the sidebar is on screen its Search row is the way in; a narrow window keeps this icon. */}
       <Tooltip label="Search and actions" keys="/">
         <button
           type="button"

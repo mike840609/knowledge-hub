@@ -27,7 +27,7 @@ import { useTheme, type Theme } from "./use-theme";
  * not belong in Settings either — that surface is workspace governance, and
  * the theme is a personal preference held in this browser.
  */
-export function UserMenu({ identityName, workspaceId, compact = false, trigger = "account" }: { identityName: string; workspaceId?: string; compact?: boolean; trigger?: "account" | "preferences" }) {
+export function UserMenu({ identityName, workspaceId, trigger = "account" }: { identityName: string; workspaceId?: string; trigger?: "account" | "preferences" }) {
   const [reportOpen, setReportOpen] = useState(false);
   const accountRef = useRef<HTMLButtonElement>(null);
   const { theme, setTheme } = useTheme();
@@ -36,17 +36,17 @@ export function UserMenu({ identityName, workspaceId, compact = false, trigger =
       <MenuTrigger
         ref={accountRef}
         aria-label={trigger === "preferences" ? "Personal preferences" : `Account: ${identityName}`}
-        className={buttonClasses({ variant: trigger === "preferences" ? "secondary" : "ghost", className: trigger === "preferences" ? "" : compact ? "w-full justify-center px-0" : "w-full justify-start gap-2" })}
+        className={buttonClasses({ variant: trigger === "preferences" ? "secondary" : "ghost", className: trigger === "preferences" ? "" : "w-full justify-start gap-2" })}
       >
         {trigger === "preferences" ? <><Settings className="h-4 w-4 shrink-0" aria-hidden="true"/><span className="profile-preferences-label">Preferences</span></> : <><UserRound className="h-4 w-4 shrink-0" aria-hidden="true" />
-        {!compact ? <><span className="min-w-0 flex-1 truncate text-left">{identityName}</span><ChevronUp className="h-4 w-4 shrink-0" aria-hidden="true" /></> : null}</>}
+        <span className="min-w-0 flex-1 truncate text-left">{identityName}</span><ChevronUp className="h-4 w-4 shrink-0" aria-hidden="true" /></>}
       </MenuTrigger>
   );
   return (
     <>
     <MenuRoot>
-      {/* The rail is 160px, so a full name is usually cut off; the tooltip says it whole, expanded or not. */}
-      {trigger === "account" ? <Tooltip label={identityName} side={compact ? "right" : "top"}>{accountTrigger}</Tooltip> : accountTrigger}
+      {/* A long name is cut off in the sidebar; the tooltip says it whole. */}
+      {trigger === "account" ? <Tooltip label={identityName} side="top">{accountTrigger}</Tooltip> : accountTrigger}
       <MenuContent side="top" align="start" className="w-56">
         <MenuGroup>
           <MenuGroupLabel>Signed in as</MenuGroupLabel>

@@ -21,7 +21,6 @@ import { actionsFor, type Action } from "@/components/actions/action-registry";
 import { RowActionsTrigger, RowContextMenu, useActionRunner } from "@/components/actions/action-menu";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { MenuRoot, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/menu";
-import { ShareLinkDialogHost } from "./share-link-dialog";
 import { useHydrated } from "@/components/shell/use-hydrated";
 
 type Doc = { sourceName?:string; sourcePath?:string|null; documentId: string; sourceId: string; title: string; updatedAt: string; ownership: "SOURCE_MANAGED" | "HUB_MANAGED"; status: "ACTIVE" | "ARCHIVED"; sourceStatus: "ACTIVE" | "ARCHIVED" };
@@ -184,7 +183,6 @@ export function PersonalHome({ workspaceId, documents, drafts, updates={runs:[],
           <Link className="kh-focus-ring mt-3 inline-block rounded-md px-3 py-2 text-body-sm text-kh-link" href={`/w/${workspaceId}/updates`}>View all updates</Link>
         </Section>
       </div>
-      <ShareLinkDialogHost />
     </div>
     </GuidanceVisibilityContext.Provider>
   );

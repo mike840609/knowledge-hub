@@ -425,6 +425,11 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-sidebar-surface {
     --kh-bg-hover: var(--kh-bg-hover-strong);
   }
+
+  /* Collapsed, the sidebar's expand button floats over the pages' top line; the line gives it room. */
+  [data-nav-collapsed] [data-top-line] {
+    padding-inline-start: 3rem;
+  }
 }
 
 /* One global opt-out, so no component has to remember motion-reduce. */

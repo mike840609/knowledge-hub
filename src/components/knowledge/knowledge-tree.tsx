@@ -263,7 +263,7 @@ export function KnowledgeTree({
     tree.setAttribute("aria-busy", "true");
     if (!collapsedReady) return;
     const selected = tree.querySelector<HTMLElement>('[aria-current="page"]');
-    const scroller = tree.closest("nav");
+    const scroller = tree.closest<HTMLElement>("[data-sidebar-scroll]");
     if (selected && scroller) {
       const row = selected.getBoundingClientRect();
       const viewport = scroller.getBoundingClientRect();

@@ -8,7 +8,7 @@ import { DocumentContextBar } from "./document-context-bar";
 
 /**
  * A narrow window's header: the Menu, Search, and the document's title and actions. A wide window has no
- * topbar — the rail carries the wordmark, switcher and Search, and the document pane its own title and
+ * topbar — the sidebar carries the switcher and Search, and the document pane its own title and
  * actions — but the palette stays mounted here, once, at every width.
  */
 export function Topbar({ model, onMenuClick }: { model: WorkspaceShellModel; onMenuClick?: () => void }) {

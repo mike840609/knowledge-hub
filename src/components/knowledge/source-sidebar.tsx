@@ -22,10 +22,9 @@ import { actionsFor, type ActionTarget, type FolderTarget } from "@/components/a
 
 export type SourceSidebarProps = {
   workspaceId: string;
-  source: SourceView;
+  /** The source being read, when the route names one; outside Knowledge every source starts open. */
+  currentSourceId?: string;
   collections: { source: SourceView; tree: KnowledgeTreeItem[] }[];
-  selectedDocumentId?: string;
-  includeArchived: boolean;
 };
 
 function withoutArchivedSubtrees(items: KnowledgeTreeItem[]): KnowledgeTreeItem[] {
@@ -41,7 +40,7 @@ function withoutArchivedSubtrees(items: KnowledgeTreeItem[]): KnowledgeTreeItem[
   return items.filter((item) => !hidden(item));
 }
 
-export function SourceSidebar({ workspaceId, source, collections, selectedDocumentId, includeArchived }: SourceSidebarProps) {
+export function SourceSidebar({ workspaceId, currentSourceId, collections }: SourceSidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -59,13 +58,13 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
   const [recentOpen, setRecentOpen, recentReady] = usePersistedJson(`kh:sidebar-recent:${workspaceId}`, false, isBoolean);
   const sidebarReady = queryReady && filterReady && expandedReady && shortcutsReady && favoritesReady && recentReady;
   const showArchived = searchParams.get("includeArchived") === "true";
-  const resolvedDocumentId = selectedDocumentId ?? (typeof routeParams?.documentId === "string" ? routeParams.documentId : undefined);
+  const resolvedDocumentId = typeof routeParams?.documentId === "string" ? routeParams.documentId : undefined;
   const needle = query.trim().toLowerCase();
   const visibleCollections = useMemo(() => collections
     .filter(({ source: candidate }) => showArchived || candidate.status === "ACTIVE")
-    .map((collection) => ({ ...collection, tree: showArchived && includeArchived ? collection.tree : withoutArchivedSubtrees(collection.tree) }))
+    .map((collection) => ({ ...collection, tree: showArchived ? collection.tree : withoutArchivedSubtrees(collection.tree) }))
     .sort((a, b) => Number(b.source.sourceType === "HUB") - Number(a.source.sourceType === "HUB")),
-  [collections, showArchived, includeArchived]);
+  [collections, showArchived]);
   const documents = useMemo(() => {
     const map = new Map<string, { documentId: string; sourceId: string; sourceName: string; label: string }>();
     for (const collection of visibleCollections) {
@@ -80,12 +79,12 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
   const favoriteKeys = shortcuts.favorites.filter((key) => documents.has(key));
   // The section is the same height however many are starred: the newest few, and a row for the rest.
   const { inPlace: favoritesInPlaceKeys, showAll: favoritesTotal } = favoritesInPlace(favoriteKeys);
-  const recentKeys = shortcuts.recent.filter((key) => documents.has(key) && !shortcuts.favorites.includes(key) && key !== `${source.id}:${resolvedDocumentId}`).slice(0, 4);
+  const recentKeys = shortcuts.recent.filter((key) => documents.has(key) && !shortcuts.favorites.includes(key) && key !== `${currentSourceId}:${resolvedDocumentId}`).slice(0, 4);
   const favoriteDocumentIds = new Set(shortcuts.favorites.map((key) => documents.get(key)?.documentId).filter((id): id is string => Boolean(id)));
 
   const recordedOpen = useRef<string | null>(null);
   useEffect(() => {
-    const key = resolvedDocumentId ? documentShortcutKey(source.id, resolvedDocumentId) : null;
+    const key = currentSourceId && resolvedDocumentId ? documentShortcutKey(currentSourceId, resolvedDocumentId) : null;
     const visit = key ? `${workspaceId}:${key}` : null;
     // Explorer refreshes and display filters rebuild `documents` while the
     // reader stays on the same document. Only entering it records an open.
@@ -94,7 +93,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
       recordedOpen.current = visit;
       updateShortcuts((previous) => rememberDocument(previous, key));
     }
-  }, [workspaceId, source.id, resolvedDocumentId, documents, updateShortcuts]);
+  }, [workspaceId, currentSourceId, resolvedDocumentId, documents, updateShortcuts]);
 
   const toggleFavorite = useCallback((sourceId: string, documentId: string) => {
     updateShortcuts((previous) => toggleFavoriteDocument(previous, documentShortcutKey(sourceId, documentId)));
@@ -164,7 +163,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
   }
 
   return (
-    <aside aria-label="Knowledge explorer" aria-busy={!sidebarReady} className="kh-sidebar-surface flex h-full min-h-0 w-full shrink-0 flex-col gap-3 border-t border-kh-border lg:border-r lg:border-t-0 bg-kh-bg-explorer px-3 pb-3 pt-2">
+    <aside aria-label="Knowledge explorer" aria-busy={!sidebarReady} className="flex w-full flex-col gap-3 px-2">
       <div className="flex shrink-0 items-center justify-between gap-2">
         <h2 className="px-2 text-caption font-medium text-kh-text-muted">Documents</h2>
         <div className="flex items-center gap-0.5">
@@ -194,7 +193,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
         </div>
       </div>
       {filterOpen ? <div className="shrink-0"><TreeFilter value={query} onChange={setQuery} onClose={closeFilter} /></div> : null}
-      <nav aria-label="Document tree" className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain">
+      <nav aria-label="Document tree" className="space-y-1">
         {!needle && favoriteKeys.length > 0 ? <section aria-label="Favorites" className="pb-1">
           <h3><button type="button" aria-expanded={favoritesOpen} onClick={() => setFavoritesOpen((open) => !open)} className="kh-control kh-interactive-row flex min-h-8 w-full items-center gap-2 px-2 text-left text-caption font-medium text-kh-text-muted">
             {favoritesOpen ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
@@ -244,7 +243,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
           </div>
         ) : null}
         {matches.map(({ source: candidate, tree }) => {
-          const open = Boolean(needle) || (expanded[candidate.id] ?? candidate.id === source.id);
+          const open = Boolean(needle) || (expanded[candidate.id] ?? (currentSourceId === undefined || candidate.id === currentSourceId));
           const Icon = open ? ChevronDown : ChevronRight;
           const isNotes = candidate.sourceType === "HUB" && candidate.name === "Notes" && candidate.status === "ACTIVE";
           return (

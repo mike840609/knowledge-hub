@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/shell/app-shell";
-import { getWorkspaceShellModel } from "@/server/knowledge-read";
+import { getWorkspaceExplorerModel, getWorkspaceShellModel } from "@/server/knowledge-read";
 
 export default async function WorkspaceLayout({
   params,
@@ -11,7 +11,7 @@ export default async function WorkspaceLayout({
   children: ReactNode;
 }) {
   const { workspaceId } = await params;
-  const model = await getWorkspaceShellModel(workspaceId);
+  const [model, explorer] = await Promise.all([getWorkspaceShellModel(workspaceId), getWorkspaceExplorerModel(workspaceId)]);
   if (!model) notFound();
-  return <AppShell key={workspaceId} model={model}>{children}</AppShell>;
+  return <AppShell key={workspaceId} model={model} explorer={explorer}>{children}</AppShell>;
 }

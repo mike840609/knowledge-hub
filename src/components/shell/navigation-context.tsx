@@ -1,8 +1,5 @@
 "use client";
 import { createContext } from "react";
 
-/** Mobile contextual navigation stays owned by its route and portals into the shell drawer. */
-export const NavigationContext = createContext<{
-  mobileExplorerTarget: HTMLElement | null;
-  closeNavigation: () => void;
-} | null>(null);
+/** Lets a link inside the narrow drawer close it. */
+export const NavigationContext = createContext<{ closeNavigation: () => void } | null>(null);
