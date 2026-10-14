@@ -98,7 +98,7 @@ export function AppShell({ model, explorer, children }: { model: WorkspaceShellM
       <div className="flex min-h-0 flex-1">
         {wide ? (
           <SidebarFrame collapsed={navCollapsed} onExpand={toggleNav}>
-            <Sidebar model={model} explorer={explorer} onCollapse={toggleNav} />
+            <Sidebar model={model} explorer={explorer} onCollapse={toggleNav} documentsHidden={authorization.revoked} />
           </SidebarFrame>
         ) : null}
         <main data-nav-collapsed={wide && navCollapsed ? "" : undefined} className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-kh-bg has-[[data-document-pane]]:overflow-hidden">{authorization.revoked ? <p role="status">Workspace access changed. Returning to My Space…</p> : children}</main>
@@ -107,7 +107,7 @@ export function AppShell({ model, explorer, children }: { model: WorkspaceShellM
         <div className="h-full min-h-0" onClick={(event) => {
           if ((event.target as HTMLElement).closest("a") && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) setNavOpen(false);
         }}>
-          {!wide ? <Sidebar model={model} explorer={explorer} /> : null}
+          {!wide ? <Sidebar model={model} explorer={explorer} documentsHidden={authorization.revoked} /> : null}
         </div>
       </Drawer>
       <DocumentOpenRecorder workspaceId={model.workspace.id} collections={explorer?.collections ?? []} />

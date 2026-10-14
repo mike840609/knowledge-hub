@@ -15,9 +15,10 @@ import { WorkspaceSelector } from "./workspace-selector";
 /**
  * Navigation and the document tree in one column: a fixed head (workspace, Search, Home, Graph), one
  * scroll region (Favorites, Recent, Documents, then the low-frequency destinations), and the account row.
- * Rendered once — in the wide frame or in the narrow drawer, never both.
+ * Rendered once — in the wide frame or in the narrow drawer, never both. `documentsHidden` drops the
+ * tree once access to the workspace is revoked: the payload it was drawn from is no longer the reader's to see.
  */
-export function Sidebar({ model, explorer, onCollapse }: { model: WorkspaceShellModel; explorer: WorkspaceExplorerModel | null; onCollapse?: () => void }) {
+export function Sidebar({ model, explorer, onCollapse, documentsHidden = false }: { model: WorkspaceShellModel; explorer: WorkspaceExplorerModel | null; onCollapse?: () => void; documentsHidden?: boolean }) {
   const params = useParams();
   const currentSourceId = typeof params?.sourceId === "string" ? params.sourceId : undefined;
   const workspaceId = model.workspace.id;
@@ -38,7 +39,7 @@ export function Sidebar({ model, explorer, onCollapse }: { model: WorkspaceShell
         <PrimaryNav workspaceId={workspaceId} group="top" />
       </div>
       <div data-sidebar-scroll className="mt-2 min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        {explorer ? <SourceSidebar workspaceId={workspaceId} currentSourceId={currentSourceId} collections={explorer.collections} /> : <ExplorerUnavailable />}
+        {documentsHidden ? null : explorer ? <SourceSidebar workspaceId={workspaceId} currentSourceId={currentSourceId} collections={explorer.collections} /> : <ExplorerUnavailable />}
         <div className="mt-4 px-2 pb-2"><PrimaryNav workspaceId={workspaceId} group="bottom" /></div>
       </div>
       <div className="shrink-0 border-t border-kh-border p-2"><UserMenu identityName={model.identityName} workspaceId={workspaceId} /></div>
