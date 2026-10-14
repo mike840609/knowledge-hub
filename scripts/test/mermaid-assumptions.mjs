@@ -391,14 +391,19 @@ await mustChangeNothing("sankey ", "sankey-beta\n\nA,B,10\nB,C,5", {
 });
 
 // 4. What only the image policy stops. These reach the page while a drawn type is laid out, and nothing before
-//    layout can tell them apart with certainty: the flowchart shape that loads an image by its URL, and a `url()`
-//    in an author's `style` or `classDef` line, which Mermaid writes into the page as CSS. The assumption is that
-//    each is an image fetch, so that `img-src` refuses it elsewhere; a fetch of any other kind fails the run.
+//    layout can tell them apart with certainty: the flowchart shape that loads an image by its URL, a `url()` in an
+//    author's `style` or `classDef` line (class, state and block), which Mermaid writes into the page as CSS, a
+//    sequence participant's `icon` property, which becomes an SVG `<image href>`, and a C4 `UpdateElementStyle`
+//    colour, which is used as a paint. The assumption is that each is an image fetch, so that `img-src` refuses it
+//    elsewhere; a fetch of any other kind fails the run. (A sankey's `linkColor` was a fifth, and is in `secure`.)
 const IMAGE_POLICY = {
   "flowchart image shape": `flowchart LR\n  A@{ img: "https:${ELSEWHERE}/shape.png", label: "x", w: 60, h: 60 }`,
   "class style": `classDiagram\n  class A\n  style A background:url(https:${ELSEWHERE}/s.png),fill:url(https:${ELSEWHERE}/p.svg#a)`,
   "state classDef and style": `stateDiagram-v2\n  [*] --> s1\n  classDef evil background:url(https:${ELSEWHERE}/c.png)\n  class s1 evil\n  style s1 background:url(https:${ELSEWHERE}/t.png)`,
   "block style and classDef": `block-beta\n  a["A"] b\n  style a background:url(https:${ELSEWHERE}/s.png)\n  classDef evil background:url(https:${ELSEWHERE}/c.png)\n  class b evil`,
+  // Written as the review wrote them: `//attacker.example` takes the page's scheme.
+  "sequence participant icon": 'sequenceDiagram\n participant A\n properties A: {"icon": "https://attacker.example/x.png"}\n A->>A: hi',
+  "C4 UpdateElementStyle": 'C4Context\n Person(a,"x","y")\n UpdateElementStyle(a, $bgColor="url(//attacker.example/b.svg#a)")',
 };
 report.onlyTheImagePolicy = {};
 for (const [name, source] of Object.entries(IMAGE_POLICY)) {
@@ -406,7 +411,7 @@ for (const [name, source] of Object.entries(IMAGE_POLICY)) {
   report.onlyTheImagePolicy[name] = { violations: laid.violations, threw: laid.threw };
   if (laid.foreign.length > 0) fail(`${name}: ${laid.foreign.join(", ")}`);
   if (laid.violations.length === 0) fail(`${name}: nothing was refused, so this sample no longer shows what the policy stops`);
-  for (const each of laid.violations) if (!each.startsWith(`img-src https:${ELSEWHERE}/`)) fail(`${name}: a fetch the image policy does not cover: ${each}`);
+  for (const each of laid.violations) if (!each.startsWith(`img-src http:${ELSEWHERE}/`) && !each.startsWith(`img-src https:${ELSEWHERE}/`)) fail(`${name}: a fetch the image policy does not cover: ${each}`);
 }
 
 // What `layout` in `secure` does and does not do. Not an assumption: nothing fails on this, it is what the script saw.
