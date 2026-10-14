@@ -4,6 +4,7 @@ import { Plugin, PluginKey, type EditorState } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
 import { dispatchBlockAction } from "./block-actions";
+import { insertDetailsSkeleton } from "./details-toggle";
 
 const commands = [
   { id: "text", label: "Text", hint: "Plain paragraph", words: "paragraph 文字 段落" },
@@ -16,6 +17,9 @@ const commands = [
   { id: "quote", label: "Quote", hint: "A block quotation", words: "blockquote 引用" },
   { id: "code", label: "Code", hint: "A fenced code block", words: "程式碼" },
   { id: "divider", label: "Divider", hint: "A horizontal rule", words: "hr line 分隔線" },
+  { id: "table", label: "Table", hint: "A simple 2×2 table", words: "table 表格" },
+  { id: "toggle", label: "Toggle", hint: "A collapsible section", words: "toggle fold collapsible 折疊" },
+  { id: "callout", label: "Callout", hint: "A highlighted note", words: "callout note 提示 標註" },
 ] as const;
 type Command = typeof commands[number];
 type Trigger = { pos: number; query: string };
@@ -50,10 +54,29 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
       const item = nodes.list_item.create({ listType: ordered ? "ordered" : "bullet", label: ordered ? "1." : "-", ...(command.id === "task" ? { checked: false } : {}) }, paragraph);
       node = (ordered ? nodes.ordered_list : nodes.bullet_list).create(ordered ? { order: 1 } : null, item);
     }
+    if (command.id === "table") {
+      const cell = () => nodes.table_cell.create(null, nodes.paragraph.create());
+      const header = () => nodes.table_header.create(null, nodes.paragraph.create());
+      node = nodes.table.create(null, [
+        nodes.table_header_row.create(null, [header(), header()]),
+        nodes.table_row.create(null, [cell(), cell()]),
+      ]);
+    }
     const current = view.state.doc.nodeAt(trigger.pos)!;
+    if (command.id === "toggle") {
+      insertDetailsSkeleton(view, trigger.pos, trigger.pos + current.nodeSize, "");
+      return;
+    }
+    let caret = trigger.pos + 1;
+    if (command.id === "callout") {
+      // The marker must stand alone on the quote's first line (remark-callouts), so the body is its own paragraph.
+      const marker = nodes.paragraph.create(null, view.state.schema.text("[!NOTE]"));
+      node = nodes.blockquote.create(null, [marker, paragraph]);
+      caret = trigger.pos + 1 + marker.nodeSize + 1;
+    }
     const replacement = command.id === "divider" ? [nodes.hr.create(), paragraph] : node;
     const transaction = view.state.tr.replaceWith(trigger.pos, trigger.pos + current.nodeSize, replacement);
-    dispatchBlockAction(view, transaction, trigger.pos + (command.id === "divider" ? 2 : 1));
+    dispatchBlockAction(view, transaction, command.id === "divider" ? trigger.pos + 2 : caret);
   }
 
   const plugin = $prose(() => new Plugin<State>({

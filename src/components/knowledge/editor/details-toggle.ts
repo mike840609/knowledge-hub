@@ -13,6 +13,7 @@ import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import type { EditorState } from "@milkdown/kit/prose/state";
 import { TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
+import { dispatchBlockAction } from "./block-actions";
 const DETAILS_OPEN = /^<details(\s+open)?>/i;
 const DETAILS_CLOSE = /^<\/details>$/i;
 /** Innermost details opener at or before pos whose body contains pos. */
@@ -41,26 +42,39 @@ export function convertBlockToDetails(view: EditorView): boolean {
   const { $from } = state.selection;
   const parent = $from.parent;
   if (parent.type.name !== "paragraph" && parent.type.name !== "heading") return false;
+  const summary = escapeSummaryText(parent.textContent);
+  return insertDetailsSkeleton(view, $from.start(), $from.end(), summary);
+}
+/** The four nodes of one disclosure: opener, summary, empty body, closer. */
+function detailsNodes(state: EditorState, summaryValue: string): ProseNode[] | null {
   const html = state.schema.nodes.html;
   const paragraph = state.schema.nodes.paragraph;
-  if (!html || !paragraph) return false;
-  const start = $from.start();
-  const end = $from.end();
-  const summary = escapeSummaryText(parent.textContent);
-  let tr = state.tr.replaceWith(start, end, [
+  if (!html || !paragraph) return null;
+  return [
     html.create({ value: "<details>" }),
-    html.create({ value: `<summary>${summary}</summary>` }),
+    html.create({ value: `<summary>${summaryValue}</summary>` }),
     paragraph.create(),
     html.create({ value: "</details>" }),
-  ]);
+  ];
+}
+/** Position inside the first empty paragraph at or after from, if any. */
+function firstEmptyBodyAtOrAfter(doc: ProseNode, from: number): number | null {
   let caret: number | null = null;
-  tr.doc.descendants((node: ProseNode, position: number) => {
+  doc.descendants((node: ProseNode, position: number) => {
     if (caret !== null) return false;
-    if (position < start) return;
+    if (position < from) return;
     if (node.type.name === "paragraph" && node.content.size === 0) caret = position + 1;
   });
-  if (caret !== null) tr = tr.setSelection(new TextSelection(tr.doc.resolve(caret)));
-  view.dispatch(tr.scrollIntoView());
+  return caret;
+}
+/** Replaces [from, to) with a disclosure; caret lands in its body. One undo step. */
+export function insertDetailsSkeleton(view: EditorView, from: number, to: number, summaryValue: string): boolean {
+  const nodes = detailsNodes(view.state, summaryValue);
+  if (!nodes) return false;
+  const tr = view.state.tr.replaceWith(from, to, nodes);
+  const caret = firstEmptyBodyAtOrAfter(tr.doc, from);
+  if (caret === null) return false;
+  dispatchBlockAction(view, tr, caret);
   return true;
 }
 /** Rewrites the nearest opener at pos, or false when the caret is not in a toggle. */
