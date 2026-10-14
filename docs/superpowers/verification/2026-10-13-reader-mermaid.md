@@ -113,7 +113,9 @@ Diagram types turned away by the `<foreignObject>` rule: none of the eight tried
 
 Method: a throwaway Playwright spec (not committed) run through the e2e harness on the production build, 2026-10-13, with `command npm run test:e2e -- <the file>`; Chromium; each page in a fresh browser context so nothing was cached.
 
-- Chunks fetched for a page with one flowchart: 10 files, 665,482 bytes of response body as transferred (gzip; `response.request().sizes().responseBodySize`, headers not included: 4,233 bytes more), 2,326,262 bytes once decoded. The largest is one of 434,116 bytes transferred (1,448,145 decoded). Two runs gave the same total. "Fetched only for a diagram" means: the JavaScript files under `/_next/` the flowchart document fetched that two documents without a `mermaid` block (one with a `js` code block, one text only) did not. The flowchart document fetched 41 JavaScript files, the other two 31 each.
+- Chunks fetched for a page with one flowchart: 10 files, 665,482 bytes of response body as transferred (gzip; `response.request().sizes().responseBodySize`, headers not included: 4,233 bytes more), 2,326,262 bytes once decoded. The largest is one of 434,116 bytes transferred (1,448,145 decoded). Two runs gave the same total. The largest is ELK's: the production build of 2026-10-14 holds a chunk of exactly
+1,448,145 bytes, `.next/static/chunks/91dbc596.66eb85067e5182c6.js`, which contains "Eclipse Layout Kernel". A flowchart
+loads it by default (see "ELK" below). "Fetched only for a diagram" means: the JavaScript files under `/_next/` the flowchart document fetched that two documents without a `mermaid` block (one with a `js` code block, one text only) did not. The flowchart document fetched 41 JavaScript files, the other two 31 each.
 - A page with no `mermaid` block: none of those ten files requested, in either document.
 - Opened at a heading below a diagram (`#landing-heading`, a flowchart, 40 filler paragraphs, then the heading; viewport 1280 by 800): lands on the heading. Sampled on every animation frame from navigation: the heading's `getBoundingClientRect().top` was 16 px from the frame in which the page had scrolled to it to the end of the sampling (several seconds), including the frame in which the source closed and the 184 px image appeared. The document's scroll pane moved to compensate (scrollTop 3016, then 2910, then 3132), which is the browser's scroll anchoring; the heading did not move. The same document with the fence changed to `text` (nothing drawn) also had it at 16 px. Not off, so left alone.
 
@@ -121,7 +123,10 @@ Method: a throwaway Playwright spec (not committed) run through the e2e harness 
 
 - How many stored documents hold a `mermaid` block.
 - Browsers other than Chromium. The image approach rests on behaviour all three engines share, and it was run in one. The heading measurement above also depends on Chromium's scroll anchoring, and was not repeated in an engine without it.
-- The size of the chunks for any diagram type but a flowchart: other types may load further chunks.
+- The size of the chunks for any diagram type but a flowchart: other types may load further chunks. A sequence diagram
+  was seen not to load ELK's chunk, in the unbundled `dist` the script serves (a probe run for the wave of 2026-10-14,
+  not kept: 29 files for the flowchart and 22 for the sequence diagram, in a page that loads nothing else; the
+  script records only whether the ELK chunk was fetched); no figure was taken for it in the production build.
 - Time to draw on a slow device. The one figure seen is from a fast machine: an image visible 443 ms after navigation for one flowchart, and ten diagrams settled in about 1.1 s (Task 6 run).
 
 ## Final review fixes, 2026-10-14
@@ -199,10 +204,12 @@ maths too.
 
 After the fix the same test passes: nothing left the origin, no element of the author's choosing was recorded
 while a diagram was laid out, and the policy refused exactly two things, both `img-src`: the image shape's URL
-and the `url()` in a class diagram's `style` line.
+and the `url()` in a class diagram's `style` line. (That was the test on that day. The wave of 2026-10-14, below,
+added three more and the test now expects five.)
 
 What changed: the type is found by `mermaid.parse` before anything is laid out and only listed types are drawn;
-Mermaid's sanitiser is given a configuration that leaves `<br>` and no attribute; `media-src 'none'` in the three
+Mermaid's sanitiser is given a configuration that leaves `<br>` (and, as first written, an attribute of it: `data-*`
+and `aria-*` survived, until the wave below); `media-src 'none'` in the three
 places the policy is written (nothing under `src/` or `public/` plays audio or video, so `'none'` and not
 `'self'`); and six more keys in `secure`.
 
@@ -258,9 +265,10 @@ after `$$x^2$$`.
 | `---` | no | | | `parse` throws on it, so there is no type |
 | `agentflow`, `swimlane`, `treeView`, `ishikawa`, `venn`, `usecase`, `wardley`, `cynefin`, `railroad`, `railroadEbnf`, `railroadAbnf`, `railroadPeg` | no | | | Not examined, and not run by the script |
 
-Refused after layout, among the drawn types, for a `<foreignObject>`: a sequence or class diagram whose text holds
-`$$…$$`, and a sequence diagram whose own config sets `textPlacement: fo`. In each, the only HTML elements in the
-page were the wrappers above.
+Refused after layout, among the drawn types, for a `<foreignObject>`: a sequence diagram whose message, note or
+`loop` label holds `$$…$$`, a class diagram whose class label or member does, and a sequence diagram whose own
+config sets `textPlacement: fo`. In each, the only HTML elements in the page were the wrappers above. Not every
+place with `$$…$$` is refused: see "Where `$$…$$` is refused" below.
 
 The script fails without the sanitiser. With `dompurifyConfig` taken out of its `initialize` it exited 1: every
 sequence and class sample with `$$` had `video[src][preload], img[src], a[href]` in the page, and the policy
@@ -271,25 +279,34 @@ Mermaid is imported. An HTML-namespace element counts as Mermaid's own when its 
 `style` or `canvas` and its attributes are among `id`, `class`, `style`, `xmlns`, `width`, `height` and
 `data-id`; any other is reported and fails the run. The review's wording was "other than Mermaid's own container
 `div` and `style`". That is narrower than what Mermaid itself makes (the maths box, the label wrappers, the
-mindmap's layout engine), so the check is by tag and attribute name instead, which still catches every element
-that can fetch.
+mindmap's layout engine), so the check is by tag and attribute name instead. It records every element of a
+tag that can fetch (`img`, `video`, `audio`, `source`, `iframe`, `object`, `embed`, `link`, `image` in the HTML
+namespace, and so on: any tag not among the five). It does not record an author's `<style>` element, because a bare
+`style` is one of the five, or a `style` attribute on a `div`, `span`, `br`, `style` or `canvas`, because `style` is
+among the allowed attribute names: those two are how CSS gets in. They are covered by other assertions instead:
+in the script by the policy's violation list and the list of requests that left the origin, and in the e2e by the
+same two and the list of requests tried.
 
 ### What a diagram's own text can no longer set
 
 `secure` gained `themeCSS`, `fontFamily`, `altFontFamily`, `theme`, `themeVariables`, `layout` and
-`dompurifyConfig`. Read in 12.2.0's `sanitize`: every key in `secure` is deleted from a directive's or
+`dompurifyConfig` (and `linkColor`, in the wave of 2026-10-14 below). Read in 12.2.0's `sanitize`: every key in `secure` is deleted from a directive's or
 frontmatter's config, and the function calls itself on each object in it, so the list holds at every depth; it is
 called on directives only, never on what `initialize` is given. Run: a flowchart drawn with each of the first six
 set by a directive and by frontmatter, and with four of them nested under `flowchart`, was the same string as the
 flowchart without, fourteen times of fourteen; the policy refused nothing and no further file of Mermaid's was
-fetched: 12.2.0 registers a loader for ELK, a chunk of its own, and `layout: elk` did not ask for it. Before the
+fetched. (This once went on to say that 12.2.0 registers a loader for ELK and that `layout: elk` did not ask for
+it. That was not what was seen: see "ELK" below. The run did show `layout: elk` changing nothing and fetching
+nothing, because ELK is the default.) Before the
 keys were added the same run exited 1: `theme`, `themeVariables`, `themeCSS` and `fontFamily` each changed the
 drawing, and `themeCSS` and `fontFamily` made an `img-src` violation. The theme still follows the page: the e2e
 that switches theme and reads the drawing's text colour passes.
 
-Two things remain that only `img-src` stops, both shown by the script and by the hostile test: the flowchart
-image shape, and a `url()` in a `style` or `classDef` line of a class, state or block diagram (the flowchart
-parser refuses one). The second was not in the review.
+Four things remain that only `img-src` stops, all shown by the script and by the hostile test (the last two found
+by the re-review of 2026-10-14, below): the flowchart image shape; a `url()` in a `style` or `classDef` line of a
+class, state or block diagram (the flowchart parser refuses one); a sequence participant's icon property; and a C4
+`UpdateElementStyle` colour. A fifth, a sankey's `linkColor`, is closed by `secure` since that wave. The `secure`
+list had, at this point, fourteen keys; it has fifteen now.
 
 ### A picture that did not load
 
@@ -325,10 +342,12 @@ repeated here.
 - `make test-e2e`, whole suite, once: 340 passed, 2 skipped, 1 failed. Exit 2. The one that failed is
   `tests/e2e/owner-review.spec.ts:73`, "a discussion that awaits the owner is open beside its passage when the
   document is, in the outline's place": the document pane was wider than its box
-  (`pane.scrollWidth <= pane.clientWidth` was false). The document it opens holds no diagram, and this wave
-  changed neither that test nor a file it exercises other than the policy's `media-src`. That file run again
-  alone, once: 11 passed, exit 0. Why it failed the first time was not found. Every `zz-mermaid*` test, the policy
-  tests and the share-link tests passed in the whole run. The two skipped are the two that were skipped before.
+  (`pane.scrollWidth <= pane.clientWidth` was false). It failed once in the whole run, and passed when its file was
+  run again alone (11 passed, exit 0). The page it opens has no diagram, so Mermaid is not imported there. The cause
+  was not established. The re-review of 2026-10-14 reads it as a race in that test: one un-polled measurement, at
+  line 103, taken right after a layout change (it failed 440 ms in; the same test passed in two earlier whole runs,
+  at 2.0 s). That reading was not tried, and the test is as it was. Every `zz-mermaid*` test, the policy tests and
+  the share-link tests passed in the whole run. The two skipped are the two that were skipped before.
 
 ### Superseded
 
@@ -353,3 +372,137 @@ repeated here.
 - The types marked "not examined".
 - Accessibility items from the review: a keyboard-scrollable picture box, a live region for the reason, `alt` from
   `accTitle`.
+
+## Re-review fixes, 2026-10-14
+
+A second review of the fix wave above (`7e80139..30dce16`) found no critical defect and one important one: three
+more layout-time fetches that rest on `img-src` alone and were in no document or test. This section is what was done
+about it and its minor findings, and what was seen. Every run is Chromium, `mermaid@12.2.0`.
+
+### What changed
+
+- **`linkColor` is in `secure`.** `%%{init: {"sankey": {"linkColor": "url(https://attacker.example/s.svg#a)"}}}%%`
+  reached layout, and only `img-src` stopped the fetch. In the assumptions script a sankey is drawn with that
+  directive, and with it as frontmatter: with the key out of `secure` the drawing changed and the policy refused
+  `img-src https://attacker.example/s.svg`, for both forms; with it in, the drawing is the same, nothing is refused
+  and nothing further is fetched. (The script also carries `linkColor` at the top level of the config, which a
+  sankey does not read and which changed nothing either way.) The comparison treats
+  `node-N`, `link-N` and `linearGradient-N` as one name, since a sankey numbers them from a counter that outlives a
+  drawing (`node-1`, then `node-6`, for the same text). A plain sankey still draws (its entry in the per-type
+  samples). The script and `mermaid-queue.ts` hold the same list (`mermaid-assumptions-lists.test.ts`).
+- **A superseded request is not laid out.** The newest-request check is repeated after the load of Mermaid and after
+  the type is found, before the next step; it was only at the start and after `render`. A request that is dropped
+  there returns without giving back the picture the block shows; the request that replaces it does, as before.
+  Unit tests, each seen to fail first: two `draw` calls for one block while the load is pending, `render` called
+  with `["old", "new"]` and the test expects `["new"]`; `forget` during the load, `["a"]` and expects none; the
+  same two during the type check, `["slow", "new"]` and `["slow"]`.
+- **`<br>` carries no attribute.** The sanitiser's configuration gains `ALLOW_DATA_ATTR: false` and
+  `ALLOW_ARIA_ATTR: false`, in the queue and in the script (the lists test compares the whole configuration, and
+  its literal). The script lays out a sequence message and a class label holding `$$x^2$$ a<br data-x=1 aria-label=y title=t>b`:
+  with the flags out, both left `br[data-x][aria-label]` in the page and the sequence one had a `<br>` with
+  attributes; with them in, the sequence message makes a bare `<br>` and the class label's page holds no element of
+  the author's attributes. (The class label is refused afterwards for its `<foreignObject>`; the check is of the
+  moment of layout.) `title` was never allowed.
+- **The decode check cannot hang the queue.** It is raced with a timer, `DECODE_TIMEOUT_MS` (10 s, beside the other
+  limits), which is cleared when the check settles. One that never settles is "did not load": the URL is revoked, the
+  reason is the existing `This kind of diagram cannot be drawn here yet.`, and the next diagram is drawn. Unit tests
+  with fake timers through the injected `decodes`: nothing revoked at 9,999 ms, refused and revoked at 10,000 ms, the
+  next block drawn; no timer left behind whether the check says yes, no or throws; a check that settles after the
+  timeout changes nothing. Seen failing first: `DECODE_TIMEOUT_MS` did not exist and the two timed tests timed out.
+- **The image policy's cases.** The script's image-policy group and the hostile e2e gain a sequence participant's
+  icon (`properties A: {"icon": "https://attacker.example/x.png"}`) and a C4 `UpdateElementStyle(a, $bgColor="url(//attacker.example/b.svg#a)")`.
+  Script: each is laid out, drawn (no throw), and refused with one `img-src` violation (`https://attacker.example/x.png`,
+  `http://attacker.example/b.svg`, since `//` takes the page's scheme); the check on the violation's prefix now
+  accepts `http:` as well as `https:`. With `img-src` widened to those two origins in a copy of the script, all six
+  samples of the group failed with "nothing was refused" and six requests left the origin (four `image`, and two
+  `other`: the `fill:url()` of the class style and the C4 colour).
+- **The hostile e2e's `REMOTE` sample.** It was a flowchart `classDef … fill:url(…)`, which the flowchart parser
+  refuses; it proved nothing about `url()`. It is now a state diagram's `classDef evil background:url(https://attacker.example/remote.png)`.
+  The test asserts that this one, the class `style`, the participant icon, the C4 colour and the two ignored configs
+  are each drawn (an image, no reason, so not a parse error), and that the policy refused exactly five URLs, all
+  `img-src`: `shape.png`, `style.png`, `remote.png`, `x.png` and `<page scheme>//attacker.example/b.svg`, and that the
+  requests tried are the same five (`image` for four, `other` for the C4 colour). With `REMOTE` put back as the
+  flowchart it fails: the figure holds no `img[data-diagram]`. Twenty blocks, not eighteen.
+- **`layout` in the script.** `layout: "elk"` is 12.2.0's default and so was a no-op in the script's "ours" cases.
+  A `layout: dagre` case is added (directive, frontmatter), and the nested case now sets dagre. With `layout` out of
+  `secure` in a copy: `layoutDagre` changed the drawing and fetched `chunks/mermaid.esm.min/dagre-JKPHJXCU.mjs`, by
+  directive and by frontmatter, and `nested` changed the drawing. With it in, neither does.
+
+### ELK
+
+Observed, not assumed. 12.2.0's `defaultConfig.layout` is `"elk"`. A page that draws one plain flowchart,
+`flowchart LR; A[Start] --> B{Choice}`, fetches `chunks/mermaid.esm.min/elk-7HBNN7NY.mjs`, 1,618,161 bytes in
+`node_modules/mermaid/dist` (the script reports it as `layoutEngine.flowchart`); a plain sequence diagram does not
+(`layoutEngine.sequence`: no ELK chunk). `elkjs` is 0.9.3, EPL-2.0 (`node_modules/elkjs/package.json`); mermaid is
+MIT. In the production build, the largest chunk of the record's measurement, 1,448,145 bytes decoded, is ELK's (a
+chunk of that size in this tree's `.next/static/chunks` contains "Eclipse Layout Kernel"). So the earlier sentence
+that `layout: elk` "did not ask for" a loader it had registered was not what happens: the baseline flowchart
+already loads ELK, because it is the default. In a probe run for this wave (not kept), `%%{init: {"layout":"elk"}}%%`
+produced the same drawing as no directive, with `layout` in `secure` and without; `%%{init: {"layout":"dagre"}}%%`
+without it produced a different drawing (11,596 characters against 11,204) and fetched one more chunk. What `layout`
+in `secure` prevents is a diagram choosing another engine. It does not prevent ELK from loading. The totals in
+"Measured" are unchanged and were right: the ten files for one flowchart include the ELK chunk. It is now named
+there and in the spec's "Dependency", with its size and licence.
+
+### Where `$$…$$` is refused
+
+The spec said a sequence or class diagram whose text holds `$$…$$` is turned away. A probe for this wave (not kept;
+sixteen sources, with the configuration of the queue) found where, and where not:
+
+| Place | `<foreignObject>` (refused) | Drawn |
+| --- | --- | --- |
+| sequence message, note, `loop` label | yes | no |
+| class label, class member | yes | no |
+| sequence title, `box` label | no | yes, `$$x^2$$` shown as text |
+| class note, generic note, relation label | no | yes, shown as text |
+| flowchart label, state description, ER relation | no | yes, shown as text |
+| sequence participant alias, actor alias | no | **yes, with that participant's label missing** |
+
+The last row is a known limitation, left: no code was added for it. The spec states it. The re-review's sample,
+`participant A as $$x^2$$ hello`, behaves so here with `hello` absent from the drawing as well as the maths.
+
+### Tests seen to fail first
+
+- `tests/unit/mermaid-queue.test.ts` and `tests/unit/mermaid-assumptions-lists.test.ts`: 8 failed before the change
+  (the two lists tests on `linkColor` and the sanitiser's literal; the two timers; the four supersession cases),
+  86 passed after, in those two files.
+- The assumptions script with, in turn, `linkColor` out of `secure`, the two sanitiser flags out, `layout` out of
+  `secure`, and `img-src` widened: each exited 1 with the lines above. With none of them: `OK`.
+- `tests/e2e/zz-mermaid-hostile.spec.ts` with the old `REMOTE`: failed, as above.
+
+### Runs, on the tree after all of the above
+
+- `make verify`: 194 test files, 2573 tests passed (8 more than before: three for the decode check, five for the
+  supersession). Typecheck, lint and build passed. Exit 0.
+- `make test-mermaid-assumptions`: `OK`, exit 0. `abroad` and `scriptRefusals` empty.
+- `make test-e2e`, whole suite, once: 340 passed, 2 skipped, 1 failed. Exit 2. The one that failed is
+  `tests/e2e/mvp-freshness.spec.ts:9`, "freshness preference persists and reminders link to source actions", with
+  `SqlError: pool failed to retrieve a connection from pool` caused by `Too many connections` (MariaDB, error
+  1040): the database refused the connection, and the test does not touch a diagram. That file run again alone,
+  once: 1 passed, exit 0. Why the database had no connection to give was not looked into. `owner-review.spec.ts:73`
+  passed in this run (1.9 s), as did every `zz-mermaid*` test, the policy tests and the share-link tests. The two
+  skipped are the two that were skipped before. `docs/ui-comparisons` was restored afterwards and is not committed.
+
+### Superseded
+
+- "194 test files, 2565 tests" and the `make test-e2e` line of "Runs, on the tree after all of the above", in "Review
+  fixes": the figures of this wave, above, replace them. Where that section says what failed or passed, it is true of
+  its tree, not of this one.
+- "Two things remain that only `img-src` stops": four, and the sankey's `linkColor` is closed.
+- "the policy refused exactly two things" (the hostile test): five.
+- "eighteen blocks" in the spec and in "Superseded" above: twenty, with `REMOTE` replaced.
+- "`layout: elk` did not ask for it": see "ELK".
+- "a configuration that leaves `<br>` and no attribute": true from this wave; before it `data-*` and `aria-*` stayed.
+- "which still catches every element that can fetch": it records every tag but a `<style>` element and a `style`
+  attribute; see the paragraph on what the element check is.
+- The `$$…$$` sentence under the table of types: see "Where `$$…$$` is refused".
+
+### Not done, not measured
+
+- Not in scope and left: the accessibility items, `default-src`, a sandboxed layout frame, Firefox and Safari, refusing
+  `$$` in an alias, and `owner-review.spec.ts`.
+- The probes for ELK and for `$$…$$` are not in the script (the script records only whether the ELK chunk is fetched,
+  and its size); their figures above are from runs whose output is not kept in the repository.
+- A URL on this origin in an icon property or a C4 colour was not tried, as for the image shape.
+- Whether the C4 and sequence cases are the only further ones: the review ran about eleven hundred layouts and found
+  these; the script runs a sample.

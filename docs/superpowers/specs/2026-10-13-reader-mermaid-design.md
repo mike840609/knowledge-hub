@@ -103,12 +103,15 @@ What guards the moment now, each danger with the guard that stops it:
 | At layout time | What stops it |
 | --- | --- |
 | A type that writes the author's text into the page as HTML (`architecture`, `eventmodeling`), or any type nobody has examined | The type is found before anything is laid out, and only the types on a list are drawn ("The types that are drawn") |
-| Text holding `$$…$$` in a drawn type, written as an HTML label | Mermaid's sanitiser is given a configuration of ours (`dompurifyConfig`) that leaves a line break and no attribute, so what is written is text. The key is in `secure` |
+| Text holding `$$…$$` in a drawn type, written as an HTML label | Mermaid's sanitiser is given a configuration of ours (`dompurifyConfig`) that leaves a line break and no attribute (`data-` and `aria-` ones included), so what is written is text. The key is in `secure` |
 | HTML labels turned back on by the diagram's own text | `htmlLabels` in `secure` |
-| A style, a font, a theme or a layout engine chosen by the diagram's own text | `themeCSS`, `fontFamily`, `altFontFamily`, `theme`, `themeVariables` and `layout` in `secure` |
+| A style, a font, a theme or a layout engine other than the default (ELK, in 12.2.0) chosen by the diagram's own text | `themeCSS`, `fontFamily`, `altFontFamily`, `theme`, `themeVariables` and `layout` in `secure`. `layout` keeps a diagram from choosing another engine; it does not keep ELK from loading, since a flowchart loads it by default ("Dependency") |
+| A sankey's `linkColor`, used as a paint, so that `url(https://…)` in it is a fetch | `linkColor` in `secure`. It was found resting on `img-src` alone, and is closed |
 | The `<style>` holding the author's `classDef` and `style` lines reaching the rest of the page | Mermaid scoping its rules to the drawing's own id (it compiles them under that selector; read in 12.2.0's `createUserStyles`). Nothing else: `script-src` says nothing about styles |
 | A `url()` in an author's `style` or `classDef` line. Class, state and block diagrams accept one; the flowchart parser refuses it | `img-src` only |
 | The flowchart shape that loads an image by its URL (`A@{ img: "…" }`): Mermaid makes an `Image` of it in the page to measure it | `img-src` only |
+| A sequence participant's icon property (`properties A: {"icon": "https://…"}`): Mermaid writes an SVG `<image href>` of it into the page | `img-src` only |
+| A C4 diagram's `UpdateElementStyle(a, $bgColor="url(//host/…)")`: the colour is used as a paint | `img-src` only |
 | An audio or video element | `media-src 'none'`, behind the first two rows |
 | An inline script or handler | `script-src`, which refuses one whoever inserted it |
 
@@ -117,10 +120,17 @@ What guards the moment now, each danger with the guard that stops it:
 not to our own `initialize`, so the theme still follows the page. Without an
 entry, the setting it names guards nothing.
 
-For the two rows that say `img-src` only: nothing before layout tells such a
-diagram from another with certainty, so the policy is the guard and there is no
-line in front of it. A URL on another origin is refused. A URL on this origin
-is loaded, which a Markdown image in the same document can already do.
+For the four rows that say `img-src` only (a style or `classDef` `url()`, the
+flowchart image shape, a sequence participant's icon, a C4 style colour):
+nothing before layout tells such a diagram from another with certainty, so the
+policy is the guard and there is no line in front of it. A URL on another
+origin is refused, with an `img-src` violation, and nothing leaves. A URL on
+this origin is loaded, which a Markdown image in the same document can already
+do. These four are the ones found, each by running it; a fifth, the sankey's
+`linkColor`, was found the same way and is closed by `secure`. The script
+shows each of the four refused, and fails the run if one is not (or if its
+fetch is of a kind `img-src` does not cover); that is evidence about the places
+tried, not a proof that no fifth remains.
 
 What the checks show, and no more. `scripts/test/mermaid-assumptions.mjs` lays
 each drawn type out in Chromium, plain and with hostile HTML in each place the
@@ -194,8 +204,11 @@ text happens to be a diagram. The reader does not guess a language
    drawings: Mermaid keeps state between calls, and a page must stay usable
    while its diagrams arrive. **Only the newest request for a block is drawn.**
    A request that a newer one for the same block has superseded, or whose block
-   has left the page, is dropped before Mermaid is called
-   (`createDiagramQueue`, `mermaid-queue.ts`). The theme is read with a store
+   has left the page, is dropped before it is laid out: the queue asks again
+   after Mermaid has loaded and after the type is found, the two steps that
+   wait, so `render` is never called for it. (`parse` may have been; it lays
+   nothing out.) One that is superseded while it is being laid out finishes,
+   and makes no URL (`createDiagramQueue`, `mermaid-queue.ts`). The theme is read with a store
    whose server value differs from the client's, so every hydrated page asks
    twice; without this rule every diagram was drawn twice in production.
 5. **The type is found before anything is laid out.** `mermaid.parse` reads
@@ -209,8 +222,8 @@ text happens to be a diagram. The reader does not guess a language
    things in it are mended (below), and it becomes
    `new Blob([svg], { type: "image/svg+xml" })` and a URL from
    `URL.createObjectURL`. The queue then loads that URL in an `Image`: only if
-   it loads does it become the `src` of the `<img>`, and otherwise it is
-   revoked and the block is left as code. The URL is revoked when the block
+   it loads, within ten seconds, does it become the `src` of the `<img>`, and
+   otherwise it is revoked and the block is left as code. The URL is revoked when the block
    redraws, unmounts, or is asked for again and declined. `bindFunctions`,
    which Mermaid returns for click handlers, is never called.
 
@@ -255,7 +268,7 @@ ignored, and the block is still drawn.
 | A type that is not on the list, or text no type can be told of | `This kind of diagram cannot be drawn here yet.` |
 | Longer than 10,000 characters | `This diagram is too long to draw.` |
 | More than 50 diagrams before it in the document | `Too many diagrams on this page; this one is left as code.` |
-| The drawing holds a `<foreignObject>`, gives no size, its URL cannot be made, or the URL does not load as an image | `This kind of diagram cannot be drawn here yet.` |
+| The drawing holds a `<foreignObject>`, gives no size, its URL cannot be made, or the URL does not load as an image (or the browser does not say, in ten seconds) | `This kind of diagram cannot be drawn here yet.` |
 | Mermaid could not be loaded | `Diagrams could not be loaded.` |
 
 The limits are constants beside the queue, as the highlighter's are beside it.
@@ -270,9 +283,14 @@ SVG. One that still embeds HTML draws unevenly across browsers as an image, and
 a diagram with its labels missing is a wrong picture, which is worse than code.
 So it is refused. This rule is about the picture, and comes after layout; what
 may be laid out at all is the list above. Among the drawn types it turns away a
-sequence or class diagram whose text holds `$$…$$`, and a sequence diagram
-whose own config sets `textPlacement: fo`. Maths is not drawn: a flowchart
-shows `$$…$$` as the text it is.
+sequence diagram whose message, note or `loop` label holds `$$…$$`, a class
+diagram whose class label or member does, and a sequence diagram whose own
+config sets `textPlacement: fo`. It does not turn away every place: `$$…$$` in
+a sequence title or `box`, or in a class note or relation label, is drawn as the
+text it is, as a flowchart does. **Known limitation:** a sequence participant or
+actor alias holding `$$…$$` (`participant A as $$x^2$$ hello`) is drawn, with
+that participant's label missing, because Mermaid leaves no `<foreignObject>`
+for the rule to see. Maths is not drawn, and this is not fixed here.
 
 **A picture that does not load.** An `<img>` says nothing when its source is
 not an image, so the reader would see a broken picture over a closed source.
@@ -434,6 +452,17 @@ d3, a parser and layout engines. It is reached only through `import()`:
 
 Verification records the size of the chunks a page with one flowchart fetches.
 
+**ELK.** Mermaid 12.2.0's default layout engine is ELK (`elkjs` 0.9.3, licensed
+EPL-2.0; Mermaid is MIT), a chunk of its own: 1,618,161 bytes in
+`node_modules/mermaid/dist/chunks/mermaid.esm.min/`, and the 1,448,145-byte
+chunk, the largest, in the production build the verification measured. A
+flowchart fetches it with no help from the diagram's text; a sequence diagram
+does not. It is part of what Mermaid costs, and a dependency whose licence is
+not Mermaid's. `layout` in `secure` does not change that: it keeps a diagram
+from choosing another engine (`layout: dagre` changed the drawing and fetched a
+further chunk until the key was in `secure`), and `layout: elk` asks for what is
+already the default.
+
 Before the version is changed, and after: `make test-mermaid-assumptions`. The
 three lists in `mermaid-queue.ts` are true of 12.2.0 because that script saw
 them hold; nothing says they hold for another version until it has run.
@@ -457,7 +486,7 @@ labels on, by a `%%{init}%%` directive anywhere in the text or by YAML frontmatt
 so a flowchart came out with `<foreignObject>`. Done: `htmlLabels` is added to Mermaid's
 `secure` list in `initialize` (`mermaid-queue.ts`), which was then the installed default
 (`secure`, `securityLevel`, `startOnLoad`, `maxTextSize`, `suppressErrorRendering`,
-`maxEdges`) plus `htmlLabels`, and has gained seven keys since (below). No directive is stripped. `scripts/test/mermaid-assumptions.mjs`
+`maxEdges`) plus `htmlLabels`, and has gained eight keys since (below). No directive is stripped. `scripts/test/mermaid-assumptions.mjs`
 holds a copy of that list and tries a directive before the first line, a directive after it,
 and frontmatter `config:`: none yields `<foreignObject>`, and the script passes. The
 `<foreignObject>` refusal stays as the backstop. The other four rows held: `render` resolves
@@ -475,7 +504,9 @@ when one fails:
 | Each type on the list is laid out with no element of the author's choosing in the page, plain and with hostile text | Take the type off the list |
 | A directive or frontmatter cannot set a key in `secure`, at any depth: the drawing is the same string with it and without | The key guards nothing; return to "What B does not cover" |
 | With `dompurifyConfig` set, text holding `$$…$$` leaves no element but Mermaid's own wrappers, and a directive cannot replace it | Take sequence and class diagrams off the list |
-| The image shape and a `url()` in a style line are image fetches, which `img-src` refuses elsewhere | A fetch the policy does not name leaves the origin; refuse the type that makes it |
+| The image shape, a `url()` in a style line, a sequence participant's icon and a C4 style colour are image fetches, which `img-src` refuses elsewhere | A fetch the policy does not name leaves the origin; refuse the type that makes it |
+| A sankey's `linkColor` and `layout: dagre`, carried by a directive or by frontmatter, change nothing: the drawing is the same string, the policy refuses nothing, no further chunk is fetched | The key guards nothing; return to "What B does not cover" |
+| `<br data-x=1 aria-label=y>` in text holding `$$…$$` leaves a bare `<br>` (a sequence message) or no attribute (a class label) | The sanitiser's configuration lets an attribute through; return to "What B does not cover" |
 | A drawing with a link or a non-breaking space loads as an image once mended | The picture is refused by the load check, and the block is left as code |
 
 ## Shape of the change
@@ -521,7 +552,10 @@ Each line is a requirement above.
   to find the type are refused with `render` never called; a listed type that
   does not parse says what Mermaid said. A drawing that does not load as an
   image is refused and its URL revoked, the picture on show kept until the new
-  one loads. `&nbsp;` and an undeclared `xlink:` are mended, and a string with
+  one loads; so is one whose check has not settled in ten seconds (fake timers),
+  after which the next block is drawn and no timer is left. A block asked again
+  or forgotten while Mermaid loads, or while its type is found, is never handed
+  to `render`, and gives back no picture it did not make. `&nbsp;` and an undeclared `xlink:` are mended, and a string with
   neither is passed on as Mermaid returned it.
 - `MermaidBlock`, with the queue stubbed (`mermaid-block-client.test.tsx`): the
   picture, `Source` and the reason as an outcome gives them; the code as
@@ -553,25 +587,30 @@ Each line is a requirement above.
   non-breaking space are each drawn, with a natural size above zero; clicking
   the first goes nowhere.
 - **Hostile**, in `tests/e2e/zz-mermaid-hostile.spec.ts`, on a shared page,
-  eighteen blocks.
-  Ten against the picture: a label holding `<img src=x onerror=…>`; a label
+  twenty blocks.
+  Nine against the picture: a label holding `<img src=x onerror=…>`; a label
   holding `<script>`; `click A href "javascript:…"`; the `%%{init}%%` directive
   that sets `securityLevel: "loose"` and turns HTML labels on before each of
-  those three; `click A call alert()`; `classDef` with
-  `fill:url(https://example.invalid/x)` and with `position:fixed`; and a label
-  that closes the SVG and opens an `<img onerror>`. Nine are drawn. The
-  `fill:url(https://…)` one is refused by the flowchart parser ("Parse error"),
-  as are `style` and `background:` forms of it.
-  Eight against the layout: an `architecture-beta` block whose icon text holds
+  those three; `click A call alert()`; `classDef` with `position:fixed`; and a
+  label that closes the SVG and opens an `<img onerror>`. All nine are drawn.
+  (This once held a tenth, a flowchart `classDef … fill:url(https://…)`. The
+  flowchart parser refuses that with a parse error, as it does `style` and
+  `background:` forms of it, so it proved nothing about `url()`. It is replaced
+  by the state diagram below.)
+  Eleven against the layout: an `architecture-beta` block whose icon text holds
   a `<video src>` on another origin, and an `eventmodeling` block holding an
   `<img src>` (neither type is drawn: each is left as code, open, with
   `This kind of diagram cannot be drawn here yet.`); a sequence diagram and a
   class diagram whose text holds `$$…$$` and then a `<video>` and an `<img>`
   (laid out, and refused for the HTML label, with the same line); the flowchart
   image shape with a URL on another origin (not drawn, with a reason); a class
-  diagram with `style A background:url(…)` on another origin (drawn); and a
-  flowchart under a directive setting `themeCSS`, and one setting `fontFamily`,
-  each with a `url()` on another origin (drawn, as the plain flowchart).
+  diagram with `style A background:url(…)`, a state diagram with a `classDef`
+  holding `background:url(…)`, a sequence diagram with a participant `icon`
+  property, and a C4 diagram with `UpdateElementStyle(a, $bgColor="url(//…)")`,
+  each on another origin (all four drawn, with no reason, so a parse error did
+  not stop them); and a flowchart under a directive setting `themeCSS`, and one
+  setting `fontFamily`, each with a `url()` on another origin (drawn, as the
+  plain flowchart).
   Across them all: no flag was set on `window`, no dialog opened, each figure
   holds only its image (in its box), its `<details>` and, when not drawn, its
   reason line, the first paragraph keeps its computed position and display, the
@@ -584,10 +623,13 @@ Each line is a requirement above.
     Mermaid lays out (the `div` it adds to `<body>`, and the one it measures
     maths in) other than a bare `div`, `span`, `br` or `style`, which are the
     ones Mermaid's own code makes. The list is empty.
-  - The policy refused exactly two things, both `img-src`: the image shape's
-    URL and the style line's. Those are the two rows of "What B does not cover"
-    for which the policy is the only guard, and the test shows it holding. The
-    `themeCSS` and `fontFamily` URLs were never tried.
+  - The policy refused exactly five things, all `img-src`: the image shape's
+    URL, the class style line's, the state `classDef`'s, the participant's icon
+    and the C4 colour (`http://attacker.example/b.svg`, since `//` takes the
+    page's scheme). Those are the four rows of "What B does not cover" for which
+    the policy is the only guard, and the test shows it holding. The
+    `themeCSS` and `fontFamily` URLs were never tried. The sankey's `linkColor`
+    is not in the test: it is shown, in the script, to change nothing.
   What this test cannot see. It runs in Chromium, on the inputs it holds. A
   URL on this origin in the image shape or a style line is loaded, and the test
   does not try one. This once said an image request the policy blocks "never
