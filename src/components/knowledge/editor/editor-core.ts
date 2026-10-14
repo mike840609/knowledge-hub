@@ -8,7 +8,7 @@ import { Plugin, Selection, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { $ctx, $prose, getMarkdown, replaceAll } from "@milkdown/kit/utils";
 import { readerHints } from "./reader-hints";
-import { detailsClickToggle, flipNearestDetails } from "./details-toggle";
+import { flipNearestDetails } from "./details-toggle";
 import { configureCellBreakStringify, remarkCellBreaks } from "./table-cell-breaks";
 import { configureWikiLinkStringify, wikiLinkPlugins } from "./wiki-link";
 
@@ -280,7 +280,6 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
     // In every host of the editor, not an extra: a document with a wikilink must survive being opened in it.
     .use(wikiLinkPlugins)
     .use(readerHints)
-    .use(detailsClickToggle)
     .use(history)
     .use(listener)
     .use(editWatcher)

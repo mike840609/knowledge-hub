@@ -11,9 +11,8 @@ export function escapeSummaryText(text: string): string {
 }
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import type { EditorState } from "@milkdown/kit/prose/state";
-import { Plugin, TextSelection } from "@milkdown/kit/prose/state";
+import { TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
-import { $prose } from "@milkdown/kit/utils";
 const DETAILS_OPEN = /^<details(\s+open)?>/i;
 const DETAILS_CLOSE = /^<\/details>$/i;
 /** Innermost details opener at or before pos whose body contains pos. */
@@ -76,21 +75,3 @@ export function flipNearestDetails(view: EditorView, pos: number): boolean {
   view.dispatch(view.state.tr.replaceWith(found.position, found.position + node.nodeSize, html.create({ value: flipped })));
   return true;
 }
-/** Clicking a summary folds/unfolds without moving the caret (same $prose shape as readerHints). */
-export const detailsClickToggle = $prose(
-  () =>
-    new Plugin({
-      props: {
-        handleClick: (view, _pos, event) => {
-          const target = event.target as HTMLElement | null;
-          const summary = target?.closest?.("summary") ?? null;
-          if (!summary || !view.dom.contains(summary)) return false;
-          const coords = view.posAtCoords({ left: event.clientX, top: event.clientY });
-          if (!coords) return false;
-          if (!flipNearestDetails(view, coords.pos)) return false;
-          event.preventDefault();
-          return true;
-        },
-      },
-    }),
-);
