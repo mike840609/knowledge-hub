@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures/test";
 import { createFolder, header, mySpace, openKnowledge, unique } from "./fixtures/organize";
+import { stageReadingFolder } from "./fixtures/folder-reading";
 
 // Mirrors scripts/db/seed.ts BROWSER_FIXTURE_IDS.
 const QUERY_MASTER_WORKSPACE = "0199f100-0000-7000-8000-000000000001";
@@ -221,7 +222,22 @@ test.describe("one sidebar", () => {
     await page.getByRole("button", { name: `New in ${name}`, exact: true }).click();
     await page.getByRole("menuitem", { name: "New document here" }).click();
     await page.waitForURL(/\/knowledge\/new\?folder=/, ROUND_TRIP);
-    await expect(page.getByText(name).first()).toBeVisible();
+    // The form names the folder it will write into; the sidebar's own row for it is outside `main`.
+    await expect(page.locator("main").getByText(name).first()).toBeVisible(ROUND_TRIP);
+  });
+
+  test("a folder imported while the sidebar is open appears in it without a reload", async ({ page, request }) => {
+    const workspaceId = await mySpace(page);
+    const sourceName = unique("Imported");
+    const snapshotId = await stageReadingFolder(request, { workspaceId, sourceName, fixture: "reading-flow-v1" });
+    // The workspace layout renders here, once; everything after is client navigation inside /w/:id.
+    await page.goto(`/w/${workspaceId}/sources/imports/${snapshotId}`);
+    const nav = page.getByRole("complementary", { name: "Navigation" });
+    await expect(nav.getByRole("region", { name: "Notes documents" })).toBeVisible(ROUND_TRIP);
+    await expect(nav.getByRole("region", { name: `${sourceName} documents` })).toHaveCount(0);
+    await page.getByRole("button", { name: "Apply changes" }).click();
+    await page.waitForURL(/\/sources\/[^/]+\/runs\/[0-9a-f-]+$/, ROUND_TRIP);
+    await expect(nav.getByRole("region", { name: `${sourceName} documents` })).toBeVisible(ROUND_TRIP);
   });
 
   test("section controls are there on hover and on focus, not at rest", async ({ page }) => {

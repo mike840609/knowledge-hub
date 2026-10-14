@@ -2,6 +2,7 @@ import { importRuntimeConfig } from "@/server/import-config";
 import { SourceDetail } from "@/components/sources/source-detail";
 import { getSourceDetailModel } from "@/server/source-read";
 import { StatusMessage } from "@/components/ui/status-message";
+import { RefreshOnArrival } from "@/components/shell/refresh-on-arrival";
 
 export default async function WorkspaceSourceDetailPage({
   params,
@@ -26,6 +27,7 @@ export default async function WorkspaceSourceDetailPage({
   const limits = importRuntimeConfig().limits;
   return (
     <main className="kh-page pb-6">
+      <RefreshOnArrival pathname={`/w/${workspaceId}/sources/${sourceId}`} />
       <SourceDetail limits={{ maxAssetFileBytes: limits.maxAssetFileBytes, maxAssetTotalBytes: limits.maxAssetTotalBytes }} model={model} showImportSuccess={importParam === "success"} />
     </main>
   );
