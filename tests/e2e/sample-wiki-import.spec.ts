@@ -101,7 +101,7 @@ test.describe("import guide", () => {
     const ws = await personalWorkspaceId(page);
     await page.goto(`/w/${ws}/sources/import/guide`);
     await expect(page.locator("[lang='en']").first()).toBeVisible();
-    await expect(page.getByRole("heading", { level: 2 })).toHaveText(SECTION_HEADINGS.en);
+    await expect(page.locator("main").getByRole("heading", { level: 2 })).toHaveText(SECTION_HEADINGS.en);
 
     const limits = page.getByRole("table");
     const row = (name: string) => limits.getByRole("row").filter({ has: page.getByRole("rowheader", { name, exact: true }) });
@@ -119,7 +119,7 @@ test.describe("import guide", () => {
   test("unknown ?lang falls back to English", async ({ page }) => {
     const ws = await personalWorkspaceId(page);
     await page.goto(`/w/${ws}/sources/import/guide?lang=fr`);
-    await expect(page.getByRole("heading", { level: 2 }).first()).toHaveText(SECTION_HEADINGS.en[0]);
+    await expect(page.locator("main").getByRole("heading", { level: 2 }).first()).toHaveText(SECTION_HEADINGS.en[0]);
   });
 
   test("?lang=zh-TW renders Chinese and the switch marks it current", async ({ page }) => {
@@ -127,7 +127,7 @@ test.describe("import guide", () => {
     await page.goto(`/w/${ws}/sources/import/guide`);
     await page.getByRole("navigation", { name: "Guide language" }).getByRole("link", { name: "繁體中文" }).click();
     await expect(page).toHaveURL(/[?]lang=zh-TW$/);
-    await expect(page.getByRole("heading", { level: 2 })).toHaveText(SECTION_HEADINGS.zhTW);
+    await expect(page.locator("main").getByRole("heading", { level: 2 })).toHaveText(SECTION_HEADINGS.zhTW);
     await expect(page.locator("[lang='zh-TW']").filter({ has: page.getByRole("heading", { level: 1 }) })).toBeVisible();
     const nav = page.getByRole("navigation", { name: "Guide language" });
     await expect(nav.getByRole("link", { name: "繁體中文" })).toHaveAttribute("aria-current", "page");

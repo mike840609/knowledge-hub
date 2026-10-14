@@ -136,7 +136,8 @@ test("a discussion that awaits the owner is open beside its passage when the doc
 
 test("the discussions arriving do not move the article", async ({ page, request }) => {
   const doc = await documentWithDiscussion(request);
-  await page.setViewportSize({ width: 1280, height: 800 });
+  // 1088 + the 256px sidebar leaves the pane the 832px it had beside the old rail and explorer.
+  await page.setViewportSize({ width: 1088, height: 800 });
   // Held back, so the article can be measured before the discussions are known.
   let release = () => {};
   await page.route(`**/api/documents/${doc.documentId}/review-threads`, async (route) => { await new Promise<void>((resolve) => { release = resolve; }); await route.continue(); });
@@ -282,10 +283,11 @@ test("opening and closing the owner's discussions moves nothing under the pointe
   const crumb = page.getByRole("region", { name: "Document content", exact: true }).getByRole("navigation", { name: "Breadcrumb" });
   const edit = page.getByRole("link", { name: "Edit", exact: true });
   const where = async () => ({ crumb: Math.round((await crumb.boundingBox())!.x), article: Math.round((await article.boundingBox())!.x), edit: Math.round((await edit.boundingBox())!.x) });
-  // 1920: room for the rail beside the column as it stood. 1440: the pane is narrower than the reading
+  // 1920 (1728 now): room for the rail beside the column as it stood. 1440 (1248 now): the pane is narrower than the reading
   // width beside the outline, so the outline's slot is what the rail takes. Re-centred, the path line's
   // controls leapt 224-272px right and the column slid 48px left.
-  for (const width of [1920, 1440]) {
+  // The widths are the pane's plus the 256px sidebar (the pane was 1472 and 992 beside the old rail and explorer).
+  for (const width of [1728, 1248]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(doc.href);
     const rail = page.getByRole("complementary", { name: "Document discussions" });

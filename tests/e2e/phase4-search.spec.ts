@@ -36,7 +36,8 @@ test("shows an empty state when nothing matches", async ({ page }) => {
 
 test("keeps archived mode on result links", async ({ page }) => {
   await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/search?q=${encodeURIComponent("請假")}&archived=1`);
-  const links = page.getByRole("link", { name: SEARCH_TITLE });
+  // The results, not the sidebar tree, which lists the same document.
+  const links = page.locator("main").getByRole("link", { name: SEARCH_TITLE });
   await expect(links.first()).toHaveAttribute("href", /includeArchived=true/);
 });
 

@@ -65,6 +65,8 @@ test("D opens and closes the comments on a shared page and on the owner's, and i
   // With a modifier it is the browser's own key, not this one.
   await page.keyboard.press("Shift+D"); await expect(entry).toHaveAttribute("aria-expanded", "false");
 
+  // The owner's page has the 256px sidebar: 1088 leaves the pane the 832px it had beside the old rail and explorer.
+  await page.setViewportSize({ width: 1088, height: 720 });
   await page.goto(doc.href);
   const owner = page.getByRole("button", { name: /^(Open|Hide) discussions/ });
   await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");

@@ -38,7 +38,7 @@ test("personal profile counts, detail links, themes and mobile layout",async({pa
  const updated=await overview();
  expect(updated.articles).toBe(baseline.articles+9);expect(updated.folders).toBe(baseline.folders+4);expect(updated.browsed).toBe(baseline.browsed);
  expect(await detailCount("favorites")).toBe(baseline.favorites+1);
- await expect(page.getByRole("heading",{name:"Favorites",exact:true,level:1})).toBeVisible();await expect(page.getByRole("link",{name:/Dashboard favorite/})).toBeVisible();
+ await expect(page.getByRole("heading",{name:"Favorites",exact:true,level:1})).toBeVisible();await expect(page.locator("main").getByRole("link",{name:/Dashboard favorite/})).toBeVisible();
  expect(await detailCount("unread")).toBe(baseline.unread+8);
  await expect(page.getByRole("heading",{name:"Unread updates",exact:true,level:1})).toBeVisible();
  const marked=page.waitForResponse(r=>r.url().endsWith("/read")&&r.request().method()==="POST");
@@ -62,7 +62,7 @@ test("personal profile counts, detail links, themes and mobile layout",async({pa
  await expect(page.locator("[data-browsed-count]").filter({visible:true})).toHaveCount(0);
  await expect(page.getByRole("region",{name:"Continue reading"}).getByRole("link",{name:/Team guide/})).toBeVisible();
  await page.screenshot({path:path.join(output,"home-light.png"),fullPage:true,animations:"disabled"});
- await page.getByRole("navigation",{name:"Primary"}).getByRole("link",{name:"Insights"}).click();
+ await page.getByRole("navigation",{name:"Workspace"}).getByRole("link",{name:"Insights"}).click();
  await expect(page.locator("[data-browsed-count]").filter({visible:true})).toHaveAttribute("data-browsed-count",String(baseline.browsed+1));
  await expect(page.getByRole("heading",{name:"Insights",exact:true})).toBeVisible();await expect(page.getByRole("heading",{name:"Sync overview",exact:true})).toBeVisible();
  await page.screenshot({path:path.join(output,"desktop-light.png"),fullPage:true,animations:"disabled"});

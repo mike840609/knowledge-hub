@@ -18,7 +18,7 @@ test("account stays at the sidebar bottom in expanded, collapsed and mobile navi
   await page.keyboard.press("Escape");await expect(account()).toBeFocused();
   await page.getByRole("button",{name:"Collapse navigation",exact:true}).click();
   await expect(page.getByRole("button",{name:"Expand navigation",exact:true})).toBeVisible();
-  const compact=await account().boundingBox();expect(compact!.width).toBeLessThan(48);
+  await expect(account()).not.toBeInViewport();
   if(output)await page.screenshot({path:`${output}/desktop-collapsed.png`,animations:"disabled"});
   await page.getByRole("button",{name:"Expand navigation",exact:true}).click();
   await page.setViewportSize({width:390,height:844});await expect(account()).toBeHidden();

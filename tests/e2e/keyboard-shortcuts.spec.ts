@@ -111,9 +111,9 @@ test("Esc never discards a changed draft", async ({ page }) => {
   await expect(titleField).toHaveValue("Unsaved change");
 });
 
-/** The primary navigation, its button and its width: collapsed is the narrow rail, expanded the one with the labels. */
+/** The sidebar, its buttons and its width: collapsed it takes none (0), expanded it is 256px. */
 function navigation(page: Page) {
-  const rail = page.getByRole("navigation", { name: "Primary" }).locator("xpath=ancestor::aside");
+  const rail = page.getByRole("complementary", { name: "Navigation" });
   return {
     rail,
     collapse: page.getByRole("button", { name: "Collapse navigation" }),
@@ -127,20 +127,20 @@ test.describe("⌘\\ collapses and expands the navigation", () => {
     await openArchitecture(page);
     const nav = navigation(page);
     await expect(nav.collapse).toHaveAttribute("aria-keyshortcuts", "Meta+\\ Control+\\");
-    expect(await nav.width()).toBeGreaterThan(150);
+    expect(await nav.width()).toBe(256);
 
     await pressUntil(page, "ControlOrMeta+Backslash", () => expect(nav.expand).toBeVisible({ timeout: 1_000 }));
-    await expect.poll(nav.width).toBeLessThan(60);
+    await expect.poll(nav.width).toBe(0);
     await page.keyboard.press("ControlOrMeta+Backslash");
     await expect(nav.collapse).toBeVisible();
-    await expect.poll(nav.width).toBeGreaterThan(150);
+    await expect.poll(nav.width).toBe(256);
 
     // Collapsed, and reloaded: still collapsed.
     await page.keyboard.press("ControlOrMeta+Backslash");
     await expect(nav.expand).toBeVisible();
     await page.reload();
     await expect(nav.expand).toBeVisible(ROUND_TRIP);
-    await expect.poll(nav.width).toBeLessThan(60);
+    await expect.poll(nav.width).toBe(0);
   });
 
   test("also while writing, from the title and from the editor, without typing anything", async ({ page }) => {
@@ -188,7 +188,7 @@ test.describe("⌘\\ collapses and expands the navigation", () => {
     await page.keyboard.press("Escape");
     await expect(field).toBeHidden();
     await expect(nav.collapse).toBeVisible();
-    expect(await nav.width()).toBeGreaterThan(150);
+    expect(await nav.width()).toBe(256);
   });
 
   test("in a window too narrow for the rail, it opens the menu that takes its place", async ({ page }) => {

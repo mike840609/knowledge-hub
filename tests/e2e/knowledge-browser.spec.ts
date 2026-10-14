@@ -30,10 +30,10 @@ test("browses the persistent explorer with a stable canonical document URL", asy
   await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${OBSIDIAN_SOURCE}`);
   await expect(page).toHaveURL(CANONICAL_DOC_URL);
 
-  // Persistent shell: brand, Workspace selector, and primary nav.
-  await expect(page.getByText("Knowledge Hub", { exact: true }).filter({ visible: true })).toBeVisible();
+  // Persistent shell: Workspace selector, document tree, and primary nav.
+  await expect(page.getByRole("button", { name: /^Workspace: / })).toBeVisible();
   await expect(page.getByLabel("Workspace: Query Master", { exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Knowledge" })).toBeVisible();
+  await expect(page.getByRole("tree", { name: "Knowledge tree" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Sources" })).toBeVisible();
 
   // Legacy query-form controls are gone.

@@ -32,30 +32,27 @@ test('reader and composer keep their column and expose commands during long scro
   const breadcrumb = region.getByRole('navigation', { name: 'Breadcrumb' });
   await expect(breadcrumb).toBeVisible(wait);
   const readerX = (await breadcrumb.boundingBox())!.x;
-  expect((await page.locator('main').boundingBox())!.x).toBe(160);
+  expect((await page.locator('main').boundingBox())!.x).toBe(256);
+  const sidebar = page.getByRole('complementary', { name: 'Navigation' });
   const explorer = page.getByRole('complementary', { name: 'Knowledge explorer' });
+  const expandedSidebar = (await sidebar.boundingBox())!;
   const expandedExplorer = (await explorer.boundingBox())!;
-  expect(expandedExplorer.y).toBe((await page.locator('main').boundingBox())!.y);
-  expect(expandedExplorer.width).toBe(288);
-  // A wide window has no topbar: rail, explorer and content start at its top edge.
+  expect(expandedSidebar.y).toBe((await page.locator('main').boundingBox())!.y);
+  expect(expandedSidebar.width).toBe(256);
+  // A wide window has no topbar: sidebar and content start at its top edge.
   await expect(page.locator('header').first()).toBeHidden();
-  expect(expandedExplorer.y).toBe(0);
-  // The rail opens with the wordmark, then the workspace switcher, then Search, then the navigation.
+  expect(expandedSidebar.y).toBe(0);
+  // The sidebar opens with the workspace switcher, then Search, then the navigation.
   const workspace = page.getByRole('button', { name: /^Workspace:/ });
   const search = page.getByRole('button', { name: 'Quick search', exact: true });
   const primary = page.getByRole('navigation', { name: 'Primary' });
-  const inRail = async (rail: number) => {
-    for (const control of [workspace, search]) { const box = (await control.boundingBox())!; expect(box.x).toBe(8); expect(box.x + box.width).toBeLessThanOrEqual(rail - 8); }
-    expect((await workspace.boundingBox())!.y).toBeLessThan((await search.boundingBox())!.y);
-    expect((await search.boundingBox())!.y).toBeLessThan((await primary.boundingBox())!.y);
-  };
-  await inRail(160);
-  expect((await page.getByText('Knowledge Hub', { exact: true }).filter({ visible: true }).boundingBox())!.y).toBeLessThan((await workspace.boundingBox())!.y);
-  // With no topbar, the rail's wordmark, the explorer's first row and the breadcrumb share one top line.
+  for (const control of [workspace, search]) { const box = (await control.boundingBox())!; expect(box.x).toBe(8); expect(box.x + box.width).toBeLessThanOrEqual(256 - 8); }
+  expect((await workspace.boundingBox())!.y).toBeLessThan((await search.boundingBox())!.y);
+  expect((await search.boundingBox())!.y).toBeLessThan((await primary.boundingBox())!.y);
+  // With no topbar, the sidebar's workspace switcher and the breadcrumb share one top line.
   const centre = async (locator: ReturnType<Page['locator']>) => { const box = (await locator.boundingBox())!; return box.y + box.height / 2; };
   const line = await centre(breadcrumb);
-  expect(Math.abs(await centre(page.getByText('Knowledge Hub', { exact: true }).filter({ visible: true })) - line)).toBeLessThanOrEqual(1);
-  expect(Math.abs(await centre(explorer.getByRole('heading', { name: 'Documents', exact: true })) - line)).toBeLessThanOrEqual(1);
+  expect(Math.abs(await centre(workspace) - line)).toBeLessThanOrEqual(1);
   await page.screenshot({ path: info.outputPath('reader-navigation-expanded.png') });
   // Scrolling pins the breadcrumb line — location › title, and its actions — to the top of the reading column.
   const regionBox = (await region.boundingBox())!;
@@ -80,10 +77,11 @@ test('reader and composer keep their column and expose commands during long scro
   await page.keyboard.press('Meta+i');
   await region.evaluate(el => { el.scrollTop = 0; });
   await page.getByRole('button', { name: 'Collapse navigation' }).click();
-  await expect(explorer).toBeVisible();
-  expect((await explorer.boundingBox())!.x).toBe(48);
-  await inRail(48);
-  await search.click();
+  await expect(page.getByRole('button', { name: 'Expand navigation' })).toBeVisible();
+  // Collapsed, the sidebar takes no width and the content starts at the window's edge.
+  await expect.poll(async () => (await sidebar.boundingBox())?.width ?? 0).toBe(0);
+  expect((await page.locator('main').boundingBox())!.x).toBe(0);
+  await page.keyboard.press('ControlOrMeta+k');
   await expect(page.getByRole('dialog', { name: 'Search and actions' })).toBeVisible();
   await page.keyboard.press('Escape');
   expect((await explorer.boundingBox())!.height).toBe(expandedExplorer.height);
@@ -168,13 +166,13 @@ test('history presents changed lines before optional full Markdown', async ({ pa
 test('Sources support row keys and importing uses the shared field and folder trigger', async ({ page }) => {
   const workspace = '0199f100-0000-7000-8000-000000000001';
   await page.goto(`/w/${workspace}/sources`);
-  // A page that opens with PageHeader puts its location › title on the rail's top line, as a document does.
+  // A page that opens with PageHeader puts its location › title on the sidebar's top line, as a document does.
   const heading = page.getByRole('heading', { level: 1, name: 'Sources', exact: true });
   await expect(heading).toBeVisible();
   const middle = async (locator: ReturnType<Page['locator']>) => { const box = (await locator.boundingBox())!; return box.y + box.height / 2; };
-  expect(Math.abs(await middle(heading) - await middle(page.getByText('Knowledge Hub', { exact: true }).filter({ visible: true })))).toBeLessThanOrEqual(1);
-  // Primary navigation is neutral; the document tree owns the accent selection.
-  await expect(page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Sources', exact: true })).toHaveCSS('background-color', 'rgb(236, 238, 242)');
+  expect(Math.abs(await middle(heading) - await middle(page.getByRole('button', { name: /^Workspace: / })))).toBeLessThanOrEqual(1);
+  // The navigation is neutral (the sidebar's own, deeper hover step); the document tree owns the accent selection.
+  await expect(page.getByRole('navigation', { name: 'Workspace' }).getByRole('link', { name: 'Sources', exact: true })).toHaveCSS('background-color', 'rgb(228, 231, 236)');
   const rows = page.locator('[data-list-row]');
   await expect(rows.nth(1)).toBeVisible();
   await rows.first().focus();
@@ -206,8 +204,11 @@ test('touch tree controls stay visible, usable and separated in both themes', as
     expect(starBox.width).toBeGreaterThanOrEqual(39.99);
     expect(actionsBox.x + actionsBox.width).toBeLessThanOrEqual(starBox.x);
     await mobile.screenshot({ path: info.outputPath('mobile-menu-light.png') });
+    // The current place's row is a step above hover; Graph is where the menu is opened from here.
+    await mobile.goto(`/w/${doc.workspaceId}/graph`);
+    await mobile.getByRole('button', { name: 'Open menu', exact: true }).click();
     await mobile.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
-    await expect(menu.getByRole('link', { name: 'Knowledge', exact: true })).toHaveCSS('background-color', 'rgb(36, 38, 44)');
+    await expect(menu.getByRole('link', { name: 'Graph', exact: true })).toHaveCSS('background-color', 'rgb(43, 46, 53)');
     await mobile.screenshot({ path: info.outputPath('mobile-menu-dark.png') });
   } finally { await context.close(); }
 });
@@ -303,7 +304,7 @@ test('long explorer reveals the selected document after portal layout settles', 
   expect(await page.getByRole('region', { name: 'Document content', exact: true }).evaluate(el => el.scrollTop)).toBe(0);
   // Opening or closing Favorites or Recent is the reader's own layout change: the explorer stays where they
   // left it rather than scrolling back to the document being read.
-  const scroller = page.getByRole('navigation', { name: 'Document tree', exact: true });
+  const scroller = page.locator('[data-sidebar-scroll]');
   await scroller.evaluate(el => { el.scrollTop = 0; });
   await expect(row).not.toBeInViewport();
   for (const name of ['Favorites', 'Recent']) {

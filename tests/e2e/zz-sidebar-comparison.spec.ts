@@ -11,27 +11,35 @@ test("knowledge navigation stays distinct from document content in both themes",
   await expect(page.getByRole("region", { name: "Document content" })).toBeVisible();
   const output = process.env.KM_SIDEBAR_SCREENSHOTS;
   if (output) await mkdir(output, { recursive: true });
+  const documentUrl = page.url();
+  const graphUrl = documentUrl.replace(/\/knowledge\/.*$/, "/graph");
   for (const theme of ["Light", "Dark"] as const) {
     await page.getByRole("button", { name: /^Account:/ }).click();
     await page.getByRole("menuitemradio", { name: theme, exact: true }).click();
     await page.keyboard.press("Escape");
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme.toLowerCase());
-    const surfaces = await explorer.evaluate(el => {
-      const rail = document.querySelector('aside:not([aria-label="Knowledge explorer"])')!;
+    // One sidebar surface, set apart from the document pane; the tree sits on it rather than on a third one.
+    const surfaces = await explorer.evaluate(() => {
+      const sidebar = document.querySelector(".kh-sidebar-surface")!;
       const pane = document.querySelector('[data-document-pane]')!;
-      return [rail, el, pane].map(node => getComputedStyle(node).backgroundColor);
+      return [sidebar, pane].map(node => getComputedStyle(node).backgroundColor);
     });
-    expect(new Set(surfaces).size).toBe(3);
+    expect(new Set(surfaces).size).toBe(2);
     if (theme === "Dark") {
       const brightness = surfaces.map(color => color.match(/\d+/g)!.slice(0, 3).reduce((sum, channel) => sum + Number(channel), 0));
       expect(brightness[0]).toBeLessThan(brightness[1]);
-      expect(brightness[1]).toBeLessThan(brightness[2]);
     }
-    const selection = page.locator('nav[aria-label="Primary"] a[aria-current="page"]');
     const selectedDocument = explorer.locator('[aria-selected="true"]');
-    await expect(selection).toBeVisible();
     await expect(selectedDocument).toBeVisible();
-    expect(await selection.evaluate(el => getComputedStyle(el).backgroundColor)).not.toBe(await selectedDocument.evaluate(el => getComputedStyle(el).backgroundColor));
+    const documentSelection = await selectedDocument.evaluate(el => getComputedStyle(el).backgroundColor);
     if (output) await page.screenshot({ path: `${output}/${theme.toLowerCase()}.png`, animations: "disabled" });
+    // The current place in the navigation is neutral, the selected document is the accent: they differ.
+    // No page has both at once (a document is under no navigation item), so the navigation's is read on Graph.
+    await page.goto(graphUrl);
+    const selection = page.locator('nav[aria-label="Primary"] a[aria-current="page"]');
+    await expect(selection).toBeVisible();
+    expect(await selection.evaluate(el => getComputedStyle(el).backgroundColor)).not.toBe(documentSelection);
+    await page.goto(documentUrl);
+    await expect(explorer).toHaveAttribute("aria-busy", "false");
   }
 });
