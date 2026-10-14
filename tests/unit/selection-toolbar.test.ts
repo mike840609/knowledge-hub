@@ -99,6 +99,7 @@ describe("the selection toolbar's DOM contract", () => {
       "Heading 2",
       "Bulleted list",
       "Numbered list",
+      "Toggle section",
     ]);
     for (const b of buttons) expect(b.getAttribute("type")).toBe("button");
     expect(toolbarElement().getAttribute("role")).toBe("toolbar");
