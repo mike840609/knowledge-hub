@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
 import { editorViewCtx } from "@milkdown/kit/core";
+import { undo } from "@milkdown/kit/prose/history";
 import { TextSelection } from "@milkdown/kit/prose/state";
 import { afterEach, describe, expect, it } from "vitest";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
 import { convertBlockToDetails, flipNearestDetails } from "@/components/knowledge/editor/details-toggle";
 
+// jsdom has no layout; undo scrolls the selection into view.
+Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
+Range.prototype.getBoundingClientRect = () => ({ top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 }) as DOMRect;
 const opened: MarkdownEditor[] = [];
 afterEach(async () => {
   while (opened.length) await opened.pop()!.destroy();
@@ -42,6 +46,18 @@ describe("toolbar conversion into a details disclosure", () => {
     expect(saved).toContain("</details>");
     const reopened = await open(saved);
     expect(reopened.getMarkdown()).toBe(saved);
+  });
+  it("is one undo step on each side: typed text before it and after it are undone separately", async () => {
+    const editor = await open("");
+    const v = view(editor);
+    v.dispatch(v.state.tr.insertText("abc"));
+    expect(convertBlockToDetails(v)).toBe(true);
+    const converted = v.state.doc;
+    v.dispatch(v.state.tr.insertText("x"));
+    undo(v.state, v.dispatch);
+    expect(v.state.doc.eq(converted)).toBe(true);
+    undo(v.state, v.dispatch);
+    expect(v.state.doc.textContent).toBe("abc");
   });
   it("refuses outside paragraphs and headings", async () => {
     const editor = await open("```js\nconst a = 1;\n```");

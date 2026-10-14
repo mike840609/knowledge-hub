@@ -69,9 +69,10 @@ export function slashCommands(): { plugins: MilkdownPlugin[]; configure: (ctx: C
     }
     let caret = trigger.pos + 1;
     if (command.id === "callout") {
-      const marker = "[!NOTE] ";
-      node = nodes.blockquote.create(null, nodes.paragraph.create(null, view.state.schema.text(marker)));
-      caret = trigger.pos + 2 + marker.length;
+      // The marker must stand alone on the quote's first line (remark-callouts), so the body is its own paragraph.
+      const marker = nodes.paragraph.create(null, view.state.schema.text("[!NOTE]"));
+      node = nodes.blockquote.create(null, [marker, paragraph]);
+      caret = trigger.pos + 1 + marker.nodeSize + 1;
     }
     const replacement = command.id === "divider" ? [nodes.hr.create(), paragraph] : node;
     const transaction = view.state.tr.replaceWith(trigger.pos, trigger.pos + current.nodeSize, replacement);

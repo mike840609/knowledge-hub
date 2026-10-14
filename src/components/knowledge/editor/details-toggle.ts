@@ -10,10 +10,10 @@ export function escapeSummaryText(text: string): string {
   return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
-import { closeHistory } from "@milkdown/kit/prose/history";
 import type { EditorState } from "@milkdown/kit/prose/state";
 import { TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
+import { dispatchBlockAction } from "./block-actions";
 const DETAILS_OPEN = /^<details(\s+open)?>/i;
 const DETAILS_CLOSE = /^<\/details>$/i;
 /** Innermost details opener at or before pos whose body contains pos. */
@@ -71,11 +71,10 @@ function firstEmptyBodyAtOrAfter(doc: ProseNode, from: number): number | null {
 export function insertDetailsSkeleton(view: EditorView, from: number, to: number, summaryValue: string): boolean {
   const nodes = detailsNodes(view.state, summaryValue);
   if (!nodes) return false;
-  let tr = view.state.tr.replaceWith(from, to, nodes);
+  const tr = view.state.tr.replaceWith(from, to, nodes);
   const caret = firstEmptyBodyAtOrAfter(tr.doc, from);
   if (caret === null) return false;
-  tr = tr.setSelection(new TextSelection(tr.doc.resolve(caret)));
-  view.dispatch(closeHistory(tr.scrollIntoView()));
+  dispatchBlockAction(view, tr, caret);
   return true;
 }
 /** Rewrites the nearest opener at pos, or false when the caret is not in a toggle. */

@@ -2,9 +2,12 @@
 import { editorViewCtx } from "@milkdown/kit/core";
 import { undo } from "@milkdown/kit/prose/history";
 import { TextSelection } from "@milkdown/kit/prose/state";
+import type { Blockquote } from "mdast";
+import { fromMarkdown } from "mdast-util-from-markdown";
 import { afterEach, expect, it, vi } from "vitest";
 import { createMarkdownEditor, type MarkdownEditor } from "@/components/knowledge/editor/editor-core";
 import { slashCommands } from "@/components/knowledge/editor/slash-commands";
+import { calloutMarker } from "@/shared/markdown/remark-callouts";
 
 const rect = { top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 } as DOMRect;
 Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
@@ -53,6 +56,16 @@ it.each([
   expect(editor.getMarkdown()).toContain(markdown);
 });
 
+it.each(['quote', 'table', 'toggle', 'callout'])('keeps /%s when undoing typing that follows it at once', async (query) => {
+  const { view } = await open();
+  view.dispatch(view.state.tr.insertText('/' + query));
+  key(view.dom, 'Enter');
+  const chosen = view.state.doc;
+  view.dispatch(view.state.tr.insertText('x'));
+  undo(view.state, view.dispatch);
+  expect(view.state.doc.eq(chosen)).toBe(true);
+});
+
 it('supports filtering, arrow navigation and Escape without leaving the editor', async () => {
   const { view } = await open();
   view.dispatch(view.state.tr.insertText('/heading'));
@@ -92,20 +105,24 @@ it('inserts an empty toggle with the caret in its body', async () => {
     if (node.type.name === "html" && String(node.attrs.value ?? "").startsWith("<details>")) opener = true;
   });
   expect(opener).toBe(true);
-  expect(editor.getMarkdown()).toContain('<details>');
-  const { $from } = view.state.selection;
-  expect($from.parent.type.name).toBe('paragraph');
+  view.dispatch(view.state.tr.insertText('New block'));
+  expect(editor.getMarkdown()).toContain('</summary>\n\nNew block\n\n</details>');
 });
 
-it('inserts a callout marker with the caret after it', async () => {
+it('inserts a callout that stays one after the user types and saves', async () => {
   const { editor, view } = await open();
   view.dispatch(view.state.tr.insertText('/callout'));
   key(view.dom, 'Enter');
   view.dispatch(view.state.tr.insertText('New block'));
-  expect(editor.getMarkdown()).toContain('[!NOTE] New block');
+  expect(view.dom.querySelector('blockquote')?.getAttribute('data-callout')).toBe('note');
+  const quote = fromMarkdown(editor.getMarkdown()).children[0] as Blockquote;
+  expect(quote.type).toBe('blockquote');
+  expect(calloutMarker(quote)?.kind).toBe('note');
+  expect(editor.getMarkdown()).toContain('New block');
 });
 
-it('leaves slash text in code and nested paragraphs alone, and hides when read-only', async () => {  for (const markdown of ['```\ncode\n```', '- item', '| A |\n| - |\n| B |']) {
+it('leaves slash text in code and nested paragraphs alone, and hides when read-only', async () => {
+  for (const markdown of ['```\ncode\n```', '- item', '| A |\n| - |\n| B |']) {
     const { view } = await open(markdown);
     view.dispatch(view.state.tr.setSelection(TextSelection.atEnd(view.state.doc)).insertText('/code'));
     expect(menu().hidden).toBe(true);
