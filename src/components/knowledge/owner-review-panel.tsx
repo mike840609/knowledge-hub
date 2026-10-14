@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { readStored, removeStored, writeStored } from "@/components/shell/use-persisted-state";
 import { awaitingOwner, dismissedKey, opensOnArrival, parseDismissed } from "./review-auto-open";
+import { useShareCommentUnread } from "./share-comment-notifications";
 import { useReviewEntry, useReviewToggleKey } from "./review-entry";
 import { useReviewHighlights } from "./review-highlights";
 import { ReviewComposer, useReviewSelection } from "./review-composer";
@@ -43,7 +44,10 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
   const selection = useReviewSelection(readingRef, markdown, `${documentId}:${revisionId}`);
   const canComment = !!result?.writesEnabled && !readOnly && !revisionChanged;
   const base = `/api/documents/${documentId}/review-threads`;
+  const { unreadCount, markRead } = useShareCommentUnread(documentId);
   const load = useCallback(async () => { try { setResult(await reviewRequest(base)); setError(undefined); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not load discussions."); } }, [base]);
+  // Opening the panel marks this document's notices read; a closed panel clears nothing.
+  useEffect(() => { if (open && result && !revisionChanged) void markRead(); }, [open, result, revisionChanged, markRead]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { setActiveThreadId(undefined); }, [documentId, revisionId]);
   // Open on arrival, once, where a discussion awaits the owner that they have not closed the rail
@@ -62,6 +66,10 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
     // otherwise crowd the ones that want an answer away from their passages. With nothing open it
     // starts on everything — an empty list would say there was nothing at all.
     setFilter(result.threads.some(thread => thread.status === "OPEN") ? "OPEN" : "ALL");
+    // A `?thread=` deep link (e.g. from the home discussions list) selects its
+    // discussion and opens the rail; an unknown id is ignored, never an error.
+    const deep = new URLSearchParams(window.location.search).get("thread");
+    if (deep && result.threads.some(thread => thread.id === deep)) { setActiveThreadId(deep); setOpen(true); }
     if (reviewRailInline() && opensOnArrival(result.threads, parseDismissed(readStored("local", dismissedKey(documentId))), result.callerUserId)) setOpen(true);
   }, [result, documentId]);
   useEffect(() => {
@@ -92,8 +100,8 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
   const startHere = canComment && ready && !open;
   const said = canComment && !ready ? hint : undefined;
   useEffect(() => {
-    publish?.(count > 0 || open || startHere || said ? { count, awaiting, open, toggle, comment: startHere ? () => { capture(); changeOpen(true); } : undefined, hint: said } : null);
-  }, [publish, count, awaiting, open, toggle, changeOpen, startHere, said, capture]);
+    publish?.(count > 0 || open || startHere || said || unreadCount > 0 ? { count, awaiting, unread: unreadCount, open, toggle, comment: startHere ? () => { capture(); changeOpen(true); } : undefined, hint: said } : null);
+  }, [publish, count, awaiting, unreadCount, open, toggle, changeOpen, startHere, said, capture]);
   useEffect(() => () => publish?.(null), [publish]);
   const refresh = <Tooltip label="Refresh comments"><Button type="button" variant="ghost" icon aria-label="Refresh comments" onClick={() => void load()}><RefreshCw className="size-4" aria-hidden="true" /></Button></Tooltip>;
   return <>
