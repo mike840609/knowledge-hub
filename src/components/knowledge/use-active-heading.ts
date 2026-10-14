@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type RefObject } from "react";
+import { HeadingSlugger } from "@/shared/markdown/heading-slug";
 
 /**
  * A heading inside the document, by its slug. Looked up within the article
@@ -9,7 +10,12 @@ import { useEffect, useState, type RefObject } from "react";
  * whichever comes first in the DOM — the explorer — and scroll to it.
  */
 export function findHeading(slug: string): HTMLElement | null {
-  return document.querySelector<HTMLElement>(`[data-document-pane] article [id="${CSS.escape(slug)}"]`);
+  const read = document.querySelector<HTMLElement>(`[data-document-pane] article [id="${CSS.escape(slug)}"]`);
+  if (read) return read;
+  // The composer's editor does not carry the reader's ids; its headings take the reader's slugs in reading order.
+  const slugger = new HeadingSlugger();
+  const editing = document.querySelectorAll<HTMLElement>("[data-document-pane] .kh-editor :is(h1, h2, h3, h4, h5, h6)");
+  return [...editing].find((heading) => slugger.slug((heading.textContent ?? "").trim()) === slug) ?? null;
 }
 
 /** How far below the top of the pane a heading counts as "the one being read". */

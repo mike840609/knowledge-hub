@@ -705,8 +705,10 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-markdown-table th { position: static; }
 }
 
-/* Block controls have a gutter of their own, inside the editor's left edge; prose stays selectable. */
-.kh-editor-blocks { padding-left: 3.5rem; }
+/* Block controls have a gutter of their own, inside the editor's left edge; prose stays selectable.
+   It hangs left of the text, so the text sits where the reader puts it; in a pane with less room than
+   that, the pane clips what does not fit. */
+.kh-editor-blocks { padding-left: 3.5rem; margin-left: -3.5rem; }
 .kh-block-gutter { position: fixed; z-index: 30; display: flex; gap: 2px; }
 .kh-block-gutter[hidden], .kh-block-move-menu[hidden], .kh-slash-menu[hidden] { display: none; }
 .kh-block-gutter button {

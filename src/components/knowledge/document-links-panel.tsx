@@ -11,7 +11,8 @@ export type LocalGraphData = {
   data: GraphViewData;
   depth: 1 | 2;
   openHref: string;
-  depthHrefs: { 1: string; 2: string };
+  /** Where each depth is drawn; null where switching would leave the page, as from the composer. */
+  depthHrefs: { 1: string; 2: string } | null;
 };
 
 /**
@@ -22,15 +23,16 @@ export type LocalGraphData = {
  */
 function LocalGraph({ graph, focusId }: { graph: LocalGraphData; focusId: string }) {
   const connected = graph.data.nodes.length > 1;
+  const depthHrefs = graph.depthHrefs;
   return (
     <section aria-label="Local graph" data-links-section="graph">
       <div className="flex items-baseline justify-between">
         <h3 className="text-caption font-medium text-kh-text-muted">Graph</h3>
-        <div className="flex items-center gap-2 text-caption">
+        {depthHrefs ? <div className="flex items-center gap-2 text-caption">
           {([1, 2] as const).map((depth) => (
             <Link
               key={depth}
-              href={graph.depthHrefs[depth]}
+              href={depthHrefs[depth]}
               replace
               scroll={false}
               // These point at the page they are on. Prefetched from itself, the
@@ -45,7 +47,7 @@ function LocalGraph({ graph, focusId }: { graph: LocalGraphData; focusId: string
               {depth === 1 ? "1 link" : "2 links"}
             </Link>
           ))}
-        </div>
+        </div> : null}
       </div>
       {connected ? (
         <div className="mt-1 h-56 overflow-hidden rounded-md border border-kh-border bg-kh-bg">

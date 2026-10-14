@@ -70,6 +70,7 @@ Display rules:
 
 - Show the large borderless title field above the textarea only for `source === "TYPED"`, with `aria-label="Title"`.
 - For `METADATA`, a caption under the breadcrumb explains that the title comes from uploaded frontmatter, so changing H1 does not rename it.
+  *Amended 2026-10-14:* the caption sits under the title, in the line the reader gives "Updated", so the composer lays out line for line as the reader does (`frontend-design-language.md`, document pages).
 - When deleting the opening H1 changes `H1` to `TYPED`, prefill the last H1 text rather than suddenly blanking the name.
 - Empty resolution disables Save; `useFormKeys` also blocks `⌘Enter` through submit-button `disabled`.
 - Always submit the resolved `title`; the server's `MAX_TITLE_LENGTH` still enforces length.

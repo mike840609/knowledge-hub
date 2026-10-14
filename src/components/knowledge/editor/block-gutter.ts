@@ -85,11 +85,13 @@ export function blockGutter() {
         const editorRect = dom.getBoundingClientRect();
         const scroller = dom.closest(".kh-document-pane")?.getBoundingClientRect();
         if (rect.top < Math.max(0, scroller?.top ?? 0) || rect.top > Math.min(window.innerHeight, scroller?.bottom ?? window.innerHeight) - 24) { hide(); return; }
-        toolbar.style.left = `${Math.max(4, editorRect.left + 4)}px`;
+        // The gutter hangs left of the text and may run past the pane, which clips it; the controls stay inside.
+        const left = Math.max(Math.max(0, scroller?.left ?? 0) + 4, editorRect.left + 4);
+        toolbar.style.left = `${left}px`;
         toolbar.style.top = `${rect.top}px`;
         toolbar.hidden = false;
         if (!menu.hidden) {
-          menu.style.left = `${Math.min(Math.max(8, editorRect.left + 4), window.innerWidth - menu.offsetWidth - 8)}px`;
+          menu.style.left = `${Math.min(Math.max(8, left), window.innerWidth - menu.offsetWidth - 8)}px`;
           menu.style.top = `${Math.max(8, Math.min(rect.top + 28, window.innerHeight - menu.offsetHeight - 8))}px`;
         }
       }
@@ -194,7 +196,8 @@ export function blockGutter() {
           if (event.clientY < (box.top + box.bottom) / 2) { target = block.pos; y = box.top; break; }
         }
         dropAt = target;
-        line.style.left = `${rect.left + 56}px`; line.style.width = `${Math.max(0, rect.width - 56)}px`; line.style.top = `${y}px`; line.hidden = false;
+        const gutterWidth = Number.parseFloat(getComputedStyle(dom).paddingLeft) || 56;
+        line.style.left = `${rect.left + gutterWidth}px`; line.style.width = `${Math.max(0, rect.width - gutterWidth)}px`; line.style.top = `${y}px`; line.hidden = false;
         const pane = dom.closest<HTMLElement>(".kh-document-pane");
         if (pane) { const box = pane.getBoundingClientRect(); if (event.clientY < box.top + 40) pane.scrollBy(0, -16); else if (event.clientY > box.bottom - 40) pane.scrollBy(0, 16); }
       };

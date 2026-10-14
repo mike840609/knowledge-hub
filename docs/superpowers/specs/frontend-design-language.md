@@ -797,13 +797,15 @@ the reason the `[[` list is: a control beside the block the pointer is on
 empty line (`editor/slash-commands.ts`).
 
 **The editor keeps a 56px gutter on its left** (`.kh-editor-blocks`,
-`padding-left: 3.5rem`), and this is a recorded departure from
-`kh-reading-column`: while a document is being edited its text starts 56px
-inside the reader's left edge, and the measure is narrower by as much. The
-controls need somewhere the pointer can reach without leaving the editor, and
-the pane's own 24px padding does not hold two 24px controls. The reader is not
-changed. The gutter is where the pointer shows the controls; in the text it
-does nothing, so selecting prose is as it was.
+`padding-left: 3.5rem` with `margin-left: -3.5rem`). It hangs left of the text,
+into the column's padding and the pane's margin, so the text being edited sits
+exactly where the reader puts it — same left edge, same measure — and nothing
+moves when a document goes from reading to editing or when the editor replaces
+the server's stand-in. Where the pane has less than 56px left of the text, the
+pane clips the part that does not fit and the controls are kept inside the pane,
+over the text's first characters while they show. The gutter is where the
+pointer shows the controls; in the text it does nothing, so selecting prose is
+as it was.
 
 The controls are two `size-6` icon buttons in muted text with the shared focus
 ring: one adds a paragraph below, one is dragged to move the block and clicked
@@ -1486,7 +1488,7 @@ distinction that cannot be made with what exists, not to match a count.
 
 ## October 2026 remediation
 
-Desktop navigation keeps a 160px primary rail, collapsible to 48px, beside an independent 288px contextual explorer. Wide screens have no topbar: rail, explorer and content all start at the top of the window, and the explorer retains its full height when the primary rail collapses. The primary rail opens with the wordmark and its collapse control, then the workspace switcher, then a Search row drawn like navigation. The reader pins its breadcrumb line (location › title, with Edit/Share/Details) to the top of the reading column while the rest of its header scrolls away. A pinned bar's lower edge is not a rule: while it is pinned, the content scrolling under it fades into it through a 16px gradient from `--kh-bg` to transparent (`.kh-fade-below`, in `globals.css`), drawn below the bar, click-through, and never taller than would swallow a line of text. The composer's pinned command line uses the same edge. The rule is for a page's pinned *top line* over reading or writing; a sticky table header and a pinned bottom action bar keep their rule, which separates a header from its rows and an action bar from the form it acts on. On a document page the rail's first row (wordmark), the explorer's first row (Documents) and the document's breadcrumb line are each 48px and centred on one line, so the three columns share one top edge. Narrow screens keep a topbar (Menu, search icon, and the document's title and actions once its header scrolls away) and one Menu drawer headed by the switcher (`2026-10-08-workspace-switcher-in-rail-design.md`). Reader/composer share DocumentPane geometry and the composer pins Save/Cancel/Markdown and draft status inside its scrolling pane. See `2026-10-02-linear-remediation-design.md` for the coordinated contract. Kbd and graph action hints use `text-muted` to meet small-text contrast. Desktop controls retain 24/32/40px heights; coarse pointers get at least 40px physical targets through the shared control classes.
+Desktop navigation keeps a 160px primary rail, collapsible to 48px, beside an independent 288px contextual explorer. Wide screens have no topbar: rail, explorer and content all start at the top of the window, and the explorer retains its full height when the primary rail collapses. The primary rail opens with the wordmark and its collapse control, then the workspace switcher, then a Search row drawn like navigation. The reader pins its breadcrumb line (location › title, with Edit/Share/Details) to the top of the reading column while the rest of its header scrolls away. A pinned bar's lower edge is not a rule: while it is pinned, the content scrolling under it fades into it through a 16px gradient from `--kh-bg` to transparent (`.kh-fade-below`, in `globals.css`), drawn below the bar, click-through, and never taller than would swallow a line of text. The composer's pinned command line uses the same edge. The rule is for a page's pinned *top line* over reading or writing; a sticky table header and a pinned bottom action bar keep their rule, which separates a header from its rows and an action bar from the form it acts on. On a document page the rail's first row (wordmark), the explorer's first row (Documents) and the document's breadcrumb line are each 48px and centred on one line, so the three columns share one top edge. Narrow screens keep a topbar (Menu, search icon, and the document's title and actions once its header scrolls away) and one Menu drawer headed by the switcher (`2026-10-08-workspace-switcher-in-rail-design.md`). Reader/composer share DocumentPane geometry and lay a document out line for line alike — the 48px path line, the title with one muted caption line under it, the outline (rail or disclosure), then the text — so nothing moves between reading and editing (`tests/e2e/zz-editor-blocks.spec.ts` measures both). The composer pins Save/Cancel/Markdown in its path line; its draft status and title hints take the reader's "Updated" line, which stays one line tall when empty and may wrap to a second only while a status needs it (a rename notice beside a draft status on a phone) — a jump the writer caused, not one between reading and editing. Details is the reader's panel with the reader's open state: Edit is a client navigation, so a panel open while reading is open while editing and after Cancel or Save, beside text that has not moved. The composer has a Details button in the reader's place, last in its path line, but no ⌘I, which the editor gives to italic. See `2026-10-02-linear-remediation-design.md` for the coordinated contract. Kbd and graph action hints use `text-muted` to meet small-text contrast. Desktop controls retain 24/32/40px heights; coarse pointers get at least 40px physical targets through the shared control classes.
 
 
 ### Shared article discussion layout (2026-10-12, PR #168)
@@ -1530,4 +1532,4 @@ No token was added.
 
 ### Block controls and the `/` list (2026-10-14)
 
-§10 gained "Block controls and the `/` list": the rendered editor's 56px left gutter — a recorded departure from `kh-reading-column` while editing — the add and move controls in it, and the list `/` opens. No colour, radius or elevation token was added.
+§10 gained "Block controls and the `/` list": the rendered editor's 56px left gutter, hung left of the text so the editor keeps the reader's measure, the add and move controls in it, and the list `/` opens. No colour, radius or elevation token was added.

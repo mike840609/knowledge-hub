@@ -66,7 +66,7 @@ export type DocumentInspectorData = {
     data: GraphViewData;
     depth: 1 | 2;
     openHref: string;
-    depthHrefs: { 1: string; 2: string };
+    depthHrefs: { 1: string; 2: string } | null;
   } | null;
 };
 
@@ -479,4 +479,14 @@ export function DocumentDetailClient({
       </DocumentPane>
     </ReviewEntryProvider>
   );
+}
+
+/**
+ * The Details panel beside the composer: the reader's, with the reader's open state, so a panel open
+ * while reading stays open while editing and the text beside it does not move. Rendered by the edit
+ * page and handed to the composer, which then sends none of this to /new.
+ */
+export function EditorInspector({ data, outline }: { data: DocumentInspectorData; outline: readonly OutlineEntry[] }) {
+  const inspector = useContext(InspectorContext);
+  return <DocumentInspector open={inspector?.open ?? false} onOpenChange={(open) => inspector?.setOpen(open)} data={data} outline={outline} activeSlug={null} requestedTab={null} />;
 }
