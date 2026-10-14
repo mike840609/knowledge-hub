@@ -109,7 +109,7 @@ export function NewDocumentForm({
           title, markdown, expectedCurrentRevisionId: expectedRevisionId ?? created.revisionId,
         });
         const href = `/w/${workspaceId}/knowledge/${created.sourceId}/${created.documentId}`;
-        return { revisionId: saved.revisionId, documentId: created.documentId, editHref: `${href}/edit`, readHref: `${href}?mode=read`, creationStorageKey: key };
+        return { revisionId: saved.revisionId, documentId: created.documentId, editHref: `${href}/edit`, readHref: href, creationStorageKey: key };
       } : undefined}
       onSubmit={({ title, markdown }) => create({ title, markdown })}
       blocked={uploading}

@@ -33,7 +33,7 @@ export function DocumentEditor({
   personal?: boolean;
 }) {
   const documentHref = `/w/${workspaceId}/knowledge/${sourceId}/${documentId}`;
-  const readHref = personal ? `${documentHref}?mode=read` : documentHref;
+  const readHref = documentHref;
   return (
     <DocumentComposer
       workspaceId={workspaceId}
