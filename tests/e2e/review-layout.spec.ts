@@ -82,8 +82,13 @@ test("shared comments follow passage order and the selected card stays beside it
   await expect(addComment).toBeInViewport();
   await addComment.click();
   await expect(page.getByRole("textbox", { name: "Add comment" })).toBeInViewport();
-  await expect.poll(async () => Math.abs((await laterCard.boundingBox())!.y - await later.evaluate(textTop))).toBeLessThan(1);
+  // The new comment takes the passage's level; the discussion already there moves aside, not under it.
+  const draft = page.locator("[data-review-rail] [data-review-draft]");
+  await expect.poll(async () => Math.abs((await draft.boundingBox())!.y - await later.evaluate(textTop))).toBeLessThan(1);
+  const [draftBox, laterBox] = [(await draft.boundingBox())!, (await laterCard.boundingBox())!];
+  expect(laterBox.y >= draftBox.y + draftBox.height || laterBox.y + laterBox.height <= draftBox.y).toBe(true);
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect.poll(async () => Math.abs((await laterCard.boundingBox())!.y - await later.evaluate(textTop))).toBeLessThan(1);
 
   // Collapsing recovers the full centered reading layout without losing the passage.
   const beforeCollapse = await page.evaluate(() => window.scrollY);
@@ -323,6 +328,44 @@ test("collapsed selection offers Comment, and Escape preserves a new-comment dra
   await expect(input).toHaveValue("New draft");
   await page.getByRole("button", { name: "Add comment", exact: true }).click();
   await expect(page.getByRole("button", { name: "Hide discussions, 1 comments", exact: true })).toBeVisible();
+});
+
+test("a new comment opens in the rail level with the selected passage, not at the top of the rail", async ({ page, request }) => {
+  const markdown = Array.from({ length: 60 }, (_, i) => `Paragraph ${i + 1}: a clear recommendation with enough context for a colleague to review.`).join("\n\n");
+  const doc = await createReviewDocument(request, markdown);
+  const origin = phase3Origin("viewer");
+  const token = doc.links[0].path.split("/").pop();
+  const block = projectReviewBlocks(markdown)[44];
+  // A discussion already on the same passage: the new comment takes the passage's level, the card moves aside.
+  const existing = await request.post(`${origin}/api/share-review/threads`, { headers: { Origin: origin }, data: {
+    token, expectedRevisionId: doc.revisionId, idempotencyKey: crypto.randomUUID(), body: "Already here",
+    anchor: { schemaVersion: 1, blockPath: block.path, blockKind: block.kind, startUtf16: 0, endUtf16: 12, exact: block.text.slice(0, 12), prefix: "", suffix: block.text.slice(12, 76) },
+  } });
+  expect(existing.status()).toBe(201);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${origin}${doc.links[0].path}`);
+  await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
+  const passage = page.locator("[data-review-document] p").nth(44);
+  await passage.scrollIntoViewIfNeeded();
+  const textTop = await passage.evaluate(element => {
+    const range = document.createRange(); range.setStart(element.firstChild!, 0); range.setEnd(element.firstChild!, 12);
+    const selection = window.getSelection()!; selection.removeAllRanges(); selection.addRange(range);
+    return range.getBoundingClientRect().top;
+  });
+  const scrollY = await page.evaluate(() => window.scrollY);
+  await page.getByRole("button", { name: "Comment on selection" }).click();
+  const draft = page.locator("[data-review-rail] [data-review-draft]");
+  await expect(draft.getByRole("textbox", { name: "Add comment" })).toBeFocused();
+  await expect.poll(async () => Math.abs((await draft.boundingBox())!.y - textTop)).toBeLessThan(1);
+  expect(await page.evaluate(() => window.scrollY)).toBeCloseTo(scrollY, 0);
+  const card = page.locator("[data-review-rail] [data-review-thread]").filter({ visible: true });
+  await expect(card).toHaveCount(1);
+  const [draftBox, cardBox] = [(await draft.boundingBox())!, (await card.boundingBox())!];
+  expect(cardBox.y >= draftBox.y + draftBox.height || cardBox.y + cardBox.height <= draftBox.y).toBe(true);
+  await draft.getByRole("textbox", { name: "Add comment" }).fill("Written beside the passage");
+  await draft.getByRole("button", { name: "Add comment", exact: true }).click();
+  await expect(draft).toHaveCount(0);
+  await expect(card.filter({ hasText: "Written beside the passage" })).toBeVisible();
 });
 
 test("collapsed errors and stale revision notices remain visible, with stale replies enabled", async ({ page, request }) => {

@@ -105,6 +105,12 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
     publish?.(count > 0 || open || startHere || said || unreadCount > 0 ? { count, awaiting, unread: unreadCount, open, toggle, comment: startHere ? () => { capture(); changeOpen(true); } : undefined, hint: said } : null);
   }, [publish, count, awaiting, unreadCount, open, toggle, changeOpen, startHere, said, capture]);
   useEffect(() => () => publish?.(null), [publish]);
+  const composer = selection.chosen && <ReviewComposer anchor={selection.chosen} onCancel={selection.clear} onSubmit={async (body, idempotencyKey) => {
+    const created = await reviewRequest<{ id: string }>(base, { expectedRevisionId: revisionId, anchor: selection.chosen, body, idempotencyKey });
+    selection.clear(); setFilter(current => current === "RESOLVED" ? "OPEN" : current); setActiveThreadId(created.id); await load();
+  }} />;
+  // Beside its passage where the discussions are a rail; at the top of the drawer, which covers the passage, where they are not.
+  const draft = composer && inline && !revisionChanged ? { anchor: selection.chosen!, composer } : undefined;
   const refresh = <Tooltip label="Refresh comments"><Button type="button" variant="ghost" icon aria-label="Refresh comments" onClick={() => void load()}><RefreshCw className="size-4" aria-hidden="true" /></Button></Tooltip>;
   return <>
     {!open && error && <p role="alert" className="pb-3 text-body-sm">{error}</p>}
@@ -129,11 +135,8 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
             {revisionChanged && <p role="status" className="mt-3 text-body-sm">Document changed. Refresh this page before selecting or locating a passage.</p>}
             {canComment && <div className="mt-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={selection.capture} aria-label="Comment on selection"><MessageSquarePlus className="size-4" aria-hidden="true" />Add comment</Button></div>}
           </div>
-          {selection.chosen && <div className="mt-3"><ReviewComposer anchor={selection.chosen} onCancel={selection.clear} onSubmit={async (body, idempotencyKey) => {
-            const created = await reviewRequest<{ id: string }>(base, { expectedRevisionId: revisionId, anchor: selection.chosen, body, idempotencyKey });
-            selection.clear(); setFilter(current => current === "RESOLVED" ? "OPEN" : current); setActiveThreadId(created.id); await load();
-          }} /></div>}
-          {result && <div className="mt-3"><ReviewThreadList filter={filter} onFilterChange={setFilter} railMarkdown={revisionChanged ? undefined : markdown} activeThreadId={activeThreadId} onActivate={setActiveThreadId}
+          {composer && !draft && <div className="mt-3">{composer}</div>}
+          {result && <div className="mt-3"><ReviewThreadList draft={draft} filter={filter} onFilterChange={setFilter} railMarkdown={revisionChanged ? undefined : markdown} activeThreadId={activeThreadId} onActivate={setActiveThreadId}
             focusAnchor={revisionChanged ? undefined : anchor => { const root = document.querySelector<HTMLElement>("[data-review-document]"); if (root) focusReviewAnchor(root, markdown, anchor); }}
             threads={result.threads} writesEnabled={result.writesEnabled && !readOnly} canResolve={!readOnly}
             reply={async (threadId, body, idempotencyKey) => { await reviewRequest(`${base}/${threadId}/replies`, { body, idempotencyKey }); await load(); }}
