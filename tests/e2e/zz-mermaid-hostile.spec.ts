@@ -11,7 +11,6 @@ const HANDLER = 'flowchart LR\n  A["<img src=x onerror=\'window.khPwned=1\'>"] -
 const SCRIPT = 'flowchart LR\n  A["<script>window.khPwned=2</script>"] --> B';
 const LINK = 'flowchart LR\n  A --> B\n  click A href "javascript:window.khPwned=3"';
 const CALLBACK = "flowchart LR\n  A --> B\n  click A call alert()";
-const REMOTE = "flowchart LR\n  A --> B\n  classDef evil fill:url(https://example.invalid/x)\n  class A evil";
 const COVER = "flowchart LR\n  A --> B\n  classDef evil position:fixed,top:0,left:0,width:100vw,height:100vh\n  class A evil";
 const BREAKOUT = 'flowchart LR\n  A["</text></g></svg><img src=x onerror=window.khPwned=4>"] --> B';
 
@@ -27,17 +26,26 @@ const MATH_CLASS = `classDiagram\n  class A["${MATH}"]`;
 const IMAGE_SHAPE = `flowchart LR\n  A@{ img: "${ELSEWHERE}/shape.png", label: "x", w: 60, h: 60 }`;
 /** An author's `style` line is written into the page as CSS while the drawing is laid out; its `url()` is an image fetch. */
 const STYLE_URL = `classDiagram\n  class A\n  style A background:url(${ELSEWHERE}/style.png)`;
+/**
+ * A `url()` in a `classDef` that really lays out (a state diagram takes one; the flowchart parser refuses it with a parse
+ * error, which proves nothing about the policy). It is drawn, and the policy refuses the fetch.
+ */
+const REMOTE = `stateDiagram-v2\n  [*] --> s1\n  classDef evil background:url(${ELSEWHERE}/remote.png)\n  class s1 evil`;
+/** A participant's `icon` property becomes an SVG \`<image href>\` in the page while the diagram is laid out. */
+const SEQUENCE_ICON = `sequenceDiagram\n participant A\n properties A: {"icon": "${ELSEWHERE}/x.png"}\n A->>A: hi`;
+/** A C4 style colour is used as a paint: \`//host\` takes the page's scheme. */
+const C4_STYLE = 'C4Context\n Person(a,"x","y")\n UpdateElementStyle(a, $bgColor="url(//attacker.example/b.svg#a)")';
 const THEME_CSS = `%%{init: {"themeCSS": ".node rect{background-image:url(${ELSEWHERE}/themecss.png)}"}}%%\nflowchart LR\n  A-->B`;
 const FONT_FAMILY = `%%{init: {"fontFamily": "x; .node rect{background-image:url(${ELSEWHERE}/font.png)}"}}%%\nflowchart LR\n  A-->B`;
 
-const PICTURES = [HANDLER, LOOSE + HANDLER, SCRIPT, LOOSE + SCRIPT, LINK, LOOSE + LINK, CALLBACK, REMOTE, COVER, BREAKOUT];
+const PICTURES = [HANDLER, LOOSE + HANDLER, SCRIPT, LOOSE + SCRIPT, LINK, LOOSE + LINK, CALLBACK, COVER, BREAKOUT];
 /** Refused before Mermaid lays anything out: not a type the reader draws. */
 const NOT_DRAWN_HERE = [ARCHITECTURE, EVENT_MODEL];
 /** Laid out, and refused for the HTML label Mermaid made of it. */
 const REFUSED_AFTER = [MATH_SEQUENCE, MATH_CLASS];
 /** Its own config is not taken, so it is the plain flowchart beneath. */
 const CONFIG_IGNORED = [THEME_CSS, FONT_FAMILY];
-const CASES = [...PICTURES, ...NOT_DRAWN_HERE, ...REFUSED_AFTER, IMAGE_SHAPE, STYLE_URL, ...CONFIG_IGNORED];
+const CASES = [...PICTURES, ...NOT_DRAWN_HERE, ...REFUSED_AFTER, IMAGE_SHAPE, STYLE_URL, REMOTE, SEQUENCE_ICON, C4_STYLE, ...CONFIG_IGNORED];
 const MARKDOWN = ["A first paragraph.", "", ...CASES.flatMap((source) => [fence(source), ""]), "A last paragraph."].join("\n");
 const UNSUPPORTED = "This kind of diagram cannot be drawn here yet.";
 
@@ -116,7 +124,12 @@ test("no diagram puts an element, a script, a request or a style of its own onto
   }
   await expect(at(IMAGE_SHAPE).locator("[data-diagram-reason]")).toHaveText(/\S/);
   await expect(at(IMAGE_SHAPE).locator("details")).toHaveAttribute("open", "");
-  for (const source of [STYLE_URL, ...CONFIG_IGNORED]) await expect(at(source).locator("img[data-diagram]")).toBeVisible();
+  // These really lay out and carry a fetch of the author's choosing: each is drawn, with no reason (a parse error
+  // would be a reason), so what stops the fetch is the policy, which `stopped` below shows by its violations.
+  for (const source of [STYLE_URL, REMOTE, SEQUENCE_ICON, C4_STYLE, ...CONFIG_IGNORED]) {
+    await expect(at(source).locator("img[data-diagram]")).toBeVisible();
+    await expect(at(source).locator("[data-diagram-reason]")).toHaveCount(0);
+  }
 
   // Click where a link or a callback would be.
   for (const picture of await visitor.locator("img[data-diagram]").all()) await picture.click({ position: { x: 20, y: 20 }, force: true });
@@ -149,11 +162,15 @@ test("no diagram puts an element, a script, a request or a style of its own onto
   // While Mermaid laid them out: no element of the author's choosing was ever in the page.
   expect(page_.seen.elements).toEqual([]);
   // What the policy had to stop, and did (spec, "What B does not cover"): the flowchart shape that loads an image
-  // by its URL, and the `url()` in an author's style line. The style and the font a diagram's own config asked
-  // for were never taken, so their URLs were never tried.
-  const stopped = [`${ELSEWHERE}/shape.png`, `${ELSEWHERE}/style.png`];
-  expect(Array.from(new Set(page_.seen.violations)).sort()).toEqual(stopped.map((target) => `img-src ${target}`));
-  expect(Array.from(tried).sort()).toEqual(stopped.map((target) => `image ${target}`));
+  // by its URL, a `url()` in an author's style or classDef line, a sequence participant's icon, and a C4 style colour.
+  // The style, the font and the link colour a diagram's own config asked for were never taken, so their URLs were
+  // never tried. The `//` one takes the page's scheme.
+  const stopped: Array<[kind: string, target: string]> = [
+    ["image", `${ELSEWHERE}/shape.png`], ["image", `${ELSEWHERE}/style.png`], ["image", `${ELSEWHERE}/remote.png`],
+    ["image", `${ELSEWHERE}/x.png`], ["other", `${new URL(url).protocol}//attacker.example/b.svg`],
+  ];
+  expect(Array.from(new Set(page_.seen.violations)).sort()).toEqual(stopped.map(([, target]) => `img-src ${target}`).sort());
+  expect(Array.from(tried).sort()).toEqual(stopped.map(([kind, target]) => `${kind} ${target}`).sort());
   expect(page_.figuresAsBuilt).toBe(true);
   expect(page_.strays).toBe(0);
   expect(new Set(page_.imageSources)).toEqual(new Set(["blob:"]));
