@@ -190,42 +190,40 @@ Neutral surfaces, named by role:
 ```text
 bg          canvas — document and page content
 bg-raised   chrome on the canvas — topbar, inspector panel
-bg-sunken   primary navigation rail
-bg-explorer secondary navigation — knowledge sidebar and its loading placeholder
+bg-sunken   the sidebar — navigation and the document tree
 bg-subtle   inset fills — code blocks, table headers, kbd
 ```
 
-Primary navigation uses `bg-sunken`; the Knowledge explorer and its loading
-placeholder use `bg-explorer`, separated by the existing 1px border. Primary
-navigation selection uses a neutral hover fill; the selected document keeps
-the accent fill, so location within a folder is the stronger cue.
-
-`bg-explorer` aliases `bg-subtle` in light mode. In dark mode it is
-`#0e0f12`, between the primary rail (`#0a0b0e`) and canvas (`#131417`),
-so the secondary rail does not appear as a bright inset panel.
-
+The sidebar uses `bg-sunken`, separated from the canvas by the existing 1px
+border. A navigation item's current state is a neutral hover fill; the
+selected document keeps the accent fill, so location within a folder is the
+stronger cue.
 
 ### Navigation colour scheme
 
-In both themes, surfaces become progressively lighter from left to right:
-primary navigation → Knowledge explorer → reading canvas. Keep the existing
-1px separators; do not use shadows to distinguish these regions.
+One sidebar, `bg-sunken`, beside the canvas. The sidebar holds navigation and
+the document tree in one column (`2026-10-14-notion-sidebar-design.md`); there
+is no second rail and no explorer surface. In both themes the canvas is the
+lighter of the two. Keep the 1px separator; do not use shadows to distinguish
+the two regions, except where the sidebar floats over the page while peeking
+(§10).
 
 | Region | Token | Light | Dark |
 | --- | --- | --- | --- |
 | Primary navigation | `bg-sunken` | `#f1f2f5` | `#0a0b0e` |
-| Knowledge explorer and loading placeholder | `bg-explorer` | `#f6f7f9` (alias of `bg-subtle`) | `#0e0f12` |
 | Reading canvas | `bg` | `#ffffff` | `#131417` |
 
-The primary navigation's current item uses `bg-hover` with `text`, so it
-remains neutral. The selected document uses `bg-selected` with
-`selected-text`, making the document location the stronger accent cue.
-Hover and focus states retain their existing tokens and focus rings.
+A navigation item's current state uses `bg-hover` with `text`, so it remains
+neutral: `.kh-sidebar-surface` redefines `--kh-bg-hover` as `bg-hover-strong`
+inside the sidebar, because the ordinary hover step disappears into
+`bg-sunken`. The tree's selected document uses `bg-selected` with
+`selected-text`, making the document location the stronger accent cue. Hover
+and focus states retain their existing tokens and focus rings.
 
 The darker `bg-sunken` value also applies to other surfaces already using
 that token, including the outer application background. Inset content
 continues to use `bg-subtle`; its dark value (`#1d1f24`) is deliberately not
-the explorer background.
+the sidebar's background.
 
 A document is content, so it sits on `bg` like every other page. The
 document pane had been painted `bg-raised` whole, header and body alike,
@@ -267,8 +265,11 @@ page does not restate its own name.
 
 `PageHeader`'s line is 48px and is the first thing on its page: a page that
 opens with one has no top padding (`pb-6`, not `py-6`), so the line is centred
-on the same top line as the rail's wordmark row and a document's breadcrumb —
-with no topbar, that line is the window's top edge. A page that does not open
+on the same top line as the sidebar's head row (the workspace selector) and a
+document's breadcrumb — with no topbar, that line is the window's top edge.
+While the sidebar is collapsed the line gives way 48px on its left to the
+expand button that floats there (`[data-nav-collapsed] [data-top-line]`), so
+no page is edited to make room for it. A page that does not open
 with `PageHeader` keeps `py-6`. `py-8` appeared on four sources pages for no
 reason anyone recorded. The `py-16` of a centred message state belongs to
 `StatusMessage` and `EmptyState`, not to the pages that show one.
@@ -311,10 +312,10 @@ not correctness.
 ## 8. Colour
 
 One restrained accent, used for selected state, focus and primary action.
-The primary rail's current item is not one of them: it is marked with a neutral
+A navigation item's current state is not one of them: it is marked with a neutral
 step above hover (`bg-hover-strong`, full-strength text, medium weight), so the
-accent on screen is the explorer's selected document rather than two accent
-blocks side by side competing for the eye. Hierarchy relies on weight, size, spacing and foreground
+accent on screen is the tree's selected document rather than two accent
+blocks competing for the eye. Hierarchy relies on weight, size, spacing and foreground
 level rather than decorative colour.
 
 ### Foreground levels
@@ -332,7 +333,7 @@ text-faint      hints that are not content — kbd, separators, disabled
 they can sit on and may carry body text. **`text-faint` meets 3:1 and may
 not** — it is for marks a reader can ignore without losing meaning.
 
-A group label in a navigation rail (Documents, Favorites, Recent) is
+A group label in the sidebar (Documents, Favorites, Recent) is
 `caption`, medium, `text-muted`: one style, so a label never reads as another
 row. Collections and rows below it keep `body`.
 
@@ -673,17 +674,24 @@ owner's page it acts when that control is there (discussions to open, or open
 ones to close). Where the comments are a drawer, the drawer is a dialog and keeps
 its keys: `D` opens it and `Esc` closes it. Not `C` (Create document) nor `M` (Move).
 
-⌘\ (Ctrl \ elsewhere) collapses and expands the primary navigation, and is
+⌘\ (Ctrl \ elsewhere) collapses and expands the sidebar, and is
 `NAV_TOGGLE_SHORTCUT` in the registry: the app shell reads the key from there,
 the collapse button takes its `aria-keyshortcuts` from there, and the palette's
 "Toggle navigation" shows it (`matchesShortcut` in `lib/shortcut-keys.ts` reads
 a shortcut that carries a modifier, as `isSingleKeyShortcut` reads one that
-does not). It acts from the composer's title and editor, since no field types
+does not). Collapsing takes the sidebar to zero width, and the page has the
+window. While it is collapsed a pointer at the window's left edge peeks it in
+over the page (`shadow-popover`, the content does not move); it leaves about
+300ms after the pointer does, not while a menu opened from it is open, and at
+once on Esc. Peek is an accelerator for a pointer and only where hover exists;
+the keyboard's path is ⌘\ or the expand button, which do everything peeking
+does. ⌘\ acts from the composer's title and editor, since no field types
 it — the writer is who most wants the room — but a dialog or menu that is open,
-the palette included, keeps its keys. Where the rail is not on screen (a window
-under `lg`) it opens and closes the menu that takes its place. It is not ⌘/,
+the palette included, keeps its keys. Where the sidebar is not on screen (a window
+under `lg`) it opens and closes the Menu drawer that takes its place, which holds the
+same sidebar. It is not ⌘/,
 which the composer has for the rendered/source switch, nor ⌘B, which is bold
-there. The Knowledge explorer beside it has no collapse, so this does not reach it.
+there.
 
 The composer's title field, its rendered editor and its Markdown text are the
 one place without the focus ring. A text field matches `:focus-visible` for as
@@ -769,6 +777,12 @@ nothing when hidden. It follows that a row holding a floated control must have
 a background whenever that control is showing, which is why
 `.kh-interactive-row` tints on `focus-within` as well as on hover.
 
+In the sidebar the row controls (`+`, `⋯`, ☆) and a section header's controls
+(the Documents filter, `⋯` and `+`) are shown on hover or focus by
+`.kh-row-action`, kept while the menu they opened is showing, and always shown
+where there is no hover. A folder row floats two controls, so on touch its end
+padding is 88px where a document row's, with one, is 48px.
+
 ### The `[[` list
 
 The one floating list that is not a menu: it opens under the caret while a
@@ -841,10 +855,17 @@ refresh discards.
 
 Which storage is part of the decision. A choice keeps (`localStorage`): which
 sources are expanded, which folders are collapsed, which sections are open,
-whether the nav rail is collapsed. Work in progress lasts the session
+whether the sidebar is collapsed. Work in progress lasts the session
 (`sessionStorage`): a find-as-you-type filter is worth keeping across a
 refresh and not worth greeting someone with a week later, when a stale needle
 would make the tree look empty for no reason.
+
+The sidebar's width is the reader's (220–400px, default 256, `kh:nav-width`);
+so is whether it is collapsed (`kh:nav-collapsed`). The width is dragged on the
+sidebar's right edge, or stepped 16px with ←/→ on that handle (a focusable
+`role="separator"`), and double-click returns it to the default. A stored value
+outside the bounds is not trusted and gives the default back. The width is
+written once, when the drag is released, not on every pointer move.
 
 `usePersistedJson` in `components/shell/use-persisted-state.ts` is how, and
 it exists because the hand-written version gets two things wrong. It must
@@ -892,7 +913,7 @@ attribute stays the only thing the stylesheet reads.
 
 ## 13. Icons
 
-A consistent outline icon language (Lucide). In primary navigation, icons
+A consistent outline icon language (Lucide). In the sidebar, icons
 support labels rather than replace them.
 
 One stroke weight, 1.5, set once in `globals.css` for every `svg.lucide`.
@@ -1102,7 +1123,7 @@ state ("No documents yet") and never the page**, and leads with one primary
 action. A second action is secondary, so two equal buttons never ask the reader
 to choose. `hint` teaches the one shortcut that does the primary action, because
 the empty state is the one moment a reader is looking for what to do. Compact
-empty lines inside a rail or a list (a folder with nothing in it) stay one line
+empty lines inside the sidebar or a list (a folder with nothing in it) stay one line
 of `text-muted`; they are not pages.
 
 ### One loading idiom, one message shape
@@ -1284,7 +1305,7 @@ a forced click on the hidden input lands wherever the pixel is.
 
 **A mutation that navigates to its result refreshes on arrival.** The push
 fetches the destination page fresh, but a layout the two routes share is kept
-as it was: saving a title left the knowledge sidebar naming the document by
+as it was: saving a title left the sidebar naming the document by
 its old one until a reload. `router.refresh()` renders the layouts again, but
 never in the same breath as the push: a navigate dispatched while a refresh is
 pending discards it, and a refresh sent alongside a push was measured leaving
@@ -1456,11 +1477,10 @@ explicitly enables it. Disabled controls have no navigation or click action.
     and the navigation guard this item asked about became a tab-scoped draft
     restored on return, since the App Router cannot intercept in-app
     navigation. Personal workspaces now save drafts to the account separately from published revisions, with a local recovery copy and visible save status; Team drafts remain tab-scoped.
- 4. Knowledge pages carry two sidebars side by side: the primary nav
-    (`src/components/shell/app-shell.tsx`, `w-40`, collapsible to `w-12`)
-    and the Knowledge explorer (`src/components/knowledge/source-sidebar.tsx`,
-    `w-72`). The reference has one. Merging them changes the shell every page
-    sits in, so it comes after item 3.
+ 4. Knowledge pages carried two sidebars side by side, a primary nav and the
+    Knowledge explorer; the reference has one. Closed: the two are one sidebar,
+    on every workspace page and not only Knowledge
+    (`docs/superpowers/specs/2026-10-14-notion-sidebar-design.md`, §7 and §10).
  5. One thing is deferred on purpose, with the condition that reopens it. List
     pages sit in `kh-page` rather than spanning the window; widen them when the
     Sources list is long enough that the width costs a reader something. (`E`
@@ -1486,7 +1506,7 @@ distinction that cannot be made with what exists, not to match a count.
 
 ## October 2026 remediation
 
-Desktop navigation keeps a 160px primary rail, collapsible to 48px, beside an independent 288px contextual explorer. Wide screens have no topbar: rail, explorer and content all start at the top of the window, and the explorer retains its full height when the primary rail collapses. The primary rail opens with the wordmark and its collapse control, then the workspace switcher, then a Search row drawn like navigation. The reader pins its breadcrumb line (location › title, with Edit/Share/Details) to the top of the reading column while the rest of its header scrolls away. A pinned bar's lower edge is not a rule: while it is pinned, the content scrolling under it fades into it through a 16px gradient from `--kh-bg` to transparent (`.kh-fade-below`, in `globals.css`), drawn below the bar, click-through, and never taller than would swallow a line of text. The composer's pinned command line uses the same edge. The rule is for a page's pinned *top line* over reading or writing; a sticky table header and a pinned bottom action bar keep their rule, which separates a header from its rows and an action bar from the form it acts on. On a document page the rail's first row (wordmark), the explorer's first row (Documents) and the document's breadcrumb line are each 48px and centred on one line, so the three columns share one top edge. Narrow screens keep a topbar (Menu, search icon, and the document's title and actions once its header scrolls away) and one Menu drawer headed by the switcher (`2026-10-08-workspace-switcher-in-rail-design.md`). Reader/composer share DocumentPane geometry and the composer pins Save/Cancel/Markdown and draft status inside its scrolling pane. See `2026-10-02-linear-remediation-design.md` for the coordinated contract. Kbd and graph action hints use `text-muted` to meet small-text contrast. Desktop controls retain 24/32/40px heights; coarse pointers get at least 40px physical targets through the shared control classes.
+Desktop navigation is one sidebar (§7): 256px by default, 220–400px as the reader sets it, and collapsible to zero width. Wide screens have no topbar: the sidebar and the content both start at the top of the window, and the sidebar keeps its full height. It opens with the workspace selector, which has a collapse control beside it that shows on hover; Search, Home (personal workspaces) and Graph are fixed beneath it. One scroll region follows: Favorites, Recent and Documents (a tree per source, every source the reader has not closed open by default), then Sources, Shares, Insights and Settings, each where its permission allows. The account row is pinned at the bottom. The reader pins its breadcrumb line (location › title, with Edit/Share/Details) to the top of the reading column while the rest of its header scrolls away. A pinned bar's lower edge is not a rule: while it is pinned, the content scrolling under it fades into it through a 16px gradient from `--kh-bg` to transparent (`.kh-fade-below`, in `globals.css`), drawn below the bar, click-through, and never taller than would swallow a line of text. The composer's pinned command line uses the same edge. The rule is for a page's pinned *top line* over reading or writing; a sticky table header and a pinned bottom action bar keep their rule, which separates a header from its rows and an action bar from the form it acts on. On a document page the sidebar's head row (the workspace selector) and the document's breadcrumb line are each 48px and centred on one line, so the two columns share one top edge. Narrow screens keep a topbar (Menu, search icon, and the document's title and actions once its header scrolls away) and one Menu drawer that holds the same sidebar, headed by the switcher (`2026-10-08-workspace-switcher-in-rail-design.md`). Reader/composer share DocumentPane geometry and the composer pins Save/Cancel/Markdown and draft status inside its scrolling pane. See `2026-10-02-linear-remediation-design.md` for the coordinated contract. Kbd and graph action hints use `text-muted` to meet small-text contrast. Desktop controls retain 24/32/40px heights; coarse pointers get at least 40px physical targets through the shared control classes.
 
 
 ### Shared article discussion layout (2026-10-12, PR #168)
@@ -1531,3 +1551,7 @@ No token was added.
 ### Block controls and the `/` list (2026-10-14)
 
 §10 gained "Block controls and the `/` list": the rendered editor's 56px left gutter — a recorded departure from `kh-reading-column` while editing — the add and move controls in it, and the list `/` opens. No colour, radius or elevation token was added.
+
+### One sidebar (2026-10-14)
+
+§7 now describes one `bg-sunken` sidebar beside the canvas where it described a primary rail, a Knowledge explorer and the canvas, and the `bg-explorer` token is gone. §10 says what collapsing, peeking and ⌘\ do, §11 says that the sidebar's width and collapsed state are the reader's, and the October 2026 remediation paragraph above describes the new column. Open item 4 is closed. No token was added.
