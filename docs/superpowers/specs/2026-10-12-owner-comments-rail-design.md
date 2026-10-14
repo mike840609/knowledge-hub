@@ -100,6 +100,18 @@ thread or a comment. *Amended 2026-10-13
 (`2026-10-13-review-anchors-and-owner-threads-design.md` §4):* the owner may
 also start a discussion — a control in the header while text is selected, and
 "Add comment" in the rail.
+*Amended 2026-10-14:* and from a button beside each paragraph. It stands in the
+reading column's own 24px right padding, outside the article, so the article
+keeps its width and its margin rule below is unchanged: the button reserves
+nothing and nothing moves when the buttons arrive. It shows for the paragraph
+under the pointer, on its own hover and focus, and always on a screen that
+cannot hover. Choosing one marks the paragraph, opens the discussions and puts
+the caret in the comment box; the comment is anchored to the paragraph's words,
+its first 512 characters where it is longer, through the same proof a selection
+goes through. A paragraph in a closed disclosure has no button, since it has no
+place on the page. Beside an open rail the buttons are not shown — that padding
+is the rail's — and "Add comment" there is the way in. Only the owner's page has
+them: a shared page's readers comment by selecting, as before.
 
 **A document with no discussion** shows no comments control and reserves no
 margin for marks. The control appears in the header once the discussions have
