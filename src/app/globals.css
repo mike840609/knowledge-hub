@@ -6,7 +6,7 @@
  * Surfaces are four steps of one cool neutral hue, each with a distinct job:
  *   bg      canvas — document and page content
  *   raised  chrome sitting on the canvas — topbar, inspector panel
- *   sunken  navigation rails — primary nav, knowledge sidebar
+ *   sunken  the sidebar — navigation and the document tree
  *   subtle  inset fills — code blocks, table headers, kbd
  * Accent, link and focus all share one hue so selection reads as a single idea.
  */
@@ -419,7 +419,7 @@ input[type="search"]::-webkit-search-cancel-button:hover {
     }
   }
 
-  /* Rails need a deeper hover than the canvas, or it disappears into them. */
+  /* The sidebar needs a deeper hover than the canvas, or it disappears into it. */
   .kh-sidebar-surface {
     --kh-bg-hover: var(--kh-bg-hover-strong);
   }
