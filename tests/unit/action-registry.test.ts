@@ -633,6 +633,7 @@ describe("action registry — the row menu's sections (frontend-design-language 
       "document.open-new-tab": "open",
       "document.copy-link": "open",
       "document.edit": "edit",
+      "document.add-to-collection": "edit",
       "document.share": "edit",
       "document.favorite": "edit",
       "document.move": "edit",
@@ -652,7 +653,7 @@ describe("action registry — the row menu's sections (frontend-design-language 
   it("groups an editable document: open, change, export, remove, each in its own order", () => {
     expect(sectionsOf(context({ ...personal, target: target() }))).toEqual([
       ["document.open-new-tab", "document.copy-link"],
-      ["document.edit", "document.share", "document.favorite", "document.move"],
+      ["document.edit", "document.add-to-collection", "document.share", "document.favorite", "document.move"],
       ["document.agent-context", "document.export"],
       ["document.archive"],
     ]);
@@ -661,7 +662,7 @@ describe("action registry — the row menu's sections (frontend-design-language 
   it("leaves out Copy for Agent where it is not offered, without leaving a hole", () => {
     expect(sectionsOf(context({ target: target() }))).toEqual([
       ["document.open-new-tab", "document.copy-link"],
-      ["document.edit", "document.favorite", "document.move"],
+      ["document.edit", "document.add-to-collection", "document.favorite", "document.move"],
       ["document.export"],
       ["document.archive"],
     ]);
@@ -671,7 +672,7 @@ describe("action registry — the row menu's sections (frontend-design-language 
     const sections = sectionsOf(context({ ...personal, target: target({ ownership: "SOURCE_MANAGED" }) }));
     expect(sections).toEqual([
       ["document.open-new-tab", "document.copy-link"],
-      ["document.share", "document.favorite"],
+      ["document.add-to-collection", "document.share", "document.favorite"],
       ["document.agent-context", "document.export"],
     ]);
     expect(sections.every((section) => section.length > 0)).toBe(true);
@@ -738,7 +739,7 @@ describe("action registry — the row menu's sections (frontend-design-language 
     const rows = actionsFor("row", context({ ...personal, target: target() }));
     const shuffled = [...rows].reverse();
     const sections = rowMenuSections(shuffled).map(ids);
-    expect(sections.map((section) => section.length)).toEqual([2, 4, 2, 1]);
+    expect(sections.map((section) => section.length)).toEqual([2, 5, 2, 1]);
     expect(sections[0]).toEqual(["document.copy-link", "document.open-new-tab"]);
   });
 
@@ -760,6 +761,7 @@ describe("action registry — the row menu's sections (frontend-design-language 
       "document.export",
       "document.copy-link",
       "document.edit",
+      "document.add-to-collection",
       "document.share",
       "document.favorite",
       "document.details",
