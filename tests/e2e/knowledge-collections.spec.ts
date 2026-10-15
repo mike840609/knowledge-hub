@@ -24,6 +24,7 @@ test("personal collection creates a reading path, annotations, reorders and open
  let version=1;
  version=await add(overview.documentId,version);
  version=await add(runbook.documentId,version);
+ expect(version).toBe(3);
  await page.reload();
  const reading=page.getByRole("list",{name:"Collection documents"});
  await expect(reading.getByRole("link",{name:"Architecture overview"})).toBeVisible();
