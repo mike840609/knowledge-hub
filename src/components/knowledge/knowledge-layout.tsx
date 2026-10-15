@@ -9,6 +9,7 @@ import { SourceSidebar } from "./source-sidebar";
 import { FolderNameDialogHost } from "./folder-name-dialog";
 import { MoveDialogHost } from "./move-dialog";
 import { ShareLinkDialogHost } from "./share-link-dialog";
+import { CollectionAddDialogHost } from "./collection-add-request";
 import { InspectorContext } from "./inspector-context";
 import { DocumentSkeleton, TreeSkeleton } from "./knowledge-skeletons";
 import { useScrollRestoration } from "./use-scroll-restoration";
@@ -67,6 +68,7 @@ export function KnowledgeLayout({
         </div>
       </div>
       <ShareLinkDialogHost />
+      <CollectionAddDialogHost workspaceId={workspaceId} />
       <FolderNameDialogHost />
       <MoveDialogHost collections={collections} />
     </div>
