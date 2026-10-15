@@ -205,7 +205,7 @@ test("the row menu shows each action's key, without truncating its label, and no
   await expect(menu.getByRole("menuitem", { name: /Move document/ }).locator("kbd")).toHaveText("M");
   // Grouped by what the reader is doing (open, change, export, remove), one rule between each pair of sections.
   const shape = await menuShape(menu);
-  expect(shape).toEqual(["Open in new tab", "Copy link", RULE, "Edit document", "Add to favorites", "Move document…", RULE, "Download Markdown", RULE, "Archive document"]);
+  expect(shape).toEqual(["Open in new tab", "Copy link", RULE, "Edit document", "Add to Collection", "Add to favorites", "Move document…", RULE, "Download Markdown", RULE, "Archive document"]);
   expectRulesOnlyBetweenItems(shape);
   expect(await menu.getByRole("separator").count()).toBe(3);
   const labels = menu.getByRole("menuitem").locator("span.truncate");
