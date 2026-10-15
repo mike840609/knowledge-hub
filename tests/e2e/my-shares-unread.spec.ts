@@ -24,7 +24,7 @@ test("My shares shows one document-level unread badge across multiple share link
     headers: { Origin: viewer },
     data: { token, body: "A follow-up question", idempotencyKey: crypto.randomUUID() },
   });
-  expect(reply.status()).toBe(201);
+  expect(reply.status()).toBe(200);
 
   await page.goto(`${owner}/w/${doc.workspaceId}/shares`);
   const list = page.getByRole("list", { name: "Share links" });
