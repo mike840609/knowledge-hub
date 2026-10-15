@@ -70,6 +70,25 @@ describe("share-comment notify: link-origin comments notify the owner",()=>{
   await expect(f.service.markDocumentRead(f.viewer,f.documentId)).rejects.toMatchObject({code:"SHARE_LINK_NOT_FOUND"});
   expect(t.id).toBeTruthy();
  });
+ it("groups unread link comments by document and selects the latest thread", async () => {
+  const f = await fixture();
+  const first = await f.service.createForLink(f.viewer, { token: f.token, expectedRevisionId: f.revisionId, anchor: f.anchor, body: "First", idempotencyKey: randomUUID() });
+  const reply = await f.service.replyForLink(f.viewer, { token: f.token, threadId: first.id, body: "Second", idempotencyKey: randomUUID() });
+  expect(reply.id).toBeTruthy();
+  expect(await f.service.listUnreadShareCountsForOwner(f.caller)).toEqual([
+    { documentId: f.documentId, unreadCount: 2, latestThreadId: first.id },
+  ]);
+  expect(await f.service.listUnreadShareCountsForOwner(f.viewer)).toEqual([]);
+  await f.service.markDocumentRead(f.caller, f.documentId);
+  expect(await f.service.listUnreadShareCountsForOwner(f.caller)).toEqual([]);
+ });
+ it("excludes hidden and retracted comments from My shares unread counts", async () => {
+  const f = await fixture();
+  const first = await f.service.createForLink(f.viewer, { token: f.token, expectedRevisionId: f.revisionId, anchor: f.anchor, body: "Hidden", idempotencyKey: randomUUID() });
+  await f.service.setVisibility(f.caller, { documentId: f.documentId, threadId: first.id, visibility: "HIDDEN", reason: "moderated" });
+  expect(await f.service.listUnreadShareCountsForOwner(f.caller)).toEqual([]);
+ });
+
  it("activity retains read history and exposes open/resolved state without leaking to a reviewer", async () => {
   const f = await fixture();
   const t = await f.service.createForLink(f.viewer, { token: f.token, expectedRevisionId: f.revisionId, anchor: f.anchor, body: "Decision needed", idempotencyKey: randomUUID() });
