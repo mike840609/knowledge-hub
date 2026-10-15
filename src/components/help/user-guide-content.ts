@@ -68,6 +68,15 @@ export function userGuideContent(locale:GuideLocale):UserGuideContent {
         "收藏保存到帳號；Continue reading／最近閱讀保存在裝置，換瀏覽器可能不同。",
         "未保存草稿不列入文章統計或匯出。",
       ]}]),
+      section("collections","Collections：建立閱讀路徑",[
+        "從左側 Collections 建立一份整理好的閱讀清單，可引用同一 Workspace 中不同 Source 的文件。",
+        "Editor 以上可調整順序、加入每篇文件的閱讀說明，或從文章選單使用 Add to Collection。",
+        "Collections 不複製 Markdown；Folder Sync 原始檔案仍在原本位置修改，再同步回 Knowledge Hub。",
+      ],[{title:"權限、版本與失效引用",items:[
+        "Collection 網址只有具有該 Workspace 閱讀權限的登入使用者可以開啟，不是公開分享連結。",
+        "文件更新後顯示目前最新版本；若被封存或同步產生新 Document ID，舊引用會保留為 Unavailable document，不會自動重連。",
+        "多人同時修改時，舊版本可能遇到 Conflict，重新載入後再修改。封存 Collection 不會封存其中的原始文件。",
+      ]}]),
       section("insights","Home 與 Insights 的數字",[
         "點 Home 的摘要數字開啟清單，或選 View all insights 查看完整分析。",
         "用 Refresh 更新統計。Updated 是查詢時間；Last synced 才是成功同步時間。",
@@ -151,6 +160,15 @@ export function userGuideContent(locale:GuideLocale):UserGuideContent {
         "Opening the current revision updates its read record, not whether you finished reading. A later synced revision may become unread again.",
         "Favorites are saved to your account. Continue reading and recent articles are stored on this device and may differ in another browser.",
         "Unsaved drafts are excluded from article counts and export.",
+      ]}]),
+      section("collections","Collections: curate reading paths",[
+        "Open Collections in the sidebar to build an ordered guide from documents across Sources in the same Workspace.",
+        "Editors can reorder references, add a reading note to each document, or choose Add to Collection from a document menu.",
+        "Collections reference documents rather than copying Markdown. Change folder-synced content at its original source and sync it again.",
+      ],[{title:"Access, changes and unavailable references",items:[
+        "A Collection URL is not a public share link. Only signed-in members with Workspace read access can open it.",
+        "The latest saved document revision is shown. Archived or newly re-imported documents with different IDs leave an Unavailable document placeholder; no automatic relinking occurs.",
+        "Concurrent edits can conflict. Reload the latest version and try again. Archiving a collection never archives its original documents.",
       ]}]),
       section("insights","Understand Home and Insights",[
         "Click a summary number on Home for its list, or View all insights for detailed analysis.",
