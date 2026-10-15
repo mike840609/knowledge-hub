@@ -45,3 +45,58 @@ test("mobile has the same Inbox popover in topbar", async ({ page, request }) =>
   await expect(page.getByRole("heading", { name: "Inbox", exact: true })).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/w/${doc.workspaceId}/home$`));
 });
+
+test("Inbox popup gives titles the full row width and keeps time in metadata on both tabs", async ({ page, request }) => {
+  const doc = await createReviewDocument(request);
+  const owner = phase3Origin("reviewOwner");
+  const viewer = phase3Origin("viewer");
+  const token = doc.links[0].path.split("/").pop();
+  const queryResponse = await request.post(`${viewer}/api/share-review/threads/query`, {
+    headers: { Origin: viewer }, data: { token },
+  });
+  expect(queryResponse.ok()).toBe(true);
+  const query = await queryResponse.json();
+  const created = await request.post(`${viewer}/api/share-review/threads`, {
+    headers: { Origin: viewer },
+    data: {
+      token,
+      expectedRevisionId: query.revisionId,
+      anchor: { schemaVersion: 1, blockPath: [0], blockKind: "paragraph", startUtf16: 2, endUtf16: 9, exact: "😀 bold", prefix: "A ", suffix: " passage to review." },
+      body: "A comment to check the compact Inbox notification layout",
+      idempotencyKey: crypto.randomUUID(),
+    },
+  });
+  expect(created.status()).toBe(201);
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${owner}/w/${doc.workspaceId}/home`);
+  await page.locator("aside").first().getByRole("button", { name: /Inbox/ }).click();
+
+  async function expectCompactRow(listName: string) {
+    const row = page.getByRole("list", { name: listName })
+      .getByRole("link", { name: /A comment to check the compact Inbox notification layout/ });
+    await expect(row).toBeVisible();
+    const title = row.locator("[data-inbox-notification-title]");
+    const time = row.locator("time");
+    await expect(title).toBeVisible();
+    await expect(time).toBeVisible();
+    const titleBox = await title.boundingBox();
+    const timeBox = await time.boundingBox();
+    const rowBox = await row.boundingBox();
+    expect(titleBox && timeBox && rowBox).toBeTruthy();
+    // A timestamp must not squeeze the document title into a tiny first-line column.
+    expect(timeBox!.y).toBeGreaterThanOrEqual(titleBox!.y + titleBox!.height);
+    expect(timeBox!.x + timeBox!.width).toBeLessThanOrEqual(rowBox!.x + rowBox!.width);
+  }
+
+  await expectCompactRow("Unread notifications");
+  await page.getByRole("tab", { name: "All activity" }).click();
+  await expectCompactRow("Recent notifications");
+
+  // The same hierarchy must fit in the narrower mobile popover.
+  await page.keyboard.press("Escape");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("banner").getByRole("button", { name: /Inbox/ }).click();
+  await page.getByRole("tab", { name: "All activity" }).click();
+  await expectCompactRow("Recent notifications");
+});
