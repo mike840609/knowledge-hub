@@ -122,18 +122,20 @@ export function InboxPopover({ workspaceId, placement = "header" }: { workspaceI
                 : <ul aria-label={tab === "unread" ? "Unread notifications" : "Recent notifications"} className="divide-y divide-kh-border">
                     {visible.map(item => <li key={item.id}>
                       <Link
-                        className="kh-focus-ring block px-4 py-3 hover:bg-kh-bg-hover"
+                        className="kh-focus-ring block px-4 py-2.5 hover:bg-kh-bg-hover"
                         href={`/w/${item.workspaceId}/knowledge/${item.sourceId}/${item.documentId}?thread=${item.threadId}`}
                         onClick={() => setOpen(false)}
                       >
-                        <span className="flex items-center justify-between gap-2">
-                          <span className="truncate text-body-sm font-medium text-kh-text">{item.documentTitle}</span>
-                          <Timestamp value={String(item.createdAt)} variant="relative" />
-                        </span>
-                        <span className="mt-1 block truncate text-body-sm text-kh-text-muted">{item.authorName ?? "Someone"}: {item.excerpt}</span>
-                        <span className="mt-1 flex items-center gap-1 text-caption text-kh-text-muted">
-                          {item.readAt === null ? <span className="h-1.5 w-1.5 rounded-full bg-kh-primary" aria-hidden="true" /> : null}
-                          {item.threadStatus === "OPEN" ? "Open discussion" : "Resolved"}
+                        <span className="flex min-w-0 items-start gap-2.5">
+                          <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${item.readAt === null ? "bg-kh-primary" : "bg-transparent"}`} aria-hidden="true" />
+                          <span className="block min-w-0 flex-1">
+                            <span data-inbox-notification-title className="block truncate text-body-sm font-medium text-kh-text">{item.documentTitle}</span>
+                            <span className="mt-0.5 block line-clamp-2 break-words text-body-sm text-kh-text-muted">{item.authorName ?? "Someone"}: {item.excerpt}</span>
+                            <span className="mt-1.5 flex min-w-0 items-center justify-between gap-2 text-caption text-kh-text-muted">
+                              <span className="min-w-0 truncate">{item.threadStatus === "OPEN" ? "Open discussion" : "Resolved"}</span>
+                              <Timestamp value={String(item.createdAt)} variant="relative" className="shrink-0 whitespace-nowrap tabular-nums text-kh-text-faint" />
+                            </span>
+                          </span>
                         </span>
                       </Link>
                     </li>)}
