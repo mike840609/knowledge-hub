@@ -35,11 +35,11 @@ export function DocumentHeader({
   status: "ACTIVE" | "ARCHIVED";
   updatedAt: Date;
   revisionBanner: { viewingNo: number; backHref: string } | null;
-  onDetailsClick: () => void;
+  onDetailsClick?: () => void;
   /** "3 backlinks" and the like; `null` when the document has no links worth announcing. */
-  linkSummary: string | null;
+  linkSummary?: string | null;
   /** Opens the inspector on its Links tab. */
-  onLinksClick: () => void;
+  onLinksClick?: () => void;
   editHref: string | null;
   /** Opens the share-link dialog; null where sharing is not offered (share-link spec §10.1). */
   onShareClick: (() => void) | null;
@@ -127,6 +127,7 @@ export function DocumentHeader({
               </button>
             </Tooltip>
           ) : null}
+          {onDetailsClick ? (
           <Tooltip label="Details" shortcut="Meta+I Control+I">
             <button
               type="button"
@@ -138,6 +139,7 @@ export function DocumentHeader({
               <PanelRight className="h-4 w-4" aria-hidden="true" />
             </button>
           </Tooltip>
+          ) : null}
         </div>
       </div>
       </div>
