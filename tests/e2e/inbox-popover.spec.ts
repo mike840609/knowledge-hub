@@ -100,3 +100,27 @@ test("Inbox popup gives titles the full row width and keeps time in metadata on 
   await page.getByRole("tab", { name: "All activity" }).click();
   await expectCompactRow("Recent notifications");
 });
+
+test("desktop Inbox gives activity more vertical space while small screens stay bounded", async ({ page, request }) => {
+  const doc = await createReviewDocument(request);
+  const owner = phase3Origin("reviewOwner");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${owner}/w/${doc.workspaceId}/home`);
+  await page.locator("aside").first().getByRole("button", { name: /Inbox/ }).click();
+
+  const scroll = page.locator("[data-inbox-scroll]");
+  await expect(scroll).toBeVisible();
+  // Eight desktop notifications should not be constrained by the old 24rem cap.
+  await expect(scroll).toHaveCSS("max-height", "576px");
+  await page.getByRole("tab", { name: "All activity" }).click();
+  await expect(scroll).toHaveCSS("max-height", "576px");
+
+  // Preserve room for the trigger, header, tabs and footer on shorter desktop viewports.
+  await page.setViewportSize({ width: 1440, height: 600 });
+  await expect(scroll).toHaveCSS("max-height", "376px");
+
+  await page.keyboard.press("Escape");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("banner").getByRole("button", { name: /Inbox/ }).click();
+  await expect(scroll).toHaveCSS("max-height", "384px");
+});
