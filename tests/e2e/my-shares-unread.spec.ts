@@ -52,3 +52,13 @@ test("My shares does not show a badge when there are no unread comments", async 
   await expect(rows).toHaveCount(2);
   await expect(rows.getByRole("link", { name: /unread comments/ })).toHaveCount(0);
 });
+
+test("My shares stays available when unread counts cannot be loaded", async ({ page, request }) => {
+  const doc = await createReviewDocument(request);
+  await page.route("**/api/review-notifications/share-counts", route => route.abort("failed"));
+  await page.goto(`${phase3Origin("reviewOwner")}/w/${doc.workspaceId}/shares`);
+  const rows = page.getByRole("list", { name: "Share links" }).getByRole("listitem")
+    .filter({ has: page.locator(`a[data-list-row][href*="${doc.documentId}"]`) });
+  await expect(rows).toHaveCount(2);
+  await expect(rows.getByRole("link", { name: /unread comments/ })).toHaveCount(0);
+});
