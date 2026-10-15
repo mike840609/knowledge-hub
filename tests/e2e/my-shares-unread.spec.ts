@@ -20,9 +20,9 @@ test("My shares shows one document-level unread badge across multiple share link
   });
   expect(created.status()).toBe(201);
   const thread = await created.json();
-  const reply = await request.post(`${viewer}/api/share-review/comments`, {
+  const reply = await request.post(`${viewer}/api/share-review/threads/${thread.id}/replies`, {
     headers: { Origin: viewer },
-    data: { token, threadId: thread.id, body: "A follow-up question", idempotencyKey: crypto.randomUUID() },
+    data: { token, body: "A follow-up question", idempotencyKey: crypto.randomUUID() },
   });
   expect(reply.status()).toBe(201);
 
