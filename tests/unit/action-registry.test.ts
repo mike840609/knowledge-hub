@@ -630,7 +630,8 @@ describe("action registry — the row menu's sections (frontend-design-language 
         .map((action) => [action.id, action.section]),
     );
     expect(sectionById).toEqual({
-      "document.open-new-tab": "open",
+      "document.open-side-peek": "open-in",
+      "document.open-new-tab": "open-in",
       "document.copy-link": "open",
       "document.edit": "edit",
       "document.share": "edit",
@@ -649,10 +650,11 @@ describe("action registry — the row menu's sections (frontend-design-language 
     });
   });
 
-  it("groups an editable document: open, change, export, remove, each in its own order", () => {
+  it("groups an editable document: open, change, open in, export, remove, each in its own order", () => {
     expect(sectionsOf(context({ ...personal, target: target() }))).toEqual([
-      ["document.open-new-tab", "document.copy-link"],
+      ["document.copy-link"],
       ["document.edit", "document.share", "document.favorite", "document.move"],
+      ["document.open-side-peek", "document.open-new-tab"],
       ["document.agent-context", "document.export"],
       ["document.archive"],
     ]);
@@ -660,8 +662,9 @@ describe("action registry — the row menu's sections (frontend-design-language 
 
   it("leaves out Copy for Agent where it is not offered, without leaving a hole", () => {
     expect(sectionsOf(context({ target: target() }))).toEqual([
-      ["document.open-new-tab", "document.copy-link"],
+      ["document.copy-link"],
       ["document.edit", "document.favorite", "document.move"],
+      ["document.open-side-peek", "document.open-new-tab"],
       ["document.export"],
       ["document.archive"],
     ]);
@@ -670,8 +673,9 @@ describe("action registry — the row menu's sections (frontend-design-language 
   it("has no change or remove section for a read-only (source-managed) document, and no empty section", () => {
     const sections = sectionsOf(context({ ...personal, target: target({ ownership: "SOURCE_MANAGED" }) }));
     expect(sections).toEqual([
-      ["document.open-new-tab", "document.copy-link"],
+      ["document.copy-link"],
       ["document.share", "document.favorite"],
+      ["document.open-side-peek", "document.open-new-tab"],
       ["document.agent-context", "document.export"],
     ]);
     expect(sections.every((section) => section.length > 0)).toBe(true);
@@ -680,16 +684,18 @@ describe("action registry — the row menu's sections (frontend-design-language 
   it("drops every section a caller who cannot write may not use, down to the one that is left", () => {
     const none = { canWrite: false, canImport: false, canSearch: false, canInspectSources: false, canOpenSettings: false };
     expect(sectionsOf(context({ can: none, confirmed: false, target: target({ status: "ARCHIVED", revision: "HISTORICAL" }) }))).toEqual([
-      ["document.open-new-tab", "document.copy-link"],
+      ["document.copy-link"],
       ["document.favorite"],
+      ["document.open-side-peek", "document.open-new-tab"],
       ["document.export"],
     ]);
   });
 
   it("puts Restore alone at the end for an archived document", () => {
     expect(sectionsOf(context({ ...personal, target: target({ status: "ARCHIVED" }) }))).toEqual([
-      ["document.open-new-tab", "document.copy-link"],
+      ["document.copy-link"],
       ["document.favorite"],
+      ["document.open-side-peek", "document.open-new-tab"],
       ["document.export"],
       ["document.restore"],
     ]);
@@ -738,8 +744,8 @@ describe("action registry — the row menu's sections (frontend-design-language 
     const rows = actionsFor("row", context({ ...personal, target: target() }));
     const shuffled = [...rows].reverse();
     const sections = rowMenuSections(shuffled).map(ids);
-    expect(sections.map((section) => section.length)).toEqual([2, 4, 2, 1]);
-    expect(sections[0]).toEqual(["document.copy-link", "document.open-new-tab"]);
+    expect(sections.map((section) => section.length)).toEqual([1, 4, 2, 2, 1]);
+    expect(sections[0]).toEqual(["document.copy-link"]);
   });
 
   it("leaves the palette's own grouping and order alone", () => {

@@ -6,11 +6,13 @@ import {
   CornerUpLeft,
   Database,
   ExternalLink,
+  Maximize2,
   FilePlus,
   FolderInput,
   FolderPlus,
   Link2,
   PanelLeft,
+  PanelRight,
   FileText,
   Network,
   Info,
@@ -32,6 +34,8 @@ import type { ActionIconName } from "./action-registry";
  */
 const icons: Record<ActionIconName, LucideIcon> = {
   "new-tab": ExternalLink,
+  "side-peek": PanelRight,
+  expand: Maximize2,
   home: Home,
   agent: Bot,
   "copy-link": Link2,

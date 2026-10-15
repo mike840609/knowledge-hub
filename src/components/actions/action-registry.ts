@@ -32,6 +32,7 @@ export type ActionId =
   | "create.folder"
   | "create.import"
   | "document.export"
+  | "document.open-side-peek"
   | "document.open-new-tab"
   | "document.copy-link"
   | "document.edit"
@@ -55,7 +56,7 @@ export type ActionGroup = "navigate" | "create" | "document" | "folder";
  * What the reader is doing when they pick a row action: the row menu's own grouping. It is not
  * `ActionGroup`, which is the palette's (what an action is *about*); neither stands in for the other.
  */
-export type ActionSection = "open" | "edit" | "export" | "remove";
+export type ActionSection = "open" | "edit" | "open-in" | "export" | "remove";
 
 /**
  * Where an action may be offered. A surface renders nothing it did not ask for. `create` is the
@@ -67,6 +68,8 @@ export type ActionSurface = "palette" | "row" | "empty" | "create";
 /** Named rather than imported so this module stays free of component imports. */
 export type ActionIconName =
   | "new-tab"
+  | "side-peek"
+  | "expand"
   | "home"
   | "agent"
   | "copy-link"
@@ -109,6 +112,8 @@ export type ActionEffect =
   | { kind: "navigate"; href: string }
   /** Leaves this tab where it is; what a middle-click on the row's link does. */
   | { kind: "open-new-tab"; href: string }
+  /** Asks the shell to show this document in a side peek, leaving the open document where it is. */
+  | { kind: "side-peek"; documentId: string; sourceId: string }
   /** A path, not a URL: the origin is the browser's to supply, not this module's. */
   | { kind: "copy-link"; href: string }
   | { kind: "command"; command: ActionCommand; documentId: string; sourceId: string; label?: string }
@@ -382,12 +387,22 @@ export function availableActions(context: ActionContext): readonly Action[] {
     // replacement has to give them back — a context menu that is poorer than
     // the one it displaced is a regression, however much it adds.
     actions.push({
+      id: "document.open-side-peek",
+      label: "Open in side peek",
+      group: "document",
+      icon: "side-peek",
+      keywords: ["peek", "preview", "side", target.label],
+      section: "open-in",
+      surfaces: ["row"],
+      effect: { kind: "side-peek", documentId: target.documentId, sourceId: target.sourceId },
+    });
+    actions.push({
       id: "document.open-new-tab",
       label: "Open in new tab",
       group: "document",
       icon: "new-tab",
       keywords: ["tab", "window", target.label],
-      section: "open",
+      section: "open-in",
       surfaces: ["row"],
       effect: { kind: "open-new-tab", href: documentHref },
     });
@@ -628,7 +643,7 @@ export function actionsFor(surface: ActionSurface, context: ActionContext): read
 }
 
 /** The row menu's sections, in the order they are drawn. */
-const rowSectionOrder: readonly ActionSection[] = ["open", "edit", "export", "remove"];
+const rowSectionOrder: readonly ActionSection[] = ["open", "edit", "open-in", "export", "remove"];
 
 /**
  * A row's actions as the menu draws them: sections in a fixed order, each action keeping the order it
