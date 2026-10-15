@@ -45,7 +45,7 @@ export function UserMenu({ identityName, workspaceId, compact = false, trigger =
   return (
     <>
     <MenuRoot>
-      {/* The rail is 160px, so a full name is usually cut off; the tooltip says it whole, expanded or not. */}
+      {/* The rail is compact, so a full name may still be cut off; the tooltip says it whole, expanded or not. */}
       {trigger === "account" ? <Tooltip label={identityName} side={compact ? "right" : "top"}>{accountTrigger}</Tooltip> : accountTrigger}
       <MenuContent side="top" align="start" className="w-56">
         <MenuGroup>
