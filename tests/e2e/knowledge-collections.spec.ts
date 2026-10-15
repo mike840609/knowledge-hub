@@ -18,7 +18,7 @@ test("personal collection creates a reading path, annotations, reorders and open
  await expect(page.getByRole("heading",{name:"Authentication onboarding"})).toBeVisible();
  const u=new URL(page.url()),collectionId=u.pathname.split("/").at(-1);
  const add=async(documentId:string,expectedVersion:number)=>{
-   const r=await request.post(`${origin}/api/workspaces/${workspaceId}/collections/${collectionId}/items`,{data:{documentId,expectedVersion}});
+   const r=await request.post(`${origin}/api/workspaces/${workspaceId}/collections/${collectionId}/items`,{headers:{Origin:origin},data:{documentId,expectedVersion}});
    expect(r.ok()).toBe(true);return (await r.json()).version as number;
  };
  let version=1;
@@ -43,9 +43,9 @@ test("workspace references are not grants; unavailable metadata stays hidden",as
  const workspaceId=navigation.items.find((i:{type:string})=>i.type==="PERSONAL").id as string;
  const document=await request.post(`${origin}/api/workspaces/${workspaceId}/documents`,{data:{title:"Private internal architecture",markdown:"Never copy this"}});expect(document.ok()).toBe(true);
  const doc=await document.json();
- const created=await request.post(`${origin}/api/workspaces/${workspaceId}/collections`,{data:{name:"Secure path"}});expect(created.ok()).toBe(true);
+ const created=await request.post(`${origin}/api/workspaces/${workspaceId}/collections`,{headers:{Origin:origin},data:{name:"Secure path"}});expect(created.ok()).toBe(true);
  const {id}=await created.json();
- const added=await request.post(`${origin}/api/workspaces/${workspaceId}/collections/${id}/items`,{data:{documentId:doc.documentId,readingNote:"Private review note",expectedVersion:1}});expect(added.ok()).toBe(true);
+ const added=await request.post(`${origin}/api/workspaces/${workspaceId}/collections/${id}/items`,{headers:{Origin:origin},data:{documentId:doc.documentId,readingNote:"Private review note",expectedVersion:1}});expect(added.ok()).toBe(true);
  expect((await request.get(`${outsider}/api/workspaces/${workspaceId}/collections/${id}`)).status()).toBe(404);
  await page.goto(`${origin}/w/${workspaceId}/collections/${id}`);
  await expect(page.getByText("Private internal architecture")).toBeVisible();
@@ -67,11 +67,11 @@ test("collection API distinguishes no session from unavailable identity",async({
 test("team editor may update an owner collection, viewer cannot",async({request})=>{
  test.skip(process.env.KM_TEAM_WORKSPACES_ENABLED==="false","Team feature flag is disabled.");
  const owner=phase3Origin("owner"),editor=phase3Origin("editor"),viewer=phase3Origin("viewer");
- const created=await request.post(`${owner}/api/workspaces/${PHASE3_TEAM_ID}/collections`,{data:{name:"Team knowledge"}});expect(created.ok()).toBe(true);
+ const created=await request.post(`${owner}/api/workspaces/${PHASE3_TEAM_ID}/collections`,{headers:{Origin:owner},data:{name:"Team knowledge"}});expect(created.ok()).toBe(true);
  const {id}=await created.json();
- const changed=await request.patch(`${editor}/api/workspaces/${PHASE3_TEAM_ID}/collections/${id}`,{data:{name:"Team handoff",expectedVersion:1}});
+ const changed=await request.patch(`${editor}/api/workspaces/${PHASE3_TEAM_ID}/collections/${id}`,{headers:{Origin:editor},data:{name:"Team handoff",expectedVersion:1}});
  expect(changed.ok()).toBe(true);
- const denied=await request.patch(`${viewer}/api/workspaces/${PHASE3_TEAM_ID}/collections/${id}`,{data:{name:"Viewer edit",expectedVersion:2}});
+ const denied=await request.patch(`${viewer}/api/workspaces/${PHASE3_TEAM_ID}/collections/${id}`,{headers:{Origin:viewer},data:{name:"Viewer edit",expectedVersion:2}});
  expect(denied.status()).toBe(403);
  const response=await request.get(`${viewer}/api/workspaces/${PHASE3_TEAM_ID}/collections/${id}`);
  expect(response.ok()).toBe(true);
