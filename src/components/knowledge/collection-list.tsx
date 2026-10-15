@@ -1,4 +1,6 @@
 "use client";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
@@ -38,9 +40,9 @@ export function CollectionListView({workspaceId,model,status,canWrite}:{
     {canWrite&&status==="ACTIVE"?<form onSubmit={create} className="mb-5 rounded-md border border-kh-border p-4">
       <h2 className="mb-3 text-body font-semibold">Create collection</h2>
       <label htmlFor="collection-name" className="block text-caption text-kh-text-muted">Name</label>
-      <input id="collection-name" required maxLength={120} value={name} onChange={e=>setName(e.target.value)} placeholder="Project onboarding" className="kh-control mb-2 mt-1 w-full rounded-md border border-kh-border bg-kh-bg p-2 text-body"/>
+      <Input id="collection-name" required maxLength={120} value={name} onChange={e=>setName(e.target.value)} placeholder="Project onboarding" className="kh-control mb-2 mt-1 w-full rounded-md border border-kh-border bg-kh-bg p-2 text-body"/>
       <label htmlFor="collection-description" className="block text-caption text-kh-text-muted">Description (optional)</label>
-      <textarea id="collection-description" maxLength={2000} rows={2} value={description} onChange={e=>setDescription(e.target.value)} className="kh-control mt-1 w-full rounded-md border border-kh-border bg-kh-bg p-2 text-body"/>
+      <Textarea id="collection-description" maxLength={2000} rows={2} value={description} onChange={e=>setDescription(e.target.value)} className="kh-control mt-1 w-full rounded-md border border-kh-border bg-kh-bg p-2 text-body"/>
       <button type="submit" disabled={creating} className="kh-control mt-3 rounded-md bg-kh-primary px-3 py-2 text-body font-medium text-white disabled:opacity-60">{creating?"Creating…":"Create collection"}</button>
     </form>:null}
     {error?<p role="alert" className="mb-3 text-body text-kh-danger">{error}</p>:null}
