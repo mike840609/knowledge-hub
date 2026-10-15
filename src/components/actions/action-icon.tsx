@@ -19,6 +19,7 @@ import {
   Search,
   Settings,
   Share2,
+  Layers3,
   Star,
   Upload,
   type LucideIcon,
@@ -48,6 +49,7 @@ const icons: Record<ActionIconName, LucideIcon> = {
   // Not a chain: Copy link already is one, and the two sit side by side in
   // the row menu while doing very different things.
   share: Share2,
+  collection: Layers3,
   favorite: Star,
   details: Info,
   backlinks: CornerUpLeft,
