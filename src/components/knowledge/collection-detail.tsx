@@ -1,4 +1,6 @@
 "use client";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
@@ -82,9 +84,9 @@ export function CollectionDetailView({workspaceId,model,canWrite}:{
     </div>:null}
     {editable?<form onSubmit={saveMetadata} className="mt-4 rounded-md border border-kh-border p-3">
       <label htmlFor="collection-detail-name" className="block text-caption text-kh-text-muted">Name</label>
-      <input id="collection-detail-name" required maxLength={120} value={name} onChange={e=>setName(e.target.value)} className="kh-control mt-1 w-full rounded-md border border-kh-border bg-kh-bg p-2 text-body"/>
+      <Input id="collection-detail-name" required maxLength={120} value={name} onChange={e=>setName(e.target.value)} className="kh-control mt-1 w-full rounded-md border border-kh-border bg-kh-bg p-2 text-body"/>
       <label htmlFor="collection-detail-description" className="mt-2 block text-caption text-kh-text-muted">Description</label>
-      <textarea id="collection-detail-description" maxLength={2000} value={description} onChange={e=>setDescription(e.target.value)} rows={2} className="kh-control mt-1 w-full rounded-md border border-kh-border bg-kh-bg p-2 text-body"/>
+      <Textarea id="collection-detail-description" maxLength={2000} value={description} onChange={e=>setDescription(e.target.value)} rows={2} className="kh-control mt-1 w-full rounded-md border border-kh-border bg-kh-bg p-2 text-body"/>
       <button type="submit" disabled={busy} className="kh-control mt-2 rounded-md border border-kh-border px-3 py-1.5 text-body disabled:opacity-50">Save details</button>
     </form>:null}
     <h2 className="mb-3 mt-7 text-lg font-semibold text-kh-text">Reading path <span className="text-body font-normal text-kh-text-muted">({items.length})</span></h2>
@@ -110,7 +112,7 @@ export function CollectionDetailView({workspaceId,model,canWrite}:{
               <button type="button" disabled={busy} className="kh-control rounded-md border border-kh-border px-2 py-1 text-caption disabled:opacity-40" onClick={()=>{if(window.confirm("Remove document from this collection?"))void mutate(`${base}/items/${item.id}`,"DELETE",{},"Reference removed.");}}>Remove</button>
             </div>:null}
             {editable?<form className="mt-2 flex min-w-0 gap-2" onSubmit={e=>{e.preventDefault();void mutate(`${base}/items/${item.id}`,"PATCH",{readingNote:notes[item.id]??item.readingNote??""},"Reading note saved.");}}>
-              <input aria-label={`Reading note for item ${index+1}`} maxLength={500} value={notes[item.id]??item.readingNote??""} onChange={e=>setNotes(current=>({...current,[item.id]:e.target.value}))} placeholder="Why read this?" className="kh-control min-w-0 flex-1 rounded-md border border-kh-border bg-kh-bg px-2 py-1 text-body"/>
+              <Input aria-label={`Reading note for item ${index+1}`} maxLength={500} value={notes[item.id]??item.readingNote??""} onChange={e=>setNotes(current=>({...current,[item.id]:e.target.value}))} placeholder="Why read this?" className="kh-control min-w-0 flex-1 rounded-md border border-kh-border bg-kh-bg px-2 py-1 text-body"/>
               <button disabled={busy} className="kh-control rounded-md border border-kh-border px-2 py-1 text-caption disabled:opacity-40">Save note</button>
             </form>:null}
           </div>
@@ -120,7 +122,7 @@ export function CollectionDetailView({workspaceId,model,canWrite}:{
     {editable?<section className="mt-5 rounded-md border border-kh-border p-3">
       <h2 className="text-body font-semibold">Add document</h2>
       <form className="mt-2 flex gap-2" onSubmit={search}>
-        <input aria-label="Find documents" value={query} maxLength={200} onChange={e=>setQuery(e.target.value)} required placeholder="Search document title or content" className="kh-control min-w-0 flex-1 rounded-md border border-kh-border bg-kh-bg p-2 text-body"/>
+        <Input aria-label="Find documents" value={query} maxLength={200} onChange={e=>setQuery(e.target.value)} required placeholder="Search document title or content" className="kh-control min-w-0 flex-1 rounded-md border border-kh-border bg-kh-bg p-2 text-body"/>
         <button disabled={busy||searching} className="kh-control rounded-md border border-kh-border px-3 py-2 text-body disabled:opacity-40">{searching?"Searching…":"Search"}</button>
       </form>
       <ul aria-label="Matching documents" className="mt-3 divide-y divide-kh-border">
