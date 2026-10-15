@@ -4,8 +4,7 @@ import { useWorkspaceAuthorization } from "./use-workspace-authorization";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Tooltip } from "@/components/ui/tooltip";
-import { BookOpenText, Database, Network, Settings, Home, UserRound, Share2, Inbox } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { BookOpenText, Database, Network, Settings, Home, UserRound, Share2 } from "lucide-react";
 
 export function PrimaryNav({
   workspaceId,
@@ -18,24 +17,8 @@ export function PrimaryNav({
 }) {
   const { access } = useWorkspaceAuthorization();
   const pathname = usePathname();
-  const [unread, setUnread] = useState(0);
-  const refreshUnread = useCallback(async () => {
-    try {
-      const response = await fetch("/api/review-notifications/unread", { credentials: "same-origin", cache: "no-store" });
-      if (!response.ok) return;
-      const result = await response.json() as { notifications: unknown[] };
-      setUnread(result.notifications.length);
-    } catch { /* The navigation remains usable if reviews are unavailable. */ }
-  }, []);
-  useEffect(() => {
-    if (access.workspace.type !== "PERSONAL") return;
-    void refreshUnread();
-    window.addEventListener("kh:notification-changed", refreshUnread);
-    return () => window.removeEventListener("kh:notification-changed", refreshUnread);
-  }, [pathname, access.workspace.type, refreshUnread]);
   const items = [
     ...(access.workspace.type === "PERSONAL" ? [{ name: "Home", href: `/w/${workspaceId}/home`, Icon: Home }] : []),
-    ...(access.workspace.type === "PERSONAL" ? [{ name: "Inbox", href: `/w/${workspaceId}/inbox`, Icon: Inbox }] : []),
     {
       name: "Knowledge",
       href: `/w/${workspaceId}/knowledge`,
@@ -72,7 +55,6 @@ export function PrimaryNav({
           >
             <Icon size={15} aria-hidden="true" />
             {compact ? null : <span>{name}</span>}
-            {name === "Inbox" && unread > 0 ? <span className={`rounded-full bg-kh-bg-hover px-1.5 text-caption tabular-nums ${compact ? "absolute ml-6 -mt-4" : "ml-auto"}`} aria-label={`${unread} unread comments`}>{unread > 99 ? "99+" : unread}</span> : null}
           </Link>
         );
         return compact ? <Tooltip key={name} label={name} side="right">{link}</Tooltip> : link;
