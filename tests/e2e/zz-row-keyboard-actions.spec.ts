@@ -224,7 +224,7 @@ test("the row menu shows each action's key, without truncating its label, and no
   for (const gone of ["Move document…", "Archive document"]) await expect(page.getByRole("menuitem", { name: gone })).toHaveCount(0);
   // Only what is offered is drawn, and a rule only between two sections that both have something in them.
   const readOnlyShape = await menuShape(page.getByRole("menu"));
-  expect(readOnlyShape).toEqual(["Open in new tab", "Copy link", RULE, "Add to favorites", RULE, "Download Markdown"]);
+  expect(readOnlyShape).toEqual(["Open in new tab", "Copy link", RULE, "Add to Collection", "Add to favorites", RULE, "Download Markdown"]);
   expectRulesOnlyBetweenItems(readOnlyShape);
 });
 
