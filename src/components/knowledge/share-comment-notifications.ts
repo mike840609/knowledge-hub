@@ -32,6 +32,7 @@ export function useShareCommentUnread(documentId: string) {
       }
     }
     await refresh();
+    window.dispatchEvent(new Event("kh:notification-changed"));
   }, [documentId, refresh]);
   return { unreadCount: unread.length, refresh, markRead };
 }
