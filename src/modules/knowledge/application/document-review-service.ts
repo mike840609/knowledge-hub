@@ -24,24 +24,52 @@ export class DocumentReviewService {
   async queryForOwner(caller:CallerContext,documentId:string) {
     return this.uow.run(async r => { const s=await this.ownerScope(r,caller,documentId,false); return {threads:await this.views(r,documentId,true,caller.identity.id),revisionId:s.document.currentRevisionId,writesEnabled:this.writesEnabled(),callerUserId:caller.identity.id}; });
   }
-  /** The owner's inbox: link-origin comments on their documents, newest first. The recipient is always the caller; no user id is accepted. */
-  async listUnreadForOwner(caller:CallerContext) {
+  /** Only events owned by the caller are selected at the repository boundary. */
+  private async notificationViews(r: KnowledgeRepositories, events: Awaited<ReturnType<KnowledgeRepositories["shareCommentEvents"]["listUnreadByRecipient"]>>) {
+    const views = [];
+    for (const e of events) {
+      const thread = await r.reviewThreads.findById(e.threadId);
+      const document = await r.documents.findById(e.documentId);
+      const revision = await r.revisions.findCurrent(e.documentId);
+      const comments = await r.reviewComments.listByThread(e.threadId);
+      const comment = comments.find(c => c.id === e.commentId);
+      if (!thread || thread.visibility === "HIDDEN" || isRetractedThread(comments)) continue;
+      if (!document || !revision || !comment || comment.deletedAt || comment.visibility === "HIDDEN") continue;
+      const author = await r.users.findById(e.createdByUserId);
+      views.push(projectShareCommentNotification({
+        id: e.id, workspaceId: e.workspaceId, documentId: e.documentId,
+        sourceId: document.sourceId, documentTitle: revision.title,
+        threadId: e.threadId, commentId: e.commentId,
+        authorName: author?.name, body: comment.body, createdAt: e.createdAt,
+        readAt: e.readAt, threadStatus: thread.status,
+      }));
+    }
+    return views;
+  }
+  async listUnreadForOwner(caller: CallerContext) {
+    return this.uow.run(async r => ({
+      notifications: await this.notificationViews(r, await r.shareCommentEvents.listUnreadByRecipient(caller.identity.id)),
+    }));
+  }
+  /** A bounded, cursor-paged cross-document activity feed, including already-read comments. */
+  async listActivityForOwner(caller: CallerContext, before?: { createdAt: Date; id: string }) {
     return this.uow.run(async r => {
-      const events=await r.shareCommentEvents.listUnreadByRecipient(caller.identity.id);
-      const views=[];
-      for(const e of events) {
-        const thread=await r.reviewThreads.findById(e.threadId);
-        const document=await r.documents.findById(e.documentId);
-        const revision=await r.revisions.findCurrent(e.documentId);
-        const comments=await r.reviewComments.listByThread(e.threadId);
-        const comment=comments.find(c=>c.id===e.commentId);
-        if(!thread || thread.visibility==="HIDDEN" || isRetractedThread(comments)) continue;
-        if(!document || !revision || !comment || comment.deletedAt || comment.visibility==="HIDDEN") continue;
-        const author=await r.users.findById(e.createdByUserId);
-        views.push(projectShareCommentNotification({id:e.id,workspaceId:e.workspaceId,documentId:e.documentId,sourceId:document.sourceId,documentTitle:revision.title,threadId:e.threadId,commentId:e.commentId,authorName:author?.name,body:comment.body,createdAt:e.createdAt}));
-      }
-      return {notifications:views};
+      const size = 50;
+      const events = await r.shareCommentEvents.listRecentByRecipient(caller.identity.id, before, size + 1);
+      const page = events.slice(0, size);
+      return {
+        notifications: await this.notificationViews(r, page),
+        nextCursor: events.length > size && page.length
+          ? { createdAt: page[page.length - 1].createdAt.toISOString(), id: page[page.length - 1].id }
+          : null,
+      };
     });
+  }
+  async markEventRead(caller: CallerContext, eventId: string) {
+    await this.uow.run(r => r.shareCommentEvents.markEventRead(caller.identity.id, eventId, this.clock()));
+  }
+  async markAllActivityRead(caller: CallerContext) {
+    await this.uow.run(r => r.shareCommentEvents.markAllRead(caller.identity.id, this.clock()));
   }
   /** Marks this document's events read. Owner scope first: a non-owner reaches nothing. */
   async markDocumentRead(caller:CallerContext,documentId:string) {
