@@ -171,3 +171,62 @@ test.describe("blocks in the rendered editor", () => {
     await expect(page.locator("article").first().locator("blockquote")).toHaveText("Quoted words", ROUND_TRIP);
   });
 });
+
+
+test("slash blocks render while editing and survive save and reopen", async ({ page }, testInfo) => {
+  const workspaceId = await mySpace(page);
+  const stamp = unique("Rendered blocks");
+  const target = `Target ${stamp}`;
+  const targetUrl = await createNote(page, workspaceId, target, "Link target.");
+  const url = await createNote(page, workspaceId, stamp, "Opening paragraph.");
+  let surface = await openEditor(page, url);
+  async function insert(query: string) {
+    await page.keyboard.press("Alt+F10");
+    await page.getByRole("button", { name: "Add paragraph below" }).click();
+    await page.keyboard.type(`/${query}`);
+    await page.getByRole("listbox").getByRole("option", { name: new RegExp(query, "i") }).click();
+  }
+  await insert("toggle");
+  await expect(surface.locator("details")).toHaveAttribute("open", "");
+  await page.keyboard.type(`See [[${target}]].`);
+  const summary = surface.locator("summary");
+  await summary.click({ position: { x: 22, y: 8 } });
+  await page.keyboard.type("Project notes");
+  await summary.click({ position: { x: 5, y: 8 } });
+  await expect(surface.locator("details")).not.toHaveAttribute("open");
+  await summary.click({ position: { x: 5, y: 8 } });
+  await expect(surface.locator("details")).toHaveAttribute("open", "");
+  await insert("callout");
+  await page.keyboard.type("A useful note.");
+  await expect(surface.locator(".kh-callout-title")).toHaveText("Note");
+  await expect(surface.locator(".kh-callout-marker")).toBeHidden();
+  await insert("table");
+  await page.keyboard.type("Task");
+  await page.keyboard.press("Tab");
+  await page.keyboard.type("Status");
+  await page.keyboard.press("Tab");
+  await page.keyboard.type("Rendering");
+  await page.keyboard.press("Tab");
+  await page.keyboard.type("Ready");
+  await expect(surface.locator("table th")).toHaveText(["Task", "Status"]);
+  await expect(surface.locator("table td")).toHaveText(["Rendering", "Ready"]);
+  const editHeight = (await surface.locator("th").first().boundingBox())!.height;
+  await page.screenshot({ path: testInfo.outputPath("rendered-blocks-desktop.png"), fullPage: true });
+  const markdown = await save(page);
+  expect(markdown).toContain(`<summary>Project notes</summary>`);
+  expect(markdown).toContain(`[[${target}]]`);
+  const article = page.locator("article").first();
+  await expect(article.getByRole("link", { name: target, exact: true })).toBeVisible(ROUND_TRIP);
+  await expect(article.locator("[data-callout]")).toContainText("A useful note.");
+  const readHeight = (await article.locator("th").first().boundingBox())!.height;
+  expect(Math.abs(editHeight - readHeight)).toBeLessThanOrEqual(1);
+  surface = await openEditor(page, url);
+  await expect(surface.locator("summary")).toHaveText("Project notes");
+  await expect(surface.locator("table td")).toHaveText(["Rendering", "Ready"]);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(surface.locator(".kh-markdown-table")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await page.screenshot({ path: testInfo.outputPath("rendered-blocks-mobile.png"), fullPage: true });
+  await page.goto(targetUrl);
+  await expect(page.locator("[data-backlinks]").getByRole("heading", { name: "Linked from 1 document" })).toBeVisible(ROUND_TRIP);
+});

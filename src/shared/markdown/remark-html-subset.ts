@@ -20,8 +20,13 @@ function element(tagName: string, children: RootContent[], properties: Record<st
   return { type: "khElement", data: { hName: tagName, hProperties: properties }, children } as unknown as RootContent;
 }
 
+/** Decode the three entities the editor emits, once, into a safe text node. */
+export function decodeSummaryText(text: string): string {
+  return text.replace(/&(amp|lt|gt);/g, (_match, name: string) => ({ amp: "&", lt: "<", gt: ">" })[name]!);
+}
+
 function summary(text: string): RootContent {
-  return element("summary", [{ type: "text", value: text }]);
+  return element("summary", [{ type: "text", value: decodeSummaryText(text) }]);
 }
 
 function inlineTag(node: Nodes): Tag | null {
@@ -31,7 +36,7 @@ function inlineTag(node: Nodes): Tag | null {
   return { name, close: match[1] === "/", make: (inner) => element(name, inner) };
 }
 
-function detailsTag(node: Nodes): Tag | null {
+function detailsTag(node: Nodes, editing = false): Tag | null {
   if (node.type !== "html") return null;
   const html = node.value.trim();
   if (DETAILS_CLOSE.test(html)) return { name: "details", close: true };
@@ -44,7 +49,8 @@ function detailsTag(node: Nodes): Tag | null {
       // The summary may be on the opening line, or the block right after it.
       const alone = open[2] === undefined && inner[0]?.type === "html" ? SUMMARY_ALONE.exec(inner[0].value.trim()) : null;
       // Without one of its own it is given one: the browser's would be drawn its way, not the product's.
-      const title = (open[2] ?? alone?.[1] ?? "").trim() || "Details";
+      const rawTitle = open[2] ?? alone?.[1] ?? "";
+      const title = editing ? rawTitle : rawTitle.trim() || "Details";
       const body = element("div", alone ? inner.slice(1) : inner);
       return element("details", [summary(title), body], open[1] ? { open: true } : {});
     },
@@ -93,6 +99,20 @@ export function remarkHtmlSubset() {
       if (!("children" in node)) return;
       // A `<details>` holds blocks and sits among blocks; the inline tags hold a line's content and sit in one.
       pair(node, FLOW.has(node.type) || node.data?.hName === "div" ? detailsTag : inlineTag);
+    });
+  };
+}
+
+/** The editor uses the same strict disclosure recognizer, without converting inline HTML. */
+export function remarkDetailsSubset() {
+  return (tree: Root) => {
+    visit(tree, (node) => {
+      if ("children" in node && (FLOW.has(node.type) || node.data?.hName === "div")) pair(node, child => detailsTag(child, true));
+    });
+    visit(tree, node => {
+      if ("children" in node && node.data?.hName === "div") {
+        node.children = node.children.map(child => child.type === "html" ? { type: "paragraph", children: [child] } : child) as typeof node.children;
+      }
     });
   };
 }

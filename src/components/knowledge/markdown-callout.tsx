@@ -7,7 +7,7 @@ import { CALLOUT_ATTRIBUTE, type CalloutKind } from "@/shared/markdown/remark-ca
  * read in the text colour (design language §8, "Callouts"). There is no colour for information or
  * for emphasis, so a note and an important are neutral and told apart by their glyph and word.
  */
-const CALLOUTS: Record<CalloutKind, { title: string; Icon: LucideIcon; line: string; glyph: string }> = {
+export const CALLOUTS: Record<CalloutKind, { title: string; Icon: LucideIcon; line: string; glyph: string }> = {
   note: { title: "Note", Icon: Info, line: "border-kh-border-strong", glyph: "text-kh-text-muted" },
   tip: { title: "Tip", Icon: Lightbulb, line: "border-kh-success", glyph: "text-kh-success" },
   important: { title: "Important", Icon: MessageSquareWarning, line: "border-kh-text-secondary", glyph: "text-kh-text" },

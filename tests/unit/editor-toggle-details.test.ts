@@ -41,7 +41,7 @@ describe("toolbar conversion into a details disclosure", () => {
     v.dispatch(v.state.tr.setSelection(TextSelection.create(v.state.doc, 1)));
     expect(convertBlockToDetails(v)).toBe(true);
     const saved = editor.getMarkdown();
-    expect(saved).toContain("<details>");
+    expect(saved).toContain("<details open>");
     expect(saved).toContain("<summary>Fold me</summary>");
     expect(saved).toContain("</details>");
     const reopened = await open(saved);
@@ -81,4 +81,19 @@ describe("toolbar conversion into a details disclosure", () => {
     expect(flipNearestDetails(v, 1)).toBe(true);
     expect(editor.getMarkdown()).not.toContain("<details open>");
   });
+});
+
+it('moves the caret to the visible summary when folding from the body', async () => {
+  const editor = await open('<details open>\n<summary>Title</summary>\n\nbody\n\n</details>');
+  const v = view(editor);
+  let body = 0;
+  v.state.doc.descendants((node, pos) => { if (node.type.name === 'paragraph') body = pos + 1; });
+  v.dispatch(v.state.tr.setSelection(TextSelection.create(v.state.doc, body)));
+  expect(flipNearestDetails(v, body)).toBe(true);
+  expect(v.state.selection.$from.parent.type.name).toBe('details_summary');
+});
+it('does not toggle a readonly editor', async () => {
+  const editor = await open('<details open>\n<summary>Title</summary>\n\nbody\n\n</details>');
+  editor.setEditable(false);
+  expect(flipNearestDetails(view(editor), 1)).toBe(false);
 });

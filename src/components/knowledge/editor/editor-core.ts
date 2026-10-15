@@ -3,10 +3,11 @@ import type { Ctx, MilkdownPlugin } from "@milkdown/kit/ctx";
 import { history } from "@milkdown/kit/plugin/history";
 import { listener, listenerCtx } from "@milkdown/kit/plugin/listener";
 import { commonmark, hardbreakFilterNodes, imageSchema } from "@milkdown/kit/preset/commonmark";
-import { gfm } from "@milkdown/kit/preset/gfm";
+import { gfm, tableSchema } from "@milkdown/kit/preset/gfm";
 import { Plugin, Selection, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { $ctx, $prose, getMarkdown, replaceAll } from "@milkdown/kit/utils";
+import { detailsPlugins, detailsRemark } from "./details-node";
 import { readerHints } from "./reader-hints";
 import { flipNearestDetails } from "./details-toggle";
 import { configureCellBreakStringify, remarkCellBreaks } from "./table-cell-breaks";
@@ -65,6 +66,12 @@ const safeImageSchema = imageSchema.extendSchema((previous) => (ctx) => {
   };
 });
 const commonmarkWithSafeImages = commonmark.filter((plugin) => plugin !== imageSchema[0] && plugin !== imageSchema[1]);
+
+const scrollableTable = tableSchema.extendSchema(previous => ctx => ({
+  ...previous(ctx),
+  toDOM: () => ["div", { class: "kh-markdown-table kh-editor-table", role: "region", "aria-label": "Table", tabindex: "0" }, ["table", ["tbody", 0]]],
+}));
+const gfmWithScrollableTables = gfm.filter(plugin => plugin !== tableSchema[0] && plugin !== tableSchema[1]);
 
 type MarkdownNode = { type: string; title?: string | null; children?: MarkdownNode[] };
 type DefinitionNode = MarkdownNode & { identifier?: string; url?: string };
@@ -273,10 +280,13 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
         options.onMarkdown(markdown);
       });
     })
+    .use(detailsRemark)
     .use(commonmarkWithSafeImages)
+    .use(detailsPlugins)
     .use(safeImageSchema)
     .use(imagePolicyCtx)
-    .use(gfm)
+    .use(gfmWithScrollableTables)
+    .use(scrollableTable)
     // In every host of the editor, not an extra: a document with a wikilink must survive being opened in it.
     .use(wikiLinkPlugins)
     .use(readerHints)

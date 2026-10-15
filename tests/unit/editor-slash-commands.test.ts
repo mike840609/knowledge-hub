@@ -38,7 +38,7 @@ it.each([
   ['numbered', 'ordered_list', '1. New block'], ['to-do', 'bullet_list', '- [ ] New block'],
   ['quote', 'blockquote', '> New block'], ['code', 'code_block', 'New block'],
   ['divider', 'hr', '---'], ['text', 'paragraph', 'New block'],
-  ['table', 'table', 'New block'], ['toggle', 'paragraph', '<summary>'], ['callout', 'blockquote', '[!NOTE]'],
+  ['table', 'table', 'New block'], ['toggle', 'details', '<summary>'], ['callout', 'blockquote', '[!NOTE]'],
 ])('converts /%s as one undoable command and saves valid Markdown', async (query, type, markdown) => {
   const { editor, view } = await open();
   view.dispatch(view.state.tr.insertText('/' + query));
@@ -100,11 +100,8 @@ it('inserts an empty toggle with the caret in its body', async () => {
   const { editor, view } = await open();
   view.dispatch(view.state.tr.insertText('/toggle'));
   key(view.dom, 'Enter');
-  let opener = false;
-  view.state.doc.descendants((node) => {
-    if (node.type.name === "html" && String(node.attrs.value ?? "").startsWith("<details>")) opener = true;
-  });
-  expect(opener).toBe(true);
+  expect(view.dom.querySelector('details')?.open).toBe(true);
+  expect(view.dom.querySelector('summary')).not.toBeNull();
   view.dispatch(view.state.tr.insertText('New block'));
   expect(editor.getMarkdown()).toContain('</summary>\n\nNew block\n\n</details>');
 });

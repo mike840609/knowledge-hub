@@ -185,3 +185,9 @@ describe("the HTML subset in the rendered document", () => {
     expect(ids).toEqual(outline.map((entry) => entry.slug));
   });
 });
+
+it('shows summary characters escaped by the editor as text, never markup', () => {
+  const html = shape('<details>\n<summary>A &amp; B &lt;img src=x&gt;</summary>\n\nbody\n\n</details>');
+  expect(html).toContain('<summary>A &amp; B &lt;img src=x&gt;</summary>');
+  expect(tags(html).has('img')).toBe(false);
+});
