@@ -2,7 +2,7 @@ import {expect,test} from "./fixtures/test";
 import {PHASE3_TEAM_ID,phase3NoSessionOrigin,phase3Origin,phase3UnconfiguredOrigin} from "./fixtures/phase3-identities";
 test.use({timezoneId:"Asia/Taipei"});
 
-test("personal collection creates a reading path, annotations, reorders and opens latest document",async({page,request})=>{
+test("personal collection creates a reading path, annotations, reorders and opens latest document",async({page,request},testInfo)=>{
  const origin=phase3Origin("reviewOwner");
  const navigation=await (await request.get(`${origin}/api/workspaces`)).json();
  const workspaceId=navigation.items.find((item:{type:string})=>item.type==="PERSONAL").id as string;
@@ -32,6 +32,17 @@ test("personal collection creates a reading path, annotations, reorders and open
  await reading.getByRole("textbox",{name:"Reading note for item 1"}).fill("Read this before the API spec.");
  await reading.getByRole("button",{name:"Save note"}).first().click();
  await expect(page.getByText("Read this before the API spec.")).toBeVisible();
+ // Capture the actual rendered Next.js UI for PR review, not a mockup.
+ await page.setViewportSize({width:1440,height:900});
+ await page.screenshot({path:testInfo.outputPath("knowledge-collection-detail-desktop.png"),fullPage:true});
+ await page.setViewportSize({width:390,height:844});
+ await page.screenshot({path:testInfo.outputPath("knowledge-collection-detail-mobile.png"),fullPage:true});
+ await page.setViewportSize({width:1440,height:900});
+ await page.goto(`${origin}/w/${workspaceId}/collections`);
+ await expect(page.getByRole("link",{name:"Authentication onboarding"})).toBeVisible();
+ await page.screenshot({path:testInfo.outputPath("knowledge-collection-list-desktop.png"),fullPage:true});
+ await page.goto(`${origin}/w/${workspaceId}/collections/${collectionId}`);
+ await expect(reading.getByRole("link",{name:"Incident runbook"})).toBeVisible();
  await reading.getByRole("button",{name:"Move document 2 up"}).click();
  await expect(reading.locator("li").first().getByRole("link",{name:"Incident runbook"})).toBeVisible();
  await reading.getByRole("link",{name:"Incident runbook"}).click();
