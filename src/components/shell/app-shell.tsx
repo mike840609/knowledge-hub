@@ -96,12 +96,12 @@ export function AppShell({ model, children }: { model: WorkspaceShellModel; chil
       {!authorization.confirmed && !authorization.revoked && <p role="alert" className="bg-kh-bg p-3 text-body text-kh-danger">Unable to confirm workspace access. Changes are paused. <button className="underline" onClick={() => void authorization.refresh()}>Retry</button></p>}
       {authorization.access.workspace.lifecycleState === "ARCHIVED" && <ArchivedWorkspaceBanner workspaceId={model.workspace.id} canRestore={authorization.confirmed && authorization.access.actions.canRestore} />}
       <div className="flex min-h-0 flex-1">
-        <aside className={`hidden shrink-0 border-r border-kh-border bg-kh-bg-sunken lg:flex lg:flex-col ${navCollapsed ? "w-12" : "w-52"}`}>
-          {/* The full wordmark, Inbox and collapse control share the 208px header. */}
-          <div className={`flex h-12 shrink-0 items-center gap-2 ${navCollapsed ? "justify-center px-2" : "px-3 pr-2"}`}>
+        <aside className={`hidden shrink-0 border-r border-kh-border bg-kh-bg-sunken lg:flex lg:flex-col ${navCollapsed ? "w-12" : "w-44"}`}>
+          {/* Keep the full wordmark with Inbox and collapse controls in the compact 176px header. */}
+          <div className={`flex h-12 shrink-0 items-center gap-1 ${navCollapsed ? "justify-center px-2" : "px-2"}`}>
             {navCollapsed ? null : <><span className="min-w-0 flex-1 whitespace-nowrap text-caption font-semibold text-kh-text">Knowledge Hub</span>{authorization.access.workspace.type === "PERSONAL" ? <InboxPopover workspaceId={model.workspace.id} /> : null}</>}
             <Tooltip label={navCollapsed ? "Expand navigation" : "Collapse navigation"} shortcut={NAV_TOGGLE_SHORTCUT} side={navCollapsed ? "right" : "bottom"}>
-              <button type="button" onClick={toggleNav} aria-label={navCollapsed ? "Expand navigation" : "Collapse navigation"} aria-keyshortcuts={NAV_TOGGLE_SHORTCUT} className={buttonClasses({ variant: "ghost", icon: true })}>
+              <button type="button" onClick={toggleNav} aria-label={navCollapsed ? "Expand navigation" : "Collapse navigation"} aria-keyshortcuts={NAV_TOGGLE_SHORTCUT} className={buttonClasses({ variant: "ghost", icon: true, size: navCollapsed ? "md" : "sm" })}>
                 {navCollapsed ? <PanelLeftOpen className="h-4 w-4" aria-hidden="true" /> : <PanelLeftClose className="h-4 w-4" aria-hidden="true" />}
               </button>
             </Tooltip>
