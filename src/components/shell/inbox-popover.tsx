@@ -88,7 +88,8 @@ export function InboxPopover({ workspaceId, placement = "header" }: { workspaceI
       <Popover.Portal>
         <Popover.Positioner
           className="z-50"
-          align={placement === "compact" ? "start" : "end"}
+          align={placement === "mobile" ? "end" : "start"}
+          alignOffset={placement === "header" ? 32 : 0}
           side={placement === "compact" ? "right" : "bottom"}
           sideOffset={8}
         >
