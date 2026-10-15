@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { KnowledgeCollectionError } from "@/modules/knowledge/domain/knowledge-collection-errors";
 import { applicationServices } from "./composition";
 import { toWorkspaceErrorResponse } from "./http-error-response";
 import { assertReviewOrigin } from "./review-origin";
@@ -30,9 +31,9 @@ export async function collectionHttp(
 /** Reject oversized requests and non-object/array bodies before passing values to the domain. */
 export async function collectionBody(request: Request): Promise<Record<string, unknown>> {
   const text = await request.text();
-  if (text.length > 16_384) throw new Error("Collection request body too large.");
+  if (text.length > 16_384) throw new KnowledgeCollectionError("COLLECTION_INVALID", "Collection request body too large.");
   let value: unknown;
-  try { value = JSON.parse(text); } catch { throw new Error("Invalid collection JSON."); }
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid collection JSON object.");
+  try { value = JSON.parse(text); } catch { throw new KnowledgeCollectionError("COLLECTION_INVALID", "Invalid collection JSON."); }
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new KnowledgeCollectionError("COLLECTION_INVALID", "Invalid collection JSON object.");
   return value as Record<string, unknown>;
 }
