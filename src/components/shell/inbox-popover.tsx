@@ -79,7 +79,7 @@ export function InboxPopover({ workspaceId, placement = "header" }: { workspaceI
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger
         aria-label={unread.length ? `Inbox, ${unread.length} unread comments` : "Inbox"}
-        className={buttonClasses({ variant: "ghost", icon: true, className: "relative shrink-0" })}
+        className={buttonClasses({ variant: "ghost", icon: true, size: placement === "header" ? "sm" : "md", className: "relative shrink-0" })}
         title="Inbox"
       >
         <Inbox className="h-4 w-4" aria-hidden="true" />
