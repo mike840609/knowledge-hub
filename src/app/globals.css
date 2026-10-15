@@ -22,6 +22,7 @@
   --kh-bg-selected: #eef0ff;
   --kh-border: #e5e7ee;
   --kh-border-strong: #828797;
+  --kh-table-border: #dfe1e7;
   --kh-text: #1d1f24;
   --kh-text-secondary: #3b4250;
   --kh-text-muted: #61697a;
@@ -76,6 +77,7 @@
   --kh-bg-selected: #23253d;
   --kh-border: #1e2127;
   --kh-border-strong: #70737a;
+  --kh-table-border: #303239;
   --kh-text: #e7e8ec;
   --kh-text-secondary: #bfc5d1;
   --kh-text-muted: #9ba2b0;
@@ -298,15 +300,6 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   }
   .kh-editor pre code {
     @apply bg-transparent p-0;
-  }
-  .kh-editor .kh-editor-table {
-    @apply my-4 w-full overflow-auto rounded-md border border-kh-border;
-  }
-  .kh-editor table {
-    @apply w-full border-collapse text-body;
-  }
-  .kh-editor :is(th, td) > p {
-    @apply my-0;
   }
   .kh-editor .kh-callout-marker {
     display: none;
@@ -721,14 +714,39 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-review-document[data-review-inline] .kh-review-thread-list[data-positioned] > [data-review-draft] { z-index: 1; }
 
 /* A long table scrolls in its own box, both ways, and keeps its header in sight. */
-.kh-markdown-table { max-height: 70vh; }
-.kh-markdown-table th { position: sticky; top: 0; z-index: 1; }
-.kh-markdown-table :is(th, td) { min-width: 8rem; overflow-wrap: anywhere; }
-.kh-markdown-table tr:hover td { background: var(--kh-bg-subtle); }
+.kh-markdown-table {
+  @apply my-4 w-full overflow-auto rounded-md;
+  border: 1px solid var(--kh-table-border);
+  max-height: 70vh;
+}
+.kh-markdown-table table { @apply w-full border-separate border-spacing-0 text-body; }
+.kh-markdown-table table :is(th, td) {
+  border: 0;
+  border-right: 1px solid var(--kh-table-border);
+  border-bottom: 1px solid var(--kh-table-border);
+  padding: 0.5rem 0.75rem;
+  color: var(--kh-text);
+  vertical-align: top;
+  min-width: 8rem;
+  overflow-wrap: anywhere;
+}
+.kh-markdown-table table tr > :last-child { border-right: 0; }
+.kh-markdown-table table > :last-child > tr:last-child > :is(th, td) { border-bottom: 0; }
+.kh-markdown-table table th {
+  background: var(--kh-bg-raised);
+  color: var(--kh-text-secondary);
+  font-weight: 500;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+/* ProseMirror wraps cell text in paragraphs; the reader renders it inline.
+   Override the shared prose paragraph margins in both surfaces. */
+.kh-markdown-table :is(th, td) > p { margin: 0; }
 
 @media print {
   .kh-markdown-table { max-height: none; overflow: visible; }
-  .kh-markdown-table th { position: static; }
+  .kh-markdown-table table th { position: static; }
 }
 
 /* Block controls have a gutter of their own, inside the editor's left edge; prose stays selectable.
@@ -736,10 +754,11 @@ input[type="search"]::-webkit-search-cancel-button:hover {
    that, the pane clips what does not fit. */
 .kh-editor-blocks { padding-left: 3.5rem; margin-left: -3.5rem; }
 .kh-block-gutter { position: fixed; z-index: 30; display: flex; gap: 2px; }
-.kh-table-actions { position: fixed; z-index: 31; display: flex; gap: 4px; padding: 3px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); box-shadow: 0 2px 8px rgb(0 0 0 / 12%); }
+.kh-table-actions { position: fixed; z-index: 31; display: flex; gap: 4px; padding: 3px; max-width: calc(100vw - 16px); flex-wrap: wrap; border: 1px solid var(--kh-table-border); border-radius: 6px; color: var(--kh-text-secondary); background: var(--kh-bg-raised); box-shadow: var(--kh-shadow-popover); }
 .kh-table-actions[hidden] { display: none; }
-.kh-table-actions button { padding: 2px 6px; border-radius: 4px; font-size: 12px; white-space: nowrap; }
-.kh-table-actions button:hover, .kh-table-actions button:focus-visible { background: var(--muted); }
+.kh-table-actions button { padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; }
+.kh-table-actions button:hover { color: var(--kh-text); background: var(--kh-bg-hover); }
+.kh-table-actions button:focus-visible { outline: 2px solid var(--kh-focus); outline-offset: -2px; }
 .kh-block-gutter[hidden], .kh-block-move-menu[hidden], .kh-slash-menu[hidden] { display: none; }
 .kh-block-gutter button {
   @apply flex size-6 items-center justify-center rounded-md text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text kh-focus-ring;

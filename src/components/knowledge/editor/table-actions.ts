@@ -1,5 +1,5 @@
-import { Plugin } from "@milkdown/kit/prose/state";
-import { addColumnAfter, addRowAfter, isInTable } from "@milkdown/kit/prose/tables";
+import { Plugin, type Command } from "@milkdown/kit/prose/state";
+import { addColumnAfter, addRowAfter, deleteColumn, deleteRow, deleteTable, isInTable } from "@milkdown/kit/prose/tables";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
 
@@ -12,19 +12,37 @@ export function tableActions() {
       controls.hidden = true;
       controls.setAttribute("role", "group");
       controls.setAttribute("aria-label", "Table actions");
-      const row = document.createElement("button");
-      row.type = "button";
-      row.textContent = "+ Row";
-      row.setAttribute("aria-label", "Add row below");
-      const column = document.createElement("button");
-      column.type = "button";
-      column.textContent = "+ Column";
-      column.setAttribute("aria-label", "Add column right");
-      controls.append(row, column);
+      const actions: [string, string, Command][] = [
+        ["+ Row", "Add row below", addRowAfter],
+        ["+ Column", "Add column right", addColumnAfter],
+        ["Delete row", "Delete row", deleteRow],
+        ["Delete column", "Delete column", deleteColumn],
+        ["Delete table", "Delete table", deleteTable],
+      ];
+      const cleanup = actions.map(([label, ariaLabel, command]) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = label;
+        button.setAttribute("aria-label", ariaLabel);
+        const onMouseDown = (event: MouseEvent) => event.preventDefault();
+        const onClick = () => {
+          if (!view.editable || !command(view.state)) return;
+          command(view.state, transaction => view.dispatch(transaction.scrollIntoView()));
+          view.focus();
+          position();
+        };
+        button.addEventListener("mousedown", onMouseDown);
+        button.addEventListener("click", onClick);
+        controls.appendChild(button);
+        return () => {
+          button.removeEventListener("mousedown", onMouseDown);
+          button.removeEventListener("click", onClick);
+        };
+      });
       document.body.appendChild(controls);
 
       function position() {
-        if (!view.editable || !view.hasFocus() || !isInTable(view.state)) {
+        if (!view.editable || (!view.hasFocus() && !controls.contains(document.activeElement)) || !isInTable(view.state)) {
           controls.hidden = true;
           return;
         }
@@ -44,21 +62,8 @@ export function tableActions() {
         controls.style.top = `${Math.max(8, rect.top - controls.offsetHeight - 4)}px`;
       }
 
-      function add(kind: "row" | "column") {
-        const command = kind === "row" ? addRowAfter : addColumnAfter;
-        if (!view.editable || !command(view.state)) return;
-        command(view.state, transaction => view.dispatch(transaction.scrollIntoView()));
-        view.focus();
-        position();
-      }
-      const onMouseDown = (event: MouseEvent) => event.preventDefault();
-      const onRow = () => add("row");
-      const onColumn = () => add("column");
       const onFocus = () => requestAnimationFrame(position);
-      row.addEventListener("mousedown", onMouseDown);
-      column.addEventListener("mousedown", onMouseDown);
-      row.addEventListener("click", onRow);
-      column.addEventListener("click", onColumn);
+      controls.addEventListener("focusout", onFocus);
       view.dom.addEventListener("focusin", onFocus);
       view.dom.addEventListener("focusout", onFocus);
       window.addEventListener("scroll", position, true);
@@ -67,10 +72,8 @@ export function tableActions() {
       return {
         update: position,
         destroy() {
-          row.removeEventListener("mousedown", onMouseDown);
-          column.removeEventListener("mousedown", onMouseDown);
-          row.removeEventListener("click", onRow);
-          column.removeEventListener("click", onColumn);
+          cleanup.forEach(remove => remove());
+          controls.removeEventListener("focusout", onFocus);
           view.dom.removeEventListener("focusin", onFocus);
           view.dom.removeEventListener("focusout", onFocus);
           window.removeEventListener("scroll", position, true);
