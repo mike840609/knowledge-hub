@@ -1,4 +1,6 @@
 "use client";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { COLLECTION_ADD_REQUEST_EVENT } from "@/components/actions/action-menu";
@@ -74,11 +76,11 @@ export function CollectionAddDialogHost({workspaceId}:{workspaceId:string}) {
       {error?<p role="alert" className="mt-3 text-body text-kh-danger">{error}</p>:null}
       {notice?<p role="status" className="mt-3 text-body">{notice}</p>:null}
       <label htmlFor="target-collection" className="mt-4 block text-caption font-medium text-kh-text-muted">Collection</label>
-      <select id="target-collection" value={choice} disabled={busy||choices.length===0} onChange={e=>setChoice(e.target.value)} className="kh-control mt-1 w-full rounded-md border border-kh-border bg-kh-bg px-2 py-2 text-body">
+      <Select id="target-collection" value={choice} disabled={busy||choices.length===0} onChange={e=>setChoice(e.target.value)} className="kh-control mt-1 w-full rounded-md border border-kh-border bg-kh-bg px-2 py-2 text-body">
         {choices.length===0?<option value="">No collections available</option>:choices.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-      </select>
+      </Select>
       <label htmlFor="collection-reading-note" className="mt-3 block text-caption font-medium text-kh-text-muted">Reading note (optional)</label>
-      <textarea id="collection-reading-note" value={note} onChange={e=>setNote(e.target.value)} maxLength={500} rows={2} className="kh-control mt-1 w-full rounded-md border border-kh-border bg-kh-bg p-2 text-body" placeholder="Why should someone read this?"/>
+      <Textarea id="collection-reading-note" value={note} onChange={e=>setNote(e.target.value)} maxLength={500} rows={2} className="kh-control mt-1 w-full rounded-md border border-kh-border bg-kh-bg p-2 text-body" placeholder="Why should someone read this?"/>
       <div className="mt-4 flex justify-end gap-2">
         <button className="kh-control rounded-md border border-kh-border px-3 py-2 text-body" type="button" onClick={()=>setTarget(null)} disabled={busy}>Cancel</button>
         <button className="kh-control rounded-md bg-kh-primary px-3 py-2 text-body font-medium text-white disabled:opacity-50" type="button" onClick={()=>void add()} disabled={busy||!selected}>{busy?"Working…":"Add document"}</button>
