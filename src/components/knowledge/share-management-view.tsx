@@ -7,6 +7,7 @@ import { Share2 } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { WorkspaceContentActions } from "./workspace-content-actions";
 import { useEffect, useRef, useState } from "react";
+import { reviewRequest } from "./review-thread-list";
 import Link from "next/link";
 import { Copy, MoreHorizontal, Search, RefreshCw } from "lucide-react";
 import { MenuRoot, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/menu";
@@ -24,10 +25,12 @@ import { writeLinkToClipboard } from "@/components/actions/action-menu";
 import { navigateListRows } from "@/lib/list-row-navigation";
 import type { ManagedShareLink, ShareManagementQuery, ShareManagementStatus } from "@/modules/knowledge/domain/share-management";
 const labels: Record<ShareManagementStatus, string> = { active: "Active", expired: "Expired", revoked: "Revoked", unavailable: "Unavailable" };
+type UnreadShareCount = { documentId: string; unreadCount: number; latestThreadId: string };
 export type ShareManagementModel = { query: ShareManagementQuery; items: ManagedShareLink[]; hasNext: boolean };
 export function ShareManagementView({ workspaceId, model, filterError, hasDocuments = true }: { workspaceId: string; model: ShareManagementModel; filterError?: string; hasDocuments?: boolean }) {
   const router = useRouter(), toast = useToast();
   const [origin, setOrigin] = useState("");
+  const [unreadCounts, setUnreadCounts] = useState<UnreadShareCount[]>([]);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [revoked, setRevoked] = useState<Set<string>>(new Set());
@@ -37,11 +40,40 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
   const fields = useRef(new Map<string, HTMLDivElement>());
   const pending = useRef(false);
   useEffect(() => { setOrigin(window.location.origin); }, []);
+  // Refresh on entry and after reading a discussion. Fetch only aggregated counts,
+  // not the truncated/full-body notification preview used by the global Inbox.
+  useEffect(() => {
+    let mounted = true;
+    const refreshCounts = async () => {
+      try {
+        const result = await reviewRequest<{ counts: UnreadShareCount[] }>("/api/review-notifications/share-counts");
+        if (mounted) setUnreadCounts(result.counts);
+      } catch {
+        // Shares remains usable if notification counts are temporarily unavailable.
+        if (mounted) setUnreadCounts([]);
+      }
+    };
+    void refreshCounts();
+    window.addEventListener("focus", refreshCounts);
+    window.addEventListener("kh:notification-changed", refreshCounts);
+    return () => {
+      mounted = false;
+      window.removeEventListener("focus", refreshCounts);
+      window.removeEventListener("kh:notification-changed", refreshCounts);
+    };
+  }, [workspaceId]);
   useEffect(() => {
     if (!manualCopy) return;
     const field = fields.current.get(manualCopy.id)?.querySelector("input");
     field?.focus(); field?.select();
   }, [manualCopy]);
+  // Multiple share links can point to one document. Show a single badge per
+  // document in the current page, rather than repeating the unread count per link.
+  const firstLinkByDocument = new Map<string, string>();
+  for (const item of model.items) {
+    if (!firstLinkByDocument.has(item.documentId)) firstLinkByDocument.set(item.documentId, item.id);
+  }
+  const unreadByDocument = new Map(unreadCounts.map(count => [count.documentId, count]));
   const confirmedItem = model.items.find(item => item.id === confirming);
   const filtered = !!model.query.q || model.query.status !== "all" || model.query.page > 1;
   const href = (page: number) => `/w/${workspaceId}/shares?${new URLSearchParams({ q: model.query.q, status: model.query.status, page: String(page) })}`;
@@ -82,9 +114,20 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
       {model.items.map(item => {
         const status = revoked.has(item.id) ? "revoked" : item.status;
         const actionLabel = `Share actions for ${item.title} · ${item.label ?? "Untitled link"}`;
+        const notice = firstLinkByDocument.get(item.documentId) === item.id ? unreadByDocument.get(item.documentId) : undefined;
         return <li key={item.id} className="group rounded-md border border-kh-border bg-kh-bg p-3 hover:bg-kh-bg-hover focus-within:bg-kh-bg-hover md:rounded-none md:border-x-0 md:border-t-0 md:py-2">
           <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 md:grid-cols-[minmax(0,1fr)_6rem_7rem_4rem_6rem] md:gap-y-0">
-            <div className="min-w-0"><Link data-list-row className="kh-focus-ring block truncate rounded-md text-body font-medium text-kh-text hover:text-kh-link" href={`/w/${workspaceId}/knowledge/${item.sourceId}/${item.documentId}?includeArchived=true`}>{item.title}</Link><p className="truncate text-caption text-kh-text-muted" title={`${item.sourceName} · ${item.label ?? "Untitled link"}`}>{item.sourceName} · {item.label ?? "Untitled link"}</p></div>
+            <div className="min-w-0">
+              <div className="flex min-w-0 items-center gap-2">
+                <Link data-list-row className="kh-focus-ring min-w-0 flex-1 truncate rounded-md text-body font-medium text-kh-text hover:text-kh-link" href={`/w/${workspaceId}/knowledge/${item.sourceId}/${item.documentId}?includeArchived=true`}>{item.title}</Link>
+                {notice ? <Link
+                  href={`/w/${workspaceId}/knowledge/${item.sourceId}/${item.documentId}?thread=${notice.latestThreadId}`}
+                  aria-label={`Open ${notice.unreadCount} unread comments for ${item.title}`}
+                  className="kh-focus-ring shrink-0 rounded-full bg-kh-bg-selected px-2 py-0.5 text-caption font-semibold text-kh-selected-text hover:bg-kh-highlight"
+                >{notice.unreadCount} new</Link> : null}
+              </div>
+              <p className="truncate text-caption text-kh-text-muted" title={`${item.sourceName} · ${item.label ?? "Untitled link"}`}>{item.sourceName} · {item.label ?? "Untitled link"}</p>
+            </div>
             <span className="row-start-2 text-caption text-kh-text-muted md:row-auto"><span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${status === "active" ? "bg-kh-primary" : "bg-kh-text-muted"}`} />{labels[status]}</span></span>
             <span className="col-span-2 text-caption text-kh-text-muted md:col-span-1"><span className="md:sr-only">Expires </span><Timestamp value={item.expiresAt} variant="date" /></span>
             <span className="col-start-2 row-start-2 whitespace-nowrap text-right text-caption tabular-nums text-kh-text-muted md:col-auto md:row-auto">{item.totalViews.toLocaleString()}<span className="md:sr-only"> {item.totalViews === 1 ? "view" : "views"}</span></span>

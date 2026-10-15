@@ -51,6 +51,10 @@ export class DocumentReviewService {
       notifications: await this.notificationViews(r, await r.shareCommentEvents.listUnreadByRecipient(caller.identity.id)),
     }));
   }
+  /** Lightweight counts for My shares. No comment bodies or full revisions are loaded. */
+  async listUnreadShareCountsForOwner(caller: CallerContext) {
+    return this.uow.run(r => r.shareCommentEvents.listUnreadCountsByRecipient(caller.identity.id));
+  }
   /** A bounded, cursor-paged cross-document activity feed, including already-read comments. */
   async listActivityForOwner(caller: CallerContext, before?: { createdAt: Date; id: string }) {
     return this.uow.run(async r => {

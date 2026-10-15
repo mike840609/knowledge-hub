@@ -1,6 +1,6 @@
 import { asDate, asNullableDate, type DbRow, type QueryConnection } from "./shared";
 import type { ShareCommentEvent } from "@/modules/knowledge/domain/share-comment-event";
-import type { ShareCommentEventRepository } from "@/modules/knowledge/ports/share-comment-event-repository";
+import type { ShareCommentEventRepository, ShareDocumentUnreadCount } from "@/modules/knowledge/ports/share-comment-event-repository";
 function map(row: DbRow): ShareCommentEvent {
   return {
     id: String(row.id), workspaceId: String(row.workspace_id), documentId: String(row.document_id),
@@ -25,6 +25,38 @@ export class MariaDbShareCommentEventsRepository implements ShareCommentEventRep
       [recipientUserId],
     );
     return rows.map(map);
+  }
+  /**
+   * Counts visible, non-retracted link-origin comments without loading comment bodies or
+   * truncating at the 100-entry unread Inbox preview limit.
+   *
+   * Pick the newest unread thread per document so the Shares badge opens its discussion.
+   */
+  async listUnreadCountsByRecipient(recipientUserId: string): Promise<ShareDocumentUnreadCount[]> {
+    const rows = await this.connection.query<DbRow[]>(
+      `SELECT unread.document_id, unread.thread_id, unread.unread_count
+       FROM (
+         SELECT e.document_id, e.thread_id,
+                COUNT(*) OVER (PARTITION BY e.document_id) AS unread_count,
+                ROW_NUMBER() OVER (PARTITION BY e.document_id
+                                   ORDER BY e.created_at DESC, e.id DESC) AS row_num
+         FROM share_comment_events e
+         JOIN workspaces w ON w.id = e.workspace_id
+         JOIN document_review_threads t ON t.id = e.thread_id
+         JOIN document_review_comments c ON c.id = e.comment_id
+         WHERE w.personal_owner_user_id = ? AND w.workspace_type = 'PERSONAL'
+           AND e.read_at IS NULL
+           AND t.visibility = 'VISIBLE'
+           AND c.deleted_at IS NULL AND c.visibility = 'VISIBLE'
+       ) unread
+       WHERE unread.row_num = 1`,
+      [recipientUserId],
+    );
+    return rows.map(row => ({
+      documentId: String(row.document_id),
+      unreadCount: Number(row.unread_count),
+      latestThreadId: String(row.thread_id),
+    }));
   }
   async listRecentByRecipient(recipientUserId: string, before: { createdAt: Date; id: string } | undefined, limit: number): Promise<ShareCommentEvent[]> {
     const cursor = before ? "AND (e.created_at < ? OR (e.created_at = ? AND e.id < ?))" : "";

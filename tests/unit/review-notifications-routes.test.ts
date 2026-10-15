@@ -4,20 +4,22 @@ vi.mock("@/server/composition", () => ({ applicationServices: mocks.services }))
 import { GET as unread } from "@/app/api/review-notifications/unread/route";
 import { POST as markRead } from "@/app/api/review-notifications/mark-read/route";
 import { GET as activity, POST as activityAction } from "@/app/api/review-notifications/activity/route";
+import { GET as shareCounts } from "@/app/api/review-notifications/share-counts/route";
 afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks(); });
 function authed(notifications: unknown[] = []) {
   const markEventRead = vi.fn().mockResolvedValue(undefined);
   const markAllActivityRead = vi.fn().mockResolvedValue(undefined);
   const listActivityForOwner = vi.fn().mockResolvedValue({ notifications, nextCursor: null });
+  const listUnreadShareCountsForOwner = vi.fn().mockResolvedValue([{ documentId: "d1", unreadCount: 3, latestThreadId: "t1" }]);
   mocks.services.mockReturnValue({
     establishTrustedCaller: async () => ({ caller: { identity: { id: "owner-1" } } }),
     reviews: {
       listUnreadForOwner: async () => ({ notifications }),
       markDocumentRead: async () => {},
-      markEventRead, markAllActivityRead, listActivityForOwner,
+      markEventRead, markAllActivityRead, listActivityForOwner, listUnreadShareCountsForOwner,
     },
   });
-  return { markEventRead, markAllActivityRead, listActivityForOwner };
+  return { markEventRead, markAllActivityRead, listActivityForOwner, listUnreadShareCountsForOwner };
 }
 describe("review notification routes", () => {
   it("GET unread returns the owner's notifications", async () => {
@@ -37,6 +39,13 @@ describe("review notification routes", () => {
     const response = await markRead(new Request("http://127.0.0.1:3000/api/review-notifications/mark-read", { method: "POST", headers: { Origin: "http://127.0.0.1:3000" }, body: JSON.stringify({ documentId: "d1" }) }));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ ok: true });
+  });
+  it("GET share counts returns grouped owner unread counts without accepting another recipient", async () => {
+    const stubs = authed();
+    const response = await shareCounts(new Request("http://127.0.0.1:3000/api/review-notifications/share-counts?recipientUserId=someone-else"));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ counts: [{ documentId: "d1", unreadCount: 3, latestThreadId: "t1" }] });
+    expect(stubs.listUnreadShareCountsForOwner).toHaveBeenCalledWith(expect.objectContaining({ identity: { id: "owner-1" } }));
   });
   it("GET activity returns read and unread events scoped to the current owner", async () => {
     const mocks = authed([{ id: "e1", readAt: null }, { id: "e2", readAt: "2026-10-15T01:00:00Z" }]);
