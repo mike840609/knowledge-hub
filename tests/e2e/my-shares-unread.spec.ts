@@ -28,7 +28,7 @@ test("My shares shows one document-level unread badge across multiple share link
 
   await page.goto(`${owner}/w/${doc.workspaceId}/shares`);
   const list = page.getByRole("list", { name: "Share links" });
-  const rows = list.getByRole("listitem").filter({ hasText: /Review / });
+  const rows = list.getByRole("listitem").filter({ has: page.locator(`a[data-list-row][href*="${doc.documentId}"]`) });
   await expect(rows).toHaveCount(2); // Two links, one document.
   const badge = rows.getByRole("link", { name: /2 unread comments/ });
   await expect(badge).toHaveCount(1);
@@ -48,7 +48,7 @@ test("My shares shows one document-level unread badge across multiple share link
 test("My shares does not show a badge when there are no unread comments", async ({ page, request }) => {
   const doc = await createReviewDocument(request);
   await page.goto(`${phase3Origin("reviewOwner")}/w/${doc.workspaceId}/shares`);
-  const rows = page.getByRole("list", { name: "Share links" }).getByRole("listitem").filter({ hasText: /Review / });
+  const rows = page.getByRole("list", { name: "Share links" }).getByRole("listitem").filter({ has: page.locator(`a[data-list-row][href*="${doc.documentId}"]`) });
   await expect(rows).toHaveCount(2);
   await expect(rows.getByRole("link", { name: /unread comments/ })).toHaveCount(0);
 });
