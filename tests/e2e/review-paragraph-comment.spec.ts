@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures/test";
+// @requires-sso-personas: createReviewDocument uses a Persona origin in an imported fixture.\nimport { expect, test } from "./fixtures/test";
 import { createReviewDocument } from "./fixtures/document-review";
 
 // A paragraph's comment button, for the owner of a document: beside the paragraph, in the reading
