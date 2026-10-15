@@ -1,3 +1,4 @@
+// @requires-sso-personas: createReviewDocument uses a Persona origin in an imported fixture.
 import { expect, test } from "./fixtures/test";
 import { createReviewDocument } from "./fixtures/document-review";
 

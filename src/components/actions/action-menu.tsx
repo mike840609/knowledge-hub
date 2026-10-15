@@ -25,6 +25,10 @@ import { ActionIcon } from "./action-icon";
 import { rowMenuSections, type Action } from "./action-registry";
 
 export const SHARE_REQUEST_EVENT = "kh:request-share";
+export const COLLECTION_ADD_REQUEST_EVENT = "kh:request-add-to-collection";
+export function requestAddToCollection(documentId:string,sourceId:string):void {
+  window.dispatchEvent(new CustomEvent(COLLECTION_ADD_REQUEST_EVENT,{detail:{documentId,sourceId}}));
+}
 
 /**
  * Ask the share-link dialog (ShareLinkDialogHost, mounted by the knowledge
@@ -99,6 +103,9 @@ export function useActionRunner({ onToggleFavorite }: ActionHandlers) {
             case "document.open-links":
               // Same request, asking for the Links tab.
               window.dispatchEvent(new CustomEvent("kh:request-details", { detail: { tab: "links" } }));
+              return;
+            case "document.open-add-to-collection":
+              requestAddToCollection(effect.documentId,effect.sourceId);
               return;
             case "document.open-share":
               // The dialog lives with the knowledge layout; any surface asks

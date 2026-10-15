@@ -4,7 +4,7 @@ import { useWorkspaceAuthorization } from "./use-workspace-authorization";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Tooltip } from "@/components/ui/tooltip";
-import { BookOpenText, Database, Network, Settings, Home, UserRound, Share2 } from "lucide-react";
+import { BookOpenText, Database, Network, Settings, Home, UserRound, Share2, Layers3 } from "lucide-react";
 
 export function PrimaryNav({
   workspaceId,
@@ -24,6 +24,7 @@ export function PrimaryNav({
       href: `/w/${workspaceId}/knowledge`,
       Icon: BookOpenText,
     },
+    ...(access.actions.canSearch ? [{ name: "Collections", href: `/w/${workspaceId}/collections`, Icon: Layers3 }] : []),
     {
       name: "Graph",
       href: `/w/${workspaceId}/graph`,

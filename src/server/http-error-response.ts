@@ -31,6 +31,7 @@ const WORKSPACE_HIDDEN_NOT_FOUND = new Set([
   "SOURCE_NOT_FOUND",
   "SHARE_LINK_NOT_FOUND",
   "SAVED_SHARE_NOT_FOUND",
+  "COLLECTION_NOT_FOUND",
   // A tree node is found by its own ID, so "no such node" must not be told apart from "not yours".
   "TREE_NODE_NOT_FOUND",
 ]);
@@ -85,6 +86,10 @@ export function toWorkspaceErrorResponse(error: unknown): { status: number; body
       return { status, body: { error: { code: error.code, message: error.message } } };
     }
     if (["IDEMPOTENCY_KEY_REUSED", "CAPACITY_EXCEEDED", "REVIEW_CONFLICT", "STALE_DOCUMENT_REVISION", "REVIEW_THREAD_CLOSED"].includes(error.code)) return { status: 409, body: { error: { code: error.code, message: error.message } } };
+    if (error.code === "COLLECTION_FORBIDDEN") return { status: 403, body: { error: { code: "COLLECTION_FORBIDDEN", message: "You cannot modify this collection." } } };
+    if (error.code === "COLLECTION_LIMIT") return { status: 422, body: { error: { code: "COLLECTION_LIMIT", message: error.message } } };
+    if (error.code === "COLLECTION_INVALID") return { status: 400, body: { error: { code: "COLLECTION_INVALID", message: error.message } } };
+    if (error.code === "COLLECTION_CONFLICT" || error.code === "COLLECTION_DUPLICATE_ITEM") return { status: 409, body: { error: { code: error.code, message: error.message } } };
     if (error.code === "REVIEW_NOT_FOUND") return { status: 404, body: { error: { code: "NOT_FOUND", message: "The requested resource was not found." } } };
     if (WORKSPACE_HIDDEN_NOT_FOUND.has(error.code)) return { status: 404, body: { error: { code: "NOT_FOUND", message: "The requested resource was not found." } } };
     if (error.code === "WORKSPACE_BUSY") return { status: 503, body: { error: { code: error.code, message: error.message } } };

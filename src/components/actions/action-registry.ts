@@ -36,6 +36,7 @@ export type ActionId =
   | "document.copy-link"
   | "document.edit"
   | "document.share"
+  | "document.add-to-collection"
   | "document.favorite"
   | "document.details"
   | "document.backlinks"
@@ -81,6 +82,7 @@ export type ActionIconName =
   | "open"
   | "edit"
   | "share"
+  | "collection"
   | "favorite"
   | "details"
   | "backlinks"
@@ -95,6 +97,7 @@ export type ActionCommand =
   | "document.toggle-favorite"
   | "document.open-details"
   | "document.open-share"
+  | "document.open-add-to-collection"
   | "document.open-links"
   | "document.archive"
   | "document.restore";
@@ -422,6 +425,20 @@ export function availableActions(context: ActionContext): readonly Action[] {
         section: "edit",
         surfaces: ["palette", "row"],
         effect: { kind: "navigate", href: `${documentHref.split("?")[0]}/edit` },
+      });
+    }
+    if (can.canWrite && confirmed && target.status === "ACTIVE" &&
+      target.sourceStatus === "ACTIVE" && target.revision === "CURRENT") {
+      actions.push({
+        id: "document.add-to-collection",
+        label: "Add to Collection",
+        group: "document",
+        icon: "collection",
+        keywords: ["collection", "reading path", "curate", target.label],
+        section: "edit",
+        surfaces: ["palette", "row"],
+        effect: {kind:"command",command:"document.open-add-to-collection",
+          documentId:target.documentId,sourceId:target.sourceId},
       });
     }
     // Share-link spec §10.1. Ownership is deliberately not consulted: sharing
