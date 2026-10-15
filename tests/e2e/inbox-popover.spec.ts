@@ -2,7 +2,7 @@ import { expect, test } from "./fixtures/test";
 import { phase3Origin } from "./fixtures/phase3-identities";
 import { createReviewDocument } from "./fixtures/document-review";
 
-test("desktop Inbox is a 208px sidebar header popover rather than a navigation row", async ({ page, request }) => {
+test("desktop Inbox fits the 176px sidebar header as a popover, not a navigation row", async ({ page, request }) => {
   const doc = await createReviewDocument(request);
   const owner = phase3Origin("reviewOwner");
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -11,11 +11,18 @@ test("desktop Inbox is a 208px sidebar header popover rather than a navigation r
   const sidebar = page.locator("aside").first();
   await expect(sidebar).toBeVisible();
   const bounds = await sidebar.boundingBox();
-  expect(bounds?.width).toBe(208);
+  expect(bounds?.width).toBe(176);
   await expect(sidebar.getByText("Knowledge Hub", { exact: true })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "Inbox" })).toHaveCount(0);
 
   const icon = sidebar.getByRole("button", { name: /Inbox/ });
+  const brand = sidebar.getByText("Knowledge Hub", { exact: true });
+  const collapse = sidebar.getByRole("button", { name: "Collapse navigation" });
+  const [brandBox, inboxBox, collapseBox] = await Promise.all([brand.boundingBox(), icon.boundingBox(), collapse.boundingBox()]);
+  expect(brandBox && inboxBox && collapseBox).toBeTruthy();
+  expect(brandBox!.x + brandBox!.width).toBeLessThanOrEqual(inboxBox!.x + 1);
+  expect(inboxBox!.x + inboxBox!.width).toBeLessThanOrEqual(collapseBox!.x + 1);
+  expect(collapseBox!.x + collapseBox!.width).toBeLessThanOrEqual(bounds!.x + bounds!.width);
   await icon.click();
   await expect(page.getByRole("heading", { name: "Inbox", exact: true })).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/w/${doc.workspaceId}/home$`));
