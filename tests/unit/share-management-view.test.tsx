@@ -10,7 +10,15 @@ vi.mock("@/components/shell/use-workspace-authorization", () => ({ requestWorksp
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 afterEach(() => vi.unstubAllGlobals());
 it("requires confirmation before revoke and disables copying after success", async () => {
-  let posts = 0; vi.stubGlobal("fetch", async () => { posts++; return new Response(null, { status: 204 }); });
+  // The list now fetches unread counts on mount; only revoke POSTs are mutations.
+  let posts = 0;
+  vi.stubGlobal("fetch", async (_url: unknown, options?: RequestInit) => {
+    if (options?.method === "POST") {
+      posts++;
+      return new Response(null, { status: 204 });
+    }
+    return Response.json({ counts: [] });
+  });
   const item: ManagedShareLink = { id: "link", documentId: "doc", sourceId: "source", title: "Guide", sourceName: "Wiki", label: "For team", path: "/s/token", status: "active", createdAt: new Date(), expiresAt: new Date(Date.now()+86400000), revokedAt: null, totalViews: 3, lastViewedAt: null };
   const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
   const click = async (name: string) => { await act(async () => [...document.querySelectorAll<HTMLElement>("button,[role=menuitem]")].find(b => (b.getAttribute("aria-label") ?? b.textContent) === name)!.click()); };
