@@ -22,7 +22,7 @@ test("owner Inbox shows a shared comment, retains activity after read, and links
   await expect(page.getByRole("heading", { name: "Inbox" })).toBeVisible();
   const inbox = page.getByRole("list", { name: "Inbox discussions" });
   await expect(inbox.getByText("Inbox verification comment")).toBeVisible();
-  await inbox.getByRole("button", { name: "Mark read" }).last().click();
+  await inbox.getByRole("listitem").filter({ hasText: "Inbox verification comment" }).getByRole("button", { name: "Mark read" }).click();
   await page.getByRole("tab", { name: "All activity" }).click();
   const activity = page.getByRole("list", { name: "Activity history" });
   const row = activity.getByRole("link", { name: /Inbox verification comment/ });
