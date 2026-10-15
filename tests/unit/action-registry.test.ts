@@ -769,3 +769,27 @@ describe("action registry — the row menu's sections (frontend-design-language 
     ]);
   });
 });
+
+describe("action registry — collections", () => {
+  it("shows Add to Collection for active current source-managed documents in an editable workspace", () => {
+    const actions=availableActions(context({target:target({ownership:"SOURCE_MANAGED"})}));
+    const add=actions.find(item=>item.id==="document.add-to-collection");
+    expect(add).toMatchObject({
+      label:"Add to Collection",
+      surfaces:["palette","row"],
+      effect:{kind:"command",command:"document.open-add-to-collection",documentId:"d1",sourceId:"s1"},
+    });
+  });
+  it("hides collection writes from Viewers, unconfirmed sessions, archived and historical content", () => {
+    const readonlyCan={...allCapabilities,canWrite:false};
+    for(const ctx of [
+      context({can:readonlyCan,target:target()}),
+      context({confirmed:false,target:target()}),
+      context({target:target({status:"ARCHIVED"})}),
+      context({target:target({sourceStatus:"ARCHIVED"})}),
+      context({target:target({revision:"HISTORICAL"})}),
+    ]) {
+      expect(ids(availableActions(ctx))).not.toContain("document.add-to-collection");
+    }
+  });
+});
