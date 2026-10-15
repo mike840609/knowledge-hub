@@ -181,7 +181,7 @@ export function PersonalHome({ workspaceId, documents, drafts, updates={runs:[],
           {slots?.reminders}
           <HomeDiscussions />
           <HomeUpdates workspaceId={workspaceId} page={updates} />
-          <Link className="kh-focus-ring mt-3 inline-block rounded-md px-3 py-2 text-body-sm text-kh-link" href={`/w/${workspaceId}/updates`}>View all updates</Link>
+          <div className="mt-3 flex flex-wrap gap-3 px-3 text-body-sm"><Link className="kh-focus-ring rounded-md text-kh-link" href={`/w/${workspaceId}/inbox`}>Open Inbox</Link><Link className="kh-focus-ring rounded-md text-kh-link" href={`/w/${workspaceId}/updates`}>View all folder updates</Link></div>
         </Section>
       </div>
       <ShareLinkDialogHost />
