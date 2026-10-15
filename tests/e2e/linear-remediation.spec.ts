@@ -32,7 +32,8 @@ test('reader and composer keep their column and expose commands during long scro
   const breadcrumb = region.getByRole('navigation', { name: 'Breadcrumb' });
   await expect(breadcrumb).toBeVisible(wait);
   const readerX = (await breadcrumb.boundingBox())!.x;
-  expect((await page.locator('main').boundingBox())!.x).toBe(160);
+  // The expanded navigation rail is 176px; verify the reader starts after it.
+  expect((await page.locator('main').boundingBox())!.x).toBe(176);
   const explorer = page.getByRole('complementary', { name: 'Knowledge explorer' });
   const expandedExplorer = (await explorer.boundingBox())!;
   expect(expandedExplorer.y).toBe((await page.locator('main').boundingBox())!.y);
@@ -49,7 +50,7 @@ test('reader and composer keep their column and expose commands during long scro
     expect((await workspace.boundingBox())!.y).toBeLessThan((await search.boundingBox())!.y);
     expect((await search.boundingBox())!.y).toBeLessThan((await primary.boundingBox())!.y);
   };
-  await inRail(160);
+  await inRail(176);
   expect((await page.getByText('Knowledge Hub', { exact: true }).filter({ visible: true }).boundingBox())!.y).toBeLessThan((await workspace.boundingBox())!.y);
   // With no topbar, the rail's wordmark, the explorer's first row and the breadcrumb share one top line.
   const centre = async (locator: ReturnType<Page['locator']>) => { const box = (await locator.boundingBox())!; return box.y + box.height / 2; };
