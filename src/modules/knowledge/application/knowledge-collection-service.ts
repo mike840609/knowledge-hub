@@ -4,6 +4,10 @@ import type { KnowledgeUnitOfWork } from "../ports/unit-of-work";
 import { COLLECTION_PAGE_SIZE, encodeCollectionCursor, parseCollectionCursor,
   type CollectionDetail, type CollectionPage } from "../domain/knowledge-collection";
 import { KnowledgeCollectionError } from "../domain/knowledge-collection-errors";
+import {isUuid} from "@/shared/ids/uuidv7";
+function requireResourceId(value:string):void {
+  if(!isUuid(value))throw new KnowledgeCollectionError("COLLECTION_NOT_FOUND","Collection resource unavailable.");
+}
 import { createCollection,updateCollection } from "./internal/collection-lifecycle";
 import { addCollectionItem,editCollectionItemNote } from "./internal/collection-item-create";
 import { removeCollectionItem,reorderCollectionItems } from "./internal/collection-item-order";
@@ -33,6 +37,7 @@ export class KnowledgeCollectionService {
   }
 
   async get(caller:CallerContext,workspaceId:string,collectionId:string):Promise<CollectionDetail>{
+    requireResourceId(collectionId);
     return this.unitOfWork.run(async r=>{
       await syncCallerIdentity(r.users,caller);
       await r.workspaceAccess.requireWorkspaceRead(caller,workspaceId);
@@ -47,23 +52,28 @@ export class KnowledgeCollectionService {
   create(caller:CallerContext,workspaceId:string,input:{name:unknown;description?:unknown}):Promise<{id:string;version:number}> {
     return this.unitOfWork.run(r=>createCollection(r,caller,workspaceId,input,this.clock()));
   }
-  update(caller:CallerContext,workspaceId:string,collectionId:string,
+  async update(caller:CallerContext,workspaceId:string,collectionId:string,
     input:{expectedVersion:unknown;name?:unknown;description?:unknown;status?:"ACTIVE"|"ARCHIVED"}):Promise<{version:number}>{
+    requireResourceId(collectionId);
     return this.unitOfWork.run(r=>updateCollection(r,caller,workspaceId,collectionId,input,this.clock()));
   }
-  addItem(caller:CallerContext,workspaceId:string,collectionId:string,
+  async addItem(caller:CallerContext,workspaceId:string,collectionId:string,
     input:{documentId:unknown;readingNote?:unknown;expectedVersion:unknown}):Promise<{version:number}>{
+    requireResourceId(collectionId);
     return this.unitOfWork.run(r=>addCollectionItem(r,caller,workspaceId,collectionId,input,this.clock()));
   }
-  editItemNote(caller:CallerContext,workspaceId:string,collectionId:string,itemId:string,
+  async editItemNote(caller:CallerContext,workspaceId:string,collectionId:string,itemId:string,
     input:{readingNote:unknown;expectedVersion:unknown}):Promise<{version:number}>{
+    requireResourceId(collectionId);requireResourceId(itemId);
     return this.unitOfWork.run(r=>editCollectionItemNote(r,caller,workspaceId,collectionId,itemId,input,this.clock()));
   }
-  removeItem(caller:CallerContext,workspaceId:string,collectionId:string,itemId:string,expectedVersion:unknown):Promise<{version:number}>{
+  async removeItem(caller:CallerContext,workspaceId:string,collectionId:string,itemId:string,expectedVersion:unknown):Promise<{version:number}>{
+    requireResourceId(collectionId);requireResourceId(itemId);
     return this.unitOfWork.run(r=>removeCollectionItem(r,caller,workspaceId,collectionId,itemId,expectedVersion,this.clock()));
   }
-  reorder(caller:CallerContext,workspaceId:string,collectionId:string,
+  async reorder(caller:CallerContext,workspaceId:string,collectionId:string,
     input:{itemIds:unknown;expectedVersion:unknown}):Promise<{version:number}>{
+    requireResourceId(collectionId);
     return this.unitOfWork.run(r=>reorderCollectionItems(r,caller,workspaceId,collectionId,input,this.clock()));
   }
 }
