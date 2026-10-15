@@ -114,19 +114,17 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
       {model.items.map(item => {
         const status = revoked.has(item.id) ? "revoked" : item.status;
         const actionLabel = `Share actions for ${item.title} · ${item.label ?? "Untitled link"}`;
+        const notice = firstLinkByDocument.get(item.documentId) === item.id ? unreadByDocument.get(item.documentId) : undefined;
         return <li key={item.id} className="group rounded-md border border-kh-border bg-kh-bg p-3 hover:bg-kh-bg-hover focus-within:bg-kh-bg-hover md:rounded-none md:border-x-0 md:border-t-0 md:py-2">
           <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 md:grid-cols-[minmax(0,1fr)_6rem_7rem_4rem_6rem] md:gap-y-0">
             <div className="min-w-0">
               <div className="flex min-w-0 items-center gap-2">
                 <Link data-list-row className="kh-focus-ring min-w-0 flex-1 truncate rounded-md text-body font-medium text-kh-text hover:text-kh-link" href={`/w/${workspaceId}/knowledge/${item.sourceId}/${item.documentId}?includeArchived=true`}>{item.title}</Link>
-                {firstLinkByDocument.get(item.documentId) === item.id && unreadByDocument.get(item.documentId) ? (() => {
-                  const notice = unreadByDocument.get(item.documentId)!;
-                  return <Link
-                    href={`/w/${workspaceId}/knowledge/${item.sourceId}/${item.documentId}?thread=${notice.latestThreadId}`}
-                    aria-label={`Open ${notice.unreadCount} unread comments for ${item.title}`}
-                    className="kh-focus-ring shrink-0 rounded-full bg-kh-bg-selected px-2 py-0.5 text-caption font-semibold text-kh-selected-text hover:bg-kh-highlight"
-                  >{notice.unreadCount} new</Link>;
-                })() : null}
+                {notice ? <Link
+                  href={`/w/${workspaceId}/knowledge/${item.sourceId}/${item.documentId}?thread=${notice.latestThreadId}`}
+                  aria-label={`Open ${notice.unreadCount} unread comments for ${item.title}`}
+                  className="kh-focus-ring shrink-0 rounded-full bg-kh-bg-selected px-2 py-0.5 text-caption font-semibold text-kh-selected-text hover:bg-kh-highlight"
+                >{notice.unreadCount} new</Link> : null}
               </div>
               <p className="truncate text-caption text-kh-text-muted" title={`${item.sourceName} · ${item.label ?? "Untitled link"}`}>{item.sourceName} · {item.label ?? "Untitled link"}</p>
             </div>
