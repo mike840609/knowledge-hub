@@ -5,6 +5,7 @@ import { isAllowedMarkdownImageSrc } from "@/components/knowledge/markdown-image
 import { MARKDOWN_PROSE } from "@/components/knowledge/markdown-prose";
 import { governanceRequest } from "@/components/workspaces/governance-error";
 import { blockGutter } from "./block-gutter";
+import { tableActions } from "./table-actions";
 import { slashCommands } from "./slash-commands";
 import type { LinkTargetsView } from "@/modules/knowledge/application/knowledge-link-service";
 import { createMarkdownEditor, type MarkdownEditor } from "./editor-core";
@@ -69,7 +70,7 @@ export function RenderedEditor(props: RenderedEditorProps) {
       onUserEdit: () => latest.current.onUserEdit(),
       onMarkdown: (markdown) => latest.current.onMarkdown(markdown),
       allowImage: (src) => isAllowedMarkdownImageSrc(src, { origin: window.location.origin }),
-      extraPlugins: [...toolbar.plugins, ...suggest.plugins, ...slash.plugins, blockGutter()],
+      extraPlugins: [...toolbar.plugins, ...suggest.plugins, ...slash.plugins, blockGutter(), tableActions()],
       configure: (ctx) => {
         toolbar.configure(ctx);
         suggest.configure(ctx);

@@ -1,5 +1,9 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { CALLOUTS } from "../markdown-callout";
+import type { CalloutKind } from "@/shared/markdown/remark-callouts";
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
-import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
+import { Plugin, PluginKey, TextSelection, type EditorState } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
 import { CALLOUT_ATTRIBUTE, calloutKind } from "@/shared/markdown/remark-callouts";
@@ -42,12 +46,48 @@ function inlinePairs(block: ProseNode, start: number, found: Decoration[]): void
   });
 }
 
+/** The body position for a caret in a hidden marker; null means this note has no body yet. */
+function hiddenMarker(state: EditorState): { body: number | null; end: number } | undefined {
+  const { $from, empty } = state.selection;
+  if (!empty || !(state.selection instanceof TextSelection)) return;
+  for (let depth = $from.depth; depth > 0; depth--) {
+    const quote = $from.node(depth);
+    if (quote.type.name !== "blockquote" || !calloutOf(quote) || $from.index(depth) !== 0) continue;
+    const paragraph = quote.firstChild!;
+    const start = $from.before(depth);
+    const markerEnd = start + 2 + paragraph.firstChild!.nodeSize;
+    if ($from.pos > markerEnd) return;
+    const body = paragraph.childCount > 1
+      ? markerEnd + 1
+      : quote.childCount > 1 ? start + 1 + paragraph.nodeSize + 1 : null;
+    return { body, end: start + quote.nodeSize - 1 };
+  }
+}
+
 function hints(doc: ProseNode): DecorationSet {
   const found: Decoration[] = [];
   doc.descendants((node, pos) => {
     if (node.type.name === "blockquote") {
       const kind = calloutOf(node);
-      if (kind) found.push(Decoration.node(pos, pos + node.nodeSize, { [CALLOUT_ATTRIBUTE]: kind }));
+      if (kind) {
+        found.push(Decoration.node(pos, pos + node.nodeSize, { [CALLOUT_ATTRIBUTE]: kind, role: "note" }));
+        const paragraph = node.firstChild!;
+        const marker = paragraph.firstChild!;
+        if (paragraph.childCount === 1) {
+          found.push(Decoration.node(pos + 1, pos + 1 + paragraph.nodeSize, { class: "kh-callout-marker" }));
+        } else {
+          found.push(Decoration.inline(pos + 2, pos + 2 + marker.nodeSize + (paragraph.maybeChild(1)?.type.name === "hardbreak" ? 1 : 0), { class: "kh-callout-marker" }));
+        }
+        found.push(Decoration.widget(pos + 1, () => {
+          const { title, Icon, glyph } = CALLOUTS[kind as CalloutKind];
+          const label = document.createElement("div");
+          label.className = "kh-callout-title flex items-center gap-2 font-medium";
+          // Only a bundled icon is parsed, never author-supplied HTML.
+          const svg = new DOMParser().parseFromString(renderToStaticMarkup(createElement(Icon, { "aria-hidden": true, className: `h-4 w-4 shrink-0 ${glyph}` })), "image/svg+xml").documentElement;
+          label.append(document.importNode(svg, true), document.createTextNode(title));
+          return label;
+        }, { key: `callout-${kind}`, side: -1 }));
+      }
     }
     if (node.isTextblock) inlinePairs(node, pos + 1, found);
   });
@@ -61,7 +101,7 @@ const key = new PluginKey<DecorationSet>("khReaderHints");
  * (docs/superpowers/specs/2026-10-12-editor-reader-hints-design.md).
  *
  * Decorations only. The document is not touched: `[!NOTE]` stays the first line of a quote and
- * `<u>` stays an `html` node, both there to be read and edited, and the Markdown written is what it
+ * `<u>` stays an `html` node, the marker hidden behind its title, and the Markdown written is what it
  * was without this. That is the point of doing it this way — nothing here can change what is saved.
  */
 export const readerHints = $prose(
@@ -72,6 +112,23 @@ export const readerHints = $prose(
         init: (_config, state) => hints(state.doc),
         apply: (transaction, previous) => (transaction.docChanged ? hints(transaction.doc) : previous),
       },
-      props: { decorations: (state) => key.getState(state) },
+      appendTransaction(transactions, _previous, state) {
+        if (!transactions.some(transaction => transaction.selectionSet || transaction.docChanged)) return null;
+        const marker = hiddenMarker(state);
+        if (marker?.body == null) return null;
+        return state.tr.setSelection(TextSelection.near(state.doc.resolve(marker.body)));
+      },
+      props: {
+        decorations: (state) => key.getState(state),
+        handleTextInput(view, _from, _to, text) {
+          const marker = hiddenMarker(view.state);
+          if (!view.editable || !marker || marker.body !== null) return false;
+          const { schema } = view.state;
+          const tr = view.state.tr.insert(marker.end, schema.nodes.paragraph.create(null, schema.text(text)));
+          tr.setSelection(TextSelection.create(tr.doc, marker.end + 1 + text.length));
+          view.dispatch(tr);
+          return true;
+        },
+      },
     }),
 );

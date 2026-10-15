@@ -1533,3 +1533,21 @@ No token was added.
 ### Block controls and the `/` list (2026-10-14)
 
 §10 gained "Block controls and the `/` list": the rendered editor's 56px left gutter, hung left of the text so the editor keeps the reader's measure, the add and move controls in it, and the list `/` opens. No colour, radius or elevation token was added.
+
+### Rendered slash blocks (2026-10-15, PR #200 follow-up)
+
+The rendered editor shows a Toggle as a native disclosure with an editable,
+plain-text summary and a block body. New toggles open with the caret in the body;
+clicking the summary's chevron or pressing Alt+Enter changes the saved open state.
+Typing in the summary edits its title; Enter moves into the body. Existing bare
+`details`/`summary` Markdown uses the reader's exact recognizer; unsupported HTML
+stays inert text. This supersedes the earlier raw-tag editing limitation.
+
+Callouts show the reader's glyph and kind title. Their source marker remains in
+the document for Markdown round trips but is hidden in rendered editing; change
+the kind in Markdown mode. This supersedes the marker-visible portion of the
+editor reader-hints contract. Their bodies remain editable.
+
+Editor tables use the reader's bordered scroll container, 70vh height limit,
+sticky header and 8rem minimum cell width. Cell paragraphs have no article-level
+vertical margin, so a one-line cell has the reader's height. No token is added.

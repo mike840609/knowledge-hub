@@ -299,8 +299,37 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-editor pre code {
     @apply bg-transparent p-0;
   }
+  .kh-editor .kh-editor-table {
+    @apply my-4 w-full overflow-auto rounded-md border border-kh-border;
+  }
   .kh-editor table {
-    @apply my-4 w-full border-collapse text-body;
+    @apply w-full border-collapse text-body;
+  }
+  .kh-editor :is(th, td) > p {
+    @apply my-0;
+  }
+  .kh-editor .kh-callout-marker {
+    display: none;
+  }
+  .kh-editor .kh-callout-title + p,
+  .kh-editor .kh-callout-marker + p {
+    @apply mt-1;
+  }
+  .kh-editor blockquote[data-callout] {
+    @apply my-3;
+  }
+  .kh-editor-details {
+    @apply my-3;
+  }
+  .kh-editor-details > summary {
+    @apply cursor-text rounded-md font-medium;
+  }
+  .kh-editor-details > summary:has(> br:only-child)::after {
+    content: attr(data-placeholder);
+    @apply pointer-events-none text-kh-text-muted;
+  }
+  .kh-editor-details > [data-details-body] {
+    @apply ml-1 border-l-2 border-kh-border pl-4;
   }
   /* The marker is drawn out of flow: a task item is `paragraph block*`, so a flex row
      would put a nested list or a second paragraph beside the first one. */
@@ -707,6 +736,10 @@ input[type="search"]::-webkit-search-cancel-button:hover {
    that, the pane clips what does not fit. */
 .kh-editor-blocks { padding-left: 3.5rem; margin-left: -3.5rem; }
 .kh-block-gutter { position: fixed; z-index: 30; display: flex; gap: 2px; }
+.kh-table-actions { position: fixed; z-index: 31; display: flex; gap: 4px; padding: 3px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); box-shadow: 0 2px 8px rgb(0 0 0 / 12%); }
+.kh-table-actions[hidden] { display: none; }
+.kh-table-actions button { padding: 2px 6px; border-radius: 4px; font-size: 12px; white-space: nowrap; }
+.kh-table-actions button:hover, .kh-table-actions button:focus-visible { background: var(--muted); }
 .kh-block-gutter[hidden], .kh-block-move-menu[hidden], .kh-slash-menu[hidden] { display: none; }
 .kh-block-gutter button {
   @apply flex size-6 items-center justify-center rounded-md text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text kh-focus-ring;
@@ -725,7 +758,7 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-slash-option[aria-selected="true"] { @apply bg-kh-bg-selected text-kh-selected-text; }
 .kh-block-drop-line { position: fixed; z-index: 50; height: 2px; background: var(--kh-primary); pointer-events: none; }
 .kh-block-is-dragging { cursor: grabbing; }
-@media print { .kh-block-gutter, .kh-block-move-menu, .kh-slash-menu, .kh-block-drop-line { display: none; } }
+@media print { .kh-block-gutter, .kh-block-move-menu, .kh-slash-menu, .kh-block-drop-line, .kh-table-actions { display: none; } }
 
 /* The whole block stays marked while it moves, nested content included. */
 .kh-editor .kh-block-drag-source {
