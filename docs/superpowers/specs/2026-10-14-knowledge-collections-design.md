@@ -5,7 +5,7 @@
 | Initiated | 2026-10-14 |
 | Written | 2026-10-15 |
 | Type | Architectural design; **review required before implementation planning** |
-| Status | Product choices agreed; written spec pending user review |
+| Status | Approved 2026-10-15 for implementation planning; product code not authorized yet |
 | Scope | Workspace-scoped, manually curated virtual collections of existing documents |
 | Existing contracts | `CLAUDE.md`; Phase 3 Workspace governance; Folder Sync; Document links; Saved shares; frontend design language |
 
@@ -191,6 +191,6 @@ Do not introduce a new standalone module, general-purpose ACL engine, search ind
 
 ## 10. Review and handoff
 
-The six user-facing choices above are **approved**. This written technical specification is the next review gate, not approval for implementation. The partner must approve this spec before running `superpowers:writing-plans`. After spec approval, create a separate implementation plan and obtain execution-method approval before touching product code.
+The six user-facing choices and this written technical specification were **approved by the user on 2026-10-15**. `superpowers:writing-plans` may now produce a separate implementation plan. Obtain the user's plan review and execution-method approval before touching product code.
 
 References: `CLAUDE.md` (scope, authorization, source ownership, revisions), `src/modules/workspaces/domain/workspace-capability.ts`, `src/modules/knowledge/ports/unit-of-work.ts`, `src/modules/knowledge/application/internal/require-visible-document.ts`, `docs/superpowers/specs/2026-10-12-saved-shares-design.md`, `docs/superpowers/specs/frontend-design-language.md`.
