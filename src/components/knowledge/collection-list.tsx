@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import type { CollectionPage } from "@/modules/knowledge/domain/knowledge-collection";
 
 export function CollectionListView({workspaceId,model,status,canWrite}:{
@@ -13,7 +13,7 @@ export function CollectionListView({workspaceId,model,status,canWrite}:{
   const [creating,setCreating]=useState(false);
   const [error,setError]=useState<string|null>(null);
   const base=`/w/${workspaceId}/collections`;
-  async function create(event:React.FormEvent<HTMLFormElement>) {
+  async function create(event:FormEvent<HTMLFormElement>) {
     event.preventDefault();if(creating)return;setCreating(true);setError(null);
     try {
       const response=await fetch(`/api/workspaces/${workspaceId}/collections`,{
