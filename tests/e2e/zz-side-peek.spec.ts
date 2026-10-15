@@ -61,7 +61,9 @@ test("a wikilink click in the peek changes the peek, main and URL unchanged", as
   await expect(sidePeek).toContainText(peekTitle, ROUND_TRIP);
   await sidePeek.getByRole("link", { name: thirdTitle }).click();
 
-  await expect(sidePeek).toContainText(thirdTitle, ROUND_TRIP);
+  // The third document's body only renders after the peek follows the link:
+  // asserting the title alone would pass on the link label itself.
+  await expect(sidePeek).toContainText(`Body of ${thirdTitle}.`, ROUND_TRIP);
   const mainContent = page.getByRole("region", { name: "Document content" }).first();
   await expect(mainContent).toContainText(mainTitle);
   await expect(mainContent).not.toContainText(thirdTitle);

@@ -363,7 +363,10 @@ export function PeekPane({ request, onClose }: { request: PeekRequest; onClose: 
             </div>
           ) : null}
           {peek && view ? (
-            <div className="kh-reading-column py-6" onClick={onContentClick}>
+            // Capture phase: Next's Link checks defaultPrevented in its own
+            // click handler, so a bubble-phase interception always loses the
+            // race and the main page navigates. Intercepting here wins it.
+            <div className="kh-reading-column py-6" onClickCapture={onContentClick}>
               <DocumentViewer
                 view={view}
                 links={peek.linkView ? renderedLinksFrom(peek.linkView) : undefined}
