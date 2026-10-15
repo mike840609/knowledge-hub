@@ -1,8 +1,8 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
-import type { CollectionDetail, CollectionItemView } from "@/modules/knowledge/domain/knowledge-collection";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import type { CollectionDetail } from "@/modules/knowledge/domain/knowledge-collection";
 
 type Candidate={documentId:string;sourceId:string;title:string;sourceName:string};
 export function CollectionDetailView({workspaceId,model,canWrite}:{
@@ -14,6 +14,7 @@ export function CollectionDetailView({workspaceId,model,canWrite}:{
   const [name,setName]=useState(model.collection.name);
   const [description,setDescription]=useState(model.collection.description);
   const [busy,setBusy]=useState(false);
+  const [dragged,setDragged]=useState<number|null>(null);
   const [error,setError]=useState<string|null>(null);
   const [message,setMessage]=useState<string|null>(null);
   const [query,setQuery]=useState("");
@@ -43,7 +44,7 @@ export function CollectionDetailView({workspaceId,model,canWrite}:{
     } catch(cause) {setError(cause instanceof Error?cause.message:"Could not save this collection.");}
     finally{setBusy(false);}
   }
-  async function search(event:React.FormEvent<HTMLFormElement>){
+  async function search(event:FormEvent<HTMLFormElement>){
     event.preventDefault();if(searching||!query.trim())return;
     setSearching(true);setError(null);
     try{
@@ -58,7 +59,15 @@ export function CollectionDetailView({workspaceId,model,canWrite}:{
     const order=[...items];[order[index],order[target]]=[order[target],order[index]];
     void mutate(`${base}/items/order`,"PUT",{itemIds:order.map(i=>i.id)},"Order saved.");
   }
-  async function saveMetadata(event:React.FormEvent<HTMLFormElement>){
+  function dropAt(index:number) {
+    if(dragged===null||dragged===index||busy){setDragged(null);return;}
+    const ordered=[...items];
+    const [moved]=ordered.splice(dragged,1);
+    ordered.splice(index,0,moved);
+    setDragged(null);
+    void mutate(`${base}/items/order`,"PUT",{itemIds:ordered.map(i=>i.id)},"Order saved.");
+  }
+  async function saveMetadata(event:FormEvent<HTMLFormElement>){
     event.preventDefault();await mutate(base,"PATCH",{name,description},"Collection updated.");
   }
   return <main className="kh-page pb-8">
@@ -81,7 +90,12 @@ export function CollectionDetailView({workspaceId,model,canWrite}:{
     <h2 className="mb-3 mt-7 text-lg font-semibold text-kh-text">Reading path <span className="text-body font-normal text-kh-text-muted">({items.length})</span></h2>
     {items.length===0?<p className="rounded-md border border-kh-border p-4 text-body text-kh-text-muted">No documents yet. Add a document to build your reading path.</p>:null}
     <ol aria-label="Collection documents" className="divide-y divide-kh-border rounded-md border border-kh-border">
-      {items.map((item,index)=><li key={item.id} className="p-3">
+      {items.map((item,index)=><li key={item.id} className={`p-3 ${dragged===index?"opacity-60":""}`}
+        draggable={editable&&!busy}
+        onDragStart={event=>{if(!editable||busy){event.preventDefault();return;}event.dataTransfer.effectAllowed="move";setDragged(index);}}
+        onDragOver={event=>{if(editable&&!busy)event.preventDefault();}}
+        onDrop={event=>{event.preventDefault();dropAt(index);}}
+        onDragEnd={()=>setDragged(null)}>
         <div className="flex min-w-0 items-start gap-3">
           <span className="mt-0.5 text-caption tabular-nums text-kh-text-muted">{index+1}.</span>
           <div className="min-w-0 flex-1">
