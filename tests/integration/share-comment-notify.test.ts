@@ -70,6 +70,30 @@ describe("share-comment notify: link-origin comments notify the owner",()=>{
   await expect(f.service.markDocumentRead(f.viewer,f.documentId)).rejects.toMatchObject({code:"SHARE_LINK_NOT_FOUND"});
   expect(t.id).toBeTruthy();
  });
+ it("activity retains read history and exposes open/resolved state without leaking to a reviewer", async () => {
+  const f = await fixture();
+  const t = await f.service.createForLink(f.viewer, { token: f.token, expectedRevisionId: f.revisionId, anchor: f.anchor, body: "Decision needed", idempotencyKey: randomUUID() });
+  const first = await f.service.listActivityForOwner(f.caller);
+  expect(first.notifications).toHaveLength(1);
+  expect(first.notifications[0]).toMatchObject({ readAt: null, threadStatus: "OPEN" });
+  expect((await f.service.listActivityForOwner(f.viewer)).notifications).toHaveLength(0);
+  await f.service.markEventRead(f.viewer, first.notifications[0].id);
+  expect((await f.service.listUnreadForOwner(f.caller)).notifications).toHaveLength(1);
+  await f.service.markEventRead(f.caller, first.notifications[0].id);
+  expect((await f.service.listUnreadForOwner(f.caller)).notifications).toHaveLength(0);
+  expect((await f.service.listActivityForOwner(f.caller)).notifications[0].readAt).not.toBeNull();
+  await f.service.setResolution(f.caller, { documentId: f.documentId, threadId: t.id, status: "RESOLVED" });
+  expect((await f.service.listActivityForOwner(f.caller)).notifications[0].threadStatus).toBe("RESOLVED");
+ });
+ it("mark all read affects only this owner", async () => {
+  const f = await fixture();
+  await f.service.createForLink(f.viewer, { token: f.token, expectedRevisionId: f.revisionId, anchor: f.anchor, body: "One", idempotencyKey: randomUUID() });
+  await f.service.markAllActivityRead(f.viewer);
+  expect((await f.service.listUnreadForOwner(f.caller)).notifications).toHaveLength(1);
+  await f.service.markAllActivityRead(f.caller);
+  expect((await f.service.listUnreadForOwner(f.caller)).notifications).toHaveLength(0);
+  expect((await f.service.listActivityForOwner(f.caller)).notifications).toHaveLength(1);
+ });
  it("revoked-link writes fail and insert no event",async()=>{
   const f=await fixture();
   await f.shares.revoke(f.caller,f.a.id);

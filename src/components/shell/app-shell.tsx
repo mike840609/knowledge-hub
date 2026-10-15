@@ -6,6 +6,7 @@ import type { WorkspaceShellModel } from "@/server/knowledge-read";
 import { DocumentTopbarContext, type DocumentTopbarState } from "./document-topbar-context";
 import { Topbar } from "@/components/shell/topbar";
 import {UserMenu} from "./user-menu";
+import { InboxPopover } from "./inbox-popover";
 import { PrimaryNav } from "@/components/shell/primary-nav";
 import { WorkspaceSelector } from "@/components/shell/workspace-selector";
 import { SearchNavItem } from "@/components/search/search-nav-item";
@@ -95,16 +96,17 @@ export function AppShell({ model, children }: { model: WorkspaceShellModel; chil
       {!authorization.confirmed && !authorization.revoked && <p role="alert" className="bg-kh-bg p-3 text-body text-kh-danger">Unable to confirm workspace access. Changes are paused. <button className="underline" onClick={() => void authorization.refresh()}>Retry</button></p>}
       {authorization.access.workspace.lifecycleState === "ARCHIVED" && <ArchivedWorkspaceBanner workspaceId={model.workspace.id} canRestore={authorization.confirmed && authorization.access.actions.canRestore} />}
       <div className="flex min-h-0 flex-1">
-        <aside className={`hidden shrink-0 border-r border-kh-border bg-kh-bg-sunken lg:flex lg:flex-col ${navCollapsed ? "w-12" : "w-40"}`}>
-          {/* The wordmark and the rail's own collapse control head it; there is no wide-screen topbar. */}
-          <div className={`flex h-12 shrink-0 items-center gap-2 ${navCollapsed ? "justify-center px-2" : "px-4 pr-2"}`}>
-            {navCollapsed ? null : <span className="min-w-0 flex-1 truncate whitespace-nowrap text-caption font-semibold text-kh-text">Knowledge Hub</span>}
+        <aside className={`hidden shrink-0 border-r border-kh-border bg-kh-bg-sunken lg:flex lg:flex-col ${navCollapsed ? "w-12" : "w-44"}`}>
+          {/* Keep the full wordmark with Inbox and collapse controls in the compact 176px header. */}
+          <div className={`flex h-12 shrink-0 items-center gap-1 ${navCollapsed ? "justify-center px-2" : "px-2"}`}>
+            {navCollapsed ? null : <><span className="min-w-0 flex-1 whitespace-nowrap text-caption font-semibold text-kh-text">Knowledge Hub</span>{authorization.access.workspace.type === "PERSONAL" ? <InboxPopover workspaceId={model.workspace.id} /> : null}</>}
             <Tooltip label={navCollapsed ? "Expand navigation" : "Collapse navigation"} shortcut={NAV_TOGGLE_SHORTCUT} side={navCollapsed ? "right" : "bottom"}>
-              <button type="button" onClick={toggleNav} aria-label={navCollapsed ? "Expand navigation" : "Collapse navigation"} aria-keyshortcuts={NAV_TOGGLE_SHORTCUT} className={buttonClasses({ variant: "ghost", icon: true })}>
+              <button type="button" onClick={toggleNav} aria-label={navCollapsed ? "Expand navigation" : "Collapse navigation"} aria-keyshortcuts={NAV_TOGGLE_SHORTCUT} className={buttonClasses({ variant: "ghost", icon: true, size: navCollapsed ? "md" : "sm" })}>
                 {navCollapsed ? <PanelLeftOpen className="h-4 w-4" aria-hidden="true" /> : <PanelLeftClose className="h-4 w-4" aria-hidden="true" />}
               </button>
             </Tooltip>
           </div>
+          {navCollapsed && authorization.access.workspace.type === "PERSONAL" ? <div className="flex justify-center px-2 pb-1"><InboxPopover placement="compact" workspaceId={model.workspace.id} /></div> : null}
           <div className="flex shrink-0 flex-col gap-0.5 px-2">
             <WorkspaceSelector workspaceId={model.workspace.id} compact={navCollapsed} />
             <SearchNavItem compact={navCollapsed} />

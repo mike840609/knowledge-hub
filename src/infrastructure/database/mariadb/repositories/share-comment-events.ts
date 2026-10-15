@@ -26,6 +26,33 @@ export class MariaDbShareCommentEventsRepository implements ShareCommentEventRep
     );
     return rows.map(map);
   }
+  async listRecentByRecipient(recipientUserId: string, before: { createdAt: Date; id: string } | undefined, limit: number): Promise<ShareCommentEvent[]> {
+    const cursor = before ? "AND (e.created_at < ? OR (e.created_at = ? AND e.id < ?))" : "";
+    const args: (string | Date | number)[] = [recipientUserId];
+    if (before) args.push(before.createdAt, before.createdAt, before.id);
+    args.push(limit);
+    const rows = await this.connection.query<DbRow[]>(
+      `SELECT e.* FROM share_comment_events e JOIN workspaces w ON w.id=e.workspace_id
+       WHERE w.personal_owner_user_id=? ${cursor}
+       ORDER BY e.created_at DESC, e.id DESC LIMIT ?`,
+      args,
+    );
+    return rows.map(map);
+  }
+  async markEventRead(recipientUserId: string, eventId: string, at: Date): Promise<void> {
+    await this.connection.query(
+      `UPDATE share_comment_events e JOIN workspaces w ON w.id=e.workspace_id
+       SET e.read_at=? WHERE w.personal_owner_user_id=? AND e.id=? AND e.read_at IS NULL`,
+      [at, recipientUserId, eventId],
+    );
+  }
+  async markAllRead(recipientUserId: string, at: Date): Promise<void> {
+    await this.connection.query(
+      `UPDATE share_comment_events e JOIN workspaces w ON w.id=e.workspace_id
+       SET e.read_at=? WHERE w.personal_owner_user_id=? AND e.read_at IS NULL`,
+      [at, recipientUserId],
+    );
+  }
   async markDocumentRead(recipientUserId: string, documentId: string, at: Date): Promise<void> {
     await this.connection.query(
       `UPDATE share_comment_events e JOIN workspaces w ON w.id=e.workspace_id
