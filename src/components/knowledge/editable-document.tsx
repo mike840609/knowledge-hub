@@ -15,13 +15,14 @@ import { browserDraftStorage, clearDraft, readDraft, syncDraft, type DraftKey } 
 import { PersistentDraft } from "@/lib/persistent-draft";
 import { carryTitle, resolveAuthoredTitle } from "@/lib/authored-title";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
+import type { RenderedLinks } from "./rendered-links";
 import type { MarkdownEditor } from "./editor/editor-core";
 import type { RenderedEditorProps } from "./editor/rendered-editor";
 
 type DetailProps = Omit<ComponentProps<typeof DocumentDetailClient>, "children" | "titleControl" | "saveStatus">;
 
 /** The reader's frame stays mounted while its article edits and saves in place. */
-export function EditableDocument({ detail, markdown, metadataTitle, revisionId, userId, personal, standIn, backlinks }: {
+export function EditableDocument({ detail, markdown, metadataTitle, revisionId, userId, personal, standIn, backlinks, links }: {
   detail: DetailProps;
   markdown: string;
   metadataTitle: unknown;
@@ -30,6 +31,7 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
   personal: boolean;
   standIn: ReactNode;
   backlinks: ReactNode;
+  links?: RenderedLinks;
 }) {
   const router = useRouter();
   const { confirmed, access } = useWorkspaceAuthorization();
@@ -165,7 +167,7 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
     const visibility = () => { if (document.visibilityState === "hidden") persist(); };
     const unload = (event: BeforeUnloadEvent) => {
       persist();
-      if (writer.dirty) event.preventDefault();
+      if (writer.dirty && !discardingRef.current) event.preventDefault();
     };
     window.addEventListener("pagehide", persist);
     window.addEventListener("beforeunload", unload);
@@ -215,6 +217,7 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
   const serverRevisions = detail.inspectorData.revisions;
   const revisions = [...serverRevisions, ...localRevisions.filter(item => !serverRevisions.some(existing => existing.id === item.id))];
   const displayTitle = dirty || recovery ? resolved.title || "Untitled" : savedTitle;
+  const Article = ready ? "article" : "div";
   const article = <>
     <div className="mb-3 flex items-center justify-end gap-2 text-caption">
       <Button type="button" variant="ghost" aria-pressed={source || failed} disabled={!loaded || failed} onClick={() => {
@@ -245,14 +248,14 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
       composing.current = false;
       flushEditor();
       writer?.pause(!editable || !!recovery || !resolve(queue.current!.current).title);
-    }} onBlur={() => flushEditor()} onKeyDown={event => {
+    }} onBlur={() => flushEditor()} onKeyDownCapture={event => {
       if ((event.metaKey || event.ctrlKey) && (event.key === "s" || event.key === "Enter") && !event.nativeEvent.isComposing) {
         event.preventDefault(); flushEditor(); void writer?.flush();
       }
     }}>
       {!ready && !source && !failed && !recovery ? standIn : null}
-      <article data-review-document={ready && !source && !failed ? "" : undefined} hidden={source || failed || !ready}>
-        {loaded && Editor && !failed && <Editor workspaceId={detail.inspectorData.workspaceId} documentId={detail.inspectorData.documentId}
+      <Article data-review-document={ready && !source && !failed ? "" : undefined} hidden={source || failed || !ready}>
+        {loaded && Editor && !failed && <Editor links={links} workspaceId={detail.inspectorData.workspaceId} documentId={detail.inspectorData.documentId}
           markdown={content.markdown} editable={editable && !source} onReady={(instance, openedWith) => {
             editor.current = instance;
             if (openedWith !== queue.current!.current.markdown) instance.replaceMarkdown(queue.current!.current.markdown);
@@ -262,7 +265,7 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
             // ProseMirror calls this during transaction application; serialize after it has committed.
             queueMicrotask(() => { if (alive.current) flushRef.current(); });
           }} onMarkdown={() => { if (pending.current) flushEditor(); }} />}
-      </article>
+      </Article>
       {(source || failed) && <textarea aria-label="Markdown" value={content.markdown} disabled={!editable}
         onChange={event => {
           const next = event.target.value;

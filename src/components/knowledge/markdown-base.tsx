@@ -88,7 +88,7 @@ function DocumentLink({
   );
 }
 
-function MarkdownAnchor({ links, ...props }: AnchorProps & { links?: RenderedLinks }) {
+export function MarkdownAnchor({ links, ...props }: AnchorProps & { links?: RenderedLinks }) {
   const wikiTarget = props[WIKILINK_TARGET];
   const anchor = props[WIKILINK_ANCHOR];
   const { children } = props;

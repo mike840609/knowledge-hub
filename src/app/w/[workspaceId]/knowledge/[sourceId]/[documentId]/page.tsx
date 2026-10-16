@@ -126,7 +126,7 @@ export default async function KnowledgeDocumentPage({
   if (canEdit && shell && explorer) {
     return <EditableDocument key={documentId} markdown={selectedRevision.markdown} metadataTitle={selectedRevision.metadata.title}
       revisionId={selectedRevision.id} userId={shell.identityId} personal={shell.workspace.type === "PERSONAL"}
-      standIn={viewer} backlinks={linkView ? <BacklinksFooter view={linkView} /> : null}
+      standIn={viewer} links={linkView ? renderedLinksFrom(linkView, inspectorData.createLinks ?? {}) : undefined} backlinks={linkView ? <BacklinksFooter view={linkView} /> : null}
       detail={{ breadcrumb, title: selectedRevision.title, status: view.status, updatedAt: selectedRevision.createdAt,
         revisionBanner: null, inspectorData, editHref: null, sourceStatus: explorer.source.status, readOnly: false,
         syncHref: null, ownership: explorer.source.ownership, contentOwnsTitle, outline: extractOutline(selectedRevision.markdown) }} />;
