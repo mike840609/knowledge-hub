@@ -12,7 +12,7 @@ export function unique(label: string) {
 
 /** main form + first(): the duplicate-DOM quirk phase5-authoring.spec.ts documents. */
 export function composer(page: Page) {
-  return page.locator("main form").first();
+  return page.locator("main");
 }
 
 /** The rendered editing surface. */
