@@ -21,7 +21,7 @@ function unique(label: string) {
   return `${label}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
-const composer = (page: Page) => page.locator("main form").first();
+const composer = (page: Page) => page.locator("main");
 
 
 async function createNote(page: Page, workspaceId: string, title: string, markdown: string) {

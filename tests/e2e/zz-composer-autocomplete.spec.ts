@@ -20,7 +20,7 @@ function unique(label: string) {
   return `${label}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
-const composer = (page: Page) => page.locator("main form").first();
+const composer = (page: Page) => page.locator("main");
 const surfaceOf = (page: Page) => composer(page).getByRole("textbox", { name: "Content" });
 const listboxOf = (page: Page) => page.getByRole("listbox", { name: "Documents to link to" });
 const optionsOf = (page: Page) => listboxOf(page).getByRole("option");
