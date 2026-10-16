@@ -1,5 +1,5 @@
 /**
- * Whether a key press may act as a single-key shortcut (`C`, `E`, `/`), and
+ * Whether a key press may act as a single-key navigation shortcut (`J`, `K`), and
  * how a registry `shortcut` reads on screen.
  *
  * A single key is also a character, so the rule is mostly about when it is

@@ -8,7 +8,7 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { readStored, removeStored, writeStored } from "@/components/shell/use-persisted-state";
 import { awaitingOwner, dismissedKey, opensOnArrival, parseDismissed } from "./review-auto-open";
 import { useShareCommentUnread } from "./share-comment-notifications";
-import { useReviewEntry, useReviewToggleKey } from "./review-entry";
+import { useReviewEntry } from "./review-entry";
 import { useReviewHighlights } from "./review-highlights";
 import { ReviewComposer, ReviewSelectionBubble, useReviewSelection } from "./review-composer";
 import { ReviewPanelShell } from "./review-panel-shell";
@@ -95,7 +95,6 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
   const count = result?.threads.length ?? 0;
   // The key is there when the header's control is: with discussions to open, or open ones to close.
   const toggle = useCallback(() => changeOpen(!open), [changeOpen, open]);
-  useReviewToggleKey(count > 0 || open ? toggle : undefined);
   const awaiting = result?.threads.filter(thread => thread.status === "OPEN").length ?? 0;
   // Only where there is something for the header to offer: discussions to open. On a document with
   // none this would be a control that opens an empty panel, on every document. A selection is

@@ -23,23 +23,25 @@ async function pressUntil(page: Page, key: string, answered: () => Promise<void>
 async function openArchitecture(page: Page) {
   await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${OBSIDIAN_SOURCE}`);
   await page.getByRole("treeitem", { name: "Architecture", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Architecture" })).toBeVisible(ROUND_TRIP);
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toBeVisible(ROUND_TRIP);
 }
 
-test("/ opens the palette without typing the slash, and the palette shows shortcuts", async ({ page }) => {
+test("Cmd/Ctrl K opens the palette, and Create has no letter shortcut", async ({ page }) => {
   await openArchitecture(page);
   const field = page.getByRole("combobox", { name: "Search documents and actions" });
-  await pressUntil(page, "/", () => expect(field).toBeVisible({ timeout: 1_000 }));
+  await pressUntil(page, "ControlOrMeta+k", () => expect(field).toBeVisible({ timeout: 1_000 }));
   await expect(field).toHaveValue("");
 
   const list = page.getByRole("listbox", { name: "Actions and documents" });
-  await expect(list.getByRole("option", { name: /Create document/ }).locator("kbd")).toHaveText("C");
+  await expect(list.getByRole("option", { name: /Create document/ }).locator("kbd")).toHaveCount(0);
   await expect(list.getByRole("option", { name: /Edit document/ })).toHaveCount(0);
 });
 
-test("C opens a new note", async ({ page }) => {
+test("C does not navigate away from the current document", async ({ page }) => {
   await openArchitecture(page);
-  await pressUntil(page, "c", () => expect(page).toHaveURL(/\/knowledge\/new$/, { timeout: 1_000 }));
+  const before = page.url();
+  await page.keyboard.press("c");
+  expect(page.url()).toBe(before);
 });
 
 test("a letter typed into a field stays in the field", async ({ page }) => {
@@ -65,7 +67,7 @@ test("E does nothing on source-managed content", async ({ page }) => {
   await page.goto(url);
   // Prove the shortcuts are live on this page before asserting that E is not.
   const field = page.getByRole("combobox", { name: "Search documents and actions" });
-  await pressUntil(page, "/", () => expect(field).toBeVisible({ timeout: 1_000 }));
+  await pressUntil(page, "ControlOrMeta+k", () => expect(field).toBeVisible({ timeout: 1_000 }));
   await page.keyboard.press("Escape");
   await expect(field).toHaveCount(0);
 
@@ -169,7 +171,7 @@ test.describe("⌘\\ collapses and expands the navigation", () => {
     await openArchitecture(page);
     const nav = navigation(page);
     const field = page.getByRole("combobox", { name: "Search documents and actions" });
-    await pressUntil(page, "/", () => expect(field).toBeVisible({ timeout: 1_000 }));
+    await pressUntil(page, "ControlOrMeta+k", () => expect(field).toBeVisible({ timeout: 1_000 }));
     await field.fill("sidebar");
     const option = page.getByRole("listbox", { name: "Actions and documents" }).getByRole("option", { name: /Toggle navigation/ });
     await expect(option.locator("kbd")).toHaveText("⌘\\");
@@ -182,7 +184,7 @@ test.describe("⌘\\ collapses and expands the navigation", () => {
     await openArchitecture(page);
     const nav = navigation(page);
     const field = page.getByRole("combobox", { name: "Search documents and actions" });
-    await pressUntil(page, "/", () => expect(field).toBeVisible({ timeout: 1_000 }));
+    await pressUntil(page, "ControlOrMeta+k", () => expect(field).toBeVisible({ timeout: 1_000 }));
     await page.keyboard.press("ControlOrMeta+Backslash");
     await expect(field).toBeVisible();
     // With the palette open the page behind it is out of the accessibility tree, so look at it once the

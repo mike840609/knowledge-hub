@@ -81,50 +81,12 @@ function press(target: HTMLElement, key: string, init: Partial<KeyboardEventInit
 }
 
 describe("a key on the row in focus", () => {
-  it("runs the row's own action for it, and takes the key", () => {
+  it.each(["A", "F"])("does not intercept action letters on row %s", (label) => {
     const { onRunAction } = render();
-    const event = press(rowFor("A"), "f");
-    expect(onRunAction).toHaveBeenCalledWith(favoriteAction);
-    expect(event.defaultPrevented).toBe(true);
-  });
-
-  it("goes by the row's kind: C on a folder is its New document here", () => {
-    const { onRunAction } = render();
-    press(rowFor("F"), "c");
-    expect(onRunAction).toHaveBeenCalledWith(newHereAction);
-  });
-
-  it("takes a key the row's kind has declared even when the registry offers nothing for it, and does nothing", () => {
-    const { onRunAction } = render({ documentActions: () => [] });
-    const event = press(rowFor("A"), "f");
-    expect(onRunAction).not.toHaveBeenCalled();
-    expect(event.defaultPrevented).toBe(true); // so the page's own F does not favorite the document being read
-  });
-
-  it("leaves a key the row's kind has not declared to the page: C on a document is still Create document", () => {
-    const { onRunAction } = render();
-    const event = press(rowFor("A"), "c");
-    expect(onRunAction).not.toHaveBeenCalled();
-    expect(event.defaultPrevented).toBe(false);
-  });
-
-  it("takes F and M on a folder row too, for the document being read must not answer them", () => {
-    const { onRunAction } = render({ folderActions: () => [newHereAction] });
-    for (const key of ["f", "m"]) {
-      const event = press(rowFor("F"), key);
-      expect(event.defaultPrevented).toBe(true);
+    for (const key of ["f", "m", "c", "d", "r", "/"]) {
+      expect(press(rowFor(label), key).defaultPrevented).toBe(false);
     }
     expect(onRunAction).not.toHaveBeenCalled();
-  });
-
-  it("still runs the folder's own C, and leaves C on a document row alone", () => {
-    const { onRunAction } = render();
-    const folderEvent = press(rowFor("F"), "c");
-    expect(folderEvent.defaultPrevented).toBe(true);
-    expect(onRunAction).toHaveBeenCalledTimes(1);
-    expect(onRunAction).toHaveBeenCalledWith(newHereAction);
-    expect(press(rowFor("A"), "c").defaultPrevented).toBe(false);
-    expect(onRunAction).toHaveBeenCalledTimes(1);
   });
 
   it("does not act on a modified key, a held key or a composed one", () => {

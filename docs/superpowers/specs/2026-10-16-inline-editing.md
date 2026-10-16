@@ -11,3 +11,7 @@ Comment creation and passage locations wait while the editor has unsaved content
 Verification covers no-write visits, save/reload, slow network typing, conflicts, recovery, readonly history, source fallback, and composition. Existing manual-save E2E scenarios need migration to the new interaction contract; new-document creation still uses its explicit Create workflow.
 
 Normal saves show no status. A request still pending after one second shows Saving; its success is confirmed for two seconds. Failures and recovery remain visible in a stable toolbar slot.
+
+## Typing-first keyboard behavior
+
+Page and folder commands are invoked through explicit controls or the command palette. Remove global and row F (favorite), M (move), C (create), D (discussions), and R (rename) bindings and their visual/accessibility hints. Plain slash no longer opens global search; the editor retains its own slash behavior. Cmd/Ctrl+K opens the palette only when the event has not already been handled by the editor, and never during IME composition. Row arrows and J/K navigation remain local to the tree. Discussion buttons remain available on owner and shared pages.

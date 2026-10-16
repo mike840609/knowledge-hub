@@ -1,26 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import { REVIEW_TOGGLE_SHORTCUT } from "@/components/actions/action-registry";
-import { isSingleKeyShortcut } from "@/lib/shortcut-keys";
-
-/**
- * `D` opens and closes the discussions, wherever a single key may act (not in a field, a dialog or
- * a menu — so not from the drawer the discussions are on a narrow window, which Esc closes).
- * `toggle` is absent where there is no control to press either.
- */
-export function useReviewToggleKey(toggle: (() => void) | undefined) {
-  useEffect(() => {
-    if (!toggle) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.key.toLowerCase() !== REVIEW_TOGGLE_SHORTCUT.toLowerCase() || !isSingleKeyShortcut(event)) return;
-      event.preventDefault();
-      toggle();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [toggle]);
-}
+import { createContext, useContext, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 
 /** What the document's header needs to offer a way into its discussions. */
 export type ReviewEntry = {

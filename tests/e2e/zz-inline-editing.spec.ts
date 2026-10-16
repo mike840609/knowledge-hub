@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "./fixtures/test";
+import { openPalette } from "./fixtures/palette";
 import { personalWorkspaceId } from "./fixtures/my-space";
 
 async function note(page: Page) {
@@ -196,4 +197,48 @@ test("inline: a failed document save backs up recovery to the account", async ({
     await expect(second.getByRole("button", { name: "Resume saving" })).toBeVisible({ timeout: 15000 });
     await expect(second.getByRole("textbox", { name: "Content", exact: true })).toContainText("Account recovery text.");
   } finally { await other.close(); }
+});
+
+
+test("inline: action letters type normally in title and body", async ({ page }) => {
+  const { url } = await note(page);
+  const editor = await surface(page, url);
+  const title = page.getByRole("textbox", { name: "Title", exact: true });
+  await title.fill("");
+  await title.pressSequentially("fmcdre/");
+  await expect(title).toHaveValue("fmcdre/");
+  await editor.fill("");
+  await editor.pressSequentially("fmcdre/");
+  await expect(editor).toHaveText("fmcdre/");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page).toHaveURL(new RegExp(`${url}$`));
+  await saved(page);
+});
+
+test("inline: page chrome and tree leave action letters and slash unbound", async ({ page }) => {
+  const { url } = await note(page);
+  await surface(page, url);
+  // Opening once confirms that the palette's keyboard listener is hydrated.
+  await openPalette(page);
+  await page.keyboard.press("Escape");
+  const row = page.locator('[role="treeitem"][aria-current="page"]').first();
+  const details = page.getByRole("button", { name: "Details", exact: true }).filter({ visible: true }).first();
+  for (const target of [details, row]) {
+    await target.focus();
+    for (const key of ["f", "m", "c", "d", "r", "/"]) await page.keyboard.press(key);
+    await expect(target).toBeFocused();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page).toHaveURL(new RegExp(`${url}$`));
+  }
+  // F did not silently favorite the page, and commands remain accessible.
+  await row.click({ button: "right" });
+  const menu = page.getByRole("menu");
+  await expect(menu.getByRole("menuitem", { name: "Add to favorites" })).toBeVisible();
+  await expect(menu.getByRole("menuitem", { name: "Move document…" })).toBeVisible();
+  await expect(menu.locator("kbd")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await openPalette(page);
+  const list = page.getByRole("listbox", { name: "Actions and documents" });
+  await expect(list.getByRole("option", { name: "Add to favorites" })).toBeVisible();
+  await expect(list.getByRole("option", { name: "Create document", exact: true }).locator("kbd")).toHaveCount(0);
 });

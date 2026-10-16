@@ -3,11 +3,9 @@ import {
   NAV_TOGGLE_SHORTCUT,
   actionsFor,
   availableActions,
-  claimedRowKeys,
   groupActions,
   matchActions,
   rowMenuSections,
-  rowShortcuts,
   type ActionContext,
   type ActionSurface,
   type ActionTarget,
@@ -271,8 +269,8 @@ describe("action registry — shortcuts", () => {
   const byId = (id: string, ctx: ActionContext) =>
     availableActions(ctx).find((action) => action.id === id);
 
-  it("binds C to Create document and leaves E unbound", () => {
-    expect(byId("create.document", context())?.shortcut).toBe("C");
+  it("leaves C and E unbound", () => {
+    expect(byId("create.document", context())?.shortcut).toBeUndefined();
     expect(availableActions(context({ target: target() })).some(action => action.shortcut === "E")).toBe(false);
   });
 
@@ -296,9 +294,9 @@ describe("action registry — shortcuts", () => {
       .map((action) => action.shortcut)
       .filter((shortcut): shortcut is string => Boolean(shortcut));
 
-  it("binds F and M on a document row, and C, M and R on a folder row", () => {
-    expect(shortcutsOn("row", context({ target: target() })).sort()).toEqual(["F", "M"]);
-    expect(shortcutsOn("row", context({ folder: folder() })).sort()).toEqual(["C", "M", "R"]);
+  it("leaves document and folder rows without action shortcuts", () => {
+    expect(shortcutsOn("row", context({ target: target() })).sort()).toEqual([]);
+    expect(shortcutsOn("row", context({ folder: folder() })).sort()).toEqual([]);
   });
 
   it("gives no two actions on one surface the same key (C means two things, on two kinds of target)", () => {
@@ -312,27 +310,10 @@ describe("action registry — shortcuts", () => {
     }
   });
 
-  it("reads every row action's shortcut from rowShortcuts, so there is one source", () => {
-    const seen = [
-      ...availableActions(context({ target: target() })),
-      ...availableActions(context({ folder: folder() })),
-    ];
-    for (const action of seen) {
-      if (action.id in rowShortcuts) expect(action.shortcut).toBe(rowShortcuts[action.id as keyof typeof rowShortcuts]);
-    }
-  });
-
-  it("claims a kind's keys even where the registry offers none of them, so a read-only row keeps its keys", () => {
-    expect([...claimedRowKeys("document")].sort()).toEqual(["f", "m"]);
-    // A folder row also takes the document keys: they act on the document being read when no row is in focus.
-    expect([...claimedRowKeys("folder")].sort()).toEqual(["c", "f", "m", "r"]);
-    const readOnly = availableActions(context({ target: target({ ownership: "SOURCE_MANAGED" }) }));
-    expect(readOnly.some((action) => action.label === "Edit document")).toBe(false);
-    expect(claimedRowKeys("document").has("e")).toBe(false);
-  });
-
-  it("leaves C on a document row to the global Create document", () => {
-    expect(claimedRowKeys("document").has("c")).toBe(false);
+  it("offers page and folder actions without single-character shortcuts", () => {
+    const actions = availableActions(context({ target: target(), folder: folder() }));
+    expect(actions.filter(action => action.shortcut?.length === 1)).toEqual([]);
+    expect(ids(actions)).toEqual(expect.arrayContaining(["create.document", "document.favorite", "document.move", "folder.rename", "folder.move"]));
   });
 });
 

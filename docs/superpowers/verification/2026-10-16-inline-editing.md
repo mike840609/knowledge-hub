@@ -24,3 +24,14 @@ The standalone type check caught an untyped React test-environment global in the
 Removed Edit document from the shared action registry (row menus and command palette), the E binding, and the narrow-window document context bar. Recovery and Retry save actions remain available.
 
 The 210 affected unit tests and the full unit suite (218 files, 2,744 tests) passed. The row-actions browser suite passed all 8 tests, including absence of Edit in both row menu variants and the palette, and no navigation on E. Its production build passed; lint and standalone type checking also passed. Other modified legacy browser expectations have not been run as a complete suite; the draft limitation above still applies.
+
+## Typing-first shortcut follow-up
+
+Removed global and row F/M/C/D/R action bindings, the global slash search binding, and obsolete tooltip/ARIA hints. Cmd/Ctrl+K respects an already-handled event and IME composition; local tree navigation and editor commands remain. Tests verify literal typing in title/body, unchanged page/tree state on action letters or slash, and explicit menu/button access to commands and discussions.
+
+- Full unit suite: 218 files, 2,738 tests passed (obsolete action-key assertions replaced).
+- Lint, standalone type checking, and production build passed.
+- The inline/row-actions run passed 21 of 22 tests; the remaining test used the wrong Details button label. After correcting the locator, that browser case passed.
+- Both shared/owner discussion tests passed, including D remaining unbound and explicit controls working.
+- Full row keyboard/menu suite: 16 tests passed after adapting direct-key focus assumptions to menu invocation. Together with the inline, row-actions and review checks, 40 distinct browser scenarios passed across the runs.
+- Keyboard/browser changes do not constitute a complete legacy E2E migration; the PR remains draft.
