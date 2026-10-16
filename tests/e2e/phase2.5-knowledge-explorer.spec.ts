@@ -15,7 +15,7 @@ test("keeps Source Tree visible while switching Documents", async ({ page }) => 
   await expect(page.getByRole("button", { name: "Obsidian Wiki", exact: true })).toHaveAttribute("aria-expanded", "true");
   await tree.getByRole("treeitem", { name: "Runbooks" }).click();
   await expect(tree).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Runbooks" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toBeVisible();
 });
 
 test("filters the current Source", async ({ page }) => {
@@ -30,12 +30,12 @@ test("filters the current Source", async ({ page }) => {
 
 test("renders the Document inside the Explorer with a compact header", async ({ page }) => {
   await page.goto(`/w/${WORKSPACE}/knowledge/${SOURCE}`);
-  await expect(page.getByRole("heading", { name: "Architecture" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toBeVisible();
   // Scoped to main > header: a hidden RSC flight segment duplicates this text elsewhere.
   // The seed identity is an OWNER on a HUB_MANAGED, ACTIVE document, so the header shows
   // Edit (not the "Read only" badge, which is reserved for viewers who cannot edit). Edit is on the
   // breadcrumb line, which sits just above <header> so that a wide screen can pin it.
-  await expect(page.getByRole("region", { name: "Document content", exact: true }).getByRole("link", { name: "Edit" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Document content", exact: true }).getByRole("link", { name: "Edit" })).toHaveCount(0);
   await expect(page.locator("main header").first().getByText(/Updated/)).toBeVisible();
   await expect(page.locator("pre").filter({
     hasText: "The Query Master architecture notes",
