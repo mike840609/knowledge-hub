@@ -19,7 +19,7 @@ function unique(label: string) {
 
 /** main form + first(): the duplicate-DOM quirk phase5-authoring.spec.ts documents. */
 function composer(page: Page) {
-  return page.locator("main form").first();
+  return page.locator("main");
 }
 
 async function createNote(page: Page, workspaceId: string, title: string, markdown: string) {
