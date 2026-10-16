@@ -109,8 +109,8 @@ describe("action registry — the source ownership axis", () => {
     expect(ids(managed)).toContain("document.copy-link");
   });
 
-  it("offers Edit on hub-managed content", () => {
-    expect(ids(availableActions(context({ target: target() })))).toContain("document.edit");
+  it("omits the redundant Edit action on directly editable content", () => {
+    expect(ids(availableActions(context({ target: target() })))).not.toContain("document.edit");
   });
 });
 
@@ -201,10 +201,10 @@ describe("action registry — hrefs", () => {
     });
   });
 
-  it("does not carry the query string into the edit route", () => {
+  it("does not offer a separate edit route in an archived view", () => {
     const archived = availableActions(context({ includeArchived: true, target: target() }));
-    const edit = archived.find((action) => action.id === "document.edit");
-    expect(edit?.effect).toEqual({ kind: "navigate", href: "/w/w1/knowledge/s1/d1/edit" });
+    const edit = archived.find((action) => action.label === "Edit document");
+    expect(edit).toBeUndefined();
   });
 });
 
@@ -271,9 +271,9 @@ describe("action registry — shortcuts", () => {
   const byId = (id: string, ctx: ActionContext) =>
     availableActions(ctx).find((action) => action.id === id);
 
-  it("binds C to Create document and E to Edit document", () => {
+  it("binds C to Create document and leaves E unbound", () => {
     expect(byId("create.document", context())?.shortcut).toBe("C");
-    expect(byId("document.edit", context({ target: target() }))?.shortcut).toBe("E");
+    expect(availableActions(context({ target: target() })).some(action => action.shortcut === "E")).toBe(false);
   });
 
   it("offers no E wherever editing is not offered", () => {
@@ -297,7 +297,7 @@ describe("action registry — shortcuts", () => {
       .filter((shortcut): shortcut is string => Boolean(shortcut));
 
   it("binds F and M on a document row, and C, M and R on a folder row", () => {
-    expect(shortcutsOn("row", context({ target: target() })).sort()).toEqual(["E", "F", "M"]);
+    expect(shortcutsOn("row", context({ target: target() })).sort()).toEqual(["F", "M"]);
     expect(shortcutsOn("row", context({ folder: folder() })).sort()).toEqual(["C", "M", "R"]);
   });
 
@@ -323,12 +323,12 @@ describe("action registry — shortcuts", () => {
   });
 
   it("claims a kind's keys even where the registry offers none of them, so a read-only row keeps its keys", () => {
-    expect([...claimedRowKeys("document")].sort()).toEqual(["e", "f", "m"]);
+    expect([...claimedRowKeys("document")].sort()).toEqual(["f", "m"]);
     // A folder row also takes the document keys: they act on the document being read when no row is in focus.
-    expect([...claimedRowKeys("folder")].sort()).toEqual(["c", "e", "f", "m", "r"]);
+    expect([...claimedRowKeys("folder")].sort()).toEqual(["c", "f", "m", "r"]);
     const readOnly = availableActions(context({ target: target({ ownership: "SOURCE_MANAGED" }) }));
-    expect(readOnly.some((action) => action.id === "document.edit")).toBe(false);
-    expect(claimedRowKeys("document").has("e")).toBe(true);
+    expect(readOnly.some((action) => action.label === "Edit document")).toBe(false);
+    expect(claimedRowKeys("document").has("e")).toBe(false);
   });
 
   it("leaves C on a document row to the global Create document", () => {
@@ -421,7 +421,7 @@ describe("action registry — archiving a document (daily-driver spec §7.2)", (
   it("puts it last in a row menu, where a menu keeps what is hard to take back", () => {
     const row = ids(actionsFor("row", context({ target: target() })));
     expect(row.at(-1)).toBe("document.archive");
-    expect(row).toContain("document.edit");
+    expect(row).not.toContain("document.edit");
   });
 
   it("offers it in the palette for the document being read", () => {
@@ -633,7 +633,6 @@ describe("action registry — the row menu's sections (frontend-design-language 
       "document.open-side-peek": "open-in",
       "document.open-new-tab": "open-in",
       "document.copy-link": "open",
-      "document.edit": "edit",
       "document.share": "edit",
       "document.favorite": "edit",
       "document.move": "edit",
@@ -653,7 +652,7 @@ describe("action registry — the row menu's sections (frontend-design-language 
   it("groups an editable document: open, change, open in, export, remove, each in its own order", () => {
     expect(sectionsOf(context({ ...personal, target: target() }))).toEqual([
       ["document.copy-link"],
-      ["document.edit", "document.share", "document.favorite", "document.move"],
+      ["document.share", "document.favorite", "document.move"],
       ["document.open-side-peek", "document.open-new-tab"],
       ["document.agent-context", "document.export"],
       ["document.archive"],
@@ -663,7 +662,7 @@ describe("action registry — the row menu's sections (frontend-design-language 
   it("leaves out Copy for Agent where it is not offered, without leaving a hole", () => {
     expect(sectionsOf(context({ target: target() }))).toEqual([
       ["document.copy-link"],
-      ["document.edit", "document.favorite", "document.move"],
+      ["document.favorite", "document.move"],
       ["document.open-side-peek", "document.open-new-tab"],
       ["document.export"],
       ["document.archive"],
@@ -744,7 +743,7 @@ describe("action registry — the row menu's sections (frontend-design-language 
     const rows = actionsFor("row", context({ ...personal, target: target() }));
     const shuffled = [...rows].reverse();
     const sections = rowMenuSections(shuffled).map(ids);
-    expect(sections.map((section) => section.length)).toEqual([1, 4, 2, 2, 1]);
+    expect(sections.map((section) => section.length)).toEqual([1, 3, 2, 2, 1]);
     expect(sections[0]).toEqual(["document.copy-link"]);
   });
 
@@ -765,7 +764,6 @@ describe("action registry — the row menu's sections (frontend-design-language 
       "document.agent-context",
       "document.export",
       "document.copy-link",
-      "document.edit",
       "document.share",
       "document.favorite",
       "document.details",

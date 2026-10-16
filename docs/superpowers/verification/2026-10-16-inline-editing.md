@@ -18,3 +18,9 @@ The first post-rebase browser run lost its server at port 3101; subsequent reque
 This is not a complete legacy E2E pass. Existing tests for the old separate editor, Save/Cancel and reader-only UI still need migration and full-suite validation. Keep the PR in draft until that work is complete. No throughput/capacity benchmark was performed; request-count assertions validate reduced redundant traffic, not database capacity.
 
 The standalone type check caught an untyped React test-environment global in the new indicator test. It now uses Vitest global stubbing; type checking, the three indicator tests and the changed-file lint check passed after the fix.
+
+## Removal of redundant editing actions
+
+Removed Edit document from the shared action registry (row menus and command palette), the E binding, and the narrow-window document context bar. Recovery and Retry save actions remain available.
+
+The 210 affected unit tests and the full unit suite (218 files, 2,744 tests) passed. The row-actions browser suite passed all 8 tests, including absence of Edit in both row menu variants and the palette, and no navigation on E. Its production build passed; lint and standalone type checking also passed. Other modified legacy browser expectations have not been run as a complete suite; the draft limitation above still applies.

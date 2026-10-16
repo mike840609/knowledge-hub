@@ -34,7 +34,7 @@ test("/ opens the palette without typing the slash, and the palette shows shortc
 
   const list = page.getByRole("listbox", { name: "Actions and documents" });
   await expect(list.getByRole("option", { name: /Create document/ }).locator("kbd")).toHaveText("C");
-  await expect(list.getByRole("option", { name: /Edit document/ }).locator("kbd")).toHaveText("E");
+  await expect(list.getByRole("option", { name: /Edit document/ })).toHaveCount(0);
 });
 
 test("C opens a new note", async ({ page }) => {
@@ -53,9 +53,11 @@ test("a letter typed into a field stays in the field", async ({ page }) => {
   expect(page.url()).toBe(before);
 });
 
-test("E edits the document being read", async ({ page }) => {
+test("E leaves the document being read unchanged", async ({ page }) => {
   await openArchitecture(page);
-  await pressUntil(page, "e", () => expect(page).toHaveURL(/\/edit$/, { timeout: 1_000 }));
+  const before = page.url();
+  await page.keyboard.press("e");
+  expect(page.url()).toBe(before);
 });
 
 test("E does nothing on source-managed content", async ({ page }) => {

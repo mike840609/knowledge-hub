@@ -66,13 +66,13 @@ test("j and k move the focus like the arrows, and Alt+j does not", async ({ page
   await expect(row(page, a)).toBeFocused();
 });
 
-test("E edits the row in focus, not the document being read", async ({ page }) => {
-  const { a, docA } = await setUp(page);
+test("E leaves the focused row and current document unchanged", async ({ page }) => {
+  const { a } = await setUp(page);
   const reading = page.url();
   await armTree(page, row(page, a));
   await page.keyboard.press("e");
-  await expect(page).toHaveURL(new RegExp(`/knowledge/${docA.sourceId}/${docA.documentId}/edit$`), ROUND_TRIP);
-  expect(page.url()).not.toBe(reading);
+  await expect(row(page, a)).toBeFocused();
+  expect(page.url()).toBe(reading);
 });
 
 test("F favourites the row in focus, and the menu then offers the way back", async ({ page }) => {
@@ -197,15 +197,15 @@ test("the row menu shows each action's key, without truncating its label, and no
   await row(page, "Runbooks").click({ button: "right" });
   const menu = page.getByRole("menu");
   // The key is announced by aria-keyshortcuts, so the visible hint must stay out of the accessible name.
-  for (const name of ["Edit document", "Add to favorites", "Move document…"]) {
+  for (const name of ["Add to favorites", "Move document…"]) {
     await expect(menu.getByRole("menuitem", { name, exact: true })).toBeVisible();
   }
-  await expect(menu.getByRole("menuitem", { name: /Edit document/ }).locator("kbd")).toHaveText("E");
+  await expect(menu.getByRole("menuitem", { name: /Edit document/ })).toHaveCount(0);
   await expect(menu.getByRole("menuitem", { name: /Add to favorites/ }).locator("kbd")).toHaveText("F");
   await expect(menu.getByRole("menuitem", { name: /Move document/ }).locator("kbd")).toHaveText("M");
   // Grouped by what the reader is doing (open, change, open in, export, remove), one rule between each pair of sections.
   const shape = await menuShape(menu);
-  expect(shape).toEqual(["Copy link", RULE, "Edit document", "Add to favorites", "Move document…", RULE, "Open in side peek", "Open in new tab", RULE, "Download Markdown", RULE, "Archive document"]);
+  expect(shape).toEqual(["Copy link", RULE, "Add to favorites", "Move document…", RULE, "Open in side peek", "Open in new tab", RULE, "Download Markdown", RULE, "Archive document"]);
   expectRulesOnlyBetweenItems(shape);
   expect(await menu.getByRole("separator").count()).toBe(4);
   const labels = menu.getByRole("menuitem").locator("span.truncate");

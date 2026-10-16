@@ -35,7 +35,6 @@ export type ActionId =
   | "document.open-side-peek"
   | "document.open-new-tab"
   | "document.copy-link"
-  | "document.edit"
   | "document.share"
   | "document.favorite"
   | "document.details"
@@ -147,10 +146,9 @@ export const REVIEW_TOGGLE_SHORTCUT = "D";
  * from here, so binding, `aria-keyshortcuts` and the hint on screen still have one source. It is
  * data rather than a field on the built action because an action the caller may not run is not
  * built at all, and the tree must still know the key is its own: `E` on a read-only row is
- * taken and does nothing, it is not passed on to edit the document being read.
+ * taken and does nothing, it is not passed on to act on the document being read.
  */
 export const rowShortcuts = {
-  "document.edit": "E",
   "document.favorite": "F",
   "document.move": "M",
   "folder.new-document": "C",
@@ -341,7 +339,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
     actions.push({
       id: "create.document",
       // "Create", because the key is C. The noun is the one the rest of the
-      // product uses (Edit document, Move document); where it goes, Notes,
+      // product uses (Move document, Archive document); where it goes, Notes,
       // is a keyword rather than the label.
       label: "Create document",
       group: "create",
@@ -418,27 +416,6 @@ export function availableActions(context: ActionContext): readonly Action[] {
       surfaces: ["palette", "row"],
       effect: { kind: "copy-link", href: documentHref },
     });
-    // All three axes at once: the capability, then the ownership, then the
-    // state of the document itself.
-    if (
-      can.canWrite &&
-      confirmed &&
-      target.ownership === "HUB_MANAGED" &&
-      target.status === "ACTIVE" &&
-      target.revision === "CURRENT"
-    ) {
-      actions.push({
-        id: "document.edit",
-        label: "Edit document",
-        group: "document",
-        icon: "edit",
-        keywords: ["rename", "title", "write", target.label],
-        shortcut: rowShortcuts["document.edit"],
-        section: "edit",
-        surfaces: ["palette", "row"],
-        effect: { kind: "navigate", href: `${documentHref.split("?")[0]}/edit` },
-      });
-    }
     // Share-link spec §10.1. Ownership is deliberately not consulted: sharing
     // is reading, and SOURCE_MANAGED content is as readable as any other. A
     // historical revision is excluded because the link always shows the

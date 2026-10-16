@@ -38,10 +38,10 @@ describe("empty palette context", () => {
     { id: "navigate.knowledge", group: "navigate", effect: { kind: "navigate", href: "/w/w/knowledge" } },
     { id: "navigate.graph", group: "navigate", effect: { kind: "navigate", href: "/w/w/graph" } },
     { id: "create.document", group: "create", effect: { kind: "navigate", href: "/w/w/knowledge/new" } },
-    { id: "document.edit", group: "document", effect: { kind: "navigate", href: "/w/w/knowledge/s/d/edit" } },
+    { id: "document.open-new-tab", group: "document", effect: { kind: "open-new-tab", href: "/w/w/knowledge/s/d" } },
   ] as Action[];
   it("offers the current document before other destinations, omitting redundant section navigation", () => {
-    expect(prioritizePaletteActions(actions, "/w/w/knowledge/s/d", "").map(a => a.id)).toEqual(["document.edit", "create.document", "navigate.graph"]);
+    expect(prioritizePaletteActions(actions, "/w/w/knowledge/s/d", "").map(a => a.id)).toEqual(["document.open-new-tab", "create.document", "navigate.graph"]);
   });
   it("retains explicit typed navigation matches", () => {
     expect(prioritizePaletteActions(actions, "/w/w/knowledge/s/d", "knowledge")).toBe(actions);
