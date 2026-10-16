@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { isAllowedMarkdownImageSrc } from "@/components/knowledge/markdown-image-policy";
 import { MARKDOWN_PROSE } from "@/components/knowledge/markdown-prose";
 import { governanceRequest } from "@/components/workspaces/governance-error";
@@ -12,9 +12,19 @@ import { createMarkdownEditor, type MarkdownEditor } from "./editor-core";
 import { selectionToolbar } from "./selection-toolbar";
 import { wikiLinkSuggest } from "./wikilink-suggest";
 
+import { createPortal } from "react-dom";
+import { Plugin } from "@milkdown/kit/prose/state";
+import { $prose } from "@milkdown/kit/utils";
+import { MarkdownAnchor } from "../markdown-base";
+import type { RenderedLinks } from "../rendered-links";
+import { parseWikiLinkParts } from "@/modules/knowledge/domain/document-links";
+import { headingSlug } from "@/shared/markdown/heading-slug";
+import { WIKILINK_TARGET, WIKILINK_FRAGMENT, WIKILINK_ANCHOR } from "../remark-knowledge-links";
+
 export type RenderedEditorProps = {
   /** The Workspace whose documents `[[` offers. */
   workspaceId: string;
+  links?: RenderedLinks;
   /** The document being edited, when there is one: `[[` does not offer it to itself. */
   documentId?: string;
   /** What to open with. Later changes go in through the handle `onReady` gave. */
@@ -42,6 +52,7 @@ export type RenderedEditorProps = {
 export function RenderedEditor(props: RenderedEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<MarkdownEditor | null>(null);
+  const [wikiViews, setWikiViews] = useState<{ dom: HTMLElement; raw: string }[]>([]);
   const latest = useRef(props);
   latest.current = props;
 
@@ -60,6 +71,19 @@ export function RenderedEditor(props: RenderedEditorProps) {
       excludeDocumentId: () => latest.current.documentId,
     });
     const slash = slashCommands();
+    const links = $prose(() => new Plugin({ props: { nodeViews: {
+      wiki_link(node) {
+        const dom = document.createElement("span");
+        dom.setAttribute("data-kh-wiki-raw", String(node.attrs.raw));
+        dom.contentEditable = "false";
+        const entry = { dom, raw: String(node.attrs.raw) };
+        queueMicrotask(() => { if (!cancelled) setWikiViews(previous => [...previous, entry]); });
+        return { dom, ignoreMutation: () => true,
+          stopEvent: event => !!(event.target as HTMLElement).closest("a"),
+          destroy() { queueMicrotask(() => { if (!cancelled) setWikiViews(previous => previous.filter(item => item !== entry)); }); },
+        };
+      },
+    } } }));
     const openedWith = latest.current.markdown;
     createMarkdownEditor({
       root: host,
@@ -70,7 +94,7 @@ export function RenderedEditor(props: RenderedEditorProps) {
       onUserEdit: () => latest.current.onUserEdit(),
       onMarkdown: (markdown) => latest.current.onMarkdown(markdown),
       allowImage: (src) => isAllowedMarkdownImageSrc(src, { origin: window.location.origin }),
-      extraPlugins: [...toolbar.plugins, ...suggest.plugins, ...slash.plugins, blockGutter(), tableActions()],
+      extraPlugins: [...toolbar.plugins, ...suggest.plugins, ...slash.plugins, ...(latest.current.links ? [links] : []), blockGutter(), tableActions()],
       configure: (ctx) => {
         toolbar.configure(ctx);
         suggest.configure(ctx);
@@ -108,11 +132,16 @@ export function RenderedEditor(props: RenderedEditorProps) {
   // (a non-editable anchor would follow itself); ⌘/Ctrl-click follows it, as the reader's links do.
   function followLinkOnModifierClick(event: MouseEvent<HTMLDivElement>) {
     const link = (event.target as HTMLElement).closest("a");
-    if (!link) return;
+    if (!link || link.closest("[data-kh-wiki-raw]")) return;
     event.preventDefault();
     const href = link.getAttribute("href");
     if (href && (event.metaKey || event.ctrlKey)) window.open(href, "_blank", "noopener,noreferrer");
   }
 
-  return <div ref={containerRef} onClick={followLinkOnModifierClick} />;
+  return <><div ref={containerRef} onClick={followLinkOnModifierClick} />{wikiViews.map(({ dom, raw }, index) => {
+    const parts = parseWikiLinkParts(raw.slice(2, -2));
+    const attributes = parts.target ? { [WIKILINK_TARGET]: parts.target, ...(parts.fragment ? { [WIKILINK_FRAGMENT]: parts.fragment } : {}) } : { [WIKILINK_ANCHOR]: headingSlug(parts.fragment ?? "") };
+    return createPortal(<MarkdownAnchor links={props.links} {...attributes}>{parts.alias ?? (parts.target || parts.fragment)}</MarkdownAnchor>, dom, String(index));
+  })}</>;
+
 }

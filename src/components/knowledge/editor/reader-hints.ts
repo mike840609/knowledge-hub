@@ -1,3 +1,4 @@
+import { HeadingSlugger } from "@/shared/markdown/heading-slug";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { CALLOUTS } from "../markdown-callout";
@@ -66,7 +67,9 @@ function hiddenMarker(state: EditorState): { body: number | null; end: number } 
 
 function hints(doc: ProseNode): DecorationSet {
   const found: Decoration[] = [];
+  const slugger = new HeadingSlugger();
   doc.descendants((node, pos) => {
+    if (node.type.name === "heading") found.push(Decoration.node(pos, pos + node.nodeSize, { id: slugger.slug(node.textContent) }));
     if (node.type.name === "blockquote") {
       const kind = calloutOf(node);
       if (kind) {
