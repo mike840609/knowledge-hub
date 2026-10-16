@@ -53,24 +53,22 @@ test("creates the first document in a workspace with no sources", async ({ page 
   await newTitle(page).fill("My First Note");
   await page.getByRole("button", { name: "Create document" }).click();
 
-  await expect(page.getByRole("heading", { name: "My First Note" })).toBeVisible(ROUND_TRIP);
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("My First Note", ROUND_TRIP);
 });
 
 test("edits a hub-managed document and records a second revision", async ({ page }) => {
   await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
   await newTitle(page).fill("Editable Note");
   await page.getByRole("button", { name: "Create document" }).click();
-  await expect(page.getByRole("heading", { name: "Editable Note" })).toBeVisible(ROUND_TRIP);
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Editable Note", ROUND_TRIP);
 
-  await page.getByRole("link", { name: "Edit", exact: true }).click();
-  // main form + first(): same pre-existing duplicate-DOM quirk as the "main header" convention
-  // above (a hidden leftover node the a11y tree doesn't surface, but raw-DOM locators still match).
-  const editorForm = page.locator("main form").first();
+  const editorForm = page.locator("main");
   const source = await showMarkdown(editorForm);
   await source.fill("updated body");
-  await editorForm.getByRole("button", { name: "Save" }).click();
+  await expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", ROUND_TRIP);
 
-  await expect(page.locator("article").first().getByText("updated body")).toBeVisible(ROUND_TRIP);
+  await editorForm.getByRole("button", { name: "Markdown", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("updated body", ROUND_TRIP);
   await page.locator("main").getByRole("button", { name: "Details" }).click();
   await page.getByRole("tab", { name: "History" }).click();
   await expect(page.getByRole("link", { name: /Revision 2/ })).toBeVisible();
@@ -87,16 +85,17 @@ test("after a save, the sidebar names the document by its new title", async ({ p
   await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
   await newTitle(page).fill(before);
   await page.getByRole("button", { name: "Create document" }).click();
-  await expect(page.getByRole("heading", { name: before })).toBeVisible(ROUND_TRIP);
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(before, ROUND_TRIP);
   // Creating navigates to the new document too, and the tree must gain its row.
   await expect(page.getByRole("treeitem", { name: before, exact: true })).toBeVisible(ROUND_TRIP);
 
-  await page.getByRole("link", { name: "Edit", exact: true }).click();
-  const editorForm = page.locator("main form").first();
+  const editorForm = page.locator("main");
   await editorForm.getByLabel("Title", { exact: true }).fill(after);
-  await editorForm.getByRole("button", { name: "Save" }).click();
+  await expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", ROUND_TRIP);
 
-  await expect(page.getByRole("heading", { name: after })).toBeVisible(ROUND_TRIP);
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(after, ROUND_TRIP);
+  // Opening Details refreshes saved metadata immediately, including the shared tree.
+  await page.getByRole("button", { name: "Details", exact: true }).click();
   await expect(page.getByRole("treeitem", { name: after, exact: true })).toBeVisible(ROUND_TRIP);
   await expect(page.getByRole("treeitem", { name: before, exact: true })).toHaveCount(0);
 });
@@ -131,76 +130,55 @@ test("a stale second editor gets a conflict, keeps their input, and does not ove
   await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
   await newTitle(page).fill("Conflict Note");
   await page.getByRole("button", { name: "Create document" }).click();
-  await expect(page.getByRole("heading", { name: "Conflict Note" })).toBeVisible(ROUND_TRIP);
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Conflict Note", ROUND_TRIP);
   const documentUrl = page.url();
 
   // Two editors open the same base revision. A second page in the same context is
   // the same identity — the conflict is about revision versioning, not authorization.
-  await page.goto(`${documentUrl}/edit`);
-  const editorA = page.locator("main form").first();
+  await page.goto(documentUrl);
+  const editorA = page.locator("main");
   const pageB = await page.context().newPage();
   pageB.on("dialog", (dialog) => void dialog.accept());
-  await pageB.goto(`${documentUrl}/edit`);
-  const editorB = pageB.locator("main form").first();
+  await pageB.goto(documentUrl);
+  const editorB = pageB.locator("main");
 
   // A saves first and wins.
   const sourceA = await showMarkdown(editorA);
   await sourceA.fill("winner body");
-  await editorA.getByRole("button", { name: "Save" }).click();
-  await expect(page.locator("article").first().getByText("winner body")).toBeVisible(ROUND_TRIP);
+  await expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", ROUND_TRIP);
 
   // B saves stale: conflict shown, input preserved, reload offered — no silent overwrite.
   const sourceB = await showMarkdown(editorB);
   await sourceB.fill("loser body");
-  await editorB.getByRole("button", { name: "Save" }).click();
-  await expect(pageB.getByRole("alert").filter({ hasText: "Someone updated this document" })).toBeVisible(ROUND_TRIP);
+  await expect(pageB.getByText("Someone updated this document.", { exact: false })).toBeVisible(ROUND_TRIP);
   await expect(sourceB).toHaveValue("loser body");
-  await expect(pageB.getByRole("button", { name: "Load latest version (discard your changes)" })).toBeVisible();
+  await expect(pageB.getByRole("button", { name: "Load latest version", exact: true })).toBeVisible();
 
-  // The persisted current revision is the winner's, never the loser's.
-  await pageB.goto(documentUrl);
+  // Explicitly discard the local recovery copy before reading the persisted winner.
+  await pageB.getByRole("button", { name: "Load latest version", exact: true }).click();
+  await pageB.getByRole("button", { name: "Discard and load latest", exact: true }).click();
   await expect(pageB.locator("article").first().getByText("winner body")).toBeVisible(ROUND_TRIP);
   await expect(pageB.getByText("loser body")).toHaveCount(0);
   await pageB.close();
 });
 
-/**
- * The editor's form is server-rendered with a `type="submit"` button and no
- * `action`, so before React attaches `preventDefault` a click is a **native**
- * submit: the browser navigates to the same URL as a GET and the draft is
- * gone. CI found this the hard way — a second page loading in the same browser
- * delayed hydration past a save.
- *
- * Holding a page in that state needs care. `javaScriptEnabled: false` does not
- * model it: this route streams, so its content arrives in a hidden `<div>` at
- * the end of the body and an *inline* script moves it into place. Turning
- * JavaScript off stops that too, and the form never reaches the page at all.
- * Blocking the framework chunks is the faithful version — inline scripts still
- * run, React never hydrates.
- */
-test("the editor cannot be saved before it can handle its own submit", async ({ page, browser }) => {
+// Blocking framework chunks allows streamed HTML to appear without hydration.
+// The inline title must remain disabled and there must be no native submit path.
+test("the editor cannot accept changes before hydration", async ({ page, browser }) => {
   await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
   await newTitle(page).fill("Pre-hydration Note");
   await page.getByRole("button", { name: "Create document" }).click();
-  await expect(page.getByRole("heading", { name: "Pre-hydration Note" })).toBeVisible(ROUND_TRIP);
-  await page.getByRole("link", { name: "Edit", exact: true }).click();
-  await expect(page).toHaveURL(/\/edit$/);
-  const editUrl = page.url();
-
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Pre-hydration Note", ROUND_TRIP);
+  const documentUrl = page.url();
   const context = await browser.newContext();
   const unhydrated = await context.newPage();
   try {
     await unhydrated.route("**/_next/static/chunks/**", (route) => route.abort());
-    await unhydrated.goto(editUrl);
-    const save = unhydrated.locator('main form button[type="submit"]');
-    await expect(save).toHaveText("Save");
-    await expect(save).toBeDisabled();
-
-    // The guard is the attribute rather than a handler, so even a forced click
-    // cannot submit the form out from under the draft.
-    await save.click({ force: true }).catch(() => undefined);
-    await unhydrated.waitForTimeout(500);
-    expect(unhydrated.url()).toBe(editUrl);
+    await unhydrated.goto(documentUrl);
+    await expect(unhydrated.getByRole("textbox", { name: "Title", exact: true })).toBeDisabled();
+    await expect(unhydrated.getByRole("textbox", { name: "Content", exact: true })).toHaveCount(0);
+    await expect(unhydrated.locator('main button[type="submit"]')).toHaveCount(0);
+    expect(unhydrated.url()).toBe(documentUrl);
   } finally {
     await context.close();
   }

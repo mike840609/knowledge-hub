@@ -83,11 +83,8 @@ async function editOwnNote(page: Page, title: string) {
   await expect(field).toBeEditable(ROUND_TRIP);
   await field.fill(title);
   await page.getByRole("button", { name: "Create document" }).click();
-  await expect(page.getByRole("heading", { name: title })).toBeVisible(ROUND_TRIP);
-  await pressUntil(page, "e", () => expect(page).toHaveURL(/\/edit$/, { timeout: 1_000 }));
-  // main form + first(): the duplicate-DOM quirk phase5-authoring documents.
-  const titleField = page.locator("main form").first().getByLabel("Title", { exact: true });
-  await expect(titleField).toBeEditable(ROUND_TRIP);
+  const titleField = page.getByRole("textbox", { name: "Title", exact: true });
+  await expect(titleField).toHaveValue(title, ROUND_TRIP);
   return titleField;
 }
 
@@ -96,14 +93,16 @@ test("⌘Enter saves from inside the editor", async ({ page }) => {
   await titleField.fill("Saved By Keyboard");
   await titleField.press("ControlOrMeta+Enter");
   await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
-  await expect(page.getByRole("heading", { name: "Saved By Keyboard" })).toBeVisible(ROUND_TRIP);
+  await expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", ROUND_TRIP);
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Saved By Keyboard");
 });
 
 test("Esc leaves an unchanged editor", async ({ page }) => {
   const titleField = await editOwnNote(page, "Shortcut Esc Clean Note");
   await titleField.press("Escape");
   await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
-  await expect(page.getByRole("heading", { name: "Shortcut Esc Clean Note" })).toBeVisible(ROUND_TRIP);
+  await expect(titleField).toHaveValue("Shortcut Esc Clean Note");
 });
 
 test("Esc never discards a changed draft", async ({ page }) => {
@@ -111,7 +110,7 @@ test("Esc never discards a changed draft", async ({ page }) => {
   await titleField.fill("Unsaved change");
   await titleField.press("Escape");
   await page.waitForTimeout(500);
-  await expect(page).toHaveURL(/\/edit$/);
+  await expect(page).not.toHaveURL(/\/edit$/);
   await expect(titleField).toHaveValue("Unsaved change");
 });
 
@@ -199,7 +198,7 @@ test.describe("⌘\\ collapses and expands the navigation", () => {
     await page.setViewportSize({ width: 800, height: 700 });
     // The tree is behind the Browse button at this width, so go to the source and let it land on a document.
     await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${OBSIDIAN_SOURCE}`);
-    await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible(ROUND_TRIP);
+    await expect(page.getByRole("textbox", { name: "Title", exact: true })).toBeVisible(ROUND_TRIP);
     await pressUntil(page, "ControlOrMeta+Backslash", () => expect(page.getByRole("dialog", { name: "Menu" })).toBeVisible({ timeout: 1_000 }));
   });
 });
