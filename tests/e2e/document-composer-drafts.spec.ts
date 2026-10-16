@@ -1,137 +1,147 @@
 import { expect, test } from "./fixtures/test";
 import { showMarkdown } from "./composer-helpers";
-import { ROUND_TRIP, unique, composer, createNote, leaveEditor, openEditor } from "./fixtures/document-composer";
+import { ROUND_TRIP, HELD, unique, composer, createNote, leaveEditor, openEditor, holdEditorCode, surfaceOf } from "./fixtures/document-composer";
 
-test("what was typed in the rendered editor survives leaving and is offered back on return", async ({ page }) => {
+const recovered = "Your unsaved changes were recovered";
+
+test("rendered edits survive leaving and only save after recovery is accepted", async ({ page }) => {
   const url = await createNote(page, unique("Draft"), "start\n");
   const surface = await openEditor(page, url);
   await surface.click();
   await page.keyboard.type("draft text");
-
   await leaveEditor(page, url);
 
   const back = await openEditor(page, url);
-  await expect(composer(page).getByRole("status").filter({ hasText: "Your unsaved changes were restored" })).toBeVisible();
+  await expect(composer(page).getByRole("status").filter({ hasText: recovered })).toBeVisible();
   await expect(back).toContainText("draft text");
-  await expect(back).toBeFocused(ROUND_TRIP);
-
-  await composer(page).getByRole("button", { name: "Discard draft" }).click();
-  await expect(back).not.toContainText("draft text");
+  // Wait beyond the normal autosave delay: simply opening recovery cannot publish it.
+  const writes: string[] = [];
+  page.on("request", request => {
+    if (request.method() === "PATCH" && request.url().includes("/api/documents/")) writes.push(request.url());
+  });
+  await page.waitForTimeout(3500);
+  expect(writes).toHaveLength(0);
+  await composer(page).getByRole("button", { name: "Resume saving" }).click();
+  await expect(page.locator('[data-autosave-status="saved"]')).toBeVisible(ROUND_TRIP);
+  expect(writes).toHaveLength(1);
   await page.reload();
   await expect(back).toBeEditable(ROUND_TRIP);
-  await expect(composer(page).getByRole("status").filter({ hasText: "unsaved changes were restored" })).toHaveCount(0);
+  await expect(back).toContainText("draft text");
+  await expect(composer(page).getByRole("button", { name: "Resume saving" })).toHaveCount(0);
 });
 
-test("a draft discarded while the editor is still loading is not what the editor shows", async ({ page }) => {
+test("recovery can be discarded while rendered editing is still loading", async ({ page }) => {
   const url = await createNote(page, unique("Discard Early"), "start\n");
-  const surface = await openEditor(page, url);
-  await surface.click();
-  await page.keyboard.type("draft text ");
+  await openEditor(page, url);
+  await (await showMarkdown(composer(page))).fill("draft text");
   await leaveEditor(page, url);
 
-  // Press Discard draft the moment the editor's host joins the page, while the editor in it is being built.
-  await page.addInitScript(() => {
-    new MutationObserver((records, observer) => {
-      for (const record of records) {
-        const host = [...record.addedNodes].find((node) => node instanceof HTMLDivElement && node.attributes.length === 0 && !node.firstChild);
-        if (!host || !(record.target instanceof HTMLElement) || !record.target.parentElement?.hasAttribute("hidden")) continue;
-        const discard = [...document.querySelectorAll<HTMLButtonElement>("main form button")].find((button) => button.textContent === "Discard draft");
-        if (!discard) continue;
-        (window as unknown as { discardedWhileBuilding?: boolean }).discardedWhileBuilding = !document.querySelector(".ProseMirror");
-        discard.click();
-        observer.disconnect();
-        return;
-      }
-    }).observe(document, { childList: true, subtree: true });
-  });
-  const back = await openEditor(page, url);
-  expect(await page.evaluate(() => (window as unknown as { discardedWhileBuilding?: boolean }).discardedWhileBuilding)).toBe(true);
-  await expect(composer(page).getByRole("status").filter({ hasText: "unsaved changes were restored" })).toHaveCount(0);
-  await expect(back).not.toContainText("draft text");
-  await expect(back).toHaveText("start");
+  const release = await holdEditorCode(page);
+  try {
+    await page.goto(url, HELD);
+    await expect(composer(page).getByRole("status").filter({ hasText: recovered })).toBeVisible(ROUND_TRIP);
+    await expect(surfaceOf(page)).toHaveCount(0);
+    await composer(page).getByRole("button", { name: "Discard recovered changes" }).click();
+    page.on("dialog", dialog => void dialog.accept());
+    await page.getByRole("alertdialog").getByRole("button", { name: "Discard and load latest" }).click();
+    await expect(composer(page).getByRole("button", { name: "Discard recovered changes" })).toHaveCount(0);
+  } finally {
+    release();
+  }
+  await expect(surfaceOf(page)).toBeEditable(ROUND_TRIP);
+  await expect(surfaceOf(page)).toHaveText("start");
 });
 
-test("Cancel right after typing leaves no draft, even when the editor's output lands after it", async ({ page }) => {
-  const url = await createNote(page, unique("Cancel Late"), "start\n");
+test("discarding recovered edits clears changes typed immediately before confirmation", async ({ page }) => {
+  const url = await createNote(page, unique("Discard Late"), "start\n");
+  await openEditor(page, url);
+  await (await showMarkdown(composer(page))).fill("draft text");
+  await leaveEditor(page, url);
   const surface = await openEditor(page, url);
   await surface.click();
   await page.keyboard.type("typed ");
-  const cancel = composer(page).getByRole("button", { name: "Cancel" });
-  await cancel.click();
-  const dialog = page.getByRole("alertdialog", { name: "Discard changes?" });
+  await composer(page).getByRole("button", { name: "Discard recovered changes" }).click();
+  const dialog = page.getByRole("alertdialog", { name: "Discard your unsaved changes?" });
   await expect(dialog).toBeVisible();
-  // Answering after the editor's 200 ms output debounce has passed: whatever that output wrote,
-  // discarding clears it, so no draft is left to be restored.
+  // Let the editor's delayed Markdown output land before confirming the discard.
   await page.waitForTimeout(400);
-  await dialog.getByRole("button", { name: "Discard changes" }).click();
-  await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
-
-  await openEditor(page, url);
-  await expect(composer(page).getByRole("status").filter({ hasText: "unsaved changes were restored" })).toHaveCount(0);
+  page.on("dialog", dialog => void dialog.accept());
+  await dialog.getByRole("button", { name: "Discard and load latest" }).click();
+  await expect(surface).toHaveText("start", ROUND_TRIP);
+  await page.reload();
+  await expect(surface).toBeEditable(ROUND_TRIP);
+  await expect(surface).toHaveText("start");
+  await expect(composer(page).getByRole("status").filter({ hasText: recovered })).toHaveCount(0);
 });
 
-test("a restored draft on a document someone changed meanwhile conflicts instead of overwriting", async ({ page }) => {
+test("stale recovery stays paused and can be downloaded before loading the latest version", async ({ page }) => {
   const url = await createNote(page, unique("Stale Draft"));
   await openEditor(page, url);
-  const source = await showMarkdown(composer(page));
-  await source.fill("mine");
+  await (await showMarkdown(composer(page))).fill("mine");
   await leaveEditor(page, url);
 
-  // A new page is a new tab, with its own sessionStorage.
+  // A new tab has its own sessionStorage and can save a newer revision.
   const other = await page.context().newPage();
   await openEditor(other, url);
-  const theirSource = await showMarkdown(composer(other));
-  await theirSource.fill("theirs");
-  await composer(other).getByRole("button", { name: "Save" }).click();
-  await expect(other).not.toHaveURL(/\/edit$/, ROUND_TRIP);
-  await expect(other.locator("article").first().getByText("theirs")).toBeVisible(ROUND_TRIP);
+  await (await showMarkdown(composer(other))).fill("theirs");
+  await expect(other.locator('[data-autosave-status="saved"]')).toBeVisible(ROUND_TRIP);
   await other.close();
 
   const surface = await openEditor(page, url);
   await expect(composer(page).getByRole("status").filter({ hasText: "changed while you were away" })).toBeVisible();
   await expect(surface).toContainText("mine");
-  await composer(page).getByRole("button", { name: "Save" }).click();
-  await expect(page.getByRole("alert").filter({ hasText: "Someone updated this document" })).toBeVisible(ROUND_TRIP);
-  await expect(surface).toContainText("mine");
+  await expect(composer(page).getByRole("button", { name: "Resume saving" })).toHaveCount(0);
+  const writes: string[] = [];
+  page.on("request", request => {
+    if (request.method() === "PATCH" && request.url().includes("/api/documents/")) writes.push(request.url());
+  });
+  await surface.press("ControlOrMeta+s");
+  await page.waitForTimeout(3500);
+  expect(writes).toHaveLength(0);
+  const downloading = page.waitForEvent("download");
+  await composer(page).getByRole("button", { name: "Download my changes" }).click();
+  const download = await downloading;
+  const stream = await download.createReadStream();
+  expect(stream).not.toBeNull();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
+  expect(Buffer.concat(chunks).toString()).toBe("mine");
 
-  await composer(page).getByRole("button", { name: "Load latest version (discard your changes)" }).click();
+  await composer(page).getByRole("button", { name: "Discard recovered changes" }).click();
+  page.on("dialog", dialog => void dialog.accept());
+  await page.getByRole("alertdialog").getByRole("button", { name: "Discard and load latest" }).click();
   await expect(surface).toContainText("theirs", ROUND_TRIP);
-  await expect(composer(page).getByRole("status").filter({ hasText: "unsaved changes were restored" })).toHaveCount(0);
+  await expect(composer(page).getByRole("button", { name: "Discard recovered changes" })).toHaveCount(0);
 });
 
-test("Cancel asks before discarding changes, and discarding clears the draft", async ({ page }) => {
-  const url = await createNote(page, unique("Cancel"));
+test("discard recovery asks for confirmation and Keep editing or Escape preserves it", async ({ page }) => {
+  const url = await createNote(page, unique("Keep Recovery"));
+  await openEditor(page, url);
+  await (await showMarkdown(composer(page))).fill("changed");
+  await leaveEditor(page, url);
   await openEditor(page, url);
   const source = await showMarkdown(composer(page));
-  await source.fill("changed");
-  const cancel = composer(page).getByRole("button", { name: "Cancel" });
+  const discard = composer(page).getByRole("button", { name: "Discard recovered changes" });
 
-  // The question is the app's own dialog, not the browser's: it is in the page, so a click does not
-  // block on it. Asserting the Markdown field is still there with its typed value after answering
-  // "Keep editing" is the positive signal that no navigation happened (router.push is async, so a
-  // URL check alone would pass even if the dialog had never appeared).
-  await cancel.click();
-  const dialog = page.getByRole("alertdialog", { name: "Discard changes?" });
+  await discard.click();
+  const dialog = page.getByRole("alertdialog", { name: "Discard your unsaved changes?" });
   await expect(dialog).toBeVisible();
-  // The safe answer holds focus, so Enter on a freshly opened dialog never discards by reflex.
   await expect(dialog.getByRole("button", { name: "Keep editing" })).toBeFocused();
   await dialog.getByRole("button", { name: "Keep editing" }).click();
   await expect(dialog).toBeHidden();
-  await expect(source).toBeVisible();
   await expect(source).toHaveValue("changed");
 
-  // Escape means no, too.
-  await cancel.click();
+  await discard.click();
   await expect(dialog).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   await expect(source).toHaveValue("changed");
+  await expect(discard).toBeVisible();
 
-  await cancel.click();
-  await dialog.getByRole("button", { name: "Discard changes" }).click();
-  await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
-
-  const surface = await openEditor(page, url);
-  await expect(surface).not.toContainText("changed");
-  await expect(composer(page).getByRole("status").filter({ hasText: "unsaved changes were restored" })).toHaveCount(0);
+  await discard.click();
+  page.on("dialog", dialog => void dialog.accept());
+  await dialog.getByRole("button", { name: "Discard and load latest" }).click();
+  await expect(surfaceOf(page)).toBeEditable(ROUND_TRIP);
+  await expect(surfaceOf(page)).not.toContainText("changed");
+  await expect(composer(page).getByRole("status").filter({ hasText: recovered })).toHaveCount(0);
 });

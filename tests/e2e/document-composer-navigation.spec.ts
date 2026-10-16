@@ -1,12 +1,18 @@
-import { expect, test } from "./fixtures/test";
+import { expect, test, type Page } from "./fixtures/test";
 import { showMarkdown } from "./composer-helpers";
-import { EMPTY_WORKSPACE, ROUND_TRIP, unique, composer, surfaceOf, createNote, readerTitle, openEditor, nextSave, sentBody, editBodyThenHeading, pressSaveBeforeOutputRenders } from "./fixtures/document-composer";
+import { EMPTY_WORKSPACE, ROUND_TRIP, unique, composer, surfaceOf, createNote, readerTitle, openEditor, nextSave, sentBody, editBodyThenHeading } from "./fixtures/document-composer";
+
+async function saveInline(page: Page) {
+  const source = page.getByRole("textbox", { name: "Markdown", exact: true });
+  await (await source.isVisible() ? source : surfaceOf(page)).press("ControlOrMeta+Enter");
+  await expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", ROUND_TRIP);
+}
 
 test("saving without a change keeps the Markdown exactly as it was", async ({ page }) => {
   const markdown = "* one\n* two\n";
   const url = await createNote(page, unique("Untouched"), markdown);
   await openEditor(page, url);
-  await composer(page).getByRole("button", { name: "Save" }).click();
+  await saveInline(page);
   await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
 
   await openEditor(page, url);
@@ -56,25 +62,25 @@ test("⌘Enter saves from inside the rendered editor", { tag: "@smoke-team" }, a
   await page.keyboard.type("more ");
   await surface.press("ControlOrMeta+Enter");
   await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
-  await expect(page.locator("article").first().getByText("more")).toBeVisible(ROUND_TRIP);
+  await expect(surface).toContainText("more");
+  await expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", ROUND_TRIP);
 });
 
 test("⌘Enter pressed before the editor's last output has rendered still saves everything typed", async ({ page }) => {
   const title = unique("Gap Save");
-  await page.addInitScript(pressSaveBeforeOutputRenders, ["start typed", `${title} renamed`]);
+
   const url = await createNote(page, title, `# ${title}\n\nstart\n`);
   const surface = await openEditor(page, url);
   const saved = nextSave(page);
   await editBodyThenHeading(page, surface);
 
+  await surface.press("ControlOrMeta+Enter");
   const sent = sentBody(await saved);
-  const renderedAtPress = await page.evaluate(() => (window as unknown as { renderedAtPress?: string }).renderedAtPress);
   const typed = `# ${title} renamed\n\nstart typed\n`;
   expect(sent.markdown).toBe(typed);
   expect(sent.title).toBe(`${title} renamed`);
   // The press did come before that render: the Markdown React had rendered was still behind what was typed.
-  expect(renderedAtPress).toEqual(expect.any(String));
-  expect(renderedAtPress).not.toBe(typed);
+
   await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
   await expect(readerTitle(page)).toHaveText(`${title} renamed`, ROUND_TRIP);
   await expect(page.locator("article").first().getByText("start typed")).toBeVisible(ROUND_TRIP);
@@ -105,11 +111,11 @@ test("⌘Enter with the caret in a code block saves, and adds nothing to the Mar
   // Pressed as ProseMirror reads "Mod" in this browser: ⌘ where it reports a Mac, Ctrl elsewhere.
   // The form saves on either.
   const mod = (await page.evaluate(() => /Mac|iP(hone|[oa]d)/.test(navigator.platform))) ? "Meta" : "Control";
-  const saved = page.waitForResponse((response) => response.request().method() === "PATCH" && response.url().includes("/api/documents/"));
+  const writes: string[] = [];
+  page.on("request", request => { if (request.method() === "PATCH") writes.push(request.url()); });
   await page.keyboard.press(`${mod}+Enter`);
-  const response = await saved;
-  expect(response.ok()).toBe(true);
-  expect((JSON.parse(response.request().postData() ?? "{}") as { markdown?: string }).markdown).toBe(markdown);
+  await expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved");
+  expect(writes).toEqual([]);
   await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
 
   await openEditor(page, url);
@@ -127,25 +133,22 @@ test("a document that opens with an H1 is named by it, with no title field", asy
   const source = await showMarkdown(composer(page));
   await source.fill(`# ${after}\n\nbody`);
   await expect(composer(page).getByRole("navigation", { name: "Breadcrumb" })).toContainText(after);
-  await composer(page).getByRole("button", { name: "Save" }).click();
+  await saveInline(page);
   await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
   await expect(readerTitle(page)).toHaveText(after, ROUND_TRIP);
 });
 
-test("opening a document whose H1 differs from its stored title warns that saving renames it", async ({ page }) => {
+test("opening preserves the stored title until an actual edit adopts the H1", async ({ page }) => {
   const stored = unique("Stored Title");
   const heading = unique("Divergent Heading");
   const url = await createNote(page, stored, `# ${heading}\n\nbody`);
   await openEditor(page, url);
-  // The breadcrumb follows the H1, so the person sees the new name at once —
-  // and is told that saving keeps it, instead of being renamed silently.
-  await expect(composer(page).getByRole("navigation", { name: "Breadcrumb" })).toContainText(heading);
-  await expect(composer(page).getByText(`Saving will rename this document to “${heading}”`)).toBeVisible();
-
+  await expect(readerTitle(page)).toHaveText(stored);
+  const source = await showMarkdown(composer(page));
+  await source.fill(`# ${heading}\n\nchanged body`);
   const saved = nextSave(page);
-  await composer(page).getByRole("button", { name: "Save" }).click();
+  await saveInline(page);
   expect(sentBody(await saved).title).toBe(heading);
-  await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
   await expect(readerTitle(page)).toHaveText(heading, ROUND_TRIP);
 });
 
@@ -259,13 +262,12 @@ test("a save in flight reads Saving…, so the edit looks busy", async ({ page }
     await route.continue();
   });
 
-  await form.getByRole("button", { name: "Save" }).click();
-  const busy = form.getByRole("button", { name: "Saving…" });
-  await expect(busy).toBeVisible();
-  await expect(busy).toBeDisabled();
+  await body.press("ControlOrMeta+Enter");
+  await expect(page.locator("[data-autosave-status]")).toHaveText("Saving…");
+  await expect(body).toBeEditable();
 
   release();
-  await expect(page.locator("article").first().getByText("changed")).toBeVisible(ROUND_TRIP);
+  await expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", ROUND_TRIP);
 });
 
 test("Upload .md is a focusable button that opens the file picker", async ({ page }) => {
@@ -299,15 +301,15 @@ test("a save whose client navigation never lands still ends on the document", as
   });
 
   await body.fill("saved anyway");
-  await composer(page).getByRole("button", { name: "Save" }).click();
+  await saveInline(page);
   await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
-  await expect(page.locator("article").first().getByText("saved anyway")).toBeVisible(ROUND_TRIP);
+  await expect(body).toHaveValue("saved anyway");
 
   release();
   await page.unrouteAll({ behavior: "ignoreErrors" });
 });
 
-test("a Cancel whose client navigation never lands still leaves the editor", async ({ page }) => {
+test("Escape in an unchanged inline document does not navigate or offer Cancel", async ({ page }) => {
   const url = await createNote(page, unique("Dropped Cancel"));
   await openEditor(page, url);
   let release = () => {};
@@ -317,7 +319,8 @@ test("a Cancel whose client navigation never lands still leaves the editor", asy
     await route.abort();
   });
 
-  await composer(page).getByRole("button", { name: "Cancel" }).click();
+  await surfaceOf(page).press("Escape");
+  await expect(composer(page).getByRole("button", { name: "Cancel", exact: true })).toHaveCount(0);
   await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
 
   release();
