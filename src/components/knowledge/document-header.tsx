@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type Ref } from "react";
+import { useEffect, useState, type Ref, type ReactNode } from "react";
 import { LockKeyhole, MessageSquare, PanelRight } from "lucide-react";
 import { ActionIcon } from "@/components/actions/action-icon";
 import { Badge } from "@/components/ui/badge";
@@ -29,7 +29,13 @@ export function DocumentHeader({
   contentOwnsTitle,
   headerRef,
   pinned = false,
+  titleControl,
+  saveStatus,
+  readOnlyReason,
 }: {
+  titleControl?: ReactNode;
+  saveStatus?: ReactNode;
+  readOnlyReason?: ReactNode;
   breadcrumb: DocumentBreadcrumbSegment[];
   title: string;
   status: "ACTIVE" | "ARCHIVED";
@@ -93,6 +99,7 @@ export function DocumentHeader({
               </Link>
             </Tooltip>
           ) : null}
+          {saveStatus}
           {onShareClick ? (
             <Tooltip label="Share link…">
               <button
@@ -145,10 +152,11 @@ export function DocumentHeader({
       </div>
       <header ref={headerRef}>
         <div className="kh-reading-column pb-3">
-          {contentOwnsTitle ? null : (
+          {titleControl ?? (contentOwnsTitle ? null : (
             <h1 className="mt-2 truncate text-heading font-semibold tracking-tight text-kh-text" title={title}>{title}</h1>
-          )}
+          ))}
           <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-kh-text-muted">
+            {readOnlyReason}
             {readOnly ? <span className="inline-flex items-center gap-1"><LockKeyhole className="h-3 w-3" aria-hidden="true" />Read only</span> : null}
             {readOnly ? (
               // Source ownership decides who may write: say where the edit happens instead of only refusing it.

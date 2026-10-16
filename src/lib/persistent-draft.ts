@@ -6,10 +6,11 @@ export class PersistentDraft {
   private version = 0;
   private pending: Draft | null | undefined;
   private loaded = false;
+  private synced: Draft | null | undefined;
   private stopped = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private flight: Promise<void> | undefined;
-  constructor(private readonly endpoint: string, private readonly key: string, private readonly onStatus: (s: DraftStatus) => void) {}
+  constructor(private readonly endpoint: string, private readonly key: string, private readonly onStatus: (s: DraftStatus) => void, private readonly options: { autoSync?: boolean; delay?: number } = {}) {}
   private get storageKey() { return `kh:persistent:${this.endpoint}:${this.key}`; }
   private readLocal(): Envelope | null {
     try {
@@ -31,11 +32,12 @@ export class PersistentDraft {
       if (!response.ok) throw new Error();
       const remote = await response.json() as Envelope;
       this.version = remote.version;
+      this.synced = remote.value;
       this.loaded = true;
       if (local && JSON.stringify(local.value) !== JSON.stringify(remote.value)) {
         this.pending = local.value;
         if (local.version !== remote.version) { this.stopped = true; this.onStatus("conflict"); }
-        else { this.onStatus("local"); this.schedule(); }
+        else { this.onStatus("local"); if (this.options.autoSync !== false) this.schedule(); }
         return local.value;
       }
       this.onStatus("saved");
@@ -46,15 +48,16 @@ export class PersistentDraft {
       return local?.value ?? null;
     }
   }
-  change(value: Draft | null) {
+  change(value: Draft | null, sync = this.options.autoSync !== false) {
     this.pending = value;
     const kept = this.keepLocal(value);
     this.onStatus(this.stopped ? "conflict" : kept ? "local" : "error");
-    this.schedule();
+    clearTimeout(this.timer);
+    if (sync) this.schedule();
   }
   private schedule() {
     clearTimeout(this.timer);
-    this.timer = setTimeout(() => { void this.flush(); }, 600);
+    this.timer = setTimeout(() => { void this.flush(); }, this.options.delay ?? 600);
   }
   async flush(): Promise<void> {
     clearTimeout(this.timer);
@@ -62,6 +65,14 @@ export class PersistentDraft {
     if (!this.loaded || this.stopped || this.pending === undefined) return;
     const value = this.pending;
     this.pending = undefined;
+    if (JSON.stringify(value) === JSON.stringify(this.synced)) {
+      const local = this.readLocal();
+      if (local?.version === this.version && JSON.stringify(local.value) === JSON.stringify(value)) {
+        try { localStorage.removeItem(this.storageKey); } catch { /* unavailable storage */ }
+      }
+      this.onStatus("saved");
+      return;
+    }
     this.onStatus("saving");
     this.flight = (async () => {
       try {
@@ -72,6 +83,7 @@ export class PersistentDraft {
         }
         const result = await response.json() as Envelope;
         this.version = result.version;
+        this.synced = value;
         if (this.pending !== undefined) this.keepLocal(this.pending);
         else {
           // Do not delete another tab's local recovery copy.

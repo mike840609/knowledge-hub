@@ -42,3 +42,29 @@ it("discarding a conflicting recovery copy leaves the newer remote draft untouch
   expect(await new PersistentDraft("/personal", "draft:new", vi.fn()).load()).toEqual(remote);
   expect(fetcher.mock.calls.every(call => call[1]?.method !== "PUT")).toBe(true);
 });
+it("inline autosave keeps local recovery without uploading successful edits twice", async () => {
+  const fetcher = vi.fn().mockResolvedValue(Response.json({ value: null, version: 0 }));
+  vi.stubGlobal("fetch", fetcher);
+  const client = new PersistentDraft("/personal", "draft:doc", vi.fn(), { autoSync: false });
+  await client.load();
+  client.change(draft);
+  await vi.advanceTimersByTimeAsync(20000);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(localStorage.getItem("kh:persistent:/personal:draft:doc")).toContain("Recovery");
+  client.change(null);
+  await client.flush();
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(localStorage.getItem("kh:persistent:/personal:draft:doc")).toBeNull();
+});
+it("flushes recovery on failure or leaving, then clears only the uploaded draft", async () => {
+  const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ value: null, version: 0 }))
+    .mockResolvedValueOnce(Response.json({ version: 1 })).mockResolvedValueOnce(Response.json({ version: 2 }));
+  vi.stubGlobal("fetch", fetcher);
+  const client = new PersistentDraft("/personal", "draft:doc", vi.fn(), { autoSync: false });
+  await client.load(); client.change(draft); await client.flush();
+  client.change(null); await client.flush();
+  expect(fetcher).toHaveBeenCalledTimes(3);
+  expect(JSON.parse(fetcher.mock.calls[2][1].body)).toMatchObject({ value: null, version: 1 });
+  client.change(null); await client.flush();
+  expect(fetcher).toHaveBeenCalledTimes(3);
+});

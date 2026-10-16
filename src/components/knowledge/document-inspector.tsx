@@ -324,7 +324,15 @@ export function DocumentDetailClient({
   ownership,
   contentOwnsTitle,
   outline,
+  titleControl,
+  saveStatus,
+  readOnlyReason,
+  onInspect,
 }: {
+  titleControl?: ReactNode;
+  saveStatus?: ReactNode;
+  readOnlyReason?: ReactNode;
+  onInspect?: () => void;
   breadcrumb: DocumentBreadcrumbSegment[];
   title: string;
   status: "ACTIVE" | "ARCHIVED";
@@ -362,9 +370,10 @@ export function DocumentDetailClient({
   const inspectorOpen = inspector?.open ?? false;
   const setInspectorOpen = inspector?.setOpen;
   const openInspector = useCallback(() => {
+    onInspect?.();
     setInspectorOpen?.(true);
     window.dispatchEvent(new CustomEvent("kh:open-inspector"));
-  }, [setInspectorOpen]);
+  }, [setInspectorOpen, onInspect]);
   const toggleInspector = useCallback(() => {
     if (inspectorOpen) {
       setInspectorOpen?.(false);
@@ -458,6 +467,9 @@ export function DocumentDetailClient({
         inspector={<DocumentInspector open={inspectorOpen} onOpenChange={(open) => setInspectorOpen?.(open)} data={inspectorData} outline={outline} activeSlug={activeSlug} requestedTab={requestedTab} />}
       >
           <DocumentHeader
+            titleControl={titleControl}
+            saveStatus={saveStatus}
+            readOnlyReason={readOnlyReason}
             headerRef={headerRef}
             pinned={scrolledPast}
             breadcrumb={breadcrumb}

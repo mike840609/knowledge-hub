@@ -13,6 +13,7 @@ export async function governanceRequest<T>(
   url: string,
   method = "GET",
   body?: unknown,
+  options?: { notifyMutation?: boolean },
 ): Promise<T> {
   const response = await fetch(url, {
     method,
@@ -36,7 +37,7 @@ export async function governanceRequest<T>(
       },
     );
   }
-  if (method !== "GET") window.dispatchEvent(new Event("kh:workspace-mutation"));
+  if (method !== "GET" && options?.notifyMutation !== false) window.dispatchEvent(new Event("kh:workspace-mutation"));
   return data as T;
 }
 export function governanceFailure(error: unknown): GovernanceFailure {

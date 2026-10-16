@@ -27,7 +27,7 @@ import { ReviewFilterMenu, ReviewThreadList, reviewRequest, type ReviewFilter } 
  * The owner replies, resolves and hides, and starts a discussion as a reader of a link does: by
  * selecting a passage (docs/superpowers/specs/2026-10-13-review-anchors-and-owner-threads-design.md).
  */
-export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = false, children }: { documentId: string; revisionId: string; markdown: string; readOnly?: boolean; children: ReactNode }) {
+export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = false, contentPending = false, children }: { documentId: string; revisionId: string; markdown: string; readOnly?: boolean; contentPending?: boolean; children: ReactNode }) {
   const [result, setResult] = useState<{ threads: OwnerReviewThreadView[]; writesEnabled: boolean; revisionId: string; callerUserId: string }>();
   const [error, setError] = useState<string>();
   const [open, setOpen] = useState(false);
@@ -40,17 +40,19 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
   const readingRef = useRef<HTMLDivElement>(null);
   const inline = useReviewRailInline();
   const revisionChanged = !!result && result.revisionId !== revisionId;
-  const located = revisionChanged ? undefined : result?.threads;
+  const located = revisionChanged || contentPending ? undefined : result?.threads;
   useReviewHighlights(markdown, located, activeThreadId);
   const selection = useReviewSelection(readingRef, markdown, `${documentId}:${revisionId}`);
-  const canComment = !!result?.writesEnabled && !readOnly && !revisionChanged;
+  const canComment = !!result?.writesEnabled && !readOnly && !revisionChanged && !contentPending;
   const base = `/api/documents/${documentId}/review-threads`;
   const { unreadCount, markRead } = useShareCommentUnread(documentId);
   const load = useCallback(async () => { try { setResult(await reviewRequest(base)); setError(undefined); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not load discussions."); } }, [base]);
+  useEffect(() => { if (contentPending) selection.clear(); }, [contentPending, selection.clear]);
   // Opening the panel marks this document's notices read; a closed panel clears nothing.
   useEffect(() => { if (open && result && !revisionChanged) void markRead(); }, [open, result, revisionChanged, markRead]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { setActiveThreadId(undefined); }, [documentId, revisionId]);
+  useEffect(() => { if (revisionChanged && !contentPending) void load(); }, [revisionChanged, contentPending, load]);
   // Open on arrival, once, where a discussion awaits the owner that they have not closed the rail
   // on (`review-auto-open.ts`) — and only as a rail: a drawer would cover what they came to read.
   // It sets the state and nothing else, so it takes neither the focus nor the scroll position.
@@ -134,8 +136,8 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
             {canComment && <div className="mt-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={selection.capture} aria-label="Add comment from selected text"><MessageSquarePlus className="size-4" aria-hidden="true" />Add comment</Button></div>}
           </div>
           {composer && !draft && <div className="mt-3">{composer}</div>}
-          {result && <div className="mt-3"><ReviewThreadList draft={draft} filter={filter} onFilterChange={setFilter} railMarkdown={revisionChanged ? undefined : markdown} activeThreadId={activeThreadId} onActivate={setActiveThreadId}
-            focusAnchor={revisionChanged ? undefined : anchor => { const root = document.querySelector<HTMLElement>("[data-review-document]"); if (root) focusReviewAnchor(root, markdown, anchor); }}
+          {result && <div className="mt-3"><ReviewThreadList draft={draft} filter={filter} onFilterChange={setFilter} railMarkdown={revisionChanged || contentPending ? undefined : markdown} activeThreadId={activeThreadId} onActivate={setActiveThreadId}
+            focusAnchor={revisionChanged || contentPending ? undefined : anchor => { const root = document.querySelector<HTMLElement>("[data-review-document]"); if (root) focusReviewAnchor(root, markdown, anchor); }}
             threads={result.threads} writesEnabled={result.writesEnabled && !readOnly} canResolve={!readOnly}
             reply={async (threadId, body, idempotencyKey) => { await reviewRequest(`${base}/${threadId}/replies`, { body, idempotencyKey }); await load(); }}
             author={{

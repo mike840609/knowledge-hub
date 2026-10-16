@@ -23,6 +23,8 @@ export function useReviewHighlights(markdown: string, threads?: (ReviewThreadVie
       registry.set("document-review-active", new HighlightClass(...ranges.filter(item => item.threadId === activeThreadId).map(item => item.range)));
     }
     function focusDiscussion(event: PointerEvent) {
+      // Clicking editable text must place the caret, never transfer focus to a comment card.
+      if (event.target instanceof Element && event.target.closest('[contenteditable="true"]')) return;
       if (!window.getSelection()?.isCollapsed) return;
       const candidates = ranges.filter(({range}) => Array.from(range.getClientRects()).some(rect => event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom));
       const target = candidates.find(item => item.threadId === activeThreadId) ?? candidates[0];
