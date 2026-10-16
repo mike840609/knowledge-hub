@@ -9,12 +9,24 @@ import { HeadingSlugger } from "@/shared/markdown/heading-slug";
  * id of the explorer's filter box, and the page-wide lookup would return
  * whichever comes first in the DOM — the explorer — and scroll to it.
  */
-export function findHeading(slug: string): HTMLElement | null {
-  const read = document.querySelector<HTMLElement>(`[data-document-pane] article [id="${CSS.escape(slug)}"]`);
+export function findHeading(slug: string, scope?: ParentNode | null): HTMLElement | null {
+  const root: ParentNode = scope ?? document;
+  const selector = `[id="${CSS.escape(slug)}"]`;
+  if (root === document) {
+    const read = document.querySelector<HTMLElement>(`[data-document-pane] article ${selector}`);
+    if (read) return read;
+    // The composer's editor does not carry the reader's ids; its headings take the reader's slugs in reading order.
+    const slugger = new HeadingSlugger();
+    const editing = document.querySelectorAll<HTMLElement>("[data-document-pane] .kh-editor :is(h1, h2, h3, h4, h5, h6)");
+    return [...editing].find((heading) => slugger.slug((heading.textContent ?? "").trim()) === slug) ?? null;
+  }
+  // Scoped to one pane's own root (the pane wrapper or its scroll container):
+  // the root already sits inside its pane, so the pane qualifier would match
+  // nothing and is dropped — the search stays inside this pane only.
+  const read = root.querySelector<HTMLElement>(`article ${selector}`);
   if (read) return read;
-  // The composer's editor does not carry the reader's ids; its headings take the reader's slugs in reading order.
   const slugger = new HeadingSlugger();
-  const editing = document.querySelectorAll<HTMLElement>("[data-document-pane] .kh-editor :is(h1, h2, h3, h4, h5, h6)");
+  const editing = root.querySelectorAll<HTMLElement>(".kh-editor :is(h1, h2, h3, h4, h5, h6)");
   return [...editing].find((heading) => slugger.slug((heading.textContent ?? "").trim()) === slug) ?? null;
 }
 
@@ -64,7 +76,7 @@ export function useActiveHeading(slugs: readonly string[], rootRef: RefObject<HT
       frame = 0;
       const rootTop = root.getBoundingClientRect().top;
       const tops = slugs.map((slug) => {
-        const element = findHeading(slug);
+        const element = findHeading(slug, root);
         return element ? element.getBoundingClientRect().top - rootTop : Number.POSITIVE_INFINITY;
       });
       const atBottom = root.scrollTop > 0 && root.scrollTop + root.clientHeight >= root.scrollHeight - 2;

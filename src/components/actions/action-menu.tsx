@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/menu";
 import { requestFolderName } from "@/components/knowledge/folder-name-request";
 import { requestMove } from "@/components/knowledge/move-request";
+import { requestPeek } from "@/components/knowledge/peek-request";
 import { requestNavToggle } from "@/components/shell/nav-toggle";
 import { useTreeMutations } from "@/components/knowledge/use-tree-mutations";
 import { shortcutLabel } from "@/lib/shortcut-keys";
@@ -82,6 +83,9 @@ export function useActionRunner({ onToggleFavorite }: ActionHandlers) {
         case "open-new-tab":
           // `noopener` so the new tab cannot reach back into this one.
           window.open(effect.href, "_blank", "noopener");
+          return;
+        case "side-peek":
+          requestPeek({ documentId: effect.documentId, sourceId: effect.sourceId });
           return;
         case "copy-link":
           void copyLink(effect.href, toast);

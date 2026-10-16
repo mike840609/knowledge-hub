@@ -749,8 +749,10 @@ it is chosen from has already closed; the clipboard can refuse, and says so.
 This was missed on the first pass and found by reading the product rather than
 the diff: middle-click still worked, so nothing looked broken.
 
-**A row's menu is grouped by what the reader is doing**: open, change, export,
-remove, in that order, with a rule between sections. Remove is last and alone,
+**A row's menu is grouped by what the reader is doing**: open, change, open in,
+export, remove, in that order, with a rule between sections. *Open in* holds the
+two ways of opening the document somewhere other than here — the side peek and a
+new tab. Remove is last and alone,
 because Archive and Restore are what looks hardest to take back and a menu keeps
 those where a stray click is least likely to land. The sections follow a
 `section` field on the registry's row actions; the palette keeps its own

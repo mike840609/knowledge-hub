@@ -203,11 +203,11 @@ test("the row menu shows each action's key, without truncating its label, and no
   await expect(menu.getByRole("menuitem", { name: /Edit document/ }).locator("kbd")).toHaveText("E");
   await expect(menu.getByRole("menuitem", { name: /Add to favorites/ }).locator("kbd")).toHaveText("F");
   await expect(menu.getByRole("menuitem", { name: /Move document/ }).locator("kbd")).toHaveText("M");
-  // Grouped by what the reader is doing (open, change, export, remove), one rule between each pair of sections.
+  // Grouped by what the reader is doing (open, change, open in, export, remove), one rule between each pair of sections.
   const shape = await menuShape(menu);
-  expect(shape).toEqual(["Open in new tab", "Copy link", RULE, "Edit document", "Add to favorites", "Move document…", RULE, "Download Markdown", RULE, "Archive document"]);
+  expect(shape).toEqual(["Copy link", RULE, "Edit document", "Add to favorites", "Move document…", RULE, "Open in side peek", "Open in new tab", RULE, "Download Markdown", RULE, "Archive document"]);
   expectRulesOnlyBetweenItems(shape);
-  expect(await menu.getByRole("separator").count()).toBe(3);
+  expect(await menu.getByRole("separator").count()).toBe(4);
   const labels = menu.getByRole("menuitem").locator("span.truncate");
   expect(await labels.count()).toBeGreaterThan(0);
   expect(await labels.count()).toBe(await menu.getByRole("menuitem").count());
@@ -220,11 +220,12 @@ test("the row menu shows each action's key, without truncating its label, and no
   await row(page, "Compliance Policy").click({ button: "right" });
   await expect(page.getByRole("menu")).toBeVisible(ROUND_TRIP);
   await expect(page.getByRole("menuitem", { name: /Open in new tab/ })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: /Open in side peek/ })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: /Edit document/ })).toHaveCount(0);
   for (const gone of ["Move document…", "Archive document"]) await expect(page.getByRole("menuitem", { name: gone })).toHaveCount(0);
   // Only what is offered is drawn, and a rule only between two sections that both have something in them.
   const readOnlyShape = await menuShape(page.getByRole("menu"));
-  expect(readOnlyShape).toEqual(["Open in new tab", "Copy link", RULE, "Add to favorites", RULE, "Download Markdown"]);
+  expect(readOnlyShape).toEqual(["Copy link", RULE, "Add to favorites", RULE, "Open in side peek", "Open in new tab", RULE, "Download Markdown"]);
   expectRulesOnlyBetweenItems(readOnlyShape);
 });
 

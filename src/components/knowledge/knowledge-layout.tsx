@@ -8,6 +8,10 @@ import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/applicat
 import { SourceSidebar } from "./source-sidebar";
 import { FolderNameDialogHost } from "./folder-name-dialog";
 import { MoveDialogHost } from "./move-dialog";
+import { PeekDialog } from "./peek-dialog";
+import { PeekPane } from "./peek-pane";
+import { PEEK_REQUEST_EVENT, type PeekRequest } from "./peek-request";
+import { useIsWide } from "./use-is-wide";
 import { ShareLinkDialogHost } from "./share-link-dialog";
 import { InspectorContext } from "./inspector-context";
 import { DocumentSkeleton, TreeSkeleton } from "./knowledge-skeletons";
@@ -30,6 +34,8 @@ export function KnowledgeLayout({
   const [explorerTarget, setExplorerTarget] = useState<HTMLElement | null>(null);
   const pathname = usePathname();
   const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [peekRequest, setPeekRequest] = useState<PeekRequest | null>(null);
+  const isWide = useIsWide();
   const contentRef = useRef<HTMLDivElement>(null);
 
   useScrollRestoration(contentRef, pathname);
@@ -41,6 +47,19 @@ export function KnowledgeLayout({
       window.removeEventListener("kh:open-nav", close);
     };
   }, []);
+
+  useEffect(() => {
+    const open = (event: Event) => {
+      const detail = (event as CustomEvent<Partial<PeekRequest>>).detail;
+      if (typeof detail?.documentId === "string" && typeof detail?.sourceId === "string") {
+        setPeekRequest({ documentId: detail.documentId, sourceId: detail.sourceId });
+      }
+    };
+    window.addEventListener(PEEK_REQUEST_EVENT, open);
+    return () => window.removeEventListener(PEEK_REQUEST_EVENT, open);
+  }, []);
+
+  const closePeek = () => setPeekRequest(null);
 
   const sidebar = (
     <SourceSidebar
@@ -62,13 +81,28 @@ export function KnowledgeLayout({
         if ((event.target as HTMLElement).closest("a") && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) navigation.closeNavigation();
       }}>{sidebar}</div>, navigation.mobileExplorerTarget) : explorerTarget ? createPortal(sidebar, explorerTarget) : null}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <div ref={contentRef} className="min-h-0 flex-1 overflow-hidden overscroll-contain [&:not(:has([data-document-pane]))]:overflow-y-auto">
-          <Suspense fallback={<DocumentSkeleton />}>{children}</Suspense>
+        <div className="flex min-h-0 min-w-0 flex-1">
+          <div ref={contentRef} className="min-h-0 min-w-0 flex-1 overflow-hidden overscroll-contain [&:not(:has([data-document-pane]))]:overflow-y-auto">
+            <Suspense fallback={<DocumentSkeleton />}>{children}</Suspense>
+          </div>
+          {peekRequest && isWide ? (
+            <div data-testid="side-peek" className="min-h-0 min-w-0 flex-1 border-l border-kh-border">
+              <PeekPane request={peekRequest} onClose={closePeek} />
+            </div>
+          ) : null}
         </div>
       </div>
       <ShareLinkDialogHost />
       <FolderNameDialogHost />
       <MoveDialogHost collections={collections} />
+      {peekRequest && !isWide ? (
+        <PeekDialog
+          request={peekRequest}
+          onOpenChange={(next) => {
+            if (!next) closePeek();
+          }}
+        />
+      ) : null}
     </div>
     </InspectorContext.Provider>
   );
