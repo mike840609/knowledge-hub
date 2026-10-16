@@ -66,7 +66,7 @@ test("a server-rendered timestamp ends up in the reader's zone", async ({ browse
 test("a document's revision history is read in the browser's zone", async ({ browser }) => {
   const { context, page } = await visit(browser, ZONES.east, `/w/${WORKSPACE}/knowledge/${SOURCE}`);
   try {
-    await expect(page.getByRole("heading", { name: "Architecture" })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Title", exact: true })).toBeVisible();
     await page.locator("main").getByRole("button", { name: "Details" }).click();
     await page.getByRole("tab", { name: "History" }).click();
     const panel = page.getByRole("tabpanel", { name: "History" });

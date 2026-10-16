@@ -44,7 +44,7 @@ for (const scenario of [
     const start = await create(plainTitle, `[[${withOutlineTitle}]]\n\n${paragraphs}`);
     await page.goto(start);
     const content = page.getByRole("region", { name: "Document content", exact: true });
-    await expect(content.locator("article")).toBeVisible(ROUND_TRIP);
+    await expect(content.locator("article:visible")).toBeVisible(ROUND_TRIP);
     if (scenario.inspector) {
       await page.getByRole("button", { name: "Details", exact: true }).first().click();
       await expect(page.getByRole("complementary", { name: "Document details", exact: true })).toBeVisible();
@@ -81,7 +81,7 @@ for (const scenario of [
     expect(Math.abs(loading!.width - before!.width)).toBeLessThanOrEqual(1);
     await test.info().attach("loading", { body: await page.screenshot(), contentType: "image/png" });
 
-    await expect(content.locator("article")).toBeVisible(ROUND_TRIP);
+    await expect(content.locator("article:visible")).toBeVisible(ROUND_TRIP);
     await expect(page).toHaveURL(new RegExp(`${destination}$`));
     const after = await content.locator(".kh-reading-column").first().boundingBox();
     expect(after).not.toBeNull();
@@ -94,7 +94,7 @@ for (const scenario of [
     // Returning to a document without an outline must also keep its position.
     await content.getByRole("link", { name: plainTitle, exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`${start}$`));
-    await expect(content.locator("article")).toBeVisible(ROUND_TRIP);
+    await expect(content.locator("article:visible")).toBeVisible(ROUND_TRIP);
     const returned = await content.locator(".kh-reading-column").first().boundingBox();
     expect(Math.abs(returned!.x - before!.x)).toBeLessThanOrEqual(1);
     await expect(page.getByRole("complementary", { name: "On this page", exact: true })).toHaveCount(0);
