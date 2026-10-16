@@ -161,3 +161,39 @@ test("inline: saving leaves history, sharing and discussion controls available",
   await expect(page.getByRole("link", { name: /Revision 2/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Share link…" })).toBeVisible();
 });
+
+test("inline: continuous typing submits by the maximum wait without account draft writes", async ({ page }) => {
+  const { url, id } = await note(page);
+  const editor = await surface(page, url);
+  let patches = 0;
+  let drafts = 0;
+  page.on("request", request => {
+    if (request.method() === "PATCH" && request.url().endsWith(`/api/documents/${id}`)) patches++;
+    if (request.method() === "PUT" && request.url().includes("/personal")) drafts++;
+  });
+  for (let i = 0; i < 15; i++) {
+    await editor.fill(`Continuous typing ${i}`);
+    await page.waitForTimeout(1000);
+  }
+  await expect.poll(() => patches).toBeGreaterThanOrEqual(1);
+  await saved(page);
+  expect(drafts).toBe(0);
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("Continuous typing 14");
+});
+
+test("inline: a failed document save backs up recovery to the account", async ({ page, browser }) => {
+  const { url, id } = await note(page);
+  const editor = await surface(page, url);
+  await page.route(`**/api/documents/${id}`, route => route.request().method() === "PATCH" ? route.abort() : route.continue());
+  const backup = page.waitForResponse(response => response.request().method() === "PUT" && response.url().includes("/personal") && response.ok());
+  await editor.fill("Account recovery text.");
+  await backup;
+  const other = await browser.newContext();
+  try {
+    const second = await other.newPage();
+    await second.goto(new URL(url, page.url()).href);
+    await expect(second.getByRole("button", { name: "Resume saving" })).toBeVisible({ timeout: 15000 });
+    await expect(second.getByRole("textbox", { name: "Content", exact: true })).toContainText("Account recovery text.");
+  } finally { await other.close(); }
+});
