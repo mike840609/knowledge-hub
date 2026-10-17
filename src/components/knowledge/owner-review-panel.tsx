@@ -17,7 +17,7 @@ import { ReviewPassageMarkers } from "./review-passage-markers";
 import { reviewRailInline, useReviewRailInline } from "./review-rail-mode";
 import { InlineReviewContext, type CaptureReviewAnchor, type PreparedReviewComment } from "./inline-review-context";
 import { useReviewDomVersion } from "./review-dom-version";
-import { createReviewRangeResolver, focusReviewAnchor } from "./review-selection";
+import { createReviewRangeResolver, focusReviewAnchor, selectionAnchorInBlock } from "./review-selection";
 import { ReviewFilterMenu, ReviewThreadList, reviewRequest, type ReviewFilter } from "./review-thread-list";
 
 /**
@@ -184,7 +184,28 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
       <div ref={readingRef} className="kh-review-reading">
         {children}
         {canComment && (!prepareComment || !!selection.hint) && <ReviewSelectionBubble place={selection.place} ready={selection.ready} hint={selection.hint} onComment={() => { selection.capture(); changeOpen(true); }} />}
-        {canComment && <ReviewBlockComment readingRef={readingRef} markdown={markdown} chosen={selection.chosen} onChoose={anchor => { if (prepareComment) requestComment(() => anchor); else { selection.choose(anchor); changeOpen(true); } }} />}
+        {canComment && <ReviewBlockComment readingRef={readingRef} markdown={markdown} chosen={selection.chosen} onChoose={anchor => {
+          // What is selected inside this paragraph is the comment's passage; without a selection
+          // there the button still comments on the paragraph, up to the server's quote limit.
+          // The whole paragraph lights up only when the comment is about the whole paragraph.
+          const resolve = (current: string) => {
+            const root = readingRef.current?.querySelector<HTMLElement>("[data-review-document]");
+            return (root && selectionAnchorInBlock(root, current, anchor, window.getSelection())) ?? anchor;
+          };
+          if (prepareComment) {
+            let useBlock = true;
+            requestComment(current => {
+              const resolved = resolve(current);
+              useBlock = resolved === anchor;
+              return resolved;
+            });
+            return useBlock;
+          }
+          const resolved = resolve(markdown);
+          selection.choose(resolved);
+          changeOpen(true);
+          return resolved === anchor;
+        }} />}
         <ReviewPassageMarkers readingRef={readingRef} markdown={markdown} threads={located} />
       </div>
       <aside id="owner-document-discussions" className="kh-review-panel" aria-label="Document discussions" onKeyDown={event => { if (!event.defaultPrevented && event.key === "Escape" && reviewRailInline()) { if (selection.chosen) cancelComment(); else changeOpen(false); } }}>

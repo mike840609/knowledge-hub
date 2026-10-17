@@ -157,6 +157,22 @@ describe("the selection toolbar's DOM contract", () => {
     expect(toolbarElement().getAttribute("role")).toBe("toolbar");
   });
 
+  it("puts Comment on selection last, after every formatting control", async () => {
+    const editor = await open("some text\n", true, { available: () => true, run: () => {} });
+    mountToolbar(editor);
+    expect([...toolbarElement().querySelectorAll("button")].map((b) => b.getAttribute("aria-label"))).toEqual([
+      "Bold",
+      "Italic",
+      "Link",
+      "Heading 1",
+      "Heading 2",
+      "Bulleted list",
+      "Numbered list",
+      "Toggle section",
+      "Comment on selection",
+    ]);
+  });
+
   it("cancels mousedown on the buttons and on the toolbar's own padding, but not on the link box", async () => {
     const editor = await open("some text\n");
     mountToolbar(editor);

@@ -5,7 +5,7 @@ import { MarkdownRenderer } from "@/components/knowledge/markdown-renderer";
 import { linkLookupKey } from "@/modules/knowledge/domain/link-graph";
 import * as projection from "@/modules/knowledge/domain/review-anchor";
 import { validateReviewAnchor } from "@/modules/knowledge/domain/review-anchor";
-import { reviewBlockAnchor, createReviewRangeResolver, focusReviewAnchor, readReviewSelection, reviewAnchorRange, selectedReviewAnchor } from "@/components/knowledge/review-selection";
+import { reviewBlockAnchor, createReviewRangeResolver, focusReviewAnchor, readReviewSelection, reviewAnchorRange, selectedReviewAnchor, selectionAnchorInBlock } from "@/components/knowledge/review-selection";
 
 // Every case is read off the page the reader really draws: the mapping is between that page and the
 // Markdown, and a hand-written page would only show that it agrees with itself.
@@ -306,6 +306,32 @@ describe("paragraph comment controls", () => {
     const root = page("Saved text");
     root.querySelector("p")!.textContent = "Unsaved change";
     expect(reviewBlockAnchor(root.querySelector("p")!, "Saved text")).toBeNull();
+  });
+  test("narrows the block button to the selected words", () => {
+    const markdown = `${"filler ".repeat(120)}target words here.`;
+    const root = page(markdown);
+    const block = reviewBlockAnchor(root.querySelector("p")!, markdown)!;
+    expect([...block.exact]).toHaveLength(512);
+    const { from, to } = span(root.querySelector("p")!, "target words");
+    const narrowed = selectionAnchorInBlock(root, markdown, block, select(from, to));
+    expect(narrowed?.exact).toBe("target words");
+    expect(narrowed?.blockPath).toEqual(block.blockPath);
+  });
+  test("keeps the block anchor when the selection is elsewhere, across blocks or collapsed", () => {
+    const markdown = "First paragraph here.\n\nSecond paragraph here.";
+    const root = page(markdown);
+    const block = reviewBlockAnchor(root.querySelector("p")!, markdown)!;
+    const elsewhere = span(root.querySelectorAll("p")[1], "paragraph");
+    expect(selectionAnchorInBlock(root, markdown, block, select(elsewhere.from, elsewhere.to))).toBeNull();
+    const across = select(span(root.querySelectorAll("p")[0], "here.").from, span(root.querySelectorAll("p")[1], "Second").to);
+    expect(selectionAnchorInBlock(root, markdown, block, across)).toBeNull();
+    const caret = document.createRange();
+    caret.setStart(root.querySelector("p")!.firstChild!, 0);
+    caret.collapse(true);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(caret);
+    expect(selectionAnchorInBlock(root, markdown, block, selection)).toBeNull();
   });
 });
 

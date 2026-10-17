@@ -38,6 +38,28 @@ test("lossy editor projection cannot reassign duplicate paths, and clears stale 
 });
 
 
+test("an HTML block leaves its neighbours stamped instead of clearing the document", () => {
+  const markdown = "Before\n\n<div>raw</div>\n\nAfter\n";
+  const root = editor("<p>Before</p><p>&lt;div&gt;raw&lt;/div&gt;</p><p>After</p>");
+  document.body.replaceChildren(root);
+  expect(stampEditorReviewPaths(root, markdown)).toBe(true);
+  expect([...root.querySelectorAll("p")].map(p => p.getAttribute("data-review-path"))).toEqual(["0", null, "2"]);
+  const range = document.createRange();
+  range.setStart(root.querySelectorAll("p")[0].firstChild!, 0);
+  range.setEnd(root.querySelectorAll("p")[0].firstChild!, 6);
+  const selection = window.getSelection()!;
+  selection.removeAllRanges();
+  selection.addRange(range);
+  expect(readReviewSelection(root, markdown, selection).anchor).toMatchObject({ blockPath: [0], exact: "Before" });
+});
+
+test("a changed sentence disables only its own paragraph", () => {
+  const root = editor("<p>Same</p><p>Changed</p>");
+  document.body.replaceChildren(root);
+  expect(stampEditorReviewPaths(root, "Same\n\nDifferent")).toBe(true);
+  expect([...root.querySelectorAll("p")].map(p => p.getAttribute("data-review-path"))).toEqual(["0", null]);
+});
+
 test("unsupported HTML in its own paragraph does not disable unrelated passages", () => {
   const root = editor("<p>Safe</p><p>Other <kbd>Wiki</kbd> text.</p><p>Safe</p>");
   expect(stampEditorReviewPaths(root, "Safe\n\nOther <kbd>Wiki</kbd> text.\n\nSafe")).toBe(true);
