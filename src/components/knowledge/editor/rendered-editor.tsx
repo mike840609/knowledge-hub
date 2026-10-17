@@ -67,6 +67,13 @@ export function RenderedEditor(props: RenderedEditorProps) {
   latest.current = props;
 
   useEffect(() => {
+    // The toolbar belongs to ProseMirror rather than React, so a React selection
+    // validity update must explicitly refresh its visibility.
+    const commentGroup = containerRef.current?.querySelector<HTMLElement>("[data-review-comment-control]");
+    if (commentGroup) commentGroup.hidden = !review?.available;
+  }, [review?.available]);
+
+  useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
     // Its own host, so the two editors a Strict Mode double-mount briefly

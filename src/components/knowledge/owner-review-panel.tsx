@@ -52,7 +52,8 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
   const requestVersion = useRef(0);
   const returnPassage = useRef<(() => void) | null>(null);
   const domVersion = useReviewDomVersion();
-  const canRequest = !!prepareComment && !!result?.writesEnabled && !readOnly && !revisionChanged && commentAvailable && selection.ready && !selection.chosen;
+  const canRequest = !!prepareComment && !!result?.writesEnabled && !readOnly && !revisionChanged && commentAvailable;
+  const canRequestSelection = canRequest && selection.ready && !selection.chosen;
   const savePrepared = useCallback(async (comment: PreparedReviewComment, version: number) => {
     setSavingDocument(true); setSaveError(undefined);
     try {
@@ -148,7 +149,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
       void savePrepared(comment, version);
     } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not select this passage."); }
   }, [canRequest, prepareComment, selection.choose, changeOpen, savePrepared]);
-  const reviewContext = useMemo(() => prepareComment ? { available: canRequest, request: requestComment } : null, [prepareComment, canRequest, requestComment]);
+  const reviewContext = useMemo(() => prepareComment ? { available: canRequestSelection, request: requestComment } : null, [prepareComment, canRequestSelection, requestComment]);
   const cancelComment = () => {
     const anchor = selection.chosen;
     const snapshot = prepared?.markdown ?? markdown;

@@ -164,6 +164,7 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
           const input = document.createElement("input");
           const commentGroup = document.createElement("div");
           commentGroup.className = "ml-1 border-l border-kh-border pl-1";
+          commentGroup.setAttribute("data-review-comment-control", "");
           const commentButton = document.createElement("button");
           commentButton.type = "button";
           commentButton.className = buttonClasses({ variant: "ghost", size: "md" });

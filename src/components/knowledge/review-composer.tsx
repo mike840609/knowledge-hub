@@ -49,6 +49,9 @@ export function useReviewSelection(readingRef: RefObject<HTMLElement | null>, ma
       }
     };
     document.addEventListener("selectionchange", remember);
+    // The selected DOM can be created before a concurrent edit updates the Markdown prop. Recheck
+    // it when the reader catches up, even if the browser has already delivered selectionchange.
+    remember();
     return () => { window.clearTimeout(timer); document.removeEventListener("selectionchange", remember); };
   }, [read, readingRef]);
   const capture = useCallback(() => {

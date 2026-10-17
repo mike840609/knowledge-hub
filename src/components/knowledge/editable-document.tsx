@@ -39,7 +39,6 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
   const { confirmed, access } = useWorkspaceAuthorization();
   const [content, setContent] = useState<DocumentContent>({ title: detail.title, markdown });
   const [savedRevision, setSavedRevision] = useState(revisionId);
-  const [savedMarkdown, setSavedMarkdown] = useState(markdown);
   const [savedTitle, setSavedTitle] = useState(detail.title);
   const [savedAt, setSavedAt] = useState(detail.updatedAt);
   const [localRevisions, setLocalRevisions] = useState<DetailProps["inspectorData"]["revisions"]>([]);
@@ -152,7 +151,6 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
         if (!live) return;
         acknowledgedRevisionNo.current = revision.revisionNo;
         setSavedRevision(revision.revisionId);
-        setSavedMarkdown(snapshot.markdown);
         setSavedTitle(resolve(snapshot).title);
         const createdAt = new Date();
         setSavedAt(createdAt);
@@ -252,7 +250,6 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
       try { editor.current.replaceMarkdown(markdown); } catch { setFailed(true); }
     }
     setContent(next);
-    setSavedMarkdown(markdown);
     setSavedTitle(detail.title);
     setSavedAt(detail.updatedAt);
     acknowledgedRevisionNo.current = detail.inspectorData.selectedRevisionNo;
@@ -352,7 +349,7 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
     }}>
       {!ready && !source && !failed && !recovery ? standIn : null}
       <Article data-review-document={ready && !source && !failed ? "" : undefined} hidden={source || failed || !ready}>
-        {loaded && Editor && !failed && <Editor reviewMarkdown={ready && !dirty && !source && !recovery ? savedMarkdown : undefined} renderCode={renderCode} links={links} workspaceId={detail.inspectorData.workspaceId} documentId={detail.inspectorData.documentId}
+        {loaded && Editor && !failed && <Editor reviewMarkdown={ready && !source && !recovery ? content.markdown : undefined} renderCode={renderCode} links={links} workspaceId={detail.inspectorData.workspaceId} documentId={detail.inspectorData.documentId}
           markdown={content.markdown} editable={editable && !source} onReady={(instance, openedWith) => {
             editor.current = instance;
             if (openedWith !== queue.current!.current.markdown) instance.replaceMarkdown(queue.current!.current.markdown);
@@ -384,7 +381,7 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
       onCompositionEnd={() => { composing.current = false; writer?.pause(!editable || !!recovery || !resolve(queue.current!.current).title); }} /> : undefined}>
     <div className="kh-reading-column py-6">
       {personal && <ReadRevisionMarker workspaceId={detail.inspectorData.workspaceId} documentId={detail.inspectorData.documentId} revisionId={savedRevision} />}
-      {personal ? <OwnerReviewPanel documentId={detail.inspectorData.documentId} revisionId={savedRevision} markdown={savedMarkdown} prepareComment={prepareComment} commentAvailable={editable && ready && !recovery && !source && !failed} contentPending={dirty || !!recovery || source || failed || !ready}>{article}</OwnerReviewPanel> : article}
+      {personal ? <OwnerReviewPanel documentId={detail.inspectorData.documentId} revisionId={savedRevision} markdown={content.markdown} prepareComment={prepareComment} commentAvailable={editable && ready && !recovery && !source && !failed} contentPending={dirty || !!recovery || source || failed || !ready}>{article}</OwnerReviewPanel> : article}
       {backlinks}
     </div>
     <ConfirmDialog open={discarding} onOpenChange={setDiscarding} title="Discard your unsaved changes?"
