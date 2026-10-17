@@ -177,6 +177,16 @@ export function focusReviewAnchor(root: HTMLElement, markdown: string, anchor: R
   element.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
+/** The block button's passage, narrowed to what is selected when the selection is inside it.
+ * A collapsed, cross-block or elsewhere selection is not this button's: the caller keeps the
+ * block anchor then, so a comment is still about the paragraph whose button was pressed. */
+export function selectionAnchorInBlock(root: HTMLElement, markdown: string, block: ReviewAnchor, selection: Selection | null): ReviewAnchor | null {
+  if (!selection || selection.rangeCount !== 1 || selection.isCollapsed) return null;
+  const reading = readReviewRange(root, markdown, selection.getRangeAt(0));
+  if (!reading.anchor || reading.anchor.blockKind !== block.blockKind || reviewPathKey(reading.anchor.blockPath) !== reviewPathKey(block.blockPath)) return null;
+  return reading.anchor;
+}
+
 /** A block control uses the same canonical path and DOM proof as text selection.
  * Long paragraphs anchor their opening passage within the server's quote limit. */
 export function reviewBlockAnchor(element: HTMLElement, markdown: string): ReviewAnchor | null {
