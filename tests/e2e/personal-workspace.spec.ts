@@ -63,8 +63,7 @@ test("a new-note draft survives closing its tab and can be resumed from Home", {
   await expect(page.getByText("Draft saved to your account", { exact: true })).toBeVisible(wait);
   await page.close();
   const next = await context.newPage(); await next.goto("/");
-  await next.getByRole("tab", { name: /^Drafts/ }).click();
-  const draft = next.getByRole("tabpanel")
+  const draft = next.getByRole("region", { name: "Continue working" })
     .getByRole("link").filter({ has: next.getByText("New persistent note", { exact: true }) });
   await expect(draft).toHaveAttribute("href", `/w/${workspaceId}/knowledge/new`);
   await draft.click();

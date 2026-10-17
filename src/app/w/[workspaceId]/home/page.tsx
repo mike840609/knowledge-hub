@@ -26,7 +26,7 @@ export default async function PersonalHomePage({ params }: { params: Promise<{ w
   const onboarding = await getHomeOnboardingState(s.personalPreferences, caller, workspaceId,
     documents.length > 0 || items.some(item => !item.key.startsWith("prefs:")) || (folderModel?.items.length ?? 0) > 0 || profile.counts.archived > 0 || profile.sync.pending > 0 || progress.read || progress.search || progress.context);
   slots.guidance = <FirstUseGuidance key={onboarding.version} workspaceId={workspaceId} initial={onboarding} imported={folderIds.size > 0} progress={progress} firstDocumentHref={firstReadableDocument ? `/w/${workspaceId}/knowledge/${firstReadableDocument.sourceId}/${firstReadableDocument.documentId}` : undefined} />;
-  const updates=await s.folderUpdates.list(caller,workspaceId,{limit:3,documentsPerRun:5});
+  const updates=await s.folderUpdates.list(caller,workspaceId,{limit:3,documentsPerRun:5,unreadOnly:true});
   const locations=await s.unitOfWork.run(r=>r.entries.findByDocumentIds(documents.map(d=>d.documentId)));
   const paths=new Map(locations.map(e=>[e.documentId,e.sourcePath]));
   const sourceNames=new Map(folderModel?.items.map(i=>[i.source.id,i.source.name])??[]);

@@ -10,13 +10,16 @@ export function HomeUpdates({ workspaceId, page }: { workspaceId: string; page: 
       if (!change.documentId || !change.afterRevisionNo || seen.has(change.documentId)) return false;
       seen.add(change.documentId);
       return true;
-    }).slice(0, 3);
-  if (!changes.length) return <p className="px-3 py-2 text-body text-kh-text-muted">No recorded folder changes to show.</p>;
+    }).filter(change => change.unread).slice(0, 3);
+  if (!changes.length) return <p className="px-3 py-2 text-body text-kh-text-muted">No new knowledge updates.</p>;
   return <ul className="space-y-1">{changes.map(change => <li key={change.documentId}>
     <Link className="kh-interactive-row kh-focus-ring block rounded-md px-3 py-2" href={`/w/${workspaceId}/knowledge/${change.sourceId}/${change.documentId}?revision=${change.afterRevisionNo}`}>
       <span className="flex min-w-0 items-baseline gap-2">
         <span className="min-w-0 flex-1 truncate text-body text-kh-text">{change.title}</span>
-        <span className="shrink-0 text-caption text-kh-text-muted">Updated <Timestamp value={change.updatedAt} variant="relative" /></span>
+        <span className="grid shrink-0 grid-cols-1 text-right text-caption text-kh-text-muted sm:w-36 sm:grid-cols-[3rem_minmax(0,1fr)] sm:items-baseline sm:gap-2">
+          <span className="hidden sm:block sm:text-left">Updated</span>
+          <span className="whitespace-nowrap tabular-nums"><Timestamp value={change.updatedAt} variant="relative" /></span>
+        </span>
       </span>
       <span className="mt-1 flex min-w-0 items-center gap-2 text-caption text-kh-text-muted">
         <span className="min-w-0 flex-1 truncate" title={change.sourceName}>{change.sourceName}</span>

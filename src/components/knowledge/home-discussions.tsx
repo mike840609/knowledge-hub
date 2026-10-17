@@ -8,20 +8,23 @@ import { reviewRequest } from "./review-thread-list";
 
 /**
  * Unread share-link comments across the owner's documents, newest first.
- * Each row jumps to its document with the thread selected. Renders nothing
- * without unread notices, and a failed fetch never blocks the home page.
+ * Each row jumps to its document with the thread selected. Empty, loading,
+ * and failed requests stay distinct without blocking the rest of Home.
  */
-export function HomeDiscussions() {
+export function HomeDiscussions({ workspaceId }: { workspaceId: string }) {
   const [notices, setNotices] = useState<ShareCommentNotificationView[]>([]);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   useEffect(() => {
     let live = true;
     reviewRequest<{ notifications: ShareCommentNotificationView[] }>("/api/review-notifications/unread")
-      .then(result => { if (live) setNotices(result.notifications); })
-      .catch(() => { if (live) setNotices([]); });
+      .then(result => { if (live) { setNotices(result.notifications); setStatus("ready"); } })
+      .catch(() => { if (live) setStatus("error"); });
     return () => { live = false; };
   }, []);
-  if (!notices.length) return null;
-  return <ul aria-label="Unread discussions" className="mb-3 space-y-1">{notices.slice(0, 5).map(notice => (
+  const visible = notices.filter(notice => notice.workspaceId === workspaceId && !notice.readAt && notice.threadStatus === "OPEN");
+  return <section aria-label="Needs your attention">
+    <h2 className="flex items-center justify-between gap-2 px-3 pb-3 text-body font-medium text-kh-text">Needs your attention{visible.length > 0 ? <span className="text-caption text-kh-text-muted" aria-label={`${visible.length} unread notifications`}>{visible.length}</span> : null}</h2>
+    {status === "loading" ? <p role="status" className="px-3 py-2 text-body text-kh-text-muted">Loading discussions…</p> : status === "error" ? <p role="status" className="px-3 py-2 text-body text-kh-text-muted">Could not load discussions. Try opening Inbox.</p> : !visible.length ? <p className="px-3 py-2 text-body text-kh-text-muted">No new comments or replies.</p> : <ul aria-label="Unread discussions" className="space-y-1">{visible.slice(0, 5).map(notice => (
     <li key={notice.id}>
       <Link className="kh-interactive-row kh-focus-ring block rounded-md px-3 py-2" href={`/w/${notice.workspaceId}/knowledge/${notice.sourceId}/${notice.documentId}?thread=${notice.threadId}`}>
         <span className="flex min-w-0 items-baseline gap-2">
@@ -34,5 +37,7 @@ export function HomeDiscussions() {
         </span>
       </Link>
     </li>
-  ))}</ul>;
+  ))}</ul>}
+    <Link className="kh-focus-ring mt-3 inline-block rounded-md px-3 py-2 text-body-sm text-kh-link" href={`/w/${workspaceId}/inbox`}>Open Inbox</Link>
+  </section>;
 }
