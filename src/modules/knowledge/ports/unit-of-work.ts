@@ -1,3 +1,4 @@
+import type { KnowledgeCollectionRepository } from "./knowledge-collection-repository";
 import type { SavedShareRepository } from "./saved-share-repository";
 import type { ShareCommentEventRepository } from "./share-comment-event-repository";
 import type { DocumentReviewThreadRepository } from "./document-review-thread-repository";
@@ -44,6 +45,7 @@ export type KnowledgeRepositories = {
   groupMappings: WorkspaceGroupMappingRepository;
   shareLinks: DocumentShareLinkRepository;
   savedShares: SavedShareRepository;
+  collections: KnowledgeCollectionRepository;
   /**
    * The derived link index (graph spec §7). Every path that writes a revision
    * replaces the document's edges in the same transaction; reads use it for

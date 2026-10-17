@@ -96,6 +96,7 @@ describe("MariaDB schema and migrations", () => {
       "SELECT table_name, column_name, is_nullable FROM information_schema.columns WHERE table_schema = DATABASE() AND column_name = 'updated_by' ORDER BY table_name",
     );
     expect(actorColumns).toEqual([
+      { table_name: "knowledge_collections", column_name: "updated_by", is_nullable: "NO" },
       { table_name: "knowledge_documents", column_name: "updated_by", is_nullable: "NO" },
       { table_name: "knowledge_sources", column_name: "updated_by", is_nullable: "NO" },
       { table_name: "knowledge_tree_nodes", column_name: "updated_by", is_nullable: "NO" },

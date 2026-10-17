@@ -1,3 +1,4 @@
+import { MariaDbKnowledgeCollectionRepository } from "./knowledge-collections";
 import { MariaDbSavedShareRepository } from "./saved-shares";
 import { MariaDbShareCommentEventsRepository } from "./share-comment-events";
 import { MariaDbDocumentReviewThreadsRepository } from "./document-review-threads";
@@ -70,6 +71,7 @@ export function createRepositories(connection: DatabaseConnection): SourceReposi
     auditEvents: new MariaDbWorkspaceAuditEventRepository(connection),
     shareLinks: new MariaDbDocumentShareLinkRepository(connection),
     savedShares: new MariaDbSavedShareRepository(connection),
+    collections: new MariaDbKnowledgeCollectionRepository(connection),
     links: new MariaDbDocumentLinkRepository(connection),
     identityLinks: new MariaDbExternalIdentityLinkRepository(connection),
   };
