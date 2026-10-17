@@ -31,10 +31,10 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 // The tooltip provider is throttled at 200ms; a selection made after the first update shows after it.
 const throttleWindow = () => wait(260);
 
-async function open(markdown: string, editable = true): Promise<MarkdownEditor> {
+async function open(markdown: string, editable = true, comment?: Parameters<typeof selectionToolbar>[0]): Promise<MarkdownEditor> {
   const root = document.createElement("div");
   document.body.appendChild(root);
-  const toolbar = selectionToolbar();
+  const toolbar = selectionToolbar(comment);
   const editor = await createMarkdownEditor({
     root,
     markdown,
@@ -87,6 +87,39 @@ function key(target: HTMLElement, init: KeyboardEventInit) {
 }
 
 describe("the selection toolbar's DOM contract", () => {
+  it("keeps a pending toolbar reveal when review metadata updates after selection", async () => {
+    const editor = await open("hello world");
+    mountToolbar(editor);
+    await throttleWindow();
+    // Selection and review decorations can update in the same tooltip throttle window.
+    select(editor, 1, 1);
+    select(editor, 7, 12);
+    editor.action(ctx => {
+      const view = ctx.get(editorViewCtx);
+      view.dispatch(view.state.tr.setMeta("review-availability", true));
+    });
+    await throttleWindow();
+    expect(toolbarElement().dataset.show).toBe("true");
+  });
+
+  it("offers Comment in the same toolbar only while commenting is available", async () => {
+    let available = true;
+    const run = vi.fn();
+    const editor = await open("hello world", true, { available: () => available, run });
+    select(editor, 1, 6);
+    const comment = button("Comment on selection");
+    expect(comment.type).toBe("button");
+    expect(comment.parentElement!.hidden).toBe(false);
+    comment.click();
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(editor.getMarkdown()).toBe("hello world\n");
+    available = false;
+    mountToolbar(editor);
+    expect(comment.parentElement!.hidden).toBe(true);
+    comment.click();
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
   it("captures the final native range before Tab moves focus to formatting", async () => {
     const editor = await open("hello world");
     select(editor, 7, 10);

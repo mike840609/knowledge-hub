@@ -1,6 +1,8 @@
 "use client";
 
-import { useLayoutEffect, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { useContext, useLayoutEffect, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { InlineReviewContext } from "../inline-review-context";
+import { readReviewRange } from "../review-selection";
 import { isAllowedMarkdownImageSrc } from "@/components/knowledge/markdown-image-policy";
 import { MARKDOWN_PROSE } from "@/components/knowledge/markdown-prose";
 import { governanceRequest } from "@/components/workspaces/governance-error";
@@ -13,7 +15,7 @@ import { selectionToolbar } from "./selection-toolbar";
 import { wikiLinkSuggest } from "./wikilink-suggest";
 
 import { editorViewCtx } from "@milkdown/kit/core";
-import { editorReviewPathsPlugin, updateEditorReviewPaths } from "./review-paths";
+import { editorReviewPathsPlugin, preserveEditorSelection, updateEditorReviewPaths } from "./review-paths";
 import { createPortal } from "react-dom";
 import { Plugin, TextSelection } from "@milkdown/kit/prose/state";
 import { $prose } from "@milkdown/kit/utils";
@@ -54,6 +56,9 @@ export type RenderedEditorProps = {
  * at the moment they are needed, so a re-render never rebuilds the editor.
  */
 export function RenderedEditor(props: RenderedEditorProps) {
+  const review = useContext(InlineReviewContext);
+  const reviewRef = useRef(review);
+  reviewRef.current = review;
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<MarkdownEditor | null>(null);
   const [wikiViews, setWikiViews] = useState<{ dom: HTMLElement; raw: string }[]>([]);
@@ -69,7 +74,26 @@ export function RenderedEditor(props: RenderedEditorProps) {
     const host = document.createElement("div");
     container.appendChild(host);
     let cancelled = false;
-    const toolbar = selectionToolbar();
+    const toolbar = selectionToolbar({
+      available: () => !!reviewRef.current?.available,
+      run: view => {
+        const native = view.dom.ownerDocument.getSelection();
+        // A pointer preserves the native range; keyboard activation uses the
+        // editor's stored selection after Tab has moved focus into the toolbar.
+        const range = native && !native.isCollapsed && native.rangeCount && view.dom.contains(native.anchorNode)
+          ? native.getRangeAt(0).cloneRange() : (() => {
+            const from = view.domAtPos(view.state.selection.from);
+            const to = view.domAtPos(view.state.selection.to);
+            const selected = document.createRange();
+            selected.setStart(from.node, from.offset); selected.setEnd(to.node, to.offset);
+            return selected;
+          })();
+        reviewRef.current?.request(markdown => {
+          updateEditorReviewPaths(view, markdown);
+          return readReviewRange(view.dom, markdown, range).anchor ?? null;
+        });
+      },
+    });
     const suggest = wikiLinkSuggest({
       // Read through the ref at the moment of use, like every other prop here.
       loadTargets: () => governanceRequest<LinkTargetsView>(`/api/workspaces/${latest.current.workspaceId}/link-targets`),
@@ -192,6 +216,13 @@ export function RenderedEditor(props: RenderedEditorProps) {
   useEffect(() => {
     editorRef.current?.setEditable(props.editable);
   }, [props.editable]);
+
+  useLayoutEffect(() => {
+    editorRef.current?.action(ctx => {
+      const view = ctx.get(editorViewCtx);
+      view.dispatch(preserveEditorSelection(view, view.state.tr));
+    });
+  }, [review]);
 
   useLayoutEffect(() => {
     const root = containerRef.current;

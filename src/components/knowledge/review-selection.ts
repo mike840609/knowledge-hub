@@ -83,6 +83,12 @@ function withinLeaf(range: Range, element: HTMLElement): Range | null {
 export function readReviewSelection(root: HTMLElement, markdown: string, selection: Selection | null): ReviewSelectionReading {
   if (!selection || selection.rangeCount !== 1 || selection.isCollapsed) return { problem: "none" };
   const chosen = selection.getRangeAt(0);
+  return readReviewRange(root, markdown, chosen);
+}
+
+/** A captured range remains usable after focus moves to a comment control. */
+export function readReviewRange(root: HTMLElement, markdown: string, chosen: Range): ReviewSelectionReading {
+  if (chosen.collapsed) return { problem: "none" };
   if (!root.contains(chosen.startContainer) || !root.contains(chosen.endContainer) || !chosen.toString().trim()) return { problem: "none" };
   const element = leafOf(chosen.startContainer);
   if (!element) return { problem: leafOf(chosen.endContainer) ? "across" : "unsupported" };

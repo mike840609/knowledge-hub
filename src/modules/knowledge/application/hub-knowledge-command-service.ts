@@ -2,7 +2,7 @@ import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import type { KnowledgeUnitOfWork } from "../ports/unit-of-work";
 import { createDocumentInTransaction, type CreateHubDocumentInput } from "./internal/create-document";
 import { createFolderInTransaction } from "./internal/create-folder";
-import { createRevisionInTransaction, type CreateRevisionInput } from "./internal/create-revision";
+import { createRevisionInTransaction, type CreateRevisionInput, type CreateRevisionResult } from "./internal/create-revision";
 import { moveTreeNodeInTransaction } from "./internal/move-tree-node";
 import { renameFolderInTransaction } from "./internal/rename-folder";
 import { reorderTreeNodeInTransaction } from "./internal/reorder-tree-node";
@@ -23,7 +23,7 @@ export type MoveTreeNodeInput = {
  */
 export interface HubKnowledgeCommandService {
   createDocument(caller: CallerContext, input: CreateHubDocumentInput): Promise<{ documentId: string; revisionId: string; treeNodeId: string }>;
-  createRevision(caller: CallerContext, input: CreateRevisionInput): Promise<{ revisionId: string; revisionNo: number; changed: boolean }>;
+  createRevision(caller: CallerContext, input: CreateRevisionInput): Promise<CreateRevisionResult>;
   renameFolder(caller: CallerContext, input: { nodeId: string; name: string }): Promise<void>;
   createFolder(caller: CallerContext, input: { sourceId: string; parentId: string | null; name: string; position?: number }): Promise<{ treeNodeId: string }>;
   moveTreeNode(caller: CallerContext, input: MoveTreeNodeInput): Promise<void>;
@@ -49,7 +49,7 @@ export interface HubKnowledgeCommandService {
 export class HubKnowledgeCommandServiceImpl implements HubKnowledgeCommandService {
   private readonly unitOfWork: KnowledgeUnitOfWork;
 
-  constructor(unitOfWork: KnowledgeUnitOfWork) {
+  constructor(unitOfWork: KnowledgeUnitOfWork, private readonly clock: () => Date = () => new Date()) {
     this.unitOfWork = unitOfWork;
   }
 
@@ -63,8 +63,8 @@ export class HubKnowledgeCommandServiceImpl implements HubKnowledgeCommandServic
   async createRevision(
     caller: CallerContext,
     input: CreateRevisionInput,
-  ): Promise<{ revisionId: string; revisionNo: number; changed: boolean }> {
-    return this.unitOfWork.run((repositories) => createRevisionInTransaction(repositories, caller, input));
+  ): Promise<CreateRevisionResult> {
+    return this.unitOfWork.run((repositories) => createRevisionInTransaction(repositories, caller, input, this.clock()));
   }
 
   async createFolder(

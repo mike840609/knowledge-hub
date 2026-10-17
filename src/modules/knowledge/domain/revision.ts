@@ -2,6 +2,7 @@ import type { ContentInput, KnowledgeMetadata, RevisionContentInput } from "./co
 import { isSameRevisionContent } from "./content";
 
 export type KnowledgeRevision = ContentInput & {
+  history?: import("./revision-history").RevisionHistory;
   id: string;
   documentId: string;
   revisionNo: number;

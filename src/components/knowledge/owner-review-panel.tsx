@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { MessageSquarePlus, RefreshCw, X } from "lucide-react";
 import type { OwnerReviewThreadView } from "@/modules/knowledge/domain/document-review";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,9 @@ import { ReviewPanelShell } from "./review-panel-shell";
 import { ReviewBlockComment } from "./review-block-comment";
 import { ReviewPassageMarkers } from "./review-passage-markers";
 import { reviewRailInline, useReviewRailInline } from "./review-rail-mode";
-import { focusReviewAnchor } from "./review-selection";
+import { InlineReviewContext, type CaptureReviewAnchor, type PreparedReviewComment } from "./inline-review-context";
+import { useReviewDomVersion } from "./review-dom-version";
+import { createReviewRangeResolver, focusReviewAnchor } from "./review-selection";
 import { ReviewFilterMenu, ReviewThreadList, reviewRequest, type ReviewFilter } from "./review-thread-list";
 
 /**
@@ -27,7 +29,7 @@ import { ReviewFilterMenu, ReviewThreadList, reviewRequest, type ReviewFilter } 
  * The owner replies, resolves and hides, and starts a discussion as a reader of a link does: by
  * selecting a passage (docs/superpowers/specs/2026-10-13-review-anchors-and-owner-threads-design.md).
  */
-export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = false, contentPending = false, children }: { documentId: string; revisionId: string; markdown: string; readOnly?: boolean; contentPending?: boolean; children: ReactNode }) {
+export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = false, contentPending = false, prepareComment, commentAvailable = false, children }: { prepareComment?: (capture: CaptureReviewAnchor) => PreparedReviewComment; commentAvailable?: boolean; documentId: string; revisionId: string; markdown: string; readOnly?: boolean; contentPending?: boolean; children: ReactNode }) {
   const [result, setResult] = useState<{ threads: OwnerReviewThreadView[]; writesEnabled: boolean; revisionId: string; callerUserId: string }>();
   const [error, setError] = useState<string>();
   const [open, setOpen] = useState(false);
@@ -42,12 +44,41 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
   const revisionChanged = !!result && result.revisionId !== revisionId;
   const located = revisionChanged || contentPending ? undefined : result?.threads;
   useReviewHighlights(markdown, located, activeThreadId);
-  const selection = useReviewSelection(readingRef, markdown, `${documentId}:${revisionId}`);
+  const selection = useReviewSelection(readingRef, markdown, prepareComment ? documentId : `${documentId}:${revisionId}`, !!prepareComment);
+  const [prepared, setPrepared] = useState<PreparedReviewComment>();
+  const [commentRevision, setCommentRevision] = useState<string>();
+  const [savingDocument, setSavingDocument] = useState(false);
+  const [saveError, setSaveError] = useState<string>();
+  const requestVersion = useRef(0);
+  const returnPassage = useRef<(() => void) | null>(null);
+  const domVersion = useReviewDomVersion();
+  const canRequest = !!prepareComment && !!result?.writesEnabled && !readOnly && !revisionChanged && commentAvailable && !selection.chosen;
+  const savePrepared = useCallback(async (comment: PreparedReviewComment, version: number) => {
+    setSavingDocument(true); setSaveError(undefined);
+    try {
+      const revision = await comment.save();
+      if (requestVersion.current === version) setCommentRevision(revision);
+    } catch (failure) {
+      if (requestVersion.current === version) setSaveError(failure instanceof Error ? failure.message : "Could not save the document. Your comment is kept here.");
+    } finally {
+      if (requestVersion.current === version) setSavingDocument(false);
+    }
+  }, []);
+  useEffect(() => () => { requestVersion.current++; }, [documentId]);
+  useEffect(() => {
+    const registry = (globalThis.CSS as typeof CSS & { highlights?: Map<string, unknown> })?.highlights;
+    const HighlightClass = (globalThis as typeof globalThis & { Highlight?: new (...ranges: Range[]) => unknown }).Highlight;
+    const root = readingRef.current?.querySelector<HTMLElement>("[data-review-document]");
+    const range = root && selection.chosen && prepared ? createReviewRangeResolver(root, prepared.markdown)(selection.chosen) : null;
+    if (registry && HighlightClass && range) registry.set("document-review-draft", new HighlightClass(range));
+    else registry?.delete("document-review-draft");
+    return () => { registry?.delete("document-review-draft"); };
+  }, [selection.chosen, prepared, domVersion]);
   const canComment = !!result?.writesEnabled && !readOnly && !revisionChanged && !contentPending;
   const base = `/api/documents/${documentId}/review-threads`;
   const { unreadCount, markRead } = useShareCommentUnread(documentId);
   const load = useCallback(async () => { try { setResult(await reviewRequest(base)); setError(undefined); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not load discussions."); } }, [base]);
-  useEffect(() => { if (contentPending) selection.clear(); }, [contentPending, selection.clear]);
+  useEffect(() => { if (contentPending && !prepareComment) selection.clear(); }, [contentPending, prepareComment, selection.clear]);
   // Opening the panel marks this document's notices read; a closed panel clears nothing.
   useEffect(() => { if (open && result && !revisionChanged) void markRead(); }, [open, result, revisionChanged, markRead]);
   useEffect(() => { void load(); }, [load]);
@@ -87,9 +118,13 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
     if (next) removeStored("local", dismissedKey(documentId));
     else writeStored("local", dismissedKey(documentId), JSON.stringify(awaitingOwner(threads.current, owner.current)));
     if (!next) {
-      selection.clear();
+      requestVersion.current++;
+      selection.clear(); setPrepared(undefined); setCommentRevision(undefined); setSaveError(undefined); setSavingDocument(false);
       setActiveThreadId(undefined);
-      if (reviewRailInline()) entryRef?.current?.focus({ preventScroll: true });
+      if (reviewRailInline()) {
+        if (returnPassage.current) { const restore = returnPassage.current; returnPassage.current = null; requestAnimationFrame(restore); }
+        else entryRef?.current?.focus({ preventScroll: true });
+      }
     }
   }, [documentId, entryRef, selection.clear]);
   const count = result?.threads.length ?? 0;
@@ -103,24 +138,56 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
     publish?.(count > 0 || open || unreadCount > 0 ? { count, awaiting, unread: unreadCount, open, toggle } : null);
   }, [publish, count, awaiting, unreadCount, open, toggle]);
   useEffect(() => () => publish?.(null), [publish]);
-  const composer = selection.chosen && <ReviewComposer anchor={selection.chosen} onCancel={selection.clear} onSubmit={async (body, idempotencyKey) => {
-    const created = await reviewRequest<{ id: string }>(base, { expectedRevisionId: revisionId, anchor: selection.chosen, body, idempotencyKey });
-    selection.clear(); setFilter(current => current === "RESOLVED" ? "OPEN" : current); setActiveThreadId(created.id); await load();
-  }} />;
+  const requestComment = useCallback((capture: CaptureReviewAnchor) => {
+    if (!canRequest || !prepareComment) return;
+    try {
+      const comment = prepareComment(capture);
+      const version = ++requestVersion.current;
+      setPrepared(comment); setCommentRevision(undefined); setSaveError(undefined);
+      selection.choose(comment.anchor); changeOpen(true);
+      void savePrepared(comment, version);
+    } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not select this passage."); }
+  }, [canRequest, prepareComment, selection.choose, changeOpen, savePrepared]);
+  const reviewContext = useMemo(() => prepareComment ? { available: canRequest, request: requestComment } : null, [prepareComment, canRequest, requestComment]);
+  const cancelComment = () => {
+    const anchor = selection.chosen;
+    const snapshot = prepared?.markdown ?? markdown;
+    const restore = () => {
+      const root = readingRef.current?.querySelector<HTMLElement>("[data-review-document]");
+      if (root && anchor) {
+        if (createReviewRangeResolver(root, snapshot)(anchor)) focusReviewAnchor(root, snapshot, anchor);
+        else root.querySelector<HTMLElement>('[contenteditable="true"]')?.focus({ preventScroll: true });
+      }
+    };
+    requestVersion.current++;
+    selection.clear(); setPrepared(undefined); setCommentRevision(undefined); setSaveError(undefined); setSavingDocument(false);
+    if (!inline) { returnPassage.current = restore; changeOpen(false); }
+    else requestAnimationFrame(restore);
+  };
+  const composer = selection.chosen && <ReviewComposer anchor={selection.chosen} onCancel={cancelComment}
+    pending={savingDocument} saveError={saveError}
+    onRetrySave={prepared ? () => { void savePrepared(prepared, ++requestVersion.current); } : undefined}
+    onSubmit={async (body, idempotencyKey) => {
+      const revision = prepared ? commentRevision : revisionId;
+      if (!revision || savingDocument || saveError) throw new Error("Wait for the document to finish saving before commenting.");
+      const created = await reviewRequest<{ id: string }>(base, { expectedRevisionId: revision, anchor: selection.chosen, body, idempotencyKey });
+      selection.clear(); setPrepared(undefined); setCommentRevision(undefined);
+      setFilter(current => current === "RESOLVED" ? "OPEN" : current); setActiveThreadId(created.id); await load();
+    }} />;
   // Beside its passage where the discussions are a rail; at the top of the drawer, which covers the passage, where they are not.
-  const draft = composer && inline && !revisionChanged ? { anchor: selection.chosen!, composer } : undefined;
+  const draft = composer && inline && (!revisionChanged || !!prepared) ? { anchor: selection.chosen!, composer } : undefined;
   const refresh = <Tooltip label="Refresh comments"><Button type="button" variant="ghost" icon aria-label="Refresh comments" onClick={() => void load()}><RefreshCw className="size-4" aria-hidden="true" /></Button></Tooltip>;
-  return <>
+  return <InlineReviewContext.Provider value={reviewContext}>
     {!open && error && <p role="alert" className="pb-3 text-body-sm">{error}</p>}
     <div className="kh-review-document" data-review-ready={result || error ? "" : undefined} data-review-open={open ? "" : undefined} data-review-inline={inline ? "" : undefined}>
       <div ref={readingRef} className="kh-review-reading">
         {children}
-        {canComment && <ReviewSelectionBubble place={selection.place} ready={selection.ready} hint={selection.hint} onComment={() => { selection.capture(); changeOpen(true); }} />}
-        {canComment && <ReviewBlockComment readingRef={readingRef} markdown={markdown} chosen={selection.chosen} onChoose={anchor => { selection.choose(anchor); changeOpen(true); }} />}
+        {canComment && !prepareComment && <ReviewSelectionBubble place={selection.place} ready={selection.ready} hint={selection.hint} onComment={() => { selection.capture(); changeOpen(true); }} />}
+        {canComment && <ReviewBlockComment readingRef={readingRef} markdown={markdown} chosen={selection.chosen} onChoose={anchor => { if (prepareComment) requestComment(() => anchor); else { selection.choose(anchor); changeOpen(true); } }} />}
         <ReviewPassageMarkers readingRef={readingRef} markdown={markdown} threads={located} />
       </div>
-      <aside id="owner-document-discussions" className="kh-review-panel" aria-label="Document discussions" onKeyDown={event => { if (!event.defaultPrevented && event.key === "Escape" && reviewRailInline()) changeOpen(false); }}>
-        <ReviewPanelShell open={open} inline={inline} onOpenChange={changeOpen} returnFocus={() => entryRef?.current?.focus({ preventScroll: true })}><div>
+      <aside id="owner-document-discussions" className="kh-review-panel" aria-label="Document discussions" onKeyDown={event => { if (!event.defaultPrevented && event.key === "Escape" && reviewRailInline()) { if (selection.chosen) cancelComment(); else changeOpen(false); } }}>
+        <ReviewPanelShell open={open} inline={inline} onOpenChange={changeOpen} returnFocus={() => { if (returnPassage.current) { const restore = returnPassage.current; returnPassage.current = null; restore(); } else entryRef?.current?.focus({ preventScroll: true }); }}><div>
           <div className="kh-review-toolbar">
             {/* One row: what this is and which of it is listed, then what acts on it. As a drawer the
                 drawer names itself and closes itself, so the name and the cross are the rail's alone.
@@ -131,11 +198,11 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
             </div>
             {error && <p role="alert" className="mt-3 text-body-sm">{error}</p>}
             {selection.refusal && <p role="status" className="mt-3 text-body-sm">{selection.refusal}</p>}
-            {revisionChanged && <p role="status" className="mt-3 text-body-sm">Document changed. Refresh this page before selecting or locating a passage.</p>}
-            {canComment && <div className="mt-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={selection.capture} aria-label="Add comment from selected text"><MessageSquarePlus className="size-4" aria-hidden="true" />Add comment</Button></div>}
+            {revisionChanged && !prepared && <p role="status" className="mt-3 text-body-sm">Document changed. Refresh this page before selecting or locating a passage.</p>}
+            {canComment && !selection.chosen && <div className="mt-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={() => { if (prepareComment) requestComment(() => selection.capture()); else selection.capture(); }} aria-label="Add comment from selected text"><MessageSquarePlus className="size-4" aria-hidden="true" />Add comment</Button></div>}
           </div>
           {composer && !draft && <div className="mt-3">{composer}</div>}
-          {result && <div className="mt-3"><ReviewThreadList draft={draft} filter={filter} onFilterChange={setFilter} railMarkdown={revisionChanged || contentPending ? undefined : markdown} activeThreadId={activeThreadId} onActivate={setActiveThreadId}
+          {result && <div className="mt-3"><ReviewThreadList draft={draft} filter={filter} onFilterChange={setFilter} railMarkdown={prepared?.markdown ?? (revisionChanged || contentPending ? undefined : markdown)} activeThreadId={activeThreadId} onActivate={setActiveThreadId}
             focusAnchor={revisionChanged || contentPending ? undefined : anchor => { const root = document.querySelector<HTMLElement>("[data-review-document]"); if (root) focusReviewAnchor(root, markdown, anchor); }}
             threads={result.threads} writesEnabled={result.writesEnabled && !readOnly} canResolve={!readOnly}
             reply={async (threadId, body, idempotencyKey) => { await reviewRequest(`${base}/${threadId}/replies`, { body, idempotencyKey }); await load(); }}
@@ -147,5 +214,5 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
         </div></ReviewPanelShell>
       </aside>
     </div>
-  </>;
+  </InlineReviewContext.Provider>;
 }

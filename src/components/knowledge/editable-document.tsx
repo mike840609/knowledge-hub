@@ -19,6 +19,7 @@ import { extractDocumentLinks } from "@/modules/knowledge/domain/document-links"
 import type { RenderedLinks } from "./rendered-links";
 import type { MarkdownEditor } from "./editor/editor-core";
 import type { RenderedEditorProps } from "./editor/rendered-editor";
+import type { CaptureReviewAnchor, PreparedReviewComment } from "./inline-review-context";
 
 type DetailProps = Omit<ComponentProps<typeof DocumentDetailClient>, "children" | "titleControl" | "saveStatus">;
 
@@ -108,6 +109,20 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
     const after = resolve({ ...previous, markdown: next });
     change({ title: carryTitle(before, after, previous.title), markdown: next });
   }
+  function prepareComment(capture: CaptureReviewAnchor): PreparedReviewComment {
+    flushEditor();
+    const writer = queue.current;
+    if (!writer || !editable || recovery || source || failed || !ready || composing.current) throw new Error("Finish editing or recovering the document before commenting.");
+    const snapshot = writer.current;
+    const anchor = capture(snapshot.markdown);
+    if (!anchor) throw new Error("Select text within one paragraph to comment.");
+    return { anchor, markdown: snapshot.markdown, save: async () => {
+      if (writer.error) await writer.retry();
+      const revision = await writer.saveCurrent();
+      if (writer.current.markdown !== snapshot.markdown || writer.saved.markdown !== snapshot.markdown) throw new Error("The selected text changed. Cancel this comment and select the passage again.");
+      return revision;
+    } };
+  }
   const flushRef = useRef(flushEditor);
   flushRef.current = flushEditor;
 
@@ -121,7 +136,7 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
         const title = resolve(snapshot).title;
         if (!title) throw new Error("Add a title before saving.");
         return governanceRequest<SavedRevision>(`/api/documents/${detail.inspectorData.documentId}`, "PATCH", {
-          title, markdown: snapshot.markdown, expectedCurrentRevisionId: expectedRevisionId,
+          title, markdown: snapshot.markdown, expectedCurrentRevisionId: expectedRevisionId, autosave: true,
         }, { notifyMutation: false });
       },
       change: () => {
@@ -141,9 +156,12 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
         setSavedTitle(resolve(snapshot).title);
         const createdAt = new Date();
         setSavedAt(createdAt);
-        setLocalRevisions(previous => previous.some(item => item.id === revision.revisionId) ? previous : [...previous, {
-          id: revision.revisionId, revisionNo: revision.revisionNo, createdAt,
-        }]);
+        setLocalRevisions(previous => {
+          const preserved = revision.preservedRevision;
+          const retained = previous.filter(item => item.history?.state !== "WORKING" && item.id !== revision.revisionId && item.id !== preserved?.id);
+          if (preserved) retained.push({ ...preserved, createdAt: new Date(preserved.createdAt), history: preserved.history ? { ...preserved.history, windowStartedAt: preserved.history.windowStartedAt ? new Date(preserved.history.windowStartedAt) : null } : undefined });
+          return [...retained, { id: revision.revisionId, revisionNo: revision.revisionNo, createdAt, history: revision.history ? { ...revision.history, windowStartedAt: revision.history.windowStartedAt ? new Date(revision.history.windowStartedAt) : null } : undefined }];
+        });
         metadataDirty.current = true;
         const targets = JSON.stringify(extractDocumentLinks(snapshot.markdown).map(({ kind, target, fragment }) => [kind, target, fragment]));
         if (targets !== savedLinkTargets.current) {
@@ -273,7 +291,22 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
   const status = !loaded ? "loading" : recovery ? "recovery" : !resolved.title ? "invalid" : error ? "error" : writer?.status === "saving" ? "saving" : dirty ? "pending" : "saved";
   const attention = recovery ? "Recovered changes" : !resolved.title ? "Add a title" : error ? "Not saved" : undefined;
   const serverRevisions = detail.inspectorData.revisions;
-  const revisions = [...serverRevisions, ...localRevisions.filter(item => !serverRevisions.some(existing => existing.id === item.id))];
+  const revisions = [...serverRevisions.filter(item => !localRevisions.some(local => local.id === item.id)), ...localRevisions]
+    .filter(item => item.history?.state !== "WORKING" || item.id === savedRevision);
+  async function keepVersion(name: string) {
+    flushEditor();
+    const currentWriter = queue.current;
+    if (!currentWriter || !editable || recovery || composing.current) throw new Error("Finish editing or recovering the document before keeping a version.");
+    const expectedCurrentRevisionId = await currentWriter.saveCurrent();
+    const revision = await governanceRequest<SavedRevision>(`/api/documents/${detail.inspectorData.documentId}/checkpoint`, "POST", { expectedCurrentRevisionId, name }, { notifyMutation: false });
+    const history = revision.history;
+    setLocalRevisions(previous => [...previous.filter(item => item.id !== revision.revisionId), {
+      id: revision.revisionId, revisionNo: revision.revisionNo, createdAt: revisions.find(item => item.id === revision.revisionId)?.createdAt ?? savedAt,
+      history: history ? { ...history, windowStartedAt: history.windowStartedAt ? new Date(history.windowStartedAt) : null } : undefined,
+    }]);
+    metadataDirty.current = true;
+    refreshMetadata();
+  }
   const displayTitle = dirty || recovery ? resolved.title || "Untitled" : savedTitle;
   const Article = "article";
   const article = <>
@@ -339,7 +372,7 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
         }} className="min-h-[60vh] w-full resize-y border-0 bg-transparent text-reading text-kh-text outline-none" />}
     </div>
   </>;
-  return <DocumentDetailClient {...detail} editHref={null} title={displayTitle} updatedAt={savedAt} onInspect={refreshMetadata}
+  return <DocumentDetailClient {...detail} editHref={null} title={displayTitle} updatedAt={savedAt} onInspect={refreshMetadata} onKeepVersion={editable && !recovery ? keepVersion : undefined}
     inspectorData={{ ...detail.inspectorData, revisions, selectedRevisionNo: revisions.find(item => item.id === savedRevision)?.revisionNo ?? detail.inspectorData.selectedRevisionNo }}
     breadcrumb={[...detail.breadcrumb.slice(0, -1), { label: displayTitle }]} outline={outline}
     contentOwnsTitle={markdownOpensWithHeading(content.markdown)}
@@ -351,7 +384,7 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
       onCompositionEnd={() => { composing.current = false; writer?.pause(!editable || !!recovery || !resolve(queue.current!.current).title); }} /> : undefined}>
     <div className="kh-reading-column py-6">
       {personal && <ReadRevisionMarker workspaceId={detail.inspectorData.workspaceId} documentId={detail.inspectorData.documentId} revisionId={savedRevision} />}
-      {personal ? <OwnerReviewPanel documentId={detail.inspectorData.documentId} revisionId={savedRevision} markdown={savedMarkdown} contentPending={dirty || !!recovery || source || failed || !ready}>{article}</OwnerReviewPanel> : article}
+      {personal ? <OwnerReviewPanel documentId={detail.inspectorData.documentId} revisionId={savedRevision} markdown={savedMarkdown} prepareComment={prepareComment} commentAvailable={editable && ready && !recovery && !source && !failed} contentPending={dirty || !!recovery || source || failed || !ready}>{article}</OwnerReviewPanel> : article}
       {backlinks}
     </div>
     <ConfirmDialog open={discarding} onOpenChange={setDiscarding} title="Discard your unsaved changes?"

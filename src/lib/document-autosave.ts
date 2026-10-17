@@ -1,5 +1,6 @@
 export type DocumentContent = { title: string; markdown: string };
-export type SavedRevision = { revisionId: string; revisionNo: number; changed: boolean };
+export type RevisionHistory = { state: "WORKING" | "CHECKPOINT"; activityId: string | null; windowStartedAt: Date | string | null; name: string | null; reason: string };
+export type SavedRevision = { revisionId: string; revisionNo: number; changed: boolean; history?: RevisionHistory; preservedRevision?: { id: string; revisionNo: number; createdAt: Date | string; createdBy: string; history?: RevisionHistory } };
 export type AutosaveStatus = "saved" | "pending" | "saving" | "error";
 const equal = (a: DocumentContent, b: DocumentContent) => a.title === b.title && a.markdown === b.markdown;
 
@@ -15,6 +16,7 @@ export class DocumentAutosave {
   private dirtySince: number | undefined;
   private disposed = false;
   private paused = false;
+  private settled = new Set<() => void>();
   constructor(content: DocumentContent, revisionId: string, private readonly options: {
     write: (content: DocumentContent, revisionId: string) => Promise<SavedRevision>;
     change: () => void;
@@ -73,7 +75,21 @@ export class DocumentAutosave {
       this.error = error;
       this.status = "error";
       if (!this.disposed) this.options.change();
+    } finally {
+      for (const resolve of this.settled) resolve();
+      this.settled.clear();
     }
+  }
+  /** Explicit actions such as commenting must wait for an existing write too. */
+  async saveCurrent(): Promise<string> {
+    while (this.dirty && !this.error) {
+      if (this.disposed || this.paused) throw new Error("Finish editing or recovering the document before commenting.");
+      if (this.flight) await new Promise<void>(resolve => this.settled.add(resolve));
+      else await this.flush();
+    }
+    if (this.disposed) throw new Error("The document was closed before it finished saving.");
+    if (this.error) throw this.error;
+    return this.revisionId;
   }
   /** A refreshed server snapshot can replace an idle baseline, never unsaved input. */
   adopt(content: DocumentContent, revisionId: string) {

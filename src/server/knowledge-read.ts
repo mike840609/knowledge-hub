@@ -22,7 +22,7 @@ export type KnowledgeDocumentModel = {
  * One row of a document's history. The page hands the whole history to the
  * browser, so it carries what the list shows and no revision's body.
  */
-export type RevisionSummary = Pick<KnowledgeRevisionView, "id" | "revisionNo" | "createdAt">;
+export type RevisionSummary = Pick<KnowledgeRevisionView, "id" | "revisionNo" | "createdAt" | "history">;
 
 /**
  * Task 5 read model: Workspace/Source-scoped Document load. Trusted caller
@@ -56,7 +56,7 @@ export async function getKnowledgeDocumentModel(
     ]);
     return {
       view,
-      revisions: revisions.map(({ id, revisionNo, createdAt }) => ({ id, revisionNo, createdAt })),
+      revisions: revisions.filter(revision => revision.history?.state !== "WORKING" || revision.id === view.currentRevision.id).map(({ id, revisionNo, createdAt, history }) => ({ id, revisionNo, createdAt, history })),
       selectedRevision,
       sourcePath,
     };

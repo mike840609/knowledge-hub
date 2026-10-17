@@ -129,3 +129,30 @@ it("adopts refreshed server content only while idle and keeps dirty input on its
   expect(queue.current.markdown).toBe("Local changes");
   expect(queue.revisionId).toBe("remote-r2");
 });
+
+it("explicit comment saving waits for a write already in flight and then saves newer text", async () => {
+  let finish!: (revision: SavedRevision) => void;
+  const write = vi.fn().mockImplementationOnce(() => new Promise<SavedRevision>(resolve => { finish = resolve; }))
+    .mockResolvedValue({ revisionId: "r3", revisionNo: 3, changed: true });
+  const { queue } = setup(write);
+  queue.change({ ...original, markdown: "First" });
+  const flight = queue.flush();
+  queue.change({ ...original, markdown: "Second" });
+  let settled = false;
+  const waiting = queue.saveCurrent().then(revision => { settled = true; return revision; });
+  await Promise.resolve();
+  expect(settled).toBe(false);
+  finish({ revisionId: "r2", revisionNo: 2, changed: true });
+  await flight;
+  expect(await waiting).toBe("r3");
+  expect(write).toHaveBeenLastCalledWith({ ...original, markdown: "Second" }, "r2");
+});
+it("explicit comment saving rejects failure and cannot silently accept a paused dirty document", async () => {
+  const failure = new Error("conflict");
+  const { queue } = setup(vi.fn().mockRejectedValue(failure));
+  queue.change({ ...original, markdown: "Edited" });
+  queue.pause(true);
+  await expect(queue.saveCurrent()).rejects.toThrow("Finish editing");
+  queue.pause(false);
+  await expect(queue.saveCurrent()).rejects.toBe(failure);
+});

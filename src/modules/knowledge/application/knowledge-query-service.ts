@@ -53,6 +53,7 @@ export type KnowledgeRevisionView = {
   contentHash: string;
   createdBy: string;
   createdAt: Date;
+  history?: KnowledgeRevision["history"];
 };
 
 export interface KnowledgeQueryService {
@@ -78,6 +79,7 @@ function toRevisionView(revision: KnowledgeRevision): KnowledgeRevisionView {
     contentHash: revision.contentHash,
     createdBy: revision.createdBy,
     createdAt: revision.createdAt,
+    ...(revision.history ? { history: revision.history } : {}),
   };
 }
 

@@ -23,7 +23,7 @@ export function stampEditorReviewPaths(root: HTMLElement, markdown: string): boo
   return true;
 }
 
-import { Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
+import { Plugin, PluginKey, TextSelection, type Transaction } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
 
@@ -109,6 +109,12 @@ export function updateEditorReviewPaths(view: EditorView, markdown: string | und
   }
   if (proven) decorations.push(...(reviewPathsKey.getState(view.state)?.find(undefined, undefined, spec => spec.reviewBlockSelected === true) ?? []));
   const transaction = view.state.tr.setMeta(reviewPathsKey, DecorationSet.create(view.state.doc, decorations));
+  view.dispatch(preserveEditorSelection(view, transaction));
+  return !!proven;
+}
+
+/** UI availability updates must not replace a native selection still awaiting selectionchange. */
+export function preserveEditorSelection(view: EditorView, transaction: Transaction): Transaction {
   // A native selection can arrive before ProseMirror receives selectionchange.
   // Updating decorations must not write its older caret back over that gesture.
   const selection = view.dom.ownerDocument.getSelection();
@@ -125,6 +131,5 @@ export function updateEditorReviewPaths(view: EditorView, markdown: string | und
       // A concurrently replaced endpoint has no valid position in this document.
     }
   }
-  view.dispatch(transaction);
-  return !!proven;
+  return transaction;
 }

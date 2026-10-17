@@ -19,6 +19,7 @@ export async function PATCH(request: Request, context: DocumentRouteContext) {
     const current = await services.queries.getCurrentRevision(caller, documentId, { includeArchived: true });
     return services.hub.createRevision(caller, {
       documentId,
+      ...(input.autosave ? { saveMode: "AUTOSAVE" as const } : {}),
       expectedCurrentRevisionId: input.expectedCurrentRevisionId,
       title: input.title,
       markdown: input.markdown,
