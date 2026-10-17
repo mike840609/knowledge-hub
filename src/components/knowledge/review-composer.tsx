@@ -19,7 +19,7 @@ const HINT_DELAY_MS = 400;
  * `capture` takes the selection for the composer; `chosen` is what it took. `place` is where the
  * selection's first line is, in the reading box, for the button that floats beside it.
  */
-export function useReviewSelection(readingRef: RefObject<HTMLElement | null>, markdown: string, resetKey: string) {
+export function useReviewSelection(readingRef: RefObject<HTMLElement | null>, markdown: string, resetKey: string, preserveChosen = false) {
   // What was last selected, kept while the selection is empty: pressing a button may empty it.
   const pending = useRef<ReviewAnchor | null>(null);
   const [ready, setReady] = useState(false);
@@ -32,7 +32,8 @@ export function useReviewSelection(readingRef: RefObject<HTMLElement | null>, ma
     return root ? readReviewSelection(root, markdown, window.getSelection()) : { problem: "none" as const };
   }, [readingRef, markdown]);
   const clear = useCallback(() => { pending.current = null; setChosen(null); setRefusal(undefined); }, []);
-  useEffect(clear, [clear, resetKey, markdown]);
+  useEffect(clear, [clear, resetKey]);
+  useEffect(() => { if (!preserveChosen) clear(); }, [clear, markdown, preserveChosen]);
   useEffect(() => {
     let timer = 0;
     const remember = () => {
@@ -48,6 +49,9 @@ export function useReviewSelection(readingRef: RefObject<HTMLElement | null>, ma
       }
     };
     document.addEventListener("selectionchange", remember);
+    // The selected DOM can be created before a concurrent edit updates the Markdown prop. Recheck
+    // it when the reader catches up, even if the browser has already delivered selectionchange.
+    remember();
     return () => { window.clearTimeout(timer); document.removeEventListener("selectionchange", remember); };
   }, [read, readingRef]);
   const capture = useCallback(() => {
@@ -90,11 +94,12 @@ export function ReviewSelectionBubble({ place, ready, hint, onComment }: { place
 }
 
 /** The passage chosen, and the first thing said about it. */
-export function ReviewComposer({ anchor, onSubmit, onCancel }: { anchor: ReviewAnchor; onSubmit: (body: string, idempotencyKey: string) => Promise<void>; onCancel: () => void }) {
+export function ReviewComposer({ anchor, onSubmit, onCancel, pending = false, saveError, onRetrySave, cancelOnEscape = false }: { anchor: ReviewAnchor; onSubmit: (body: string, idempotencyKey: string) => Promise<void>; onCancel: () => void; pending?: boolean; saveError?: string; onRetrySave?: () => void; cancelOnEscape?: boolean }) {
   return <div className="kh-review-composer mb-4 border border-kh-border bg-kh-bg p-4">
     {/* Code keeps its lines; anything else wraps as it would have. */}
     <blockquote className={`line-clamp-6 border-l border-kh-border pl-3 text-body-sm ${anchor.blockKind === "code" ? "whitespace-pre-wrap break-words font-mono" : ""}`}>{anchor.exact}</blockquote>
-    <ReviewReplyForm label="Add comment" onSubmit={onSubmit} />
-    <Button type="button" variant="ghost" className="mt-2" onClick={onCancel}>Cancel</Button>
+    {pending && <p role="status" className="mt-3 text-body-sm text-kh-text-muted">Saving document before commenting…</p>}
+    {saveError && <div className="mt-3"><p role="alert" className="text-body-sm">{saveError}</p>{onRetrySave && <Button type="button" variant="link" onClick={onRetrySave}>Retry document save</Button>}</div>}
+    <ReviewReplyForm label="Add comment" onSubmit={onSubmit} onCancel={onCancel} cancelOnEscape={cancelOnEscape} submitDisabled={pending || !!saveError} />
   </div>;
 }

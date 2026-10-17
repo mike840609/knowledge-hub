@@ -5,7 +5,10 @@ import { createReviewDocument } from "./fixtures/document-review";
 // column's own padding, so the article keeps the width the rail's design gives it
 // (docs/superpowers/specs/2026-10-12-owner-comments-rail-design.md).
 const button = (page: import("@playwright/test").Page, text: string) => page.getByRole("button", { name: `Comment on paragraph: ${text}`, exact: true });
-const ready = (page: import("@playwright/test").Page) => expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
+const ready = async (page: import("@playwright/test").Page) => {
+  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeVisible();
+  await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
+};
 
 test("the owner comments on a paragraph from the button beside it, and the article keeps its width", async ({ page, request }) => {
   const doc = await createReviewDocument(request, "## Alpha\n\nA paragraph.\n\n## Beta\n\nAnother.\n");
@@ -56,7 +59,8 @@ test("a paragraph in a closed disclosure has no button until it is opened", asyn
   await ready(page);
   await expect(button(page, "Outside.")).toHaveCount(1);
   await expect(button(page, "Inside the disclosure.")).toHaveCount(0);
-  await page.locator("[data-review-document] summary").click();
+  await page.locator("[data-review-document] summary").click({ position: { x: 5, y: 8 } });
+  await expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", { timeout: 15000 });
   await expect(button(page, "Inside the disclosure.")).toHaveCount(1);
 });
 

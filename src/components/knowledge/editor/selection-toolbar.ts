@@ -11,6 +11,7 @@ import {
   wrapInHeadingCommand,
   wrapInOrderedListCommand,
 } from "@milkdown/kit/preset/commonmark";
+import { TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { buttonClasses } from "@/components/ui/button";
 import { fieldClasses } from "@/components/ui/field";
@@ -119,7 +120,7 @@ const items: Item[] = [
  * `<form>`, where the default type submits — that is, saves. `mousedown` is
  * cancelled on them so pressing one does not take the selection with it.
  */
-export function selectionToolbar(): { plugins: MilkdownPlugin[]; configure: (ctx: Ctx) => void } {
+export function selectionToolbar(comment?: { available: () => boolean; run: (view: EditorView) => void }): { plugins: MilkdownPlugin[]; configure: (ctx: Ctx) => void } {
   return {
     plugins: [tooltip].flat() as MilkdownPlugin[],
     configure: (ctx) => {
@@ -161,6 +162,32 @@ export function selectionToolbar(): { plugins: MilkdownPlugin[]; configure: (ctx
           });
 
           const input = document.createElement("input");
+          const commentGroup = document.createElement("div");
+          commentGroup.className = "ml-1 border-l border-kh-border pl-1";
+          commentGroup.setAttribute("data-review-comment-control", "");
+          const commentButton = document.createElement("button");
+          commentButton.type = "button";
+          commentButton.className = buttonClasses({ variant: "ghost", size: "md" });
+          const commentIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          for (const [name, value] of Object.entries({ viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true", class: "size-4 sm:hidden" })) commentIcon.setAttribute(name, value);
+          // Message-square-plus, matching the application's Lucide comment icon.
+          for (const d of ["M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z", "M12 8v6", "M9 11h6"]) {
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path"); path.setAttribute("d", d); commentIcon.append(path);
+          }
+          const commentLabel = document.createElement("span");
+          commentLabel.className = "hidden sm:inline"; commentLabel.textContent = "Comment";
+          commentButton.append(commentIcon, commentLabel);
+          commentButton.title = "Comment on selection";
+          commentButton.setAttribute("aria-label", "Comment on selection");
+          commentButton.addEventListener("mousedown", event => event.preventDefault());
+          commentButton.addEventListener("click", () => {
+            if (!comment?.available()) return;
+            comment.run(editorView);
+            provider.hide();
+          });
+          commentGroup.append(commentButton);
+          commentGroup.hidden = !comment?.available();
+          if (comment) buttons.append(commentGroup);
           // Not `type="url"`: inside the composer's validating form that would block Save on half-typed text.
           input.type = "text";
           input.setAttribute("inputmode", "url");
@@ -221,20 +248,38 @@ export function selectionToolbar(): { plugins: MilkdownPlugin[]; configure: (ctx
             if (next === null && !document.hasFocus()) return;
             provider.hide();
           }
+          // Tab can move focus before the browser delivers selectionchange for the
+          // last Shift+Arrow key. Capture that final range before leaving the editor.
+          const captureSelectionOnTab = (event: KeyboardEvent) => {
+            if (event.key !== "Tab") return;
+            const selection = editorView.dom.ownerDocument.getSelection();
+            if (!selection?.anchorNode || !selection.focusNode || !editorView.dom.contains(selection.anchorNode) || !editorView.dom.contains(selection.focusNode)) return;
+            const anchor = editorView.posAtDOM(selection.anchorNode, selection.anchorOffset);
+            const head = editorView.posAtDOM(selection.focusNode, selection.focusOffset);
+            if (editorView.state.doc.resolve(anchor).parent.inlineContent && editorView.state.doc.resolve(head).parent.inlineContent) {
+              editorView.dispatch(editorView.state.tr.setSelection(TextSelection.create(editorView.state.doc, anchor, head)));
+            }
+          };
+          editorView.dom.addEventListener("keydown", captureSelectionOnTab, true);
           const showOnFocus = () => provider.update(editorView);
           editorView.dom.addEventListener("blur", hideOnBlur);
           editorView.dom.addEventListener("focus", showOnFocus);
           input.addEventListener("blur", hideOnLinkBoxBlur);
 
           return {
-            update: (view, previous) => {
+            update: view => {
+              commentGroup.hidden = !comment?.available();
               for (const { item, button } of pressers) {
                 button.setAttribute("aria-pressed", String(item.active(view)));
                 button.disabled = item.disabled?.(view) ?? false;
               }
-              provider.update(view, previous);
+              // A metadata-only update may replace a selection update inside the
+              // provider's throttle window. Re-evaluate the live selection instead
+              // of letting its same-state shortcut discard that pending reveal.
+              provider.update(view);
             },
             destroy: () => {
+              editorView.dom.removeEventListener("keydown", captureSelectionOnTab, true);
               editorView.dom.removeEventListener("blur", hideOnBlur);
               editorView.dom.removeEventListener("focus", showOnFocus);
               provider.destroy();

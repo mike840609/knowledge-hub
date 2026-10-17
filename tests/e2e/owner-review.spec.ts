@@ -113,13 +113,13 @@ test("a discussion that awaits the owner is open beside its passage when the doc
   // The way back in is in the document's header, beside Edit — so it costs the article no room,
   const entry = page.getByRole("button", { name: "Open discussions, 1 comments" });
   await expect(entry).toBeVisible();
-  const [entryBox, editBox] = [(await entry.boundingBox())!, (await page.getByRole("link", { name: "Edit", exact: true }).boundingBox())!];
+  const [entryBox, editBox] = [(await entry.boundingBox())!, (await page.getByRole("button", { name: "Details", exact: true }).boundingBox())!];
   expect(Math.abs(entryBox.y + entryBox.height / 2 - (editBox.y + editBox.height / 2))).toBeLessThan(2);
   await expect(entry).toContainText("1");
   // What is done to the document, then what is shown beside it: Edit, Share, Comments, Details —
   // the two that open something on the right are together, at the right.
   const left = async (control: ReturnType<typeof page.getByRole>) => (await control.boundingBox())!.x;
-  const order = [await left(page.getByRole("link", { name: "Edit", exact: true })), await left(page.getByRole("button", { name: "Share link…" })), await left(entry), await left(page.getByRole("button", { name: "Details", exact: true }))];
+  const order = [await left(page.getByRole("button", { name: "Share link…" })), await left(entry), await left(page.getByRole("button", { name: "Details", exact: true }))];
   expect(order).toEqual([...order].sort((a, b) => a - b));
   // and is still there at the end of a long document, where no mark is in sight.
   await page.getByRole("region", { name: "Document content" }).evaluate((pane) => pane.scrollTo(0, pane.scrollHeight));
@@ -142,6 +142,7 @@ test("the discussions arriving do not move the article", async ({ page, request 
   await page.route(`**/api/documents/${doc.documentId}/review-threads`, async (route) => { await new Promise<void>((resolve) => { release = resolve; }); await route.continue(); });
   await page.goto(doc.href);
   const top = async () => Math.round((await page.locator("[data-review-document]").boundingBox())!.y);
+  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeVisible();
   await expect(page.locator("[data-review-document] p").first()).toBeVisible();
   const before = await top();
   release();
@@ -240,9 +241,10 @@ test("the owner's page keeps one left edge for its title and its article, with d
   const rail = page.getByRole("complementary", { name: "Document discussions" });
   const edges = () => page.evaluate(() => {
     const textLeft = (element: Element) => { const range = document.createRange(); range.selectNodeContents(element); return Math.round(range.getClientRects()[0].left); };
-    return { title: textLeft(document.querySelector('[role="region"][aria-label="Document content"] h1')!), article: textLeft(document.querySelector("[data-review-document] p")!) };
+    return { title: Math.round(document.querySelector<HTMLElement>('[role="region"][aria-label="Document content"] input[aria-label="Title"]')!.getBoundingClientRect().left), article: textLeft(document.querySelector("[data-review-document] p")!) };
   });
   await expect(rail).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeVisible();
   const open = await edges();
   expect(open.article).toBe(open.title);
   await page.getByRole("button", { name: "Collapse discussions" }).click();
@@ -280,7 +282,7 @@ test("opening and closing the owner's discussions moves nothing under the pointe
   const doc = await documentWithDiscussion(request);
   const article = page.locator("[data-review-document]");
   const crumb = page.getByRole("region", { name: "Document content", exact: true }).getByRole("navigation", { name: "Breadcrumb" });
-  const edit = page.getByRole("link", { name: "Edit", exact: true });
+  const edit = page.getByRole("button", { name: "Details", exact: true });
   const where = async () => ({ crumb: Math.round((await crumb.boundingBox())!.x), article: Math.round((await article.boundingBox())!.x), edit: Math.round((await edit.boundingBox())!.x) });
   // 1920: room for the rail beside the column as it stood. 1440: the pane is narrower than the reading
   // width beside the outline, so the outline's slot is what the rail takes. Re-centred, the path line's
@@ -288,6 +290,7 @@ test("opening and closing the owner's discussions moves nothing under the pointe
   for (const width of [1920, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(doc.href);
+    await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeVisible();
     const rail = page.getByRole("complementary", { name: "Document discussions" });
     await expect(rail).toBeVisible();
     await page.getByRole("button", { name: "Collapse discussions" }).click();

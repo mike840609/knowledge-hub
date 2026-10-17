@@ -1,4 +1,5 @@
 "use client";
+import { useReviewDomVersion } from "./review-dom-version";
 import { useEffect } from "react";
 import type { ReviewThreadView, OwnerReviewThreadView } from "@/modules/knowledge/domain/document-review";
 import { createReviewRangeResolver } from "./review-selection";
@@ -7,6 +8,7 @@ import { reviewRailInline } from "./review-rail-mode";
 /** Native highlights never rewrite Markdown DOM or expose hidden/outdated quotes.
  * Browsers without the Highlight API retain the accessible quote buttons. */
 export function useReviewHighlights(markdown: string, threads?: (ReviewThreadView | OwnerReviewThreadView)[], activeThreadId?: string) {
+  const domVersion = useReviewDomVersion();
   useEffect(() => {
     const root = document.querySelector<HTMLElement>("[data-review-document]");
     if (!root || !threads) return;
@@ -23,6 +25,8 @@ export function useReviewHighlights(markdown: string, threads?: (ReviewThreadVie
       registry.set("document-review-active", new HighlightClass(...ranges.filter(item => item.threadId === activeThreadId).map(item => item.range)));
     }
     function focusDiscussion(event: PointerEvent) {
+      // Clicking editable text must place the caret, never transfer focus to a comment card.
+      if (event.target instanceof Element && event.target.closest('[contenteditable="true"]')) return;
       if (!window.getSelection()?.isCollapsed) return;
       const candidates = ranges.filter(({range}) => Array.from(range.getClientRects()).some(rect => event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom));
       const target = candidates.find(item => item.threadId === activeThreadId) ?? candidates[0];
@@ -44,5 +48,5 @@ export function useReviewHighlights(markdown: string, threads?: (ReviewThreadVie
     }
     root.addEventListener("pointerup", focusDiscussion);
     return () => { root.removeEventListener("pointerup", focusDiscussion); registry?.delete("document-review"); registry?.delete("document-review-active"); };
-  }, [markdown, threads, activeThreadId]);
+  }, [markdown, threads, activeThreadId, domVersion]);
 }

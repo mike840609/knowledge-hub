@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type Ref } from "react";
+import { useEffect, useState, type Ref, type ReactNode } from "react";
 import { LockKeyhole, MessageSquare, PanelRight } from "lucide-react";
 import { ActionIcon } from "@/components/actions/action-icon";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,6 @@ import { formatDateTime, formatRelativeTime } from "@/lib/format-date";
 import { useDisplayTimeZone } from "@/components/ui/timestamp";
 import { DocumentBreadcrumb, type DocumentBreadcrumbSegment } from "./document-breadcrumb";
 import { useReviewEntry } from "./review-entry";
-import { REVIEW_TOGGLE_SHORTCUT } from "@/components/actions/action-registry";
 
 export function DocumentHeader({
   breadcrumb,
@@ -29,7 +28,13 @@ export function DocumentHeader({
   contentOwnsTitle,
   headerRef,
   pinned = false,
+  titleControl,
+  saveStatus,
+  readOnlyReason,
 }: {
+  titleControl?: ReactNode;
+  saveStatus?: ReactNode;
+  readOnlyReason?: ReactNode;
   breadcrumb: DocumentBreadcrumbSegment[];
   title: string;
   status: "ACTIVE" | "ARCHIVED";
@@ -93,6 +98,7 @@ export function DocumentHeader({
               </Link>
             </Tooltip>
           ) : null}
+          {saveStatus}
           {onShareClick ? (
             <Tooltip label="Share link…">
               <button
@@ -108,13 +114,12 @@ export function DocumentHeader({
           {/* What is done to the document comes first; then the two that open something on the right,
               together and nearest to it: the discussions, and Details. */}
           {review?.entry && (review.entry.count > 0 || review.entry.open) ? (
-            <Tooltip label={review.entry.open ? "Hide comments" : `Comments · ${review.entry.awaiting} open, ${review.entry.count} total`} shortcut={REVIEW_TOGGLE_SHORTCUT}>
+            <Tooltip label={review.entry.open ? "Hide comments" : `Comments · ${review.entry.awaiting} open, ${review.entry.count} total`}>
               <button
                 ref={review.buttonRef}
                 type="button"
                 aria-label={`${review.entry.open ? "Hide discussions" : "Open discussions"}, ${review.entry.count} comments, ${review.entry.awaiting} open`}
                 aria-expanded={review.entry.open}
-                aria-keyshortcuts={REVIEW_TOGGLE_SHORTCUT}
                 aria-controls="owner-document-discussions"
                 onPointerDown={(event) => event.preventDefault()}
                 onClick={review.entry.toggle}
@@ -145,10 +150,11 @@ export function DocumentHeader({
       </div>
       <header ref={headerRef}>
         <div className="kh-reading-column pb-3">
-          {contentOwnsTitle ? null : (
+          {titleControl ?? (contentOwnsTitle ? null : (
             <h1 className="mt-2 truncate text-heading font-semibold tracking-tight text-kh-text" title={title}>{title}</h1>
-          )}
+          ))}
           <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-kh-text-muted">
+            {readOnlyReason}
             {readOnly ? <span className="inline-flex items-center gap-1"><LockKeyhole className="h-3 w-3" aria-hidden="true" />Read only</span> : null}
             {readOnly ? (
               // Source ownership decides who may write: say where the edit happens instead of only refusing it.

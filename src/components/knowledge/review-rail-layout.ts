@@ -1,5 +1,6 @@
 "use client";
 
+import { useReviewDomVersion } from "./review-dom-version";
 import { useLayoutEffect, useRef, useState } from "react";
 import type { ReviewThreadView } from "@/modules/knowledge/domain/document-review";
 import { reviewRailInline, watchReviewRail } from "./review-rail-mode";
@@ -52,6 +53,7 @@ export function compareReviewPassages(a: RailCard, b: RailCard) {
 
 /** Measure live ranges, so wrapping, images, replies and font loading cannot stale the rail. */
 export function useReviewRailLayout(threads: RailCard[], markdown?: string, activeId?: string) {
+  const domVersion = useReviewDomVersion();
   const ref = useRef<HTMLDivElement>(null);
   const [layout, setLayout] = useState<RailLayout>();
   const measureRef = useRef<(() => void) | null>(null);
@@ -103,6 +105,6 @@ export function useReviewRailLayout(threads: RailCard[], markdown?: string, acti
       unwatch();
       document.fonts?.removeEventListener("loadingdone", schedule);
     };
-  }, [threads, markdown, activeId]);
+  }, [threads, markdown, activeId, domVersion]);
   return { ref, layout };
 }

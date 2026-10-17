@@ -1,0 +1,35 @@
+import { expect, test } from './fixtures/test';
+import { personalWorkspaceId } from './fixtures/my-space';
+
+test('autosave keeps a working head and a named checkpoint survives later edits', async ({ page }) => {
+  const workspaceId = await personalWorkspaceId(page);
+  const response = await page.request.post(`/api/workspaces/${workspaceId}/documents`, { data: { title: `Autosave history ${Date.now()}`, markdown: 'Original content.' } });
+  expect(response.ok()).toBe(true);
+  const doc = await response.json() as { sourceId: string; documentId: string };
+  const href = `/w/${workspaceId}/knowledge/${doc.sourceId}/${doc.documentId}`;
+  await page.goto(href);
+  const editor = page.getByRole('textbox', { name: 'Content', exact: true });
+  await expect(editor).toBeEditable({ timeout: 15_000 });
+  const saved = page.waitForResponse(response => response.url().endsWith(`/api/documents/${doc.documentId}`) && response.request().method() === 'PATCH');
+  await editor.fill('First autosaved text.');
+  expect((await saved).ok()).toBe(true);
+  await page.locator('main').getByRole('button', { name: 'Details', exact: true }).click();
+  await page.getByRole('tab', { name: 'History', exact: true }).click();
+  const history = page.getByRole('tabpanel', { name: 'History' });
+  await expect(history.getByText('Latest saved content', { exact: true })).toBeVisible();
+  await history.getByLabel('Version name (optional)').fill('Before revision');
+  await history.getByRole('button', { name: 'Keep version', exact: true }).click();
+  await expect(history.getByText('Version kept.', { exact: true })).toBeVisible();
+  await expect(history.getByRole('link', { name: /Before revision/ })).toBeVisible();
+  await page.keyboard.press('Escape');
+  const nextSaved = page.waitForResponse(response => response.url().endsWith(`/api/documents/${doc.documentId}`) && response.request().method() === 'PATCH');
+  await editor.fill('Second autosaved text.');
+  expect((await nextSaved).ok()).toBe(true);
+  await page.reload();
+  await expect(editor).toContainText('Second autosaved text.', { timeout: 15_000 });
+  await page.locator('main').getByRole('button', { name: 'Details', exact: true }).click();
+  await page.getByRole('tab', { name: 'History', exact: true }).click();
+  await history.getByRole('link', { name: /Before revision/ }).click();
+  await expect(page.locator('article').first()).toContainText('First autosaved text.');
+  await expect(page.getByRole('link', { name: 'Back to current' })).toBeVisible();
+});

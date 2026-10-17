@@ -21,13 +21,14 @@ test.describe("document share link", () => {
     await page.waitForURL(/\/w\/[^/]+\/knowledge/);
     const workspaceId = new URL(page.url()).pathname.split("/")[2];
     await page.goto(`/w/${workspaceId}/knowledge/new`);
-    const form = page.locator("main form").first();
+    const form = page.locator("main");
     await form.getByLabel("Title", { exact: true }).fill(title);
     const source = await showMarkdown(form);
     await source.fill(body);
     await expect(page.getByRole("button", { name: "Create document" })).toBeEnabled(ROUND_TRIP);
     await page.getByRole("button", { name: "Create document" }).click();
-    await expect(page.getByRole("heading", { name: title })).toBeVisible(ROUND_TRIP);
+  await expect(page).not.toHaveURL(/\/knowledge\/new(?:\?.*)?$/, ROUND_TRIP);
+    await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(title, ROUND_TRIP);
     return { workspaceId };
   }
 
@@ -93,11 +94,11 @@ test.describe("document share link", () => {
 
       // The owner edits; the reader sees the new text on the next load (A2).
       await page.keyboard.press("Escape");
-      await page.getByRole("link", { name: "Edit", exact: true }).click();
-      const editorForm = page.locator("main form").first();
+      const editorForm = page.locator("main");
       const source = await showMarkdown(editorForm);
       await source.fill("second shared body");
-      await editorForm.getByRole("button", { name: "Save" }).click();
+      await expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", ROUND_TRIP);
+      await editorForm.getByRole("button", { name: "Markdown", exact: true }).click();
       await expect(page.locator("article").first().getByText("second shared body")).toBeVisible(ROUND_TRIP);
       expect(await (await reader.get(path!)).text()).toContain("second shared body");
 

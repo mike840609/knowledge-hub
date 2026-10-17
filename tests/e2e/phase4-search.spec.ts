@@ -15,7 +15,7 @@ test("finds a mixed Chinese/English document and opens it", async ({ page }) => 
   await expect(hit).toBeVisible();
   await expect(hit.locator("mark").first()).toHaveText("請假");
   await hit.click();
-  await expect(page.getByRole("heading", { name: SEARCH_TITLE })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(SEARCH_TITLE);
 });
 
 test("never returns content from a workspace without membership", async ({ page }) => {

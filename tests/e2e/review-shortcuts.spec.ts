@@ -43,7 +43,7 @@ test("⌘Enter sends a comment, a reply and an edit; Esc leaves an edit nothing 
   await expect(editor).toHaveCount(0);
 });
 
-test("D opens and closes the comments on a shared page and on the owner's, and is a letter where one is typed", async ({ page, request }) => {
+test("D leaves discussions unchanged; explicit buttons open and close them", async ({ page, request }) => {
   const doc = await createReviewDocument(request);
   const token = doc.links[0].path.split("/").pop();
   const viewer = phase3Origin("viewer");
@@ -52,27 +52,31 @@ test("D opens and closes the comments on a shared page and on the owner's, and i
   await page.goto(`${viewer}${doc.links[0].path}`);
   const entry = page.getByRole("button", { name: /^(Open|Hide) discussions/ });
   await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
-  await expect(entry).toHaveAttribute("aria-keyshortcuts", "D");
+  await expect(entry).not.toHaveAttribute("aria-keyshortcuts");
   await expect(entry).toHaveAttribute("aria-expanded", "false");
-  await page.locator("body").press("d"); await expect(entry).toHaveAttribute("aria-expanded", "true");
+  await page.locator("body").press("d"); await expect(entry).toHaveAttribute("aria-expanded", "false");
+  await entry.click();
+  await expect(entry).toHaveAttribute("aria-expanded", "true");
   // In a field it is the letter.
   await page.locator("[data-review-thread]").filter({ visible: true }).getByRole("button", { name: "Reply", exact: true }).click();
   const reply = page.getByRole("textbox", { name: "Reply", exact: true });
   await reply.pressSequentially("added"); await expect(reply).toHaveValue("added");
   await expect(entry).toHaveAttribute("aria-expanded", "true");
   await page.locator("[data-review-document]").click();
-  await page.keyboard.press("d"); await expect(entry).toHaveAttribute("aria-expanded", "false");
+  await page.keyboard.press("d"); await expect(entry).toHaveAttribute("aria-expanded", "true");
+  await entry.click();
+  await expect(entry).toHaveAttribute("aria-expanded", "false");
   // With a modifier it is the browser's own key, not this one.
   await page.keyboard.press("Shift+D"); await expect(entry).toHaveAttribute("aria-expanded", "false");
 
   await page.goto(doc.href);
   const owner = page.getByRole("button", { name: /^(Open|Hide) discussions/ });
   await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
-  await expect(owner).toHaveAttribute("aria-keyshortcuts", "D");
+  await expect(owner).not.toHaveAttribute("aria-keyshortcuts");
   await expect(owner).toHaveAttribute("aria-expanded", "false");
   await page.locator("[data-review-document]").click();
-  // Where the pane has no room for a rail the comments are a drawer, which takes the page's keys
-  // while it is open: D opens it, and Esc — the drawer's own key — closes it.
   await page.keyboard.press("d");
+  await expect(owner).toHaveAttribute("aria-expanded", "false");
+  await owner.click();
   await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-open", "");
 });

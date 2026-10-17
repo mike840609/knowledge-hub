@@ -1,3 +1,4 @@
+import { EditableDocument } from "@/components/knowledge/editable-document";
 import { OwnerReviewPanel } from "@/components/knowledge/owner-review-panel";
 import { ReadRevisionMarker } from "@/components/knowledge/read-revision-marker";
 import { RevisionRestore } from "@/components/knowledge/revision-restore";
@@ -80,7 +81,8 @@ export default async function KnowledgeDocumentPage({
     shell?.access.actions.canWrite === true &&
     explorer?.source.ownership === "HUB_MANAGED" &&
     view.status === "ACTIVE" &&
-    !isHistorical;
+    !isHistorical && revisionNo === undefined && explorer.source.status === "ACTIVE" &&
+    shell.access.workspace.lifecycleState !== "ARCHIVED";
   const editHref = canEdit ? `/w/${workspaceId}/knowledge/${sourceId}/${documentId}/edit` : null;
   // A new document goes to the workspace's own Notes whatever this one is (a synced source's document
   // included), so what decides whether a broken link offers to make it is the capability to write here.
@@ -121,6 +123,14 @@ export default async function KnowledgeDocumentPage({
   });
 
   const viewer = <DocumentViewer view={view} selectedRevision={selectedRevision} links={linkView ? renderedLinksFrom(linkView, inspectorData.createLinks ?? {}) : undefined} />;
+  if (canEdit && shell && explorer) {
+    return <EditableDocument key={documentId} markdown={selectedRevision.markdown} metadataTitle={selectedRevision.metadata.title}
+      revisionId={selectedRevision.id} userId={shell.identityId} personal={shell.workspace.type === "PERSONAL"}
+      standIn={viewer} links={linkView ? renderedLinksFrom(linkView, inspectorData.createLinks ?? {}) : undefined} backlinks={linkView ? <BacklinksFooter view={linkView} /> : null}
+      detail={{ breadcrumb, title: selectedRevision.title, status: view.status, updatedAt: selectedRevision.createdAt,
+        revisionBanner: null, inspectorData, editHref: null, sourceStatus: explorer.source.status, readOnly: false,
+        syncHref: null, ownership: explorer.source.ownership, contentOwnsTitle, outline: extractOutline(selectedRevision.markdown) }} />;
+  }
   return (
     <DocumentDetailClient
       breadcrumb={breadcrumb}
@@ -128,7 +138,7 @@ export default async function KnowledgeDocumentPage({
       status={view.status}
       updatedAt={selectedRevision.createdAt}
       revisionBanner={
-        isHistorical
+        revisionNo !== undefined
           ? {
               viewingNo: selectedRevision.revisionNo,
               backHref: `/w/${workspaceId}/knowledge/${sourceId}/${documentId}${archivedSuffix}`,
@@ -136,6 +146,7 @@ export default async function KnowledgeDocumentPage({
           : null
       }
       inspectorData={inspectorData}
+      readOnlyReason={!sourceManaged && !canEdit ? <span>Read only{revisionNo !== undefined ? " · revision snapshot" : view.status === "ARCHIVED" || explorer?.source.status === "ARCHIVED" || shell?.access.workspace.lifecycleState === "ARCHIVED" ? " · archived" : " · no edit permission"}</span> : undefined}
       editHref={editHref}
       sourceStatus={explorer?.source.status ?? "ARCHIVED"}
       readOnly={sourceManaged}

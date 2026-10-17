@@ -17,9 +17,9 @@ function unique(label: string) {
   return `${label} ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
-/** main form + first(): the duplicate-DOM quirk phase5-authoring.spec.ts documents. */
+/** The inline document and new-note composer share the main landmark. */
 function composer(page: Page) {
-  return page.locator("main form").first();
+  return page.locator("main");
 }
 
 async function createNote(page: Page, workspaceId: string, title: string, markdown: string) {
@@ -30,27 +30,25 @@ async function createNote(page: Page, workspaceId: string, title: string, markdo
 }
 
 async function openEditor(page: Page, documentUrl: string) {
-  await page.goto(`${documentUrl}/edit`);
+  await page.goto(documentUrl);
   const surface = composer(page).getByRole("textbox", { name: "Content" });
   await expect(surface).toBeEditable(ROUND_TRIP);
-  // The composer puts the caret at the start once the editor has loaded. Keys and clicks that come
-  // straight after can be lost to it (seen on main as well), so these tests never place the caret
-  // themselves: they act on the block it starts in.
-  await expect(surface).toBeFocused(ROUND_TRIP);
+  await surface.locator("p").first().click();
+  await page.keyboard.press("Home");
   return surface;
 }
 
-/** Saves, and returns the Markdown the page sent. */
+/** Wait for autosave, then read the persisted Markdown through export. */
 async function save(page: Page) {
-  const sent = page.waitForRequest((request) => request.method() === "PATCH" && /\/api\/documents\//.test(request.url()), ROUND_TRIP);
-  await composer(page).getByRole("button", { name: "Save" }).click();
-  const markdown = (JSON.parse((await sent).postData() ?? "{}") as { markdown?: string }).markdown ?? "";
-  await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
-  return markdown;
+  await expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", ROUND_TRIP);
+  const documentId = new URL(page.url()).pathname.split("/").at(-1);
+  const exported = await page.request.get(`/api/documents/${documentId}/export`);
+  expect(exported.ok()).toBe(true);
+  return exported.text();
 }
 
 test.describe("blocks in the rendered editor", () => {
-  test("the editor lays the page out as the reader does, from the title to the text", async ({ page }) => {
+  test("focusing the inline editor preserves the reading layout from title to text", async ({ page }) => {
     const stamp = unique("Measure");
     const workspaceId = await mySpace(page);
     const prose = "A paragraph long enough to fill the measure of the reading column, so its width says where the column ends as well as where it begins.";
@@ -68,15 +66,17 @@ test.describe("blocks in the rendered editor", () => {
       for (const url of [typed, owned]) {
         await page.setViewportSize({ width, height: 900 });
         await page.goto(url);
+        const surface = composer(page).getByRole("textbox", { name: "Content" });
+        await expect(surface).toBeEditable(ROUND_TRIP);
         const article = page.locator("main article");
         await expect(article.locator("p").first()).toBeVisible();
         const read = {
-          title: await box(page.locator("main header h1")),
+          title: await box(composer(page).getByRole("textbox", { name: "Title" })),
           h1: await box(article.locator("h1")),
           text: await box(article.locator("p")),
           heading: await box(article.locator("h2")),
         };
-        const surface = await openEditor(page, url);
+        await surface.locator("p").first().click();
         const edit = {
           title: await box(composer(page).getByRole("textbox", { name: "Title" })),
           h1: await box(surface.locator("h1")),
@@ -98,23 +98,24 @@ test.describe("blocks in the rendered editor", () => {
       const found = await locator.first().boundingBox();
       return found && { x: Math.round(found.x), y: Math.round(found.y), width: Math.round(found.width) };
     };
-    // Leave once by each way out: both return to the reader through the client router.
-    for (const [width, leave] of [[1600, "Cancel"], [1920, "Save"]] as const) {
+    for (const width of [1600, 1920]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(url);
-      await expect(page.locator("main article p").first()).toBeVisible(ROUND_TRIP);
+      await expect(composer(page).getByRole("textbox", { name: "Content" })).toBeEditable(ROUND_TRIP);
       await page.getByRole("button", { name: "Details", exact: true }).first().click();
       await expect(panel).toBeVisible();
       const read = await text(page.locator("main article p"));
-      await page.getByRole("link", { name: "Edit" }).first().click();
       const surface = composer(page).getByRole("textbox", { name: "Content" });
+      await surface.locator("p").first().click();
       await expect(surface).toBeFocused(ROUND_TRIP);
       await expect(panel).toBeVisible();
       expect(await text(surface.locator("p")), `editing at ${width}px`).toEqual(read);
-      await composer(page).getByRole("button", { name: leave, exact: true }).click();
+      await page.keyboard.press("End");
+      await page.keyboard.type(" Saved inline.");
+      await save(page);
       await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
       await expect(panel).toBeVisible();
-      expect(await text(page.locator("main article p")), `back after ${leave} at ${width}px`).toEqual(read);
+      expect(await text(page.locator("main article p")), `after autosave at ${width}px`).toEqual(read);
     }
   });
 
@@ -126,13 +127,13 @@ test.describe("blocks in the rendered editor", () => {
     const sourceUrl = await createNote(page, workspaceId, `Source ${stamp}`, `Linked: see [[${target}]].\n\nSecond paragraph.`);
 
     const surface = await openEditor(page, sourceUrl);
-    await expect(surface.locator("span.kh-wikilink")).toHaveCount(1);
+    await expect(surface.locator("[data-kh-wiki-raw]")).toHaveCount(1);
     await page.keyboard.press("Alt+F10");
     await expect(page.getByRole("button", { name: "Add paragraph below" })).toBeFocused();
     await page.getByRole("button", { name: "Move block" }).click();
     await page.getByRole("menuitem", { name: "Move down" }).click();
     await expect(surface.locator("p").first()).toHaveText("Second paragraph.");
-    await expect(surface.locator("span.kh-wikilink")).toHaveCount(1);
+    await expect(surface.locator("[data-kh-wiki-raw]")).toHaveCount(1);
 
     const markdown = await save(page);
     expect(markdown.indexOf("Second paragraph.")).toBeLessThan(markdown.indexOf(`[[${target}]]`));

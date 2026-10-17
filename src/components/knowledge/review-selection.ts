@@ -83,6 +83,12 @@ function withinLeaf(range: Range, element: HTMLElement): Range | null {
 export function readReviewSelection(root: HTMLElement, markdown: string, selection: Selection | null): ReviewSelectionReading {
   if (!selection || selection.rangeCount !== 1 || selection.isCollapsed) return { problem: "none" };
   const chosen = selection.getRangeAt(0);
+  return readReviewRange(root, markdown, chosen);
+}
+
+/** A captured range remains usable after focus moves to a comment control. */
+export function readReviewRange(root: HTMLElement, markdown: string, chosen: Range): ReviewSelectionReading {
+  if (chosen.collapsed) return { problem: "none" };
   if (!root.contains(chosen.startContainer) || !root.contains(chosen.endContainer) || !chosen.toString().trim()) return { problem: "none" };
   const element = leafOf(chosen.startContainer);
   if (!element) return { problem: leafOf(chosen.endContainer) ? "across" : "unsupported" };
@@ -162,8 +168,12 @@ export function focusReviewAnchor(root: HTMLElement, markdown: string, anchor: R
   if (!element) return;
   // A quote in a closed disclosure has no box to scroll to: an author's `<details>`, or a diagram's source.
   for (let closed = element.closest("details"); closed; closed = closed.parentElement?.closest("details") ?? null) closed.open = true;
-  element.tabIndex = -1; element.focus({ preventScroll: true });
-  const selection = window.getSelection(); selection?.removeAllRanges(); selection?.addRange(range);
+  const editor = element.closest<HTMLElement>('[contenteditable="true"]');
+  const focus = new CustomEvent("kh:review-focus-range", { cancelable: true, detail: range });
+  if (!editor || editor.dispatchEvent(focus)) {
+    element.tabIndex = -1; element.focus({ preventScroll: true });
+    const selection = window.getSelection(); selection?.removeAllRanges(); selection?.addRange(range);
+  }
   element.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 

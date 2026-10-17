@@ -24,7 +24,7 @@ import { documentIdInPath, recentDocumentIds, toggleFavoriteDocument } from "@/l
 import { buttonClasses } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { Tooltip } from "@/components/ui/tooltip";
-import { actionForKey, isSingleKeyShortcut, shortcutLabel } from "@/lib/shortcut-keys";
+import { matchesShortcut, shortcutLabel } from "@/lib/shortcut-keys";
 import { OPEN_SEARCH_EVENT } from "./search-nav-item";
 import { dialogBackdropClasses, dialogSurfaceClasses } from "@/components/ui/dialog";
 
@@ -147,34 +147,16 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
   }, [recentRows.length]);
   const activeRow = rows[activeIndex];
 
-  // ⌘K, and the single keys. The single keys read the same actions this
-  // palette lists, so E exists exactly when "Edit document" is on offer here:
-  // the registry's three availability axes are not restated.
+  // Page actions use the palette or explicit controls; typing never invokes them.
   useEffect(() => {
     if (!enabled) {
       setOpen(false);
       return;
     }
     const onShortcut = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        setOpen(true);
-        return;
-      }
-      if (!isSingleKeyShortcut(event)) return;
-      if (event.key === "/") {
-        // Kept out of the field that is about to take focus.
-        event.preventDefault();
-        setOpen(true);
-        return;
-      }
-      // The tree answers the keys it has declared for the row in focus, and says so by taking the event
-      // (row-keyboard-actions spec §4.2). `/` is above and never the tree's.
-      if (event.defaultPrevented) return;
-      const action = actionForKey(actions, event);
-      if (!action) return;
+      if (event.defaultPrevented || !matchesShortcut(event, "Meta+K Control+K")) return;
       event.preventDefault();
-      runAction(action);
+      setOpen(true);
     };
     // The rail's Search row asks by event; this is the one palette.
     const onRequest = () => setOpen(true);
@@ -184,7 +166,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
       window.removeEventListener("keydown", onShortcut);
       window.removeEventListener(OPEN_SEARCH_EVENT, onRequest);
     };
-  }, [enabled, actions, runAction]);
+  }, [enabled]);
 
   // The documents to list while nothing is typed. They are asked of the server rather than read back from
   // what the browser remembered: that is only a list of IDs, and a document may have been renamed or
@@ -298,7 +280,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Quick search"
-          aria-keyshortcuts="Meta+K Control+K /"
+          aria-keyshortcuts="Meta+K Control+K"
           className={buttonClasses({ variant: "ghost", icon: true, className: "lg:hidden" })}
         >
           <Search className="h-4 w-4" aria-hidden="true" />

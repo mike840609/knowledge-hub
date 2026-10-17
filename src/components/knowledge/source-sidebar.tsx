@@ -139,7 +139,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
   const hasNotes = visibleCollections.some(({ source: candidate }) => candidate.sourceType === "HUB" && candidate.name === "Notes" && candidate.status === "ACTIVE");
   const canCreate = access.actions.canWrite && confirmed;
   const newNoteHref = `/w/${workspaceId}/knowledge/new`;
-  const addNote = <Tooltip label="Create document" shortcut="C"><Link href={newNoteHref} aria-label="Create document" aria-keyshortcuts="C" className={buttonClasses({ variant: "ghost", icon: true })}><Plus size={15} aria-hidden="true" /></Link></Tooltip>;
+  const addNote = <Tooltip label="Create document"><Link href={newNoteHref} aria-label="Create document" className={buttonClasses({ variant: "ghost", icon: true })}><Plus size={15} aria-hidden="true" /></Link></Tooltip>;
   // What can be made here, from the registry like everything else: the button exists when the action does.
   const createFolder = actionsFor("create", { workspaceId, workspaceType: access.workspace.type, can: access.actions, confirmed }).find((action) => action.id === "create.folder");
   const addFolder = createFolder ? (

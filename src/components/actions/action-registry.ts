@@ -35,7 +35,6 @@ export type ActionId =
   | "document.open-side-peek"
   | "document.open-new-tab"
   | "document.copy-link"
-  | "document.edit"
   | "document.share"
   | "document.favorite"
   | "document.details"
@@ -133,45 +132,6 @@ export type ActionEffect =
  * the rendered editor and the Markdown source, and rather than ⌘B, which is bold there.
  */
 export const NAV_TOGGLE_SHORTCUT = "Meta+\\ Control+\\";
-
-/**
- * Open or close the comments of the document being read. Bound by the two review panels (the owner's
- * and the shared page's, which has no palette), so it is a key here and not an action; the buttons
- * that do the same thing take their `aria-keyshortcuts` and tooltip from this. `D` for discussions:
- * `C` is Create document and `M` is Move.
- */
-export const REVIEW_TOGGLE_SHORTCUT = "D";
-
-/**
- * The key each row action takes (row-keyboard-actions spec §4.2). An action reads its `shortcut`
- * from here, so binding, `aria-keyshortcuts` and the hint on screen still have one source. It is
- * data rather than a field on the built action because an action the caller may not run is not
- * built at all, and the tree must still know the key is its own: `E` on a read-only row is
- * taken and does nothing, it is not passed on to edit the document being read.
- */
-export const rowShortcuts = {
-  "document.edit": "E",
-  "document.favorite": "F",
-  "document.move": "M",
-  "folder.new-document": "C",
-  "folder.move": "M",
-  "folder.rename": "R",
-} as const satisfies Partial<Record<ActionId, string>>;
-
-/**
- * The keys, lower-cased, that a focused row of this kind takes for itself. A folder row takes the
- * document keys too: with no row in focus they act on the document being read, so a key pressed on a
- * folder must never reach that document. `C` is the exception that stays a document row's to leave: it
- * is Create document globally, and only a folder row (`folder.new-document`) claims it.
- */
-export function claimedRowKeys(kind: "document" | "folder"): ReadonlySet<string> {
-  const prefixes = kind === "folder" ? ["folder.", "document."] : ["document."];
-  return new Set(
-    Object.entries(rowShortcuts)
-      .filter(([id]) => prefixes.some((prefix) => id.startsWith(prefix)))
-      .map(([, key]) => key.toLowerCase()),
-  );
-}
 
 export type Action = {
   id: ActionId;
@@ -341,13 +301,12 @@ export function availableActions(context: ActionContext): readonly Action[] {
     actions.push({
       id: "create.document",
       // "Create", because the key is C. The noun is the one the rest of the
-      // product uses (Edit document, Move document); where it goes, Notes,
+      // product uses (Move document, Archive document); where it goes, Notes,
       // is a keyword rather than the label.
       label: "Create document",
       group: "create",
       icon: "create",
       keywords: ["new", "add", "note", "notes", "write"],
-      shortcut: "C",
       surfaces: ["palette", "empty", "create"],
       effect: { kind: "navigate", href: `/w/${workspaceId}/knowledge/new` },
     });
@@ -418,27 +377,6 @@ export function availableActions(context: ActionContext): readonly Action[] {
       surfaces: ["palette", "row"],
       effect: { kind: "copy-link", href: documentHref },
     });
-    // All three axes at once: the capability, then the ownership, then the
-    // state of the document itself.
-    if (
-      can.canWrite &&
-      confirmed &&
-      target.ownership === "HUB_MANAGED" &&
-      target.status === "ACTIVE" &&
-      target.revision === "CURRENT"
-    ) {
-      actions.push({
-        id: "document.edit",
-        label: "Edit document",
-        group: "document",
-        icon: "edit",
-        keywords: ["rename", "title", "write", target.label],
-        shortcut: rowShortcuts["document.edit"],
-        section: "edit",
-        surfaces: ["palette", "row"],
-        effect: { kind: "navigate", href: `${documentHref.split("?")[0]}/edit` },
-      });
-    }
     // Share-link spec §10.1. Ownership is deliberately not consulted: sharing
     // is reading, and SOURCE_MANAGED content is as readable as any other. A
     // historical revision is excluded because the link always shows the
@@ -471,7 +409,6 @@ export function availableActions(context: ActionContext): readonly Action[] {
       group: "document",
       icon: "favorite",
       keywords: ["star", "bookmark", target.label],
-      shortcut: rowShortcuts["document.favorite"],
       section: "edit",
       surfaces: ["palette", "row"],
       effect: {
@@ -526,7 +463,6 @@ export function availableActions(context: ActionContext): readonly Action[] {
         group: "document",
         icon: "move",
         keywords: ["folder", "relocate", "put", "organize", "file", target.label],
-        shortcut: rowShortcuts["document.move"],
         section: "edit",
         surfaces: ["palette", "row"],
         effect: { kind: "move", sourceId: target.sourceId, label: target.label, node: { type: "document", documentId: target.documentId } },
@@ -573,7 +509,6 @@ export function availableActions(context: ActionContext): readonly Action[] {
         group: "folder",
         icon: "new-document",
         keywords: ["create", "add", "note", "write", folder.label],
-        shortcut: rowShortcuts["folder.new-document"],
         section: "edit",
         surfaces: ["row"],
         effect: { kind: "navigate", href: `/w/${workspaceId}/knowledge/new?folder=${folder.nodeId}` },
@@ -594,7 +529,6 @@ export function availableActions(context: ActionContext): readonly Action[] {
         group: "folder",
         icon: "rename",
         keywords: ["name", "title", folder.label],
-        shortcut: rowShortcuts["folder.rename"],
         section: "edit",
         surfaces: ["row"],
         effect: { kind: "folder-command", command: "folder.rename", ...identity },
@@ -605,7 +539,6 @@ export function availableActions(context: ActionContext): readonly Action[] {
         group: "folder",
         icon: "move",
         keywords: ["relocate", "put", "nest", "organize", folder.label],
-        shortcut: rowShortcuts["folder.move"],
         section: "edit",
         surfaces: ["row"],
         effect: { kind: "move", sourceId: folder.sourceId, label: folder.label, node: { type: "folder", nodeId: folder.nodeId } },

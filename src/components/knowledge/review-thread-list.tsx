@@ -28,7 +28,7 @@ export async function reviewRequest<T>(url: string, body?: unknown): Promise<T> 
 }
 
 /** A failed submission retains its UUID so a retry after a lost response writes once. */
-export function ReviewReplyForm({ onSubmit, label = "Reply", openRequest = 0, initial = "", submitLabel = label, onCancel }: { onSubmit: (body: string, key: string) => Promise<void>; label?: string; /** Changes when the card's own Reply was pressed: open the form. */ openRequest?: number; /** An edit starts from what the comment says. */ initial?: string; submitLabel?: string; onCancel?: () => void }) {
+export function ReviewReplyForm({ onSubmit, label = "Reply", openRequest = 0, initial = "", submitLabel = label, onCancel, submitDisabled = false, cancelOnEscape = false }: { onSubmit: (body: string, key: string) => Promise<void>; label?: string; /** Changes when the card's own Reply was pressed: open the form. */ openRequest?: number; /** An edit starts from what the comment says. */ initial?: string; submitLabel?: string; onCancel?: () => void; submitDisabled?: boolean; cancelOnEscape?: boolean }) {
   const [body, setBody] = useState(initial);
   const [expanded, setExpanded] = useState(label !== "Reply");
   useEffect(() => { if (openRequest > 0) setExpanded(true); }, [openRequest]);
@@ -42,9 +42,9 @@ export function ReviewReplyForm({ onSubmit, label = "Reply", openRequest = 0, in
     if (event.key !== "Escape") return;
     // Esc never closes the rail from here, and never discards: it leaves only an edit nothing was changed in.
     event.preventDefault(); event.stopPropagation();
-    if (onCancel && !busy && body === initial) onCancel();
+    if (onCancel && !busy && (cancelOnEscape || body === initial)) onCancel();
   }} onSubmit={async event => {
-    event.preventDefault(); if (busy || !body.trim()) return;
+    event.preventDefault(); if (busy || submitDisabled || !body.trim()) return;
     if (!request.current || request.current.body !== body) request.current = { body, key: crypto.randomUUID() };
     setBusy(true); setError(undefined);
     try { await onSubmit(body, request.current.key); setBody(""); request.current = null; if (label === "Reply") setExpanded(false); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not save comment."); } finally { setBusy(false); }
@@ -52,7 +52,7 @@ export function ReviewReplyForm({ onSubmit, label = "Reply", openRequest = 0, in
     <Textarea aria-label={label} placeholder={label === "Reply" ? "Reply…" : "Add a comment…"} rows={2} autoFocus className="!min-h-20 resize-y" value={body} disabled={busy} onChange={event => setBody(event.target.value)} required maxLength={6000} />
     {[...body].length >= 2700 && <p className="text-caption text-kh-text-muted">{[...body].length}/3,000</p>}
     {error && <p role="alert" className="text-body-sm">{error}</p>}
-    <div className="flex justify-end gap-1">{(label === "Reply" || onCancel) && <Button type="button" variant="ghost" disabled={busy} onClick={onCancel ?? (() => setExpanded(false))}>Cancel</Button>}<Tooltip label={submitLabel} shortcut={SUBMIT_SHORTCUT}><Button type="submit" aria-keyshortcuts={SUBMIT_SHORTCUT} disabled={busy || !body.trim() || [...body].length > 3000}>{busy ? "Saving…" : submitLabel}</Button></Tooltip></div>
+    <div className="flex justify-end gap-1">{(label === "Reply" || onCancel) && <Button type="button" variant="ghost" disabled={busy} onClick={onCancel ?? (() => setExpanded(false))}>Cancel</Button>}<Tooltip label={submitLabel} shortcut={SUBMIT_SHORTCUT}><Button type="submit" aria-keyshortcuts={SUBMIT_SHORTCUT} disabled={busy || submitDisabled || !body.trim() || [...body].length > 3000}>{busy ? "Saving…" : submitLabel}</Button></Tooltip></div>
   </form>;
 }
 

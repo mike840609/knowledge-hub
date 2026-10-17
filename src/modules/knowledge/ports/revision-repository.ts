@@ -1,6 +1,8 @@
 import type { KnowledgeRevision } from "../domain/revision";
 
 export interface RevisionRepository {
+  markCheckpoint(id: string, reason: string, name?: string): Promise<void>;
+  pruneWorking(documentId: string): Promise<void>;
   insert(revision: KnowledgeRevision): Promise<void>;
   /** Many revisions in few statements; for a bulk create in one transaction. */
   insertMany(revisions: readonly KnowledgeRevision[]): Promise<void>;

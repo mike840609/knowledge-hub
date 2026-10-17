@@ -175,6 +175,7 @@ export class DocumentReviewService {
     await this.capacity(r,s.document.id,caller.identity.id); await this.quota(r,caller.identity.id,s.document.id);
     const now=this.clock(); const thread:ReviewThread={id:uuidv7(),documentId:s.document.id,createdRevisionId:revision.id,createdBy:caller.identity.id,creationIdempotencyKey:key,creationRequestHash:requestHash,originShareLinkId,anchor,status:"OPEN",visibility:"VISIBLE",hiddenBy:null,hiddenAt:null,hiddenReason:null,resolvedBy:null,resolvedAt:null,createdAt:now,updatedAt:now};
     const firstComment=this.comment(thread.id,caller.identity.id,body,key,requestHash);
+    if (revision.history?.state === "WORKING") await r.revisions.markCheckpoint(revision.id,"COMMENT");
     await r.reviewThreads.insert(thread);
     await r.reviewComments.insert(firstComment); await this.charge(r,caller.identity.id,s.document.id);
     if(originShareLinkId!==null) await r.shareCommentEvents.insert({id:uuidv7(),workspaceId:s.workspace.id,documentId:s.document.id,threadId:thread.id,commentId:firstComment.id,originShareLinkId,createdByUserId:caller.identity.id,mentionedUserId:null,createdAt:now,readAt:null});

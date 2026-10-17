@@ -38,7 +38,7 @@ test("a row's actions open by right-click and by its button, with the same items
   await row.click({ button: "right" });
   const contextMenu = page.getByRole("menu");
   await expect(contextMenu.getByRole("menuitem", { name: "Open in new tab" })).toBeVisible();
-  await expect(contextMenu.getByRole("menuitem", { name: "Edit document" })).toBeVisible();
+  await expect(contextMenu.getByRole("menuitem", { name: "Edit document" })).toHaveCount(0);
   await expect(contextMenu.getByRole("menuitem", { name: "Add to favorites" })).toBeVisible();
   await closeMenu(page);
 
@@ -48,7 +48,7 @@ test("a row's actions open by right-click and by its button, with the same items
   await page.getByRole("button", { name: "Actions for Architecture" }).click();
   const buttonMenu = page.getByRole("menu");
   await expect(buttonMenu.getByRole("menuitem", { name: "Open in new tab" })).toBeVisible();
-  await expect(buttonMenu.getByRole("menuitem", { name: "Edit document" })).toBeVisible();
+  await expect(buttonMenu.getByRole("menuitem", { name: "Edit document" })).toHaveCount(0);
   await expect(buttonMenu.getByRole("menuitem", { name: "Add to favorites" })).toBeVisible();
 });
 
@@ -56,9 +56,9 @@ test("source-managed content offers no Edit, however capable the caller", async 
   await openTree(page);
   await expandVault(page);
 
-  // The same caller, one row apart: the difference is the source's ownership.
+  // Neither ownership type needs a separate Edit entry.
   await page.getByRole("treeitem", { name: "Architecture", exact: true }).click({ button: "right" });
-  await expect(page.getByRole("menuitem", { name: "Edit document" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Edit document" })).toHaveCount(0);
   await closeMenu(page);
 
   await page.getByRole("treeitem", { name: "Compliance Policy", exact: true }).click({ button: "right" });
@@ -68,11 +68,17 @@ test("source-managed content offers no Edit, however capable the caller", async 
   await expect(page.getByRole("menuitem", { name: "Open document" })).toHaveCount(0);
 });
 
-test("a row action runs: Edit opens the editor", async ({ page }) => {
+test("directly editable documents omit Edit from the palette and leave E unbound", async ({ page }) => {
   await openTree(page);
-  await page.getByRole("treeitem", { name: "Architecture", exact: true }).click({ button: "right" });
-  await page.getByRole("menuitem", { name: "Edit document" }).click();
-  await expect(page).toHaveURL(/\/edit$/);
+  await openPalette(page);
+  await expect(page.getByRole("option", { name: "Edit document", exact: true })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  const before = page.url();
+  const row = page.getByRole("treeitem", { name: "Architecture", exact: true });
+  await row.focus();
+  await page.keyboard.press("e");
+  await expect(row).toBeFocused();
+  expect(page.url()).toBe(before);
 });
 
 test("the palette searches on the first character without waiting out the typing pause, and a burst is one request", async ({ page }) => {

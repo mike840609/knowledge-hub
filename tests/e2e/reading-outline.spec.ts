@@ -104,9 +104,9 @@ test.describe("document outline", () => {
     await page.goto(`${documentUrl}/edit`);
     // `main form` + first(): the repo's convention for the editor (see phase5-authoring) —
     // a route transition can leave a hidden duplicate of the form, and a bare label matches both.
-    const editorForm = page.locator("main form").first();
+    const editorForm = page.locator("main");
     await (await showMarkdown(editorForm)).fill("## One\n\ntext\n\n## Two\n\ntext\n\n## Three\n\ntext\n");
-    await editorForm.getByRole("button", { name: "Save" }).click();
+    await expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", ROUND_TRIP);
     await expect(page).toHaveURL(documentUrl, ROUND_TRIP);
 
     const rail = page.getByRole("complementary", { name: "On this page" });

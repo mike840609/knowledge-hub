@@ -21,7 +21,7 @@ function unique(label: string) {
   return `${label}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
-const composer = (page: Page) => page.locator("main form").first();
+const composer = (page: Page) => page.locator("main");
 
 
 async function createNote(page: Page, workspaceId: string, title: string, markdown: string) {
@@ -79,7 +79,7 @@ test.describe("creating the document a broken link names", () => {
     await composer(page).getByRole("button", { name: "Create document" }).click();
     await expect(page).not.toHaveURL(/\/knowledge\/new/, ROUND_TRIP);
     const createdUrl = page.url();
-    await expect(page.getByRole("heading", { name: `${stamp} Notes` }).first()).toBeVisible(ROUND_TRIP);
+    await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(`${stamp} Notes`, ROUND_TRIP);
 
     // Back in the document that has the link: it resolves, with nothing having been written to it.
     await page.goto(sourceUrl);

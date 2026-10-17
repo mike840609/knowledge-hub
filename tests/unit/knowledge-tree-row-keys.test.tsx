@@ -34,7 +34,7 @@ const action = (id: Action["id"], shortcut: string): Action => ({
   id, label: id, group: id.startsWith("folder") ? "folder" : "document", icon: "open", keywords: [], shortcut, surfaces: ["row"],
   effect: { kind: "navigate", href: "/x" },
 });
-const editAction = action("document.edit", "E");
+const favoriteAction = action("document.favorite", "F");
 const newHereAction = action("folder.new-document", "C");
 
 let root: Root;
@@ -61,7 +61,7 @@ function render(props: Props = {}) {
         sourceId: "s1",
         favoriteDocumentIds: new Set<string>(),
         onToggleFavorite: () => {},
-        documentActions: () => [editAction],
+        documentActions: () => [favoriteAction],
         folderActions: () => [newHereAction],
         onRunAction,
         onReorder: async () => true,
@@ -81,58 +81,20 @@ function press(target: HTMLElement, key: string, init: Partial<KeyboardEventInit
 }
 
 describe("a key on the row in focus", () => {
-  it("runs the row's own action for it, and takes the key", () => {
+  it.each(["A", "F"])("does not intercept action letters on row %s", (label) => {
     const { onRunAction } = render();
-    const event = press(rowFor("A"), "e");
-    expect(onRunAction).toHaveBeenCalledWith(editAction);
-    expect(event.defaultPrevented).toBe(true);
-  });
-
-  it("goes by the row's kind: C on a folder is its New document here", () => {
-    const { onRunAction } = render();
-    press(rowFor("F"), "c");
-    expect(onRunAction).toHaveBeenCalledWith(newHereAction);
-  });
-
-  it("takes a key the row's kind has declared even when the registry offers nothing for it, and does nothing", () => {
-    const { onRunAction } = render({ documentActions: () => [] });
-    const event = press(rowFor("A"), "e");
-    expect(onRunAction).not.toHaveBeenCalled();
-    expect(event.defaultPrevented).toBe(true); // so the page's own E does not edit the document being read
-  });
-
-  it("leaves a key the row's kind has not declared to the page: C on a document is still Create document", () => {
-    const { onRunAction } = render();
-    const event = press(rowFor("A"), "c");
-    expect(onRunAction).not.toHaveBeenCalled();
-    expect(event.defaultPrevented).toBe(false);
-  });
-
-  it("takes E and F on a folder row too, for the document being read must not answer them", () => {
-    const { onRunAction } = render({ folderActions: () => [newHereAction] });
-    for (const key of ["e", "f"]) {
-      const event = press(rowFor("F"), key);
-      expect(event.defaultPrevented).toBe(true);
+    for (const key of ["f", "m", "c", "d", "r", "/"]) {
+      expect(press(rowFor(label), key).defaultPrevented).toBe(false);
     }
     expect(onRunAction).not.toHaveBeenCalled();
   });
 
-  it("still runs the folder's own C, and leaves C on a document row alone", () => {
-    const { onRunAction } = render();
-    const folderEvent = press(rowFor("F"), "c");
-    expect(folderEvent.defaultPrevented).toBe(true);
-    expect(onRunAction).toHaveBeenCalledTimes(1);
-    expect(onRunAction).toHaveBeenCalledWith(newHereAction);
-    expect(press(rowFor("A"), "c").defaultPrevented).toBe(false);
-    expect(onRunAction).toHaveBeenCalledTimes(1);
-  });
-
   it("does not act on a modified key, a held key or a composed one", () => {
     const { onRunAction } = render();
-    press(rowFor("A"), "e", { metaKey: true });
-    press(rowFor("A"), "e", { ctrlKey: true });
-    press(rowFor("A"), "e", { repeat: true });
-    press(rowFor("A"), "e", { isComposing: true });
+    press(rowFor("A"), "f", { metaKey: true });
+    press(rowFor("A"), "f", { ctrlKey: true });
+    press(rowFor("A"), "f", { repeat: true });
+    press(rowFor("A"), "f", { isComposing: true });
     expect(onRunAction).not.toHaveBeenCalled();
   });
 
@@ -140,7 +102,7 @@ describe("a key on the row in focus", () => {
     const { onRunAction } = render();
     const input = document.createElement("input");
     rowFor("A").appendChild(input);
-    const event = press(input, "e");
+    const event = press(input, "f");
     expect(onRunAction).not.toHaveBeenCalled();
     expect(event.defaultPrevented).toBe(false);
   });
@@ -153,7 +115,7 @@ describe("a key on the row in focus", () => {
     menu.appendChild(item);
     // Inside the row's subtree, so the event reaches the tree's handler and only the menu guard stops it.
     rowFor("A").appendChild(menu);
-    const event = press(item, "e");
+    const event = press(item, "f");
     expect(onRunAction).not.toHaveBeenCalled();
     expect(event.defaultPrevented).toBe(false);
   });

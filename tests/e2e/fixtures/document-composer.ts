@@ -10,9 +10,9 @@ export function unique(label: string) {
   return `${label} ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
-/** main form + first(): the duplicate-DOM quirk phase5-authoring.spec.ts documents. */
+/** Inline editing renders no form: scope to main (covers new-doc form and inline doc). */
 export function composer(page: Page) {
-  return page.locator("main form").first();
+  return page.locator("main");
 }
 
 /** The rendered editing surface. */
@@ -133,7 +133,7 @@ export function pressSaveBeforeOutputRenders(words: string[]) {
       pressed = true;
       // React schedules its render from a microtask queued while `handler` ran; these two run after it.
       queueMicrotask(() => queueMicrotask(() => {
-        const source = document.querySelector<HTMLTextAreaElement>('main form textarea[aria-label="Markdown"]');
+        const source = document.querySelector<HTMLTextAreaElement>('main textarea[aria-label="Markdown"]');
         (window as unknown as { renderedAtPress?: string }).renderedAtPress = source?.value;
         const save = { key: "Enter", metaKey: true, ctrlKey: true, bubbles: true, cancelable: true };
         document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", save));

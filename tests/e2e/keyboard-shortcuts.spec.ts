@@ -23,23 +23,25 @@ async function pressUntil(page: Page, key: string, answered: () => Promise<void>
 async function openArchitecture(page: Page) {
   await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${OBSIDIAN_SOURCE}`);
   await page.getByRole("treeitem", { name: "Architecture", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Architecture" })).toBeVisible(ROUND_TRIP);
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toBeVisible(ROUND_TRIP);
 }
 
-test("/ opens the palette without typing the slash, and the palette shows shortcuts", async ({ page }) => {
+test("Cmd/Ctrl K opens the palette, and Create has no letter shortcut", async ({ page }) => {
   await openArchitecture(page);
   const field = page.getByRole("combobox", { name: "Search documents and actions" });
-  await pressUntil(page, "/", () => expect(field).toBeVisible({ timeout: 1_000 }));
+  await pressUntil(page, "ControlOrMeta+k", () => expect(field).toBeVisible({ timeout: 1_000 }));
   await expect(field).toHaveValue("");
 
   const list = page.getByRole("listbox", { name: "Actions and documents" });
-  await expect(list.getByRole("option", { name: /Create document/ }).locator("kbd")).toHaveText("C");
-  await expect(list.getByRole("option", { name: /Edit document/ }).locator("kbd")).toHaveText("E");
+  await expect(list.getByRole("option", { name: /Create document/ }).locator("kbd")).toHaveCount(0);
+  await expect(list.getByRole("option", { name: /Edit document/ })).toHaveCount(0);
 });
 
-test("C opens a new note", async ({ page }) => {
+test("C does not navigate away from the current document", async ({ page }) => {
   await openArchitecture(page);
-  await pressUntil(page, "c", () => expect(page).toHaveURL(/\/knowledge\/new$/, { timeout: 1_000 }));
+  const before = page.url();
+  await page.keyboard.press("c");
+  expect(page.url()).toBe(before);
 });
 
 test("a letter typed into a field stays in the field", async ({ page }) => {
@@ -53,9 +55,11 @@ test("a letter typed into a field stays in the field", async ({ page }) => {
   expect(page.url()).toBe(before);
 });
 
-test("E edits the document being read", async ({ page }) => {
+test("E leaves the document being read unchanged", async ({ page }) => {
   await openArchitecture(page);
-  await pressUntil(page, "e", () => expect(page).toHaveURL(/\/edit$/, { timeout: 1_000 }));
+  const before = page.url();
+  await page.keyboard.press("e");
+  expect(page.url()).toBe(before);
 });
 
 test("E does nothing on source-managed content", async ({ page }) => {
@@ -63,7 +67,7 @@ test("E does nothing on source-managed content", async ({ page }) => {
   await page.goto(url);
   // Prove the shortcuts are live on this page before asserting that E is not.
   const field = page.getByRole("combobox", { name: "Search documents and actions" });
-  await pressUntil(page, "/", () => expect(field).toBeVisible({ timeout: 1_000 }));
+  await pressUntil(page, "ControlOrMeta+k", () => expect(field).toBeVisible({ timeout: 1_000 }));
   await page.keyboard.press("Escape");
   await expect(field).toHaveCount(0);
 
@@ -75,15 +79,13 @@ test("E does nothing on source-managed content", async ({ page }) => {
 /** A note of our own, so saving it cannot disturb another test's fixture. */
 async function editOwnNote(page: Page, title: string) {
   await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
-  const field = page.locator("main form").first().getByLabel("Title", { exact: true });
+  const field = page.locator("main").getByLabel("Title", { exact: true });
   await expect(field).toBeEditable(ROUND_TRIP);
   await field.fill(title);
   await page.getByRole("button", { name: "Create document" }).click();
-  await expect(page.getByRole("heading", { name: title })).toBeVisible(ROUND_TRIP);
-  await pressUntil(page, "e", () => expect(page).toHaveURL(/\/edit$/, { timeout: 1_000 }));
-  // main form + first(): the duplicate-DOM quirk phase5-authoring documents.
-  const titleField = page.locator("main form").first().getByLabel("Title", { exact: true });
-  await expect(titleField).toBeEditable(ROUND_TRIP);
+  await expect(page).not.toHaveURL(/\/knowledge\/new(?:\?.*)?$/, ROUND_TRIP);
+  const titleField = page.getByRole("textbox", { name: "Title", exact: true });
+  await expect(titleField).toHaveValue(title, ROUND_TRIP);
   return titleField;
 }
 
@@ -92,14 +94,16 @@ test("⌘Enter saves from inside the editor", async ({ page }) => {
   await titleField.fill("Saved By Keyboard");
   await titleField.press("ControlOrMeta+Enter");
   await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
-  await expect(page.getByRole("heading", { name: "Saved By Keyboard" })).toBeVisible(ROUND_TRIP);
+  await expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", ROUND_TRIP);
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Saved By Keyboard");
 });
 
 test("Esc leaves an unchanged editor", async ({ page }) => {
   const titleField = await editOwnNote(page, "Shortcut Esc Clean Note");
   await titleField.press("Escape");
   await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
-  await expect(page.getByRole("heading", { name: "Shortcut Esc Clean Note" })).toBeVisible(ROUND_TRIP);
+  await expect(titleField).toHaveValue("Shortcut Esc Clean Note");
 });
 
 test("Esc never discards a changed draft", async ({ page }) => {
@@ -107,7 +111,7 @@ test("Esc never discards a changed draft", async ({ page }) => {
   await titleField.fill("Unsaved change");
   await titleField.press("Escape");
   await page.waitForTimeout(500);
-  await expect(page).toHaveURL(/\/edit$/);
+  await expect(page).not.toHaveURL(/\/edit$/);
   await expect(titleField).toHaveValue("Unsaved change");
 });
 
@@ -145,7 +149,7 @@ test.describe("⌘\\ collapses and expands the navigation", () => {
 
   test("also while writing, from the title and from the editor, without typing anything", async ({ page }) => {
     await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/new`);
-    const form = page.locator("main form").first();
+    const form = page.locator("main");
     const title = form.getByLabel("Title", { exact: true });
     await expect(title).toBeEditable(ROUND_TRIP);
     const nav = navigation(page);
@@ -167,7 +171,7 @@ test.describe("⌘\\ collapses and expands the navigation", () => {
     await openArchitecture(page);
     const nav = navigation(page);
     const field = page.getByRole("combobox", { name: "Search documents and actions" });
-    await pressUntil(page, "/", () => expect(field).toBeVisible({ timeout: 1_000 }));
+    await pressUntil(page, "ControlOrMeta+k", () => expect(field).toBeVisible({ timeout: 1_000 }));
     await field.fill("sidebar");
     const option = page.getByRole("listbox", { name: "Actions and documents" }).getByRole("option", { name: /Toggle navigation/ });
     await expect(option.locator("kbd")).toHaveText("⌘\\");
@@ -180,7 +184,7 @@ test.describe("⌘\\ collapses and expands the navigation", () => {
     await openArchitecture(page);
     const nav = navigation(page);
     const field = page.getByRole("combobox", { name: "Search documents and actions" });
-    await pressUntil(page, "/", () => expect(field).toBeVisible({ timeout: 1_000 }));
+    await pressUntil(page, "ControlOrMeta+k", () => expect(field).toBeVisible({ timeout: 1_000 }));
     await page.keyboard.press("ControlOrMeta+Backslash");
     await expect(field).toBeVisible();
     // With the palette open the page behind it is out of the accessibility tree, so look at it once the
@@ -195,7 +199,7 @@ test.describe("⌘\\ collapses and expands the navigation", () => {
     await page.setViewportSize({ width: 800, height: 700 });
     // The tree is behind the Browse button at this width, so go to the source and let it land on a document.
     await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/${OBSIDIAN_SOURCE}`);
-    await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible(ROUND_TRIP);
+    await expect(page.getByRole("textbox", { name: "Title", exact: true })).toBeVisible(ROUND_TRIP);
     await pressUntil(page, "ControlOrMeta+Backslash", () => expect(page.getByRole("dialog", { name: "Menu" })).toBeVisible({ timeout: 1_000 }));
   });
 });

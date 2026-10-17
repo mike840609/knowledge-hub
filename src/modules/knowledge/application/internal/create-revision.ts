@@ -1,3 +1,4 @@
+import { planRevisionHistory, type RevisionHistory, type RevisionSaveMode } from "../../domain/revision-history";
 import { syncCallerIdentity } from "@/modules/identity/application/sync-caller-identity";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { lockWorkspaceForMutation } from "@/modules/workspaces/application/workspace-mutation-guard";
@@ -13,13 +14,18 @@ import {
   SourceArchivedError,
   SourceNotFoundError,
   SourceReadOnlyError,
+  ValidationError,
 } from "../../domain/errors";
 import type { KnowledgeRepositories } from "../../ports/unit-of-work";
 
 export type CreateRevisionInput = RevisionContentInput & {
+  saveMode?: RevisionSaveMode;
+  versionName?: string;
   documentId: string;
   expectedCurrentRevisionId: string;
 };
+
+export type CreateRevisionResult = { revisionId: string; revisionNo: number; changed: boolean; history?: RevisionHistory; preservedRevision?: { id: string; revisionNo: number; createdAt: Date; createdBy: string; history: RevisionHistory } };
 
 /**
  * Hub-managed revision creation bound to an already-open canonical transaction.
@@ -35,7 +41,8 @@ export async function createRevisionInTransaction(
   repositories: KnowledgeRepositories,
   caller: CallerContext,
   input: CreateRevisionInput,
-): Promise<{ revisionId: string; revisionNo: number; changed: boolean }> {
+  now: Date = new Date(),
+): Promise<CreateRevisionResult> {
   await syncCallerIdentity(repositories.users, caller);
   const existing = await repositories.documents.findById(input.documentId);
   if (!existing) throw new DocumentNotFoundError();
@@ -50,18 +57,31 @@ export async function createRevisionInTransaction(
   const current = await repositories.revisions.findCurrent(document.id);
   if (!current) throw new IntegrityViolationError("Document current revision is missing.");
   if (current.id !== input.expectedCurrentRevisionId) throw new RevisionConflictError();
-  if (isRevisionContentUnchanged(current, input)) {
-    return { revisionId: current.id, revisionNo: current.revisionNo, changed: false };
+  if (input.versionName !== undefined && (!input.versionName.trim() || input.versionName.trim().length > 120)) throw new ValidationError("Provide a version name of up to 120 characters.");
+  if (isRevisionContentUnchanged(current, input) && input.saveMode !== "RESTORE") {
+    if (input.saveMode === "CHECKPOINT") {
+      await repositories.revisions.markCheckpoint(current.id, "NAMED", input.versionName?.trim());
+      return { revisionId: current.id, revisionNo: current.revisionNo, changed: false, history: { state: "CHECKPOINT", activityId: current.history?.activityId ?? current.id, windowStartedAt: current.history?.windowStartedAt ?? current.createdAt, name: input.versionName?.trim() ?? null, reason: "NAMED" } };
+    }
+    return { revisionId: current.id, revisionNo: current.revisionNo, changed: false, history: current.history };
   }
   const { normalized: content, contentHash } = fingerprintRevisionContent(input);
   const revisionId = uuidv7();
+  const policy = planRevisionHistory(current, caller.identity.id, now, revisionId, input.saveMode);
+  let preservedRevision: CreateRevisionResult["preservedRevision"];
+  if (policy.preserve) {
+    await repositories.revisions.markCheckpoint(current.id, policy.preserveReason);
+    preservedRevision = { id: current.id, revisionNo: current.revisionNo, createdAt: current.createdAt, createdBy: current.createdBy, history: { ...current.history!, state: "CHECKPOINT", reason: policy.preserveReason } };
+  }
   const revisionNo = await repositories.revisions.nextRevisionNumber(document.id);
   await repositories.revisions.insert({
     id: revisionId, documentId: document.id, revisionNo, ...content,
-    contentHash, createdBy: caller.identity.id, createdAt: new Date(),
+    contentHash, createdBy: caller.identity.id, createdAt: now,
+    ...(input.saveMode ? { history: policy.history } : {}),
   });
   await repositories.documents.setCurrentRevision(document.id, revisionId, caller.identity.id);
   await repositories.links.replaceForDocument({ documentId: document.id, revisionId, links: extractDocumentLinks(content.markdown) });
+  if (input.saveMode || current.history?.state === "WORKING") await repositories.revisions.pruneWorking(document.id);
   await repositories.documents.assertComplete(document.id);
-  return { revisionId, revisionNo, changed: true };
+  return { revisionId, revisionNo, changed: true, ...(input.saveMode ? { history: policy.history } : {}), ...(preservedRevision ? { preservedRevision } : {}) };
 }

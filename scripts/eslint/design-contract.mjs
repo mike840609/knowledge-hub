@@ -13,7 +13,9 @@ export const designContractRule = {
     const fieldExceptions = [
       "/components/ui/input.tsx", "/components/ui/select.tsx", "/components/ui/textarea.tsx",
       // Unframed text surfaces belonging to a document, palette or tree rather than a form field.
-      "/components/knowledge/document-composer.tsx", "/components/search/quick-search.tsx",
+      // The inline document uses borderless title/prose fields, like the composer.
+      // See docs/superpowers/specs/2026-10-16-inline-editing.md.
+      "/components/knowledge/editable-document.tsx", "/components/knowledge/document-composer.tsx", "/components/search/quick-search.tsx",
       "/components/knowledge/tree-filter.tsx", "/components/knowledge/move-dialog.tsx",
     ];
     return {

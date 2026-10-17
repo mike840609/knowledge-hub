@@ -21,7 +21,7 @@ export function SearchNavItem({ compact = false }: { compact?: boolean }) {
       type="button"
       onClick={requestQuickSearch}
       aria-label="Quick search"
-      aria-keyshortcuts="Meta+K Control+K /"
+      aria-keyshortcuts="Meta+K Control+K"
       className={`kh-control kh-focus-ring flex h-8 w-full items-center rounded-md px-2 text-body text-kh-text-muted transition hover:bg-kh-bg-hover hover:text-kh-text ${compact ? "justify-center" : "gap-2"}`}
     >
       <Search size={15} aria-hidden="true" />

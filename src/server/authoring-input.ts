@@ -172,12 +172,15 @@ export function parseCreateDocumentInput(body: unknown): { title: string; markdo
 }
 
 export function parseUpdateDocumentInput(body: unknown): {
+  autosave?: boolean;
   title: string;
   markdown: string;
   expectedCurrentRevisionId: string;
 } {
   const record = readObject(body);
+  if (record.autosave !== undefined && typeof record.autosave !== "boolean") invalid("Provide autosave as a boolean.");
   return {
+    ...(record.autosave === true ? { autosave: true } : {}),
     title: checkedTitle(readString(record, "title")),
     markdown: readMarkdown(record),
     expectedCurrentRevisionId: readString(record, "expectedCurrentRevisionId"),

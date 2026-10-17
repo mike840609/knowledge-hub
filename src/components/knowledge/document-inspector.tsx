@@ -3,6 +3,7 @@ import {CopySourcePath} from "./copy-source-path";
 
 
 import Link from "next/link";
+import { Input } from "@/components/ui/input";
 import { useRefreshOnArrival } from "@/components/shell/refresh-on-arrival";
 import { requestShare } from "@/components/actions/action-menu";
 import { availableActions } from "@/components/actions/action-registry";
@@ -112,13 +113,18 @@ function InspectorTabs({
   outline,
   activeSlug,
   requestedTab,
+  onKeepVersion,
 }: {
   data: DocumentInspectorData;
   outline: readonly OutlineEntry[];
   activeSlug: string | null;
   requestedTab: RequestedInspectorTab | null;
+  onKeepVersion?: (name: string) => Promise<void>;
 }) {
   const { access } = useWorkspaceAuthorization();
+  const [versionName, setVersionName] = useState("");
+  const [keeping, setKeeping] = useState(false);
+  const [versionMessage, setVersionMessage] = useState("");
   const available = useMemo(
     () => ["details", "links", "history", ...(outline.length > 0 ? ["outline"] : [])],
     [outline.length],
@@ -200,13 +206,24 @@ function InspectorTabs({
         <DocumentLinksPanel view={data.links} localGraph={data.localGraph} focusId={data.documentId} createLinks={data.createLinks} />
       </TabsPanel>
       <TabsPanel value="history">
+        {onKeepVersion ? <form className="mb-4 space-y-2" onSubmit={event => {
+          event.preventDefault();
+          setKeeping(true); setVersionMessage("");
+          void onKeepVersion(versionName.trim()).then(() => { setVersionName(""); setVersionMessage("Version kept."); }).catch(error => setVersionMessage(error instanceof Error ? error.message : "Could not keep this version.")).finally(() => setKeeping(false));
+        }}>
+          <label className="block text-caption text-kh-text-muted" htmlFor="checkpoint-name">Version name (optional)</label>
+          <Input id="checkpoint-name" maxLength={120} value={versionName} onChange={event => setVersionName(event.target.value)} className="w-full rounded-md border border-kh-border bg-transparent px-2.5 py-2 text-body-sm" />
+          <button type="submit" disabled={keeping} className={buttonClasses({ variant: "secondary", size: "sm" })}>{keeping ? "Keeping…" : "Keep version"}</button>
+          <p role="status" className="text-caption text-kh-text-muted">{versionMessage}</p>
+        </form> : null}
         <ul className="space-y-1">
-          {sorted.map((revision) => {
+          {sorted.filter(revision => revision.history?.state !== "WORKING" || revision.id === current?.id).map((revision, index, visible) => {
             const isCurrent = current && revision.id === current.id;
             const isSelected = revision.revisionNo === data.selectedRevisionNo;
             return (
               <li key={revision.id}>
-                <Link
+                {revision.history?.activityId && revision.history.activityId !== visible[index - 1]?.history?.activityId ? <p className="px-2.5 pb-1 pt-3 text-caption text-kh-text-muted">Editing activity{revision.history.windowStartedAt ? <> · <Timestamp value={revision.history.windowStartedAt} /></> : null}</p> : null}
+                {revision.history?.state === "WORKING" ? <div className="flex items-center justify-between gap-2 rounded-md px-2.5 py-2 text-body-sm"><span>Latest saved content</span><Timestamp value={revision.createdAt} /></div> : <Link
                   href={revisionHref({
                     workspaceId: data.workspaceId,
                     sourceId: data.sourceId,
@@ -218,13 +235,13 @@ function InspectorTabs({
                   className={`flex items-center justify-between gap-2 rounded-md px-2.5 py-2 text-body-sm hover:bg-kh-bg-hover kh-focus-ring ${isSelected ? "bg-kh-bg-selected font-medium text-kh-text" : "text-kh-text"}`}
                 >
                   <span>
-                    Revision {revision.revisionNo}
+                    {revision.history?.name || (revision.history && revision.history.reason !== "LEGACY" ? "Saved version" : `Revision ${revision.revisionNo}`)}
                     {isCurrent ? " (current)" : ""}
                   </span>
                   <span className="shrink-0 text-caption text-kh-text-muted">
                     <Timestamp value={revision.createdAt} />
                   </span>
-                </Link>
+                </Link>}
               </li>
             );
           })}
@@ -260,6 +277,7 @@ export function DocumentInspector({
   outline,
   activeSlug,
   requestedTab,
+  onKeepVersion,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -267,6 +285,7 @@ export function DocumentInspector({
   outline: readonly OutlineEntry[];
   activeSlug: string | null;
   requestedTab: RequestedInspectorTab | null;
+  onKeepVersion?: (name: string) => Promise<void>;
 }) {
   const wide = useWideInspector();
   if (!open) return null;
@@ -289,7 +308,7 @@ export function DocumentInspector({
         </div>
         <div key={data.documentId} role="region" aria-label="Document details content" tabIndex={0}
           className="min-h-0 flex-1 overflow-y-auto overscroll-contain break-words px-4 py-3 kh-focus-ring">
-          <InspectorTabs data={data} outline={outline} activeSlug={activeSlug} requestedTab={requestedTab} />
+          <InspectorTabs data={data} outline={outline} activeSlug={activeSlug} requestedTab={requestedTab} onKeepVersion={onKeepVersion} />
         </div>
       </aside>
     );
@@ -304,7 +323,7 @@ export function DocumentInspector({
       description={data.sourceName}
       surfaceClassName="bg-kh-bg-raised"
     >
-      <InspectorTabs data={data} outline={outline} activeSlug={activeSlug} requestedTab={requestedTab} />
+      <InspectorTabs data={data} outline={outline} activeSlug={activeSlug} requestedTab={requestedTab} onKeepVersion={onKeepVersion} />
     </Drawer>
   );
 }
@@ -324,7 +343,17 @@ export function DocumentDetailClient({
   ownership,
   contentOwnsTitle,
   outline,
+  titleControl,
+  saveStatus,
+  readOnlyReason,
+  onInspect,
+  onKeepVersion,
 }: {
+  titleControl?: ReactNode;
+  saveStatus?: ReactNode;
+  readOnlyReason?: ReactNode;
+  onInspect?: () => void;
+  onKeepVersion?: (name: string) => Promise<void>;
   breadcrumb: DocumentBreadcrumbSegment[];
   title: string;
   status: "ACTIVE" | "ARCHIVED";
@@ -362,9 +391,10 @@ export function DocumentDetailClient({
   const inspectorOpen = inspector?.open ?? false;
   const setInspectorOpen = inspector?.setOpen;
   const openInspector = useCallback(() => {
+    onInspect?.();
     setInspectorOpen?.(true);
     window.dispatchEvent(new CustomEvent("kh:open-inspector"));
-  }, [setInspectorOpen]);
+  }, [setInspectorOpen, onInspect]);
   const toggleInspector = useCallback(() => {
     if (inspectorOpen) {
       setInspectorOpen?.(false);
@@ -455,9 +485,12 @@ export function DocumentDetailClient({
         contentRef={contentRef}
         outline={<OutlineRail entries={outline} activeSlug={activeSlug} />}
         inspectorOpen={inspectorOpen}
-        inspector={<DocumentInspector open={inspectorOpen} onOpenChange={(open) => setInspectorOpen?.(open)} data={inspectorData} outline={outline} activeSlug={activeSlug} requestedTab={requestedTab} />}
+        inspector={<DocumentInspector open={inspectorOpen} onOpenChange={(open) => setInspectorOpen?.(open)} data={inspectorData} outline={outline} activeSlug={activeSlug} requestedTab={requestedTab} onKeepVersion={onKeepVersion} />}
       >
           <DocumentHeader
+            titleControl={titleControl}
+            saveStatus={saveStatus}
+            readOnlyReason={readOnlyReason}
             headerRef={headerRef}
             pinned={scrolledPast}
             breadcrumb={breadcrumb}

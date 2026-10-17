@@ -36,6 +36,15 @@ const callout = (root: HTMLElement) => root.querySelector("blockquote")?.getAttr
  * is what it wrote before (docs/superpowers/specs/2026-10-12-editor-reader-hints-design.md).
  */
 describe("the reader's look, hinted in the editor", () => {
+  it("keeps heading anchors unique and updates them without changing Markdown", async () => {
+    const markdown = "## Setup\n\n## Setup\n\n## 請假流程\n";
+    const { root, editor } = await open(markdown);
+    expect([...root.querySelectorAll("h2")].map(node => node.id)).toEqual(["setup", "setup-1", "請假流程"]);
+    expect(editor.getMarkdown()).toBe(markdown);
+    typeAfter(editor, "Setup", " changed");
+    expect([...root.querySelectorAll("h2")].map(node => node.id)).toEqual(["setup-changed", "setup", "請假流程"]);
+  });
+
   describe("a callout", () => {
     it.each([["NOTE", "note"], ["TIP", "tip"], ["IMPORTANT", "important"], ["WARNING", "warning"], ["CAUTION", "caution"]])("marks a quote that opens with [!%s]", async (marker, kind) => {
       const { root } = await open(`> [!${marker}]\n> body\n`);

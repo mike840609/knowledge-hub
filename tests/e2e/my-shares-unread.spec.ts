@@ -42,7 +42,8 @@ test("My shares shows one document-level unread badge across multiple share link
   await expect(page).toHaveURL(new RegExp(`/knowledge/${doc.sourceId}/${doc.documentId}\\?thread=${thread.id}`));
   await openReviewDiscussions(page);
   await page.goto(`${owner}/w/${doc.workspaceId}/shares`);
-  await expect(list.getByRole("link", { name: /unread comments/ })).toHaveCount(0);
+  // Reading this document clears its badge; unrelated documents can still be unread.
+  await expect(rows.getByRole("link", { name: /unread comments/ })).toHaveCount(0);
 });
 
 test("My shares does not show a badge when there are no unread comments", async ({ page, request }) => {

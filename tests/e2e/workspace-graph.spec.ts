@@ -23,7 +23,7 @@ async function createMySpaceDocument(page: Page, title: string, body: string): P
   const workspaceId = new URL(page.url()).pathname.split("/")[2];
   await page.goto(`/w/${workspaceId}/knowledge/new`);
   // The composer opens in rendered editing; exact Markdown is typed in its source view (composer-helpers).
-  const form = page.locator("main form").first();
+  const form = page.locator("main");
   await form.getByLabel("Title", { exact: true }).fill(title);
   await (await showMarkdown(form)).fill(body);
   await expect(page.getByRole("button", { name: "Create document" })).toBeEnabled(ROUND_TRIP);
