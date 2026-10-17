@@ -66,7 +66,7 @@ const interaction = $prose(() => new Plugin({
         const target = event.target as HTMLElement;
         const summary = target.closest("summary");
         const disclosure = summary?.parentElement;
-        if (event.button !== 0 || !summary || disclosure?.tagName !== "DETAILS" || !view.dom.contains(summary)) return false;
+        if (event.button !== 0 || !summary || disclosure?.tagName !== "DETAILS" || !view.dom.contains(summary) || summary.closest('[contenteditable="false"]')) return false;
         if (event.clientX > summary.getBoundingClientRect().left + 20) return false;
         event.preventDefault();
         if (!view.editable) return true;
@@ -81,7 +81,7 @@ const interaction = $prose(() => new Plugin({
       },
       click(view, event) {
         const summary = (event.target as HTMLElement).closest("summary");
-        if (!summary || !view.dom.contains(summary)) return false;
+        if (!summary || !view.dom.contains(summary) || summary.closest('[contenteditable="false"]')) return false;
         // Native click toggling would bypass the document and undo history.
         event.preventDefault();
         return true;

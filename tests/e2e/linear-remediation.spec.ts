@@ -91,7 +91,7 @@ test('reader and composer keep their column and expose commands during long scro
   await page.screenshot({ path: info.outputPath('reader-navigation-collapsed.png') });
   await page.getByRole('button', { name: 'Expand navigation' }).click();
   await page.goto(`${doc.href}/edit`);
-  const form = page.locator('main form').first();
+  const form = page.locator("main");
   await expect(form.getByRole('navigation', { name: 'Breadcrumb' })).toBeVisible(wait);
   const editorX = (await form.getByRole('navigation', { name: 'Breadcrumb' }).boundingBox())!.x;
   expect(Math.abs(readerX - editorX)).toBeLessThan(2);
@@ -100,12 +100,12 @@ test('reader and composer keep their column and expose commands during long scro
   await source.fill(longMarkdown + '\n\nExtra line');
   await region.evaluate(el => { el.scrollTop = el.scrollHeight; });
   // The composer's pinned command line fades the scrolled document in, as the reader's does; not at rest.
-  const commands = form.locator('.kh-fade-below');
+  const commands = pinnedLine;
   await expect(commands).toHaveAttribute('data-pinned', 'true');
   await region.evaluate(el => { el.scrollTop = 0; });
   await expect(commands).not.toHaveAttribute('data-pinned');
   await region.evaluate(el => { el.scrollTop = el.scrollHeight; });
-  await expect(form.getByRole('button', { name: 'Save', exact: true })).toBeInViewport();
+  await expect(region.getByRole('button', { name: 'Details', exact: true })).toBeInViewport();
   await page.screenshot({ path: info.outputPath('composer-commands.png') });
   // Discard this test's local draft when leaving the page.
   page.on('dialog', dialog => void dialog.accept());

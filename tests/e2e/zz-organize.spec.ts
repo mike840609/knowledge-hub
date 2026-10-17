@@ -59,7 +59,7 @@ async function chooseFromFolderMenu(page: Page, folder: string, item: string) {
 async function createDocumentIn(page: Page, folder: string, title: string) {
   await chooseFromFolderMenu(page, folder, "New document here");
   await expect(page).toHaveURL(/\/knowledge\/new\?folder=[0-9a-f-]{36}$/);
-  const form = page.locator("main form").first();
+  const form = page.locator("main");
   await form.getByLabel("Title", { exact: true }).fill(title);
   await (await showMarkdown(form)).fill(`Body of ${title}.`);
   await expect(page.getByRole("button", { name: "Create document" })).toBeEnabled(ROUND_TRIP);
@@ -292,7 +292,7 @@ test.describe("what cannot be done", () => {
     const nodeId = new URL(newUrl).searchParams.get("folder")!;
     const archived = await page.request.post(`/api/tree-nodes/${nodeId}/archive`);
     expect(archived.status()).toBe(204);
-    const form = page.locator("main form").first();
+    const form = page.locator("main");
     await form.getByLabel("Title", { exact: true }).fill(unique("Nowhere"));
     await (await showMarkdown(form)).fill("x");
     const accessChecks = await countAccessChecks(page);

@@ -135,6 +135,7 @@ test("the owner starts a discussion on their own document, and a reader of its l
   const doc = await createReviewDocument(request, "The owner's own passage here.\n\nSee [another page](./another.md) too.");
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(doc.href);
+  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeVisible();
   await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
   // A document nobody has said anything about offers nothing until something is selected.
   await expect(page.getByRole("button", { name: /^(Open|Hide) discussions/ })).toHaveCount(0);
@@ -170,6 +171,7 @@ test("the owner starts a discussion on their own document, and a reader of its l
 
   // Now a reader has answered, and it does: the rail is open when the owner comes back.
   await page.goto(doc.href);
+  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Hide discussions, 1 comments, 1 open/ })).toBeVisible();
 });
 

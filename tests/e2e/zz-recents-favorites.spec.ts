@@ -31,7 +31,7 @@ async function createNote(page: Page, workspaceId: string, title: string) {
  */
 async function read(page: Page, note: { url: string; documentId: string }, title: string) {
   await page.goto(note.url);
-  await expect(page.getByRole("heading", { name: title }).first()).toBeVisible(ROUND_TRIP);
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(title, ROUND_TRIP);
   await expect(page.getByRole("treeitem", { name: title, exact: true })).toBeVisible(ROUND_TRIP);
   const storageKey = `kh:document-shortcuts:${note.url.split("/")[2]}`;
   await expect

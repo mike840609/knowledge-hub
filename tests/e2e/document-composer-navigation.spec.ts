@@ -106,7 +106,8 @@ test("⌘Enter with the caret in a code block saves, and adds nothing to the Mar
   const markdown = "```js\nconst a = 1;\n```\n\nafter\n";
   const url = await createNote(page, unique("Code Save"), markdown);
   const surface = await openEditor(page, url);
-  await surface.locator("pre").click();
+  await surface.getByRole("button", { name: "Edit code", exact: true }).click();
+  await surface.locator("pre:visible").click();
   // ProseMirror's own ⌘Enter would leave the code block by inserting an empty paragraph (`<br />`).
   // Pressed as ProseMirror reads "Mod" in this browser: ⌘ where it reports a Mac, Ctrl elsewhere.
   // The form saves on either.

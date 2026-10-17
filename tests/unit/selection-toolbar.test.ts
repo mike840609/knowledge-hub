@@ -87,6 +87,25 @@ function key(target: HTMLElement, init: KeyboardEventInit) {
 }
 
 describe("the selection toolbar's DOM contract", () => {
+  it("captures the final native range before Tab moves focus to formatting", async () => {
+    const editor = await open("hello world");
+    select(editor, 7, 10);
+    const dom = editorDom(editor);
+    const text = dom.querySelector("p")!.firstChild!;
+    const range = document.createRange();
+    range.setStart(text, 6);
+    range.setEnd(text, 11);
+    const native = document.getSelection()!;
+    native.removeAllRanges();
+    native.addRange(range);
+    key(dom, { key: "Tab" });
+    editor.action(ctx => {
+      const view = ctx.get(editorViewCtx);
+      expect(view.state.doc.textBetween(view.state.selection.from, view.state.selection.to)).toBe("world");
+    });
+    button("Bold").click();
+    expect(editor.getMarkdown()).toBe("hello **world**\n");
+  });
   it("makes every control a type=button, so pressing one cannot submit the composer's form", async () => {
     const editor = await open("some text\n");
     mountToolbar(editor);

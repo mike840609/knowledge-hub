@@ -12,7 +12,7 @@ const ARCHITECTURE_BODY_V2 = "The Query Master architecture notes, second revisi
 
 test("opens the Inspector and selects a historical revision", async ({ page }) => {
   await page.goto(`/w/${WORKSPACE}/knowledge/${SOURCE}`);
-  await expect(page.getByRole("heading", { name: "Architecture" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Architecture");
 
   // Inspector is closed by default.
   await expect(page.getByRole("tab", { name: "Details" })).toHaveCount(0);
@@ -42,7 +42,7 @@ test("opens the Inspector and selects a historical revision", async ({ page }) =
 
 test("shows Details metadata in the Inspector", async ({ page }) => {
   await page.goto(`/w/${WORKSPACE}/knowledge/${SOURCE}`);
-  await expect(page.getByRole("heading", { name: "Architecture" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Architecture");
 
   await page.locator("main").getByRole("button", { name: "Details" }).click();
   await expect(page.getByRole("tab", { name: "Details" })).toBeVisible();
@@ -53,7 +53,7 @@ test("shows Details metadata in the Inspector", async ({ page }) => {
 
 test("shows not-found for an unknown revision number", async ({ page }) => {
   await page.goto(`/w/${WORKSPACE}/knowledge/${SOURCE}`);
-  await expect(page.getByRole("heading", { name: "Architecture" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Architecture");
   const documentUrl = page.url();
 
   await page.goto(`${documentUrl}?revision=999`);

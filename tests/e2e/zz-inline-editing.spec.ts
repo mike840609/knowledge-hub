@@ -33,7 +33,7 @@ test("inline: content and title autosave without navigating or losing focus", as
   const editor = await surface(page, url);
   const traffic: string[] = [];
   page.on("request", request => {
-    if (request.method() === "PUT" && request.url().includes("/personal") || request.headers()["rsc"] === "1") traffic.push(request.url());
+    if (request.method() === "PUT" && request.url().includes("/personal") || request.headers()["rsc"] === "1" && new URL(request.url()).pathname === url && !request.headers()["next-router-prefetch"]) traffic.push(request.url());
   });
   await editor.fill("Changed inline.");
   await page.waitForTimeout(1500);
@@ -241,4 +241,55 @@ test("inline: page chrome and tree leave action letters and slash unbound", asyn
   const list = page.getByRole("listbox", { name: "Actions and documents" });
   await expect(list.getByRole("option", { name: "Add to favorites" })).toBeVisible();
   await expect(list.getByRole("option", { name: "Create document", exact: true }).locator("kbd")).toHaveCount(0);
+});
+
+
+test("inline: delayed refresh cannot replace a newer acknowledged save", async ({ page }) => {
+  const { url } = await note(page);
+  const editor = await surface(page, url);
+  await editor.fill("Snapshot B.");
+  await saved(page);
+  let release!: () => void;
+  let intercepted!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  const fetched = new Promise<void>(resolve => { intercepted = resolve; });
+  await page.route(`**${url}?*`, async route => {
+    if (route.request().headers()["rsc"] !== "1" || route.request().headers()["next-router-prefetch"]) return route.continue();
+    const response = await route.fetch();
+    intercepted();
+    await held;
+    await route.fulfill({ response });
+  });
+  await page.getByRole("button", { name: "Details", exact: true }).first().click();
+  await fetched;
+  await editor.fill("Newer snapshot C.");
+  await editor.press("ControlOrMeta+Enter");
+  await saved(page);
+  const delivered = page.waitForResponse(response => new URL(response.url()).pathname === url && response.request().headers()["rsc"] === "1");
+  release();
+  await delivered;
+  await page.waitForTimeout(500); // Allow the delayed RSC response to commit.
+  await expect(editor).toHaveText("Newer snapshot C.");
+  await page.unrouteAll({ behavior: "wait" });
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toHaveText("Newer snapshot C.");
+});
+
+test("inline: inserting code reveals the caret and Edit code restores focus", async ({ page }) => {
+  const { url } = await note(page);
+  const editor = await surface(page, url);
+  await editor.fill("");
+  await editor.pressSequentially("/code");
+  await page.getByRole("option", { name: /^Code/ }).click();
+  await page.keyboard.type("const answer = 42;");
+  await expect(editor.locator("pre:visible")).toHaveText("const answer = 42;");
+  await editor.press("ControlOrMeta+Enter");
+  await saved(page);
+  await page.getByRole("button", { name: "Done editing code", exact: true }).click();
+  await page.getByRole("button", { name: "Edit code", exact: true }).click();
+  await expect(editor).toBeFocused();
+  await page.keyboard.type("// edited ");
+  await expect(editor.locator("pre:visible")).toContainText("// edited const answer = 42;");
+  await editor.press("ControlOrMeta+Enter");
+  await saved(page);
 });

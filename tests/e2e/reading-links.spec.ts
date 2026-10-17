@@ -208,7 +208,7 @@ test.describe("wikilinks and backlinks in My Space", () => {
     await page.goto(linker.url);
     await page.locator("article").first().getByRole("link", { name: "the setup" }).click();
     await expect(page).toHaveURL(`${target.url}#local-setup`, ROUND_TRIP);
-    await expect(page.locator("#local-setup")).toBeInViewport(ROUND_TRIP);
+    await expect(page.locator("#local-setup:visible")).toBeInViewport(ROUND_TRIP);
   });
 });
 

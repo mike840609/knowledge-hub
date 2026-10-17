@@ -75,6 +75,16 @@ export class DocumentAutosave {
       if (!this.disposed) this.options.change();
     }
   }
+  /** A refreshed server snapshot can replace an idle baseline, never unsaved input. */
+  adopt(content: DocumentContent, revisionId: string) {
+    if (this.disposed || this.dirty || this.error) return false;
+    clearTimeout(this.timer);
+    this.current = this.saved = content;
+    this.revisionId = revisionId;
+    this.status = "saved";
+    this.dirtySince = undefined;
+    return true;
+  }
   retry() {
     this.error = undefined;
     return this.flush();

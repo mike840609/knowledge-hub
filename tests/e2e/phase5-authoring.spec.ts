@@ -30,7 +30,7 @@ const ROUND_TRIP = { timeout: 15_000 };
 
 /** The new-document page's title field. main form + first(): the duplicate-DOM quirk noted below. */
 function newTitle(page: Page) {
-  return page.locator("main form").first().getByLabel("Title", { exact: true });
+  return page.locator("main").getByLabel("Title", { exact: true });
 }
 
 // Navigate to the standalone authoring page and return only once the form is
@@ -52,6 +52,7 @@ test("creates the first document in a workspace with no sources", async ({ page 
   await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
   await newTitle(page).fill("My First Note");
   await page.getByRole("button", { name: "Create document" }).click();
+  await expect(page).not.toHaveURL(/\/knowledge\/new(?:\?.*)?$/, ROUND_TRIP);
 
   await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("My First Note", ROUND_TRIP);
 });
@@ -60,6 +61,7 @@ test("edits a hub-managed document and records a second revision", async ({ page
   await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
   await newTitle(page).fill("Editable Note");
   await page.getByRole("button", { name: "Create document" }).click();
+  await expect(page).not.toHaveURL(/\/knowledge\/new(?:\?.*)?$/, ROUND_TRIP);
   await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Editable Note", ROUND_TRIP);
 
   const editorForm = page.locator("main");
@@ -85,6 +87,7 @@ test("after a save, the sidebar names the document by its new title", async ({ p
   await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
   await newTitle(page).fill(before);
   await page.getByRole("button", { name: "Create document" }).click();
+  await expect(page).not.toHaveURL(/\/knowledge\/new(?:\?.*)?$/, ROUND_TRIP);
   await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(before, ROUND_TRIP);
   // Creating navigates to the new document too, and the tree must gain its row.
   await expect(page.getByRole("treeitem", { name: before, exact: true })).toBeVisible(ROUND_TRIP);
@@ -130,6 +133,7 @@ test("a stale second editor gets a conflict, keeps their input, and does not ove
   await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
   await newTitle(page).fill("Conflict Note");
   await page.getByRole("button", { name: "Create document" }).click();
+  await expect(page).not.toHaveURL(/\/knowledge\/new(?:\?.*)?$/, ROUND_TRIP);
   await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Conflict Note", ROUND_TRIP);
   const documentUrl = page.url();
 
@@ -168,6 +172,7 @@ test("the editor cannot accept changes before hydration", async ({ page, browser
   await gotoKnowledgeReadyToUpload(page, EMPTY_WORKSPACE);
   await newTitle(page).fill("Pre-hydration Note");
   await page.getByRole("button", { name: "Create document" }).click();
+  await expect(page).not.toHaveURL(/\/knowledge\/new(?:\?.*)?$/, ROUND_TRIP);
   await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Pre-hydration Note", ROUND_TRIP);
   const documentUrl = page.url();
   const context = await browser.newContext();

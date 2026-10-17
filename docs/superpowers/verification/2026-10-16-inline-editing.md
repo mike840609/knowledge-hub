@@ -35,3 +35,15 @@ Removed global and row F/M/C/D/R action bindings, the global slash search bindin
 - Both shared/owner discussion tests passed, including D remaining unbound and explicit controls working.
 - Full row keyboard/menu suite: 16 tests passed after adapting direct-key focus assumptions to menu invocation. Together with the inline, row-actions and review checks, 40 distinct browser scenarios passed across the runs.
 - Keyboard/browser changes do not constitute a complete legacy E2E migration; the PR remains draft.
+
+## CI repair on 2026-10-17
+
+Migrated the legacy editor assertions to canonical inline editing: intentional focus, silent autosave state, conflict/recovery confirmation, and editable titles. Restored code copying/highlighting, Mermaid preview, heading anchors, and canonical review paths in the editable surface. Review paths are ProseMirror decorations, with whole-block proof before assigning an anchor; explicit passage navigation synchronizes the editor selection.
+
+Clean documents may adopt a newer server revision. Older refresh responses cannot replace a newer acknowledged local save, and dirty/recovered text is never adopted over. Code insertion and explicit Edit code reveal and focus the actual editing surface. Added regressions for both refresh ordering and code focus.
+
+Full unit suite: 219 files, 2,749 tests passed. Lint and standalone type checking passed. Full browser discovery ran 384 scenarios: 368 passed, 14 failed and 2 skipped before the final repairs. The affected 90-scenario rerun passed 87, exposing three selection timing failures; the complete 19-scenario editor suite then passed three consecutive repetitions (57/57) after fixing review decoration timing and capturing the final native selection before Tab leaves the editor. The other affected scenarios, including comments, conflicts, delayed refreshes, code focus, links and Mermaid, passed their rerun.
+
+Link target changes refresh resolved links immediately after saving; ordinary saves retain the coalesced metadata refresh. Read-only code previews keep native disclosures and wide-diagram scrolling, independently of the editor's disclosure commands. A new unit regression covers the keyboard selection/Tab race. Generated comparison screenshots were restored and are not part of the repair.
+
+The repair is ready for fresh GitHub CI; remote completion will be recorded after all checks finish.

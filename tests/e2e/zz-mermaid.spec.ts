@@ -33,6 +33,8 @@ const reason = (figure: Locator) => figure.locator("[data-diagram-reason]");
 
 /** Every diagram on the page has either its picture or its reason. */
 async function settled(page: Page) {
+  if (new URL(page.url()).pathname.startsWith("/w/")) await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeEditable(ROUND_TRIP);
+  await expect(figures(page).first()).toBeAttached(DRAWN);
   await expect(page.locator("article figure[data-mermaid]:not(:has(img[data-diagram])):not(:has([data-diagram-reason]))")).toHaveCount(0, DRAWN);
 }
 
@@ -190,14 +192,14 @@ test.describe("mermaid in the reader", () => {
   test("a document with a diagram, edited in the rendered editor and saved, keeps the fence as written and is still drawn", async ({ page }) => {
     const note = await createNote(page, unique("Diagram edit"), ["Intro line.", "", fence(FLOW), "", "After."].join("\n"));
     await page.goto(`${note.url}/edit`);
-    const form = page.locator("main form").first();
+    const form = page.locator("main");
     const surface = form.getByRole("textbox", { name: "Content" });
     await expect(surface).toBeEditable(ROUND_TRIP);
     await surface.locator("p").first().click();
     await page.keyboard.press("End");
     await page.keyboard.type(" (edited)");
     const saved = page.waitForRequest((request) => request.method() === "PATCH" && /\/api\/documents\//.test(request.url()), ROUND_TRIP);
-    await form.getByRole("button", { name: "Save" }).click();
+    await surface.press("ControlOrMeta+Enter");
     const markdown = (JSON.parse((await saved).postData() ?? "{}") as { markdown?: string }).markdown ?? "";
     expect(markdown).toContain("Intro line. (edited)");
     expect(markdown).toContain(fence(FLOW));

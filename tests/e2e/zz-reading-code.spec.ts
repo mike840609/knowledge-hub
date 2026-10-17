@@ -1,3 +1,4 @@
+import { showMarkdown } from "./composer-helpers";
 import { expect, test, type Page } from "./fixtures/test";
 import { personalWorkspaceId as mySpace } from "./fixtures/my-space";
 
@@ -70,6 +71,7 @@ test.describe("code in the reader", () => {
   test("is coloured from the tokens in both themes, and code with no language is left plain", async ({ page }) => {
     const note = await createNote(page, unique("Reading code"), MARKDOWN);
     await page.goto(note.url);
+    await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeEditable(ROUND_TRIP);
     await expect(blocks(page)).toHaveCount(3, ROUND_TRIP);
 
     // Coloured: the first block's keyword is `select`, drawn in the keyword token and not in the block's text colour.
@@ -102,6 +104,7 @@ test.describe("code in the reader", () => {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     const note = await createNote(page, unique("Copy code"), MARKDOWN);
     await page.goto(note.url);
+    await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeEditable(ROUND_TRIP);
     await expect(blocks(page)).toHaveCount(3, ROUND_TRIP);
 
     // Not the colour spans, not the button, not the newline Markdown adds — the code, character for character.
@@ -129,6 +132,7 @@ test.describe("code in the reader", () => {
     page.on("pageerror", (error) => errors.push(error.message));
     const note = await createNote(page, unique("Copy refused"), MARKDOWN);
     await page.goto(note.url);
+    await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeEditable(ROUND_TRIP);
     await expect(blocks(page)).toHaveCount(3, ROUND_TRIP);
 
     await page.evaluate(() => {
@@ -197,11 +201,13 @@ test.describe("code on a shared page", () => {
 test.describe("code in the composer", () => {
   test("stays as it was: not coloured, and no copy button", async ({ page }) => {
     const note = await createNote(page, unique("Composer code"), MARKDOWN);
-    await page.goto(`${note.url}/edit`);
-    const surface = page.locator("main form").first().getByRole("textbox", { name: "Content" });
+    await page.goto(`/w/${note.url.split("/")[2]}/knowledge/new`);
+    await (await showMarkdown(page.locator("main"))).fill(MARKDOWN);
+    await page.getByRole("button", { name: "Markdown", exact: true }).click();
+    const surface = page.locator("main").getByRole("textbox", { name: "Content" });
     await expect(surface).toBeEditable(ROUND_TRIP);
     await expect(surface.locator("pre")).toHaveCount(3);
-    await expect(page.locator("main form .hljs-keyword")).toHaveCount(0);
-    await expect(page.locator("main form").getByRole("button", { name: "Copy code" })).toHaveCount(0);
+    await expect(page.locator("main .hljs-keyword")).toHaveCount(0);
+    await expect(page.locator("main").getByRole("button", { name: "Copy code" })).toHaveCount(0);
   });
 });

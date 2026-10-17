@@ -15,6 +15,7 @@ import { browserDraftStorage, clearDraft, readDraft, syncDraft, type DraftKey } 
 import { PersistentDraft } from "@/lib/persistent-draft";
 import { carryTitle, resolveAuthoredTitle } from "@/lib/authored-title";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
+import { extractDocumentLinks } from "@/modules/knowledge/domain/document-links";
 import type { RenderedLinks } from "./rendered-links";
 import type { MarkdownEditor } from "./editor/editor-core";
 import type { RenderedEditorProps } from "./editor/rendered-editor";
@@ -43,6 +44,8 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
   const [localRevisions, setLocalRevisions] = useState<DetailProps["inspectorData"]["revisions"]>([]);
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const metadataDirty = useRef(false);
+  const savedLinkTargets = useRef<string | undefined>(undefined);
+  savedLinkTargets.current ??= JSON.stringify(extractDocumentLinks(markdown).map(({ kind, target, fragment }) => [kind, target, fragment]));
   const refreshMetadata = useCallback(() => {
     if (!metadataDirty.current) return;
     clearTimeout(refreshTimer.current);
@@ -56,12 +59,17 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
   const [loaded, setLoaded] = useState(false);
   const [source, setSource] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [CodePreview, setCodePreview] = useState<ComponentType<{ code: string; language: string }>>();
+  const renderCode = useCallback((code: string, language: string) => CodePreview ? <CodePreview code={code} language={language} /> : <pre><code>{code}</code></pre>, [CodePreview]);
+  const sourceTextarea = useRef<HTMLTextAreaElement>(null);
   const [Editor, setEditor] = useState<ComponentType<RenderedEditorProps>>();
   const [recovery, setRecovery] = useState<"current" | "stale" | null>(null);
   const [discarding, setDiscarding] = useState(false);
   const [, render] = useState(0);
   const editor = useRef<MarkdownEditor | null>(null);
   const queue = useRef<DocumentAutosave | null>(null);
+  const receivedRevision = useRef(revisionId);
+  const acknowledgedRevisionNo = useRef(detail.inspectorData.selectedRevisionNo);
   const persistent = useRef<PersistentDraft | null>(null);
   const pending = useRef(false);
   const composing = useRef(false);
@@ -127,6 +135,7 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
         // Clear remote recovery only after all current text has reached the document.
         if (!writer.dirty) void persistent.current?.flush();
         if (!live) return;
+        acknowledgedRevisionNo.current = revision.revisionNo;
         setSavedRevision(revision.revisionId);
         setSavedMarkdown(snapshot.markdown);
         setSavedTitle(resolve(snapshot).title);
@@ -136,7 +145,13 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
           id: revision.revisionId, revisionNo: revision.revisionNo, createdAt,
         }]);
         metadataDirty.current = true;
-        refreshTimer.current ??= setTimeout(refreshMetadata, 30_000);
+        const targets = JSON.stringify(extractDocumentLinks(snapshot.markdown).map(({ kind, target, fragment }) => [kind, target, fragment]));
+        if (targets !== savedLinkTargets.current) {
+          savedLinkTargets.current = targets;
+          refreshMetadata();
+        } else {
+          refreshTimer.current ??= setTimeout(refreshMetadata, 30_000);
+        }
       },
     });
     writer.pause(true);
@@ -207,6 +222,49 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
     }
   }, [source, ready, content.markdown]);
 
+  useEffect(() => {
+    if (!loaded || !queue.current || receivedRevision.current === revisionId) return;
+    receivedRevision.current = revisionId;
+    if (detail.inspectorData.selectedRevisionNo <= acknowledgedRevisionNo.current) return;
+    const writer = queue.current;
+    if (!loaded || !writer || writer.revisionId === revisionId || pending.current || composing.current || recovery) return;
+    const next = { title: detail.title, markdown };
+    if (!writer.adopt(next, revisionId)) return;
+    if (editor.current && editor.current.getMarkdown() !== markdown) {
+      try { editor.current.replaceMarkdown(markdown); } catch { setFailed(true); }
+    }
+    setContent(next);
+    setSavedMarkdown(markdown);
+    setSavedTitle(detail.title);
+    setSavedAt(detail.updatedAt);
+    acknowledgedRevisionNo.current = detail.inspectorData.selectedRevisionNo;
+    setSavedRevision(revisionId);
+  }, [loaded, revisionId, detail.title, detail.updatedAt, detail.inspectorData.selectedRevisionNo, markdown, recovery]);
+  useEffect(() => {
+    if (!/```|~~~/u.test(content.markdown) || CodePreview) return;
+    let live = true;
+    void import("./editor/inline-code-preview").then(module => { if (live) setCodePreview(() => module.InlineCodePreview); }).catch(() => { /* Raw code stays available if its preview cannot load. */ });
+    return () => { live = false; };
+  }, [content.markdown, CodePreview]);
+  useEffect(() => {
+    if (!ready || source || failed || !window.location.hash) return;
+    const id = decodeURIComponent(window.location.hash.slice(1));
+    document.querySelector('[role="region"][aria-label="Document content"]')?.querySelector<HTMLElement>(`[id="${CSS.escape(id)}"]`)?.scrollIntoView({ block: "start" });
+  }, [ready, source, failed]);
+  useEffect(() => {
+    const textarea = sourceTextarea.current;
+    if (!textarea) return;
+    const fit = () => { textarea.style.height = "auto"; textarea.style.height = `${textarea.scrollHeight}px`; };
+    fit();
+    let width = textarea.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (textarea.clientWidth === width) return;
+      width = textarea.clientWidth;
+      fit();
+    });
+    observer.observe(textarea);
+    return () => observer.disconnect();
+  }, [source, failed, content.markdown]);
   const writer = queue.current;
   const error = writer?.error ? governanceFailure(writer.error) : null;
   const conflict = error?.code === "REVISION_CONFLICT";
@@ -217,7 +275,7 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
   const serverRevisions = detail.inspectorData.revisions;
   const revisions = [...serverRevisions, ...localRevisions.filter(item => !serverRevisions.some(existing => existing.id === item.id))];
   const displayTitle = dirty || recovery ? resolved.title || "Untitled" : savedTitle;
-  const Article = ready ? "article" : "div";
+  const Article = "article";
   const article = <>
     <div className="mb-3 flex items-center justify-end gap-2 text-caption">
       <Button type="button" variant="ghost" aria-pressed={source || failed} disabled={!loaded || failed} onClick={() => {
@@ -249,13 +307,19 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
       flushEditor();
       writer?.pause(!editable || !!recovery || !resolve(queue.current!.current).title);
     }} onBlur={() => flushEditor()} onKeyDownCapture={event => {
+      if ((event.metaKey || event.ctrlKey) && event.key === "/" && !event.nativeEvent.isComposing && !failed) {
+        event.preventDefault(); flushEditor();
+        if (!source) sourceRef.current = true;
+        setSource(value => !value);
+        return;
+      }
       if ((event.metaKey || event.ctrlKey) && (event.key === "s" || event.key === "Enter") && !event.nativeEvent.isComposing) {
         event.preventDefault(); flushEditor(); void writer?.flush();
       }
     }}>
       {!ready && !source && !failed && !recovery ? standIn : null}
       <Article data-review-document={ready && !source && !failed ? "" : undefined} hidden={source || failed || !ready}>
-        {loaded && Editor && !failed && <Editor links={links} workspaceId={detail.inspectorData.workspaceId} documentId={detail.inspectorData.documentId}
+        {loaded && Editor && !failed && <Editor reviewMarkdown={ready && !dirty && !source && !recovery ? savedMarkdown : undefined} renderCode={renderCode} links={links} workspaceId={detail.inspectorData.workspaceId} documentId={detail.inspectorData.documentId}
           markdown={content.markdown} editable={editable && !source} onReady={(instance, openedWith) => {
             editor.current = instance;
             if (openedWith !== queue.current!.current.markdown) instance.replaceMarkdown(queue.current!.current.markdown);
@@ -266,7 +330,7 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
             queueMicrotask(() => { if (alive.current) flushRef.current(); });
           }} onMarkdown={() => { if (pending.current) flushEditor(); }} />}
       </Article>
-      {(source || failed) && <textarea aria-label="Markdown" value={content.markdown} disabled={!editable}
+      {(source || failed) && <textarea ref={sourceTextarea} aria-label="Markdown" value={content.markdown} disabled={!editable}
         onChange={event => {
           const next = event.target.value;
           const before = resolve(content);

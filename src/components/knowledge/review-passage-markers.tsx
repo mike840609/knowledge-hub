@@ -1,4 +1,5 @@
 "use client";
+import { useReviewDomVersion } from "./review-dom-version";
 
 import { useLayoutEffect, useState, type RefObject } from "react";
 import { MessageSquare } from "lucide-react";
@@ -39,6 +40,7 @@ export function ReviewPassageMarkers({ readingRef, markdown, threads }: {
   markdown: string;
   threads?: ReviewThreadView[];
 }) {
+  const domVersion = useReviewDomVersion();
   const [markers, setMarkers] = useState<Marker[]>([]);
   useLayoutEffect(() => {
     const reading = readingRef.current;
@@ -76,7 +78,7 @@ export function ReviewPassageMarkers({ readingRef, markdown, threads }: {
       window.removeEventListener("resize", schedule);
       document.fonts?.removeEventListener("loadingdone", schedule);
     };
-  }, [readingRef, markdown, threads]);
+  }, [readingRef, markdown, threads, domVersion]);
 
   return <div className="pointer-events-none absolute inset-0" aria-label="Passage comments">
     {markers.map(marker => <button key={marker.id} type="button" data-review-marker={marker.id}

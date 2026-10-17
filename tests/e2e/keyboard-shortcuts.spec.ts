@@ -79,10 +79,11 @@ test("E does nothing on source-managed content", async ({ page }) => {
 /** A note of our own, so saving it cannot disturb another test's fixture. */
 async function editOwnNote(page: Page, title: string) {
   await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
-  const field = page.locator("main form").first().getByLabel("Title", { exact: true });
+  const field = page.locator("main").getByLabel("Title", { exact: true });
   await expect(field).toBeEditable(ROUND_TRIP);
   await field.fill(title);
   await page.getByRole("button", { name: "Create document" }).click();
+  await expect(page).not.toHaveURL(/\/knowledge\/new(?:\?.*)?$/, ROUND_TRIP);
   const titleField = page.getByRole("textbox", { name: "Title", exact: true });
   await expect(titleField).toHaveValue(title, ROUND_TRIP);
   return titleField;
@@ -148,7 +149,7 @@ test.describe("⌘\\ collapses and expands the navigation", () => {
 
   test("also while writing, from the title and from the editor, without typing anything", async ({ page }) => {
     await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/knowledge/new`);
-    const form = page.locator("main form").first();
+    const form = page.locator("main");
     const title = form.getByLabel("Title", { exact: true });
     await expect(title).toBeEditable(ROUND_TRIP);
     const nav = navigation(page);

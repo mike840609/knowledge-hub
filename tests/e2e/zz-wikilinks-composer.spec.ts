@@ -30,7 +30,7 @@ function unique(label: string) {
   return `${label} ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
-/** main form + first(): the duplicate-DOM quirk phase5-authoring.spec.ts documents. */
+/** The inline document and new-note composer share the main landmark. */
 function composer(page: Page) {
   return page.locator("main");
 }
@@ -52,7 +52,7 @@ async function createNote(page: Page, workspaceId: string, title: string, markdo
 
 /** Opens a document in the composer and returns the rendered surface once it can be typed into. */
 async function openEditor(page: Page, documentUrl: string) {
-  await page.goto(`${documentUrl}/edit`);
+  await page.goto(documentUrl);
   const surface = surfaceOf(page);
   await expect(surface).toBeEditable(ROUND_TRIP);
   return surface;
@@ -83,14 +83,14 @@ test.describe("wikilinks in the rendered editor", () => {
 
     const surface = await openEditor(page, sourceUrl);
     // Held as links, not as text: two nodes, showing the target and the alias, read as links.
-    const links = surface.locator("span.kh-wikilink");
+    const links = surface.locator("[data-kh-wiki-raw]");
     await expect(links).toHaveCount(2);
     await expect(links.nth(0)).toHaveText(target);
     await expect(links.nth(1)).toHaveText("the alias");
-    await expect(links.nth(0)).toHaveCSS("text-decoration-line", "underline");
-    await expect(links.nth(0)).toHaveCSS("font-weight", "500");
+    await expect(links.nth(0).getByRole("link")).toHaveCSS("text-decoration-line", "underline");
+    await expect(links.nth(0).getByRole("link")).toHaveCSS("font-weight", "500");
     // The reader's link colour, and not the text's.
-    const colours = await links.nth(0).evaluate((element) => {
+    const colours = await links.nth(0).getByRole("link").evaluate((element) => {
       const probe = document.createElement("span");
       probe.style.color = "var(--kh-link)";
       document.body.appendChild(probe);
@@ -104,12 +104,12 @@ test.describe("wikilinks in the rendered editor", () => {
     // Edit the text beside them, and save.
     await surface.locator("p").first().click();
     await page.keyboard.press("End");
-    await page.keyboard.type(" (edited)");
     const saved = nextWrite(page, "PATCH");
-    await composer(page).getByRole("button", { name: "Save" }).click();
+    await page.keyboard.type(" (edited)");
 
     // What is sent is what gets indexed: the links as written, never `\[`.
     const markdown = sentMarkdown(await saved);
+    await expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", ROUND_TRIP);
     expect(markdown).toContain("Intro line. (edited)");
     expect(markdown).toContain(`[[${target}]]`);
     expect(markdown).toContain(`[[${target}|the alias]]`);
@@ -196,13 +196,16 @@ test.describe("wikilinks in the rendered editor", () => {
     await expect(surface.locator("p").first()).toHaveText(`a Note ${stamp} b`);
   });
 
-  test("clicking a wikilink selects it as a whole, and goes nowhere from the editor", async ({ page }) => {
+  test("clicking a wikilink selects it as a whole, and goes nowhere from a new-note draft", async ({ page }) => {
     const stamp = unique("Click");
     // The target exists, so the link is one that could be followed — and still is not, from here.
     const workspaceId = await mySpace(page);
     await createNote(page, workspaceId, `Target ${stamp}`, "The target document.");
-    const sourceUrl = await createNote(page, workspaceId, `Source ${stamp}`, `See [[Target ${stamp}]] here.`);
-    const surface = await openEditor(page, sourceUrl);
+    await page.goto(`/w/${workspaceId}/knowledge/new`);
+    const surface = surfaceOf(page);
+    await expect(surface).toBeEditable(ROUND_TRIP);
+    await surface.click();
+    await page.keyboard.type(`See [[Target ${stamp}]] here.`);
     const link = surface.locator("span.kh-wikilink");
     await expect(link).toHaveCount(1);
 
@@ -218,6 +221,6 @@ test.describe("wikilinks in the rendered editor", () => {
       return { shown: getComputedStyle(element).backgroundColor, selected };
     });
     expect(backgrounds.shown).toBe(backgrounds.selected);
-    await expect(page).toHaveURL(new RegExp(`${sourceUrl}/edit$`));
+    await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/knowledge/new$`));
   });
 });

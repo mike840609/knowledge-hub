@@ -5,6 +5,7 @@ import { showMarkdown } from "./composer-helpers";
 test("a paragraph becomes a toggle, flips open, and folds in the reader", async ({ page }) => {
   const url = await createNote(page, unique("Toggle"), "Fold me\n");
   const surface = await openEditor(page, url);
+  await surface.locator("p").click();
   await surface.locator("p").selectText();
   const toolbar = page.getByRole("toolbar", { name: "Formatting" });
   await expect(toolbar).toBeVisible(ROUND_TRIP);
@@ -23,13 +24,14 @@ test("a paragraph becomes a toggle, flips open, and folds in the reader", async 
   await page.keyboard.press("Alt+Enter");
   const reopened = await showMarkdown(composer(page));
   await expect.poll(() => reopened.inputValue(), ROUND_TRIP).toContain("<details open>");
-  await composer(page).getByRole("button", { name: "Save" }).click();
-  await page.waitForURL(/\/knowledge\//);
-  const summary = page.locator("details summary").getByText("Fold me");
+  await expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", ROUND_TRIP);
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Content" })).toBeEditable(ROUND_TRIP);
+  const summary = page.locator("details summary").filter({ hasText: "Fold me" });
   await expect(summary).toBeVisible();
   await expect(page.locator("details[open]")).toHaveCount(1);
-  await summary.click();
+  await summary.click({ position: { x: 5, y: 8 } });
   await expect(page.locator("details[open]")).toHaveCount(0);
-  await summary.click();
+  await summary.click({ position: { x: 5, y: 8 } });
   await expect(page.locator("details[open]")).toHaveCount(1);
 });

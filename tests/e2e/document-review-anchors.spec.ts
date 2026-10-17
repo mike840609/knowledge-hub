@@ -6,6 +6,7 @@ test("owner and shared readers agree on emoji, formatting and duplicate block of
   const markdown = "A 😀 **bold** passage to review.\n\nA 😀 **bold** passage to review.\n\nOther <kbd>Wiki</kbd> text.\n\nA [relative](./document.md) link.";
   const doc = await createReviewDocument(request, markdown);
   await page.goto(doc.href);
+  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeVisible();
   await expect(page.locator("[data-review-document] p")).toHaveCount(4);
   const owner = await page.locator("[data-review-document] p").allTextContents();
   await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
@@ -22,6 +23,7 @@ test("owner and shared readers agree on emoji, formatting and duplicate block of
   expect(body.anchor).toMatchObject({ startUtf16: 2, endUtf16: 9, exact: "😀 bold", blockPath: [0] });
   await expect(page.getByText("UTF-16 check", { exact: true })).toBeVisible();
   await page.goto(doc.href);
+  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeVisible();
   await openReviewDiscussions(page);
   await page.getByRole("button", { name: "😀 bold", exact: true }).click();
   await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe("😀 bold");
@@ -59,7 +61,9 @@ test("new server revision disables mapping into an older displayed document", as
     anchor: { schemaVersion: 1, blockPath: [0], blockKind: "paragraph", startUtf16: 0, endUtf16: 1, exact: "A", prefix: "", suffix: " 😀 bold passage to review." },
   } });
   expect(created.status()).toBe(201);
-  await page.goto(doc.href); await openReviewDiscussions(page);
+  await page.goto(doc.href);
+  await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeVisible();
+  await openReviewDiscussions(page);
   await expect(page.getByRole("status").filter({ hasText: "Document changed." }).filter({ visible: true })).toContainText("Document changed. Refresh this page");
   // And with the document changed underneath them, the discussions are not pinned to passages.
   await expect(page.locator("[data-review-marker]")).toHaveCount(0);

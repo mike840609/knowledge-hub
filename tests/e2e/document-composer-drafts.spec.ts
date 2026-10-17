@@ -22,7 +22,7 @@ test("rendered edits survive leaving and only save after recovery is accepted", 
   await page.waitForTimeout(3500);
   expect(writes).toHaveLength(0);
   await composer(page).getByRole("button", { name: "Resume saving" }).click();
-  await expect(page.locator('[data-autosave-status="saved"]')).toBeVisible(ROUND_TRIP);
+  await expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", ROUND_TRIP);
   expect(writes).toHaveLength(1);
   await page.reload();
   await expect(back).toBeEditable(ROUND_TRIP);
@@ -84,7 +84,7 @@ test("stale recovery stays paused and can be downloaded before loading the lates
   const other = await page.context().newPage();
   await openEditor(other, url);
   await (await showMarkdown(composer(other))).fill("theirs");
-  await expect(other.locator('[data-autosave-status="saved"]')).toBeVisible(ROUND_TRIP);
+  await expect(other.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", ROUND_TRIP);
   await other.close();
 
   const surface = await openEditor(page, url);

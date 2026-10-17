@@ -79,7 +79,7 @@ test.describe("creating the document a broken link names", () => {
     await composer(page).getByRole("button", { name: "Create document" }).click();
     await expect(page).not.toHaveURL(/\/knowledge\/new/, ROUND_TRIP);
     const createdUrl = page.url();
-    await expect(page.getByRole("heading", { name: `${stamp} Notes` }).first()).toBeVisible(ROUND_TRIP);
+    await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(`${stamp} Notes`, ROUND_TRIP);
 
     // Back in the document that has the link: it resolves, with nothing having been written to it.
     await page.goto(sourceUrl);

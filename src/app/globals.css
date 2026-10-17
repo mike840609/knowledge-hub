@@ -292,7 +292,7 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-editor .kh-wikilink.ProseMirror-selectednode {
     @apply rounded-sm bg-kh-bg-selected;
   }
-  .kh-editor img {
+  .kh-editor img:not([data-diagram]) {
     @apply my-4 h-auto max-w-full rounded-md border border-kh-border;
   }
   .kh-editor pre {

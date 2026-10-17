@@ -117,3 +117,15 @@ it("never submits mid-composition even when the maximum wait expires", async () 
   await vi.advanceTimersByTimeAsync(1);
   expect(write).toHaveBeenCalledTimes(1);
 });
+
+it("adopts refreshed server content only while idle and keeps dirty input on its original baseline", () => {
+  const { queue } = setup();
+  const remote = { title: "Remote", markdown: "Remote content" };
+  expect(queue.adopt(remote, "remote-r2")).toBe(true);
+  expect(queue.current).toEqual(remote);
+  expect(queue.revisionId).toBe("remote-r2");
+  queue.change({ ...remote, markdown: "Local changes" });
+  expect(queue.adopt(original, "remote-r3")).toBe(false);
+  expect(queue.current.markdown).toBe("Local changes");
+  expect(queue.revisionId).toBe("remote-r2");
+});

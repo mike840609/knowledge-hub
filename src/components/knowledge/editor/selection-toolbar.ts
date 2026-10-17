@@ -11,6 +11,7 @@ import {
   wrapInHeadingCommand,
   wrapInOrderedListCommand,
 } from "@milkdown/kit/preset/commonmark";
+import { TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { buttonClasses } from "@/components/ui/button";
 import { fieldClasses } from "@/components/ui/field";
@@ -221,6 +222,19 @@ export function selectionToolbar(): { plugins: MilkdownPlugin[]; configure: (ctx
             if (next === null && !document.hasFocus()) return;
             provider.hide();
           }
+          // Tab can move focus before the browser delivers selectionchange for the
+          // last Shift+Arrow key. Capture that final range before leaving the editor.
+          const captureSelectionOnTab = (event: KeyboardEvent) => {
+            if (event.key !== "Tab") return;
+            const selection = editorView.dom.ownerDocument.getSelection();
+            if (!selection?.anchorNode || !selection.focusNode || !editorView.dom.contains(selection.anchorNode) || !editorView.dom.contains(selection.focusNode)) return;
+            const anchor = editorView.posAtDOM(selection.anchorNode, selection.anchorOffset);
+            const head = editorView.posAtDOM(selection.focusNode, selection.focusOffset);
+            if (editorView.state.doc.resolve(anchor).parent.inlineContent && editorView.state.doc.resolve(head).parent.inlineContent) {
+              editorView.dispatch(editorView.state.tr.setSelection(TextSelection.create(editorView.state.doc, anchor, head)));
+            }
+          };
+          editorView.dom.addEventListener("keydown", captureSelectionOnTab, true);
           const showOnFocus = () => provider.update(editorView);
           editorView.dom.addEventListener("blur", hideOnBlur);
           editorView.dom.addEventListener("focus", showOnFocus);
@@ -235,6 +249,7 @@ export function selectionToolbar(): { plugins: MilkdownPlugin[]; configure: (ctx
               provider.update(view, previous);
             },
             destroy: () => {
+              editorView.dom.removeEventListener("keydown", captureSelectionOnTab, true);
               editorView.dom.removeEventListener("blur", hideOnBlur);
               editorView.dom.removeEventListener("focus", showOnFocus);
               provider.destroy();

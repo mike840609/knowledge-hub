@@ -18,14 +18,15 @@ test("the rendered editor mounts without hydration or page errors", { tag: "@smo
   await expect(page.locator(".ProseMirror")).toHaveCount(1);
 });
 
-test("focus lands in Title on a new document, and at the start of the content for an H1-led one", async ({ page }) => {
+test("new documents focus Title while existing documents wait for an editing gesture", async ({ page }) => {
   await page.goto(`/w/${EMPTY_WORKSPACE}/knowledge/new`);
   await expect(composer(page).getByLabel("Title", { exact: true })).toBeFocused(ROUND_TRIP);
 
   const title = unique("Focus H1");
   const url = await createNote(page, title, `# ${title}\n\nbody`);
   const surface = await openEditor(page, url);
-  await expect(surface).toBeFocused(ROUND_TRIP);
+  await expect(surface).not.toBeFocused();
+  await surface.getByRole("heading", { level: 1 }).click({ position: { x: 1, y: 10 } });
   await page.keyboard.type("X");
   const source = await showMarkdown(composer(page));
   await expect(source).toHaveValue(`# X${title}\n\nbody\n`);
@@ -52,6 +53,7 @@ test("selecting text shows the toolbar, and Bold writes ** into the Markdown", a
   const toolbar = page.getByRole("toolbar", { name: "Formatting" });
   await expect(toolbar).toBeHidden();
 
+  await surface.locator("p").click();
   await surface.locator("p").selectText();
   await expect(toolbar).toBeVisible(ROUND_TRIP);
   const box = await toolbar.boundingBox();
@@ -61,8 +63,8 @@ test("selecting text shows the toolbar, and Bold writes ** into the Markdown", a
   expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
 
   await toolbar.getByRole("button", { name: "Bold" }).click();
-  // A toolbar button must not submit the form it sits in.
-  await expect(page).toHaveURL(/\/edit$/);
+  // Formatting stays on the canonical document page.
+  await expect(page).toHaveURL(new RegExp(`${url}$`));
   await expect(surface.locator("strong")).toHaveText("hello world");
   await expect(toolbar.getByRole("button", { name: "Bold" })).toHaveAttribute("aria-pressed", "true");
   const source = await showMarkdown(composer(page));
@@ -74,11 +76,13 @@ test("the toolbar works from the keyboard: select, Tab into it, press Bold", asy
   const surface = await openEditor(page, url);
   const toolbar = page.getByRole("toolbar", { name: "Formatting" });
   const bold = toolbar.getByRole("button", { name: "Bold" });
-  // A titled note without an H1 opens with the caret at the start of its text.
-  await expect(surface).toBeFocused(ROUND_TRIP);
+  // Start editing explicitly; opening an inline document does not move focus.
+  await surface.click();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.press("ArrowLeft");
   for (let letter = 0; letter < "hello ".length; letter += 1) await page.keyboard.press("ArrowRight");
   // One key makes the selection: the editor reads it after the key, so a toolbar shown means it holds all of it.
-  await page.keyboard.press("Shift+End");
+  for (let letter = 0; letter < "world".length; letter += 1) await page.keyboard.press("Shift+ArrowRight");
   await expect(toolbar).toBeVisible(ROUND_TRIP);
 
   // The toolbar follows the editor in the tab order, and focus moving into it keeps it open.
@@ -87,8 +91,8 @@ test("the toolbar works from the keyboard: select, Tab into it, press Bold", asy
   await expect(toolbar).toBeVisible();
   await page.keyboard.press("Enter");
 
-  // Enter on a toolbar button presses it; it does not submit the form.
-  await expect(page).toHaveURL(/\/edit$/);
+  // Enter presses the toolbar button without navigating.
+  await expect(page).toHaveURL(new RegExp(`${url}$`));
   await expect(surface.locator("strong")).toHaveText("world");
   await expect(bold).toHaveAttribute("aria-pressed", "true");
   // Pressing a button hands focus back to the editor, selection kept.
@@ -102,6 +106,7 @@ test("the toolbar adds a link from an address typed into it", async ({ page }) =
   const url = await createNote(page, unique("Link"), "hello world\n");
   const surface = await openEditor(page, url);
   const toolbar = page.getByRole("toolbar", { name: "Formatting" });
+  await surface.locator("p").click();
   await surface.locator("p").selectText();
   await toolbar.getByRole("button", { name: "Link" }).click();
   const address = toolbar.getByLabel("Link address");
@@ -109,8 +114,8 @@ test("the toolbar adds a link from an address typed into it", async ({ page }) =
   await address.fill("https://example.com");
   await address.press("Enter");
 
-  // Enter in the address box must neither save the document nor leave the page.
-  await expect(page).toHaveURL(/\/edit$/);
+  // Enter applies the link without leaving the document.
+  await expect(page).toHaveURL(new RegExp(`${url}$`));
   await expect(surface.locator('a[href="https://example.com"]')).toHaveText("hello world");
   const source = await showMarkdown(composer(page));
   await expect(source).toHaveValue("[hello world](https://example.com)\n");
@@ -132,6 +137,7 @@ test("the toolbar goes away when focus leaves the editor", async ({ page }) => {
   const url = await createNote(page, unique("Blur"), "hello world\n");
   const surface = await openEditor(page, url);
   const toolbar = page.getByRole("toolbar", { name: "Formatting" });
+  await surface.locator("p").click();
   await surface.locator("p").selectText();
   await expect(toolbar).toBeVisible(ROUND_TRIP);
   await composer(page).getByLabel("Title", { exact: true }).click();
@@ -142,6 +148,7 @@ test("the bulleted-list button wraps a paragraph into a list and lifts it back o
   const url = await createNote(page, unique("List Toggle"), "item\n");
   const surface = await openEditor(page, url);
   const toolbar = page.getByRole("toolbar", { name: "Formatting" });
+  await surface.locator("p").click();
   await surface.locator("p").selectText();
   await toolbar.getByRole("button", { name: "Bulleted list" }).click();
   await expect(surface.getByRole("listitem")).toHaveCount(1);
@@ -185,13 +192,13 @@ test("Markdown the editor makes nothing of stays in the source, with the reason 
   await source.fill("[a]: https://example.com\n");
   const toggle = composer(page).getByRole("button", { name: "Markdown", exact: true });
   await toggle.click();
-  await expect(composer(page).getByRole("status").filter({ hasText: "Your text is available in Markdown mode" })).toBeVisible();
+  await expect(composer(page).getByRole("status").filter({ hasText: "Rendered editing is unavailable. You can continue in Markdown." })).toBeVisible();
   await expect(source).toBeVisible();
   await expect(source).toHaveValue("[a]: https://example.com\n");
   await expect(toggle).toBeDisabled();
 });
 
-test("the Markdown waits for the editor to load before it takes typing", async ({ page }) => {
+test("Markdown accepts edits while rendered editor code is still loading", async ({ page }) => {
   const url = await createNote(page, unique("Wait For Editor"), "body\n");
   const release = await holdEditorCode(page);
   await page.goto(`${url}/edit`, HELD);
@@ -200,9 +207,13 @@ test("the Markdown waits for the editor to load before it takes typing", async (
   await toggle.click();
   const source = composer(page).getByLabel("Markdown", { exact: true });
   await expect(source).toBeVisible();
-  await expect(source).toBeDisabled();
+  await expect(source).toBeEditable();
+  await source.fill("typed while loading\n");
   release();
-  await expect(source).toBeEnabled(ROUND_TRIP);
+  await expect(page.locator(".ProseMirror")).toHaveAttribute("contenteditable", "false", ROUND_TRIP);
+  await expect(source).toHaveValue("typed while loading\n");
+  await toggle.click();
+  await expect(page.getByRole("textbox", { name: "Content" })).toHaveText("typed while loading");
 });
 
 test("the editor arriving does not take the caret from a field the person moved to", async ({ page }) => {
@@ -216,7 +227,7 @@ test("the editor arriving does not take the caret from a field the person moved 
   await titleField.click();
   await page.keyboard.type(" more");
   release();
-  await expect(page.locator(".ProseMirror")).toHaveAttribute("contenteditable", "true", ROUND_TRIP);
+  await expect(page.locator(".ProseMirror")).toHaveAttribute("contenteditable", "false", ROUND_TRIP);
   // A steal would come right after the editor is built; keep watching for a while.
   for (let check = 0; check < 5; check += 1) {
     await expect(titleField).toBeFocused();
@@ -229,12 +240,13 @@ test("an editor whose code cannot load leaves the Markdown in charge", async ({ 
   const url = await createNote(page, unique("No Editor Code"), "body\n");
   await page.route(EDITOR_CODE, (route) => route.abort());
   await page.goto(`${url}/edit`);
-  await expect(composer(page).getByRole("status").filter({ hasText: "Your text is available in Markdown mode" })).toBeVisible(ROUND_TRIP);
+  await expect(composer(page).getByRole("status").filter({ hasText: "Rendered editing is unavailable. You can continue in Markdown." })).toBeVisible(ROUND_TRIP);
   const source = composer(page).getByLabel("Markdown", { exact: true });
   await expect(source).toBeEditable();
   await source.fill("still editable");
-  await composer(page).getByRole("button", { name: "Save" }).click();
-  await expect(page.locator("article").first().getByText("still editable")).toBeVisible(ROUND_TRIP);
+  await expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", ROUND_TRIP);
+  await page.reload();
+  await expect(source).toHaveValue("still editable", ROUND_TRIP);
 });
 
 test("an image the reader would refuse is not loaded by the editor either", async ({ page }) => {
@@ -283,14 +295,15 @@ test("a frontmatter title survives editing the H1", async ({ page }) => {
   await expect(page).not.toHaveURL(/\/new$/, ROUND_TRIP);
 
   const surface = await openEditor(page, page.url());
-  await expect(composer(page).getByText("Title comes from the uploaded file’s frontmatter")).toBeVisible();
+  await expect(composer(page).getByLabel("Title", { exact: true })).toHaveCount(0);
+  await expect(readerTitle(page)).toHaveText(title);
   // The body opens with its own H1, so the editor shows that one heading, as the reader does.
   await expect(surface.getByRole("heading", { level: 1 })).toHaveCount(1);
   const source = await showMarkdown(composer(page));
   await source.fill("# Another heading entirely\n\ntext");
-  await composer(page).getByRole("button", { name: "Save" }).click();
-  await expect(page).not.toHaveURL(/\/edit$/, ROUND_TRIP);
-  await expect(page.locator("article").first().getByRole("heading", { name: "Another heading entirely" })).toBeVisible(ROUND_TRIP);
+  await expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", ROUND_TRIP);
+  await page.reload();
+  await expect(surface.getByRole("heading", { name: "Another heading entirely" })).toBeVisible(ROUND_TRIP);
   await expect(readerTitle(page)).toHaveText(title);
 });
 
