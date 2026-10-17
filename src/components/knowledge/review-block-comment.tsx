@@ -20,7 +20,9 @@ export function ReviewBlockComment({ readingRef, markdown, chosen, onChoose }: {
   readingRef: RefObject<HTMLDivElement | null>;
   markdown: string;
   chosen: ReviewAnchor | null;
-  onChoose: (anchor: ReviewAnchor) => void;
+  /** The anchor for the pressed paragraph. True paints the whole paragraph; false leaves
+   * the narrowed selection, which the browser already shows, as the only highlight. */
+  onChoose: (anchor: ReviewAnchor) => boolean;
 }) {
   const domVersion = useReviewDomVersion();
   const [blocks, setBlocks] = useState<{ element: HTMLElement; anchor: ReviewAnchor; top: number; height: number }[]>([]);
@@ -64,11 +66,14 @@ export function ReviewBlockComment({ readingRef, markdown, chosen, onChoose }: {
       className="kh-block-comment-zone pointer-events-auto absolute" data-hovered={hovered === element ? "" : undefined} style={{ top, height }}>
       <button type="button" disabled={!!chosen && chosen.blockPath.join(".") !== anchor.blockPath.join(".")} aria-label={`Comment on paragraph: ${anchor.exact.slice(0, 80)}`}
         className="kh-block-comment-button kh-focus-ring flex size-6 items-center justify-center rounded-sm text-kh-text-muted hover:bg-kh-bg-selected hover:text-kh-selected-text"
+        onPointerDown={event => event.preventDefault()}
         onClick={() => {
           if (selected.current) setReviewBlockSelected(selected.current, false);
-          selected.current = element;
-          setReviewBlockSelected(element, true);
-          onChoose(anchor);
+          selected.current = null;
+          if (onChoose(anchor)) {
+            selected.current = element;
+            setReviewBlockSelected(element, true);
+          }
         }}>
         <MessageSquarePlus className="size-4" aria-hidden="true" />
       </button>

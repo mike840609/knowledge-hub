@@ -1,9 +1,11 @@
 import { projectReviewBlocks } from "@/modules/knowledge/domain/review-anchor";
 import { REVIEW_PATH, reviewPathKey } from "@/shared/markdown/remark-review-paths";
 
-/** Stamp editor leaves only after proving the complete ordered block structure and every selectable block’s text. This is
- * deliberately stricter than finding a matching quote: duplicate paragraphs cannot steal
- * each other's path when the editor drops, adds, or changes a block during parsing. */
+/** Stamp the editor leaves the reader can prove, one block at a time. A block the editor
+ * renders differently — an HTML block, a changed sentence — leaves its own element unstamped
+ * instead of clearing the whole document. A signature shared by two blocks is never stamped:
+ * duplicate paragraphs cannot steal each other's path, and the reader re-proves any path
+ * by whole-text match before it anchors a comment. */
 export function stampEditorReviewPaths(root: HTMLElement, markdown: string): boolean {
   root.querySelectorAll(`[${REVIEW_PATH}]`).forEach(element => element.removeAttribute(REVIEW_PATH));
   const blocks = projectReviewBlocks(markdown).filter(block => ["heading", "paragraph", "tableCell", "code"].includes(block.kind));
@@ -16,11 +18,29 @@ export function stampEditorReviewPaths(root: HTMLElement, markdown: string): boo
     const value = copy.textContent ?? "";
     return code ? value.replace(/\n$/, "") : value.replace(/[\t\n\r ]+/g, " ").replace(/^ /, "");
   };
-  if (blocks.length !== elements.length || blocks.some((block, index) => kind(elements[index]) !== block.kind || (block.selectable && text(elements[index], block.kind === "code") !== block.text.slice(block.hidden)))) return false;
-  blocks.forEach((block, index) => {
-    if (text(elements[index], block.kind === "code") === block.text.slice(block.hidden)) elements[index].setAttribute(REVIEW_PATH, reviewPathKey(block.path));
+  const expected = (index: number) => blocks[index].text.slice(blocks[index].hidden);
+  if (blocks.length === elements.length && blocks.every((block, index) => kind(elements[index]) === block.kind && (!block.selectable || text(elements[index], block.kind === "code") === expected(index)))) {
+    blocks.forEach((block, index) => {
+      if (text(elements[index], block.kind === "code") === expected(index)) elements[index].setAttribute(REVIEW_PATH, reviewPathKey(block.path));
+    });
+    return true;
+  }
+  const signature = blocks.map((block, index) => `${block.kind}\0${expected(index)}`);
+  const blockCount = new Map<string, number>();
+  for (const item of signature) blockCount.set(item, (blockCount.get(item) ?? 0) + 1);
+  const elementCount = new Map<string, number>();
+  const elementSignature = elements.map(element => `${kind(element)}\0${text(element, element.tagName === "PRE")}`);
+  for (const item of elementSignature) elementCount.set(item, (elementCount.get(item) ?? 0) + 1);
+  const pending = new Map<string, number[]>();
+  signature.forEach((item, index) => pending.set(item, [...(pending.get(item) ?? []), index]));
+  let stamped = 0;
+  elementSignature.forEach((item, index) => {
+    const match = pending.get(item)?.shift();
+    if (match === undefined || blockCount.get(item) !== 1 || elementCount.get(item) !== 1) return;
+    elements[index].setAttribute(REVIEW_PATH, reviewPathKey(blocks[match].path));
+    stamped += 1;
   });
-  return true;
+  return stamped > 0;
 }
 
 import { Plugin, PluginKey, TextSelection, type Transaction } from "@milkdown/kit/prose/state";
