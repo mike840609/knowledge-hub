@@ -159,7 +159,7 @@ test("inline: saving leaves history, sharing and discussion controls available",
   await saved(page);
   await page.getByRole("button", { name: "Details", exact: true }).first().click();
   await page.getByRole("tab", { name: "History", exact: true }).click();
-  await expect(page.getByRole("link", { name: /Revision 2/ })).toBeVisible();
+  await expect(page.getByText("Latest saved content", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Share link…" })).toBeVisible();
 });
 

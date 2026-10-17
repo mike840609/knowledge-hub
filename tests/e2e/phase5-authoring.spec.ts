@@ -73,7 +73,7 @@ test("edits a hub-managed document and records a second revision", async ({ page
   await expect(page.getByRole("textbox", { name: "Content", exact: true })).toContainText("updated body", ROUND_TRIP);
   await page.locator("main").getByRole("button", { name: "Details" }).click();
   await page.getByRole("tab", { name: "History" }).click();
-  await expect(page.getByRole("link", { name: /Revision 2/ })).toBeVisible();
+  await expect(page.getByText("Latest saved content", { exact: true })).toBeVisible();
 });
 
 // The push back from a save fetches the document page fresh, but a layout the

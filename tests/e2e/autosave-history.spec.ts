@@ -1,9 +1,13 @@
 import { expect, test } from './fixtures/test';
-import { createReviewDocument } from './fixtures/document-review';
+import { personalWorkspaceId } from './fixtures/my-space';
 
-test('autosave keeps a working head and a named checkpoint survives later edits', async ({ page, request }) => {
-  const doc = await createReviewDocument(request);
-  await page.goto(doc.href);
+test('autosave keeps a working head and a named checkpoint survives later edits', async ({ page }) => {
+  const workspaceId = await personalWorkspaceId(page);
+  const response = await page.request.post(`/api/workspaces/${workspaceId}/documents`, { data: { title: `Autosave history ${Date.now()}`, markdown: 'Original content.' } });
+  expect(response.ok()).toBe(true);
+  const doc = await response.json() as { sourceId: string; documentId: string };
+  const href = `/w/${workspaceId}/knowledge/${doc.sourceId}/${doc.documentId}`;
+  await page.goto(href);
   const editor = page.getByRole('textbox', { name: 'Content', exact: true });
   await expect(editor).toBeEditable({ timeout: 15_000 });
   const saved = page.waitForResponse(response => response.url().endsWith(`/api/documents/${doc.documentId}`) && response.request().method() === 'PATCH');

@@ -13,12 +13,10 @@ for (const width of [1680, 900, 390]) {
     const surface = page.getByRole("textbox", { name: "Content", exact: true });
     await expect(surface).toBeEditable(ROUND_TRIP);
     await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
-    await surface.locator("p").click();
-    // Use editing gestures: the shared-reader helper only assigns a DOM range.
-    await page.keyboard.press("ControlOrMeta+a");
-    await page.keyboard.press("ArrowLeft");
-    for (let index = 0; index < "A ".length; index++) await page.keyboard.press("ArrowRight");
-    for (let index = 0; index < [..."😀 bold"].length; index++) await page.keyboard.press("Shift+ArrowRight");
+    // Select the same passage deterministically at every viewport. The editor's
+    // keyboard navigation is covered separately; this case checks that opening
+    // and cancelling the draft preserves the selected range.
+    await selectPassage(page);
     await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe("😀 bold");
     const toolbar = page.getByRole("toolbar", { name: "Formatting" });
     await expect(toolbar).toBeVisible();

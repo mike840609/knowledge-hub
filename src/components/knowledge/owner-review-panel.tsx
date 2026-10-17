@@ -52,7 +52,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
   const requestVersion = useRef(0);
   const returnPassage = useRef<(() => void) | null>(null);
   const domVersion = useReviewDomVersion();
-  const canRequest = !!prepareComment && !!result?.writesEnabled && !readOnly && !revisionChanged && commentAvailable && !selection.chosen;
+  const canRequest = !!prepareComment && !!result?.writesEnabled && !readOnly && !revisionChanged && commentAvailable && selection.ready && !selection.chosen;
   const savePrepared = useCallback(async (comment: PreparedReviewComment, version: number) => {
     setSavingDocument(true); setSaveError(undefined);
     try {
@@ -164,7 +164,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
     if (!inline) { returnPassage.current = restore; changeOpen(false); }
     else requestAnimationFrame(restore);
   };
-  const composer = selection.chosen && <ReviewComposer anchor={selection.chosen} onCancel={cancelComment}
+  const composer = selection.chosen && <ReviewComposer anchor={selection.chosen} onCancel={cancelComment} cancelOnEscape={!!prepared}
     pending={savingDocument} saveError={saveError}
     onRetrySave={prepared ? () => { void savePrepared(prepared, ++requestVersion.current); } : undefined}
     onSubmit={async (body, idempotencyKey) => {
@@ -182,7 +182,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
     <div className="kh-review-document" data-review-ready={result || error ? "" : undefined} data-review-open={open ? "" : undefined} data-review-inline={inline ? "" : undefined}>
       <div ref={readingRef} className="kh-review-reading">
         {children}
-        {canComment && !prepareComment && <ReviewSelectionBubble place={selection.place} ready={selection.ready} hint={selection.hint} onComment={() => { selection.capture(); changeOpen(true); }} />}
+        {canComment && (!prepareComment || !!selection.hint) && <ReviewSelectionBubble place={selection.place} ready={selection.ready} hint={selection.hint} onComment={() => { selection.capture(); changeOpen(true); }} />}
         {canComment && <ReviewBlockComment readingRef={readingRef} markdown={markdown} chosen={selection.chosen} onChoose={anchor => { if (prepareComment) requestComment(() => anchor); else { selection.choose(anchor); changeOpen(true); } }} />}
         <ReviewPassageMarkers readingRef={readingRef} markdown={markdown} threads={located} />
       </div>
