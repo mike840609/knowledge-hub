@@ -16,6 +16,9 @@ describe("E2E service requirements", () => {
   test("personal workspace needs only the local application", () => {
     expect(requiredE2eServices([source("personal-workspace.spec.ts")])).toEqual({ personas: false, unconfigured: false, noSession: false, teamsClosed: false });
   });
+  test("paragraph comments require SSO through the shared review document fixture", () => {
+    expect(requiredE2eServices([source("review-paragraph-comment.spec.ts")])).toEqual({ personas: true, unconfigured: false, noSession: false, teamsClosed: false });
+  });
   test("anonymous share readers need the fail-closed server, not the SSO fixture build", () => {
     expect(requiredE2eServices([source("share-link.spec.ts")])).toEqual({ personas: false, unconfigured: true, noSession: false, teamsClosed: false });
   });
