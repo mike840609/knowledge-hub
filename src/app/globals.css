@@ -568,6 +568,12 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-row-action { opacity: 1; }
   .kh-tree-row-actions { right: 44px; }
   .kh-tree-document-link, .kh-tree-folder-button { padding-inline-end: 48px; }
+
+  /* Home keeps favorite and menu as separate actions, so give each one a full
+     touch target and matching grid cell instead of letting them overlap. */
+  [data-home-actions] { width: 88px; grid-template-columns: repeat(2, 44px); }
+  [data-home-actions] > span { height: 44px; }
+  [data-home-actions] .kh-icon-control { width: 44px; min-width: 44px; min-height: 44px; }
 }
 
 /* Search icon clearance: left inset + icon width + gutter, not spacing rhythm. */

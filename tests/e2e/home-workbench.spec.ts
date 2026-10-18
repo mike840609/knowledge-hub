@@ -18,6 +18,7 @@ test("home workbench opens shared search, keeps favorites, and reflows on mobile
   const row = work.locator(`[data-list-row][href="/w/${workspaceId}/knowledge/${doc.sourceId}/${doc.documentId}"]`);
   await expect(row).toBeVisible();
   await expect(row).toHaveCount(1);
+  await expect.poll(async () => !/Loading discussions|Checking discussions/.test((await attention.textContent()) ?? "")).toBe(true);
   const saved = page.waitForResponse(response => response.url().endsWith("/personal") && response.request().method() === "PUT");
   await work.getByRole("button", { name: `Favorite: ${title}`, exact: true }).click();
   expect((await saved).ok()).toBe(true);
@@ -28,10 +29,18 @@ test("home workbench opens shared search, keeps favorites, and reflows on mobile
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const desktopWork = await work.boundingBox();
   const desktopAttention = await attention.boundingBox();
-  expect(desktopAttention!.x).toBeGreaterThan(desktopWork!.x + desktopWork!.width);
+  const attentionIsRail = desktopAttention!.x > desktopWork!.x + desktopWork!.width;
+  if (attentionIsRail) {
+    expect(desktopAttention!.x).toBeGreaterThan(desktopWork!.x + desktopWork!.width);
+  } else {
+    await expect(attention).toContainText("No new comments or replies");
+    const desktopFavorites = await favorites.boundingBox();
+    expect(desktopAttention!.y).toBeGreaterThanOrEqual(desktopFavorites!.y + desktopFavorites!.height);
+  }
   await page.screenshot({ path: testInfo.outputPath("home-desktop.png"), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
-  const boxes = await Promise.all([work, attention, favorites, updates].map(region => region.boundingBox()));
+  const mobileOrder = attentionIsRail ? [work, attention, favorites, updates] : [work, favorites, attention, updates];
+  const boxes = await Promise.all(mobileOrder.map(region => region.boundingBox()));
   for (let i = 1; i < boxes.length; i++) expect(boxes[i]!.y).toBeGreaterThanOrEqual(boxes[i - 1]!.y + boxes[i - 1]!.height);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("home-mobile.png"), fullPage: true });

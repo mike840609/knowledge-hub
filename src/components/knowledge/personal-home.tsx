@@ -4,7 +4,7 @@ import { GuidanceVisibilityContext } from "./guidance-visibility";
 import { ReopenGuidanceMenuItem } from "./reopen-guidance-menu-item";
 import { Fragment, useState, type ReactNode } from "react";
 import { HomeUpdates } from "./home-updates";
-import { HomeDiscussions } from "./home-discussions";
+import { HomeDiscussionsContent, useHomeDiscussions } from "./home-discussions";
 import type {FolderUpdatesPage} from "@/modules/personal/application/list-folder-updates";
 
 import Link from "next/link";
@@ -86,6 +86,8 @@ function Row({ href, icon, title, timestamp, timeLabel, provenance, trailing, ac
 export function PersonalHome({ workspaceId, documents, drafts, updates={runs:[],nextCursor:null}, slots, guidanceDismissed = false }: { guidanceDismissed?: boolean; slots?: { guidance?: ReactNode; reminders?: ReactNode }; workspaceId: string; documents: Doc[]; drafts: Draft[]; updates?:FolderUpdatesPage }) {
   const [dismissed, setDismissed] = useState(guidanceDismissed);
   const { shortcuts, update } = useDocumentShortcuts(workspaceId);
+  const discussions = useHomeDiscussions(workspaceId);
+  const showDiscussionPanel = discussions.status !== "ready" || discussions.notices.length > 0;
   const hydrated = useHydrated();
   const { access, confirmed } = useWorkspaceAuthorization();
   const runAction = useActionRunner({ onToggleFavorite: (sourceId, documentId) => update(state => toggleFavoriteDocument(state, documentShortcutKey(sourceId, documentId))) });
@@ -102,6 +104,11 @@ export function PersonalHome({ workspaceId, documents, drafts, updates={runs:[],
   ].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   const [showAllWork, setShowAllWork] = useState(false);
   const [showAllFavorites, setShowAllFavorites] = useState(false);
+  const latestDraft = continuing.find(item => item.draft !== null);
+  const visibleContinuing = (showAllWork ? continuing.slice(0, 12) : continuing.slice(0, 6));
+  if (latestDraft && !visibleContinuing.includes(latestDraft)) {
+    visibleContinuing[visibleContinuing.length - 1] = latestDraft;
+  }
 
   function documentRows(docs: Doc[], showActivity = true) {
     return (
@@ -178,7 +185,7 @@ export function PersonalHome({ workspaceId, documents, drafts, updates={runs:[],
       <div className="-mx-3 grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <Section title="Continue working" className="xl:col-start-1 xl:row-start-1">
           {continuing.length ? <ul onKeyDown={navigateListRows} className="space-y-1">
-            {(showAllWork ? continuing : continuing.slice(0, 6)).map(item => item.doc ? (
+            {visibleContinuing.map(item => item.doc ? (
               <Fragment key={keyOf(item.doc)}>{documentRows([item.doc])}</Fragment>
             ) : item.draft ? (
               <Row key={item.draft.key}
@@ -189,18 +196,21 @@ export function PersonalHome({ workspaceId, documents, drafts, updates={runs:[],
             ) : null)}
           </ul> : <EmptyLine>Notes you write and documents you open will appear here.{documents.length === 0 && dismissed ? <ReopenGuidanceMenuItem workspaceId={workspaceId} surface="empty" /> : null}</EmptyLine>}
           <div className="mt-3 flex flex-wrap items-center gap-3 px-3">
-            {continuing.length > 6 ? <Button variant="ghost" size="sm" onClick={() => setShowAllWork(!showAllWork)}>{showAllWork ? "Show fewer" : "Show all recent work"}</Button> : null}
+            {continuing.length > 6 ? <Button variant="ghost" size="sm" onClick={() => setShowAllWork(!showAllWork)}>{showAllWork ? "Show fewer" : `Show more recent work (${Math.min(12, continuing.length)} of ${continuing.length})`}</Button> : null}
             <Link className="kh-focus-ring rounded-md py-2 text-body-sm text-kh-link" href={`/w/${workspaceId}/knowledge`}>Browse knowledge</Link>
           </div>
         </Section>
-        <div className="min-w-0 xl:col-start-2 xl:row-span-2 xl:row-start-1">
-          <HomeDiscussions workspaceId={workspaceId} />
-        </div>
+        {showDiscussionPanel ? <div className="min-w-0 xl:col-start-2 xl:row-span-2 xl:row-start-1">
+          <HomeDiscussionsContent workspaceId={workspaceId} state={discussions} />
+        </div> : null}
         <Section title="Favorites" className="xl:col-start-1 xl:row-start-2">
           {favorites.length ? <ul onKeyDown={navigateListRows} className="space-y-1">{documentRows(showAllFavorites ? favorites : favorites.slice(0, 6), false)}</ul> : <EmptyLine>Star documents to keep them close at hand.</EmptyLine>}
           {favorites.length > 6 ? <Button variant="ghost" size="sm" className="mx-3 mt-3" onClick={() => setShowAllFavorites(!showAllFavorites)}>{showAllFavorites ? "Show fewer favorites" : `Show all favorites (${favorites.length})`}</Button> : null}
         </Section>
-        <Section title="Knowledge updates" className="xl:col-span-2">
+        {!showDiscussionPanel ? <div className="min-w-0 xl:col-span-2 xl:row-start-3">
+          <HomeDiscussionsContent workspaceId={workspaceId} state={discussions} compact />
+        </div> : null}
+        <Section title="Knowledge updates" className={`xl:col-span-2 ${showDiscussionPanel ? "xl:row-start-3" : "xl:row-start-4"}`}>
           {slots?.reminders}
           <HomeUpdates workspaceId={workspaceId} page={updates} />
           <Link className="kh-focus-ring mt-3 inline-block rounded-md px-3 py-2 text-body-sm text-kh-link" href={`/w/${workspaceId}/updates`}>View all folder updates</Link>
