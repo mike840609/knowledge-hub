@@ -59,6 +59,8 @@ export function ReviewReplyForm({ onSubmit, label = "Reply", openRequest = 0, in
 export type ReviewFilter = "ALL" | "OPEN" | "RESOLVED";
 /** The draft's place in the rail layout; no thread ID (a UUID) can equal it. */
 const DRAFT_ID = "draft";
+/** Threads on one passage read as one entry from this many on. */
+const GROUP_THRESHOLD = 3;
 const FILTER_NAMES: Record<ReviewFilter, string> = { ALL: "All comments", OPEN: "Open", RESOLVED: "Resolved" };
 
 /** Which discussions are listed. The list draws it above itself unless a panel takes it for its heading. */
@@ -114,6 +116,21 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
   const placed = useMemo<RailCard[]>(() => !draftAnchor ? visible
     : [...visible, { id: DRAFT_ID, currentAnchor: { match: "MATCHED" as const, anchor: draftAnchor } }].sort(compareReviewPassages), [visible, draftAnchor]);
   const { ref: railRef, layout } = useReviewRailLayout(placed, railMarkdown, draft ? DRAFT_ID : activeThreadId);
+  /** Threads on one passage read as one entry once there are enough of them to push others away. */
+  const groups = useMemo(() => {
+    const ordered: { key: string; threads: typeof visible }[] = [];
+    const byKey = new Map<string, typeof visible>();
+    for (const thread of visible) {
+      const anchor = thread.currentAnchor.match === "OUTDATED" ? undefined : thread.currentAnchor.anchor;
+      const key = anchor ? `block:${JSON.stringify(anchor.blockPath)}` : `thread:${thread.id}`;
+      const found = byKey.get(key);
+      if (found) found.push(thread);
+      else { byKey.set(key, [thread]); ordered.push({ key, threads: byKey.get(key)! }); }
+    }
+    return ordered;
+  }, [visible]);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const firstGroupKey = groups[0]?.key;
   return <div className="space-y-3">
     <ConfirmDialog open={!!pendingHide} onOpenChange={open => { if (!open) setPendingHide(undefined); }} title="Hide from reviewers?" description="This content will be hidden from all reviewers. It remains available to you for moderation." confirmLabel="Confirm hide" onConfirm={() => { if(pendingHide) void act(pendingHide.threadId,"visibility","HIDDEN",pendingHide.commentId,true); }} />
     <ConfirmDialog open={!!pendingDelete} onOpenChange={open => { if (!open) setPendingDelete(undefined); }} title="Delete comment?" description="Your comment will be removed for everyone. This cannot be undone." confirmLabel="Delete comment" onConfirm={() => { if (pendingDelete) void remove(pendingDelete); }} />
@@ -123,7 +140,10 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
     <div ref={railRef} data-review-rail={railMarkdown !== undefined ? "" : undefined} data-positioned={layout ? "" : undefined} className="kh-review-thread-list" style={layout ? { "--review-list-height": `${layout.height}px` } as CSSProperties : undefined}>
     {/* The box is placed before its field mounts: the field takes focus on mounting, and focused at the rail's top it scrolls the page away from the passage. */}
     {draft && <section data-review-draft={DRAFT_ID} aria-label="New comment" style={layout ? { "--review-thread-top": `${layout.positions[DRAFT_ID] ?? 0}px` } as CSSProperties : undefined}>{layout?.positions[DRAFT_ID] !== undefined && draft.composer}</section>}
-    {visible.map(thread => {
+    {groups.flatMap(group => {
+      // The passage being read and the first group start expanded; the rest open on demand.
+      const expanded = expandedGroups[group.key] ?? (group.key === firstGroupKey || group.threads.some(item => item.id === activeThreadId));
+      if (group.threads.length < GROUP_THRESHOLD || expanded) return group.threads.map(thread => {
       const owner = "visibility" in thread ? thread : undefined;
       const active = activeThreadId === thread.id;
       const compact = !!onActivate && !active;
@@ -168,6 +188,20 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
           : <Button type="button" variant="ghost" className="mt-2" onClick={event => { event.currentTarget.closest<HTMLElement>("[data-review-thread]")?.focus({ preventScroll: true }); onActivate?.(thread.id); }}>{thread.comments.length > 1 ? `Show ${thread.comments.length - 1} ${thread.comments.length === 2 ? "reply" : "replies"}` : "Expand comment"}</Button>)}
         {canReply && <div hidden={compact}><ReviewReplyForm openRequest={replyRequest?.threadId === thread.id ? replyRequest.nonce : 0} onSubmit={(body, key) => reply(thread.id, body, key)} /></div>}
       </section>;
+      });
+      const first = group.threads[0];
+      const cover = first.comments[0];
+      return [<section key={group.key} data-review-thread={first.id} data-stacked="" aria-label={`${group.threads.length} discussions on this passage`} style={layout ? { "--review-thread-top": `${layout.positions[first.id] ?? 0}px` } as CSSProperties : undefined} className="rounded-md border border-kh-border bg-kh-bg p-3">
+        {first.currentAnchor.anchor && <blockquote className="mb-3 border-l border-kh-border pl-3 text-body-sm text-kh-text-muted"><span className="line-clamp-2">{first.currentAnchor.anchor.exact}</span></blockquote>}
+        {cover && !cover.deleted && <div className="mb-2 text-body-sm">
+          <div className="mb-2 flex items-start gap-2">
+            <span aria-hidden="true" className="flex size-6 shrink-0 items-center justify-center rounded-full bg-kh-bg-selected font-medium text-kh-selected-text">{(cover.authorName ?? "C").slice(0, 1).toUpperCase()}</span>
+            <div className="min-w-0 flex-1"><p className="truncate font-medium">{cover.authorName ?? "Company colleague"}</p></div>
+          </div>
+          <p className="whitespace-pre-wrap break-words line-clamp-2">{cover.body}</p>
+        </div>}
+        <Button type="button" variant="ghost" className="mt-2" onClick={() => setExpandedGroups(previous => ({ ...previous, [group.key]: true }))}>Show {group.threads.length} discussions</Button>
+      </section>];
     })}
     </div>
   </div>;
