@@ -5,7 +5,9 @@ import { CALLOUTS } from "../markdown-callout";
 import type { CalloutKind } from "@/shared/markdown/remark-callouts";
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import { Plugin, PluginKey, TextSelection, type EditorState } from "@milkdown/kit/prose/state";
+import type { EditorView } from "@milkdown/kit/prose/view";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
+import { dispatchBlockAction } from "./block-actions";
 import { $prose } from "@milkdown/kit/utils";
 import { CALLOUT_ATTRIBUTE, calloutKind } from "@/shared/markdown/remark-callouts";
 import { INLINE_HTML_TAG } from "@/shared/markdown/remark-known-html";
@@ -19,6 +21,41 @@ function calloutOf(quote: ProseNode): string | null {
   const next = paragraph.maybeChild(1);
   if (next && next.type.name !== "hardbreak") return null;
   return calloutKind(line.text ?? "");
+}
+
+/** Backspace where a hidden marker would swallow visible text: either the start of the
+ * paragraph right after a marker paragraph, or right after the break in a paragraph that
+ * holds both. Drops the marker (and the break): the callout becomes a plain quote and every
+ * word stays visible. One undo step. */
+export function handleCalloutBackspace(view: EditorView): boolean {
+  if (!view.editable) return false;
+  const { selection } = view.state;
+  if (!(selection instanceof TextSelection) || !selection.empty) return false;
+  const { $from } = selection;
+  if ($from.parent.type.name !== "paragraph" || $from.depth < 2) return false;
+  const quote = $from.node($from.depth - 1);
+  if (quote.type.name !== "blockquote" || !calloutOf(quote)) return false;
+  const index = $from.index($from.depth - 1);
+  // Marker paragraph followed by a body paragraph: drop the invisible marker.
+  if ($from.parentOffset === 0 && index === 1) {
+    const markerPos = $from.before($from.depth - 1) + 1;
+    const marker = quote.firstChild!;
+    const tr = view.state.tr.delete(markerPos, markerPos + marker.nodeSize);
+    dispatchBlockAction(view, tr, tr.mapping.map($from.pos));
+    return true;
+  }
+  // Marker and body share one paragraph split by a break: drop the marker and the break.
+  if (index === 0) {
+    const marker = $from.parent.firstChild;
+    const second = $from.parent.childCount > 1 ? $from.parent.child(1) : null;
+    if (marker?.isText && second?.type.name === "hardbreak" && calloutKind(marker.text ?? "") && $from.parentOffset === marker.nodeSize + 1) {
+      const contentStart = $from.before($from.depth) + 1;
+      const tr = view.state.tr.delete(contentStart, $from.pos);
+      dispatchBlockAction(view, tr, tr.mapping.map($from.pos));
+      return true;
+    }
+  }
+  return false;
 }
 
 /**

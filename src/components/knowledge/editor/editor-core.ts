@@ -9,7 +9,8 @@ import type { EditorView } from "@milkdown/kit/prose/view";
 import { $ctx, $prose, getMarkdown, replaceAll } from "@milkdown/kit/utils";
 import { detailsPlugins, detailsRemark } from "./details-node";
 import { readerHints } from "./reader-hints";
-import { flipNearestDetails } from "./details-toggle";
+import { flipNearestDetails, handleDetailsDeleteKey } from "./details-toggle";
+import { handleCalloutBackspace } from "./reader-hints";
 import { configureCellBreakStringify, remarkCellBreaks } from "./table-cell-breaks";
 import { configureWikiLinkStringify, wikiLinkPlugins } from "./wiki-link";
 
@@ -249,6 +250,12 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
         // Shift+Enter in a table is taken here too, before Milkdown's command can split the table.
         handleKeyDown: (view, event) => {
           if ((event.metaKey || event.ctrlKey) && event.key === "Enter") return true;
+          // Backspace/Delete cannot cross a toggle's defining boundary: without this the caret
+          // is stuck and the toggle undeletable. A direct prop runs before every plugin's keymap.
+          if ((event.key === "Backspace" || event.key === "Delete") && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.isComposing && event.keyCode !== 229 && handleDetailsDeleteKey(view, event.key)) return true;
+          // Backspace at the start of a callout body would merge visible text into the hidden
+          // marker paragraph instead. Drop the marker: the callout becomes a plain quote.
+          if (event.key === "Backspace" && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.isComposing && event.keyCode !== 229 && handleCalloutBackspace(view)) return true;
           if (event.key === "Enter" && event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.isComposing && event.keyCode !== 229 && flipNearestDetails(view, view.state.selection.$from.pos)) return true;
           if (event.key === "Enter" && event.shiftKey && !event.altKey && !event.isComposing && event.keyCode !== 229 && breakInTable(view)) return true;
           if (

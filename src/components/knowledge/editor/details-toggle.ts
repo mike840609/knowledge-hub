@@ -54,3 +54,53 @@ export function flipNearestDetails(view: EditorView, pos: number): boolean {
   dispatchBlockAction(view, tr, found.open ? found.position + 2 : view.state.selection.from);
   return true;
 }
+/** Dissolves the toggle at detailsPos, keeping every word: a non-empty summary becomes a
+ * paragraph, then the body blocks follow. Backspace and forward Delete cannot cross the
+ * toggle's defining boundary, so without this the caret is stuck and the toggle undeletable. */
+function dissolveDetails(view: EditorView, detailsPos: number, caretPos: number): boolean {
+  const node = view.state.doc.nodeAt(detailsPos);
+  if (!node || node.type.name !== "details") return false;
+  const summary = node.firstChild!;
+  const body = node.lastChild!;
+  const { paragraph } = view.state.schema.nodes;
+  const blocks = summary.textContent ? [paragraph.create(null, view.state.schema.text(summary.textContent))] : [];
+  body.forEach(child => { blocks.push(child); });
+  dispatchBlockAction(view, view.state.tr.replaceWith(detailsPos, detailsPos + node.nodeSize, blocks), caretPos);
+  return true;
+}
+/** Backspace where the editor cannot move: the start of a summary, or the start of the first
+ * textblock of a body, can never join upward through the toggle. Dissolve it instead. */
+export function handleDetailsBackspace(view: EditorView): boolean {
+  if (!view.editable) return false;
+  const { selection } = view.state;
+  if (!(selection instanceof TextSelection) || !selection.empty) return false;
+  const { $from } = selection;
+  if ($from.parentOffset !== 0) return false;
+  const parent = $from.parent;
+  if (parent.type.name === "details_summary") {
+    const detailsPos = $from.before($from.depth - 1);
+    return dissolveDetails(view, detailsPos, detailsPos + 1);
+  }
+  if (!parent.isTextblock) return false;
+  if ($from.node($from.depth - 1)?.type.name !== "details_body" || $from.index($from.depth - 1) !== 0) return false;
+  const detailsPos = $from.before($from.depth - 2);
+  return dissolveDetails(view, detailsPos, detailsPos + 1);
+}
+/** Forward Delete where the editor cannot move: the end of a summary can never pull the body
+ * up into it. Dissolve the toggle instead, leaving the caret where the summary ended. */
+export function handleDetailsForwardDelete(view: EditorView): boolean {
+  if (!view.editable) return false;
+  const { selection } = view.state;
+  if (!(selection instanceof TextSelection) || !selection.empty) return false;
+  const { $from } = selection;
+  const parent = $from.parent;
+  if (parent.type.name !== "details_summary" || $from.parentOffset !== parent.content.size) return false;
+  const detailsPos = $from.before($from.depth - 1);
+  return dissolveDetails(view, detailsPos, detailsPos + 1 + parent.content.size);
+}
+/** Plain Backspace/Delete that the toggle would otherwise swallow. */
+export function handleDetailsDeleteKey(view: EditorView, key: string): boolean {
+  if (key === "Backspace") return handleDetailsBackspace(view);
+  if (key === "Delete") return handleDetailsForwardDelete(view);
+  return false;
+}
