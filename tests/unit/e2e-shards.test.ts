@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, test } from "vitest";
 import history from "../../scripts/test/e2e-durations.json";
 import { balancedE2eGroups, E2E_GROUP_COUNT, SSO_GROUP_ALLOWANCE_MS } from "../../scripts/test/e2e-shards";
-import { requiredE2eServices } from "../../scripts/test/e2e-services";
+import { e2eSpecSource, requiredE2eServices } from "../../scripts/test/e2e-services";
 
 const root = new URL("../../", import.meta.url);
 const read = (file: string) => readFileSync(new URL(file, root), "utf8");
@@ -12,7 +12,7 @@ const specs = readdirSync(e2eRoot, { recursive: true, withFileTypes: true })
   .filter((entry) => entry.isFile() && entry.name.endsWith(".spec.ts"))
   .map((entry) => {
     const absolute = path.join(entry.parentPath, entry.name);
-    return { file: path.relative(e2eRoot, absolute).replaceAll(path.sep, "/"), source: readFileSync(absolute, "utf8") };
+    return { file: path.relative(e2eRoot, absolute).replaceAll(path.sep, "/"), source: e2eSpecSource(absolute) };
   });
 const weights: Record<string, number> = history.durationsMs;
 const weight = (file: string) => weights[file] ?? 5_000;

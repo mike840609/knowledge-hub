@@ -3,7 +3,7 @@ import { preparePhase3Application, seedPhase3Identities } from "../../tests/e2e/
 import { PHASE3_PROVIDER, phase3PersonaNames, phase3UserId } from "../../tests/e2e/fixtures/phase3-identities";
 import path from "node:path";
 import { assertE2eCounts, createE2eRunDirectory, e2eHtmlReportDirectory, e2eReporterArguments, recordE2eRun, type E2eCounts, type E2eRunReport } from "./e2e-report";
-import { e2eTeamWorkspacesEnabled, requiredE2eServices } from "./e2e-services";
+import { e2eSpecSource, e2eTeamWorkspacesEnabled, requiredE2eServices } from "./e2e-services";
 import { spawn, type ChildProcess } from "node:child_process";
 import { databaseConfig } from "@/infrastructure/database/mariadb/config";
 import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
@@ -110,7 +110,7 @@ async function main(): Promise<void> {
       }
       collect(listing.suites);
       if (!files.size) throw new Error("No E2E tests selected.");
-      const services = requiredE2eServices(await Promise.all([...files].map((file) => readFile(file, "utf8"))));
+      const services = requiredE2eServices([...files].map((file) => e2eSpecSource(file)));
       if (process.env.KM_E2E_PERSONAL_ONLY === "true" && services.personas) {
         throw new Error("Selected tests require SSO personas; remove KM_E2E_PERSONAL_ONLY=true.");
       }

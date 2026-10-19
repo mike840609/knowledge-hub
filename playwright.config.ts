@@ -2,6 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { defineConfig, devices } from "@playwright/test";
 import { balancedE2eGroups, E2E_GROUP_COUNT } from "./scripts/test/e2e-shards";
+import { e2eSpecSource } from "./scripts/test/e2e-services";
 import { PHASE3_PROVIDER, phase3Origin, phase3PersonaNames, phase3NoSessionOrigin, phase3UnconfiguredOrigin } from "./tests/e2e/fixtures/phase3-identities";
 import { teamsClosedOrigin } from "./tests/e2e/fixtures/teams-closed";
 
@@ -13,7 +14,7 @@ const files = group ? readdirSync(path.join(process.cwd(), "tests/e2e"), { recur
   .filter((entry) => entry.isFile() && entry.name.endsWith(".spec.ts"))
   .map((entry) => {
     const absolute = path.join(entry.parentPath, entry.name);
-    return { file: path.relative(path.join(process.cwd(), "tests/e2e"), absolute).replaceAll(path.sep, "/"), source: readFileSync(absolute, "utf8") };
+    return { file: path.relative(path.join(process.cwd(), "tests/e2e"), absolute).replaceAll(path.sep, "/"), source: e2eSpecSource(absolute) };
   }) : [];
 const groups = balancedE2eGroups(files);
 const localServer = {
