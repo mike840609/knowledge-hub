@@ -3,9 +3,9 @@
 import { GuidanceVisibilityContext } from "./guidance-visibility";
 import { ReopenGuidanceMenuItem } from "./reopen-guidance-menu-item";
 import { useState, type ReactNode } from "react";
-import { HomeUpdates } from "./home-updates";
-import { HomeDiscussions } from "./home-discussions";
-import type {FolderUpdatesPage} from "@/modules/personal/application/list-folder-updates";
+import { continueItems, type ContinueDoc, type ContinueDraft, type ContinueItem } from "@/lib/home-continue";
+import { HomeAttention } from "./home-attention";
+import type { FreshnessReminder } from "@/modules/personal/application/knowledge-freshness";
 
 import Link from "next/link";
 import { FileText, PenLine, Star, MoreHorizontal } from "lucide-react";
@@ -14,7 +14,6 @@ import { useDocumentShortcuts, documentShortcutKey } from "./use-document-shortc
 import { toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { PageHeader } from "@/components/shell/page-header";
-import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/components/ui/tabs";
 import { Timestamp } from "@/components/ui/timestamp";
 import { Tooltip } from "@/components/ui/tooltip";
 import { actionsFor, type Action } from "@/components/actions/action-registry";
@@ -24,14 +23,13 @@ import { MenuRoot, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/me
 import { ShareLinkDialogHost } from "./share-link-dialog";
 import { useHydrated } from "@/components/shell/use-hydrated";
 
-type Doc = { sourceName?:string; sourcePath?:string|null; documentId: string; sourceId: string; title: string; updatedAt: string; ownership: "SOURCE_MANAGED" | "HUB_MANAGED"; status: "ACTIVE" | "ARCHIVED"; sourceStatus: "ACTIVE" | "ARCHIVED" };
-type Draft = { key: string; title: string; sourceId: string | null; updatedAt: string };
+type Doc = ContinueDoc;
 
-/** Keep the two work areas visually clear without adding card chrome. */
+/** A labelled group of rows; the label is the rail's group-label style, not a heading-size title. */
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section aria-label={title} className="min-w-0">
-      <h2 className="px-3 pb-3 text-body font-medium text-kh-text">{title}</h2>
+      <h2 className="px-3 pb-2 text-caption font-medium text-kh-text-muted">{title}</h2>
       {children}
     </section>
   );
@@ -46,12 +44,14 @@ function EmptyLine({ children }: { children: React.ReactNode }) {
  * results are. The favourite toggle sits beside the link rather than inside
  * it, so it is its own target and a click on it never navigates.
  */
-function Row({ href, icon, title, timestamp, timeLabel, provenance, trailing, actions = [], onRun = () => {} }: {
+function Row({ href, icon, title, timestamp, timeLabel, eventLabel, provenance, trailing, actions = [], onRun = () => {} }: {
   href: string;
   icon: React.ReactNode;
   title: string;
   timestamp?: string;
   timeLabel?: string;
+  /** Names the event beside the time; `accent` colours the label alone, never the time. */
+  eventLabel?: { text: string; accent: boolean };
   provenance?:string;
   trailing?: React.ReactNode;
   actions?: readonly Action[];
@@ -68,9 +68,9 @@ function Row({ href, icon, title, timestamp, timeLabel, provenance, trailing, ac
         <span className="min-w-0 flex-1 py-1">
           <span className="block truncate text-body font-medium text-kh-text">{title}</span>
           {provenance?<span className="block truncate text-caption text-kh-text-muted">{provenance}</span>:null}
-          {timestamp ? <span className="block text-caption text-kh-text-muted sm:hidden">{timeLabel} <Timestamp value={timestamp} variant="relative" /></span> : null}
+          {timestamp ? <span className="block text-caption text-kh-text-muted sm:hidden"><span className={eventLabel?.accent ? "text-kh-selected-text" : "text-kh-text-muted"}>{eventLabel?.text ?? timeLabel}</span>{" "}<Timestamp value={timestamp} variant="relative" /></span> : null}
         </span>
-        {timestamp ? <span className="hidden shrink-0 text-caption text-kh-text-muted sm:block">{timeLabel} <Timestamp value={timestamp} variant="relative" /></span> : null}
+        {timestamp ? <span className="hidden shrink-0 text-caption text-kh-text-muted sm:block"><span className={eventLabel?.accent ? "text-kh-selected-text" : "text-kh-text-muted"}>{eventLabel?.text ?? timeLabel}</span>{" "}<Timestamp value={timestamp} variant="relative" /></span> : null}
       </Link>
       {trailing}
       <RowActionsTrigger actions={actions} onRun={onRun} label={title} className="kh-row-action mr-1" />
@@ -78,59 +78,62 @@ function Row({ href, icon, title, timestamp, timeLabel, provenance, trailing, ac
   );
 }
 
-export function PersonalHome({ workspaceId, documents, drafts, updates={runs:[],nextCursor:null}, slots, guidanceDismissed = false }: { guidanceDismissed?: boolean; slots?: { guidance?: ReactNode; reminders?: ReactNode }; workspaceId: string; documents: Doc[]; drafts: Draft[]; updates?:FolderUpdatesPage }) {
+export function PersonalHome({ workspaceId, documents, drafts, reminders = [], slots, guidanceDismissed = false }: { guidanceDismissed?: boolean; slots?: { guidance?: ReactNode }; workspaceId: string; documents: Doc[]; drafts: ContinueDraft[]; reminders?: FreshnessReminder[] }) {
   const [dismissed, setDismissed] = useState(guidanceDismissed);
   const { shortcuts, update } = useDocumentShortcuts(workspaceId);
   const hydrated = useHydrated();
   const { access, confirmed } = useWorkspaceAuthorization();
   const runAction = useActionRunner({ onToggleFavorite: (sourceId, documentId) => update(state => toggleFavoriteDocument(state, documentShortcutKey(sourceId, documentId))) });
   const keyOf = (doc: Doc) => documentShortcutKey(doc.sourceId, doc.documentId);
-  const recent = shortcuts.recent
-    .map((key) => documents.find((doc) => keyOf(doc) === key))
+  const items = continueItems({ documents, drafts, recent: shortcuts.recent, openedAt: shortcuts.openedAt });
+  const favorites = shortcuts.favorites
+    .map(key => documents.find(doc => keyOf(doc) === key))
     .filter((doc): doc is Doc => !!doc && doc.status === "ACTIVE" && doc.sourceStatus === "ACTIVE");
-  const [workTab, setWorkTab] = useState("recent");
-  const resumeDrafts = [...drafts].sort((a,b) => b.updatedAt.localeCompare(a.updatedAt));
+  // ponytail: every favourite is listed; add the rail's "show all" cut-off if lists grow past a screen.
 
-  function documentRows(docs: Doc[]) {
+  function documentRow(doc: Doc, { timestamp, eventLabel }: { timestamp?: string; eventLabel?: { text: string; accent: boolean } }) {
+    const key = keyOf(doc);
+    const favorite = shortcuts.favorites.includes(key);
+    const actions = actionsFor("row", { workspaceId, workspaceType: "PERSONAL", can: access.actions, confirmed,
+      target: { ...doc, label: doc.title, favorite, revision: "CURRENT" },
+    }).filter(action => action.id !== "document.move");
+    const label = `${favorite ? "Remove favorite" : "Favorite"}: ${doc.title}`;
     return (
-      <ul onKeyDown={navigateListRows} className="space-y-0.5">
-        {docs.map((doc) => {
-          const key = keyOf(doc);
-          const favorite = shortcuts.favorites.includes(key);
-          const actions = actionsFor("row", { workspaceId, workspaceType: "PERSONAL", can: access.actions, confirmed,
-            target: { ...doc, label: doc.title, favorite, revision: "CURRENT" },
-          }).filter(action => action.id !== "document.move");
-          const label = `${favorite ? "Remove favorite" : "Favorite"}: ${doc.title}`;
-          return (
-            <Row
-              key={key}
-              href={`/w/${workspaceId}/knowledge/${doc.sourceId}/${doc.documentId}`}
-              icon={<FileText size={14} aria-hidden="true" />}
-              title={doc.title}
-              timestamp={shortcuts.openedAt?.[key]} timeLabel="Opened"
-              provenance={[doc.sourceName,doc.sourcePath].filter(Boolean).join(" · ")}
-              actions={actions}
-              onRun={runAction}
-              trailing={
-                <Tooltip label={favorite ? "Remove from favorites" : "Add to favorites"}>
-                  <Button
-                    variant="ghost"
-                    icon
-                    size="sm"
-                    disabled={!hydrated}
-                    onClick={() => update((state) => toggleFavoriteDocument(state, key))}
-                    aria-label={label}
-                    className={favorite ? "text-kh-selected-text" : "kh-row-action"}
-                  >
-                    <Star size={14} fill={favorite ? "currentColor" : "none"} aria-hidden="true" />
-                  </Button>
-                </Tooltip>
-              }
-            />
-          );
-        })}
-      </ul>
+      <Row
+        key={key}
+        href={`/w/${workspaceId}/knowledge/${doc.sourceId}/${doc.documentId}`}
+        icon={<FileText size={14} aria-hidden="true" />}
+        title={doc.title}
+        timestamp={timestamp} eventLabel={eventLabel}
+        provenance={[doc.sourceName,doc.sourcePath].filter(Boolean).join(" · ")}
+        actions={actions}
+        onRun={runAction}
+        trailing={
+          <Tooltip label={favorite ? "Remove from favorites" : "Add to favorites"}>
+            <Button
+              variant="ghost"
+              icon
+              size="sm"
+              disabled={!hydrated}
+              onClick={() => update((state) => toggleFavoriteDocument(state, key))}
+              aria-label={label}
+              className={favorite ? "text-kh-selected-text" : "kh-row-action"}
+            >
+              <Star size={14} fill={favorite ? "currentColor" : "none"} aria-hidden="true" />
+            </Button>
+          </Tooltip>
+        }
+      />
     );
+  }
+
+  function continueRow(item: ContinueItem) {
+    const eventLabel = { text: item.label, accent: item.label === "Draft" };
+    if (item.label === "Draft") {
+      const href = item.doc ? `/w/${workspaceId}/knowledge/${item.doc.sourceId}/${item.doc.documentId}/edit` : `/w/${workspaceId}/knowledge/new`;
+      return <Row key={item.id} href={href} icon={<PenLine size={14} aria-hidden="true" />} title={item.draft?.title || "Untitled draft"} provenance="Continue writing" timestamp={item.at} eventLabel={eventLabel} />;
+    }
+    return documentRow(item.doc!, { timestamp: item.at, eventLabel });
   }
 
   return (
@@ -155,34 +158,17 @@ export function PersonalHome({ workspaceId, documents, drafts, updates={runs:[],
         </>}
       />
       {slots?.guidance}
-      <div className="-mx-3 grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <Section title="Continue reading">
-          <TabsRoot value={workTab} onValueChange={value => setWorkTab(String(value))}>
-            <TabsList aria-label="Continue working" className="mx-3">
-              <TabsTab value="recent" className="aria-selected:border-kh-primary aria-selected:text-kh-selected-text">Recent reading</TabsTab>
-              <TabsTab value="drafts" className="aria-selected:border-kh-primary aria-selected:text-kh-selected-text">Drafts{drafts.length > 0 ? ` ${drafts.length}` : ""}</TabsTab>
-            </TabsList>
-            <TabsPanel value="recent">
-              {recent.length > 0 ? documentRows(recent.slice(0, 5)) : <EmptyLine>Documents you open will appear here.{documents.length === 0 && dismissed ? <ReopenGuidanceMenuItem workspaceId={workspaceId} surface="empty" /> : null}</EmptyLine>}
-            </TabsPanel>
-            <TabsPanel value="drafts">
-              {resumeDrafts.length > 0 ? <ul onKeyDown={navigateListRows} className="space-y-0.5">
-                {resumeDrafts.map(draft => <Row key={draft.key}
-                  href={draft.key === "draft:new" ? `/w/${workspaceId}/knowledge/new` : `/w/${workspaceId}/knowledge/${draft.sourceId}/${draft.key.split(":")[1]}/edit`}
-                  icon={<PenLine size={14} aria-hidden="true" />}
-                  title={draft.title || "Untitled draft"} provenance="Draft · Continue writing" timestamp={draft.updatedAt} timeLabel="Edited"
-                />)}
-              </ul> : <EmptyLine>No unfinished drafts.</EmptyLine>}
-            </TabsPanel>
-          </TabsRoot>
-          <Link className="kh-focus-ring mt-3 inline-block rounded-md px-3 py-2 text-body-sm text-kh-link" href={`/w/${workspaceId}/knowledge`}>Browse knowledge</Link>
+      <HomeAttention workspaceId={workspaceId} reminders={reminders} />
+      <div className="-mx-3 space-y-6">
+        <Section title="Continue">
+          {items.length ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{items.map(continueRow)}</ul>
+            : <EmptyLine>Documents you write, edit or open will appear here.{documents.length === 0 && dismissed ? <ReopenGuidanceMenuItem workspaceId={workspaceId} surface="empty" /> : null}</EmptyLine>}
         </Section>
-        <Section title="Updates">
-          {slots?.reminders}
-          <HomeDiscussions />
-          <HomeUpdates workspaceId={workspaceId} page={updates} />
-          <div className="mt-3 flex flex-wrap gap-3 px-3 text-body-sm"><Link className="kh-focus-ring rounded-md text-kh-link" href={`/w/${workspaceId}/inbox`}>Open Inbox</Link><Link className="kh-focus-ring rounded-md text-kh-link" href={`/w/${workspaceId}/updates`}>View all folder updates</Link></div>
+        <Section title="Favorites">
+          {favorites.length ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{favorites.map(doc => documentRow(doc, {}))}</ul>
+            : <EmptyLine>Star a document to keep it here.</EmptyLine>}
         </Section>
+        <Link className="kh-focus-ring inline-block rounded-md px-3 py-2 text-body-sm text-kh-link" href={`/w/${workspaceId}/knowledge`}>Browse knowledge</Link>
       </div>
       <ShareLinkDialogHost />
     </div>
