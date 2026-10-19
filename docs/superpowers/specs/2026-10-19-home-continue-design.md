@@ -84,6 +84,35 @@ removes the favourite). Empty: "Star a document to keep it here."
 Authorization is unchanged: rows only link to documents already returned by
 `listDocumentSummaries` for the caller, and opening one rechecks access.
 
+## Visual language
+
+Home follows `frontend-design-language.md` (the Linear-derived contract). The
+user asked that any emphasis use the app's lavender accent; the contract
+allows exactly one accent, `--kh-primary` / `--kh-selected-text`, so that is
+the only colour Home adds to the neutral ramp.
+
+- **No cards.** Sections are rows under a label, separated by spacing; the
+  attention strip is one `rounded-md` panel with a 1px `border-kh-border`
+  and no fill or shadow (§6).
+- **Section labels** ("Needs attention", "Continue", "Favorites") use the rail
+  group-label style: `caption`, medium, `text-muted` (§8). A count, where
+  shown, is `text-faint` beside it. Hierarchy comes from weight and
+  foreground level, not size or colour.
+- **Rows** keep today's `Row`: `min-h-10`, `px-3`, fill hanging outside the
+  column (§ "A row's fill hangs outside the column"), title `body` medium
+  `text`, provenance and time `caption` `text-muted`, arrow-key navigation via
+  `navigateListRows`.
+- **Accent, and only here:**
+  - the event label **Draft** in `text-kh-selected-text` — unsaved work is the
+    one row state Home emphasises; Edited and Opened stay `text-muted`;
+  - a 6px unread dot in `bg-kh-primary` on each unread comment row;
+  - a filled favourite star in `text-kh-selected-text` (unchanged);
+  - focus rings (`kh-focus-ring`, unchanged).
+- **Status is not accent.** A failed import keeps the existing warning tokens
+  (`kh-warning-*`); a pending or stale source stays neutral.
+- No new tokens. Tailwind's default spellings (`text-sm`, `rounded`,
+  `shadow-sm`) do not compile and are not used.
+
 ## Out of scope
 
 - Server-side recent reading (needs a new port, table and migration). Revisit
