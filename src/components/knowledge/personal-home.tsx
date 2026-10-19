@@ -52,10 +52,11 @@ function EmptyLine({ children }: { children: React.ReactNode }) {
  * it, so it is its own target and a click on it never navigates.
  */
 function EventTime({ timestamp, eventLabel }: { timestamp?: string; eventLabel?: string }) {
+  // A short time ("23h") with the event in its tooltip; untimed, the event is all there is to say.
+  if (!timestamp) return eventLabel ? <span className="text-kh-text-muted">{eventLabel}</span> : null;
   return <>
-    {eventLabel ? <span className="text-kh-text-muted">{eventLabel}</span> : null}
-    {eventLabel && timestamp ? " " : null}
-    {timestamp ? <Timestamp value={timestamp} variant="relative" /> : null}
+    {eventLabel ? <span className="sr-only">{eventLabel} </span> : null}
+    <Timestamp value={timestamp} variant="short" label={eventLabel} className="tabular-nums" />
   </>;
 }
 
@@ -109,11 +110,14 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
     .map(key => documents.find(doc => keyOf(doc) === key))
     .filter((doc): doc is Doc => !!doc && doc.status === "ACTIVE" && doc.sourceStatus === "ACTIVE");
   // ponytail: every favourite is listed; add the rail's "show all" cut-off if lists grow past a screen.
-  // A source name every visible row shares tells the reader nothing; name it only when the rows differ.
-  const shown = [...lists.drafts.flatMap(item => item.doc ? [item.doc] : []), ...lists.recent.map(item => item.doc), ...favorites];
+  const recentShown = showAllRecent ? lists.recent : lists.recent.slice(0, RECENT_SHOWN);
+  // A source name every visible row shares tells the reader nothing; name it only when the rows differ,
+  // and then only where it changes from the row above, as a repeated name says nothing either.
+  const shown = [...lists.drafts.flatMap(item => item.doc ? [item.doc] : []), ...recentShown.map(item => item.doc), ...favorites];
   const manySources = new Set(shown.map(doc => doc.sourceId)).size > 1;
+  const sourceChanges = (docs: readonly Doc[], i: number) => manySources && docs[i - 1]?.sourceId !== docs[i].sourceId;
 
-  function documentRow(doc: Doc, { timestamp, eventLabel }: { timestamp?: string; eventLabel?: string }) {
+  function documentRow(doc: Doc, { timestamp, eventLabel, showSource }: { timestamp?: string; eventLabel?: string; showSource: boolean }) {
     const key = keyOf(doc);
     const favorite = shortcuts.favorites.includes(key);
     const actions = actionsFor("row", { workspaceId, workspaceType: "PERSONAL", can: access.actions, confirmed,
@@ -127,7 +131,7 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
         icon={<FileText size={14} aria-hidden="true" />}
         title={doc.title}
         timestamp={timestamp} eventLabel={eventLabel}
-        provenance={[manySources ? doc.sourceName : undefined, doc.sourcePath].filter(Boolean).join(" · ")}
+        provenance={[showSource ? doc.sourceName : undefined, doc.sourcePath].filter(Boolean).join(" · ")}
         actions={actions}
         onRun={runAction}
         trailing={
@@ -157,7 +161,8 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
       trailing={<span aria-hidden="true" className="mr-1 flex shrink-0"><span className={slot} /><span className={slot} /></span>} />;
   }
 
-  const recentRow = (item: RecentItem) => documentRow(item.doc, { timestamp: item.at, eventLabel: item.label });
+  const recentDocs = recentShown.map(item => item.doc);
+  const recentRow = (item: RecentItem, i: number) => documentRow(item.doc, { timestamp: item.at, eventLabel: item.label, showSource: sourceChanges(recentDocs, i) });
 
   return (
     <GuidanceVisibilityContext.Provider value={{ dismissed, setDismissed }}>
@@ -197,7 +202,7 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
             <ul onKeyDown={navigateListRows} className="space-y-0.5">{lists.drafts.map(draftRow)}</ul>
           </Section> : null}
           <Section title="Recent">
-            {lists.recent.length ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{(showAllRecent ? lists.recent : lists.recent.slice(0, RECENT_SHOWN)).map(recentRow)}</ul>
+            {lists.recent.length ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{recentShown.map(recentRow)}</ul>
               : <EmptyLine>Documents you edit or open will appear here.{documents.length === 0 && dismissed ? <ReopenGuidanceMenuItem workspaceId={workspaceId} surface="empty" /> : null}</EmptyLine>}
             {hiddenRecent > 0 ? <Button variant="ghost" size="sm" className="mx-3 mt-1 text-kh-text-muted" aria-expanded={showAllRecent} onClick={() => setShowAllRecent(!showAllRecent)}>
               {showAllRecent ? "Show fewer" : `Show ${hiddenRecent} more`}
@@ -209,12 +214,11 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
             {notices.length ? <UnreadDiscussions notices={notices} /> : <EmptyLine>No new comments or replies.</EmptyLine>}
           </Section>
           <Section title="Favorites">
-            {favorites.length ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{favorites.map(doc => documentRow(doc, {}))}</ul>
+            {favorites.length ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{favorites.map((doc, i) => documentRow(doc, { showSource: sourceChanges(favorites, i) }))}</ul>
               : <EmptyLine>Star a document to keep it here.</EmptyLine>}
           </Section>
         </div>
       </div>
-      <Link className="kh-focus-ring -mx-3 inline-block rounded-md px-3 py-2 text-body-sm text-kh-link" href={`/w/${workspaceId}/knowledge`}>Browse knowledge</Link>
       <ShareLinkDialogHost />
     </div>
     </GuidanceVisibilityContext.Provider>

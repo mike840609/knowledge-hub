@@ -46,7 +46,7 @@ it("leads with Recent and Favorites, searches through ⌘K and leaves the change
   expect(html).not.toContain('aria-label="Updates"');
   expect(html).not.toContain('role="tablist"');
   expect(html).not.toContain("Needs attention");
-  expect(html).toContain("Browse knowledge");
+  expect(html).not.toContain("Browse knowledge");
   expect(html).toContain("Documents you edit or open will appear here.");
   expect(html).toContain("Star a document to keep it here.");
   expect(html).toContain('aria-label="Discussions"');
@@ -65,7 +65,9 @@ it("puts drafts above Recent, counted in the accent, and edits in muted text", (
   const recent = html.slice(html.indexOf('aria-label="Recent"'), html.indexOf('aria-label="Favorites"'));
   expect(recent).toContain('href="/w/ws/knowledge/src/b"');
   expect(recent).not.toContain('href="/w/ws/knowledge/src/a"');
-  expect(recent).toMatch(/text-kh-text-muted[^"]*">Edited/);
+  // The event is read out and shown in the time's tooltip; the column holds only the short time.
+  expect(recent).toContain('<span class="sr-only">Edited </span>');
+  expect(recent).toMatch(/<time [^>]*title="Edited Oct 1, 2026/);
 });
 
 it("lists favourites in favourites order with a filled star", () => {
@@ -113,6 +115,19 @@ it("names a document's source only when Home spans more than one source", () => 
   const two = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[doc("a", { sourceName: "Notes" }), doc("b", { sourceId: "team", sourceName: "Team wiki", sourcePath: "guides/setup.md" })]} drafts={[]} />);
   expect(two).toContain(">Notes<");
   expect(two).toContain(">Team wiki · guides/setup.md<");
+});
+
+it("names a source only where it changes from the row above", () => {
+  const html = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[
+    doc("a", { sourceName: "Notes", updatedAt: "2026-10-09T00:00:00.000Z" }),
+    doc("b", { sourceName: "Notes", updatedAt: "2026-10-08T00:00:00.000Z" }),
+    doc("c", { sourceId: "team", sourceName: "Team wiki", updatedAt: "2026-10-07T00:00:00.000Z" }),
+    doc("d", { sourceName: "Notes", updatedAt: "2026-10-06T00:00:00.000Z" }),
+  ]} drafts={[]} />);
+  const recent = html.slice(html.indexOf('aria-label="Recent"'), html.indexOf('aria-label="Discussions"'));
+  // a names Notes, b repeats it and stays quiet, c changes to Team wiki, d changes back.
+  expect(recent.match(/>Notes</g)).toHaveLength(2);
+  expect(recent.match(/>Team wiki</g)).toHaveLength(1);
 });
 
 it("shows the first eight recent rows and offers the rest behind Show more", () => {

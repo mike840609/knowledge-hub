@@ -81,3 +81,24 @@ export function formatRelativeTime(elapsedMs: number): string {
   const step = unit === "minute" ? MINUTE : unit === "hour" ? HOUR : DAY;
   return relativeFormat.format(-Math.floor(elapsedMs / step), unit);
 }
+
+const yearFormats = new Map<string, Intl.DateTimeFormat>();
+const monthDayFormats = new Map<string, Intl.DateTimeFormat>();
+const WEEK = 7 * DAY;
+
+/**
+ * "5m", "23h", "6d", then "Oct 12" — a list column's time, as compact as the
+ * row it sits in. Past a week the date says more than a count of days; the
+ * year appears only when it is not this one.
+ */
+export function formatShortTime(value: Date, now: number, timeZone: string): string {
+  const elapsed = Math.max(0, now - value.getTime());
+  if (elapsed < MINUTE) return "now";
+  if (elapsed < HOUR) return `${Math.floor(elapsed / MINUTE)}m`;
+  if (elapsed < DAY) return `${Math.floor(elapsed / HOUR)}h`;
+  if (elapsed < WEEK) return `${Math.floor(elapsed / DAY)}d`;
+  const year = formatter(yearFormats, timeZone, { year: "numeric" });
+  if (year.format(value) !== year.format(new Date(now))) return formatDate(value, timeZone);
+  return formatter(monthDayFormats, timeZone, { month: "short", day: "numeric" }).format(value);
+}
+

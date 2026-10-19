@@ -56,7 +56,9 @@ is waiting for them.
    `?thread=`. A failed read renders none and never blocks the page. Empty:
    "No new comments or replies."
 7. **Favorites** — region name `Favorites`.
-8. A "Browse knowledge" link to `/w/:id/knowledge`, after everything above.
+
+There is no "Browse knowledge" link: the rail's Knowledge item already goes
+there, and a lone link under the lists repeated it.
 
 From `xl` up, Drafts and Recent take the left two thirds and Discussions then
 Favorites the right third (`grid-cols-[minmax(0,2fr)_minmax(0,1fr)]`, the grid
@@ -137,22 +139,27 @@ the only colour Home adds to the neutral ramp.
   foreground level, not size or colour.
 - **Rows** are one line from `sm` up, on the ladder's `md` rung (`min-h-8`,
   32px; "Rows sit on the ladder too"): icon, title `body` medium `text`,
-  provenance `caption` `text-muted` beside the title, time at the right. On a
+  provenance `caption` `text-muted` beside the title, time at the right in
+  the short form (`now`, `5m`, `23h`, `6d`, then `Oct 12`, with the year only
+  when it is not this one; `formatShortTime`). The event ("Edited", "Opened")
+  is in the time's tooltip and read out to screen readers; an untimed recent
+  shows the event itself. On a
   phone the provenance and time drop to a second `caption` line. Fill hangs
   outside the column (§ "A row's fill hangs outside the column"); arrow-key
   navigation via `navigateListRows`.
 - **Provenance** (source name, then folder path) names the source only when
-  the rows on screen come from more than one source: a name every row shares
-  doubled each row's height and told the reader nothing. A folder path is
+  the rows on screen come from more than one source, and then only on a row
+  whose source differs from the row above it in the same list: a name every
+  row shares, or one printed again on the next row, tells the reader nothing. A folder path is
   always shown. Draft rows carry no provenance; their section names them.
 - **Accent, and only here:**
   - the **Drafts and unread Discussions counts** in `text-kh-selected-text` —
-    unfinished work and waiting replies are what Home emphasises; the Edited
-    and Opened labels stay `text-muted`;
+    unfinished work and waiting replies are what Home emphasises; times stay
+    `text-muted`;
   - a 6px unread dot in `bg-kh-primary` on each unread comment row;
   - a filled favourite star in `text-kh-selected-text` (unchanged);
   - focus rings (`kh-focus-ring`, unchanged);
-  - navigation links ("View all updates", "Browse knowledge") keep the
+  - navigation links ("View all updates") keep the
     existing `text-kh-link` token, unchanged from the old Home; so does
     "Open Inbox".
 - **Status is not accent.** A failed import keeps the existing warning tokens
