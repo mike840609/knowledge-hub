@@ -83,7 +83,6 @@ export default async function KnowledgeDocumentPage({
     view.status === "ACTIVE" &&
     !isHistorical && revisionNo === undefined && explorer.source.status === "ACTIVE" &&
     shell.access.workspace.lifecycleState !== "ARCHIVED";
-  const editHref = canEdit ? `/w/${workspaceId}/knowledge/${sourceId}/${documentId}/edit` : null;
   // A new document goes to the workspace's own Notes whatever this one is (a synced source's document
   // included), so what decides whether a broken link offers to make it is the capability to write here.
   const canCreate = shell?.access.actions.canWrite === true;
@@ -128,7 +127,7 @@ export default async function KnowledgeDocumentPage({
       revisionId={selectedRevision.id} userId={shell.identityId} personal={shell.workspace.type === "PERSONAL"}
       standIn={viewer} links={linkView ? renderedLinksFrom(linkView, inspectorData.createLinks ?? {}) : undefined} backlinks={linkView ? <BacklinksFooter view={linkView} /> : null}
       detail={{ breadcrumb, title: selectedRevision.title, status: view.status, updatedAt: selectedRevision.createdAt,
-        revisionBanner: null, inspectorData, editHref: null, sourceStatus: explorer.source.status, readOnly: false,
+        revisionBanner: null, inspectorData, sourceStatus: explorer.source.status, readOnly: false,
         syncHref: null, ownership: explorer.source.ownership, contentOwnsTitle, outline: extractOutline(selectedRevision.markdown) }} />;
   }
   return (
@@ -147,7 +146,6 @@ export default async function KnowledgeDocumentPage({
       }
       inspectorData={inspectorData}
       readOnlyReason={!sourceManaged && !canEdit ? <span>Read only{revisionNo !== undefined ? " · revision snapshot" : view.status === "ARCHIVED" || explorer?.source.status === "ARCHIVED" || shell?.access.workspace.lifecycleState === "ARCHIVED" ? " · archived" : " · no edit permission"}</span> : undefined}
-      editHref={editHref}
       sourceStatus={explorer?.source.status ?? "ARCHIVED"}
       readOnly={sourceManaged}
       syncHref={explorer?.source.sourceType === "FOLDER_SYNC" && explorer.source.status === "ACTIVE" ? `/w/${workspaceId}/sources/${sourceId}/update` : null}

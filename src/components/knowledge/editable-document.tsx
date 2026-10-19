@@ -369,7 +369,7 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
         }} className="min-h-[60vh] w-full resize-y border-0 bg-transparent text-reading text-kh-text outline-none" />}
     </div>
   </>;
-  return <DocumentDetailClient {...detail} editHref={null} title={displayTitle} updatedAt={savedAt} onInspect={refreshMetadata} onKeepVersion={editable && !recovery ? keepVersion : undefined}
+  return <DocumentDetailClient {...detail} title={displayTitle} updatedAt={savedAt} onInspect={refreshMetadata} onKeepVersion={editable && !recovery ? keepVersion : undefined}
     inspectorData={{ ...detail.inspectorData, revisions, selectedRevisionNo: revisions.find(item => item.id === savedRevision)?.revisionNo ?? detail.inspectorData.selectedRevisionNo }}
     breadcrumb={[...detail.breadcrumb.slice(0, -1), { label: displayTitle }]} outline={outline}
     contentOwnsTitle={markdownOpensWithHeading(content.markdown)}

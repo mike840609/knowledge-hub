@@ -21,7 +21,6 @@ export function DocumentHeader({
   onDetailsClick,
   linkSummary,
   onLinksClick,
-  editHref,
   onShareClick,
   readOnly,
   syncHref,
@@ -45,7 +44,6 @@ export function DocumentHeader({
   linkSummary?: string | null;
   /** Opens the inspector on its Links tab. */
   onLinksClick?: () => void;
-  editHref: string | null;
   /** Opens the share-link dialog; null where sharing is not offered (share-link spec §10.1). */
   onShareClick: (() => void) | null;
   readOnly: boolean;
@@ -85,19 +83,6 @@ export function DocumentHeader({
             aria-label and tooltip. Details draws the same glyph as the
             narrow topbar's copy of this button. */}
         <div className="flex shrink-0 items-center gap-2">
-          {editHref ? (
-            <Tooltip label="Edit" shortcut="E">
-              {/* A client navigation: the layout, and whether Details is open, carry over to the editor. */}
-              <Link
-                href={editHref}
-                aria-label="Edit"
-                aria-keyshortcuts="E"
-                className={buttonClasses({ variant: "ghost", icon: true })}
-              >
-                <ActionIcon name="edit" className="h-4 w-4" />
-              </Link>
-            </Tooltip>
-          ) : null}
           {saveStatus}
           {onShareClick ? (
             <Tooltip label="Share link…">

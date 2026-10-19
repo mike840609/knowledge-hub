@@ -31,7 +31,6 @@ const baseProps = {
   status: "ACTIVE" as const,
   updatedAt: new Date("2026-10-01T00:00:00.000Z"),
   revisionBanner: null,
-  editHref: null,
   onShareClick: null,
   readOnly: false,
   syncHref: null,
