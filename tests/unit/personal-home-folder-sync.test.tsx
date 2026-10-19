@@ -35,6 +35,8 @@ it("leads with Recent and Favorites, searches through ⌘K and leaves the change
   expect(html).not.toContain("<input");
   expect(html).toContain('aria-label="Search articles and notes"');
   expect(html.indexOf('aria-label="Search articles and notes"')).toBeLessThan(html.indexOf('aria-label="Recent"'));
+  // The ⌘K hint takes 13px in the 40px search bar, not the 11px default.
+  expect(html).toMatch(/<kbd class="[^"]*text-body-sm[^"]*">⌘K<\/kbd>/);
   expect(html).not.toContain("/sources/import");
   expect(html).toContain("New note");
   expect(html).toContain('aria-label="Recent"');

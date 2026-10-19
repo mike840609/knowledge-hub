@@ -184,7 +184,7 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
         <button type="button" onClick={requestQuickSearch} aria-label="Search articles and notes" className="kh-focus-ring flex min-h-10 min-w-0 flex-1 items-center gap-3 rounded-md border border-kh-border px-3 py-2 text-body text-kh-text-muted hover:bg-kh-bg-subtle">
           <Search size={16} aria-hidden="true" />
           <span className="flex-1 truncate text-left">Search articles and notes…</span>
-          <Kbd className="hidden shrink-0 sm:inline-flex">⌘K</Kbd>
+          <Kbd size="md" className="hidden shrink-0 sm:inline-flex">⌘K</Kbd>
         </button>
         <Link className={buttonClasses({ variant: "secondary", size: "lg" })} href={`/w/${workspaceId}/knowledge/new`}><Plus size={16} aria-hidden="true" />New note</Link>
       </div>
