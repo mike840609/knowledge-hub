@@ -187,7 +187,7 @@ export function PersonalHome({ workspaceId, documents, drafts, updates={runs:[],
       {slots?.guidance}
       <div className="-mx-3 grid grid-cols-1 items-start gap-x-6 gap-y-section xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-section">
-          <Section title="Continue working">
+          <Section title="Continue working" action={<Link className="kh-focus-ring -my-2 shrink-0 rounded-sm py-2 text-body-sm text-kh-link" aria-label="View all knowledge" href={`/w/${workspaceId}/knowledge`}>View all</Link>}>
             <TabsRoot defaultValue="recent">
               <TabsList aria-label="Continue working views" className="mx-3">
                 <TabsTab value="recent" className="aria-selected:border-kh-primary aria-selected:text-kh-selected-text">Recent</TabsTab>
@@ -195,17 +195,14 @@ export function PersonalHome({ workspaceId, documents, drafts, updates={runs:[],
               </TabsList>
               <TabsPanel value="recent">
                 {continuing.length ? <ul onKeyDown={navigateListRows} className="space-y-1">{documentRows(visibleContinuing)}</ul> : <EmptyLine>Notes you write and documents you open will appear here.{documents.length === 0 && dismissed ? <ReopenGuidanceMenuItem workspaceId={workspaceId} surface="empty" /> : null}</EmptyLine>}
-                <div className="mt-3 flex flex-wrap items-center gap-3 px-3">
-                  {continuing.length > 6 ? <Button variant="ghost" size="sm" onClick={() => setShowAllWork(!showAllWork)}>{showAllWork ? "Show fewer" : `Show ${Math.min(6, continuing.length - 6)} more`}</Button> : null}
-                  <Link className="kh-focus-ring rounded-md py-2 text-body-sm text-kh-link" href={`/w/${workspaceId}/knowledge`}>Browse knowledge</Link>
-                </div>
+                {continuing.length > 6 ? <div className="mt-3 px-3"> <Button variant="ghost" size="sm" onClick={() => setShowAllWork(!showAllWork)}>{showAllWork ? "Show fewer" : `Show ${Math.min(6, continuing.length - 6)} more`}</Button></div> : null}
               </TabsPanel>
               <TabsPanel value="drafts">
                 {sortedDrafts.length ? <ul onKeyDown={navigateListRows} className="space-y-1">{sortedDrafts.map(draft => (
                   <Row key={draft.key}
                     href={draft.key === "draft:new" ? `/w/${workspaceId}/knowledge/new` : `/w/${workspaceId}/knowledge/${draft.sourceId}/${draft.key.split(":")[1]}/edit`}
                     icon={<PenLine size={14} aria-hidden="true" />}
-                    title={draft.title || "Untitled note"} provenance="Continue writing" timestamp={draft.updatedAt} timeLabel="Edited"
+                    title={draft.title || "Untitled note"} timestamp={draft.updatedAt}
                   />
                 ))}</ul> : <EmptyLine>No unfinished drafts. Your drafts will appear here when you start writing.</EmptyLine>}
               </TabsPanel>

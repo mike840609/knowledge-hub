@@ -92,7 +92,6 @@ export function HomeDiscussionsContent({ workspaceId, compact = false, state }: 
         </span>
         <span className="mt-1 flex min-w-0 items-center gap-2 text-caption text-kh-text-muted">
           <span className="min-w-0 flex-1 truncate">{notice.authorName ?? "Someone"}: {notice.excerpt}</span>
-          <span className="shrink-0">Unread</span>
         </span>
       </Link>
     </li>

@@ -44,7 +44,7 @@ it("offers search, continuing work, attention, favorites and updates in task ord
   expect(html).not.toContain("Continue writing");
   expect(html).not.toContain("Your notes");
   expect(html).not.toContain("Knowledge freshness");
-  expect(html).toContain("Browse knowledge");
+  expect(html).toContain('aria-label="View all knowledge"');
   expect(html).toContain("Notes you write and documents you open will appear here.");
 });
 
