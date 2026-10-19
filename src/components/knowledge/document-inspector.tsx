@@ -336,7 +336,6 @@ export function DocumentDetailClient({
   revisionBanner,
   inspectorData,
   children,
-  editHref,
   sourceStatus,
   readOnly,
   syncHref,
@@ -361,7 +360,6 @@ export function DocumentDetailClient({
   revisionBanner: { viewingNo: number; backHref: string } | null;
   inspectorData: DocumentInspectorData;
   children: ReactNode;
-  editHref: string | null;
   /**
    * The collection's own lifecycle. A document can be ACTIVE inside an
    * archived source; every action that would be refused there must not be
@@ -501,7 +499,6 @@ export function DocumentDetailClient({
             onDetailsClick={toggleInspector}
             linkSummary={summariseLinks(inspectorData.links)}
             onLinksClick={openLinks}
-            editHref={editHref}
             onShareClick={canShare ? () => requestShare(inspectorData.documentId) : null}
             readOnly={readOnly}
             syncHref={syncHref}

@@ -330,9 +330,8 @@ export function PeekPane({ request, onClose }: { request: PeekRequest; onClose: 
               status={peek.status}
               updatedAt={new Date(peek.updatedAt)}
               revisionBanner={null}
-              // Edit and Share live in the peek toolbar above; the header keeps
-              // only what describes the document so the two never double up.
-              editHref={null}
+              // Share lives in the peek toolbar above; the header keeps only
+              // what describes the document so the two never double up.
               onShareClick={null}
               readOnly={peek.readOnly}
               syncHref={peek.syncHref}
