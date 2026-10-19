@@ -3,7 +3,7 @@
 import { GuidanceVisibilityContext } from "./guidance-visibility";
 import { ReopenGuidanceMenuItem } from "./reopen-guidance-menu-item";
 import { useState, type ReactNode } from "react";
-import { homeLists, type ContinueDoc, type ContinueDraft, type DraftItem, type RecentItem } from "@/lib/home-continue";
+import { RECENT_SHOWN, homeLists, type ContinueDoc, type ContinueDraft, type DraftItem, type RecentItem } from "@/lib/home-continue";
 import { AttentionList, type HomeNotice } from "./home-attention";
 import type { FreshnessReminder } from "@/modules/personal/application/knowledge-freshness";
 
@@ -98,6 +98,8 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
   const runAction = useActionRunner({ onToggleFavorite: (sourceId, documentId) => update(state => toggleFavoriteDocument(state, documentShortcutKey(sourceId, documentId))) });
   const keyOf = (doc: Doc) => documentShortcutKey(doc.sourceId, doc.documentId);
   const lists = homeLists({ documents, drafts, recent: shortcuts.recent, openedAt: shortcuts.openedAt });
+  const [showAllRecent, setShowAllRecent] = useState(false);
+  const hiddenRecent = lists.recent.length - RECENT_SHOWN;
   const favorites = shortcuts.favorites
     .map(key => documents.find(doc => keyOf(doc) === key))
     .filter((doc): doc is Doc => !!doc && doc.status === "ACTIVE" && doc.sourceStatus === "ACTIVE");
@@ -182,8 +184,11 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
             <ul onKeyDown={navigateListRows} className="space-y-0.5">{lists.drafts.map(draftRow)}</ul>
           </Section> : null}
           <Section title="Recent">
-            {lists.recent.length ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{lists.recent.map(recentRow)}</ul>
+            {lists.recent.length ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{(showAllRecent ? lists.recent : lists.recent.slice(0, RECENT_SHOWN)).map(recentRow)}</ul>
               : <EmptyLine>Documents you edit or open will appear here.{documents.length === 0 && dismissed ? <ReopenGuidanceMenuItem workspaceId={workspaceId} surface="empty" /> : null}</EmptyLine>}
+            {hiddenRecent > 0 ? <Button variant="ghost" size="sm" className="mx-3 mt-1 text-kh-text-muted" aria-expanded={showAllRecent} onClick={() => setShowAllRecent(!showAllRecent)}>
+              {showAllRecent ? "Show fewer" : `Show ${hiddenRecent} more`}
+            </Button> : null}
           </Section>
         </div>
         <Section title="Favorites">

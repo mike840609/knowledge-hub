@@ -85,7 +85,9 @@ Rules:
 - A document whose `status` or `sourceStatus` is `ARCHIVED` is excluded,
   whichever source named it. A recent or a draft whose document is not in the
   workspace's document list is excluded (except `draft:new`).
-- Recent is ordered newest first, at most 8 rows. A recent with no `openedAt`
+- Recent is ordered newest first and keeps at most 16 rows. Home shows the
+  first 8; the rest sit behind a ghost "Show N more" button (`aria-expanded`),
+  which turns into "Show fewer" (taken from PR #216's comparison). A recent with no `openedAt`
   sorts after every timed entry, in recents order.
 
 Row targets: Draft → the editor (`/knowledge/new` or `…/:documentId/edit`);
@@ -154,11 +156,12 @@ the only colour Home adds to the neutral ramp.
 - Unit: `homeLists()` — empty inputs; every draft listed newest first however
   old; a drafted document absent from Recent; newest event wins in Recent;
   `SOURCE_MANAGED` never Edited; archived document and archived source
-  excluded; unknown document excluded; `draft:new` kept; Recent cap of 8;
+  excluded; unknown document excluded; `draft:new` kept; Recent cap of 16;
   untimed recents last.
 - Unit: Home renders the attention strip only with items; Drafts only with
   drafts, above Recent, with its count in the accent; Recent and Favorites
-  regions and their empty copy.
+  regions and their empty copy; eight Recent rows shown with "Show N more" for
+  the rest, and no button at eight or fewer.
 - E2E: `personal-profile`, `linear-remediation` and `folder-sync-reading-flow`
   read the `Recent` region; `personal-workspace` finds the new-note draft in
   `Drafts`; no `Updates` region.

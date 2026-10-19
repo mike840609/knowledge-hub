@@ -3,7 +3,9 @@ export type ContinueDraft = { key: string; title: string; sourceId: string | nul
 export type DraftItem = { id: string; at: string; draft: ContinueDraft; doc?: ContinueDoc };
 export type RecentItem = { id: string; label: "Edited" | "Opened"; at?: string; doc: ContinueDoc };
 
-export const RECENT_LIMIT = 8;
+/** Recent keeps this many rows; Home shows the first `RECENT_SHOWN` and the rest behind "Show more". */
+export const RECENT_LIMIT = 16;
+export const RECENT_SHOWN = 8;
 
 /**
  * Home's two work lists. Drafts are unfinished work and are listed whole, newest first, so an old

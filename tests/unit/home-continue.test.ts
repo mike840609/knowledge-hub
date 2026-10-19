@@ -64,10 +64,10 @@ describe("homeLists", () => {
     expect(ids(homeLists({ documents, drafts: [], recent: ["src:y", "src:x"] }).recent)).toEqual(["Edited:e", "Opened:y", "Opened:x"]);
   });
 
-  it(`caps recent at ${RECENT_LIMIT} rows`, () => {
-    const documents = Array.from({ length: 12 }, (_, n) => doc(`d${n}`, { updatedAt: `2026-10-${String(n + 1).padStart(2, "0")}T00:00:00.000Z` }));
+  it(`keeps at most ${RECENT_LIMIT} recent rows, newest first`, () => {
+    const documents = Array.from({ length: 20 }, (_, n) => doc(`d${n}`, { updatedAt: `2026-10-${String(n + 1).padStart(2, "0")}T00:00:00.000Z` }));
     const { recent } = homeLists({ documents, drafts: [], recent: [] });
     expect(recent).toHaveLength(RECENT_LIMIT);
-    expect(recent[0].id).toBe("d11");
+    expect(recent[0].id).toBe("d19");
   });
 });
