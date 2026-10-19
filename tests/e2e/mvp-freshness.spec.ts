@@ -57,7 +57,7 @@ test("freshness preference persists and reminders link to source actions",async(
  await expect(row("Older folder").getByText("Check for folder updates",{exact:false})).toBeVisible();
  await page.goto(`/w/${ws}/home`);
  await expect(page.getByRole("region",{name:"Knowledge freshness"})).toHaveCount(0);
- await expect(page.getByRole("region",{name:"Updates"}).getByRole("link",{name:/sources need attention/})).toHaveAttribute("href",`/w/${ws}/sources`);
+ await expect(page.getByRole("region",{name:"Needs attention",exact:true}).getByRole("link",{name:/sources need attention/})).toHaveAttribute("href",`/w/${ws}/sources`);
  await page.goto(`/w/${ws}/sources`);
  await expectChosen(region.getByLabel("Freshness threshold"), "7");
  const output=path.resolve("docs/ui-comparisons/mvp-freshness");await mkdir(output,{recursive:true});

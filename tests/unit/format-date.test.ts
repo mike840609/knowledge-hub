@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SSR_TIME_ZONE, UI_LOCALE, formatDate, formatDateTime, formatRelativeTime } from "@/lib/format-date";
+import { SSR_TIME_ZONE, UI_LOCALE, formatDate, formatDateTime, formatRelativeTime, formatShortTime } from "@/lib/format-date";
 
 /**
  * Four call sites each built their own `Intl` formatter with the locale
@@ -54,3 +54,37 @@ describe("format-date", () => {
     expect(formatRelativeTime(86_400_000)).toBe("yesterday");
   });
 });
+
+describe("formatShortTime", () => {
+  const now = Date.parse("2026-10-19T12:00:00Z");
+  const ago = (ms: number) => formatShortTime(new Date(now - ms), now, "UTC");
+  const MIN = 60_000, HOUR = 60 * MIN, DAY = 24 * HOUR;
+
+  it("counts minutes, hours and days in one letter, the coarsest unit that fits", () => {
+    expect(ago(0)).toBe("now");
+    expect(ago(MIN - 1)).toBe("now");
+    expect(ago(MIN)).toBe("1m");
+    expect(ago(HOUR - 1)).toBe("59m");
+    expect(ago(HOUR)).toBe("1h");
+    expect(ago(DAY - 1)).toBe("23h");
+    expect(ago(DAY)).toBe("1d");
+    expect(ago(7 * DAY - 1)).toBe("6d");
+  });
+
+  it("names the date from a week on, with the year only when it is not this one", () => {
+    expect(ago(7 * DAY)).toBe("Oct 12");
+    expect(formatShortTime(new Date("2025-12-30T00:00:00Z"), now, "UTC")).toBe("Dec 30, 2025");
+  });
+
+  it("treats a time in the future as now", () => {
+    expect(ago(-5 * MIN)).toBe("now");
+  });
+
+  it("decides the year in the reader's zone", () => {
+    const newYear = Date.parse("2027-01-01T03:00:00Z");
+    // 2026-12-24 in New York is still last year there and here alike; Dec 31 23:00 UTC is Jan 1 in Tokyo.
+    expect(formatShortTime(new Date("2026-12-24T23:00:00Z"), newYear, "Asia/Tokyo")).toBe("Dec 25, 2026");
+    expect(formatShortTime(new Date("2026-12-24T23:00:00Z"), newYear, "UTC")).toBe("Dec 24, 2026");
+  });
+});
+
