@@ -4,7 +4,7 @@ import { GuidanceVisibilityContext } from "./guidance-visibility";
 import { ReopenGuidanceMenuItem } from "./reopen-guidance-menu-item";
 import { useState, type ReactNode } from "react";
 import { continueItems, type ContinueDoc, type ContinueDraft, type ContinueItem } from "@/lib/home-continue";
-import { HomeAttention } from "./home-attention";
+import { AttentionList, type HomeNotice } from "./home-attention";
 import type { FreshnessReminder } from "@/modules/personal/application/knowledge-freshness";
 
 import Link from "next/link";
@@ -44,12 +44,19 @@ function EmptyLine({ children }: { children: React.ReactNode }) {
  * results are. The favourite toggle sits beside the link rather than inside
  * it, so it is its own target and a click on it never navigates.
  */
-function Row({ href, icon, title, timestamp, timeLabel, eventLabel, provenance, trailing, actions = [], onRun = () => {} }: {
+function EventTime({ timestamp, eventLabel }: { timestamp?: string; eventLabel?: { text: string; accent: boolean } }) {
+  return <>
+    {eventLabel ? <span className={eventLabel.accent ? "text-kh-selected-text" : "text-kh-text-muted"}>{eventLabel.text}</span> : null}
+    {eventLabel && timestamp ? " " : null}
+    {timestamp ? <Timestamp value={timestamp} variant="relative" /> : null}
+  </>;
+}
+
+function Row({ href, icon, title, timestamp, eventLabel, provenance, trailing, actions = [], onRun = () => {} }: {
   href: string;
   icon: React.ReactNode;
   title: string;
   timestamp?: string;
-  timeLabel?: string;
   /** Names the event beside the time; `accent` colours the label alone, never the time. */
   eventLabel?: { text: string; accent: boolean };
   provenance?:string;
@@ -68,9 +75,9 @@ function Row({ href, icon, title, timestamp, timeLabel, eventLabel, provenance, 
         <span className="min-w-0 flex-1 py-1">
           <span className="block truncate text-body font-medium text-kh-text">{title}</span>
           {provenance?<span className="block truncate text-caption text-kh-text-muted">{provenance}</span>:null}
-          {timestamp ? <span className="block text-caption text-kh-text-muted sm:hidden"><span className={eventLabel?.accent ? "text-kh-selected-text" : "text-kh-text-muted"}>{eventLabel?.text ?? timeLabel}</span>{" "}<Timestamp value={timestamp} variant="relative" /></span> : null}
+          {timestamp || eventLabel ? <span className="block text-caption text-kh-text-muted sm:hidden"><EventTime timestamp={timestamp} eventLabel={eventLabel} /></span> : null}
         </span>
-        {timestamp ? <span className="hidden shrink-0 text-caption text-kh-text-muted sm:block"><span className={eventLabel?.accent ? "text-kh-selected-text" : "text-kh-text-muted"}>{eventLabel?.text ?? timeLabel}</span>{" "}<Timestamp value={timestamp} variant="relative" /></span> : null}
+        {timestamp || eventLabel ? <span className="hidden shrink-0 text-caption text-kh-text-muted sm:block"><EventTime timestamp={timestamp} eventLabel={eventLabel} /></span> : null}
       </Link>
       {trailing}
       <RowActionsTrigger actions={actions} onRun={onRun} label={title} className="kh-row-action mr-1" />
@@ -78,7 +85,7 @@ function Row({ href, icon, title, timestamp, timeLabel, eventLabel, provenance, 
   );
 }
 
-export function PersonalHome({ workspaceId, documents, drafts, reminders = [], slots, guidanceDismissed = false }: { guidanceDismissed?: boolean; slots?: { guidance?: ReactNode }; workspaceId: string; documents: Doc[]; drafts: ContinueDraft[]; reminders?: FreshnessReminder[] }) {
+export function PersonalHome({ workspaceId, documents, drafts, reminders = [], notices = [], slots, guidanceDismissed = false }: { guidanceDismissed?: boolean; slots?: { guidance?: ReactNode }; workspaceId: string; documents: Doc[]; drafts: ContinueDraft[]; reminders?: FreshnessReminder[]; notices?: HomeNotice[] }) {
   const [dismissed, setDismissed] = useState(guidanceDismissed);
   const { shortcuts, update } = useDocumentShortcuts(workspaceId);
   const hydrated = useHydrated();
@@ -131,9 +138,9 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], s
     const eventLabel = { text: item.label, accent: item.label === "Draft" };
     if (item.label === "Draft") {
       const href = item.doc ? `/w/${workspaceId}/knowledge/${item.doc.sourceId}/${item.doc.documentId}/edit` : `/w/${workspaceId}/knowledge/new`;
-      return <Row key={item.id} href={href} icon={<PenLine size={14} aria-hidden="true" />} title={item.draft?.title || "Untitled draft"} provenance="Continue writing" timestamp={item.at} eventLabel={eventLabel} />;
+      return <Row key={item.id} href={href} icon={<PenLine size={14} aria-hidden="true" />} title={item.draft.title || "Untitled draft"} provenance="Continue writing" timestamp={item.at} eventLabel={eventLabel} />;
     }
-    return documentRow(item.doc!, { timestamp: item.at, eventLabel });
+    return documentRow(item.doc, { timestamp: item.at, eventLabel });
   }
 
   return (
@@ -158,7 +165,7 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], s
         </>}
       />
       {slots?.guidance}
-      <HomeAttention workspaceId={workspaceId} reminders={reminders} />
+      <AttentionList workspaceId={workspaceId} reminders={reminders} notices={notices} />
       <div className="-mx-3 space-y-6">
         <Section title="Continue">
           {items.length ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{items.map(continueRow)}</ul>

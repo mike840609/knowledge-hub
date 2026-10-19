@@ -30,9 +30,11 @@ is waiting for them.
 1. **PageHeader** — unchanged (title "Home", New note, actions menu).
 2. **First-use guidance** — unchanged slot.
 3. **Attention strip** — rendered only when it has items.
-   - Unread share comments from `/api/review-notifications/unread` (existing
+   - Unread share comments, read on the server by the page from the same
+     service as `/api/review-notifications/unread` (`listUnreadForOwner`), so
+     the strip is in the first paint and never shifts Continue (existing
      `HomeDiscussions` behaviour: each row jumps to its document with
-     `?thread=`). A failed fetch renders nothing and never blocks the page.
+     `?thread=`). A failed read renders none and never blocks the page.
    - Source reminders from `knowledgeFreshness` (existing
      `HomeSourceAttention` behaviour and copy).
    - A "View all updates" link to `/w/:id/updates`, shown with the strip.
@@ -43,7 +45,8 @@ is waiting for them.
 
 Removed from Home: the Recent reading / Drafts tabs, the "Updates" region,
 `HomeUpdates` (folder change rows) and the page's `folderUpdates.list` query.
-`/updates` is untouched.
+`/updates` is untouched. The "Open Inbox" link is also gone; Inbox stays
+reachable from the topbar inbox popover.
 
 ## Continue list
 
@@ -72,7 +75,9 @@ Rules:
 
 Row targets: Draft → the editor (`/knowledge/new` or `…/:documentId/edit`);
 Edited and Opened → the reader. Document rows keep today's row actions and the
-favourite star. Empty list: "Documents you write, edit or open will appear
+favourite star; Draft rows open the editor and carry neither (as the old
+Drafts tab did), and the document keeps its star in Favorites and in its
+Edited/Opened row. Empty list: "Documents you write, edit or open will appear
 here."
 
 ## Favorites
@@ -107,7 +112,9 @@ the only colour Home adds to the neutral ramp.
     one row state Home emphasises; Edited and Opened stay `text-muted`;
   - a 6px unread dot in `bg-kh-primary` on each unread comment row;
   - a filled favourite star in `text-kh-selected-text` (unchanged);
-  - focus rings (`kh-focus-ring`, unchanged).
+  - focus rings (`kh-focus-ring`, unchanged);
+  - navigation links ("View all updates", "Browse knowledge") keep the
+    existing `text-kh-link` token, unchanged from the old Home.
 - **Status is not accent.** A failed import keeps the existing warning tokens
   (`kh-warning-*`); a pending or stale source stays neutral.
 - No new tokens. Tailwind's default spellings (`text-sm`, `rounded`,

@@ -68,3 +68,20 @@ it("offers inline guide recovery only when dismissed and the workspace has no do
   expect(render(false)).not.toContain("Show getting started guide");
   expect(render(true, [{ sourceId: "source", documentId: "doc", title: "Unread note", ownership: "HUB_MANAGED", status: "ACTIVE", sourceStatus: "ACTIVE", updatedAt: "2026-10-09T00:00:00Z" }])).not.toContain("Show getting started guide");
 });
+
+it("renders the attention strip when reminders or notices are passed in", () => {
+  const reminders = [{ sourceId: "s1", sourceName: "Folder", status: "old" as const, previewId: null, lastImportedAt: null }];
+  const notices = [{ id: "n1", workspaceId: "ws", sourceId: "src", documentId: "a", threadId: "t1", commentId: "c1", documentTitle: "Plan", authorName: "Ana", excerpt: "Looks good", createdAt: "2026-10-18T00:00:00.000Z", readAt: null, threadStatus: "OPEN" as const }];
+  const withReminders = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[]} drafts={[]} reminders={reminders} />);
+  expect(withReminders).toContain('aria-label="Needs attention"');
+  const withNotices = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[]} drafts={[]} notices={notices} />);
+  expect(withNotices).toContain('aria-label="Unread discussions"');
+  expect(withNotices.indexOf('aria-label="Needs attention"')).toBeLessThan(withNotices.indexOf('aria-label="Continue"'));
+});
+
+it("labels an untimed recent as Opened without a time", () => {
+  shortcuts.value = { favorites: [], recent: ["src:a"] };
+  const html = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[doc("a", { ownership: "SOURCE_MANAGED" })]} drafts={[]} />);
+  expect(html).toContain('href="/w/ws/knowledge/src/a"');
+  expect(html).toMatch(/text-kh-text-muted[^"]*">Opened/);
+});

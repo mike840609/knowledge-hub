@@ -8,6 +8,7 @@ import { PersonalHome } from "@/components/knowledge/personal-home";
 import { notFound } from "next/navigation";
 import { FirstUseGuidance } from "@/components/knowledge/first-use-guidance";
 import { getHomeOnboardingState } from "@/server/onboarding-state";
+import { unreadHomeNotices } from "@/server/home-notices";
 export default async function PersonalHomePage({ params }: { params: Promise<{ workspaceId: string }> }) {
   const { workspaceId } = await params; const s = applicationServices(); const { caller } = await s.establishTrustedCaller();
   const slots: { guidance?: ReactNode } = {};
@@ -29,5 +30,6 @@ export default async function PersonalHomePage({ params }: { params: Promise<{ w
   const paths=new Map(locations.map(e=>[e.documentId,e.sourcePath]));
   const sourceNames=new Map(folderModel?.items.map(i=>[i.source.id,i.source.name])??[]);
   const reminders = knowledgeFreshness(folderModel?.items ?? [], freshnessThreshold(freshness.value), new Date());
-  return <PersonalHome guidanceDismissed={onboarding.value.dismissed} slots={slots} workspaceId={workspaceId} documents={documents.map(d=>({...d,sourceName:sourceNames.get(d.sourceId),sourcePath:paths.get(d.documentId)}))} drafts={drafts} reminders={reminders} />;
+  const notices = await unreadHomeNotices(s.reviews, caller);
+  return <PersonalHome guidanceDismissed={onboarding.value.dismissed} slots={slots} workspaceId={workspaceId} documents={documents.map(d=>({...d,sourceName:sourceNames.get(d.sourceId),sourcePath:paths.get(d.documentId)}))} drafts={drafts} reminders={reminders} notices={notices} />;
 }

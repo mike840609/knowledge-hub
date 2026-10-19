@@ -1,6 +1,8 @@
 export type ContinueDoc = { documentId: string; sourceId: string; title: string; updatedAt: string; ownership: "SOURCE_MANAGED" | "HUB_MANAGED"; status: "ACTIVE" | "ARCHIVED"; sourceStatus: "ACTIVE" | "ARCHIVED"; sourceName?: string; sourcePath?: string | null };
 export type ContinueDraft = { key: string; title: string; sourceId: string | null; updatedAt: string };
-export type ContinueItem = { id: string; label: "Draft" | "Edited" | "Opened"; at?: string; doc?: ContinueDoc; draft?: ContinueDraft };
+export type ContinueItem =
+  | { id: string; label: "Edited" | "Opened"; at?: string; doc: ContinueDoc }
+  | { id: string; label: "Draft"; at?: string; doc?: ContinueDoc; draft: ContinueDraft };
 
 export const CONTINUE_LIMIT = 8;
 
