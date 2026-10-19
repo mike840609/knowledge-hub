@@ -67,17 +67,20 @@ function Row({ href, icon, title, timestamp, eventLabel, provenance, trailing, a
   onRun?: (action: Action) => void;
 }) {
   return (
-    <RowContextMenu actions={actions} onRun={onRun} className="kh-interactive-row group flex min-h-10 items-center pr-1">
+    <RowContextMenu actions={actions} onRun={onRun} className="kh-interactive-row group flex min-h-8 items-center pr-1">
       <Link
         data-list-row
         href={href}
-        className="kh-focus-ring flex min-h-10 min-w-0 flex-1 items-center gap-3 rounded-md px-3"
+        className="kh-focus-ring flex min-h-8 min-w-0 flex-1 items-center gap-3 rounded-md px-3"
       >
         <span className="shrink-0 text-kh-text-muted">{icon}</span>
-        <span className="min-w-0 flex-1 py-1">
-          <span className="block truncate text-body font-medium text-kh-text">{title}</span>
-          {provenance?<span className="block truncate text-caption text-kh-text-muted">{provenance}</span>:null}
-          {timestamp || eventLabel ? <span className="block text-caption text-kh-text-muted sm:hidden"><EventTime timestamp={timestamp} eventLabel={eventLabel} /></span> : null}
+        {/* One line from `sm` up: title, then provenance beside it; on a phone the meta drops below. */}
+        <span className="min-w-0 flex-1 py-1 sm:flex sm:items-baseline sm:gap-2">
+          <span className="block min-w-0 truncate text-body font-medium text-kh-text">{title}</span>
+          {provenance ? <span className="hidden min-w-0 truncate text-caption text-kh-text-muted sm:block">{provenance}</span> : null}
+          {provenance || timestamp || eventLabel ? <span className="block truncate text-caption text-kh-text-muted sm:hidden">
+            {provenance}{provenance && (timestamp || eventLabel) ? " · " : null}<EventTime timestamp={timestamp} eventLabel={eventLabel} />
+          </span> : null}
         </span>
         {timestamp || eventLabel ? <span className="hidden shrink-0 text-caption text-kh-text-muted sm:block"><EventTime timestamp={timestamp} eventLabel={eventLabel} /></span> : null}
       </Link>
@@ -99,6 +102,9 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
     .map(key => documents.find(doc => keyOf(doc) === key))
     .filter((doc): doc is Doc => !!doc && doc.status === "ACTIVE" && doc.sourceStatus === "ACTIVE");
   // ponytail: every favourite is listed; add the rail's "show all" cut-off if lists grow past a screen.
+  // A source name every visible row shares tells the reader nothing; name it only when the rows differ.
+  const shown = [...lists.drafts.flatMap(item => item.doc ? [item.doc] : []), ...lists.recent.map(item => item.doc), ...favorites];
+  const manySources = new Set(shown.map(doc => doc.sourceId)).size > 1;
 
   function documentRow(doc: Doc, { timestamp, eventLabel }: { timestamp?: string; eventLabel?: string }) {
     const key = keyOf(doc);
@@ -114,7 +120,7 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
         icon={<FileText size={14} aria-hidden="true" />}
         title={doc.title}
         timestamp={timestamp} eventLabel={eventLabel}
-        provenance={[doc.sourceName,doc.sourcePath].filter(Boolean).join(" · ")}
+        provenance={[manySources ? doc.sourceName : undefined, doc.sourcePath].filter(Boolean).join(" · ")}
         actions={actions}
         onRun={runAction}
         trailing={
@@ -140,7 +146,7 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
     const href = item.doc ? `/w/${workspaceId}/knowledge/${item.doc.sourceId}/${item.doc.documentId}/edit` : `/w/${workspaceId}/knowledge/new`;
     // Draft rows have no star or menu; invisible copies of both keep their times on the same edge as Recent's.
     const slot = buttonClasses({ variant: "ghost", icon: true, size: "sm", className: "invisible" });
-    return <Row key={item.id} href={href} icon={<PenLine size={14} aria-hidden="true" />} title={item.draft.title || "Untitled draft"} provenance="Continue writing" timestamp={item.at}
+    return <Row key={item.id} href={href} icon={<PenLine size={14} aria-hidden="true" />} title={item.draft.title || "Untitled draft"} timestamp={item.at}
       trailing={<span aria-hidden="true" className="mr-1 flex shrink-0"><span className={slot} /><span className={slot} /></span>} />;
   }
 
@@ -169,20 +175,23 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
       />
       {slots?.guidance}
       <AttentionList workspaceId={workspaceId} reminders={reminders} notices={notices} />
-      <div className="-mx-3 space-y-6">
-        {lists.drafts.length ? <Section title="Drafts" count={lists.drafts.length}>
-          <ul onKeyDown={navigateListRows} className="space-y-0.5">{lists.drafts.map(draftRow)}</ul>
-        </Section> : null}
-        <Section title="Recent">
-          {lists.recent.length ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{lists.recent.map(recentRow)}</ul>
-            : <EmptyLine>Documents you edit or open will appear here.{documents.length === 0 && dismissed ? <ReopenGuidanceMenuItem workspaceId={workspaceId} surface="empty" /> : null}</EmptyLine>}
-        </Section>
+      {/* Wide screens set Favorites beside the work lists, so the whole page fits without scrolling. */}
+      <div className="-mx-3 grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <div className="min-w-0 space-y-6">
+          {lists.drafts.length ? <Section title="Drafts" count={lists.drafts.length}>
+            <ul onKeyDown={navigateListRows} className="space-y-0.5">{lists.drafts.map(draftRow)}</ul>
+          </Section> : null}
+          <Section title="Recent">
+            {lists.recent.length ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{lists.recent.map(recentRow)}</ul>
+              : <EmptyLine>Documents you edit or open will appear here.{documents.length === 0 && dismissed ? <ReopenGuidanceMenuItem workspaceId={workspaceId} surface="empty" /> : null}</EmptyLine>}
+          </Section>
+        </div>
         <Section title="Favorites">
           {favorites.length ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{favorites.map(doc => documentRow(doc, {}))}</ul>
             : <EmptyLine>Star a document to keep it here.</EmptyLine>}
         </Section>
-        <Link className="kh-focus-ring inline-block rounded-md px-3 py-2 text-body-sm text-kh-link" href={`/w/${workspaceId}/knowledge`}>Browse knowledge</Link>
       </div>
+      <Link className="kh-focus-ring -mx-3 inline-block rounded-md px-3 py-2 text-body-sm text-kh-link" href={`/w/${workspaceId}/knowledge`}>Browse knowledge</Link>
       <ShareLinkDialogHost />
     </div>
     </GuidanceVisibilityContext.Provider>

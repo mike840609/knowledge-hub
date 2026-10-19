@@ -48,7 +48,13 @@ is waiting for them.
 4. **Drafts** — region name `Drafts`, rendered only when there is a draft.
 5. **Recent** — region name `Recent`.
 6. **Favorites** — region name `Favorites`.
-7. A "Browse knowledge" link to `/w/:id/knowledge`.
+7. A "Browse knowledge" link to `/w/:id/knowledge`, after everything above.
+
+From `xl` up, Drafts and Recent take the left two thirds and Favorites the
+right third (`grid-cols-[minmax(0,2fr)_minmax(0,1fr)]`, the grid the old Home
+used), so the page fits in one screen; below `xl` they stack in the order
+above. The page stays in `kh-page`: list pages do not span the window
+(design language, deferred item 5).
 
 Removed from Home: the Recent reading / Drafts tabs, the "Updates" region,
 `HomeUpdates` (folder change rows) and the page's `folderUpdates.list` query.
@@ -113,10 +119,16 @@ the only colour Home adds to the neutral ramp.
   the rail group-label style: `caption`, medium, `text-muted` (§8). Drafts
   shows its count beside the label. Hierarchy comes from weight and
   foreground level, not size or colour.
-- **Rows** keep today's `Row`: `min-h-10`, `px-3`, fill hanging outside the
-  column (§ "A row's fill hangs outside the column"), title `body` medium
-  `text`, provenance and time `caption` `text-muted`, arrow-key navigation via
-  `navigateListRows`.
+- **Rows** are one line from `sm` up, on the ladder's `md` rung (`min-h-8`,
+  32px; "Rows sit on the ladder too"): icon, title `body` medium `text`,
+  provenance `caption` `text-muted` beside the title, time at the right. On a
+  phone the provenance and time drop to a second `caption` line. Fill hangs
+  outside the column (§ "A row's fill hangs outside the column"); arrow-key
+  navigation via `navigateListRows`.
+- **Provenance** (source name, then folder path) names the source only when
+  the rows on screen come from more than one source: a name every row shares
+  doubled each row's height and told the reader nothing. A folder path is
+  always shown. Draft rows carry no provenance; their section names them.
 - **Accent, and only here:**
   - the **Drafts count** in `text-kh-selected-text` — unfinished work is the
     one thing Home emphasises; the Edited and Opened labels stay `text-muted`;

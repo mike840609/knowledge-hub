@@ -90,3 +90,12 @@ it("labels an untimed recent as Opened without a time", () => {
   expect(html).toContain('href="/w/ws/knowledge/src/a"');
   expect(html).toMatch(/text-kh-text-muted[^"]*">Opened/);
 });
+
+it("names a document's source only when Home spans more than one source", () => {
+  const one = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[doc("a", { sourceName: "Notes" }), doc("b", { sourceName: "Notes" })]} drafts={[{ key: "draft:new", title: "Fresh", sourceId: null, updatedAt: "2026-10-02T00:00:00.000Z" }]} />);
+  expect(one).not.toContain(">Notes<");
+  expect(one).not.toContain("Continue writing");
+  const two = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[doc("a", { sourceName: "Notes" }), doc("b", { sourceId: "team", sourceName: "Team wiki", sourcePath: "guides/setup.md" })]} drafts={[]} />);
+  expect(two).toContain(">Notes<");
+  expect(two).toContain(">Team wiki · guides/setup.md<");
+});
