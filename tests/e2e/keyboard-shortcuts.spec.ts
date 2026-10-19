@@ -203,3 +203,44 @@ test.describe("⌘\\ collapses and expands the navigation", () => {
     await pressUntil(page, "ControlOrMeta+Backslash", () => expect(page.getByRole("dialog", { name: "Menu" })).toBeVisible({ timeout: 1_000 }));
   });
 });
+
+/** The signed-in user's personal Home, found the way the app finds it. */
+async function openPersonalHome(page: Page) {
+  const workspaces = await (await page.request.get("/api/workspaces")).json() as { items: { id: string; type: string }[] };
+  const personal = workspaces.items.find(item => item.type === "PERSONAL");
+  expect(personal, "the e2e user has a personal workspace").toBeTruthy();
+  await page.goto(`/w/${personal!.id}/home`);
+  await expect(page.getByRole("region", { name: "Recent", exact: true })).toBeVisible(ROUND_TRIP);
+  return personal!.id;
+}
+
+test("C on Home opens a new note", async ({ page }) => {
+  const workspaceId = await openPersonalHome(page);
+  await pressUntil(page, "c", () => expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/knowledge/new$`), { timeout: 1_000 }));
+});
+
+test("c typed into the palette opened from Home stays in the palette", async ({ page }) => {
+  await openPersonalHome(page);
+  const before = page.url();
+  const field = page.getByRole("combobox", { name: "Search documents and actions" });
+  await expect(async () => {
+    await page.getByRole("button", { name: "Search articles and notes" }).click();
+    await expect(field).toBeVisible({ timeout: 1_000 });
+  }).toPass(ROUND_TRIP);
+  await page.keyboard.press("c");
+  await expect(field).toHaveValue("c");
+  expect(page.url()).toBe(before);
+});
+
+test("C stops answering once Home is left without a full load", async ({ page }) => {
+  await openPersonalHome(page);
+  // Prove Home's listener is live before leaving, so its absence afterwards means something.
+  await expect(page.getByRole("link", { name: "New note" })).toHaveAttribute("aria-keyshortcuts", "C");
+  await page.getByRole("navigation").getByRole("link", { name: "Knowledge", exact: true }).first().click();
+  await expect(page).not.toHaveURL(/\/home$/, ROUND_TRIP);
+  await page.waitForLoadState("networkidle");
+  const before = new URL(page.url()).pathname;
+  await page.keyboard.press("c");
+  await page.waitForTimeout(500);
+  expect(new URL(page.url()).pathname).toBe(before);
+});

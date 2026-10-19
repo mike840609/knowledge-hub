@@ -15,3 +15,5 @@ Normal saves show no status. A request still pending after one second shows Savi
 ## Typing-first keyboard behavior
 
 Page and folder commands are invoked through explicit controls or the command palette. Remove global and row F (favorite), M (move), C (create), D (discussions), and R (rename) bindings and their visual/accessibility hints. Plain slash no longer opens global search; the editor retains its own slash behavior. Cmd/Ctrl+K opens the palette only when the event has not already been handled by the editor, and never during IME composition. Row arrows and J/K navigation remain local to the tree. Discussion buttons remain available on owner and shared pages.
+
+One exception, added 2026-10-19: personal Home answers `C` with a new note. Home has no editor, and the listener is mounted with Home only, so no page that holds the inline editor ever sees it (`2026-10-19-home-continue-design.md`, "New note key"; `tests/e2e/keyboard-shortcuts.spec.ts` checks both sides).

@@ -114,6 +114,26 @@ Recent's at every control size. Recent empty: "Documents you edit or open will
 appear here." Drafts has no empty state: it is not rendered. Every empty
 state is one `caption` `text-muted` line: background, never mistaken for a row.
 
+## New note key
+
+`C` opens a new note (`/w/:id/knowledge/new`) on personal Home, and nowhere
+else. The inline-editing spec removed every global letter key because a
+document page is an editor that opens unfocused: a letter there is text the
+reader meant to type. Home has no editor, so the key is mounted with Home
+(`isNewNoteKey`, a `keydown` listener added and removed with the component)
+and never reaches a document page, even after a client-side navigation.
+
+It does not fire in a field, editor, menu or dialog, during input-method
+composition, on a held key, with ⌘/Ctrl/Alt/Shift (`isSingleKeyShortcut`),
+or with focus on the search bar, where a key means search. The New note link
+carries `aria-keyshortcuts="C"` and a tooltip naming the key.
+
+WCAG 2.1.4 (character key shortcuts) asks that such a key can be turned off
+or remapped, or acts only while a component has focus. This one does
+neither: it is page-wide on Home and has no setting. It is accepted for now
+because Home holds nothing to type into outside the fields it already
+excludes; revisit if speech-input users report accidental new notes.
+
 ## Favorites
 
 `shortcuts.favorites` mapped to the workspace's documents, active ones only, in
