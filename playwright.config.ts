@@ -8,7 +8,7 @@ import { teamsClosedOrigin } from "./tests/e2e/fixtures/teams-closed";
 const port = Number(process.env.KM_E2E_PORT ?? "3101");
 const phase3Root = process.env.KM_PHASE3_APP_ROOT;
 const group = process.env.KM_E2E_GROUP;
-if (group && !/^[12]$/.test(group)) throw new Error(`KM_E2E_GROUP must be between 1 and ${E2E_GROUP_COUNT}`);
+if (group && !(/^[1-9]\d*$/.test(group) && Number(group) <= E2E_GROUP_COUNT)) throw new Error(`KM_E2E_GROUP must be between 1 and ${E2E_GROUP_COUNT}`);
 const files = group ? readdirSync(path.join(process.cwd(), "tests/e2e"), { recursive: true, withFileTypes: true })
   .filter((entry) => entry.isFile() && entry.name.endsWith(".spec.ts"))
   .map((entry) => {
