@@ -4,7 +4,7 @@ import { GuidanceVisibilityContext } from "./guidance-visibility";
 import { ReopenGuidanceMenuItem } from "./reopen-guidance-menu-item";
 import { useState, type ReactNode } from "react";
 import { RECENT_SHOWN, homeLists, type ContinueDoc, type ContinueDraft, type DraftItem, type RecentItem } from "@/lib/home-continue";
-import { AttentionList, type HomeNotice } from "./home-attention";
+import { AttentionList, UnreadDiscussions, type HomeNotice } from "./home-attention";
 import type { FreshnessReminder } from "@/modules/personal/application/knowledge-freshness";
 
 import Link from "next/link";
@@ -26,12 +26,15 @@ import { useHydrated } from "@/components/shell/use-hydrated";
 type Doc = ContinueDoc;
 
 /** A labelled group of rows; the label is the rail's group-label style, not a heading-size title. */
-function Section({ title, count, children }: { title: string; count?: number; children: React.ReactNode }) {
+function Section({ title, count, action, children }: { title: string; count?: number; action?: ReactNode; children: React.ReactNode }) {
   return (
     <section aria-label={title} className="min-w-0">
-      <h2 className="px-3 pb-2 text-caption font-medium text-kh-text-muted">
-        {title}{count ? <span className="ml-1.5 text-kh-selected-text">{count}</span> : null}
-      </h2>
+      <div className="flex items-baseline justify-between gap-3 px-3 pb-2">
+        <h2 className="text-caption font-medium text-kh-text-muted">
+          {title}{count ? <span className="ml-1.5 text-kh-selected-text">{count}</span> : null}
+        </h2>
+        {action}
+      </div>
       {children}
     </section>
   );
@@ -176,8 +179,8 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
         </>}
       />
       {slots?.guidance}
-      <AttentionList workspaceId={workspaceId} reminders={reminders} notices={notices} />
-      {/* Wide screens set Favorites beside the work lists, so the whole page fits without scrolling. */}
+      <AttentionList workspaceId={workspaceId} reminders={reminders} />
+      {/* Wide screens set Discussions and Favorites beside the work lists, so the whole page fits without scrolling. */}
       <div className="-mx-3 grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="min-w-0 space-y-6">
           {lists.drafts.length ? <Section title="Drafts" count={lists.drafts.length}>
@@ -191,10 +194,15 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
             </Button> : null}
           </Section>
         </div>
-        <Section title="Favorites">
-          {favorites.length ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{favorites.map(doc => documentRow(doc, {}))}</ul>
-            : <EmptyLine>Star a document to keep it here.</EmptyLine>}
-        </Section>
+        <div className="min-w-0 space-y-6">
+          <Section title="Discussions" count={notices.length} action={<Link className="kh-focus-ring rounded-md text-caption text-kh-link" href={`/w/${workspaceId}/inbox`}>Open Inbox</Link>}>
+            {notices.length ? <UnreadDiscussions notices={notices} /> : <EmptyLine>No new comments or replies.</EmptyLine>}
+          </Section>
+          <Section title="Favorites">
+            {favorites.length ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{favorites.map(doc => documentRow(doc, {}))}</ul>
+              : <EmptyLine>Star a document to keep it here.</EmptyLine>}
+          </Section>
+        </div>
       </div>
       <Link className="kh-focus-ring -mx-3 inline-block rounded-md px-3 py-2 text-body-sm text-kh-link" href={`/w/${workspaceId}/knowledge`}>Browse knowledge</Link>
       <ShareLinkDialogHost />

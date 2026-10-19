@@ -13,9 +13,9 @@ Agreed with the user on 2026-10-19:
 
 - **Home's one job is to return you to work in progress.** Drafts, recent
   edits, recent reading and favorites are the main area.
-- **Changes appear only when they need you to act**: unread share comments and
-  source reminders, in one attention strip. The full change feed stays on
-  `/updates`; Home links to it.
+- **Changes appear only when they need you to act**: source reminders in an
+  attention strip, unread share comments in Discussions. The full change feed
+  stays on `/updates`; Home links to it.
 - **"Drafts" above "Recent", then "Favorites"**, no tabs. (Revised the same
   day: a first cut merged everything into one time-ordered "Continue" list.
   Seen rendered, an older draft sank below newer edits, Edited rows — nearly
@@ -35,31 +35,39 @@ is waiting for them.
 
 1. **PageHeader** — unchanged (title "Home", New note, actions menu).
 2. **First-use guidance** — unchanged slot.
-3. **Attention strip** — rendered only when it has items.
-   - Unread share comments, read on the server by the page from the same
-     service as `/api/review-notifications/unread` (`listUnreadForOwner`), so
-     the strip is in the first paint and never shifts the lists below (existing
-     `HomeDiscussions` behaviour: each row jumps to its document with
-     `?thread=`). A failed read renders none and never blocks the page.
+3. **Attention strip** — rendered only when a source needs the user.
    - Source reminders from `knowledgeFreshness` (existing
      `HomeSourceAttention` behaviour and copy).
    - A "View all updates" link to `/w/:id/updates`, shown with the strip.
    - Region name: `Needs attention`.
 4. **Drafts** — region name `Drafts`, rendered only when there is a draft.
 5. **Recent** — region name `Recent`.
-6. **Favorites** — region name `Favorites`.
-7. A "Browse knowledge" link to `/w/:id/knowledge`, after everything above.
+6. **Discussions** — region name `Discussions`, always rendered, with an
+   "Open Inbox" link to `/w/:id/inbox` beside its label and the unread count
+   after it. Its list (`Unread discussions`, at most five) holds unread share
+   comments, read on the server by the page from the same service as
+   `/api/review-notifications/unread` (`listUnreadForOwner`), so it is in the
+   first paint and never shifts the page; each row jumps to its document with
+   `?thread=`. A failed read renders none and never blocks the page. Empty:
+   "No new comments or replies."
+7. **Favorites** — region name `Favorites`.
+8. A "Browse knowledge" link to `/w/:id/knowledge`, after everything above.
 
-From `xl` up, Drafts and Recent take the left two thirds and Favorites the
-right third (`grid-cols-[minmax(0,2fr)_minmax(0,1fr)]`, the grid the old Home
-used), so the page fits in one screen; below `xl` they stack in the order
-above. The page stays in `kh-page`: list pages do not span the window
+From `xl` up, Drafts and Recent take the left two thirds and Discussions then
+Favorites the right third (`grid-cols-[minmax(0,2fr)_minmax(0,1fr)]`, the grid
+the old Home used), so the page fits in one screen; below `xl` they stack in
+the order above.
+
+(Revised the same day: a first cut put unread comments in the attention strip
+and dropped "Open Inbox". Compared with PR #216, the user asked for both back:
+Discussions is where a reply to your shared document is expected, so it keeps a
+fixed place and an empty state, and Inbox needs a link from Home rather than
+only from the topbar. Comments left the strip so one never shows twice.) The page stays in `kh-page`: list pages do not span the window
 (design language, deferred item 5).
 
 Removed from Home: the Recent reading / Drafts tabs, the "Updates" region,
 `HomeUpdates` (folder change rows) and the page's `folderUpdates.list` query.
-`/updates` is untouched. The "Open Inbox" link is also gone; Inbox stays
-reachable from the topbar inbox popover.
+`/updates` is untouched.
 
 ## Drafts and Recent
 
@@ -117,9 +125,10 @@ the only colour Home adds to the neutral ramp.
 - **No cards.** Sections are rows under a label, separated by spacing; the
   attention strip is one `rounded-md` panel with a 1px `border-kh-border`
   and no fill or shadow (§6).
-- **Section labels** ("Needs attention", "Drafts", "Recent", "Favorites") use
+- **Section labels** ("Needs attention", "Drafts", "Recent", "Discussions",
+  "Favorites") use
   the rail group-label style: `caption`, medium, `text-muted` (§8). Drafts
-  shows its count beside the label. Hierarchy comes from weight and
+  and Discussions show their counts beside the label. Hierarchy comes from weight and
   foreground level, not size or colour.
 - **Rows** are one line from `sm` up, on the ladder's `md` rung (`min-h-8`,
   32px; "Rows sit on the ladder too"): icon, title `body` medium `text`,
@@ -132,13 +141,15 @@ the only colour Home adds to the neutral ramp.
   doubled each row's height and told the reader nothing. A folder path is
   always shown. Draft rows carry no provenance; their section names them.
 - **Accent, and only here:**
-  - the **Drafts count** in `text-kh-selected-text` — unfinished work is the
-    one thing Home emphasises; the Edited and Opened labels stay `text-muted`;
+  - the **Drafts and unread Discussions counts** in `text-kh-selected-text` —
+    unfinished work and waiting replies are what Home emphasises; the Edited
+    and Opened labels stay `text-muted`;
   - a 6px unread dot in `bg-kh-primary` on each unread comment row;
   - a filled favourite star in `text-kh-selected-text` (unchanged);
   - focus rings (`kh-focus-ring`, unchanged);
   - navigation links ("View all updates", "Browse knowledge") keep the
-    existing `text-kh-link` token, unchanged from the old Home.
+    existing `text-kh-link` token, unchanged from the old Home; so does
+    "Open Inbox".
 - **Status is not accent.** A failed import keeps the existing warning tokens
   (`kh-warning-*`); a pending or stale source stays neutral.
 - No new tokens. Tailwind's default spellings (`text-sm`, `rounded`,
@@ -158,7 +169,9 @@ the only colour Home adds to the neutral ramp.
   `SOURCE_MANAGED` never Edited; archived document and archived source
   excluded; unknown document excluded; `draft:new` kept; Recent cap of 16;
   untimed recents last.
-- Unit: Home renders the attention strip only with items; Drafts only with
+- Unit: Home renders the attention strip only with source reminders;
+  Discussions always, before Favorites, with "Open Inbox", its empty copy, and
+  unread comments (at most five) in place of it; Drafts only with
   drafts, above Recent, with its count in the accent; Recent and Favorites
   regions and their empty copy; eight Recent rows shown with "Show N more" for
   the rest, and no button at eight or fewer.

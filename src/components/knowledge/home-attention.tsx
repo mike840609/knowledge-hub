@@ -20,26 +20,31 @@ function SourceReminder({ workspaceId, reminders }: { workspaceId: string; remin
   </Link>;
 }
 
-/** What needs the user on Home: unread share comments and source reminders. Renders nothing otherwise. */
-export function AttentionList({ workspaceId, reminders, notices }: { workspaceId: string; reminders: readonly FreshnessReminder[]; notices: readonly HomeNotice[] }) {
-  if (!reminders.length && !notices.length) return null;
+/** Unread share comments, newest first; each row jumps to its thread. Renders nothing without one. */
+export function UnreadDiscussions({ notices }: { notices: readonly HomeNotice[] }) {
+  if (!notices.length) return null;
+  return <ul aria-label="Unread discussions" onKeyDown={navigateListRows} className="space-y-0.5">{notices.slice(0, 5).map(notice => (
+    <li key={notice.id}>
+      <Link data-list-row className="kh-interactive-row kh-focus-ring flex min-h-10 items-center gap-3 rounded-md px-3 py-1" href={`/w/${notice.workspaceId}/knowledge/${notice.sourceId}/${notice.documentId}?thread=${notice.threadId}`}>
+        <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-kh-primary" />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-body font-medium text-kh-text">{notice.documentTitle}</span>
+          <span className="block truncate text-caption text-kh-text-muted">{notice.authorName ?? "Someone"}: {notice.excerpt}</span>
+        </span>
+        <span className="shrink-0 text-caption text-kh-text-muted"><Timestamp value={notice.createdAt} variant="relative" /></span>
+      </Link>
+    </li>
+  ))}</ul>;
+}
+
+/** Sources that need the user on Home. Renders nothing otherwise; unread comments live in Discussions. */
+export function AttentionList({ workspaceId, reminders }: { workspaceId: string; reminders: readonly FreshnessReminder[] }) {
+  if (!reminders.length) return null;
   return <section aria-label="Needs attention" className="rounded-md border border-kh-border py-1">
     <div className="flex items-baseline justify-between px-3 pb-1 pt-2">
       <h2 className="text-caption font-medium text-kh-text-muted">Needs attention</h2>
       <Link className="kh-focus-ring rounded-md text-caption text-kh-link" href={`/w/${workspaceId}/updates`}>View all updates</Link>
     </div>
-    {notices.length ? <ul aria-label="Unread discussions" onKeyDown={navigateListRows} className="space-y-0.5">{notices.slice(0, 5).map(notice => (
-      <li key={notice.id}>
-        <Link data-list-row className="kh-interactive-row kh-focus-ring flex min-h-10 items-center gap-3 rounded-md px-3 py-1" href={`/w/${notice.workspaceId}/knowledge/${notice.sourceId}/${notice.documentId}?thread=${notice.threadId}`}>
-          <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-kh-primary" />
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-body font-medium text-kh-text">{notice.documentTitle}</span>
-            <span className="block truncate text-caption text-kh-text-muted">{notice.authorName ?? "Someone"}: {notice.excerpt}</span>
-          </span>
-          <span className="shrink-0 text-caption text-kh-text-muted"><Timestamp value={notice.createdAt} variant="relative" /></span>
-        </Link>
-      </li>
-    ))}</ul> : null}
-    {reminders.length ? <SourceReminder workspaceId={workspaceId} reminders={reminders} /> : null}
+    <SourceReminder workspaceId={workspaceId} reminders={reminders} />
   </section>;
 }

@@ -43,6 +43,11 @@ it("leads with Recent and Favorites, leaves search to ⌘K and the change feed t
   expect(html).toContain("Browse knowledge");
   expect(html).toContain("Documents you edit or open will appear here.");
   expect(html).toContain("Star a document to keep it here.");
+  expect(html).toContain('aria-label="Discussions"');
+  expect(html).toContain("No new comments or replies.");
+  expect(html).toContain('href="/w/ws/inbox"');
+  expect(html).toContain("Open Inbox");
+  expect(html.indexOf('aria-label="Discussions"')).toBeLessThan(html.indexOf('aria-label="Favorites"'));
 });
 
 it("puts drafts above Recent, counted in the accent, and edits in muted text", () => {
@@ -74,14 +79,18 @@ it("offers inline guide recovery only when dismissed and the workspace has no do
   expect(render(true, [{ sourceId: "source", documentId: "doc", title: "Unread note", ownership: "HUB_MANAGED", status: "ACTIVE", sourceStatus: "ACTIVE", updatedAt: "2026-10-09T00:00:00Z" }])).not.toContain("Show getting started guide");
 });
 
-it("renders the attention strip when reminders or notices are passed in", () => {
+it("puts source reminders in the attention strip and unread comments in Discussions", () => {
   const reminders = [{ sourceId: "s1", sourceName: "Folder", status: "old" as const, previewId: null, lastImportedAt: null }];
   const notices = [{ id: "n1", workspaceId: "ws", sourceId: "src", documentId: "a", threadId: "t1", commentId: "c1", documentTitle: "Plan", authorName: "Ana", excerpt: "Looks good", createdAt: "2026-10-18T00:00:00.000Z", readAt: null, threadStatus: "OPEN" as const }];
   const withReminders = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[]} drafts={[]} reminders={reminders} />);
   expect(withReminders).toContain('aria-label="Needs attention"');
   const withNotices = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[]} drafts={[]} notices={notices} />);
-  expect(withNotices).toContain('aria-label="Unread discussions"');
-  expect(withNotices.indexOf('aria-label="Needs attention"')).toBeLessThan(withNotices.indexOf('aria-label="Recent"'));
+  expect(withReminders.indexOf('aria-label="Needs attention"')).toBeLessThan(withReminders.indexOf('aria-label="Recent"'));
+  expect(withNotices).not.toContain("Needs attention");
+  expect(withNotices).not.toContain("No new comments or replies.");
+  const discussions = withNotices.slice(withNotices.indexOf('aria-label="Discussions"'), withNotices.indexOf('aria-label="Favorites"'));
+  expect(discussions).toContain('aria-label="Unread discussions"');
+  expect(discussions).toContain(">1<");
 });
 
 it("labels an untimed recent as Opened without a time", () => {
