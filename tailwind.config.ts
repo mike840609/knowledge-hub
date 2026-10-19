@@ -102,7 +102,7 @@ const config: Config = {
       ...rhythm,
       auto: "auto", // mx-auto/ml-auto centring; negatives (-mx-6, -mb-px) derive
     },
-    gap: { ...rhythm }, // gap-x-*/gap-y-* read this scale too
+    gap: { ...rhythm, section: "2rem" }, // gap-x-*/gap-y-* read this scale too
     space: { ...rhythm },
     extend: {
       colors: {

@@ -46,6 +46,7 @@ export function Tooltip({
       <BaseTooltip.Portal>
         <BaseTooltip.Positioner side={side} sideOffset={6} className="z-[80]">
           <BaseTooltip.Popup
+            role="tooltip"
             className={
               "pointer-events-none flex items-center gap-2 rounded-lg border border-kh-border bg-kh-bg-raised px-2 py-1 " +
               "text-caption text-kh-text shadow-popover " +

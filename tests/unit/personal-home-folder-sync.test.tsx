@@ -37,8 +37,8 @@ it("offers search, continuing work, attention, favorites and updates in task ord
   expect(html).not.toContain('/sources/import');
   expect(html).toContain("New note");
   expect(html).toContain("Search articles and notes");
-  expect(html.indexOf("Continue working")).toBeLessThan(html.indexOf("Needs your attention"));
-  expect(html.indexOf("Needs your attention")).toBeLessThan(html.indexOf("Favorites"));
+  expect(html.indexOf("Continue working")).toBeLessThan(html.indexOf("Discussions"));
+  expect(html.indexOf("Favorites")).toBeLessThan(html.indexOf("Discussions"));
   expect(html.indexOf("Favorites")).toBeLessThan(html.indexOf("Knowledge updates"));
   expect(html).not.toContain("My folders");
   expect(html).not.toContain("Continue writing");
@@ -48,7 +48,7 @@ it("offers search, continuing work, attention, favorites and updates in task ord
   expect(html).toContain("Notes you write and documents you open will appear here.");
 });
 
-it("merges recent activity and recoverable drafts without duplicating or exposing archived documents", () => {
+it("keeps saved articles in Recent and counts only recoverable drafts in the separate tab", () => {
   const doc = { sourceId: "source", documentId: "doc", title: "Saved note", ownership: "HUB_MANAGED" as const, status: "ACTIVE" as const, sourceStatus: "ACTIVE" as const, updatedAt: "2026-10-16T00:00:00Z" };
   state.recent = ["source:doc", "source:archived", "source:reading"];
   state.openedAt = { "source:reading": "2026-10-17T12:00:00Z" };
@@ -61,12 +61,13 @@ it("merges recent activity and recoverable drafts without duplicating or exposin
     { key: "draft:archived", title: "Archived draft", sourceId: "source", updatedAt: "2026-10-17T13:00:00Z" },
     { key: "draft:new", title: "New unfinished note", sourceId: null, updatedAt: "2026-10-17T11:00:00Z" },
   ]} />);
-  expect(html).not.toContain("Saved note");
+  expect(html).toContain("Saved note");
   expect(html).not.toContain("Archived note");
   expect(html).not.toContain("Archived draft");
-  expect(html).toContain('/knowledge/source/doc/edit');
-  expect(html.indexOf("Recent reading")).toBeLessThan(html.indexOf("New unfinished note"));
-  expect(html.indexOf("New unfinished note")).toBeLessThan(html.indexOf("Recover this text"));
+  expect(html).toContain("Drafts · 2");
+  expect(html).not.toContain("Recover this text");
+  expect(html).not.toContain("New unfinished note");
+  expect(html.indexOf("Recent reading")).toBeLessThan(html.indexOf("Saved note"));
 });
 
 it("keeps favorites in saved order regardless of reading order", () => {

@@ -71,15 +71,18 @@ export function HomeDiscussionsContent({ workspaceId, compact = false, state }: 
   const visible = notices;
 
   if (compact) {
-    return <section aria-label="Needs your attention">
+    return <section aria-label="Discussions">
       <p role="status" className="px-3 py-2 text-body text-kh-text-muted">
         {status === "loading" ? "Checking discussions…" : <>No new comments or replies. <Link className="kh-focus-ring rounded-sm text-kh-link" href={`/w/${workspaceId}/inbox`}>Open Inbox</Link></>}
       </p>
     </section>;
   }
 
-  return <section aria-label="Needs your attention">
-    <h2 className="flex items-center justify-between gap-2 px-3 pb-3 text-body font-medium text-kh-text">Needs your attention{visible.length > 0 ? <span className="text-caption text-kh-text-muted" aria-label={`${visible.length} unread notifications`}>{visible.length}</span> : null}</h2>
+  return <section aria-label="Discussions">
+    <div className="flex items-center justify-between gap-3 px-3 pb-3">
+      <h2 className="flex min-w-0 items-center gap-2 text-body font-semibold text-kh-text">Discussions{visible.length > 0 ? <span className="shrink-0 text-caption text-kh-text-muted" aria-label={`${visible.length} unread notifications`}>{visible.length}</span> : null}</h2>
+      <Link className="kh-focus-ring -my-2 shrink-0 rounded-sm py-2 text-body-sm text-kh-link" href={`/w/${workspaceId}/inbox`}>Open Inbox</Link>
+    </div>
     {status === "loading" ? <p role="status" className="px-3 py-2 text-body text-kh-text-muted">Loading discussions…</p> : status === "error" ? <p role="status" className="px-3 py-2 text-body text-kh-text-muted">Could not load discussions. Try opening Inbox.</p> : !visible.length ? <p className="px-3 py-2 text-body text-kh-text-muted">No new comments or replies.</p> : <ul aria-label="Unread discussions" className="space-y-1">{visible.slice(0, 5).map(notice => (
     <li key={notice.id}>
       <Link className="kh-interactive-row kh-focus-ring block rounded-md px-3 py-2" href={`/w/${notice.workspaceId}/knowledge/${notice.sourceId}/${notice.documentId}?thread=${notice.threadId}`}>
@@ -94,6 +97,5 @@ export function HomeDiscussionsContent({ workspaceId, compact = false, state }: 
       </Link>
     </li>
   ))}</ul>}
-    <Link className="kh-focus-ring mt-3 inline-block rounded-md px-3 py-2 text-body-sm text-kh-link" href={`/w/${workspaceId}/inbox`}>Open Inbox</Link>
   </section>;
 }
