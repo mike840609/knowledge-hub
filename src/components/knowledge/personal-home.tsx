@@ -8,7 +8,9 @@ import { AttentionList, UnreadDiscussions, type HomeNotice } from "./home-attent
 import type { FreshnessReminder } from "@/modules/personal/application/knowledge-freshness";
 
 import Link from "next/link";
-import { FileText, PenLine, Star, MoreHorizontal } from "lucide-react";
+import { FileText, PenLine, Star, MoreHorizontal, Search, Plus } from "lucide-react";
+import { Kbd } from "@/components/ui/kbd";
+import { requestQuickSearch } from "@/components/search/search-nav-item";
 import { navigateListRows } from "@/lib/list-row-navigation";
 import { useDocumentShortcuts, documentShortcutKey } from "./use-document-shortcuts";
 import { toggleFavoriteDocument } from "@/lib/document-shortcuts";
@@ -165,7 +167,6 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
         locationHref={`/w/${workspaceId}/home`}
         title="Home"
         actions={<>
-          <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/knowledge/new`}>New note</Link>
           <MenuRoot>
             <MenuTrigger aria-label="Home actions" className={buttonClasses({ variant: "ghost", icon: true })}><MoreHorizontal size={16} aria-hidden="true" /></MenuTrigger>
             <MenuContent align="end" className="w-72">
@@ -178,6 +179,15 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
           </MenuRoot>
         </>}
       />
+      {/* Opens the same ⌘K palette as the rail, so there is still one place to search. */}
+      <div className="flex items-center gap-3">
+        <button type="button" onClick={requestQuickSearch} aria-label="Search articles and notes" className="kh-focus-ring flex min-h-10 min-w-0 flex-1 items-center gap-3 rounded-md border border-kh-border px-3 py-2 text-body text-kh-text-muted hover:bg-kh-bg-subtle">
+          <Search size={16} aria-hidden="true" />
+          <span className="flex-1 truncate text-left">Search articles and notes…</span>
+          <Kbd className="hidden shrink-0 sm:inline-flex">⌘K</Kbd>
+        </button>
+        <Link className={buttonClasses({ variant: "secondary", size: "lg" })} href={`/w/${workspaceId}/knowledge/new`}><Plus size={16} aria-hidden="true" />New note</Link>
+      </div>
       {slots?.guidance}
       <AttentionList workspaceId={workspaceId} reminders={reminders} />
       {/* Wide screens set Discussions and Favorites beside the work lists, so the whole page fits without scrolling. */}

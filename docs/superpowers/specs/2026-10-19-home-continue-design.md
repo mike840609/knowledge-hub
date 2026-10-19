@@ -33,7 +33,12 @@ is waiting for them.
 
 ## Layout, top to bottom
 
-1. **PageHeader** — unchanged (title "Home", New note, actions menu).
+1. **PageHeader** — title "Home" and the actions menu.
+   Below it, one row (from PR #216, at the user's request): a search bar and
+   "New note" (secondary, `lg`). The search bar is a button named "Search
+   articles and notes" that opens the same ⌘K palette as the rail
+   (`requestQuickSearch`), never a second search field, so there is still one
+   place to search; it shows `⌘K` from `sm` up.
 2. **First-use guidance** — unchanged slot.
 3. **Attention strip** — rendered only when a source needs the user.
    - Source reminders from `knowledgeFreshness` (existing
@@ -160,7 +165,8 @@ the only colour Home adds to the neutral ramp.
 - Server-side recent reading (needs a new port, table and migration). Revisit
   if Edited plus device-local Opened proves insufficient.
 - Changing the post-login landing.
-- Knowledge statistics, graph summaries or a Home search box.
+- Knowledge statistics or graph summaries. (A Home search *field* stays out:
+  the search bar only opens the palette.)
 
 ## Testing
 

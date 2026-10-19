@@ -28,9 +28,13 @@ beforeEach(() => { shortcuts.value = { favorites: [], recent: [] }; });
 
 const doc = (id: string, over = {}) => ({ sourceId: "src", documentId: id, title: `Doc ${id}`, ownership: "HUB_MANAGED" as const, status: "ACTIVE" as const, sourceStatus: "ACTIVE" as const, updatedAt: "2026-10-09T00:00:00.000Z", ...over });
 
-it("leads with Recent and Favorites, leaves search to ⌘K and the change feed to /updates", () => {
+it("leads with Recent and Favorites, searches through ⌘K and leaves the change feed to /updates", () => {
   const html = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[]} drafts={[]} />);
+  // The search bar is a button that opens the ⌘K palette, never a second search field.
   expect(html).not.toContain('role="search"');
+  expect(html).not.toContain("<input");
+  expect(html).toContain('aria-label="Search articles and notes"');
+  expect(html.indexOf('aria-label="Search articles and notes"')).toBeLessThan(html.indexOf('aria-label="Recent"'));
   expect(html).not.toContain("/sources/import");
   expect(html).toContain("New note");
   expect(html).toContain('aria-label="Recent"');
