@@ -42,8 +42,9 @@ function Section({ title, count, action, children }: { title: string; count?: nu
   );
 }
 
+/** A list's empty state is background, not content: caption size, so it never reads as a row. */
 function EmptyLine({ children }: { children: React.ReactNode }) {
-  return <p className="px-3 py-2 text-body text-kh-text-muted">{children}</p>;
+  return <p className="px-3 py-1 text-caption text-kh-text-muted">{children}</p>;
 }
 
 /**

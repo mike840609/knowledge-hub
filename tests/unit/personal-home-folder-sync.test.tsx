@@ -50,7 +50,7 @@ it("leads with Recent and Favorites, searches through ⌘K and leaves the change
   expect(html).toContain("Documents you edit or open will appear here.");
   expect(html).toContain("Star a document to keep it here.");
   expect(html).toContain('aria-label="Discussions"');
-  expect(html).toContain("No new comments or replies.");
+  expect(html).toMatch(/<p class="[^"]*text-caption[^"]*">No new comments or replies\.<\/p>/);
   expect(html).toContain('href="/w/ws/inbox"');
   expect(html).toContain("Open Inbox");
   expect(html.indexOf('aria-label="Discussions"')).toBeLessThan(html.indexOf('aria-label="Favorites"'));

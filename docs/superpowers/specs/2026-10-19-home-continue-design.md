@@ -111,7 +111,8 @@ favourite star; Draft rows open the editor and carry neither (as the old
 Drafts tab did), and the document keeps its star in Favorites. Draft rows hold
 invisible copies of the star and menu buttons so their times line up with
 Recent's at every control size. Recent empty: "Documents you edit or open will
-appear here." Drafts has no empty state: it is not rendered.
+appear here." Drafts has no empty state: it is not rendered. Every empty
+state is one `caption` `text-muted` line: background, never mistaken for a row.
 
 ## Favorites
 
