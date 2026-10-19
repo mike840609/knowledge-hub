@@ -1,6 +1,6 @@
-import { beforeEach, expect, it, vi } from "vitest";
+import { describe, beforeEach, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { PersonalHome } from "@/components/knowledge/personal-home";
+import { PersonalHome, isNewNoteKey } from "@/components/knowledge/personal-home";
 const shortcuts = vi.hoisted(() => ({ value: { favorites: [] as string[], recent: [] as string[] } as { favorites: string[]; recent: string[]; openedAt?: Record<string, string> } }));
 vi.mock("@/components/knowledge/use-document-shortcuts", () => ({
   useDocumentShortcuts: () => ({ shortcuts: shortcuts.value, update: () => {} }),
@@ -139,3 +139,48 @@ it("shows the first eight recent rows and offers the rest behind Show more", () 
   const few = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={many.slice(0, 8)} drafts={[]} />);
   expect(few).not.toContain("Show ");
 });
+
+describe("C on Home opens a new note", () => {
+  /** A target whose closest() answers for the selectors it is "inside". */
+  const inside = (...matches: string[]) => ({ closest: (selector: string) => (matches.some(m => selector.includes(m)) ? {} : null) });
+  const press = (over: Partial<Parameters<typeof isNewNoteKey>[0]> = {}) => isNewNoteKey({
+    key: "c", metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, isComposing: false, repeat: false, defaultPrevented: false, target: inside(), ...over,
+  });
+
+  it("answers c on the page, and C with caps lock", () => {
+    expect(press()).toBe(true);
+    expect(press({ key: "C" })).toBe(true);
+    expect(press({ target: null })).toBe(true);
+  });
+
+  it("leaves a letter typed into a field, an editor, a menu or a dialog alone", () => {
+    for (const where of ["input", "textarea", "contenteditable", '[role="menu"]', '[role="dialog"]']) expect(press({ target: inside(where) })).toBe(false);
+  });
+
+  it("leaves the search bar alone, where a key means search", () => {
+    expect(press({ target: inside("data-home-search") })).toBe(false);
+  });
+
+  it("never fires mid-composition, on a held key, or with a modifier (⌘C copies)", () => {
+    expect(press({ isComposing: true })).toBe(false);
+    expect(press({ keyCode: 229 })).toBe(false);
+    expect(press({ repeat: true })).toBe(false);
+    expect(press({ metaKey: true })).toBe(false);
+    expect(press({ ctrlKey: true })).toBe(false);
+    expect(press({ altKey: true })).toBe(false);
+    expect(press({ shiftKey: true, key: "C" })).toBe(false);
+  });
+
+  it("answers only c, and not a key something else already took", () => {
+    expect(press({ key: "e" })).toBe(false);
+    expect(press({ key: "/" })).toBe(false);
+    expect(press({ defaultPrevented: true })).toBe(false);
+  });
+
+  it("names the key on New note and marks the search bar", () => {
+    const html = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[]} drafts={[]} />);
+    expect(html).toMatch(/<a [^>]*href="\/w\/ws\/knowledge\/new"[^>]*aria-keyshortcuts="C"|<a [^>]*aria-keyshortcuts="C"[^>]*href="\/w\/ws\/knowledge\/new"/);
+    expect(html).toMatch(/<button [^>]*data-home-search/);
+  });
+});
+

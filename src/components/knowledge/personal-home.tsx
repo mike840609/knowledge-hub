@@ -2,7 +2,8 @@
 
 import { GuidanceVisibilityContext } from "./guidance-visibility";
 import { ReopenGuidanceMenuItem } from "./reopen-guidance-menu-item";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { RECENT_SHOWN, homeLists, type ContinueDoc, type ContinueDraft, type DraftItem, type RecentItem } from "@/lib/home-continue";
 import { AttentionList, UnreadDiscussions, type HomeNotice } from "./home-attention";
 import type { FreshnessReminder } from "@/modules/personal/application/knowledge-freshness";
@@ -12,6 +13,7 @@ import { FileText, PenLine, Star, MoreHorizontal, Search, Plus } from "lucide-re
 import { Kbd } from "@/components/ui/kbd";
 import { requestQuickSearch } from "@/components/search/search-nav-item";
 import { navigateListRows } from "@/lib/list-row-navigation";
+import { isSingleKeyShortcut, type KeyEventLike } from "@/lib/shortcut-keys";
 import { useDocumentShortcuts, documentShortcutKey } from "./use-document-shortcuts";
 import { toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import { Button, buttonClasses } from "@/components/ui/button";
@@ -97,8 +99,32 @@ function Row({ href, icon, title, timestamp, eventLabel, provenance, trailing, a
   );
 }
 
+/**
+ * `C` opens a new note — on Home only. Home has no editor, so the key cannot be a character someone
+ * meant to type; it is mounted with Home and gone on any other page, where the inline editor keeps
+ * every letter (inline-editing spec, "Typing-first keyboard behavior"). Not in a field, menu or
+ * dialog, not mid-composition, not with a modifier (`isSingleKeyShortcut`), and not on the search
+ * bar, where a key means search.
+ */
+export function isNewNoteKey(event: KeyEventLike & { defaultPrevented: boolean }): boolean {
+  if (event.defaultPrevented || event.key.toLowerCase() !== "c" || !isSingleKeyShortcut(event)) return false;
+  const target = event.target as { closest?: (selector: string) => unknown } | null;
+  return !(typeof target?.closest === "function" && target.closest("[data-home-search]"));
+}
+
 export function PersonalHome({ workspaceId, documents, drafts, reminders = [], notices = [], slots, guidanceDismissed = false }: { guidanceDismissed?: boolean; slots?: { guidance?: ReactNode }; workspaceId: string; documents: Doc[]; drafts: ContinueDraft[]; reminders?: FreshnessReminder[]; notices?: HomeNotice[] }) {
   const [dismissed, setDismissed] = useState(guidanceDismissed);
+  const router = useRouter();
+  const newNoteHref = `/w/${workspaceId}/knowledge/new`;
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!isNewNoteKey(event)) return;
+      event.preventDefault();
+      router.push(newNoteHref);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [router, newNoteHref]);
   const { shortcuts, update } = useDocumentShortcuts(workspaceId);
   const hydrated = useHydrated();
   const { access, confirmed } = useWorkspaceAuthorization();
@@ -187,12 +213,14 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
       />
       {/* Opens the same ⌘K palette as the rail, so there is still one place to search. */}
       <div className="flex items-center gap-3">
-        <button type="button" onClick={requestQuickSearch} aria-label="Search articles and notes" className="kh-focus-ring flex min-h-10 min-w-0 flex-1 items-center gap-3 rounded-md border border-kh-border px-3 py-2 text-body text-kh-text-muted hover:bg-kh-bg-subtle">
+        <button type="button" data-home-search onClick={requestQuickSearch} aria-label="Search articles and notes" className="kh-focus-ring flex min-h-10 min-w-0 flex-1 items-center gap-3 rounded-md border border-kh-border px-3 py-2 text-body text-kh-text-muted hover:bg-kh-bg-subtle">
           <Search size={16} aria-hidden="true" />
           <span className="flex-1 truncate text-left">Search articles and notes…</span>
           <Kbd size="md" className="hidden shrink-0 sm:inline-flex">⌘K</Kbd>
         </button>
-        <Link className={buttonClasses({ variant: "secondary", size: "lg" })} href={`/w/${workspaceId}/knowledge/new`}><Plus size={16} aria-hidden="true" />New note</Link>
+        <Tooltip label="New note" shortcut="C">
+          <Link className={buttonClasses({ variant: "secondary", size: "lg" })} href={newNoteHref} aria-keyshortcuts="C"><Plus size={16} aria-hidden="true" />New note</Link>
+        </Tooltip>
       </div>
       {slots?.guidance}
       <AttentionList workspaceId={workspaceId} reminders={reminders} />
