@@ -3,7 +3,7 @@
 import { GuidanceVisibilityContext } from "./guidance-visibility";
 import { ReopenGuidanceMenuItem } from "./reopen-guidance-menu-item";
 import { useState, type ReactNode } from "react";
-import { continueItems, type ContinueDoc, type ContinueDraft, type ContinueItem } from "@/lib/home-continue";
+import { homeLists, type ContinueDoc, type ContinueDraft, type DraftItem, type RecentItem } from "@/lib/home-continue";
 import { AttentionList, type HomeNotice } from "./home-attention";
 import type { FreshnessReminder } from "@/modules/personal/application/knowledge-freshness";
 
@@ -26,10 +26,12 @@ import { useHydrated } from "@/components/shell/use-hydrated";
 type Doc = ContinueDoc;
 
 /** A labelled group of rows; the label is the rail's group-label style, not a heading-size title. */
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, count, children }: { title: string; count?: number; children: React.ReactNode }) {
   return (
     <section aria-label={title} className="min-w-0">
-      <h2 className="px-3 pb-2 text-caption font-medium text-kh-text-muted">{title}</h2>
+      <h2 className="px-3 pb-2 text-caption font-medium text-kh-text-muted">
+        {title}{count ? <span className="ml-1.5 text-kh-selected-text">{count}</span> : null}
+      </h2>
       {children}
     </section>
   );
@@ -44,9 +46,9 @@ function EmptyLine({ children }: { children: React.ReactNode }) {
  * results are. The favourite toggle sits beside the link rather than inside
  * it, so it is its own target and a click on it never navigates.
  */
-function EventTime({ timestamp, eventLabel }: { timestamp?: string; eventLabel?: { text: string; accent: boolean } }) {
+function EventTime({ timestamp, eventLabel }: { timestamp?: string; eventLabel?: string }) {
   return <>
-    {eventLabel ? <span className={eventLabel.accent ? "text-kh-selected-text" : "text-kh-text-muted"}>{eventLabel.text}</span> : null}
+    {eventLabel ? <span className="text-kh-text-muted">{eventLabel}</span> : null}
     {eventLabel && timestamp ? " " : null}
     {timestamp ? <Timestamp value={timestamp} variant="relative" /> : null}
   </>;
@@ -57,8 +59,8 @@ function Row({ href, icon, title, timestamp, eventLabel, provenance, trailing, a
   icon: React.ReactNode;
   title: string;
   timestamp?: string;
-  /** Names the event beside the time; `accent` colours the label alone, never the time. */
-  eventLabel?: { text: string; accent: boolean };
+  /** Names the event beside the time ("Edited", "Opened"). */
+  eventLabel?: string;
   provenance?:string;
   trailing?: React.ReactNode;
   actions?: readonly Action[];
@@ -92,13 +94,13 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
   const { access, confirmed } = useWorkspaceAuthorization();
   const runAction = useActionRunner({ onToggleFavorite: (sourceId, documentId) => update(state => toggleFavoriteDocument(state, documentShortcutKey(sourceId, documentId))) });
   const keyOf = (doc: Doc) => documentShortcutKey(doc.sourceId, doc.documentId);
-  const items = continueItems({ documents, drafts, recent: shortcuts.recent, openedAt: shortcuts.openedAt });
+  const lists = homeLists({ documents, drafts, recent: shortcuts.recent, openedAt: shortcuts.openedAt });
   const favorites = shortcuts.favorites
     .map(key => documents.find(doc => keyOf(doc) === key))
     .filter((doc): doc is Doc => !!doc && doc.status === "ACTIVE" && doc.sourceStatus === "ACTIVE");
   // ponytail: every favourite is listed; add the rail's "show all" cut-off if lists grow past a screen.
 
-  function documentRow(doc: Doc, { timestamp, eventLabel }: { timestamp?: string; eventLabel?: { text: string; accent: boolean } }) {
+  function documentRow(doc: Doc, { timestamp, eventLabel }: { timestamp?: string; eventLabel?: string }) {
     const key = keyOf(doc);
     const favorite = shortcuts.favorites.includes(key);
     const actions = actionsFor("row", { workspaceId, workspaceType: "PERSONAL", can: access.actions, confirmed,
@@ -134,14 +136,15 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
     );
   }
 
-  function continueRow(item: ContinueItem) {
-    const eventLabel = { text: item.label, accent: item.label === "Draft" };
-    if (item.label === "Draft") {
-      const href = item.doc ? `/w/${workspaceId}/knowledge/${item.doc.sourceId}/${item.doc.documentId}/edit` : `/w/${workspaceId}/knowledge/new`;
-      return <Row key={item.id} href={href} icon={<PenLine size={14} aria-hidden="true" />} title={item.draft.title || "Untitled draft"} provenance="Continue writing" timestamp={item.at} eventLabel={eventLabel} />;
-    }
-    return documentRow(item.doc, { timestamp: item.at, eventLabel });
+  function draftRow(item: DraftItem) {
+    const href = item.doc ? `/w/${workspaceId}/knowledge/${item.doc.sourceId}/${item.doc.documentId}/edit` : `/w/${workspaceId}/knowledge/new`;
+    // Draft rows have no star or menu; invisible copies of both keep their times on the same edge as Recent's.
+    const slot = buttonClasses({ variant: "ghost", icon: true, size: "sm", className: "invisible" });
+    return <Row key={item.id} href={href} icon={<PenLine size={14} aria-hidden="true" />} title={item.draft.title || "Untitled draft"} provenance="Continue writing" timestamp={item.at}
+      trailing={<span aria-hidden="true" className="mr-1 flex shrink-0"><span className={slot} /><span className={slot} /></span>} />;
   }
+
+  const recentRow = (item: RecentItem) => documentRow(item.doc, { timestamp: item.at, eventLabel: item.label });
 
   return (
     <GuidanceVisibilityContext.Provider value={{ dismissed, setDismissed }}>
@@ -167,9 +170,12 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
       {slots?.guidance}
       <AttentionList workspaceId={workspaceId} reminders={reminders} notices={notices} />
       <div className="-mx-3 space-y-6">
-        <Section title="Continue">
-          {items.length ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{items.map(continueRow)}</ul>
-            : <EmptyLine>Documents you write, edit or open will appear here.{documents.length === 0 && dismissed ? <ReopenGuidanceMenuItem workspaceId={workspaceId} surface="empty" /> : null}</EmptyLine>}
+        {lists.drafts.length ? <Section title="Drafts" count={lists.drafts.length}>
+          <ul onKeyDown={navigateListRows} className="space-y-0.5">{lists.drafts.map(draftRow)}</ul>
+        </Section> : null}
+        <Section title="Recent">
+          {lists.recent.length ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{lists.recent.map(recentRow)}</ul>
+            : <EmptyLine>Documents you edit or open will appear here.{documents.length === 0 && dismissed ? <ReopenGuidanceMenuItem workspaceId={workspaceId} surface="empty" /> : null}</EmptyLine>}
         </Section>
         <Section title="Favorites">
           {favorites.length ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{favorites.map(doc => documentRow(doc, {}))}</ul>

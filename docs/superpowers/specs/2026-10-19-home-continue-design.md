@@ -16,7 +16,13 @@ Agreed with the user on 2026-10-19:
 - **Changes appear only when they need you to act**: unread share comments and
   source reminders, in one attention strip. The full change feed stays on
   `/updates`; Home links to it.
-- **One time-ordered "Continue" list plus "Favorites"**, no tabs.
+- **"Drafts" above "Recent", then "Favorites"**, no tabs. (Revised the same
+  day: a first cut merged everything into one time-ordered "Continue" list.
+  Seen rendered, an older draft sank below newer edits, Edited rows — nearly
+  every personal note is Hub-managed — crowded out reading, and the row type
+  could be told only from a label at the right edge. Grouping by the next
+  action fixes all three: a draft is unfinished work to complete; an edit or
+  an open is a place to pick up again.)
 - **The post-login landing does not change.** `/` still sends personal-only
   users to Home and everyone else to Knowledge.
 
@@ -32,31 +38,32 @@ is waiting for them.
 3. **Attention strip** — rendered only when it has items.
    - Unread share comments, read on the server by the page from the same
      service as `/api/review-notifications/unread` (`listUnreadForOwner`), so
-     the strip is in the first paint and never shifts Continue (existing
+     the strip is in the first paint and never shifts the lists below (existing
      `HomeDiscussions` behaviour: each row jumps to its document with
      `?thread=`). A failed read renders none and never blocks the page.
    - Source reminders from `knowledgeFreshness` (existing
      `HomeSourceAttention` behaviour and copy).
    - A "View all updates" link to `/w/:id/updates`, shown with the strip.
    - Region name: `Needs attention`.
-4. **Continue** — a single list, region name `Continue`.
-5. **Favorites** — region name `Favorites`.
-6. A "Browse knowledge" link to `/w/:id/knowledge`.
+4. **Drafts** — region name `Drafts`, rendered only when there is a draft.
+5. **Recent** — region name `Recent`.
+6. **Favorites** — region name `Favorites`.
+7. A "Browse knowledge" link to `/w/:id/knowledge`.
 
 Removed from Home: the Recent reading / Drafts tabs, the "Updates" region,
 `HomeUpdates` (folder change rows) and the page's `folderUpdates.list` query.
 `/updates` is untouched. The "Open Inbox" link is also gone; Inbox stays
 reachable from the topbar inbox popover.
 
-## Continue list
+## Drafts and Recent
 
-A pure function `continueItems()` builds the list; it does no I/O.
+A pure function `homeLists()` builds both lists; it does no I/O.
 
 Inputs:
 
 | Source | Time | Label | Cross-device |
 |---|---|---|---|
-| Drafts (`draft:new`, `draft:<documentId>` personal items) | draft `updatedAt` | Draft | yes |
+| Drafts (`draft:new`, `draft:<documentId>` personal items) | draft `updatedAt` | (its own list) | yes |
 | Documents with `ownership = HUB_MANAGED` | revision `updatedAt` | Edited | yes |
 | Device-local recents (`shortcuts.recent` + `openedAt`) | `openedAt` | Opened | no |
 
@@ -64,26 +71,29 @@ Rules:
 
 - `SOURCE_MANAGED` documents never produce an Edited entry: their `updatedAt`
   is written by a sync, not by the user. They appear only as Opened.
-- One row per document. A draft for a document wins over its other entries
-  (unsaved work matters most); otherwise the newest event decides the label
-  and time. `draft:new` has no document and is always its own row.
+- **Drafts** lists every draft, newest first, however old. `draft:new` has no
+  document and is always its own row.
+- **Recent** holds one row per document; the newest event decides the label
+  and time. A document with a draft appears under Drafts only, never again in
+  Recent.
 - A document whose `status` or `sourceStatus` is `ARCHIVED` is excluded,
   whichever source named it. A recent or a draft whose document is not in the
   workspace's document list is excluded (except `draft:new`).
-- Ordered newest first, at most 8 rows.
-- A recent with no `openedAt` sorts after every timed entry, in recents order.
+- Recent is ordered newest first, at most 8 rows. A recent with no `openedAt`
+  sorts after every timed entry, in recents order.
 
 Row targets: Draft → the editor (`/knowledge/new` or `…/:documentId/edit`);
 Edited and Opened → the reader. Document rows keep today's row actions and the
 favourite star; Draft rows open the editor and carry neither (as the old
-Drafts tab did), and the document keeps its star in Favorites and in its
-Edited/Opened row. Empty list: "Documents you write, edit or open will appear
-here."
+Drafts tab did), and the document keeps its star in Favorites. Draft rows hold
+invisible copies of the star and menu buttons so their times line up with
+Recent's at every control size. Recent empty: "Documents you edit or open will
+appear here." Drafts has no empty state: it is not rendered.
 
 ## Favorites
 
 `shortcuts.favorites` mapped to the workspace's documents, active ones only, in
-favourites order, using the same row as Continue (star filled; clicking it
+favourites order, using the same row as Recent (star filled; clicking it
 removes the favourite). Empty: "Star a document to keep it here."
 
 Authorization is unchanged: rows only link to documents already returned by
@@ -99,17 +109,17 @@ the only colour Home adds to the neutral ramp.
 - **No cards.** Sections are rows under a label, separated by spacing; the
   attention strip is one `rounded-md` panel with a 1px `border-kh-border`
   and no fill or shadow (§6).
-- **Section labels** ("Needs attention", "Continue", "Favorites") use the rail
-  group-label style: `caption`, medium, `text-muted` (§8). A count, where
-  shown, is `text-faint` beside it. Hierarchy comes from weight and
+- **Section labels** ("Needs attention", "Drafts", "Recent", "Favorites") use
+  the rail group-label style: `caption`, medium, `text-muted` (§8). Drafts
+  shows its count beside the label. Hierarchy comes from weight and
   foreground level, not size or colour.
 - **Rows** keep today's `Row`: `min-h-10`, `px-3`, fill hanging outside the
   column (§ "A row's fill hangs outside the column"), title `body` medium
   `text`, provenance and time `caption` `text-muted`, arrow-key navigation via
   `navigateListRows`.
 - **Accent, and only here:**
-  - the event label **Draft** in `text-kh-selected-text` — unsaved work is the
-    one row state Home emphasises; Edited and Opened stay `text-muted`;
+  - the **Drafts count** in `text-kh-selected-text` — unfinished work is the
+    one thing Home emphasises; the Edited and Opened labels stay `text-muted`;
   - a 6px unread dot in `bg-kh-primary` on each unread comment row;
   - a filled favourite star in `text-kh-selected-text` (unchanged);
   - focus rings (`kh-focus-ring`, unchanged);
@@ -129,16 +139,17 @@ the only colour Home adds to the neutral ramp.
 
 ## Testing
 
-- Unit: `continueItems()` — empty inputs; draft beats a newer Edited/Opened of
-  the same document; newest event wins otherwise; `SOURCE_MANAGED` never
-  Edited; archived document and archived source excluded; unknown document
-  excluded; `draft:new` kept; cap of 8; untimed recents last.
-- Unit: Home renders the attention strip only with items; Continue and
-  Favorites regions and their empty copy (replaces the ordering assertion in
-  `tests/unit/personal-home-folder-sync.test.tsx`).
-- E2E: update `personal-profile`, `linear-remediation` and
-  `folder-sync-reading-flow` to the `Continue` region; drop the `Updates`
-  region assertion.
-- Help copy (`user-guide-content.ts`, `user-guide-illustration.tsx`) renamed
-  from "Continue reading" to "Continue", keeping the note that Opened entries
-  are stored on this device.
+- Unit: `homeLists()` — empty inputs; every draft listed newest first however
+  old; a drafted document absent from Recent; newest event wins in Recent;
+  `SOURCE_MANAGED` never Edited; archived document and archived source
+  excluded; unknown document excluded; `draft:new` kept; Recent cap of 8;
+  untimed recents last.
+- Unit: Home renders the attention strip only with items; Drafts only with
+  drafts, above Recent, with its count in the accent; Recent and Favorites
+  regions and their empty copy.
+- E2E: `personal-profile`, `linear-remediation` and `folder-sync-reading-flow`
+  read the `Recent` region; `personal-workspace` finds the new-note draft in
+  `Drafts`; no `Updates` region.
+- Help copy (`user-guide-content.ts`, `user-guide-illustration.tsx`) names
+  Drafts and Recent, keeping the note that recently opened entries are stored
+  on this device.

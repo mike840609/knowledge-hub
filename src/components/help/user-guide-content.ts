@@ -61,11 +61,11 @@ export function userGuideContent(locale:GuideLocale):UserGuideContent {
       ]),
       section("reading","閱讀、搜尋與整理",[
         "用 Search 找文章；同名時對照來源與原始路徑。Graph 可探索文章連結。",
-        "點星號收藏；回 Home 的 Continue 繼續閱讀或寫作。",
+        "點星號收藏；回 Home 的 Drafts 繼續寫作、Recent 繼續閱讀。",
         "選 New note 建立個人筆記；從文章選單使用封存、還原與歷史版本。",
       ],[{title:"未讀、裝置紀錄與草稿的差別",items:[
         "開啟目前版本會更新閱讀紀錄，不代表已讀完；文章再次同步更新後可能重新出現未讀。",
-        "收藏保存到帳號；Continue 裡的草稿與編輯跨裝置同步，最近開啟保存在裝置，換瀏覽器可能不同。",
+        "收藏、草稿與編輯紀錄保存到帳號；Recent 裡的最近開啟保存在裝置，換瀏覽器可能不同。",
         "未保存草稿不列入文章統計或匯出。",
       ]}]),
       section("insights","Home 與 Insights 的數字",[
@@ -145,11 +145,11 @@ export function userGuideContent(locale:GuideLocale):UserGuideContent {
       ]),
       section("reading","Read, search and organize",[
         "Find articles with Search; use source and original path to distinguish identical titles. Explore links in Graph.",
-        "Star an article to save a favorite; return to Continue on Home to resume.",
+        "Star an article to save a favorite; on Home, Drafts holds unfinished writing and Recent picks up where you left off.",
         "Create a personal note with New note. Use article actions for archive, restore and revision history.",
       ],[{title:"Unread updates, device history and drafts",items:[
         "Opening the current revision updates its read record, not whether you finished reading. A later synced revision may become unread again.",
-        "Favorites are saved to your account. Drafts and edits in Continue follow your account; recently opened articles are stored on this device and may differ in another browser.",
+        "Favorites, drafts and edits follow your account. Recently opened articles in Recent are stored on this device and may differ in another browser.",
         "Unsaved drafts are excluded from article counts and export.",
       ]}]),
       section("insights","Understand Home and Insights",[

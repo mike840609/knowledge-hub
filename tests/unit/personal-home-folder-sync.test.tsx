@@ -28,28 +28,33 @@ beforeEach(() => { shortcuts.value = { favorites: [], recent: [] }; });
 
 const doc = (id: string, over = {}) => ({ sourceId: "src", documentId: id, title: `Doc ${id}`, ownership: "HUB_MANAGED" as const, status: "ACTIVE" as const, sourceStatus: "ACTIVE" as const, updatedAt: "2026-10-09T00:00:00.000Z", ...over });
 
-it("leads with Continue and Favorites, leaves search to ⌘K and the change feed to /updates", () => {
+it("leads with Recent and Favorites, leaves search to ⌘K and the change feed to /updates", () => {
   const html = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[]} drafts={[]} />);
   expect(html).not.toContain('role="search"');
   expect(html).not.toContain("/sources/import");
   expect(html).toContain("New note");
-  expect(html).toContain('aria-label="Continue"');
+  expect(html).toContain('aria-label="Recent"');
   expect(html).toContain('aria-label="Favorites"');
-  expect(html.indexOf('aria-label="Continue"')).toBeLessThan(html.indexOf('aria-label="Favorites"'));
+  expect(html.indexOf('aria-label="Recent"')).toBeLessThan(html.indexOf('aria-label="Favorites"'));
+  expect(html).not.toContain('aria-label="Drafts"');
   expect(html).not.toContain('aria-label="Updates"');
   expect(html).not.toContain('role="tablist"');
   expect(html).not.toContain("Needs attention");
   expect(html).toContain("Browse knowledge");
-  expect(html).toContain("Documents you write, edit or open will appear here.");
+  expect(html).toContain("Documents you edit or open will appear here.");
   expect(html).toContain("Star a document to keep it here.");
 });
 
-it("marks a draft with the accent and edits in muted text", () => {
+it("puts drafts above Recent, counted in the accent, and edits in muted text", () => {
   const html = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[doc("a"), doc("b", { updatedAt: "2026-10-01T00:00:00.000Z" })]} drafts={[{ key: "draft:a", title: "Doc a", sourceId: "src", updatedAt: "2026-10-02T00:00:00.000Z" }]} />);
-  expect(html).toContain('href="/w/ws/knowledge/src/a/edit"');
-  expect(html).toContain('href="/w/ws/knowledge/src/b"');
-  expect(html).toMatch(/text-kh-selected-text[^"]*">Draft/);
-  expect(html).toMatch(/text-kh-text-muted[^"]*">Edited/);
+  const drafts = html.slice(html.indexOf('aria-label="Drafts"'), html.indexOf('aria-label="Recent"'));
+  expect(html.indexOf('aria-label="Drafts"')).toBeGreaterThan(-1);
+  expect(drafts).toContain('href="/w/ws/knowledge/src/a/edit"');
+  expect(drafts).toMatch(/text-kh-selected-text[^"]*">1</);
+  const recent = html.slice(html.indexOf('aria-label="Recent"'), html.indexOf('aria-label="Favorites"'));
+  expect(recent).toContain('href="/w/ws/knowledge/src/b"');
+  expect(recent).not.toContain('href="/w/ws/knowledge/src/a"');
+  expect(recent).toMatch(/text-kh-text-muted[^"]*">Edited/);
 });
 
 it("lists favourites in favourites order with a filled star", () => {
@@ -76,7 +81,7 @@ it("renders the attention strip when reminders or notices are passed in", () => 
   expect(withReminders).toContain('aria-label="Needs attention"');
   const withNotices = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[]} drafts={[]} notices={notices} />);
   expect(withNotices).toContain('aria-label="Unread discussions"');
-  expect(withNotices.indexOf('aria-label="Needs attention"')).toBeLessThan(withNotices.indexOf('aria-label="Continue"'));
+  expect(withNotices.indexOf('aria-label="Needs attention"')).toBeLessThan(withNotices.indexOf('aria-label="Recent"'));
 });
 
 it("labels an untimed recent as Opened without a time", () => {

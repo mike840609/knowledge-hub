@@ -1,33 +1,39 @@
 export type ContinueDoc = { documentId: string; sourceId: string; title: string; updatedAt: string; ownership: "SOURCE_MANAGED" | "HUB_MANAGED"; status: "ACTIVE" | "ARCHIVED"; sourceStatus: "ACTIVE" | "ARCHIVED"; sourceName?: string; sourcePath?: string | null };
 export type ContinueDraft = { key: string; title: string; sourceId: string | null; updatedAt: string };
-export type ContinueItem =
-  | { id: string; label: "Edited" | "Opened"; at?: string; doc: ContinueDoc }
-  | { id: string; label: "Draft"; at?: string; doc?: ContinueDoc; draft: ContinueDraft };
+export type DraftItem = { id: string; at: string; draft: ContinueDraft; doc?: ContinueDoc };
+export type RecentItem = { id: string; label: "Edited" | "Opened"; at?: string; doc: ContinueDoc };
 
-export const CONTINUE_LIMIT = 8;
-
-/** Rank two entries for the same document: a draft always wins, then the newer time; untimed loses. */
-function beats(next: ContinueItem, held: ContinueItem): boolean {
-  if (held.label === "Draft") return false;
-  if (next.label === "Draft") return true;
-  return !!next.at && (!held.at || next.at > held.at);
-}
+export const RECENT_LIMIT = 8;
 
 /**
- * Home's Continue list: drafts, the user's Hub-managed edits and this device's recents, one row
- * per document, newest first. A source-managed document's `updatedAt` is written by a sync, not
- * by the user, so it never counts as Edited.
+ * Home's two work lists. Drafts are unfinished work and are listed whole, newest first, so an old
+ * one never sinks below newer edits. Recent holds the user's Hub-managed edits and this device's
+ * opens, one row per document, newest first; a document with a draft is shown under Drafts only.
+ * A source-managed document's `updatedAt` is written by a sync, not by the user, so it never
+ * counts as Edited.
  */
-export function continueItems({ documents, drafts, recent, openedAt = {} }: {
+export function homeLists({ documents, drafts, recent, openedAt = {} }: {
   documents: readonly ContinueDoc[]; drafts: readonly ContinueDraft[]; recent: readonly string[]; openedAt?: Readonly<Record<string, string>>;
-}): ContinueItem[] {
+}): { drafts: DraftItem[]; recent: RecentItem[] } {
   const active = documents.filter(d => d.status === "ACTIVE" && d.sourceStatus === "ACTIVE");
   const byId = new Map(active.map(d => [d.documentId, d]));
   const byShortcut = new Map(active.map(d => [`${d.sourceId}:${d.documentId}`, d]));
-  const held = new Map<string, ContinueItem>();
-  const offer = (item: ContinueItem) => {
+
+  // ponytail: every draft is listed, as the old Drafts tab did; cap it if drafts pile up.
+  const draftItems: DraftItem[] = [];
+  for (const draft of drafts) {
+    if (draft.key === "draft:new") { draftItems.push({ id: draft.key, at: draft.updatedAt, draft }); continue; }
+    const doc = byId.get(draft.key.slice("draft:".length));
+    if (doc) draftItems.push({ id: doc.documentId, at: draft.updatedAt, draft, doc });
+  }
+  draftItems.sort((a, b) => b.at.localeCompare(a.at));
+
+  const drafted = new Set(draftItems.map(item => item.id));
+  const held = new Map<string, RecentItem>();
+  const offer = (item: RecentItem) => {
+    if (drafted.has(item.id)) return;
     const current = held.get(item.id);
-    if (!current || beats(item, current)) held.set(item.id, item);
+    if (!current || (!!item.at && (!current.at || item.at > current.at))) held.set(item.id, item);
   };
   // Recents first: Map keeps first-insertion order, which is the order untimed recents keep.
   for (const key of recent) {
@@ -35,12 +41,9 @@ export function continueItems({ documents, drafts, recent, openedAt = {} }: {
     if (doc) offer({ id: doc.documentId, label: "Opened", at: openedAt[key], doc });
   }
   for (const doc of active) if (doc.ownership === "HUB_MANAGED") offer({ id: doc.documentId, label: "Edited", at: doc.updatedAt, doc });
-  for (const draft of drafts) {
-    if (draft.key === "draft:new") { offer({ id: draft.key, label: "Draft", at: draft.updatedAt, draft }); continue; }
-    const doc = byId.get(draft.key.slice("draft:".length));
-    if (doc) offer({ id: doc.documentId, label: "Draft", at: draft.updatedAt, doc, draft });
-  }
-  return [...held.values()]
+  const recentItems = [...held.values()]
     .sort((a, b) => (a.at && b.at ? b.at.localeCompare(a.at) : a.at ? -1 : b.at ? 1 : 0))
-    .slice(0, CONTINUE_LIMIT);
+    .slice(0, RECENT_LIMIT);
+
+  return { drafts: draftItems, recent: recentItems };
 }

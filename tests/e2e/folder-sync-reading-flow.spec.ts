@@ -19,7 +19,7 @@ test("folder preview → durable result → revision-aware personal reading", as
   ).toBeVisible();
   const source = page.url().match(/sources\/([^/]+)\//)![1];
   await page.goto(`/w/${ws}/home`);
-  await expect(page.getByRole("region", {name:"Continue", exact:true})).toBeVisible();
+  await expect(page.getByRole("region", {name:"Recent", exact:true})).toBeVisible();
   await expect(page.getByRole("region", {name:"Updates"})).toHaveCount(0);
   await page.goto(`/w/${ws}/sources`);
   await page.setViewportSize({width:390,height:844});
