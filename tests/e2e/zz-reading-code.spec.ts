@@ -151,6 +151,42 @@ test.describe("code in the reader", () => {
   });
 });
 
+test.describe("a long code block in the reader", () => {
+  const LONG = Array.from({ length: 60 }, (_, i) => `select ${i + 1};`).join("\n");
+
+  test("opens collapsed and scrollable, names its language, unfolds and folds, and copies all of it", async ({ page, context }) => {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    const note = await createNote(page, unique("Long code"), ["Before.", "", "```sql", LONG, "```", "", "After."].join("\n"));
+    await page.goto(note.url);
+    await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeEditable(ROUND_TRIP);
+    const block = blocks(page).first();
+    await expect(block.getByTitle("sql", { exact: true })).toBeVisible();
+
+    const toggle = block.getByRole("button", { name: "Show all 60 lines" });
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    const scroller = block.locator("pre").locator("..");
+    const held = await scroller.evaluate((element) => ({ client: element.clientHeight, scroll: element.scrollHeight }));
+    expect(held.client).toBeLessThan(held.scroll);
+    // The last line is in the page, reached by scrolling the block rather than lost behind it.
+    await block.getByText("select 60;").scrollIntoViewIfNeeded();
+    await expect(block.getByText("select 60;")).toBeInViewport();
+
+    // Collapsed, the copy is still the whole block.
+    await block.getByRole("button", { name: "Copy code" }).click();
+    await expect(block.locator("[aria-live=polite]")).toHaveText("Copied", ROUND_TRIP);
+    expect(await readClipboard(page)).toBe(LONG);
+
+    await toggle.click();
+    const fewer = block.getByRole("button", { name: "Show fewer lines" });
+    await expect(fewer).toHaveAttribute("aria-expanded", "true");
+    const whole = await scroller.evaluate((element) => ({ client: element.clientHeight, scroll: element.scrollHeight }));
+    expect(whole.client).toBe(whole.scroll);
+
+    await fewer.click();
+    await expect(block.getByRole("button", { name: "Show all 60 lines" })).toBeInViewport();
+  });
+});
+
 test.describe("code on a shared page", () => {
   test("is coloured and copyable for someone who is not signed in, with no error on the page", async ({ page, browser, baseURL }) => {
     const note = await createNote(page, unique("Shared code"), MARKDOWN);

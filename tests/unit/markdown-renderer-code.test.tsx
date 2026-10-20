@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { COLLAPSE_OVER_LINES } from "@/components/knowledge/code-block";
+import { lineCount } from "@/components/knowledge/code-highlight";
 import { codeAsWritten } from "@/components/knowledge/copy-code-button";
 import { MarkdownBase } from "@/components/knowledge/markdown-base";
 import { MarkdownRenderer } from "@/components/knowledge/markdown-renderer";
@@ -28,7 +30,7 @@ describe("code in the reader's renderer", () => {
   });
 
   it("keeps the button off the printed page", () => {
-    expect(reader(SQL)).toMatch(/<div class="[^"]*\bprint:hidden\b[^"]*"><span aria-live="polite"/);
+    expect(reader(SQL)).toMatch(/<div class="[^"]*\bprint:hidden\b[^"]*">(<span[^>]*>sql<\/span>)?<span aria-live="polite"/);
   });
 
   it("has no button on inline code", () => {
@@ -60,7 +62,84 @@ describe("code in the reader's renderer", () => {
   });
 });
 
+describe("the language a block names, shown in its corner", () => {
+  const label = (html: string) => /<span title="([^"]*)" class="[^"]*\btruncate\b[^"]*">([^<]*)<\/span>/.exec(html);
+
+  it("is the fence's word as written, outside the <pre>", () => {
+    const html = reader("```ts\nconst a = 1\n```");
+    expect(label(html)?.slice(1)).toEqual(["ts", "ts"]);
+    expect(/<pre[ >][\s\S]*<\/pre>/.exec(html)![0]).not.toContain('title="ts"');
+  });
+
+  it("is shown for a language the reader cannot colour, which is left plain", () => {
+    const html = reader("```toml-but-not\nkey = 1\n```");
+    expect(label(html)?.[2]).toBe("toml-but-not");
+    expect(html).not.toContain("hljs");
+  });
+
+  it("is absent when nothing is named: a bare fence, or indented code", () => {
+    for (const markdown of ["```\nselect 1\n```", "para\n\n    select 1\n"]) expect(label(reader(markdown))).toBeNull();
+  });
+
+  it("is text, never markup", () => {
+    const html = reader('```"><img/src=x>\nx\n```');
+    expect(html).not.toMatch(/<img/i);
+  });
+});
+
+describe("a long block", () => {
+  const block = (n: number) => `\`\`\`sql\n${Array.from({ length: n }, (_, i) => `select ${i};`).join("\n")}\n\`\`\``;
+  const toggle = (html: string) => /<button[^>]*aria-expanded="false"[^>]*>Show all (\d+) lines<\/button>/.exec(html);
+
+  it(`opens collapsed over ${COLLAPSE_OVER_LINES} lines, scrolling inside a held height that print releases`, () => {
+    const html = reader(block(COLLAPSE_OVER_LINES + 1));
+    expect(toggle(html)?.[1]).toBe(String(COLLAPSE_OVER_LINES + 1));
+    const scroller = /<div id="([^"]+)" class="([^"]*)"><pre/.exec(html)!;
+    expect(scroller[2]).toMatch(/\bmax-h-\[31\.5rem\]/);
+    expect(scroller[2]).toMatch(/\boverflow-y-auto\b/);
+    expect(scroller[2]).toMatch(/\bprint:max-h-none\b/);
+    expect(html).toContain(`aria-controls="${scroller[1]}"`);
+    // Every line is still in the page: held, not cut.
+    expect(html).toContain(`<span class="hljs-number">${COLLAPSE_OVER_LINES}</span>;`);
+  });
+
+  it(`is whole, with no toggle, at ${COLLAPSE_OVER_LINES} lines`, () => {
+    const html = reader(block(COLLAPSE_OVER_LINES));
+    expect(html).not.toContain("Show all");
+    expect(html).not.toContain("max-h-");
+  });
+
+  it("keeps the toggle off the printed page and out of what is copied", () => {
+    const html = reader(block(40));
+    expect(html).toMatch(/<div class="[^"]*\bprint:hidden\b[^"]*"><button[^>]*aria-expanded/);
+    expect(/<pre[ >][\s\S]*<\/pre>/.exec(html)![0]).not.toContain("Show all");
+  });
+
+  it("is counted without the newline Markdown adds, so 31 written lines are 31", () => {
+    expect(reader(block(31))).toContain('data-lines="31"');
+  });
+});
+
+describe("lineCount", () => {
+  it("counts lines as the copy button copies them", () => {
+    expect(lineCount("")).toBe(0);
+    expect(lineCount("\n")).toBe(0);
+    expect(lineCount("a\n")).toBe(1);
+    expect(lineCount("a")).toBe(1);
+    expect(lineCount("a\nb\n")).toBe(2);
+    expect(lineCount("a\n\n")).toBe(2);
+  });
+});
+
 describe("the plain renderer, which the composer shows while its editor loads", () => {
+  it("has no fold and no language label, however long the block", () => {
+    const html = plain(`\`\`\`sql\n${"select 1;\n".repeat(60)}\`\`\``);
+    expect(html).not.toContain("Show all");
+    expect(html).not.toContain("max-h-");
+    expect(html).not.toContain("data-lines");
+    expect(html).not.toContain('title="sql"');
+  });
+
   it("draws the same box with no colour and no button", () => {
     const html = plain(SQL);
     expect(html).toContain("data-code-block");
@@ -82,7 +161,7 @@ describe("codeAsWritten", () => {
 });
 
 describe("no path from Markdown to the page other than elements", () => {
-  it.each(["markdown-base.tsx", "markdown-renderer.tsx", "markdown-article.tsx", "copy-code-button.tsx", "code-highlight.ts"])("%s does not use dangerouslySetInnerHTML", (file) => {
+  it.each(["markdown-base.tsx", "markdown-renderer.tsx", "markdown-article.tsx", "copy-code-button.tsx", "code-highlight.ts", "code-block.tsx", "scrollable-pre.tsx"])("%s does not use dangerouslySetInnerHTML", (file) => {
     expect(readFileSync(new URL(`../../src/components/knowledge/${file}`, import.meta.url), "utf8")).not.toContain("dangerouslySetInnerHTML");
   });
 });

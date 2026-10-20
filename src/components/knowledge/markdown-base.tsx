@@ -12,6 +12,7 @@ import { remarkKnownHtml } from "@/shared/markdown/remark-known-html";
 import { remarkReviewPaths } from "@/shared/markdown/remark-review-paths";
 import { MarkdownQuote } from "./markdown-callout";
 import { MarkdownDetails, MarkdownKbd, MarkdownMark, MarkdownSummary } from "./markdown-html";
+import { ScrollablePre } from "./scrollable-pre";
 import { DocumentPreviewLink } from "./document-preview-link";
 import { LinkedImageScope, MarkdownImage } from "./markdown-image";
 import { MARKDOWN_PROSE } from "./markdown-prose";
@@ -174,22 +175,6 @@ function ResponsiveTable({ children }: { children?: React.ReactNode }) {
   return (
     <div role="region" aria-label="Table" tabIndex={0} className="kh-markdown-table kh-focus-ring">
       <table>{children}</table>
-    </div>
-  );
-}
-
-/**
- * A code block: the code in a box that scrolls sideways, and room in its corner for `action`.
- * The corner belongs to the box rather than to the scroller inside it, so what sits there stays
- * put while a long line scrolls under it.
- */
-export function ScrollablePre({ children, action }: { children?: ReactNode; action?: ReactNode }) {
-  return (
-    <div data-code-block className="relative my-4 w-full rounded-md border border-kh-border bg-kh-bg-subtle">
-      <div className="w-full overflow-x-auto rounded-md">
-        <pre className="min-w-0 px-4 py-3 font-mono text-body-sm leading-6 text-kh-text">{children}</pre>
-      </div>
-      {action}
     </div>
   );
 }

@@ -129,5 +129,29 @@ export function rehypeCodeHighlight(options: CodeHighlightOptions = {}) {
   };
 }
 
+/**
+ * The lines a code block holds, counted as the copy button copies it: the newline Markdown puts
+ * after the code is not a line of its own, and an empty block has none.
+ */
+export function lineCount(text: string): number {
+  const code = text.endsWith("\n") ? text.slice(0, -1) : text;
+  return code === "" ? 0 : code.split("\n").length;
+}
+
+/**
+ * Marks each fenced block's `<code>` with `data-lines`, so the reader can open a long one
+ * collapsed from the server and nothing moves when the page hydrates (code-block-label-collapse
+ * spec §2). Every block, coloured or not: the count is the text's, not the highlighter's.
+ */
+export function rehypeCodeLines() {
+  return (tree: Root) => {
+    visit(tree, "element", (node, _index, parent) => {
+      if (node.tagName !== "code" || parent?.type !== "element" || parent.tagName !== "pre") return;
+      node.properties.dataLines = lineCount(textOf(node));
+      return SKIP;
+    });
+  };
+}
+
 /** `rehypePlugins` for `react-markdown`. */
-export const codeHighlightPlugins: PluggableList = [rehypeCodeHighlight];
+export const codeHighlightPlugins: PluggableList = [rehypeCodeLines, rehypeCodeHighlight];
