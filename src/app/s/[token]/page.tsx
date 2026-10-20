@@ -4,7 +4,7 @@ import { buttonClasses } from "@/components/ui/button";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { MarkdownRenderer } from "@/components/knowledge/markdown-renderer";
-import { OutlineDisclosure, OutlineRail } from "@/components/knowledge/document-outline";
+import { SharedOutline } from "@/components/knowledge/shared-outline";
 import { extractOutline } from "@/shared/markdown/outline";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
 import { Timestamp } from "@/components/ui/timestamp";
@@ -62,9 +62,9 @@ export default async function SharedDocumentPage({ params }: SharedPageProps) {
         </div>
       </header>
       {/* Outline: a rail off the column's left edge when there is room, else above the comments bar (share-page-outline spec §2). */}
-      <div className="kh-share-outline"><OutlineDisclosure entries={outline} activeSlug={null} /></div>
+      <div className="kh-share-outline"><SharedOutline entries={outline} placement="disclosure" /></div>
       <SharedReviewPanel token={token} revisionId={shared.revisionId} markdown={shared.markdown}>
-      {outline.length > 0 ? <div className="kh-share-outline-rail kh-reading-column sticky top-16 z-10 h-0"><div className="absolute right-full top-0 w-52"><OutlineRail entries={outline} activeSlug={null} /></div></div> : null}
+      {outline.length > 0 ? <div className="kh-share-outline-rail kh-reading-column sticky top-16 z-10 h-0"><div className="absolute right-full top-0 w-52"><SharedOutline entries={outline} placement="rail" /></div></div> : null}
       <article data-review-document className="kh-reading-column min-w-0 pb-6 pt-6 [&>div>:first-child]:mt-0">
         <MarkdownRenderer markdown={shared.markdown} />
       </article>

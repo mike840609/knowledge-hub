@@ -14,7 +14,8 @@ shared spec is read by scrolling.
 
 - The same entries as the workspace (`extractOutline`: h1–h4, at least 2, at most 200), the
   same list (`OutlineList`), the same links (`#slug`, ids the renderer already gives headings).
-- Built on the server from `shared.markdown`; no new client component, no request.
+- Built on the server from `shared.markdown`; no request. The one client piece is the
+  wrapper that follows the reader (§3).
 
 ## 2. Placement
 
@@ -30,13 +31,25 @@ shared spec is read by scrolling.
 - Both sit outside `article[data-review-document]`, so review anchoring, which reads that
   article's text, is unaffected.
 
-## 3. Not done
+## 3. Following the reader (added 2026-10-20)
 
-- **No active heading.** `useActiveHeading` listens to a scroll container; this page scrolls
-  the window. The rail shows no current entry, as the composer's does not. Add when a reader
-  asks for it.
-- **No smooth scroll.** `findHeading` looks inside a document pane, which this page has not;
-  a click falls back to the link's own `#slug` jump.
+The first version left two things out; both are now done.
+
+- **Current heading.** `useActiveHeading` takes `"window"` in place of a pane's ref: it
+  listens to the window's scroll and measures heading tops from the top of the viewport,
+  with the pane's rule unchanged (the last heading at or above the 96px reading line; the
+  last entry at the bottom of the page). `SharedOutline` is the client wrapper that calls it
+  and hands `activeSlug` to the rail or the disclosure; the page itself stays a server
+  component. A workspace pane still passes its ref and behaves as before.
+- **Smooth scroll.** Unscoped, `findHeading` now also looks in `.kh-share-page
+  article[data-review-document]` after the document pane, so an outline click scrolls
+  smoothly, opens a closed ancestor `<details>`, and replaces the address rather than adding
+  a history entry, as in the workspace. A page with a document pane finds what it found
+  before; the share-page selector cannot match there.
+- **Clear of the pinned Comments bar.** That bar is 48px and pinned to the window's top; the
+  prose's `scroll-mt-4` (16px) put a jumped-to heading under it. On this page headings take
+  `scroll-margin-top: 4rem` (`globals.css`): 16px below the bar, and inside the 96px reading
+  line, so the clicked entry is the highlighted one. A page loaded at `#slug` lands there too.
 
 ## 4. Acceptance
 
@@ -44,6 +57,11 @@ E2E (`zz-share-outline.spec.ts`), desktop:
 
 - A shared document with headings shows the rail beside the article at 1440px, left of it,
   not overlapping it; clicking an entry moves the page to that heading and the address to `#slug`.
-- At 1280px the rail is hidden and the disclosure lists the same entries.
+- The first entry is current on arrival. After a click the clicked entry is current, the
+  heading is in view below the Comments bar, and no history entry was added.
+- Scrolling the window makes the heading at the reading line current; at the bottom of the
+  page the last entry is. The disclosure follows the same way.
+- At 1280px the rail is hidden and the disclosure lists the same entries, in a box no wider
+  than the text (reader-measure spec §1).
 - Opening Comments at 1440px hides the rail and shows the disclosure.
 - A document with fewer than two headings shows neither.

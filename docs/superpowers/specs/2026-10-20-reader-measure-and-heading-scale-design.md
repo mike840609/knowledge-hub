@@ -35,6 +35,13 @@ The Markdown source view is raw text being edited and is unchanged.
 - An image inside a paragraph follows the paragraph's measure. This is accepted.
 - `kh-reading-column` stays 860px. It also holds message states and the page chrome,
   which are not prose.
+- **Amended (2026-10-20): the outline disclosure takes the measure too.** The "On this
+  page" box above the text (`OutlineDisclosure`, in the reader, the editor and on a shared
+  page) is `max-w-measure`. At the column's width it ran 117px (workspace, 1280 window) to
+  172px (shared page, 1280) past the right edge of the text under it: a tinted box that
+  ends nowhere the text does, holding a narrow list. It is a list of the text's headings,
+  so it is held to the text's width, not to the tables'. Where the column is narrower than
+  the measure nothing changes. Evidence: `tests/e2e/zz-share-outline.spec.ts`.
 
 ## 2. Heading scale
 

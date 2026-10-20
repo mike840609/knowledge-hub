@@ -24,3 +24,18 @@ it("finds nothing outside the document pane or for a slug no heading has", () =>
   expect(findHeading("tree-filter")).toBeNull();
   expect(findHeading("missing")).toBeNull();
 });
+
+it("finds a heading of a shared page's article, which has no document pane", () => {
+  document.body.innerHTML = `<main class="kh-share-page"><nav><a id="setup-link"></a></nav><article data-review-document><h2 id="setup">Setup</h2></article></main>`;
+  expect(findHeading("setup")?.textContent).toBe("Setup");
+  expect(findHeading("setup-link")).toBeNull();
+});
+
+it("keeps the document pane first, and looks in no reviewed article outside a pane or a shared page", () => {
+  document.body.innerHTML =
+    `<main class="kh-share-page"><article data-review-document><h2 id="setup">Shared Setup</h2></article></main>` +
+    `<div data-document-pane><article><h2 id="setup">Pane Setup</h2></article></div>`;
+  expect(findHeading("setup")?.textContent).toBe("Pane Setup");
+  document.body.innerHTML = `<article data-review-document><h2 id="setup">Elsewhere</h2></article>`;
+  expect(findHeading("setup")).toBeNull();
+});
