@@ -68,8 +68,10 @@ changes.
 - On touch devices there is no hover. The lock is not replaced, and the
   expanded state is still visible, because the children are shown or not
   directly below the heading.
-- A tooltip on the heading of a `SOURCE_MANAGED` source reads
-  "Synced from a folder · read-only in the Hub".
+- The heading's native `title` of a `SOURCE_MANAGED` source reads
+  "<name> · Synced from a folder, read-only in the Hub". (Not `Tooltip`:
+  `components/ui/tooltip.tsx` keeps that for controls with no visible label,
+  and the heading already uses `title` for its truncated name.)
 
 ## Favorites, Recent and "Show all"
 

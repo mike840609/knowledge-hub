@@ -910,6 +910,16 @@ the same weight (`.kh-select`), drawn as two gradient strokes in
 not an SVG: `img-src 'self' blob:` refuses `data:` images, which is the Markdown
 image policy doing its job, not something to loosen for a glyph.
 
+### A source heading's slot
+
+A Knowledge explorer source heading has one 14px slot before its name: the
+source's mark at rest, its chevron on hover (only where hover exists) or on
+keyboard focus. `LockKeyhole` there means the source is `SOURCE_MANAGED`,
+read-only in the Hub, the same glyph the document header uses for "Read only".
+A Hub source leaves the slot empty. The reason is an accessible description,
+never part of the heading's name
+(`docs/superpowers/specs/2026-10-20-knowledge-tree-read-only-cue-design.md`).
+
 ### Brand mark
 
 The product has one mark: a hub joined by three uneven links to three

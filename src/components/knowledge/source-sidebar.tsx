@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, ChevronRight, Clock3, FileText, MoreHorizontal, Plus, ListFilter, Star } from "lucide-react";
+import { ChevronDown, ChevronRight, Clock3, FileText, LockKeyhole, MoreHorizontal, Plus, ListFilter, Star } from "lucide-react";
 import { ActionIcon } from "@/components/actions/action-icon";
 import { favoritesInPlace, rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
@@ -19,6 +19,9 @@ import { documentShortcutKey, useDocumentShortcuts } from "./use-document-shortc
 import { useTreeMutations } from "./use-tree-mutations";
 import { useActionRunner } from "@/components/actions/action-menu";
 import { actionsFor, type ActionTarget, type FolderTarget } from "@/components/actions/action-registry";
+
+/** Why a synced source's documents cannot be edited here; read after the name, never part of it. */
+const READ_ONLY_DESCRIPTION = "Synced from a folder, read-only in the Hub";
 
 export type SourceSidebarProps = {
   workspaceId: string;
@@ -53,6 +56,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
   const [query, setQuery, queryReady] = usePersistedJson(`kh:tree-filter:${workspaceId}`, "", isString, "session");
   const [filterOpen, setFilterOpen, filterReady] = usePersistedJson(`kh:tree-filter-open:${workspaceId}`, false, isBoolean, "session");
   const filterTriggerRef = useRef<HTMLButtonElement>(null);
+  const readOnlyDescriptionId = useId();
   const [expanded, setExpanded, expandedReady] = usePersistedJson<Record<string, boolean>>(`kh:tree-expanded:${workspaceId}`, {}, isBooleanRecord);
   const { shortcuts, update: updateShortcuts, ready: shortcutsReady } = useDocumentShortcuts(workspaceId);
   const [favoritesOpen, setFavoritesOpen, favoritesReady] = usePersistedJson(`kh:sidebar-favorites:${workspaceId}`, false, isBoolean);
@@ -195,6 +199,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
       </div>
       {filterOpen ? <div className="shrink-0"><TreeFilter value={query} onChange={setQuery} onClose={closeFilter} /></div> : null}
       <nav aria-label="Document tree" className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain">
+        <span id={readOnlyDescriptionId} hidden>{READ_ONLY_DESCRIPTION}</span>
         {!needle && favoriteKeys.length > 0 ? <section aria-label="Favorites" className="pb-1">
           <h3><button type="button" aria-expanded={favoritesOpen} onClick={() => setFavoritesOpen((open) => !open)} className="kh-control kh-interactive-row flex min-h-8 w-full items-center gap-2 px-2 text-left text-caption font-medium text-kh-text-muted">
             {favoritesOpen ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
@@ -246,12 +251,17 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
         {matches.map(({ source: candidate, tree }) => {
           const open = Boolean(needle) || (expanded[candidate.id] ?? candidate.id === source.id);
           const Icon = open ? ChevronDown : ChevronRight;
+          const readOnly = candidate.ownership === "SOURCE_MANAGED";
           const isNotes = candidate.sourceType === "HUB" && candidate.name === "Notes" && candidate.status === "ACTIVE";
           return (
             <section key={candidate.id} aria-label={`${candidate.name} documents`}>
               <div className="flex items-center gap-1">
-                <button type="button" aria-expanded={open} aria-controls={`collection-${candidate.id}`} onClick={() => setExpanded((previous) => ({ ...previous, [candidate.id]: !open }))} title={candidate.name} className="kh-control flex min-h-8 min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 text-left text-body font-medium text-kh-text hover:bg-kh-bg-hover kh-focus-ring">
-                  <Icon size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />
+                <button type="button" aria-expanded={open} aria-controls={`collection-${candidate.id}`} aria-describedby={readOnly ? readOnlyDescriptionId : undefined} onClick={() => setExpanded((previous) => ({ ...previous, [candidate.id]: !open }))} title={readOnly ? `${candidate.name} · ${READ_ONLY_DESCRIPTION}` : candidate.name} className="group kh-control flex min-h-8 min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 text-left text-body font-medium text-kh-text hover:bg-kh-bg-hover kh-focus-ring">
+                  {/* One slot, Notion-style: the source's mark at rest, its chevron on hover (where hover exists) or keyboard focus. */}
+                  <span className="relative size-3.5 shrink-0 text-kh-text-muted" aria-hidden="true">
+                    {readOnly ? <LockKeyhole size={14} data-read-only-cue="" className="absolute inset-0 group-focus-visible:invisible [@media(hover:hover)]:group-hover:invisible" /> : null}
+                    <Icon size={14} data-expand-cue="" className="invisible absolute inset-0 group-focus-visible:visible [@media(hover:hover)]:group-hover:visible" />
+                  </span>
                   <span className="truncate">{candidate.name}</span>
                   {candidate.status === "ARCHIVED" ? <Status kind="archived" className="ml-auto text-caption font-normal text-kh-text-muted">Archived</Status> : null}
                 </button>
