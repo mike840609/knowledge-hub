@@ -671,16 +671,27 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-share-page .kh-share-heading,
 .kh-share-page .kh-review-entry,
 .kh-share-page .kh-review-document,
+.kh-share-page .kh-share-outline > .kh-outline-inline,
 .kh-share-page > footer {
   /* Centred, as `mx-auto` would, but as a length: a margin cannot slide from `auto`. */
   margin-inline: max(0px, calc((100% - theme("maxWidth.reading")) / 2)) auto;
   transition: margin-inline-start 120ms ease-out;
 }
-.kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) :is(.kh-share-heading, .kh-review-entry, .kh-review-document),
+.kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) :is(.kh-share-heading, .kh-review-entry, .kh-review-document, .kh-share-outline > .kh-outline-inline),
 .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) > footer {
   margin-inline-start: max(0px, min(calc((100% - theme("maxWidth.reading")) / 2), calc(100% - theme("maxWidth.reading") - 320px)));
 }
 .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) > footer { max-width: calc(theme("maxWidth.reading") + 320px); }
+/* The outline hangs off the column's left edge where the centred column leaves room for it (82rem:
+   224px, a w-52 rail and its edge), else it is a disclosure above the Comments row; and, as in the
+   workspace, the comments rail takes its room while open (share-page-outline spec §2). */
+.kh-share-page .kh-share-outline-rail { display: none; }
+@media (min-width: 82rem) {
+  .kh-share-page .kh-share-outline-rail { display: block; }
+  .kh-share-page .kh-share-outline > .kh-outline-inline { display: none; }
+}
+.kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) .kh-share-outline-rail { display: none; }
+.kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) .kh-share-outline > .kh-outline-inline { display: block; }
 /* The workspace's columns keep their left edge too, and the title and the article keep one. Re-centred,
    the pinned path line's Edit / Share / Comments / Details leapt 224-272px right under the pointer and,
    where the pane is wide, the whole column slid 48px left. Each column is centred as `mx-auto` would
