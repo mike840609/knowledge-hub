@@ -103,7 +103,9 @@ test("inline: failed saves recover after reload without silently publishing", as
   const editor = await surface(page, url);
   await page.route(`**/api/documents/${id}`, route => route.request().method() === "PATCH" ? route.abort() : route.continue());
   await editor.fill("Recover me.");
-  await expect(page.getByRole("button", { name: "Retry save" })).toBeVisible();
+  await expect(editor).toContainText("Recover me.");
+  // The write only starts after the 3s autosave debounce; the default 5s left ~1.6s for a parallel run.
+  await expect(page.getByRole("button", { name: "Retry save" })).toBeVisible({ timeout: 15000 });
   page.on("dialog", dialog => dialog.accept());
   await page.reload();
   await expect(page.getByRole("button", { name: "Resume saving" })).toBeVisible();
