@@ -63,7 +63,7 @@ export default async function SharedDocumentPage({ params }: SharedPageProps) {
       </header>
       {/* Outline: a rail off the column's left edge when there is room, else above the comments bar (share-page-outline spec §2). */}
       <div className="kh-share-outline"><SharedOutline entries={outline} placement="disclosure" /></div>
-      <SharedReviewPanel token={token} revisionId={shared.revisionId} markdown={shared.markdown}>
+      <SharedReviewPanel token={token} revisionId={shared.revisionId} markdown={shared.markdown} signInHref={platformEntry}>
       {outline.length > 0 ? <div className="kh-share-outline-rail kh-reading-column sticky top-16 z-10 h-0"><div className="absolute right-full top-0 w-52"><SharedOutline entries={outline} placement="rail" /></div></div> : null}
       <article data-review-document className="kh-reading-column min-w-0 pb-6 pt-6 [&>div>:first-child]:mt-0">
         <MarkdownRenderer markdown={shared.markdown} />
