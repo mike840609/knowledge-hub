@@ -252,7 +252,9 @@ characters a line, measured), while tables, code and diagrams keep the whole
 column. A line as wide as the column (100 Latin / 54 CJK at 804px) was long
 enough that the sweep back to the next line's start lost its place. It is a
 rule in `MARKDOWN_PROSE`, not a fourth page width
-(`2026-10-20-reader-measure-and-heading-scale-design.md`).
+(`2026-10-20-reader-measure-and-heading-scale-design.md`). The outline
+disclosure above the text is held to the same measure: it lists the text's
+headings, so its box ends where the text does.
 
 They are classes rather than remembered widths, and the `maxWidth` scale is
 replaced like the others, so `max-w-4xl` compiles to nothing and a sixth width

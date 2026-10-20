@@ -30,12 +30,48 @@ test("share outline: a rail left of the article on a wide window, jumping to hea
   expect(railBox.x + railBox.width).toBeLessThanOrEqual(text.x);
   expect(railBox.x).toBeGreaterThanOrEqual(0);
 
+  await expect(rail(page).getByRole("link", { name: "Guide" })).toHaveAttribute("aria-current", "location");
+  const historyBefore = await page.evaluate(() => window.history.length);
   await rail(page).getByRole("link", { name: "Configure" }).click();
   await expect(page).toHaveURL(/#configure$/);
-  const heading = (await page.getByRole("heading", { name: "Configure" }).boundingBox())!;
-  expect(heading.y).toBeLessThan(200);
+  // The outline's own scroll, not the link's jump: the address is replaced, so Back leaves the page.
+  expect(await page.evaluate(() => window.history.length)).toBe(historyBefore);
+  await expect(rail(page).getByRole("link", { name: "Configure" })).toHaveAttribute("aria-current", "location");
   await expect(rail(page)).toBeInViewport();
+  await expectBelowCommentsBar(page, "Configure");
 });
+
+test("share outline: the current entry follows the window's scroll", async ({ page }) => {
+  const path = await shareOf(page, LONG);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(path);
+  await page.evaluate(() => window.scrollTo({ top: document.getElementById("install")!.getBoundingClientRect().top + window.scrollY - 80 }));
+  await expect(rail(page).getByRole("link", { name: "Install" })).toHaveAttribute("aria-current", "location");
+  await expect(rail(page).locator("[aria-current]")).toHaveCount(1);
+  // A short last section never reaches the reading line; at the bottom it is the current one.
+  await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight }));
+  await expect(rail(page).getByRole("link", { name: "Advanced" })).toHaveAttribute("aria-current", "location");
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.evaluate(() => window.scrollTo({ top: 0 }));
+  await disclosure(page).click();
+  const list = page.getByRole("navigation", { name: "On this page" });
+  await expect(list.getByRole("link", { name: "Guide" })).toHaveAttribute("aria-current", "location");
+  await list.getByRole("link", { name: "Install" }).click();
+  await expect(list.getByRole("link", { name: "Install" })).toHaveAttribute("aria-current", "location");
+  await expectBelowCommentsBar(page, "Install");
+});
+
+/** A heading jumped to is in full view under the pinned Comments bar, not behind it. */
+async function expectBelowCommentsBar(page: Page, name: string) {
+  const bar = page.locator(".kh-review-entry");
+  const heading = page.getByRole("heading", { name, exact: true });
+  await expect.poll(async () => {
+    const [barBox, headingBox] = [(await bar.boundingBox())!, (await heading.boundingBox())!];
+    return headingBox.y >= barBox.y + barBox.height && headingBox.y < 200;
+  }).toBe(true);
+  await expect(heading).toBeInViewport();
+}
 
 test("share outline: a disclosure on a narrower window, and while comments are open", async ({ page }) => {
   const path = await shareOf(page, LONG);
@@ -44,6 +80,11 @@ test("share outline: a disclosure on a narrower window, and while comments are o
   await expect(rail(page)).toBeHidden();
   await disclosure(page).click();
   await expect(page.getByRole("navigation", { name: "On this page" }).getByRole("link")).toHaveText(["Guide", "Install", "Configure", "Advanced"]);
+  // The box is as wide as the text under it, not the 860px column (reader-measure spec §1).
+  const box = (await page.locator(".kh-share-outline details").boundingBox())!;
+  const text = (await page.locator("article[data-review-document] p").first().boundingBox())!;
+  expect(box.x).toBeCloseTo(text.x, 0);
+  expect(box.width).toBeLessThanOrEqual(640);
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect(rail(page)).toBeVisible();

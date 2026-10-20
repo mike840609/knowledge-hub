@@ -252,6 +252,8 @@ Retain `markdown-image-policy`. CSP must be **one header containing both directi
 - Relative/internal Hub links return 404 for these readers; correct behavior, no rewriting.
 - Follow `frontend-design-language.md` tokens and `globals.css` color variables.
 
+> **Amended (2026-10-20):** the page shows an "On this page" outline of the shared document's own headings: a rail left of the column on a wide window, otherwise a disclosure above the Comments bar. It is built from the same Markdown the page renders, so it shows nothing the article does not, and it sits outside `article[data-review-document]`. See the [share page outline design](2026-10-20-share-page-outline-design.md).
+
 ## 7. Data model
 
 Add migration `011-document-share-links`.

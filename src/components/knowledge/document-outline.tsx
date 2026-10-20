@@ -91,7 +91,8 @@ export function OutlineDisclosure({ entries, activeSlug }: { entries: readonly O
   if (entries.length === 0) return null;
   return (
     <div className="kh-reading-column kh-outline-inline">
-      <details className="mb-2 rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2">
+      {/* As wide as the text under it, not the column: tables and code may take the column, prose does not (reader-measure spec §1). */}
+      <details className="mb-2 max-w-measure rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2">
         <summary className="cursor-pointer rounded-md text-body-sm font-medium text-kh-text-secondary kh-focus-ring">
           On this page
         </summary>

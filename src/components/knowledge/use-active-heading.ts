@@ -15,6 +15,9 @@ export function findHeading(slug: string, scope?: ParentNode | null): HTMLElemen
   if (root === document) {
     const read = document.querySelector<HTMLElement>(`[data-document-pane] article ${selector}`);
     if (read) return read;
+    // A shared page (`/s/:token`) has no document pane: its one reviewed article is the document.
+    const shared = document.querySelector<HTMLElement>(`.kh-share-page article[data-review-document] ${selector}`);
+    if (shared) return shared;
     // The composer's editor does not carry the reader's ids; its headings take the reader's slugs in reading order.
     const slugger = new HeadingSlugger();
     const editing = document.querySelectorAll<HTMLElement>("[data-document-pane] .kh-editor :is(h1, h2, h3, h4, h5, h6)");
@@ -58,40 +61,46 @@ export function pickActiveIndex(tops: readonly number[], atBottom: boolean, read
 
 /**
  * The slug of the heading the reader is in, for the outline to highlight.
- * The pane is a scroll container of its own rather than the window, so this
- * listens to it (passively, once per frame) instead of using the window.
+ * A workspace pane is a scroll container of its own rather than the window, so
+ * this listens to it (passively, once per frame). A shared page scrolls the
+ * window instead; it passes `"window"`, and distances are then measured from
+ * the top of the viewport.
  */
-export function useActiveHeading(slugs: readonly string[], rootRef: RefObject<HTMLElement | null>): string | null {
+export function useActiveHeading(slugs: readonly string[], rootRef: RefObject<HTMLElement | null> | "window"): string | null {
   const [active, setActive] = useState<string | null>(slugs[0] ?? null);
   const key = slugs.join("\n");
 
   useEffect(() => {
-    const root = rootRef.current;
-    if (!root || slugs.length === 0) {
+    const root = rootRef === "window" ? null : rootRef.current;
+    if ((rootRef !== "window" && !root) || slugs.length === 0) {
       setActive(null);
       return;
     }
+    const page = document.documentElement;
     let frame = 0;
     const measure = () => {
       frame = 0;
-      const rootTop = root.getBoundingClientRect().top;
+      const rootTop = root ? root.getBoundingClientRect().top : 0;
       const tops = slugs.map((slug) => {
         const element = findHeading(slug, root);
         return element ? element.getBoundingClientRect().top - rootTop : Number.POSITIVE_INFINITY;
       });
-      const atBottom = root.scrollTop > 0 && root.scrollTop + root.clientHeight >= root.scrollHeight - 2;
+      const atBottom = root
+        ? root.scrollTop > 0 && root.scrollTop + root.clientHeight >= root.scrollHeight - 2
+        : window.scrollY > 0 && window.scrollY + window.innerHeight >= page.scrollHeight - 2;
       const index = pickActiveIndex(tops, atBottom);
       setActive(index < 0 ? null : slugs[index]);
     };
     const schedule = () => {
       if (frame === 0) frame = window.requestAnimationFrame(measure);
     };
+    const scroller: HTMLElement | Window = root ?? window;
     measure();
-    root.addEventListener("scroll", schedule, { passive: true });
+    scroller.addEventListener("scroll", schedule, { passive: true });
     const resize = new ResizeObserver(schedule);
-    resize.observe(root);
+    resize.observe(root ?? page);
     return () => {
-      root.removeEventListener("scroll", schedule);
+      scroller.removeEventListener("scroll", schedule);
       resize.disconnect();
       if (frame !== 0) window.cancelAnimationFrame(frame);
     };
