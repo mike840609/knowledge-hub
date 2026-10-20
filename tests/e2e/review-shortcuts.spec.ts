@@ -53,6 +53,10 @@ test("D leaves discussions unchanged; explicit buttons open and close them", asy
   const entry = page.getByRole("button", { name: /^(Open|Hide) discussions/ });
   await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
   await expect(entry).not.toHaveAttribute("aria-keyshortcuts");
+  // With room beside the document they open with the page; D changes nothing either way.
+  await expect(entry).toHaveAttribute("aria-expanded", "true");
+  await page.locator("body").press("d"); await expect(entry).toHaveAttribute("aria-expanded", "true");
+  await entry.click();
   await expect(entry).toHaveAttribute("aria-expanded", "false");
   await page.locator("body").press("d"); await expect(entry).toHaveAttribute("aria-expanded", "false");
   await entry.click();
