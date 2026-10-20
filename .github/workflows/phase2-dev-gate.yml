@@ -49,7 +49,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3, 4]
     services:
       mariadb:
         image: mariadb:10.11
@@ -79,15 +79,16 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      # Group 1 also caches the SSO compiler; groups 2-4 compile the same local application.
       - name: Restore application compiler caches
         uses: actions/cache@v4
         with:
           path: |
             .next/cache
             .cache/e2e-sso
-          key: e2e-next-${{ runner.os }}-${{ runner.arch }}-${{ matrix.shard }}-${{ hashFiles('package-lock.json', 'next.config.ts', 'tsconfig.json', 'postcss.config.mjs', 'tailwind.config.ts', 'patches/**') }}-${{ hashFiles('src/**', 'tests/e2e/fixtures/phase3-*.ts') }}
+          key: e2e-next-${{ runner.os }}-${{ runner.arch }}-${{ matrix.shard == 1 && 'sso' || 'local' }}-${{ hashFiles('package-lock.json', 'next.config.ts', 'tsconfig.json', 'postcss.config.mjs', 'tailwind.config.ts', 'patches/**') }}-${{ hashFiles('src/**', 'tests/e2e/fixtures/phase3-*.ts') }}
           restore-keys: |
-            e2e-next-${{ runner.os }}-${{ runner.arch }}-${{ matrix.shard }}-${{ hashFiles('package-lock.json', 'next.config.ts', 'tsconfig.json', 'postcss.config.mjs', 'tailwind.config.ts', 'patches/**') }}-
+            e2e-next-${{ runner.os }}-${{ runner.arch }}-${{ matrix.shard == 1 && 'sso' || 'local' }}-${{ hashFiles('package-lock.json', 'next.config.ts', 'tsconfig.json', 'postcss.config.mjs', 'tailwind.config.ts', 'patches/**') }}-
       - run: npx playwright install --with-deps --only-shell chromium
       - run: npm run test:e2e -- --reporter=list,blob
       - uses: actions/upload-artifact@v4

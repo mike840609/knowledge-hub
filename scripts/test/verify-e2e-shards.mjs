@@ -2,6 +2,8 @@ import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const root = path.resolve(process.argv[2] ?? "e2e-shards");
+// Must equal E2E_GROUP_COUNT in e2e-shards.ts and the workflow matrix; tests/unit/e2e-shards.test.ts checks all three.
+const SHARD_COUNT = 4;
 async function find(directory, name) {
   const files = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -14,7 +16,7 @@ async function find(directory, name) {
 const reports = await find(root, "tests.json");
 const runners = await find(root, "runner.json");
 const discoveries = await find(root, "discovery.json");
-if (reports.length !== 2 || runners.length !== 2 || discoveries.length !== 2) throw new Error("Expected exactly two completed shard reports and discovery manifests.");
+if ([reports, runners, discoveries].some(found => found.length !== SHARD_COUNT)) throw new Error(`Expected exactly ${SHARD_COUNT} completed shard reports and discovery manifests.`);
 const manifests = await Promise.all(discoveries.map(async file => JSON.parse(await readFile(file, "utf8"))));
 const locked = JSON.parse(await readFile(new URL("../../package-lock.json", import.meta.url), "utf8")).packages["node_modules/@playwright/test"].version;
 const reportingVersion = JSON.parse(await readFile(new URL("./reporting/package-lock.json", import.meta.url), "utf8")).packages["node_modules/@playwright/test"].version;
@@ -25,7 +27,8 @@ for (const manifest of manifests) {
   if (manifest.playwrightVersion !== locked) throw new Error("Discovery used an unexpected Playwright version.");
   if (process.env.GITHUB_SHA && manifest.commit !== process.env.GITHUB_SHA) throw new Error("Discovery is from a different commit.");
 }
-if (manifests[0].commit !== manifests[1].commit || JSON.stringify([...manifests[0].ids].sort()) !== JSON.stringify([...manifests[1].ids].sort())) throw new Error("Shards disagree about complete test discovery.");
+const discovered = (manifest) => JSON.stringify([...manifest.ids].sort());
+if (manifests.some(manifest => manifest.commit !== manifests[0].commit || discovered(manifest) !== discovered(manifests[0]))) throw new Error("Shards disagree about complete test discovery.");
 const expected = new Set(manifests[0].ids);
 const seen = new Set();
 const counts = { passed: 0, failed: 0, flaky: 0, skipped: 0 };
@@ -49,4 +52,4 @@ for (const file of runners) {
   stages.push({ shard: path.relative(root, file), durationMs: runner.durationMs, stages: runner.stages });
 }
 await writeFile("e2e-summary.json", JSON.stringify({ version: 1, counts, stages, tests }, null, 2) + "\n");
-console.log(`Verified ${seen.size} tests across two shards: ${JSON.stringify(counts)}`);
+console.log(`Verified ${seen.size} tests across ${SHARD_COUNT} shards: ${JSON.stringify(counts)}`);

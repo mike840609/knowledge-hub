@@ -2,7 +2,7 @@ import { phase3NoSessionOrigin, phase3UnconfiguredOrigin } from "../e2e/fixtures
 import { teamsClosedOrigin } from "../e2e/fixtures/teams-closed";
 import { describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
-import { e2eTeamWorkspacesEnabled, requiredE2eServices } from "../../scripts/test/e2e-services";
+import { e2eSpecSource, e2eTeamWorkspacesEnabled, requiredE2eServices } from "../../scripts/test/e2e-services";
 
 const source = (name: string) => readFileSync(new URL(`../e2e/${name}`, import.meta.url), "utf8");
 
@@ -29,5 +29,17 @@ describe("E2E service requirements", () => {
   });
   test("combines governance, anonymous-reader and availability coverage", () => {
     expect(requiredE2eServices([source("phase3-workspace-governance.spec.ts"), source("share-link.spec.ts"), source("team-workspaces-coming-soon.spec.ts")])).toEqual({ personas: true, unconfigured: true, noSession: false, teamsClosed: true });
+  });
+  test("a spec that reaches SSO personas only through a helper it imports still needs them", () => {
+    const spec = new URL("../e2e/review-paragraph-comment.spec.ts", import.meta.url).pathname;
+    expect(requiredE2eServices([e2eSpecSource(spec)]).personas).toBe(true);
+  });
+  test("importing the module that defines an origin is not using it", () => {
+    const spec = new URL("../e2e/share-link.spec.ts", import.meta.url).pathname;
+    expect(requiredE2eServices([e2eSpecSource(spec)])).toEqual({ personas: false, unconfigured: true, noSession: false, teamsClosed: false });
+  });
+  test("a spec with no helper imports reads as its own source", () => {
+    const spec = new URL("../e2e/personal-workspace.spec.ts", import.meta.url).pathname;
+    expect(e2eSpecSource(spec)).toContain(source("personal-workspace.spec.ts"));
   });
 });
