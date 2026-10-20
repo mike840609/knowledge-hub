@@ -95,3 +95,59 @@ test("filters documents across collections without switching sources", async ({ 
   await filter.fill("no-such-document-123");
   await expect(page.getByRole("status").filter({ hasText: "No matching documents." })).toBeVisible();
 });
+
+test("a synced source's heading marks it read-only, and hover or focus shows its chevron", async ({ page }) => {
+  await page.goto(`/w/${WORKSPACE}/knowledge/${SOURCE}`, { waitUntil: "networkidle" });
+  const explorer = page.getByRole("complementary", { name: "Knowledge explorer" });
+  const synced = explorer.getByRole("button", { name: "Vendor Compliance Vault", exact: true });
+  const hub = explorer.getByRole("button", { name: "Obsidian Wiki", exact: true });
+
+  // At rest: the synced source shows the lock, and says why; the Hub source shows neither.
+  await expect(synced.locator("[data-read-only-cue]")).toBeVisible();
+  await expect(synced.locator("[data-expand-cue]")).toBeHidden();
+  await expect(synced).toHaveAccessibleDescription("Synced from a folder, read-only in the Hub");
+  await expect(hub.locator("[data-read-only-cue]")).toHaveCount(0);
+  await expect(hub.locator("[data-expand-cue]")).toBeHidden();
+  await expect(hub).not.toHaveAccessibleDescription(/read-only/);
+
+  // Keyboard focus (no pointer press yet, so focus is focus-visible) shows the chevron in place of the lock.
+  await page.mouse.move(0, 0);
+  await synced.focus();
+  await expect(synced.locator("[data-expand-cue]")).toBeVisible();
+  await expect(synced.locator("[data-read-only-cue]")).toBeHidden();
+  await synced.blur();
+
+  // Hover does the same, and changes nothing but the glyph.
+  const expanded = await synced.getAttribute("aria-expanded");
+  await synced.hover();
+  await expect(synced.locator("[data-expand-cue]")).toBeVisible();
+  await expect(synced.locator("[data-read-only-cue]")).toBeHidden();
+  await expect(synced).toHaveAttribute("aria-expanded", expanded!);
+  await hub.hover();
+  await expect(hub.locator("[data-expand-cue]")).toBeVisible();
+});
+
+test("a favorite from a synced source carries the read-only cue; one from a Hub source does not", async ({ page }) => {
+  await page.goto(`/w/${WORKSPACE}/knowledge/${SOURCE}`, { waitUntil: "networkidle" });
+  const explorer = page.getByRole("complementary", { name: "Knowledge explorer" });
+  const vault = explorer.getByRole("button", { name: "Vendor Compliance Vault", exact: true });
+  if (await vault.getAttribute("aria-expanded") === "false") await vault.click();
+  await explorer.getByRole("button", { name: "Add to favorites: Compliance Policy", exact: true }).click();
+  await explorer.getByRole("button", { name: "Add to favorites: Runbooks", exact: true }).click();
+  try {
+    const favorites = explorer.getByRole("region", { name: "Favorites" });
+    const toggle = favorites.getByRole("button", { name: "Favorites", exact: true });
+    if (await toggle.getAttribute("aria-expanded") === "false") await toggle.click();
+    const synced = favorites.getByRole("link", { name: "Compliance Policy", exact: true });
+    const hub = favorites.getByRole("link", { name: "Runbooks", exact: true });
+    await expect(synced.locator("[data-read-only-cue]")).toBeVisible();
+    await expect(synced).toHaveAccessibleDescription("Vendor Compliance Vault Synced from a folder, read-only in the Hub");
+    await expect(hub.locator("[data-read-only-cue]")).toHaveCount(0);
+    await expect(hub).not.toHaveAccessibleDescription(/read-only/);
+  } finally {
+    for (const title of ["Compliance Policy", "Runbooks"]) {
+      const remove = explorer.getByRole("button", { name: `Remove from favorites: ${title}`, exact: true }).first();
+      if (await remove.count()) await remove.click();
+    }
+  }
+});
