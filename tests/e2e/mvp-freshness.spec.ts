@@ -5,6 +5,7 @@ import path from "node:path";
 import {stageReadingFolder} from "./fixtures/folder-reading";
 import {createDatabasePool} from "../../src/infrastructure/database/mariadb/pool";
 import {databaseConfig} from "../../src/infrastructure/database/mariadb/config";
+import { comparisonDir } from "./fixtures/ui-comparisons";
 
 test("freshness preference persists and reminders link to source actions",async({page,request})=>{
  const previewsToApply:string[]=[];
@@ -60,7 +61,7 @@ test("freshness preference persists and reminders link to source actions",async(
  await expect(page.getByRole("region",{name:"Needs attention",exact:true}).getByRole("link",{name:/sources need attention/})).toHaveAttribute("href",`/w/${ws}/sources`);
  await page.goto(`/w/${ws}/sources`);
  await expectChosen(region.getByLabel("Freshness threshold"), "7");
- const output=path.resolve("docs/ui-comparisons/mvp-freshness");await mkdir(output,{recursive:true});
+ const output=comparisonDir("mvp-freshness");await mkdir(output,{recursive:true});
  await page.setViewportSize({width:1440,height:1100});await page.screenshot({path:path.join(output,"desktop.png"),fullPage:true,animations:"disabled"});
  await page.setViewportSize({width:390,height:844});await region.scrollIntoViewIfNeeded();await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:path.join(output,"mobile.png"),fullPage:true,animations:"disabled"});
  await row("Pending folder").getByRole("link",{name:"Review preview"}).click();await expect(page).toHaveURL(new RegExp(`/sources/imports/${pending}$`));

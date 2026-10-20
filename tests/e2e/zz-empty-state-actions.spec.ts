@@ -1,6 +1,7 @@
 import { test, expect } from "./fixtures/test";
 import { mkdir } from "node:fs/promises";
 import { stageReadingFolder } from "./fixtures/folder-reading";
+import { comparisonDir } from "./fixtures/ui-comparisons";
 
 test("empty-result recovery preserves work and successful imports lead to reading", async ({ page, request }) => {
   const nav = await (await request.get("/api/workspaces")).json();
@@ -10,8 +11,9 @@ test("empty-result recovery preserves work and successful imports lead to readin
   await page.getByRole("button", { name: "Apply changes" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await expect(page.getByText("Your changes are saved.", { exact: false })).toBeVisible();
-  await mkdir("docs/ui-comparisons/empty-state-guidance", { recursive: true });
-  await page.screenshot({ path: "docs/ui-comparisons/empty-state-guidance/after-import-next-step.png", fullPage: true });
+  const output = comparisonDir("empty-state-guidance");
+  await mkdir(output, { recursive: true });
+  await page.screenshot({ path: `${output}/after-import-next-step.png`, fullPage: true });
   const read = page.waitForResponse(response => response.url().endsWith("/read") && response.status() === 204);
   await page.getByRole("link", { name: "Read this update", exact: true }).click();
   await read;

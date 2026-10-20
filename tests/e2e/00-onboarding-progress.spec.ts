@@ -1,6 +1,7 @@
 import { test, expect } from "./fixtures/test";
 import { mkdir } from "node:fs/promises";
 import { stageReadingFolder } from "./fixtures/folder-reading";
+import { comparisonDir } from "./fixtures/ui-comparisons";
 
 test("onboarding follows real actions and persists progress across browser sessions", async ({ page, request, browser }) => {
   const nav = await (await request.get("/api/workspaces")).json();
@@ -8,7 +9,8 @@ test("onboarding follows real actions and persists progress across browser sessi
   const endpoint = `/api/workspaces/${ws}/onboarding`;
   const initial = await (await request.get(endpoint)).json();
   expect((await request.put(endpoint, { data: { value: { schemaVersion: 1, dismissed: false }, version: initial.version } })).ok()).toBe(true);
-  await mkdir("docs/ui-comparisons/onboarding-progress", { recursive: true });
+  const output = comparisonDir("onboarding-progress");
+  await mkdir(output, { recursive: true });
   const home = async () => { await page.goto(`/w/${ws}/home`); };
   const guide = page.getByRole("region", { name: "Get started", exact: true });
   await home();
@@ -16,7 +18,7 @@ test("onboarding follows real actions and persists progress across browser sessi
   await expect(guide.getByRole("link", { name: "Import your first folder", exact: true })).toBeVisible();
   for (const [name, viewport] of [["desktop", { width: 1440, height: 1000 }], ["mobile", { width: 390, height: 844 }]] as const) {
     await page.setViewportSize(viewport);
-    await page.screenshot({ path: `docs/ui-comparisons/onboarding-progress/before-import-${name}.png`, fullPage: true });
+    await page.screenshot({ path: `${output}/before-import-${name}.png`, fullPage: true });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
   const snapshot = await stageReadingFolder(request, { workspaceId: ws, sourceName: "Tutorial progress folder", fixture: "reading-flow-v1" });
@@ -49,7 +51,7 @@ test("onboarding follows real actions and persists progress across browser sessi
   await expect(guide.getByText("4 of 4 steps complete", { exact: false })).toBeVisible();
   for (const [name, viewport] of [["desktop", { width: 1440, height: 1000 }], ["mobile", { width: 390, height: 844 }]] as const) {
     await page.setViewportSize(viewport);
-    await page.screenshot({ path: `docs/ui-comparisons/onboarding-progress/completed-${name}.png`, fullPage: true });
+    await page.screenshot({ path: `${output}/completed-${name}.png`, fullPage: true });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
   const other = await browser.newContext();

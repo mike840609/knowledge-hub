@@ -232,7 +232,7 @@ npm run test:e2e
 KM_E2E_PERSONAL_ONLY=true npm run test:e2e -- personal-workspace.spec.ts
 ```
 
-The test runner manages its own mode and required servers rather than inheriting the Team default from `.env`. Reports are written to `playwright-report/e2e-runs/<suite>/<UUID>/` and `test-results/`, and are excluded from Git. See the [E2E coverage matrix](docs/superpowers/verification/2026-10-02-e2e-coverage-matrix.md) for coverage details.
+The test runner manages its own mode and required servers rather than inheriting the Team default from `.env`. Reports are written to `playwright-report/e2e-runs/<suite>/<UUID>/` and `test-results/`, and are excluded from Git. Specs that take comparison screenshots write them to `test-results/ui-comparisons/` too; the tracked before/after evidence under `docs/ui-comparisons/` is rewritten only with `KM_UPDATE_UI_COMPARISONS=1`. See the [E2E coverage matrix](docs/superpowers/verification/2026-10-02-e2e-coverage-matrix.md) for coverage details.
 
 ### Next.js patch
 
