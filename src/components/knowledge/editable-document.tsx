@@ -56,6 +56,11 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
   }, [router]);
   const [outline, setOutline] = useState(detail.outline);
   const [ready, setReady] = useState(false);
+  // A press on the stand-in finishes on the stand-in. Swapping the editor in between its down and up
+  // splits them across two elements, and the browser then clicks neither: a link pressed as the page
+  // settles would not open. So the editor waits for the release, and for the click it dispatches.
+  const standInPressed = useRef(false);
+  const revealAfterPress = useRef(false);
   const [loaded, setLoaded] = useState(false);
   const [source, setSource] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -195,6 +200,13 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
       try { flushRef.current(); } catch { /* Last serialized recovery copy survives editor teardown. */ }
       keepRecovery();
     };
+    const pressEnded = () => {
+      standInPressed.current = false;
+      if (!revealAfterPress.current) return;
+      revealAfterPress.current = false;
+      // A mouse release dispatches pointerup, mouseup and click in one task; the next task is after them.
+      setTimeout(() => { if (live) setReady(true); }, 0);
+    };
     const visibility = () => { if (document.visibilityState === "hidden") persist(); };
     const unload = (event: BeforeUnloadEvent) => {
       persist();
@@ -203,6 +215,9 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
     window.addEventListener("pagehide", persist);
     window.addEventListener("beforeunload", unload);
     document.addEventListener("visibilitychange", visibility);
+    for (const type of ["pointerup", "pointercancel"]) window.addEventListener(type, pressEnded, true);
+    // Not captured: a captured blur is any element's, and a press moves focus.
+    window.addEventListener("blur", pressEnded);
     return () => {
       persist();
       live = false;
@@ -214,6 +229,8 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
       window.removeEventListener("pagehide", persist);
       window.removeEventListener("beforeunload", unload);
       document.removeEventListener("visibilitychange", visibility);
+      for (const type of ["pointerup", "pointercancel"]) window.removeEventListener(type, pressEnded, true);
+      window.removeEventListener("blur", pressEnded);
     };
     // A document identity mounts a new component; server refreshes must not reset edits or history.
   }, []);
@@ -331,7 +348,7 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     }}>Download my changes</Button>}
     {failed && <p role="status" className="mb-3 text-body-sm">Rendered editing is unavailable. You can continue in Markdown.</p>}
-    <div onCompositionStart={() => { composing.current = true; writer?.pause(true); }} onCompositionEnd={() => {
+    <div onPointerDownCapture={() => { if (!ready) standInPressed.current = true; }} onCompositionStart={() => { composing.current = true; writer?.pause(true); }} onCompositionEnd={() => {
       composing.current = false;
       flushEditor();
       writer?.pause(!editable || !!recovery || !resolve(queue.current!.current).title);
@@ -352,7 +369,8 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
           markdown={content.markdown} editable={editable && !source} onReady={(instance, openedWith) => {
             editor.current = instance;
             if (openedWith !== queue.current!.current.markdown) instance.replaceMarkdown(queue.current!.current.markdown);
-            setReady(true);
+            if (standInPressed.current) revealAfterPress.current = true;
+            else setReady(true);
           }} onFail={() => setFailed(true)} onUserEdit={() => {
             pending.current = true;
             // ProseMirror calls this during transaction application; serialize after it has committed.

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "./fixtures/test";
+import { expect, test, type Locator, type Page } from "./fixtures/test";
 import { phase3UnconfiguredOrigin } from "./fixtures/phase3-identities";
 import { openPalette } from "./fixtures/palette";
 
@@ -20,6 +20,42 @@ async function createMySpaceDocument(page: Page, title: string, body: string): P
   expect(response.status()).toBe(201);
   const created = await response.json() as { sourceId: string; documentId: string };
   return { workspaceId, url: new URL(`/w/${workspaceId}/knowledge/${created.sourceId}/${created.documentId}`, response.url()).href };
+}
+
+/**
+ * A document page arrives as a server-rendered copy, and the rendered editor replaces it when its script
+ * loads. A press spanning that moment once went down on one element and up on another, the browser clicked
+ * neither, and a link pressed as the page settled opened nothing (CI, where the script landed mid-click).
+ * Holding back the editor's script puts the replacement inside the press, on cue.
+ */
+async function openWithEditorHeld(page: Page, url: string, linkName: string) {
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  await page.route("**/_next/static/chunks/**", async route => {
+    const response = await route.fetch();
+    const body = await response.text();
+    // The rendered editor's own chunk: the only one with this label of its code-block control.
+    if (body.includes("Done editing code")) await held;
+    await route.fulfill({ response, body });
+  });
+  await page.goto(url);
+  const editor = page.locator('article[data-review-document=""]');
+  const link = page.locator("article").first().getByRole("link", { name: linkName });
+  await expect(link).toBeVisible();
+  await expect(editor).toHaveCount(0);
+  // Hydrated, so a press reaches React rather than the browser's own link handling.
+  await expect.poll(() => link.evaluate(anchor => Object.keys(anchor).some(key => key.startsWith("__reactProps")))).toBe(true);
+  async function pressAcrossTakeover(target: Locator) {
+    const box = (await target.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    release();
+    await expect(page.locator(".ProseMirror")).toBeAttached(ROUND_TRIP);
+    // The editor is built; leave it the moment it took to replace the copy, with the button still down.
+    await page.waitForTimeout(500);
+    await page.mouse.up();
+  }
+  return { editor, link, pressAcrossTakeover };
 }
 
 test.describe("wikilinks and backlinks in My Space", () => {
@@ -209,6 +245,24 @@ test.describe("wikilinks and backlinks in My Space", () => {
     await page.locator("article").first().getByRole("link", { name: "the setup" }).click();
     await expect(page).toHaveURL(`${target.url}#local-setup`, ROUND_TRIP);
     await expect(page.locator("#local-setup:visible")).toBeInViewport(ROUND_TRIP);
+  });
+
+  test("a link pressed while the editor takes over from the server's copy still opens", async ({ page }) => {
+    const stamp = Date.now();
+    const target = await createMySpaceDocument(page, `Pressed Target ${stamp}`, "The target.");
+    const linker = await createMySpaceDocument(page, `Pressed Linker ${stamp}`, `Go to [[Pressed Target ${stamp}|the target]].`);
+    const { link, pressAcrossTakeover } = await openWithEditorHeld(page, linker.url, "the target");
+    // Focus elsewhere, so the press also moves focus (a blur mid-press must not count as its end).
+    await page.getByRole("button", { name: "Quick search" }).focus();
+    await pressAcrossTakeover(link);
+    await expect(page).toHaveURL(target.url, ROUND_TRIP);
+  });
+
+  test("a press that opens nothing still lets the editor take over once it is released", async ({ page }) => {
+    const linker = await createMySpaceDocument(page, `Pressed Text ${Date.now()}`, `Plain words.\n\nAnd [[Nowhere ${Date.now()}|a link]].`);
+    const { editor, pressAcrossTakeover } = await openWithEditorHeld(page, linker.url, "a link");
+    await pressAcrossTakeover(page.locator("article").first().getByText("Plain words.", { exact: true }));
+    await expect(editor).toBeVisible(ROUND_TRIP);
   });
 });
 
