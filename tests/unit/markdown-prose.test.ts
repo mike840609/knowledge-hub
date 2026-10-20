@@ -45,3 +45,10 @@ describe("the heading scale", () => {
     expect(fontSize.subheading[1].lineHeight).toBe("26px");
   });
 });
+
+describe("inline code", () => {
+  it("is a chip only outside a code block, where its padding would indent the block's first line", () => {
+    expect(classes.filter((name) => name.startsWith("[&_code]"))).toEqual([]);
+    expect(classes).toContain("[&_:not(pre)>code]:px-1");
+  });
+});

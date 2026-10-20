@@ -83,3 +83,33 @@ test("Edit code shows on hover and on keyboard focus, and stays while the code i
   await page.mouse.move(5, 5);
   await expect.poll(() => done.evaluate((element) => getComputedStyle(element).opacity)).toBe("1");
 });
+
+test("a code block in the editor is drawn as the reader draws it: one box, and the reader's height", async ({ page }) => {
+  await open(page);
+  const preview = page.locator("[data-inline-code-preview]").first();
+  await expect(preview.locator("pre")).toBeVisible();
+  // The editor's rule for the raw code it edits must not reach the reader's block it shows: that drew a second
+  // box inside the first, and its margins, so the editor's page ran longer than the page it saves.
+  const inner = await preview.locator("pre").evaluate((pre) => {
+    const style = getComputedStyle(pre);
+    return { border: style.borderTopWidth, margin: style.marginTop, background: style.backgroundColor };
+  });
+  expect(inner).toEqual({ border: "0px", margin: "0px", background: "rgba(0, 0, 0, 0)" });
+  // Where the block and the paragraph after it sit, from the top of the document's first heading.
+  const layout = (root: string) => page.evaluate((selector) => {
+    const scope = document.querySelector(selector)!;
+    const top = scope.querySelector("h1")!.getBoundingClientRect().top;
+    const box = scope.querySelector("[data-code-block]")!.getBoundingClientRect();
+    const code = getComputedStyle(scope.querySelector("[data-code-block] pre code")!);
+    const after = Array.from(scope.querySelectorAll("p")).find((p) => p.textContent === "After.")!.getBoundingClientRect();
+    // An inline-code chip's padding on a block's <code> indents only its first line.
+    return { block: Math.round(box.top - top), height: Math.round(box.height), after: Math.round(after.top - top), codePadding: code.paddingLeft };
+  }, root);
+  const editor = await layout('[role="textbox"][aria-label="Content"]');
+
+  await page.goto(`${page.url()}?revision=1`);
+  await expect(page.locator("article [data-code-block]")).toBeVisible();
+  // Edit code takes no room of its own until the code is being edited: the editor's page is the reader's page.
+  expect(editor).toEqual(await layout("article"));
+  expect(editor.codePadding).toBe("0px");
+});

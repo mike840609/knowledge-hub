@@ -93,6 +93,19 @@ documents are read in.
   - **Edit code** under each code block is shown when the block is pointed at, when it
     has keyboard focus, and while the code is being edited. It is always shown where
     nothing can point (`hover: none`). It is never removed from the page or the
-    accessibility tree, only made transparent.
+    accessibility tree, only made transparent. While the code is not being edited it sits
+    over the block's lower right corner and takes no room of its own. While editing, it is
+    in the flow as before.
+- **The editor draws a code block as the reader does.** The editor shows the reader's
+  block (`InlineCodePreview` → `MarkdownRenderer`), but `.kh-editor pre`, the rule for
+  the raw code being edited, also reached the reader's `<pre>` inside it. It drew a second
+  border, background and 16px margins inside the first box. With the Edit code line, the
+  editor's page ran about 44px longer per block than the page it saves (measured: the
+  following `hr` at 493 against 449). The rule now skips `[data-inline-code-preview]`.
+  The editor and the reader place the block, its height and the next paragraph at the
+  same offsets.
+- **A block's first line is not indented.** `MARKDOWN_PROSE` gave every `code` the
+  inline-code chip, padding included, so in both views the first line of every block sat
+  4px right of the others. The chip is now `:not(pre) > code`.
 
 Acceptance: `tests/e2e/zz-reader-chrome.spec.ts`.
