@@ -71,10 +71,10 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
     .sort((a, b) => Number(b.source.sourceType === "HUB") - Number(a.source.sourceType === "HUB")),
   [collections, showArchived, includeArchived]);
   const documents = useMemo(() => {
-    const map = new Map<string, { documentId: string; sourceId: string; sourceName: string; label: string }>();
+    const map = new Map<string, { documentId: string; sourceId: string; sourceName: string; ownership: SourceView["ownership"]; label: string }>();
     for (const collection of visibleCollections) {
       for (const item of collection.tree) {
-        if (item.type === "document") map.set(`${collection.source.id}:${item.documentId}`, { documentId: item.documentId, sourceId: collection.source.id, sourceName: collection.source.name, label: item.label });
+        if (item.type === "document") map.set(`${collection.source.id}:${item.documentId}`, { documentId: item.documentId, sourceId: collection.source.id, sourceName: collection.source.name, ownership: collection.source.ownership, label: item.label });
       }
     }
     return map;
@@ -128,9 +128,10 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
     if (!document) return null;
     const selected = document.documentId === resolvedDocumentId;
     return <li key={key} className={`kh-interactive-row group flex min-h-8 items-center ${selected ? "bg-kh-bg-selected hover:bg-kh-bg-selected" : ""}`}>
-      <Link href={`/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}${showArchived ? "?includeArchived=true" : ""}`} prefetch={selected ? false : undefined} title={`${document.label} · ${document.sourceName}`} aria-current={selected ? "page" : undefined} className={`kh-control flex min-h-8 min-w-0 flex-1 items-center gap-2 px-2 text-body kh-focus-ring ${selected ? "font-medium text-kh-selected-text" : "text-kh-text-muted"}`}>
+      <Link href={`/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}${showArchived ? "?includeArchived=true" : ""}`} prefetch={selected ? false : undefined} title={`${document.label} · ${document.sourceName}`} aria-current={selected ? "page" : undefined} aria-describedby={document.ownership === "SOURCE_MANAGED" ? readOnlyDescriptionId : undefined} className={`kh-control flex min-h-8 min-w-0 flex-1 items-center gap-2 px-2 text-body kh-focus-ring ${selected ? "font-medium text-kh-selected-text" : "text-kh-text-muted"}`}>
         {favorite ? <FileText size={14} className="shrink-0" aria-hidden="true" /> : <Clock3 size={14} className="shrink-0" aria-hidden="true" />}
         <span className="truncate">{document.label}</span>
+        {document.ownership === "SOURCE_MANAGED" ? <LockKeyhole size={14} data-read-only-cue="" className="shrink-0 text-kh-text-muted" aria-hidden="true" /> : null}
       </Link>
       <Tooltip label={favorite ? "Remove from favorites" : "Add to favorites"}>
         <button type="button" onClick={() => toggleFavorite(document.sourceId, document.documentId)} aria-label={`${favorite ? "Remove from" : "Add to"} favorites: ${document.label}`} className={`mr-1 inline-flex kh-control kh-icon-control h-6 w-6 shrink-0 items-center justify-center rounded-md text-kh-text-muted kh-focus-ring ${favorite ? "opacity-80" : "kh-row-action"}`}>
@@ -221,12 +222,13 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
                     return (
                       <MenuItem
                         key={key}
-                        render={<Link href={`/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}${showArchived ? "?includeArchived=true" : ""}`} prefetch={selected ? false : undefined} aria-current={selected ? "page" : undefined} />}
+                        render={<Link href={`/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}${showArchived ? "?includeArchived=true" : ""}`} prefetch={selected ? false : undefined} aria-current={selected ? "page" : undefined} aria-describedby={document.ownership === "SOURCE_MANAGED" ? readOnlyDescriptionId : undefined} />}
                         className={selected ? "bg-kh-bg-selected font-medium text-kh-selected-text" : ""}
                       >
                         <FileText size={14} className="shrink-0" aria-hidden="true" />
                         <span className="min-w-0 flex-1 truncate" title={document.label}>{document.label}</span>
                         <span className="max-w-[40%] shrink-0 truncate text-caption text-kh-text-muted">{document.sourceName}</span>
+                        {document.ownership === "SOURCE_MANAGED" ? <LockKeyhole size={14} data-read-only-cue="" className="shrink-0 text-kh-text-muted" aria-hidden="true" /> : null}
                       </MenuItem>
                     );
                   })}
