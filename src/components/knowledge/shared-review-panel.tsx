@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { ReviewThreadView } from "@/modules/knowledge/domain/document-review";
 import { useReviewHighlights } from "./review-highlights";
-import { RefreshCw, MessageSquare, MessageSquarePlus, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { LogIn, RefreshCw, MessageSquare, MessageSquarePlus, X } from "lucide-react";
+import { Button, buttonClasses } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { ReviewFilterMenu, ReviewThreadList, reviewRequest, type ReviewFilter } from "./review-thread-list";
 import { ReviewComposer, ReviewSelectionBubble, useReviewSelection } from "./review-composer";
@@ -14,7 +14,7 @@ import { ReviewPassageMarkers } from "./review-passage-markers";
 import { reviewRailInline, useReviewRailInline } from "./review-rail-mode";
 
 type DiscussionResult = { threads: ReviewThreadView[]; revisionId: string; writesEnabled: boolean; callerUserId: string | null };
-export function SharedReviewPanel({ token, revisionId, markdown, children }: { token: string; revisionId: string; markdown: string; children: ReactNode }) {
+export function SharedReviewPanel({ token, revisionId, markdown, signInHref, children }: { token: string; revisionId: string; markdown: string; signInHref: string; children: ReactNode }) {
   const [result, setResult] = useState<DiscussionResult>();
   const [error, setError] = useState<string>();
   const [activeThreadId, setActiveThreadId] = useState<string>();
@@ -33,6 +33,14 @@ export function SharedReviewPanel({ token, revisionId, markdown, children }: { t
   const toggle = useCallback(() => changeOpen(!open), [changeOpen, open]);
   const revisionChanged = !!result && result.revisionId !== revisionId;
   const canComment = !!result?.writesEnabled && !revisionChanged;
+  const anonymous = result?.callerUserId === null;
+  // Discussions are what a reviewer came for: where they fit beside the document, they open with it (once).
+  const autoOpened = useRef(false);
+  useEffect(() => {
+    if (autoOpened.current || !result || !inline) return;
+    autoOpened.current = true;
+    if (result.threads.length > 0) setOpen(true);
+  }, [result, inline]);
   useReviewHighlights(markdown, revisionChanged ? undefined : result?.threads, activeThreadId);
   const selection = useReviewSelection(readingRef, markdown, `${token}:${revisionId}`);
   const load = useCallback(async () => {
@@ -66,6 +74,7 @@ export function SharedReviewPanel({ token, revisionId, markdown, children }: { t
       <div ref={readingRef} className="kh-review-reading">
         {children}
         {canComment && <ReviewSelectionBubble place={selection.place} ready={selection.ready} hint={selection.hint} onComment={() => { selection.capture(); changeOpen(true); }} />}
+        {anonymous && !revisionChanged && <ReviewSelectionBubble place={selection.place} ready={selection.ready} signInHref={signInHref} onComment={() => undefined} />}
         <ReviewPassageMarkers readingRef={readingRef} markdown={markdown} threads={revisionChanged ? undefined : result?.threads} />
       </div>
       <aside id="shared-document-discussions" className="kh-review-panel" aria-label="Document discussions" onKeyDown={event => { if (!event.defaultPrevented && event.key === "Escape" && reviewRailInline()) changeOpen(false); }}>
@@ -85,6 +94,7 @@ export function SharedReviewPanel({ token, revisionId, markdown, children }: { t
         {/* The one thing a reader does here that an owner does not, on a row of its own. */}
         {canComment && <div className="mb-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={selection.capture} aria-label="Add comment from selected text"><MessageSquarePlus className="size-4" aria-hidden="true" />Add comment</Button></div>}
         {!result.writesEnabled && <p className="mb-3 text-body-sm text-kh-text-muted">{result.callerUserId === null ? "Sign in to add a comment." : "Adding comments is currently disabled."}</p>}
+        {anonymous && <div className="mb-3"><a href={signInHref} className={buttonClasses({ variant: "soft" })}><LogIn className="size-4" aria-hidden="true" />Sign in to comment</a></div>}
       </div>}
       </div>
       {!draft && composer}

@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
-import { MessageSquarePlus } from "lucide-react";
+import { LogIn, MessageSquarePlus } from "lucide-react";
 import type { ReviewAnchor } from "@/modules/knowledge/domain/document-review";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClasses } from "@/components/ui/button";
 import { readReviewSelection, REVIEW_SELECTION_HINTS } from "./review-selection";
 import { ReviewReplyForm } from "./review-thread-list";
 
@@ -82,12 +82,15 @@ function placeOf(box: HTMLElement | null, selection: Selection | null): Selectio
  * first line, or below it where the line is at the top of the article. The selection stays: the
  * button takes no focus from a pointer.
  */
-export function ReviewSelectionBubble({ place, ready, hint, onComment }: { place: SelectionPlace | null; ready: boolean; hint?: string; onComment: () => void }) {
+/** `signInHref`: the reader may not comment yet; a chosen passage offers sign-in in place of Comment. */
+export function ReviewSelectionBubble({ place, ready, hint, onComment, signInHref }: { place: SelectionPlace | null; ready: boolean; hint?: string; onComment: () => void; signInHref?: string }) {
   if (!place || (!ready && !hint)) return null;
   const above = place.top >= 40;
   const style = { top: above ? place.top - 8 : place.bottom + 8, left: Math.max(0, place.left), transform: above ? "translateY(-100%)" : undefined };
   return <div className="kh-selection-bubble absolute z-20 rounded-md border border-kh-border bg-kh-bg shadow-popover" style={style}>
-    {ready
+    {ready && signInHref
+      ? <a href={signInHref} className={buttonClasses({ variant: "ghost" })} onPointerDown={event => event.preventDefault()}><LogIn className="size-4" aria-hidden="true" />Sign in to comment</a>
+      : ready
       ? <Button type="button" variant="ghost" aria-label="Comment on selection" onPointerDown={event => event.preventDefault()} onClick={onComment}><MessageSquarePlus className="size-4" aria-hidden="true" />Comment</Button>
       : <p role="status" className="max-w-xs px-3 py-2 text-body-sm text-kh-text-muted">{hint}</p>}
   </div>;

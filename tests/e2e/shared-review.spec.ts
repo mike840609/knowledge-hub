@@ -65,6 +65,37 @@ test("anonymous readers see comments but cannot create or reply, even without an
   expect(revoked.status()).toBe(404); expect(JSON.stringify(await revoked.json())).not.toContain("Visible without signing in");
 });
 
+test("anonymous readers find the discussions open beside the document and are offered sign-in to comment", async ({ page, request }) => {
+  const doc = await createReviewDocument(request, "A first passage to review.\n\nA second paragraph here.");
+  const token = doc.links[0].path.split("/").pop();
+  const viewer = phase3Origin("viewer");
+  const created = await request.post(`${viewer}/api/share-review/threads`, { headers: { Origin: viewer }, data: { token, expectedRevisionId: doc.revisionId, anchor: { schemaVersion: 1, blockPath: [0], blockKind: "paragraph", startUtf16: 2, endUtf16: 7, exact: "first", prefix: "A ", suffix: " passage to review." }, body: "Open without a click", idempotencyKey: crypto.randomUUID() } });
+  expect(created.status()).toBe(201);
+  const origin = phase3NoSessionOrigin();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${origin}${doc.links[0].path}`);
+  const entry = page.getByRole("button", { name: /^(Open|Hide) discussions/ });
+  await expect(entry).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator("[data-review-thread]")).toContainText("Open without a click");
+  const signIn = page.getByRole("link", { name: "Sign in to comment" });
+  await expect(signIn).toHaveAttribute("href", /\/s\/[^/]+\/open/);
+  // Choosing a passage offers sign-in where a signed-in reader is offered Comment.
+  await selectPassage(page, "first");
+  await expect(page.locator(".kh-selection-bubble").getByRole("link", { name: "Sign in to comment" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Comment on selection" })).toHaveCount(0);
+  // Closed once, it stays closed: it opens with the page, not again.
+  await entry.click();
+  await expect(entry).toHaveAttribute("aria-expanded", "false");
+});
+
+test("a shared page with no discussions keeps them closed", async ({ page, request }) => {
+  const doc = await createReviewDocument(request);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${phase3NoSessionOrigin()}${doc.links[0].path}`);
+  await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
+  await expect(page.getByRole("button", { name: /^Open discussions/ })).toHaveAttribute("aria-expanded", "false");
+});
+
 test("review rejects cross-origin and browser-supplied identities", async ({ request }) => {
   const doc = await createReviewDocument(request);
   const origin = phase3Origin("viewer");
