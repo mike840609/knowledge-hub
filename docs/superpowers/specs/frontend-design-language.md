@@ -425,6 +425,13 @@ nothing. A scope the highlighter starts to emit that has neither a colour nor a
 reason to be left plain fails the same test, which is how a lowlight upgrade
 announces itself.
 
+In the reader a block names its language in its corner, before the copy
+button, as the fence wrote it, in mono `caption`, `text-muted`; a block that
+names none shows nothing. A block of more than 30 lines opens held to 20 lines'
+height, scrolling inside it, with a ghost `Show all N lines` below — held, not
+cut, so find and a comment's highlight still reach every line
+(`2026-10-20-reader-code-block-label-collapse-design.md`).
+
 The rendered editor's code blocks are not coloured (daily-driver spec §5);
 they are the editor's, and its decorations are a different piece of work.
 
