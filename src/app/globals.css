@@ -256,6 +256,15 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-editor a {
     @apply cursor-text font-medium text-kh-link underline decoration-kh-link underline-offset-2;
   }
+  /* An external link says it leaves the Hub, as the reader's does with lucide's ExternalLink (the
+     same glyph). A pseudo-element, so neither the Markdown written back nor the caret sees it. The
+     reader's test (`isExternalHref`): http, https or protocol-relative. */
+  .kh-editor a:is([href^="http://"], [href^="https://"], [href^="//"])::after {
+    content: "";
+    @apply ml-0.5 inline-block h-3 w-3 bg-current;
+    -webkit-mask: url("/icons/external-link.svg") center / contain no-repeat;
+    mask: url("/icons/external-link.svg") center / contain no-repeat;
+  }
   /* A [[wikilink]] is one node, read as the reader reads it: the link colour and underline. It is
      not followed from here — a draft has no resolutions, so only the reader can say where it goes —
      so it does not take the pointer. Selected as a whole, since a caret is never inside it. */

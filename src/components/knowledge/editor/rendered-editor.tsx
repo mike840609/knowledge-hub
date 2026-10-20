@@ -129,6 +129,8 @@ export function RenderedEditor(props: RenderedEditorProps) {
             const dom = document.createElement("div");
             const preview = document.createElement("div");
             preview.contentEditable = "false";
+            // Edit code shows when the block is pointed at (below).
+            preview.className = "group/code";
             const pre = document.createElement("pre");
             pre.hidden = true;
             const contentDOM = document.createElement("code");
@@ -258,7 +260,9 @@ export function RenderedEditor(props: RenderedEditorProps) {
     return createPortal(<MarkdownAnchor links={props.links} {...attributes}>{parts.alias ?? (parts.target || parts.fragment)}</MarkdownAnchor>, dom, String(index));
   })}{codeViews.map(entry => createPortal(<>
     <div data-inline-code-preview hidden={entry.editing}>{props.renderCode?.(entry.code, entry.language)}</div>
-    <button type="button" className="text-caption text-kh-text-muted hover:text-kh-text" onClick={() => entry.setEditing(!entry.editing)}>{entry.editing ? "Done editing code" : "Edit code"}</button>
+    {/* Under every block it is a line of chrome read past on each scroll: shown on pointing, on keyboard focus,
+        while editing, and always where nothing can point (reader-measure spec §5). */}
+    <button type="button" className={`text-caption text-kh-text-muted transition-opacity hover:text-kh-text focus-visible:opacity-100 group-hover/code:opacity-100 [@media(hover:none)]:opacity-100 ${entry.editing ? "" : "opacity-0"}`} onClick={() => entry.setEditing(!entry.editing)}>{entry.editing ? "Done editing code" : "Edit code"}</button>
   </>, entry.preview, String(codeViews.indexOf(entry))))}</>;
 
 }

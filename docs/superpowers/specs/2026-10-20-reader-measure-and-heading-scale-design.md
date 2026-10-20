@@ -73,3 +73,26 @@ The Markdown source view is raw text being edited and is unchanged.
   - a paragraph's box is at most 640px wide, and a table may be wider;
   - computed font sizes are `h3` 17px and `h4`, `h5`, `h6` at least 15px;
   - every heading is at least as large as body text.
+
+## 5. Follow-ups on the same page (added 2026-10-20)
+
+The same evaluation found two more things on the editable document page, the view most
+documents are read in.
+
+- **An external link in the editor says it leaves.** The reader appends lucide's
+  `ExternalLink` to an `http`, `https` or protocol-relative link (`isExternalHref`). The
+  editor drew no mark, so a wikilink and a link off-site looked the same. The editor now
+  draws the same glyph as a CSS `::after` mask (`/icons/external-link.svg`, the pattern
+  `check.svg` uses) in the link's colour. Being a pseudo-element, it is in neither the
+  Markdown written back nor the text the caret walks.
+- **Less chrome between the page's top and its first line.**
+  - The Markdown toggle used to sit on a row of its own above the article and pushed the
+    title down about 60px. It now sits with the page's actions in the pinned line, after
+    the save status and before Share (`DocumentHeader`'s `editorActions`, which was
+    `saveStatus`). That keeps it reachable while scrolling, and `⌘/` is unchanged.
+  - **Edit code** under each code block is shown when the block is pointed at, when it
+    has keyboard focus, and while the code is being edited. It is always shown where
+    nothing can point (`hover: none`). It is never removed from the page or the
+    accessibility tree, only made transparent.
+
+Acceptance: `tests/e2e/zz-reader-chrome.spec.ts`.

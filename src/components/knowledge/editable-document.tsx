@@ -21,7 +21,7 @@ import type { MarkdownEditor } from "./editor/editor-core";
 import type { RenderedEditorProps } from "./editor/rendered-editor";
 import type { CaptureReviewAnchor, PreparedReviewComment } from "./inline-review-context";
 
-type DetailProps = Omit<ComponentProps<typeof DocumentDetailClient>, "children" | "titleControl" | "saveStatus">;
+type DetailProps = Omit<ComponentProps<typeof DocumentDetailClient>, "children" | "titleControl" | "editorActions">;
 
 /** The reader's frame stays mounted while its article edits and saves in place. */
 export function EditableDocument({ detail, markdown, metadataTitle, revisionId, userId, personal, standIn, backlinks, links }: {
@@ -306,14 +306,13 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
   }
   const displayTitle = dirty || recovery ? resolved.title || "Untitled" : savedTitle;
   const Article = "article";
+  // With the page's actions in the pinned line rather than on a row of its own above the title.
+  const markdownToggle = <Button type="button" variant="ghost" aria-pressed={source || failed} disabled={!loaded || failed} onClick={() => {
+    flushEditor();
+    if (!source) sourceRef.current = true;
+    setSource(value => !value);
+  }}>Markdown</Button>;
   const article = <>
-    <div className="mb-3 flex items-center justify-end gap-2 text-caption">
-      <Button type="button" variant="ghost" aria-pressed={source || failed} disabled={!loaded || failed} onClick={() => {
-        flushEditor();
-        if (!source) sourceRef.current = true;
-        setSource(value => !value);
-      }}>Markdown</Button>
-    </div>
     {recovery && <p role="status" className="mb-3 text-body-sm">
       {recovery === "stale" ? "This document changed while you were away. Your recovered text is kept here; download it before loading the latest version." : "Your unsaved changes were recovered."}
       {recovery === "current" && <Button variant="link" onClick={() => setRecovery(null)}>Resume saving</Button>}
@@ -373,7 +372,7 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
     inspectorData={{ ...detail.inspectorData, revisions, selectedRevisionNo: revisions.find(item => item.id === savedRevision)?.revisionNo ?? detail.inspectorData.selectedRevisionNo }}
     breadcrumb={[...detail.breadcrumb.slice(0, -1), { label: displayTitle }]} outline={outline}
     contentOwnsTitle={markdownOpensWithHeading(content.markdown)}
-    saveStatus={<AutosaveIndicator state={status} attention={attention} />}
+    editorActions={<><AutosaveIndicator state={status} attention={attention} />{markdownToggle}</>}
     titleControl={resolved.source === "TYPED" ? <input aria-label="Title" value={content.title} disabled={!editable} maxLength={512}
       onChange={event => change({ ...queue.current!.current, title: event.target.value })}
       className="mt-2 block w-full border-0 bg-transparent p-0 text-heading font-semibold tracking-tight text-kh-text outline-none"
