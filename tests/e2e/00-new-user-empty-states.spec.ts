@@ -1,5 +1,6 @@
 import { test, expect } from "./fixtures/test";
 import { mkdir } from "node:fs/promises";
+import { comparisonDir } from "./fixtures/ui-comparisons";
 
 test("new users get actionable guidance on every empty page and can reopen Home guidance", async ({ page, request }) => {
   const nav = await (await request.get("/api/workspaces")).json();
@@ -7,7 +8,7 @@ test("new users get actionable guidance on every empty page and can reopen Home 
   const endpoint = `/api/workspaces/${ws}/onboarding`;
   const initial = await (await request.get(endpoint)).json();
   expect((await request.put(endpoint, { data: { value: { schemaVersion: 1, dismissed: false }, version: initial.version } })).ok()).toBe(true);
-  const output = process.env.KM_EMPTY_SCREENSHOTS ?? "docs/ui-comparisons/empty-state-guidance";
+  const output = process.env.KM_EMPTY_SCREENSHOTS ?? comparisonDir("empty-state-guidance");
   await mkdir(output, { recursive: true });
   const pages = [
     ["knowledge", "No documents yet"],

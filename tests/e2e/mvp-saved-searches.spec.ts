@@ -1,6 +1,7 @@
 import { test, expect } from "./fixtures/test";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
+import { comparisonDir } from "./fixtures/ui-comparisons";
 test("personal saved search save, reload, reopen, rename, conflict and delete", async ({page, request}) => {
  const nav = await (await request.get("/api/workspaces")).json();
  const ws = nav.items.find((w:{type:string}) => w.type === "PERSONAL").id;
@@ -22,7 +23,7 @@ test("personal saved search save, reload, reopen, rename, conflict and delete", 
  await region.getByRole("textbox",{name:"Saved search name"}).fill("Weekly research");
  await region.getByRole("button",{name:"Rename search",exact:true}).click();
  await expect(region.getByRole("link",{name:"Weekly research",exact:true})).toBeVisible();
- const output = path.resolve("docs/ui-comparisons/mvp-saved-searches"); await mkdir(output,{recursive:true});
+ const output = comparisonDir("mvp-saved-searches"); await mkdir(output,{recursive:true});
  await page.getByRole("button",{name:"Dismiss notification"}).click();
  await page.screenshot({path:path.join(output,"desktop.png"),fullPage:true,animations:"disabled"});
  await page.setViewportSize({width:390,height:844});

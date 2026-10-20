@@ -1,6 +1,7 @@
 import { test, expect } from "./fixtures/test";
 import { mkdir } from "node:fs/promises";
 import { stageReadingFolder } from "./fixtures/folder-reading";
+import { comparisonDir } from "./fixtures/ui-comparisons";
 test("first folder guidance persists dismissal and rejects invalid or inaccessible preferences", async ({ page, request, browser }) => {
   const nav = await (await request.get("/api/workspaces")).json();
   const ws = nav.items.find((w: { type: string }) => w.type === "PERSONAL").id;
@@ -23,7 +24,7 @@ test("first folder guidance persists dismissal and rejects invalid or inaccessib
   await guide.getByRole("link", { name: "Prepare AI context" }).click();
   await expect(page).toHaveURL(/\/agent-context$/);
   await page.goto(`/w/${ws}/home`); await expect(guide).toBeVisible();
-  const output = process.env.KM_ONBOARDING_SCREENSHOTS ?? "docs/ui-comparisons/mvp-onboarding";
+  const output = process.env.KM_ONBOARDING_SCREENSHOTS ?? comparisonDir("mvp-onboarding");
   await mkdir(output, { recursive: true });
   await expect(guide.locator("figure")).toHaveCount(4);
   await expect(guide.getByText("Example: folder → Preview → Apply", { exact: true })).toBeVisible();
