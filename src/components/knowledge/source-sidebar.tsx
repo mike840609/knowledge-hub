@@ -127,11 +127,15 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
     const document = documents.get(key);
     if (!document) return null;
     const selected = document.documentId === resolvedDocumentId;
+    const readOnly = document.ownership === "SOURCE_MANAGED";
+    // aria-describedby replaces the description the title would give, so a marked row names its source itself, then the reason.
+    const sourceNameId = `${readOnlyDescriptionId}-${key}`;
     return <li key={key} className={`kh-interactive-row group flex min-h-8 items-center ${selected ? "bg-kh-bg-selected hover:bg-kh-bg-selected" : ""}`}>
-      <Link href={`/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}${showArchived ? "?includeArchived=true" : ""}`} prefetch={selected ? false : undefined} title={`${document.label} · ${document.sourceName}`} aria-current={selected ? "page" : undefined} aria-describedby={document.ownership === "SOURCE_MANAGED" ? readOnlyDescriptionId : undefined} className={`kh-control flex min-h-8 min-w-0 flex-1 items-center gap-2 px-2 text-body kh-focus-ring ${selected ? "font-medium text-kh-selected-text" : "text-kh-text-muted"}`}>
+      {readOnly ? <span id={sourceNameId} hidden>{document.sourceName}</span> : null}
+      <Link href={`/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}${showArchived ? "?includeArchived=true" : ""}`} prefetch={selected ? false : undefined} title={`${document.label} · ${document.sourceName}`} aria-current={selected ? "page" : undefined} aria-describedby={readOnly ? `${sourceNameId} ${readOnlyDescriptionId}` : undefined} className={`kh-control flex min-h-8 min-w-0 flex-1 items-center gap-2 px-2 text-body kh-focus-ring ${selected ? "font-medium text-kh-selected-text" : "text-kh-text-muted"}`}>
         {favorite ? <FileText size={14} className="shrink-0" aria-hidden="true" /> : <Clock3 size={14} className="shrink-0" aria-hidden="true" />}
         <span className="truncate">{document.label}</span>
-        {document.ownership === "SOURCE_MANAGED" ? <LockKeyhole size={14} data-read-only-cue="" className="shrink-0 text-kh-text-muted" aria-hidden="true" /> : null}
+        {readOnly ? <LockKeyhole size={14} data-read-only-cue="" className="shrink-0 text-kh-text-muted" aria-hidden="true" /> : null}
       </Link>
       <Tooltip label={favorite ? "Remove from favorites" : "Add to favorites"}>
         <button type="button" onClick={() => toggleFavorite(document.sourceId, document.documentId)} aria-label={`${favorite ? "Remove from" : "Add to"} favorites: ${document.label}`} className={`mr-1 inline-flex kh-control kh-icon-control h-6 w-6 shrink-0 items-center justify-center rounded-md text-kh-text-muted kh-focus-ring ${favorite ? "opacity-80" : "kh-row-action"}`}>
@@ -261,8 +265,8 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
                 <button type="button" aria-expanded={open} aria-controls={`collection-${candidate.id}`} aria-describedby={readOnly ? readOnlyDescriptionId : undefined} onClick={() => setExpanded((previous) => ({ ...previous, [candidate.id]: !open }))} title={readOnly ? `${candidate.name} · ${READ_ONLY_DESCRIPTION}` : candidate.name} className="group kh-control flex min-h-8 min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 text-left text-body font-medium text-kh-text hover:bg-kh-bg-hover kh-focus-ring">
                   {/* One slot, Notion-style: the source's mark at rest, its chevron on hover (where hover exists) or keyboard focus. */}
                   <span className="relative size-3.5 shrink-0 text-kh-text-muted" aria-hidden="true">
-                    {readOnly ? <LockKeyhole size={14} data-read-only-cue="" className="absolute inset-0 group-focus-visible:invisible [@media(hover:hover)]:group-hover:invisible" /> : null}
-                    <Icon size={14} data-expand-cue="" className="invisible absolute inset-0 group-focus-visible:visible [@media(hover:hover)]:group-hover:visible" />
+                    {readOnly ? <LockKeyhole size={14} data-read-only-cue="" className="absolute inset-0 group-focus-visible:invisible [@media(hover:hover)_and_(pointer:fine)]:group-hover:invisible" /> : null}
+                    <Icon size={14} data-expand-cue="" className="invisible absolute inset-0 group-focus-visible:visible [@media(hover:hover)_and_(pointer:fine)]:group-hover:visible" />
                   </span>
                   <span className="truncate">{candidate.name}</span>
                   {candidate.status === "ARCHIVED" ? <Status kind="archived" className="ml-auto text-caption font-normal text-kh-text-muted">Archived</Status> : null}

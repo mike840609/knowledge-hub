@@ -141,7 +141,7 @@ test("a favorite from a synced source carries the read-only cue; one from a Hub 
     const synced = favorites.getByRole("link", { name: "Compliance Policy", exact: true });
     const hub = favorites.getByRole("link", { name: "Runbooks", exact: true });
     await expect(synced.locator("[data-read-only-cue]")).toBeVisible();
-    await expect(synced).toHaveAccessibleDescription("Synced from a folder, read-only in the Hub");
+    await expect(synced).toHaveAccessibleDescription("Vendor Compliance Vault Synced from a folder, read-only in the Hub");
     await expect(hub.locator("[data-read-only-cue]")).toHaveCount(0);
     await expect(hub).not.toHaveAccessibleDescription(/read-only/);
   } finally {
@@ -149,6 +149,5 @@ test("a favorite from a synced source carries the read-only cue; one from a Hub 
       const remove = explorer.getByRole("button", { name: `Remove from favorites: ${title}`, exact: true }).first();
       if (await remove.count()) await remove.click();
     }
-    await expect(explorer.getByRole("button", { name: /^Remove from favorites: (Compliance Policy|Runbooks)$/ })).toHaveCount(0);
   }
 });

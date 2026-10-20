@@ -54,8 +54,8 @@ changes.
 | State | `SOURCE_MANAGED` | `HUB_MANAGED` |
 | --- | --- | --- |
 | At rest | `LockKeyhole`, `text-kh-text-muted` | empty (slot kept) |
-| Heading hovered, or focus-visible inside it | `ChevronRight` / `ChevronDown` | `ChevronRight` / `ChevronDown` |
-| `@media (hover: none)` | `LockKeyhole` always | empty always |
+| Heading hovered (only under `(hover: hover) and (pointer: fine)`), or focus-visible inside it | `ChevronRight` / `ChevronDown` | `ChevronRight` / `ChevronDown` |
+| Anywhere `(hover: hover) and (pointer: fine)` is false (touch) | `LockKeyhole` always | empty always |
 
 - `LockKeyhole` is the icon the document header already uses for "Read only",
   so the tree and the page say the same thing with the same mark.
@@ -64,8 +64,11 @@ changes.
   whatever the icon.
 - The heading button gains `group`, and the slot swaps with
   `group-hover:` / `group-focus-visible:`: CSS only, no state and no
-  re-render. (The row around it has no `group` today.)
-- On touch devices there is no hover. The lock is not replaced, and the
+  re-render. (The row around it has no `group` today.) The hover swap is
+  wrapped in `(hover: hover) and (pointer: fine)`, the same condition as
+  `.kh-row-action` in `globals.css`, so hover is decided one way across the
+  explorer.
+- Where that condition is false (touch) there is no usable hover. The lock is not replaced, and the
   expanded state is still visible, because the children are shown or not
   directly below the heading.
 - The heading's native `title` of a `SOURCE_MANAGED` source reads
@@ -96,6 +99,14 @@ accessible name:
 - "Synced from a folder, read-only in the Hub" is attached as an accessible
   description (`aria-describedby`, one visually hidden element per sidebar),
   so it is announced after the name.
+- A marked Favorites/Recent row has a `title` ("<document> · <source>") that
+  would otherwise supply its description, and `aria-describedby` replaces
+  that. So its description is its source name followed by the reason ("Vendor
+  Compliance Vault Synced from a folder, read-only in the Hub"): a second
+  visually hidden element per row holds the source name, referenced before
+  the shared reason element. Hub rows have no `aria-describedby` and keep the
+  title-derived description. The heading (its `title` extends the name) and
+  the "Show all" item (the source name is visible text) need nothing more.
 - The icons are `aria-hidden`.
 
 ## Testing

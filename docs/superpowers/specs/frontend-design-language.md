@@ -913,8 +913,9 @@ image policy doing its job, not something to loosen for a glyph.
 ### A source heading's slot
 
 A Knowledge explorer source heading has one 14px slot before its name: the
-source's mark at rest, its chevron on hover (only where hover exists) or on
-keyboard focus. `LockKeyhole` there means the source is `SOURCE_MANAGED`,
+source's mark at rest, its chevron on hover or on keyboard focus. The hover
+swap applies only under `(hover: hover) and (pointer: fine)`, the same
+condition as `.kh-row-action`, so touch keeps the mark. `LockKeyhole` there means the source is `SOURCE_MANAGED`,
 read-only in the Hub, the same glyph the document header uses for "Read only".
 A Hub source leaves the slot empty. The reason is an accessible description,
 never part of the heading's name
