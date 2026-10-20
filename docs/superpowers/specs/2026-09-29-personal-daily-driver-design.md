@@ -135,6 +135,8 @@ In jsdom, mount draft remark/wiki_link through createMarkdownEditor extraPlugins
 - **Scope:** reader/share, not rendered composer code (later ProseMirror decorations). Composer loading fallback also omits highlight/copy to resemble editor and keep lowlight out of client. Split MarkdownBase (layout) for composer MarkdownArticle and MarkdownRenderer (base+highlight/copy) for reader/share. composer-bundle.test.ts checks import closure. **Deviation:** plan C.5 claimed shared composer preview, contradicting this scope; this section prevails.
 - **Acceptance:** unit registered/unlabeled/oversize languages and escaped script; E2E SQL token spans, exact raw clipboard, no share-page console errors.
 
+> The reader's blocks also show their language and fold when long: `2026-10-20-reader-code-block-label-collapse-design.md` (2026-10-20). This section is otherwise unchanged.
+
 ## 6. Slice D: completion and create from unresolved
 
 ### 6.1 Rendered-editor completion

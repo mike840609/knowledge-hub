@@ -24,8 +24,10 @@ export function codeAsWritten(text: string): string {
  * It stands alone. A shared page (`/s/:token`) has no app shell, so there is no toast to use, and
  * the outcome is said here, in words, in a live region: "Copied", or "Could not copy" when the
  * browser refuses (permission, or a page that is not a secure context). Neither throws.
+ *
+ * `language` is the fence's word as written, shown before it; nothing when the fence names none.
  */
-export function CopyCodeButton() {
+export function CopyCodeButton({ language }: { language?: string }) {
   const [outcome, setOutcome] = useState<Outcome>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
@@ -49,6 +51,11 @@ export function CopyCodeButton() {
   return (
     // Opaque, so a long line scrolling under the corner does not show through the icon. Not printed: a page is.
     <div className="absolute right-1.5 top-1.5 flex items-center rounded-md bg-kh-bg-subtle print:hidden">
+      {language && (
+        <span title={language} className="max-w-32 truncate pl-1.5 font-mono text-caption text-kh-text-muted">
+          {language}
+        </span>
+      )}
       <span aria-live="polite" className={`whitespace-nowrap text-caption ${outcome === "failed" ? "text-kh-danger" : "text-kh-text-muted"} ${outcome ? "pl-1.5" : ""}`}>
         {outcome === "copied" ? "Copied" : outcome === "failed" ? "Could not copy" : ""}
       </span>
