@@ -39,6 +39,8 @@ const config: Config = {
       // Document scale: longer measure wants a larger size and looser leading
       // than the reference, which sets 15px at 1.6 for marketing prose.
       reading: ["15px", { lineHeight: "28px", letterSpacing: "-0.011em" }],
+      // An h3: the reference's 17px, between body text and `heading` (reader-measure spec §2).
+      subheading: ["17px", { lineHeight: "26px", letterSpacing: "0" }],
       display: ["24px", { lineHeight: "32px", letterSpacing: "-0.015em" }], // interpolated
     },
     // Rungs of the reference ladder (4/6/8/12/16/24/32), taking the four this
@@ -69,7 +71,8 @@ const config: Config = {
       none: "none",
       full: "100%",
       panel: "36rem", // a form panel sitting inside a page
-      reading: "860px", // prose measure — see §7
+      reading: "860px", // the document column — see §7
+      measure: "40rem", // running text inside it: ~80 Latin or ~42 CJK characters a line
       page: "56rem", // the standard page container
       wide: "64rem", // a page whose content is a table
     },

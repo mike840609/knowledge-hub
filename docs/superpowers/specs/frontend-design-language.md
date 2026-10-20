@@ -98,13 +98,13 @@ together, and say what job the new token does that no existing one covers.
 | Scale | Tokens | Job |
 | --- | --- | --- |
 | Type (UI) | `micro`, `caption`, `body-sm`, `body`, `title`, `heading` | `body` is the ~14px default the UI spends most of its time in |
-| Type (document) | `reading`, `display` | rendered Markdown only; a longer measure wants a larger size and looser leading |
+| Type (document) | `reading`, `subheading`, `display` | rendered Markdown only; a longer measure wants a larger size and looser leading. Headings step `display` 24 / `heading` 20 / `subheading` 17 / `reading` 15 semibold for `h4`–`h6` (`h6` muted): none smaller than the text under it (`2026-10-20-reader-measure-and-heading-scale-design.md`) |
 | Radius | `sm`, `md`, `lg`, `xl` | see §5 |
 | Elevation | `popover`, `modal` | floating surfaces only |
 | Border | `border`, `border-strong` | see §6 |
 | Syntax colour | `--kh-syntax-{keyword,string,number,comment,function,type,variable,meta}` | fenced code in the reader and on a shared page; see §8 |
 | Chart colour | `--kh-chart-1`, `--kh-chart-1-hover`, `--kh-chart-2`, `--kh-chart-3` | series marks in data displays (Insights); see §8 |
-| Container | `page`, `wide`, `reading`, `panel` | see §7; the `maxWidth` scale is replaced, so `max-w-4xl` does not compile |
+| Container | `page`, `wide`, `reading`, `measure`, `panel` | see §7; the `maxWidth` scale is replaced, so `max-w-4xl` does not compile |
 | Spacing rhythm | `0`, `px`, `0.5`–`6` every half step, `auto` (margin), `16` (padding) | paddings, margins and gaps; `16` is `StatusMessage` and `EmptyState` only, see §7 |
 | Control height | `sm`, `md`, `lg` (24 / 32 / 40) | see §15; buttons and fields read the same ladder |
 | Motion | two durations, one easing curve | see §9 |
@@ -242,9 +242,17 @@ ended up adjacent without anyone noticing.
 ```text
 kh-page            56rem  the standard page — lists, forms, detail views
 kh-page-wide       64rem  a page whose content is a table
-kh-reading-column  860px  prose measure — the document, its editor, and
-                          every message state
+kh-reading-column  860px  the document column — the document, its editor,
+                          and every message state
 ```
+
+Inside that column running text — paragraphs, lists, quotes and callouts,
+headings — is held to `max-w-measure` (40rem: about 80 Latin or 42 CJK
+characters a line, measured), while tables, code and diagrams keep the whole
+column. A line as wide as the column (100 Latin / 54 CJK at 804px) was long
+enough that the sweep back to the next line's start lost its place. It is a
+rule in `MARKDOWN_PROSE`, not a fourth page width
+(`2026-10-20-reader-measure-and-heading-scale-design.md`).
 
 They are classes rather than remembered widths, and the `maxWidth` scale is
 replaced like the others, so `max-w-4xl` compiles to nothing and a sixth width

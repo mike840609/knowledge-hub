@@ -29,13 +29,15 @@ describe("token scales", () => {
     // Five widths were in use for what was mostly the same page. Adding a
     // sixth is a change to the contract, so it should fail here first.
     expect(Object.keys(theme.maxWidth as object).sort()).toEqual(
-      ["full", "none", "page", "panel", "reading", "wide"],
+      ["full", "measure", "none", "page", "panel", "reading", "wide"],
     );
   });
 
   it("keeps the containers in the order the contract states", () => {
     const widths = theme.maxWidth as Record<string, string>;
     expect(widths.panel).toBe("36rem");
+    // Running text inside the reading column (reader-measure spec §1).
+    expect(widths.measure).toBe("40rem");
     expect(widths.reading).toBe("860px");
     expect(widths.page).toBe("56rem");
     expect(widths.wide).toBe("64rem");

@@ -343,13 +343,13 @@ export function DocumentDetailClient({
   contentOwnsTitle,
   outline,
   titleControl,
-  saveStatus,
+  editorActions,
   readOnlyReason,
   onInspect,
   onKeepVersion,
 }: {
   titleControl?: ReactNode;
-  saveStatus?: ReactNode;
+  editorActions?: ReactNode;
   readOnlyReason?: ReactNode;
   onInspect?: () => void;
   onKeepVersion?: (name: string) => Promise<void>;
@@ -487,7 +487,7 @@ export function DocumentDetailClient({
       >
           <DocumentHeader
             titleControl={titleControl}
-            saveStatus={saveStatus}
+            editorActions={editorActions}
             readOnlyReason={readOnlyReason}
             headerRef={headerRef}
             pinned={scrolledPast}

@@ -28,11 +28,12 @@ export function DocumentHeader({
   headerRef,
   pinned = false,
   titleControl,
-  saveStatus,
+  editorActions,
   readOnlyReason,
 }: {
   titleControl?: ReactNode;
-  saveStatus?: ReactNode;
+  /** The editor's own: its save status and the Markdown toggle, before Share. */
+  editorActions?: ReactNode;
   readOnlyReason?: ReactNode;
   breadcrumb: DocumentBreadcrumbSegment[];
   title: string;
@@ -83,7 +84,7 @@ export function DocumentHeader({
             aria-label and tooltip. Details draws the same glyph as the
             narrow topbar's copy of this button. */}
         <div className="flex shrink-0 items-center gap-2">
-          {saveStatus}
+          {editorActions}
           {onShareClick ? (
             <Tooltip label="Share link…">
               <button

@@ -127,8 +127,12 @@ export function RenderedEditor(props: RenderedEditorProps) {
         nodeViews: {
           code_block(node, view, getPos) {
             const dom = document.createElement("div");
+            // Holds Edit code over the block's corner (below).
+            dom.className = "relative";
             const preview = document.createElement("div");
             preview.contentEditable = "false";
+            // Edit code shows when the block is pointed at (below).
+            preview.className = "group/code";
             const pre = document.createElement("pre");
             pre.hidden = true;
             const contentDOM = document.createElement("code");
@@ -258,7 +262,10 @@ export function RenderedEditor(props: RenderedEditorProps) {
     return createPortal(<MarkdownAnchor links={props.links} {...attributes}>{parts.alias ?? (parts.target || parts.fragment)}</MarkdownAnchor>, dom, String(index));
   })}{codeViews.map(entry => createPortal(<>
     <div data-inline-code-preview hidden={entry.editing}>{props.renderCode?.(entry.code, entry.language)}</div>
-    <button type="button" className="text-caption text-kh-text-muted hover:text-kh-text" onClick={() => entry.setEditing(!entry.editing)}>{entry.editing ? "Done editing code" : "Edit code"}</button>
+    {/* Under every block it was a line of chrome read past on each scroll, and room the saved page does not
+        have. Over the block's lower corner instead, taking none, shown on pointing, on keyboard focus and
+        always where nothing can point; below the raw code while it is edited (reader-measure spec §5). */}
+    <button type="button" className={`text-caption text-kh-text-muted hover:text-kh-text ${entry.editing ? "" : "absolute bottom-1.5 right-1.5 rounded-md bg-kh-bg-subtle px-1.5 opacity-0 transition-opacity focus-visible:opacity-100 group-hover/code:opacity-100 [@media(hover:none)]:opacity-100"}`} onClick={() => entry.setEditing(!entry.editing)}>{entry.editing ? "Done editing code" : "Edit code"}</button>
   </>, entry.preview, String(codeViews.indexOf(entry))))}</>;
 
 }

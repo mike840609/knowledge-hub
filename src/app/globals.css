@@ -256,6 +256,15 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-editor a {
     @apply cursor-text font-medium text-kh-link underline decoration-kh-link underline-offset-2;
   }
+  /* An external link says it leaves the Hub, as the reader's does with lucide's ExternalLink (the
+     same glyph). A pseudo-element, so neither the Markdown written back nor the caret sees it. The
+     reader's test (`isExternalHref`): http, https or protocol-relative. */
+  .kh-editor a:is([href^="http://"], [href^="https://"], [href^="//"])::after {
+    content: "";
+    @apply ml-0.5 inline-block h-3 w-3 bg-current;
+    -webkit-mask: url("/icons/external-link.svg") center / contain no-repeat;
+    mask: url("/icons/external-link.svg") center / contain no-repeat;
+  }
   /* A [[wikilink]] is one node, read as the reader reads it: the link colour and underline. It is
      not followed from here — a draft has no resolutions, so only the reader can say where it goes —
      so it does not take the pointer. Selected as a whole, since a caret is never inside it. */
@@ -295,10 +304,13 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-editor img:not([data-diagram]) {
     @apply my-4 h-auto max-w-full rounded-md border border-kh-border;
   }
-  .kh-editor pre {
+  /* The raw code a block opens for editing. Not the block shown in its place, which is the reader's
+     own (`InlineCodePreview`, under [data-inline-code-preview]) and is drawn by the reader's rules:
+     these on it drew a second box inside the first (reader-measure spec §5). */
+  .kh-editor pre:not([data-inline-code-preview] pre) {
     @apply my-4 overflow-x-auto rounded-md border border-kh-border bg-kh-bg-subtle px-4 py-3 font-mono text-body-sm leading-6 text-kh-text;
   }
-  .kh-editor pre code {
+  .kh-editor pre:not([data-inline-code-preview] pre) code {
     @apply bg-transparent p-0;
   }
   .kh-editor .kh-callout-marker {
