@@ -41,6 +41,13 @@ mostly wants to get past the block, not navigate inside it.
   (`rehypeCodeLines`, before the highlighter), so the page arrives collapsed and nothing
   moves when it hydrates. Counted the way the copy button copies: the newline Markdown
   adds is not a line.
+- **A block a comment is on opens whole.** A review's marks, its rail cards and its click-to-thread
+  are placed from the quoted line's own box, which the fold clips but does not move, so a comment
+  past line 20 would be marked below the block, beside unrelated text, and its jump would land on
+  a line still held out of sight (measured: mark at y=1081 for a block ending at 635). When the
+  review resolves its anchors (`useReviewHighlights`), it sends `kh:code-block-expand` to each
+  block holding one, as the jump already opens a closed `<details>`. Regression:
+  `review-anchors-wider.spec.ts`, "a comment on a line a long code block folds away".
 - Copy still copies the whole block (`textContent` is unaffected by height).
 - Printed, it is expanded and the button is hidden.
 - Collapsing again brings the toggle back into view (`scrollIntoView({ block: "nearest" })`,

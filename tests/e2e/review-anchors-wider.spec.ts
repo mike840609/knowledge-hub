@@ -196,3 +196,31 @@ test("only the owner starts one that way: not another person, not another site, 
   expect((await request.post(`${owner}/api/documents/${doc.documentId}/archive`, { headers: { Origin: owner } })).ok()).toBe(true);
   expect((await request.post(`${owner}${path}`, { headers: { Origin: owner }, data: data() })).status()).toBe(409);
 });
+
+// docs/superpowers/specs/2026-10-20-reader-code-block-label-collapse-design.md §2
+test("a comment on a line a long code block folds away opens the block, so its mark and its jump land on the line", async ({ page, request }) => {
+  const long = Array.from({ length: 45 }, (_, i) => `line ${String(i + 1).padStart(2, "0")} = value;`).join("\n");
+  const doc = await createReviewDocument(request, ["Before.", "", "```js", long, "```", "", "After the code."].join("\n"));
+  await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
+  await openReviewDiscussions(page);
+  // Line 40 is past the fold: scrolled to inside the held block, selected there, commented on.
+  await page.locator("[data-code-block]").getByText("line 40").scrollIntoViewIfNeeded();
+  await selectText(page, "pre code", "line 40");
+  await comment(page, "On line forty");
+  await expect(page.getByRole("button", { name: "Show fewer lines" })).toBeVisible();
+
+  // Opened again, the block a comment is on is whole, and the mark is beside the line, not below the block.
+  await page.reload();
+  await openReviewDiscussions(page);
+  await expect(page.getByRole("button", { name: "Show fewer lines" })).toBeVisible();
+  await expect(page.locator("[data-review-marker]")).toHaveCount(1);
+  await expect.poll(() => page.evaluate(() => {
+    const line = Array.from(document.querySelectorAll("pre code span")).find(span => span.textContent === "40")!.getBoundingClientRect();
+    const marker = document.querySelector("[data-review-marker]")!.getBoundingClientRect();
+    return Math.abs(marker.top - line.top) < 12;
+  })).toBe(true);
+
+  await page.locator("[data-review-thread]").filter({ visible: true }).filter({ hasText: "On line forty" }).locator("blockquote button").click();
+  await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe("line 40");
+  await expect(page.locator("pre code").getByText("line 40")).toBeInViewport();
+});

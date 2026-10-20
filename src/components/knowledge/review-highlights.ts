@@ -2,6 +2,7 @@
 import { useReviewDomVersion } from "./review-dom-version";
 import { useEffect } from "react";
 import type { ReviewThreadView, OwnerReviewThreadView } from "@/modules/knowledge/domain/document-review";
+import { EXPAND_CODE_BLOCK } from "./code-block";
 import { createReviewRangeResolver } from "./review-selection";
 import { reviewRailInline } from "./review-rail-mode";
 
@@ -18,6 +19,8 @@ export function useReviewHighlights(markdown: string, threads?: (ReviewThreadVie
       const range = resolve(thread.currentAnchor.anchor);
       return range ? [{ threadId: thread.id, range }] : [];
     });
+    // A long code block a comment is on opens whole, as a closed disclosure does for its quote.
+    for (const { range } of ranges) range.startContainer.parentElement?.closest("[data-code-block]")?.dispatchEvent(new Event(EXPAND_CODE_BLOCK));
     const registry = (globalThis.CSS as typeof CSS & { highlights?: Map<string, unknown> })?.highlights;
     const HighlightClass = (globalThis as typeof globalThis & { Highlight?: new (...ranges: Range[]) => unknown }).Highlight;
     if (registry && HighlightClass) {
