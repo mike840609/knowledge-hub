@@ -42,7 +42,8 @@ test("owner moderation survives link revocation and document archive", async ({ 
   await page.goto(`${doc.href}?includeArchived=true`);
   await openReviewDiscussions(page);
   await expect(page.getByText("Retained moderation history", { exact: true }).filter({ visible: true })).toBeVisible();
-  await page.getByRole("button", { name: "Expand comment", exact: true }).click();
+  // A short remark has nothing cut to expand; the card itself opens.
+  await page.locator("[data-review-thread]").filter({ visible: true }).getByText("Retained moderation history", { exact: true }).click();
   await expect(page.getByRole("button", { name: "Resolve", exact: true })).toBeDisabled();
   await expect(page.getByRole("textbox", { name: "Reply", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Comment options", exact: true }).click();
