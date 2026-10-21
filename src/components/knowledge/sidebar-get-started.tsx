@@ -18,9 +18,12 @@ export function hasNoDocuments(collections: { tree: KnowledgeTreeItem[] }[]): bo
 /**
  * The explorer's tree when the workspace has no documents at all. An empty folder is one muted
  * line, but this is the first thing a new workspace shows, so it says how documents get here and
- * what each way leads to (frontend design language, empty states).
+ * what each way leads to (frontend design language, empty states). `compact` is for the Knowledge
+ * page, whose own empty state already does that: there the explorer is one muted line.
  */
-export function SidebarGetStarted({ actions }: { actions: Action[] }) {
+export function SidebarGetStarted({ actions, compact = false }: { actions: Action[]; compact?: boolean }) {
+  // Where the page beside it already offers these ways in, the explorer does not offer them again.
+  if (compact) return <p className="px-2 py-3 text-body text-kh-text-muted">No documents yet</p>;
   return (
     <section aria-label="Get started" className="px-2 py-3">
       <p className="text-body font-medium text-kh-text">No documents yet</p>

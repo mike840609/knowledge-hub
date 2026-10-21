@@ -270,7 +270,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
           </button></h3>
           {recentOpen ? <ul className="mt-0.5 space-y-0.5">{recentKeys.map((key) => shortcutRow(key, false))}</ul> : null}
         </section> : null}
-        {getStarted ? <SidebarGetStarted actions={getStarted} /> : null}
+        {getStarted ? <SidebarGetStarted actions={getStarted} compact={pathname === `/w/${workspaceId}/knowledge`} /> : null}
         {!getStarted && !hasNotes && canCreate && (!needle || "notes".includes(needle)) ? (
           <div className="flex items-center justify-between pl-2">
             <Link href={newNoteHref} className="rounded-md text-body font-medium text-kh-text hover:underline kh-focus-ring">Notes</Link>

@@ -12,7 +12,7 @@ test("first folder guidance persists dismissal and rejects invalid or inaccessib
   // The full suite shares this workspace: earlier tests may already have imported folders.
   const emptyFolders = await page.getByText("Import a Markdown folder to bring your knowledge into My Space.", { exact: false }).isVisible();
   await expect(page.getByRole("region", { name: "Get started", exact: true })).toBeVisible();
-  if (emptyFolders) await expect(page.getByRole("link", { name: "Import your first folder", exact: true })).toBeVisible();
+  if (emptyFolders) await expect(page.getByRole("link", { name: "Add your first document", exact: true })).toBeVisible();
   const snapshot = await stageReadingFolder(request, { workspaceId: ws, sourceName: "Onboarding folder", fixture: "reading-flow-v1" });
   await page.goto(`/w/${ws}/sources/imports/${snapshot}`);
   await page.getByRole("button", { name: "Apply changes" }).click();
@@ -26,8 +26,8 @@ test("first folder guidance persists dismissal and rejects invalid or inaccessib
   await page.goto(`/w/${ws}/home`); await expect(guide).toBeVisible();
   const output = process.env.KM_ONBOARDING_SCREENSHOTS ?? comparisonDir("mvp-onboarding");
   await mkdir(output, { recursive: true });
-  await expect(guide.locator("figure")).toHaveCount(4);
-  await expect(guide.getByText("Example: folder → Preview → Apply", { exact: true })).toBeVisible();
+  await expect(guide.locator("[data-illustration]")).toHaveCount(4);
+  await expect(guide.locator('[data-illustration="start"]')).toBeVisible();
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.screenshot({ path: `${output}/desktop.png`, fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });

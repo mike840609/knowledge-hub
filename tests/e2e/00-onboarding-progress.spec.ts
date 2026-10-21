@@ -15,7 +15,7 @@ test("onboarding follows real actions and persists progress across browser sessi
   const guide = page.getByRole("region", { name: "Get started", exact: true });
   await home();
   await expect(guide.getByText("0 of 4 steps complete", { exact: false })).toBeVisible();
-  await expect(guide.getByRole("link", { name: "Import your first folder", exact: true })).toBeVisible();
+  await expect(guide.getByRole("link", { name: "Add your first document", exact: true })).toBeVisible();
   for (const [name, viewport] of [["desktop", { width: 1440, height: 1000 }], ["mobile", { width: 390, height: 844 }]] as const) {
     await page.setViewportSize(viewport);
     await page.screenshot({ path: `${output}/before-import-${name}.png`, fullPage: true });

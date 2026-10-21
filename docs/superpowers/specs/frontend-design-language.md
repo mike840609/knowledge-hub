@@ -1137,14 +1137,35 @@ the empty state is the one moment a reader is looking for what to do. Compact
 empty lines inside a rail or a list (a folder with nothing in it) stay one line
 of `text-muted`; they are not pages.
 
+An empty state's example drawing comes from one component,
+`components/knowledge/illustration.tsx`, and every drawing is made of the same
+few shapes on the same 256×96 canvas in a 1.5 stroke: a document, a folder, an
+arrow, a panel, and the agent drawn as a robot, the figure its actions carry. Objects are drawn bare; only what is itself a screen surface (a
+search box, a preview, a link, a page) sits in a panel. The accent marks the
+subject and everything else is neutral. A drawing is an example, never workspace
+data, and is hidden from assistive technology. It has no caption: it carries its
+meaning in shapes (a lock on what is read-only, a pencil on what is editable),
+and the empty state's title and one line of text carry the rest, so anything a
+reader must know is said once in words as well. A new example is a new case in
+that file, not a new component.
+
+The ways to add a first document are one list, the registry's `empty` surface,
+and every empty state that offers them reads it (`WorkspaceContentActions`), so
+they have the same names, order and weight on every page. They are buttons
+alone, with nothing written under each: an empty state is one title, one line
+and its actions. Where the difference between them matters, on the Knowledge
+page, its drawing shows both ways in the order of the buttons, and its one line
+says what each leads to. An action's `detail` is shown only where a list has
+room for it (the explorer, below); it is not a tooltip.
+
 One rail is the exception: the knowledge explorer of a workspace with no
 documents at all. It is shown even when the workspace has no source, and in
-place of the tree it says "No documents yet" and lists the ways to start, from
-the registry's `empty` surface, each with its `detail`: the line saying what
-that way leads to (an imported folder stays read-only in the Hub, a written
-document stays editable), which a label cannot. An action's `detail` is for
-such a choice and is shown under its label; it is not a tooltip. Past the first
-document the explorer keeps importing one click away, as an icon in its header.
+place of the tree it says "No documents yet" and lists the same ways to start,
+each with its `detail`, for the pages beside it that do not (a source with
+nothing to read). On the Knowledge page itself, whose empty state already offers
+them, it is the one muted line "No documents yet": a choice is offered once per
+screen. Past the first document the explorer keeps importing one click away, as
+an icon in its header.
 
 ### One loading idiom, one message shape
 

@@ -42,6 +42,11 @@ describe("sidebar get started", () => {
     }
   });
 
+  it("is one muted line where the page beside it already offers the ways in", () => {
+    const html = renderToStaticMarkup(createElement(SidebarGetStarted, { actions: startActions(context()), compact: true }));
+    expect(html).toBe('<p class="px-2 py-3 text-body text-kh-text-muted">No documents yet</p>');
+  });
+
   it("counts a workspace as empty only when no source holds a document, archived ones included", () => {
     expect(hasNoDocuments([])).toBe(true);
     expect(hasNoDocuments([{ tree: [] }, { tree: [item("folder")] }])).toBe(true);

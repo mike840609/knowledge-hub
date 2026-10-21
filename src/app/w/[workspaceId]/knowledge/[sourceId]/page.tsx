@@ -38,7 +38,7 @@ export default async function SourceKnowledgePage({
       <EmptyState
         icon={FileText}
         title="No readable documents in this source"
-        description={model.source.sourceType === "FOLDER_SYNC" ? "Your saved folder documents appear here after you review and apply an import. Open Sources to check the folder status or review a pending preview." : "This source has no saved documents to read. Open Sources to check its contents, or create a note from the workspace."}
+        description={model.source.sourceType === "FOLDER_SYNC" ? "Your saved folder documents appear here after you review and apply an import. Open Sources to check the folder status or review a pending preview." : "This source has no saved documents to read. Open Sources to check its contents, or create a document from the workspace."}
         action={
           <Link
             className={buttonClasses({ variant: "secondary", size: "lg" })}
