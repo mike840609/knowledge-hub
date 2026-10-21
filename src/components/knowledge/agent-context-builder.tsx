@@ -1,7 +1,7 @@
 "use client";
 
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
-import { OnboardingIllustration } from "./onboarding-illustration";
+import { Illustration } from "@/components/knowledge/illustration";
 import { FileText, Search } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { WorkspaceContentActions } from "./workspace-content-actions";
@@ -55,7 +55,7 @@ export function AgentContextBuilder({ workspaceId, documents, initialDocumentId 
   const normalized = query.trim().toLocaleLowerCase();
   const matches = documents.filter(d => [d.title, d.sourceName, d.sourcePath].some(value => value?.toLocaleLowerCase().includes(normalized)));
   const visible = matches.slice(0, 100);
-  if (!documents.length) return <EmptyState icon={FileText} illustration={<OnboardingIllustration kind="context" />} title={canAddDocuments ? "Add documents to prepare AI context" : "No documents available for AI context"} description={!accessConfirmed ? "Checking workspace access…" : canAddDocuments ? "Turn saved documents into Markdown your AI agent can use. Import a folder or create a document, then select documents and prepare a preview." : readOnlyGuidance} action={canAddDocuments ? <WorkspaceContentActions workspaceId={workspaceId} /> : undefined} />;
+  if (!documents.length) return <EmptyState icon={FileText} illustration={<Illustration kind="context" />} title={canAddDocuments ? "Add documents to prepare AI context" : "No documents available for AI context"} description={!accessConfirmed ? "Checking workspace access…" : canAddDocuments ? "Turn selected documents into Markdown for your AI agent." : readOnlyGuidance} action={canAddDocuments ? <WorkspaceContentActions workspaceId={workspaceId} /> : undefined} />;
   return <div className="space-y-4">
     <p className="text-body text-kh-text-secondary">Select documents, prepare Markdown, then review it before copying to your agent.</p>
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">

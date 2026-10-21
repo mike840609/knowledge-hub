@@ -1,14 +1,12 @@
 "use client";
 import { PageHeader } from "@/components/shell/page-header";
-import { WorkspaceEmptyIllustration } from "@/components/knowledge/workspace-empty-illustration";
+import { Illustration } from "@/components/knowledge/illustration";
 
-import Link from "next/link";
 import { FileText } from "lucide-react";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
-import { buttonClasses } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Kbd } from "@/components/ui/kbd";
-import { ActionIcon } from "@/components/actions/action-icon";
+import { WorkspaceContentActions } from "@/components/knowledge/workspace-content-actions";
 import { startActions } from "@/components/knowledge/sidebar-get-started";
 import { shortcutLabel } from "@/lib/shortcut-keys";
 
@@ -37,32 +35,14 @@ export function KnowledgeEmptyState() {
     <section className="kh-page pb-6">
       <PageHeader location={access.workspace.type === "PERSONAL" ? "My Space" : access.workspace.name} locationHref={`/w/${access.workspace.id}/${access.workspace.type === "PERSONAL" ? "home" : "sources"}`} title="Knowledge" />
       <EmptyState
-        icon={FileText} illustration={<WorkspaceEmptyIllustration kind="knowledge" />}
+        icon={FileText} illustration={<Illustration kind="start" importFirst={first?.id !== "create.document"} />}
         title="No documents yet"
         description={
           actions.length > 0
-            ? "Browse and read your saved knowledge here. Import a Markdown folder or create a note to add your first document."
+            ? "Imported folders stay read-only here; documents you write stay editable."
             : "You can read this workspace; adding to it needs edit access."
         }
-        action={
-          <>
-            {actions.map((action, index) =>
-              action.effect.kind === "navigate" ? (
-                <Link
-                  key={action.id}
-                  className={buttonClasses({
-                    size: "lg",
-                    variant: index === 0 ? "primary" : "secondary",
-                  })}
-                  href={action.effect.href}
-                >
-                  <ActionIcon name={action.icon} className="h-4 w-4 shrink-0" />
-                  {action.label}
-                </Link>
-              ) : null,
-            )}
-          </>
-        }
+        action={<WorkspaceContentActions workspaceId={access.workspace.id} />}
         hint={
           first?.shortcut ? (
             <>

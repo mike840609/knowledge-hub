@@ -1,6 +1,6 @@
 "use client";
 
-import { OnboardingIllustration } from "./onboarding-illustration";
+import { Illustration } from "@/components/knowledge/illustration";
 import { Network } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { WorkspaceContentActions } from "./workspace-content-actions";
@@ -97,6 +97,9 @@ export function GraphExplorer({
   const matches = data.nodes.filter(node => matchesQuery(node, query)).length;
   const links = data.edges.length;
   const hasFilters = Boolean(filters.sourceId || !filters.orphans || filters.unresolved);
+  // No document anywhere in the workspace: the filters and totals describe nothing, so only the way to add one is shown.
+  const noDocuments = total.documents === 0;
+  const filteredOut = hasFilters && !noDocuments;
   const firstDocumentHref = data.nodes.find(node => node.kind === "DOCUMENT" && node.href)?.href;
   const summary = `Knowledge graph, ${data.nodes.length} ${data.nodes.length === 1 ? "node" : "nodes"}, ${links} ${links === 1 ? "link" : "links"}`;
 
@@ -124,7 +127,7 @@ export function GraphExplorer({
             </Link>
           ))}
         </nav>
-        <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1 py-1">
+        {noDocuments ? null : <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1 py-1">
           {/* The width belongs to a wrapper; the field fills it (`Input` does by default, `Select` is told to below). */}
           <div className="w-56">
             <label className="sr-only" htmlFor="graph-find">Find a document</label>
@@ -151,8 +154,9 @@ export function GraphExplorer({
           ) : null}
           <Toggle label="Orphans" checked={shown.orphans} onChange={(orphans) => change({ orphans })} />
           <Toggle label="Unresolved" checked={shown.unresolved} onChange={(unresolved) => change({ unresolved })} />
-        </div>
+        </div>}
       </div>
+      {noDocuments ? null : <>
       <div className="flex min-h-6 items-center justify-between gap-3" aria-label="Graph filter status">
           <p className="text-caption tabular-nums text-kh-text-muted" data-graph-summary>
             {total.documents} {total.documents === 1 ? "document" : "documents"} · {total.edges} {total.edges === 1 ? "link" : "links"}
@@ -164,6 +168,7 @@ export function GraphExplorer({
       </div>
       <p id={findHelpId} data-graph-find-help className="text-caption text-kh-text-muted" role="status">{query.trim() ? `${matches} ${matches === 1 ? "match" : "matches"} · ` : ""}{filters.view === "list" ? "Find filters the rows below." : "Find highlights matching nodes; other nodes remain visible."}</p>
       <details className="text-caption text-kh-text-muted"><summary className="kh-focus-ring w-fit cursor-pointer rounded-md">About graph filters</summary><p className="mt-2">Orphans have no links. Unresolved targets have no saved document.</p></details>
+      </>}
       <LinkIndexNote stale={staleDocuments} />
       {truncated ? (
         <p role="status" className="rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2 text-body-sm text-kh-text-secondary">
@@ -178,10 +183,10 @@ export function GraphExplorer({
           <div data-graph-empty className="px-3">
             <EmptyState
               icon={Network}
-              illustration={!hasFilters ? <OnboardingIllustration kind="graph" /> : undefined}
-              title={hasFilters ? "No documents match these filters" : canAddDocuments ? "Add documents to build your graph" : "No documents to show"}
-              description={hasFilters ? "Reset the graph filters to include documents without links and other sources." : !accessConfirmed ? "Checking workspace access…" : canAddDocuments ? "Explore connections between your documents here. Import a folder or create a note to get started." : readOnlyGuidance}
-              action={hasFilters ? <Button variant="secondary" onClick={() => change({ sourceId: null, orphans: true, unresolved: false, focusId: null })}>Show all documents</Button> : canAddDocuments ? <WorkspaceContentActions workspaceId={workspaceId} /> : undefined}
+              illustration={!filteredOut ? <Illustration kind="graph" /> : undefined}
+              title={filteredOut ? "No documents match these filters" : canAddDocuments ? "Add documents to build your graph" : "No documents to show"}
+              description={filteredOut ? "Reset the graph filters to include documents without links and other sources." : !accessConfirmed ? "Checking workspace access…" : canAddDocuments ? "Links between your documents appear here." : readOnlyGuidance}
+              action={filteredOut ? <Button variant="secondary" onClick={() => change({ sourceId: null, orphans: true, unresolved: false, focusId: null })}>Show all documents</Button> : canAddDocuments ? <WorkspaceContentActions workspaceId={workspaceId} /> : undefined}
             />
           </div>
         ) : filters.view === "list" ? (

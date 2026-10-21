@@ -22,10 +22,13 @@ test("new users get actionable guidance on every empty page and can reopen Home 
   for (const [route, heading] of pages) {
     await page.goto(`/w/${ws}/${route}`);
     await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
-    await expect(page.locator("figure")).toHaveCount(1);
-    await expect(page.getByRole("link", { name: route === "knowledge" ? "Import your first knowledge source" : "Import folder", exact: true })).toBeVisible();
+    await expect(page.locator("[data-illustration]")).toHaveCount(1);
+    await expect(page.getByRole("link", { name: route === "sources" ? "Import folder" : "Import your first knowledge source", exact: true })).toBeVisible();
     // Personal leads with the import, in the explorer as on the page.
-    if (route === "knowledge") await expect(page.getByRole("region", { name: "Get started" }).getByRole("link")).toHaveText([/^Import your first knowledge source.*Read-only here/, /^Create document/]);
+    // Knowledge draws both ways in and says once what each leads to; the explorer beside it does not offer them again.
+    if (route === "knowledge") await expect(page.locator('[data-illustration="start"]')).toBeVisible();
+    if (route === "knowledge") await expect(page.getByText("Imported folders stay read-only here; documents you write stay editable.", { exact: true })).toBeVisible();
+    if (route === "knowledge") await expect(page.getByRole("region", { name: "Get started" })).toHaveCount(0);
     for (const [name, viewport] of [["desktop", { width: 1440, height: 1000 }], ["mobile", { width: 390, height: 844 }]] as const) {
       await page.setViewportSize(viewport);
       await page.screenshot({ path: `${output}/after-${route.split("?")[0]}-${name}.png`, fullPage: false, animations: "disabled" });
@@ -34,7 +37,7 @@ test("new users get actionable guidance on every empty page and can reopen Home 
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`/w/${ws}/updates`);
-  await expect(page.getByText("Example: new and updated documents after Apply", { exact: true })).toBeVisible();
+  await expect(page.locator('[data-illustration="updates"]')).toBeVisible();
   await page.screenshot({ path: `${output}/after-updates-desktop.png`, animations: "disabled" });
   await page.getByRole("button", { name: /^Account:/ }).click();
   await page.getByRole("menuitemradio", { name: "Dark", exact: true }).click();
