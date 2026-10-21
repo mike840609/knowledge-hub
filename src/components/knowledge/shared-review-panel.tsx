@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import type { ReviewThreadView } from "@/modules/knowledge/domain/document-review";
+import type { ReviewAnchor, ReviewThreadView } from "@/modules/knowledge/domain/document-review";
 import { useReviewHighlights } from "./review-highlights";
 import { LogIn, RefreshCw, MessageSquare, MessageSquarePlus, X } from "lucide-react";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
-import { ReviewFilterMenu, ReviewThreadList, reviewRequest, type ReviewFilter } from "./review-thread-list";
+import { ReviewFilterMenu, ReviewThreadList, reviewDraftKey, reviewRequest, type ReviewFilter } from "./review-thread-list";
 import { ReviewComposer, ReviewSelectionBubble, useReviewSelection } from "./review-composer";
 import { ReviewPanelShell } from "./review-panel-shell";
 import { COMMENT_HINT, focusReviewAnchor } from "./review-selection";
@@ -81,9 +81,23 @@ export function SharedReviewPanel({ token, revisionId, markdown, signInHref, chi
     document.addEventListener("review-focus-thread", activate);
     return () => document.removeEventListener("review-focus-thread", activate);
   }, []);
-  const composer = selection.chosen && <ReviewComposer anchor={selection.chosen} onCancel={selection.clear} onSubmit={async (body, idempotencyKey) => {
+  // An unsent new comment is kept with its passage, so a reload brings both back (spec amendment 2026-10-21).
+  const draftKey = reviewDraftKey("new", token);
+  const anchorKey = `${draftKey}:anchor`;
+  const [restored, setRestored] = useState(false);
+  const discardDraft = useCallback(() => { removeStored("session", draftKey); removeStored("session", anchorKey); setRestored(false); }, [draftKey, anchorKey]);
+  useEffect(() => { if (selection.chosen) writeStored("session", anchorKey, JSON.stringify(selection.chosen)); }, [selection.chosen, anchorKey]);
+  const restoreChecked = useRef(false);
+  useEffect(() => {
+    if (restoreChecked.current || !result || !canComment) return;
+    restoreChecked.current = true;
+    const anchor = parseStoredAnchor(readStored("session", anchorKey));
+    if (anchor && readStored("session", draftKey)?.trim()) { selection.choose(anchor); setRestored(true); setOpen(true); }
+    else discardDraft();
+  }, [result, canComment, anchorKey, draftKey, selection, discardDraft]);
+  const composer = selection.chosen && <ReviewComposer anchor={selection.chosen} draftKey={draftKey} restored={restored} onCancel={() => { discardDraft(); selection.clear(); }} onSubmit={async (body, idempotencyKey) => {
     const created = await reviewRequest<{ id: string }>("/api/share-review/threads", { token, expectedRevisionId: revisionId, anchor: selection.chosen, body, idempotencyKey });
-    selection.clear(); setFilter(current => current === "RESOLVED" ? "OPEN" : current); setActiveThreadId(created.id); await load();
+    discardDraft(); selection.clear(); setFilter(current => current === "RESOLVED" ? "OPEN" : current); setActiveThreadId(created.id); await load();
   }} />;
   // Beside its passage where the discussions are a rail; at the top of the drawer, which covers the passage, where they are not.
   const draft = composer && inline && !revisionChanged ? { anchor: selection.chosen!, composer } : undefined;
@@ -135,4 +149,14 @@ export function SharedReviewPanel({ token, revisionId, markdown, signInHref, chi
       </aside>
     </div>
   </>;
+}
+
+/** A kept passage, read back as the anchor it was; anything else is no draft. The service checks it again on send. */
+function parseStoredAnchor(stored: string | null): ReviewAnchor | null {
+  try {
+    const value = JSON.parse(stored ?? "") as Partial<ReviewAnchor> | null;
+    return value && typeof value.exact === "string" && Array.isArray(value.blockPath) ? value as ReviewAnchor : null;
+  } catch {
+    return null;
+  }
 }

@@ -153,6 +153,34 @@ test("the panel says how to comment before Add comment is pressed", async ({ pag
   await expect(hint).toHaveCount(0);
 });
 
+test("an unsent comment and an unsent reply survive a reload; sending forgets them", async ({ page, request }) => {
+  const doc = await createReviewDocument(request, "A first passage to review.\n\nA second paragraph here.");
+  expect((await postThread(request, doc, 1, "second", "A ", " paragraph here.", "Existing")).status()).toBe(201);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
+  await openReviewDiscussions(page);
+  await selectPassage(page, "first");
+  await page.getByRole("button", { name: "Comment on selection" }).click();
+  await page.getByRole("textbox", { name: "Add comment" }).fill("Kept across a reload");
+  const card = page.locator("[data-review-rail] [data-review-thread]").filter({ visible: true }).filter({ hasText: "Existing" });
+  await card.click();
+  await card.getByRole("button", { name: "Reply", exact: true }).click();
+  await card.getByRole("textbox", { name: "Reply", exact: true }).fill("Reply in progress");
+
+  await page.reload();
+  await expect(page.getByText("Restored your unsent comment. Check the quoted passage before sending.")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Add comment" })).toHaveValue("Kept across a reload");
+  await expect(card).toContainText("Unsent reply");
+  await card.click();
+  await expect(card.getByRole("textbox", { name: "Reply", exact: true })).toHaveValue("Reply in progress");
+
+  await page.getByRole("button", { name: "Add comment", exact: true }).click();
+  await expect(page.locator("[data-review-thread]").filter({ visible: true }).filter({ hasText: "Kept across a reload" })).toHaveCount(1);
+  await page.reload();
+  await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
+  await expect(page.getByRole("textbox", { name: "Add comment" })).toHaveCount(0);
+});
+
 test("a shared page with no discussions keeps them closed", async ({ page, request }) => {
   const doc = await createReviewDocument(request);
   await page.setViewportSize({ width: 1440, height: 900 });

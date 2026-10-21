@@ -13,6 +13,7 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { compareReviewPassages, useReviewRailLayout, type RailCard } from "./review-rail-layout";
 import { matchesShortcut } from "@/lib/shortcut-keys";
 import { linkify } from "@/lib/linkify";
+import { readStored, removeStored, writeStored } from "@/components/shell/use-persisted-state";
 
 /** Sends what is written, as it saves a document in the composer. Enter alone stays a line of the comment. */
 const SUBMIT_SHORTCUT = "Meta+Enter Control+Enter";
@@ -29,9 +30,22 @@ export async function reviewRequest<T>(url: string, body?: unknown): Promise<T> 
 }
 
 /** A failed submission retains its UUID so a retry after a lost response writes once. */
-export function ReviewReplyForm({ onSubmit, label = "Reply", openRequest = 0, initial = "", submitLabel = label, onCancel, submitDisabled = false, cancelOnEscape = false }: { onSubmit: (body: string, key: string) => Promise<void>; label?: string; /** Changes when the card's own Reply was pressed: open the form. */ openRequest?: number; /** An edit starts from what the comment says. */ initial?: string; submitLabel?: string; onCancel?: () => void; submitDisabled?: boolean; cancelOnEscape?: boolean }) {
-  const [body, setBody] = useState(initial);
-  const [expanded, setExpanded] = useState(label !== "Reply");
+/**
+ * Where an unsent remark is kept, for this tab only (`sessionStorage`): a reload, a page left and
+ * come back to, or a failed send does not lose it; sending or Cancel does.
+ */
+export const reviewDraftKey = (kind: "reply" | "new", id: string) => `kh:review-draft:${kind}:${id}`;
+
+export function ReviewReplyForm({ onSubmit, label = "Reply", openRequest = 0, initial = "", submitLabel = label, onCancel, submitDisabled = false, cancelOnEscape = false, draftKey }: { onSubmit: (body: string, key: string) => Promise<void>; label?: string; /** Changes when the card's own Reply was pressed: open the form. */ openRequest?: number; /** An edit starts from what the comment says. */ initial?: string; submitLabel?: string; onCancel?: () => void; submitDisabled?: boolean; cancelOnEscape?: boolean; /** Keeps the unsent text (`reviewDraftKey`). */ draftKey?: string }) {
+  const [body, setBody] = useState(() => (draftKey && readStored("session", draftKey)) || initial);
+  // A reply someone had started is open again, as they left it.
+  const [expanded, setExpanded] = useState(() => label !== "Reply" || !!(draftKey && readStored("session", draftKey)));
+  const keep = (value: string) => {
+    setBody(value);
+    if (!draftKey) return;
+    if (value.trim() && value !== initial) writeStored("session", draftKey, value); else removeStored("session", draftKey);
+  };
+  const discard = () => { if (draftKey) removeStored("session", draftKey); };
   useEffect(() => { if (openRequest > 0) setExpanded(true); }, [openRequest]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -48,12 +62,12 @@ export function ReviewReplyForm({ onSubmit, label = "Reply", openRequest = 0, in
     event.preventDefault(); if (busy || submitDisabled || !body.trim()) return;
     if (!request.current || request.current.body !== body) request.current = { body, key: crypto.randomUUID() };
     setBusy(true); setError(undefined);
-    try { await onSubmit(body, request.current.key); setBody(""); request.current = null; if (label === "Reply") setExpanded(false); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not save comment."); } finally { setBusy(false); }
+    try { await onSubmit(body, request.current.key); setBody(""); discard(); request.current = null; if (label === "Reply") setExpanded(false); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not save comment."); } finally { setBusy(false); }
   }}>
-    <Textarea aria-label={label} placeholder={label === "Reply" ? "Reply…" : "Add a comment…"} rows={2} autoFocus className="!min-h-20 resize-y" value={body} disabled={busy} onChange={event => setBody(event.target.value)} required maxLength={6000} />
+    <Textarea aria-label={label} placeholder={label === "Reply" ? "Reply…" : "Add a comment…"} rows={2} autoFocus className="!min-h-20 resize-y" value={body} disabled={busy} onChange={event => keep(event.target.value)} required maxLength={6000} />
     {[...body].length >= 2700 && <p className="text-caption text-kh-text-muted">{[...body].length}/3,000</p>}
     {error && <p role="alert" className="text-body-sm">{error}</p>}
-    <div className="flex justify-end gap-1">{(label === "Reply" || onCancel) && <Button type="button" variant="ghost" disabled={busy} onClick={onCancel ?? (() => setExpanded(false))}>Cancel</Button>}<Tooltip label={submitLabel} shortcut={SUBMIT_SHORTCUT}><Button type="submit" aria-keyshortcuts={SUBMIT_SHORTCUT} disabled={busy || submitDisabled || !body.trim() || [...body].length > 3000}>{busy ? "Saving…" : submitLabel}</Button></Tooltip></div>
+    <div className="flex justify-end gap-1">{(label === "Reply" || onCancel) && <Button type="button" variant="ghost" disabled={busy} onClick={() => { discard(); setBody(initial); if (onCancel) onCancel(); else setExpanded(false); }}>Cancel</Button>}<Tooltip label={submitLabel} shortcut={SUBMIT_SHORTCUT}><Button type="submit" aria-keyshortcuts={SUBMIT_SHORTCUT} disabled={busy || submitDisabled || !body.trim() || [...body].length > 3000}>{busy ? "Saving…" : submitLabel}</Button></Tooltip></div>
   </form>;
 }
 
@@ -194,7 +208,8 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
           ? <a href={signInHref} className={`mt-2 ${buttonClasses({ variant: "ghost" })}`} onClick={event => event.stopPropagation()}>Sign in to reply</a>
           // Opened, a lone remark shows only what was cut: with nothing cut, there is nothing to open.
           : (thread.comments.length > 1 || clamped[thread.id]) && <Button type="button" variant="ghost" className="mt-2" onClick={event => { event.currentTarget.closest<HTMLElement>("[data-review-thread]")?.focus({ preventScroll: true }); onActivate?.(thread.id); }}>{thread.comments.length > 1 ? `Show ${thread.comments.length - 1} ${thread.comments.length === 2 ? "reply" : "replies"}` : "Expand comment"}</Button>)}
-        {canReply && <div hidden={compact}><ReviewReplyForm openRequest={replyRequest?.threadId === thread.id ? replyRequest.nonce : 0} onSubmit={(body, key) => reply(thread.id, body, key)} /></div>}
+        {compact && canReply && readStored("session", reviewDraftKey("reply", thread.id)) && <p className="mt-2 text-caption text-kh-text-muted">Unsent reply</p>}
+        {canReply && <div hidden={compact}><ReviewReplyForm draftKey={reviewDraftKey("reply", thread.id)} openRequest={replyRequest?.threadId === thread.id ? replyRequest.nonce : 0} onSubmit={(body, key) => reply(thread.id, body, key)} /></div>}
       </section>;
       });
       const first = group.threads[0];
