@@ -43,6 +43,16 @@ it("round trips anchors, unique keys, visibility counts and opener invariant",as
  await expect(f.uow.run(r=>r.reviewThreads.insert({...f.thread,id:uuidv7()}))).rejects.toBeDefined();
  await expect(f.uow.run(r=>r.reviewComments.insert({...f.comment,id:uuidv7()}))).rejects.toBeDefined();
 });
+it("lists comments of several threads in one query in listByThread order",async()=>{
+ const f=await fixture(),later=new Date(f.now.getTime()+1000);
+ const second:ReviewComment={...f.comment,id:uuidv7(),idempotencyKey:randomUUID(),createdAt:later};
+ await f.uow.run(r=>r.reviewComments.insert(second));
+ await f.uow.run(async r=>{
+ expect(await r.reviewComments.listByThreads([])).toEqual([]);
+ expect(await r.reviewComments.listByThreads([f.thread.id,uuidv7()])).toEqual(await r.reviewComments.listByThread(f.thread.id));
+ expect((await r.reviewComments.listByThreads([f.thread.id])).map(c=>c.id)).toEqual([f.comment.id,second.id]);
+ });
+});
 it("counts rolling hour from persistent storage and cleanup preserves current window",async()=>{
  const f=await fixture(),old=new Date(f.now.getTime()-49*3600_000);
  await f.uow.run(async r=>{for(const createdAt of [old,f.now])await r.reviewWriteLedger.record({id:uuidv7(),userId:f.id,documentId:f.thread.documentId,createdAt});expect(await r.reviewWriteLedger.countSince(f.id,f.thread.documentId,new Date(f.now.getTime()-3600_000))).toBe(1);});

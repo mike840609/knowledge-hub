@@ -9,7 +9,7 @@ export type AgentContextDiscussion = {
   createdAt: Date;
   updatedAt: Date;
   currentAnchor: CurrentAnchorProjection;
-  comments: { id: string; authorName: string; createdAt: Date; editedAt: Date | null; body: string }[];
+  comments: { id: string; authorName: string; createdAt: Date; editedAt: Date | null; state: "VISIBLE" | "HIDDEN" | "DELETED"; body: string }[];
 };
 
 export function projectAgentDiscussion(
@@ -27,6 +27,7 @@ export function projectAgentDiscussion(
       authorName: authors.get(comment.authorUserId) ?? "Unknown author",
       createdAt: comment.createdAt,
       editedAt: comment.deletedAt || comment.visibility === "HIDDEN" ? null : comment.editedAt,
+      state: comment.deletedAt ? "DELETED" : comment.visibility,
       body: comment.deletedAt ? "[Comment deleted]" : comment.visibility === "HIDDEN" ? "[Comment hidden]" : comment.body,
     })),
   };
@@ -41,6 +42,6 @@ export function formatAgentDiscussion(thread: AgentContextDiscussion): string {
     ? { match: "OUTDATED", note: "The original passage has changed and cannot be located in this saved version." }
     : { match: thread.currentAnchor.match, quote: thread.currentAnchor.anchor?.exact };
   return `\n#### Discussion\n\nThread: ${JSON.stringify({ id: thread.id, status: thread.status, createdRevisionId: thread.createdRevisionId, createdAt: thread.createdAt.toISOString(), updatedAt: thread.updatedAt.toISOString() })}\n\nPassage: ${JSON.stringify(passage)}\n` + thread.comments.map(comment =>
-    `\nComment: ${JSON.stringify({ id: comment.id, author: comment.authorName, createdAt: comment.createdAt.toISOString(), editedAt: comment.editedAt?.toISOString() ?? null })}\n\n${comment.body}\n`,
+    `\nComment: ${JSON.stringify({ id: comment.id, author: comment.authorName, createdAt: comment.createdAt.toISOString(), editedAt: comment.editedAt?.toISOString() ?? null, state: comment.state, body: comment.body })}\n`,
   ).join("");
 }

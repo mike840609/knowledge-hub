@@ -17,3 +17,15 @@ The export uses the existing personal-workspace authorization and transaction bo
 - Unit coverage includes multi-document association, chronological replies and attribution, suppressed bodies, wholly retracted threads, outdated/moved anchors, zero discussions and overflow caused by discussion content.
 
 Scope: the targeted browser flow was run; the full browser suite was not run. No schema migration is needed.
+
+## Addendum (2026-10-22): review hardening
+
+Changes verified: comment bodies are JSON string fields with a separate `state`; `AgentContextFormatter` encodes each segment once; comments load once per document through `listByThreads`; hidden and fully retracted threads are filtered only in `projectAgentDiscussion`.
+
+Run locally (Node 24.6.0):
+
+- `vitest` on `agent-context-discussions`, `mvp-agent-context`, `mvp-agent-context-builder`: 3 files, 13 tests passed.
+- `tsc --noEmit`: exit 0. `eslint .`: exit 0.
+- Full unit suite: 238 files, 3014 tests passed.
+- Integration suite (`scripts/test/integration.ts`, isolated DB on the running MariaDB at 127.0.0.1:3307): 82 files, 748 tests passed, including `mvp-discovery-agent` (3) and `document-review-repositories` (3, with the new `listByThreads` case).
+- Not run: Playwright e2e (needs a build and browsers). `tests/e2e/mvp-discovery-agent.spec.ts` asserts only substrings (`OPEN discussion retained`, `RESOLVED reply retained`, counts), which still occur inside the JSON body, so it needed no change.

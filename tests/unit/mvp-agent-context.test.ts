@@ -9,7 +9,7 @@ it("rejects empty, duplicate, invalid and oversized selections", () => {
   for (const ids of [[], [id, id], ["bad"], Array.from({ length: 21 }, (_, i) => `00000000-0000-0000-0000-${String(i).padStart(12, "0")}`)]) expect(() => validateContextSelection(ids)).toThrow();
 });
 it("formats saved revisions with provenance and pinned links and bounds UTF-8 bytes", () => {
-  const doc = { documentId: id, sourceId: id, sourceName: "Wiki", sourcePath: "docs/a.md", revisionId: id, revisionNo: 2, title: "中文", markdown: "# 中文\nbody", updatedAt: new Date("2026-10-04T00:00:00Z") };
+  const doc = { discussions: [], documentId: id, sourceId: id, sourceName: "Wiki", sourcePath: "docs/a.md", revisionId: id, revisionNo: 2, title: "中文", markdown: "# 中文\nbody", updatedAt: new Date("2026-10-04T00:00:00Z") };
   const out = formatAgentContext(id, [doc]);
   expect(out.markdown).toContain("docs/a.md"); expect(out.markdown).toContain("?revision=2"); expect(out.bytes).toBe(new TextEncoder().encode(out.markdown).length);
   expect(() => formatAgentContext(id, [{ ...doc, markdown: "字".repeat(100000) }])).toThrow();
