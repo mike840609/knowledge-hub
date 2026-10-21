@@ -6,8 +6,9 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const services = applicationServices();
   const { caller } = await services.establishTrustedCaller();
   const { returnTo } = await searchParams;
-  // Only the share-opening route may continue a login; it rechecks link validity and document access.
-  if (typeof returnTo === "string" && /^\/s\/[A-Za-z0-9_-]{1,128}\/open$/.test(returnTo)) redirect(returnTo);
+  // Only a shared page (to comment, signed in) or its opening route may continue a login; each
+  // rechecks link validity, and the opening route document access.
+  if (typeof returnTo === "string" && /^\/s\/[A-Za-z0-9_-]{1,128}(?:\/open)?$/.test(returnTo)) redirect(returnTo);
   const navigation = await services.workspaceAdmin.navigation(caller);
   const personal = navigation.items.find((item) => item.type === "PERSONAL");
   if (!personal) throw new Error("Personal workspace provisioning is unavailable.");
