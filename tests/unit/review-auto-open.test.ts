@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { awaitingOwner, opensOnArrival, parseDismissed } from "@/components/knowledge/review-auto-open";
+import { awaitingOwner, awaitingReader, newComments, opensOnArrival, parseDismissed } from "@/components/knowledge/review-auto-open";
 
 const says = (authorUserId: string, visibility: "VISIBLE" | "HIDDEN" = "VISIBLE") => ({ authorUserId, visibility });
 const thread = (id: string, status: "OPEN" | "RESOLVED" = "OPEN", visibility: "VISIBLE" | "HIDDEN" = "VISIBLE", comments = [says("reader")]) => ({ id, status, visibility, comments });
@@ -57,5 +57,22 @@ describe("a comment its author deleted is not a word that stands", () => {
   });
   it("and the owner's retracted answer leaves the reader's word waiting", () => {
     expect(awaitingOwner([thread("a", "OPEN", "VISIBLE", [says("reader"), gone(OWNER)])], OWNER)).toEqual(["a"]);
+  });
+});
+
+const remark = (id: string, own = false, visibility: "VISIBLE" | "HIDDEN" = "VISIBLE", deleted = false) => ({ id, own, visibility, deleted });
+const shared = (id: string, comments = [remark(`${id}-1`)], status: "OPEN" | "RESOLVED" = "OPEN") => ({ id, status, comments });
+
+describe("a shared page's discussions", () => {
+  it("await the reader where they are open and the last word standing is not the reader's", () => {
+    expect(awaitingReader([shared("a"), shared("b", [remark("b1"), remark("b2", true)]), shared("c", undefined, "RESOLVED"), shared("d", [remark("d1", true), remark("d2")]), shared("e", [remark("e1"), remark("e2", true, "VISIBLE", true)])])).toEqual(["a", "d", "e"]);
+    expect(awaitingReader([shared("f", [remark("f1", false, "HIDDEN")])])).toEqual([]);
+    expect(awaitingReader([])).toEqual([]);
+  });
+  it("count what a returning reader has not seen, not their own words", () => {
+    const before = [shared("a", [remark("a1")])];
+    expect(newComments(before, before)).toBe(0);
+    expect(newComments(before, [shared("a", [remark("a1"), remark("a2"), remark("a3", true)]), shared("b", [remark("b1")])])).toBe(2);
+    expect(newComments([], [])).toBe(0);
   });
 });

@@ -55,7 +55,7 @@ export function OutlineList({
                   : "border-transparent text-kh-text-muted hover:text-kh-text"
               }`}
             >
-              <span className="block truncate" style={indent(entry.level)} title={entry.text}>
+              <span className="line-clamp-2 break-words" style={indent(entry.level)} title={entry.text}>
                 {entry.text}
               </span>
             </a>

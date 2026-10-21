@@ -17,7 +17,7 @@ import { ReviewPassageMarkers } from "./review-passage-markers";
 import { reviewRailInline, useReviewRailInline } from "./review-rail-mode";
 import { InlineReviewContext, type CaptureReviewAnchor, type PreparedReviewComment } from "./inline-review-context";
 import { useReviewDomVersion } from "./review-dom-version";
-import { createReviewRangeResolver, focusReviewAnchor, selectionAnchorInBlock } from "./review-selection";
+import { COMMENT_HINT, createReviewRangeResolver, focusReviewAnchor, selectionAnchorInBlock } from "./review-selection";
 import { ReviewFilterMenu, ReviewThreadList, reviewRequest, type ReviewFilter } from "./review-thread-list";
 
 /**
@@ -221,7 +221,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
             {error && <p role="alert" className="mt-3 text-body-sm">{error}</p>}
             {selection.refusal && <p role="status" className="mt-3 text-body-sm">{selection.refusal}</p>}
             {revisionChanged && !prepared && <p role="status" className="mt-3 text-body-sm">Document changed. Refresh this page before selecting or locating a passage.</p>}
-            {canComment && !selection.chosen && <div className="mt-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={() => { if (prepareComment) requestComment(() => selection.capture()); else selection.capture(); }} aria-label="Add comment from selected text"><MessageSquarePlus className="size-4" aria-hidden="true" />Add comment</Button></div>}
+            {canComment && !selection.chosen && <div className="mt-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={() => { if (prepareComment) requestComment(() => selection.capture()); else selection.capture(); }} aria-label="Add comment from selected text"><MessageSquarePlus className="size-4" aria-hidden="true" />Add comment</Button>{!selection.ready && <p className="mt-1 text-caption text-kh-text-muted">{COMMENT_HINT}</p>}</div>}
           </div>
           {composer && !draft && <div className="mt-3">{composer}</div>}
           {result && <div className="mt-3"><ReviewThreadList draft={draft} filter={filter} onFilterChange={setFilter} railMarkdown={prepared?.markdown ?? (revisionChanged || contentPending ? undefined : markdown)} activeThreadId={activeThreadId} onActivate={setActiveThreadId}

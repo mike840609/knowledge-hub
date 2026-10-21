@@ -9,9 +9,11 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { ReviewFilterMenu, ReviewThreadList, reviewRequest, type ReviewFilter } from "./review-thread-list";
 import { ReviewComposer, ReviewSelectionBubble, useReviewSelection } from "./review-composer";
 import { ReviewPanelShell } from "./review-panel-shell";
-import { focusReviewAnchor } from "./review-selection";
+import { COMMENT_HINT, focusReviewAnchor } from "./review-selection";
 import { ReviewPassageMarkers } from "./review-passage-markers";
 import { reviewRailInline, useReviewRailInline } from "./review-rail-mode";
+import { awaitingReader, newComments, parseDismissed, sharedDismissedKey } from "./review-auto-open";
+import { readStored, removeStored, writeStored } from "@/components/shell/use-persisted-state";
 
 type DiscussionResult = { threads: ReviewThreadView[]; revisionId: string; writesEnabled: boolean; callerUserId: string | null };
 export function SharedReviewPanel({ token, revisionId, markdown, signInHref, children }: { token: string; revisionId: string; markdown: string; signInHref: string; children: ReactNode }) {
@@ -23,31 +25,56 @@ export function SharedReviewPanel({ token, revisionId, markdown, signInHref, chi
   const readingRef = useRef<HTMLDivElement>(null);
   const inline = useReviewRailInline();
   const [filter, setFilter] = useState<ReviewFilter>("ALL");
+  const shown = useRef<DiscussionResult | undefined>(undefined);
+  useEffect(() => { shown.current = result; }, [result]);
+  // The reader's own opening and closing. Closing is remembered as the discussions it was closed on,
+  // so the rail stays shut on those and opens again for one that arrives later (as the owner's does).
   const changeOpen = useCallback((next: boolean) => {
     setOpen(next);
+    if (next) removeStored("local", sharedDismissedKey(token));
+    else writeStored("local", sharedDismissedKey(token), JSON.stringify(awaitingReader(shown.current?.threads ?? [])));
     if (!next) {
       setActiveThreadId(undefined);
       if (reviewRailInline()) entryRef.current?.focus({ preventScroll: true });
     }
-  }, []);
+  }, [token]);
   const toggle = useCallback(() => changeOpen(!open), [changeOpen, open]);
   const revisionChanged = !!result && result.revisionId !== revisionId;
   const canComment = !!result?.writesEnabled && !revisionChanged;
   const anonymous = result?.callerUserId === null;
-  // Discussions are what a reviewer came for: where they fit beside the document, they open with it (once).
+  // Discussions are what a reviewer came for: where they fit beside the document, they open with it
+  // (once) — unless this reader closed them on every discussion still waiting for them.
   const autoOpened = useRef(false);
   useEffect(() => {
     if (autoOpened.current || !result || !inline) return;
     autoOpened.current = true;
-    if (result.threads.length > 0) setOpen(true);
-  }, [result, inline]);
+    const dismissed = parseDismissed(readStored("local", sharedDismissedKey(token)));
+    if (awaitingReader(result.threads).some(id => !dismissed.includes(id))) setOpen(true);
+  }, [result, inline, token]);
   useReviewHighlights(markdown, revisionChanged ? undefined : result?.threads, activeThreadId);
   const selection = useReviewSelection(readingRef, markdown, `${token}:${revisionId}`);
+  // A newer reading, held back while it would move the cards: the reader chooses when to see it.
+  const [arrived, setArrived] = useState<{ result: DiscussionResult; count: number }>();
   const load = useCallback(async () => {
     setError(undefined);
-    try { setResult(await reviewRequest<DiscussionResult>("/api/share-review/threads/query", { token })); } catch (failure) { setResult(undefined); setError(failure instanceof Error ? failure.message : "Discussions are unavailable."); }
+    try { setResult(await reviewRequest<DiscussionResult>("/api/share-review/threads/query", { token })); setArrived(undefined); } catch (failure) { setResult(undefined); setError(failure instanceof Error ? failure.message : "Discussions are unavailable."); }
   }, [token]);
   useEffect(() => { void load(); }, [load]);
+  // Coming back to the tab reads the discussions again. Nothing new is taken in quietly; new
+  // comments wait behind a notice, so a card is never moved under the reader.
+  useEffect(() => {
+    const back = async () => {
+      if (document.visibilityState !== "visible" || !shown.current) return;
+      try {
+        const next = await reviewRequest<DiscussionResult>("/api/share-review/threads/query", { token });
+        const count = shown.current ? newComments(shown.current.threads, next.threads) : 0;
+        if (count === 0) setResult(next); else setArrived({ result: next, count });
+      } catch { /* What is shown stays; Refresh still reads again. */ }
+    };
+    document.addEventListener("visibilitychange", back);
+    return () => document.removeEventListener("visibilitychange", back);
+  }, [token]);
+  const showArrived = () => { if (!arrived) return; setResult(arrived.result); setArrived(undefined); changeOpen(true); };
   useEffect(() => { setActiveThreadId(undefined); }, [token, revisionId, markdown]);
   useEffect(() => {
     const activate = (event: Event) => setActiveThreadId((event as CustomEvent<string>).detail);
@@ -62,6 +89,7 @@ export function SharedReviewPanel({ token, revisionId, markdown, signInHref, chi
   const draft = composer && inline && !revisionChanged ? { anchor: selection.chosen!, composer } : undefined;
   return <>
     <div className="kh-review-entry kh-reading-column sticky top-0 z-20 flex items-center justify-end gap-2 bg-kh-bg py-2">
+      <span aria-live="polite">{arrived && <Button type="button" variant="soft" onClick={showArrived}>{arrived.count === 1 ? "1 new comment" : `${arrived.count} new comments`}</Button>}</span>
       <Button ref={entryRef} type="button" variant="ghost" aria-label={`${open ? "Hide discussions" : "Open discussions"}${result ? `, ${result.threads.length} comments` : ""}`} aria-expanded={open} aria-controls="shared-document-discussions" onPointerDown={event => event.preventDefault()} onClick={toggle}>
         <MessageSquare className="size-4" aria-hidden="true" />Comments{result && result.threads.length > 0 ? ` (${result.threads.length})` : ""}
       </Button>
@@ -92,7 +120,7 @@ export function SharedReviewPanel({ token, revisionId, markdown, signInHref, chi
       {result && <div className="mt-3">
         {revisionChanged && <p role="status" className="mb-3 text-body-sm">Document changed. Refresh this page before selecting or locating a passage. You can still reply to existing discussions.</p>}
         {/* The one thing a reader does here that an owner does not, on a row of its own. */}
-        {canComment && <div className="mb-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={selection.capture} aria-label="Add comment from selected text"><MessageSquarePlus className="size-4" aria-hidden="true" />Add comment</Button></div>}
+        {canComment && <div className="mb-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={selection.capture} aria-label="Add comment from selected text"><MessageSquarePlus className="size-4" aria-hidden="true" />Add comment</Button>{!selection.ready && <p className="mt-1 text-caption text-kh-text-muted">{COMMENT_HINT}</p>}</div>}
         {!result.writesEnabled && <p className="mb-3 text-body-sm text-kh-text-muted">{result.callerUserId === null ? "Sign in to add a comment." : "Adding comments is currently disabled."}</p>}
         {anonymous && <div className="mb-3"><a href={signInHref} className={buttonClasses({ variant: "soft" })}><LogIn className="size-4" aria-hidden="true" />Sign in to comment</a></div>}
       </div>}

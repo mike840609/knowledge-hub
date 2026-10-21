@@ -22,8 +22,8 @@ test("shared comments follow passage order and the selected card stays beside it
   }
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${origin}${doc.links[0].path}`);
-  // Beside the document there is room for them, so they open with the page.
-  await expect(page.getByRole("complementary", { name: "Document discussions" })).toBeVisible();
+  // The reader's own discussions are not waiting for them, so the page opens without them.
+  await expect(page.getByRole("complementary", { name: "Document discussions" })).toBeHidden();
   await expect(page.locator("[data-review-marker]")).toHaveCount(2);
   await expect(page.getByRole("button", { name: "2 comments on passage: Paragraph 20" })).toBeVisible();
   await openReviewDiscussions(page);
