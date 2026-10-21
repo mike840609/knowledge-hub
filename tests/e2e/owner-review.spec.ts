@@ -19,9 +19,9 @@ test("owner replies, resolves, reopens and hides first comment without changing 
   await page.getByRole("button", { name: "Resolve", exact: true }).click(); await expect(page.getByRole("textbox", { name: "Reply", exact: true })).toHaveCount(0);
   // Resolved, it leaves the list of what is open; it is under Resolved, and can be opened again from there.
   await expect(page.getByText("Owner response", { exact: true }).filter({ visible: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Filter discussions" }).filter({ visible: true }).click(); await page.getByRole("menuitem", { name: "Resolved", exact: true }).click();
+  await page.getByRole("button", { name: "Filter discussions" }).filter({ visible: true }).click(); await page.getByRole("menuitemradio", { name: "Resolved", exact: true }).click();
   await page.getByRole("button", { name: "Reopen", exact: true }).click();
-  await page.getByRole("button", { name: "Filter discussions" }).filter({ visible: true }).click(); await page.getByRole("menuitem", { name: "Open", exact: true }).click(); await expect(page.getByRole("button", { name: "Reply", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Filter discussions" }).filter({ visible: true }).click(); await page.getByRole("menuitemradio", { name: "Open", exact: true }).click(); await expect(page.getByRole("button", { name: "Reply", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Comment options", exact: true }).click();
   await page.getByRole("menuitem", { name: "Hide thread", exact: true }).click(); await page.getByRole("button", { name: "Confirm hide", exact: true }).click(); await expect(page.getByText("Hidden from reviewers", { exact: false }).filter({ visible: true })).toBeVisible();
   const response = await request.post(`${phase3Origin("viewer")}/api/share-review/threads/query`, { headers: { Origin: phase3Origin("viewer") }, data: { token: doc.links[1].path.split("/").pop() } });
@@ -252,12 +252,12 @@ test("the owner is shown what is still open; what is resolved is one choice away
   await expect(cards).toContainText("Still to be answered");
 
   await rail.getByRole("button", { name: "Filter discussions" }).click();
-  await page.getByRole("menuitem", { name: "All comments", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: "All comments", exact: true }).click();
   await expect(cards).toHaveCount(2);
 
   // A mark on a passage whose discussion is resolved still leads to it.
   await rail.getByRole("button", { name: "Filter discussions" }).click();
-  await page.getByRole("menuitem", { name: "Open", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: "Open", exact: true }).click();
   await expect(cards).toHaveCount(1);
   await page.getByRole("button", { name: "1 comment on passage: Paragraph 8" }).click();
   await expect(cards).toHaveCount(2);

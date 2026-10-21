@@ -138,7 +138,7 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
                 <MenuContent align="end" className="min-w-40">
                   {status === "active" ? <MenuItem onClick={() => void copy(item)}>Copy link</MenuItem> : null}
                   <MenuItem onClick={() => { setManualCopy(null); setDetails(current => current === item.id ? null : item.id); }}>{details === item.id ? "Hide details" : "Show details"}</MenuItem>
-                  {status !== "revoked" ? <MenuItem className="text-kh-danger" onClick={() => setConfirming(item.id)}>Revoke</MenuItem> : null}
+                  {status !== "revoked" ? <MenuItem onClick={() => setConfirming(item.id)}>Revoke</MenuItem> : null}
                 </MenuContent>
               </MenuRoot>
             </div>
