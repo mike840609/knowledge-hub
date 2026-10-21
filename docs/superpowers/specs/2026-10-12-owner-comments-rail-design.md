@@ -247,20 +247,20 @@ existing layout tests — hold the refactor of the five window checks.
 ## Amendment (2026-10-21): the outline stays where the pane holds all three
 
 "The rail takes the outline's place" assumed a pane too narrow for both. A pane of
-`88rem` or wider holds article, rail and outline (860 + 320 + 224 = 1404px), so
-there the outline stays a rail, right of the open discussions, and the disclosure
-stays hidden (`globals.css`, `@container kh-document (min-width: 88rem)`). The
-columns measure from the room left of the outline, as the shared page's do
-(share-page-outline spec §6): they keep their left edge where that room allows and
-move left only as far as the rail needs, as the usual 120ms slide. Below 88rem
-nothing changes.
+`88rem` or wider holds outline, article and rail (224 + 860 + 320 = 1404px). There the
+outline is on the column's **left**, as on a shared page — a zero-height sticky box sized as
+the reading column, the rail `absolute right-full` inside it (`document-pane.tsx`) — and stays
+while the discussions are open: outline, article, discussions. The discussions stay next to
+the article because their cards line up with passages; the outline is a jump list with no
+line it belongs beside, so it takes the outer side.
 
-This trades away part of the inline-review spec's 2026-10-13 rule that opening the
-rail moves nothing under the pointer. The column can stay put beside rail and
-outline only from a pane of 1724px (`(pane − 1084) / 2 + 1404 ≤ pane`), so between
-88rem and 108rem the column, the path line and the header slide left on opening —
-at most about 158px, 140px at a 1920px window with the explorer open. Chosen over
-108rem, where nothing moves but the pane needs a window of about 2190px. From
-108rem, and below 88rem, nothing moves (`owner-review.spec.ts`). A reviewer comparing a comment with another section keeps the
-outline in view. With the explorer open the pane reaches 88rem at a window of about
-1870px; a narrower navigation would bring that down.
+The column is centred in the whole pane, and opening the rail moves it left only as far as
+the rail needs: `max(0, min((pane − 860) / 2, pane − 1180))`. From a 1500px pane nothing
+moves; between 1408px and 1500px it slides up to 46px. Below 88rem the outline stays on the
+right exactly as before, where the rail takes its slot and nothing moves. Placing it on the
+left there too was rejected: its slot would then be left of the column, so every opening
+would slide the article up to 224px, on the panes most windows have.
+
+The outline therefore changes side at 88rem as the window is resized; it never changes side
+when the discussions open or close. With the explorer open the pane reaches 88rem at a window
+of about 1870px; a narrower navigation would bring that down.

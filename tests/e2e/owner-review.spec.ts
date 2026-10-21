@@ -135,7 +135,7 @@ test("a discussion that awaits the owner is open beside its passage when the doc
   await expect(rail).toBeVisible();
 });
 
-test("a pane wide enough for article, discussions and outline keeps all three side by side", async ({ page, request }) => {
+test("a pane wide enough for outline, article and discussions keeps all three side by side, the outline on the left", async ({ page, request }) => {
   const doc = await documentWithDiscussion(request);
   // The pane is the window less the navigation and the explorer: 2000px leaves it past 88rem (1408px).
   await page.setViewportSize({ width: 2000, height: 900 });
@@ -146,13 +146,16 @@ test("a pane wide enough for article, discussions and outline keeps all three si
   const outlineRail = page.getByRole("complementary", { name: "On this page" });
   const article = page.locator("[data-review-document]");
   await expect(rail).toBeVisible();
+  await expect(outlineRail).toHaveCount(1);
   await expect(outlineRail).toBeVisible();
   await expect(page.locator(".kh-outline-inline")).toBeHidden();
-  // Article, then discussions, then outline, none over another, once the column's 120ms slide has settled.
-  await expect.poll(async () => {
-    const [articleBox, railBox, outlineBox] = [(await article.boundingBox())!, (await rail.boundingBox())!, (await outlineRail.boundingBox())!];
-    return railBox.x >= articleBox.x + articleBox.width - 1 && outlineBox.x >= railBox.x + railBox.width - 1;
-  }).toBe(true);
+  // Outline, article, discussions — the discussions level with their passages, beside the article —
+  // none over another, once the column's 120ms slide has settled.
+  const order = async () => {
+    const [outlineBox, articleBox, railBox] = [(await outlineRail.boundingBox())!, (await article.boundingBox())!, (await rail.boundingBox())!];
+    return outlineBox.x >= 0 && outlineBox.x + outlineBox.width <= articleBox.x + 1 && railBox.x >= articleBox.x + articleBox.width - 1;
+  };
+  await expect.poll(order).toBe(true);
   expect((await rail.boundingBox())!.width).toBe(320);
   expect(await pane.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
   // An outline entry still jumps to its heading with the discussions open.
@@ -160,9 +163,27 @@ test("a pane wide enough for article, discussions and outline keeps all three si
   await expect(page.getByRole("heading", { name: "Beta" })).toBeInViewport();
   await expect(rail).toBeVisible();
 
+  // Past 1500px of pane the rail fits right of the column where it stands: closing moves nothing.
+  const articleX = async () => Math.round((await article.boundingBox())!.x);
+  const open = await articleX();
   await page.getByRole("button", { name: "Collapse discussions" }).click();
   await expect(rail).toBeHidden();
   await expect(outlineRail).toBeVisible();
+  await page.waitForTimeout(250);
+  expect(await articleX()).toBe(open);
+  const outlineBox = (await outlineRail.boundingBox())!;
+  expect(outlineBox.x + outlineBox.width).toBeLessThanOrEqual(open + 1);
+});
+
+test("below 88rem of pane the outline stays on the right, as before", async ({ page, request }) => {
+  const doc = await createReviewDocument(request, "## Alpha\n\nA paragraph.\n\n## Beta\n\nAnother.\n");
+  await page.setViewportSize({ width: 1680, height: 900 });
+  await page.goto(doc.href);
+  const outlineRail = page.getByRole("complementary", { name: "On this page" });
+  await expect(outlineRail).toHaveCount(1);
+  await expect(outlineRail).toBeVisible();
+  const [outlineBox, articleBox] = [(await outlineRail.boundingBox())!, (await page.locator("[data-review-document]").boundingBox())!];
+  expect(outlineBox.x).toBeGreaterThanOrEqual(articleBox.x + articleBox.width - 1);
 });
 
 test("the discussions arriving do not move the article", async ({ page, request }) => {
@@ -318,7 +339,7 @@ test("opening and closing the owner's discussions moves nothing under the pointe
   // 2400: a pane past 108rem holds article, rail and outline with the column where it stood. 1440: the
   // pane is narrower than the reading width beside the outline, so the outline's slot is what the rail
   // takes. Re-centred, the path line's controls leapt 224-272px right and the column slid 48px left.
-  // Between 88rem and 108rem the outline stays and the column slides left by what the rail needs
+  // From 88rem the outline is on the left and the column slides only between 1408px and 1500px of pane
   // (owner-comments-rail spec, 2026-10-21 amendment); the side-by-side test covers that.
   for (const width of [2400, 1440]) {
     await page.setViewportSize({ width, height: 900 });
