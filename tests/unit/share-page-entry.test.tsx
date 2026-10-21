@@ -3,7 +3,7 @@ import { afterEach, expect, it, vi } from "vitest";
 
 vi.mock("@/server/share-read", () => ({ getSharedDocument: async () => ({ title: "Shared", markdown: "# Shared", sharedByName: "Owner", updatedAt: "2026-10-13", expiresAt: "2026-10-20", revisionId: "revision" }) }));
 vi.mock("@/components/knowledge/save-share-button", () => ({ SaveShareButton: () => null }));
-vi.mock("@/components/knowledge/shared-review-panel", () => ({ SharedReviewPanel: ({ children }: { children: React.ReactNode }) => children }));
+vi.mock("@/components/knowledge/shared-review-panel", () => ({ SharedReviewPanel: ({ children, signInHref }: { children: React.ReactNode; signInHref: string }) => <div data-sign-in={signInHref}>{children}</div> }));
 vi.mock("@/components/knowledge/markdown-renderer", () => ({ MarkdownRenderer: () => null }));
 vi.mock("@/components/ui/timestamp", () => ({ Timestamp: () => null }));
 import SharedDocumentPage from "@/app/s/[token]/page";
@@ -24,4 +24,13 @@ it("keeps the document-opening flow when no company gateway is configured", asyn
   const html = renderToStaticMarkup(await SharedDocumentPage({ params: Promise.resolve({ token: "share-token" }) }));
   const links = [...html.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>(Open in Knowledge Hub|Get started)<\/a>/g)];
   expect(links.map(link => link[1])).toEqual(["/s/share-token/open", "/s/share-token/open"]);
+});
+
+it("signs a reader in to comment and brings them back to the shared page", async () => {
+  vi.stubEnv("KM_PUBLIC_ORIGIN", "https://hub.example.com/");
+  const html = renderToStaticMarkup(await SharedDocumentPage({ params: Promise.resolve({ token: "share-token" }) }));
+  expect(html).toContain('data-sign-in="https://hub.example.com/?returnTo=%2Fs%2Fshare-token"');
+  vi.stubEnv("KM_PUBLIC_ORIGIN", "");
+  const local = renderToStaticMarkup(await SharedDocumentPage({ params: Promise.resolve({ token: "share-token" }) }));
+  expect(local).toContain('data-sign-in="/?returnTo=%2Fs%2Fshare-token"');
 });
