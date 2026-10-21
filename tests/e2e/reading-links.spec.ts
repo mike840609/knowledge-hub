@@ -247,6 +247,26 @@ test.describe("wikilinks and backlinks in My Space", () => {
     await expect(page.locator("#local-setup:visible")).toBeInViewport(ROUND_TRIP);
   });
 
+  test("a link pressed before the page has hydrated still opens when the editor takes over", async ({ page }) => {
+    const stamp = Date.now();
+    const target = await createMySpaceDocument(page, `Early Target ${stamp}`, "The target.");
+    const linker = await createMySpaceDocument(page, `Early Linker ${stamp}`, `Go to [[Early Target ${stamp}|the target]].`);
+    // Every script waits, so the press goes down on the server's copy before React has attached anything to it.
+    let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    await page.route("**/_next/static/chunks/**", async route => { await held; await route.continue(); });
+    await page.goto(linker.url, { waitUntil: "commit" });
+    const link = page.locator("article").first().getByRole("link", { name: "the target" });
+    const box = (await link.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    release();
+    await expect(page.locator(".ProseMirror")).toBeAttached(ROUND_TRIP);
+    await page.waitForTimeout(500);
+    await page.mouse.up();
+    await expect(page).toHaveURL(target.url, ROUND_TRIP);
+  });
+
   test("a link pressed while the editor takes over from the server's copy still opens", async ({ page }) => {
     const stamp = Date.now();
     const target = await createMySpaceDocument(page, `Pressed Target ${stamp}`, "The target.");

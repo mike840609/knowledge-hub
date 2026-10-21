@@ -61,6 +61,8 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
   // settles would not open. So the editor waits for the release, and for the click it dispatches.
   const standInPressed = useRef(false);
   const revealAfterPress = useRef(false);
+  // A press that began before hydration reached no handler of ours; the browser still marks what it holds `:active`.
+  const pressArea = useRef<HTMLDivElement>(null);
   const [loaded, setLoaded] = useState(false);
   const [source, setSource] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -348,7 +350,7 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     }}>Download my changes</Button>}
     {failed && <p role="status" className="mb-3 text-body-sm">Rendered editing is unavailable. You can continue in Markdown.</p>}
-    <div onPointerDownCapture={() => { if (!ready) standInPressed.current = true; }} onCompositionStart={() => { composing.current = true; writer?.pause(true); }} onCompositionEnd={() => {
+    <div ref={pressArea} onPointerDownCapture={() => { if (!ready) standInPressed.current = true; }} onCompositionStart={() => { composing.current = true; writer?.pause(true); }} onCompositionEnd={() => {
       composing.current = false;
       flushEditor();
       writer?.pause(!editable || !!recovery || !resolve(queue.current!.current).title);
@@ -369,7 +371,7 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
           markdown={content.markdown} editable={editable && !source} onReady={(instance, openedWith) => {
             editor.current = instance;
             if (openedWith !== queue.current!.current.markdown) instance.replaceMarkdown(queue.current!.current.markdown);
-            if (standInPressed.current) revealAfterPress.current = true;
+            if (standInPressed.current || pressArea.current?.querySelector(":active")) revealAfterPress.current = true;
             else setReady(true);
           }} onFail={() => setFailed(true)} onUserEdit={() => {
             pending.current = true;
