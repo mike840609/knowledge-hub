@@ -24,6 +24,8 @@ test("new users get actionable guidance on every empty page and can reopen Home 
     await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
     await expect(page.locator("figure")).toHaveCount(1);
     await expect(page.getByRole("link", { name: route === "knowledge" ? "Import your first knowledge source" : "Import folder", exact: true })).toBeVisible();
+    // Personal leads with the import, in the explorer as on the page.
+    if (route === "knowledge") await expect(page.getByRole("region", { name: "Get started" }).getByRole("link")).toHaveText([/^Import your first knowledge source.*Read-only here/, /^Create document/]);
     for (const [name, viewport] of [["desktop", { width: 1440, height: 1000 }], ["mobile", { width: 390, height: 844 }]] as const) {
       await page.setViewportSize(viewport);
       await page.screenshot({ path: `${output}/after-${route.split("?")[0]}-${name}.png`, fullPage: false, animations: "disabled" });

@@ -9,7 +9,7 @@ import { buttonClasses } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Kbd } from "@/components/ui/kbd";
 import { ActionIcon } from "@/components/actions/action-icon";
-import { actionsFor } from "@/components/actions/action-registry";
+import { startActions } from "@/components/knowledge/sidebar-get-started";
 import { shortcutLabel } from "@/lib/shortcut-keys";
 
 /**
@@ -25,15 +25,12 @@ import { shortcutLabel } from "@/lib/shortcut-keys";
  */
 export function KnowledgeEmptyState() {
   const { access, confirmed } = useWorkspaceAuthorization();
-  const available = actionsFor("empty", {
+  const actions = startActions({
     workspaceId: access.workspace.id,
     workspaceType: access.workspace.type,
     can: access.actions,
     confirmed,
-    onboarding: true,
   });
-  const actions = [...available];
-  if (access.workspace.type === "PERSONAL") actions.sort((a, b) => Number(b.id === "create.import") - Number(a.id === "create.import"));
   const first = actions[0];
 
   return (

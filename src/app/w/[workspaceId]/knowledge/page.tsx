@@ -1,4 +1,5 @@
 import { KnowledgeEmptyState } from "@/components/knowledge/knowledge-empty-state";
+import { KnowledgeLayout } from "@/components/knowledge/knowledge-layout";
 import { redirect, notFound } from "next/navigation";
 import { getDefaultKnowledgeTarget, getKnowledgeExplorerModel } from "@/server/knowledge-read";
 import { applicationServices } from "@/server/composition";
@@ -14,7 +15,8 @@ export default async function WorkspaceKnowledgePage({
   const workspaces = await services.workspaces.listWorkspaces(caller);
   if (!workspaces.some((workspace) => workspace.id === workspaceId)) notFound();
   const sources = await services.queries.listSources(caller, workspaceId);
-  if (sources.length === 0) return <KnowledgeEmptyState />;
+  // The explorer comes too: in an empty workspace it is where the ways to add a document are offered.
+  if (sources.length === 0) return <KnowledgeLayout workspaceId={workspaceId} source={null} collections={[]} includeArchived={false}><KnowledgeEmptyState /></KnowledgeLayout>;
   const target = await getDefaultKnowledgeTarget(workspaceId);
   if (target) redirect(`/w/${workspaceId}/knowledge/${target.sourceId}/${target.documentId}`);
   const firstByName = [...sources].sort((left, right) =>

@@ -147,6 +147,11 @@ export type Action = {
   section?: ActionSection;
   surfaces: readonly ActionSurface[];
   effect: ActionEffect;
+  /**
+   * What choosing it leads to, in one line, for the places a reader is choosing how to start: a
+   * folder import stays read-only and a written document stays editable, and the label says neither.
+   */
+  detail?: string;
 };
 
 /**
@@ -309,6 +314,7 @@ export function availableActions(context: ActionContext): readonly Action[] {
       keywords: ["new", "add", "note", "notes", "write"],
       surfaces: ["palette", "empty", "create"],
       effect: { kind: "navigate", href: `/w/${workspaceId}/knowledge/new` },
+      detail: "Write in the Hub. You can edit it any time.",
     });
     // The same gate as a document, for the same reason: it writes to the Notes source, which
     // is made on first use. Not on the empty state, which offers a place to start writing.
@@ -332,8 +338,9 @@ export function availableActions(context: ActionContext): readonly Action[] {
       group: "create",
       icon: "import",
       keywords: ["folder", "upload", "sync", "source"],
-      surfaces: ["palette", "empty"],
+      surfaces: ["palette", "empty", "create"],
       effect: { kind: "navigate", href: `/w/${workspaceId}/sources/import` },
+      detail: "Markdown files from your computer. Read-only here; import again to update them.",
     });
   }
 

@@ -25,7 +25,7 @@ export function KnowledgeLayout({
   children,
 }: {
   workspaceId: string;
-  source: SourceView;
+  source: SourceView | null;
   collections: { source: SourceView; tree: KnowledgeTreeItem[] }[];
   includeArchived: boolean;
   children: ReactNode;
