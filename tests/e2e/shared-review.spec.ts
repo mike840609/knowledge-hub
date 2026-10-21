@@ -78,7 +78,7 @@ test("anonymous readers find the discussions open beside the document and are of
   await expect(entry).toHaveAttribute("aria-expanded", "true");
   await expect(page.locator("[data-review-thread]")).toContainText("Open without a click");
   const signIn = page.getByRole("link", { name: "Sign in to comment" });
-  await expect(signIn).toHaveAttribute("href", /\/s\/[^/]+\/open/);
+  await expect(signIn).toHaveAttribute("href", new RegExp(`/\\?returnTo=${encodeURIComponent(`/s/${token}`)}$`));
   // Choosing a passage offers sign-in where a signed-in reader is offered Comment.
   await selectPassage(page, "first");
   await expect(page.locator(".kh-selection-bubble").getByRole("link", { name: "Sign in to comment" })).toBeVisible();
@@ -86,6 +86,19 @@ test("anonymous readers find the discussions open beside the document and are of
   // Closed once, it stays closed: it opens with the page, not again.
   await entry.click();
   await expect(entry).toHaveAttribute("aria-expanded", "false");
+});
+
+test("signing in to comment comes back to the shared page, where the reader can comment", async ({ page, request }) => {
+  const doc = await createReviewDocument(request);
+  const token = doc.links[0].path.split("/").pop()!;
+  const viewer = phase3Origin("viewer");
+  // What the sign-in link continues to once the reader is signed in.
+  await page.goto(`${viewer}/?returnTo=${encodeURIComponent(`/s/${token}`)}`);
+  await expect(page).toHaveURL(`${viewer}/s/${token}`);
+  await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
+  await expect(page.getByRole("link", { name: "Sign in to comment" })).toHaveCount(0);
+  await selectPassage(page);
+  await expect(page.getByRole("button", { name: "Comment on selection" })).toBeVisible();
 });
 
 test("a shared page with no discussions keeps them closed", async ({ page, request }) => {
