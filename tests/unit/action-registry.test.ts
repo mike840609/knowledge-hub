@@ -550,6 +550,14 @@ describe("action registry — Create folder", () => {
     const surfacesOf = (id: string): ActionSurface[] => (availableActions(context()).find((candidate) => candidate.id === id)?.surfaces ?? []) as ActionSurface[];
     expect(surfacesOf("create.folder")).toEqual(["palette", "create"]);
     expect(surfacesOf("create.document")).toEqual(["palette", "empty", "create"]);
+    // The sidebar's Import button reads `create`, so importing stays one click away once there are documents.
+    expect(surfacesOf("create.import")).toEqual(["palette", "empty", "create"]);
+  });
+
+  it("says what each way of starting leads to: an import stays read-only, a written document editable", () => {
+    const detailOf = (id: string) => availableActions(context()).find((candidate) => candidate.id === id)?.detail;
+    expect(detailOf("create.import")).toMatch(/read-only/i);
+    expect(detailOf("create.document")).toMatch(/edit/i);
   });
 
   it("is found by 'new', like Create document", () => {

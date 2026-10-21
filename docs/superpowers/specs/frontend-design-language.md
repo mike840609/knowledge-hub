@@ -1137,6 +1137,15 @@ the empty state is the one moment a reader is looking for what to do. Compact
 empty lines inside a rail or a list (a folder with nothing in it) stay one line
 of `text-muted`; they are not pages.
 
+One rail is the exception: the knowledge explorer of a workspace with no
+documents at all. It is shown even when the workspace has no source, and in
+place of the tree it says "No documents yet" and lists the ways to start, from
+the registry's `empty` surface, each with its `detail`: the line saying what
+that way leads to (an imported folder stays read-only in the Hub, a written
+document stays editable), which a label cannot. An action's `detail` is for
+such a choice and is shown under its label; it is not a tooltip. Past the first
+document the explorer keeps importing one click away, as an icon in its header.
+
 ### One loading idiom, one message shape
 
 A region that is loading shows a skeleton shaped like what is being fetched,

@@ -32,7 +32,7 @@ test.describe("Phase 3 Workspace product acceptance", () => {
     try {
       await page.goto("/");
       await expect(page).toHaveURL(/\/w\/[^/]+\/knowledge$/);
-      await expect(page.getByRole("link", { name: "Import your first knowledge source" })).toBeVisible();
+      await expect(page.getByRole("link", { name: "Import your first knowledge source", exact: true })).toBeVisible();
       await expect(page.getByRole("link", { name: "Settings", exact: true })).toHaveCount(0);
       await page.getByLabel("Workspace: My Space", { exact: true }).click();
       await expect(page.getByText("Teams", { exact: true })).toBeVisible();

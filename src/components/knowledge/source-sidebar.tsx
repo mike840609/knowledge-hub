@@ -10,6 +10,7 @@ import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/applicat
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { MenuCheckboxItem, MenuContent, MenuItem, MenuRoot, MenuTrigger } from "@/components/ui/menu";
 import { KnowledgeTree } from "./knowledge-tree";
+import { SidebarGetStarted, hasNoDocuments, startActions } from "./sidebar-get-started";
 import { TreeFilter } from "./tree-filter";
 import { buttonClasses } from "@/components/ui/button";
 import { Status } from "@/components/ui/status";
@@ -25,7 +26,8 @@ const READ_ONLY_DESCRIPTION = "Synced from a folder, read-only in the Hub";
 
 export type SourceSidebarProps = {
   workspaceId: string;
-  source: SourceView;
+  /** Null in a workspace with no sources yet, where the explorer is there to say how to add one. */
+  source: SourceView | null;
   collections: { source: SourceView; tree: KnowledgeTreeItem[] }[];
   selectedDocumentId?: string;
   includeArchived: boolean;
@@ -84,12 +86,12 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
   const favoriteKeys = shortcuts.favorites.filter((key) => documents.has(key));
   // The section is the same height however many are starred: the newest few, and a row for the rest.
   const { inPlace: favoritesInPlaceKeys, showAll: favoritesTotal } = favoritesInPlace(favoriteKeys);
-  const recentKeys = shortcuts.recent.filter((key) => documents.has(key) && !shortcuts.favorites.includes(key) && key !== `${source.id}:${resolvedDocumentId}`).slice(0, 4);
+  const recentKeys = shortcuts.recent.filter((key) => documents.has(key) && !shortcuts.favorites.includes(key) && key !== `${source?.id}:${resolvedDocumentId}`).slice(0, 4);
   const favoriteDocumentIds = new Set(shortcuts.favorites.map((key) => documents.get(key)?.documentId).filter((id): id is string => Boolean(id)));
 
   const recordedOpen = useRef<string | null>(null);
   useEffect(() => {
-    const key = resolvedDocumentId ? documentShortcutKey(source.id, resolvedDocumentId) : null;
+    const key = source && resolvedDocumentId ? documentShortcutKey(source.id, resolvedDocumentId) : null;
     const visit = key ? `${workspaceId}:${key}` : null;
     // Explorer refreshes and display filters rebuild `documents` while the
     // reader stays on the same document. Only entering it records an open.
@@ -98,7 +100,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
       recordedOpen.current = visit;
       updateShortcuts((previous) => rememberDocument(previous, key));
     }
-  }, [workspaceId, source.id, resolvedDocumentId, documents, updateShortcuts]);
+  }, [workspaceId, source?.id, resolvedDocumentId, documents, updateShortcuts]);
 
   const toggleFavorite = useCallback((sourceId: string, documentId: string) => {
     updateShortcuts((previous) => toggleFavoriteDocument(previous, documentShortcutKey(sourceId, documentId)));
@@ -150,7 +152,11 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
   const newNoteHref = `/w/${workspaceId}/knowledge/new`;
   const addNote = <Tooltip label="Create document"><Link href={newNoteHref} aria-label="Create document" className={buttonClasses({ variant: "ghost", icon: true })}><Plus size={15} aria-hidden="true" /></Link></Tooltip>;
   // What can be made here, from the registry like everything else: the button exists when the action does.
-  const createFolder = actionsFor("create", { workspaceId, workspaceType: access.workspace.type, can: access.actions, confirmed }).find((action) => action.id === "create.folder");
+  const actionContext = { workspaceId, workspaceType: access.workspace.type, can: access.actions, confirmed };
+  const createActions = actionsFor("create", actionContext);
+  const createFolder = createActions.find((action) => action.id === "create.folder");
+  const importAction = createActions.find((action) => action.id === "create.import");
+  const getStarted = !needle && hasNoDocuments(collections) ? startActions(actionContext) : null;
   const addFolder = createFolder ? (
     <Tooltip label="Create folder">
       <button type="button" aria-label="Create folder" onClick={() => runAction(createFolder)} className={buttonClasses({ variant: "ghost", icon: true })}>
@@ -177,6 +183,13 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
       <div className="flex shrink-0 items-center justify-between gap-2">
         <h2 className="px-2 text-caption font-medium text-kh-text-muted">Documents</h2>
         <div className="flex items-center gap-0.5">
+          {importAction?.effect.kind === "navigate" ? (
+            <Tooltip label="Import folder">
+              <Link href={importAction.effect.href} aria-label="Import folder" className={buttonClasses({ variant: "ghost", icon: true })}>
+                <ActionIcon name="import" className="h-4 w-4 shrink-0" />
+              </Link>
+            </Tooltip>
+          ) : null}
           <Tooltip label="Filter documents and sources">
             <button
               ref={filterTriggerRef}
@@ -248,14 +261,15 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
           </button></h3>
           {recentOpen ? <ul className="mt-0.5 space-y-0.5">{recentKeys.map((key) => shortcutRow(key, false))}</ul> : null}
         </section> : null}
-        {!hasNotes && canCreate && (!needle || "notes".includes(needle)) ? (
+        {getStarted ? <SidebarGetStarted actions={getStarted} /> : null}
+        {!getStarted && !hasNotes && canCreate && (!needle || "notes".includes(needle)) ? (
           <div className="flex items-center justify-between pl-2">
             <Link href={newNoteHref} className="rounded-md text-body font-medium text-kh-text hover:underline kh-focus-ring">Notes</Link>
             <div className="flex items-center">{addFolder}{addNote}</div>
           </div>
         ) : null}
         {matches.map(({ source: candidate, tree }) => {
-          const open = Boolean(needle) || (expanded[candidate.id] ?? candidate.id === source.id);
+          const open = Boolean(needle) || (expanded[candidate.id] ?? candidate.id === source?.id);
           const Icon = open ? ChevronDown : ChevronRight;
           const readOnly = candidate.ownership === "SOURCE_MANAGED";
           const isNotes = candidate.sourceType === "HUB" && candidate.name === "Notes" && candidate.status === "ACTIVE";
