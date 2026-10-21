@@ -20,12 +20,13 @@ Scope: the targeted browser flow was run; the full browser suite was not run. No
 
 ## Addendum (2026-10-22): review hardening
 
-Changes verified: comment bodies are JSON string fields with a separate `state`; `AgentContextFormatter` encodes each segment once; comments load once per document through `listByThreads`; hidden and fully retracted threads are filtered only in `projectAgentDiscussion`.
+Changes verified: comment bodies are JSON string fields with a separate `state`; every JSON record line (`Provenance:`, `Thread:`, `Passage:`, `Comment:`) escapes U+0085, U+2028 and U+2029 as `\uXXXX`; `AgentContextFormatter` encodes each segment once; comments load in batches of 100 threads with the byte bound checked between batches; hidden threads are skipped before loading and author lookup is skipped for retracted threads; the unused `formatAgentContext` was removed.
 
-Run locally (Node 24.6.0):
+Run locally (Node 24.6.0) for these follow-up commits:
 
-- `vitest` on `agent-context-discussions`, `mvp-agent-context`, `mvp-agent-context-builder`: 3 files, 13 tests passed.
+- `vitest` on `agent-context-discussions`, `mvp-agent-context`, `mvp-agent-context-builder`: 3 files, 17 tests passed. The new hostile-separator test fails when the escaping is removed.
 - `tsc --noEmit`: exit 0. `eslint .`: exit 0.
-- Full unit suite: 238 files, 3014 tests passed.
-- Integration suite (`scripts/test/integration.ts`, isolated DB on the running MariaDB at 127.0.0.1:3307): 82 files, 748 tests passed, including `mvp-discovery-agent` (3) and `document-review-repositories` (3, with the new `listByThreads` case).
-- Not run: Playwright e2e (needs a build and browsers). `tests/e2e/mvp-discovery-agent.spec.ts` asserts only substrings (`OPEN discussion retained`, `RESOLVED reply retained`, counts), which still occur inside the JSON body, so it needed no change.
+- Full unit suite: 238 files, 3018 tests passed.
+- Integration suite (`scripts/test/integration.ts`, isolated DB on the running MariaDB at 127.0.0.1:3307): 82 files, 748 tests passed, including the extended `listByThreads` case (three threads, ordering per thread, unrequested thread excluded).
+
+The Playwright e2e spec (`tests/e2e/mvp-discovery-agent.spec.ts`) was NOT run for these follow-up commits; CI will run it. It asserts only substrings (`OPEN discussion retained`, `RESOLVED reply retained`, counts), which still occur inside the JSON body, but that is an inference from reading the spec, not a run.

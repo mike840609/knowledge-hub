@@ -44,13 +44,20 @@ it("round trips anchors, unique keys, visibility counts and opener invariant",as
  await expect(f.uow.run(r=>r.reviewComments.insert({...f.comment,id:uuidv7()}))).rejects.toBeDefined();
 });
 it("lists comments of several threads in one query in listByThread order",async()=>{
- const f=await fixture(),later=new Date(f.now.getTime()+1000);
- const second:ReviewComment={...f.comment,id:uuidv7(),idempotencyKey:randomUUID(),createdAt:later};
- await f.uow.run(r=>r.reviewComments.insert(second));
+ const f=await fixture(),at=(n:number)=>new Date(f.now.getTime()+n*1000);
+ const mk=(threadId:string,n:number):ReviewComment=>({...f.comment,id:uuidv7(),threadId,idempotencyKey:randomUUID(),createdAt:at(n)});
+ const t2:ReviewThread={...f.thread,id:uuidv7(),creationIdempotencyKey:randomUUID()},t3:ReviewThread={...f.thread,id:uuidv7(),creationIdempotencyKey:randomUUID()};
+ await f.uow.run(async r=>{
+ await r.reviewThreads.insert(t2);await r.reviewThreads.insert(t3);
+ for(const c of [mk(f.thread.id,1),mk(t2.id,1),mk(t2.id,2),mk(t3.id,1),mk(t3.id,2),mk(f.thread.id,3)])await r.reviewComments.insert(c);
+ });
  await f.uow.run(async r=>{
  expect(await r.reviewComments.listByThreads([])).toEqual([]);
+ const got=await r.reviewComments.listByThreads([f.thread.id,t2.id]);
+ for(const t of [f.thread,t2]){const own=await r.reviewComments.listByThread(t.id);expect(own.length).toBeGreaterThanOrEqual(2);expect(got.filter(c=>c.threadId===t.id)).toEqual(own);}
+ expect(got.some(c=>c.threadId===t3.id)).toBe(false);
+ expect(got).toHaveLength((await r.reviewComments.listByThread(f.thread.id)).length+(await r.reviewComments.listByThread(t2.id)).length);
  expect(await r.reviewComments.listByThreads([f.thread.id,uuidv7()])).toEqual(await r.reviewComments.listByThread(f.thread.id));
- expect((await r.reviewComments.listByThreads([f.thread.id])).map(c=>c.id)).toEqual([f.comment.id,second.id]);
  });
 });
 it("counts rolling hour from persistent storage and cleanup preserves current window",async()=>{

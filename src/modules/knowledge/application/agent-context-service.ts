@@ -7,7 +7,8 @@ import { requireVisibleDocument } from "./internal/require-visible-document";
 import { assertActiveDocumentPlacement } from "./tree-validation";
 import { byCreation, projectAgentDiscussion } from "../domain/agent-context-discussion";
 import { createReviewAnchorRelocator } from "../domain/review-anchor";
-import type { ReviewComment } from "../domain/document-review";
+import { isRetractedThread, type ReviewComment } from "../domain/document-review";
+const COMMENT_BATCH_THREADS = 100;
 export class AgentContextService {
   constructor(private readonly uow: KnowledgeUnitOfWork) {}
   async build(caller: CallerContext, workspaceId: string, rawIds: unknown, origin = "") {
@@ -29,16 +30,23 @@ export class AgentContextService {
         const entry = await r.linkedEntries.findByDocumentId(document.id);
         formatter.addDocument({ documentId: document.id, sourceId: document.sourceId, sourceName: policy.name, sourcePath: entry?.sourcePath ?? null, revisionId: revision.id, revisionNo: revision.revisionNo, title: revision.title, markdown: revision.markdown, updatedAt: revision.createdAt });
         const relocate = createReviewAnchorRelocator(revision.markdown);
-        const threads = (await r.reviewThreads.listByDocument(document.id)).sort(byCreation);
-        const byThread = new Map<string, ReviewComment[]>();
-        for (const comment of await r.reviewComments.listByThreads(threads.map(t => t.id))) byThread.set(comment.threadId, [...(byThread.get(comment.threadId) ?? []), comment]);
-        for (const thread of threads) {
-          const comments = byThread.get(thread.id) ?? [];
-          for (const comment of comments) {
-            if (!authors.has(comment.authorUserId)) authors.set(comment.authorUserId, (await r.users.findById(comment.authorUserId))?.name ?? "Unknown author");
+        const threads = (await r.reviewThreads.listByDocument(document.id)).filter(t => t.visibility !== "HIDDEN").sort(byCreation);
+        // Memory is bounded per batch: the formatter throws on overflow before the next batch loads.
+        for (let i = 0; i < threads.length; i += COMMENT_BATCH_THREADS) {
+          const batch = threads.slice(i, i + COMMENT_BATCH_THREADS), byThread = new Map<string, ReviewComment[]>();
+          for (const comment of await r.reviewComments.listByThreads(batch.map(t => t.id))) {
+            const list = byThread.get(comment.threadId);
+            if (list) list.push(comment); else byThread.set(comment.threadId, [comment]);
           }
-          const discussion = projectAgentDiscussion(thread, comments, relocate(thread.anchor, thread.createdRevisionId === revision.id), authors);
-          if (discussion) formatter.addDiscussion(discussion);
+          for (const thread of batch) {
+            const comments = byThread.get(thread.id) ?? [];
+            if (isRetractedThread(comments)) continue;
+            for (const comment of comments) {
+              if (!authors.has(comment.authorUserId)) authors.set(comment.authorUserId, (await r.users.findById(comment.authorUserId))?.name ?? "Unknown author");
+            }
+            const discussion = projectAgentDiscussion(thread, comments, relocate(thread.anchor, thread.createdRevisionId === revision.id), authors);
+            if (discussion) formatter.addDiscussion(discussion);
+          }
         }
       }
       return formatter.finish();

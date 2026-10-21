@@ -1,8 +1,8 @@
-import { formatAgentDiscussion, type AgentContextDiscussion } from "./agent-context-discussion";
+import { formatAgentDiscussion, jsonRecord, type AgentContextDiscussion } from "./agent-context-discussion";
 import { ValidationError } from "./errors";
 export const CONTEXT_MAX_DOCUMENTS = 20;
 export const CONTEXT_MAX_BYTES = 256 * 1024;
-export type AgentContextDocument = { documentId: string; sourceId: string; sourceName: string; sourcePath: string | null; revisionId: string; revisionNo: number; title: string; markdown: string; updatedAt: Date; discussions: AgentContextDiscussion[] };
+export type AgentContextDocument = { documentId: string; sourceId: string; sourceName: string; sourcePath: string | null; revisionId: string; revisionNo: number; title: string; markdown: string; updatedAt: Date };
 export function validateContextSelection(raw: unknown): string[] {
   if (!Array.isArray(raw) || raw.length === 0 || raw.length > CONTEXT_MAX_DOCUMENTS || raw.some(id => typeof id !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))) throw new ValidationError("Select 1–20 documents.");
   const ids = raw.map(id => id.toLowerCase());
@@ -30,9 +30,9 @@ export class AgentContextFormatter {
     this.chunks.push(chunk);
   }
 
-  addDocument(doc: Omit<AgentContextDocument, "discussions">) {
+  addDocument(doc: AgentContextDocument) {
     const href = `${this.origin}/w/${this.workspaceId}/knowledge/${doc.sourceId}/${doc.documentId}?revision=${doc.revisionNo}`;
-    this.append(`\n---\n\n## Document\n\nProvenance: ${JSON.stringify({ title: doc.title, source: doc.sourceName, path: doc.sourcePath, documentId: doc.documentId, revisionId: doc.revisionId, revision: doc.revisionNo, updatedAt: doc.updatedAt.toISOString() })}\n\nOriginal: ${href}\n\n${doc.markdown}\n`);
+    this.append(`\n---\n\n## Document\n\nProvenance: ${jsonRecord({ title: doc.title, source: doc.sourceName, path: doc.sourcePath, documentId: doc.documentId, revisionId: doc.revisionId, revision: doc.revisionNo, updatedAt: doc.updatedAt.toISOString() })}\n\nOriginal: ${href}\n\n${doc.markdown}\n`);
     this.documentCount++;
     this.documentHasDiscussions = false;
   }
@@ -48,13 +48,4 @@ export class AgentContextFormatter {
   finish() {
     return { markdown: this.chunks.join(""), bytes: this.bytes, documentCount: this.documentCount, threadCount: this.threadCount, commentCount: this.commentCount };
   }
-}
-
-export function formatAgentContext(workspaceId: string, documents: readonly AgentContextDocument[], origin = "") {
-  const formatter = new AgentContextFormatter(workspaceId, origin);
-  for (const doc of documents) {
-    formatter.addDocument(doc);
-    for (const thread of doc.discussions) formatter.addDiscussion(thread);
-  }
-  return formatter.finish();
 }
