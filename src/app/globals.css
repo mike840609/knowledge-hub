@@ -724,6 +724,17 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-outline-rail { display: none; }
 .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-outline-inline { display: block; }
 .kh-document-pane .kh-review-document[data-review-inline][data-review-open] ~ * { max-width: calc(100% - 320px); }
+/* A pane that holds article, rail and outline (860 + 320 + 224 = 1404px, 88rem) keeps the outline beside
+   the open rail. The column then measures from the room left of the outline, as the shared page does:
+   it keeps its left edge where that room allows and moves left only as far as the rail needs. */
+@container kh-document (min-width: 88rem) {
+  .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-outline-rail { display: block; }
+  .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-outline-inline { display: none; }
+  .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-reading-column {
+    margin-inline-start: max(0px, min(calc((100% - theme("maxWidth.reading")) / 2), calc(100% - theme("maxWidth.reading") - 320px)));
+    max-width: theme("maxWidth.reading");
+  }
+}
 
 .kh-review-document[data-review-inline] .kh-review-thread-list[data-positioned] {
   position: relative;

@@ -243,3 +243,24 @@ edge for the title and the article, open or not; the drawer in a narrow pane; a
 document without discussions unchanged; and the owner's reply, resolve and hide
 through the new entry. `tests/e2e/review-layout.spec.ts` — the shared page's
 existing layout tests — hold the refactor of the five window checks.
+
+## Amendment (2026-10-21): the outline stays where the pane holds all three
+
+"The rail takes the outline's place" assumed a pane too narrow for both. A pane of
+`88rem` or wider holds article, rail and outline (860 + 320 + 224 = 1404px), so
+there the outline stays a rail, right of the open discussions, and the disclosure
+stays hidden (`globals.css`, `@container kh-document (min-width: 88rem)`). The
+columns measure from the room left of the outline, as the shared page's do
+(share-page-outline spec §6): they keep their left edge where that room allows and
+move left only as far as the rail needs, as the usual 120ms slide. Below 88rem
+nothing changes.
+
+This trades away part of the inline-review spec's 2026-10-13 rule that opening the
+rail moves nothing under the pointer. The column can stay put beside rail and
+outline only from a pane of 1724px (`(pane − 1084) / 2 + 1404 ≤ pane`), so between
+88rem and 108rem the column, the path line and the header slide left on opening —
+at most about 158px, 140px at a 1920px window with the explorer open. Chosen over
+108rem, where nothing moves but the pane needs a window of about 2190px. From
+108rem, and below 88rem, nothing moves (`owner-review.spec.ts`). A reviewer comparing a comment with another section keeps the
+outline in view. With the explorer open the pane reaches 88rem at a window of about
+1870px; a narrower navigation would bring that down.
