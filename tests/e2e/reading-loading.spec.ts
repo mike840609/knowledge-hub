@@ -44,12 +44,14 @@ for (const scenario of [
     const start = await create(plainTitle, `[[${withOutlineTitle}]]\n\n${paragraphs}`);
     await page.goto(start);
     const content = page.getByRole("region", { name: "Document content", exact: true });
+    // The first column that holds content; the outline's zero-height box (`kh-outline-rail-left`) shares the class only to share its edge.
+    const readingColumn = () => content.locator(".kh-reading-column:not(.kh-outline-rail-left)").first();
     await expect(content.locator("article:visible")).toBeVisible(ROUND_TRIP);
     if (scenario.inspector) {
       await page.getByRole("button", { name: "Details", exact: true }).first().click();
       await expect(page.getByRole("complementary", { name: "Document details", exact: true })).toBeVisible();
     }
-    const before = await content.locator(".kh-reading-column").first().boundingBox();
+    const before = await readingColumn().boundingBox();
     expect(before).not.toBeNull();
 
     // The prefetched loading boundary can render while the document response
@@ -75,7 +77,7 @@ for (const scenario of [
       await content.getByRole("link", { name: withOutlineTitle, exact: true }).click();
     }
     await expect(content.getByRole("status")).toHaveText("Loading document");
-    const loading = await content.locator(".kh-reading-column").first().boundingBox();
+    const loading = await readingColumn().boundingBox();
     expect(loading).not.toBeNull();
     expect(Math.abs(loading!.x - before!.x)).toBeLessThanOrEqual(1);
     expect(Math.abs(loading!.width - before!.width)).toBeLessThanOrEqual(1);
@@ -83,7 +85,7 @@ for (const scenario of [
 
     await expect(content.locator("article:visible")).toBeVisible(ROUND_TRIP);
     await expect(page).toHaveURL(new RegExp(`${destination}$`));
-    const after = await content.locator(".kh-reading-column").first().boundingBox();
+    const after = await readingColumn().boundingBox();
     expect(after).not.toBeNull();
     expect(Math.abs(after!.x - loading!.x)).toBeLessThanOrEqual(1);
     expect(Math.abs(after!.width - loading!.width)).toBeLessThanOrEqual(1);
@@ -95,7 +97,7 @@ for (const scenario of [
     await content.getByRole("link", { name: plainTitle, exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`${start}$`));
     await expect(content.locator("article:visible")).toBeVisible(ROUND_TRIP);
-    const returned = await content.locator(".kh-reading-column").first().boundingBox();
+    const returned = await readingColumn().boundingBox();
     expect(Math.abs(returned!.x - before!.x)).toBeLessThanOrEqual(1);
     await expect(page.getByRole("complementary", { name: "On this page", exact: true })).toHaveCount(0);
     if (scenario.inspector) {

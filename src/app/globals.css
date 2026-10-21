@@ -724,6 +724,23 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-outline-rail { display: none; }
 .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-outline-inline { display: block; }
 .kh-document-pane .kh-review-document[data-review-inline][data-review-open] ~ * { max-width: calc(100% - 320px); }
+/* A pane that holds outline, article and rail (224 + 860 + 320 = 1404px, 88rem) shows the outline on the
+   column's left, as a shared page does, and keeps it there while the rail is open: outline, article,
+   discussions. The column is centred in the whole pane; opening the rail moves it left only as far as the
+   rail needs (nothing from 1500px). Below 88rem the outline stays on the right, where the rail takes its
+   slot and nothing moves (owner-comments-rail spec, 2026-10-21 amendment). */
+.kh-outline-rail-left { display: none; }
+@container kh-document (min-width: 88rem) {
+  .kh-document-pane .kh-outline-rail-left { display: block; }
+  .kh-document-pane .kh-outline-rail,
+  .kh-document-pane .kh-outline-inline,
+  .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-outline-inline { display: none; }
+  .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-reading-column {
+    margin-inline-start: max(0px, min(calc((100% - theme("maxWidth.reading")) / 2), calc(100% - theme("maxWidth.reading") - 320px)));
+    max-width: theme("maxWidth.reading");
+  }
+}
+
 
 .kh-review-document[data-review-inline] .kh-review-thread-list[data-positioned] {
   position: relative;

@@ -243,3 +243,24 @@ edge for the title and the article, open or not; the drawer in a narrow pane; a
 document without discussions unchanged; and the owner's reply, resolve and hide
 through the new entry. `tests/e2e/review-layout.spec.ts` — the shared page's
 existing layout tests — hold the refactor of the five window checks.
+
+## Amendment (2026-10-21): the outline stays where the pane holds all three
+
+"The rail takes the outline's place" assumed a pane too narrow for both. A pane of
+`88rem` or wider holds outline, article and rail (224 + 860 + 320 = 1404px). There the
+outline is on the column's **left**, as on a shared page — a zero-height sticky box sized as
+the reading column, the rail `absolute right-full` inside it (`document-pane.tsx`) — and stays
+while the discussions are open: outline, article, discussions. The discussions stay next to
+the article because their cards line up with passages; the outline is a jump list with no
+line it belongs beside, so it takes the outer side.
+
+The column is centred in the whole pane, and opening the rail moves it left only as far as
+the rail needs: `max(0, min((pane − 860) / 2, pane − 1180))`. From a 1500px pane nothing
+moves; between 1408px and 1500px it slides up to 46px. Below 88rem the outline stays on the
+right exactly as before, where the rail takes its slot and nothing moves. Placing it on the
+left there too was rejected: its slot would then be left of the column, so every opening
+would slide the article up to 224px, on the panes most windows have.
+
+The outline therefore changes side at 88rem as the window is resized; it never changes side
+when the discussions open or close. With the explorer open the pane reaches 88rem at a window
+of about 1870px; a narrower navigation would bring that down.
