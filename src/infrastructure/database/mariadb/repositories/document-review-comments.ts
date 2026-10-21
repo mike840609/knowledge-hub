@@ -24,6 +24,7 @@ export class MariaDbDocumentReviewCommentsRepository implements DocumentReviewCo
  async findById(id:string){return this.find("SELECT * FROM document_review_comments WHERE id=?",[id]);}
  async findByIdempotencyKey(threadId:string,authorId:string,key:string){return this.find("SELECT * FROM document_review_comments WHERE thread_id=? AND author_user_id=? AND idempotency_key=?",[threadId,authorId,key]);}
  async listByThread(threadId:string){const rows=await this.connection.query<DbRow[]>("SELECT * FROM document_review_comments WHERE thread_id=? ORDER BY created_at,id",[threadId]);return rows.map(map);}
+ async listByThreads(threadIds:string[]){if(threadIds.length===0)return [];const rows=await this.connection.query<DbRow[]>(`SELECT * FROM document_review_comments WHERE thread_id IN (${threadIds.map(()=>"?").join(",")}) ORDER BY created_at,id`,threadIds);return rows.map(map);}
  async countByThread(threadId:string){const rows=await this.connection.query<DbRow[]>("SELECT COUNT(*) AS n FROM document_review_comments WHERE thread_id=?",[threadId]);return asNumber(rows[0].n,"comment count");}
  async setBody(id:string,body:string,at:Date){await this.connection.query("UPDATE document_review_comments SET body=?,edited_at=? WHERE id=?",[body,at,id]);}
  async markDeleted(id:string,at:Date){await this.connection.query("UPDATE document_review_comments SET deleted_at=? WHERE id=?",[at,id]);}

@@ -23,7 +23,7 @@ export function AgentContextBuilder({ workspaceId, documents, initialDocumentId 
     : "Ask a member with edit access to add documents. You can then select saved documents and prepare Markdown for your AI agent.";
   const [selected, setSelected] = useState<string[]>(() => documents.some(d => d.documentId === initialDocumentId) ? [initialDocumentId!] : []);
   const [query, setQuery] = useState("");
-  const [bundle, setBundle] = useState<{ markdown: string; bytes: number; documentCount: number } | null>(null);
+  const [bundle, setBundle] = useState<{ markdown: string; bytes: number; documentCount: number; threadCount: number; commentCount: number } | null>(null);
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null);
   const controller = useRef<AbortController | null>(null);
   const preview = useRef<HTMLDivElement>(null);
@@ -57,7 +57,7 @@ export function AgentContextBuilder({ workspaceId, documents, initialDocumentId 
   const visible = matches.slice(0, 100);
   if (!documents.length) return <EmptyState icon={FileText} illustration={<Illustration kind="context" />} title={canAddDocuments ? "Add documents to prepare AI context" : "No documents available for AI context"} description={!accessConfirmed ? "Checking workspace access…" : canAddDocuments ? "Turn selected documents into Markdown for your AI agent." : readOnlyGuidance} action={canAddDocuments ? <WorkspaceContentActions workspaceId={workspaceId} /> : undefined} />;
   return <div className="space-y-4">
-    <p className="text-body text-kh-text-secondary">Select documents, prepare Markdown, then review it before copying to your agent.</p>
+    <p className="text-body text-kh-text-secondary">Select documents to include their saved content and all visible discussions, both open and resolved. Review the Markdown before copying to your agent.</p>
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
     <section aria-label="Available documents" className="min-w-0 space-y-3">
     <Label htmlFor="context-search">Find documents<Input id="context-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Title, source or path" className="mt-1" /></Label>
@@ -82,6 +82,6 @@ export function AgentContextBuilder({ workspaceId, documents, initialDocumentId 
     </aside>
     </div>
     {error ? <p role="alert" className="text-body text-kh-danger">{error}</p> : null}
-    {bundle ? <section aria-label="Context preview" className="space-y-2"><p className="text-caption text-kh-text-muted">{bundle.documentCount} documents · {bundle.bytes.toLocaleString()} bytes · saved revisions only</p><Label htmlFor="agent-context-preview">Markdown preview</Label><div ref={preview}><Textarea id="agent-context-preview" className="font-mono" value={bundle.markdown} readOnly rows={16} /></div></section> : null}
+    {bundle ? <section aria-label="Context preview" className="space-y-2"><p className="text-caption text-kh-text-muted">{bundle.documentCount} documents · {bundle.threadCount} discussions · {bundle.commentCount} comments · {bundle.bytes.toLocaleString()} bytes</p><Label htmlFor="agent-context-preview">Markdown preview</Label><div ref={preview}><Textarea id="agent-context-preview" className="font-mono" value={bundle.markdown} readOnly rows={16} /></div></section> : null}
   </div>;
 }

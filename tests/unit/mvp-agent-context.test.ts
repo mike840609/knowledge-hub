@@ -1,6 +1,6 @@
 import { expect, it, vi } from "vitest";
 import { AgentContextService } from "@/modules/knowledge/application/agent-context-service";
-import { formatAgentContext, validateContextSelection } from "@/modules/knowledge/domain/agent-context";
+import { AgentContextFormatter, validateContextSelection } from "@/modules/knowledge/domain/agent-context";
 import type { KnowledgeRepositories } from "@/modules/knowledge/ports/unit-of-work";
 import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 const id = "00000000-0000-0000-0000-000000000001";
@@ -10,9 +10,10 @@ it("rejects empty, duplicate, invalid and oversized selections", () => {
 });
 it("formats saved revisions with provenance and pinned links and bounds UTF-8 bytes", () => {
   const doc = { documentId: id, sourceId: id, sourceName: "Wiki", sourcePath: "docs/a.md", revisionId: id, revisionNo: 2, title: "中文", markdown: "# 中文\nbody", updatedAt: new Date("2026-10-04T00:00:00Z") };
-  const out = formatAgentContext(id, [doc]);
+  const format = (d: typeof doc) => { const f = new AgentContextFormatter(id); f.addDocument(d); return f.finish(); };
+  const out = format(doc);
   expect(out.markdown).toContain("docs/a.md"); expect(out.markdown).toContain("?revision=2"); expect(out.bytes).toBe(new TextEncoder().encode(out.markdown).length);
-  expect(() => formatAgentContext(id, [{ ...doc, markdown: "字".repeat(100000) }])).toThrow();
+  expect(() => format({ ...doc, markdown: "字".repeat(100000) })).toThrow();
 });
 it("does not return partial context for a foreign workspace even when both are readable", async () => {
   const read = vi.fn(async () => {});
