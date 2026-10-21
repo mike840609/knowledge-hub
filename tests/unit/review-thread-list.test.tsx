@@ -37,7 +37,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function renderList(threads: ReturnType<typeof thread>[], extra?: Partial<typeof props & { activeThreadId?: string }>) {
+function renderList(threads: ReturnType<typeof thread>[], extra?: Partial<typeof props & { activeThreadId?: string; signInHref?: string }>) {
   act(() => {
     root = createRoot(host);
     root.render(createElement(ReviewThreadList, { threads: threads as never, ...props, ...extra }));
@@ -81,4 +81,42 @@ test("the passage being read and the first group start expanded", () => {
   );
   expect(host.textContent).toMatch("body of t1");
   expect(host.textContent).not.toMatch(/3 discussions/);
+});
+
+function buttons(name: string) {
+  return Array.from(host.querySelectorAll("button")).filter(button => button.textContent === name);
+}
+
+test("a preview says when its remark was made", () => {
+  renderList([thread("t1", [0], "Para zero.")], { writesEnabled: false });
+  expect(cards()[0].querySelector("time")).not.toBeNull();
+});
+
+test("a short lone remark that cannot be answered offers nothing to open", () => {
+  renderList([thread("t1", [0], "Para zero.", "Short.")], { writesEnabled: false });
+  expect(buttons("Expand comment")).toHaveLength(0);
+});
+
+test("a lone remark cut short by the preview can be opened", () => {
+  vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(120);
+  vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(40);
+  renderList([thread("t1", [0], "Para zero.", "A long remark.")], { writesEnabled: false });
+  expect(buttons("Expand comment")).toHaveLength(1);
+  vi.restoreAllMocks();
+});
+
+test("a reader who is not signed in is offered sign-in to reply on an open discussion", () => {
+  renderList([thread("t1", [0], "Para zero."), { ...thread("t2", [1], "Para one."), status: "RESOLVED" as never }], { writesEnabled: false, signInHref: "/?returnTo=%2Fs%2Fabc%2Fopen" });
+  const links = Array.from(host.querySelectorAll("a")).filter(link => link.textContent === "Sign in to reply");
+  expect(links).toHaveLength(1);
+  expect(links[0].getAttribute("href")).toBe("/?returnTo=%2Fs%2Fabc%2Fopen");
+  expect(links[0].closest("[data-review-thread]")?.getAttribute("data-review-thread")).toBe("t1");
+});
+
+test("http(s) links in a remark are links; anything else stays text", () => {
+  renderList([thread("t1", [0], "Para zero.", "See https://example.com/pr/1. <b>bold</b> javascript:alert(1)")], { writesEnabled: false });
+  const anchors = Array.from(cards()[0].querySelectorAll("p a"));
+  expect(anchors.map(a => [a.getAttribute("href"), a.getAttribute("target"), a.getAttribute("rel")])).toEqual([["https://example.com/pr/1", "_blank", "noopener noreferrer"]]);
+  expect(cards()[0].querySelector("b")).toBeNull();
+  expect(cards()[0].textContent).toContain("<b>bold</b> javascript:alert(1)");
 });

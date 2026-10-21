@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { OwnerReviewThreadView, ReviewAnchor, ReviewThreadView } from "@/modules/knowledge/domain/document-review";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Timestamp } from "@/components/ui/timestamp";
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { compareReviewPassages, useReviewRailLayout, type RailCard } from "./review-rail-layout";
 import { matchesShortcut } from "@/lib/shortcut-keys";
+import { linkify } from "@/lib/linkify";
 
 /** Sends what is written, as it saves a document in the composer. Enter alone stays a line of the comment. */
 const SUBMIT_SHORTCUT = "Meta+Enter Control+Enter";
@@ -68,7 +69,7 @@ export function ReviewFilterMenu({ value, onChange }: { value: ReviewFilter; onC
   return <MenuRoot><MenuTrigger className={buttonClasses({ variant: "ghost" })} aria-label="Filter discussions">{FILTER_NAMES[value]}<ChevronDown className="size-4" aria-hidden="true" /></MenuTrigger><MenuContent>{(Object.keys(FILTER_NAMES) as ReviewFilter[]).map(option => <MenuItem key={option} onClick={() => onChange(option)}>{FILTER_NAMES[option]}</MenuItem>)}</MenuContent></MenuRoot>;
 }
 
-export function ReviewThreadList({ threads, writesEnabled, reply, moderate, author, canResolve = true, focusAnchor, railMarkdown, activeThreadId, onActivate, filter: controlled, onFilterChange, draft }: {
+export function ReviewThreadList({ threads, writesEnabled, reply, moderate, author, canResolve = true, focusAnchor, railMarkdown, activeThreadId, onActivate, filter: controlled, onFilterChange, draft, signInHref }: {
   threads: (ReviewThreadView | OwnerReviewThreadView)[];
   writesEnabled: boolean;
   reply: (threadId: string, body: string, key: string) => Promise<void>;
@@ -85,7 +86,11 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
   onFilterChange?: (filter: ReviewFilter) => void;
   /** A new comment being written, placed in the rail level with its passage, ahead of every card. */
   draft?: { anchor: ReviewAnchor; composer: ReactNode };
+  /** The reader is not signed in: an open discussion offers sign-in where a signed-in one offers Reply. */
+  signInHref?: string;
 }) {
+  // Which previews cut their remark short: only those have more to show when opened.
+  const [clamped, setClamped] = useState<Record<string, boolean>>({});
   const [pendingHide, setPendingHide] = useState<{ threadId: string; commentId?: string }>();
   const [pendingDelete, setPendingDelete] = useState<{ threadId: string; commentId: string }>();
   const [editing, setEditing] = useState<string>();
@@ -169,7 +174,7 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
           return <li key={comment.id} className="text-body-sm">
           <div className="mb-2 flex items-start gap-2">
             <span aria-hidden="true" className={`flex ${compact ? "size-6" : "size-8"} shrink-0 items-center justify-center rounded-full bg-kh-bg-selected font-medium text-kh-selected-text`}>{(comment.authorName ?? "C").slice(0, 1).toUpperCase()}</span>
-            <div className="min-w-0 flex-1"><p className="truncate font-medium">{comment.authorName ?? "Company colleague"}{comment.visibility === "HIDDEN" ? " · Hidden" : ""}</p>{!compact && <p className="text-caption text-kh-text-muted"><Timestamp value={comment.createdAt} />{comment.editedAt ? " · Edited" : ""}</p>}</div>
+            <div className="min-w-0 flex-1"><p className="truncate font-medium">{comment.authorName ?? "Company colleague"}{comment.visibility === "HIDDEN" ? " · Hidden" : ""}{compact && <span className="font-normal text-caption text-kh-text-muted"> · <Timestamp value={comment.createdAt} variant="short" /></span>}</p>{!compact && <p className="text-caption text-kh-text-muted"><Timestamp value={comment.createdAt} />{comment.editedAt ? " · Edited" : ""}</p>}</div>
             {moderate && index === 0 && <Tooltip label={thread.status === "OPEN" ? "Resolve" : "Reopen"}><Button type="button" variant="ghost" icon aria-label={thread.status === "OPEN" ? "Resolve" : "Reopen"} disabled={busy || !canResolve} onClick={() => void act(thread.id, "resolution", thread.status === "OPEN" ? "RESOLVED" : "OPEN")}><Check className="size-4" aria-hidden="true" /></Button></Tooltip>}
             {(hides || mine) && <MenuRoot><MenuTrigger aria-label={index === 0 ? "Comment options" : "Reply options"} className={buttonClasses({variant:"ghost",icon:true})}><MoreHorizontal className="size-4" aria-hidden="true" /></MenuTrigger><MenuContent align="end">{canEdit && <MenuItem disabled={busy} onClick={() => setEditing(comment.id)}>Edit</MenuItem>}{mine && <MenuItem disabled={busy} onClick={() => setPendingDelete({ threadId: thread.id, commentId: comment.id })}>Delete</MenuItem>}{hides && <MenuItem disabled={busy} onClick={() => void act(thread.id, "visibility", index === 0 ? (owner?.visibility === "HIDDEN" ? "VISIBLE" : "HIDDEN") : (comment.visibility === "HIDDEN" ? "VISIBLE" : "HIDDEN"), index === 0 ? undefined : comment.id)}>{index === 0 ? (owner?.visibility === "HIDDEN" ? "Unhide thread" : "Hide thread") : comment.visibility === "HIDDEN" ? "Unhide reply" : "Hide reply"}</MenuItem>}</MenuContent></MenuRoot>}
           </div>
@@ -177,7 +182,7 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
             ? <p className="text-kh-text-muted">Comment deleted by author</p>
             : editing === comment.id && canEdit && !compact
               ? <ReviewReplyForm label="Edit comment" submitLabel="Save" initial={comment.body} onCancel={() => setEditing(undefined)} onSubmit={async body => { await author!.edit(thread.id, comment.id, body); setEditing(undefined); }} />
-              : <p className={`whitespace-pre-wrap break-words ${compact ? "line-clamp-2" : ""}`}>{comment.body}</p>}
+              : <CommentBody body={comment.body} compact={compact} onClamped={index === 0 ? value => setClamped(previous => previous[thread.id] === value ? previous : { ...previous, [thread.id]: value }) : undefined} />}
         </li>; })}</ol>
         {/* A preview's one button. With replies to show, it shows them. With only the remark — which
             the preview already is — opening the card would reveal nothing but Reply, so it is Reply:
@@ -185,7 +190,10 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
             made it opens the card, for the full text and its time. */}
         {compact && (thread.comments.length === 1 && canReply
           ? <Button type="button" variant="ghost" className="mt-2" onClick={() => { onActivate?.(thread.id); setReplyRequest(previous => ({ threadId: thread.id, nonce: (previous?.nonce ?? 0) + 1 })); }}>Reply</Button>
-          : <Button type="button" variant="ghost" className="mt-2" onClick={event => { event.currentTarget.closest<HTMLElement>("[data-review-thread]")?.focus({ preventScroll: true }); onActivate?.(thread.id); }}>{thread.comments.length > 1 ? `Show ${thread.comments.length - 1} ${thread.comments.length === 2 ? "reply" : "replies"}` : "Expand comment"}</Button>)}
+          : thread.comments.length === 1 && signInHref && thread.status === "OPEN"
+          ? <a href={signInHref} className={`mt-2 ${buttonClasses({ variant: "ghost" })}`} onClick={event => event.stopPropagation()}>Sign in to reply</a>
+          // Opened, a lone remark shows only what was cut: with nothing cut, there is nothing to open.
+          : (thread.comments.length > 1 || clamped[thread.id]) && <Button type="button" variant="ghost" className="mt-2" onClick={event => { event.currentTarget.closest<HTMLElement>("[data-review-thread]")?.focus({ preventScroll: true }); onActivate?.(thread.id); }}>{thread.comments.length > 1 ? `Show ${thread.comments.length - 1} ${thread.comments.length === 2 ? "reply" : "replies"}` : "Expand comment"}</Button>)}
         {canReply && <div hidden={compact}><ReviewReplyForm openRequest={replyRequest?.threadId === thread.id ? replyRequest.nonce : 0} onSubmit={(body, key) => reply(thread.id, body, key)} /></div>}
       </section>;
       });
@@ -205,4 +213,23 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
     })}
     </div>
   </div>;
+}
+
+/** A remark as text, its http(s) links made links; a preview is held to two lines and says whether it was cut. */
+function CommentBody({ body, compact, onClamped }: { body: string; compact: boolean; onClamped?: (clamped: boolean) => void }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element || !onClamped) return;
+    const measure = () => onClamped(compact && element.scrollHeight > element.clientHeight + 1);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [compact, body, onClamped]);
+  return <p ref={ref} className={`whitespace-pre-wrap break-words ${compact ? "line-clamp-2" : ""}`}>
+    {linkify(body).map((part, index) => part.href
+      ? <a key={index} href={part.href} target="_blank" rel="noopener noreferrer" className="font-medium text-kh-link underline decoration-kh-link underline-offset-2 kh-focus-ring" onClick={event => event.stopPropagation()}>{part.text}</a>
+      : part.text)}
+  </p>;
 }
