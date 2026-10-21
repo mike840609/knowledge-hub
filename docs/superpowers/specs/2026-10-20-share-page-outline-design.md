@@ -65,3 +65,9 @@ E2E (`zz-share-outline.spec.ts`), desktop:
   than the text (reader-measure spec §1).
 - Opening Comments at 1440px hides the rail and shows the disclosure.
 - A document with fewer than two headings shows neither.
+
+## 5. Amendment (2026-10-21): two lines per entry
+
+An entry takes up to two lines (`line-clamp-2`), not one: Chinese headings cut to one line read
+as near-identical fragments. The full heading stays its `title`. This applies to every outline
+(`OutlineList`), the workspace's too. E2E: `zz-share-outline.spec.ts`, "a long heading wraps to two lines".

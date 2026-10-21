@@ -100,3 +100,15 @@ test("share outline: a document with one heading shows none", async ({ page }) =
   await expect(page.getByText("Body.")).toBeVisible();
   await expect(page.getByText("On this page")).toHaveCount(0);
 });
+
+test("share outline: a long heading wraps to two lines in the outline rather than being cut to one", async ({ page }) => {
+  const long = "這是一個相當長的中文章節標題用來確認目錄可以顯示兩行而不是被截斷成單行省略";
+  const path = await shareOf(page, `# Guide\n\nIntro.\n\n## ${long}\n\nBody.\n\n## Short\n\nEnd.`);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(path);
+  const entry = rail(page).getByRole("link", { name: long });
+  const short = (await rail(page).getByRole("link", { name: "Short" }).boundingBox())!;
+  const box = (await entry.boundingBox())!;
+  expect(box.height).toBeGreaterThan(short.height * 1.5);
+  expect(box.height).toBeLessThan(short.height * 2.6);
+});

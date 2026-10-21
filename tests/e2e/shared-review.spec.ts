@@ -1,3 +1,4 @@
+import type { APIRequestContext } from "@playwright/test";
 import { expect, test } from "./fixtures/test";
 import { phase3Origin, phase3NoSessionOrigin, phase3UnconfiguredOrigin, phase3UserId } from "./fixtures/phase3-identities";
 import { createReviewDocument, openReviewDiscussions, selectPassage } from "./fixtures/document-review";
@@ -99,6 +100,57 @@ test("signing in to comment comes back to the shared page, where the reader can 
   await expect(page.getByRole("link", { name: "Sign in to comment" })).toHaveCount(0);
   await selectPassage(page);
   await expect(page.getByRole("button", { name: "Comment on selection" })).toBeVisible();
+});
+
+function postThread(request: APIRequestContext, doc: Awaited<ReturnType<typeof createReviewDocument>>, block: number, exact: string, prefix: string, suffix: string, body: string) {
+  const token = doc.links[0].path.split("/").pop();
+  const viewer = phase3Origin("viewer");
+  return request.post(`${viewer}/api/share-review/threads`, { headers: { Origin: viewer }, data: { token, expectedRevisionId: doc.revisionId, anchor: { schemaVersion: 1, blockPath: [block], blockKind: "paragraph", startUtf16: prefix.length, endUtf16: prefix.length + exact.length, exact, prefix, suffix }, body, idempotencyKey: crypto.randomUUID() } });
+}
+
+test("a reader who closes the discussions finds them closed next time, until a new one arrives", async ({ page, request }) => {
+  const doc = await createReviewDocument(request, "A first passage to review.\n\nA second paragraph here.");
+  expect((await postThread(request, doc, 0, "first", "A ", " passage to review.", "One")).status()).toBe(201);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const url = `${phase3NoSessionOrigin()}${doc.links[0].path}`;
+  await page.goto(url);
+  const entry = page.getByRole("button", { name: /^(Open|Hide) discussions/ });
+  await expect(entry).toHaveAttribute("aria-expanded", "true");
+  await entry.click();
+  await page.reload();
+  await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
+  await expect(entry).toHaveAttribute("aria-expanded", "false");
+  expect((await postThread(request, doc, 1, "second", "A ", " paragraph here.", "Two")).status()).toBe(201);
+  await page.reload();
+  await expect(entry).toHaveAttribute("aria-expanded", "true");
+});
+
+test("coming back to the tab offers new comments without moving the cards", async ({ page, request }) => {
+  const doc = await createReviewDocument(request, "A first passage to review.\n\nA second paragraph here.");
+  expect((await postThread(request, doc, 0, "first", "A ", " passage to review.", "One")).status()).toBe(201);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${phase3NoSessionOrigin()}${doc.links[0].path}`);
+  const cards = page.locator("[data-review-rail] [data-review-thread]").filter({ visible: true });
+  await expect(cards).toHaveCount(1);
+  expect((await postThread(request, doc, 1, "second", "A ", " paragraph here.", "Arrived while away")).status()).toBe(201);
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  const notice = page.getByRole("button", { name: "1 new comment", exact: true });
+  await expect(notice).toBeVisible();
+  await expect(cards).toHaveCount(1);
+  await notice.click();
+  await expect(cards).toHaveCount(2);
+  await expect(cards.filter({ hasText: "Arrived while away" })).toHaveCount(1);
+  await expect(notice).toHaveCount(0);
+});
+
+test("the panel says how to comment before Add comment is pressed", async ({ page, request }) => {
+  const doc = await createReviewDocument(request);
+  await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
+  await openReviewDiscussions(page);
+  const hint = page.getByText("Select text in the document to comment on it.", { exact: true }).filter({ visible: true });
+  await expect(hint).toBeVisible();
+  await selectPassage(page);
+  await expect(hint).toHaveCount(0);
 });
 
 test("a shared page with no discussions keeps them closed", async ({ page, request }) => {

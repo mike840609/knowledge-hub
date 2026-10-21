@@ -23,6 +23,26 @@ export function opensOnArrival(threads: readonly Discussion[], dismissed: readon
   return awaitingOwner(threads, ownerId).some((id) => !dismissed.includes(id));
 }
 
+/** Where a shared page's reader closing the rail is remembered. The token is already this browser's: it is in its address bar and history. */
+export const sharedDismissedKey = (token: string) => `kh:share-review-dismissed:${token}`;
+
+type ReaderDiscussion = { id: string; status: ReviewStatus; comments: readonly { own: boolean; visibility: ReviewVisibility; deleted?: boolean }[] };
+
+/**
+ * What a shared page's reader has not answered: open discussions whose last word that stands is
+ * not the reader's own. A reader who is not signed in owns nothing, so for them it is every open one.
+ */
+export function awaitingReader(threads: readonly ReaderDiscussion[]): string[] {
+  const last = (thread: ReaderDiscussion) => thread.comments.filter((comment) => comment.visibility === "VISIBLE" && !comment.deleted).at(-1);
+  return threads.filter((thread) => thread.status === "OPEN" && last(thread) && !last(thread)!.own).map((thread) => thread.id);
+}
+
+/** The new comments in `next` that `previous` did not have: what a reader coming back has not seen. */
+export function newComments(previous: readonly { comments: readonly { id: string }[] }[], next: readonly { comments: readonly { id: string; own: boolean }[] }[]): number {
+  const seen = new Set(previous.flatMap((thread) => thread.comments.map((comment) => comment.id)));
+  return next.flatMap((thread) => thread.comments).filter((comment) => !seen.has(comment.id) && !comment.own).length;
+}
+
 export function parseDismissed(stored: string | null): string[] {
   try {
     const value: unknown = JSON.parse(stored ?? "");

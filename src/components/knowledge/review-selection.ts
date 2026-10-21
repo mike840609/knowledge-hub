@@ -59,6 +59,8 @@ export type ReviewSelectionProblem = "none" | "across" | "long" | "unsupported";
 export type ReviewSelectionReading = { anchor: ReviewAnchor; problem?: undefined } | { anchor?: undefined; problem: ReviewSelectionProblem };
 
 /** What a reader is told when what they selected cannot take a comment. */
+/** Said beside Add comment while nothing is chosen, so the reader learns it before pressing it. */
+export const COMMENT_HINT = "Select text in the document to comment on it.";
 export const REVIEW_SELECTION_HINTS: Record<Exclude<ReviewSelectionProblem, "none">, string> = {
   across: "Select within one paragraph to comment.",
   long: `Select ${REVIEW_LIMITS.quote} characters or fewer to comment.`,
