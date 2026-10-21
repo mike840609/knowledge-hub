@@ -16,6 +16,10 @@ import { ShareLinkDialogHost } from "./share-link-dialog";
 import { InspectorContext } from "./inspector-context";
 import { DocumentSkeleton, TreeSkeleton } from "./knowledge-skeletons";
 import { useScrollRestoration } from "./use-scroll-restoration";
+import { PanelLeftOpen } from "lucide-react";
+import { buttonClasses } from "@/components/ui/button";
+import { Tooltip } from "@/components/ui/tooltip";
+import { isBoolean, usePersistedJson } from "@/components/shell/use-persisted-state";
 
 export function KnowledgeLayout({
   workspaceId,
@@ -37,6 +41,13 @@ export function KnowledgeLayout({
   const [peekRequest, setPeekRequest] = useState<PeekRequest | null>(null);
   const isWide = useIsWide();
   const contentRef = useRef<HTMLDivElement>(null);
+  const [explorerCollapsed, setExplorerCollapsed] = usePersistedJson("kh:explorer-collapsed", false, isBoolean);
+  const showExplorerRef = useRef<HTMLButtonElement>(null);
+  // The button pressed is gone once the explorer changes; focus goes to the one that took its place.
+  const toggleExplorer = (collapse: boolean) => {
+    setExplorerCollapsed(collapse);
+    requestAnimationFrame(() => (collapse ? showExplorerRef.current : explorerTarget?.querySelector<HTMLButtonElement>("[data-explorer-collapse]"))?.focus());
+  };
 
   useScrollRestoration(contentRef, pathname);
 
@@ -67,14 +78,27 @@ export function KnowledgeLayout({
       source={source}
       collections={collections}
       includeArchived={includeArchived}
+      onCollapse={navigation?.mobileExplorerTarget ? undefined : () => toggleExplorer(true)}
     />
   );
 
   return (
     <InspectorContext.Provider value={{ open: inspectorOpen, setOpen: setInspectorOpen }}>
     <div className="flex h-full min-h-0 overflow-hidden">
-      <div ref={setExplorerTarget} className="hidden h-full w-72 shrink-0 lg:block">
-        {!explorerTarget ? <div className="h-full border-r border-kh-border bg-kh-bg-explorer p-3"><TreeSkeleton /></div> : null}
+      <div className={`hidden h-full shrink-0 lg:block ${explorerCollapsed ? "w-10" : "w-72"}`}>
+        {explorerCollapsed ? (
+          <div className="flex h-full justify-center border-r border-kh-border bg-kh-bg-explorer pt-2">
+            <Tooltip label="Show documents" side="right">
+              <button ref={showExplorerRef} type="button" aria-label="Show documents" onClick={() => toggleExplorer(false)} className={buttonClasses({ variant: "ghost", icon: true })}>
+                <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </Tooltip>
+          </div>
+        ) : null}
+        {/* Hidden, not unmounted: open folders and the filter are as they were when it is shown again. */}
+        <div ref={setExplorerTarget} className={explorerCollapsed ? "hidden" : "h-full"}>
+          {!explorerTarget ? <div className="h-full border-r border-kh-border bg-kh-bg-explorer p-3"><TreeSkeleton /></div> : null}
+        </div>
       </div>
       {/* One explorer instance: avoid duplicate filter IDs and competing persisted state. */}
       {navigation?.mobileExplorerTarget ? createPortal(<div className="h-full" onClick={(event) => {
