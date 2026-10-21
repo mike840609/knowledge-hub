@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { ReviewThreadList } from "@/components/knowledge/review-thread-list";
+import { ReviewReplyForm, ReviewThreadList, reviewDraftKey } from "@/components/knowledge/review-thread-list";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -119,4 +119,59 @@ test("http(s) links in a remark are links; anything else stays text", () => {
   expect(anchors.map(a => [a.getAttribute("href"), a.getAttribute("target"), a.getAttribute("rel")])).toEqual([["https://example.com/pr/1", "_blank", "noopener noreferrer"]]);
   expect(cards()[0].querySelector("b")).toBeNull();
   expect(cards()[0].textContent).toContain("<b>bold</b> javascript:alert(1)");
+});
+
+function type(textarea: HTMLTextAreaElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+  act(() => { setter.call(textarea, value); textarea.dispatchEvent(new Event("input", { bubbles: true })); });
+}
+
+function renderForm(onSubmit: (body: string) => Promise<void> = async () => {}) {
+  act(() => {
+    root = createRoot(host);
+    root.render(createElement(ReviewReplyForm, { draftKey: reviewDraftKey("reply", "t1"), onSubmit }));
+  });
+}
+
+function remount(onSubmit?: (body: string) => Promise<void>) {
+  act(() => root?.unmount());
+  renderForm(onSubmit);
+}
+
+test("an unsent reply survives the form going away and comes back open", () => {
+  sessionStorage.clear();
+  renderForm();
+  act(() => { buttons("Reply")[0].click(); });
+  type(host.querySelector("textarea")!, "Half a thought");
+  expect(sessionStorage.getItem(reviewDraftKey("reply", "t1"))).toBe("Half a thought");
+  remount();
+  expect(host.querySelector("textarea")?.value).toBe("Half a thought");
+  // Emptied, nothing is kept.
+  type(host.querySelector("textarea")!, "  ");
+  expect(sessionStorage.getItem(reviewDraftKey("reply", "t1"))).toBeNull();
+});
+
+test("sending or cancelling a reply forgets its draft", async () => {
+  sessionStorage.clear();
+  const sent: string[] = [];
+  renderForm(async (body: string) => { sent.push(body); });
+  act(() => { buttons("Reply")[0].click(); });
+  type(host.querySelector("textarea")!, "Done");
+  await act(async () => { host.querySelector("form")!.requestSubmit(); });
+  expect(sent).toEqual(["Done"]);
+  expect(sessionStorage.getItem(reviewDraftKey("reply", "t1"))).toBeNull();
+  act(() => { buttons("Reply")[0].click(); });
+  type(host.querySelector("textarea")!, "Never mind");
+  act(() => { buttons("Cancel")[0].click(); });
+  expect(sessionStorage.getItem(reviewDraftKey("reply", "t1"))).toBeNull();
+  remount();
+  expect(host.querySelector("textarea")).toBeNull();
+});
+
+test("a collapsed card says it holds an unsent reply", () => {
+  sessionStorage.clear();
+  sessionStorage.setItem(reviewDraftKey("reply", "t1"), "Kept");
+  renderList([thread("t1", [0], "Para zero.")]);
+  expect(cards()[0].textContent).toContain("Unsent reply");
+  sessionStorage.clear();
 });

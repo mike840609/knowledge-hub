@@ -284,7 +284,8 @@ test("keyboard expansion keeps a stable focus target and Escape preserves reply 
   await page.setViewportSize({ width: 390, height: 844 });
   const drawer = page.getByRole("dialog");
   await expect(drawer).toHaveCSS("opacity", "1");
-  await drawer.getByRole("button", { name: "Reply", exact: true }).click();
+  // The drawer's copy of the card opens on the reply the rail's held: the draft is kept, not the form.
+  await expect(drawer.getByRole("textbox", { name: "Reply" })).toHaveValue("Keep this draft");
   await drawer.getByRole("textbox", { name: "Reply" }).fill("Mobile draft");
   await page.keyboard.press("Escape");
   await expect(drawer).toBeVisible();
