@@ -130,6 +130,7 @@ export function SharedReviewPanel({ token, revisionId, markdown, signInHref, chi
         <div className="flex shrink-0 items-center gap-1"><Tooltip label="Refresh comments"><Button type="button" variant="ghost" icon aria-label="Refresh comments" onClick={() => void load()}><RefreshCw className="size-4" aria-hidden="true" /></Button></Tooltip><span className="kh-review-rail-only"><Tooltip label="Hide comments"><Button type="button" variant="ghost" icon aria-label="Collapse discussions" onClick={() => changeOpen(false)}><X className="size-4" aria-hidden="true" /></Button></Tooltip></span></div>
       </div>
       {error && <p role="status" className="mt-3 text-body-sm">{error}</p>}
+      {!result && !error && <p role="status" className="mt-3 text-body-sm text-kh-text-muted">Loading discussions…</p>}
       {selection.refusal && <p role="status" className="mt-3 text-body-sm">{selection.refusal}</p>}
       {result && <div className="mt-3">
         {revisionChanged && <p role="status" className="mb-3 text-body-sm">Document changed. Refresh this page before selecting or locating a passage. You can still reply to existing discussions.</p>}

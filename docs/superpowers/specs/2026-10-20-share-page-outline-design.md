@@ -25,9 +25,8 @@ shared spec is read by scrolling.
   inside it — so it moves with the column when the comments rail slides it left, and never
   needs the page's centring arithmetic copied. It sticks below the pinned Comments bar (`top-16`).
 - **Disclosure** (`OutlineDisclosure`) above the Comments bar otherwise, and also while the
-  comments rail is open inline — the rail's room is gone then, as the workspace already does
-  (`globals.css`, `.kh-document-pane:has(… [data-review-open]) .kh-outline-rail`). It slides with
-  the heading when the comments rail opens.
+  comments rail is open inline on a window narrower than `88rem` — the rail's room is gone then
+  (§6). It slides with the heading when the comments rail opens.
 - Both sit outside `article[data-review-document]`, so review anchoring, which reads that
   article's text, is unaffected.
 
@@ -63,7 +62,8 @@ E2E (`zz-share-outline.spec.ts`), desktop:
   page the last entry is. The disclosure follows the same way.
 - At 1280px the rail is hidden and the disclosure lists the same entries, in a box no wider
   than the text (reader-measure spec §1).
-- Opening Comments at 1440px hides the rail and shows the disclosure.
+- Opening Comments at 1366px hides the rail and shows the disclosure; at 1408px and 1440px
+  the rail stays, left of the article and on screen, and the disclosure stays hidden (§6).
 - A document with fewer than two headings shows neither.
 
 ## 5. Amendment (2026-10-21): two lines per entry
@@ -71,3 +71,16 @@ E2E (`zz-share-outline.spec.ts`), desktop:
 An entry takes up to two lines (`line-clamp-2`), not one: Chinese headings cut to one line read
 as near-identical fragments. The full heading stays its `title`. This applies to every outline
 (`OutlineList`), the workspace's too. E2E: `zz-share-outline.spec.ts`, "a long heading wraps to two lines".
+
+## 6. Amendment (2026-10-21): the outline stays beside open comments where it fits
+
+§2 first folded the outline into the disclosure whenever the comments rail opened, as the
+workspace does. On a shared page that is more than the room requires: the column keeps its
+left edge when the comments rail opens and moves left only as far as the rail needs
+(`margin-inline-start: max(0, min((100% − 860px) / 2, 100% − 1180px))`), so the room left of it
+is `100% − 1180px` once that is the smaller term. That is ≥ 224px — the outline rail and its
+edge — from 1404px. From `88rem` (1408px) the outline therefore stays a rail while comments are
+open; below it the column slides over the outline's room and the outline folds into the
+disclosure as before (`globals.css`, `@media (max-width: 87.99rem)`). A reviewer comparing a
+comment with another section keeps the outline where it was. The workspace is unchanged: its
+pane is not the window, and it keeps its own rule.

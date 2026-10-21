@@ -96,7 +96,8 @@ describe("the share link is the single caller-less content path", () => {
       .map((file) => file);
     expect(offenders).toEqual([]);
     const page = readFileSync(path.join("src", "app", "s", "[token]", "page.tsx"), "utf8");
-    expect(page).toMatch(/<MarkdownRenderer\s+markdown=\{shared\.markdown\}\s*\/>/);
+    // `afterTitle` places the byline; it resolves nothing.
+    expect(page).toMatch(/<MarkdownRenderer\s+markdown=\{shared\.markdown\}(\s+afterTitle=\{[^}]*\})?\s*\/>/);
     expect(page).not.toMatch(/<MarkdownRenderer[^>]*\blinks=/);
   });
 

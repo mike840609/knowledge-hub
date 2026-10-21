@@ -440,7 +440,7 @@ test("the shared page keeps one left edge: its bar, its byline, its article and 
         range.selectNodeContents(document.querySelector(selector)!);
         return Math.round(range.getClientRects()[0].left);
       };
-      return { bar: textLeft(".kh-share-page > div:first-child span"), byline: textLeft(".kh-share-page header .kh-byline > span > span"), article: textLeft("[data-review-document] p"), footer: textLeft(".kh-share-page footer p") };
+      return { bar: textLeft(".kh-share-page > div:first-child span"), byline: textLeft(".kh-share-page .kh-byline > span > span"), article: textLeft("[data-review-document] p"), footer: textLeft(".kh-share-page footer p") };
     });
   const aligned = async () => {
     const { bar, byline, article, footer } = await edges();
@@ -466,7 +466,7 @@ test("the shared page's byline wraps without leaving a separator at the end of a
   const doc = await createReviewDocument(request, "# A shared title\n\nA paragraph of the article.\n");
   await page.setViewportSize({ width: 390, height: 800 });
   await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
-  const byline = page.locator(".kh-share-page header .kh-byline");
+  const byline = page.locator(".kh-share-page .kh-byline");
   await expect(byline).toContainText("Shared by");
   const { clip, items } = await byline.evaluate((element) => {
     const box = element.getBoundingClientRect();

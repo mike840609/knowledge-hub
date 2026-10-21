@@ -683,15 +683,21 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 }
 .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) > footer { max-width: calc(theme("maxWidth.reading") + 320px); }
 /* The outline hangs off the column's left edge where the centred column leaves room for it (82rem:
-   224px, a w-52 rail and its edge), else it is a disclosure above the Comments row; and, as in the
-   workspace, the comments rail takes its room while open (share-page-outline spec §2). */
+   224px, a w-52 rail and its edge), else it is a disclosure above the Comments row. With the
+   comments rail open the column keeps its left edge only while the window holds column + rail +
+   outline (860 + 320 + 224 = 1404px, 88rem); below that the column slides left over the outline's
+   room, so the outline folds into the disclosure (share-page-outline spec §2). */
 .kh-share-page .kh-share-outline-rail { display: none; }
+/* The disclosure is the first thing under the bar now that the title sits below the Comments row. */
+.kh-share-page .kh-share-outline > .kh-outline-inline { margin-top: theme("spacing.3"); }
 @media (min-width: 82rem) {
   .kh-share-page .kh-share-outline-rail { display: block; }
   .kh-share-page .kh-share-outline > .kh-outline-inline { display: none; }
 }
-.kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) .kh-share-outline-rail { display: none; }
-.kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) .kh-share-outline > .kh-outline-inline { display: block; }
+@media (max-width: 87.99rem) {
+  .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) .kh-share-outline-rail { display: none; }
+  .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) .kh-share-outline > .kh-outline-inline { display: block; }
+}
 /* A heading jumped to lands below the pinned Comments bar (48px), with the prose's own 16px above it, not under the bar.
    64px is also inside the outline's 96px reading line, so the entry clicked is the one highlighted (spec §3). */
 .kh-share-page article[data-review-document] :is(h1, h2, h3, h4, h5, h6) { scroll-margin-top: theme("spacing.16"); }

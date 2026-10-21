@@ -86,11 +86,30 @@ test("share outline: a disclosure on a narrower window, and while comments are o
   expect(box.x).toBeCloseTo(text.x, 0);
   expect(box.width).toBeLessThanOrEqual(640);
 
-  await page.setViewportSize({ width: 1440, height: 900 });
+  // Between 82rem and 88rem the outline has room beside the article but not beside article and comments.
+  await page.setViewportSize({ width: 1366, height: 900 });
   await expect(rail(page)).toBeVisible();
   await page.getByRole("button", { name: /^Open discussions/ }).click();
+  await expect(page.getByRole("complementary", { name: "Document discussions" })).toBeVisible();
   await expect(rail(page)).toBeHidden();
   await expect(disclosure(page)).toBeVisible();
+});
+
+test("share outline: from 88rem the outline, the article and the comments stand side by side", async ({ page }) => {
+  const path = await shareOf(page, LONG);
+  for (const width of [1408, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(path);
+    await page.getByRole("button", { name: /^Open discussions/ }).click();
+    await expect(page.getByRole("complementary", { name: "Document discussions" })).toBeVisible();
+    await expect(rail(page)).toBeVisible();
+    await expect(disclosure(page)).toBeHidden();
+    // Wait for the column's 120ms slide, then check nothing overlaps and the outline stays on screen.
+    await expect.poll(async () => {
+      const [outline, text] = [(await rail(page).boundingBox())!, (await page.locator("article[data-review-document] p").first().boundingBox())!];
+      return outline.x >= 0 && outline.x + outline.width <= text.x;
+    }).toBe(true);
+  }
 });
 
 test("share outline: a document with one heading shows none", async ({ page }) => {

@@ -36,6 +36,6 @@ const readerRemarkPlugins = [remarkCallouts, remarkHtmlSubset];
  * Not for the composer, which is a client component and must not carry the highlighter: it uses
  * `MarkdownBase`. `links` is as there — a shared page passes none.
  */
-export function MarkdownRenderer({ markdown, links }: { markdown: string; links?: RenderedLinks }) {
-  return <MarkdownBase markdown={markdown} links={links} remarkPlugins={readerRemarkPlugins} rehypePlugins={codeHighlightPlugins} pre={ReadingPre} />;
+export function MarkdownRenderer({ markdown, links, afterTitle }: { markdown: string; links?: RenderedLinks; afterTitle?: ReactNode }) {
+  return <MarkdownBase markdown={markdown} links={links} remarkPlugins={readerRemarkPlugins} rehypePlugins={codeHighlightPlugins} pre={ReadingPre} afterTitle={afterTitle} />;
 }
