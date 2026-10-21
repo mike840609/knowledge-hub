@@ -1,6 +1,6 @@
 import Link from "next/link";
-import type { AnchorHTMLAttributes, ComponentType, DetailedHTMLProps, ImgHTMLAttributes, ReactNode } from "react";
-import ReactMarkdown from "react-markdown";
+import type { AnchorHTMLAttributes, ComponentProps, ComponentType, DetailedHTMLProps, ImgHTMLAttributes, ReactNode } from "react";
+import ReactMarkdown, { type ExtraProps } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { PluggableList } from "unified";
 import { ExternalLink } from "lucide-react";
@@ -10,6 +10,7 @@ import { headingSlug } from "@/shared/markdown/heading-slug";
 import { remarkHeadingIds } from "@/shared/markdown/remark-heading-ids";
 import { remarkKnownHtml } from "@/shared/markdown/remark-known-html";
 import { remarkReviewPaths } from "@/shared/markdown/remark-review-paths";
+import { markdownOpensWithHeading } from "@/lib/markdown-title";
 import { MarkdownQuote } from "./markdown-callout";
 import { MarkdownDetails, MarkdownKbd, MarkdownMark, MarkdownSummary } from "./markdown-html";
 import { ScrollablePre } from "./scrollable-pre";
@@ -200,6 +201,7 @@ export function MarkdownBase({
   remarkPlugins = [],
   rehypePlugins,
   pre = ScrollablePre,
+  afterTitle,
 }: {
   markdown: string;
   links?: RenderedLinks;
@@ -208,7 +210,10 @@ export function MarkdownBase({
   rehypePlugins?: PluggableList;
   /** How a code block is drawn; `ScrollablePre` unless the caller has more to put in it. */
   pre?: ComponentType<{ children?: ReactNode }>;
+  /** Drawn right after the `#` heading the document opens with, when it opens with one; it is no block, so carries no review path. */
+  afterTitle?: ReactNode;
 }) {
+  const titleLine = afterTitle && markdownOpensWithHeading(markdown) ? markdown.slice(0, markdown.search(/\S/)).split("\n").length : 0;
   return (
     <div className={MARKDOWN_PROSE}>
       <ReactMarkdown
@@ -234,6 +239,7 @@ export function MarkdownBase({
           kbd: MarkdownKbd,
           mark: MarkdownMark,
           pre,
+          ...(titleLine ? { h1: ({ node, ...props }: ComponentProps<"h1"> & ExtraProps) => <><h1 {...props} />{node?.position?.start.line === titleLine ? afterTitle : null}</> } : {}),
         }}
       >
         {markdown}
