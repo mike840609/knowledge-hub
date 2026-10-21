@@ -2,7 +2,7 @@ import { test, expect } from "./fixtures/test";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-test("source exclusions, filter-only search and reviewed Agent context", async ({ page, request }) => {
+test("source exclusions, filter-only search and reviewed Agent context", async ({ page, request, context }) => {
   const nav = await (await request.get("/api/workspaces")).json();
   const ws = nav.items.find((w: { type: string }) => w.type === "PERSONAL").id;
   const root = await mkdtemp(path.join(tmpdir(), "mvp-wiki-"));
@@ -34,6 +34,30 @@ test("source exclusions, filter-only search and reviewed Agent context", async (
     await page.getByRole("button", { name: "Prepare context" }).click();
     const preview = page.getByLabel("Markdown preview");
     await expect(preview).toHaveValue(/Agent reference body\./);
+    const provenance = JSON.parse((await preview.inputValue()).match(/Provenance: (.+)/)![1]);
+    const headers = { Origin: new URL(page.url()).origin };
+    for (const status of ["OPEN", "RESOLVED"]) {
+      const created = await request.post(`/api/documents/${provenance.documentId}/review-threads`, { headers, data: {
+        expectedRevisionId: provenance.revisionId,
+        anchor: { schemaVersion: 1, blockPath: [1], blockKind: "paragraph", startUtf16: 0, endUtf16: 5, exact: "Agent", prefix: "", suffix: " reference body." },
+        body: `${status} discussion retained`, idempotencyKey: crypto.randomUUID(),
+      } });
+      expect(created.status()).toBe(201);
+      const thread = await created.json();
+      const reply = await request.post(`/api/documents/${provenance.documentId}/review-threads/${thread.id}/replies`, { headers, data: { body: `${status} reply retained`, idempotencyKey: crypto.randomUUID() } });
+      expect(reply.ok()).toBe(true);
+      if (status === "RESOLVED") {
+        const resolved = await request.post(`/api/documents/${provenance.documentId}/review-threads/${thread.id}/resolution`, { headers, data: { status } });
+        expect(resolved.ok()).toBe(true);
+      }
+    }
+    await page.getByRole("button", { name: "Prepare context" }).click();
+    await expect(preview).toHaveValue(/OPEN discussion retained/);
+    await expect(preview).toHaveValue(/RESOLVED reply retained/);
+    await expect(page.getByText(/1 documents · 2 discussions · 4 comments/)).toBeVisible();
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.getByRole("button", { name: "Copy for Agent", exact: true }).click();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(await preview.inputValue());
     // Next.js may normalize the loopback request hostname to localhost.
     const port = new URL(page.url()).port;
     await expect(preview).toHaveValue(new RegExp(`Original: http://(?:127\\.0\\.0\\.1|localhost):${port}/w/${ws}/knowledge/${source}/[a-f0-9-]+\\?revision=1`));

@@ -8,6 +8,8 @@ import { UploadFolderImportEntriesService } from "@/modules/sources/application/
 import { FinalizeFolderImportService } from "@/modules/sources/application/finalize-folder-import";
 import { ApplyFolderImportService } from "@/modules/sources/application/apply-folder-import";
 import { GetImportScopeService } from "@/modules/sources/application/get-import-scope";
+import { DocumentReviewService } from "@/modules/knowledge/application/document-review-service";
+import { randomUUID } from "node:crypto";
 import { AgentContextService } from "@/modules/knowledge/application/agent-context-service";
 import { parseSearchFilters } from "@/modules/knowledge/domain/search-filters";
 import { createSourceFixture, fixtureCaller, fixtureIdentity } from "../fixtures/knowledge";
@@ -61,7 +63,17 @@ it("builds a personal context with saved paths and rejects mixed-workspace and a
   const result = await new ApplyFolderImportService(uow).apply(caller, first.session.snapshotId); if (result.kind !== "APPLIED") throw new Error("Expected Apply");
   const docs = await pool.query<{ id: string }[]>("SELECT id FROM knowledge_documents WHERE source_id=? ORDER BY id", [result.sourceId]);
   const service = new AgentContextService(uow);
+  const reviews = new DocumentReviewService(uow, () => new Date(), () => true);
+  const revision = await uow.run(r => r.revisions.findCurrent(docs[0].id));
+  const created = await reviews.createForOwner(caller, { documentId: docs[0].id, expectedRevisionId: revision!.id, anchor: { schemaVersion: 1, blockPath: [1], blockKind: "paragraph", startUtf16: 0, endUtf16: 3, exact: "MVP", prefix: "", suffix: " search content." }, body: "Review before using", idempotencyKey: randomUUID() });
+  const threadId = created.id;
+  await reviews.replyForOwner(caller, { documentId: docs[0].id, threadId, body: "Decision retained", idempotencyKey: randomUUID() });
+  await reviews.setResolution(caller, { documentId: docs[0].id, threadId, status: "RESOLVED" });
   const bundle = await service.build(caller, workspace.id, docs.map(d => d.id)); expect(bundle.documentCount).toBe(2); expect(bundle.markdown).toContain("docs/agent.md"); expect(bundle.markdown).toContain("?revision=1");
+  expect(bundle).toMatchObject({ threadCount: 1, commentCount: 2 });
+  expect(bundle.markdown).toContain("Review before using");
+  expect(bundle.markdown).toContain("Decision retained");
+  expect(bundle.markdown).toContain('"status":"RESOLVED"');
   const other = await stage(fixture.workspaceId, ["foreign.md"], []); const foreign = await new ApplyFolderImportService(uow).apply(caller, other.session.snapshotId); if (foreign.kind !== "APPLIED") throw new Error("Expected Apply");
   const foreignDocs = await pool.query<{ id: string }[]>("SELECT id FROM knowledge_documents WHERE source_id=?", [foreign.sourceId]);
   await expect(service.build(caller, workspace.id, [docs[0].id, foreignDocs[0].id])).rejects.toMatchObject({ code: "DOCUMENT_NOT_FOUND" });

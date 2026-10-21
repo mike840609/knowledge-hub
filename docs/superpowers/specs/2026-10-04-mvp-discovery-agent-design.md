@@ -17,3 +17,13 @@ Provide a My Space page listing active saved documents, with search and multi-se
 ## Verification
 
 Unit: rules, hashes, date boundaries/invalid inputs, SQL escaping/ordering, bundle bounds and authorization, client scope scanning. Integration: initial/resync Apply, rollback and stale-scope conflict, scoped search/date/path and bundle reads. Browser: first import exclusions → Preview → Apply → fresh-device resync; filtered pagination; multi-selection → bundle preview → clipboard/fallback. Run unit, typecheck, lint, build and affected DB/browser suites, recording actual limits.
+
+## Copy for Agent discussions (2026-10-21)
+
+Approved extension: the single Copy for Agent action always includes the selected documents' visible discussions and replies, both OPEN and RESOLVED. There is no body-only toggle or resolution filter. Group discussions under their document, order threads and comments by creation time with ID tie-breakers, and preserve author display names, creation/edit times, thread IDs, original revision IDs and resolution status. A discussion's status does not imply its suggestions were incorporated into the document.
+
+Project discussion data specifically for export; do not serialize owner moderation views. Exclude hidden threads and wholly retracted threads. Hidden and deleted comments retain placeholders, never their bodies. Export only current validated quotes (MATCHED/MOVED), relocated against the exact saved Markdown in the bundle. Keep OUTDATED discussions with an explicit unavailable-passage marker and no original quote. Do not export user IDs, share-link identifiers/tokens or moderation metadata.
+
+Read through the existing authorized personal-workspace unit of work. The export is a generated view of saved document versions and discussions read during preparation, not immutable discussion history. Original links pin document versions only. The database uses READ COMMITTED; do not claim a transaction-wide point-in-time snapshot. Reuse the existing reference-material warning for documents and comments. Discussion output counts toward the 256 KiB UTF-8 limit; reject oversized bundles without truncation. Check the bound while assembling discussions. Preview reports document, discussion and comment counts (comment placeholders count as entries), and clipboard copies exactly the preview.
+
+Validation covers both statuses, reply ordering/attribution, multiple-document association, hidden/deleted/retracted suppression, stale and moved anchors, discussion byte limits, unchanged document authorization, zero-discussion output, and preview/clipboard equality.
