@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, ChevronRight, Clock3, FileText, LockKeyhole, MoreHorizontal, PanelLeftClose, Plus, ListFilter, Star } from "lucide-react";
+import { ChevronDown, ChevronRight, Clock3, FileText, LockKeyhole, MoreHorizontal, ChevronsLeft, Plus, ListFilter, Star } from "lucide-react";
 import { ActionIcon } from "@/components/actions/action-icon";
 import { favoritesInPlace, rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
@@ -218,7 +218,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
           {onCollapse ? (
             <Tooltip label="Hide documents">
               <button type="button" data-explorer-collapse aria-label="Hide documents" onClick={onCollapse} className={buttonClasses({ variant: "ghost", icon: true })}>
-                <PanelLeftClose size={16} aria-hidden="true" />
+                <ChevronsLeft size={16} aria-hidden="true" />
               </button>
             </Tooltip>
           ) : null}

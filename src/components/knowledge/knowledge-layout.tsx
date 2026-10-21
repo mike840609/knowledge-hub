@@ -16,7 +16,7 @@ import { ShareLinkDialogHost } from "./share-link-dialog";
 import { InspectorContext } from "./inspector-context";
 import { DocumentSkeleton, TreeSkeleton } from "./knowledge-skeletons";
 import { useScrollRestoration } from "./use-scroll-restoration";
-import { PanelLeftOpen } from "lucide-react";
+import { FolderTree } from "lucide-react";
 import { buttonClasses } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { isBoolean, usePersistedJson } from "@/components/shell/use-persisted-state";
@@ -90,7 +90,7 @@ export function KnowledgeLayout({
           <div className="flex h-full justify-center border-r border-kh-border bg-kh-bg-explorer pt-2">
             <Tooltip label="Show documents" side="right">
               <button ref={showExplorerRef} type="button" aria-label="Show documents" onClick={() => toggleExplorer(false)} className={buttonClasses({ variant: "ghost", icon: true })}>
-                <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
+                <FolderTree className="h-4 w-4" aria-hidden="true" />
               </button>
             </Tooltip>
           </div>

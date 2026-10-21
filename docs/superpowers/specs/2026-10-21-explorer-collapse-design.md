@@ -13,10 +13,11 @@ remaining 288px.
 
 ## Behaviour
 
-- The explorer's header ends with **Hide documents** (`PanelLeftClose`). Pressed,
+- The explorer's header ends with **Hide documents** (`ChevronsLeft`). Pressed,
   the explorer becomes a 40px strip in its place — same `bg-explorer` and right
-  border — holding one button, **Show documents** (`PanelLeftOpen`), which restores
-  it. Focus moves to the button that replaces the one pressed.
+  border — holding one button, **Show documents** (`FolderTree`), which restores
+  it. Not the panel glyphs: those are the primary rail's, and collapsed the two
+  sit side by side. Focus moves to the button that replaces the one pressed.
 - Collapsed is remembered in this browser (`kh:explorer-collapsed`, as
   `kh:nav-collapsed` is). The tree stays mounted while hidden, so open folders, the
   filter and favourites are as they were when it is shown again.
