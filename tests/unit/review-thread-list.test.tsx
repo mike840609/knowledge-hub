@@ -175,3 +175,17 @@ test("a collapsed card says it holds an unsent reply", () => {
   expect(cards()[0].textContent).toContain("Unsent reply");
   sessionStorage.clear();
 });
+
+test("an unread discussion says so inside its first author line, so reading it moves no button", () => {
+  const unread = new Set(["a"]);
+  act(() => {
+    root = createRoot(host);
+    root.render(createElement(ReviewThreadList, { threads: [thread("a", [0], "Para zero."), thread("b", [1], "Para one.")] as never, ...props, unreadThreadIds: unread }));
+  });
+  const [first, second] = cards();
+  const name = first.querySelector("li p.font-medium")!;
+  expect(name.textContent).toMatch(/^UnreadAnn/);
+  // The card has no line of its own for it: what reading takes away is inside the name.
+  expect(Array.from(first.children).map(child => child.tagName)).toEqual(Array.from(second.children).map(child => child.tagName));
+  expect(second.textContent).not.toContain("Unread");
+});

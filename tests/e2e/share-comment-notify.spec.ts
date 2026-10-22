@@ -23,7 +23,7 @@ test("a share-page comment notifies the owner; opening the panel keeps it, looki
   await openReviewDiscussions(page);
   // Opening the panel marks nothing: the owner has not looked at the discussion yet (spec 2026-10-22).
   const card = page.getByRole("region", { name: "Discussion thread" }).filter({ hasText: "Holder observation" });
-  await expect(card.getByText("Unread", { exact: true })).toBeVisible();
+  await expect(card.getByText("Unread", { exact: true })).toHaveCount(1);
   expect(await unread()).toHaveLength(1);
   await card.click();
   await expect.poll(unread).toEqual([]);

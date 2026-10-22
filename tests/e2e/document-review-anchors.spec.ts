@@ -33,7 +33,7 @@ test("owner and shared readers agree on emoji, formatting and duplicate block of
   await openReviewDiscussions(page);
   for (const index of [2, 3]) {
     await page.locator("[data-review-document] p").nth(index).evaluate(element => { const range = document.createRange(); range.selectNodeContents(element); const selection = window.getSelection()!; selection.removeAllRanges(); selection.addRange(range); });
-    await page.getByRole("button", { name: "Add comment from selected text" }).click();
+    await page.getByRole("button", { name: "Comment on selected text" }).click();
     await expect(page.getByRole("textbox", { name: "Add comment" })).toHaveCount(0);
   }
 });
