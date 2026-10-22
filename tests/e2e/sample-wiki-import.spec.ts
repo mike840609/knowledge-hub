@@ -93,13 +93,12 @@ test.describe("import guide", () => {
     const ws = await personalWorkspaceId(page);
     await page.goto(`/w/${ws}/sources/import`);
     await page.getByRole("link", { name: "Folder format guide" }).click();
-    await expect(page).toHaveURL(new RegExp(`/w/${ws}/sources/import/guide$`));
+    await expect(page).toHaveURL(/\/help\/import-guide$/);
     await expect(page.getByRole("heading", { level: 1, name: "Bring your wiki into Knowledge Hub" })).toBeVisible();
   });
 
   test("English: seven sections in order, with the configured limits", async ({ page }) => {
-    const ws = await personalWorkspaceId(page);
-    await page.goto(`/w/${ws}/sources/import/guide`);
+    await page.goto("/help/import-guide");
     await expect(page.locator("[lang='en']").first()).toBeVisible();
     await expect(page.getByRole("heading", { level: 2 })).toHaveText(SECTION_HEADINGS.en);
 
@@ -117,14 +116,12 @@ test.describe("import guide", () => {
   });
 
   test("unknown ?lang falls back to English", async ({ page }) => {
-    const ws = await personalWorkspaceId(page);
-    await page.goto(`/w/${ws}/sources/import/guide?lang=fr`);
+    await page.goto("/help/import-guide?lang=fr");
     await expect(page.getByRole("heading", { level: 2 }).first()).toHaveText(SECTION_HEADINGS.en[0]);
   });
 
   test("?lang=zh-TW renders Chinese and the switch marks it current", async ({ page }) => {
-    const ws = await personalWorkspaceId(page);
-    await page.goto(`/w/${ws}/sources/import/guide`);
+    await page.goto("/help/import-guide");
     await page.getByRole("navigation", { name: "Guide language" }).getByRole("link", { name: "繁體中文" }).click();
     await expect(page).toHaveURL(/[?]lang=zh-TW$/);
     await expect(page.getByRole("heading", { level: 2 })).toHaveText(SECTION_HEADINGS.zhTW);
@@ -137,7 +134,7 @@ test.describe("import guide", () => {
 
   test("Try the sample wiki returns to the import page with the control in view", async ({ page }) => {
     const ws = await personalWorkspaceId(page);
-    await page.goto(`/w/${ws}/sources/import/guide`);
+    await page.goto("/help/import-guide");
     await page.getByRole("link", { name: "Try the sample wiki" }).click();
     await expect(page).toHaveURL(new RegExp(`/w/${ws}/sources/import#sample-wiki$`));
     const sample = page.getByRole("group", { name: "Try with a sample wiki" });

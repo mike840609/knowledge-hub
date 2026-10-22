@@ -34,7 +34,7 @@ export default async function WorkspaceSourceImportPreviewPage({
       <p className="mt-1 text-body text-kh-text-muted">
         Review changes before applying. Resolve blockers to continue.
       </p>
-      <details className="mt-2 text-body"><summary className="kh-focus-ring w-fit cursor-pointer rounded-md text-kh-text-muted">Preview help</summary><Link className="kh-focus-ring rounded-md text-kh-link hover:underline" href={`/w/${workspaceId}/help#sync`}>How to review and apply changes</Link></details>
+      <details className="mt-2 text-body"><summary className="kh-focus-ring w-fit cursor-pointer rounded-md text-kh-text-muted">Preview help</summary><Link className="kh-focus-ring rounded-md text-kh-link hover:underline" href="/help#sync">How to review and apply changes</Link></details>
       <div className="mt-4">
         <ImportPreview workspaceId={workspaceId} preview={preview} />
       </div>
