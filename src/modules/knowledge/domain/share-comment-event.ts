@@ -9,6 +9,12 @@ export type ShareCommentNotificationView = {
   threadId: string; commentId: string; authorName: string | undefined;
   excerpt: string; createdAt: Date;
   readAt: Date | null; threadStatus: "OPEN" | "RESOLVED";
+  /**
+   * OWNER: a comment on the caller's shared document. FOLLOW: replies in a discussion the caller
+   * follows, one entry per discussion; it carries no Workspace or document id, only the link's
+   * token while that link opens (`linkAvailable`), and `replyCount` replies not yet seen.
+   */
+  kind?: "OWNER" | "FOLLOW"; token?: string; replyCount?: number; linkAvailable?: boolean;
 };
 const EXCERPT_LIMIT = 80;
 export function projectShareCommentNotification(input: {

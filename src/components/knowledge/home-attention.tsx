@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notificationHref, notificationLine } from "./notification-href";
 import type { ShareCommentNotificationView } from "@/modules/knowledge/domain/share-comment-event";
 import type { FreshnessReminder } from "@/modules/personal/application/knowledge-freshness";
 import { Timestamp } from "@/components/ui/timestamp";
@@ -20,16 +21,16 @@ function SourceReminder({ workspaceId, reminders }: { workspaceId: string; remin
   </Link>;
 }
 
-/** Unread share comments, newest first; each row jumps to its thread. Renders nothing without one. */
+/** Unread share comments and followed replies, newest first (unread never includes a dead link); each row jumps to its thread. Renders nothing without one. */
 export function UnreadDiscussions({ notices }: { notices: readonly HomeNotice[] }) {
   if (!notices.length) return null;
   return <ul aria-label="Unread discussions" onKeyDown={navigateListRows} className="space-y-0.5">{notices.slice(0, 5).map(notice => (
     <li key={notice.id}>
-      <Link data-list-row className="kh-interactive-row kh-focus-ring flex min-h-10 items-center gap-3 rounded-md px-3 py-1" href={`/w/${notice.workspaceId}/knowledge/${notice.sourceId}/${notice.documentId}?thread=${notice.threadId}`}>
+      <Link data-list-row className="kh-interactive-row kh-focus-ring flex min-h-10 items-center gap-3 rounded-md px-3 py-1" href={notificationHref(notice) ?? `/w/${notice.workspaceId}/home`} prefetch={notice.kind === "FOLLOW" ? false : undefined}>
         <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-kh-primary" />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-body font-medium text-kh-text">{notice.documentTitle}</span>
-          <span className="block truncate text-caption text-kh-text-muted">{notice.authorName ?? "Someone"}: {notice.excerpt}</span>
+          <span className="block truncate text-caption text-kh-text-muted">{notificationLine(notice)}</span>
         </span>
         <span className="shrink-0 text-caption text-kh-text-muted"><Timestamp value={notice.createdAt} variant="relative" /></span>
       </Link>

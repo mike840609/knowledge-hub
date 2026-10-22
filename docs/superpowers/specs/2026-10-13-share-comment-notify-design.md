@@ -71,8 +71,11 @@ stands: exactly `readShared` and `queryForLink` answer without a caller.
 **Read/unread semantics.**
 
 - Unread = event rows with `read_at IS NULL` for the calling owner.
-  Opening the owner review panel on a document marks that document's events
-  read (per-thread batch, idempotent — re-marking is a no-op).
+  ~~Opening the owner review panel on a document marks that document's events
+  read.~~ *Amended 2026-10-22* (`2026-10-22-review-reply-follow-design.md`):
+  opening the panel marks nothing; looking at a discussion (activating it,
+  arriving by `?thread=`, or replying) marks that discussion's events read,
+  and the panel's *Mark all read* marks the document's.
 - UI: one badge on the owner review rail entry plus one dot on the personal
   home updates area; the list shows document → author → time → excerpt;
   clicking lands on the thread anchor (MOVED follows, OUTDATED shows the

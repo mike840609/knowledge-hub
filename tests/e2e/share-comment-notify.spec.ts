@@ -2,7 +2,7 @@ import { expect, test } from "./fixtures/test";
 import { phase3Origin } from "./fixtures/phase3-identities";
 import { createReviewDocument, openReviewDiscussions } from "./fixtures/document-review";
 
-test("a share-page comment notifies the owner, and opening the panel clears it", async ({ page, request }) => {
+test("a share-page comment notifies the owner; opening the panel keeps it, looking at the discussion clears it", async ({ page, request }) => {
   const doc = await createReviewDocument(request);
   const owner = phase3Origin("reviewOwner"), viewer = phase3Origin("viewer");
   const token = doc.links[0].path.split("/").pop();
@@ -21,7 +21,13 @@ test("a share-page comment notifies the owner, and opening the panel clears it",
   await page.goto(doc.href);
   await expect(page.getByText("1 new", { exact: true })).toBeVisible();
   await openReviewDiscussions(page);
+  // Opening the panel marks nothing: the owner has not looked at the discussion yet (spec 2026-10-22).
+  const card = page.getByRole("region", { name: "Discussion thread" }).filter({ hasText: "Holder observation" });
+  await expect(card.getByText("Unread", { exact: true })).toBeVisible();
+  expect(await unread()).toHaveLength(1);
+  await card.click();
   await expect.poll(unread).toEqual([]);
+  await expect(card.getByText("Unread", { exact: true })).toHaveCount(0);
   await page.reload();
   await openReviewDiscussions(page);
   await expect(page.getByText("1 new", { exact: true })).toHaveCount(0);
