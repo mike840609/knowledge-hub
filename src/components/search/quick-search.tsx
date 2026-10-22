@@ -298,7 +298,10 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
                 type="search"
                 value={query}
                 maxLength={200}
-                onChange={(event) => setQuery(event.target.value)}
+                // Back to the first row in the same update as the text: left to the effect below, an Enter
+                // pressed before it ran chose by the old index — past the end of a shorter list, which is
+                // "see all results" instead of the row on show.
+                onChange={(event) => { setQuery(event.target.value); setActiveIndex(0); }}
                 onKeyDown={(event) => {
                   if (event.key === "ArrowDown" && rows.length) {
                     event.preventDefault();
