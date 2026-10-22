@@ -38,7 +38,7 @@ test("My shares shows one document-level unread badge across multiple share link
   const unread = await (await request.get(`${owner}/api/review-notifications/unread`)).json();
   expect(unread.notifications.filter((item: { documentId: string }) => item.documentId === doc.documentId)).toHaveLength(2);
 
-  // Opening the panel marks the document read in the background; leaving before that lands would leave it unread.
+  // Arriving on the discussion (`?thread=`) marks it read in the background; leaving before that lands would leave it unread.
   const markedRead = page.waitForResponse(response => response.url().endsWith("/api/review-notifications/mark-read") && response.request().method() === "POST");
   await badge.click();
   await expect(page).toHaveURL(new RegExp(`/knowledge/${doc.sourceId}/${doc.documentId}\\?thread=${thread.id}`));

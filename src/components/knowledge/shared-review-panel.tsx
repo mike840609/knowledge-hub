@@ -51,6 +51,25 @@ export function SharedReviewPanel({ token, revisionId, markdown, signInHref, chi
     const dismissed = parseDismissed(readStored("local", sharedDismissedKey(token)));
     if (awaitingReader(result.threads).some(id => !dismissed.includes(id))) setOpen(true);
   }, [result, inline, token]);
+  // `?thread=` (an Inbox entry) opens the discussions on that one, once, where it is listed; an unknown id does nothing.
+  const deepLinked = useRef(false);
+  useEffect(() => {
+    if (deepLinked.current || !result) return;
+    deepLinked.current = true;
+    const thread = result.threads.find(candidate => candidate.id === new URLSearchParams(window.location.search).get("thread"));
+    if (!thread) return;
+    setFilter("ALL"); setActiveThreadId(thread.id); setOpen(true);
+    const anchor = revisionChanged ? undefined : thread.currentAnchor.anchor;
+    const root = document.querySelector<HTMLElement>("[data-review-document]");
+    if (anchor && root) requestAnimationFrame(() => requestAnimationFrame(() => focusReviewAnchor(root, markdown, anchor)));
+  }, [result, revisionChanged, markdown]);
+  // Looking at a discussion one follows marks its replies seen. A failure retries once, then waits for the next look.
+  const following = result?.threads.find(thread => thread.id === activeThreadId)?.following;
+  useEffect(() => {
+    if (!activeThreadId || !following) return;
+    const send = () => reviewRequest(`/api/share-review/threads/${activeThreadId}/seen`, { token });
+    void send().catch(() => send()).then(() => window.dispatchEvent(new Event("kh:notification-changed")), () => undefined);
+  }, [activeThreadId, following, token]);
   useReviewHighlights(markdown, revisionChanged ? undefined : result?.threads, activeThreadId);
   const selection = useReviewSelection(readingRef, markdown, `${token}:${revisionId}`);
   // A newer reading, held back while it would move the cards: the reader chooses when to see it.
@@ -141,7 +160,8 @@ export function SharedReviewPanel({ token, revisionId, markdown, signInHref, chi
       </div>}
       </div>
       {!draft && composer}
-      {result && <ReviewThreadList draft={draft} filter={filter} onFilterChange={setFilter} railMarkdown={revisionChanged ? undefined : markdown} activeThreadId={activeThreadId} onActivate={setActiveThreadId} focusAnchor={revisionChanged ? undefined : anchor => { const root = document.querySelector<HTMLElement>("[data-review-document]"); if (root) focusReviewAnchor(root, markdown, anchor); }} threads={result.threads} writesEnabled={result.writesEnabled} signInHref={anonymous ? signInHref : undefined} reply={async (threadId, body, idempotencyKey) => { await reviewRequest(`/api/share-review/threads/${threadId}/replies`, { token, body, idempotencyKey }); await load(); }}
+      {result && <ReviewThreadList draft={draft} filter={filter} onFilterChange={setFilter} railMarkdown={revisionChanged ? undefined : markdown} activeThreadId={activeThreadId} onActivate={setActiveThreadId} focusAnchor={revisionChanged ? undefined : anchor => { const root = document.querySelector<HTMLElement>("[data-review-document]"); if (root) focusReviewAnchor(root, markdown, anchor); }} threads={result.threads} writesEnabled={result.writesEnabled} signInHref={anonymous ? signInHref : undefined}
+        follow={anonymous ? undefined : async (threadId, next) => { await reviewRequest(`/api/share-review/threads/${threadId}/follow`, { token, following: next }); await load(); }} reply={async (threadId, body, idempotencyKey) => { await reviewRequest(`/api/share-review/threads/${threadId}/replies`, { token, body, idempotencyKey }); await load(); }}
         author={result.callerUserId === null ? undefined : {
           edit: async (threadId, commentId, body) => { await reviewRequest(`/api/share-review/threads/${threadId}/comments/${commentId}/body`, { token, body }); await load(); },
           remove: async (threadId, commentId) => { await reviewRequest(`/api/share-review/threads/${threadId}/comments/${commentId}/deletion`, { token }); await load(); },

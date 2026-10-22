@@ -9,6 +9,7 @@ import { Timestamp } from "@/components/ui/timestamp";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/components/ui/tabs";
 import { reviewRequest } from "./review-thread-list";
 import type { ShareCommentNotificationView } from "@/modules/knowledge/domain/share-comment-event";
+import { notificationHref, notificationLine, notificationTitle } from "./notification-href";
 
 type Cursor = { createdAt: string; id: string };
 type ActivityResponse = { notifications: ShareCommentNotificationView[]; nextCursor: Cursor | null };
@@ -40,7 +41,8 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
 
   useEffect(() => { void refresh(); }, [refresh]);
 
-  const attention = useMemo(() => items.filter(item => item.readAt === null || item.threadStatus === "OPEN"), [items]);
+  // A dead link's entry needs nothing from anyone: it is history, not attention.
+  const attention = useMemo(() => items.filter(item => item.readAt === null || (item.threadStatus === "OPEN" && item.linkAvailable !== false)), [items]);
   const shown = view === "inbox" ? attention : items;
   const unread = items.filter(item => item.readAt === null).length;
 
@@ -66,7 +68,7 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
         <Button variant="secondary" onClick={() => void mark()} disabled={busy || unread === 0}><CheckCheck size={16} />Mark all read</Button>
       </div>
     } />
-    <p className="text-body-sm text-kh-text-muted">Comments on your shared documents, across your personal knowledge. Opening a discussion marks that document read; resolving it is a separate action.</p>
+    <p className="text-body-sm text-kh-text-muted">Comments on your shared documents, and replies in discussions you follow on pages shared with you. Opening a discussion marks it read; resolving it is a separate action.</p>
     {error && <p role="alert" className="text-body-sm text-kh-danger">{error}</p>}
     <TabsRoot value={view} onValueChange={value => setView(value as View)}>
       <TabsList aria-label="Activity filters">
@@ -81,19 +83,22 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
             <p className="mt-1 text-body-sm">{tab === "inbox" ? "New and open discussions will appear here." : "When someone comments on your shared article, its activity appears here."}</p>
           </div>
         ) : <ul aria-label={tab === "inbox" ? "Inbox discussions" : "Activity history"} className="divide-y divide-kh-border">
-          {shown.map(item => <li key={item.id} className="flex items-start gap-3 py-3">
-            <span aria-hidden="true" className={`mt-2 h-2 w-2 shrink-0 rounded-full ${item.readAt === null ? "bg-kh-primary" : "bg-transparent"}`} />
-            <Link className="kh-focus-ring min-w-0 flex-1 rounded-md px-1 py-1 hover:bg-kh-bg-hover" href={`/w/${item.workspaceId}/knowledge/${item.sourceId}/${item.documentId}?thread=${item.threadId}`}>
-              <span className="block truncate text-body font-medium">{item.documentTitle}</span>
-              <span className="mt-1 block text-body-sm text-kh-text-muted">{item.authorName ?? "Someone"}: {item.excerpt}</span>
+          {shown.map(item => { const href = notificationHref(item); const content = <>
+              <span className="block truncate text-body font-medium">{notificationTitle(item)}</span>
+              <span className="mt-1 block text-body-sm text-kh-text-muted">{notificationLine(item)}</span>
               <span className="mt-1 flex flex-wrap items-center gap-2 text-caption text-kh-text-muted">
                 <Timestamp value={String(item.createdAt)} variant="relative" />
                 {item.readAt === null ? <span className="font-medium text-kh-text">Unread</span> : <span>Read</span>}
-                <span>{item.threadStatus === "OPEN" ? "Open discussion" : "Resolved"}</span>
+                <span>{item.kind === "FOLLOW" ? "Discussion you follow" : item.threadStatus === "OPEN" ? "Open discussion" : "Resolved"}</span>
               </span>
-            </Link>
+            </>;
+            return <li key={item.id} className="flex items-start gap-3 py-3">
+            <span aria-hidden="true" className={`mt-2 h-2 w-2 shrink-0 rounded-full ${item.readAt === null ? "bg-kh-primary" : "bg-transparent"}`} />
+            {href
+              ? <Link className="kh-focus-ring min-w-0 flex-1 rounded-md px-1 py-1 hover:bg-kh-bg-hover" href={href} prefetch={item.kind === "FOLLOW" ? false : undefined}>{content}</Link>
+              : <div className="min-w-0 flex-1 px-1 py-1">{content}</div>}
             {item.readAt === null && <Button variant="ghost" size="sm" disabled={busy} onClick={() => void mark(item.id)}>Mark read</Button>}
-          </li>)}
+          </li>; })}
         </ul>}
       </TabsPanel>)}
     </TabsRoot>

@@ -9,6 +9,7 @@ import { buttonClasses, Button } from "@/components/ui/button";
 import { Timestamp } from "@/components/ui/timestamp";
 import { reviewRequest } from "@/components/knowledge/review-thread-list";
 import type { ShareCommentNotificationView } from "@/modules/knowledge/domain/share-comment-event";
+import { notificationHref, notificationLine, notificationTitle } from "@/components/knowledge/notification-href";
 
 type ActivityResult = { notifications: ShareCommentNotificationView[]; nextCursor: { createdAt: string; id: string } | null };
 type Tab = "unread" | "all";
@@ -120,25 +121,22 @@ export function InboxPopover({ workspaceId, placement = "header" }: { workspaceI
                     <p className="text-body-sm">{tab === "unread" ? "You're all caught up." : "No share comments yet."}</p>
                   </div>
                 : <ul aria-label={tab === "unread" ? "Unread notifications" : "Recent notifications"} className="divide-y divide-kh-border">
-                    {visible.map(item => <li key={item.id}>
-                      <Link
-                        className="kh-focus-ring block px-4 py-2.5 hover:bg-kh-bg-hover lg:py-3"
-                        href={`/w/${item.workspaceId}/knowledge/${item.sourceId}/${item.documentId}?thread=${item.threadId}`}
-                        onClick={() => setOpen(false)}
-                      >
+                    {visible.map(item => { const href = notificationHref(item); const content = <>
                         <span className="flex min-w-0 items-start gap-2.5">
                           <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${item.readAt === null ? "bg-kh-primary" : "bg-transparent"}`} aria-hidden="true" />
                           <span className="block min-w-0 flex-1">
-                            <span data-inbox-notification-title className="block truncate text-body-sm font-medium text-kh-text">{item.documentTitle}</span>
-                            <span className="mt-0.5 block line-clamp-2 break-words text-body-sm text-kh-text-muted lg:mt-1">{item.authorName ?? "Someone"}: {item.excerpt}</span>
+                            <span data-inbox-notification-title className="block truncate text-body-sm font-medium text-kh-text">{notificationTitle(item)}</span>
+                            <span className="mt-0.5 block line-clamp-2 break-words text-body-sm text-kh-text-muted lg:mt-1">{notificationLine(item)}</span>
                             <span className="mt-1.5 flex min-w-0 items-center justify-between gap-2 text-caption text-kh-text-muted">
-                              <span className="min-w-0 truncate">{item.threadStatus === "OPEN" ? "Open discussion" : "Resolved"}</span>
+                              <span className="min-w-0 truncate">{item.kind === "FOLLOW" ? "Discussion you follow" : item.threadStatus === "OPEN" ? "Open discussion" : "Resolved"}</span>
                               <Timestamp value={String(item.createdAt)} variant="relative" className="shrink-0 whitespace-nowrap tabular-nums text-kh-text-faint" />
                             </span>
                           </span>
                         </span>
-                      </Link>
-                    </li>)}
+                    </>;
+                    return <li key={item.id}>{href
+                      ? <Link className="kh-focus-ring block px-4 py-2.5 hover:bg-kh-bg-hover lg:py-3" href={href} prefetch={item.kind === "FOLLOW" ? false : undefined} onClick={() => setOpen(false)}>{content}</Link>
+                      : <div className="block px-4 py-2.5 lg:py-3">{content}</div>}</li>; })}
                   </ul>}
             </div>
             <div className="border-t border-kh-border px-3 py-2">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { MessageSquarePlus, RefreshCw, X } from "lucide-react";
+import { CheckCheck, MessageSquarePlus, RefreshCw, X } from "lucide-react";
 import type { OwnerReviewThreadView } from "@/modules/knowledge/domain/document-review";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -77,11 +77,11 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
   }, [selection.chosen, prepared, domVersion]);
   const canComment = !!result?.writesEnabled && !readOnly && !revisionChanged && !contentPending;
   const base = `/api/documents/${documentId}/review-threads`;
-  const { unreadCount, markRead } = useShareCommentUnread(documentId);
+  const { unreadCount, unreadThreadIds, markRead } = useShareCommentUnread(documentId);
   const load = useCallback(async () => { try { setResult(await reviewRequest(base)); setError(undefined); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not load discussions."); } }, [base]);
   useEffect(() => { if (contentPending && !prepareComment) selection.clear(); }, [contentPending, prepareComment, selection.clear]);
-  // Opening the panel marks this document's notices read; a closed panel clears nothing.
-  useEffect(() => { if (open && result && !revisionChanged) void markRead(); }, [open, result, revisionChanged, markRead]);
+  // Looking at a discussion marks its notices read; opening the panel marks nothing (spec 2026-10-22).
+  useEffect(() => { if (open && activeThreadId && unreadThreadIds.has(activeThreadId)) void markRead(activeThreadId); }, [open, activeThreadId, unreadThreadIds, markRead]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { setActiveThreadId(undefined); }, [documentId, revisionId]);
   useEffect(() => { if (revisionChanged && !contentPending) void load(); }, [revisionChanged, contentPending, load]);
@@ -216,7 +216,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
                 A cross, not a panel glyph: Details, just above, is the panel glyph. */}
             <div className="flex items-center justify-between gap-2">
               <div className="flex min-w-0 items-center gap-1"><h2 className="kh-review-rail-only text-body font-medium">Comments</h2>{count > 0 && <ReviewFilterMenu value={filter} onChange={setFilter} />}</div>
-              <div className="flex shrink-0 items-center gap-1">{refresh}<span className="kh-review-rail-only"><Tooltip label="Hide comments"><Button type="button" variant="ghost" icon aria-label="Collapse discussions" onClick={() => changeOpen(false)}><X className="size-4" aria-hidden="true" /></Button></Tooltip></span></div>
+              <div className="flex shrink-0 items-center gap-1">{unreadCount > 0 && <Tooltip label="Mark all read"><Button type="button" variant="ghost" icon aria-label="Mark all read" onClick={() => void markRead()}><CheckCheck className="size-4" aria-hidden="true" /></Button></Tooltip>}{refresh}<span className="kh-review-rail-only"><Tooltip label="Hide comments"><Button type="button" variant="ghost" icon aria-label="Collapse discussions" onClick={() => changeOpen(false)}><X className="size-4" aria-hidden="true" /></Button></Tooltip></span></div>
             </div>
             {error && <p role="alert" className="mt-3 text-body-sm">{error}</p>}
             {selection.refusal && <p role="status" className="mt-3 text-body-sm">{selection.refusal}</p>}
@@ -224,10 +224,10 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
             {canComment && !selection.chosen && <div className="mt-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={() => { if (prepareComment) requestComment(() => selection.capture()); else selection.capture(); }} aria-label="Add comment from selected text"><MessageSquarePlus className="size-4" aria-hidden="true" />Add comment</Button>{!selection.ready && <p className="mt-1 text-caption text-kh-text-muted">{COMMENT_HINT}</p>}</div>}
           </div>
           {composer && !draft && <div className="mt-3">{composer}</div>}
-          {result && <div className="mt-3"><ReviewThreadList draft={draft} filter={filter} onFilterChange={setFilter} railMarkdown={prepared?.markdown ?? (revisionChanged || contentPending ? undefined : markdown)} activeThreadId={activeThreadId} onActivate={setActiveThreadId}
+          {result && <div className="mt-3"><ReviewThreadList draft={draft} filter={filter} onFilterChange={setFilter} railMarkdown={prepared?.markdown ?? (revisionChanged || contentPending ? undefined : markdown)} activeThreadId={activeThreadId} onActivate={setActiveThreadId} unreadThreadIds={unreadThreadIds}
             focusAnchor={revisionChanged || contentPending ? undefined : anchor => { const root = document.querySelector<HTMLElement>("[data-review-document]"); if (root) focusReviewAnchor(root, markdown, anchor); }}
             threads={result.threads} writesEnabled={result.writesEnabled && !readOnly} canResolve={!readOnly}
-            reply={async (threadId, body, idempotencyKey) => { await reviewRequest(`${base}/${threadId}/replies`, { body, idempotencyKey }); await load(); }}
+            reply={async (threadId, body, idempotencyKey) => { await reviewRequest(`${base}/${threadId}/replies`, { body, idempotencyKey }); if (unreadThreadIds.has(threadId)) void markRead(threadId); await load(); }}
             author={{
               edit: async (threadId, commentId, body) => { await reviewRequest(`${base}/${threadId}/comments/${commentId}/body`, { body }); await load(); },
               remove: async (threadId, commentId) => { await reviewRequest(`${base}/${threadId}/comments/${commentId}/deletion`, {}); await load(); },

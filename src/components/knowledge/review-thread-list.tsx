@@ -5,7 +5,7 @@ import type { OwnerReviewThreadView, ReviewAnchor, ReviewThreadView } from "@/mo
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Timestamp } from "@/components/ui/timestamp";
 import { Textarea } from "@/components/ui/textarea";
-import { Check, ChevronDown, MoreHorizontal } from "lucide-react";
+import { Bell, BellOff, Check, ChevronDown, MoreHorizontal } from "lucide-react";
 import { MenuRoot, MenuTrigger, MenuContent, MenuItem, MenuRadioGroup, MenuRadioItem } from "@/components/ui/menu";
 import { buttonClasses } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
@@ -83,7 +83,7 @@ export function ReviewFilterMenu({ value, onChange }: { value: ReviewFilter; onC
   return <MenuRoot><MenuTrigger className={buttonClasses({ variant: "ghost" })} aria-label="Filter discussions">{FILTER_NAMES[value]}<ChevronDown className="size-4" aria-hidden="true" /></MenuTrigger><MenuContent><MenuRadioGroup value={value} onValueChange={next => onChange(next as ReviewFilter)}>{(Object.keys(FILTER_NAMES) as ReviewFilter[]).map(option => <MenuRadioItem key={option} value={option}>{FILTER_NAMES[option]}</MenuRadioItem>)}</MenuRadioGroup></MenuContent></MenuRoot>;
 }
 
-export function ReviewThreadList({ threads, writesEnabled, reply, moderate, author, canResolve = true, focusAnchor, railMarkdown, activeThreadId, onActivate, filter: controlled, onFilterChange, draft, signInHref }: {
+export function ReviewThreadList({ threads, writesEnabled, reply, moderate, author, canResolve = true, focusAnchor, railMarkdown, activeThreadId, onActivate, filter: controlled, onFilterChange, draft, signInHref, unreadThreadIds, follow }: {
   threads: (ReviewThreadView | OwnerReviewThreadView)[];
   writesEnabled: boolean;
   reply: (threadId: string, body: string, key: string) => Promise<void>;
@@ -102,6 +102,10 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
   draft?: { anchor: ReviewAnchor; composer: ReactNode };
   /** The reader is not signed in: an open discussion offers sign-in where a signed-in one offers Reply. */
   signInHref?: string;
+  /** Discussions with notices the owner has not read. */
+  unreadThreadIds?: ReadonlySet<string>;
+  /** A signed-in reader's following; offered on a discussion that says whether it is followed. */
+  follow?: (threadId: string, following: boolean) => Promise<void>;
 }) {
   // Which previews cut their remark short: only those have more to show when opened.
   const [clamped, setClamped] = useState<Record<string, boolean>>({});
@@ -172,6 +176,7 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
         // out from under mouseup and swallow its click. Keyboard focus can activate now.
         if (event.target.matches(":focus-visible") && (event.target === event.currentTarget || event.target.closest("blockquote"))) onActivate?.(thread.id);
       }} onClick={() => onActivate?.(thread.id)} style={layout ? { "--review-thread-top": `${layout.positions[thread.id] ?? 0}px` } as CSSProperties : undefined} className={`rounded-md border kh-focus-ring focus:border-kh-primary p-3 ${active ? "border-kh-primary bg-kh-bg-selected" : "border-kh-border bg-kh-bg"}`}>
+        {unreadThreadIds?.has(thread.id) && <p className="mb-2 flex items-center gap-1.5 text-caption font-medium text-kh-text"><span aria-hidden="true" className="size-1.5 rounded-full bg-kh-primary" />Unread</p>}
         {(thread.status === "RESOLVED" || owner?.visibility === "HIDDEN" || thread.currentAnchor.match === "OUTDATED") && <p className="mb-2 text-caption text-kh-text-muted">{[thread.status === "RESOLVED" ? "Resolved" : "", owner?.visibility === "HIDDEN" ? "Hidden from reviewers" : "", thread.currentAnchor.match === "OUTDATED" ? "Passage outdated" : ""].filter(Boolean).join(" · ")}</p>}
         {thread.currentAnchor.anchor && <blockquote className="mb-3 border-l border-kh-border pl-3 text-body-sm text-kh-text-muted"><button type="button" disabled={!focusAnchor} className={`line-clamp-2 text-left kh-focus-ring hover:text-kh-text ${thread.currentAnchor.anchor.blockKind === "code" ? "whitespace-pre-wrap break-words font-mono" : ""}`} onClick={() => {
           const locate = () => focusAnchor?.(thread.currentAnchor.anchor!);
@@ -209,6 +214,10 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
           // Opened, a lone remark shows only what was cut: with nothing cut, there is nothing to open.
           : (thread.comments.length > 1 || clamped[thread.id]) && <Button type="button" variant="ghost" className="mt-2" onClick={event => { event.currentTarget.closest<HTMLElement>("[data-review-thread]")?.focus({ preventScroll: true }); onActivate?.(thread.id); }}>{thread.comments.length > 1 ? `Show ${thread.comments.length - 1} ${thread.comments.length === 2 ? "reply" : "replies"}` : "Expand comment"}</Button>)}
         {compact && canReply && readStored("session", reviewDraftKey("reply", thread.id)) && <p className="mt-2 text-caption text-kh-text-muted">Unsent reply</p>}
+        {follow && thread.following !== undefined && !compact && <div className="mt-2 flex justify-end"><Button type="button" variant="ghost" size="sm" disabled={busy} onClick={async event => {
+          event.stopPropagation(); setBusy(true); setError(undefined);
+          try { await follow(thread.id, !thread.following); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not update following."); } finally { setBusy(false); }
+        }}>{thread.following ? <BellOff className="size-4" aria-hidden="true" /> : <Bell className="size-4" aria-hidden="true" />}{thread.following ? "Unfollow" : "Follow replies"}</Button></div>}
         {canReply && <div hidden={compact}><ReviewReplyForm draftKey={reviewDraftKey("reply", thread.id)} openRequest={replyRequest?.threadId === thread.id ? replyRequest.nonce : 0} onSubmit={(body, key) => reply(thread.id, body, key)} /></div>}
       </section>;
       });
