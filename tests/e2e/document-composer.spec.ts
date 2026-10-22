@@ -81,7 +81,7 @@ test("the toolbar works from the keyboard: select, Tab into it, press Bold", asy
   // Keys at a hand's pace. A script presses them 4ms apart, under the 20-50ms in which ProseMirror
   // puts its own selection back after a key (prosemirror-view's focus and arrow-key timers) when
   // it has not yet read the browser's: the next key then moves from the old place, and CI once
-  // bolded "wor" or "w". 40ms apart is still faster than key repeat (about 33ms is the floor).
+  // bolded "wor" or "w". 40ms apart is about the pace of a held key repeating (~33ms).
   const press = async (key: string) => { await page.keyboard.press(key); await page.waitForTimeout(40); };
   await press("ControlOrMeta+a");
   await press("ArrowLeft");
