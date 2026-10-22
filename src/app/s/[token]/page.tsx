@@ -10,6 +10,8 @@ import { markdownOpensWithHeading } from "@/lib/markdown-title";
 import { Timestamp } from "@/components/ui/timestamp";
 import { getSharedDocument } from "@/server/share-read";
 import { publicOrigin } from "@/server/config";
+import { expiresSoon } from "@/lib/share-expiry";
+import { ExternalLink } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -44,28 +46,27 @@ export default async function SharedDocumentPage({ params }: SharedPageProps) {
   const signInHref = `${origin ?? ""}/?${new URLSearchParams({ returnTo: `/s/${token}` })}`;
   // Title, then who shared it, then the article — whether the title is this page's or the document's own `#` heading.
   const contentOwnsTitle = markdownOpensWithHeading(shared.markdown);
+  const soon = expiresSoon(shared.expiresAt, new Date());
   // The dots between these are the stylesheet's (`.kh-byline`), so a line never ends on one. A div: the prose spaces every `p`.
   const byline = (
     <div className="kh-byline mt-1.5 text-caption text-kh-text-muted">
       <span>
         <span>{`Shared by ${shared.sharedByName}`}</span>
         <span>Updated <Timestamp value={shared.updatedAt} /></span>
-        <span>Link expires <Timestamp value={shared.expiresAt} variant="date" /></span>
+        {/* Quiet until it matters: close to the end it is said in the warning colour, with how soon. */}
+        <span className={soon ? "font-medium text-kh-warning" : undefined}>Link expires <Timestamp value={shared.expiresAt} variant="date" />{soon ? ` (${soon})` : ""}</span>
       </span>
     </div>
   );
   return (
     <main className="kh-share-page min-h-screen bg-kh-bg">
-      <div className="border-b border-kh-border">
-        <div className="kh-share-heading kh-reading-column flex min-h-14 items-center justify-between gap-3 py-2">
-          <span className="shrink-0 text-body font-semibold text-kh-text">Knowledge Hub</span>
-          <div className="flex min-w-0 flex-wrap items-start justify-end gap-2"><SaveShareButton token={token} /><a href={platformEntry} className={buttonClasses({ variant: "ghost" })}>Open in Knowledge Hub</a></div>
-        </div>
-      </div>
-      {/* Outline: a rail off the column's left edge when there is room, else above the comments bar (share-page-outline spec §2). */}
+      {/* One pinned bar, then the title: the brand, Comments, Save and Open share a row. On a phone Save and Open keep their names for assistive technology and show only their icons. */}
+      <SharedReviewPanel token={token} revisionId={shared.revisionId} markdown={shared.markdown} signInHref={signInHref}
+        brand={<span className="shrink-0 text-body font-semibold text-kh-text">Knowledge Hub</span>}
+        actions={<><SaveShareButton token={token} /><a href={platformEntry} className={buttonClasses({ variant: "ghost" })}><ExternalLink className="size-4 sm:hidden" aria-hidden="true" /><span className="max-sm:sr-only">Open in Knowledge Hub</span></a></>}>
+      {/* Outline: a rail off the column's left edge when there is room, else a disclosure above the title (share-page-outline spec §2). */}
       <div className="kh-share-outline"><SharedOutline entries={outline} placement="disclosure" /></div>
-      <SharedReviewPanel token={token} revisionId={shared.revisionId} markdown={shared.markdown} signInHref={signInHref}>
-      {outline.length > 0 ? <div className="kh-share-outline-rail kh-reading-column sticky top-16 z-10 h-0"><div className="absolute right-full top-0 w-52"><SharedOutline entries={outline} placement="rail" /></div></div> : null}
+      {outline.length > 0 ? <div className="kh-share-outline-rail kh-reading-column sticky top-[4.5rem] z-10 h-0"><div className="absolute right-full top-0 w-52"><SharedOutline entries={outline} placement="rail" /></div></div> : null}
       {contentOwnsTitle ? null : <header className="kh-reading-column pt-6"><h1 className="text-heading font-semibold tracking-tight text-kh-text">{shared.title}</h1>{byline}</header>}
       <article data-review-document className={`kh-reading-column min-w-0 pb-6 ${contentOwnsTitle ? "pt-6" : "pt-3"} [&>div>:first-child]:mt-0`}>
         <MarkdownRenderer markdown={shared.markdown} afterTitle={contentOwnsTitle ? byline : undefined} />
