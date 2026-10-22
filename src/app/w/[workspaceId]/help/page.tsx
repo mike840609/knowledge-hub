@@ -18,11 +18,11 @@ export default async function UserGuidePage({params,searchParams}:{params:Promis
   const services=applicationServices(),{caller}=await services.establishTrustedCaller();
   const state=await services.workspaceAdmin.workspaceState(caller,workspaceId);
   const personal=state.workspace.type==="PERSONAL";
-  const locale=lang==="zh-TW"?"zh-TW":"en",zh=locale==="zh-TW",content=userGuideContent(locale),base=`/w/${workspaceId}`;
+  const locale=lang==="en"?"en":"zh-TW",zh=locale==="zh-TW",content=userGuideContent(locale),base=`/w/${workspaceId}`;
   const link="kh-focus-ring rounded-md text-kh-link underline-offset-4 hover:underline";
   return <main className="pb-6" lang={locale}>
     <div className="kh-page">
-    <PageHeader location={personal ? "Home" : "Sources"} locationHref={`${base}/${personal ? "home" : "sources"}`} title={content.title} actions={<nav aria-label="Guide language" className="flex gap-3">{[{lang:"en",label:"English"},{lang:"zh-TW",label:"繁體中文"}].map(l=><Link key={l.lang} lang={l.lang} className={link} href={`${base}/help?lang=${l.lang}`} aria-current={locale===l.lang?"page":undefined}>{l.label}</Link>)}</nav>} />
+    <PageHeader location={personal ? "Home" : "Sources"} locationHref={`${base}/${personal ? "home" : "sources"}`} title={content.title} actions={<nav aria-label={zh?"手冊語言":"Guide language"} className="flex gap-3">{[{lang:"en",label:"English"},{lang:"zh-TW",label:"繁體中文"}].map(l=><Link key={l.lang} lang={l.lang} className={link} href={`${base}/help?lang=${l.lang}`} aria-current={locale===l.lang?"page":undefined}>{l.label}</Link>)}</nav>} />
     <p className="mt-2 text-body text-kh-text-muted">{content.intro}</p>
     {!personal?<p className="mt-3 text-body text-kh-text-muted">{zh?"你目前位於 Team workspace。同步與疑難排解步驟依你的權限使用；Home、Insights 與個人整理章節適用 My Space。":"You are in a Team workspace. Sync and troubleshooting steps depend on your permissions; Home, Insights and personal organization sections apply to My Space."}</p>:null}
     <div className="mt-4 flex flex-wrap gap-4 text-body"><Link className={link} href={`${base}/sources/import`}>{zh?"開始匯入":"Import folder"}</Link><Link className={link} href={`${base}/sources/import/guide?lang=${locale}`}>{zh?"Markdown 格式、knowledge_id 與匯入限制":"Markdown format, knowledge_id and import limits"}</Link></div>

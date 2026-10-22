@@ -10,8 +10,12 @@ test("Home help covers first import, repeat sync and recovery in both languages"
   await expect(page.getByRole("link",{name:"Quick start guide",exact:true})).toHaveCount(0);
   await page.getByRole("button",{name:/^Account:/}).click();
   await page.getByRole("menuitem",{name:"Help & guides",exact:true}).click();
-  await expect(page.getByRole("heading",{name:"User guide",exact:true})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"使用者操作手冊",exact:true})).toBeVisible();
   await expect(page).toHaveURL(/\/help$/);
+  await expect(page.locator("main[lang]")).toHaveAttribute("lang","zh-TW");
+  await page.getByRole("navigation",{name:"手冊語言",exact:true}).getByRole("link",{name:"English",exact:true}).click();
+  await expect(page.getByRole("heading",{name:"User guide",exact:true})).toBeVisible();
+  await expect(page.locator("main[lang]")).toHaveAttribute("lang","en");
   await expect(page.getByRole("figure")).toHaveCount(6);
   await expect(page.getByRole("figure",{name:"Diagram · From folder to readable articles"})).toContainText("Choose folder");
   await expect(page.getByRole("heading",{name:"Daily sync: check, preview, apply",exact:true})).toBeAttached();

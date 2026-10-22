@@ -27,7 +27,7 @@ test("account stays at the sidebar bottom in expanded, collapsed and mobile navi
   await account().click();await expect(page.getByRole("menuitem",{name:"Help & guides",exact:true})).toBeVisible();
   if(output)await page.screenshot({path:`${output}/mobile-menu.png`,animations:"disabled"});
   await page.getByRole("menuitem",{name:"Help & guides",exact:true}).click();
-  await expect(page.getByRole("heading",{name:"User guide",exact:true})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"使用者操作手冊",exact:true})).toBeVisible();
   await expect(page.getByRole("dialog",{name:"Menu",exact:true})).toHaveCount(0);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
