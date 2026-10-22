@@ -15,7 +15,7 @@ test("two people open the same guide address and read the same guide, each led i
     await expect(page.getByRole("link", { name: "開始匯入", exact: true })).toHaveAttribute("href", `/w/${ws}/sources/import`);
     await expect(page.getByRole("link", { name: "Markdown 格式、knowledge_id 與匯入限制", exact: true })).toHaveAttribute("href", "/help/import-guide?lang=zh-TW");
     await page.goto(`${origin}/help/import-guide`);
-    await expect(page.getByRole("heading", { level: 1, name: "Bring your wiki into Knowledge Hub" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "把你的維基帶進 Knowledge Hub" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Try the sample wiki" })).toHaveAttribute("href", `/w/${ws}/sources/import#sample-wiki`);
   }
 });

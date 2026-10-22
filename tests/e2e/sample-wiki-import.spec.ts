@@ -94,11 +94,11 @@ test.describe("import guide", () => {
     await page.goto(`/w/${ws}/sources/import`);
     await page.getByRole("link", { name: "Folder format guide" }).click();
     await expect(page).toHaveURL(/\/help\/import-guide$/);
-    await expect(page.getByRole("heading", { level: 1, name: "Bring your wiki into Knowledge Hub" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "把你的維基帶進 Knowledge Hub" })).toBeVisible();
   });
 
   test("English: seven sections in order, with the configured limits", async ({ page }) => {
-    await page.goto("/help/import-guide");
+    await page.goto("/help/import-guide?lang=en");
     await expect(page.locator("[lang='en']").first()).toBeVisible();
     await expect(page.getByRole("heading", { level: 2 })).toHaveText(SECTION_HEADINGS.en);
 
@@ -115,13 +115,16 @@ test.describe("import guide", () => {
     await expect(nav.getByRole("link", { name: "繁體中文" })).not.toHaveAttribute("aria-current", /.+/);
   });
 
-  test("unknown ?lang falls back to English", async ({ page }) => {
+  test("without ?lang, and with an unknown one, the guide reads in Traditional Chinese", async ({ page }) => {
+    await page.goto("/help/import-guide");
+    await expect(page.getByRole("heading", { level: 2 })).toHaveText(SECTION_HEADINGS.zhTW);
+    await expect(page.getByRole("navigation", { name: "Guide language" }).getByRole("link", { name: "繁體中文" })).toHaveAttribute("aria-current", "page");
     await page.goto("/help/import-guide?lang=fr");
-    await expect(page.getByRole("heading", { level: 2 }).first()).toHaveText(SECTION_HEADINGS.en[0]);
+    await expect(page.getByRole("heading", { level: 2 }).first()).toHaveText(SECTION_HEADINGS.zhTW[0]);
   });
 
   test("?lang=zh-TW renders Chinese and the switch marks it current", async ({ page }) => {
-    await page.goto("/help/import-guide");
+    await page.goto("/help/import-guide?lang=en");
     await page.getByRole("navigation", { name: "Guide language" }).getByRole("link", { name: "繁體中文" }).click();
     await expect(page).toHaveURL(/[?]lang=zh-TW$/);
     await expect(page.getByRole("heading", { level: 2 })).toHaveText(SECTION_HEADINGS.zhTW);

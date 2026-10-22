@@ -3,8 +3,9 @@ import { guideContent, type GuideLocale } from "@/components/imports/import-guid
 import { importRuntimeConfig } from "@/server/import-config";
 import { helpWorkspaceId } from "@/server/help-read";
 
+/** Traditional Chinese unless English is asked for, as the user guide beside it. */
 function localeOf(lang: string | string[] | undefined): GuideLocale {
-  return lang === "zh-TW" ? "zh-TW" : "en";
+  return lang === "en" ? "en" : "zh-TW";
 }
 
 /** The folder format guide, one address for everyone; its way back leads to the reader's own import form. */
