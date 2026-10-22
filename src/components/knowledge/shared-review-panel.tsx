@@ -16,7 +16,8 @@ import { awaitingReader, newComments, parseDismissed, sharedDismissedKey } from 
 import { readStored, removeStored, writeStored } from "@/components/shell/use-persisted-state";
 
 type DiscussionResult = { threads: ReviewThreadView[]; revisionId: string; writesEnabled: boolean; callerUserId: string | null };
-export function SharedReviewPanel({ token, revisionId, markdown, signInHref, children }: { token: string; revisionId: string; markdown: string; signInHref: string; children: ReactNode }) {
+/** `brand` and `actions` (the page's own: Save, Open) share the one pinned bar with Comments, so nothing stands between it and the title. */
+export function SharedReviewPanel({ token, revisionId, markdown, signInHref, brand, actions, children }: { token: string; revisionId: string; markdown: string; signInHref: string; brand?: ReactNode; actions?: ReactNode; children: ReactNode }) {
   const [result, setResult] = useState<DiscussionResult>();
   const [error, setError] = useState<string>();
   const [activeThreadId, setActiveThreadId] = useState<string>();
@@ -125,13 +126,19 @@ export function SharedReviewPanel({ token, revisionId, markdown, signInHref, chi
   // Beside its passage where the discussions are a rail; at the top of the drawer, which covers the passage, where they are not.
   const draft = composer && inline && !revisionChanged ? { anchor: selection.chosen!, composer } : undefined;
   return <>
-    <div className="kh-review-entry kh-reading-column sticky top-0 z-20 flex items-center justify-end gap-2 bg-kh-bg py-2">
-      <span aria-live="polite">{arrived && <Button type="button" variant="soft" onClick={showArrived}>{arrived.count === 1 ? "1 new comment" : `${arrived.count} new comments`}</Button>}</span>
-      <Button ref={entryRef} type="button" variant="ghost" aria-label={`${open ? "Hide discussions" : "Open discussions"}${result ? `, ${result.threads.length} comments` : ""}${allResolved ? ", all resolved" : ""}`} aria-expanded={open} aria-controls="shared-document-discussions" onPointerDown={event => event.preventDefault()} onClick={toggle}>
-        <MessageSquare className="size-4" aria-hidden="true" />Comments{allResolved ? ` · ${result.threads.length} resolved` : result && result.threads.length > 0 ? ` (${result.threads.length})` : ""}
-      </Button>
+    <div className="sticky top-0 z-20 border-b border-kh-border bg-kh-bg">
+      <div className="kh-review-entry kh-reading-column relative flex min-h-14 items-center justify-between gap-3 py-2">
+        {brand}
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-1">
+          <span aria-live="polite">{arrived && <Button type="button" variant="soft" onClick={showArrived}>{arrived.count === 1 ? "1 new comment" : `${arrived.count} new comments`}</Button>}</span>
+          <Button ref={entryRef} type="button" variant="ghost" aria-label={`${open ? "Hide discussions" : "Open discussions"}${result ? `, ${result.threads.length} comments` : ""}${allResolved ? ", all resolved" : ""}`} aria-expanded={open} aria-controls="shared-document-discussions" onPointerDown={event => event.preventDefault()} onClick={toggle}>
+            <MessageSquare className="size-4" aria-hidden="true" />Comments{allResolved ? ` · ${result.threads.length} resolved` : result && result.threads.length > 0 ? ` (${result.threads.length})` : ""}
+          </Button>
+          {actions}
+        </div>
+      </div>
     </div>
-    {!open && (error || revisionChanged) && <div className="kh-reading-column pb-3">
+    {!open && (error || revisionChanged) && <div className="kh-reading-column py-3">
       {error && <p role="status" className="text-body-sm">{error} <Button type="button" variant="ghost" aria-label="Refresh comments" onClick={() => void load()}><RefreshCw className="size-4" aria-hidden="true" />Retry</Button></p>}
       {revisionChanged && <p role="status" className="text-body-sm">Document changed. Refresh this page before selecting or locating a passage. You can still reply to existing discussions.</p>}
     </div>}

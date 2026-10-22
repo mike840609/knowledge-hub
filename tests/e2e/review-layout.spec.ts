@@ -414,9 +414,17 @@ test("saved-share actions coexist with comments on mobile without overflow", asy
   await expect(page.getByRole("button", { name: "Saved", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "View saved shares" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  // One pinned row holds the brand, Comments, Save and Open (spec 2026-10-09, amendment 2026-10-22);
+  // the notice floats under it, so the row keeps its height.
+  const bar = page.locator(".kh-review-entry");
+  expect((await bar.boundingBox())!.height).toBeLessThanOrEqual(57);
   const saved = (await page.getByRole("button", { name: "Saved", exact: true }).boundingBox())!;
   const entry = (await page.getByRole("button", { name: "Open discussions" }).boundingBox())!;
-  expect(saved.y + saved.height).toBeLessThanOrEqual(entry.y);
+  const open = (await bar.getByRole("link", { name: "Open in Knowledge Hub" }).boundingBox())!;
+  for (const box of [saved, open]) expect(Math.abs(box.y - entry.y)).toBeLessThanOrEqual(2);
+  expect(open.x + open.width).toBeLessThanOrEqual(390);
+  await page.getByRole("button", { name: "Dismiss" }).click();
+  await expect(page.getByRole("link", { name: "View saved shares" })).toHaveCount(0);
   await openReviewDiscussions(page);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.getByRole("button", { name: "Close discussions" }).click();

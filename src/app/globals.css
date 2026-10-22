@@ -665,19 +665,17 @@ input[type="search"]::-webkit-search-cancel-button:hover {
    the rail was opened or closed. Where the window has room for the rail beside the centred article
    (1500px and up) nothing moves; below that the column moves left only as far as the rail needs,
    and slides there rather than jumping.
-   Only the document and the footer that closes it widen. The bar and the Comments row keep the
-   article's width, so their buttons stay where they were clicked rather than leaping 320px right;
-   the rail names itself and closes itself. */
-.kh-share-page .kh-share-heading,
+   Only the document and the footer that closes it widen. The pinned bar keeps the article's width,
+   so its buttons stay where they were clicked rather than leaping 320px right; the rail names
+   itself and closes itself. */
 .kh-share-page .kh-review-entry,
 .kh-share-page .kh-review-document,
-.kh-share-page .kh-share-outline > .kh-outline-inline,
 .kh-share-page > footer {
   /* Centred, as `mx-auto` would, but as a length: a margin cannot slide from `auto`. */
   margin-inline: max(0px, calc((100% - theme("maxWidth.reading")) / 2)) auto;
   transition: margin-inline-start 120ms ease-out;
 }
-.kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) :is(.kh-share-heading, .kh-review-entry, .kh-review-document, .kh-share-outline > .kh-outline-inline),
+.kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) :is(.kh-review-entry, .kh-review-document),
 .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) > footer {
   margin-inline-start: max(0px, min(calc((100% - theme("maxWidth.reading")) / 2), calc(100% - theme("maxWidth.reading") - 320px)));
 }
@@ -688,7 +686,7 @@ input[type="search"]::-webkit-search-cancel-button:hover {
    outline (860 + 320 + 224 = 1404px, 88rem); below that the column slides left over the outline's
    room, so the outline folds into the disclosure (share-page-outline spec §2). */
 .kh-share-page .kh-share-outline-rail { display: none; }
-/* The disclosure is the first thing under the bar now that the title sits below the Comments row. */
+/* The disclosure is the first thing under the pinned bar, above the title, inside the reading column. */
 .kh-share-page .kh-share-outline > .kh-outline-inline { margin-top: theme("spacing.3"); }
 @media (min-width: 82rem) {
   .kh-share-page .kh-share-outline-rail { display: block; }
@@ -698,9 +696,9 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) .kh-share-outline-rail { display: none; }
   .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) .kh-share-outline > .kh-outline-inline { display: block; }
 }
-/* A heading jumped to lands below the pinned Comments bar (48px), with the prose's own 16px above it, not under the bar.
-   64px is also inside the outline's 96px reading line, so the entry clicked is the one highlighted (spec §3). */
-.kh-share-page article[data-review-document] :is(h1, h2, h3, h4, h5, h6) { scroll-margin-top: theme("spacing.16"); }
+/* A heading jumped to lands below the pinned bar (57px), with 15px above it, not under the bar.
+   72px is also inside the outline's 96px reading line, so the entry clicked is the one highlighted (spec §3). */
+.kh-share-page article[data-review-document] :is(h1, h2, h3, h4, h5, h6) { scroll-margin-top: 4.5rem; }
 /* The workspace's columns keep their left edge too, and the title and the article keep one. Re-centred,
    the pinned path line's Edit / Share / Comments / Details leapt 224-272px right under the pointer and,
    where the pane is wide, the whole column slid 48px left. Each column is centred as `mx-auto` would

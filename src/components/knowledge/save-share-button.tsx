@@ -1,5 +1,5 @@
 "use client";
-import { Bookmark, BookmarkCheck } from "lucide-react";
+import { Bookmark, BookmarkCheck, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -46,11 +46,12 @@ export function SaveShareButton({ token }: { token: string }) {
     finally{if(version===generation.current){busy.current=false;setPending(false);}}
   }
   const saved=!!result?.saved;
+  // The notice floats under the bar it sits in (the nearest positioned box), so the pinned bar never grows.
   return <div className="flex min-w-0 flex-col items-start gap-1">
     <div className="flex flex-wrap items-center gap-2">
-      <Button variant="secondary" disabled={pending||loadState==="loading"||loadState==="error"} aria-pressed={saved} aria-busy={pending||loadState==="loading"} onClick={()=>void toggle()}>{saved?<BookmarkCheck size={15} aria-hidden="true"/>:<Bookmark size={15} aria-hidden="true"/>}{saved?"Saved":"Save share"}</Button>
+      <Button variant="secondary" disabled={pending||loadState==="loading"||loadState==="error"} aria-pressed={saved} aria-busy={pending||loadState==="loading"} onClick={()=>void toggle()}>{saved?<BookmarkCheck size={15} aria-hidden="true"/>:<Bookmark size={15} aria-hidden="true"/>}<span className="max-sm:sr-only">{saved?"Saved":"Save share"}</span></Button>
       {(loadState==="error"||loadState==="auth-unavailable")&&<Button variant="ghost" size="sm" disabled={pending} onClick={()=>setRetry(n=>n+1)}>Retry</Button>}
     </div>
-    {notice&&<p role="status" className="max-w-panel text-caption text-kh-text-muted">{notice} {loadState==="signed-out"||loadState==="auth-unavailable"?<Link prefetch={false} className="kh-focus-ring rounded-md text-kh-link" href={`/s/${token}/open`}>Open in Knowledge Hub</Link>:saved&&notice==="Saved to Shares."?<Link prefetch={false} className="kh-focus-ring rounded-md text-kh-link" href={`/w/${result!.workspaceId}/shares?tab=saved`}>View saved shares</Link>:null}</p>}
+    {notice&&<div role="status" className="absolute right-6 top-full z-30 mt-1 flex w-max max-w-[min(theme(maxWidth.panel),calc(100vw-3rem))] items-start gap-2 rounded-md border border-kh-border bg-kh-bg-raised p-3 text-caption text-kh-text-muted shadow-popover"><p>{notice} {loadState==="signed-out"||loadState==="auth-unavailable"?<Link prefetch={false} className="kh-focus-ring rounded-md text-kh-link" href={`/s/${token}/open`}>Open in Knowledge Hub</Link>:saved&&notice==="Saved to Shares."?<Link prefetch={false} className="kh-focus-ring rounded-md text-kh-link" href={`/w/${result!.workspaceId}/shares?tab=saved`}>View saved shares</Link>:null}</p><Button variant="ghost" size="sm" icon aria-label="Dismiss" onClick={()=>setNotice("")}><X className="size-4" aria-hidden="true"/></Button></div>}
   </div>;
 }

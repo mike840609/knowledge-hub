@@ -3,17 +3,17 @@ import { afterEach, expect, it, vi } from "vitest";
 
 vi.mock("@/server/share-read", () => ({ getSharedDocument: async () => ({ title: "Shared", markdown: "# Shared", sharedByName: "Owner", updatedAt: "2026-10-13", expiresAt: "2026-10-20", revisionId: "revision" }) }));
 vi.mock("@/components/knowledge/save-share-button", () => ({ SaveShareButton: () => null }));
-vi.mock("@/components/knowledge/shared-review-panel", () => ({ SharedReviewPanel: ({ children, signInHref }: { children: React.ReactNode; signInHref: string }) => <div data-sign-in={signInHref}>{children}</div> }));
-vi.mock("@/components/knowledge/markdown-renderer", () => ({ MarkdownRenderer: () => null }));
+vi.mock("@/components/knowledge/shared-review-panel", () => ({ SharedReviewPanel: ({ children, signInHref, brand, actions }: { children: React.ReactNode; signInHref: string; brand: React.ReactNode; actions: React.ReactNode }) => <div data-sign-in={signInHref}><div data-bar="">{brand}{actions}</div>{children}</div> }));
+vi.mock("@/components/knowledge/markdown-renderer", () => ({ MarkdownRenderer: ({ afterTitle }: { afterTitle?: React.ReactNode }) => <>{afterTitle}</> }));
 vi.mock("@/components/ui/timestamp", () => ({ Timestamp: () => null }));
 import SharedDocumentPage from "@/app/s/[token]/page";
 
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => { vi.unstubAllEnvs(); vi.useRealTimers(); });
 
 it("navigates both entry buttons to the company gateway with native links", async () => {
   vi.stubEnv("KM_PUBLIC_ORIGIN", "https://hub.example.com/");
   const html = renderToStaticMarkup(await SharedDocumentPage({ params: Promise.resolve({ token: "share-token" }) }));
-  const links = [...html.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>(Open in Knowledge Hub|Get started)<\/a>/g)];
+  const links = [...html.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>(?:<svg.*?<\/svg>)?(?:<span[^>]*>)?(Open in Knowledge Hub|Get started)(?:<\/span>)?<\/a>/g)];
   expect(links).toHaveLength(2);
   expect(links.map(link => link[1])).toEqual(["https://hub.example.com/?returnTo=%2Fs%2Fshare-token%2Fopen", "https://hub.example.com/?returnTo=%2Fs%2Fshare-token%2Fopen"]);
   expect(links.every(link => !link[0].includes("data-next"))).toBe(true);
@@ -22,7 +22,7 @@ it("navigates both entry buttons to the company gateway with native links", asyn
 it("keeps the document-opening flow when no company gateway is configured", async () => {
   vi.stubEnv("KM_PUBLIC_ORIGIN", "");
   const html = renderToStaticMarkup(await SharedDocumentPage({ params: Promise.resolve({ token: "share-token" }) }));
-  const links = [...html.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>(Open in Knowledge Hub|Get started)<\/a>/g)];
+  const links = [...html.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>(?:<svg.*?<\/svg>)?(?:<span[^>]*>)?(Open in Knowledge Hub|Get started)(?:<\/span>)?<\/a>/g)];
   expect(links.map(link => link[1])).toEqual(["/s/share-token/open", "/s/share-token/open"]);
 });
 
@@ -33,4 +33,21 @@ it("signs a reader in to comment and brings them back to the shared page", async
   vi.stubEnv("KM_PUBLIC_ORIGIN", "");
   const local = renderToStaticMarkup(await SharedDocumentPage({ params: Promise.resolve({ token: "share-token" }) }));
   expect(local).toContain('data-sign-in="/?returnTo=%2Fs%2Fshare-token"');
+});
+
+it("puts the brand and both page actions in the pinned bar, ahead of the title", async () => {
+  const html = renderToStaticMarkup(await SharedDocumentPage({ params: Promise.resolve({ token: "share-token" }) }));
+  const bar = html.match(/<div data-bar="">(.*?)<\/div>/)![1];
+  expect(bar).toContain("Knowledge Hub");
+  expect(bar).toContain("Open in Knowledge Hub");
+});
+
+it("says the link's expiry quietly, and with emphasis and how soon in its last three days", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-10-10T00:00:00Z"));
+  const quiet = renderToStaticMarkup(await SharedDocumentPage({ params: Promise.resolve({ token: "share-token" }) }));
+  expect(quiet).toMatch(/<span>Link expires (?!.*\(in)/);
+  vi.setSystemTime(new Date("2026-10-18T00:00:00Z"));
+  const soon = renderToStaticMarkup(await SharedDocumentPage({ params: Promise.resolve({ token: "share-token" }) }));
+  expect(soon).toContain('<span class="font-medium text-kh-warning">Link expires  (in 2 days)</span>');
 });

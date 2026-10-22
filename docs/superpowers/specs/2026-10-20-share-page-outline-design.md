@@ -4,6 +4,12 @@ Amends the share-link spec's reading page (`/s/:token`, §6.5). Desktop first. N
 what a link grants changes: the outline is built from the same Markdown the page already
 renders, so it shows no more than the article does.
 
+> **2026-10-22 amendment:** The brand bar and the Comments bar are now one pinned bar (57px; see
+> the inline review spec's 2026-10-22 header amendment). Below, "the Comments bar" means that
+> bar: the rail sticks at `top-[4.5rem]`, headings take `scroll-margin-top: 4.5rem` (15px below
+> it, still inside the 96px reading line), and the disclosure sits under it inside the reading
+> column, above the title.
+
 ## Why
 
 The workspace reader has had an outline since the knowledge-graph phase; a shared page, often
