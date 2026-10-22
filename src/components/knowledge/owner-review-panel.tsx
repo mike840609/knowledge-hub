@@ -18,7 +18,7 @@ import { reviewRailInline, useReviewRailInline } from "./review-rail-mode";
 import { InlineReviewContext, type CaptureReviewAnchor, type PreparedReviewComment } from "./inline-review-context";
 import { useReviewDomVersion } from "./review-dom-version";
 import { COMMENT_HINT, createReviewRangeResolver, focusReviewAnchor, selectionAnchorInBlock } from "./review-selection";
-import { ReviewFilterMenu, ReviewThreadList, reviewRequest, type ReviewFilter } from "./review-thread-list";
+import { ReviewFilterMenu, ReviewNextButtons, ReviewThreadList, reviewRequest, type ReviewFilter } from "./review-thread-list";
 
 /**
  * The owner's discussions, beside the article they are about (`children`).
@@ -221,6 +221,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
               <div className="flex min-w-0 items-center gap-1"><h2 className="kh-review-rail-only text-body font-medium">Comments</h2>{count > 0 && <ReviewFilterMenu value={filter} onChange={setFilter} />}</div>
               <div className="flex shrink-0 items-center gap-1">{unreadCount > 0 && <Tooltip label="Mark all read"><Button type="button" variant="ghost" icon aria-label="Mark all read" onClick={() => void markRead()}><CheckCheck className="size-4" aria-hidden="true" /></Button></Tooltip>}{refresh}<span className="kh-review-rail-only"><Tooltip label="Hide comments"><Button type="button" variant="ghost" icon aria-label="Collapse discussions" onClick={() => changeOpen(false)}><X className="size-4" aria-hidden="true" /></Button></Tooltip></span></div>
             </div>
+            {result && result.threads.length > 0 && <ReviewNextButtons threads={result.threads} activeThreadId={activeThreadId} onActivate={setActiveThreadId} filter={filter} onFilterChange={setFilter} unreadThreadIds={unreadThreadIds} />}
             {error && <p role="alert" className="mt-3 text-body-sm">{error}</p>}
             {refreshing && result && <p role="status" className="mt-3 text-caption text-kh-text-muted">Updating…</p>}
             {selection.refusal && <p role="status" className="mt-3 text-body-sm">{selection.refusal}</p>}

@@ -5,7 +5,7 @@ import type { OwnerReviewThreadView, ReviewAnchor, ReviewThreadView } from "@/mo
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Timestamp } from "@/components/ui/timestamp";
 import { Textarea } from "@/components/ui/textarea";
-import { Bell, BellOff, Check, ChevronDown, MoreHorizontal } from "lucide-react";
+import { Bell, BellDot, BellOff, Check, ChevronDown, CircleArrowDown, MoreHorizontal } from "lucide-react";
 import { MenuRoot, MenuTrigger, MenuContent, MenuItem, MenuRadioGroup, MenuRadioItem } from "@/components/ui/menu";
 import { buttonClasses } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
@@ -81,6 +81,37 @@ const FILTER_NAMES: Record<ReviewFilter, string> = { ALL: "All comments", OPEN: 
 /** Which discussions are listed. The list draws it above itself unless a panel takes it for its heading. */
 export function ReviewFilterMenu({ value, onChange }: { value: ReviewFilter; onChange: (value: ReviewFilter) => void }) {
   return <MenuRoot><MenuTrigger className={buttonClasses({ variant: "ghost" })} aria-label="Filter discussions">{FILTER_NAMES[value]}<ChevronDown className="size-4" aria-hidden="true" /></MenuTrigger><MenuContent><MenuRadioGroup value={value} onValueChange={next => onChange(next as ReviewFilter)}>{(Object.keys(FILTER_NAMES) as ReviewFilter[]).map(option => <MenuRadioItem key={option} value={option}>{FILTER_NAMES[option]}</MenuRadioItem>)}</MenuRadioGroup></MenuContent></MenuRoot>;
+}
+
+/** The first discussion after the active one, in passage order and round again, that `matches`; never the active one itself. */
+export function nextReviewThreadId(threads: readonly RailCard[], activeThreadId: string | undefined, matches: (id: string) => boolean): string | undefined {
+  const ordered = [...threads].sort(compareReviewPassages);
+  const start = ordered.findIndex(thread => thread.id === activeThreadId) + 1;
+  return [...ordered.slice(start), ...ordered.slice(0, start)].find(thread => thread.id !== activeThreadId && matches(thread.id))?.id;
+}
+
+/**
+ * Steps through what wants attention: discussions with unread notices (the owner's) and open ones.
+ * Focus stays on the button, so pressing again goes on to the next.
+ */
+export function ReviewNextButtons({ threads, activeThreadId, onActivate, filter, onFilterChange, unreadThreadIds }: { threads: readonly ReviewThreadView[]; activeThreadId?: string; onActivate: (threadId: string) => void; filter: ReviewFilter; onFilterChange: (filter: ReviewFilter) => void; unreadThreadIds?: ReadonlySet<string> }) {
+  const status = new Map(threads.map(thread => [thread.id, thread.status]));
+  const nextUnread = unreadThreadIds && nextReviewThreadId(threads, activeThreadId, id => unreadThreadIds.has(id));
+  const nextOpen = nextReviewThreadId(threads, activeThreadId, id => status.get(id) === "OPEN");
+  function go(threadId: string) {
+    if (filter !== "ALL" && status.get(threadId) !== filter) onFilterChange("ALL");
+    onActivate(threadId);
+    // The card is drawn, and placed beside its passage, after this render.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const card = Array.from(document.querySelectorAll<HTMLElement>("[data-review-thread]")).find(item => item.dataset.reviewThread === threadId && item.getClientRects().length > 0);
+      card?.scrollIntoView({ block: "center", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    }));
+  }
+  // Always drawn, disabled when there is nowhere to go: a row appearing or leaving would move the cards under the pointer.
+  return <div className="mt-3 flex flex-wrap gap-1">
+    {unreadThreadIds && <Button type="button" variant="ghost" disabled={!nextUnread} onClick={() => nextUnread && go(nextUnread)}><BellDot className="size-4" aria-hidden="true" />Next unread</Button>}
+    <Button type="button" variant="ghost" disabled={!nextOpen} onClick={() => nextOpen && go(nextOpen)}><CircleArrowDown className="size-4" aria-hidden="true" />Next open</Button>
+  </div>;
 }
 
 export function ReviewThreadList({ threads, writesEnabled, reply, moderate, author, canResolve = true, focusAnchor, railMarkdown, activeThreadId, onActivate, filter: controlled, onFilterChange, draft, signInHref, unreadThreadIds, follow }: {
