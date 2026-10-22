@@ -92,4 +92,11 @@ export class MariaDbShareCommentEventsRepository implements ShareCommentEventRep
       [at, recipientUserId, documentId],
     );
   }
+  async markThreadRead(recipientUserId: string, documentId: string, threadId: string, at: Date): Promise<void> {
+    await this.connection.query(
+      `UPDATE share_comment_events e JOIN workspaces w ON w.id=e.workspace_id
+       SET e.read_at=? WHERE w.personal_owner_user_id=? AND e.document_id=? AND e.thread_id=? AND e.read_at IS NULL`,
+      [at, recipientUserId, documentId, threadId],
+    );
+  }
 }

@@ -8,4 +8,5 @@ export interface ShareCommentEventRepository {
   markEventRead(recipientUserId: string, eventId: string, at: Date): Promise<void>;
   markAllRead(recipientUserId: string, at: Date): Promise<void>;
   markDocumentRead(recipientUserId: string, documentId: string, at: Date): Promise<void>;
+  markThreadRead(recipientUserId: string, documentId: string, threadId: string, at: Date): Promise<void>;
 }
