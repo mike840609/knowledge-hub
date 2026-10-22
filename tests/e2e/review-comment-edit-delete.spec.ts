@@ -49,7 +49,7 @@ test("a reader edits and then deletes their own comment through the link; nobody
   await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
   await page.getByRole("button", { name: "Delete comment", exact: true }).click();
   await expect(page.locator("[data-review-thread]")).toHaveCount(0);
-  await expect(page.getByText("No comments yet.", { exact: true }).filter({ visible: true })).toBeVisible();
+  await expect(page.getByText("No comments yet. Select text in the document to start a discussion.", { exact: true }).filter({ visible: true })).toBeVisible();
   for (const result of [await (await request.get(`${owner}/api/documents/${doc.documentId}/review-threads`)).json(), await (await request.post(`${anonymous}/api/share-review/threads/query`, { headers: { Origin: anonymous }, data: { token } })).json()]) {
     expect(result.threads).toEqual([]); expect(JSON.stringify(result)).not.toContain("wording");
   }

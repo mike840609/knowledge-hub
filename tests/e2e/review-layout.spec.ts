@@ -166,7 +166,7 @@ test("mobile comments can retry after a temporary loading failure", async ({ pag
   const drawer = page.getByRole("dialog");
   await expect(drawer.getByRole("status")).toContainText("unavailable");
   await drawer.getByRole("button", { name: "Refresh comments" }).click();
-  await expect(drawer.getByRole("button", { name: "Add comment from selected text" })).toBeVisible();
+  await expect(drawer.getByRole("button", { name: "Comment on selected text" })).toBeVisible();
   await expect(drawer.getByRole("status")).toHaveCount(0);
 });
 
@@ -208,7 +208,7 @@ test("wide screens default to centered reading and open a 320px rail on demand",
   // The rail's name and its collapse control are one row.
   const railRow = async (locator: ReturnType<typeof page.locator>) => { const box = (await locator.boundingBox())!; return box.y + box.height / 2; };
   expect(Math.abs(await railRow(page.locator(".kh-review-panel h2").filter({ visible: true })) - await railRow(page.getByRole("button", { name: "Collapse discussions" })))).toBeLessThan(6);
-  await expect(rail.getByRole("button", { name: "Add comment from selected text" })).toBeVisible();
+  await expect(rail.getByRole("button", { name: "Comment on selected text" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Hide discussions" })).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const railBox = (await rail.boundingBox())!;
@@ -308,7 +308,7 @@ test("an outdated discussion's expansion button stays focused until activated", 
   await openReviewDiscussions(page);
   const card = page.locator("[data-review-thread]").filter({ visible: true });
   // From the last control above the list, Tab reaches the card's button.
-  await page.getByRole("button", { name: "Add comment from selected text" }).focus();
+  await page.getByRole("button", { name: "Comment on selected text" }).focus();
   await page.keyboard.press("Tab");
   await expect(card.getByRole("button", { name: "Reply", exact: true })).toBeFocused();
   await expect(card).not.toHaveAttribute("aria-current", "true");
@@ -503,7 +503,7 @@ test("the shared rail's heading is one row, as the owner's is: its name and filt
   // One refresh, not one per row.
   await expect(rail.getByRole("button", { name: "Refresh comments" })).toHaveCount(1);
   // Add comment is the row beneath: the one thing a reader does here that an owner does not.
-  expect((await place(rail.getByRole("button", { name: "Add comment from selected text" }))).middle).toBeGreaterThan(close.bottom);
+  expect((await place(rail.getByRole("button", { name: "Comment on selected text" }))).middle).toBeGreaterThan(close.bottom);
 
   // As a drawer, which names and closes itself, the row is the filter and refresh.
   await page.getByRole("button", { name: "Collapse discussions" }).click();

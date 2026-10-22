@@ -78,7 +78,8 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
   const canComment = !!result?.writesEnabled && !readOnly && !revisionChanged && !contentPending;
   const base = `/api/documents/${documentId}/review-threads`;
   const { unreadCount, unreadThreadIds, markRead } = useShareCommentUnread(documentId);
-  const load = useCallback(async () => { try { setResult(await reviewRequest(base)); setError(undefined); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not load discussions."); } }, [base]);
+  const [refreshing, setRefreshing] = useState(false);
+  const load = useCallback(async () => { setRefreshing(true); try { setResult(await reviewRequest(base)); setError(undefined); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not load discussions."); } finally { setRefreshing(false); } }, [base]);
   useEffect(() => { if (contentPending && !prepareComment) selection.clear(); }, [contentPending, prepareComment, selection.clear]);
   // Looking at a discussion marks its notices read; opening the panel marks nothing (spec 2026-10-22).
   useEffect(() => { if (open && activeThreadId && unreadThreadIds.has(activeThreadId)) void markRead(activeThreadId); }, [open, activeThreadId, unreadThreadIds, markRead]);
@@ -177,7 +178,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
     }} />;
   // Beside its passage where the discussions are a rail; at the top of the drawer, which covers the passage, where they are not.
   const draft = composer && inline && (!revisionChanged || !!prepared) ? { anchor: selection.chosen!, composer } : undefined;
-  const refresh = <Tooltip label="Refresh comments"><Button type="button" variant="ghost" icon aria-label="Refresh comments" onClick={() => void load()}><RefreshCw className="size-4" aria-hidden="true" /></Button></Tooltip>;
+  const refresh = <Tooltip label="Refresh comments"><Button type="button" variant="ghost" icon aria-label="Refresh comments" disabled={refreshing} onClick={() => void load()}><RefreshCw className={`size-4 ${refreshing ? "motion-safe:animate-spin" : ""}`} aria-hidden="true" /></Button></Tooltip>;
   return <InlineReviewContext.Provider value={reviewContext}>
     {!open && error && <p role="alert" className="pb-3 text-body-sm">{error}</p>}
     <div className="kh-review-document" data-review-ready={result || error ? "" : undefined} data-review-open={open ? "" : undefined} data-review-inline={inline ? "" : undefined}>
@@ -219,9 +220,10 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
               <div className="flex shrink-0 items-center gap-1">{unreadCount > 0 && <Tooltip label="Mark all read"><Button type="button" variant="ghost" icon aria-label="Mark all read" onClick={() => void markRead()}><CheckCheck className="size-4" aria-hidden="true" /></Button></Tooltip>}{refresh}<span className="kh-review-rail-only"><Tooltip label="Hide comments"><Button type="button" variant="ghost" icon aria-label="Collapse discussions" onClick={() => changeOpen(false)}><X className="size-4" aria-hidden="true" /></Button></Tooltip></span></div>
             </div>
             {error && <p role="alert" className="mt-3 text-body-sm">{error}</p>}
+            {refreshing && result && <p role="status" className="mt-3 text-caption text-kh-text-muted">Updating…</p>}
             {selection.refusal && <p role="status" className="mt-3 text-body-sm">{selection.refusal}</p>}
             {revisionChanged && !prepared && <p role="status" className="mt-3 text-body-sm">Document changed. Refresh this page before selecting or locating a passage.</p>}
-            {canComment && !selection.chosen && <div className="mt-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={() => { if (prepareComment) requestComment(() => selection.capture()); else selection.capture(); }} aria-label="Add comment from selected text"><MessageSquarePlus className="size-4" aria-hidden="true" />Add comment</Button>{!selection.ready && <p className="mt-1 text-caption text-kh-text-muted">{COMMENT_HINT}</p>}</div>}
+            {canComment && !selection.chosen && <div className="mt-3"><Button type="button" variant="soft" onPointerDown={event => event.preventDefault()} onClick={() => { if (prepareComment) requestComment(() => selection.capture()); else selection.capture(); }} ><MessageSquarePlus className="size-4" aria-hidden="true" />Comment on selected text</Button>{!selection.ready && <p className="mt-1 text-caption text-kh-text-muted">{COMMENT_HINT}</p>}</div>}
           </div>
           {composer && !draft && <div className="mt-3">{composer}</div>}
           {result && <div className="mt-3"><ReviewThreadList draft={draft} filter={filter} onFilterChange={setFilter} railMarkdown={prepared?.markdown ?? (revisionChanged || contentPending ? undefined : markdown)} activeThreadId={activeThreadId} onActivate={setActiveThreadId} unreadThreadIds={unreadThreadIds}
