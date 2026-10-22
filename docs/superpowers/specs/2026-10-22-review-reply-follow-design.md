@@ -100,7 +100,11 @@ derives the recipient as the Workspace owner).
   bury the rest of the Inbox.
 - Activity (including read) for follows lists followed threads that have any
   reply by someone else, ordered by the latest such reply, `readAt` set when
-  `seen_at >= latest`. The cursor stays `(createdAt, id)` across both kinds.
+  `seen_at >= latest`. *Deviation, recorded at implementation:* follow entries
+  are not cursor-paged. They are merged into the first Activity page only, at
+  most 100 followed discussions; the `(createdAt, id)` cursor pages owner
+  events alone. A reader follows few discussions; paging both kinds under one
+  cursor bought nothing yet.
 - The badge count is owner unread events plus follow threads with unread replies.
 - Href: `/s/:token?thread=:threadId`. The token is the one the reader already
   used. It is in their history, and saved-shares already keeps the same

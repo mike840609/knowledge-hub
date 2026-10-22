@@ -98,6 +98,12 @@ pass.
   title/sender metadata; unavailable links never disclose newer private metadata.
   Saving never extends the link's lifetime or grants sender Workspace membership,
   Workspace search, tree, history, MCP, Markdown edits or revision writes.
+  And follow replies in the reader's own Inbox: writing in a discussion through a
+  link follows it (`review_thread_follows`); the Inbox shows replies others wrote
+  there only to that trusted caller, only while the followed link opens now
+  (re-evaluated per request), and a dead link's entry names nothing. Following
+  never extends a link's lifetime or grants anything the link does not
+  (`docs/superpowers/specs/2026-10-22-review-reply-follow-design.md`).
   Review access never grants Workspace membership, search, tree, history,
   MCP, Markdown edits or revision writes. Review responses include only
   validated current-revision selected-text fragments; hidden bodies and

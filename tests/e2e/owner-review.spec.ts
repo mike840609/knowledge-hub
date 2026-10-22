@@ -246,7 +246,8 @@ test("the owner is shown what is still open; what is resolved is one choice away
   // The header says what the list shows: one is open. Both are in its name.
   const entry = page.getByRole("button", { name: "Hide discussions, 2 comments, 1 open", exact: true });
   await expect(entry).toBeVisible();
-  await expect(entry).toHaveText("1");
+  // One open; the link comments' notices stay unread until a discussion is looked at (spec 2026-10-22).
+  await expect(entry).toHaveText(/^1(\d+ new)?$/);
   await expect(rail.getByRole("button", { name: "Filter discussions" })).toHaveText("Open");
   await expect(cards).toHaveCount(1);
   await expect(cards).toContainText("Still to be answered");
