@@ -14,7 +14,7 @@ export type ReviewComment = HiddenMetadata & { id:string; threadId:string; autho
  * past its one document (share-link spec §6.1). The thread and comment IDs are the review's own.
  */
 export type ReviewCommentView = { id:string; threadId:string; authorName?:string; body:string; visibility:ReviewVisibility; createdAt:Date; editedAt:Date|null; deleted:boolean; /** The caller wrote it. Said as a fact about the caller, so no author ID is handed out. */ own:boolean };
-export type ReviewThreadView = { id:string; status:ReviewStatus; createdAt:Date; updatedAt:Date; currentAnchor:CurrentAnchorProjection; comments:ReviewCommentView[] };
+export type ReviewThreadView = { id:string; status:ReviewStatus; createdAt:Date; updatedAt:Date; currentAnchor:CurrentAnchorProjection; comments:ReviewCommentView[]; /** A signed-in reader, not the owner, follows it. Absent for anyone else. */ following?:boolean };
 /** What the document's owner reads in My Space: the same threads, with who and what moderation needs. */
 export type OwnerReviewThreadView = ReviewThreadView & { documentId:string; createdBy:string; visibility:ReviewVisibility; hiddenBy:string|null; hiddenAt:Date|null; hiddenReason:string|null; originalAnchor:ReviewAnchor; resolvedBy:string|null; resolvedAt:Date|null; comments:(ReviewCommentView & { authorUserId:string; hiddenBy:string|null; hiddenAt:Date|null; hiddenReason:string|null })[] };
 export type CreateReviewThreadInput = { token:string; expectedRevisionId:string; anchor:ReviewAnchor; body:string; idempotencyKey:string };
