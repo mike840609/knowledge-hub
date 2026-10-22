@@ -24,8 +24,9 @@ test("a reader's Inbox brings the owner's reply back to the discussion on the sh
   await expect(page).toHaveURL(/\/w\/[^/]+\//);
   const workspaceId = new URL(page.url()).pathname.split("/")[2];
   await page.goto(`${viewer}/w/${workspaceId}/inbox`);
-  const entry = page.getByRole("list", { name: "Inbox discussions" }).getByRole("link", { name: /Owner answer/ });
-  await expect(entry).toHaveAttribute("href", `/s/${token}?thread=${thread.id}`);
+  // Other tests' discussions reach this reader's Inbox too: this one is known by where it leads.
+  const entry = page.getByRole("list", { name: "Inbox discussions" }).locator(`a[href="/s/${token}?thread=${thread.id}"]`);
+  await expect(entry).toContainText("Owner answer");
   await entry.click();
   await expect(page).toHaveURL(new RegExp(`/s/${token}\\?thread=${thread.id}`));
   const card = page.locator(`[data-review-thread="${thread.id}"]`);

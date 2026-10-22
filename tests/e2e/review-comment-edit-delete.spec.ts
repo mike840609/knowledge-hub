@@ -64,12 +64,12 @@ test("the owner edits and deletes their own reply; it stays as a tombstone under
   await page.goto(doc.href); await openReviewDiscussions(page);
   await page.getByRole("button", { name: "Reply", exact: true }).click();
   await page.getByRole("textbox", { name: "Reply", exact: true }).fill("Owner answer SECRET"); await page.getByRole("button", { name: "Reply", exact: true }).click();
-  await expect(page.getByText("Owner answer SECRET", { exact: true })).toBeVisible();
+  await expect(page.getByText("Owner answer SECRET", { exact: true }).filter({ visible: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Reply options", exact: true }).click();
   await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
   await page.getByRole("textbox", { name: "Edit comment", exact: true }).fill("Owner answer SECRET, revised"); await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByText("Owner answer SECRET, revised", { exact: true })).toBeVisible();
+  await expect(page.getByText("Owner answer SECRET, revised", { exact: true }).filter({ visible: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Reply options", exact: true }).click();
   await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
