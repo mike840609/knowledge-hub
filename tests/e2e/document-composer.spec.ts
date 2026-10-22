@@ -78,11 +78,15 @@ test("the toolbar works from the keyboard: select, Tab into it, press Bold", asy
   const bold = toolbar.getByRole("button", { name: "Bold" });
   // Start editing explicitly; opening an inline document does not move focus.
   await surface.click();
-  await page.keyboard.press("ControlOrMeta+a");
-  await page.keyboard.press("ArrowLeft");
-  for (let letter = 0; letter < "hello ".length; letter += 1) await page.keyboard.press("ArrowRight");
-  // One key makes the selection: the editor reads it after the key, so a toolbar shown means it holds all of it.
-  for (let letter = 0; letter < "world".length; letter += 1) await page.keyboard.press("Shift+ArrowRight");
+  // Keys at a hand's pace. A script presses them 4ms apart, under the 20-50ms in which ProseMirror
+  // puts its own selection back after a key (prosemirror-view's focus and arrow-key timers) when
+  // it has not yet read the browser's: the next key then moves from the old place, and CI once
+  // bolded "wor" or "w". 40ms apart is still faster than key repeat (about 33ms is the floor).
+  const press = async (key: string) => { await page.keyboard.press(key); await page.waitForTimeout(40); };
+  await press("ControlOrMeta+a");
+  await press("ArrowLeft");
+  for (let letter = 0; letter < "hello ".length; letter += 1) await press("ArrowRight");
+  for (let letter = 0; letter < "world".length; letter += 1) await press("Shift+ArrowRight");
   await expect(toolbar).toBeVisible(ROUND_TRIP);
 
   // The toolbar follows the editor in the tab order, and focus moving into it keeps it open.
