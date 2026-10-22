@@ -21,7 +21,7 @@ test("Home help covers first import, repeat sync and recovery in both languages"
   await expect(page.getByRole("heading",{name:"Daily sync: check, preview, apply",exact:true})).toBeAttached();
   await expect(page.getByRole("link",{name:"Try the sample wiki",exact:true})).toHaveAttribute("href",`/w/${ws}/sources/import#sample-wiki`);
   await page.getByRole("link",{name:"Read the import preview guide",exact:true}).click();
-  await expect(page).toHaveURL(/\/sources\/import\/guide\?lang=en#import-preview-apply$/);
+  await expect(page).toHaveURL(/\/help\/import-guide\?lang=en#import-preview-apply$/);
   await expect(page.locator("#import-preview-apply")).toBeVisible();
   await page.goBack();
   await page.getByRole("link",{name:"Troubleshooting",exact:true}).click();
@@ -43,7 +43,7 @@ test("Home help covers first import, repeat sync and recovery in both languages"
   await expect(page.getByText(/規則在 Apply 成功後保存到來源/)).toBeVisible();
   await expect(page.getByRole("link",{name:"選擇來源以設定排除路徑",exact:true})).toHaveAttribute("href",`/w/${ws}/sources`);
   await page.getByRole("link",{name:"查看 knowledge_id 設定與改名範例",exact:true}).click();
-  await expect(page).toHaveURL(/\/sources\/import\/guide\?lang=zh-TW#keep-in-sync$/);
+  await expect(page).toHaveURL(/\/help\/import-guide\?lang=zh-TW#keep-in-sync$/);
   await expect(page.locator("#keep-in-sync pre")).toContainText("knowledge_id: leave-policy");
   await page.getByRole("link",{name:"日常操作與疑難排解手冊",exact:true}).click();
   await page.getByRole("link",{name:"試用範例 wiki",exact:true}).click();
@@ -54,7 +54,7 @@ test("Home help covers first import, repeat sync and recovery in both languages"
   await expect(page).toHaveURL(new RegExp(`/w/${ws}/sources$`));
   await page.goBack();
   await page.getByRole("link",{name:"Markdown 格式、knowledge_id 與匯入限制",exact:true}).click();
-  await expect(page).toHaveURL(/\/sources\/import\/guide\?lang=zh-TW$/);
+  await expect(page).toHaveURL(/\/help\/import-guide\?lang=zh-TW$/);
   await page.getByRole("link",{name:"日常操作與疑難排解手冊",exact:true}).click();
   await expect(page.getByRole("heading",{name:"使用者操作手冊",exact:true})).toBeVisible();
   const output=process.env.KM_GUIDE_SCREENSHOTS;

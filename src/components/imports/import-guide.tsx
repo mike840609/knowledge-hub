@@ -63,7 +63,7 @@ function Block({ block, caption }: { block: GuideBlock; caption: string }): Reac
   }
 }
 
-/** The guide page body: language switch, content in its own `lang`, and the way back to the form. */
+/** The guide page body, at one address for everyone (`/help/import-guide`): language switch, content in its own `lang`, and the way back to the reader's own import form. */
 export function ImportGuide({
   workspaceId,
   locale,
@@ -73,7 +73,7 @@ export function ImportGuide({
   locale: GuideLocale;
   content: GuideContent;
 }): React.JSX.Element {
-  const guideHref = `/w/${workspaceId}/sources/import/guide`;
+  const guideHref = "/help/import-guide";
   return (
     <main className="kh-page pb-6" lang={locale}>
       <PageHeader location="Import folder" locationHref={`/w/${workspaceId}/sources/import`} title={content.title} />
@@ -99,7 +99,7 @@ export function ImportGuide({
           </section>
         ))}
       </div>
-      <p className="mt-6 text-body"><Link className={LINK} href={`/w/${workspaceId}/help?lang=${locale}`}>{locale==="zh-TW"?"日常操作與疑難排解手冊":"Daily operations and troubleshooting"}</Link></p>
+      <p className="mt-6 text-body"><Link className={LINK} href={`/help?lang=${locale}`}>{locale==="zh-TW"?"日常操作與疑難排解手冊":"Daily operations and troubleshooting"}</Link></p>
       <p className="mt-6 text-body">
         <Link className="rounded-md font-medium text-kh-link underline-offset-4 hover:underline kh-focus-ring" href={`/w/${workspaceId}/sources/import#sample-wiki`}>
           Try the sample wiki

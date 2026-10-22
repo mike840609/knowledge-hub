@@ -77,7 +77,7 @@ export function UserMenu({ identityName, workspaceId, compact = false, trigger =
             </MenuRadioItem>
           </MenuRadioGroup>
         </MenuGroup>
-        {workspaceId ? <><MenuSeparator /><MenuItem render={<Link href={`/w/${workspaceId}/help`} />}><span className="flex items-center gap-2"><CircleHelp className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />Help &amp; guides</span></MenuItem></> : null}
+        {workspaceId ? <><MenuSeparator /><MenuItem render={<Link href="/help" />}><span className="flex items-center gap-2"><CircleHelp className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />Help &amp; guides</span></MenuItem></> : null}
         <MenuItem onClick={() => setReportOpen(true)}><span className="flex items-center gap-2"><MessageSquareWarning className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />Report a problem</span></MenuItem>
       </MenuContent>
     </MenuRoot>
