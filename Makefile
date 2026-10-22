@@ -92,6 +92,10 @@ test-integration: db-up ## Integration tests (needs MariaDB; uses root creds fro
 test-e2e: db-up ## E2E tests: provisions an isolated DB, builds, runs Playwright (needs 'make browsers' once).
 	npm run test:e2e
 
+.PHONY: guide-screenshots
+guide-screenshots: db-up ## Regenerate the user guide's screenshots from the sample wiki (needs 'make browsers' once).
+	KM_GUIDE_CAPTURE=$(CURDIR)/src/components/help/screens npm run test:e2e -- tests/e2e/user-guide-screenshots.spec.ts
+
 .PHONY: test-mermaid-assumptions
 test-mermaid-assumptions: ## What the reader assumes of Mermaid, checked in Chromium; run before changing its version (needs 'make browsers' once).
 	npm run test:mermaid-assumptions

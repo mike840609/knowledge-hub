@@ -16,7 +16,7 @@ test("Home help covers first import, repeat sync and recovery in both languages"
   await page.getByRole("navigation",{name:"手冊語言",exact:true}).getByRole("link",{name:"English",exact:true}).click();
   await expect(page.getByRole("heading",{name:"User guide",exact:true})).toBeVisible();
   await expect(page.locator("main[lang]")).toHaveAttribute("lang","en");
-  await expect(page.getByRole("figure")).toHaveCount(6);
+  await expect(page.getByRole("figure")).toHaveCount(12);
   await expect(page.getByRole("figure",{name:"Diagram · From folder to readable articles"})).toContainText("Choose folder");
   await expect(page.getByRole("heading",{name:"Daily sync: check, preview, apply",exact:true})).toBeAttached();
   await expect(page.getByRole("link",{name:"Try the sample wiki",exact:true})).toHaveAttribute("href",`/w/${ws}/sources/import#sample-wiki`);
@@ -35,7 +35,7 @@ test("Home help covers first import, repeat sync and recovery in both languages"
   await page.getByRole("link",{name:"繁體中文",exact:true}).click();
   await expect(page.getByRole("heading",{name:"使用者操作手冊",exact:true})).toBeVisible();
   await expect(page.getByRole("heading",{name:"遇到問題時",exact:true})).toBeAttached();
-  await expect(page.getByRole("figure")).toHaveCount(6);
+  await expect(page.getByRole("figure")).toHaveCount(12);
   await expect(page.getByRole("figure",{name:"示意圖 · 每次更新都需要 Apply"})).toContainText("不會在背景自動同步");
   await expect(page.locator("details[open]")).toHaveCount(0);
   await expect(page.getByText(/規則在 Apply 成功後保存到來源/)).toBeHidden();
@@ -95,10 +95,11 @@ test("Home help covers first import, repeat sync and recovery in both languages"
     for(const theme of ["light","dark"]) {
       await page.evaluate(value=>document.documentElement.setAttribute("data-theme",value),theme);
       for(const id of ["quick-start","sync","troubleshooting","reading","insights","sharing-export"]) {
-        const figure=page.locator(`#${id} figure`);
+        const figure=page.locator(`#${id} figure[aria-labelledby]`);
         await figure.scrollIntoViewIfNeeded();
         await expect(figure).toBeVisible();
         expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+        if(id==="sync")await expect(page.locator("#sync figure img:visible")).toHaveAttribute("src",new RegExp(`sync-${theme}`));
         if(output&&width===1440&&theme==="light")await page.locator(`#${id}`).screenshot({path:`${output}/${id}-section.png`,animations:"disabled"});
         if(output)await figure.screenshot({path:`${output}/${id}-${width}-${theme}.png`,animations:"disabled"});
       }

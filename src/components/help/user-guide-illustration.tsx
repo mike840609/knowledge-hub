@@ -1,4 +1,4 @@
-import {ArrowDown, ArrowRight, Check, FileText, Folder, MessageSquare, Search, Star} from "lucide-react";
+import {ArrowDown, ArrowRight, Check, FileText, Folder, Star} from "lucide-react";
 import type {ReactNode} from "react";
 import type {GuideLocale} from "@/components/imports/import-guide-content";
 
@@ -12,12 +12,12 @@ function Flow({steps}:{steps:{title:string;detail:string}[]}) {
   </li>)}</ol>;
 }
 
+// Flat and tinted, never framed or lifted: a framed window is how a real screen looks (user-guide-screenshot).
 function Figure({id,title,note,children}:{id:string;title:string;note:string;children:ReactNode}) {
-  const simple=["troubleshooting","reading","insights"].includes(id);
-  return <figure aria-labelledby={`${id}-figure-caption`} className={simple?"my-4 border-y border-kh-border":"my-4 overflow-hidden rounded-md border border-kh-border"}>
-    <figcaption id={`${id}-figure-caption`} className={`${simple?"pt-3":"border-b border-kh-border bg-kh-bg-subtle px-4 py-2"} text-body-sm font-medium text-kh-text`}>{title}</figcaption>
-    <div className={`space-y-4 ${simple?"py-4":"p-4"}`}>{children}</div>
-    <p className={`${simple?"pb-3":"border-t border-kh-border px-4 py-2"} text-body-sm text-kh-text-secondary`}>{note}</p>
+  return <figure aria-labelledby={`${id}-figure-caption`} className="my-4 space-y-4 rounded-md bg-kh-bg-subtle p-4">
+    <figcaption id={`${id}-figure-caption`} className="text-body-sm font-medium text-kh-text">{title}</figcaption>
+    {children}
+    <p className="text-body-sm text-kh-text-secondary">{note}</p>
   </figure>;
 }
 
@@ -44,18 +44,17 @@ export function UserGuideIllustration({sectionId,locale}:{sectionId:string;local
         [t("Many articles marked archived","大量文章被列為封存"),t("Check root and exclusions before Apply","先確認根目錄與排除規則，再決定 Apply")],
       ].map(([problem,action])=><div key={problem} className="grid gap-1 py-3 first:pt-0 last:pb-0 sm:grid-cols-2 sm:gap-4"><dt className={label}>{problem}</dt><dd className="text-body-sm text-kh-text-secondary">{action}</dd></div>)}</dl>
     </Figure>;
-    case "reading": return <Figure id={sectionId} title={t("Diagram · Find an article, then keep your place","示意圖 · 找文章，再整理閱讀進度")} note={t("Favorites are saved to your account. Recently opened is stored on this device.","收藏保存在帳號；最近開啟保存在目前裝置。") }>
-      <div className="grid gap-4 sm:grid-cols-[1fr_2fr]">
-        <div className="space-y-2 border-b border-kh-border pb-3 sm:border-b-0 sm:border-r sm:pb-0 sm:pr-4"><p className={label}>Home</p>{[[Search,"Search"],[FileText,"Knowledge"],[Folder,"Sources"]].map(([Icon,name])=>{const Glyph=Icon as typeof Search;return <p key={String(name)} className="flex items-center gap-2 text-body-sm text-kh-text-secondary"><Glyph className={icon} aria-hidden="true"/>{String(name)}</p>;})}</div>
-        <div className="space-y-3"><p className="flex items-center gap-2 text-body font-medium"><FileText className={icon} aria-hidden="true"/>{t("Article title","文章標題")}</p><p className="font-mono text-body-sm text-kh-text-muted">wiki / notes / guide.md</p><div className="border-t border-kh-border pt-3 text-body-sm text-kh-text-secondary"><p className="flex items-center gap-2"><Star className={icon} aria-hidden="true"/>{t("Star → Favorites","星號 → Favorites 收藏")}</p><p className="mt-2">{t("Open current revision → update the read record","開啟目前版本 → 更新閱讀紀錄")}</p></div></div>
+    case "reading": return <Figure id={sectionId} title={t("Diagram · Where your reading progress is kept","示意圖 · 閱讀進度存在哪裡")} note={t("Opening the current revision updates the read record; it does not mean read in full. A later sync can make it unread again.","開啟目前版本會更新閱讀紀錄，不代表已讀完；文章再次同步更新後可能重新出現未讀。") }>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div><p className={`${label} flex items-center gap-2`}><Star className={icon} aria-hidden="true"/>{t("Favorites → your account","收藏 → 存在帳號")}</p><p className="mt-1 text-body-sm text-kh-text-secondary">{t("The same on every device and browser.","換裝置、換瀏覽器都看得到。")}</p></div>
+        <div className="border-t border-kh-border pt-3 sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0"><p className={`${label} flex items-center gap-2`}><FileText className={icon} aria-hidden="true"/>{t("Recent → this device","最近開啟 → 存在這台裝置")}</p><p className="mt-1 text-body-sm text-kh-text-secondary">{t("Another browser may show a different list.","換瀏覽器，清單可能不同。")}</p></div>
       </div>
     </Figure>;
     case "insights": return <Figure id={sectionId} title={t("Diagram · What the time selector changes","示意圖 · 時間範圍影響哪些數字")} note={t("An article can be both added and updated in the selected period. Do not add those counts to get your article total.","同一篇文章可能在期間內新增又更新；分類數字相加不等於文章總數。") }>
       <div className="grid gap-4 sm:grid-cols-2"><div><p className={label}>{t("Current state","目前狀態")}</p><ul className="mt-2 space-y-1 text-body-sm text-kh-text-secondary"><li>{t("Active articles and source distribution","活躍文章與來源分布")}</li><li>{t("Unread updates and sync status","未讀更新與同步狀態")}</li></ul></div><div className="border-t border-kh-border pt-3 sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0"><p className={label}>7 days / 30 days</p><ArrowDown className={`${icon} my-2`} aria-hidden="true"/><p className="text-body-sm text-kh-text-secondary">{t("Reading activity + recent changes","閱讀活動＋近期變更")}</p><p className="mt-1 text-body-sm text-kh-text-muted">{t("Only these use the selected period","只有這兩項使用所選期間")}</p></div></div>
     </Figure>;
     case "sharing-export": return <Figure id={sectionId} title={t("Diagram · Read, discuss and save a shared article","示意圖 · 閱讀、留言與儲存分享")} note={t("Save share retains the link, not an article copy. Expiry and revocation still apply; it grants no workspace access.","Save share 只保存連結，不複製文章；仍受期限與撤銷限制，也不會取得對方的工作區權限。") }>
-      <Flow steps={[{title:"Share link",detail:t("Owner sets expiry or revokes","擁有者設定期限或撤銷")},{title:t("Open link","開啟連結"),detail:t("Read article and visible comments","免登入讀文章與公開留言")},{title:t("Sign in","登入"),detail:t("Comment, reply or Save share","新增留言、回覆或 Save share")}]}/>
-      <div className="grid gap-4 border-t border-kh-border pt-4 sm:grid-cols-[2fr_1fr]"><div><p className={label}>{t("Shared article","分享的文章")}</p><p className="mt-2 rounded-sm bg-kh-bg-selected px-2 py-1 text-body-sm">{t("Select a passage → Comment","選取一段文字 → Comment")}</p><p className="mt-2 text-body-sm text-kh-text-secondary">{t("Passage count → its discussion","段落旁留言數 → 對應討論")}</p></div><div className="border-t border-kh-border pt-3 sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0"><p className="flex items-center gap-2 text-body-sm font-medium"><MessageSquare className={icon} aria-hidden="true"/>Comments</p><p className="mt-2 text-body-sm text-kh-text-secondary">{t("Opens a side panel on desktop; a drawer on smaller screens.","桌面開啟右側欄；小螢幕開啟抽屜。")}</p></div></div>
+      <Flow steps={[{title:"Share link",detail:t("Owner sets expiry or revokes","擁有者設定期限或撤銷")},{title:t("Open link","開啟連結"),detail:t("Read article and visible comments","免登入讀文章與公開留言")},{title:t("Sign in","登入"),detail:t("Select a passage to comment; reply or Save share","選取段落即可留言；也可回覆或 Save share")}]}/>
     </Figure>;
     default:return null;
   }
