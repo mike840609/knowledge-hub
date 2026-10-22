@@ -78,8 +78,10 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
   const canComment = !!result?.writesEnabled && !readOnly && !revisionChanged && !contentPending;
   const base = `/api/documents/${documentId}/review-threads`;
   const { unreadCount, unreadThreadIds, markRead } = useShareCommentUnread(documentId);
+  // Updating is a read *again*: the first read renders nothing extra while the document is still settling in.
   const [refreshing, setRefreshing] = useState(false);
-  const load = useCallback(async () => { setRefreshing(true); try { setResult(await reviewRequest(base)); setError(undefined); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not load discussions."); } finally { setRefreshing(false); } }, [base]);
+  const loaded = useRef(false);
+  const load = useCallback(async () => { if (loaded.current) setRefreshing(true); try { setResult(await reviewRequest(base)); loaded.current = true; setError(undefined); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not load discussions."); } finally { setRefreshing(false); } }, [base]);
   useEffect(() => { if (contentPending && !prepareComment) selection.clear(); }, [contentPending, prepareComment, selection.clear]);
   // Looking at a discussion marks its notices read; opening the panel marks nothing (spec 2026-10-22).
   useEffect(() => { if (open && activeThreadId && unreadThreadIds.has(activeThreadId)) void markRead(activeThreadId); }, [open, activeThreadId, unreadThreadIds, markRead]);

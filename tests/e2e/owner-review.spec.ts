@@ -328,7 +328,8 @@ test("a document nobody has commented on shows the owner no way into discussions
   await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
   await expect(page.getByRole("button", { name: /discussions/ })).toHaveCount(0);
   await expect(page.locator("[data-review-marker]")).toHaveCount(0);
-  expect(await page.locator("[data-review-document]").evaluate((article) => getComputedStyle(article).paddingRight)).toBe("0px");
+  // Retried, not read once: the reading copy is replaced as the editor takes over, and a node read mid-swap has no style.
+  await expect(page.locator("[data-review-document]")).toHaveCSS("padding-right", "0px");
 });
 
 test("opening and closing the owner's discussions moves nothing under the pointer where the pane has room", async ({ page, request }) => {
