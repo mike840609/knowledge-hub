@@ -152,7 +152,9 @@ test("a pane wide enough for outline, article and discussions keeps all three si
   // Outline, article, discussions — the discussions level with their passages, beside the article —
   // none over another, once the column's 120ms slide has settled.
   const order = async () => {
-    const [outlineBox, articleBox, railBox] = [(await outlineRail.boundingBox())!, (await article.boundingBox())!, (await rail.boundingBox())!];
+    // Mid-slide a box can be momentarily absent: that is "not yet", for the poll to ask again, not a failure.
+    const [outlineBox, articleBox, railBox] = [await outlineRail.boundingBox(), await article.boundingBox(), await rail.boundingBox()];
+    if (!outlineBox || !articleBox || !railBox) return false;
     return outlineBox.x >= 0 && outlineBox.x + outlineBox.width <= articleBox.x + 1 && railBox.x >= articleBox.x + articleBox.width - 1;
   };
   await expect.poll(order).toBe(true);
