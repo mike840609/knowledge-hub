@@ -20,6 +20,10 @@ export function stampEditorReviewPaths(root: HTMLElement, markdown: string): boo
     // projection reads them as nothing and `htmlAsText`. The stamp is identity, not permission.
     copy.querySelectorAll('sup[data-type="footnote_reference"]').forEach(extra => extra.remove());
     copy.querySelectorAll<HTMLElement>('span[data-type="html"]').forEach(html => html.replaceWith(htmlAsText(html.dataset.value ?? "")));
+    // A cell's non-final `<br>` is a hard break there (`remarkCellBreaks`) and carries no text; the
+    // projection reads it as the one space the page draws. Without this the fast path fails and
+    // duplicate blocks elsewhere in the document lose their stamps.
+    copy.querySelectorAll('br[data-type="hardbreak"]').forEach(br => br.replaceWith(" "));
     const value = copy.textContent ?? "";
     return code ? value.replace(/\n$/, "") : value.replace(/[\t\n\r ]+/g, " ").replace(/^ /, "");
   };

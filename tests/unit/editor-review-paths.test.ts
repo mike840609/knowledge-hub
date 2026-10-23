@@ -206,6 +206,21 @@ test("a <br> keeps its paragraph stamped but, drawn raw in the editor, it takes 
   expect(readReviewSelection(root, markdown, selection).problem).toBe("unsupported");
 });
 
+test("a <br> in a cell keeps the cell and its duplicates stamped, though the cell takes no comment", () => {
+  const markdown = "| A |\n| --- |\n| one<br>two |\n\nSame\n\nSame";
+  const root = editor('<table><tbody><tr><th><p>A</p></th></tr><tr><td><p>one<br data-type="hardbreak" data-is-inline="false">two</p></td></tr></tbody></table><p>Same</p><p>Same</p>');
+  document.body.replaceChildren(root);
+  expect(stampEditorReviewPaths(root, markdown)).toBe(true);
+  const cells = [...root.querySelectorAll<HTMLElement>("th,td")];
+  const paragraphs = [...root.children].filter((element): element is HTMLElement => element instanceof HTMLElement && element.tagName === "P");
+  expect([...cells, ...paragraphs].map(element => element.getAttribute("data-review-path"))).toEqual(["0.0.0", "0.1.0", "1", "2"]);
+  // The editor's hard break carries no text, so the cell's page proof still fails.
+  expect(reviewBlockAnchor(cells[1], markdown)).toBeNull();
+  // Duplicate paragraphs beside it keep their paths and can still take comments.
+  expect(reviewBlockAnchor(paragraphs[0], markdown)).toMatchObject({ blockPath: [1], exact: "Same" });
+  expect(reviewBlockAnchor(paragraphs[1], markdown)).toMatchObject({ blockPath: [2], exact: "Same" });
+});
+
 test("duplicate cells stay stamped beside a footnote reference elsewhere", () => {
   const markdown = "| A | B |\n| --- | --- |\n| Same | Same |\n\nRef[^n] here.\n\n[^n]: Note.\n";
   const root = editor(`<table><tbody><tr><th><p>A</p></th><th><p>B</p></th></tr><tr><td><p>Same</p></td><td><p>Same</p></td></tr></tbody></table><p>Ref${footnoteRef("n")} here.</p><dl data-label="n" data-type="footnote_definition"><dt>n</dt><dd><p>Note.</p></dd></dl>`);
