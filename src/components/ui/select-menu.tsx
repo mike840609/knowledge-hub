@@ -22,7 +22,8 @@ export type SelectMenuOption<Value extends string | number> = {
  * platform and leaves the design language at the moment it is used.
  *
  * `Select` stays, and stays native, for a form that must submit without
- * JavaScript. This one has no `name`: it reports through `onValueChange`.
+ * JavaScript. It reports through `onValueChange`; a `name` also submits it with
+ * its form (Base UI's hidden input), for a GET filter in a client component.
  *
  * The list opens under the field, not over it with the chosen row on top of
  * the trigger (the library's default, after macOS), so it reads as the menus
@@ -37,6 +38,7 @@ export function SelectMenu<Value extends string | number>({
   className = "",
   disabled,
   id,
+  name,
   "aria-label": ariaLabel,
 }: {
   value: Value;
@@ -46,11 +48,13 @@ export function SelectMenu<Value extends string | number>({
   className?: string;
   disabled?: boolean;
   id?: string;
+  name?: string;
   "aria-label"?: string;
 }) {
   return (
     <BaseSelect.Root
       items={options}
+      name={name}
       value={value}
       disabled={disabled}
       onValueChange={(next) => {

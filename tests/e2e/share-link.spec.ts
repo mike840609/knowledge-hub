@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "./fixtures/test";
 import { showMarkdown } from "./composer-helpers";
 import { phase3UnconfiguredOrigin } from "./fixtures/phase3-identities";
+import { chooseOption } from "./fixtures/select-menu";
 
 // Server round trips (create, save, revoke) get the same budget as phase5-authoring.spec.ts.
 const ROUND_TRIP = { timeout: 15_000 };
@@ -113,7 +114,7 @@ test.describe("document share link", () => {
       await page.getByRole("menuitem", { name: "Revoke", exact: true }).click();
       await page.getByRole("alertdialog", { name: "Revoke share link?" }).getByRole("button", { name: "Confirm revoke" }).click();
       await expect(page.getByText("No shares match these filters.")).toBeVisible(ROUND_TRIP);
-      await page.getByLabel("Status", { exact: true }).selectOption("revoked");
+      await chooseOption(page.getByLabel("Status", { exact: true }), "revoked");
       await page.locator("main").getByRole("button", { name: "Search", exact: true }).click();
       await expect(managed).toContainText("Revoked", ROUND_TRIP);
       const revoked = await reader.get(path!);
