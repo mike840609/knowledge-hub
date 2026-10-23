@@ -28,10 +28,12 @@ function blocksByPath(markdown: string) {
  * footnote's number — and in the editor, a footnote reference's label and an HTML comment's source
  * (spec §3c). `[role="img"]` cannot come from a document: the reader passes no HTML through, so it
  * is only the renderer's own label for a blocked image. The editor's selection proof reads no
- * space for an HTML `<br>` (raw source in a paragraph, a text-less hard break in a cell) or a
- * Markdown hard break (a text-less hard break wherever it is), so a break that is the only
- * space between words is refused; one that only opens or ends a block leaves no text behind and
- * is accepted.
+ * space for a break. A Markdown hard break is a text-less hard break wherever it is; an HTML
+ * `<br>` is one only where it opens a cell or stands between words in a cell, and raw source
+ * anywhere else. So a break that is the only space between words is refused; a Markdown hard
+ * break that only opens or ends a block, and a `<br>` that only opens a cell, leave no text
+ * behind and are accepted; a `<br>` that opens or ends a paragraph, or ends a cell, stays raw
+ * source and is refused.
  */
 const NOT_TEXT = '.sr-only,[aria-hidden="true"],[role="img"],[data-footnote-ref],sup[data-type="footnote_reference"],span[data-type="html"][data-value^="<!--"][data-value$="-->"]';
 

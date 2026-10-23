@@ -172,10 +172,14 @@ differently: a footnote reference as its label
 in a table cell as a hard break (`br[data-type="hardbreak"]`, made by
 `remarkCellBreaks`). A Markdown hard break is that same hard break node wherever
 it is. Its stamper reads the first as nothing, the second as `htmlAsText` of its
-source, and a non-trailing hard break as the one space the projection gives it —
-a run of hard breaks that ends the block is dropped by the Markdown serialiser
-and by the stamper too — so every block keeps its path (a stamp says which block
-an element is, not that it may take a comment). The selection list also leaves
+source, and a hard break as the one space the projection gives it only when
+something follows it in the block — the stamper reads a hard break, or a run of
+them, that ends the block as nothing — so every block keeps its path (a stamp
+says which block an element is, not that it may take a comment). The Markdown
+serialiser drops one trailing hard break when it saves; a run of two it writes
+as `one\` and a line ending, which reads back as a literal backslash, in the
+editor as on the page. That is a Milkdown defect outside this change; it changes
+the saved words, and the views still agree on them. The selection list also leaves
 out the reference and a comment's span (`data-value` opening `<!--` and closing
 `-->`), so a paragraph beside either takes a comment in the editor too.
 
@@ -186,8 +190,13 @@ break is a text-less hard break wherever it is. A break that is the only space
 between the words therefore fails the editor's proof and is refused ("This
 passage cannot take a comment").
 A Markdown hard break that only opens or ends a block leaves no text behind and
-is accepted, as is a `<br>` that only opens a cell. An HTML `<br>` at the end of
-a paragraph or a cell stays raw source and is refused. The shared page and the
+is accepted, as is a `<br>` that only opens a cell. An HTML `<br>` at the start
+or end of a paragraph, or at the end of a cell, stays raw source and is refused.
+A Markdown hard break followed only by an image or a footnote reference does not
+end the block: the stamper reads its space and the block keeps its path, and the
+editor's proof, reading none, refuses it. The shared page and the reader accept
+it, and its text, so a whole-block quote, ends with that space (`a `): the
+projection drops a leading space, never a trailing one. The shared page and the
 reader accept every block holding one. That is the accepted, fail-closed limit:
 the selection proof reads no space in its place.
 
@@ -228,6 +237,15 @@ refused by the page, which draws them at the foot with a back link their text
 does not have. The editor draws no back link, so there they take a comment, as
 they did before §3c.
 
+A known limit in the editor: an empty link (`[](url)`) is drawn there as nothing
+at all, so a hard break followed only by one looks as if it ends the block. The
+stamper reads no space where the projection keeps one (`a `), that block's text
+differs, and the stamper falls back to stamping only blocks whose text is unique
+in the document: that block and any duplicated blocks are left without a path,
+and none of them takes a comment in the editor. It fails closed, on rare input.
+Trimming the projection's trailing space to match would move stored anchors, so
+it is left as it is.
+
 ## 4. The owner starts a discussion
 
 `POST /api/documents/:documentId/review-threads`, beside the owner's existing
@@ -261,10 +279,15 @@ passage (`2026-10-12-owner-comments-rail-design.md`, 2026-10-15). The rail's
 ## 5. Limits that remain
 
 - A paragraph containing a reference-style link or HTML other than `<br>` and
-  comments, and a footnote definition on the shared page, still cannot be
-  commented on. They say so (§2). Links, images, footnote references and `<br>`
-  can since §3c; a `<br>` inside a block's text is not commentable in the
-  owner's editor, and a footnote definition's paragraph is (see §3c).
+  comments, and a footnote definition on the shared page and in the reader,
+  still cannot be commented on. They say so (§2). Links, images, footnote
+  references and `<br>` can since §3c. In the owner's editor a `<br>` or a
+  Markdown hard break between words is refused, as is an HTML `<br>` that opens
+  or ends a paragraph or ends a cell; a `<br>` that opens a cell is accepted, and
+  a footnote definition's paragraph takes a comment (see §3c).
+- In the owner's editor, a hard break followed only by an empty link leaves that
+  block and any duplicated blocks unstamped, and none takes a comment there
+  (§3c, a known limit; it fails closed).
 - One block per comment.
 - The document header is pinned only in a wide pane; in a narrow one the owner's
   control scrolls away with it. The rail's "Add comment" row is the other way in.

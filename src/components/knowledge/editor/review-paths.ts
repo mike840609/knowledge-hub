@@ -2,8 +2,8 @@ import { projectReviewBlocks } from "@/modules/knowledge/domain/review-anchor";
 import { htmlAsText } from "@/shared/markdown/remark-known-html";
 import { REVIEW_PATH, reviewPathKey } from "@/shared/markdown/remark-review-paths";
 
-/** Whether anything follows `node` in its block besides a run of hard breaks. The Markdown
- * serialiser drops a break that ends a block, so such a break contributes no space. */
+/** Whether anything follows `node` in its block besides a run of hard breaks. A break that ends a
+ * block has no counterpart in the saved Markdown, so such a break contributes no space. */
 function hasContentAfter(node: Node, root: HTMLElement): boolean {
   for (let current: Node | null = node; current && current !== root; current = current.parentNode) {
     for (let next = current.nextSibling; next; next = next.nextSibling) {
@@ -34,9 +34,9 @@ export function stampEditorReviewPaths(root: HTMLElement, markdown: string): boo
     const copy = element.cloneNode(true) as HTMLElement;
     copy.querySelectorAll('.sr-only,[aria-hidden="true"],.ProseMirror-trailingBreak,.ProseMirror-separator').forEach(extra => extra.remove());
     // A hard break reads as the one space the page draws only when something follows it in the
-    // block. One that ends the block is dropped by the Markdown serialiser, so it is no space; a
-    // run of them is dropped together. Without this the fast path fails and duplicate blocks
-    // elsewhere in the document lose their stamps.
+    // block. One that ends the block, or a run of them, is no space: the Markdown parser makes no
+    // break there, and the serialiser drops a single one (spec §3c). Without this the fast path
+    // fails and duplicate blocks elsewhere in the document lose their stamps.
     copy.querySelectorAll('br[data-type="hardbreak"]').forEach(br => {
       if (hasContentAfter(br, copy)) br.replaceWith(" ");
     });
