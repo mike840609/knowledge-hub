@@ -5,6 +5,7 @@ import type { SyncRun } from "@/modules/sources/domain/sync-run";
 import type { WorkspaceActions } from "@/server/workspace-admin";
 import type { WorkspaceView } from "@/modules/workspaces/application/workspace-query-service";
 import { applicationServices } from "@/server/composition";
+import { isHiddenReadFailure } from "./read-errors";
 
 export const SOURCE_RUN_LIST_LIMIT = 20;
 export const SOURCE_RUN_DETAIL_LIMIT = 50;
@@ -49,8 +50,9 @@ export async function getSourceListModel(workspaceId: string): Promise<SourceLis
   let sources: SourceView[];
   try {
     sources = sortSourcesByName(await services.queries.listSources(caller, workspaceId, { includeArchived: true }));
-  } catch {
-    return null;
+  } catch (error) {
+    if (isHiddenReadFailure(error)) return null;
+    throw error;
   }
   const items = await services.unitOfWork.run(async (repositories) =>
     Promise.all(

@@ -8,6 +8,7 @@ vi.mock("@/server/knowledge-read", () => ({ getWorkspaceShellModel: vi.fn() }));
 import { applicationServices } from "@/server/composition";
 import { getWorkspaceShellModel } from "@/server/knowledge-read";
 import { getDraftRecoveryModel } from "@/server/draft-read";
+import { DomainError } from "@/shared/domain/errors";
 
 type Services = ReturnType<typeof ApplicationServicesFn>;
 
@@ -47,21 +48,36 @@ function source(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function tree(overrides: Record<string, unknown>[] = []) {
+  return overrides.length ? overrides : [{
+    type: "document",
+    id: "node",
+    parentId: null,
+    documentId: DOCUMENT_ID,
+    label: "Draft",
+    currentRevisionId: "rev",
+    position: 0,
+    status: "ACTIVE",
+  }];
+}
+
 function fakeServices(overrides: {
   get?: () => Promise<unknown>;
   getDocument?: () => Promise<unknown>;
   getSource?: () => Promise<unknown>;
+  listTree?: () => Promise<unknown>;
 } = {}) {
   const personal = { get: vi.fn(overrides.get ?? (async () => DRAFT)) };
   const getDocument = vi.fn(overrides.getDocument ?? (async () => document()));
   const getSource = vi.fn(overrides.getSource ?? (async () => source()));
+  const listTree = vi.fn(overrides.listTree ?? (async () => tree()));
   const services = {
     establishTrustedCaller: vi.fn(async () => ({ caller })),
     personal,
-    queries: { getDocument, getSource },
+    queries: { getDocument, getSource, listTree },
   } as unknown as Services;
   vi.mocked(applicationServices).mockReturnValue(services);
-  return { personal, getDocument, getSource };
+  return { personal, getDocument, getSource, listTree };
 }
 
 function fakeShell(canWrite = true, lifecycleState: "ACTIVE" | "ARCHIVED" = "ACTIVE") {
@@ -106,6 +122,31 @@ describe("draft recovery model", () => {
     fakeServices({ getSource: async () => source({ ownership: "SOURCE_MANAGED" }) });
     const model = await getDraftRecoveryModel(WORKSPACE_ID, SOURCE_ID, DOCUMENT_ID);
     expect(model?.canRestore).toBe(false);
+  });
+
+  it("does not offer restore when an ancestor folder is archived", async () => {
+    fakeServices({ listTree: async () => [
+      { type: "folder", id: "folder", parentId: null, label: "Archive", position: 0, status: "ARCHIVED" },
+      { type: "document", id: "node", parentId: "folder", documentId: DOCUMENT_ID, label: "Draft", currentRevisionId: "rev", position: 0, status: "ARCHIVED" },
+    ] });
+    const model = await getDraftRecoveryModel(WORKSPACE_ID, SOURCE_ID, DOCUMENT_ID);
+    expect(model).toMatchObject({ canRestore: false, folderArchived: true, treeNodeMissing: false });
+  });
+
+  it("does not offer restore when the document has no tree node", async () => {
+    fakeServices({ listTree: async () => [] });
+    const model = await getDraftRecoveryModel(WORKSPACE_ID, SOURCE_ID, DOCUMENT_ID);
+    expect(model).toMatchObject({ canRestore: false, treeNodeMissing: true });
+  });
+
+  it("treats a plain workspace-not-found domain error as a hidden draft", async () => {
+    fakeServices({ get: async () => { throw new DomainError("WORKSPACE_NOT_FOUND", "Personal workspace unavailable."); } });
+    await expect(getDraftRecoveryModel(WORKSPACE_ID, SOURCE_ID, DOCUMENT_ID)).resolves.toBeNull();
+  });
+
+  it("treats a plain document-not-found domain error as a hidden draft", async () => {
+    fakeServices({ get: async () => { throw new DomainError("DOCUMENT_NOT_FOUND", "Document unavailable."); } });
+    await expect(getDraftRecoveryModel(WORKSPACE_ID, SOURCE_ID, DOCUMENT_ID)).resolves.toBeNull();
   });
 
   it("returns null when the route source does not match the document", async () => {

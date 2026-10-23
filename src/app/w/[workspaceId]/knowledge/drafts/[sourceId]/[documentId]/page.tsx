@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/shell/page-header";
 import { MarkdownArticle } from "@/components/knowledge/markdown-article";
@@ -22,7 +23,13 @@ export default async function DraftRecoveryPage({
       ? "The source is archived. Restore the source in Sources before the original document can be edited."
       : !model.canWrite
         ? "You do not have permission to restore the original document. Download or copy the draft instead."
-        : "The original document is archived. Restore it to continue editing, or download a copy.";
+        : model.document.ownership === "SOURCE_MANAGED"
+          ? "This document comes from a synced source and cannot be restored here. Restore it from its source, or download or copy the draft."
+          : model.treeNodeMissing
+            ? "The document's place in the source is unavailable. Download or copy the draft."
+            : model.folderArchived
+              ? "The folder holding this document is archived. Restore the folder in Sources first, or download or copy the draft."
+              : "The original document is archived. Restore it to continue editing, or download a copy.";
 
   return (
     <div className="kh-page space-y-6 pb-6">
@@ -40,6 +47,11 @@ export default async function DraftRecoveryPage({
           canRestore={model.canRestore}
         />}
       />
+      {(model.sourceArchived || model.folderArchived || model.treeNodeMissing) && !model.workspaceArchived ? (
+        <p className="text-body-sm text-kh-text-muted">
+          <Link className="kh-focus-ring rounded-md text-kh-link" href={`/w/${workspaceId}/sources/${sourceId}`}>Open Sources</Link>
+        </p>
+      ) : null}
       <div className="kh-reading-column py-6">
         <MarkdownArticle markdown={model.draft.markdown} />
       </div>

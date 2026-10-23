@@ -1,7 +1,6 @@
 import { applicationServices } from "./composition";
 import { getWorkspaceShellModel } from "./knowledge-read";
-import { NotFoundError } from "@/modules/knowledge/domain/errors";
-import { WorkspaceAccessDeniedError, WorkspaceNotFoundError } from "@/modules/workspaces/domain/errors";
+import { isHiddenReadFailure } from "./read-errors";
 
 export type DraftRecoveryModel = {
   draft: { key: string; title: string; markdown: string; updatedAt: string };
@@ -17,6 +16,8 @@ export type DraftRecoveryModel = {
   canWrite: boolean;
   sourceArchived: boolean;
   workspaceArchived: boolean;
+  folderArchived: boolean;
+  treeNodeMissing: boolean;
 };
 
 /**
@@ -43,14 +44,31 @@ export async function getDraftRecoveryModel(
     const document = await services.queries.getDocument(caller, documentId, { includeArchived: true });
     if (document.workspaceId !== workspaceId || document.sourceId !== sourceId) return null;
     const source = await services.queries.getSource(caller, sourceId, { includeArchived: true });
+    const tree = await services.queries.listTree(caller, sourceId, { includeArchived: true });
     const shell = await getWorkspaceShellModel(workspaceId);
     if (!shell) return null;
+
+    const byId = new Map(tree.map(node => [node.id, node]));
+    const node = tree.find(candidate => candidate.type === "document" && candidate.documentId === documentId);
+    let treeNodeMissing = !node;
+    let folderArchived = false;
+    if (node) {
+      let parentId = node.parentId;
+      while (parentId) {
+        const parent = byId.get(parentId);
+        if (!parent) { treeNodeMissing = true; break; }
+        if (parent.type === "folder" && parent.status === "ARCHIVED") { folderArchived = true; break; }
+        parentId = parent.parentId;
+      }
+    }
 
     const canWrite = shell.access.actions.canWrite;
     const workspaceArchived = shell.access.workspace.lifecycleState === "ARCHIVED";
     const canRestore =
       canWrite &&
       !workspaceArchived &&
+      !folderArchived &&
+      !treeNodeMissing &&
       document.status === "ARCHIVED" &&
       source.status === "ACTIVE" &&
       source.ownership === "HUB_MANAGED";
@@ -69,9 +87,11 @@ export async function getDraftRecoveryModel(
       canWrite,
       sourceArchived: source.status === "ARCHIVED",
       workspaceArchived,
+      folderArchived,
+      treeNodeMissing,
     };
   } catch (error) {
-    if (error instanceof NotFoundError || error instanceof WorkspaceAccessDeniedError || error instanceof WorkspaceNotFoundError) return null;
+    if (isHiddenReadFailure(error)) return null;
     throw error;
   }
 }
