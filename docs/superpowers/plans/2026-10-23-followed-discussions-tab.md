@@ -575,7 +575,7 @@ import { FollowedDiscussionsView } from "@/components/knowledge/followed-discuss
 import { filterFollowedDiscussions, parseDiscussionFilter } from "@/modules/knowledge/domain/review-follow";
 ```
 
-Before the `try`, declare `let discussionsUnread = 0;`. As the first statements inside the existing `try`, load the follows and assign the count. This keeps a filter error showing the count and leaves errors from the load inside the page's existing `catch` (so a followed document whose Workspace is gone still reaches `notFound()`, as the other tabs do):
+Before the `try`, declare `let discussionsUnread = 0;`. As the first statements inside the existing `try`, load the follows and assign the count. This keeps a filter error showing the count. The load itself does not throw for a dead or vanished link: `linkValid` turns `scope`'s `ShareLinkNotFoundError` into a dead row, so one bad follow never takes the Shares page down.
 
 ```ts
   let discussionsUnread = 0;
@@ -603,6 +603,8 @@ Pass `discussionsUnread={discussionsUnread}` to the `SavedSharesView` and `Share
 The `followed` load runs before the ownership proof. That is safe: it reads only the caller's own follows and renders nothing until a branch proves the Workspace; a foreign Workspace still reaches `notFound()`.
 
 - [ ] **Step 6: Run unit tests, typecheck, lint**
+
+The Unfollow/Remove failure message is one page-level alert, as `SavedSharesView` shows its Remove failure; the row stays. (The spec says "inline error"; this is that, at the list's head.)
 
 Run: `npx vitest run --config vitest.config.ts tests/unit/followed-discussions-view.test.tsx tests/unit/saved-shares-view.test.tsx tests/unit/share-management-view.test.tsx`
 Run: `make verify`
@@ -672,7 +674,7 @@ test("a reader finds their discussion in Shares → Discussions, sees the reply,
   await request.post(`${owner}/api/documents/${doc.documentId}/review-threads/${thread.id}/replies`, { headers: { Origin: owner }, data: { body: "Owner answer", idempotencyKey: crypto.randomUUID() } });
   await page.reload();
   await expect(row()).toContainText("1 new reply");
-  await expect(page.getByRole("link", { name: /Discussions/ }).getByLabel(/\d+ unread/)).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Shares sections" }).getByLabel(/\d+ unread/)).toBeVisible();
 
   // Arriving marks the discussion seen by a request the page sends on its own: wait for it before leaving.
   const seen = page.waitForResponse(response => response.url().includes(`/api/share-review/threads/${thread.id}/seen`) && response.ok());
