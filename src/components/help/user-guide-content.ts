@@ -1,6 +1,6 @@
 import type {GuideContent,GuideLocale,GuideSection} from "@/components/imports/import-guide-content";
 
-export type UserGuideAction = {target:"sample"|"sources"|"preview"|"identity";label:string};
+export type UserGuideAction = {target:"sample"|"sources"|"identity";label:string};
 type GuideDetail = {title:string;items:string[];links?:UserGuideAction[]};
 type UserGuideSection = GuideSection & {details:GuideDetail[];links:UserGuideAction[]};
 type UserGuideContent = Omit<GuideContent,"sections"> & {sections:UserGuideSection[]};
@@ -12,24 +12,25 @@ function section(id:string,title:string,items:string[],details:GuideDetail[]=[],
 export function userGuideContent(locale:GuideLocale):UserGuideContent {
   if(locale==="zh-TW")return {
     title:"使用者操作手冊",
-    intro:"My Space 個人工作區的日常操作。先看示意圖，再依需要展開細節；按鈕名稱與英文介面一致。",
+    intro:"My Space 個人工作區的日常操作。先看示意圖與實際畫面，再依需要展開細節；按鈕名稱與英文介面一致。",
     sections:[
       section("quick-start","五分鐘開始使用",[
-        "在 Home 選 Import folder，依上圖完成匯入。每次都選完整根目錄。",
+        "到 Sources 選 Import folder，依上圖完成匯入。每次都選完整根目錄。",
         "預覽時展開更新項目查看差異；先解決阻擋問題，再 Apply。大量封存時先確認是否選錯目錄。",
         "成功後從結果頁開啟文章。沒有自己的資料夾？先試 Try with a sample wiki。",
       ],[{title:"預覽檢查與大量封存確認",items:[
         "掃描與上傳完成後，Import preview 會列出新增、更新、移動與封存。警告需檢查，阻擋問題必須先解決。",
         "大量封存可能要求輸入來源名稱。來源名稱只是顯示名稱，不能用來確認本機資料夾身分。範例 wiki 可在匯入頁選擇語言。",
         "只有 Apply 成功才會套用變更；取消預覽不會套用。結果頁也提供瀏覽來源的入口。",
-      ]}],[{target:"sample",label:"試用範例 wiki"},{target:"preview",label:"查看匯入預覽說明"}]),
+        "選資料夾後，瀏覽器會讀取並上傳 Markdown 來產生預覽；預覽會過期，Apply 前不會成為文章。本機刪除的檔案在 Apply 後封存，不會永久刪除。",
+      ]}],[{target:"sample",label:"試用範例 wiki"}]),
       section("sync","日常同步：檢查、預覽、套用",[
-        "在本機修改同步文件，再從 Home 的 My folders 或 Sources 選 Check for changes。",
+        "在本機修改同步文件，再到 Sources 點該來源最前面的同步圖示（Check for changes）。",
         "預覽差異與封存項目。大量文章消失時，先確認根目錄與排除規則。",
         "Apply 成功後查看結果；來源的同步歷史可回看批次變更。",
       ],[
         {title:"重新選資料夾、授權與取消同步",items:[
-          "沒有快速檢查圖示時，進入原有來源的更新頁並選 Choose folder，不必建立新來源。",
+          "最前面是資料夾圖示（Update from folder）時，點它進入原有來源的更新頁並選 Choose folder，不必建立新來源。",
           "快速檢查依賴瀏覽器記住的資料夾與讀取授權。換裝置、換瀏覽器、清除網站資料或授權失效時，需重選完整根目錄；已套用文章仍保存在帳號。",
           "Cancel checking／Cancel import 可停止本次檢查或上傳，不會撤銷先前成功的同步。",
           "Folder Sync 文件以本機為準；網站建立的個人筆記則在網站編輯。",
@@ -61,15 +62,18 @@ export function userGuideContent(locale:GuideLocale):UserGuideContent {
       ]),
       section("reading","閱讀、搜尋與整理",[
         "用 Search 找文章；同名時對照來源與原始路徑。Graph 可探索文章連結。",
-        "點星號收藏；回 Home 的 Drafts 繼續寫作、Recent 繼續閱讀。",
+        "在文件列的 ⋯ 選單選 Add to favorites 收藏（Home 列表也可點星號）；回 Home 的 Drafts 繼續寫作、Recent 繼續閱讀。",
         "選 New note 建立個人筆記；從文章選單使用封存、還原與歷史版本。",
       ],[{title:"未讀、裝置紀錄與草稿的差別",items:[
         "開啟目前版本會更新閱讀紀錄，不代表已讀完；文章再次同步更新後可能重新出現未讀。",
         "收藏、草稿與編輯紀錄保存到帳號；Recent 裡的最近開啟保存在裝置，換瀏覽器可能不同。",
         "未保存草稿不列入文章統計或匯出。",
+      ]},{title:"搜尋篩選與 Copy for Agent",items:[
+        "Search 的進階篩選可依路徑（例如 docs/runbooks）與更新日期（Updated from／Updated to）縮小範圍。",
+        "Copy for Agent 只在 My Space 提供：選 1–20 份文件整理成一份 Markdown，方便貼給代理。",
       ]}]),
-      section("insights","Home 與 Insights 的數字",[
-        "點 Home 的摘要數字開啟清單，或選 View all insights 查看完整分析。",
+      section("insights","Insights 的數字",[
+        "從側欄 Insights 開啟統計；點 Recent changes 的 Added、Updated 或 Archived 可開啟對應的文章清單。",
         "用 Refresh 更新統計。Updated 是查詢時間；Last synced 才是成功同步時間。",
       ],[{title:"統計範圍與未讀數的計算",items:[
         "Insights 顯示目前知識組成、未讀更新、來源分布與同步狀態；來源分布也列出各資料夾已開啟過的文件數。",
@@ -96,24 +100,25 @@ export function userGuideContent(locale:GuideLocale):UserGuideContent {
   };
   return {
     title:"User guide",
-    intro:"Daily tasks in My Space. Start with each diagram, then expand details as needed. Button names match the English interface.",
+    intro:"Daily tasks in My Space. Start with each diagram and screen, then expand details as needed. Button names match the English interface.",
     sections:[
       section("quick-start","Get started in five minutes",[
-        "On Home, select Import folder and follow the diagram. Always choose the complete root folder.",
+        "In Sources, select Import folder and follow the diagram. Always choose the complete root folder.",
         "Expand updated items to inspect differences. Resolve blockers before Apply; check the root if many articles are marked archived.",
         "Open an article from the result page. No folder yet? Try with a sample wiki first.",
       ],[{title:"Preview checks and large-archive confirmation",items:[
         "After scanning and uploading, Import preview lists added, updated, moved and archived items. Review warnings and resolve blockers.",
         "A large archive may require entering the source name. This is a display name, not proof of folder identity. Sample wikis offer a language choice on the import page.",
         "Only a successful Apply changes your articles; canceling a preview does not apply it. The result page also links to the source.",
-      ]}],[{target:"sample",label:"Try the sample wiki"},{target:"preview",label:"Read the import preview guide"}]),
+        "After you choose a folder, the browser reads it and uploads the Markdown to build the preview; a preview expires, and nothing becomes an article before Apply. Files deleted locally are archived after Apply, never deleted for good.",
+      ]}],[{target:"sample",label:"Try the sample wiki"}]),
       section("sync","Daily sync: check, preview, apply",[
-        "Edit synced files locally, then select Check for changes in Home's My folders or Sources.",
+        "Edit synced files locally, then in Sources select the sync icon at the start of the source's row (Check for changes).",
         "Review differences and archives. If many articles disappear, check the root and exclusions first.",
         "After Apply succeeds, check the result. Source sync history retains batch changes.",
       ],[
         {title:"Folder permission, reselection and cancellation",items:[
-          "If quick check is unavailable, open the existing source's update page and select Choose folder. Do not create a new source.",
+          "If the row starts with a folder icon (Update from folder), select it to open the existing source's update page, then Choose folder. Do not create a new source.",
           "Quick checks depend on this browser's remembered folder and read permission. A new device, browser, cleared site data or expired permission requires selecting the complete root again. Applied articles remain in your account.",
           "Cancel checking / Cancel import stops this check or upload without undoing previous successful syncs.",
           "Local files remain authoritative for Folder Sync; personal notes created in the Hub are edited on the website.",
@@ -145,15 +150,18 @@ export function userGuideContent(locale:GuideLocale):UserGuideContent {
       ]),
       section("reading","Read, search and organize",[
         "Find articles with Search; use source and original path to distinguish identical titles. Explore links in Graph.",
-        "Star an article to save a favorite; on Home, Drafts holds unfinished writing and Recent picks up where you left off.",
+        "Save a favorite with Add to favorites in a document row's ⋯ menu (on Home, the star does the same); Drafts holds unfinished writing and Recent picks up where you left off.",
         "Create a personal note with New note. Use article actions for archive, restore and revision history.",
       ],[{title:"Unread updates, device history and drafts",items:[
         "Opening the current revision updates its read record, not whether you finished reading. A later synced revision may become unread again.",
         "Favorites, drafts and edits follow your account. Recently opened articles in Recent are stored on this device and may differ in another browser.",
         "Unsaved drafts are excluded from article counts and export.",
+      ]},{title:"Search filters and Copy for Agent",items:[
+        "Advanced Search filters narrow results by path (for example docs/runbooks) and by update date (Updated from / Updated to).",
+        "Copy for Agent, in My Space only, builds one Markdown bundle from 1–20 documents you select, ready to paste into an agent.",
       ]}]),
-      section("insights","Understand Home and Insights",[
-        "Click a summary number on Home for its list, or View all insights for detailed analysis.",
+      section("insights","Understand Insights",[
+        "Open Insights from the sidebar; under Recent changes, Added, Updated or Archived opens the matching article list.",
         "Use Refresh for current statistics. Updated is the query time; Last synced is the successful sync time.",
       ],[{title:"Statistics scope and unread counts",items:[
         "Insights shows current knowledge composition, unread updates, source distribution and sync status. Distribution also shows how many documents you have opened in each folder.",

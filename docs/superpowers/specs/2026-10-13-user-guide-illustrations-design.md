@@ -65,3 +65,51 @@ The guide's PageHeader, introduction and entry links retain the standard `kh-pag
 container to honor the cross-page breadcrumb origin. Only the chapter-navigation
 and article grid uses `kh-page-wide`, following the same composition as Graph.
 The existing breadcrumb alignment test remains unchanged.
+
+## Real screenshots (2026-10-22)
+
+Amends the opening rule against screenshots. Each workflow chapter except
+Troubleshooting now pairs its diagram with real screens: the diagram explains why,
+the screen shows where. The original concern was tiny baked-in text, so screens
+are cropped to the relevant region at 2x pixel density rather than whole windows,
+and the control to use is outlined in the focus colour. Each screen exists in
+light and dark and follows the app's `data-theme`; captions state the action in
+the guide's language, and the caption doubles as alt text. A pictured page looks
+exactly like the guide around it, so each screen is framed as a window (neutral
+title bar with three dots and the page name, decorative and `aria-hidden`) and
+lifted with `shadow-popover`, so its controls never read as the guide's own. The
+window alone does that; no tray around it.
+
+Screens come from a fresh account and the zh-TW sample wiki, captured by
+`tests/e2e/user-guide-screenshots.spec.ts` (`make guide-screenshots`, skipped in
+the normal suite). They are committed under `src/components/help/screens/` and
+served through `next/image`. A pictured screen that changes is re-captured, not
+hand-edited. The sample source has no remembered folder, so the sync screen
+shows Update from folder; its caption says Check for changes appears beside it
+when the browser remembers the folder.
+
+## Diagrams and screens divide the work
+
+Beside real screens, diagrams that imitated the interface showed the same page
+twice, once real and once drawn. A screen now answers where and what to press; a
+diagram only what a screen cannot show: order, cause and where a rule applies.
+Reading no longer draws a sidebar and article; it contrasts Favorites (kept on the
+account) with Recent (kept on this device). Sharing keeps its flow and drops the
+drawn article and comments panel; selecting a passage to comment moves into the
+flow's last step. Every diagram is flat on `bg-subtle`, with no border, caption bar
+or shadow, so a framed, lifted window always means a real screen.
+
+## Numbered steps and paths
+
+Each control a screen points at carries a number, placed by the capture script on
+the page before the shot, and the caption names the steps in that order (① review
+warnings, ② Apply changes). The window's title bar shows how to reach the page
+(`Sources › Import preview`) rather than its name alone. The window's dots stay
+neutral: coloured ones would compete with the numbered marks and need three new
+colour tokens.
+
+Daily sync opens with the Sources list, one row of each kind, numbered: a Hub
+source (web notes, nothing to sync), a folder this browser remembers (Check for
+changes, one click) and one it does not (Update from folder, pick the root again).
+The caption explains each. The capture writes the remembered-folder record the row
+reads instead of picking a real folder, which a test browser cannot do.

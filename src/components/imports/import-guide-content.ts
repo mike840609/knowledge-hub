@@ -1,7 +1,8 @@
 /**
- * Content of the in-app guide "Bring your wiki into Knowledge Hub".
+ * Content of "Folder format and import rules", the user guide's reference part
+ * (`/help#format-reference`): what a folder must look like.
  *
- * Two content objects, one per locale, with the same seven sections in the
+ * Two content objects, one per locale, with the same five sections in the
  * same order. Every number the server enforces comes in as `limits` (read from
  * `importRuntimeConfig()` by the page), so the guide cannot disagree with what
  * the importer does. Text is plain; a `backtick span` renders as inline code.
@@ -16,6 +17,7 @@ export type GuideLimits = {
 
 export type GuideBlock =
   | { kind: "p"; text: string }
+  | { kind: "note"; text: string }
   | { kind: "ul" | "ol"; items: string[] }
   | { kind: "table"; head: string[]; rows: string[][] }
   | { kind: "code"; text: string };
@@ -24,15 +26,7 @@ export type GuideSection = { id: string; title: string; body: GuideBlock[] };
 export type GuideContent = { title: string; intro: string; sections: GuideSection[] };
 export type GuideLocale = "en" | "zh-TW";
 
-export const GUIDE_SECTION_IDS = [
-  "what-you-need",
-  "from-obsidian",
-  "from-a-tool",
-  "import-preview-apply",
-  "keep-in-sync",
-  "read-search-agent",
-  "limits",
-] as const;
+export const GUIDE_SECTION_IDS = ["example", "checklist", "titles-links", "knowledge-id", "limits"] as const;
 
 /** The importer accepts at most this many extra excluded paths (see import-scope.ts). */
 const MAX_EXCLUDED_PATHS = 50;
@@ -58,41 +52,36 @@ function formatCount(value: number): string {
 function english(limits: GuideLimits): GuideContent {
   const fileLimit = formatGuideBytes(limits.maxMarkdownFileBytes);
   return {
-    title: "Bring your wiki into Knowledge Hub",
+    title: "Folder format and import rules",
     intro:
-      "Knowledge Hub imports a folder of Markdown files. This guide says what a folder needs to look like, what you will see while importing, and how to keep it up to date.",
+      "What a folder of Markdown files needs for Knowledge Hub to import it: the files, the links and the limits.",
     sections: [
       {
-        id: "what-you-need",
-        title: "What you need",
+        id: "example",
+        title: "A complete example",
         body: [
           {
             kind: "p",
-            text: "A folder of `.md` files. It can have subfolders; each Markdown file becomes one document, and the folders are kept as the tree.",
+            text: "A folder like this imports as it is. An Obsidian vault already fits: choose the vault folder, and its `.obsidian` settings folder is skipped.",
+          },
+          {
+            kind: "code",
+            text: "wiki/                     <- choose this folder\n├── index.md\n├── handbook/\n│   ├── leave-policy.md\n│   └── onboarding.md\n└── .obsidian/            <- skipped",
+          },
+          { kind: "p", text: "`handbook/leave-policy.md`, with every form this guide describes:" },
+          {
+            kind: "code",
+            text: "---\ntitle: Leave policy\nknowledge_id: leave-policy\n---\n# Leave policy\n\nAsk your manager first. See [[Onboarding]] and [the handbook](../index.md).\n\n## How to request leave",
           },
           {
             kind: "p",
-            text: "No folder yet? On the Import folder page, choose a language under Try with a sample wiki. It imports a small team handbook through the same Preview and Apply steps as your own folder, so you can see the whole flow before you use real files.",
+            text: "Each Markdown file becomes one document and the folders become the tree. `knowledge_id` is optional; see below. No folder yet? Try with a sample wiki on the Import folder page imports a small handbook through the same Preview and Apply as your own folder.",
           },
         ],
       },
       {
-        id: "from-obsidian",
-        title: "From an Obsidian vault",
-        body: [
-          {
-            kind: "p",
-            text: "An Obsidian vault works as it is: choose the vault folder. The `.obsidian` settings folder and any `.git` folder are always skipped.",
-          },
-          {
-            kind: "p",
-            text: "Obsidian's `[[wikilinks]]` are understood, including a path-qualified form `[[folder/Note]]`. Images and other attachments are recorded as references only (see Limits).",
-          },
-        ],
-      },
-      {
-        id: "from-a-tool",
-        title: "From a tool or agent that writes Markdown",
+        id: "checklist",
+        title: "Checklist for tools and agents",
         body: [
           {
             kind: "p",
@@ -109,74 +98,43 @@ function english(limits: GuideLimits): GuideContent {
               "Do not rely on files or folders whose names start with a dot, or on `node_modules` folders and `Thumbs.db` files, at any depth: a folder such as `.wiki/` is skipped without a warning. Skipped paths are never read or uploaded, and they do not count toward the file-count or size limits.",
             ],
           },
-          {
-            kind: "p",
-            text: "A title comes from the frontmatter `title`, then the first H1, then the file name. When the frontmatter title and the first H1 differ, the frontmatter title wins and Preview shows a warning.",
-          },
-          {
-            kind: "p",
-            text: "To link to a heading, use an anchor in GitHub's style, such as `#how-to-request-leave`. Headings written in any script keep their characters in the anchor. Links resolve only inside one workspace.",
-          },
-          {
-            kind: "p",
-            text: `The folders \`.git\` and \`.obsidian\` are always skipped (like any name that starts with a dot). You can exclude up to ${MAX_EXCLUDED_PATHS} more paths in the import form, as exact relative paths with no wildcards.`,
-          },
         ],
       },
       {
-        id: "import-preview-apply",
-        title: "Import, Preview, Apply",
+        id: "titles-links",
+        title: "Titles, links and anchors",
         body: [
-          {
-            kind: "p",
-            text: "Choose the folder. Knowledge Hub reads it in your browser, sends the Markdown files to Knowledge Hub to build the Preview, and opens it. That upload is only a temporary Preview that expires; nothing becomes a document in your workspace until you press Apply changes.",
-          },
           {
             kind: "ul",
             items: [
-              "Summary: how many documents are added, updated, moved or renamed, and archived.",
-              "Changes, grouped as Added, Updated, Moved / Renamed, Archived / Restored and Unchanged, with a filter.",
-              "Warnings: something worth a look. A warning does not stop Apply.",
-              "Blockers: a problem that must be fixed first. Apply stays disabled while any blocker remains.",
+              "Title: the frontmatter `title`, then the first H1, then the file name. When the frontmatter title and the first H1 differ, the frontmatter title wins and Preview shows a warning.",
+              "`[[Title]]` links by title. Add the folder, `[[folder/Note]]`, when two notes share a name; part of the path or the full path from the folder you import both work.",
+              "A relative Markdown link, such as `[text](../folder/note.md)`, links by path.",
+              "To link to a heading, use an anchor in GitHub's style, such as `#how-to-request-leave`. Headings written in any script keep their characters in the anchor.",
+              "Links resolve only inside one workspace, when the page is read: a link whose target no longer exists shows as unresolved.",
             ],
-          },
-          {
-            kind: "p",
-            text: "Each diagnostic names the file it is about and says what is wrong. Expect exactly one warning from the sample wiki, on purpose: one file's frontmatter title differs from its first H1, so you can see how a warning reads.",
-          },
-          {
-            kind: "code",
-            text: "frontmatter.title differs from the first H1; frontmatter.title wins.",
-          },
-          {
-            kind: "p",
-            text: "Apply changes saves the result: new files become documents, changed files get a new revision, and files that are gone become archived.",
           },
         ],
       },
       {
-        id: "keep-in-sync",
-        title: "Keeping it in sync",
+        id: "knowledge-id",
+        title: "Keep a document through renames",
         body: [
           {
-            kind: "p",
-            text: "Importing is one-way. The folder on your computer is authoritative: edit your files there, not in Knowledge Hub. Imported documents are read-only in the Hub.",
+            kind: "note",
+            text: "If you rename or move a file and also edit it before the next sync, it becomes a new document: the old one is archived, and its share links, favorites and history stay with the archived copy.",
           },
           {
             kind: "p",
-            text: "To pick up changes, open the source, choose Update from folder, select the folder again, then Preview and Apply. Files you removed become archived documents; nothing is deleted for good.",
+            text: "Each sync recognizes a file by its path, or, when the path changed, by unchanged content. A `knowledge_id` keeps the document the same whatever changes:",
           },
           {
-            kind: "p",
-            text: "In Chrome or Edge, Knowledge Hub can remember the folder, and a one-click Check for changes button on the source re-scans it and opens a new Preview. Selecting the folder again always works.",
-          },
-          {
-            kind: "p",
-            text: "Each sync recognizes a file by its path, or, when the path changed, by unchanged content. If you rename or move a file and also edit it before the next sync, it becomes a new document: the old one is archived, and its share links, favorites and history stay with the archived copy.",
-          },
-          {
-            kind: "p",
-            text: "To keep a document the same through renames and edits, give it a `knowledge_id` in its frontmatter: a text value up to 512 characters, unique within the folder (quote it if it is only digits, such as `\"2024\"`, or the import refuses it as a number). Add it to an existing file in a sync of its own, before renaming, so that sync still matches the file by its path. Once a document has one, keep it: removing or changing it, or reusing it in another file, blocks the next Preview.",
+            kind: "ol",
+            items: [
+              "Add a `knowledge_id` to the frontmatter: a text value up to 512 characters, unique within the folder. Quote it if it is only digits, such as `\"2024\"`, or the import refuses it as a number.",
+              "Sync that change on its own, before renaming, so that sync still matches the file by its path.",
+              "Keep it from then on: removing or changing it, or reusing it in another file, blocks the next Preview.",
+            ],
           },
           {
             kind: "code",
@@ -185,26 +143,8 @@ function english(limits: GuideLimits): GuideContent {
         ],
       },
       {
-        id: "read-search-agent",
-        title: "Read, search, and Copy for Agent",
-        body: [
-          {
-            kind: "p",
-            text: "Imported documents open in the reader like any other. Links between them are clickable; a link is resolved when the page is read, so a link whose target no longer exists shows as unresolved.",
-          },
-          {
-            kind: "p",
-            text: "Search finds them by text. Advanced filters narrow the results by path, for example `docs/runbooks`, and by the date a document was updated (Updated from, Updated to).",
-          },
-          {
-            kind: "p",
-            text: "Copy for Agent, available in your personal workspace (My Space), builds one Markdown bundle from 1–20 documents you select, ready to paste into an agent.",
-          },
-        ],
-      },
-      {
         id: "limits",
-        title: "Limits",
+        title: "Limits and skipped paths",
         body: [
           { kind: "p", text: "These are the limits this server enforces right now." },
           {
@@ -215,7 +155,7 @@ function english(limits: GuideLimits): GuideContent {
               ["Length of one file path", formatGuideBytes(limits.maxPathBytes)],
               ["Size of one Markdown file", fileLimit],
               ["Total size of Markdown files in one import", formatGuideBytes(limits.maxMarkdownTotalBytes)],
-              ["Extra excluded paths", `Up to ${MAX_EXCLUDED_PATHS}, exact paths, no wildcards`],
+              ["Extra excluded paths", `Up to ${MAX_EXCLUDED_PATHS}, exact relative paths, no wildcards; set in the import form`],
               ["Always skipped", "Names that start with a dot (including `.git` and `.obsidian`), `node_modules`, `Thumbs.db`"],
               ["Assets and attachments", "References only; no binary attachment storage"],
             ],
@@ -229,41 +169,36 @@ function english(limits: GuideLimits): GuideContent {
 function traditionalChinese(limits: GuideLimits): GuideContent {
   const fileLimit = formatGuideBytes(limits.maxMarkdownFileBytes);
   return {
-    title: "把你的維基帶進 Knowledge Hub",
+    title: "資料夾格式與匯入規則",
     intro:
-      "Knowledge Hub 可以匯入一個放滿 Markdown 檔案的資料夾。這份指南說明資料夾需要長什麼樣子、匯入時會看到什麼，以及如何讓內容保持最新。",
+      "Knowledge Hub 能匯入的 Markdown 資料夾需要符合什麼：檔案、連結與限制。",
     sections: [
       {
-        id: "what-you-need",
-        title: "你需要準備什麼",
+        id: "example",
+        title: "完整範例",
         body: [
           {
             kind: "p",
-            text: "一個放著 `.md` 檔案的資料夾，裡面可以有子資料夾。每個 Markdown 檔案會成為一份文件，資料夾結構則會保留成目錄樹。",
+            text: "下面這樣的資料夾可以直接匯入。Obsidian 筆記庫（vault）不用修改就符合：選筆記庫資料夾即可，`.obsidian` 設定資料夾會被略過。",
+          },
+          {
+            kind: "code",
+            text: "wiki/                     <- 選這個資料夾\n├── index.md\n├── handbook/\n│   ├── leave-policy.md\n│   └── onboarding.md\n└── .obsidian/            <- 略過",
+          },
+          { kind: "p", text: "`handbook/leave-policy.md` 的內容，包含這份指南提到的所有寫法：" },
+          {
+            kind: "code",
+            text: "---\ntitle: 請假規定\nknowledge_id: leave-policy\n---\n# 請假規定\n\n先和主管確認。另見 [[新人報到]] 與 [團隊手冊](../index.md)。\n\n## 怎麼申請請假",
           },
           {
             kind: "p",
-            text: "還沒有資料夾嗎？在 Import folder（匯入資料夾）頁面的「Try with a sample wiki」下選一種語言，就能匯入一份小型團隊手冊。它走的預覽（Preview）與套用（Apply）流程和你自己的資料夾完全相同，可以先看過整個流程，再換成真正的檔案。",
+            text: "每個 Markdown 檔案會成為一份文件，資料夾結構則成為目錄樹。`knowledge_id` 可省略，說明見下方。還沒有資料夾嗎？在 Import folder 頁面選「Try with a sample wiki」，就能用和自己資料夾相同的預覽（Preview）與套用（Apply）流程匯入一份小型手冊。",
           },
         ],
       },
       {
-        id: "from-obsidian",
-        title: "從 Obsidian 筆記庫（vault）匯入",
-        body: [
-          {
-            kind: "p",
-            text: "Obsidian 筆記庫（vault）不必修改就能匯入：直接選取筆記庫資料夾即可。`.obsidian` 設定資料夾與 `.git` 資料夾一律會被略過。",
-          },
-          {
-            kind: "p",
-            text: "系統看得懂 Obsidian 的維基連結（wikilink），寫成 `[[標題]]`，也看得懂含資料夾路徑的寫法 `[[folder/Note]]`。圖片等附件只會記錄為參照（詳見「限制」）。",
-          },
-        ],
-      },
-      {
-        id: "from-a-tool",
-        title: "從會寫出 Markdown 的工具或代理匯入",
+        id: "checklist",
+        title: "給工具與代理的檢查清單",
         body: [
           {
             kind: "p",
@@ -280,74 +215,43 @@ function traditionalChinese(limits: GuideLimits): GuideContent {
               "不要依賴名稱以點開頭的檔案或資料夾，也不要依賴任何層級的 `node_modules` 資料夾與 `Thumbs.db` 檔案：像 `.wiki/` 這樣的資料夾會被略過，而且不會出現警告。被略過的路徑不會被讀取或上傳，也不計入檔案數與大小限制。",
             ],
           },
-          {
-            kind: "p",
-            text: "標題的取用順序是：frontmatter 的 `title`、第一個 H1、檔案名稱。如果 frontmatter 標題與第一個 H1 不一致，會以 frontmatter 標題為準，預覽（Preview）也會顯示一則警告。",
-          },
-          {
-            kind: "p",
-            text: "要連到某個標題，請用 GitHub 風格的錨點，例如 `#how-to-request-leave`。任何語言的標題，錨點都會保留原本的文字。連結只在同一個工作區內解析。",
-          },
-          {
-            kind: "p",
-            text: `\`.git\` 與 \`.obsidian\` 資料夾一律會被略過（名稱以點開頭的路徑都是如此）。你還可以在匯入表單中再排除最多 ${MAX_EXCLUDED_PATHS} 個路徑，必須是精確的相對路徑，不支援萬用字元。`,
-          },
         ],
       },
       {
-        id: "import-preview-apply",
-        title: "匯入、預覽、套用",
+        id: "titles-links",
+        title: "標題、連結與錨點",
         body: [
-          {
-            kind: "p",
-            text: "選取資料夾後，Knowledge Hub 會在你的瀏覽器中讀取，並把 Markdown 檔案上傳到 Knowledge Hub 以產生預覽（Preview）。這份上傳只是會過期的暫時預覽；在你按下套用（Apply）之前，不會有任何內容成為工作區裡的文件。",
-          },
           {
             kind: "ul",
             items: [
-              "摘要：新增、更新、移動或重新命名、封存的文件各有幾份。",
-              "變更清單：依「新增、更新、移動／重新命名、封存／還原、未變更」分組，並可篩選。",
-              "警告：值得留意的地方，不會阻止套用。",
-              "阻擋項目：必須先修正的問題，只要還有任何一項，就無法套用。",
+              "標題：依序取 frontmatter 的 `title`、第一個 H1、檔案名稱。frontmatter 標題與第一個 H1 不一致時，以 frontmatter 標題為準，預覽（Preview）也會顯示一則警告。",
+              "維基連結（wikilink）`[[標題]]` 以標題連結。兩份筆記同名時加上資料夾，寫成 `[[folder/Note]]`；可以寫部分路徑，也可以寫從匯入資料夾起算的完整路徑。",
+              "相對路徑的 Markdown 連結，例如 `[文字](../folder/note.md)`，以路徑連結。",
+              "要連到某個標題，請用 GitHub 風格的錨點，例如 `#how-to-request-leave`。任何語言的標題，錨點都會保留原本的文字。",
+              "連結只在同一個工作區內、於閱讀頁面時解析：目標已不存在的連結會顯示為未解析。",
             ],
-          },
-          {
-            kind: "p",
-            text: "每則診斷訊息都會指出是哪個檔案、哪裡有問題。範例知識庫刻意只會產生一則警告：其中一個檔案的 frontmatter 標題與第一個 H1 不同，讓你看看警告長什麼樣子。",
-          },
-          {
-            kind: "code",
-            text: "frontmatter.title differs from the first H1; frontmatter.title wins.",
-          },
-          {
-            kind: "p",
-            text: "按下「Apply changes」就會儲存結果：新檔案成為文件，有修改的檔案產生新版本，已不存在的檔案則會封存。",
           },
         ],
       },
       {
-        id: "keep-in-sync",
-        title: "保持同步",
+        id: "knowledge-id",
+        title: "改名或移動時保持同一份文件",
         body: [
           {
-            kind: "p",
-            text: "匯入是單向的，以你電腦上的資料夾為準：要修改請在本機檔案裡改，不要在 Knowledge Hub 裡改。匯入後的文件在 Hub 中是唯讀的。",
+            kind: "note",
+            text: "如果在下次同步前同時改名（或移動）並編輯某個檔案，它會變成一份新文件：舊文件會被封存，它的分享連結、收藏與歷史紀錄都留在封存的那一份。",
           },
           {
             kind: "p",
-            text: "要更新內容，請開啟該來源，選擇「Update from folder」，重新選取資料夾，再依序預覽（Preview）與套用（Apply）。你刪掉的檔案會變成封存文件，不會被永久刪除。",
+            text: "每次同步會用路徑辨認同一個檔案；路徑改變時，則用沒有變動的內容來辨認。加上 `knowledge_id`，不論怎麼改，文件都會是同一份：",
           },
           {
-            kind: "p",
-            text: "在 Chrome 或 Edge 中，Knowledge Hub 可以記住該資料夾，來源頁面上的「Check for changes」按鈕只要點一下就會重新掃描並開啟新的預覽。重新選取資料夾則永遠可用。",
-          },
-          {
-            kind: "p",
-            text: "每次同步會用路徑辨認同一個檔案；路徑改變時，則用沒有變動的內容來辨認。如果你在下次同步前同時改名（或移動）並編輯了某個檔案，它會變成一份新文件：舊文件會被封存，它的分享連結、收藏與歷史紀錄都留在封存的那一份。",
-          },
-          {
-            kind: "p",
-            text: "想讓文件在改名、編輯後仍是同一份，請在它的 frontmatter 加上 `knowledge_id`：512 個字元以內、在資料夾中不重複的文字值（若只有數字，例如 `\"2024\"`，請加上引號，否則會被當成數字而無法匯入）。要替既有檔案加上它時，請先單獨同步一次再改名，讓那次同步仍能用路徑認出這個檔案。文件一旦有了 `knowledge_id` 就請保留：移除或修改它，或在另一個檔案重複使用，都會讓下一次預覽無法套用。",
+            kind: "ol",
+            items: [
+              "在 frontmatter 加上 `knowledge_id`：512 個字元以內、在資料夾中不重複的文字值。若只有數字，例如 `\"2024\"`，請加上引號，否則會被當成數字而無法匯入。",
+              "先單獨同步這次變更，再改名，讓那次同步仍能用路徑認出這個檔案。",
+              "之後請一直保留：移除或修改它，或在另一個檔案重複使用，都會讓下一次預覽無法套用。",
+            ],
           },
           {
             kind: "code",
@@ -356,26 +260,8 @@ function traditionalChinese(limits: GuideLimits): GuideContent {
         ],
       },
       {
-        id: "read-search-agent",
-        title: "閱讀、搜尋與 Copy for Agent",
-        body: [
-          {
-            kind: "p",
-            text: "匯入的文件和其他文件一樣在閱讀器中開啟，文件之間的連結可以直接點選。連結是在閱讀頁面時才解析，所以目標已不存在的連結會顯示為未解析。",
-          },
-          {
-            kind: "p",
-            text: "搜尋可以用文字找到這些文件。進階篩選可以依路徑縮小範圍，例如 `docs/runbooks`，也可以依文件的更新日期篩選（Updated from、Updated to）。",
-          },
-          {
-            kind: "p",
-            text: "Copy for Agent 只在你的個人工作區（My Space）提供，會把你選取的 1–20 份文件整理成一份 Markdown，方便貼給代理使用。",
-          },
-        ],
-      },
-      {
         id: "limits",
-        title: "限制",
+        title: "限制與略過規則",
         body: [
           { kind: "p", text: "以下是此伺服器目前實際採用的限制。" },
           {
@@ -386,7 +272,7 @@ function traditionalChinese(limits: GuideLimits): GuideContent {
               ["單一檔案路徑的長度", formatGuideBytes(limits.maxPathBytes)],
               ["單一 Markdown 檔案的大小", fileLimit],
               ["一次匯入的 Markdown 檔案總大小", formatGuideBytes(limits.maxMarkdownTotalBytes)],
-              ["額外排除的路徑", `最多 ${MAX_EXCLUDED_PATHS} 個，須為精確路徑，不支援萬用字元`],
+              ["額外排除的路徑", `最多 ${MAX_EXCLUDED_PATHS} 個，須為精確的相對路徑，不支援萬用字元；在匯入表單設定`],
               ["一律略過", "名稱以點開頭的路徑（包含 `.git` 與 `.obsidian`）、`node_modules`、`Thumbs.db`"],
               ["資源與附件", "只保留參照，不儲存二進位附件"],
             ],

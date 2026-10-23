@@ -15,7 +15,7 @@ The current version is **0.1.0 and under active development**. A personal worksp
 
 ## User guide
 
-Open the account menu in the bottom of the sidebar and select **Help & guides** (`/help`, the same address for everyone; the folder format guide is `/help/import-guide`).
+Open the account menu in the bottom of the sidebar and select **Help & guides** (`/help`, the same address for everyone; its last part, the folder format reference, is `/help#format-reference`).
 The in-app English and Traditional Chinese manual covers first import, repeat sync,
 permissions and recovery, reading, statistics, sharing and export. Preview and sync
 errors link to the relevant sections. The existing **Import folder → Read the guide**
@@ -115,7 +115,7 @@ npm run dev
 
 ### Your first workflow
 
-1. Choose **New note** to write a note, or **Import folder** to bring in a Markdown folder. The import page links to an in-app guide, "Bring your wiki into Knowledge Hub", and offers **Try with a sample wiki**: it imports a ready-made folder (English or Traditional Chinese, from `public/sample-wiki/`) through the normal Preview → Apply flow.
+1. Choose **New note** to write a note, or **Import folder** to bring in a Markdown folder. The import page links to an in-app guide, "Folder format and import rules", and offers **Try with a sample wiki**: it imports a ready-made folder (English or Traditional Chinese, from `public/sample-wiki/`) through the normal Preview → Apply flow.
 2. For imports, review additions, updates, archives, and diagnostics in Preview before applying changes.
 3. Use `[[Document title]]` in editable notes to link documents, then open Graph to explore relationships.
 4. Save a note before creating a read-only share link or downloading its Markdown.

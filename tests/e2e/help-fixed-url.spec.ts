@@ -13,10 +13,8 @@ test("two people open the same guide address and read the same guide, each led i
     await expect(page).toHaveURL(`${origin}/help`);
     await expect(page.getByRole("heading", { level: 1, name: "使用者操作手冊" })).toBeVisible();
     await expect(page.getByRole("link", { name: "開始匯入", exact: true })).toHaveAttribute("href", `/w/${ws}/sources/import`);
-    await expect(page.getByRole("link", { name: "Markdown 格式、knowledge_id 與匯入限制", exact: true })).toHaveAttribute("href", "/help/import-guide?lang=zh-TW");
-    await page.goto(`${origin}/help/import-guide`);
-    await expect(page.getByRole("heading", { level: 1, name: "把你的維基帶進 Knowledge Hub" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Try the sample wiki" })).toHaveAttribute("href", `/w/${ws}/sources/import#sample-wiki`);
+    await expect(page.getByRole("link", { name: "資料夾格式與匯入規則", exact: true })).toHaveAttribute("href", "#format-reference");
+    await expect(page.getByRole("link", { name: "試用範例 wiki", exact: true })).toHaveAttribute("href", `/w/${ws}/sources/import#sample-wiki`);
   }
 });
 
@@ -26,9 +24,9 @@ test("an old workspace guide link lands on the shared address, its language kept
   await expect(page).toHaveURL(/\/help\?lang=en$/);
   await expect(page.getByRole("heading", { level: 1, name: "User guide" })).toBeVisible();
   await page.goto(`/w/${ws}/sources/import/guide?lang=zh-TW`);
-  await expect(page).toHaveURL(/\/help\/import-guide\?lang=zh-TW$/);
+  await expect(page).toHaveURL(/\/help\?lang=zh-TW#format-reference$/);
   await page.goto(`/w/${ws}/sources/import/guide`);
-  await expect(page).toHaveURL(/\/help\/import-guide$/);
+  await expect(page).toHaveURL(/\/help#format-reference$/);
 });
 
 test("the account menu leads to the shared address", async ({ page, request }) => {

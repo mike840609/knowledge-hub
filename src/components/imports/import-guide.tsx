@@ -1,13 +1,4 @@
-import { PageHeader } from "@/components/shell/page-header";
-import Link from "next/link";
-import type { GuideBlock, GuideContent, GuideLocale } from "./import-guide-content";
-
-const LANGUAGES: { locale: GuideLocale; label: string }[] = [
-  { locale: "en", label: "English" },
-  { locale: "zh-TW", label: "繁體中文" },
-];
-
-const LINK = "w-fit rounded-md text-body font-medium text-kh-text-muted underline-offset-4 hover:underline kh-focus-ring";
+import type { GuideBlock } from "./import-guide-content";
 
 /** A `backtick span` in the content is inline code; everything else is text. */
 function Inline({ text }: { text: string }): React.JSX.Element {
@@ -28,6 +19,8 @@ function Block({ block, caption }: { block: GuideBlock; caption: string }): Reac
   switch (block.kind) {
     case "p":
       return <p className="mt-2 text-body text-kh-text-secondary"><Inline text={block.text} /></p>;
+    case "note":
+      return <p className="mt-2 rounded-md border-l-2 border-kh-primary bg-kh-bg-subtle px-3 py-2 text-body font-medium text-kh-text"><Inline text={block.text} /></p>;
     case "ul":
     case "ol": {
       const List = block.kind;
@@ -41,7 +34,7 @@ function Block({ block, caption }: { block: GuideBlock; caption: string }): Reac
       return <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded-md border border-kh-border bg-kh-bg-subtle px-3 py-2 font-mono text-body-sm text-kh-text">{block.text}</pre>;
     case "table":
       return (
-        <div className="mt-2 overflow-x-auto">
+        <div className="relative mt-2 overflow-x-auto">
           <table className="w-full border-collapse text-left text-body">
             <caption className="sr-only">{caption}</caption>
             <thead>
@@ -61,52 +54,6 @@ function Block({ block, caption }: { block: GuideBlock; caption: string }): Reac
         </div>
       );
   }
-}
-
-/** The guide page body, at one address for everyone (`/help/import-guide`): language switch, content in its own `lang`, and the way back to the reader's own import form. */
-export function ImportGuide({
-  workspaceId,
-  locale,
-  content,
-}: {
-  workspaceId: string;
-  locale: GuideLocale;
-  content: GuideContent;
-}): React.JSX.Element {
-  const guideHref = "/help/import-guide";
-  return (
-    <main className="kh-page pb-6" lang={locale}>
-      <PageHeader location="Import folder" locationHref={`/w/${workspaceId}/sources/import`} title={content.title} />
-      <nav aria-label="Guide language" className="mt-3 flex flex-wrap items-center gap-3 text-body">
-        {LANGUAGES.map((language) => (
-          <Link
-            key={language.locale}
-            href={`${guideHref}?lang=${language.locale}`}
-            lang={language.locale}
-            aria-current={language.locale === locale ? "page" : undefined}
-            className={`rounded-md underline-offset-4 hover:underline kh-focus-ring ${language.locale === locale ? "font-semibold text-kh-text" : "text-kh-link"}`}
-          >
-            {language.label}
-          </Link>
-        ))}
-      </nav>
-      <div lang={locale} className="mt-4 max-w-reading">
-        <p className="mt-1 text-body text-kh-text-muted">{content.intro}</p>
-        {content.sections.map((section) => (
-          <section key={section.id} id={section.id} aria-labelledby={`${section.id}-heading`} className="mt-6">
-            <h2 id={`${section.id}-heading`} className="text-title font-semibold text-kh-text">{section.title}</h2>
-            {section.body.map((block, index) => <Block key={index} block={block} caption={section.title} />)}
-          </section>
-        ))}
-      </div>
-      <p className="mt-6 text-body"><Link className={LINK} href={`/help?lang=${locale}`}>{locale==="zh-TW"?"日常操作與疑難排解手冊":"Daily operations and troubleshooting"}</Link></p>
-      <p className="mt-6 text-body">
-        <Link className="rounded-md font-medium text-kh-link underline-offset-4 hover:underline kh-focus-ring" href={`/w/${workspaceId}/sources/import#sample-wiki`}>
-          Try the sample wiki
-        </Link>
-      </p>
-    </main>
-  );
 }
 
 export {Block as GuideContentBlock};

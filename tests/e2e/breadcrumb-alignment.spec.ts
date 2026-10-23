@@ -11,7 +11,7 @@ test("workspace page breadcrumbs share a desktop origin and document rows share 
   const { sourceId, runId } = await applied.json();
   await page.setViewportSize({ width: 1440, height: 1000 });
   let origin: { x: number; y: number; height: number } | undefined;
-  const routes = ["home", "graph", "sources", "shares", "profile", "search", "agent-context", "help", "sources/import", "sources/import/guide", "sources/health", `sources/${sourceId}`, `sources/${sourceId}/update`, `sources/${sourceId}/health`, "profile/articles", "profile/sync"];
+  const routes = ["home", "graph", "sources", "shares", "profile", "search", "agent-context", "help", "sources/import", "sources/health", `sources/${sourceId}`, `sources/${sourceId}/update`, `sources/${sourceId}/health`, "profile/articles", "profile/sync"];
   if (runId) routes.push(`sources/${sourceId}/runs/${runId}`);
   for (const route of routes) {
     await page.goto(`/w/${ws}/${route}`);

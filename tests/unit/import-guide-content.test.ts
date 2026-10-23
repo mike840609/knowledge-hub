@@ -8,15 +8,7 @@ import {
   type GuideLimits,
 } from "@/components/imports/import-guide-content";
 
-const SECTION_IDS = [
-  "what-you-need",
-  "from-obsidian",
-  "from-a-tool",
-  "import-preview-apply",
-  "keep-in-sync",
-  "read-search-agent",
-  "limits",
-];
+const SECTION_IDS = ["example", "checklist", "titles-links", "knowledge-id", "limits"];
 const LOCALES = ["en", "zh-TW"] as const;
 const MiB = 1024 * 1024;
 
@@ -31,6 +23,7 @@ const CUSTOM: GuideLimits = {
 function blockText(block: GuideBlock): string {
   switch (block.kind) {
     case "p":
+    case "note":
     case "code":
       return block.text;
     case "ul":
@@ -52,7 +45,7 @@ function sectionText(content: GuideContent, id: string): string {
 }
 
 describe("guideContent structure", () => {
-  it("returns the same seven section ids in the same order for both locales", () => {
+  it("returns the same five section ids in the same order for both locales", () => {
     for (const locale of LOCALES) {
       expect(guideContent(locale, DEFAULT_IMPORT_LIMITS).sections.map((s) => s.id)).toEqual(SECTION_IDS);
     }
@@ -120,7 +113,7 @@ describe("guideContent limits are live", () => {
 
   it("names the per-file limit in the checklist, from the same number", () => {
     for (const locale of LOCALES) {
-      expect(sectionText(guideContent(locale, CUSTOM), "from-a-tool"), locale).toContain("2 MiB");
+      expect(sectionText(guideContent(locale, CUSTOM), "checklist"), locale).toContain("2 MiB");
     }
   });
 
@@ -152,38 +145,64 @@ describe("guideContent facts", () => {
   const en = (id: string) => sectionText(guideContent("en", DEFAULT_IMPORT_LIMITS), id);
   const zh = (id: string) => sectionText(guideContent("zh-TW", DEFAULT_IMPORT_LIMITS), id);
 
-  it("from-a-tool: skipped folders and title precedence", () => {
-    const text = en("from-a-tool");
-    expect(text).toContain(".git");
-    expect(text).toContain(".obsidian");
+  it("is a format reference titled to match the link that leads to it", () => {
+    expect(guideContent("en", DEFAULT_IMPORT_LIMITS).title).toBe("Folder format and import rules");
+    expect(guideContent("zh-TW", DEFAULT_IMPORT_LIMITS).title).toBe("資料夾格式與匯入規則");
+  });
+
+  it("example: a folder tree to choose, a file with every form, and an Obsidian vault fits as it is", () => {
+    for (const text of [en("example"), zh("example")]) {
+      expect(text).toContain(".obsidian");
+      expect(text).toMatch(/---\ntitle: .+\nknowledge_id: leave-policy\n---/);
+      expect(text).toContain("[[");
+      expect(text).toContain("](../index.md)");
+      expect(text).toContain("## ");
+    }
+    expect(en("example")).toMatch(/Obsidian vault already fits/);
+    expect(zh("example")).toContain("筆記庫（vault）");
+  });
+
+  it("checklist: a six-item list naming the per-file limit, skipped names and ../ links", () => {
+    for (const locale of LOCALES) {
+      const section = guideContent(locale, DEFAULT_IMPORT_LIMITS).sections.find((s) => s.id === "checklist")!;
+      const lists = section.body.filter((b): b is Extract<GuideBlock, { kind: "ul" | "ol" }> => b.kind === "ul" || b.kind === "ol");
+      expect(lists.some((l) => l.items.length === 6), locale).toBe(true);
+    }
+    expect(en("checklist")).toMatch(/names start with a dot[\s\S]*skipped without a warning/);
+    expect(en("checklist")).toMatch(/never read or uploaded, and they do not count toward the file-count or size limits/);
+    expect(en("checklist")).toContain("links between files may still use `../`");
+    expect(zh("checklist")).toMatch(/名稱以點開頭[\s\S]*會被略過，而且不會出現警告/);
+    expect(zh("checklist")).toMatch(/不會被讀取或上傳，也不計入檔案數與大小限制/);
+    for (const text of [en("checklist"), zh("checklist")]) expect(text).toContain("node_modules");
+  });
+
+  it("titles-links: title precedence, the three link forms, GitHub anchors, one workspace", () => {
+    const text = en("titles-links");
     expect(text).toMatch(/frontmatter[\s\S]*first H1[\s\S]*file name/i);
+    expect(text).toContain("[[Title]]");
+    expect(text).toContain("[[folder/Note]]");
+    expect(text).toMatch(/relative[^\n]*\.md/i);
+    expect(text).toMatch(/GitHub/);
+    expect(text).toMatch(/one workspace/);
+    expect(zh("titles-links")).toContain("維基連結（wikilink）");
+    expect(zh("titles-links")).toContain("同一個工作區");
   });
 
-  it("from-a-tool: says dot-prefixed names are skipped without a warning, in both locales", () => {
-    expect(en("from-a-tool")).toMatch(/names start with a dot[\s\S]*skipped without a warning/);
-    expect(en("from-a-tool")).toContain("node_modules");
-    expect(zh("from-a-tool")).toMatch(/名稱以點開頭[\s\S]*會被略過，而且不會出現警告/);
-    expect(zh("from-a-tool")).toContain("node_modules");
+  it("knowledge-id: leads with what a rename plus edit loses, then the steps", () => {
+    for (const locale of LOCALES) {
+      const body = guideContent(locale, DEFAULT_IMPORT_LIMITS).sections.find((s) => s.id === "knowledge-id")!.body;
+      expect(body[0].kind, locale).toBe("note");
+      expect(body.some((b) => b.kind === "ol" && b.items.length === 3), locale).toBe(true);
+    }
+    expect(en("knowledge-id")).toMatch(/rename or move a file and also edit it before the next sync, it becomes a new document/);
+    expect(en("knowledge-id")).toMatch(/share links, favorites and history stay with the archived copy/);
+    expect(en("knowledge-id")).toMatch(/`knowledge_id`.*up to 512 characters, unique within the folder/);
+    expect(en("knowledge-id")).toMatch(/removing or changing it, or reusing it in another file, blocks the next Preview/);
+    expect(zh("knowledge-id")).toMatch(/同時改名（或移動）並編輯.*會變成一份新文件/);
+    expect(zh("knowledge-id")).toMatch(/移除或修改它，或在另一個檔案重複使用，都會讓下一次預覽無法套用/);
   });
 
-  it("keep-in-sync: says a rename plus edit starts a new document, and how knowledge_id prevents it", () => {
-    expect(en("keep-in-sync")).toMatch(/rename or move a file and also edit it before the next sync, it becomes a new document/);
-    expect(en("keep-in-sync")).toMatch(/share links, favorites and history stay with the archived copy/);
-    expect(en("keep-in-sync")).toMatch(/`knowledge_id`.*up to 512 characters, unique within the folder/);
-    expect(en("keep-in-sync")).toMatch(/removing or changing it, or reusing it in another file, blocks the next Preview/);
-    expect(zh("keep-in-sync")).toMatch(/同時改名（或移動）並編輯.*會變成一份新文件/);
-    expect(zh("keep-in-sync")).toContain("`knowledge_id`");
-    expect(zh("keep-in-sync")).toMatch(/移除或修改它，或在另一個檔案重複使用，都會讓下一次預覽無法套用/);
-  });
-
-  it("from-a-tool: skipped paths are never uploaded and do not count toward the limits", () => {
-    expect(en("from-a-tool")).toMatch(/never read or uploaded, and they do not count toward the file-count or size limits/);
-    expect(en("from-a-tool")).not.toMatch(/still listed in the upload/);
-    expect(zh("from-a-tool")).toMatch(/不會被讀取或上傳，也不計入檔案數與大小限制/);
-    expect(zh("from-a-tool")).not.toMatch(/仍會列在上傳清單中/);
-  });
-
-  it("limits table: the always-skipped row matches the checklist", () => {
+  it("limits table: the always-skipped row names every skipped path", () => {
     const row = (locale: "en" | "zh-TW") => {
       const table = guideContent(locale, DEFAULT_IMPORT_LIMITS).sections.find((x) => x.id === "limits")!.body.find((b) => b.kind === "table");
       if (table?.kind !== "table") throw new Error("no table");
@@ -196,58 +215,19 @@ describe("guideContent facts", () => {
     expect(row("zh-TW")).toContain("以點開頭");
   });
 
-  it("from-a-tool: the file-location item does not ban ../ in links", () => {
-    expect(en("from-a-tool")).toContain("links between files may still use `../`");
-    expect(zh("from-a-tool")).toContain("`../`");
-  });
-
-  it("says the Preview upload is temporary and that Copy for Agent is for the personal workspace", () => {
-    expect(en("import-preview-apply")).toMatch(/sends the Markdown files[\s\S]*temporary Preview/);
-    expect(en("read-search-agent")).toMatch(/personal workspace/);
-    expect(zh("read-search-agent")).toContain("個人工作區");
-    expect(zh("import-preview-apply")).toContain("上傳");
-  });
-
-  it("from-a-tool: a six-item checklist", () => {
+  it("leaves operating to the user guide: no Preview, sync or Copy for Agent walkthrough here", () => {
     for (const locale of LOCALES) {
-      const section = guideContent(locale, DEFAULT_IMPORT_LIMITS).sections.find((s) => s.id === "from-a-tool")!;
-      const lists = section.body.filter((b): b is Extract<GuideBlock, { kind: "ul" | "ol" }> => b.kind === "ul" || b.kind === "ol");
-      expect(lists.some((l) => l.items.length === 6), locale).toBe(true);
+      const all = allText(guideContent(locale, DEFAULT_IMPORT_LIMITS));
+      expect(all, locale).not.toContain("Copy for Agent");
+      expect(all, locale).not.toMatch(/Check for changes|Update from folder/);
     }
   });
 
-  it("states the link forms, anchors and the Preview warning", () => {
-    const text = [en("from-a-tool"), en("import-preview-apply"), en("what-you-need")].join("\n");
-    expect(text).toContain("[[Title]]");
-    expect(text).toContain("[[folder/Note]]");
-    expect(text).toMatch(/relative[^\n]*\.md/i);
-    expect(text).toMatch(/GitHub/);
-    expect(text).toMatch(/exactly one warning/i);
-  });
-
-  it("keeps the sync model: one-way, read-only, removed files archived, Chrome or Edge", () => {
-    const text = en("keep-in-sync");
-    expect(text).toMatch(/one-way/i);
-    expect(text).toMatch(/read-only/i);
-    expect(text).toMatch(/archived/i);
-    expect(text).toMatch(/Chrome or Edge/);
-    expect(zh("keep-in-sync")).toMatch(/Chrome 或 Edge/);
-    expect(zh("keep-in-sync")).toMatch(/封存/);
-    expect(zh("keep-in-sync")).toMatch(/唯讀/);
-  });
-
-  it("says Copy for Agent takes 1 to 20 documents", () => {
-    expect(en("read-search-agent")).toMatch(/1.{1,3}20 documents/);
-    expect(zh("read-search-agent")).toMatch(/1.{1,3}20/);
-  });
-
   it("uses the reviewed zh-TW terms", () => {
-    const text = guideContent("zh-TW", DEFAULT_IMPORT_LIMITS);
-    const all = allText(text);
+    const all = allText(guideContent("zh-TW", DEFAULT_IMPORT_LIMITS));
     expect(all).toContain("維基連結（wikilink）");
     expect(all).toContain("筆記庫（vault）");
     expect(all).not.toContain("資料庫");
-    expect(all).not.toContain("（wikilink）`[[wikilinks]]`");
     expect(all).toContain("預覽（Preview）");
     expect(all).toContain("套用（Apply）");
   });

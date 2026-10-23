@@ -16,14 +16,11 @@ test("Home help covers first import, repeat sync and recovery in both languages"
   await page.getByRole("navigation",{name:"手冊語言",exact:true}).getByRole("link",{name:"English",exact:true}).click();
   await expect(page.getByRole("heading",{name:"User guide",exact:true})).toBeVisible();
   await expect(page.locator("main[lang]")).toHaveAttribute("lang","en");
-  await expect(page.getByRole("figure")).toHaveCount(6);
+  await expect(page.getByRole("figure")).toHaveCount(13);
   await expect(page.getByRole("figure",{name:"Diagram · From folder to readable articles"})).toContainText("Choose folder");
   await expect(page.getByRole("heading",{name:"Daily sync: check, preview, apply",exact:true})).toBeAttached();
   await expect(page.getByRole("link",{name:"Try the sample wiki",exact:true})).toHaveAttribute("href",`/w/${ws}/sources/import#sample-wiki`);
-  await page.getByRole("link",{name:"Read the import preview guide",exact:true}).click();
-  await expect(page).toHaveURL(/\/help\/import-guide\?lang=en#import-preview-apply$/);
-  await expect(page.locator("#import-preview-apply")).toBeVisible();
-  await page.goBack();
+  await expect(page.getByRole("link",{name:"Read the import preview guide",exact:true})).toHaveCount(0);
   await page.getByRole("link",{name:"Troubleshooting",exact:true}).click();
   await expect(page).toHaveURL(/#troubleshooting$/);
   await expect(page.locator("#troubleshooting-heading")).toBeFocused();
@@ -35,7 +32,7 @@ test("Home help covers first import, repeat sync and recovery in both languages"
   await page.getByRole("link",{name:"繁體中文",exact:true}).click();
   await expect(page.getByRole("heading",{name:"使用者操作手冊",exact:true})).toBeVisible();
   await expect(page.getByRole("heading",{name:"遇到問題時",exact:true})).toBeAttached();
-  await expect(page.getByRole("figure")).toHaveCount(6);
+  await expect(page.getByRole("figure")).toHaveCount(13);
   await expect(page.getByRole("figure",{name:"示意圖 · 每次更新都需要 Apply"})).toContainText("不會在背景自動同步");
   await expect(page.locator("details[open]")).toHaveCount(0);
   await expect(page.getByText(/規則在 Apply 成功後保存到來源/)).toBeHidden();
@@ -43,9 +40,8 @@ test("Home help covers first import, repeat sync and recovery in both languages"
   await expect(page.getByText(/規則在 Apply 成功後保存到來源/)).toBeVisible();
   await expect(page.getByRole("link",{name:"選擇來源以設定排除路徑",exact:true})).toHaveAttribute("href",`/w/${ws}/sources`);
   await page.getByRole("link",{name:"查看 knowledge_id 設定與改名範例",exact:true}).click();
-  await expect(page).toHaveURL(/\/help\/import-guide\?lang=zh-TW#keep-in-sync$/);
-  await expect(page.locator("#keep-in-sync pre")).toContainText("knowledge_id: leave-policy");
-  await page.getByRole("link",{name:"日常操作與疑難排解手冊",exact:true}).click();
+  await expect(page).toHaveURL(/\/help\?lang=zh-TW#knowledge-id$/);
+  await expect(page.locator("#knowledge-id pre")).toContainText("knowledge_id: leave-policy");
   await page.getByRole("link",{name:"試用範例 wiki",exact:true}).click();
   await expect(page).toHaveURL(/\/sources\/import#sample-wiki$/);
   await expect(page.getByRole("group",{name:"Try with a sample wiki",exact:true})).toBeVisible();
@@ -53,9 +49,9 @@ test("Home help covers first import, repeat sync and recovery in both languages"
   await page.getByRole("link",{name:"開啟 Sources，選擇要更新的來源",exact:true}).click();
   await expect(page).toHaveURL(new RegExp(`/w/${ws}/sources$`));
   await page.goBack();
-  await page.getByRole("link",{name:"Markdown 格式、knowledge_id 與匯入限制",exact:true}).click();
-  await expect(page).toHaveURL(/\/help\/import-guide\?lang=zh-TW$/);
-  await page.getByRole("link",{name:"日常操作與疑難排解手冊",exact:true}).click();
+  await page.getByRole("link",{name:"資料夾格式與匯入規則",exact:true}).click();
+  await expect(page).toHaveURL(/\/help\?lang=zh-TW#format-reference$/);
+  await expect(page.getByRole("heading",{level:2,name:"資料夾格式與匯入規則"})).toBeInViewport();
   await expect(page.getByRole("heading",{name:"使用者操作手冊",exact:true})).toBeVisible();
   const output=process.env.KM_GUIDE_SCREENSHOTS;
   if(output)await mkdir(output,{recursive:true});
@@ -95,10 +91,11 @@ test("Home help covers first import, repeat sync and recovery in both languages"
     for(const theme of ["light","dark"]) {
       await page.evaluate(value=>document.documentElement.setAttribute("data-theme",value),theme);
       for(const id of ["quick-start","sync","troubleshooting","reading","insights","sharing-export"]) {
-        const figure=page.locator(`#${id} figure`);
+        const figure=page.locator(`#${id} figure[aria-labelledby]`);
         await figure.scrollIntoViewIfNeeded();
         await expect(figure).toBeVisible();
         expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+        if(id==="sync")await expect(page.locator("#sync figure img:visible").first()).toHaveAttribute("src",new RegExp(`sources-${theme}`));
         if(output&&width===1440&&theme==="light")await page.locator(`#${id}`).screenshot({path:`${output}/${id}-section.png`,animations:"disabled"});
         if(output)await figure.screenshot({path:`${output}/${id}-${width}-${theme}.png`,animations:"disabled"});
       }
