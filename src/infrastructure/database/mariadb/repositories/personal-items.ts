@@ -13,6 +13,13 @@ export class MariaDbPersonalStore implements PersonalStore {
     const rows = await this.pool.query("SELECT * FROM personal_items WHERE user_id=? AND workspace_id=? AND payload IS NOT NULL ORDER BY updated_at DESC", [userId, workspaceId]);
     return (rows as Record<string, unknown>[]).map(item);
   }
+  async listFavorites(userId: string, workspaceId: string) {
+    const rows = await this.pool.query(
+      "SELECT * FROM personal_items WHERE user_id=? AND workspace_id=? AND item_key LIKE 'favorite:%' AND payload IS NOT NULL ORDER BY updated_at DESC",
+      [userId, workspaceId],
+    );
+    return (rows as Record<string, unknown>[]).map(item);
+  }
   async put(userId: string, workspaceId: string, key: string, value: Record<string, unknown> | null, expected: number) {
     const payload = value === null ? null : JSON.stringify(value);
     if (expected === 0) {

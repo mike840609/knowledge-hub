@@ -85,7 +85,7 @@ export function useDocumentShortcuts(workspaceId: string): {
         if (!personal) return;
         await migrateLocalFavorites(workspaceId);
         await pendingFavoriteWrites(workspaceId).catch(() => {});
-        const response = await fetch(`/api/workspaces/${workspaceId}/personal`, { cache: "no-store" });
+        const response = await fetch(`/api/workspaces/${workspaceId}/personal?view=favorites`, { cache: "no-store" });
         if (!response.ok) throw new Error();
         const items = await response.json() as { key: string; sourceId?: string }[];
         if (!live || requestGeneration !== generation.current) return;

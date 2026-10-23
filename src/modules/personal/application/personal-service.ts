@@ -37,6 +37,18 @@ export class PersonalService {
     }
     return result;
   }
+  async listFavorites(caller: CallerContext, workspaceId: string) {
+    await this.authorize(caller, workspaceId);
+    const items = await this.store.listFavorites(caller.identity.id, workspaceId);
+    const documents = new Map(
+      (await this.queries.listDocumentSummaries(caller, workspaceId, { includeArchived: true }))
+        .map(document => [document.documentId, document] as const),
+    );
+    return items.flatMap(item => {
+      const document = documents.get(item.key.slice("favorite:".length));
+      return document ? [{ key: item.key, sourceId: document.sourceId }] : [];
+    });
+  }
   async get(caller: CallerContext, workspaceId: string, key: string) {
     await this.authorize(caller, workspaceId, key);
     return await this.store.get(caller.identity.id, workspaceId, key) ?? { key, value: null, version: 0, updatedAt: "" };

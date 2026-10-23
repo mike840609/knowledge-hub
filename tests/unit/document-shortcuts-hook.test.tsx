@@ -69,6 +69,12 @@ it("keeps a document that was just opened when the favourites arrive before its 
   expect(stored().recent).toEqual(["s:b", "s:a"]);
 });
 
+it("asks for the favorites view, not every personal item", async () => {
+  await act(async () => root.render(<Host />));
+  expect(fetch).toHaveBeenCalledWith("/api/workspaces/ws/personal?view=favorites", { cache: "no-store" });
+  await answerFavorites([]);
+});
+
 it("still shows what was stored and what was just opened once the state arrives", async () => {
   localStorage.setItem(KEY, JSON.stringify({ recent: ["s:a"], favorites: [] }));
   await act(async () => root.render(<Host />));
