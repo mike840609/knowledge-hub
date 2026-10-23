@@ -151,7 +151,7 @@ decision the page already makes, so the two cannot disagree.
 | In the Markdown | Its text | Why the page agrees |
 |---|---|---|
 | a link, whatever its URL (relative `.md` included) | its link text | Every link the renderer draws — external, document, unresolved, plain `<span>` where there is no `links` — draws its children and nothing else visible. The external icon is `aria-hidden` and the announcements are `.sr-only`, which the selection reader already leaves out. |
-| an image | nothing | An `<img>` holds no text. The label drawn where it is blocked or fails (`role="img"`, *Image blocked: …*) is left out by the selection reader. Whether an image loads is decided at run time, so its label can never be part of a block's text. |
+| an image, inline or by reference | nothing | An `<img>` holds no text. The label drawn where it is blocked or fails (`role="img"`, *Image blocked: …*) is left out by the selection reader. Whether an image loads is decided at run time, so its label can never be part of a block's text. |
 | a footnote reference | nothing | The number is the page's (`[data-footnote-ref]`), not the Markdown's, and is left out by the selection reader. A `[^x]` with no definition is not a reference; it is text, and is text on the page. |
 | HTML that is `<br>` or a comment | `htmlAsText`: one space, or nothing | `remark-known-html` makes `<br>` a line break and drops a comment, using the same patterns. |
 
@@ -170,20 +170,25 @@ differently: a footnote reference as its label
 (`sup[data-type="footnote_reference"]`), inline HTML as its raw source
 (`span[data-type="html"]`, the source in `data-value`), and a non-final `<br>`
 in a table cell as a hard break (`br[data-type="hardbreak"]`, made by
-`remarkCellBreaks`). Its stamper reads the first as nothing, the second as
-`htmlAsText` of its source, and the hard break as the one space the projection
-gives it, so every block keeps its path (a stamp says which block an element is,
-not that it may take a comment). The selection list also leaves out the
-reference and a comment's span (`data-value` opening `<!--` and closing `-->`),
-so a paragraph beside either takes a comment in the editor too.
+`remarkCellBreaks`). A Markdown hard break is that same hard break node wherever
+it is. Its stamper reads the first as nothing, the second as `htmlAsText` of its
+source, and a non-trailing hard break as the one space the projection gives it —
+a run of hard breaks that ends the block is dropped by the Markdown serialiser
+and by the stamper too — so every block keeps its path (a stamp says which block
+an element is, not that it may take a comment). The selection list also leaves
+out the reference and a comment's span (`data-value` opening `<!--` and closing
+`-->`), so a paragraph beside either takes a comment in the editor too.
 
-The editor does not draw a `<br>` as the space the page does: in a paragraph it
-stays raw HTML source, and in a cell it is a text-less hard break (raw source
-too when it ends the cell). A block holding one therefore fails the editor's
-proof and is refused ("This passage cannot take a comment"), except a cell whose
-`<br>` only opens it: that gap is dropped on both sides, so the cell is accepted.
-The shared page and the reader accept every block holding one. That is the
-accepted, fail-closed limit: the editor reads no space in its place.
+The editor's selection proof still reads no space for a `<br>` or a hard break.
+An HTML `<br>` stays raw HTML source in a paragraph and in a cell that ends with
+it; a non-final `<br>` in a cell is a text-less hard break, and a Markdown hard
+break is a text-less hard break wherever it is. A break between words therefore
+fails the editor's proof and is refused ("This passage cannot take a comment").
+A Markdown hard break that only opens or ends a block leaves no text behind and
+is accepted, as is a `<br>` that only opens a cell. An HTML `<br>` at the end of
+a paragraph or a cell stays raw source and is refused. The shared page and the
+reader accept every block holding one. That is the accepted, fail-closed limit:
+the selection proof reads no space in its place.
 
 A consequence: a quote over a footnote reference or an image does not show the
 number or the picture; the words around them are the quote.
@@ -215,6 +220,8 @@ break, an encoded space or tab, inline code opening with a space; above).
 Still refused, for a later change: a reference-style link (`[text][ref]`, whose
 words depend on a separate definition) and any other HTML (the five inline tags
 `remark-html-subset` draws pair up by rules the projection does not share yet).
+A reference-style image (`![alt][ref]`) is not a link: it resolves to the same
+picture and is read as nothing, as an inline image is.
 The paragraphs of a footnote definition are selectable in the projection but
 refused by the page, which draws them at the foot with a back link their text
 does not have. The editor draws no back link, so there they take a comment, as
