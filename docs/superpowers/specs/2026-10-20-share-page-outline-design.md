@@ -25,6 +25,9 @@ shared spec is read by scrolling.
 
 ## 2. Placement
 
+> **Superseded (2026-10-23)** by `2026-10-23-outline-right-of-article-design.md`: the rail hangs off the
+> column's right edge, and off the comments' right edge while they are open.
+
 - **Rail**, when the window is at least `82rem` wide (the 860px column centred leaves ≥ 224px
   on its left: a `w-52` rail and a 16px edge). It hangs off the article column's left edge — a
   zero-height `sticky` box sized as the column (`kh-reading-column`), the rail `absolute right-full`
@@ -79,6 +82,9 @@ as near-identical fragments. The full heading stays its `title`. This applies to
 (`OutlineList`), the workspace's too. E2E: `zz-share-outline.spec.ts`, "a long heading wraps to two lines".
 
 ## 6. Amendment (2026-10-21): the outline stays beside open comments where it fits
+
+> **Superseded (2026-10-23)** by `2026-10-23-outline-right-of-article-design.md`: the rail hangs off the
+> column's right edge, and off the comments' right edge while they are open.
 
 §2 first folded the outline into the disclosure whenever the comments rail opened, as the
 workspace does. On a shared page that is more than the room requires: the column keeps its

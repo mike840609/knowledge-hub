@@ -246,6 +246,9 @@ existing layout tests — hold the refactor of the five window checks.
 
 ## Amendment (2026-10-21): the outline stays where the pane holds all three
 
+> **Superseded (2026-10-23)** by `2026-10-23-outline-right-of-article-design.md`: the outline is always
+> right of the article. Changing side at 88rem moved it whenever the explorer was hidden or shown.
+
 "The rail takes the outline's place" assumed a pane too narrow for both. A pane of
 `88rem` or wider holds outline, article and rail (224 + 860 + 320 = 1404px). There the
 outline is on the column's **left**, as on a shared page — a zero-height sticky box sized as
