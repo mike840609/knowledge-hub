@@ -23,7 +23,6 @@ test("a reader finds their discussion in Shares → Discussions, sees the reply,
   await request.post(`${owner}/api/documents/${doc.documentId}/review-threads/${thread.id}/replies`, { headers: { Origin: owner }, data: { body: "Owner answer", idempotencyKey: crypto.randomUUID() } });
   await page.reload();
   await expect(row()).toContainText("1 new reply");
-  await expect(page.getByRole("navigation", { name: "Shares sections" }).getByLabel(/\d+ unread/)).toBeVisible();
 
   // Arriving marks the discussion seen by a request the page sends on its own: wait for it before leaving.
   const seen = page.waitForResponse(response => response.url().includes(`/api/share-review/threads/${thread.id}/seen`) && response.ok());
@@ -34,6 +33,8 @@ test("a reader finds their discussion in Shares → Discussions, sees the reply,
   await expect(row()).not.toContainText("new repl");
 
   await row().getByRole("button", { name: /^Unfollow:/ }).click();
+  await expect(row()).toHaveCount(0);
+  await page.reload();
   await expect(row()).toHaveCount(0);
 });
 

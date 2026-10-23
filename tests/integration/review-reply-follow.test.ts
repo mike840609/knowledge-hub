@@ -77,6 +77,19 @@ describe("a shared-page reader follows the discussions they write in", () => {
     expect(await f.follows(f.other)).toEqual([]);
   });
 
+  it("keeps the owner's reply as the Inbox excerpt after the reader writes again", async () => {
+    const f = await fixture();
+    const thread = await f.start();
+    await f.ownerReply(thread.id, "Owner answer");
+    f.time.tick();
+    await f.service.replyForLink(f.reader, { token: f.token, threadId: thread.id, body: "Me again", idempotencyKey: randomUUID() });
+    f.time.tick();
+    // Writing again moves the read cursor past the owner's reply (spec 2026-10-22 § Following), so
+    // the unread Inbox no longer lists it; the activity feed still does, quoting the owner.
+    const [entry] = (await f.service.listActivityForOwner(f.reader)).notifications.filter(n => n.kind === "FOLLOW");
+    expect(entry).toMatchObject({ excerpt: "Owner answer", authorName: "Owner", replyCount: 0 });
+  });
+
   it("unfollowing stops it; writing again follows again; following again starts from now", async () => {
     const f = await fixture();
     const thread = await f.start();

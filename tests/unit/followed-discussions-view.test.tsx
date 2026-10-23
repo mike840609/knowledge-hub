@@ -45,6 +45,11 @@ it("Unfollow uses the link; Remove uses the caller's own follow; a failure keeps
  expect(calls).toContain("/api/review-follows/t2/unfollow ");
  expect(host.textContent).toContain("Discussions you comment on through a shared link appear here.");
 });
+it("shows Untitled when the discussion's document has no current title",async()=>{
+ await mount([{ ...live, documentTitle: "" }]);
+ expect(host.textContent).toContain("Untitled");
+ expect(host.querySelector('button[aria-label="Unfollow: Untitled"]')).not.toBeNull();
+});
 it("the filter submits tab=discussions with the chosen status",async()=>{
  await mount([live],"unread");
  expect(host.querySelector('input[name="tab"]')?.getAttribute("value")).toBe("discussions");

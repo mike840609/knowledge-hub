@@ -48,11 +48,11 @@ export function FollowedDiscussionsView({ workspaceId, items, filter, unread, fi
       {item.linkAvailable
         ? <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
             <Link prefetch={false} data-list-row className="kh-focus-ring min-w-0 rounded-md" href={`/s/${item.token}?thread=${item.threadId}`}>
-              <span className="flex items-center gap-2">{item.unread > 0 && <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-kh-primary"/>}<span className="truncate text-body font-medium text-kh-text">{item.documentTitle}</span></span>
+              <span className="flex items-center gap-2">{item.unread > 0 && <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-kh-primary"/>}<span className="truncate text-body font-medium text-kh-text">{item.documentTitle || "Untitled"}</span></span>
               <span className="block truncate text-caption text-kh-text-muted">{item.authorName ?? "Someone"}: {item.excerpt}</span>
               <span className="block text-caption text-kh-text-muted">{item.threadStatus === "OPEN" ? "Open" : "Resolved"} · <Timestamp value={item.latestAt}/>{item.unread > 0 && <> · {item.unread} new {item.unread === 1 ? "reply" : "replies"}</>}</span>
             </Link>
-            <Button variant="ghost" size="sm" aria-label={`Unfollow: ${item.documentTitle}`} disabled={busy !== null} onClick={() => void drop(item)}>Unfollow</Button>
+            <Button variant="ghost" size="sm" aria-label={`Unfollow: ${item.documentTitle || "Untitled"}`} disabled={busy !== null} onClick={() => void drop(item)}>Unfollow</Button>
           </div>
         : <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
             <span className="text-body text-kh-text-muted">A shared discussion — this link is no longer available</span>
