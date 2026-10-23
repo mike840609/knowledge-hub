@@ -9,6 +9,7 @@ import {
   SourceReadOnlyError,
 } from "@/modules/knowledge/domain/errors";
 import { toWorkspaceErrorResponse } from "@/server/http-error-response";
+import { DomainError } from "@/shared/domain/errors";
 
 describe("Phase 5 authoring error mapping (spec §7.2)", () => {
   it("maps a stale-editor conflict to 409, never 500", () => {
@@ -37,5 +38,11 @@ describe("Phase 5 authoring error mapping (spec §7.2)", () => {
     expect(mapped.status).toBe(404);
     expect(mapped.body.error.code).toBe("NOT_FOUND");
     expect(toWorkspaceErrorResponse(new SourceNotFoundError()).status).toBe(404);
+  });
+
+  it("maps an oversized draft to 400 with its own code", () => {
+    const mapped = toWorkspaceErrorResponse(new DomainError("DRAFT_TOO_LARGE", "Draft is too large."));
+    expect(mapped.status).toBe(400);
+    expect(mapped.body.error.code).toBe("DRAFT_TOO_LARGE");
   });
 });

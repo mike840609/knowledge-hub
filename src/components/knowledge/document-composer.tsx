@@ -21,6 +21,9 @@ import { carryTitle, resolveAuthoredTitle } from "@/lib/authored-title";
 import { matchesInitial } from "@/lib/composer-output";
 import { browserDraftStorage, clearDraft, readDraft, syncDraft, type DraftKey } from "@/lib/document-draft";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
+import { MAX_MARKDOWN_BYTES, markdownBytes } from "@/lib/markdown-limits";
+import { downloadMarkdown } from "@/lib/download-markdown";
+import { DraftSizeHint } from "./draft-size-hint";
 import { DocumentBreadcrumb, type DocumentBreadcrumbSegment } from "./document-breadcrumb";
 import type { MarkdownEditor } from "./editor/editor-core";
 import type { RenderedEditorProps } from "./editor/rendered-editor";
@@ -160,6 +163,11 @@ export function DocumentComposer({
   const hydrated = useHydrated();
   const [title, setTitle] = useState(initialTitle);
   const [markdown, setMarkdown] = useState(initialMarkdown);
+  const [draftBytes, setDraftBytes] = useState(() => markdownBytes(initialMarkdown));
+  useEffect(() => {
+    const timer = setTimeout(() => setDraftBytes(markdownBytes(markdown)), 300);
+    return () => clearTimeout(timer);
+  }, [markdown]);
   const [baseRevisionId, setBaseRevisionId] = useState(currentRevisionId);
   const [restored, setRestored] = useState<"current" | "stale" | null>(null);
   const [restoreChecked, setRestoreChecked] = useState(false);
@@ -658,9 +666,13 @@ export function DocumentComposer({
             {resolved.source === "METADATA" ? <span>Title comes from the uploaded file’s frontmatter</span> : null}
             {renamesOnSave ? <span>Saving will rename this document to “{resolved.title}”</span> : null}
             {durableDraft && <span role="status">
-              {({ loading: "Loading draft…", saved: "Draft saved to your account", saving: "Saving draft…", local: "Draft kept on this device · syncing…", error: "Draft sync failed. Keep this page open and retry.", conflict: "Draft changed on another device. Your text is preserved here; copy it before loading another draft." })[draftStatus]}
+              {({ loading: "Loading draft…", saved: "Draft saved to your account", saving: "Saving draft…", local: "Draft kept on this device · syncing…", error: "Draft sync failed. Keep this page open and retry.", conflict: "Draft changed on another device. Your text is preserved here; copy it before loading another draft.", "too-large": "Draft is too large to save to your account. Download or copy it before leaving." })[draftStatus]}
               {draftStatus === "error" && <Button type="button" variant="link" onClick={() => void persistent.current?.retry()}>Retry draft save</Button>}
             </span>}
+            <DraftSizeHint bytes={draftBytes} />
+            {(draftStatus === "too-large" || draftBytes > MAX_MARKDOWN_BYTES) && (
+              <Button type="button" variant="link" onClick={() => downloadMarkdown(title || "draft", markdown)}>Download draft</Button>
+            )}
           </div>
         </header>
         <OutlineDisclosure entries={outline} activeSlug={null} />

@@ -5,6 +5,7 @@ import type { WorkspaceUnitOfWork } from "@/modules/workspaces/ports/unit-of-wor
 import { DomainError } from "@/shared/domain/errors";
 import type { PersonalStore } from "../ports/personal-store";
 import { isUuid } from "@/shared/ids/uuidv7";
+import { markdownTooLarge } from "@/lib/markdown-limits";
 
 export class PersonalService {
   constructor(private readonly store: PersonalStore, private readonly queries: KnowledgeQueryService, private readonly uow: WorkspaceUnitOfWork) {}
@@ -48,8 +49,11 @@ export class PersonalService {
       if (!value || typeof value !== "object" || Array.isArray(value)) throw new DomainError("INVALID_REQUEST", "Invalid personal item.");
       const v = value as Record<string, unknown>;
       if (key.startsWith("draft:")) {
-        if (typeof v.title !== "string" || v.title.length > 512 || typeof v.markdown !== "string" || v.markdown.length > 5_000_000 || !(v.baseRevisionId === null || typeof v.baseRevisionId === "string" && isUuid(v.baseRevisionId))) throw new DomainError("INVALID_REQUEST", "Invalid draft.");
-        payload = { title: v.title, markdown: v.markdown, baseRevisionId: v.baseRevisionId };
+        const title = v.title;
+        const markdown = v.markdown;
+        if (typeof title !== "string" || title.length > 512 || typeof markdown !== "string" || !(v.baseRevisionId === null || typeof v.baseRevisionId === "string" && isUuid(v.baseRevisionId))) throw new DomainError("INVALID_REQUEST", "Invalid draft.");
+        if (markdownTooLarge(markdown)) throw new DomainError("DRAFT_TOO_LARGE", "Draft is too large to save.");
+        payload = { title, markdown, baseRevisionId: v.baseRevisionId };
       } else {
         if (v.favorite !== true) throw new DomainError("INVALID_REQUEST", "Invalid favorite.");
         payload = { favorite: true };

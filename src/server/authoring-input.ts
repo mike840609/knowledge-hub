@@ -4,10 +4,11 @@ import { DomainError } from "@/shared/domain/errors";
 import type { KnowledgeMetadata } from "@/modules/knowledge/domain/content";
 import { APPEND_POSITION, MAX_FOLDER_NAME_LENGTH, normalizeFolderName } from "@/modules/knowledge/domain/tree-rules";
 import { isUuid } from "@/shared/ids/uuidv7";
+import { MAX_MARKDOWN_BYTES, markdownBytes } from "@/lib/markdown-limits";
 
 export const MAX_TITLE_LENGTH = 512;
 export { MAX_FOLDER_NAME_LENGTH };
-export const MAX_MARKDOWN_BYTES = 5 * 1024 * 1024;
+export { MAX_MARKDOWN_BYTES };
 
 function invalid(message: string): never {
   throw new DomainError("INVALID_REQUEST", message);
@@ -26,7 +27,7 @@ function readString(record: Record<string, unknown>, field: string): string {
 
 function readMarkdown(record: Record<string, unknown>): string {
   const markdown = readString(record, "markdown");
-  if (Buffer.byteLength(markdown, "utf8") > MAX_MARKDOWN_BYTES) invalid("Markdown is too large.");
+  if (markdownBytes(markdown) > MAX_MARKDOWN_BYTES) invalid("Markdown is too large.");
   return markdown;
 }
 

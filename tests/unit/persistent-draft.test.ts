@@ -56,6 +56,32 @@ it("inline autosave keeps local recovery without uploading successful edits twic
   expect(fetcher).toHaveBeenCalledTimes(1);
   expect(localStorage.getItem("kh:persistent:/personal:draft:doc")).toBeNull();
 });
+it("stops after a too-large refusal and keeps the local copy", async () => {
+  const status = vi.fn();
+  const fetcher = vi.fn()
+    .mockResolvedValueOnce(Response.json({ value: null, version: 0 }))
+    .mockResolvedValueOnce(Response.json({ error: { code: "DRAFT_TOO_LARGE", message: "Draft is too large to save." } }, { status: 400 }));
+  vi.stubGlobal("fetch", fetcher);
+  const client = new PersistentDraft("/personal", "draft:doc", status);
+  await client.load(); client.change(draft); await client.flush();
+  expect(status).toHaveBeenLastCalledWith("too-large");
+  await client.retry();
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  expect(localStorage.getItem("kh:persistent:/personal:draft:doc")).toContain("Recovery");
+});
+it("resumes saving after the text shrinks below the limit", async () => {
+  const status = vi.fn();
+  const fetcher = vi.fn()
+    .mockResolvedValueOnce(Response.json({ value: null, version: 0 }))
+    .mockResolvedValueOnce(Response.json({ error: { code: "DRAFT_TOO_LARGE", message: "Draft is too large to save." } }, { status: 400 }))
+    .mockResolvedValueOnce(Response.json({ version: 1 }));
+  vi.stubGlobal("fetch", fetcher);
+  const client = new PersistentDraft("/personal", "draft:doc", status);
+  await client.load(); client.change(draft); await client.flush();
+  client.change({ ...draft, markdown: "small" }); await client.flush();
+  expect(status).toHaveBeenLastCalledWith("saved");
+  expect(fetcher).toHaveBeenCalledTimes(3);
+});
 it("flushes recovery on failure or leaving, then clears only the uploaded draft", async () => {
   const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ value: null, version: 0 }))
     .mockResolvedValueOnce(Response.json({ version: 1 })).mockResolvedValueOnce(Response.json({ version: 2 }));

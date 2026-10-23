@@ -1,5 +1,6 @@
 import type { Draft } from "./document-draft";
-export type DraftStatus = "loading" | "saved" | "saving" | "local" | "error" | "conflict";
+import { markdownTooLarge } from "./markdown-limits";
+export type DraftStatus = "loading" | "saved" | "saving" | "local" | "error" | "conflict" | "too-large";
 type Envelope = { value: Draft | null; version: number };
 /** Serial writes plus optimistic versions prevent late responses and other tabs from overwriting drafts. */
 export class PersistentDraft {
@@ -8,6 +9,7 @@ export class PersistentDraft {
   private loaded = false;
   private synced: Draft | null | undefined;
   private stopped = false;
+  private tooLarge = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private flight: Promise<void> | undefined;
   constructor(private readonly endpoint: string, private readonly key: string, private readonly onStatus: (s: DraftStatus) => void, private readonly options: { autoSync?: boolean; delay?: number } = {}) {}
@@ -50,10 +52,11 @@ export class PersistentDraft {
   }
   change(value: Draft | null, sync = this.options.autoSync !== false) {
     this.pending = value;
+    if (this.tooLarge && (value === null || !markdownTooLarge(value.markdown))) this.tooLarge = false;
     const kept = this.keepLocal(value);
-    this.onStatus(this.stopped ? "conflict" : kept ? "local" : "error");
+    this.onStatus(this.stopped ? "conflict" : this.tooLarge ? "too-large" : kept ? "local" : "error");
     clearTimeout(this.timer);
-    if (sync) this.schedule();
+    if (sync && !this.tooLarge) this.schedule();
   }
   private schedule() {
     clearTimeout(this.timer);
@@ -62,7 +65,7 @@ export class PersistentDraft {
   async flush(): Promise<void> {
     clearTimeout(this.timer);
     if (this.flight) { await this.flight; return this.flush(); }
-    if (!this.loaded || this.stopped || this.pending === undefined) return;
+    if (!this.loaded || this.stopped || this.tooLarge || this.pending === undefined) return;
     const value = this.pending;
     this.pending = undefined;
     if (JSON.stringify(value) === JSON.stringify(this.synced)) {
@@ -78,6 +81,12 @@ export class PersistentDraft {
       try {
         const response = await fetch(this.endpoint, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: this.key, value, version: this.version }) });
         if (!response.ok) {
+          const failure = await response.json().catch(() => null) as { error?: { code?: string } } | null;
+          if (failure?.error?.code === "DRAFT_TOO_LARGE") {
+            this.tooLarge = true;
+            this.onStatus("too-large");
+            return;
+          }
           if (response.status === 409) this.stopped = true;
           throw new Error();
         }
@@ -100,7 +109,7 @@ export class PersistentDraft {
     this.flight = undefined;
   }
   async retry() {
-    if (this.stopped) return;
+    if (this.stopped || this.tooLarge) return;
     if (!this.loaded) {
       // Establish a version before uploading a recovery copy; load detects divergence.
       const pending = this.pending;
@@ -110,7 +119,7 @@ export class PersistentDraft {
     await this.flush();
   }
   async clear() {
-    if (this.stopped) {
+    if (this.stopped || this.tooLarge) {
       // Discard only our recovery copy; another device owns the newer server version.
       clearTimeout(this.timer);
       this.pending = undefined;
