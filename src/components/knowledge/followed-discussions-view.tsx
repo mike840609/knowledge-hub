@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { SelectMenu } from "@/components/ui/select-menu";
 import { Timestamp } from "@/components/ui/timestamp";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Illustration } from "./illustration";
 import { SharesNavigation } from "./shares-navigation";
 import { navigateListRows } from "@/lib/list-row-navigation";
 import type { DiscussionFilter, FollowedDiscussionView } from "@/modules/knowledge/domain/review-follow";
@@ -43,7 +44,7 @@ export function FollowedDiscussionsView({ workspaceId, items, filter, unread, fi
       <Button type="submit" variant="secondary">Filter</Button>
     </form>
     {(error || filterError) && <p role="alert" className="mt-3 text-body-sm text-kh-danger">{filterError || error}</p>}
-    {!filterError && shown.length === 0 && <EmptyState icon={MessagesSquare} title={filter === "unread" ? "No unread discussions." : "No discussions yet."} description="Discussions you comment on through a shared link appear here."/>}
+    {!filterError && shown.length === 0 && <EmptyState icon={MessagesSquare} illustration={filter === "all" ? <Illustration kind="discussions" /> : undefined} title={filter === "unread" ? "No unread discussions." : "No discussions yet."} description="Discussions you comment on through a shared link appear here."/>}
     <ul aria-label="Followed discussions" onKeyDown={navigateListRows} className="mt-4 space-y-2 md:space-y-0">{shown.map(item => <li key={item.threadId} data-thread-id={item.threadId} className="rounded-md border border-kh-border bg-kh-bg p-3 hover:bg-kh-bg-hover focus-within:bg-kh-bg-hover md:rounded-none md:border-x-0 md:border-t-0 md:py-2">
       {item.linkAvailable
         ? <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
