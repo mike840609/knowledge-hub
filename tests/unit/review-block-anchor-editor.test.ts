@@ -110,3 +110,63 @@ test("the real editor drops a trailing hard break in a cell too", async () => {
   const paragraphs = [...view.dom.children].filter((element): element is HTMLElement => element instanceof HTMLElement && element.tagName === "P");
   expect(paragraphs.map(p => p.getAttribute("data-review-path"))).toEqual(["1", "2"]);
 });
+
+const stamps = (view: Awaited<ReturnType<typeof rendered>>) =>
+  [...view.dom.querySelectorAll<HTMLElement>("p,td,th")].filter(element => !element.parentElement?.closest("td,th")).map(element => element.getAttribute("data-review-path"));
+
+test.each([
+  ["two trailing spaces", "a  \nb\n\nSame\n\nSame\n"],
+  ["a backslash", "a\\\nb\n\nSame\n\nSame\n"],
+])("the real editor: a hard break (%s) between words is stamped but refused, and duplicates keep theirs", async (_name, markdown) => {
+  const view = await rendered(markdown);
+  expect(view.dom.querySelector('p br[data-type="hardbreak"]')).not.toBeNull();
+  expect(updateEditorReviewPaths(view, markdown)).toBe(true);
+  expect(stamps(view)).toEqual(["0", "1", "2"]);
+  const paragraphs = [...view.dom.querySelectorAll<HTMLElement>("p")];
+  expect(reviewBlockAnchor(paragraphs[0], markdown)).toBeNull();
+  expect(reviewBlockAnchor(paragraphs[1], markdown)).toMatchObject({ blockPath: [1], exact: "Same" });
+  expect(reviewBlockAnchor(paragraphs[2], markdown)).toMatchObject({ blockPath: [2], exact: "Same" });
+});
+
+test("the real editor: a cell with a <br> between words is stamped but refused, and duplicates keep theirs", async () => {
+  const markdown = "| A |\n| --- |\n| one<br>two |\n\nSame\n\nSame\n";
+  const view = await rendered(markdown);
+  expect(view.dom.querySelector('td br[data-type="hardbreak"]')).not.toBeNull();
+  expect(updateEditorReviewPaths(view, markdown)).toBe(true);
+  expect(stamps(view)).toEqual(["0.0.0", "0.1.0", "1", "2"]);
+  expect(reviewBlockAnchor(view.dom.querySelector<HTMLElement>("td")!, markdown)).toBeNull();
+  const paragraphs = [...view.dom.children].filter((element): element is HTMLElement => element instanceof HTMLElement && element.tagName === "P");
+  expect(paragraphs.map(p => reviewBlockAnchor(p, markdown)?.exact)).toEqual(["Same", "Same"]);
+});
+
+test("the real editor: a cell opened by a <br> takes a comment on its words", async () => {
+  const markdown = "| A |\n| --- |\n| <br>two |\n\nSame\n\nSame\n";
+  const view = await rendered(markdown);
+  expect(updateEditorReviewPaths(view, markdown)).toBe(true);
+  expect(stamps(view)).toEqual(["0.0.0", "0.1.0", "1", "2"]);
+  expect(reviewBlockAnchor(view.dom.querySelector<HTMLElement>("td")!, markdown)).toMatchObject({ blockPath: [0, 1, 0], exact: "two" });
+});
+
+test.each([
+  ["an image", "a\\\n![x](/a.png)\n\nSame\n\nSame\n", "img[data-kh-src]"],
+  ["a footnote reference", "a\\\n[^1]\n\nSame\n\nSame\n\n[^1]: n\n", 'sup[data-type="footnote_reference"]'],
+])("the real editor: a hard break followed only by %s is stamped but refused", async (_name, markdown, drawn) => {
+  const view = await rendered(markdown);
+  expect(view.dom.querySelector(`p ${drawn}`)).not.toBeNull();
+  expect(updateEditorReviewPaths(view, markdown)).toBe(true);
+  const paragraphs = [...view.dom.querySelectorAll<HTMLElement>("p")];
+  expect(paragraphs.slice(0, 3).map(p => p.getAttribute("data-review-path"))).toEqual(["0", "1", "2"]);
+  expect(reviewBlockAnchor(paragraphs[0], markdown)).toBeNull();
+  expect(reviewBlockAnchor(paragraphs[1], markdown)).toMatchObject({ exact: "Same" });
+});
+
+test("the real editor draws nothing for an empty link after a hard break, and fails closed: no stamp, no comment (spec §3c)", async () => {
+  const markdown = "a\\\n[](https://u)\n\nSame\n\nSame\n";
+  const view = await rendered(markdown);
+  // The empty link leaves no element, so the break looks as if it ends the block; the
+  // projection still reads "a " for it. A known limit: the editor stamps nothing.
+  expect(view.dom.querySelector("a")).toBeNull();
+  expect(updateEditorReviewPaths(view, markdown)).toBe(false);
+  expect(view.dom.querySelector("[data-review-path]")).toBeNull();
+  expect([...view.dom.querySelectorAll<HTMLElement>("p")].map(p => reviewBlockAnchor(p, markdown))).toEqual([null, null, null]);
+});

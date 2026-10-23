@@ -363,6 +363,16 @@ describe("paragraph comment controls", () => {
     expect(anchor.endUtf16).toBe(1024);
     expect(reviewAnchorRange(root, markdown, anchor)?.toString()).toBe(anchor.exact);
   });
+  test.each([
+    ["a blocked image", "a\\\n![x](https://e.example/a.png)"],
+    ["an image that loads", "a\\\n![x](./a.png)"],
+    ["a footnote reference", "a\\\n[^1]\n\n[^1]: The note"],
+  ])("a hard break followed only by %s keeps its space in the quote (spec §3c)", (_name, markdown) => {
+    const root = page(markdown);
+    const anchor = reviewBlockAnchor(root.querySelector("p")!, markdown)!;
+    expect(anchor).toMatchObject({ blockPath: [0], exact: "a ", startUtf16: 0, endUtf16: 2 });
+    expect(validateReviewAnchor(markdown, anchor)).toEqual(anchor);
+  });
   test("refuses a DOM paragraph that differs from the saved revision", () => {
     const root = page("Saved text");
     root.querySelector("p")!.textContent = "Unsaved change";
