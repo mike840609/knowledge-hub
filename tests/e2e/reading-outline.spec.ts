@@ -50,16 +50,20 @@ test.describe("document outline", () => {
     await rail.getByRole("link", { name: "Install" }).click();
     await expect(page).toHaveURL(/#install$/);
     await expect(rail.getByRole("link", { name: "Install" })).toHaveAttribute("aria-current", "location");
-    // Landed at the top of the pane, not left below the fold.
+    // Landed near the top of the pane, not left below the fold — and clear of the pinned breadcrumb bar,
+    // not tucked under it (a heading's scroll margin is shorter than the bar).
     await expect
       .poll(() =>
         page.evaluate(() => {
           const pane = document.querySelector('[role="region"][aria-label="Document content"]');
+          const bar = document.querySelector("[data-pinned]");
           const heading = document.getElementById("install");
-          return pane && heading ? Math.round(heading.getBoundingClientRect().top - pane.getBoundingClientRect().top) : null;
+          if (!pane || !bar || !heading) return null;
+          const top = heading.getBoundingClientRect().top;
+          return top >= bar.getBoundingClientRect().bottom && top - pane.getBoundingClientRect().top < 100;
         }),
       )
-      .toBeLessThan(40);
+      .toBe(true);
     // Following an outline entry is not a page visit: Back must leave the document.
     expect(await page.evaluate(() => window.history.length)).toBe(historyBefore);
 
