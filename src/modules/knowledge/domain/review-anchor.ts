@@ -11,9 +11,10 @@ export type CanonicalReviewBlock = { path:number[]; kind:ReviewAnchor["blockKind
 const kinds = new Set(["heading","paragraph","listItem","blockquote","tableCell","code"]);
 // What a passage can be chosen in: a block that holds text and no other block.
 const leaves = new Set(["heading","paragraph","tableCell"]);
-// An image and a footnote reference hold no text the reader shows as theirs (its label, the
-// number, are left out on the page too); HTML is read as the reader draws it (§3c).
-const inlineKinds = new Set(["text","inlineCode","emphasis","strong","delete","link","linkReference","break","image","footnoteReference","html"]);
+// An image, inline or by reference, and a footnote reference hold no text the reader shows as
+// theirs (its label, the number, are left out on the page too); HTML is read as the reader draws
+// it (§3c).
+const inlineKinds = new Set(["text","inlineCode","emphasis","strong","delete","link","linkReference","break","image","imageReference","footnoteReference","html"]);
 // Paths are child indexes from the mdast root. Text is inline reading order,
 // CRLF normalized to LF, with line breaks — soft or hard — and whitespace collapsed
 // to one space. A `[[wikilink]]` is the text shown for it, which is what a reader
@@ -30,7 +31,7 @@ function textOf(node:Nodes):string {
 }
 function safeInline(node:Nodes):boolean {
   if(!inlineKinds.has(node.type)) return false;
-  // Reference destinations depend on separate nodes; conservatively refuse.
+  // A reference link's words depend on a separate definition; conservatively refuse.
   if(node.type==="linkReference") return false;
   // `<br>` and comments only: the inline tags the reader draws pair up by rules this does not share.
   if(node.type==="html" && !isLineBreakHtml(node.value) && !isCommentHtml(node.value)) return false;

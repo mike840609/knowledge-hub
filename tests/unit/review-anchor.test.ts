@@ -26,11 +26,14 @@ it("reads a link of any URL as its words, an image and a footnote's number as no
  expect(projectReviewBlocks("see [the doc](./file.md) now")[0]).toMatchObject({text:"see the doc now",selectable:true});
  expect(projectReviewBlocks("see [x](/w/a) and [y](javascript:void0) now")[0]).toMatchObject({text:"see x and y now",selectable:true});
  expect(projectReviewBlocks("look ![alt](https://a/img) here")[0]).toMatchObject({text:"look here",selectable:true});
+ // A reference image resolves to the same picture the page draws.
+ expect(projectReviewBlocks("look ![alt][img] here\n\n[img]: https://a/img")[0]).toMatchObject({text:"look here",selectable:true});
  // The page drops the gap a block opens with (`fromStart`); so does this, or a passage after a leading image could never be proved.
  expect(projectReviewBlocks("[![alt](./a.png)](https://a) after")[0]).toMatchObject({text:"after",selectable:true});
  expect(projectReviewBlocks("<br>two")[0]).toMatchObject({text:"two",selectable:true});
  // Nothing to quote: no passage, and no paragraph button that would send an empty one.
  expect(projectReviewBlocks("![alt](./a.png)")[0]).toMatchObject({text:"",selectable:false});
+ expect(projectReviewBlocks("![alt][img]\n\n[img]: https://a/img")[0]).toMatchObject({text:"",selectable:false});
  expect(projectReviewBlocks("a note[^1] here\n\n[^1]: The note")[0]).toMatchObject({text:"a note here",selectable:true});
  expect(projectReviewBlocks("one<br>two")[0]).toMatchObject({text:"one two",selectable:true});
  expect(projectReviewBlocks("one<br />two")[0]).toMatchObject({text:"one two",selectable:true});
@@ -94,6 +97,7 @@ describe("a passage in a table cell or a code block",()=>{
  it("a cell with <br> or an image is read as a paragraph would be",()=>{
   expect(projectReviewBlocks("| a |\n|---|\n| one<br>two |").filter(block=>block.kind==="tableCell").at(-1)).toMatchObject({text:"one two",selectable:true});
   expect(projectReviewBlocks("| a |\n|---|\n| ![x](https://a/img) cap |").filter(block=>block.kind==="tableCell").at(-1)).toMatchObject({text:"cap",selectable:true});
+  expect(projectReviewBlocks("| a |\n|---|\n| ![x][img] cap |\n\n[img]: https://a/img").filter(block=>block.kind==="tableCell").at(-1)).toMatchObject({text:"cap",selectable:true});
  });
  it("a cell with HTML the reader draws as an element is refused as the paragraph would be",()=>{
   expect(projectReviewBlocks("| a |\n|---|\n| <kbd>K</kbd> |").filter(block=>block.kind==="tableCell").at(-1)!.selectable).toBe(false);

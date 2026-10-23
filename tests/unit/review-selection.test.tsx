@@ -90,6 +90,8 @@ describe("a passage that can take a comment", () => {
     ["a paragraph with a hard line break, after it", "one line  \ntwo lines", "p", "two lines", "paragraph"],
     ["a paragraph with a backslash line break", "one line\\\ntwo lines", "p", "two", "paragraph"],
     ["a paragraph opened by an encoded space", "&#32;text here", "p", "text", "paragraph"],
+    ["a paragraph opened by an encoded tab", "&#9;text here", "p", "text", "paragraph"],
+    ["a paragraph opened by inline code with a space", "` a` text here", "p", "a text", "paragraph"],
     ["a paragraph opened by a hard line break", "\\\ntext here", "p", "text", "paragraph"],
     ["what a <details> holds", "<details>\n<summary>More</summary>\n\nInside it\n\n</details>", "details p", "Inside", "paragraph"],
     ["a table's heading cell", "| Name | Role |\n|---|---|\n| Ada | Owner |", "th + th", "Role", "tableCell"],
@@ -100,10 +102,12 @@ describe("a passage that can take a comment", () => {
     ["indented code", "para\n\n    indented code\n", "pre code", "indented", "code"],
     ["a paragraph with a link to another document, across it", "See [the doc](./other.md) now", "p", "the doc now", "paragraph"],
     ["a paragraph with a blocked image, after it", "Look ![x](https://e.example/a.png) here", "p", "here", "paragraph"],
+    ["a paragraph with a reference image, after it", "Look ![x][img] here\n\n[img]: https://e.example/a.png", "p", "here", "paragraph"],
     ["a paragraph with an image that loads, after it", "Look ![x](./a.png) here", "p", "here", "paragraph"],
     ["a paragraph with a <br>, after it", "one<br>two", "p", "two", "paragraph"],
     ["a paragraph with a comment in it", "one <!-- quiet --> two", "p", "two", "paragraph"],
     ["a table cell with a line break", "| a |\n|---|\n| one<br>two |", "td", "two", "tableCell"],
+    ["a table cell opened by a <br>", "| a |\n|---|\n| <br>one |", "td", "one", "tableCell"],
     ["a paragraph with a footnote's number, before it", "Text here[^1] after\n\n[^1]: The note", "p", "Text here", "paragraph"],
   ];
   test.each(cases)("%s", (_name, markdown, selector, text, kind) => {
@@ -216,6 +220,7 @@ describe("a passage that can take a comment", () => {
   test.each([
     ["a footnote's number", "Text here[^1] after\n\n[^1]: The note", "here", "after", "here after", 5],
     ["a blocked image", "Look ![x](https://e.example/a.png) here", "Look", "here", "Look here", 0],
+    ["a reference image", "Look ![x][img] here\n\n[img]: https://e.example/a.png", "Look", "here", "Look here", 0],
     ["a <br>", "one<br>two", "one", "two", "one two", 0],
   ])("a selection over %s leaves it out of the quote", (_name, markdown, from, to, exact, startUtf16) => {
     const root = page(markdown);
@@ -224,6 +229,19 @@ describe("a passage that can take a comment", () => {
     expect(anchor).toMatchObject({ exact, startUtf16 });
     expect(validateReviewAnchor(markdown, anchor)).toEqual(anchor);
     expect(reviewAnchorRange(root, markdown, anchor)).not.toBeNull();
+  });
+
+  test("a quote and its context hold no URL, image label, footnote number or comment body", () => {
+    const markdown = "Look ![alt](https://e.example/secret.png) [link](https://e.example/secret) note[^1] <!-- secret --> here\n\n[^1]: The note";
+    const root = page(markdown);
+    const paragraph = root.querySelector("p")!;
+    const anchor = selectedReviewAnchor(root, markdown, select(span(paragraph, "here").from, span(paragraph, "here").to))!;
+    expect(anchor.exact).toBe("here");
+    for (const value of [anchor.prefix, anchor.suffix, anchor.exact]) {
+      expect(value).not.toContain("https");
+      expect(value).not.toContain("alt");
+      expect(value).not.toContain("secret");
+    }
   });
 
   test("a whole code block is selected without the newline the page ends it with", () => {

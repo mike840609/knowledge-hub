@@ -206,7 +206,7 @@ test("a <br> keeps its paragraph stamped but, drawn raw in the editor, it takes 
   expect(readReviewSelection(root, markdown, selection).problem).toBe("unsupported");
 });
 
-test("a <br> in a cell keeps the cell and its duplicates stamped, though the cell takes no comment", () => {
+test("a mid-cell <br> keeps the cell and its duplicates stamped, though the cell takes no comment", () => {
   const markdown = "| A |\n| --- |\n| one<br>two |\n\nSame\n\nSame";
   const root = editor('<table><tbody><tr><th><p>A</p></th></tr><tr><td><p>one<br data-type="hardbreak" data-is-inline="false">two</p></td></tr></tbody></table><p>Same</p><p>Same</p>');
   document.body.replaceChildren(root);
@@ -219,6 +219,50 @@ test("a <br> in a cell keeps the cell and its duplicates stamped, though the cel
   // Duplicate paragraphs beside it keep their paths and can still take comments.
   expect(reviewBlockAnchor(paragraphs[0], markdown)).toMatchObject({ blockPath: [1], exact: "Same" });
   expect(reviewBlockAnchor(paragraphs[1], markdown)).toMatchObject({ blockPath: [2], exact: "Same" });
+});
+
+test("a trailing hard break is no space, so duplicates stay stamped", () => {
+  const markdown = "one\n\nSame\n\nSame";
+  const root = editor('<p>one<br data-type="hardbreak" data-is-inline="false"><br class="ProseMirror-trailingBreak"></p><p>Same</p><p>Same</p>');
+  document.body.replaceChildren(root);
+  expect(stampEditorReviewPaths(root, markdown)).toBe(true);
+  expect([...root.querySelectorAll("p")].map(p => p.getAttribute("data-review-path"))).toEqual(["0", "1", "2"]);
+  expect(reviewBlockAnchor(root.querySelector("p")!, markdown)).toMatchObject({ blockPath: [0], exact: "one" });
+});
+
+test("a run of trailing hard breaks is dropped together", () => {
+  const markdown = "one\n\nSame\n\nSame";
+  const root = editor('<p>one<br data-type="hardbreak"><br data-type="hardbreak"><br class="ProseMirror-trailingBreak"></p><p>Same</p><p>Same</p>');
+  document.body.replaceChildren(root);
+  expect(stampEditorReviewPaths(root, markdown)).toBe(true);
+  expect([...root.querySelectorAll("p")].map(p => p.getAttribute("data-review-path"))).toEqual(["0", "1", "2"]);
+});
+
+test("a trailing hard break in a cell is no space either", () => {
+  const markdown = "| A |\n| --- |\n| one |\n\nSame\n\nSame";
+  const root = editor('<table><tbody><tr><th><p>A</p></th></tr><tr><td><p>one<br data-type="hardbreak" data-is-inline="false"><br class="ProseMirror-trailingBreak"></p></td></tr></tbody></table><p>Same</p><p>Same</p>');
+  document.body.replaceChildren(root);
+  expect(stampEditorReviewPaths(root, markdown)).toBe(true);
+  const cells = [...root.querySelectorAll<HTMLElement>("th,td")];
+  const paragraphs = [...root.children].filter((element): element is HTMLElement => element instanceof HTMLElement && element.tagName === "P");
+  expect([...cells, ...paragraphs].map(element => element.getAttribute("data-review-path"))).toEqual(["0.0.0", "0.1.0", "1", "2"]);
+  expect(reviewBlockAnchor(cells[1], markdown)).toMatchObject({ blockPath: [0, 1, 0], exact: "one" });
+});
+
+test("a hard break before an image is still one space", () => {
+  const markdown = "| A |\n| --- |\n| one<br>![x](/a.png) |";
+  const root = editor('<table><tbody><tr><th><p>A</p></th></tr><tr><td><p>one<br data-type="hardbreak" data-is-inline="false"><img alt="x" src="/a.png"></p></td></tr></tbody></table>');
+  document.body.replaceChildren(root);
+  expect(stampEditorReviewPaths(root, markdown)).toBe(true);
+  expect(root.querySelector("td")!.getAttribute("data-review-path")).toBe("0.1.0");
+});
+
+test("a reference image is read as an image, not text", () => {
+  const markdown = "Look ![x][img] here\n\n[img]: https://e.example/a.png";
+  const root = editor('<p>Look <img alt="x" src="https://e.example/a.png"> here</p>');
+  document.body.replaceChildren(root);
+  expect(stampEditorReviewPaths(root, markdown)).toBe(true);
+  expect(reviewBlockAnchor(root.querySelector("p")!, markdown)).toMatchObject({ blockPath: [0], exact: "Look here" });
 });
 
 test("duplicate cells stay stamped beside a footnote reference elsewhere", () => {

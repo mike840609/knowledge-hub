@@ -27,9 +27,10 @@ function blocksByPath(markdown: string) {
  * What the page draws that is no part of a block's text: announcements, icons, an image's label, a
  * footnote's number — and in the editor, a footnote reference's label and an HTML comment's source
  * (spec §3c). `[role="img"]` cannot come from a document: the reader passes no HTML through, so it
- * is only the renderer's own label for a blocked image. The editor draws no space for a `<br>`
- * inside a block's text (raw source in a paragraph, a text-less hard break in a cell), so that
- * block fails its proof there and is refused; one whose `<br>` only opens a cell is accepted.
+ * is only the renderer's own label for a blocked image. The editor's selection proof reads no
+ * space for an HTML `<br>` (raw source in a paragraph, a text-less hard break in a cell) or a
+ * Markdown hard break (a text-less hard break wherever it is), so a break between words is
+ * refused; one that only opens or ends a block leaves no text behind and is accepted.
  */
 const NOT_TEXT = '.sr-only,[aria-hidden="true"],[role="img"],[data-footnote-ref],sup[data-type="footnote_reference"],span[data-type="html"][data-value^="<!--"][data-value$="-->"]';
 
