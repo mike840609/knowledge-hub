@@ -1,4 +1,5 @@
 import { projectReviewBlocks } from "@/modules/knowledge/domain/review-anchor";
+import { htmlAsText } from "@/shared/markdown/remark-known-html";
 import { REVIEW_PATH, reviewPathKey } from "@/shared/markdown/remark-review-paths";
 
 /** Stamp the editor leaves the reader can prove, one block at a time. A block the editor
@@ -15,6 +16,10 @@ export function stampEditorReviewPaths(root: HTMLElement, markdown: string): boo
   const text = (element: HTMLElement, code: boolean) => {
     const copy = element.cloneNode(true) as HTMLElement;
     copy.querySelectorAll('.sr-only,[aria-hidden="true"],.ProseMirror-trailingBreak').forEach(extra => extra.remove());
+    // The editor draws a footnote reference as its label and inline HTML as its raw source; the
+    // projection reads them as nothing and `htmlAsText`. The stamp is identity, not permission.
+    copy.querySelectorAll('sup[data-type="footnote_reference"]').forEach(extra => extra.remove());
+    copy.querySelectorAll<HTMLElement>('span[data-type="html"]').forEach(html => html.replaceWith(htmlAsText(html.dataset.value ?? "")));
     const value = copy.textContent ?? "";
     return code ? value.replace(/\n$/, "") : value.replace(/[\t\n\r ]+/g, " ").replace(/^ /, "");
   };

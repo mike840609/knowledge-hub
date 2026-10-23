@@ -23,8 +23,14 @@ function blocksByPath(markdown: string) {
   return projected.blocks;
 }
 
-/** What the page draws that is no part of a block's text: announcements, icons, an image's label, a footnote's number (spec §3c). */
-const NOT_TEXT = '.sr-only,[aria-hidden="true"],[role="img"],[data-footnote-ref]';
+/**
+ * What the page draws that is no part of a block's text: announcements, icons, an image's label, a
+ * footnote's number — and in the editor, a footnote reference's label and an HTML comment's source
+ * (spec §3c). `[role="img"]` cannot come from a document: the reader passes no HTML through, so it
+ * is only the renderer's own label for a blocked image. The editor's `<br>` stays raw text, so a
+ * block holding one fails its proof there and is refused.
+ */
+const NOT_TEXT = '.sr-only,[aria-hidden="true"],[role="img"],[data-footnote-ref],sup[data-type="footnote_reference"],span[data-type="html"][data-value^="<!--"][data-value$="-->"]';
 
 /** Match the renderer's visible Markdown text: what `NOT_TEXT` names is left out. */
 function readableText(node: HTMLElement | DocumentFragment): string {

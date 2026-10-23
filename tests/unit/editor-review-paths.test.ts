@@ -152,3 +152,63 @@ test("selected paragraph styling remains a decoration and cleanup retains every 
   expect(reader.classList.contains("kh-comment-block-selected")).toBe(false);
   view.destroy();
 });
+
+// The editor's own markup (Milkdown's `footnote_reference` and `html` nodes): a footnote reference
+// is drawn as its label, inline HTML as its raw source with the value in `data-value`.
+const footnoteRef = (label: string) => `<sup data-label="${label}" data-type="footnote_reference">${label}</sup>`;
+const inlineHtml = (value: string) => `<span data-value="${value.replace(/</g, "&lt;").replace(/>/g, "&gt;")}" data-type="html">${value.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span>`;
+
+test("a footnote reference keeps every block stamped, the duplicates included", () => {
+  const markdown = "Safe\n\nA note[^1] here.\n\nSafe\n\n[^1]: The note.\n";
+  const root = editor(`<p>Safe</p><p>A note${footnoteRef("1")} here.</p><p>Safe</p><dl data-label="1" data-type="footnote_definition"><dt>1</dt><dd><p>The note.</p></dd></dl>`);
+  document.body.replaceChildren(root);
+  expect(stampEditorReviewPaths(root, markdown)).toBe(true);
+  expect([...root.querySelectorAll("p")].map(p => p.getAttribute("data-review-path"))).toEqual(["0", "1", "2", "3.0"]);
+  const paragraph = root.querySelectorAll<HTMLElement>("p")[1];
+  expect(reviewBlockAnchor(paragraph, markdown)).toMatchObject({ blockPath: [1], exact: "A note here." });
+  const range = document.createRange();
+  range.setStart(paragraph.firstChild!, 2);
+  range.setEnd(paragraph.lastChild!, 5);
+  const selection = window.getSelection()!;
+  selection.removeAllRanges(); selection.addRange(range);
+  expect(readReviewSelection(root, markdown, selection).anchor).toMatchObject({ blockPath: [1], exact: "note here", startUtf16: 2, endUtf16: 11 });
+});
+
+test("an HTML comment keeps every block stamped and its paragraph takes a comment", () => {
+  const markdown = "Safe\n\nOne <!-- c --> two.\n\nSafe";
+  const root = editor(`<p>Safe</p><p>One ${inlineHtml("<!-- c -->")} two.</p><p>Safe</p>`);
+  document.body.replaceChildren(root);
+  expect(stampEditorReviewPaths(root, markdown)).toBe(true);
+  expect([...root.querySelectorAll("p")].map(p => p.getAttribute("data-review-path"))).toEqual(["0", "1", "2"]);
+  const paragraph = root.querySelectorAll<HTMLElement>("p")[1];
+  expect(reviewBlockAnchor(paragraph, markdown)).toMatchObject({ blockPath: [1], exact: "One two." });
+  const range = document.createRange();
+  range.setStart(paragraph.firstChild!, 0);
+  range.setEnd(paragraph.lastChild!, 4);
+  const selection = window.getSelection()!;
+  selection.removeAllRanges(); selection.addRange(range);
+  expect(readReviewSelection(root, markdown, selection).anchor).toMatchObject({ blockPath: [1], exact: "One two", startUtf16: 0, endUtf16: 7 });
+});
+
+test("a <br> keeps its paragraph stamped but, drawn raw in the editor, it takes no comment there", () => {
+  const markdown = "Safe\n\nOne<br>two.\n\nSafe";
+  const root = editor(`<p>Safe</p><p>One${inlineHtml("<br>")}two.</p><p>Safe</p>`);
+  document.body.replaceChildren(root);
+  expect(stampEditorReviewPaths(root, markdown)).toBe(true);
+  expect([...root.querySelectorAll("p")].map(p => p.getAttribute("data-review-path"))).toEqual(["0", "1", "2"]);
+  const paragraph = root.querySelectorAll<HTMLElement>("p")[1];
+  expect(reviewBlockAnchor(paragraph, markdown)).toBeNull();
+  const range = document.createRange();
+  range.setStart(paragraph.firstChild!, 0);
+  range.setEnd(paragraph.lastChild!, 3);
+  const selection = window.getSelection()!;
+  selection.removeAllRanges(); selection.addRange(range);
+  expect(readReviewSelection(root, markdown, selection).problem).toBe("unsupported");
+});
+
+test("duplicate cells stay stamped beside a footnote reference elsewhere", () => {
+  const markdown = "| A | B |\n| --- | --- |\n| Same | Same |\n\nRef[^n] here.\n\n[^n]: Note.\n";
+  const root = editor(`<table><tbody><tr><th><p>A</p></th><th><p>B</p></th></tr><tr><td><p>Same</p></td><td><p>Same</p></td></tr></tbody></table><p>Ref${footnoteRef("n")} here.</p><dl data-label="n" data-type="footnote_definition"><dt>n</dt><dd><p>Note.</p></dd></dl>`);
+  expect(stampEditorReviewPaths(root, markdown)).toBe(true);
+  expect([...root.querySelectorAll("th,td,body > p, div > p, dd > p")].map(p => p.getAttribute("data-review-path"))).toEqual(["0.0.0", "0.0.1", "0.1.0", "0.1.1", "1", "2.0"]);
+});

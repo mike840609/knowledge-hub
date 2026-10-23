@@ -42,3 +42,36 @@ test("a selection in the real editor narrows the block button anchor", async () 
   expect(narrowed?.exact).toBe("target words");
   expect(narrowed?.blockPath).toEqual(block.blockPath);
 });
+
+async function rendered(markdown: string) {
+  const host = document.createElement("div");
+  document.body.appendChild(host);
+  const editor = await createMarkdownEditor({
+    root: host, markdown, className: "kh-editor", ariaLabel: "Content",
+    editable: true, onUserEdit: () => {}, onMarkdown: () => {}, allowImage: () => false,
+    extraPlugins: [editorReviewPathsPlugin],
+  });
+  opened.push(editor);
+  return editor.action(ctx => ctx.get(editorViewCtx));
+}
+
+test("the real editor stamps around a footnote reference, and its paragraph takes a comment", async () => {
+  const markdown = "Safe\n\nA note[^1] here.\n\nSafe\n\n[^1]: The note.\n";
+  const view = await rendered(markdown);
+  expect(view.dom.querySelector('sup[data-type="footnote_reference"]')).not.toBeNull();
+  expect(updateEditorReviewPaths(view, markdown)).toBe(true);
+  const paragraphs = [...view.dom.querySelectorAll<HTMLElement>("p")];
+  expect(paragraphs.map(p => p.getAttribute("data-review-path"))).toEqual(["0", "1", "2", "3.0"]);
+  expect(reviewBlockAnchor(paragraphs[1], markdown)).toMatchObject({ blockPath: [1], exact: "A note here." });
+});
+
+test("the real editor: a comment's paragraph takes a comment, a <br>'s does not, both stay stamped", async () => {
+  const markdown = "Safe\n\nOne <!-- c --> two.\n\nSafe\n\nOne<br>two.\n";
+  const view = await rendered(markdown);
+  expect(view.dom.querySelectorAll('span[data-type="html"]')).toHaveLength(2);
+  expect(updateEditorReviewPaths(view, markdown)).toBe(true);
+  const paragraphs = [...view.dom.querySelectorAll<HTMLElement>("p")];
+  expect(paragraphs.map(p => p.getAttribute("data-review-path"))).toEqual(["0", "1", "2", "3"]);
+  expect(reviewBlockAnchor(paragraphs[1], markdown)).toMatchObject({ blockPath: [1], exact: "One two." });
+  expect(reviewBlockAnchor(paragraphs[3], markdown)).toBeNull();
+});
