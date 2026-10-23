@@ -132,13 +132,12 @@ Workspace (`tests/e2e/owner-review.spec.ts`, `tests/e2e/reading-loading.spec.ts`
 - Opening and closing discussions at windows of 2400px and 1440px leaves the
   article's left edge and the path line's controls where they were.
 - At a pane of 1100px with discussions open, the outline is a disclosure above
-  the article and never left of it; the article is at least 688px wide.
+  the article and never left of it; its paragraphs are at least 608px wide.
 
 Shared page (`tests/e2e/zz-share-outline.spec.ts`):
 
 - At 1440px the outline rail is right of the article; with comments open it is
-  right of the comments rail, stays on screen, and the article is at least 688px
-  wide.
+  right of the comments rail, stays on screen, and its paragraphs are at least 608px wide.
 - At 1280px the outline is the disclosure.
 - Opening comments at 1680px leaves the article's left edge where it was.
 
