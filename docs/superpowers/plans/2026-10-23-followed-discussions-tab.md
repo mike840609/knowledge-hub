@@ -19,7 +19,8 @@
 - At most `FOLLOW_LIMIT` (100) follows; the cap carries a `ponytail:` comment naming the upgrade (cursor paging).
 - Tailwind tokens only (`text-body`, `text-caption`, `rounded-md`, …); no colour outside `globals.css` variables. Read `docs/superpowers/specs/frontend-design-language.md` before Task 4.
 - Bare `npm` may be shadowed in non-interactive shells: run tests with `npx vitest …` and never pipe a test command (it hides the exit code).
-- Commit messages end with: `Claude-Session: https://claude.ai/code/session_01YXG2rxk4WnFUSkLvqzDNma`
+- Every commit carries the trailer `Claude-Session: https://claude.ai/code/session_01YXG2rxk4WnFUSkLvqzDNma` (the second `-m` in each commit command below).
+- E2E runs serially (`playwright.config.ts`: `workers: 1`), but every test shares the `viewer` reader: find a test's own row by thread id, never by position.
 
 ---
 
@@ -42,7 +43,7 @@
 
 - [ ] **Step 1: Update and add failing tests** in `tests/unit/review-follow.test.ts`
 
-Replace the two `toBeNull()` expectations that describe "no one else said anything" with the new shape, and add the new cases:
+Delete these two existing `it` blocks: "never counts the follower's own words" and "lists nothing when no one else has said anything". Keep "lists nothing for a hidden or retracted discussion" (its `toBeNull()` still holds). Add the import change and these three blocks inside the existing `describe`:
 
 ```ts
 import { filterFollowedDiscussions, orderFollowedDiscussions, parseDiscussionFilter, summarizeFollowedThread, type FollowedDiscussionView } from "@/modules/knowledge/domain/review-follow";
@@ -78,6 +79,7 @@ describe("the reader's list of followed discussions", () => {
   });
   it("accepts all or unread, defaulting to all, and refuses anything else", () => {
     expect(parseDiscussionFilter(undefined)).toBe("all");
+    expect(parseDiscussionFilter("")).toBe("all");
     expect(parseDiscussionFilter("unread")).toBe("unread");
     expect(() => parseDiscussionFilter("resolved")).toThrow("Choose All or Unread.");
   });
@@ -129,7 +131,7 @@ export function orderFollowedDiscussions(items: FollowedDiscussionView[]): Follo
 }
 
 export function parseDiscussionFilter(value: string | undefined): DiscussionFilter {
-  if (value === undefined || value === "all") return "all";
+  if (!value || value === "all") return "all";
   if (value === "unread") return "unread";
   throw new ValidationError("Choose All or Unread.");
 }
@@ -138,8 +140,6 @@ export function filterFollowedDiscussions(items: FollowedDiscussionView[], filte
   return filter === "all" ? items : items.filter(item => item.linkAvailable && item.unread > 0);
 }
 ```
-
-Check `ValidationError`'s constructor in `src/modules/knowledge/domain/errors.ts:13` takes a message as first argument; if it takes `(code, message)`, pass `("INVALID_REQUEST", "Choose All or Unread.")` matching the other callers in that file.
 
 In `src/modules/knowledge/domain/share-comment-event.ts` change `const EXCERPT_LIMIT = 80;` to `export const EXCERPT_LIMIT = 80;`.
 
@@ -154,7 +154,7 @@ Expected: PASS, no type errors.
 
 ```bash
 git add src/modules/knowledge/domain/review-follow.ts src/modules/knowledge/domain/share-comment-event.ts src/modules/knowledge/application/document-review-service.ts tests/unit/review-follow.test.ts
-git commit -m "feat(follow): a followed discussion's summary names its latest comment as well as the latest reply"
+git commit -m "feat(follow): a followed discussion's summary names its latest comment as well as the latest reply" -m "Claude-Session: https://claude.ai/code/session_01YXG2rxk4WnFUSkLvqzDNma"
 ```
 
 ---
@@ -288,6 +288,7 @@ Public entries (place after `markSeenForLink`):
   }
   /** The caller gives up their own follow. It reads nothing, so it needs no live link and answers alike for any id. */
   async unfollowOwn(caller: CallerContext, threadId: string): Promise<{ following: false }> {
+    // thread_id is a MariaDB UUID column: a malformed id would fail the query rather than match nothing.
     if (isUuid(threadId)) await this.uow.run(r => r.reviewFollows.unfollow(threadId, caller.identity.id, this.clock()));
     return { following: false };
   }
@@ -303,7 +304,7 @@ Expected: all PASS.
 
 ```bash
 git add src/modules/knowledge/application/document-review-service.ts tests/integration/review-reply-follow.test.ts
-git commit -m "feat(follow): list every followed discussion; a reader can drop their own follow without a live link"
+git commit -m "feat(follow): list every followed discussion; a reader can drop their own follow without a live link" -m "Claude-Session: https://claude.ai/code/session_01YXG2rxk4WnFUSkLvqzDNma"
 ```
 
 ---
@@ -347,13 +348,11 @@ describe("stopping one's own follow", () => {
   it("refuses a request from another origin", async () => {
     const unfollowOwn = vi.fn();
     mocks.services.mockReturnValue({ establishTrustedCaller: async () => ({ caller: { identity: { id: "reader" } } }), reviews: { unfollowOwn } });
-    expect((await call({ Origin: "https://evil.example" })).status).toBeGreaterThanOrEqual(400);
+    expect((await call({ Origin: "https://evil.example" })).status).toBe(403);
     expect(unfollowOwn).not.toHaveBeenCalled();
   });
 });
 ```
-
-Check `AuthRequiredError`'s constructor arguments in `src/modules/identity/domain/identity-session-errors.ts` and how `tests/unit/review-http.test.ts` builds a missing-caller case; copy that if it differs. Check the exact status `assertReviewOrigin` maps to and assert it exactly instead of `>= 400`.
 
 - [ ] **Step 2: Run, expect failure** (module not found)
 
@@ -373,13 +372,15 @@ export async function POST(request:Request, context:{params:Promise<{threadId:st
 
 - [ ] **Step 4: Run, expect PASS**
 
-Run: `npx vitest run --config vitest.config.ts tests/unit/review-follows-route.test.ts tests/unit/share-link-single-exception.test.ts`
+Add `"review-follows/[threadId]/unfollow"` to the `routes` array in `tests/unit/review-http.test.ts` ("keeps every private review route force-dynamic…", line 103).
+
+Run: `npx vitest run --config vitest.config.ts tests/unit/review-follows-route.test.ts tests/unit/review-http.test.ts tests/unit/share-link-single-exception.test.ts`
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/app/api/review-follows tests/unit/review-follows-route.test.ts
-git commit -m "feat(follow): POST /api/review-follows/:threadId/unfollow drops the caller's own follow"
+git add src/app/api/review-follows tests/unit/review-follows-route.test.ts tests/unit/review-http.test.ts
+git commit -m "feat(follow): POST /api/review-follows/:threadId/unfollow drops the caller's own follow" -m "Claude-Session: https://claude.ai/code/session_01YXG2rxk4WnFUSkLvqzDNma"
 ```
 
 ---
@@ -429,6 +430,7 @@ it("links a live row to the discussion on the shared page and shows what is new"
 });
 it("a dead link's row names nothing and offers Remove",async()=>{
  await mount([dead]);
+ expect(host.querySelector('li[data-thread-id="t2"]')).not.toBeNull();
  expect(host.textContent).toContain("A shared discussion — this link is no longer available");
  expect(host.querySelector('a[href^="/s/"]')).toBeNull();
  expect(host.querySelector('button[aria-label="Remove discussion"]')).not.toBeNull();
@@ -447,15 +449,24 @@ it("Unfollow uses the link; Remove uses the caller's own follow; a failure keeps
  expect(calls).toContain("/api/review-follows/t2/unfollow ");
  expect(host.textContent).toContain("Discussions you comment on through a shared link appear here.");
 });
-it("the Unread filter submits as tab=discussions",async()=>{
+it("the filter submits tab=discussions with the chosen status",async()=>{
  await mount([live],"unread");
  expect(host.querySelector('input[name="tab"]')?.getAttribute("value")).toBe("discussions");
+ expect(host.querySelector('#discussions-status')?.getAttribute("data-value")).toBe("unread");
+});
+it("a filter error is shown in place of the list and its empty state",async()=>{
+ await act(async()=>root.render(<FollowedDiscussionsView workspaceId="reader" items={[]} filter="all" unread={3} filterError="Choose All or Unread."/>));
+ expect(host.querySelector('[role="alert"]')?.textContent).toBe("Choose All or Unread.");
+ expect(host.textContent).not.toContain("No discussions yet.");
+ expect(host.querySelector('[aria-label="3 unread"]')).not.toBeNull();
 });
 ```
 
 - [ ] **Step 2: Run, expect failure** (module not found)
 
 Run: `npx vitest run --config vitest.config.ts tests/unit/followed-discussions-view.test.tsx`
+
+If `SelectMenu` does not put `data-value` on the element with its `id`, read `src/components/ui/select-menu.tsx` and assert the hidden `input[name="status"]` value instead.
 
 - [ ] **Step 3: Navigation** — `src/components/knowledge/shares-navigation.tsx`
 
@@ -475,15 +486,13 @@ export function SharesNavigation({ workspaceId, active, discussionsUnread = 0 }:
       {sections.map(section => (
         <Link key={section.id} href={section.href} aria-current={active === section.id ? "page" : undefined} className={tabClasses(active === section.id)}>
           {section.label}
-          {section.id === "discussions" && discussionsUnread > 0 && <span aria-label={`${discussionsUnread} unread`} className="ml-1 tabular-nums text-caption text-kh-link">{discussionsUnread}</span>}
+          {section.id === "discussions" && discussionsUnread > 0 && <span aria-label={`${discussionsUnread} unread`} className="ml-1 tabular-nums text-caption text-kh-text-muted">{discussionsUnread}</span>}
         </Link>
       ))}
     </nav>
   );
 }
 ```
-
-Before settling the badge classes, look for an existing count badge in `src/components` (e.g. the Inbox badge in `src/components/shell/inbox-popover.tsx`, or My shares' unread count) and reuse its classes so the contract's tokens are respected.
 
 Add `discussionsUnread?: number` to the props of `ShareManagementView` (`share-management-view.tsx:30`) and `SavedSharesView` (`saved-shares-view.tsx:16`) and pass it on: `<SharesNavigation workspaceId={workspaceId} active="mine" discussionsUnread={discussionsUnread} />` (and `active="saved"`).
 
@@ -536,11 +545,11 @@ export function FollowedDiscussionsView({ workspaceId, items, filter, unread, fi
     </form>
     {(error || filterError) && <p role="alert" className="mt-3 text-body-sm text-kh-danger">{filterError || error}</p>}
     {!filterError && shown.length === 0 && <EmptyState icon={MessagesSquare} title={filter === "unread" ? "No unread discussions." : "No discussions yet."} description="Discussions you comment on through a shared link appear here."/>}
-    <ul aria-label="Followed discussions" onKeyDown={navigateListRows} className="mt-4 space-y-2 md:space-y-0">{shown.map(item => <li key={item.threadId} className="rounded-md border border-kh-border bg-kh-bg p-3 hover:bg-kh-bg-hover focus-within:bg-kh-bg-hover md:rounded-none md:border-x-0 md:border-t-0 md:py-2">
+    <ul aria-label="Followed discussions" onKeyDown={navigateListRows} className="mt-4 space-y-2 md:space-y-0">{shown.map(item => <li key={item.threadId} data-thread-id={item.threadId} className="rounded-md border border-kh-border bg-kh-bg p-3 hover:bg-kh-bg-hover focus-within:bg-kh-bg-hover md:rounded-none md:border-x-0 md:border-t-0 md:py-2">
       {item.linkAvailable
         ? <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
             <Link prefetch={false} data-list-row className="kh-focus-ring min-w-0 rounded-md" href={`/s/${item.token}?thread=${item.threadId}`}>
-              <span className="flex items-center gap-2">{item.unread > 0 && <span aria-label="Unread" className="size-2 shrink-0 rounded-full bg-kh-link"/>}<span className="truncate text-body font-medium text-kh-text">{item.documentTitle}</span></span>
+              <span className="flex items-center gap-2">{item.unread > 0 && <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-kh-primary"/>}<span className="truncate text-body font-medium text-kh-text">{item.documentTitle}</span></span>
               <span className="block truncate text-caption text-kh-text-muted">{item.authorName ?? "Someone"}: {item.excerpt}</span>
               <span className="block text-caption text-kh-text-muted">{item.threadStatus === "OPEN" ? "Open" : "Resolved"} · <Timestamp value={item.latestAt}/>{item.unread > 0 && <> · {item.unread} new {item.unread === 1 ? "reply" : "replies"}</>}</span>
             </Link>
@@ -555,7 +564,7 @@ export function FollowedDiscussionsView({ workspaceId, items, filter, unread, fi
 }
 ```
 
-Check: the follow route requires the JSON `Origin` the browser sends (same-origin fetch does); `MessagesSquare` exists in the installed `lucide-react` (else use `MessageSquare`); the unread-dot classes match an existing unread dot (`grep -rn 'aria-label="Unread"' src/components`) and copy those classes.
+The unread dot copies the Inbox's (`src/components/shell/inbox-popover.tsx:126`); the "N new replies" text carries the meaning, so the dot is `aria-hidden`. `data-thread-id` is the id the row already holds for Remove; it names no content.
 
 - [ ] **Step 5: Page wiring** — `src/app/w/[workspaceId]/shares/page.tsx`
 
@@ -566,12 +575,12 @@ import { FollowedDiscussionsView } from "@/components/knowledge/followed-discuss
 import { filterFollowedDiscussions, parseDiscussionFilter } from "@/modules/knowledge/domain/review-follow";
 ```
 
-Inside `try`, before the tab checks:
+Before the `try` (after `input` is built), so a filter error still shows the count:
 
 ```ts
-    // ponytail: the tab's unread count reloads every follow per Shares visit, as the Inbox badge does; a count query if it shows.
-    const followed=(await s.reviews.listFollowedDiscussions(caller)).items;
-    const discussionsUnread=followed.filter(item=>item.linkAvailable&&item.unread>0).length;
+  // ponytail: the tab's unread count reloads every follow per Shares visit, as the Inbox badge does; a count query if it shows.
+  const followed=(await s.reviews.listFollowedDiscussions(caller)).items;
+  const discussionsUnread=followed.filter(item=>item.linkAvailable&&item.unread>0).length;
 ```
 
 Change the tab guard to `if(tab!=="mine"&&tab!=="saved"&&tab!=="discussions")` and its message to `"Choose My shares, Saved shares or Discussions."`. Add before the `saved` branch:
@@ -585,7 +594,7 @@ Change the tab guard to `if(tab!=="mine"&&tab!=="saved"&&tab!=="discussions")` a
     }
 ```
 
-Pass `discussionsUnread={discussionsUnread}` to the `SavedSharesView` and `ShareManagementView` in the success branches. In the `catch` `ValidationError` branch add `tab==="discussions"?<FollowedDiscussionsView workspaceId={workspaceId} items={[]} filter="all" unread={0} filterError={error.message}/>:` ahead of the existing ternary.
+Pass `discussionsUnread={discussionsUnread}` to the `SavedSharesView` and `ShareManagementView` in the success branches. In the `catch` `ValidationError` branch add `tab==="discussions"?<FollowedDiscussionsView workspaceId={workspaceId} items={[]} filter="all" unread={discussionsUnread} filterError={error.message}/>:` ahead of the existing ternary, and pass `discussionsUnread={discussionsUnread}` to the `SavedSharesView` and `ShareManagementView` there too.
 
 The `followed` load runs before the ownership proof. That is safe: it reads only the caller's own follows and renders nothing until a branch proves the Workspace; a foreign Workspace still reaches `notFound()`.
 
@@ -599,7 +608,7 @@ Expected: PASS.
 
 ```bash
 git add src/components/knowledge/shares-navigation.tsx src/components/knowledge/followed-discussions-view.tsx src/components/knowledge/share-management-view.tsx src/components/knowledge/saved-shares-view.tsx "src/app/w/[workspaceId]/shares/page.tsx" tests/unit/followed-discussions-view.test.tsx
-git commit -m "feat(shares): a Discussions tab lists the discussions you follow and marks new replies"
+git commit -m "feat(shares): a Discussions tab lists the discussions you follow and marks new replies" -m "Claude-Session: https://claude.ai/code/session_01YXG2rxk4WnFUSkLvqzDNma"
 ```
 
 ---
@@ -654,15 +663,18 @@ test("a reader finds their discussion in Shares → Discussions, sees the reply,
   const row = () => page.getByRole("list", { name: "Followed discussions" }).locator("li").filter({ has: page.locator(`a[href="/s/${token}?thread=${thread.id}"]`) });
   await page.goto(`${viewer}/w/${workspaceId}/shares?tab=discussions`);
   await expect(row()).toContainText("Reader question");
-  await expect(row().getByLabel("Unread")).toHaveCount(0);
+  await expect(row()).not.toContainText("new repl");
 
   await request.post(`${owner}/api/documents/${doc.documentId}/review-threads/${thread.id}/replies`, { headers: { Origin: owner }, data: { body: "Owner answer", idempotencyKey: crypto.randomUUID() } });
   await page.reload();
   await expect(row()).toContainText("1 new reply");
   await expect(page.getByRole("link", { name: /Discussions/ }).getByLabel(/\d+ unread/)).toBeVisible();
 
+  // Arriving marks the discussion seen by a request the page sends on its own: wait for it before leaving.
+  const seen = page.waitForResponse(response => response.url().includes(`/api/share-review/threads/${thread.id}/seen`) && response.ok());
   await row().locator("a").click();
   await expect(page.locator(`[data-review-thread="${thread.id}"]`)).toHaveAttribute("data-active", "");
+  await seen;
   await page.goto(`${viewer}/w/${workspaceId}/shares?tab=discussions`);
   await expect(row()).not.toContainText("new repl");
 
@@ -675,29 +687,29 @@ test("a revoked link leaves a row that names nothing, and Remove clears it", asy
   const owner = phase3Origin("reviewOwner"), viewer = phase3Origin("viewer");
   const token = doc.links[0].path.split("/").pop()!;
   const created = await request.post(`${viewer}/api/share-review/threads`, { headers: { Origin: viewer }, data: { token, expectedRevisionId: doc.revisionId, anchor: { schemaVersion: 1, blockPath: [0], blockKind: "paragraph", startUtf16: 2, endUtf16: 9, exact: "😀 bold", prefix: "A ", suffix: " passage to review." }, body: "Soon gone", idempotencyKey: crypto.randomUUID() } });
+  expect(created.status()).toBe(201);
   const thread = await created.json();
   const revoked = await request.post(`${owner}/api/share-links/${doc.links[0].id}/revoke`, { headers: { Origin: owner } });
   expect(revoked.ok()).toBe(true);
+
   await page.goto(`${viewer}/`);
-  const home = new URL(page.url()).pathname.split("/")[2];
-  await page.goto(`${viewer}/w/${home}/shares?tab=discussions`);
-  await expect(page.getByText("A shared discussion — this link is no longer available").first()).toBeVisible();
-  await expect(page.getByText("Soon gone")).toHaveCount(0);
-  // Other tests' follows share this reader and dead rows name nothing, so this one is dropped by its id.
-  const followed = await (await request.post(`${viewer}/api/review-follows/${thread.id}/unfollow`, { headers: { Origin: viewer } })).json();
-  expect(followed).toEqual({ following: false });
-  await page.goto(`${viewer}/`);
+  await expect(page).toHaveURL(/\/w\/[^/]+\//);
   const workspaceId = new URL(page.url()).pathname.split("/")[2];
   await page.goto(`${viewer}/w/${workspaceId}/shares?tab=discussions`);
+  const row = page.locator(`li[data-thread-id="${thread.id}"]`);
+  await expect(row).toHaveText(/A shared discussion — this link is no longer available/);
+  await expect(row.locator("a")).toHaveCount(0);
   await expect(page.getByText("Soon gone")).toHaveCount(0);
+  await row.getByRole("button", { name: "Remove discussion" }).click();
+  await expect(row).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator(`li[data-thread-id="${thread.id}"]`)).toHaveCount(0);
 });
 ```
 
-The second test drops the follow through the API because dead rows carry no identifying text, so the UI cannot tell this test's dead row from another test's. Before writing it, check the revoke endpoint's exact path and body in `src/app/api/share-links/[linkId]/revoke/route.ts` and the `links[0]` shape returned by `createReviewDocument` (`tests/e2e/fixtures/document-review.ts`); adjust the call to match. The *Remove* button's UI behaviour is covered by Task 4's view test.
-
 - [ ] **Step 5: Run e2e**
 
-Run: `make browsers` (once), then `make test-e2e` — or narrow with the Playwright grep the Makefile supports (check `Makefile` for an `E2E_GREP`/`ARGS` variable) to `zz-followed-discussions`, then the whole suite once.
+Run: `make browsers` (once), then `make db-up && npm run test:e2e -- --grep "Shares → Discussions|revoked link leaves"` (`scripts/test/e2e.ts` passes its arguments to Playwright), then `make test-e2e` once for the whole suite.
 Expected: PASS, including `zz-review-reply-follow.spec.ts`. If docs stall on "Loading document" with `PROBE-NEXT` lines, move `.next/cache` aside and rerun.
 
 - [ ] **Step 6: Final gate and commit**
@@ -706,5 +718,5 @@ Run: `make verify` and `make test-integration`.
 
 ```bash
 git add CLAUDE.md README.md src/components/help/user-guide-content.ts tests/e2e/zz-followed-discussions.spec.ts
-git commit -m "docs+test(shares): Discussions in the share-link contract, guide and e2e"
+git commit -m "docs+test(shares): Discussions in the share-link contract, guide and e2e" -m "Claude-Session: https://claude.ai/code/session_01YXG2rxk4WnFUSkLvqzDNma"
 ```
