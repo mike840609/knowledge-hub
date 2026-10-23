@@ -1,4 +1,4 @@
-type Kind = "start" | "sources" | "search" | "shares" | "insights" | "updates" | "graph" | "context" | "reading";
+type Kind = "start" | "sources" | "search" | "shares" | "discussions" | "insights" | "updates" | "graph" | "context" | "reading";
 
 /*
  * One set of shapes on one 256×96 canvas, so every example reads as the same hand. Objects (a document,
@@ -83,6 +83,20 @@ function drawing(kind: Kind, importFirst: boolean) {
       <Arrow x={164} y={48} /><Doc x={196} y={29} />
       <circle cx="226" cy="64" r="9" className="fill-kh-bg stroke-kh-border-strong" />
       <circle cx="226" cy="61.5" r="2.5" className="stroke-kh-text-muted" /><path d="M221.5 69a4.5 4.5 0 0 1 9 0" className="stroke-kh-text-muted" />
+    </>;
+    // A shared page with one passage chosen, and the discussion that follows it.
+    case "discussions": return <>
+      <Panel x={16} y={12} width={116} height={72} />
+      <path d="M28 24h44M28 36h72M28 56h76M28 66h48" className={muted} />
+      <rect x="24" y="41" width="56" height="10" rx="2" className="fill-kh-bg-selected" />
+      <path d="M28 46h48" className="stroke-kh-primary" />
+      <path d="M136 46h10m-4-4 4 4-4 4" className="stroke-kh-primary" />
+      <path d="M160 24H224Q232 24 232 32V56Q232 64 224 64H196L186 74V64H160Q152 64 152 56V32Q152 24 160 24Z" className="fill-kh-bg stroke-kh-primary" />
+      <circle cx="166" cy="36" r="7" className="fill-kh-bg-selected stroke-kh-primary" />
+      <circle cx="166" cy="34" r="2" className="stroke-kh-text-muted" />
+      <path d="M162.5 40a3.5 3.5 0 0 1 7 0" className="stroke-kh-text-muted" />
+      <path d="M178 34h42M178 42h28" className={muted} />
+      <path d="M164 55h36m-4-4 4 4-4 4" className="stroke-kh-primary" />
     </>;
     case "insights": return <>
       <Panel x={24} y={10} width={208} height={76} /><path d="M40 28h39M40 39h24M40 60h60M40 71h44M136 74h78" className={muted} />

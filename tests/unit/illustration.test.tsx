@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Illustration } from "@/components/knowledge/illustration";
 
-const kinds = ["start", "sources", "search", "shares", "insights", "updates", "graph", "context", "reading"] as const;
+const kinds = ["start", "sources", "search", "shares", "discussions", "insights", "updates", "graph", "context", "reading"] as const;
 
 describe("empty-state illustrations", () => {
   it.each(kinds)("draws %s on the shared canvas, in the shared stroke, hidden from assistive technology", (kind) => {
@@ -10,6 +10,15 @@ describe("empty-state illustrations", () => {
     expect(html.startsWith(`<svg data-illustration="${kind}" viewBox="0 0 256 96" class="h-24 w-64 max-w-full" fill="none" stroke-width="1.5"`)).toBe(true);
     expect(html).toContain('aria-hidden="true"');
     expect(html).not.toMatch(/stroke-width="(?!1\.5")/);
+  });
+
+  it("draws the discussion example with a page, a chosen passage and a reply bubble", () => {
+    const html = renderToStaticMarkup(<Illustration kind="discussions" />);
+    expect((html.match(/<rect/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    expect((html.match(/<path/g) ?? []).length).toBeGreaterThanOrEqual(5);
+    expect(html).toContain("stroke-kh-primary");
+    expect(html).toContain("fill-kh-bg-selected");
+    expect(html).not.toMatch(/<text/);
   });
 
   it("lets the drawing carry the meaning: no caption, and words only where a step needs naming", () => {

@@ -61,3 +61,12 @@ it("a filter error is shown in place of the list and its empty state",async()=>{
  expect(host.textContent).not.toContain("No discussions yet.");
  expect(host.querySelector('[aria-label="3 unread"]')).not.toBeNull();
 });
+it("draws the discussions example when there are none",async()=>{
+ await mount([]);
+ expect(host.querySelector('svg[data-illustration="discussions"]')).not.toBeNull();
+});
+it("keeps the icon for the Unread filtered empty state",async()=>{
+ await mount([],"unread");
+ expect(host.querySelector('svg[data-illustration="discussions"]')).toBeNull();
+ expect(host.textContent).toContain("No unread discussions.");
+});
