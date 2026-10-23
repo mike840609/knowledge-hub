@@ -48,11 +48,18 @@ unchanged).
 ## The article narrows before anything moves
 
 Running text is held to `max-w-measure` (40rem, 640px) inside the 860px reading
-column; only tables, code and diagrams use the rest. So when the discussions open,
-the column holding the article keeps its left edge and the article narrows from
-the right, down to 640px, before the column moves at all. Prose does not rewrap;
-wide blocks get narrower. Below that, the column slides left (the existing 120ms
-`margin-inline-start` transition) only as far as keeps the article at 640px.
+column, which also carries 24px of padding each side (`kh-reading-column`,
+`px-6`); only tables, code and diagrams use the rest. So the article's box can
+narrow to **688px** (640 + 2 × 24) without one line of prose rewrapping. When it
+has discussion marks it keeps their 32px right margin inside that box, and at the
+floor its text is 608px wide.
+
+When the discussions open, the column holding the article keeps its left edge and
+the article narrows from the right, down to 688px, before the column moves. Wide
+blocks get narrower; prose does not. Below that the column slides left (the
+existing 120ms `margin-inline-start` transition) only as far as keeps the article
+at 688px. The outline folds into the disclosure only where even a column at the
+pane's left edge cannot hold article, discussions and outline.
 
 The path line and the header keep their width and left edge, so Edit, Share,
 Comments and Details stay under the pointer whenever the column does not slide.
@@ -68,35 +75,40 @@ Let *A* be the flex area left of the outline slot (pane − 224px).
 
 - Discussions closed: unchanged. Outline rail from a `60rem` pane, disclosure
   below.
-- Discussions open, pane ≥ `74rem` (1184px = 224 + 640 + 320): the outline rail
-  stays. The column's start margin is `max(0, min((A − 860) / 2, A − 960))`; the
+- Discussions open, pane ≥ `77rem` (1232px = 224 + 688 + 320): the outline rail
+  stays. The column's start margin is `max(0, min((A − 860) / 2, A − 1008))`; the
   column holding the article is `min(1180px, A − margin)` wide, the discussions
-  320px of it. The article is ≥ 640px. Nothing slides from a 1284px pane; between
-  1184px and 1284px the column slides up to 50px.
-- Discussions open, pane < `74rem`: the outline rail hides and the disclosure
-  shows, as today below `88rem`. The column keeps the left edge it had beside the
-  outline slot, sliding only as far as keeps the article at 640px.
+  320px of it, so the article is ≥ 688px. Nothing slides from a 1380px pane;
+  between 1232px and 1380px the column slides up to 74px.
+- Discussions open, pane < `77rem`: the outline rail hides and the disclosure
+  shows, as today below `88rem`. The flex area is then the whole pane; the start
+  margin is `max(0, min((pane − 1084) / 2, pane − 1008))` — the left edge the
+  column had beside the outline slot, moved only as far as keeps the article at
+  688px.
 
-With the primary rail and explorer both open, all three columns meet from a
-window of about 1650px; with both collapsed, from about 1275px.
+With the primary rail (176px) and explorer (288px) both open, all three columns
+meet from a window of about 1700px; with both collapsed, from about 1320px.
 
 ## Shared page geometry
 
 The shared page is the whole window, its column centred in it.
 
-- The outline rail hangs off the right edge of the reading column — a zero-height
-  sticky box as today, the rail `absolute left-full` instead of `right-full` — and
-  so off the right edge of the discussions when they are open inline. It sticks
-  below the pinned Comments bar, as today.
-- Rail from a `82rem` window (the centred column leaves 224px and a 16px edge on
-  its right), disclosure below: the same threshold, mirrored.
-- With discussions open inline the column keeps its left edge and the article
-  narrows to 640px before the column slides. The column's start margin is
-  `max(0, min((100% − 860px) / 2, 100% − 1200px))` (640 + 320 + 240). Nothing slides from a
-  1540px window. From `82rem` the outline therefore stays a rail while
-  discussions are open; below it, with no outline rail to make room for, the
-  second term is `100% − 960px`. The `@media (max-width: 87.99rem)` fold is
-  deleted.
+- The outline rail hangs off the right edge of a zero-height sticky box, as today
+  off its left: the rail `absolute left-full w-52` instead of `right-full`. It
+  sticks below the pinned Comments bar, as today.
+- The box sits inside the reading part of the discussions' layout. While the
+  discussions are open inline it is made as wide as reading part and discussions
+  together (`width: calc(100% + 320px)`), so the rail hangs off the right edge of
+  the discussions, not over them.
+- Rail from a `82rem` window (the centred column leaves the 208px rail and a 16px
+  edge on its right), disclosure below: the same threshold, mirrored.
+- With discussions open inline, from `82rem`: the start margin is
+  `max(0, min((100% − 860px) / 2, 100% − 1232px))` (688 + 320 + 224), and the
+  discussions' layout is `min(1180px, 100% − margin − 224px)` wide, leaving the
+  outline its room. Nothing slides from a 1604px window; at 82rem the column
+  slides up to 146px. Below `82rem`, with no outline rail to make room for, the
+  terms are `100% − 1008px` and `100% − margin`. The `@media (max-width:
+  87.99rem)` fold is deleted.
 
 ## Not in this change
 
@@ -115,18 +127,19 @@ Workspace (`tests/e2e/owner-review.spec.ts`, `tests/e2e/reading-loading.spec.ts`
 
 - At a window of 1728px, the outline's left edge is right of the article's right
   edge with the explorer shown and with it hidden.
-- At a pane of 1408px and wider, the outline is right of the article and still
-  right of it with discussions open, with the discussions between.
-- Opening and closing discussions at a 1440px pane leaves the article's left edge
-  and the path line's controls where they were.
+- At a window of 2000px (pane past 1380px), the outline is right of the article
+  and still right of it with discussions open, with the discussions between.
+- Opening and closing discussions at windows of 2400px and 1440px leaves the
+  article's left edge and the path line's controls where they were.
 - At a pane of 1100px with discussions open, the outline is a disclosure above
-  the article and never left of it; the article is at least 640px wide.
+  the article and never left of it; the article is at least 688px wide.
 
 Shared page (`tests/e2e/zz-share-outline.spec.ts`):
 
 - At 1440px the outline rail is right of the article; with comments open it is
-  right of the comments rail and stays on screen.
+  right of the comments rail, stays on screen, and the article is at least 688px
+  wide.
 - At 1280px the outline is the disclosure.
-- Opening comments at 1600px leaves the article's left edge where it was.
+- Opening comments at 1680px leaves the article's left edge where it was.
 
 Both: no viewport width puts the outline left of the article.
