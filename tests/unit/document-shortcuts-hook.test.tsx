@@ -75,6 +75,22 @@ it("asks for the favorites view, not every personal item", async () => {
   await answerFavorites([]);
 });
 
+it("makes one favorites request for two mounted hooks", async () => {
+  await act(async () => root.render(<><Host /><Host /></>));
+  expect(fetch).toHaveBeenCalledTimes(1);
+  await answerFavorites([{ key: "favorite:f", sourceId: "s" }]);
+  expect(stored().favorites).toEqual(["s:f"]);
+});
+
+it("makes one favorites request when the window regains focus", async () => {
+  await act(async () => root.render(<><Host /><Host /></>));
+  await answerFavorites([{ key: "favorite:f", sourceId: "s" }]);
+  vi.mocked(fetch).mockClear();
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  expect(fetch).toHaveBeenCalledTimes(1);
+  await answerFavorites([{ key: "favorite:f", sourceId: "s" }]);
+});
+
 it("still shows what was stored and what was just opened once the state arrives", async () => {
   localStorage.setItem(KEY, JSON.stringify({ recent: ["s:a"], favorites: [] }));
   await act(async () => root.render(<Host />));
