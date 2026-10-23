@@ -131,6 +131,7 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
   const runAction = useActionRunner({ onToggleFavorite: (sourceId, documentId) => update(state => toggleFavoriteDocument(state, documentShortcutKey(sourceId, documentId))) });
   const keyOf = (doc: Doc) => documentShortcutKey(doc.sourceId, doc.documentId);
   const lists = homeLists({ documents, drafts, recent: shortcuts.recent, openedAt: shortcuts.openedAt });
+  const activeDocumentCount = documents.filter(doc => doc.status === "ACTIVE" && doc.sourceStatus === "ACTIVE").length;
   const [showAllRecent, setShowAllRecent] = useState(false);
   const hiddenRecent = lists.recent.length - RECENT_SHOWN;
   const favorites = shortcuts.favorites
@@ -180,11 +181,25 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
     );
   }
 
+  function draftHref(item: DraftItem): string {
+    if (!item.doc) return `/w/${workspaceId}/knowledge/new`;
+    if (item.doc.status === "ACTIVE" && item.doc.sourceStatus === "ACTIVE") {
+      return `/w/${workspaceId}/knowledge/${item.doc.sourceId}/${item.doc.documentId}`;
+    }
+    return `/w/${workspaceId}/knowledge/drafts/${item.doc.sourceId}/${item.doc.documentId}`;
+  }
+
+  function draftProvenance(item: DraftItem): string | undefined {
+    if (!item.doc) return undefined;
+    if (item.doc.sourceStatus === "ARCHIVED") return "Draft · Source archived";
+    if (item.doc.status === "ARCHIVED") return "Draft · Original document archived";
+    return undefined;
+  }
+
   function draftRow(item: DraftItem) {
-    const href = item.doc ? `/w/${workspaceId}/knowledge/${item.doc.sourceId}/${item.doc.documentId}/edit` : `/w/${workspaceId}/knowledge/new`;
     // Draft rows have no star or menu; invisible copies of both keep their times on the same edge as Recent's.
     const slot = buttonClasses({ variant: "ghost", icon: true, size: "sm", className: "invisible" });
-    return <Row key={item.id} href={href} icon={<PenLine size={14} aria-hidden="true" />} title={item.draft.title || "Untitled draft"} timestamp={item.at}
+    return <Row key={item.id} href={draftHref(item)} icon={<PenLine size={14} aria-hidden="true" />} title={item.draft.title || "Untitled draft"} timestamp={item.at} provenance={draftProvenance(item)}
       trailing={<span aria-hidden="true" className="mr-1 flex shrink-0"><span className={slot} /><span className={slot} /></span>} />;
   }
 
@@ -232,7 +247,7 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
           </Section> : null}
           <Section title="Recent">
             {lists.recent.length ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{recentShown.map(recentRow)}</ul>
-              : <EmptyLine>Documents you edit or open will appear here.{documents.length === 0 && dismissed ? <ReopenGuidanceMenuItem workspaceId={workspaceId} surface="empty" /> : null}</EmptyLine>}
+              : <EmptyLine>Documents you edit or open will appear here.{activeDocumentCount === 0 && dismissed ? <ReopenGuidanceMenuItem workspaceId={workspaceId} surface="empty" /> : null}</EmptyLine>}
             {hiddenRecent > 0 ? <Button variant="ghost" size="sm" className="mx-3 mt-1 text-kh-text-muted" aria-expanded={showAllRecent} onClick={() => setShowAllRecent(!showAllRecent)}>
               {showAllRecent ? "Show fewer" : `Show ${hiddenRecent} more`}
             </Button> : null}

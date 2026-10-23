@@ -60,7 +60,7 @@ it("puts drafts above Recent, counted in the accent, and edits in muted text", (
   const html = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[doc("a"), doc("b", { updatedAt: "2026-10-01T00:00:00.000Z" })]} drafts={[{ key: "draft:a", title: "Doc a", sourceId: "src", updatedAt: "2026-10-02T00:00:00.000Z" }]} />);
   const drafts = html.slice(html.indexOf('aria-label="Drafts"'), html.indexOf('aria-label="Recent"'));
   expect(html.indexOf('aria-label="Drafts"')).toBeGreaterThan(-1);
-  expect(drafts).toContain('href="/w/ws/knowledge/src/a/edit"');
+  expect(drafts).toContain('href="/w/ws/knowledge/src/a"');
   expect(drafts).toMatch(/text-kh-selected-text[^"]*">1</);
   const recent = html.slice(html.indexOf('aria-label="Recent"'), html.indexOf('aria-label="Favorites"'));
   expect(recent).toContain('href="/w/ws/knowledge/src/b"');
@@ -68,6 +68,27 @@ it("puts drafts above Recent, counted in the accent, and edits in muted text", (
   // The event is read out and shown in the time's tooltip; the column holds only the short time.
   expect(recent).toContain('<span class="sr-only">Edited </span>');
   expect(recent).toMatch(/<time [^>]*title="Edited Oct 1, 2026/);
+});
+
+it("links an archived document's draft to recovery, not the editor", () => {
+  const html = renderToStaticMarkup(
+    <PersonalHome
+      workspaceId="ws"
+      documents={[doc("a", { status: "ARCHIVED" })]}
+      drafts={[{ key: "draft:a", title: "Doc a", sourceId: "src", updatedAt: "2026-10-02T00:00:00.000Z" }]}
+    />,
+  );
+  const drafts = html.slice(html.indexOf('aria-label="Drafts"'), html.indexOf('aria-label="Recent"'));
+  expect(drafts).toContain('href="/w/ws/knowledge/drafts/src/a"');
+  expect(drafts).toContain("Original document archived");
+  expect(drafts).not.toContain("/edit");
+});
+
+it("still offers the getting-started guide when every document is archived", () => {
+  const html = renderToStaticMarkup(
+    <PersonalHome workspaceId="ws" documents={[doc("a", { status: "ARCHIVED" })]} drafts={[]} guidanceDismissed />,
+  );
+  expect(html).toContain("Show getting started guide");
 });
 
 it("lists favourites in favourites order with a filled star", () => {

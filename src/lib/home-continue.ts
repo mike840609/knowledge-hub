@@ -9,10 +9,11 @@ export const RECENT_SHOWN = 8;
 
 /**
  * Home's two work lists. Drafts are unfinished work and are listed whole, newest first, so an old
- * one never sinks below newer edits. Recent holds the user's Hub-managed edits and this device's
- * opens, one row per document, newest first; a document with a draft is shown under Drafts only.
- * A source-managed document's `updatedAt` is written by a sync, not by the user, so it never
- * counts as Edited.
+ * one never sinks below newer edits; a draft whose document or source is archived stays here so the
+ * reader can recover it. Recent holds the user's Hub-managed edits and this device's opens, one row
+ * per active document, newest first; a document with a draft is shown under Drafts only. A
+ * source-managed document's `updatedAt` is written by a sync, not by the user, so it never counts
+ * as Edited.
  */
 export function homeLists({ documents, drafts, recent, openedAt = {} }: {
   documents: readonly ContinueDoc[]; drafts: readonly ContinueDraft[]; recent: readonly string[]; openedAt?: Readonly<Record<string, string>>;
@@ -20,12 +21,15 @@ export function homeLists({ documents, drafts, recent, openedAt = {} }: {
   const active = documents.filter(d => d.status === "ACTIVE" && d.sourceStatus === "ACTIVE");
   const byId = new Map(active.map(d => [d.documentId, d]));
   const byShortcut = new Map(active.map(d => [`${d.sourceId}:${d.documentId}`, d]));
+  const all = new Map(documents.map(d => [d.documentId, d]));
 
   // ponytail: every draft is listed, as the old Drafts tab did; cap it if drafts pile up.
+  // A draft whose document or source is archived stays here so the reader can recover it;
+  // Recents and Favorites still use the active maps above.
   const draftItems: DraftItem[] = [];
   for (const draft of drafts) {
     if (draft.key === "draft:new") { draftItems.push({ id: draft.key, at: draft.updatedAt, draft }); continue; }
-    const doc = byId.get(draft.key.slice("draft:".length));
+    const doc = all.get(draft.key.slice("draft:".length));
     if (doc) draftItems.push({ id: doc.documentId, at: draft.updatedAt, draft, doc });
   }
   draftItems.sort((a, b) => b.at.localeCompare(a.at));
