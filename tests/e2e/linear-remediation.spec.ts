@@ -289,7 +289,7 @@ test('long explorer reveals the selected document after portal layout settles', 
   }
   let releaseFavorites!: () => void;
   const loadedFavorites = new Promise<void>(resolve => { releaseFavorites = resolve; });
-  await page.route(`**/api/workspaces/${selected.workspaceId}/personal`, async route => {
+  await page.route(`**/api/workspaces/${selected.workspaceId}/personal?view=favorites`, async route => {
     await loadedFavorites;
     await route.fulfill({ json: favorites });
   });
