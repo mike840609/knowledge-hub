@@ -237,6 +237,8 @@ describe("a passage that can take a comment", () => {
     const paragraph = root.querySelector("p")!;
     const anchor = selectedReviewAnchor(root, markdown, select(span(paragraph, "here").from, span(paragraph, "here").to))!;
     expect(anchor.exact).toBe("here");
+    // No image label, footnote number or comment body, not merely no URL.
+    expect(anchor.prefix).toBe("Look link note ");
     for (const value of [anchor.prefix, anchor.suffix, anchor.exact]) {
       expect(value).not.toContain("https");
       expect(value).not.toContain("alt");

@@ -26,8 +26,10 @@ it("reads a link of any URL as its words, an image and a footnote's number as no
  expect(projectReviewBlocks("see [the doc](./file.md) now")[0]).toMatchObject({text:"see the doc now",selectable:true});
  expect(projectReviewBlocks("see [x](/w/a) and [y](javascript:void0) now")[0]).toMatchObject({text:"see x and y now",selectable:true});
  expect(projectReviewBlocks("look ![alt](https://a/img) here")[0]).toMatchObject({text:"look here",selectable:true});
- // A reference image resolves to the same picture the page draws.
+ // A reference image resolves to the same picture the page draws, in all three forms.
  expect(projectReviewBlocks("look ![alt][img] here\n\n[img]: https://a/img")[0]).toMatchObject({text:"look here",selectable:true});
+ expect(projectReviewBlocks("look ![alt][] here\n\n[alt]: https://a/img")[0]).toMatchObject({text:"look here",selectable:true});
+ expect(projectReviewBlocks("look ![alt] here\n\n[alt]: https://a/img")[0]).toMatchObject({text:"look here",selectable:true});
  // The page drops the gap a block opens with (`fromStart`); so does this, or a passage after a leading image could never be proved.
  expect(projectReviewBlocks("[![alt](./a.png)](https://a) after")[0]).toMatchObject({text:"after",selectable:true});
  expect(projectReviewBlocks("<br>two")[0]).toMatchObject({text:"two",selectable:true});
