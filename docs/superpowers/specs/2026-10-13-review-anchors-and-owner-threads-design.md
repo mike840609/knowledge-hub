@@ -140,7 +140,40 @@ discussing hold one.
 
 `<br>` written as HTML, a relative `.md` link and a footnote reference are still
 refused: the first two for reasons the canonical review spec gives, the third
-because the page shows a number the Markdown does not have.
+because the page shows a number the Markdown does not have. *(Superseded by §3c.)*
+
+## 3c. A paragraph with a link, an image, a footnote reference or `<br>`
+
+Added 2026-10-23. The same rule as §3b — a block's text is the words on the
+page — applied to the four inline kinds still refused. Each is projected by a
+decision the page already makes, so the two cannot disagree.
+
+| In the Markdown | Its text | Why the page agrees |
+|---|---|---|
+| a link, whatever its URL (relative `.md` included) | its link text | Every link the renderer draws — external, document, unresolved, plain `<span>` where there is no `links` — draws its children and nothing else visible. The external icon is `aria-hidden` and the announcements are `.sr-only`, which the selection reader already leaves out. |
+| an image | nothing | An `<img>` holds no text. The label drawn where it is blocked or fails (`role="img"`, *Image blocked: …*) is left out by the selection reader. Whether an image loads is decided at run time, so its label can never be part of a block's text. |
+| a footnote reference | nothing | The number is the page's (`[data-footnote-ref]`), not the Markdown's, and is left out by the selection reader. A `[^x]` with no definition is not a reference; it is text, and is text on the page. |
+| HTML that is `<br>` or a comment | `htmlAsText`: one space, or nothing | `remark-known-html` makes `<br>` a line break and drops a comment, using the same patterns. |
+
+The canonical review spec's "renderer-dependent relative document links" (§6.1)
+are not renderer-dependent in their text: resolving one changes the element
+around the words, never the words. That disable is lifted.
+
+What the selection reader leaves out is one list in `review-selection.ts`,
+used both to read a block's text and to map a selection to offsets:
+`.sr-only`, `[aria-hidden="true"]`, `[role="img"]`, `[data-footnote-ref]`.
+
+A consequence: a quote over a footnote reference or an image does not show the
+number or the picture; the words around them are the quote.
+
+No stored anchor changes meaning: every block these open was unselectable
+before. `schemaVersion` stays 1; no migration.
+
+Still refused, for a later change: a reference-style link (`[text][ref]`, whose
+words depend on a separate definition), any other HTML (the five inline tags
+`remark-html-subset` draws pair up by rules the projection does not share yet),
+and the paragraphs of a footnote definition (drawn at the foot with a back
+link).
 
 ## 4. The owner starts a discussion
 
@@ -174,9 +207,9 @@ passage (`2026-10-12-owner-comments-rail-design.md`, 2026-10-15). The rail's
 
 ## 5. Limits that remain
 
-- A paragraph containing a footnote reference, a relative `.md` link, an image
-  or raw HTML (`<br>` included), and a footnote definition, still cannot be
-  commented on. They now say so (§2).
+- A paragraph containing a reference-style link or HTML other than `<br>` and
+  comments, and a footnote definition, still cannot be commented on. They say
+  so (§2). Links, images, footnote references and `<br>` can since §3c.
 - One block per comment.
 - The document header is pinned only in a wide pane; in a narrow one the owner's
   control scrolls away with it. The rail's "Add comment" row is the other way in.
