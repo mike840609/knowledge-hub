@@ -106,7 +106,7 @@ test("a reader comments on a paragraph, a table cell, code, a callout and a task
 });
 
 test("a selection that cannot take a comment says why, where the button would have been", async ({ page, request }) => {
-  const doc = await createReviewDocument(request, "See [another page](./another.md) here.\n\nFirst plain passage.\n\nSecond plain passage.");
+  const doc = await createReviewDocument(request, "Press <kbd>Ctrl</kbd> here.\n\nFirst plain passage.\n\nSecond plain passage.");
   await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
   await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
   // Beside the selection, not in the page's bar.
@@ -132,7 +132,7 @@ test("a selection that cannot take a comment says why, where the button would ha
 });
 
 test("the owner starts a discussion on their own document, and a reader of its link answers it", async ({ page, request }) => {
-  const doc = await createReviewDocument(request, "The owner's own passage here.\n\nSee [another page](./another.md) too.");
+  const doc = await createReviewDocument(request, "The owner's own passage here.\n\nPress <kbd>Ctrl</kbd> too.");
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(doc.href);
   await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeVisible();
@@ -223,4 +223,35 @@ test("a comment on a line a long code block folds away opens the block, so its m
   await page.locator("[data-review-thread]").filter({ visible: true }).filter({ hasText: "On line forty" }).locator("blockquote button").click();
   await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe("line 40");
   await expect(page.locator("pre code").getByText("line 40")).toBeInViewport();
+});
+
+const INLINES = [
+  "Read [the guide](./guide.md) and a note[^1] here.", "",
+  "Before<br>after ![chart](./chart.png) the end.", "",
+  "[^1]: The note",
+].join("\n");
+
+test("a reader comments across a document link, a footnote's number, a <br> and an image, and the passages hold after a reload (§3c)", async ({ page, request }) => {
+  const doc = await createReviewDocument(request, INLINES);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
+  await openReviewDiscussions(page);
+
+  const first = page.waitForRequest(sent => sent.url().endsWith("/api/share-review/threads") && sent.method() === "POST");
+  await selectText(page, "p", "guide", "p", "here");
+  await comment(page, "Across the link and the note");
+  expect((await first).postDataJSON().anchor).toMatchObject({ blockKind: "paragraph", exact: "guide and a note here" });
+
+  const second = page.waitForRequest(sent => sent.url().endsWith("/api/share-review/threads") && sent.method() === "POST");
+  await selectText(page, "p", "Before", "p", "the end");
+  await comment(page, "Across the break and the image");
+  expect((await second).postDataJSON().anchor).toMatchObject({ blockKind: "paragraph", exact: "Before after the end" });
+
+  await page.reload();
+  await openReviewDiscussions(page);
+  for (const body of ["Across the link and the note", "Across the break and the image"]) {
+    const card = page.locator("[data-review-thread]").filter({ visible: true }).filter({ hasText: body });
+    await expect(card).toBeVisible();
+    await expect(card).not.toContainText("Outdated selection");
+  }
 });
