@@ -144,9 +144,10 @@ export class DocumentReviewService {
       if (!summary) continue;
       const base = { id: `${FOLLOW_PREFIX}${thread.id}`, workspaceId: "", documentId: "", sourceId: "", threadId: thread.id };
       if ("unavailable" in summary) { views.push({ ...base, kind: "FOLLOW", documentTitle: "", commentId: "", authorName: undefined, excerpt: "", createdAt: follow.seenAt, readAt: follow.seenAt, threadStatus: "OPEN", linkAvailable: false }); continue; }
+      if (!summary.latestReply) continue;
       const revision = await r.revisions.findCurrent(thread.documentId);
       views.push({
-        ...projectShareCommentNotification({ ...base, documentTitle: revision?.title ?? "", commentId: summary.latest.id, authorName: (await r.users.findById(summary.latest.authorUserId))?.name, body: summary.latest.body, createdAt: summary.latest.createdAt, readAt: summary.unread > 0 ? null : follow.seenAt, threadStatus: thread.status }),
+        ...projectShareCommentNotification({ ...base, documentTitle: revision?.title ?? "", commentId: summary.latestReply.id, authorName: (await r.users.findById(summary.latestReply.authorUserId))?.name, body: summary.latestReply.body, createdAt: summary.latestReply.createdAt, readAt: summary.unread > 0 ? null : follow.seenAt, threadStatus: thread.status }),
         kind: "FOLLOW", token: link!.token, replyCount: summary.unread, linkAvailable: true,
       });
     }
