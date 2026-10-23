@@ -161,7 +161,22 @@ around the words, never the words. That disable is lifted.
 
 What the selection reader leaves out is one list in `review-selection.ts`,
 used both to read a block's text and to map a selection to offsets:
-`.sr-only`, `[aria-hidden="true"]`, `[role="img"]`, `[data-footnote-ref]`.
+`.sr-only`, `[aria-hidden="true"]`, `[role="img"]`, `[data-footnote-ref]`, and
+the editor's two below. `[role="img"]` cannot come from a document — the reader
+passes no HTML through — only from the renderer's own label for an image.
+
+**In the owner's rendered editor**, a third view, the same blocks are drawn
+differently: a footnote reference as its label
+(`sup[data-type="footnote_reference"]`), and inline HTML as its raw source
+(`span[data-type="html"]`, the source in `data-value`). Its stamper reads the
+first as nothing and the second as `htmlAsText` of its source, so every block
+keeps its path (a stamp says which block an element is, not that it may take a
+comment). The selection list also leaves out the reference and a comment's span
+(`data-value` opening `<!--` and closing `-->`), so a paragraph beside either
+takes a comment in the editor too. A `<br>` stays raw text there, so a block
+holding one fails the editor's proof and is refused ("This passage cannot take
+a comment"); it can take one on the shared page and in the reader. That is the
+accepted, fail-closed limit: the editor reads no space in its place.
 
 A consequence: a quote over a footnote reference or an image does not show the
 number or the picture; the words around them are the quote.
@@ -171,28 +186,32 @@ Two rules follow from the table.
 - **A non-code block's text drops one leading space.** A paragraph that opens
   with an image, a footnote reference or `<br>`, then text, projects a space
   first, and the page drops the gap a block opens with (`fromStart` in
-  `review-selection.ts`); the projection drops it too. Without this, a passage after a leading image or `<br>` could never be
-  proved. Code keeps its text as written. Compatibility: a paragraph opening
-  with a hard break (a backslash, then a newline) used to project with that
-  leading space, while the page never accepted it — its text differed — so no
-  page-made anchor exists there. Such an anchor's offsets are off by one, so on
-  the same revision it is Outdated; on a later revision the relocator may find
-  it again by its quote and context (Moved), or, near the paragraph's start,
-  report Outdated. It is never shown at a place whose words differ from its
-  quote.
+  `review-selection.ts`); the projection drops it too. Without this, a passage
+  after a leading image or `<br>` could never be proved. Code keeps its text as
+  written. Compatibility: any block whose text began with whitespace (a hard
+  break, an encoded space or tab, inline code opening with a space) used to
+  project with that leading space, while the page always stripped it — its text
+  differed — so no page-made anchor exists there. Such an anchor's offsets are
+  off by one, so on the same revision it is Outdated; on a later revision the
+  relocator may find it again by its quote and context (Moved), or, near the
+  block's start, report Outdated. It is never shown at a place whose words
+  differ from its quote.
 - **A leaf with no text is not selectable.** An image alone in its paragraph
   has nothing to quote, and no paragraph button is offered that would send an
   empty quote.
 
 No stored anchor changes meaning: every block these open was unselectable
-before, except a paragraph that opens with a hard break (above).
+before, except any block whose text began with whitespace (a hard break, an
+encoded space or tab, inline code opening with a space; above).
 `schemaVersion` stays 1; no migration.
 
 Still refused, for a later change: a reference-style link (`[text][ref]`, whose
-words depend on a separate definition), any other HTML (the five inline tags
-`remark-html-subset` draws pair up by rules the projection does not share yet),
-and the paragraphs of a footnote definition (drawn at the foot with a back
-link).
+words depend on a separate definition) and any other HTML (the five inline tags
+`remark-html-subset` draws pair up by rules the projection does not share yet).
+The paragraphs of a footnote definition are selectable in the projection but
+refused by the page, which draws them at the foot with a back link their text
+does not have. The editor draws no back link, so there they take a comment, as
+they did before §3c.
 
 ## 4. The owner starts a discussion
 
@@ -228,7 +247,8 @@ passage (`2026-10-12-owner-comments-rail-design.md`, 2026-10-15). The rail's
 
 - A paragraph containing a reference-style link or HTML other than `<br>` and
   comments, and a footnote definition, still cannot be commented on. They say
-  so (§2). Links, images, footnote references and `<br>` can since §3c.
+  so (§2). Links, images, footnote references and `<br>` can since §3c (`<br>`
+  not in the owner's editor).
 - One block per comment.
 - The document header is pinned only in a wide pane; in a narrow one the owner's
   control scrolls away with it. The rail's "Add comment" row is the other way in.
