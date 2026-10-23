@@ -675,26 +675,45 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   margin-inline: max(0px, calc((100% - theme("maxWidth.reading")) / 2)) auto;
   transition: margin-inline-start 120ms ease-out;
 }
+/* The column keeps its left edge and the article narrows to its measure plus the column's padding
+   (640 + 48 = 688px) before the column slides (outline-right-of-article spec). */
+.kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) {
+  --kh-share-start: max(0px, min(calc((100% - theme("maxWidth.reading")) / 2), calc(100% - theme("maxWidth.measure") - theme("spacing.12") - 320px)));
+}
 .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) :is(.kh-review-entry, .kh-review-document),
 .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) > footer {
-  margin-inline-start: max(0px, min(calc((100% - theme("maxWidth.reading")) / 2), calc(100% - theme("maxWidth.reading") - 320px)));
+  margin-inline-start: var(--kh-share-start);
 }
-.kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) > footer { max-width: calc(theme("maxWidth.reading") + 320px); }
-/* The outline hangs off the column's left edge where the centred column leaves room for it (82rem:
-   224px, a w-52 rail and its edge), else it is a disclosure above the Comments row. With the
-   comments rail open the column keeps its left edge only while the window holds column + rail +
-   outline (860 + 320 + 224 = 1404px, 88rem); below that the column slides left over the outline's
-   room, so the outline folds into the disclosure (share-page-outline spec §2). */
+.kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) > footer {
+  /* Below 82rem no rail takes room, so the column fills what its start margin leaves (spec). */
+  max-width: min(calc(theme("maxWidth.reading") + 320px), calc(100% - var(--kh-share-start)));
+}
+.kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) .kh-review-document {
+  /* Same fill; without it `w-full` plus the new start margin runs off the window (outline-right-of-article spec). */
+  max-width: min(calc(theme("maxWidth.reading") + 320px), calc(100% - var(--kh-share-start)));
+}
+/* The outline hangs off the column's right edge where the centred column leaves room for it (82rem:
+   a w-52 rail and a 16px edge), else it is a disclosure above the Comments row. While the comments
+   are open inline its box spans reading part and comments, so it hangs off the comments' right edge,
+   and the comments' layout leaves it that room (224px): article, comments, outline. */
 .kh-share-page .kh-share-outline-rail { display: none; }
 /* The disclosure is the first thing under the pinned bar, above the title, inside the reading column. */
 .kh-share-page .kh-share-outline > .kh-outline-inline { margin-top: theme("spacing.3"); }
+.kh-share-page .kh-review-document[data-review-inline][data-review-open] .kh-share-outline-rail {
+  width: calc(100% + 320px);
+  max-width: none;
+  margin-inline: 0;
+}
 @media (min-width: 82rem) {
   .kh-share-page .kh-share-outline-rail { display: block; }
   .kh-share-page .kh-share-outline > .kh-outline-inline { display: none; }
-}
-@media (max-width: 87.99rem) {
-  .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) .kh-share-outline-rail { display: none; }
-  .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) .kh-share-outline > .kh-outline-inline { display: block; }
+  .kh-share-page:has(.kh-share-outline-rail):has(.kh-review-document[data-review-inline][data-review-open]) {
+    --kh-share-start: max(0px, min(calc((100% - theme("maxWidth.reading")) / 2), calc(100% - theme("maxWidth.measure") - theme("spacing.12") - 320px - theme("spacing.56"))));
+  }
+  .kh-share-page:has(.kh-share-outline-rail) .kh-review-document[data-review-inline][data-review-open],
+  .kh-share-page:has(.kh-share-outline-rail):has(.kh-review-document[data-review-inline][data-review-open]) > footer {
+    max-width: min(calc(theme("maxWidth.reading") + 320px), calc(100% - var(--kh-share-start) - theme("spacing.56")));
+  }
 }
 /* A heading jumped to lands below the pinned bar (57px), with 15px above it, not under the bar.
    72px is also inside the outline's 96px reading line, so the entry clicked is the one highlighted (spec §3). */

@@ -18,7 +18,7 @@ async function shareOf(page: Page, markdown: string) {
 const rail = (page: Page) => page.getByRole("complementary", { name: "On this page" });
 const disclosure = (page: Page) => page.locator(".kh-share-outline summary", { hasText: "On this page" });
 
-test("share outline: a rail left of the article on a wide window, jumping to headings", async ({ page }) => {
+test("share outline: a rail right of the article on a wide window, jumping to headings", async ({ page }) => {
   const path = await shareOf(page, LONG);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(path);
@@ -27,8 +27,8 @@ test("share outline: a rail left of the article on a wide window, jumping to hea
   await expect(rail(page).getByRole("link")).toHaveText(["Guide", "Install", "Configure", "Advanced"]);
   const railBox = (await rail(page).boundingBox())!;
   const text = (await page.locator("article[data-review-document] p").first().boundingBox())!;
-  expect(railBox.x + railBox.width).toBeLessThanOrEqual(text.x);
-  expect(railBox.x).toBeGreaterThanOrEqual(0);
+  expect(railBox.x).toBeGreaterThanOrEqual(text.x + text.width);
+  expect(railBox.x + railBox.width).toBeLessThanOrEqual(1440);
 
   await expect(rail(page).getByRole("link", { name: "Guide" })).toHaveAttribute("aria-current", "location");
   const historyBefore = await page.evaluate(() => window.history.length);
@@ -86,30 +86,46 @@ test("share outline: a disclosure on a narrower window, and while comments are o
   expect(box.x).toBeCloseTo(text.x, 0);
   expect(box.width).toBeLessThanOrEqual(640);
 
-  // Between 82rem and 88rem the outline has room beside the article but not beside article and comments.
-  await page.setViewportSize({ width: 1366, height: 900 });
-  await expect(rail(page)).toBeVisible();
+  // Under 82rem the comments rail is inline, and the outline stays the disclosure above the article.
   await page.getByRole("button", { name: /^Open discussions/ }).click();
   await expect(page.getByRole("complementary", { name: "Document discussions" })).toBeVisible();
   await expect(rail(page)).toBeHidden();
   await expect(disclosure(page)).toBeVisible();
 });
 
-test("share outline: from 88rem the outline, the article and the comments stand side by side", async ({ page }) => {
+test("share outline: from 82rem the article, the comments and the outline stand side by side", async ({ page }) => {
   const path = await shareOf(page, LONG);
-  for (const width of [1408, 1440]) {
+  // 1312 is 82rem, where the column slides furthest; 1680 is past 1604px, where it does not slide at all.
+  for (const width of [1312, 1366, 1440, 1680]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(path);
+    const comments = page.getByRole("complementary", { name: "Document discussions" });
+    await expect(rail(page)).toBeVisible();
     await page.getByRole("button", { name: /^Open discussions/ }).click();
-    await expect(page.getByRole("complementary", { name: "Document discussions" })).toBeVisible();
+    await expect(comments).toBeVisible();
     await expect(rail(page)).toBeVisible();
     await expect(disclosure(page)).toBeHidden();
-    // Wait for the column's 120ms slide, then check nothing overlaps and the outline stays on screen.
+    // Wait for the column's 120ms slide; then article, comments, outline, in that order, all on screen.
     await expect.poll(async () => {
-      const [outline, text] = [(await rail(page).boundingBox())!, (await page.locator("article[data-review-document] p").first().boundingBox())!];
-      return outline.x >= 0 && outline.x + outline.width <= text.x;
+      const [outline, commentsBox, text] = [await rail(page).boundingBox(), await comments.boundingBox(), await page.locator("article[data-review-document] p").first().boundingBox()];
+      if (!outline || !commentsBox || !text) return false;
+      return commentsBox.x >= text.x + text.width - 1 && outline.x >= commentsBox.x + commentsBox.width - 1 && outline.x + outline.width <= width;
     }).toBe(true);
+    // 640px of measure less the 32px the marks keep.
+    expect((await page.locator("article[data-review-document] p").first().boundingBox())!.width).toBeGreaterThanOrEqual(608);
   }
+});
+
+test("share outline: opening comments on a wide window leaves the article where it was", async ({ page }) => {
+  const path = await shareOf(page, LONG);
+  await page.setViewportSize({ width: 1680, height: 900 });
+  await page.goto(path);
+  const articleX = async () => Math.round((await page.locator("article[data-review-document]").boundingBox())!.x);
+  const before = await articleX();
+  await page.getByRole("button", { name: /^Open discussions/ }).click();
+  await expect(page.getByRole("complementary", { name: "Document discussions" })).toBeVisible();
+  await page.waitForTimeout(250);
+  expect(await articleX()).toBe(before);
 });
 
 test("share outline: a document with one heading shows none", async ({ page }) => {
