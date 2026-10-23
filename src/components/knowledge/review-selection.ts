@@ -23,10 +23,13 @@ function blocksByPath(markdown: string) {
   return projected.blocks;
 }
 
-/** Match the renderer's visible Markdown text, not generated link announcements/icons. */
+/** What the page draws that is no part of a block's text: announcements, icons, an image's label, a footnote's number (spec §3c). */
+const NOT_TEXT = '.sr-only,[aria-hidden="true"],[role="img"],[data-footnote-ref]';
+
+/** Match the renderer's visible Markdown text: what `NOT_TEXT` names is left out. */
 function readableText(node: HTMLElement | DocumentFragment): string {
   const copy = node.cloneNode(true) as HTMLElement | DocumentFragment;
-  copy.querySelectorAll('.sr-only,[aria-hidden="true"]').forEach(extra => extra.remove());
+  copy.querySelectorAll(NOT_TEXT).forEach(extra => extra.remove());
   return copy.textContent ?? "";
 }
 const WHITESPACE = /[\t\n\r ]/;
@@ -129,7 +132,7 @@ export function createReviewRangeResolver(root: HTMLElement, markdown: string) {
   if (!element || !block?.selectable || leafText(element, block) !== shown(block) || anchor.startUtf16 < block.hidden || block.text.slice(anchor.startUtf16, anchor.endUtf16) !== anchor.exact) return null;
   const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
-      const extra = node.parentElement?.closest('.sr-only,[aria-hidden="true"]');
+      const extra = node.parentElement?.closest(NOT_TEXT);
       if (extra && element.contains(extra)) return NodeFilter.FILTER_REJECT;
       if (element.tagName !== "LI") return NodeFilter.FILTER_ACCEPT;
       const list = node.parentElement?.closest("ul,ol");
