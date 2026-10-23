@@ -41,8 +41,9 @@ export function projectReviewBlocks(markdown:string):CanonicalReviewBlock[] {
  function walk(node:Nodes,path:number[],hidden=0) {
    if(kinds.has(node.type)) {
      const code=node.type==="code";
-     // No block's own text started with a space until an image, `<br>` or footnote number could
-     // open it; the page drops that gap (`fromStart` in review-selection.ts), and so does this.
+     // The page drops the gap a non-code block opens with (`fromStart` in review-selection.ts), and
+     // so does this: an image, `<br>` or footnote number, a hard break, an encoded space or tab, or
+     // inline code opening with a space would otherwise lead the text with one.
      const text=code?node.value:textOf(node).replace(/\r\n?/g,"\n").replace(/[\t\n\r ]+/g," ").replace(/^ /,"");
      // Container blocks are deliberately unselectable: their nested leaf blocks
      // receive paths separately, preventing overlapping DOM anchor candidates.

@@ -29,7 +29,7 @@ it("reads a link of any URL as its words, an image and a footnote's number as no
  expect(projectReviewBlocks("one<br />two")[0]).toMatchObject({text:"one two",selectable:true});
  expect(projectReviewBlocks("one <!-- note --> two")[0]).toMatchObject({text:"one two",selectable:true});
 });
-it("still refuses a reference link, other HTML and a footnote definition's paragraph",()=>{
+it("still refuses a reference link and other HTML, and reads a [^x] with no definition as text",()=>{
  for(const markdown of ["a [ref][a]\n\n[a]: ./file.md","press <kbd>K</kbd>","a <span>x</span>"]) expect(projectReviewBlocks(markdown)[0].selectable).toBe(false);
  // A `[^x]` with no definition is text, on the page and here.
  expect(projectReviewBlocks("a [^missing] b")[0]).toMatchObject({text:"a [^missing] b",selectable:true});
