@@ -15,7 +15,7 @@ import { buttonClasses } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shell/page-header";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { SelectMenu } from "@/components/ui/select-menu";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Timestamp } from "@/components/ui/timestamp";
@@ -30,6 +30,8 @@ export type ShareManagementModel = { query: ShareManagementQuery; items: Managed
 export function ShareManagementView({ workspaceId, model, filterError, hasDocuments = true }: { workspaceId: string; model: ShareManagementModel; filterError?: string; hasDocuments?: boolean }) {
   const router = useRouter(), toast = useToast();
   const [origin, setOrigin] = useState("");
+  const [status, setStatus] = useState<string>(model.query.status);
+  useEffect(() => setStatus(model.query.status), [model.query.status]);
   const [unreadCounts, setUnreadCounts] = useState<UnreadShareCount[]>([]);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -101,7 +103,7 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
         <Input id="shares-query" name="q" defaultValue={model.query.q} maxLength={200} placeholder="Find shares…" className="kh-search-field" />
       </div>
       <label htmlFor="shares-status" className="sr-only">Status</label>
-      <Select id="shares-status" name="status" defaultValue={model.query.status}><option value="all">All statuses</option>{Object.entries(labels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
+      <SelectMenu id="shares-status" name="status" value={status} onValueChange={setStatus} options={[{ value: "all", label: "All statuses" }, ...Object.entries(labels).map(([value, label]) => ({ value, label }))]} />
       <Button type="submit" variant="secondary">Search</Button>
       <Button type="button" variant="ghost" icon aria-label="Refresh shares" disabled={busy !== null} onClick={() => router.refresh()}><RefreshCw size={15} aria-hidden="true" /></Button>
       {model.query.q || model.query.status !== "active" || model.query.page > 1 ? <Link className="kh-focus-ring rounded-md text-body-sm text-kh-link" href={`/w/${workspaceId}/shares`}>Clear filters</Link> : null}

@@ -1054,10 +1054,14 @@ field. A native `<select>` gives its list to the platform, so the design
 language stopped at the moment the control was used; twelve such fields in
 settings, imports, the graph and the share dialog were native for no reason
 beyond having been written that way. It reports through `onValueChange` and has
-no `name`. It has no filter field; one is added when a list outgrows type-ahead.
+no `name` unless it sits in a GET form: given one, Base UI's hidden input submits
+it, so the URL stays the state. It has no filter field; one is added when a list outgrows type-ahead.
 
 `Select` stays a native `<select>`, for a form that submits by GET: the search
-page, the Updates source filter and the shares status filter. For the first of
+page and the Updates source filter, both server-rendered. (The shares status
+filters were native too until 2026-10-23; their views are client components whose
+rows need JavaScript anyway, so they became `SelectMenu` with a `name`, and the
+list opens under the field like every other menu.) For the first of
 those: the search page is a plain GET form that works without JavaScript,
 and every hand-rolled copy it replaces was native already. With JavaScript,
 that form searches as the reader types (`LiveSearchSubmit`) and keeps its
