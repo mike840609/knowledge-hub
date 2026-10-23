@@ -182,8 +182,9 @@ out the reference and a comment's span (`data-value` opening `<!--` and closing
 The editor's selection proof still reads no space for a `<br>` or a hard break.
 An HTML `<br>` stays raw HTML source in a paragraph and in a cell that ends with
 it; a non-final `<br>` in a cell is a text-less hard break, and a Markdown hard
-break is a text-less hard break wherever it is. A break between words therefore
-fails the editor's proof and is refused ("This passage cannot take a comment").
+break is a text-less hard break wherever it is. A break that is the only space
+between the words therefore fails the editor's proof and is refused ("This
+passage cannot take a comment").
 A Markdown hard break that only opens or ends a block leaves no text behind and
 is accepted, as is a `<br>` that only opens a cell. An HTML `<br>` at the end of
 a paragraph or a cell stays raw source and is refused. The shared page and the

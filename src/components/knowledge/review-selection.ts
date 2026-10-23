@@ -29,8 +29,9 @@ function blocksByPath(markdown: string) {
  * (spec §3c). `[role="img"]` cannot come from a document: the reader passes no HTML through, so it
  * is only the renderer's own label for a blocked image. The editor's selection proof reads no
  * space for an HTML `<br>` (raw source in a paragraph, a text-less hard break in a cell) or a
- * Markdown hard break (a text-less hard break wherever it is), so a break between words is
- * refused; one that only opens or ends a block leaves no text behind and is accepted.
+ * Markdown hard break (a text-less hard break wherever it is), so a break that is the only
+ * space between words is refused; one that only opens or ends a block leaves no text behind and
+ * is accepted.
  */
 const NOT_TEXT = '.sr-only,[aria-hidden="true"],[role="img"],[data-footnote-ref],sup[data-type="footnote_reference"],span[data-type="html"][data-value^="<!--"][data-value$="-->"]';
 
