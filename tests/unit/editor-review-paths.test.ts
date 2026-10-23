@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { expect, test } from "vitest";
 import { stampEditorReviewPaths, createEditorReviewPathsPlugin, updateEditorReviewPaths } from "@/components/knowledge/editor/review-paths";
-import { readReviewSelection } from "@/components/knowledge/review-selection";
+import { readReviewSelection, reviewBlockAnchor } from "@/components/knowledge/review-selection";
 
 function editor(html: string) {
   const root = document.createElement("div");
@@ -61,9 +61,14 @@ test("a changed sentence disables only its own paragraph", () => {
 });
 
 test("unsupported HTML in its own paragraph does not disable unrelated passages", () => {
-  const root = editor("<p>Safe</p><p>Other &lt;kbd&gt;Wiki&lt;/kbd&gt; text.</p><p>Safe</p>");
-  expect(stampEditorReviewPaths(root, "Safe\n\nOther <kbd>Wiki</kbd> text.\n\nSafe")).toBe(true);
-  expect([...root.querySelectorAll("p")].map(p => p.getAttribute("data-review-path"))).toEqual(["0", null, "2"]);
+  const markdown = "Safe\n\nOther <kbd>Wiki</kbd> text.\n\nSafe";
+  const root = editor("<p>Safe</p><p>Other <kbd>Wiki</kbd> text.</p><p>Safe</p>");
+  expect(stampEditorReviewPaths(root, markdown)).toBe(true);
+  // The stamp says which block an element is; it does not say the block may take a comment.
+  expect([...root.querySelectorAll("p")].map(p => p.getAttribute("data-review-path"))).toEqual(["0", "1", "2"]);
+  const paragraphs = root.querySelectorAll<HTMLElement>("p");
+  expect(reviewBlockAnchor(paragraphs[1], markdown)).toBeNull();
+  expect(reviewBlockAnchor(paragraphs[0], markdown)).toMatchObject({ blockPath: [0], exact: "Safe" });
 });
 
 
