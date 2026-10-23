@@ -89,6 +89,8 @@ describe("a passage that can take a comment", () => {
     ["a paragraph with a hard line break, before it", "one line  \ntwo lines", "p", "one", "paragraph"],
     ["a paragraph with a hard line break, after it", "one line  \ntwo lines", "p", "two lines", "paragraph"],
     ["a paragraph with a backslash line break", "one line\\\ntwo lines", "p", "two", "paragraph"],
+    ["a paragraph opened by an encoded space", "&#32;text here", "p", "text", "paragraph"],
+    ["a paragraph opened by a hard line break", "\\\ntext here", "p", "text", "paragraph"],
     ["what a <details> holds", "<details>\n<summary>More</summary>\n\nInside it\n\n</details>", "details p", "Inside", "paragraph"],
     ["a table's heading cell", "| Name | Role |\n|---|---|\n| Ada | Owner |", "th + th", "Role", "tableCell"],
     ["a table's cell", "| Name | Role |\n|---|---|\n| Ada | **Owner** here |", "td + td", "Owner here", "tableCell"],

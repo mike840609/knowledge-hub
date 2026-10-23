@@ -15,6 +15,13 @@ describe("canonical review anchors",()=>{
  it("reads a hard line break as the one space a soft one is",()=>{
   expect(projectReviewBlocks("a  \nb")[0]).toMatchObject({text:"a b",selectable:true});
  });
+ it("drops the one leading space a block opens with, as the page does",()=>{
+  expect(projectReviewBlocks("&#32;text")[0]).toMatchObject({text:"text",selectable:true});
+  expect(projectReviewBlocks("&#9;text")[0]).toMatchObject({text:"text",selectable:true});
+  expect(projectReviewBlocks("` a` text")[0]).toMatchObject({text:"a text",selectable:true});
+  // A hard break can open a paragraph; its space is dropped like any other leading one.
+  expect(projectReviewBlocks("\\\ntext")[0]).toMatchObject({text:"text",selectable:true});
+ });
 it("reads a link of any URL as its words, an image and a footnote's number as nothing, <br> as a space",()=>{
  expect(projectReviewBlocks("see [the doc](./file.md) now")[0]).toMatchObject({text:"see the doc now",selectable:true});
  expect(projectReviewBlocks("see [x](/w/a) and [y](javascript:void0) now")[0]).toMatchObject({text:"see x and y now",selectable:true});
@@ -39,7 +46,7 @@ it("still refuses a reference link and other HTML, and reads a [^x] with no defi
 it("rejects offset and context forgery including surrogate splits",()=>{
  for(const changed of [{endUtf16:1,exact:"\ud83d",suffix:"\ude00 hello"},{prefix:"forged"},{startUtf16:-1},{blockPath:[999]},{blockKind:"heading" as const}])expect(()=>validateReviewAnchor("😀 hello",{...anchor,...changed})).toThrow();
 });
-it("normalizes whitespace deterministically and refuses complex/hard-break blocks",()=>{
+it("normalizes whitespace deterministically and refuses other HTML and reference links",()=>{
  expect(projectReviewBlocks("a\r\nb **c** `d`")[0].text).toBe("a b c d");
  for(const markdown of ["a <span>x</span>","a [ref][a]\n\n[a]: ./file.md"]){expect(projectReviewBlocks(markdown)[0].selectable).toBe(false);}
 });
