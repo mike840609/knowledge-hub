@@ -2,6 +2,7 @@ import type { Nodes } from "mdast";
 import { parseMarkdown } from "@/shared/markdown/parse";
 import { replaceWikiLinks, shownText } from "./replace-wiki-links";
 import { calloutMarker } from "@/shared/markdown/remark-callouts";
+import { htmlAsText, isCommentHtml, isLineBreakHtml } from "@/shared/markdown/remark-known-html";
 import { ValidationError } from "./errors";
 import { copyReviewAnchor, REVIEW_LIMITS, type ReviewAnchor, type CurrentAnchorProjection } from "./document-review";
 export type CanonicalReviewBlock = { path:number[]; kind:ReviewAnchor["blockKind"]; text:string; selectable:boolean;
@@ -10,7 +11,9 @@ export type CanonicalReviewBlock = { path:number[]; kind:ReviewAnchor["blockKind
 const kinds = new Set(["heading","paragraph","listItem","blockquote","tableCell","code"]);
 // What a passage can be chosen in: a block that holds text and no other block.
 const leaves = new Set(["heading","paragraph","tableCell"]);
-const inlineKinds = new Set(["text","inlineCode","emphasis","strong","delete","link","linkReference","break"]);
+// An image and a footnote reference hold no text the reader shows as theirs (its label, the
+// number, are left out on the page too); HTML is read as the reader draws it (§3c).
+const inlineKinds = new Set(["text","inlineCode","emphasis","strong","delete","link","linkReference","break","image","footnoteReference","html"]);
 // Paths are child indexes from the mdast root. Text is inline reading order,
 // CRLF normalized to LF, with line breaks — soft or hard — and whitespace collapsed
 // to one space. A `[[wikilink]]` is the text shown for it, which is what a reader
@@ -20,15 +23,17 @@ const inlineKinds = new Set(["text","inlineCode","emphasis","strong","delete","l
 // Offsets are JavaScript UTF-16 offsets; quote/context caps count code points.
 function textOf(node:Nodes):string {
   if(node.type==="break") return "\n";
+  if(node.type==="html") return htmlAsText(node.value);
   if("value" in node) return typeof node.value==="string"?node.value:"";
   if("children" in node) return node.children.map(n=>textOf(n as Nodes)).join("");
   return "";
 }
 function safeInline(node:Nodes):boolean {
   if(!inlineKinds.has(node.type)) return false;
-  if(node.type==="link" && !/^(?:https?:|mailto:|tel:|#)/i.test(node.url)) return false;
   // Reference destinations depend on separate nodes; conservatively refuse.
   if(node.type==="linkReference") return false;
+  // `<br>` and comments only: the inline tags the reader draws pair up by rules this does not share.
+  if(node.type==="html" && !isLineBreakHtml(node.value) && !isCommentHtml(node.value)) return false;
   return !("children" in node) || node.children.every(n=>safeInline(n as Nodes));
 }
 export function projectReviewBlocks(markdown:string):CanonicalReviewBlock[] {
@@ -36,10 +41,13 @@ export function projectReviewBlocks(markdown:string):CanonicalReviewBlock[] {
  function walk(node:Nodes,path:number[],hidden=0) {
    if(kinds.has(node.type)) {
      const code=node.type==="code";
-     const text=code?node.value:textOf(node).replace(/\r\n?/g,"\n").replace(/[\t\n\r ]+/g," ");
+     // No block's own text started with a space until an image, `<br>` or footnote number could
+     // open it; the page drops that gap (`fromStart` in review-selection.ts), and so does this.
+     const text=code?node.value:textOf(node).replace(/\r\n?/g,"\n").replace(/[\t\n\r ]+/g," ").replace(/^ /,"");
      // Container blocks are deliberately unselectable: their nested leaf blocks
      // receive paths separately, preventing overlapping DOM anchor candidates.
-     const selectable=code || (leaves.has(node.type) && "children" in node && node.children.every(n=>safeInline(n as Nodes)));
+     // A leaf with no text (an image alone) has nothing to quote.
+     const selectable=code || (leaves.has(node.type) && text!=="" && "children" in node && node.children.every(n=>safeInline(n as Nodes)));
      result.push({path,kind:node.type as ReviewAnchor["blockKind"],text,selectable,hidden});
    }
    // A callout's marker is in its opening paragraph's text and not on the page; the marker's line

@@ -11,6 +11,11 @@ export function isLineBreakHtml(value: string): boolean {
   return BR.test(value.trim());
 }
 
+/** Whether a piece of HTML is a comment, which the reader does not show. */
+export function isCommentHtml(value: string): boolean {
+  return COMMENT.test(value.trim());
+}
+
 /**
  * What a piece of HTML reads as, where only text can be shown (a heading in the outline, its
  * slug): a `<br>` is a space, a comment and an inline tag the reader draws are nothing, and anything
