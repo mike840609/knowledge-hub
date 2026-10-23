@@ -112,7 +112,7 @@ export function AppShell({ model, children }: { model: WorkspaceShellModel; chil
             <SearchNavItem compact={navCollapsed} />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto"><PrimaryNav workspaceId={model.workspace.id} compact={navCollapsed} /></div>
-          <div className="shrink-0 border-t border-kh-border p-2"><UserMenu identityName={model.identityName} workspaceId={model.workspace.id} compact={navCollapsed}/></div>
+          <div className="shrink-0 border-t border-kh-border p-2"><UserMenu identityName={model.identityName} identityEmpId={model.identityEmpId} workspaceId={model.workspace.id} compact={navCollapsed}/></div>
         </aside>
         <main className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-kh-bg has-[[data-document-pane]]:overflow-hidden">{authorization.revoked ? <p role="status">Workspace access changed. Returning to My Space…</p> : children}</main>
       </div>
@@ -123,7 +123,7 @@ export function AppShell({ model, children }: { model: WorkspaceShellModel; chil
           <div className="shrink-0 pb-2"><WorkspaceSelector workspaceId={model.workspace.id} /></div>
           <PrimaryNav workspaceId={model.workspace.id} />
           <div ref={setMobileExplorerTarget} className="min-h-0 flex-1 overflow-y-auto" />
-          <div className="shrink-0 border-t border-kh-border pt-3"><UserMenu identityName={model.identityName} workspaceId={model.workspace.id}/></div>
+          <div className="shrink-0 border-t border-kh-border pt-3"><UserMenu identityName={model.identityName} identityEmpId={model.identityEmpId} workspaceId={model.workspace.id}/></div>
         </div>
       </Drawer>
     </div>
