@@ -48,7 +48,7 @@ test("the explorer keeps its tree while hidden: an open filter is still open whe
   await expect(filter).toBeVisible();
 });
 
-test("at 1512px, with the primary rail and the explorer collapsed, outline, article and discussions stand side by side", async ({ page, request }) => {
+test("at 1512px, with the primary rail and the explorer collapsed, article, discussions and outline stand side by side", async ({ page, request }) => {
   const paragraphs = (from: number) => Array.from({ length: 12 }, (_, i) => `Paragraph ${from + i}: a clear recommendation with enough context for a colleague to review.`).join("\n\n");
   const markdown = `## Alpha\n\n${paragraphs(1)}\n\n## Beta\n\n${paragraphs(13)}\n`;
   const doc = await createReviewDocument(request, markdown);
@@ -71,13 +71,13 @@ test("at 1512px, with the primary rail and the explorer collapsed, outline, arti
   await page.getByRole("button", { name: "Collapse navigation" }).click();
   await page.getByRole("button", { name: "Hide documents" }).click();
   const pane = page.getByRole("region", { name: "Document content" });
-  await expect.poll(() => pane.evaluate((element) => element.clientWidth)).toBeGreaterThanOrEqual(1408);
+  await expect.poll(() => pane.evaluate((element) => element.clientWidth)).toBeGreaterThanOrEqual(1232);
   await expect(rail).toBeVisible();
   await expect(outline).toBeVisible();
   const article = page.locator("[data-review-document]");
   await expect.poll(async () => {
     const [outlineBox, articleBox, railBox] = [(await outline.boundingBox())!, (await article.boundingBox())!, (await rail.boundingBox())!];
-    return outlineBox.x >= 0 && outlineBox.x + outlineBox.width <= articleBox.x + 1 && railBox.x >= articleBox.x + articleBox.width - 1;
+    return railBox.x >= articleBox.x + articleBox.width - 1 && outlineBox.x >= railBox.x + railBox.width - 1;
   }).toBe(true);
   expect(await pane.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
 });
