@@ -132,7 +132,7 @@ In `projectReviewBlocks`, replace the two lines computing `text` and `selectable
      const selectable=code || (leaves.has(node.type) && text!=="" && "children" in node && node.children.every(n=>safeInline(n as Nodes)));
 ```
 
-(`image` and `footnoteReference` have neither `value` nor `children`, so `textOf` gives them `""` already. No stored anchor moves: before this change no non-code block's text could start with a space, and no leaf could be empty.)
+(`image` and `footnoteReference` have neither `value` nor `children`, so `textOf` gives them `""` already. No stored anchor moves: a non-code block whose text began with a space could not be page-anchored — the page dropped the gap — and a leaf with no text has nothing to quote.)
 
 - [ ] **Step 5: Run the file, then all anchor/review unit tests**
 

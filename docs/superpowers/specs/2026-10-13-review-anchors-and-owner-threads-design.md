@@ -167,15 +167,22 @@ passes no HTML through — only from the renderer's own label for an image.
 
 **In the owner's rendered editor**, a third view, the same blocks are drawn
 differently: a footnote reference as its label
-(`sup[data-type="footnote_reference"]`), and inline HTML as its raw source
-(`span[data-type="html"]`, the source in `data-value`). Its stamper reads the
-first as nothing and the second as `htmlAsText` of its source, so every block
-keeps its path (a stamp says which block an element is, not that it may take a
-comment). The selection list also leaves out the reference and a comment's span
-(`data-value` opening `<!--` and closing `-->`), so a paragraph beside either
-takes a comment in the editor too. A `<br>` stays raw text there, so a block
-holding one fails the editor's proof and is refused ("This passage cannot take
-a comment"); it can take one on the shared page and in the reader. That is the
+(`sup[data-type="footnote_reference"]`), inline HTML as its raw source
+(`span[data-type="html"]`, the source in `data-value`), and a non-final `<br>`
+in a table cell as a hard break (`br[data-type="hardbreak"]`, made by
+`remarkCellBreaks`). Its stamper reads the first as nothing, the second as
+`htmlAsText` of its source, and the hard break as the one space the projection
+gives it, so every block keeps its path (a stamp says which block an element is,
+not that it may take a comment). The selection list also leaves out the
+reference and a comment's span (`data-value` opening `<!--` and closing `-->`),
+so a paragraph beside either takes a comment in the editor too.
+
+The editor does not draw a `<br>` as the space the page does: in a paragraph it
+stays raw HTML source, and in a cell it is a text-less hard break (raw source
+too when it ends the cell). A block holding one therefore fails the editor's
+proof and is refused ("This passage cannot take a comment"), except a cell whose
+`<br>` only opens it: that gap is dropped on both sides, so the cell is accepted.
+The shared page and the reader accept every block holding one. That is the
 accepted, fail-closed limit: the editor reads no space in its place.
 
 A consequence: a quote over a footnote reference or an image does not show the
@@ -188,12 +195,12 @@ Two rules follow from the table.
   first, and the page drops the gap a block opens with (`fromStart` in
   `review-selection.ts`); the projection drops it too. Without this, a passage
   after a leading image or `<br>` could never be proved. Code keeps its text as
-  written. Compatibility: any block whose text began with whitespace (a hard
-  break, an encoded space or tab, inline code opening with a space) used to
-  project with that leading space, while the page always stripped it — its text
-  differed — so no page-made anchor exists there. Such an anchor's offsets are
-  off by one, so on the same revision it is Outdated; on a later revision the
-  relocator may find it again by its quote and context (Moved), or, near the
+  written. Compatibility: any non-code block whose text began with whitespace
+  (a hard break, an encoded space or tab, inline code opening with a space) used
+  to project with that leading space, while the page always stripped it — its
+  text differed — so no page-made anchor exists there. Such an anchor's offsets
+  are off by one, so on the same revision it is Outdated; on a later revision
+  the relocator may find it again by its quote and context (Moved), or, near the
   block's start, report Outdated. It is never shown at a place whose words
   differ from its quote.
 - **A leaf with no text is not selectable.** An image alone in its paragraph
@@ -201,8 +208,8 @@ Two rules follow from the table.
   empty quote.
 
 No stored anchor changes meaning: every block these open was unselectable
-before, except any block whose text began with whitespace (a hard break, an
-encoded space or tab, inline code opening with a space; above).
+before, except any non-code block whose text began with whitespace (a hard
+break, an encoded space or tab, inline code opening with a space; above).
 `schemaVersion` stays 1; no migration.
 
 Still refused, for a later change: a reference-style link (`[text][ref]`, whose
@@ -246,9 +253,10 @@ passage (`2026-10-12-owner-comments-rail-design.md`, 2026-10-15). The rail's
 ## 5. Limits that remain
 
 - A paragraph containing a reference-style link or HTML other than `<br>` and
-  comments, and a footnote definition, still cannot be commented on. They say
-  so (§2). Links, images, footnote references and `<br>` can since §3c (`<br>`
-  not in the owner's editor).
+  comments, and a footnote definition on the shared page, still cannot be
+  commented on. They say so (§2). Links, images, footnote references and `<br>`
+  can since §3c; a `<br>` inside a block's text is not commentable in the
+  owner's editor, and a footnote definition's paragraph is (see §3c).
 - One block per comment.
 - The document header is pinned only in a wide pane; in a narrow one the owner's
   control scrolls away with it. The rail's "Add comment" row is the other way in.
