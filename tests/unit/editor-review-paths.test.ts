@@ -61,7 +61,7 @@ test("a changed sentence disables only its own paragraph", () => {
 });
 
 test("unsupported HTML in its own paragraph does not disable unrelated passages", () => {
-  const root = editor("<p>Safe</p><p>Other <kbd>Wiki</kbd> text.</p><p>Safe</p>");
+  const root = editor("<p>Safe</p><p>Other &lt;kbd&gt;Wiki&lt;/kbd&gt; text.</p><p>Safe</p>");
   expect(stampEditorReviewPaths(root, "Safe\n\nOther <kbd>Wiki</kbd> text.\n\nSafe")).toBe(true);
   expect([...root.querySelectorAll("p")].map(p => p.getAttribute("data-review-path"))).toEqual(["0", null, "2"]);
 });

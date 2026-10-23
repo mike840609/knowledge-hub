@@ -166,6 +166,21 @@ used both to read a block's text and to map a selection to offsets:
 A consequence: a quote over a footnote reference or an image does not show the
 number or the picture; the words around them are the quote.
 
+Two rules follow from the table.
+
+- **A non-code block's text drops one leading space.** A paragraph that opens
+  with an image or `<br>` projects a space first, and the page drops the gap a
+  block opens with (`fromStart` in `review-selection.ts`); the projection drops
+  it too. Without this, a passage after a leading image or `<br>` could never be
+  proved. Code keeps its text as written. Compatibility: a paragraph opening
+  with a hard break (a backslash, then a newline) used to project with that
+  leading space, while the page never accepted it — its text differed — so no
+  page-made anchor exists there. Any such anchor fails safe to Outdated; it is
+  never re-pointed.
+- **A leaf with no text is not selectable.** An image alone in its paragraph
+  has nothing to quote, and no paragraph button is offered that would send an
+  empty quote.
+
 No stored anchor changes meaning: every block these open was unselectable
 before. `schemaVersion` stays 1; no migration.
 
