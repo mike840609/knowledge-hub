@@ -169,20 +169,24 @@ number or the picture; the words around them are the quote.
 Two rules follow from the table.
 
 - **A non-code block's text drops one leading space.** A paragraph that opens
-  with an image or `<br>` projects a space first, and the page drops the gap a
-  block opens with (`fromStart` in `review-selection.ts`); the projection drops
-  it too. Without this, a passage after a leading image or `<br>` could never be
+  with an image, a footnote reference or `<br>`, then text, projects a space
+  first, and the page drops the gap a block opens with (`fromStart` in
+  `review-selection.ts`); the projection drops it too. Without this, a passage after a leading image or `<br>` could never be
   proved. Code keeps its text as written. Compatibility: a paragraph opening
   with a hard break (a backslash, then a newline) used to project with that
   leading space, while the page never accepted it — its text differed — so no
-  page-made anchor exists there. Any such anchor fails safe to Outdated; it is
-  never re-pointed.
+  page-made anchor exists there. Such an anchor's offsets are off by one, so on
+  the same revision it is Outdated; on a later revision the relocator may find
+  it again by its quote and context (Moved), or, near the paragraph's start,
+  report Outdated. It is never shown at a place whose words differ from its
+  quote.
 - **A leaf with no text is not selectable.** An image alone in its paragraph
   has nothing to quote, and no paragraph button is offered that would send an
   empty quote.
 
 No stored anchor changes meaning: every block these open was unselectable
-before. `schemaVersion` stays 1; no migration.
+before, except a paragraph that opens with a hard break (above).
+`schemaVersion` stays 1; no migration.
 
 Still refused, for a later change: a reference-style link (`[text][ref]`, whose
 words depend on a separate definition), any other HTML (the five inline tags
