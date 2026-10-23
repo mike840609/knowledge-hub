@@ -30,6 +30,8 @@ test('find feedback, sortable graph, search disclosure and safe share cancellati
  await page.getByRole('menuitem',{name:'Report a problem',exact:true}).click();
  const report=page.getByRole('dialog',{name:'Report a problem',exact:true});
  await expect(report).toBeVisible();
+ const empId=report.getByLabel('Employee ID');
+ await expect(empId).toHaveAttribute('readonly','');await expect(empId).toHaveValue(/\S/);await expect(empId).not.toBeFocused();
  await expect(report.getByRole('button',{name:'Send report'})).toBeDisabled();
  await page.keyboard.press('Escape');await expect(report).toBeHidden();
  await expect(page.getByRole('button',{name:/^Account:/})).toBeFocused();
