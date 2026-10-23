@@ -249,9 +249,11 @@ test("a reader comments across a document link, a footnote's number, a <br> and 
 
   await page.reload();
   await openReviewDiscussions(page);
-  for (const body of ["Across the link and the note", "Across the break and the image"]) {
+  // The card draws the quote only while its anchor still resolves, and says "Passage outdated" when not.
+  for (const [body, exact] of [["Across the link and the note", "guide and a note here"], ["Across the break and the image", "Before after the end"]]) {
     const card = page.locator("[data-review-thread]").filter({ visible: true }).filter({ hasText: body });
     await expect(card).toBeVisible();
-    await expect(card).not.toContainText("Outdated selection");
+    await expect(card.locator("blockquote")).toContainText(exact);
+    await expect(card).not.toContainText("Passage outdated");
   }
 });
