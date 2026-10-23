@@ -104,6 +104,11 @@ pass.
   (re-evaluated per request), and a dead link's entry names nothing. Following
   never extends a link's lifetime or grants anything the link does not
   (`docs/superpowers/specs/2026-10-22-review-reply-follow-design.md`).
+  Shares → Discussions lists those follows to the same trusted caller, under
+  the same per-request link judgement, and a reader may stop their own follow
+  without a live link (`POST /api/review-follows/:threadId/unfollow`): it reads
+  nothing and answers alike for any id
+  (`docs/superpowers/specs/2026-10-23-followed-discussions-tab-design.md`).
   Review access never grants Workspace membership, search, tree, history,
   MCP, Markdown edits or revision writes. Review responses include only
   validated current-revision selected-text fragments; hidden bodies and

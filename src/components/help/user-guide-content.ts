@@ -83,7 +83,7 @@ export function userGuideContent(locale:GuideLocale):UserGuideContent {
       ]}]),
       section("sharing-export","分享、匯出與使用範圍",[
         "分享前確認內容可公開給連結持有人；對方免登入即可閱讀，也會看到文章後續變更。",
-        "在文章的 Share link 管理期限與撤銷；到 Shares 查看 My shares 或 Saved shares。",
+        "在文章的 Share link 管理期限與撤銷；到 Shares 查看 My shares、Saved shares，或在 Discussions 追蹤你參與的討論。",
         "登入後可留言、回覆或 Save share（需系統啟用相關功能）。儲存的是連結，不是文章副本。",
         "Home 更多操作 → Export Markdown ZIP：含已保存與封存筆記，不含草稿、歷史版本或附件，不能當作完整備份。",
       ],[
@@ -171,7 +171,7 @@ export function userGuideContent(locale:GuideLocale):UserGuideContent {
       ]}]),
       section("sharing-export","Share, export and workspace scope",[
         "Before sharing, confirm the content is suitable for link holders. They can read without signing in and see later article changes.",
-        "Manage expiry and revocation in Share link. Open Shares for My shares or Saved shares.",
+        "Manage expiry and revocation in Share link. Open Shares for My shares, Saved shares, or Discussions to follow the discussions you take part in.",
         "Sign in to comment, reply or Save share where enabled. Saving retains a link, not an article copy.",
         "Home's more-actions menu → Export Markdown ZIP includes saved and archived notes, excluding drafts, revision history and attachments. It is not a full backup.",
       ],[

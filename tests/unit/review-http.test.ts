@@ -100,7 +100,7 @@ describe("review request security",()=>{
  });
 
  it("keeps every private review route force-dynamic to preserve the original Request",()=>{
-  const routes=["share-review/threads/query","share-review/threads","share-review/threads/[threadId]/replies","documents/[documentId]/review-threads","documents/[documentId]/review-threads/[threadId]/replies","documents/[documentId]/review-threads/[threadId]/resolution","documents/[documentId]/review-threads/[threadId]/visibility","documents/[documentId]/review-threads/[threadId]/comments/[commentId]/visibility"];
+  const routes=["share-review/threads/query","share-review/threads","share-review/threads/[threadId]/replies","documents/[documentId]/review-threads","documents/[documentId]/review-threads/[threadId]/replies","documents/[documentId]/review-threads/[threadId]/resolution","documents/[documentId]/review-threads/[threadId]/visibility","documents/[documentId]/review-threads/[threadId]/comments/[commentId]/visibility","review-follows/[threadId]/unfollow"];
   for(const route of routes)expect(readFileSync(`src/app/api/${route}/route.ts`,"utf8")).toContain('export const dynamic = "force-dynamic"');
  });
 

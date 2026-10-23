@@ -16,7 +16,7 @@ export type ShareCommentNotificationView = {
    */
   kind?: "OWNER" | "FOLLOW"; token?: string; replyCount?: number; linkAvailable?: boolean;
 };
-const EXCERPT_LIMIT = 80;
+export const EXCERPT_LIMIT = 80;
 export function projectShareCommentNotification(input: {
   id: string; workspaceId: string; documentId: string; sourceId: string; documentTitle: string;
   threadId: string; commentId: string; authorName: string | undefined;
