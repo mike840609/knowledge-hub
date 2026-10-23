@@ -24,11 +24,12 @@ describe("smoke catalog", () => {
   test("Team smoke selects exactly the eight approved flows", () => {
     expect(catalog("@smoke-team").map(t => t.title).sort()).toEqual([...teamTitles].sort());
   });
-  test("Personal smoke selects routing and both rollout cases", () => {
+  test("Personal smoke selects routing and all rollout cases", () => {
     expect(catalog("@smoke-personal").map(t => t.title).sort()).toEqual([
       "root resolves deterministically into My Space",
       "personal rollout: disabled teams, drafts across browsers, organize, export, restore and favorites",
       "a new-note draft survives closing its tab and can be resumed from Home",
+      "a draft survives archiving and can be restored from Home",
     ].sort());
   });
   test("unknown smoke tag is rejected rather than passing without tests", () => {

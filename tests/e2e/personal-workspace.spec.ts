@@ -15,19 +15,27 @@ test("personal rollout: disabled teams, drafts across browsers, organize, export
   const response = await page.request.post(`/api/workspaces/${workspaceId}/documents`, { data: { title: "Personal lifecycle", markdown: "Original body" } });
   expect(response.ok()).toBe(true); const doc = await response.json();
   const href = `/w/${workspaceId}/knowledge/${doc.sourceId}/${doc.documentId}`;
-  await page.goto(`${href}/edit`);
+  const draft = await page.request.put(`/api/workspaces/${workspaceId}/personal`, {
+    data: {
+      key: `draft:${doc.documentId}`,
+      value: { title: "Personal lifecycle", markdown: "Persistent draft body", baseRevisionId: doc.revisionId },
+      version: 0,
+    },
+  });
+  expect(draft.ok()).toBe(true);
+  await page.goto(href);
   await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeEditable(wait);
   await page.getByRole("button", { name: "Markdown", exact: true }).click();
-  await page.getByRole("textbox", { name: "Markdown", exact: true }).fill("Persistent draft body");
-  await expect(page.getByText("Draft saved to your account", { exact: true })).toBeVisible(wait);
+  await expect(page.getByRole("textbox", { name: "Markdown", exact: true })).toHaveValue("Persistent draft body", wait);
   const other = await browser.newContext(); const resumed = await other.newPage();
-  await resumed.goto(`${new URL(page.url()).origin}${href}/edit`);
+  await resumed.goto(`${new URL(page.url()).origin}${href}`);
   await expect(resumed.getByRole("textbox", { name: "Content", exact: true })).toBeEditable(wait);
   await resumed.getByRole("button", { name: "Markdown", exact: true }).click();
   await expect(resumed.getByRole("textbox", { name: "Markdown", exact: true })).toHaveValue("Persistent draft body");
-  await resumed.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(resumed).toHaveURL(new RegExp(`${doc.documentId}$`), wait);
-  await expect(resumed.getByRole("region", { name: "Document content", exact: true }).getByRole("article").getByText("Persistent draft body", { exact: true })).toBeVisible(wait);
+  await resumed.getByRole("button", { name: "Resume saving", exact: true }).click();
+  const savedDocument = resumed.waitForResponse(response => response.url().endsWith(`/api/documents/${doc.documentId}`) && response.request().method() === "PATCH", wait);
+  await resumed.getByRole("textbox", { name: "Markdown", exact: true }).fill("Persistent draft body\n\nSaved");
+  expect((await savedDocument).ok()).toBe(true);
   await page.goto(`/w/${workspaceId}/home`);
   await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Knowledge" }).click();
   await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/knowledge(?:/|$)`), wait);

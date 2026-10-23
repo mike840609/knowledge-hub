@@ -19,7 +19,6 @@ export function homeLists({ documents, drafts, recent, openedAt = {} }: {
   documents: readonly ContinueDoc[]; drafts: readonly ContinueDraft[]; recent: readonly string[]; openedAt?: Readonly<Record<string, string>>;
 }): { drafts: DraftItem[]; recent: RecentItem[] } {
   const active = documents.filter(d => d.status === "ACTIVE" && d.sourceStatus === "ACTIVE");
-  const byId = new Map(active.map(d => [d.documentId, d]));
   const byShortcut = new Map(active.map(d => [`${d.sourceId}:${d.documentId}`, d]));
   const all = new Map(documents.map(d => [d.documentId, d]));
 
