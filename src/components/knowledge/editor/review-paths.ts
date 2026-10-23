@@ -32,7 +32,7 @@ export function stampEditorReviewPaths(root: HTMLElement, markdown: string): boo
   const kind = (element: HTMLElement) => /^H[1-6]$/.test(element.tagName) ? "heading" : element.tagName === "P" ? "paragraph" : element.tagName === "PRE" ? "code" : "tableCell";
   const text = (element: HTMLElement, code: boolean) => {
     const copy = element.cloneNode(true) as HTMLElement;
-    copy.querySelectorAll('.sr-only,[aria-hidden="true"],.ProseMirror-trailingBreak').forEach(extra => extra.remove());
+    copy.querySelectorAll('.sr-only,[aria-hidden="true"],.ProseMirror-trailingBreak,.ProseMirror-separator').forEach(extra => extra.remove());
     // A hard break reads as the one space the page draws only when something follows it in the
     // block. One that ends the block is dropped by the Markdown serialiser, so it is no space; a
     // run of them is dropped together. Without this the fast path fails and duplicate blocks

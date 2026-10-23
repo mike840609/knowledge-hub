@@ -87,6 +87,17 @@ test("the real editor drops a trailing hard break from the text it stamps", asyn
   expect(paragraphs.map(p => p.getAttribute("data-review-path"))).toEqual(["0", "1", "2"]);
 });
 
+test("the real editor drops a run of trailing hard breaks too", async () => {
+  const markdown = "one\n\nSame\n\nSame";
+  const view = await rendered(markdown);
+  view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 4)));
+  for (let index = 0; index < 2; index += 1) view.dispatch(view.state.tr.replaceSelectionWith(view.state.schema.nodes.hardbreak.create()));
+  expect(view.dom.querySelectorAll('p br[data-type="hardbreak"]')).toHaveLength(2);
+  expect(updateEditorReviewPaths(view, markdown)).toBe(true);
+  const paragraphs = [...view.dom.children].filter((element): element is HTMLElement => element instanceof HTMLElement && element.tagName === "P");
+  expect(paragraphs.map(p => p.getAttribute("data-review-path"))).toEqual(["0", "1", "2"]);
+});
+
 test("the real editor drops a trailing hard break in a cell too", async () => {
   const markdown = "| A |\n| --- |\n| one |\n\nSame\n\nSame";
   const view = await rendered(markdown);
