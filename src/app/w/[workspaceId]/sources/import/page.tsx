@@ -29,7 +29,7 @@ export default async function WorkspaceSourceImportPage({
       <PageHeader location="Sources" locationHref={`/w/${workspaceId}/sources`} title="Import folder" />
       <p className="mt-1 text-body text-kh-text-muted">
         Your local files stay unchanged.{" "}
-        <Link className="rounded-md text-kh-link underline-offset-4 hover:underline kh-focus-ring" href="/help/import-guide">Folder format guide</Link>
+        <Link className="rounded-md text-kh-link underline-offset-4 hover:underline kh-focus-ring" href="/help#format-reference">Folder format guide</Link>
       </p>
       <ImportFlowGuide />
       <div className="mt-5">

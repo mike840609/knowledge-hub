@@ -98,3 +98,18 @@ account) with Recent (kept on this device). Sharing keeps its flow and drops the
 drawn article and comments panel; selecting a passage to comment moves into the
 flow's last step. Every diagram is flat on `bg-subtle`, with no border, caption bar
 or shadow, so a framed, lifted window always means a real screen.
+
+## Numbered steps and paths
+
+Each control a screen points at carries a number, placed by the capture script on
+the page before the shot, and the caption names the steps in that order (① review
+warnings, ② Apply changes). The window's title bar shows how to reach the page
+(`Sources › Import preview`) rather than its name alone. The window's dots stay
+neutral: coloured ones would compete with the numbered marks and need three new
+colour tokens.
+
+Daily sync opens with the Sources list, one row of each kind, numbered: a Hub
+source (web notes, nothing to sync), a folder this browser remembers (Check for
+changes, one click) and one it does not (Update from folder, pick the root again).
+The caption explains each. The capture writes the remembered-folder record the row
+reads instead of picking a real folder, which a test browser cannot do.

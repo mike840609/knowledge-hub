@@ -94,3 +94,49 @@ Facts the guide states, all verified in the code on `main` at the time of writin
 - A static `public/` path must not be gated by anything in front of the app (a reverse proxy rule, SSO path allow-list). The deployer must serve `/sample-wiki/*` to signed-in users; the button reports a clear error if the fetch fails.
 - The guide covers what Knowledge Hub accepts. It cannot say how any specific generator behaves.
 - Browser behaviour in Firefox and Safari is not tested.
+
+## Amendment 2026-10-22: the guide becomes a format reference
+
+The user guide (`/help`) grew its own import, preview and sync chapters, with
+diagrams and real screens, and the two guides started to disagree (this guide
+placed the one-click sync only on the source page; the Sources list has it on
+every row). Two copies of how to operate drift; one copy does not.
+
+So the import guide (`/help/import-guide`) now says only what a folder must look
+like, and links to the user guide for how to import, preview and sync:
+
+- Title "Folder format and import rules" / 「資料夾格式與匯入規則」, matching the
+  link that leads to it.
+- Five sections, in this order: a complete example (folder tree and one file to
+  copy; an Obsidian vault already fits), the six-item checklist for tools and
+  agents, titles/links/anchors, keeping a document through renames
+  (`knowledge_id`, as numbered steps under a highlighted rule: a rename plus an
+  edit in one sync starts a new document), and limits with the always-skipped
+  paths (stated once, in the table and the checklist only).
+- Removed here, kept in the user guide: Preview and Apply, keeping in sync,
+  reading/search/Copy for Agent. The facts the user guide lacked move into it:
+  the Preview upload is temporary and removed files are archived (quick start),
+  search path filters and Copy for Agent's 1–20 documents (reading).
+- A chapter navigation like the user guide's, reusing its component. A `note`
+  block (highlighted paragraph) is added to the shared guide blocks.
+- The user guide's "Read the import preview guide" link goes away (the preview is
+  explained where it is shown); its `knowledge_id` link points at the new section.
+
+## Amendment 2026-10-23: one guide, with the format as its reference part
+
+Following a link from the user guide to `/help/import-guide` left the guide's
+chapter navigation and changed the page's shape (breadcrumb, language switch),
+for readers who are the same people. The format reference is now the last part
+of the user guide at `/help`:
+
+- After the six operating chapters, a part titled "Folder format and import
+  rules" (`#format-reference`, an `h2`), its five sections as `h3` with their
+  existing ids. The chapter navigation lists them under a "Reference: folder
+  format" group, tracking position across both groups.
+- Links into it are in-page: the header link to `#format-reference`, the
+  `knowledge_id` link to `#knowledge-id`. The import page's Folder format guide
+  link goes to `/help#format-reference`.
+- `/help/import-guide` and `/w/:id/sources/import/guide` redirect to
+  `/help#format-reference`, keeping `?lang`. Old links keep working.
+- The format part's intro drops its pointer to the user guide (it is the user
+  guide) and its own Try the sample wiki link (quick start has one).
