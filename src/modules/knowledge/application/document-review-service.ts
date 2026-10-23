@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { DomainError } from "@/shared/domain/errors";
-import { uuidv7 } from "@/shared/ids/uuidv7";
+import { isUuid, uuidv7 } from "@/shared/ids/uuidv7";
 import { evaluateShareLinkValidity, isShareToken, ShareLinkNotFoundError } from "../domain/document-share-link";
 import { REVIEW_LIMITS, isRetractedThread, projectOwnerThread, projectReviewerThread, projectReviewComment, validateReviewBody, validateReviewIdempotencyKey, type ReviewThread, type ReviewComment, type ReviewAnchor, type ReviewStatus, type ReviewVisibility, type ReviewThreadView, type OwnerReviewThreadView, type CreateReviewThreadInput, type CreateOwnerReviewThreadInput, type ReplyReviewInput } from "../domain/document-review";
 import { createReviewAnchorRelocator, validateReviewAnchor } from "../domain/review-anchor";
-import { projectShareCommentNotification, type ShareCommentNotificationView } from "../domain/share-comment-event";
-import { summarizeFollowedThread } from "../domain/review-follow";
+import { projectShareCommentNotification, EXCERPT_LIMIT, type ShareCommentNotificationView } from "../domain/share-comment-event";
+import { orderFollowedDiscussions, summarizeFollowedThread, type FollowedDiscussionView } from "../domain/review-follow";
 import type { DocumentShareLink } from "../domain/document-share-link";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "../ports/unit-of-work";
 
@@ -116,6 +116,28 @@ export class DocumentReviewService {
       await r.reviewFollows.markSeen(input.threadId, caller.identity.id, this.clock());
     });
   }
+  /** Shares → Discussions: every discussion the caller follows, including ones no one has answered. */
+  async listFollowedDiscussions(caller: CallerContext): Promise<{ items: FollowedDiscussionView[] }> {
+    return this.uow.run(async r => {
+      const items: FollowedDiscussionView[] = [];
+      for (const { thread, link, summary } of await this.followedThreads(r, caller.identity.id)) {
+        if ("unavailable" in summary) { items.push({ threadId: thread.id, linkAvailable: false }); continue; }
+        const revision = await r.revisions.findCurrent(thread.documentId);
+        items.push({
+          threadId: thread.id, linkAvailable: true, token: link!.token, documentTitle: revision?.title ?? "", threadStatus: thread.status,
+          authorName: (await r.users.findById(summary.latest.authorUserId))?.name,
+          excerpt: [...summary.latest.body].slice(0, EXCERPT_LIMIT).join(""), latestAt: summary.latest.createdAt, unread: summary.unread,
+        });
+      }
+      return { items: orderFollowedDiscussions(items) };
+    });
+  }
+  /** The caller gives up their own follow. It reads nothing, so it needs no live link and answers alike for any id. */
+  async unfollowOwn(caller: CallerContext, threadId: string): Promise<{ following: false }> {
+    // thread_id is a MariaDB UUID column: a malformed id would fail the query rather than match nothing.
+    if (isUuid(threadId)) await this.uow.run(r => r.reviewFollows.unfollow(threadId, caller.identity.id, this.clock()));
+    return { following: false };
+  }
   /** A visible, standing discussion on a live link's document; any other is not found. */
   private async linkThread(r: KnowledgeRepositories, token: string, threadId: string) {
     const s = await this.linkScope(r, token, false);
@@ -129,19 +151,28 @@ export class DocumentReviewService {
     return threads.map(thread => ({ ...thread, following: followed.has(thread.id) }));
   }
   /**
-   * The caller's followed discussions as Inbox entries, one per discussion. A link that no longer
-   * opens yields an entry naming nothing: no title, author, words or token.
-   * ponytail: a few queries per follow, bounded by FOLLOW_LIMIT; one joined query if Inboxes grow slow.
+   * The caller's followed discussions with their link's state, judged now.
+   * ponytail: at most FOLLOW_LIMIT follows, a few queries each; cursor paging and one joined query once readers follow more.
    */
-  private async followViews(r: KnowledgeRepositories, userId: string): Promise<ShareCommentNotificationView[]> {
-    const views: ShareCommentNotificationView[] = [];
+  private async followedThreads(r: KnowledgeRepositories, userId: string) {
+    const found = [];
     for (const follow of await r.reviewFollows.listFollowing(userId, FOLLOW_LIMIT)) {
       const thread = await r.reviewThreads.findById(follow.threadId);
       if (!thread) continue;
       const link = (await r.shareLinks.listByDocument(thread.documentId)).find(candidate => candidate.id === follow.shareLinkId);
       const linkValid = !!link && await this.linkValid(r, link);
       const summary = summarizeFollowedThread({ thread, comments: await r.reviewComments.listByThread(thread.id), userId, seenAt: follow.seenAt, linkValid });
-      if (!summary) continue;
+      if (summary) found.push({ follow, thread, link, summary });
+    }
+    return found;
+  }
+  /**
+   * The caller's followed discussions as Inbox entries, one per discussion. A link that no longer
+   * opens yields an entry naming nothing: no title, author, words or token.
+   */
+  private async followViews(r: KnowledgeRepositories, userId: string): Promise<ShareCommentNotificationView[]> {
+    const views: ShareCommentNotificationView[] = [];
+    for (const { follow, thread, link, summary } of await this.followedThreads(r, userId)) {
       const base = { id: `${FOLLOW_PREFIX}${thread.id}`, workspaceId: "", documentId: "", sourceId: "", threadId: thread.id };
       if ("unavailable" in summary) { views.push({ ...base, kind: "FOLLOW", documentTitle: "", commentId: "", authorName: undefined, excerpt: "", createdAt: follow.seenAt, readAt: follow.seenAt, threadStatus: "OPEN", linkAvailable: false }); continue; }
       if (!summary.latestReply) continue;

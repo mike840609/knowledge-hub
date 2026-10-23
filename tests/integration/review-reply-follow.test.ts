@@ -164,3 +164,57 @@ describe("the owner reads discussion by discussion", () => {
     expect(await ownerUnread()).toEqual([second.id]);
   });
 });
+
+describe("Shares → Discussions: every discussion the reader follows", () => {
+  const discussions = async (f: Awaited<ReturnType<typeof fixture>>, caller = f.reader) => (await f.service.listFollowedDiscussions(caller)).items;
+
+  it("lists a discussion no one has answered yet, and marks it unread once someone does", async () => {
+    const f = await fixture();
+    const thread = await f.start();
+    expect(await discussions(f)).toEqual([expect.objectContaining({ threadId: thread.id, linkAvailable: true, token: f.token, documentTitle: "Review", threadStatus: "OPEN", authorName: "Reader", excerpt: "Reader asks", unread: 0 })]);
+    await f.ownerReply(thread.id);
+    expect(await discussions(f)).toEqual([expect.objectContaining({ authorName: "Owner", excerpt: "Owner answers", unread: 1 })]);
+    await f.service.markSeenForLink(f.reader, { token: f.token, threadId: thread.id });
+    f.time.tick();
+    expect(await discussions(f)).toEqual([expect.objectContaining({ unread: 0 })]);
+  });
+
+  it("drops a discussion once unfollowed, from the link or from the list", async () => {
+    const f = await fixture();
+    const thread = await f.start();
+    await f.service.followForLink(f.reader, { token: f.token, threadId: thread.id, following: false });
+    expect(await discussions(f)).toEqual([]);
+    await f.service.followForLink(f.reader, { token: f.token, threadId: thread.id, following: true });
+    expect(await f.service.unfollowOwn(f.reader, thread.id)).toEqual({ following: false });
+    expect(await discussions(f)).toEqual([]);
+  });
+
+  it("a dead link's row names nothing, and Remove needs no live link", async () => {
+    const f = await fixture();
+    const thread = await f.start();
+    await f.ownerReply(thread.id, "PRIVATE ANSWER");
+    await f.shares.revoke(f.owner, f.link.id);
+    const items = await discussions(f);
+    expect(items).toEqual([{ threadId: thread.id, linkAvailable: false }]);
+    expect(JSON.stringify(items)).not.toContain("PRIVATE");
+    await f.service.unfollowOwn(f.reader, thread.id);
+    expect(await discussions(f)).toEqual([]);
+  });
+
+  it("Remove touches only the caller's own follow and says the same for anything else", async () => {
+    const f = await fixture();
+    const thread = await f.start();
+    await f.service.followForLink(f.other, { token: f.token, threadId: thread.id, following: true });
+    expect(await f.service.unfollowOwn(f.other, thread.id)).toEqual({ following: false });
+    expect(await discussions(f)).toHaveLength(1);
+    expect(await f.service.unfollowOwn(f.reader, randomUUID())).toEqual({ following: false });
+    expect(await f.service.unfollowOwn(f.reader, "not-a-uuid")).toEqual({ following: false });
+    expect(await discussions(f)).toHaveLength(1);
+  });
+
+  it("the Inbox still lists only discussions someone else answered", async () => {
+    const f = await fixture();
+    await f.start();
+    expect((await f.service.listActivityForOwner(f.reader)).notifications.filter(n => n.kind === "FOLLOW")).toEqual([]);
+  });
+});
