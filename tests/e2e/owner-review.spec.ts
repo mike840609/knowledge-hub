@@ -15,7 +15,8 @@ test("owner replies, resolves, reopens and hides first comment without changing 
   // A card is a preview until it is opened; its button is the reply itself.
   await page.getByRole("button", { name: "Reply", exact: true }).click();
   await page.getByRole("textbox", { name: "Reply", exact: true }).fill("Owner response"); await page.getByRole("button", { name: "Reply", exact: true }).click();
-  await expect(page.getByText("Owner response", { exact: true })).toBeVisible();
+  // The reply can show in the passage's inline thread and the rail's at once.
+  await expect(page.getByText("Owner response", { exact: true }).filter({ visible: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "Resolve", exact: true }).click(); await expect(page.getByRole("textbox", { name: "Reply", exact: true })).toHaveCount(0);
   // Resolved, it leaves the list of what is open; it is under Resolved, and can be opened again from there.
   await expect(page.getByText("Owner response", { exact: true }).filter({ visible: true })).toHaveCount(0);
