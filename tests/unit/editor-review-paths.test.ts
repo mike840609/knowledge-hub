@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { expect, test } from "vitest";
 import { stampEditorReviewPaths, createEditorReviewPathsPlugin, updateEditorReviewPaths } from "@/components/knowledge/editor/review-paths";
-import { readReviewSelection } from "@/components/knowledge/review-selection";
+import { readReviewSelection, reviewBlockAnchor } from "@/components/knowledge/review-selection";
 
 function editor(html: string) {
   const root = document.createElement("div");
@@ -61,9 +61,14 @@ test("a changed sentence disables only its own paragraph", () => {
 });
 
 test("unsupported HTML in its own paragraph does not disable unrelated passages", () => {
+  const markdown = "Safe\n\nOther <kbd>Wiki</kbd> text.\n\nSafe";
   const root = editor("<p>Safe</p><p>Other <kbd>Wiki</kbd> text.</p><p>Safe</p>");
-  expect(stampEditorReviewPaths(root, "Safe\n\nOther <kbd>Wiki</kbd> text.\n\nSafe")).toBe(true);
-  expect([...root.querySelectorAll("p")].map(p => p.getAttribute("data-review-path"))).toEqual(["0", null, "2"]);
+  expect(stampEditorReviewPaths(root, markdown)).toBe(true);
+  // The stamp says which block an element is; it does not say the block may take a comment.
+  expect([...root.querySelectorAll("p")].map(p => p.getAttribute("data-review-path"))).toEqual(["0", "1", "2"]);
+  const paragraphs = root.querySelectorAll<HTMLElement>("p");
+  expect(reviewBlockAnchor(paragraphs[1], markdown)).toBeNull();
+  expect(reviewBlockAnchor(paragraphs[0], markdown)).toMatchObject({ blockPath: [0], exact: "Safe" });
 });
 
 
@@ -146,4 +151,123 @@ test("selected paragraph styling remains a decoration and cleanup retains every 
   setReviewBlockSelected(reader, false);
   expect(reader.classList.contains("kh-comment-block-selected")).toBe(false);
   view.destroy();
+});
+
+// The editor's own markup (Milkdown's `footnote_reference` and `html` nodes): a footnote reference
+// is drawn as its label, inline HTML as its raw source with the value in `data-value`.
+const footnoteRef = (label: string) => `<sup data-label="${label}" data-type="footnote_reference">${label}</sup>`;
+const inlineHtml = (value: string) => `<span data-value="${value.replace(/</g, "&lt;").replace(/>/g, "&gt;")}" data-type="html">${value.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span>`;
+
+test("a footnote reference keeps every block stamped, the duplicates included", () => {
+  const markdown = "Safe\n\nA note[^1] here.\n\nSafe\n\n[^1]: The note.\n";
+  const root = editor(`<p>Safe</p><p>A note${footnoteRef("1")} here.</p><p>Safe</p><dl data-label="1" data-type="footnote_definition"><dt>1</dt><dd><p>The note.</p></dd></dl>`);
+  document.body.replaceChildren(root);
+  expect(stampEditorReviewPaths(root, markdown)).toBe(true);
+  expect([...root.querySelectorAll("p")].map(p => p.getAttribute("data-review-path"))).toEqual(["0", "1", "2", "3.0"]);
+  const paragraph = root.querySelectorAll<HTMLElement>("p")[1];
+  expect(reviewBlockAnchor(paragraph, markdown)).toMatchObject({ blockPath: [1], exact: "A note here." });
+  const range = document.createRange();
+  range.setStart(paragraph.firstChild!, 2);
+  range.setEnd(paragraph.lastChild!, 5);
+  const selection = window.getSelection()!;
+  selection.removeAllRanges(); selection.addRange(range);
+  expect(readReviewSelection(root, markdown, selection).anchor).toMatchObject({ blockPath: [1], exact: "note here", startUtf16: 2, endUtf16: 11 });
+});
+
+test("an HTML comment keeps every block stamped and its paragraph takes a comment", () => {
+  const markdown = "Safe\n\nOne <!-- c --> two.\n\nSafe";
+  const root = editor(`<p>Safe</p><p>One ${inlineHtml("<!-- c -->")} two.</p><p>Safe</p>`);
+  document.body.replaceChildren(root);
+  expect(stampEditorReviewPaths(root, markdown)).toBe(true);
+  expect([...root.querySelectorAll("p")].map(p => p.getAttribute("data-review-path"))).toEqual(["0", "1", "2"]);
+  const paragraph = root.querySelectorAll<HTMLElement>("p")[1];
+  expect(reviewBlockAnchor(paragraph, markdown)).toMatchObject({ blockPath: [1], exact: "One two." });
+  const range = document.createRange();
+  range.setStart(paragraph.firstChild!, 0);
+  range.setEnd(paragraph.lastChild!, 4);
+  const selection = window.getSelection()!;
+  selection.removeAllRanges(); selection.addRange(range);
+  expect(readReviewSelection(root, markdown, selection).anchor).toMatchObject({ blockPath: [1], exact: "One two", startUtf16: 0, endUtf16: 7 });
+});
+
+test("a <br> keeps its paragraph stamped but, drawn raw in the editor, it takes no comment there", () => {
+  const markdown = "Safe\n\nOne<br>two.\n\nSafe";
+  const root = editor(`<p>Safe</p><p>One${inlineHtml("<br>")}two.</p><p>Safe</p>`);
+  document.body.replaceChildren(root);
+  expect(stampEditorReviewPaths(root, markdown)).toBe(true);
+  expect([...root.querySelectorAll("p")].map(p => p.getAttribute("data-review-path"))).toEqual(["0", "1", "2"]);
+  const paragraph = root.querySelectorAll<HTMLElement>("p")[1];
+  expect(reviewBlockAnchor(paragraph, markdown)).toBeNull();
+  const range = document.createRange();
+  range.setStart(paragraph.firstChild!, 0);
+  range.setEnd(paragraph.lastChild!, 3);
+  const selection = window.getSelection()!;
+  selection.removeAllRanges(); selection.addRange(range);
+  expect(readReviewSelection(root, markdown, selection).problem).toBe("unsupported");
+});
+
+test("a mid-cell <br> keeps the cell and its duplicates stamped, though the cell takes no comment", () => {
+  const markdown = "| A |\n| --- |\n| one<br>two |\n\nSame\n\nSame";
+  const root = editor('<table><tbody><tr><th><p>A</p></th></tr><tr><td><p>one<br data-type="hardbreak" data-is-inline="false">two</p></td></tr></tbody></table><p>Same</p><p>Same</p>');
+  document.body.replaceChildren(root);
+  expect(stampEditorReviewPaths(root, markdown)).toBe(true);
+  const cells = [...root.querySelectorAll<HTMLElement>("th,td")];
+  const paragraphs = [...root.children].filter((element): element is HTMLElement => element instanceof HTMLElement && element.tagName === "P");
+  expect([...cells, ...paragraphs].map(element => element.getAttribute("data-review-path"))).toEqual(["0.0.0", "0.1.0", "1", "2"]);
+  // The editor's hard break carries no text, so the cell's page proof still fails.
+  expect(reviewBlockAnchor(cells[1], markdown)).toBeNull();
+  // Duplicate paragraphs beside it keep their paths and can still take comments.
+  expect(reviewBlockAnchor(paragraphs[0], markdown)).toMatchObject({ blockPath: [1], exact: "Same" });
+  expect(reviewBlockAnchor(paragraphs[1], markdown)).toMatchObject({ blockPath: [2], exact: "Same" });
+});
+
+test("a trailing hard break is no space, so duplicates stay stamped", () => {
+  const markdown = "one\n\nSame\n\nSame";
+  const root = editor('<p>one<br data-type="hardbreak" data-is-inline="false"><br class="ProseMirror-trailingBreak"></p><p>Same</p><p>Same</p>');
+  document.body.replaceChildren(root);
+  expect(stampEditorReviewPaths(root, markdown)).toBe(true);
+  expect([...root.querySelectorAll("p")].map(p => p.getAttribute("data-review-path"))).toEqual(["0", "1", "2"]);
+  expect(reviewBlockAnchor(root.querySelector("p")!, markdown)).toMatchObject({ blockPath: [0], exact: "one" });
+});
+
+test("a run of trailing hard breaks is dropped together", () => {
+  const markdown = "one\n\nSame\n\nSame";
+  const root = editor('<p>one<br data-type="hardbreak"><br data-type="hardbreak"><br class="ProseMirror-trailingBreak"></p><p>Same</p><p>Same</p>');
+  document.body.replaceChildren(root);
+  expect(stampEditorReviewPaths(root, markdown)).toBe(true);
+  expect([...root.querySelectorAll("p")].map(p => p.getAttribute("data-review-path"))).toEqual(["0", "1", "2"]);
+});
+
+test("a trailing hard break in a cell is no space either", () => {
+  const markdown = "| A |\n| --- |\n| one |\n\nSame\n\nSame";
+  const root = editor('<table><tbody><tr><th><p>A</p></th></tr><tr><td><p>one<br data-type="hardbreak" data-is-inline="false"><br class="ProseMirror-trailingBreak"></p></td></tr></tbody></table><p>Same</p><p>Same</p>');
+  document.body.replaceChildren(root);
+  expect(stampEditorReviewPaths(root, markdown)).toBe(true);
+  const cells = [...root.querySelectorAll<HTMLElement>("th,td")];
+  const paragraphs = [...root.children].filter((element): element is HTMLElement => element instanceof HTMLElement && element.tagName === "P");
+  expect([...cells, ...paragraphs].map(element => element.getAttribute("data-review-path"))).toEqual(["0.0.0", "0.1.0", "1", "2"]);
+  expect(reviewBlockAnchor(cells[1], markdown)).toMatchObject({ blockPath: [0, 1, 0], exact: "one" });
+});
+
+test("a hard break before an image is still one space", () => {
+  const markdown = "| A |\n| --- |\n| one<br>![x](/a.png) |";
+  const root = editor('<table><tbody><tr><th><p>A</p></th></tr><tr><td><p>one<br data-type="hardbreak" data-is-inline="false"><img alt="x" src="/a.png"></p></td></tr></tbody></table>');
+  document.body.replaceChildren(root);
+  expect(stampEditorReviewPaths(root, markdown)).toBe(true);
+  expect(root.querySelector("td")!.getAttribute("data-review-path")).toBe("0.1.0");
+});
+
+test("a reference image is read as an image, not text", () => {
+  const markdown = "Look ![x][img] here\n\n[img]: https://e.example/a.png";
+  const root = editor('<p>Look <img alt="x" src="https://e.example/a.png"> here</p>');
+  document.body.replaceChildren(root);
+  expect(stampEditorReviewPaths(root, markdown)).toBe(true);
+  expect(reviewBlockAnchor(root.querySelector("p")!, markdown)).toMatchObject({ blockPath: [0], exact: "Look here" });
+});
+
+test("duplicate cells stay stamped beside a footnote reference elsewhere", () => {
+  const markdown = "| A | B |\n| --- | --- |\n| Same | Same |\n\nRef[^n] here.\n\n[^n]: Note.\n";
+  const root = editor(`<table><tbody><tr><th><p>A</p></th><th><p>B</p></th></tr><tr><td><p>Same</p></td><td><p>Same</p></td></tr></tbody></table><p>Ref${footnoteRef("n")} here.</p><dl data-label="n" data-type="footnote_definition"><dt>n</dt><dd><p>Note.</p></dd></dl>`);
+  expect(stampEditorReviewPaths(root, markdown)).toBe(true);
+  expect([...root.querySelectorAll("th,td,body > p, div > p, dd > p")].map(p => p.getAttribute("data-review-path"))).toEqual(["0.0.0", "0.0.1", "0.1.0", "0.1.1", "1", "2.0"]);
 });

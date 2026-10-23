@@ -23,10 +23,24 @@ function blocksByPath(markdown: string) {
   return projected.blocks;
 }
 
-/** Match the renderer's visible Markdown text, not generated link announcements/icons. */
+/**
+ * What the page draws that is no part of a block's text: announcements, icons, an image's label, a
+ * footnote's number — and in the editor, a footnote reference's label and an HTML comment's source
+ * (spec §3c). `[role="img"]` cannot come from a document: the reader passes no HTML through, so it
+ * is only the renderer's own label for a blocked image. The editor's selection proof reads no
+ * space for a break. A Markdown hard break is a text-less hard break wherever it is; an HTML
+ * `<br>` is one only where it opens a cell or stands between words in a cell, and raw source
+ * anywhere else. So a break that is the only space between words is refused; a Markdown hard
+ * break that only opens or ends a block, and a `<br>` that only opens a cell, leave no text
+ * behind and are accepted; a `<br>` that opens or ends a paragraph, or ends a cell, stays raw
+ * source and is refused.
+ */
+const NOT_TEXT = '.sr-only,[aria-hidden="true"],[role="img"],[data-footnote-ref],sup[data-type="footnote_reference"],span[data-type="html"][data-value^="<!--"][data-value$="-->"]';
+
+/** Match the renderer's visible Markdown text: what `NOT_TEXT` names is left out. */
 function readableText(node: HTMLElement | DocumentFragment): string {
   const copy = node.cloneNode(true) as HTMLElement | DocumentFragment;
-  copy.querySelectorAll('.sr-only,[aria-hidden="true"]').forEach(extra => extra.remove());
+  copy.querySelectorAll(NOT_TEXT).forEach(extra => extra.remove());
   return copy.textContent ?? "";
 }
 const WHITESPACE = /[\t\n\r ]/;
@@ -129,7 +143,7 @@ export function createReviewRangeResolver(root: HTMLElement, markdown: string) {
   if (!element || !block?.selectable || leafText(element, block) !== shown(block) || anchor.startUtf16 < block.hidden || block.text.slice(anchor.startUtf16, anchor.endUtf16) !== anchor.exact) return null;
   const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
-      const extra = node.parentElement?.closest('.sr-only,[aria-hidden="true"]');
+      const extra = node.parentElement?.closest(NOT_TEXT);
       if (extra && element.contains(extra)) return NodeFilter.FILTER_REJECT;
       if (element.tagName !== "LI") return NodeFilter.FILTER_ACCEPT;
       const list = node.parentElement?.closest("ul,ol");

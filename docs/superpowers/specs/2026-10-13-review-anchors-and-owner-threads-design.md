@@ -140,7 +140,111 @@ discussing hold one.
 
 `<br>` written as HTML, a relative `.md` link and a footnote reference are still
 refused: the first two for reasons the canonical review spec gives, the third
-because the page shows a number the Markdown does not have.
+because the page shows a number the Markdown does not have. *(Superseded by §3c.)*
+
+## 3c. A paragraph with a link, an image, a footnote reference or `<br>`
+
+Added 2026-10-23. The same rule as §3b — a block's text is the words on the
+page — applied to the four inline kinds still refused. Each is projected by a
+decision the page already makes, so the two cannot disagree.
+
+| In the Markdown | Its text | Why the page agrees |
+|---|---|---|
+| a link, whatever its URL (relative `.md` included) | its link text | Every link the renderer draws — external, document, unresolved, plain `<span>` where there is no `links` — draws its children and nothing else visible. The external icon is `aria-hidden` and the announcements are `.sr-only`, which the selection reader already leaves out. |
+| an image, inline or by reference | nothing | An `<img>` holds no text. The label drawn where it is blocked or fails (`role="img"`, *Image blocked: …*) is left out by the selection reader. Whether an image loads is decided at run time, so its label can never be part of a block's text. |
+| a footnote reference | nothing | The number is the page's (`[data-footnote-ref]`), not the Markdown's, and is left out by the selection reader. A `[^x]` with no definition is not a reference; it is text, and is text on the page. |
+| HTML that is `<br>` or a comment | `htmlAsText`: one space, or nothing | `remark-known-html` makes `<br>` a line break and drops a comment, using the same patterns. |
+
+The canonical review spec's "renderer-dependent relative document links" (§6.1)
+are not renderer-dependent in their text: resolving one changes the element
+around the words, never the words. That disable is lifted.
+
+What the selection reader leaves out is one list in `review-selection.ts`,
+used both to read a block's text and to map a selection to offsets:
+`.sr-only`, `[aria-hidden="true"]`, `[role="img"]`, `[data-footnote-ref]`, and
+the editor's two below. `[role="img"]` cannot come from a document — the reader
+passes no HTML through — only from the renderer's own label for an image.
+
+**In the owner's rendered editor**, a third view, the same blocks are drawn
+differently: a footnote reference as its label
+(`sup[data-type="footnote_reference"]`), inline HTML as its raw source
+(`span[data-type="html"]`, the source in `data-value`), and a non-final `<br>`
+in a table cell as a hard break (`br[data-type="hardbreak"]`, made by
+`remarkCellBreaks`). A Markdown hard break is that same hard break node wherever
+it is. Its stamper reads the first as nothing, the second as `htmlAsText` of its
+source, and a hard break as the one space the projection gives it only when
+something follows it in the block — the stamper reads a hard break, or a run of
+them, that ends the block as nothing — so every block keeps its path (a stamp
+says which block an element is, not that it may take a comment). The Markdown
+serialiser drops one trailing hard break when it saves; a run of two it writes
+as `one\` and a line ending, which reads back as a literal backslash, in the
+editor as on the page. That is a Milkdown defect outside this change; it changes
+the saved words, and the views still agree on them. The selection list also leaves
+out the reference and a comment's span (`data-value` opening `<!--` and closing
+`-->`), so a paragraph beside either takes a comment in the editor too.
+
+The editor's selection proof still reads no space for a `<br>` or a hard break.
+An HTML `<br>` stays raw HTML source in a paragraph and in a cell that ends with
+it; a non-final `<br>` in a cell is a text-less hard break, and a Markdown hard
+break is a text-less hard break wherever it is. A break that is the only space
+between the words therefore fails the editor's proof and is refused ("This
+passage cannot take a comment").
+A Markdown hard break that only opens or ends a block leaves no text behind and
+is accepted, as is a `<br>` that only opens a cell. An HTML `<br>` at the start
+or end of a paragraph, or at the end of a cell, stays raw source and is refused.
+A Markdown hard break followed only by an image or a footnote reference does not
+end the block: the stamper reads its space and the block keeps its path, and the
+editor's proof, reading none, refuses it. The shared page and the reader accept
+it, and its text, so a whole-block quote, ends with that space (`a `): the
+projection drops a leading space, never a trailing one. The shared page and the
+reader accept every block holding one. That is the accepted, fail-closed limit:
+the selection proof reads no space in its place.
+
+A consequence: a quote over a footnote reference or an image does not show the
+number or the picture; the words around them are the quote.
+
+Two rules follow from the table.
+
+- **A non-code block's text drops one leading space.** A paragraph that opens
+  with an image, a footnote reference or `<br>`, then text, projects a space
+  first, and the page drops the gap a block opens with (`fromStart` in
+  `review-selection.ts`); the projection drops it too. Without this, a passage
+  after a leading image or `<br>` could never be proved. Code keeps its text as
+  written. Compatibility: any non-code block whose text began with whitespace
+  (a hard break, an encoded space or tab, inline code opening with a space) used
+  to project with that leading space, while the page always stripped it — its
+  text differed — so no page-made anchor exists there. Such an anchor's offsets
+  are off by one, so on the same revision it is Outdated; on a later revision
+  the relocator may find it again by its quote and context (Moved), or, near the
+  block's start, report Outdated. It is never shown at a place whose words
+  differ from its quote.
+- **A leaf with no text is not selectable.** An image alone in its paragraph
+  has nothing to quote, and no paragraph button is offered that would send an
+  empty quote.
+
+No stored anchor changes meaning: every block these open was unselectable
+before, except any non-code block whose text began with whitespace (a hard
+break, an encoded space or tab, inline code opening with a space; above).
+`schemaVersion` stays 1; no migration.
+
+Still refused, for a later change: a reference-style link (`[text][ref]`, whose
+words depend on a separate definition) and any other HTML (the five inline tags
+`remark-html-subset` draws pair up by rules the projection does not share yet).
+A reference-style image (`![alt][ref]`) is not a link: it resolves to the same
+picture and is read as nothing, as an inline image is.
+The paragraphs of a footnote definition are selectable in the projection but
+refused by the page, which draws them at the foot with a back link their text
+does not have. The editor draws no back link, so there they take a comment, as
+they did before §3c.
+
+A known limit in the editor: an empty link (`[](url)`) is drawn there as nothing
+at all, so a hard break followed only by one looks as if it ends the block. The
+stamper reads no space where the projection keeps one (`a `), that block's text
+differs, and the stamper falls back to stamping only blocks whose text is unique
+in the document: that block and any duplicated blocks are left without a path,
+and none of them takes a comment in the editor. It fails closed, on rare input.
+Trimming the projection's trailing space to match would move stored anchors, so
+it is left as it is.
 
 ## 4. The owner starts a discussion
 
@@ -174,9 +278,16 @@ passage (`2026-10-12-owner-comments-rail-design.md`, 2026-10-15). The rail's
 
 ## 5. Limits that remain
 
-- A paragraph containing a footnote reference, a relative `.md` link, an image
-  or raw HTML (`<br>` included), and a footnote definition, still cannot be
-  commented on. They now say so (§2).
+- A paragraph containing a reference-style link or HTML other than `<br>` and
+  comments, and a footnote definition on the shared page and in the reader,
+  still cannot be commented on. They say so (§2). Links, images, footnote
+  references and `<br>` can since §3c. In the owner's editor a `<br>` or a
+  Markdown hard break between words is refused, as is an HTML `<br>` that opens
+  or ends a paragraph or ends a cell; a `<br>` that opens a cell is accepted, and
+  a footnote definition's paragraph takes a comment (see §3c).
+- In the owner's editor, a hard break followed only by an empty link leaves that
+  block and any duplicated blocks unstamped, and none takes a comment there
+  (§3c, a known limit; it fails closed).
 - One block per comment.
 - The document header is pinned only in a wide pane; in a narrow one the owner's
   control scrolls away with it. The rail's "Add comment" row is the other way in.

@@ -1,5 +1,23 @@
 import { projectReviewBlocks } from "@/modules/knowledge/domain/review-anchor";
+import { htmlAsText } from "@/shared/markdown/remark-known-html";
 import { REVIEW_PATH, reviewPathKey } from "@/shared/markdown/remark-review-paths";
+
+/** Whether anything follows `node` in its block besides a run of hard breaks. A break that ends a
+ * block has no counterpart in the saved Markdown, so such a break contributes no space. */
+function hasContentAfter(node: Node, root: HTMLElement): boolean {
+  for (let current: Node | null = node; current && current !== root; current = current.parentNode) {
+    for (let next = current.nextSibling; next; next = next.nextSibling) {
+      if (next.nodeType === Node.TEXT_NODE) {
+        if ((next as Text).data !== "") return true;
+      } else if (next instanceof HTMLElement && next.matches('br[data-type="hardbreak"]')) {
+        continue;
+      } else if (next instanceof HTMLElement && (next.tagName === "IMG" || (next.textContent ?? "") !== "")) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
 
 /** Stamp the editor leaves the reader can prove, one block at a time. A block the editor
  * renders differently — an HTML block, a changed sentence — leaves its own element unstamped
@@ -14,7 +32,18 @@ export function stampEditorReviewPaths(root: HTMLElement, markdown: string): boo
   const kind = (element: HTMLElement) => /^H[1-6]$/.test(element.tagName) ? "heading" : element.tagName === "P" ? "paragraph" : element.tagName === "PRE" ? "code" : "tableCell";
   const text = (element: HTMLElement, code: boolean) => {
     const copy = element.cloneNode(true) as HTMLElement;
-    copy.querySelectorAll('.sr-only,[aria-hidden="true"],.ProseMirror-trailingBreak').forEach(extra => extra.remove());
+    copy.querySelectorAll('.sr-only,[aria-hidden="true"],.ProseMirror-trailingBreak,.ProseMirror-separator').forEach(extra => extra.remove());
+    // A hard break reads as the one space the page draws only when something follows it in the
+    // block. One that ends the block, or a run of them, is no space: the Markdown parser makes no
+    // break there, and the serialiser drops a single one (spec §3c). Without this the fast path
+    // fails and duplicate blocks elsewhere in the document lose their stamps.
+    copy.querySelectorAll('br[data-type="hardbreak"]').forEach(br => {
+      if (hasContentAfter(br, copy)) br.replaceWith(" ");
+    });
+    // The editor draws a footnote reference as its label and inline HTML as its raw source; the
+    // projection reads them as nothing and `htmlAsText`. The stamp is identity, not permission.
+    copy.querySelectorAll('sup[data-type="footnote_reference"]').forEach(extra => extra.remove());
+    copy.querySelectorAll<HTMLElement>('span[data-type="html"]').forEach(html => html.replaceWith(htmlAsText(html.dataset.value ?? "")));
     const value = copy.textContent ?? "";
     return code ? value.replace(/\n$/, "") : value.replace(/[\t\n\r ]+/g, " ").replace(/^ /, "");
   };

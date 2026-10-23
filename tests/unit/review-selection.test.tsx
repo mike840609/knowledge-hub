@@ -3,6 +3,7 @@ import { describe, expect, test, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MarkdownRenderer } from "@/components/knowledge/markdown-renderer";
 import { linkLookupKey } from "@/modules/knowledge/domain/link-graph";
+import { parseDocumentHref } from "@/modules/knowledge/domain/document-links";
 import * as projection from "@/modules/knowledge/domain/review-anchor";
 import { validateReviewAnchor } from "@/modules/knowledge/domain/review-anchor";
 import { reviewBlockAnchor, createReviewRangeResolver, focusReviewAnchor, readReviewSelection, reviewAnchorRange, selectedReviewAnchor, selectionAnchorInBlock } from "@/components/knowledge/review-selection";
@@ -54,6 +55,12 @@ function choose(root: HTMLElement, markdown: string, selector: string, text: str
 }
 
 describe("a passage that can take a comment", () => {
+  test("the page marks a footnote's number and an image's label as its own (spec §3c's premise)", () => {
+    const root = page("a note[^1] and ![x](https://e.example/a.png) end\n\n[^1]: The note");
+    expect(root.querySelector("p [data-footnote-ref]")?.textContent).toBe("1");
+    expect(root.querySelector('p [role="img"]')?.textContent).toContain("Image blocked");
+  });
+
   const cases: [name: string, markdown: string, selector: string, text: string, kind: string][] = [
     ["a paragraph", "A 😀 passage", "p", "😀 pass", "paragraph"],
     ["a heading", "## A title here\n\nbody", "h2", "title", "heading"],
@@ -82,6 +89,10 @@ describe("a passage that can take a comment", () => {
     ["a paragraph with a hard line break, before it", "one line  \ntwo lines", "p", "one", "paragraph"],
     ["a paragraph with a hard line break, after it", "one line  \ntwo lines", "p", "two lines", "paragraph"],
     ["a paragraph with a backslash line break", "one line\\\ntwo lines", "p", "two", "paragraph"],
+    ["a paragraph opened by an encoded space", "&#32;text here", "p", "text", "paragraph"],
+    ["a paragraph opened by an encoded tab", "&#9;text here", "p", "text", "paragraph"],
+    ["a paragraph opened by inline code with a space", "` a` text here", "p", "a text", "paragraph"],
+    ["a paragraph opened by a hard line break", "\\\ntext here", "p", "text", "paragraph"],
     ["what a <details> holds", "<details>\n<summary>More</summary>\n\nInside it\n\n</details>", "details p", "Inside", "paragraph"],
     ["a table's heading cell", "| Name | Role |\n|---|---|\n| Ada | Owner |", "th + th", "Role", "tableCell"],
     ["a table's cell", "| Name | Role |\n|---|---|\n| Ada | **Owner** here |", "td + td", "Owner here", "tableCell"],
@@ -89,6 +100,15 @@ describe("a passage that can take a comment", () => {
     ["code over a line break, spaces kept", "```\nif (a) {\n    b();\n}\n```", "pre code", "{\n    b();", "code"],
     ["coloured code, across its tokens", "```js\nconst total = 1;\n```", "pre code", "const total = 1", "code"],
     ["indented code", "para\n\n    indented code\n", "pre code", "indented", "code"],
+    ["a paragraph with a link to another document, across it", "See [the doc](./other.md) now", "p", "the doc now", "paragraph"],
+    ["a paragraph with a blocked image, after it", "Look ![x](https://e.example/a.png) here", "p", "here", "paragraph"],
+    ["a paragraph with a reference image, after it", "Look ![x][img] here\n\n[img]: https://e.example/a.png", "p", "here", "paragraph"],
+    ["a paragraph with an image that loads, after it", "Look ![x](./a.png) here", "p", "here", "paragraph"],
+    ["a paragraph with a <br>, after it", "one<br>two", "p", "two", "paragraph"],
+    ["a paragraph with a comment in it", "one <!-- quiet --> two", "p", "two", "paragraph"],
+    ["a table cell with a line break", "| a |\n|---|\n| one<br>two |", "td", "two", "tableCell"],
+    ["a table cell opened by a <br>", "| a |\n|---|\n| <br>one |", "td", "one", "tableCell"],
+    ["a paragraph with a footnote's number, before it", "Text here[^1] after\n\n[^1]: The note", "p", "Text here", "paragraph"],
   ];
   test.each(cases)("%s", (_name, markdown, selector, text, kind) => {
     const root = page(markdown);
@@ -171,6 +191,22 @@ describe("a passage that can take a comment", () => {
     expect(reviewAnchorRange(root, markdown, anchor)).not.toBeNull();
   });
 
+  test.each([
+    ["one it can follow", { status: "RESOLVED" as const, basePath: "/w/w1/knowledge/s1/d1", title: "Other page", ambiguousWith: 0 }],
+    ["one that leads nowhere", { status: "UNRESOLVED" as const }],
+    ["none given, as on a shared page", undefined],
+  ])("a link to another document, %s, is the same text", (_name, resolution) => {
+    const markdown = "See [the doc](./other.md) now";
+    const links = resolution && { [linkLookupKey("PATH", parseDocumentHref("./other.md")!.target)]: resolution };
+    document.body.innerHTML = `<article>${renderToStaticMarkup(<MarkdownRenderer markdown={markdown} links={links} />)}</article>`;
+    const root = document.querySelector<HTMLElement>("article")!;
+    const paragraph = root.querySelector("p")!;
+    const anchor = selectedReviewAnchor(root, markdown, select(span(paragraph, "doc").from, span(paragraph, "now").to))!;
+    expect(anchor).toMatchObject({ exact: "doc now", startUtf16: 8 });
+    expect(validateReviewAnchor(markdown, anchor)).toEqual(anchor);
+    expect(reviewAnchorRange(root, markdown, anchor)).not.toBeNull();
+  });
+
   test("a selection across a hard line break is one space of the block's text", () => {
     const markdown = "one line  \ntwo lines";
     const root = page(markdown);
@@ -179,6 +215,35 @@ describe("a passage that can take a comment", () => {
     expect(anchor).toMatchObject({ exact: "line two", startUtf16: 4 });
     expect(validateReviewAnchor(markdown, anchor)).toEqual(anchor);
     expect(reviewAnchorRange(root, markdown, anchor)).not.toBeNull();
+  });
+
+  test.each([
+    ["a footnote's number", "Text here[^1] after\n\n[^1]: The note", "here", "after", "here after", 5],
+    ["a blocked image", "Look ![x](https://e.example/a.png) here", "Look", "here", "Look here", 0],
+    ["a reference image", "Look ![x][img] here\n\n[img]: https://e.example/a.png", "Look", "here", "Look here", 0],
+    ["a <br>", "one<br>two", "one", "two", "one two", 0],
+  ])("a selection over %s leaves it out of the quote", (_name, markdown, from, to, exact, startUtf16) => {
+    const root = page(markdown);
+    const paragraph = root.querySelector("p")!;
+    const anchor = selectedReviewAnchor(root, markdown, select(span(paragraph, from).from, span(paragraph, to).to))!;
+    expect(anchor).toMatchObject({ exact, startUtf16 });
+    expect(validateReviewAnchor(markdown, anchor)).toEqual(anchor);
+    expect(reviewAnchorRange(root, markdown, anchor)).not.toBeNull();
+  });
+
+  test("a quote and its context hold no URL, image label, footnote number or comment body", () => {
+    const markdown = "Look ![alt](https://e.example/secret.png) [link](https://e.example/secret) note[^1] <!-- secret --> here\n\n[^1]: The note";
+    const root = page(markdown);
+    const paragraph = root.querySelector("p")!;
+    const anchor = selectedReviewAnchor(root, markdown, select(span(paragraph, "here").from, span(paragraph, "here").to))!;
+    expect(anchor.exact).toBe("here");
+    // No image label, footnote number or comment body, not merely no URL.
+    expect(anchor.prefix).toBe("Look link note ");
+    for (const value of [anchor.prefix, anchor.suffix, anchor.exact]) {
+      expect(value).not.toContain("https");
+      expect(value).not.toContain("alt");
+      expect(value).not.toContain("secret");
+    }
   });
 
   test("a whole code block is selected without the newline the page ends it with", () => {
@@ -192,13 +257,9 @@ describe("a passage that can take a comment", () => {
 
 describe("a passage that cannot", () => {
   const refused: [name: string, markdown: string, selector: string, text: string][] = [
-    ["a paragraph with a link to another document", "See [doc](./other.md) now", "p", "now"],
-    ["a paragraph with an image", "Look ![x](https://e.example/a.png) here", "p", "Look"],
-    ["a paragraph with a <br>", "one<br>two", "p", "one"],
+    ["a reference link", "See [doc][d] now\n\n[d]: ./other.md", "p", "now"],
     ["a paragraph with a drawn HTML tag", "Press <kbd>Ctrl</kbd> now", "p", "Press"],
-    ["a paragraph with a footnote's number", "Text here[^1]\n\n[^1]: The note", "p", "Text"],
     ["a footnote", "Text here[^1]\n\n[^1]: The note", "section li p", "note"],
-    ["a table cell with a line break", "| a |\n|---|\n| one<br>two |", "td", "one"],
   ];
   test.each(refused)("%s — and says so", (_name, markdown, selector, text) => {
     expect(choose(page(markdown), markdown, selector, text)).toEqual({ problem: "unsupported" });
@@ -301,6 +362,16 @@ describe("paragraph comment controls", () => {
     expect([...anchor.exact]).toHaveLength(512);
     expect(anchor.endUtf16).toBe(1024);
     expect(reviewAnchorRange(root, markdown, anchor)?.toString()).toBe(anchor.exact);
+  });
+  test.each([
+    ["a blocked image", "a\\\n![x](https://e.example/a.png)"],
+    ["an image that loads", "a\\\n![x](./a.png)"],
+    ["a footnote reference", "a\\\n[^1]\n\n[^1]: The note"],
+  ])("a hard break followed only by %s keeps its space in the quote (spec §3c)", (_name, markdown) => {
+    const root = page(markdown);
+    const anchor = reviewBlockAnchor(root.querySelector("p")!, markdown)!;
+    expect(anchor).toMatchObject({ blockPath: [0], exact: "a ", startUtf16: 0, endUtf16: 2 });
+    expect(validateReviewAnchor(markdown, anchor)).toEqual(anchor);
   });
   test("refuses a DOM paragraph that differs from the saved revision", () => {
     const root = page("Saved text");

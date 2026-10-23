@@ -15,13 +15,43 @@ describe("canonical review anchors",()=>{
  it("reads a hard line break as the one space a soft one is",()=>{
   expect(projectReviewBlocks("a  \nb")[0]).toMatchObject({text:"a b",selectable:true});
  });
- it("refuses relative links and images for whole block",()=>{for(const markdown of ["safe [doc](./file.md)","safe ![img](https://a/img)"]){expect(projectReviewBlocks(markdown)[0].selectable).toBe(false);}});
+ it("drops the one leading space a block opens with, as the page does",()=>{
+  expect(projectReviewBlocks("&#32;text")[0]).toMatchObject({text:"text",selectable:true});
+  expect(projectReviewBlocks("&#9;text")[0]).toMatchObject({text:"text",selectable:true});
+  expect(projectReviewBlocks("` a` text")[0]).toMatchObject({text:"a text",selectable:true});
+  // A hard break can open a paragraph; its space is dropped like any other leading one.
+  expect(projectReviewBlocks("\\\ntext")[0]).toMatchObject({text:"text",selectable:true});
+ });
+it("reads a link of any URL as its words, an image and a footnote's number as nothing, <br> as a space",()=>{
+ expect(projectReviewBlocks("see [the doc](./file.md) now")[0]).toMatchObject({text:"see the doc now",selectable:true});
+ expect(projectReviewBlocks("see [x](/w/a) and [y](javascript:void0) now")[0]).toMatchObject({text:"see x and y now",selectable:true});
+ expect(projectReviewBlocks("look ![alt](https://a/img) here")[0]).toMatchObject({text:"look here",selectable:true});
+ // A reference image resolves to the same picture the page draws, in all three forms.
+ expect(projectReviewBlocks("look ![alt][img] here\n\n[img]: https://a/img")[0]).toMatchObject({text:"look here",selectable:true});
+ expect(projectReviewBlocks("look ![alt][] here\n\n[alt]: https://a/img")[0]).toMatchObject({text:"look here",selectable:true});
+ expect(projectReviewBlocks("look ![alt] here\n\n[alt]: https://a/img")[0]).toMatchObject({text:"look here",selectable:true});
+ // The page drops the gap a block opens with (`fromStart`); so does this, or a passage after a leading image could never be proved.
+ expect(projectReviewBlocks("[![alt](./a.png)](https://a) after")[0]).toMatchObject({text:"after",selectable:true});
+ expect(projectReviewBlocks("<br>two")[0]).toMatchObject({text:"two",selectable:true});
+ // Nothing to quote: no passage, and no paragraph button that would send an empty one.
+ expect(projectReviewBlocks("![alt](./a.png)")[0]).toMatchObject({text:"",selectable:false});
+ expect(projectReviewBlocks("![alt][img]\n\n[img]: https://a/img")[0]).toMatchObject({text:"",selectable:false});
+ expect(projectReviewBlocks("a note[^1] here\n\n[^1]: The note")[0]).toMatchObject({text:"a note here",selectable:true});
+ expect(projectReviewBlocks("one<br>two")[0]).toMatchObject({text:"one two",selectable:true});
+ expect(projectReviewBlocks("one<br />two")[0]).toMatchObject({text:"one two",selectable:true});
+ expect(projectReviewBlocks("one <!-- note --> two")[0]).toMatchObject({text:"one two",selectable:true});
+});
+it("still refuses a reference link and other HTML, and reads a [^x] with no definition as text",()=>{
+ for(const markdown of ["a [ref][a]\n\n[a]: ./file.md","press <kbd>K</kbd>","a <span>x</span>"]) expect(projectReviewBlocks(markdown)[0].selectable).toBe(false);
+ // A `[^x]` with no definition is text, on the page and here.
+ expect(projectReviewBlocks("a [^missing] b")[0]).toMatchObject({text:"a [^missing] b",selectable:true});
+});
  it("never guesses between repeated quotes",()=>{expect(relocateReviewAnchor("😀 hello\n\n😀 hello",anchor,false)).toEqual({match:"OUTDATED"});});
 });
 it("rejects offset and context forgery including surrogate splits",()=>{
  for(const changed of [{endUtf16:1,exact:"\ud83d",suffix:"\ude00 hello"},{prefix:"forged"},{startUtf16:-1},{blockPath:[999]},{blockKind:"heading" as const}])expect(()=>validateReviewAnchor("😀 hello",{...anchor,...changed})).toThrow();
 });
-it("normalizes whitespace deterministically and refuses complex/hard-break blocks",()=>{
+it("normalizes whitespace deterministically and refuses other HTML and reference links",()=>{
  expect(projectReviewBlocks("a\r\nb **c** `d`")[0].text).toBe("a b c d");
  for(const markdown of ["a <span>x</span>","a [ref][a]\n\n[a]: ./file.md"]){expect(projectReviewBlocks(markdown)[0].selectable).toBe(false);}
 });
@@ -66,8 +96,13 @@ describe("a passage in a table cell or a code block",()=>{
   expect(cells.map(block=>[block.path,block.text,block.selectable])).toEqual([[[0,0,0],"Name",true],[[0,0,1],"Role",true],[[0,1,0],"Ada",true],[[0,1,1],"Owner here",true]]);
   expect(validateReviewAnchor(table,cell)).toEqual(cell);
  });
- it("a cell that holds what a paragraph may not is refused as the paragraph would be",()=>{
-  for(const markdown of ["| a |\n|---|\n| one<br>two |","| a |\n|---|\n| ![x](https://a/img) |"]) expect(projectReviewBlocks(markdown).filter(block=>block.kind==="tableCell").at(-1)!.selectable).toBe(false);
+ it("a cell with <br> or an image is read as a paragraph would be",()=>{
+  expect(projectReviewBlocks("| a |\n|---|\n| one<br>two |").filter(block=>block.kind==="tableCell").at(-1)).toMatchObject({text:"one two",selectable:true});
+  expect(projectReviewBlocks("| a |\n|---|\n| ![x](https://a/img) cap |").filter(block=>block.kind==="tableCell").at(-1)).toMatchObject({text:"cap",selectable:true});
+  expect(projectReviewBlocks("| a |\n|---|\n| ![x][img] cap |\n\n[img]: https://a/img").filter(block=>block.kind==="tableCell").at(-1)).toMatchObject({text:"cap",selectable:true});
+ });
+ it("a cell with HTML the reader draws as an element is refused as the paragraph would be",()=>{
+  expect(projectReviewBlocks("| a |\n|---|\n| <kbd>K</kbd> |").filter(block=>block.kind==="tableCell").at(-1)!.selectable).toBe(false);
  });
  it("code is read as it was written: its line breaks and its spaces are its text",()=>{
   expect(projectReviewBlocks(fenced)[0]).toMatchObject({kind:"code",text:"if (a) {\n    b();\n}",selectable:true});
