@@ -27,7 +27,7 @@ import type { ManagedShareLink, ShareManagementQuery, ShareManagementStatus } fr
 const labels: Record<ShareManagementStatus, string> = { active: "Active", expired: "Expired", revoked: "Revoked", unavailable: "Unavailable" };
 type UnreadShareCount = { documentId: string; unreadCount: number; latestThreadId: string };
 export type ShareManagementModel = { query: ShareManagementQuery; items: ManagedShareLink[]; hasNext: boolean };
-export function ShareManagementView({ workspaceId, model, filterError, hasDocuments = true }: { workspaceId: string; model: ShareManagementModel; filterError?: string; hasDocuments?: boolean }) {
+export function ShareManagementView({ workspaceId, model, filterError, hasDocuments = true, discussionsUnread = 0 }: { workspaceId: string; model: ShareManagementModel; filterError?: string; hasDocuments?: boolean; discussionsUnread?: number }) {
   const router = useRouter(), toast = useToast();
   const [origin, setOrigin] = useState("");
   const [status, setStatus] = useState<string>(model.query.status);
@@ -95,7 +95,7 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
   }
   return <main className="kh-page pb-6">
     <PageHeader location="My Space" locationHref={`/w/${workspaceId}/home`} title="Shares" description="Manage links to your documents. Anyone holding an active link can read its latest saved content without signing in." />
-    <SharesNavigation workspaceId={workspaceId} active="mine" />
+    <SharesNavigation workspaceId={workspaceId} active="mine" discussionsUnread={discussionsUnread} />
     <form action={`/w/${workspaceId}/shares`} method="get" className="mt-4 flex flex-wrap items-center gap-2" aria-label="Filter shares">
       <div className="relative min-w-0 basis-full sm:flex-1 sm:basis-auto">
         <label htmlFor="shares-query" className="sr-only">Find shares</label>
