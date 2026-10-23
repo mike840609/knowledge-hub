@@ -466,7 +466,7 @@ it("a filter error is shown in place of the list and its empty state",async()=>{
 
 Run: `npx vitest run --config vitest.config.ts tests/unit/followed-discussions-view.test.tsx`
 
-If `SelectMenu` does not put `data-value` on the element with its `id`, read `src/components/ui/select-menu.tsx` and assert the hidden `input[name="status"]` value instead.
+`SelectMenu` puts `id` and `data-value` on its trigger (`src/components/ui/select-menu.tsx`), so this assertion is exact.
 
 - [ ] **Step 3: Navigation** — `src/components/knowledge/shares-navigation.tsx`
 
@@ -575,13 +575,17 @@ import { FollowedDiscussionsView } from "@/components/knowledge/followed-discuss
 import { filterFollowedDiscussions, parseDiscussionFilter } from "@/modules/knowledge/domain/review-follow";
 ```
 
-Before the `try` (after `input` is built), so a filter error still shows the count:
+Before the `try`, declare `let discussionsUnread = 0;`. As the first statements inside the existing `try`, load the follows and assign the count. This keeps a filter error showing the count and leaves errors from the load inside the page's existing `catch` (so a followed document whose Workspace is gone still reaches `notFound()`, as the other tabs do):
 
 ```ts
-  // ponytail: the tab's unread count reloads every follow per Shares visit, as the Inbox badge does; a count query if it shows.
-  const followed=(await s.reviews.listFollowedDiscussions(caller)).items;
-  const discussionsUnread=followed.filter(item=>item.linkAvailable&&item.unread>0).length;
+  let discussionsUnread = 0;
+  try {
+    // ponytail: the tab's unread count reloads every follow per Shares visit, as the Inbox badge does; a count query if it shows.
+    const followed=(await s.reviews.listFollowedDiscussions(caller)).items;
+    discussionsUnread=followed.filter(item=>item.linkAvailable&&item.unread>0).length;
 ```
+
+The existing tab guards and branches stay inside this `try`; the `catch` can read `discussionsUnread`.
 
 Change the tab guard to `if(tab!=="mine"&&tab!=="saved"&&tab!=="discussions")` and its message to `"Choose My shares, Saved shares or Discussions."`. Add before the `saved` branch:
 
