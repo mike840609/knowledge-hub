@@ -1,9 +1,11 @@
 # The outline is always right of the article
 
 Supersedes the outline's placement in the owner-comments-rail spec's 2026-10-21
-amendment ("the outline stays where the pane holds all three") and in the
-share-page-outline spec §2 and §6. Amends the frontend design language's
-description of the owner's reader. Everything else in those documents stands.
+amendment ("the outline stays where the pane holds all three"), its base
+placement rule and Tests paragraph ("the rail takes the outline's place"), and
+the share-page-outline spec §2, §4 and §6. Amends the frontend design
+language's description of the owner's reader. Everything else in those
+documents stands.
 
 ## Why
 

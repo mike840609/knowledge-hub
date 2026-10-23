@@ -61,18 +61,22 @@ The first version left two things out; both are now done.
 
 ## 4. Acceptance
 
+> **Rewritten (2026-10-23)** by `2026-10-23-outline-right-of-article-design.md`: the rail is right of
+> the article, and right of the comments rail while they are open. The old 1366/1408 fold below is
+> gone.
+
 E2E (`zz-share-outline.spec.ts`), desktop:
 
-- A shared document with headings shows the rail beside the article at 1440px, left of it,
-  not overlapping it; clicking an entry moves the page to that heading and the address to `#slug`.
+- A shared document with headings shows the rail right of the article at 1440px, on screen and not
+  overlapping it; clicking an entry moves the page to that heading and the address to `#slug`.
 - The first entry is current on arrival. After a click the clicked entry is current, the
   heading is in view below the Comments bar, and no history entry was added.
 - Scrolling the window makes the heading at the reading line current; at the bottom of the
   page the last entry is. The disclosure follows the same way.
 - At 1280px the rail is hidden and the disclosure lists the same entries, in a box no wider
   than the text (reader-measure spec §1).
-- Opening Comments at 1366px hides the rail and shows the disclosure; at 1408px and 1440px
-  the rail stays, left of the article and on screen, and the disclosure stays hidden (§6).
+- Opening Comments at 1440px keeps the rail right of the comments rail and on screen, and the
+  disclosure hidden; at 1680px it leaves the article's left edge unchanged.
 - A document with fewer than two headings shows neither.
 
 ## 5. Amendment (2026-10-21): two lines per entry

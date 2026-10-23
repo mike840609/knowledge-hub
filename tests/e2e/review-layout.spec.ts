@@ -214,14 +214,15 @@ test("wide screens default to centered reading and open a 320px rail on demand",
   const railBox = (await rail.boundingBox())!;
   const articleBox = (await article.boundingBox())!;
   expect(railBox.width).toBe(320);
-  // Opening the rail keeps the article's left edge; the article narrows from the right, never past
-  // its measure plus padding (640 + 48 = 688px) and never wider than it was, rather than the column
-  // sliding (outline-right-of-article spec). This document has no headings, so no outline takes room.
+  // Opening the rail keeps the article's left edge; the article narrows from the right, never
+  // narrower than its measure plus padding (640 + 48 = 688px) and never wider than it was, rather
+  // than the column sliding (outline-right-of-article spec). This document has no headings, so no
+  // outline takes room.
   expect(articleBox.x).toBeCloseTo(initialBox.x, 0);
   expect(articleBox.width).toBeGreaterThanOrEqual(688);
   expect(articleBox.width).toBeLessThanOrEqual(initialBox.width);
   expect(railBox.x).toBeGreaterThanOrEqual(articleBox.x + articleBox.width - 1);
-  expect(railBox.x + railBox.width).toBeLessThanOrEqual(1440);
+  expect(railBox.x + railBox.width).toBeLessThanOrEqual(page.viewportSize()!.width);
   await page.getByRole("button", { name: "Collapse discussions" }).click();
   await expect(rail).toBeHidden();
   await expect(page.getByRole("button", { name: "Open discussions" })).toBeFocused();

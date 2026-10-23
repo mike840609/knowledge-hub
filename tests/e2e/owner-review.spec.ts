@@ -223,6 +223,56 @@ test("where the pane cannot hold all three, the outline folds above the article 
   expect(await pane.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
 });
 
+test("a pane just past 77rem keeps the outline right of the open discussions, and the column slides at most 74px", async ({ page, request }) => {
+  const doc = await documentWithDiscussion(request);
+  // 1712px less the navigation and the explorer (466px) leaves a pane just past 77rem (1232px) and
+  // under 1380px, where the column still slides. A threshold at 88rem would fold the outline here.
+  await page.setViewportSize({ width: 1712, height: 900 });
+  await page.goto(doc.href);
+  const pane = page.getByRole("region", { name: "Document content" });
+  const paneWidth = await pane.evaluate((element) => element.clientWidth);
+  expect(paneWidth).toBeGreaterThanOrEqual(1232);
+  expect(paneWidth).toBeLessThan(1380);
+  const rail = page.getByRole("complementary", { name: "Document discussions" });
+  const outlineRail = page.getByRole("complementary", { name: "On this page" });
+  const article = page.locator("[data-review-document]");
+  // The owner has an unanswered remark, so the rail opened on arrival.
+  await expect(rail).toBeVisible();
+  await expect(outlineRail).toBeVisible();
+  await expect(page.locator(".kh-outline-inline")).toBeHidden();
+  // Article, discussions, outline, once the column's 120ms slide has settled.
+  const inOrder = async () => {
+    const [paneBox, articleBox, railBox, outlineBox] = [await pane.boundingBox(), await article.boundingBox(), await rail.boundingBox(), await outlineRail.boundingBox()];
+    if (!paneBox || !articleBox || !railBox || !outlineBox) return false;
+    return railBox.x >= articleBox.x + articleBox.width - 1
+      && outlineBox.x >= railBox.x + railBox.width - 1
+      && outlineBox.x + outlineBox.width <= paneBox.x + paneBox.width + 1;
+  };
+  await expect.poll(inOrder).toBe(true);
+  // 640px of measure less the 32px the marks keep: the prose kept its measure at the floor.
+  expect((await article.locator("p").first().boundingBox())!.width).toBeGreaterThanOrEqual(608);
+
+  const articleX = async () => Math.round((await article.boundingBox())!.x);
+  await page.waitForTimeout(250);
+  const open = await articleX();
+  await page.getByRole("button", { name: "Collapse discussions" }).click();
+  await expect(rail).toBeHidden();
+  await expect(outlineRail).toBeVisible();
+  await page.waitForTimeout(250);
+  const closed = await articleX();
+  await page.getByRole("button", { name: /^Open discussions/ }).click();
+  await expect(rail).toBeVisible();
+  await expect.poll(inOrder).toBe(true);
+  await page.waitForTimeout(250);
+  const reopened = await articleX();
+  // Between 77rem and 1380px the column slides left no more than the 74px that keeps the article at
+  // 688px; the same opening lands in the same place twice.
+  expect(closed - reopened).toBeGreaterThanOrEqual(0);
+  expect(closed - reopened).toBeLessThanOrEqual(74);
+  expect(reopened).toBe(open);
+  expect(await pane.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+});
+
 test("the discussions arriving do not move the article", async ({ page, request }) => {
   const doc = await documentWithDiscussion(request);
   await page.setViewportSize({ width: 1280, height: 800 });

@@ -1,5 +1,14 @@
 # The owner's discussions, beside the article
 
+> **Amendment (2026-10-23):** the outline is now always right of the article
+> (`2026-10-23-outline-right-of-article-design.md`). Below a `77rem` pane the
+> rail takes the outline's place and the outline is the disclosure above the
+> article; from `77rem` the outline keeps its rail, right of the open
+> discussions. This supersedes the base "the rail takes the outline's place"
+> rule below, the workspace-layout bullets and the Tests paragraph wherever they
+> say the outline gives up its rail. The rest of this document — the rail, its
+> cards, the drawer, the header entry and the order of the controls — stands.
+
 ## Intent and agreed product direction
 
 A reader of a shared page sees discussions the way Google Docs shows them: a
@@ -13,6 +22,9 @@ Agreed with the user on 2026-10-12:
   passages**, as on the shared page.
 - **The rail takes the outline's place.** While it is open the outline is shown
   above the article, as it already is in a narrow pane.
+  *(Superseded 2026-10-23 from `77rem`: there the outline keeps its rail right
+  of the discussions. Below `77rem` this rule still stands — see the amendment
+  at the top.)*
 - **Collapsed by default** — amended the same day, below: open on arrival where
   a discussion awaits the owner.
 
@@ -87,10 +99,12 @@ closing.
 
 **Opening** — the entry, a mark, or a highlighted passage. Where the document
 pane is at least 60rem wide, the rail (320px) appears to the right of the
-article and the outline moves above it. Cards are in document order, level with
-their passages where the cards above leave room, the selected one first; an
-unselected card is a preview and opens on activation. Escape, the entry, or the
-rail's collapse button closes it and puts the outline back.
+article and the outline moves above it. *(2026-10-23: from a `77rem` pane the
+outline keeps its rail right of the discussions; only below that does it move
+above the article.)* Cards are in document order, level with their passages
+where the cards above leave room, the selected one first; an unselected card is
+a preview and opens on activation. Escape, the entry, or the rail's collapse
+button closes it and puts the outline back.
 
 **Where the pane is narrower**, the same discussions open in the drawer the
 shared page uses, over the article.
@@ -195,7 +209,9 @@ Open and inline:
 - every `.kh-reading-column` in the pane takes the wider measure (reading +
   320px), so the title, the outline disclosure and the article keep one left
   edge;
-- the outline rail is hidden and the outline disclosure shown;
+- below a `77rem` pane, the outline rail is hidden and the outline disclosure
+  shown; from `77rem` the outline keeps its rail right of the discussions
+  *(amended 2026-10-23; see the amendment at the top)*;
 - what follows the article in its column (backlinks) stays the article's width.
 
 The article is given the 32px right margin the marks need only when it has a
@@ -225,6 +241,13 @@ workspace does too.
   screen the header is not pinned; the marks on the passages are the way in.
 
 ## Tests
+
+> **Amended (2026-10-23):** read "the rail beside the article and level with
+> its passage, in the outline's place, and the outline back on collapse" as:
+> the rail sits between the article and the outline from a `77rem` pane, and
+> the outline keeps its rail right of the discussions; below `77rem` the rail
+> takes the outline's place and the outline is the disclosure. See the
+> amendment at the top.
 
 `tests/unit/review-auto-open.test.ts`: when the rail opens by itself — awaiting,
 resolved, hidden, closed-on, and a discussion arriving after a closing.

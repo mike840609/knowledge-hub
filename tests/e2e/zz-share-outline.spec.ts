@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "./fixtures/test";
 import { personalWorkspaceId } from "./fixtures/my-space";
 
-// share-page-outline spec §4.
+// share-page-outline spec §4, as rewritten by the outline-right-of-article spec.
 const LONG = ["# Guide", "", "Intro.", "", "## Install", "", ...Array(40).fill("Step text.\n"), "## Configure", "", ...Array(40).fill("More text.\n"), "### Advanced", "", "End."].join("\n");
 
 async function shareOf(page: Page, markdown: string) {
@@ -91,6 +91,8 @@ test("share outline: a disclosure on a narrower window, and while comments are o
   await expect(page.getByRole("complementary", { name: "Document discussions" })).toBeVisible();
   await expect(rail(page)).toBeHidden();
   await expect(disclosure(page)).toBeVisible();
+  // With no outline rail to reserve, the document is capped by the start margin: it does not run off.
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
 test("share outline: from 82rem the article, the comments and the outline stand side by side", async ({ page }) => {
