@@ -45,3 +45,13 @@ Final gate outcomes are recorded below after completion.
 - `git diff --check`: passed.
 
 The complete E2E suite was not run; the selected explorer/organizer scenarios were run. Tests verify behavior, not a full visual redesign, and this change does not introduce one.
+
+## CI follow-up: background metadata updates during navigation
+
+CI run 40055546493 failed only the heading-link case in E2E shard 3; the aggregate E2E job consequently failed too. Its trace shows the correct target href and a successful target RSC response while the browser remained on the original document, with sidebar-shortcut responses arriving during navigation. The other three shards, build, unit and integration jobs passed.
+
+`useSidebarShortcuts` published background results as urgent React state updates, unlike the existing document-shortcut and workspace-authorization hooks which explicitly transition such updates to avoid interrupting App Router navigation. Success, failure and empty-result publication now use `startTransition`; explicit retry remains an ordinary user action.
+
+A unit regression holds transitions and verifies that both successful and failed metadata responses remain deferred (both cases failed before the change and passed after). The original heading-link test is unchanged. An additional browser test holds destination navigation and releases shortcut metadata while it is pending, then verifies the target URL including the heading fragment and heading visibility. That browser scenario passed on the old code as well; it adds coverage but does not deterministically reproduce the CI failure. A diagnostic run waiting for the settled editor also passed, ruling out the initial hypothesis that an ordinary wikilink click in that editor is supposed not to navigate.
+
+The full reading-link run also exposed a hover test starting on the stand-in immediately before editor takeover removed its tooltip. That hover-only case now waits for the visible editor before pointing; press-across-takeover cases remain intact. Afterward, `npm run test:e2e -- reading-links.spec.ts --repeat-each=3` passed all **36** cases, including the unchanged original heading-navigation assertion. Production build passed. Full unit suite passed **253 files / 3,155 tests**; typecheck and lint passed. GitHub CI is verified separately on the pushed fix commit.
