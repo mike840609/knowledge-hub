@@ -1,18 +1,19 @@
 import { NextResponse, type NextRequest } from "next/server";
+import type { NextAuthRequest } from "next-auth";
 import { contentSecurityPolicy, NONCE_HEADER } from "@/lib/content-security-policy";
+import { googleGate } from "@/lib/auth-paths";
 import { isSitePasswordExempt, verifySitePassword } from "@/lib/site-password";
 
+type GoogleAuthMiddleware = (
+  handler: (request: NextAuthRequest) => Response | Promise<Response>,
+) => (request: NextRequest) => Promise<Response>;
+
 /**
- * Two concerns, in order:
- *
- * 1. An optional site password (`KM_SITE_PASSWORD`). It is deliberately not a
- *    sign-in system: the identity is still the server-configured local user.
- *    It only stops "anyone with the URL is the operator". Share links and the
- *    token-gated review API stay public; every other page and API needs it.
- * 2. A per-response Content-Security-Policy nonce for pages. API answers are
- *    not documents; they keep the static policy from next.config.ts.
+ * The policy that applies to every deployment: the optional site password and
+ * the per-response CSP. Google is an additive gate in `middleware`; when it is
+ * not selected this function behaves exactly as before.
  */
-export async function middleware(request: NextRequest) {
+async function applyLegacyPolicy(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
   const password = process.env.KM_SITE_PASSWORD;
   if (password && !isSitePasswordExempt(pathname)) {
@@ -37,6 +38,28 @@ export async function middleware(request: NextRequest) {
   const response = NextResponse.next({ request: { headers } });
   response.headers.set("Content-Security-Policy", policy);
   return response;
+}
+
+export async function middleware(request: NextRequest): Promise<Response> {
+  if (process.env.KM_IDENTITY_PROVIDER !== "google") return applyLegacyPolicy(request);
+
+  const { googleAuth } = await import("@/auth.edge");
+  const authMiddleware = googleAuth as unknown as GoogleAuthMiddleware;
+  return authMiddleware((req) => {
+    const decision = googleGate({
+      pathname: req.nextUrl.pathname,
+      search: req.nextUrl.search,
+      hasSession: Boolean(req.auth),
+    });
+    if (decision.kind === "allow") return applyLegacyPolicy(req);
+    if (decision.kind === "unauthorized") {
+      return NextResponse.json(
+        { error: { code: "AUTH_REQUIRED", message: "Sign in required." } },
+        { status: 401, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+    return NextResponse.redirect(new URL(decision.location, req.url));
+  })(request);
 }
 
 export const config = {
