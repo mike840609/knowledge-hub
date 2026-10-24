@@ -67,3 +67,6 @@ work/
 .impeccable/
 .playwright-mcp/
 docs/ui-comparisons/
+
+# local database dumps (may contain production data)
+*.sql

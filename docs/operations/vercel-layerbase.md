@@ -105,13 +105,15 @@ is at the same migration level as the commit you are deploying: the dump carries
 ```sh
 docker compose up -d --wait
 docker compose exec -T mariadb mysqldump -uroot -phcm_km_root \
-  --single-transaction --routines --triggers hcm_km_dev > km-local.sql
+  --single-transaction --routines --triggers hcm_km_dev > "${TMPDIR:-/tmp}/km-local.sql"
 
-mysql --ssl-mode=REQUIRED -h <host> -P <port> -u <user> -p <database> < km-local.sql
+mysql --ssl-mode=REQUIRED -h <host> -P <port> -u <user> -p <database> < "${TMPDIR:-/tmp}/km-local.sql"
 ```
 
-Do not run `db:seed` after a dump. Keep the same `KM_LOCAL_*` identity values in Vercel, or the
-stored workspace membership will point at a different user.
+Keep the dump outside the repository: it contains the whole local knowledge base, and
+`.vercelignore`/`.gitignore` now exclude `*.sql` as a second line of defence. Do not run
+`db:seed` after a dump. Keep the same `KM_LOCAL_*` identity values in Vercel, or the stored
+workspace membership will point at a different user.
 
 ## 6. Deploy
 

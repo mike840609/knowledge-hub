@@ -50,3 +50,13 @@ describe("vercel.json", () => {
     });
   });
 });
+
+describe("upload exclusions", () => {
+  it("keeps credentials and database dumps out of Vercel uploads and git", () => {
+    const vercelIgnore = readFileSync(".vercelignore", "utf8").split(/\r?\n/);
+    for (const pattern of [".env", ".env.*", "*.sql"]) {
+      expect(vercelIgnore).toContain(pattern);
+    }
+    expect(readFileSync(".gitignore", "utf8").split(/\r?\n/)).toContain("*.sql");
+  });
+});

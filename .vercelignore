@@ -12,3 +12,4 @@ work
 .vercel
 .env
 .env.*
+*.sql
