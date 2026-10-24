@@ -342,7 +342,7 @@ it("loads a batch of revisions by id and none for an empty batch", async () => {
   await expect(uow.run((r) => r.revisions.findByIds([]))).resolves.toEqual([]);
 });
 
-it("keeps run-detail hrefs and diffs for before-only, after-only, and both-present changes", async () => {
+it("keeps run-detail hrefs, diffs, and unavailability across before/after combinations", async () => {
   const fixture = await seedRevisionBatchFixture();
   const runId = uuidv7();
   const now = new Date("2026-09-02T00:05:00Z");
