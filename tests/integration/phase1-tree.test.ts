@@ -269,6 +269,85 @@ describe("hub tree move", () => {
   });
 });
 
+/**
+ * Seed a source with root and nested nodes whose sibling positions collide.
+ *
+ * Nodes are created through the hub service so document/revision foreign keys
+ * stay valid, then their positions are overwritten with `updatePosition` to
+ * force ties; the ids are the deterministic tie-break under test.
+ */
+async function seedOrderingFixture() {
+  const fixture = await setupTreeFixture();
+  const service = hub();
+  const caller = callerFromIdentity(owner);
+  const rootFolder = await service.createFolder(caller, { sourceId: fixture.sourceId, parentId: null, name: "Root A" });
+  const rootDocument = await service.createDocument(caller, {
+    sourceId: fixture.sourceId, parentId: null, title: "Root Doc", markdown: "body", metadata: {},
+  });
+  const nestedFolder = await service.createFolder(caller, { sourceId: fixture.sourceId, parentId: fixture.rootFolderId, name: "Nested" });
+  const nestedDocument = await service.createDocument(caller, {
+    sourceId: fixture.sourceId, parentId: fixture.rootFolderId, title: "Nested Doc", markdown: "body", metadata: {},
+  });
+  await new MariaDbUnitOfWork(pool).run(async (repositories) => {
+    await repositories.tree.updatePosition(fixture.rootFolderId, 1, owner.id);
+    await repositories.tree.updatePosition(rootFolder.treeNodeId, 1, owner.id);
+    await repositories.tree.updatePosition(rootDocument.treeNodeId, 0, owner.id);
+    await repositories.tree.updatePosition(nestedFolder.treeNodeId, 0, owner.id);
+    await repositories.tree.updatePosition(nestedDocument.treeNodeId, 0, owner.id);
+  });
+  return {
+    sourceId: fixture.sourceId,
+    rootFolderId: fixture.rootFolderId,
+    rootFolderNodeId: rootFolder.treeNodeId,
+    rootDocumentNodeId: rootDocument.treeNodeId,
+    nestedFolderNodeId: nestedFolder.treeNodeId,
+    nestedDocumentNodeId: nestedDocument.treeNodeId,
+  };
+}
+
+describe("tree list ordering", () => {
+  it("lists roots first, then by position, then by id", async () => {
+    const seeded = await seedOrderingFixture();
+    const byId = (left: string, right: string) => (left < right ? -1 : left > right ? 1 : 0);
+    // Position ties leave id as the only ordering key, so sort the tied
+    // groups explicitly instead of assuming creation order.
+    const tiedRootIds = [seeded.rootFolderId, seeded.rootFolderNodeId].sort(byId);
+    const tiedNestedIds = [seeded.nestedFolderNodeId, seeded.nestedDocumentNodeId].sort(byId);
+
+    const nodes = await new MariaDbUnitOfWork(pool).run((repositories) => repositories.tree.listBySource(seeded.sourceId));
+
+    expect(nodes.map((node) => node.id)).toEqual([
+      seeded.rootDocumentNodeId,
+      ...tiedRootIds,
+      ...tiedNestedIds,
+    ]);
+    expect(nodes.map((node) => node.parentId)).toEqual([
+      null, null, null, seeded.rootFolderId, seeded.rootFolderId,
+    ]);
+    expect(nodes.map((node) => node.position)).toEqual([0, 1, 1, 0, 0]);
+    expect(tiedRootIds[0]).not.toBe(tiedRootIds[1]);
+    expect(tiedNestedIds[0]).not.toBe(tiedNestedIds[1]);
+  });
+
+  it("orders identically with and without the COALESCE root key", async () => {
+    const seeded = await seedOrderingFixture();
+    // Characterization test: MariaDB sorts NULL first, so the rewritten order
+    // must return the exact same rows as the COALESCE form it replaced.
+    const oldOrder = await pool.query<{ id: string }[]>(
+      `SELECT id FROM knowledge_tree_nodes
+       WHERE source_id = ? ORDER BY COALESCE(parent_id, ''), position, id`,
+      [seeded.sourceId],
+    );
+    const newOrder = await pool.query<{ id: string }[]>(
+      `SELECT id FROM knowledge_tree_nodes
+       WHERE source_id = ? ORDER BY parent_id, position, id`,
+      [seeded.sourceId],
+    );
+    expect(oldOrder).toHaveLength(5);
+    expect(newOrder).toEqual(oldOrder);
+  });
+});
+
 describe("hub tree reorder", () => {
   it("reorders siblings contiguously by position then id", async () => {
     const fixture = await setupTreeFixture();
