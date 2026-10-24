@@ -40,7 +40,9 @@ export async function verifySitePassword(authorization: string | null, password:
   if (!encoded) return false;
   let decoded: string;
   try {
-    decoded = atob(encoded);
+    // atob returns one character per byte; the challenge advertises UTF-8, so
+    // decode those bytes as UTF-8 or a non-ASCII password can never match.
+    decoded = new TextDecoder().decode(Uint8Array.from(atob(encoded), (char) => char.charCodeAt(0)));
   } catch {
     return false;
   }

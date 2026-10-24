@@ -229,6 +229,7 @@ Runtime (Production scope only — preview builds are disabled in §7):
 | `KM_DB_SSL` | `verify` |
 | `KM_DB_POOL_SIZE` | `2` |
 | `KM_IMPORT_MAX_UPLOAD_BATCH_BYTES` | `4194304` |
+| `KM_IMPORT_MAX_MARKDOWN_FILE_BYTES` | `4000000` |
 | `KM_IDENTITY_PROVIDER` | `local` |
 | `KM_LOCAL_IDENTITY_ENABLED` | `true` |
 | `KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION` | `true` |
@@ -256,16 +257,18 @@ long-lived server and has several flows larger than that. Decisions:
 - **Folder-import upload batches**: lower `MAX_BATCH_BYTES` in
   `src/components/imports/folder-import-form.tsx` from 10 MiB to 4 MiB. Batches are multipart
   `FormData`, so 4 MiB of files plus per-part headers stays well under 4.5 MB. The production
-  environment also sets `KM_IMPORT_MAX_UPLOAD_BATCH_BYTES=4194304` so the server contract matches
-  the client. Local defaults are unchanged.
+  environment also sets `KM_IMPORT_MAX_UPLOAD_BATCH_BYTES=4194304` and
+  `KM_IMPORT_MAX_MARKDOWN_FILE_BYTES=4000000`; the server passes the per-file limit to the client,
+  which rejects an oversized Markdown file before creating a session, and a 413 from the platform
+  is surfaced as a readable size error. Local defaults are unchanged.
 - **Import manifest**: the client posts one JSON manifest. With the default 20,000-entry ceiling
   and realistic paths this is normally below 4.5 MB, but pathological paths can exceed it. The
   deployment doc lists lowering `KM_IMPORT_MAX_MANIFEST_ENTRIES` in production as the remedy, with
   no code change.
 - **Exports and very large documents**: `GET /api/workspaces/:workspaceId/export` buffers a ZIP,
   and a rendered document page includes its Markdown. A response above 4.5 MB fails at the platform
-  edge. This is recorded as a known limitation; streaming the export and lowering
-  `KM_IMPORT_MAX_MARKDOWN_FILE_BYTES` for production are future work, not part of this iteration.
+  edge. This is recorded as a known limitation; streaming the export is future work, not part of
+  this iteration.
 
 ### 10. Data bootstrap
 

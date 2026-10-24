@@ -35,7 +35,7 @@ export default async function WorkspaceSourceImportPage({
       <div className="mt-5">
         {model.actions.canImport ? <FolderImportForm
           target={{ kind: "new", workspaceId }}
-          limits={{ maxAssetFileBytes: importLimits.maxAssetFileBytes, maxAssetTotalBytes: importLimits.maxAssetTotalBytes }}
+          limits={{ maxMarkdownFileBytes: importLimits.maxMarkdownFileBytes, maxAssetFileBytes: importLimits.maxAssetFileBytes, maxAssetTotalBytes: importLimits.maxAssetTotalBytes }}
         /> : <p role="status">This workspace is read-only. Import is unavailable.</p>}
       </div>
     </main>

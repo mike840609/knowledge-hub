@@ -4,6 +4,7 @@ const pool = vi.hoisted(() => ({ query: vi.fn() }));
 vi.mock("@/server/composition", () => ({ getDatabasePool: () => pool }));
 
 import { GET } from "@/app/api/health/route";
+import { pingDatabase } from "@/server/database-health";
 
 describe("GET /api/health", () => {
   it("answers ok when SELECT 1 succeeds", async () => {
@@ -20,5 +21,11 @@ describe("GET /api/health", () => {
     const response = await GET();
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ ok: false });
+  });
+});
+
+describe("pingDatabase", () => {
+  it("times out a query that never resolves", async () => {
+    await expect(pingDatabase({ query: () => new Promise(() => {}) }, 10)).rejects.toThrow(/timed out/i);
   });
 });

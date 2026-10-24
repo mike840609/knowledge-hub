@@ -20,6 +20,9 @@ export const SESSION_UTC_SQL = "SET SESSION time_zone = '+00:00'";
 export const SESSION_INIT_SQL: string[] = [SESSION_ISOLATION_SQL, SESSION_UTC_SQL];
 
 export function createDatabasePool(config: DatabaseConfig): Pool {
+  if (config.ssl && config.ssl.rejectUnauthorized === false) {
+    console.warn("KM_DB_SSL=trust disables database certificate verification; use verify unless the endpoint cannot present a valid certificate.");
+  }
   return mariadb.createPool({
     host: config.host,
     port: config.port,

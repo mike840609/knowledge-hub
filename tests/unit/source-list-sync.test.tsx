@@ -25,7 +25,7 @@ beforeEach(() => {
   container=document.createElement("div");document.body.appendChild(container);root=createRoot(container);
 });
 afterEach(async () => {await act(async () => root.unmount());container.remove();vi.unstubAllGlobals();});
-const limits = {maxAssetFileBytes:8,maxAssetTotalBytes:16};
+const limits = {maxMarkdownFileBytes: 5 * 1024 * 1024, maxAssetFileBytes:8,maxAssetTotalBytes:16};
 async function render(items=[source("one"),source("two")]) {await act(async () => root.render(<SourceList workspaceId="ws" items={items} limits={limits} />));}
 it("syncs only the clicked source and opens its preview without nesting the button in the detail link",async () => {
   await render();

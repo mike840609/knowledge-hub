@@ -47,8 +47,9 @@ export const MAX_UPLOAD_BATCH_BYTES = 4 * 1024 * 1024;
 const ASSET_HASH_CONCURRENCY = 4;
 const TRANSIENT_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 
-export type FolderImportClientLimits = Pick<ImportLimits, "maxAssetFileBytes" | "maxAssetTotalBytes">;
+export type FolderImportClientLimits = Pick<ImportLimits, "maxMarkdownFileBytes" | "maxAssetFileBytes" | "maxAssetTotalBytes">;
 const DEFAULT_CLIENT_LIMITS: FolderImportClientLimits = {
+  maxMarkdownFileBytes: DEFAULT_IMPORT_LIMITS.maxMarkdownFileBytes,
   maxAssetFileBytes: DEFAULT_IMPORT_LIMITS.maxAssetFileBytes,
   maxAssetTotalBytes: DEFAULT_IMPORT_LIMITS.maxAssetTotalBytes,
 };
@@ -109,6 +110,9 @@ async function buildManifest(
 
   staged.forEach((entry, index) => {
     if (entry.markdown) {
+      if (entry.file.size > limits.maxMarkdownFileBytes) {
+        throw importLimitError("Markdown file exceeds the configured per-file byte limit.");
+      }
       manifest[index] = { uploadKey: entry.uploadKey, relativePath: entry.relativePath, kind: "MARKDOWN", size: entry.file.size };
       return;
     }
@@ -306,6 +310,9 @@ async function uploadMarkdownBatches(
         async (response) => response,
         assertAllowed,
       );
+      if (response.status === 413) {
+        throw Object.assign(new Error("The upload exceeded the server's 4.5 MB request limit. Split the folder or reduce large files."), { code: "IMPORT_TOO_LARGE" });
+      }
       if (!response.ok) {
         const body = await response.json().catch(() => null);
         if (response.status !== 404) {

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { isSitePasswordExempt, verifySitePassword } from "@/lib/site-password";
-import { middleware } from "@/middleware";
+import { config, middleware } from "@/middleware";
 
 const basic = (value: string) => `Basic ${btoa(value)}`;
 
@@ -31,6 +31,10 @@ describe("verifySitePassword", () => {
   it("handles a password containing a colon", async () => {
     expect(await verifySitePassword(basic("owner:a:b"), "a:b")).toBe(true);
   });
+  it("accepts a UTF-8 password, as the challenge advertises", async () => {
+    const encoded = btoa(String.fromCharCode(...new TextEncoder().encode("owner:päss")));
+    expect(await verifySitePassword(`Basic ${encoded}`, "päss")).toBe(true);
+  });
 });
 
 describe("middleware", () => {
@@ -59,5 +63,25 @@ describe("middleware", () => {
     vi.stubEnv("KM_SITE_PASSWORD", "");
     const response = await middleware(new NextRequest("https://km.example.com/api/documents/x"));
     expect(response.status).toBe(200);
+  });
+
+  it("lets share pages and the share-review API through without credentials", async () => {
+    vi.stubEnv("KM_SITE_PASSWORD", "s3cret");
+    for (const url of ["https://km.example.com/s/abc", "https://km.example.com/api/share-review/threads/query"]) {
+      const response = await middleware(new NextRequest(url));
+      expect(response.status).toBe(200);
+    }
+  });
+});
+
+describe("middleware matcher", () => {
+  const pattern = new RegExp(`^${config.matcher[0]}$`);
+
+  it.each(["/api/documents/x", "/api/health", "/api/share-review/threads/query", "/w/ws/home", "/s/abc"])("covers %s", (path) => {
+    expect(pattern.test(path)).toBe(true);
+  });
+
+  it.each(["/_next/static/x.js", "/_next/image", "/icon.svg", "/icons/a.svg"])("skips %s", (path) => {
+    expect(pattern.test(path)).toBe(false);
   });
 });

@@ -32,7 +32,9 @@ async function readSession(connection: PoolConnection): Promise<{ version: strin
  * the direct URL instead. The deployment runbook carries the same rule.
  */
 async function main(): Promise<void> {
-  const pool = createDatabasePool(databaseConfig("dev"));
+  // Two connections so the probe can open a second one while the first is held;
+  // otherwise the pool hands back the same socket and "fresh" proves nothing.
+  const pool = createDatabasePool({ ...databaseConfig("dev"), connectionLimit: 2 });
   const checks: Check[] = [];
   let connection: PoolConnection | undefined;
   try {
@@ -41,6 +43,11 @@ async function main(): Promise<void> {
     record(checks, "server version", Boolean(first?.version), first?.version);
     record(checks, "session isolation", first?.isolation === "READ-COMMITTED", first?.isolation);
     record(checks, "session time zone", first?.tz === "+00:00", first?.tz);
+
+    await connection.beginTransaction();
+    const during = await readSession(connection);
+    await connection.commit();
+    record(checks, "isolation inside a transaction", during?.isolation === "READ-COMMITTED", during?.isolation);
 
     const lock = await connection.query<{ acquired: unknown }[]>("SELECT GET_LOCK('km_probe', 2) AS acquired");
     record(checks, "GET_LOCK acquired", Number(lock[0]?.acquired) === 1, lock[0]?.acquired);
@@ -58,17 +65,21 @@ async function main(): Promise<void> {
     const released = await connection.query<{ released: unknown }[]>("SELECT RELEASE_LOCK('km_probe') AS released");
     record(checks, "RELEASE_LOCK", Number(released[0]?.released) === 1, released[0]?.released);
 
-    connection.release();
-    connection = undefined;
+    const afterLock = await readSession(connection);
+    record(checks, "isolation after lock round-trip", afterLock?.isolation === "READ-COMMITTED", afterLock?.isolation);
 
+    // Held while acquiring: the pool must open a separate physical connection.
     const fresh = await pool.getConnection();
     try {
       const second = await readSession(fresh);
-      record(checks, "fresh connection isolation", second?.isolation === "READ-COMMITTED", second?.isolation);
-      record(checks, "fresh connection time zone", second?.tz === "+00:00", second?.tz);
+      record(checks, "new connection isolation", second?.isolation === "READ-COMMITTED", second?.isolation);
+      record(checks, "new connection time zone", second?.tz === "+00:00", second?.tz);
     } finally {
       fresh.release();
     }
+
+    connection.release();
+    connection = undefined;
   } catch (error) {
     record(checks, "connection", false, error instanceof Error ? error.message : String(error));
   } finally {
