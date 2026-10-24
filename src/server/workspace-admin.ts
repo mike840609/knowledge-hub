@@ -111,9 +111,11 @@ export class WorkspaceAdminService {
       const options = grantOptions(actions).newMemberAssignableRoles;
       const owners = await repositories.workspaceMemberships.countDirectOwners(workspaceId);
       const mappings = await repositories.groupMappings.listByWorkspace(workspaceId);
+      const memberships = await repositories.workspaceMemberships.listByWorkspace(workspaceId);
+      const users = new Map((await repositories.users.findByIds(memberships.map(member => member.userId))).map(user => [user.id, user]));
       const result: MemberAdminView[] = [];
-      for (const member of await repositories.workspaceMemberships.listByWorkspace(workspaceId)) {
-        const user = await repositories.users.findById(member.userId);
+      for (const member of memberships) {
+        const user = users.get(member.userId);
         if (!user) continue;
         const self = user.id === caller.identity.id;
         const protectedRole = !actions.canManageOwners && (member.role === "OWNER" || member.role === "ADMIN");
@@ -142,13 +144,14 @@ export class WorkspaceAdminService {
       if (!actions.canReadAudit) throw new InsufficientWorkspaceCapabilityError();
       const events = await repositories.auditEvents.listPage(workspaceId, cursor, 51);
       const page = events.slice(0, 50);
+      const actorIds = [...new Set(page.flatMap(event => event.actorUserId ? [event.actorUserId] : []))];
+      const actorNames = new Map((await repositories.users.findByIds(actorIds)).map(user => [user.id, user.name]));
       const items: AuditItem[] = [];
       for (const event of page) {
-        const actor = event.actorUserId ? await repositories.users.findById(event.actorUserId) : null;
         const payload = event.payload && typeof event.payload === "object" ? event.payload as Record<string, unknown> : {};
         const before = Object.fromEntries(Object.entries(payload).filter(([key]) => key.startsWith("before") || key.startsWith("previous")));
         const after = Object.fromEntries(Object.entries(payload).filter(([key]) => !key.startsWith("before") && !key.startsWith("previous")));
-        items.push({ id: event.id, actorName: actor?.name ?? null, eventType: event.eventType, targetType: event.targetType ?? "WORKSPACE", targetId: event.targetId, summary: event.eventType.toLowerCase().replaceAll("_", " "), createdAt: event.createdAt.toISOString(), ...(Object.keys(before).length ? { before } : {}), ...(Object.keys(after).length ? { after } : {}) });
+        items.push({ id: event.id, actorName: event.actorUserId ? actorNames.get(event.actorUserId) ?? null : null, eventType: event.eventType, targetType: event.targetType ?? "WORKSPACE", targetId: event.targetId, summary: event.eventType.toLowerCase().replaceAll("_", " "), createdAt: event.createdAt.toISOString(), ...(Object.keys(before).length ? { before } : {}), ...(Object.keys(after).length ? { after } : {}) });
       }
       return { items, nextCursor: events.length > 50 ? page.at(-1)!.id : null };
     });

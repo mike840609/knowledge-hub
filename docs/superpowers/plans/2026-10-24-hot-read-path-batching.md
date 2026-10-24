@@ -20,7 +20,9 @@
   - Recent hits preserve the browser's ID order and exclude documents `getDocument()` would not show.
   - Run detail keeps before/after pairing and `revisionUnavailable` behavior.
   - Updates keeps run order, per-run `LIMIT 50`, `total/added/updated`, and unread calculation.
-- Use 500-ID chunks and 200 source/version pairs. Never interpolate IDs into SQL.
+- Use 500-ID chunks for by-ID reads, 200 source/version pairs for the snapshot
+  lookup, and 50 per-source probes per latest-run statement. Never interpolate
+  IDs into SQL.
 - Empty input returns `[]` or `new Map()` without a query.
 - Do not add cross-request caching, `FORCE INDEX`, or optimizer hints.
 - Authorization stays at the service boundary: `requireWorkspaceRead`, `requireVisibleDocument`, and workspace membership checks are unchanged.
@@ -38,10 +40,10 @@
 ## File Structure
 
 - `src/modules/sources/ports/sync-run-repository.ts` — two batch run methods.
-- `src/infrastructure/database/mariadb/repositories/sync-runs.ts` — window-function batch SQL.
+- `src/infrastructure/database/mariadb/repositories/sync-runs.ts` — per-source `UNION ALL` probe SQL.
 - `src/modules/sources/ports/import-snapshot-repository.ts` — batch pending-ID method; remove the single-source ID method.
 - `src/infrastructure/database/mariadb/repositories/import-snapshots.ts` — batch pending-ID SQL.
-- `src/server/source-read.ts` — source-list batch wiring, `SOURCE_RUN_LIST_LIMIT = 1`, batched actors, remove redundant `listSources`.
+- `src/server/source-read.ts` — source-list batch wiring, batched actors, remove redundant `listSources` and the dead `SOURCE_RUN_LIST_LIMIT`.
 - `src/modules/knowledge/ports/tree-repository.ts` — `listDocumentsByIds`.
 - `src/infrastructure/database/mariadb/repositories/tree.ts` — batch document summary SQL.
 - `src/modules/knowledge/application/knowledge-query-service.ts` — `listDocumentSummariesByIds`.
@@ -112,7 +114,7 @@ Expected: FAIL with `listLatestBySourceIds is not a function` and `findLatestRea
 
 - [ ] **Step 3: Add the ports and repository SQL**
 
-Implement the three methods with the SQL from the design. Chunk source IDs at 500 and source/version pairs at 200. Use `ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY ... DESC) = 1` for the latest-row methods. Return a `Map` for the snapshot method. Remove the single-source snapshot method.
+Implement the three methods with the SQL from the design. Chunk source IDs at 50 per-source probes (one `ORDER BY ... LIMIT 1` subquery per ID in a `UNION ALL`, not an `IN (...)` window query — `sync_runs` history is unbounded) and source/version pairs at 200. Use `ROW_NUMBER() OVER (PARTITION BY source_id ...)` for the snapshot batch only. Return a `Map` for the snapshot method. Remove the single-source snapshot method.
 
 - [ ] **Step 4: Switch `getSourceListModel()` to the batch methods**
 
@@ -123,7 +125,7 @@ Replace the per-source `Promise.all` with one `unitOfWork.run` that:
 3. calls `findLatestReadyIdsBySourceForCreator` with `{ sourceId, basedOnVersion: source.syncVersion }` pairs for non-HUB sources;
 4. builds maps and returns one item per source with the same fields.
 
-Change `SOURCE_RUN_LIST_LIMIT` to `1`. Keep the existing `listSources`, `workspaceState`, and `canInspectSources` checks.
+Remove the dead `SOURCE_RUN_LIST_LIMIT` export (the old 20-row list read is gone). Keep the existing `listSources`, `workspaceState`, and `canInspectSources` checks.
 
 - [ ] **Step 5: Add the model call-count test**
 
@@ -368,7 +370,7 @@ Keep the existing `listReadingChanges` per-run query; it carries the run's own l
 
 - [ ] **Step 3: Update the page**
 
-In `updates/page.tsx`, replace `getSourceListModel(workspaceId)` with `applicationServices().queries.listSources(caller, workspaceId)` and filter `sourceType === "FOLDER_SYNC"`. Keep the same dropdown labels and values.
+In `updates/page.tsx`, replace `getSourceListModel(workspaceId)` with `applicationServices().queries.listSources(caller, workspaceId, { includeArchived: true })` and filter `sourceType === "FOLDER_SYNC"`. Keep the same dropdown labels and values; archived folders stay in the list because their applied runs still show.
 
 - [ ] **Step 4: Run typecheck and the focused test**
 
@@ -430,7 +432,13 @@ Expected: all pass. Members/audit result behavior is covered by the integration 
 
 - [ ] **Step 6: Query-count evidence**
 
-Capture the unit tests' call-count assertions and, if a production-like environment is available, page p95 and DB QPS for Home, Sources, Updates, the palette, run detail, and members/audit before and after. No EXPLAIN gate is required because no index or access path changed.
+Capture the unit tests' call-count assertions and, for the source-list run
+selection, the `ANALYZE FORMAT=JSON` access-path comparison on a synthetic
+`sync_runs` table (window `IN` shape vs the shipped per-source probes). If a
+production-like environment is available, page p95 and DB QPS for Home,
+Sources, Updates, the palette, run detail, and members/audit before and after.
+No index is added: the probes reuse `(source_id, started_at)` and
+`(source_id, status, completed_at)`.
 
 - [ ] **Step 7: Commit any fixes**
 

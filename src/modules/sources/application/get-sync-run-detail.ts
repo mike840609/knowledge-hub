@@ -50,34 +50,46 @@ export class GetSyncRunDetailService {
       const hasRecordedChanges =
         rows.length > 0 ||
         (await r.syncRunChanges.listByRun(runId, 0, 1)).length > 0;
-      const changes = await Promise.all(
-        rows.slice(0, 50).map(async (c) => {
-          const before = c.beforeRevisionId
-            ? await r.revisions.findById(c.beforeRevisionId)
-            : null;
-          const after = c.afterRevisionId
-            ? await r.revisions.findById(c.afterRevisionId)
-            : null;
-          const selected = after ?? (!c.afterRevisionId ? before : null);
-          const revisionUnavailable = Boolean(
-            (c.beforeRevisionId && !before) ||
-              (c.afterRevisionId && !after) ||
-              (selected && selected.documentId !== c.documentId),
-          );
-          return {
-            ...c,
-            revisionUnavailable,
-            href:
-              selected && !revisionUnavailable
-                ? `/w/${workspaceId}/knowledge/${sourceId}/${c.documentId}?revision=${selected.revisionNo}&includeArchived=true`
-                : null,
-            diff:
-              !revisionUnavailable && c.kind === "DOCUMENT" && (before || after)
-                ? buildImportContentDiff(before, after)
-                : null,
-          };
-        }),
+      const page = rows.slice(0, 50);
+      const revisionIds = [
+        ...new Set(
+          page
+            .flatMap((c) => [c.beforeRevisionId, c.afterRevisionId])
+            .filter((id): id is string => id !== null),
+        ),
+      ];
+      const revisionById = new Map(
+        (await r.revisions.findByIds(revisionIds)).map((revision) => [
+          revision.id,
+          revision,
+        ]),
       );
+      const changes = page.map((c) => {
+        const before = c.beforeRevisionId
+          ? revisionById.get(c.beforeRevisionId) ?? null
+          : null;
+        const after = c.afterRevisionId
+          ? revisionById.get(c.afterRevisionId) ?? null
+          : null;
+        const selected = after ?? (!c.afterRevisionId ? before : null);
+        const revisionUnavailable = Boolean(
+          (c.beforeRevisionId && !before) ||
+            (c.afterRevisionId && !after) ||
+            (selected && selected.documentId !== c.documentId),
+        );
+        return {
+          ...c,
+          revisionUnavailable,
+          href:
+            selected && !revisionUnavailable
+              ? `/w/${workspaceId}/knowledge/${sourceId}/${c.documentId}?revision=${selected.revisionNo}&includeArchived=true`
+              : null,
+          diff:
+            !revisionUnavailable && c.kind === "DOCUMENT" && (before || after)
+              ? buildImportContentDiff(before, after)
+              : null,
+        };
+      });
       return {
         run,
         source,

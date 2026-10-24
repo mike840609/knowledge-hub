@@ -8,10 +8,11 @@ export type RecentDocumentHit = { documentId: string; sourceId: string; title: s
  * each is called now, and where it is.
  *
  * What is remembered lives in the browser and is only a list of IDs, which is not authorization — nor is it
- * to be believed about the document. Each one is asked of the query service, which decides whether this
- * caller may read it: one that is archived, that has since been made unreadable, that belongs to another
- * Workspace, or that never existed is left out, and nothing says which of those it was. The order the
- * caller gave is kept. Someone who is not in the Workspace gets the same refusal as for any other read of it.
+ * to be believed about the document. The whole list is asked of the query service in one batch, which
+ * decides which of them this caller may read: one that is archived, that has since been made unreadable,
+ * that belongs to another Workspace, or that never existed is left out, and nothing says which of those it
+ * was. The order the caller gave is kept. Someone who is not in the Workspace gets the same refusal as for
+ * any other read of it.
  */
 export async function recentDocumentHits(
   services: ReturnType<typeof applicationServices>,
@@ -20,15 +21,15 @@ export async function recentDocumentHits(
   documentIds: readonly string[],
 ): Promise<RecentDocumentHit[]> {
   const sourceNames = new Map((await services.queries.listSources(caller, workspaceId)).map((source) => [source.id, source.name]));
+  if (documentIds.length === 0) return [];
+  const readable = new Map(
+    (await services.queries.listDocumentSummariesByIds(caller, workspaceId, documentIds)).map((summary) => [summary.documentId, summary]),
+  );
   const hits: RecentDocumentHit[] = [];
   for (const documentId of documentIds) {
-    try {
-      const view = await services.queries.getDocument(caller, documentId, {});
-      if (view.workspaceId !== workspaceId) continue;
-      hits.push({ documentId: view.documentId, sourceId: view.sourceId, title: view.currentRevision.title, sourceName: sourceNames.get(view.sourceId) ?? "" });
-    } catch {
-      // Not readable by this caller, or not active: not offered.
-    }
+    const summary = readable.get(documentId);
+    if (!summary) continue;
+    hits.push({ documentId: summary.documentId, sourceId: summary.sourceId, title: summary.title, sourceName: sourceNames.get(summary.sourceId) ?? "" });
   }
   return hits;
 }

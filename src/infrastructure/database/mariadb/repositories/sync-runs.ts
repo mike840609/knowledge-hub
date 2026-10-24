@@ -11,6 +11,14 @@ export function mapSyncRun(row: DbRow): SyncRun {
   };
 }
 
+/**
+ * One `ORDER BY … LIMIT 1` index probe per source, joined with `UNION ALL`.
+ * 50 probes keep the statement text bounded while staying far below MariaDB's
+ * placeholder limit. `sync_runs` has no retention path, so an `IN (…)` window
+ * query would scan the whole run history to return one row per source.
+ */
+const SOURCE_PROBE_CHUNK = 50;
+
 export class MariaDbSyncRunRepository implements SyncRunRepository {
   constructor(private readonly connection: QueryConnection) {}
 
@@ -41,5 +49,38 @@ export class MariaDbSyncRunRepository implements SyncRunRepository {
       status ? [sourceId, status, limit] : [sourceId, limit],
     );
     return rows.map(mapSyncRun);
+  }
+
+  async listLatestBySourceIds(sourceIds: readonly string[]): Promise<SyncRun[]> {
+    return this.probeLatestPerSource(sourceIds, "", "started_at");
+  }
+
+  async listLatestAppliedBySourceIds(sourceIds: readonly string[]): Promise<SyncRun[]> {
+    return this.probeLatestPerSource(sourceIds, " AND status = 'APPLIED'", "completed_at");
+  }
+
+  /**
+   * One `(source_id, started_at)` / `(source_id, status, completed_at)` index
+   * probe per source, so the read cost follows the source count rather than the
+   * unbounded run history. Result order is unspecified; callers map by
+   * `sourceId`. Duplicate ids are collapsed so a chunk boundary cannot return
+   * the same source twice.
+   */
+  private async probeLatestPerSource(
+    sourceIds: readonly string[],
+    statusFilter: string,
+    orderColumn: "started_at" | "completed_at",
+  ): Promise<SyncRun[]> {
+    const distinct = [...new Set(sourceIds)];
+    const runs: SyncRun[] = [];
+    for (let start = 0; start < distinct.length; start += SOURCE_PROBE_CHUNK) {
+      const batch = distinct.slice(start, start + SOURCE_PROBE_CHUNK);
+      const probes = batch
+        .map(() => `(SELECT * FROM sync_runs WHERE source_id = ?${statusFilter} ORDER BY ${orderColumn} DESC, id DESC LIMIT 1)`)
+        .join(" UNION ALL ");
+      const rows = await this.connection.query<DbRow[]>(`SELECT * FROM (${probes}) latest`, [...batch]);
+      runs.push(...rows.map(mapSyncRun));
+    }
+    return runs;
   }
 }
