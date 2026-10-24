@@ -154,6 +154,31 @@ describe("immutable knowledge revisions", () => {
     expect(listed.map((revision) => revision.revisionNo)).toEqual([1, 2]);
   });
 
+  it("lists revision summaries without content", async () => {
+    const { source, folderId } = await createSourceFixture(pool);
+    const hub = new HubKnowledgeCommandServiceImpl(new MariaDbUnitOfWork(pool));
+    const created = await hub.createDocument(fixtureCaller(), {
+      sourceId: source.id, parentId: folderId,
+      title: "Summary", markdown: "v1", metadata: {},
+    });
+    await hub.createRevision(fixtureCaller(), {
+      documentId: created.documentId, expectedCurrentRevisionId: created.revisionId,
+      title: "Summary", markdown: "v2", metadata: {},
+    });
+
+    const uow = new MariaDbUnitOfWork(pool);
+    const full = await uow.run((r) => r.revisions.listByDocument(created.documentId));
+    const summaries = await uow.run((r) => r.revisions.listSummariesByDocument(created.documentId));
+
+    expect(summaries.map((s) => s.id)).toEqual(full.map((r) => r.id));
+    expect(summaries.map((s) => s.revisionNo)).toEqual([1, 2]);
+    for (const summary of summaries) {
+      expect(summary).not.toHaveProperty("markdown");
+      expect(summary).not.toHaveProperty("title");
+      expect(summary).not.toHaveProperty("metadata");
+    }
+  });
+
   it("assigns unique increasing revision numbers and rejects duplicates", async () => {
     const { source, folderId } = await createSourceFixture(pool);
     const hub = new HubKnowledgeCommandServiceImpl(new MariaDbUnitOfWork(pool));

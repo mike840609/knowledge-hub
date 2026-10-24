@@ -45,13 +45,15 @@ function fakeServices(overrides: {
     currentRevision: revisions[1],
   })));
   const getRevision = vi.fn(async (_caller: unknown, _id: string, revisionNo: number) => revisions[revisionNo - 1]);
+  const listRevisionSummaries = vi.fn(async () => revisions.map(({ id, revisionNo, createdAt }) => ({ id, revisionNo, createdAt })));
+  const listRevisions = vi.fn(async () => revisions);
   const services = {
     establishTrustedCaller: vi.fn(async () => ({ caller })),
-    queries: { getDocument, listRevisions: vi.fn(async () => revisions), getRevision },
+    queries: { getDocument, listRevisionSummaries, listRevisions, getRevision },
     unitOfWork: { run: vi.fn(async (work: (repositories: unknown) => unknown) => work({ entries: { findByDocumentId: findEntry } })) },
   } as unknown as Services;
   vi.mocked(applicationServices).mockReturnValue(services);
-  return { findEntry, getDocument, getRevision };
+  return { findEntry, getDocument, getRevision, listRevisionSummaries, listRevisions };
 }
 
 describe("document read model", () => {
@@ -74,6 +76,13 @@ describe("document read model", () => {
       { id: "rev-2", revisionNo: 2, createdAt: new Date(Date.UTC(2026, 0, 2)) },
     ]);
     expect(JSON.stringify(model?.revisions)).not.toContain("Body of revision");
+  });
+
+  it("asks only for revision summaries when loading history", async () => {
+    const { listRevisionSummaries, listRevisions } = fakeServices();
+    await getKnowledgeDocumentModel(WORKSPACE_ID, SOURCE_ID, DOCUMENT_ID);
+    expect(listRevisionSummaries).toHaveBeenCalledTimes(1);
+    expect(listRevisions).not.toHaveBeenCalled();
   });
 
   it("selects a historical revision with its body", async () => {

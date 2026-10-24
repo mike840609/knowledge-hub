@@ -6,7 +6,7 @@ import {
   SourceNotFoundError,
   TreeNodeNotFoundError,
 } from "../domain/errors";
-import type { KnowledgeRevision } from "../domain/revision";
+import type { KnowledgeRevision, KnowledgeRevisionSummary } from "../domain/revision";
 import type { SourcePolicy } from "../domain/source-policy";
 import { collectAncestors } from "../domain/tree-rules";
 import { requireSourcePolicy, requireVisibleDocument } from "./internal/require-visible-document";
@@ -65,6 +65,7 @@ export interface KnowledgeQueryService {
   getCurrentRevision(caller: CallerContext, documentId: string, input?: { includeArchived?: boolean }): Promise<KnowledgeRevisionView>;
   getRevision(caller: CallerContext, documentId: string, revisionNo: number, input?: { includeArchived?: boolean }): Promise<KnowledgeRevisionView>;
   listRevisions(caller: CallerContext, documentId: string, input?: { includeArchived?: boolean }): Promise<KnowledgeRevisionView[]>;
+  listRevisionSummaries(caller: CallerContext, documentId: string, input?: { includeArchived?: boolean }): Promise<KnowledgeRevisionSummary[]>;
   getAncestors(caller: CallerContext, nodeId: string, input?: { includeArchived?: boolean }): Promise<KnowledgeTreeItem[]>;
 }
 
@@ -208,6 +209,13 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
       const { document } = await requireVisibleDocument(repositories, caller, documentId, input.includeArchived ?? false);
       const revisions = await repositories.revisions.listByDocument(document.id);
       return revisions.map(toRevisionView);
+    });
+  }
+
+  async listRevisionSummaries(caller: CallerContext, documentId: string, input: { includeArchived?: boolean } = {}): Promise<KnowledgeRevisionSummary[]> {
+    return this.unitOfWork.run(async (repositories) => {
+      const { document } = await requireVisibleDocument(repositories, caller, documentId, input.includeArchived ?? false);
+      return repositories.revisions.listSummariesByDocument(document.id);
     });
   }
 

@@ -74,6 +74,19 @@ export type KnowledgeRevisionView = {
   createdAt: Date;
 };
 
+export type KnowledgeRevisionSummary = {
+  id: string;
+  revisionNo: number;
+  createdAt: Date;
+  history?: {
+    state: "WORKING" | "CHECKPOINT";
+    activityId: string | null;
+    windowStartedAt: Date | null;
+    name: string | null;
+    reason: string;
+  };
+};
+
 export interface HubKnowledgeCommandService {
   createDocument(caller: CallerContext, input: CreateHubDocumentInput): Promise<{ documentId: string; revisionId: string; treeNodeId: string }>;
   createRevision(caller: CallerContext, input: CreateRevisionInput): Promise<{ revisionId: string; revisionNo: number; changed: boolean }>;
@@ -118,6 +131,7 @@ export interface KnowledgeQueryService {
   getCurrentRevision(caller: CallerContext, documentId: string, input?: { includeArchived?: boolean }): Promise<KnowledgeRevisionView>;
   getRevision(caller: CallerContext, documentId: string, revisionNo: number, input?: { includeArchived?: boolean }): Promise<KnowledgeRevisionView>;
   listRevisions(caller: CallerContext, documentId: string, input?: { includeArchived?: boolean }): Promise<KnowledgeRevisionView[]>;
+  listRevisionSummaries(caller: CallerContext, documentId: string, input?: { includeArchived?: boolean }): Promise<KnowledgeRevisionSummary[]>;
   getAncestors(caller: CallerContext, nodeId: string, input?: { includeArchived?: boolean }): Promise<KnowledgeTreeItem[]>;
 }
 
@@ -182,6 +196,7 @@ describe("Phase 1 shared service contracts", () => {
     assertCallerFirst<KnowledgeQueryService["getCurrentRevision"]>(true);
     assertCallerFirst<KnowledgeQueryService["getRevision"]>(true);
     assertCallerFirst<KnowledgeQueryService["listRevisions"]>(true);
+    assertCallerFirst<KnowledgeQueryService["listRevisionSummaries"]>(true);
     assertCallerFirst<KnowledgeQueryService["getAncestors"]>(true);
   });
 
@@ -261,6 +276,7 @@ describe("Phase 1 shared service contracts", () => {
       getCurrentRevision: async () => ({ id: "r", documentId: "d", revisionNo: 1, title: "t", markdown: "m", metadata: {}, contentHash: "h", createdBy: "u", createdAt: new Date(0) }),
       getRevision: async () => ({ id: "r", documentId: "d", revisionNo: 1, title: "t", markdown: "m", metadata: {}, contentHash: "h", createdBy: "u", createdAt: new Date(0) }),
       listRevisions: async () => [],
+      listRevisionSummaries: async () => [],
       getAncestors: async () => [],
     };
     const workspaces: WorkspaceQueryService = { listWorkspaces: async () => [{ id: "w", name: "Workspace" }] };

@@ -142,11 +142,12 @@ describe("knowledge query workspace access", () => {
       queries.getCurrentRevision(outsider, scope.documentId),
       queries.getRevision(outsider, scope.documentId, 1),
       queries.listRevisions(outsider, scope.documentId),
+      queries.listRevisionSummaries(outsider, scope.documentId),
       queries.listTree(outsider, scope.sourceX),
       queries.getAncestors(outsider, scope.documentNodeId),
     ];
     const settled = await Promise.allSettled(denied);
-    expect(settled).toHaveLength(7);
+    expect(settled).toHaveLength(8);
     for (const outcome of settled) {
       expect(outcome.status).toBe("rejected");
       const failure = (outcome as PromiseRejectedResult).reason as Error;
@@ -242,6 +243,7 @@ describe("knowledge query not-found contract", () => {
     await expect(queries.getDocument(member, uuidv7())).rejects.toMatchObject({ code: "DOCUMENT_NOT_FOUND" });
     await expect(queries.getCurrentRevision(member, uuidv7())).rejects.toMatchObject({ code: "DOCUMENT_NOT_FOUND" });
     await expect(queries.listRevisions(member, uuidv7())).rejects.toMatchObject({ code: "DOCUMENT_NOT_FOUND" });
+    await expect(queries.listRevisionSummaries(member, uuidv7())).rejects.toMatchObject({ code: "DOCUMENT_NOT_FOUND" });
     await expect(queries.getRevision(member, scope.documentId, 999)).rejects.toMatchObject({ code: "REVISION_NOT_FOUND" });
     await expect(queries.getAncestors(member, uuidv7())).rejects.toMatchObject({ code: "TREE_NODE_NOT_FOUND" });
   });
@@ -253,6 +255,7 @@ describe("knowledge query not-found contract", () => {
     await expect(queries.getRevision(member, scope.documentId, 1)).resolves.toMatchObject({ revisionNo: 1, markdown: "secret body" });
     await expect(queries.getRevision(member, scope.documentId, 2)).resolves.toMatchObject({ revisionNo: 2, markdown: "secret body v2" });
     await expect(queries.listRevisions(member, scope.documentId)).resolves.toHaveLength(2);
+    expect(await queries.listRevisionSummaries(member, scope.documentId)).toHaveLength(2);
     const ancestors = await queries.getAncestors(member, scope.documentNodeId);
     expect(ancestors.map((item) => item.id)).toEqual([scope.folderX, scope.childFolderId]);
     expect(ancestors[0]).toMatchObject({ type: "folder", label: "Shared Folder" });
