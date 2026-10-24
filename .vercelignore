@@ -4,5 +4,11 @@
 playwright-report
 test-results
 *.tsbuildinfo
+.codegraph
+.superpowers
+.omo
 .impeccable
 work
+.vercel
+.env
+.env.*
