@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MAX_UPLOAD_BATCH_BYTES, runFolderImport } from "@/components/imports/folder-import-form";
+import { MAX_UPLOAD_BATCH_BYTES } from "@/lib/upload-limits";
+import { runFolderImport } from "@/components/imports/folder-import-form";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 vi.mock("@/lib/source-import-scope", () => ({ loadSourceImportScope: vi.fn(async () => ({ paths: [], configured: true, syncVersion: 1 })) }));

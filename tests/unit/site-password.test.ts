@@ -8,7 +8,7 @@ const basic = (value: string) => `Basic ${btoa(value)}`;
 afterEach(() => vi.unstubAllEnvs());
 
 describe("isSitePasswordExempt", () => {
-  it.each(["/s", "/s/abc", "/s/abc/open", "/api/share-review", "/api/share-review/threads/query", "/api/health"])("exempts %s", (path) => {
+  it.each(["/s", "/s/abc", "/s/abc/open", "/api/share-review", "/api/share-review/threads/query", "/api/health", "/sample-wiki/manifest.json"])("exempts %s", (path) => {
     expect(isSitePasswordExempt(path)).toBe(true);
   });
   it.each(["/", "/w/ws/home", "/api/documents/x", "/sx", "/api/healthz"])("requires auth for %s", (path) => {

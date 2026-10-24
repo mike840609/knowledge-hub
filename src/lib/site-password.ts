@@ -1,5 +1,5 @@
 const EXEMPT_EXACT = new Set(["/s", "/api/share-review", "/api/health"]);
-const EXEMPT_PREFIXES = ["/s/", "/api/share-review/"];
+const EXEMPT_PREFIXES = ["/s/", "/api/share-review/", "/sample-wiki/"];
 
 /**
  * Share links are the product's public surface: their pages and the

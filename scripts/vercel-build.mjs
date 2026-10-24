@@ -7,9 +7,12 @@ const directUrl = (process.env.KM_DB_MIGRATE_URL ?? "").trim();
 const appUrl = (process.env.KM_DB_URL ?? "").trim();
 const migrateUrl = directUrl || appUrl;
 const migrationUrlSource = directUrl ? "direct" : appUrl ? "app" : "none";
+// Test/harness hook only; never honor it on Vercel, where the project
+// environment must not be able to replace the build entrypoint.
+const buildScript = (!process.env.VERCEL && (process.env.KM_VERCEL_BUILD_SCRIPT ?? "").trim()) || "scripts/build.mjs";
 
 if (dryRun) {
-  console.log(JSON.stringify({ build: true, migrate, migrationUrlSource }));
+  console.log(JSON.stringify({ build: true, buildScript, migrate, migrationUrlSource }));
   process.exit(migrate && !migrateUrl ? 1 : 0);
 }
 
@@ -26,8 +29,6 @@ function run(command, args, env = process.env) {
 // build must leave the schema untouched. Migrations run only after a green
 // build, so the "new schema + old code" window is migrate → promote.
 console.log("vercel-build: building.");
-// Test/harness hook only; production leaves it unset.
-const buildScript = (process.env.KM_VERCEL_BUILD_SCRIPT ?? "").trim() || "scripts/build.mjs";
 const buildStatus = run(process.execPath, [buildScript]);
 if (buildStatus !== 0) process.exit(buildStatus);
 

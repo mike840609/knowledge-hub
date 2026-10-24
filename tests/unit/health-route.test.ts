@@ -33,6 +33,12 @@ describe("healthTimeoutMs", () => {
     expect(healthTimeoutMs()).toBe(45000);
     vi.unstubAllEnvs();
   });
+
+  it("clamps below the function ceiling", () => {
+    vi.stubEnv("KM_DB_CONNECT_TIMEOUT_MS", "300000");
+    expect(healthTimeoutMs()).toBe(250000);
+    vi.unstubAllEnvs();
+  });
 });
 
 describe("pingDatabase", () => {

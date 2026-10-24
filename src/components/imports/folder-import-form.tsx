@@ -21,6 +21,7 @@ import {
 } from "@/components/imports/folder-handle-store";
 import type { ImportManifestEntry } from "@/modules/sources/application/create-folder-import";
 import { DEFAULT_IMPORT_LIMITS, type ImportLimits } from "@/modules/sources/domain/import-limits";
+import { MAX_UPLOAD_BATCH_BYTES } from "@/lib/upload-limits";
 import { Label } from "@/components/ui/label";
 
 export type FolderImportTarget =
@@ -41,9 +42,6 @@ export type ImportUiState =
 
 const MARKDOWN_EXTENSION = /\.(?:md|markdown)$/iu;
 const MAX_BATCH_FILES = 20;
-// Vercel caps a Function request body at 4.5 MB; 4 MiB of files plus multipart
-// headers stays below it. Local builds use the same ceiling so behaviour is identical.
-export const MAX_UPLOAD_BATCH_BYTES = 4 * 1024 * 1024;
 const ASSET_HASH_CONCURRENCY = 4;
 const TRANSIENT_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 
