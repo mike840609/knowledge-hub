@@ -14,7 +14,7 @@ make verify
 
 Result: **exit 0**
 
-- Unit suite: **256 files, 3,188 tests passed**
+- Unit suite: **256 files, 3,190 tests passed**
 - TypeScript: `tsc --noEmit` passed
 - Lint: `eslint .` passed
 - Build: Next.js production build compiled successfully
@@ -76,11 +76,14 @@ The reviewer’s Minor findings were deferred; they are recorded in the plan wor
 - Home sends only active documents plus archived documents that actually have a draft; `documentsForHome()` is tested independently.
 - `listFavorites` now resolves each favorite document individually, so its cost follows the favorite count rather than the workspace document count; the DB-backed integration test still passes.
 - A stale recovery URL with no draft now redirects to the document (with `?includeArchived=true` when the document/source is archived) instead of showing 404. Unit page tests and a browser E2E cover both the active and stale cases.
+- Discarding an oversized draft now sends a null PUT for the server copy as well as removing the local copy; the previous early return only removed local storage.
+- Restore now only pushes to the document; it no longer calls `router.refresh()` immediately after `push()`, avoiding the recorded #49 stuck-page pattern.
+- When localStorage refuses the oversized draft, the status is `too-large-unstored` rather than `too-large`, so the UI does not claim a local copy that was never written.
 
 ## Covered by unit tests, not re-run manually
 
 - A transient document read rethrows and reaches the document Retry boundary; not-found/access still returns the non-enumerating page.
-- Draft and publish both enforce the same 5 MiB UTF-8 byte limit, including 2M CJK text; an oversized account draft enters the terminal `too-large` state, keeps its local copy, and resumes after the text shrinks.
+- Draft and publish both enforce the same 5 MiB UTF-8 byte limit, including 2M CJK text; an oversized account draft enters the terminal `too-large` state and resumes after the text shrinks. It reports `too-large-unstored` instead when this browser cannot keep the local copy; discarding either state also deletes the server copy.
 - Favorites use `GET /personal?view=favorites`, return identifiers only, and two mounted hooks plus a focus event share one in-flight request.
 - Archived-document drafts appear under Home Drafts with `Original document archived` / `Source archived`; active drafts link to the document page, not `/edit`.
 

@@ -60,6 +60,7 @@ it("restores the original document and returns to it", async () => {
   await act(async () => button("Restore document").dispatchEvent(new MouseEvent("click", { bubbles: true })));
   expect(mocks.request).toHaveBeenCalledWith("/api/documents/doc/restore", "POST");
   expect(mocks.push).toHaveBeenCalledWith("/w/ws/knowledge/src/doc");
+  expect(mocks.refresh).not.toHaveBeenCalled();
   expect(mocks.toast).toHaveBeenCalledWith({ message: "Restored “Draft”." });
 });
 

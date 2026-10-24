@@ -27,7 +27,6 @@ export function DraftRecoveryActions({ workspaceId, sourceId, documentId, title,
       await governanceRequest(`/api/documents/${documentId}/restore`, "POST");
       toast({ message: `Restored “${title}”.` });
       router.push(`/w/${workspaceId}/knowledge/${sourceId}/${documentId}`);
-      router.refresh();
     } catch (error) {
       toast({ message: organizeFailure(governanceFailure(error)), tone: "danger" });
     } finally {
