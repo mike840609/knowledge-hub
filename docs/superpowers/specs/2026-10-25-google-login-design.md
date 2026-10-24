@@ -75,9 +75,8 @@ never imports MariaDB:
 - `src/app/api/auth/[...nextauth]/route.ts` — exports `GET`/`POST` from `handlers`.
 
 Environment: `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, and the canonical
-`AUTH_URL=https://<production-origin>`. `AUTH_URL` defaults to `KM_PUBLIC_ORIGIN` when unset; if
-both are set and differ, the production build fails instead of letting Auth.js and the review
-origin checks disagree. The Google OAuth client's redirect URI is
+`AUTH_URL=https://<production-origin>`. `AUTH_URL` must equal `KM_PUBLIC_ORIGIN`; the production
+build fails if either is missing or their origins differ. The Google OAuth client's redirect URI is
 `https://<production-origin>/api/auth/callback/google`.
 
 When `KM_IDENTITY_PROVIDER === "google"`, the Vercel build validates `AUTH_SECRET`,
@@ -251,7 +250,8 @@ is additive and only runs when `KM_IDENTITY_PROVIDER === "google"`:
   - an unsafe `returnTo` (`https://evil.example`, `//evil.example`) becomes `/`;
   - a valid mocked session reaches the page/API.
 - Config tests:
-  - `authUrl()` defaults to `KM_PUBLIC_ORIGIN` and rejects a mismatched explicit `AUTH_URL`;
+  - the build requires `AUTH_URL`, `KM_PUBLIC_ORIGIN`, and the Google secrets when the provider is
+    `google`, and rejects a mismatched origin;
   - `vercel-build.mjs --dry-run` exits 1 when provider is `google` and an auth env is missing,
     and exits 0 when the complete set is present.
 - Manual production smoke: Google login, personal workspace, create/edit a document, sign out,
