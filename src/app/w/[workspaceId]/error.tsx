@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useRouteRetry } from "@/components/shell/use-route-retry";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { StatusMessage } from "@/components/ui/status-message";
 
@@ -13,12 +14,13 @@ import { StatusMessage } from "@/components/ui/status-message";
  */
 export default function WorkspaceError({ reset }: { error: Error & { digest?: string }; reset: () => void }) {
   const { workspaceId } = useParams<{ workspaceId: string }>();
+  const retry = useRouteRetry(reset);
   return (
     <StatusMessage
       title="This page could not be loaded"
       description="Check your connection and try again. If the problem continues, return to Knowledge and try opening another document."
       action={<>
-        <Button variant="secondary" size="lg" onClick={() => reset()}>Retry this page</Button>
+        <Button variant="secondary" size="lg" onClick={retry}>Retry this page</Button>
         <Link className={buttonClasses({ variant: "ghost", size: "lg" })} href={`/w/${encodeURIComponent(workspaceId)}/knowledge`}>Return to Knowledge</Link>
       </>}
     />

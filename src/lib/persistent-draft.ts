@@ -10,7 +10,6 @@ export class PersistentDraft {
   private synced: Draft | null | undefined;
   private stopped = false;
   private tooLarge = false;
-  private localKept = true;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private flight: Promise<void> | undefined;
   constructor(private readonly endpoint: string, private readonly key: string, private readonly onStatus: (s: DraftStatus) => void, private readonly options: { autoSync?: boolean; delay?: number } = {}) {}
@@ -55,7 +54,6 @@ export class PersistentDraft {
     this.pending = value;
     if (this.tooLarge && (value === null || !markdownTooLarge(value.markdown))) this.tooLarge = false;
     const kept = this.keepLocal(value);
-    this.localKept = kept;
     this.onStatus(this.stopped ? "conflict" : !kept ? (this.tooLarge ? "too-large-unstored" : "error") : this.tooLarge ? "too-large" : "local");
     clearTimeout(this.timer);
     if (sync && !this.tooLarge) this.schedule();
@@ -85,9 +83,12 @@ export class PersistentDraft {
         if (!response.ok) {
           const failure = await response.json().catch(() => null) as { error?: { code?: string } } | null;
           if (failure?.error?.code === "DRAFT_TOO_LARGE") {
+            // A discard or a smaller edit made in flight supersedes this refusal;
+            // a still-oversized edit does not, or typing would resend it on every pause.
+            const newer = this.pending;
+            if (newer === null || (newer !== undefined && !markdownTooLarge(newer.markdown))) return;
             this.tooLarge = true;
-            this.localKept = this.keepLocal(value);
-            this.onStatus(this.localKept ? "too-large" : "too-large-unstored");
+            this.onStatus(this.keepLocal(newer ?? value) ? "too-large" : "too-large-unstored");
             return;
           }
           if (response.status === 409) this.stopped = true;

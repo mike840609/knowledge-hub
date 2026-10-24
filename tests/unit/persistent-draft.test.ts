@@ -98,6 +98,66 @@ it("deletes the server copy when discarding an oversized draft", async () => {
   expect(JSON.parse(fetcher.mock.calls[2][1].body)).toMatchObject({ value: null, version: 1 });
   expect(localStorage.getItem("kh:persistent:/personal:draft:doc")).toBeNull();
 });
+it("deletes the server copy when discarding while an oversized upload is in flight", async () => {
+  const status = vi.fn();
+  const earlier = { ...draft, markdown: "Earlier server copy" };
+  let refuse!: (response: Response) => void;
+  const fetcher = vi.fn()
+    .mockResolvedValueOnce(Response.json({ value: earlier, version: 1 }))
+    .mockReturnValueOnce(new Promise<Response>(resolve => { refuse = resolve; }))
+    .mockResolvedValueOnce(Response.json({ version: 2 }));
+  vi.stubGlobal("fetch", fetcher);
+  const client = new PersistentDraft("/personal", "draft:doc", status);
+  await client.load(); client.change(draft);
+  const upload = client.flush();
+  const discard = client.clear();
+  refuse(Response.json({ error: { code: "DRAFT_TOO_LARGE", message: "Draft is too large to save." } }, { status: 400 }));
+  await upload; await discard;
+  expect(fetcher).toHaveBeenCalledTimes(3);
+  expect(JSON.parse(fetcher.mock.calls[2][1].body)).toMatchObject({ value: null, version: 1 });
+  expect(localStorage.getItem("kh:persistent:/personal:draft:doc")).toBeNull();
+  expect(status).toHaveBeenLastCalledWith("saved");
+});
+it("saves a smaller edit made while an oversized upload is in flight", async () => {
+  const status = vi.fn();
+  let refuse!: (response: Response) => void;
+  const fetcher = vi.fn()
+    .mockResolvedValueOnce(Response.json({ value: null, version: 0 }))
+    .mockReturnValueOnce(new Promise<Response>(resolve => { refuse = resolve; }))
+    .mockResolvedValueOnce(Response.json({ version: 1 }));
+  vi.stubGlobal("fetch", fetcher);
+  const client = new PersistentDraft("/personal", "draft:doc", status);
+  await client.load(); client.change(draft);
+  const upload = client.flush();
+  const small = { ...draft, markdown: "small" };
+  client.change(small);
+  refuse(Response.json({ error: { code: "DRAFT_TOO_LARGE", message: "Draft is too large to save." } }, { status: 400 }));
+  await upload;
+  expect(JSON.parse(localStorage.getItem("kh:persistent:/personal:draft:doc")!).value).toEqual(small);
+  await client.flush();
+  expect(fetcher).toHaveBeenCalledTimes(3);
+  expect(JSON.parse(fetcher.mock.calls[2][1].body)).toMatchObject({ value: small, version: 0 });
+  expect(status).toHaveBeenLastCalledWith("saved");
+});
+it("stays too large when an edit made during an oversized upload is still oversized", async () => {
+  const status = vi.fn();
+  let refuse!: (response: Response) => void;
+  const fetcher = vi.fn()
+    .mockResolvedValueOnce(Response.json({ value: null, version: 0 }))
+    .mockReturnValueOnce(new Promise<Response>(resolve => { refuse = resolve; }))
+    .mockResolvedValue(Response.json({ version: 1 }));
+  vi.stubGlobal("fetch", fetcher);
+  const client = new PersistentDraft("/personal", "draft:doc", status);
+  await client.load(); client.change(draft);
+  const upload = client.flush();
+  client.change({ ...draft, markdown: "a".repeat(5 * 1024 * 1024 + 1) });
+  refuse(Response.json({ error: { code: "DRAFT_TOO_LARGE", message: "Draft is too large to save." } }, { status: 400 }));
+  await upload;
+  await vi.advanceTimersByTimeAsync(20000);
+  await client.flush();
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  expect(status.mock.lastCall?.[0]).toMatch(/^too-large/);
+});
 it("does not claim a local copy when storage refuses an oversized draft", async () => {
   const status = vi.fn();
   const fetcher = vi.fn()
