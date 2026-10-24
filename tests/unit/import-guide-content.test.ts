@@ -108,7 +108,7 @@ describe("guideContent limits are live", () => {
 
   it("shows the default limits when given the defaults", () => {
     const limits = sectionText(guideContent("en", DEFAULT_IMPORT_LIMITS), "limits");
-    for (const text of ["20,000", "2 KiB", "5 MiB", "256 MiB"]) expect(limits).toContain(text);
+    for (const text of ["20,000", "2 KiB", "3.5 MiB", "256 MiB"]) expect(limits).toContain(text);
   });
 
   it("names the per-file limit in the checklist, from the same number", () => {
