@@ -30,7 +30,9 @@ export default async function UpdatesPage({
   if (!page) notFound();
   const services = applicationServices();
   const { caller } = await services.establishTrustedCaller();
-  const sources = await services.queries.listSources(caller, workspaceId);
+  const sources = await services.queries.listSources(caller, workspaceId, {
+    includeArchived: true,
+  });
   const next = new URLSearchParams();
   if (q.source) next.set("source", q.source);
   if (q.unread) next.set("unread", q.unread);
