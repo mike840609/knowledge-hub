@@ -134,14 +134,8 @@ export async function getKnowledgeExplorerModel(
     if (!sources.some((candidate) => candidate.id === sourceId)) return null;
     const tree = await services.queries.listTree(caller, sourceId, { includeArchived });
     const ordered = sortSourcesByName(sources);
-    // Only the explorer layout needs every collection. Each query retains its
-    // own authorization checks; document/header reads still load one tree.
-    const collections = input.includeCollections
-      ? await Promise.all(ordered.map(async (candidate) => ({
-          source: candidate,
-          tree: candidate.id === sourceId ? tree : await services.queries.listTree(caller, candidate.id, { includeArchived }),
-        })))
-      : [{ source, tree }];
+    // Source headers are cheap; only the current source's tree enters the initial payload.
+    const collections = [{ source, tree }];
     return { sources: ordered, source, tree, collections, includeArchived };
   } catch (error) {
     if (isHiddenReadFailure(error)) return null;
