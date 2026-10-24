@@ -11,6 +11,13 @@ export function mapSyncRun(row: DbRow): SyncRun {
   };
 }
 
+/** One `IN (?…)` batch per statement; well under MariaDB's placeholder limit. */
+const SOURCE_ID_CHUNK = 500;
+
+function placeholders(count: number): string {
+  return Array(count).fill("?").join(", ");
+}
+
 export class MariaDbSyncRunRepository implements SyncRunRepository {
   constructor(private readonly connection: QueryConnection) {}
 
@@ -41,5 +48,45 @@ export class MariaDbSyncRunRepository implements SyncRunRepository {
       status ? [sourceId, status, limit] : [sourceId, limit],
     );
     return rows.map(mapSyncRun);
+  }
+
+  async listLatestBySourceIds(sourceIds: readonly string[]): Promise<SyncRun[]> {
+    const runs: SyncRun[] = [];
+    for (let start = 0; start < sourceIds.length; start += SOURCE_ID_CHUNK) {
+      const batch = sourceIds.slice(start, start + SOURCE_ID_CHUNK);
+      const rows = await this.connection.query<DbRow[]>(
+        `SELECT * FROM (
+           SELECT r.*, ROW_NUMBER() OVER (
+             PARTITION BY r.source_id ORDER BY r.started_at DESC, r.id DESC
+           ) AS rn
+           FROM sync_runs r
+           WHERE r.source_id IN (${placeholders(batch.length)})
+         ) ranked
+         WHERE ranked.rn = 1`,
+        [...batch],
+      );
+      runs.push(...rows.map(mapSyncRun));
+    }
+    return runs;
+  }
+
+  async listLatestAppliedBySourceIds(sourceIds: readonly string[]): Promise<SyncRun[]> {
+    const runs: SyncRun[] = [];
+    for (let start = 0; start < sourceIds.length; start += SOURCE_ID_CHUNK) {
+      const batch = sourceIds.slice(start, start + SOURCE_ID_CHUNK);
+      const rows = await this.connection.query<DbRow[]>(
+        `SELECT * FROM (
+           SELECT r.*, ROW_NUMBER() OVER (
+             PARTITION BY r.source_id ORDER BY r.completed_at DESC, r.id DESC
+           ) AS rn
+           FROM sync_runs r
+           WHERE r.source_id IN (${placeholders(batch.length)}) AND r.status = 'APPLIED'
+         ) ranked
+         WHERE ranked.rn = 1`,
+        [...batch],
+      );
+      runs.push(...rows.map(mapSyncRun));
+    }
+    return runs;
   }
 }
