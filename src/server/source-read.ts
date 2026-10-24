@@ -7,7 +7,7 @@ import type { WorkspaceView } from "@/modules/workspaces/application/workspace-q
 import { applicationServices } from "@/server/composition";
 import { isHiddenReadFailure } from "./read-errors";
 
-export const SOURCE_RUN_LIST_LIMIT = 20;
+export const SOURCE_RUN_LIST_LIMIT = 1;
 export const SOURCE_RUN_DETAIL_LIMIT = 50;
 
 export type SourceListItemModel = {
@@ -55,15 +55,26 @@ export async function getSourceListModel(workspaceId: string): Promise<SourceLis
     throw error;
   }
   const items = await services.unitOfWork.run(async (repositories) => {
-    const now = new Date();
-    return Promise.all(
-      sources.map(async (source) => {
-        const runs = await repositories.syncRuns.listBySourceId(source.id, SOURCE_RUN_LIST_LIMIT);
-        const successfulRuns = source.sourceType === "HUB" ? [] : await repositories.syncRuns.listBySourceId(source.id, 1, "APPLIED");
-        const pending = source.sourceType === "HUB" ? null : await repositories.importSnapshots.findLatestReadyIdBySourceForCreator(source.id, caller.identity.id, now, source.syncVersion);
-        return { pendingPreviewId: pending, source, latestRun: runs[0] ?? null, latestSuccessfulRun: successfulRuns[0] ?? null };
-      }),
-    );
+    // All sources (including archived) keep their latest run; HUB sources have
+    // no sync runs or import previews, so those two lookups skip them.
+    const scopedSources = sources.filter((source) => source.sourceType !== "HUB");
+    const [latestRuns, latestAppliedRuns, pendingPreviewIds] = await Promise.all([
+      repositories.syncRuns.listLatestBySourceIds(sources.map((source) => source.id)),
+      repositories.syncRuns.listLatestAppliedBySourceIds(scopedSources.map((source) => source.id)),
+      repositories.importSnapshots.findLatestReadyIdsBySourceForCreator(
+        scopedSources.map((source) => ({ sourceId: source.id, basedOnVersion: source.syncVersion })),
+        caller.identity.id,
+        new Date(),
+      ),
+    ]);
+    const latestRunBySource = new Map(latestRuns.map((run) => [run.sourceId, run]));
+    const latestAppliedBySource = new Map(latestAppliedRuns.map((run) => [run.sourceId, run]));
+    return sources.map((source) => ({
+      pendingPreviewId: pendingPreviewIds.get(source.id) ?? null,
+      source,
+      latestRun: latestRunBySource.get(source.id) ?? null,
+      latestSuccessfulRun: latestAppliedBySource.get(source.id) ?? null,
+    }));
   });
   return { workspace, actions, items };
 }
