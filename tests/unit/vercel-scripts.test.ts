@@ -1,5 +1,7 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 function run(script: string, args: string[] = [], env: Record<string, string> = {}) {
@@ -52,11 +54,45 @@ describe("vercel.json", () => {
 });
 
 describe("upload exclusions", () => {
-  it("keeps credentials and database dumps out of Vercel uploads and git", () => {
+  it("keeps credentials, dumps, and local tooling out of Vercel uploads and git", () => {
     const vercelIgnore = readFileSync(".vercelignore", "utf8").split(/\r?\n/);
-    for (const pattern of [".env", ".env.*", "*.sql"]) {
+    for (const pattern of [
+      ".env", ".env.*", "*.sql",
+      ".opencode", ".playwright-mcp", ".cache", "coverage", "blob-report", "*.log", ".DS_Store", "docs/ui-comparisons",
+    ]) {
       expect(vercelIgnore).toContain(pattern);
     }
     expect(readFileSync(".gitignore", "utf8").split(/\r?\n/)).toContain("*.sql");
+  });
+});
+
+describe("vercel-build.mjs ordering", () => {
+  it.skipIf(process.platform === "win32")("builds before migrating and never migrates after a failed build", () => {
+    const dir = mkdtempSync(join(tmpdir(), "km-vercel-build-"));
+    const build = join(dir, "build.mjs");
+    const npm = join(dir, "npm");
+    try {
+      writeFileSync(build, 'console.log("BUILD"); process.exit(0);\n');
+      writeFileSync(npm, '#!/bin/sh\necho MIGRATE\nexit 0\n');
+      chmodSync(npm, 0o755);
+      const env = {
+        ...process.env,
+        PATH: `${dir}:${process.env.PATH ?? ""}`,
+        VERCEL_ENV: "production",
+        KM_MIGRATE_ON_BUILD: "1",
+        KM_DB_MIGRATE_URL: "mysql://direct/db",
+        KM_VERCEL_BUILD_SCRIPT: build,
+      };
+      const ok = spawnSync(process.execPath, ["scripts/vercel-build.mjs"], { encoding: "utf8", env });
+      expect(ok.status).toBe(0);
+      expect(ok.stdout.indexOf("MIGRATE")).toBeGreaterThan(ok.stdout.indexOf("BUILD"));
+
+      writeFileSync(build, 'console.log("BUILD"); process.exit(3);\n');
+      const failed = spawnSync(process.execPath, ["scripts/vercel-build.mjs"], { encoding: "utf8", env });
+      expect(failed.status).toBe(3);
+      expect(failed.stdout).not.toContain("MIGRATE");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

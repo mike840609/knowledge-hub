@@ -26,7 +26,9 @@ function run(command, args, env = process.env) {
 // build must leave the schema untouched. Migrations run only after a green
 // build, so the "new schema + old code" window is migrate → promote.
 console.log("vercel-build: building.");
-const buildStatus = run(process.execPath, ["scripts/build.mjs"]);
+// Test/harness hook only; production leaves it unset.
+const buildScript = (process.env.KM_VERCEL_BUILD_SCRIPT ?? "").trim() || "scripts/build.mjs";
+const buildStatus = run(process.execPath, [buildScript]);
 if (buildStatus !== 0) process.exit(buildStatus);
 
 if (!migrate) {
