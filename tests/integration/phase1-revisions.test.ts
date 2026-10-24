@@ -172,6 +172,7 @@ describe("immutable knowledge revisions", () => {
 
     expect(summaries.map((s) => s.id)).toEqual(full.map((r) => r.id));
     expect(summaries.map((s) => s.revisionNo)).toEqual([1, 2]);
+    expect(summaries.map((s) => s.history)).toEqual(full.map((r) => r.history));
     for (const summary of summaries) {
       expect(summary).not.toHaveProperty("markdown");
       expect(summary).not.toHaveProperty("title");

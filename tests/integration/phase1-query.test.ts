@@ -180,12 +180,14 @@ describe("knowledge query archived filtering", () => {
     await expect(queries.getDocument(member, scope.documentId)).rejects.toMatchObject({ code: "DOCUMENT_NOT_FOUND" });
     await expect(queries.getCurrentRevision(member, scope.documentId)).rejects.toMatchObject({ code: "DOCUMENT_NOT_FOUND" });
     await expect(queries.listRevisions(member, scope.documentId)).rejects.toMatchObject({ code: "DOCUMENT_NOT_FOUND" });
+    await expect(queries.listRevisionSummaries(member, scope.documentId)).rejects.toMatchObject({ code: "DOCUMENT_NOT_FOUND" });
     expect((await queries.listTree(member, scope.sourceX)).some((item) => item.type === "document")).toBe(false);
 
     const archivedView = await queries.getDocument(member, scope.documentId, { includeArchived: true });
     expect(archivedView.status).toBe("ARCHIVED");
     expect(archivedView.currentRevision.title).toBe("Secret Title");
     expect(await queries.listRevisions(member, scope.documentId, { includeArchived: true })).toHaveLength(2);
+    expect(await queries.listRevisionSummaries(member, scope.documentId, { includeArchived: true })).toHaveLength(2);
 
     await sources.archiveSource(member, scope.sourceX);
     expect(await queries.listSources(member, scope.workspaceX)).toEqual([]);
@@ -218,6 +220,7 @@ describe("knowledge query archived filtering", () => {
     await expect(queries.getDocument(outsider, scope.documentId, { includeArchived: true })).rejects.toBeInstanceOf(WorkspaceAccessDeniedError);
     await expect(queries.listSources(outsider, scope.workspaceX, { includeArchived: true })).rejects.toBeInstanceOf(WorkspaceAccessDeniedError);
     await expect(queries.listRevisions(outsider, scope.documentId, { includeArchived: true })).rejects.toBeInstanceOf(WorkspaceAccessDeniedError);
+    await expect(queries.listRevisionSummaries(outsider, scope.documentId, { includeArchived: true })).rejects.toBeInstanceOf(WorkspaceAccessDeniedError);
   });
 
   it("lists archived sources for the browser flow after enumerating authorized workspaces", async () => {
