@@ -240,7 +240,7 @@ Keep `listByDocument()` unchanged for full-content consumers.
 select only the summary columns:
 
 ```sql
-SELECT r.id, r.document_id, r.revision_no, r.created_at,
+SELECT r.id, r.revision_no, r.created_at,
        r.history_state, r.history_activity_id, r.history_window_started_at,
        r.version_name, r.history_reason
 FROM knowledge_revisions r
@@ -301,6 +301,10 @@ carries the body.
 - `tests/integration/phase1-revisions.test.ts`: add a test that
   `listSummariesByDocument()` returns the expected revisions in order and that
   the returned objects have no `markdown`/`title`/`metadata` keys.
+- `tests/integration/autosave-history.test.ts`: add a test using the existing
+  `setup()` helper that saves autosaves and asserts `listSummariesByDocument()`
+  returns the same IDs as `listByDocument()`, including the current WORKING
+  revision, with no content fields.
 - `tests/integration/phase1-query.test.ts`: add the same authorization cases
   as `listRevisions()` for the new service method (outsider, archived
   document, missing document).
@@ -452,6 +456,7 @@ Register it in `migrations/index.ts` after `reviewThreadFollowsMigration`.
 2. `npm test` (unit) and the focused integration suites:
    - `tests/integration/import-safety.test.ts`
    - `tests/integration/phase1-revisions.test.ts`
+   - `tests/integration/autosave-history.test.ts`
    - `tests/integration/phase1-query.test.ts`
    - `tests/integration/phase1-tree.test.ts`
    - `tests/integration/phase1-migration-runner.test.ts`
