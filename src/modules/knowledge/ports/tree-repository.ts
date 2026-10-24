@@ -10,7 +10,7 @@ export type DocumentSummary = {
 
 export interface TreeRepository {
   /** Current metadata only; never loads document bodies. */
-  listDocumentsByWorkspace(workspaceId: string, includeArchived: boolean): Promise<DocumentSummary[]>;
+  listDocumentsByWorkspace(workspaceId: string, includeArchived: boolean, excludeArchivedAncestors?: boolean): Promise<DocumentSummary[]>;
   insert(node: KnowledgeTreeNode): Promise<void>;
   insertMany(nodes: readonly KnowledgeTreeNode[]): Promise<void>;
   findById(id: string): Promise<KnowledgeTreeNode | null>;
