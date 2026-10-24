@@ -1,5 +1,7 @@
 # Vercel + Layerbase deployment
 
+**English** | [繁體中文](vercel-layerbase.zh-TW.md)
+
 This is the single-operator deployment path: the app runs on Vercel, the database is a
 [Layerbase](https://layerbase.com) MariaDB 10.11, and the identity stays the server-configured local
 user. It is not a multi-user or company-SSO deployment; see the main README for that contract.
