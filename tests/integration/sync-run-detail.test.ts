@@ -226,9 +226,14 @@ type RevisionBatchFixture = {
   documentId: string;
   beforeRevisionId: string;
   afterRevisionId: string;
+  /** A real revision belonging to a different document in the same source. */
+  otherDocumentRevisionId: string;
 };
 
-/** One document with revision 1 (`before`) and revision 2 (`after`). */
+/**
+ * One document with revision 1 (`before`) and revision 2 (`after`), plus a
+ * second document whose revision is used to hit the document-mismatch branch.
+ */
 async function seedRevisionBatchFixture(): Promise<RevisionBatchFixture> {
   const fixture = await createSourceFixture(pool, { managed: true });
   const actor = fixtureCaller().identity.id;
@@ -236,6 +241,8 @@ async function seedRevisionBatchFixture(): Promise<RevisionBatchFixture> {
   const documentId = uuidv7();
   const beforeRevisionId = uuidv7();
   const afterRevisionId = uuidv7();
+  const otherDocumentId = uuidv7();
+  const otherDocumentRevisionId = uuidv7();
   const before = {
     title: "Before",
     markdown: "# Before\nOld line",
@@ -278,6 +285,32 @@ async function seedRevisionBatchFixture(): Promise<RevisionBatchFixture> {
       createdAt,
     });
     await r.documents.setCurrentRevision(documentId, afterRevisionId, actor);
+    await r.documents.insertDraft({
+      id: otherDocumentId,
+      sourceId: fixture.source.id,
+      currentRevisionId: null,
+      status: "ACTIVE",
+      createdBy: actor,
+      updatedBy: actor,
+      archivedBy: null,
+      archivedAt: null,
+      createdAt,
+      updatedAt: createdAt,
+    });
+    await r.revisions.insert({
+      id: otherDocumentRevisionId,
+      documentId: otherDocumentId,
+      revisionNo: 1,
+      ...before,
+      contentHash: contentFingerprint(before),
+      createdBy: actor,
+      createdAt,
+    });
+    await r.documents.setCurrentRevision(
+      otherDocumentId,
+      otherDocumentRevisionId,
+      actor,
+    );
   });
   return {
     workspaceId: fixture.workspaceId,
@@ -285,6 +318,7 @@ async function seedRevisionBatchFixture(): Promise<RevisionBatchFixture> {
     documentId,
     beforeRevisionId,
     afterRevisionId,
+    otherDocumentRevisionId,
   };
 }
 
@@ -366,6 +400,18 @@ it("keeps run-detail hrefs and diffs for before-only, after-only, and both-prese
         beforeRevisionNo: 1,
         afterRevisionNo: 2,
       },
+      {
+        // A real revision that belongs to another document: the change's
+        // before side resolves but is unusable, the `documentId` mismatch path.
+        ...base,
+        id: uuidv7(),
+        ordinal: 4,
+        labels: ["MOVED"],
+        beforeRevisionId: fixture.otherDocumentRevisionId,
+        afterRevisionId: null,
+        beforeRevisionNo: 1,
+        afterRevisionNo: null,
+      },
     ]);
   });
 
@@ -420,4 +466,9 @@ it("keeps run-detail hrefs and diffs for before-only, after-only, and both-prese
     ],
     truncated: false,
   });
+
+  const unavailable = changes.get(4)!;
+  expect(unavailable.revisionUnavailable).toBe(true);
+  expect(unavailable.href).toBeNull();
+  expect(unavailable.diff).toBeNull();
 });
