@@ -54,16 +54,17 @@ export async function getSourceListModel(workspaceId: string): Promise<SourceLis
     if (isHiddenReadFailure(error)) return null;
     throw error;
   }
-  const items = await services.unitOfWork.run(async (repositories) =>
-    Promise.all(
+  const items = await services.unitOfWork.run(async (repositories) => {
+    const now = new Date();
+    return Promise.all(
       sources.map(async (source) => {
         const runs = await repositories.syncRuns.listBySourceId(source.id, SOURCE_RUN_LIST_LIMIT);
         const successfulRuns = source.sourceType === "HUB" ? [] : await repositories.syncRuns.listBySourceId(source.id, 1, "APPLIED");
-        const pending = source.sourceType === "HUB" ? null : await repositories.importSnapshots.findLatestReadyBySourceForCreator(source.id,caller.identity.id,new Date(),source.syncVersion);
-        return { pendingPreviewId:pending?.id??null, source, latestRun: runs[0] ?? null, latestSuccessfulRun: successfulRuns[0] ?? null };
+        const pending = source.sourceType === "HUB" ? null : await repositories.importSnapshots.findLatestReadyIdBySourceForCreator(source.id, caller.identity.id, now, source.syncVersion);
+        return { pendingPreviewId: pending, source, latestRun: runs[0] ?? null, latestSuccessfulRun: successfulRuns[0] ?? null };
       }),
-    ),
-  );
+    );
+  });
   return { workspace, actions, items };
 }
 
