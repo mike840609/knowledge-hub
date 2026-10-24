@@ -17,6 +17,7 @@ import { UploadFolderImportEntriesService } from "@/modules/sources/application/
 import { FinalizeFolderImportService } from "@/modules/sources/application/finalize-folder-import";
 import { ApplyFolderImportService } from "@/modules/sources/application/apply-folder-import";
 import { CleanupFolderImportsService } from "@/modules/sources/application/cleanup-folder-imports";
+import { ListFolderUpdatesService } from "@/modules/personal/application/list-folder-updates";
 let handle: IsolatedDatabaseHandle,
   pool: Pool,
   uow: MariaDbUnitOfWork,
@@ -166,4 +167,133 @@ it("keeps history after terminal snapshot cleanup", async () => {
   expect(
     await uow.run((r) => r.revisions.findById(doc!.afterRevisionId!)),
   ).toMatchObject({ revisionNo: 1 });
+});
+async function stageNewSource(
+  targetWorkspaceId: string,
+  sourceName: string,
+  files: { path: string; text: string }[],
+) {
+  const entries = files.map((file, index) => ({
+    uploadKey: `m${index}`,
+    relativePath: file.path,
+    bytes: new TextEncoder().encode(file.text),
+  }));
+  const input = {
+    rootName: "updates",
+    manifest: entries.map((entry) => ({
+      uploadKey: entry.uploadKey,
+      relativePath: entry.relativePath,
+      kind: "MARKDOWN" as const,
+      size: entry.bytes.byteLength,
+    })),
+  };
+  const session = await new CreateFolderImportService(uow).createInitial(
+    fixtureCaller(),
+    { ...input, workspaceId: targetWorkspaceId, sourceName },
+  );
+  await new UploadFolderImportEntriesService(uow).upload(fixtureCaller(), {
+    snapshotId: session.snapshotId,
+    entries: entries.map((entry) => ({
+      uploadKey: entry.uploadKey,
+      bytes: entry.bytes,
+    })),
+  });
+  await new FinalizeFolderImportService(uow).finalize(
+    fixtureCaller(),
+    session.snapshotId,
+  );
+  return session.snapshotId;
+}
+it("groups applied runs in run order with unread flags and stable pagination", async () => {
+  const updatesWorkspaceId = (await createSourceFixture(pool)).workspaceId;
+  await pool.query(
+    "UPDATE workspaces SET name='My Space',workspace_type='PERSONAL',personal_owner_user_id=? WHERE id=?",
+    [fixtureCaller().identity.id, updatesWorkspaceId],
+  );
+  const alpha = await apply(
+    await stageNewSource(updatesWorkspaceId, "Alpha", [
+      { path: "alpha/one.md", text: "# Alpha One\nfirst" },
+      { path: "alpha/two.md", text: "# Alpha Two\nsecond" },
+    ]),
+  );
+  const beta = await apply(
+    await stageNewSource(updatesWorkspaceId, "Beta", [
+      { path: "beta/one.md", text: "# Beta One\nthird" },
+    ]),
+  );
+  const alphaChanges = await uow.run((r) =>
+    r.syncRunChanges.listByRun(alpha.runId!, 0, 100),
+  );
+  const readChange = alphaChanges.find(
+    (c) => c.kind === "DOCUMENT" && c.sourcePath === "alpha/one.md",
+  )!;
+  const unreadChange = alphaChanges.find(
+    (c) => c.kind === "DOCUMENT" && c.sourcePath === "alpha/two.md",
+  )!;
+  await uow.run((r) =>
+    r.documentReadProgress.advance({
+      userId: fixtureCaller().identity.id,
+      workspaceId: updatesWorkspaceId,
+      documentId: readChange.documentId!,
+      revisionId: readChange.afterRevisionId!,
+      revisionNo: readChange.afterRevisionNo!,
+      readAt: new Date(),
+    }),
+  );
+  const service = new ListFolderUpdatesService(uow);
+  const full = await service.list(fixtureCaller(), updatesWorkspaceId, {
+    limit: 20,
+  });
+  expect(full.runs.map((group) => group.sourceName)).toEqual([
+    "Beta",
+    "Alpha",
+  ]);
+  expect(full.runs.map((group) => group.run.id)).toEqual([
+    beta.runId,
+    alpha.runId,
+  ]);
+  expect(full.nextCursor).toBeNull();
+  const first = await service.list(fixtureCaller(), updatesWorkspaceId, {
+    limit: 1,
+  });
+  expect(first.runs).toHaveLength(1);
+  expect(first.runs[0]).toMatchObject({
+    run: { id: beta.runId, sourceId: beta.sourceId },
+    sourceName: "Beta",
+    totalChanges: 1,
+    added: 1,
+    updated: 0,
+  });
+  expect(first.runs[0].changes.map((change) => change.sourcePath)).toEqual([
+    "beta/one.md",
+  ]);
+  expect(first.runs[0].changes[0].unread).toBe(true);
+  expect(first.nextCursor).toEqual({
+    completedAt: first.runs[0].run.completedAt!.toISOString(),
+    runId: beta.runId!,
+  });
+  const second = await service.list(fixtureCaller(), updatesWorkspaceId, {
+    limit: 1,
+    cursor: first.nextCursor!,
+  });
+  expect(second.nextCursor).toBeNull();
+  expect(second.runs).toHaveLength(1);
+  expect(second.runs[0]).toMatchObject({
+    run: { id: alpha.runId, sourceId: alpha.sourceId },
+    sourceName: "Alpha",
+    totalChanges: 2,
+    added: 2,
+    updated: 0,
+  });
+  expect(
+    second.runs[0].changes.map((change) => change.sourcePath).sort(),
+  ).toEqual(["alpha/one.md", "alpha/two.md"]);
+  const unreadByDocument = new Map(
+    second.runs[0].changes.map((change) => [
+      change.documentId,
+      change.unread,
+    ]),
+  );
+  expect(unreadByDocument.get(readChange.documentId!)).toBe(false);
+  expect(unreadByDocument.get(unreadChange.documentId!)).toBe(true);
 });
