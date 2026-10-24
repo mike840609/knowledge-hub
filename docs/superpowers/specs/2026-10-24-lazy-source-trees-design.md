@@ -58,3 +58,7 @@ Use the same loaded tree cache as the sidebar. Opening a move for a source whose
 Behavioral tests prove request counts as well as UI states: no read for unopened sources, one read per first expansion, cache reuse, retry after failure, stale response isolation, archive mode, shortcut visibility, filtering completeness and move destinations. Existing organizer, shortcut and tree keyboard tests must continue passing.
 
 E2E covers real API calls: open an article, expand another source, collapse/reopen it, filter across sources, move a document, mutate/refresh and verify the tree. Measure equivalent data before/after using at least 400 documents across multiple sources: initial tree query count, response bytes and content arrival. Report hardware/data setup and results; do not reuse PR #201's historical numbers as new measurements.
+
+## Implemented detail
+
+Shortcut visibility required an opt-in `excludeArchivedAncestors` summary option, backed by a Workspace-scoped recursive SQL exclusion. Default summary consumers keep their previous behavior. Performance evidence covers equivalent read projections and DTO sizes on real MariaDB; full-browser before/after cold latency remains unmeasured, explicitly reported in the verification record.
