@@ -1,7 +1,7 @@
 import { Select } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { getSourceListModel } from "@/server/source-read";
+import { applicationServices } from "@/server/composition";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getFolderUpdates } from "@/server/sync-reading";
@@ -28,7 +28,11 @@ export default async function UpdatesPage({
     cursor: q.time && q.run ? { completedAt: q.time, runId: q.run } : undefined,
   });
   if (!page) notFound();
-  const sources = await getSourceListModel(workspaceId);
+  const services = applicationServices();
+  const { caller } = await services.establishTrustedCaller();
+  const sources = await services.queries.listSources(caller, workspaceId, {
+    includeArchived: true,
+  });
   const next = new URLSearchParams();
   if (q.source) next.set("source", q.source);
   if (q.unread) next.set("unread", q.unread);
@@ -48,11 +52,11 @@ export default async function UpdatesPage({
           Folder
           <Select name="source" defaultValue={q.source ?? ""}>
             <option value="">All folders</option>
-            {sources?.items
-              .filter((i) => i.source.sourceType === "FOLDER_SYNC")
-              .map((i) => (
-                <option key={i.source.id} value={i.source.id}>
-                  {i.source.name}
+            {sources
+              .filter((source) => source.sourceType === "FOLDER_SYNC")
+              .map((source) => (
+                <option key={source.id} value={source.id}>
+                  {source.name}
                 </option>
               ))}
           </Select>

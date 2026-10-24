@@ -201,6 +201,19 @@ describe("Phase 3 real request adapters with a trusted test session reader", () 
     expect((await createThroughRoute(workspace.id)).status).not.toBe(201);
   });
 
+  it("keeps an archived source detail readable in its workspace and hides it from another workspace", async () => {
+    const { workspace, owner, lifecycle } = await team();
+    const { snapshotId } = await (await createThroughRoute(workspace.id)).json();
+    const applied = await finish(snapshotId);
+    const { caller } = await services.establishTrustedCaller();
+    await services.unitOfWork.run((r) => r.sources.updateStatus(applied.sourceId, "ARCHIVED", caller.identity.id));
+    // The redundant listSources() check is gone; getSource(includeArchived) keeps this readable.
+    expect(await getSourceDetailModel(workspace.id, applied.sourceId)).toMatchObject({ source: { id: applied.sourceId }, runActors: { [caller.identity.id]: "you" } });
+    const other = await lifecycle.createTeamWorkspace(owner, { name: "Other Team", groupMappings: [{ externalGroupId: "writers", role: "EDITOR" }] });
+    expect(await getSourceDetailModel(other.id, applied.sourceId)).toBeNull();
+    expect(await getSourceDetailModel(workspace.id, uuidv7())).toBeNull();
+  });
+
   it.each([false, true])("allows group ADMIN governance/audit with direct VIEWER=%s without elevating to OWNER", async (directViewer) => {
     const { workspace, owner, governance, lifecycle } = await team("ADMIN");
     const { caller } = await services.establishTrustedCaller();

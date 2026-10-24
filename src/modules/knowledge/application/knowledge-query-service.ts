@@ -58,6 +58,7 @@ export type KnowledgeRevisionView = {
 
 export interface KnowledgeQueryService {
   listDocumentSummaries(caller: CallerContext, workspaceId: string, input?: { includeArchived?: boolean }): Promise<DocumentSummary[]>;
+  listDocumentSummariesByIds(caller: CallerContext, workspaceId: string, documentIds: readonly string[], input?: { includeArchived?: boolean }): Promise<DocumentSummary[]>;
   listSources(caller: CallerContext, workspaceId: string, input?: { includeArchived?: boolean }): Promise<SourceView[]>;
   getSource(caller: CallerContext, sourceId: string, input?: { includeArchived?: boolean }): Promise<SourceView>;
   listTree(caller: CallerContext, sourceId: string, input?: { includeArchived?: boolean }): Promise<KnowledgeTreeItem[]>;
@@ -130,6 +131,19 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
       await syncCallerIdentity(repositories.users, caller);
       await repositories.workspaceAccess.requireWorkspaceRead(caller, workspaceId);
       return repositories.tree.listDocumentsByWorkspace(workspaceId, input.includeArchived ?? false);
+    });
+  }
+
+  async listDocumentSummariesByIds(
+    caller: CallerContext,
+    workspaceId: string,
+    documentIds: readonly string[],
+    input: { includeArchived?: boolean } = {},
+  ): Promise<DocumentSummary[]> {
+    return this.unitOfWork.run(async (repositories) => {
+      await syncCallerIdentity(repositories.users, caller);
+      await repositories.workspaceAccess.requireWorkspaceRead(caller, workspaceId);
+      return repositories.tree.listDocumentsByIds(workspaceId, documentIds, input.includeArchived ?? false);
     });
   }
 

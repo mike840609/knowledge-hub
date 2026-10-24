@@ -110,7 +110,7 @@ it("assesses ordinary and legacy previews without depending on client safety fie
     "APPLIED",
   );
 });
-it("returns the latest ready snapshot id for the creator, version, and time", async () => {
+it("returns the latest ready snapshot id per source, creator, version, and time", async () => {
   const initial = await prepareReadingImport(uow, workspaceId, null, files);
   const applied = await s.imports.apply.apply(fixtureCaller(), initial);
   if (applied.kind !== "APPLIED") throw new Error("fixture failed");
@@ -124,27 +124,60 @@ it("returns the latest ready snapshot id for the creator, version, and time", as
     files.map((f) => ({ ...f, path: f.path.replace("docs/", "newer/") })),
   );
 
-  const latest = await uow.run((r) =>
-    r.importSnapshots.findLatestReadyIdBySourceForCreator(
-      applied.sourceId, fixtureCaller().identity.id, new Date(), 1,
+  // A second source whose READY snapshot is based on a different version: the
+  // batch must omit it rather than return a stale preview.
+  const otherInitial = await prepareReadingImport(uow, workspaceId, null, files.slice(0, 3));
+  const otherApplied = await s.imports.apply.apply(fixtureCaller(), otherInitial);
+  if (otherApplied.kind !== "APPLIED") throw new Error("fixture failed");
+  await prepareReadingImport(
+    uow, workspaceId, otherApplied.sourceId,
+    files.slice(0, 3).map((f) => ({ ...f, path: f.path.replace("docs/", "other/") })),
+  );
+
+  const ids = await uow.run((r) =>
+    r.importSnapshots.findLatestReadyIdsBySourceForCreator(
+      [
+        { sourceId: applied.sourceId, basedOnVersion: 1 },
+        { sourceId: otherApplied.sourceId, basedOnVersion: 2 },
+      ],
+      fixtureCaller().identity.id,
+      new Date(),
     ),
   );
-  expect(latest).toBe(newer);
-  expect(latest).not.toBe(older);
+  expect(ids.get(applied.sourceId)).toBe(newer);
+  expect(ids.get(applied.sourceId)).not.toBe(older);
+  expect(ids.has(otherApplied.sourceId)).toBe(false); // wrong-version fixture
 
-  expect(await uow.run((r) =>
-    r.importSnapshots.findLatestReadyIdBySourceForCreator(
-      applied.sourceId, "0199f000-0000-7000-8000-000000009999", new Date(), 1,
+  expect((await uow.run((r) =>
+    r.importSnapshots.findLatestReadyIdsBySourceForCreator(
+      [{ sourceId: applied.sourceId, basedOnVersion: 1 }],
+      "0199f000-0000-7000-8000-000000009999",
+      new Date(),
     ),
-  )).toBeNull();
-  expect(await uow.run((r) =>
-    r.importSnapshots.findLatestReadyIdBySourceForCreator(
-      applied.sourceId, fixtureCaller().identity.id, new Date(Date.now() + 86400_000), 1,
+  )).has(applied.sourceId)).toBe(false); // foreign creator
+
+  // READY snapshots expire after 30 minutes.
+  expect((await uow.run((r) =>
+    r.importSnapshots.findLatestReadyIdsBySourceForCreator(
+      [{ sourceId: applied.sourceId, basedOnVersion: 1 }],
+      fixtureCaller().identity.id,
+      new Date(Date.now() + 86400_000),
     ),
-  )).toBeNull();
-  expect(await uow.run((r) =>
-    r.importSnapshots.findLatestReadyIdBySourceForCreator(
-      applied.sourceId, fixtureCaller().identity.id, new Date(), 2,
+  )).has(applied.sourceId)).toBe(false); // expired
+
+  expect((await uow.run((r) =>
+    r.importSnapshots.findLatestReadyIdsBySourceForCreator(
+      [{ sourceId: applied.sourceId, basedOnVersion: 2 }],
+      fixtureCaller().identity.id,
+      new Date(),
     ),
-  )).toBeNull();
+  )).has(applied.sourceId)).toBe(false); // wrong version
+
+  expect((await uow.run((r) =>
+    r.importSnapshots.findLatestReadyIdsBySourceForCreator(
+      [],
+      fixtureCaller().identity.id,
+      new Date(),
+    ),
+  )).size).toBe(0);
 });

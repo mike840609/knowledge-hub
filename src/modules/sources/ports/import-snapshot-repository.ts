@@ -14,7 +14,19 @@ export type MarkImportSnapshotReadyInput = {
 
 export interface ImportSnapshotRepository {
   insert(snapshot: ImportSnapshot): Promise<void>;
-  findLatestReadyIdBySourceForCreator(sourceId: string, creatorId: string, now: Date, basedOnVersion: number): Promise<string | null>;
+  /**
+   * Newest READY snapshot id per source, scoped to the creator and still
+   * unexpired at `now`. Sources without a match are absent from the map.
+   *
+   * Precondition: callers pass at most one `{ sourceId, basedOnVersion }` pair
+   * per source. The SQL partitions by source only, so a second pair for the
+   * same source is not a separate lookup key.
+   */
+  findLatestReadyIdsBySourceForCreator(
+    sources: readonly { sourceId: string; basedOnVersion: number }[],
+    creatorId: string,
+    now: Date,
+  ): Promise<Map<string, string>>;
   findById(snapshotId: string): Promise<ImportSnapshot | null>;
   lockById(snapshotId: string): Promise<ImportSnapshot | null>;
   countActiveByCreatorAndState(creatorId: string, state: "BUILDING" | "READY", now: Date): Promise<number>;

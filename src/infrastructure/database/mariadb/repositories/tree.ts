@@ -13,6 +13,22 @@ function mapNode(row: DbRow): KnowledgeTreeNode {
   };
 }
 
+function mapDocumentSummary(row: DbRow): DocumentSummary {
+  return {
+    documentId: String(row.document_id), sourceId: String(row.source_id),
+    title: asRequiredString(row.title, "document summary title"), updatedAt: asDate(row.updated_at),
+    ownership: String(row.ownership) as DocumentSummary["ownership"],
+    status: String(row.status) as DocumentSummary["status"], sourceStatus: String(row.source_status) as DocumentSummary["sourceStatus"],
+  };
+}
+
+/** One `IN (?…)` batch per statement; well under MariaDB's placeholder limit. */
+const DOCUMENT_ID_CHUNK = 500;
+
+function placeholders(count: number): string {
+  return Array(count).fill("?").join(", ");
+}
+
 export class MariaDbTreeRepository implements TreeRepository {
   constructor(private readonly connection: QueryConnection) {}
 
@@ -27,12 +43,33 @@ export class MariaDbTreeRepository implements TreeRepository {
        WHERE s.workspace_id = ? AND (? = 1 OR (s.status = 'ACTIVE' AND d.status = 'ACTIVE' AND n.status = 'ACTIVE'))
        ORDER BY r.created_at DESC, d.id ASC`, [workspaceId, includeArchived ? 1 : 0],
     );
-    return rows.map((row) => ({
-      documentId: String(row.document_id), sourceId: String(row.source_id),
-      title: asRequiredString(row.title, "document summary title"), updatedAt: asDate(row.updated_at),
-      ownership: String(row.ownership) as DocumentSummary["ownership"],
-      status: String(row.status) as DocumentSummary["status"], sourceStatus: String(row.source_status) as DocumentSummary["sourceStatus"],
-    }));
+    return rows.map(mapDocumentSummary);
+  }
+
+  /**
+   * `getDocument()`'s visibility, without its per-document round trip: the
+   * document and its Source must be ACTIVE unless archived content was asked
+   * for. The tree node is deliberately not consulted — `getDocument()` does not
+   * require it to be active, so filtering on it would hide documents the
+   * palette shows today.
+   */
+  async listDocumentsByIds(workspaceId: string, documentIds: readonly string[], includeArchived: boolean): Promise<DocumentSummary[]> {
+    const summaries: DocumentSummary[] = [];
+    for (let start = 0; start < documentIds.length; start += DOCUMENT_ID_CHUNK) {
+      const batch = documentIds.slice(start, start + DOCUMENT_ID_CHUNK);
+      const rows = await this.connection.query<DbRow[]>(
+        `SELECT d.id AS document_id, d.source_id, r.title, r.created_at AS updated_at,
+                s.ownership, s.status AS source_status, d.status
+         FROM knowledge_documents d
+         JOIN knowledge_sources s ON s.id = d.source_id
+         JOIN knowledge_revisions r ON r.id = d.current_revision_id AND r.document_id = d.id
+         WHERE s.workspace_id = ? AND d.id IN (${placeholders(batch.length)})
+           AND (? = 1 OR (s.status = 'ACTIVE' AND d.status = 'ACTIVE'))`,
+        [workspaceId, ...batch, includeArchived ? 1 : 0],
+      );
+      summaries.push(...rows.map(mapDocumentSummary));
+    }
+    return summaries;
   }
 
   async insert(node: KnowledgeTreeNode): Promise<void> {
