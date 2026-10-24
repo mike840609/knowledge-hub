@@ -324,6 +324,26 @@ describe("document summary batch reads", () => {
     await expect(queries.listDocumentSummariesByIds(callerFromIdentity(hrOutsider), scope.workspaceX, askedFor))
       .rejects.toMatchObject({ code: "WORKSPACE_NOT_FOUND" });
   });
+
+  it("keeps an ACTIVE document whose tree node is ARCHIVED, matching getDocument()", async () => {
+    const scope = await setupQueryScope();
+    const { queries } = queryServices();
+    const member = callerFromIdentity(hrMember);
+    // Visibility is document + source status, never the tree node's: the
+    // recent palette must show exactly what getDocument() resolves.
+    await pool.query(
+      "UPDATE knowledge_tree_nodes SET status='ARCHIVED', archived_by=?, archived_at=NOW(6) WHERE document_id=?",
+      [rdMember.id, scope.documentId],
+    );
+
+    await expect(queries.getDocument(member, scope.documentId)).resolves.toMatchObject({
+      documentId: scope.documentId,
+      status: "ACTIVE",
+    });
+    const summaries = await queries.listDocumentSummariesByIds(member, scope.workspaceX, [scope.documentId]);
+    expect(summaries.map((summary) => summary.documentId)).toEqual([scope.documentId]);
+    expect(summaries[0]).toMatchObject({ status: "ACTIVE", sourceStatus: "ACTIVE" });
+  });
 });
 
 describe("Home metadata summaries", () => {

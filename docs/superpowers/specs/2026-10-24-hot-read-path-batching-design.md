@@ -83,8 +83,9 @@ changes.
 - Do not make `getSourceDetailModel()` rely on `listSources()` for
   authorization; `getSource()` already checks workspace membership and the
   adapter's `source.workspaceId === workspaceId` check is kept.
-- Do not batch a page into one unbounded query. Use 500-parameter chunks (200
-  pairs for the snapshot lookup).
+- Do not batch a page into one unbounded query. Use 500-parameter chunks for
+  by-ID reads, 200 source/version pairs for the snapshot lookup, and 50
+  per-source probes for the latest-run statements.
 
 ## Constraints
 
@@ -103,15 +104,21 @@ changes.
 
 ## Approaches considered
 
-### A. Batch in the repository with `IN` and window functions
+### A. Batch in the repository with `IN`, plus per-source index probes
 
-One query per lookup shape, chunked. For "latest per source", use
-`ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY ... DESC) = 1`. For
-by-ID reads, use `WHERE id IN (...)`.
+By-ID reads use one chunked `WHERE id IN (...)` query. For "latest per
+source", one statement holds up to 50 `ORDER BY ... LIMIT 1` subqueries joined
+with `UNION ALL`, one per source ID. For by-ID reads this removes round trips;
+for latest-per-source it turns one full-history window scan into one index
+probe per source.
 
 **Chosen.** It removes round trips and lets MariaDB use the existing
 `(source_id, started_at)` / `(source_id, status, completed_at)` indexes.
-Window functions are already part of the codebase's SQL vocabulary.
+`sync_runs` has no retention path, so the earlier
+`ROW_NUMBER() OVER (PARTITION BY source_id ...)` draft read every run in the
+workspace (and its `summary`) before discarding all but one row per source;
+the probe shape reads exactly one row per source, as the old per-source
+`LIMIT 1` calls did.
 
 ### B. Keep per-item queries but run them in parallel
 
@@ -166,21 +173,22 @@ The existing single-source `findLatestReadyIdBySourceForCreator` is removed
 once its only caller (`source-read.ts`) uses the batch method. The old
 `findLatestReadyBySourceForCreator` is already gone from PR #264.
 
-**SQL.** For latest run per source (chunked, 500 IDs):
+**SQL.** For latest run per source (chunked, 50 source IDs per statement):
 
 ```sql
 SELECT * FROM (
-  SELECT r.*, ROW_NUMBER() OVER (
-    PARTITION BY r.source_id ORDER BY r.started_at DESC, r.id DESC
-  ) AS rn
-  FROM sync_runs r
-  WHERE r.source_id IN (?, ?, ...)
-) ranked
-WHERE ranked.rn = 1
+  (SELECT * FROM sync_runs WHERE source_id = ? ORDER BY started_at DESC, id DESC LIMIT 1)
+  UNION ALL
+  (SELECT * FROM sync_runs WHERE source_id = ? ORDER BY started_at DESC, id DESC LIMIT 1)
+) latest
 ```
 
-Latest APPLIED per source is the same shape with `r.status = 'APPLIED'` and
-`ORDER BY r.completed_at DESC, r.id DESC`.
+Latest APPLIED per source is the same shape with `AND status = 'APPLIED'` and
+`ORDER BY completed_at DESC, id DESC`. Each subquery is one
+`(source_id, started_at)` or `(source_id, status, completed_at)` index probe
+that stops after one row, so the statement's cost follows the source count and
+not the unbounded run history. Result order is irrelevant because the caller
+maps by source ID. A realistic workspace needs one or two statements.
 
 Pending preview IDs (chunked, 200 source/version pairs):
 
@@ -202,9 +210,9 @@ cheap even without the P2 snapshot index.
 
 **Caller.** `getSourceListModel()` runs one unit of work that calls the three
 batch methods once for the whole source list, then builds a map per source.
-`SOURCE_RUN_LIST_LIMIT` changes from `20` to `1`; the source list item has only
-`latestRun`, so 20 rows were never used. HUB sources are skipped for the
-APPLIED and pending lookups.
+The old `SOURCE_RUN_LIST_LIMIT = 20` list read disappears with the batching;
+the source list item has only `latestRun`, so 20 rows were never used. HUB
+sources are skipped for the APPLIED and pending lookups.
 
 **Tests.**
 - Repository integration: two sources with interleaved runs; assert one
@@ -333,8 +341,9 @@ and the adapter's `source.workspaceId === workspaceId` check is kept.
 
 **Page.** `src/app/w/[workspaceId]/updates/page.tsx` currently calls
 `getSourceListModel()` only to render the Folder dropdown. Replace it with
-`queries.listSources(caller, workspaceId)` (one query) and filter
-`sourceType === "FOLDER_SYNC"` in the page.
+`queries.listSources(caller, workspaceId, { includeArchived: true })` (one
+query; archived folders stay selectable because their applied runs still show)
+and filter `sourceType === "FOLDER_SYNC"` in the page.
 
 **Service.** `ListFolderUpdatesService`:
 
@@ -376,13 +385,21 @@ separate `1 + 3N` source-list model in favour of one `listSources()` query.
 4. Targeted E2E: source list, Updates, command palette recent documents,
    source run detail, workspace members/audit.
 
-### Query-count evidence
+### Query-count and access-path evidence
 
-No EXPLAIN gate is needed because this design does not change an index or a
-query's access path. The meaningful evidence is call count:
+The source-list run selection does change an access path: the window draft read
+the entire run history, while the shipped shape is one index probe per source.
+Everything else is a round-trip reduction and keeps its old access path. The
+evidence is therefore both call count and `ANALYZE FORMAT=JSON`:
 
-- Source list with N sources: three batch calls instead of `3N`; latest run
-  payload is one row per source instead of 20.
+- Source list with N sources: three batch calls instead of `3N`; the latest-run
+  statements carry at most 50 probes each and return one row per source instead
+  of scanning every run in the workspace. On a synthetic 50-source × 500-run
+  table (`ANALYZE FORMAT=JSON`), the window shape read 25,000 run rows
+  (derived-table `r_rows`, `access_type: ALL`, filesort) while the probe shape
+  read 50 rows (50 × `ref` on `idx_sync_runs_source_started`, `r_rows = 1`);
+  the APPLIED shapes read 2,500 vs 50 rows on
+  `idx_sync_runs_source_status_completed`.
 - Recent palette with M IDs: one document batch plus one source list instead
   of `M` `getDocument()` calls.
 - Run detail with C changes: one revision batch instead of up to `2C`

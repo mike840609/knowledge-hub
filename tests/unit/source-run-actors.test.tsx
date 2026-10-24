@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ImportHistory } from "@/components/sources/import-history";
 import type { SyncRun } from "@/modules/sources/domain/sync-run";
@@ -16,6 +16,10 @@ function run(id: string, triggeredBy: string): SyncRun {
 }
 
 describe("who started a sync run", () => {
+  beforeEach(() => {
+    injected.services = null;
+  });
+
   it("names the caller 'you', a teammate by name, and a missing user neutrally, looking each up once", async () => {
     const findName = vi.fn(async (id: string) => (id === TEAMMATE ? "Mei Lin" : null));
     const actors = await resolveRunActors([run("1", CALLER), run("2", TEAMMATE), run("3", TEAMMATE), run("4", GONE)], CALLER, findName);
