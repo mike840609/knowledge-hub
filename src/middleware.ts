@@ -1,15 +1,35 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { contentSecurityPolicy, NONCE_HEADER } from "@/lib/content-security-policy";
+import { isSitePasswordExempt, verifySitePassword } from "@/lib/site-password";
 
 /**
- * Gives every page a Content-Security-Policy with a nonce of its own.
+ * Two concerns, in order:
  *
- * The policy goes on the request as well as the response: Next reads the nonce out of the request's
- * header to put it on the scripts it writes, and the layout reads `x-nonce` for the one it writes.
+ * 1. An optional site password (`KM_SITE_PASSWORD`). It is deliberately not a
+ *    sign-in system: the identity is still the server-configured local user.
+ *    It only stops "anyone with the URL is the operator". Share links and the
+ *    token-gated review API stay public; every other page and API needs it.
+ * 2. A per-response Content-Security-Policy nonce for pages. API answers are
+ *    not documents; they keep the static policy from next.config.ts.
  */
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const password = process.env.KM_SITE_PASSWORD;
+  if (password && !isSitePasswordExempt(pathname)) {
+    if (!(await verifySitePassword(request.headers.get("authorization"), password))) {
+      return new NextResponse("Authentication required.", {
+        status: 401,
+        headers: {
+          "WWW-Authenticate": 'Basic realm="Knowledge Hub", charset="UTF-8"',
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+  }
+  if (pathname.startsWith("/api/")) return NextResponse.next();
+
   const nonce = btoa(crypto.randomUUID());
-  const policy = contentSecurityPolicy({ nonce, pathname: request.nextUrl.pathname, development: process.env.NODE_ENV === "development" });
+  const policy = contentSecurityPolicy({ nonce, pathname, development: process.env.NODE_ENV === "development" });
   const headers = new Headers(request.headers);
   headers.set(NONCE_HEADER, nonce);
   headers.set("Content-Security-Policy", policy);
@@ -19,7 +39,7 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Pages only. An API answer and a static file are not documents a policy governs; they keep the
-  // static policy `next.config.ts` sets on every path.
-  matcher: ["/((?!api/|_next/static|_next/image|icon.svg|icons/).*)"],
+  // Pages and API routes. Static assets never need the password; share pages
+  // and the review API are exempted inside the function.
+  matcher: ["/((?!_next/static|_next/image|icon.svg|icons/).*)"],
 };
