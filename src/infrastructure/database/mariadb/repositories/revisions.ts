@@ -19,6 +19,13 @@ function mapRevisionSummary(row: DbRow): KnowledgeRevisionSummary {
   };
 }
 
+/** One `IN (?…)` batch per statement; well under MariaDB's placeholder limit. */
+const REVISION_ID_CHUNK = 500;
+
+function placeholders(count: number): string {
+  return Array(count).fill("?").join(", ");
+}
+
 export class MariaDbRevisionRepository implements RevisionRepository {
   constructor(private readonly connection: QueryConnection) {}
 
@@ -69,6 +76,19 @@ export class MariaDbRevisionRepository implements RevisionRepository {
   async findById(id: string): Promise<KnowledgeRevision | null> {
     const rows = await this.connection.query<DbRow[]>("SELECT * FROM knowledge_revisions WHERE id = ?", [id]);
     return rows[0] ? mapRevision(rows[0]) : null;
+  }
+
+  async findByIds(ids: readonly string[]): Promise<KnowledgeRevision[]> {
+    const revisions: KnowledgeRevision[] = [];
+    for (let start = 0; start < ids.length; start += REVISION_ID_CHUNK) {
+      const batch = ids.slice(start, start + REVISION_ID_CHUNK);
+      const rows = await this.connection.query<DbRow[]>(
+        `SELECT * FROM knowledge_revisions WHERE id IN (${placeholders(batch.length)})`,
+        [...batch],
+      );
+      revisions.push(...rows.map(mapRevision));
+    }
+    return revisions;
   }
 
   async findCurrent(documentId: string): Promise<KnowledgeRevision | null> {

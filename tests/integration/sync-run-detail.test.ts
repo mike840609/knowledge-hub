@@ -14,6 +14,8 @@ import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction
 import { createSourceFixture, fixtureCaller } from "../fixtures/knowledge";
 import { prepareReadingImport } from "../fixtures/folder-reading";
 import { buildApplicationServices } from "@/server/composition";
+import { contentFingerprint } from "@/modules/knowledge/domain/content";
+import { uuidv7 } from "@/shared/ids/uuidv7";
 let pool: Pool,
   handle: IsolatedDatabaseHandle,
   uow: MariaDbUnitOfWork,
@@ -216,4 +218,206 @@ it("reads durable moved revisions after staging cleanup and rejects a foreign sc
       applied.runId,
     ),
   ).rejects.toBeDefined();
+});
+
+type RevisionBatchFixture = {
+  workspaceId: string;
+  sourceId: string;
+  documentId: string;
+  beforeRevisionId: string;
+  afterRevisionId: string;
+};
+
+/** One document with revision 1 (`before`) and revision 2 (`after`). */
+async function seedRevisionBatchFixture(): Promise<RevisionBatchFixture> {
+  const fixture = await createSourceFixture(pool, { managed: true });
+  const actor = fixtureCaller().identity.id;
+  const createdAt = new Date("2026-09-02T00:00:00Z");
+  const documentId = uuidv7();
+  const beforeRevisionId = uuidv7();
+  const afterRevisionId = uuidv7();
+  const before = {
+    title: "Before",
+    markdown: "# Before\nOld line",
+    metadata: {},
+  };
+  const after = {
+    title: "After",
+    markdown: "# After\nNew line",
+    metadata: {},
+  };
+  await uow.run(async (r) => {
+    await r.documents.insertDraft({
+      id: documentId,
+      sourceId: fixture.source.id,
+      currentRevisionId: null,
+      status: "ACTIVE",
+      createdBy: actor,
+      updatedBy: actor,
+      archivedBy: null,
+      archivedAt: null,
+      createdAt,
+      updatedAt: createdAt,
+    });
+    await r.revisions.insert({
+      id: beforeRevisionId,
+      documentId,
+      revisionNo: 1,
+      ...before,
+      contentHash: contentFingerprint(before),
+      createdBy: actor,
+      createdAt,
+    });
+    await r.revisions.insert({
+      id: afterRevisionId,
+      documentId,
+      revisionNo: 2,
+      ...after,
+      contentHash: contentFingerprint(after),
+      createdBy: actor,
+      createdAt,
+    });
+    await r.documents.setCurrentRevision(documentId, afterRevisionId, actor);
+  });
+  return {
+    workspaceId: fixture.workspaceId,
+    sourceId: fixture.source.id,
+    documentId,
+    beforeRevisionId,
+    afterRevisionId,
+  };
+}
+
+it("loads a batch of revisions by id and none for an empty batch", async () => {
+  const { beforeRevisionId, afterRevisionId } = await seedRevisionBatchFixture();
+
+  const revisions = await uow.run((r) =>
+    r.revisions.findByIds([beforeRevisionId, afterRevisionId]),
+  );
+
+  expect(revisions).toHaveLength(2);
+  expect(revisions.map((revision) => revision.id).sort()).toEqual(
+    [beforeRevisionId, afterRevisionId].sort(),
+  );
+  expect(
+    revisions.find((revision) => revision.id === beforeRevisionId)?.markdown,
+  ).toBe("# Before\nOld line");
+  expect(
+    revisions.find((revision) => revision.id === afterRevisionId)?.markdown,
+  ).toBe("# After\nNew line");
+  await expect(uow.run((r) => r.revisions.findByIds([]))).resolves.toEqual([]);
+});
+
+it("keeps run-detail hrefs and diffs for before-only, after-only, and both-present changes", async () => {
+  const fixture = await seedRevisionBatchFixture();
+  const runId = uuidv7();
+  const now = new Date("2026-09-02T00:05:00Z");
+  const base = {
+    runId,
+    sourceId: fixture.sourceId,
+    workspaceId: fixture.workspaceId,
+    kind: "DOCUMENT" as const,
+    sourcePath: "docs/detail.md",
+    previousPath: null,
+    title: "Before",
+    documentId: fixture.documentId,
+    diagnostics: [],
+  };
+  await uow.run(async (r) => {
+    await r.syncRuns.insert({
+      id: runId,
+      sourceId: fixture.sourceId,
+      triggeredBy: fixtureCaller().identity.id,
+      basedOnVersion: 1,
+      resultVersion: 2,
+      status: "APPLIED",
+      summary: {},
+      startedAt: now,
+      completedAt: now,
+    });
+    await r.syncRunChanges.insertMany([
+      {
+        ...base,
+        id: uuidv7(),
+        ordinal: 1,
+        labels: ["REMOVED"],
+        beforeRevisionId: fixture.beforeRevisionId,
+        afterRevisionId: null,
+        beforeRevisionNo: 1,
+        afterRevisionNo: null,
+      },
+      {
+        ...base,
+        id: uuidv7(),
+        ordinal: 2,
+        labels: ["ADDED"],
+        beforeRevisionId: null,
+        afterRevisionId: fixture.afterRevisionId,
+        beforeRevisionNo: null,
+        afterRevisionNo: 2,
+      },
+      {
+        ...base,
+        id: uuidv7(),
+        ordinal: 3,
+        labels: ["UPDATED"],
+        beforeRevisionId: fixture.beforeRevisionId,
+        afterRevisionId: fixture.afterRevisionId,
+        beforeRevisionNo: 1,
+        afterRevisionNo: 2,
+      },
+    ]);
+  });
+
+  const detail = await s.syncReading.get(
+    fixtureCaller(),
+    fixture.workspaceId,
+    fixture.sourceId,
+    runId,
+  );
+  expect(detail.hasRecordedChanges).toBe(true);
+  const changes = new Map(detail.changes.map((change) => [change.ordinal, change]));
+  const href = (revisionNo: number) =>
+    `/w/${fixture.workspaceId}/knowledge/${fixture.sourceId}/${fixture.documentId}?revision=${revisionNo}&includeArchived=true`;
+
+  const beforeOnly = changes.get(1)!;
+  expect(beforeOnly.revisionUnavailable).toBe(false);
+  expect(beforeOnly.href).toBe(href(1));
+  expect(beforeOnly.diff).toEqual({
+    titleChanges: { before: "Before", after: null },
+    metadataChanges: [],
+    lines: [
+      { kind: "removed", text: "# Before" },
+      { kind: "removed", text: "Old line" },
+    ],
+    truncated: false,
+  });
+
+  const afterOnly = changes.get(2)!;
+  expect(afterOnly.revisionUnavailable).toBe(false);
+  expect(afterOnly.href).toBe(href(2));
+  expect(afterOnly.diff).toEqual({
+    titleChanges: { before: null, after: "After" },
+    metadataChanges: [],
+    lines: [
+      { kind: "added", text: "# After" },
+      { kind: "added", text: "New line" },
+    ],
+    truncated: false,
+  });
+
+  const bothPresent = changes.get(3)!;
+  expect(bothPresent.revisionUnavailable).toBe(false);
+  expect(bothPresent.href).toBe(href(2));
+  expect(bothPresent.diff).toEqual({
+    titleChanges: { before: "Before", after: "After" },
+    metadataChanges: [],
+    lines: [
+      { kind: "removed", text: "# Before" },
+      { kind: "removed", text: "Old line" },
+      { kind: "added", text: "# After" },
+      { kind: "added", text: "New line" },
+    ],
+    truncated: false,
+  });
 });
