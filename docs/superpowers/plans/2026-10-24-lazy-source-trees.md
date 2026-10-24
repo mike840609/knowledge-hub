@@ -1,6 +1,6 @@
 # Source trees loaded on demand — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Load only the current source tree initially and other source trees on demand, without breaking shortcuts, filtering or organization.
 
@@ -55,10 +55,10 @@
 - Produce a metadata-only shortcut read accepting validated document IDs and archive mode. Response rows carry `documentId`, `sourceId`, `label`, `sourceName`, `ownership`, and the visibility information needed by shortcut rendering.
 - Tree route returns `{ source, tree }`; shortcut route returns `{ documents }`. Use existing ID guards, workspace HTTP error mapping and no-store behavior. Bound metadata requests and chunk long favorite lists client-side without truncating Show all.
 
-- [ ] Write projection/route tests: Workspace mismatch and unreadable source refused; archived inclusive tree available only through current policy; unexpected failures not represented as empty success; no Markdown/revision body in shortcuts; unopened source shortcuts resolve independently.
-- [ ] Run new tests and record expected failures.
-- [ ] Implement projections/routes using composition services and existing application ports.
-- [ ] Run tests and typecheck; commit this coherent read boundary.
+- [x] Write projection/route tests: Workspace mismatch and unreadable source refused; archived inclusive tree available only through current policy; unexpected failures not represented as empty success; no Markdown/revision body in shortcuts; unopened source shortcuts resolve independently.
+- [x] Run new tests and record expected failures.
+- [x] Implement projections/routes using composition services and existing application ports.
+- [x] Run tests and typecheck; commit this coherent read boundary.
 
 ### Task 2: Initial bootstrap and shared client cache
 
@@ -67,10 +67,10 @@
 - Hook `useSourceTrees(workspaceId, sources, initialCollection)` produces `states`, `ensure(sourceId)`, `retry(sourceId)`, and loaded `collections`.
 - State is discriminated: `unloaded | loading | loaded | error`; only loaded carries a tree. Seed changes are snapshot boundaries, not merely source-ID changes.
 
-- [ ] Write bootstrap test asserting only the current source reaches `listTree`.
-- [ ] Write hook tests: ensure deduplicates, collapse/reopen reuses loaded data, failure retries, late responses ignored after scope/seed replacement, and refresh invalidates old extra trees.
-- [ ] Observe red tests, then implement hook and bootstrap. Keep server snapshots stable enough that ordinary client rerenders do not invalidate data.
-- [ ] Run targeted tests and typecheck; commit.
+- [x] Write bootstrap test asserting only the current source reaches `listTree`.
+- [x] Write hook tests: ensure deduplicates, collapse/reopen reuses loaded data, failure retries, late responses ignored after scope/seed replacement, and refresh invalidates old extra trees.
+- [x] Observe red tests, then implement hook and bootstrap. Keep server snapshots stable enough that ordinary client rerenders do not invalidate data.
+- [x] Run targeted tests and typecheck; commit.
 
 ### Task 3: Sidebar and move compatibility
 
@@ -78,21 +78,27 @@
 - Sidebar receives source headers, explicit load states, `ensure`/`retry`, and metadata shortcuts separately.
 - Move dialog requests its source with the same `ensure` function and consumes that cache's loaded collection.
 
-- [ ] Write rendered tests: initial current tree visible; unopened source causes zero tree requests; expand triggers one request; loaded-empty differs from failed; retry recovers.
-- [ ] Add tests for persisted-open hydration, favorites/recents from unloaded sources, Show all ordering, non-empty filtering finding an unloaded source document, archive mode, conservative onboarding emptiness and complete move destinations.
-- [ ] Observe red tests, then wire the layout hook into sidebar/move dialog. Preserve original-source context for folder/document action menus.
-- [ ] Load extra trees only for explicit expansion, restored-open sections, active filtering or a move request. Keep expanded source headers visible while loading/failing.
-- [ ] Run targeted tests plus existing shortcut, organizer, move and tree keyboard tests; commit.
+- [x] Write rendered tests: initial current tree visible; unopened source causes zero tree requests; expand triggers one request; loaded-empty differs from failed; retry recovers.
+- [x] Add tests for persisted-open hydration, favorites/recents from unloaded sources, Show all ordering, non-empty filtering finding an unloaded source document, archive mode, conservative onboarding emptiness and complete move destinations.
+- [x] Observe red tests, then wire the layout hook into sidebar/move dialog. Preserve original-source context for folder/document action menus.
+- [x] Load extra trees only for explicit expansion, restored-open sections, active filtering or a move request. Keep expanded source headers visible while loading/failing.
+- [x] Run targeted tests plus existing shortcut, organizer, move and tree keyboard tests; commit.
 
 ### Task 4: End-to-end and performance evidence
 
-- [ ] Add E2E checks for request counts, cached reopening, retry, direct-document reveal, filter completeness, move destinations and refreshed mutations.
-- [ ] Run full unit suite, typecheck and lint (exclude local `.claude` worktree copies, documenting the exact command).
-- [ ] Run production build and relevant DB-backed E2E scenarios in their isolated harness; report any unavailable prerequisites explicitly.
-- [ ] Compare baseline and branch on identical multi-source fixtures with at least 400 documents. Record initial tree reads, response size and content arrival; include warm expansion/reopening behavior and test conditions.
-- [ ] Save evidence to `docs/superpowers/verification/2026-10-24-lazy-source-trees.md`, update canonical documentation references where needed, and review the full diff.
-- [ ] Create a focused PR against the intended base, with scope/behavior and actual verification results. Attach it to this chat.
+- [x] Add E2E checks for request counts, cached reopening, retry, direct-document reveal, filter completeness, move destinations and refreshed mutations.
+- [x] Run full unit suite, typecheck and lint (exclude local `.claude` worktree copies, documenting the exact command).
+- [x] Run production build and relevant DB-backed E2E scenarios in their isolated harness; report any unavailable prerequisites explicitly.
+- [x] Compare baseline and branch on identical multi-source fixtures with at least 400 documents. Record initial tree reads, response size and content arrival; include warm expansion/reopening behavior and test conditions.
+- [x] Save evidence to `docs/superpowers/verification/2026-10-24-lazy-source-trees.md`, update canonical documentation references where needed, and review the full diff.
+- [x] Create a focused PR against the intended base, with scope/behavior and actual verification results. Attach it to this chat.
 
 ## Self-review
 
 All spec behaviors map to Tasks 1–4. Shared cache and explicit load states prevent empty/unloaded confusion. Shortcut metadata and move requests are explicit dependencies rather than accidental consumers of complete trees. Filtering's exceptional full load is documented. PR 3 (cross-page persistence), PR 4 (targeted operation-result reveal) and unrelated visual changes remain outside this plan.
+
+## Execution notes
+
+Native execution approved by the user. Implementation is on `codex/lazy-source-trees`, based directly on main (the original checkout's unrelated editor commit is excluded). Final independent review completed and its archived-ancestor finding was fixed with a MariaDB regression.
+
+Performance verification was narrowed to equivalent bootstrap read projections + serialized DTO sizes over 400 real documents/four sources, plus browser functional checks. Full-browser cold-load before/after latency is explicitly unmeasured, rather than inferred from DTO reductions. See the verification record for limits and exact commands.
