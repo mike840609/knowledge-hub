@@ -214,8 +214,8 @@ New `vercel.json`:
 - No `crons`: the free database sleeps regardless, and import cleanup already runs opportunistically
   on import requests.
 - No `maxDuration`: Fluid Compute's 300 s default covers the worst cold wake.
-- `package.json` `engines.node` becomes `24.x` to match the verified local runtime (24.19.0) and
-  Vercel's supported Node 24 line.
+- Keep `package.json` `engines.node` as `>=20.19.0 <25`. Choose the runtime in the Vercel
+  project's Node.js Version setting (22.x or 24.x); do not narrow the package range for one host.
 - A minimal `.vercelignore` excludes build artifacts (`playwright-report`, `test-results`,
   `*.tsbuildinfo`, `.next-dev`) but keeps tests and scripts that `next build` type-checks.
 

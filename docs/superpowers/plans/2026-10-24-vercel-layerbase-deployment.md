@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Node `24.x`; do not add runtime dependencies.
+- Node `>=20.19.0 <25` (unchanged); do not add runtime dependencies.
 - Keep MariaDB/MySQL SQL and the existing pool/unit-of-work architecture.
 - Production pool: `connectionLimit` 2, `minimumIdle` 0, `idleTimeout` 60 s, `connectTimeout` 30000 ms, `acquireTimeout` 35000 ms. Local defaults stay 10 connections.
 - Session init is exactly: `SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED` and `SET SESSION time_zone = '+00:00'`.
@@ -559,7 +559,7 @@ Expected: FAIL — scripts and `vercel.json` do not exist.
   - Otherwise: run `node scripts/build.mjs`; on failure exit with its status; when `migrate`, fail with a clear message if no URL, warn when falling back to `KM_DB_URL`, then run `npm run db:migrate` with `env: { ...process.env, KM_DB_URL: migrateUrl }`; when not migrating, log the reason. Never print `migrateUrl`.
 - `vercel.json` exactly as in the test plus `"$schema": "https://openapi.vercel.sh/vercel.json"`.
 - `.vercelignore`: `.next`, `.next-dev`, `playwright-report`, `test-results`, `*.tsbuildinfo`, `.impeccable`, `work`.
-- `package.json`: add `"build:vercel": "node scripts/vercel-build.mjs"` and change `engines.node` to `"24.x"`.
+- `package.json`: add `"build:vercel": "node scripts/vercel-build.mjs"`. Leave `engines.node` unchanged (`>=20.19.0 <25`); set the Vercel project's Node.js Version to 22.x or 24.x in the dashboard.
 
 - [ ] **Step 4: Run the test to verify it passes**
 
