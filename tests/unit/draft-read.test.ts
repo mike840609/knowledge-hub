@@ -154,9 +154,11 @@ describe("draft recovery model", () => {
     await expect(getDraftRecoveryModel(WORKSPACE_ID, "another-source", DOCUMENT_ID)).resolves.toBeNull();
   });
 
-  it("returns null when the draft is gone", async () => {
+  it("returns the document with a null draft when the draft is gone", async () => {
     fakeServices({ get: async () => ({ key: `draft:${DOCUMENT_ID}`, value: null, version: 0, updatedAt: "" }) });
-    await expect(getDraftRecoveryModel(WORKSPACE_ID, SOURCE_ID, DOCUMENT_ID)).resolves.toBeNull();
+    const model = await getDraftRecoveryModel(WORKSPACE_ID, SOURCE_ID, DOCUMENT_ID);
+    expect(model?.draft).toBeNull();
+    expect(model?.document.documentId).toBe(DOCUMENT_ID);
   });
 
   it("rethrows a transient read failure", async () => {

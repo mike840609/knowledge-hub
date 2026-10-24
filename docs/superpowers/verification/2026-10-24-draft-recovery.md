@@ -14,7 +14,7 @@ make verify
 
 Result: **exit 0**
 
-- Unit suite: **256 files, 3,182 tests passed**
+- Unit suite: **256 files, 3,188 tests passed**
 - TypeScript: `tsc --noEmit` passed
 - Lint: `eslint .` passed
 - Build: Next.js production build compiled successfully
@@ -69,6 +69,13 @@ The reviewer’s Minor findings were deferred; they are recorded in the plan wor
 - the new E2E URL assertion could be exact instead of suffix-matching;
 - the plan’s “Draft · Continue writing” provenance is intentionally not shown for ordinary drafts, because the existing Home test forbids it;
 - `getDraftRecoveryModel` reads the document once through `personal.get` and once by id.
+
+## Requested follow-up fixes
+
+- Starting a favorite write now invalidates an in-flight favorites list, so a newly mounted hook cannot reuse the pre-toggle list. `loadFavoriteItems` also only removes its own entry from the in-flight map.
+- Home sends only active documents plus archived documents that actually have a draft; `documentsForHome()` is tested independently.
+- `listFavorites` now resolves each favorite document individually, so its cost follows the favorite count rather than the workspace document count; the DB-backed integration test still passes.
+- A stale recovery URL with no draft now redirects to the document (with `?includeArchived=true` when the document/source is archived) instead of showing 404. Unit page tests and a browser E2E cover both the active and stale cases.
 
 ## Covered by unit tests, not re-run manually
 

@@ -1,5 +1,19 @@
 export type ContinueDoc = { documentId: string; sourceId: string; title: string; updatedAt: string; ownership: "SOURCE_MANAGED" | "HUB_MANAGED"; status: "ACTIVE" | "ARCHIVED"; sourceStatus: "ACTIVE" | "ARCHIVED"; sourceName?: string; sourcePath?: string | null };
 export type ContinueDraft = { key: string; title: string; sourceId: string | null; updatedAt: string };
+
+/**
+ * The documents Home actually needs in its client props: every active document,
+ * plus only those archived documents that have a draft to recover. Sending every
+ * archived document makes the Home payload grow with the archive, not with the
+ * work the reader can still resume.
+ */
+export function documentsForHome(
+  documents: readonly ContinueDoc[],
+  drafts: readonly ContinueDraft[],
+): ContinueDoc[] {
+  const draftIds = new Set(drafts.flatMap(draft => draft.key.startsWith("draft:") ? [draft.key.slice("draft:".length)] : []));
+  return documents.filter(document => (document.status === "ACTIVE" && document.sourceStatus === "ACTIVE") || draftIds.has(document.documentId));
+}
 export type DraftItem = { id: string; at: string; draft: ContinueDraft; doc?: ContinueDoc };
 export type RecentItem = { id: string; label: "Edited" | "Opened"; at?: string; doc: ContinueDoc };
 

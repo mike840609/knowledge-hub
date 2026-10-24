@@ -41,13 +41,16 @@ const lastFailureAt = new Map<string, number>();
 async function loadFavoriteItems(workspaceId: string): Promise<FavoriteItem[]> {
   const existing = favoritesInFlight.get(workspaceId);
   if (existing) return existing;
-  const promise = (async () => {
+  const promise: Promise<FavoriteItem[]> = (async () => {
     await migrateLocalFavorites(workspaceId);
     await pendingFavoriteWrites(workspaceId).catch(() => {});
     const response = await fetch(`/api/workspaces/${workspaceId}/personal?view=favorites`, { cache: "no-store" });
     if (!response.ok) throw new Error();
     return await response.json() as FavoriteItem[];
-  })().finally(() => favoritesInFlight.delete(workspaceId));
+  })().finally(() => {
+    // A favorite change may have replaced this request; only remove our own entry.
+    if (favoritesInFlight.get(workspaceId) === promise) favoritesInFlight.delete(workspaceId);
+  });
   favoritesInFlight.set(workspaceId, promise);
   return promise;
 }
@@ -163,6 +166,9 @@ export function useDocumentShortcuts(workspaceId: string): {
       startTransition(() => setShortcuts(next));
       if (personal) {
         const changed = [...new Set([...before.favorites, ...next.favorites])].filter(key => before.favorites.includes(key) !== next.favorites.includes(key));
+        // A newly mounted hook must not reuse a list requested before this change;
+        // the queued write below makes the next request read the new state.
+        if (changed.length) favoritesInFlight.delete(workspaceId);
         for (const key of changed) {
           const selected = next.favorites.includes(key);
           void enqueueFavoriteWrite(workspaceId, async () => {

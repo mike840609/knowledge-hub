@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { getSourceListModel } from "@/server/source-read";
 import { FRESHNESS_KEY, freshnessThreshold, knowledgeFreshness } from "@/modules/personal/application/knowledge-freshness";
 import { resolveAuthoredTitle } from "@/lib/authored-title";
+import { documentsForHome } from "@/lib/home-continue";
 import { applicationServices } from "@/server/composition";
 import { PersonalHome } from "@/components/knowledge/personal-home";
 import { notFound } from "next/navigation";
@@ -21,6 +22,7 @@ export default async function PersonalHomePage({ params }: { params: Promise<{ w
     .map(doc => ({ ...doc, updatedAt: doc.updatedAt.toISOString() }));
   const activeDocuments = allDocuments.filter(doc => doc.status === "ACTIVE" && doc.sourceStatus === "ACTIVE");
   const drafts = items.filter(i => i.key.startsWith("draft:") && i.value).map(i => ({ key: i.key, title: resolveAuthoredTitle({ metadataTitle: undefined, markdown: String(i.value?.markdown ?? ""), typedTitle: String(i.value?.title ?? "") }).title || "Untitled draft", sourceId: "sourceId" in i ? String(i.sourceId) : null, updatedAt: i.updatedAt }));
+  const homeDocuments = documentsForHome(allDocuments, drafts);
   const folderModel=await getSourceListModel(workspaceId);
   const folderIds = new Set(folderModel?.items.filter(item => item.source.sourceType === "FOLDER_SYNC").map(item => item.source.id));
   const firstReadableDocument = activeDocuments.find(doc => folderIds.has(doc.sourceId)) ?? activeDocuments[0];
@@ -33,5 +35,5 @@ export default async function PersonalHomePage({ params }: { params: Promise<{ w
   const sourceNames=new Map(folderModel?.items.map(i=>[i.source.id,i.source.name])??[]);
   const reminders = knowledgeFreshness(folderModel?.items ?? [], freshnessThreshold(freshness.value), new Date());
   const notices = await unreadHomeNotices(s.reviews, caller);
-  return <PersonalHome guidanceDismissed={onboarding.value.dismissed} slots={slots} workspaceId={workspaceId} documents={allDocuments.map(d=>({...d,sourceName:sourceNames.get(d.sourceId),sourcePath:paths.get(d.documentId)}))} drafts={drafts} reminders={reminders} notices={notices} />;
+  return <PersonalHome guidanceDismissed={onboarding.value.dismissed} slots={slots} workspaceId={workspaceId} documents={homeDocuments.map(d=>({...d,sourceName:sourceNames.get(d.sourceId),sourcePath:paths.get(d.documentId)}))} drafts={drafts} reminders={reminders} notices={notices} />;
 }

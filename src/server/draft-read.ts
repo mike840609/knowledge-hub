@@ -3,7 +3,7 @@ import { getWorkspaceShellModel } from "./knowledge-read";
 import { isHiddenReadFailure } from "./read-errors";
 
 export type DraftRecoveryModel = {
-  draft: { key: string; title: string; markdown: string; updatedAt: string };
+  draft: { key: string; title: string; markdown: string; updatedAt: string } | null;
   document: {
     documentId: string;
     sourceId: string;
@@ -39,7 +39,9 @@ export async function getDraftRecoveryModel(
     const value = item.value;
     const title = value?.title;
     const markdown = value?.markdown;
-    if (typeof title !== "string" || typeof markdown !== "string") return null;
+    const draft = typeof title === "string" && typeof markdown === "string"
+      ? { key: item.key, title, markdown, updatedAt: item.updatedAt }
+      : null;
 
     const document = await services.queries.getDocument(caller, documentId, { includeArchived: true });
     if (document.workspaceId !== workspaceId || document.sourceId !== sourceId) return null;
@@ -74,7 +76,7 @@ export async function getDraftRecoveryModel(
       source.ownership === "HUB_MANAGED";
 
     return {
-      draft: { key: item.key, title, markdown, updatedAt: item.updatedAt },
+      draft,
       document: {
         documentId: document.documentId,
         sourceId: document.sourceId,

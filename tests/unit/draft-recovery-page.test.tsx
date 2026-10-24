@@ -69,6 +69,26 @@ it("sends an active draft back to the document page", async () => {
   expect(mocks.redirect).toHaveBeenCalledWith("/w/ws/knowledge/src/doc");
 });
 
+it("redirects a stale recovery URL to an active document when the draft is gone", async () => {
+  mocks.model.mockResolvedValue({
+    draft: null,
+    document: { documentId: "doc", sourceId: "src", status: "ACTIVE", sourceStatus: "ACTIVE", ownership: "HUB_MANAGED", title: "Document" },
+    canRestore: false, canWrite: true, sourceArchived: false, workspaceArchived: false, folderArchived: false, treeNodeMissing: false,
+  });
+  await DraftRecoveryPage({ params: Promise.resolve({ workspaceId: "ws", sourceId: "src", documentId: "doc" }) });
+  expect(mocks.redirect).toHaveBeenCalledWith("/w/ws/knowledge/src/doc");
+});
+
+it("redirects a stale recovery URL to the archived document view", async () => {
+  mocks.model.mockResolvedValue({
+    draft: null,
+    document: { documentId: "doc", sourceId: "src", status: "ARCHIVED", sourceStatus: "ACTIVE", ownership: "HUB_MANAGED", title: "Document" },
+    canRestore: true, canWrite: true, sourceArchived: false, workspaceArchived: false, folderArchived: false, treeNodeMissing: false,
+  });
+  await DraftRecoveryPage({ params: Promise.resolve({ workspaceId: "ws", sourceId: "src", documentId: "doc" }) });
+  expect(mocks.redirect).toHaveBeenCalledWith("/w/ws/knowledge/src/doc?includeArchived=true");
+});
+
 it("is not found when the draft has no recovery model", async () => {
   mocks.model.mockResolvedValue(null);
   await expect(DraftRecoveryPage({ params: Promise.resolve({ workspaceId: "ws", sourceId: "src", documentId: "doc" }) })).rejects.toThrow("not found");

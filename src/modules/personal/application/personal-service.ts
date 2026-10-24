@@ -40,14 +40,14 @@ export class PersonalService {
   async listFavorites(caller: CallerContext, workspaceId: string) {
     await this.authorize(caller, workspaceId);
     const items = await this.store.listFavorites(caller.identity.id, workspaceId);
-    const documents = new Map(
-      (await this.queries.listDocumentSummaries(caller, workspaceId, { includeArchived: true }))
-        .map(document => [document.documentId, document] as const),
-    );
-    return items.flatMap(item => {
-      const document = documents.get(item.key.slice("favorite:".length));
-      return document ? [{ key: item.key, sourceId: document.sourceId }] : [];
-    });
+    const result: { key: string; sourceId: string }[] = [];
+    for (const item of items) {
+      try {
+        const document = await this.queries.getDocument(caller, item.key.slice("favorite:".length), { includeArchived: true });
+        if (document.workspaceId === workspaceId) result.push({ key: item.key, sourceId: document.sourceId });
+      } catch (error) { if (!(error instanceof DomainError)) throw error; }
+    }
+    return result;
   }
   async get(caller: CallerContext, workspaceId: string, key: string) {
     await this.authorize(caller, workspaceId, key);

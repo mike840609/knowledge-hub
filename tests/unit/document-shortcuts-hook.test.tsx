@@ -82,6 +82,26 @@ it("makes one favorites request for two mounted hooks", async () => {
   expect(stored().favorites).toEqual(["s:f"]);
 });
 
+it("starts a fresh request after a favorite changes while one is in flight", async () => {
+  let answerFirst!: (response: Response) => void;
+  const first = new Promise<Response>(resolve => { answerFirst = resolve; });
+  const fetcher = vi.fn()
+    .mockReturnValueOnce(first)
+    .mockResolvedValueOnce(new Response(JSON.stringify([{ key: "favorite:new", sourceId: "s" }]), { status: 200 }));
+  vi.stubGlobal("fetch", fetcher);
+
+  await act(async () => root.render(<Host />));
+  expect(fetcher).toHaveBeenCalledTimes(1);
+
+  await act(async () => api.update(previous => ({ ...previous, favorites: [...previous.favorites, "s:new"] })));
+  await act(async () => root.render(<><Host /><Host /></>));
+  expect(fetcher).toHaveBeenCalledTimes(2);
+
+  await act(async () => answerFirst(new Response(JSON.stringify([]), { status: 200 })));
+  await act(async () => transitions.splice(0).forEach((run) => run()));
+  expect(stored().favorites).toContain("s:new");
+});
+
 it("makes one favorites request when the window regains focus", async () => {
   await act(async () => root.render(<><Host /><Host /></>));
   await answerFavorites([{ key: "favorite:f", sourceId: "s" }]);

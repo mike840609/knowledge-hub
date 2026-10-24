@@ -13,8 +13,13 @@ export default async function DraftRecoveryPage({
   const { workspaceId, sourceId, documentId } = await params;
   const model = await getDraftRecoveryModel(workspaceId, sourceId, documentId);
   if (!model) notFound();
+  const draft = model.draft;
+  if (!draft) {
+    const suffix = model.document.status === "ARCHIVED" || model.document.sourceStatus === "ARCHIVED" ? "?includeArchived=true" : "";
+    return redirect(`/w/${workspaceId}/knowledge/${sourceId}/${documentId}${suffix}`);
+  }
   if (model.document.status === "ACTIVE" && model.document.sourceStatus === "ACTIVE") {
-    redirect(`/w/${workspaceId}/knowledge/${sourceId}/${documentId}`);
+    return redirect(`/w/${workspaceId}/knowledge/${sourceId}/${documentId}`);
   }
 
   const explanation = model.workspaceArchived
@@ -36,14 +41,14 @@ export default async function DraftRecoveryPage({
       <PageHeader
         location="Home"
         locationHref={`/w/${workspaceId}/home`}
-        title={model.draft.title || "Untitled draft"}
+        title={draft.title || "Untitled draft"}
         description={explanation}
         actions={<DraftRecoveryActions
           workspaceId={workspaceId}
           sourceId={sourceId}
           documentId={documentId}
-          title={model.draft.title || "Untitled draft"}
-          markdown={model.draft.markdown}
+          title={draft.title || "Untitled draft"}
+          markdown={draft.markdown}
           canRestore={model.canRestore}
         />}
       />
@@ -53,7 +58,7 @@ export default async function DraftRecoveryPage({
         </p>
       ) : null}
       <div className="kh-reading-column py-6">
-        <MarkdownArticle markdown={model.draft.markdown} />
+        <MarkdownArticle markdown={draft.markdown} />
       </div>
     </div>
   );

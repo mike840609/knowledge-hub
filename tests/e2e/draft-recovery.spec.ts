@@ -38,3 +38,18 @@ test("a draft survives archiving and can be restored from Home", { tag: "@smoke-
   await page.getByRole("button", { name: "Markdown", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Markdown", exact: true })).toHaveValue("Unsaved draft body");
 });
+
+test("a stale draft recovery URL redirects to the document", async ({ page }) => {
+  await page.goto("/");
+  const navigation = await (await page.request.get("/api/workspaces")).json();
+  const workspaceId = navigation.items[0].id;
+  const created = await page.request.post(`/api/workspaces/${workspaceId}/documents`, {
+    data: { title: "No draft left", markdown: "Saved body" },
+  });
+  expect(created.ok()).toBe(true);
+  const document = await created.json();
+
+  await page.goto(`/w/${workspaceId}/knowledge/drafts/${document.sourceId}/${document.documentId}`);
+  await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}$`));
+  await expect(page.getByRole("region", { name: "Document content", exact: true }).getByRole("article").getByText("Saved body", { exact: true })).toBeVisible();
+});
