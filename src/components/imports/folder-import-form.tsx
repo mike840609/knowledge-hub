@@ -41,7 +41,9 @@ export type ImportUiState =
 
 const MARKDOWN_EXTENSION = /\.(?:md|markdown)$/iu;
 const MAX_BATCH_FILES = 20;
-const MAX_BATCH_BYTES = 10 * 1024 * 1024;
+// Vercel caps a Function request body at 4.5 MB; 4 MiB of files plus multipart
+// headers stays below it. Local builds use the same ceiling so behaviour is identical.
+export const MAX_UPLOAD_BATCH_BYTES = 4 * 1024 * 1024;
 const ASSET_HASH_CONCURRENCY = 4;
 const TRANSIENT_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 
@@ -281,7 +283,7 @@ async function uploadMarkdownBatches(
     let current: StagedFile[] = [];
     let currentBytes = 0;
     for (const entry of batch) {
-      if (current.length > 0 && currentBytes + entry.file.size > MAX_BATCH_BYTES) {
+      if (current.length > 0 && currentBytes + entry.file.size > MAX_UPLOAD_BATCH_BYTES) {
         chunks.push(current);
         current = [];
         currentBytes = 0;
