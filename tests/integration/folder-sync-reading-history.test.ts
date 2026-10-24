@@ -286,7 +286,7 @@ it("groups applied runs in run order with unread flags and stable pagination", a
     updated: 0,
   });
   expect(
-    second.runs[0].changes.map((change) => change.sourcePath).sort(),
+    second.runs[0].changes.map((change) => change.sourcePath),
   ).toEqual(["alpha/one.md", "alpha/two.md"]);
   const unreadByDocument = new Map(
     second.runs[0].changes.map((change) => [

@@ -73,6 +73,7 @@ describe("source list batch reads", () => {
 
     const model = await getSourceListModel(WORKSPACE_ID);
     expect(model).not.toBeNull();
+    expect(model!.items.map((item) => item.source.id)).toEqual([FOLDER_SOURCE_ID, HUB_SOURCE_ID]);
     const items = new Map(model!.items.map((item) => [item.source.id, item]));
 
     expect(items.get(FOLDER_SOURCE_ID)).toMatchObject({
