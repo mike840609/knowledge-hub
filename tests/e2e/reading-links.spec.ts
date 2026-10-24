@@ -68,6 +68,9 @@ test.describe("wikilinks and backlinks in My Space", () => {
     page.on("request", (request) => { if (new URL(request.url()).pathname.endsWith("/preview")) asked.push(request.url()); });
 
     await page.goto(source.url);
+    // Measure hover on the settled reader: editor takeover replaces the stand-in's tooltip root.
+    // Presses spanning takeover are covered separately below.
+    await expect(page.locator(".ProseMirror")).toBeVisible(ROUND_TRIP);
     const link = page.locator("article").first().getByRole("link", { name: targetTitle, exact: true });
     await expect(link).toBeVisible();
     expect(asked).toHaveLength(0);
@@ -245,6 +248,36 @@ test.describe("wikilinks and backlinks in My Space", () => {
     await page.locator("article").first().getByRole("link", { name: "the setup" }).click();
     await expect(page).toHaveURL(`${target.url}#local-setup`, ROUND_TRIP);
     await expect(page.locator("#local-setup:visible")).toBeInViewport(ROUND_TRIP);
+  });
+
+  test("shortcut metadata arriving during a heading navigation does not discard that navigation", async ({ page }) => {
+    const stamp = Date.now();
+    const title = `Deferred Anchor ${stamp}`;
+    const target = await createMySpaceDocument(page, title, "Intro.\n\n## Local Setup\n\nHere.");
+    const linker = await createMySpaceDocument(page, `Deferred Linker ${stamp}`, `Go to [[${title}#Local Setup|the setup]].`);
+    let releaseMetadata!: () => void;
+    const metadataHeld = new Promise<void>(resolve => { releaseMetadata = resolve; });
+    await page.route("**/sidebar-shortcuts?**", async route => { await metadataHeld; await route.continue(); });
+    let releaseNavigation!: () => void;
+    const navigationHeld = new Promise<void>(resolve => { releaseNavigation = resolve; });
+    let navigationStarted!: () => void;
+    const started = new Promise<void>(resolve => { navigationStarted = resolve; });
+    await page.route(url => url.pathname === new URL(target.url).pathname && url.searchParams.has("_rsc"), async route => {
+      navigationStarted(); await navigationHeld; await route.continue();
+    });
+    try {
+      await page.goto(linker.url);
+      await expect(page.locator(".ProseMirror")).toBeVisible(ROUND_TRIP);
+      const click = page.locator("article").first().getByRole("link", { name: "the setup" }).click();
+      await started;
+      const response = page.waitForResponse(response => response.url().includes("/sidebar-shortcuts?"));
+      releaseMetadata(); await (await response).finished();
+      // Let the response update the sidebar while the destination is deliberately still pending.
+      await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+      releaseNavigation(); await click;
+      await expect(page).toHaveURL(`${target.url}#local-setup`, ROUND_TRIP);
+      await expect(page.locator("#local-setup:visible")).toBeInViewport(ROUND_TRIP);
+    } finally { releaseMetadata(); releaseNavigation(); }
   });
 
   test("a link pressed before the page has hydrated still opens when the editor takes over", async ({ page }) => {
