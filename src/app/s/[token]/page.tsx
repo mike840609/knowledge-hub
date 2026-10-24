@@ -64,9 +64,9 @@ export default async function SharedDocumentPage({ params }: SharedPageProps) {
       <SharedReviewPanel token={token} revisionId={shared.revisionId} markdown={shared.markdown} signInHref={signInHref}
         brand={<span className="shrink-0 text-body font-semibold text-kh-text">Knowledge Hub</span>}
         actions={<><SaveShareButton token={token} /><a href={platformEntry} className={buttonClasses({ variant: "ghost" })}><ExternalLink className="size-4 sm:hidden" aria-hidden="true" /><span className="max-sm:sr-only">Open in Knowledge Hub</span></a></>}>
-      {/* Outline: a rail off the column's left edge when there is room, else a disclosure above the title (share-page-outline spec §2). */}
+      {/* Outline: a rail off the column's right edge — off the comments' right edge while they are open — when there is room, else a disclosure above the title (outline-right-of-article spec). */}
       <div className="kh-share-outline"><SharedOutline entries={outline} placement="disclosure" /></div>
-      {outline.length > 0 ? <div className="kh-share-outline-rail kh-reading-column sticky top-[4.5rem] z-10 h-0"><div className="absolute right-full top-0 w-52"><SharedOutline entries={outline} placement="rail" /></div></div> : null}
+      {outline.length > 0 ? <div className="kh-share-outline-rail kh-reading-column sticky top-[4.5rem] z-10 h-0"><div className="absolute left-full top-0 w-52"><SharedOutline entries={outline} placement="rail" /></div></div> : null}
       {contentOwnsTitle ? null : <header className="kh-reading-column pt-6"><h1 className="text-heading font-semibold tracking-tight text-kh-text">{shared.title}</h1>{byline}</header>}
       <article data-review-document className={`kh-reading-column min-w-0 pb-6 ${contentOwnsTitle ? "pt-6" : "pt-3"} [&>div>:first-child]:mt-0`}>
         <MarkdownRenderer markdown={shared.markdown} afterTitle={contentOwnsTitle ? byline : undefined} />

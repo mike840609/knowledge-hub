@@ -24,9 +24,6 @@ export function DocumentPane({
         className="kh-document-pane min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain contain-layout kh-focus-ring">
         <div className="flex items-start">
           <div className="min-w-0 flex-1">
-            {/* Where the pane holds outline, article and discussions (88rem), the outline hangs off the
-                column's left edge instead, as on a shared page; CSS shows one of the two. */}
-            <div className="kh-outline-rail-left kh-reading-column sticky top-8 h-0"><div className="absolute right-full top-0 w-56">{outline}</div></div>
             {children}
           </div>
           {/* Reserve the wide-pane rail even for a document without headings.
