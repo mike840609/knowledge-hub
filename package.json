@@ -3,12 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=20.19.0 <25"
+    "node": "24.x"
   },
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1",
     "build": "node scripts/build.mjs",
     "build:offline": "node scripts/build-offline.mjs",
+    "build:vercel": "node scripts/vercel-build.mjs",
     "start": "next start --hostname 127.0.0.1",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",

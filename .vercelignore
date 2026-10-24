@@ -1,0 +1,8 @@
+.next
+.next-dev
+.next-dev-reviewer
+playwright-report
+test-results
+*.tsbuildinfo
+.impeccable
+work
