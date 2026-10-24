@@ -67,6 +67,10 @@ export class MariaDbTreeRepository implements TreeRepository {
    * MariaDB sorts `NULL` first, so `ORDER BY parent_id` keeps roots first
    * exactly like the old `COALESCE(parent_id, '')` did, and the
    * `(source_id, parent_id, position)` index can supply the order directly.
+   *
+   * This equivalence assumes the app's UUIDv7 ids and MariaDB's native UUID
+   * ordering (10.11.5+). A different id format or an older server could sort
+   * `id` differently, so revisit the tie-break before either changes.
    */
   async listBySource(sourceId: string): Promise<TreeViewNode[]> {
     const rows = await this.connection.query<DbRow[]>(

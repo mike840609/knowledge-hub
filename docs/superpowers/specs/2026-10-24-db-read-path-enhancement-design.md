@@ -1,6 +1,6 @@
 # DB read-path enhancement: narrow projections and lookup indexes
 
-Status: Draft for review
+Status: Approved 2026-10-24; implementation complete
 Date: 2026-10-24
 Branch: `db-enhancement`
 Measurement context: dev MariaDB 10.11.19, 2026-10-24. Dev has 2 `sync_runs` and 1
@@ -370,6 +370,12 @@ every UUID string, so roots remain first. The `position` and `id` tie-breaks
 are unchanged. A 500-row probe compared the two orderings and found **0
 mismatches**.
 
+**ID-format assumption.** The equivalence also relies on the app's UUIDv7
+primary keys and MariaDB's native UUID ordering (available on 10.11.5+). A
+different id format, or a server that compares the UUID type byte order
+differently, could change the `id` tie-break. Re-check the order before either
+assumption changes; the release gate includes the server version.
+
 **Index:**
 
 ```sql
@@ -493,6 +499,11 @@ into a scratch DB or use a read replica and run the following with
 
 Record `r_rows`, `r_total_time_ms`, chosen key, and filesort for each query
 before and after. Do not accept the change on “the index exists” alone.
+
+Record the target server version as part of the gate: the tree-order
+equivalence assumes MariaDB 10.11.5+ native UUID ordering and the app's UUIDv7
+ids. If the target is older or the id format changes, re-run the tree order
+comparison before accepting the rewrite.
 
 ## Rollout and rollback
 

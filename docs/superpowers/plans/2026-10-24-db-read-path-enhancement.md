@@ -62,7 +62,7 @@ These are the failure modes most likely to bite a reader or an operator. Each li
   - `findLatestReadyIdBySourceForCreator(sourceId: string, creatorId: string, now: Date, basedOnVersion: number): Promise<string | null>`
   - `SourceListItemModel.pendingPreviewId` keeps its existing `string | null` shape.
 
-- [ ] **Step 1: Add the failing repository test**
+- [x] **Step 1: Add the failing repository test**
 
 In `tests/integration/import-safety.test.ts`, remove the four `findLatestReadyBySourceForCreator` assertions from the preview-safety test (lines 103-144). Add a new `it` block that creates two READY snapshots for the same source and version and asserts the latest wins:
 
@@ -107,13 +107,13 @@ it("returns the latest ready snapshot id for the creator, version, and time", as
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npx vitest run --config vitest.integration.config.ts tests/integration/import-safety.test.ts`
 
 Expected: FAIL with `findLatestReadyIdBySourceForCreator is not a function`.
 
-- [ ] **Step 3: Implement the port and repository method**
+- [x] **Step 3: Implement the port and repository method**
 
 Replace the old method in `import-snapshot-repository.ts` with the ID-only signature. In `import-snapshots.ts`, replace the implementation with:
 
@@ -137,13 +137,13 @@ async findLatestReadyIdBySourceForCreator(
 
 Delete the old `findLatestReadyBySourceForCreator` implementation. Do not select or parse `plan`/`summary`.
 
-- [ ] **Step 4: Run the repository test to verify it passes**
+- [x] **Step 4: Run the repository test to verify it passes**
 
 Run: `npx vitest run --config vitest.integration.config.ts tests/integration/import-safety.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 5: Update the source-list caller**
+- [x] **Step 5: Update the source-list caller**
 
 In `getSourceListModel()`:
 
@@ -152,7 +152,7 @@ In `getSourceListModel()`:
 - Set `pendingPreviewId: pending` (the returned string or null).
 - Remove the old `pending?.id`.
 
-- [ ] **Step 6: Add the model-level integration test**
+- [x] **Step 6: Add the model-level integration test**
 
 In `tests/integration/phase3-request-authorization.test.ts`, add a test using the existing `team()`, `createThroughRoute`, `finish`, `createSourceResync`, `uploadSourceImportEntries`, `finalizeSourceImport`, and `getSourceListModel` helpers:
 
@@ -175,7 +175,7 @@ it("exposes the latest READY preview id on the source list", async () => {
 });
 ```
 
-- [ ] **Step 7: Run typecheck and the focused tests**
+- [x] **Step 7: Run typecheck and the focused tests**
 
 Run:
 - `npm run typecheck`
@@ -184,7 +184,7 @@ Run:
 
 Expected: all pass.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/modules/sources/ports/import-snapshot-repository.ts src/infrastructure/database/mariadb/repositories/import-snapshots.ts src/server/source-read.ts tests/integration/import-safety.test.ts tests/integration/phase3-request-authorization.test.ts
@@ -215,7 +215,7 @@ git commit -m "perf(sources): read only the pending preview id"
   - `RevisionRepository.listSummariesByDocument(documentId: string): Promise<KnowledgeRevisionSummary[]>`
   - `KnowledgeQueryService.listRevisionSummaries(caller: CallerContext, documentId: string, input?: { includeArchived?: boolean }): Promise<KnowledgeRevisionSummary[]>`
 
-- [ ] **Step 1: Add the failing tests**
+- [x] **Step 1: Add the failing tests**
 
 In `tests/integration/phase1-revisions.test.ts`, add a test that seeds a document with two checkpoint revisions and asserts the summary method returns the same IDs as `listByDocument()` with no content fields:
 
@@ -279,13 +279,13 @@ await expect(queries.listRevisionSummaries(member, uuidv7()))
 expect(await queries.listRevisionSummaries(member, scope.documentId)).toHaveLength(2);
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `npx vitest run --config vitest.integration.config.ts tests/integration/phase1-revisions.test.ts tests/integration/autosave-history.test.ts tests/integration/phase1-query.test.ts`
 
 Expected: FAIL with `listSummariesByDocument is not a function` / `listRevisionSummaries is not a function`.
 
-- [ ] **Step 3: Add the domain type and repository port**
+- [x] **Step 3: Add the domain type and repository port**
 
 Add to `src/modules/knowledge/domain/revision.ts`:
 
@@ -304,7 +304,7 @@ listSummariesByDocument(documentId: string): Promise<KnowledgeRevisionSummary[]>
 
 Keep `listByDocument()` unchanged.
 
-- [ ] **Step 4: Implement the repository summary query**
+- [x] **Step 4: Implement the repository summary query**
 
 In `revisions.ts`, add a mapper and method. The SQL must select only:
 
@@ -322,7 +322,7 @@ ORDER BY r.revision_no ASC
 
 The mapper mirrors `mapRevision()` for `history`, but returns only `id`, `revisionNo`, `createdAt`, and `history`. Do not select `title`, `markdown`, `metadata`, `content_hash`, or `created_by`.
 
-- [ ] **Step 5: Add the service method and switch the caller**
+- [x] **Step 5: Add the service method and switch the caller**
 
 Add `listRevisionSummaries` to `KnowledgeQueryService` and `KnowledgeQueryServiceImpl`. Its implementation must mirror `listRevisions()`:
 
@@ -339,13 +339,13 @@ In `knowledge-read.ts`, replace `services.queries.listRevisions(...)` with `serv
 
 Define `RevisionSummary` as `KnowledgeRevisionSummary` in `knowledge-read.ts` (or keep the structurally identical `Pick<KnowledgeRevisionView, ...>`; one definition is preferred).
 
-- [ ] **Step 6: Update the unit tests, fakes, and contract mirror**
+- [x] **Step 6: Update the unit tests, fakes, and contract mirror**
 
 - `tests/unit/knowledge-document-model.test.ts`: replace the `listRevisions` fake with `listRevisionSummaries`, returning objects with only `{ id, revisionNo, createdAt, history }`. Add an assertion that the model calls `listRevisionSummaries` once and never calls `listRevisions`.
 - `tests/unit/phase1-read-model.test.ts`: add `listSummariesByDocument` to the fake repository (map the existing revisions to summaries). Add a test for `listRevisionSummaries` that asserts the revision numbers and that no summary has `markdown`.
 - `tests/unit/phase1-contracts.test.ts`: add `listRevisionSummaries` to the local `KnowledgeQueryService` mirror and the stub object; add `assertCallerFirst<KnowledgeQueryService["listRevisionSummaries"]>(true)`.
 
-- [ ] **Step 7: Run typecheck and the focused tests**
+- [x] **Step 7: Run typecheck and the focused tests**
 
 Run:
 - `npm run typecheck`
@@ -354,7 +354,7 @@ Run:
 
 Expected: all pass.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/modules/knowledge/domain/revision.ts src/modules/knowledge/ports/revision-repository.ts src/infrastructure/database/mariadb/repositories/revisions.ts src/modules/knowledge/application/knowledge-query-service.ts src/server/knowledge-read.ts tests/unit/knowledge-document-model.test.ts tests/unit/phase1-read-model.test.ts tests/unit/phase1-contracts.test.ts tests/integration/phase1-revisions.test.ts tests/integration/autosave-history.test.ts tests/integration/phase1-query.test.ts
@@ -374,7 +374,7 @@ git commit -m "perf(knowledge): return revision summaries without content"
 - Consumes: `Migration`, `runMigrations`.
 - Produces: migration version 25; indexes `idx_sync_runs_source_status_completed` and `idx_tree_source_parent_position_order`.
 
-- [ ] **Step 1: Add the failing migration test**
+- [x] **Step 1: Add the failing migration test**
 
 Create `tests/integration/db-index-enhancement.test.ts` using `provisionIsolatedDatabase`, `runMigrations`, and `disposeIsolatedDatabase` from the existing test helpers. Query `information_schema.statistics` and assert the exact column order:
 
@@ -404,13 +404,13 @@ expect(await pool.query(
 )).toEqual([{ state: "APPLIED" }]);
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npx vitest run --config vitest.integration.config.ts tests/integration/db-index-enhancement.test.ts`
 
 Expected: FAIL — the index queries return an empty array and version 25 is absent.
 
-- [ ] **Step 3: Create and register migration 025**
+- [x] **Step 3: Create and register migration 025**
 
 Create `025-query-path-indexes.ts`:
 
@@ -434,13 +434,13 @@ export const queryPathIndexesMigration: Migration = {
 
 Register it in `migrations/index.ts` after `reviewThreadFollowsMigration`.
 
-- [ ] **Step 4: Run the migration test to verify it passes**
+- [x] **Step 4: Run the migration test to verify it passes**
 
 Run: `npx vitest run --config vitest.integration.config.ts tests/integration/db-index-enhancement.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 5: Apply to dev and smoke-check the sync-run plans**
+- [x] **Step 5: Apply to dev and smoke-check the sync-run plans**
 
 Run `npm run db:migrate` against the dev database. Then run:
 
@@ -456,7 +456,7 @@ ORDER BY started_at DESC, id DESC LIMIT 1;
 
 Expected: the first uses `idx_sync_runs_source_status_completed`; the second stays on `idx_sync_runs_source_started`. Dev has only two `sync_runs` rows, so if the optimizer chooses differently, record the plan and rely on the production-like gate in Task 5.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/infrastructure/database/mariadb/migrations/025-query-path-indexes.ts src/infrastructure/database/mariadb/migrations/index.ts tests/integration/db-index-enhancement.test.ts
@@ -475,7 +475,7 @@ git commit -m "feat(db): add sync-run and tree lookup indexes"
 - Consumes: migration 25's `idx_tree_source_parent_position_order`.
 - Produces: `listBySource()` order `parent_id, position, id`; signature unchanged.
 
-- [ ] **Step 1: Add the characterization tests**
+- [x] **Step 1: Add the characterization tests**
 
 In `tests/integration/phase1-tree.test.ts`, use `setupTreeFixture()` and its `fixture.sourceId` as `sourceId`. Create valid folders/documents through the hub service, then set duplicate positions through `repositories.tree.updatePosition` so foreign keys stay valid. Add two tests:
 
@@ -498,13 +498,13 @@ expect(newOrder).toEqual(oldOrder);
 
 These pass against the current `COALESCE` query; they are characterization tests for a behavior-preserving change.
 
-- [ ] **Step 2: Run the tests before the change**
+- [x] **Step 2: Run the tests before the change**
 
 Run: `npx vitest run --config vitest.integration.config.ts tests/integration/phase1-tree.test.ts`
 
 Expected: PASS (the current query already produces the same order).
 
-- [ ] **Step 3: Change the SQL order**
+- [x] **Step 3: Change the SQL order**
 
 In `tree.ts`, replace:
 
@@ -520,17 +520,17 @@ ORDER BY n.parent_id, n.position, n.id
 
 Add a short comment: MariaDB sorts `NULL` first, so this matches the old `COALESCE(parent_id, '')` order and lets `(source_id, parent_id, position)` supply the order.
 
-- [ ] **Step 4: Run the tests after the change**
+- [x] **Step 4: Run the tests after the change**
 
 Run: `npx vitest run --config vitest.integration.config.ts tests/integration/phase1-tree.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 5: Smoke-check the plan on dev**
+- [x] **Step 5: Smoke-check the plan on dev**
 
 Run `EXPLAIN` for the rewritten `listBySource()` query. On dev, the source holds 70/118 nodes, so a full scan is expected; record it. The production-like gate in Task 5 is where the index choice is accepted.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/infrastructure/database/mariadb/repositories/tree.ts tests/integration/phase1-tree.test.ts
@@ -543,31 +543,33 @@ git commit -m "perf(knowledge): make tree ordering index-friendly"
 
 **Files:** none unless a verification step finds a defect.
 
-- [ ] **Step 1: Run typecheck**
+- [x] **Step 1: Run typecheck**
 
 Run: `npm run typecheck`
 
 Expected: exit 0.
 
-- [ ] **Step 2: Run lint**
+- [x] **Step 2: Run lint**
 
 Run: `npm run lint`
 
 Expected: exit 0.
 
-- [ ] **Step 3: Run the unit suite**
+Result: the committed project code passes `npx eslint . --ignore-pattern '.superpowers/**'` (exit 0). The unfiltered `npm run lint` exits 1 only on gitignored `.superpowers/` scratch files from a sibling plan, which are not part of this branch.
+
+- [x] **Step 3: Run the unit suite**
 
 Run: `npm run test:unit`
 
 Expected: all tests pass.
 
-- [ ] **Step 4: Run the integration suite**
+- [x] **Step 4: Run the integration suite**
 
 Run: `npm run test:integration`
 
 Expected: all tests pass, including the new migration and projection tests.
 
-- [ ] **Step 5: Run the targeted browser suites**
+- [x] **Step 5: Run the targeted browser suites**
 
 Run:
 
@@ -594,7 +596,9 @@ This is a release gate, not a code change. Use a pre-migration production dump r
 
 Do not deploy to production until this table is recorded. The dev plans are a smoke test only; dev has 2 `sync_runs` rows and 1 snapshot.
 
-- [ ] **Step 7: Commit any fixes**
+**Status: OPEN — not executed.** No pre-migration production dump or read replica was available, and no production-like numbers were fabricated. The dev and synthetic smoke results recorded in the Task 5 report are not a substitute.
+
+- [x] **Step 7: Commit any fixes**
 
 If a verification step required code or test changes, commit them with a message that names the gate, for example:
 
