@@ -15,7 +15,8 @@ export async function GET() {
   try {
     await pingDatabase(getDatabasePool());
     return NextResponse.json({ ok: true }, { headers: NO_STORE });
-  } catch {
+  } catch (error) {
+    console.error("[health] database ping failed:", error instanceof Error ? (error as { code?: string }).code ?? error.message : "unknown");
     return NextResponse.json({ ok: false }, { status: 503, headers: NO_STORE });
   }
 }

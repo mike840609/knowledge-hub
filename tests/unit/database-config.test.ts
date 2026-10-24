@@ -23,6 +23,15 @@ describe("parseConnectionUrl", () => {
     expect(() => parseConnectionUrl("mysql://u:p@host/")).toThrow(/database/i);
   });
 
+  it("strips IPv6 host brackets", () => {
+    expect(parseConnectionUrl("mysql://u:p@[::1]:3306/db")).toEqual({ host: "::1", port: 3306, user: "u", password: "p", database: "db" });
+  });
+
+  it("rejects a database path with extra segments or a trailing slash", () => {
+    expect(() => parseConnectionUrl("mysql://u:p@host/db/")).toThrow(/database/i);
+    expect(() => parseConnectionUrl("mysql://u:p@host/db/extra")).toThrow(/database/i);
+  });
+
   it("keeps a literal @ in the password", () => {
     expect(parseConnectionUrl("mysql://u:p@ss@host/db")).toEqual({ host: "host", port: 3306, user: "u", password: "p@ss", database: "db" });
   });

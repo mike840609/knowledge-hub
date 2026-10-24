@@ -15,6 +15,8 @@ function display(value: unknown): string {
 
 async function readSession(connection: PoolConnection): Promise<{ version: string; isolation: string; tz: string } | undefined> {
   const rows = await connection.query<{ version: string; isolation: string; tz: string }[]>(
+    // MariaDB 10.11 spells this @@tx_isolation; @@transaction_isolation only
+    // arrived in 11.1.1, so keep the 10.11 name here.
     "SELECT @@version AS version, @@tx_isolation AS isolation, @@session.time_zone AS tz",
   );
   return rows[0];

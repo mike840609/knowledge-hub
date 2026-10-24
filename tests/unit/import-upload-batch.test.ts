@@ -60,6 +60,24 @@ describe("folder-import upload batches", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("rejects above the batch ceiling even when the server allows a larger file", async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(runFolderImport({
+      target: { kind: "new", workspaceId: "w1" },
+      files: [markdown(4 * 1024 * 1024 + 1, "big.md")],
+      sourceName: "Notes",
+      onProgress: () => {},
+      limits: { ...limits, maxMarkdownFileBytes: 5 * 1024 * 1024 },
+    })).rejects.toMatchObject({ code: "IMPORT_LIMIT_EXCEEDED" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps at least 256 KiB of multipart headroom under Vercel's 4.5 MB cap", () => {
+    expect(MAX_UPLOAD_BATCH_BYTES).toBeLessThan(4_500_000);
+    expect(4_500_000 - MAX_UPLOAD_BATCH_BYTES).toBeGreaterThanOrEqual(256 * 1024);
+  });
+
   it("surfaces a 413 as a readable size error", async () => {
     const fetchMock = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);

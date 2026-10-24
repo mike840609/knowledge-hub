@@ -39,7 +39,7 @@ export function parseConnectionUrl(raw: string): ParsedConnectionUrl {
     throw new Error(CONNECTION_URL_ERROR);
   }
   if (url.protocol !== "mysql:" && url.protocol !== "mariadb:") throw new Error(CONNECTION_URL_ERROR);
-  const host = url.hostname;
+  const host = url.hostname.replace(/^\[|\]$/g, "");
   let database: string;
   let user: string;
   let password: string;
@@ -50,7 +50,7 @@ export function parseConnectionUrl(raw: string): ParsedConnectionUrl {
   } catch {
     throw new Error(CONNECTION_URL_ERROR);
   }
-  if (!host || !database) throw new Error(CONNECTION_URL_ERROR);
+  if (!host || !database || database.includes("/")) throw new Error(CONNECTION_URL_ERROR);
   const port = url.port ? Number(url.port) : 3306;
   if (!Number.isInteger(port) || port <= 0 || port > 65535) throw new Error(CONNECTION_URL_ERROR);
   return { host, port, user, password, database };

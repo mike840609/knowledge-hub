@@ -110,7 +110,9 @@ async function buildManifest(
 
   staged.forEach((entry, index) => {
     if (entry.markdown) {
-      if (entry.file.size > limits.maxMarkdownFileBytes) {
+      // The server limit can be higher than the request cap; clamp so a single
+      // file can never produce an over-cap multipart request.
+      if (entry.file.size > Math.min(limits.maxMarkdownFileBytes, MAX_UPLOAD_BATCH_BYTES)) {
         throw importLimitError("Markdown file exceeds the configured per-file byte limit.");
       }
       manifest[index] = { uploadKey: entry.uploadKey, relativePath: entry.relativePath, kind: "MARKDOWN", size: entry.file.size };
