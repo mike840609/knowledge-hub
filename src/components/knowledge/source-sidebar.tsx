@@ -225,7 +225,10 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
         </div>
       </div>
       {filterOpen ? <div className="shrink-0"><TreeFilter value={query} onChange={setQuery} onClose={closeFilter} /></div> : null}
-      <nav aria-label="Document tree" className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain">
+      {/* `relative`: the tree's absolutely placed boxes (its `sr-only` live regions) are placed against this
+          scroller and clipped by it. Placed against the page they made it taller than the window, and a
+          scrollIntoView the pane could not satisfy scrolled the whole shell away. */}
+      <nav aria-label="Document tree" className="relative min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain">
         <span id={readOnlyDescriptionId} hidden>{READ_ONLY_DESCRIPTION}</span>
         {!needle && favoriteKeys.length > 0 ? <section aria-label="Favorites" className="pb-1">
           <h3><button type="button" aria-expanded={favoritesOpen} onClick={() => setFavoritesOpen((open) => !open)} className="kh-control kh-interactive-row flex min-h-8 w-full items-center gap-2 px-2 text-left text-caption font-medium text-kh-text-muted">
