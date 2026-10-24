@@ -21,6 +21,7 @@ import {
 } from "@/components/imports/folder-handle-store";
 import type { ImportManifestEntry } from "@/modules/sources/application/create-folder-import";
 import { DEFAULT_IMPORT_LIMITS, type ImportLimits } from "@/modules/sources/domain/import-limits";
+import { MAX_UPLOAD_BATCH_BYTES } from "@/lib/upload-limits";
 import { Label } from "@/components/ui/label";
 
 export type FolderImportTarget =
@@ -41,12 +42,12 @@ export type ImportUiState =
 
 const MARKDOWN_EXTENSION = /\.(?:md|markdown)$/iu;
 const MAX_BATCH_FILES = 20;
-const MAX_BATCH_BYTES = 10 * 1024 * 1024;
 const ASSET_HASH_CONCURRENCY = 4;
 const TRANSIENT_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 
-export type FolderImportClientLimits = Pick<ImportLimits, "maxAssetFileBytes" | "maxAssetTotalBytes">;
+export type FolderImportClientLimits = Pick<ImportLimits, "maxMarkdownFileBytes" | "maxAssetFileBytes" | "maxAssetTotalBytes">;
 const DEFAULT_CLIENT_LIMITS: FolderImportClientLimits = {
+  maxMarkdownFileBytes: DEFAULT_IMPORT_LIMITS.maxMarkdownFileBytes,
   maxAssetFileBytes: DEFAULT_IMPORT_LIMITS.maxAssetFileBytes,
   maxAssetTotalBytes: DEFAULT_IMPORT_LIMITS.maxAssetTotalBytes,
 };
@@ -107,6 +108,11 @@ async function buildManifest(
 
   staged.forEach((entry, index) => {
     if (entry.markdown) {
+      // The server limit can be higher than the request cap; clamp so a single
+      // file can never produce an over-cap multipart request.
+      if (entry.file.size > Math.min(limits.maxMarkdownFileBytes, MAX_UPLOAD_BATCH_BYTES)) {
+        throw importLimitError("Markdown file exceeds the configured per-file byte limit.");
+      }
       manifest[index] = { uploadKey: entry.uploadKey, relativePath: entry.relativePath, kind: "MARKDOWN", size: entry.file.size };
       return;
     }
@@ -281,7 +287,7 @@ async function uploadMarkdownBatches(
     let current: StagedFile[] = [];
     let currentBytes = 0;
     for (const entry of batch) {
-      if (current.length > 0 && currentBytes + entry.file.size > MAX_BATCH_BYTES) {
+      if (current.length > 0 && currentBytes + entry.file.size > MAX_UPLOAD_BATCH_BYTES) {
         chunks.push(current);
         current = [];
         currentBytes = 0;
@@ -304,6 +310,9 @@ async function uploadMarkdownBatches(
         async (response) => response,
         assertAllowed,
       );
+      if (response.status === 413) {
+        throw Object.assign(new Error("The upload exceeded the server's 4.5 MB request limit. Split the folder or reduce large files."), { code: "IMPORT_TOO_LARGE" });
+      }
       if (!response.ok) {
         const body = await response.json().catch(() => null);
         if (response.status !== 404) {

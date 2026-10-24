@@ -77,6 +77,14 @@ function getPool(): Pool {
   return slot.__kmDbPool;
 }
 
+/**
+ * The shared pool for infrastructure checks (health) that need no identity.
+ * Application code keeps going through the composition root.
+ */
+export function getDatabasePool(): Pool {
+  return getPool();
+}
+
 export function buildApplicationServices(databasePool: Pool, options: {
   companySessionReader?: CompanySsoSessionReader;
 } = {}) {

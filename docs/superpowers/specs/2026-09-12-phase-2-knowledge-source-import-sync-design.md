@@ -847,7 +847,7 @@ Default application limits：
 ```text
 max manifest entries          20,000
 max normalized path           2 KiB UTF-8
-max one Markdown file         5 MiB
+max one Markdown file         3.5 MiB
 max total Markdown            256 MiB
 max parsed metadata/document  256 KiB
 max upload batch              20 files / 10 MiB

@@ -39,7 +39,7 @@ export default async function WorkspaceSourcesPage({
         </WorkspaceImportLink>}</>}
       />
       <div className="mt-6">
-        <SourceList workspaceId={workspaceId} items={model.items} limits={{ maxAssetFileBytes: limits.maxAssetFileBytes, maxAssetTotalBytes: limits.maxAssetTotalBytes }} />
+        <SourceList workspaceId={workspaceId} items={model.items} limits={{ maxMarkdownFileBytes: limits.maxMarkdownFileBytes, maxAssetFileBytes: limits.maxAssetFileBytes, maxAssetTotalBytes: limits.maxAssetTotalBytes }} />
       </div>
       {preference ? <div className="-mx-3 mt-6"><FreshnessReminders workspaceId={workspaceId} items={model.items} preference={{thresholdDays: freshnessThreshold(preference.value), version: preference.version}} now={new Date().toISOString()} /></div> : null}
     </main>

@@ -137,7 +137,7 @@ npm run dev
 | `KM_IMPORT_*` | 匯入檔案數、大小、batch 與 snapshot quota |
 | `KM_TEST_DB_*`／`KM_E2E_DB_PREFIX` | 隔離測試資料庫設定；測試帳號需可建立與刪除指定 prefix 的資料庫 |
 
-匯入預設上限為 20,000 個 manifest entries、單篇 Markdown 5 MiB、Markdown 總量 256 MiB。完整上限以 `.env.example` 為準。Snapshot retention：BUILDING 2 小時、READY 30 分鐘、STALE／APPLIED 24 小時。有人開始匯入時，伺服器會在背景清除過期的 staging，每個程序最多每 10 分鐘一次。若要立即清除（例如沒有人在匯入的站台），可執行：
+匯入預設上限為 20,000 個 manifest entries、單篇 Markdown 3.5 MiB、Markdown 總量 256 MiB。完整上限以 `.env.example` 為準。Snapshot retention：BUILDING 2 小時、READY 30 分鐘、STALE／APPLIED 24 小時。有人開始匯入時，伺服器會在背景清除過期的 staging，每個程序最多每 10 分鐘一次。若要立即清除（例如沒有人在匯入的站台），可執行：
 
 ```bash
 npx tsx scripts/db/cleanup-import-snapshots.ts
@@ -157,6 +157,8 @@ npm run start
 ```
 
 **正式環境需要先完成身分整合。** `npm run start` 使用 production 模式，預設的 Local identity 會被拒絕。`KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION` 是測試用途，請勿將其作為正式部署方式。
+
+若是**單人操作**的部署，可參考 [Vercel + Layerbase runbook](docs/operations/vercel-layerbase.zh-TW.md)：這條路徑刻意保留 local identity，並以選用的站台密碼保護，於 production build 時執行 migration，同時關閉 preview deployment。請勿將此方式用於共用或公司部署。
 
 目前提供通用的 `company-sso` adapter contract，部署者必須實作可信任的 [`CompanySsoSessionReader`](src/modules/identity/ports/company-sso-session-reader.ts)，並在建立 application services 前接入 [`configureCompanySsoSessionReader`](src/server/composition.ts)。單純設定 `KM_IDENTITY_PROVIDER=company-sso` 不會自動提供 OAuth／OIDC 登入頁面或身分服務。
 

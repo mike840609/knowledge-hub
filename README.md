@@ -136,7 +136,7 @@ See [`.env.example`](.env.example) for local development settings and import lim
 | `KM_IMPORT_*` | Import file counts, sizes, batch limits, and snapshot quotas |
 | `KM_TEST_DB_*` / `KM_E2E_DB_PREFIX` | Isolated test database settings; the test account must be able to create and drop databases with the designated prefixes |
 
-Default import limits include 20,000 manifest entries, 5 MiB per Markdown file, and 256 MiB of Markdown in total. See `.env.example` for the full limits. Snapshot retention is 2 hours for BUILDING, 30 minutes for READY, and 24 hours for STALE/APPLIED. The server deletes expired staging data in the background when someone starts an import, at most once every 10 minutes per process. To clean up on demand, for example on an instance nobody imports into, run:
+Default import limits include 20,000 manifest entries, 3.5 MiB per Markdown file, and 256 MiB of Markdown in total. See `.env.example` for the full limits. Snapshot retention is 2 hours for BUILDING, 30 minutes for READY, and 24 hours for STALE/APPLIED. The server deletes expired staging data in the background when someone starts an import, at most once every 10 minutes per process. To clean up on demand, for example on an instance nobody imports into, run:
 
 ```bash
 npx tsx scripts/db/cleanup-import-snapshots.ts
@@ -156,6 +156,8 @@ npm run start
 ```
 
 **Complete identity integration before running in production.** `npm run start` runs in production mode, which rejects the default Local identity provider. `KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION` is for testing and must not be used as a production deployment method.
+
+For a **single-operator** deployment on Vercel with a Layerbase MariaDB, follow the [Vercel + Layerbase runbook](docs/operations/vercel-layerbase.md). That path deliberately keeps the local identity provider behind an optional site password, runs migrations during production builds, and disables preview deployments. Do not apply it to a shared or company deployment.
 
 The application provides a generic `company-sso` adapter contract. Deployers must implement a trusted [`CompanySsoSessionReader`](src/modules/identity/ports/company-sso-session-reader.ts) and register it through [`configureCompanySsoSessionReader`](src/server/composition.ts) before application services are created. Setting `KM_IDENTITY_PROVIDER=company-sso` alone does not provide an OAuth/OIDC login page or identity service. Shared-page “Open in Knowledge Hub” and “Get started” links navigate to `KM_PUBLIC_ORIGIN` with a full browser navigation when configured, allowing the company Gateway at that origin to challenge anonymous users for SSO. The entry URL carries `returnTo=/s/:token/open`; the Gateway must preserve this query string through SSO. After authentication, the Hub accepts only a share-opening path and resumes the existing link-validity and document-access checks. Invalid or absent continuation parameters use the ordinary home destination. Without `KM_PUBLIC_ORIGIN`, these links retain the local `/s/:token/open` flow.
 

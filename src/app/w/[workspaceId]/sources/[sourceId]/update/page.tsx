@@ -29,7 +29,7 @@ export default async function WorkspaceSourceUpdatePage({
       <div className="mt-5">
         {model.actions.canImport ? <FolderImportForm
           target={{ kind: "existing", workspaceId, sourceId: model.source.id, sourceName: model.source.name }}
-          limits={{ maxAssetFileBytes: importLimits.maxAssetFileBytes, maxAssetTotalBytes: importLimits.maxAssetTotalBytes }}
+          limits={{ maxMarkdownFileBytes: importLimits.maxMarkdownFileBytes, maxAssetFileBytes: importLimits.maxAssetFileBytes, maxAssetTotalBytes: importLimits.maxAssetTotalBytes }}
         /> : <p role="status">This workspace is read-only. Updating is unavailable.</p>}
       </div>
     </main>

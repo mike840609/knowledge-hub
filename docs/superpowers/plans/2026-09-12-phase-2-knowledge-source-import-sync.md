@@ -28,7 +28,7 @@
 - One successful Confirm, including an all-UNCHANGED no-op sync, advances `sync_version` exactly once and writes exactly one APPLIED SyncRun.
 - Blocking diagnostics prevent Apply; warnings do not. Partial canonical success is forbidden.
 - Snapshot access is creator-private and every read/upload/finalize/apply re-checks current Workspace membership.
-- Default import limits are exactly: 20,000 manifest entries; 2 KiB normalized UTF-8 path; 5 MiB per Markdown file; 256 MiB total Markdown; 256 KiB parsed metadata per document; 20 files / 10 MiB per upload batch; 3 active BUILDING snapshots/user; 10 active READY snapshots/user.
+- Default import limits are exactly: 20,000 manifest entries; 2 KiB normalized UTF-8 path; 3.5 MiB per Markdown file; 256 MiB total Markdown; 256 KiB parsed metadata per document; 20 files / 10 MiB per upload batch; 3 active BUILDING snapshots/user; 10 active READY snapshots/user.
 - Default retention is exactly: BUILDING 2 hours; READY 30 minutes after finalize; STALE 24 hours; APPLIED 24 hours.
 - Implementation follows TDD. Test-only fault injection must never be reachable from server/HTTP/UI code.
 

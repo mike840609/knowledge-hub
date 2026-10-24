@@ -237,7 +237,7 @@ it("cancels a remembered-folder import on pagehide without navigating", async ()
 });
 
 it("passes the configured runtime asset limits to remembered-folder imports", async () => {
-  const limits = { maxAssetFileBytes: 8, maxAssetTotalBytes: 16 };
+  const limits = { maxMarkdownFileBytes: 5 * 1024 * 1024, maxAssetFileBytes: 8, maxAssetTotalBytes: 16 };
   await act(async () => { root.render(<SyncNowButton workspaceId="ws-1" sourceId="src-1" limits={limits} />); });
   clickSync();
   await act(async () => {});
