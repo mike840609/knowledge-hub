@@ -169,4 +169,23 @@ describe("Phase 3 workspace product contracts and real route adapters", () => {
     expect(audit.items[0]).toMatchObject({ eventType: "TEAM_WORKSPACE_RENAMED", actorName: "Owner", before: { previousName: "Alpha" }, after: { name: "Renamed" } });
     expect(audit.nextCursor).toBeNull();
   });
+  it("finds users by a batch of ids and omits ids that do not exist", async () => {
+    const mei = await user("Mei Lin");
+    const raj = await user("Raj Patel");
+    const found = await uow.run(r => r.users.findByIds([mei.identity.id, raj.identity.id, uuidv7()]));
+    expect(found.map(row => row.id).sort()).toEqual([mei.identity.id, raj.identity.id].sort());
+    expect(found.map(row => row.name).sort()).toEqual(["Mei Lin", "Raj Patel"]);
+    expect(await uow.run(r => r.users.findByIds([]))).toEqual([]);
+  });
+  it("resolves every member and audit actor name through batched user lookups", async () => {
+    const mei = await user("Mei Lin");
+    const raj = await user("Raj Patel");
+    await governance.addDirectMember(owner, workspaceId, { userId: mei.identity.id, role: "ADMIN" });
+    await governance.addDirectMember(mei, workspaceId, { userId: raj.identity.id, role: "VIEWER" });
+    expect((await admin.listMembers(owner, workspaceId)).map(row => row.user.name)).toEqual(["Mei Lin", "Owner", "Raj Patel"]);
+    const audit = await admin.listAudit(owner, workspaceId);
+    expect(audit.items[0]).toMatchObject({ eventType: "MEMBER_ADDED", actorName: "Mei Lin" });
+    expect(audit.items.every(item => item.actorName)).toBe(true);
+    expect(new Set(audit.items.map(item => item.actorName))).toEqual(new Set(["Owner", "Mei Lin"]));
+  });
 });

@@ -7,6 +7,13 @@ function mapUser(row: DbRow): UserIdentity {
   return { id: String(row.id), emp_id: String(row.emp_id), name: String(row.name), org_code: String(row.org_code) };
 }
 
+/** One `IN (?…)` batch per statement; well under MariaDB's placeholder limit. */
+const USER_ID_CHUNK = 500;
+
+function placeholders(count: number): string {
+  return Array(count).fill("?").join(", ");
+}
+
 export class MariaDbUserRepository implements UserRepository {
   constructor(private readonly connection: QueryConnection) {}
 
@@ -37,6 +44,19 @@ export class MariaDbUserRepository implements UserRepository {
   async findById(id: string): Promise<UserIdentity | null> {
     const rows = await this.connection.query<DbRow[]>("SELECT id, emp_id, name, org_code FROM users WHERE id = ?", [id]);
     return rows[0] ? mapUser(rows[0]) : null;
+  }
+
+  async findByIds(ids: readonly string[]): Promise<UserIdentity[]> {
+    const users: UserIdentity[] = [];
+    for (let start = 0; start < ids.length; start += USER_ID_CHUNK) {
+      const batch = ids.slice(start, start + USER_ID_CHUNK);
+      const rows = await this.connection.query<DbRow[]>(
+        `SELECT id, emp_id, name, org_code FROM users WHERE id IN (${placeholders(batch.length)})`,
+        [...batch],
+      );
+      users.push(...rows.map(mapUser));
+    }
+    return users;
   }
 
   async findByEmpId(empId: string): Promise<UserIdentity | null> {

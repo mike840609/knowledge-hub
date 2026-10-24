@@ -108,11 +108,11 @@ export async function getSourceDetailModel(
     if (!actions.canInspectSources) return null;
     const source = await services.queries.getSource(caller, sourceId, { includeArchived: true });
     if (source.workspaceId !== workspaceId) return null;
-    const sources = await services.queries.listSources(caller, workspaceId, { includeArchived: true });
-    if (!sources.some((candidate) => candidate.id === sourceId)) return null;
     const { runs, runActors } = await services.unitOfWork.run(async (repositories) => {
       const runs = await repositories.syncRuns.listBySourceId(sourceId, SOURCE_RUN_DETAIL_LIMIT);
-      const runActors = await resolveRunActors(runs, caller.identity.id, async (id) => (await repositories.users.findById(id))?.name ?? null);
+      const actorIds = [...new Set(runs.map((run) => run.triggeredBy))].filter((id) => id !== caller.identity.id);
+      const actorNames = new Map((await repositories.users.findByIds(actorIds)).map((user) => [user.id, user.name]));
+      const runActors = await resolveRunActors(runs, caller.identity.id, async (id) => actorNames.get(id) ?? null);
       return { runs, runActors };
     });
     return { workspace, actions, source, runs, runActors };
