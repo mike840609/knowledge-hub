@@ -104,6 +104,23 @@ describe("Phase 3 real request adapters with a trusted test session reader", () 
     expect(item?.latestSuccessfulRun).toMatchObject({status:"APPLIED",completedAt});
   });
 
+  it("exposes the latest READY preview id on the source list", async () => {
+    const { workspace } = await team();
+    const { snapshotId } = await (await createThroughRoute(workspace.id)).json();
+    const first = await finish(snapshotId);
+
+    const resync = await createSourceResync(first.sourceId, {
+      rootName: "wiki",
+      manifest,
+    });
+    await uploadSourceImportEntries(resync.snapshotId, [{ uploadKey: "m1", bytes }]);
+    await finalizeSourceImport(resync.snapshotId);
+
+    const item = (await getSourceListModel(workspace.id))?.items
+      .find((candidate) => candidate.source.id === first.sourceId);
+    expect(item?.pendingPreviewId).toBe(resync.snapshotId);
+  });
+
   it.each(["EDITOR", "ADMIN"] as const)("bootstraps deep links and completes initial/resync import for group-only %s", async (role) => {
     const { workspace } = await team(role);
     // A real deep-link adapter must resolve a new Hub identity and provision

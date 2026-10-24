@@ -57,6 +57,25 @@ describe("autosave history persistence", () => {
     expect(await f.rows()).toEqual(before);
   });
 
+  it("lists the same history ids as full reads, without content", async () => {
+    const f = await setup();
+    await f.save("draft 1");
+    await f.save("draft 2");
+
+    const uow = new MariaDbUnitOfWork(pool);
+    const full = await uow.run((r) =>
+      r.revisions.listByDocument(f.created.documentId),
+    );
+    const summaries = await uow.run((r) =>
+      r.revisions.listSummariesByDocument(f.created.documentId),
+    );
+
+    expect(summaries.map((s) => s.id)).toEqual(full.map((r) => r.id));
+    for (const summary of summaries) {
+      expect(summary).not.toHaveProperty("markdown");
+    }
+  });
+
   it("retains the fixed ten-minute checkpoint while replacing subsequent working heads", async () => {
     const f = await setup();
     await f.save("start");

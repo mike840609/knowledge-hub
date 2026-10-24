@@ -1,7 +1,8 @@
 import { cache } from "react";
 import { findFirstReadableDocument, sortSourcesByName } from "@/lib/knowledge-navigation";
 import { isHiddenReadFailure } from "./read-errors";
-import type { KnowledgeRevisionView, KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
+import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
+import type { KnowledgeRevisionSummary } from "@/modules/knowledge/domain/revision";
 import type { WorkspaceAccessView, WorkspaceNavigationModel, WorkspaceNavigationItem } from "@/server/workspace-admin";
 import { applicationServices } from "@/server/composition";
 
@@ -23,7 +24,7 @@ export type KnowledgeDocumentModel = {
  * One row of a document's history. The page hands the whole history to the
  * browser, so it carries what the list shows and no revision's body.
  */
-export type RevisionSummary = Pick<KnowledgeRevisionView, "id" | "revisionNo" | "createdAt" | "history">;
+export type RevisionSummary = KnowledgeRevisionSummary;
 
 /**
  * Task 5 read model: Workspace/Source-scoped Document load. Trusted caller
@@ -45,7 +46,7 @@ export async function getKnowledgeDocumentModel(
     const view = await services.queries.getDocument(caller, documentId, { includeArchived: input.includeArchived });
     if (view.workspaceId !== workspaceId || view.sourceId !== sourceId) return null;
     const [revisions, selectedRevision, sourcePath] = await Promise.all([
-      services.queries.listRevisions(caller, documentId, { includeArchived: input.includeArchived }),
+      services.queries.listRevisionSummaries(caller, documentId, { includeArchived: input.includeArchived }),
       input.revisionNo === undefined
         ? view.currentRevision
         : services.queries.getRevision(caller, documentId, input.revisionNo, { includeArchived: input.includeArchived }),
@@ -57,7 +58,7 @@ export async function getKnowledgeDocumentModel(
     ]);
     return {
       view,
-      revisions: revisions.filter(revision => revision.history?.state !== "WORKING" || revision.id === view.currentRevision.id).map(({ id, revisionNo, createdAt, history }) => ({ id, revisionNo, createdAt, history })),
+      revisions: revisions.filter(revision => revision.history?.state !== "WORKING" || revision.id === view.currentRevision.id),
       selectedRevision,
       sourcePath,
     };

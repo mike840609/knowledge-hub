@@ -63,6 +63,15 @@ export class MariaDbTreeRepository implements TreeRepository {
     return rows[0] ? mapNode(rows[0]) : null;
   }
 
+  /**
+   * MariaDB sorts `NULL` first, so `ORDER BY parent_id` keeps roots first
+   * exactly like the old `COALESCE(parent_id, '')` did, and the
+   * `(source_id, parent_id, position)` index can supply the order directly.
+   *
+   * This equivalence assumes the app's UUIDv7 ids and MariaDB's native UUID
+   * ordering (10.11.5+). A different id format or an older server could sort
+   * `id` differently, so revisit the tie-break before either changes.
+   */
   async listBySource(sourceId: string): Promise<TreeViewNode[]> {
     const rows = await this.connection.query<DbRow[]>(
       `SELECT n.*, r.title AS title, d.status AS document_status, d.current_revision_id AS document_current_revision_id
@@ -70,7 +79,7 @@ export class MariaDbTreeRepository implements TreeRepository {
        LEFT JOIN knowledge_documents d ON d.id = n.document_id AND d.source_id = n.source_id
        LEFT JOIN knowledge_revisions r ON r.id = d.current_revision_id AND r.document_id = d.id
 
-       WHERE n.source_id = ? ORDER BY COALESCE(n.parent_id, ''), n.position, n.id`,
+       WHERE n.source_id = ? ORDER BY n.parent_id, n.position, n.id`,
       [sourceId],
     );
     return rows.map((row) => ({ ...mapNode(row), title: row.title === null ? null : String(row.title), documentStatus: row.document_status === null ? null : String(row.document_status) as "ACTIVE" | "ARCHIVED", currentRevisionId: row.document_current_revision_id === null || row.document_current_revision_id === undefined ? null : String(row.document_current_revision_id) }));

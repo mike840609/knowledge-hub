@@ -11,6 +11,11 @@ export type KnowledgeRevision = ContentInput & {
   createdAt: Date;
 };
 
+export type KnowledgeRevisionSummary = Pick<
+  KnowledgeRevision,
+  "id" | "revisionNo" | "createdAt" | "history"
+>;
+
 export function revisionContent(revision: KnowledgeRevision): ContentInput {
   return {
     title: revision.title,
