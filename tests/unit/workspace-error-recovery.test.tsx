@@ -3,7 +3,8 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
 import WorkspaceError from "@/app/w/[workspaceId]/error";
-vi.mock("next/navigation", () => ({ useParams: () => ({ workspaceId: "team-workspace" }) }));
+const refresh = vi.hoisted(() => vi.fn());
+vi.mock("next/navigation", () => ({ useParams: () => ({ workspaceId: "team-workspace" }), useRouter: () => ({ refresh }) }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 it("lets the reader retry or leave a failed page within the current workspace", async () => {
   const reset = vi.fn(), host = document.createElement("div");
@@ -14,6 +15,7 @@ it("lets the reader retry or leave a failed page within the current workspace", 
     expect(host.textContent).not.toContain("private server details");
     expect(host.querySelector("a")?.getAttribute("href")).toBe("/w/team-workspace/knowledge");
     await act(async () => host.querySelector("button")!.click());
+    expect(refresh).toHaveBeenCalledOnce();
     expect(reset).toHaveBeenCalledOnce();
   } finally { await act(async () => root.unmount()); host.remove(); }
 });
