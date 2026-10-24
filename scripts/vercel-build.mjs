@@ -7,13 +7,48 @@ const directUrl = (process.env.KM_DB_MIGRATE_URL ?? "").trim();
 const appUrl = (process.env.KM_DB_URL ?? "").trim();
 const migrateUrl = directUrl || appUrl;
 const migrationUrlSource = directUrl ? "direct" : appUrl ? "app" : "none";
+const identityProvider = process.env.KM_IDENTITY_PROVIDER ?? "local";
 // Test/harness hook only; never honor it on Vercel, where the project
 // environment must not be able to replace the build entrypoint.
 const buildScript = (!process.env.VERCEL && (process.env.KM_VERCEL_BUILD_SCRIPT ?? "").trim()) || "scripts/build.mjs";
 
+function googleAuthErrors() {
+  if (identityProvider !== "google") return [];
+  const errors = [];
+  for (const name of ["AUTH_SECRET", "AUTH_GOOGLE_ID", "AUTH_GOOGLE_SECRET", "AUTH_URL", "KM_PUBLIC_ORIGIN"]) {
+    if (!(process.env[name] ?? "").trim()) errors.push(name);
+  }
+  const authUrl = (process.env.AUTH_URL ?? "").trim();
+  const publicOrigin = (process.env.KM_PUBLIC_ORIGIN ?? "").trim();
+  if (authUrl && publicOrigin) {
+    try {
+      if (new URL(authUrl).origin !== new URL(publicOrigin).origin) {
+        errors.push("AUTH_URL must match KM_PUBLIC_ORIGIN");
+      }
+    } catch {
+      errors.push("AUTH_URL and KM_PUBLIC_ORIGIN must be absolute URLs");
+    }
+  }
+  return errors;
+}
+
+const authErrors = googleAuthErrors();
+
 if (dryRun) {
-  console.log(JSON.stringify({ build: true, buildScript, migrate, migrationUrlSource }));
-  process.exit(migrate && !migrateUrl ? 1 : 0);
+  console.log(JSON.stringify({
+    build: true,
+    buildScript,
+    migrate,
+    migrationUrlSource,
+    authProvider: identityProvider,
+    authErrors,
+  }));
+  process.exit(authErrors.length > 0 || (migrate && !migrateUrl) ? 1 : 0);
+}
+
+if (authErrors.length > 0) {
+  console.error(`vercel-build: invalid Google auth configuration: ${authErrors.join(", ")}`);
+  process.exit(1);
 }
 
 function run(command, args, env = process.env) {
