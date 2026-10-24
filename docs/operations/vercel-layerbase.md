@@ -157,3 +157,31 @@ Then, in a browser:
 
 Vercel's Hobby plan is for non-commercial use. This deployment is personal; use a paid plan for
 anything commercial.
+
+## Google demo login
+
+This is an additive provider for the public demo. `local` and `company-sso` are unchanged; only
+`KM_IDENTITY_PROVIDER=google` selects it.
+
+1. Google Cloud: create a **Web application** OAuth client. Authorized redirect URI:
+   `https://<origin>/api/auth/callback/google`. Scopes: `openid email profile`. Publish the consent
+   screen, or add test users while it is in testing mode.
+2. Production environment:
+   - `KM_IDENTITY_PROVIDER=google`
+   - `AUTH_SECRET` (`openssl rand -base64 32`)
+   - `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`
+   - `AUTH_URL=https://<origin>` — must equal `KM_PUBLIC_ORIGIN`
+   - remove `KM_SITE_PASSWORD` and `KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION`
+   - `KM_REVIEW_WRITES_ENABLED=true`, `KM_TEAM_WORKSPACES_ENABLED=false`
+3. Redeploy. The build fails if a Google auth variable is missing or the two origins differ.
+4. The first sign-in creates a Hub user with `emp_id = DEMO-…`, `org_code = DEMO`, and a personal
+   workspace. The bottom-left shows the Google profile name (email local-part if Google returns no
+   name). `emp_id` is not displayed there.
+5. Sign out from My Space → Insights; the sign-out form is at the bottom of that profile page.
+6. Smoke test: `/` → `/login`; Continue with Google → My Space; a share link in a private window;
+   a signed-in reply on the share page; `/api/health` stays public; `/s/<token>/open` asks to sign
+   in and then opens.
+7. Layerbase free plan: 20 connections; upgrade before a public demo.
+
+Do not combine `KM_SITE_PASSWORD` with the Google demo. The local and company-SSO runbooks above
+continue to apply unchanged.
