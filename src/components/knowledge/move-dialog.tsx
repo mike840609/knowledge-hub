@@ -1,5 +1,6 @@
 "use client";
 
+import type { TreeLoadState } from "./source-tree-cache";
 import { useEffect, useId, useMemo, useState } from "react";
 import { Dialog } from "@base-ui-components/react/dialog";
 import { Folder } from "lucide-react";
@@ -22,7 +23,7 @@ const TOP = "top";
  * reader can see — and what it offers is only that: the server decides what happens, and refuses a
  * destination archived or gone since this list was made, in words beside the list.
  */
-export function MoveDialogHost({ collections }: { collections: Collections }) {
+export function MoveDialogHost({ collections, ensureTree, retryTree, treeStates }: { collections: Collections; ensureTree?: (id: string) => Promise<void>; retryTree?: (id: string) => Promise<void>; treeStates?: Record<string, TreeLoadState> }) {
   const [request, setRequest] = useState<MoveRequest | null>(null);
   useEffect(() => {
     const open = (event: Event) => {
@@ -32,10 +33,12 @@ export function MoveDialogHost({ collections }: { collections: Collections }) {
     window.addEventListener(MOVE_REQUEST_EVENT, open);
     return () => window.removeEventListener(MOVE_REQUEST_EVENT, open);
   }, []);
-  return <MoveDialog request={request} collections={collections} onClose={() => setRequest(null)} />;
+  useEffect(() => { if (request) void ensureTree?.(request.sourceId); }, [request, ensureTree]);
+  const state = request ? treeStates?.[request.sourceId] : undefined;
+  return <MoveDialog request={request} collections={collections} loading={!!ensureTree && !!request && (!state || state.status === "loading")} failed={state?.status === "error"} onRetry={() => { if (request) void retryTree?.(request.sourceId); }} onClose={() => setRequest(null)} />;
 }
 
-function MoveDialog({ request, collections, onClose }: { request: MoveRequest | null; collections: Collections; onClose: () => void }) {
+function MoveDialog({ request, collections, onClose, loading, failed, onRetry }: { request: MoveRequest | null; collections: Collections; onClose: () => void; loading?: boolean; failed?: boolean; onRetry?: () => void }) {
   const mutations = useTreeMutations();
   const errorId = useId();
   const [selected, setSelected] = useState<string | null>(null);
@@ -114,7 +117,11 @@ function MoveDialog({ request, collections, onClose }: { request: MoveRequest | 
         <Dialog.Backdrop className={dialogBackdropClasses()} />
         <Dialog.Popup className={dialogPopupClasses("w-[min(26rem,92vw)]")}>
           <Dialog.Title className="text-title font-semibold">{kind === "folder" ? "Move folder" : "Move document"}</Dialog.Title>
-          {found ? (
+          {loading || failed ? <>
+            <Dialog.Description role="status" className="mt-2 text-body text-kh-text-muted">{failed ? "Documents could not be loaded." : "Loading documents…"}</Dialog.Description>
+            {failed ? <Button onClick={onRetry}>Retry</Button> : null}
+            <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          </> : found ? (
             <>
               <Dialog.Description className="mt-1 text-body text-kh-text-muted">
                 {`Choose where “${label}” goes. It will be placed last.`}
