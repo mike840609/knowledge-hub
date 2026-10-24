@@ -1,5 +1,5 @@
 import { AuthRequiredError, AuthUnavailableError } from "@/modules/identity/domain/identity-session-errors";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { LocalIdentityProvider } from "@/infrastructure/identity/local-identity-provider";
 import { CompanySsoIdentityProvider } from "@/infrastructure/identity/company-sso-identity-provider";
 import { GoogleIdentityProvider } from "@/infrastructure/identity/google-identity-provider";
