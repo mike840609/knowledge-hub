@@ -59,7 +59,7 @@ Runtime:
 | `KM_TEAM_WORKSPACES_ENABLED` | `false` |
 | `KM_REVIEW_WRITES_ENABLED` | `true` (requires `KM_PUBLIC_ORIGIN`) |
 | `KM_PUBLIC_ORIGIN` | `https://<production-domain>` |
-| `KM_SITE_PASSWORD` | optional; strongly recommended for a public URL |
+| `KM_SITE_PASSWORD` | optional; strongly recommended for a public URL. Edge middleware reads it at build time: after setting it, redeploy and verify `/` returns 401. |
 
 Build-only:
 

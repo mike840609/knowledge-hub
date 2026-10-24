@@ -185,8 +185,10 @@ HTTP Basic auth:
 - Everything else — pages **and** `/api/*` — requires the password.
 - The middleware matcher is broadened to cover API routes. CSP handling stays page-only; API
   responses keep the static CSP from `next.config.ts`.
-- Constant-time comparison through Web Crypto digests (Edge-compatible). Failure returns 401 with
-  `WWW-Authenticate: Basic realm="Knowledge Hub"`.
+- Constant-time comparison through Web Crypto digests (Edge-compatible). A page navigation that
+  fails returns 401 with `WWW-Authenticate: Basic realm="Knowledge Hub"` so the browser prompts; an
+  `/api/*` 401 omits the header, because a public share page's gated fetch must not raise a
+  credential dialog over the document.
 - This is deliberately not authentication: identity is still the configured local user. It only
   prevents "anyone with the URL is the operator".
 
