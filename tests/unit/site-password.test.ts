@@ -45,6 +45,13 @@ describe("middleware", () => {
     expect(response.headers.get("www-authenticate")).toContain('Basic realm="Knowledge Hub"');
   });
 
+  it("does not challenge an API 401, so a public share page cannot prompt", async () => {
+    vi.stubEnv("KM_SITE_PASSWORD", "s3cret");
+    const response = await middleware(new NextRequest("https://km.example.com/api/saved-shares/state?token=x"));
+    expect(response.status).toBe(401);
+    expect(response.headers.get("www-authenticate")).toBeNull();
+  });
+
   it("lets an authenticated page through with its CSP header", async () => {
     vi.stubEnv("KM_SITE_PASSWORD", "s3cret");
     const response = await middleware(new NextRequest("https://km.example.com/w/ws/home", { headers: { authorization: basic("owner:s3cret") } }));

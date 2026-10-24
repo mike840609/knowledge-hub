@@ -17,13 +17,14 @@ export async function middleware(request: NextRequest) {
   const password = process.env.KM_SITE_PASSWORD;
   if (password && !isSitePasswordExempt(pathname)) {
     if (!(await verifySitePassword(request.headers.get("authorization"), password))) {
-      return new NextResponse("Authentication required.", {
-        status: 401,
-        headers: {
-          "WWW-Authenticate": 'Basic realm="Knowledge Hub", charset="UTF-8"',
-          "Cache-Control": "no-store",
-        },
-      });
+      // A challenge on an XHR/fetch 401 can raise the browser's credential
+      // dialog over a public share page, whose Save button calls a gated API.
+      // Pages keep the challenge; APIs just answer 401.
+      const headers: Record<string, string> = { "Cache-Control": "no-store" };
+      if (!pathname.startsWith("/api/")) {
+        headers["WWW-Authenticate"] = 'Basic realm="Knowledge Hub", charset="UTF-8"';
+      }
+      return new NextResponse("Authentication required.", { status: 401, headers });
     }
   }
   if (pathname.startsWith("/api/")) return NextResponse.next();
