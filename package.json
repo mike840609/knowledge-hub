@@ -18,6 +18,7 @@
     "test:mermaid-assumptions": "node scripts/test/mermaid-assumptions.mjs",
     "db:migrate": "tsx scripts/db/migrate.ts",
     "db:seed": "tsx scripts/db/seed.ts",
+    "db:probe": "tsx scripts/db/probe-session.ts",
     "db:backfill-personal-workspaces": "tsx scripts/db/backfill-personal-workspaces.ts",
     "db:reindex-document-links": "tsx scripts/db/reindex-document-links.ts",
     "db:report-escaped-wikilinks": "tsx scripts/db/report-escaped-wikilinks.ts",
