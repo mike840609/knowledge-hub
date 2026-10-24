@@ -7,16 +7,23 @@ import type { applicationServices as ApplicationServicesFn } from "@/server/comp
 vi.mock("@/server/composition", () => ({ applicationServices: vi.fn() }));
 
 import { applicationServices } from "@/server/composition";
-import { getKnowledgeDocumentModel } from "@/server/knowledge-read";
+import { getKnowledgeDocumentModel, type RevisionSummary } from "@/server/knowledge-read";
 
 type Services = ReturnType<typeof ApplicationServicesFn>;
+type RevisionHistory = NonNullable<RevisionSummary["history"]>;
 
 const WORKSPACE_ID = "0199f400-0000-7000-8000-0000000005a1";
 const SOURCE_ID = "0199f400-0000-7000-8000-0000000005a2";
 const DOCUMENT_ID = "0199f400-0000-7000-8000-0000000005a3";
 const caller = callerFromIdentity({ id: "0199f400-0000-7000-8000-0000000005a4", emp_id: "DOC-READ", name: "Reader", org_code: "HRSD" });
 
-function revision(revisionNo: number) {
+function revision(revisionNo: number, history: RevisionHistory = {
+  state: "CHECKPOINT",
+  activityId: `activity-${revisionNo}`,
+  windowStartedAt: new Date(Date.UTC(2026, 0, revisionNo)),
+  name: null,
+  reason: "LEGACY",
+}) {
   return {
     id: `rev-${revisionNo}`,
     documentId: DOCUMENT_ID,
@@ -27,6 +34,7 @@ function revision(revisionNo: number) {
     contentHash: `hash-${revisionNo}`,
     createdBy: caller.identity.id,
     createdAt: new Date(Date.UTC(2026, 0, revisionNo)),
+    history,
   };
 }
 
@@ -34,18 +42,19 @@ function fakeServices(overrides: {
   getDocument?: () => Promise<unknown>;
   findEntry?: () => Promise<unknown>;
   workspaceId?: string;
+  revisions?: ReturnType<typeof revision>[];
 } = {}) {
-  const revisions = [revision(1), revision(2)];
+  const revisions = overrides.revisions ?? [revision(1), revision(2)];
   const findEntry = vi.fn(overrides.findEntry ?? (async () => ({ sourcePath: "notes/guide.md" })));
   const getDocument = vi.fn(overrides.getDocument ?? (async () => ({
     documentId: DOCUMENT_ID,
     sourceId: SOURCE_ID,
     workspaceId: overrides.workspaceId ?? WORKSPACE_ID,
     status: "ACTIVE",
-    currentRevision: revisions[1],
+    currentRevision: revisions[revisions.length - 1],
   })));
   const getRevision = vi.fn(async (_caller: unknown, _id: string, revisionNo: number) => revisions[revisionNo - 1]);
-  const listRevisionSummaries = vi.fn(async () => revisions.map(({ id, revisionNo, createdAt }) => ({ id, revisionNo, createdAt })));
+  const listRevisionSummaries = vi.fn(async () => revisions.map(({ id, revisionNo, createdAt, history }) => ({ id, revisionNo, createdAt, history })));
   const listRevisions = vi.fn(async () => revisions);
   const services = {
     establishTrustedCaller: vi.fn(async () => ({ caller })),
@@ -72,10 +81,40 @@ describe("document read model", () => {
     fakeServices();
     const model = await getKnowledgeDocumentModel(WORKSPACE_ID, SOURCE_ID, DOCUMENT_ID);
     expect(model?.revisions).toEqual([
-      { id: "rev-1", revisionNo: 1, createdAt: new Date(Date.UTC(2026, 0, 1)) },
-      { id: "rev-2", revisionNo: 2, createdAt: new Date(Date.UTC(2026, 0, 2)) },
+      {
+        id: "rev-1",
+        revisionNo: 1,
+        createdAt: new Date(Date.UTC(2026, 0, 1)),
+        history: { state: "CHECKPOINT", activityId: "activity-1", windowStartedAt: new Date(Date.UTC(2026, 0, 1)), name: null, reason: "LEGACY" },
+      },
+      {
+        id: "rev-2",
+        revisionNo: 2,
+        createdAt: new Date(Date.UTC(2026, 0, 2)),
+        history: { state: "CHECKPOINT", activityId: "activity-2", windowStartedAt: new Date(Date.UTC(2026, 0, 2)), name: null, reason: "LEGACY" },
+      },
     ]);
     expect(JSON.stringify(model?.revisions)).not.toContain("Body of revision");
+  });
+
+  it("keeps only the current WORKING revision in history", async () => {
+    const working = (activityId: string): RevisionHistory => ({
+      state: "WORKING",
+      activityId,
+      windowStartedAt: new Date(Date.UTC(2026, 0, 2)),
+      name: null,
+      reason: "AUTOSAVE",
+    });
+    fakeServices({
+      revisions: [
+        revision(1),
+        revision(2, working("activity-2")),
+        revision(3, working("activity-3")),
+      ],
+    });
+    const model = await getKnowledgeDocumentModel(WORKSPACE_ID, SOURCE_ID, DOCUMENT_ID);
+    expect(model?.revisions.map((entry) => entry.revisionNo)).toEqual([1, 3]);
+    expect(model?.revisions[1]?.history).toMatchObject({ state: "WORKING", activityId: "activity-3", reason: "AUTOSAVE" });
   });
 
   it("asks only for revision summaries when loading history", async () => {
