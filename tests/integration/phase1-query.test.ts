@@ -279,6 +279,53 @@ describe("knowledge query not-found contract", () => {
 });
 
 
+describe("document summary batch reads", () => {
+  it("returns only visible requested documents, hiding archived and other-workspace ones by default", async () => {
+    const scope = await setupQueryScope();
+    const { queries, hub } = queryServices();
+    const member = callerFromIdentity(hrMember);
+    const now = new Date();
+
+    const secondActive = await hub.createDocument(member, {
+      sourceId: scope.sourceX, parentId: scope.childFolderId, title: "Second Active", markdown: "body", metadata: {},
+    });
+    const archived = await hub.createDocument(member, {
+      sourceId: scope.sourceX, parentId: scope.childFolderId, title: "Archived", markdown: "body", metadata: {},
+    });
+    await hub.archiveDocument(member, archived.documentId);
+
+    const sourceY = uuidv7();
+    await new MariaDbUnitOfWork(pool).run(async (repositories) => {
+      await repositories.sources.insert({
+        id: sourceY, name: "Foreign Hub", workspaceId: scope.workspaceY, sourceType: "HUB", ownership: "HUB_MANAGED",
+        status: "ACTIVE", syncVersion: 0, createdBy: rdMember.id, updatedBy: rdMember.id,
+        archivedBy: null, archivedAt: null, createdAt: now, updatedAt: now,
+      });
+    });
+    const rdCaller = callerFromIdentity(rdMember);
+    const foreignFolder = await hub.createFolder(rdCaller, { sourceId: sourceY, parentId: null, name: "Foreign Folder" });
+    const foreign = await hub.createDocument(rdCaller, {
+      sourceId: sourceY, parentId: foreignFolder.treeNodeId, title: "Foreign", markdown: "body", metadata: {},
+    });
+
+    const askedFor = [scope.documentId, secondActive.documentId, archived.documentId, foreign.documentId, uuidv7()];
+
+    const visible = await queries.listDocumentSummariesByIds(member, scope.workspaceX, askedFor);
+    expect(visible.map((summary) => summary.documentId).sort()).toEqual([scope.documentId, secondActive.documentId].sort());
+    expect(visible[0]).toMatchObject({ sourceId: scope.sourceX, ownership: "HUB_MANAGED", status: "ACTIVE", sourceStatus: "ACTIVE" });
+
+    const withArchived = await queries.listDocumentSummariesByIds(member, scope.workspaceX, askedFor, { includeArchived: true });
+    expect(withArchived.map((summary) => summary.documentId).sort()).toEqual(
+      [scope.documentId, secondActive.documentId, archived.documentId].sort(),
+    );
+    expect(withArchived.find((summary) => summary.documentId === archived.documentId)?.status).toBe("ARCHIVED");
+
+    await expect(queries.listDocumentSummariesByIds(member, scope.workspaceX, [])).resolves.toEqual([]);
+    await expect(queries.listDocumentSummariesByIds(callerFromIdentity(hrOutsider), scope.workspaceX, askedFor))
+      .rejects.toMatchObject({ code: "WORKSPACE_NOT_FOUND" });
+  });
+});
+
 describe("Home metadata summaries", () => {
   it("scopes summaries by workspace, enforces membership, and preserves archive filtering", async () => {
     const scope = await setupQueryScope();
