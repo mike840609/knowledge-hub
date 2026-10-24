@@ -121,7 +121,7 @@ All four fields (`title`/`filename`/`markdown`/`expectedCurrentRevisionId`) are 
 
 ### 6.4 Limits
 
-`title`: 512 characters; `markdown`: 5 MiB, matching the default `KM_IMPORT_MAX_MARKDOWN_FILE_BYTES`. Exceeding these limits returns `INVALID_REQUEST`.
+`title`: 512 characters; `markdown`: 3.5 MiB (3,670,016 bytes), the deployment-safe authoring cap under Vercel's 4.5 MB request limit. Exceeding these limits returns `INVALID_REQUEST`.
 
 ## 7. Authorization and Error Mapping
 
@@ -178,7 +178,7 @@ New page `/w/[workspaceId]/knowledge/[sourceId]/[documentId]/edit`, component `s
 | U2 | §6.1、§6.2 | Body validation: missing fields, non-strings, both `title` and `filename`, or neither |
 | U3 | §6.2 | `filename` branch: frontmatter title takes precedence over H1; if both are absent, use the filename without its extension |
 | U4 | §7.2 | `toWorkspaceErrorResponse`：`REVISION_CONFLICT` → 409、`SOURCE_MANAGED_READ_ONLY` → 409、`INVALID_TITLE` → 400、`DOCUMENT_NOT_FOUND` → 404 |
-| U5 | §6.4 | Limits: `title` over 512 or `markdown` over 5 MiB returns `INVALID_REQUEST` |
+| U5 | §6.4 | Limits: `title` over 512 or `markdown` over 3.5 MiB returns `INVALID_REQUEST` |
 
 ### 9.2 Integration Tests (DB Required)
 

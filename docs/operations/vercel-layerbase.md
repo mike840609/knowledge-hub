@@ -53,7 +53,7 @@ Runtime:
 | `KM_DB_CONNECT_TIMEOUT_MS` | `30000` |
 | `KM_DB_ACQUIRE_TIMEOUT_MS` | `35000` |
 | `KM_IMPORT_MAX_UPLOAD_BATCH_BYTES` | `4194304` |
-| `KM_IMPORT_MAX_MARKDOWN_FILE_BYTES` | `4000000` |
+| `KM_IMPORT_MAX_MARKDOWN_FILE_BYTES` | `3670016` |
 | `KM_IDENTITY_PROVIDER` | `local` |
 | `KM_LOCAL_IDENTITY_ENABLED` | `true` |
 | `KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION` | `true` — single-operator only; never on a shared deployment |
@@ -151,7 +151,7 @@ Then, in a browser:
 | `no more connections allowed` | The plan's connection cap is reached. Lower `KM_DB_POOL_SIZE` (1) or upgrade. |
 | TLS verification error | Confirm the host. Use `KM_DB_SSL=trust` only after verifying the endpoint cannot present a public certificate. |
 | Migration ledger `FAILED` | The migration stopped mid-run. Repair the schema explicitly and clear only that ledger row; never edit checksums. |
-| 413 from a folder import | A request exceeded 4.5 MB. Keep each Markdown file under `KM_IMPORT_MAX_MARKDOWN_FILE_BYTES` (4,000,000 bytes in this template); the client rejects an oversized file before upload. Lower `KM_IMPORT_MAX_MANIFEST_ENTRIES` if the manifest itself is too large. |
+| 413 from a folder import | A request exceeded 4.5 MB. Keep each Markdown file under `KM_IMPORT_MAX_MARKDOWN_FILE_BYTES` (3,670,016 bytes in this template); the client rejects an oversized file before upload. Lower `KM_IMPORT_MAX_MANIFEST_ENTRIES` if the manifest itself is too large. |
 | Export or a huge document fails | Vercel caps responses at 4.5 MB; the export is buffered. Stream it or split the content in a future change. |
 | Preview deployment says “skipped” | Expected. Only production builds run. |
 

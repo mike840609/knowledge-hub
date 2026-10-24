@@ -600,7 +600,7 @@ Append to `.env.example`:
 # KM_DB_MIGRATE_URL="mysql://USER:PASSWORD@DIRECT_HOST:PORT/DATABASE"   # direct URL, build-only
 # KM_MIGRATE_ON_BUILD=1
 # KM_IMPORT_MAX_UPLOAD_BATCH_BYTES=4194304
-# KM_IMPORT_MAX_MARKDOWN_FILE_BYTES=4000000
+# KM_IMPORT_MAX_MARKDOWN_FILE_BYTES=3670016
 
 # Single-operator production identity. Never use these on a shared deployment.
 # KM_IDENTITY_PROVIDER=local

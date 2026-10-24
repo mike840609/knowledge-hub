@@ -9,7 +9,7 @@ Preview deployment 由 `scripts/vercel-ignore.mjs` 關閉：它們沒有資料�
 
 ## 1. 建立資料庫
 
-1. 登入 <https://layerbase.com>，建立 **MariaDB 10.11** 資料庫（免費方案即可）。若建立流程提供 region 選項，選離 Vercel region（`sin1`，新加坡）最近者。
+1. 登入 <https://layerbase.com>，建立 **MariaDB 10.11** 資料庫（免費方案即可）。
    Layerbase 的共享方案**沒有 region 可選**：資料庫固定放在美國東岸 Ashburn, Virginia。只有 dedicated server 能選地區，而且只有美國或巴西。專案的 `vercel.json` 使用 `iad1`，讓 function 緊鄰資料庫；不要改成離 US East 很遠的 region。
 2. 打開資料庫的 **Connect** 對話框，複製兩種連線字串：
    - **Pooled** — 執行時使用（`KM_DB_URL`）。
@@ -44,7 +44,7 @@ vercel link          # 或在 Vercel dashboard 匯入 mike840609/knowledge-hub
 | `KM_DB_CONNECT_TIMEOUT_MS` | `30000` |
 | `KM_DB_ACQUIRE_TIMEOUT_MS` | `35000` |
 | `KM_IMPORT_MAX_UPLOAD_BATCH_BYTES` | `4194304` |
-| `KM_IMPORT_MAX_MARKDOWN_FILE_BYTES` | `4000000` |
+| `KM_IMPORT_MAX_MARKDOWN_FILE_BYTES` | `3670016` |
 | `KM_IDENTITY_PROVIDER` | `local` |
 | `KM_LOCAL_IDENTITY_ENABLED` | `true` |
 | `KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION` | `true` — 僅限單人操作；切勿用於共用部署 |
@@ -129,7 +129,7 @@ curl -fsS https://<domain>/api/health      # {"ok":true}
 | `no more connections allowed` | 方案的連線上限到了。把 `KM_DB_POOL_SIZE` 降到 1，或升級方案。 |
 | TLS 驗證錯誤 | 確認 host。只有在確認端點無法提供公開憑證時才用 `KM_DB_SSL=trust`。 |
 | Migration ledger `FAILED` | migration 中斷。明確修復 schema，只清掉該筆 ledger row；切勿修改 checksum。 |
-| 資料夾匯入 413 | 請求超過 4.5 MB。每個 Markdown 檔要小於 `KM_IMPORT_MAX_MARKDOWN_FILE_BYTES`（此範本為 4,000,000 bytes）；client 會在上傳前擋下。若 manifest 本身過大，調低 `KM_IMPORT_MAX_MANIFEST_ENTRIES`。 |
+| 資料夾匯入 413 | 請求超過 4.5 MB。每個 Markdown 檔要小於 `KM_IMPORT_MAX_MARKDOWN_FILE_BYTES`（此範本為 3,670,016 bytes）；client 會在上傳前擋下。若 manifest 本身過大，調低 `KM_IMPORT_MAX_MANIFEST_ENTRIES`。 |
 | 匯出或超大文件失敗 | Vercel 回應上限 4.5 MB；匯出目前是 buffered。未來可改成 streaming。 |
 | Preview deployment 顯示 skipped | 正常。只有 production build 會執行。 |
 

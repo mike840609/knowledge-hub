@@ -231,7 +231,7 @@ Runtime (Production scope only — preview builds are disabled in §7):
 | `KM_DB_SSL` | `verify` |
 | `KM_DB_POOL_SIZE` | `2` |
 | `KM_IMPORT_MAX_UPLOAD_BATCH_BYTES` | `4194304` |
-| `KM_IMPORT_MAX_MARKDOWN_FILE_BYTES` | `4000000` |
+| `KM_IMPORT_MAX_MARKDOWN_FILE_BYTES` | `3670016` |
 | `KM_IDENTITY_PROVIDER` | `local` |
 | `KM_LOCAL_IDENTITY_ENABLED` | `true` |
 | `KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION` | `true` |
@@ -253,16 +253,21 @@ credentials.
 
 ### 9. Vercel platform limits
 
-Vercel Functions cap request **and** response bodies at 4.5 MB. The app was written for a
-long-lived server and has several flows larger than that. Decisions:
+Vercel Functions cap request **and** response bodies at 4.5 MB, and Routing Middleware caps the
+request body it receives at **4 MB**. Decisions:
 
-- **Folder-import upload batches**: lower `MAX_BATCH_BYTES` in
-  `src/components/imports/folder-import-form.tsx` from 10 MiB to 4 MiB. Batches are multipart
-  `FormData`, so 4 MiB of files plus per-part headers stays well under 4.5 MB. The production
-  environment also sets `KM_IMPORT_MAX_UPLOAD_BATCH_BYTES=4194304` and
-  `KM_IMPORT_MAX_MARKDOWN_FILE_BYTES=4000000`; the server passes the per-file limit to the client,
-  which rejects an oversized Markdown file before creating a session, and a 413 from the platform
-  is surfaced as a readable size error. Local defaults are unchanged.
+- **Middleware body**: `vercel.json` sets `skipMiddlewareRequestBody: true`. The middleware never
+  reads a body; without this option the 4 MiB import batches (plus multipart framing) would exceed
+  the 4 MB middleware cap before reaching the function. The function still receives the body and
+  keeps the 4.5 MB cap. Verify with a real ~4 MiB import after the first deploy.
+- **Folder-import upload batches**: 4 MiB of file bytes (`MAX_UPLOAD_BATCH_BYTES` in
+  `src/lib/upload-limits.ts`) plus multipart framing stays under the 4.5 MB function cap. The
+  production environment sets `KM_IMPORT_MAX_UPLOAD_BATCH_BYTES=4194304` and
+  `KM_IMPORT_MAX_MARKDOWN_FILE_BYTES=3670016`; the client clamps each Markdown file to the smaller
+  of that server limit and the batch cap, and a platform 413 becomes a readable size error.
+- **Document authoring**: `MAX_MARKDOWN_BYTES` is 3.5 MiB (3,670,016 bytes). A save is a JSON body,
+  so 3.5 MiB leaves room for escaping and metadata under 4.5 MB. The draft hint uses the same
+  constant and flags an oversized draft before saving.
 - **Import manifest**: the client posts one JSON manifest. With the default 20,000-entry ceiling
   and realistic paths this is normally below 4.5 MB, but pathological paths can exceed it. The
   deployment doc lists lowering `KM_IMPORT_MAX_MANIFEST_ENTRIES` in production as the remedy, with
