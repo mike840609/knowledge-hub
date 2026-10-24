@@ -1,4 +1,5 @@
 import { LOCAL_IDENTITY_PROVIDER_NAME } from "@/infrastructure/identity/local-identity-provider";
+import { GOOGLE_IDENTITY_PROVIDER_NAME } from "@/infrastructure/identity/google-identity-provider";
 import { callerFromPrincipal, type CallerContext } from "@/modules/identity/domain/caller-context";
 import type { AuthenticatedPrincipal } from "@/modules/identity/domain/authenticated-principal";
 import type { IdentityProvider } from "@/modules/identity/ports/identity-provider";
@@ -40,8 +41,11 @@ export type TrustedCaller = {
  */
 export async function establishTrustedCaller(dependencies: TrustedCallerDependencies): Promise<TrustedCaller> {
   const claims = await dependencies.provider.getCurrentClaims();
+  const directIdentity =
+    claims.externalIdentity.provider === LOCAL_IDENTITY_PROVIDER_NAME ||
+    claims.externalIdentity.provider === GOOGLE_IDENTITY_PROVIDER_NAME;
   const identity =
-    claims.externalIdentity.provider === LOCAL_IDENTITY_PROVIDER_NAME
+    directIdentity
       ? await dependencies.provider.getCurrentIdentity()
       : await dependencies.resolver.resolve(claims.externalIdentity);
   await dependencies.unitOfWork.run((repositories) => repositories.users.upsertIdentity(identity));

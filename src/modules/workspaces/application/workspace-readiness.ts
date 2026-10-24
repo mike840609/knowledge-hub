@@ -33,7 +33,7 @@ export type ReadinessQuery = <T>(sql: string, params?: unknown[]) => Promise<T>;
 
 export type ProductionReadinessOptions = {
   query: ReadinessQuery;
-  identityProviderKind: "local" | "company-sso";
+  identityProviderKind: "local" | "company-sso" | "google";
   companySsoProvider: string;
   companySessionReaderConfigured: boolean;
   rolloutHubUserIds?: readonly string[];
