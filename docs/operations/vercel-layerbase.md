@@ -10,8 +10,10 @@ and would otherwise deploy successfully and then fail on every page.
 ## 1. Create the database
 
 1. Sign in at <https://layerbase.com> and create a **MariaDB 10.11** database (free plan is enough
-   to start). Pick the region closest to the Vercel region (`sin1`, Singapore) if the create flow
-   offers a choice.
+   to start). Layerbase's shared fleet has **no region choice**: those databases run in Ashburn,
+   Virginia (US East). Dedicated servers can choose a region, but only the US or Brazil. The
+   repository's `vercel.json` uses `iad1` so the functions run next to the database; do not change
+   it to a region far from US East.
 2. Open the database's **Connect** dialog and copy both connection strings:
    - **Pooled** — the runtime URL (`KM_DB_URL`).
    - **Direct** — turn the Pooled toggle off (`KM_DB_MIGRATE_URL`, and the probe fallback).

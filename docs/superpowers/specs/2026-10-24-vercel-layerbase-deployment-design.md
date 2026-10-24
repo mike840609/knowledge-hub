@@ -203,7 +203,7 @@ New `vercel.json`:
   "installCommand": "npm ci",
   "buildCommand": "node scripts/vercel-build.mjs",
   "ignoreCommand": "node scripts/vercel-ignore.mjs",
-  "regions": ["sin1"]
+  "regions": ["iad1"]
 }
 ```
 
@@ -289,7 +289,9 @@ No data is copied automatically by the build.
 New `docs/operations/vercel-layerbase.md` (English, matching the existing operations docs) with:
 
 - Create the Layerbase MariaDB 10.11 database; capture pooled and direct URLs.
-- Choose the closest region (Singapore if offered) to match `sin1`.
+- Layerbase's shared fleet has no per-database region choice: those databases run in Ashburn,
+  Virginia (US East). Dedicated servers can choose a region, but only US East, US West, or São
+  Paulo. Run the Vercel functions in `iad1` so the app and database share a region.
 - Set the environment variables above.
 - `vercel login` / `vercel link` or connect the GitHub repository; deploy.
 - Run the probe; record which URL the runtime uses.
@@ -328,6 +330,6 @@ New `docs/operations/vercel-layerbase.md` (English, matching the existing operat
 ## Left to the deployer
 
 - Provide Layerbase credentials and run `vercel login` (the local CLI token is currently invalid).
-- Choose the Layerbase region/plan.
+- Choose the Layerbase plan (shared/free vs dedicated); the shared fleet's region is fixed.
 - Choose fresh seed vs. local-data copy.
 - Decide whether to set `KM_SITE_PASSWORD`.

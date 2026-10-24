@@ -4,5 +4,5 @@
   "installCommand": "npm ci",
   "buildCommand": "node scripts/vercel-build.mjs",
   "ignoreCommand": "node scripts/vercel-ignore.mjs",
-  "regions": ["sin1"]
+  "regions": ["iad1"]
 }

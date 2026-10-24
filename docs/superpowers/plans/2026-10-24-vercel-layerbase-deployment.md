@@ -530,14 +530,14 @@ describe("vercel-build.mjs --dry-run", () => {
 });
 
 describe("vercel.json", () => {
-  it("builds through the migration-aware script and targets sin1", () => {
+  it("builds through the migration-aware script and targets the database region", () => {
     const config = JSON.parse(readFileSync("vercel.json", "utf8"));
     expect(config).toMatchObject({
       framework: "nextjs",
       installCommand: "npm ci",
       buildCommand: "node scripts/vercel-build.mjs",
       ignoreCommand: "node scripts/vercel-ignore.mjs",
-      regions: ["sin1"],
+      regions: ["iad1"],
     });
   });
 });
