@@ -52,13 +52,16 @@ unchanged).
 Running text is held to `max-w-measure` (40rem, 640px) inside the 860px reading
 column, which also carries 24px of padding each side (`kh-reading-column`,
 `px-6`); only tables, code and diagrams use the rest. So the article's box can
-narrow to **688px** (640 + 2 × 24) without one line of prose rewrapping. When it
-has discussion marks it keeps their 32px right margin inside that box, and at the
-floor its text is 608px wide.
+narrow to **688px** (640 + 2 × 24). When it has discussion marks it keeps their
+32px right margin inside that box, and at the floor its prose is 608px wide in the
+workspace. On the shared page the article keeps 24px left and 32px right padding,
+so its prose at the floor is 632px. Prose therefore rewraps only at that narrowest
+point — by 32px in the workspace and 8px on the shared page.
 
 When the discussions open, the column holding the article keeps its left edge and
 the article narrows from the right, down to 688px, before the column moves. Wide
-blocks get narrower; prose does not. Below that the column slides left (the
+blocks get narrower; marked prose reaches 608px (workspace) or 632px (shared page)
+at the floor. Below that the column slides left (the
 existing 120ms `margin-inline-start` transition) only as far as keeps the article
 at 688px. The outline folds into the disclosure only where even a column at the
 pane's left edge cannot hold article, discussions and outline.
@@ -111,6 +114,9 @@ The shared page is the whole window, its column centred in it.
   slides up to 146px. Below `82rem`, with no outline rail to make room for, the
   terms are `100% − 1008px` and `100% − margin`. The `@media (max-width:
   87.99rem)` fold is deleted.
+- A document with fewer than two headings renders no rail, so it reserves no
+  224px even at `82rem`: it keeps the below-`82rem` terms, and its document is
+  capped by `100% − margin`.
 
 ## Not in this change
 
@@ -139,7 +145,7 @@ Workspace (`tests/e2e/owner-review.spec.ts`, `tests/e2e/reading-loading.spec.ts`
 Shared page (`tests/e2e/zz-share-outline.spec.ts`):
 
 - At 1440px the outline rail is right of the article; with comments open it is
-  right of the comments rail, stays on screen, and its paragraphs are at least 608px wide.
+  right of the comments rail, stays on screen, and its paragraphs are at least 632px wide.
 - At 1280px the outline is the disclosure.
 - Opening comments at 1680px leaves the article's left edge where it was.
 

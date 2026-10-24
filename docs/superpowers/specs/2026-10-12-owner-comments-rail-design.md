@@ -206,9 +206,8 @@ The stylesheet is the one place that knows where there is room.
 
 Open and inline:
 
-- every `.kh-reading-column` in the pane takes the wider measure (reading +
-  320px), so the title, the outline disclosure and the article keep one left
-  edge;
+- the column that holds the article takes the wider measure (reading + 320px);
+  the path line and header keep the reading width and one left edge;
 - below a `77rem` pane, the outline rail is hidden and the outline disclosure
   shown; from `77rem` the outline keeps its rail right of the discussions
   *(amended 2026-10-23; see the amendment at the top)*;

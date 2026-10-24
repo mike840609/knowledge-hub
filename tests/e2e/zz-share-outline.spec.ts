@@ -103,8 +103,21 @@ test("share outline: from 82rem the article, the comments and the outline stand 
     await page.goto(path);
     const comments = page.getByRole("complementary", { name: "Document discussions" });
     await expect(rail(page)).toBeVisible();
+    // The start margin slides for 120ms; sample every frame from before the click so a cap that
+    // jumps to its final width while the column is still centred cannot overflow unseen.
+    const widestOverflow = page.evaluate(() => new Promise<number>((resolve) => {
+      const started = performance.now();
+      let widest = 0;
+      const sample = () => {
+        widest = Math.max(widest, document.documentElement.scrollWidth - window.innerWidth);
+        if (performance.now() - started < 250) requestAnimationFrame(sample);
+        else resolve(widest);
+      };
+      sample();
+    }));
     await page.getByRole("button", { name: /^Open discussions/ }).click();
     await expect(comments).toBeVisible();
+    expect(await widestOverflow).toBeLessThanOrEqual(0);
     await expect(rail(page)).toBeVisible();
     await expect(disclosure(page)).toBeHidden();
     // Wait for the column's 120ms slide; then article, comments, outline, in that order, all on screen.
@@ -113,8 +126,8 @@ test("share outline: from 82rem the article, the comments and the outline stand 
       if (!outline || !commentsBox || !text) return false;
       return commentsBox.x >= text.x + text.width - 1 && outline.x >= commentsBox.x + commentsBox.width - 1 && outline.x + outline.width <= width;
     }).toBe(true);
-    // 640px of measure less the 32px the marks keep.
-    expect((await page.locator("article[data-review-document] p").first().boundingBox())!.width).toBeGreaterThanOrEqual(608);
+    // 688px article less its 24px left and 32px right padding: 632px, with 1px for sub-pixel layout.
+    expect((await page.locator("article[data-review-document] p").first().boundingBox())!.width).toBeGreaterThanOrEqual(631);
   }
 });
 

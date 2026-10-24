@@ -217,7 +217,7 @@ test("where the pane cannot hold all three, the outline folds above the article 
   // The disclosure is above the article, not beside it on either side.
   const [disclosureBox, articleBox] = [(await page.locator(".kh-outline-inline").boundingBox())!, (await page.locator("[data-review-document]").boundingBox())!];
   expect(disclosureBox.y + disclosureBox.height).toBeLessThanOrEqual(articleBox.y + 1);
-  // 640px of measure less the 32px the marks keep.
+  // This narrow layout is unchanged; the 77rem test below pins the changed boundary.
   const paragraph = page.locator("[data-review-document] p").first();
   await expect.poll(async () => (await paragraph.boundingBox())!.width).toBeGreaterThanOrEqual(608);
   expect(await pane.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
@@ -249,8 +249,8 @@ test("a pane just past 77rem keeps the outline right of the open discussions, an
       && outlineBox.x + outlineBox.width <= paneBox.x + paneBox.width + 1;
   };
   await expect.poll(inOrder).toBe(true);
-  // 640px of measure less the 32px the marks keep: the prose kept its measure at the floor.
-  expect((await article.locator("p").first().boundingBox())!.width).toBeGreaterThanOrEqual(608);
+  // 640px of measure less the 32px the marks keep: 608px at the floor, with 1px for sub-pixel layout.
+  expect((await article.locator("p").first().boundingBox())!.width).toBeGreaterThanOrEqual(607);
 
   const articleX = async () => Math.round((await article.boundingBox())!.x);
   await page.waitForTimeout(250);

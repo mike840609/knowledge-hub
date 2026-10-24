@@ -662,12 +662,15 @@ input[type="search"]::-webkit-search-cancel-button:hover {
    never on something a utility lays out: there is no layer here for that utility to be restored from. */
 .kh-review-document[data-review-inline] .kh-review-rail-only { display: revert; }
 /* The column keeps its left edge when the rail opens, and the article narrows from the right to its
-   688px floor (640 measure + 48 padding) before the column moves. Centred, the whole page — bar,
-   byline, article — used to slide 160px sideways under the pointer each time the rail was opened or
-   closed. With an outline rail the column no longer moves from 1604px; without one, from 1156px, so
-   at 1440px a document with no outline only narrows. Below those widths the column moves left only
-   as far as keeps the article at 688px, and slides there rather than jumping; below the floor the
-   prose narrows too.
+   688px floor (640 measure + 48 padding) before the column moves. The article box narrows to 688px;
+   marked prose reaches 608px in the workspace and share-page prose reaches 632px, so prose rewraps
+   only at that narrowest point. Centred, the whole page — bar, byline, article — used to slide
+   160px sideways under the pointer each time the rail was opened or closed. Now the document and
+   footer fill what the start margin leaves (`width: auto`), so during the 120ms margin slide their
+   width travels with it instead of jumping to its final cap and overflowing. With an outline rail
+   the column no longer moves from 1604px; below that it moves left only as far as keeps the
+   article at 688px. The no-outline floor term is defensive: inline comments begin at 1200px, where
+   the centred term already wins. Below the floor the prose narrows too.
    Only the document and the footer that closes it widen. The pinned bar keeps the article's width,
    so its buttons stay where they were clicked rather than leaping 320px right; the rail names
    itself and closes itself. */
@@ -687,12 +690,10 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) > footer {
   margin-inline-start: var(--kh-share-start);
 }
+.kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) .kh-review-document,
 .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) > footer {
-  /* Below 82rem no rail takes room, so the column fills what its start margin leaves (spec). */
-  max-width: min(calc(theme("maxWidth.reading") + 320px), calc(100% - var(--kh-share-start)));
-}
-.kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) .kh-review-document {
-  /* Same fill; without it `w-full` plus the new start margin runs off the window (outline-right-of-article spec). */
+  /* Fill what the start margin leaves, and keep filling while that margin slides. */
+  width: auto;
   max-width: min(calc(theme("maxWidth.reading") + 320px), calc(100% - var(--kh-share-start)));
 }
 /* The outline hangs off the column's right edge where the centred column leaves room for it (82rem:
@@ -713,9 +714,11 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-share-page:has(.kh-share-outline-rail):has(.kh-review-document[data-review-inline][data-review-open]) {
     --kh-share-start: max(0px, min(calc((100% - theme("maxWidth.reading")) / 2), calc(100% - theme("maxWidth.measure") - theme("spacing.12") - 320px - theme("spacing.56"))));
   }
-  .kh-share-page:has(.kh-share-outline-rail) .kh-review-document[data-review-inline][data-review-open],
+  .kh-share-page:has(.kh-share-outline-rail):has(.kh-review-document[data-review-inline][data-review-open]) .kh-review-document[data-review-inline][data-review-open],
   .kh-share-page:has(.kh-share-outline-rail):has(.kh-review-document[data-review-inline][data-review-open]) > footer {
-    max-width: min(calc(theme("maxWidth.reading") + 320px), calc(100% - var(--kh-share-start) - theme("spacing.56")));
+    /* Leave the outline its 224px at the right; the width follows the sliding start margin. */
+    margin-inline-end: theme("spacing.56");
+    max-width: calc(theme("maxWidth.reading") + 320px);
   }
 }
 /* A heading jumped to lands below the pinned bar (57px), with 15px above it, not under the bar.
@@ -748,7 +751,8 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-document-pane .kh-review-document[data-review-inline][data-review-open] ~ * { max-width: calc(100% - 320px); }
 /* The outline is always right of the article: article, discussions, outline (outline-right-of-article
    spec). Opening the discussions narrows the article from the right down to its measure plus the
-   column's padding (640 + 48 = 688px) before the column moves, so prose never rewraps. Where the pane
+   column's padding (640 + 48 = 688px) before the column moves; unmarked prose keeps its 640px
+   measure, and marked prose reaches 608px at the floor. Where the pane
    holds outline slot, that article and the discussions (224 + 688 + 320 = 1232px, 77rem) the outline
    stays a rail; below, it folds above the article and the discussions take its slot. Hiding the
    explorer or opening Details changes only how much fits, never which side the outline is on. */
