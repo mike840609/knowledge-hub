@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { findFirstReadableDocument, sortSourcesByName } from "@/lib/knowledge-navigation";
+import { isHiddenReadFailure } from "./read-errors";
 import type { KnowledgeRevisionView, KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import type { WorkspaceAccessView, WorkspaceNavigationModel, WorkspaceNavigationItem } from "@/server/workspace-admin";
 import { applicationServices } from "@/server/composition";
@@ -60,8 +61,12 @@ export async function getKnowledgeDocumentModel(
       selectedRevision,
       sourcePath,
     };
-  } catch {
-    return null;
+  } catch (error) {
+    // A missing document and a hidden document are the same answer to the reader.
+    // Everything else (a dropped connection, a broken revision pointer) must reach
+    // the route error boundary so the reader is offered Retry, not a false 404.
+    if (isHiddenReadFailure(error)) return null;
+    throw error;
   }
 }
 
@@ -137,8 +142,9 @@ export async function getKnowledgeExplorerModel(
         })))
       : [{ source, tree }];
     return { sources: ordered, source, tree, collections, includeArchived };
-  } catch {
-    return null;
+  } catch (error) {
+    if (isHiddenReadFailure(error)) return null;
+    throw error;
   }
 }
 

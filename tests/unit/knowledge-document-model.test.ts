@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
-import { DocumentNotFoundError } from "@/modules/knowledge/domain/errors";
+import { DocumentNotFoundError, IntegrityViolationError } from "@/modules/knowledge/domain/errors";
+import { WorkspaceAccessDeniedError } from "@/modules/workspaces/domain/errors";
 import type { applicationServices as ApplicationServicesFn } from "@/server/composition";
 
 vi.mock("@/server/composition", () => ({ applicationServices: vi.fn() }));
@@ -115,5 +116,21 @@ describe("document read model", () => {
     const { findEntry } = fakeServices({ getDocument: async () => { throw new DocumentNotFoundError(); } });
     expect(await getKnowledgeDocumentModel(WORKSPACE_ID, SOURCE_ID, DOCUMENT_ID)).toBeNull();
     expect(findEntry).not.toHaveBeenCalled();
+  });
+
+  it("rethrows a transient read failure instead of calling it not found", async () => {
+    const failure = new Error("connect ETIMEDOUT");
+    fakeServices({ getDocument: async () => { throw failure; } });
+    await expect(getKnowledgeDocumentModel(WORKSPACE_ID, SOURCE_ID, DOCUMENT_ID)).rejects.toBe(failure);
+  });
+
+  it("still returns null when the caller may not see the document", async () => {
+    fakeServices({ getDocument: async () => { throw new WorkspaceAccessDeniedError(); } });
+    await expect(getKnowledgeDocumentModel(WORKSPACE_ID, SOURCE_ID, DOCUMENT_ID)).resolves.toBeNull();
+  });
+
+  it("rethrows an integrity failure instead of showing not found", async () => {
+    fakeServices({ getDocument: async () => { throw new IntegrityViolationError("current revision missing"); } });
+    await expect(getKnowledgeDocumentModel(WORKSPACE_ID, SOURCE_ID, DOCUMENT_ID)).rejects.toThrow("current revision missing");
   });
 });

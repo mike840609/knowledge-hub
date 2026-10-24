@@ -32,6 +32,56 @@ export function documentShortcutKey(sourceId: string, documentId: string): strin
   return `${sourceId}:${documentId}`;
 }
 
+type FavoriteItem = { key: string; sourceId: string };
+const favoritesInFlight = new Map<string, Promise<FavoriteItem[]>>();
+const focusListeners = new Map<string, Set<() => void>>();
+const focusHandlers = new Map<string, () => void>();
+const lastFailureAt = new Map<string, number>();
+
+async function loadFavoriteItems(workspaceId: string): Promise<FavoriteItem[]> {
+  const existing = favoritesInFlight.get(workspaceId);
+  if (existing) return existing;
+  const promise: Promise<FavoriteItem[]> = (async () => {
+    await migrateLocalFavorites(workspaceId);
+    await pendingFavoriteWrites(workspaceId).catch(() => {});
+    const response = await fetch(`/api/workspaces/${workspaceId}/personal?view=favorites`, { cache: "no-store" });
+    if (!response.ok) throw new Error();
+    return await response.json() as FavoriteItem[];
+  })().finally(() => {
+    // A favorite change may have replaced this request; only remove our own entry.
+    if (favoritesInFlight.get(workspaceId) === promise) favoritesInFlight.delete(workspaceId);
+  });
+  favoritesInFlight.set(workspaceId, promise);
+  return promise;
+}
+
+function subscribeFavoritesFocus(workspaceId: string, listener: () => void): () => void {
+  let listeners = focusListeners.get(workspaceId);
+  if (!listeners) {
+    listeners = new Set();
+    focusListeners.set(workspaceId, listeners);
+    const handler = () => { for (const notify of listeners!) notify(); };
+    focusHandlers.set(workspaceId, handler);
+    window.addEventListener("focus", handler);
+  }
+  listeners.add(listener);
+  return () => {
+    listeners!.delete(listener);
+    if (listeners!.size === 0) {
+      window.removeEventListener("focus", focusHandlers.get(workspaceId)!);
+      focusHandlers.delete(workspaceId);
+      focusListeners.delete(workspaceId);
+    }
+  };
+}
+
+function notifyFavoritesFailure(workspaceId: string, toast: ReturnType<typeof useToast>): void {
+  const now = Date.now();
+  if (now - (lastFailureAt.get(workspaceId) ?? 0) < 5_000) return;
+  lastFailureAt.set(workspaceId, now);
+  toast({ message: "Favorites could not sync. Showing this device’s saved list.", tone: "danger" });
+}
+
 export function useDocumentShortcuts(workspaceId: string): {
   shortcuts: DocumentShortcuts;
   update: (change: (previous: DocumentShortcuts) => DocumentShortcuts) => void;
@@ -83,11 +133,7 @@ export function useDocumentShortcuts(workspaceId: string): {
       const requestGeneration = generation.current;
       try {
         if (!personal) return;
-        await migrateLocalFavorites(workspaceId);
-        await pendingFavoriteWrites(workspaceId).catch(() => {});
-        const response = await fetch(`/api/workspaces/${workspaceId}/personal`, { cache: "no-store" });
-        if (!response.ok) throw new Error();
-        const items = await response.json() as { key: string; sourceId?: string }[];
+        const items = await loadFavoriteItems(workspaceId);
         if (!live || requestGeneration !== generation.current) return;
         const next = { ...current.current, favorites: items.filter(i => i.key.startsWith("favorite:") && i.sourceId).map(i => `${i.sourceId}:${i.key.split(":")[1]}`) };
         if (JSON.stringify(current.current) !== JSON.stringify(next)) {
@@ -95,7 +141,7 @@ export function useDocumentShortcuts(workspaceId: string): {
           startTransition(() => setShortcuts(next));
         }
         writeStored("local", storageKey, JSON.stringify(next));
-      } catch { if (live) toast({ message: "Favorites could not sync. Showing this device’s saved list.", tone: "danger" }); }
+      } catch { if (live) notifyFavoritesFailure(workspaceId, toast); }
       finally {
         pending--;
         // Failure still leaves a usable local list; late requests from old workspaces do not mark it ready.
@@ -103,8 +149,8 @@ export function useDocumentShortcuts(workspaceId: string): {
       }
     };
     void refresh();
-    window.addEventListener("focus", refresh);
-    return () => { live = false; window.removeEventListener(CHANGED, onChange); window.removeEventListener("focus", refresh); };
+    const unsubscribe = subscribeFavoritesFocus(workspaceId, refresh);
+    return () => { live = false; unsubscribe(); window.removeEventListener(CHANGED, onChange); };
   }, [storageKey, workspaceId, personal, toast]);
 
   const update = useCallback(
@@ -120,6 +166,9 @@ export function useDocumentShortcuts(workspaceId: string): {
       startTransition(() => setShortcuts(next));
       if (personal) {
         const changed = [...new Set([...before.favorites, ...next.favorites])].filter(key => before.favorites.includes(key) !== next.favorites.includes(key));
+        // A newly mounted hook must not reuse a list requested before this change;
+        // the queued write below makes the next request read the new state.
+        if (changed.length) favoritesInFlight.delete(workspaceId);
         for (const key of changed) {
           const selected = next.favorites.includes(key);
           void enqueueFavoriteWrite(workspaceId, async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RECENT_LIMIT, homeLists, type ContinueDoc, type ContinueDraft } from "@/lib/home-continue";
+import { RECENT_LIMIT, documentsForHome, homeLists, type ContinueDoc, type ContinueDraft } from "@/lib/home-continue";
 
 const doc = (id: string, over: Partial<ContinueDoc> = {}): ContinueDoc => ({
   documentId: id, sourceId: "src", title: id, updatedAt: "2026-10-01T00:00:00.000Z",
@@ -48,10 +48,18 @@ describe("homeLists", () => {
     expect(lists.recent).toEqual([]);
   });
 
-  it("excludes archived documents and documents in archived sources, whichever input names them", () => {
+  it("lists a draft for an archived document, but keeps it out of Recent", () => {
     const documents = [doc("a", { status: "ARCHIVED" }), doc("b", { sourceStatus: "ARCHIVED" })];
-    const lists = homeLists({ documents, drafts: [draft("draft:a", "2026-10-01T00:00:00.000Z")], recent: ["src:b"], openedAt: { "src:b": "2026-10-01T00:00:00.000Z" } });
-    expect(lists).toEqual({ drafts: [], recent: [] });
+    const lists = homeLists({
+      documents,
+      drafts: [draft("draft:a", "2026-10-02T00:00:00.000Z"), draft("draft:b", "2026-10-01T00:00:00.000Z")],
+      recent: ["src:a", "src:b"],
+      openedAt: { "src:a": "2026-10-03T00:00:00.000Z", "src:b": "2026-10-03T00:00:00.000Z" },
+    });
+    expect(lists.drafts.map(item => item.id)).toEqual(["a", "b"]);
+    expect(lists.drafts[0].doc?.status).toBe("ARCHIVED");
+    expect(lists.drafts[1].doc?.sourceStatus).toBe("ARCHIVED");
+    expect(lists.recent).toEqual([]);
   });
 
   it("excludes a draft or recent whose document is not in the workspace", () => {
@@ -69,5 +77,26 @@ describe("homeLists", () => {
     const { recent } = homeLists({ documents, drafts: [], recent: [] });
     expect(recent).toHaveLength(RECENT_LIMIT);
     expect(recent[0].id).toBe("d19");
+  });
+});
+
+describe("documentsForHome", () => {
+  it("sends active documents and only archived documents that have a draft", () => {
+    const documents = [
+      doc("active"),
+      doc("archived-draft", { status: "ARCHIVED" }),
+      doc("archived-no-draft", { status: "ARCHIVED" }),
+      doc("source-archived-draft", { sourceStatus: "ARCHIVED" }),
+      doc("source-archived-no-draft", { sourceStatus: "ARCHIVED" }),
+    ];
+    const drafts = [
+      draft("draft:archived-draft", "2026-10-02T00:00:00.000Z"),
+      draft("draft:source-archived-draft", "2026-10-01T00:00:00.000Z"),
+    ];
+    expect(documentsForHome(documents, drafts).map(document => document.documentId)).toEqual([
+      "active",
+      "archived-draft",
+      "source-archived-draft",
+    ]);
   });
 });
