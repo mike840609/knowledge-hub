@@ -40,7 +40,7 @@ vercel link          # 或在 Vercel dashboard 匯入 mike840609/knowledge-hub
 | --- | --- |
 | `KM_DB_URL` | Layerbase **pooled** URL（若第 4 步判定需要，才改用 direct） |
 | `KM_DB_SSL` | `verify` |
-| `KM_DB_POOL_SIZE` | `2` |
+| `KM_DB_POOL_SIZE` | `2`（見[連線池大小](#連線池大小)） |
 | `KM_DB_CONNECT_TIMEOUT_MS` | `30000` |
 | `KM_DB_ACQUIRE_TIMEOUT_MS` | `35000` |
 | `KM_IMPORT_MAX_UPLOAD_BATCH_BYTES` | `4194304` |
@@ -72,6 +72,32 @@ KM_DB_URL="<pooled URL>" npm run db:probe
 每一行都必須是 `PASS`：server 版本、`READ-COMMITTED`、`+00:00`、`GET_LOCK` 取得、lock holder 是同一個連線、release，以及新連線仍有相同 session 值。
 
 若任何 session 檢查失敗，代表 Layerbase pooler 沒有保留 session state。把執行時的 `KM_DB_URL` 改成 **direct** URL（不用改程式），並記錄原因。`KM_DB_MIGRATE_URL` 一律保持 direct。
+
+### 連線池大小
+
+`KM_DB_POOL_SIZE` 是**每個 Vercel function instance** 各開一份，不是整個部署共用：
+
+```
+總連線數 ≈ pool size × 同時存在的 instance 數
+```
+
+所以調大 pool 反而會讓「可同時執行的 instance 數」變少，更容易撞到資料庫的連線上限。以 20 條連線的方案為例，`2` 大約可容納十個 instance，`10` 只能容納兩個。pool 變大不會增加總吞吐量，只是讓單一 instance 能同時跑更多交易。
+
+20 條連線的 demo 方案請維持 `KM_DB_POOL_SIZE=2`。只有在以下情況才重新評估：
+
+- 升級 Layerbase 方案（或其連線上限）——約 50 條時用 3–5，100 條以上用 5–10；
+- log 出現 `ER_CON_COUNT_ERROR` / `Too many connections`，或請求卡在 `KM_DB_ACQUIRE_TIMEOUT_MS`；
+- 單一 instance 確實被長時間交易塞住，例如大型 folder import。
+
+用 SQL client 檢查實際壓力：
+
+```sql
+SELECT @@max_connections;
+SHOW STATUS LIKE 'Max_used_connections';
+SHOW STATUS LIKE 'Threads_connected';
+```
+
+`Max_used_connections` 遠低於方案上限，就代表 pool 不是瓶頸。`@@max_connections` 是 MariaDB 自己的上限，可能高於 pooler 實際套用的方案限制，請以方案為準。Layerbase 的 `wait_timeout` 是 8 小時：被凍結的 instance 會長時間佔住閒置連線，這也是 pool 應該保持小的另一個原因。
 
 ## 5. 選擇資料路徑
 

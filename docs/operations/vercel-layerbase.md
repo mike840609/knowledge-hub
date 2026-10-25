@@ -49,7 +49,7 @@ Runtime:
 | --- | --- |
 | `KM_DB_URL` | Layerbase **pooled** URL (or the direct URL if step 4 says so) |
 | `KM_DB_SSL` | `verify` |
-| `KM_DB_POOL_SIZE` | `2` |
+| `KM_DB_POOL_SIZE` | `2` (see [Connection pool sizing](#connection-pool-sizing)) |
 | `KM_DB_CONNECT_TIMEOUT_MS` | `30000` |
 | `KM_DB_ACQUIRE_TIMEOUT_MS` | `35000` |
 | `KM_IMPORT_MAX_UPLOAD_BATCH_BYTES` | `4194304` |
@@ -85,6 +85,39 @@ lock holder is the same connection, release, and a fresh connection with the sam
 If any session check fails, the Layerbase pooler does not preserve session state. Set the runtime
 `KM_DB_URL` to the **direct** URL instead (no code change) and record why in the deployment notes.
 Keep `KM_DB_MIGRATE_URL` direct either way.
+
+### Connection pool sizing
+
+`KM_DB_POOL_SIZE` is per Vercel function instance, not per deployment:
+
+```
+total connections ≈ pool size × concurrently running instances
+```
+
+Raising the pool therefore lowers the number of instances that can run before the database refuses
+connections. On a 20-connection plan, `2` leaves room for about ten instances; `10` leaves room for
+two. A larger pool does not add throughput — it only lets one instance run more transactions in
+parallel.
+
+Keep `KM_DB_POOL_SIZE=2` for a demo on a 20-connection plan. Revisit it only when:
+
+- the Layerbase plan (or its connection limit) is upgraded — then 3–5 for ~50, 5–10 for 100+;
+- logs show `ER_CON_COUNT_ERROR` / `Too many connections`, or requests fail at
+  `KM_DB_ACQUIRE_TIMEOUT_MS`;
+- one instance genuinely queues behind long transactions, such as large folder imports.
+
+Check the real pressure from a SQL client:
+
+```sql
+SELECT @@max_connections;
+SHOW STATUS LIKE 'Max_used_connections';
+SHOW STATUS LIKE 'Threads_connected';
+```
+
+`Max_used_connections` well below the plan limit means the pool is not the bottleneck. `@@max_connections`
+is MariaDB's own ceiling and can be higher than the plan limit the pooler enforces, so trust the plan
+first. `wait_timeout` is 8 hours on Layerbase: a frozen instance keeps its idle connections for a long
+time, which is another reason to keep the pool small.
 
 ## 5. Choose the data path
 
