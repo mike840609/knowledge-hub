@@ -7,23 +7,42 @@ const directUrl = (process.env.KM_DB_MIGRATE_URL ?? "").trim();
 const appUrl = (process.env.KM_DB_URL ?? "").trim();
 const migrateUrl = directUrl || appUrl;
 const migrationUrlSource = directUrl ? "direct" : appUrl ? "app" : "none";
-const identityProvider = process.env.KM_IDENTITY_PROVIDER ?? "local";
+const identityProvider = (process.env.KM_IDENTITY_PROVIDER ?? "").trim() || "local";
+const IDENTITY_PROVIDERS = ["local", "company-sso", "google"];
 // Test/harness hook only; never honor it on Vercel, where the project
 // environment must not be able to replace the build entrypoint.
 const buildScript = (!process.env.VERCEL && (process.env.KM_VERCEL_BUILD_SCRIPT ?? "").trim()) || "scripts/build.mjs";
 
-function googleAuthErrors() {
-  if (identityProvider !== "google") return [];
+function identityConfigErrors() {
   const errors = [];
+  if (!IDENTITY_PROVIDERS.includes(identityProvider)) {
+    errors.push(`KM_IDENTITY_PROVIDER must be one of ${IDENTITY_PROVIDERS.join(", ")}`);
+    return errors;
+  }
+  if (identityProvider !== "google") return errors;
+
   for (const name of ["AUTH_SECRET", "AUTH_GOOGLE_ID", "AUTH_GOOGLE_SECRET", "AUTH_URL", "KM_PUBLIC_ORIGIN"]) {
     if (!(process.env[name] ?? "").trim()) errors.push(name);
+  }
+  if ((process.env.KM_SITE_PASSWORD ?? "").trim()) {
+    errors.push("KM_SITE_PASSWORD must be unset when the Google provider is selected");
   }
   const authUrl = (process.env.AUTH_URL ?? "").trim();
   const publicOrigin = (process.env.KM_PUBLIC_ORIGIN ?? "").trim();
   if (authUrl && publicOrigin) {
     try {
-      if (new URL(authUrl).origin !== new URL(publicOrigin).origin) {
+      const auth = new URL(authUrl);
+      const publicUrl = new URL(publicOrigin);
+      if (auth.origin !== publicUrl.origin) {
         errors.push("AUTH_URL must match KM_PUBLIC_ORIGIN");
+      }
+      // Auth.js derives its base path from AUTH_URL; a non-root path would move
+      // the OAuth callback away from /api/auth/callback/google.
+      if (auth.pathname !== "/" || publicUrl.pathname !== "/") {
+        errors.push("AUTH_URL and KM_PUBLIC_ORIGIN must not include a path");
+      }
+      if (isProduction && auth.protocol !== "https:") {
+        errors.push("AUTH_URL must use https in production");
       }
     } catch {
       errors.push("AUTH_URL and KM_PUBLIC_ORIGIN must be absolute URLs");
@@ -32,7 +51,7 @@ function googleAuthErrors() {
   return errors;
 }
 
-const authErrors = googleAuthErrors();
+const authErrors = identityConfigErrors();
 
 if (dryRun) {
   console.log(JSON.stringify({
@@ -47,7 +66,7 @@ if (dryRun) {
 }
 
 if (authErrors.length > 0) {
-  console.error(`vercel-build: invalid Google auth configuration: ${authErrors.join(", ")}`);
+  console.error(`vercel-build: invalid identity configuration: ${authErrors.join(", ")}`);
   process.exit(1);
 }
 
