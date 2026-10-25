@@ -15,7 +15,7 @@ function claims(provider: string, subject: string) {
   };
 }
 
-function dependencies(providerKind: string) {
+function dependencies(providerKind: string, usesDirectIdentity = providerKind !== "company-sso") {
   const getCurrentIdentity = vi.fn(async () => identity);
   const resolve = vi.fn(async () => identity);
   const upsertIdentity = vi.fn(async () => {});
@@ -31,6 +31,7 @@ function dependencies(providerKind: string) {
     unitOfWork: {
       run: async <T>(work: (repositories: TrustedCallerRepositories) => Promise<T>) => work({ users }),
     },
+    usesDirectIdentity,
     getCurrentIdentity,
     resolve,
     upsertIdentity,
@@ -56,6 +57,13 @@ describe("establishTrustedCaller provider routing", () => {
 
   it("keeps company SSO on the external resolver", async () => {
     const deps = dependencies("company-sso");
+    await establishTrustedCaller(deps);
+    expect(deps.resolve).toHaveBeenCalledOnce();
+    expect(deps.getCurrentIdentity).not.toHaveBeenCalled();
+  });
+
+  it("keeps company SSO on the resolver even when its configured name is google", async () => {
+    const deps = dependencies("google", false);
     await establishTrustedCaller(deps);
     expect(deps.resolve).toHaveBeenCalledOnce();
     expect(deps.getCurrentIdentity).not.toHaveBeenCalled();

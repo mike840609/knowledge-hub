@@ -118,7 +118,13 @@ export function buildApplicationServices(databasePool: Pool, options: {
       });
       await readiness;
     }
-    const trusted = await establishTrustedCallerWith({ provider: identityProvider, resolver, personalWorkspaces, unitOfWork });
+    const trusted = await establishTrustedCallerWith({
+      provider: identityProvider,
+      resolver,
+      personalWorkspaces,
+      unitOfWork,
+      usesDirectIdentity: providerKind !== "company-sso",
+    });
     if (process.env.KM_TEAM_WORKSPACES_ENABLED !== "true") {
       trusted.caller.personalWorkspaceOnly = trusted.personalWorkspace.id;
     }
