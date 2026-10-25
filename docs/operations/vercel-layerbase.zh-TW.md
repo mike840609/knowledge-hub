@@ -69,7 +69,7 @@ Build-only：
 KM_DB_URL="<pooled URL>" npm run db:probe
 ```
 
-每一行都必須是 `PASS`：server 版本、`READ-COMMITTED`、`+00:00`、`GET_LOCK` 取得、lock holder 是同一個連線、release，以及新連線仍有相同 session 值。
+每一行都必須是 `PASS`：server 版本、`READ-COMMITTED`、`+00:00`、`GET_LOCK` 取得、lock holder 是同一個連線、release、新連線仍有相同 session 值，以及 transaction 內的平行查詢（讓 source 頁面壞掉的 pooler 陷阱）。
 
 若任何 session 檢查失敗，代表 Layerbase pooler 沒有保留 session state。把執行時的 `KM_DB_URL` 改成 **direct** URL（不用改程式），並記錄原因。`KM_DB_MIGRATE_URL` 一律保持 direct。
 

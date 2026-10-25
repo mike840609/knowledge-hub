@@ -80,7 +80,8 @@ KM_DB_URL="<pooled URL>" npm run db:probe
 ```
 
 Every line must say `PASS`: server version, `READ-COMMITTED`, `+00:00`, `GET_LOCK` acquired, the
-lock holder is the same connection, release, and a fresh connection with the same session values.
+lock holder is the same connection, release, a fresh connection with the same session values, and
+concurrent reads inside a transaction (the pooler trap that broke the source pages).
 
 If any session check fails, the Layerbase pooler does not preserve session state. Set the runtime
 `KM_DB_URL` to the **direct** URL instead (no code change) and record why in the deployment notes.
