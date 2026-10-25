@@ -153,6 +153,7 @@ curl -fsS https://<domain>/api/health      # {"ok":true}
 | --- | --- |
 | 所有請求 503 / timeout | 免費資料庫正在喚醒。重試；升級到 always-on 方案可消除。 |
 | `no more connections allowed` | 方案的連線上限到了。把 `KM_DB_POOL_SIZE` 降到 1，或升級方案。 |
+| `Database operation failed.`，log 的 cause 是 `ER_SOCKET_UNEXPECTED_CLOSE` | pooler 關掉了「同一個 transaction 一次送出多個查詢」的連線。新版 build 已固定 `pipelining: false`；請重新部署，或先改用 direct URL。 |
 | TLS 驗證錯誤 | 確認 host。只有在確認端點無法提供公開憑證時才用 `KM_DB_SSL=trust`。 |
 | Migration ledger `FAILED` | migration 中斷。明確修復 schema，只清掉該筆 ledger row；切勿修改 checksum。 |
 | 資料夾匯入 413 | 請求超過 4.5 MB。每個 Markdown 檔要小於 `KM_IMPORT_MAX_MARKDOWN_FILE_BYTES`（此範本為 3,670,016 bytes）；client 會在上傳前擋下。若 manifest 本身過大，調低 `KM_IMPORT_MAX_MANIFEST_ENTRIES`。 |

@@ -42,6 +42,14 @@ export function createDatabasePool(config: DatabaseConfig): Pool {
     insertIdAsNumber: true,
     ssl: config.ssl,
     initSql: SESSION_INIT_SQL,
+    // The driver pipelines concurrent commands on one connection by default.
+    // A transaction that issues `Promise.all` queries then sends them before
+    // the previous result arrives. Layerbase's pooled endpoint closes the
+    // socket on that pattern (ER_SOCKET_UNEXPECTED_CLOSE), which surfaced as a
+    // 500 on every workspace with at least one source. Serializing commands
+    // keeps the same call sites working through a pooler; the affected reads
+    // are a handful of small index probes.
+    pipelining: false,
   });
 }
 
