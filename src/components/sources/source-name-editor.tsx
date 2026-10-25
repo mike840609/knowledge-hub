@@ -10,32 +10,47 @@ import { requestSourceRename } from "./rename-source-request";
  * The source name in the detail header. Clicking it edits in place (Linear's
  * pattern) instead of opening a dialog: Enter or blur saves, Esc restores the
  * old name. The source id never changes, so only the label moves.
+ *
+ * The button keeps its visible text as its accessible name — the page <h1>
+ * wraps it, so an aria-label here would rename the whole heading.
  */
 export function SourceNameEditor({ sourceId, name }: { sourceId: string; name: string }) {
   const router = useRouter();
   const toast = useToast();
+  const [shown, setShown] = useState(name);
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(name);
   const [busy, setBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const committing = useRef(false);
   const cancelled = useRef(false);
+  const focusTitle = useRef(false);
+
+  // Keep the local label in step with a refreshed server value (e.g. a rename
+  // from another device) without flashing the old text after our own save.
+  useEffect(() => setShown(name), [name]);
 
   useEffect(() => {
-    if (!editing) return;
-    setValue(name);
+    if (!editing) {
+      if (focusTitle.current) {
+        focusTitle.current = false;
+        buttonRef.current?.focus();
+      }
+      return;
+    }
     inputRef.current?.focus();
     inputRef.current?.select();
-  }, [editing, name]);
+  }, [editing]);
 
   async function commit() {
-    if (committing.current) return;
     if (cancelled.current) {
       cancelled.current = false;
       return;
     }
+    if (committing.current) return;
     const next = value.trim();
-    if (!next || next === name) {
+    if (!next || next === shown) {
       setEditing(false);
       return;
     }
@@ -43,6 +58,8 @@ export function SourceNameEditor({ sourceId, name }: { sourceId: string; name: s
     setBusy(true);
     try {
       await requestSourceRename(sourceId, next);
+      setShown(next);
+      focusTitle.current = true;
       setEditing(false);
       router.refresh();
     } catch (error) {
@@ -60,15 +77,17 @@ export function SourceNameEditor({ sourceId, name }: { sourceId: string; name: s
   if (!editing) {
     return (
       <button
+        ref={buttonRef}
         type="button"
-        aria-label={`Rename ${name}`}
+        title="Rename source"
         onClick={() => {
           cancelled.current = false;
+          setValue(shown);
           setEditing(true);
         }}
         className="min-w-0 truncate rounded-md text-left font-medium kh-focus-ring hover:bg-kh-bg-hover"
       >
-        {name}
+        {shown}
       </button>
     );
   }
@@ -78,12 +97,15 @@ export function SourceNameEditor({ sourceId, name }: { sourceId: string; name: s
       ref={inputRef}
       aria-label="Source name"
       value={value}
-      disabled={busy}
+      readOnly={busy}
+      aria-disabled={busy}
       autoComplete="off"
       className="min-w-0 px-1 font-medium"
       onChange={(event) => setValue(event.target.value)}
       onBlur={() => void commit()}
       onKeyDown={(event) => {
+        // An input method uses Enter and Esc to finish or abandon a composition.
+        if (event.nativeEvent.isComposing || event.keyCode === 229) return;
         if (event.key === "Enter") {
           event.preventDefault();
           void commit();
@@ -91,7 +113,8 @@ export function SourceNameEditor({ sourceId, name }: { sourceId: string; name: s
         if (event.key === "Escape") {
           event.preventDefault();
           cancelled.current = true;
-          setValue(name);
+          setValue(shown);
+          focusTitle.current = true;
           setEditing(false);
         }
       }}

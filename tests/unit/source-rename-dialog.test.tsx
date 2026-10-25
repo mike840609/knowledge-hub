@@ -83,3 +83,19 @@ it("keeps the dialog open with the typed value and the server message on failure
   expect(document.body.textContent).toContain("Name is empty.");
   expect(onOpenChange).not.toHaveBeenCalledWith(false);
 });
+
+it("resets the field when reopened with the current name", async () => {
+  const onOpenChange = vi.fn();
+  act(() => root.render(<RenameSourceDialog open onOpenChange={onOpenChange} sourceId="source-1" name="Old name" />));
+  await act(async () => {
+    const element = nameInput();
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    setter.call(element, "Half-typed");
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+
+  act(() => root.render(<RenameSourceDialog open={false} onOpenChange={onOpenChange} sourceId="source-1" name="Old name" />));
+  act(() => root.render(<RenameSourceDialog open onOpenChange={onOpenChange} sourceId="source-1" name="Renamed" />));
+
+  expect(nameInput().value).toBe("Renamed");
+});

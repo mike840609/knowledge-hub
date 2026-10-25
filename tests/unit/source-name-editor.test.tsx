@@ -39,10 +39,14 @@ function input(): HTMLInputElement {
   return element;
 }
 
+function titleButton(): HTMLButtonElement {
+  return document.querySelector<HTMLButtonElement>('button[title="Rename source"]')!;
+}
+
 async function openEditor() {
   render();
   await act(async () => {
-    document.querySelector<HTMLButtonElement>('button[aria-label="Rename Old name"]')!.click();
+    titleButton().click();
   });
 }
 
@@ -61,6 +65,18 @@ async function press(key: string) {
   });
 }
 
+async function blur() {
+  await act(async () => {
+    input().dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+  });
+}
+
+async function flush() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
 it("opens on click, sends the trimmed value on Enter, and refreshes", async () => {
   const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
   vi.stubGlobal("fetch", fetchMock);
@@ -68,6 +84,7 @@ it("opens on click, sends the trimmed value on Enter, and refreshes", async () =
   expect(document.activeElement).toBe(input());
   await type("  Research Vault  ");
   await press("Enter");
+  await flush();
 
   expect(fetchMock).toHaveBeenCalledTimes(1);
   expect(fetchMock).toHaveBeenCalledWith("/api/sources/source-1/rename", expect.objectContaining({
@@ -76,9 +93,40 @@ it("opens on click, sends the trimmed value on Enter, and refreshes", async () =
   }));
   expect(refresh).toHaveBeenCalledOnce();
   expect(document.querySelector('input[aria-label="Source name"]')).toBeNull();
+  expect(document.activeElement).toBe(titleButton());
+  expect(titleButton().textContent).toBe("Research Vault");
 });
 
-it("cancels on Escape without a request", async () => {
+it("saves on blur", async () => {
+  const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+  vi.stubGlobal("fetch", fetchMock);
+  await openEditor();
+  await type("Blurred");
+  await blur();
+  await flush();
+
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(fetchMock).toHaveBeenCalledWith("/api/sources/source-1/rename", expect.objectContaining({
+    body: JSON.stringify({ name: "Blurred" }),
+  }));
+  expect(refresh).toHaveBeenCalledOnce();
+});
+
+it("sends one request when Enter is followed by blur", async () => {
+  let resolveFetch!: (response: Response) => void;
+  const fetchMock = vi.fn(() => new Promise<Response>((resolve) => { resolveFetch = resolve; }));
+  vi.stubGlobal("fetch", fetchMock);
+  await openEditor();
+  await type("Research Vault");
+  await press("Enter");
+  await blur();
+  resolveFetch(new Response(null, { status: 204 }));
+  await flush();
+
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
+it("cancels on Escape without a request and returns focus to the title", async () => {
   const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
   vi.stubGlobal("fetch", fetchMock);
   await openEditor();
@@ -87,15 +135,18 @@ it("cancels on Escape without a request", async () => {
 
   expect(fetchMock).not.toHaveBeenCalled();
   expect(document.body.textContent).toContain("Old name");
+  expect(document.activeElement).toBe(titleButton());
 });
 
-it("keeps the typed value and reports a rejected rename", async () => {
+it("keeps the typed value, keeps focus, and reports a rejected rename", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: { code: "VALIDATION_ERROR", message: "Name is taken." } }), { status: 400 })));
   await openEditor();
   await type("New");
   await press("Enter");
+  await flush();
 
   expect(input().value).toBe("New");
+  expect(document.activeElement).toBe(input());
   expect(toast).toHaveBeenCalledWith({ message: "Name is taken.", tone: "danger" });
   expect(refresh).not.toHaveBeenCalled();
 });

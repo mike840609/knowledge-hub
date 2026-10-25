@@ -76,7 +76,7 @@ viewing a source.
 ## What is left to the builder
 
 - Extract a `SourceNameEditor` client component for the header (display → input, focus + select,
-  saving state, inline error that keeps the typed value).
+  saving state, a danger toast for a rejected save while the typed value stays on screen).
 - Add a `RenameSourceDialog` following the existing `FolderNameDialog` pattern, mounted once where
   the source actions render.
 - Add `renameSource(caller, sourceId, name)` to `SourceApplicationService`: `syncCallerIdentity` →
