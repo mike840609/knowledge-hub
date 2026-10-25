@@ -54,6 +54,12 @@ describe("Google demo auth UI", () => {
     expect(redirectMock).toHaveBeenCalledWith("/s/token");
   });
 
+  it("sends a non-Google deployment away from the Google login page", async () => {
+    vi.stubEnv("KM_IDENTITY_PROVIDER", "local");
+    await LoginPage({ searchParams: Promise.resolve({}) });
+    expect(redirectMock).toHaveBeenCalledWith("/");
+  });
+
   it("renders the sign-out form", () => {
     expect(renderToStaticMarkup(<SignOutForm />)).toContain("Sign out");
   });
