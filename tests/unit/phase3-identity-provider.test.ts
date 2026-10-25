@@ -2,6 +2,7 @@ import { AuthRequiredError, AuthUnavailableError } from "@/modules/identity/doma
 import { afterEach, describe, expect, it } from "vitest";
 import { LocalIdentityProvider } from "@/infrastructure/identity/local-identity-provider";
 import { CompanySsoIdentityProvider } from "@/infrastructure/identity/company-sso-identity-provider";
+import { GoogleIdentityProvider } from "@/infrastructure/identity/google-identity-provider";
 import { createIdentityProvider } from "@/server/identity-provider-factory";
 import type { CompanySsoSessionReader } from "@/modules/identity/ports/company-sso-session-reader";
 import { IdentityError } from "@/modules/knowledge/domain/errors";
@@ -16,6 +17,9 @@ const ENV_NAMES = [
   "KM_COMPANY_SSO_PROVIDER",
   "KM_COMPANY_SSO_TEAM_CREATE_GROUPS",
   "KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION",
+  "AUTH_SECRET",
+  "AUTH_GOOGLE_ID",
+  "AUTH_GOOGLE_SECRET",
   "NODE_ENV",
 ];
 const saved = new Map(ENV_NAMES.map((name) => [name, process.env[name]]));
@@ -251,5 +255,30 @@ describe("an unavailable identity provider keeps why, and tells the client nothi
   expect(new AuthUnavailableError().cause).toBeUndefined();
   for(const error of [new AuthUnavailableError(),new AuthRequiredError()])expect(error.message).not.toMatch(/comment|discussion|document/i);
   expect(new AuthUnavailableError()).toMatchObject({code:"AUTH_UNAVAILABLE"});expect(new AuthRequiredError()).toMatchObject({code:"AUTH_REQUIRED"});
+ });
+});
+
+describe("Google identity provider",()=>{
+ function enableGoogle():void{
+  process.env.KM_IDENTITY_PROVIDER="google";
+  process.env.AUTH_SECRET="auth-secret";
+  process.env.AUTH_GOOGLE_ID="google-client";
+  process.env.AUTH_GOOGLE_SECRET="google-secret";
+ }
+ it("is selected by configuration",()=>{
+  enableGoogle();
+  expect(createIdentityProvider()).toBeInstanceOf(GoogleIdentityProvider);
+ });
+ it("fails fast when a Google setting is missing",()=>{
+  enableGoogle();
+  delete process.env.AUTH_GOOGLE_SECRET;
+  expect(()=>createIdentityProvider()).toThrow(/AUTH_GOOGLE_SECRET/);
+ });
+ it("does not affect local or company-SSO selection",()=>{
+  enableLocal();
+  expect(createIdentityProvider()).toBeInstanceOf(LocalIdentityProvider);
+  process.env.KM_IDENTITY_PROVIDER="company-sso";
+  const reader={readSession:async()=>null};
+  expect(createIdentityProvider({companySessionReader:reader})).toBeInstanceOf(CompanySsoIdentityProvider);
  });
 });

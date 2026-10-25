@@ -29,7 +29,14 @@ describe("vercel-build.mjs --dry-run", () => {
       VERCEL_ENV: "production", KM_DB_MIGRATE_URL: "mysql://direct/db", KM_DB_URL: "mysql://pooled/db",
     });
     expect(result.status).toBe(0);
-    expect(JSON.parse(result.stdout)).toEqual({ build: true, buildScript: "scripts/build.mjs", migrate: true, migrationUrlSource: "direct" });
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      build: true,
+      buildScript: "scripts/build.mjs",
+      migrate: true,
+      migrationUrlSource: "direct",
+      authProvider: "local",
+      authErrors: [],
+    });
   });
   it("skips migrations outside production or when disabled", () => {
     expect(JSON.parse(run("scripts/vercel-build.mjs", ["--dry-run"], { VERCEL_ENV: "preview", KM_DB_URL: "mysql://pooled/db" }).stdout)).toMatchObject({ migrate: false });
@@ -61,6 +68,83 @@ describe("vercel.json", () => {
       skipMiddlewareRequestBody: true,
       regions: ["iad1"],
     });
+  });
+});
+
+describe("Google auth build policy", () => {
+  it("validates Google auth env only when that provider is selected", () => {
+    const local = JSON.parse(run("scripts/vercel-build.mjs", ["--dry-run"], { KM_IDENTITY_PROVIDER: "local" }).stdout);
+    expect(local.authErrors).toEqual([]);
+
+    const missing = run("scripts/vercel-build.mjs", ["--dry-run"], { KM_IDENTITY_PROVIDER: "google" });
+    expect(missing.status).toBe(1);
+    expect(JSON.parse(missing.stdout).authErrors).toEqual(expect.arrayContaining(["AUTH_SECRET", "AUTH_GOOGLE_ID", "AUTH_GOOGLE_SECRET"]));
+
+    const complete = run("scripts/vercel-build.mjs", ["--dry-run"], {
+      KM_IDENTITY_PROVIDER: "google",
+      AUTH_SECRET: "secret", AUTH_GOOGLE_ID: "id", AUTH_GOOGLE_SECRET: "google-secret",
+      AUTH_URL: "https://km.example.com", KM_PUBLIC_ORIGIN: "https://km.example.com",
+    });
+    expect(complete.status).toBe(0);
+    expect(JSON.parse(complete.stdout).authErrors).toEqual([]);
+  });
+
+  it("rejects a mismatched AUTH_URL and KM_PUBLIC_ORIGIN", () => {
+    const result = run("scripts/vercel-build.mjs", ["--dry-run"], {
+      KM_IDENTITY_PROVIDER: "google",
+      AUTH_SECRET: "secret", AUTH_GOOGLE_ID: "id", AUTH_GOOGLE_SECRET: "google-secret",
+      AUTH_URL: "https://a.example.com", KM_PUBLIC_ORIGIN: "https://b.example.com",
+    });
+    expect(result.status).toBe(1);
+    expect(JSON.parse(result.stdout).authErrors).toContain("AUTH_URL must match KM_PUBLIC_ORIGIN");
+  });
+
+  it("rejects an unknown provider instead of failing on every request", () => {
+    const result = run("scripts/vercel-build.mjs", ["--dry-run"], { KM_IDENTITY_PROVIDER: "Google" });
+    expect(result.status).toBe(1);
+    expect(JSON.parse(result.stdout).authErrors).toContain(
+      "KM_IDENTITY_PROVIDER must be one of local, company-sso, google",
+    );
+  });
+
+  it("normalizes surrounding whitespace in the provider name", () => {
+    const result = run("scripts/vercel-build.mjs", ["--dry-run"], {
+      KM_IDENTITY_PROVIDER: " google ",
+      AUTH_SECRET: "secret", AUTH_GOOGLE_ID: "id", AUTH_GOOGLE_SECRET: "google-secret",
+      AUTH_URL: "https://km.example.com", KM_PUBLIC_ORIGIN: "https://km.example.com",
+    });
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({ authProvider: "google", authErrors: [] });
+  });
+
+  it("rejects the site password together with Google", () => {
+    const result = run("scripts/vercel-build.mjs", ["--dry-run"], {
+      KM_IDENTITY_PROVIDER: "google", KM_SITE_PASSWORD: "hunter2",
+      AUTH_SECRET: "secret", AUTH_GOOGLE_ID: "id", AUTH_GOOGLE_SECRET: "google-secret",
+      AUTH_URL: "https://km.example.com", KM_PUBLIC_ORIGIN: "https://km.example.com",
+    });
+    expect(result.status).toBe(1);
+    expect(JSON.parse(result.stdout).authErrors).toContain(
+      "KM_SITE_PASSWORD must be unset when the Google provider is selected",
+    );
+  });
+
+  it("requires https and a root path in production", () => {
+    const base = {
+      VERCEL_ENV: "production", KM_MIGRATE_ON_BUILD: "0", KM_IDENTITY_PROVIDER: "google",
+      AUTH_SECRET: "secret", AUTH_GOOGLE_ID: "id", AUTH_GOOGLE_SECRET: "google-secret",
+    };
+    const http = run("scripts/vercel-build.mjs", ["--dry-run"], {
+      ...base, AUTH_URL: "http://km.example.com", KM_PUBLIC_ORIGIN: "http://km.example.com",
+    });
+    expect(http.status).toBe(1);
+    expect(JSON.parse(http.stdout).authErrors).toContain("AUTH_URL must use https in production");
+
+    const withPath = run("scripts/vercel-build.mjs", ["--dry-run"], {
+      ...base, AUTH_URL: "https://km.example.com/app", KM_PUBLIC_ORIGIN: "https://km.example.com/app",
+    });
+    expect(withPath.status).toBe(1);
+    expect(JSON.parse(withPath.stdout).authErrors).toContain("AUTH_URL and KM_PUBLIC_ORIGIN must not include a path");
   });
 });
 

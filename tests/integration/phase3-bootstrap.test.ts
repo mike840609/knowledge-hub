@@ -302,6 +302,7 @@ describe("Phase 3 trusted caller bootstrap (Task 7)", () => {
       resolver: new HubIdentityResolver(unitOfWork),
       personalWorkspaces: new PersonalWorkspaceService(unitOfWork),
       unitOfWork,
+      usesDirectIdentity: false,
     });
 
     expect(isUuid(established.identity.id)).toBe(true);
@@ -334,6 +335,7 @@ describe("Phase 3 trusted caller bootstrap (Task 7)", () => {
       resolver: new HubIdentityResolver(unitOfWork),
       personalWorkspaces: new PersonalWorkspaceService(unitOfWork),
       unitOfWork,
+      usesDirectIdentity: false,
     };
 
     const deepLink = await establishTrustedCaller(dependencies);
@@ -356,12 +358,14 @@ describe("Phase 3 trusted caller bootstrap (Task 7)", () => {
       resolver: new HubIdentityResolver(unitOfWork),
       personalWorkspaces: new PersonalWorkspaceService(unitOfWork),
       unitOfWork,
+      usesDirectIdentity: false,
     });
     const second = await establishTrustedCaller({
       provider: stubCompanySsoProvider(companySsoClaims({ subject: secondSubject, empId: `P3SSO-2-${secondSubject.slice(0, 8)}` })),
       resolver: new HubIdentityResolver(unitOfWork),
       personalWorkspaces: new PersonalWorkspaceService(unitOfWork),
       unitOfWork,
+      usesDirectIdentity: false,
     });
 
     expect(second.identity.id).not.toBe(first.identity.id);
@@ -380,6 +384,7 @@ describe("Phase 3 trusted caller bootstrap (Task 7)", () => {
         resolver: new HubIdentityResolver(unitOfWork),
         personalWorkspaces: new PersonalWorkspaceService(unitOfWork),
         unitOfWork,
+        usesDirectIdentity: false,
       }),
     ).rejects.toThrow(/linked|bootstrap/i);
     expect(await personalCountForOwner(user.id)).toBe(0);

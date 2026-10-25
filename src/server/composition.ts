@@ -21,8 +21,6 @@ import { WorkspaceAdminService } from "./workspace-admin";
 import { TeamWorkspaceService } from "@/modules/workspaces/application/team-workspace-service";
 import { TeamGovernanceService } from "@/modules/workspaces/application/team-governance-service";
 import type { Pool } from "mariadb";
-import { databaseConfig } from "@/infrastructure/database/mariadb/config";
-import { createDatabasePool } from "@/infrastructure/database/mariadb/pool";
 import { MariaDbUnitOfWork } from "@/infrastructure/database/mariadb/transaction";
 import { KnowledgeQueryServiceImpl } from "@/modules/knowledge/application/knowledge-query-service";
 import { KnowledgeSearchService } from "@/modules/knowledge/application/knowledge-search-service";
@@ -51,6 +49,7 @@ import { HubIdentityResolver } from "@/modules/identity/application/hub-identity
 import { establishTrustedCaller as establishTrustedCallerWith } from "@/server/trusted-caller";
 import { importRuntimeConfig } from "@/server/import-config";
 import { createIdentityProvider } from "@/server/identity-provider-factory";
+import { closeDatabasePool, getDatabasePool } from "./database-pool";
 
 let services: ReturnType<typeof buildApplicationServices> | undefined;
 let companySessionReader: CompanySsoSessionReader | undefined;
@@ -63,27 +62,11 @@ export function configureCompanySsoSessionReader(reader: CompanySsoSessionReader
   companySessionReader = reader;
 }
 
-type GlobalPoolSlot = { __kmDbPool?: Pool };
-
-function getPool(): Pool {
-  // `next dev` re-evaluates server modules on every HMR reload; a plain
-  // module-level singleton would orphan a full pool per reload and exhaust
-  // MariaDB max_connections over a session. Pin the pool on globalThis so
-  // reloads reuse it; closeApplicationPool() clears the slot for tests.
-  // The slot is the single source of truth — no module-level mirror — so a
-  // future one-sided edit can't reintroduce the HMR pool leak.
-  const slot = globalThis as unknown as GlobalPoolSlot;
-  slot.__kmDbPool ??= createDatabasePool(databaseConfig("dev"));
-  return slot.__kmDbPool;
-}
-
 /**
  * The shared pool for infrastructure checks (health) that need no identity.
  * Application code keeps going through the composition root.
  */
-export function getDatabasePool(): Pool {
-  return getPool();
-}
+export { getDatabasePool };
 
 export function buildApplicationServices(databasePool: Pool, options: {
   companySessionReader?: CompanySsoSessionReader;
@@ -135,7 +118,13 @@ export function buildApplicationServices(databasePool: Pool, options: {
       });
       await readiness;
     }
-    const trusted = await establishTrustedCallerWith({ provider: identityProvider, resolver, personalWorkspaces, unitOfWork });
+    const trusted = await establishTrustedCallerWith({
+      provider: identityProvider,
+      resolver,
+      personalWorkspaces,
+      unitOfWork,
+      usesDirectIdentity: providerKind !== "company-sso",
+    });
     if (process.env.KM_TEAM_WORKSPACES_ENABLED !== "true") {
       trusted.caller.personalWorkspaceOnly = trusted.personalWorkspace.id;
     }
@@ -162,7 +151,7 @@ export function buildApplicationServices(databasePool: Pool, options: {
 }
 
 export function applicationServices() {
-  services ??= buildApplicationServices(getPool(), { companySessionReader });
+  services ??= buildApplicationServices(getDatabasePool(), { companySessionReader });
   return services;
 }
 
@@ -173,12 +162,12 @@ export function applicationServices() {
  * share link has no identity at all. Only the unit of work is needed.
  */
 export function shareReadService(): Pick<DocumentShareService, "readShared"> {
-  return new DocumentShareService(new MariaDbUnitOfWork(getPool()), new RandomShareTokenIssuer());
+  return new DocumentShareService(new MariaDbUnitOfWork(getDatabasePool()), new RandomShareTokenIssuer());
 }
 
 /** Token-scoped public review projection, independent of identity-provider setup. */
 export function reviewReadService(): Pick<DocumentReviewService, "queryForLink"> {
-  return new DocumentReviewService(new MariaDbUnitOfWork(getPool()));
+  return new DocumentReviewService(new MariaDbUnitOfWork(getDatabasePool()));
 }
 
 /** Verify the same provider/session dependencies used by request handling. */
@@ -189,9 +178,7 @@ export async function verifyProductionReadiness(options: {
 }
 
 export async function closeApplicationPool(): Promise<void> {
-  const slot = globalThis as unknown as GlobalPoolSlot;
-  if (slot.__kmDbPool) await slot.__kmDbPool.end();
-  delete slot.__kmDbPool;
+  await closeDatabasePool();
   services = undefined;
   companySessionReader = undefined;
 }

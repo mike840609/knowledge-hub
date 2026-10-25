@@ -1,5 +1,6 @@
 import { AuthUnavailableError } from "@/modules/identity/domain/identity-session-errors";
 import { CompanySsoIdentityProvider } from "@/infrastructure/identity/company-sso-identity-provider";
+import { GoogleIdentityProvider } from "@/infrastructure/identity/google-identity-provider";
 import { LocalIdentityProvider } from "@/infrastructure/identity/local-identity-provider";
 import type { IdentityProvider } from "@/modules/identity/ports/identity-provider";
 import type { CompanySsoSessionReader } from "@/modules/identity/ports/company-sso-session-reader";
@@ -33,6 +34,15 @@ export function createIdentityProvider(deps: IdentityProviderFactoryDeps = {}): 
     return new CompanySsoIdentityProvider(deps.companySessionReader, {
       provider: companySsoProviderName(),
       teamCreateGroupIds: companySsoTeamCreateGroups(),
+    });
+  }
+  if (kind === "google") {
+    for (const name of ["AUTH_SECRET", "AUTH_GOOGLE_ID", "AUTH_GOOGLE_SECRET"]) {
+      if (!(process.env[name] ?? "").trim()) throw new IdentityError(`Google identity requires ${name}.`);
+    }
+    return new GoogleIdentityProvider(async () => {
+      const { auth } = await import("@/auth");
+      return auth();
     });
   }
   if (isProductionEnvironment()) {

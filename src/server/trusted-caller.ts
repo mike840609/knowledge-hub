@@ -1,4 +1,3 @@
-import { LOCAL_IDENTITY_PROVIDER_NAME } from "@/infrastructure/identity/local-identity-provider";
 import { callerFromPrincipal, type CallerContext } from "@/modules/identity/domain/caller-context";
 import type { AuthenticatedPrincipal } from "@/modules/identity/domain/authenticated-principal";
 import type { IdentityProvider } from "@/modules/identity/ports/identity-provider";
@@ -21,6 +20,14 @@ export type TrustedCallerDependencies = {
   resolver: HubIdentityResolver;
   personalWorkspaces: PersonalWorkspaceService;
   unitOfWork: TrustedCallerUnitOfWork;
+  /**
+   * True when the selected provider already returns a resolved Hub identity
+   * (local, Google). Company SSO returns external claims that must go through
+   * the resolver. This is keyed on the configured provider kind, never on a
+   * claim string: `KM_COMPANY_SSO_PROVIDER` is deployer-configurable and can
+   * legitimately be "google" for a Google Workspace deployment.
+   */
+  usesDirectIdentity: boolean;
 };
 
 export type TrustedCaller = {
@@ -40,10 +47,9 @@ export type TrustedCaller = {
  */
 export async function establishTrustedCaller(dependencies: TrustedCallerDependencies): Promise<TrustedCaller> {
   const claims = await dependencies.provider.getCurrentClaims();
-  const identity =
-    claims.externalIdentity.provider === LOCAL_IDENTITY_PROVIDER_NAME
-      ? await dependencies.provider.getCurrentIdentity()
-      : await dependencies.resolver.resolve(claims.externalIdentity);
+  const identity = dependencies.usesDirectIdentity
+    ? await dependencies.provider.getCurrentIdentity()
+    : await dependencies.resolver.resolve(claims.externalIdentity);
   await dependencies.unitOfWork.run((repositories) => repositories.users.upsertIdentity(identity));
   const { workspace: personalWorkspace } = await dependencies.personalWorkspaces.ensurePersonalWorkspace(identity.id);
   const principal: AuthenticatedPrincipal = {

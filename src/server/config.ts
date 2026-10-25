@@ -35,12 +35,12 @@ export function localIdentityConfig(): UserIdentity {
   });
 }
 
-export type IdentityProviderKind = "local" | "company-sso";
+export type IdentityProviderKind = "local" | "company-sso" | "google";
 
 export function identityProviderKind(): IdentityProviderKind {
   const raw = process.env.KM_IDENTITY_PROVIDER ?? "local";
-  if (raw !== "local" && raw !== "company-sso") {
-    throw new IdentityError(`Unknown identity provider: ${raw}; expected "local" or "company-sso".`);
+  if (raw !== "local" && raw !== "company-sso" && raw !== "google") {
+    throw new IdentityError(`Unknown identity provider: ${raw}; expected "local", "company-sso", or "google".`);
   }
   return raw;
 }

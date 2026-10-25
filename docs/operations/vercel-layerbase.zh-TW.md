@@ -134,3 +134,29 @@ curl -fsS https://<domain>/api/health      # {"ok":true}
 | Preview deployment 顯示 skipped | 正常。只有 production build 會執行。 |
 
 Vercel Hobby 方案僅限非商業用途。此部署為個人使用；商業用途請升級方案。
+
+## Google demo login
+
+這是公開 demo 額外可選的 provider。`local` 與 `company-sso` 完全不變；只有
+`KM_IDENTITY_PROVIDER=google` 會啟用它。
+
+1. Google Cloud：建立 **Web application** OAuth client。Authorized redirect URI：
+   `https://<origin>/api/auth/callback/google`。Scopes：`openid email profile`。把 consent screen
+   發布，或在 testing 模式下加入 test users。
+2. Production 環境變數：
+   - `KM_IDENTITY_PROVIDER=google`
+   - `AUTH_SECRET`（`openssl rand -base64 32`）
+   - `AUTH_GOOGLE_ID`、`AUTH_GOOGLE_SECRET`
+   - `AUTH_URL=https://<origin>` — 必須等於 `KM_PUBLIC_ORIGIN`
+   - 移除 `KM_SITE_PASSWORD` 與 `KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION`
+   - `KM_REVIEW_WRITES_ENABLED=true`、`KM_TEAM_WORKSPACES_ENABLED=false`
+3. 重新部署。缺少任何 Google auth 變數，或兩個 origin 不一致，build 會直接失敗。
+4. 第一次登入會建立 Hub user：`emp_id = DEMO-…`、`org_code = DEMO`，並自動得到 personal
+   workspace。左下角顯示 Google profile name（Google 沒回傳名稱時用 email local-part）；
+   `emp_id` 不會顯示。
+5. 登出位置：My Space → Insights，表單在 profile 頁面底部。
+6. Smoke test：`/` → `/login`；Continue with Google → My Space；無痕視窗開分享連結；登入後在分享頁
+   回覆；`/api/health` 保持公開；`/s/<token>/open` 會先要求登入再開啟。
+7. Layerbase 免費方案只有 20 條連線；公開 demo 前建議升級。
+
+不要把 `KM_SITE_PASSWORD` 和 Google demo 一起使用。上面 local 與 company-SSO 的說明仍完全適用。
