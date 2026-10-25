@@ -80,7 +80,8 @@ KM_DB_URL="<pooled URL>" npm run db:probe
 ```
 
 Every line must say `PASS`: server version, `READ-COMMITTED`, `+00:00`, `GET_LOCK` acquired, the
-lock holder is the same connection, release, and a fresh connection with the same session values.
+lock holder is the same connection, release, a fresh connection with the same session values, and
+concurrent reads inside a transaction (the pooler trap that broke the source pages).
 
 If any session check fails, the Layerbase pooler does not preserve session state. Set the runtime
 `KM_DB_URL` to the **direct** URL instead (no code change) and record why in the deployment notes.
@@ -182,6 +183,7 @@ Then, in a browser:
 | --- | --- |
 | Every request 503 / times out | The free database is waking. Retry; upgrade to an always-on plan to remove it. |
 | `no more connections allowed` | The plan's connection cap is reached. Lower `KM_DB_POOL_SIZE` (1) or upgrade. |
+| `Database operation failed.` and the log cause is `ER_SOCKET_UNEXPECTED_CLOSE` | The pooler closed a connection whose transaction sent several queries at once. Builds ship `pipelining: false`; redeploy an older build, or fall back to the direct URL. |
 | TLS verification error | Confirm the host. Use `KM_DB_SSL=trust` only after verifying the endpoint cannot present a public certificate. |
 | Migration ledger `FAILED` | The migration stopped mid-run. Repair the schema explicitly and clear only that ledger row; never edit checksums. |
 | 413 from a folder import | A request exceeded 4.5 MB. Keep each Markdown file under `KM_IMPORT_MAX_MARKDOWN_FILE_BYTES` (3,670,016 bytes in this template); the client rejects an oversized file before upload. Lower `KM_IMPORT_MAX_MANIFEST_ENTRIES` if the manifest itself is too large. |

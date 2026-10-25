@@ -32,6 +32,10 @@ async function readSession(connection: PoolConnection): Promise<{ version: strin
  *
  * All PASS → the pooled URL is safe for the app. Any FAIL → point KM_DB_URL at
  * the direct URL instead. The deployment runbook carries the same rule.
+ *
+ * The concurrent-read check covers the other pooler trap: a transactional
+ * connection may only carry one in-flight command. The app disables query
+ * pipelining for that reason; this check proves the deployed configuration.
  */
 async function main(): Promise<void> {
   // Two connections so the probe can open a second one while the first is held;
@@ -78,6 +82,28 @@ async function main(): Promise<void> {
       record(checks, "new connection time zone", second?.tz === "+00:00", second?.tz);
     } finally {
       fresh.release();
+    }
+
+    // Layerbase's pooled endpoint closes the socket when a transactional
+    // connection has two commands in flight. The app disables pipelining, so
+    // this must pass; if it fails, the pool configuration or the endpoint
+    // changed and every `Promise.all` inside a unit of work would 500.
+    await connection.beginTransaction();
+    try {
+      const [one, two] = await Promise.all([
+        connection.query<{ value: unknown }[]>("SELECT 1 AS value"),
+        connection.query<{ value: unknown }[]>("SELECT 2 AS value"),
+      ]);
+      await connection.commit();
+      record(
+        checks,
+        "concurrent reads inside a transaction",
+        Number(one[0]?.value) === 1 && Number(two[0]?.value) === 2,
+        [one[0]?.value, two[0]?.value],
+      );
+    } catch (error) {
+      try { await connection.rollback(); } catch { /* the socket may already be gone */ }
+      record(checks, "concurrent reads inside a transaction", false, error instanceof Error ? error.message : String(error));
     }
 
     connection.release();
