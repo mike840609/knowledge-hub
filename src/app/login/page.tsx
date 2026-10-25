@@ -9,13 +9,19 @@ export const dynamic = "force-dynamic";
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ returnTo?: string | string[] }>;
+  searchParams: Promise<{ returnTo?: string | string[]; error?: string | string[] }>;
 }) {
   if (identityProviderKind() !== "google") redirect("/");
-  if (await auth()) redirect("/");
 
-  const { returnTo } = await searchParams;
+  const { returnTo, error } = await searchParams;
   const target = safeReturnTo(typeof returnTo === "string" ? returnTo : undefined);
+
+  // A failed callback still reaches this page. When the failure was a retry of
+  // an already-consumed code, the first attempt has signed the visitor in, so
+  // an existing session must win over the error message.
+  if (await auth()) redirect(target);
+
+  const failure = typeof error === "string" && error.length > 0;
 
   async function continueWithGoogle() {
     "use server";
@@ -29,6 +35,14 @@ export default async function LoginPage({
         <p className="mt-2 text-body text-kh-text-muted">
           Use your Google account to open your My Space.
         </p>
+        {failure ? (
+          <p
+            role="alert"
+            className="mt-4 rounded-md border border-kh-danger-border bg-kh-danger-bg px-3 py-2 text-body text-kh-danger"
+          >
+            Sign-in didn&apos;t complete. Please try again.
+          </p>
+        ) : null}
         <form action={continueWithGoogle} className="mt-5">
           <button type="submit" className={buttonClasses({ className: "w-full" })}>
             Continue with Google

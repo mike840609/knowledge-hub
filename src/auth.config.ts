@@ -8,6 +8,11 @@ import Google from "next-auth/providers/google";
  */
 export const authConfig = {
   providers: [Google],
-  pages: { signIn: "/login" },
+  // Auth.js renders its own error page (HTTP 500) for a failed callback. A
+  // browser retry of a single-use authorization code is one way to get there,
+  // and by then the first callback may already have created the session. Send
+  // every failure to /login: it shows a retry message when signed out, and
+  // forwards into the app when a session already exists.
+  pages: { signIn: "/login", error: "/login" },
   session: { strategy: "jwt", maxAge: 7 * 24 * 60 * 60 },
 } satisfies NextAuthConfig;
