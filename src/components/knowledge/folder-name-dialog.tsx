@@ -9,6 +9,7 @@ import { FOLDER_NAME_REQUEST_EVENT, type FolderNameRequest } from "./folder-name
 import { folderNameProblem } from "./organize-messages";
 import { useTreeMutations } from "./use-tree-mutations";
 import { dialogBackdropClasses, dialogPopupClasses } from "@/components/ui/dialog";
+import { DialogCloseButton } from "@/components/ui/dialog-close";
 import { Label } from "@/components/ui/label";
 
 /**
@@ -117,6 +118,7 @@ function FolderNameDialog({ request, onClose }: { request: FolderNameRequest | n
               </Button>
             </div>
           </form>
+          <DialogCloseButton disabled={busy} />
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>

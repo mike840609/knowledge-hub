@@ -1005,6 +1005,14 @@ for the palette, which is placed and padded differently. `Dialog` and
 `AlertDialog` are different roots, so it is the look that is shared, as with
 tabs.
 
+**A dialog has a way out in its corner.** Every centred dialog ends its popup
+with `DialogCloseButton` (`components/ui/dialog-close.tsx`): an `sm` ghost ×
+level with the title, beside Escape and the footer's Cancel, disabled while the
+dialog is busy. It is the popup's last child so the library's first focus still
+lands on the dialog's first field. A confirmation has none — its two buttons
+are the answers — and the image viewer keeps the Close at the end of its zoom
+toolbar (`tests/unit/dialog-close-button.test.tsx`; 2026-10-27).
+
 **A button says what state it is in.** Hover, pressed, and "my menu is open"
 are three states. The neutral variants (`ghost`, `secondary`) take the step
 above hover while pressed (`bg-hover-strong`) and keep the hover fill for as
@@ -1067,7 +1075,11 @@ and every hand-rolled copy it replaces was native already. With JavaScript,
 that form searches as the reader types (`LiveSearchSubmit`) and keeps its
 submit button, which is what Enter reaches from any of its text fields; the
 URL is still the state, so a search stays shareable, and without JavaScript
-the button and the GET are all there is. A multi-line field
+the button and the GET are all there is. The Shares filter rows are the same
+GET forms with no button (`LiveSearch`): text applies as it is typed and on
+Enter, and a chosen status applies at once (`applyAndSearch`, which commits the
+choice before the form is read). Their Search, Filter and Refresh buttons are
+gone (2026-10-27). A multi-line field
 takes its height from `rows` rather than the ladder; only its padding scales.
 
 **A field has a name, and one way to be wrong.** `Label` (`components/ui/label.tsx`)

@@ -9,6 +9,7 @@ import { SelectMenu } from "@/components/ui/select-menu";
 import { FEEDBACK_CATEGORIES, type FeedbackCategory } from "@/modules/personal/domain/feedback-report";
 import { Label } from "@/components/ui/label";
 import { dialogBackdropClasses, dialogPopupClasses } from "@/components/ui/dialog";
+import { DialogCloseButton } from "@/components/ui/dialog-close";
 export function FeedbackReport({ empId, open, onOpenChange, returnFocus }: { empId: string; open: boolean; onOpenChange: (open: boolean) => void; returnFocus?: RefObject<HTMLElement | null> }){
   const id = useId();
   const [category,setCategory]=useState<FeedbackCategory>("Sync");const [description,setDescription]=useState("");const [saved,setSaved]=useState(false);
@@ -40,5 +41,5 @@ export function FeedbackReport({ empId, open, onOpenChange, returnFocus }: { emp
     <div className="flex flex-wrap justify-end gap-2"><Button variant="ghost" onClick={() => onOpenChange(false)}>Close</Button><Button variant="secondary" disabled={!description.trim()||sending} onClick={()=>void send()}>{sending?"Sending…":"Send report"}</Button></div>
     {error?<p role="alert" className="text-body-sm text-kh-text">{error}</p>:null}
     {saved?<p role="status" className="text-caption text-kh-text-muted">Report sent. Thank you.</p>:null}
-  </div></Dialog.Popup></Dialog.Portal></Dialog.Root>;
+  </div><DialogCloseButton /></Dialog.Popup></Dialog.Portal></Dialog.Root>;
 }

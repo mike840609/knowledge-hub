@@ -9,7 +9,7 @@ import { WorkspaceContentActions } from "./workspace-content-actions";
 import { useEffect, useRef, useState } from "react";
 import { reviewRequest } from "./review-thread-list";
 import Link from "next/link";
-import { Copy, MoreHorizontal, Search, RefreshCw } from "lucide-react";
+import { Copy, MoreHorizontal, Search } from "lucide-react";
 import { MenuRoot, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/menu";
 import { buttonClasses } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { SelectMenu } from "@/components/ui/select-menu";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
+import { applyAndSearch, LiveSearch } from "@/components/search/live-search-submit";
 import { Timestamp } from "@/components/ui/timestamp";
 import { useToast } from "@/components/ui/toast";
 import { GovernanceError, governanceFailure, governanceRequest, type GovernanceFailure } from "@/components/workspaces/governance-error";
@@ -31,6 +32,7 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
   const router = useRouter(), toast = useToast();
   const [origin, setOrigin] = useState("");
   const [status, setStatus] = useState<string>(model.query.status);
+  const filterForm = useRef<HTMLFormElement>(null);
   useEffect(() => setStatus(model.query.status), [model.query.status]);
   const [unreadCounts, setUnreadCounts] = useState<UnreadShareCount[]>([]);
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -96,16 +98,15 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
   return <main className="kh-page pb-6">
     <PageHeader location="My Space" locationHref={`/w/${workspaceId}/home`} title="Shares" description="Manage links to your documents. Anyone holding an active link can read its latest saved content without signing in." />
     <SharesNavigation workspaceId={workspaceId} active="mine" discussionsUnread={discussionsUnread} />
-    <form action={`/w/${workspaceId}/shares`} method="get" className="mt-4 flex flex-wrap items-center gap-2" aria-label="Filter shares">
+    <form ref={filterForm} action={`/w/${workspaceId}/shares`} method="get" className="mt-4 flex flex-wrap items-center gap-2" aria-label="Filter shares">
       <div className="relative min-w-0 basis-full sm:flex-1 sm:basis-auto">
         <label htmlFor="shares-query" className="sr-only">Find shares</label>
         <Search size={15} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-kh-text-muted" />
         <Input id="shares-query" name="q" defaultValue={model.query.q} maxLength={200} placeholder="Find shares…" className="kh-search-field" />
       </div>
       <label htmlFor="shares-status" className="sr-only">Status</label>
-      <SelectMenu id="shares-status" name="status" value={status} onValueChange={setStatus} options={[{ value: "all", label: "All statuses" }, ...Object.entries(labels).map(([value, label]) => ({ value, label }))]} />
-      <Button type="submit" variant="secondary">Search</Button>
-      <Button type="button" variant="ghost" icon aria-label="Refresh shares" disabled={busy !== null} onClick={() => router.refresh()}><RefreshCw size={15} aria-hidden="true" /></Button>
+      <SelectMenu id="shares-status" name="status" value={status} onValueChange={(value) => applyAndSearch(filterForm.current, () => setStatus(value))} options={[{ value: "all", label: "All statuses" }, ...Object.entries(labels).map(([value, label]) => ({ value, label }))]} />
+      <LiveSearch />
       {model.query.q || model.query.status !== "active" || model.query.page > 1 ? <Link className="kh-focus-ring rounded-md text-body-sm text-kh-link" href={`/w/${workspaceId}/shares`}>Clear filters</Link> : null}
     </form>
     {filterError ? <p role="alert" className="mt-3 text-body text-kh-danger">{filterError}</p> : null}

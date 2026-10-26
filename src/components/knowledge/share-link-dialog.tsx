@@ -15,6 +15,7 @@ import {
   type GovernanceFailure,
 } from "@/components/workspaces/governance-error";
 import { dialogBackdropClasses, dialogPopupClasses } from "@/components/ui/dialog";
+import { DialogCloseButton } from "@/components/ui/dialog-close";
 import { Label } from "@/components/ui/label";
 import { ShareLinksSkeleton } from "./knowledge-skeletons";
 
@@ -258,6 +259,7 @@ export function ShareLinkDialog({
           <div className="mt-6 flex justify-end">
             <Button variant="secondary" type="button" disabled={busy} onClick={() => onOpenChange(false)}>Done</Button>
           </div>
+          <DialogCloseButton disabled={busy} />
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>

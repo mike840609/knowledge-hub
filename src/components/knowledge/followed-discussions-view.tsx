@@ -11,12 +11,14 @@ import { Timestamp } from "@/components/ui/timestamp";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Illustration } from "./illustration";
 import { SharesNavigation } from "./shares-navigation";
+import { applyAndSearch, LiveSearch } from "@/components/search/live-search-submit";
 import { navigateListRows } from "@/lib/list-row-navigation";
 import type { DiscussionFilter, FollowedDiscussionView } from "@/modules/knowledge/domain/review-follow";
 
 export function FollowedDiscussionsView({ workspaceId, items, filter, unread, filterError }: { workspaceId: string; items: FollowedDiscussionView[]; filter: DiscussionFilter; unread: number; filterError?: string }) {
   const router = useRouter(), pending = useRef(false);
   const [status, setStatus] = useState<string>(filter);
+  const filterForm = useRef<HTMLFormElement>(null);
   useEffect(() => setStatus(filter), [filter]);
   const [busy, setBusy] = useState<string | null>(null), [error, setError] = useState(""), [removed, setRemoved] = useState(new Set<string>());
   // Optimistic removals belong to this server snapshot; a refresh may bring back a re-followed discussion.
@@ -37,11 +39,11 @@ export function FollowedDiscussionsView({ workspaceId, items, filter, unread, fi
   return <main className="kh-page pb-6">
     <PageHeader location="My Space" locationHref={`/w/${workspaceId}/home`} title="Shares" description="Discussions you follow on shared articles. Following never extends a link's access."/>
     <SharesNavigation workspaceId={workspaceId} active="discussions" discussionsUnread={unread}/>
-    <form action={`/w/${workspaceId}/shares`} method="get" aria-label="Filter discussions" className="mt-4 flex flex-wrap items-center gap-2">
+    <form ref={filterForm} action={`/w/${workspaceId}/shares`} method="get" aria-label="Filter discussions" className="mt-4 flex flex-wrap items-center gap-2">
       <Input type="hidden" name="tab" value="discussions"/>
       <label className="sr-only" htmlFor="discussions-status">Discussion status</label>
-      <SelectMenu id="discussions-status" name="status" value={status} onValueChange={setStatus} options={[{ value: "all", label: "All" }, { value: "unread", label: "Unread" }]}/>
-      <Button type="submit" variant="secondary">Filter</Button>
+      <SelectMenu id="discussions-status" name="status" value={status} onValueChange={(value) => applyAndSearch(filterForm.current, () => setStatus(value))} options={[{ value: "all", label: "All" }, { value: "unread", label: "Unread" }]}/>
+      <LiveSearch />
     </form>
     {(error || filterError) && <p role="alert" className="mt-3 text-body-sm text-kh-danger">{filterError || error}</p>}
     {!filterError && shown.length === 0 && <EmptyState icon={MessagesSquare} illustration={filter === "all" ? <Illustration kind="discussions" /> : undefined} title={filter === "unread" ? "No unread discussions." : "No discussions yet."} description="Discussions you comment on through a shared link appear here."/>}
