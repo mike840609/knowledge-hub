@@ -105,8 +105,9 @@ test.describe("document share link", () => {
 
       // Revoking takes two steps, and then the link is gone for everyone.
       await page.goto(`/w/${workspaceId}/shares`);
+      // The filter applies as it is typed; there is no Search button.
       await page.getByLabel("Find shares").fill(title);
-      await page.locator("main").getByRole("button", { name: "Search", exact: true }).click();
+      await expect(page).toHaveURL(/[?&]q=/, ROUND_TRIP);
       const managed = page.getByRole("list", { name: "Share links" });
       await expect(managed.getByRole("link", { name: title, exact: true })).toBeVisible(ROUND_TRIP);
       await expect(managed).toContainText("for the reader");
@@ -115,7 +116,7 @@ test.describe("document share link", () => {
       await page.getByRole("alertdialog", { name: "Revoke share link?" }).getByRole("button", { name: "Confirm revoke" }).click();
       await expect(page.getByText("No shares match these filters.")).toBeVisible(ROUND_TRIP);
       await chooseOption(page.getByLabel("Status", { exact: true }), "revoked");
-      await page.locator("main").getByRole("button", { name: "Search", exact: true }).click();
+      await expect(page).toHaveURL(/[?&]status=revoked/, ROUND_TRIP);
       await expect(managed).toContainText("Revoked", ROUND_TRIP);
       const revoked = await reader.get(path!);
       expect(revoked.status()).toBe(404);
