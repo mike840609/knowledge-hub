@@ -4,7 +4,7 @@ import { useWorkspaceAuthorization } from "./use-workspace-authorization";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Tooltip } from "@/components/ui/tooltip";
-import { BookOpenText, Database, Network, Settings, Home, UserRound, Share2 } from "lucide-react";
+import { BarChart3, BookOpenText, Database, Network, Settings, Home, Share2 } from "lucide-react";
 
 export function PrimaryNav({
   workspaceId,
@@ -35,7 +35,7 @@ export function PrimaryNav({
       Icon: Database,
     }] : []),
     ...(access.workspace.type === "PERSONAL" && access.actions.canSearch ? [{ name: "Shares", href: `/w/${workspaceId}/shares`, Icon: Share2 }] : []),
-    ...(access.workspace.type === "PERSONAL" ? [{name: "Insights", href: `/w/${workspaceId}/profile`, Icon: UserRound}] : []),
+    ...(access.workspace.type === "PERSONAL" ? [{name: "Insights", href: `/w/${workspaceId}/profile`, Icon: BarChart3}] : []),
     ...(access.actions.canOpenSettings ? [{name: "Settings", href: `/w/${workspaceId}/settings`, Icon: Settings}] : []),
   ];
   // The current place is a neutral step above hover, not the accent: the accent marks what is selected in the

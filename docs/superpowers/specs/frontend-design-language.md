@@ -1119,6 +1119,12 @@ The current route is matched exactly, not by prefix. A section's index tab
 lives at the section root, so a prefix match leaves it lit on every page in
 the section.
 
+Base UI marks the current tab `data-active`. The look was keyed on
+`data-selected`, which this version of the library never sets, so the
+inspector and the Inbox showed no current tab at all and nothing failed;
+`tests/unit/tabs-active-state.test.tsx` now reads the attribute out of the
+classes and checks it against what the library renders.
+
 ### A state is a glyph and a word; an empty place leads with its action
 
 `components/ui/status.tsx` says a state with a glyph, a colour from the semantic
@@ -1180,6 +1186,14 @@ paired with a screen-reader-only `role="status"` line, because a skeleton is
 per area rather than beside a caller: the document skeleton had two callers,
 was copied into both, and the two drifted to different paddings, so the page
 shifted as the route boundary handed over to the `Suspense` fallback.
+
+**A list that is being re-asked keeps its last answer.** The palette's
+document results, between one keystroke's answer and the next, stay on screen
+at half opacity, `inert` and outside the listbox, with the `Searching` status
+line, rather than blanking to a skeleton on every keystroke. They answer the
+previous query, so they are never a row: Enter, a click or Tab cannot reach
+one. The skeleton remains for the first answer, when there is nothing to keep
+(`tests/unit/quick-search-pending-results.test.tsx`).
 
 **The document skeleton is kept knowing what it costs.** Measured, opening a
 document takes 383ms at p50, of which about 250ms is the skeleton rather than
