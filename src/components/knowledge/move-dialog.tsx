@@ -11,6 +11,7 @@ import { organizeFailure } from "./organize-messages";
 import { MOVE_REQUEST_EVENT, requestRevealFolder, type MoveRequest } from "./move-request";
 import { useTreeMutations } from "./use-tree-mutations";
 import { dialogBackdropClasses, dialogPopupClasses } from "@/components/ui/dialog";
+import { DialogCloseButton } from "@/components/ui/dialog-close";
 
 type Collections = { source: SourceView; tree: KnowledgeTreeItem[] }[];
 
@@ -174,6 +175,7 @@ function MoveDialog({ request, collections, onClose, loading, failed, onRetry }:
               </div>
             </>
           )}
+          <DialogCloseButton disabled={busy} />
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>

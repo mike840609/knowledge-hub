@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { dialogBackdropClasses, dialogPopupClasses } from "@/components/ui/dialog";
+import { DialogCloseButton } from "@/components/ui/dialog-close";
 import { requestSourceRename } from "./rename-source-request";
 
 /**
@@ -94,6 +95,7 @@ export function RenameSourceDialog({ open, onOpenChange, sourceId, name }: {
               <Button type="submit" disabled={busy}>{busy ? "Renaming…" : "Rename"}</Button>
             </div>
           </form>
+          <DialogCloseButton disabled={busy} />
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>
