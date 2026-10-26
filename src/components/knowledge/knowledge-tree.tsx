@@ -120,7 +120,7 @@ function TreeNodeRow({
           // showed the revision before it. Keyboard-shortcuts spec §9.
           prefetch={selected ? false : undefined}
           title={item.label}
-          className={`kh-tree-document-link kh-control flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-body kh-focus-ring ${
+          className={`kh-tree-document-link kh-control flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-body-sm kh-focus-ring ${
             selected ? "font-medium text-kh-selected-text" : "text-kh-text-muted"
           }`}
         >
@@ -168,7 +168,7 @@ function TreeNodeRow({
           aria-expanded={!collapsed}
           title={item.label}
           tabIndex={-1}
-          className={`kh-tree-folder-button kh-control flex min-h-8 min-w-0 flex-1 items-center gap-2 px-2 text-left text-body font-medium kh-focus-ring rounded-md ${archived ? "text-kh-text-muted" : "text-kh-text"}`}
+          className={`kh-tree-folder-button kh-control flex min-h-8 min-w-0 flex-1 items-center gap-2 px-2 text-left text-body-sm font-medium kh-focus-ring rounded-md ${archived ? "text-kh-text-muted" : "text-kh-text"}`}
         >
           {collapsed ? <ChevronRight size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" /> : <ChevronDown size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />}
           <span className="min-w-0 flex-1 truncate">{item.label}</span>

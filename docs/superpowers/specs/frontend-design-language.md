@@ -1050,6 +1050,13 @@ opens from it and the button beside it were three unrelated heights. The
 reference's sidebar is denser still, at roughly 28px; `md` is the nearest rung,
 and a rung is not added for one surface.
 
+A rail row's label is `body-sm` (13px), not `body`: the primary navigation,
+its Search and Workspace rows, and the explorer's documents, folders,
+shortcuts and collection headers. The rail is chrome read at a glance, and
+the reference sets it a step below the content it leads to. The row keeps its
+32px; only the text is lighter. The account button at the rail's foot is a
+`Button` and keeps the button's `body`.
+
 Every form field is `Input`, `Select`, `SelectMenu` or `Textarea`, which share
 their shape through `fieldClasses()` in `components/ui/field.ts`.
 
