@@ -91,6 +91,11 @@ test.describe("wikilinks and backlinks in My Space", () => {
 
     await page.goto(source.url);
 
+    // The server-rendered copy is replaced when the editor's script lands. A
+    // click that spans that swap goes to neither element (CI saw it as "opened
+    // nothing"), so wait for the editor before any link is pressed.
+    await expect(page.locator(".ProseMirror")).toBeVisible(ROUND_TRIP);
+
     // The source document: one link that goes somewhere, one that is marked, one with an alias.
     const article = page.locator("article").first();
     const link = article.getByRole("link", { name: targetTitle, exact: true });
@@ -242,6 +247,8 @@ test.describe("wikilinks and backlinks in My Space", () => {
     const target = await createMySpaceDocument(page, targetTitle, `Intro.\n\n## Setup\n\n${"filler paragraph\n\n".repeat(60)}## Local Setup\n\nHere.`);
     const linker = await createMySpaceDocument(page, `Anchor Linker ${stamp}`, `Go to [[${targetTitle}#Local Setup|the setup]].`);
     await page.goto(linker.url);
+    // Same takeover race as above: the swap out of the server copy would eat the click.
+    await expect(page.locator(".ProseMirror")).toBeVisible(ROUND_TRIP);
     await page.locator("article").first().getByRole("link", { name: "the setup" }).click();
     await expect(page).toHaveURL(`${target.url}#local-setup`, ROUND_TRIP);
     await expect(page.locator("#local-setup:visible")).toBeInViewport(ROUND_TRIP);
