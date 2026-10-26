@@ -32,16 +32,28 @@ function placeholders(count: number): string {
 export class MariaDbTreeRepository implements TreeRepository {
   constructor(private readonly connection: QueryConnection) {}
 
-  async listDocumentsByWorkspace(workspaceId: string, includeArchived: boolean): Promise<DocumentSummary[]> {
+  async listDocumentsByWorkspace(workspaceId: string, includeArchived: boolean, excludeArchivedAncestors = false): Promise<DocumentSummary[]> {
+    // Sidebar shortcuts must follow the same archived-ancestor rule as the document tree.
+    // Keep this opt-in so existing workspace summary projections retain their contract.
+    const filterAncestors = excludeArchivedAncestors && !includeArchived;
+    const hidden = filterAncestors ? `WITH RECURSIVE hidden_nodes AS (
+      SELECT n.id, n.source_id FROM knowledge_tree_nodes n
+      JOIN knowledge_sources s ON s.id = n.source_id
+      WHERE s.workspace_id = ? AND n.status = 'ARCHIVED'
+      UNION DISTINCT
+      SELECT child.id, child.source_id FROM knowledge_tree_nodes child
+      JOIN hidden_nodes parent ON child.parent_id = parent.id AND child.source_id = parent.source_id
+    )` : "";
     const rows = await this.connection.query<DbRow[]>(
-      `SELECT d.id AS document_id, d.source_id, r.title, r.created_at AS updated_at,
+      `${hidden} SELECT d.id AS document_id, d.source_id, r.title, r.created_at AS updated_at,
               s.ownership, s.status AS source_status, d.status
        FROM knowledge_documents d
        JOIN knowledge_sources s ON s.id = d.source_id
        JOIN knowledge_tree_nodes n ON n.document_id = d.id AND n.source_id = s.id
        JOIN knowledge_revisions r ON r.id = d.current_revision_id AND r.document_id = d.id
        WHERE s.workspace_id = ? AND (? = 1 OR (s.status = 'ACTIVE' AND d.status = 'ACTIVE' AND n.status = 'ACTIVE'))
-       ORDER BY r.created_at DESC, d.id ASC`, [workspaceId, includeArchived ? 1 : 0],
+       ${filterAncestors ? "AND NOT EXISTS (SELECT 1 FROM hidden_nodes hidden WHERE hidden.id = n.id)" : ""}
+       ORDER BY r.created_at DESC, d.id ASC`, [...(filterAncestors ? [workspaceId] : []), workspaceId, includeArchived ? 1 : 0],
     );
     return rows.map(mapDocumentSummary);
   }
