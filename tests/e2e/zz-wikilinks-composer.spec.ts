@@ -74,6 +74,21 @@ async function expectBacklinkFrom(page: Page, targetUrl: string) {
 }
 
 test.describe("wikilinks in the rendered editor", () => {
+  // These tests type into /knowledge/new without saving, which leaves an account-backed
+  // `draft:new`. That draft is workspace-wide, so the next test inherits the previous test's
+  // wikilinks and a count that should be 1 becomes 2 (seen in CI). Start every test clean.
+  test.beforeEach(async ({ page }) => {
+    const workspaceId = await mySpace(page);
+    const current = await page.request.get(`/api/workspaces/${workspaceId}/personal?key=draft:new`);
+    expect(current.ok()).toBe(true);
+    const { value, version } = (await current.json()) as { value: unknown; version: number };
+    if (value === null) return;
+    const cleared = await page.request.put(`/api/workspaces/${workspaceId}/personal`, {
+      data: { key: "draft:new", value: null, version },
+    });
+    expect(cleared.ok()).toBe(true);
+  });
+
   test("a document with wikilinks keeps them when it is edited and saved", async ({ page }) => {
     const stamp = unique("Edit");
     const target = `Target ${stamp}`;
