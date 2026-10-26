@@ -473,3 +473,62 @@ describe("lifecycle access", () => {
     await expect(sources.restoreSource(caller, uuidv7())).rejects.toBeInstanceOf(SourceNotFoundError);
   });
 });
+
+describe("source rename", () => {
+  it("trims the name, persists it, and leaves status and sync_version alone", async () => {
+    const scope = await setupLifecycleScope();
+    const { sources } = lifecycleServices();
+    const caller = callerFromIdentity(owner);
+
+    await sources.renameSource(caller, scope.managedSourceId, "  Research Vault  ");
+
+    const [row] = await pool.query<{ name: string; status: string; sync_version: number }[]>(
+      "SELECT name, status, sync_version FROM knowledge_sources WHERE id = ?",
+      [scope.managedSourceId],
+    );
+    expect(row).toMatchObject({ name: "Research Vault", status: "ACTIVE", sync_version: 0 });
+
+    await sources.renameSource(caller, scope.managedSourceId, "Research Vault");
+    await sources.renameSource(caller, scope.hubSourceId, "Research Vault");
+    const names = await pool.query<{ name: string }[]>(
+      "SELECT name FROM knowledge_sources WHERE id IN (?, ?) ORDER BY name",
+      [scope.managedSourceId, scope.hubSourceId],
+    );
+    expect(names.map((entry) => entry.name)).toEqual(["Research Vault", "Research Vault"]);
+  });
+
+  it("rejects an empty or over-long name", async () => {
+    const scope = await setupLifecycleScope();
+    const { sources } = lifecycleServices();
+    const caller = callerFromIdentity(owner);
+
+    await expect(sources.renameSource(caller, scope.managedSourceId, "   ")).rejects.toBeInstanceOf(ValidationError);
+    await expect(sources.renameSource(caller, scope.managedSourceId, "x".repeat(513))).rejects.toBeInstanceOf(ValidationError);
+    const [row] = await pool.query<{ name: string }[]>("SELECT name FROM knowledge_sources WHERE id = ?", [scope.managedSourceId]);
+    expect(row?.name).toBe("Managed Source");
+  });
+
+  it("refuses a caller outside the workspace and keeps the name", async () => {
+    const scope = await setupLifecycleScope();
+    const { sources } = lifecycleServices();
+    const stranger = callerFromIdentity(outsider);
+
+    await expect(sources.renameSource(stranger, scope.managedSourceId, "Hijacked")).rejects.toBeInstanceOf(WorkspaceAccessDeniedError);
+    const [row] = await pool.query<{ name: string }[]>("SELECT name FROM knowledge_sources WHERE id = ?", [scope.managedSourceId]);
+    expect(row?.name).toBe("Managed Source");
+  });
+
+  it("renames an archived source without restoring it", async () => {
+    const scope = await setupLifecycleScope();
+    const { sources } = lifecycleServices();
+    const caller = callerFromIdentity(owner);
+
+    await sources.archiveSource(caller, scope.managedSourceId);
+    await sources.renameSource(caller, scope.managedSourceId, "Archived Vault");
+    const [row] = await pool.query<{ name: string; status: string }[]>(
+      "SELECT name, status FROM knowledge_sources WHERE id = ?",
+      [scope.managedSourceId],
+    );
+    expect(row).toMatchObject({ name: "Archived Vault", status: "ARCHIVED" });
+  });
+});

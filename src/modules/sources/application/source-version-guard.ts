@@ -2,7 +2,8 @@ import { syncCallerIdentity } from "@/modules/identity/application/sync-caller-i
 import { uuidv7 } from "@/shared/ids/uuidv7";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { lockWorkspaceForMutation } from "@/modules/workspaces/application/workspace-mutation-guard";
-import { IntegrityViolationError, VersionConflictError, SourceNotFoundError, NotFoundError, SourceEntryConflictError } from "@/modules/knowledge/domain/errors";
+import { IntegrityViolationError, VersionConflictError, SourceNotFoundError, NotFoundError, SourceEntryConflictError, ValidationError } from "@/modules/knowledge/domain/errors";
+import { MAX_FOLDER_NAME_LENGTH } from "@/modules/knowledge/domain/tree-rules";
 import type { ContentInput } from "@/modules/knowledge/domain/content";
 import { fingerprintRevisionContent } from "@/modules/knowledge/domain/content";
 import type { SourceUnitOfWork } from "../ports/unit-of-work";
@@ -52,6 +53,15 @@ function failedSummary(summary: Record<string, unknown> | undefined, error: unkn
 export interface SourceLifecycleCommands {
   archiveSource(caller: CallerContext, sourceId: string): Promise<void>;
   restoreSource(caller: CallerContext, sourceId: string): Promise<void>;
+  renameSource(caller: CallerContext, sourceId: string, name: string): Promise<void>;
+}
+
+function normalizedSourceName(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > MAX_FOLDER_NAME_LENGTH) {
+    throw new ValidationError(`Source name must be between 1 and ${MAX_FOLDER_NAME_LENGTH} characters.`);
+  }
+  return trimmed;
 }
 
 export class SourceApplicationService implements SourceLifecycleCommands {
@@ -147,6 +157,18 @@ export class SourceApplicationService implements SourceLifecycleCommands {
 
   async archiveSource(caller: CallerContext, sourceId: string): Promise<void> {
     await this.setSourceStatus(caller, sourceId, "ARCHIVED");
+  }
+
+  async renameSource(caller: CallerContext, sourceId: string, name: string): Promise<void> {
+    const next = normalizedSourceName(name);
+    await this.unitOfWork.run(async (repositories) => {
+      await syncCallerIdentity(repositories.users, caller);
+      const source = await repositories.sources.lockById(sourceId);
+      if (!source) throw new SourceNotFoundError();
+      await lockWorkspaceForMutation(repositories, caller, source.workspaceId, "source-import");
+      if (source.name === next) return;
+      await repositories.sources.updateName(sourceId, next, caller.identity.id);
+    });
   }
 
   async restoreSource(caller: CallerContext, sourceId: string): Promise<void> {
