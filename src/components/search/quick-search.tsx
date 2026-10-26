@@ -125,13 +125,15 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
     () => (trimmed ? [] : recents.filter((hit) => recentIds.includes(hit.documentId)).map((hit) => ({ kind: "hit" as const, hit }))),
     [trimmed, recents, recentIds],
   );
+  // While a search is in flight the hits on screen answer the previous query: shown, so the list does not
+  // blank on every keystroke, but not rows, so Enter can never open a document the current query did not find.
   const rows = useMemo<PaletteRow[]>(
     () => [
       ...recentRows,
       ...matched.map((action) => ({ kind: "action" as const, action })),
-      ...hits.map((hit) => ({ kind: "hit" as const, hit })),
+      ...(loading ? [] : hits.map((hit) => ({ kind: "hit" as const, hit }))),
     ],
-    [recentRows, matched, hits],
+    [recentRows, matched, hits, loading],
   );
   // The first row is the default target, and the row set changes as results
   // arrive; leaving the index where it was would point it at something else.
@@ -211,7 +213,6 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
     const wait = queryStarted.current ? SEARCH_DEBOUNCE_MS : 0;
     queryStarted.current = true;
     const controller = new AbortController();
-    setHits([]);
     setLoading(true);
     setMessage("");
     const timer = window.setTimeout(async () => {
@@ -380,7 +381,21 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
                   );
                 })}
               </ul>
-              {loading ? <ResultListSkeleton /> : null}
+              {loading && hits.length === 0 ? <ResultListSkeleton /> : null}
+              {loading && hits.length > 0 ? (
+                <>
+                  <p role="status" className="sr-only">Searching</p>
+                  {/* The previous query's answer, until this one's arrives: inert, so neither pointer nor Tab reaches it. */}
+                  <ul inert aria-hidden="true" data-stale-results className="space-y-0.5 opacity-50">
+                    {hits.map((hit) => (
+                      <li key={hit.documentId} className="rounded-md px-3 py-2">
+                        <span className="block truncate text-body font-medium text-kh-text">{hit.title}</span>
+                        <span className="block truncate text-caption text-kh-text-muted">{hit.sourceName}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
               {!loading && message ? <p role="status" className="px-3 py-3 text-body text-kh-text-muted">{message}</p> : null}
               {!loading && !message && trimmed && rows.length === 0 ? <p role="status" className="px-3 py-3 text-body text-kh-text-muted">Nothing matches that.</p> : null}
               {/* Said even when actions matched: otherwise a query that hits an
