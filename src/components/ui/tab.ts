@@ -2,7 +2,7 @@
  * The tab shape, shared by the two things that need it.
  *
  * `ui/tabs.tsx` wraps Base UI's tabs, which swap panels inside one page and
- * mark the current tab with a `data-selected` attribute. Route-based
+ * mark the current tab with a `data-active` attribute. Route-based
  * navigation cannot use that — each tab is a link to its own URL, and the
  * current one is decided by the pathname, not by component state. The two
  * therefore cannot share a component, which is why the settings navigation
@@ -11,6 +11,9 @@
  * They can share the look, and this is where it lives so that changing a tab
  * changes both. The alternative — restating the class string in the link
  * version — is the drift this codebase has already paid for twice.
+ *
+ * The Base UI form was keyed on `data-selected`, an attribute that library never sets, so the inspector's
+ * and the Inbox's tabs showed no current tab at all (design language §15).
  */
 const TAB_BASE = "kh-focus-ring -mb-px border-b-2 px-3 py-2 text-body-sm font-medium transition-colors";
 const TAB_IDLE = "border-transparent text-kh-text-muted hover:text-kh-text";
@@ -25,4 +28,4 @@ export function tabClasses(active: boolean, className = ""): string {
 
 /** For Base UI, which marks the current tab with an attribute instead. */
 export const selectableTabClasses =
-  `${TAB_BASE} ${TAB_IDLE} data-[selected]:border-kh-primary data-[selected]:text-kh-selected-text`;
+  `${TAB_BASE} ${TAB_IDLE} data-[active]:border-kh-primary data-[active]:text-kh-selected-text`;
