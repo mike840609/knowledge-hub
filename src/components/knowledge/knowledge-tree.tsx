@@ -110,7 +110,7 @@ function TreeNodeRow({
         data-status={item.status}
         tabIndex={tabIndex}
         onFocus={() => onFocusNode(item.id)}
-        className={`kh-interactive-row group relative flex min-h-7 items-center ${selected ? "bg-kh-bg-selected hover:bg-kh-bg-selected" : ""}`}
+        className={`kh-interactive-row group relative flex kh-rail-row items-center ${selected ? "bg-kh-bg-selected hover:bg-kh-bg-selected" : ""}`}
       >
         <Link
           href={documentHref(item, scope, includeArchived)}
@@ -120,7 +120,7 @@ function TreeNodeRow({
           // showed the revision before it. Keyboard-shortcuts spec §9.
           prefetch={selected ? false : undefined}
           title={item.label}
-          className={`kh-tree-document-link kh-control flex min-h-7 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-body-sm kh-focus-ring ${
+          className={`kh-tree-document-link kh-control flex kh-rail-row min-w-0 flex-1 items-center gap-2 rounded-md px-2 kh-rail-text kh-focus-ring ${
             selected ? "font-medium text-kh-selected-text" : "text-kh-text-muted"
           }`}
         >
@@ -160,7 +160,7 @@ function TreeNodeRow({
         as="div"
         actions={actions}
         onRun={onRunAction}
-        className="kh-interactive-row group relative flex min-h-7 items-center"
+        className="kh-interactive-row group relative flex kh-rail-row items-center"
       >
         <button
           type="button"
@@ -168,7 +168,7 @@ function TreeNodeRow({
           aria-expanded={!collapsed}
           title={item.label}
           tabIndex={-1}
-          className={`kh-tree-folder-button kh-control flex min-h-7 min-w-0 flex-1 items-center gap-2 px-2 text-left text-body-sm font-medium kh-focus-ring rounded-md ${archived ? "text-kh-text-muted" : "text-kh-text"}`}
+          className={`kh-tree-folder-button kh-control flex kh-rail-row min-w-0 flex-1 items-center gap-2 px-2 text-left kh-rail-text font-medium kh-focus-ring rounded-md ${archived ? "text-kh-text-muted" : "text-kh-text"}`}
         >
           {collapsed ? <ChevronRight size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" /> : <ChevronDown size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />}
           <span className="min-w-0 flex-1 truncate">{item.label}</span>

@@ -74,7 +74,7 @@ export function WorkspaceSelector({ workspaceId, compact = false }: { workspaceI
           <Tooltip label={currentName} side="right">
             <MenuTrigger
               aria-label={`Workspace: ${currentName}`}
-              className="kh-control kh-focus-ring flex h-7 w-full items-center justify-center rounded-md transition-colors hover:bg-kh-bg-hover data-[popup-open]:bg-kh-bg-hover"
+              className="kh-control kh-focus-ring flex kh-rail-row w-full items-center justify-center rounded-md transition-colors hover:bg-kh-bg-hover data-[popup-open]:bg-kh-bg-hover"
             >
               <WorkspaceInitial name={currentName} />
             </MenuTrigger>
@@ -82,7 +82,7 @@ export function WorkspaceSelector({ workspaceId, compact = false }: { workspaceI
         ) : (
           <MenuTrigger
             aria-label={`Workspace: ${currentName}`}
-            className="kh-control kh-focus-ring flex min-h-7 w-full min-w-0 items-center gap-2 rounded-md px-2 text-body-sm transition-colors hover:bg-kh-bg-hover data-[popup-open]:bg-kh-bg-hover"
+            className="kh-control kh-focus-ring flex kh-rail-row w-full min-w-0 items-center gap-2 rounded-md px-2 kh-rail-text transition-colors hover:bg-kh-bg-hover data-[popup-open]:bg-kh-bg-hover"
           >
             <WorkspaceInitial name={currentName} />
             <span className="min-w-0 flex-1 truncate text-left font-medium text-kh-text" title={currentName}>{currentName}</span>

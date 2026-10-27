@@ -573,6 +573,23 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-row-action:has([data-popup-open]) { opacity: 1; }
 }
 
+/* A rail row follows the reader's density (design contract, "Rows sit on the ladder"): compact is the
+   reference's 28px at body-sm, comfortable the 32px md rung at body. The height is a variable so the
+   coarse-pointer rule below still lifts it to 40px; a group header keeps its own caption type. */
+:root { --kh-rail-row-height: 28px; }
+:root[data-density="comfortable"] { --kh-rail-row-height: 32px; }
+.kh-rail-row { min-height: var(--kh-rail-row-height); }
+.kh-rail-text {
+  font-size: theme("fontSize.body-sm[0]");
+  line-height: theme("fontSize.body-sm[1].lineHeight");
+  letter-spacing: theme("fontSize.body-sm[1].letterSpacing");
+}
+:root[data-density="comfortable"] .kh-rail-text {
+  font-size: theme("fontSize.body[0]");
+  line-height: theme("fontSize.body[1].lineHeight");
+  letter-spacing: theme("fontSize.body[1].letterSpacing");
+}
+
 /* Dense desktop chrome keeps its ladder; touch gets a usable physical target. */
 @media (pointer: coarse) {
   .kh-control { min-height: 40px; }
