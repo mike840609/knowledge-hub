@@ -911,6 +911,11 @@ Should following the system be wanted again, it returns as a third state on
 the control — `light` / `dark` / `system` — not as a second CSS block. The
 attribute stays the only thing the stylesheet reads.
 
+Density is kept the same way: `kh:density` in storage, `data-density` stamped
+by the same pre-paint script (`compact` unless `comfortable` was chosen), and
+changed only from the account menu. It sizes the rails and nothing else
+(§15, "Rows sit on the ladder").
+
 ## 13. Icons
 
 A consistent outline icon language (Lucide). In primary navigation, icons
@@ -1043,12 +1048,35 @@ two heights that are not rungs, a default that does not line up, and the only
 offset focus ring in the system. Reopening it means accepting those three,
 not just the appearance.
 
-**Rows sit on the ladder too.** A navigation or tree row is `md` (32px) and
-the control floated inside it is `sm` (24px). Rows were 36px with a 28px
-floated button, neither on the ladder, so a sidebar row, the menu row that
-opens from it and the button beside it were three unrelated heights. The
-reference's sidebar is denser still, at roughly 28px; `md` is the nearest rung,
-and a rung is not added for one surface.
+**Rows sit on the ladder too, except a rail's.** A list or menu row is `md`
+(32px) and the control floated inside it is `sm` (24px). Rows were 36px with a
+28px floated button, neither on the ladder, so a sidebar row, the menu row that
+opens from it and the button beside it were three unrelated heights.
+
+A rail row — the primary navigation, its Search and Workspace rows, and the
+knowledge explorer's documents, folders, shortcuts and group headers — follows
+the reader's **density**, chosen under Density in the account menu:
+
+| Density | Row | Label |
+| --- | --- | --- |
+| Compact (default) | 28px, the reference's height | `body-sm` (13px) |
+| Comfortable | 32px, the `md` rung | `body` (14px) |
+
+Comfortable is the rail as it was before compact existed. Compact was first
+refused on the ground that a rung is not added for one surface; it was made
+anyway because at 32px the rails were the one place the density difference
+from the reference showed, and the explorer is the surface read most. It is
+not a rung: no button, field or menu row takes it, and the floated `sm`
+control still fits with 2px either side.
+
+A rail row carries `kh-rail-row` (its height, from `--kh-rail-row-height`) and,
+where it has a label, `kh-rail-text`; both are in `globals.css`, which reads
+`data-density` on `<html>` the way it reads `data-theme` (§12). The height is a
+variable so the coarse-pointer rule still lifts the row to 40px. A group header
+(Favorites, Recent) takes the height and keeps its `caption` label. The account
+button at the rail's foot is a `Button` and keeps the button's height and
+`body`; the explorer's filter is a field and keeps `md`. Nothing outside the
+rails reads density.
 
 Every form field is `Input`, `Select`, `SelectMenu` or `Textarea`, which share
 their shape through `fieldClasses()` in `components/ui/field.ts`.
