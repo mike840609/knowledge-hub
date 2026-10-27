@@ -239,7 +239,7 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
       />
       {/* Opens the same ⌘K palette as the rail, so there is still one place to search. */}
       <div className="flex items-center gap-3">
-        <button type="button" data-home-search onClick={requestQuickSearch} aria-label="Search articles and notes" className="kh-focus-ring flex min-h-8 min-w-0 flex-1 items-center gap-3 rounded-md border border-kh-border-strong px-3 py-1 text-body text-kh-text-muted hover:bg-kh-bg-subtle">
+        <button type="button" data-home-search onClick={requestQuickSearch} aria-label="Search articles and notes" className="kh-focus-ring flex min-h-8 min-w-0 flex-1 items-center gap-3 rounded-md border border-kh-border px-3 py-1 text-body text-kh-text-muted hover:bg-kh-bg-subtle">
           <Search size={16} aria-hidden="true" />
           <span className="flex-1 truncate text-left">Search articles and notes…</span>
           <Kbd size="md" className="hidden shrink-0 sm:inline-flex">⌘K</Kbd>
