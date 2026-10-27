@@ -775,7 +775,13 @@ page* grows the split's peek left over the page (160ms, the one curve) while the
 route loads, and removes it once both the growth and the route are done: the
 document arrives where the reader's eye already is, instead of the peek
 vanishing and the page catching up. *Edit* and the drawer's links just close the
-peek, which would otherwise stay beside the page it had just opened. Remove is last and alone,
+peek, which would otherwise stay beside the page it had just opened. The split's
+peek lives at the right: it slides in from there and *Close preview* (»,
+pointing the way it goes) or Escape slides it back out, both 160ms on the one
+curve and by transform only, so the page beside it takes its width at once,
+under the pane, and its text rewraps once rather than through the motion.
+Closing returns focus to the row the peek was opened from, or to the document
+it sat beside when that row is gone. Remove is last and alone,
 because Archive and Restore are what looks hardest to take back and a menu keeps
 those where a stray click is least likely to land. The sections follow a
 `section` field on the registry's row actions; the palette keeps its own

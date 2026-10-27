@@ -21,10 +21,26 @@ export function PeekHost({ children }: { children: ReactNode }) {
   // the loading skeleton (`aria-busy`), which `loading.tsx` commits first — or never will move: the page
   // was this document. Going on the route change alone uncovered that skeleton, which read as a reload.
   const [expanding, setExpanding] = useState<{ from: string; to: string; grown: boolean } | null>(null);
+  // Closing slides the pane out to the right before it goes; focus then returns to what opened it.
+  const [leaving, setLeaving] = useState(false);
+  const opener = useRef<HTMLElement | null>(null);
+  const lastFocus = useRef<HTMLElement | null>(null);
   const close = useCallback(() => {
     setRequest(null);
     setExpanding(null);
+    setLeaving(false);
   }, []);
+  const startLeaving = useCallback(() => setLeaving(true), []);
+  const finishLeaving = useCallback(() => {
+    close();
+    const active = document.activeElement;
+    // Only where focus would otherwise be lost: inside the pane that is going, or nowhere.
+    if (active && active !== document.body && !active.closest("[data-testid=\"side-peek\"]")) return;
+    const target = opener.current?.isConnected
+      ? opener.current
+      : contentRef.current?.querySelector<HTMLElement>('[role="region"][aria-label="Document content"]');
+    target?.focus();
+  }, [close]);
 
   const contentRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -44,29 +60,42 @@ export function PeekHost({ children }: { children: ReactNode }) {
       const detail = (event as CustomEvent<Partial<PeekRequest>>).detail;
       if (typeof detail?.documentId === "string" && typeof detail?.sourceId === "string") {
         setRequest({ documentId: detail.documentId, sourceId: detail.sourceId });
+        setLeaving(false);
+        // The row the menu was opened on is what Close returns to. The menu still holds focus here, and
+        // gives it back only after its own exit, so the row is the last focus outside menus and the peek.
+        opener.current = lastFocus.current;
       }
     };
+    const track = (event: FocusEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && !target.closest('[role="menu"], [data-testid="side-peek"]')) lastFocus.current = target;
+    };
     window.addEventListener(PEEK_REQUEST_EVENT, open);
-    return () => window.removeEventListener(PEEK_REQUEST_EVENT, open);
+    document.addEventListener("focusin", track);
+    return () => {
+      window.removeEventListener(PEEK_REQUEST_EVENT, open);
+      document.removeEventListener("focusin", track);
+    };
   }, []);
 
   return (
     <>
-      <div className="relative flex h-full min-h-0 min-w-0 flex-1">
+      <div className="relative flex h-full min-h-0 min-w-0 flex-1 overflow-hidden">
         <div ref={contentRef} className="contents">{children}</div>
         {request && isWide ? (
           <div
             data-testid="side-peek"
-            className={`min-h-0 min-w-0 flex-1 border-l border-kh-border ${expanding ? "kh-peek-expanding" : ""}`}
+            className={`kh-peek-pane min-h-0 min-w-0 flex-1 border-l border-kh-border ${expanding ? "kh-peek-expanding" : leaving ? "kh-peek-leaving" : ""}`}
             onAnimationEnd={(event) => {
-              // The pane's own growth, not an animation inside the document bubbling up.
+              // The pane's own motion, not an animation inside the document bubbling up.
               if (event.target !== event.currentTarget) return;
-              setExpanding((current) => (current ? { ...current, grown: true } : current));
+              if (event.animationName === "kh-peek-expand") setExpanding((current) => (current ? { ...current, grown: true } : current));
+              if (event.animationName === "kh-peek-leave") finishLeaving();
             }}
           >
             <PeekPane
               request={request}
-              onClose={close}
+              onClose={startLeaving}
               onOpenFullPage={(to) => setExpanding({ from: pathname, to, grown: false })}
             />
           </div>

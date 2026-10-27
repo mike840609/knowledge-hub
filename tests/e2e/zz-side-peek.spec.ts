@@ -171,3 +171,31 @@ test("Open as full page never uncovers the loading skeleton", async ({ page }) =
   await expect(page.getByRole("region", { name: "Document content" }).first()).toContainText(peekTitle);
   expect(await page.evaluate(() => (window as unknown as { uncovered: boolean }).uncovered)).toBe(false);
 });
+
+test("Close preview slides the peek out and returns focus to the row that opened it", async ({ page }) => {
+  const { peekTitle } = await setUp(page);
+  const peekRow = row(page, peekTitle);
+  await peekRow.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Open in side peek" }).click();
+  const sidePeek = page.getByTestId("side-peek");
+  await expect(sidePeek).toContainText(peekTitle, ROUND_TRIP);
+
+  await sidePeek.getByRole("button", { name: "Close preview" }).click();
+  // It slides out rather than vanishing: for its 160ms it is still there, leaving.
+  await expect(sidePeek).toHaveClass(/kh-peek-leaving/);
+  await expect(page.getByTestId("side-peek")).toHaveCount(0, ROUND_TRIP);
+  expect(await page.evaluate(() => document.activeElement !== document.body)).toBe(true);
+  expect(await peekRow.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+});
+
+test("Escape closes the peek the same way", async ({ page }) => {
+  const { peekTitle } = await setUp(page);
+  await row(page, peekTitle).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Open in side peek" }).click();
+  const sidePeek = page.getByTestId("side-peek");
+  await expect(sidePeek).toContainText(peekTitle, ROUND_TRIP);
+  await sidePeek.getByRole("button", { name: "Close preview" }).focus();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("side-peek")).toHaveCount(0, ROUND_TRIP);
+  expect(await page.evaluate(() => document.activeElement !== document.body)).toBe(true);
+});

@@ -9,7 +9,7 @@ import {
   useState,
   type MouseEvent as ReactMouseEvent,
 } from "react";
-import { ChevronsLeft } from "lucide-react";
+import { ChevronsRight } from "lucide-react";
 import type { DocumentLinkView } from "@/modules/knowledge/application/knowledge-link-service";
 import type { KnowledgeQueryService } from "@/modules/knowledge/application/knowledge-query-service";
 import {
@@ -285,7 +285,7 @@ export function PeekPane({
               aria-label="Close preview"
               className={buttonClasses({ variant: "ghost", icon: true })}
             >
-              <ChevronsLeft className="h-4 w-4" aria-hidden="true" />
+              <ChevronsRight className="h-4 w-4" aria-hidden="true" />
             </button>
           </Tooltip>
           {canonicalHref ? (
