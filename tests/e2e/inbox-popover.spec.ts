@@ -2,7 +2,7 @@ import { expect, test } from "./fixtures/test";
 import { phase3Origin } from "./fixtures/phase3-identities";
 import { createReviewDocument } from "./fixtures/document-review";
 
-test("desktop Inbox fits the 176px sidebar header as a popover, not a navigation row", async ({ page, request }) => {
+test("desktop Inbox is a primary navigation row, with the header popover as its quick peek", async ({ page, request }) => {
   const doc = await createReviewDocument(request);
   const owner = phase3Origin("reviewOwner");
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -13,7 +13,9 @@ test("desktop Inbox fits the 176px sidebar header as a popover, not a navigation
   const bounds = await sidebar.boundingBox();
   expect(bounds?.width).toBe(176);
   await expect(sidebar.getByText("Knowledge Hub", { exact: true })).toBeVisible();
-  await expect(sidebar.getByRole("link", { name: "Inbox" })).toHaveCount(0);
+  // The primary rail carries Inbox as a place (Linear's model); the header keeps
+  // its popover as the quick peek at what arrived.
+  await expect(sidebar.getByRole("link", { name: /^Inbox/ })).toBeVisible();
 
   const icon = sidebar.getByRole("button", { name: /Inbox/ });
   const brand = sidebar.getByText("Knowledge Hub", { exact: true });

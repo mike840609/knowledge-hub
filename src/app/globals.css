@@ -63,9 +63,10 @@
   --kh-shadow-modal: 0 2px 4px rgb(23 25 32 / 0.06), 0 16px 40px -8px rgb(23 25 32 / 0.18);
 }
 
-/* Dark theme. Applied only by explicit choice — the toggle writes
-   `data-theme` and persists it. The system's `prefers-color-scheme` is
-   deliberately not consulted; see the contract's theme section. */
+/* Dark theme. Applied by an explicit Dark choice, or by System when the
+   operating system prefers dark. The choice is persisted as `kh:theme` and
+   the pre-paint script resolves it before the first frame; see the contract's
+   theme section. */
 :root[data-theme="dark"] {
   color-scheme: dark;
   --kh-bg: #131417;
@@ -875,6 +876,8 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-block-move-menu button {
   @apply block w-full rounded-md px-3 py-2 text-left text-body-sm text-kh-text hover:bg-kh-bg-hover disabled:opacity-50 kh-focus-ring;
 }
+.kh-block-move-menu button[aria-current="true"] { @apply bg-kh-bg-selected font-medium text-kh-selected-text; }
+.kh-block-menu-separator { height: 1px; margin: 4px; background: var(--kh-border); }
 .kh-slash-menu { width: 18rem; max-width: calc(100vw - 1rem); max-height: min(24rem, 60vh); overflow-y: auto; }
 .kh-slash-option { @apply flex cursor-pointer flex-col rounded-md px-3 py-1.5 text-body-sm text-kh-text hover:bg-kh-bg-hover; }
 .kh-slash-option[aria-selected="true"] { @apply bg-kh-bg-selected text-kh-selected-text; }
