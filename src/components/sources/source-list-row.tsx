@@ -53,7 +53,8 @@ export function SourceListRow({ workspaceId, item, limits }: { workspaceId: stri
             {latestRun ? <Status kind={syncStatusKind(latestRun.status)}>{syncStatusLabel(latestRun.status)}</Status> : null}
             {lastSyncedAt ? (
               <>
-                {latestRun ? <><span aria-hidden="true">·</span>{latestRun.status === "APPLIED" ? <Timestamp value={lastSyncedAt} variant="relative" /> : <span>Last synced <Timestamp value={lastSyncedAt} variant="relative" /></span>}</> : <span>Last synced <Timestamp value={lastSyncedAt} variant="relative" /></span>}
+                {latestRun ? <span aria-hidden="true">·</span> : null}
+                <span>Last synced <Timestamp value={lastSyncedAt} variant="relative" /></span>
               </>
             ) : (
               <span>Never synced</span>

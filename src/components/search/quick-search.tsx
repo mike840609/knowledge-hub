@@ -346,7 +346,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
                   return (
                     <Fragment key={`recent-${row.hit.documentId}`}>
                       {position === 0 ? (
-                        <li role="presentation" aria-hidden="true" className="px-3 pb-1 pt-2 text-caption font-semibold text-kh-text-muted">Recent</li>
+                        <li role="presentation" className="px-3 pb-1 pt-2 text-caption font-semibold text-kh-text-muted">Recent</li>
                       ) : null}
                       <li id={`quick-row-${index}`} role="option" aria-selected={index === activeIndex}>
                         {documentRow(row.hit, index)}
@@ -362,7 +362,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
                   return (
                     <Fragment key={action.id}>
                       {first ? (
-                        <li role="presentation" aria-hidden="true" className="px-3 pb-1 pt-2 text-caption font-semibold text-kh-text-muted">
+                        <li role="presentation" className="px-3 pb-1 pt-2 text-caption font-semibold text-kh-text-muted">
                           {actionGroupLabels[action.group]}
                         </li>
                       ) : null}
