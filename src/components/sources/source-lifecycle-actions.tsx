@@ -7,6 +7,7 @@ import { MenuRoot, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/me
 import { buttonClasses } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
+import { RenameSourceDialog } from "./rename-source-dialog";
 
 export function SourceLifecycleActions({ workspaceId, sourceId, sourceName, status, label = "Source actions" }: {
   workspaceId: string; sourceId: string; sourceName: string; status: "ACTIVE" | "ARCHIVED"; label?: string;
@@ -14,6 +15,7 @@ export function SourceLifecycleActions({ workspaceId, sourceId, sourceName, stat
   const router = useRouter();
   const { access, confirmed } = useWorkspaceAuthorization();
   const [confirm, setConfirm] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   if (!confirmed || access.workspace.id !== workspaceId || !access.actions.canImport) return null;
@@ -35,9 +37,10 @@ export function SourceLifecycleActions({ workspaceId, sourceId, sourceName, stat
   return <div>
     <MenuRoot>
       <MenuTrigger disabled={busy} aria-label={label} className={buttonClasses({ variant: "ghost", icon: true, className: "min-h-11 min-w-11" })}><MoreHorizontal size={16} /></MenuTrigger>
-      <MenuContent align="end"><MenuItem onClick={() => archived ? void changeStatus() : setConfirm(true)}>{archived ? "Restore source" : "Archive source"}</MenuItem></MenuContent>
+      <MenuContent align="end"><MenuItem onClick={() => setRenameOpen(true)}>Rename source</MenuItem><MenuItem onClick={() => archived ? void changeStatus() : setConfirm(true)}>{archived ? "Restore source" : "Archive source"}</MenuItem></MenuContent>
     </MenuRoot>
     <ConfirmDialog open={confirm} onOpenChange={setConfirm} title={`Archive ${sourceName}?`} description="This source and its documents will be hidden from normal browsing, search and Graph. Documents and import history are retained. You can restore it from Sources → Show archived." confirmLabel="Archive source" tone="primary" onConfirm={() => void changeStatus()} />
+    <RenameSourceDialog open={renameOpen} onOpenChange={setRenameOpen} sourceId={sourceId} name={sourceName} />
     {error ? <p role="alert" className="max-w-64 text-caption text-kh-danger">{error}</p> : null}
   </div>;
 }

@@ -41,7 +41,7 @@ describe("folder import asset manifest resource usage", () => {
     const arrayBuffer = vi.fn(async () => new Uint8Array([1]).buffer);
     const fetchMock = vi.fn<typeof fetch>();
     vi.stubGlobal("fetch", fetchMock);
-    const base = { target, sourceName: "Assets", onProgress: vi.fn(), limits: { maxAssetFileBytes: 10, maxAssetTotalBytes: 15 } };
+    const base = { target, sourceName: "Assets", onProgress: vi.fn(), limits: { maxMarkdownFileBytes: 5 * 1024 * 1024, maxAssetFileBytes: 10, maxAssetTotalBytes: 15 } };
     await expect(runFolderImport({ ...base, files: [fakeAsset(0, { size: 11, arrayBuffer })] })).rejects.toMatchObject({ code: "IMPORT_LIMIT_EXCEEDED" });
     await expect(runFolderImport({ ...base, files: [fakeAsset(0, { size: 8, arrayBuffer }), fakeAsset(1, { size: 8, arrayBuffer })] })).rejects.toMatchObject({ code: "IMPORT_LIMIT_EXCEEDED" });
     expect(arrayBuffer).not.toHaveBeenCalled();

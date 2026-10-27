@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 import type { UserIdentity } from "@/modules/identity/domain/user-identity";
 import { KnowledgeQueryServiceImpl } from "@/modules/knowledge/application/knowledge-query-service";
+import type { KnowledgeRevision } from "@/modules/knowledge/domain/revision";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "@/modules/knowledge/ports/unit-of-work";
 import type { TreeViewNode } from "@/modules/knowledge/ports/tree-repository";
 
@@ -18,7 +19,7 @@ const sourceRow = {
   syncVersion: 0,
 } as const;
 
-const revisionOne = {
+const revisionOne: KnowledgeRevision = {
   id: "revision-1",
   documentId: "document-1",
   revisionNo: 1,
@@ -90,6 +91,7 @@ function fakeUnitOfWork(options: FakeOptions = {}): KnowledgeUnitOfWork {
       findById: async (id: string) => revisions.find((revision) => revision.id === id) ?? null,
       findByRevisionNo: async (documentId: string, revisionNo: number) => revisions.find((revision) => revision.documentId === documentId && revision.revisionNo === revisionNo) ?? null,
       listByDocument: async () => [...revisions],
+      listSummariesByDocument: async () => revisions.map(({ id, revisionNo, createdAt, history }) => ({ id, revisionNo, createdAt, history })),
     },
     tree: {
       findById: async (id: string) => nodes.find((node) => node.id === id) ?? null,
@@ -132,6 +134,15 @@ describe("knowledge read models", () => {
     const view = await queries.getDocument(caller, "document-1");
     expect(view.currentRevision.title).toBe("Second Title");
     expect(view.currentRevision.id).toBe("revision-2");
+  });
+
+  it("lists revision summaries without revision bodies", async () => {
+    const queries = new KnowledgeQueryServiceImpl(fakeUnitOfWork({ revisions: [revisionOne, revisionTwo] }));
+    const summaries = await queries.listRevisionSummaries(caller, "document-1");
+    expect(summaries.map((summary) => summary.revisionNo)).toEqual([1, 2]);
+    for (const summary of summaries) {
+      expect(summary).not.toHaveProperty("markdown");
+    }
   });
 
   it("serves a non-Web caller from a trusted CallerContext without a web runtime", async () => {

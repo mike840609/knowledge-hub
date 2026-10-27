@@ -30,6 +30,7 @@ export default async function SourceExplorerLayout({
     <KnowledgeLayout
       workspaceId={workspaceId}
       source={model.source}
+      sources={model.sources}
       collections={model.collections}
       includeArchived={model.includeArchived}
     >

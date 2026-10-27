@@ -1,15 +1,37 @@
 import { NextResponse, type NextRequest } from "next/server";
+import type { NextAuthRequest } from "next-auth";
 import { contentSecurityPolicy, NONCE_HEADER } from "@/lib/content-security-policy";
+import { googleGate } from "@/lib/auth-paths";
+import { isSitePasswordExempt, verifySitePassword } from "@/lib/site-password";
+
+type GoogleAuthMiddleware = (
+  handler: (request: NextAuthRequest) => Response | Promise<Response>,
+) => (request: NextRequest) => Promise<Response>;
 
 /**
- * Gives every page a Content-Security-Policy with a nonce of its own.
- *
- * The policy goes on the request as well as the response: Next reads the nonce out of the request's
- * header to put it on the scripts it writes, and the layout reads `x-nonce` for the one it writes.
+ * The policy that applies to every deployment: the optional site password and
+ * the per-response CSP. Google is an additive gate in `middleware`; when it is
+ * not selected this function behaves exactly as before.
  */
-export function middleware(request: NextRequest) {
+async function applyLegacyPolicy(request: NextRequest): Promise<NextResponse> {
+  const { pathname } = request.nextUrl;
+  const password = process.env.KM_SITE_PASSWORD;
+  if (password && !isSitePasswordExempt(pathname)) {
+    if (!(await verifySitePassword(request.headers.get("authorization"), password))) {
+      // A challenge on an XHR/fetch 401 can raise the browser's credential
+      // dialog over a public share page, whose Save button calls a gated API.
+      // Pages keep the challenge; APIs just answer 401.
+      const headers: Record<string, string> = { "Cache-Control": "no-store" };
+      if (!pathname.startsWith("/api/")) {
+        headers["WWW-Authenticate"] = 'Basic realm="Knowledge Hub", charset="UTF-8"';
+      }
+      return new NextResponse("Authentication required.", { status: 401, headers });
+    }
+  }
+  if (pathname.startsWith("/api/")) return NextResponse.next();
+
   const nonce = btoa(crypto.randomUUID());
-  const policy = contentSecurityPolicy({ nonce, pathname: request.nextUrl.pathname, development: process.env.NODE_ENV === "development" });
+  const policy = contentSecurityPolicy({ nonce, pathname, development: process.env.NODE_ENV === "development" });
   const headers = new Headers(request.headers);
   headers.set(NONCE_HEADER, nonce);
   headers.set("Content-Security-Policy", policy);
@@ -18,8 +40,30 @@ export function middleware(request: NextRequest) {
   return response;
 }
 
+export async function middleware(request: NextRequest): Promise<Response> {
+  if (process.env.KM_IDENTITY_PROVIDER !== "google") return applyLegacyPolicy(request);
+
+  const { googleAuth } = await import("@/auth.edge");
+  const authMiddleware = googleAuth as unknown as GoogleAuthMiddleware;
+  return authMiddleware((req) => {
+    const decision = googleGate({
+      pathname: req.nextUrl.pathname,
+      search: req.nextUrl.search,
+      hasSession: Boolean(req.auth),
+    });
+    if (decision.kind === "allow") return applyLegacyPolicy(req);
+    if (decision.kind === "unauthorized") {
+      return NextResponse.json(
+        { error: { code: "AUTH_REQUIRED", message: "Sign in required." } },
+        { status: 401, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+    return NextResponse.redirect(new URL(decision.location, req.url));
+  })(request);
+}
+
 export const config = {
-  // Pages only. An API answer and a static file are not documents a policy governs; they keep the
-  // static policy `next.config.ts` sets on every path.
-  matcher: ["/((?!api/|_next/static|_next/image|icon.svg|icons/).*)"],
+  // Pages and API routes. Static assets never need the password; share pages
+  // and the review API are exempted inside the function.
+  matcher: ["/((?!_next/static|_next/image|icon.svg|icons/).*)"],
 };

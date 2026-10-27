@@ -1,13 +1,18 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type RefObject } from "react";
+import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
-/** GET fallback and debounced live search share the same form values.
- * The visible submit button also supports Enter across multiple text fields. */
-export function LiveSearchSubmit() {
-  const ref = useRef<HTMLSpanElement>(null);
+/** Typing pause before the URL follows the fields. */
+const LIVE_SEARCH_DEBOUNCE_MS = 250;
+
+/**
+ * The enclosing GET form searches as the reader types: the fields become the URL, so a search stays
+ * shareable, and without JavaScript the form still submits as a plain GET. Enter (a submit) searches at once.
+ */
+function useLiveSearch(ref: RefObject<HTMLElement | null>) {
   const router = useRouter();
 
   useEffect(() => {
@@ -25,7 +30,7 @@ export function LiveSearchSubmit() {
     };
     const later = () => {
       window.clearTimeout(timer);
-      timer = window.setTimeout(search, 250);
+      timer = window.setTimeout(search, LIVE_SEARCH_DEBOUNCE_MS);
     };
     const now = (event: Event) => {
       event.preventDefault();
@@ -40,11 +45,37 @@ export function LiveSearchSubmit() {
       form.removeEventListener("submit", now);
       delete form.dataset.liveSearchReady;
     };
-  }, [router]);
+  }, [ref, router]);
+}
 
+/** GET fallback and debounced live search share the same form values.
+ * The visible submit button also supports Enter across multiple text fields. */
+export function LiveSearchSubmit() {
+  const ref = useRef<HTMLSpanElement>(null);
+  useLiveSearch(ref);
   return (
     <span ref={ref} className="contents">
       <Button type="submit" size="lg">Search</Button>
     </span>
   );
+}
+
+/**
+ * The same live search with no button, for a filter row in a client view: what is typed or chosen applies
+ * by itself. Enter still applies at once, because a form whose only text field is that one submits on Enter
+ * without a button.
+ */
+export function LiveSearch() {
+  const ref = useRef<HTMLSpanElement>(null);
+  useLiveSearch(ref);
+  return <span ref={ref} hidden />;
+}
+
+/**
+ * A choice that is not typed (a `SelectMenu`) fires no `input` event, and its hidden field takes the new
+ * value only when React commits it. Commit first, then search, so the form is read with the value just chosen.
+ */
+export function applyAndSearch(form: HTMLFormElement | null, apply: () => void) {
+  flushSync(apply);
+  form?.requestSubmit();
 }

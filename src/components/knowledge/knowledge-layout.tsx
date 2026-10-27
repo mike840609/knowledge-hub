@@ -1,10 +1,11 @@
 "use client";
 
-import { Suspense, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { Suspense, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { NavigationContext } from "@/components/shell/navigation-context";
 import { usePathname } from "next/navigation";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
+import { useSourceTrees } from "./use-source-trees";
 import { SourceSidebar } from "./source-sidebar";
 import { FolderNameDialogHost } from "./folder-name-dialog";
 import { MoveDialogHost } from "./move-dialog";
@@ -24,16 +25,20 @@ import { isBoolean, usePersistedJson } from "@/components/shell/use-persisted-st
 export function KnowledgeLayout({
   workspaceId,
   source,
+  sources,
   collections,
   includeArchived,
   children,
 }: {
   workspaceId: string;
   source: SourceView | null;
+  sources?: SourceView[];
   collections: { source: SourceView; tree: KnowledgeTreeItem[] }[];
   includeArchived: boolean;
   children: ReactNode;
 }) {
+  const headers = useMemo(() => sources ?? collections.map(c => c.source), [sources, collections]);
+  const trees = useSourceTrees(workspaceId, headers, collections);
   const navigation = useContext(NavigationContext);
   const [explorerTarget, setExplorerTarget] = useState<HTMLElement | null>(null);
   const pathname = usePathname();
@@ -76,7 +81,11 @@ export function KnowledgeLayout({
     <SourceSidebar
       workspaceId={workspaceId}
       source={source}
-      collections={collections}
+      collections={trees.collections}
+      sources={headers}
+      treeStates={trees.states}
+      ensureTree={trees.ensure}
+      retryTree={trees.retry}
       includeArchived={includeArchived}
       onCollapse={navigation?.mobileExplorerTarget ? undefined : () => toggleExplorer(true)}
     />
@@ -118,7 +127,7 @@ export function KnowledgeLayout({
       </div>
       <ShareLinkDialogHost />
       <FolderNameDialogHost />
-      <MoveDialogHost collections={collections} />
+      <MoveDialogHost collections={trees.collections} ensureTree={trees.ensure} retryTree={trees.retry} treeStates={trees.states} />
       {peekRequest && !isWide ? (
         <PeekDialog
           request={peekRequest}

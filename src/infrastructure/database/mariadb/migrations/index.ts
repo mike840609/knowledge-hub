@@ -1,5 +1,6 @@
 import { autosaveHistoryMigration } from "./023-autosave-history";
 import { reviewThreadFollowsMigration } from "./024-review-thread-follows";
+import { queryPathIndexesMigration } from "./025-query-path-indexes";
 import { shareCommentEventsMigration } from "./022-share-comment-events";
 import { reviewCommentEditDeleteMigration } from "./021-review-comment-edit-delete";
 import { feedbackReportsMigration } from "./020-feedback-reports";
@@ -48,4 +49,5 @@ export const migrations = [
   shareCommentEventsMigration,
   autosaveHistoryMigration,
   reviewThreadFollowsMigration,
+  queryPathIndexesMigration,
 ] as const;

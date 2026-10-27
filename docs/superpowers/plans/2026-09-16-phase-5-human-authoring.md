@@ -17,7 +17,7 @@ Chinese text in code examples and quoted UI strings is preserved as literal test
 - All writes must pass through `lockWorkspaceForMutation(repositories, caller, workspaceId, "content-write")`, which requires the `document.write` capability.
 - No ID in a route or body is authorization proof; the caller must come only from `services.establishTrustedCaller()`.
 - `metadata` is not editable; always reuse the existing value or `{}`.
-- Limits: `title` 512 characters, `markdown` 5 MiB (5 \* 1024 \* 1024 bytes, matching the default `KM_IMPORT_MAX_MARKDOWN_FILE_BYTES`).
+- Limits: `title` 512 characters, `markdown` 3.5 MiB (3,670,016 bytes, the deployment-safe authoring cap under Vercel's 4.5 MB request limit).
 - The default Hub Source name is fixed as `Notes`.
 - New UI uses existing `kh-*` tokens; introduce no dependencies (the editor uses existing `ui/input.tsx` and `ui/textarea.tsx`).
 - **Test commands**: unit can target one file (`npm run test:unit -- <path>`); **integration cannot target one file** because `runVitest()` in `scripts/test/integration.ts:9` hardcodes arguments and does not forward `process.argv`; run the entire suite with `npm run test:integration`; e2e can target one file (`scripts/test/e2e.ts:117` forwards arguments).
@@ -167,7 +167,7 @@ Extract body validation into pure functions so limits, mutual exclusion, and tit
 **Interfaces:**
 - Consumes: `parseGenericMarkdownText`（`src/modules/sources/adapters/generic-markdown-folder-adapter.ts:86`）、`resolveImportTitle`（`src/modules/sources/domain/import-title.ts:6`）
 - Produces:
-  - `MAX_TITLE_LENGTH: 512`、`MAX_MARKDOWN_BYTES: 5242880`
+  - `MAX_TITLE_LENGTH: 512`、`MAX_MARKDOWN_BYTES: 3670016`
   - `parseCreateDocumentInput(body: unknown): { title: string; markdown: string }`
   - `parseUpdateDocumentInput(body: unknown): { title: string; markdown: string; expectedCurrentRevisionId: string }`
   - Both throw `DomainError("INVALID_REQUEST", …)` on validation failure
@@ -242,7 +242,7 @@ import { resolveImportTitle } from "@/modules/sources/domain/import-title";
 import { DomainError } from "@/shared/domain/errors";
 
 export const MAX_TITLE_LENGTH = 512;
-export const MAX_MARKDOWN_BYTES = 5 * 1024 * 1024;
+export const MAX_MARKDOWN_BYTES = 3.5 * 1024 * 1024;
 
 function invalid(message: string): never {
   throw new DomainError("INVALID_REQUEST", message);

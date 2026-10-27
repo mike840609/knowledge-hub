@@ -10,6 +10,7 @@ import { RememberedFolderRow } from "@/components/sources/remembered-folder-row"
 import { SourceSyncActions } from "@/components/sources/source-sync-actions";
 import { sourceTypeLabel } from "@/components/sources/source-list-row";
 import { SourceLifecycleActions } from "./source-lifecycle-actions";
+import { SourceNameEditor } from "./source-name-editor";
 import { TechnicalDetails } from "@/components/sources/technical-details";
 
 export function SourceDetail({ model, showImportSuccess = false, limits }: { model: SourceDetailModel; showImportSuccess?: boolean; limits?: FolderImportClientLimits }) {
@@ -17,7 +18,7 @@ export function SourceDetail({ model, showImportSuccess = false, limits }: { mod
   const syncable = isFolderSyncable(source);
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader location="Sources" locationHref={`/w/${workspace.id}/sources`} title={source.name}
+      <PageHeader location="Sources" locationHref={`/w/${workspace.id}/sources`} title={model.actions.canImport ? <SourceNameEditor sourceId={source.id} name={source.name} /> : source.name}
         actions={<><Link className={buttonClasses({ variant: "ghost" })} href={`/w/${workspace.id}/sources/${source.id}/health`}>Check source health</Link><span className="flex items-center gap-2">{syncable ? <SourceSyncActions workspaceId={workspace.id} sourceId={source.id} limits={limits} /> : null}<SourceLifecycleActions workspaceId={workspace.id} sourceId={source.id} sourceName={source.name} status={source.status} /></span></>}
       />
       {showImportSuccess ? (

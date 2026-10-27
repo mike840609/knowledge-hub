@@ -73,6 +73,10 @@ describe("parseCreateDocumentInput (spec §6.1, §6.2, §6.4)", () => {
     expect(() => parseCreateDocumentInput({ title: "A", markdown: "x".repeat(MAX_MARKDOWN_BYTES + 1) })).toThrow();
   });
 
+  it("rejects a markdown body over the byte limit even when its character count is under it", () => {
+    expect(() => parseCreateDocumentInput({ title: "A", markdown: "中".repeat(2_000_000) })).toThrow("Markdown is too large.");
+  });
+
   it("rejects a blank title", () => {
     expect(() => parseCreateDocumentInput({ title: "   ", markdown: "x" })).toThrow();
   });

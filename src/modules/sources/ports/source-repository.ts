@@ -8,5 +8,6 @@ export interface SourceRepository {
   lockById(sourceId: string): Promise<KnowledgeSource | null>;
   insert(source: KnowledgeSource): Promise<void>;
   updateStatus(sourceId: string, status: "ACTIVE" | "ARCHIVED", actorId: string): Promise<void>;
+  updateName(sourceId: string, name: string, actorId: string): Promise<void>;
   guardAndAdvanceVersion(sourceId: string, basedOnVersion: number, actorId: string, excludedPaths?: readonly string[]): Promise<number | null>;
 }

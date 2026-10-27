@@ -5,8 +5,8 @@ import type { SyncRun } from "@/modules/sources/domain/sync-run";
 import type { WorkspaceActions } from "@/server/workspace-admin";
 import type { WorkspaceView } from "@/modules/workspaces/application/workspace-query-service";
 import { applicationServices } from "@/server/composition";
+import { isHiddenReadFailure } from "./read-errors";
 
-export const SOURCE_RUN_LIST_LIMIT = 20;
 export const SOURCE_RUN_DETAIL_LIMIT = 50;
 
 export type SourceListItemModel = {
@@ -49,19 +49,32 @@ export async function getSourceListModel(workspaceId: string): Promise<SourceLis
   let sources: SourceView[];
   try {
     sources = sortSourcesByName(await services.queries.listSources(caller, workspaceId, { includeArchived: true }));
-  } catch {
-    return null;
+  } catch (error) {
+    if (isHiddenReadFailure(error)) return null;
+    throw error;
   }
-  const items = await services.unitOfWork.run(async (repositories) =>
-    Promise.all(
-      sources.map(async (source) => {
-        const runs = await repositories.syncRuns.listBySourceId(source.id, SOURCE_RUN_LIST_LIMIT);
-        const successfulRuns = source.sourceType === "HUB" ? [] : await repositories.syncRuns.listBySourceId(source.id, 1, "APPLIED");
-        const pending = source.sourceType === "HUB" ? null : await repositories.importSnapshots.findLatestReadyBySourceForCreator(source.id,caller.identity.id,new Date(),source.syncVersion);
-        return { pendingPreviewId:pending?.id??null, source, latestRun: runs[0] ?? null, latestSuccessfulRun: successfulRuns[0] ?? null };
-      }),
-    ),
-  );
+  const items = await services.unitOfWork.run(async (repositories) => {
+    // All sources (including archived) keep their latest run; HUB sources have
+    // no sync runs or import previews, so those two lookups skip them.
+    const scopedSources = sources.filter((source) => source.sourceType !== "HUB");
+    const [latestRuns, latestAppliedRuns, pendingPreviewIds] = await Promise.all([
+      repositories.syncRuns.listLatestBySourceIds(sources.map((source) => source.id)),
+      repositories.syncRuns.listLatestAppliedBySourceIds(scopedSources.map((source) => source.id)),
+      repositories.importSnapshots.findLatestReadyIdsBySourceForCreator(
+        scopedSources.map((source) => ({ sourceId: source.id, basedOnVersion: source.syncVersion })),
+        caller.identity.id,
+        new Date(),
+      ),
+    ]);
+    const latestRunBySource = new Map(latestRuns.map((run) => [run.sourceId, run]));
+    const latestAppliedBySource = new Map(latestAppliedRuns.map((run) => [run.sourceId, run]));
+    return sources.map((source) => ({
+      pendingPreviewId: pendingPreviewIds.get(source.id) ?? null,
+      source,
+      latestRun: latestRunBySource.get(source.id) ?? null,
+      latestSuccessfulRun: latestAppliedBySource.get(source.id) ?? null,
+    }));
+  });
   return { workspace, actions, items };
 }
 
@@ -94,11 +107,11 @@ export async function getSourceDetailModel(
     if (!actions.canInspectSources) return null;
     const source = await services.queries.getSource(caller, sourceId, { includeArchived: true });
     if (source.workspaceId !== workspaceId) return null;
-    const sources = await services.queries.listSources(caller, workspaceId, { includeArchived: true });
-    if (!sources.some((candidate) => candidate.id === sourceId)) return null;
     const { runs, runActors } = await services.unitOfWork.run(async (repositories) => {
       const runs = await repositories.syncRuns.listBySourceId(sourceId, SOURCE_RUN_DETAIL_LIMIT);
-      const runActors = await resolveRunActors(runs, caller.identity.id, async (id) => (await repositories.users.findById(id))?.name ?? null);
+      const actorIds = [...new Set(runs.map((run) => run.triggeredBy))].filter((id) => id !== caller.identity.id);
+      const actorNames = new Map((await repositories.users.findByIds(actorIds)).map((user) => [user.id, user.name]));
+      const runActors = await resolveRunActors(runs, caller.identity.id, async (id) => actorNames.get(id) ?? null);
       return { runs, runActors };
     });
     return { workspace, actions, source, runs, runActors };

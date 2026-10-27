@@ -1,3 +1,4 @@
+import { flip, getOverflowAncestors, offset, shift } from "@floating-ui/dom";
 import { commandsCtx } from "@milkdown/kit/core";
 import type { Ctx, MilkdownPlugin } from "@milkdown/kit/ctx";
 import { TooltipProvider, tooltipFactory } from "@milkdown/kit/plugin/tooltip";
@@ -228,7 +229,15 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
             }
           });
 
-          const provider = new TooltipProvider({ content: element, offset: 8 });
+          // Above the first line is the document's header ("Updated …"), not free space: flip below a
+          // selection with no room above it inside the editor, as well as inside the panes that clip it
+          // (Milkdown's default). Derived per placement, since the editor is mounted only after this runs.
+          // The list replaces Milkdown's, so it keeps its offset and shift.
+          const boundary = () => [editorView.dom, ...getOverflowAncestors(editorView.dom).filter((node): node is Element => node instanceof Element)];
+          const provider = new TooltipProvider({
+            content: element,
+            floatingUIOptions: { middleware: [flip(() => ({ boundary: boundary() })), offset(8), shift()] },
+          });
           provider.onHide = showButtons;
           // The provider re-evaluates only on ProseMirror updates, and neither a blur nor a focus
           // dispatches one. Focus moving into the toolbar itself (the link box) keeps it; focus

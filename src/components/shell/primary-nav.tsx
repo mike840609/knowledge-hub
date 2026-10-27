@@ -4,7 +4,7 @@ import { useWorkspaceAuthorization } from "./use-workspace-authorization";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Tooltip } from "@/components/ui/tooltip";
-import { BookOpenText, Database, Network, Settings, Home, UserRound, Share2 } from "lucide-react";
+import { BarChart3, BookOpenText, Database, Network, Settings, Home, Share2 } from "lucide-react";
 
 export function PrimaryNav({
   workspaceId,
@@ -35,7 +35,7 @@ export function PrimaryNav({
       Icon: Database,
     }] : []),
     ...(access.workspace.type === "PERSONAL" && access.actions.canSearch ? [{ name: "Shares", href: `/w/${workspaceId}/shares`, Icon: Share2 }] : []),
-    ...(access.workspace.type === "PERSONAL" ? [{name: "Insights", href: `/w/${workspaceId}/profile`, Icon: UserRound}] : []),
+    ...(access.workspace.type === "PERSONAL" ? [{name: "Insights", href: `/w/${workspaceId}/profile`, Icon: BarChart3}] : []),
     ...(access.actions.canOpenSettings ? [{name: "Settings", href: `/w/${workspaceId}/settings`, Icon: Settings}] : []),
   ];
   // The current place is a neutral step above hover, not the accent: the accent marks what is selected in the
@@ -51,7 +51,7 @@ export function PrimaryNav({
             onClick={onNavigate}
             aria-current={selected ? "page" : undefined}
             aria-label={compact ? name : undefined}
-            className={`kh-control flex h-8 items-center rounded-md px-2 text-body transition kh-focus-ring ${compact ? "justify-center" : "gap-2"} ${selected ? "bg-kh-bg-hover font-medium text-kh-text hover:bg-kh-bg-hover" : "text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text"}`}
+            className={`kh-control flex kh-rail-row items-center rounded-md px-2 kh-rail-text transition kh-focus-ring ${compact ? "justify-center" : "gap-2"} ${selected ? "bg-kh-bg-hover font-medium text-kh-text hover:bg-kh-bg-hover" : "text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text"}`}
           >
             <Icon size={15} aria-hidden="true" />
             {compact ? null : <span>{name}</span>}

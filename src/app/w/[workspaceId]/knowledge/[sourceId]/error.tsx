@@ -1,14 +1,16 @@
 "use client";
 
+import { useRouteRetry } from "@/components/shell/use-route-retry";
 import { Button } from "@/components/ui/button";
 import { StatusMessage } from "@/components/ui/status-message";
 
 export default function SourceDocumentError({ reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  const retry = useRouteRetry(reset);
   return (
     <StatusMessage
       title="Something went wrong"
       description="This section could not be loaded. The Source Tree is unchanged."
-      action={<Button variant="secondary" size="lg" onClick={() => reset()}>Retry</Button>}
+      action={<Button variant="secondary" size="lg" onClick={retry}>Retry</Button>}
     />
   );
 }

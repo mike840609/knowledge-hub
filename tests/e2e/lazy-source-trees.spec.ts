@@ -1,0 +1,25 @@
+import { expect, test } from './fixtures/test';
+const workspace='0199f100-0000-7000-8000-000000000001';
+const source='0199f100-0000-7000-8000-000000000101';
+test('source trees load on expansion, retry failures and reuse loaded results',async({page})=>{
+ const requests:string[]=[];
+ page.on('request',r=>{if(r.url().includes('/tree') && r.url().includes('/api/workspaces/'))requests.push(r.url());});
+ await page.goto(`/w/${workspace}/knowledge/${source}`,{waitUntil:'networkidle'});
+ const explorer=page.getByRole('complementary',{name:'Knowledge explorer'});
+ const other=explorer.locator(`button[aria-controls^="collection-"]:not([aria-controls="collection-${source}"])`).first();
+ await expect(other).toBeVisible(); await expect(other).toHaveAttribute('aria-expanded','false');
+ expect(requests).toHaveLength(0);
+ const otherId=(await other.getAttribute('aria-controls'))!.replace('collection-','');
+ const endpoint=`**/api/workspaces/${workspace}/sources/${otherId}/tree`;
+ await page.route(endpoint,route=>route.fulfill({status:503,contentType:'application/json',body:'{}'}),{times:1});
+ await other.click();await expect(explorer.getByText('Documents could not be loaded.')).toBeVisible();
+ await explorer.getByRole('button',{name:'Retry',exact:true}).click();
+ await expect(explorer.getByText('Documents could not be loaded.')).toHaveCount(0);
+ await expect(explorer.getByText('Loading documents…')).toHaveCount(0);
+ expect(requests).toHaveLength(2);
+ await other.click();await other.click();
+ await expect(other).toHaveAttribute('aria-expanded','true');expect(requests).toHaveLength(2);
+ await explorer.getByRole('button',{name:'Filter documents and sources'}).click();
+ await explorer.getByPlaceholder('Filter documents and sources').fill('Runbooks');
+ await expect(explorer.getByRole('treeitem',{name:'Runbooks',exact:true})).toBeVisible();
+});

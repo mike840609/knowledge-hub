@@ -142,11 +142,12 @@ describe("knowledge query workspace access", () => {
       queries.getCurrentRevision(outsider, scope.documentId),
       queries.getRevision(outsider, scope.documentId, 1),
       queries.listRevisions(outsider, scope.documentId),
+      queries.listRevisionSummaries(outsider, scope.documentId),
       queries.listTree(outsider, scope.sourceX),
       queries.getAncestors(outsider, scope.documentNodeId),
     ];
     const settled = await Promise.allSettled(denied);
-    expect(settled).toHaveLength(7);
+    expect(settled).toHaveLength(8);
     for (const outcome of settled) {
       expect(outcome.status).toBe("rejected");
       const failure = (outcome as PromiseRejectedResult).reason as Error;
@@ -179,12 +180,14 @@ describe("knowledge query archived filtering", () => {
     await expect(queries.getDocument(member, scope.documentId)).rejects.toMatchObject({ code: "DOCUMENT_NOT_FOUND" });
     await expect(queries.getCurrentRevision(member, scope.documentId)).rejects.toMatchObject({ code: "DOCUMENT_NOT_FOUND" });
     await expect(queries.listRevisions(member, scope.documentId)).rejects.toMatchObject({ code: "DOCUMENT_NOT_FOUND" });
+    await expect(queries.listRevisionSummaries(member, scope.documentId)).rejects.toMatchObject({ code: "DOCUMENT_NOT_FOUND" });
     expect((await queries.listTree(member, scope.sourceX)).some((item) => item.type === "document")).toBe(false);
 
     const archivedView = await queries.getDocument(member, scope.documentId, { includeArchived: true });
     expect(archivedView.status).toBe("ARCHIVED");
     expect(archivedView.currentRevision.title).toBe("Secret Title");
     expect(await queries.listRevisions(member, scope.documentId, { includeArchived: true })).toHaveLength(2);
+    expect(await queries.listRevisionSummaries(member, scope.documentId, { includeArchived: true })).toHaveLength(2);
 
     await sources.archiveSource(member, scope.sourceX);
     expect(await queries.listSources(member, scope.workspaceX)).toEqual([]);
@@ -217,6 +220,7 @@ describe("knowledge query archived filtering", () => {
     await expect(queries.getDocument(outsider, scope.documentId, { includeArchived: true })).rejects.toBeInstanceOf(WorkspaceAccessDeniedError);
     await expect(queries.listSources(outsider, scope.workspaceX, { includeArchived: true })).rejects.toBeInstanceOf(WorkspaceAccessDeniedError);
     await expect(queries.listRevisions(outsider, scope.documentId, { includeArchived: true })).rejects.toBeInstanceOf(WorkspaceAccessDeniedError);
+    await expect(queries.listRevisionSummaries(outsider, scope.documentId, { includeArchived: true })).rejects.toBeInstanceOf(WorkspaceAccessDeniedError);
   });
 
   it("lists archived sources for the browser flow after enumerating authorized workspaces", async () => {
@@ -242,6 +246,7 @@ describe("knowledge query not-found contract", () => {
     await expect(queries.getDocument(member, uuidv7())).rejects.toMatchObject({ code: "DOCUMENT_NOT_FOUND" });
     await expect(queries.getCurrentRevision(member, uuidv7())).rejects.toMatchObject({ code: "DOCUMENT_NOT_FOUND" });
     await expect(queries.listRevisions(member, uuidv7())).rejects.toMatchObject({ code: "DOCUMENT_NOT_FOUND" });
+    await expect(queries.listRevisionSummaries(member, uuidv7())).rejects.toMatchObject({ code: "DOCUMENT_NOT_FOUND" });
     await expect(queries.getRevision(member, scope.documentId, 999)).rejects.toMatchObject({ code: "REVISION_NOT_FOUND" });
     await expect(queries.getAncestors(member, uuidv7())).rejects.toMatchObject({ code: "TREE_NODE_NOT_FOUND" });
   });
@@ -253,6 +258,7 @@ describe("knowledge query not-found contract", () => {
     await expect(queries.getRevision(member, scope.documentId, 1)).resolves.toMatchObject({ revisionNo: 1, markdown: "secret body" });
     await expect(queries.getRevision(member, scope.documentId, 2)).resolves.toMatchObject({ revisionNo: 2, markdown: "secret body v2" });
     await expect(queries.listRevisions(member, scope.documentId)).resolves.toHaveLength(2);
+    expect(await queries.listRevisionSummaries(member, scope.documentId)).toHaveLength(2);
     const ancestors = await queries.getAncestors(member, scope.documentNodeId);
     expect(ancestors.map((item) => item.id)).toEqual([scope.folderX, scope.childFolderId]);
     expect(ancestors[0]).toMatchObject({ type: "folder", label: "Shared Folder" });
@@ -272,6 +278,73 @@ describe("knowledge query not-found contract", () => {
   });
 });
 
+
+describe("document summary batch reads", () => {
+  it("returns only visible requested documents, hiding archived and other-workspace ones by default", async () => {
+    const scope = await setupQueryScope();
+    const { queries, hub } = queryServices();
+    const member = callerFromIdentity(hrMember);
+    const now = new Date();
+
+    const secondActive = await hub.createDocument(member, {
+      sourceId: scope.sourceX, parentId: scope.childFolderId, title: "Second Active", markdown: "body", metadata: {},
+    });
+    const archived = await hub.createDocument(member, {
+      sourceId: scope.sourceX, parentId: scope.childFolderId, title: "Archived", markdown: "body", metadata: {},
+    });
+    await hub.archiveDocument(member, archived.documentId);
+
+    const sourceY = uuidv7();
+    await new MariaDbUnitOfWork(pool).run(async (repositories) => {
+      await repositories.sources.insert({
+        id: sourceY, name: "Foreign Hub", workspaceId: scope.workspaceY, sourceType: "HUB", ownership: "HUB_MANAGED",
+        status: "ACTIVE", syncVersion: 0, createdBy: rdMember.id, updatedBy: rdMember.id,
+        archivedBy: null, archivedAt: null, createdAt: now, updatedAt: now,
+      });
+    });
+    const rdCaller = callerFromIdentity(rdMember);
+    const foreignFolder = await hub.createFolder(rdCaller, { sourceId: sourceY, parentId: null, name: "Foreign Folder" });
+    const foreign = await hub.createDocument(rdCaller, {
+      sourceId: sourceY, parentId: foreignFolder.treeNodeId, title: "Foreign", markdown: "body", metadata: {},
+    });
+
+    const askedFor = [scope.documentId, secondActive.documentId, archived.documentId, foreign.documentId, uuidv7()];
+
+    const visible = await queries.listDocumentSummariesByIds(member, scope.workspaceX, askedFor);
+    expect(visible.map((summary) => summary.documentId).sort()).toEqual([scope.documentId, secondActive.documentId].sort());
+    expect(visible[0]).toMatchObject({ sourceId: scope.sourceX, ownership: "HUB_MANAGED", status: "ACTIVE", sourceStatus: "ACTIVE" });
+
+    const withArchived = await queries.listDocumentSummariesByIds(member, scope.workspaceX, askedFor, { includeArchived: true });
+    expect(withArchived.map((summary) => summary.documentId).sort()).toEqual(
+      [scope.documentId, secondActive.documentId, archived.documentId].sort(),
+    );
+    expect(withArchived.find((summary) => summary.documentId === archived.documentId)?.status).toBe("ARCHIVED");
+
+    await expect(queries.listDocumentSummariesByIds(member, scope.workspaceX, [])).resolves.toEqual([]);
+    await expect(queries.listDocumentSummariesByIds(callerFromIdentity(hrOutsider), scope.workspaceX, askedFor))
+      .rejects.toMatchObject({ code: "WORKSPACE_NOT_FOUND" });
+  });
+
+  it("keeps an ACTIVE document whose tree node is ARCHIVED, matching getDocument()", async () => {
+    const scope = await setupQueryScope();
+    const { queries } = queryServices();
+    const member = callerFromIdentity(hrMember);
+    // Visibility is document + source status, never the tree node's: the
+    // recent palette must show exactly what getDocument() resolves.
+    await pool.query(
+      "UPDATE knowledge_tree_nodes SET status='ARCHIVED', archived_by=?, archived_at=NOW(6) WHERE document_id=?",
+      [rdMember.id, scope.documentId],
+    );
+
+    await expect(queries.getDocument(member, scope.documentId)).resolves.toMatchObject({
+      documentId: scope.documentId,
+      status: "ACTIVE",
+    });
+    const summaries = await queries.listDocumentSummariesByIds(member, scope.workspaceX, [scope.documentId]);
+    expect(summaries.map((summary) => summary.documentId)).toEqual([scope.documentId]);
+    expect(summaries[0]).toMatchObject({ status: "ACTIVE", sourceStatus: "ACTIVE" });
+  });
+});
 
 describe("Home metadata summaries", () => {
   it("scopes summaries by workspace, enforces membership, and preserves archive filtering", async () => {

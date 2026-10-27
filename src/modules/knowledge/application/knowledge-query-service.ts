@@ -6,7 +6,7 @@ import {
   SourceNotFoundError,
   TreeNodeNotFoundError,
 } from "../domain/errors";
-import type { KnowledgeRevision } from "../domain/revision";
+import type { KnowledgeRevision, KnowledgeRevisionSummary } from "../domain/revision";
 import type { SourcePolicy } from "../domain/source-policy";
 import { collectAncestors } from "../domain/tree-rules";
 import { requireSourcePolicy, requireVisibleDocument } from "./internal/require-visible-document";
@@ -57,7 +57,8 @@ export type KnowledgeRevisionView = {
 };
 
 export interface KnowledgeQueryService {
-  listDocumentSummaries(caller: CallerContext, workspaceId: string, input?: { includeArchived?: boolean }): Promise<DocumentSummary[]>;
+  listDocumentSummaries(caller: CallerContext, workspaceId: string, input?: { includeArchived?: boolean; excludeArchivedAncestors?: boolean }): Promise<DocumentSummary[]>;
+  listDocumentSummariesByIds(caller: CallerContext, workspaceId: string, documentIds: readonly string[], input?: { includeArchived?: boolean }): Promise<DocumentSummary[]>;
   listSources(caller: CallerContext, workspaceId: string, input?: { includeArchived?: boolean }): Promise<SourceView[]>;
   getSource(caller: CallerContext, sourceId: string, input?: { includeArchived?: boolean }): Promise<SourceView>;
   listTree(caller: CallerContext, sourceId: string, input?: { includeArchived?: boolean }): Promise<KnowledgeTreeItem[]>;
@@ -65,6 +66,7 @@ export interface KnowledgeQueryService {
   getCurrentRevision(caller: CallerContext, documentId: string, input?: { includeArchived?: boolean }): Promise<KnowledgeRevisionView>;
   getRevision(caller: CallerContext, documentId: string, revisionNo: number, input?: { includeArchived?: boolean }): Promise<KnowledgeRevisionView>;
   listRevisions(caller: CallerContext, documentId: string, input?: { includeArchived?: boolean }): Promise<KnowledgeRevisionView[]>;
+  listRevisionSummaries(caller: CallerContext, documentId: string, input?: { includeArchived?: boolean }): Promise<KnowledgeRevisionSummary[]>;
   getAncestors(caller: CallerContext, nodeId: string, input?: { includeArchived?: boolean }): Promise<KnowledgeTreeItem[]>;
 }
 
@@ -124,11 +126,26 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
     this.unitOfWork = unitOfWork;
   }
 
-  async listDocumentSummaries(caller: CallerContext, workspaceId: string, input: { includeArchived?: boolean } = {}): Promise<DocumentSummary[]> {
+  async listDocumentSummaries(caller: CallerContext, workspaceId: string, input: { includeArchived?: boolean; excludeArchivedAncestors?: boolean } = {}): Promise<DocumentSummary[]> {
     return this.unitOfWork.run(async (repositories) => {
       await syncCallerIdentity(repositories.users, caller);
       await repositories.workspaceAccess.requireWorkspaceRead(caller, workspaceId);
-      return repositories.tree.listDocumentsByWorkspace(workspaceId, input.includeArchived ?? false);
+      return input.excludeArchivedAncestors
+        ? repositories.tree.listDocumentsByWorkspace(workspaceId, input.includeArchived ?? false, true)
+        : repositories.tree.listDocumentsByWorkspace(workspaceId, input.includeArchived ?? false);
+    });
+  }
+
+  async listDocumentSummariesByIds(
+    caller: CallerContext,
+    workspaceId: string,
+    documentIds: readonly string[],
+    input: { includeArchived?: boolean } = {},
+  ): Promise<DocumentSummary[]> {
+    return this.unitOfWork.run(async (repositories) => {
+      await syncCallerIdentity(repositories.users, caller);
+      await repositories.workspaceAccess.requireWorkspaceRead(caller, workspaceId);
+      return repositories.tree.listDocumentsByIds(workspaceId, documentIds, input.includeArchived ?? false);
     });
   }
 
@@ -208,6 +225,13 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
       const { document } = await requireVisibleDocument(repositories, caller, documentId, input.includeArchived ?? false);
       const revisions = await repositories.revisions.listByDocument(document.id);
       return revisions.map(toRevisionView);
+    });
+  }
+
+  async listRevisionSummaries(caller: CallerContext, documentId: string, input: { includeArchived?: boolean } = {}): Promise<KnowledgeRevisionSummary[]> {
+    return this.unitOfWork.run(async (repositories) => {
+      const { document } = await requireVisibleDocument(repositories, caller, documentId, input.includeArchived ?? false);
+      return repositories.revisions.listSummariesByDocument(document.id);
     });
   }
 

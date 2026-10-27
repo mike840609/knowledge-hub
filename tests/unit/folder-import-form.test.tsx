@@ -215,7 +215,7 @@ it("enforces runtime asset limits in the native directory picker before reading 
   vi.mocked(collectHandleFiles).mockResolvedValue([file]);
   const fetchMock = vi.fn<typeof fetch>();
   vi.stubGlobal("fetch", fetchMock);
-  act(() => { root.render(<FolderImportForm target={existingTarget} limits={{ maxAssetFileBytes: 1, maxAssetTotalBytes: 2 }} />); });
+  act(() => { root.render(<FolderImportForm target={existingTarget} limits={{ maxMarkdownFileBytes: 5 * 1024 * 1024, maxAssetFileBytes: 1, maxAssetTotalBytes: 2 }} />); });
   await clickChooseFolder();
   expect(fetchMock).not.toHaveBeenCalled();
   expect(read).not.toHaveBeenCalled();

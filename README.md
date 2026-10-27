@@ -136,7 +136,7 @@ See [`.env.example`](.env.example) for local development settings and import lim
 | `KM_IMPORT_*` | Import file counts, sizes, batch limits, and snapshot quotas |
 | `KM_TEST_DB_*` / `KM_E2E_DB_PREFIX` | Isolated test database settings; the test account must be able to create and drop databases with the designated prefixes |
 
-Default import limits include 20,000 manifest entries, 5 MiB per Markdown file, and 256 MiB of Markdown in total. See `.env.example` for the full limits. Snapshot retention is 2 hours for BUILDING, 30 minutes for READY, and 24 hours for STALE/APPLIED. The server deletes expired staging data in the background when someone starts an import, at most once every 10 minutes per process. To clean up on demand, for example on an instance nobody imports into, run:
+Default import limits include 20,000 manifest entries, 3.5 MiB per Markdown file, and 256 MiB of Markdown in total. See `.env.example` for the full limits. Snapshot retention is 2 hours for BUILDING, 30 minutes for READY, and 24 hours for STALE/APPLIED. The server deletes expired staging data in the background when someone starts an import, at most once every 10 minutes per process. To clean up on demand, for example on an instance nobody imports into, run:
 
 ```bash
 npx tsx scripts/db/cleanup-import-snapshots.ts
@@ -156,6 +156,10 @@ npm run start
 ```
 
 **Complete identity integration before running in production.** `npm run start` runs in production mode, which rejects the default Local identity provider. `KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION` is for testing and must not be used as a production deployment method.
+
+For a **single-operator** deployment on Vercel with a Layerbase MariaDB, follow the [Vercel + Layerbase runbook](docs/operations/vercel-layerbase.md). That path deliberately keeps the local identity provider behind an optional site password, runs migrations during production builds, and disables preview deployments. Do not apply it to a shared or company deployment.
+
+For a **public demo**, the runbook also documents [Google demo login](docs/operations/vercel-layerbase.md#google-demo-login): set `KM_IDENTITY_PROVIDER=google` and the `AUTH_*` variables. It is an additive provider; the local and company-SSO paths are unchanged.
 
 The application provides a generic `company-sso` adapter contract. Deployers must implement a trusted [`CompanySsoSessionReader`](src/modules/identity/ports/company-sso-session-reader.ts) and register it through [`configureCompanySsoSessionReader`](src/server/composition.ts) before application services are created. Setting `KM_IDENTITY_PROVIDER=company-sso` alone does not provide an OAuth/OIDC login page or identity service. Shared-page “Open in Knowledge Hub” and “Get started” links navigate to `KM_PUBLIC_ORIGIN` with a full browser navigation when configured, allowing the company Gateway at that origin to challenge anonymous users for SSO. The entry URL carries `returnTo=/s/:token/open`; the Gateway must preserve this query string through SSO. After authentication, the Hub accepts only a share-opening path and resumes the existing link-validity and document-access checks. Invalid or absent continuation parameters use the ordinary home destination. Without `KM_PUBLIC_ORIGIN`, these links retain the local `/s/:token/open` flow.
 
@@ -298,6 +302,7 @@ These documents define the core contracts and their implementation plans. Later 
 | Content-Security-Policy | [Spec](docs/superpowers/specs/2026-10-12-content-security-policy-design.md) | — | Scripts run by per-response nonce on every page; no inline script or handler. |
 | Mermaid in the reader | [Spec](docs/superpowers/specs/2026-10-13-reader-mermaid-design.md) | [Plan](docs/superpowers/plans/2026-10-13-reader-mermaid.md) | A `mermaid` block drawn as an image in the reader and on shared pages, never as markup; left as code, with a reason, when it cannot be. |
 | Editor reader hints | [Spec](docs/superpowers/specs/2026-10-12-editor-reader-hints-design.md) | — | The editor hints at a callout and the inline HTML subset with decorations; the marks stay and the saved Markdown is unchanged. |
+| Source tree loading | [Spec](docs/superpowers/specs/2026-10-24-lazy-source-trees-design.md) | [Plan](docs/superpowers/plans/2026-10-24-lazy-source-trees.md) | Current source initially; other trees load on expansion, with retry and shared move-dialog data. |
 | Document composer | [Spec](docs/superpowers/specs/2026-09-28-document-composer-design.md) | [Plan](docs/superpowers/plans/2026-09-28-document-composer.md) | Rendered editing and Markdown source mode. |
 | Knowledge links and graph | [Spec](docs/superpowers/specs/2026-09-29-personal-workspace-knowledge-graph-design.md) | [Plan](docs/superpowers/plans/2026-09-29-personal-workspace-knowledge-graph.md) | Wikilinks, backlinks, heading anchors and derived graph data. |
 | Personal daily use | [Spec](docs/superpowers/specs/2026-09-29-personal-daily-driver-design.md) | [Plan](docs/superpowers/plans/2026-09-29-personal-daily-driver.md) | Wikilink preservation, completion, code blocks and organization. |

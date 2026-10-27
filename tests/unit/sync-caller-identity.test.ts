@@ -31,6 +31,7 @@ function bootstrap(upsertIdentity: () => Promise<void>): { dependencies: Trusted
       order.push("committed");
       return result;
     } },
+    usesDirectIdentity: true,
   } as unknown as TrustedCallerDependencies;
   return { dependencies, order };
 }

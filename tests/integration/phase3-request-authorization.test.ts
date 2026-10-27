@@ -104,6 +104,23 @@ describe("Phase 3 real request adapters with a trusted test session reader", () 
     expect(item?.latestSuccessfulRun).toMatchObject({status:"APPLIED",completedAt});
   });
 
+  it("exposes the latest READY preview id on the source list", async () => {
+    const { workspace } = await team();
+    const { snapshotId } = await (await createThroughRoute(workspace.id)).json();
+    const first = await finish(snapshotId);
+
+    const resync = await createSourceResync(first.sourceId, {
+      rootName: "wiki",
+      manifest,
+    });
+    await uploadSourceImportEntries(resync.snapshotId, [{ uploadKey: "m1", bytes }]);
+    await finalizeSourceImport(resync.snapshotId);
+
+    const item = (await getSourceListModel(workspace.id))?.items
+      .find((candidate) => candidate.source.id === first.sourceId);
+    expect(item?.pendingPreviewId).toBe(resync.snapshotId);
+  });
+
   it.each(["EDITOR", "ADMIN"] as const)("bootstraps deep links and completes initial/resync import for group-only %s", async (role) => {
     const { workspace } = await team(role);
     // A real deep-link adapter must resolve a new Hub identity and provision
@@ -182,6 +199,19 @@ describe("Phase 3 real request adapters with a trusted test session reader", () 
     await lifecycle.archiveTeamWorkspace(owner, workspace.id);
     await expect(uploadSourceImportEntries(snapshotId, [{ uploadKey: "m1", bytes }])).rejects.toMatchObject({ code: "WORKSPACE_ARCHIVED" });
     expect((await createThroughRoute(workspace.id)).status).not.toBe(201);
+  });
+
+  it("keeps an archived source detail readable in its workspace and hides it from another workspace", async () => {
+    const { workspace, owner, lifecycle } = await team();
+    const { snapshotId } = await (await createThroughRoute(workspace.id)).json();
+    const applied = await finish(snapshotId);
+    const { caller } = await services.establishTrustedCaller();
+    await services.unitOfWork.run((r) => r.sources.updateStatus(applied.sourceId, "ARCHIVED", caller.identity.id));
+    // The redundant listSources() check is gone; getSource(includeArchived) keeps this readable.
+    expect(await getSourceDetailModel(workspace.id, applied.sourceId)).toMatchObject({ source: { id: applied.sourceId }, runActors: { [caller.identity.id]: "you" } });
+    const other = await lifecycle.createTeamWorkspace(owner, { name: "Other Team", groupMappings: [{ externalGroupId: "writers", role: "EDITOR" }] });
+    expect(await getSourceDetailModel(other.id, applied.sourceId)).toBeNull();
+    expect(await getSourceDetailModel(workspace.id, uuidv7())).toBeNull();
   });
 
   it.each([false, true])("allows group ADMIN governance/audit with direct VIEWER=%s without elevating to OWNER", async (directViewer) => {

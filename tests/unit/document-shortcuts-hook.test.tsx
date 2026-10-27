@@ -69,6 +69,48 @@ it("keeps a document that was just opened when the favourites arrive before its 
   expect(stored().recent).toEqual(["s:b", "s:a"]);
 });
 
+it("asks for the favorites view, not every personal item", async () => {
+  await act(async () => root.render(<Host />));
+  expect(fetch).toHaveBeenCalledWith("/api/workspaces/ws/personal?view=favorites", { cache: "no-store" });
+  await answerFavorites([]);
+});
+
+it("makes one favorites request for two mounted hooks", async () => {
+  await act(async () => root.render(<><Host /><Host /></>));
+  expect(fetch).toHaveBeenCalledTimes(1);
+  await answerFavorites([{ key: "favorite:f", sourceId: "s" }]);
+  expect(stored().favorites).toEqual(["s:f"]);
+});
+
+it("starts a fresh request after a favorite changes while one is in flight", async () => {
+  let answerFirst!: (response: Response) => void;
+  const first = new Promise<Response>(resolve => { answerFirst = resolve; });
+  const fetcher = vi.fn()
+    .mockReturnValueOnce(first)
+    .mockResolvedValueOnce(new Response(JSON.stringify([{ key: "favorite:new", sourceId: "s" }]), { status: 200 }));
+  vi.stubGlobal("fetch", fetcher);
+
+  await act(async () => root.render(<Host />));
+  expect(fetcher).toHaveBeenCalledTimes(1);
+
+  await act(async () => api.update(previous => ({ ...previous, favorites: [...previous.favorites, "s:new"] })));
+  await act(async () => root.render(<><Host /><Host /></>));
+  expect(fetcher).toHaveBeenCalledTimes(2);
+
+  await act(async () => answerFirst(new Response(JSON.stringify([]), { status: 200 })));
+  await act(async () => transitions.splice(0).forEach((run) => run()));
+  expect(stored().favorites).toContain("s:new");
+});
+
+it("makes one favorites request when the window regains focus", async () => {
+  await act(async () => root.render(<><Host /><Host /></>));
+  await answerFavorites([{ key: "favorite:f", sourceId: "s" }]);
+  vi.mocked(fetch).mockClear();
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  expect(fetch).toHaveBeenCalledTimes(1);
+  await answerFavorites([{ key: "favorite:f", sourceId: "s" }]);
+});
+
 it("still shows what was stored and what was just opened once the state arrives", async () => {
   localStorage.setItem(KEY, JSON.stringify({ recent: ["s:a"], favorites: [] }));
   await act(async () => root.render(<Host />));

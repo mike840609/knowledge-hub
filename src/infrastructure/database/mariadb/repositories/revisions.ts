@@ -1,4 +1,4 @@
-import type { KnowledgeRevision } from "@/modules/knowledge/domain/revision";
+import type { KnowledgeRevision, KnowledgeRevisionSummary } from "@/modules/knowledge/domain/revision";
 import type { RevisionRepository } from "@/modules/knowledge/ports/revision-repository";
 import type { QueryConnection, DbRow } from "./shared";
 import { asDate, asJsonObject, asNumber, insertBatches, valueRows } from "./shared";
@@ -10,6 +10,20 @@ function mapRevision(row: DbRow): KnowledgeRevision {
     title: String(row.title), markdown: String(row.markdown), metadata: asJsonObject(row.metadata, "metadata") as KnowledgeRevision["metadata"],
     contentHash: String(row.content_hash), createdBy: String(row.created_by), createdAt: asDate(row.created_at),
   };
+}
+
+function mapRevisionSummary(row: DbRow): KnowledgeRevisionSummary {
+  return {
+    history: { state: row.history_state === "WORKING" ? "WORKING" : "CHECKPOINT", activityId: row.history_activity_id ? String(row.history_activity_id) : null, windowStartedAt: row.history_window_started_at ? asDate(row.history_window_started_at) : null, name: row.version_name ? String(row.version_name) : null, reason: String(row.history_reason ?? "LEGACY") },
+    id: String(row.id), revisionNo: asNumber(row.revision_no, "revision number"), createdAt: asDate(row.created_at),
+  };
+}
+
+/** One `IN (?…)` batch per statement; well under MariaDB's placeholder limit. */
+const REVISION_ID_CHUNK = 500;
+
+function placeholders(count: number): string {
+  return Array(count).fill("?").join(", ");
 }
 
 export class MariaDbRevisionRepository implements RevisionRepository {
@@ -64,6 +78,19 @@ export class MariaDbRevisionRepository implements RevisionRepository {
     return rows[0] ? mapRevision(rows[0]) : null;
   }
 
+  async findByIds(ids: readonly string[]): Promise<KnowledgeRevision[]> {
+    const revisions: KnowledgeRevision[] = [];
+    for (let start = 0; start < ids.length; start += REVISION_ID_CHUNK) {
+      const batch = ids.slice(start, start + REVISION_ID_CHUNK);
+      const rows = await this.connection.query<DbRow[]>(
+        `SELECT * FROM knowledge_revisions WHERE id IN (${placeholders(batch.length)})`,
+        [...batch],
+      );
+      revisions.push(...rows.map(mapRevision));
+    }
+    return revisions;
+  }
+
   async findCurrent(documentId: string): Promise<KnowledgeRevision | null> {
     const rows = await this.connection.query<DbRow[]>(
       `SELECT r.* FROM knowledge_revisions r
@@ -88,6 +115,22 @@ export class MariaDbRevisionRepository implements RevisionRepository {
       [documentId],
     );
     return rows.map(mapRevision);
+  }
+
+  async listSummariesByDocument(documentId: string): Promise<KnowledgeRevisionSummary[]> {
+    const rows = await this.connection.query<DbRow[]>(
+      `SELECT r.id, r.revision_no, r.created_at,
+              r.history_state, r.history_activity_id, r.history_window_started_at,
+              r.version_name, r.history_reason
+       FROM knowledge_revisions r
+       WHERE r.document_id = ?
+         AND (r.history_state = 'CHECKPOINT' OR EXISTS (
+           SELECT 1 FROM knowledge_documents d WHERE d.current_revision_id = r.id
+         ))
+       ORDER BY r.revision_no ASC`,
+      [documentId],
+    );
+    return rows.map(mapRevisionSummary);
   }
 
   async nextRevisionNumber(documentId: string): Promise<number> {

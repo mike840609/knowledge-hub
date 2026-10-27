@@ -10,6 +10,7 @@ import {
   type GovernanceFailure,
 } from "./governance-error";
 import { dialogBackdropClasses, dialogPopupClasses } from "@/components/ui/dialog";
+import { DialogCloseButton } from "@/components/ui/dialog-close";
 import { Label } from "@/components/ui/label";
 
 export function CreateTeamDialog({
@@ -103,6 +104,7 @@ export function CreateTeamDialog({
               </Button>
             </div>
           </form>
+          <DialogCloseButton disabled={busy} />
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>

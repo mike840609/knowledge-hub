@@ -137,7 +137,7 @@ npm run dev
 | `KM_IMPORT_*` | 匯入檔案數、大小、batch 與 snapshot quota |
 | `KM_TEST_DB_*`／`KM_E2E_DB_PREFIX` | 隔離測試資料庫設定；測試帳號需可建立與刪除指定 prefix 的資料庫 |
 
-匯入預設上限為 20,000 個 manifest entries、單篇 Markdown 5 MiB、Markdown 總量 256 MiB。完整上限以 `.env.example` 為準。Snapshot retention：BUILDING 2 小時、READY 30 分鐘、STALE／APPLIED 24 小時。有人開始匯入時，伺服器會在背景清除過期的 staging，每個程序最多每 10 分鐘一次。若要立即清除（例如沒有人在匯入的站台），可執行：
+匯入預設上限為 20,000 個 manifest entries、單篇 Markdown 3.5 MiB、Markdown 總量 256 MiB。完整上限以 `.env.example` 為準。Snapshot retention：BUILDING 2 小時、READY 30 分鐘、STALE／APPLIED 24 小時。有人開始匯入時，伺服器會在背景清除過期的 staging，每個程序最多每 10 分鐘一次。若要立即清除（例如沒有人在匯入的站台），可執行：
 
 ```bash
 npx tsx scripts/db/cleanup-import-snapshots.ts
@@ -157,6 +157,10 @@ npm run start
 ```
 
 **正式環境需要先完成身分整合。** `npm run start` 使用 production 模式，預設的 Local identity 會被拒絕。`KM_ALLOW_LOCAL_IDENTITY_IN_PRODUCTION` 是測試用途，請勿將其作為正式部署方式。
+
+若是**單人操作**的部署，可參考 [Vercel + Layerbase runbook](docs/operations/vercel-layerbase.zh-TW.md)：這條路徑刻意保留 local identity，並以選用的站台密碼保護，於 production build 時執行 migration，同時關閉 preview deployment。請勿將此方式用於共用或公司部署。
+
+若要架設**公開 demo**，同一份 runbook 也記錄了 [Google demo login](docs/operations/vercel-layerbase.zh-TW.md#google-demo-login)：設定 `KM_IDENTITY_PROVIDER=google` 與 `AUTH_*` 變數即可。這是額外的 provider，local 與 company-SSO 路徑完全不受影響。
 
 目前提供通用的 `company-sso` adapter contract，部署者必須實作可信任的 [`CompanySsoSessionReader`](src/modules/identity/ports/company-sso-session-reader.ts)，並在建立 application services 前接入 [`configureCompanySsoSessionReader`](src/server/composition.ts)。單純設定 `KM_IDENTITY_PROVIDER=company-sso` 不會自動提供 OAuth／OIDC 登入頁面或身分服務。
 
@@ -284,6 +288,7 @@ KM_E2E_PERSONAL_ONLY=true npm run test:e2e -- personal-workspace.spec.ts
 | 閱讀頁 HTML 子集 | [規格](docs/superpowers/specs/2026-10-12-reader-html-subset-design.md) | — | 閱讀頁和分享頁認得七個不帶屬性的 HTML 標籤；其餘照原樣顯示成文字，使用者寫的 HTML 一律不直接輸出。 |
 | Content-Security-Policy | [規格](docs/superpowers/specs/2026-10-12-content-security-policy-design.md) | — | 每個頁面的 script 都要帶該次回應的 nonce 才能執行；不允許 inline script 與事件處理器。 |
 | 編輯器的閱讀樣式提示 | [規格](docs/superpowers/specs/2026-10-12-editor-reader-hints-design.md) | — | 編輯器以 decoration 提示 callout 與行內 HTML 子集的樣子；標記保留，儲存的 Markdown 不變。 |
+| 文件樹按需載入 | [規格](docs/superpowers/specs/2026-10-24-lazy-source-trees-design.md) | [計畫](docs/superpowers/plans/2026-10-24-lazy-source-trees.md) | 初始載入目前來源，其餘展開時讀取；支援重試，並與移動對話框共用資料。 |
 | 文件編輯器 | [規格](docs/superpowers/specs/2026-09-28-document-composer-design.md) | [計畫](docs/superpowers/plans/2026-09-28-document-composer.md) | 渲染編輯與 Markdown 原始碼模式。 |
 | 知識連結與圖譜 | [規格](docs/superpowers/specs/2026-09-29-personal-workspace-knowledge-graph-design.md) | [計畫](docs/superpowers/plans/2026-09-29-personal-workspace-knowledge-graph.md) | Wikilinks、反向連結、標題錨點與衍生圖譜資料。 |
 | 個人日用功能 | [規格](docs/superpowers/specs/2026-09-29-personal-daily-driver-design.md) | [計畫](docs/superpowers/plans/2026-09-29-personal-daily-driver.md) | Wikilink 保留、自動完成、程式碼區塊與整理。 |

@@ -2,7 +2,10 @@ import type { ImportSnapshot } from "@/modules/sources/domain/import-snapshot";
 import { importError } from "@/modules/sources/domain/import-errors";
 import type { ImportSnapshotRepository, MarkImportSnapshotReadyInput } from "@/modules/sources/ports/import-snapshot-repository";
 import type { DbRow, QueryConnection } from "./shared";
-import { affectedRows, asDate, asNullableDate, asNumber } from "./shared";
+import { affectedRows, asDate, asNullableDate, asNumber, valueRows } from "./shared";
+
+/** Each pair is two placeholders; 200 pairs keeps one statement bounded. */
+const SOURCE_VERSION_PAIR_CHUNK = 200;
 
 function json<T>(value: unknown): T | null {
   if (value === null || typeof value === "undefined") return null;
@@ -64,9 +67,30 @@ export class MariaDbImportSnapshotRepository implements ImportSnapshotRepository
     );
   }
 
-  async findLatestReadyBySourceForCreator(sourceId:string,creatorId:string,now:Date,basedOnVersion:number):Promise<ImportSnapshot|null>{
-    const rows=await this.connection.query<DbRow[]>("SELECT * FROM source_import_snapshots WHERE source_id=? AND created_by=? AND state='READY' AND expires_at>? AND based_on_version=? ORDER BY finalized_at DESC,id DESC LIMIT 1",[sourceId,creatorId,now,basedOnVersion]);
-    return rows[0]?mapSnapshot(rows[0]):null;
+  async findLatestReadyIdsBySourceForCreator(
+    sources: readonly { sourceId: string; basedOnVersion: number }[],
+    creatorId: string,
+    now: Date,
+  ): Promise<Map<string, string>> {
+    const latest = new Map<string, string>();
+    for (let start = 0; start < sources.length; start += SOURCE_VERSION_PAIR_CHUNK) {
+      const batch = sources.slice(start, start + SOURCE_VERSION_PAIR_CHUNK);
+      const rows = await this.connection.query<{ source_id: unknown; id: unknown }[]>(
+        `SELECT ranked.source_id, ranked.id FROM (
+           SELECT i.source_id, i.id,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY i.source_id ORDER BY i.finalized_at DESC, i.id DESC
+                  ) AS rn
+           FROM source_import_snapshots i
+           WHERE i.created_by=? AND i.state='READY' AND i.expires_at>?
+             AND (i.source_id, i.based_on_version) IN (${valueRows(batch.length, 2)})
+         ) ranked
+         WHERE ranked.rn = 1`,
+        [creatorId, now, ...batch.flatMap((pair) => [pair.sourceId, pair.basedOnVersion])],
+      );
+      for (const row of rows) latest.set(String(row.source_id), String(row.id));
+    }
+    return latest;
   }
   async findById(snapshotId: string): Promise<ImportSnapshot | null> {
     const rows = await this.connection.query<DbRow[]>("SELECT * FROM source_import_snapshots WHERE id = ?", [snapshotId]);

@@ -22,7 +22,7 @@ export function SearchNavItem({ compact = false }: { compact?: boolean }) {
       onClick={requestQuickSearch}
       aria-label="Quick search"
       aria-keyshortcuts="Meta+K Control+K"
-      className={`kh-control kh-focus-ring flex h-8 w-full items-center rounded-md px-2 text-body text-kh-text-muted transition hover:bg-kh-bg-hover hover:text-kh-text ${compact ? "justify-center" : "gap-2"}`}
+      className={`kh-control kh-focus-ring flex kh-rail-row w-full items-center rounded-md px-2 kh-rail-text text-kh-text-muted transition hover:bg-kh-bg-hover hover:text-kh-text ${compact ? "justify-center" : "gap-2"}`}
     >
       <Search size={15} aria-hidden="true" />
       {compact ? null : <>

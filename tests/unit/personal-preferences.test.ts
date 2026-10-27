@@ -5,7 +5,7 @@ import type { WorkspaceUnitOfWork, WorkspaceRepositories } from "@/modules/works
 import type { PersonalStore } from "@/modules/personal/ports/personal-store";
 const caller = callerFromIdentity({ id: "owner", emp_id: "EMP", name: "Owner", org_code: "ORG" });
 function fixture(overrides: Record<string, unknown> = {}, membership: string | null = "OWNER") {
-  const store = { get: vi.fn().mockResolvedValue(null), list: vi.fn(), put: vi.fn().mockResolvedValue(true) };
+  const store = { get: vi.fn().mockResolvedValue(null), list: vi.fn(), listFavorites: vi.fn(), put: vi.fn().mockResolvedValue(true) };
   const repositories = {
     workspaces: { findById: vi.fn().mockResolvedValue({ workspaceType: "PERSONAL", lifecycleState: "ACTIVE", personalOwnerUserId: "owner", ...overrides }) },
     workspaceMemberships: { find: vi.fn().mockResolvedValue(membership ? { role: membership } : null) },

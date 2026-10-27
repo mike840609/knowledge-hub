@@ -9,6 +9,8 @@ import { favoritesInPlace, rememberDocument, toggleFavoriteDocument } from "@/li
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { MenuCheckboxItem, MenuContent, MenuItem, MenuRoot, MenuTrigger } from "@/components/ui/menu";
+import type { TreeLoadState } from "./source-tree-cache";
+import { useSidebarShortcuts } from "./use-sidebar-shortcuts";
 import { KnowledgeTree } from "./knowledge-tree";
 import { SidebarGetStarted, hasNoDocuments, startActions } from "./sidebar-get-started";
 import { TreeFilter } from "./tree-filter";
@@ -29,6 +31,10 @@ export type SourceSidebarProps = {
   /** Null in a workspace with no sources yet, where the explorer is there to say how to add one. */
   source: SourceView | null;
   collections: { source: SourceView; tree: KnowledgeTreeItem[] }[];
+  sources?: SourceView[];
+  treeStates?: Record<string, TreeLoadState>;
+  ensureTree?: (id: string) => Promise<void>;
+  retryTree?: (id: string) => Promise<void>;
   selectedDocumentId?: string;
   includeArchived: boolean;
   /** Given where the explorer stands beside the content (desktop); the navigation menu's copy has no way to collapse. */
@@ -48,7 +54,7 @@ function withoutArchivedSubtrees(items: KnowledgeTreeItem[]): KnowledgeTreeItem[
   return items.filter((item) => !hidden(item));
 }
 
-export function SourceSidebar({ workspaceId, source, collections, selectedDocumentId, includeArchived, onCollapse }: SourceSidebarProps) {
+export function SourceSidebar({ workspaceId, source, collections, sources, treeStates, ensureTree, retryTree, selectedDocumentId, includeArchived, onCollapse }: SourceSidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -69,11 +75,21 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
   const showArchived = searchParams.get("includeArchived") === "true";
   const resolvedDocumentId = selectedDocumentId ?? (typeof routeParams?.documentId === "string" ? routeParams.documentId : undefined);
   const needle = query.trim().toLowerCase();
-  const visibleCollections = useMemo(() => collections
+  const headers = useMemo(() => sources ?? collections.map(c => c.source), [sources, collections]);
+  const shortcutIds = [...new Set([...shortcuts.favorites, ...shortcuts.recent].map(key => key.split(":")[1]))].join(",");
+  const shortcutMetadata = useSidebarShortcuts(workspaceId, ensureTree ? shortcutIds : "", showArchived, sources);
+  useEffect(() => {
+    if (!expandedReady) return;
+    for (const candidate of headers) {
+      if (!showArchived && candidate.status === "ARCHIVED") continue;
+      if (needle || (expanded[candidate.id] ?? candidate.id === source?.id)) void ensureTree?.(candidate.id);
+    }
+  }, [headers, showArchived, needle, expanded, expandedReady, source?.id, ensureTree]);
+  const visibleCollections = useMemo(() => headers.map(candidate => ({ source: candidate, tree: collections.find(c => c.source.id === candidate.id)?.tree ?? [] }))
     .filter(({ source: candidate }) => showArchived || candidate.status === "ACTIVE")
     .map((collection) => ({ ...collection, tree: showArchived && includeArchived ? collection.tree : withoutArchivedSubtrees(collection.tree) }))
     .sort((a, b) => Number(b.source.sourceType === "HUB") - Number(a.source.sourceType === "HUB")),
-  [collections, showArchived, includeArchived]);
+  [headers, collections, showArchived, includeArchived]);
   const documents = useMemo(() => {
     const map = new Map<string, { documentId: string; sourceId: string; sourceName: string; ownership: SourceView["ownership"]; label: string }>();
     for (const collection of visibleCollections) {
@@ -81,8 +97,12 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
         if (item.type === "document") map.set(`${collection.source.id}:${item.documentId}`, { documentId: item.documentId, sourceId: collection.source.id, sourceName: collection.source.name, ownership: collection.source.ownership, label: item.label });
       }
     }
+    for (const document of shortcutMetadata.documents) {
+      // Loaded trees are authoritative about hidden archived ancestors.
+      if (!collections.some(c => c.source.id === document.sourceId)) map.set(`${document.sourceId}:${document.documentId}`, document);
+    }
     return map;
-  }, [visibleCollections]);
+  }, [visibleCollections, shortcutMetadata.documents, collections]);
   // The newest few are listed in place; the rest are one click away in "Show all", which lists every one, so a
   // favorite that is starred and not shown is never one that cannot be found.
   const favoriteKeys = shortcuts.favorites.filter((key) => documents.has(key));
@@ -134,9 +154,9 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
     const readOnly = document.ownership === "SOURCE_MANAGED";
     // aria-describedby replaces the description the title would give, so a marked row names its source itself, then the reason.
     const sourceNameId = `${readOnlyDescriptionId}-${key}`;
-    return <li key={key} className={`kh-interactive-row group flex min-h-8 items-center ${selected ? "bg-kh-bg-selected hover:bg-kh-bg-selected" : ""}`}>
+    return <li key={key} className={`kh-interactive-row group flex kh-rail-row items-center ${selected ? "bg-kh-bg-selected hover:bg-kh-bg-selected" : ""}`}>
       {readOnly ? <span id={sourceNameId} hidden>{document.sourceName}</span> : null}
-      <Link href={`/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}${showArchived ? "?includeArchived=true" : ""}`} prefetch={selected ? false : undefined} title={`${document.label} · ${document.sourceName}`} aria-current={selected ? "page" : undefined} aria-describedby={readOnly ? `${sourceNameId} ${readOnlyDescriptionId}` : undefined} className={`kh-control flex min-h-8 min-w-0 flex-1 items-center gap-2 px-2 text-body kh-focus-ring ${selected ? "font-medium text-kh-selected-text" : "text-kh-text-muted"}`}>
+      <Link href={`/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}${showArchived ? "?includeArchived=true" : ""}`} prefetch={selected ? false : undefined} title={`${document.label} · ${document.sourceName}`} aria-current={selected ? "page" : undefined} aria-describedby={readOnly ? `${sourceNameId} ${readOnlyDescriptionId}` : undefined} className={`kh-control flex kh-rail-row min-w-0 flex-1 items-center gap-2 px-2 kh-rail-text kh-focus-ring ${selected ? "font-medium text-kh-selected-text" : "text-kh-text-muted"}`}>
         {favorite ? <FileText size={14} className="shrink-0" aria-hidden="true" /> : <Clock3 size={14} className="shrink-0" aria-hidden="true" />}
         <span className="truncate">{document.label}</span>
         {readOnly ? <LockKeyhole size={14} data-read-only-cue="" className="shrink-0 text-kh-text-muted" aria-hidden="true" /> : null}
@@ -148,7 +168,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
       </Tooltip>
     </li>;
   }
-  const matches = visibleCollections.filter(({ source: candidate, tree }) => !needle || candidate.name.toLowerCase().includes(needle) || tree.some((item) => item.label.toLowerCase().includes(needle)));
+  const matches = visibleCollections.filter(({ source: candidate, tree }) => !needle || (ensureTree && treeStates?.[candidate.id]?.status !== "loaded") || candidate.name.toLowerCase().includes(needle) || tree.some((item) => item.label.toLowerCase().includes(needle)));
   const hasNotes = visibleCollections.some(({ source: candidate }) => candidate.sourceType === "HUB" && candidate.name === "Notes" && candidate.status === "ACTIVE");
   const canCreate = access.actions.canWrite && confirmed;
   const newNoteHref = `/w/${workspaceId}/knowledge/new`;
@@ -158,7 +178,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
   const createActions = actionsFor("create", actionContext);
   const createFolder = createActions.find((action) => action.id === "create.folder");
   const importAction = createActions.find((action) => action.id === "create.import");
-  const getStarted = !needle && hasNoDocuments(collections) ? startActions(actionContext) : null;
+  const getStarted = !needle && (!ensureTree || headers.every(s => treeStates?.[s.id]?.status === "loaded")) && hasNoDocuments(collections) ? startActions(actionContext) : null;
   const addFolder = createFolder ? (
     <Tooltip label="Create folder">
       <button type="button" aria-label="Create folder" onClick={() => runAction(createFolder)} className={buttonClasses({ variant: "ghost", icon: true })}>
@@ -225,10 +245,14 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
         </div>
       </div>
       {filterOpen ? <div className="shrink-0"><TreeFilter value={query} onChange={setQuery} onClose={closeFilter} /></div> : null}
-      <nav aria-label="Document tree" className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain">
+      {/* `relative`: the tree's absolutely placed boxes (its `sr-only` live regions) are placed against this
+          scroller and clipped by it. Placed against the page they made it taller than the window, and a
+          scrollIntoView the pane could not satisfy scrolled the whole shell away. */}
+      <nav aria-label="Document tree" className="relative min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain">
         <span id={readOnlyDescriptionId} hidden>{READ_ONLY_DESCRIPTION}</span>
+        {shortcutMetadata.error ? <p role="status" className="px-2 py-2 text-body text-kh-text-muted">Shortcuts could not be loaded. <button className="kh-focus-ring underline" onClick={shortcutMetadata.retry}>Retry</button></p> : null}
         {!needle && favoriteKeys.length > 0 ? <section aria-label="Favorites" className="pb-1">
-          <h3><button type="button" aria-expanded={favoritesOpen} onClick={() => setFavoritesOpen((open) => !open)} className="kh-control kh-interactive-row flex min-h-8 w-full items-center gap-2 px-2 text-left text-caption font-medium text-kh-text-muted">
+          <h3><button type="button" aria-expanded={favoritesOpen} onClick={() => setFavoritesOpen((open) => !open)} className="kh-control kh-interactive-row flex kh-rail-row w-full items-center gap-2 px-2 text-left text-caption font-medium text-kh-text-muted">
             {favoritesOpen ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
             <span>Favorites</span>
           </button></h3>
@@ -236,7 +260,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
             {favoritesInPlaceKeys.map((key) => shortcutRow(key, true))}
             {favoritesTotal !== null ? <li>
               <MenuRoot>
-                <MenuTrigger className="kh-control kh-interactive-row kh-focus-ring flex min-h-8 w-full items-center gap-2 px-2 text-left text-caption font-medium text-kh-text-muted">
+                <MenuTrigger className="kh-control kh-interactive-row kh-focus-ring flex kh-rail-row w-full items-center gap-2 px-2 text-left text-caption font-medium text-kh-text-muted">
                   <MoreHorizontal size={14} className="shrink-0" aria-hidden="true" />
                   <span>Show all {favoritesTotal}</span>
                 </MenuTrigger>
@@ -264,7 +288,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
           </ul> : null}
         </section> : null}
         {!needle && recentKeys.length > 0 ? <section aria-label="Recent documents" className="pb-1">
-          <h3><button type="button" aria-expanded={recentOpen} onClick={() => setRecentOpen((open) => !open)} className="kh-control kh-interactive-row flex min-h-8 w-full items-center gap-2 px-2 text-left text-caption font-medium text-kh-text-muted">
+          <h3><button type="button" aria-expanded={recentOpen} onClick={() => setRecentOpen((open) => !open)} className="kh-control kh-interactive-row flex kh-rail-row w-full items-center gap-2 px-2 text-left text-caption font-medium text-kh-text-muted">
             {recentOpen ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
             <span>Recent</span>
           </button></h3>
@@ -285,7 +309,7 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
           return (
             <section key={candidate.id} aria-label={`${candidate.name} documents`}>
               <div className="flex items-center gap-1">
-                <button type="button" aria-expanded={open} aria-controls={`collection-${candidate.id}`} aria-describedby={readOnly ? readOnlyDescriptionId : undefined} onClick={() => setExpanded((previous) => ({ ...previous, [candidate.id]: !open }))} title={readOnly ? `${candidate.name} · ${READ_ONLY_DESCRIPTION}` : candidate.name} className="group kh-control flex min-h-8 min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 text-left text-body font-medium text-kh-text hover:bg-kh-bg-hover kh-focus-ring">
+                <button type="button" aria-expanded={open} aria-controls={`collection-${candidate.id}`} aria-describedby={readOnly ? readOnlyDescriptionId : undefined} onClick={() => setExpanded((previous) => ({ ...previous, [candidate.id]: !open }))} title={readOnly ? `${candidate.name} · ${READ_ONLY_DESCRIPTION}` : candidate.name} className="group kh-control flex kh-rail-row min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 text-left kh-rail-text font-medium text-kh-text hover:bg-kh-bg-hover kh-focus-ring">
                   {/* One slot, Notion-style: the source's mark at rest, its chevron on hover (where hover exists) or keyboard focus. */}
                   <span className="relative size-3.5 shrink-0 text-kh-text-muted" aria-hidden="true">
                     {readOnly ? <LockKeyhole size={14} data-read-only-cue="" className="absolute inset-0 group-focus-visible:invisible [@media(hover:hover)_and_(pointer:fine)]:group-hover:invisible" /> : null}
@@ -297,7 +321,9 @@ export function SourceSidebar({ workspaceId, source, collections, selectedDocume
                 {isNotes && canCreate ? <div className="flex items-center">{addFolder}{addNote}</div> : null}
               </div>
               <div id={`collection-${candidate.id}`} hidden={!open} className="mt-1 pl-2">
-                {open ? <KnowledgeTree
+                {open && ensureTree && treeStates?.[candidate.id]?.status !== "loaded" ? <p role="status" className="px-2 py-2 text-body text-kh-text-muted">
+                  {treeStates?.[candidate.id]?.status === "error" ? <>Documents could not be loaded. <button className="kh-focus-ring underline" onClick={() => void retryTree?.(candidate.id)}>Retry</button></> : "Loading documents…"}
+                </p> : open ? <KnowledgeTree
                   items={tree}
                   sidebarReady={sidebarReady}
                   workspaceId={workspaceId}

@@ -13,26 +13,75 @@ function mapNode(row: DbRow): KnowledgeTreeNode {
   };
 }
 
+function mapDocumentSummary(row: DbRow): DocumentSummary {
+  return {
+    documentId: String(row.document_id), sourceId: String(row.source_id),
+    title: asRequiredString(row.title, "document summary title"), updatedAt: asDate(row.updated_at),
+    ownership: String(row.ownership) as DocumentSummary["ownership"],
+    status: String(row.status) as DocumentSummary["status"], sourceStatus: String(row.source_status) as DocumentSummary["sourceStatus"],
+  };
+}
+
+/** One `IN (?…)` batch per statement; well under MariaDB's placeholder limit. */
+const DOCUMENT_ID_CHUNK = 500;
+
+function placeholders(count: number): string {
+  return Array(count).fill("?").join(", ");
+}
+
 export class MariaDbTreeRepository implements TreeRepository {
   constructor(private readonly connection: QueryConnection) {}
 
-  async listDocumentsByWorkspace(workspaceId: string, includeArchived: boolean): Promise<DocumentSummary[]> {
+  async listDocumentsByWorkspace(workspaceId: string, includeArchived: boolean, excludeArchivedAncestors = false): Promise<DocumentSummary[]> {
+    // Sidebar shortcuts must follow the same archived-ancestor rule as the document tree.
+    // Keep this opt-in so existing workspace summary projections retain their contract.
+    const filterAncestors = excludeArchivedAncestors && !includeArchived;
+    const hidden = filterAncestors ? `WITH RECURSIVE hidden_nodes AS (
+      SELECT n.id, n.source_id FROM knowledge_tree_nodes n
+      JOIN knowledge_sources s ON s.id = n.source_id
+      WHERE s.workspace_id = ? AND n.status = 'ARCHIVED'
+      UNION DISTINCT
+      SELECT child.id, child.source_id FROM knowledge_tree_nodes child
+      JOIN hidden_nodes parent ON child.parent_id = parent.id AND child.source_id = parent.source_id
+    )` : "";
     const rows = await this.connection.query<DbRow[]>(
-      `SELECT d.id AS document_id, d.source_id, r.title, r.created_at AS updated_at,
+      `${hidden} SELECT d.id AS document_id, d.source_id, r.title, r.created_at AS updated_at,
               s.ownership, s.status AS source_status, d.status
        FROM knowledge_documents d
        JOIN knowledge_sources s ON s.id = d.source_id
        JOIN knowledge_tree_nodes n ON n.document_id = d.id AND n.source_id = s.id
        JOIN knowledge_revisions r ON r.id = d.current_revision_id AND r.document_id = d.id
        WHERE s.workspace_id = ? AND (? = 1 OR (s.status = 'ACTIVE' AND d.status = 'ACTIVE' AND n.status = 'ACTIVE'))
-       ORDER BY r.created_at DESC, d.id ASC`, [workspaceId, includeArchived ? 1 : 0],
+       ${filterAncestors ? "AND NOT EXISTS (SELECT 1 FROM hidden_nodes hidden WHERE hidden.id = n.id)" : ""}
+       ORDER BY r.created_at DESC, d.id ASC`, [...(filterAncestors ? [workspaceId] : []), workspaceId, includeArchived ? 1 : 0],
     );
-    return rows.map((row) => ({
-      documentId: String(row.document_id), sourceId: String(row.source_id),
-      title: asRequiredString(row.title, "document summary title"), updatedAt: asDate(row.updated_at),
-      ownership: String(row.ownership) as DocumentSummary["ownership"],
-      status: String(row.status) as DocumentSummary["status"], sourceStatus: String(row.source_status) as DocumentSummary["sourceStatus"],
-    }));
+    return rows.map(mapDocumentSummary);
+  }
+
+  /**
+   * `getDocument()`'s visibility, without its per-document round trip: the
+   * document and its Source must be ACTIVE unless archived content was asked
+   * for. The tree node is deliberately not consulted — `getDocument()` does not
+   * require it to be active, so filtering on it would hide documents the
+   * palette shows today.
+   */
+  async listDocumentsByIds(workspaceId: string, documentIds: readonly string[], includeArchived: boolean): Promise<DocumentSummary[]> {
+    const summaries: DocumentSummary[] = [];
+    for (let start = 0; start < documentIds.length; start += DOCUMENT_ID_CHUNK) {
+      const batch = documentIds.slice(start, start + DOCUMENT_ID_CHUNK);
+      const rows = await this.connection.query<DbRow[]>(
+        `SELECT d.id AS document_id, d.source_id, r.title, r.created_at AS updated_at,
+                s.ownership, s.status AS source_status, d.status
+         FROM knowledge_documents d
+         JOIN knowledge_sources s ON s.id = d.source_id
+         JOIN knowledge_revisions r ON r.id = d.current_revision_id AND r.document_id = d.id
+         WHERE s.workspace_id = ? AND d.id IN (${placeholders(batch.length)})
+           AND (? = 1 OR (s.status = 'ACTIVE' AND d.status = 'ACTIVE'))`,
+        [workspaceId, ...batch, includeArchived ? 1 : 0],
+      );
+      summaries.push(...rows.map(mapDocumentSummary));
+    }
+    return summaries;
   }
 
   async insert(node: KnowledgeTreeNode): Promise<void> {
@@ -63,6 +112,15 @@ export class MariaDbTreeRepository implements TreeRepository {
     return rows[0] ? mapNode(rows[0]) : null;
   }
 
+  /**
+   * MariaDB sorts `NULL` first, so `ORDER BY parent_id` keeps roots first
+   * exactly like the old `COALESCE(parent_id, '')` did, and the
+   * `(source_id, parent_id, position)` index can supply the order directly.
+   *
+   * This equivalence assumes the app's UUIDv7 ids and MariaDB's native UUID
+   * ordering (10.11.5+). A different id format or an older server could sort
+   * `id` differently, so revisit the tie-break before either changes.
+   */
   async listBySource(sourceId: string): Promise<TreeViewNode[]> {
     const rows = await this.connection.query<DbRow[]>(
       `SELECT n.*, r.title AS title, d.status AS document_status, d.current_revision_id AS document_current_revision_id
@@ -70,7 +128,7 @@ export class MariaDbTreeRepository implements TreeRepository {
        LEFT JOIN knowledge_documents d ON d.id = n.document_id AND d.source_id = n.source_id
        LEFT JOIN knowledge_revisions r ON r.id = d.current_revision_id AND r.document_id = d.id
 
-       WHERE n.source_id = ? ORDER BY COALESCE(n.parent_id, ''), n.position, n.id`,
+       WHERE n.source_id = ? ORDER BY n.parent_id, n.position, n.id`,
       [sourceId],
     );
     return rows.map((row) => ({ ...mapNode(row), title: row.title === null ? null : String(row.title), documentStatus: row.document_status === null ? null : String(row.document_status) as "ACTIVE" | "ARCHIVED", currentRevisionId: row.document_current_revision_id === null || row.document_current_revision_id === undefined ? null : String(row.document_current_revision_id) }));

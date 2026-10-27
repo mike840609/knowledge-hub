@@ -15,6 +15,7 @@ import { browserDraftStorage, clearDraft, readDraft, syncDraft, type DraftKey } 
 import { PersistentDraft } from "@/lib/persistent-draft";
 import { carryTitle, resolveAuthoredTitle } from "@/lib/authored-title";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
+import { downloadMarkdown } from "@/lib/download-markdown";
 import { extractDocumentLinks } from "@/modules/knowledge/domain/document-links";
 import type { RenderedLinks } from "./rendered-links";
 import type { MarkdownEditor } from "./editor/editor-core";
@@ -345,9 +346,7 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
     {(error || recovery) && <Button variant="link" onClick={() => {
       flushEditor();
       const value = queue.current!.current;
-      const url = URL.createObjectURL(new Blob([value.markdown], { type: "text/markdown;charset=utf-8" }));
-      const anchor = document.createElement("a"); anchor.href = url; anchor.download = `${(resolve(value).title || "recovered-document").replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").slice(0, 120)}.md`; anchor.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      downloadMarkdown(resolve(value).title, value.markdown);
     }}>Download my changes</Button>}
     {failed && <p role="status" className="mb-3 text-body-sm">Rendered editing is unavailable. You can continue in Markdown.</p>}
     <div ref={pressArea} onPointerDownCapture={() => { if (!ready) standInPressed.current = true; }} onCompositionStart={() => { composing.current = true; writer?.pause(true); }} onCompositionEnd={() => {

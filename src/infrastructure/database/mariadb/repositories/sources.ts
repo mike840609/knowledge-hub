@@ -60,6 +60,14 @@ export class MariaDbSourceRepository implements SourceRepository {
     if (affectedRows(result) !== 1) throw new IntegrityViolationError("Source lifecycle could not be updated.");
   }
 
+  async updateName(sourceId: string, name: string, actorId: string): Promise<void> {
+    const result = await this.connection.query(
+      "UPDATE knowledge_sources SET name = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP(6) WHERE id = ?",
+      [name, actorId, sourceId],
+    );
+    if (affectedRows(result) !== 1) throw new IntegrityViolationError("Source name could not be updated.");
+  }
+
   async guardAndAdvanceVersion(sourceId: string, basedOnVersion: number, actorId: string, excludedPaths?: readonly string[]): Promise<number | null> {
     const result = await this.connection.query(
       `UPDATE knowledge_sources

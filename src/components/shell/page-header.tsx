@@ -20,7 +20,7 @@ export function PageHeader({
 }: {
   location: string;
   locationHref: string;
-  title: string;
+  title: ReactNode;
   /** A line under the header, for a form that needs saying what it does. */
   description?: string;
   actions?: ReactNode;

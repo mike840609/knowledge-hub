@@ -1,8 +1,13 @@
 import { workspaceHttp, type WorkspaceRouteContext } from "@/server/workspace-http";
+import { DomainError } from "@/shared/domain/errors";
 export async function GET(request: Request, context: WorkspaceRouteContext) {
   return workspaceHttp(async (s, c) => {
     const { workspaceId } = await context.params;
-    const key = new URL(request.url).searchParams.get("key");
+    const url = new URL(request.url);
+    const view = url.searchParams.get("view");
+    if (view === "favorites") return s.personal.listFavorites(c, workspaceId);
+    if (view !== null) throw new DomainError("INVALID_REQUEST", "Unknown personal view.");
+    const key = url.searchParams.get("key");
     return key ? s.personal.get(c, workspaceId, key) : s.personal.list(c, workspaceId);
   });
 }

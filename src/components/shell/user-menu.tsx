@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import { FeedbackReport } from "@/components/knowledge/feedback-report";
 import Link from "next/link";
 
-import { ChevronUp, Moon, Sun, UserRound, Settings, CircleHelp, MessageSquareWarning } from "lucide-react";
+import { ChevronUp, Moon, Rows3, Rows4, Sun, UserRound, Settings, CircleHelp, MessageSquareWarning } from "lucide-react";
 import {Tooltip} from "@/components/ui/tooltip";
 import { buttonClasses } from "@/components/ui/button";
 import {
@@ -18,6 +18,7 @@ import {
   MenuTrigger,
 } from "@/components/ui/menu";
 import { useTheme, type Theme } from "./use-theme";
+import { useDensity, type Density } from "./use-density";
 
 /**
  * The account affordance, and where personal preferences live.
@@ -31,6 +32,7 @@ export function UserMenu({ identityName, identityEmpId, workspaceId, compact = f
   const [reportOpen, setReportOpen] = useState(false);
   const accountRef = useRef<HTMLButtonElement>(null);
   const { theme, setTheme } = useTheme();
+  const { density, setDensity } = useDensity();
 
   const accountTrigger=(
       <MenuTrigger
@@ -73,6 +75,27 @@ export function UserMenu({ identityName, identityEmpId, workspaceId, compact = f
               <span className="flex items-center gap-2">
                 <Moon className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />
                 Dark
+              </span>
+            </MenuRadioItem>
+          </MenuRadioGroup>
+        </MenuGroup>
+        <MenuSeparator />
+        <MenuGroup>
+          <MenuGroupLabel>Density</MenuGroupLabel>
+          <MenuRadioGroup
+            value={density ?? undefined}
+            onValueChange={(value) => setDensity(value as Density)}
+          >
+            <MenuRadioItem value="compact" closeOnClick={false}>
+              <span className="flex items-center gap-2">
+                <Rows4 className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />
+                Compact
+              </span>
+            </MenuRadioItem>
+            <MenuRadioItem value="comfortable" closeOnClick={false}>
+              <span className="flex items-center gap-2">
+                <Rows3 className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />
+                Comfortable
               </span>
             </MenuRadioItem>
           </MenuRadioGroup>

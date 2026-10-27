@@ -911,6 +911,11 @@ Should following the system be wanted again, it returns as a third state on
 the control — `light` / `dark` / `system` — not as a second CSS block. The
 attribute stays the only thing the stylesheet reads.
 
+Density is kept the same way: `kh:density` in storage, `data-density` stamped
+by the same pre-paint script (`compact` unless `comfortable` was chosen), and
+changed only from the account menu. It sizes the rails and nothing else
+(§15, "Rows sit on the ladder").
+
 ## 13. Icons
 
 A consistent outline icon language (Lucide). In primary navigation, icons
@@ -1005,6 +1010,14 @@ for the palette, which is placed and padded differently. `Dialog` and
 `AlertDialog` are different roots, so it is the look that is shared, as with
 tabs.
 
+**A dialog has a way out in its corner.** Every centred dialog ends its popup
+with `DialogCloseButton` (`components/ui/dialog-close.tsx`): an `sm` ghost ×
+level with the title, beside Escape and the footer's Cancel, disabled while the
+dialog is busy. It is the popup's last child so the library's first focus still
+lands on the dialog's first field. A confirmation has none — its two buttons
+are the answers — and the image viewer keeps the Close at the end of its zoom
+toolbar (`tests/unit/dialog-close-button.test.tsx`; 2026-10-27).
+
 **A button says what state it is in.** Hover, pressed, and "my menu is open"
 are three states. The neutral variants (`ghost`, `secondary`) take the step
 above hover while pressed (`bg-hover-strong`) and keep the hover fill for as
@@ -1035,12 +1048,35 @@ two heights that are not rungs, a default that does not line up, and the only
 offset focus ring in the system. Reopening it means accepting those three,
 not just the appearance.
 
-**Rows sit on the ladder too.** A navigation or tree row is `md` (32px) and
-the control floated inside it is `sm` (24px). Rows were 36px with a 28px
-floated button, neither on the ladder, so a sidebar row, the menu row that
-opens from it and the button beside it were three unrelated heights. The
-reference's sidebar is denser still, at roughly 28px; `md` is the nearest rung,
-and a rung is not added for one surface.
+**Rows sit on the ladder too, except a rail's.** A list or menu row is `md`
+(32px) and the control floated inside it is `sm` (24px). Rows were 36px with a
+28px floated button, neither on the ladder, so a sidebar row, the menu row that
+opens from it and the button beside it were three unrelated heights.
+
+A rail row — the primary navigation, its Search and Workspace rows, and the
+knowledge explorer's documents, folders, shortcuts and group headers — follows
+the reader's **density**, chosen under Density in the account menu:
+
+| Density | Row | Label |
+| --- | --- | --- |
+| Compact (default) | 28px, the reference's height | `body-sm` (13px) |
+| Comfortable | 32px, the `md` rung | `body` (14px) |
+
+Comfortable is the rail as it was before compact existed. Compact was first
+refused on the ground that a rung is not added for one surface; it was made
+anyway because at 32px the rails were the one place the density difference
+from the reference showed, and the explorer is the surface read most. It is
+not a rung: no button, field or menu row takes it, and the floated `sm`
+control still fits with 2px either side.
+
+A rail row carries `kh-rail-row` (its height, from `--kh-rail-row-height`) and,
+where it has a label, `kh-rail-text`; both are in `globals.css`, which reads
+`data-density` on `<html>` the way it reads `data-theme` (§12). The height is a
+variable so the coarse-pointer rule still lifts the row to 40px. A group header
+(Favorites, Recent) takes the height and keeps its `caption` label. The account
+button at the rail's foot is a `Button` and keeps the button's height and
+`body`; the explorer's filter is a field and keeps `md`. Nothing outside the
+rails reads density.
 
 Every form field is `Input`, `Select`, `SelectMenu` or `Textarea`, which share
 their shape through `fieldClasses()` in `components/ui/field.ts`.
@@ -1067,7 +1103,24 @@ and every hand-rolled copy it replaces was native already. With JavaScript,
 that form searches as the reader types (`LiveSearchSubmit`) and keeps its
 submit button, which is what Enter reaches from any of its text fields; the
 URL is still the state, so a search stays shareable, and without JavaScript
-the button and the GET are all there is. A multi-line field
+the button and the GET are all there is. The Shares filter rows are the same
+GET forms with no button (`LiveSearch`): text applies as it is typed and on
+Enter, and a chosen status applies at once (`applyAndSearch`, which commits the
+choice before the form is read). Their Search, Filter and Refresh buttons are
+gone (2026-10-27).
+
+**A condition in force is a chip that removes it.** Above the search page's
+Advanced filters, each condition that narrows the search — path, dates, a sort
+other than relevance, all-workspaces scope, source, archived — is a chip:
+`h-6`, `rounded-md`, `border`, `bg-selected` with `selected-text`, its name in
+`text-muted` before its value, and an × at its end. The whole chip is a link to
+the same search without that one parameter (and without the page), so it
+removes exactly what it names, works without JavaScript, and leaves a URL that
+can be shared. Its accessible name says so: "Remove filter Path: docs".
+Clear filters stays beside them and keeps the query and scope, as before. A
+chip is lavender because a filter in force is a selection; it is not a tag and
+not a button. Editing a condition is still the Advanced filters form — a chip
+that opens its own editor is not added until a surface needs it. A multi-line field
 takes its height from `rows` rather than the ladder; only its padding scales.
 
 **A field has a name, and one way to be wrong.** `Label` (`components/ui/label.tsx`)
@@ -1118,6 +1171,12 @@ arrow-key movement between panels that a set of links does not have.
 The current route is matched exactly, not by prefix. A section's index tab
 lives at the section root, so a prefix match leaves it lit on every page in
 the section.
+
+Base UI marks the current tab `data-active`. The look was keyed on
+`data-selected`, which this version of the library never sets, so the
+inspector and the Inbox showed no current tab at all and nothing failed;
+`tests/unit/tabs-active-state.test.tsx` now reads the attribute out of the
+classes and checks it against what the library renders.
 
 ### A state is a glyph and a word; an empty place leads with its action
 
@@ -1180,6 +1239,14 @@ paired with a screen-reader-only `role="status"` line, because a skeleton is
 per area rather than beside a caller: the document skeleton had two callers,
 was copied into both, and the two drifted to different paddings, so the page
 shifted as the route boundary handed over to the `Suspense` fallback.
+
+**A list that is being re-asked keeps its last answer.** The palette's
+document results, between one keystroke's answer and the next, stay on screen
+at half opacity, `inert` and outside the listbox, with the `Searching` status
+line, rather than blanking to a skeleton on every keystroke. They answer the
+previous query, so they are never a row: Enter, a click or Tab cannot reach
+one. The skeleton remains for the first answer, when there is nothing to keep
+(`tests/unit/quick-search-pending-results.test.tsx`).
 
 **The document skeleton is kept knowing what it costs.** Measured, opening a
 document takes 383ms at p50, of which about 250ms is the skeleton rather than

@@ -45,28 +45,43 @@ export class ListFolderUpdatesService {
         cursor: input.cursor,
         limit: limit + 1,
       });
-      const selected = runs.slice(0, limit),
-        groups: FolderUpdatesPage["runs"] = [];
-      for (const run of selected) {
-        const source = await r.sources.findById(run.sourceId);
-        if (
-          !source ||
-          source.workspaceId !== workspaceId ||
-          source.status !== "ACTIVE"
-        )
-          continue;
-        const result = await r.syncRunChanges.listReadingChanges(run.id, {
-          userId: caller.identity.id,
-          workspaceId,
-          unreadOnly: input.unreadOnly,
-          limit: Math.max(1, Math.min(50, input.documentsPerRun ?? 50)),
-        });
-        const progress = await r.documentReadProgress.getMany(
-          caller.identity.id,
-          workspaceId,
-          result.changes.map((c) => c.documentId!),
+      const selected = runs.slice(0, limit);
+      const sources = new Map(
+        (await r.sourcePolicy.listByWorkspaceId(workspaceId, {})).map(
+          (source) => [source.id, source],
+        ),
+      );
+      const readable = selected.filter((run) => {
+        const source = sources.get(run.sourceId);
+        return (
+          source?.workspaceId === workspaceId && source.status === "ACTIVE"
         );
-        const read = new Map(progress.map((p) => [p.documentId, p.revisionNo]));
+      });
+      const changesPerRun = await Promise.all(
+        readable.map((run) =>
+          r.syncRunChanges.listReadingChanges(run.id, {
+            userId: caller.identity.id,
+            workspaceId,
+            unreadOnly: input.unreadOnly,
+            limit: Math.max(1, Math.min(50, input.documentsPerRun ?? 50)),
+          }),
+        ),
+      );
+      const progress = await r.documentReadProgress.getMany(
+        caller.identity.id,
+        workspaceId,
+        [
+          ...new Set(
+            changesPerRun.flatMap((result) =>
+              result.changes.map((c) => c.documentId!),
+            ),
+          ),
+        ],
+      );
+      const read = new Map(progress.map((p) => [p.documentId, p.revisionNo]));
+      const groups: FolderUpdatesPage["runs"] = [];
+      readable.forEach((run, index) => {
+        const result = changesPerRun[index];
         const marked = result.changes.map((c) => ({
           ...c,
           unread: c.afterRevisionNo! > (read.get(c.documentId!) ?? 0),
@@ -74,13 +89,13 @@ export class ListFolderUpdatesService {
         if (marked.length)
           groups.push({
             run,
-            sourceName: source.name,
+            sourceName: sources.get(run.sourceId)!.name,
             totalChanges: result.total,
             added: result.added,
             updated: result.updated,
             changes: marked,
           });
-      }
+      });
       const last = selected[selected.length - 1];
       return {
         runs: groups,

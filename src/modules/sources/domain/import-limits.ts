@@ -15,7 +15,7 @@ export type ImportLimits = {
 export const DEFAULT_IMPORT_LIMITS: ImportLimits = {
   maxManifestEntries: 20_000,
   maxPathBytes: 2 * 1024,
-  maxMarkdownFileBytes: 5 * 1024 * 1024,
+  maxMarkdownFileBytes: 3.5 * 1024 * 1024,
   maxMarkdownTotalBytes: 256 * 1024 * 1024,
   maxAssetFileBytes: 64 * 1024 * 1024,
   maxAssetTotalBytes: 512 * 1024 * 1024,
