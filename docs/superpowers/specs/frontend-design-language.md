@@ -1043,19 +1043,22 @@ two heights that are not rungs, a default that does not line up, and the only
 offset focus ring in the system. Reopening it means accepting those three,
 not just the appearance.
 
-**Rows sit on the ladder too.** A navigation or tree row is `md` (32px) and
-the control floated inside it is `sm` (24px). Rows were 36px with a 28px
-floated button, neither on the ladder, so a sidebar row, the menu row that
-opens from it and the button beside it were three unrelated heights. The
-reference's sidebar is denser still, at roughly 28px; `md` is the nearest rung,
-and a rung is not added for one surface.
+**Rows sit on the ladder too, except a rail's.** A list or menu row is `md`
+(32px) and the control floated inside it is `sm` (24px). Rows were 36px with a
+28px floated button, neither on the ladder, so a sidebar row, the menu row that
+opens from it and the button beside it were three unrelated heights.
 
-A rail row's label is `body-sm` (13px), not `body`: the primary navigation,
-its Search and Workspace rows, and the explorer's documents, folders,
-shortcuts and collection headers. The rail is chrome read at a glance, and
-the reference sets it a step below the content it leads to. The row keeps its
-32px; only the text is lighter. The account button at the rail's foot is a
-`Button` and keeps the button's `body`.
+A rail row — the primary navigation, its Search and Workspace rows, and the
+knowledge explorer's documents, folders, shortcuts and group headers — is 28px
+(`h-7` / `min-h-7`), the reference's height, with its label at `body-sm`
+(13px). This was first refused on the ground that a rung is not added for one
+surface; it was made anyway because at 32px the rails were the one place the
+density difference from the reference showed, and the explorer is the surface
+read most. It is not a rung: no button, field or menu row takes it, and the
+floated `sm` control still fits with 2px either side. Under a coarse pointer
+`.kh-control` lifts the row to 40px as before. The account button at the rail's
+foot is a `Button` and keeps the button's height and `body`; the explorer's
+filter is a field and keeps `md`.
 
 Every form field is `Input`, `Select`, `SelectMenu` or `Textarea`, which share
 their shape through `fieldClasses()` in `components/ui/field.ts`.
