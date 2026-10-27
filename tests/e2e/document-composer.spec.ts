@@ -232,7 +232,7 @@ test("the editor arriving does not take the caret from a field the person moved 
   // The field is 32px now, so a centre click lands inside the title rather
   // than past it. Put the caret at the end explicitly; the point of this test
   // is that the arriving editor does not take focus, not where a click lands.
-  await titleField.press("End");
+  await titleField.evaluate((el) => el.setSelectionRange(el.value.length, el.value.length));
   await page.keyboard.type(" more");
   release();
   await expect(page.locator(".ProseMirror")).toHaveAttribute("contenteditable", "false", ROUND_TRIP);
