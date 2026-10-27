@@ -100,6 +100,26 @@ export function ResultListSkeleton() {
   );
 }
 
+const NOTIFICATION_ROW_WIDTHS = ["w-3/4", "w-2/3", "w-4/5"];
+
+/** A discussion notification: title, one line of context, then its metadata. */
+export function NotificationListSkeleton({ compact = false }: { compact?: boolean }) {
+  return (
+    <div className={compact ? "space-y-3 px-4 py-3" : "space-y-3 py-3"}>
+      <LoadingStatus>Loading comments</LoadingStatus>
+      <div aria-hidden="true" className="space-y-4">
+        {NOTIFICATION_ROW_WIDTHS.map((width, index) => (
+          <div key={index} className="space-y-1.5">
+            <Skeleton className={`h-4 ${width}`} />
+            <Skeleton className="h-3 w-1/2" />
+            <Skeleton className="h-3 w-1/3" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** One link row: its label, then when it expires. The share dialog's list, while it loads. */
 export function ShareLinksSkeleton() {
   return (

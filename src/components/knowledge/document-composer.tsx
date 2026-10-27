@@ -580,7 +580,7 @@ export function DocumentComposer({
     resolved.source === "H1" && !untitled && resolved.title !== initialTitle;
 
   return (
-    <DocumentPane contentRef={paneRef} outline={<OutlineRail entries={outline} activeSlug={null} />} inspector={inspector} inspectorOpen={Boolean(inspector) && details?.open === true}>
+    <DocumentPane contentRef={paneRef} outline={outline.length ? <OutlineRail entries={outline} activeSlug={null} /> : null} inspector={inspector} inspectorOpen={Boolean(inspector) && details?.open === true}>
       <form
         onBlur={() => {
           // Leaving a field flushes pending rendered output, so a revert
@@ -651,13 +651,13 @@ export function DocumentComposer({
               disabled={!ready}
               onChange={(event) => changeTitle(event.target.value)}
               onKeyDown={onTitleKeyDown}
-              className="mt-2 block w-full border-0 bg-transparent p-0 text-heading font-semibold tracking-tight text-kh-text outline-none placeholder:text-kh-text-muted"
+              className="mt-2 block w-full border-0 bg-transparent p-0 text-display font-semibold tracking-tight text-kh-text outline-none placeholder:text-kh-text-muted"
             />
           ) : null}
           {/* The reader's rule: a title above the content unless the content opens with its own heading.
               TYPED has the title field above; METADATA has neither. */}
           {showing === "rendered" && resolved.source === "METADATA" && !markdownOpensWithHeading(markdown) ? (
-            <h1 className="mt-2 truncate text-heading font-semibold tracking-tight text-kh-text" title={resolved.title}>{resolved.title}</h1>
+            <h1 className="mt-2 truncate text-display font-semibold tracking-tight text-kh-text" title={resolved.title}>{resolved.title}</h1>
           ) : null}
           {/* Always one line tall, as the reader's is, even with nothing to say. */}
           <div className="mt-1.5 flex min-h-4 flex-wrap items-center gap-x-2 gap-y-1 text-caption text-kh-text-muted">

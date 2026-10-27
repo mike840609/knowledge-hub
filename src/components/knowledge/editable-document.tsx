@@ -7,6 +7,7 @@ import { OwnerReviewPanel } from "./owner-review-panel";
 import { AutosaveIndicator } from "./autosave-indicator";
 import { ReadRevisionMarker } from "./read-revision-marker";
 import { Button } from "@/components/ui/button";
+import { FileCode2 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { governanceFailure, governanceRequest, GovernanceError } from "@/components/workspaces/governance-error";
@@ -327,11 +328,14 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
   const displayTitle = dirty || recovery ? resolved.title || "Untitled" : savedTitle;
   const Article = "article";
   // With the page's actions in the pinned line rather than on a row of its own above the title.
-  const markdownToggle = <Button type="button" variant="ghost" aria-pressed={source || failed} disabled={!loaded || failed} onClick={() => {
+  const markdownToggle = <Button type="button" variant="ghost" aria-pressed={source || failed} data-pressed={source || failed} disabled={!loaded || failed} className="max-sm:px-2 data-[pressed=true]:bg-kh-bg-hover data-[pressed=true]:text-kh-text" onClick={() => {
     flushEditor();
     if (!source) sourceRef.current = true;
     setSource(value => !value);
-  }}>Markdown</Button>;
+  }}>
+    <FileCode2 className="h-4 w-4 sm:hidden" aria-hidden="true" />
+    <span className="max-sm:sr-only">Markdown</span>
+  </Button>;
   const article = <>
     {recovery && <p role="status" className="mb-3 text-body-sm">
       {recovery === "stale" ? "This document changed while you were away. Your recovered text is kept here; download it before loading the latest version." : "Your unsaved changes were recovered."}
@@ -394,7 +398,7 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
     editorActions={<><AutosaveIndicator state={status} attention={attention} />{markdownToggle}</>}
     titleControl={resolved.source === "TYPED" ? <input aria-label="Title" value={content.title} disabled={!editable} maxLength={512}
       onChange={event => change({ ...queue.current!.current, title: event.target.value })}
-      className="mt-2 block w-full border-0 bg-transparent p-0 text-heading font-semibold tracking-tight text-kh-text outline-none"
+      className="mt-2 block w-full border-0 bg-transparent p-0 text-display font-semibold tracking-tight text-kh-text outline-none"
       onCompositionStart={() => { composing.current = true; writer?.pause(true); }}
       onCompositionEnd={() => { composing.current = false; writer?.pause(!editable || !!recovery || !resolve(queue.current!.current).title); }} /> : undefined}>
     <div className="kh-reading-column py-6">

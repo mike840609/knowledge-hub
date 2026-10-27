@@ -10,6 +10,7 @@ import { Timestamp } from "@/components/ui/timestamp";
 import { reviewRequest } from "@/components/knowledge/review-thread-list";
 import type { ShareCommentNotificationView } from "@/modules/knowledge/domain/share-comment-event";
 import { notificationHref, notificationLine, notificationTitle } from "@/components/knowledge/notification-href";
+import { NotificationListSkeleton } from "@/components/knowledge/knowledge-skeletons";
 
 type ActivityResult = { notifications: ShareCommentNotificationView[]; nextCursor: { createdAt: string; id: string } | null };
 type Tab = "unread" | "all";
@@ -115,7 +116,7 @@ export function InboxPopover({ workspaceId, placement = "header" }: { workspaceI
             </div>
             {error && <p role="alert" className="px-4 py-2 text-body-sm text-kh-danger">{error}</p>}
             <div data-inbox-scroll className="max-h-[min(24rem,calc(100dvh-12rem))] overflow-y-auto lg:max-h-[min(36rem,calc(100dvh-14rem))]">
-              {loading ? <p role="status" className="px-4 py-8 text-center text-body-sm text-kh-text-muted">Loading comments…</p>
+              {loading ? <NotificationListSkeleton compact />
                 : visible.length === 0 ? <div className="px-4 py-9 text-center text-kh-text-muted">
                     <MessageSquareText className="mx-auto mb-2 h-6 w-6" aria-hidden="true" />
                     <p className="text-body-sm">{tab === "unread" ? "You're all caught up." : "No share comments yet."}</p>

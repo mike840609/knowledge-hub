@@ -280,6 +280,7 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
           ...(typeof previous.attributes === "object" ? previous.attributes : {}),
           class: `editor ${options.className}`,
           "aria-label": options.ariaLabel,
+          "aria-multiline": "true",
         },
       }));
       options.configure?.(ctx);

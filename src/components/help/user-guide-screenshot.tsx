@@ -43,15 +43,18 @@ export function UserGuideScreenshots({sectionId,locale}:{sectionId:string;locale
     const caption=zh?shot.zh:shot.en;
     // Framed as a window, so the pictured controls do not read as this page's own.
     return <figure key={shot.light.src} className="my-4">
-      <div className="overflow-hidden rounded-md border border-kh-border bg-kh-bg shadow-popover">
-        <div aria-hidden="true" className="relative flex h-8 items-center border-b border-kh-border bg-kh-bg-raised px-3">
-          <span className="flex gap-2">{[0,1,2].map(i=><span key={i} className="size-3 rounded-full bg-kh-border"/>)}</span>
-          <span className="absolute inset-x-16 truncate text-center text-body-sm text-kh-text-muted">{shot.path[zh?1:0]}</span>
+      <a href={shot.light.src} target="_blank" rel="noreferrer" title={zh?"開啟完整尺寸":"Open full size"} className="kh-focus-ring block rounded-md">
+        <div className="overflow-hidden rounded-md border border-kh-border bg-kh-bg">
+          <div aria-hidden="true" className="relative flex h-8 items-center border-b border-kh-border bg-kh-bg-raised px-3">
+            <span className="flex gap-2">{[0,1,2].map(i=><span key={i} className="size-3 rounded-full bg-kh-border"/>)}</span>
+            <span className="absolute inset-x-16 truncate text-center text-body-sm text-kh-text-muted">{shot.path[zh?1:0]}</span>
+          </div>
+          <Image src={shot.light} alt={caption} sizes="(min-width: 768px) 720px, 100vw" className="h-auto w-full [[data-theme=dark]_&]:hidden"/>
+          <Image src={shot.dark} alt={caption} sizes="(min-width: 768px) 720px, 100vw" className="hidden h-auto w-full [[data-theme=dark]_&]:block"/>
         </div>
-        <Image src={shot.light} alt={caption} sizes="(min-width: 768px) 720px, 100vw" className="h-auto w-full [[data-theme=dark]_&]:hidden"/>
-        <Image src={shot.dark} alt={caption} sizes="(min-width: 768px) 720px, 100vw" className="hidden h-auto w-full [[data-theme=dark]_&]:block"/>
-      </div>
+      </a>
       <figcaption className="mt-2 text-body-sm text-kh-text-secondary"><span className="font-medium text-kh-text">{zh?"畫面":"Screen"}</span> · {caption}
+        <a href={shot.light.src} target="_blank" rel="noreferrer" className="kh-focus-ring mt-1 inline-block rounded-md text-caption text-kh-link underline underline-offset-2">{zh?"開啟完整尺寸":"Open full size"}</a>
         {shot.marks?<ul className="mt-2 space-y-1">{shot.marks.map(mark=><li key={mark[0]}>{zh?mark[1]:mark[0]}</li>)}</ul>:null}
       </figcaption>
     </figure>;

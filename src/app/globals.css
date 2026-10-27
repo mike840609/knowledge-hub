@@ -27,6 +27,7 @@
   --kh-text-secondary: #3b4250;
   --kh-text-muted: #61697a;
   --kh-text-faint: #7b8496;
+  /* Darkened from the reference indigo so white button text clears 4.5:1 in light mode. */
   --kh-primary: #4f5bc8;
   --kh-primary-hover: #414bb4;
   --kh-on-primary: #ffffff;

@@ -167,7 +167,7 @@ export function GraphExplorer({
         </div>
       </div>
       <p id={findHelpId} data-graph-find-help className="text-caption text-kh-text-muted" role="status">{query.trim() ? `${matches} ${matches === 1 ? "match" : "matches"} · ` : ""}{filters.view === "list" ? "Find filters the rows below." : "Find highlights matching nodes; other nodes remain visible."}</p>
-      <details className="text-caption text-kh-text-muted"><summary className="kh-focus-ring w-fit cursor-pointer rounded-md">About graph filters</summary><p className="mt-2">Orphans have no links. Unresolved targets have no saved document.</p></details>
+      <details className="text-caption text-kh-text-muted"><summary className="kh-focus-ring inline-flex min-h-6 w-fit cursor-pointer items-center rounded-md">About graph filters</summary><p className="mt-2">Orphans have no links. Unresolved targets have no saved document.</p></details>
       </>}
       <LinkIndexNote stale={staleDocuments} />
       {truncated ? (

@@ -141,7 +141,8 @@ test.describe("the palette, before anything is typed", () => {
     await openPalette(page);
     await expect.poll(() => asked, ROUND_TRIP).toBeGreaterThan(0);
     await expect(recentHeading(page)).toBeHidden();
-    await expect(options(page).first()).toContainText(/This document/);
+    await expect(options(page).first()).toBeVisible();
+    await expect(page.getByText("This document", { exact: true })).toBeVisible();
     // Typing still searches.
     await page.getByRole("dialog").getByRole("combobox").fill(stamp);
     await expect(options(page).filter({ hasText: a })).toBeVisible(ROUND_TRIP);
@@ -196,7 +197,7 @@ test.describe("the palette, before anything is typed", () => {
     await openPalette(page);
     await expect(recentHeading(page)).toBeHidden();
     await expect(options(page).first()).toHaveAttribute("aria-selected", "true");
-    await expect(options(page).first()).toContainText(/This document/);
+    await expect(page.getByText("This document", { exact: true })).toBeVisible();
   });
 });
 

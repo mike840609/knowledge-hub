@@ -83,7 +83,7 @@ export function ReviewPassageMarkers({ readingRef, markdown, threads }: {
   return <div className="pointer-events-none absolute inset-0" aria-label="Passage comments">
     {markers.map(marker => <button key={marker.id} type="button" data-review-marker={marker.id}
       aria-label={`${marker.count} ${marker.count === 1 ? "comment" : "comments"} on passage: ${marker.quote.slice(0, 80)}`}
-      className="pointer-events-auto absolute right-1 flex h-6 min-w-7 items-center justify-center gap-0.5 rounded-sm text-caption text-kh-text-muted kh-focus-ring hover:bg-kh-bg-selected hover:text-kh-selected-text"
+      className="pointer-events-auto absolute right-1 flex h-6 min-w-7 items-center justify-center gap-0.5 rounded-full bg-kh-bg-subtle px-1.5 text-caption text-kh-text-muted kh-focus-ring hover:bg-kh-bg-selected hover:text-kh-selected-text"
       style={{ top: marker.top }} onClick={() => document.dispatchEvent(new CustomEvent("review-focus-thread", { detail: marker.id }))}>
       <MessageSquare className="size-3" aria-hidden="true" /><span>{marker.count}</span>
     </button>)}
