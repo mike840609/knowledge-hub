@@ -33,7 +33,8 @@ test("browses the persistent explorer with a stable canonical document URL", asy
   // Persistent shell: brand, Workspace selector, and primary nav.
   await expect(page.getByText("Knowledge Hub", { exact: true }).filter({ visible: true })).toBeVisible();
   await expect(page.getByLabel("Workspace: Query Master", { exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Knowledge" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Knowledge" })).toHaveCount(0);
+  await expect(page.getByRole("complementary", { name: "Knowledge explorer" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Sources" })).toBeVisible();
 
   // Legacy query-form controls are gone.

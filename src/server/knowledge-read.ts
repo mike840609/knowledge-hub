@@ -79,6 +79,8 @@ export type WorkspaceShellModel = {
   workspace: WorkspaceNavigationItem;
   navigation: WorkspaceNavigationModel;
   access: WorkspaceAccessView;
+  /** The sidebar's source headers, on every workspace page; trees are read on demand. */
+  sources: SourceView[];
 };
 
 export type KnowledgeExplorerModel = {
@@ -106,7 +108,9 @@ export const getWorkspaceShellModel = cache(async (
   const workspace = workspaces.find((candidate) => candidate.id === workspaceId);
   if (!workspace) return null;
   const access = await services.workspaceAdmin.workspaceState(caller, workspaceId);
+  const sources = sortSourcesByName(await services.queries.listSources(caller, workspaceId, { includeArchived: true }));
   return {
+    sources,
     navigation,
     access,
     identityId: identity.id,

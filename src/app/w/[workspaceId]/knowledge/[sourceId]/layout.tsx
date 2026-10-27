@@ -27,13 +27,7 @@ export default async function SourceExplorerLayout({
     );
   }
   return (
-    <KnowledgeLayout
-      workspaceId={workspaceId}
-      source={model.source}
-      sources={model.sources}
-      collections={model.collections}
-      includeArchived={model.includeArchived}
-    >
+    <KnowledgeLayout collections={model.collections}>
       {children}
     </KnowledgeLayout>
   );

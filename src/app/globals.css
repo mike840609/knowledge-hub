@@ -16,7 +16,6 @@
   --kh-bg-raised: #fafbfc;
   --kh-bg-sunken: #f1f2f5;
   --kh-bg-subtle: #f6f7f9;
-  --kh-bg-explorer: var(--kh-bg-subtle);
   --kh-bg-hover: #eceef2;
   --kh-bg-hover-strong: #e4e7ec;
   --kh-bg-selected: #eef0ff;
@@ -71,7 +70,6 @@
   --kh-bg-raised: #191a1e;
   --kh-bg-sunken: #0a0b0e;
   --kh-bg-subtle: #1d1f24;
-  --kh-bg-explorer: #0e0f12;
   --kh-bg-hover: #24262c;
   --kh-bg-hover-strong: #2b2e35;
   --kh-bg-selected: #23253d;

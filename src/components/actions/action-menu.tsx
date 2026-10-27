@@ -28,8 +28,8 @@ import { rowMenuSections, type Action } from "./action-registry";
 export const SHARE_REQUEST_EVENT = "kh:request-share";
 
 /**
- * Ask the share-link dialog (ShareLinkDialogHost, mounted by the knowledge
- * layout) to open for a document. The one way every surface asks, so the
+ * Ask the share-link dialog (ShareLinkDialogHost, mounted by the app
+ * shell) to open for a document. The one way every surface asks, so the
  * event's shape lives in one place.
  */
 export function requestShare(documentId: string): void {

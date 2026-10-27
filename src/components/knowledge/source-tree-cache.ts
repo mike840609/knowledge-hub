@@ -17,6 +17,12 @@ export class SourceTreeCache {
     if (this.disposed) return;
     this.states = { ...this.states, [id]: state }; this.listeners.forEach(listener => listener());
   }
+  /** A tree the server already read (the current source's) replaces whatever is held for it. */
+  adopt = (seed: SourceCollection[]) => {
+    if (this.disposed || seed.length === 0) return;
+    this.states = { ...this.states, ...Object.fromEntries(seed.map(c => [c.source.id, { status: 'loaded', tree: c.tree } as TreeLoadState])) };
+    this.listeners.forEach(listener => listener());
+  };
   ensure = (id: string): Promise<void> => {
     if (this.disposed) return Promise.resolve();
     const pending = this.pending.get(id); if (pending) return pending;
