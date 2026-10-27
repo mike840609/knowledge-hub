@@ -23,8 +23,8 @@ page the whole window.
 
 Success means:
 
-- the tree, Favorites and Recent are on Home, Graph, Settings and every other
-  workspace page;
+- the tree and Favorites are on Home, Graph, Settings and every other workspace
+  page;
 - one sidebar component serves the wide frame and the narrow drawer;
 - entering a page outside Knowledge reads **no** source tree the reader has not
   expanded;
@@ -58,6 +58,46 @@ contradicts them:
 6. **One background.** The whole sidebar is `bg-sunken`; `--bg-explorer` is
    retired.
 
+## Layout
+
+```text
+┌─────────────────────────────┐
+│ [▣ My Space ▾]   ✎ New  ⇤  │  header, fixed; ⇤ on hover and focus
+│  🔍 Search            ⌘K   │  fixed head from here
+│  🏠 Home                    │  (personal workspaces)
+│  📥 Inbox              3    │  (personal workspaces)
+│  ◎ Graph                    │
+│  ⛁ Sources                  │  each where its permission allows,
+│  ⇪ Shares                   │  as today
+│  ◔ Insights                 │
+│  ⚙ Settings                 │
+├ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┤  one scroll region from here
+│ Favorites                   │
+│ Documents          ⧩ ⋯ +   │  controls on hover
+│   ▾ Notes               +  │  Hub sources open by default
+│     ▸ Folder          + ⋯  │
+│       · Doc           ☆ ⋯  │
+│   ▸ Synced source           │  folder sources closed until opened
+├─────────────────────────────┤
+│  👤 Name                ⋯  │  the only pinned row
+└─────────────────────────────┘
+```
+
+Checked against Notion's and Linear's sidebars on 2026-10-27. Kept as theirs:
+
+- one column under a workspace menu;
+- collapse to nothing (Notion ⌘\, Linear `[`);
+- a `+` beside a section on hover;
+- one background.
+
+The three changes under "Header" and "Default expansion" below, and Recent's
+removal, came out of that check. Not taken:
+
+- Linear's inset content card, which would add a surface layer the contract
+  does not have;
+- moving the user menu into the workspace menu, since the reader already knows
+  where Theme and Density are.
+
 ## What changes from #201
 
 ### Trees load as `main` loads them now
@@ -79,14 +119,22 @@ That spec's rules govern here, on every page:
     Home. Lifted, it survives every navigation inside the workspace, which is
     the cross-page persistence the lazy spec deferred.
   - A server refresh still invalidates it, by the lazy spec's existing rule.
-- **Default expansion stays the lazy spec's:**
-  - the saved choice (`kh:tree-expanded:<workspaceId>`) decides;
-  - otherwise only the current source is open, and outside Knowledge there is
-    none, so nothing opens.
+- **Default expansion.** The saved choice (`kh:tree-expanded:<workspaceId>`)
+  decides. Without one:
+  - the current source is open, as the lazy spec has it;
+  - **every Hub-managed source is open** (Notes, in a personal workspace);
+  - folder-sync sources stay closed until opened.
 
-  #201's built default (`expanded[id] ?? true`) is **not** carried over.
+  Notion opens its sections by default, so their first-level pages show. A
+  sidebar of closed headers on Home would show a reader none of their writing.
+  Hub sources are what the reader wrote, usually one per workspace, so this
+  costs one tree read on entry. Folder-sync trees are the large ones, and they
+  stay unread until asked for.
+
+  #201's built default (`expanded[id] ?? true`) is **not** carried over: it read
+  every tree.
 - **Unchanged from the lazy spec:**
-  - Favorites and Recent resolve through the metadata-only shortcut read;
+  - Favorites resolve through the metadata-only shortcut read;
   - a non-empty filter loads every visible tree;
   - the Move dialog asks the cache for the trees it needs.
 
@@ -98,11 +146,43 @@ reader's Density choice: Compact is 28px / 13px and the default; Comfortable is
 hover controls stay 24px (`sm`); a Compact row's 2px each side is the margin the
 contract already records.
 
-### The header keeps the Inbox
+### Header and head
 
-`main` put the Inbox popover in the rail header (personal workspaces) after #201
-was drafted. The header row is: workspace selector (it replaces the wordmark), then
-Inbox, then collapse (⇤, shown on hover and focus).
+- **The header row** is the workspace selector (it replaces the wordmark), then
+  **New note**, then collapse (⇤, shown on hover and focus).
+  - New note is always shown, as Notion's new-page button and Linear's new-issue
+    button are. It opens `/w/:id/knowledge/new`, which creates in Notes.
+  - Its tooltip names `C` only on Home. There `C` keeps working as today
+    (`isNewNoteKey`); elsewhere a letter belongs to the inline editor
+    (inline-editing spec), so `C` does not become global.
+  - The Notes row's hover `+` stays, for creating inside a folder.
+- **Inbox becomes a row** in the fixed head, under Home (personal workspaces),
+  with the unread count at its end, as Notion's and Linear's are.
+  - It opens the existing Inbox popover, anchored to the row; the popover's
+    contents, polling and Open Inbox link are unchanged.
+  - It was a header button only because the 176px rail could not fit a row's
+    label there (`inbox-popover.spec.ts`). At 256px that reason is gone.
+  - Collapsed or peeking, it is the same row; the drawer has it too.
+- **The head is eight rows** for a personal workspace's owner: Search, Home,
+  Inbox, Graph, Sources, Shares, Insights and Settings. That is ~230px fixed at
+  Compact, kept fixed by #201's 2026-10-15 decision.
+
+### Recent leaves the sidebar
+
+Home already lists Recent, as Notion's Home holds its Recents. A second copy in
+the sidebar costs a section above the tree on every page. The sidebar keeps
+Favorites and Documents.
+
+The recents themselves stay; Home and ⌘K read them. Today the sidebar records
+each open (`source-sidebar.tsx`, the `recordedOpen` effect). That recording moves
+into a recorder that `AppShell` mounts, as #201's `DocumentOpenRecorder` did:
+
+- the sidebar no longer shows recents, so it should not be what keeps them;
+- the narrow drawer's sidebar is unmounted while closed, and a document opened
+  there would go unrecorded.
+
+The sidebar's section and its `kh:sidebar-recent:<id>` key go; recording and
+storage are unchanged.
 
 ### Hosts move to the shell
 
@@ -175,6 +255,9 @@ Three PRs, each green on its own:
      spec's row.
 2. **Width, collapse to 0, peek.** `shell/sidebar-frame.tsx`, ported from #201
    with its *Built* fixes.
+   - Recent leaves the sidebar, and Inbox becomes a row.
+   - The header gains New note.
+   - Hub sources are open by default.
 3. **Hover controls.** `+` on Hub folder rows and on Notes, section-header
    controls on hover, and the chevron on the right. Ported from #201's "Rows and
    section headers", at the current density.
@@ -189,9 +272,14 @@ Three PRs, each green on its own:
 - **e2e (`zz-one-sidebar.spec.ts`, from #201's `zz-notion-sidebar.spec.ts`):**
   1. On Graph, the tree is shown, and a document opened from it lands with the
      same folders expanded.
-  2. **Entering Home with no saved expansion requests no tree**, counted at
-     `/api/workspaces/:id/sources/:id/tree`. Expanding a source requests it
-     once; going to Graph and back requests nothing more.
+  2. **Entering Home with no saved expansion requests only the Hub source's
+     tree**, counted at `/api/workspaces/:id/sources/:id/tree`.
+     - Notes is open, and a folder-sync source is closed and unread.
+     - Expanding the folder source requests it once.
+     - Going to Graph and back requests nothing more.
+  2a. The header's New note opens the composer from Graph. The Inbox row shows
+      the unread count and opens the popover. The sidebar has no Recent section,
+      and Home's Recent still lists a document just opened.
   3. Collapsed, the sidebar is 0 wide; the left edge peeks it, Esc hides it, and
      ⌘\ pins it.
   4. ←/→ on the handle change the width, and a reload keeps it.
@@ -204,6 +292,9 @@ Three PRs, each green on its own:
     updated;
   - `zz-explorer-collapse.spec.ts` is deleted, and its 1512px three-columns
     case moves to (1) with the sidebar open;
+  - `inbox-popover.spec.ts` is rewritten for the row, and its "fits the 176px
+    header" case goes;
+  - cases that read the sidebar's Recent move to Home's;
   - `zz-sidebar-comparison` baselines are re-taken.
 - **Latency:**
   - entering Home and a document, before and after PR 1, measured by
