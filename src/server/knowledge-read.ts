@@ -12,6 +12,7 @@ export type KnowledgeDocumentModel = {
     sourceId: string;
     workspaceId: string;
     status: "ACTIVE" | "ARCHIVED";
+    pageIcon: string | null;
     currentRevision: import("@/modules/knowledge/application/knowledge-query-service").KnowledgeRevisionView;
   };
   revisions: RevisionSummary[];

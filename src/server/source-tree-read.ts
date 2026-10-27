@@ -13,6 +13,6 @@ export async function readSidebarShortcuts(services: Services, caller: CallerCon
   const wanted = new Set(ids);
   const documents = await services.queries.listDocumentSummaries(caller, workspaceId, { includeArchived, excludeArchivedAncestors: true });
   return documents.filter(d => wanted.has(d.documentId) && names.has(d.sourceId)).map(d => ({
-    documentId: d.documentId, sourceId: d.sourceId, label: d.title, sourceName: names.get(d.sourceId)!, ownership: d.ownership,
+    documentId: d.documentId, sourceId: d.sourceId, label: d.title, sourceName: names.get(d.sourceId)!, ownership: d.ownership, pageIcon: d.pageIcon ?? null,
   }));
 }

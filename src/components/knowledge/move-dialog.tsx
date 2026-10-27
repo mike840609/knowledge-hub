@@ -66,14 +66,35 @@ function MoveDialog({ request, collections, onClose, loading, failed, onRetry }:
 
   const kind = request?.node.type === "folder" ? "folder" : "document";
   const label = request?.label ?? "";
+  const bulk = request?.documents && request.documents.length > 1 ? request.documents : null;
 
   async function submit() {
     if (!request || !found || selected === null || busy) return;
     const toParentId = selected === TOP ? null : selected;
-    if (toParentId === found.item.parentId) return;
+    if (!bulk && toParentId === found.item.parentId) return;
     const destination = toParentId === null ? null : found.destinations.find((candidate) => candidate.id === toParentId)?.label ?? null;
     setBusy(true);
     setProblem(null);
+    if (bulk) {
+      const tree = collections.find((collection) => collection.source.id === request.sourceId)?.tree ?? [];
+      const inputs = bulk.flatMap((document) => {
+        const item = tree.find((candidate) => candidate.type === "document" && candidate.documentId === document.documentId);
+        if (!item || item.parentId === toParentId) return [];
+        return [{ nodeId: item.id, label: document.label, from: { parentId: item.parentId, position: item.position } }];
+      });
+      if (inputs.length === 0) {
+        setBusy(false);
+        onClose();
+        return;
+      }
+      const result = await mutations.moveNodes(inputs, { parentId: toParentId, label: destination });
+      setBusy(false);
+      if (result.ok) {
+        if (toParentId !== null) requestRevealFolder(toParentId);
+        onClose();
+      } else setProblem(result.message);
+      return;
+    }
     const result = await mutations.moveNode({
       nodeId: found.item.id,
       label,
@@ -117,7 +138,7 @@ function MoveDialog({ request, collections, onClose, loading, failed, onRetry }:
       <Dialog.Portal>
         <Dialog.Backdrop className={dialogBackdropClasses()} />
         <Dialog.Popup className={dialogPopupClasses("w-[min(26rem,92vw)]")}>
-          <Dialog.Title className="text-title font-semibold">{kind === "folder" ? "Move folder" : "Move document"}</Dialog.Title>
+          <Dialog.Title className="text-title font-semibold">{bulk ? "Move documents" : kind === "folder" ? "Move folder" : "Move document"}</Dialog.Title>
           {loading || failed ? <>
             <Dialog.Description role="status" className="mt-2 text-body text-kh-text-muted">{failed ? "Documents could not be loaded." : "Loading documents…"}</Dialog.Description>
             {failed ? <Button onClick={onRetry}>Retry</Button> : null}
@@ -125,7 +146,7 @@ function MoveDialog({ request, collections, onClose, loading, failed, onRetry }:
           </> : found ? (
             <>
               <Dialog.Description className="mt-1 text-body text-kh-text-muted">
-                {`Choose where “${label}” goes. It will be placed last.`}
+                {bulk ? `Choose where ${bulk.length} documents go. They will be placed last.` : `Choose where “${label}” goes. It will be placed last.`}
               </Dialog.Description>
               <form
                 className="mt-4"

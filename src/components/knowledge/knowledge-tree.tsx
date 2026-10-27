@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronRight, FileText, Star } from "lucide-react";
+import { Archive, Check, ChevronDown, ChevronRight, FileText, FolderInput, Star, X } from "lucide-react";
 import {
   buildKnowledgeTree,
   filterKnowledgeTree,
   reorderStep,
   type KnowledgeTreeNode,
 } from "@/lib/knowledge-navigation";
+import { selectionRange } from "@/lib/tree-selection";
 import type { KnowledgeTreeItem } from "@/modules/knowledge/application/knowledge-query-service";
 import { isStringArray, usePersistedJson } from "@/components/shell/use-persisted-state";
 import { RowActionsTrigger, RowContextMenu } from "@/components/actions/action-menu";
@@ -19,6 +20,7 @@ import { REVEAL_FOLDER_EVENT } from "./move-request";
 import { CLEAR_FILTER_TO_REORDER, alreadyAtEdge, reorderedNode } from "./organize-messages";
 import { Status } from "@/components/ui/status";
 import { Tooltip } from "@/components/ui/tooltip";
+import { buttonClasses } from "@/components/ui/button";
 
 export type KnowledgeTreeProps = {
   items: KnowledgeTreeItem[];
@@ -46,7 +48,13 @@ export type KnowledgeTreeProps = {
    * decides which place from what it shows; whether it may is the actions' say, and the server's.
    */
   onReorder: (input: { nodeId: string; position: number }) => Promise<boolean>;
+  /** Bulk actions from the selection bar; the tree decides which rows they apply to. */
+  onBulkFavorite: (documents: readonly BulkDocument[], favorite: boolean) => void;
+  onBulkMove: (documents: readonly BulkDocument[]) => void;
+  onBulkArchive: (documents: readonly BulkDocument[]) => void;
 };
+
+export type BulkDocument = { documentId: string; label: string };
 
 function documentHref(
   item: Extract<KnowledgeTreeItem, { type: "document" }>,
@@ -72,6 +80,8 @@ function TreeNodeRow({
   documentActions,
   folderActions,
   onRunAction,
+  bulkSelected,
+  onToggleSelection,
 }: {
   node: KnowledgeTreeNode;
   depth: number;
@@ -87,6 +97,8 @@ function TreeNodeRow({
   documentActions: (item: Extract<KnowledgeTreeItem, { type: "document" }>) => readonly Action[];
   folderActions: (item: Extract<KnowledgeTreeItem, { type: "folder" }>) => readonly Action[];
   onRunAction: (action: Action) => void;
+  bulkSelected: ReadonlySet<string>;
+  onToggleSelection: (documentId: string, shiftKey: boolean) => void;
 }) {
   const { item } = node;
   const archived = item.status === "ARCHIVED";
@@ -96,6 +108,7 @@ function TreeNodeRow({
   if (item.type === "document") {
     const selected = selectedDocumentId !== undefined && item.documentId === selectedDocumentId;
     const isFavorite = favoriteDocumentIds.has(item.documentId);
+    const bulkPicked = bulkSelected.has(item.documentId);
     const actions = documentActions(item);
     return (
       <RowContextMenu
@@ -124,10 +137,28 @@ function TreeNodeRow({
             selected ? "font-medium text-kh-selected-text" : "text-kh-text-muted"
           }`}
         >
-          <FileText size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />
+          {item.pageIcon ? <span className={`flex size-3.5 shrink-0 items-center justify-center text-body leading-none ${bulkPicked ? "opacity-0" : "group-hover:opacity-0 group-focus-within:opacity-0"}`} aria-hidden="true">{item.pageIcon}</span> : <FileText size={14} className={`shrink-0 text-kh-text-muted ${bulkPicked ? "opacity-0" : "group-hover:opacity-0 group-focus-within:opacity-0"}`} aria-hidden="true" />}
           <span className="truncate">{item.label}</span>
           {archived ? <Status kind="archived" className="ml-auto shrink-0 text-caption font-normal text-kh-text-muted">Archived</Status> : null}
         </Link>
+        <button
+          type="button"
+          aria-label={`${bulkPicked ? "Deselect" : "Select"} ${item.label}`}
+          aria-pressed={bulkPicked}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onToggleSelection(item.documentId, event.shiftKey);
+          }}
+          className={`absolute left-2 top-1/2 z-10 flex size-5 -translate-y-1/2 items-center justify-center rounded-md kh-focus-ring [@media(hover:none)]:opacity-100 ${bulkPicked ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"}`}
+        >
+          <span
+            aria-hidden="true"
+            className={`flex size-4 items-center justify-center rounded border ${bulkPicked ? "border-kh-primary bg-kh-primary text-kh-on-primary" : `border-kh-border-strong ${selected ? "bg-kh-bg-selected" : "bg-kh-bg"}`}`}
+          >
+            {bulkPicked ? <Check size={11} strokeWidth={3} /> : null}
+          </span>
+        </button>
         <Tooltip label={isFavorite ? "Remove from favorites" : "Add to favorites"}><button type="button" onClick={() => onToggleFavorite(item.documentId)} aria-label={`${isFavorite ? "Remove from" : "Add to"} favorites: ${item.label}`} className={`mr-1 inline-flex kh-control kh-icon-control h-6 w-6 shrink-0 items-center justify-center rounded-md kh-focus-ring ${isFavorite ? "text-kh-selected-text" : "kh-row-action text-kh-text-muted hover:bg-kh-bg-hover"}`}>
           <Star size={14} fill={isFavorite ? "currentColor" : "none"} aria-hidden="true" />
         </button></Tooltip>
@@ -199,6 +230,8 @@ function TreeNodeRow({
               documentActions={documentActions}
               folderActions={folderActions}
               onRunAction={onRunAction}
+              bulkSelected={bulkSelected}
+              onToggleSelection={onToggleSelection}
             />
           ))}
         </ul>
@@ -211,6 +244,16 @@ function TreeNodeRow({
 }
 
 const EMPTY_COLLAPSED: string[] = [];
+
+/** Every document in the order the tree shows it, for shift-click ranges. */
+function documentsInOrder(nodes: readonly KnowledgeTreeNode[]): string[] {
+  const ids: string[] = [];
+  for (const node of nodes) {
+    if (node.item.type === "document") ids.push(node.item.documentId);
+    ids.push(...documentsInOrder(node.children));
+  }
+  return ids;
+}
 
 export function KnowledgeTree({
   items,
@@ -227,6 +270,9 @@ export function KnowledgeTree({
   folderActions,
   onRunAction,
   onReorder,
+  onBulkFavorite,
+  onBulkMove,
+  onBulkArchive,
 }: KnowledgeTreeProps) {
   const router = useRouter();
   const treeRef = useRef<HTMLUListElement>(null);
@@ -239,6 +285,8 @@ export function KnowledgeTree({
   );
   const collapsedIds = useMemo<ReadonlySet<string>>(() => new Set(collapsedList), [collapsedList]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [bulkSelected, setBulkSelected] = useState<ReadonlySet<string>>(() => new Set());
+  const selectionAnchor = useRef<string | null>(null);
 
   const roots = useMemo(() => {
     const nested = buildKnowledgeTree(items);
@@ -254,6 +302,57 @@ export function KnowledgeTree({
     () => (filtering ? new Set<string>() : collapsedIds),
     [filtering, collapsedIds],
   );
+
+  const orderedDocumentIds = useMemo(() => documentsInOrder(roots), [roots]);
+  const selectedDocuments = useMemo(
+    () => orderedDocumentIds.flatMap((documentId) => {
+      if (!bulkSelected.has(documentId)) return [];
+      const item = items.find((candidate): candidate is Extract<KnowledgeTreeItem, { type: "document" }> => candidate.type === "document" && candidate.documentId === documentId);
+      return item ? [{ documentId, label: item.label }] : [];
+    }),
+    [orderedDocumentIds, bulkSelected, items],
+  );
+  // A document that left the tree — archived elsewhere, filtered away — is no
+  // longer selected, and an empty bar disappears with it.
+  useEffect(() => {
+    const present = new Set(orderedDocumentIds);
+    setBulkSelected((previous) => {
+      const next = new Set([...previous].filter((id) => present.has(id)));
+      return next.size === previous.size ? previous : next;
+    });
+  }, [orderedDocumentIds]);
+  // Opening a document is leaving the selection behind; a row click still opens.
+  useEffect(() => {
+    setBulkSelected((previous) => (previous.size === 0 ? previous : new Set()));
+    selectionAnchor.current = null;
+  }, [selectedDocumentId, sourceId]);
+
+  const toggleSelection = useCallback((documentId: string, shiftKey: boolean) => {
+    setBulkSelected((previous) => {
+      const next = new Set(previous);
+      const anchor = selectionAnchor.current;
+      if (shiftKey && anchor && anchor !== documentId) {
+        for (const id of selectionRange(orderedDocumentIds, anchor, documentId)) next.add(id);
+      } else if (next.has(documentId)) next.delete(documentId);
+      else next.add(documentId);
+      return next;
+    });
+    selectionAnchor.current = documentId;
+  }, [orderedDocumentIds]);
+  const clearSelection = useCallback(() => {
+    setBulkSelected(new Set());
+    selectionAnchor.current = null;
+  }, []);
+
+  const allFavorite = selectedDocuments.length > 0 && selectedDocuments.every((document) => favoriteDocumentIds.has(document.documentId));
+  const canMove = selectedDocuments.length > 0 && selectedDocuments.every((document) => {
+    const item = items.find((candidate): candidate is Extract<KnowledgeTreeItem, { type: "document" }> => candidate.type === "document" && candidate.documentId === document.documentId);
+    return item ? documentActions(item).some((action) => action.id === "document.move") : false;
+  });
+  const canArchive = selectedDocuments.length > 0 && selectedDocuments.every((document) => {
+    const item = items.find((candidate): candidate is Extract<KnowledgeTreeItem, { type: "document" }> => candidate.type === "document" && candidate.documentId === document.documentId);
+    return item ? documentActions(item).some((action) => action.id === "document.archive") : false;
+  });
 
   // Reveal only the hidden portion of the selected row, without moving the
   // document pane or recentering a row that is already visible.
@@ -390,6 +489,11 @@ export function KnowledgeTree({
   };
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLElement>) {
+    if (event.key === "Escape" && bulkSelected.size > 0) {
+      event.preventDefault();
+      clearSelection();
+      return;
+    }
     // Alt+arrow is a different key from the arrow: the plain one moves the focus, this one moves the row.
     if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
       const row = (event.target as HTMLElement).closest?.('[role="treeitem"]') as HTMLElement | null;
@@ -488,6 +592,49 @@ export function KnowledgeTree({
     <div aria-live="polite" aria-atomic="true" className="sr-only">
       <p key={announcement.sequence}>{announcement.text}</p>
     </div>
+    {selectedDocuments.length > 0 ? (
+      <div role="toolbar" aria-label="Selected documents" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); clearSelection(); } }} className="sticky top-0 z-20 mb-1 flex items-center gap-0.5 rounded-md border border-kh-border bg-kh-bg-raised px-1 py-1 shadow-popover">
+        <span aria-live="polite" className="whitespace-nowrap px-1 text-caption text-kh-text-muted tabular-nums">{selectedDocuments.length} selected</span>
+        <Tooltip label={allFavorite ? "Remove from favorites" : "Add to favorites"}>
+          <button
+            type="button"
+            aria-label={allFavorite ? "Remove selected from favorites" : "Add selected to favorites"}
+            onClick={() => onBulkFavorite(selectedDocuments, !allFavorite)}
+            className={buttonClasses({ variant: "ghost", icon: true, size: "sm" })}
+          >
+            <Star size={14} fill={allFavorite ? "currentColor" : "none"} aria-hidden="true" />
+          </button>
+        </Tooltip>
+        <Tooltip label="Move documents…">
+          <button
+            type="button"
+            aria-label="Move selected documents"
+            disabled={!canMove}
+            onClick={() => onBulkMove(selectedDocuments)}
+            className={buttonClasses({ variant: "ghost", icon: true, size: "sm" })}
+          >
+            <FolderInput size={14} aria-hidden="true" />
+          </button>
+        </Tooltip>
+        <Tooltip label="Archive documents">
+          <button
+            type="button"
+            aria-label="Archive selected documents"
+            disabled={!canArchive}
+            onClick={() => onBulkArchive(selectedDocuments)}
+            className={buttonClasses({ variant: "ghost", icon: true, size: "sm" })}
+          >
+            <Archive size={14} aria-hidden="true" />
+          </button>
+        </Tooltip>
+        <span className="flex-1" />
+        <Tooltip label="Clear selection">
+          <button type="button" aria-label="Clear selection" onClick={clearSelection} className={buttonClasses({ variant: "ghost", icon: true, size: "sm" })}>
+            <X size={14} aria-hidden="true" />
+          </button>
+        </Tooltip>
+      </div>
+    ) : null}
     <ul
       ref={treeRef}
       role="tree"
@@ -514,6 +661,8 @@ export function KnowledgeTree({
           documentActions={documentActions}
           folderActions={folderActions}
           onRunAction={onRunAction}
+          bulkSelected={bulkSelected}
+          onToggleSelection={toggleSelection}
         />
       ))}
     </ul>

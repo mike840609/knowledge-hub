@@ -1,6 +1,6 @@
 "use client";
 import { startTransition, useEffect, useState } from 'react';
-export type SidebarShortcut = { documentId: string; sourceId: string; label: string; sourceName: string; ownership: 'SOURCE_MANAGED' | 'HUB_MANAGED' };
+export type SidebarShortcut = { documentId: string; sourceId: string; label: string; sourceName: string; ownership: 'SOURCE_MANAGED' | 'HUB_MANAGED'; pageIcon: string | null };
 export function useSidebarShortcuts(workspaceId: string, idsKey: string, includeArchived: boolean, snapshot: unknown) {
   const [attempt, setAttempt] = useState(0);
   const [result, setResult] = useState<{ key: string; documents: SidebarShortcut[]; error: boolean } | null>(null);

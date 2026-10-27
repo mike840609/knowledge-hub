@@ -12,4 +12,6 @@ export interface DocumentRepository {
   assertComplete(documentId: string): Promise<void>;
   assertCompleteMany(documentIds: readonly string[]): Promise<void>;
   updateStatus(documentId: string, status: "ACTIVE" | "ARCHIVED", actorId: string): Promise<void>;
+  /** Sets or clears the page's emoji; it is presentation, not a revision. */
+  updatePageIcon(documentId: string, icon: string | null, actorId: string): Promise<void>;
 }

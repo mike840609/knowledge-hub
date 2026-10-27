@@ -42,6 +42,10 @@ const config: Config = {
       // An h3: the reference's 17px, between body text and `heading` (reader-measure spec §2).
       subheading: ["17px", { lineHeight: "26px", letterSpacing: "0" }],
       display: ["24px", { lineHeight: "32px", letterSpacing: "-0.015em" }], // interpolated
+      // A page's own title, not a title in a list: Notion's document scale
+      // begins around here, and the extra size is what separates the page from
+      // the article it opens. Lists and tables keep `title`/`body`.
+      "page-title": ["32px", { lineHeight: "40px", letterSpacing: "-0.02em" }],
     },
     // Rungs of the reference ladder (4/6/8/12/16/24/32), taking the four this
     // product needs: inline chrome, controls, menus, modals. 10px, used

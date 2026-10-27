@@ -125,7 +125,7 @@ export default async function KnowledgeDocumentPage({
     return <EditableDocument key={documentId} markdown={selectedRevision.markdown} metadataTitle={selectedRevision.metadata.title}
       revisionId={selectedRevision.id} userId={shell.identityId} personal={shell.workspace.type === "PERSONAL"}
       standIn={viewer} links={linkView ? renderedLinksFrom(linkView, inspectorData.createLinks ?? {}) : undefined} backlinks={linkView ? <BacklinksFooter view={linkView} /> : null}
-      detail={{ breadcrumb, title: selectedRevision.title, status: view.status, updatedAt: selectedRevision.createdAt,
+      detail={{ breadcrumb, title: selectedRevision.title, status: view.status, pageIcon: view.pageIcon, updatedAt: selectedRevision.createdAt,
         revisionBanner: null, inspectorData, sourceStatus: explorer.source.status, readOnly: false,
         syncHref: null, ownership: explorer.source.ownership, contentOwnsTitle, outline: extractOutline(selectedRevision.markdown) }} />;
   }
@@ -150,6 +150,7 @@ export default async function KnowledgeDocumentPage({
       syncHref={explorer?.source.sourceType === "FOLDER_SYNC" && explorer.source.status === "ACTIVE" ? `/w/${workspaceId}/sources/${sourceId}/update` : null}
       ownership={explorer?.source.ownership ?? "SOURCE_MANAGED"}
       contentOwnsTitle={contentOwnsTitle}
+      pageIcon={view.pageIcon}
       outline={extractOutline(selectedRevision.markdown)}
     >
       <div className="kh-reading-column py-6">

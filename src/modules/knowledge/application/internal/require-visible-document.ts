@@ -2,6 +2,7 @@ import { syncCallerIdentity } from "@/modules/identity/application/sync-caller-i
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { DocumentNotFoundError, SourceNotFoundError } from "../../domain/errors";
 import type { SourcePolicy } from "../../domain/source-policy";
+import type { KnowledgeDocument } from "../../domain/document";
 import type { KnowledgeRepositories } from "../../ports/unit-of-work";
 
 export async function requireSourcePolicy(repositories: KnowledgeRepositories, sourceId: string): Promise<SourcePolicy> {
@@ -23,7 +24,7 @@ export async function requireVisibleDocument(
   caller: CallerContext,
   documentId: string,
   includeArchived: boolean,
-): Promise<{ document: { id: string; sourceId: string; status: "ACTIVE" | "ARCHIVED" }; policy: SourcePolicy }> {
+): Promise<{ document: KnowledgeDocument; policy: SourcePolicy }> {
   await syncCallerIdentity(repositories.users, caller);
   const document = await repositories.documents.findById(documentId);
   if (!document) throw new DocumentNotFoundError();

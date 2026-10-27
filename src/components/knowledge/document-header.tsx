@@ -2,10 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState, type Ref, type ReactNode } from "react";
-import { LockKeyhole, MessageSquare, PanelRight } from "lucide-react";
+import { LockKeyhole, MessageSquare, MoreHorizontal, PanelRight, Star } from "lucide-react";
 import { ActionIcon } from "@/components/actions/action-icon";
+import { ActionMenuItems } from "@/components/actions/action-menu";
+import type { Action } from "@/components/actions/action-registry";
 import { Badge } from "@/components/ui/badge";
 import { buttonClasses } from "@/components/ui/button";
+import { MenuContent, MenuRoot, MenuTrigger } from "@/components/ui/menu";
 import { Tooltip } from "@/components/ui/tooltip";
 import { formatDateTime, formatRelativeTime } from "@/lib/format-date";
 import { useDisplayTimeZone } from "@/components/ui/timestamp";
@@ -30,11 +33,24 @@ export function DocumentHeader({
   titleControl,
   editorActions,
   readOnlyReason,
+  favorite,
+  onToggleFavorite,
+  actions,
+  onRunAction,
+  beforeTitle,
 }: {
   titleControl?: ReactNode;
+  /** Above the title: the page's icon, when there is one to show. */
+  beforeTitle?: ReactNode;
   /** The editor's own: its save status and the Markdown toggle, before Share. */
   editorActions?: ReactNode;
   readOnlyReason?: ReactNode;
+  /** Whether this page is in the reader's favorites; absent where favoriting is not offered. */
+  favorite?: boolean;
+  onToggleFavorite?: () => void;
+  /** The page's own actions, from the one registry. Already narrowed to what this surface shows. */
+  actions?: readonly Action[];
+  onRunAction?: (action: Action) => void;
   breadcrumb: DocumentBreadcrumbSegment[];
   title: string;
   status: "ACTIVE" | "ARCHIVED";
@@ -131,13 +147,37 @@ export function DocumentHeader({
             </button>
           </Tooltip>
           ) : null}
+          {onToggleFavorite ? (
+            <Tooltip label={favorite ? "Remove from favorites" : "Add to favorites"}>
+              <button
+                type="button"
+                onClick={onToggleFavorite}
+                aria-label={favorite ? "Remove from favorites" : "Add to favorites"}
+                aria-pressed={favorite}
+                className={buttonClasses({ variant: "ghost", icon: true, className: favorite ? "text-kh-selected-text" : "" })}
+              >
+                <Star className="h-4 w-4" fill={favorite ? "currentColor" : "none"} aria-hidden="true" />
+              </button>
+            </Tooltip>
+          ) : null}
+          {actions && actions.length > 0 && onRunAction ? (
+            <MenuRoot>
+              <MenuTrigger aria-label="Document actions" className={buttonClasses({ variant: "ghost", icon: true })}>
+                <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+              </MenuTrigger>
+              <MenuContent align="end" className="w-56">
+                <ActionMenuItems actions={actions} onRun={onRunAction} />
+              </MenuContent>
+            </MenuRoot>
+          ) : null}
         </div>
       </div>
       </div>
       <header ref={headerRef}>
         <div className="kh-reading-column pb-3">
+          {beforeTitle}
           {titleControl ?? (contentOwnsTitle ? null : (
-            <h1 className="mt-2 truncate text-display font-semibold tracking-tight text-kh-text" title={title}>{title}</h1>
+            <h1 className="mt-2 truncate text-page-title font-semibold tracking-tight text-kh-text" title={title}>{title}</h1>
           ))}
           <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-kh-text-muted">
             {readOnlyReason}

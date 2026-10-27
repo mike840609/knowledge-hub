@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronRight, Clock3, FileText, LockKeyhole, MoreHorizontal, ChevronsLeft, Plus, ListFilter, Star } from "lucide-react";
 import { ActionIcon } from "@/components/actions/action-icon";
-import { favoritesInPlace, rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
+import { favoritesInPlace, rememberDocument, setFavoriteDocuments, toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { MenuCheckboxItem, MenuContent, MenuItem, MenuRoot, MenuTrigger } from "@/components/ui/menu";
@@ -22,6 +22,7 @@ import { documentShortcutKey, useDocumentShortcuts } from "./use-document-shortc
 import { useTreeMutations } from "./use-tree-mutations";
 import { useActionRunner } from "@/components/actions/action-menu";
 import { actionsFor, type ActionTarget, type FolderTarget } from "@/components/actions/action-registry";
+import { requestMove } from "./move-request";
 
 /** Why a synced source's documents cannot be edited here; read after the name, never part of it. */
 const READ_ONLY_DESCRIPTION = "Synced from a folder, read-only in the Hub";
@@ -91,10 +92,10 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
     .sort((a, b) => Number(b.source.sourceType === "HUB") - Number(a.source.sourceType === "HUB")),
   [headers, collections, showArchived, includeArchived]);
   const documents = useMemo(() => {
-    const map = new Map<string, { documentId: string; sourceId: string; sourceName: string; ownership: SourceView["ownership"]; label: string }>();
+    const map = new Map<string, { documentId: string; sourceId: string; sourceName: string; ownership: SourceView["ownership"]; label: string; pageIcon: string | null }>();
     for (const collection of visibleCollections) {
       for (const item of collection.tree) {
-        if (item.type === "document") map.set(`${collection.source.id}:${item.documentId}`, { documentId: item.documentId, sourceId: collection.source.id, sourceName: collection.source.name, ownership: collection.source.ownership, label: item.label });
+        if (item.type === "document") map.set(`${collection.source.id}:${item.documentId}`, { documentId: item.documentId, sourceId: collection.source.id, sourceName: collection.source.name, ownership: collection.source.ownership, label: item.label, pageIcon: item.pageIcon ?? null });
       }
     }
     for (const document of shortcutMetadata.documents) {
@@ -157,7 +158,7 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
     return <li key={key} className={`kh-interactive-row group flex kh-rail-row items-center ${selected ? "bg-kh-bg-selected hover:bg-kh-bg-selected" : ""}`}>
       {readOnly ? <span id={sourceNameId} hidden>{document.sourceName}</span> : null}
       <Link href={`/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}${showArchived ? "?includeArchived=true" : ""}`} prefetch={selected ? false : undefined} title={`${document.label} · ${document.sourceName}`} aria-current={selected ? "page" : undefined} aria-describedby={readOnly ? `${sourceNameId} ${readOnlyDescriptionId}` : undefined} className={`kh-control flex kh-rail-row min-w-0 flex-1 items-center gap-2 px-2 kh-rail-text kh-focus-ring ${selected ? "font-medium text-kh-selected-text" : "text-kh-text-muted"}`}>
-        {favorite ? <FileText size={14} className="shrink-0" aria-hidden="true" /> : <Clock3 size={14} className="shrink-0" aria-hidden="true" />}
+        {document.pageIcon ? <span className="shrink-0 text-body leading-none" aria-hidden="true">{document.pageIcon}</span> : favorite ? <FileText size={14} className="shrink-0" aria-hidden="true" /> : <Clock3 size={14} className="shrink-0" aria-hidden="true" />}
         <span className="truncate">{document.label}</span>
         {readOnly ? <LockKeyhole size={14} data-read-only-cue="" className="shrink-0 text-kh-text-muted" aria-hidden="true" /> : null}
       </Link>
@@ -275,7 +276,7 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
                         render={<Link href={`/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}${showArchived ? "?includeArchived=true" : ""}`} prefetch={selected ? false : undefined} aria-current={selected ? "page" : undefined} aria-describedby={document.ownership === "SOURCE_MANAGED" ? readOnlyDescriptionId : undefined} />}
                         className={selected ? "bg-kh-bg-selected font-medium text-kh-selected-text" : ""}
                       >
-                        <FileText size={14} className="shrink-0" aria-hidden="true" />
+                        {document.pageIcon ? <span className="shrink-0 text-body leading-none" aria-hidden="true">{document.pageIcon}</span> : <FileText size={14} className="shrink-0" aria-hidden="true" />}
                         <span className="min-w-0 flex-1 truncate" title={document.label}>{document.label}</span>
                         <span className="max-w-[40%] shrink-0 truncate text-caption text-kh-text-muted">{document.sourceName}</span>
                         {document.ownership === "SOURCE_MANAGED" ? <LockKeyhole size={14} data-read-only-cue="" className="shrink-0 text-kh-text-muted" aria-hidden="true" /> : null}
@@ -374,6 +375,19 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
                   })}
                   onRunAction={runAction}
                   onReorder={async (input) => (await mutations.reorderNode(input)).ok}
+                  onBulkFavorite={(documents, favorite) => updateShortcuts((previous) => setFavoriteDocuments(previous, documents.map((document) => documentShortcutKey(candidate.id, document.documentId)), favorite))}
+                  onBulkMove={(documents) => {
+                    if (documents.length === 0) return;
+                    requestMove({
+                      sourceId: candidate.id,
+                      label: `${documents.length} documents`,
+                      node: { type: "document", documentId: documents[0].documentId },
+                      documents,
+                    });
+                  }}
+                  onBulkArchive={(documents) => {
+                    void mutations.archiveDocuments(documents.map((document) => ({ documentId: document.documentId, sourceId: candidate.id, title: document.label })));
+                  }}
                 /> : null}
               </div>
             </section>

@@ -112,6 +112,9 @@ export function useActionRunner({ onToggleFavorite }: ActionHandlers) {
             case "document.archive":
               void mutations.archiveDocument({ documentId: effect.documentId, sourceId: effect.sourceId, title: effect.label ?? "Untitled document" });
               return;
+            case "document.duplicate":
+              void mutations.duplicateDocument({ documentId: effect.documentId, sourceId: effect.sourceId, title: effect.label ?? "Untitled document" });
+              return;
             case "document.restore":
               void mutations.restoreDocument({ documentId: effect.documentId, sourceId: effect.sourceId, title: effect.label ?? "Untitled document" });
               return;

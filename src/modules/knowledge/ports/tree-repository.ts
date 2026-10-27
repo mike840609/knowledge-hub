@@ -1,11 +1,12 @@
 import type { KnowledgeTreeNode } from "../domain/tree-node";
 
-export type TreeViewNode = KnowledgeTreeNode & { title: string | null; documentStatus: "ACTIVE" | "ARCHIVED" | null; currentRevisionId: string | null };
+export type TreeViewNode = KnowledgeTreeNode & { title: string | null; pageIcon?: string | null; documentStatus: "ACTIVE" | "ARCHIVED" | null; currentRevisionId: string | null };
 
 export type DocumentSummary = {
   documentId: string; sourceId: string; title: string; updatedAt: Date;
   ownership: "SOURCE_MANAGED" | "HUB_MANAGED";
   status: "ACTIVE" | "ARCHIVED"; sourceStatus: "ACTIVE" | "ARCHIVED";
+  pageIcon?: string | null;
 };
 
 export interface TreeRepository {

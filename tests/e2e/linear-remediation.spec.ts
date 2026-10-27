@@ -130,7 +130,7 @@ test('mobile menu contains contextual navigation and closes after selecting a do
   await expect(menu).not.toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole('region', { name: 'Document content', exact: true }).evaluate(el => { el.scrollTop = el.scrollHeight; });
-  await page.getByRole('button', { name: 'Document actions', exact: true }).click();
+  await page.getByRole('banner').getByRole('button', { name: 'Document actions', exact: true }).click();
   await expect(page.getByRole('menuitem', { name: 'Edit document', exact: true })).toHaveCount(0);
   await expect(page.getByRole('menuitem', { name: 'Share link…', exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
