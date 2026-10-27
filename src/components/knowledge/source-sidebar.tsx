@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, ChevronRight, Clock3, FileText, LockKeyhole, MoreHorizontal, ChevronsLeft, Plus, ListFilter, Star } from "lucide-react";
+import { ChevronDown, ChevronRight, Clock3, FileText, LockKeyhole, MoreHorizontal, Plus, ListFilter, Star } from "lucide-react";
 import { ActionIcon } from "@/components/actions/action-icon";
 import { favoritesInPlace, rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
@@ -37,8 +37,6 @@ export type SourceSidebarProps = {
   retryTree?: (id: string) => Promise<void>;
   selectedDocumentId?: string;
   includeArchived: boolean;
-  /** Given where the explorer stands beside the content (desktop); the navigation menu's copy has no way to collapse. */
-  onCollapse?: () => void;
 };
 
 function withoutArchivedSubtrees(items: KnowledgeTreeItem[]): KnowledgeTreeItem[] {
@@ -54,7 +52,7 @@ function withoutArchivedSubtrees(items: KnowledgeTreeItem[]): KnowledgeTreeItem[
   return items.filter((item) => !hidden(item));
 }
 
-export function SourceSidebar({ workspaceId, source, collections, sources, treeStates, ensureTree, retryTree, selectedDocumentId, includeArchived, onCollapse }: SourceSidebarProps) {
+export function SourceSidebar({ workspaceId, source, collections, sources, treeStates, ensureTree, retryTree, selectedDocumentId, includeArchived }: SourceSidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -201,7 +199,7 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
   }
 
   return (
-    <aside aria-label="Knowledge explorer" aria-busy={!sidebarReady} className="kh-sidebar-surface flex h-full min-h-0 w-full shrink-0 flex-col gap-3 border-t border-kh-border lg:border-r lg:border-t-0 bg-kh-bg-explorer px-3 pb-3 pt-2">
+    <aside aria-label="Knowledge explorer" aria-busy={!sidebarReady} className="kh-sidebar-surface flex h-full min-h-0 w-full shrink-0 flex-col gap-3 px-2 pb-3 pt-2">
       <div className="flex shrink-0 items-center justify-between gap-2">
         <h2 className="px-2 text-caption font-medium text-kh-text-muted">Documents</h2>
         <div className="flex items-center gap-0.5">
@@ -235,13 +233,6 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
               </MenuCheckboxItem>
             </MenuContent>
           </MenuRoot>
-          {onCollapse ? (
-            <Tooltip label="Hide documents">
-              <button type="button" data-explorer-collapse aria-label="Hide documents" onClick={onCollapse} className={buttonClasses({ variant: "ghost", icon: true })}>
-                <ChevronsLeft size={16} aria-hidden="true" />
-              </button>
-            </Tooltip>
-          ) : null}
         </div>
       </div>
       {filterOpen ? <div className="shrink-0"><TreeFilter value={query} onChange={setQuery} onClose={closeFilter} /></div> : null}

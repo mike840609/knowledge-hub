@@ -37,7 +37,9 @@ test("personal rollout: disabled teams, drafts across browsers, organize, export
   await resumed.getByRole("textbox", { name: "Markdown", exact: true }).fill("Persistent draft body\n\nSaved");
   expect((await savedDocument).ok()).toBe(true);
   await page.goto(`/w/${workspaceId}/home`);
-  await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Knowledge" }).click();
+  // Home carries the tree too; the Knowledge route still resolves for links that go through it.
+  await expect(page.getByRole("complementary", { name: "Knowledge explorer" })).toBeVisible(wait);
+  await page.goto(`/w/${workspaceId}/knowledge`);
   await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/knowledge(?:/|$)`), wait);
   await page.goto(`${href}?revision=1`);
   const content = page.getByRole("region", { name: "Document content", exact: true });

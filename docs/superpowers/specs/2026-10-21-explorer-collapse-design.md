@@ -1,5 +1,9 @@
 # Knowledge explorer: collapse to a strip
 
+**Superseded** by [2026-10-27-one-sidebar-design.md](2026-10-27-one-sidebar-design.md):
+the explorer is now part of the one sidebar, and its strip, Hide/Show documents and
+`kh:explorer-collapsed` are gone. Kept as architecture history.
+
 Amends the frontend design language ("The Knowledge explorer beside it has no
 collapse"). Desktop (`lg` and up) only; the narrow window's menu is unchanged.
 

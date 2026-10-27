@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, useMemo } from 'react';
+import { act, useLayoutEffect, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, expect, it, vi } from 'vitest';
 import { SourceSidebar } from '@/components/knowledge/source-sidebar';
@@ -18,7 +18,8 @@ vi.mock('@/components/ui/tooltip',()=>({Tooltip:({children}:{children:React.Reac
 const sources=[{id:'a',name:'Alpha',status:'ACTIVE',ownership:'HUB_MANAGED',sourceType:'HUB'},{id:'b',name:'Beta',status:'ACTIVE',ownership:'SOURCE_MANAGED',sourceType:'FOLDER_SYNC'}] as SourceView[];
 function Host(){
  const seed=useMemo(()=>[{source:sources[0],tree:[]}],[]);
- const trees=useSourceTrees('w',sources,seed);
+ const trees=useSourceTrees('w',sources);
+ useLayoutEffect(()=>trees.adopt(seed),[trees.adopt,seed]);
  return <SourceSidebar workspaceId="w" source={sources[0]} sources={sources} collections={trees.collections} treeStates={trees.states} ensureTree={trees.ensure} retryTree={trees.retry} includeArchived />;
 }
 let cleanup:()=>Promise<void>;

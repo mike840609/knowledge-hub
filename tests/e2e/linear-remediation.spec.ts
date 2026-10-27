@@ -32,15 +32,15 @@ test('reader and composer keep their column and expose commands during long scro
   const breadcrumb = region.getByRole('navigation', { name: 'Breadcrumb' });
   await expect(breadcrumb).toBeVisible(wait);
   const readerX = (await breadcrumb.boundingBox())!.x;
-  // The expanded navigation rail is 176px; verify the reader starts after it.
-  expect((await page.locator('main').boundingBox())!.x).toBe(176);
+  // The one sidebar is 256px and holds the tree; the reader starts after it.
+  expect((await page.locator('main').boundingBox())!.x).toBe(256);
+  const sidebar = page.locator('aside').first();
   const explorer = page.getByRole('complementary', { name: 'Knowledge explorer' });
-  const expandedExplorer = (await explorer.boundingBox())!;
-  expect(expandedExplorer.y).toBe((await page.locator('main').boundingBox())!.y);
-  expect(expandedExplorer.width).toBe(288);
-  // A wide window has no topbar: rail, explorer and content start at its top edge.
+  await expect(sidebar.getByRole('complementary', { name: 'Knowledge explorer' })).toBeVisible();
+  // A wide window has no topbar: sidebar and content start at its top edge.
   await expect(page.locator('header').first()).toBeHidden();
-  expect(expandedExplorer.y).toBe(0);
+  expect((await sidebar.boundingBox())!.y).toBe(0);
+  expect((await page.locator('main').boundingBox())!.y).toBe(0);
   // The rail opens with the wordmark, then the workspace switcher, then Search, then the navigation.
   const workspace = page.getByRole('button', { name: /^Workspace:/ });
   const search = page.getByRole('button', { name: 'Quick search', exact: true });
@@ -50,13 +50,12 @@ test('reader and composer keep their column and expose commands during long scro
     expect((await workspace.boundingBox())!.y).toBeLessThan((await search.boundingBox())!.y);
     expect((await search.boundingBox())!.y).toBeLessThan((await primary.boundingBox())!.y);
   };
-  await inRail(176);
+  await inRail(256);
   expect((await page.getByText('Knowledge Hub', { exact: true }).filter({ visible: true }).boundingBox())!.y).toBeLessThan((await workspace.boundingBox())!.y);
-  // With no topbar, the rail's wordmark, the explorer's first row and the breadcrumb share one top line.
+  // With no topbar, the sidebar's wordmark and the breadcrumb share one top line.
   const centre = async (locator: ReturnType<Page['locator']>) => { const box = (await locator.boundingBox())!; return box.y + box.height / 2; };
   const line = await centre(breadcrumb);
   expect(Math.abs(await centre(page.getByText('Knowledge Hub', { exact: true }).filter({ visible: true })) - line)).toBeLessThanOrEqual(1);
-  expect(Math.abs(await centre(explorer.getByRole('heading', { name: 'Documents', exact: true })) - line)).toBeLessThanOrEqual(1);
   await page.screenshot({ path: info.outputPath('reader-navigation-expanded.png') });
   // Scrolling pins the breadcrumb line — location › title, and its actions — to the top of the reading column.
   const regionBox = (await region.boundingBox())!;
@@ -81,13 +80,13 @@ test('reader and composer keep their column and expose commands during long scro
   await page.keyboard.press('Meta+i');
   await region.evaluate(el => { el.scrollTop = 0; });
   await page.getByRole('button', { name: 'Collapse navigation' }).click();
-  await expect(explorer).toBeVisible();
-  expect((await explorer.boundingBox())!.x).toBe(48);
+  // The tree is part of the sidebar, so it collapses with it.
+  await expect(explorer).toBeHidden();
+  expect((await page.locator('main').boundingBox())!.x).toBe(48);
   await inRail(48);
   await search.click();
   await expect(page.getByRole('dialog', { name: 'Search and actions' })).toBeVisible();
   await page.keyboard.press('Escape');
-  expect((await explorer.boundingBox())!.height).toBe(expandedExplorer.height);
   await page.screenshot({ path: info.outputPath('reader-navigation-collapsed.png') });
   await page.getByRole('button', { name: 'Expand navigation' }).click();
   await page.goto(`${doc.href}/edit`);
@@ -208,7 +207,7 @@ test('touch tree controls stay visible, usable and separated in both themes', as
     expect(actionsBox.x + actionsBox.width).toBeLessThanOrEqual(starBox.x);
     await mobile.screenshot({ path: info.outputPath('mobile-menu-light.png') });
     await mobile.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
-    await expect(menu.getByRole('link', { name: 'Knowledge', exact: true })).toHaveCSS('background-color', 'rgb(36, 38, 44)');
+    await expect(row).toHaveAttribute('aria-current', 'page');
     await mobile.screenshot({ path: info.outputPath('mobile-menu-dark.png') });
   } finally { await context.close(); }
 });

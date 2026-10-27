@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { NavigationContext } from "./navigation-context";
 import type { WorkspaceShellModel } from "@/server/knowledge-read";
 import { DocumentTopbarContext, type DocumentTopbarState } from "./document-topbar-context";
 import { Topbar } from "@/components/shell/topbar";
@@ -21,9 +20,15 @@ import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { NAV_TOGGLE_SHORTCUT } from "@/components/actions/action-registry";
 import { matchesShortcut } from "@/lib/shortcut-keys";
 import { TOGGLE_NAV_EVENT } from "./nav-toggle";
+import { SidebarTree } from "./sidebar";
+import { SourceTreesContext, useSourceTrees } from "@/components/knowledge/use-source-trees";
+import { FolderNameDialogHost } from "@/components/knowledge/folder-name-dialog";
+import { MoveDialogHost } from "@/components/knowledge/move-dialog";
+import { PeekHost } from "@/components/knowledge/peek-host";
+import { ShareLinkDialogHost } from "@/components/knowledge/share-link-dialog";
 
 export function AppShell({ model, children }: { model: WorkspaceShellModel; children: ReactNode }) {
-  const [mobileExplorerTarget, setMobileExplorerTarget] = useState<HTMLElement | null>(null);
+  const trees = useSourceTrees(model.workspace.id, model.sources);
   const authorization = useWorkspaceAuthorizationRefresh(model.access, model.navigation);
   const [documentTopbar, setDocumentTopbar] = useState<DocumentTopbarState | null>(null);
   const [navOpen, setNavOpen] = useState(false);
@@ -84,10 +89,12 @@ export function AppShell({ model, children }: { model: WorkspaceShellModel; chil
     };
   }, [toggleNavigation]);
 
+  const sidebar = <SidebarTree workspaceId={model.workspace.id} sources={model.sources} />;
+
   return (
     <WorkspaceAuthorizationContext.Provider value={authorization}>
     <DocumentTopbarContext.Provider value={{ document: documentTopbar, setDocument: setDocumentTopbar }}>
-    <NavigationContext.Provider value={{ mobileExplorerTarget, closeNavigation: () => setNavOpen(false) }}>
+    <SourceTreesContext.Provider value={trees}>
     <ToastProvider>
     <TooltipProvider delay={500} closeDelay={0}>
     <div className="flex h-screen overflow-hidden flex-col bg-kh-bg-subtle text-kh-text supports-[height:100dvh]:h-dvh">
@@ -96,8 +103,7 @@ export function AppShell({ model, children }: { model: WorkspaceShellModel; chil
       {!authorization.confirmed && !authorization.revoked && <p role="alert" className="bg-kh-bg p-3 text-body text-kh-danger">Unable to confirm workspace access. Changes are paused. <button className="underline" onClick={() => void authorization.refresh()}>Retry</button></p>}
       {authorization.access.workspace.lifecycleState === "ARCHIVED" && <ArchivedWorkspaceBanner workspaceId={model.workspace.id} canRestore={authorization.confirmed && authorization.access.actions.canRestore} />}
       <div className="flex min-h-0 flex-1">
-        <aside className={`hidden shrink-0 border-r border-kh-border bg-kh-bg-sunken lg:flex lg:flex-col ${navCollapsed ? "w-12" : "w-44"}`}>
-          {/* Keep the full wordmark with Inbox and collapse controls in the compact 176px header. */}
+        <aside className={`hidden shrink-0 border-r border-kh-border bg-kh-bg-sunken lg:flex lg:flex-col ${navCollapsed ? "w-12" : "w-64"}`}>
           <div className={`flex h-12 shrink-0 items-center gap-1 ${navCollapsed ? "justify-center px-2" : "px-2"}`}>
             {navCollapsed ? null : <><span className="min-w-0 flex-1 whitespace-nowrap text-caption font-semibold text-kh-text">Knowledge Hub</span>{authorization.access.workspace.type === "PERSONAL" ? <InboxPopover workspaceId={model.workspace.id} /> : null}</>}
             <Tooltip label={navCollapsed ? "Expand navigation" : "Collapse navigation"} shortcut={NAV_TOGGLE_SHORTCUT} side={navCollapsed ? "right" : "bottom"}>
@@ -111,10 +117,14 @@ export function AppShell({ model, children }: { model: WorkspaceShellModel; chil
             <WorkspaceSelector workspaceId={model.workspace.id} compact={navCollapsed} />
             <SearchNavItem compact={navCollapsed} />
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto"><PrimaryNav workspaceId={model.workspace.id} compact={navCollapsed} /></div>
+          <div className="shrink-0"><PrimaryNav workspaceId={model.workspace.id} compact={navCollapsed} /></div>
+          {/* Hidden, not unmounted, while collapsed or in the drawer: open folders and the filter are as they were. */}
+          <div className="min-h-0 flex-1">{navOpen ? null : <div className={navCollapsed ? "hidden" : "h-full"}>{sidebar}</div>}</div>
           <div className="shrink-0 border-t border-kh-border p-2"><UserMenu identityName={model.identityName} identityEmpId={model.identityEmpId} workspaceId={model.workspace.id} compact={navCollapsed}/></div>
         </aside>
-        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-kh-bg has-[[data-document-pane]]:overflow-hidden">{authorization.revoked ? <p role="status">Workspace access changed. Returning to My Space…</p> : children}</main>
+        <PeekHost>
+          <main className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-kh-bg has-[[data-document-pane]]:overflow-hidden">{authorization.revoked ? <p role="status">Workspace access changed. Returning to My Space…</p> : children}</main>
+        </PeekHost>
       </div>
       <Drawer side="left" open={navOpen} onOpenChange={setNavOpen} title="Menu">
         <div className="flex h-full min-h-0 flex-col" onClick={(event) => {
@@ -122,14 +132,17 @@ export function AppShell({ model, children }: { model: WorkspaceShellModel; chil
         }}>
           <div className="shrink-0 pb-2"><WorkspaceSelector workspaceId={model.workspace.id} /></div>
           <PrimaryNav workspaceId={model.workspace.id} />
-          <div ref={setMobileExplorerTarget} className="min-h-0 flex-1 overflow-y-auto" />
+          <div className="min-h-0 flex-1">{navOpen ? sidebar : null}</div>
           <div className="shrink-0 border-t border-kh-border pt-3"><UserMenu identityName={model.identityName} identityEmpId={model.identityEmpId} workspaceId={model.workspace.id}/></div>
         </div>
       </Drawer>
+      <ShareLinkDialogHost />
+      <FolderNameDialogHost />
+      <MoveDialogHost collections={trees.collections} ensureTree={trees.ensure} retryTree={trees.retry} treeStates={trees.states} />
     </div>
     </TooltipProvider>
     </ToastProvider>
-    </NavigationContext.Provider>
+    </SourceTreesContext.Provider>
     </DocumentTopbarContext.Provider>
     </WorkspaceAuthorizationContext.Provider>
   );

@@ -4,7 +4,7 @@ import { useWorkspaceAuthorization } from "./use-workspace-authorization";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Tooltip } from "@/components/ui/tooltip";
-import { BarChart3, BookOpenText, Database, Network, Settings, Home, Share2 } from "lucide-react";
+import { BarChart3, Database, Network, Settings, Home, Share2 } from "lucide-react";
 
 export function PrimaryNav({
   workspaceId,
@@ -20,11 +20,6 @@ export function PrimaryNav({
   const items = [
     ...(access.workspace.type === "PERSONAL" ? [{ name: "Home", href: `/w/${workspaceId}/home`, Icon: Home }] : []),
     {
-      name: "Knowledge",
-      href: `/w/${workspaceId}/knowledge`,
-      Icon: BookOpenText,
-    },
-    {
       name: "Graph",
       href: `/w/${workspaceId}/graph`,
       Icon: Network,
@@ -38,6 +33,7 @@ export function PrimaryNav({
     ...(access.workspace.type === "PERSONAL" ? [{name: "Insights", href: `/w/${workspaceId}/profile`, Icon: BarChart3}] : []),
     ...(access.actions.canOpenSettings ? [{name: "Settings", href: `/w/${workspaceId}/settings`, Icon: Settings}] : []),
   ];
+  // No Knowledge item: the tree below is the Knowledge navigation, and its selected row marks the place.
   // The current place is a neutral step above hover, not the accent: the accent marks what is selected in the
   // content (the explorer's document, a menu's row), and two accent blocks side by side competed for the eye.
   return (

@@ -236,7 +236,7 @@ test("C stops answering once Home is left without a full load", async ({ page })
   await openPersonalHome(page);
   // Prove Home's listener is live before leaving, so its absence afterwards means something.
   await expect(page.getByRole("link", { name: "New note" })).toHaveAttribute("aria-keyshortcuts", "C");
-  await page.getByRole("navigation").getByRole("link", { name: "Knowledge", exact: true }).first().click();
+  await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Graph", exact: true }).first().click();
   await expect(page).not.toHaveURL(/\/home$/, ROUND_TRIP);
   await page.waitForLoadState("networkidle");
   const before = new URL(page.url()).pathname;

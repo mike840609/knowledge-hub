@@ -15,8 +15,8 @@ export default async function WorkspaceKnowledgePage({
   const workspaces = await services.workspaces.listWorkspaces(caller);
   if (!workspaces.some((workspace) => workspace.id === workspaceId)) notFound();
   const sources = await services.queries.listSources(caller, workspaceId);
-  // The explorer comes too: in an empty workspace it is where the ways to add a document are offered.
-  if (sources.length === 0) return <KnowledgeLayout workspaceId={workspaceId} source={null} collections={[]} includeArchived={false}><KnowledgeEmptyState /></KnowledgeLayout>;
+  // The sidebar is where an empty workspace offers the ways to add a document.
+  if (sources.length === 0) return <KnowledgeLayout collections={[]}><KnowledgeEmptyState /></KnowledgeLayout>;
   const target = await getDefaultKnowledgeTarget(workspaceId);
   if (target) redirect(`/w/${workspaceId}/knowledge/${target.sourceId}/${target.documentId}`);
   const firstByName = [...sources].sort((left, right) =>

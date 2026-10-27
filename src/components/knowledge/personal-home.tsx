@@ -24,7 +24,6 @@ import { actionsFor, type Action } from "@/components/actions/action-registry";
 import { RowActionsTrigger, RowContextMenu, useActionRunner } from "@/components/actions/action-menu";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { MenuRoot, MenuTrigger, MenuContent, MenuItem } from "@/components/ui/menu";
-import { ShareLinkDialogHost } from "./share-link-dialog";
 import { useHydrated } from "@/components/shell/use-hydrated";
 
 type Doc = ContinueDoc;
@@ -263,7 +262,6 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
           </Section>
         </div>
       </div>
-      <ShareLinkDialogHost />
     </div>
     </GuidanceVisibilityContext.Provider>
   );

@@ -190,31 +190,26 @@ Neutral surfaces, named by role:
 ```text
 bg          canvas — document and page content
 bg-raised   chrome on the canvas — topbar, inspector panel
-bg-sunken   primary navigation rail
-bg-explorer secondary navigation — knowledge sidebar and its loading placeholder
+bg-sunken   the sidebar — navigation and the document tree, one surface
 bg-subtle   inset fills — code blocks, table headers, kbd
 ```
 
-Primary navigation uses `bg-sunken`; the Knowledge explorer and its loading
-placeholder use `bg-explorer`, separated by the existing 1px border. Primary
-navigation selection uses a neutral hover fill; the selected document keeps
-the accent fill, so location within a folder is the stronger cue.
-
-`bg-explorer` aliases `bg-subtle` in light mode. In dark mode it is
-`#0e0f12`, between the primary rail (`#0a0b0e`) and canvas (`#131417`),
-so the secondary rail does not appear as a bright inset panel.
+The sidebar (`2026-10-27-one-sidebar-design.md`) is one `bg-sunken` column:
+destinations above, the document tree below, no border between them. Its
+destination selection uses a neutral hover fill; the selected document keeps
+the accent fill, so location within a folder is the stronger cue. The
+`bg-explorer` token of the former two-column layout is retired.
 
 
 ### Navigation colour scheme
 
-In both themes, surfaces become progressively lighter from left to right:
-primary navigation → Knowledge explorer → reading canvas. Keep the existing
-1px separators; do not use shadows to distinguish these regions.
+In both themes, the surface becomes lighter from left to right: sidebar →
+reading canvas. Keep the existing 1px separator; do not use shadows to
+distinguish these regions.
 
 | Region | Token | Light | Dark |
 | --- | --- | --- | --- |
-| Primary navigation | `bg-sunken` | `#f1f2f5` | `#0a0b0e` |
-| Knowledge explorer and loading placeholder | `bg-explorer` | `#f6f7f9` (alias of `bg-subtle`) | `#0e0f12` |
+| Sidebar | `bg-sunken` | `#f1f2f5` | `#0a0b0e` |
 | Reading canvas | `bg` | `#ffffff` | `#131417` |
 
 The primary navigation's current item uses `bg-hover` with `text`, so it
@@ -224,8 +219,7 @@ Hover and focus states retain their existing tokens and focus rings.
 
 The darker `bg-sunken` value also applies to other surfaces already using
 that token, including the outer application background. Inset content
-continues to use `bg-subtle`; its dark value (`#1d1f24`) is deliberately not
-the explorer background.
+continues to use `bg-subtle`.
 
 A document is content, so it sits on `bg` like every other page. The
 document pane had been painted `bg-raised` whole, header and body alike,
@@ -700,7 +694,7 @@ it — the writer is who most wants the room — but a dialog or menu that is op
 the palette included, keeps its keys. Where the rail is not on screen (a window
 under `lg`) it opens and closes the menu that takes its place. It is not ⌘/,
 which the composer has for the rendered/source switch, nor ⌘B, which is bold
-there. The Knowledge explorer beside it collapses on its own, to a 40px strip, by its header's Hide documents (`2026-10-21-explorer-collapse-design.md`); ⌘\ does not reach it.
+there. The document tree is part of the sidebar and collapses with it.
 
 The composer's title field, its rendered editor and its Markdown text are the
 one place without the focus ring. A text field matches `:focus-visible` for as
@@ -1631,7 +1625,7 @@ distinction that cannot be made with what exists, not to match a count.
 
 ## October 2026 remediation
 
-Desktop navigation keeps a 160px primary rail, collapsible to 48px, beside an independent 288px contextual explorer, collapsible to a 40px strip. Wide screens have no topbar: rail, explorer and content all start at the top of the window, and the explorer retains its full height when the primary rail collapses. The primary rail opens with the wordmark and its collapse control, then the workspace switcher, then a Search row drawn like navigation. The reader pins its breadcrumb line (location › title, with Edit/Share/Details) to the top of the reading column while the rest of its header scrolls away. A pinned bar's lower edge is not a rule: while it is pinned, the content scrolling under it fades into it through a 16px gradient from `--kh-bg` to transparent (`.kh-fade-below`, in `globals.css`), drawn below the bar, click-through, and never taller than would swallow a line of text. The composer's pinned command line uses the same edge. The rule is for a page's pinned *top line* over reading or writing; a sticky table header and a pinned bottom action bar keep their rule, which separates a header from its rows and an action bar from the form it acts on. On a document page the rail's first row (wordmark), the explorer's first row (Documents) and the document's breadcrumb line are each 48px and centred on one line, so the three columns share one top edge. Narrow screens keep a topbar (Menu, search icon, and the document's title and actions once its header scrolls away) and one Menu drawer headed by the switcher (`2026-10-08-workspace-switcher-in-rail-design.md`). Reader/composer share DocumentPane geometry and lay a document out line for line alike — the 48px path line, the title with one muted caption line under it, the outline (rail or disclosure), then the text — so nothing moves between reading and editing (`tests/e2e/zz-editor-blocks.spec.ts` measures both). The composer pins Save/Cancel/Markdown in its path line; its draft status and title hints take the reader's "Updated" line, which stays one line tall when empty and may wrap to a second only while a status needs it (a rename notice beside a draft status on a phone) — a jump the writer caused, not one between reading and editing. Details is the reader's panel with the reader's open state: Edit is a client navigation, so a panel open while reading is open while editing and after Cancel or Save, beside text that has not moved. The composer has a Details button in the reader's place, last in its path line, but no ⌘I, which the editor gives to italic. See `2026-10-02-linear-remediation-design.md` for the coordinated contract. Kbd and graph action hints use `text-muted` to meet small-text contrast. Desktop controls retain 24/32/40px heights; coarse pointers get at least 40px physical targets through the shared control classes.
+Desktop navigation is one 256px sidebar on every workspace page, collapsible to 48px (`2026-10-27-one-sidebar-design.md`): destinations in a fixed head, then the document tree, the only part that scrolls. There is no Knowledge destination; the tree is the Knowledge navigation. Wide screens have no topbar: sidebar and content both start at the top of the window. The sidebar opens with the wordmark and its collapse control, then the workspace switcher, then a Search row drawn like navigation. The reader pins its breadcrumb line (location › title, with Edit/Share/Details) to the top of the reading column while the rest of its header scrolls away. A pinned bar's lower edge is not a rule: while it is pinned, the content scrolling under it fades into it through a 16px gradient from `--kh-bg` to transparent (`.kh-fade-below`, in `globals.css`), drawn below the bar, click-through, and never taller than would swallow a line of text. The composer's pinned command line uses the same edge. The rule is for a page's pinned *top line* over reading or writing; a sticky table header and a pinned bottom action bar keep their rule, which separates a header from its rows and an action bar from the form it acts on. On a document page the sidebar's first row (wordmark) and the document's breadcrumb line are each 48px and centred on one line, so the two columns share one top edge. Narrow screens keep a topbar (Menu, search icon, and the document's title and actions once its header scrolls away) and one Menu drawer headed by the switcher (`2026-10-08-workspace-switcher-in-rail-design.md`), which holds the same sidebar, tree included. Reader/composer share DocumentPane geometry and lay a document out line for line alike — the 48px path line, the title with one muted caption line under it, the outline (rail or disclosure), then the text — so nothing moves between reading and editing (`tests/e2e/zz-editor-blocks.spec.ts` measures both). The composer pins Save/Cancel/Markdown in its path line; its draft status and title hints take the reader's "Updated" line, which stays one line tall when empty and may wrap to a second only while a status needs it (a rename notice beside a draft status on a phone) — a jump the writer caused, not one between reading and editing. Details is the reader's panel with the reader's open state: Edit is a client navigation, so a panel open while reading is open while editing and after Cancel or Save, beside text that has not moved. The composer has a Details button in the reader's place, last in its path line, but no ⌘I, which the editor gives to italic. See `2026-10-02-linear-remediation-design.md` for the coordinated contract. Kbd and graph action hints use `text-muted` to meet small-text contrast. Desktop controls retain 24/32/40px heights; coarse pointers get at least 40px physical targets through the shared control classes.
 
 
 ### Shared article discussion layout (2026-10-12, PR #168)
