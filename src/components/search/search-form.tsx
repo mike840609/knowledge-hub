@@ -77,7 +77,7 @@ export function SearchForm({
         </div>
       ) : null}
       <details open={active.length > 0} className="border-b border-kh-border pb-3">
-      <summary className="kh-focus-ring w-fit cursor-pointer rounded-md text-body-sm text-kh-text-secondary">Advanced filters{active.length ? ` (${active.length})` : ""}</summary>
+      <summary className="kh-focus-ring inline-flex min-h-6 w-fit cursor-pointer items-center rounded-md text-body-sm text-kh-text-secondary">Advanced filters{active.length ? ` (${active.length})` : ""}</summary>
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <Label htmlFor="search-path">Path
           <Input id="search-path" name="path" defaultValue={filters.path ?? ""} placeholder="docs/runbooks" className="mt-1" />

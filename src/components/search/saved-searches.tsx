@@ -52,7 +52,7 @@ export function SavedSearches({ workspaceId }: { workspaceId: string }) {
   }
   if (!state) return error ? <p role="alert" className="mt-3 text-body-sm text-kh-danger">{error}</p> : null;
   return <section aria-label="Saved searches" className="mt-3 border-b border-kh-border pb-3">
-    <details><summary className="kh-focus-ring w-fit cursor-pointer rounded-md text-body-sm text-kh-text-secondary">Saved searches · {state.searches.length}/20 · Personal</summary>
+    <details><summary className="kh-focus-ring inline-flex min-h-6 w-fit cursor-pointer items-center rounded-md text-body-sm text-kh-text-secondary">Saved searches · {state.searches.length}/20 · Personal</summary>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <Input aria-label="Saved search name" maxLength={80} value={name} onChange={e => setName(e.target.value)} placeholder="Name this search" disabled={busy} className="min-w-0 max-w-64 flex-1" />
         <Button variant="secondary" disabled={busy || (!editing && state.searches.length >= 20)} onClick={save}>{editing ? "Rename search" : "Save current search"}</Button>

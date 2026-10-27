@@ -63,7 +63,7 @@ function EventTime({ timestamp, eventLabel }: { timestamp?: string; eventLabel?:
   </>;
 }
 
-function Row({ href, icon, title, timestamp, eventLabel, provenance, trailing, actions = [], onRun = () => {} }: {
+function Row({ href, icon, title, timestamp, eventLabel, provenance, stackProvenance = false, trailing, actions = [], onRun = () => {} }: {
   href: string;
   icon: React.ReactNode;
   title: string;
@@ -71,6 +71,8 @@ function Row({ href, icon, title, timestamp, eventLabel, provenance, trailing, a
   /** Names the event beside the time ("Edited", "Opened"). */
   eventLabel?: string;
   provenance?:string;
+  /** The narrow Favorites column stacks provenance under the title instead of squeezing both onto one line. */
+  stackProvenance?: boolean;
   trailing?: React.ReactNode;
   actions?: readonly Action[];
   onRun?: (action: Action) => void;
@@ -83,15 +85,23 @@ function Row({ href, icon, title, timestamp, eventLabel, provenance, trailing, a
         className="kh-focus-ring flex min-h-8 min-w-0 flex-1 items-center gap-3 rounded-md px-3"
       >
         <span className="shrink-0 text-kh-text-muted">{icon}</span>
-        {/* One line from `sm` up: title, then provenance beside it; on a phone the meta drops below. */}
-        <span className="min-w-0 flex-1 py-1 sm:flex sm:items-baseline sm:gap-2">
-          <span className="block min-w-0 truncate text-body font-medium text-kh-text">{title}</span>
-          {provenance ? <span className="hidden min-w-0 truncate text-caption text-kh-text-muted sm:block">{provenance}</span> : null}
-          {provenance || timestamp || eventLabel ? <span className="block truncate text-caption text-kh-text-muted sm:hidden">
-            {provenance}{provenance && (timestamp || eventLabel) ? " · " : null}<EventTime timestamp={timestamp} eventLabel={eventLabel} />
-          </span> : null}
-        </span>
-        {timestamp || eventLabel ? <span className="hidden shrink-0 text-caption text-kh-text-muted sm:block"><EventTime timestamp={timestamp} eventLabel={eventLabel} /></span> : null}
+        {stackProvenance ? (
+          <span className="min-w-0 flex-1 py-1">
+            <span className="block min-w-0 truncate text-body font-medium text-kh-text">{title}</span>
+            {provenance || timestamp || eventLabel ? <span className="mt-0.5 block truncate text-caption text-kh-text-muted">
+              {provenance}{provenance && (timestamp || eventLabel) ? " · " : null}<EventTime timestamp={timestamp} eventLabel={eventLabel} />
+            </span> : null}
+          </span>
+        ) : (
+          <span className="min-w-0 flex-1 py-1 sm:flex sm:items-baseline sm:gap-2">
+            <span className="block min-w-0 truncate text-body font-medium text-kh-text">{title}</span>
+            {provenance ? <span className="hidden min-w-0 truncate text-caption text-kh-text-muted sm:block">{provenance}</span> : null}
+            {provenance || timestamp || eventLabel ? <span className="block truncate text-caption text-kh-text-muted sm:hidden">
+              {provenance}{provenance && (timestamp || eventLabel) ? " · " : null}<EventTime timestamp={timestamp} eventLabel={eventLabel} />
+            </span> : null}
+          </span>
+        )}
+        {!stackProvenance && (timestamp || eventLabel) ? <span className="hidden shrink-0 text-caption text-kh-text-muted sm:block"><EventTime timestamp={timestamp} eventLabel={eventLabel} /></span> : null}
       </Link>
       {trailing}
       <RowActionsTrigger actions={actions} onRun={onRun} label={title} className="kh-row-action mr-1" />
@@ -145,7 +155,7 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
   const manySources = new Set(shown.map(doc => doc.sourceId)).size > 1;
   const sourceChanges = (docs: readonly Doc[], i: number) => manySources && docs[i - 1]?.sourceId !== docs[i].sourceId;
 
-  function documentRow(doc: Doc, { timestamp, eventLabel, showSource }: { timestamp?: string; eventLabel?: string; showSource: boolean }) {
+  function documentRow(doc: Doc, { timestamp, eventLabel, showSource, stackProvenance = false }: { timestamp?: string; eventLabel?: string; showSource: boolean; stackProvenance?: boolean }) {
     const key = keyOf(doc);
     const favorite = shortcuts.favorites.includes(key);
     const actions = actionsFor("row", { workspaceId, workspaceType: "PERSONAL", can: access.actions, confirmed,
@@ -160,6 +170,7 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
         title={doc.title}
         timestamp={timestamp} eventLabel={eventLabel}
         provenance={[showSource ? doc.sourceName : undefined, doc.sourcePath].filter(Boolean).join(" · ")}
+        stackProvenance={stackProvenance}
         actions={actions}
         onRun={runAction}
         trailing={
@@ -228,13 +239,13 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
       />
       {/* Opens the same ⌘K palette as the rail, so there is still one place to search. */}
       <div className="flex items-center gap-3">
-        <button type="button" data-home-search onClick={requestQuickSearch} aria-label="Search articles and notes" className="kh-focus-ring flex min-h-10 min-w-0 flex-1 items-center gap-3 rounded-md border border-kh-border px-3 py-2 text-body text-kh-text-muted hover:bg-kh-bg-subtle">
+        <button type="button" data-home-search onClick={requestQuickSearch} aria-label="Search articles and notes" className="kh-focus-ring flex min-h-8 min-w-0 flex-1 items-center gap-3 rounded-md border border-kh-border-strong px-3 py-1 text-body text-kh-text-muted hover:bg-kh-bg-subtle">
           <Search size={16} aria-hidden="true" />
           <span className="flex-1 truncate text-left">Search articles and notes…</span>
           <Kbd size="md" className="hidden shrink-0 sm:inline-flex">⌘K</Kbd>
         </button>
         <Tooltip label="New note" shortcut="C">
-          <Link className={buttonClasses({ variant: "secondary", size: "lg" })} href={newNoteHref} aria-keyshortcuts="C"><Plus size={16} aria-hidden="true" />New note</Link>
+          <Link className={buttonClasses({ variant: "secondary" })} href={newNoteHref} aria-keyshortcuts="C"><Plus size={16} aria-hidden="true" />New note</Link>
         </Tooltip>
       </div>
       {slots?.guidance}
@@ -258,7 +269,7 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
             {notices.length ? <UnreadDiscussions notices={notices} /> : <EmptyLine>No new comments or replies.</EmptyLine>}
           </Section>
           <Section title="Favorites">
-            {favorites.length ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{favorites.map((doc, i) => documentRow(doc, { showSource: sourceChanges(favorites, i) }))}</ul>
+            {favorites.length ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{favorites.map((doc, i) => documentRow(doc, { showSource: sourceChanges(favorites, i), stackProvenance: true }))}</ul>
               : <EmptyLine>Star a document to keep it here.</EmptyLine>}
           </Section>
         </div>

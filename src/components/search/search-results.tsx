@@ -5,6 +5,7 @@ import { buttonClasses } from "@/components/ui/button";
 import { WorkspaceContentActions } from "@/components/knowledge/workspace-content-actions";
 import Link from "next/link";
 import type { SearchPageModel } from "@/server/search-read";
+import { SEARCH_PAGE_SIZE } from "@/modules/knowledge/application/knowledge-search-service";
 import { SearchResultRow } from "@/components/search/search-result-row";
 import { SearchResultList } from "@/components/search/search-result-list";
 
@@ -39,8 +40,14 @@ export function SearchResults({ model }: { model: SearchPageModel }) {
     const params = new URLSearchParams({ q: model.q, scope: model.scope });
     return <EmptyState icon={Search} title="No results for this query." description={filtered ? "Keep your keyword and remove the source, path or date filters to search more broadly." : "Try a shorter keyword or a phrase from a document. You can also browse your saved knowledge."} action={filtered ? <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${model.workspaceId}/search?${params}`}>Search without filters</Link> : <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${model.workspaceId}/knowledge`}>Browse documents</Link>} />;
   }
+  const start = (result.page - 1) * SEARCH_PAGE_SIZE + 1;
+  const end = start + result.hits.length - 1;
+  const countLabel = result.page > 1 || result.hasNext
+    ? `Showing ${start}–${end} results`
+    : `${result.hits.length} ${result.hits.length === 1 ? "result" : "results"}`;
   return (
     <>
+      <p role="status" className="mb-2 text-caption text-kh-text-muted">{countLabel}</p>
       <SearchResultList label="Search results">
         {result.hits.map((hit) => (
           <SearchResultRow

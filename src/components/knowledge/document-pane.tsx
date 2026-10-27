@@ -26,12 +26,12 @@ export function DocumentPane({
           <div className="min-w-0 flex-1">
             {/* Where the pane holds outline, article and discussions (88rem), the outline hangs off the
                 column's left edge instead, as on a shared page; CSS shows one of the two. */}
-            <div className="kh-outline-rail-left kh-reading-column sticky top-8 h-0"><div className="absolute right-full top-0 w-56">{outline}</div></div>
+            {outline ? <div className="kh-outline-rail-left kh-reading-column sticky top-8 h-0"><div className="absolute right-full top-0 w-56">{outline}</div></div> : null}
             {children}
           </div>
-          {/* Reserve the wide-pane rail even for a document without headings.
-              Its presence must not move the reading column during navigation. */}
-          <div className="kh-outline-rail w-56 shrink-0 self-stretch">{outline}</div>
+          {/* A document without headings gets no empty rail: the reading column
+              keeps the width instead of reserving 224px for a list that is not there. */}
+          {outline ? <div className="kh-outline-rail w-56 shrink-0 self-stretch">{outline}</div> : null}
         </div>
       </div>
       {/* CSS reserves an open inspector's width before its media-query effect

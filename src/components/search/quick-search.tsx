@@ -3,7 +3,7 @@
 import { Dialog } from "@base-ui-components/react/dialog";
 import { Search, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { DocumentTopbarContext } from "@/components/shell/document-topbar-context";
 import { ResultListSkeleton } from "@/components/knowledge/knowledge-skeletons";
@@ -76,6 +76,11 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const opener = useRef<HTMLElement | null>(null);
+  const openPalette = useCallback(() => {
+    opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setOpen(true);
+  }, []);
   const trimmed = query.trim();
   const terms = useMemo(() => parseSearchQuery(trimmed).terms, [trimmed]);
   const allHref = `/w/${workspaceId}/search${trimmed ? `?q=${encodeURIComponent(trimmed)}` : ""}`;
@@ -158,17 +163,17 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
     const onShortcut = (event: KeyboardEvent) => {
       if (event.defaultPrevented || !matchesShortcut(event, "Meta+K Control+K")) return;
       event.preventDefault();
-      setOpen(true);
+      openPalette();
     };
     // The rail's Search row asks by event; this is the one palette.
-    const onRequest = () => setOpen(true);
+    const onRequest = () => openPalette();
     window.addEventListener("keydown", onShortcut);
     window.addEventListener(OPEN_SEARCH_EVENT, onRequest);
     return () => {
       window.removeEventListener("keydown", onShortcut);
       window.removeEventListener(OPEN_SEARCH_EVENT, onRequest);
     };
-  }, [enabled]);
+  }, [enabled, openPalette]);
 
   // The documents to list while nothing is typed. They are asked of the server rather than read back from
   // what the browser remembered: that is only a list of IDs, and a document may have been renamed or
@@ -279,7 +284,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
       <Tooltip label="Search and actions" keys="/">
         <button
           type="button"
-          onClick={() => setOpen(true)}
+          onClick={openPalette}
           aria-label="Quick search"
           aria-keyshortcuts="Meta+K Control+K"
           className={buttonClasses({ variant: "ghost", icon: true, className: "lg:hidden" })}
@@ -287,7 +292,10 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
           <Search className="h-4 w-4" aria-hidden="true" />
         </button>
       </Tooltip>
-      <Dialog.Root open={open} onOpenChange={setOpen}>
+      <Dialog.Root open={open} onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) requestAnimationFrame(() => opener.current?.focus({ preventScroll: true }));
+      }}>
         <Dialog.Portal>
           <Dialog.Backdrop className={dialogBackdropClasses("z-50")} />
           <Dialog.Popup className={`${dialogSurfaceClasses} top-[min(14vh,120px)] z-[60] flex max-h-[75vh] w-[min(640px,calc(100vw-24px))] flex-col overflow-hidden`}>
@@ -323,7 +331,7 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
                 aria-controls="quick-search-results"
                 aria-activedescendant={activeRow ? `quick-row-${activeIndex}` : undefined}
                 placeholder="Search documents, or run an action…"
-                className="h-14 min-w-0 flex-1 bg-transparent text-body text-kh-text outline-none placeholder:text-kh-text-muted [&::-webkit-search-cancel-button]:hidden"
+                className="h-12 min-w-0 flex-1 bg-transparent text-body text-kh-text outline-none placeholder:text-kh-text-muted [&::-webkit-search-cancel-button]:hidden"
               />
               <Dialog.Close aria-label="Close search" className={buttonClasses({ variant: "ghost", icon: true, size: "sm" })}>
                 <X className="h-4 w-4" aria-hidden="true" />
@@ -336,12 +344,14 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
                   rowIndex += 1;
                   const index = rowIndex;
                   return (
-                    <li key={`recent-${row.hit.documentId}`} id={`quick-row-${index}`} role="option" aria-selected={index === activeIndex}>
+                    <Fragment key={`recent-${row.hit.documentId}`}>
                       {position === 0 ? (
-                        <p aria-hidden="true" className="px-3 pb-1 pt-2 text-caption font-semibold text-kh-text-muted">Recent</p>
+                        <li role="presentation" aria-hidden="true" className="px-3 pb-1 pt-2 text-caption font-semibold text-kh-text-muted">Recent</li>
                       ) : null}
-                      {documentRow(row.hit, index)}
-                    </li>
+                      <li id={`quick-row-${index}`} role="option" aria-selected={index === activeIndex}>
+                        {documentRow(row.hit, index)}
+                      </li>
+                    </Fragment>
                   );
                 })}
                 {matched.map((action) => {
@@ -350,25 +360,27 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
                   const first = !groupsShown.has(action.group);
                   groupsShown.add(action.group);
                   return (
-                    <li key={action.id} id={`quick-row-${index}`} role="option" aria-selected={index === activeIndex}>
+                    <Fragment key={action.id}>
                       {first ? (
-                        <p aria-hidden="true" className="px-3 pb-1 pt-2 text-caption font-semibold text-kh-text-muted">
+                        <li role="presentation" aria-hidden="true" className="px-3 pb-1 pt-2 text-caption font-semibold text-kh-text-muted">
                           {actionGroupLabels[action.group]}
-                        </p>
+                        </li>
                       ) : null}
-                      <button
-                        type="button"
-                        onClick={() => choose({ kind: "action", action })}
-                        onMouseEnter={() => setActiveIndex(index)}
-                        className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left kh-focus-ring ${index === activeIndex ? "bg-kh-bg-selected" : "hover:bg-kh-bg-hover"}`}
-                      >
-                        <ActionIcon name={action.icon} />
-                        <span className={`min-w-0 flex-1 truncate text-body ${index === activeIndex ? "text-kh-selected-text" : "text-kh-text"}`}>
-                          {action.label}
-                        </span>
-                        {action.shortcut ? <Kbd className="shrink-0">{shortcutLabel(action.shortcut)}</Kbd> : null}
-                      </button>
-                    </li>
+                      <li id={`quick-row-${index}`} role="option" aria-selected={index === activeIndex}>
+                        <button
+                          type="button"
+                          onClick={() => choose({ kind: "action", action })}
+                          onMouseEnter={() => setActiveIndex(index)}
+                          className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left kh-focus-ring ${index === activeIndex ? "bg-kh-bg-selected" : "hover:bg-kh-bg-hover"}`}
+                        >
+                          <ActionIcon name={action.icon} />
+                          <span className={`min-w-0 flex-1 truncate text-body ${index === activeIndex ? "text-kh-selected-text" : "text-kh-text"}`}>
+                            {action.label}
+                          </span>
+                          {action.shortcut ? <Kbd className="shrink-0">{shortcutLabel(action.shortcut)}</Kbd> : null}
+                        </button>
+                      </li>
+                    </Fragment>
                   );
                 })}
                 {!loading && hits.map((hit) => {
@@ -411,6 +423,14 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
                 {activeRow ? null : <span aria-hidden="true">↵</span>}
               </button>
             ) : null}
+            <div className="hidden shrink-0 items-center justify-between gap-3 border-t border-kh-border px-4 py-2 text-caption text-kh-text-muted sm:flex">
+              <span className="flex items-center gap-1.5">
+                <Kbd>↑</Kbd><Kbd>↓</Kbd><span className="mr-2">navigate</span>
+                <Kbd>↵</Kbd><span className="mr-2">open</span>
+                <Kbd>esc</Kbd><span>close</span>
+              </span>
+              <Kbd>⌘K</Kbd>
+            </div>
           </Dialog.Popup>
         </Dialog.Portal>
       </Dialog.Root>

@@ -29,7 +29,7 @@ export function SearchResultRow({
           narrow-viewport reader would lose the source and date entirely.
           Below sm it wraps under the title; from sm it becomes aligned
           right-hand columns a reader can scan straight down. */}
-      <Link href={href} data-search-result className="kh-interactive-row flex items-start gap-3 px-3 py-2.5">
+      <Link href={href} data-search-result className="kh-interactive-row flex items-start gap-3 px-3 py-2">
         <FileText size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-kh-text-muted" />
         <span className="min-w-0 flex-1 sm:flex sm:items-start sm:gap-3">
           <span className="block min-w-0 sm:flex-1">
@@ -38,7 +38,7 @@ export function SearchResultRow({
             </span>
             {hit.sourcePath ? <span className="block truncate text-caption text-kh-text-muted">{hit.sourcePath}</span> : null}
             {snippet && (
-              <span className="mt-0.5 block line-clamp-2 text-body-sm text-kh-text-secondary">
+              <span className="mt-0.5 line-clamp-2 text-body-sm text-kh-text-secondary">
                 <HighlightedSearchText text={snippet} terms={terms} />
               </span>
             )}

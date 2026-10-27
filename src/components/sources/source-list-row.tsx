@@ -41,7 +41,7 @@ export function SourceListRow({ workspaceId, item, limits }: { workspaceId: stri
       <Link
         data-list-row
         href={`/w/${workspaceId}/sources/${source.id}`}
-        className="group kh-focus-ring col-start-2 row-start-1 flex min-w-0 min-h-11 flex-wrap items-center gap-x-3 gap-y-1 rounded-md px-2 py-2.5 transition-colors hover:bg-kh-bg-hover focus-visible:bg-kh-bg-hover"
+        className="group kh-focus-ring col-start-2 row-start-1 flex min-w-0 min-h-10 flex-wrap items-center gap-x-3 gap-y-1 rounded-md px-2 py-2 transition-colors hover:bg-kh-bg-hover focus-visible:bg-kh-bg-hover"
       >
         <span className="min-w-0 flex-1 truncate text-body font-medium text-kh-text group-hover:text-kh-link group-hover:underline group-focus-visible:text-kh-link group-focus-visible:underline">{source.name}</span>
         <span className="shrink-0 text-caption text-kh-text-muted">
@@ -53,8 +53,7 @@ export function SourceListRow({ workspaceId, item, limits }: { workspaceId: stri
             {latestRun ? <Status kind={syncStatusKind(latestRun.status)}>{syncStatusLabel(latestRun.status)}</Status> : null}
             {lastSyncedAt ? (
               <>
-                {latestRun ? <span aria-hidden="true">·</span> : null}
-                <span>Last synced <Timestamp value={lastSyncedAt} variant="relative" /></span>
+                {latestRun ? <><span aria-hidden="true">·</span>{latestRun.status === "APPLIED" ? <Timestamp value={lastSyncedAt} variant="relative" /> : <span>Last synced <Timestamp value={lastSyncedAt} variant="relative" /></span>}</> : <span>Last synced <Timestamp value={lastSyncedAt} variant="relative" /></span>}
               </>
             ) : (
               <span>Never synced</span>
@@ -62,7 +61,7 @@ export function SourceListRow({ workspaceId, item, limits }: { workspaceId: stri
           </span>
         ) : null}
       </Link>
-      <div className="col-start-3 row-start-1 ml-1 flex min-w-11 justify-center"><SourceLifecycleActions workspaceId={workspaceId} sourceId={source.id} sourceName={source.name} status={source.status} label={`Source actions: ${source.name}`} /></div>
+      <div className="col-start-3 row-start-1 ml-1 flex min-w-10 justify-center"><SourceLifecycleActions workspaceId={workspaceId} sourceId={source.id} sourceName={source.name} status={source.status} label={`Source actions: ${source.name}`} /></div>
       {item.pendingPreviewId ? <Link className="kh-focus-ring col-start-2 w-fit rounded-md pb-2 text-body-sm font-medium text-kh-link hover:underline" href={`/w/${workspaceId}/sources/imports/${item.pendingPreviewId}`}>Awaiting Apply · Review preview</Link> : null}
     </li>
   );

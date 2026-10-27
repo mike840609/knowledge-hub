@@ -26,8 +26,8 @@ export default async function UserGuidePage({searchParams}:{searchParams:Promise
   const locale=lang==="en"?"en":"zh-TW",zh=locale==="zh-TW",content=userGuideContent(locale),format=guideContent(locale,importRuntimeConfig().limits),base=`/w/${workspaceId}`;
   const link="kh-focus-ring rounded-md text-kh-link underline-offset-4 hover:underline";
   return <main className="pb-6" lang={locale}>
-    <div className="kh-page">
-    <PageHeader location="Home" locationHref={`${base}/home`} title={content.title} actions={<nav aria-label={zh?"手冊語言":"Guide language"} className="flex gap-3">{[{lang:"en",label:"English"},{lang:"zh-TW",label:"繁體中文"}].map(l=><Link key={l.lang} lang={l.lang} className={link} href={`/help?lang=${l.lang}`} aria-current={locale===l.lang?"page":undefined}>{l.label}</Link>)}</nav>} />
+    <div className="kh-page-wide">
+    <PageHeader location="My Space" locationHref={`${base}/home`} title={content.title} actions={<nav aria-label={zh?"手冊語言":"Guide language"} className="flex gap-3">{[{lang:"en",label:"English"},{lang:"zh-TW",label:"繁體中文"}].map(l=><Link key={l.lang} lang={l.lang} className={`${link} ${locale===l.lang ? "font-medium text-kh-text no-underline hover:no-underline" : ""}`} href={`/help?lang=${l.lang}`} aria-current={locale===l.lang?"page":undefined}>{l.label}</Link>)}</nav>} />
     <p className="mt-2 text-body text-kh-text-muted">{content.intro}</p>
     <div className="mt-4 flex flex-wrap gap-4 text-body"><Link className={link} href={`${base}/sources/import`}>{zh?"開始匯入":"Import folder"}</Link><Link className={link} href="#format-reference">{zh?"資料夾格式與匯入規則":"Folder format and import rules"}</Link></div>
     </div>
@@ -41,7 +41,7 @@ export default async function UserGuidePage({searchParams}:{searchParams:Promise
         <GuideActionLinks links={s.links} base={base}/>
         <div className="mt-4 space-y-3">{s.details.map(detail=><details key={detail.title}><summary className="kh-focus-ring cursor-pointer rounded-md text-body font-medium text-kh-text-secondary">{detail.title}</summary><GuideContentBlock block={{kind:"ul",items:detail.items}} caption={detail.title}/><GuideActionLinks links={detail.links??[]} base={base}/></details>)}</div>
       </section>)}
-      <section id="format-reference" aria-labelledby="format-reference-heading" className="mt-12 scroll-mt-6 border-t-2 border-kh-border pt-8">
+      <section id="format-reference" aria-labelledby="format-reference-heading" className="mt-12 scroll-mt-6 border-t border-kh-border pt-8">
         <p className="text-body-sm font-medium text-kh-text-muted">{zh?"參考":"Reference"}</p>
         <h2 id="format-reference-heading" tabIndex={-1} className="kh-focus-ring mt-1 rounded-md text-title font-semibold">{format.title}</h2>
         <p className="mt-2 text-body text-kh-text-muted">{format.intro}</p>

@@ -64,7 +64,7 @@ export function AgentContextBuilder({ workspaceId, documents, initialDocumentId 
     <p className="text-caption text-kh-text-muted">{selected.length} selected · {matches.length} matching documents{matches.length > 100 ? " · showing the first 100; narrow your search" : ""}</p>
 
     <ul aria-label="Documents for Agent" className="max-h-[28rem] space-y-0.5 overflow-y-auto overscroll-contain" onKeyDown={navigateListRows}>
-      {visible.map(d => <li key={d.documentId} className="flex items-center gap-3 rounded-md px-3 py-2 hover:bg-kh-bg-hover">
+      {visible.map(d => <li key={d.documentId} className="flex items-center gap-3 rounded-md px-3 py-0.5 hover:bg-kh-bg-hover">
         <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-body">
           <input type="checkbox" aria-label={`Select ${d.title} · ${d.sourceName}${d.sourcePath ? ` · ${d.sourcePath}` : ""}`} checked={selected.includes(d.documentId)} disabled={busy || (!selected.includes(d.documentId) && selected.length >= 20)} onChange={() => toggle(d.documentId)} />
           <span className="min-w-0"><span className="block truncate text-kh-text">{d.title}</span><span className="block truncate text-caption text-kh-text-muted">{[d.sourceName, d.sourcePath].filter(Boolean).join(" · ")}</span></span>

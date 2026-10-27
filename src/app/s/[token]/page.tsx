@@ -67,14 +67,14 @@ export default async function SharedDocumentPage({ params }: SharedPageProps) {
       {/* Outline: a rail off the column's left edge when there is room, else a disclosure above the title (share-page-outline spec §2). */}
       <div className="kh-share-outline"><SharedOutline entries={outline} placement="disclosure" /></div>
       {outline.length > 0 ? <div className="kh-share-outline-rail kh-reading-column sticky top-[4.5rem] z-10 h-0"><div className="absolute right-full top-0 w-52"><SharedOutline entries={outline} placement="rail" /></div></div> : null}
-      {contentOwnsTitle ? null : <header className="kh-reading-column pt-6"><h1 className="text-heading font-semibold tracking-tight text-kh-text">{shared.title}</h1>{byline}</header>}
+      {contentOwnsTitle ? null : <header className="kh-reading-column pt-6"><h1 className="text-display font-semibold tracking-tight text-kh-text">{shared.title}</h1>{byline}</header>}
       <article data-review-document className={`kh-reading-column min-w-0 pb-6 ${contentOwnsTitle ? "pt-6" : "pt-3"} [&>div>:first-child]:mt-0`}>
         <MarkdownRenderer markdown={shared.markdown} afterTitle={contentOwnsTitle ? byline : undefined} />
       </article>
       </SharedReviewPanel>
       <footer className="kh-reading-column pb-10 pt-4">
         <div className="flex flex-wrap items-center justify-between gap-4 border-t border-kh-border pt-5">
-          <div><p className="text-body font-medium text-kh-text">Keep useful knowledge within reach.</p><p className="mt-1 text-body-sm text-kh-text-muted">Organize documents and search your team’s knowledge in Knowledge Hub.</p></div>
+          <div><p className="text-body font-medium text-kh-text">Keep useful knowledge within reach.</p><p className="mt-1 text-body-sm text-kh-text-muted">Organize documents and search your workspace’s knowledge in Knowledge Hub.</p></div>
           <a href={platformEntry} className={buttonClasses({ variant: "primary" })}>Get started</a>
         </div>
         <p className="mt-3 text-caption text-kh-text-muted">Continue with your company account. Workspace access is managed separately from this share link.</p>

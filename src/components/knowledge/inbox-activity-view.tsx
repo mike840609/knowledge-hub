@@ -10,6 +10,7 @@ import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/components/ui/tabs";
 import { reviewRequest } from "./review-thread-list";
 import type { ShareCommentNotificationView } from "@/modules/knowledge/domain/share-comment-event";
 import { notificationHref, notificationLine, notificationTitle } from "./notification-href";
+import { NotificationListSkeleton } from "./knowledge-skeletons";
 
 type Cursor = { createdAt: string; id: string };
 type ActivityResponse = { notifications: ShareCommentNotificationView[]; nextCursor: Cursor | null };
@@ -76,7 +77,7 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
         <TabsTab value="activity">All activity</TabsTab>
       </TabsList>
       {(["inbox", "activity"] as const).map(tab => <TabsPanel key={tab} value={tab}>
-        {loading ? <p role="status" className="py-8 text-body text-kh-text-muted">Loading comments…</p> : shown.length === 0 ? (
+        {loading ? <NotificationListSkeleton /> : shown.length === 0 ? (
           <div className="py-12 text-center text-kh-text-muted">
             <MessageSquareText size={24} className="mx-auto mb-3" aria-hidden="true" />
             <p className="text-body font-medium">{tab === "inbox" ? "You're all caught up" : "No share comments yet"}</p>

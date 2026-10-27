@@ -31,7 +31,7 @@ export function PageHeader({
         {/* The title holds the 48px line itself, so it sits where every other page has it whether the actions are tall or wrap under it. */}
         <div className="flex min-h-12 min-w-0 items-center gap-1 text-body">
           <nav aria-label="Breadcrumb" className="shrink-0 text-kh-text-muted">
-            <Link href={locationHref} className="rounded-md hover:text-kh-text hover:underline kh-focus-ring">
+            <Link href={locationHref} className="inline-flex min-h-6 items-center rounded-md hover:text-kh-text hover:underline kh-focus-ring">
               {location}
             </Link>
           </nav>

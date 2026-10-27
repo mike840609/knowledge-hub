@@ -137,7 +137,7 @@ export function DocumentHeader({
       <header ref={headerRef}>
         <div className="kh-reading-column pb-3">
           {titleControl ?? (contentOwnsTitle ? null : (
-            <h1 className="mt-2 truncate text-heading font-semibold tracking-tight text-kh-text" title={title}>{title}</h1>
+            <h1 className="mt-2 truncate text-display font-semibold tracking-tight text-kh-text" title={title}>{title}</h1>
           ))}
           <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-kh-text-muted">
             {readOnlyReason}

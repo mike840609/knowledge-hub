@@ -17,7 +17,7 @@ export function DocumentBreadcrumb({ segments }: { segments: DocumentBreadcrumbS
             <li key={`${segment.label}-${index}`} className="flex min-w-0 items-center gap-1">
               {index > 0 ? <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> : null}
               {segment.href && !isLast ? (
-                <Link href={segment.href} className="shrink-0 rounded-md hover:text-kh-text hover:underline kh-focus-ring">
+                <Link href={segment.href} className="inline-flex min-h-6 shrink-0 items-center rounded-md hover:text-kh-text hover:underline kh-focus-ring">
                   {segment.label}
                 </Link>
               ) : (

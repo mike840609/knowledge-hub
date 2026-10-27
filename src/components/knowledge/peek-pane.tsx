@@ -331,7 +331,7 @@ export function PeekPane({
       <div className="min-h-0 flex-1">
         <DocumentPane
           contentRef={contentRef}
-          outline={peek ? <OutlineRail entries={entries} activeSlug={activeSlug} /> : undefined}
+          outline={peek && entries.length ? <OutlineRail entries={entries} activeSlug={activeSlug} /> : undefined}
           loading={loading}
         >
           {peek ? (

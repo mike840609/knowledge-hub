@@ -24,6 +24,17 @@ function isExternalHref(href: string): boolean {
   return href.startsWith("http://") || href.startsWith("https://") || href.startsWith("//");
 }
 
+/**
+ * A document may be written in a language other than the interface's. Mark the
+ * rendered prose so a screen reader uses the document's pronunciation rules,
+ * not English ones; a mostly-English document with a Chinese quotation keeps
+ * the English default.
+ */
+function contentLanguage(markdown: string): string | undefined {
+  const cjk = (markdown.match(/[\u3400-\u9fff]/g) ?? []).length;
+  return cjk >= 20 ? "zh" : undefined;
+}
+
 type AnchorProps = DetailedHTMLProps<AnchorHTMLAttributes<HTMLAnchorElement>, HTMLAnchorElement> & {
   [WIKILINK_TARGET]?: string;
   [WIKILINK_FRAGMENT]?: string;
@@ -215,7 +226,7 @@ export function MarkdownBase({
 }) {
   const titleLine = afterTitle && markdownOpensWithHeading(markdown) ? markdown.slice(0, markdown.search(/\S/)).split("\n").length : 0;
   return (
-    <div className={MARKDOWN_PROSE}>
+    <div className={MARKDOWN_PROSE} lang={contentLanguage(markdown)}>
       <ReactMarkdown
         // `remarkReviewPaths` first: it records each block's place before anything moves one.
         remarkPlugins={[remarkGfm, remarkReviewPaths, remarkHeadingIds, remarkKnowledgeLinks, remarkKnownHtml, ...remarkPlugins]}

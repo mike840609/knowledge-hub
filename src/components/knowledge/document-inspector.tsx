@@ -154,7 +154,7 @@ function InspectorTabs({
 
   return (
     <TabsRoot value={tab} onValueChange={(value) => choose(String(value))}>
-      <TabsList aria-label="Document inspector">
+      <TabsList aria-label="Document inspector" className="-mx-3">
         <TabsTab value="details">Details</TabsTab>
         <TabsTab value="links">Links</TabsTab>
         <TabsTab value="history">History</TabsTab>
@@ -481,7 +481,7 @@ export function DocumentDetailClient({
     <ReviewEntryProvider>
       <DocumentPane
         contentRef={contentRef}
-        outline={<OutlineRail entries={outline} activeSlug={activeSlug} />}
+        outline={outline.length ? <OutlineRail entries={outline} activeSlug={activeSlug} /> : null}
         inspectorOpen={inspectorOpen}
         inspector={<DocumentInspector open={inspectorOpen} onOpenChange={(open) => setInspectorOpen?.(open)} data={inspectorData} outline={outline} activeSlug={activeSlug} requestedTab={requestedTab} onKeepVersion={onKeepVersion} />}
       >
