@@ -26,7 +26,7 @@ export default async function UserGuidePage({searchParams}:{searchParams:Promise
   const locale=lang==="en"?"en":"zh-TW",zh=locale==="zh-TW",content=userGuideContent(locale),format=guideContent(locale,importRuntimeConfig().limits),base=`/w/${workspaceId}`;
   const link="kh-focus-ring rounded-md text-kh-link underline-offset-4 hover:underline";
   return <main className="pb-6" lang={locale}>
-    <div className="kh-page-wide">
+    <div className="kh-page">
     <PageHeader location="My Space" locationHref={`${base}/home`} title={content.title} actions={<nav aria-label={zh?"手冊語言":"Guide language"} className="flex gap-3">{[{lang:"en",label:"English"},{lang:"zh-TW",label:"繁體中文"}].map(l=><Link key={l.lang} lang={l.lang} className={`${link} ${locale===l.lang ? "font-medium text-kh-text no-underline hover:no-underline" : ""}`} href={`/help?lang=${l.lang}`} aria-current={locale===l.lang?"page":undefined}>{l.label}</Link>)}</nav>} />
     <p className="mt-2 text-body text-kh-text-muted">{content.intro}</p>
     <div className="mt-4 flex flex-wrap gap-4 text-body"><Link className={link} href={`${base}/sources/import`}>{zh?"開始匯入":"Import folder"}</Link><Link className={link} href="#format-reference">{zh?"資料夾格式與匯入規則":"Folder format and import rules"}</Link></div>

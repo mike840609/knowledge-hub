@@ -328,13 +328,13 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
   const displayTitle = dirty || recovery ? resolved.title || "Untitled" : savedTitle;
   const Article = "article";
   // With the page's actions in the pinned line rather than on a row of its own above the title.
-  const markdownToggle = <Button type="button" variant="ghost" aria-pressed={source || failed} aria-label={source || failed ? "Show rendered document" : "Show Markdown source"} data-pressed={source || failed} disabled={!loaded || failed} className="max-sm:px-2 data-[pressed=true]:bg-kh-bg-hover data-[pressed=true]:text-kh-text" onClick={() => {
+  const markdownToggle = <Button type="button" variant="ghost" aria-pressed={source || failed} data-pressed={source || failed} disabled={!loaded || failed} className="max-sm:px-2 data-[pressed=true]:bg-kh-bg-hover data-[pressed=true]:text-kh-text" onClick={() => {
     flushEditor();
     if (!source) sourceRef.current = true;
     setSource(value => !value);
   }}>
     <FileCode2 className="h-4 w-4 sm:hidden" aria-hidden="true" />
-    <span className="max-sm:sr-only">{source || failed ? "Rendered" : "Markdown"}</span>
+    <span className="max-sm:sr-only">Markdown</span>
   </Button>;
   const article = <>
     {recovery && <p role="status" className="mb-3 text-body-sm">
