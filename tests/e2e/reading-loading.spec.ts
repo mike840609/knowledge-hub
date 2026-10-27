@@ -44,8 +44,7 @@ for (const scenario of [
     const start = await create(plainTitle, `[[${withOutlineTitle}]]\n\n${paragraphs}`);
     await page.goto(start);
     const content = page.getByRole("region", { name: "Document content", exact: true });
-    // The first column that holds content; the outline's zero-height box (`kh-outline-rail-left`) shares the class only to share its edge.
-    const readingColumn = () => content.locator(".kh-reading-column:not(.kh-outline-rail-left)").first();
+    const readingColumn = () => content.locator(".kh-reading-column").first();
     await expect(content.locator("article:visible")).toBeVisible(ROUND_TRIP);
     if (scenario.inspector) {
       await page.getByRole("button", { name: "Details", exact: true }).first().click();

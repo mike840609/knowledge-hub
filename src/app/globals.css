@@ -660,16 +660,24 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-share-page .kh-review-document { --review-rail: inline; }
 }
 /* In the workspace the document pane decides, as it does for the outline — and at the same width,
-   because the rail takes the outline's place. */
+   the outline's own container threshold. Below 77rem the rail takes the outline's place; from there
+   the outline keeps its rail right of the open discussions. */
 @container kh-document (min-width: 60rem) {
   .kh-document-pane .kh-review-document { --review-rail: inline; }
 }
 
-.kh-review-document[data-review-inline][data-review-open] { display: flex; max-width: calc(theme("maxWidth.reading") + 320px); }
+/* The widths the open-discussions layouts are summed from: the discussions rail, the outline's slot
+   beside it, and the article's floor (its measure plus the column's padding, 688px). */
+:root {
+  --kh-review-rail: 320px;
+  --kh-outline-slot: theme("spacing.56");
+  --kh-article-floor: calc(theme("maxWidth.measure") + theme("spacing.12"));
+}
+.kh-review-document[data-review-inline][data-review-open] { display: flex; max-width: calc(theme("maxWidth.reading") + var(--kh-review-rail)); }
 .kh-review-document[data-review-inline][data-review-open] > .kh-review-reading { flex: 1; }
 .kh-review-document[data-review-inline][data-review-open] > .kh-review-panel {
   display: block;
-  width: 320px;
+  width: var(--kh-review-rail);
   flex-shrink: 0;
   padding-inline: 12px;
   padding-bottom: 24px;
@@ -677,11 +685,16 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 /* Back to the element's own display — so the class goes on a plain wrapper, a heading or a span,
    never on something a utility lays out: there is no layer here for that utility to be restored from. */
 .kh-review-document[data-review-inline] .kh-review-rail-only { display: revert; }
-/* The column keeps its left edge when the rail opens, and the rail takes the room to its right.
-   Centred, the whole page — bar, byline, article — slid 160px sideways under the pointer each time
-   the rail was opened or closed. Where the window has room for the rail beside the centred article
-   (1500px and up) nothing moves; below that the column moves left only as far as the rail needs,
-   and slides there rather than jumping.
+/* The column keeps its left edge when the rail opens, and the article narrows from the right to its
+   688px floor (640 measure + 48 padding) before the column moves. The article box narrows to 688px;
+   marked prose reaches 608px in the workspace and share-page prose reaches 632px, so prose rewraps
+   only at that narrowest point. Centred, the whole page — bar, byline, article — used to slide
+   160px sideways under the pointer each time the rail was opened or closed. Now the document and
+   footer fill what the start margin leaves (`width: auto`), so during the 120ms margin slide their
+   width travels with it instead of jumping to its final cap and overflowing. With an outline rail
+   the column no longer moves from 1604px; below that it moves left only as far as keeps the
+   article at 688px. The no-outline floor term is defensive: inline comments begin at 1200px, where
+   the centred term already wins. Below the floor the prose narrows too.
    Only the document and the footer that closes it widen. The pinned bar keeps the article's width,
    so its buttons stay where they were clicked rather than leaping 320px right; the rail names
    itself and closes itself. */
@@ -692,26 +705,39 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   margin-inline: max(0px, calc((100% - theme("maxWidth.reading")) / 2)) auto;
   transition: margin-inline-start 120ms ease-out;
 }
+/* The column keeps its left edge and the article narrows to its measure plus the column's padding
+   (640 + 48 = 688px) before the column slides (outline-right-of-article spec). */
+.kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) {
+  --kh-share-start: max(0px, min(calc((100% - theme("maxWidth.reading")) / 2), calc(100% - var(--kh-article-floor) - var(--kh-review-rail) - var(--kh-share-outline, 0px))));
+}
 .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) :is(.kh-review-entry, .kh-review-document),
 .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) > footer {
-  margin-inline-start: max(0px, min(calc((100% - theme("maxWidth.reading")) / 2), calc(100% - theme("maxWidth.reading") - 320px)));
+  margin-inline-start: var(--kh-share-start);
 }
-.kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) > footer { max-width: calc(theme("maxWidth.reading") + 320px); }
-/* The outline hangs off the column's left edge where the centred column leaves room for it (82rem:
-   224px, a w-52 rail and its edge), else it is a disclosure above the Comments row. With the
-   comments rail open the column keeps its left edge only while the window holds column + rail +
-   outline (860 + 320 + 224 = 1404px, 88rem); below that the column slides left over the outline's
-   room, so the outline folds into the disclosure (share-page-outline spec §2). */
+.kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) .kh-review-document,
+.kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) > footer {
+  /* Fill what the start margin leaves, and keep filling while that margin slides. */
+  width: auto;
+  /* From 82rem, leave the outline rail its slot at the right: article, comments, outline. */
+  margin-inline-end: var(--kh-share-outline, 0px);
+  max-width: min(calc(theme("maxWidth.reading") + var(--kh-review-rail)), calc(100% - var(--kh-share-start)));
+}
+/* The outline hangs off the column's right edge where the centred column leaves room for it (82rem:
+   a w-52 rail and a 16px edge), else it is a disclosure above the Comments row. While the comments
+   are open inline its box spans reading part and comments, so it hangs off the comments' right edge,
+   and the comments' layout leaves it that room (224px): article, comments, outline. */
 .kh-share-page .kh-share-outline-rail { display: none; }
 /* The disclosure is the first thing under the pinned bar, above the title, inside the reading column. */
 .kh-share-page .kh-share-outline > .kh-outline-inline { margin-top: theme("spacing.3"); }
+.kh-share-page .kh-review-document[data-review-inline][data-review-open] .kh-share-outline-rail {
+  width: calc(100% + var(--kh-review-rail));
+  max-width: none;
+  margin-inline: 0;
+}
 @media (min-width: 82rem) {
   .kh-share-page .kh-share-outline-rail { display: block; }
   .kh-share-page .kh-share-outline > .kh-outline-inline { display: none; }
-}
-@media (max-width: 87.99rem) {
-  .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) .kh-share-outline-rail { display: none; }
-  .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) .kh-share-outline > .kh-outline-inline { display: block; }
+  .kh-share-page:has(.kh-share-outline-rail) { --kh-share-outline: var(--kh-outline-slot); }
 }
 /* A heading jumped to lands below the pinned bar (57px), with 15px above it, not under the bar.
    72px is also inside the outline's 96px reading line, so the entry clicked is the one highlighted (spec §3). */
@@ -720,38 +746,40 @@ input[type="search"]::-webkit-search-cancel-button:hover {
    the pinned path line's Edit / Share / Comments / Details leapt 224-272px right under the pointer and,
    where the pane is wide, the whole column slid 48px left. Each column is centred as `mx-auto` would
    be, but as a length so it can slide; while the rail is open it keeps the left edge it had beside the
-   outline — the outline's 224px slot is what the rail takes — or moves left only as far as the rail
-   needs. Only the column that holds the article widens; the path line and the header keep the
-   article's width, so their controls stay where they were clicked. The outline gives the rail its
-   place and is shown above the article instead, as it is in a narrow pane; what follows the article
-   in its column stays the article's width. */
+   outline, or moves left only as far as the article's 688px floor needs. Only the column that holds the
+   article widens; the path line and the header keep the article's width, so their controls stay where
+   they were clicked. Below 77rem the outline folds into the disclosure above the article and the
+   discussions take its slot; from there the outline keeps its rail right of the discussions. What
+   follows the article in its column stays the article's width. */
 .kh-document-pane .kh-reading-column {
+  /* Fill only what the start margin leaves: a centred 860px column and a capped 1180px one alike. */
+  width: auto;
   margin-inline: max(0px, calc((100% - theme("maxWidth.reading")) / 2)) auto;
   transition: margin-inline-start 120ms ease-out;
 }
 .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-reading-column {
-  margin-inline-start: max(0px, min(calc((100% - theme("spacing.56") - theme("maxWidth.reading")) / 2), calc(100% - theme("maxWidth.reading") - 320px)));
+  margin-inline-start: max(0px, min(calc((100% - var(--kh-outline-slot) - theme("maxWidth.reading")) / 2), calc(100% - var(--kh-article-floor) - var(--kh-review-rail))));
   /* As wide as it was beside the outline: in a pane too narrow for the full reading width, the slot
      the outline gives up would otherwise widen the path line and push its controls right. */
-  max-width: min(theme("maxWidth.reading"), calc(100% - theme("spacing.56")));
+  max-width: min(theme("maxWidth.reading"), calc(100% - var(--kh-outline-slot)));
 }
-.kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-reading-column:has(> .kh-review-document) { max-width: calc(theme("maxWidth.reading") + 320px); }
+.kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-reading-column:has(> .kh-review-document) { max-width: calc(theme("maxWidth.reading") + var(--kh-review-rail)); }
 .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-outline-rail { display: none; }
 .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-outline-inline { display: block; }
-.kh-document-pane .kh-review-document[data-review-inline][data-review-open] ~ * { max-width: calc(100% - 320px); }
-/* A pane that holds outline, article and rail (224 + 860 + 320 = 1404px, 88rem) shows the outline on the
-   column's left, as a shared page does, and keeps it there while the rail is open: outline, article,
-   discussions. The column is centred in the whole pane; opening the rail moves it left only as far as the
-   rail needs (nothing from 1500px). Below 88rem the outline stays on the right, where the rail takes its
-   slot and nothing moves (owner-comments-rail spec, 2026-10-21 amendment). */
-.kh-outline-rail-left { display: none; }
-@container kh-document (min-width: 88rem) {
-  .kh-document-pane .kh-outline-rail-left { display: block; }
-  .kh-document-pane .kh-outline-rail,
-  .kh-document-pane .kh-outline-inline,
+.kh-document-pane .kh-review-document[data-review-inline][data-review-open] ~ * { max-width: calc(100% - var(--kh-review-rail)); }
+/* The outline is always right of the article: article, discussions, outline (outline-right-of-article
+   spec). Opening the discussions narrows the article from the right down to its measure plus the
+   column's padding (640 + 48 = 688px) before the column moves; unmarked prose keeps its 640px
+   measure, and marked prose reaches 608px at the floor. Where the pane
+   holds outline slot, that article and the discussions (224 + 688 + 320 = 1232px, 77rem) the outline
+   stays a rail; below, it folds above the article and the discussions take its slot. Hiding the
+   explorer or opening Details changes only how much fits, never which side the outline is on. */
+@container kh-document (min-width: 77rem) {
+  .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-outline-rail { display: block; }
   .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-outline-inline { display: none; }
   .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-reading-column {
-    margin-inline-start: max(0px, min(calc((100% - theme("maxWidth.reading")) / 2), calc(100% - theme("maxWidth.reading") - 320px)));
+    margin-inline-start: max(0px, min(calc((100% - theme("maxWidth.reading")) / 2), calc(100% - var(--kh-article-floor) - var(--kh-review-rail))));
+    /* The flex area already excludes the outline's slot; the path line keeps the width it had closed. */
     max-width: theme("maxWidth.reading");
   }
 }
