@@ -1079,7 +1079,20 @@ the button and the GET are all there is. The Shares filter rows are the same
 GET forms with no button (`LiveSearch`): text applies as it is typed and on
 Enter, and a chosen status applies at once (`applyAndSearch`, which commits the
 choice before the form is read). Their Search, Filter and Refresh buttons are
-gone (2026-10-27). A multi-line field
+gone (2026-10-27).
+
+**A condition in force is a chip that removes it.** Above the search page's
+Advanced filters, each condition that narrows the search — path, dates, a sort
+other than relevance, all-workspaces scope, source, archived — is a chip:
+`h-6`, `rounded-md`, `border`, `bg-selected` with `selected-text`, its name in
+`text-muted` before its value, and an × at its end. The whole chip is a link to
+the same search without that one parameter (and without the page), so it
+removes exactly what it names, works without JavaScript, and leaves a URL that
+can be shared. Its accessible name says so: "Remove filter Path: docs".
+Clear filters stays beside them and keeps the query and scope, as before. A
+chip is lavender because a filter in force is a selection; it is not a tag and
+not a button. Editing a condition is still the Advanced filters form — a chip
+that opens its own editor is not added until a surface needs it. A multi-line field
 takes its height from `rows` rather than the ladder; only its padding scales.
 
 **A field has a name, and one way to be wrong.** `Label` (`components/ui/label.tsx`)

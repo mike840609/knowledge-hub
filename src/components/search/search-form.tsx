@@ -2,7 +2,7 @@ import type { SearchFilterInput } from "@/modules/knowledge/domain/search-filter
 import { SearchDateZone } from "./search-date-zone";
 import type { SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import Link from "next/link";
-import { Search } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { LiveSearchSubmit } from "./live-search-submit";
@@ -24,7 +24,24 @@ export function SearchForm({
   sources: SourceView[];
   teamsEnabled?: boolean;
 }) {
-  const active = [filters.path && `Path: ${filters.path}`, filters.from && `From: ${filters.from}`, filters.to && `To: ${filters.to}`, filters.sort && filters.sort !== "relevance" && `Sort: ${filters.sort}`, scope === "all" && "All workspaces", sourceId && `Source: ${sources.find(s => s.id === sourceId)?.name ?? sourceId}`, includeArchived && "Archived included"].filter(Boolean);
+  const sortLabel = filters.sort === "newest" ? "Newest first" : filters.sort === "oldest" ? "Oldest first" : null;
+  // Each condition in force, by the URL parameter that carries it, so a chip can drop exactly that one.
+  const active = [
+    filters.path && { param: "path", label: "Path", value: filters.path },
+    filters.from && { param: "from", label: "Updated from", value: filters.from },
+    filters.to && { param: "to", label: "Updated to", value: filters.to },
+    sortLabel && { param: "sort", label: "Sort", value: sortLabel },
+    scope === "all" && { param: "scope", label: "Scope", value: "All my workspaces" },
+    sourceId && { param: "source", label: "Source", value: sources.find(s => s.id === sourceId)?.name ?? sourceId },
+    includeArchived && { param: "archived", label: "Archived", value: "Included" },
+  ].filter((chip): chip is { param: string; label: string; value: string } => Boolean(chip));
+  const fields: [string, string | null | undefined][] = [
+    ["q", q], ["scope", scope === "all" ? "all" : null], ["source", sourceId], ["archived", includeArchived ? "1" : null],
+    ["path", filters.path], ["from", filters.from], ["to", filters.to], ["sort", sortLabel ? filters.sort : null], ["offset", filters.offset],
+  ];
+  // The search as it is, less one parameter; the page goes too, so a wider search starts at its first page.
+  const without = (param: string) =>
+    `/w/${workspaceId}/search?${new URLSearchParams(fields.filter(([name, value]) => name !== param && value) as [string, string][])}`;
   // The query field and its submit button sit side by side on the `lg` rung
   // rather than nesting the button inside a shared border box. That box was
   // the reason this form carried a 44px input and a button reshaped through
@@ -43,7 +60,22 @@ export function SearchForm({
         </div>
         <LiveSearchSubmit />
       </div>
-      {active.length ? <div className="flex flex-wrap items-center gap-2 text-caption text-kh-text-secondary" aria-label="Active search filters"><span>{active.join(" · ")}</span><Link className="kh-focus-ring rounded-md text-kh-link" href={`/w/${workspaceId}/search?${new URLSearchParams({q, scope})}`}>Clear filters</Link></div> : null}
+      {active.length ? (
+        <div className="flex flex-wrap items-center gap-2" aria-label="Active search filters">
+          {active.map((chip) => (
+            <Link
+              key={chip.param}
+              href={without(chip.param)}
+              aria-label={`Remove filter ${chip.label}: ${chip.value}`}
+              className="kh-focus-ring inline-flex h-6 max-w-full items-center gap-1 rounded-md border border-kh-border bg-kh-bg-selected pl-2 pr-1 text-caption text-kh-selected-text transition-colors hover:border-kh-primary"
+            >
+              <span className="min-w-0 truncate"><span className="text-kh-text-muted">{chip.label}:</span> {chip.value}</span>
+              <X className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            </Link>
+          ))}
+          <Link className="kh-focus-ring rounded-md text-caption text-kh-link" href={`/w/${workspaceId}/search?${new URLSearchParams({q, scope})}`}>Clear filters</Link>
+        </div>
+      ) : null}
       <details open={active.length > 0} className="border-b border-kh-border pb-3">
       <summary className="kh-focus-ring w-fit cursor-pointer rounded-md text-body-sm text-kh-text-secondary">Advanced filters{active.length ? ` (${active.length})` : ""}</summary>
       <div className="mt-3 flex flex-wrap items-center gap-3">
