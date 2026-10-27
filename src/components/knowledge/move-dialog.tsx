@@ -67,6 +67,12 @@ function MoveDialog({ request, collections, onClose, loading, failed, onRetry }:
   const kind = request?.node.type === "folder" ? "folder" : "document";
   const label = request?.label ?? "";
   const bulk = request?.documents && request.documents.length > 1 ? request.documents : null;
+  const tree = request ? collections.find((collection) => collection.source.id === request.sourceId)?.tree : undefined;
+  // A bulk destination is "current" only when every selected document is already there.
+  const currentParents = bulk && tree
+    ? new Set(bulk.map((document) => tree.find((candidate) => candidate.type === "document" && candidate.documentId === document.documentId)?.parentId ?? null))
+    : null;
+  const isCurrentParent = (parentId: string | null) => bulk ? currentParents!.size === 1 && currentParents!.has(parentId) : found?.item.parentId === parentId;
 
   async function submit() {
     if (!request || !found || selected === null || busy) return;
@@ -166,8 +172,8 @@ function MoveDialog({ request, collections, onClose, loading, failed, onRetry }:
                   }}
                 >
                   <legend className="sr-only">Destination</legend>
-                  {option(TOP, "Top level", 0, found.item.parentId === null)}
-                  {found.destinations.map((destination) => option(destination.id, destination.label, destination.depth + 1, destination.id === found.item.parentId))}
+                  {option(TOP, "Top level", 0, isCurrentParent(null))}
+                  {found.destinations.map((destination) => option(destination.id, destination.label, destination.depth + 1, isCurrentParent(destination.id)))}
                 </fieldset>
                 {problem ? (
                   <p id={errorId} role="alert" className="mt-2 text-body text-kh-danger">
