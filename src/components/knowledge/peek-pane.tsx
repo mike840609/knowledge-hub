@@ -33,7 +33,7 @@ import { DocumentHeader } from "./document-header";
 import type { DocumentBreadcrumbSegment } from "./document-breadcrumb";
 import { useActiveHeading } from "./use-active-heading";
 import { renderedLinksFrom } from "./rendered-links";
-import type { PeekRequest } from "./peek-request";
+import { leavesPeek, type PeekRequest } from "./peek-request";
 
 type DocumentDetails = Awaited<ReturnType<KnowledgeQueryService["getDocument"]>>;
 
@@ -106,7 +106,16 @@ function scrollToSlugInPane(root: HTMLElement | null, slug: string): void {
  * pane. The main page is never touched — the layout agent owns where this
  * sits and when it opens; this owns only what it shows.
  */
-export function PeekPane({ request, onClose }: { request: PeekRequest; onClose: () => void }) {
+export function PeekPane({
+  request,
+  onClose,
+  onOpenFullPage = onClose,
+}: {
+  request: PeekRequest;
+  onClose: () => void;
+  /** A plain click on "Open as full page"; the link navigates either way. */
+  onOpenFullPage?: (path: string) => void;
+}) {
   const [documentId, setDocumentId] = useState(request.documentId);
   const [peek, setPeek] = useState<PeekResult | null>(null);
   const [error, setError] = useState<GovernanceFailure | null>(null);
@@ -284,6 +293,7 @@ export function PeekPane({ request, onClose }: { request: PeekRequest; onClose: 
               <Link
                 href={canonicalHref}
                 aria-label="Open as full page"
+                onClick={(event) => { if (leavesPeek(event)) onOpenFullPage(canonicalHref.split("?")[0]); }}
                 className={buttonClasses({ variant: "ghost", icon: true })}
               >
                 <ActionIcon name="expand" className="h-4 w-4" />
@@ -297,6 +307,7 @@ export function PeekPane({ request, onClose }: { request: PeekRequest; onClose: 
               <Link
                 href={peek.editHref}
                 aria-label="Edit"
+                onClick={(event) => { if (leavesPeek(event)) onClose(); }}
                 className={buttonClasses({ variant: "ghost", icon: true })}
               >
                 <ActionIcon name="edit" className="h-4 w-4" />

@@ -12,7 +12,7 @@ import {
   type GovernanceFailure,
 } from "@/components/workspaces/governance-error";
 import { MarkdownRenderer } from "./markdown-renderer";
-import type { PeekRequest } from "./peek-request";
+import { leavesPeek, type PeekRequest } from "./peek-request";
 
 type PeekResult = {
   title: string;
@@ -122,6 +122,7 @@ export function PeekDialog({
             <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-kh-border pt-3">
               <Link
                 href={canonicalHref}
+                onClick={(event) => { if (leavesPeek(event)) onOpenChange(false); }}
                 className={buttonClasses({ variant: "secondary", size: "md" })}
               >
                 Open as full page
@@ -129,6 +130,7 @@ export function PeekDialog({
               {peek.ownership === "HUB_MANAGED" ? (
                 <Link
                   href={`${canonicalHref.split("?")[0]}/edit`}
+                  onClick={(event) => { if (leavesPeek(event)) onOpenChange(false); }}
                   className={buttonClasses({ variant: "primary", size: "md" })}
                 >
                   Edit

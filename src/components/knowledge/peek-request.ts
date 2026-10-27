@@ -13,3 +13,8 @@ export type PeekRequest = {
 export function requestPeek(request: PeekRequest): void {
   window.dispatchEvent(new CustomEvent<PeekRequest>(PEEK_REQUEST_EVENT, { detail: request }));
 }
+
+/** A plain click on a link out of the peek leaves it, so the page it opens is not shown beside a stale peek. */
+export function leavesPeek(event: { metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean; button: number }): boolean {
+  return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+}
