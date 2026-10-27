@@ -33,7 +33,7 @@ import { DocumentHeader } from "./document-header";
 import type { DocumentBreadcrumbSegment } from "./document-breadcrumb";
 import { useActiveHeading } from "./use-active-heading";
 import { renderedLinksFrom } from "./rendered-links";
-import type { PeekRequest } from "./peek-request";
+import { leavesPeek, type PeekRequest } from "./peek-request";
 
 type DocumentDetails = Awaited<ReturnType<KnowledgeQueryService["getDocument"]>>;
 
@@ -284,6 +284,7 @@ export function PeekPane({ request, onClose }: { request: PeekRequest; onClose: 
               <Link
                 href={canonicalHref}
                 aria-label="Open as full page"
+                onClick={(event) => { if (leavesPeek(event)) onClose(); }}
                 className={buttonClasses({ variant: "ghost", icon: true })}
               >
                 <ActionIcon name="expand" className="h-4 w-4" />
@@ -297,6 +298,7 @@ export function PeekPane({ request, onClose }: { request: PeekRequest; onClose: 
               <Link
                 href={peek.editHref}
                 aria-label="Edit"
+                onClick={(event) => { if (leavesPeek(event)) onClose(); }}
                 className={buttonClasses({ variant: "ghost", icon: true })}
               >
                 <ActionIcon name="edit" className="h-4 w-4" />

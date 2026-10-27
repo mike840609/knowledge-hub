@@ -80,3 +80,52 @@ test("closing the peek restores the single column", async ({ page }) => {
   await sidePeek.getByRole("button", { name: /close/i }).click();
   await expect(page.getByTestId("side-peek")).toHaveCount(0, ROUND_TRIP);
 });
+
+test("Open as full page closes the peek and opens the peeked document", async ({ page }) => {
+  const { peekTitle, reading } = await setUp(page);
+  await row(page, peekTitle).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Open in side peek" }).click();
+
+  const sidePeek = page.getByTestId("side-peek");
+  await expect(sidePeek).toContainText(peekTitle, ROUND_TRIP);
+  await sidePeek.getByRole("link", { name: "Open as full page" }).click();
+
+  await expect(page.getByTestId("side-peek")).toHaveCount(0, ROUND_TRIP);
+  const mainContent = page.getByRole("region", { name: "Document content" }).first();
+  await expect(mainContent).toContainText(peekTitle, ROUND_TRIP);
+  expect(page.url()).not.toBe(reading);
+});
+
+async function homeWithDocument(page: Page) {
+  const workspaceId = await mySpace(page);
+  const title = unique("Peek Home");
+  const created = await apiDocument(page, workspaceId, title, `Body of ${title}.`);
+  await page.goto(`/w/${workspaceId}/home`);
+  const homeRow = page.getByRole("link", { name: title }).first();
+  await expect(homeRow).toBeVisible(ROUND_TRIP);
+  return { title, created, homeRow, home: page.url() };
+}
+
+test("Home's Open in side peek opens the split beside Home", async ({ page }) => {
+  const { title, homeRow, home } = await homeWithDocument(page);
+  await homeRow.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Open in side peek" }).click();
+
+  const sidePeek = page.getByTestId("side-peek");
+  await expect(sidePeek).toContainText(`Body of ${title}.`, ROUND_TRIP);
+  expect(page.url()).toBe(home);
+  await expect(page.getByRole("heading", { name: "Recent" })).toBeVisible();
+});
+
+test("a narrow Home peeks in the drawer, and Open as full page leaves it", async ({ page }) => {
+  await page.setViewportSize({ width: 800, height: 900 });
+  const { title, created, homeRow } = await homeWithDocument(page);
+  await homeRow.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Open in side peek" }).click();
+
+  const drawer = page.getByRole("dialog");
+  await expect(drawer).toContainText(`Body of ${title}.`, ROUND_TRIP);
+  await drawer.getByRole("link", { name: "Open as full page" }).click();
+  await expect(page).toHaveURL(new RegExp(created.documentId), ROUND_TRIP);
+  await expect(page.getByRole("dialog")).toHaveCount(0, ROUND_TRIP);
+});
