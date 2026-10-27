@@ -3,6 +3,9 @@ import { phase3Origin } from "./fixtures/phase3-identities";
 import { createReviewDocument, openReviewDiscussions, selectPassage } from "./fixtures/document-review";
 import { projectReviewBlocks } from "../../src/modules/knowledge/domain/review-anchor";
 
+// The window less the sidebar is the document pane; widths here are written as the pane they leave.
+const SIDEBAR = 256;
+
 test("owner replies, resolves, reopens and hides first comment without changing Markdown", async ({ page, request }) => {
   const doc = await createReviewDocument(request);
   await page.goto(`${phase3Origin("viewer")}${doc.links[0].path}`);
@@ -74,7 +77,7 @@ async function documentWithDiscussion(request: Parameters<typeof createReviewDoc
 
 test("a discussion that awaits the owner is open beside its passage when the document is, in the outline's place", async ({ page, request }) => {
   const doc = await documentWithDiscussion(request);
-  await page.setViewportSize({ width: 1680, height: 900 });
+  await page.setViewportSize({ width: 1216 + SIDEBAR, height: 900 });
   await page.goto(doc.href);
   const rail = page.getByRole("complementary", { name: "Document discussions" });
   const outlineRail = page.getByRole("complementary", { name: "On this page" });
@@ -138,7 +141,7 @@ test("a discussion that awaits the owner is open beside its passage when the doc
 
 test("a pane wide enough for outline, article and discussions keeps all three side by side, the outline on the left", async ({ page, request }) => {
   const doc = await documentWithDiscussion(request);
-  // The pane is the window less the navigation and the explorer: 2000px leaves it past 88rem (1408px).
+  // 2000px leaves the pane past 88rem (1408px).
   await page.setViewportSize({ width: 2000, height: 900 });
   await page.goto(doc.href);
   const pane = page.getByRole("region", { name: "Document content" });
@@ -180,7 +183,7 @@ test("a pane wide enough for outline, article and discussions keeps all three si
 
 test("below 88rem of pane the outline stays on the right, as before", async ({ page, request }) => {
   const doc = await createReviewDocument(request, "## Alpha\n\nA paragraph.\n\n## Beta\n\nAnother.\n");
-  await page.setViewportSize({ width: 1680, height: 900 });
+  await page.setViewportSize({ width: 1216 + SIDEBAR, height: 900 });
   await page.goto(doc.href);
   const outlineRail = page.getByRole("complementary", { name: "On this page" });
   await expect(outlineRail).toHaveCount(1);
@@ -191,7 +194,7 @@ test("below 88rem of pane the outline stays on the right, as before", async ({ p
 
 test("the discussions arriving do not move the article", async ({ page, request }) => {
   const doc = await documentWithDiscussion(request);
-  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.setViewportSize({ width: 816 + SIDEBAR, height: 800 });
   // Held back, so the article can be measured before the discussions are known.
   let release = () => {};
   await page.route(`**/api/documents/${doc.documentId}/review-threads`, async (route) => { await new Promise<void>((resolve) => { release = resolve; }); await route.continue(); });
@@ -207,7 +210,7 @@ test("the discussions arriving do not move the article", async ({ page, request 
 
 test("once the owner has closed the discussions they stay closed, until someone says something new", async ({ page, request }) => {
   const doc = await documentWithDiscussion(request);
-  await page.setViewportSize({ width: 1680, height: 900 });
+  await page.setViewportSize({ width: 1216 + SIDEBAR, height: 900 });
   await page.goto(doc.href);
   const rail = page.getByRole("complementary", { name: "Document discussions" });
   await expect(rail).toBeVisible();
@@ -241,7 +244,7 @@ test("the owner is shown what is still open; what is resolved is one choice away
     anchor: { schemaVersion: 1, blockPath: block.path, blockKind: block.kind, startUtf16: 0, endUtf16: 11, exact: block.text.slice(0, 11), prefix: "", suffix: block.text.slice(11, 75) },
   } })).status()).toBe(201);
 
-  await page.setViewportSize({ width: 1680, height: 900 });
+  await page.setViewportSize({ width: 1216 + SIDEBAR, height: 900 });
   await page.goto(doc.href);
   const rail = page.getByRole("complementary", { name: "Document discussions" });
   const cards = rail.locator("[data-review-thread]").filter({ visible: true });
@@ -275,7 +278,7 @@ test("discussions that are all resolved do not open by themselves", async ({ pag
   expect((await request.post(`${owner}/api/documents/${doc.documentId}/review-threads/${threads[0].id}/resolution`, { headers: { Origin: owner }, data: { status: "RESOLVED" } })).ok()).toBe(true);
   // Resolved from the discussions, it would have been seen there; resolved here, its notice is read the same way.
   expect((await request.post(`${owner}/api/review-notifications/mark-read`, { headers: { Origin: owner }, data: { documentId: doc.documentId } })).ok()).toBe(true);
-  await page.setViewportSize({ width: 1680, height: 900 });
+  await page.setViewportSize({ width: 1216 + SIDEBAR, height: 900 });
   await page.goto(doc.href);
   // Nothing awaits the owner, so the control carries no number.
   const entry = page.getByRole("button", { name: "Open discussions, 1 comments, 0 open", exact: true });
@@ -292,7 +295,7 @@ test("discussions that are all resolved do not open by themselves", async ({ pag
 
 test("the owner's page keeps one left edge for its title and its article, with discussions open or not", async ({ page, request }) => {
   const doc = await documentWithDiscussion(request);
-  await page.setViewportSize({ width: 1680, height: 900 });
+  await page.setViewportSize({ width: 1216 + SIDEBAR, height: 900 });
   await page.goto(doc.href);
   const rail = page.getByRole("complementary", { name: "Document discussions" });
   const edges = () => page.evaluate(() => {
@@ -326,7 +329,7 @@ test("where the pane has no room for a rail, the owner's discussions open over t
 
 test("a document nobody has commented on shows the owner no way into discussions, and no margin for marks", async ({ page, request }) => {
   const doc = await createReviewDocument(request, "## Alpha\n\nA paragraph.\n\n## Beta\n\nAnother.\n");
-  await page.setViewportSize({ width: 1680, height: 900 });
+  await page.setViewportSize({ width: 1216 + SIDEBAR, height: 900 });
   await page.goto(doc.href);
   await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
   await expect(page.getByRole("button", { name: /discussions/ })).toHaveCount(0);
@@ -341,12 +344,12 @@ test("opening and closing the owner's discussions moves nothing under the pointe
   const crumb = page.getByRole("region", { name: "Document content", exact: true }).getByRole("navigation", { name: "Breadcrumb" });
   const edit = page.getByRole("button", { name: "Details", exact: true });
   const where = async () => ({ crumb: Math.round((await crumb.boundingBox())!.x), article: Math.round((await article.boundingBox())!.x), edit: Math.round((await edit.boundingBox())!.x) });
-  // 2400: a pane past 108rem holds article, rail and outline with the column where it stood. 1440: the
+  // 2400: a pane past 108rem holds article, rail and outline with the column where it stood. 976px of
   // pane is narrower than the reading width beside the outline, so the outline's slot is what the rail
   // takes. Re-centred, the path line's controls leapt 224-272px right and the column slid 48px left.
   // From 88rem the outline is on the left and the column slides only between 1408px and 1500px of pane
   // (owner-comments-rail spec, 2026-10-21 amendment); the side-by-side test covers that.
-  for (const width of [2400, 1440]) {
+  for (const width of [2400, 976 + SIDEBAR]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(doc.href);
     await expect(page.getByRole("textbox", { name: "Content", exact: true })).toBeVisible();

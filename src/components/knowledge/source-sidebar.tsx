@@ -12,7 +12,7 @@ import { MenuCheckboxItem, MenuContent, MenuItem, MenuRoot, MenuTrigger } from "
 import type { TreeLoadState } from "./source-tree-cache";
 import { useSidebarShortcuts } from "./use-sidebar-shortcuts";
 import { KnowledgeTree } from "./knowledge-tree";
-import { SidebarGetStarted, hasNoDocuments, startActions } from "./sidebar-get-started";
+import { SidebarGetStarted, hasNoDocuments, pageOffersStart, startActions } from "./sidebar-get-started";
 import { TreeFilter } from "./tree-filter";
 import { buttonClasses } from "@/components/ui/button";
 import { Status } from "@/components/ui/status";
@@ -39,7 +39,18 @@ export type SourceSidebarProps = {
   includeArchived: boolean;
 };
 
+// The same tree in gives the same array out. A refresh redraws the current source's tree as it was until
+// its page adopts the fresh one; a new array there would read to the tree as "the tree arrived" too early.
+const pruned = new WeakMap<KnowledgeTreeItem[], KnowledgeTreeItem[]>();
 function withoutArchivedSubtrees(items: KnowledgeTreeItem[]): KnowledgeTreeItem[] {
+  const known = pruned.get(items);
+  if (known) return known;
+  const result = prune(items);
+  pruned.set(items, result);
+  return result;
+}
+
+function prune(items: KnowledgeTreeItem[]): KnowledgeTreeItem[] {
   const byId = new Map(items.map((item) => [item.id, item]));
   const hidden = (item: KnowledgeTreeItem): boolean => {
     let current: KnowledgeTreeItem | undefined = item;
@@ -285,7 +296,7 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
           </button></h3>
           {recentOpen ? <ul className="mt-0.5 space-y-0.5">{recentKeys.map((key) => shortcutRow(key, false))}</ul> : null}
         </section> : null}
-        {getStarted ? <SidebarGetStarted actions={getStarted} compact={pathname === `/w/${workspaceId}/knowledge`} /> : null}
+        {getStarted ? <SidebarGetStarted actions={getStarted} compact={pageOffersStart(pathname, workspaceId)} /> : null}
         {!getStarted && !hasNotes && canCreate && (!needle || "notes".includes(needle)) ? (
           <div className="flex items-center justify-between pl-2">
             <Link href={newNoteHref} className="rounded-md text-body font-medium text-kh-text hover:underline kh-focus-ring">Notes</Link>

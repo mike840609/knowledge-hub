@@ -1231,9 +1231,10 @@ One rail is the exception: the knowledge explorer of a workspace with no
 documents at all. It is shown even when the workspace has no source, and in
 place of the tree it says "No documents yet" and lists the same ways to start,
 each with its `detail`, for the pages beside it that do not (a source with
-nothing to read). On the Knowledge page itself, whose empty state already offers
-them, it is the one muted line "No documents yet": a choice is offered once per
-screen. Past the first document the explorer keeps importing one click away, as
+nothing to read). Every other page it sits beside — the Knowledge page, Home,
+Sources, Search, Graph and the rest — draws its own empty state with them, so
+there it is the one muted line "No documents yet": a choice is offered once per
+screen (`pageOffersStart`). Past the first document the explorer keeps importing one click away, as
 an icon in its header.
 
 ### One loading idiom, one message shape

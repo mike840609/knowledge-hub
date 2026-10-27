@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ActionContext } from "@/components/actions/action-registry";
-import { SidebarGetStarted, hasNoDocuments, startActions } from "@/components/knowledge/sidebar-get-started";
+import { SidebarGetStarted, hasNoDocuments, pageOffersStart, startActions } from "@/components/knowledge/sidebar-get-started";
 import type { KnowledgeTreeItem } from "@/modules/knowledge/application/knowledge-query-service";
 
 const can = { canWrite: true, canImport: true, canSearch: true, canInspectSources: true, canOpenSettings: true };
@@ -45,6 +45,14 @@ describe("sidebar get started", () => {
   it("is one muted line where the page beside it already offers the ways in", () => {
     const html = renderToStaticMarkup(createElement(SidebarGetStarted, { actions: startActions(context()), compact: true }));
     expect(html).toBe('<p class="px-2 py-3 text-body text-kh-text-muted">No documents yet</p>');
+  });
+
+  it("offers the ways in only beside a source with nothing to read; every other page draws its own", () => {
+    for (const path of ["/w/w1/home", "/w/w1/knowledge", "/w/w1/sources", "/w/w1/graph", "/w/w1/search", "/w/w1/shares", "/w/w1/profile"]) expect(pageOffersStart(path, "w1")).toBe(true);
+    expect(pageOffersStart("/w/w1/knowledge/s1", "w1")).toBe(false);
+    expect(pageOffersStart("/w/w1/knowledge/new", "w1")).toBe(false);
+    // Another workspace's source path is not this one's.
+    expect(pageOffersStart("/w/w2/knowledge/s1", "w1")).toBe(true);
   });
 
   it("counts a workspace as empty only when no source holds a document, archived ones included", () => {

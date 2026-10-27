@@ -261,7 +261,7 @@ test("enforces asset file and total byte limits at the HTTP boundary", async ({ 
 
 test("imports basic-v1 through the directory input and applies the grouped preview", async ({ page }) => {
   await page.goto(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources`);
-  await page.getByRole("link", { name: "Import folder", exact: true }).click();
+  await page.getByRole("main").getByRole("link", { name: "Import folder", exact: true }).click();
   await expect(page).toHaveURL(`/w/${QUERY_MASTER_WORKSPACE_ID}/sources/import`);
 
   await page.getByLabel("Source name").fill("E2E Folder Import");

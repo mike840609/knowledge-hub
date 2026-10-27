@@ -15,11 +15,16 @@ export function hasNoDocuments(collections: { tree: KnowledgeTreeItem[] }[]): bo
   return collections.every(({ tree }) => tree.every((item) => item.type !== "document"));
 }
 
+/** Every workspace page draws its own empty state with the ways in, except a source with nothing to read. */
+export function pageOffersStart(pathname: string, workspaceId: string): boolean {
+  return !pathname.startsWith(`/w/${workspaceId}/knowledge/`);
+}
+
 /**
  * The explorer's tree when the workspace has no documents at all. An empty folder is one muted
  * line, but this is the first thing a new workspace shows, so it says how documents get here and
- * what each way leads to (frontend design language, empty states). `compact` is for the Knowledge
- * page, whose own empty state already does that: there the explorer is one muted line.
+ * what each way leads to (frontend design language, empty states). `compact` is for a page whose own
+ * empty state already does that (`pageOffersStart`): there the explorer is one muted line.
  */
 export function SidebarGetStarted({ actions, compact = false }: { actions: Action[]; compact?: boolean }) {
   // Where the page beside it already offers these ways in, the explorer does not offer them again.

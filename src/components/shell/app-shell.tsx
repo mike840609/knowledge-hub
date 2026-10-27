@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useParams } from "next/navigation";
 import type { WorkspaceShellModel } from "@/server/knowledge-read";
 import { DocumentTopbarContext, type DocumentTopbarState } from "./document-topbar-context";
 import { Topbar } from "@/components/shell/topbar";
@@ -28,7 +29,8 @@ import { PeekHost } from "@/components/knowledge/peek-host";
 import { ShareLinkDialogHost } from "@/components/knowledge/share-link-dialog";
 
 export function AppShell({ model, children }: { model: WorkspaceShellModel; children: ReactNode }) {
-  const trees = useSourceTrees(model.workspace.id, model.sources);
+  const params = useParams();
+  const trees = useSourceTrees(model.workspace.id, model.sources, typeof params?.sourceId === "string" ? params.sourceId : null);
   const authorization = useWorkspaceAuthorizationRefresh(model.access, model.navigation);
   const [documentTopbar, setDocumentTopbar] = useState<DocumentTopbarState | null>(null);
   const [navOpen, setNavOpen] = useState(false);
