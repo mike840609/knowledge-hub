@@ -129,3 +129,17 @@ test("a narrow Home peeks in the drawer, and Open as full page leaves it", async
   await expect(page).toHaveURL(new RegExp(created.documentId), ROUND_TRIP);
   await expect(page.getByRole("dialog")).toHaveCount(0, ROUND_TRIP);
 });
+
+test("Open as full page on the document already open still closes the peek", async ({ page }) => {
+  const { mainTitle, reading } = await setUp(page);
+  await row(page, mainTitle).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Open in side peek" }).click();
+
+  const sidePeek = page.getByTestId("side-peek");
+  await expect(sidePeek).toContainText(mainTitle, ROUND_TRIP);
+  await sidePeek.getByRole("link", { name: "Open as full page" }).click();
+
+  // The route does not move, so only the finished growth can take the peek away.
+  await expect(page.getByTestId("side-peek")).toHaveCount(0, ROUND_TRIP);
+  expect(page.url()).toBe(reading);
+});

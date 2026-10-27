@@ -770,9 +770,12 @@ the diff: middle-click still worked, so nothing looked broken.
 export, remove, in that order, with a rule between sections. *Open in* holds the
 two ways of opening the document somewhere other than here — the side peek and a
 new tab. A page whose rows offer the side peek mounts a `PeekHost` to answer it
-(the knowledge layout and Home do); without one the item did nothing. Opening the
-peeked document as a full page, or for editing, closes the peek, which would
-otherwise stay beside the page it had just opened. Remove is last and alone,
+(the knowledge layout and Home do); without one the item did nothing. *Open as full
+page* grows the split's peek left over the page (160ms, the one curve) while the
+route loads, and removes it once both the growth and the route are done: the
+document arrives where the reader's eye already is, instead of the peek
+vanishing and the page catching up. *Edit* and the drawer's links just close the
+peek, which would otherwise stay beside the page it had just opened. Remove is last and alone,
 because Archive and Restore are what looks hardest to take back and a menu keeps
 those where a stray click is least likely to land. The sections follow a
 `section` field on the registry's row actions; the palette keeps its own

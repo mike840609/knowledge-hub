@@ -461,6 +461,22 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   }
 }
 
+/* "Open as full page": the side peek grows left over the page it sat beside, from its half to the whole
+   row, while the route loads; the page that arrives shows the same document where the pane ended. */
+@keyframes kh-peek-expand {
+  from { width: 50%; }
+  to { width: 100%; border-left-color: transparent; }
+}
+.kh-peek-expanding {
+  position: absolute;
+  inset-block: 0;
+  right: 0;
+  z-index: 1;
+  width: 100%;
+  border-left-color: transparent;
+  animation: kh-peek-expand theme("transitionDuration.160") theme("transitionTimingFunction.out");
+}
+
 /* One global opt-out, so no component has to remember motion-reduce. */
 @media (prefers-reduced-motion: reduce) {
   *,

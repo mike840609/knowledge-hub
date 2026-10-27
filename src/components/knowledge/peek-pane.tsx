@@ -106,7 +106,16 @@ function scrollToSlugInPane(root: HTMLElement | null, slug: string): void {
  * pane. The main page is never touched — the layout agent owns where this
  * sits and when it opens; this owns only what it shows.
  */
-export function PeekPane({ request, onClose }: { request: PeekRequest; onClose: () => void }) {
+export function PeekPane({
+  request,
+  onClose,
+  onOpenFullPage = onClose,
+}: {
+  request: PeekRequest;
+  onClose: () => void;
+  /** A plain click on "Open as full page"; the link navigates either way. */
+  onOpenFullPage?: (path: string) => void;
+}) {
   const [documentId, setDocumentId] = useState(request.documentId);
   const [peek, setPeek] = useState<PeekResult | null>(null);
   const [error, setError] = useState<GovernanceFailure | null>(null);
@@ -284,7 +293,7 @@ export function PeekPane({ request, onClose }: { request: PeekRequest; onClose: 
               <Link
                 href={canonicalHref}
                 aria-label="Open as full page"
-                onClick={(event) => { if (leavesPeek(event)) onClose(); }}
+                onClick={(event) => { if (leavesPeek(event)) onOpenFullPage(canonicalHref.split("?")[0]); }}
                 className={buttonClasses({ variant: "ghost", icon: true })}
               >
                 <ActionIcon name="expand" className="h-4 w-4" />
