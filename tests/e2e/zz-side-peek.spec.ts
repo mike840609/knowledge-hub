@@ -143,3 +143,31 @@ test("Open as full page on the document already open still closes the peek", asy
   await expect(page.getByTestId("side-peek")).toHaveCount(0, ROUND_TRIP);
   expect(page.url()).toBe(reading);
 });
+
+test("Open as full page never uncovers the loading skeleton", async ({ page }) => {
+  const { peekTitle } = await setUp(page);
+  await row(page, peekTitle).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Open in side peek" }).click();
+  const sidePeek = page.getByTestId("side-peek");
+  await expect(sidePeek).toContainText(peekTitle, ROUND_TRIP);
+
+  // Hold the document's server render so the route's loading.tsx skeleton is on screen for a while.
+  const target = new URL((await sidePeek.getByRole("link", { name: "Open as full page" }).getAttribute("href"))!, page.url()).pathname;
+  await page.route((url) => url.pathname === target, async (route) => {
+    if (route.request().headers()["rsc"]) await new Promise((resolve) => setTimeout(resolve, 1500));
+    await route.continue();
+  });
+  await page.evaluate(() => {
+    const w = window as unknown as { uncovered: boolean };
+    w.uncovered = false;
+    new MutationObserver(() => {
+      const skeleton = document.querySelector('[role="region"][aria-label="Document content"][aria-busy="true"]');
+      if (skeleton && !document.querySelector('[data-testid="side-peek"]')) w.uncovered = true;
+    }).observe(document.body, { subtree: true, childList: true, attributes: true });
+  });
+
+  await sidePeek.getByRole("link", { name: "Open as full page" }).click();
+  await expect(page.getByTestId("side-peek")).toHaveCount(0, ROUND_TRIP);
+  await expect(page.getByRole("region", { name: "Document content" }).first()).toContainText(peekTitle);
+  expect(await page.evaluate(() => (window as unknown as { uncovered: boolean }).uncovered)).toBe(false);
+});
