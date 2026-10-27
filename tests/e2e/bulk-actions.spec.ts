@@ -10,7 +10,7 @@ function unique(label: string) {
 async function createNote(page: Page, workspaceId: string, title: string) {
   const response = await page.request.post(`/api/workspaces/${workspaceId}/documents`, { data: { title, markdown: "Some words." } });
   expect(response.ok()).toBe(true);
-  return (await response.json()) as { documentId: string };
+  return (await response.json()) as { documentId: string; sourceId: string };
 }
 
 /**
@@ -22,10 +22,10 @@ test("two selected documents can be favorited together and cleared with Escape",
   const workspaceId = await mySpace(page);
   const first = unique("Bulk favorite A");
   const second = unique("Bulk favorite B");
-  await createNote(page, workspaceId, first);
+  const firstNote = await createNote(page, workspaceId, first);
   await createNote(page, workspaceId, second);
 
-  await page.goto(`/w/${workspaceId}/knowledge`);
+  await page.goto(`/w/${workspaceId}/knowledge/${firstNote.sourceId}`);
   await expect(page.getByRole("treeitem", { name: first, exact: true })).toBeVisible(ROUND_TRIP);
   await expect(page.getByRole("treeitem", { name: second, exact: true })).toBeVisible(ROUND_TRIP);
 
@@ -46,10 +46,10 @@ test("two selected documents can be favorited together and cleared with Escape",
 test("archiving two documents is one action, and Undo restores both", async ({ page }) => {  const workspaceId = await mySpace(page);
   const first = unique("Bulk archive A");
   const second = unique("Bulk archive B");
-  await createNote(page, workspaceId, first);
+  const firstNote = await createNote(page, workspaceId, first);
   await createNote(page, workspaceId, second);
 
-  await page.goto(`/w/${workspaceId}/knowledge`);
+  await page.goto(`/w/${workspaceId}/knowledge/${firstNote.sourceId}`);
   await expect(page.getByRole("treeitem", { name: first, exact: true })).toBeVisible(ROUND_TRIP);
   await expect(page.getByRole("treeitem", { name: second, exact: true })).toBeVisible(ROUND_TRIP);
 
@@ -73,10 +73,10 @@ test("moving two documents asks for one destination and moves both", async ({ pa
 
   const first = unique("Bulk move A");
   const second = unique("Bulk move B");
-  await createNote(page, workspaceId, first);
+  const firstNote = await createNote(page, workspaceId, first);
   await createNote(page, workspaceId, second);
 
-  await page.goto(`/w/${workspaceId}/knowledge`);
+  await page.goto(`/w/${workspaceId}/knowledge/${firstNote.sourceId}`);
   await expect(page.getByRole("treeitem", { name: first, exact: true })).toBeVisible(ROUND_TRIP);
   await page.getByRole("button", { name: `Select ${first}`, exact: true }).click();
   await page.getByRole("button", { name: `Select ${second}`, exact: true }).click();
