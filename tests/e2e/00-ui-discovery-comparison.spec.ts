@@ -56,6 +56,8 @@ test('find feedback, sortable graph, search disclosure and safe share cancellati
  await page.goto(`/w/${ws}/search?q=Feedback`);await expect(page.getByLabel('Path',{exact:true})).toBeHidden();
  await page.getByText('Advanced filters',{exact:true}).click();await page.getByLabel('Path',{exact:true}).fill('docs');
  await expect(page).toHaveURL(/[?&]path=docs/);await expect(page.getByLabel('Active search filters')).toContainText('Path: docs');
+ await page.getByRole('link',{name:'Remove filter Path: docs'}).click();await expect(page).not.toHaveURL(/[?&]path=/);await expect(page).toHaveURL(/[?&]q=Feedback/);await expect(page.getByLabel('Active search filters')).toHaveCount(0);
+ await page.goto(`/w/${ws}/search?q=Feedback&path=docs&sort=newest`);await expect(page.getByRole('link',{name:'Remove filter Sort: Newest first'})).toBeVisible();
  await page.getByRole('link',{name:'Clear filters'}).click();await expect(page).not.toHaveURL(/[?&]path=/);await expect(page.getByLabel('Search knowledge')).toHaveValue('Feedback');
  await page.goto(`/w/${ws}/shares?q=Feedback`);await expect(page.getByRole('button',{name:'Copy link for Feedback guide · Safe cancel'})).toBeVisible();
  await page.getByRole('button',{name:'Share actions for Feedback guide · Safe cancel'}).click();await page.getByRole('menuitem',{name:'Revoke',exact:true}).click();
