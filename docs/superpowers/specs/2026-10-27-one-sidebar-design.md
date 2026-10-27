@@ -1,6 +1,8 @@
 # One sidebar
 
-**Status:** draft for review, 2026-10-27. Rewrites PR #201's
+**Status:** agreed with the user, 2026-10-27: default expansion, Settings in
+the fixed head, New note with `C` on Home only, Inbox as a row, the three-PR
+delivery and retiring `kh:explorer-collapsed`, each as written below. Rewrites PR #201's
 `2026-10-14-notion-sidebar-design.md` (agreed 2026-10-14, never merged) against
 `main` as it is now. When built, this supersedes
 [2026-10-21-explorer-collapse-design.md](2026-10-21-explorer-collapse-design.md),
