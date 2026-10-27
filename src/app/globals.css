@@ -666,11 +666,18 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-document-pane .kh-review-document { --review-rail: inline; }
 }
 
-.kh-review-document[data-review-inline][data-review-open] { display: flex; max-width: calc(theme("maxWidth.reading") + 320px); }
+/* The widths the open-discussions layouts are summed from: the discussions rail, the outline's slot
+   beside it, and the article's floor (its measure plus the column's padding, 688px). */
+:root {
+  --kh-review-rail: 320px;
+  --kh-outline-slot: theme("spacing.56");
+  --kh-article-floor: calc(theme("maxWidth.measure") + theme("spacing.12"));
+}
+.kh-review-document[data-review-inline][data-review-open] { display: flex; max-width: calc(theme("maxWidth.reading") + var(--kh-review-rail)); }
 .kh-review-document[data-review-inline][data-review-open] > .kh-review-reading { flex: 1; }
 .kh-review-document[data-review-inline][data-review-open] > .kh-review-panel {
   display: block;
-  width: 320px;
+  width: var(--kh-review-rail);
   flex-shrink: 0;
   padding-inline: 12px;
   padding-bottom: 24px;
@@ -701,7 +708,7 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 /* The column keeps its left edge and the article narrows to its measure plus the column's padding
    (640 + 48 = 688px) before the column slides (outline-right-of-article spec). */
 .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) {
-  --kh-share-start: max(0px, min(calc((100% - theme("maxWidth.reading")) / 2), calc(100% - theme("maxWidth.measure") - theme("spacing.12") - 320px)));
+  --kh-share-start: max(0px, min(calc((100% - theme("maxWidth.reading")) / 2), calc(100% - var(--kh-article-floor) - var(--kh-review-rail) - var(--kh-share-outline, 0px))));
 }
 .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) :is(.kh-review-entry, .kh-review-document),
 .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) > footer {
@@ -711,7 +718,9 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) > footer {
   /* Fill what the start margin leaves, and keep filling while that margin slides. */
   width: auto;
-  max-width: min(calc(theme("maxWidth.reading") + 320px), calc(100% - var(--kh-share-start)));
+  /* From 82rem, leave the outline rail its slot at the right: article, comments, outline. */
+  margin-inline-end: var(--kh-share-outline, 0px);
+  max-width: min(calc(theme("maxWidth.reading") + var(--kh-review-rail)), calc(100% - var(--kh-share-start)));
 }
 /* The outline hangs off the column's right edge where the centred column leaves room for it (82rem:
    a w-52 rail and a 16px edge), else it is a disclosure above the Comments row. While the comments
@@ -721,22 +730,14 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 /* The disclosure is the first thing under the pinned bar, above the title, inside the reading column. */
 .kh-share-page .kh-share-outline > .kh-outline-inline { margin-top: theme("spacing.3"); }
 .kh-share-page .kh-review-document[data-review-inline][data-review-open] .kh-share-outline-rail {
-  width: calc(100% + 320px);
+  width: calc(100% + var(--kh-review-rail));
   max-width: none;
   margin-inline: 0;
 }
 @media (min-width: 82rem) {
   .kh-share-page .kh-share-outline-rail { display: block; }
   .kh-share-page .kh-share-outline > .kh-outline-inline { display: none; }
-  .kh-share-page:has(.kh-share-outline-rail):has(.kh-review-document[data-review-inline][data-review-open]) {
-    --kh-share-start: max(0px, min(calc((100% - theme("maxWidth.reading")) / 2), calc(100% - theme("maxWidth.measure") - theme("spacing.12") - 320px - theme("spacing.56"))));
-  }
-  .kh-share-page:has(.kh-share-outline-rail):has(.kh-review-document[data-review-inline][data-review-open]) .kh-review-document[data-review-inline][data-review-open],
-  .kh-share-page:has(.kh-share-outline-rail):has(.kh-review-document[data-review-inline][data-review-open]) > footer {
-    /* Leave the outline its 224px at the right; the width follows the sliding start margin. */
-    margin-inline-end: theme("spacing.56");
-    max-width: calc(theme("maxWidth.reading") + 320px);
-  }
+  .kh-share-page:has(.kh-share-outline-rail) { --kh-share-outline: var(--kh-outline-slot); }
 }
 /* A heading jumped to lands below the pinned bar (57px), with 15px above it, not under the bar.
    72px is also inside the outline's 96px reading line, so the entry clicked is the one highlighted (spec §3). */
@@ -757,15 +758,15 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   transition: margin-inline-start 120ms ease-out;
 }
 .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-reading-column {
-  margin-inline-start: max(0px, min(calc((100% - theme("spacing.56") - theme("maxWidth.reading")) / 2), calc(100% - theme("maxWidth.measure") - theme("spacing.12") - 320px)));
+  margin-inline-start: max(0px, min(calc((100% - var(--kh-outline-slot) - theme("maxWidth.reading")) / 2), calc(100% - var(--kh-article-floor) - var(--kh-review-rail))));
   /* As wide as it was beside the outline: in a pane too narrow for the full reading width, the slot
      the outline gives up would otherwise widen the path line and push its controls right. */
-  max-width: min(theme("maxWidth.reading"), calc(100% - theme("spacing.56")));
+  max-width: min(theme("maxWidth.reading"), calc(100% - var(--kh-outline-slot)));
 }
-.kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-reading-column:has(> .kh-review-document) { max-width: calc(theme("maxWidth.reading") + 320px); }
+.kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-reading-column:has(> .kh-review-document) { max-width: calc(theme("maxWidth.reading") + var(--kh-review-rail)); }
 .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-outline-rail { display: none; }
 .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-outline-inline { display: block; }
-.kh-document-pane .kh-review-document[data-review-inline][data-review-open] ~ * { max-width: calc(100% - 320px); }
+.kh-document-pane .kh-review-document[data-review-inline][data-review-open] ~ * { max-width: calc(100% - var(--kh-review-rail)); }
 /* The outline is always right of the article: article, discussions, outline (outline-right-of-article
    spec). Opening the discussions narrows the article from the right down to its measure plus the
    column's padding (640 + 48 = 688px) before the column moves; unmarked prose keeps its 640px
@@ -777,7 +778,7 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-outline-rail { display: block; }
   .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-outline-inline { display: none; }
   .kh-document-pane:has(.kh-review-document[data-review-inline][data-review-open]) .kh-reading-column {
-    margin-inline-start: max(0px, min(calc((100% - theme("maxWidth.reading")) / 2), calc(100% - theme("maxWidth.measure") - theme("spacing.12") - 320px)));
+    margin-inline-start: max(0px, min(calc((100% - theme("maxWidth.reading")) / 2), calc(100% - var(--kh-article-floor) - var(--kh-review-rail))));
     /* The flex area already excludes the outline's slot; the path line keeps the width it had closed. */
     max-width: theme("maxWidth.reading");
   }
