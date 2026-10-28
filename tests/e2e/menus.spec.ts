@@ -53,6 +53,17 @@ test("the theme is chosen from the user menu and persists", async ({ page }) => 
   await page.getByLabel(/^Account: /).click();
   await expect(page.getByRole("menuitemradio", { name: "Dark" })).toHaveAttribute("aria-checked", "true");
   await expect(page.getByRole("menuitemradio", { name: "Light" })).toHaveAttribute("aria-checked", "false");
+
+  // System is the one choice that follows the operating system, and it keeps
+  // following it while chosen.
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.getByRole("menuitemradio", { name: "System" }).click();
+  expect(await theme()).toBe("dark");
+  expect(await page.evaluate(() => localStorage.getItem("kh:theme"))).toBe("system");
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect.poll(theme).toBe("light");
+  await page.getByRole("menuitemradio", { name: "Light" }).click();
+  expect(await theme()).toBe("light");
 });
 
 test("the rails' density is chosen from the user menu, sizes the rows, and persists", async ({ page }) => {

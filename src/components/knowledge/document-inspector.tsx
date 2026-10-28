@@ -5,9 +5,11 @@ import {CopySourcePath} from "./copy-source-path";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { useRefreshOnArrival } from "@/components/shell/refresh-on-arrival";
-import { requestShare } from "@/components/actions/action-menu";
-import { availableActions } from "@/components/actions/action-registry";
+import { requestShare, useActionRunner } from "@/components/actions/action-menu";
+import { actionsFor, type ActionId } from "@/components/actions/action-registry";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
+import { documentShortcutKey, useDocumentShortcuts } from "./use-document-shortcuts";
+import { toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, startTransition, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { DocumentTopbarContext } from "@/components/shell/document-topbar-context";
@@ -28,6 +30,7 @@ import type { RevisionSummary } from "@/server/knowledge-read";
 import { Drawer } from "@/components/ui/drawer";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/components/ui/tabs";
 import { DocumentHeader } from "./document-header";
+import { PageIconPicker } from "./page-icon-picker";
 import { DocumentPane } from "./document-pane";
 import type { DocumentBreadcrumbSegment } from "./document-breadcrumb";
 import { buttonClasses } from "@/components/ui/button";
@@ -345,6 +348,7 @@ export function DocumentDetailClient({
   titleControl,
   editorActions,
   readOnlyReason,
+  pageIcon,
   onInspect,
   onKeepVersion,
 }: {
@@ -371,6 +375,8 @@ export function DocumentDetailClient({
   /** Passed rather than inferred from `readOnly`: the two happen to agree today. */
   ownership: "SOURCE_MANAGED" | "HUB_MANAGED";
   contentOwnsTitle: boolean;
+  /** The page's chosen emoji, or null for the default file glyph. */
+  pageIcon?: string | null;
   /** Headings of the revision on screen, from the same parse that gives them their ids. */
   outline: OutlineEntry[];
 }) {
@@ -450,13 +456,37 @@ export function DocumentDetailClient({
   // The header asks the registry, like every other surface (action-model
   // spec §4; share-link spec §10.1), rather than re-deriving the rule.
   const { access, confirmed } = useWorkspaceAuthorization();
-  const canShare = availableActions({
+  const { shortcuts, update: updateShortcuts } = useDocumentShortcuts(inspectorData.workspaceId);
+  const favoriteKey = documentShortcutKey(inspectorData.sourceId, inspectorData.documentId);
+  const favorite = shortcuts.favorites.includes(favoriteKey);
+  const toggleFavorite = useCallback(
+    () => updateShortcuts((previous) => toggleFavoriteDocument(previous, favoriteKey)),
+    [updateShortcuts, favoriteKey],
+  );
+  const runAction = useActionRunner({ onToggleFavorite: () => toggleFavorite() });
+  // Share, Details and the row-only openings already have their own doors in
+  // this header; the overflow is for what would otherwise be buried in the tree.
+  const headerHidden = useMemo<ReadonlySet<ActionId>>(
+    () => new Set<ActionId>(["document.favorite", "document.share", "document.open-side-peek", "document.open-new-tab"]),
+    [],
+  );
+  const available = actionsFor("row", {
     workspaceId: inspectorData.workspaceId,
     workspaceType: access.workspace.type,
     can: access.actions,
     confirmed,
-    target: { ...target, favorite: false },
-  }).some((action) => action.id === "document.share");
+    target: { ...target, favorite },
+  });
+  const canShare = available.some((action) => action.id === "document.share");
+  const headerActions = available.filter((action) => !headerHidden.has(action.id));
+  const canEditPage =
+    !readOnly &&
+    confirmed &&
+    access.actions.canWrite &&
+    status === "ACTIVE" &&
+    sourceStatus === "ACTIVE" &&
+    revisionBanner === null &&
+    access.workspace.lifecycleState !== "ARCHIVED";
   useEffect(() => {
     const header = headerRef.current;
     const root = contentRef.current;
@@ -503,6 +533,11 @@ export function DocumentDetailClient({
             readOnly={readOnly}
             syncHref={syncHref}
             contentOwnsTitle={contentOwnsTitle}
+            favorite={favorite}
+            onToggleFavorite={toggleFavorite}
+            actions={headerActions}
+            onRunAction={runAction}
+            beforeTitle={<PageIconPicker documentId={inspectorData.documentId} icon={pageIcon ?? null} editable={canEditPage} />}
           />
         <OutlineDisclosure entries={outline} activeSlug={activeSlug} />
         {children}

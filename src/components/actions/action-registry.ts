@@ -35,6 +35,7 @@ export type ActionId =
   | "document.open-side-peek"
   | "document.open-new-tab"
   | "document.copy-link"
+  | "document.duplicate"
   | "document.share"
   | "document.favorite"
   | "document.details"
@@ -72,6 +73,7 @@ export type ActionIconName =
   | "home"
   | "agent"
   | "copy-link"
+  | "duplicate"
   | "sidebar"
   | "knowledge"
   | "search"
@@ -98,6 +100,7 @@ export type ActionCommand =
   | "document.open-details"
   | "document.open-share"
   | "document.open-links"
+  | "document.duplicate"
   | "document.archive"
   | "document.restore";
 
@@ -425,6 +428,18 @@ export function availableActions(context: ActionContext): readonly Action[] {
         sourceId: target.sourceId,
       },
     });
+    if (can.canWrite && confirmed && target.ownership === "HUB_MANAGED" && target.status === "ACTIVE" && target.sourceStatus === "ACTIVE" && target.revision === "CURRENT") {
+      actions.push({
+        id: "document.duplicate",
+        label: "Duplicate document",
+        group: "document",
+        icon: "duplicate",
+        keywords: ["copy", "clone", "another", "new", target.label],
+        section: "edit",
+        surfaces: ["palette", "row"],
+        effect: { kind: "command", command: "document.duplicate", documentId: target.documentId, sourceId: target.sourceId, label: target.label },
+      });
+    }
     actions.push({
       id: "document.details",
       label: "Open details",

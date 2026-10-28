@@ -7,7 +7,9 @@ import { affectedRows, asDate, asRequiredString, insertBatches } from "./shared"
 function mapDocument(row: DbRow): KnowledgeDocument {
   return {
     id: String(row.id), sourceId: String(row.source_id), currentRevisionId: row.current_revision_id === null ? null : String(row.current_revision_id),
-    status: String(row.status) as "ACTIVE" | "ARCHIVED", createdBy: String(row.created_by), updatedBy: asRequiredString(row.updated_by, "document updated_by"),
+    status: String(row.status) as "ACTIVE" | "ARCHIVED",
+    pageIcon: row.page_icon === null || row.page_icon === undefined ? null : String(row.page_icon),
+    createdBy: String(row.created_by), updatedBy: asRequiredString(row.updated_by, "document updated_by"),
     archivedBy: row.archived_by === null ? null : String(row.archived_by), archivedAt: row.archived_at === null ? null : asDate(row.archived_at),
     createdAt: asDate(row.created_at), updatedAt: asDate(row.updated_at),
   };
@@ -102,5 +104,13 @@ export class MariaDbDocumentRepository implements DocumentRepository {
       [status, actorId, archivedBy, archivedAt, documentId],
     );
     if (affectedRows(result) !== 1) throw new IntegrityViolationError("Document lifecycle could not be updated.");
+  }
+
+  async updatePageIcon(documentId: string, icon: string | null, actorId: string): Promise<void> {
+    const result = await this.connection.query(
+      "UPDATE knowledge_documents SET page_icon = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP(6) WHERE id = ?",
+      [icon, actorId, documentId],
+    );
+    if (affectedRows(result) !== 1) throw new IntegrityViolationError("Document page icon could not be updated.");
   }
 }

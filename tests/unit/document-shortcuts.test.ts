@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FAVORITES_SHOWN, documentIdInPath, favoritesInPlace, parseDocumentShortcuts, recentDocumentIds, rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
+import { FAVORITES_SHOWN, documentIdInPath, favoritesInPlace, parseDocumentShortcuts, recentDocumentIds, rememberDocument, toggleFavoriteDocument, setFavoriteDocuments } from "@/lib/document-shortcuts";
 
 describe("document shortcuts", () => {
   it("keeps recent documents unique and newest first", () => {
@@ -98,5 +98,15 @@ describe("documentIdInPath", () => {
   it("is not fooled by an ID in another place in the path", () => {
     expect(documentIdInPath(`/w/${workspace}/search/${source}/${document}`)).toBeUndefined();
     expect(documentIdInPath(`/x/w/${workspace}/knowledge/${source}/${document}`)).toBeUndefined();
+  });
+});
+
+describe("bulk favorites", () => {
+  it("adds several at the front without duplicating one already pinned", () => {
+    expect(setFavoriteDocuments({ recent: [], favorites: ["s:a"] }, ["s:b", "s:a"], true).favorites).toEqual(["s:b", "s:a"]);
+  });
+
+  it("removes several and keeps the order of what remains", () => {
+    expect(setFavoriteDocuments({ recent: [], favorites: ["s:a", "s:b", "s:c"] }, ["s:b", "s:x"], false).favorites).toEqual(["s:a", "s:c"]);
   });
 });

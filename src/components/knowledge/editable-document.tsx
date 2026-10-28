@@ -398,7 +398,7 @@ export function EditableDocument({ detail, markdown, metadataTitle, revisionId, 
     editorActions={<><AutosaveIndicator state={status} attention={attention} />{markdownToggle}</>}
     titleControl={resolved.source === "TYPED" ? <input aria-label="Title" value={content.title} disabled={!editable} maxLength={512}
       onChange={event => change({ ...queue.current!.current, title: event.target.value })}
-      className="mt-2 block w-full border-0 bg-transparent p-0 text-display font-semibold tracking-tight text-kh-text outline-none"
+      className="mt-2 block w-full border-0 bg-transparent p-0 text-page-title font-semibold tracking-tight text-kh-text outline-none"
       onCompositionStart={() => { composing.current = true; writer?.pause(true); }}
       onCompositionEnd={() => { composing.current = false; writer?.pause(!editable || !!recovery || !resolve(queue.current!.current).title); }} /> : undefined}>
     <div className="kh-reading-column py-6">

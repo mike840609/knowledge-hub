@@ -63,9 +63,10 @@
   --kh-shadow-modal: 0 2px 4px rgb(23 25 32 / 0.06), 0 16px 40px -8px rgb(23 25 32 / 0.18);
 }
 
-/* Dark theme. Applied only by explicit choice — the toggle writes
-   `data-theme` and persists it. The system's `prefers-color-scheme` is
-   deliberately not consulted; see the contract's theme section. */
+/* Dark theme. Applied by an explicit Dark choice, or by System when the
+   operating system prefers dark. The choice is persisted as `kh:theme` and
+   the pre-paint script resolves it before the first frame; see the contract's
+   theme section. */
 :root[data-theme="dark"] {
   color-scheme: dark;
   --kh-bg: #131417;
@@ -239,6 +240,16 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   }
   .kh-editor img.ProseMirror-separator {
     @apply m-0 inline border-0;
+  }
+  /* A page whose title is the H1 it opens with has no title field; that H1 is
+     the page's name, not a section heading, so it wears the page-title scale
+     (32/40) in the reader, the composer and the shared page alike. */
+  .kh-editor > h1:first-child,
+  .kh-reading-column article > div > h1:first-child,
+  .kh-share-page article > div > h1:first-child {
+    font-size: 32px;
+    line-height: 40px;
+    letter-spacing: -0.02em;
   }
   /* While a node (an image, a rule) is selected, ProseMirror marks the editor with this and
      keeps the browser's text selection only as a carrier: it must not show. */
@@ -632,6 +643,8 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-row-action { opacity: 1; }
   .kh-tree-row-actions { right: 44px; }
   .kh-tree-document-link, .kh-tree-folder-button { padding-inline-end: 48px; }
+  /* The always-visible selection checkbox takes the glyph's place at the left. */
+  .kh-tree-document-link { padding-inline-start: 48px; }
 }
 
 /* Search icon clearance: left inset + icon width + gutter, not spacing rhythm. */
@@ -875,6 +888,8 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 .kh-block-move-menu button {
   @apply block w-full rounded-md px-3 py-2 text-left text-body-sm text-kh-text hover:bg-kh-bg-hover disabled:opacity-50 kh-focus-ring;
 }
+.kh-block-move-menu button[aria-current="true"] { @apply bg-kh-bg-selected font-medium text-kh-selected-text; }
+.kh-block-menu-separator { height: 1px; margin: 4px; background: var(--kh-border); }
 .kh-slash-menu { width: 18rem; max-width: calc(100vw - 1rem); max-height: min(24rem, 60vh); overflow-y: auto; }
 .kh-slash-option { @apply flex cursor-pointer flex-col rounded-md px-3 py-1.5 text-body-sm text-kh-text hover:bg-kh-bg-hover; }
 .kh-slash-option[aria-selected="true"] { @apply bg-kh-bg-selected text-kh-selected-text; }

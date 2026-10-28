@@ -43,10 +43,37 @@ it('offers bounded move actions and moves the selected block down', async () => 
   const { editor } = await open();
   button('Move block').click();
   const items = document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]');
-  expect(items[0].disabled).toBe(true);
-  expect(items[1].disabled).toBe(false);
-  items[1].click();
+  expect([...items].map((item) => item.textContent)).toEqual(['Turn into', 'Duplicate', 'Delete', 'Move up', 'Move down']);
+  const up = [...items].find((item) => item.textContent === 'Move up')!;
+  const down = [...items].find((item) => item.textContent === 'Move down')!;
+  expect(up.disabled).toBe(true);
+  expect(down.disabled).toBe(false);
+  down.click();
   expect(editor.getMarkdown()).toMatch(/Second[\s\S]*First[\s\S]*Third/);
+});
+
+it('turns a block into a heading from the gutter menu', async () => {
+  const { editor } = await open();
+  button('Move block').click();
+  const turn = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((item) => item.textContent === 'Turn into')!;
+  turn.click();
+  expect(document.querySelector<HTMLElement>('[role="menu"]')!.getAttribute('aria-label')).toBe('Turn block into');
+  const heading = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((item) => item.textContent === 'Heading 2')!;
+  expect(heading.disabled).toBe(false);
+  heading.click();
+  expect(editor.getMarkdown()).toMatch(/^## First/m);
+});
+
+it('duplicates and deletes a block from the gutter menu', async () => {
+  const { editor } = await open();
+  button('Move block').click();
+  const duplicate = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((item) => item.textContent === 'Duplicate')!;
+  duplicate.click();
+  expect(editor.getMarkdown()).toMatch(/First\n\nFirst\n\nSecond/);
+  button('Move block').click();
+  const remove = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((item) => item.textContent === 'Delete')!;
+  remove.click();
+  expect(editor.getMarkdown()).toMatch(/^First\n\nSecond/m);
 });
 
 it('moves only on an in-editor drop and cancels when the document changes during a drag', async () => {
@@ -92,12 +119,17 @@ it('reaches block actions directly by keyboard and returns to the editor with Es
   expect(document.activeElement).toBe(button('Add paragraph below'));
   button('Move block').focus();
   button('Move block').click();
-  const down = document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')[1];
-  expect(document.activeElement).toBe(down);
-  down.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  const turn = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((item) => item.textContent === 'Turn into')!;
+  expect(document.activeElement).toBe(turn);
+  // Escape in the submenu comes back to the block menu, not all the way out.
+  turn.click();
+  const back = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((item) => item.textContent === 'Back')!;
+  expect(document.activeElement).toBe(back);
+  back.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  expect(document.activeElement?.textContent).toBe('Turn into');
+  document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
   expect(document.activeElement).toBe(button('Move block'));
-  button('Move block').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-  expect(document.activeElement).toBe(view.dom);
+  expect(document.querySelector<HTMLElement>('.kh-block-move-menu')!.hidden).toBe(true);
 });
 
 it('reveals controls only in the left gutter, not on focus, typing or prose hover', async () => {

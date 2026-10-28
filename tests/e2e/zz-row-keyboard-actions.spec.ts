@@ -209,7 +209,7 @@ test("the row menu offers actions without single-letter key hints", async ({ pag
   await expect(menu.getByRole("menuitem", { name: /Move document/ }).locator("kbd")).toHaveCount(0);
   // Grouped by what the reader is doing (open, change, open in, export, remove), one rule between each pair of sections.
   const shape = await menuShape(menu);
-  expect(shape).toEqual(["Copy link", RULE, "Add to favorites", "Move document…", RULE, "Open in side peek", "Open in new tab", RULE, "Download Markdown", RULE, "Archive document"]);
+  expect(shape).toEqual(["Copy link", RULE, "Add to favorites", "Duplicate document", "Move document…", RULE, "Open in side peek", "Open in new tab", RULE, "Download Markdown", RULE, "Archive document"]);
   expectRulesOnlyBetweenItems(shape);
   expect(await menu.getByRole("separator").count()).toBe(4);
   const labels = menu.getByRole("menuitem").locator("span.truncate");

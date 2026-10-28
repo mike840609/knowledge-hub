@@ -19,6 +19,7 @@ function mapDocumentSummary(row: DbRow): DocumentSummary {
     title: asRequiredString(row.title, "document summary title"), updatedAt: asDate(row.updated_at),
     ownership: String(row.ownership) as DocumentSummary["ownership"],
     status: String(row.status) as DocumentSummary["status"], sourceStatus: String(row.source_status) as DocumentSummary["sourceStatus"],
+    pageIcon: row.page_icon === null || row.page_icon === undefined ? null : String(row.page_icon),
   };
 }
 
@@ -47,7 +48,7 @@ export class MariaDbTreeRepository implements TreeRepository {
       JOIN hidden_nodes parent ON child.parent_id = parent.id AND child.source_id = parent.source_id
     )` : "";
     const rows = await this.connection.query<DbRow[]>(
-      `${hidden} SELECT d.id AS document_id, d.source_id, r.title, r.created_at AS updated_at,
+      `${hidden} SELECT d.id AS document_id, d.source_id, r.title, r.created_at AS updated_at, d.page_icon,
               s.ownership, s.status AS source_status, d.status
        FROM knowledge_documents d
        JOIN knowledge_sources s ON s.id = d.source_id
@@ -72,7 +73,7 @@ export class MariaDbTreeRepository implements TreeRepository {
     for (let start = 0; start < documentIds.length; start += DOCUMENT_ID_CHUNK) {
       const batch = documentIds.slice(start, start + DOCUMENT_ID_CHUNK);
       const rows = await this.connection.query<DbRow[]>(
-        `SELECT d.id AS document_id, d.source_id, r.title, r.created_at AS updated_at,
+        `SELECT d.id AS document_id, d.source_id, r.title, r.created_at AS updated_at, d.page_icon,
                 s.ownership, s.status AS source_status, d.status
          FROM knowledge_documents d
          JOIN knowledge_sources s ON s.id = d.source_id
@@ -125,7 +126,7 @@ export class MariaDbTreeRepository implements TreeRepository {
    */
   async listBySource(sourceId: string): Promise<TreeViewNode[]> {
     const rows = await this.connection.query<DbRow[]>(
-      `SELECT n.*, r.title AS title, d.status AS document_status, d.current_revision_id AS document_current_revision_id
+      `SELECT n.*, r.title AS title, d.page_icon AS document_page_icon, d.status AS document_status, d.current_revision_id AS document_current_revision_id
        FROM knowledge_tree_nodes n
        LEFT JOIN knowledge_documents d ON d.id = n.document_id AND d.source_id = n.source_id
        LEFT JOIN knowledge_revisions r ON r.id = d.current_revision_id AND r.document_id = d.id
@@ -133,7 +134,7 @@ export class MariaDbTreeRepository implements TreeRepository {
        WHERE n.source_id = ? ORDER BY n.parent_id, n.position, n.id`,
       [sourceId],
     );
-    return rows.map((row) => ({ ...mapNode(row), title: row.title === null ? null : String(row.title), documentStatus: row.document_status === null ? null : String(row.document_status) as "ACTIVE" | "ARCHIVED", currentRevisionId: row.document_current_revision_id === null || row.document_current_revision_id === undefined ? null : String(row.document_current_revision_id) }));
+    return rows.map((row) => ({ ...mapNode(row), title: row.title === null ? null : String(row.title), pageIcon: row.document_page_icon === null || row.document_page_icon === undefined ? null : String(row.document_page_icon), documentStatus: row.document_status === null ? null : String(row.document_status) as "ACTIVE" | "ARCHIVED", currentRevisionId: row.document_current_revision_id === null || row.document_current_revision_id === undefined ? null : String(row.document_current_revision_id) }));
   }
 
   async updateParent(nodeId: string, parentId: string | null, actorId: string): Promise<void> {

@@ -213,6 +213,7 @@ export function PeekPane({
             sourceId: peek.sourceId,
             workspaceId: peek.workspaceId,
             status: "ACTIVE",
+            pageIcon: null,
             currentRevision: {
               id: "",
               documentId: peek.documentId,

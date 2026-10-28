@@ -25,6 +25,7 @@ test("new documents focus Title while existing documents wait for an editing ges
   const title = unique("Focus H1");
   const url = await createNote(page, title, `# ${title}\n\nbody`);
   const surface = await openEditor(page, url);
+  await expect(surface.getByRole('heading', { level: 1 })).toHaveCSS('font-size', '32px');
   await expect(surface).not.toBeFocused();
   await surface.getByRole("heading", { level: 1 }).click({ position: { x: 1, y: 10 } });
   await page.keyboard.type("X");
@@ -229,6 +230,10 @@ test("the editor arriving does not take the caret from a field the person moved 
   await toggle.click();
   const titleField = composer(page).getByLabel("Title", { exact: true });
   await titleField.click();
+  // The field is 32px now, so a centre click lands inside the title rather
+  // than past it. Put the caret at the end explicitly; the point of this test
+  // is that the arriving editor does not take focus, not where a click lands.
+  await titleField.evaluate((el) => { const input = el as HTMLInputElement; input.setSelectionRange(input.value.length, input.value.length); });
   await page.keyboard.type(" more");
   release();
   await expect(page.locator(".ProseMirror")).toHaveAttribute("contenteditable", "false", ROUND_TRIP);

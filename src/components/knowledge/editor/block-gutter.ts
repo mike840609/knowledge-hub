@@ -1,7 +1,7 @@
 import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
-import { insertBlockBelow, moveBlock, topLevelBlocks } from "./block-actions";
+import { blockKind, canTurnInto, deleteBlock, duplicateBlock, insertBlockBelow, moveBlock, topLevelBlocks, turnBlockInto, type BlockKind } from "./block-actions";
 
 function icon(kind: "plus" | "grip"): SVGSVGElement {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -51,12 +51,84 @@ export function blockGutter() {
       const dom = view.dom;
       const toolbar = document.createElement("div"); toolbar.className = "kh-block-gutter"; toolbar.hidden = true; toolbar.setAttribute("role", "group"); toolbar.setAttribute("aria-label", "Block actions");
       const add = document.createElement("button"); add.type = "button"; add.setAttribute("aria-label", "Add paragraph below"); add.title = "Add paragraph below (Alt+F10 for block actions)"; add.appendChild(icon("plus"));
-      const grip = document.createElement("button"); grip.type = "button"; grip.draggable = true; grip.setAttribute("aria-label", "Move block"); grip.title = "Drag to move. Click for move options."; grip.setAttribute("aria-haspopup", "menu"); grip.setAttribute("aria-expanded", "false"); grip.appendChild(icon("grip"));
+      const grip = document.createElement("button"); grip.type = "button"; grip.draggable = true; grip.setAttribute("aria-label", "Move block"); grip.title = "Drag to move. Click for block actions."; grip.setAttribute("aria-haspopup", "menu"); grip.setAttribute("aria-expanded", "false"); grip.appendChild(icon("grip"));
       toolbar.append(add, grip);
-      const menu = document.createElement("div"); menu.className = "kh-block-move-menu"; menu.hidden = true; menu.setAttribute("role", "menu"); menu.setAttribute("aria-label", "Move block");
-      const up = document.createElement("button"); up.type = "button"; up.setAttribute("role", "menuitem"); up.textContent = "Move up";
-      const down = document.createElement("button"); down.type = "button"; down.setAttribute("role", "menuitem"); down.textContent = "Move down";
-      menu.append(up, down);
+      const menu = document.createElement("div"); menu.className = "kh-block-move-menu"; menu.hidden = true; menu.setAttribute("role", "menu"); menu.setAttribute("aria-label", "Block actions");
+      let menuMode: "main" | "turn" = "main";
+      const turnOptions: readonly [BlockKind, string][] = [
+        ["paragraph", "Text"],
+        ["h1", "Heading 1"],
+        ["h2", "Heading 2"],
+        ["h3", "Heading 3"],
+        ["bullet", "Bulleted list"],
+        ["ordered", "Numbered list"],
+        ["task", "To-do list"],
+        ["quote", "Quote"],
+        ["code", "Code"],
+      ];
+      const blocksNow = () => topLevelBlocks(view.state.doc);
+      const activeIndex = () => blocksNow().findIndex((block) => block.pos === active);
+      const activeNode = () => (active === null ? null : view.state.doc.nodeAt(active));
+      function menuButton(label: string, run: () => void): HTMLButtonElement {
+        const button = document.createElement("button");
+        button.type = "button"; button.setAttribute("role", "menuitem"); button.textContent = label;
+        button.addEventListener("mousedown", event => { if (event.button === 0) event.preventDefault(); });
+        button.addEventListener("click", run);
+        return button;
+      }
+      function separator(): HTMLElement {
+        const rule = document.createElement("div"); rule.setAttribute("role", "separator"); rule.className = "kh-block-menu-separator";
+        return rule;
+      }
+      function renderMain(): HTMLElement {
+        menuMode = "main";
+        menu.replaceChildren();
+        menu.setAttribute("aria-label", "Block actions");
+        const turn = menuButton("Turn into", () => { renderTurn(); position(); focusFirst(); });
+        turn.setAttribute("aria-haspopup", "menu"); turn.setAttribute("aria-expanded", "false");
+        const duplicate = menuButton("Duplicate", () => {
+          if (active === null || !duplicateBlock(view, active)) return;
+          live.textContent = "Block duplicated";
+          closeMenu();
+        });
+        const remove = menuButton("Delete", () => {
+          if (active === null || !deleteBlock(view, active)) return;
+          live.textContent = "Block deleted";
+          closeMenu();
+        });
+        const up = menuButton("Move up", () => moveBy(-1));
+        const down = menuButton("Move down", () => moveBy(1));
+        const blocks = blocksNow();
+        const index = activeIndex();
+        up.disabled = index <= 0;
+        down.disabled = index < 0 || index === blocks.length - 1;
+        menu.append(turn, duplicate, remove, separator(), up, down);
+        return turn;
+      }
+      function renderTurn(): void {
+        menuMode = "turn";
+        menu.replaceChildren();
+        menu.setAttribute("aria-label", "Turn block into");
+        const node = activeNode();
+        const current = node ? blockKind(node) : null;
+        const back = menuButton("Back", () => { const first = renderMain(); position(); first.focus(); });
+        back.setAttribute("aria-label", "Back to block actions");
+        menu.append(back, separator());
+        for (const [kind, label] of turnOptions) {
+          const button = menuButton(label, () => {
+            if (active === null || !turnBlockInto(view, active, kind)) return;
+            live.textContent = `Block turned into ${label.toLowerCase()}`;
+            closeMenu();
+          });
+          button.disabled = !node || !canTurnInto(node, kind);
+          if (kind === current) button.setAttribute("aria-current", "true");
+          menu.append(button);
+        }
+      }
+      function focusFirst(): void {
+        const first = menu.querySelector<HTMLButtonElement>("button:not(:disabled)");
+        first?.focus();
+      }
       const line = document.createElement("div"); line.className = "kh-block-drop-line"; line.hidden = true; line.setAttribute("aria-hidden", "true");
       const live = document.createElement("div"); live.className = "sr-only"; live.setAttribute("aria-live", "polite");
       document.body.append(toolbar, menu, line, live);
@@ -155,19 +227,28 @@ export function blockGutter() {
       }
       grip.addEventListener("click", () => {
         if (!menu.hidden) { closeMenu(); return; }
-        const blocks = topLevelBlocks(view.state.doc);
-        const index = blocks.findIndex(block => block.pos === active);
-        up.disabled = index <= 0; down.disabled = index < 0 || index === blocks.length - 1;
+        renderMain();
         menu.hidden = false; grip.setAttribute("aria-expanded", "true"); position();
-        (up.disabled ? down : up).focus();
+        focusFirst();
       });
       grip.addEventListener("keydown", event => {
         if (event.key === "ArrowUp" || event.key === "ArrowDown") { event.preventDefault(); moveBy(event.key === "ArrowUp" ? -1 : 1); }
       });
-      up.addEventListener("click", () => moveBy(-1)); down.addEventListener("click", () => moveBy(1));
       menu.addEventListener("keydown", event => {
-        if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closeMenu(); grip.focus(); }
-        if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); const next = document.activeElement === up ? down : up; if (!next.disabled) next.focus(); }
+        if (event.key === "Escape") {
+          event.preventDefault(); event.stopPropagation();
+          if (menuMode === "turn") { const first = renderMain(); position(); first.focus(); }
+          else { closeMenu(); grip.focus(); }
+          return;
+        }
+        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+          event.preventDefault();
+          const items = [...menu.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
+          if (items.length === 0) return;
+          const index = items.indexOf(document.activeElement as HTMLButtonElement);
+          items[(index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus();
+          return;
+        }
         if (event.key === "Tab") { event.preventDefault(); closeMenu(); view.focus(); }
       });
       const outside = (event: PointerEvent) => { if (event.target instanceof Node && !toolbar.contains(event.target) && !menu.contains(event.target)) closeMenu(); };

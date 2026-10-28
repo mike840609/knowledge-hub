@@ -30,6 +30,23 @@ describe("pre-paint density", () => {
     expect(runScript()).toEqual({ theme: "dark", density: "comfortable" });
   });
 
+  it("resolves System from the OS before paint", () => {
+    localStorage.setItem("kh:theme", "system");
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
+    expect(runScript().theme).toBe("dark");
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false })));
+    expect(runScript().theme).toBe("light");
+  });
+
+  it("keeps an explicit theme even when the OS disagrees", () => {
+    localStorage.setItem("kh:theme", "light");
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
+    expect(runScript().theme).toBe("light");
+    localStorage.setItem("kh:theme", "dark");
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false })));
+    expect(runScript().theme).toBe("dark");
+  });
+
   it("treats a value it does not know as compact", () => {
     localStorage.setItem("kh:density", "cozy");
     expect(runScript().density).toBe("compact");

@@ -22,6 +22,15 @@ export type OrganizeResult = { ok: true } | { ok: false; message: string };
 export type TreeMutations = {
   archiveDocument(input: { documentId: string; sourceId: string; title: string }): Promise<void>;
   restoreDocument(input: { documentId: string; sourceId: string; title: string }): Promise<void>;
+  /** Creates a copy beside the original and opens it; Undo archives the copy. */
+  duplicateDocument(input: { documentId: string; sourceId: string; title: string }): Promise<void>;
+  /** Archives many with one summary toast and one Undo that restores them all. */
+  archiveDocuments(inputs: readonly { documentId: string; sourceId: string; title: string }[]): Promise<void>;
+  /** Moves several tree nodes to one place; Undo puts each back where it was. */
+  moveNodes(
+    inputs: readonly { nodeId: string; label: string; from: { parentId: string | null; position: number } }[],
+    to: { parentId: string | null; label: string | null },
+  ): Promise<OrganizeResult>;
   archiveFolder(input: { nodeId: string; name: string }): Promise<void>;
   restoreFolder(input: { nodeId: string; name: string }): Promise<void>;
   /** For a dialog: the refusal comes back as words to put next to the field, not as a toast. */
@@ -159,6 +168,102 @@ export function useTreeMutations(): TreeMutations {
       },
       archiveDocument: (input) => setDocument("archive", input),
       restoreDocument: (input) => setDocument("restore", input),
+      async duplicateDocument({ documentId, sourceId, title }) {
+        try {
+          const created = await governanceRequest<{ documentId: string }>(`/api/documents/${documentId}/duplicate`, "POST");
+          const href = `/w/${workspaceId}/knowledge/${sourceId}/${created.documentId}`;
+          const originalHref = documentHref(sourceId, documentId);
+          // A copy is opened, as a reader expects from Duplicate; the Undo
+          // follows it rather than the page it came from, and takes the reader
+          // back to the original when the copy was the page on screen.
+          toast({
+            message: `Duplicated “${title}”.`,
+            undo: {
+              label: UNDO_LABEL,
+              run: async () => {
+                await governanceRequest(`/api/documents/${created.documentId}/archive`, "POST");
+                if (isOpen(href)) {
+                  refreshOnArrival(originalHref);
+                  router.push(originalHref);
+                } else refresh();
+              },
+            },
+            survivesNavigation: true,
+          });
+          refreshOnArrival(href);
+          router.push(href);
+        } catch (failure) {
+          failed(failure);
+        }
+      },
+      async archiveDocuments(inputs) {
+        if (inputs.length === 0) return;
+        // One document keeps the single-document path: its toast carries the
+        // backlink warning and its Undo. A batch has its own summary.
+        if (inputs.length === 1) {
+          await setDocument("archive", inputs[0]);
+          return;
+        }
+        const results = await Promise.allSettled(inputs.map((input) => governanceRequest(`/api/documents/${input.documentId}/archive`, "POST")));
+        const succeeded = inputs.filter((_, index) => results[index].status === "fulfilled");
+        const failureCount = inputs.length - succeeded.length;
+        if (succeeded.length === 0) {
+          const firstFailure = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
+          failed(firstFailure?.reason);
+          refresh();
+          return;
+        }
+        const viewing = succeeded.find((input) => isOpen(documentHref(input.sourceId, input.documentId)));
+        const message = failureCount === 0
+          ? `Archived ${succeeded.length} documents.`
+          : `Archived ${succeeded.length} of ${inputs.length} documents; ${failureCount} could not be archived.`;
+        const undo = {
+          label: UNDO_LABEL,
+          run: async () => {
+            await Promise.all(succeeded.map((input) => governanceRequest(`/api/documents/${input.documentId}/restore`, "POST")));
+            if (viewing) {
+              const href = documentHref(viewing.sourceId, viewing.documentId);
+              refreshOnArrival(href);
+              router.push(href);
+            } else refresh();
+          },
+        };
+        const tone = failureCount > 0 ? "danger" as const : undefined;
+        if (viewing) {
+          const listHref = `/w/${workspaceId}/knowledge/${viewing.sourceId}`;
+          toast({ message, undo, survivesNavigation: true, ...(tone ? { tone } : {}) });
+          refreshOnArrivalElsewhere();
+          router.push(listHref);
+        } else {
+          toast({ message, undo, ...(tone ? { tone } : {}) });
+          refresh();
+        }
+      },
+      async moveNodes(inputs, to) {
+        if (inputs.length === 0) return { ok: true };
+        try {
+          await Promise.all(inputs.map((input) => governanceRequest(`/api/tree-nodes/${input.nodeId}`, "PATCH", { parentId: to.parentId })));
+          const count = `${inputs.length} document${inputs.length === 1 ? "" : "s"}`;
+          const where = to.label ? `“${to.label}”` : "the top level";
+          toast({
+            message: `Moved ${count} to ${where}.`,
+            undo: {
+              label: UNDO_LABEL,
+              run: async () => {
+                for (const input of inputs) await governanceRequest(`/api/tree-nodes/${input.nodeId}`, "PATCH", { parentId: input.from.parentId, position: input.from.position });
+                refresh();
+              },
+            },
+          });
+          refresh();
+          return { ok: true };
+        } catch (failure) {
+          const message = organizeFailure(governanceFailure(failure));
+          toast({ message, tone: "danger" });
+          refresh();
+          return { ok: false, message };
+        }
+      },
       archiveFolder: (input) => setFolder("archive", input),
       restoreFolder: (input) => setFolder("restore", input),
       async createFolder({ name, parentId, sourceId }) {

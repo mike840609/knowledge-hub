@@ -98,7 +98,7 @@ together, and say what job the new token does that no existing one covers.
 | Scale | Tokens | Job |
 | --- | --- | --- |
 | Type (UI) | `micro`, `caption`, `body-sm`, `body`, `title`, `heading` | `body` is the ~14px default the UI spends most of its time in |
-| Type (document) | `reading`, `subheading`, `display` | rendered Markdown only; a longer measure wants a larger size and looser leading. Headings step `display` 24 / `heading` 20 / `subheading` 17 / `reading` 15 semibold for `h4`–`h6` (`h6` muted): none smaller than the text under it (`2026-10-20-reader-measure-and-heading-scale-design.md`) |
+| Type (document) | `reading`, `subheading`, `display`, `page-title` | rendered Markdown uses `display` 24 / `heading` 20 / `subheading` 17 / `reading` 15 semibold for `h4`–`h6` (`h6` muted): none smaller than the text under it (`2026-10-20-reader-measure-and-heading-scale-design.md`). `page-title` (32/40) is the page's own name — the document title in its header, the composer title field and the public share header — never a heading inside the article, so the page reads as a page and lists keep their 14px titles. |
 | Radius | `sm`, `md`, `lg`, `xl` | see §5 |
 | Elevation | `popover`, `modal` | floating surfaces only |
 | Border | `border`, `border-strong` | see §6 |
@@ -832,11 +832,19 @@ as it was.
 
 The controls are two `size-6` icon buttons in muted text with the shared focus
 ring: one adds a paragraph below, one is dragged to move the block and clicked
-for a menu of Move up and Move down. `Alt+F10` in the editor moves focus to
-them, and the editor says so (`aria-keyshortcuts`); Escape goes back to the
-text. While a block is dragged it is tinted `kh-bg-selected` and a 2px
-`--kh-primary` line marks where it will land. On a device with no hover the
-controls follow the block the caret is in.
+for the block menu. The menu offers **Turn into** (Text, Heading 1–3, Bulleted
+list, Numbered list, To-do list, Quote, Code), **Duplicate**, **Delete**, then a
+rule and **Move up** / **Move down**. Turn into is a second page of the same
+menu, not a nested popover: a conversion that would drop content — a several-item
+list into one heading, a quote with several paragraphs into one code block — is
+disabled rather than performed lossily. Duplicate inserts the copy immediately
+below; Delete removes the block and leaves one empty paragraph when it was the
+document's only one. `Alt+F10` in the editor moves focus to the controls, and
+the editor says so (`aria-keyshortcuts`); Escape closes the menu, or returns
+from Turn into to the block menu, and finally goes back to the text. While a
+block is dragged it is tinted `kh-bg-selected` and a 2px `--kh-primary` line
+marks where it will land. On a device with no hover the controls follow the
+block the caret is in.
 
 The `/` list takes what the `[[` list takes — the `lg` radius, a border, the
 `popover` elevation, the row in force in `kh-bg-selected` — and behaves as it
@@ -884,36 +892,31 @@ whole shell rather than losing a preference.
 
 Light and dark must both resolve every token.
 
-**The theme is the reader's explicit choice and nothing else.** Dark is served
-by one selector, `:root[data-theme="dark"]`. The system's
-`prefers-color-scheme` is deliberately not consulted, so the control reflects
-what was last picked rather than changing underfoot when the OS switches.
-Light is the starting point until someone picks otherwise.
+**The theme is the reader's choice between Light, Dark and System.** Dark is
+served by one selector, `:root[data-theme="dark"]`; CSS never reads the media
+query itself. `system` is resolved to one of the two before the attribute is
+written, so the stylesheet keeps one source of truth.
 
-The choice persists to `localStorage` under `kh:theme`. A pre-paint script in
-the document head applies it before the first frame, so a reader who picked
-dark never sees a light one. It stamps `data-theme` unconditionally, defaulting
-to light, so the DOM states which theme is in force from the first byte rather
-than only after hydration.
+The choice persists to `localStorage` under `kh:theme` as `light`, `dark` or
+`system`. A pre-paint script in the document head resolves it before the first
+frame: an explicit choice is stamped as it is, and `system` is stamped from
+`matchMedia("(prefers-color-scheme: dark)")`. The control reads the stored
+choice, so it can show System as current while the document wears whichever
+theme the OS means. Light is the starting point until someone picks otherwise.
 
-Because the script writes to `<html>` before React hydrates, the server HTML
-and the DOM React finds disagree on that one attribute by design. The root
-layout marks `<html>` `suppressHydrationWarning`; React applies it to that
-element's own attributes only, so a real mismatch anywhere below still reports.
+While System is chosen, a `matchMedia` listener redraws the page when the OS
+switches. Light and Dark never change underfoot. Because the script writes to
+`<html>` before React hydrates, the server HTML and the DOM React finds
+disagree on those attributes by design. The root layout marks `<html>`
+`suppressHydrationWarning`; React applies it to that element's own attributes
+only, so a real mismatch anywhere below still reports.
 
 ### What this costs
 
-A visitor whose OS is set to dark gets light until they pick, and with
-JavaScript disabled the theme cannot change at all. An earlier revision served
-both, with a media query alongside the attribute; that meant two blocks of
-identical values that had to be edited together, and a toggle that could not
-return to following the system once touched. Trading those away for one
-source of truth and a control that always tells the truth about its own state
-is the deliberate call recorded here.
-
-Should following the system be wanted again, it returns as a third state on
-the control — `light` / `dark` / `system` — not as a second CSS block. The
-attribute stays the only thing the stylesheet reads.
+With JavaScript disabled the theme cannot change at all, and a first paint
+without the script is light. The script is small and runs before the styles
+have painted anything, so this is the cost of not having two blocks of
+identical dark values that must be edited together.
 
 Density is kept the same way: `kh:density` in storage, `data-density` stamped
 by the same pre-paint script (`compact` unless `comfortable` was chosen), and
@@ -1624,7 +1627,7 @@ distinction that cannot be made with what exists, not to match a count.
 
 ## October 2026 remediation
 
-Desktop navigation keeps a 176px primary rail, collapsible to 48px, beside an independent 288px contextual explorer, collapsible to a 40px strip. Wide screens have no topbar: rail, explorer and content all start at the top of the window, and the explorer retains its full height when the primary rail collapses. The primary rail opens with the wordmark and its collapse control, then the workspace switcher, then a Search row drawn like navigation. The reader pins its breadcrumb line (location › title, with Markdown/Share/Comments/Details) to the top of the reading column while the rest of its header scrolls away. A pinned bar's lower edge is not a rule: while it is pinned, the content scrolling under it fades into it through a 16px gradient from `--kh-bg` to transparent (`.kh-fade-below`, in `globals.css`), drawn below the bar, click-through, and never taller than would swallow a line of text. The composer's pinned command line uses the same edge. The rule is for a page's pinned *top line* over reading or writing; a sticky table header and a pinned bottom action bar keep their rule, which separates a header from its rows and an action bar from the form it acts on. On a document page the rail's first row (wordmark), the explorer's first row (Documents) and the document's breadcrumb line are each 48px and centred on one line, so the three columns share one top edge. Narrow screens keep a topbar (Menu, search icon, and the document's title and actions once its header scrolls away) and one Menu drawer headed by the switcher (`2026-10-08-workspace-switcher-in-rail-design.md`). Reader/composer share DocumentPane geometry and lay a document out line for line alike — the 48px path line, the title with one muted caption line under it, the outline (rail or disclosure), then the text — so nothing moves between reading and editing (`tests/e2e/zz-editor-blocks.spec.ts` measures both). The composer pins Save/Cancel/Markdown in its path line; its draft status and title hints take the reader's "Updated" line, which stays one line tall when empty and may wrap to a second only while a status needs it (a rename notice beside a draft status on a phone) — a jump the writer caused, not one between reading and editing. Details is the reader's panel with the reader's open state: the document is edited inline, so a panel open while reading is open while editing and after Cancel or Save, beside text that has not moved. The composer has a Details button in the reader's place, last in its path line, but no ⌘I, which the editor gives to italic. See `2026-10-02-linear-remediation-design.md` for the coordinated contract. Kbd and graph action hints use `text-muted` to meet small-text contrast. Desktop controls retain 24/32/40px heights; coarse pointers get at least 40px physical targets through the shared control classes.
+Desktop navigation keeps a 176px primary rail, collapsible to 48px, beside an independent 288px contextual explorer, collapsible to a 40px strip. Wide screens have no topbar: rail, explorer and content all start at the top of the window, and the explorer retains its full height when the primary rail collapses. The explorer supports multi-select: a checkbox replaces a document row's glyph on hover or focus, and is always visible on a touch device; shift-click extends the range, and a sticky bar offers Favorite, Move and Archive for every selected row, with the same three-axis availability the row menus use. The primary rail opens with the wordmark and its collapse control, then the workspace switcher, then a Search row drawn like navigation. A personal workspace puts **Inbox** first among the navigation rows, with the unread count beside it; the header's Inbox popover stays as the quick peek, so the row is the place and the popover is the glance. The reader pins its breadcrumb line (location › title, with Markdown/Share/Comments/Details, then the favorite star and the document overflow) to the top of the reading column while the rest of its header scrolls away. The overflow carries the same registry actions as a tree row's menu — Copy link, Duplicate, Move, Download Markdown and Archive/Restore; Share keeps its own button — so a page can be arranged without going back to the tree. The document's own title is `page-title` 32/40, with its page icon above it; when the title is the H1 the document opens with, that leading H1 wears the same scale. The icon is a document-level choice and never a revision. A pinned bar's lower edge is not a rule: while it is pinned, the content scrolling under it fades into it through a 16px gradient from `--kh-bg` to transparent (`.kh-fade-below`, in `globals.css`), drawn below the bar, click-through, and never taller than would swallow a line of text. The composer's pinned command line uses the same edge. The rule is for a page's pinned *top line* over reading or writing; a sticky table header and a pinned bottom action bar keep their rule, which separates a header from its rows and an action bar from the form it acts on. On a document page the rail's first row (wordmark), the explorer's first row (Documents) and the document's breadcrumb line are each 48px and centred on one line, so the three columns share one top edge. Narrow screens keep a topbar (Menu, search icon, and the document's title, star and actions once its header scrolls away) and one Menu drawer headed by the switcher (`2026-10-08-workspace-switcher-in-rail-design.md`). Reader/composer share DocumentPane geometry and lay a document out line for line alike — the 48px path line, the page icon and `page-title` title with one muted caption line under it, the outline (rail or disclosure), then the text — so nothing moves between reading and editing (`tests/e2e/zz-editor-blocks.spec.ts` measures both). The composer pins Save/Cancel/Markdown in its path line; its draft status and title hints take the reader's "Updated" line, which stays one line tall when empty and may wrap to a second only while a status needs it (a rename notice beside a draft status on a phone) — a jump the writer caused, not one between reading and editing. Details is the reader's panel with the reader's open state: the document is edited inline, so a panel open while reading is open while editing and after Cancel or Save, beside text that has not moved. The composer has a Details button in the reader's place, last in its path line, but no ⌘I, which the editor gives to italic. See `2026-10-02-linear-remediation-design.md` for the coordinated contract. Kbd and graph action hints use `text-muted` to meet small-text contrast. Desktop controls retain 24/32/40px heights; coarse pointers get at least 40px physical targets through the shared control classes.
 
 
 ### Shared article discussion layout (2026-10-12, PR #168)

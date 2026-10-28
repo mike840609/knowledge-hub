@@ -15,5 +15,5 @@ it('loads exactly the requested source inclusively', async () => {
 });
 it('shortcut metadata is independent of trees and contains no body', async () => {
  const services = {queries:{listSources:async () => [{id:'s',name:'Source'}],listDocumentSummaries:async () => [{documentId:'d',sourceId:'s',title:'Title',ownership:'HUB_MANAGED',status:'ACTIVE',sourceStatus:'ACTIVE',markdown:'secret'}]}} as never;
- expect(await readSidebarShortcuts(services,caller,'w',['d'],false)).toEqual([{documentId:'d',sourceId:'s',label:'Title',sourceName:'Source',ownership:'HUB_MANAGED'}]);
+ expect(await readSidebarShortcuts(services,caller,'w',['d'],false)).toEqual([{documentId:'d',sourceId:'s',label:'Title',sourceName:'Source',ownership:'HUB_MANAGED',pageIcon:null}]);
 });

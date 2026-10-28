@@ -427,6 +427,52 @@ describe("action registry — archiving a document (daily-driver spec §7.2)", (
   });
 });
 
+describe("action registry — duplicating a document", () => {
+  const cells = combinations({
+    canWrite: [true, false],
+    confirmed: [true, false],
+    ownership: ["HUB_MANAGED", "SOURCE_MANAGED"],
+    status: ["ACTIVE", "ARCHIVED"],
+    sourceStatus: ["ACTIVE", "ARCHIVED"],
+  } as const);
+
+  it.each(cells)("canWrite=$canWrite confirmed=$confirmed $ownership document $status in a $sourceStatus source", (cell) => {
+    const offered = ids(
+      availableActions(
+        context({
+          can: { ...allCapabilities, canWrite: cell.canWrite },
+          confirmed: cell.confirmed,
+          target: target({ ownership: cell.ownership, status: cell.status, sourceStatus: cell.sourceStatus }),
+        }),
+      ),
+    ).filter((id) => id === "document.duplicate");
+    const expected = cell.canWrite && cell.confirmed && cell.ownership === "HUB_MANAGED" && cell.status === "ACTIVE" && cell.sourceStatus === "ACTIVE" ? ["document.duplicate"] : [];
+    expect(offered).toEqual(expected);
+  });
+
+  it("is on a row and in the palette, and names the document it copies", () => {
+    expect(ids(actionsFor("row", context({ target: target() })))).toContain("document.duplicate");
+    expect(ids(actionsFor("palette", context({ target: target() })))).toContain("document.duplicate");
+    const duplicate = availableActions(context({ target: target() })).find((action) => action.id === "document.duplicate");
+    expect(duplicate?.effect).toEqual({
+      kind: "command",
+      command: "document.duplicate",
+      documentId: "d1",
+      sourceId: "s1",
+      label: "Onboarding",
+    });
+  });
+
+  it("is found by the words a reader would use for it", () => {
+    const actions = availableActions(context({ target: target() }));
+    for (const word of ["copy", "clone", "duplicate"]) expect(ids(matchActions(actions, word))).toContain("document.duplicate");
+  });
+
+  it("is not offered on a historical revision: it would copy a snapshot as if it were current", () => {
+    expect(ids(availableActions(context({ target: target({ revision: "HISTORICAL" }) })))).not.toContain("document.duplicate");
+  });
+});
+
 describe("action registry — moving a document (daily-driver spec §7.2)", () => {
   const cells = combinations({
     canWrite: [true, false],
@@ -624,6 +670,7 @@ describe("action registry — the row menu's sections (frontend-design-language 
       "document.copy-link": "open",
       "document.share": "edit",
       "document.favorite": "edit",
+      "document.duplicate": "edit",
       "document.move": "edit",
       "folder.new-document": "edit",
       "folder.new-folder": "edit",
@@ -641,7 +688,7 @@ describe("action registry — the row menu's sections (frontend-design-language 
   it("groups an editable document: open, change, open in, export, remove, each in its own order", () => {
     expect(sectionsOf(context({ ...personal, target: target() }))).toEqual([
       ["document.copy-link"],
-      ["document.share", "document.favorite", "document.move"],
+      ["document.share", "document.favorite", "document.duplicate", "document.move"],
       ["document.open-side-peek", "document.open-new-tab"],
       ["document.agent-context", "document.export"],
       ["document.archive"],
@@ -651,7 +698,7 @@ describe("action registry — the row menu's sections (frontend-design-language 
   it("leaves out Copy for Agent where it is not offered, without leaving a hole", () => {
     expect(sectionsOf(context({ target: target() }))).toEqual([
       ["document.copy-link"],
-      ["document.favorite", "document.move"],
+      ["document.favorite", "document.duplicate", "document.move"],
       ["document.open-side-peek", "document.open-new-tab"],
       ["document.export"],
       ["document.archive"],
@@ -732,7 +779,7 @@ describe("action registry — the row menu's sections (frontend-design-language 
     const rows = actionsFor("row", context({ ...personal, target: target() }));
     const shuffled = [...rows].reverse();
     const sections = rowMenuSections(shuffled).map(ids);
-    expect(sections.map((section) => section.length)).toEqual([1, 3, 2, 2, 1]);
+    expect(sections.map((section) => section.length)).toEqual([1, 4, 2, 2, 1]);
     expect(sections[0]).toEqual(["document.copy-link"]);
   });
 
@@ -755,6 +802,7 @@ describe("action registry — the row menu's sections (frontend-design-language 
       "document.copy-link",
       "document.share",
       "document.favorite",
+      "document.duplicate",
       "document.details",
       "document.backlinks",
       "document.move",

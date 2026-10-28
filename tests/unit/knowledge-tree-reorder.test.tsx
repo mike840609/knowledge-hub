@@ -64,6 +64,9 @@ function render(props: Props = {}) {
       folderActions: () => [],
       onRunAction: () => {},
       onReorder,
+      onBulkFavorite: () => {},
+      onBulkMove: () => {},
+      onBulkArchive: () => {},
       ...props,
       ...extra,
     });

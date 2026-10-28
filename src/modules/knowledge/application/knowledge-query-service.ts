@@ -42,6 +42,8 @@ export type KnowledgeTreeItem =
       currentRevisionId: string;
       position: number;
       status: "ACTIVE" | "ARCHIVED";
+      /** The page's chosen emoji, or null for the file glyph. */
+      pageIcon?: string | null;
     };
 
 export type KnowledgeRevisionView = {
@@ -63,7 +65,7 @@ export interface KnowledgeQueryService {
   listSources(caller: CallerContext, workspaceId: string, input?: { includeArchived?: boolean }): Promise<SourceView[]>;
   getSource(caller: CallerContext, sourceId: string, input?: { includeArchived?: boolean }): Promise<SourceView>;
   listTree(caller: CallerContext, sourceId: string, input?: { includeArchived?: boolean }): Promise<KnowledgeTreeItem[]>;
-  getDocument(caller: CallerContext, documentId: string, input?: { includeArchived?: boolean }): Promise<{ documentId: string; sourceId: string; workspaceId: string; status: "ACTIVE" | "ARCHIVED"; currentRevision: KnowledgeRevisionView }>;
+  getDocument(caller: CallerContext, documentId: string, input?: { includeArchived?: boolean }): Promise<{ documentId: string; sourceId: string; workspaceId: string; status: "ACTIVE" | "ARCHIVED"; pageIcon: string | null; currentRevision: KnowledgeRevisionView }>;
   /** Where each readable document lives, in one transaction and without its revision; unreadable IDs are absent. */
   locateDocuments(caller: CallerContext, documentIds: readonly string[], input?: { includeArchived?: boolean }): Promise<Map<string, { sourceId: string; workspaceId: string }>>;
   getCurrentRevision(caller: CallerContext, documentId: string, input?: { includeArchived?: boolean }): Promise<KnowledgeRevisionView>;
@@ -119,6 +121,7 @@ function toTreeItem(node: TreeViewNode, includeArchived: boolean): KnowledgeTree
     currentRevisionId: node.currentRevisionId,
     position: node.position,
     status: node.status,
+    pageIcon: node.pageIcon,
   };
 }
 
@@ -190,7 +193,7 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
     caller: CallerContext,
     documentId: string,
     input: { includeArchived?: boolean } = {},
-  ): Promise<{ documentId: string; sourceId: string; workspaceId: string; status: "ACTIVE" | "ARCHIVED"; currentRevision: KnowledgeRevisionView }> {
+  ): Promise<{ documentId: string; sourceId: string; workspaceId: string; status: "ACTIVE" | "ARCHIVED"; pageIcon: string | null; currentRevision: KnowledgeRevisionView }> {
     return this.unitOfWork.run(async (repositories) => {
       const { document, policy } = await requireVisibleDocument(repositories, caller, documentId, input.includeArchived ?? false);
       const current = await repositories.revisions.findCurrent(document.id);
@@ -200,6 +203,7 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
         sourceId: document.sourceId,
         workspaceId: policy.workspaceId,
         status: document.status,
+        pageIcon: document.pageIcon ?? null,
         currentRevision: toRevisionView(current),
       };
     });

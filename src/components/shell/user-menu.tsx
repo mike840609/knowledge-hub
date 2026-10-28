@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import { FeedbackReport } from "@/components/knowledge/feedback-report";
 import Link from "next/link";
 
-import { ChevronUp, Moon, Rows3, Rows4, Sun, UserRound, Settings, CircleHelp, MessageSquareWarning } from "lucide-react";
+import { ChevronUp, Moon, Monitor, Rows3, Rows4, Sun, UserRound, Settings, CircleHelp, MessageSquareWarning } from "lucide-react";
 import {Tooltip} from "@/components/ui/tooltip";
 import { buttonClasses } from "@/components/ui/button";
 import {
@@ -75,6 +75,12 @@ export function UserMenu({ identityName, identityEmpId, workspaceId, compact = f
               <span className="flex items-center gap-2">
                 <Moon className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />
                 Dark
+              </span>
+            </MenuRadioItem>
+            <MenuRadioItem value="system" closeOnClick={false}>
+              <span className="flex items-center gap-2">
+                <Monitor className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />
+                System
               </span>
             </MenuRadioItem>
           </MenuRadioGroup>

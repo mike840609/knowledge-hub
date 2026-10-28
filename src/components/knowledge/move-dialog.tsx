@@ -11,6 +11,7 @@ import { organizeFailure } from "./organize-messages";
 import { MOVE_REQUEST_EVENT, requestRevealFolder, type MoveRequest } from "./move-request";
 import { useTreeMutations } from "./use-tree-mutations";
 import { dialogBackdropClasses, dialogPopupClasses } from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/toast";
 import { DialogCloseButton } from "@/components/ui/dialog-close";
 
 type Collections = { source: SourceView; tree: KnowledgeTreeItem[] }[];
@@ -41,6 +42,7 @@ export function MoveDialogHost({ collections, ensureTree, retryTree, treeStates 
 
 function MoveDialog({ request, collections, onClose, loading, failed, onRetry }: { request: MoveRequest | null; collections: Collections; onClose: () => void; loading?: boolean; failed?: boolean; onRetry?: () => void }) {
   const mutations = useTreeMutations();
+  const toast = useToast();
   const errorId = useId();
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -66,14 +68,42 @@ function MoveDialog({ request, collections, onClose, loading, failed, onRetry }:
 
   const kind = request?.node.type === "folder" ? "folder" : "document";
   const label = request?.label ?? "";
+  const bulk = request?.documents && request.documents.length > 1 ? request.documents : null;
+  const tree = request ? collections.find((collection) => collection.source.id === request.sourceId)?.tree : undefined;
+  // A bulk destination is "current" only when every selected document is already there.
+  const currentParents = bulk && tree
+    ? new Set(bulk.map((document) => tree.find((candidate) => candidate.type === "document" && candidate.documentId === document.documentId)?.parentId ?? null))
+    : null;
+  const isCurrentParent = (parentId: string | null) => bulk ? currentParents!.size === 1 && currentParents!.has(parentId) : found?.item.parentId === parentId;
 
   async function submit() {
     if (!request || !found || selected === null || busy) return;
     const toParentId = selected === TOP ? null : selected;
-    if (toParentId === found.item.parentId) return;
+    if (!bulk && toParentId === found.item.parentId) return;
     const destination = toParentId === null ? null : found.destinations.find((candidate) => candidate.id === toParentId)?.label ?? null;
     setBusy(true);
     setProblem(null);
+    if (bulk) {
+      const tree = collections.find((collection) => collection.source.id === request.sourceId)?.tree ?? [];
+      const inputs = bulk.flatMap((document) => {
+        const item = tree.find((candidate) => candidate.type === "document" && candidate.documentId === document.documentId);
+        if (!item || item.parentId === toParentId) return [];
+        return [{ nodeId: item.id, label: document.label, from: { parentId: item.parentId, position: item.position } }];
+      });
+      if (inputs.length === 0) {
+        setBusy(false);
+        toast({ message: "Every selected document is already there." });
+        onClose();
+        return;
+      }
+      const result = await mutations.moveNodes(inputs, { parentId: toParentId, label: destination });
+      setBusy(false);
+      if (result.ok) {
+        if (toParentId !== null) requestRevealFolder(toParentId);
+        onClose();
+      } else setProblem(result.message);
+      return;
+    }
     const result = await mutations.moveNode({
       nodeId: found.item.id,
       label,
@@ -117,7 +147,7 @@ function MoveDialog({ request, collections, onClose, loading, failed, onRetry }:
       <Dialog.Portal>
         <Dialog.Backdrop className={dialogBackdropClasses()} />
         <Dialog.Popup className={dialogPopupClasses("w-[min(26rem,92vw)]")}>
-          <Dialog.Title className="text-title font-semibold">{kind === "folder" ? "Move folder" : "Move document"}</Dialog.Title>
+          <Dialog.Title className="text-title font-semibold">{bulk ? "Move documents" : kind === "folder" ? "Move folder" : "Move document"}</Dialog.Title>
           {loading || failed ? <>
             <Dialog.Description role="status" className="mt-2 text-body text-kh-text-muted">{failed ? "Documents could not be loaded." : "Loading documents…"}</Dialog.Description>
             {failed ? <Button onClick={onRetry}>Retry</Button> : null}
@@ -125,7 +155,7 @@ function MoveDialog({ request, collections, onClose, loading, failed, onRetry }:
           </> : found ? (
             <>
               <Dialog.Description className="mt-1 text-body text-kh-text-muted">
-                {`Choose where “${label}” goes. It will be placed last.`}
+                {bulk ? `Choose where ${bulk.length} documents go. They will be placed last.` : `Choose where “${label}” goes. It will be placed last.`}
               </Dialog.Description>
               <form
                 className="mt-4"
@@ -145,8 +175,8 @@ function MoveDialog({ request, collections, onClose, loading, failed, onRetry }:
                   }}
                 >
                   <legend className="sr-only">Destination</legend>
-                  {option(TOP, "Top level", 0, found.item.parentId === null)}
-                  {found.destinations.map((destination) => option(destination.id, destination.label, destination.depth + 1, destination.id === found.item.parentId))}
+                  {option(TOP, "Top level", 0, isCurrentParent(null))}
+                  {found.destinations.map((destination) => option(destination.id, destination.label, destination.depth + 1, isCurrentParent(destination.id)))}
                 </fieldset>
                 {problem ? (
                   <p id={errorId} role="alert" className="mt-2 text-body text-kh-danger">

@@ -8,6 +8,8 @@ import { renameFolderInTransaction } from "./internal/rename-folder";
 import { reorderTreeNodeInTransaction } from "./internal/reorder-tree-node";
 import { archiveDocumentInTransaction, restoreDocumentInTransaction } from "./internal/set-document-lifecycle";
 import { archiveFolderInTransaction, restoreFolderInTransaction } from "./internal/set-folder-lifecycle";
+import { duplicateDocumentInTransaction } from "./internal/duplicate-document";
+import { setDocumentIconInTransaction } from "./internal/set-document-icon";
 
 export type { CreateHubDocumentInput, CreateRevisionInput };
 
@@ -23,6 +25,8 @@ export type MoveTreeNodeInput = {
  */
 export interface HubKnowledgeCommandService {
   createDocument(caller: CallerContext, input: CreateHubDocumentInput): Promise<{ documentId: string; revisionId: string; treeNodeId: string }>;
+  duplicateDocument(caller: CallerContext, documentId: string): Promise<{ documentId: string; revisionId: string; treeNodeId: string }>;
+  setDocumentIcon(caller: CallerContext, documentId: string, icon: string | null): Promise<{ icon: string | null }>;
   createRevision(caller: CallerContext, input: CreateRevisionInput): Promise<CreateRevisionResult>;
   renameFolder(caller: CallerContext, input: { nodeId: string; name: string }): Promise<void>;
   createFolder(caller: CallerContext, input: { sourceId: string; parentId: string | null; name: string; position?: number }): Promise<{ treeNodeId: string }>;
@@ -65,6 +69,17 @@ export class HubKnowledgeCommandServiceImpl implements HubKnowledgeCommandServic
     input: CreateRevisionInput,
   ): Promise<CreateRevisionResult> {
     return this.unitOfWork.run((repositories) => createRevisionInTransaction(repositories, caller, input, this.clock()));
+  }
+
+  async duplicateDocument(
+    caller: CallerContext,
+    documentId: string,
+  ): Promise<{ documentId: string; revisionId: string; treeNodeId: string }> {
+    return this.unitOfWork.run((repositories) => duplicateDocumentInTransaction(repositories, caller, documentId));
+  }
+
+  async setDocumentIcon(caller: CallerContext, documentId: string, icon: string | null): Promise<{ icon: string | null }> {
+    return this.unitOfWork.run((repositories) => setDocumentIconInTransaction(repositories, caller, documentId, icon));
   }
 
   async createFolder(
