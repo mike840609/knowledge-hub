@@ -643,8 +643,6 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-row-action { opacity: 1; }
   .kh-tree-row-actions { right: 44px; }
   .kh-tree-document-link, .kh-tree-folder-button { padding-inline-end: 48px; }
-  /* The always-visible selection checkbox takes the glyph's place at the left. */
-  .kh-tree-document-link { padding-inline-start: 48px; }
 }
 
 /* Search icon clearance: left inset + icon width + gutter, not spacing rhythm. */

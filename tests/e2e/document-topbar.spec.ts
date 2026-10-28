@@ -31,8 +31,11 @@ test("a document can be favorited, given an icon, and duplicated from its own he
   await expect(main.getByRole("button", { name: "Remove from favorites", exact: true })).toHaveAttribute("aria-pressed", "true");
 
   await main.getByRole("button", { name: "Add page icon", exact: true }).click();
+  // The picker shows the icon before the server has it; reloading earlier would read the page without it.
+  const saved = page.waitForResponse((response) => response.url().endsWith("/icon") && response.request().method() === "PUT");
   await page.getByRole("button", { name: "Use 📌", exact: true }).click();
   await expect(main.getByRole("button", { name: "Change page icon", exact: true })).toBeVisible(ROUND_TRIP);
+  expect((await saved).ok()).toBe(true);
   await page.reload();
   await expect(main.getByRole("button", { name: "Change page icon", exact: true })).toBeVisible(ROUND_TRIP);
 

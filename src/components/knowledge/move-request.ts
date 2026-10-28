@@ -11,11 +11,9 @@ export const MOVE_REQUEST_EVENT = "kh:request-move";
 
 export type MoveRequest = {
   sourceId: string;
-  /** What the reader calls it: the document's title, the folder's name, or "N documents". */
+  /** What the reader calls it: the document's title or the folder's name. */
   label: string;
   node: { type: "document"; documentId: string } | { type: "folder"; nodeId: string };
-  /** A multi-select asking for one destination; the first document is `node`. */
-  documents?: readonly { documentId: string; label: string }[];
 };
 
 export function requestMove(request: MoveRequest): void {

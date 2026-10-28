@@ -77,6 +77,8 @@
 
 ### Task 6: Multi-select in the explorer
 
+> **Withdrawn 2026-10-28.** Shipped in #284, then removed at the reader's request: the hover checkbox over every document row read as noise. Single-document Favorite, Move and Archive remain in each row's menu. `frontend-design-language.md` records the explorer as having no multi-select.
+
 **Files:** `src/components/knowledge/knowledge-tree.tsx`, `src/components/knowledge/source-sidebar.tsx`, `src/components/knowledge/move-request.ts`, `src/components/knowledge/move-dialog.tsx`, `src/components/knowledge/use-tree-mutations.ts`, `tests/unit/knowledge-navigation.test.ts` (selection helpers), `tests/e2e/bulk-actions.spec.ts` (new).
 
 - [ ] A checkbox appears on hover/focus of each document row; shift-click selects the range; Escape clears.

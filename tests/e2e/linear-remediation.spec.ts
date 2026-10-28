@@ -199,19 +199,17 @@ test('touch tree controls stay visible, usable and separated in both themes', as
     const row = menu.getByRole('treeitem').filter({ has: mobile.locator(`a[href="${doc.href}"]`) });
     const star = row.getByRole('button', { name: /favorites:/ });
     const actions = row.getByRole('button', { name: /Actions for/ });
-    const select = row.getByRole('button', { name: /^Select / });
     await expect(menu).toHaveCSS('opacity', '1');
     await expect(star).toBeVisible();
     await expect(actions).toBeVisible();
-    await expect(select).toBeVisible();
-    const starBox = (await star.boundingBox())!, actionsBox = (await actions.boundingBox())!, selectBox = (await select.boundingBox())!;
+    const starBox = (await star.boundingBox())!, actionsBox = (await actions.boundingBox())!;
     expect(starBox.height).toBeGreaterThanOrEqual(39.99);
     expect(starBox.width).toBeGreaterThanOrEqual(39.99);
-    expect(selectBox.height).toBeGreaterThanOrEqual(39.99);
-    expect(selectBox.width).toBeGreaterThanOrEqual(39.99);
     expect(actionsBox.x + actionsBox.width).toBeLessThanOrEqual(starBox.x);
-    const labelBox = (await row.getByRole('link').locator('span.truncate').first().boundingBox())!;
-    expect(labelBox.x).toBeGreaterThanOrEqual(selectBox.x + selectBox.width - 1);
+    // No space is held at the left for a control the row does not have: the glyph sits at the link's own padding.
+    const link = row.getByRole('link');
+    const linkBox = (await link.boundingBox())!, glyphBox = (await link.locator('svg, [aria-hidden="true"]').first().boundingBox())!;
+    expect(glyphBox.x - linkBox.x).toBeLessThanOrEqual(12);
     await mobile.screenshot({ path: info.outputPath('mobile-menu-light.png') });
     await mobile.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
     await expect(menu.getByRole('link', { name: 'Knowledge', exact: true })).toHaveCSS('background-color', 'rgb(36, 38, 44)');
