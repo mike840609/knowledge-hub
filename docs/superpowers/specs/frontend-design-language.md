@@ -1134,7 +1134,13 @@ the button and the GET are all there is. The Shares filter rows are the same
 GET forms with no button (`LiveSearch`): text applies as it is typed and on
 Enter, and a chosen status applies at once (`applyAndSearch`, which commits the
 choice before the form is read). Their Search, Filter and Refresh buttons are
-gone (2026-10-27).
+gone (2026-10-27). The Updates filter row joins them (2026-10-29): its native
+folder `Select` and Unread only checkbox fire `input`, so `LiveSearch` applies
+them as they change, and its Filter button stays only inside `<noscript>`, for
+the page that works without JavaScript. Its rows are written in text colour,
+not link colour, like every other list of documents; an unread change has a
+`primary` dot in the row's gutter and says "Unread" to assistive technology,
+and a read change says nothing.
 
 **A condition in force is a chip that removes it.** Above the search page's
 Advanced filters, each condition that narrows the search — path, dates, a sort

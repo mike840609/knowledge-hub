@@ -78,9 +78,11 @@ test("folder preview → durable result → revision-aware personal reading", as
       .getByText("New workflow: check, review, apply, and read."),
   ).toBeVisible();
   await page.goto(`/w/${ws}/updates`);
-  await expect(
-    page.getByRole("link", { name: /Updated team guide.*Read/ }),
-  ).toBeVisible();
+  const readArticle = page
+    .getByRole("link", { name: /^Updated team guide/ })
+    .first();
+  await expect(readArticle).toBeVisible();
+  await expect(readArticle).not.toHaveAccessibleName(/Unread/);
   const wrong = await stageReadingFolder(request, {
     workspaceId: ws,
     sourceId: source,

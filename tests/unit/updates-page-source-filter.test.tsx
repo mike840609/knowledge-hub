@@ -17,6 +17,7 @@ vi.mock("next/navigation", () => ({
   notFound: () => {
     throw new Error("notFound");
   },
+  useRouter: () => ({ replace: vi.fn() }),
 }));
 
 import UpdatesPage from "@/app/w/[workspaceId]/updates/page";
@@ -58,5 +59,16 @@ describe("Updates folder filter", () => {
       limit: 20,
       cursor: undefined,
     });
+  });
+
+  it("applies a filter as it is chosen and keeps a Filter button only for a page without JavaScript", async () => {
+    const html = renderToStaticMarkup(
+      await UpdatesPage({ params: Promise.resolve({ workspaceId: WORKSPACE_ID }), searchParams: Promise.resolve({ unread: "true" }) }),
+    );
+
+    expect(html).toMatch(new RegExp(`<form [^>]*action="/w/${WORKSPACE_ID}/updates"`));
+    expect(html).toMatch(/<input type="checkbox" name="unread" checked="" value="true"\/>/);
+    expect(html.match(/<button[^>]*type="submit"/g) ?? []).toHaveLength(1);
+    expect(html).toMatch(/<noscript><button[^>]*type="submit"[^>]*>Filter<\/button><\/noscript>/);
   });
 });
