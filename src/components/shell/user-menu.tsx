@@ -49,7 +49,7 @@ export function UserMenu({ identityName, identityEmpId, workspaceId, compact = f
     <MenuRoot>
       {/* The rail is compact, so a full name may still be cut off; the tooltip says it whole, expanded or not. */}
       {trigger === "account" ? <Tooltip label={identityName} side={compact ? "right" : "top"}>{accountTrigger}</Tooltip> : accountTrigger}
-      <MenuContent side="top" align="start" className="w-56">
+      <MenuContent side="top" align="start" className="w-60">
         <MenuGroup>
           <MenuGroupLabel>Signed in as</MenuGroupLabel>
           <p className="truncate px-2 pb-1 text-body text-kh-text" title={identityName}>
@@ -59,50 +59,42 @@ export function UserMenu({ identityName, identityEmpId, workspaceId, compact = f
         <MenuSeparator />
         <MenuGroup>
           <MenuGroupLabel>Theme</MenuGroupLabel>
-          {/* Null until the effect resolves, so neither option claims to be
-              current while the server and client renders are still agreeing. */}
+          {/* One row, not three: the choices are icons with their names, and
+              selection is the row's fill. This is the same live preference,
+              spending 32px instead of 96px of the account menu. */}
           <MenuRadioGroup
             value={theme ?? undefined}
             onValueChange={(value) => setTheme(value as Theme)}
+            className="grid grid-cols-3 gap-0.5 px-1"
           >
-            <MenuRadioItem value="light" closeOnClick={false}>
-              <span className="flex items-center gap-2">
-                <Sun className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />
-                Light
-              </span>
+            <MenuRadioItem compact value="light" closeOnClick={false}>
+              <Sun className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span>Light</span>
             </MenuRadioItem>
-            <MenuRadioItem value="dark" closeOnClick={false}>
-              <span className="flex items-center gap-2">
-                <Moon className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />
-                Dark
-              </span>
+            <MenuRadioItem compact value="dark" closeOnClick={false}>
+              <Moon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span>Dark</span>
             </MenuRadioItem>
-            <MenuRadioItem value="system" closeOnClick={false}>
-              <span className="flex items-center gap-2">
-                <Monitor className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />
-                System
-              </span>
+            <MenuRadioItem compact value="system" closeOnClick={false}>
+              <Monitor className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span>System</span>
             </MenuRadioItem>
           </MenuRadioGroup>
         </MenuGroup>
-        <MenuSeparator />
         <MenuGroup>
           <MenuGroupLabel>Density</MenuGroupLabel>
           <MenuRadioGroup
             value={density ?? undefined}
             onValueChange={(value) => setDensity(value as Density)}
+            className="grid grid-cols-2 gap-0.5 px-1"
           >
-            <MenuRadioItem value="compact" closeOnClick={false}>
-              <span className="flex items-center gap-2">
-                <Rows4 className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />
-                Compact
-              </span>
+            <MenuRadioItem compact value="compact" closeOnClick={false}>
+              <Rows4 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span>Compact</span>
             </MenuRadioItem>
-            <MenuRadioItem value="comfortable" closeOnClick={false}>
-              <span className="flex items-center gap-2">
-                <Rows3 className="h-4 w-4 shrink-0 text-kh-text-muted" aria-hidden="true" />
-                Comfortable
-              </span>
+            <MenuRadioItem compact value="comfortable" closeOnClick={false}>
+              <Rows3 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span>Comfortable</span>
             </MenuRadioItem>
           </MenuRadioGroup>
         </MenuGroup>
