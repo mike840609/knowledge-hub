@@ -102,8 +102,8 @@ describe("GET /api/workspaces/:id/recent-documents", () => {
     expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(body).toEqual({
       hits: [
-        { documentId: second.documentId, sourceId: w.notes, title: "Second", sourceName: source.name },
-        { documentId: first.documentId, sourceId: w.notes, title: "First", sourceName: source.name },
+        { documentId: second.documentId, sourceId: w.notes, title: "Second", sourceName: source.name, pageIcon: null },
+        { documentId: first.documentId, sourceId: w.notes, title: "First", sourceName: source.name, pageIcon: null },
       ],
     });
   });

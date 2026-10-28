@@ -166,7 +166,7 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
       <Row
         key={key}
         href={`/w/${workspaceId}/knowledge/${doc.sourceId}/${doc.documentId}`}
-        icon={<FileText size={14} aria-hidden="true" />}
+        icon={doc.pageIcon ? <span className="text-body leading-none" aria-hidden="true">{doc.pageIcon}</span> : <FileText size={14} aria-hidden="true" />}
         title={doc.title}
         timestamp={timestamp} eventLabel={eventLabel}
         provenance={[showSource ? doc.sourceName : undefined, doc.sourcePath].filter(Boolean).join(" · ")}

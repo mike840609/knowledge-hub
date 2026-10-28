@@ -34,6 +34,8 @@ The reader chose this direction on 2026-10-28: quick retrieval / organization. T
 
 - `kh:sidebar-favorites` and `kh:sidebar-recent` keep their persisted booleans, but the fallback changes from `false` to `true`.
 - A reader who closes either section keeps it closed across reloads and drawer opens. The automatic “open when a new favorite is added” behavior stays, and counts only a favorite added after the explorer's list loaded: the list arriving on mount is not one.
+- Favorites lists four in place and the rest behind “Show all N”; Recent follows the same rule, so the explorer stays bounded without hiding an older recent.
+- Both lists carry the document's page icon, as the tree and the document header do. The same icon follows the document to Home's Recent and Favorites, the ⌘K palette, full search and the shared page.
 - The sections still render only when they have rows.
 
 ### Search and palette

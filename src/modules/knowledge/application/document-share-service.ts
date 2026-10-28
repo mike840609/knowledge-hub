@@ -33,6 +33,7 @@ export type SharedDocumentView = {
   revisionId: string;
   title: string;
   markdown: string;
+  pageIcon: string | null;
   sharedByName: string;
   updatedAt: Date;
   expiresAt: Date;
@@ -188,7 +189,7 @@ export class DocumentShareService {
       if (!creator) throw new IntegrityViolationError("Share link creator is missing.");
       return {
         linkId: link.id,
-        view: { revisionId: revision.id, title: revision.title, markdown: revision.markdown, sharedByName: creator.name, updatedAt: revision.createdAt, expiresAt: link.expiresAt },
+        view: { revisionId: revision.id, title: revision.title, markdown: revision.markdown, pageIcon: document.pageIcon ?? null, sharedByName: creator.name, updatedAt: revision.createdAt, expiresAt: link.expiresAt },
       };
     });
     try {

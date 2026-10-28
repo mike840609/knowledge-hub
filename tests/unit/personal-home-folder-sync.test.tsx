@@ -129,6 +129,15 @@ it("labels an untimed recent as Opened without a time", () => {
   expect(html).toMatch(/text-kh-text-muted[^"]*">Opened/);
 });
 
+it("shows the document's page icon in Recent and Favorites", () => {
+  shortcuts.value = { favorites: ["src:b"], recent: ["src:a"] };
+  const html = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[doc("a", { pageIcon: "📌" }), doc("b", { pageIcon: "🧭" })]} drafts={[]} />);
+  const recent = html.slice(html.indexOf('aria-label="Recent"'), html.indexOf('aria-label="Discussions"'));
+  const favorites = html.slice(html.indexOf('aria-label="Favorites"'));
+  expect(recent).toContain("📌");
+  expect(favorites).toContain("🧭");
+});
+
 it("names a document's source only when Home spans more than one source", () => {
   const one = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[doc("a", { sourceName: "Notes" }), doc("b", { sourceName: "Notes" })]} drafts={[{ key: "draft:new", title: "Fresh", sourceId: null, updatedAt: "2026-10-02T00:00:00.000Z" }]} />);
   expect(one).not.toContain(">Notes<");

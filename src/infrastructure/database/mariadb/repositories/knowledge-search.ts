@@ -26,6 +26,7 @@ function mapRow(row: DbRow): KnowledgeSearchRow {
     sourceId: String(row.source_id),
     workspaceId: String(row.workspace_id),
     title: asRequiredString(row.title, "search title"),
+    pageIcon: row.page_icon === null || row.page_icon === undefined ? null : String(row.page_icon),
     sourceName: asRequiredString(row.source_name, "search source name"),
     workspaceName: asRequiredString(row.workspace_name, "search workspace name"),
     snippet: row.snippet === null || row.snippet === undefined ? "" : String(row.snippet),
@@ -77,7 +78,7 @@ export class MariaDbKnowledgeSearchRepository implements KnowledgeSearchReposito
     parameters.push(criteria.limit, criteria.offset);
     const sql = `SET STATEMENT max_statement_time=${SEARCH_TIMEOUT_SECONDS} FOR
       SELECT d.id AS document_id, d.source_id AS source_id, s.workspace_id AS workspace_id, r.title AS title,
-             s.name AS source_name, w.name AS workspace_name, d.status AS status, r.created_at AS updated_at,
+             d.page_icon AS page_icon, s.name AS source_name, w.name AS workspace_name, d.status AS status, r.created_at AS updated_at,
              LOCATE(?, r.markdown COLLATE utf8mb4_unicode_ci) AS anchor_at, CHAR_LENGTH(r.markdown) AS markdown_length,
              CASE WHEN LOCATE(?, r.markdown COLLATE utf8mb4_unicode_ci) > 0
                   THEN SUBSTRING(r.markdown, GREATEST(LOCATE(?, r.markdown COLLATE utf8mb4_unicode_ci) - ?, 1), ?)

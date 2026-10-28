@@ -72,6 +72,20 @@ export function favoritesInPlace(favorites: readonly string[]): { inPlace: strin
   };
 }
 
+/** How many recents the sidebar lists in place; the rest are behind "Show all". */
+export const RECENT_SHOWN = 4;
+
+/**
+ * The recents to list in place — the newest few — and, when there are more, the number on the "Show all"
+ * row: how many there are in all, not how many are behind it.
+ */
+export function recentInPlace(recent: readonly string[]): { inPlace: string[]; showAll: number | null } {
+  return {
+    inPlace: recent.slice(0, RECENT_SHOWN),
+    showAll: recent.length > RECENT_SHOWN ? recent.length : null,
+  };
+}
+
 export function toggleFavoriteDocument(shortcuts: DocumentShortcuts, key: string): DocumentShortcuts {
   return {
     ...shortcuts,
