@@ -384,13 +384,10 @@ export function bindSourceProjection(
       // The view's own nodes: their positions are already final after every insert above.
       await repositories.tree.insertMany(nodes);
       // Existing siblings shifted to make room, as placeNodeAtIndex would have moved them.
-      for (const ordered of childrenOf.values()) {
-        for (const sibling of ordered) {
-          if (!created.has(sibling.id) && sibling.position !== originalPositions.get(sibling.id)) {
-            await repositories.tree.updatePosition(sibling.id, sibling.position, actor);
-          }
-        }
-      }
+      const shifted = [...childrenOf.values()].flat()
+        .filter((sibling) => !created.has(sibling.id) && sibling.position !== originalPositions.get(sibling.id))
+        .map((sibling) => ({ nodeId: sibling.id, position: sibling.position }));
+      if (shifted.length > 0) await repositories.tree.updatePositions(shifted, actor);
       await repositories.documents.assertCompleteMany(documents.map((document) => document.id));
       await repositories.entries.insertMany(entries);
       return results;

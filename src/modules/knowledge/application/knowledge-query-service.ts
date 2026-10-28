@@ -1,6 +1,7 @@
 import { syncCallerIdentity } from "@/modules/identity/application/sync-caller-identity";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import {
+  DomainError,
   IntegrityViolationError,
   RevisionNotFoundError,
   SourceNotFoundError,
@@ -63,6 +64,8 @@ export interface KnowledgeQueryService {
   getSource(caller: CallerContext, sourceId: string, input?: { includeArchived?: boolean }): Promise<SourceView>;
   listTree(caller: CallerContext, sourceId: string, input?: { includeArchived?: boolean }): Promise<KnowledgeTreeItem[]>;
   getDocument(caller: CallerContext, documentId: string, input?: { includeArchived?: boolean }): Promise<{ documentId: string; sourceId: string; workspaceId: string; status: "ACTIVE" | "ARCHIVED"; currentRevision: KnowledgeRevisionView }>;
+  /** Where each readable document lives, in one transaction and without its revision; unreadable IDs are absent. */
+  locateDocuments(caller: CallerContext, documentIds: readonly string[], input?: { includeArchived?: boolean }): Promise<Map<string, { sourceId: string; workspaceId: string }>>;
   getCurrentRevision(caller: CallerContext, documentId: string, input?: { includeArchived?: boolean }): Promise<KnowledgeRevisionView>;
   getRevision(caller: CallerContext, documentId: string, revisionNo: number, input?: { includeArchived?: boolean }): Promise<KnowledgeRevisionView>;
   listRevisions(caller: CallerContext, documentId: string, input?: { includeArchived?: boolean }): Promise<KnowledgeRevisionView[]>;
@@ -199,6 +202,21 @@ export class KnowledgeQueryServiceImpl implements KnowledgeQueryService {
         status: document.status,
         currentRevision: toRevisionView(current),
       };
+    });
+  }
+
+  async locateDocuments(caller: CallerContext, documentIds: readonly string[], input: { includeArchived?: boolean } = {}): Promise<Map<string, { sourceId: string; workspaceId: string }>> {
+    return this.unitOfWork.run(async (repositories) => {
+      const found = new Map<string, { sourceId: string; workspaceId: string }>();
+      for (const documentId of new Set(documentIds)) {
+        try {
+          const { document, policy } = await requireVisibleDocument(repositories, caller, documentId, input.includeArchived ?? false);
+          found.set(documentId, { sourceId: document.sourceId, workspaceId: policy.workspaceId });
+        } catch (error) {
+          if (!(error instanceof DomainError)) throw error;
+        }
+      }
+      return found;
     });
   }
 

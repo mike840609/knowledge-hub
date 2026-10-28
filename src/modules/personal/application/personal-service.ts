@@ -25,29 +25,33 @@ export class PersonalService {
   }
   async list(caller: CallerContext, workspaceId: string) {
     await this.authorize(caller, workspaceId);
-    const items = await this.store.list(caller.identity.id, workspaceId);
+    const items = (await this.store.list(caller.identity.id, workspaceId)).filter(item => !item.key.startsWith("prefs:"));
+    const located = await this.locate(caller, workspaceId, items.filter(item => item.key !== "draft:new").map(item => item.key.split(":")[1]));
     const result = [];
     for (const item of items) {
-      if (item.key.startsWith("prefs:")) continue;
       if (item.key === "draft:new") { result.push(item); continue; }
-      try {
-        const doc = await this.queries.getDocument(caller, item.key.split(":")[1], { includeArchived: true });
-        if (doc.workspaceId === workspaceId) result.push({ ...item, sourceId: doc.sourceId });
-      } catch (error) { if (!(error instanceof DomainError)) throw error; }
+      const sourceId = located.get(item.key.split(":")[1]);
+      if (sourceId) result.push({ ...item, sourceId });
     }
     return result;
   }
   async listFavorites(caller: CallerContext, workspaceId: string) {
     await this.authorize(caller, workspaceId);
     const items = await this.store.listFavorites(caller.identity.id, workspaceId);
-    const result: { key: string; sourceId: string }[] = [];
-    for (const item of items) {
-      try {
-        const document = await this.queries.getDocument(caller, item.key.slice("favorite:".length), { includeArchived: true });
-        if (document.workspaceId === workspaceId) result.push({ key: item.key, sourceId: document.sourceId });
-      } catch (error) { if (!(error instanceof DomainError)) throw error; }
+    const located = await this.locate(caller, workspaceId, items.map(item => item.key.slice("favorite:".length)));
+    return items.flatMap(item => {
+      const sourceId = located.get(item.key.slice("favorite:".length));
+      return sourceId ? [{ key: item.key, sourceId }] : [];
+    });
+  }
+  /** Document ID → source ID for the documents this caller can read in this workspace, archived included. */
+  private async locate(caller: CallerContext, workspaceId: string, documentIds: string[]) {
+    const sourceIds = new Map<string, string>();
+    if (documentIds.length === 0) return sourceIds;
+    for (const [id, where] of await this.queries.locateDocuments(caller, documentIds, { includeArchived: true })) {
+      if (where.workspaceId === workspaceId) sourceIds.set(id, where.sourceId);
     }
-    return result;
+    return sourceIds;
   }
   async get(caller: CallerContext, workspaceId: string, key: string) {
     await this.authorize(caller, workspaceId, key);

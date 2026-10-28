@@ -124,6 +124,9 @@ function stubRepositories(source: KnowledgeSource) {
       updatePosition: async (nodeId: string, position: number) => {
         nodes.get(nodeId)!.position = position;
       },
+      updatePositions: async (updates: readonly { nodeId: string; position: number }[]) => {
+        for (const { nodeId, position } of updates) nodes.get(nodeId)!.position = position;
+      },
       updateStatus: async (nodeId: string, status: "ACTIVE" | "ARCHIVED") => {
         nodes.get(nodeId)!.status = status;
       },

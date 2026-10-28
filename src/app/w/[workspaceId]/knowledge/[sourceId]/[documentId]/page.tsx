@@ -47,7 +47,16 @@ export default async function KnowledgeDocumentPage({
     revisionNo = parsed;
   }
 
-  const model = await getKnowledgeDocumentModel(workspaceId, sourceId, documentId, { includeArchived, revisionNo });
+  // What this document links to and what links to it, for the revision on
+  // screen. Absent, the page still renders: links are then just their text.
+  const graphDepth: 1 | 2 = query?.graph === "2" ? 2 : 1;
+  // Independent reads, each authorized on its own, so none waits for another.
+  const [model, linkView, explorer, shell] = await Promise.all([
+    getKnowledgeDocumentModel(workspaceId, sourceId, documentId, { includeArchived, revisionNo }),
+    getDocumentLinkModel(workspaceId, documentId, { includeArchived, revisionNo, localGraphDepth: graphDepth }),
+    getKnowledgeExplorerModel(workspaceId, sourceId, { includeArchived: true }),
+    getWorkspaceShellModel(workspaceId),
+  ]);
   if (!model) {
     return (
       <StatusMessage
@@ -61,16 +70,6 @@ export default async function KnowledgeDocumentPage({
   const contentOwnsTitle = markdownOpensWithHeading(selectedRevision.markdown);
   const isHistorical = selectedRevision.id !== view.currentRevision.id;
   const archivedSuffix = includeArchived ? "?includeArchived=true" : "";
-
-  // What this document links to and what links to it, for the revision on
-  // screen. Absent, the page still renders: links are then just their text.
-  const graphDepth: 1 | 2 = query?.graph === "2" ? 2 : 1;
-  // Independent reads, each authorized on its own, so none waits for another.
-  const [linkView, explorer, shell] = await Promise.all([
-    getDocumentLinkModel(workspaceId, documentId, { includeArchived, revisionNo, localGraphDepth: graphDepth }),
-    getKnowledgeExplorerModel(workspaceId, sourceId, { includeArchived: true }),
-    getWorkspaceShellModel(workspaceId),
-  ]);
   // Badge visibility is ownership, not editability (spec §8.3): a HUB_MANAGED
   // document is never "Read only" even when this particular view (e.g. a
   // historical revision, or a viewer without canWrite) cannot be edited right

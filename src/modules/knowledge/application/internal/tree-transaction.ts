@@ -102,13 +102,7 @@ export async function renumberSiblingPositions(
   const nodes = preloadedNodes ?? (await repositories.tree.listBySource(sourceId));
   const siblings = orderSiblingsByPosition(nodes.filter((node) => node.parentId === parentId));
   const positions = assignContiguousPositions(siblings);
-  for (const sibling of siblings) {
-    const position = positions.get(sibling.id)!;
-    if (sibling.position !== position) {
-      await repositories.tree.updatePosition(sibling.id, position, actorId);
-      if (preloadedNodes) sibling.position = position;
-    }
-  }
+  await writePositions(repositories, siblings.map((sibling) => [sibling, positions.get(sibling.id)!]), actorId, preloadedNodes !== undefined);
 }
 
 /**
@@ -138,10 +132,18 @@ export async function placeNodeAtIndex(
   const others = orderSiblingsByPosition(nodes.filter((candidate) => candidate.parentId === parentId && candidate.id !== nodeId));
   const at = Math.min(index, others.length);
   const merged = [...others.slice(0, at), node, ...others.slice(at)];
-  for (const [position, sibling] of merged.entries()) {
-    if (sibling.position !== position) {
-      await repositories.tree.updatePosition(sibling.id, position, actorId);
-      if (preloadedNodes) sibling.position = position;
-    }
-  }
+  await writePositions(repositories, merged.map((sibling, position) => [sibling, position]), actorId, preloadedNodes !== undefined);
+}
+
+/** One write for every sibling whose position changes; a tx-local view also takes the new positions. */
+async function writePositions(
+  repositories: KnowledgeRepositories,
+  targets: readonly (readonly [TreeViewNode, number])[],
+  actorId: string,
+  updateView: boolean,
+): Promise<void> {
+  const changed = targets.filter(([sibling, position]) => sibling.position !== position);
+  if (changed.length === 0) return;
+  await repositories.tree.updatePositions(changed.map(([sibling, position]) => ({ nodeId: sibling.id, position })), actorId);
+  if (updateView) for (const [sibling, position] of changed) sibling.position = position;
 }
