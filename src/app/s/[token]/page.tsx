@@ -75,7 +75,7 @@ export default async function SharedDocumentPage({ params }: SharedPageProps) {
       </article>
       </SharedReviewPanel>
       <footer className="kh-reading-column pb-10 pt-4">
-        <p className="text-caption text-kh-text-muted">Shared from Knowledge Hub · <a href={platformEntry} className="kh-focus-ring rounded-md text-kh-link">Open in Knowledge Hub</a></p>
+        <p className="text-caption text-kh-text-muted">Shared from <a href={platformEntry} className="kh-focus-ring rounded-md text-kh-link">Knowledge Hub</a></p>
       </footer>
     </main>
   );

@@ -13,7 +13,7 @@ afterEach(() => { vi.unstubAllEnvs(); vi.useRealTimers(); });
 it("navigates both entry buttons to the company gateway with native links", async () => {
   vi.stubEnv("KM_PUBLIC_ORIGIN", "https://hub.example.com/");
   const html = renderToStaticMarkup(await SharedDocumentPage({ params: Promise.resolve({ token: "share-token" }) }));
-  const links = [...html.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>(?:<svg.*?<\/svg>)?(?:<span[^>]*>)?(Open in Knowledge Hub)(?:<\/span>)?<\/a>/g)];
+  const links = [...html.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>(?:<svg.*?<\/svg>)?(?:<span[^>]*>)?(Open in Knowledge Hub|Knowledge Hub)(?:<\/span>)?<\/a>/g)];
   expect(links).toHaveLength(2);
   expect(links.map(link => link[1])).toEqual(["https://hub.example.com/?returnTo=%2Fs%2Fshare-token%2Fopen", "https://hub.example.com/?returnTo=%2Fs%2Fshare-token%2Fopen"]);
   expect(links.every(link => !link[0].includes("data-next"))).toBe(true);
@@ -22,7 +22,7 @@ it("navigates both entry buttons to the company gateway with native links", asyn
 it("keeps the document-opening flow when no company gateway is configured", async () => {
   vi.stubEnv("KM_PUBLIC_ORIGIN", "");
   const html = renderToStaticMarkup(await SharedDocumentPage({ params: Promise.resolve({ token: "share-token" }) }));
-  const links = [...html.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>(?:<svg.*?<\/svg>)?(?:<span[^>]*>)?(Open in Knowledge Hub)(?:<\/span>)?<\/a>/g)];
+  const links = [...html.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>(?:<svg.*?<\/svg>)?(?:<span[^>]*>)?(Open in Knowledge Hub|Knowledge Hub)(?:<\/span>)?<\/a>/g)];
   expect(links.map(link => link[1])).toEqual(["/s/share-token/open", "/s/share-token/open"]);
 });
 
@@ -47,8 +47,11 @@ it("ends with one quiet attribution, not a marketing footer", async () => {
   expect(html).not.toContain("Keep useful knowledge within reach.");
   expect(html).not.toContain("Get started");
   expect(html).not.toContain("Continue with your company account.");
-  expect(html).toContain("Shared from Knowledge Hub");
+  expect(html).toContain("Shared from ");
   expect(html).toContain('<footer class="kh-reading-column');
+  const footer = html.slice(html.indexOf("<footer"));
+  expect(footer).toMatch(/Shared from <a[^>]*>Knowledge Hub<\/a>/);
+  expect(footer).not.toContain("Open in Knowledge Hub");
 });
 
 it("shows the document's page icon above the title", async () => {
