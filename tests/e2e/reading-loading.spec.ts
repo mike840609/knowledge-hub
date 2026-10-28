@@ -24,7 +24,7 @@ for (const scenario of [
   { name: "wide pane", width: 1440, inspector: false },
   { name: "wide pane with details", width: 1800, inspector: true },
   { name: "narrow pane with details", width: 1440, inspector: true },
-  { name: "narrow pane", width: 1100, inspector: false },
+  { name: "explorer drawer", width: 1100, inspector: false },
   { name: "mobile", width: 390, inspector: false },
 ]) {
   test(`document loading keeps the reading column aligned: ${scenario.name}`, async ({ page, loadingDocuments }) => {
@@ -62,13 +62,14 @@ for (const scenario of [
       await new Promise((resolve) => setTimeout(resolve, 600));
       await route.fulfill({ response });
     });
-    if (scenario.width < 1024) {
-      // Article links deliberately disable prefetch. The mobile explorer is
-      // mounted on demand, so exercise its prefetched loading state explicitly.
+    if (scenario.width < 1280) {
+      // Article links deliberately disable prefetch. Under 1280 the explorer is
+      // a drawer (the Menu drawer under 1024), mounted on demand, so exercise
+      // its prefetched loading state explicitly.
       const prefetched = page.waitForResponse((response) =>
         new URL(response.url()).pathname === destination && Boolean(response.request().headers()["next-router-prefetch"]),
       );
-      await page.getByRole("button", { name: "Open menu", exact: true }).click();
+      await page.getByRole("button", { name: scenario.width < 1024 ? "Open menu" : "Show documents", exact: true }).click();
       const document = page.getByRole("treeitem", { name: withOutlineTitle, exact: true });
       await document.scrollIntoViewIfNeeded();
       await prefetched;

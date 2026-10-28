@@ -191,8 +191,8 @@ test("below 88rem of pane the outline stays on the right, as before", async ({ p
 
 test("the discussions arriving do not move the article", async ({ page, request }) => {
   const doc = await documentWithDiscussion(request);
-  // A pane too narrow for the rail (under 48rem with the explorer open): the discussions do not open on arrival.
-  await page.setViewportSize({ width: 1100, height: 800 });
+  // A pane below the rail's 48rem threshold even with the explorer in a drawer: the discussions do not open on arrival.
+  await page.setViewportSize({ width: 720, height: 800 });
   // Held back, so the article can be measured before the discussions are known.
   let release = () => {};
   await page.route(`**/api/documents/${doc.documentId}/review-threads`, async (route) => { await new Promise<void>((resolve) => { release = resolve; }); await route.continue(); });

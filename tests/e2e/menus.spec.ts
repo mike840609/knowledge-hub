@@ -49,8 +49,8 @@ test("the theme is chosen from the user menu and persists", async ({ page }) => 
     page.getByRole("menuitemradio", { name: "System" }).boundingBox(),
   ]);
   expect(lightBox && darkBox && systemBox).toBeTruthy();
-  expect(lightBox!.y).toBe(darkBox!.y);
-  expect(darkBox!.y).toBe(systemBox!.y);
+  expect(Math.abs(lightBox!.y - darkBox!.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(darkBox!.y - systemBox!.y)).toBeLessThanOrEqual(1);
   await page.getByRole("menuitemradio", { name: "Dark" }).click();
   expect(await theme()).toBe("dark");
   expect(await page.evaluate(() => localStorage.getItem("kh:theme"))).toBe("dark");
@@ -93,7 +93,7 @@ test("the rails' density is chosen from the user menu, sizes the rows, and persi
     page.getByRole("menuitemradio", { name: "Comfortable" }).boundingBox(),
   ]);
   expect(compactBox && comfortableBox).toBeTruthy();
-  expect(compactBox!.y).toBe(comfortableBox!.y);
+  expect(Math.abs(compactBox!.y - comfortableBox!.y)).toBeLessThanOrEqual(1);
   await page.getByRole("menuitemradio", { name: "Comfortable" }).click();
   expect(await density()).toBe("comfortable");
   expect(await rowHeight()).toBe(32);

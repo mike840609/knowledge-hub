@@ -70,8 +70,8 @@ test("D leaves discussions unchanged; explicit buttons open and close them", asy
   // With a modifier it is the browser's own key, not this one.
   await page.keyboard.press("Shift+D"); await expect(entry).toHaveAttribute("aria-expanded", "false");
 
-  // A pane too narrow for the rail, where the owner's discussions wait to be asked for rather than open on arrival.
-  await page.setViewportSize({ width: 1100, height: 800 });
+  // A pane below the rail's 48rem threshold, where the owner's discussions wait to be asked for rather than open on arrival.
+  await page.setViewportSize({ width: 720, height: 800 });
   await page.goto(doc.href);
   const owner = page.getByRole("button", { name: /^(Open|Hide) discussions/ });
   await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");
