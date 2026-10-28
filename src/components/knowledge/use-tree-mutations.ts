@@ -198,33 +198,44 @@ export function useTreeMutations(): TreeMutations {
       },
       async archiveDocuments(inputs) {
         if (inputs.length === 0) return;
-        try {
-          await Promise.all(inputs.map((input) => governanceRequest(`/api/documents/${input.documentId}/archive`, "POST")));
-          const viewing = inputs.find((input) => isOpen(documentHref(input.sourceId, input.documentId)));
-          const message = inputs.length === 1 ? archivedDocument(inputs[0].title, null) : `Archived ${inputs.length} documents.`;
-          const undo = {
-            label: UNDO_LABEL,
-            run: async () => {
-              await Promise.all(inputs.map((input) => governanceRequest(`/api/documents/${input.documentId}/restore`, "POST")));
-              if (viewing) {
-                const href = documentHref(viewing.sourceId, viewing.documentId);
-                refreshOnArrival(href);
-                router.push(href);
-              } else refresh();
-            },
-          };
-          if (viewing) {
-            const listHref = `/w/${workspaceId}/knowledge/${viewing.sourceId}`;
-            toast({ message, undo, survivesNavigation: true });
-            refreshOnArrivalElsewhere();
-            router.push(listHref);
-          } else {
-            toast({ message, undo });
-            refresh();
-          }
-        } catch (failure) {
-          // Some requests may have landed; refreshing shows what did.
-          failed(failure);
+        // One document keeps the single-document path: its toast carries the
+        // backlink warning and its Undo. A batch has its own summary.
+        if (inputs.length === 1) {
+          await setDocument("archive", inputs[0]);
+          return;
+        }
+        const results = await Promise.allSettled(inputs.map((input) => governanceRequest(`/api/documents/${input.documentId}/archive`, "POST")));
+        const succeeded = inputs.filter((_, index) => results[index].status === "fulfilled");
+        const failureCount = inputs.length - succeeded.length;
+        if (succeeded.length === 0) {
+          const firstFailure = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
+          failed(firstFailure?.reason);
+          refresh();
+          return;
+        }
+        const viewing = succeeded.find((input) => isOpen(documentHref(input.sourceId, input.documentId)));
+        const message = failureCount === 0
+          ? `Archived ${succeeded.length} documents.`
+          : `Archived ${succeeded.length} of ${inputs.length} documents; ${failureCount} could not be archived.`;
+        const undo = {
+          label: UNDO_LABEL,
+          run: async () => {
+            await Promise.all(succeeded.map((input) => governanceRequest(`/api/documents/${input.documentId}/restore`, "POST")));
+            if (viewing) {
+              const href = documentHref(viewing.sourceId, viewing.documentId);
+              refreshOnArrival(href);
+              router.push(href);
+            } else refresh();
+          },
+        };
+        const tone = failureCount > 0 ? "danger" as const : undefined;
+        if (viewing) {
+          const listHref = `/w/${workspaceId}/knowledge/${viewing.sourceId}`;
+          toast({ message, undo, survivesNavigation: true, ...(tone ? { tone } : {}) });
+          refreshOnArrivalElsewhere();
+          router.push(listHref);
+        } else {
+          toast({ message, undo, ...(tone ? { tone } : {}) });
           refresh();
         }
       },

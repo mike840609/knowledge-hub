@@ -11,6 +11,7 @@ import { organizeFailure } from "./organize-messages";
 import { MOVE_REQUEST_EVENT, requestRevealFolder, type MoveRequest } from "./move-request";
 import { useTreeMutations } from "./use-tree-mutations";
 import { dialogBackdropClasses, dialogPopupClasses } from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/toast";
 import { DialogCloseButton } from "@/components/ui/dialog-close";
 
 type Collections = { source: SourceView; tree: KnowledgeTreeItem[] }[];
@@ -41,6 +42,7 @@ export function MoveDialogHost({ collections, ensureTree, retryTree, treeStates 
 
 function MoveDialog({ request, collections, onClose, loading, failed, onRetry }: { request: MoveRequest | null; collections: Collections; onClose: () => void; loading?: boolean; failed?: boolean; onRetry?: () => void }) {
   const mutations = useTreeMutations();
+  const toast = useToast();
   const errorId = useId();
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -90,6 +92,7 @@ function MoveDialog({ request, collections, onClose, loading, failed, onRetry }:
       });
       if (inputs.length === 0) {
         setBusy(false);
+        toast({ message: "Every selected document is already there." });
         onClose();
         return;
       }

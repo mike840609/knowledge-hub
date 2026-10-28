@@ -24,7 +24,6 @@ function prefersDark(): boolean {
 function applyTheme(choice: ThemeChoice): ResolvedTheme {
   const resolved = resolveTheme(choice, prefersDark());
   document.documentElement.dataset.theme = resolved;
-  document.documentElement.dataset.themeChoice = choice;
   return resolved;
 }
 

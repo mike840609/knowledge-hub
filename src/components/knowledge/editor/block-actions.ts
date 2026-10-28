@@ -16,6 +16,9 @@ export type BlockKind =
   | "h1"
   | "h2"
   | "h3"
+  | "h4"
+  | "h5"
+  | "h6"
   | "bullet"
   | "ordered"
   | "task"
@@ -32,7 +35,7 @@ export function blockKind(node: ProseNode): BlockKind {
       return "paragraph";
     case "heading": {
       const level = Number(node.attrs.level);
-      return level === 2 ? "h2" : level === 3 ? "h3" : "h1";
+      return level === 2 ? "h2" : level === 3 ? "h3" : level === 4 ? "h4" : level === 5 ? "h5" : level === 6 ? "h6" : "h1";
     }
     case "bullet_list":
       return node.firstChild?.attrs.checked == null ? "bullet" : "task";
@@ -64,7 +67,8 @@ export function canTurnInto(node: ProseNode, target: BlockKind): boolean {
       if (item.childCount !== 1 || !item.firstChild?.isTextblock) simple = false;
     });
     if (!simple) return false;
-    return target === "paragraph" || node.childCount === 1;
+    // Another list keeps every item; a leaf block needs a single item's text.
+    return target === "paragraph" || LIST_KINDS.has(target) || node.childCount === 1;
   }
   if (node.type.name === "blockquote") {
     let paragraphs = node.childCount > 0;
@@ -126,8 +130,12 @@ function leafFrom(node: ProseNode, target: LeafKind, schema: EditorView["state"]
       return schema.nodes.heading.create({ level: Number(target.slice(1)) }, inline);
     case "quote":
       return schema.nodes.blockquote.create(null, schema.nodes.paragraph.create(null, inline));
-    case "code":
-      return schema.nodes.code_block.create(null, node.textContent ? schema.text(node.textContent) : undefined);
+    case "code": {
+      // `textContent` drops a hard break entirely; a code block must keep the
+      // line the writer sees. `leafText` supplies the newline for hard breaks.
+      const text = node.type.name === "code_block" ? node.textContent : node.textBetween(0, node.content.size, "\n", "\n");
+      return schema.nodes.code_block.create(null, text ? schema.text(text) : undefined);
+    }
   }
 }
 
@@ -137,7 +145,7 @@ function leafFrom(node: ProseNode, target: LeafKind, schema: EditorView["state"]
  * is one block. One undo step, caret in the result.
  */
 export function turnBlockInto(view: EditorView, pos: number, target: BlockKind): boolean {
-  if (!view.editable || target === "other") return false;
+  if (!view.editable || target === "other" || target === "h4" || target === "h5" || target === "h6") return false;
   const block = topLevelBlocks(view.state.doc).find((candidate) => candidate.pos === pos);
   if (!block || !canTurnInto(block.node, target)) return false;
   const schema = view.state.schema;
@@ -186,8 +194,9 @@ export function deleteBlock(view: EditorView, pos: number): boolean {
     dispatchBlockAction(view, view.state.tr.replaceWith(pos, end, paragraph), pos + 1);
     return true;
   }
-  const caret = blocks[index + 1]?.pos ?? blocks[index - 1].pos;
-  dispatchBlockAction(view, view.state.tr.delete(pos, end), caret);
+  // After the deletion `pos` is the start of the following block, or the end
+  // of the previous one when the last block was removed.
+  dispatchBlockAction(view, view.state.tr.delete(pos, end), pos);
   return true;
 }
 

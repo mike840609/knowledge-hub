@@ -107,6 +107,34 @@ it("refuses to turn a table into text, which would drop its cells", async () => 
   expect(turnBlockInto(view, 0, 'paragraph')).toBe(false);
 });
 
+it("converts a several-item list to another list without dropping items", async () => {
+  const { view } = await open('- one\n- two\n- three');
+  const list = view.state.doc.firstChild!;
+  expect(canTurnInto(list, 'ordered')).toBe(true);
+  expect(turnBlockInto(view, 0, 'ordered')).toBe(true);
+  const converted = view.state.doc.firstChild!;
+  expect(converted.type.name).toBe('ordered_list');
+  expect(converted.childCount).toBe(3);
+  expect([...Array(converted.childCount)].map((_, index) => converted.child(index).textContent)).toEqual(['one', 'two', 'three']);
+});
+
+it("does not mistake an h4 for the page's h1", async () => {
+  const { view } = await open('#### Section\n\nBody');
+  const heading = view.state.doc.firstChild!;
+  expect(canTurnInto(heading, 'h1')).toBe(true);
+  expect(canTurnInto(heading, 'h4')).toBe(false);
+  expect(turnBlockInto(view, 0, 'h1')).toBe(true);
+  expect(view.state.doc.firstChild?.attrs.level).toBe(1);
+});
+
+it("keeps a hard line break when a paragraph becomes a code block", async () => {
+  const { view } = await open('line one  \nline two');
+  expect(view.state.doc.firstChild?.type.name).toBe('paragraph');
+  expect(turnBlockInto(view, 0, 'code')).toBe(true);
+  expect(view.state.doc.firstChild?.type.name).toBe('code_block');
+  expect(view.state.doc.firstChild?.textContent).toBe('line one\nline two');
+});
+
 it("duplicates the block below and deletes it as one undo step", async () => {
   const { view } = await open('Keep me\n\nRemove me');
   const second = topLevelBlocks(view.state.doc)[1];
@@ -121,6 +149,22 @@ it("duplicates the block below and deletes it as one undo step", async () => {
   expect(view.state.doc.firstChild?.textContent).toBe('Keep me');
   undo(view.state, view.dispatch);
   expect(view.state.doc.childCount).toBe(2);
+});
+
+it("leaves the caret at the start of the block that follows a delete", async () => {
+  const { view } = await open('First\n\nSecond\n\nThird');
+  const second = topLevelBlocks(view.state.doc)[1];
+  expect(deleteBlock(view, second.pos)).toBe(true);
+  expect(view.state.selection.$from.parent.textContent).toBe('Third');
+  expect(view.state.selection.$from.parentOffset).toBe(0);
+});
+
+it("leaves the caret at the end of the previous block when the last block is deleted", async () => {
+  const { view } = await open('First\n\nSecond\n\nThird');
+  const third = topLevelBlocks(view.state.doc)[2];
+  expect(deleteBlock(view, third.pos)).toBe(true);
+  expect(view.state.selection.$from.parent.textContent).toBe('Second');
+  expect(view.state.selection.$from.parentOffset).toBe('Second'.length);
 });
 
 it("keeps an empty paragraph when the only block is deleted", async () => {

@@ -104,6 +104,21 @@ describe("multi-select in the explorer", () => {
     expect(button("Clear selection")).toBeNull();
   });
 
+  it("extends only across rows the tree actually shows, not a collapsed folder's children", () => {
+    const withFolder: KnowledgeTreeItem[] = [
+      doc("A", 0),
+      { type: "folder", id: "n:F", parentId: null, label: "F", position: 1, status: "ACTIVE" },
+      { type: "document", id: "n:B", parentId: "n:F", documentId: "d:B", label: "B", currentRevisionId: "r:B", position: 0, status: "ACTIVE" },
+      doc("C", 2),
+    ];
+    window.localStorage.setItem("kh:tree-collapsed:w1:s1", JSON.stringify(["n:F"]));
+    render({ items: withFolder });
+    click("Select A");
+    click("Select C", true);
+    expect(container.textContent).toContain("2 selected");
+    expect(container.textContent).not.toContain("3 selected");
+  });
+
   it("offers removal when every selected document is already a favorite", () => {
     const callbacks = render({ favoriteDocumentIds: new Set(["d:A", "d:B"]) });
     click("Select A");

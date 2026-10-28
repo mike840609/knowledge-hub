@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax.
 
-**Goal:** Close every remaining Linear/Notion gap from the 2026-10-27 audit except the two-rail shell restructure.
+**Goal:** Close the six agreed Linear/Notion slices from the 2026-10-27 audit — theme, Inbox, document topbar, block menu, page identity and multi-select — except the two-rail shell restructure. The audit's smaller P2/P3 items (page width, @ mentions, defaults, image captions, Graph/Shares polish) stay deferred.
 
 **Architecture:** Six independent slices on one branch: theme choice, Inbox navigation, document topbar actions, block menu, page identity (32px title + icon), and document multi-select. Each slice keeps the registry as the source of action availability and the server as the source of truth.
 

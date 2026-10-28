@@ -57,7 +57,7 @@ export function PrimaryNav({
             href={href}
             onClick={onNavigate}
             aria-current={selected ? "page" : undefined}
-            aria-label={compact ? label ?? name : undefined}
+            aria-label={label ?? name}
             className={`kh-control flex kh-rail-row items-center rounded-md px-2 kh-rail-text transition kh-focus-ring ${compact ? "relative justify-center" : "gap-2"} ${selected ? "bg-kh-bg-hover font-medium text-kh-text hover:bg-kh-bg-hover" : "text-kh-text-muted hover:bg-kh-bg-hover hover:text-kh-text"}`}
           >
             <Icon size={15} aria-hidden="true" />

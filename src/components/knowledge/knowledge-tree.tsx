@@ -137,7 +137,7 @@ function TreeNodeRow({
             selected ? "font-medium text-kh-selected-text" : "text-kh-text-muted"
           }`}
         >
-          {item.pageIcon ? <span className={`flex size-3.5 shrink-0 items-center justify-center text-body leading-none ${bulkPicked ? "opacity-0" : "group-hover:opacity-0 group-focus-within:opacity-0"}`} aria-hidden="true">{item.pageIcon}</span> : <FileText size={14} className={`shrink-0 text-kh-text-muted ${bulkPicked ? "opacity-0" : "group-hover:opacity-0 group-focus-within:opacity-0"}`} aria-hidden="true" />}
+          {item.pageIcon ? <span className={`flex size-3.5 shrink-0 items-center justify-center text-body leading-none [@media(hover:none)]:opacity-0 ${bulkPicked ? "opacity-0" : "group-hover:opacity-0 group-focus-within:opacity-0"}`} aria-hidden="true">{item.pageIcon}</span> : <FileText size={14} className={`shrink-0 text-kh-text-muted [@media(hover:none)]:opacity-0 ${bulkPicked ? "opacity-0" : "group-hover:opacity-0 group-focus-within:opacity-0"}`} aria-hidden="true" />}
           <span className="truncate">{item.label}</span>
           {archived ? <Status kind="archived" className="ml-auto shrink-0 text-caption font-normal text-kh-text-muted">Archived</Status> : null}
         </Link>
@@ -150,7 +150,7 @@ function TreeNodeRow({
             event.stopPropagation();
             onToggleSelection(item.documentId, event.shiftKey);
           }}
-          className={`absolute left-2 top-1/2 z-10 flex size-5 -translate-y-1/2 items-center justify-center rounded-md kh-focus-ring [@media(hover:none)]:opacity-100 ${bulkPicked ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"}`}
+          className={`kh-control kh-icon-control absolute left-2 top-1/2 z-10 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md kh-focus-ring [@media(hover:none)]:opacity-100 ${bulkPicked ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"}`}
         >
           <span
             aria-hidden="true"
@@ -245,12 +245,13 @@ function TreeNodeRow({
 
 const EMPTY_COLLAPSED: string[] = [];
 
-/** Every document in the order the tree shows it, for shift-click ranges. */
-function documentsInOrder(nodes: readonly KnowledgeTreeNode[]): string[] {
+/** Every document visible in the tree, in order, for shift-click ranges. */
+function documentsInOrder(nodes: readonly KnowledgeTreeNode[], collapsed: ReadonlySet<string>): string[] {
   const ids: string[] = [];
   for (const node of nodes) {
     if (node.item.type === "document") ids.push(node.item.documentId);
-    ids.push(...documentsInOrder(node.children));
+    if (node.item.type === "folder" && collapsed.has(node.item.id)) continue;
+    ids.push(...documentsInOrder(node.children, collapsed));
   }
   return ids;
 }
@@ -303,7 +304,7 @@ export function KnowledgeTree({
     [filtering, collapsedIds],
   );
 
-  const orderedDocumentIds = useMemo(() => documentsInOrder(roots), [roots]);
+  const orderedDocumentIds = useMemo(() => documentsInOrder(roots, effectiveCollapsed), [roots, effectiveCollapsed]);
   const selectedDocuments = useMemo(
     () => orderedDocumentIds.flatMap((documentId) => {
       if (!bulkSelected.has(documentId)) return [];

@@ -87,6 +87,37 @@ test("moving two documents asks for one destination and moves both", async ({ pa
   await dialog.getByText(destination, { exact: true }).click();
   await dialog.getByRole("button", { name: "Move", exact: true }).click();
   await expect(page.getByText(`Moved 2 documents to “${destination}”.`)).toBeVisible(ROUND_TRIP);
+  // Not just still visible somewhere: both rows are now inside the destination folder.
+  const folder = page.getByRole("treeitem", { name: destination, exact: true });
+  await expect(folder.getByRole("treeitem", { name: first, exact: true })).toBeVisible(ROUND_TRIP);
+  await expect(folder.getByRole("treeitem", { name: second, exact: true })).toBeVisible(ROUND_TRIP);
+});
+
+test("a partial archive says how many landed and still offers Undo", async ({ page }) => {
+  const workspaceId = await mySpace(page);
+  const first = unique("Partial archive A");
+  const second = unique("Partial archive B");
+  const firstNote = await createNote(page, workspaceId, first);
+  await createNote(page, workspaceId, second);
+
+  await page.goto(`/w/${workspaceId}/knowledge/${firstNote.sourceId}`);
+  await expect(page.getByRole("treeitem", { name: first, exact: true })).toBeVisible(ROUND_TRIP);
+
+  let failed = false;
+  await page.route("**/api/documents/*/archive", async (route) => {
+    if (!failed) {
+      failed = true;
+      await route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ code: "INTERNAL", message: "Refused for this test." }) });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.getByRole("button", { name: `Select ${first}`, exact: true }).click();
+  await page.getByRole("button", { name: `Select ${second}`, exact: true }).click();
+  await page.getByRole("button", { name: "Archive selected documents" }).click();
+  await expect(page.getByText(/Archived 1 of 2 documents; 1 could not be archived\./)).toBeVisible(ROUND_TRIP);
+  await page.getByRole("button", { name: "Undo" }).click();
   await expect(page.getByRole("treeitem", { name: first, exact: true })).toBeVisible(ROUND_TRIP);
   await expect(page.getByRole("treeitem", { name: second, exact: true })).toBeVisible(ROUND_TRIP);
 });

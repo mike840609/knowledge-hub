@@ -241,6 +241,16 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-editor img.ProseMirror-separator {
     @apply m-0 inline border-0;
   }
+  /* A page whose title is the H1 it opens with has no title field; that H1 is
+     the page's name, not a section heading, so it wears the page-title scale
+     (32/40) in the reader, the composer and the shared page alike. */
+  .kh-editor > h1:first-child,
+  .kh-reading-column article > div > h1:first-child,
+  .kh-share-page article > div > h1:first-child {
+    font-size: 32px;
+    line-height: 40px;
+    letter-spacing: -0.02em;
+  }
   /* While a node (an image, a rule) is selected, ProseMirror marks the editor with this and
      keeps the browser's text selection only as a carrier: it must not show. */
   .kh-editor.ProseMirror-hideselection *::selection {
@@ -633,6 +643,8 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-row-action { opacity: 1; }
   .kh-tree-row-actions { right: 44px; }
   .kh-tree-document-link, .kh-tree-folder-button { padding-inline-end: 48px; }
+  /* The always-visible selection checkbox takes the glyph's place at the left. */
+  .kh-tree-document-link { padding-inline-start: 48px; }
 }
 
 /* Search icon clearance: left inset + icon width + gutter, not spacing rhythm. */

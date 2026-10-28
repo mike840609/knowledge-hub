@@ -63,6 +63,16 @@ describe("a page icon", () => {
     expect((await queries().getDocument(owner, original.documentId)).pageIcon).toBeNull();
   });
 
+  it("refuses a source-managed document and an archived document", async () => {
+    const scope = await setupLinkScope(pool);
+    const managed = await managedDocument(pool, scope, "notes/managed.md", "Managed", "Body.");
+    await expect(hub().setDocumentIcon(owner, managed.documentId, "📌")).rejects.toThrow();
+    const archived = await hubDocument(pool, scope, "Archived", "Body.");
+    await hub().archiveDocument(owner, archived.documentId);
+    await expect(hub().setDocumentIcon(owner, archived.documentId, "📌")).rejects.toThrow();
+    await expect(hub().duplicateDocument(owner, archived.documentId)).rejects.toThrow();
+  });
+
   it("refuses a glyph the picker does not offer", async () => {
     const scope = await setupLinkScope(pool);
     const original = await hubDocument(pool, scope, "Icon page", "Body.");

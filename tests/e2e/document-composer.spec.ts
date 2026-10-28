@@ -25,6 +25,7 @@ test("new documents focus Title while existing documents wait for an editing ges
   const title = unique("Focus H1");
   const url = await createNote(page, title, `# ${title}\n\nbody`);
   const surface = await openEditor(page, url);
+  await expect(surface.getByRole('heading', { level: 1 })).toHaveCSS('font-size', '32px');
   await expect(surface).not.toBeFocused();
   await surface.getByRole("heading", { level: 1 }).click({ position: { x: 1, y: 10 } });
   await page.keyboard.type("X");

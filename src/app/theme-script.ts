@@ -10,11 +10,11 @@
  * otherwise render a dark-mode reader a white page.
  */
 export const THEME_PRE_PAINT_SCRIPT =
-  `var d=document.documentElement,c,m=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches;try{c=localStorage.getItem("kh:theme");d.dataset.theme=c==="dark"||(c==="system"&&m)?"dark":"light";d.dataset.themeChoice=c==="system"?"system":c==="dark"?"dark":"light";d.dataset.density=localStorage.getItem("kh:density")==="comfortable"?"comfortable":"compact"}catch(e){d.dataset.theme="light";d.dataset.themeChoice="light";d.dataset.density="compact"}`;
+  `var d=document.documentElement,c,m=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches;try{c=localStorage.getItem("kh:theme");d.dataset.theme=c==="dark"||(c==="system"&&m)?"dark":"light";d.dataset.density=localStorage.getItem("kh:density")==="comfortable"?"comfortable":"compact"}catch(e){d.dataset.theme="light";d.dataset.density="compact"}`;
 
 /**
  * The script's SHA-256, as a Content-Security-Policy source. `global-error` is a client component
  * and cannot be handed the response's nonce, so its copy of the script is allowed by what it is.
  * `tests/unit/content-security-policy.test.ts` fails when the script changes and this does not.
  */
-export const THEME_PRE_PAINT_SCRIPT_HASH = "sha256-cdomQUKIFviJiTfj9b5JlQyaO3YWlyDuSenqnFfZqGM=";
+export const THEME_PRE_PAINT_SCRIPT_HASH = "sha256-EwlJd9cEhQIULkXOvjtlhfAM9ODLDwhO6BOlrHqXFZI=";
