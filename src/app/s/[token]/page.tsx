@@ -67,7 +67,7 @@ export default async function SharedDocumentPage({ params }: SharedPageProps) {
         actions={<><SaveShareButton token={token} /><a href={platformEntry} className={buttonClasses({ variant: "ghost" })}><ExternalLink className="size-4 sm:hidden" aria-hidden="true" /><span className="max-sm:sr-only">Open in Knowledge Hub</span></a></>}>
       {/* Outline: a rail off the column's left edge when there is room, else a disclosure above the title (share-page-outline spec §2). */}
       <div className="kh-share-outline"><SharedOutline entries={outline} placement="disclosure" /></div>
-      {outline.length > 0 ? <div className="kh-share-outline-rail kh-reading-column sticky top-[4.5rem] z-10 h-0"><div className="absolute right-full top-0 w-52"><SharedOutline entries={outline} placement="rail" /></div></div> : null}
+      {outline.length > 0 ? <div className="kh-share-outline-rail kh-reading-column sticky top-[4.5rem] z-10 h-0"><div className="kh-outline-hang absolute right-full top-0 w-52"><SharedOutline entries={outline} placement="rail" /></div></div> : null}
       {contentOwnsTitle && pageIcon ? <div className="kh-reading-column pt-6">{pageIcon}</div> : null}
       {contentOwnsTitle ? null : <header className="kh-reading-column pt-6">{pageIcon}<h1 className="text-page-title font-semibold tracking-tight text-kh-text">{shared.title}</h1>{byline}</header>}
       <article data-review-document className={`kh-reading-column min-w-0 pb-6 ${contentOwnsTitle ? "pt-6" : "pt-3"} [&>div>:first-child]:mt-0`}>

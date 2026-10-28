@@ -256,6 +256,20 @@ rule in `MARKDOWN_PROSE`, not a fourth page width
 disclosure above the text is held to the same measure: it lists the text's
 headings, so its box ends where the text does.
 
+The outline rail stays quiet beside the article (2026-10-28): a `border`
+track line with the current entry's `primary` mark on it; up to two lines per
+entry (`2026-10-20-share-page-outline-design.md` §5); a plain `caption` "On
+this page". Where it hangs left of a centred column (a pane of 88rem, a shared
+page of 82rem), it steps off the article into the room the column leaves — up
+to 56px beyond its own 40px (`pr-4` plus the column's 24px), 96px from the
+text — and only as far as leaves 16px to the pane's or window's edge
+(`.kh-outline-hang`). An outline pressed against the article while the far
+side stands empty is what made the page feel crowded, not the gap's few
+pixels. The slots (224px in a pane, 208px on a shared page) and the
+breakpoints derived from them do not change, nor does the rail on the right.
+The shared page measures its room by the window, so a classic, non-overlay
+scrollbar takes up to half its width from that 16px.
+
 They are classes rather than remembered widths, and the `maxWidth` scale is
 replaced like the others, so `max-w-4xl` compiles to nothing and a sixth width
 cannot appear quietly. `panel` (36rem) is the one non-page width the scale
