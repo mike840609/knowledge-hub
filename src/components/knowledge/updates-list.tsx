@@ -46,7 +46,7 @@ export function UpdatesList({
                     className="flex gap-2 text-body text-kh-text"
                     href={`/w/${workspaceId}/knowledge/${run.sourceId}/${c.documentId}?revision=${c.afterRevisionNo}`}
                   >
-                    {/* Unread is a dot in the row's gutter, as in Discussions; a read row says nothing. */}
+                    {/* Unread is a dot in the row's gutter, so titles and paths keep one left edge; a read row says nothing. */}
                     {c.unread ? <span aria-hidden="true" className="absolute left-0 top-4 size-1.5 rounded-full bg-kh-primary" /> : null}
                     <span className={`flex-1 ${c.unread ? "font-medium" : ""}`}>{c.title}</span>
                     <span className="text-caption text-kh-text-muted">

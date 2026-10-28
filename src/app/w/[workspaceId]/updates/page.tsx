@@ -48,7 +48,9 @@ export default async function UpdatesPage({
         locationHref={`/w/${workspaceId}`}
         title="Updates"
       />
-      <form action={`/w/${workspaceId}/updates`} className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-kh-border pb-3">
+      {/* Keyed by the query: a client navigation (Show all updates) must reset fields the reader changed,
+          or the next live change would send their stale values again. */}
+      <form key={`${q.source ?? ""}|${q.unread ?? ""}`} action={`/w/${workspaceId}/updates`} aria-label="Filter updates" className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-kh-border pb-3">
         <Label inline>
           Folder
           <Select name="source" defaultValue={q.source ?? ""}>

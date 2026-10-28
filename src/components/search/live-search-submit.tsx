@@ -28,8 +28,14 @@ function useLiveSearch(ref: RefObject<HTMLElement | null>) {
       // Only the fields travel, so a new query starts again at page 1.
       router.replace(`${form.getAttribute("action")}${params.size ? `?${params}` : ""}`, { scroll: false });
     };
-    const later = () => {
+    const later = (event: Event) => {
       window.clearTimeout(timer);
+      // A native choice is made in one act, so it applies at once; only typing waits for a pause.
+      const target = event.target;
+      if (target instanceof HTMLSelectElement || (target instanceof HTMLInputElement && (target.type === "checkbox" || target.type === "radio"))) {
+        search();
+        return;
+      }
       timer = window.setTimeout(search, LIVE_SEARCH_DEBOUNCE_MS);
     };
     const now = (event: Event) => {

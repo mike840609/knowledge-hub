@@ -67,6 +67,7 @@ describe("Updates folder filter", () => {
     );
 
     expect(html).toMatch(new RegExp(`<form [^>]*action="/w/${WORKSPACE_ID}/updates"`));
+    expect(html).toMatch(/<form [^>]*aria-label="Filter updates"/);
     expect(html).toMatch(/<input type="checkbox" name="unread" checked="" value="true"\/>/);
     expect(html.match(/<button[^>]*type="submit"/g) ?? []).toHaveLength(1);
     expect(html).toMatch(/<noscript><button[^>]*type="submit"[^>]*>Filter<\/button><\/noscript>/);
