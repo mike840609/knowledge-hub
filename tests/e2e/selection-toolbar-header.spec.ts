@@ -62,3 +62,37 @@ test('the selection toolbar still opens above a selection with room above it', a
   const [bar, line] = await Promise.all([toolbar.boundingBox(), paragraph.boundingBox()]);
   expect(bar!.y + bar!.height).toBeLessThanOrEqual(line!.y);
 });
+
+test('an existing link can be edited without removing it, and removed explicitly', async ({ page }) => {
+  const editor = await openDocument(page, 'See the [project guide](https://example.com/old) for details.');
+  const link = editor.getByRole('link', { name: 'project guide' });
+  const selectLink = async () => {
+    await editor.focus();
+    await link.evaluate(element => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const selection = window.getSelection()!;
+      selection.removeAllRanges();
+      selection.addRange(range);
+    });
+  };
+  await selectLink();
+  const toolbar = page.locator('.kh-selection-toolbar[data-show="true"]');
+  await expect(toolbar).toBeVisible();
+  await toolbar.getByRole('button', { name: 'Link', exact: true }).click();
+  const address = toolbar.getByRole('textbox', { name: 'Link address' });
+  await expect(address).toHaveValue('https://example.com/old');
+  await expect(link).toHaveAttribute('href', 'https://example.com/old');
+  await address.fill('example.com/new');
+  await toolbar.getByRole('button', { name: 'Save link' }).click();
+  await expect(link).toHaveAttribute('href', 'https://example.com/new');
+  await expect(page.locator('[data-autosave-status]')).toHaveAttribute('data-autosave-status', 'saved', { timeout: 15_000 });
+  await page.reload();
+  await expect(link).toHaveAttribute('href', 'https://example.com/new');
+  await selectLink();
+  await expect(toolbar).toBeVisible();
+  await toolbar.getByRole('button', { name: 'Link', exact: true }).click();
+  await toolbar.getByRole('button', { name: 'Remove link' }).click();
+  await expect(editor.getByText('project guide')).toBeVisible();
+  await expect(editor.getByRole('link', { name: 'project guide' })).toHaveCount(0);
+});

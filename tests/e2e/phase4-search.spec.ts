@@ -93,6 +93,23 @@ test("searches as the reader types, and a filter change searches too", async ({ 
   await expect(page).toHaveURL(/[?&]q=Query\+Master(&|$)/);
 });
 
+test("keeps applied filters visible while allowing the advanced form to stay collapsed", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/w/${QUERY_MASTER_WORKSPACE}/search?q=Query&path=docs`);
+  await expect(page.getByRole("search")).toHaveAttribute("data-live-search-ready", "true");
+  const details = page.locator("form[role=search] details");
+  await expect(details).not.toHaveAttribute("open");
+  await expect(page.getByRole("link", { name: "Remove filter Path: docs" })).toBeVisible();
+  await details.locator("summary").click();
+  await expect(details).toHaveAttribute("open", "");
+  await page.getByLabel("Path", { exact: true }).fill("guides");
+  await expect(page).toHaveURL(/[?&]path=guides(&|$)/);
+  await expect(details).toHaveAttribute("open", "");
+  await details.locator("summary").click();
+  await expect(details).not.toHaveAttribute("open");
+  await expect(page.getByRole("link", { name: "Remove filter Path: guides" })).toBeVisible();
+});
+
 test("without JavaScript the search form keeps its button and submits as a GET", async ({ browser }) => {
   const context = await browser.newContext();
   const unhydrated = await context.newPage();

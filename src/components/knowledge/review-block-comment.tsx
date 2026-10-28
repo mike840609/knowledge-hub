@@ -48,11 +48,17 @@ export function ReviewBlockComment({ readingRef, markdown, chosen, onChoose }: {
     };
     // The button of the paragraph under the pointer shows; it is beside the paragraph, not in it.
     const point = (event: PointerEvent) => setHovered((event.target as Element).closest<HTMLElement>("p[data-review-path],li[data-review-para]"));
+    // Touch has no hover; reveal the touched paragraph without interrupting
+    // the browser's own caret placement or text selection.
+    const touch = (event: PointerEvent) => {
+      if (event.pointerType === "touch" || event.pointerType === "pen") point(event);
+    };
     article.addEventListener("pointerover", point);
+    article.addEventListener("pointerdown", touch);
     const observer = new ResizeObserver(measure);
     observer.observe(article);
     measure();
-    return () => { observer.disconnect(); article.removeEventListener("pointerover", point); };
+    return () => { observer.disconnect(); article.removeEventListener("pointerover", point); article.removeEventListener("pointerdown", touch); };
   }, [readingRef, markdown, domVersion]);
   useEffect(() => {
     if (!chosen && selected.current) {

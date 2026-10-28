@@ -142,7 +142,7 @@ describe("the selection toolbar's DOM contract", () => {
   it("makes every control a type=button, so pressing one cannot submit the composer's form", async () => {
     const editor = await open("some text\n");
     mountToolbar(editor);
-    const buttons = [...toolbarElement().querySelectorAll("button")];
+    const buttons = [...buttonRow().querySelectorAll("button")];
     expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual([
       "Bold",
       "Italic",
@@ -160,7 +160,7 @@ describe("the selection toolbar's DOM contract", () => {
   it("puts Comment on selection last, after every formatting control", async () => {
     const editor = await open("some text\n", true, { available: () => true, run: () => {} });
     mountToolbar(editor);
-    expect([...toolbarElement().querySelectorAll("button")].map((b) => b.getAttribute("aria-label"))).toEqual([
+    expect([...buttonRow().querySelectorAll("button")].map((b) => b.getAttribute("aria-label"))).toEqual([
       "Bold",
       "Italic",
       "Link",
@@ -189,7 +189,7 @@ describe("the selection toolbar's DOM contract", () => {
   it("styles the pressed state on every button, and marks the active toggle", async () => {
     const editor = await open("**bold** text\n");
     mountToolbar(editor);
-    for (const b of toolbarElement().querySelectorAll("button")) {
+    for (const b of buttonRow().querySelectorAll("button")) {
       expect(b.className).toContain("aria-pressed:bg-kh-bg-selected");
       expect(b.className).toContain("aria-pressed:text-kh-text");
     }
@@ -293,6 +293,122 @@ describe("the selection toolbar's DOM contract", () => {
     key(linkBox(), { key: "Enter" });
     expect(editor.getMarkdown()).toBe("some text\n");
     expect(buttonRow().className).not.toContain("hidden");
+  });
+});
+
+
+describe("editing links", () => {
+  const original = '[some **linked** text](https://example.com "Keep this title") after\n';
+
+  async function editExisting() {
+    const editor = await open(original);
+    mountToolbar(editor);
+    // Select only the bold word inside one link spanning three differently marked nodes.
+    select(editor, 6, 12);
+    button("Link").click();
+    return editor;
+  }
+
+  it("opens the existing address without removing the link or changing the selection", async () => {
+    const editor = await editExisting();
+    expect(editor.getMarkdown()).toBe(original);
+    expect(linkBox().value).toBe("https://example.com");
+    expect(document.activeElement).toBe(linkBox());
+    expect(buttonRow().className).toBe("hidden");
+    for (const label of ["Open link", "Save link", "Remove link"]) {
+      expect(button(label)?.type).toBe("button");
+    }
+    editor.action(ctx => {
+      const { selection } = ctx.get(editorViewCtx).state;
+      expect([selection.from, selection.to]).toEqual([6, 12]);
+    });
+  });
+
+  it("saves the whole existing link while keeping its text, formatting, title and selection", async () => {
+    const editor = await editExisting();
+    linkBox().value = "updated.example/docs";
+    button("Save link")?.click();
+    expect(editor.getMarkdown()).toBe('[some **linked** text](https://updated.example/docs "Keep this title") after\n');
+    expect(document.activeElement).toBe(editorDom(editor));
+    editor.action(ctx => {
+      const { selection } = ctx.get(editorViewCtx).state;
+      expect([selection.from, selection.to]).toEqual([6, 12]);
+    });
+  });
+
+  it("removes the whole selected link without removing text or other formatting", async () => {
+    const editor = await editExisting();
+    button("Remove link")?.click();
+    expect(editor.getMarkdown()).toBe("some **linked** text after\n");
+    expect(document.activeElement).toBe(editorDom(editor));
+  });
+
+  it("discards edits on Escape while preserving the original link", async () => {
+    const editor = await editExisting();
+    linkBox().value = "unsaved.example";
+    key(linkBox(), { key: "Escape" });
+    expect(editor.getMarkdown()).toBe(original);
+    expect(buttonRow().className).not.toContain("hidden");
+    expect(document.activeElement).toBe(editorDom(editor));
+  });
+
+  it("opens the address in a separate tab without changing the document", async () => {
+    const openWindow = vi.spyOn(window, "open").mockImplementation(() => null);
+    const editor = await editExisting();
+    button("Open link")?.click();
+    expect(openWindow).toHaveBeenCalledWith("https://example.com", "_blank", "noopener,noreferrer");
+    expect(editor.getMarkdown()).toBe(original);
+  });
+
+  it("does not open an unsafe stored address", async () => {
+    const openWindow = vi.spyOn(window, "open").mockImplementation(() => null);
+    const editor = await open("[some](javascript:alert%281%29) text\n");
+    mountToolbar(editor);
+    select(editor, 1, 5);
+    button("Link").click();
+    expect(button("Open link")?.disabled).toBe(true);
+    button("Open link")?.click();
+    expect(openWindow).not.toHaveBeenCalled();
+  });
+
+  it("does not guess an address or mutate a selection spanning different links", async () => {
+    const markdown = "[one](https://one.example) and [two](https://two.example)\n";
+    const editor = await open(markdown);
+    mountToolbar(editor);
+    select(editor, 1, 12);
+    expect(button("Link").disabled).toBe(true);
+    button("Link").click();
+    expect(editor.getMarkdown()).toBe(markdown);
+    expect(buttonRow().className).not.toContain("hidden");
+  });
+
+  it("updates only the existing link when the selection also includes unlinked text", async () => {
+    const editor = await open("plain [linked](https://example.com) after\n");
+    mountToolbar(editor);
+    select(editor, 1, 19);
+    button("Link").click();
+    linkBox().value = "updated.example";
+    key(linkBox(), { key: "Enter" });
+    expect(editor.getMarkdown()).toBe("plain [linked](https://updated.example) after\n");
+  });
+
+  it("keeps an existing link when Save receives an empty address", async () => {
+    const editor = await editExisting();
+    linkBox().value = "  ";
+    button("Save link")?.click();
+    expect(editor.getMarkdown()).toBe(original);
+  });
+
+  it("creates a new link with Save and keeps Remove unavailable", async () => {
+    const editor = await open("some text\n");
+    mountToolbar(editor);
+    select(editor, 1, 5);
+    button("Link").click();
+    expect(button("Remove link")?.disabled).toBe(true);
+    linkBox().value = "example.com";
+    linkBox().dispatchEvent(new Event("input", { bubbles: true }));
+    button("Save link")?.click();
+    expect(editor.getMarkdown()).toBe("[some](https://example.com) text\n");
   });
 });
 

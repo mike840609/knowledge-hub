@@ -72,3 +72,19 @@ test("pressing the button keeps the selection it narrows to", () => {
   expect(press.defaultPrevented).toBe(true);
   expect(selection.toString()).toBe("First");
 });
+
+test("touching a paragraph reveals its action without intercepting the touch or creating a comment", () => {
+  const choose = vi.fn(() => true);
+  const [first, second] = buttons(choose);
+  const touch = new PointerEvent("pointerdown", { bubbles: true, cancelable: true, pointerType: "touch" });
+  act(() => { paragraphs()[0].dispatchEvent(touch); });
+  expect(touch.defaultPrevented).toBe(false);
+  expect(first.parentElement!.hasAttribute("data-hovered")).toBe(true);
+  expect(second.parentElement!.hasAttribute("data-hovered")).toBe(false);
+  expect(choose).not.toHaveBeenCalled();
+
+  act(() => { paragraphs()[1].dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" })); });
+  expect(first.parentElement!.hasAttribute("data-hovered")).toBe(false);
+  expect(second.parentElement!.hasAttribute("data-hovered")).toBe(true);
+  expect(choose).not.toHaveBeenCalled();
+});
