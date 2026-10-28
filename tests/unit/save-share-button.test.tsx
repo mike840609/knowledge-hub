@@ -49,3 +49,16 @@ it("can save after sign-in completes in another tab without reloading the articl
  let signedIn=false;vi.stubGlobal("fetch",async(_url:string,init?:RequestInit)=>signedIn?Response.json(init?.method==="POST"?{...state,saved:true,id:"record"}:state):Response.json({error:{code:"AUTH_REQUIRED"}},{status:401}));
  await mount();await click("Save share");expect(host.textContent).toContain("Sign in to save");signedIn=true;await click("Save share");expect(host.textContent).toContain("Saved to Shares");
 });
+// `buttonClasses` dims every disabled button with `disabled:opacity-50`, which Tailwind emits after
+// `disabled:opacity-100`; only the important form overrides it, so the check reads the exact class.
+it("does not dim while it checks the saved state, and dims again once that check is done",async()=>{
+ let finish:(r:Response)=>void=()=>{};
+ vi.stubGlobal("fetch",async(_url:string,init?:RequestInit)=>init?.method==="POST"?new Promise<Response>(()=>{}):new Promise<Response>(r=>{finish=r;}));
+ await mount();
+ const button=()=>host.querySelector("button")!;
+ expect(button().disabled).toBe(true);expect(button().className.split(" ")).toContain("disabled:!opacity-100");
+ await act(async()=>finish(Response.json(state)));
+ expect(button().disabled).toBe(false);expect(button().className).not.toContain("opacity-100");
+ await click("Save share");
+ expect(button().disabled).toBe(true);expect(button().className).not.toContain("opacity-100");
+});

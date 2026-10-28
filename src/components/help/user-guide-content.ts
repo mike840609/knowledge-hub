@@ -84,13 +84,13 @@ export function userGuideContent(locale:GuideLocale):UserGuideContent {
       section("sharing-export","分享、匯出與使用範圍",[
         "分享前確認內容可公開給連結持有人；對方免登入即可閱讀，也會看到文章後續變更。",
         "在文章的 Share link 管理期限與撤銷；到 Shares 查看 My shares、Saved shares，或在 Discussions 追蹤你參與的討論。",
-        "登入後可留言、回覆或 Save share（需系統啟用相關功能）。儲存的是連結，不是文章副本。",
+        "登入後可留言、回覆或按 Save（需系統啟用相關功能）。儲存的是連結，不是文章副本。",
         "Home 更多操作 → Export Markdown ZIP：含已保存與封存筆記，不含草稿、歷史版本或附件，不能當作完整備份。",
       ],[
         {title:"留言權限與已儲存分享",items:[
           "有效連結可免登入閱讀未隱藏的評論；新增與回覆需要可信登入身分及啟用寫入。公司登入未設定時仍可閱讀評論。",
           "擁有者可回覆、解決或隱藏留言；評論不修改 Markdown，也不影響 Folder Sync。",
-          "Save share 不會加入自己的最愛。到期或失效的紀錄仍可 Remove；移除不會撤銷對方連結。撤銷後，原連結無法再開啟文件。",
+          "儲存分享不會加入自己的最愛。到期或失效的紀錄仍可 Remove；移除不會撤銷對方連結。撤銷後，原連結無法再開啟文件。",
         ]},
         {title:"Team workspace 的適用範圍",items:[
           "本手冊以 My Space 為主。Team 是否可用取決於部署設定，操作受角色與工作區狀態限制；唯讀或沒有權限時請依介面提示處理。",
@@ -172,13 +172,13 @@ export function userGuideContent(locale:GuideLocale):UserGuideContent {
       section("sharing-export","Share, export and workspace scope",[
         "Before sharing, confirm the content is suitable for link holders. They can read without signing in and see later article changes.",
         "Manage expiry and revocation in Share link. Open Shares for My shares, Saved shares, or Discussions to follow the discussions you take part in.",
-        "Sign in to comment, reply or Save share where enabled. Saving retains a link, not an article copy.",
+        "Sign in to comment, reply or choose Save where enabled. Saving retains a link, not an article copy.",
         "Home's more-actions menu → Export Markdown ZIP includes saved and archived notes, excluding drafts, revision history and attachments. It is not a full backup.",
       ],[
         {title:"Comment permissions and saved shares",items:[
           "A valid link allows anonymous reading of visible comments. Adding comments and replies requires trusted sign-in and enabled writes. Reading still works without configured company sign-in.",
           "Owners can reply, resolve and hide comments without changing Markdown or Folder Sync.",
-          "Save share does not add a workspace favorite. Expired or unavailable entries remain removable; Remove does not revoke the sender's link. Revoked links can no longer open the article.",
+          "Saving a share does not add a workspace favorite. Expired or unavailable entries remain removable; Remove does not revoke the sender's link. Revoked links can no longer open the article.",
         ]},
         {title:"Team workspace scope",items:[
           "This guide focuses on My Space. Team availability depends on deployment settings; operations depend on roles and workspace state. Follow read-only or access-denied messages.",

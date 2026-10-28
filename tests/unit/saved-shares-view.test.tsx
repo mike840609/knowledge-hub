@@ -30,7 +30,8 @@ it("explains empty and filtered empty states",async()=>{
  await mount({...model,items:[]});expect(host.textContent).toContain("choose Save while signed in");await mount({...model,items:[],query:{q:"missing",status:"all",page:1}});expect(host.textContent).toContain("No saved shares match");expect(host.textContent).toContain("Clear filters");
 });
 it.each(["en","zh-TW"] as const)("explains saved shares versus favorites in %s guide",locale=>{
- const text=JSON.stringify(userGuideContent(locale));expect(text).toContain("Saved shares");expect(text).toContain("Save share");expect(text).toContain(locale==="en"?"favorites":"最愛");
+ // The guide names the button as the reader sees it: "Save" (its "share" is for screen readers only).
+ const text=JSON.stringify(userGuideContent(locale));expect(text).toContain("Saved shares");expect(text).toContain(locale==="en"?"choose Save":"按 Save");expect(text).not.toContain("Save share");expect(text).toContain(locale==="en"?"favorites":"最愛");
 });
 it("refresh can show a share re-saved on another device after local removal",async()=>{
  vi.stubGlobal("fetch",async()=>new Response(null,{status:204}));await mount();await act(async()=>host.querySelector<HTMLButtonElement>('button[aria-label="Remove saved share: A useful guide"]')!.click());expect(host.textContent).not.toContain("A useful guide");
