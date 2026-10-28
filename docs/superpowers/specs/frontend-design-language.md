@@ -259,15 +259,16 @@ headings, so its box ends where the text does.
 The outline rail stays quiet beside the article (2026-10-28): a `border`
 track line with the current entry's `primary` mark on it; up to two lines per
 entry (`2026-10-20-share-page-outline-design.md` §5); a plain `caption` "On
-this page"; and 48px between an outline hung left of the column and the
-article's text (`pr-6`, the top of the rhythm scale, inside the rail's 224px
-slot plus the column's 24px), so the slot widths and the breakpoints derived
-from them do not change. Where the outline hangs left of a centred column
-(a pane of 88rem, a shared page of 82rem), it steps further off the article
-into the room the column leaves — up to 48px more, 96px from the text — but
-never nearer than 16px to the pane's or window's edge (`.kh-outline-hang`):
-an outline pressed against the article while the far side stands empty is
-what made the page feel crowded, not the gap's few pixels.
+this page". Where it hangs left of a centred column (a pane of 88rem, a shared
+page of 82rem), it steps off the article into the room the column leaves — up
+to 56px beyond its own 40px (`pr-4` plus the column's 24px), 96px from the
+text — and only as far as leaves 16px to the pane's or window's edge
+(`.kh-outline-hang`). An outline pressed against the article while the far
+side stands empty is what made the page feel crowded, not the gap's few
+pixels. The slots (224px in a pane, 208px on a shared page) and the
+breakpoints derived from them do not change, nor does the rail on the right.
+The shared page measures its room by the window, so a classic, non-overlay
+scrollbar takes up to half its width from that 16px.
 
 They are classes rather than remembered widths, and the `maxWidth` scale is
 replaced like the others, so `max-w-4xl` compiles to nothing and a sixth width
