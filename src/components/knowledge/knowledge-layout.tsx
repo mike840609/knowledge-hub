@@ -56,6 +56,8 @@ export function KnowledgeLayout({
   const overlayExplorer = isDesktop && !isWide;
   const [overlayOpen, setOverlayOpen] = useState(false);
   useEffect(() => { if (!overlayExplorer) setOverlayOpen(false); }, [overlayExplorer]);
+  // The palette, search, or Back can change the page without touching the drawer.
+  useEffect(() => { setOverlayOpen(false); }, [pathname]);
   // The button pressed is gone once the explorer changes; focus goes to the one that took its place.
   const toggleExplorer = (collapse: boolean) => {
     setExplorerCollapsed(collapse);
