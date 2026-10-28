@@ -14,7 +14,7 @@ import { ReviewComposer, ReviewSelectionBubble, useReviewSelection } from "./rev
 import { ReviewPanelShell } from "./review-panel-shell";
 import { ReviewBlockComment } from "./review-block-comment";
 import { ReviewPassageMarkers } from "./review-passage-markers";
-import { reviewRailInline, useReviewRailInline } from "./review-rail-mode";
+import { reviewRailInline, useReviewRailInline, useReviewRailOpen } from "./review-rail-mode";
 import { InlineReviewContext, type CaptureReviewAnchor, type PreparedReviewComment } from "./inline-review-context";
 import { useReviewDomVersion } from "./review-dom-version";
 import { COMMENT_HINT, createReviewRangeResolver, focusReviewAnchor, selectionAnchorInBlock } from "./review-selection";
@@ -32,7 +32,6 @@ import { ReviewFilterMenu, ReviewNextButtons, ReviewThreadList, reviewRequest, t
 export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = false, contentPending = false, prepareComment, commentAvailable = false, children }: { prepareComment?: (capture: CaptureReviewAnchor) => PreparedReviewComment; commentAvailable?: boolean; documentId: string; revisionId: string; markdown: string; readOnly?: boolean; contentPending?: boolean; children: ReactNode }) {
   const [result, setResult] = useState<{ threads: OwnerReviewThreadView[]; writesEnabled: boolean; revisionId: string; callerUserId: string }>();
   const [error, setError] = useState<string>();
-  const [open, setOpen] = useState(false);
   const [activeThreadId, setActiveThreadId] = useState<string>();
   const [filter, setFilter] = useState<ReviewFilter>("ALL");
   // The way in is the document header's (`review-entry.tsx`), not a row of this panel's.
@@ -40,6 +39,8 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
   const publish = shared?.publish;
   const entryRef = shared?.buttonRef;
   const readingRef = useRef<HTMLDivElement>(null);
+  // Every way the rail opens and closes holds the reader's place.
+  const [open, setOpen, holdAt] = useReviewRailOpen(readingRef);
   const inline = useReviewRailInline();
   const revisionChanged = !!result && result.revisionId !== revisionId;
   const located = revisionChanged || contentPending ? undefined : result?.threads;
@@ -187,7 +188,8 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
       <div ref={readingRef} className="kh-review-reading">
         {children}
         {canComment && (!prepareComment || !!selection.hint) && <ReviewSelectionBubble place={selection.place} ready={selection.ready} hint={selection.hint} onComment={() => { selection.capture(); changeOpen(true); }} />}
-        {canComment && <ReviewBlockComment readingRef={readingRef} markdown={markdown} chosen={selection.chosen} onChoose={anchor => {
+        {canComment && <ReviewBlockComment readingRef={readingRef} markdown={markdown} chosen={selection.chosen} onChoose={(anchor, element) => {
+          holdAt(element);
           // What is selected inside this paragraph is the comment's passage; without a selection
           // there the button still comments on the paragraph, up to the server's quote limit.
           // The whole paragraph lights up only when the comment is about the whole paragraph.

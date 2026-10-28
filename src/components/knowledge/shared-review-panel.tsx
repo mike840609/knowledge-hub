@@ -11,7 +11,7 @@ import { ReviewComposer, ReviewSelectionBubble, useReviewSelection } from "./rev
 import { ReviewPanelShell } from "./review-panel-shell";
 import { COMMENT_HINT, focusReviewAnchor } from "./review-selection";
 import { ReviewPassageMarkers } from "./review-passage-markers";
-import { reviewRailInline, useReviewRailInline } from "./review-rail-mode";
+import { reviewRailInline, useReviewRailInline, useReviewRailOpen } from "./review-rail-mode";
 import { awaitingReader, newComments, parseDismissed, sharedDismissedKey } from "./review-auto-open";
 import { readStored, removeStored, writeStored } from "@/components/shell/use-persisted-state";
 
@@ -21,9 +21,10 @@ export function SharedReviewPanel({ token, revisionId, markdown, signInHref, bra
   const [result, setResult] = useState<DiscussionResult>();
   const [error, setError] = useState<string>();
   const [activeThreadId, setActiveThreadId] = useState<string>();
-  const [open, setOpen] = useState(false);
   const entryRef = useRef<HTMLButtonElement>(null);
   const readingRef = useRef<HTMLDivElement>(null);
+  // Every way the rail opens and closes holds the reader's place.
+  const [open, setOpen] = useReviewRailOpen(readingRef);
   const inline = useReviewRailInline();
   const [filter, setFilter] = useState<ReviewFilter>("ALL");
   const shown = useRef<DiscussionResult | undefined>(undefined);
