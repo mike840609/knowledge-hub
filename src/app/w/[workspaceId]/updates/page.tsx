@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import { getFolderUpdates } from "@/server/sync-reading";
 import { UpdatesList } from "@/components/knowledge/updates-list";
 import { PageHeader } from "@/components/shell/page-header";
+import { LiveSearch } from "@/components/search/live-search-submit";
 export default async function UpdatesPage({
   params,
   searchParams,
@@ -47,7 +48,9 @@ export default async function UpdatesPage({
         locationHref={`/w/${workspaceId}`}
         title="Updates"
       />
-      <form className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-kh-border pb-3">
+      {/* Keyed by the query: a client navigation (Show all updates) must reset fields the reader changed,
+          or the next live change would send their stale values again. */}
+      <form key={`${q.source ?? ""}|${q.unread ?? ""}`} action={`/w/${workspaceId}/updates`} aria-label="Filter updates" className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-kh-border pb-3">
         <Label inline>
           Folder
           <Select name="source" defaultValue={q.source ?? ""}>
@@ -70,7 +73,10 @@ export default async function UpdatesPage({
           />
           Unread only
         </label>
-        <Button type="submit" variant="secondary">Filter</Button>
+        <LiveSearch />
+        <noscript>
+          <Button type="submit" variant="secondary">Filter</Button>
+        </noscript>
       </form>
       <UpdatesList workspaceId={workspaceId} page={page} filters={{ sourceId: q.source, unreadOnly: q.unread === "true", paginated: Boolean(q.time && q.run) }} />
       {page.nextCursor ? (

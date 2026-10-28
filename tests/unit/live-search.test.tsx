@@ -87,3 +87,31 @@ it("leaves out empty fields, so clearing the text returns to the unfiltered addr
   await wait(300);
   expect(navigation.replace).toHaveBeenCalledWith("/w/ws-1/shares?status=active", { scroll: false });
 });
+
+// The shape of the Updates filter: a native select and a checkbox, each chosen in one act.
+function NativeChoices() {
+  return (
+    <form action="/w/ws-1/updates" method="get">
+      <select aria-label="Folder" name="source" defaultValue="">
+        <option value="">All folders</option>
+        <option value="src-a">A</option>
+      </select>
+      <input type="checkbox" aria-label="Unread only" name="unread" value="true" />
+      <LiveSearch />
+    </form>
+  );
+}
+
+it("applies a native select or checkbox at once, without waiting for a typing pause", async () => {
+  await act(async () => root.render(<NativeChoices />));
+  const select = container.querySelector("select")!;
+  await act(async () => {
+    select.value = "src-a";
+    select.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(navigation.replace).toHaveBeenCalledTimes(1);
+  expect(navigation.replace).toHaveBeenLastCalledWith("/w/ws-1/updates?source=src-a", { scroll: false });
+  await act(async () => container.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click());
+  expect(navigation.replace).toHaveBeenCalledTimes(2);
+  expect(navigation.replace).toHaveBeenLastCalledWith("/w/ws-1/updates?source=src-a&unread=true", { scroll: false });
+});

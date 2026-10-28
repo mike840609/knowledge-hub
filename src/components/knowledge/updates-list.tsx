@@ -30,7 +30,7 @@ export function UpdatesList({
           <section key={run.id}>
             <div className="flex items-baseline justify-between gap-3 pb-1">
               <Link
-                className="text-body font-medium text-kh-link"
+                className="text-body font-medium text-kh-text hover:underline"
                 href={`/w/${workspaceId}/sources/${run.sourceId}/runs/${run.id}`}
               >
                 {sourceName} · Added {added}, updated {updated}
@@ -41,15 +41,17 @@ export function UpdatesList({
             </div>
             <ul className="-mx-3 space-y-0.5">
               {changes.map((c) => (
-                <li key={c.id} className="kh-interactive-row px-3 py-2">
+                <li key={c.id} className="kh-interactive-row relative px-3 py-2">
                   <Link
-                    className="flex gap-2 text-body text-kh-link"
+                    className="flex gap-2 text-body text-kh-text"
                     href={`/w/${workspaceId}/knowledge/${run.sourceId}/${c.documentId}?revision=${c.afterRevisionNo}`}
                   >
-                    <span className="flex-1">{c.title}</span>
+                    {/* Unread is a dot in the row's gutter, so titles and paths keep one left edge; a read row says nothing. */}
+                    {c.unread ? <span aria-hidden="true" className="absolute left-0 top-4 size-1.5 rounded-full bg-kh-primary" /> : null}
+                    <span className={`flex-1 ${c.unread ? "font-medium" : ""}`}>{c.title}</span>
                     <span className="text-caption text-kh-text-muted">
-                      {c.labels.includes("ADDED") ? "Added" : "Updated"} ·{" "}
-                      {c.unread ? "Unread" : "Read"}
+                      {c.labels.includes("ADDED") ? "Added" : "Updated"}
+                      {c.unread ? <span className="sr-only"> · Unread</span> : null}
                     </span>
                   </Link>
                   <p className="text-caption text-kh-text-muted">
