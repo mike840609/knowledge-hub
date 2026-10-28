@@ -8,12 +8,15 @@ vi.mock("@/components/knowledge/markdown-renderer", () => ({ MarkdownRenderer: (
 vi.mock("@/components/ui/timestamp", () => ({ Timestamp: () => null }));
 import SharedDocumentPage from "@/app/s/[token]/page";
 
+// An entry link by the name assistive technology reads, whatever spans and icons shorten what is shown.
+const entryLinks = (html: string) => [...html.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>(.*?)<\/a>/g)].filter(link => ["Open in Knowledge Hub", "Get started"].includes(link[2].replace(/<[^>]+>/g, "")));
+
 afterEach(() => { vi.unstubAllEnvs(); vi.useRealTimers(); });
 
 it("navigates both entry buttons to the company gateway with native links", async () => {
   vi.stubEnv("KM_PUBLIC_ORIGIN", "https://hub.example.com/");
   const html = renderToStaticMarkup(await SharedDocumentPage({ params: Promise.resolve({ token: "share-token" }) }));
-  const links = [...html.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>(?:<svg.*?<\/svg>)?(?:<span[^>]*>)?(Open in Knowledge Hub|Get started)(?:<\/span>)?<\/a>/g)];
+  const links = entryLinks(html);
   expect(links).toHaveLength(2);
   expect(links.map(link => link[1])).toEqual(["https://hub.example.com/?returnTo=%2Fs%2Fshare-token%2Fopen", "https://hub.example.com/?returnTo=%2Fs%2Fshare-token%2Fopen"]);
   expect(links.every(link => !link[0].includes("data-next"))).toBe(true);
@@ -22,7 +25,7 @@ it("navigates both entry buttons to the company gateway with native links", asyn
 it("keeps the document-opening flow when no company gateway is configured", async () => {
   vi.stubEnv("KM_PUBLIC_ORIGIN", "");
   const html = renderToStaticMarkup(await SharedDocumentPage({ params: Promise.resolve({ token: "share-token" }) }));
-  const links = [...html.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>(?:<svg.*?<\/svg>)?(?:<span[^>]*>)?(Open in Knowledge Hub|Get started)(?:<\/span>)?<\/a>/g)];
+  const links = entryLinks(html);
   expect(links.map(link => link[1])).toEqual(["/s/share-token/open", "/s/share-token/open"]);
 });
 
@@ -39,7 +42,7 @@ it("puts the brand and both page actions in the pinned bar, ahead of the title",
   const html = renderToStaticMarkup(await SharedDocumentPage({ params: Promise.resolve({ token: "share-token" }) }));
   const bar = html.match(/<div data-bar="">(.*?)<\/div>/)![1];
   expect(bar).toContain("Knowledge Hub");
-  expect(bar).toContain("Open in Knowledge Hub");
+  expect(bar.replace(/<[^>]+>/g, "")).toContain("Open in Knowledge Hub");
 });
 
 it("shows the document's page icon above the title", async () => {

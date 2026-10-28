@@ -68,7 +68,7 @@ test.describe("document share link", () => {
       expect(html).toContain(title);
       expect(html).toContain("first shared body");
       expect(html).toContain("Shared by E2E Knowledge User");
-      expect(html).toContain("Open in Knowledge Hub");
+      expect(html.replace(/<[^>]+>/g, "")).toContain("Open in Knowledge Hub");
       expect(html).toContain("Keep useful knowledge within reach.");
       expect(html).toContain(`${path}/open`);
       expect(html).not.toMatch(/property="og:/);
