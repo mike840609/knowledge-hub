@@ -56,7 +56,7 @@ test.describe("document share link", () => {
 
     const originalDocumentUrl = page.url();
     await page.goto(path!);
-    await page.getByRole("link", { name: "Open in Knowledge Hub", exact: true }).click();
+    await page.locator(".kh-share-page > div:first-child").getByRole("link", { name: "Open in Knowledge Hub", exact: true }).click();
     await expect(page).toHaveURL(originalDocumentUrl);
     await page.locator("main").getByRole("button", { name: "Share link…" }).click();
 
