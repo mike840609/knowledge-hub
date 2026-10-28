@@ -80,15 +80,3 @@ export function toggleFavoriteDocument(shortcuts: DocumentShortcuts, key: string
       : [key, ...shortcuts.favorites],
   };
 }
-
-/**
- * Adds or removes several documents at once. New favorites go in front, as a
- * single one does; removing keeps the order of what remains. A key already in
- * the wanted state is not moved.
- */
-export function setFavoriteDocuments(shortcuts: DocumentShortcuts, keys: readonly string[], favorite: boolean): DocumentShortcuts {
-  const wanted = new Set(keys);
-  if (!favorite) return { ...shortcuts, favorites: shortcuts.favorites.filter((key) => !wanted.has(key)) };
-  const added = keys.filter((key) => !shortcuts.favorites.includes(key));
-  return { ...shortcuts, favorites: [...added, ...shortcuts.favorites] };
-}

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronRight, Clock3, FileText, LockKeyhole, MoreHorizontal, ChevronsLeft, Plus, ListFilter, Star } from "lucide-react";
 import { ActionIcon } from "@/components/actions/action-icon";
-import { favoritesInPlace, rememberDocument, setFavoriteDocuments, toggleFavoriteDocument } from "@/lib/document-shortcuts";
+import { favoritesInPlace, rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { MenuCheckboxItem, MenuContent, MenuItem, MenuRoot, MenuTrigger } from "@/components/ui/menu";
@@ -22,7 +22,6 @@ import { documentShortcutKey, useDocumentShortcuts } from "./use-document-shortc
 import { useTreeMutations } from "./use-tree-mutations";
 import { useActionRunner } from "@/components/actions/action-menu";
 import { actionsFor, type ActionTarget, type FolderTarget } from "@/components/actions/action-registry";
-import { requestMove } from "./move-request";
 
 /** Why a synced source's documents cannot be edited here; read after the name, never part of it. */
 const READ_ONLY_DESCRIPTION = "Synced from a folder, read-only in the Hub";
@@ -380,19 +379,6 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
                   })}
                   onRunAction={runAction}
                   onReorder={async (input) => (await mutations.reorderNode(input)).ok}
-                  onBulkFavorite={(documents, favorite) => updateShortcuts((previous) => setFavoriteDocuments(previous, documents.map((document) => documentShortcutKey(candidate.id, document.documentId)), favorite))}
-                  onBulkMove={(documents) => {
-                    if (documents.length === 0) return;
-                    requestMove({
-                      sourceId: candidate.id,
-                      label: `${documents.length} documents`,
-                      node: { type: "document", documentId: documents[0].documentId },
-                      documents,
-                    });
-                  }}
-                  onBulkArchive={(documents) => {
-                    void mutations.archiveDocuments(documents.map((document) => ({ documentId: document.documentId, sourceId: candidate.id, title: document.label })));
-                  }}
                 /> : null}
               </div>
             </section>
