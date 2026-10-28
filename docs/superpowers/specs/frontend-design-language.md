@@ -923,6 +923,12 @@ by the same pre-paint script (`compact` unless `comfortable` was chosen), and
 changed only from the account menu. It sizes the rails and nothing else
 (§15, "Rows sit on the ladder").
 
+Theme and Density each spend **one row** in the account menu: a grid of named
+icon choices, not a vertical radio list. Selection is the row's fill and weight;
+the check slot is omitted because the icon and name already identify the choice.
+This is both shorter (two rows instead of five) and the reason System could be
+added without making the menu taller.
+
 ## 13. Icons
 
 A consistent outline icon language (Lucide). In primary navigation, icons
