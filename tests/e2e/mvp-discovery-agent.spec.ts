@@ -27,6 +27,7 @@ test("source exclusions, filter-only search and reviewed Agent context", async (
     await page.goto(`/w/${ws}/search?source=${source}&path=docs&sort=newest&offset=480`);
     await expect(page.getByRole("link", { name: /^MVP guide docs\/guide\.md/ })).toBeVisible();
     await expect(page.getByText("Excluded secret", { exact: true })).toHaveCount(0);
+    await page.locator('form[role="search"] details summary').click();
     await expect(page.getByText("Dates are inclusive in UTC+08:00", { exact: false })).toBeVisible();
     await page.goto(`/w/${ws}/agent-context`);
     await page.getByLabel("Find documents").fill("MVP browser source");
