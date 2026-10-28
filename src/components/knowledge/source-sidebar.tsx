@@ -132,18 +132,23 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
   // Favourites can now be starred from a row menu or the palette as well as
   // from here, so the section reveals itself whenever the list grows rather
   // than only when this component was the one that did it.
-  const previousFavorites = useRef(shortcuts.favorites);
+  // The list loads after mount; only growth after that is a new favorite, or every mount would reopen a closed section.
+  const previousFavorites = useRef<string[] | null>(null);
   // Counts the times the sections above the tree changed height on their own — the section opening itself here —
   // as opposed to the reader opening or closing one. Only the former asks the tree to re-reveal the document
   // being read: re-revealing after a reader's own click scrolled the explorer away from where they were.
   const [shortcutsAutoOpened, setShortcutsAutoOpened] = useState(0);
   useEffect(() => {
-    if (shortcuts.favorites.length > previousFavorites.current.length) {
+    if (!shortcutsReady) {
+      previousFavorites.current = null;
+      return;
+    }
+    if (previousFavorites.current && shortcuts.favorites.length > previousFavorites.current.length) {
       setFavoritesOpen(true);
       setShortcutsAutoOpened((count) => count + 1);
     }
     previousFavorites.current = shortcuts.favorites;
-  }, [shortcuts.favorites, setFavoritesOpen]);
+  }, [shortcuts.favorites, shortcutsReady, setFavoritesOpen]);
 
   const runAction = useActionRunner({ onToggleFavorite: toggleFavorite });
   const mutations = useTreeMutations();

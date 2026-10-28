@@ -51,7 +51,8 @@ export function KnowledgeLayout({
   // Between the narrow shell and the wide inline explorer, the explorer is a
   // drawer over the content instead of a 288px column. The CSS already hides
   // the inline column and shows the strip; this decides where the one
-  // SourceSidebar instance renders.
+  // SourceSidebar instance renders. Closed, it stays mounted in the hidden
+  // column: it is what records a document as Recent, at every width.
   const overlayExplorer = isDesktop && !isWide;
   const [overlayOpen, setOverlayOpen] = useState(false);
   useEffect(() => { if (!overlayExplorer) setOverlayOpen(false); }, [overlayExplorer]);
@@ -106,8 +107,8 @@ export function KnowledgeLayout({
       {/* The middle desktop range gets a strip and a drawer: the same explorer,
           without spending 288px of a 1024px window. */}
       <div className="hidden h-full w-10 shrink-0 flex-col items-center border-r border-kh-border bg-kh-bg-explorer pt-2 lg:flex xl:hidden">
-        <Tooltip label="Browse documents" side="right">
-          <button ref={overlayButtonRef} type="button" aria-label="Show documents" onClick={() => setOverlayOpen(true)} className={buttonClasses({ variant: "ghost", icon: true })}>
+        <Tooltip label="Show documents" side="right">
+          <button ref={overlayButtonRef} type="button" aria-label="Show documents" aria-haspopup="dialog" aria-expanded={overlayOpen} onClick={() => setOverlayOpen(true)} className={buttonClasses({ variant: "ghost", icon: true })}>
             <FolderTree className="h-4 w-4" aria-hidden="true" />
           </button>
         </Tooltip>
@@ -115,15 +116,15 @@ export function KnowledgeLayout({
       {/* One explorer instance: avoid duplicate filter IDs and competing persisted state. */}
       {navigation?.mobileExplorerTarget ? createPortal(<div className="h-full" onClick={(event) => {
         if ((event.target as HTMLElement).closest("a") && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) navigation.closeNavigation();
-      }}>{sidebar}</div>, navigation.mobileExplorerTarget) : isWide && explorerTarget ? createPortal(sidebar, explorerTarget) : null}
+      }}>{sidebar}</div>, navigation.mobileExplorerTarget) : explorerTarget && !(overlayExplorer && overlayOpen) ? createPortal(sidebar, explorerTarget) : null}
       {overlayExplorer ? (
         <Drawer side="left" open={overlayOpen} onOpenChange={(open) => {
           setOverlayOpen(open);
           if (!open) requestAnimationFrame(() => overlayButtonRef.current?.focus());
         }} title="Browse" surfaceClassName="bg-kh-bg-explorer">
-          <div className="h-full" onClick={(event) => {
+          <div className="h-full [&>aside]:border-r-0" onClick={(event) => {
             if ((event.target as HTMLElement).closest("a") && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) setOverlayOpen(false);
-          }}>{sidebar}</div>
+          }}>{overlayOpen ? sidebar : null}</div>
         </Drawer>
       ) : null}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">

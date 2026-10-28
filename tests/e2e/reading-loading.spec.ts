@@ -24,7 +24,7 @@ for (const scenario of [
   { name: "wide pane", width: 1440, inspector: false },
   { name: "wide pane with details", width: 1800, inspector: true },
   { name: "narrow pane with details", width: 1440, inspector: true },
-  { name: "narrow pane", width: 1100, inspector: false },
+  { name: "explorer drawer", width: 1100, inspector: false },
   { name: "mobile", width: 390, inspector: false },
 ]) {
   test(`document loading keeps the reading column aligned: ${scenario.name}`, async ({ page, loadingDocuments }) => {
@@ -62,13 +62,14 @@ for (const scenario of [
       await new Promise((resolve) => setTimeout(resolve, 600));
       await route.fulfill({ response });
     });
-    if (scenario.width < 1024) {
-      // Article links deliberately disable prefetch. The mobile explorer is
-      // mounted on demand, so exercise its prefetched loading state explicitly.
+    if (scenario.width < 1280) {
+      // Article links deliberately disable prefetch. Under 1280 the explorer is
+      // a drawer (the Menu drawer under 1024), mounted on demand, so exercise
+      // its prefetched loading state explicitly.
       const prefetched = page.waitForResponse((response) =>
         new URL(response.url()).pathname === destination && Boolean(response.request().headers()["next-router-prefetch"]),
       );
-      await page.getByRole("button", { name: "Open menu", exact: true }).click();
+      await page.getByRole("button", { name: scenario.width < 1024 ? "Open menu" : "Show documents", exact: true }).click();
       const document = page.getByRole("treeitem", { name: withOutlineTitle, exact: true });
       await document.scrollIntoViewIfNeeded();
       await prefetched;
@@ -76,17 +77,11 @@ for (const scenario of [
     } else {
       await content.getByRole("link", { name: withOutlineTitle, exact: true }).click();
     }
-    // A prefetched destination can arrive before the boundary is observable.
-    // When it does, still check the final column against the starting one;
-    // when the boundary is there, check it as well.
-    const loadingStatus = content.getByRole("status").filter({ hasText: "Loading document" });
-    const sawLoading = await loadingStatus.waitFor({ state: "visible", timeout: 1_000 }).then(() => true).catch(() => false);
-    const loading = sawLoading ? await readingColumn().boundingBox() : before;
+    await expect(content.getByRole("status")).toHaveText("Loading document");
+    const loading = await readingColumn().boundingBox();
     expect(loading).not.toBeNull();
-    if (sawLoading) {
-      expect(Math.abs(loading!.x - before!.x)).toBeLessThanOrEqual(1);
-      expect(Math.abs(loading!.width - before!.width)).toBeLessThanOrEqual(1);
-    }
+    expect(Math.abs(loading!.x - before!.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(loading!.width - before!.width)).toBeLessThanOrEqual(1);
     await test.info().attach("loading", { body: await page.screenshot(), contentType: "image/png" });
 
     await expect(content.locator("article:visible")).toBeVisible(ROUND_TRIP);

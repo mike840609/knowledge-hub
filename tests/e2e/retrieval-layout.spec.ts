@@ -66,3 +66,48 @@ test("Favorites and Recent are open without a first click", async ({ page }) => 
   await expect(favorites.getByRole("button", { name: "Favorites", exact: true })).toHaveAttribute("aria-expanded", "true");
   await expect(recentRegion.getByRole("button", { name: "Recent", exact: true })).toHaveAttribute("aria-expanded", "true");
 });
+
+// The explorer is what records an open, so it stays mounted where it is not shown: a document read at a width
+// without the inline explorer is still in Recent the next time the explorer is opened.
+for (const width of [1100, 390]) {
+  test(`documents opened at ${width}px are recorded in Recent`, async ({ page }) => {
+    const workspaceId = await mySpace(page);
+    const firstTitle = unique("Recent first");
+    const first = await createNote(page, workspaceId, firstTitle);
+    const second = await createNote(page, workspaceId, unique("Recent second"));
+
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto(first.href);
+    await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(firstTitle, ROUND_TRIP);
+    await page.goto(second.href);
+    await page.getByRole("button", { name: width < 1024 ? "Open menu" : "Show documents", exact: true }).click();
+    await expect(page.getByRole("region", { name: "Recent" }).getByRole("link", { name: firstTitle, exact: true })).toBeVisible(ROUND_TRIP);
+  });
+}
+
+test("a section closed in the drawer is still closed when the drawer opens again", async ({ page }) => {
+  const workspaceId = await mySpace(page);
+  const read = await createNote(page, workspaceId, unique("Closed recent read"));
+  const note = await createNote(page, workspaceId, unique("Closed recent"));
+  await page.setViewportSize({ width: 1100, height: 800 });
+  // Recent lists documents other than the one open, and only when it has one.
+  await page.goto(read.href);
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toBeVisible(ROUND_TRIP);
+  await page.goto(note.href);
+  const strip = page.getByRole("button", { name: "Show documents", exact: true });
+  const browse = page.getByRole("dialog", { name: "Browse", exact: true });
+  const heading = (name: string) => browse.getByRole("button", { name, exact: true });
+
+  await strip.click();
+  await heading("Recent").click();
+  await expect(heading("Recent")).toHaveAttribute("aria-expanded", "false");
+  await page.keyboard.press("Escape");
+  await expect(browse).toHaveCount(0);
+  await expect(strip).toBeFocused();
+
+  await strip.click();
+  await expect(heading("Recent")).toHaveAttribute("aria-expanded", "false", ROUND_TRIP);
+  await page.reload();
+  await strip.click();
+  await expect(heading("Recent")).toHaveAttribute("aria-expanded", "false", ROUND_TRIP);
+});
