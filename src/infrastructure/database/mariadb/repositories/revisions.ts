@@ -48,7 +48,7 @@ export class MariaDbRevisionRepository implements RevisionRepository {
     try {
       await this.connection.query(`DELETE r FROM knowledge_revisions r
         WHERE r.document_id=? AND r.history_state='WORKING'
-        AND NOT EXISTS (SELECT 1 FROM knowledge_documents d WHERE d.current_revision_id=r.id)
+        AND NOT EXISTS (SELECT 1 FROM knowledge_documents d WHERE d.id=r.document_id AND d.current_revision_id=r.id)
         AND NOT EXISTS (SELECT 1 FROM knowledge_link_index l WHERE l.revision_id=r.id)
         AND NOT EXISTS (SELECT 1 FROM document_review_threads t WHERE t.created_revision_id=r.id)
         AND NOT EXISTS (SELECT 1 FROM document_read_progress p WHERE p.revision_id=r.id)
@@ -111,7 +111,7 @@ export class MariaDbRevisionRepository implements RevisionRepository {
 
   async listByDocument(documentId: string): Promise<KnowledgeRevision[]> {
     const rows = await this.connection.query<DbRow[]>(
-      "SELECT r.* FROM knowledge_revisions r WHERE r.document_id = ? AND (r.history_state = 'CHECKPOINT' OR EXISTS (SELECT 1 FROM knowledge_documents d WHERE d.current_revision_id=r.id)) ORDER BY r.revision_no ASC",
+      "SELECT r.* FROM knowledge_revisions r WHERE r.document_id = ? AND (r.history_state = 'CHECKPOINT' OR EXISTS (SELECT 1 FROM knowledge_documents d WHERE d.id=r.document_id AND d.current_revision_id=r.id)) ORDER BY r.revision_no ASC",
       [documentId],
     );
     return rows.map(mapRevision);
@@ -125,7 +125,7 @@ export class MariaDbRevisionRepository implements RevisionRepository {
        FROM knowledge_revisions r
        WHERE r.document_id = ?
          AND (r.history_state = 'CHECKPOINT' OR EXISTS (
-           SELECT 1 FROM knowledge_documents d WHERE d.current_revision_id = r.id
+           SELECT 1 FROM knowledge_documents d WHERE d.id = r.document_id AND d.current_revision_id = r.id
          ))
        ORDER BY r.revision_no ASC`,
       [documentId],

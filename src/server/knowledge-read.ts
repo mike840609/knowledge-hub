@@ -117,14 +117,15 @@ export const getWorkspaceShellModel = cache(async (
   };
 });
 
-export async function getKnowledgeExplorerModel(
+// Cached per request on primitive arguments (an options object would never match): a source layout
+// and the document page under it both ask for the same tree.
+const loadKnowledgeExplorerModel = cache(async (
   workspaceId: string,
   sourceId: string,
-  input: { includeArchived?: boolean; includeCollections?: boolean } = {},
-): Promise<KnowledgeExplorerModel | null> {
+  includeArchived: boolean,
+): Promise<KnowledgeExplorerModel | null> => {
   const services = applicationServices();
   const { caller } = await services.establishTrustedCaller();
-  const includeArchived = input.includeArchived ?? false;
   try {
     const workspaces = await services.workspaces.listWorkspaces(caller);
     if (!workspaces.some((workspace) => workspace.id === workspaceId)) return null;
@@ -141,6 +142,14 @@ export async function getKnowledgeExplorerModel(
     if (isHiddenReadFailure(error)) return null;
     throw error;
   }
+});
+
+export function getKnowledgeExplorerModel(
+  workspaceId: string,
+  sourceId: string,
+  input: { includeArchived?: boolean; includeCollections?: boolean } = {},
+): Promise<KnowledgeExplorerModel | null> {
+  return loadKnowledgeExplorerModel(workspaceId, sourceId, input.includeArchived ?? false);
 }
 
 /**

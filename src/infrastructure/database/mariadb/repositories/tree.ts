@@ -25,6 +25,8 @@ function mapDocumentSummary(row: DbRow): DocumentSummary {
 /** One `IN (?…)` batch per statement; well under MariaDB's placeholder limit. */
 const DOCUMENT_ID_CHUNK = 500;
 
+const POSITION_BATCH = 500;
+
 function placeholders(count: number): string {
   return Array(count).fill("?").join(", ");
 }
@@ -147,6 +149,17 @@ export class MariaDbTreeRepository implements TreeRepository {
   async updatePosition(nodeId: string, position: number, actorId: string): Promise<void> {
     const result = await this.connection.query("UPDATE knowledge_tree_nodes SET position = ?, updated_by = ? WHERE id = ?", [position, actorId, nodeId]);
     if (affectedRows(result) !== 1) throw new Error("Tree position could not be updated.");
+  }
+
+  async updatePositions(updates: readonly { nodeId: string; position: number }[], actorId: string): Promise<void> {
+    for (let start = 0; start < updates.length; start += POSITION_BATCH) {
+      const batch = updates.slice(start, start + POSITION_BATCH);
+      const result = await this.connection.query(
+        `UPDATE knowledge_tree_nodes SET position = CASE id ${batch.map(() => "WHEN ? THEN ?").join(" ")} END, updated_by = ? WHERE id IN (${placeholders(batch.length)})`,
+        [...batch.flatMap((update) => [update.nodeId, update.position]), actorId, ...batch.map((update) => update.nodeId)],
+      );
+      if (affectedRows(result) !== batch.length) throw new Error("Tree position could not be updated.");
+    }
   }
 
   async updateStatus(nodeId: string, status: "ACTIVE" | "ARCHIVED", actorId: string): Promise<void> {
