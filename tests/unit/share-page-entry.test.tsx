@@ -13,17 +13,17 @@ afterEach(() => { vi.unstubAllEnvs(); vi.useRealTimers(); });
 it("navigates both entry buttons to the company gateway with native links", async () => {
   vi.stubEnv("KM_PUBLIC_ORIGIN", "https://hub.example.com/");
   const html = renderToStaticMarkup(await SharedDocumentPage({ params: Promise.resolve({ token: "share-token" }) }));
-  const links = [...html.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>(?:<svg.*?<\/svg>)?(?:<span[^>]*>)?(Open in Knowledge Hub|Get started)(?:<\/span>)?<\/a>/g)];
-  expect(links).toHaveLength(2);
-  expect(links.map(link => link[1])).toEqual(["https://hub.example.com/?returnTo=%2Fs%2Fshare-token%2Fopen", "https://hub.example.com/?returnTo=%2Fs%2Fshare-token%2Fopen"]);
+  const links = [...html.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>(?:<svg.*?<\/svg>)?(?:<span[^>]*>)?(Open in Knowledge Hub)(?:<\/span>)?<\/a>/g)];
+  expect(links).toHaveLength(1);
+  expect(links.map(link => link[1])).toEqual(["https://hub.example.com/?returnTo=%2Fs%2Fshare-token%2Fopen"]);
   expect(links.every(link => !link[0].includes("data-next"))).toBe(true);
 });
 
 it("keeps the document-opening flow when no company gateway is configured", async () => {
   vi.stubEnv("KM_PUBLIC_ORIGIN", "");
   const html = renderToStaticMarkup(await SharedDocumentPage({ params: Promise.resolve({ token: "share-token" }) }));
-  const links = [...html.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>(?:<svg.*?<\/svg>)?(?:<span[^>]*>)?(Open in Knowledge Hub|Get started)(?:<\/span>)?<\/a>/g)];
-  expect(links.map(link => link[1])).toEqual(["/s/share-token/open", "/s/share-token/open"]);
+  const links = [...html.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>(?:<svg.*?<\/svg>)?(?:<span[^>]*>)?(Open in Knowledge Hub)(?:<\/span>)?<\/a>/g)];
+  expect(links.map(link => link[1])).toEqual(["/s/share-token/open"]);
 });
 
 it("signs a reader in to comment and brings them back to the shared page", async () => {
@@ -40,6 +40,13 @@ it("puts the brand and both page actions in the pinned bar, ahead of the title",
   const bar = html.match(/<div data-bar="">(.*?)<\/div>/)![1];
   expect(bar).toContain("Knowledge Hub");
   expect(bar).toContain("Open in Knowledge Hub");
+});
+
+it("ends with the article, not a marketing footer", async () => {
+  const html = renderToStaticMarkup(await SharedDocumentPage({ params: Promise.resolve({ token: "share-token" }) }));
+  expect(html).not.toContain("Keep useful knowledge within reach.");
+  expect(html).not.toContain("Get started");
+  expect(html).not.toContain("Continue with your company account.");
 });
 
 it("shows the document's page icon above the title", async () => {

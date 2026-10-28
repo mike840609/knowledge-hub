@@ -160,14 +160,14 @@ it("names a source only where it changes from the row above", () => {
   expect(recent.match(/>Team wiki</g)).toHaveLength(1);
 });
 
-it("shows the first eight recent rows and offers the rest behind Show more", () => {
+it("shows the first five recent rows and offers the rest behind Show all", () => {
   const many = Array.from({ length: 11 }, (_, n) => doc(`d${n}`, { updatedAt: `2026-10-${String(n + 1).padStart(2, "0")}T00:00:00.000Z` }));
   const html = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={many} drafts={[]} />);
   const recent = html.slice(html.indexOf('aria-label="Recent"'), html.indexOf('aria-label="Favorites"'));
-  expect(recent.match(/data-list-row/g)).toHaveLength(8);
-  expect(recent).toContain(">Show 3 more<");
-  const few = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={many.slice(0, 8)} drafts={[]} />);
-  expect(few).not.toContain("Show ");
+  expect(recent.match(/data-list-row/g)).toHaveLength(5);
+  expect(recent).toContain(">Show all 11<");
+  const few = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={many.slice(0, 5)} drafts={[]} />);
+  expect(few).not.toContain("Show all");
 });
 
 describe("C on Home opens a new note", () => {

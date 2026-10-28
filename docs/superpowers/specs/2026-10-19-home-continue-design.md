@@ -101,8 +101,8 @@ Rules:
   whichever source named it. A recent or a draft whose document is not in the
   workspace's document list is excluded (except `draft:new`).
 - Recent is ordered newest first and keeps at most 16 rows. Home shows the
-  first 8; the rest sit behind a ghost "Show N more" button (`aria-expanded`),
-  which turns into "Show fewer" (taken from PR #216's comparison). A recent with no `openedAt`
+  first 5; the rest sit behind a ghost "Show all N" button (`aria-expanded`),
+  which turns into "Show fewer". A recent with no `openedAt`
   sorts after every timed entry, in recents order.
 
 Row targets: Draft → the editor (`/knowledge/new` or `…/:documentId/edit`);
@@ -207,8 +207,8 @@ the only colour Home adds to the neutral ramp.
   Discussions always, before Favorites, with "Open Inbox", its empty copy, and
   unread comments (at most five) in place of it; Drafts only with
   drafts, above Recent, with its count in the accent; Recent and Favorites
-  regions and their empty copy; eight Recent rows shown with "Show N more" for
-  the rest, and no button at eight or fewer.
+  regions and their empty copy; five Recent rows shown with "Show all N" for
+  the rest, and no button at five or fewer.
 - E2E: `personal-profile`, `linear-remediation` and `folder-sync-reading-flow`
   read the `Recent` region; `personal-workspace` finds the new-note draft in
   `Drafts`; no `Updates` region.

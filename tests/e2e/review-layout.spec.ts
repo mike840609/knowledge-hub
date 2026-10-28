@@ -437,7 +437,7 @@ test("saved-share actions coexist with comments on mobile without overflow", asy
   }
 });
 
-test("the shared page keeps one left edge: its bar, its byline, its article and its footer", async ({ page, request }) => {
+test("the shared page keeps one left edge: its bar, its byline and its article", async ({ page, request }) => {
   const doc = await createReviewDocument(request, "# A shared title\n\nA paragraph of the article.\n");
   const origin = phase3Origin("viewer");
   // Where each part's text starts, not where its box does: padding is what went wrong.
@@ -448,11 +448,11 @@ test("the shared page keeps one left edge: its bar, its byline, its article and 
         range.selectNodeContents(document.querySelector(selector)!);
         return Math.round(range.getClientRects()[0].left);
       };
-      return { bar: textLeft(".kh-share-page > div:first-child span"), byline: textLeft(".kh-share-page .kh-byline > span > span"), article: textLeft("[data-review-document] p"), footer: textLeft(".kh-share-page footer p") };
+      return { bar: textLeft(".kh-share-page > div:first-child span"), byline: textLeft(".kh-share-page .kh-byline > span > span"), article: textLeft("[data-review-document] p") };
     });
   const aligned = async () => {
-    const { bar, byline, article, footer } = await edges();
-    expect({ byline, article, footer }).toEqual({ byline: bar, article: bar, footer: bar });
+    const { bar, byline, article } = await edges();
+    expect({ byline, article }).toEqual({ byline: bar, article: bar });
   };
 
   for (const width of [1440, 390]) {

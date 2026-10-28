@@ -256,12 +256,11 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
           {lists.drafts.length ? <Section title="Drafts" count={lists.drafts.length}>
             <ul onKeyDown={navigateListRows} className="space-y-0.5">{lists.drafts.map(draftRow)}</ul>
           </Section> : null}
-          <Section title="Recent">
+          <Section title="Recent" action={hiddenRecent > 0 ? <button type="button" aria-expanded={showAllRecent} onClick={() => setShowAllRecent(!showAllRecent)} className="kh-focus-ring rounded-md text-caption text-kh-link">
+            {showAllRecent ? "Show fewer" : `Show all ${lists.recent.length}`}
+          </button> : undefined}>
             {lists.recent.length ? <ul onKeyDown={navigateListRows} className="space-y-0.5">{recentShown.map(recentRow)}</ul>
               : <EmptyLine>Documents you edit or open will appear here.{activeDocumentCount === 0 && dismissed ? <ReopenGuidanceMenuItem workspaceId={workspaceId} surface="empty" /> : null}</EmptyLine>}
-            {hiddenRecent > 0 ? <Button variant="ghost" size="sm" className="mx-3 mt-1 text-kh-text-muted" aria-expanded={showAllRecent} onClick={() => setShowAllRecent(!showAllRecent)}>
-              {showAllRecent ? "Show fewer" : `Show ${hiddenRecent} more`}
-            </Button> : null}
           </Section>
         </div>
         <div className="min-w-0 space-y-6">

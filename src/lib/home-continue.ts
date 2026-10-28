@@ -17,9 +17,9 @@ export function documentsForHome(
 export type DraftItem = { id: string; at: string; draft: ContinueDraft; doc?: ContinueDoc };
 export type RecentItem = { id: string; label: "Edited" | "Opened"; at?: string; doc: ContinueDoc };
 
-/** Recent keeps this many rows; Home shows the first `RECENT_SHOWN` and the rest behind "Show more". */
+/** Recent keeps this many rows; Home shows the first `RECENT_SHOWN` and the rest behind "Show all". */
 export const RECENT_LIMIT = 16;
-export const RECENT_SHOWN = 8;
+export const RECENT_SHOWN = 5;
 
 /**
  * Home's two work lists. Drafts are unfinished work and are listed whole, newest first, so an old

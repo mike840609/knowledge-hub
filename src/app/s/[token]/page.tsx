@@ -74,13 +74,6 @@ export default async function SharedDocumentPage({ params }: SharedPageProps) {
         <MarkdownRenderer markdown={shared.markdown} afterTitle={contentOwnsTitle ? byline : undefined} />
       </article>
       </SharedReviewPanel>
-      <footer className="kh-reading-column pb-10 pt-4">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-kh-border pt-5">
-          <div><p className="text-body font-medium text-kh-text">Keep useful knowledge within reach.</p><p className="mt-1 text-body-sm text-kh-text-muted">Organize documents and search your workspace’s knowledge in Knowledge Hub.</p></div>
-          <a href={platformEntry} className={buttonClasses({ variant: "primary" })}>Get started</a>
-        </div>
-        <p className="mt-3 text-caption text-kh-text-muted">Continue with your company account. Workspace access is managed separately from this share link.</p>
-      </footer>
     </main>
   );
 }
