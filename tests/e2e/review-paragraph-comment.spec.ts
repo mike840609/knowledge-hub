@@ -90,7 +90,9 @@ test.describe("touch paragraph comments", () => {
     const secondAction = button(page, "Second paragraph.");
     await expect(firstAction).toHaveCSS("opacity", "0");
     await expect(secondAction).toHaveCSS("opacity", "0");
-    await first.tap();
+    // The hidden action must not intercept a touch on the right edge of text.
+    const firstBox = await first.boundingBox();
+    await first.tap({ position: { x: firstBox!.width - 8, y: 8 }, timeout: 3_000 });
     await expect(firstAction).toHaveCSS("opacity", "1");
     await expect(secondAction).toHaveCSS("opacity", "0");
     await second.tap();

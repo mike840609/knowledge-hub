@@ -69,7 +69,7 @@ export function ReviewBlockComment({ readingRef, markdown, chosen, onChoose }: {
   useEffect(() => () => { if (selected.current) setReviewBlockSelected(selected.current, false); }, [markdown]);
   return <div className="kh-block-comment-controls pointer-events-none absolute inset-0" aria-label="Paragraph comments">
     {blocks.map(({ element, anchor, top, height }) => <div key={anchor.blockPath.join(".")}
-      className="kh-block-comment-zone pointer-events-auto absolute" data-hovered={hovered === element ? "" : undefined} style={{ top, height }}>
+      className="kh-block-comment-zone absolute" data-hovered={hovered === element ? "" : undefined} style={{ top, height }}>
       <button type="button" disabled={!!chosen && chosen.blockPath.join(".") !== anchor.blockPath.join(".")} aria-label={`Comment on paragraph: ${anchor.exact.slice(0, 80)}`}
         className="kh-block-comment-button kh-focus-ring flex size-6 items-center justify-center rounded-sm text-kh-text-muted hover:bg-kh-bg-selected hover:text-kh-selected-text"
         onPointerDown={event => event.preventDefault()}
