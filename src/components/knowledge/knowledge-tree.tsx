@@ -255,7 +255,6 @@ export function KnowledgeTree({
     [filtering, collapsedIds],
   );
 
-
   // Reveal only the hidden portion of the selected row, without moving the
   // document pane or recentering a row that is already visible.
   useLayoutEffect(() => {
