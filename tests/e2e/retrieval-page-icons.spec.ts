@@ -31,7 +31,7 @@ test("a page icon follows the document to Home, the palette, the explorer and se
 
   // Home: the Recent row is the whole row, icon included.
   await page.goto(`/w/${workspaceId}/home`);
-  const homeRow = page.locator(`a[href="${note.href}"]`).first();
+  const homeRow = page.locator('section[aria-label="Recent"]').locator(`a[href="${note.href}"]`).first();
   await expect(homeRow).toBeVisible(ROUND_TRIP);
   expect(await homeRow.textContent()).toContain("📌");
 
