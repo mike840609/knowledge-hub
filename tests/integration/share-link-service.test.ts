@@ -209,6 +209,14 @@ describe("DocumentShareService.readShared (share-link spec §5.2, §5.3, §6.1)"
     });
   });
 
+  it("carries the document's page icon to the shared page", async () => {
+    const { caller, documentId, owner } = await mySpaceDocument();
+    await new MariaDbUnitOfWork(pool).run((repositories) => repositories.documents.updatePageIcon(documentId, "📌", owner.id));
+    const shares = service();
+    const link = await shares.create(caller, { documentId });
+    await expect(shares.readShared(tokenOf(link.path))).resolves.toMatchObject({ pageIcon: "📌" });
+  });
+
   it("follows the owner's edits (A2)", async () => {
     const { caller, documentId, revisionId } = await mySpaceDocument();
     const shares = service();

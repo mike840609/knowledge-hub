@@ -7,7 +7,7 @@ const CALLER = callerFromIdentity({ id: "0199f400-0000-7000-8000-0000000012a1", 
 const WORKSPACE_ID = "0199f400-0000-7000-8000-0000000012a2";
 const SOURCE_ID = "0199f400-0000-7000-8000-0000000012a3";
 
-function summary(documentId: string): DocumentSummary {
+function summary(documentId: string, pageIcon: string | null = null): DocumentSummary {
   return {
     documentId,
     sourceId: SOURCE_ID,
@@ -16,6 +16,7 @@ function summary(documentId: string): DocumentSummary {
     ownership: "HUB_MANAGED",
     status: "ACTIVE",
     sourceStatus: "ACTIVE",
+    pageIcon,
   };
 }
 
@@ -24,7 +25,7 @@ function summary(documentId: string): DocumentSummary {
  * supplied. The fake queries service records both calls so the test can pin that
  * only one batch is made and the source list is still read for names.
  */
-function fakeServices(summaries: DocumentSummary[] = [summary("b"), summary("a")]) {
+function fakeServices(summaries: DocumentSummary[] = [summary("b"), summary("a", "📌")]) {
   const listSources = vi.fn(async () => [{ id: SOURCE_ID, name: "Source" }]);
   const listDocumentSummariesByIds = vi.fn(async () => summaries);
   const services = { queries: { listSources, listDocumentSummariesByIds } };
@@ -39,8 +40,8 @@ describe("recent document hits", () => {
 
     expect(hits.map((hit) => hit.documentId)).toEqual(["a", "b"]);
     expect(hits).toEqual([
-      { documentId: "a", sourceId: SOURCE_ID, title: "Title a", sourceName: "Source" },
-      { documentId: "b", sourceId: SOURCE_ID, title: "Title b", sourceName: "Source" },
+      { documentId: "a", sourceId: SOURCE_ID, title: "Title a", sourceName: "Source", pageIcon: "📌" },
+      { documentId: "b", sourceId: SOURCE_ID, title: "Title b", sourceName: "Source", pageIcon: null },
     ]);
     expect(listDocumentSummariesByIds).toHaveBeenCalledTimes(1);
     expect(listDocumentSummariesByIds).toHaveBeenCalledWith(CALLER, WORKSPACE_ID, ["a", "missing", "b"]);

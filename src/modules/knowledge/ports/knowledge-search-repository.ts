@@ -4,6 +4,7 @@ export type KnowledgeSearchRow = {
   sourceId: string;
   workspaceId: string;
   title: string;
+  pageIcon: string | null;
   sourceName: string;
   sourcePath?:string|null;
   workspaceName: string;

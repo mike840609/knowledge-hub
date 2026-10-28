@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FAVORITES_SHOWN, documentIdInPath, favoritesInPlace, parseDocumentShortcuts, recentDocumentIds, rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
+import { FAVORITES_SHOWN, documentIdInPath, favoritesInPlace, parseDocumentShortcuts, recentDocumentIds, recentInPlace, rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
 
 describe("document shortcuts", () => {
   it("keeps recent documents unique and newest first", () => {
@@ -61,6 +61,20 @@ describe("favoritesInPlace", () => {
     const given = keys(6);
     favoritesInPlace(given);
     expect(given).toEqual(keys(6));
+  });
+});
+
+describe("recentInPlace", () => {
+  const keys = (count: number) => Array.from({ length: count }, (_, index) => `source:${index + 1}`);
+
+  it("lists four in place", () => {
+    expect(recentInPlace([])).toEqual({ inPlace: [], showAll: null });
+    expect(recentInPlace(keys(4))).toEqual({ inPlace: keys(4), showAll: null });
+  });
+
+  it("puts the rest behind Show all, counted in all", () => {
+    expect(recentInPlace(keys(5))).toEqual({ inPlace: keys(4), showAll: 5 });
+    expect(recentInPlace(keys(8))).toEqual({ inPlace: keys(4), showAll: 8 });
   });
 });
 

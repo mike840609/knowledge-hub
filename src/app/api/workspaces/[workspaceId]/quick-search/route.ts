@@ -17,6 +17,7 @@ export async function GET(request: Request, context: { params: Promise<{ workspa
       documentId: hit.documentId,
       sourceId: hit.sourceId,
       title: hit.title,
+      pageIcon: hit.pageIcon,
       sourceName: hit.sourceName,
       snippet: hit.snippet,
       snippetClipped: hit.snippetClipped,

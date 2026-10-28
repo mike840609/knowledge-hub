@@ -1,7 +1,7 @@
 "use client";
 
 import { Dialog } from "@base-ui-components/react/dialog";
-import { Search, X } from "lucide-react";
+import { FileText, Search, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
@@ -35,6 +35,7 @@ type QuickHit = {
   sourceName: string;
   snippet: string;
   snippetClipped?: { start: boolean; end: boolean };
+  pageIcon?: string | null;
 };
 
 type QuickResponse = { hits: QuickHit[]; tooLong: boolean; timedOut: boolean };
@@ -270,8 +271,13 @@ export function QuickSearch({ workspaceId }: { workspaceId: string }) {
   // search, the line that matched).
   const documentRow = (hit: QuickHit, index: number) => (
     <button type="button" onClick={() => choose({ kind: "hit", hit })} onMouseEnter={() => setActiveIndex(index)} className={`w-full rounded-md px-3 py-2 text-left kh-focus-ring ${index === activeIndex ? "bg-kh-bg-selected" : "hover:bg-kh-bg-hover"}`}>
-      <span className={`block truncate text-body font-medium ${index === activeIndex ? "text-kh-selected-text" : "text-kh-text"}`}><HighlightedSearchText text={hit.title} terms={terms} /></span>
-      <span className="block truncate text-caption text-kh-text-muted">{hit.sourceName}{hit.snippet ? <> · <HighlightedSearchText text={plainSearchSnippet(hit.snippet, hit.snippetClipped)} terms={terms} /></> : null}</span>
+      <span className="flex min-w-0 items-center gap-2">
+        {hit.pageIcon ? <span className="shrink-0 text-body leading-none" aria-hidden="true">{hit.pageIcon}</span> : <FileText size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />}
+        <span className="min-w-0 flex-1">
+          <span className={`block truncate text-body font-medium ${index === activeIndex ? "text-kh-selected-text" : "text-kh-text"}`}><HighlightedSearchText text={hit.title} terms={terms} /></span>
+          <span className="block truncate text-caption text-kh-text-muted">{hit.sourceName}{hit.snippet ? <> · <HighlightedSearchText text={plainSearchSnippet(hit.snippet, hit.snippetClipped)} terms={terms} /></> : null}</span>
+        </span>
+      </span>
     </button>
   );
 

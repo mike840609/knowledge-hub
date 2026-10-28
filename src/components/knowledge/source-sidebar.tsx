@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronRight, Clock3, FileText, LockKeyhole, MoreHorizontal, ChevronsLeft, Plus, ListFilter, Star } from "lucide-react";
 import { ActionIcon } from "@/components/actions/action-icon";
-import { favoritesInPlace, rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
+import { favoritesInPlace, recentInPlace, rememberDocument, toggleFavoriteDocument } from "@/lib/document-shortcuts";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import { useWorkspaceAuthorization } from "@/components/shell/use-workspace-authorization";
 import { MenuCheckboxItem, MenuContent, MenuItem, MenuRoot, MenuTrigger } from "@/components/ui/menu";
@@ -108,7 +108,8 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
   const favoriteKeys = shortcuts.favorites.filter((key) => documents.has(key));
   // The section is the same height however many are starred: the newest few, and a row for the rest.
   const { inPlace: favoritesInPlaceKeys, showAll: favoritesTotal } = favoritesInPlace(favoriteKeys);
-  const recentKeys = shortcuts.recent.filter((key) => documents.has(key) && !shortcuts.favorites.includes(key) && key !== `${source?.id}:${resolvedDocumentId}`).slice(0, 4);
+  const recentCandidates = shortcuts.recent.filter((key) => documents.has(key) && !shortcuts.favorites.includes(key) && key !== `${source?.id}:${resolvedDocumentId}`);
+  const { inPlace: recentKeys, showAll: recentTotal } = recentInPlace(recentCandidates);
   const favoriteDocumentIds = new Set(shortcuts.favorites.map((key) => documents.get(key)?.documentId).filter((id): id is string => Boolean(id)));
 
   const recordedOpen = useRef<string | null>(null);
@@ -173,6 +174,38 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
       </Tooltip>
     </li>;
   }
+  function shortcutMenuItem(key: string) {
+    const document = documents.get(key);
+    if (!document) return null;
+    const selected = document.documentId === resolvedDocumentId;
+    return (
+      <MenuItem
+        key={key}
+        render={<Link href={`/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}${showArchived ? "?includeArchived=true" : ""}`} prefetch={selected ? false : undefined} aria-current={selected ? "page" : undefined} aria-describedby={document.ownership === "SOURCE_MANAGED" ? readOnlyDescriptionId : undefined} />}
+        className={selected ? "bg-kh-bg-selected font-medium text-kh-selected-text" : ""}
+      >
+        {document.pageIcon ? <span className="shrink-0 text-body leading-none" aria-hidden="true">{document.pageIcon}</span> : <FileText size={14} className="shrink-0" aria-hidden="true" />}
+        <span className="min-w-0 flex-1 truncate" title={document.label}>{document.label}</span>
+        <span className="max-w-[40%] shrink-0 truncate text-caption text-kh-text-muted">{document.sourceName}</span>
+        {document.ownership === "SOURCE_MANAGED" ? <LockKeyhole size={14} data-read-only-cue="" className="shrink-0 text-kh-text-muted" aria-hidden="true" /> : null}
+      </MenuItem>
+    );
+  }
+
+  function shortcutMenu(keys: readonly string[], total: number) {
+    return (
+      <MenuRoot>
+        <MenuTrigger className="kh-control kh-interactive-row kh-focus-ring flex kh-rail-row w-full items-center gap-2 px-2 text-left text-caption font-medium text-kh-text-muted">
+          <MoreHorizontal size={14} className="shrink-0" aria-hidden="true" />
+          <span>Show all {total}</span>
+        </MenuTrigger>
+        <MenuContent side="right" align="start" className="max-h-[min(24rem,60vh)] w-96 max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain">
+          {keys.map(shortcutMenuItem)}
+        </MenuContent>
+      </MenuRoot>
+    );
+  }
+
   const matches = visibleCollections.filter(({ source: candidate, tree }) => !needle || (ensureTree && treeStates?.[candidate.id]?.status !== "loaded") || candidate.name.toLowerCase().includes(needle) || tree.some((item) => item.label.toLowerCase().includes(needle)));
   const hasNotes = visibleCollections.some(({ source: candidate }) => candidate.sourceType === "HUB" && candidate.name === "Notes" && candidate.status === "ACTIVE");
   const canCreate = access.actions.canWrite && confirmed;
@@ -263,33 +296,7 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
           </button></h3>
           {favoritesOpen ? <ul className="mt-0.5 space-y-0.5">
             {favoritesInPlaceKeys.map((key) => shortcutRow(key, true))}
-            {favoritesTotal !== null ? <li>
-              <MenuRoot>
-                <MenuTrigger className="kh-control kh-interactive-row kh-focus-ring flex kh-rail-row w-full items-center gap-2 px-2 text-left text-caption font-medium text-kh-text-muted">
-                  <MoreHorizontal size={14} className="shrink-0" aria-hidden="true" />
-                  <span>Show all {favoritesTotal}</span>
-                </MenuTrigger>
-                <MenuContent side="right" align="start" className="max-h-[min(24rem,60vh)] w-96 max-w-[calc(100vw-2rem)] overflow-y-auto overscroll-contain">
-                  {favoriteKeys.map((key) => {
-                    const document = documents.get(key);
-                    if (!document) return null;
-                    const selected = document.documentId === resolvedDocumentId;
-                    return (
-                      <MenuItem
-                        key={key}
-                        render={<Link href={`/w/${workspaceId}/knowledge/${document.sourceId}/${document.documentId}${showArchived ? "?includeArchived=true" : ""}`} prefetch={selected ? false : undefined} aria-current={selected ? "page" : undefined} aria-describedby={document.ownership === "SOURCE_MANAGED" ? readOnlyDescriptionId : undefined} />}
-                        className={selected ? "bg-kh-bg-selected font-medium text-kh-selected-text" : ""}
-                      >
-                        {document.pageIcon ? <span className="shrink-0 text-body leading-none" aria-hidden="true">{document.pageIcon}</span> : <FileText size={14} className="shrink-0" aria-hidden="true" />}
-                        <span className="min-w-0 flex-1 truncate" title={document.label}>{document.label}</span>
-                        <span className="max-w-[40%] shrink-0 truncate text-caption text-kh-text-muted">{document.sourceName}</span>
-                        {document.ownership === "SOURCE_MANAGED" ? <LockKeyhole size={14} data-read-only-cue="" className="shrink-0 text-kh-text-muted" aria-hidden="true" /> : null}
-                      </MenuItem>
-                    );
-                  })}
-                </MenuContent>
-              </MenuRoot>
-            </li> : null}
+            {favoritesTotal !== null ? <li>{shortcutMenu(favoriteKeys, favoritesTotal)}</li> : null}
           </ul> : null}
         </section> : null}
         {!needle && recentKeys.length > 0 ? <section aria-label="Recent documents" className="pb-1">
@@ -297,7 +304,10 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
             {recentOpen ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
             <span>Recent</span>
           </button></h3>
-          {recentOpen ? <ul className="mt-0.5 space-y-0.5">{recentKeys.map((key) => shortcutRow(key, false))}</ul> : null}
+          {recentOpen ? <ul className="mt-0.5 space-y-0.5">
+            {recentKeys.map((key) => shortcutRow(key, false))}
+            {recentTotal !== null ? <li>{shortcutMenu(recentCandidates, recentTotal)}</li> : null}
+          </ul> : null}
         </section> : null}
         {getStarted ? <SidebarGetStarted actions={getStarted} compact={pathname === `/w/${workspaceId}/knowledge`} /> : null}
         {!getStarted && !hasNotes && canCreate && (!needle || "notes".includes(needle)) ? (

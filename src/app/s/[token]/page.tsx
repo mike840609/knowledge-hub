@@ -47,6 +47,7 @@ export default async function SharedDocumentPage({ params }: SharedPageProps) {
   // Title, then who shared it, then the article — whether the title is this page's or the document's own `#` heading.
   const contentOwnsTitle = markdownOpensWithHeading(shared.markdown);
   const soon = expiresSoon(shared.expiresAt, new Date());
+  const pageIcon = shared.pageIcon ? <div data-shared-page-icon className="mb-2 select-none text-display leading-8" aria-hidden="true">{shared.pageIcon}</div> : null;
   // The dots between these are the stylesheet's (`.kh-byline`), so a line never ends on one. A div: the prose spaces every `p`.
   const byline = (
     <div className="kh-byline mt-1.5 text-caption text-kh-text-muted">
@@ -67,7 +68,8 @@ export default async function SharedDocumentPage({ params }: SharedPageProps) {
       {/* Outline: a rail off the column's left edge when there is room, else a disclosure above the title (share-page-outline spec §2). */}
       <div className="kh-share-outline"><SharedOutline entries={outline} placement="disclosure" /></div>
       {outline.length > 0 ? <div className="kh-share-outline-rail kh-reading-column sticky top-[4.5rem] z-10 h-0"><div className="absolute right-full top-0 w-52"><SharedOutline entries={outline} placement="rail" /></div></div> : null}
-      {contentOwnsTitle ? null : <header className="kh-reading-column pt-6"><h1 className="text-page-title font-semibold tracking-tight text-kh-text">{shared.title}</h1>{byline}</header>}
+      {contentOwnsTitle && pageIcon ? <div className="kh-reading-column pt-6">{pageIcon}</div> : null}
+      {contentOwnsTitle ? null : <header className="kh-reading-column pt-6">{pageIcon}<h1 className="text-page-title font-semibold tracking-tight text-kh-text">{shared.title}</h1>{byline}</header>}
       <article data-review-document className={`kh-reading-column min-w-0 pb-6 ${contentOwnsTitle ? "pt-6" : "pt-3"} [&>div>:first-child]:mt-0`}>
         <MarkdownRenderer markdown={shared.markdown} afterTitle={contentOwnsTitle ? byline : undefined} />
       </article>

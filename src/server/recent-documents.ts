@@ -1,7 +1,7 @@
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import type { applicationServices } from "./composition";
 
-export type RecentDocumentHit = { documentId: string; sourceId: string; title: string; sourceName: string };
+export type RecentDocumentHit = { documentId: string; sourceId: string; title: string; sourceName: string; pageIcon: string | null };
 
 /**
  * The documents a reader says they opened lately, as the palette lists them when nothing is typed: what
@@ -29,7 +29,7 @@ export async function recentDocumentHits(
   for (const documentId of documentIds) {
     const summary = readable.get(documentId);
     if (!summary) continue;
-    hits.push({ documentId: summary.documentId, sourceId: summary.sourceId, title: summary.title, sourceName: sourceNames.get(summary.sourceId) ?? "" });
+    hits.push({ documentId: summary.documentId, sourceId: summary.sourceId, title: summary.title, sourceName: sourceNames.get(summary.sourceId) ?? "", pageIcon: summary.pageIcon ?? null });
   }
   return hits;
 }
