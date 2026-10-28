@@ -27,7 +27,7 @@ it("failed removal keeps the row and successful retry removes it",async()=>{
  await act(async()=>remove().click());expect(host.textContent).toContain("Could not remove");expect(host.textContent).toContain("A useful guide");failed=false;await act(async()=>remove().click());expect(host.textContent).not.toContain("A useful guide");expect(host.textContent).toContain("No saved shares yet");
 });
 it("explains empty and filtered empty states",async()=>{
- await mount({...model,items:[]});expect(host.textContent).toContain("Save share");await mount({...model,items:[],query:{q:"missing",status:"all",page:1}});expect(host.textContent).toContain("No saved shares match");expect(host.textContent).toContain("Clear filters");
+ await mount({...model,items:[]});expect(host.textContent).toContain("choose Save while signed in");await mount({...model,items:[],query:{q:"missing",status:"all",page:1}});expect(host.textContent).toContain("No saved shares match");expect(host.textContent).toContain("Clear filters");
 });
 it.each(["en","zh-TW"] as const)("explains saved shares versus favorites in %s guide",locale=>{
  const text=JSON.stringify(userGuideContent(locale));expect(text).toContain("Saved shares");expect(text).toContain("Save share");expect(text).toContain(locale==="en"?"favorites":"最愛");

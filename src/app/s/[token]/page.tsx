@@ -61,10 +61,10 @@ export default async function SharedDocumentPage({ params }: SharedPageProps) {
   );
   return (
     <main className="kh-share-page min-h-screen bg-kh-bg">
-      {/* One pinned bar, then the title: the brand, Comments, Save and Open share a row. On a phone Save and Open keep their names for assistive technology and show only their icons. */}
+      {/* One pinned bar, then the title: the brand, Comments, Save and Open share a row. Save and Open show one word each (their full names stay for assistive technology), and on a phone only their icons. */}
       <SharedReviewPanel token={token} revisionId={shared.revisionId} markdown={shared.markdown} signInHref={signInHref}
         brand={<span className="shrink-0 text-body font-semibold text-kh-text">Knowledge Hub</span>}
-        actions={<><SaveShareButton token={token} /><a href={platformEntry} className={buttonClasses({ variant: "ghost" })}><ExternalLink className="size-4 sm:hidden" aria-hidden="true" /><span className="max-sm:sr-only">Open in Knowledge Hub</span></a></>}>
+        actions={<><SaveShareButton token={token} /><span aria-hidden="true" className="mx-1 h-4 w-px bg-kh-border max-sm:hidden" /><a href={platformEntry} className={buttonClasses({ variant: "ghost" })}><ExternalLink className="size-4" aria-hidden="true" /><span className="max-sm:sr-only">Open<span className="sr-only"> in Knowledge Hub</span></span></a></>}>
       {/* Outline: a rail off the column's left edge when there is room, else a disclosure above the title (share-page-outline spec §2). */}
       <div className="kh-share-outline"><SharedOutline entries={outline} placement="disclosure" /></div>
       {outline.length > 0 ? <div className="kh-share-outline-rail kh-reading-column sticky top-[4.5rem] z-10 h-0"><div className="kh-outline-hang absolute right-full top-0 w-52"><SharedOutline entries={outline} placement="rail" /></div></div> : null}
