@@ -121,16 +121,25 @@ export function MenuRadioItem({
   className = "",
   children,
   closeOnClick = true,
+  compact = false,
   ...props
-}: ComponentProps<typeof BaseMenu.RadioItem> & { children: ReactNode }) {
+}: ComponentProps<typeof BaseMenu.RadioItem> & { children: ReactNode; compact?: boolean }) {
+  // `compact` is for a row that is a control in a grid, not a menu line: the
+  // check slot would spend more width than the label. Selection is the row's
+  // fill and weight instead, and `aria-checked` still carries the state.
+  const row = compact
+    ? "kh-control flex min-h-8 w-full min-w-0 cursor-default select-none items-center justify-center gap-1 rounded-md px-1.5 text-caption text-kh-text outline-none aria-checked:bg-kh-bg-selected aria-checked:font-medium aria-checked:text-kh-selected-text data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[highlighted]:bg-kh-bg-hover"
+    : menuRowClasses;
   return (
-    <BaseMenu.RadioItem className={`${menuRowClasses} ${className}`} closeOnClick={closeOnClick} {...props}>
-      <span className="flex h-4 w-4 shrink-0 items-center justify-center">
-        <BaseMenu.RadioItemIndicator>
-          <Check className="h-4 w-4 text-kh-selected-text" aria-hidden="true" />
-        </BaseMenu.RadioItemIndicator>
-      </span>
-      <span className="min-w-0 flex-1 truncate">{children}</span>
+    <BaseMenu.RadioItem className={`${row} ${className}`} closeOnClick={closeOnClick} {...props}>
+      {compact ? null : (
+        <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+          <BaseMenu.RadioItemIndicator>
+            <Check className="h-4 w-4 text-kh-selected-text" aria-hidden="true" />
+          </BaseMenu.RadioItemIndicator>
+        </span>
+      )}
+      <span className={compact ? "flex min-w-0 items-center gap-1" : "min-w-0 flex-1 truncate"}>{children}</span>
     </BaseMenu.RadioItem>
   );
 }

@@ -42,6 +42,15 @@ test("the theme is chosen from the user menu and persists", async ({ page }) => 
   expect(await theme()).toBe("light");
 
   await page.getByLabel(/^Account: /).click();
+  // Theme is one compact row now, not a vertical list; the three choices share a line.
+  const [lightBox, darkBox, systemBox] = await Promise.all([
+    page.getByRole("menuitemradio", { name: "Light" }).boundingBox(),
+    page.getByRole("menuitemradio", { name: "Dark" }).boundingBox(),
+    page.getByRole("menuitemradio", { name: "System" }).boundingBox(),
+  ]);
+  expect(lightBox && darkBox && systemBox).toBeTruthy();
+  expect(lightBox!.y).toBe(darkBox!.y);
+  expect(darkBox!.y).toBe(systemBox!.y);
   await page.getByRole("menuitemradio", { name: "Dark" }).click();
   expect(await theme()).toBe("dark");
   expect(await page.evaluate(() => localStorage.getItem("kh:theme"))).toBe("dark");
@@ -79,6 +88,12 @@ test("the rails' density is chosen from the user menu, sizes the rows, and persi
   expect(await fontSize()).toBe("13px");
 
   await page.getByLabel(/^Account: /).click();
+  const [compactBox, comfortableBox] = await Promise.all([
+    page.getByRole("menuitemradio", { name: "Compact" }).boundingBox(),
+    page.getByRole("menuitemradio", { name: "Comfortable" }).boundingBox(),
+  ]);
+  expect(compactBox && comfortableBox).toBeTruthy();
+  expect(compactBox!.y).toBe(comfortableBox!.y);
   await page.getByRole("menuitemradio", { name: "Comfortable" }).click();
   expect(await density()).toBe("comfortable");
   expect(await rowHeight()).toBe(32);
