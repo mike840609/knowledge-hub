@@ -70,8 +70,8 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
   const readOnlyDescriptionId = useId();
   const [expanded, setExpanded, expandedReady] = usePersistedJson<Record<string, boolean>>(`kh:tree-expanded:${workspaceId}`, {}, isBooleanRecord);
   const { shortcuts, update: updateShortcuts, ready: shortcutsReady } = useDocumentShortcuts(workspaceId);
-  const [favoritesOpen, setFavoritesOpen, favoritesReady] = usePersistedJson(`kh:sidebar-favorites:${workspaceId}`, false, isBoolean);
-  const [recentOpen, setRecentOpen, recentReady] = usePersistedJson(`kh:sidebar-recent:${workspaceId}`, false, isBoolean);
+  const [favoritesOpen, setFavoritesOpen, favoritesReady] = usePersistedJson(`kh:sidebar-favorites:${workspaceId}`, true, isBoolean);
+  const [recentOpen, setRecentOpen, recentReady] = usePersistedJson(`kh:sidebar-recent:${workspaceId}`, true, isBoolean);
   const sidebarReady = queryReady && filterReady && expandedReady && shortcutsReady && favoritesReady && recentReady;
   const showArchived = searchParams.get("includeArchived") === "true";
   const resolvedDocumentId = selectedDocumentId ?? (typeof routeParams?.documentId === "string" ? routeParams.documentId : undefined);
