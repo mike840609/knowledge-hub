@@ -13,6 +13,7 @@ import {
   wrapInOrderedListCommand,
 } from "@milkdown/kit/preset/commonmark";
 import { TextSelection } from "@milkdown/kit/prose/state";
+import type { Mark } from "@milkdown/kit/prose/model";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { buttonClasses } from "@/components/ui/button";
 import { fieldClasses } from "@/components/ui/field";
@@ -54,6 +55,48 @@ function withScheme(value: string): string {
   return `https://${value}`;
 }
 
+type SelectedLink =
+  | { kind: "none" }
+  | { kind: "multiple" }
+  | { kind: "one"; from: number; to: number; mark: Mark };
+
+/** Find one complete link even when the selection covers only part of it. */
+function selectedLink(view: EditorView): SelectedLink {
+  const type = view.state.schema.marks.link;
+  const { from, to, empty } = view.state.selection;
+  if (!type || empty) return { kind: "none" };
+  const runs: { from: number; to: number; mark: Mark }[] = [];
+  view.state.doc.nodesBetween(from, to, (node, pos) => {
+    if (!node.isInline) return;
+    const mark = type.isInSet(node.marks);
+    if (!mark) return;
+    const last = runs.at(-1);
+    if (last && last.to === pos && last.mark.eq(mark)) last.to = pos + node.nodeSize;
+    else runs.push({ from: pos, to: pos + node.nodeSize, mark });
+  });
+  if (runs.length === 0) return { kind: "none" };
+  if (runs.length > 1) return { kind: "multiple" };
+
+  const run = runs[0];
+  const $start = view.state.doc.resolve(run.from);
+  const parentStart = $start.start();
+  const siblings: { from: number; to: number; matches: boolean }[] = [];
+  $start.parent.forEach((node, offset) => {
+    const mark = type.isInSet(node.marks);
+    siblings.push({ from: parentStart + offset, to: parentStart + offset + node.nodeSize, matches: Boolean(mark?.eq(run.mark)) });
+  });
+  let first = siblings.findIndex((node) => node.from <= run.from && node.to > run.from);
+  let last = first;
+  if (first < 0) return { kind: "multiple" };
+  while (first > 0 && siblings[first - 1].matches) first--;
+  while (last + 1 < siblings.length && siblings[last + 1].matches) last++;
+  return { kind: "one", from: siblings[first].from, to: siblings[last].to, mark: run.mark };
+}
+
+function canOpenLink(value: string): boolean {
+  return /^(?:https?:|mailto:|\/(?!\/)|#)/i.test(withScheme(value.trim()));
+}
+
 type Item = {
   label: string;
   text: string;
@@ -70,7 +113,8 @@ const items: Item[] = [
     label: "Link",
     text: "Link",
     active: (view) => markActive(view, "link"),
-    run: (ctx, view, openLink) => (markActive(view, "link") ? ctx.get(commandsCtx).call(toggleLinkCommand.key) : openLink()),
+    disabled: (view) => selectedLink(view).kind === "multiple",
+    run: (_ctx, _view, openLink) => openLink(),
   },
   ...[1, 2].map<Item>((level) => ({
     label: `Heading ${level}`,
@@ -140,7 +184,7 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
           function setLinkMode(on: boolean) {
             linkMode = on;
             buttons.className = on ? "hidden" : "flex items-center gap-0.5";
-            linkRow.className = on ? "flex items-center gap-1" : "hidden";
+            linkRow.className = on ? "flex flex-col gap-2" : "hidden";
           }
           setLinkMode(false);
           element.append(buttons, linkRow);
@@ -196,7 +240,34 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
           input.placeholder = "https://";
           input.setAttribute("aria-label", "Link address");
           input.className = fieldClasses({ size: "sm", className: "w-56" });
-          linkRow.appendChild(input);
+          const linkLabel = document.createElement("label");
+          linkLabel.className = "flex flex-col gap-1 text-caption text-kh-text-muted";
+          linkLabel.append("Link address", input);
+          linkRow.appendChild(linkLabel);
+          const linkActions = document.createElement("div");
+          linkActions.className = "flex items-center gap-1";
+          const openButton = document.createElement("button");
+          const removeButton = document.createElement("button");
+          const saveButton = document.createElement("button");
+          for (const [button, label, text] of [
+            [openButton, "Open link", "Open"],
+            [removeButton, "Remove link", "Remove"],
+            [saveButton, "Save link", "Save"],
+          ] as const) {
+            button.type = "button";
+            button.setAttribute("aria-label", label);
+            button.textContent = text;
+            button.className = buttonClasses({ variant: button === saveButton ? "primary" : "ghost", size: "sm", className: button === saveButton ? "ml-auto" : "" });
+            linkActions.appendChild(button);
+          }
+          linkRow.appendChild(linkActions);
+          let editingLink: Extract<SelectedLink, { kind: "one" }> | null = null;
+          const updateLinkActions = () => {
+            openButton.disabled = !canOpenLink(input.value);
+            removeButton.disabled = !editingLink;
+            saveButton.disabled = !input.value.trim();
+          };
+          input.addEventListener("input", updateLinkActions);
           // Pressing the toolbar's padding must not take focus (and with it the toolbar) from the editor either.
           element.addEventListener("mousedown", (event) => {
             if (event.target !== input) event.preventDefault();
@@ -205,14 +276,54 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
           function showButtons() {
             setLinkMode(false);
             input.value = "";
+            editingLink = null;
           }
           function openLink() {
+            const target = selectedLink(editorView);
+            if (target.kind === "multiple") return;
+            editingLink = target.kind === "one" ? target : null;
+            input.value = editingLink ? String(editingLink.mark.attrs.href ?? "") : "";
+            updateLinkActions();
             setLinkMode(true);
             input.focus();
           }
+          function saveLink() {
+            const href = withScheme(input.value.trim());
+            if (!href) {
+              if (!editingLink) {
+                showButtons();
+                editorView.focus();
+              }
+              return;
+            }
+            const target = editingLink;
+            if (target) {
+              const current = selectedLink(editorView);
+              if (current.kind !== "one" || current.from !== target.from || current.to !== target.to || !current.mark.eq(target.mark)) return;
+              const type = editorView.state.schema.marks.link;
+              editorView.dispatch(editorView.state.tr.removeMark(target.from, target.to, type).addMark(target.from, target.to, type.create({ ...target.mark.attrs, href })));
+            } else {
+              ctx.get(commandsCtx).call(toggleLinkCommand.key, { href });
+            }
+            showButtons();
+            editorView.focus();
+          }
+          openButton.addEventListener("click", () => {
+            const href = withScheme(input.value.trim());
+            if (canOpenLink(href)) window.open(href, "_blank", "noopener,noreferrer");
+          });
+          removeButton.addEventListener("click", () => {
+            const target = editingLink;
+            const current = selectedLink(editorView);
+            if (!target || current.kind !== "one" || current.from !== target.from || current.to !== target.to || !current.mark.eq(target.mark)) return;
+            editorView.dispatch(editorView.state.tr.removeMark(target.from, target.to, editorView.state.schema.marks.link));
+            showButtons();
+            editorView.focus();
+          });
+          saveButton.addEventListener("click", saveLink);
           // Enter and Esc stop here: a bare Enter would submit the composer's form, and Esc would leave
           // the page. Every other key still bubbles, so ⌘K reaches the global search.
-          input.addEventListener("keydown", (event) => {
+          linkRow.addEventListener("keydown", (event) => {
             if (event.key !== "Enter" && event.key !== "Escape") return;
             event.stopPropagation();
             if (event.isComposing || event.keyCode === 229) return;
@@ -220,12 +331,9 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
               event.preventDefault();
               showButtons();
               editorView.focus();
-            } else if (event.key === "Enter") {
+            } else if (event.key === "Enter" && event.target === input) {
               event.preventDefault();
-              const href = withScheme(input.value.trim());
-              showButtons();
-              editorView.focus();
-              if (href) ctx.get(commandsCtx).call(toggleLinkCommand.key, { href });
+              saveLink();
             }
           });
 
@@ -273,7 +381,7 @@ export function selectionToolbar(comment?: { available: () => boolean; run: (vie
           const showOnFocus = () => provider.update(editorView);
           editorView.dom.addEventListener("blur", hideOnBlur);
           editorView.dom.addEventListener("focus", showOnFocus);
-          input.addEventListener("blur", hideOnLinkBoxBlur);
+          linkRow.addEventListener("focusout", hideOnLinkBoxBlur);
 
           return {
             update: view => {

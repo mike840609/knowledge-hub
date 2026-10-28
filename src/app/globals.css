@@ -687,12 +687,15 @@ input[type="search"]::-webkit-search-cancel-button:hover {
    article and outside it: no margin is made for it, with or without a marker. It shows for the
    paragraph under the pointer, on its own hover and focus, and always where nothing hovers. Beside
    an open rail that padding is the rail's, so there the rail's own "Add comment" is the way in. */
-.kh-block-comment-zone { inset-inline-start: 100%; width: 24px; }
-.kh-block-comment-button { opacity: 0; }
+.kh-block-comment-zone { inset-inline-start: 100%; width: 24px; pointer-events: none; }
+.kh-block-comment-button { opacity: 0; pointer-events: none; }
 .kh-block-comment-zone[data-hovered] .kh-block-comment-button,
 .kh-block-comment-zone:hover .kh-block-comment-button,
-.kh-block-comment-button:focus-visible { opacity: 1; }
-@media (hover: none) { .kh-block-comment-button { opacity: 1; } }
+.kh-block-comment-button:focus-visible { opacity: 1; pointer-events: auto; }
+@media (pointer: coarse) {
+  .kh-block-comment-zone { inset-inline-start: calc(100% - 16px); width: 40px; }
+  .kh-block-comment-button { min-width: 40px; min-height: 40px; }
+}
 .kh-review-document[data-review-inline][data-review-open] .kh-block-comment-controls { display: none; }
 .kh-comment-block-selected { background-color: var(--kh-bg-selected); border-radius: theme("borderRadius.sm"); outline: 2px solid var(--kh-bg-selected); }
 @media print { .kh-block-comment-controls { display: none; } }

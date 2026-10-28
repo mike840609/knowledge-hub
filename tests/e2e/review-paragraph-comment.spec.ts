@@ -76,3 +76,33 @@ test("a long document gets its buttons without holding the page up", async ({ pa
   // Projecting the document once per paragraph took seconds for this many; once for all does not.
   expect(Date.now() - started).toBeLessThan(5_000);
 });
+
+test.describe("touch paragraph comments", () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+
+  test("reveals only the touched paragraph's action and opens its comment drawer", async ({ page, request }) => {
+    const doc = await createReviewDocument(request, "First paragraph.\n\nSecond paragraph.\n");
+    await page.goto(doc.href);
+    await ready(page);
+    const first = page.locator("[data-review-document]").getByText("First paragraph.", { exact: true });
+    const second = page.locator("[data-review-document]").getByText("Second paragraph.", { exact: true });
+    const firstAction = button(page, "First paragraph.");
+    const secondAction = button(page, "Second paragraph.");
+    await expect(firstAction).toHaveCSS("opacity", "0");
+    await expect(secondAction).toHaveCSS("opacity", "0");
+    // The hidden action must not intercept a touch on the right edge of text.
+    const firstBox = await first.boundingBox();
+    await first.tap({ position: { x: firstBox!.width - 8, y: 8 }, timeout: 3_000 });
+    await expect(firstAction).toHaveCSS("opacity", "1");
+    await expect(secondAction).toHaveCSS("opacity", "0");
+    await second.tap();
+    await expect(firstAction).toHaveCSS("opacity", "0");
+    await expect(secondAction).toHaveCSS("opacity", "1");
+    const box = await secondAction.boundingBox();
+    expect(box!.width).toBeGreaterThanOrEqual(40);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    await secondAction.tap();
+    await expect(page.getByRole("dialog", { name: "Comments" }).getByRole("textbox", { name: "Add comment" })).toBeVisible();
+  });
+});

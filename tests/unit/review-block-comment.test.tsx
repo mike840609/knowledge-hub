@@ -72,3 +72,35 @@ test("pressing the button keeps the selection it narrows to", () => {
   expect(press.defaultPrevented).toBe(true);
   expect(selection.toString()).toBe("First");
 });
+
+test("a completed tap reveals its paragraph action without intercepting the touch or creating a comment", async () => {
+  const choose = vi.fn(() => true);
+  const [first, second] = buttons(choose);
+  act(() => { paragraphs()[0].dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "touch", pointerId: 1 })); });
+  expect(first.parentElement!.hasAttribute("data-hovered")).toBe(false);
+  const touch = new PointerEvent("pointerdown", { bubbles: true, cancelable: true, pointerType: "touch", pointerId: 1 });
+  act(() => { paragraphs()[0].dispatchEvent(touch); });
+  expect(touch.defaultPrevented).toBe(false);
+  expect(first.parentElement!.hasAttribute("data-hovered")).toBe(false);
+  act(() => { window.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "touch", pointerId: 1 })); });
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+  expect(first.parentElement!.hasAttribute("data-hovered")).toBe(true);
+  expect(second.parentElement!.hasAttribute("data-hovered")).toBe(false);
+  expect(choose).not.toHaveBeenCalled();
+
+  act(() => { paragraphs()[1].dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch", pointerId: 2 })); });
+  act(() => { window.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "touch", pointerId: 2 })); });
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+  expect(first.parentElement!.hasAttribute("data-hovered")).toBe(false);
+  expect(second.parentElement!.hasAttribute("data-hovered")).toBe(true);
+  expect(choose).not.toHaveBeenCalled();
+});
+
+test("scrolling a touch over a paragraph does not reveal its comment action", async () => {
+  const [first] = buttons(() => true);
+  act(() => { paragraphs()[0].dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch", pointerId: 1, clientY: 10 })); });
+  act(() => { window.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, pointerType: "touch", pointerId: 1, clientY: 40 })); });
+  act(() => { window.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "touch", pointerId: 1, clientY: 40 })); });
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+  expect(first.parentElement!.hasAttribute("data-hovered")).toBe(false);
+});

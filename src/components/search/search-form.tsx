@@ -76,7 +76,7 @@ export function SearchForm({
           <Link className="kh-focus-ring rounded-md text-caption text-kh-link" href={`/w/${workspaceId}/search?${new URLSearchParams({q, scope})}`}>Clear filters</Link>
         </div>
       ) : null}
-      <details open={active.length > 0} className="border-b border-kh-border pb-3">
+      <details className="border-b border-kh-border pb-3">
       <summary className="kh-focus-ring inline-flex min-h-6 w-fit cursor-pointer items-center rounded-md text-body-sm text-kh-text-secondary">Advanced filters{active.length ? ` (${active.length})` : ""}</summary>
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <Label htmlFor="search-path">Path

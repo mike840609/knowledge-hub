@@ -46,13 +46,46 @@ export function ReviewBlockComment({ readingRef, markdown, chosen, onChoose }: {
         return { ...block, top: rect.top - origin, height: Math.max(24, rect.height) };
       }));
     };
-    // The button of the paragraph under the pointer shows; it is beside the paragraph, not in it.
-    const point = (event: PointerEvent) => setHovered((event.target as Element).closest<HTMLElement>("p[data-review-path],li[data-review-para]"));
+    const paragraphAt = (event: PointerEvent) => event.target instanceof Element
+      ? event.target.closest<HTMLElement>("p[data-review-path],li[data-review-para]") : null;
+    const point = (event: PointerEvent) => {
+      if (event.pointerType !== "touch" && event.pointerType !== "pen") setHovered(paragraphAt(event));
+    };
+    let pending: { pointerId: number; x: number; y: number; element: HTMLElement | null } | null = null;
+    let revealTimer: number | undefined;
+    const touchDown = (event: PointerEvent) => {
+      if (event.pointerType !== "touch" && event.pointerType !== "pen") return;
+      window.clearTimeout(revealTimer);
+      pending = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, element: paragraphAt(event) };
+    };
+    const touchMove = (event: PointerEvent) => {
+      if (pending && event.pointerId === pending.pointerId && Math.hypot(event.clientX - pending.x, event.clientY - pending.y) > 10) pending = null;
+    };
+    const touchCancel = (event: PointerEvent) => { if (pending?.pointerId === event.pointerId) pending = null; };
+    const touchUp = (event: PointerEvent) => {
+      if (!pending || event.pointerId !== pending.pointerId) return;
+      const element = pending.element;
+      pending = null;
+      // Let the original tap and its click finish before revealing a control under it.
+      revealTimer = window.setTimeout(() => { if (element?.isConnected) setHovered(element); }, 0);
+    };
     article.addEventListener("pointerover", point);
+    article.addEventListener("pointerdown", touchDown);
+    window.addEventListener("pointermove", touchMove, true);
+    window.addEventListener("pointerup", touchUp, true);
+    window.addEventListener("pointercancel", touchCancel, true);
     const observer = new ResizeObserver(measure);
     observer.observe(article);
     measure();
-    return () => { observer.disconnect(); article.removeEventListener("pointerover", point); };
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(revealTimer);
+      article.removeEventListener("pointerover", point);
+      article.removeEventListener("pointerdown", touchDown);
+      window.removeEventListener("pointermove", touchMove, true);
+      window.removeEventListener("pointerup", touchUp, true);
+      window.removeEventListener("pointercancel", touchCancel, true);
+    };
   }, [readingRef, markdown, domVersion]);
   useEffect(() => {
     if (!chosen && selected.current) {
@@ -63,7 +96,7 @@ export function ReviewBlockComment({ readingRef, markdown, chosen, onChoose }: {
   useEffect(() => () => { if (selected.current) setReviewBlockSelected(selected.current, false); }, [markdown]);
   return <div className="kh-block-comment-controls pointer-events-none absolute inset-0" aria-label="Paragraph comments">
     {blocks.map(({ element, anchor, top, height }) => <div key={anchor.blockPath.join(".")}
-      className="kh-block-comment-zone pointer-events-auto absolute" data-hovered={hovered === element ? "" : undefined} style={{ top, height }}>
+      className="kh-block-comment-zone absolute" data-hovered={hovered === element ? "" : undefined} style={{ top, height }}>
       <button type="button" disabled={!!chosen && chosen.blockPath.join(".") !== anchor.blockPath.join(".")} aria-label={`Comment on paragraph: ${anchor.exact.slice(0, 80)}`}
         className="kh-block-comment-button kh-focus-ring flex size-6 items-center justify-center rounded-sm text-kh-text-muted hover:bg-kh-bg-selected hover:text-kh-selected-text"
         onPointerDown={event => event.preventDefault()}
