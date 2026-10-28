@@ -74,6 +74,9 @@ export default async function SharedDocumentPage({ params }: SharedPageProps) {
         <MarkdownRenderer markdown={shared.markdown} afterTitle={contentOwnsTitle ? byline : undefined} />
       </article>
       </SharedReviewPanel>
+      <footer className="kh-reading-column pb-10 pt-4">
+        <p className="text-caption text-kh-text-muted">Shared from Knowledge Hub · <a href={platformEntry} className="kh-focus-ring rounded-md text-kh-link">Open in Knowledge Hub</a></p>
+      </footer>
     </main>
   );
 }
