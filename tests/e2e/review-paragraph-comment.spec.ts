@@ -42,7 +42,8 @@ test("the owner comments on a paragraph from the button beside it, and the artic
 
 test("where the pane has no room for a rail, the paragraph's button opens the comment in the drawer", async ({ page, request }) => {
   const doc = await createReviewDocument(request, "A paragraph.\n\nAnother.\n");
-  await page.setViewportSize({ width: 900, height: 900 });
+  // Under the rail's 48rem pane.
+  await page.setViewportSize({ width: 760, height: 900 });
   await page.goto(doc.href);
   await ready(page);
   await page.locator("[data-review-document]").getByText("Another.", { exact: true }).hover();

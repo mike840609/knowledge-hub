@@ -174,6 +174,15 @@ wider.** That is exactly where the outline rail exists, which is what "takes
 the outline's place" means. With the explorer open that is a window of about
 1440px; with it closed, about 1000px.
 
+> **Amendment 2026-10-28 — the rail from 48rem.** At 60rem a laptop with the
+> explorer open (1280–1366px window, an 816–902px pane) got the drawer: the
+> composer opened at the drawer's top, under a scrim that hid the passage it was
+> about, which read as the page jumping away. The rail now starts where the pane
+> is **48rem** (768px) or wider. Between 48rem and 60rem the outline is already a
+> disclosure above the article, so the rail takes its 320px from the article
+> (about 450–580px left to read) instead of from the outline. From 60rem nothing
+> changes. Narrower panes keep the drawer.
+
 Five places asked the window (`matchMedia("(min-width: 1200px)")`): the drawer
 shell, the card layout, the highlight handler and two in the shared panel. They
 now ask one function, which asks the stylesheet:

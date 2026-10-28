@@ -191,7 +191,8 @@ test("below 88rem of pane the outline stays on the right, as before", async ({ p
 
 test("the discussions arriving do not move the article", async ({ page, request }) => {
   const doc = await documentWithDiscussion(request);
-  await page.setViewportSize({ width: 1280, height: 800 });
+  // A pane too narrow for the rail (under 48rem with the explorer open): the discussions do not open on arrival.
+  await page.setViewportSize({ width: 1100, height: 800 });
   // Held back, so the article can be measured before the discussions are known.
   let release = () => {};
   await page.route(`**/api/documents/${doc.documentId}/review-threads`, async (route) => { await new Promise<void>((resolve) => { release = resolve; }); await route.continue(); });
@@ -311,7 +312,8 @@ test("the owner's page keeps one left edge for its title and its article, with d
 
 test("where the pane has no room for a rail, the owner's discussions open over the article instead", async ({ page, request }) => {
   const doc = await documentWithDiscussion(request);
-  await page.setViewportSize({ width: 820, height: 800 });
+  // Under the rail's 48rem pane.
+  await page.setViewportSize({ width: 760, height: 800 });
   await page.goto(doc.href);
   // A drawer would cover the article the owner came to read, so here it waits to be asked for.
   await expect(page.locator(".kh-review-document")).toHaveAttribute("data-review-ready", "");

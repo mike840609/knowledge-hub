@@ -707,9 +707,12 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 @media (min-width: 1200px) {
   .kh-share-page .kh-review-document { --review-rail: inline; }
 }
-/* In the workspace the document pane decides, as it does for the outline — and at the same width,
-   because the rail takes the outline's place. */
-@container kh-document (min-width: 60rem) {
+/* In the workspace the document pane decides, as it does for the outline. From 60rem the rail takes
+   the outline's place; from 48rem, where the outline is already above the article, it takes room from
+   the article instead (~450-580px left to read), so a laptop with the explorer open (1280-1366px)
+   comments beside the passage rather than in a drawer that covers it (owner-comments-rail spec,
+   2026-10-28 amendment). */
+@container kh-document (min-width: 48rem) {
   .kh-document-pane .kh-review-document { --review-rail: inline; }
 }
 
