@@ -22,7 +22,7 @@ export function ReviewBlockComment({ readingRef, markdown, chosen, onChoose }: {
   chosen: ReviewAnchor | null;
   /** The anchor for the pressed paragraph. True paints the whole paragraph; false leaves
    * the narrowed selection, which the browser already shows, as the only highlight. */
-  onChoose: (anchor: ReviewAnchor) => boolean;
+  onChoose: (anchor: ReviewAnchor, element: HTMLElement) => boolean;
 }) {
   const domVersion = useReviewDomVersion();
   const [blocks, setBlocks] = useState<{ element: HTMLElement; anchor: ReviewAnchor; top: number; height: number }[]>([]);
@@ -70,7 +70,7 @@ export function ReviewBlockComment({ readingRef, markdown, chosen, onChoose }: {
         onClick={() => {
           if (selected.current) setReviewBlockSelected(selected.current, false);
           selected.current = null;
-          if (onChoose(anchor)) {
+          if (onChoose(anchor, element)) {
             selected.current = element;
             setReviewBlockSelected(element, true);
           }

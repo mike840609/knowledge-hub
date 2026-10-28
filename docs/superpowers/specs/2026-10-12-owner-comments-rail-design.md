@@ -183,6 +183,20 @@ the outline's place" means. With the explorer open that is a window of about
 > (about 450–580px left to read) instead of from the outline. From 60rem nothing
 > changes. Narrower panes keep the drawer.
 
+> **Amendment 2026-10-28 — opening and closing hold the reader's place.**
+> Opening the rail moves the article: below 88rem the outline beside it is drawn
+> above it instead, the column narrows and its text wraps again. In the
+> workspace pane the column's sliding margin also stops the browser's own scroll
+> anchoring from making up for it, so a passage just selected slid 40px or more
+> and its composer with it. Every change of the rail's open state, whatever
+> asks for it (a button, arrival, a `?thread=` link, a restored draft, closing),
+> now goes through `useReviewRailOpen` (`review-rail-mode.ts`), which holds one
+> thing where it is on screen until the column has stopped moving (200ms): the
+> paragraph whose comment button was pressed, else what is selected, else the
+> first block in sight. At the very top of the page with nothing selected
+> nothing is held, so the outline drawn above the article is seen. A drawer
+> moves nothing and holds nothing. Evidence: `tests/e2e/review-composer-no-jump.spec.ts`.
+
 Five places asked the window (`matchMedia("(min-width: 1200px)")`): the drawer
 shell, the card layout, the highlight handler and two in the shared panel. They
 now ask one function, which asks the stylesheet:
