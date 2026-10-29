@@ -60,16 +60,16 @@ export class DocumentReviewService {
       notifications: newestFirst([
         ...await this.notificationViews(r, await r.shareCommentEvents.listUnreadByRecipient(caller.identity.id)),
         ...(await this.followViews(r, caller.identity.id)).filter(view => view.readAt === null),
-        ...(await this.mentionViews(r, caller.identity.id)).filter(view => view.readAt === null),
+        ...(await this.mentionViews(r, await this.unreadMentions(r, caller.identity.id))).filter(view => view.readAt === null),
       ]),
     }));
   }
-  /** The Inbox badge: as many as `listUnreadForOwner` lists, without loading a body, title or author. */
+  /** The Inbox badge: as many as `listUnreadForOwner` lists, without loading a title or author. */
   async countUnreadForOwner(caller: CallerContext): Promise<{ count: number }> {
     return this.uow.run(async r => {
       const owner = (await r.shareCommentEvents.listUnreadCountsByRecipient(caller.identity.id)).reduce((sum, row) => sum + row.unreadCount, 0);
       const follows = (await this.followedThreads(r, caller.identity.id)).filter(({ summary }) => !("unavailable" in summary) && !!summary.latestReply && summary.unread > 0).length;
-      const mentions = (await this.judgedMentions(r, caller.identity.id)).filter(judged => "comment" in judged && judged.mention.readAt === null).length;
+      const mentions = (await this.judgedMentions(r, await this.unreadMentions(r, caller.identity.id))).filter(judged => "comment" in judged).length;
       return { count: owner + follows + mentions };
     });
   }
@@ -85,7 +85,7 @@ export class DocumentReviewService {
       const page = events.slice(0, size);
       // Follows and mentions are not paged: at most FOLLOW_LIMIT each, all on the first page (specs 2026-10-22, 2026-10-29, deviation).
       const follows = before ? [] : await this.followViews(r, caller.identity.id);
-      const mentions = before ? [] : await this.mentionViews(r, caller.identity.id);
+      const mentions = before ? [] : await this.mentionViews(r, await r.reviewMentions.listRecentByRecipient(caller.identity.id, FOLLOW_LIMIT));
       return {
         notifications: newestFirst([...await this.notificationViews(r, page), ...follows, ...mentions]),
         nextCursor: events.length > size && page.length
@@ -134,8 +134,8 @@ export class DocumentReviewService {
   async searchMentionCandidates(caller: CallerContext, input: { query: string; token?: string; documentId?: string }) {
     if ((input.token === undefined) === (input.documentId === undefined)) fail("INVALID_REQUEST", "Provide a share link or a document.");
     return this.uow.run(async r => {
-      if (input.token !== undefined) await this.linkScope(r, input.token, false);
-      else await this.ownerScope(r, caller, input.documentId!, false);
+      const s = input.token !== undefined ? await this.linkScope(r, input.token, false) : await this.ownerScope(r, caller, input.documentId!, false);
+      this.enabled(); this.active(s);
       const query = input.query.trim().slice(0, 200);
       if (!query) return { candidates: [] };
       const found = await r.users.searchExisting(query, MENTION_LIMIT);
@@ -237,12 +237,11 @@ export class DocumentReviewService {
     return views;
   }
   /**
-   * The caller's newest mentions, each judged now: live only while its carried link opens and the
+   * The given mentions (newest first, at most FOLLOW_LIMIT), each judged now: live only while its carried link opens and the
    * comment and its discussion stand visible (`projectReviewerThread`'s rules). Anything else is dead.
    * ponytail: at most FOLLOW_LIMIT mentions, one comment lookup each; paging once readers are named more.
    */
-  private async judgedMentions(r: KnowledgeRepositories, userId: string) {
-    const mentions = await r.reviewMentions.listRecentByRecipient(userId, FOLLOW_LIMIT);
+  private async judgedMentions(r: KnowledgeRepositories, mentions: readonly ReviewMention[]) {
     const threads = new Map<string, { thread: ReviewThread | null; comments: ReviewComment[] }>();
     const linksByDocument = new Map<string, DocumentShareLink[]>();
     const validByLink = new Map<string, boolean>();
@@ -260,15 +259,19 @@ export class DocumentReviewService {
     }
     return judged;
   }
-  /** The caller's mentions as Inbox entries, one per comment. A dead one names nothing and is never unread. */
-  private async mentionViews(r: KnowledgeRepositories, userId: string): Promise<ShareCommentNotificationView[]> {
+  /** The caller's newest unread mentions: the unread list and the badge judge the same rows. */
+  private unreadMentions(r: KnowledgeRepositories, userId: string) {
+    return r.reviewMentions.listUnreadByRecipient(userId, FOLLOW_LIMIT);
+  }
+  /** Mentions as Inbox entries, one per comment. A dead one names nothing and is never unread. */
+  private async mentionViews(r: KnowledgeRepositories, mentions: readonly ReviewMention[]): Promise<ShareCommentNotificationView[]> {
     const views: ShareCommentNotificationView[] = [];
     const titles = new Map<string, string>();
     const authorNames = new Map<string, string | undefined>();
-    for (const judged of await this.judgedMentions(r, userId)) {
+    for (const judged of await this.judgedMentions(r, mentions)) {
       const { mention } = judged;
       const base = { id: `${MENTION_PREFIX}${mention.commentId}`, workspaceId: "", documentId: "", sourceId: "", commentId: mention.commentId, createdAt: mention.createdAt };
-      if (!("comment" in judged)) { views.push({ ...base, kind: "MENTION", threadId: "", documentTitle: "", authorName: undefined, excerpt: "", readAt: mention.createdAt, threadStatus: "OPEN", linkAvailable: false }); continue; }
+      if (!("comment" in judged)) { views.push({ ...base, kind: "MENTION", commentId: "", threadId: "", documentTitle: "", authorName: undefined, excerpt: "", readAt: mention.createdAt, threadStatus: "OPEN", linkAvailable: false }); continue; }
       const { thread, comment, link } = judged;
       if (!titles.has(thread.documentId)) titles.set(thread.documentId, (await r.revisions.findCurrent(thread.documentId))?.title ?? "");
       if (!authorNames.has(comment.authorUserId)) authorNames.set(comment.authorUserId, (await r.users.findById(comment.authorUserId))?.name);

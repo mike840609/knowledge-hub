@@ -75,8 +75,8 @@ describe("review comment mentions repository", () => {
     await f.uow.run(r => r.reviewMentions.markRead(f.alice, a.commentId, at(9)));
     expect((await f.uow.run(r => r.reviewMentions.listRecentByRecipient(f.alice, 10)))[0].readAt).toEqual(at(9));
     expect((await f.uow.run(r => r.reviewMentions.listRecentByRecipient(f.bob, 10)))[0].readAt).toBeNull();
-    expect(await f.uow.run(r => r.reviewMentions.listUnreadByRecipient(f.alice))).toEqual([]);
-    expect(await f.uow.run(r => r.reviewMentions.listUnreadByRecipient(f.bob))).toHaveLength(1);
+    expect(await f.uow.run(r => r.reviewMentions.listUnreadByRecipient(f.alice, 100))).toEqual([]);
+    expect(await f.uow.run(r => r.reviewMentions.listUnreadByRecipient(f.bob, 100))).toHaveLength(1);
   });
 
   it("markAllRead touches only the caller's unread rows", async () => {
@@ -85,8 +85,8 @@ describe("review comment mentions repository", () => {
     const row = (commentId: string, user: string) => ({ commentId, mentionedUserId: user, shareLinkId: f.linkId, createdAt: at(1), readAt: null });
     await f.uow.run(r => r.reviewMentions.insertMany([row(a.commentId, f.alice), row(b.commentId, f.alice), row(a.commentId, f.bob)]));
     await f.uow.run(r => r.reviewMentions.markAllRead(f.alice, at(9)));
-    expect(await f.uow.run(r => r.reviewMentions.listUnreadByRecipient(f.alice))).toEqual([]);
-    expect(await f.uow.run(r => r.reviewMentions.listUnreadByRecipient(f.bob))).toHaveLength(1);
+    expect(await f.uow.run(r => r.reviewMentions.listUnreadByRecipient(f.alice, 100))).toEqual([]);
+    expect(await f.uow.run(r => r.reviewMentions.listUnreadByRecipient(f.bob, 100))).toHaveLength(1);
   });
 
   it("markThreadRead touches only the caller's rows in that thread", async () => {
@@ -95,8 +95,8 @@ describe("review comment mentions repository", () => {
     const row = (commentId: string, user: string) => ({ commentId, mentionedUserId: user, shareLinkId: f.linkId, createdAt: at(1), readAt: null });
     await f.uow.run(r => r.reviewMentions.insertMany([row(a.commentId, f.alice), row(b.commentId, f.alice), row(a.commentId, f.bob)]));
     await f.uow.run(r => r.reviewMentions.markThreadRead(f.alice, a.threadId, at(9)));
-    expect((await f.uow.run(r => r.reviewMentions.listUnreadByRecipient(f.alice))).map(m => m.commentId)).toEqual([b.commentId]);
-    expect(await f.uow.run(r => r.reviewMentions.listUnreadByRecipient(f.bob))).toHaveLength(1);
+    expect((await f.uow.run(r => r.reviewMentions.listUnreadByRecipient(f.alice, 100))).map(m => m.commentId)).toEqual([b.commentId]);
+    expect(await f.uow.run(r => r.reviewMentions.listUnreadByRecipient(f.bob, 100))).toHaveLength(1);
   });
 });
 
@@ -277,7 +277,7 @@ describe("mentions in the Inbox", () => {
   const activity = async (f: F) => mentionsOf(await f.service.listActivityForOwner(callers(f).alice));
   const count = async (f: F) => (await f.service.countUnreadForOwner(callers(f).alice)).count;
   const expectDead = (entry: Record<string, unknown>, commentId: string) => {
-    expect(entry).toMatchObject({ id: `mention:${commentId}`, kind: "MENTION", linkAvailable: false, documentTitle: "", authorName: undefined, excerpt: "", workspaceId: "", documentId: "", sourceId: "", threadId: "" });
+    expect(entry).toMatchObject({ id: `mention:${commentId}`, kind: "MENTION", linkAvailable: false, documentTitle: "", authorName: undefined, excerpt: "", workspaceId: "", documentId: "", sourceId: "", threadId: "", commentId: "" });
     expect(entry.token).toBeUndefined();
     expect(entry.readAt).toEqual(entry.createdAt);
   };
@@ -378,6 +378,18 @@ describe("mentions in the Inbox", () => {
     expect(await count(f)).toBe(1);
   });
 
+  it("the badge counts exactly the unread list: read and dead mentions are in neither", async () => {
+    const f = await fixture();
+    const read = await mentionAlice(f);
+    await mentionAlice(f);
+    const hidden = await mentionAlice(f);
+    await f.service.markEventRead(callers(f).alice, `mention:${read.commentId}`);
+    await f.service.setVisibility(f.owner, { documentId: f.documentId, threadId: hidden.threadId, commentId: hidden.commentId, visibility: "HIDDEN", reason: "off topic" });
+    const listed = (await f.service.listUnreadForOwner(callers(f).alice)).notifications;
+    expect(listed).toHaveLength(1);
+    expect(await count(f)).toBe(listed.length);
+  });
+
   it("Activity's first page carries mentions read and unread; a later page none", async () => {
     const f = await fixture();
     const a = await mentionAlice(f);
@@ -425,6 +437,22 @@ describe("mention candidates", () => {
     const found = await f.service.searchMentionCandidates(f.owner, { query: emp, documentId: f.documentId });
     expect(found.candidates.map(c => c.id)).toEqual([f.alice]);
     await expect(f.service.searchMentionCandidates(f.reader, { query: emp, documentId: f.documentId })).rejects.toMatchObject({ name: "ShareLinkNotFoundError" });
+  });
+
+  it("answers only a caller who could write a comment now: writes disabled are refused", async () => {
+    const f = await fixture();
+    const disabled = new DocumentReviewService(f.uow, () => at(0), () => false);
+    await expect(disabled.searchMentionCandidates(f.reader, { query: "Alice", token: f.token })).rejects.toMatchObject({ code: "REVIEW_WRITES_DISABLED" });
+    await expect(disabled.searchMentionCandidates(f.owner, { query: "", documentId: f.documentId })).rejects.toMatchObject({ code: "REVIEW_WRITES_DISABLED" });
+  });
+
+  it("an archived document is refused, even to its owner", async () => {
+    const f = await fixture();
+    await pool.query("UPDATE knowledge_documents SET status='ARCHIVED',archived_by=?,archived_at=? WHERE id=?", [f.ownerUserId, new Date(), f.documentId]);
+    await expect(f.service.searchMentionCandidates(f.owner, { query: "Alice", documentId: f.documentId })).rejects.toMatchObject({ code: "REVIEW_CONFLICT" });
+    await expect(f.service.searchMentionCandidates(f.owner, { query: "", documentId: f.documentId })).rejects.toMatchObject({ code: "REVIEW_CONFLICT" });
+    // The link no longer opens on an archived document: not found, as any write through it.
+    await expect(f.service.searchMentionCandidates(f.reader, { query: "Alice", token: f.token })).rejects.toMatchObject({ name: "ShareLinkNotFoundError" });
   });
 
   it("exactly one of token and documentId", async () => {

@@ -4,8 +4,8 @@ export interface ReviewMentionRepository {
   insertMany(rows: ReviewMention[]): Promise<void>;
   /** Newest first. */
   listRecentByRecipient(userId: string, limit: number): Promise<ReviewMention[]>;
-  /** Unread rows only; whether each may still be shown is judged live by the service. */
-  listUnreadByRecipient(userId: string): Promise<ReviewMention[]>;
+  /** Unread rows only, newest first; whether each may still be shown is judged live by the service. */
+  listUnreadByRecipient(userId: string, limit: number): Promise<ReviewMention[]>;
   mentionedCommentIds(userId: string, commentIds: readonly string[]): Promise<Set<string>>;
   markRead(userId: string, commentId: string, at: Date): Promise<void>;
   markAllRead(userId: string, at: Date): Promise<void>;
