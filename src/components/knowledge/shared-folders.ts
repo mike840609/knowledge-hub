@@ -37,15 +37,15 @@ export function useSharedFolderIds(workspaceId: string, enabled: boolean): Reado
       }
     };
     // A link can expire while the tab stays open; come back to the answer when the owner returns.
+    // `visibilitychange` alone covers that: a tab regaining focus is also visible, so listening to
+    // both would read the same answer twice.
     const refresh = () => { if (document.visibilityState === "visible") void load(); };
     void load();
     window.addEventListener(SHARE_LINKS_CHANGED_EVENT, load);
-    window.addEventListener("focus", refresh);
     document.addEventListener("visibilitychange", refresh);
     return () => {
       live = false;
       window.removeEventListener(SHARE_LINKS_CHANGED_EVENT, load);
-      window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
   }, [workspaceId, enabled]);

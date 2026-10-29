@@ -81,7 +81,7 @@ describe("useSharedFolderIds", () => {
     expect(seen()).toBe("");
   });
 
-  it("refreshes when the tab returns to view, so an expired link stops being marked", async () => {
+  it("refreshes when the tab returns to view, and not again on focus", async () => {
     let folders = [{ folderNodeId: "a", name: "A" }];
     const fetchStub = vi.fn(async () => new Response(JSON.stringify({ folders }), { status: 200 }));
     vi.stubGlobal("fetch", fetchStub);
@@ -93,9 +93,10 @@ describe("useSharedFolderIds", () => {
     await flush();
     expect(fetchStub).toHaveBeenCalledTimes(2);
     expect(seen()).toBe("");
+    // A focus follows the same return; reading again would only repeat the answer.
     act(() => { window.dispatchEvent(new Event("focus")); });
     await flush();
-    expect(fetchStub).toHaveBeenCalledTimes(3);
+    expect(fetchStub).toHaveBeenCalledTimes(2);
   });
 
   it("does not ask outside My Space, and keeps the last answer when a read fails", async () => {
@@ -133,7 +134,7 @@ describe("the share dialog", () => {
     expect(dialogText()).toContain("Also visible through the shared folder Handbook");
     const button = Array.from(document.body.querySelectorAll("button")).find((candidate) => candidate.textContent === "Handbook")!;
     // Tabbed to on its own, it says what it does and that Handbook is a folder, not only the name.
-    expect(button.getAttribute("aria-label")).toBe("Open share links for folder Handbook");
+    expect(button.getAttribute("aria-label")).toBe("Handbook — open share links for this folder");
     await act(async () => { button.click(); });
     await flush();
     expect(fetchStub).toHaveBeenCalledWith("/api/tree-nodes/n1/share-links", expect.anything());

@@ -215,7 +215,7 @@ export function ShareLinkDialog({
               {viaFolders.map((folder) => (
                 <li key={folder.folderNodeId} className="text-body-sm text-kh-text-muted">
                   Also visible through the shared folder{" "}
-                  <button type="button" aria-label={`Open share links for folder ${folder.name}`} disabled={busy} onClick={() => onRetarget?.({ folderNodeId: folder.folderNodeId, name: folder.name })} className="rounded-sm font-medium text-kh-text underline kh-focus-ring">{folder.name}</button>
+                  <button type="button" aria-label={`${folder.name} — open share links for this folder`} disabled={busy} onClick={() => onRetarget?.({ folderNodeId: folder.folderNodeId, name: folder.name })} className="rounded-sm font-medium text-kh-text underline kh-focus-ring">{folder.name}</button>
                 </li>
               ))}
             </ul>

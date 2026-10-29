@@ -178,6 +178,14 @@ input[type="search"]::-webkit-search-cancel-button:hover {
     @apply outline-none focus-visible:ring-2 focus-visible:ring-kh-focus;
   }
 
+  /* A shared page's first stop: off-screen until focused, then at the top-left. */
+  .kh-skip-link {
+    @apply kh-focus-ring fixed left-4 top-4 z-50 -translate-y-24 rounded-md border border-kh-border bg-kh-bg px-3 py-2 text-body text-kh-text shadow-popover;
+  }
+  .kh-skip-link:focus {
+    @apply translate-y-0;
+  }
+
   .kh-interactive-row {
     @apply kh-focus-ring rounded-md transition-colors hover:bg-kh-bg-hover focus-within:bg-kh-bg-hover;
   }

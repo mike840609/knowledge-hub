@@ -83,7 +83,13 @@ export function SharedFolderTree({ token, nodes, currentDocumentId, folderName }
     return byParent;
   }, [nodes]);
   // On a phone the list lies over the page: a press anywhere else puts it away, and so does
-  // Escape, wherever focus is, handing focus back to the button.
+  // Escape, wherever focus is, handing focus back to the button. Opening it moves focus into the
+  // list, so Tab goes through the tree rather than on to the bar's next control.
+  useEffect(() => {
+    if (!open) return;
+    const first = navRef.current?.querySelector<HTMLElement>("a[href], button:not([disabled])");
+    (first ?? navRef.current)?.focus();
+  }, [open]);
   useEffect(() => {
     if (!open) return;
     const away = (event: PointerEvent) => {
@@ -111,6 +117,7 @@ export function SharedFolderTree({ token, nodes, currentDocumentId, folderName }
     <nav
       ref={navRef}
       id={navId}
+      tabIndex={-1}
       aria-label={folderName}
       className={`kh-shared-folder-tree fixed inset-x-0 top-14 z-30 max-h-[70vh] overflow-y-auto border-b border-kh-border bg-kh-bg p-3 shadow-popover sm:bottom-0 sm:right-auto sm:max-h-none sm:w-[var(--kh-tree-rail)] sm:border-b-0 sm:border-r sm:bg-kh-bg-explorer sm:shadow-none ${open ? "" : "max-sm:hidden"}`}
     >

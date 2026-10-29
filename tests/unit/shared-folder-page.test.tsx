@@ -72,7 +72,7 @@ describe("a folder link's page", () => {
     const html = await render(ids.setup);
     const crumbs = html.match(/<nav aria-label="Breadcrumb"[^>]*>(.*?)<\/nav>/)![1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
     expect(crumbs).toBe("Onboarding / Engineering / Dev setup");
-    expect(html).toMatch(/<li[^>]*aria-current="page"[^>]*>Dev setup<\/li>/);
+    expect(html).toMatch(/<li[^>]*aria-current="location"[^>]*>Dev setup<\/li>/);
   });
 
   it("lists the folder in a tree: the document read is current, the folders on its path open, the rest closed", async () => {
@@ -84,7 +84,7 @@ describe("a folder link's page", () => {
     expect(html).toMatch(/<button[^>]*aria-expanded="true"[^>]*>.*?Engineering/);
     expect(html).toMatch(/<button[^>]*aria-expanded="false"[^>]*>.*?HR/);
     expect(html).toContain(`href="/s/tok?d=${ids.faq}"`);
-    expect(html.match(/aria-current="page"/g)).toHaveLength(2);
+    expect(html.match(/aria-current="page"/g)).toHaveLength(1);
   });
 
   it("links an in-folder wikilink within the link, and reads every other link as its text", async () => {

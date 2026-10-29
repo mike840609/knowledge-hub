@@ -197,13 +197,16 @@ describe("what a folder link refuses, all alike", () => {
     await expect(f.service.deleteForLink(f.reader, { ...scope, commentId: comment.id })).rejects.toMatchObject(notFound);
   });
 
-  it("a document moved out of the folder after the reader loaded it: create, reply, follow and seen", async () => {
+  it("a document moved out of the folder after the reader loaded it: create, reply, edit, delete, follow and seen", async () => {
     const f = await fixture();
     const thread = await f.start();
+    const opener = thread.comments[0];
     await f.move(f.devSetup.treeNodeId, null);
     const scope = { token: f.token, documentId: f.devSetup.documentId, threadId: thread.id };
     await expect(f.service.createForLink(f.reader, { token: f.token, documentId: f.devSetup.documentId, expectedRevisionId: f.devSetup.revisionId, anchor: f.anchor, body: "x", idempotencyKey: randomUUID() })).rejects.toMatchObject(notFound);
     await expect(f.service.replyForLink(f.reader, { ...scope, body: "x", idempotencyKey: randomUUID() })).rejects.toMatchObject(notFound);
+    await expect(f.service.editForLink(f.reader, { ...scope, commentId: opener.id, body: "x" })).rejects.toMatchObject(notFound);
+    await expect(f.service.deleteForLink(f.reader, { ...scope, commentId: opener.id })).rejects.toMatchObject(notFound);
     await expect(f.service.followForLink(f.reader, { ...scope, following: true })).rejects.toMatchObject(notFound);
     await expect(f.service.markSeenForLink(f.reader, scope)).rejects.toMatchObject(notFound);
     await expect(f.service.queryForLink(f.reader, f.token, f.devSetup.documentId)).rejects.toMatchObject(notFound);
@@ -241,11 +244,20 @@ describe("what a folder link refuses, all alike", () => {
     expect(locks.taken).toEqual([]);
   });
 
-  it("a document under an archived folder inside the shared one", async () => {
+  it("a document under an archived folder inside the shared one: reads and writes alike", async () => {
     const f = await fixture();
+    const thread = await f.start();
+    const opener = thread.comments[0];
+    const scope = { token: f.token, documentId: f.devSetup.documentId, threadId: thread.id };
     // The Hub refuses to archive a folder that still holds documents; the rule must hold if one is anyway.
     await f.uow.run(r => r.tree.updateStatus(f.engineeringId, "ARCHIVED", f.owner.identity.id));
     await expect(f.service.queryForLink(null, f.token, f.devSetup.documentId)).rejects.toMatchObject(notFound);
+    await expect(f.service.createForLink(f.reader, { token: f.token, documentId: f.devSetup.documentId, expectedRevisionId: f.devSetup.revisionId, anchor: f.anchor, body: "x", idempotencyKey: randomUUID() })).rejects.toMatchObject(notFound);
+    await expect(f.service.replyForLink(f.reader, { ...scope, body: "x", idempotencyKey: randomUUID() })).rejects.toMatchObject(notFound);
+    await expect(f.service.editForLink(f.reader, { ...scope, commentId: opener.id, body: "x" })).rejects.toMatchObject(notFound);
+    await expect(f.service.deleteForLink(f.reader, { ...scope, commentId: opener.id })).rejects.toMatchObject(notFound);
+    await expect(f.service.followForLink(f.reader, { ...scope, following: false })).rejects.toMatchObject(notFound);
+    await expect(f.service.markSeenForLink(f.reader, scope)).rejects.toMatchObject(notFound);
   });
 });
 

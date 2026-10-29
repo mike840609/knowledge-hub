@@ -49,6 +49,16 @@ export function SharedReading({ document, links }: { document: SharedDocumentVie
   );
 }
 
+/**
+ * The first focusable thing on a shared page: past the pinned bar and, on a folder page, the tree,
+ * straight to the reading column. Hidden until focused, as a skip link is.
+ */
+export function SharedSkipLink() {
+  return (
+    <a href="#shared-content" className="kh-skip-link">Skip to content</a>
+  );
+}
+
 /** What closes every shared page: the way into the Hub, said once more under the article. */
 export function SharedFooter({ platformEntry }: { platformEntry: string }) {
   return (

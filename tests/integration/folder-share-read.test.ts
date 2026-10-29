@@ -124,6 +124,15 @@ describe("TreeRepository.listChain", () => {
     await expect(new MariaDbUnitOfWork(pool).run((repositories) => repositories.tree.listChain(uuidv7()))).resolves.toEqual([]);
   });
 
+  it("stops at the depth limit when a defect makes the rows cyclic", async () => {
+    const f = await sharedFolder();
+    // A folder whose parent is its own descendant: only the depth guard ends the walk.
+    await pool.query("UPDATE knowledge_tree_nodes SET parent_id = ? WHERE id = ?", [f.engineeringId, f.folderNodeId]);
+    const chain = await new MariaDbUnitOfWork(pool).run((repositories) => repositories.tree.listChain(f.devSetup.treeNodeId));
+    expect(chain).toHaveLength(1000);
+    expect(new Set(chain.map(node => node.id)).size).toBeLessThan(chain.length);
+  });
+
   it("lists only the shared folder's ACTIVE descendants, not the rest of the Source", async () => {
     const f = await sharedFolder();
     for (let index = 0; index < 20; index += 1) {
