@@ -105,7 +105,7 @@ describe("Phase 3 workspace product contracts and real route adapters", () => {
     expect(await admin.listGroups(owner, empty.id)).toEqual([]);
     expect((await admin.teamView(owner, empty.id)).grantOptions.newGroupAssignableRoles).toEqual(["ADMIN", "EDITOR", "VIEWER"]);
     const lookup = await admin.searchUsers(owner, "Group Admin", 1000);
-    expect(lookup).toEqual([{ id: caller.identity.id, name: "Group Admin", empId: caller.identity.emp_id }]);
+    expect(lookup).toEqual([{ id: caller.identity.id, name: "Group Admin", empId: caller.identity.emp_id, nameEn: null }]);
   });
   it.each([false, true])("revocation retains exactly current group access: %s", async remaining => {
     const caller = await user("Affected", remaining ? ["readers"] : []);
