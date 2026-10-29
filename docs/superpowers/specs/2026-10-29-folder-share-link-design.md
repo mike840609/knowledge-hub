@@ -368,6 +368,9 @@ Requirement-driven; each bullet is at least one case.
   Comments sit beside the article from 1456px (the room beside the tree that
   a document page has from 1200px) and open in the drawer below; with them
   open the outline keeps its rail only from 1660px.
+- *Builder's call (Task 4):* `/s/:token/open` on a folder with no documents
+  has no landing document to open, so it lands the reader on their own
+  personal home (`/w/<personal>/home`) rather than refusing the link.
 - *Builder's call, flagged:* no cap on folder size in this cut. Ceiling: the
   whole subtree is returned on every page load; if a shared folder reaches
   thousands of nodes, page the tree or load subfolders on expand.
