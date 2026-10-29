@@ -25,28 +25,32 @@ const at = (seconds: number) => new Date(T0 + seconds * 1000);
 async function fixture() {
   const uow = new MariaDbUnitOfWork(pool);
   const identity = (name: string) => ({ id: uuidv7(), emp_id: randomUUID(), name, org_code: "MENTION" });
-  const ownerId = identity("Owner"), aliceId = identity("Alice"), bobId = identity("Bob");
-  await uow.run(async r => { for (const user of [ownerId, aliceId, bobId]) await r.users.upsertIdentity(user); });
+  const ownerId = identity("Owner"), aliceId = identity("Alice"), bobId = identity("Bob"), carolId = identity("Carol");
+  await uow.run(async r => { for (const user of [ownerId, aliceId, bobId, carolId]) await r.users.upsertIdentity(user); });
   const owner = callerFromIdentity(ownerId);
   const { workspace } = await new PersonalWorkspaceService(uow).ensurePersonalWorkspace(ownerId.id);
   const sourceId = await ensureDefaultHubSource(uow, owner, workspace.id);
-  const created = await new HubKnowledgeCommandServiceImpl(uow).createDocument(owner, { sourceId, parentId: null, title: "Review", markdown: "A secret passage here.", metadata: {} });
+  const commands = new HubKnowledgeCommandServiceImpl(uow);
+  const created = await commands.createDocument(owner, { sourceId, parentId: null, title: "Review", markdown: "A secret passage here.", metadata: {} });
   const shares = new DocumentShareService(uow, new RandomShareTokenIssuer());
-  const issue = async () => {
-    const link = await shares.create(owner, { documentId: created.documentId });
-    return { token: link.path.slice(3), id: String((await pool.query("SELECT id FROM document_share_links WHERE document_id=? ORDER BY created_at DESC, id DESC LIMIT 1", [created.documentId]))[0].id) };
+  const issue = async (documentId = created.documentId) => {
+    const link = await shares.create(owner, { documentId });
+    return { token: link.path.slice(3), id: String((await pool.query("SELECT id FROM document_share_links WHERE document_id=? ORDER BY created_at DESC, id DESC LIMIT 1", [documentId]))[0].id) };
   };
   const newLink = async () => (await issue()).id;
   const { token, id: linkId } = await issue();
   const block = projectReviewBlocks("A secret passage here.")[0];
   const anchor: ReviewAnchor = { schemaVersion: 1, blockPath: block.path, blockKind: block.kind, startUtf16: 2, endUtf16: 16, exact: "secret passage", prefix: "A ", suffix: " here." };
-  const service = new DocumentReviewService(uow, () => at(0), () => true);
+  let seconds = 0;
+  const service = new DocumentReviewService(uow, () => at(seconds), () => true);
+  const setTime = (s: number) => { seconds = s; };
   const startThread = async () => {
     const thread = await service.createForLink(callerFromIdentity(bobId), { token, expectedRevisionId: created.revisionId, anchor, body: "Bob asks", idempotencyKey: randomUUID() });
     const [row] = await pool.query("SELECT id FROM document_review_comments WHERE thread_id=? ORDER BY created_at, id LIMIT 1", [thread.id]);
     return { threadId: thread.id as string, commentId: String(row.id) };
   };
-  return { uow, alice: aliceId.id, bob: bobId.id, linkId, startThread, newLink };
+  const otherDocument = async () => (await commands.createDocument(owner, { sourceId, parentId: null, title: "Other", markdown: "Elsewhere.", metadata: {} })).documentId;
+  return { uow, service, shares, owner, ownerUserId: ownerId.id, alice: aliceId.id, bob: bobId.id, carol: carolId.id, reader: callerFromIdentity(bobId), aliceCaller: callerFromIdentity(aliceId), linkId, token, anchor, ...created, startThread, newLink, issue, otherDocument, setTime };
 }
 
 describe("review comment mentions repository", () => {
@@ -133,5 +137,127 @@ describe("followForMention", () => {
     await f.uow.run(r => r.reviewFollows.follow({ threadId: t.threadId, userId: f.alice, shareLinkId: other, at: seen }));
     await follow(f, t.threadId, f.linkId, async () => false);
     expect(await state(t.threadId, f.alice)).toEqual({ link: f.linkId, following: 1, seenAt: seen });
+  });
+});
+
+describe("writing a mention", () => {
+  type F = Awaited<ReturnType<typeof fixture>>;
+  const mentions = async (commentId: string): Promise<{ user: string; link: string; createdAt: Date }[]> => (await pool.query("SELECT mentioned_user_id, share_link_id, created_at FROM review_comment_mentions WHERE comment_id=? ORDER BY mentioned_user_id", [commentId]))
+    .map((row: Record<string, unknown>) => ({ user: String(row.mentioned_user_id), link: String(row.share_link_id), createdAt: new Date(row.created_at as string) }));
+  const followOf = async (threadId: string, userId: string) => {
+    const [row] = await pool.query("SELECT share_link_id, following, seen_at FROM review_thread_follows WHERE thread_id=? AND user_id=?", [threadId, userId]);
+    return row ? { link: String(row.share_link_id), following: Number(row.following), seenAt: new Date(row.seen_at) } : null;
+  };
+  const commentCount = async (f: F) => Number((await pool.query("SELECT COUNT(*) AS n FROM document_review_comments c JOIN document_review_threads t ON t.id=c.thread_id WHERE t.document_id=?", [f.documentId]))[0].n);
+  const firstComment = async (threadId: string) => String((await pool.query("SELECT id FROM document_review_comments WHERE thread_id=? ORDER BY created_at, id LIMIT 1", [threadId]))[0].id);
+  const createOnLink = (f: F, extra: Record<string, unknown>, key = randomUUID()) =>
+    f.service.createForLink(f.reader, { token: f.token, expectedRevisionId: f.revisionId, anchor: f.anchor, body: "Bob asks", idempotencyKey: key, ...extra });
+  const createAsOwner = (f: F, extra: Record<string, unknown>, key = randomUUID()) =>
+    f.service.createForOwner(f.owner, { documentId: f.documentId, expectedRevisionId: f.revisionId, anchor: f.anchor, body: "Owner notes", idempotencyKey: key, ...extra });
+
+  it("records the mention with the link it was written through, and the person follows on that link", async () => {
+    const f = await fixture();
+    f.setTime(10);
+    const thread = await createOnLink(f, { mentions: [f.alice.toUpperCase()] });
+    const commentId = await firstComment(thread.id);
+    expect(await mentions(commentId)).toEqual([{ user: f.alice, link: f.linkId, createdAt: at(10) }]);
+    expect(await followOf(thread.id, f.alice)).toEqual({ link: f.linkId, following: 1, seenAt: at(10) });
+  });
+
+  it("records one row per person named in a reply", async () => {
+    const f = await fixture();
+    const { threadId } = await f.startThread();
+    const reply = await f.service.replyForLink(f.reader, { token: f.token, threadId, body: "Over to you", idempotencyKey: randomUUID(), mentions: [f.alice, f.carol, f.alice] });
+    expect((await mentions(reply.id)).map(m => m.user).sort()).toEqual([f.alice, f.carol].sort());
+    expect(await followOf(threadId, f.carol)).toMatchObject({ link: f.linkId, following: 1 });
+  });
+
+  it("drops the writer and the owner without refusing the write", async () => {
+    const f = await fixture();
+    const thread = await createOnLink(f, { mentions: [f.ownerUserId, f.bob] });
+    expect(await mentions(await firstComment(thread.id))).toEqual([]);
+    expect(await followOf(thread.id, f.ownerUserId)).toBeNull();
+  });
+
+  it("refuses an unknown user, writing nothing", async () => {
+    const f = await fixture();
+    await expect(createOnLink(f, { mentions: [f.alice, randomUUID()] })).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+    expect(await commentCount(f)).toBe(0);
+    const { threadId } = await f.startThread();
+    await expect(f.service.replyForLink(f.reader, { token: f.token, threadId, body: "Hi", idempotencyKey: randomUUID(), mentions: [randomUUID()] })).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+    expect(await commentCount(f)).toBe(1);
+  });
+
+  it("refuses more than ten people, writing nothing", async () => {
+    const f = await fixture();
+    await expect(createOnLink(f, { mentions: Array.from({ length: 11 }, () => randomUUID()) })).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+    expect(await commentCount(f)).toBe(0);
+  });
+
+  it("an owner mention must carry a live link of this document", async () => {
+    const f = await fixture();
+    await expect(createAsOwner(f, { mentions: [f.alice] })).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+    const revoked = await f.newLink();
+    await f.shares.revoke(f.owner, revoked);
+    await expect(createAsOwner(f, { mentions: [f.alice], mentionLinkId: revoked })).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+    const elsewhere = (await f.issue(await f.otherDocument())).id;
+    await expect(createAsOwner(f, { mentions: [f.alice], mentionLinkId: elsewhere })).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+    await expect(createAsOwner(f, { mentions: [f.alice], mentionLinkId: "not-a-link" })).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+    expect(await commentCount(f)).toBe(0);
+    const thread = await createAsOwner(f, { mentions: [f.alice], mentionLinkId: f.linkId.toUpperCase() });
+    expect(await mentions(await firstComment(thread.id))).toEqual([expect.objectContaining({ user: f.alice, link: f.linkId })]);
+    expect(await followOf(thread.id, f.alice)).toMatchObject({ link: f.linkId, following: 1 });
+    // The owner's own reply is held to the same rule.
+    await expect(f.service.replyForOwner(f.owner, { documentId: f.documentId, threadId: thread.id, body: "Again", idempotencyKey: randomUUID(), mentions: [f.carol] })).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+    const reply = await f.service.replyForOwner(f.owner, { documentId: f.documentId, threadId: thread.id, body: "Again", idempotencyKey: randomUUID(), mentions: [f.carol], mentionLinkId: f.linkId });
+    expect(await mentions(reply.id)).toEqual([expect.objectContaining({ user: f.carol, link: f.linkId })]);
+  });
+
+  it("an owner write without mentions needs no link", async () => {
+    const f = await fixture();
+    const thread = await createAsOwner(f, { mentions: [], mentionLinkId: "ignored" });
+    expect(await mentions(await firstComment(thread.id))).toEqual([]);
+  });
+
+  it("a replay writes nothing new, and the same key with other mentions is refused", async () => {
+    const f = await fixture();
+    const key = randomUUID();
+    const thread = await createOnLink(f, { mentions: [f.alice, f.carol] }, key);
+    expect((await createOnLink(f, { mentions: [f.carol, f.alice] }, key)).id).toBe(thread.id);
+    expect(await mentions(await firstComment(thread.id))).toHaveLength(2);
+    await expect(createOnLink(f, { mentions: [f.alice] }, key)).rejects.toMatchObject({ code: "IDEMPOTENCY_KEY_REUSED" });
+    await expect(createOnLink(f, {}, key)).rejects.toMatchObject({ code: "IDEMPOTENCY_KEY_REUSED" });
+    const replyKey = randomUUID();
+    const reply = await f.service.replyForLink(f.reader, { token: f.token, threadId: thread.id, body: "R", idempotencyKey: replyKey, mentions: [f.alice] });
+    expect((await f.service.replyForLink(f.reader, { token: f.token, threadId: thread.id, body: "R", idempotencyKey: replyKey, mentions: [f.alice] })).id).toBe(reply.id);
+    expect(await mentions(reply.id)).toHaveLength(1);
+    await expect(f.service.replyForLink(f.reader, { token: f.token, threadId: thread.id, body: "R", idempotencyKey: replyKey, mentions: [f.carol] })).rejects.toMatchObject({ code: "IDEMPOTENCY_KEY_REUSED" });
+    const ownerKey = randomUUID();
+    const second = await f.issue();
+    const owned = await createAsOwner(f, { mentions: [f.alice], mentionLinkId: f.linkId }, ownerKey);
+    expect((await createAsOwner(f, { mentions: [f.alice], mentionLinkId: f.linkId }, ownerKey)).id).toBe(owned.id);
+    await expect(createAsOwner(f, { mentions: [f.alice], mentionLinkId: second.id }, ownerKey)).rejects.toMatchObject({ code: "IDEMPOTENCY_KEY_REUSED" });
+  });
+
+  it("moves a follow on a dead link to the mention's link, keeping when it was last seen", async () => {
+    const f = await fixture();
+    const { threadId } = await f.startThread();
+    f.setTime(5);
+    await f.service.replyForLink(f.aliceCaller, { token: f.token, threadId, body: "Alice here", idempotencyKey: randomUUID() });
+    expect(await followOf(threadId, f.alice)).toEqual({ link: f.linkId, following: 1, seenAt: at(5) });
+    await f.shares.revoke(f.owner, f.linkId);
+    const fresh = await f.issue();
+    f.setTime(50);
+    await f.service.replyForLink(f.reader, { token: fresh.token, threadId, body: "Alice, look", idempotencyKey: randomUUID(), mentions: [f.alice] });
+    expect(await followOf(threadId, f.alice)).toEqual({ link: fresh.id, following: 1, seenAt: at(5) });
+  });
+
+  it("editing a comment leaves its mentions as they were", async () => {
+    const f = await fixture();
+    const thread = await createOnLink(f, { mentions: [f.alice] });
+    const commentId = await firstComment(thread.id);
+    const before = await mentions(commentId);
+    await f.service.editForLink(f.reader, { token: f.token, threadId: thread.id, commentId, body: "Bob asks, edited", mentions: [f.carol] } as Parameters<typeof f.service.editForLink>[1]);
+    expect(await mentions(commentId)).toEqual(before);
   });
 });
