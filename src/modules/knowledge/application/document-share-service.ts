@@ -407,7 +407,9 @@ function sharedSubtree(nodes: readonly TreeViewNode[], folderId: string): Shared
   const children = new Map<string, TreeViewNode[]>();
   for (const node of nodes) {
     if (node.parentId === null || !isShownInSharedTree(node)) continue;
-    children.set(node.parentId, [...(children.get(node.parentId) ?? []), node]);
+    const siblings = children.get(node.parentId);
+    if (siblings) siblings.push(node);
+    else children.set(node.parentId, [node]);
   }
   const ordered: SharedTreeNode[] = [];
   const pending = [...(children.get(folderId) ?? [])].reverse();
@@ -448,13 +450,15 @@ async function reachableLinks(
   markdown: string,
   reachable: ReadonlySet<string>,
 ): Promise<SharedResolvedLink[]> {
+  const extracted = extractDocumentLinks(markdown);
+  if (extracted.length === 0) return [];
   const catalog = await repositories.links.loadCatalog(workspaceId);
   const resolver = buildLinkResolver(catalog);
   const byId = new Map(catalog.map((entry) => [entry.documentId, entry]));
   const origin = { documentId: document.id, sourceId: document.sourceId, sourcePath: byId.get(document.id)?.sourcePath ?? null };
   const seen = new Set<string>();
   const links: SharedResolvedLink[] = [];
-  for (const link of extractDocumentLinks(markdown)) {
+  for (const link of extracted) {
     const lookupKey = linkLookupKey(link.kind, link.target);
     if (seen.has(lookupKey)) continue;
     seen.add(lookupKey);
