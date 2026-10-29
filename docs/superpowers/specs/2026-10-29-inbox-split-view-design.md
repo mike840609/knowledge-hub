@@ -31,24 +31,32 @@ surroundings matter.
 
 ## Layout
 
-- Where the Inbox's own box is at least **72rem** wide (measured on the box by a
+- Where the Inbox's own box is at least **74rem** wide (its border box, measured by a
   `ResizeObserver`, as the document pane uses a container query, never the
-  window), the page is two columns: the list at **22rem** fixed and, after a
-  1px `border` rule and its gutter, a document pane of at least **48rem** — the
+  window), the page is two columns: a 25rem list column (22rem of rows and its 24px
+  gutters) and, after a 1px rule, a document pane of at least **48rem** — the
   width at which the owner's discussions sit beside the article
   (`--review-rail: inline`) rather than in a drawer over it. A drawer over the
   Inbox would cover the list being worked through, so the split waits for room
   for the rail. (Amended 2026-10-29: the first build used 44rem with the
   discussion alone; once the pane showed the document, 44rem put the
   discussions in a drawer at a 1180px window.) At a 1440px window the box is
-  about 76rem; at 1280px it is about 66rem and the Inbox is the plain list. The
+  about 79rem; at 1280px it is about 69rem and the Inbox is the plain list. The
   page widens from `kh-page` to fill the content area.
 - Narrower than that, the page is today's list, and a row is today's link.
   Nothing on a phone changes.
-- The list scrolls with the page; the discussion column is sticky at the top
-  of the content area and scrolls on its own when taller than the window. The
-  page header (title, Refresh, Mark all read) spans both columns; the tabs
-  head the list column.
+- Both columns are the window's height and scroll on their own, with a 1px rule
+  between them the full height. Each opens on a 48px line, as the rail, the
+  explorer and a document do, so they share one top edge: the list column's is
+  the page header ("My Space › Inbox", Refresh, Mark all read — the list's
+  actions, over the list), with the tabs pinned under it; the pane's is the
+  reader's path line (the entry's title, muted, and **Open document**).
+- Under the path line an owner's entry is the document with no frame of its
+  own, as the reader and the side peek show one: its `page-title` title (unless
+  the Markdown opens with a heading, which then wears that scale), then the
+  article and its rail. (Amended 2026-10-29 after a layout review: the first
+  build framed the document in a bordered box under a second title line, cut
+  off at the window's foot, with the page's actions above the pane.)
 
 ## Selection
 
@@ -76,10 +84,10 @@ surroundings matter.
 Amended 2026-10-29, after the user saw the first build: a quoted passage alone
 said too little, so an owner's entry shows the document.
 
-- **Header:** the entry's title (`notificationTitle`), its kind ("Discussion
-  you follow" / "Open discussion" / "Resolved"), and **Open document** (the
-  entry's `notificationHref`) as a secondary button. A dead link's entry shows
-  "A shared discussion" and no button.
+- **Path line:** the entry's title (`notificationTitle`) and **Open document**
+  (the entry's `notificationHref`, a small secondary button). The entry's kind
+  is not repeated; the row says it. A dead link's entry shows "A shared
+  discussion" and no button.
 - **An owner's entry shows the document**, as the reader does: the article in
   a `DocumentPane` wrapped by the same `OwnerReviewPanel`, so the passage is
   highlighted, the discussions are the rail beside it, and everything the
@@ -132,5 +140,5 @@ the shared page for a followed discussion, and `j` / `k`.
 ## Contract
 
 `frontend-design-language.md` §18 gains one sentence: the Inbox is a list and
-the selected discussion side by side from a 72rem box, a plain list below it,
+the selected discussion side by side from a 74rem box, a plain list below it,
 selection in the URL, nothing selected on arrival.

@@ -43,7 +43,7 @@ beforeEach(() => {
     if (url.startsWith("/api/review-notifications/activity")) return json(init.method === "POST" ? { ok: true } : { notifications, nextCursor: null });
     if (url === "/api/share-review/threads/query") return json({ threads: threads[`token:${body.token}`] ?? [], writesEnabled: true, callerUserId: "me", revisionId: "r" });
     const peek = url.match(/^\/api\/documents\/([^/]+)\/peek$/);
-    if (peek) return json({ markdown: `Passage of ${peek[1]}.`, revisionId: "r", status: "ACTIVE", sourceStatus: "ACTIVE", linkView: null });
+    if (peek) return json({ title: `Doc ${peek[1]}`, markdown: `Passage of ${peek[1]}.`, revisionId: "r", status: "ACTIVE", sourceStatus: "ACTIVE", linkView: null });
     const owner = url.match(/^\/api\/documents\/([^/]+)\/review-threads$/);
     if (owner) return json({ threads: threads[owner[1]] ?? [], writesEnabled: true, revisionId: "r", callerUserId: "me" });
     throw new Error(`unexpected ${url}`);
@@ -84,6 +84,7 @@ it("a plain click shows the owner's document and its discussion beside the list,
   expect(new URL(window.location.href).searchParams.get("item")).toBe("a");
   expect(row("a").getAttribute("aria-current")).toBe("true");
   expect(pane()?.textContent).toContain("Passage of doc-a.");
+  expect(pane()?.querySelector("h1")?.textContent).toBe("Doc doc-a");
   expect(pane()?.textContent).toContain("body of thread-a");
   expect(pane()?.querySelector('[data-review-thread="thread-a"]')?.hasAttribute("data-active")).toBe(true);
   expect(pane()?.querySelector("a")?.getAttribute("href")).toBe("/w/ws/knowledge/src/doc-a?thread=thread-a");

@@ -10,6 +10,7 @@ import { DocumentPane } from "./document-pane";
 import { governanceRequest } from "@/components/workspaces/governance-error";
 import { MARKDOWN_ARTICLE } from "./markdown-article";
 import { MarkdownRenderer } from "./markdown-renderer";
+import { markdownOpensWithHeading } from "@/lib/markdown-title";
 import { notificationHref, notificationTitle } from "./notification-href";
 import { OwnerReviewPanel } from "./owner-review-panel";
 import { renderedLinksFrom } from "./rendered-links";
@@ -26,19 +27,17 @@ type Entry = ShareCommentNotificationView;
 export function InboxDiscussion({ entry }: { entry: Entry }) {
   const href = notificationHref(entry);
   const follow = entry.kind === "FOLLOW";
-  return <section aria-label="Selected discussion" className="flex h-full min-h-0 min-w-0 flex-col gap-3">
-    <header className="flex shrink-0 items-start justify-between gap-3">
-      <div className="min-w-0">
-        <h2 className="truncate text-body font-medium text-kh-text">{notificationTitle(entry)}</h2>
-        <p className="text-caption text-kh-text-muted">{follow ? "Discussion you follow" : entry.threadStatus === "OPEN" ? "Open discussion" : "Resolved"}</p>
-      </div>
-      {href && <Link className={buttonClasses({ variant: "secondary" })} href={href} prefetch={follow ? false : undefined}>Open document</Link>}
+  // The reader's 48px path line: what this is on the left, the way to the full page on the right.
+  return <section aria-label="Selected discussion" className="flex h-full min-h-0 min-w-0 flex-col">
+    <header className="flex h-12 shrink-0 items-center justify-between gap-3 px-6">
+      <h2 className="min-w-0 truncate text-body text-kh-text-muted">{notificationTitle(entry)}</h2>
+      {href && <Link className={buttonClasses({ variant: "secondary", size: "sm" })} href={href} prefetch={follow ? false : undefined}>Open document</Link>}
     </header>
     {follow ? <FollowedDiscussion entry={entry} /> : <OwnerDocument entry={entry} />}
   </section>;
 }
 
-type Peek = { markdown: string; revisionId: string; status: string; sourceStatus: string; linkView: DocumentLinkView | null };
+type Peek = { title: string; markdown: string; revisionId: string; status: string; sourceStatus: string; linkView: DocumentLinkView | null };
 
 /** The owner's document as the reader shows it, its discussions beside it, the entry's one open. */
 function OwnerDocument({ entry }: { entry: Entry }) {
@@ -51,11 +50,13 @@ function OwnerDocument({ entry }: { entry: Entry }) {
       .catch(failure => { if (live) setError(failure instanceof Error ? failure.message : "Could not load the document."); });
     return () => { live = false; };
   }, [entry.documentId]);
-  if (error) return <p role="alert" className="text-body-sm">{error}</p>;
-  if (!peek) return <p role="status" className="text-body-sm text-kh-text-muted">Loading document…</p>;
-  return <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-kh-border" style={{ "--kh-review-toolbar-top": "0px" } as CSSProperties}>
+  if (error) return <p role="alert" className="px-6 text-body-sm">{error}</p>;
+  if (!peek) return <p role="status" className="px-6 text-body-sm text-kh-text-muted">Loading document…</p>;
+  // The path line is outside the pane, so the rail's toolbar has nothing to stop under.
+  return <div className="min-h-0 flex-1" style={{ "--kh-review-toolbar-top": "0px" } as CSSProperties}>
     <DocumentPane>
       <div className="kh-reading-column py-6">
+        {!markdownOpensWithHeading(peek.markdown) && <h1 className="mb-6 text-page-title font-semibold tracking-tight text-kh-text">{peek.title}</h1>}
         <OwnerReviewPanel documentId={entry.documentId} revisionId={peek.revisionId} markdown={peek.markdown} thread={entry.threadId}
           readOnly={peek.status !== "ACTIVE" || peek.sourceStatus !== "ACTIVE"}>
           <article data-review-document className={MARKDOWN_ARTICLE}>
@@ -89,12 +90,12 @@ function FollowedDiscussion({ entry }: { entry: Entry }) {
   }, [token, entry.threadId]);
   useEffect(() => { void load(); }, [load]);
 
-  if (!token) return <p className="text-body-sm text-kh-text-muted">This link is no longer available.</p>;
-  if (error) return <p role="alert" className="text-body-sm">{error}</p>;
-  if (!loaded) return <p role="status" className="text-body-sm text-kh-text-muted">Loading discussion…</p>;
-  if (!loaded.thread) return <p className="text-body-sm text-kh-text-muted">This discussion is no longer available here.</p>;
+  if (!token) return <p className="px-6 text-body-sm text-kh-text-muted">This link is no longer available.</p>;
+  if (error) return <p role="alert" className="px-6 text-body-sm">{error}</p>;
+  if (!loaded) return <p role="status" className="px-6 text-body-sm text-kh-text-muted">Loading discussion…</p>;
+  if (!loaded.thread) return <p className="px-6 text-body-sm text-kh-text-muted">This discussion is no longer available here.</p>;
   const share = async (path: string, body: object) => { await reviewRequest(`/api/share-review/threads/${path}`, { token, ...body }); await load(); };
-  return <div className="min-h-0 flex-1 overflow-y-auto">
+  return <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
     <ReviewThreadList threads={[loaded.thread]} activeThreadId={loaded.thread.id} filter="ALL" onFilterChange={() => {}} writesEnabled={loaded.writesEnabled}
       reply={(threadId, body, idempotencyKey) => share(`${threadId}/replies`, { body, idempotencyKey })}
       follow={(threadId, following) => share(`${threadId}/follow`, { following })}

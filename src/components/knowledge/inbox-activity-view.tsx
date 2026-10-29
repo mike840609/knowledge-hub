@@ -19,10 +19,11 @@ type ActivityResponse = { notifications: ShareCommentNotificationView[]; nextCur
 type View = "inbox" | "activity";
 
 /**
- * The box, not the window, decides. The 22rem list and its gutter beside a document pane of 48rem, the
- * width at which its discussions sit beside the article (`--review-rail`) rather than in a drawer over it.
+ * The box, not the window, decides: a 25rem list column (22rem of rows and its gutters) beside a document
+ * pane of 48rem, the width at which its discussions sit beside the article (`--review-rail`) rather than in
+ * a drawer over it. Measured on the border box, which the two layouts' different padding does not change.
  */
-const SPLIT_MIN_PX = 72 * 16;
+const SPLIT_MIN_PX = 74 * 16;
 const ABOUT = "Comments on your shared documents, and replies in discussions you follow on pages shared with you. Opening a discussion marks it read; resolving it is a separate action.";
 
 function useSplit() {
@@ -31,7 +32,7 @@ function useSplit() {
   useEffect(() => {
     const box = ref.current;
     if (!box || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(([entry]) => setSplit(entry.contentRect.width >= SPLIT_MIN_PX));
+    const observer = new ResizeObserver(([entry]) => setSplit((entry.borderBoxSize?.[0]?.inlineSize ?? entry.contentRect.width) >= SPLIT_MIN_PX));
     observer.observe(box);
     return () => observer.disconnect();
   }, []);
@@ -113,19 +114,16 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
     event.currentTarget.querySelector<HTMLElement>(`[data-inbox-entry="${next.id}"]`)?.focus();
   };
 
-  return <main ref={ref} className="w-full space-y-5 px-6 pb-6">
-    <PageHeader location="My Space" locationHref={`/w/${workspaceId}/home`} title="Inbox" actions={
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" icon aria-label="Refresh activity" onClick={() => void refresh()} disabled={loading || busy}><RefreshCw size={16} /></Button>
-        <Button variant="secondary" onClick={() => void mark()} disabled={busy || unread === 0}><CheckCheck size={16} />Mark all read</Button>
-      </div>
-    } />
-    {!split && <p className="text-body-sm text-kh-text-muted">{ABOUT}</p>}
-    {error && <p role="alert" className="text-body-sm text-kh-danger">{error}</p>}
-    <div className={split ? "grid grid-cols-[22rem_minmax(0,1fr)] items-start" : undefined}>
-    <div className={split ? "border-r border-kh-border pr-4" : undefined}>
+  const header = <PageHeader location="My Space" locationHref={`/w/${workspaceId}/home`} title="Inbox" actions={
+    <div className="flex items-center gap-2">
+      <Button variant="ghost" icon aria-label="Refresh activity" onClick={() => void refresh()} disabled={loading || busy}><RefreshCw size={16} /></Button>
+      <Button variant="secondary" onClick={() => void mark()} disabled={busy || unread === 0}><CheckCheck size={16} />Mark all read</Button>
+    </div>
+  } />;
+  const errorLine = error && <p role="alert" className="text-body-sm text-kh-danger">{error}</p>;
+  const list = <>
     <TabsRoot value={view} onValueChange={value => setView(value as View)}>
-      <TabsList aria-label="Activity filters">
+      <TabsList aria-label="Activity filters" className={split ? "sticky top-0 z-10 bg-kh-bg" : ""}>
         <TabsTab value="inbox">Inbox{attention.length ? ` · ${attention.length}` : ""}</TabsTab>
         <TabsTab value="activity">All activity</TabsTab>
       </TabsList>
@@ -168,15 +166,28 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
         finally { setMoreLoading(false); }
       }}>{moreLoading ? "Loading…" : "Load older activity"}</Button>
     </div>}
+  </>;
+
+  if (!split) return <main ref={ref} className="w-full space-y-5 px-6 pb-6">
+    {header}
+    <p className="text-body-sm text-kh-text-muted">{ABOUT}</p>
+    {errorLine}
+    {list}
+  </main>;
+  // Both columns are the window's height and scroll on their own; each opens on a 48px line, as the rail,
+  // the explorer and a document do, so the Inbox's header and the document's title share one top edge.
+  return <main ref={ref} className="grid h-dvh w-full grid-cols-[25rem_minmax(0,1fr)]">
+    <div className="flex min-h-0 flex-col border-r border-kh-border">
+      <div className="space-y-2 px-6">{header}{errorLine}</div>
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 pb-6">{list}</div>
     </div>
-    {split && <div className="sticky top-0 h-dvh min-h-0 pb-6 pl-6 pt-1">
+    <div className="min-h-0 min-w-0">
       {selected ? <InboxDiscussion key={selected.id} entry={selected} />
-        : <div className="py-12 text-center text-kh-text-muted">
+        : <div className="px-6 py-16 text-center text-kh-text-muted">
           <MessageSquareText size={24} className="mx-auto mb-3" aria-hidden="true" />
           <p className="text-body font-medium">Select a discussion</p>
-          <p className="mx-auto mt-1 max-w-md text-body-sm">{ABOUT}</p>
+          <p className="mx-auto mt-1 max-w-measure text-body-sm">{ABOUT}</p>
         </div>}
-    </div>}
     </div>
   </main>;
 }
