@@ -56,7 +56,7 @@
 ### Task 2: Mentions table, repository, and the mention follow
 
 **Files:**
-- Create: `src/infrastructure/database/mariadb/migrations/028-review-comment-mentions.ts`
+- Create: `src/infrastructure/database/mariadb/migrations/029-review-comment-mentions.ts`
 - Modify: `src/infrastructure/database/mariadb/migrations/index.ts`
 - Create: `src/modules/knowledge/domain/review-mention.ts`
 - Create: `src/modules/knowledge/ports/review-mention-repository.ts`
@@ -86,11 +86,11 @@
 - `KnowledgeRepositories.reviewMentions: ReviewMentionRepository`.
 
 - [ ] **Step 1: Write failing tests.**
-  - Schema test: migration 028 creates `review_comment_mentions` with PK `(comment_id, mentioned_user_id)`, key `ix_mention_inbox (mentioned_user_id, read_at, created_at)`, FKs to comments/users/share links, `ON DELETE RESTRICT`.
+  - Schema test: migration 029 creates `review_comment_mentions` with PK `(comment_id, mentioned_user_id)`, key `ix_mention_inbox (mentioned_user_id, read_at, created_at)`, FKs to comments/users/share links, `ON DELETE RESTRICT`.
   - `review-mentions.test.ts` repository cases: `insertMany` then `listRecentByRecipient` returns only that user's rows newest first; `markRead` touches only the caller's row; `markAllRead` only the caller's; `markThreadRead` only rows whose comment is in that thread; `mentionedCommentIds` returns the intersection.
   - `followForMention`: (a) no row → inserted `following=1, seen_at=at`; (b) `following=0` → `following=1, seen_at=at, share_link_id=new`; (c) following with valid link → row unchanged (same `seen_at`, same link); (d) following with `currentLinkValid` returning false → `share_link_id=new`, `seen_at` unchanged.
 - [ ] **Step 2: Run** `npx vitest run --config vitest.integration.config.ts tests/integration/review-mentions.test.ts tests/integration/document-review-schema.test.ts` — Expected: FAIL.
-- [ ] **Step 3: Implement** migration (version 28, name `review-comment-mentions`, `ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci`, style of 024), repository, `followForMention` (read the row first with `SELECT … FOR UPDATE`, then branch; the `currentLinkValid` callback keeps link judgement in the service), UoW wiring.
+- [ ] **Step 3: Implement** migration (version 29, name `review-comment-mentions`, `ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_unicode_ci`, style of 024), repository, `followForMention` (read the row first with `SELECT … FOR UPDATE`, then branch; the `currentLinkValid` callback keeps link judgement in the service), UoW wiring.
 - [ ] **Step 4: Run** the same command — Expected: PASS. Then `make test-unit` (fakes still compile).
 - [ ] **Step 5: Commit** `feat(review): mentions table and the mention follow`.
 

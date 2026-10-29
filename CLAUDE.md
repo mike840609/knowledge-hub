@@ -122,8 +122,10 @@ pass.
   writes. Its candidate search (`/api/review-mentions/candidates`) answers
   signed-in callers only, never anonymously; it asks for a live token or
   document ownership, but that is not a narrower gate on the directory, since
-  every signed-in user owns documents (accepted 2026-10-29)
-  (`docs/superpowers/specs/2026-10-29-review-mentions-design.md`).
+  every signed-in user owns documents (accepted 2026-10-29). A mention through
+  a folder link hands over that link, which opens the whole folder; it is judged
+  per document, and an owner can name only the document's own links
+  (`docs/superpowers/specs/2026-10-29-review-mentions-design.md`, "Folder share links").
   Review access never grants Workspace membership, search, tree, history,
   MCP, Markdown edits or revision writes. Review responses include only
   validated current-revision selected-text fragments; hidden bodies and
