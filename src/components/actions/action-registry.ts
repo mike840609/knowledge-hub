@@ -199,7 +199,7 @@ export type ActionContext = {
   workspaceId: string;
   workspaceType: "PERSONAL" | "TEAM";
   /** The server says the caller owns this My Space. Sharing is an owner's act, not a member's. */
-  isPersonalOwner?: boolean;
+  isPersonalOwner: boolean;
   /** Capabilities as the server derived them — never a claim read off the URL. */
   can: Pick<
     WorkspaceActions,
@@ -390,13 +390,14 @@ export function availableActions(context: ActionContext): readonly Action[] {
       surfaces: ["palette", "row"],
       effect: { kind: "copy-link", href: documentHref },
     });
-    // Share-link spec §10.1. Ownership is deliberately not consulted: sharing
-    // is reading, and SOURCE_MANAGED content is as readable as any other. A
+    // Share-link spec §10.1. Source ownership is deliberately not consulted:
+    // sharing is reading, and SOURCE_MANAGED content is as readable as any
+    // other. Only the My Space owner may share; the server refuses anyone else. A
     // historical revision is excluded because the link always shows the
     // current one, and offering it there would suggest otherwise.
     if (
       context.workspaceType === "PERSONAL" &&
-      context.isPersonalOwner === true &&
+      context.isPersonalOwner &&
       confirmed &&
       target.status === "ACTIVE" &&
       target.revision === "CURRENT"
@@ -527,9 +528,9 @@ export function availableActions(context: ActionContext): readonly Action[] {
   }
 
   // Folder share spec §8. Outside the writable block below, as document.share is outside the
-  // document's: sharing is reading, so ownership and canWrite are not consulted — only where the
-  // folder is (My Space) and its own state, and its source's.
-  if (folder && context.workspaceType === "PERSONAL" && context.isPersonalOwner === true && confirmed && folder.status === "ACTIVE" && folder.sourceStatus === "ACTIVE") {
+  // document's: sharing is reading, so source ownership and canWrite are not consulted — only that
+  // the caller owns the My Space the folder is in, and the folder's own state and its source's.
+  if (folder && context.workspaceType === "PERSONAL" && context.isPersonalOwner && confirmed && folder.status === "ACTIVE" && folder.sourceStatus === "ACTIVE") {
     actions.push({
       id: "folder.share",
       label: "Share link…",
