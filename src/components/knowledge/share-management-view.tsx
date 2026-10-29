@@ -115,14 +115,17 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
     </form>
     {filterError ? <p role="alert" className="mt-3 text-body text-kh-danger">{filterError}</p> : null}
     <GovernanceError error={error} />
-    {!filterError && model.items.length === 0 ? <EmptyState icon={Share2} illustration={!model.query.q && model.query.page === 1 && (model.query.status === "all" || (model.query.status === "active" && !hasDocuments)) ? <Illustration kind="shares" /> : undefined} title={!model.query.q && model.query.page === 1 && model.query.status === "active" ? "No active share links." : filtered ? "No shares match these filters." : "No share links yet."} description={filtered && (model.query.q || model.query.page > 1 || model.query.status !== "active") ? "Clear the filters to see links with other titles or statuses." : hasDocuments ? "Open a document and choose Share to create a link." : "Links you share to your documents appear here."} action={filtered && (model.query.q || model.query.page > 1 || model.query.status !== "active") ? <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/shares?status=all`}>Show all shares</Link> : hasDocuments ? <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/knowledge`}>Browse documents</Link> : <WorkspaceContentActions workspaceId={workspaceId} />} /> : null}
+    {!filterError && model.items.length === 0 ? <EmptyState icon={Share2} illustration={!model.query.q && model.query.page === 1 && (model.query.status === "all" || (model.query.status === "active" && !hasDocuments)) ? <Illustration kind="shares" /> : undefined} title={!model.query.q && model.query.page === 1 && model.query.status === "active" ? "No active share links." : filtered ? "No shares match these filters." : "No share links yet."} description={filtered && (model.query.q || model.query.page > 1 || model.query.status !== "active") ? "Clear the filters to see links with other titles or statuses." : hasDocuments ? "Open a document or folder and choose Share to create a link." : "Links you share to your documents and folders appear here."} action={filtered && (model.query.q || model.query.page > 1 || model.query.status !== "active") ? <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/shares?status=all`}>Show all shares</Link> : hasDocuments ? <Link className={buttonClasses({ variant: "secondary" })} href={`/w/${workspaceId}/knowledge`}>Browse documents</Link> : <WorkspaceContentActions workspaceId={workspaceId} />} /> : null}
     {model.items.length > 0 ? <p role="status" className="mt-3 text-caption text-kh-text-muted">{model.items.length} {model.items.length === 1 ? "share" : "shares"}{model.query.page > 1 || model.hasNext ? " on this page" : ""}</p> : null}
-    {model.items.length > 0 ? <div aria-hidden="true" className="mt-4 hidden grid-cols-[minmax(0,1fr)_6rem_7rem_4rem_6rem] items-center gap-3 border-b border-kh-border px-3 py-2 text-caption text-kh-text-muted md:grid"><span>Document / link</span><span>Status</span><span>Expires</span><span className="text-right">Views</span><span /></div> : null}
+    {model.items.length > 0 ? <div aria-hidden="true" className="mt-4 hidden grid-cols-[minmax(0,1fr)_6rem_7rem_4rem_6rem] items-center gap-3 border-b border-kh-border px-3 py-2 text-caption text-kh-text-muted md:grid"><span>Shared item / link</span><span>Status</span><span>Expires</span><span className="text-right">Views</span><span /></div> : null}
     <ul aria-label="Share links" onKeyDown={navigateListRows} className="mt-4 space-y-2 md:mt-0 md:space-y-0">
       {model.items.map(item => {
         const status = revoked.has(item.id) ? "revoked" : item.status;
-        const actionLabel = `Share actions for ${item.title} · ${item.label ?? "Untitled link"}`;
         const folder = item.kind === "FOLDER";
+        // Spoken names say "folder", so a document and a folder of one name are told apart.
+        const named = folder ? `folder ${item.title}` : item.title;
+        const linkName = `${named} · ${item.label ?? "Untitled link"}`;
+        const actionLabel = `Share actions for ${linkName}`;
         const notice = folder ? unreadByLink.get(item.id) : firstLinkByDocument.get(item.documentId!) === item.id ? unreadByDocument.get(item.documentId!) : undefined;
         return <li key={item.id} className="group rounded-md border border-kh-border bg-kh-bg p-3 hover:bg-kh-bg-hover focus-within:bg-kh-bg-hover md:rounded-none md:border-x-0 md:border-t-0 md:py-0.5">
           <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 md:grid-cols-[minmax(0,1fr)_6rem_7rem_4rem_6rem] md:gap-y-0">
@@ -134,7 +137,7 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
                 </Link>
                 {notice ? <Link
                   href={`/w/${workspaceId}/knowledge/${item.sourceId}/${notice.documentId}?thread=${notice.latestThreadId}`}
-                  aria-label={`Open ${notice.unreadCount} unread comments for ${item.title}`}
+                  aria-label={`Open ${notice.unreadCount} unread comments for ${named}`}
                   className="kh-focus-ring shrink-0 rounded-full bg-kh-bg-selected px-2 py-0.5 text-caption font-semibold text-kh-selected-text hover:bg-kh-highlight"
                 >{notice.unreadCount} new</Link> : null}
               </div>
@@ -144,7 +147,7 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
             <span className="col-span-2 text-caption text-kh-text-muted md:col-span-1"><span className="md:sr-only">Expires </span><Timestamp value={item.expiresAt} variant="date" /></span>
             <span title={folder ? "Documents opened through this link" : undefined} className="col-start-2 row-start-2 whitespace-nowrap text-right text-caption tabular-nums text-kh-text-muted md:col-auto md:row-auto">{item.totalViews.toLocaleString()}<span className="md:sr-only"> {item.totalViews === 1 ? "view" : "views"}</span></span>
             <div className="col-start-2 row-start-1 flex items-center gap-1 justify-self-end md:col-auto md:row-auto">
-              {status === "active" ? <Button variant="ghost" size="sm" icon aria-label={`Copy link for ${item.title} · ${item.label ?? "Untitled link"}`} disabled={busy !== null} onClick={() => void copy(item)}><Copy size={15} aria-hidden="true" /></Button> : null}
+              {status === "active" ? <Button variant="ghost" size="sm" icon aria-label={`Copy link for ${linkName}`} disabled={busy !== null} onClick={() => void copy(item)}><Copy size={15} aria-hidden="true" /></Button> : null}
               <MenuRoot>
                 <MenuTrigger aria-label={actionLabel} disabled={busy !== null} className={buttonClasses({ variant: "ghost", icon: true, size: "sm", className: "kh-row-action" })}><MoreHorizontal size={15} aria-hidden="true" /></MenuTrigger>
                 <MenuContent align="end" className="min-w-40">
@@ -159,13 +162,13 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
             <p className="break-words text-caption text-kh-text-muted">{item.sourceName} · {item.label ?? "Untitled link"}</p>
             <p className="text-caption text-kh-text-muted">Created <Timestamp value={item.createdAt} /> · Expires <Timestamp value={item.expiresAt} />{item.lastViewedAt ? <> · Last viewed <Timestamp value={item.lastViewedAt} /></> : " · Not viewed yet"}</p>
             {status === "unavailable" ? <p className="text-caption text-kh-text-muted">Sharing is paused. Restoring the {folder ? "folder" : "document"} or its source may reactivate this link until expiry. Revoke it to end sharing permanently.</p> : null}
-            {status === "active" ? <div ref={field => { if (field) fields.current.set(item.id, field); else fields.current.delete(item.id); }}><Input readOnly size="sm" aria-label={`Share URL for ${item.title} · ${item.label ?? "Untitled link"}`} value={`${origin}${item.path}`} onFocus={event => event.currentTarget.select()} /></div> : null}
+            {status === "active" ? <div ref={field => { if (field) fields.current.set(item.id, field); else fields.current.delete(item.id); }}><Input readOnly size="sm" aria-label={`Share URL for ${linkName}`} value={`${origin}${item.path}`} onFocus={event => event.currentTarget.select()} /></div> : null}
           </div> : null}
 
         </li>;
       })}
     </ul>
-    <ConfirmDialog open={!!confirmedItem} onOpenChange={open => { if (!open) setConfirming(null); }} title="Revoke share link?" description={<>Revoke “{confirmedItem?.label ?? "Untitled link"}” for {confirmedItem?.title}? Anyone holding this link will lose access. This cannot be undone.</>} cancelLabel="Keep" confirmLabel="Confirm revoke" onConfirm={() => { if (confirming) void revoke(confirming); }} />
+    <ConfirmDialog open={!!confirmedItem} onOpenChange={open => { if (!open) setConfirming(null); }} title="Revoke share link?" description={<>Revoke “{confirmedItem?.label ?? "Untitled link"}” for {confirmedItem?.kind === "FOLDER" ? "folder " : ""}{confirmedItem?.title}? Anyone holding this link will lose access. This cannot be undone.</>} cancelLabel="Keep" confirmLabel="Confirm revoke" onConfirm={() => { if (confirming) void revoke(confirming); }} />
     {model.query.page > 1 || model.hasNext ? <nav aria-label="Share pages" className="mt-4 flex items-center gap-4 text-body"><span className="text-kh-text-muted">Page {model.query.page}</span>{model.query.page > 1 ? <Link className="kh-focus-ring rounded-md text-kh-link" href={href(model.query.page - 1)}>Previous</Link> : null}{model.hasNext ? <Link className="kh-focus-ring rounded-md text-kh-link" href={href(model.query.page + 1)}>Next</Link> : null}</nav> : null}
   </main>;
 }

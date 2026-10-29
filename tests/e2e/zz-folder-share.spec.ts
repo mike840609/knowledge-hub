@@ -191,7 +191,7 @@ test.describe("folder share link", () => {
     // Revoking ends the landing page and every document of it.
     await page.goto(`/w/${workspaceId}/shares`);
     const target = shares.getByRole("listitem").filter({ has: page.getByRole("link", { name: `Folder ${names.folder}`, exact: true }) });
-    await target.getByRole("button", { name: `Share actions for ${names.folder} · for readers`, exact: true }).click();
+    await target.getByRole("button", { name: `Share actions for folder ${names.folder} · for readers`, exact: true }).click();
     await page.getByRole("menuitem", { name: "Revoke", exact: true }).click();
     await page.getByRole("alertdialog", { name: "Revoke share link?" }).getByRole("button", { name: "Confirm revoke" }).click();
     await expect(target).toHaveCount(0, ROUND_TRIP);

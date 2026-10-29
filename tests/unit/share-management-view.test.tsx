@@ -7,6 +7,8 @@ import type { ManagedShareLink } from "@/modules/knowledge/domain/share-manageme
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => vi.fn() }));
 vi.mock("@/components/shell/use-workspace-authorization", () => ({ requestWorkspaceAccessCheck: vi.fn() }));
+// The empty state with no documents offers the shell's start actions, which need the Workspace shell.
+vi.mock("@/components/knowledge/workspace-content-actions", () => ({ WorkspaceContentActions: () => null }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 afterEach(() => vi.unstubAllGlobals());
 it("requires confirmation before revoke and disables copying after success", async () => {
@@ -91,5 +93,40 @@ it("draws a folder row with its source link, its own unread badge and the folder
     expect(doc.querySelector("a[data-list-row]")!.getAttribute("href")).toBe("/w/ws/knowledge/source/doc-a?includeArchived=true");
     expect(doc.querySelector("a[aria-label*='unread comments']")?.textContent).toBe("1 new");
     expect(doc.querySelector("[title='Documents opened through this link']")).toBeNull(); expect(doc.querySelector("svg.lucide-folder")).toBeNull();
+  } finally { await act(async () => root.unmount()); host.remove(); }
+});
+
+it("heads the list for documents and folders alike, and says links come from either when there are none", async () => {
+  vi.stubGlobal("fetch", async () => Response.json({ counts: [] }));
+  const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+  try {
+    await act(async () => root.render(<ShareManagementView workspaceId="ws" model={{ items: [folderItem], query: { q: "", status: "all", page: 1 }, hasNext: false }} />));
+    expect(host.textContent).toContain("Shared item / link");
+    expect(host.textContent).not.toContain("Document / link");
+    await act(async () => root.render(<ShareManagementView workspaceId="ws" model={{ items: [], query: { q: "", status: "all", page: 1 }, hasNext: false }} />));
+    expect(host.textContent).toContain("Open a document or folder and choose Share to create a link.");
+    await act(async () => root.render(<ShareManagementView workspaceId="ws" hasDocuments={false} model={{ items: [], query: { q: "", status: "all", page: 1 }, hasNext: false }} />));
+    expect(host.textContent).toContain("Links you share to your documents and folders appear here.");
+  } finally { await act(async () => root.unmount()); host.remove(); }
+});
+
+it("names a folder row's controls as the folder's, so a document and a folder of one name differ", async () => {
+  vi.stubGlobal("fetch", async () => Response.json({ counts: [{ documentId: "doc-b", shareLinkId: "folder-link", unreadCount: 2, latestThreadId: "thread-b" }] }));
+  const documentItem: ManagedShareLink = { ...folderItem, id: "doc-link", kind: "DOCUMENT", documentId: "doc-a", folderNodeId: null };
+  const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+  const labelled = (label: string) => host.querySelectorAll(`[aria-label="${label}"]`).length;
+  try {
+    await act(async () => root.render(<ShareManagementView workspaceId="ws" model={{ items: [folderItem, documentItem], query: { q: "", status: "all", page: 1 }, hasNext: false }} />));
+    expect(labelled("Share actions for folder Handbook · Onboarding")).toBe(1);
+    expect(labelled("Share actions for Handbook · Onboarding")).toBe(1);
+    expect(labelled("Copy link for folder Handbook · Onboarding")).toBe(1);
+    expect(labelled("Copy link for Handbook · Onboarding")).toBe(1);
+    expect(labelled("Open 2 unread comments for folder Handbook")).toBe(1);
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Share actions for folder Handbook · Onboarding"]')!.click());
+    await act(async () => [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent === "Show details")!.click());
+    expect(labelled("Share URL for folder Handbook · Onboarding")).toBe(1);
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Share actions for folder Handbook · Onboarding"]')!.click());
+    await act(async () => [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent === "Revoke")!.click());
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("for folder Handbook?");
   } finally { await act(async () => root.unmount()); host.remove(); }
 });
