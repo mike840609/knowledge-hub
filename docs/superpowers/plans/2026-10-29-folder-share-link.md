@@ -113,7 +113,7 @@
 **Interfaces:**
 - Consumes: `isReachableThroughFolder`, `TreeChainNode` (Task 1); `createForFolder` (Task 2, in tests).
 - Produces:
-  - `TreeRepository.listChain(nodeId: string): Promise<TreeChainNode[]>` — the node then its ancestors upward (recursive CTE on `parent_id`, depth-capped at 256).
+  - `TreeRepository.listChain(nodeId: string): Promise<TreeChainNode[]>` — the node then its ancestors upward (recursive CTE on `parent_id`, depth-capped at 256; raised to 1000 after PR review — see `MAX_CHAIN_LENGTH` in `tree.ts`).
   - `readShared(token: string, options?: { documentId?: string; recordView?: boolean }): Promise<SharedView>`
   - `type SharedView = ({ kind: "DOCUMENT" } & SharedDocumentView) | SharedFolderView`
   - `type SharedFolderView = { kind: "FOLDER"; folderName: string; tree: SharedTreeNode[]; document: SharedFolderDocument | null; sharedByName: string; expiresAt: Date }`
@@ -134,7 +134,7 @@
   - `links`: `[[Code review]]` (in folder) → present; `[[Outside note]]` (exists outside) → absent; `[[Nothing]]` → absent
   - each call with `recordView` default counts one view
 - [ ] **Step 2: Run** `npx vitest run --config vitest.integration.config.ts tests/integration/folder-share-read.test.ts` — Expected: FAIL.
-- [ ] **Step 3: Implement `listChain`** with `WITH RECURSIVE` from `nodeId` up through `parent_id`, returning `id, parent_id, node_type, status`, ordered from the node upward, `LIMIT 256`.
+- [ ] **Step 3: Implement `listChain`** with `WITH RECURSIVE` from `nodeId` up through `parent_id`, returning `id, parent_id, node_type, status`, ordered from the node upward, `LIMIT 256` (raised to 1000 after PR review; the folder subtree is bounded to match).
 - [ ] **Step 4: Implement the folder branch of `readShared`.** Folder validity uses `evaluateShareLinkValidity` with the folder node's status and its Source/Workspace. Tree: `tree.listBySource(folder.sourceId)` filtered to ACTIVE descendants of the folder (build children map, DFS from the folder). For the requested or landing document, confirm with `listChain(documentNode.id)` + `isReachableThroughFolder` (do not trust the in-memory tree for the authorization decision). Links: `links.loadCatalog(workspaceId)` + `buildLinkResolver` + `extractDocumentLinks(revision.markdown)` as `KnowledgeLinkServiceImpl.getDocumentLinks` does, keeping only `RESOLVED` targets whose id is a document in the reachable tree. Drop the Task 1 guard.
 - [ ] **Step 5: Update `share-read.ts`** and its callers (`/s/[token]/page.tsx` keeps rendering document links exactly as before; folder rendering is Task 4 — until then a folder view may render `notFound()`).
 - [ ] **Step 6: Amend `CLAUDE.md`'s share-link invariant**: a share link targets a document **or a My Space folder**; a folder link grants read of the documents currently under it, re-derived per request; the URL's document id (`?d=`) is navigation only; a folder page resolves links only to documents under that folder.

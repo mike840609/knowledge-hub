@@ -302,6 +302,22 @@ describe("the follower's Inbox and Shares → Discussions, judged through the fo
     expect(await f.service.countUnreadForOwner(f.reader)).toEqual({ count: 0 });
   });
 
+  it("judges each followed document under one folder link on its own: the one moved out goes quiet, the one inside stays", async () => {
+    const f = await fixture();
+    const stays = await f.start(f.faq);
+    await f.ownerReply(stays.id, f.faq);
+    const leaves = await f.start(f.devSetup);
+    await f.ownerReply(leaves.id, f.devSetup);
+    expect(await f.service.countUnreadForOwner(f.reader)).toEqual({ count: 2 });
+    await f.move(f.devSetup.treeNodeId, null);
+    expect(await f.service.countUnreadForOwner(f.reader)).toEqual({ count: 1 });
+    expect((await f.follows()).map(n => n.threadId)).toEqual([stays.id]);
+    expect(await f.discussions()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ threadId: stays.id, linkAvailable: true }),
+      { threadId: leaves.id, linkAvailable: false },
+    ]));
+  });
+
   it("counts many follows on one folder link in batches, not one thread and chain read per follow", async () => {
     const f = await fixture();
     for (let index = 0; index < 12; index += 1) {

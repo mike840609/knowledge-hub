@@ -163,7 +163,10 @@ export class MariaDbTreeRepository implements TreeRepository {
        LEFT JOIN knowledge_documents d ON d.id = n.document_id AND d.source_id = n.source_id
        LEFT JOIN knowledge_revisions r ON r.id = d.current_revision_id AND r.document_id = d.id
        ORDER BY n.position, n.id`,
-      [folderNodeId, sourceId, sourceId, MAX_CHAIN_LENGTH - 1],
+      // Depth 0 is already one hop below the folder. A chain of MAX_CHAIN_LENGTH nodes reaches a
+      // folder at most MAX_CHAIN_LENGTH - 1 hops up, so the tree lists nothing deeper than that:
+      // every node it shows is one the reachability check can open.
+      [folderNodeId, sourceId, sourceId, MAX_CHAIN_LENGTH - 2],
     );
     return rows.map((row) => ({ ...mapNode(row), title: row.title === null ? null : String(row.title), pageIcon: row.document_page_icon === null || row.document_page_icon === undefined ? null : String(row.document_page_icon), documentStatus: row.document_status === null ? null : String(row.document_status) as "ACTIVE" | "ARCHIVED", currentRevisionId: row.document_current_revision_id === null || row.document_current_revision_id === undefined ? null : String(row.document_current_revision_id) }));
   }

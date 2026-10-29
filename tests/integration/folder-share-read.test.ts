@@ -172,6 +172,25 @@ describe("DocumentShareService.readShared on a folder link (folder share spec §
     expect(view.document?.path).toHaveLength(301);
   });
 
+  it("lists in the tree exactly the deep documents the link can open: 999 hops yes, 1000 no", async () => {
+    const f = await sharedFolder();
+    const folders: KnowledgeTreeNode[] = [];
+    let parentId = f.folderNodeId;
+    for (let hop = 1; hop <= 999; hop += 1) {
+      const id = uuidv7();
+      folders.push({ id, sourceId: f.sourceId, parentId, nodeType: "FOLDER" as const, name: `Hop ${hop}`, documentId: null, position: 0, status: "ACTIVE" as const, updatedBy: f.owner.id, archivedBy: null, archivedAt: null });
+      parentId = id;
+    }
+    await new MariaDbUnitOfWork(pool).run((repositories) => repositories.tree.insertMany(folders));
+    const reachable = await f.hub.createDocument(f.caller, { sourceId: f.sourceId, parentId: folders[997].id, title: "At 999", markdown: "x", metadata: {} });
+    const tooDeep = await f.hub.createDocument(f.caller, { sourceId: f.sourceId, parentId: folders[998].id, title: "At 1000", markdown: "x", metadata: {} });
+    const listed = asFolder(await service().readShared(f.token)).tree.map((node) => node.documentId);
+    expect(listed).toContain(reachable.documentId);
+    expect(listed).not.toContain(tooDeep.documentId);
+    expect(asFolder(await service().readShared(f.token, { documentId: reachable.documentId })).document?.title).toBe("At 999");
+    await expect(service().readShared(f.token, { documentId: tooDeep.documentId })).rejects.toMatchObject(notFound);
+  });
+
   it("orders siblings with equal position by id, the same on every call", async () => {
     const f = await sharedFolder();
     await pool.query("UPDATE knowledge_tree_nodes SET position = 0 WHERE id IN (?, ?)", [f.welcome.treeNodeId, f.faq.treeNodeId]);
@@ -281,6 +300,9 @@ describe("DocumentShareService.readShared on a folder link (folder share spec §
     await invalidate(f);
     await expect(service().readShared(f.token)).rejects.toMatchObject(notFound);
     await expect(service().readShared(f.token, { documentId: f.codeReview.documentId })).rejects.toMatchObject(notFound);
+    // `/s/:token/open` judges the same link through its narrow read, before sign-in.
+    await expect(service().readSharedTarget(f.token)).rejects.toMatchObject(notFound);
+    await expect(service().readSharedTarget(f.token, { documentId: f.codeReview.documentId })).rejects.toMatchObject(notFound);
   });
 
   it("guards an intermediate folder archived by a defect: its documents are unreachable", async () => {
