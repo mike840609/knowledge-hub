@@ -18,6 +18,7 @@ test("owner Inbox shows a shared comment, retains activity after read, and links
   });
   expect(created.status()).toBe(201);
   const thread = await created.json();
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${owner}/w/${doc.workspaceId}/inbox`);
   await expect(page.getByRole("heading", { name: "Inbox" })).toBeVisible();
   const inbox = page.getByRole("list", { name: "Inbox discussions" });
@@ -27,7 +28,26 @@ test("owner Inbox shows a shared comment, retains activity after read, and links
   const activity = page.getByRole("list", { name: "Activity history" });
   const row = activity.getByRole("link", { name: /Inbox verification comment/ });
   await expect(row).toContainText("Read");
+  // Selected, the discussion sits beside the list and takes a reply there.
   await row.click();
+  await expect(page).toHaveURL(/[?&]item=/);
+  const selected = page.getByRole("region", { name: "Selected discussion" });
+  await expect(selected.getByText("Inbox verification comment", { exact: true })).toBeVisible();
+  await selected.getByRole("button", { name: "Reply" }).click();
+  await selected.getByRole("textbox", { name: "Reply" }).fill("Answered from the Inbox");
+  await selected.getByRole("button", { name: "Reply" }).last().click();
+  await expect(selected.getByText("Answered from the Inbox", { exact: true })).toBeVisible();
+  await selected.getByRole("link", { name: "Open document" }).click();
   await expect(page).toHaveURL(new RegExp(`thread=${thread.id}`));
-  await expect(page.getByRole("region", { name: "Discussion thread" }).getByText("Inbox verification comment", { exact: true })).toBeVisible();
+  const card = page.getByRole("region", { name: "Discussion thread" });
+  await expect(card.getByText("Inbox verification comment", { exact: true })).toBeVisible();
+  await expect(card.getByText("Answered from the Inbox", { exact: true })).toBeVisible();
+
+  // Narrow, the Inbox is a list whose rows open the document.
+  await page.setViewportSize({ width: 600, height: 900 });
+  await page.goto(`${owner}/w/${doc.workspaceId}/inbox`);
+  await page.getByRole("tab", { name: "All activity" }).click();
+  await expect(page.getByRole("region", { name: "Selected discussion" })).toHaveCount(0);
+  await page.getByRole("list", { name: "Activity history" }).getByRole("link", { name: /Inbox verification comment/ }).click();
+  await expect(page).toHaveURL(new RegExp(`thread=${thread.id}`));
 });

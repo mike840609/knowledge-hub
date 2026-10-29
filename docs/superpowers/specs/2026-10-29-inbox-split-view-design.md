@@ -31,20 +31,26 @@ surroundings matter.
 
 ## Layout
 
-- Where the Inbox's own box is at least **60rem** wide (a container query, as
-  the document pane does, never the window), the page is two columns: the list
-  at **22rem** fixed, the discussion taking the rest, a 1px `border` rule
-  between them. The page widens from `kh-page` to fill the content area; the
-  list keeps its rows' current shape.
+- Where the Inbox's own box is at least **44rem** wide (measured on the box by a
+  `ResizeObserver`, as the document pane uses a container query, never the
+  window), the page is two columns: the list at **22rem** fixed, the discussion
+  taking the rest (at least 22rem, wider than the 20rem review rail), a 1px
+  `border` rule between them. 44rem, not the draft's 60rem: at a 1280px window
+  the content area beside the rail and the explorer is about 51rem, and the
+  split should be there on an ordinary laptop. The page widens from `kh-page`
+  to fill the content area; the list keeps its rows' current shape.
 - Narrower than that, the page is today's list, and a row is today's link.
   Nothing on a phone changes.
-- The two columns scroll independently; the page header (title, Refresh, Mark
-  all read) and the tabs stay above the list column.
+- The list scrolls with the page; the discussion column is sticky at the top
+  of the content area and scrolls on its own when taller than the window. The
+  page header (title, Refresh, Mark all read) spans both columns; the tabs
+  head the list column.
 
 ## Selection
 
 - **Selection lives in the URL** as `?item=<eventId>`, written with
-  `router.replace`, so a reload or a shared bookmark of one's own Inbox opens
+  `history.replaceState` (Next keeps `useSearchParams` in step, and no server
+  render is asked for), so a reload or a shared bookmark of one's own Inbox opens
   the same entry and Back leaves the Inbox rather than stepping through rows.
   An unknown or no-longer-listed id selects nothing, silently.
 - **Nothing is selected on arrival.** Selecting marks an entry read (below), so
@@ -85,8 +91,8 @@ surroundings matter.
 
 ## Keyboard
 
-- `↑` / `↓` move the selection when focus is in the list (roving focus, one tab
-  stop), and the pane follows. `Enter` on a row in the split layout selects;
+- `↑` / `↓` move the selection when focus is in the list, and focus and the
+  pane follow. Every row stays a tab stop, as today. `Enter` on a row in the split layout selects;
   `⌘Enter` / `Ctrl+Enter` opens the document.
 - **Open question for the user:** Linear also binds `j` / `k`. The contract
   (§10) lets single keys act on the page while no caret is in a field, so it is
@@ -112,5 +118,5 @@ rendering the document in the pane, and `j` / `k`.
 ## Contract
 
 `frontend-design-language.md` §18 gains one sentence: the Inbox is a list and
-the selected discussion side by side from a 60rem box, a plain list below it,
+the selected discussion side by side from a 44rem box, a plain list below it,
 selection in the URL, nothing selected on arrival.

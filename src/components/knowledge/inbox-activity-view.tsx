@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { useSearchParams } from "next/navigation";
 import { CheckCheck, MessageSquareText, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
@@ -11,10 +12,28 @@ import { reviewRequest } from "./review-thread-list";
 import type { ShareCommentNotificationView } from "@/modules/knowledge/domain/share-comment-event";
 import { notificationHref, notificationLine, notificationTitle } from "./notification-href";
 import { NotificationListSkeleton } from "./knowledge-skeletons";
+import { InboxDiscussion } from "./inbox-discussion";
 
 type Cursor = { createdAt: string; id: string };
 type ActivityResponse = { notifications: ShareCommentNotificationView[]; nextCursor: Cursor | null };
 type View = "inbox" | "activity";
+
+/** The box, not the window, decides: list 22rem beside a discussion at least as wide. */
+const SPLIT_MIN_PX = 44 * 16;
+const ABOUT = "Comments on your shared documents, and replies in discussions you follow on pages shared with you. Opening a discussion marks it read; resolving it is a separate action.";
+
+function useSplit() {
+  const ref = useRef<HTMLElement>(null);
+  const [split, setSplit] = useState(false);
+  useEffect(() => {
+    const box = ref.current;
+    if (!box || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => setSplit(entry.contentRect.width >= SPLIT_MIN_PX));
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, []);
+  return { ref, split };
+}
 
 export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
   const [items, setItems] = useState<ShareCommentNotificationView[]>([]);
@@ -24,6 +43,9 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
   const [moreLoading, setMoreLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { ref, split } = useSplit();
+  const deepLink = useSearchParams().get("item");
+  const [selectedId, setSelectedId] = useState<string | null>(deepLink);
 
   const load = useCallback(async (cursor?: Cursor) => {
     const search = cursor ? "?beforeCreatedAt=" + encodeURIComponent(cursor.createdAt) + "&beforeId=" + encodeURIComponent(cursor.id) : "";
@@ -47,7 +69,7 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
   const shown = view === "inbox" ? attention : items;
   const unread = items.filter(item => item.readAt === null).length;
 
-  const mark = async (eventId?: string) => {
+  const mark = useCallback(async (eventId?: string) => {
     setBusy(true);
     setError(null);
     try {
@@ -60,17 +82,49 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not mark activity as read.");
     } finally { setBusy(false); }
+  }, []);
+
+  const selected = split ? items.find(item => item.id === selectedId) : undefined;
+  // Looking at an entry is reading it, as opening it always was; nothing is selected unasked (spec).
+  const unreadSelection = selected?.readAt === null ? selected.id : null;
+  useEffect(() => { if (unreadSelection) void mark(unreadSelection); }, [unreadSelection, mark]);
+  const select = (item: ShareCommentNotificationView) => {
+    setSelectedId(item.id);
+    const url = new URL(window.location.href);
+    url.searchParams.set("item", item.id);
+    window.history.replaceState(window.history.state, "", url);
+  };
+  const onStatus = useCallback((threadId: string, threadStatus: ShareCommentNotificationView["threadStatus"]) => {
+    setItems(previous => previous.some(item => item.threadId === threadId && item.threadStatus !== threadStatus)
+      ? previous.map(item => item.threadId === threadId ? { ...item, threadStatus } : item) : previous);
+  }, []);
+  const openRow = (item: ShareCommentNotificationView) => (event: MouseEvent) => {
+    // A modified click still opens the document in a new tab.
+    if (!split || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+    event.preventDefault();
+    select(item);
+  };
+  const step = (event: KeyboardEvent<HTMLUListElement>) => {
+    if (!split || (event.key !== "ArrowDown" && event.key !== "ArrowUp")) return;
+    event.preventDefault();
+    const at = shown.findIndex(item => item.id === selectedId);
+    const next = shown[at === -1 ? 0 : Math.min(shown.length - 1, Math.max(0, at + (event.key === "ArrowDown" ? 1 : -1)))];
+    if (!next) return;
+    if (next.id !== selectedId) select(next);
+    event.currentTarget.querySelector<HTMLElement>(`[data-inbox-entry="${next.id}"]`)?.focus();
   };
 
-  return <main className="kh-page space-y-5 pb-6">
+  return <main ref={ref} className="w-full space-y-5 px-6 pb-6">
     <PageHeader location="My Space" locationHref={`/w/${workspaceId}/home`} title="Inbox" actions={
       <div className="flex items-center gap-2">
         <Button variant="ghost" icon aria-label="Refresh activity" onClick={() => void refresh()} disabled={loading || busy}><RefreshCw size={16} /></Button>
         <Button variant="secondary" onClick={() => void mark()} disabled={busy || unread === 0}><CheckCheck size={16} />Mark all read</Button>
       </div>
     } />
-    <p className="text-body-sm text-kh-text-muted">Comments on your shared documents, and replies in discussions you follow on pages shared with you. Opening a discussion marks it read; resolving it is a separate action.</p>
+    {!split && <p className="text-body-sm text-kh-text-muted">{ABOUT}</p>}
     {error && <p role="alert" className="text-body-sm text-kh-danger">{error}</p>}
+    <div className={split ? "grid grid-cols-[22rem_minmax(0,1fr)] items-start" : undefined}>
+    <div className={split ? "border-r border-kh-border pr-4" : undefined}>
     <TabsRoot value={view} onValueChange={value => setView(value as View)}>
       <TabsList aria-label="Activity filters">
         <TabsTab value="inbox">Inbox{attention.length ? ` · ${attention.length}` : ""}</TabsTab>
@@ -83,7 +137,7 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
             <p className="text-body font-medium">{tab === "inbox" ? "You're all caught up" : "No share comments yet"}</p>
             <p className="mt-1 text-body-sm">{tab === "inbox" ? "New and open discussions will appear here." : "When someone comments on your shared article, its activity appears here."}</p>
           </div>
-        ) : <ul aria-label={tab === "inbox" ? "Inbox discussions" : "Activity history"} className="divide-y divide-kh-border">
+        ) : <ul aria-label={tab === "inbox" ? "Inbox discussions" : "Activity history"} className="divide-y divide-kh-border" onKeyDown={step}>
           {shown.map(item => { const href = notificationHref(item); const content = <>
               <span className="block truncate text-body font-medium">{notificationTitle(item)}</span>
               <span className="mt-1 block text-body-sm text-kh-text-muted">{notificationLine(item)}</span>
@@ -93,10 +147,13 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
                 <span>{item.kind === "FOLLOW" ? "Discussion you follow" : item.threadStatus === "OPEN" ? "Open discussion" : "Resolved"}</span>
               </span>
             </>;
+            const current = selected?.id === item.id;
+            const row = `kh-focus-ring min-w-0 flex-1 rounded-md px-1 py-1 text-left ${current ? "bg-kh-bg-selected" : "hover:bg-kh-bg-hover"}`;
             return <li key={item.id} className="flex items-start gap-3 py-3">
             <span aria-hidden="true" className={`mt-2 h-2 w-2 shrink-0 rounded-full ${item.readAt === null ? "bg-kh-primary" : "bg-transparent"}`} />
             {href
-              ? <Link className="kh-focus-ring min-w-0 flex-1 rounded-md px-1 py-1 hover:bg-kh-bg-hover" href={href} prefetch={item.kind === "FOLLOW" ? false : undefined}>{content}</Link>
+              ? <Link className={row} href={href} prefetch={item.kind === "FOLLOW" ? false : undefined} data-inbox-entry={item.id} aria-current={current ? "true" : undefined} onClick={openRow(item)}>{content}</Link>
+              : split ? <button type="button" className={row} data-inbox-entry={item.id} aria-current={current ? "true" : undefined} onClick={() => select(item)}>{content}</button>
               : <div className="min-w-0 flex-1 px-1 py-1">{content}</div>}
             {item.readAt === null && <Button variant="ghost" size="sm" disabled={busy} onClick={() => void mark(item.id)}>Mark read</Button>}
           </li>; })}
@@ -111,5 +168,15 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
         finally { setMoreLoading(false); }
       }}>{moreLoading ? "Loading…" : "Load older activity"}</Button>
     </div>}
+    </div>
+    {split && <div className="sticky top-0 max-h-dvh overflow-y-auto pl-6 pt-1">
+      {selected ? <InboxDiscussion key={selected.id} entry={selected} onStatus={onStatus} />
+        : <div className="py-12 text-center text-kh-text-muted">
+          <MessageSquareText size={24} className="mx-auto mb-3" aria-hidden="true" />
+          <p className="text-body font-medium">Select a discussion</p>
+          <p className="mx-auto mt-1 max-w-reading text-body-sm">{ABOUT}</p>
+        </div>}
+    </div>}
+    </div>
   </main>;
 }
