@@ -1,6 +1,7 @@
 import { MariaDbSavedShareRepository } from "./saved-shares";
 import { MariaDbShareCommentEventsRepository } from "./share-comment-events";
 import { MariaDbReviewFollowsRepository } from "./review-follows";
+import { MariaDbReviewMentionsRepository } from "./review-mentions";
 import { MariaDbDocumentReviewThreadsRepository } from "./document-review-threads";
 import { MariaDbDocumentReviewCommentsRepository } from "./document-review-comments";
 import { MariaDbDocumentReviewWriteLedger } from "./document-review-write-ledger";
@@ -48,6 +49,7 @@ export function createRepositories(connection: DatabaseConnection): SourceReposi
     reviewWriteLedger: new MariaDbDocumentReviewWriteLedger(connection),
     shareCommentEvents: new MariaDbShareCommentEventsRepository(connection),
     reviewFollows: new MariaDbReviewFollowsRepository(connection),
+    reviewMentions: new MariaDbReviewMentionsRepository(connection),
     personalProfile: new MariaDbPersonalProfileRepository(connection),
     users,
     sources,
