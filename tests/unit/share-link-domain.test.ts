@@ -90,6 +90,15 @@ describe("assertShareLinkCreation (share-link spec §5.1)", () => {
       .toThrow(expect.objectContaining({ code: "SHARE_LINK_LIMIT_REACHED" }));
   });
 
+  it("names a folder as the target in the limit and archived messages", () => {
+    expect(() => assertShareLinkCreation(creation({ targetKind: "FOLDER", activeLinkCount: 10 })))
+      .toThrow("A folder can have at most 10 active share links.");
+    expect(() => assertShareLinkCreation(creation({ targetKind: "FOLDER", documentStatus: "ARCHIVED" })))
+      .toThrow("The shared folder is archived.");
+    expect(() => assertShareLinkCreation(creation({ activeLinkCount: 10 })))
+      .toThrow("A document can have at most 10 active share links.");
+  });
+
   it.each([0, 2, 365, "30", null])("rejects expiry %j", (expiresInDays) => {
     expect(() => assertShareLinkCreation(creation({ expiresInDays })))
       .toThrow(expect.objectContaining({ code: "INVALID_SHARE_LINK_EXPIRY" }));

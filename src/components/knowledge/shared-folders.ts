@@ -36,11 +36,17 @@ export function useSharedFolderIds(workspaceId: string, enabled: boolean): Reado
         // Keep the last answer.
       }
     };
+    // A link can expire while the tab stays open; come back to the answer when the owner returns.
+    const refresh = () => { if (document.visibilityState === "visible") void load(); };
     void load();
     window.addEventListener(SHARE_LINKS_CHANGED_EVENT, load);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
     return () => {
       live = false;
       window.removeEventListener(SHARE_LINKS_CHANGED_EVENT, load);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
     };
   }, [workspaceId, enabled]);
   return ids;

@@ -113,7 +113,7 @@ describe("DocumentShareService.createForFolder (folder share links §8)", () => 
   it("refuses an ARCHIVED folder", async () => {
     const { caller, folderNodeId, owner } = await mySpaceFolder();
     await new MariaDbUnitOfWork(pool).run((repositories) => repositories.tree.updateStatus(folderNodeId, "ARCHIVED", owner.id));
-    await expect(service().createForFolder(caller, { folderNodeId })).rejects.toMatchObject({ code: "DOCUMENT_ARCHIVED" });
+    await expect(service().createForFolder(caller, { folderNodeId })).rejects.toMatchObject({ code: "DOCUMENT_ARCHIVED", message: "The shared folder is archived." });
     expect(await linkRows(folderNodeId)).toBe(0);
   });
 
@@ -128,7 +128,7 @@ describe("DocumentShareService.createForFolder (folder share links §8)", () => 
     const shares = service();
     const links = [];
     for (let index = 0; index < 10; index += 1) links.push(await shares.createForFolder(caller, { folderNodeId }));
-    await expect(shares.createForFolder(caller, { folderNodeId })).rejects.toMatchObject({ code: "SHARE_LINK_LIMIT_REACHED" });
+    await expect(shares.createForFolder(caller, { folderNodeId })).rejects.toMatchObject({ code: "SHARE_LINK_LIMIT_REACHED", message: "A folder can have at most 10 active share links." });
     await shares.revoke(caller, links[0].id);
     await pool.query("UPDATE document_share_links SET created_at = NOW(6) - INTERVAL 2 DAY, expires_at = NOW(6) - INTERVAL 1 SECOND WHERE id = ?", [links[1].id]);
     await expect(shares.createForFolder(caller, { folderNodeId })).resolves.toMatchObject({ active: true });

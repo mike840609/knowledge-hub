@@ -38,7 +38,7 @@ export function DocumentContextBar({ workspaceId, className = "" }: { workspaceI
   const runAction = useActionRunner({ onToggleFavorite: () => toggleFavorite() });
   const hidden = new Set<ActionId>(["document.favorite", "document.open-side-peek", "document.open-new-tab"]);
   const contextual = active
-    ? actionsFor("row", { workspaceId, workspaceType: access.workspace.type, can: access.actions, confirmed, target: { ...state.target, favorite } })
+    ? actionsFor("row", { workspaceId, workspaceType: access.workspace.type, isPersonalOwner: access.isPersonalOwner, can: access.actions, confirmed, target: { ...state.target, favorite } })
     : [];
   const share = contextual.find((action) => action.id === "document.share");
   const actions = contextual.filter((action) => !hidden.has(action.id));

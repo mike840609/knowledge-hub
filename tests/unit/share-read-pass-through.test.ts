@@ -1,10 +1,10 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ readShared: vi.fn() }));
-vi.mock("@/server/composition", () => ({ shareReadService: () => ({ readShared: mocks.readShared }) }));
+const mocks = vi.hoisted(() => ({ readShared: vi.fn(), readSharedTarget: vi.fn() }));
+vi.mock("@/server/composition", () => ({ shareReadService: () => ({ readShared: mocks.readShared, readSharedTarget: mocks.readSharedTarget }) }));
 
-import { getShared, isSharedAvailable } from "@/server/share-read";
+import { getShared, isSharedAvailable, sharedOpenTarget } from "@/server/share-read";
 import { ShareLinkNotFoundError } from "@/modules/knowledge/domain/document-share-link";
 
 const token = "6f1c2c9e-4c5e-4b8a-9d2e-3a1b2c3d4e5f";
@@ -36,9 +36,23 @@ describe("the shared page counts a view, the pass-through to the Hub does not", 
     expect(mocks.readShared.mock.calls).toEqual([[token, { documentId: undefined, recordView: false }], [token, { documentId, recordView: false }]]);
   });
 
+  it("/s/:token/open judges the link once and returns the destination", async () => {
+    mocks.readSharedTarget.mockResolvedValue({ kind: "FOLDER", documentId });
+    await expect(sharedOpenTarget(token, documentId)).resolves.toEqual({ kind: "FOLDER", documentId });
+    expect(mocks.readSharedTarget).toHaveBeenCalledTimes(1);
+    expect(mocks.readSharedTarget).toHaveBeenCalledWith(token, { documentId });
+  });
+
+  it("a document link's open target is its own document", async () => {
+    mocks.readSharedTarget.mockResolvedValue({ kind: "DOCUMENT", documentId });
+    await expect(sharedOpenTarget(token)).resolves.toEqual({ kind: "DOCUMENT", documentId });
+    expect(mocks.readSharedTarget).toHaveBeenCalledTimes(1);
+  });
+
   it("/s/:token/open passes through, never reading the page's counted projection", () => {
     const page = readFileSync("src/app/s/[token]/open/page.tsx", "utf8");
-    expect(page).toMatch(/isSharedAvailable\(token\)/);
+    expect(page).toMatch(/sharedOpenTarget\(token, requested\)/);
     expect(page).not.toMatch(/getShared\b/);
+    expect(page).not.toMatch(/isSharedAvailable\b/);
   });
 });

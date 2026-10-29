@@ -215,7 +215,7 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
   const newNoteHref = `/w/${workspaceId}/knowledge/new`;
   const addNote = <Tooltip label="Create document"><Link href={newNoteHref} aria-label="Create document" className={buttonClasses({ variant: "ghost", icon: true })}><Plus size={15} aria-hidden="true" /></Link></Tooltip>;
   // What can be made here, from the registry like everything else: the button exists when the action does.
-  const actionContext = { workspaceId, workspaceType: access.workspace.type, can: access.actions, confirmed };
+  const actionContext = { workspaceId, workspaceType: access.workspace.type, isPersonalOwner: access.isPersonalOwner, can: access.actions, confirmed };
   const createActions = actionsFor("create", actionContext);
   const createFolder = createActions.find((action) => action.id === "create.folder");
   const importAction = createActions.find((action) => action.id === "create.import");
@@ -356,6 +356,7 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
                   documentActions={(item) => actionsFor("row", {
                     workspaceId,
                     workspaceType: access.workspace.type,
+                    isPersonalOwner: access.isPersonalOwner,
                     can: access.actions,
                     confirmed,
                     includeArchived: showArchived,
@@ -377,6 +378,7 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
                   folderActions={(item) => actionsFor("row", {
                     workspaceId,
                     workspaceType: access.workspace.type,
+                    isPersonalOwner: access.isPersonalOwner,
                     can: access.actions,
                     confirmed,
                     includeArchived: showArchived,

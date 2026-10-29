@@ -8,6 +8,7 @@ import { callerFromIdentity } from "@/modules/identity/domain/caller-context";
 import type { UserIdentity } from "@/modules/identity/domain/user-identity";
 import { DocumentShareService, type SharedFolderView, type SharedView } from "@/modules/knowledge/application/document-share-service";
 import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
+import type { KnowledgeTreeNode } from "@/modules/knowledge/domain/tree-node";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "@/modules/knowledge/ports/unit-of-work";
 import { ensureDefaultHubSource } from "@/modules/sources/application/ensure-default-hub-source";
 import { PersonalWorkspaceService } from "@/modules/workspaces/application/personal-workspace-service";
@@ -24,6 +25,27 @@ function newIdentity(name: string): UserIdentity {
 
 function service(unitOfWork: KnowledgeUnitOfWork = new MariaDbUnitOfWork(pool)) {
   return new DocumentShareService(unitOfWork, new RandomShareTokenIssuer());
+}
+
+/** Records every repository method a read calls, without changing what it returns. */
+function queryRecorder(inner: KnowledgeUnitOfWork) {
+  const calls: string[] = [];
+  const spying = <T extends object>(target: T, namespace: string): T => new Proxy(target, {
+    get(object, property) {
+      const value = Reflect.get(object, property, object);
+      if (typeof value !== "function") return value;
+      return (...args: unknown[]) => { calls.push(`${namespace}.${String(property)}`); return value.apply(object, args); };
+    },
+  });
+  const uow: KnowledgeUnitOfWork = {
+    run: work => inner.run(r => work(new Proxy(r, {
+      get(object, property) {
+        const value = Reflect.get(object, property, object);
+        return value !== null && typeof value === "object" ? spying(value, String(property)) : value;
+      },
+    }))),
+  };
+  return { uow, calls };
 }
 
 /** Counts unit-of-work runs, to prove a refusal reached no query. */
@@ -48,7 +70,7 @@ async function mySpace(name: string) {
   const { workspace } = await new PersonalWorkspaceService(unitOfWork).ensurePersonalWorkspace(owner.id);
   const caller = callerFromIdentity(owner);
   const sourceId = await ensureDefaultHubSource(unitOfWork, caller, workspace.id);
-  return { owner, caller, workspaceId: workspace.id, sourceId, hub: new HubKnowledgeCommandServiceImpl(unitOfWork) };
+  return { uow: unitOfWork, owner, caller, workspaceId: workspace.id, sourceId, hub: new HubKnowledgeCommandServiceImpl(unitOfWork) };
 }
 
 /**
@@ -101,6 +123,16 @@ describe("TreeRepository.listChain", () => {
   it("returns nothing for a node that does not exist", async () => {
     await expect(new MariaDbUnitOfWork(pool).run((repositories) => repositories.tree.listChain(uuidv7()))).resolves.toEqual([]);
   });
+
+  it("lists only the shared folder's ACTIVE descendants, not the rest of the Source", async () => {
+    const f = await sharedFolder();
+    for (let index = 0; index < 20; index += 1) {
+      await f.hub.createDocument(f.caller, { sourceId: f.sourceId, parentId: null, title: `Unrelated ${index}`, markdown: "x", metadata: {} });
+    }
+    const nodes = await new MariaDbUnitOfWork(pool).run((repositories) => repositories.tree.listSubtree(f.sourceId, f.folderNodeId));
+    expect(nodes.map((node) => node.title ?? node.name).sort()).toEqual(["Code review", "Dev setup", "Engineering", "FAQ", "Welcome"]);
+    expect(nodes.every((node) => node.status === "ACTIVE")).toBe(true);
+  });
 });
 
 describe("DocumentShareService.readShared on a folder link (folder share spec §2, §3)", () => {
@@ -122,6 +154,22 @@ describe("DocumentShareService.readShared on a folder link (folder share spec §
     expect(JSON.stringify(view.tree)).not.toContain("body");
     expect(JSON.stringify(view.tree)).not.toContain("markdown");
     expect(view.document).toMatchObject({ documentId: f.welcome.documentId, title: "Welcome", markdown: "Welcome body", revisionId: f.welcome.revisionId, path: [] });
+  });
+
+  it("keeps a document reachable through more than 256 folder hops", async () => {
+    const f = await sharedFolder();
+    const nodes: KnowledgeTreeNode[] = [];
+    let parentId = f.engineeringId;
+    for (let index = 0; index < 300; index += 1) {
+      const id = uuidv7();
+      nodes.push({ id, sourceId: f.sourceId, parentId, nodeType: "FOLDER" as const, name: `Level ${index}`, documentId: null, position: 0, status: "ACTIVE" as const, updatedBy: f.owner.id, archivedBy: null, archivedAt: null });
+      parentId = id;
+    }
+    await new MariaDbUnitOfWork(pool).run((repositories) => repositories.tree.insertMany(nodes));
+    const deep = await f.hub.createDocument(f.caller, { sourceId: f.sourceId, parentId, title: "Deep", markdown: "deep", metadata: {} });
+    const view = asFolder(await service().readShared(f.token, { documentId: deep.documentId }));
+    expect(view.document?.title).toBe("Deep");
+    expect(view.document?.path).toHaveLength(301);
   });
 
   it("orders siblings with equal position by id, the same on every call", async () => {
@@ -181,6 +229,27 @@ describe("DocumentShareService.readShared on a folder link (folder share spec §
     await expect(service().readShared(f.token, { documentId: f.devSetup.documentId })).resolves.toMatchObject({ document: { title: "Dev setup" } });
   });
 
+  it("names the Open destination in one narrow read, falling back to landing for an unreachable ?d=", async () => {
+    const f = await sharedFolder();
+    expect(await service().readSharedTarget(f.token)).toEqual({ kind: "FOLDER", documentId: f.welcome.documentId });
+    expect(await service().readSharedTarget(f.token, { documentId: f.codeReview.documentId })).toEqual({ kind: "FOLDER", documentId: f.codeReview.documentId });
+    // Open falls back; the page itself never does (readShared still refuses it above).
+    expect(await service().readSharedTarget(f.token, { documentId: f.outside.documentId })).toEqual({ kind: "FOLDER", documentId: f.welcome.documentId });
+    const documentLink = await service().create(f.caller, { documentId: f.welcome.documentId });
+    const documentToken = tokenOf(documentLink.path);
+    expect(await service().readSharedTarget(documentToken)).toEqual({ kind: "DOCUMENT", documentId: f.welcome.documentId });
+    await expect(service().readSharedTarget(documentToken, { documentId: f.codeReview.documentId })).rejects.toMatchObject(notFound);
+
+    // Open reads the destination, not the document: no revision, Markdown, creator or link catalog.
+    const counted = queryRecorder(f.uow);
+    const openService = new DocumentShareService(counted.uow, new RandomShareTokenIssuer());
+    await openService.readSharedTarget(f.token, { documentId: f.codeReview.documentId });
+    expect(counted.calls).not.toContain("revisions.findCurrent");
+    expect(counted.calls).not.toContain("links.loadCatalog");
+    expect(counted.calls).not.toContain("users.findById");
+    expect(counted.calls.length).toBeLessThan(10);
+  });
+
   it("serves an empty folder as an empty tree and no document", async () => {
     const space = await mySpace("Empty Folder Owner");
     const { treeNodeId: folderNodeId } = await space.hub.createFolder(space.caller, { sourceId: space.sourceId, parentId: null, name: "Empty" });
@@ -190,6 +259,7 @@ describe("DocumentShareService.readShared on a folder link (folder share spec §
     await expect(service().readShared(token)).resolves.toEqual({
       kind: "FOLDER", folderName: "Empty", tree: [], document: null, sharedByName: "Empty Folder Owner", expiresAt: expect.any(Date),
     });
+    await expect(service().readSharedTarget(token)).resolves.toEqual({ kind: "FOLDER", documentId: null });
   });
 
   it.each([

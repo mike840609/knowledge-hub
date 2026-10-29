@@ -81,6 +81,23 @@ describe("useSharedFolderIds", () => {
     expect(seen()).toBe("");
   });
 
+  it("refreshes when the tab returns to view, so an expired link stops being marked", async () => {
+    let folders = [{ folderNodeId: "a", name: "A" }];
+    const fetchStub = vi.fn(async () => new Response(JSON.stringify({ folders }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchStub);
+    act(() => root.render(createElement(Probe, { enabled: true })));
+    await flush();
+    expect(fetchStub).toHaveBeenCalledTimes(1);
+    folders = [];
+    act(() => { document.dispatchEvent(new Event("visibilitychange")); });
+    await flush();
+    expect(fetchStub).toHaveBeenCalledTimes(2);
+    expect(seen()).toBe("");
+    act(() => { window.dispatchEvent(new Event("focus")); });
+    await flush();
+    expect(fetchStub).toHaveBeenCalledTimes(3);
+  });
+
   it("does not ask outside My Space, and keeps the last answer when a read fails", async () => {
     const fetchStub = vi.fn(async () => new Response("{}", { status: 403 }));
     vi.stubGlobal("fetch", fetchStub);

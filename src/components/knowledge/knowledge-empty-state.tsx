@@ -26,6 +26,7 @@ export function KnowledgeEmptyState() {
   const actions = startActions({
     workspaceId: access.workspace.id,
     workspaceType: access.workspace.type,
+    isPersonalOwner: access.isPersonalOwner,
     can: access.actions,
     confirmed,
   });

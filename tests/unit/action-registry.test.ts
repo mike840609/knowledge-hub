@@ -24,6 +24,7 @@ function context(overrides: Partial<ActionContext> = {}): ActionContext {
   return {
     workspaceId: "w1",
     workspaceType: "TEAM",
+    isPersonalOwner: true,
     can: { ...allCapabilities },
     confirmed: true,
     ...overrides,
@@ -257,6 +258,7 @@ describe("action registry — document.share (share-link spec §10.1)", () => {
 
   it.each([
     ["a Team workspace", { workspaceType: "TEAM" }],
+    ["a My Space member who does not own it", { workspaceType: "PERSONAL", isPersonalOwner: false }],
     ["an unconfirmed access check", { workspaceType: "PERSONAL", confirmed: false }],
     ["an archived document", { workspaceType: "PERSONAL", target: target({ status: "ARCHIVED" }) }],
     ["a historical revision", { workspaceType: "PERSONAL", target: target({ revision: "HISTORICAL" }) }],
@@ -531,18 +533,24 @@ describe("action registry — folder.share (folder share spec §8)", () => {
     sourceStatus: ["ACTIVE", "ARCHIVED"],
     confirmed: [true, false],
     workspaceType: ["PERSONAL", "TEAM"],
+    isPersonalOwner: [true, false],
   } as const);
   const shareOffered = (ctx: ActionContext) => ids(availableActions(ctx)).includes("folder.share");
 
   // Sharing is reading: neither capability nor ownership is a rule, only where the folder is and its state.
-  it.each(cells)("canWrite=$canWrite $ownership folder $status in a $sourceStatus source, confirmed=$confirmed, $workspaceType", (cell) => {
+  it.each(cells)("canWrite=$canWrite $ownership folder $status in a $sourceStatus source, confirmed=$confirmed, $workspaceType, owner=$isPersonalOwner", (cell) => {
     const offered = shareOffered(context({
       workspaceType: cell.workspaceType,
+      isPersonalOwner: cell.isPersonalOwner,
       can: { ...allCapabilities, canWrite: cell.canWrite },
       confirmed: cell.confirmed,
       folder: folder({ ownership: cell.ownership, status: cell.status, sourceStatus: cell.sourceStatus }),
     }));
-    expect(offered).toBe(cell.workspaceType === "PERSONAL" && cell.confirmed && cell.status === "ACTIVE" && cell.sourceStatus === "ACTIVE");
+    expect(offered).toBe(cell.workspaceType === "PERSONAL" && cell.isPersonalOwner && cell.confirmed && cell.status === "ACTIVE" && cell.sourceStatus === "ACTIVE");
+  });
+
+  it("is not offered to a member who does not own this My Space", () => {
+    expect(shareOffered(context({ workspaceType: "PERSONAL", isPersonalOwner: false, folder: folder() }))).toBe(false);
   });
 
   it("is labelled Share link… and asks the share dialog for the folder, on the row menu only", () => {

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
 import { DomainError } from "@/shared/domain/errors";
 import { isUuid, uuidv7 } from "@/shared/ids/uuidv7";
-import { evaluateShareLinkValidity, isShareToken, ShareLinkNotFoundError } from "../domain/document-share-link";
+import { evaluateShareLinkValidity, isReachableThroughFolder, isShareToken, ShareLinkNotFoundError } from "../domain/document-share-link";
 import { REVIEW_LIMITS, isRetractedThread, projectOwnerThread, projectReviewerThread, projectReviewComment, validateReviewBody, validateReviewIdempotencyKey, type ReviewThread, type ReviewComment, type ReviewAnchor, type ReviewStatus, type ReviewVisibility, type ReviewThreadView, type OwnerReviewThreadView, type CreateReviewThreadInput, type CreateOwnerReviewThreadInput, type ReplyReviewInput } from "../domain/document-review";
 import { createReviewAnchorRelocator, validateReviewAnchor } from "../domain/review-anchor";
 import { projectShareCommentNotification, EXCERPT_LIMIT, type ShareCommentNotificationView } from "../domain/share-comment-event";
@@ -163,10 +163,9 @@ export class DocumentReviewService {
     return threads.map(thread => ({ ...thread, following: followed.has(thread.id) }));
   }
   /**
-   * The caller's followed discussions with their link's state, judged now.
-   * Comments come in one query; each link once, by the id the follow was made through, and its
-   * judgement once per link and document (a folder link reaches each document on its own).
-   * ponytail: at most FOLLOW_LIMIT follows, one thread lookup each; cursor paging and one joined query once readers follow more.
+   * The caller's followed discussions with their link's state, judged now. Comments, threads and
+   * links each come in one query; a folder link's reachability is judged once for all its followed
+   * documents, with their chains read in one batch.
    */
   private async followedThreads(r: KnowledgeRepositories, userId: string) {
     const follows = await r.reviewFollows.listFollowing(userId, FOLLOW_LIMIT);
@@ -175,17 +174,33 @@ export class DocumentReviewService {
       const list = commentsByThread.get(comment.threadId);
       if (list) list.push(comment); else commentsByThread.set(comment.threadId, [comment]);
     }
-    const links = new Map<string, DocumentShareLink | null>();
-    const valid = new Map<string, boolean>();
+    const threadIds = [...new Set(follows.map(follow => follow.threadId))];
+    const threads = new Map((await r.reviewThreads.findByIds(threadIds)).map(thread => [thread.id, thread]));
+    const linkIds = [...new Set(follows.map(follow => follow.shareLinkId))];
+    const links = new Map((await r.shareLinks.findByIds(linkIds)).map(link => [link.id, link]));
+    const documentsByLink = new Map<string, Set<string>>();
+    for (const follow of follows) {
+      const thread = threads.get(follow.threadId);
+      if (!thread) continue;
+      const documents = documentsByLink.get(follow.shareLinkId) ?? new Set<string>();
+      documents.add(thread.documentId);
+      documentsByLink.set(follow.shareLinkId, documents);
+    }
+    // One judgement per link: a document link once, a folder link once for all its followed documents.
+    const reachable = new Map<string, ReadonlySet<string> | null>();
+    for (const [linkId, documentIds] of documentsByLink) {
+      const link = links.get(linkId);
+      if (!link) { reachable.set(linkId, null); continue; }
+      reachable.set(linkId, link.target.kind === "DOCUMENT"
+        ? (await this.linkValid(r, link, link.target.documentId) ? new Set([link.target.documentId]) : null)
+        : await this.folderLinkDocuments(r, link, [...documentIds]));
+    }
     const found = [];
     for (const follow of follows) {
-      const thread = await r.reviewThreads.findById(follow.threadId);
+      const thread = threads.get(follow.threadId);
       if (!thread) continue;
-      if (!links.has(follow.shareLinkId)) links.set(follow.shareLinkId, await r.shareLinks.findById(follow.shareLinkId));
       const link = links.get(follow.shareLinkId) ?? null;
-      const judged = `${follow.shareLinkId}:${thread.documentId}`;
-      if (link && !valid.has(judged)) valid.set(judged, await this.linkValid(r, link, thread.documentId));
-      const linkValid = !!link && valid.get(judged)!;
+      const linkValid = reachable.get(follow.shareLinkId)?.has(thread.documentId) ?? false;
       const summary = summarizeFollowedThread({ thread, comments: commentsByThread.get(thread.id) ?? [], userId, seenAt: follow.seenAt, linkValid });
       if (summary) found.push({ follow, thread, link, summary });
     }
@@ -213,6 +228,41 @@ export class DocumentReviewService {
     }
     return views;
   }
+  /**
+   * Every named document a folder link reaches now. The link, folder, Source, Workspace and
+   * membership are judged once; only the per-document chain is read in a batch, so a reader who
+   * follows many discussions through one folder does not pay for the link once per document.
+   */
+  private async folderLinkDocuments(r: KnowledgeRepositories, link: DocumentShareLink, documentIds: readonly string[]): Promise<ReadonlySet<string> | null> {
+    if (link.target.kind !== "FOLDER" || documentIds.length === 0) return null;
+    const folder = await r.tree.findById(link.target.folderNodeId);
+    if (!folder || folder.nodeType !== "FOLDER") return null;
+    const source = await r.sourcePolicy.findById(folder.sourceId);
+    if (!source) return null;
+    const workspace = await r.workspaces.findById(source.workspaceId);
+    if (!workspace || workspace.workspaceType !== "PERSONAL") return null;
+    const membership = await r.workspaceMemberships.find(workspace.id, link.createdBy);
+    const open = evaluateShareLinkValidity({
+      link,
+      documentStatus: folder.status,
+      sourceStatus: source.status,
+      workspaceLifecycle: workspace.lifecycleState,
+      workspaceOwnerUserId: workspace.personalOwnerUserId,
+      creatorDirectRole: membership ? membership.role ?? null : undefined,
+      now: this.clock(),
+    }).valid;
+    if (!open) return null;
+    const documents = new Map((await r.documents.findByIds(documentIds)).map(document => [document.id, document]));
+    const chains = await r.tree.listChainsByDocumentIds(documentIds, folder.sourceId);
+    const reachable = new Set<string>();
+    for (const documentId of documentIds) {
+      const document = documents.get(documentId);
+      const chain = chains.get(documentId);
+      if (document && document.status === "ACTIVE" && document.sourceId === folder.sourceId && chain && isReachableThroughFolder(chain, folder.id)) reachable.add(documentId);
+    }
+    return reachable;
+  }
+
   /** Whether the link opens now on this document: the same judgement `linkScope` makes, without refusing. */
   private async linkValid(r: KnowledgeRepositories, link: DocumentShareLink, documentId: string): Promise<boolean> {
     if (link.target.kind === "DOCUMENT" && link.target.documentId !== documentId) return false;
@@ -302,10 +352,13 @@ export class DocumentReviewService {
       return scope;
     }
     if(documentId===undefined) throw new ShareLinkNotFoundError();
-    // Judged before any lock: a document outside the folder's Source is refused as missing, and nothing of it is locked.
+    // Judged before any lock: a document outside the folder's Source or outside its live subtree is
+    // refused as missing, and nothing of it is locked. The locked recheck below stays, so a move
+    // committed while this write waited is still caught.
     const shared=await r.tree.findById(link.target.folderNodeId);
     const named=shared?await r.documents.findById(documentId):null;
     if(!shared || !named || named.sourceId!==shared.sourceId) throw new ShareLinkNotFoundError();
+    if(lock && !await reachableChain(r,shared,named)) throw new ShareLinkNotFoundError();
     const scope=await this.scope(r,documentId,lock);
     // Read under the Source lock a move takes, so the chain judged is the one a write lands on.
     const folder=await r.tree.findById(link.target.folderNodeId);

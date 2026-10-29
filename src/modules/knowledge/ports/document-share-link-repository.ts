@@ -15,6 +15,8 @@ export interface DocumentShareLinkRepository {
   insert(link: DocumentShareLink): Promise<void>;
   findByToken(token: string): Promise<DocumentShareLink | null>;
   findById(id: string): Promise<DocumentShareLink | null>;
+  /** Many links in few statements; missing ids are simply absent. */
+  findByIds(ids: readonly string[]): Promise<DocumentShareLink[]>;
   lockById(id: string): Promise<DocumentShareLink | null>;
   /** Newest first, including revoked and expired links. */
   listByDocument(documentId: string): Promise<DocumentShareLink[]>;

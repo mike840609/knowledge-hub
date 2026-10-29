@@ -75,7 +75,7 @@ async function fixture() {
   /** The activity feed lists a dead link's entry too; the unread list leaves it out (nothing unread). */
   const activity = async (caller = reader) => (await service.listActivityForOwner(caller)).notifications.filter(n => n.kind === "FOLLOW");
   const discussions = async (caller = reader) => (await service.listFollowedDiscussions(caller)).items;
-  return { uow, service, shares, link, token, documentLink, documentToken, anchor, owner, reader, other, folderNodeId, engineeringId, devSetup, faq, outside, time, start, ownerReply, move, follows, activity, discussions };
+  return { uow, service, shares, hub, sourceId, link, token, documentLink, documentToken, anchor, owner, reader, other, folderNodeId, engineeringId, devSetup, faq, outside, time, start, ownerReply, move, follows, activity, discussions };
 }
 
 /** Records the ids of every Source and Workspace a run locks, passing everything else through. */
@@ -100,6 +100,27 @@ function lockRecorder(inner: KnowledgeUnitOfWork) {
     }))),
   };
   return { uow, taken };
+}
+
+/** Records every repository method a read calls, without changing what it returns. */
+function queryRecorder(inner: KnowledgeUnitOfWork) {
+  const calls: string[] = [];
+  const spying = <T extends object>(target: T, namespace: string): T => new Proxy(target, {
+    get(object, property) {
+      const value = Reflect.get(object, property, object);
+      if (typeof value !== "function") return value;
+      return (...args: unknown[]) => { calls.push(`${namespace}.${String(property)}`); return value.apply(object, args); };
+    },
+  });
+  const uow: KnowledgeUnitOfWork = {
+    run: work => inner.run(r => work(new Proxy(r, {
+      get(object, property) {
+        const value = Reflect.get(object, property, object);
+        return value !== null && typeof value === "object" ? spying(value, String(property)) : value;
+      },
+    }))),
+  };
+  return { uow, calls };
 }
 
 describe("a discussion started through a folder link", () => {
@@ -208,6 +229,18 @@ describe("what a folder link refuses, all alike", () => {
     expect(locks.taken).toEqual([]);
   });
 
+  // A sibling in the same Source is outside the grant too: it must be refused before the Source lock.
+  it("a same-Source document outside the shared subtree, refused as missing without locking its Source or Workspace", async () => {
+    const f = await fixture();
+    const locks = lockRecorder(f.uow);
+    const service = new DocumentReviewService(locks.uow, f.time.clock, () => true);
+    const scope = { token: f.token, documentId: f.outside.documentId };
+    await expect(service.createForLink(f.reader, { ...scope, expectedRevisionId: f.outside.revisionId, anchor: f.anchor, body: "x", idempotencyKey: randomUUID() })).rejects.toMatchObject(notFound);
+    await expect(service.replyForLink(f.reader, { ...scope, threadId: uuidv7(), body: "x", idempotencyKey: randomUUID() })).rejects.toMatchObject(notFound);
+    await expect(service.followForLink(f.reader, { ...scope, threadId: uuidv7(), following: true })).rejects.toMatchObject(notFound);
+    expect(locks.taken).toEqual([]);
+  });
+
   it("a document under an archived folder inside the shared one", async () => {
     const f = await fixture();
     // The Hub refuses to archive a folder that still holds documents; the rule must hold if one is anyway.
@@ -267,5 +300,23 @@ describe("the follower's Inbox and Shares → Discussions, judged through the fo
     expect(await f.service.countUnreadForOwner(f.reader)).toEqual({ count: 1 });
     await f.move(f.devSetup.treeNodeId, null);
     expect(await f.service.countUnreadForOwner(f.reader)).toEqual({ count: 0 });
+  });
+
+  it("counts many follows on one folder link in batches, not one thread and chain read per follow", async () => {
+    const f = await fixture();
+    for (let index = 0; index < 12; index += 1) {
+      const document = await f.hub.createDocument(f.owner, { sourceId: f.sourceId, parentId: f.folderNodeId, title: `Note ${index}`, markdown: MARKDOWN, metadata: {} });
+      const thread = await f.start(document);
+      await f.ownerReply(thread.id, document);
+    }
+    const counted = queryRecorder(f.uow);
+    const service = new DocumentReviewService(counted.uow, f.time.clock, () => true);
+    expect(await service.countUnreadForOwner(f.reader)).toEqual({ count: 12 });
+    expect(counted.calls).not.toContain("reviewThreads.findById");
+    expect(counted.calls).not.toContain("shareLinks.findById");
+    expect(counted.calls).not.toContain("tree.listChain");
+    expect(counted.calls).toContain("reviewThreads.findByIds");
+    expect(counted.calls).toContain("tree.listChainsByDocumentIds");
+    expect(counted.calls.length).toBeLessThan(20);
   });
 });

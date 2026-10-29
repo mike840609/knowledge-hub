@@ -67,6 +67,9 @@ export type SharedFolderDocument = SharedDocumentView & {
   links: SharedResolvedLink[];
 };
 
+/** Where `/s/:token/open` sends the caller: the named document when reachable, else the landing one. */
+export type SharedTargetView = { kind: "DOCUMENT"; documentId: string } | { kind: "FOLDER"; documentId: string | null };
+
 export type SharedFolderView = {
   kind: "FOLDER";
   folderName: string;
@@ -177,6 +180,7 @@ export class DocumentShareService {
     const now = this.clock();
     const normalized = assertShareLinkCreation({
       callerId: caller.identity.id,
+      targetKind: scope.target.kind,
       documentStatus: scope.targetStatus,
       sourceStatus: scope.source.status,
       workspace: scope.workspace,
@@ -312,6 +316,40 @@ export class DocumentShareService {
     }
     return view;
   }
+
+  /**
+   * The narrow judgement `/s/:token/open` needs: the link opens, and which document the Hub should
+   * show. A document link opens its own document and refuses `?d=`; a folder link opens the named
+   * document when it is still reachable, else the landing document (folder share spec §4). It reads
+   * no Markdown, creator or link catalog, and counts no view.
+   */
+  async readSharedTarget(token: string, { documentId }: { documentId?: string } = {}): Promise<SharedTargetView> {
+    if (!isShareToken(token)) throw new ShareLinkNotFoundError();
+    if (documentId !== undefined && !isUuid(documentId)) throw new ShareLinkNotFoundError();
+    const now = this.clock();
+    return this.unitOfWork.run(async (repositories): Promise<SharedTargetView> => {
+      const link = await repositories.shareLinks.findByToken(token);
+      if (!link) throw new ShareLinkNotFoundError();
+      if (link.target.kind === "DOCUMENT") {
+        if (documentId !== undefined) throw new ShareLinkNotFoundError();
+        const document = await repositories.documents.findById(link.target.documentId);
+        if (!document) throw new ShareLinkNotFoundError();
+        await requireOpenLink(repositories, link, document, now);
+        return { kind: "DOCUMENT", documentId: document.id };
+      }
+      const folder = await repositories.tree.findById(link.target.folderNodeId);
+      if (!folder || folder.nodeType !== "FOLDER") throw new ShareLinkNotFoundError();
+      await requireOpenLink(repositories, link, folder, now);
+      if (documentId !== undefined) {
+        const document = await repositories.documents.findById(documentId);
+        if (document && document.currentRevisionId !== null && await reachableChain(repositories, folder, document)) {
+          return { kind: "FOLDER", documentId: document.id };
+        }
+      }
+      const tree = sharedSubtree(await repositories.tree.listSubtree(folder.sourceId, folder.id), folder.id);
+      return { kind: "FOLDER", documentId: tree.find((node) => node.documentId !== null)?.documentId ?? null };
+    });
+  }
 }
 
 /**
@@ -364,7 +402,7 @@ async function readSharedFolder(
   const folder = await repositories.tree.findById(folderNodeId);
   if (!folder || folder.nodeType !== "FOLDER") throw new ShareLinkNotFoundError();
   const { workspaceId } = await requireOpenLink(repositories, link, folder, now);
-  const sourceNodes = await repositories.tree.listBySource(folder.sourceId);
+  const sourceNodes = await repositories.tree.listSubtree(folder.sourceId, folder.id);
   const tree = sharedSubtree(sourceNodes, folder.id);
   const creator = await requireCreator(repositories, link);
   const view = { kind: "FOLDER" as const, folderName: folder.name ?? "", tree, sharedByName: creator.name, expiresAt: link.expiresAt };

@@ -7,6 +7,8 @@ import type { DocumentShareLinkRepository, OpenFolderLink, ShareLinkViewTotals }
 import type { DbRow, QueryConnection } from "./shared";
 import { affectedRows, asDate, asNullableDate, asNumber } from "./shared";
 
+const ID_CHUNK = 500;
+
 function mapTarget(row: DbRow): ShareLinkTarget {
   if (row.folder_node_id !== null && row.folder_node_id !== undefined) return { kind: "FOLDER", folderNodeId: String(row.folder_node_id) };
   return { kind: "DOCUMENT", documentId: String(row.document_id) };
@@ -97,6 +99,17 @@ export class MariaDbDocumentShareLinkRepository implements DocumentShareLinkRepo
   async findById(id: string): Promise<DocumentShareLink | null> {
     const rows = await this.connection.query<DbRow[]>("SELECT * FROM document_share_links WHERE id = ?", [id]);
     return rows[0] ? mapLink(rows[0]) : null;
+  }
+
+  async findByIds(ids: readonly string[]): Promise<DocumentShareLink[]> {
+    if (ids.length === 0) return [];
+    const found: DocumentShareLink[] = [];
+    for (let start = 0; start < ids.length; start += ID_CHUNK) {
+      const batch = ids.slice(start, start + ID_CHUNK);
+      const rows = await this.connection.query<DbRow[]>(`SELECT * FROM document_share_links WHERE id IN (${batch.map(() => "?").join(", ")})`, batch);
+      found.push(...rows.map(mapLink));
+    }
+    return found;
   }
 
   async lockById(id: string): Promise<DocumentShareLink | null> {

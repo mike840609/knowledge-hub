@@ -5,6 +5,8 @@ export interface DocumentRepository {
   /** Many drafts in few statements; for a bulk create in one transaction. */
   insertDrafts(documents: readonly KnowledgeDocument[]): Promise<void>;
   findById(id: string): Promise<KnowledgeDocument | null>;
+  /** Many documents in few statements; missing ids are simply absent. */
+  findByIds(ids: readonly string[]): Promise<KnowledgeDocument[]>;
   lockById(id: string): Promise<KnowledgeDocument | null>;
   setCurrentRevision(documentId: string, revisionId: string, updatedBy: string): Promise<void>;
   /** Points each new document at its only revision. Every document must have exactly one. */

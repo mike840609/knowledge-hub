@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { sharedDocumentParam } from "@/lib/share-paths";
 import { applicationServices } from "@/server/composition";
-import { isSharedAvailable, sharedLandingDocumentId } from "@/server/share-read";
+import { sharedOpenTarget } from "@/server/share-read";
 import { sharePlatformDestination } from "@/server/share-platform-destination";
 
 export const dynamic = "force-dynamic";
@@ -17,17 +17,11 @@ export default async function OpenSharedDocument({ params, searchParams }: OpenS
   const { token } = await params;
   const requested = sharedDocumentParam((await searchParams)?.d);
   if (requested === null) notFound();
-  if (!await isSharedAvailable(token)) notFound();
+  // One read judges the link, the requested document and the landing fallback together.
+  const target = await sharedOpenTarget(token, requested);
+  if (!target) notFound();
   const services = applicationServices();
   const { caller, personalWorkspace } = await services.establishTrustedCaller();
-  const link = await services.unitOfWork.run(repositories => repositories.shareLinks.findByToken(token));
-  if (!link) notFound();
-  if (link.target.kind === "DOCUMENT") {
-    if (requested !== undefined) notFound();
-    redirect(await sharePlatformDestination(caller, link.target.documentId, personalWorkspace.id, services.queries));
-  }
-  const reachable = requested !== undefined && await isSharedAvailable(token, requested) ? requested : null;
-  const documentId = reachable ?? await sharedLandingDocumentId(token);
   // An empty folder has nothing to open in the Hub; the reader lands in their own home.
-  redirect(documentId ? await sharePlatformDestination(caller, documentId, personalWorkspace.id, services.queries) : `/w/${personalWorkspace.id}/home`);
+  redirect(target.documentId ? await sharePlatformDestination(caller, target.documentId, personalWorkspace.id, services.queries) : `/w/${personalWorkspace.id}/home`);
 }

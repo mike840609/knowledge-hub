@@ -473,6 +473,7 @@ export function DocumentDetailClient({
   const available = actionsFor("row", {
     workspaceId: inspectorData.workspaceId,
     workspaceType: access.workspace.type,
+    isPersonalOwner: access.isPersonalOwner,
     can: access.actions,
     confirmed,
     target: { ...target, favorite },
