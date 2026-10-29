@@ -173,7 +173,7 @@ export function DocumentHeader({
         </div>
       </div>
       </div>
-      <header ref={headerRef}>
+      <header ref={headerRef} className="pt-4">
         <div className="kh-reading-column pb-3">
           {beforeTitle}
           {titleControl ?? (contentOwnsTitle ? null : (
