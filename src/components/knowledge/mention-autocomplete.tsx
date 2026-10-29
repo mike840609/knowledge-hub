@@ -22,9 +22,35 @@ export function mentionTrigger(text: string, caret: number): { start: number; qu
   return match ? { start: caret - match[1].length - 1, query: match[1] } : null;
 }
 
-/** The picks whose `@name` is still in the text, once each. */
+/** How many times `@name` stands in the text as a whole name: followed by whitespace, punctuation or the end. */
+function occurrences(body: string, name: string): number {
+  const written = `@${name}`;
+  let count = 0;
+  for (let at = body.indexOf(written); at !== -1; at = body.indexOf(written, at + 1)) {
+    const next = body[at + written.length];
+    if (next === undefined || /[\s\p{P}]/u.test(next)) count++;
+  }
+  return count;
+}
+
+/**
+ * The picks (oldest first) the text still holds: each needs its own `@name`. When several picks
+ * share a name, only as many as the text has occurrences are kept, the most recent first.
+ */
+export function livePicks(body: string, picks: readonly MentionPick[]): MentionPick[] {
+  const left = new Map<string, number>();
+  const kept: MentionPick[] = [];
+  for (const pick of [...picks].reverse()) {
+    const remaining = left.get(pick.name) ?? occurrences(body, pick.name);
+    left.set(pick.name, remaining - 1);
+    if (remaining > 0) kept.unshift(pick);
+  }
+  return kept;
+}
+
+/** Who the text mentions: the ids of its live picks, once each. */
 export function mentionedIds(body: string, picks: readonly MentionPick[]): string[] {
-  return [...new Set(picks.filter(pick => body.includes(`@${pick.name}`)).map(pick => pick.id))];
+  return [...new Set(livePicks(body, picks).map(pick => pick.id))];
 }
 
 /**
@@ -83,6 +109,11 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
     return () => { current = false; window.clearTimeout(timer); };
   }, [searchable, query, owner, token]);
 
+  // A pick whose name has left the text is forgotten: typing the name again does not bring it back.
+  useEffect(() => {
+    setPicks(previous => { const kept = livePicks(body, previous); return kept.length === previous.length ? previous : kept; });
+  }, [body]);
+
   // A new `@` opens again what Esc closed.
   useEffect(() => { if (triggerStart === undefined) setDismissed(undefined); }, [triggerStart]);
 
@@ -100,7 +131,8 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
     const next = body.slice(0, trigger.start) + inserted + body.slice(end);
     const at = trigger.start + inserted.length;
     setBody(next);
-    setPicks(previous => previous.some(item => item.id === candidate.id) ? previous : [...previous, { id: candidate.id, name: candidate.name }]);
+    // The newest pick last: it wins an `@name` it shares with an older one.
+    setPicks(previous => [...previous.filter(item => item.id !== candidate.id), { id: candidate.id, name: candidate.name }]);
     setCaret(at);
     setFound(undefined);
     requestAnimationFrame(() => ref.current?.setSelectionRange(at, at));

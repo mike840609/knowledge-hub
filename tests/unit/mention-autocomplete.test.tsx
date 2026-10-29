@@ -3,11 +3,12 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { ReviewReplyForm } from "@/components/knowledge/review-thread-list";
-import { NO_LINK_HINT, type MentionScope } from "@/components/knowledge/mention-autocomplete";
+import { NO_LINK_HINT, mentionedIds, type MentionScope } from "@/components/knowledge/mention-autocomplete";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const MING = { id: "11111111-1111-4111-8111-111111111111", name: "陳小明", nameEn: "Ming Chen", empId: "E1234" };
+const MING_TWO = { id: "33333333-3333-4333-8333-333333333333", name: "陳小明", nameEn: "Ming Chen", empId: "E9999" };
 const MEI = { id: "22222222-2222-4222-8222-222222222222", name: "林美", nameEn: null, empId: "E5678" };
 
 let host: HTMLDivElement;
@@ -170,6 +171,48 @@ test("a comment without a pick sends no mentions", async () => {
   await type(textarea, "plain @陳小明 typed by hand");
   await submit();
   expect(sent).toEqual([{ body: "plain @陳小明 typed by hand", mentions: [], linkId: undefined }]);
+});
+
+test("a same-name person picked after the first one's text was deleted is the only one sent", async () => {
+  stubFetch({ candidates: [MING, MING_TWO] });
+  const sent: Sent[] = [];
+  const textarea = render({ token: "tok" }, sent);
+  await type(textarea, "@m");
+  key(textarea, "Enter");
+  await type(textarea, "");
+  await type(textarea, "@m");
+  key(textarea, "ArrowDown");
+  key(textarea, "Enter");
+  expect(textarea.value).toBe("@陳小明 ");
+  await submit();
+  expect(sent).toEqual([{ body: "@陳小明 ", mentions: [MING_TWO.id], linkId: undefined }]);
+});
+
+test("a deleted pick is forgotten: its name typed again by hand mentions no one", async () => {
+  stubFetch();
+  const sent: Sent[] = [];
+  const textarea = render({ token: "tok" }, sent);
+  await type(textarea, "@m");
+  key(textarea, "Enter");
+  await type(textarea, "gone");
+  await type(textarea, "gone @陳小明 ");
+  await submit();
+  expect(sent).toEqual([{ body: "gone @陳小明 ", mentions: [], linkId: undefined }]);
+});
+
+test("mentionedIds: a pick needs its own whole @name", () => {
+  const ming = { id: MING.id, name: MING.name }, two = { id: MING_TWO.id, name: MING_TWO.name }, mei = { id: MEI.id, name: MEI.name };
+  // A longer word is not the name.
+  expect(mentionedIds("@陳小明明 hi", [ming])).toEqual([]);
+  // Whitespace, punctuation and the end all close a name.
+  expect(mentionedIds("@陳小明", [ming])).toEqual([MING.id]);
+  expect(mentionedIds("@陳小明，請看", [ming])).toEqual([MING.id]);
+  expect(mentionedIds("(@林美).", [mei])).toEqual([MEI.id]);
+  // Two same-name people are both kept while the text has both occurrences ...
+  expect(mentionedIds("@陳小明 and @陳小明 ", [ming, two])).toEqual([MING.id, MING_TWO.id]);
+  // ... and with one left, only the most recent pick.
+  expect(mentionedIds("@陳小明 ", [ming, two])).toEqual([MING_TWO.id]);
+  expect(mentionedIds("", [ming, two, mei])).toEqual([]);
 });
 
 test("owner with no live link: @ says to create one and offers nobody", async () => {
