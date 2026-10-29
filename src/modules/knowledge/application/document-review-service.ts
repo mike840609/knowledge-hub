@@ -302,6 +302,10 @@ export class DocumentReviewService {
       return scope;
     }
     if(documentId===undefined) throw new ShareLinkNotFoundError();
+    // Judged before any lock: a document outside the folder's Source is refused as missing, and nothing of it is locked.
+    const shared=await r.tree.findById(link.target.folderNodeId);
+    const named=shared?await r.documents.findById(documentId):null;
+    if(!shared || !named || named.sourceId!==shared.sourceId) throw new ShareLinkNotFoundError();
     const scope=await this.scope(r,documentId,lock);
     // Read under the Source lock a move takes, so the chain judged is the one a write lands on.
     const folder=await r.tree.findById(link.target.folderNodeId);

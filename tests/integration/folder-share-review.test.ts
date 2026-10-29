@@ -10,6 +10,7 @@ import { DocumentReviewService } from "@/modules/knowledge/application/document-
 import { DocumentShareService } from "@/modules/knowledge/application/document-share-service";
 import { HubKnowledgeCommandServiceImpl } from "@/modules/knowledge/application/hub-knowledge-command-service";
 import type { ReviewAnchor } from "@/modules/knowledge/domain/document-review";
+import type { KnowledgeUnitOfWork } from "@/modules/knowledge/ports/unit-of-work";
 import { projectReviewBlocks } from "@/modules/knowledge/domain/review-anchor";
 import { ensureDefaultHubSource } from "@/modules/sources/application/ensure-default-hub-source";
 import { PersonalWorkspaceService } from "@/modules/workspaces/application/personal-workspace-service";
@@ -75,6 +76,30 @@ async function fixture() {
   const activity = async (caller = reader) => (await service.listActivityForOwner(caller)).notifications.filter(n => n.kind === "FOLLOW");
   const discussions = async (caller = reader) => (await service.listFollowedDiscussions(caller)).items;
   return { uow, service, shares, link, token, documentLink, documentToken, anchor, owner, reader, other, folderNodeId, engineeringId, devSetup, faq, outside, time, start, ownerReply, move, follows, activity, discussions };
+}
+
+/** Records the ids of every Source and Workspace a run locks, passing everything else through. */
+function lockRecorder(inner: KnowledgeUnitOfWork) {
+  const taken: string[] = [];
+  const spying = <T extends object>(target: T, method: string): T => new Proxy(target, {
+    get(object, property) {
+      const value = Reflect.get(object, property, object);
+      if (typeof value !== "function") return value;
+      if (property !== method) return value.bind(object);
+      return (...args: unknown[]) => { taken.push(String(args[0])); return value.apply(object, args); };
+    },
+  });
+  const uow: KnowledgeUnitOfWork = {
+    run: work => inner.run(r => work(new Proxy(r, {
+      get(object, property) {
+        const value = Reflect.get(object, property, object);
+        if (property === "sourcePolicy") return spying(value, "lockById");
+        if (property === "workspaces") return spying(value, "lockSharedById");
+        return value;
+      },
+    }))),
+  };
+  return { uow, taken };
 }
 
 describe("a discussion started through a folder link", () => {
@@ -161,6 +186,26 @@ describe("what a folder link refuses, all alike", () => {
     await expect(f.service.followForLink(f.reader, { ...scope, following: true })).rejects.toMatchObject(notFound);
     await expect(f.service.markSeenForLink(f.reader, scope)).rejects.toMatchObject(notFound);
     await expect(f.service.queryForLink(f.reader, f.token, f.devSetup.documentId)).rejects.toMatchObject(notFound);
+  });
+
+  // A folder link reaches only its own Source: a document elsewhere is refused before anything of it is locked.
+  it("a document in someone else's My Space, refused as missing without locking its Source or Workspace", async () => {
+    const f = await fixture();
+    const strangerId = { id: uuidv7(), emp_id: randomUUID(), name: "Stranger", org_code: "FOLDER-REVIEW" };
+    await f.uow.run(r => r.users.upsertIdentity(strangerId));
+    const stranger = callerFromIdentity(strangerId);
+    const { workspace } = await new PersonalWorkspaceService(f.uow).ensurePersonalWorkspace(strangerId.id);
+    const strangerSourceId = await ensureDefaultHubSource(f.uow, stranger, workspace.id);
+    const foreign = await new HubKnowledgeCommandServiceImpl(f.uow).createDocument(stranger, { sourceId: strangerSourceId, parentId: null, title: "Foreign", markdown: MARKDOWN, metadata: {} });
+    const locks = lockRecorder(f.uow);
+    const service = new DocumentReviewService(locks.uow, f.time.clock, () => true);
+    const scope = { token: f.token, documentId: foreign.documentId };
+    await expect(service.createForLink(f.reader, { ...scope, expectedRevisionId: foreign.revisionId, anchor: f.anchor, body: "x", idempotencyKey: randomUUID() })).rejects.toMatchObject(notFound);
+    await expect(service.replyForLink(f.reader, { ...scope, threadId: uuidv7(), body: "x", idempotencyKey: randomUUID() })).rejects.toMatchObject(notFound);
+    await expect(service.followForLink(f.reader, { ...scope, threadId: uuidv7(), following: true })).rejects.toMatchObject(notFound);
+    expect(locks.taken).not.toContain(strangerSourceId);
+    expect(locks.taken).not.toContain(workspace.id);
+    expect(locks.taken).toEqual([]);
   });
 
   it("a document under an archived folder inside the shared one", async () => {
