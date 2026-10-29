@@ -116,12 +116,25 @@ it("a read entry is not marked again", async () => {
 });
 
 it("a followed discussion is read through its link's token, never the owner's document", async () => {
-  notifications = [entry("f", { kind: "FOLLOW", token: "tok", linkAvailable: true })];
+  // A document link's follow carries no ids but its token (the service leaves the rest empty).
+  notifications = [entry("f", { kind: "FOLLOW", token: "tok", linkAvailable: true, workspaceId: "", documentId: "", sourceId: "" })];
   threads["token:tok"] = [thread("thread-f")];
   await mount();
   await click(row("f"));
   expect(pane()?.textContent).toContain("body of thread-f");
   expect(calls.filter(call => call.url === "/api/share-review/threads/query").map(call => call.body)).toEqual([{ token: "tok" }]);
+  expect(calls.some(call => call.url.startsWith("/api/documents/"))).toBe(false);
+});
+
+it("a discussion followed through a folder link is read, and opened, at its document in that folder", async () => {
+  const documentId = "0192f3a4-0000-7000-8000-000000000002";
+  notifications = [entry("g", { kind: "FOLLOW", token: "tok", linkAvailable: true, workspaceId: "", documentId, sourceId: "" })];
+  threads["token:tok"] = [thread("thread-g")];
+  await mount();
+  await click(row("g"));
+  expect(pane()?.textContent).toContain("body of thread-g");
+  expect(calls.filter(call => call.url === "/api/share-review/threads/query").map(call => call.body)).toEqual([{ token: "tok", documentId }]);
+  expect(pane()?.querySelector("a")?.getAttribute("href")).toBe(`/s/tok?d=${documentId}&thread=thread-g`);
   expect(calls.some(call => call.url.startsWith("/api/documents/"))).toBe(false);
 });
 

@@ -6,7 +6,6 @@ import {
   assertShareLinkCreation,
   evaluateShareLinkValidity,
   isActiveShareLink,
-  isReachableThroughFolder,
   isShareToken,
   shareLinkExpiry,
   shareLinkPath,
@@ -19,6 +18,7 @@ import { DocumentNotFoundError, IntegrityViolationError, SourceNotFoundError, Va
 import { linkLookupKey } from "../domain/link-graph";
 import { buildLinkResolver } from "../domain/link-resolution";
 import type { ShareTokenIssuer } from "../ports/share-token-issuer";
+import { reachableChain } from "./internal/folder-link-reach";
 import type { TreeViewNode } from "../ports/tree-repository";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "../ports/unit-of-work";
 
@@ -343,12 +343,9 @@ async function readSharedFolder(
   const targetId = documentId ?? tree.find((node) => node.documentId !== null)?.documentId ?? null;
   if (targetId === null) return { ...view, document: null };
 
-  const node = sourceNodes.find((candidate) => candidate.nodeType === "DOCUMENT" && candidate.documentId === targetId);
-  if (!node) throw new ShareLinkNotFoundError();
-  const chain = await repositories.tree.listChain(node.id);
-  if (!isReachableThroughFolder(chain, folder.id)) throw new ShareLinkNotFoundError();
   const document = await repositories.documents.findById(targetId);
-  if (!document || document.status !== "ACTIVE" || document.sourceId !== folder.sourceId) throw new ShareLinkNotFoundError();
+  const chain = document && await reachableChain(repositories, folder, document);
+  if (!document || !chain) throw new ShareLinkNotFoundError();
   const revision = await repositories.revisions.findCurrent(document.id);
   if (!revision) throw new IntegrityViolationError("Document current revision is missing.");
 

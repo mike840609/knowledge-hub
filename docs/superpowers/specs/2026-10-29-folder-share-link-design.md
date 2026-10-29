@@ -269,6 +269,12 @@ thread's document still reachable. The Inbox and Shares → Discussions rules
 are otherwise unchanged: a dead entry names nothing, Unfollow needs no live
 link.
 
+*Builder's call (Task 5):* a live follow entry on a folder link also carries
+the thread's `documentId` — the folder page can open the discussion, and the
+Inbox can read it through the link, only with `?d=` / `documentId`. A document
+link's entry still carries none, and a dead entry names neither. The id adds
+nothing the link does not already show: it is in the page's own URL.
+
 The rate limits and capacity counters stay per document.
 
 ### 7. Saved shares
@@ -357,6 +363,11 @@ Requirement-driven; each bullet is at least one case.
 - Tree rail component structure, and whether it reuses parts of the owner's
   tree component (it must not import anything that reads outside the folder).
 - Whether `create` grows a target parameter or a sibling method is added.
+- *Builder's call (Task 5):* the folder page's bar is the review panel's
+  (`wide`), drawn inside the body and reaching back over the tree's column.
+  Comments sit beside the article from 1456px (the room beside the tree that
+  a document page has from 1200px) and open in the drawer below; with them
+  open the outline keeps its rail only from 1660px.
 - *Builder's call, flagged:* no cap on folder size in this cut. Ceiling: the
   whole subtree is returned on every page load; if a shared folder reaches
   thousands of nodes, page the tree or load subfolders on expand.

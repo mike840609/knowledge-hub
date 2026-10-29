@@ -6,7 +6,8 @@ export type ReviewFollow = { threadId: string; userId: string; shareLinkId: stri
 
 /** One row of Shares → Discussions. A dead link's row names nothing (spec 2026-10-23 § The list). */
 export type FollowedDiscussionView =
-  | { threadId: string; linkAvailable: true; token: string; documentTitle: string; threadStatus: "OPEN" | "RESOLVED"; authorName: string | undefined; excerpt: string; latestAt: Date; unread: number }
+  /** `documentId` only on a folder link, whose page needs it (`?d=`). */
+  | { threadId: string; linkAvailable: true; token: string; documentId?: string; documentTitle: string; threadStatus: "OPEN" | "RESOLVED"; authorName: string | undefined; excerpt: string; latestAt: Date; unread: number }
   | { threadId: string; linkAvailable: false };
 export type DiscussionFilter = "all" | "unread";
 

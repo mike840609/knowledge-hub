@@ -14,6 +14,7 @@ import { SharesNavigation } from "./shares-navigation";
 import { applyAndSearch, LiveSearch } from "@/components/search/live-search-submit";
 import { navigateListRows } from "@/lib/list-row-navigation";
 import type { DiscussionFilter, FollowedDiscussionView } from "@/modules/knowledge/domain/review-follow";
+import { sharedDiscussionHref } from "./notification-href";
 
 export function FollowedDiscussionsView({ workspaceId, items, filter, unread, filterError }: { workspaceId: string; items: FollowedDiscussionView[]; filter: DiscussionFilter; unread: number; filterError?: string }) {
   const router = useRouter(), pending = useRef(false);
@@ -29,7 +30,7 @@ export function FollowedDiscussionsView({ workspaceId, items, filter, unread, fi
     pending.current = true; setBusy(item.threadId); setError("");
     try {
       const response = item.linkAvailable
-        ? await fetch(`/api/share-review/threads/${item.threadId}/follow`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: item.token, following: false }) })
+        ? await fetch(`/api/share-review/threads/${item.threadId}/follow`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: item.token, documentId: item.documentId, following: false }) })
         : await fetch(`/api/review-follows/${item.threadId}/unfollow`, { method: "POST" });
       if (!response.ok) throw new Error();
       setRemoved(current => new Set([...current, item.threadId])); router.refresh();
@@ -50,7 +51,7 @@ export function FollowedDiscussionsView({ workspaceId, items, filter, unread, fi
     <ul aria-label="Followed discussions" onKeyDown={navigateListRows} className="mt-4 space-y-2 md:space-y-0">{shown.map(item => <li key={item.threadId} data-thread-id={item.threadId} className="rounded-md border border-kh-border bg-kh-bg p-3 hover:bg-kh-bg-hover focus-within:bg-kh-bg-hover md:rounded-none md:border-x-0 md:border-t-0 md:py-2">
       {item.linkAvailable
         ? <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-            <Link prefetch={false} data-list-row className="kh-focus-ring min-w-0 rounded-md" href={`/s/${item.token}?thread=${item.threadId}`}>
+            <Link prefetch={false} data-list-row className="kh-focus-ring min-w-0 rounded-md" href={sharedDiscussionHref(item.token, item.threadId, item.documentId)}>
               <span className="flex items-center gap-2">{item.unread > 0 && <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-kh-primary"/>}<span className="truncate text-body font-medium text-kh-text">{item.documentTitle || "Untitled"}</span></span>
               <span className="block truncate text-caption text-kh-text-muted">{item.authorName ?? "Someone"}: {item.excerpt}</span>
               <span className="block text-caption text-kh-text-muted">{item.threadStatus === "OPEN" ? "Open" : "Resolved"} · <Timestamp value={item.latestAt}/>{item.unread > 0 && <> · {item.unread} new {item.unread === 1 ? "reply" : "replies"}</>}</span>

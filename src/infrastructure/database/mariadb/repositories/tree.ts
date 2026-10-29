@@ -114,6 +114,11 @@ export class MariaDbTreeRepository implements TreeRepository {
     return rows[0] ? mapNode(rows[0]) : null;
   }
 
+  async findByDocumentId(documentId: string): Promise<KnowledgeTreeNode | null> {
+    const rows = await this.connection.query<DbRow[]>("SELECT * FROM knowledge_tree_nodes WHERE document_id = ?", [documentId]);
+    return rows[0] ? mapNode(rows[0]) : null;
+  }
+
   async lockById(id: string): Promise<KnowledgeTreeNode | null> {
     const rows = await this.connection.query<DbRow[]>("SELECT * FROM knowledge_tree_nodes WHERE id = ? FOR UPDATE", [id]);
     return rows[0] ? mapNode(rows[0]) : null;

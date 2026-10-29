@@ -46,6 +46,11 @@ function sharedTitle(shared: SharedView): string {
   return shared.document ? shared.document.title : shared.folderName;
 }
 
+/** Signing in to comment comes back to the page read, where the signed-in reader can then comment. */
+function signInHref(returnTo: string): string {
+  return `${publicOrigin() ?? ""}/?${new URLSearchParams({ returnTo })}`;
+}
+
 /** The Hub's front door, by a full browser navigation, continuing to `returnTo` once signed in. */
 function platformEntry(returnTo: string): string {
   const origin = publicOrigin();
@@ -57,17 +62,16 @@ export default async function SharedPage(props: SharedPageProps) {
   if (!shared) notFound();
   if (shared.kind === "FOLDER") {
     const documentId = shared.document?.documentId;
-    return <SharedFolderPage token={token} folder={shared} platformEntry={platformEntry(documentId ? `/s/${token}/open?d=${documentId}` : `/s/${token}/open`)} />;
+    const named = documentId ? `?d=${documentId}` : "";
+    return <SharedFolderPage token={token} folder={shared} platformEntry={platformEntry(`/s/${token}/open${named}`)} signInHref={signInHref(`/s/${token}${named}`)} />;
   }
   // A full browser navigation to the protected origin lets the company Gateway initiate SSO.
   // The public /s/* routes are exempt from that login challenge.
   const entry = platformEntry(`/s/${token}/open`);
-  // Signing in to comment comes back to this page, where the signed-in reader can then comment.
-  const signInHref = `${publicOrigin() ?? ""}/?${new URLSearchParams({ returnTo: `/s/${token}` })}`;
   return (
     <main className="kh-share-page min-h-screen bg-kh-bg">
       {/* One pinned bar, then the title: the brand, Comments, Save and Open share a row. Save and Open show one word each (their full names stay for assistive technology), and on a phone only their icons. */}
-      <SharedReviewPanel token={token} revisionId={shared.revisionId} markdown={shared.markdown} signInHref={signInHref}
+      <SharedReviewPanel token={token} revisionId={shared.revisionId} markdown={shared.markdown} signInHref={signInHref(`/s/${token}`)}
         brand={<span className="shrink-0 text-body font-semibold text-kh-text">Knowledge Hub</span>}
         actions={<><SaveShareButton token={token} /><span aria-hidden="true" className="mx-1 h-4 w-px bg-kh-border max-sm:hidden" /><a href={entry} className={buttonClasses({ variant: "ghost" })}><ExternalLink className="size-4" aria-hidden="true" /><span className="max-sm:sr-only">Open<span className="sr-only"> in Knowledge Hub</span></span></a></>}>
         <SharedReading document={shared} />

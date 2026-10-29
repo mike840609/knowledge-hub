@@ -11,8 +11,9 @@ export type ShareCommentNotificationView = {
   readAt: Date | null; threadStatus: "OPEN" | "RESOLVED";
   /**
    * OWNER: a comment on the caller's shared document. FOLLOW: replies in a discussion the caller
-   * follows, one entry per discussion; it carries no Workspace or document id, only the link's
-   * token while that link opens (`linkAvailable`), and `replyCount` replies not yet seen.
+   * follows, one entry per discussion; it carries no Workspace id, only the link's token while that
+   * link opens (`linkAvailable`) — with the document id too when it is a folder link, whose page
+   * needs it (`?d=`) — and `replyCount` replies not yet seen. A dead link's entry names neither.
    */
   kind?: "OWNER" | "FOLLOW"; token?: string; replyCount?: number; linkAvailable?: boolean;
 };

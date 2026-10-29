@@ -18,6 +18,8 @@ export interface TreeRepository {
   insert(node: KnowledgeTreeNode): Promise<void>;
   insertMany(nodes: readonly KnowledgeTreeNode[]): Promise<void>;
   findById(id: string): Promise<KnowledgeTreeNode | null>;
+  /** The one node that places a document (`uq_tree_one_document`), or null. */
+  findByDocumentId(documentId: string): Promise<KnowledgeTreeNode | null>;
   lockById(id: string): Promise<KnowledgeTreeNode | null>;
   listBySource(sourceId: string): Promise<TreeViewNode[]>;
   updateParent(nodeId: string, parentId: string | null, actorId: string): Promise<void>;

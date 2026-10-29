@@ -7,7 +7,15 @@ import { linkLookupKey } from "@/modules/knowledge/domain/link-graph";
 const fixture = vi.hoisted(() => ({ getShared: vi.fn() }));
 vi.mock("@/server/share-read", () => ({ getShared: fixture.getShared }));
 vi.mock("@/components/knowledge/save-share-button", () => ({ SaveShareButton: ({ token }: { token: string }) => <button data-save={token}>Save</button> }));
-vi.mock("@/components/knowledge/shared-review-panel", () => ({ SharedReviewPanel: ({ children }: { children: React.ReactNode }) => <div data-review-panel="">{children}</div> }));
+type PanelProps = { token: string; documentId?: string; revisionId: string; signInHref: string; wide?: boolean; brand?: React.ReactNode; actions?: React.ReactNode; children: React.ReactNode };
+vi.mock("@/components/knowledge/shared-review-panel", () => ({
+  SharedReviewPanel: ({ token, documentId, revisionId, signInHref, wide, brand, actions, children }: PanelProps) => (
+    <div data-review-panel="" data-token={token} data-document={documentId} data-revision={revisionId} data-sign-in={signInHref} data-wide={wide ? "" : undefined}>
+      <header data-bar="">{brand}{actions}</header>
+      {children}
+    </div>
+  ),
+}));
 vi.mock("@/components/ui/timestamp", () => ({ Timestamp: () => null }));
 vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("notFound"); } }));
 import SharedPage, { generateMetadata } from "@/app/s/[token]/page";
@@ -106,11 +114,23 @@ describe("a folder link's page", () => {
     expect(await render(ids.setup)).toContain(`href="https://hub.example.com/?${new URLSearchParams({ returnTo: `/s/tok/open?d=${ids.setup}` }).toString().replace(/&/g, "&amp;")}"`);
   });
 
-  it("offers no discussions yet: they are the document link's alone until the review API takes a document", async () => {
+  it("offers the discussions of the document read, naming it, in the folder page's own wide bar (spec §6)", async () => {
     shared(folderView(setup));
     const html = await render(ids.setup);
-    expect(html).not.toContain("data-review-panel");
-    expect(html).not.toContain("Comments");
+    const panel = html.match(/<div data-review-panel=""[^>]*>/)![0];
+    expect(panel).toContain('data-token="tok"');
+    expect(panel).toContain(`data-document="${ids.setup}"`);
+    expect(panel).toContain('data-revision="rev"');
+    expect(panel).toContain("data-wide");
+    // The bar keeps the tree, brand, breadcrumb, Save and Open, now beside Comments.
+    const bar = html.match(/<header data-bar="">(.*?)<\/header>/s)![1];
+    for (const part of ['aria-label="Breadcrumb"', "Knowledge Hub", 'data-save="tok"', `/s/tok/open?d=${ids.setup}`, "Folder contents"]) expect(bar).toContain(part);
+  });
+
+  it("signs a reader in to comment and brings them back to the document they were reading", async () => {
+    shared(folderView(setup));
+    const signIn = (await render(ids.setup)).match(/data-sign-in="([^"]*)"/)![1].replace(/&amp;/g, "&");
+    expect(new URLSearchParams(signIn.split("?")[1]).get("returnTo")).toBe(`/s/tok?d=${ids.setup}`);
   });
 
   it("says an empty folder has no documents yet, and draws no article", async () => {
@@ -118,6 +138,7 @@ describe("a folder link's page", () => {
     const html = await render();
     expect(html).toContain("This folder has no documents yet.");
     expect(html).not.toContain("<article");
+    expect(html).not.toContain("data-review-panel");
     expect(html).toContain("Onboarding");
   });
 
@@ -139,6 +160,10 @@ describe("a document link's page", () => {
     expect(fixture.getShared).toHaveBeenCalledWith("tok", undefined);
     expect(html).toContain("<span>Code review</span>");
     expect(html).toContain("data-review-panel");
+    // A document link's page names no document to the review API, and keeps the reading column's bar.
+    expect(html).not.toContain("data-document=");
+    expect(html).not.toContain("data-wide");
+    expect(new URLSearchParams(html.match(/data-sign-in="([^"]*)"/)![1].replace(/&amp;/g, "&").split("?")[1]).get("returnTo")).toBe("/s/tok");
   });
 });
 
