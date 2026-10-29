@@ -2,13 +2,14 @@ import { SaveShareButton } from "@/components/knowledge/save-share-button";
 import { SharedReviewPanel } from "@/components/knowledge/shared-review-panel";
 import { buttonClasses } from "@/components/ui/button";
 import type { Metadata } from "next";
+import type { SharedView } from "@/modules/knowledge/application/document-share-service";
 import { notFound } from "next/navigation";
 import { MarkdownRenderer } from "@/components/knowledge/markdown-renderer";
 import { SharedOutline } from "@/components/knowledge/shared-outline";
 import { extractOutline } from "@/shared/markdown/outline";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
 import { Timestamp } from "@/components/ui/timestamp";
-import { getSharedDocument } from "@/server/share-read";
+import { getShared } from "@/server/share-read";
 import { publicOrigin } from "@/server/config";
 import { expiresSoon } from "@/lib/share-expiry";
 import { ExternalLink } from "lucide-react";
@@ -24,18 +25,25 @@ type SharedPageProps = { params: Promise<{ token: string }> };
  * so a chat preview gets the title and nothing of the body (§14).
  */
 export async function generateMetadata({ params }: SharedPageProps): Promise<Metadata> {
-  const shared = await getSharedDocument((await params).token);
+  const shared = await getShared((await params).token);
   return {
-    title: shared ? shared.title : "Link not available",
+    title: shared ? sharedTitle(shared) : "Link not available",
     description: null,
     robots: { index: false, follow: false },
   };
 }
 
+/** The document being read, else the folder's name (folder share spec §4). */
+function sharedTitle(shared: SharedView): string {
+  if (shared.kind === "DOCUMENT") return shared.title;
+  return shared.document ? shared.document.title : shared.folderName;
+}
+
 export default async function SharedDocumentPage({ params }: SharedPageProps) {
   const { token } = await params;
-  const shared = await getSharedDocument(token);
-  if (!shared) notFound();
+  const shared = await getShared(token);
+  // A folder link's page arrives with the folder view; until then it is not available here.
+  if (!shared || shared.kind !== "DOCUMENT") notFound();
   // A full browser navigation to the protected origin lets the company Gateway initiate SSO.
   // The public /s/* routes are exempt from that login challenge.
   const returnTo = `/s/${token}/open`;

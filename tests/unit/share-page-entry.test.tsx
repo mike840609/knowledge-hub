@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
 
-vi.mock("@/server/share-read", () => ({ getSharedDocument: async () => ({ title: "Shared", markdown: "Shared body", pageIcon: "📌", sharedByName: "Owner", updatedAt: "2026-10-13", expiresAt: "2026-10-20", revisionId: "revision" }) }));
+vi.mock("@/server/share-read", () => ({ getShared: async () => ({ kind: "DOCUMENT", title: "Shared", markdown: "Shared body", pageIcon: "📌", sharedByName: "Owner", updatedAt: "2026-10-13", expiresAt: "2026-10-20", revisionId: "revision" }) }));
 vi.mock("@/components/knowledge/save-share-button", () => ({ SaveShareButton: () => null }));
 vi.mock("@/components/knowledge/shared-review-panel", () => ({ SharedReviewPanel: ({ children, signInHref, brand, actions }: { children: React.ReactNode; signInHref: string; brand: React.ReactNode; actions: React.ReactNode }) => <div data-sign-in={signInHref}><div data-bar="">{brand}{actions}</div>{children}</div> }));
 vi.mock("@/components/knowledge/markdown-renderer", () => ({ MarkdownRenderer: ({ afterTitle }: { afterTitle?: React.ReactNode }) => <>{afterTitle}</> }));

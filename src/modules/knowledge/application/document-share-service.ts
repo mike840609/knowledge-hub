@@ -1,11 +1,12 @@
 import { syncCallerIdentity } from "@/modules/identity/application/sync-caller-identity";
 import { parseShareManagementQuery, SHARE_MANAGEMENT_PAGE_SIZE, type ShareManagementInput } from "../domain/share-management";
 import type { CallerContext } from "@/modules/identity/domain/caller-context";
-import { uuidv7 } from "@/shared/ids/uuidv7";
+import { isUuid, uuidv7 } from "@/shared/ids/uuidv7";
 import {
   assertShareLinkCreation,
   evaluateShareLinkValidity,
   isActiveShareLink,
+  isReachableThroughFolder,
   isShareToken,
   shareLinkExpiry,
   shareLinkPath,
@@ -13,8 +14,12 @@ import {
   type DocumentShareLink,
   type ShareLinkTarget,
 } from "../domain/document-share-link";
+import { extractDocumentLinks } from "../domain/document-links";
 import { DocumentNotFoundError, IntegrityViolationError, SourceNotFoundError, ValidationError } from "../domain/errors";
+import { linkLookupKey } from "../domain/link-graph";
+import { buildLinkResolver } from "../domain/link-resolution";
 import type { ShareTokenIssuer } from "../ports/share-token-issuer";
+import type { TreeViewNode } from "../ports/tree-repository";
 import type { KnowledgeRepositories, KnowledgeUnitOfWork } from "../ports/unit-of-work";
 
 export type ShareLinkView = {
@@ -39,6 +44,40 @@ export type SharedDocumentView = {
   updatedAt: Date;
   expiresAt: Date;
 };
+
+/** One node of a shared folder's subtree: names and icons only, never a body. */
+export type SharedTreeNode = {
+  id: string;
+  /** `null` for the shared folder's direct children. */
+  parentId: string | null;
+  kind: "FOLDER" | "DOCUMENT";
+  name: string;
+  documentId: string | null;
+  pageIcon: string | null;
+};
+
+/** A link in the document being read whose target is reachable through the same folder link. */
+export type SharedResolvedLink = { lookupKey: string; documentId: string; title: string };
+
+export type SharedFolderDocument = SharedDocumentView & {
+  documentId: string;
+  /** The folders from the shared folder (exclusive) down to the document's parent. */
+  path: { id: string; name: string }[];
+  links: SharedResolvedLink[];
+};
+
+export type SharedFolderView = {
+  kind: "FOLDER";
+  folderName: string;
+  /** Depth-first in the owner's tree order. */
+  tree: SharedTreeNode[];
+  /** `null` only when the folder holds no document. */
+  document: SharedFolderDocument | null;
+  sharedByName: string;
+  expiresAt: Date;
+};
+
+export type SharedView = ({ kind: "DOCUMENT" } & SharedDocumentView) | SharedFolderView;
 
 export const SHARE_LINK_CREATED_EVENT = "DOCUMENT_SHARE_LINK_CREATED";
 export const SHARE_LINK_REVOKED_EVENT = "DOCUMENT_SHARE_LINK_REVOKED";
@@ -208,37 +247,30 @@ export class DocumentShareService {
    * same ShareLinkNotFoundError so no response distinguishes a link that
    * once worked from one that never existed. `recordView: false` judges the
    * link without counting a read, for a page that only passes through it.
+   *
+   * `documentId` is navigation inside a folder link (folder share spec §3):
+   * it is re-judged against the folder on every call, and a document link
+   * refuses any.
    */
-  async readShared(token: string, { recordView = true }: { recordView?: boolean } = {}): Promise<SharedDocumentView> {
+  async readShared(token: string, { documentId, recordView = true }: { documentId?: string; recordView?: boolean } = {}): Promise<SharedView> {
     if (!isShareToken(token)) throw new ShareLinkNotFoundError();
+    // A malformed id would make MariaDB's UUID column raise rather than match nothing.
+    if (documentId !== undefined && !isUuid(documentId)) throw new ShareLinkNotFoundError();
     const now = this.clock();
-    const { linkId, view } = await this.unitOfWork.run(async (repositories) => {
+    const { linkId, view } = await this.unitOfWork.run(async (repositories): Promise<{ linkId: string; view: SharedView }> => {
       const link = await repositories.shareLinks.findByToken(token);
-      if (!link || link.target.kind !== "DOCUMENT") throw new ShareLinkNotFoundError();
+      if (!link) throw new ShareLinkNotFoundError();
+      if (link.target.kind === "FOLDER") return { linkId: link.id, view: await readSharedFolder(repositories, link, link.target.folderNodeId, documentId, now) };
+      if (documentId !== undefined) throw new ShareLinkNotFoundError();
       const document = await repositories.documents.findById(link.target.documentId);
       if (!document) throw new ShareLinkNotFoundError();
-      const source = await repositories.sourcePolicy.findById(document.sourceId);
-      if (!source) throw new ShareLinkNotFoundError();
-      const workspace = await repositories.workspaces.findById(source.workspaceId);
-      if (!workspace) throw new ShareLinkNotFoundError();
-      const membership = await repositories.workspaceMemberships.find(workspace.id, link.createdBy);
-      const verdict = evaluateShareLinkValidity({
-        link,
-        documentStatus: document.status,
-        sourceStatus: source.status,
-        workspaceLifecycle: workspace.lifecycleState,
-        workspaceOwnerUserId: workspace.personalOwnerUserId,
-        creatorDirectRole: membership ? membership.role ?? null : undefined,
-        now,
-      });
-      if (!verdict.valid) throw new ShareLinkNotFoundError();
+      await requireOpenLink(repositories, link, document, now);
       const revision = await repositories.revisions.findCurrent(document.id);
       if (!revision) throw new IntegrityViolationError("Document current revision is missing.");
-      const creator = await repositories.users.findById(link.createdBy);
-      if (!creator) throw new IntegrityViolationError("Share link creator is missing.");
+      const creator = await requireCreator(repositories, link);
       return {
         linkId: link.id,
-        view: { revisionId: revision.id, title: revision.title, markdown: revision.markdown, pageIcon: document.pageIcon ?? null, sharedByName: creator.name, updatedAt: revision.createdAt, expiresAt: link.expiresAt },
+        view: { kind: "DOCUMENT", revisionId: revision.id, title: revision.title, markdown: revision.markdown, pageIcon: document.pageIcon ?? null, sharedByName: creator.name, updatedAt: revision.createdAt, expiresAt: link.expiresAt },
       };
     });
     if (!recordView) return view;
@@ -251,6 +283,160 @@ export class DocumentShareService {
     }
     return view;
   }
+}
+
+/**
+ * Whether the link opens now (spec §5.2), with its target — a document or a
+ * folder node — in the document's place. Returns the target's Workspace.
+ */
+async function requireOpenLink(
+  repositories: KnowledgeRepositories,
+  link: DocumentShareLink,
+  target: { sourceId: string; status: "ACTIVE" | "ARCHIVED" },
+  now: Date,
+): Promise<{ workspaceId: string }> {
+  const source = await repositories.sourcePolicy.findById(target.sourceId);
+  if (!source) throw new ShareLinkNotFoundError();
+  const workspace = await repositories.workspaces.findById(source.workspaceId);
+  if (!workspace) throw new ShareLinkNotFoundError();
+  const membership = await repositories.workspaceMemberships.find(workspace.id, link.createdBy);
+  const verdict = evaluateShareLinkValidity({
+    link,
+    documentStatus: target.status,
+    sourceStatus: source.status,
+    workspaceLifecycle: workspace.lifecycleState,
+    workspaceOwnerUserId: workspace.personalOwnerUserId,
+    creatorDirectRole: membership ? membership.role ?? null : undefined,
+    now,
+  });
+  if (!verdict.valid) throw new ShareLinkNotFoundError();
+  return { workspaceId: workspace.id };
+}
+
+async function requireCreator(repositories: KnowledgeRepositories, link: DocumentShareLink) {
+  const creator = await repositories.users.findById(link.createdBy);
+  if (!creator) throw new IntegrityViolationError("Share link creator is missing.");
+  return creator;
+}
+
+/**
+ * A folder link's view (folder share spec §2, §3, §5), called only from
+ * readShared. The tree is the folder's ACTIVE subtree as it is now; the
+ * document shown is re-proven reachable through the stored chain, not
+ * through the tree built here.
+ */
+async function readSharedFolder(
+  repositories: KnowledgeRepositories,
+  link: DocumentShareLink,
+  folderNodeId: string,
+  documentId: string | undefined,
+  now: Date,
+): Promise<SharedFolderView> {
+  const folder = await repositories.tree.findById(folderNodeId);
+  if (!folder || folder.nodeType !== "FOLDER") throw new ShareLinkNotFoundError();
+  const { workspaceId } = await requireOpenLink(repositories, link, folder, now);
+  const sourceNodes = await repositories.tree.listBySource(folder.sourceId);
+  const tree = sharedSubtree(sourceNodes, folder.id);
+  const creator = await requireCreator(repositories, link);
+  const view = { kind: "FOLDER" as const, folderName: folder.name ?? "", tree, sharedByName: creator.name, expiresAt: link.expiresAt };
+  // An unreachable requested id is refused, never replaced by the landing document.
+  const targetId = documentId ?? tree.find((node) => node.documentId !== null)?.documentId ?? null;
+  if (targetId === null) return { ...view, document: null };
+
+  const node = sourceNodes.find((candidate) => candidate.nodeType === "DOCUMENT" && candidate.documentId === targetId);
+  if (!node) throw new ShareLinkNotFoundError();
+  const chain = await repositories.tree.listChain(node.id);
+  if (!isReachableThroughFolder(chain, folder.id)) throw new ShareLinkNotFoundError();
+  const document = await repositories.documents.findById(targetId);
+  if (!document || document.status !== "ACTIVE" || document.sourceId !== folder.sourceId) throw new ShareLinkNotFoundError();
+  const revision = await repositories.revisions.findCurrent(document.id);
+  if (!revision) throw new IntegrityViolationError("Document current revision is missing.");
+
+  const names = new Map(sourceNodes.map((candidate) => [candidate.id, candidate.name ?? ""]));
+  const between = chain.slice(1, chain.findIndex((candidate) => candidate.id === folder.id));
+  const reachable = new Set(tree.flatMap((candidate) => (candidate.documentId === null ? [] : [candidate.documentId])));
+  return {
+    ...view,
+    document: {
+      documentId: document.id,
+      revisionId: revision.id,
+      title: revision.title,
+      markdown: revision.markdown,
+      pageIcon: document.pageIcon ?? null,
+      sharedByName: creator.name,
+      updatedAt: revision.createdAt,
+      expiresAt: link.expiresAt,
+      path: between.reverse().map((ancestor) => ({ id: ancestor.id, name: names.get(ancestor.id) ?? "" })),
+      links: await reachableLinks(repositories, workspaceId, document, revision.markdown, reachable),
+    },
+  };
+}
+
+/**
+ * The folder's ACTIVE nodes, depth-first. Siblings keep `listBySource`'s
+ * order (position, then id), which is the owner's tree order; a node under
+ * an inactive folder is not reached.
+ */
+function sharedSubtree(nodes: readonly TreeViewNode[], folderId: string): SharedTreeNode[] {
+  const children = new Map<string, TreeViewNode[]>();
+  for (const node of nodes) {
+    if (node.parentId === null || !isShownInSharedTree(node)) continue;
+    children.set(node.parentId, [...(children.get(node.parentId) ?? []), node]);
+  }
+  const ordered: SharedTreeNode[] = [];
+  const pending = [...(children.get(folderId) ?? [])].reverse();
+  const seen = new Set<string>([folderId]);
+  while (pending.length > 0) {
+    const node = pending.pop()!;
+    if (seen.has(node.id)) continue;
+    seen.add(node.id);
+    ordered.push({
+      id: node.id,
+      parentId: node.parentId === folderId ? null : node.parentId,
+      kind: node.nodeType,
+      name: (node.nodeType === "FOLDER" ? node.name : node.title) ?? "",
+      documentId: node.nodeType === "DOCUMENT" ? node.documentId : null,
+      pageIcon: node.nodeType === "DOCUMENT" ? node.pageIcon ?? null : null,
+    });
+    pending.push(...[...(children.get(node.id) ?? [])].reverse());
+  }
+  return ordered;
+}
+
+function isShownInSharedTree(node: TreeViewNode): boolean {
+  if (node.status !== "ACTIVE") return false;
+  if (node.nodeType === "FOLDER") return true;
+  return node.documentId !== null && node.documentStatus === "ACTIVE" && node.currentRevisionId !== null;
+}
+
+/**
+ * The document's links resolved as the owner's reader resolves them
+ * (`KnowledgeLinkServiceImpl.getDocumentLinks`), then kept only when the
+ * target is reachable through this link. Resolving against the subtree alone
+ * would point a link somewhere it does not point for the owner.
+ */
+async function reachableLinks(
+  repositories: KnowledgeRepositories,
+  workspaceId: string,
+  document: { id: string; sourceId: string },
+  markdown: string,
+  reachable: ReadonlySet<string>,
+): Promise<SharedResolvedLink[]> {
+  const catalog = await repositories.links.loadCatalog(workspaceId);
+  const resolver = buildLinkResolver(catalog);
+  const byId = new Map(catalog.map((entry) => [entry.documentId, entry]));
+  const origin = { documentId: document.id, sourceId: document.sourceId, sourcePath: byId.get(document.id)?.sourcePath ?? null };
+  const seen = new Set<string>();
+  const links: SharedResolvedLink[] = [];
+  for (const link of extractDocumentLinks(markdown)) {
+    const lookupKey = linkLookupKey(link.kind, link.target);
+    if (seen.has(lookupKey)) continue;
+    seen.add(lookupKey);
+    const resolution = resolver.resolve(link, origin);
+    const target = resolution.status === "RESOLVED" ? byId.get(resolution.documentId) : undefined;
+    if (target && reachable.has(target.documentId)) links.push({ lookupKey, documentId: target.documentId, title: target.title });
+  }
+  return links;
 }
 
 /**

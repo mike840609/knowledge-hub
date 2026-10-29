@@ -1,3 +1,4 @@
+import type { TreeChainNode } from "@/modules/knowledge/domain/document-share-link";
 import type { KnowledgeTreeNode } from "@/modules/knowledge/domain/tree-node";
 import type { DocumentSummary, TreeRepository, TreeViewNode } from "@/modules/knowledge/ports/tree-repository";
 import type { QueryConnection, DbRow } from "./shared";
@@ -27,6 +28,9 @@ function mapDocumentSummary(row: DbRow): DocumentSummary {
 const DOCUMENT_ID_CHUNK = 500;
 
 const POSITION_BATCH = 500;
+
+/** Deeper than any real tree; a cycle (a defect) ends here instead of looping. */
+const MAX_CHAIN_LENGTH = 256;
 
 function placeholders(count: number): string {
   return Array(count).fill("?").join(", ");
@@ -187,5 +191,25 @@ export class MariaDbTreeRepository implements TreeRepository {
       cursor = rows[0]?.parent_id === null || !rows[0] ? null : String(rows[0].parent_id);
     }
     return false;
+  }
+
+  async listChain(nodeId: string): Promise<TreeChainNode[]> {
+    const rows = await this.connection.query<DbRow[]>(
+      `WITH RECURSIVE chain (id, parent_id, node_type, status, depth) AS (
+         SELECT id, parent_id, node_type, status, 0 FROM knowledge_tree_nodes WHERE id = ?
+         UNION ALL
+         SELECT parent.id, parent.parent_id, parent.node_type, parent.status, chain.depth + 1
+         FROM knowledge_tree_nodes parent JOIN chain ON parent.id = chain.parent_id
+         WHERE chain.depth < ?
+       )
+       SELECT id, parent_id, node_type, status FROM chain ORDER BY depth LIMIT ?`,
+      [nodeId, MAX_CHAIN_LENGTH - 1, MAX_CHAIN_LENGTH],
+    );
+    return rows.map((row) => ({
+      id: String(row.id),
+      parentId: row.parent_id === null ? null : String(row.parent_id),
+      nodeType: String(row.node_type) as TreeChainNode["nodeType"],
+      status: String(row.status) as TreeChainNode["status"],
+    }));
   }
 }

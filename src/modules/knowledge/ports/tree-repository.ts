@@ -1,3 +1,4 @@
+import type { TreeChainNode } from "../domain/document-share-link";
 import type { KnowledgeTreeNode } from "../domain/tree-node";
 
 export type TreeViewNode = KnowledgeTreeNode & { title: string | null; pageIcon?: string | null; documentStatus: "ACTIVE" | "ARCHIVED" | null; currentRevisionId: string | null };
@@ -27,4 +28,6 @@ export interface TreeRepository {
   updateStatus(nodeId: string, status: "ACTIVE" | "ARCHIVED", actorId: string): Promise<void>;
   updateStatusForDocument(documentId: string, status: "ACTIVE" | "ARCHIVED", actorId: string): Promise<void>;
   hasDescendant(nodeId: string, possibleDescendantId: string): Promise<boolean>;
+  /** The node, then each parent in turn through `parent_id`, at most 256 nodes; empty when the node does not exist. */
+  listChain(nodeId: string): Promise<TreeChainNode[]>;
 }
