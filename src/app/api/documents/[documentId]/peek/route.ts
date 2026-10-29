@@ -11,10 +11,11 @@ export async function GET(request: Request, context: { params: Promise<{ documen
     // what the caller may see. Client workspace/source inputs are never trusted.
     // Both reads enforce membership and exclude archived documents/sources, so
     // unauthorized or archived access fails exactly like the preview route.
-    const view = await services.queries.getDocument(caller, documentId);
-    const source = await services.queries.getSource(caller, view.sourceId);
-    // `?brief`: the document and what reading it needs, without the header's facts (the Inbox pane).
+    // `?brief`: the document and what reading it needs, without the header's facts (the Inbox pane). An
+    // archived document is still read there, read-only, so its discussions can be seen and settled.
     const brief = new URL(request.url).searchParams.has("brief");
+    const view = brief ? await services.queries.getDocument(caller, documentId, { includeArchived: true }) : await services.queries.getDocument(caller, documentId);
+    const source = brief ? await services.queries.getSource(caller, view.sourceId, { includeArchived: true }) : await services.queries.getSource(caller, view.sourceId);
     // What this document links to and what links to it, for the side-peek
     // pane's clickable wikilinks. Like the full page's getDocumentLinkModel
     // null path, any failure becomes null and the pane renders plain text.

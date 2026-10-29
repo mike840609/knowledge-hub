@@ -23,12 +23,16 @@ let notifications: ShareCommentNotificationView[];
 let threads: Record<string, ReturnType<typeof thread>[]>;
 let calls: { url: string; method: string; body: Record<string, unknown> | undefined }[];
 let width: number;
+let unreadNotices: Partial<ShareCommentNotificationView>[];
+let failMarks: number;
 
 beforeEach(() => {
   window.history.replaceState(null, "", "/w/ws/inbox");
   width = 1200;
   calls = [];
   threads = {};
+  unreadNotices = [];
+  failMarks = 0;
   vi.stubGlobal("ResizeObserver", class {
     constructor(private readonly callback: ResizeObserverCallback) {}
     observe() { this.callback([{ contentRect: { width } } as ResizeObserverEntry], this as unknown as ResizeObserver); }
@@ -38,7 +42,12 @@ beforeEach(() => {
     const body = init.body ? JSON.parse(String(init.body)) : undefined;
     calls.push({ url, method: init.method ?? "GET", body });
     const json = (value: unknown) => new Response(JSON.stringify(value), { headers: { "content-type": "application/json" } });
-    if (url === "/api/review-notifications/mark-read" || url.startsWith("/api/review-notifications/unread")) return json({ ok: true, notifications: [] });
+    if (url.startsWith("/api/review-notifications/unread")) return json({ notifications: unreadNotices });
+    if (url === "/api/review-notifications/mark-read") {
+      if (failMarks > 0) { failMarks--; return new Response(JSON.stringify({ message: "offline" }), { status: 500, headers: { "content-type": "application/json" } }); }
+      unreadNotices = unreadNotices.filter(notice => notice.threadId !== body.threadId);
+      return json({ ok: true });
+    }
     if (url.startsWith("/api/review-notifications/activity")) return json(init.method === "POST" ? { ok: true } : { notifications, nextCursor: null });
     if (url === "/api/share-review/threads/query") return json({ threads: threads[`token:${body.token}`] ?? [], writesEnabled: true, callerUserId: "me", revisionId: "r" });
     const peek = url.match(/^\/api\/documents\/([^/]+)\/peek\?brief$/);
@@ -227,4 +236,46 @@ it("the entry being read keeps its place once settled, so ↓ goes on to the nex
   await act(async () => { list.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })); });
   await settle();
   expect(pane()?.textContent).toContain("body of thread-b");
+});
+
+it("another discussion looked at in the pane is marked read, as on the reader", async () => {
+  // The rail sits beside the article here, as it does in a wide pane.
+  const style = document.createElement("style");
+  style.textContent = ".kh-review-document { --review-rail: inline; }";
+  document.head.append(style);
+  try {
+    notifications = [entry("a")];
+    threads["doc-a"] = [thread("thread-a"), thread("thread-b")];
+    unreadNotices = [{ threadId: "thread-b", documentId: "doc-a" }];
+    await mount();
+    await click(row("a"));
+    await settle();
+    expect(marks()).toEqual(["thread:thread-a"]);
+    const card = pane()!.querySelector<HTMLElement>('[data-review-thread="thread-b"]')!;
+    await click(card);
+    expect(marks()).toContain("thread:thread-b");
+  } finally { style.remove(); }
+});
+
+it("in the narrow list a settled entry named by ?item= is not listed", async () => {
+  width = 600;
+  window.history.replaceState(null, "", "/w/ws/inbox?item=a");
+  notifications = [entry("a", { readAt: new Date(0), threadStatus: "RESOLVED" }), entry("b")];
+  await mount();
+  expect(host.querySelector('[aria-label="Inbox discussions"]')?.textContent).not.toContain("Title a");
+});
+
+it("a mark that failed is asked again by choosing the entry again", async () => {
+  notifications = [entry("a")];
+  threads["doc-a"] = [thread("thread-a")];
+  failMarks = 1;
+  await mount();
+  await click(row("a"));
+  await settle();
+  expect(host.querySelector('[role="alert"]')).not.toBeNull();
+  await click(row("a"));
+  await settle();
+  expect(marks()).toEqual(["thread:thread-a", "thread:thread-a"]);
+  expect(row("a").textContent).toContain("Read");
+  expect(host.querySelector('[role="alert"]')).toBeNull();
 });

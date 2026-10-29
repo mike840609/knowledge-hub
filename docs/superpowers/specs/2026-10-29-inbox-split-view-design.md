@@ -82,7 +82,8 @@ surroundings matter.
   `mark-read` action by event id — for an owner's entry, by its discussion
   (`/api/review-notifications/mark-read` with the thread), which is what the
   reader marks, so one request settles every notice of that discussion and
-  the list updates them all; the panel inside the pane does not mark again. It is the same rule as
+  the list updates them all; the panel inside the pane does not mark that one again, though any other
+  discussion looked at there is marked as on the reader. It is the same rule as
   "opening a discussion marks it read" today.
 
 ## The discussion pane
@@ -101,7 +102,9 @@ said too little, so an owner's entry shows the document.
   here unchanged. The article comes from the existing
   `GET /api/documents/:id/peek?brief` (the side peek's read; `brief` skips the
   header's facts — explorer tree, shell, breadcrumb — and it now returns
-  `revisionId`, which the panel compares with its discussions' revision). The
+  `revisionId`, which the panel compares with its discussions' revision). It reads an
+  archived document too, which the pane shows read-only, so its discussions can
+  still be seen and settled. The
   panel takes the entry's discussion as a `thread` prop in place of
   `?thread=`, opens on it (showing every discussion, not only open ones, when it is
   resolved) and scrolls its passage into view with `revealReviewAnchor`, the

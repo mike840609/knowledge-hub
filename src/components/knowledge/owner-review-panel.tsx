@@ -85,7 +85,8 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
   const load = useCallback(async () => { if (loaded.current) setRefreshing(true); try { setResult(await reviewRequest(base)); loaded.current = true; setError(undefined); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not load discussions."); } finally { setRefreshing(false); } }, [base]);
   useEffect(() => { if (contentPending && !prepareComment) selection.clear(); }, [contentPending, prepareComment, selection.clear]);
   // Looking at a discussion marks its notices read; opening the panel marks nothing (spec 2026-10-22).
-  useEffect(() => { if (!thread && open && activeThreadId && unreadThreadIds.has(activeThreadId)) void markRead(activeThreadId); }, [thread, open, activeThreadId, unreadThreadIds, markRead]);
+  // The Inbox marks the entry it opened on; any other discussion looked at here is marked as on the reader.
+  useEffect(() => { if (open && activeThreadId && activeThreadId !== thread && unreadThreadIds.has(activeThreadId)) void markRead(activeThreadId); }, [thread, open, activeThreadId, unreadThreadIds, markRead]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { setActiveThreadId(undefined); }, [documentId, revisionId]);
   useEffect(() => { if (revisionChanged && !contentPending) void load(); }, [revisionChanged, contentPending, load]);

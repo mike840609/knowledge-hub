@@ -176,20 +176,24 @@ export function reviewAnchorRange(root: HTMLElement, markdown: string, anchor: R
   return createReviewRangeResolver(root, markdown)(anchor);
 }
 
-/** Scroll a current quote to the middle of the view, taking neither focus nor the selection. */
-export function revealReviewAnchor(root: HTMLElement, markdown: string, anchor: ReviewAnchor, behavior: ScrollBehavior = "smooth") {
+/** A current quote's range and the element it starts in, opened out of any closed disclosure. */
+function locateReviewAnchor(root: HTMLElement, markdown: string, anchor: ReviewAnchor) {
   const range = reviewAnchorRange(root,markdown,anchor);
   const element = range && leafOf(range.startContainer);
   if (!range || !element) return null;
   // A quote in a closed disclosure has no box to scroll to: an author's `<details>`, or a diagram's source.
   for (let closed = element.closest("details"); closed; closed = closed.parentElement?.closest("details") ?? null) closed.open = true;
-  element.scrollIntoView({ behavior, block: "center" });
   return { range, element };
+}
+
+/** Scroll a current quote to the middle of the view, taking neither focus nor the selection. */
+export function revealReviewAnchor(root: HTMLElement, markdown: string, anchor: ReviewAnchor, behavior: ScrollBehavior = "smooth") {
+  locateReviewAnchor(root, markdown, anchor)?.element.scrollIntoView({ behavior, block: "center" });
 }
 
 /** Focus a current quote without inserting nodes into rendered Markdown. */
 export function focusReviewAnchor(root: HTMLElement, markdown: string, anchor: ReviewAnchor) {
-  const found = revealReviewAnchor(root, markdown, anchor);
+  const found = locateReviewAnchor(root, markdown, anchor);
   if (!found) return;
   const { range, element } = found;
   const editor = element.closest<HTMLElement>('[contenteditable="true"]');
@@ -198,6 +202,8 @@ export function focusReviewAnchor(root: HTMLElement, markdown: string, anchor: R
     element.tabIndex = -1; element.focus({ preventScroll: true });
     const selection = window.getSelection(); selection?.removeAllRanges(); selection?.addRange(range);
   }
+  // Last, as it always was: an editor that takes the range above scrolls to its selection first.
+  element.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 /** The block button's passage, narrowed to what is selected when the selection is inside it.

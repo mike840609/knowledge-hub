@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { CheckCheck, MessageSquareText, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
@@ -28,9 +28,12 @@ const ABOUT = "Comments on your shared documents, and replies in discussions you
 function useSplit() {
   const ref = useRef<HTMLDivElement>(null);
   const [split, setSplit] = useState(false);
-  useEffect(() => {
+  // Before the first paint, so a wide window never shows the single column first.
+  useLayoutEffect(() => {
     const box = ref.current;
-    if (!box || typeof ResizeObserver === "undefined") return;
+    if (!box) return;
+    setSplit(box.getBoundingClientRect().width >= SPLIT_MIN_PX);
+    if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(([entry]) => setSplit(entry.contentRect.width >= SPLIT_MIN_PX));
     observer.observe(box);
     return () => observer.disconnect();
@@ -71,47 +74,39 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
   const needsAttention = (item: ShareCommentNotificationView) => item.readAt === null || (item.threadStatus === "OPEN" && item.linkAvailable !== false);
   const attention = useMemo(() => items.filter(needsAttention), [items]);
   // The entry being read stays in its place even once reading it has settled it, so ↑/↓ go on from there.
-  const shown = view === "inbox" ? items.filter(item => needsAttention(item) || item.id === selectedId) : items;
+  const shown = view === "inbox" ? items.filter(item => needsAttention(item) || (split && item.id === selectedId)) : items;
   const unread = items.filter(item => item.readAt === null).length;
 
-  const mark = useCallback(async (eventId?: string) => {
+  // One way to mark read, so two never race. An entry is its notice; with `discussion`, an owner's entry is
+  // read as its discussion (`mark-read` by thread), as the reader marks it, and every notice of it settles.
+  const marking = useRef(new Set<string>());
+  const mark = useCallback(async (entry?: ShareCommentNotificationView, discussion = false) => {
+    const key = entry?.id ?? "*";
+    if (marking.current.has(key)) return;
+    marking.current.add(key);
+    const thread = discussion && entry?.kind !== "FOLLOW";
     setBusy(true);
     setError(null);
     try {
-      await reviewRequest("/api/review-notifications/activity", eventId
-        ? { action: "mark-read", eventId }
-        : { action: "mark-all-read" });
+      await reviewRequest(thread ? "/api/review-notifications/mark-read" : "/api/review-notifications/activity",
+        thread ? { documentId: entry!.documentId, threadId: entry!.threadId }
+        : entry ? { action: "mark-read", eventId: entry.id } : { action: "mark-all-read" });
       const now = new Date();
-      setItems(previous => previous.map(item => !item.readAt && (!eventId || item.id === eventId) ? { ...item, readAt: now } : item));
+      const settles = (item: ShareCommentNotificationView) => !entry || item.id === entry.id || (thread && item.kind !== "FOLLOW" && item.threadId === entry.threadId);
+      setItems(previous => previous.map(item => !item.readAt && settles(item) ? { ...item, readAt: now } : item));
       window.dispatchEvent(new Event("kh:notification-changed"));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not mark activity as read.");
-    } finally { setBusy(false); }
+    } finally { marking.current.delete(key); setBusy(false); }
   }, []);
 
   const selected = split ? items.find(item => item.id === selectedId) : undefined;
   // Looking at an entry is reading it, as opening it always was; nothing is selected unasked (spec).
-  // An owner's entry is read as its discussion, which is what the reader marks (`mark-read` by thread):
-  // one request, and the list hears about every notice it settles.
-  const seen = useRef(new Set<string>());
-  const markSeen = useCallback(async (entry: ShareCommentNotificationView) => {
-    if (seen.current.has(entry.id)) return;
-    seen.current.add(entry.id);
-    const thread = entry.kind !== "FOLLOW";
-    try {
-      await reviewRequest(thread ? "/api/review-notifications/mark-read" : "/api/review-notifications/activity",
-        thread ? { documentId: entry.documentId, threadId: entry.threadId } : { action: "mark-read", eventId: entry.id });
-      const now = new Date();
-      setItems(previous => previous.map(item => !item.readAt && (item.id === entry.id || (thread && item.kind !== "FOLLOW" && item.threadId === entry.threadId)) ? { ...item, readAt: now } : item));
-      window.dispatchEvent(new Event("kh:notification-changed"));
-    } catch (cause) {
-      seen.current.delete(entry.id);
-      setError(cause instanceof Error ? cause.message : "Could not mark activity as read.");
-    }
-  }, []);
   const unreadSelection = selected?.readAt === null ? selected : null;
-  useEffect(() => { if (unreadSelection) void markSeen(unreadSelection); }, [unreadSelection, markSeen]);
+  useEffect(() => { if (unreadSelection) void mark(unreadSelection, true); }, [unreadSelection, mark]);
   const select = (item: ShareCommentNotificationView) => {
+    // Choosing it again after a failed mark is asking again.
+    if (item.id === selectedId && item.readAt === null) void mark(item, true);
     setSelectedId(item.id);
     const url = new URL(window.location.href);
     url.searchParams.set("item", item.id);
@@ -172,7 +167,7 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
               ? <Link className={row} href={href} prefetch={item.kind === "FOLLOW" ? false : undefined} data-inbox-entry={item.id} aria-current={current ? "true" : undefined} onClick={openRow(item)}>{content}</Link>
               : split ? <button type="button" className={row} data-inbox-entry={item.id} aria-current={current ? "true" : undefined} onClick={() => select(item)}>{content}</button>
               : <div className="min-w-0 flex-1 px-1 py-1">{content}</div>}
-            {item.readAt === null && <Button variant="ghost" size="sm" disabled={busy} onClick={() => void mark(item.id)}>Mark read</Button>}
+            {item.readAt === null && <Button variant="ghost" size="sm" disabled={busy} onClick={() => void mark(item)}>Mark read</Button>}
           </li>; })}
         </ul>}
       </TabsPanel>)}
@@ -203,6 +198,7 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
     </div>
     <div className="min-h-0 min-w-0">
       {selected ? <InboxDiscussion key={selected.id} entry={selected} />
+        : loading && selectedId ? <p role="status" className="px-6 py-4 text-body-sm text-kh-text-muted">Loading…</p>
         : <div className="px-6 py-16 text-center text-kh-text-muted">
           <MessageSquareText size={24} className="mx-auto mb-3" aria-hidden="true" />
           <p className="text-body font-medium">Select a discussion</p>
