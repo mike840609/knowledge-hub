@@ -1,6 +1,8 @@
 import { expect, test } from "./fixtures/test";
 import { showMarkdown } from "./composer-helpers";
 import { ROUND_TRIP, HELD, unique, composer, createNote, leaveEditor, openEditor, holdEditorCode, surfaceOf } from "./fixtures/document-composer";
+import { createHash } from "node:crypto";
+import { parseGenericMarkdownText } from "../../src/modules/sources/adapters/generic-markdown-folder-adapter";
 
 const recovered = "Your unsaved changes were recovered";
 
@@ -75,7 +77,8 @@ test("discarding recovered edits clears changes typed immediately before confirm
 });
 
 test("stale recovery stays paused and can be downloaded before loading the latest version", async ({ page }) => {
-  const url = await createNote(page, unique("Stale Draft"));
+  const title = unique("Stale Draft");
+  const url = await createNote(page, title);
   await openEditor(page, url);
   await (await showMarkdown(composer(page))).fill("mine");
   await leaveEditor(page, url);
@@ -105,7 +108,11 @@ test("stale recovery stays paused and can be downloaded before loading the lates
   expect(stream).not.toBeNull();
   const chunks: Buffer[] = [];
   for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
-  expect(Buffer.concat(chunks).toString()).toBe("mine");
+  const downloaded = Buffer.concat(chunks).toString();
+  expect(download.suggestedFilename()).toMatch(/\.kh-recovery\.md$/);
+  const parsed = parseGenericMarkdownText({ sourcePath: download.suggestedFilename(), text: downloaded, sourceFileHash: createHash("sha256").update(downloaded).digest("hex") });
+  expect(parsed.resolvedTitle).toBe(title);
+  expect(parsed.markdown).toBe("mine");
 
   await composer(page).getByRole("button", { name: "Discard recovered changes" }).click();
   page.on("dialog", dialog => void dialog.accept());
