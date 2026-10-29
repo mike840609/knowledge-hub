@@ -96,6 +96,8 @@ test.describe("folder share link", () => {
 
       // Out of the folder, a link is its text and carries nothing, not even the title.
       const article = reader.locator("article").first();
+      // The article stays the reading column's direct child: its 32px end padding is the comment-marker gutter.
+      await expect(article).toHaveCSS("padding-right", "32px");
       await expect(article.getByText(names.outside, { exact: true })).toBeVisible();
       await expect(article.locator("span", { hasText: new RegExp(`^${names.outside}$`) })).not.toHaveAttribute("title", /.*/);
       await expect(article.getByRole("link", { name: names.outside })).toHaveCount(0);
@@ -128,6 +130,8 @@ test.describe("folder share link", () => {
       await expect(tree).toBeHidden();
       await disclosure.click();
       await expect(tree).toBeVisible();
+      // Focus moves into the list, so Tab walks the tree rather than the bar behind it.
+      await expect(tree.locator("a, button").first()).toBeFocused();
       const phoneSub = tree.getByRole("button", { name: names.sub, exact: true });
       if ((await phoneSub.getAttribute("aria-expanded")) === "false") await phoneSub.click();
       await tree.getByRole("link", { name: names.deep, exact: true }).click();

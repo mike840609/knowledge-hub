@@ -19,7 +19,7 @@ vi.mock("@/components/knowledge/shared-reading", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/components/knowledge/shared-reading")>();
   return {
     ...actual,
-    SharedReading: ({ document }: { document: { title: string } }) => <article>{document.title}</article>,
+    SharedReading: ({ document, contentId }: { document: { title: string }; contentId?: string }) => <article id={contentId} tabIndex={contentId ? -1 : undefined}>{document.title}</article>,
     SharedByline: () => null,
     SharedFooter: () => <footer />,
   };

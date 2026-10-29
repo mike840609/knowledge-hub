@@ -29,7 +29,7 @@ export function SharedByline({ sharedByName, updatedAt, expiresAt }: { sharedByN
  * document link's page and a folder page. `links` is what the page may link (a folder page's
  * in-folder links; a document link's page passes none); anything else reads as its text.
  */
-export function SharedReading({ document, links }: { document: SharedDocumentView; links?: RenderedLinks }) {
+export function SharedReading({ document, links, contentId }: { document: SharedDocumentView; links?: RenderedLinks; contentId?: string }) {
   const outline = extractOutline(document.markdown);
   // Title, then who shared it, then the article — whether the title is this page's or the document's own `#` heading.
   const contentOwnsTitle = markdownOpensWithHeading(document.markdown);
@@ -42,7 +42,8 @@ export function SharedReading({ document, links }: { document: SharedDocumentVie
       {outline.length > 0 ? <div className="kh-share-outline-rail kh-reading-column sticky top-[4.5rem] z-10 h-0"><div className="kh-outline-hang absolute right-full top-0 w-52"><SharedOutline entries={outline} placement="rail" /></div></div> : null}
       {contentOwnsTitle && pageIcon ? <div className="kh-reading-column pt-6">{pageIcon}</div> : null}
       {contentOwnsTitle ? null : <header className="kh-reading-column pt-6">{pageIcon}<h1 className="text-page-title font-semibold tracking-tight text-kh-text">{document.title}</h1>{byline}</header>}
-      <article data-review-document className={`kh-reading-column min-w-0 pb-6 ${contentOwnsTitle ? "pt-6" : "pt-3"} [&>div>:first-child]:mt-0`}>
+      {/* The skip link's target is the article itself, so it is still a direct child of the panel's reading column (its comment-marker gutter depends on that). */}
+      <article id={contentId} tabIndex={contentId ? -1 : undefined} data-review-document className={`kh-reading-column min-w-0 scroll-mt-14 pb-6 ${contentOwnsTitle ? "pt-6" : "pt-3"} [&>div>:first-child]:mt-0`}>
         <MarkdownRenderer markdown={document.markdown} links={links} unresolvedAsText afterTitle={contentOwnsTitle ? byline : undefined} />
       </article>
     </>

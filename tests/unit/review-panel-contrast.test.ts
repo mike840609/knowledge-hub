@@ -23,12 +23,17 @@ const themes = {
   dark: css.split(':root[data-theme="dark"] {')[1].split("}")[0],
 } as const;
 
-describe.each(Object.entries(themes))("%s discussion panel", (_theme, block) => {
-  const token = (name: string) => block.match(new RegExp(`--kh-${name}: (#[a-f0-9]{6})`))![1];
+describe.each(Object.entries(themes))("%s discussion panel", (theme, block) => {
+  const token = (name: string) => {
+    const match = block.match(new RegExp(`--kh-${name}: (#[a-f0-9]{6})`));
+    if (!match) throw new Error(`Missing --kh-${name} as a six-digit hex token in the ${theme} theme.`);
+    return match[1];
+  };
 
   it.each([
     ["text", "bg"],
     ["text-muted", "bg"],
+    ["text-muted", "bg-selected"],
     ["selected-text", "bg-selected"],
     ["link", "bg"],
     ["text", "bg-raised"],

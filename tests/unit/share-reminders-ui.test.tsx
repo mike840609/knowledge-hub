@@ -81,7 +81,9 @@ describe("useSharedFolderIds", () => {
     expect(seen()).toBe("");
   });
 
-  it("refreshes when the tab returns to view, and not again on focus", async () => {
+  it("refreshes on a return, coalesces both signals, and still reads on a later app switch", async () => {
+    let now = 1_000_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
     let folders = [{ folderNodeId: "a", name: "A" }];
     const fetchStub = vi.fn(async () => new Response(JSON.stringify({ folders }), { status: 200 }));
     vi.stubGlobal("fetch", fetchStub);
@@ -89,14 +91,20 @@ describe("useSharedFolderIds", () => {
     await flush();
     expect(fetchStub).toHaveBeenCalledTimes(1);
     folders = [];
+    now += 5_000;
     act(() => { document.dispatchEvent(new Event("visibilitychange")); });
     await flush();
     expect(fetchStub).toHaveBeenCalledTimes(2);
     expect(seen()).toBe("");
-    // A focus follows the same return; reading again would only repeat the answer.
+    // A tab return can fire both; the second signal inside the cooldown does not read again.
     act(() => { window.dispatchEvent(new Event("focus")); });
     await flush();
     expect(fetchStub).toHaveBeenCalledTimes(2);
+    // Returning from another application fires focus without visibilitychange; that still reads.
+    now += 1_001;
+    act(() => { window.dispatchEvent(new Event("focus")); });
+    await flush();
+    expect(fetchStub).toHaveBeenCalledTimes(3);
   });
 
   it("does not ask outside My Space, and keeps the last answer when a read fails", async () => {

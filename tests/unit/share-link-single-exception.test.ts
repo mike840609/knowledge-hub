@@ -97,7 +97,7 @@ describe("the share link is the single caller-less content path", () => {
     expect(offenders).toEqual([]);
     // A document link's page draws its reading column with no resolutions at all.
     const page = readFileSync(path.join("src", "app", "s", "[token]", "page.tsx"), "utf8");
-    expect(page).toMatch(/<SharedReading\s+document=\{shared\}\s*\/>/);
+    expect(page).toMatch(/<SharedReading\s+document=\{shared\}[^>]*\/>/);
     expect(page).not.toMatch(/\blinks=/);
     // The one exception (folder share spec §5): a folder page is given the links the caller-less
     // read already kept — those whose target is reachable through the same link — and nothing else.

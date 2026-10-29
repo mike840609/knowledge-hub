@@ -46,15 +46,18 @@ function sharedTitle(shared: SharedView): string {
   return shared.document ? shared.document.title : shared.folderName;
 }
 
+/** The query a Hub entry carries back to the page read. */
+const returnToQuery = (returnTo: string) => new URLSearchParams({ returnTo }).toString();
+
 /** The Hub entry for a full browser navigation, continuing to `returnTo` once signed in; null without a public origin. */
 function hubEntry(returnTo: string): string | null {
   const origin = publicOrigin();
-  return origin ? `${origin}/?${new URLSearchParams({ returnTo })}` : null;
+  return origin ? `${origin}/?${returnToQuery(returnTo)}` : null;
 }
 
 /** Signing in to comment comes back to the page read, where the signed-in reader can then comment. */
 function signInHref(returnTo: string): string {
-  return hubEntry(returnTo) ?? `/?${new URLSearchParams({ returnTo })}`;
+  return hubEntry(returnTo) ?? `/?${returnToQuery(returnTo)}`;
 }
 
 /** The Hub's front door, by a full browser navigation, continuing to `returnTo` once signed in. */
@@ -80,7 +83,7 @@ export default async function SharedPage(props: SharedPageProps) {
       <SharedReviewPanel token={token} revisionId={shared.revisionId} markdown={shared.markdown} signInHref={signInHref(`/s/${token}`)}
         brand={<span className="shrink-0 text-body font-semibold text-kh-text">Knowledge Hub</span>}
         actions={<><SaveShareButton token={token} /><span aria-hidden="true" className="mx-1 h-4 w-px bg-kh-border max-sm:hidden" /><a href={entry} className={buttonClasses({ variant: "ghost" })}><ExternalLink className="size-4" aria-hidden="true" /><span className="max-sm:sr-only">Open<span className="sr-only"> in Knowledge Hub</span></span></a></>}>
-        <div id="shared-content" tabIndex={-1}><SharedReading document={shared} /></div>
+        <SharedReading document={shared} contentId="shared-content" />
       </SharedReviewPanel>
       <SharedFooter platformEntry={entry} />
     </main>

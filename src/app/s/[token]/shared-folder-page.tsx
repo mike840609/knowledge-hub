@@ -62,8 +62,8 @@ export function SharedFolderPage({ token, folder, platformEntry, signInHref }: {
           {tree}
         </SharedFolderTreeScope>
         <div className="kh-share-folder-body">
-          <div id="shared-content" tabIndex={-1} className="kh-reading-column py-6">
-            <h1 className="text-page-title font-semibold tracking-tight text-kh-text">{folder.folderName}</h1>
+          <div className="kh-reading-column py-6">
+            <h1 id="shared-content" tabIndex={-1} className="scroll-mt-14 text-page-title font-semibold tracking-tight text-kh-text">{folder.folderName}</h1>
             <SharedByline sharedByName={folder.sharedByName} expiresAt={folder.expiresAt} />
             <p className="mt-6 text-body text-kh-text-muted">This folder has no documents yet.</p>
           </div>
@@ -81,7 +81,7 @@ export function SharedFolderPage({ token, folder, platformEntry, signInHref }: {
         {tree}
         <div className="kh-share-folder-body">
           <SharedReviewPanel key={document.documentId} token={token} documentId={document.documentId} revisionId={document.revisionId} markdown={document.markdown} signInHref={signInHref} brand={lead} actions={actions} wide>
-            <div id="shared-content" tabIndex={-1}><SharedReading document={document} links={sharedFolderLinks(token, document.links)} /></div>
+            <SharedReading document={document} links={sharedFolderLinks(token, document.links)} contentId="shared-content" />
           </SharedReviewPanel>
           <SharedFooter platformEntry={platformEntry} />
         </div>

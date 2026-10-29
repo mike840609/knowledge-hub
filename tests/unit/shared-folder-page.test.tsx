@@ -154,6 +154,13 @@ describe("a folder link's page", () => {
 });
 
 describe("a document link's page", () => {
+  it("starts with a skip link to the article", async () => {
+    shared({ kind: "DOCUMENT", revisionId: "rev", title: "Doc", markdown: "Body.", pageIcon: null, sharedByName: "Mike", updatedAt: new Date(), expiresAt: new Date() });
+    const html = await render();
+    expect(html).toContain('<a href="#shared-content" class="kh-skip-link">Skip to content</a>');
+    expect(html).toMatch(/<article[^>]*id="shared-content"[^>]*tabindex="-1"[^>]*data-review-document/);
+  });
+
   it("still resolves no links: a [[wikilink]] is its text", async () => {
     shared({ kind: "DOCUMENT", revisionId: "rev", title: "Doc", markdown: "See [[Code review]].", pageIcon: null, sharedByName: "Mike", updatedAt: new Date(), expiresAt: new Date() });
     const html = await render();

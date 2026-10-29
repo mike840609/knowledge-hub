@@ -25,7 +25,9 @@ export function useSharedFolderIds(workspaceId: string, enabled: boolean): Reado
     }
     let live = true;
     let latest = 0;
+    let lastLoad = 0;
     const load = async () => {
+      lastLoad = Date.now();
       const ticket = ++latest;
       try {
         const response = await fetch(`/api/workspaces/${workspaceId}/shared-folders`, { cache: "no-store" });
@@ -37,15 +39,21 @@ export function useSharedFolderIds(workspaceId: string, enabled: boolean): Reado
       }
     };
     // A link can expire while the tab stays open; come back to the answer when the owner returns.
-    // `visibilitychange` alone covers that: a tab regaining focus is also visible, so listening to
-    // both would read the same answer twice.
-    const refresh = () => { if (document.visibilityState === "visible") void load(); };
+    // Both signals are kept: visibilitychange covers a tab switch, focus covers returning from
+    // another application while the tab stayed visible. A return can produce both, so a read
+    // inside the cooldown is skipped rather than repeated.
+    const refresh = () => {
+      if (document.visibilityState !== "visible" || Date.now() - lastLoad < 1000) return;
+      void load();
+    };
     void load();
     window.addEventListener(SHARE_LINKS_CHANGED_EVENT, load);
+    window.addEventListener("focus", refresh);
     document.addEventListener("visibilitychange", refresh);
     return () => {
       live = false;
       window.removeEventListener(SHARE_LINKS_CHANGED_EVENT, load);
+      window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
   }, [workspaceId, enabled]);
