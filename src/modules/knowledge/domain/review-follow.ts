@@ -15,15 +15,17 @@ export type DiscussionFilter = "all" | "unread";
  * newest by others, and how many of others' arrived after `seenAt`. A link that no longer opens
  * says only that (spec 2026-10-22 § The follower's Inbox): nothing written, before or after, is passed on.
  */
-export function summarizeFollowedThread({ thread, comments, userId, seenAt, linkValid }: {
+export function summarizeFollowedThread({ thread, comments, userId, seenAt, linkValid, excludeCommentIds }: {
   thread: ReviewThread; comments: ReviewComment[]; userId: string; seenAt: Date; linkValid: boolean;
+  /** Comments the Inbox already shows as mentions: neither unread nor the latest reply. */
+  excludeCommentIds?: ReadonlySet<string>;
 }): { latest: ReviewComment; latestReply: ReviewComment | null; unread: number } | { unavailable: true } | null {
   if (!linkValid) return { unavailable: true };
   if (thread.visibility === "HIDDEN" || isRetractedThread(comments)) return null;
   const standing = comments.filter(comment => !comment.deletedAt && comment.visibility === "VISIBLE");
   const latest = standing.at(-1);
   if (!latest) return null;
-  const replies = standing.filter(comment => comment.authorUserId !== userId);
+  const replies = standing.filter(comment => comment.authorUserId !== userId && !excludeCommentIds?.has(comment.id));
   return { latest, latestReply: replies.at(-1) ?? null, unread: replies.filter(comment => comment.createdAt > seenAt).length };
 }
 
