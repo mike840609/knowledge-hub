@@ -176,21 +176,28 @@ export function reviewAnchorRange(root: HTMLElement, markdown: string, anchor: R
   return createReviewRangeResolver(root, markdown)(anchor);
 }
 
-/** Focus a current quote without inserting nodes into rendered Markdown. */
-export function focusReviewAnchor(root: HTMLElement, markdown: string, anchor: ReviewAnchor) {
+/** Scroll a current quote to the middle of the view, taking neither focus nor the selection. */
+export function revealReviewAnchor(root: HTMLElement, markdown: string, anchor: ReviewAnchor, behavior: ScrollBehavior = "smooth") {
   const range = reviewAnchorRange(root,markdown,anchor);
-  if (!range) return;
-  const element = leafOf(range.startContainer);
-  if (!element) return;
+  const element = range && leafOf(range.startContainer);
+  if (!range || !element) return null;
   // A quote in a closed disclosure has no box to scroll to: an author's `<details>`, or a diagram's source.
   for (let closed = element.closest("details"); closed; closed = closed.parentElement?.closest("details") ?? null) closed.open = true;
+  element.scrollIntoView({ behavior, block: "center" });
+  return { range, element };
+}
+
+/** Focus a current quote without inserting nodes into rendered Markdown. */
+export function focusReviewAnchor(root: HTMLElement, markdown: string, anchor: ReviewAnchor) {
+  const found = revealReviewAnchor(root, markdown, anchor);
+  if (!found) return;
+  const { range, element } = found;
   const editor = element.closest<HTMLElement>('[contenteditable="true"]');
   const focus = new CustomEvent("kh:review-focus-range", { cancelable: true, detail: range });
   if (!editor || editor.dispatchEvent(focus)) {
     element.tabIndex = -1; element.focus({ preventScroll: true });
     const selection = window.getSelection(); selection?.removeAllRanges(); selection?.addRange(range);
   }
-  element.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 /** The block button's passage, narrowed to what is selected when the selection is inside it.

@@ -31,12 +31,13 @@ surroundings matter.
 
 ## Layout
 
-- Where the Inbox's own box is at least **74rem** wide (its border box, measured by a
+- Where the Inbox's own box is at least **75rem** wide (measured by a
   `ResizeObserver`, as the document pane uses a container query, never the
   window), the page is two columns: a 25rem list column (22rem of rows and its 24px
   gutters) and, after a 1px rule, a document pane of at least **48rem** — the
   width at which the owner's discussions sit beside the article
-  (`--review-rail: inline`) rather than in a drawer over it. A drawer over the
+  (`--review-rail: inline`) rather than in a drawer over it, plus a rem for a
+  classic scrollbar, which the pane's stable gutter keeps (17px on Windows). A drawer over the
   Inbox would cover the list being worked through, so the split waits for room
   for the rail. (Amended 2026-10-29: the first build used 44rem with the
   discussion alone; once the pane showed the document, 44rem put the
@@ -75,9 +76,14 @@ surroundings matter.
   modifier click or middle click still opens the document in a new tab, because
   the row's `href` is still `notificationHref`. The selected row wears the
   existing selected-row treatment (`bg-selected`, lavender; contract §8).
+- **The selected entry keeps its place** in the Inbox tab once reading it has
+  settled it, so `↓` goes on from there; it leaves on the next selection.
 - **Selecting marks the entry read**, through the existing
-  `mark-read` action by event id, the same rule as "opening a discussion marks
-  it read" today.
+  `mark-read` action by event id — for an owner's entry, by its discussion
+  (`/api/review-notifications/mark-read` with the thread), which is what the
+  reader marks, so one request settles every notice of that discussion and
+  the list updates them all; the panel inside the pane does not mark again. It is the same rule as
+  "opening a discussion marks it read" today.
 
 ## The discussion pane
 
@@ -93,10 +99,13 @@ said too little, so an owner's entry shows the document.
   highlighted, the discussions are the rail beside it, and everything the
   reader allows there (reply, resolve, hide, comment on selected text) works
   here unchanged. The article comes from the existing
-  `GET /api/documents/:id/peek` (the side peek's read; it now also returns
+  `GET /api/documents/:id/peek?brief` (the side peek's read; `brief` skips the
+  header's facts — explorer tree, shell, breadcrumb — and it now returns
   `revisionId`, which the panel compares with its discussions' revision). The
   panel takes the entry's discussion as a `thread` prop in place of
-  `?thread=`, opens on it and scrolls its passage into view. It never opens
+  `?thread=`, opens on it (showing every discussion, not only open ones, when it is
+  resolved) and scrolls its passage into view with `revealReviewAnchor`, the
+  scrolling half of `focusReviewAnchor`, which leaves focus in the list. It never opens
   as a drawer from the Inbox. The rail's sticky toolbar stops under the
   reader's 48px path line; the Inbox has none, so the pane sets
   `--kh-review-toolbar-top: 0`.
@@ -140,5 +149,5 @@ the shared page for a followed discussion, and `j` / `k`.
 ## Contract
 
 `frontend-design-language.md` §18 gains one sentence: the Inbox is a list and
-the selected discussion side by side from a 74rem box, a plain list below it,
+the selected discussion side by side from a 75rem box, a plain list below it,
 selection in the URL, nothing selected on arrival.

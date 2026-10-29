@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
-import { useSearchParams } from "next/navigation";
 import { CheckCheck, MessageSquareText, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
@@ -21,18 +20,18 @@ type View = "inbox" | "activity";
 /**
  * The box, not the window, decides: a 25rem list column (22rem of rows and its gutters) beside a document
  * pane of 48rem, the width at which its discussions sit beside the article (`--review-rail`) rather than in
- * a drawer over it. Measured on the border box, which the two layouts' different padding does not change.
+ * a drawer over it — and a rem more, for a classic scrollbar the pane's stable gutter keeps (17px on Windows).
  */
-const SPLIT_MIN_PX = 74 * 16;
+const SPLIT_MIN_PX = 75 * 16;
 const ABOUT = "Comments on your shared documents, and replies in discussions you follow on pages shared with you. Opening a discussion marks it read; resolving it is a separate action.";
 
 function useSplit() {
-  const ref = useRef<HTMLElement>(null);
+  const ref = useRef<HTMLDivElement>(null);
   const [split, setSplit] = useState(false);
   useEffect(() => {
     const box = ref.current;
     if (!box || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(([entry]) => setSplit((entry.borderBoxSize?.[0]?.inlineSize ?? entry.contentRect.width) >= SPLIT_MIN_PX));
+    const observer = new ResizeObserver(([entry]) => setSplit(entry.contentRect.width >= SPLIT_MIN_PX));
     observer.observe(box);
     return () => observer.disconnect();
   }, []);
@@ -48,8 +47,8 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { ref, split } = useSplit();
-  const deepLink = useSearchParams().get("item");
-  const [selectedId, setSelectedId] = useState<string | null>(deepLink);
+  // Read once: the URL follows the selection from here on, never the other way round.
+  const [selectedId, setSelectedId] = useState<string | null>(() => typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("item"));
 
   const load = useCallback(async (cursor?: Cursor) => {
     const search = cursor ? "?beforeCreatedAt=" + encodeURIComponent(cursor.createdAt) + "&beforeId=" + encodeURIComponent(cursor.id) : "";
@@ -69,8 +68,10 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
   useEffect(() => { void refresh(); }, [refresh]);
 
   // A dead link's entry needs nothing from anyone: it is history, not attention.
-  const attention = useMemo(() => items.filter(item => item.readAt === null || (item.threadStatus === "OPEN" && item.linkAvailable !== false)), [items]);
-  const shown = view === "inbox" ? attention : items;
+  const needsAttention = (item: ShareCommentNotificationView) => item.readAt === null || (item.threadStatus === "OPEN" && item.linkAvailable !== false);
+  const attention = useMemo(() => items.filter(needsAttention), [items]);
+  // The entry being read stays in its place even once reading it has settled it, so ↑/↓ go on from there.
+  const shown = view === "inbox" ? items.filter(item => needsAttention(item) || item.id === selectedId) : items;
   const unread = items.filter(item => item.readAt === null).length;
 
   const mark = useCallback(async (eventId?: string) => {
@@ -90,8 +91,26 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
 
   const selected = split ? items.find(item => item.id === selectedId) : undefined;
   // Looking at an entry is reading it, as opening it always was; nothing is selected unasked (spec).
-  const unreadSelection = selected?.readAt === null ? selected.id : null;
-  useEffect(() => { if (unreadSelection) void mark(unreadSelection); }, [unreadSelection, mark]);
+  // An owner's entry is read as its discussion, which is what the reader marks (`mark-read` by thread):
+  // one request, and the list hears about every notice it settles.
+  const seen = useRef(new Set<string>());
+  const markSeen = useCallback(async (entry: ShareCommentNotificationView) => {
+    if (seen.current.has(entry.id)) return;
+    seen.current.add(entry.id);
+    const thread = entry.kind !== "FOLLOW";
+    try {
+      await reviewRequest(thread ? "/api/review-notifications/mark-read" : "/api/review-notifications/activity",
+        thread ? { documentId: entry.documentId, threadId: entry.threadId } : { action: "mark-read", eventId: entry.id });
+      const now = new Date();
+      setItems(previous => previous.map(item => !item.readAt && (item.id === entry.id || (thread && item.kind !== "FOLLOW" && item.threadId === entry.threadId)) ? { ...item, readAt: now } : item));
+      window.dispatchEvent(new Event("kh:notification-changed"));
+    } catch (cause) {
+      seen.current.delete(entry.id);
+      setError(cause instanceof Error ? cause.message : "Could not mark activity as read.");
+    }
+  }, []);
+  const unreadSelection = selected?.readAt === null ? selected : null;
+  useEffect(() => { if (unreadSelection) void markSeen(unreadSelection); }, [unreadSelection, markSeen]);
   const select = (item: ShareCommentNotificationView) => {
     setSelectedId(item.id);
     const url = new URL(window.location.href);
@@ -168,15 +187,16 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
     </div>}
   </>;
 
-  if (!split) return <main ref={ref} className="w-full space-y-5 px-6 pb-6">
+  // The wrapper is measured; it is the same box in both layouts.
+  return <div ref={ref} className="w-full">{!split ? <main className="kh-page space-y-5 pb-6">
     {header}
     <p className="text-body-sm text-kh-text-muted">{ABOUT}</p>
     {errorLine}
     {list}
-  </main>;
+  </main>
   // Both columns are the window's height and scroll on their own; each opens on a 48px line, as the rail,
   // the explorer and a document do, so the Inbox's header and the document's title share one top edge.
-  return <main ref={ref} className="grid h-dvh w-full grid-cols-[25rem_minmax(0,1fr)]">
+  : <main className="grid h-dvh w-full grid-cols-[25rem_minmax(0,1fr)]">
     <div className="flex min-h-0 flex-col border-r border-kh-border">
       <div className="space-y-2 px-6">{header}{errorLine}</div>
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 pb-6">{list}</div>
@@ -189,5 +209,5 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
           <p className="mx-auto mt-1 max-w-measure text-body-sm">{ABOUT}</p>
         </div>}
     </div>
-  </main>;
+  </main>}</div>;
 }

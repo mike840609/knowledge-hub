@@ -4,7 +4,7 @@ import { documentLocation } from "@/server/document-location";
 import { getKnowledgeExplorerModel, getWorkspaceShellModel } from "@/server/knowledge-read";
 import { workspaceHttp } from "@/server/workspace-http";
 
-export async function GET(_request: Request, context: { params: Promise<{ documentId: string }> }) {
+export async function GET(request: Request, context: { params: Promise<{ documentId: string }> }) {
   return workspaceHttp(async (services, caller) => {
     const { documentId } = await context.params;
     // Scope is derived server-side: the document's own Source/Workspace decide
@@ -13,6 +13,8 @@ export async function GET(_request: Request, context: { params: Promise<{ docume
     // unauthorized or archived access fails exactly like the preview route.
     const view = await services.queries.getDocument(caller, documentId);
     const source = await services.queries.getSource(caller, view.sourceId);
+    // `?brief`: the document and what reading it needs, without the header's facts (the Inbox pane).
+    const brief = new URL(request.url).searchParams.has("brief");
     // What this document links to and what links to it, for the side-peek
     // pane's clickable wikilinks. Like the full page's getDocumentLinkModel
     // null path, any failure becomes null and the pane renders plain text.
@@ -23,6 +25,7 @@ export async function GET(_request: Request, context: { params: Promise<{ docume
     } catch {
       linkView = null;
     }
+    if (brief) return { title: view.currentRevision.title, markdown: view.currentRevision.markdown, revisionId: view.currentRevision.id, status: view.status, sourceStatus: source.status, linkView };
     // Header facts under the same conditions as the full page (page.tsx): the
     // explorer and the shell are authorized reads of their own, so either one
     // failing closes the facts it feeds instead of failing the peek.

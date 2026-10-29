@@ -45,7 +45,7 @@ function OwnerDocument({ entry }: { entry: Entry }) {
   const [error, setError] = useState<string>();
   useEffect(() => {
     let live = true;
-    governanceRequest<Peek>(`/api/documents/${entry.documentId}/peek`)
+    governanceRequest<Peek>(`/api/documents/${entry.documentId}/peek?brief`)
       .then(result => { if (live) setPeek(result); })
       .catch(failure => { if (live) setError(failure instanceof Error ? failure.message : "Could not load the document."); });
     return () => { live = false; };

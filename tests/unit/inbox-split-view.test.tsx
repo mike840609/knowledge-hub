@@ -4,8 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ShareCommentNotificationView } from "@/modules/knowledge/domain/share-comment-event";
 
-let search = new URLSearchParams();
-vi.mock("next/navigation", () => ({ useSearchParams: () => search, useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }) }));
 const { InboxActivityView } = await import("@/components/knowledge/inbox-activity-view");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -14,8 +13,8 @@ const entry = (id: string, over: Partial<ShareCommentNotificationView> = {}): Sh
   id, workspaceId: "ws", documentId: `doc-${id}`, sourceId: "src", documentTitle: `Title ${id}`, threadId: `thread-${id}`, commentId: "c",
   authorName: "Ann", excerpt: `excerpt ${id}`, createdAt: new Date(0), readAt: null, threadStatus: "OPEN", kind: "OWNER", ...over,
 });
-const thread = (id: string) => ({
-  id, status: "OPEN", createdAt: new Date(0), updatedAt: new Date(0), currentAnchor: { match: "OUTDATED" },
+const thread = (id: string, status = "OPEN") => ({
+  id, status, createdAt: new Date(0), updatedAt: new Date(0), currentAnchor: { match: "OUTDATED" },
   comments: [{ id: `${id}-c1`, threadId: id, authorName: "Ann", body: `body of ${id}`, visibility: "VISIBLE", createdAt: new Date(0), editedAt: null, deleted: false, own: false }],
 });
 
@@ -26,7 +25,6 @@ let calls: { url: string; method: string; body: Record<string, unknown> | undefi
 let width: number;
 
 beforeEach(() => {
-  search = new URLSearchParams();
   window.history.replaceState(null, "", "/w/ws/inbox");
   width = 1200;
   calls = [];
@@ -40,9 +38,10 @@ beforeEach(() => {
     const body = init.body ? JSON.parse(String(init.body)) : undefined;
     calls.push({ url, method: init.method ?? "GET", body });
     const json = (value: unknown) => new Response(JSON.stringify(value), { headers: { "content-type": "application/json" } });
+    if (url === "/api/review-notifications/mark-read" || url.startsWith("/api/review-notifications/unread")) return json({ ok: true, notifications: [] });
     if (url.startsWith("/api/review-notifications/activity")) return json(init.method === "POST" ? { ok: true } : { notifications, nextCursor: null });
     if (url === "/api/share-review/threads/query") return json({ threads: threads[`token:${body.token}`] ?? [], writesEnabled: true, callerUserId: "me", revisionId: "r" });
-    const peek = url.match(/^\/api\/documents\/([^/]+)\/peek$/);
+    const peek = url.match(/^\/api\/documents\/([^/]+)\/peek\?brief$/);
     if (peek) return json({ title: `Doc ${peek[1]}`, markdown: `Passage of ${peek[1]}.`, revisionId: "r", status: "ACTIVE", sourceStatus: "ACTIVE", linkView: null });
     const owner = url.match(/^\/api\/documents\/([^/]+)\/review-threads$/);
     if (owner) return json({ threads: threads[owner[1]] ?? [], writesEnabled: true, revisionId: "r", callerUserId: "me" });
@@ -56,7 +55,9 @@ afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi
 
 const mount = async () => { await act(async () => root.render(<InboxActivityView workspaceId="ws" />)); await act(async () => {}); };
 const settle = () => act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
-const marks = () => calls.filter(call => call.method === "POST" && call.body?.action === "mark-read").map(call => call.body!.eventId);
+// What was marked read: an event by id, or (an owner's entry) its discussion.
+const marks = () => calls.filter(call => call.method === "POST" && (call.body?.action === "mark-read" || call.url === "/api/review-notifications/mark-read"))
+  .map(call => call.body!.eventId ?? `thread:${call.body!.threadId}`);
 const row = (id: string) => host.querySelector<HTMLElement>(`[aria-label="Inbox discussions"] [data-inbox-entry="${id}"]`)!;
 const pane = () => host.querySelector<HTMLElement>('[aria-label="Selected discussion"]');
 const click = async (element: HTMLElement, init: MouseEventInit = {}) => {
@@ -88,12 +89,12 @@ it("a plain click shows the owner's document and its discussion beside the list,
   expect(pane()?.textContent).toContain("body of thread-a");
   expect(pane()?.querySelector('[data-review-thread="thread-a"]')?.hasAttribute("data-active")).toBe(true);
   expect(pane()?.querySelector("a")?.getAttribute("href")).toBe("/w/ws/knowledge/src/doc-a?thread=thread-a");
-  expect(calls.some(call => call.url === "/api/documents/doc-a/peek")).toBe(true);
+  expect(calls.some(call => call.url === "/api/documents/doc-a/peek?brief")).toBe(true);
   // Where the discussions cannot sit beside the article (jsdom has no layout), no drawer covers the list.
   expect(document.querySelector('[role="dialog"]')).toBeNull();
   expect(calls.some(call => call.url === "/api/documents/doc-a/review-threads" && call.method === "GET")).toBe(true);
   await click(row("a"));
-  expect(marks()).toEqual(["a"]);
+  expect(marks()).toEqual(["thread:thread-a"]);
 });
 
 it("a read entry is not marked again", async () => {
@@ -124,6 +125,7 @@ it("a dead link's entry shows its placeholder and asks the server for nothing", 
   expect(pane()?.textContent).toContain("A shared discussion");
   expect(pane()?.querySelector("a")).toBeNull();
   expect(calls.slice(before).filter(call => call.body?.action !== "mark-read")).toEqual([]);
+  expect(marks()).toEqual(["d"]);
 });
 
 it("a followed discussion the response no longer lists says so", async () => {
@@ -137,15 +139,15 @@ it("a followed discussion the response no longer lists says so", async () => {
 it("a deep link selects its entry; an unknown one selects nothing", async () => {
   notifications = [entry("a"), entry("b")];
   threads["doc-b"] = [thread("thread-b")];
-  search = new URLSearchParams("item=b");
+  window.history.replaceState(null, "", "/w/ws/inbox?item=b");
   await mount();
   await settle();
   expect(pane()?.textContent).toContain("body of thread-b");
-  expect(marks()).toEqual(["b"]);
+  expect(marks()).toEqual(["thread:thread-b"]);
   await act(async () => root.unmount());
   root = createRoot(host);
   calls = [];
-  search = new URLSearchParams("item=missing");
+  window.history.replaceState(null, "", "/w/ws/inbox?item=missing");
   await mount();
   expect(pane()).toBeNull();
   expect(marks()).toEqual([]);
@@ -189,6 +191,40 @@ it("in a narrow box the Inbox is today's list: rows navigate and the explanation
   await click(link);
   expect(new URL(window.location.href).searchParams.get("item")).toBeNull();
   expect(pane()).toBeNull();
+  expect(host.querySelector("main")?.classList.contains("kh-page")).toBe(true);
   expect(host.querySelector('[aria-label="Inbox discussions"] button[data-inbox-entry]')).toBeNull();
   expect(marks()).toEqual([]);
+});
+
+it("a resolved discussion opens shown, though the document has open ones", async () => {
+  notifications = [entry("a", { threadStatus: "RESOLVED" })];
+  threads["doc-a"] = [thread("thread-open"), thread("thread-a", "RESOLVED")];
+  await mount();
+  await click(row("a"));
+  expect(pane()?.querySelector('[data-review-thread="thread-a"]')).not.toBeNull();
+});
+
+it("an owner's entry is read as its discussion: one request, and every notice of it in the list settles", async () => {
+  notifications = [entry("a"), entry("a2", { threadId: "thread-a" }), entry("b")];
+  threads["doc-a"] = [thread("thread-a")];
+  await mount();
+  await click(row("a"));
+  await settle();
+  expect(marks()).toEqual(["thread:thread-a"]);
+  const rows = [...host.querySelectorAll('[aria-label="Inbox discussions"] li')];
+  expect(rows.filter(li => li.textContent?.includes("Mark read"))).toHaveLength(1);
+});
+
+it("the entry being read keeps its place once settled, so ↓ goes on to the next", async () => {
+  notifications = [entry("a", { threadStatus: "RESOLVED" }), entry("b")];
+  threads["doc-a"] = [thread("thread-a", "RESOLVED")];
+  threads["doc-b"] = [thread("thread-b")];
+  await mount();
+  await click(row("a"));
+  await settle();
+  expect(row("a")).not.toBeNull();
+  const list = host.querySelector<HTMLElement>('[aria-label="Inbox discussions"]')!;
+  await act(async () => { list.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })); });
+  await settle();
+  expect(pane()?.textContent).toContain("body of thread-b");
 });

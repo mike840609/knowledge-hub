@@ -17,7 +17,7 @@ import { ReviewPassageMarkers } from "./review-passage-markers";
 import { reviewRailInline, useReviewRailInline, useReviewRailOpen } from "./review-rail-mode";
 import { InlineReviewContext, type CaptureReviewAnchor, type PreparedReviewComment } from "./inline-review-context";
 import { useReviewDomVersion } from "./review-dom-version";
-import { COMMENT_HINT, createReviewRangeResolver, focusReviewAnchor, selectionAnchorInBlock } from "./review-selection";
+import { COMMENT_HINT, createReviewRangeResolver, focusReviewAnchor, revealReviewAnchor, selectionAnchorInBlock } from "./review-selection";
 import { ReviewFilterMenu, ReviewNextButtons, ReviewThreadList, reviewRequest, type ReviewFilter } from "./review-thread-list";
 
 /**
@@ -29,7 +29,7 @@ import { ReviewFilterMenu, ReviewNextButtons, ReviewThreadList, reviewRequest, t
  * The owner replies, resolves and hides, and starts a discussion as a reader of a link does: by
  * selecting a passage (docs/superpowers/specs/2026-10-13-review-anchors-and-owner-threads-design.md).
  */
-export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = false, contentPending = false, prepareComment, commentAvailable = false, thread, children }: { /** A discussion to open on arrival in place of `?thread=`, with its passage scrolled into view (the Inbox). */ thread?: string; prepareComment?: (capture: CaptureReviewAnchor) => PreparedReviewComment; commentAvailable?: boolean; documentId: string; revisionId: string; markdown: string; readOnly?: boolean; contentPending?: boolean; children: ReactNode }) {
+export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = false, contentPending = false, prepareComment, commentAvailable = false, thread, children }: { /** A discussion to open on arrival in place of `?thread=`, with its passage scrolled into view. The Inbox passes it, and marks the entry read itself. */ thread?: string; prepareComment?: (capture: CaptureReviewAnchor) => PreparedReviewComment; commentAvailable?: boolean; documentId: string; revisionId: string; markdown: string; readOnly?: boolean; contentPending?: boolean; children: ReactNode }) {
   const [result, setResult] = useState<{ threads: OwnerReviewThreadView[]; writesEnabled: boolean; revisionId: string; callerUserId: string }>();
   const [error, setError] = useState<string>();
   const [activeThreadId, setActiveThreadId] = useState<string>();
@@ -85,7 +85,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
   const load = useCallback(async () => { if (loaded.current) setRefreshing(true); try { setResult(await reviewRequest(base)); loaded.current = true; setError(undefined); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not load discussions."); } finally { setRefreshing(false); } }, [base]);
   useEffect(() => { if (contentPending && !prepareComment) selection.clear(); }, [contentPending, prepareComment, selection.clear]);
   // Looking at a discussion marks its notices read; opening the panel marks nothing (spec 2026-10-22).
-  useEffect(() => { if (open && activeThreadId && unreadThreadIds.has(activeThreadId)) void markRead(activeThreadId); }, [open, activeThreadId, unreadThreadIds, markRead]);
+  useEffect(() => { if (!thread && open && activeThreadId && unreadThreadIds.has(activeThreadId)) void markRead(activeThreadId); }, [thread, open, activeThreadId, unreadThreadIds, markRead]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { setActiveThreadId(undefined); }, [documentId, revisionId]);
   useEffect(() => { if (revisionChanged && !contentPending) void load(); }, [revisionChanged, contentPending, load]);
@@ -109,16 +109,19 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
     // discussion and opens the rail; an unknown id is ignored, never an error.
     const deep = thread ?? new URLSearchParams(window.location.search).get("thread");
     const found = deep ? result.threads.find(item => item.id === deep) : undefined;
+    // A deep link to a settled discussion must not land on a list that hides it.
+    if (found?.status === "RESOLVED") setFilter("ALL");
     // From the Inbox only as a rail: a drawer would cover the list the reader is working through.
     if (found) { setActiveThreadId(found.id); if (!thread || reviewRailInline()) setOpen(true); }
-    const anchor = thread && found?.currentAnchor.match !== "OUTDATED" ? found?.currentAnchor.anchor : undefined;
-    if (anchor) requestAnimationFrame(() => {
+    const anchor = thread && result.revisionId === revisionId && found?.currentAnchor.match !== "OUTDATED" ? found?.currentAnchor.anchor : undefined;
+    // After the rail has opened and the column has narrowed to make room for it; without focus, which
+    // stays in the Inbox's list.
+    if (anchor) requestAnimationFrame(() => requestAnimationFrame(() => {
       const root = readingRef.current?.querySelector<HTMLElement>("[data-review-document]");
-      const range = root ? createReviewRangeResolver(root, markdown)(anchor) : null;
-      range?.startContainer.parentElement?.scrollIntoView({ block: "center" });
-    });
+      if (root) revealReviewAnchor(root, markdown, anchor, "auto");
+    }));
     if (reviewRailInline() && opensOnArrival(result.threads, parseDismissed(readStored("local", dismissedKey(documentId))), result.callerUserId)) setOpen(true);
-  }, [result, documentId, thread, markdown]);
+  }, [result, documentId, thread, markdown, revisionId]);
   useEffect(() => {
     const activate = (event: Event) => setActiveThreadId((event as CustomEvent<string>).detail);
     document.addEventListener("review-focus-thread", activate);
