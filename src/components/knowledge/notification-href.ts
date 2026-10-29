@@ -12,7 +12,12 @@ export const notificationLabel = (entry: Pick<ShareCommentNotificationView, "kin
 /** Where an Inbox entry opens: the owner's document in its Workspace, or the shared page a discussion was followed through. A dead link opens nothing. */
 export function notificationHref(entry: Entry): string | null {
   if (!isLinkEntry(entry.kind)) return `/w/${entry.workspaceId}/knowledge/${entry.sourceId}/${entry.documentId}?thread=${entry.threadId}`;
-  return entry.linkAvailable && entry.token ? `/s/${entry.token}?thread=${entry.threadId}` : null;
+  return entry.linkAvailable && entry.token ? sharedDiscussionHref(entry.token, entry.threadId, entry.documentId || undefined) : null;
+}
+
+/** A followed discussion on its shared page. A folder link's page also names the document it is on (`?d=`, folder share spec §4). */
+export function sharedDiscussionHref(token: string, threadId: string, documentId?: string): string {
+  return `/s/${token}?${documentId ? `d=${documentId}&` : ""}thread=${threadId}`;
 }
 
 export function notificationLine(entry: Entry): string {

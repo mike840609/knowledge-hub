@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronRight, FileText, Star } from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, Share2, Star } from "lucide-react";
 import {
   buildKnowledgeTree,
   filterKnowledgeTree,
@@ -35,6 +35,8 @@ export type KnowledgeTreeProps = {
   /** Client-local filter text; ancestors stay visible and expansion is restored on clear. */
   query?: string;
   favoriteDocumentIds: ReadonlySet<string>;
+  /** Folders with a share link open now; each is marked, nothing more (folder share spec §8). */
+  sharedFolderIds?: ReadonlySet<string>;
   onToggleFavorite: (documentId: string) => void;
   /** What this reader may do to this document, from the one registry. */
   documentActions: (item: Extract<KnowledgeTreeItem, { type: "document" }>) => readonly Action[];
@@ -68,6 +70,7 @@ function TreeNodeRow({
   onToggle,
   onFocusNode,
   favoriteDocumentIds,
+  sharedFolderIds,
   onToggleFavorite,
   documentActions,
   folderActions,
@@ -83,6 +86,7 @@ function TreeNodeRow({
   onToggle: (id: string) => void;
   onFocusNode: (id: string) => void;
   favoriteDocumentIds: ReadonlySet<string>;
+  sharedFolderIds: ReadonlySet<string> | undefined;
   onToggleFavorite: (documentId: string) => void;
   documentActions: (item: Extract<KnowledgeTreeItem, { type: "document" }>) => readonly Action[];
   folderActions: (item: Extract<KnowledgeTreeItem, { type: "folder" }>) => readonly Action[];
@@ -171,7 +175,10 @@ function TreeNodeRow({
           className={`kh-tree-folder-button kh-control flex kh-rail-row min-w-0 flex-1 items-center gap-2 px-2 text-left kh-rail-text font-medium kh-focus-ring rounded-md ${archived ? "text-kh-text-muted" : "text-kh-text"}`}
         >
           {collapsed ? <ChevronRight size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" /> : <ChevronDown size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />}
-          <span className="min-w-0 flex-1 truncate">{item.label}</span>
+          <span className="min-w-0 truncate">{item.label}</span>
+          {/* Right after the name, not at the row's edge: the row's menu button is floated over that edge. */}
+          {sharedFolderIds?.has(item.id) ? <Share2 size={14} role="img" aria-label="Shared" data-shared-folder="" className="shrink-0 text-kh-text-muted" /> : null}
+          <span className="flex-1" aria-hidden="true" />
           {archived ? <Status kind="archived" className="shrink-0 text-caption font-normal text-kh-text-muted">Archived</Status> : null}
         </button>
         {/* Floated over the header's own background, as a document row's is: a
@@ -195,6 +202,7 @@ function TreeNodeRow({
               onToggle={onToggle}
               onFocusNode={onFocusNode}
               favoriteDocumentIds={favoriteDocumentIds}
+              sharedFolderIds={sharedFolderIds}
               onToggleFavorite={onToggleFavorite}
               documentActions={documentActions}
               folderActions={folderActions}
@@ -222,6 +230,7 @@ export function KnowledgeTree({
   sidebarReady = true,
   query = "",
   favoriteDocumentIds,
+  sharedFolderIds,
   onToggleFavorite,
   documentActions,
   folderActions,
@@ -510,6 +519,7 @@ export function KnowledgeTree({
           onToggle={toggle}
           onFocusNode={setActiveId}
           favoriteDocumentIds={favoriteDocumentIds}
+          sharedFolderIds={sharedFolderIds}
           onToggleFavorite={onToggleFavorite}
           documentActions={documentActions}
           folderActions={folderActions}

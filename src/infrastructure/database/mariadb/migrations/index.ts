@@ -3,7 +3,8 @@ import { reviewThreadFollowsMigration } from "./024-review-thread-follows";
 import { queryPathIndexesMigration } from "./025-query-path-indexes";
 import { documentPageIconMigration } from "./026-document-page-icon";
 import { usersAccountMigration } from "./027-users-account";
-import { reviewCommentMentionsMigration } from "./028-review-comment-mentions";
+import { folderShareLinksMigration } from "./028-folder-share-links";
+import { reviewCommentMentionsMigration } from "./029-review-comment-mentions";
 import { shareCommentEventsMigration } from "./022-share-comment-events";
 import { reviewCommentEditDeleteMigration } from "./021-review-comment-edit-delete";
 import { feedbackReportsMigration } from "./020-feedback-reports";
@@ -55,5 +56,6 @@ export const migrations = [
   queryPathIndexesMigration,
   documentPageIconMigration,
   usersAccountMigration,
+  folderShareLinksMigration,
   reviewCommentMentionsMigration,
 ] as const;

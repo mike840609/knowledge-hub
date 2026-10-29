@@ -4,6 +4,8 @@ import type { DocumentRepository } from "@/modules/knowledge/ports/document-repo
 import type { QueryConnection, DbRow } from "./shared";
 import { affectedRows, asDate, asRequiredString, insertBatches } from "./shared";
 
+const ID_CHUNK = 500;
+
 function mapDocument(row: DbRow): KnowledgeDocument {
   return {
     id: String(row.id), sourceId: String(row.source_id), currentRevisionId: row.current_revision_id === null ? null : String(row.current_revision_id),
@@ -41,6 +43,17 @@ export class MariaDbDocumentRepository implements DocumentRepository {
   async findById(id: string): Promise<KnowledgeDocument | null> {
     const rows = await this.connection.query<DbRow[]>("SELECT * FROM knowledge_documents WHERE id = ?", [id]);
     return rows[0] ? mapDocument(rows[0]) : null;
+  }
+
+  async findByIds(ids: readonly string[]): Promise<KnowledgeDocument[]> {
+    if (ids.length === 0) return [];
+    const found: KnowledgeDocument[] = [];
+    for (let start = 0; start < ids.length; start += ID_CHUNK) {
+      const batch = ids.slice(start, start + ID_CHUNK);
+      const rows = await this.connection.query<DbRow[]>(`SELECT * FROM knowledge_documents WHERE id IN (${batch.map(() => "?").join(", ")})`, batch);
+      found.push(...rows.map(mapDocument));
+    }
+    return found;
   }
 
   async lockById(id: string): Promise<KnowledgeDocument | null> {

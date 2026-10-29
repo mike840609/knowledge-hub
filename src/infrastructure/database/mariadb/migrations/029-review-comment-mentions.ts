@@ -2,7 +2,7 @@ import type { Migration } from "./types";
 // Additive: one row per (comment, mentioned user). read_at is the recipient's own read state;
 // whether the mention may still be shown is judged live from the link, never stored here.
 export const reviewCommentMentionsMigration: Migration = {
-  version: 28, name: "review-comment-mentions", statements: [
+  version: 29, name: "review-comment-mentions", statements: [
 `CREATE TABLE review_comment_mentions (
  comment_id UUID NOT NULL, mentioned_user_id UUID NOT NULL, share_link_id UUID NOT NULL,
  created_at DATETIME(6) NOT NULL, read_at DATETIME(6) NULL,

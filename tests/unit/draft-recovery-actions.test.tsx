@@ -21,6 +21,7 @@ vi.mock("@/components/workspaces/governance-error", () => ({
 }));
 
 import { DraftRecoveryActions } from "@/components/knowledge/draft-recovery-actions";
+import { parseGenericMarkdownText } from "@/modules/sources/adapters/generic-markdown-folder-adapter";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 let root: Root;
@@ -67,10 +68,26 @@ it("restores the original document and returns to it", async () => {
 it("downloads and copies the draft", async () => {
   await render();
   await act(async () => button("Download draft").dispatchEvent(new MouseEvent("click", { bubbles: true })));
-  expect(mocks.download).toHaveBeenCalledWith("Draft", "# Unsaved body");
+  const [title, markdown, options] = mocks.download.mock.calls[0] as unknown as [string, string, { recovery: boolean }];
+  const parsed = parseGenericMarkdownText({ sourcePath: "Draft.kh-recovery.md", text: markdown, sourceFileHash: "hash" });
+  expect(title).toBe("Unsaved body");
+  expect(options.recovery).toBe(true);
+  expect(parsed.markdown).toBe("# Unsaved body");
   await act(async () => button("Copy text").dispatchEvent(new MouseEvent("click", { bubbles: true })));
   expect(mocks.writeText).toHaveBeenCalledWith("# Unsaved body");
   expect(mocks.toast).toHaveBeenCalledWith({ message: "Draft copied." });
+});
+
+it("downloads the draft title and base metadata so they survive upload", async () => {
+  await act(async () => root.render(<DraftRecoveryActions workspaceId="ws" sourceId="src" documentId="doc" title="Project / Notes" markdown="Body" metadata={{ title: 42, owner: "team" }} canRestore={false} />));
+  await act(async () => button("Download draft").dispatchEvent(new MouseEvent("click", { bubbles: true })));
+  const [title, markdown, options] = mocks.download.mock.calls[0] as unknown as [string, string, { recovery: boolean }];
+  const parsed = parseGenericMarkdownText({ sourcePath: "Project _ Notes.kh-recovery.md", text: markdown, sourceFileHash: "hash" });
+  expect(title).toBe("Project / Notes");
+  expect(options.recovery).toBe(true);
+  expect(parsed.resolvedTitle).toBe("Project / Notes");
+  expect(parsed.metadata).toEqual({ title: 42, owner: "team" });
+  expect(parsed.markdown).toBe("Body");
 });
 
 it("does not offer restore without permission", async () => {

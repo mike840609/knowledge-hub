@@ -50,7 +50,7 @@ Expect:
 ### 3. The owner answers (port 3000)
 
 1. Go back to the document on port 3000 and reload it.
-2. Scroll to the end of the document and open **Comments**.
+2. In the document header, open **Comments** (or **Open discussions** where the pane is too narrow for the rail).
 3. Reply, then try resolving, reopening and hiding the discussion.
 
 Expect: the reviewer's comment with the passage it quotes; choosing the discussion scrolls to that passage.

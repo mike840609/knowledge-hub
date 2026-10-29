@@ -167,6 +167,89 @@ describe("Phase 2 Markdown adapter frontmatter root", () => {
   });
 });
 
+describe("Knowledge Hub recovered title", () => {
+  it("removes the recovery marker for a multiline frontmatter title without changing the body", () => {
+    const text = '---\ntitle: |-\n  First\n  Second\n---\n<!-- knowledge-hub-recovery-title:v1:%22First%5CnSecond%22 -->\nBody.\n';
+    const parsed = parseGenericMarkdownText({ sourcePath: "note.kh-recovery.md", text, sourceFileHash: hash(text) });
+    expect(parsed.resolvedTitle).toBe("First\nSecond");
+    expect(parsed.markdown).toBe("Body.\n");
+  });
+  it("restores an independent title without changing metadata or markdown", () => {
+    const text = '---\ntitle: 42\nowner: team\n---\n<!-- knowledge-hub-recovery-title:v1:%22Project%20%2F%20Notes%22 -->\n\nBody.\n';
+    const parsed = parseGenericMarkdownText({ sourcePath: "Project _ Notes.kh-recovery.md", text, sourceFileHash: hash(text) });
+    expect(parsed.resolvedTitle).toBe("Project / Notes");
+    expect(parsed.metadata).toEqual({ title: 42, owner: "team" });
+    expect(parsed.markdown).toBe("\nBody.\n");
+  });
+
+  it("keeps an invalid recovery marker as ordinary markdown", () => {
+    const text = "<!-- knowledge-hub-recovery-title:v1:%broken -->\n\nBody.\n";
+    const parsed = parseGenericMarkdownText({ sourcePath: "ordinary.md", text, sourceFileHash: hash(text) });
+    expect(parsed.resolvedTitle).toBe("ordinary");
+    expect(parsed.markdown).toBe(text);
+  });
+
+  it("keeps blank lines added before a recovery marker while restoring the title", () => {
+    const text = '---\nowner: team\n---\n\n<!-- knowledge-hub-recovery-title:v1:%22Project%20%2F%20Notes%22 -->\nBody.\n';
+    const parsed = parseGenericMarkdownText({ sourcePath: "Project _ Notes.kh-recovery.md", text, sourceFileHash: hash(text) });
+    expect(parsed.resolvedTitle).toBe("Project / Notes");
+    expect(parsed.metadata).toEqual({ owner: "team" });
+    expect(parsed.markdown).toBe("\nBody.\n");
+  });
+
+  it("recognizes a recovery file renamed by the browser because a download already exists", () => {
+    const text = '<!-- knowledge-hub-recovery-title:v1:%22Project%20%2F%20Notes%22 -->\nBody.\n';
+    const parsed = parseGenericMarkdownText({ sourcePath: "Project _ Notes.kh-recovery (1).md", text, sourceFileHash: hash(text) });
+    expect(parsed.resolvedTitle).toBe("Project / Notes");
+    expect(parsed.markdown).toBe("Body.\n");
+  });
+
+  it("prefers a newer frontmatter title over the recovery marker", () => {
+    const text = '---\ntitle: New title\n---\n<!-- knowledge-hub-recovery-title:v1:%22Old%20title%22 -->\nBody.\n';
+    const parsed = parseGenericMarkdownText({ sourcePath: "old.kh-recovery.md", text, sourceFileHash: hash(text) });
+    expect(parsed.resolvedTitle).toBe("New title");
+    expect(parsed.metadata).toEqual({ title: "New title" });
+    expect(parsed.markdown).toBe("Body.\n");
+  });
+
+  it("prefers a new opening H1 over the recovery marker", () => {
+    const text = '<!-- knowledge-hub-recovery-title:v1:%22Old%20title%22 -->\n# New heading\n\nBody.\n';
+    const parsed = parseGenericMarkdownText({ sourcePath: "old.kh-recovery.md", text, sourceFileHash: hash(text) });
+    expect(parsed.resolvedTitle).toBe("New heading");
+    expect(parsed.markdown).toBe("# New heading\n\nBody.\n");
+  });
+
+  it("uses the editor's H1 title resolution for reference links in recovered documents", () => {
+    const text = '<!-- knowledge-hub-recovery-title:v1:%22%5BA%5D%5Bref%5D%22 -->\n# [A][ref]\n\n[ref]: /target\n';
+    const parsed = parseGenericMarkdownText({ sourcePath: "note.kh-recovery.md", text, sourceFileHash: hash(text) });
+    expect(parsed.resolvedTitle).toBe("[A][ref]");
+    expect(parsed.titleSource).toBe("H1");
+    expect(parsed.markdown).toBe("# [A][ref]\n\n[ref]: /target\n");
+  });
+
+  it("keeps a recovered body that begins with a frontmatter-like fence", () => {
+    const text = '<!-- knowledge-hub-recovery-title:v1:%22Old%20title%22 -->\n---\nowner: team\n---\nBody.\n';
+    const parsed = parseGenericMarkdownText({ sourcePath: "old.kh-recovery.md", text, sourceFileHash: hash(text) });
+    expect(parsed.resolvedTitle).toBe("Old title");
+    expect(parsed.metadata).toEqual({});
+    expect(parsed.markdown).toBe("---\nowner: team\n---\nBody.\n");
+  });
+
+  it("preserves a marker-like comment in an ordinary Markdown file", () => {
+    const text = '---\ntitle: Regular document\n---\n<!-- knowledge-hub-recovery-title:v1:%22Other%22 -->\nBody.\n';
+    const parsed = parseGenericMarkdownText({ sourcePath: "regular.md", text, sourceFileHash: hash(text) });
+    expect(parsed.resolvedTitle).toBe("Regular document");
+    expect(parsed.markdown).toBe('<!-- knowledge-hub-recovery-title:v1:%22Other%22 -->\nBody.\n');
+  });
+
+  it("removes only the outer recovery marker when the original body starts with a similar comment", () => {
+    const text = '<!-- knowledge-hub-recovery-title:v1:%22My%20title%22 -->\n<!-- knowledge-hub-recovery-title:v1:%22Original%22 -->\nBody.\n';
+    const parsed = parseGenericMarkdownText({ sourcePath: "My title.kh-recovery.md", text, sourceFileHash: hash(text) });
+    expect(parsed.resolvedTitle).toBe("My title");
+    expect(parsed.markdown).toBe('<!-- knowledge-hub-recovery-title:v1:%22Original%22 -->\nBody.\n');
+  });
+});
+
 
 describe("Markdown stable source identity", () => {
   const parse = (text: string) => parseGenericMarkdownText({ sourcePath: "auth.md", text, sourceFileHash: hash(text) });

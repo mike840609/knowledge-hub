@@ -1,5 +1,6 @@
 import type { ShareCommentEvent } from "../domain/share-comment-event";
-export type ShareDocumentUnreadCount = { documentId: string; unreadCount: number; latestThreadId: string };
+/** One row per document link's document, or per folder link (`shareLinkId` set; `documentId` is then the newest unread comment's document). */
+export type ShareDocumentUnreadCount = { documentId: string; shareLinkId: string | null; unreadCount: number; latestThreadId: string };
 export interface ShareCommentEventRepository {
   insert(event: ShareCommentEvent): Promise<void>;
   listUnreadByRecipient(recipientUserId: string): Promise<ShareCommentEvent[]>;

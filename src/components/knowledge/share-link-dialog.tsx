@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Dialog } from "@base-ui-components/react/dialog";
-import { SHARE_REQUEST_EVENT, writeLinkToClipboard } from "@/components/actions/action-menu";
+import { SHARE_REQUEST_EVENT, writeLinkToClipboard, type ShareTarget } from "@/components/actions/action-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SelectMenu } from "@/components/ui/select-menu";
@@ -18,6 +18,7 @@ import { dialogBackdropClasses, dialogPopupClasses } from "@/components/ui/dialo
 import { DialogCloseButton } from "@/components/ui/dialog-close";
 import { Label } from "@/components/ui/label";
 import { ShareLinksSkeleton } from "./knowledge-skeletons";
+import { announceShareLinksChanged } from "./shared-folders";
 
 type ShareLink = {
   id: string;
@@ -40,37 +41,53 @@ const EXPIRY_OPTIONS = [
 
 const DEFAULT_EXPIRY_DAYS = 30;
 
+/** A shared folder a document is also visible through (folder share spec §8). */
+type ViaFolder = { folderNodeId: string; name: string };
+
+const targetKey = (target: ShareTarget | null) => (target === null ? null : "documentId" in target ? `document:${target.documentId}` : `folder:${target.folderNodeId}`);
+const linksUrl = (target: ShareTarget) => ("documentId" in target ? `/api/documents/${target.documentId}/share-links` : `/api/tree-nodes/${target.folderNodeId}/share-links`);
+
+function parseTarget(detail: Partial<{ documentId: unknown; folderNodeId: unknown; name: unknown }> | null | undefined): ShareTarget | null {
+  if (typeof detail?.documentId === "string") return { documentId: detail.documentId };
+  if (typeof detail?.folderNodeId === "string") return { folderNodeId: detail.folderNodeId, name: typeof detail.name === "string" ? detail.name : undefined };
+  return null;
+}
+
 /**
  * Mounted once by the knowledge layout. Any surface — row menu, palette,
  * document header — opens it through requestShare(), the same way they ask
  * for the details panel.
  */
 export function ShareLinkDialogHost() {
-  const [documentId, setDocumentId] = useState<string | null>(null);
+  const [target, setTarget] = useState<ShareTarget | null>(null);
   useEffect(() => {
     const open = (event: Event) => {
-      const detail = (event as CustomEvent<{ documentId?: unknown }>).detail;
-      if (typeof detail?.documentId === "string") setDocumentId(detail.documentId);
+      const next = parseTarget((event as CustomEvent<Parameters<typeof parseTarget>[0]>).detail);
+      if (next) setTarget(next);
     };
     window.addEventListener(SHARE_REQUEST_EVENT, open);
     return () => window.removeEventListener(SHARE_REQUEST_EVENT, open);
   }, []);
   return (
     <ShareLinkDialog
-      documentId={documentId}
+      target={target}
+      onRetarget={setTarget}
       onOpenChange={(next) => {
-        if (!next) setDocumentId(null);
+        if (!next) setTarget(null);
       }}
     />
   );
 }
 
 export function ShareLinkDialog({
-  documentId,
+  target,
   onOpenChange,
+  onRetarget,
 }: {
-  documentId: string | null;
+  target: ShareTarget | null;
   onOpenChange: (open: boolean) => void;
+  /** Where "Also visible through the shared folder" goes: the same dialog, for that folder. */
+  onRetarget?: (target: ShareTarget) => void;
 }) {
   const toast = useToast();
   const [links, setLinks] = useState<ShareLink[] | null>(null);
@@ -83,24 +100,36 @@ export function ShareLinkDialog({
   const [created, setCreated] = useState<string | null>(null);
   const [reviewCapability, setReviewCapability] = useState({ read: false, write: false });
   const [origin, setOrigin] = useState("");
-  // The document the dialog is open for right now. A response for any other
-  // document — the dialog was closed and reopened elsewhere before it
-  // arrived — is dropped rather than shown with this one's buttons.
-  const current = useRef<string | null>(documentId);
-  current.current = documentId;
+  const [viaFolders, setViaFolders] = useState<ViaFolder[]>([]);
+  // The document or folder the dialog is open for right now. A response for any
+  // other — the dialog was closed and reopened elsewhere before it arrived — is
+  // dropped rather than shown with this one's buttons.
+  const key = targetKey(target);
+  const current = useRef<string | null>(key);
+  current.current = key;
+  const isFolder = target !== null && "folderNodeId" in target;
+  const folderName = target !== null && "folderNodeId" in target ? target.name : undefined;
 
-  const load = useCallback(async (id: string) => {
+  const load = useCallback(async (next: ShareTarget) => {
+    const loadingKey = targetKey(next);
     try {
-      const result = await governanceRequest<{ links: ShareLink[]; reviewReadAvailable?: boolean; reviewWritesEnabled?: boolean }>(`/api/documents/${id}/share-links`);
-      if (current.current === id) { setLinks(result.links); setReviewCapability({ read: result.reviewReadAvailable === true, write: result.reviewWritesEnabled === true }); }
+      const result = await governanceRequest<{ links: ShareLink[]; viaFolders?: ViaFolder[]; reviewReadAvailable?: boolean; reviewWritesEnabled?: boolean }>(linksUrl(next));
+      if (current.current !== loadingKey) return;
+      setLinks(result.links);
+      setViaFolders(Array.isArray(result.viaFolders) ? result.viaFolders : []);
+      setReviewCapability({ read: result.reviewReadAvailable === true, write: result.reviewWritesEnabled === true });
     } catch (failure) {
-      if (current.current === id) setError(governanceFailure(failure));
+      if (current.current === loadingKey) setError(governanceFailure(failure));
     }
   }, []);
 
+  // Keyed on the target's identity, not the object: the host hands the same folder a new object per request.
+  const targetRef = useRef(target);
+  targetRef.current = target;
   useEffect(() => {
     setOrigin(window.location.origin);
     setLinks(null);
+    setViaFolders([]);
     setReviewCapability({ read: false, write: false });
     setLabel("");
     setExpiresInDays(DEFAULT_EXPIRY_DAYS);
@@ -108,8 +137,8 @@ export function ShareLinkDialog({
     setConfirmingRevoke(null);
     setCopied(null);
     setCreated(null);
-    if (documentId) void load(documentId);
-  }, [documentId, load]);
+    if (targetRef.current) void load(targetRef.current);
+  }, [key, load]);
 
   // Copying runs on the reader's own click, never after a network wait: a
   // clipboard write that has outlived its click is refused by some browsers.
@@ -125,15 +154,15 @@ export function ShareLinkDialog({
   const inactive = links?.filter((link) => !link.active) ?? [];
 
   return (
-    <Dialog.Root open={documentId !== null} onOpenChange={(next) => { if (!busy) onOpenChange(next); }}>
+    <Dialog.Root open={target !== null} onOpenChange={(next) => { if (!busy) onOpenChange(next); }}>
       <Dialog.Portal>
         <Dialog.Backdrop className={dialogBackdropClasses()} />
         <Dialog.Popup className={dialogPopupClasses("max-h-[85vh] w-[min(36rem,92vw)] overflow-y-auto")}>
-          <Dialog.Title className="text-title font-semibold">Share link</Dialog.Title>
+          <Dialog.Title className="text-title font-semibold">{isFolder ? (folderName ? `Share folder ${folderName}` : "Share folder") : "Share link"}</Dialog.Title>
           <Dialog.Description className="mt-1 text-body text-kh-text-muted">
-            Anyone with this link can read this document without signing in. They will see every change you make
-            from now on, but they cannot edit it or see anything else in My Space. Share only what you are happy to
-            see forwarded.
+            {isFolder
+              ? "Anyone with this link can read every document in this folder and its subfolders without signing in, including any you add later. They will see every change you make from now on, but they cannot edit anything or see anything else in My Space. Share only what you are happy to see forwarded."
+              : "Anyone with this link can read this document without signing in. They will see every change you make from now on, but they cannot edit it or see anything else in My Space. Share only what you are happy to see forwarded."}
             {reviewCapability.read && <> Anyone with a valid link can read existing comments.{reviewCapability.write ? " Signing in is required to add comments and replies." : " Adding comments is currently disabled."}</>}
           </Dialog.Description>
 
@@ -141,15 +170,16 @@ export function ShareLinkDialog({
             className="mt-5 flex flex-wrap items-end gap-3"
             onSubmit={async (event) => {
               event.preventDefault();
-              const id = documentId;
-              if (!id || busy) return;
+              const id = key;
+              if (!target || busy) return;
               setBusy(true);
               setError(null);
               try {
-                const { link } = await governanceRequest<{ link: ShareLink }>(`/api/documents/${id}/share-links`, "POST", {
+                const { link } = await governanceRequest<{ link: ShareLink }>(linksUrl(target), "POST", {
                   label: label.trim() === "" ? undefined : label,
                   expiresInDays,
                 });
+                announceShareLinksChanged();
                 if (current.current !== id) return;
                 setLabel("");
                 setLinks((existing) => [link, ...(existing ?? [])]);
@@ -175,9 +205,21 @@ export function ShareLinkDialog({
                 options={EXPIRY_OPTIONS.map((option) => ({ value: option.days, label: option.label }))}
               />
             </Label>
-            <Button type="submit" disabled={busy || !documentId}>{busy ? "Creating…" : "Create link"}</Button>
+            <Button type="submit" disabled={busy || !target}>{busy ? "Creating…" : "Create link"}</Button>
           </form>
           <div className="mt-3"><GovernanceError error={error} /></div>
+
+          {viaFolders.length > 0 ? (
+            // A reminder, not a gate: nothing here asks for confirmation or stops the link below.
+            <ul aria-label="Also shared through folders" className="mt-3 space-y-1">
+              {viaFolders.map((folder) => (
+                <li key={folder.folderNodeId} className="text-body-sm text-kh-text-muted">
+                  Also visible through the shared folder{" "}
+                  <button type="button" aria-label={`Open share links for folder ${folder.name}`} disabled={busy} onClick={() => onRetarget?.({ folderNodeId: folder.folderNodeId, name: folder.name })} className="rounded-sm font-medium text-kh-text underline kh-focus-ring">{folder.name}</button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
 
           <section aria-label="Active links" className="mt-5">
             {links === null ? (
@@ -208,13 +250,14 @@ export function ShareLinkDialog({
                             size="sm"
                             type="button"
                             onClick={async () => {
-                              const id = documentId;
+                              const revoking = target;
                               setError(null);
                               try {
                                 await governanceRequest<null>(`/api/share-links/${link.id}/revoke`, "POST");
+                                announceShareLinksChanged();
                                 setConfirmingRevoke(null);
-                                if (id) await load(id);
-                                toast({ message: "Link revoked. Anyone holding it can no longer open the document." });
+                                if (revoking) await load(revoking);
+                                toast({ message: `Link revoked. Anyone holding it can no longer open the ${isFolder ? "folder" : "document"}.` });
                               } catch (failure) {
                                 setError(governanceFailure(failure));
                               }

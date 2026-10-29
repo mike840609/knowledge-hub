@@ -4,7 +4,9 @@ export type ShareManagementStatus = "active" | "expired" | "revoked" | "unavaila
 export type ShareManagementInput = { q?: string; status?: string; page?: string };
 export type ShareManagementQuery = { q: string; status: ShareManagementStatus | "all"; page: number };
 export type ManagedShareLink = {
-  id: string; documentId: string; sourceId: string; title: string; sourceName: string;
+  id: string; kind: "DOCUMENT" | "FOLDER";
+  /** Set on a document link; `null` on a folder link, whose `title` is the folder's name. */
+  documentId: string | null; folderNodeId: string | null; sourceId: string; title: string; sourceName: string;
   label: string | null; path: string; status: ShareManagementStatus;
   createdAt: Date; expiresAt: Date; revokedAt: Date | null;
   totalViews: number; lastViewedAt: Date | null;

@@ -1,6 +1,6 @@
 import { expect, test } from "./fixtures/test";
 import { showMarkdown } from "./composer-helpers";
-import { EMPTY_WORKSPACE, ROUND_TRIP, unique, composer, createNote, readerTitle, EDITOR_CODE, HELD, holdEditorCode, openEditor } from "./fixtures/document-composer";
+import { EMPTY_WORKSPACE, ROUND_TRIP, unique, composer, createNote, EDITOR_CODE, HELD, holdEditorCode, openEditor } from "./fixtures/document-composer";
 
 test("the rendered editor mounts without hydration or page errors", { tag: "@smoke-team" }, async ({ page }) => {
   const problems: string[] = [];
@@ -304,8 +304,7 @@ test("a frontmatter title survives editing the H1", async ({ page }) => {
   await expect(page).not.toHaveURL(/\/new$/, ROUND_TRIP);
 
   const surface = await openEditor(page, page.url());
-  await expect(composer(page).getByLabel("Title", { exact: true })).toHaveCount(0);
-  await expect(readerTitle(page)).toHaveText(title);
+  await expect(composer(page).getByLabel("Title", { exact: true })).toHaveValue(title);
   // The body opens with its own H1, so the editor shows that one heading, as the reader does.
   await expect(surface.getByRole("heading", { level: 1 })).toHaveCount(1);
   const source = await showMarkdown(composer(page));
@@ -313,7 +312,7 @@ test("a frontmatter title survives editing the H1", async ({ page }) => {
   await expect(page.locator("[data-autosave-status]")).toHaveAttribute("data-autosave-status", "saved", ROUND_TRIP);
   await page.reload();
   await expect(surface.getByRole("heading", { name: "Another heading entirely" })).toBeVisible(ROUND_TRIP);
-  await expect(readerTitle(page)).toHaveText(title);
+  await expect(composer(page).getByLabel("Title", { exact: true })).toHaveValue(title);
 });
 
 test("the Markdown text re-fits its height when the column rewraps", async ({ page }) => {

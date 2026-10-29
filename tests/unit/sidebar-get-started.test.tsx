@@ -6,7 +6,7 @@ import { SidebarGetStarted, hasNoDocuments, startActions } from "@/components/kn
 import type { KnowledgeTreeItem } from "@/modules/knowledge/application/knowledge-query-service";
 
 const can = { canWrite: true, canImport: true, canSearch: true, canInspectSources: true, canOpenSettings: true };
-const context = (overrides: Partial<Omit<ActionContext, "onboarding">> = {}) => ({ workspaceId: "w1", workspaceType: "TEAM" as const, can, confirmed: true, ...overrides });
+const context = (overrides: Partial<Omit<ActionContext, "onboarding">> = {}) => ({ workspaceId: "w1", workspaceType: "TEAM" as const, isPersonalOwner: false, can, confirmed: true, ...overrides });
 const render = (overrides: Partial<Omit<ActionContext, "onboarding">> = {}) => renderToStaticMarkup(createElement(SidebarGetStarted, { actions: startActions(context(overrides)) }));
 const item = (type: "document" | "folder", status: "ACTIVE" | "ARCHIVED" = "ACTIVE") => ({ id: `${type}-1`, type, status, label: type, documentId: type === "document" ? "d1" : undefined }) as unknown as KnowledgeTreeItem;
 

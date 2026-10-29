@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Popover } from "@base-ui-components/react/popover";
-import { ImagePlus } from "lucide-react";
+import { FileText, ImagePlus } from "lucide-react";
 import { PAGE_ICONS } from "@/lib/page-icon";
 import { governanceRequest } from "@/components/workspaces/governance-error";
 import { useToast } from "@/components/ui/toast";
@@ -60,14 +60,19 @@ export function PageIconPicker({
         <Popover.Trigger
           type="button"
           aria-label={current ? "Change page icon" : "Add page icon"}
-          className="kh-focus-ring inline-flex h-10 min-w-10 items-center gap-1.5 rounded-md px-1 text-kh-text-muted transition-colors hover:bg-kh-bg-hover hover:text-kh-text aria-expanded:bg-kh-bg-hover aria-expanded:text-kh-text"
+          className="kh-focus-ring group inline-flex h-10 min-w-10 items-center gap-1.5 rounded-md px-1 text-kh-text-muted transition-colors hover:bg-kh-bg-hover hover:text-kh-text aria-expanded:bg-kh-bg-hover aria-expanded:text-kh-text"
         >
           {current ? (
             <span data-page-icon className="select-none text-display leading-8" aria-hidden="true">{current}</span>
           ) : (
+            // The document's mark at rest; the labelled add affordance on hover
+            // (where hover exists) or focus, as Notion reveals it.
             <>
-              <ImagePlus className="h-5 w-5" aria-hidden="true" />
-              <span className="text-body-sm">Add icon</span>
+              <FileText className="h-5 w-5 shrink-0 group-focus-visible:hidden [@media(hover:hover)_and_(pointer:fine)]:group-hover:hidden" aria-hidden="true" />
+              <span className="hidden items-center gap-1.5 group-focus-visible:inline-flex [@media(hover:hover)_and_(pointer:fine)]:group-hover:inline-flex" aria-hidden="true">
+                <ImagePlus className="h-5 w-5" />
+                <span className="text-body-sm">Add icon</span>
+              </span>
             </>
           )}
         </Popover.Trigger>

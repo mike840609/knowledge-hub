@@ -25,9 +25,14 @@ export const DEFAULT_SHARE_LINK_EXPIRY_DAYS: ShareLinkExpiryDays = 30;
 export const MAX_ACTIVE_SHARE_LINKS_PER_DOCUMENT = 10;
 export const MAX_SHARE_LINK_LABEL_LENGTH = 200;
 
+/** What a link opens: one document, or a My Space folder's live subtree. */
+export type ShareLinkTarget =
+  | { kind: "DOCUMENT"; documentId: string }
+  | { kind: "FOLDER"; folderNodeId: string };
+
 export type DocumentShareLink = {
   id: string;
-  documentId: string;
+  target: ShareLinkTarget;
   /** Random UUIDv4, never derived from any entity ID (spec §8). */
   token: string;
   label: string | null;
@@ -83,6 +88,7 @@ type LifecycleStatus = "ACTIVE" | "ARCHIVED";
 /** Everything validity depends on, already loaded. Never includes the viewer. */
 export type ShareLinkValidityInput = {
   link: Pick<DocumentShareLink, "revokedAt" | "expiresAt" | "createdBy">;
+  /** The target's status (document, or folder node). */
   documentStatus: LifecycleStatus;
   sourceStatus: LifecycleStatus;
   workspaceLifecycle: LifecycleStatus | null | undefined;
@@ -132,8 +138,35 @@ export function evaluateShareLinkValidity(
   return { valid: true };
 }
 
+/** One tree node on the path from a document up to the root, as the repository reads it. */
+export type TreeChainNode = {
+  id: string;
+  parentId: string | null;
+  nodeType: "FOLDER" | "DOCUMENT";
+  status: LifecycleStatus;
+};
+
+/**
+ * Whether a document stays inside a shared folder right now. `chain[0]` is the
+ * document's own node, then its parents upward. Every node on the way must be
+ * ACTIVE, and the shared folder must be above the document. The array is not
+ * trusted to be acyclic: a repeated id ends the walk.
+ */
+export function isReachableThroughFolder(chain: readonly TreeChainNode[], folderNodeId: string): boolean {
+  if (chain[0]?.nodeType !== "DOCUMENT") return false;
+  const seen = new Set<string>();
+  for (const [index, node] of chain.entries()) {
+    if (node.status !== "ACTIVE" || seen.has(node.id)) return false;
+    seen.add(node.id);
+    if (index > 0 && node.id === folderNodeId) return node.nodeType === "FOLDER";
+  }
+  return false;
+}
+
 export type ShareLinkCreationInput = {
   callerId: string;
+  /** The link's target: a document's state, or the shared folder node's (defaults to DOCUMENT). */
+  targetKind?: "DOCUMENT" | "FOLDER";
   documentStatus: LifecycleStatus;
   sourceStatus: LifecycleStatus;
   workspace: {
@@ -152,13 +185,13 @@ export type ShareLinkCreationInput = {
  * ownership answers who may write.
  */
 export function assertShareLinkCreation(input: ShareLinkCreationInput): { expiresInDays: ShareLinkExpiryDays; label: string | null } {
-  if (input.documentStatus !== "ACTIVE") throw new DocumentArchivedError();
+  if (input.documentStatus !== "ACTIVE") throw new DocumentArchivedError(input.targetKind === "FOLDER" ? "The shared folder is archived." : undefined);
   if (input.sourceStatus !== "ACTIVE") throw new SourceArchivedError();
   if (input.workspace.workspaceType !== "PERSONAL") throw new ShareLinkNotPersonalError();
   // Someone else's My Space is not a document this caller may learn about.
   if (input.workspace.personalOwnerUserId !== input.callerId) throw new DocumentNotFoundError();
   if (input.workspace.lifecycleState !== "ACTIVE") throw new WorkspaceArchivedError();
-  if (input.activeLinkCount >= MAX_ACTIVE_SHARE_LINKS_PER_DOCUMENT) throw new ShareLinkLimitReachedError();
+  if (input.activeLinkCount >= MAX_ACTIVE_SHARE_LINKS_PER_DOCUMENT) throw new ShareLinkLimitReachedError(`${input.targetKind === "FOLDER" ? "A folder" : "A document"} can have at most ${MAX_ACTIVE_SHARE_LINKS_PER_DOCUMENT} active share links.`);
   return { expiresInDays: normalizeExpiry(input.expiresInDays), label: normalizeLabel(input.label) };
 }
 

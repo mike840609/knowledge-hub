@@ -37,7 +37,7 @@ export type TeamWorkspaceView = {
   caller: { directRole: WorkspaceRole | null; effectiveCapabilities: readonly WorkspaceCapability[] };
   actions: WorkspaceActions; grantOptions: WorkspaceGrantOptions;
 };
-export type WorkspaceAccessView = { workspace: WorkspaceNavigationItem; effectiveCapabilities: readonly WorkspaceCapability[]; actions: WorkspaceActions };
+export type WorkspaceAccessView = { workspace: WorkspaceNavigationItem; /** True only for the owner of this My Space; Team workspaces are never one. */ isPersonalOwner: boolean; effectiveCapabilities: readonly WorkspaceCapability[]; actions: WorkspaceActions };
 export type HubUserLookup = { id: string; name: string; empId: string; nameEn: string | null };
 export type MemberAdminView = { user: { id: string; name: string; empId: string }; access: UserAccessInspection; assignableRoles: readonly WorkspaceRole[]; canRemoveDirectAccess: boolean };
 export type GroupAdminView = { externalGroupId: string; role: "ADMIN" | "EDITOR" | "VIEWER"; assignableRoles: readonly ("ADMIN" | "EDITOR" | "VIEWER")[]; canRemove: boolean };
@@ -88,7 +88,7 @@ export class WorkspaceAdminService {
   async workspaceState(caller: CallerContext, workspaceId: string): Promise<WorkspaceAccessView> {
     return this.unitOfWork.run(async repositories => {
       const { workspace, capabilities, actions } = await readState(repositories, caller, workspaceId);
-      return { workspace: navigationItem(workspace), effectiveCapabilities: [...capabilities], actions };
+      return { workspace: navigationItem(workspace), isPersonalOwner: workspace.workspaceType === "PERSONAL" && workspace.personalOwnerUserId === caller.identity.id, effectiveCapabilities: [...capabilities], actions };
     });
   }
   async teamView(caller: CallerContext, workspaceId: string): Promise<TeamWorkspaceView> {

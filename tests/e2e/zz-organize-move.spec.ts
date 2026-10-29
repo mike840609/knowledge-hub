@@ -68,6 +68,81 @@ async function expectOrder(folder: Locator, expected: string[]) {
 }
 
 test.describe("the Move dialog", () => {
+  test("duplicate numbers stay aligned with the full tree when moving one of them", async ({ page }) => {
+    const workspaceId = await mySpace(page);
+    const name = unique("Guides");
+    await apiFolder(page, workspaceId, name);
+    await apiFolder(page, workspaceId, name);
+    await apiFolder(page, workspaceId, name);
+    await openKnowledge(page, workspaceId);
+    const rows = page.getByRole("treeitem", { name, exact: true });
+    await rows.first().locator(":scope > div").first().click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Move folder…" }).click();
+    const dialog = page.getByRole("dialog", { name: "Move folder" });
+    await dialog.getByRole("searchbox", { name: "Find a folder" }).fill(name);
+    await expect(dialog.getByRole("radio", { name: `${name} (2 of 3)` })).toBeVisible();
+    await expect(dialog.getByRole("radio", { name: `${name} (3 of 3)` })).toBeVisible();
+  });
+  test("duplicate numbering cannot collide with a folder's literal name", async ({ page }) => {
+    const workspaceId = await mySpace(page);
+    const name = unique("Docs");
+    await apiFolder(page, workspaceId, name);
+    await apiFolder(page, workspaceId, name);
+    await apiFolder(page, workspaceId, `${name} (1 of 2)`);
+    const title = unique("Unique destinations");
+    await apiDocument(page, workspaceId, title);
+    await openKnowledge(page, workspaceId);
+    const dialog = await openMoveDialog(page, title, "document");
+    await dialog.getByRole("searchbox", { name: "Find a folder" }).fill(name);
+    const labels = await dialog.getByRole("radio").evaluateAll(elements => elements.map(element => element.getAttribute("aria-label")));
+    expect(labels).toHaveLength(3);
+    expect(new Set(labels).size).toBe(3);
+  });
+  test("distinguishes same-named folders that share a parent", async ({ page }) => {
+    const workspaceId = await mySpace(page);
+    const parent = unique("Team");
+    const parentId = await apiFolder(page, workspaceId, parent);
+    await apiFolder(page, workspaceId, "Guides", parentId);
+    const secondId = await apiFolder(page, workspaceId, "Guides", parentId);
+    const title = unique("Ambiguous destination");
+    await apiDocument(page, workspaceId, title);
+    await openKnowledge(page, workspaceId);
+    const dialog = await openMoveDialog(page, title, "document");
+    await dialog.getByRole("searchbox", { name: "Find a folder" }).fill(`${parent} / Guides`);
+    await expect(dialog.getByRole("radio", { name: `${parent} / Guides (1 of 2)` })).toBeVisible();
+    await expect(dialog.getByRole("radio", { name: `${parent} / Guides (2 of 2)` })).toBeVisible();
+    await dialog.getByText(`${parent} / Guides (2 of 2)`, { exact: true }).click();
+    const moveRequest = page.waitForRequest(request => request.method() === "PATCH" && request.url().includes("/api/tree-nodes/"));
+    await dialog.getByRole("button", { name: "Move", exact: true }).click();
+    expect((await moveRequest).postDataJSON().parentId).toBe(secondId);
+    await expect(dialog).toHaveCount(0, ROUND_TRIP);
+  });
+  test("finds a destination by its full path and moves to the intended matching folder", async ({ page }) => {
+    const workspaceId = await mySpace(page);
+    const parentA = unique("Research");
+    const parentB = unique("Operations");
+    const aId = await apiFolder(page, workspaceId, parentA);
+    const bId = await apiFolder(page, workspaceId, parentB);
+    await apiFolder(page, workspaceId, "Guides", aId);
+    await apiFolder(page, workspaceId, "Guides", bId);
+    const title = unique("Move search");
+    await apiDocument(page, workspaceId, title);
+    await openKnowledge(page, workspaceId);
+    const dialog = await openMoveDialog(page, title, "document");
+    const search = dialog.getByRole("searchbox", { name: "Find a folder" });
+    await search.fill("there-is-no-such-folder");
+    await expect(dialog.getByText("No folders match.")).toBeVisible();
+    await search.fill(`${parentA} / Guides`);
+    await dialog.getByText(`${parentA} / Guides`, { exact: true }).click();
+    await search.fill(`${parentB} / Guides`);
+    await expect(dialog.getByRole("button", { name: "Move", exact: true })).toBeDisabled();
+    await expect(dialog.getByRole("radio", { name: `${parentB} / Guides` })).toBeVisible();
+    await expect(dialog.getByRole("radio", { name: `${parentA} / Guides` })).toHaveCount(0);
+    await dialog.getByText(`${parentB} / Guides`, { exact: true }).click();
+    await expect(dialog.getByRole("radio", { name: `${parentB} / Guides` })).toBeChecked();
+    await dialog.getByRole("button", { name: "Move", exact: true }).click();
+    await expect(toast(page, `Moved “${title}” to “Guides”.`)).toBeVisible(ROUND_TRIP);
+  });
   test("puts a document last in the folder chosen, opens it there, and an Undo puts it back where it was", async ({ page }) => {
     const workspaceId = await mySpace(page);
     const from = unique("Origin");

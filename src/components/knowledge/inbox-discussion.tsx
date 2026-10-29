@@ -74,6 +74,8 @@ function OwnerDocument({ entry }: { entry: Entry }) {
  */
 function FollowedDiscussion({ entry }: { entry: Entry }) {
   const token = entry.linkAvailable ? entry.token : undefined;
+  // A folder link's discussion is reached through the document it is on; a document link's names none.
+  const documentId = entry.documentId || undefined;
   const [loaded, setLoaded] = useState<{ thread: ReviewThreadView | null; writesEnabled: boolean; signedIn: boolean }>();
   const [error, setError] = useState<string>();
 
@@ -81,20 +83,20 @@ function FollowedDiscussion({ entry }: { entry: Entry }) {
   const load = useCallback(async () => {
     if (!token) return;
     try {
-      const result = await reviewRequest<{ threads: ReviewThreadView[]; writesEnabled: boolean; callerUserId: string | null }>("/api/share-review/threads/query", { token });
+      const result = await reviewRequest<{ threads: ReviewThreadView[]; writesEnabled: boolean; callerUserId: string | null }>("/api/share-review/threads/query", { token, documentId });
       setLoaded({ thread: result.threads.find(item => item.id === entry.threadId) ?? null, writesEnabled: result.writesEnabled, signedIn: result.callerUserId !== null });
       setError(undefined);
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Could not load the discussion.");
     }
-  }, [token, entry.threadId]);
+  }, [token, documentId, entry.threadId]);
   useEffect(() => { void load(); }, [load]);
 
   if (!token) return <p className="px-6 text-body-sm text-kh-text-muted">This link is no longer available.</p>;
   if (error) return <p role="alert" className="px-6 text-body-sm">{error}</p>;
   if (!loaded) return <p role="status" className="px-6 text-body-sm text-kh-text-muted">Loading discussion…</p>;
   if (!loaded.thread) return <p className="px-6 text-body-sm text-kh-text-muted">This discussion is no longer available here.</p>;
-  const share = async (path: string, body: object) => { await reviewRequest(`/api/share-review/threads/${path}`, { token, ...body }); await load(); };
+  const share = async (path: string, body: object) => { await reviewRequest(`/api/share-review/threads/${path}`, { token, documentId, ...body }); await load(); };
   return <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
     <ReviewThreadList threads={[loaded.thread]} activeThreadId={loaded.thread.id} filter="ALL" onFilterChange={() => {}} writesEnabled={loaded.writesEnabled}
       reply={(threadId, body, idempotencyKey) => share(`${threadId}/replies`, { body, idempotencyKey })}

@@ -199,6 +199,8 @@ export type MarkdownEditor = {
   focus: () => void;
   /** Focus with the caret at the very start of the document. */
   focusStart: () => void;
+  /** Select the opening H1 so its existing content can be renamed in place. */
+  selectOpeningHeading: () => void;
   action: <T>(fn: (ctx: Ctx) => T) => T;
   destroy: () => Promise<void>;
 };
@@ -342,6 +344,13 @@ export async function createMarkdownEditor(options: EditorOptions): Promise<Mark
         view.dispatch(view.state.tr.setSelection(Selection.atStart(view.state.doc)));
         view.focus();
       }),
+    selectOpeningHeading: () => editor.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      const first = view.state.doc.firstChild;
+      if (!first || first.type.name !== "heading" || Number(first.attrs.level) !== 1) return;
+      view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 1, first.content.size + 1)).scrollIntoView());
+      view.focus();
+    }),
     action: (fn) => editor.action(fn),
     destroy: async () => {
       await editor.destroy();

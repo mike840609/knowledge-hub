@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bookmark, Search } from "lucide-react";
+import { Bookmark, Folder, Search } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,10 +45,10 @@ export function SavedSharesView({ workspaceId,model,filterError,discussionsUnrea
     </form>
     {(error||filterError)&&<p role="alert" className="mt-3 text-body-sm text-kh-danger">{filterError||error}</p>}
     {!filterError&&items.length===0&&<EmptyState icon={Bookmark} illustration={!filtered?<Illustration kind="shares"/>:undefined} title={filtered?"No saved shares match these filters.":"No saved shares yet."} description={filtered?"Clear the filters to see your other saved shares.":"Open an article shared with you and choose Save while signed in. Find it here on any device; the sender can still revoke access."} action={filtered?<Link className={buttonClasses({variant:"secondary"})} href={clear}>Clear filters</Link>:undefined}/>}
-    {items.length>0&&<div aria-hidden="true" className="mt-4 hidden grid-cols-[minmax(0,1fr)_7rem_7rem_5rem] gap-3 border-b border-kh-border px-3 py-2 text-caption text-kh-text-muted md:grid"><span>Article / shared by</span><span>Saved</span><span>Expires</span><span/></div>}
+    {items.length>0&&<div aria-hidden="true" className="mt-4 hidden grid-cols-[minmax(0,1fr)_7rem_7rem_5rem] gap-3 border-b border-kh-border px-3 py-2 text-caption text-kh-text-muted md:grid"><span>Title / shared by</span><span>Saved</span><span>Expires</span><span/></div>}
     <ul aria-label="Saved shares" onKeyDown={navigateListRows} className="mt-4 space-y-2 md:mt-0 md:space-y-0">{items.map(item=><li key={item.id} className="group rounded-md border border-kh-border bg-kh-bg p-3 hover:bg-kh-bg-hover focus-within:bg-kh-bg-hover md:rounded-none md:border-x-0 md:border-t-0 md:py-2">
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 md:grid-cols-[minmax(0,1fr)_7rem_7rem_5rem]">
-        <div className="min-w-0">{item.path?<Link prefetch={false} data-list-row className="kh-focus-ring block truncate rounded-md text-body font-medium text-kh-text hover:text-kh-link" href={item.path}>{item.title}</Link>:<span className="block truncate text-body font-medium text-kh-text">{item.title}</span>}
+        <div className="min-w-0">{(()=>{const name=<>{item.kind==="FOLDER"&&<><Folder size={15} aria-hidden="true" className="shrink-0 text-kh-text-muted"/><span className="sr-only">Folder </span></>}<span className="min-w-0 truncate">{item.title}</span></>;return item.path?<Link prefetch={false} data-list-row className="kh-focus-ring flex min-w-0 items-center gap-1.5 rounded-md text-body font-medium text-kh-text hover:text-kh-link" href={item.path}>{name}</Link>:<span className="flex min-w-0 items-center gap-1.5 text-body font-medium text-kh-text">{name}</span>;})()}
           <p className="truncate text-caption text-kh-text-muted">Shared by {item.sharedByName}</p>
           <p className="text-caption text-kh-text-muted">{item.status==="available"?<>Available{item.updatedAt&&<> · Updated <Timestamp value={item.updatedAt}/></>}</>:item.status==="expired"?"Expired":"Link unavailable"}</p>
         </div>

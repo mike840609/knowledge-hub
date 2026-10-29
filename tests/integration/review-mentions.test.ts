@@ -476,9 +476,9 @@ describe("mention candidates", () => {
     await expect(f.service.searchMentionCandidates(f.reader, { query: "Alice", token: f.token })).rejects.toMatchObject({ name: "ShareLinkNotFoundError" });
   });
 
-  it("exactly one of token and documentId", async () => {
+  it("needs a token or a document; a document link's token refuses a document beside it", async () => {
     const f = await fixture();
     await expect(f.service.searchMentionCandidates(f.owner, { query: "a" })).rejects.toMatchObject({ code: "INVALID_REQUEST" });
-    await expect(f.service.searchMentionCandidates(f.owner, { query: "a", token: f.token, documentId: f.documentId })).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+    await expect(f.service.searchMentionCandidates(f.owner, { query: "a", token: f.token, documentId: f.documentId })).rejects.toMatchObject({ name: "ShareLinkNotFoundError" });
   });
 });

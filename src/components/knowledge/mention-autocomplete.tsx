@@ -8,7 +8,8 @@ import { reviewRequest } from "./review-thread-list";
  * Whose `@` list a composer offers: a link reader's (`token`) or the owner's (`documentId`).
  * Absent, the composer offers none — an anonymous reader cannot write, and an edit never adds a mention.
  */
-export type MentionScope = { token: string } | { documentId: string };
+/** A link reader's scope is its token (and, on a folder link's page, the document read); the owner's is the document alone. */
+export type MentionScope = { token: string; documentId?: string } | { documentId: string };
 export type MentionPick = { id: string; name: string };
 type Candidate = { id: string; name: string; nameEn: string | null; empId: string };
 type MentionLink = { id: string; label: string | null };
@@ -72,8 +73,9 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
   const [linkId, setLinkId] = useState<string>();
   // A request in flight; the links are asked again on each new `@`, since one may have been created, revoked or expired.
   const linksLoading = useRef(false);
-  const owner = scope && "documentId" in scope ? scope.documentId : undefined;
   const token = scope && "token" in scope ? scope.token : undefined;
+  const owner = scope && !token && "documentId" in scope ? scope.documentId : undefined;
+  const linkDocument = scope && token && "documentId" in scope ? scope.documentId : undefined;
 
   const trigger = scope ? mentionTrigger(body, Math.min(caret, body.length)) : null;
   const open = !!trigger && trigger.start !== dismissed;
@@ -99,13 +101,13 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
     if (!searchable) return;
     let current = true;
     const timer = window.setTimeout(() => {
-      const door = owner ? `documentId=${encodeURIComponent(owner)}` : `token=${encodeURIComponent(token!)}`;
+      const door = owner ? `documentId=${encodeURIComponent(owner)}` : `token=${encodeURIComponent(token!)}${linkDocument ? `&documentId=${encodeURIComponent(linkDocument)}` : ""}`;
       reviewRequest<{ candidates: Candidate[] }>(`/api/review-mentions/candidates?query=${encodeURIComponent(query)}&${door}`)
         .then(result => { if (current) { setFound({ query, candidates: result.candidates }); setActive(0); setFailure(undefined); } })
         .catch(error => { if (current) setFailure(error instanceof Error ? error.message : "Could not find people."); });
     }, DEBOUNCE_MS);
     return () => { current = false; window.clearTimeout(timer); };
-  }, [searchable, query, owner, token]);
+  }, [searchable, query, owner, token, linkDocument]);
 
   // A pick whose name has left the text is forgotten: typing the name again does not bring it back.
   useEffect(() => {

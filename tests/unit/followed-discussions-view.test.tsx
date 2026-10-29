@@ -45,6 +45,15 @@ it("Unfollow uses the link; Remove uses the caller's own follow; a failure keeps
  expect(calls).toContain("/api/review-follows/t2/unfollow ");
  expect(host.textContent).toContain("Discussions you comment on through a shared link appear here.");
 });
+it("a discussion followed through a folder link opens, and is unfollowed, at its document in that folder",async()=>{
+ const calls:string[]=[];
+ vi.stubGlobal("fetch",async(url:string,init:RequestInit)=>{calls.push(`${url} ${init.body??""}`);return Response.json({following:false});});
+ const documentId="0192f3a4-0000-7000-8000-000000000002";
+ await mount([{...live,documentId}]);
+ expect([...host.querySelectorAll("a")].map(a=>a.getAttribute("href"))).toContain(`/s/tok?d=${documentId}&thread=t1`);
+ await act(async()=>host.querySelector<HTMLButtonElement>('button[aria-label="Unfollow: A useful guide"]')!.click());
+ expect(calls).toEqual([`/api/share-review/threads/t1/follow ${JSON.stringify({token:"tok",documentId,following:false})}`]);
+});
 it("shows Untitled when the discussion's document has no current title",async()=>{
  await mount([{ ...live, documentTitle: "" }]);
  expect(host.textContent).toContain("Untitled");

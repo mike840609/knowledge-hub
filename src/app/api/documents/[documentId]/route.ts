@@ -8,8 +8,8 @@ export async function PATCH(request: Request, context: DocumentRouteContext) {
   return workspaceHttp(async (services, caller) => {
     const { documentId } = await context.params;
     const input = parseUpdateDocumentInput(await request.json().catch(() => null));
-    // Spec §6.3: metadata is not editable, so carry the stored value forward
-    // rather than clearing frontmatter the import brought in. Reading it outside
+    // Carry metadata forward, updating its existing title only for an explicit rename.
+    // Reading it outside
     // the write transaction is safe: if current has moved on, createRevision
     // rejects with REVISION_CONFLICT before any mismatched metadata is written.
     // includeArchived: this read only carries metadata forward — lifecycle is the
@@ -17,13 +17,15 @@ export async function PATCH(request: Request, context: DocumentRouteContext) {
     // DOCUMENT_ARCHIVED (409). Without it an archived source/document would
     // short-circuit here to a 404, contradicting spec §7.2 (archived write → 409).
     const current = await services.queries.getCurrentRevision(caller, documentId, { includeArchived: true });
+    const metadata = { ...current.metadata };
+    if (input.updateMetadataTitle && typeof metadata.title === "string" && metadata.title.trim()) metadata.title = input.title;
     return services.hub.createRevision(caller, {
       documentId,
       ...(input.autosave ? { saveMode: "AUTOSAVE" as const } : {}),
       expectedCurrentRevisionId: input.expectedCurrentRevisionId,
       title: input.title,
       markdown: input.markdown,
-      metadata: canonicalizeJsonObject(current.metadata),
+      metadata: canonicalizeJsonObject(metadata),
     });
   });
 }

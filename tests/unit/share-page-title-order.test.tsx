@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { MarkdownRenderer } from "@/components/knowledge/markdown-renderer";
 
 const shared = vi.hoisted(() => ({ markdown: "" }));
-vi.mock("@/server/share-read", () => ({ getSharedDocument: async () => ({ title: "Saved title", markdown: shared.markdown, sharedByName: "Owner", updatedAt: "2026-10-13", expiresAt: "2026-10-20", revisionId: "revision" }) }));
+vi.mock("@/server/share-read", () => ({ getShared: async () => ({ kind: "DOCUMENT", title: "Saved title", markdown: shared.markdown, sharedByName: "Owner", updatedAt: "2026-10-13", expiresAt: "2026-10-20", revisionId: "revision" }) }));
 vi.mock("@/components/knowledge/save-share-button", () => ({ SaveShareButton: () => null }));
 vi.mock("@/components/knowledge/shared-review-panel", () => ({ SharedReviewPanel: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }));
 vi.mock("@/components/ui/timestamp", () => ({ Timestamp: () => null }));

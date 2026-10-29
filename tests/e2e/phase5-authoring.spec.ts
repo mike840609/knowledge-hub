@@ -110,7 +110,7 @@ test("uploads a markdown file and takes its title from frontmatter", async ({ pa
     mimeType: "text/markdown",
     buffer: Buffer.from("---\ntitle: 請假流程 Uploaded\n---\n\n內容\n", "utf8"),
   });
-  await expect(page.getByRole("heading", { name: "請假流程 Uploaded" })).toBeVisible(ROUND_TRIP);
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("請假流程 Uploaded", ROUND_TRIP);
 });
 
 // The seed's default HUB source (Obsidian Wiki) is HUB_MANAGED, so it alone would not exercise this
