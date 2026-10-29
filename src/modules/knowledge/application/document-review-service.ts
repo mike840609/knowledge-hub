@@ -138,7 +138,9 @@ export class DocumentReviewService {
       this.enabled(); this.active(s);
       const query = input.query.trim().slice(0, 200);
       if (!query) return { candidates: [] };
-      const found = await r.users.searchExisting(query, MENTION_LIMIT);
+      // The writer and the Workspace owner are never recorded as mentioned (`normalizeMentions`), so they are not offered.
+      const skip = new Set([caller.identity.id, s.workspace.personalOwnerUserId]);
+      const found = (await r.users.searchExisting(query, MENTION_LIMIT + skip.size)).filter(u => !skip.has(u.id)).slice(0, MENTION_LIMIT);
       return { candidates: found.map(u => ({ id: u.id, name: u.name, nameEn: u.nameEn, empId: u.emp_id })) };
     });
   }
@@ -259,9 +261,19 @@ export class DocumentReviewService {
     }
     return judged;
   }
-  /** The caller's newest unread mentions: the unread list and the badge judge the same rows. */
-  private unreadMentions(r: KnowledgeRepositories, userId: string) {
-    return r.reviewMentions.listUnreadByRecipient(userId, FOLLOW_LIMIT);
+  /**
+   * The caller's newest unread mentions that are live: the unread list and the badge read the same rows. A dead one
+   * (its link no longer opens, its comment is gone or hidden) is marked read here, so it cannot fill the window and
+   * hide an older live mention. ponytail: a thread the owner hides, then restores, loses its unread mark.
+   */
+  private async unreadMentions(r: KnowledgeRepositories, userId: string) {
+    for (;;) {
+      const unread = await r.reviewMentions.listUnreadByRecipient(userId, FOLLOW_LIMIT);
+      const dead = (await this.judgedMentions(r, unread)).filter(judged => !("comment" in judged));
+      if (dead.length === 0) return unread;
+      for (const { mention } of dead) await r.reviewMentions.markRead(userId, mention.commentId, this.clock());
+      if (unread.length < FOLLOW_LIMIT) return unread.filter(mention => !dead.some(gone => gone.mention.commentId === mention.commentId));
+    }
   }
   /** Mentions as Inbox entries, one per comment. A dead one names nothing and is never unread. */
   private async mentionViews(r: KnowledgeRepositories, mentions: readonly ReviewMention[]): Promise<ShareCommentNotificationView[]> {

@@ -378,6 +378,18 @@ describe("mentions in the Inbox", () => {
     expect(await count(f)).toBe(1);
   });
 
+  it("a dead mention is marked read, so it cannot hide an older live one", async () => {
+    const f = await fixture();
+    const live = await mentionAlice(f);
+    const dead = await mentionAlice(f);
+    await f.service.setVisibility(f.owner, { documentId: f.documentId, threadId: dead.threadId, commentId: dead.commentId, visibility: "HIDDEN", reason: "off topic" });
+    expect(await count(f)).toBe(1);
+    const rows = await pool.query("SELECT comment_id, read_at FROM review_comment_mentions WHERE mentioned_user_id=?", [f.alice]);
+    const readAt = (id: string) => rows.find((row: { comment_id: string }) => row.comment_id === id).read_at;
+    expect(readAt(dead.commentId)).not.toBeNull();
+    expect(readAt(live.commentId)).toBeNull();
+  });
+
   it("the badge counts exactly the unread list: read and dead mentions are in neither", async () => {
     const f = await fixture();
     const read = await mentionAlice(f);
@@ -409,6 +421,15 @@ describe("mention candidates", () => {
     await pool.query("UPDATE users SET name_en=? WHERE id=?", [`Alice ${tag}`, f.alice]);
     const { candidates } = await f.service.searchMentionCandidates(f.reader, { query: `  alice ${tag} `, token: f.token });
     expect(candidates).toEqual([{ id: f.alice, name: "Alice", nameEn: `Alice ${tag}`, empId: await empOf(f.alice) }]);
+  });
+
+  it("does not offer the caller or the Workspace owner, who could not be mentioned anyway", async () => {
+    const f = await fixture();
+    const readerEmp = String((await pool.query("SELECT emp_id FROM users WHERE id=?", [f.reader.identity.id]))[0].emp_id);
+    const ownerEmp = String((await pool.query("SELECT emp_id FROM users WHERE id=?", [f.owner.identity.id]))[0].emp_id);
+    expect((await f.service.searchMentionCandidates(f.reader, { query: readerEmp, token: f.token })).candidates).toEqual([]);
+    expect((await f.service.searchMentionCandidates(f.reader, { query: ownerEmp, token: f.token })).candidates).toEqual([]);
+    expect((await f.service.searchMentionCandidates(f.owner, { query: ownerEmp, documentId: f.documentId })).candidates).toEqual([]);
   });
 
   it("returns at most ten rows", async () => {
