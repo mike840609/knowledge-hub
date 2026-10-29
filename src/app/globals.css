@@ -839,10 +839,11 @@ input[type="search"]::-webkit-search-cancel-button:hover {
 /* A collapsed passage group reads as two cards: the same soft shadow as a popover, plus one
    hairline card edge peeking out behind it. Single threads stay flat. */
 .kh-review-thread-list [data-review-thread][data-stacked] { box-shadow: var(--kh-shadow-popover), 4px 4px 0 -1px var(--kh-bg), 5px 5px 0 var(--kh-border); }
-/* Keep actions within reach without pinning the discussions away from their passages. */
+/* Keep actions within reach without pinning the discussions away from their passages. They stop
+   under the reader's 48px pinned path line; a pane without one (the Inbox) sets the offset to 0. */
 .kh-review-document[data-review-inline] .kh-review-toolbar {
   position: sticky;
-  top: 48px;
+  top: var(--kh-review-toolbar-top, 48px);
   z-index: 10;
   background: var(--kh-bg);
   padding-block: 16px 1px;

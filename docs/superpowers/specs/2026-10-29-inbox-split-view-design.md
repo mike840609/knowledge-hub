@@ -31,14 +31,18 @@ surroundings matter.
 
 ## Layout
 
-- Where the Inbox's own box is at least **44rem** wide (measured on the box by a
+- Where the Inbox's own box is at least **72rem** wide (measured on the box by a
   `ResizeObserver`, as the document pane uses a container query, never the
-  window), the page is two columns: the list at **22rem** fixed, the discussion
-  taking the rest (at least 22rem, wider than the 20rem review rail), a 1px
-  `border` rule between them. 44rem, not the draft's 60rem: at a 1280px window
-  the content area beside the rail and the explorer is about 51rem, and the
-  split should be there on an ordinary laptop. The page widens from `kh-page`
-  to fill the content area; the list keeps its rows' current shape.
+  window), the page is two columns: the list at **22rem** fixed and, after a
+  1px `border` rule and its gutter, a document pane of at least **48rem** — the
+  width at which the owner's discussions sit beside the article
+  (`--review-rail: inline`) rather than in a drawer over it. A drawer over the
+  Inbox would cover the list being worked through, so the split waits for room
+  for the rail. (Amended 2026-10-29: the first build used 44rem with the
+  discussion alone; once the pane showed the document, 44rem put the
+  discussions in a drawer at a 1180px window.) At a 1440px window the box is
+  about 76rem; at 1280px it is about 66rem and the Inbox is the plain list. The
+  page widens from `kh-page` to fill the content area.
 - Narrower than that, the page is today's list, and a row is today's link.
   Nothing on a phone changes.
 - The list scrolls with the page; the discussion column is sticky at the top
@@ -69,25 +73,35 @@ surroundings matter.
 
 ## The discussion pane
 
+Amended 2026-10-29, after the user saw the first build: a quoted passage alone
+said too little, so an owner's entry shows the document.
+
 - **Header:** the entry's title (`notificationTitle`), its kind ("Discussion
   you follow" / "Open discussion" / "Resolved"), and **Open document** (the
   entry's `notificationHref`) as a secondary button. A dead link's entry shows
   "A shared discussion" and no button.
-- **Body:** that one discussion, drawn by the existing `ReviewThreadList` with
-  `threads=[thread]`: the quoted passage, the comments, Reply, and for the
-  owner Resolve / Reopen and visibility. Everything the rail lets the caller do
-  there, the pane lets them do; nothing more.
-- **Data:** the owner pane fetches the document's review threads and picks the
-  one by id; the follow pane posts the share query with the entry's token and
-  picks the one by id. A discussion the response no longer lists (hidden,
-  archived, link expired since the list loaded) shows "This discussion is no
-  longer available here." and Open document. `ponytail:` it fetches the whole
-  document's discussions to show one; a per-thread read is the upgrade if a
-  document's discussions ever make that slow.
-- After a write the pane reloads that discussion and the list row updates in
-  place (resolved status, read state); no full list reload.
-- The pane does not render the document. The quote is the passage; Open
-  document is for its surroundings.
+- **An owner's entry shows the document**, as the reader does: the article in
+  a `DocumentPane` wrapped by the same `OwnerReviewPanel`, so the passage is
+  highlighted, the discussions are the rail beside it, and everything the
+  reader allows there (reply, resolve, hide, comment on selected text) works
+  here unchanged. The article comes from the existing
+  `GET /api/documents/:id/peek` (the side peek's read; it now also returns
+  `revisionId`, which the panel compares with its discussions' revision). The
+  panel takes the entry's discussion as a `thread` prop in place of
+  `?thread=`, opens on it and scrolls its passage into view. It never opens
+  as a drawer from the Inbox. The rail's sticky toolbar stops under the
+  reader's 48px path line; the Inbox has none, so the pane sets
+  `--kh-review-toolbar-top: 0`.
+- **A followed discussion shows that discussion alone**, drawn by
+  `ReviewThreadList` with `threads=[thread]`: its quote, comments, Reply,
+  Follow, and edit/delete of one's own. The page it is on is reached only
+  through `/s/:token`, which this view neither frames (`frame-ancestors
+  'none'`) nor reads; showing it here would need a new link-scoped read, a
+  change to the share-link invariant that is not part of this work. Its data
+  is the share query with the entry's token, picked by id; a discussion the
+  response no longer lists shows "This discussion is no longer available
+  here." `ponytail:` it reads the whole page's discussions to show one.
+- The list does not re-read itself after a write in the pane; Refresh does.
 
 ## Keyboard
 
@@ -101,7 +115,7 @@ surroundings matter.
 ## Out of this cut
 
 Archive / snooze an entry, grouping by document, a draggable divider,
-rendering the document in the pane, and `j` / `k`.
+the shared page for a followed discussion, and `j` / `k`.
 
 ## Tests
 
@@ -118,5 +132,5 @@ rendering the document in the pane, and `j` / `k`.
 ## Contract
 
 `frontend-design-language.md` §18 gains one sentence: the Inbox is a list and
-the selected discussion side by side from a 44rem box, a plain list below it,
+the selected discussion side by side from a 72rem box, a plain list below it,
 selection in the URL, nothing selected on arrival.

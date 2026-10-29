@@ -42,6 +42,8 @@ beforeEach(() => {
     const json = (value: unknown) => new Response(JSON.stringify(value), { headers: { "content-type": "application/json" } });
     if (url.startsWith("/api/review-notifications/activity")) return json(init.method === "POST" ? { ok: true } : { notifications, nextCursor: null });
     if (url === "/api/share-review/threads/query") return json({ threads: threads[`token:${body.token}`] ?? [], writesEnabled: true, callerUserId: "me", revisionId: "r" });
+    const peek = url.match(/^\/api\/documents\/([^/]+)\/peek$/);
+    if (peek) return json({ markdown: `Passage of ${peek[1]}.`, revisionId: "r", status: "ACTIVE", sourceStatus: "ACTIVE", linkView: null });
     const owner = url.match(/^\/api\/documents\/([^/]+)\/review-threads$/);
     if (owner) return json({ threads: threads[owner[1]] ?? [], writesEnabled: true, revisionId: "r", callerUserId: "me" });
     throw new Error(`unexpected ${url}`);
@@ -73,7 +75,7 @@ it("selects nothing on arrival, marks nothing read, and explains the Inbox in th
   expect(marks()).toEqual([]);
 });
 
-it("a plain click shows the owner's discussion beside the list, puts it in the URL and marks it read once", async () => {
+it("a plain click shows the owner's document and its discussion beside the list, puts it in the URL and marks it read once", async () => {
   notifications = [entry("a")];
   threads["doc-a"] = [thread("thread-other"), thread("thread-a")];
   await mount();
@@ -81,9 +83,13 @@ it("a plain click shows the owner's discussion beside the list, puts it in the U
   expect(event.defaultPrevented).toBe(true);
   expect(new URL(window.location.href).searchParams.get("item")).toBe("a");
   expect(row("a").getAttribute("aria-current")).toBe("true");
+  expect(pane()?.textContent).toContain("Passage of doc-a.");
   expect(pane()?.textContent).toContain("body of thread-a");
-  expect(pane()?.textContent).not.toContain("body of thread-other");
+  expect(pane()?.querySelector('[data-review-thread="thread-a"]')?.hasAttribute("data-active")).toBe(true);
   expect(pane()?.querySelector("a")?.getAttribute("href")).toBe("/w/ws/knowledge/src/doc-a?thread=thread-a");
+  expect(calls.some(call => call.url === "/api/documents/doc-a/peek")).toBe(true);
+  // Where the discussions cannot sit beside the article (jsdom has no layout), no drawer covers the list.
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
   expect(calls.some(call => call.url === "/api/documents/doc-a/review-threads" && call.method === "GET")).toBe(true);
   await click(row("a"));
   expect(marks()).toEqual(["a"]);
@@ -119,9 +125,9 @@ it("a dead link's entry shows its placeholder and asks the server for nothing", 
   expect(calls.slice(before).filter(call => call.body?.action !== "mark-read")).toEqual([]);
 });
 
-it("a discussion the response no longer lists says so", async () => {
-  notifications = [entry("a")];
-  threads["doc-a"] = [thread("thread-other")];
+it("a followed discussion the response no longer lists says so", async () => {
+  notifications = [entry("a", { kind: "FOLLOW", token: "tok", linkAvailable: true })];
+  threads["token:tok"] = [thread("thread-other")];
   await mount();
   await click(row("a"));
   expect(pane()?.textContent).toContain("This discussion is no longer available here.");

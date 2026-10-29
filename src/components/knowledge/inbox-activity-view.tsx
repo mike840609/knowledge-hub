@@ -18,8 +18,11 @@ type Cursor = { createdAt: string; id: string };
 type ActivityResponse = { notifications: ShareCommentNotificationView[]; nextCursor: Cursor | null };
 type View = "inbox" | "activity";
 
-/** The box, not the window, decides: list 22rem beside a discussion at least as wide. */
-const SPLIT_MIN_PX = 44 * 16;
+/**
+ * The box, not the window, decides. The 22rem list and its gutter beside a document pane of 48rem, the
+ * width at which its discussions sit beside the article (`--review-rail`) rather than in a drawer over it.
+ */
+const SPLIT_MIN_PX = 72 * 16;
 const ABOUT = "Comments on your shared documents, and replies in discussions you follow on pages shared with you. Opening a discussion marks it read; resolving it is a separate action.";
 
 function useSplit() {
@@ -94,10 +97,6 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
     url.searchParams.set("item", item.id);
     window.history.replaceState(window.history.state, "", url);
   };
-  const onStatus = useCallback((threadId: string, threadStatus: ShareCommentNotificationView["threadStatus"]) => {
-    setItems(previous => previous.some(item => item.threadId === threadId && item.threadStatus !== threadStatus)
-      ? previous.map(item => item.threadId === threadId ? { ...item, threadStatus } : item) : previous);
-  }, []);
   const openRow = (item: ShareCommentNotificationView) => (event: MouseEvent) => {
     // A modified click still opens the document in a new tab.
     if (!split || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
@@ -148,8 +147,9 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
               </span>
             </>;
             const current = selected?.id === item.id;
-            const row = `kh-focus-ring min-w-0 flex-1 rounded-md px-1 py-1 text-left ${current ? "bg-kh-bg-selected" : "hover:bg-kh-bg-hover"}`;
-            return <li key={item.id} className="flex items-start gap-3 py-3">
+            const row = `kh-focus-ring min-w-0 flex-1 rounded-md px-1 py-1 text-left ${current ? "" : "hover:bg-kh-bg-hover"}`;
+            // Selected, the whole row is marked, dot and all, so its edges line up with every other row.
+            return <li key={item.id} className={`flex items-start gap-3 py-3 ${current ? "-mx-2 rounded-md bg-kh-bg-selected px-2" : ""}`}>
             <span aria-hidden="true" className={`mt-2 h-2 w-2 shrink-0 rounded-full ${item.readAt === null ? "bg-kh-primary" : "bg-transparent"}`} />
             {href
               ? <Link className={row} href={href} prefetch={item.kind === "FOLLOW" ? false : undefined} data-inbox-entry={item.id} aria-current={current ? "true" : undefined} onClick={openRow(item)}>{content}</Link>
@@ -169,12 +169,12 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
       }}>{moreLoading ? "Loading…" : "Load older activity"}</Button>
     </div>}
     </div>
-    {split && <div className="sticky top-0 max-h-dvh overflow-y-auto pl-6 pt-1">
-      {selected ? <InboxDiscussion key={selected.id} entry={selected} onStatus={onStatus} />
+    {split && <div className="sticky top-0 h-dvh min-h-0 pb-6 pl-6 pt-1">
+      {selected ? <InboxDiscussion key={selected.id} entry={selected} />
         : <div className="py-12 text-center text-kh-text-muted">
           <MessageSquareText size={24} className="mx-auto mb-3" aria-hidden="true" />
           <p className="text-body font-medium">Select a discussion</p>
-          <p className="mx-auto mt-1 max-w-reading text-body-sm">{ABOUT}</p>
+          <p className="mx-auto mt-1 max-w-md text-body-sm">{ABOUT}</p>
         </div>}
     </div>}
     </div>

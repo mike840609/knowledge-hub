@@ -29,7 +29,7 @@ import { ReviewFilterMenu, ReviewNextButtons, ReviewThreadList, reviewRequest, t
  * The owner replies, resolves and hides, and starts a discussion as a reader of a link does: by
  * selecting a passage (docs/superpowers/specs/2026-10-13-review-anchors-and-owner-threads-design.md).
  */
-export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = false, contentPending = false, prepareComment, commentAvailable = false, children }: { prepareComment?: (capture: CaptureReviewAnchor) => PreparedReviewComment; commentAvailable?: boolean; documentId: string; revisionId: string; markdown: string; readOnly?: boolean; contentPending?: boolean; children: ReactNode }) {
+export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = false, contentPending = false, prepareComment, commentAvailable = false, thread, children }: { /** A discussion to open on arrival in place of `?thread=`, with its passage scrolled into view (the Inbox). */ thread?: string; prepareComment?: (capture: CaptureReviewAnchor) => PreparedReviewComment; commentAvailable?: boolean; documentId: string; revisionId: string; markdown: string; readOnly?: boolean; contentPending?: boolean; children: ReactNode }) {
   const [result, setResult] = useState<{ threads: OwnerReviewThreadView[]; writesEnabled: boolean; revisionId: string; callerUserId: string }>();
   const [error, setError] = useState<string>();
   const [activeThreadId, setActiveThreadId] = useState<string>();
@@ -107,10 +107,18 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
     setFilter(result.threads.some(thread => thread.status === "OPEN") ? "OPEN" : "ALL");
     // A `?thread=` deep link (e.g. from the home discussions list) selects its
     // discussion and opens the rail; an unknown id is ignored, never an error.
-    const deep = new URLSearchParams(window.location.search).get("thread");
-    if (deep && result.threads.some(thread => thread.id === deep)) { setActiveThreadId(deep); setOpen(true); }
+    const deep = thread ?? new URLSearchParams(window.location.search).get("thread");
+    const found = deep ? result.threads.find(item => item.id === deep) : undefined;
+    // From the Inbox only as a rail: a drawer would cover the list the reader is working through.
+    if (found) { setActiveThreadId(found.id); if (!thread || reviewRailInline()) setOpen(true); }
+    const anchor = thread && found?.currentAnchor.match !== "OUTDATED" ? found?.currentAnchor.anchor : undefined;
+    if (anchor) requestAnimationFrame(() => {
+      const root = readingRef.current?.querySelector<HTMLElement>("[data-review-document]");
+      const range = root ? createReviewRangeResolver(root, markdown)(anchor) : null;
+      range?.startContainer.parentElement?.scrollIntoView({ block: "center" });
+    });
     if (reviewRailInline() && opensOnArrival(result.threads, parseDismissed(readStored("local", dismissedKey(documentId))), result.callerUserId)) setOpen(true);
-  }, [result, documentId]);
+  }, [result, documentId, thread, markdown]);
   useEffect(() => {
     const activate = (event: Event) => setActiveThreadId((event as CustomEvent<string>).detail);
     document.addEventListener("review-focus-thread", activate);

@@ -42,6 +42,7 @@ export async function GET(_request: Request, context: { params: Promise<{ docume
     return {
       title,
       markdown: view.currentRevision.markdown,
+      revisionId: view.currentRevision.id,
       ownership: source.ownership,
       workspaceId: view.workspaceId,
       sourceId: view.sourceId,
