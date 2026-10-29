@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { ReviewReplyForm } from "@/components/knowledge/review-thread-list";
-import type { MentionScope } from "@/components/knowledge/mention-autocomplete";
+import { NO_LINK_HINT, type MentionScope } from "@/components/knowledge/mention-autocomplete";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -20,10 +20,11 @@ function json(value: unknown) {
   return new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
 }
 
-function stubFetch({ candidates = [MING, MEI], links = [] as Array<{ id: string; label: string | null; active: boolean }> } = {}) {
+type Link = { id: string; label: string | null; active: boolean };
+function stubFetch({ candidates = [MING, MEI], links = [] as Link[] | (() => Link[]) } = {}) {
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     requests.push(url);
-    if (url.includes("/share-links")) return json({ links });
+    if (url.includes("/share-links")) return json({ links: typeof links === "function" ? links() : links });
     if (url.startsWith("/api/review-mentions/candidates")) return json({ candidates });
     throw new Error(`unexpected ${url}`);
   }));
@@ -126,6 +127,16 @@ test("Esc closes the list and leaves the form open", async () => {
   expect(cancelled).toHaveBeenCalledTimes(1);
 });
 
+test("Esc with nothing shown is the form's, as before", async () => {
+  stubFetch({ candidates: [] });
+  const cancelled = vi.fn();
+  const textarea = render({ token: "tok" }, [], { onCancel: cancelled, cancelOnEscape: true });
+  await type(textarea, "@zz");
+  expect(listbox()).toBeNull();
+  key(textarea, "Escape");
+  expect(cancelled).toHaveBeenCalledTimes(1);
+});
+
 test("@ inside a word opens nothing", async () => {
   stubFetch();
   const textarea = render({ token: "tok" });
@@ -168,6 +179,25 @@ test("owner with no live link: @ says to create one and offers nobody", async ()
   expect(requests.filter(url => url.includes("candidates"))).toEqual([]);
   // Links are loaded once, when the list first opens.
   expect(requests).toEqual(["/api/documents/doc-1/share-links"]);
+});
+
+test("owner who creates a link after seeing the hint is offered people on the next @", async () => {
+  let links: Link[] = [];
+  stubFetch({ links: () => links });
+  const textarea = render({ documentId: "doc-1" });
+  await type(textarea, "@");
+  expect(host.textContent).toContain(NO_LINK_HINT);
+  await type(textarea, "");
+  links = [{ id: "link-a", label: "Team", active: true }];
+  await type(textarea, "@ming");
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 200)); });
+  expect(host.textContent).not.toContain(NO_LINK_HINT);
+  expect(options()).toHaveLength(2);
+  expect(requests.filter(url => url.includes("/share-links"))).toHaveLength(2);
+  // Once a live link is known, a further @ does not ask again.
+  await type(textarea, "");
+  await type(textarea, "@m");
+  expect(requests.filter(url => url.includes("/share-links"))).toHaveLength(2);
 });
 
 test("owner with two live links chooses one under Share via, and it is sent", async () => {

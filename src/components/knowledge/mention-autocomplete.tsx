@@ -43,7 +43,9 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
   const [picks, setPicks] = useState<MentionPick[]>([]);
   const [links, setLinks] = useState<MentionLink[]>();
   const [linkId, setLinkId] = useState<string>();
-  const linksRequested = useRef(false);
+  // A request in flight, and whether the last answer had a live link: one with none is asked again on the next `@`.
+  const linksLoading = useRef(false);
+  const linksFound = useRef(false);
   const owner = scope && "documentId" in scope ? scope.documentId : undefined;
   const token = scope && "token" in scope ? scope.token : undefined;
 
@@ -53,14 +55,21 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
   const noLink = !!owner && links?.length === 0;
   const searchable = open && query.length > 0 && (!owner || (links?.length ?? 0) > 0);
 
-  // The owner mentions through a live link of the document: its links are read once, when the list first opens.
+  const triggerStart = trigger?.start;
+  // The owner mentions through a live link of the document. Its links are read when the list opens,
+  // and read again on each new `@` until one is live: the owner may have just created it.
   useEffect(() => {
-    if (!open || !owner || linksRequested.current) return;
-    linksRequested.current = true;
+    if (!open || !owner || linksLoading.current || linksFound.current) return;
+    linksLoading.current = true;
     reviewRequest<{ links: Array<MentionLink & { active: boolean }> }>(`/api/documents/${encodeURIComponent(owner)}/share-links`)
-      .then(result => setLinks(result.links.filter(link => link.active).map(({ id, label }) => ({ id, label }))))
-      .catch(error => { linksRequested.current = false; setFailure(error instanceof Error ? error.message : "Could not load share links."); });
-  }, [open, owner]);
+      .then(result => {
+        const live = result.links.filter(link => link.active).map(({ id, label }) => ({ id, label }));
+        linksFound.current = live.length > 0;
+        setLinks(live); setFailure(undefined);
+      })
+      .catch(error => setFailure(error instanceof Error ? error.message : "Could not load share links."))
+      .finally(() => { linksLoading.current = false; });
+  }, [open, owner, triggerStart]);
 
   useEffect(() => {
     if (!searchable) return;
@@ -75,7 +84,6 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
   }, [searchable, query, owner, token]);
 
   // A new `@` opens again what Esc closed.
-  const triggerStart = trigger?.start;
   useEffect(() => { if (triggerStart === undefined) setDismissed(undefined); }, [triggerStart]);
 
   const candidates = searchable && found?.query === query ? found.candidates : [];
@@ -101,7 +109,8 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (!open || event.nativeEvent.isComposing) return;
+    // Only what is shown takes a key: with nothing drawn, Esc is the form's as before.
+    if (!(listed || hint) || event.nativeEvent.isComposing) return;
     if (event.key === "Escape") {
       // The list's, not the form's: closing it leaves the comment being written.
       event.preventDefault(); event.stopPropagation();
