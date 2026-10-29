@@ -22,8 +22,8 @@ afterAll(async () => {
   if (handle) await disposeIsolatedDatabase(handle);
 });
 
-describe("users.account schema", () => {
-  it("adds the column to populated databases without changing existing rows", async () => {
+describe("users profile columns", () => {
+  it("adds account and name_en to populated databases without changing existing rows", async () => {
     await runMigrations(pool, migrations, { to: 26 });
     const legacyId = uuidv7();
     await pool.query(
@@ -38,11 +38,17 @@ describe("users.account schema", () => {
     );
     expect(column).toMatchObject({ Type: "varchar(128)", Null: "YES", Key: "UNI" });
 
-    const [legacy] = await pool.query<{ account: string | null }[]>(
-      "SELECT account FROM users WHERE id = ?",
+    const [nameEn] = await pool.query<{ Type: string; Null: string; Key: string }[]>(
+      "SHOW COLUMNS FROM users LIKE 'name_en'",
+    );
+    expect(nameEn).toMatchObject({ Type: "varchar(512)", Null: "YES", Key: "" });
+
+    const [legacy] = await pool.query<{ account: string | null; name_en: string | null }[]>(
+      "SELECT account, name_en FROM users WHERE id = ?",
       [legacyId],
     );
     expect(legacy.account).toBeNull();
+    expect(legacy.name_en).toBeNull();
 
     const indexes = await pool.query<{ Non_unique: number; Column_name: string }[]>(
       "SHOW INDEX FROM users WHERE Key_name = 'uq_users_account'",
@@ -66,6 +72,27 @@ describe("users.account schema", () => {
     await expect(insert("DUP-ACCOUNT-2", "alice")).rejects.toMatchObject({ code: "ER_DUP_ENTRY" });
     await expect(insert("DUP-ACCOUNT-3", "ALICE")).rejects.toMatchObject({ code: "ER_DUP_ENTRY" });
     await expect(insert("EMPTY-ACCOUNT-1", "")).rejects.toThrow(/CONSTRAINT|Check/i);
+  });
+
+  it("stores an optional English name and rejects an empty one", async () => {
+    const id = uuidv7();
+    await pool.query(
+      "INSERT INTO users (id, emp_id, name, name_en, org_code) VALUES (?, 'NAME-EN-1', 'Name', 'John Smith', 'RD')",
+      [id],
+    );
+
+    const [row] = await pool.query<{ name_en: string | null }[]>(
+      "SELECT name_en FROM users WHERE id = ?",
+      [id],
+    );
+    expect(row.name_en).toBe("John Smith");
+
+    await expect(
+      pool.query(
+        "INSERT INTO users (id, emp_id, name, name_en, org_code) VALUES (?, 'NAME-EN-2', 'Name', '', 'RD')",
+        [uuidv7()],
+      ),
+    ).rejects.toThrow(/CONSTRAINT|Check/i);
   });
 });
 

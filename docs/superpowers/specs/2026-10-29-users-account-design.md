@@ -70,15 +70,21 @@ profile attribute, never an identity-link key.
 ALTER TABLE users
   ADD COLUMN account VARCHAR(128)
     CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL AFTER emp_id,
+  ADD COLUMN name_en VARCHAR(512)
+    CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL AFTER name,
   ADD CONSTRAINT uq_users_account UNIQUE (account),
   ADD CONSTRAINT ck_users_account_nonempty
-    CHECK (account IS NULL OR CHAR_LENGTH(account) > 0);
+    CHECK (account IS NULL OR CHAR_LENGTH(account) > 0),
+  ADD CONSTRAINT ck_users_name_en_nonempty
+    CHECK (name_en IS NULL OR CHAR_LENGTH(name_en) > 0);
 ```
 
 - `NULL` covers existing rows and local/Google users.
 - `UNIQUE(account)` creates the B-tree index used by `account LIKE 'prefix%'`.
   MariaDB permits multiple `NULL`s in a unique index.
 - No separate index.
+- `name_en` is a nullable English display name with no write path in this
+  change. It matches `name`'s length and binary collation, and has no index.
 - If company accounts can be reassigned to a new employee while the old Hub user
   row still exists, the unique constraint fails closed. The operator must clear
   the old row's account first. If reuse is expected and that is unacceptable,
@@ -166,3 +172,17 @@ its own index or query; it is not part of this change.
 - Whether to refresh `account` on every login or only when it differs; an
   unconditional update is acceptable because login already writes
   `external_identity_links.last_seen_at`.
+
+## Addendum (2026-10-29): `users.name_en`
+
+The user asked for the English display name to ship in the same migration as
+`account`. Migration 027 therefore also adds
+`name_en VARCHAR(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL AFTER name`
+with a non-empty check. It is nullable, not indexed, and has no write path in
+this change; it is reserved for the English display name.
+
+Adding `name_en` changed migration 027's checksum. The migration is still
+unreleased, so no deployed environment should have applied the earlier form.
+Any local or shared database that did apply the earlier form must be rebuilt or
+reset before applying this version; the migration runner will reject the
+checksum mismatch rather than patch it in place.

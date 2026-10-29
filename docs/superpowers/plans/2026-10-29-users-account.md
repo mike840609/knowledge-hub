@@ -758,3 +758,20 @@ Expected: only the migration, identity contract, repository, resolver, tests, an
 - [ ] **Step 4: Commit any remaining verification-only changes**
 
 If Step 3 shows uncommitted changes, commit them with a message describing the fix. Otherwise, no commit is needed.
+
+---
+
+## Addendum (2026-10-29): `name_en` in migration 027
+
+The user requested an English display-name column in the same migration as
+`account`. Migration 027 now also adds
+`name_en VARCHAR(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL AFTER name`
+with `ck_users_name_en_nonempty`. The schema test in
+`tests/integration/users-account.test.ts` asserts the column is nullable and
+rejects an empty value. No Company SSO contract, resolver, or repository change
+was made for `name_en` in this pass; it is a reserved column until a write path
+is requested.
+
+Because 027 is unreleased, the checksum change is safe for the branch. Any local
+database that already applied the earlier 027 must be rebuilt or reset; the
+migration runner rejects a checksum mismatch.
