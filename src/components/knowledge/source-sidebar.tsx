@@ -12,6 +12,7 @@ import { MenuCheckboxItem, MenuContent, MenuItem, MenuRoot, MenuTrigger } from "
 import type { TreeLoadState } from "./source-tree-cache";
 import { useSidebarShortcuts } from "./use-sidebar-shortcuts";
 import { KnowledgeTree } from "./knowledge-tree";
+import { useSharedFolderIds } from "./shared-folders";
 import { SidebarGetStarted, hasNoDocuments, startActions } from "./sidebar-get-started";
 import { TreeFilter } from "./tree-filter";
 import { buttonClasses } from "@/components/ui/button";
@@ -60,6 +61,8 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
   const searchParams = useSearchParams();
   const routeParams = useParams();
   const { access, confirmed } = useWorkspaceAuthorization();
+  // Only My Space's owner has links to be reminded of; the route refuses anyone else.
+  const sharedFolderIds = useSharedFolderIds(workspaceId, access.workspace.type === "PERSONAL");
   // The filter is work in progress rather than an arrangement, so it lasts
   // for the session: worth keeping across a refresh, not worth greeting
   // someone with a week later. Everything else below is a choice, and keeps.
@@ -348,6 +351,7 @@ export function SourceSidebar({ workspaceId, source, collections, sources, treeS
                   includeArchived={showArchived}
                   query={candidate.name.toLowerCase().includes(needle) ? "" : query}
                   favoriteDocumentIds={favoriteDocumentIds}
+                  sharedFolderIds={sharedFolderIds}
                   onToggleFavorite={(documentId) => toggleFavorite(candidate.id, documentId)}
                   documentActions={(item) => actionsFor("row", {
                     workspaceId,

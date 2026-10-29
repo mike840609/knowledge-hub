@@ -529,7 +529,7 @@ export function DocumentDetailClient({
             onDetailsClick={toggleInspector}
             linkSummary={summariseLinks(inspectorData.links)}
             onLinksClick={openLinks}
-            onShareClick={canShare ? () => requestShare(inspectorData.documentId) : null}
+            onShareClick={canShare ? () => requestShare({ documentId: inspectorData.documentId }) : null}
             readOnly={readOnly}
             syncHref={syncHref}
             contentOwnsTitle={contentOwnsTitle}

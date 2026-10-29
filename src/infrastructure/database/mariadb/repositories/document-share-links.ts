@@ -3,7 +3,7 @@ import { toLikePattern } from "@/modules/knowledge/domain/search-query";
 import { shareLinkPath } from "@/modules/knowledge/domain/document-share-link";
 import { IntegrityViolationError } from "@/modules/knowledge/domain/errors";
 import type { DocumentShareLink, ShareLinkTarget } from "@/modules/knowledge/domain/document-share-link";
-import type { DocumentShareLinkRepository, ShareLinkViewTotals } from "@/modules/knowledge/ports/document-share-link-repository";
+import type { DocumentShareLinkRepository, OpenFolderLink, ShareLinkViewTotals } from "@/modules/knowledge/ports/document-share-link-repository";
 import type { DbRow, QueryConnection } from "./shared";
 import { affectedRows, asDate, asNullableDate, asNumber } from "./shared";
 
@@ -62,6 +62,23 @@ export class MariaDbDocumentShareLinkRepository implements DocumentShareLinkRepo
       label: row.label === null ? null : String(row.label), path: shareLinkPath(String(row.token)), status: String(row.link_status) as ManagedShareLink["status"],
       createdAt: asDate(row.created_at), expiresAt: asDate(row.expires_at), revokedAt: asNullableDate(row.revoked_at), totalViews: totals.get(String(row.id))?.totalViews ?? 0, lastViewedAt: totals.get(String(row.id))?.lastViewedAt ?? null,
     }));
+  }
+
+  async listOpenFolderLinks(workspaceId: string, ownerId: string, now: Date): Promise<OpenFolderLink[]> {
+    // The bearer reader's validity, as one query: a folder is listed only while some link to it would open.
+    const rows = await this.connection.query<DbRow[]>(
+      `SELECT DISTINCT f.id, f.name
+       FROM document_share_links l
+       JOIN knowledge_tree_nodes f ON f.id = l.folder_node_id AND f.node_type = 'FOLDER' AND f.status = 'ACTIVE'
+       JOIN knowledge_sources s ON s.id = f.source_id AND s.status = 'ACTIVE'
+       JOIN workspaces w ON w.id = s.workspace_id AND w.workspace_type = 'PERSONAL' AND w.lifecycle_state = 'ACTIVE'
+       JOIN workspace_memberships m ON m.workspace_id = w.id AND m.user_id = l.created_by
+       WHERE w.id = ? AND w.personal_owner_user_id = ? AND l.created_by = ?
+         AND l.revoked_at IS NULL AND l.expires_at > ?
+       ORDER BY f.name, f.id`,
+      [workspaceId, ownerId, ownerId, now],
+    );
+    return rows.map(row => ({ folderNodeId: String(row.id), name: String(row.name ?? "") }));
   }
 
   async insert(link: DocumentShareLink): Promise<void> {

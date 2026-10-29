@@ -18,6 +18,7 @@ vi.mock("@/server/composition", () => ({
 }));
 
 import { GET as listLinks, POST as createLink } from "@/app/api/documents/[documentId]/share-links/route";
+import { GET as sharedFolders } from "@/app/api/workspaces/[workspaceId]/shared-folders/route";
 import { POST as revokeLink } from "@/app/api/share-links/[linkId]/revoke/route";
 import { GET as listFolderLinks, POST as createFolderLink } from "@/app/api/tree-nodes/[nodeId]/share-links/route";
 
@@ -133,5 +134,34 @@ describe("folder share-link API", () => {
     expect(revoked.status).toBe(204);
     as(fixtureCaller());
     expect((await listFolderLinks(new Request("http://hub.test"), nodeParams(folderNodeId))).status).toBe(404);
+  });
+
+  it("lists the owner's open shared folders, and names them as viaFolders for a document inside", async () => {
+    const { caller, folderNodeId } = await mySpaceDocument();
+    as(caller);
+    const unitOfWork = new MariaDbUnitOfWork(pool);
+    const { workspaceId, sourceId } = await unitOfWork.run(async (r) => {
+      const node = (await r.tree.findById(folderNodeId))!;
+      return { sourceId: node.sourceId, workspaceId: (await r.sourcePolicy.findById(node.sourceId))!.workspaceId };
+    });
+    const inside = await new HubKnowledgeCommandServiceImpl(unitOfWork).createDocument(caller, { sourceId, parentId: folderNodeId, title: "Inside", markdown: "body", metadata: {} });
+    const listFolders = async () => sharedFolders(new Request("http://hub.test"), { params: Promise.resolve({ workspaceId }) });
+    const viaFolders = async () => (await (await listLinks(new Request("http://hub.test"), documentParams(inside.documentId))).json()).viaFolders;
+
+    expect(await (await listFolders()).json()).toEqual({ folders: [] });
+    expect(await viaFolders()).toEqual([]);
+    const { link } = await (await createFolderLink(post({}), nodeParams(folderNodeId))).json();
+    const listed = await listFolders();
+    expect(listed.headers.get("cache-control")).toBe("private, no-store");
+    expect(await listed.json()).toEqual({ folders: [{ folderNodeId, name: "Api Folder" }] });
+    expect(await viaFolders()).toEqual([{ folderNodeId, name: "Api Folder" }]);
+
+    await revokeLink(new Request("http://hub.test", { method: "POST" }), { params: Promise.resolve({ linkId: link.id }) });
+    expect(await (await listFolders()).json()).toEqual({ folders: [] });
+    expect(await viaFolders()).toEqual([]);
+
+    as(fixtureCaller());
+    expect((await listFolders()).status).toBeGreaterThanOrEqual(400);
+    expect((await listLinks(new Request("http://hub.test"), documentParams(inside.documentId))).status).toBeGreaterThanOrEqual(400);
   });
 });

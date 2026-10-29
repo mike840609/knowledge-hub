@@ -12,6 +12,8 @@ vi.mock('@/components/knowledge/use-document-shortcuts',()=>({useDocumentShortcu
 vi.mock('@/components/knowledge/use-tree-mutations',()=>({useTreeMutations:()=>({})}));
 vi.mock('@/components/actions/action-menu',()=>({useActionRunner:()=>vi.fn()}));
 vi.mock('@/components/actions/action-registry',()=>({actionsFor:()=>[]}));
+// This file counts the fetches a source's tree makes; the tree's share marker has its own request.
+vi.mock('@/components/knowledge/shared-folders',()=>({useSharedFolderIds:()=>new Set<string>()}));
 vi.mock('@/components/knowledge/knowledge-tree',()=>({KnowledgeTree:({items}:{items:{label:string}[]})=><div>{items.map(i=><span key={i.label}>{i.label}</span>)}</div>}));
 vi.mock('@/components/ui/tooltip',()=>({Tooltip:({children}:{children:React.ReactNode})=>children}));
 (globalThis as {IS_REACT_ACT_ENVIRONMENT?:boolean}).IS_REACT_ACT_ENVIRONMENT=true;

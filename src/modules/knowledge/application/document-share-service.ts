@@ -17,6 +17,7 @@ import { extractDocumentLinks } from "../domain/document-links";
 import { DocumentNotFoundError, IntegrityViolationError, SourceNotFoundError, ValidationError } from "../domain/errors";
 import { linkLookupKey } from "../domain/link-graph";
 import { buildLinkResolver } from "../domain/link-resolution";
+import type { OpenFolderLink } from "../ports/document-share-link-repository";
 import type { ShareTokenIssuer } from "../ports/share-token-issuer";
 import { reachableChain } from "./internal/folder-link-reach";
 import type { TreeViewNode } from "../ports/tree-repository";
@@ -106,6 +107,40 @@ export class DocumentShareService {
     });
   }
 
+  /** The owner's folders with a link open now, for the tree's marker (folder share spec §8). Owner of that My Space only. */
+  async listOpenFolderLinks(caller: CallerContext, workspaceId: string): Promise<OpenFolderLink[]> {
+    return this.unitOfWork.run(async r => {
+      await r.workspaceAccess.requireWorkspaceRead(caller, workspaceId);
+      const workspace = await r.workspaces.findById(workspaceId);
+      if (!workspace || workspace.workspaceType !== "PERSONAL" || workspace.personalOwnerUserId !== caller.identity.id || workspace.lifecycleState !== "ACTIVE") throw new DocumentNotFoundError();
+      return r.shareLinks.listOpenFolderLinks(workspaceId, caller.identity.id, this.clock());
+    });
+  }
+
+  /**
+   * The shared folders a document is visible through: its ancestors, nearest first, that have a link open
+   * now, reached through ACTIVE nodes only (folder share spec §8). Owner of the document's My Space only.
+   */
+  async foldersSharingDocument(caller: CallerContext, documentId: string): Promise<OpenFolderLink[]> {
+    return this.unitOfWork.run(async r => {
+      const { document, workspace } = await requireOwnedDocument(r, caller, documentId);
+      if (document.status !== "ACTIVE") return [];
+      const node = await r.tree.findByDocumentId(document.id);
+      if (!node) return [];
+      const open = new Map((await r.shareLinks.listOpenFolderLinks(workspace.id, caller.identity.id, this.clock())).map(folder => [folder.folderNodeId, folder]));
+      if (open.size === 0) return [];
+      const shared: OpenFolderLink[] = [];
+      const seen = new Set<string>();
+      for (const [index, ancestor] of (await r.tree.listChain(node.id)).entries()) {
+        if (ancestor.status !== "ACTIVE" || seen.has(ancestor.id)) break;
+        seen.add(ancestor.id);
+        const folder = index > 0 ? open.get(ancestor.id) : undefined;
+        if (folder) shared.push(folder);
+      }
+      return shared;
+    });
+  }
+
   async create(caller: CallerContext, input: { documentId: string; label?: unknown; expiresInDays?: unknown }): Promise<ShareLinkView> {
     return this.unitOfWork.run(async (repositories) => {
       await syncCallerIdentity(repositories.users, caller);
@@ -181,13 +216,7 @@ export class DocumentShareService {
   async list(caller: CallerContext, documentId: string): Promise<ShareLinkView[]> {
     return this.unitOfWork.run(async (repositories) => {
       await syncCallerIdentity(repositories.users, caller);
-      const document = await repositories.documents.findById(documentId);
-      if (!document) throw new DocumentNotFoundError();
-      const source = await repositories.sourcePolicy.findById(document.sourceId);
-      if (!source) throw new DocumentNotFoundError();
-      await repositories.workspaceAccess.requireMembership(caller, source.workspaceId);
-      const workspace = await repositories.workspaces.findById(source.workspaceId);
-      if (!workspace || workspace.personalOwnerUserId !== caller.identity.id) throw new DocumentNotFoundError();
+      const { document } = await requireOwnedDocument(repositories, caller, documentId);
       const links = await repositories.shareLinks.listByDocument(document.id);
       const totals = await repositories.shareLinks.viewTotals(links.map((link) => link.id));
       const now = this.clock();
@@ -455,6 +484,18 @@ async function lockOwnedScope(repositories: KnowledgeRepositories, caller: Calle
   const document = await repositories.documents.findById(documentId);
   if (!document) throw new DocumentNotFoundError();
   return { document, ...(await lockOwnedSourceScope(repositories, caller, document.sourceId)) };
+}
+
+/** Unlocked reads: the document, once the caller is a member of its Workspace and that is their own My Space. */
+async function requireOwnedDocument(repositories: KnowledgeRepositories, caller: CallerContext, documentId: string) {
+  const document = await repositories.documents.findById(documentId);
+  if (!document) throw new DocumentNotFoundError();
+  const source = await repositories.sourcePolicy.findById(document.sourceId);
+  if (!source) throw new DocumentNotFoundError();
+  await repositories.workspaceAccess.requireMembership(caller, source.workspaceId);
+  const workspace = await repositories.workspaces.findById(source.workspaceId);
+  if (!workspace || workspace.personalOwnerUserId !== caller.identity.id) throw new DocumentNotFoundError();
+  return { document, workspace };
 }
 
 /** The node is routed unlocked to find its Source, then locked last, after Source and Workspace. */

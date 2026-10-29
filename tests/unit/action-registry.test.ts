@@ -523,6 +523,44 @@ describe("action registry — moving a document (daily-driver spec §7.2)", () =
   });
 });
 
+describe("action registry — folder.share (folder share spec §8)", () => {
+  const cells = combinations({
+    canWrite: [true, false],
+    ownership: ["HUB_MANAGED", "SOURCE_MANAGED"],
+    status: ["ACTIVE", "ARCHIVED"],
+    sourceStatus: ["ACTIVE", "ARCHIVED"],
+    confirmed: [true, false],
+    workspaceType: ["PERSONAL", "TEAM"],
+  } as const);
+  const shareOffered = (ctx: ActionContext) => ids(availableActions(ctx)).includes("folder.share");
+
+  // Sharing is reading: neither capability nor ownership is a rule, only where the folder is and its state.
+  it.each(cells)("canWrite=$canWrite $ownership folder $status in a $sourceStatus source, confirmed=$confirmed, $workspaceType", (cell) => {
+    const offered = shareOffered(context({
+      workspaceType: cell.workspaceType,
+      can: { ...allCapabilities, canWrite: cell.canWrite },
+      confirmed: cell.confirmed,
+      folder: folder({ ownership: cell.ownership, status: cell.status, sourceStatus: cell.sourceStatus }),
+    }));
+    expect(offered).toBe(cell.workspaceType === "PERSONAL" && cell.confirmed && cell.status === "ACTIVE" && cell.sourceStatus === "ACTIVE");
+  });
+
+  it("is labelled Share link… and asks the share dialog for the folder, on the row menu only", () => {
+    const share = availableActions(context({ workspaceType: "PERSONAL", folder: folder() })).find((action) => action.id === "folder.share");
+    expect(share).toMatchObject({ label: "Share link…", group: "folder", icon: "share", surfaces: ["row"], section: "edit" });
+    expect(share?.effect).toEqual({ kind: "folder-command", command: "folder.share", nodeId: "n1", sourceId: "s1", label: "Runbooks" });
+  });
+
+  it("is the only folder action a read-only source's folder is offered", () => {
+    const readOnly = context({ workspaceType: "PERSONAL", can: { ...allCapabilities, canWrite: false }, folder: folder({ ownership: "SOURCE_MANAGED" }) });
+    expect(ids(availableActions(readOnly)).filter((id) => id.startsWith("folder."))).toEqual(["folder.share"]);
+  });
+
+  it("is not on offer where there is no folder", () => {
+    expect(shareOffered(context({ workspaceType: "PERSONAL", target: target() }))).toBe(false);
+  });
+});
+
 describe("action registry — a folder's actions (daily-driver spec §7.2)", () => {
   const cells = combinations({
     canWrite: [true, false],
@@ -672,6 +710,7 @@ describe("action registry — the row menu's sections (frontend-design-language 
       "document.favorite": "edit",
       "document.duplicate": "edit",
       "document.move": "edit",
+      "folder.share": "edit",
       "folder.new-document": "edit",
       "folder.new-folder": "edit",
       "folder.rename": "edit",

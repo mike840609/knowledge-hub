@@ -47,6 +47,7 @@ export type ActionId =
   | "folder.new-folder"
   | "folder.rename"
   | "folder.move"
+  | "folder.share"
   | "folder.archive"
   | "folder.restore";
 
@@ -105,7 +106,7 @@ export type ActionCommand =
   | "document.restore";
 
 /** What a folder row can be asked to do that needs a request to the server, or a name from the reader. */
-export type FolderCommand = "folder.rename" | "folder.archive" | "folder.restore";
+export type FolderCommand = "folder.rename" | "folder.share" | "folder.archive" | "folder.restore";
 
 export type ActionEffect =
   | { kind: "download"; href: string }
@@ -520,6 +521,22 @@ export function availableActions(context: ActionContext): readonly Action[] {
         });
       }
     }
+  }
+
+  // Folder share spec §8. Outside the writable block below, as document.share is outside the
+  // document's: sharing is reading, so ownership and canWrite are not consulted — only where the
+  // folder is (My Space) and its own state, and its source's.
+  if (folder && context.workspaceType === "PERSONAL" && confirmed && folder.status === "ACTIVE" && folder.sourceStatus === "ACTIVE") {
+    actions.push({
+      id: "folder.share",
+      label: "Share link…",
+      group: "folder",
+      icon: "share",
+      keywords: ["link", "share", "copy link", "public", folder.label],
+      section: "edit",
+      surfaces: ["row"],
+      effect: { kind: "folder-command", command: "folder.share", nodeId: folder.nodeId, sourceId: folder.sourceId, label: folder.label },
+    });
   }
 
   if (folder && can.canWrite && confirmed && folder.ownership === "HUB_MANAGED" && folder.sourceStatus === "ACTIVE") {

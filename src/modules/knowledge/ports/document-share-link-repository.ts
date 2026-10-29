@@ -3,8 +3,15 @@ import type { DocumentShareLink } from "../domain/document-share-link";
 
 export type ShareLinkViewTotals = { totalViews: number; lastViewedAt: Date | null };
 
+export type OpenFolderLink = { folderNodeId: string; name: string };
+
 export interface DocumentShareLinkRepository {
   listForWorkspace(workspaceId: string, callerId: string, query: ShareManagementQuery, now: Date, limit: number, offset: number): Promise<ManagedShareLink[]>;
+  /**
+   * The folders of this My Space with at least one link that opens now: unrevoked, unexpired, the folder
+   * ACTIVE in an ACTIVE Source and Workspace, the creator its owner and still a member. By name, then id.
+   */
+  listOpenFolderLinks(workspaceId: string, ownerId: string, now: Date): Promise<OpenFolderLink[]>;
   insert(link: DocumentShareLink): Promise<void>;
   findByToken(token: string): Promise<DocumentShareLink | null>;
   findById(id: string): Promise<DocumentShareLink | null>;
