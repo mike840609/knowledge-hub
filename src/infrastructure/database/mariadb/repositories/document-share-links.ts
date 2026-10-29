@@ -2,15 +2,20 @@ import type { ManagedShareLink, ShareManagementQuery } from "@/modules/knowledge
 import { toLikePattern } from "@/modules/knowledge/domain/search-query";
 import { shareLinkPath } from "@/modules/knowledge/domain/document-share-link";
 import { IntegrityViolationError } from "@/modules/knowledge/domain/errors";
-import type { DocumentShareLink } from "@/modules/knowledge/domain/document-share-link";
+import type { DocumentShareLink, ShareLinkTarget } from "@/modules/knowledge/domain/document-share-link";
 import type { DocumentShareLinkRepository, ShareLinkViewTotals } from "@/modules/knowledge/ports/document-share-link-repository";
 import type { DbRow, QueryConnection } from "./shared";
 import { affectedRows, asDate, asNullableDate, asNumber } from "./shared";
 
+function mapTarget(row: DbRow): ShareLinkTarget {
+  if (row.folder_node_id !== null && row.folder_node_id !== undefined) return { kind: "FOLDER", folderNodeId: String(row.folder_node_id) };
+  return { kind: "DOCUMENT", documentId: String(row.document_id) };
+}
+
 function mapLink(row: DbRow): DocumentShareLink {
   return {
     id: String(row.id),
-    documentId: String(row.document_id),
+    target: mapTarget(row),
     token: String(row.token),
     label: row.label === null ? null : String(row.label),
     createdBy: String(row.created_by),
@@ -58,9 +63,9 @@ export class MariaDbDocumentShareLinkRepository implements DocumentShareLinkRepo
 
   async insert(link: DocumentShareLink): Promise<void> {
     await this.connection.query(
-      `INSERT INTO document_share_links (id, document_id, token, label, created_by, created_at, expires_at, revoked_by, revoked_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [link.id, link.documentId, link.token, link.label, link.createdBy, link.createdAt, link.expiresAt, link.revokedBy, link.revokedAt],
+      `INSERT INTO document_share_links (id, document_id, folder_node_id, token, label, created_by, created_at, expires_at, revoked_by, revoked_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [link.id, link.target.kind === "DOCUMENT" ? link.target.documentId : null, link.target.kind === "FOLDER" ? link.target.folderNodeId : null, link.token, link.label, link.createdBy, link.createdAt, link.expiresAt, link.revokedBy, link.revokedAt],
     );
   }
 

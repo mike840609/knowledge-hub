@@ -12,6 +12,6 @@ export default async function OpenSharedDocument({ params }: { params: Promise<{
   const services = applicationServices();
   const { caller, personalWorkspace } = await services.establishTrustedCaller();
   const link = await services.unitOfWork.run(repositories => repositories.shareLinks.findByToken(token));
-  if (!link) notFound();
-  redirect(await sharePlatformDestination(caller, link.documentId, personalWorkspace.id, services.queries));
+  if (!link || link.target.kind !== "DOCUMENT") notFound();
+  redirect(await sharePlatformDestination(caller, link.target.documentId, personalWorkspace.id, services.queries));
 }

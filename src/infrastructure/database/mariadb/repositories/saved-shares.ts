@@ -28,7 +28,7 @@ export class MariaDbSavedShareRepository implements SavedShareRepository {
       LEFT JOIN users u ON u.id=l.created_by WHERE l.token=?`,[token]);
     const row=rows[0];if(!row)return null;
     return {
-      link:{id:String(row.id),documentId:String(row.document_id),token:String(row.token),label:row.label===null?null:String(row.label),createdBy:String(row.created_by),createdAt:asDate(row.created_at),expiresAt:asDate(row.expires_at),revokedBy:row.revoked_by===null?null:String(row.revoked_by),revokedAt:asNullableDate(row.revoked_at)},
+      link:{id:String(row.id),target:{kind:"DOCUMENT",documentId:String(row.document_id)},token:String(row.token),label:row.label===null?null:String(row.label),createdBy:String(row.created_by),createdAt:asDate(row.created_at),expiresAt:asDate(row.expires_at),revokedBy:row.revoked_by===null?null:String(row.revoked_by),revokedAt:asNullableDate(row.revoked_at)},
       validity:{documentStatus:String(row.document_status) as SavedShareSnapshot["validity"]["documentStatus"],sourceStatus:String(row.source_status) as SavedShareSnapshot["validity"]["sourceStatus"],workspaceOwnerUserId:row.workspace_owner===null?null:String(row.workspace_owner),workspaceLifecycle:row.workspace_lifecycle===null?null:String(row.workspace_lifecycle) as SavedShareSnapshot["validity"]["workspaceLifecycle"],creatorDirectRole:row.creator_membership===null?undefined:row.creator_role===null?null:String(row.creator_role) as SavedShareSnapshot["validity"]["creatorDirectRole"]},
       title:row.title===null?null:String(row.title),sharedByName:row.creator_name===null?null:String(row.creator_name),
     };

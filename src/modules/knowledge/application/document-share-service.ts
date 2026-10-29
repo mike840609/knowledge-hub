@@ -82,7 +82,7 @@ export class DocumentShareService {
       });
       const link: DocumentShareLink = {
         id: uuidv7(),
-        documentId: document.id,
+        target: { kind: "DOCUMENT", documentId: document.id },
         token: this.tokens.issue(),
         label: normalized.label,
         createdBy: caller.identity.id,
@@ -133,8 +133,9 @@ export class DocumentShareService {
       // No path locks a share link after Source/Workspace, so taking the link
       // first cannot invert the Phase 3 §14.2 order.
       const link = await repositories.shareLinks.lockById(linkId);
-      if (!link || link.createdBy !== caller.identity.id) throw new ShareLinkNotFoundError();
-      const { workspace } = await lockOwnedScope(repositories, caller, link.documentId).catch((error: unknown) => {
+      if (!link || link.createdBy !== caller.identity.id || link.target.kind !== "DOCUMENT") throw new ShareLinkNotFoundError();
+      const documentId = link.target.documentId;
+      const { workspace } = await lockOwnedScope(repositories, caller, documentId).catch((error: unknown) => {
         if (error instanceof DocumentNotFoundError || error instanceof SourceNotFoundError) throw new ShareLinkNotFoundError();
         throw error;
       });
@@ -149,7 +150,7 @@ export class DocumentShareService {
         eventType: SHARE_LINK_REVOKED_EVENT,
         targetType: "DOCUMENT_SHARE_LINK",
         targetId: link.id,
-        payload: { documentId: link.documentId },
+        payload: { documentId },
         correlationId: null,
         createdAt: now,
       });
@@ -167,8 +168,8 @@ export class DocumentShareService {
     const now = this.clock();
     const { linkId, view } = await this.unitOfWork.run(async (repositories) => {
       const link = await repositories.shareLinks.findByToken(token);
-      if (!link) throw new ShareLinkNotFoundError();
-      const document = await repositories.documents.findById(link.documentId);
+      if (!link || link.target.kind !== "DOCUMENT") throw new ShareLinkNotFoundError();
+      const document = await repositories.documents.findById(link.target.documentId);
       if (!document) throw new ShareLinkNotFoundError();
       const source = await repositories.sourcePolicy.findById(document.sourceId);
       if (!source) throw new ShareLinkNotFoundError();

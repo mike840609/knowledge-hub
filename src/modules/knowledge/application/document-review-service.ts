@@ -209,8 +209,9 @@ export class DocumentReviewService {
   }
   /** Whether a link opens now: the same judgement `linkScope` makes, without refusing. */
   private async linkValid(r: KnowledgeRepositories, link: DocumentShareLink): Promise<boolean> {
+    if (link.target.kind !== "DOCUMENT") return false;
     try {
-      const scope = await this.scope(r, link.documentId, false);
+      const scope = await this.scope(r, link.target.documentId, false);
       return this.opens(r, scope, link);
     } catch (error) {
       if (error instanceof ShareLinkNotFoundError) return false;
@@ -276,7 +277,8 @@ export class DocumentReviewService {
     const link=found&&lock?await r.shareLinks.lockById(found.id):found;
     // The UUID column matches and returns lower case whatever case the URL carried, as readShared accepts it.
     if(!link || link.token!==token.toLowerCase()) throw new ShareLinkNotFoundError();
-    const scope=await this.scope(r,link.documentId,lock);
+    if(link.target.kind!=="DOCUMENT") throw new ShareLinkNotFoundError();
+    const scope=await this.scope(r,link.target.documentId,lock);
     if(!await this.opens(r,scope,link)) throw new ShareLinkNotFoundError();
     return {...scope,link};
   }

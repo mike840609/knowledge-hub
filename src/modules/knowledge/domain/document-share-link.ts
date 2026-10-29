@@ -25,9 +25,14 @@ export const DEFAULT_SHARE_LINK_EXPIRY_DAYS: ShareLinkExpiryDays = 30;
 export const MAX_ACTIVE_SHARE_LINKS_PER_DOCUMENT = 10;
 export const MAX_SHARE_LINK_LABEL_LENGTH = 200;
 
+/** What a link opens: one document, or a My Space folder's live subtree. */
+export type ShareLinkTarget =
+  | { kind: "DOCUMENT"; documentId: string }
+  | { kind: "FOLDER"; folderNodeId: string };
+
 export type DocumentShareLink = {
   id: string;
-  documentId: string;
+  target: ShareLinkTarget;
   /** Random UUIDv4, never derived from any entity ID (spec §8). */
   token: string;
   label: string | null;
@@ -83,6 +88,7 @@ type LifecycleStatus = "ACTIVE" | "ARCHIVED";
 /** Everything validity depends on, already loaded. Never includes the viewer. */
 export type ShareLinkValidityInput = {
   link: Pick<DocumentShareLink, "revokedAt" | "expiresAt" | "createdBy">;
+  /** The target's status (document, or folder node). */
   documentStatus: LifecycleStatus;
   sourceStatus: LifecycleStatus;
   workspaceLifecycle: LifecycleStatus | null | undefined;
@@ -130,6 +136,31 @@ export function evaluateShareLinkValidity(
   if (input.workspaceOwnerUserId !== input.link.createdBy) return { valid: false, reason: "CREATOR_NOT_OWNER" };
   if (!directRoleCanRead(input.creatorDirectRole)) return { valid: false, reason: "CREATOR_LOST_ACCESS" };
   return { valid: true };
+}
+
+/** One tree node on the path from a document up to the root, as the repository reads it. */
+export type TreeChainNode = {
+  id: string;
+  parentId: string | null;
+  nodeType: "FOLDER" | "DOCUMENT";
+  status: LifecycleStatus;
+};
+
+/**
+ * Whether a document stays inside a shared folder right now. `chain[0]` is the
+ * document's own node, then its parents upward. Every node on the way must be
+ * ACTIVE, and the shared folder must be above the document. The array is not
+ * trusted to be acyclic: a repeated id ends the walk.
+ */
+export function isReachableThroughFolder(chain: readonly TreeChainNode[], folderNodeId: string): boolean {
+  if (chain[0]?.nodeType !== "DOCUMENT") return false;
+  const seen = new Set<string>();
+  for (const [index, node] of chain.entries()) {
+    if (node.status !== "ACTIVE" || seen.has(node.id)) return false;
+    seen.add(node.id);
+    if (index > 0 && node.id === folderNodeId) return node.nodeType === "FOLDER";
+  }
+  return false;
 }
 
 export type ShareLinkCreationInput = {
