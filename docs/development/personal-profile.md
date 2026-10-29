@@ -3,10 +3,11 @@
 **English** | [繁體中文](personal-profile.zh-TW.md)
 
 `Insights` appears in Personal workspace navigation at `/w/{workspaceId}/profile`.
-Home shows a compact row of four core counts with a View all insights link; it remains
-the reading and import entry. Detailed statistics stay on Insights, which opens with a title and period selector
-instead of a repeated identity header or the four Home counters. Team workspaces and other
-users' Personal workspaces cannot access these statistics or their detail pages.
+Home is the reading and retrieval surface: it lists drafts, recent documents, discussions
+and favorites, with Search and New note in reach. It does not repeat the statistics.
+Detailed statistics stay on Insights, which opens with a title and period selector
+instead of a repeated identity header. Team workspaces and other users' Personal
+workspaces cannot access these statistics or their detail pages.
 
 ## Count definitions
 

@@ -2,7 +2,7 @@
 
 [English](personal-profile.md) | **繁體中文**
 
-個人工作空間導覽在 `/w/{workspaceId}/profile` 提供 `Insights`。Home 顯示四個核心計數的精簡列與 View all insights 連結，仍作為閱讀與匯入入口。詳細統計放在 Insights，以標題與期間選擇器開頭，不重複身分 header 或 Home 的四個計數。Team 工作空間與其他使用者的 Personal 工作空間都無法存取這些統計及其明細頁。
+個人工作空間導覽在 `/w/{workspaceId}/profile` 提供 `Insights`。Home 是閱讀與檢索入口：列出草稿、最近文件、討論與收藏，Search 與 New note 就在手邊，不重複顯示統計。詳細統計放在 Insights，以標題與期間選擇器開頭，不重複身分 header。Team 工作空間與其他使用者的 Personal 工作空間都無法存取這些統計及其明細頁。
 
 ## 計數定義
 
