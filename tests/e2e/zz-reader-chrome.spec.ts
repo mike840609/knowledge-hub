@@ -114,32 +114,32 @@ test("a code block in the editor is drawn as the reader draws it: one box, and t
   expect(editor.codePadding).toBe("0px");
 });
 
-test("the read-only notice starts below the pinned toolbar at the top of a document", async ({ page }, testInfo) => {
+test("scrolling back to the top leaves no toolbar overlay over document text", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   const workspaceId = await mySpace(page);
-  const created = await page.request.post(`/api/workspaces/${workspaceId}/documents`, { data: { title: 'Header spacing', markdown: '# Header spacing\n\n' + 'A paragraph.\n\n'.repeat(60) } });
+  const created = await page.request.post(`/api/workspaces/${workspaceId}/documents`, { data: { title: "Header spacing", markdown: "# Header spacing\n\n" + "A paragraph.\n\n".repeat(60) } });
   expect(created.ok()).toBe(true);
   const { sourceId, documentId } = await created.json();
   await page.goto(`/w/${workspaceId}/knowledge/${sourceId}/${documentId}?revision=1`);
-  const pane = page.getByRole('region', { name: 'Document content', exact: true });
-  const notice = pane.getByText('Read only · revision snapshot', { exact: true });
+  const pane = page.getByRole("region", { name: "Document content", exact: true });
+  const notice = pane.getByText("Read only · revision snapshot", { exact: true });
   await expect(notice).toBeVisible();
-  const geometry = await notice.evaluate(element => {
-    const pane = element.closest('[aria-label="Document content"]')!;
-    const toolbar = pane.querySelector('.lg\\:sticky')!;
-    return { notice: element.getBoundingClientRect().toJSON(), toolbar: toolbar.getBoundingClientRect().toJSON(), scroll: pane.scrollTop };
-  });
-  await page.screenshot({ path: testInfo.outputPath("header-spacing.png") });
-  expect(geometry.scroll).toBe(0);
-  expect(geometry.notice.top).toBeGreaterThanOrEqual(geometry.toolbar.bottom + 16);
-  // The first small scroll must not immediately put the notice under the toolbar.
-  await pane.evaluate(element => { element.scrollTop = 6; });
-  const scrolledNotice = await notice.boundingBox();
-  expect(scrolledNotice!.y).toBeGreaterThanOrEqual(geometry.toolbar.bottom + 16);
+  const toolbar = pane.locator("header").locator("xpath=preceding-sibling::div[1]");
+  await pane.press("PageDown");
+  await expect(toolbar).toHaveAttribute("data-pinned", "true");
+  await page.screenshot({ path: testInfo.outputPath("header-scrolled.png") });
+  expect(await toolbar.evaluate(element => getComputedStyle(element, "::after").content)).toBe("none");
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await pane.evaluate(element => { element.scrollTop = 900; });
+    await expect(toolbar).toHaveAttribute("data-pinned", "true");
+    await pane.evaluate(element => { element.scrollTop = 0; });
+    await expect(toolbar).not.toHaveAttribute("data-pinned", "true");
+    await expect(notice).toBeVisible();
+    const [bar, text] = await Promise.all([toolbar.boundingBox(), notice.boundingBox()]);
+    expect(text!.y).toBeGreaterThanOrEqual(bar!.y + bar!.height);
+    expect(await toolbar.evaluate(element => getComputedStyle(element, "::after").content)).toBe("none");
+  }
+  await page.screenshot({ path: testInfo.outputPath("header-top.png") });
   await page.setViewportSize({ width: 390, height: 844 });
-  await pane.evaluate(element => { element.scrollTop = 0; });
   await expect(notice).toBeVisible();
-  const onScreen = await notice.boundingBox();
-  expect(onScreen!.y).toBeGreaterThanOrEqual(0);
-  expect(onScreen!.x + onScreen!.width).toBeLessThanOrEqual(390);
 });

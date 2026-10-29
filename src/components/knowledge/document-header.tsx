@@ -93,7 +93,7 @@ export function DocumentHeader({
           the rest of the header scrolls away. It is 48px tall, centred on the same line as the rail's and the
           explorer's first rows, so the three columns share one top edge. It sits outside <header> so that sticky is bounded by the whole
           document rather than by the header's own height. */}
-      <div data-pinned={pinned || undefined} className="z-10 bg-kh-bg lg:kh-fade-below lg:sticky lg:top-0">
+      <div data-pinned={pinned || undefined} className="z-10 bg-kh-bg lg:sticky lg:top-0">
       <div className="kh-reading-column flex min-h-12 min-w-0 items-center justify-between gap-3 py-2">
         <DocumentBreadcrumb segments={breadcrumb} />
         {/* Icon-only so the header stays light; each keeps its name as
@@ -173,7 +173,7 @@ export function DocumentHeader({
         </div>
       </div>
       </div>
-      <header ref={headerRef} className="pt-4">
+      <header ref={headerRef}>
         <div className="kh-reading-column pb-3">
           {beforeTitle}
           {titleControl ?? (contentOwnsTitle ? null : (
