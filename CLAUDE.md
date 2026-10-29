@@ -117,9 +117,12 @@ pass.
   Review access never grants Workspace membership, search, tree, history,
   MCP, Markdown edits or revision writes. Review responses include only
   validated current-revision selected-text fragments; hidden bodies and
-  outdated quotes are excluded. Exactly two entries answer without a caller:
+  outdated quotes are excluded. Exactly two entries serve content without a caller:
   `readShared`, which serves the document, and `DocumentReviewService.queryForLink`,
-  which serves the visible discussion and those fragments. Every other entry,
+  which serves the visible discussion and those fragments. A third,
+  `readSharedTarget`, answers without one but serves no content: it judges the
+  link for `/s/:token/open` and names only the document id to open, before
+  sign-in is asked for (so a dead link is a plain 404). Every other entry,
   and every write, requires one; `tests/unit/share-link-single-exception.test.ts`
   enforces it.
 - **`org_code` does not decide access.** It answers which company org a user

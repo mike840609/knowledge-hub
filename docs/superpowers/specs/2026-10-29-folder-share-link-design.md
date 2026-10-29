@@ -80,8 +80,13 @@ working in it.
   plain text the author wrote — no link, no resolved title, no "missing"
   styling that differs from a link that resolves nowhere.
 - **A third caller-less entry.** The CLAUDE.md invariant names exactly two
-  entries that answer without a caller (`readShared`, `queryForLink`). The
+  entries that serve content without a caller (`readShared`, `queryForLink`). The
   folder tree and the folder's documents are served through those same two.
+  *Amended after PR review:* `/s/:token/open` judges the link through a narrow
+  `readSharedTarget`, which also answers without a caller but returns only the
+  document id to open — no Markdown, title, tree, creator or link catalog. It
+  runs before sign-in so a dead link stays a plain 404, and the guard test pins
+  it as the only other caller-less method on `DocumentShareService`.
 - **Folder links weaken document links.** Existing links, rows, saved shares,
   follows and notifications keep working untouched.
 
@@ -197,7 +202,9 @@ opened through this link", which is stated in My shares' tooltip for folder
 rows.
 
 `tests/unit/share-link-single-exception.test.ts` must keep passing with
-`readShared` as the only caller-less content method.
+`readShared` as the only caller-less content method. The caller-less methods on
+`DocumentShareService` are pinned to exactly `readShared` and `readSharedTarget`
+(§4 `/open`), and the latter must never read revisions, Markdown or creators.
 
 ### 4. Routes and page
 
