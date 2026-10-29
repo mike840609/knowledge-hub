@@ -8,7 +8,7 @@ const identity: UserIdentity = { id: "u1", emp_id: "DEMO-ABC1234567", name: "Wan
 
 function claims(provider: string, subject: string) {
   return {
-    externalIdentity: { provider, subject, emp_id: identity.emp_id, name: identity.name, org_code: identity.org_code },
+    externalIdentity: { provider, subject, emp_id: identity.emp_id, account: null, name: identity.name, org_code: identity.org_code },
     validatedExternalGroupIds: [],
     platformCapabilities: [],
     refreshedAt: new Date(),

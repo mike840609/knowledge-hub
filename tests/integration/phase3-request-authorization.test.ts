@@ -41,7 +41,7 @@ beforeEach(async () => {
   vi.stubEnv("KM_COMPANY_SSO_PROVIDER", "review-company");
   vi.stubEnv("KM_COMPANY_SSO_TEAM_CREATE_GROUPS", "creators");
   vi.stubEnv("KM_COMPANY_SSO_ROLLOUT_USER_IDS", "");
-  session = { subject: "owner-subject", emp_id: "REVIEW-OWNER", name: "Owner", org_code: "RD", externalGroupIds: ["creators"] };
+  session = { subject: "owner-subject", emp_id: "REVIEW-OWNER", account: "owner-account", name: "Owner", org_code: "RD", externalGroupIds: ["creators"] };
   services = composition.buildApplicationServices(pool, { companySessionReader: reader });
   vi.spyOn(composition, "applicationServices").mockReturnValue(services);
   reader.readSession.mockClear();
@@ -62,7 +62,7 @@ async function team(role: "EDITOR" | "ADMIN" | "VIEWER" = "EDITOR") {
   const workspace = await lifecycle.createTeamWorkspace(owner, {
     name: "Group Team", groupMappings: [{ externalGroupId: "writers", role }],
   });
-  session = { subject: "group-subject", emp_id: "REVIEW-GROUP", name: "Group User", org_code: "OTHER", externalGroupIds: ["writers"] };
+  session = { subject: "group-subject", emp_id: "REVIEW-GROUP", account: "group-account", name: "Group User", org_code: "OTHER", externalGroupIds: ["writers"] };
   return { workspace, owner, lifecycle, governance };
 }
 

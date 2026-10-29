@@ -49,6 +49,7 @@ function enableLocal(): void {
 function trackingReader(session: {
   subject: string;
   emp_id: string;
+  account: string;
   name: string;
   org_code: string;
   externalGroupIds: readonly string[];
@@ -71,6 +72,7 @@ describe("Local identity provider claims", () => {
       provider: "local",
       subject: "local-id-1",
       emp_id: "LOCAL-0001",
+      account: null,
       name: "Local User",
       org_code: "LOCAL",
     });
@@ -99,6 +101,7 @@ describe("Company SSO identity provider claims", () => {
     const reader = trackingReader({
       subject: "  Sub-Ject_01  ",
       emp_id: "E1001",
+      account: "acct-1001",
       name: "SSO User",
       org_code: "RD",
       externalGroupIds: ["sso-eng", "sso-eng", "", "sso-platform"],
@@ -111,6 +114,7 @@ describe("Company SSO identity provider claims", () => {
       provider: "company-sso",
       subject: "  Sub-Ject_01  ",
       emp_id: "E1001",
+      account: "acct-1001",
       name: "SSO User",
       org_code: "RD",
     });
@@ -123,6 +127,7 @@ describe("Company SSO identity provider claims", () => {
     const member = trackingReader({
       subject: "sub-admin",
       emp_id: "E1002",
+      account: "acct-1002",
       name: "SSO Admin",
       org_code: "IT",
       externalGroupIds: ["sso-platform-admins", "sso-eng"],
@@ -136,6 +141,7 @@ describe("Company SSO identity provider claims", () => {
     const outsider = trackingReader({
       subject: "sub-viewer",
       emp_id: "E1003",
+      account: "acct-1003",
       name: "SSO Viewer",
       org_code: "HR",
       externalGroupIds: ["sso-eng"],
@@ -151,6 +157,7 @@ describe("Company SSO identity provider claims", () => {
     const reader = trackingReader({
       subject: "sub-refresh",
       emp_id: "E1004",
+      account: "acct-1004",
       name: "SSO Refresh",
       org_code: "RD",
       externalGroupIds: [],
@@ -163,19 +170,34 @@ describe("Company SSO identity provider claims", () => {
   });
 
   it("fails closed when the trusted session is missing required identity fields", async () => {
-    const reader = trackingReader({ subject: "", emp_id: "E1005", name: "No Subject", org_code: "RD", externalGroupIds: [] });
+    const reader = trackingReader({ subject: "", emp_id: "E1005", account: "acct-1005", name: "No Subject", org_code: "RD", externalGroupIds: [] });
     await expect(
       new CompanySsoIdentityProvider(reader, { provider: "company-sso", teamCreateGroupIds: [] }).getCurrentClaims(),
     ).rejects.toBeInstanceOf(AuthUnavailableError);
   });
 
+  it("fails closed when the company session omits account", async () => {
+    const reader = {
+      readSession: async () => ({
+        subject: "s",
+        emp_id: "e",
+        name: "n",
+        org_code: "o",
+        externalGroupIds: [],
+      }),
+    };
+    await expect(
+      new CompanySsoIdentityProvider(reader as never, { provider: "company-sso", teamCreateGroupIds: [] }).getCurrentClaims(),
+    ).rejects.toBeInstanceOf(AuthUnavailableError);
+  });
+
   it("rejects an unconfigured provider name instead of issuing claims", async () => {
-    const reader = trackingReader({ subject: "sub-x", emp_id: "E1006", name: "X", org_code: "RD", externalGroupIds: [] });
+    const reader = trackingReader({ subject: "sub-x", emp_id: "E1006", account: "acct-1006", name: "X", org_code: "RD", externalGroupIds: [] });
     expect(() => new CompanySsoIdentityProvider(reader, { provider: "", teamCreateGroupIds: [] })).toThrow(IdentityError);
   });
 
   it("never fabricates a Hub identity directly; resolution must go through HubIdentityResolver", async () => {
-    const reader = trackingReader({ subject: "sub-x", emp_id: "E1007", name: "X", org_code: "RD", externalGroupIds: [] });
+    const reader = trackingReader({ subject: "sub-x", emp_id: "E1007", account: "acct-1007", name: "X", org_code: "RD", externalGroupIds: [] });
     const provider = new CompanySsoIdentityProvider(reader, { provider: "company-sso", teamCreateGroupIds: [] });
     await expect(provider.getCurrentIdentity()).rejects.toBeInstanceOf(IdentityError);
   });
@@ -216,7 +238,7 @@ describe("identity provider factory", () => {
     process.env.KM_COMPANY_SSO_PROVIDER = "company-sso";
     process.env.KM_COMPANY_SSO_TEAM_CREATE_GROUPS = "sso-platform-admins";
     setNodeEnv("production");
-    const reader = trackingReader({ subject: "sub-1", emp_id: "E1", name: "N", org_code: "O", externalGroupIds: [] });
+    const reader = trackingReader({ subject: "sub-1", emp_id: "E1", account: "acct-1", name: "N", org_code: "O", externalGroupIds: [] });
     expect(createIdentityProvider({ companySessionReader: reader })).toBeInstanceOf(CompanySsoIdentityProvider);
   });
 
@@ -241,8 +263,8 @@ describe("an unavailable identity provider keeps why, and tells the client nothi
   const error=await failure({readSession:async()=>{throw cause;}});
   expect(error).toBeInstanceOf(AuthUnavailableError);expect(error.cause).toBe(cause);expect(error.message).not.toContain("gateway");
  });
- it.each(["subject","emp_id","name"])("names the missing session field %s in the cause only",async field=>{
-  const session={subject:"s",emp_id:"e",name:"n",org_code:"o",externalGroupIds:[],[field]:""};
+ it.each(["subject","emp_id","account","name"])("names the missing session field %s in the cause only",async field=>{
+  const session={subject:"s",emp_id:"e",account:"a",name:"n",org_code:"o",externalGroupIds:[],[field]:""};
   const error=await failure({readSession:async()=>session});
   expect(error).toBeInstanceOf(AuthUnavailableError);expect(String((error.cause as Error).message)).toContain(field);expect(error.message).not.toContain(field);
  });

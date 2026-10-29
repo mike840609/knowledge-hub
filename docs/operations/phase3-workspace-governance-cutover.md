@@ -176,8 +176,9 @@ point for supplying identity or group claims.
 
 Implement `CompanySsoSessionReader.readSession()` in trusted server-side
 infrastructure. It must validate the current request's company login session
-and return the provider-issued subject, enterprise profile, and validated
-group IDs. Reuse the reader instance, not a cached user's session or claims.
+and return the provider-issued subject, company account name, enterprise
+profile, and validated group IDs. Reuse the reader instance, not a cached
+user's session or claims.
 The concrete company login/session integration is still required before
 production use.
 

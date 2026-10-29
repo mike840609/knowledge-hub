@@ -43,6 +43,7 @@ export class GoogleIdentityProvider implements IdentityProvider {
         provider: GOOGLE_IDENTITY_PROVIDER_NAME,
         subject: identity.id,
         emp_id: identity.emp_id,
+        account: null,
         name: identity.name,
         org_code: identity.org_code,
       },

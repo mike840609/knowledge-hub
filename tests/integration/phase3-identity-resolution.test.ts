@@ -52,7 +52,7 @@ class MariaDbTestIdentityUnitOfWork implements HubIdentityUnitOfWork {
 }
 
 function claims(provider: string, subject: string, empId: string, name = "SSO User", org = "RD"): ExternalCompanyIdentity {
-  return { provider, subject, emp_id: empId, name, org_code: org };
+  return { provider, subject, emp_id: empId, account: `acct-${empId}`, name, org_code: org };
 }
 
 async function countUsersByEmp(empId: string): Promise<number> {

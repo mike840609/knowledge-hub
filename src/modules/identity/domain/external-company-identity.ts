@@ -3,12 +3,15 @@
  * `(provider, subject)` pair is the durable account identity truth;
  * `emp_id` is a trusted enterprise attribute, never the account-link key.
  * `subject` is opaque: persistence and lookup use exact UTF-8 bytes with no
- * trim / lowercase / Unicode normalization.
+ * trim / lowercase / Unicode normalization. `account` is the human-readable
+ * company account name, stored as profile data (never a link key) and `null`
+ * for providers without a company account.
  */
 export type ExternalCompanyIdentity = {
   provider: string;
   subject: string;
   emp_id: string;
+  account: string | null;
   name: string;
   org_code: string;
 };

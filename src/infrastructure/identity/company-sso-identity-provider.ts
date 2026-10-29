@@ -31,6 +31,7 @@ export class CompanySsoIdentityProvider implements IdentityProvider {
     if (!session || !Array.isArray(session.externalGroupIds)) throw new AuthUnavailableError({ cause: new IdentityError("Company SSO session is malformed: externalGroupIds is not a list.") });
     assertSessionField(session.subject, "subject");
     assertSessionField(session.emp_id, "emp_id");
+    assertSessionField(session.account, "account");
     assertSessionField(session.name, "name");
     assertSessionField(session.org_code, "org_code");
     const validatedExternalGroupIds = dedupeGroups(session.externalGroupIds);
@@ -44,6 +45,7 @@ export class CompanySsoIdentityProvider implements IdentityProvider {
         provider: this.options.provider,
         subject: session.subject,
         emp_id: session.emp_id,
+        account: session.account,
         name: session.name,
         org_code: session.org_code,
       },

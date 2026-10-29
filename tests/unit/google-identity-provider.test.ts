@@ -30,6 +30,7 @@ describe("GoogleIdentityProvider", () => {
       provider: "google",
       subject: "u1",
       emp_id: "DEMO-ABC1234567",
+      account: null,
       name: "Wang",
       org_code: "DEMO",
     });

@@ -17,7 +17,7 @@ function bootstrap(upsertIdentity: () => Promise<void>): { dependencies: Trusted
   const dependencies = {
     provider: {
       getCurrentClaims: async () => ({
-        externalIdentity: { provider: LOCAL_IDENTITY_PROVIDER_NAME, subject: "local" },
+        externalIdentity: { provider: LOCAL_IDENTITY_PROVIDER_NAME, subject: "local", account: null },
         validatedExternalGroupIds: ["group-a"],
         platformCapabilities: [],
         refreshedAt: new Date(0),
