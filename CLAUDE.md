@@ -114,9 +114,10 @@ pass.
   pasted. It reads only through `/s/:token` like any holder, is judged per
   request against the link's validity, never extends its lifetime, and grants no
   Workspace membership, search, tree, history, MCP, Markdown edits or revision
-  writes. Its candidate search (`/api/review-mentions/candidates`) requires a
-  trusted caller and answers only one who could comment on that document now
-  (live token or owner), never anonymously
+  writes. Its candidate search (`/api/review-mentions/candidates`) answers
+  signed-in callers only, never anonymously; it asks for a live token or
+  document ownership, but that is not a narrower gate on the directory, since
+  every signed-in user owns documents (accepted 2026-10-29)
   (`docs/superpowers/specs/2026-10-29-review-mentions-design.md`).
   Review access never grants Workspace membership, search, tree, history,
   MCP, Markdown edits or revision writes. Review responses include only

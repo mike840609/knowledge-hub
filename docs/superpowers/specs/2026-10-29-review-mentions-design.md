@@ -85,13 +85,20 @@ One query, two doors (agreed 2026-10-29):
 - **Mention door.** `/api/users` cannot serve mentions: in the default
   deployment (`KM_TEAM_WORKSPACES_ENABLED=false`) every caller is
   `personalWorkspaceOnly` (`src/server/composition.ts`), so it refuses
-  everyone, and discussions exist only there. Opening it would hand the whole
-  directory to every signed-in user, anywhere. Instead a new
+  everyone, and discussions exist only there. Instead a new
   `GET /api/review-mentions/candidates?query=…&token=…` (link reader) or
-  `…&documentId=…` (owner) answers only a caller who could write a comment on
-  that document now: trusted caller plus `linkScope` (live token), or
-  `ownerScope`. It then runs the same `searchExisting`. A method on
-  `DocumentReviewService` (it owns both scopes) reading users through a port.
+  `…&documentId=…` (owner) answers a caller who could write a comment on
+  that document now: trusted caller plus `linkScope` (live token) or
+  `ownerScope`, with review writes enabled and the document active. It then
+  runs the same `searchExisting`. A method on `DocumentReviewService` (it
+  owns both scopes) reading users through a port.
+  This door is not a narrower gate on the directory. Every signed-in user
+  owns a personal Workspace and can comment on their own documents, so in
+  practice any signed-in Hub user can search the people directory through
+  it. It refuses anonymous callers and returns at most 10 rows of `name`,
+  `name_en` and `emp_id`. Accepted with the user on 2026-10-29: the agreed
+  candidate pool is everyone who has signed in, so the search shows no one a
+  caller could not already mention.
 - Results: at most 10, empty for an empty query; shown as `name`, then
   `name_en · emp_id` in secondary text (`name_en` omitted when null; it fills
   on the person's next Company SSO login, #301).
@@ -106,7 +113,11 @@ One query, two doors (agreed 2026-10-29):
   list on `@` at a word start, filters as the writer types, and inserts
   `@<name>` plus the chosen user id into a `mentions` list it sends with the
   comment. Keyboard: ↑/↓, Enter/Tab to pick, Esc to close. The list is an
-  ARIA combobox/listbox.
+  ARIA listbox. *(Deviation recorded at implementation, 2026-10-29)* The
+  composer field keeps its native textbox role with
+  `aria-autocomplete="list"`, `aria-controls` and `aria-activedescendant`
+  (no `combobox` role), so existing tests and assistive tech that find it as
+  a textbox keep working.
 - The comment write (`createForLink`, `replyForLink`, `createForOwner`,
   `replyForOwner`) accepts `mentions: string[]` (user ids) and, for the owner
   writes, `mentionLinkId?: string`. Inside the existing unit of work, after
@@ -138,7 +149,9 @@ One query, two doors (agreed 2026-10-29):
 - The owner composer: when `mentions` is used, it loads the document's live
   links; one → used silently; several → a small "Share via" select before
   Post; none → the `@` list shows "Create a share link first to mention
-  someone" and picks nothing.
+  someone" and picks nothing. *(Deviation recorded at implementation,
+  2026-10-29)* The composer re-reads the links on each new `@` while none is
+  live, not once, so the hint clears after the owner creates a link.
 
 ### The Inbox entry
 
@@ -154,12 +167,16 @@ One query, two doors (agreed 2026-10-29):
   href, and is not counted unread. Same wording and rule as dead FOLLOW
   entries.
 - No double entry: the follow-unread derivation excludes comments that have a
-  `review_comment_mentions` row for the caller.
+  `review_comment_mentions` row for the caller. *(Deviation recorded at
+  implementation, 2026-10-29; plan Ruling 7)* The same exclusion applies to
+  the unread count Shares → Discussions shows, since both read one
+  derivation.
 - Badge count (`unread-count`) adds unread live mentions.
 - Activity paging (*my call, recorded deviation*): like FOLLOW entries,
   MENTION entries are not cursor-paged; at most 100 newest are merged into the
   first Activity page, and the `(createdAt, id)` cursor keeps paging owner
-  events alone.
+  events alone. The unread list and the badge judge the 100 newest *unread*
+  mentions, so they always agree.
 - Read: a MENTION entry's id is `mention:<commentId>`, marked through the
   activity route's existing `mark-read` action (`markEventRead`, which already
   dispatches `follow:<threadId>`); `mark-all-read` also marks all of the
@@ -186,7 +203,12 @@ CLAUDE.md is updated with the code:
   `KM_REVIEW_WRITES_ENABLED`, quota/capacity.
 - Candidate search is a new caller-required entry, gated as above; it adds
   no anonymous answer, and the share-link single-exception test's scan
-  covers its route.
+  covers its route. It is open to any signed-in Hub user who can comment
+  somewhere, which in practice is every signed-in user, through their own
+  personal documents; it is not a narrower gate on the directory. It refuses
+  anonymous callers and returns at most 10 rows of `name`, `name_en` and
+  `emp_id`. Accepted with the user on 2026-10-29, because the agreed
+  candidate pool is everyone who has signed in.
 - Mention reads require a trusted caller and return only rows where
   `mentioned_user_id = caller`. No endpoint takes a user id to read someone
   else's mentions.
