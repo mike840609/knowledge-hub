@@ -33,7 +33,7 @@
 ### Task 1: Schema, link target type, reachability rule
 
 **Files:**
-- Create: `src/infrastructure/database/mariadb/migrations/027-folder-share-links.ts`
+- Create: `src/infrastructure/database/mariadb/migrations/028-folder-share-links.ts`
 - Modify: `src/infrastructure/database/mariadb/migrations/index.ts` (register)
 - Modify: `src/modules/knowledge/domain/document-share-link.ts`
 - Modify: `src/infrastructure/database/mariadb/repositories/document-share-links.ts` (`mapLink`, `insert`)
@@ -57,7 +57,7 @@
   - a chain whose `parentId`s form a cycle and never reach the folder → `false` (the function must not trust the array to be acyclic: stop at a repeated id)
 - [ ] **Step 2: Run** `npx vitest run --config vitest.config.ts tests/unit/folder-share-reachability.test.ts` — Expected: FAIL (`isReachableThroughFolder` not exported).
 - [ ] **Step 3: Implement** `ShareLinkTarget`, `TreeChainNode`, `isReachableThroughFolder` in `document-share-link.ts`. Walk `chain` in order; every visited node must be ACTIVE; succeed when a node with `id === folderNodeId` and `nodeType === "FOLDER"` is reached at index ≥ 1; fail on a repeated id or end of chain.
-- [ ] **Step 4: Migration 027** (`folderShareLinksMigration`, name `"folder-share-links"`):
+- [ ] **Step 4: Migration 028** (`folderShareLinksMigration`, name `"folder-share-links"`):
   ```sql
   ALTER TABLE document_share_links MODIFY document_id UUID NULL,
     ADD COLUMN folder_node_id UUID NULL AFTER document_id,

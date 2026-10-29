@@ -6,6 +6,8 @@
 export type CompanySsoSession = {
   subject: string;
   emp_id: string;
+  account: string;
+  name_en: string | null;
   name: string;
   org_code: string;
   externalGroupIds: readonly string[];

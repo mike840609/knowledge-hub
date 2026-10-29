@@ -16,6 +16,8 @@ export class LocalIdentityProvider implements IdentityProvider {
         provider: LOCAL_IDENTITY_PROVIDER_NAME,
         subject: identity.id,
         emp_id: identity.emp_id,
+        account: null,
+        name_en: null,
         name: identity.name,
         org_code: identity.org_code,
       },

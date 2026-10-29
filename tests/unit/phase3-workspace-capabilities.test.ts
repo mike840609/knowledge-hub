@@ -114,6 +114,8 @@ describe("phase 3 workspace capabilities", () => {
         provider: "company-sso",
         subject: "sub-123",
         emp_id: "E001",
+        account: null,
+        name_en: null,
         name: "Alice",
         org_code: "HRSD",
       },

@@ -7,7 +7,7 @@
 
 **Turn Markdown notes into a knowledge workspace you can read, connect, and share.**
 
-Knowledge Hub is an open-source, self-hosted knowledge management application. Write notes in your browser or import an existing Markdown folder or LLM Wiki. Find content through search, follow links and backlinks, explore a knowledge graph, and share saved documents with others. Content stays in Markdown without requiring a particular note-taking app, wiki generator, or external knowledge platform.
+Knowledge Hub is an open-source, self-hosted knowledge workspace. Write notes in your browser or import an existing Markdown folder or LLM Wiki. Find content through search, follow links and backlinks, explore a knowledge graph, discuss shared documents, and export what you need. Content stays in Markdown without requiring a particular note-taking app, wiki generator, or external knowledge platform.
 
 The current version is **0.1.0 and under active development**. A personal workspace, **My Space**, is available by default. Team workspace navigation and access are disabled by default and can be enabled by an administrator. Development uses a local demo identity; production deployments require integration with a trusted identity provider. See [Deployment](#deployment).
 
@@ -15,29 +15,35 @@ The current version is **0.1.0 and under active development**. A personal worksp
 
 ## User guide
 
-Open the account menu in the bottom of the sidebar and select **Help & guides** (`/help`, the same address for everyone; its last part, the folder format reference, is `/help#format-reference`).
+Open the account menu at the bottom of the sidebar and select **Help & guides** (`/help`, the same address for everyone; its last part, the folder format reference, is `/help#format-reference`).
 The in-app English and Traditional Chinese manual covers first import, repeat sync,
-permissions and recovery, reading, statistics, sharing and export. Preview and sync
-errors link to the relevant sections. The existing **Import folder → Read the guide**
-continues to cover Markdown structure, `knowledge_id` and configured import limits.
+permissions and recovery, reading, search, Insights, sharing, discussions and export.
+Preview and sync errors link to the relevant sections. The **Import folder → Read the guide**
+path continues to cover Markdown structure, `knowledge_id` and configured import limits.
 
 Maintain both languages in `src/components/help/user-guide-content.ts` when workflows change.
 
 ## Screenshots
 
-Captured on **October 5, 2026 (Asia/Taipei)** from a fresh production build of remote main [`3739efb1`](https://github.com/mike840609/knowledge-hub/commit/3739efb12906e1cb2e6abc1b5eea7727914a08ab), using a dedicated demo account and synthetic English notes. The responsive layout shown uses the browser's 767 × 951 viewport. See the [capture provenance](docs/images/README.md) for version and verification details.
+Captured on **October 29, 2026 (Asia/Taipei)** from a fresh production build of commit [`ba699b4e`](https://github.com/mike840609/knowledge-hub/commit/ba699b4e37ed5fdc22f3633e468aff6ef5a1704d), using a dedicated demo account, the bundled English sample wiki, and synthetic notes. The desktop layout shown uses a **1440 × 900** viewport; the explorer becomes a drawer below 1280px, and the navigation moves into the Menu drawer below 1024px. See the [capture provenance](docs/images/README.md) for build, dataset and verification details.
 
 ### Personal home
 
-Review your synced folders, unread updates, personal notes, and knowledge statistics from My Space.
+Home brings drafts, recent documents, discussions and favorites together, with Search and New note in reach.
 
-![Personal home with synthetic notes and a synced folder](docs/images/personal-home.jpg)
+![Home with recent documents, discussions, favorites, search, and a new-note action](docs/images/personal-home.jpg)
 
 ### Document reader
 
-Read Markdown with a table of contents, resolved wikilinks, and backlinks to related documents.
+Read Markdown with the document explorer, an on-page outline, resolved wikilinks, backlinks, and a clear read-only cue for synced folders.
 
-![Markdown reader with an expanded table of contents and backlinks](docs/images/document-reader.jpg)
+![Markdown reader with explorer, outline, resolved links, and backlinks](docs/images/document-reader.jpg)
+
+### Search
+
+Search the whole workspace and narrow results by source, path and update date.
+
+![Search results for leave with source and path shown for each match](docs/images/search.jpg)
 
 ### Sources and sync history
 
@@ -47,24 +53,26 @@ Review a Markdown folder's ownership and sync history, then use **Update from fo
 
 ### Knowledge graph
 
-Explore links between documents, find a note, and filter the graph by source.
+Explore links between documents, find a note, and filter the graph by source or unresolved targets.
 
-![Knowledge graph connecting the synthetic handbook and related notes](docs/images/knowledge-graph.jpg)
+![Knowledge graph connecting the sample handbook and related notes](docs/images/knowledge-graph.jpg)
 
 ## Features
 
 | Feature | What it provides |
 | --- | --- |
-| Personal workspace | My Space, personal notes, drafts, favorites, and recently read documents; reading history stays on the device |
-| Markdown editing | Rendered editing and Markdown source modes, code blocks, a table of contents, and keyboard shortcuts |
+| Personal workspace | My Space, Home, Inbox, personal notes, drafts, favorites, and recently read documents; reading history stays on the device |
+| Inbox | Unread updates and activity; at wide widths the selected discussion opens beside the list for reply, resolve and hide |
+| Markdown editing | Rendered editing and Markdown source modes, slash insertions, tables, toggles, callouts, code blocks, an outline, and keyboard shortcuts |
 | Drafts and revisions | Account-backed autosave, local recovery on failure, immutable revision history, comparison and restore, and stale-editor conflict checks |
-| Import and sync | Import a Markdown folder through Preview → Confirm → Apply; select the folder again to review and apply later changes |
-| Organization | Document and folder trees, move, rename, archive, and restore; source-managed content is updated through sync |
-| Search | Workspace-scoped keyword search and quick search with `⌘K` / `Ctrl+K` |
+| Import and sync | Import a Markdown folder through Preview → Apply; select the folder again to review later changes; exclude paths, inspect source health, and rename a source |
+| Organization | Document and folder trees, move, rename, archive, and restore; source-managed content is read-only in the Hub |
+| Search and retrieval | Workspace search with source, path and date filters; quick search and recent documents in the `⌘K` / `Ctrl+K` palette; saved searches |
 | Knowledge links | `[[wikilinks]]`, relative `.md` links, backlinks, and workspace and local graphs |
-| Sharing | Recipient-owned saved share bookmarks in Shares; anonymous My Space document links; all valid-link holders can read shared discussions; signed-in holders may comment when writes are enabled; owner resolution and moderation |
+| Discussions | Owner discussions beside the passage, comments on shared pages, replies, resolve and hide, unread notifications, and followed discussions |
+| Sharing | Anonymous read-only My Space document links with expiry and revocation; recipient-owned saved shares; owner moderation |
 | Export | Individual Markdown downloads and a My Space ZIP with directory structure and a stable ID/path manifest |
-| Agent context | Copy for Agent and workspace-scoped read/context APIs that follow the application's access rules |
+| Agent context | Copy for Agent and workspace-scoped read/context APIs that follow the application's access rules, including discussions |
 | Team workspaces (opt-in) | Workspace administration, membership, roles and capabilities, external group mapping, and audit records |
 
 ### Content ownership
@@ -76,11 +84,13 @@ A preview is a fixed staged snapshot. Resolve blocking diagnostics before applyi
 
 ### Current limitations and future direction
 
-- Assets store metadata and references only; there is no binary attachment storage service yet.
+- Assets store metadata and references only; there is no binary attachment storage service yet. Local images and attachments are not guaranteed to open online.
 - ZIP exports include the latest saved versions of archived documents, but exclude drafts, revision history, and attachment bytes. The limit is 64 MiB / 9,999 documents.
 - Documents use archive and restore for their lifecycle; there is no general end-user permanent deletion flow.
 - Search is currently keyword-based. An MCP server, semantic/hybrid retrieval, and advanced agent memory are future directions, not shipped features.
 - Team workspaces display **Coming soon** by default. Enabling the feature flag does not complete production identity integration.
+- Discussion writes are separately gated by `KM_REVIEW_WRITES_ENABLED`. Existing discussion reads and owner moderation remain available when writes are off.
+- Hiding a discussion does not physically erase stored data.
 
 ## Quick start
 
@@ -115,7 +125,7 @@ npm run dev
 
 ### Your first workflow
 
-1. Choose **New note** to write a note, or **Import folder** to bring in a Markdown folder. The import page links to an in-app guide, "Folder format and import rules", and offers **Try with a sample wiki**: it imports a ready-made folder (English or Traditional Chinese, from `public/sample-wiki/`) through the normal Preview → Apply flow.
+1. Choose **New note** to write a note, or **Import folder** to bring in a Markdown folder. The import page links to the in-app folder format guide and offers **Try with a sample wiki**: it imports a ready-made folder (English or Traditional Chinese, from `public/sample-wiki/`) through the normal Preview → Apply flow.
 2. For imports, review additions, updates, archives, and diagnostics in Preview before applying changes.
 3. Use `[[Document title]]` in editable notes to link documents, then open Graph to explore relationships.
 4. Save a note before creating a read-only share link or downloading its Markdown.
@@ -129,10 +139,14 @@ See [`.env.example`](.env.example) for local development settings and import lim
 | --- | --- |
 | `KM_DB_HOST` / `KM_DB_PORT` | MariaDB address; locally `127.0.0.1:3307` |
 | `KM_DB_USER` / `KM_DB_PASSWORD` / `KM_DB_NAME` | Application database credentials and database name |
+| `KM_DB_URL` / `KM_DB_SSL` | Deployed database URL and TLS mode; preferred over the individual `KM_DB_*` values |
 | `KM_LOCAL_IDENTITY_ENABLED` | Local development identity; `true` in the example |
 | `KM_LOCAL_ID` / `KM_LOCAL_EMP_ID` / `KM_LOCAL_NAME` / `KM_LOCAL_ORG_CODE` | Server-configured local identity, rather than a login form |
 | `KM_TEAM_WORKSPACES_ENABLED` | Defaults to `false`; set to `true` to enable Team navigation and access |
-| `KM_IDENTITY_PROVIDER` | Defaults to `local`; production uses `company-sso` with a session reader integration |
+| `KM_IDENTITY_PROVIDER` | `local` by default; production uses `company-sso` with a session reader, or `google` for the demo login |
+| `KM_REVIEW_WRITES_ENABLED` | Defaults to `false`; enables new discussion threads and replies |
+| `KM_PUBLIC_ORIGIN` | Browser-facing origin when the Hub sits behind a Gateway or reverse proxy; required for discussion requests there |
+| `KM_SITE_PASSWORD` | Optional site password for a single-operator Vercel deployment |
 | `KM_IMPORT_*` | Import file counts, sizes, batch limits, and snapshot quotas |
 | `KM_TEST_DB_*` / `KM_E2E_DB_PREFIX` | Isolated test database settings; the test account must be able to create and drop databases with the designated prefixes |
 
@@ -161,13 +175,19 @@ For a **single-operator** deployment on Vercel with a Layerbase MariaDB, follow 
 
 For a **public demo**, the runbook also documents [Google demo login](docs/operations/vercel-layerbase.md#google-demo-login): set `KM_IDENTITY_PROVIDER=google` and the `AUTH_*` variables. It is an additive provider; the local and company-SSO paths are unchanged.
 
-The application provides a generic `company-sso` adapter contract. Deployers must implement a trusted [`CompanySsoSessionReader`](src/modules/identity/ports/company-sso-session-reader.ts) and register it through [`configureCompanySsoSessionReader`](src/server/composition.ts) before application services are created. Setting `KM_IDENTITY_PROVIDER=company-sso` alone does not provide an OAuth/OIDC login page or identity service. Shared-page “Open in Knowledge Hub” and “Get started” links navigate to `KM_PUBLIC_ORIGIN` with a full browser navigation when configured, allowing the company Gateway at that origin to challenge anonymous users for SSO. The entry URL carries `returnTo=/s/:token/open`; the Gateway must preserve this query string through SSO. After authentication, the Hub accepts only a share-opening path and resumes the existing link-validity and document-access checks. Invalid or absent continuation parameters use the ordinary home destination. Without `KM_PUBLIC_ORIGIN`, these links retain the local `/s/:token/open` flow.
+The application provides a generic `company-sso` adapter contract. Deployers must implement a trusted [`CompanySsoSessionReader`](src/modules/identity/ports/company-sso-session-reader.ts) and register it through [`configureCompanySsoSessionReader`](src/server/composition.ts) before application services are created. The reader must return the company account name as `account` and the optional English display name as `name_en` alongside the subject, employee id, name, org code, and group IDs. Setting `KM_IDENTITY_PROVIDER=company-sso` alone does not provide an OAuth/OIDC login page or identity service. Shared-page “Open in Knowledge Hub” and “Get started” links navigate to `KM_PUBLIC_ORIGIN` with a full browser navigation when configured, allowing the company Gateway at that origin to challenge anonymous users for SSO. The entry URL carries `returnTo=/s/:token/open`; the Gateway must preserve this query string through SSO. After authentication, the Hub accepts only a share-opening path and resumes the existing link-validity and document-access checks. Invalid or absent continuation parameters use the ordinary home destination. Without `KM_PUBLIC_ORIGIN`, these links retain the local `/s/:token/open` flow.
 
 Configure separate database credentials, backups, HTTPS, and a trusted session integration. The `start` script binds to `127.0.0.1`, suitable for a reverse proxy on the same host. Container deployments need an appropriate bind address in their startup command. Do not expose example development credentials or test settings in production.
 
 The import page's "Try with a sample wiki" fetches static files from `/sample-wiki/*` (`manifest.json` and the Markdown files), so a reverse proxy or SSO allow-list must serve that path to signed-in users. The URLs are absolute, so deploying under a Next.js `basePath` is not supported.
 
 Before upgrading an existing database, read the [workspace governance cutover guide](docs/operations/phase3-workspace-governance-cutover.md); some migrations enforce data readiness gates. Follow the [document link index rollout guide](docs/operations/document-link-index-rollout.md) to backfill or repair links with `npm run db:reindex-document-links`. See [Team workspace availability](docs/operations/team-workspaces-availability.md) for feature flag operations.
+
+### Document review deployment
+
+Discussions are stored separately from Markdown and Folder Sync. `KM_REVIEW_WRITES_ENABLED` defaults off; existing discussion reads and owner moderation remain available while new threads and replies are disabled. Behind a Gateway or reverse proxy, set `KM_PUBLIC_ORIGIN` to the origin browsers use (for example `https://km.example.com`); without it every discussion request is refused as cross-origin. Company SSO/Gateway and login continuation require separate corporate integration evidence before production writes are enabled. Hiding content does not physically erase stored data.
+
+[Inline review design](docs/superpowers/specs/2026-10-09-shared-personal-document-inline-review-design.md) · [Implementation plan](docs/superpowers/plans/2026-10-09-shared-personal-document-inline-review.md) · [Verification](docs/superpowers/verification/2026-10-09-shared-personal-document-inline-review.md)
 
 ## Technology and architecture
 
@@ -180,7 +200,7 @@ Before upgrading an existing database, read the [workspace governance cutover gu
 | Database | MariaDB 10.11 |
 | Testing | Vitest, Playwright |
 
-The application is a modular monolith with four core modules: `identity`, `workspaces`, `sources`, and `knowledge`. Web pages and APIs share application services.
+The application is a modular monolith with five core modules: `identity`, `workspaces`, `sources`, `knowledge`, and `personal`. Web pages and APIs share application services.
 
 ```text
 User → WorkspaceMembership → Workspace
@@ -195,9 +215,12 @@ A workspace is both a knowledge container and the basic access boundary. Organiz
 
 ```text
 src/app/             Next.js pages and HTTP routes
-src/components/      UI, composer, reader, and graph
+src/components/      UI, shell, composer, reader, review, and graph
 src/modules/         Domain, application services, and ports
 src/infrastructure/  MariaDB repositories and identity adapters
+src/server/          Request composition and server-side read models
+src/lib/             Shared client and server helpers
+src/shared/          Cross-module domain primitives
 scripts/             Migrations, seeds, maintenance, and test runners
 tests/               Unit, integration, E2E, and fixtures
 docs/                Design, operations, and verification records
@@ -217,6 +240,7 @@ docs/                Design, operations, and verification records
 | `make test-integration` | Database integration tests; the runner creates and removes isolated databases |
 | `make browsers` | Install Chromium for E2E tests on first use |
 | `make test-e2e` | Provision an isolated database, build production assets, and run browser tests |
+| `make guide-screenshots` | Regenerate the in-app user guide screenshots from the sample wiki |
 | `make test-mermaid-assumptions` | Check in Chromium what the reader assumes of Mermaid; run before changing its version |
 | `make verify` | Unit tests, TypeScript, lint, and build |
 | `make help` | List all make commands |
@@ -260,9 +284,10 @@ make test-mermaid-assumptions
 
 - **Database connection fails**: check Docker, `make db-logs`, and the credentials in `.env`. The local database uses port 3307, the development server uses 3000, and E2E defaults to 3101.
 - **Team navigation is unavailable**: Coming soon is the default. Set `KM_TEAM_WORKSPACES_ENABLED=true` and restart.
-- **Production identity error**: Local identity does not provide production login. Integrate an SSO session reader.
+- **Production identity error**: Local identity does not provide production login. Integrate an SSO session reader or use the documented Google demo provider.
 - **Import cannot be applied**: resolve blockers in Preview. A 409 version conflict requires a new preview; there is no Force Apply.
 - **Links or graph entries are missing**: ensure migrations are complete, then run `make db-reindex-links`. Fix wikilinks in synced documents at the original source.
+- **Comments cannot be added**: set `KM_REVIEW_WRITES_ENABLED=true` and restart. Behind a Gateway, also set `KM_PUBLIC_ORIGIN`; without it discussion requests are refused as cross-origin.
 - **Resetting development data**: `make db-reset` deletes the development database volume and all its contents. Back up anything you need before running it.
 
 ## Documentation and participation
@@ -271,7 +296,7 @@ English is the primary documentation language. Each project Markdown guide inclu
 
 - [Contributing guide](CONTRIBUTING.md): report issues, propose features, and submit pull requests.
 - [Security reporting](SECURITY.md): private vulnerability reporting and deployment considerations.
-- [Operations guides](docs/operations/): database upgrades, Team availability, and index maintenance.
+- [Operations guides](docs/operations/): database upgrades, Team availability, deployment, and index maintenance.
 - [Design specifications](docs/superpowers/specs/) and [implementation plans](docs/superpowers/plans/): detailed behavior contracts and design decisions.
 - [Verification records](docs/superpowers/verification/): testing and inspection evidence for individual features.
 - [GitHub Issues](https://github.com/mike840609/knowledge-hub/issues): general questions and feature requests.
@@ -304,20 +329,22 @@ These documents define the core contracts and their implementation plans. Later 
 | Editor reader hints | [Spec](docs/superpowers/specs/2026-10-12-editor-reader-hints-design.md) | — | The editor hints at a callout and the inline HTML subset with decorations; the marks stay and the saved Markdown is unchanged. |
 | Source tree loading | [Spec](docs/superpowers/specs/2026-10-24-lazy-source-trees-design.md) | [Plan](docs/superpowers/plans/2026-10-24-lazy-source-trees.md) | Current source initially; other trees load on expansion, with retry and shared move-dialog data. |
 | Document composer | [Spec](docs/superpowers/specs/2026-09-28-document-composer-design.md) | [Plan](docs/superpowers/plans/2026-09-28-document-composer.md) | Rendered editing and Markdown source mode. |
+| Inline editing | [Spec](docs/superpowers/specs/2026-10-16-inline-editing.md) | — | Editing in the reader with autosave and passage discussions; checkpoint history is a follow-up policy. |
 | Knowledge links and graph | [Spec](docs/superpowers/specs/2026-09-29-personal-workspace-knowledge-graph-design.md) | [Plan](docs/superpowers/plans/2026-09-29-personal-workspace-knowledge-graph.md) | Wikilinks, backlinks, heading anchors and derived graph data. |
 | Personal daily use | [Spec](docs/superpowers/specs/2026-09-29-personal-daily-driver-design.md) | [Plan](docs/superpowers/plans/2026-09-29-personal-daily-driver.md) | Wikilink preservation, completion, code blocks and organization. |
 | Personal workspace rollout | [Spec](docs/superpowers/specs/2026-09-30-personal-workspace-design.md) | [Plan](docs/superpowers/plans/2026-09-30-personal-workspace.md) | Account drafts, favorites, revision restoration and export. |
+| Home continue | [Spec](docs/superpowers/specs/2026-10-19-home-continue-design.md) | [Plan](docs/superpowers/plans/2026-10-19-home-continue.md) | Drafts, recent documents and favorites on Home. |
 | Discovery and Copy for Agent | [Spec](docs/superpowers/specs/2026-10-04-mvp-discovery-agent-design.md) | [Plan](docs/superpowers/plans/2026-10-04-mvp-discovery-agent.md) | Folder scope, filtered search and reviewed Markdown bundles. |
 | Sample wiki and import guide | [Spec](docs/superpowers/specs/2026-10-06-sample-wiki-import-guide-design.md) | [Plan](docs/superpowers/plans/2026-10-06-sample-wiki-import-guide.md) | Bundled bilingual sample wiki and the in-app import guide with live limits. |
+| Retrieval-first shell | [Spec](docs/superpowers/specs/2026-10-28-retrieval-first-shell-design.md) | — | The explorer becomes a drawer at 1024–1279px; Favorites and Recent open by default; search stays the primary entry. |
+| Google demo login | [Spec](docs/superpowers/specs/2026-10-25-google-login-design.md) | [Plan](docs/superpowers/plans/2026-10-25-google-login.md) | An additive Google provider for the public demo. |
+| Vercel + Layerbase deployment | [Spec](docs/superpowers/specs/2026-10-24-vercel-layerbase-deployment-design.md) | [Plan](docs/superpowers/plans/2026-10-24-vercel-layerbase-deployment.md) | Single-operator deployment with a site password and build-time migrations. |
+| Source rename | [Spec](docs/superpowers/specs/2026-10-26-source-rename-design.md) | [Plan](docs/superpowers/plans/2026-10-26-source-rename.md) | A source's display label can change without changing its folder identity. |
+| Inbox split view | [Spec](docs/superpowers/specs/2026-10-29-inbox-split-view-design.md) | — | A list and the selected discussion beside it at 75rem; narrower windows keep the list. |
+| Users account | [Spec](docs/superpowers/specs/2026-10-29-users-account-design.md) | [Plan](docs/superpowers/plans/2026-10-29-users-account.md) | Company SSO account and optional English name stored for future mention autocomplete. |
 
 Also consult the [phase roadmap](docs/superpowers/roadmaps/2026-09-10-knowledge-hub-phase-roadmap.md), [action model](docs/superpowers/specs/2026-09-21-action-model-spec.md), [keyboard shortcuts](docs/superpowers/specs/2026-09-24-keyboard-shortcuts-design.md), [row keyboard actions](docs/superpowers/specs/2026-10-02-row-keyboard-actions-design.md), and the undated [frontend design language](docs/superpowers/specs/frontend-design-language.md), which is updated in place.
 
 ## License
 
 Knowledge Hub is licensed under the **[MIT License](LICENSE)**. You may use, modify, and distribute it, retaining the original copyright and license notices when redistributing. Third-party dependencies retain their respective licenses.
-
-### Document review deployment
-
-Discussions are stored separately from Markdown and Folder Sync. `KM_REVIEW_WRITES_ENABLED` defaults off; existing discussion reads and owner moderation remain available while new threads/replies are disabled. Behind a Gateway or reverse proxy, set `KM_PUBLIC_ORIGIN` to the origin browsers use (for example `https://km.example.com`); without it every discussion request is refused as cross-origin. Company SSO/Gateway and login continuation require separate corporate integration evidence before production writes are enabled. Hiding content does not physically erase stored data.
-
-[Inline review design](docs/superpowers/specs/2026-10-09-shared-personal-document-inline-review-design.md) · [Implementation plan](docs/superpowers/plans/2026-10-09-shared-personal-document-inline-review.md) · [Verification](docs/superpowers/verification/2026-10-09-shared-personal-document-inline-review.md)

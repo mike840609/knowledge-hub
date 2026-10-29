@@ -1,39 +1,48 @@
 {
-  "capturedDate": "2026-10-05",
+  "capturedDate": "2026-10-29",
   "timezone": "Asia/Taipei",
   "remote": "origin/main",
-  "commit": "3739efb12906e1cb2e6abc1b5eea7727914a08ab",
-  "buildId": "p61B410H6oSgHi5044IHC",
+  "commit": "ba699b4e37ed5fdc22f3633e468aff6ef5a1704d",
+  "reviewedAgainst": "047e490a95d815108bd3fa0828c69f4d61d75dee",
+  "buildId": "7aWv1H9ksnG-Cg6MbGbmL",
   "runtime": "next build followed by next start, loopback-only",
+  "buildDirectory": ".next-demo",
   "viewport": {
-    "width": 767,
-    "height": 951
+    "width": 1440,
+    "height": 900
   },
+  "theme": "light",
+  "density": "compact",
   "account": "Documentation Demo (synthetic)",
+  "dataset": "public/sample-wiki/en plus three synthetic personal notes",
   "localSourceChanges": [
-    "src/app/layout.tsx: organization-neutral browser title and description only; rendered UI components match remote main"
+    "Separate .next-demo build output directory only; rendered UI matches the commit above"
   ],
   "verification": {
     "pageContentRendered": true,
     "errorOverlay": false,
-    "consoleObservation": "One React hydration warning (error #418) observed during the session; rendered pages remained usable."
+    "consoleObservation": "One RSC prefetch request returned 404 during a navigation; pages rendered and no user-facing error appeared."
   },
   "images": {
     "document-reader.jpg": {
-      "sha256": "e829dcfb447bd6fea9aac87b94a8f9090776b79b5ec88a6e65d5c8b0b2d51394",
-      "bytes": 67901
-    },
-    "personal-home.jpg": {
-      "sha256": "7594d8cabfe128e4fef20a2b05b39d25399ad2ae08768efe1fbc6d20a1ca3bbf",
-      "bytes": 55003
+      "sha256": "36ae173198bdd3e92823984cb22d5d3d8e899583b5267cc15b5893c83710587e",
+      "bytes": 121668
     },
     "knowledge-graph.jpg": {
-      "sha256": "ba674515d7740ebc005f1341ae30a36f444139fe9483679bea382ed59030c149",
-      "bytes": 35615
+      "sha256": "c9a564d50f231a99ba434d46ec5642414363b8d5fb7cbde37d1ae5dff5bec45d",
+      "bytes": 63321
+    },
+    "personal-home.jpg": {
+      "sha256": "5b80554ca84e73ebcc8e354e5fb064222320fd05aa1e801ccfda52282d02a685",
+      "bytes": 59220
+    },
+    "search.jpg": {
+      "sha256": "96d664022f848c8c468fc0de763123892a8888b8fd75304a6f45d7c3c62ac1f3",
+      "bytes": 93572
     },
     "source-history.jpg": {
-      "sha256": "baf48a5d7e24c04b1bf7852fa34aa0917aa4fcca7a76e305a8c9a824ef6ecfb2",
-      "bytes": 36689
+      "sha256": "f58efae4fb13e24aa74f3ae4deb1633c4a414c6645b3a5f8953628fb2b1d1eca",
+      "bytes": 48265
     }
   }
 }

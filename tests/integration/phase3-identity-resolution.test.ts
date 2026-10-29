@@ -16,6 +16,7 @@ import {
   IdentityLinkRequiredError,
 } from "@/modules/identity/domain/identity-errors";
 import type { ExternalCompanyIdentity } from "@/modules/identity/domain/external-company-identity";
+import { IdentityError } from "@/modules/knowledge/domain/errors";
 import { DomainError } from "@/shared/domain/errors";
 import { isUuid, uuidv7 } from "@/shared/ids/uuidv7";
 
@@ -51,8 +52,16 @@ class MariaDbTestIdentityUnitOfWork implements HubIdentityUnitOfWork {
   }
 }
 
-function claims(provider: string, subject: string, empId: string, name = "SSO User", org = "RD"): ExternalCompanyIdentity {
-  return { provider, subject, emp_id: empId, name, org_code: org };
+function claims(
+  provider: string,
+  subject: string,
+  empId: string,
+  name = "SSO User",
+  org = "RD",
+  account: string | null = `acct-${empId}`,
+  nameEn: string | null = null,
+): ExternalCompanyIdentity {
+  return { provider, subject, emp_id: empId, account, name_en: nameEn, name, org_code: org };
 }
 
 async function countUsersByEmp(empId: string): Promise<number> {
@@ -135,6 +144,8 @@ describe("Hub runtime identity resolution", () => {
     const rows = await pool.query<{ id: string; name: string }[]>("SELECT id, name FROM users WHERE emp_id = ?", [empId]);
     expect(rows.map((row) => String(row.id))).toEqual([hubUserId]);
     expect(rows[0].name).toBe("Legacy Owner");
+    const [legacy] = await pool.query<{ account: string | null }[]>("SELECT account FROM users WHERE id = ?", [hubUserId]);
+    expect(legacy.account).toBeNull();
   });
 
   it("D. different subject plus emp_id owned by an already-linked user fails IDENTITY_LINK_CONFLICT", async () => {
@@ -171,6 +182,123 @@ describe("Hub runtime identity resolution", () => {
     expect(second.id).toBe(first.id);
     expect(await countUsersByEmp(empId)).toBe(1);
     expect(await countLinks(provider, subject)).toBe(1);
+  });
+
+  it("stores the trusted account when creating a company user", async () => {
+    const tag = uuidv7();
+    const empId = `EMP-ACC-CREATE-${tag}`;
+    const account = `alice-create-${tag}`;
+    const resolved = await resolver.resolve(claims("company-sso", `subject-acc-create-${tag}`, empId, "Account User", "RD", account));
+
+    const [row] = await pool.query<{ account: string | null }[]>("SELECT account FROM users WHERE id = ?", [resolved.id]);
+    expect(row.account).toBe(account);
+  });
+
+  it("refreshes the account on an existing link without changing the Hub user", async () => {
+    const tag = uuidv7();
+    const provider = "company-sso";
+    const subject = `subject-acc-refresh-${tag}`;
+    const empId = `EMP-ACC-REFRESH-${tag}`;
+    const before = `alice-refresh-${tag}`;
+    const after = `alice-refresh-2-${tag}`;
+    const hubUserId = await seedUser(empId, "Account User");
+    await seedLink(provider, subject, hubUserId);
+    await pool.query("UPDATE users SET account = ? WHERE id = ?", [before, hubUserId]);
+
+    const resolved = await resolver.resolve(claims(provider, subject, empId, "Account User", "RD", after));
+
+    expect(resolved.id).toBe(hubUserId);
+    expect(resolved.emp_id).toBe(empId);
+    const [row] = await pool.query<{ account: string | null }[]>("SELECT account FROM users WHERE id = ?", [hubUserId]);
+    expect(row.account).toBe(after);
+  });
+
+  it("does not clear an existing account when the external identity has none", async () => {
+    const tag = uuidv7();
+    const provider = "company-sso";
+    const subject = `subject-acc-null-${tag}`;
+    const empId = `EMP-ACC-NULL-${tag}`;
+    const account = `alice-null-${tag}`;
+    const hubUserId = await seedUser(empId, "Account User");
+    await seedLink(provider, subject, hubUserId);
+    await pool.query("UPDATE users SET account = ? WHERE id = ?", [account, hubUserId]);
+
+    await resolver.resolve(claims(provider, subject, empId, "Account User", "RD", null));
+
+    const [row] = await pool.query<{ account: string | null }[]>("SELECT account FROM users WHERE id = ?", [hubUserId]);
+    expect(row.account).toBe(account);
+  });
+
+  it("rejects an overlong account before writing a user or link", async () => {
+    const tag = uuidv7();
+    const provider = "company-sso";
+    const subject = `subject-acc-long-${tag}`;
+    const empId = `EMP-ACC-LONG-${tag}`;
+
+    await expect(
+      resolver.resolve(claims(provider, subject, empId, "Long Account", "RD", "a".repeat(129))),
+    ).rejects.toBeInstanceOf(IdentityError);
+
+    expect(await countUsersByEmp(empId)).toBe(0);
+    expect(await countLinks(provider, subject)).toBe(0);
+  });
+
+  it("stores the trusted English name when creating a company user", async () => {
+    const tag = uuidv7();
+    const empId = `EMP-EN-CREATE-${tag}`;
+    const resolved = await resolver.resolve(
+      claims("company-sso", `subject-en-create-${tag}`, empId, "Account User", "RD", `acct-${empId}`, "John Smith"),
+    );
+
+    const [row] = await pool.query<{ name_en: string | null }[]>("SELECT name_en FROM users WHERE id = ?", [resolved.id]);
+    expect(row.name_en).toBe("John Smith");
+  });
+
+  it("refreshes the English name on an existing link without changing the Hub user", async () => {
+    const tag = uuidv7();
+    const provider = "company-sso";
+    const subject = `subject-en-refresh-${tag}`;
+    const empId = `EMP-EN-REFRESH-${tag}`;
+    const hubUserId = await seedUser(empId, "Account User");
+    await seedLink(provider, subject, hubUserId);
+    await pool.query("UPDATE users SET name_en = ? WHERE id = ?", ["Before English", hubUserId]);
+
+    const resolved = await resolver.resolve(
+      claims(provider, subject, empId, "Account User", "RD", `acct-${empId}`, "After English"),
+    );
+
+    expect(resolved.id).toBe(hubUserId);
+    const [row] = await pool.query<{ name_en: string | null }[]>("SELECT name_en FROM users WHERE id = ?", [hubUserId]);
+    expect(row.name_en).toBe("After English");
+  });
+
+  it("does not clear an existing English name when the external identity has none", async () => {
+    const tag = uuidv7();
+    const provider = "company-sso";
+    const subject = `subject-en-null-${tag}`;
+    const empId = `EMP-EN-NULL-${tag}`;
+    const hubUserId = await seedUser(empId, "Account User");
+    await seedLink(provider, subject, hubUserId);
+    await pool.query("UPDATE users SET name_en = ? WHERE id = ?", ["Existing English", hubUserId]);
+
+    await resolver.resolve(claims(provider, subject, empId, "Account User", "RD", `acct-${empId}`, null));
+
+    const [row] = await pool.query<{ name_en: string | null }[]>("SELECT name_en FROM users WHERE id = ?", [hubUserId]);
+    expect(row.name_en).toBe("Existing English");
+  });
+
+  it("rejects an overlong English name before writing a user or link", async () => {
+    const tag = uuidv7();
+    const provider = "company-sso";
+    const subject = `subject-en-long-${tag}`;
+    const empId = `EMP-EN-LONG-${tag}`;
+
+    await expect(
+      resolver.resolve(claims(provider, subject, empId, "Long English", "RD", `acct-${empId}`, "a".repeat(513))),
+    ).rejects.toBeInstanceOf(IdentityError);
+
+    expect(await countUsersByEmp(empId)).toBe(0);
+    expect(await countLinks(provider, subject)).toBe(0);
   });
 
   it("F. concurrent identical first-login converges to one user and one link", async () => {

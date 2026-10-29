@@ -6,7 +6,7 @@ import type { Migration } from "./types";
  * keeps exactly one target per row.
  */
 export const folderShareLinksMigration: Migration = {
-  version: 27,
+  version: 28,
   name: "folder-share-links",
   statements: [
     `ALTER TABLE document_share_links MODIFY document_id UUID NULL,
