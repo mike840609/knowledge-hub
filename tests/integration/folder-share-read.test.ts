@@ -228,6 +228,33 @@ describe("DocumentShareService.readShared on a folder link (folder share spec §
     expect(JSON.stringify(view)).not.toContain(f.outside.documentId);
   });
 
+  // Spec §5: a link points where it points for the owner, or nowhere; never at a namesake in the folder.
+  it("drops a link the owner resolves outside the folder, even when a document of that title is inside it", async () => {
+    const f = await sharedFolder();
+    const doc = (parentId: string | null, title: string, markdown = `${title} body`) =>
+      f.hub.createDocument(f.caller, { sourceId: f.sourceId, parentId, title, markdown, metadata: {} });
+    // The owner's resolver prefers the older of two equal names, so the outside copy wins.
+    const outsideDup = await doc(null, "Dup");
+    const insideDup = await doc(f.folderNodeId, "Dup");
+    const linker = await doc(f.folderNodeId, "Linker", "See [[Dup]].");
+    const view = asFolder(await service().readShared(f.token, { documentId: linker.documentId }));
+    expect(view.tree.some((node) => node.documentId === insideDup.documentId)).toBe(true);
+    expect(view.document?.links).toEqual([]);
+    expect(JSON.stringify(view)).not.toContain(outsideDup.documentId);
+  });
+
+  it("keeps a link the owner resolves to the in-folder copy of a duplicated title", async () => {
+    const f = await sharedFolder();
+    const doc = (parentId: string | null, title: string, markdown = `${title} body`) =>
+      f.hub.createDocument(f.caller, { sourceId: f.sourceId, parentId, title, markdown, metadata: {} });
+    const insideDup = await doc(f.folderNodeId, "Dup");
+    const outsideDup = await doc(null, "Dup");
+    const linker = await doc(f.folderNodeId, "Linker", "See [[Dup]].");
+    const view = asFolder(await service().readShared(f.token, { documentId: linker.documentId }));
+    expect(view.document?.links).toEqual([{ lookupKey: "WIKI:dup", documentId: insideDup.documentId, title: "Dup" }]);
+    expect(JSON.stringify(view)).not.toContain(outsideDup.documentId);
+  });
+
   it("counts one view for every read", async () => {
     const f = await sharedFolder();
     await service().readShared(f.token);
