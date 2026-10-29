@@ -19,6 +19,7 @@ vi.mock("@/server/composition", () => ({
 
 import { GET as listLinks, POST as createLink } from "@/app/api/documents/[documentId]/share-links/route";
 import { POST as revokeLink } from "@/app/api/share-links/[linkId]/revoke/route";
+import { GET as listFolderLinks, POST as createFolderLink } from "@/app/api/tree-nodes/[nodeId]/share-links/route";
 
 let pool: Pool;
 beforeAll(() => {
@@ -28,6 +29,7 @@ beforeAll(() => {
 afterAll(async () => { await pool.end(); });
 
 function as(caller: CallerContext) { injected.caller = caller; }
+const nodeParams = (nodeId: string) => ({ params: Promise.resolve({ nodeId }) });
 const documentParams = (documentId: string) => ({ params: Promise.resolve({ documentId }) });
 const post = (body: unknown) => new Request("http://hub.test/api", { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } });
 
@@ -42,7 +44,8 @@ async function mySpaceDocument() {
   const { documentId } = await new HubKnowledgeCommandServiceImpl(unitOfWork).createDocument(caller, {
     sourceId, parentId: null, title: "Api Doc", markdown: "body", metadata: {},
   });
-  return { caller, documentId };
+  const { treeNodeId: folderNodeId } = await new HubKnowledgeCommandServiceImpl(unitOfWork).createFolder(caller, { sourceId, parentId: null, name: "Api Folder" });
+  return { caller, documentId, folderNodeId };
 }
 
 describe("share-link API (share-link spec §9.4)", () => {
@@ -96,5 +99,39 @@ describe("share-link API (share-link spec §9.4)", () => {
     as(fixtureCaller());
     const response = await revokeLink(new Request("http://hub.test", { method: "POST" }), { params: Promise.resolve({ linkId: link.id }) });
     expect(response.status).toBe(404);
+  });
+});
+
+describe("folder share-link API", () => {
+  it("creates a folder link with 201 and a path, and lists it", async () => {
+    const { caller, folderNodeId } = await mySpaceDocument();
+    as(caller);
+    const response = await createFolderLink(post({ label: "team", expiresInDays: 7 }), nodeParams(folderNodeId));
+    expect(response.status).toBe(201);
+    const body = await response.json();
+    expect(body.link.path).toMatch(/^\/s\//);
+    expect(JSON.stringify(body)).not.toMatch(/https?:\/\//);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+
+    const { links } = await (await listFolderLinks(new Request("http://hub.test"), nodeParams(folderNodeId))).json();
+    expect(links).toMatchObject([{ id: body.link.id, label: "team", active: true }]);
+  });
+
+  it("rejects a body that is not a JSON object with 400 INVALID_REQUEST", async () => {
+    const { caller, folderNodeId } = await mySpaceDocument();
+    as(caller);
+    const response = await createFolderLink(post([1]), nodeParams(folderNodeId));
+    expect(response.status).toBe(400);
+    expect((await response.json()).error.code).toBe("INVALID_REQUEST");
+  });
+
+  it("answers 404 for someone else's folder list and revokes a folder link with 204", async () => {
+    const { caller, folderNodeId } = await mySpaceDocument();
+    as(caller);
+    const { link } = await (await createFolderLink(post({}), nodeParams(folderNodeId))).json();
+    const revoked = await revokeLink(new Request("http://hub.test", { method: "POST" }), { params: Promise.resolve({ linkId: link.id }) });
+    expect(revoked.status).toBe(204);
+    as(fixtureCaller());
+    expect((await listFolderLinks(new Request("http://hub.test"), nodeParams(folderNodeId))).status).toBe(404);
   });
 });

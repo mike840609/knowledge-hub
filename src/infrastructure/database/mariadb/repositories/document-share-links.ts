@@ -74,6 +74,11 @@ export class MariaDbDocumentShareLinkRepository implements DocumentShareLinkRepo
     return rows[0] ? mapLink(rows[0]) : null;
   }
 
+  async findById(id: string): Promise<DocumentShareLink | null> {
+    const rows = await this.connection.query<DbRow[]>("SELECT * FROM document_share_links WHERE id = ?", [id]);
+    return rows[0] ? mapLink(rows[0]) : null;
+  }
+
   async lockById(id: string): Promise<DocumentShareLink | null> {
     const rows = await this.connection.query<DbRow[]>("SELECT * FROM document_share_links WHERE id = ? FOR UPDATE", [id]);
     return rows[0] ? mapLink(rows[0]) : null;
@@ -91,6 +96,22 @@ export class MariaDbDocumentShareLinkRepository implements DocumentShareLinkRepo
     const rows = await this.connection.query<DbRow[]>(
       "SELECT COUNT(*) AS active FROM document_share_links WHERE document_id = ? AND revoked_at IS NULL AND expires_at > ?",
       [documentId, now],
+    );
+    return asNumber(rows[0]?.active ?? 0, "active share link count");
+  }
+
+  async listByFolder(folderNodeId: string): Promise<DocumentShareLink[]> {
+    const rows = await this.connection.query<DbRow[]>(
+      "SELECT * FROM document_share_links WHERE folder_node_id = ? ORDER BY created_at DESC, id DESC",
+      [folderNodeId],
+    );
+    return rows.map(mapLink);
+  }
+
+  async countActiveByFolder(folderNodeId: string, now: Date): Promise<number> {
+    const rows = await this.connection.query<DbRow[]>(
+      "SELECT COUNT(*) AS active FROM document_share_links WHERE folder_node_id = ? AND revoked_at IS NULL AND expires_at > ?",
+      [folderNodeId, now],
     );
     return asNumber(rows[0]?.active ?? 0, "active share link count");
   }
