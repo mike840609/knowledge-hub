@@ -38,6 +38,8 @@ const claims: ExternalCompanyIdentity = {
   provider: "company-sso",
   subject: "subject-retry",
   emp_id: "EMP-RETRY-1",
+  account: "retry-account",
+  name_en: "Retry English",
   name: "Retry User",
   org_code: "RD",
 };
