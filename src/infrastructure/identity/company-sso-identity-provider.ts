@@ -37,6 +37,12 @@ export class CompanySsoIdentityProvider implements IdentityProvider {
         cause: new IdentityError("Company SSO session field account exceeds the 128-character limit."),
       });
     }
+    const nameEn = session.name_en ?? null;
+    if (nameEn !== null && (typeof nameEn !== "string" || nameEn.length === 0 || nameEn.length > 512)) {
+      throw new AuthUnavailableError({
+        cause: new IdentityError("Company SSO session field name_en must be null or a non-empty string of at most 512 characters."),
+      });
+    }
     assertSessionField(session.name, "name");
     assertSessionField(session.org_code, "org_code");
     const validatedExternalGroupIds = dedupeGroups(session.externalGroupIds);
@@ -51,6 +57,7 @@ export class CompanySsoIdentityProvider implements IdentityProvider {
         subject: session.subject,
         emp_id: session.emp_id,
         account: session.account,
+        name_en: nameEn,
         name: session.name,
         org_code: session.org_code,
       },

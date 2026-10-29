@@ -31,6 +31,7 @@ describe("GoogleIdentityProvider", () => {
       subject: "u1",
       emp_id: "DEMO-ABC1234567",
       account: null,
+      name_en: null,
       name: "Wang",
       org_code: "DEMO",
     });

@@ -20,6 +20,7 @@ export function phase3UserId(persona: Phase3Persona): string {
 export function phase3Session(persona: Phase3Persona) {
   return {
     subject: `phase3-${persona}`, emp_id: `P3-${PHASE3_PERSONAS[persona].suffix}`, account: `p3-${persona}`,
+    name_en: `Phase3 ${persona} English`,
     name: `Phase3 ${persona}`, org_code: "E2E", externalGroupIds: [...PHASE3_PERSONAS[persona].groups],
   };
 }

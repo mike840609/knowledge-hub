@@ -31,6 +31,7 @@ export async function resolveGoogleIdentity(
     subject: input.subject,
     emp_id: googleEmpId(input.subject),
     account: null,
+    name_en: null,
     name: googleDisplayName(input.name, input.email),
     org_code: "DEMO",
   });

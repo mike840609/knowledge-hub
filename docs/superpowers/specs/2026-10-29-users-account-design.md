@@ -178,8 +178,9 @@ its own index or query; it is not part of this change.
 The user asked for the English display name to ship in the same migration as
 `account`. Migration 027 therefore also adds
 `name_en VARCHAR(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL AFTER name`
-with a non-empty check. It is nullable, not indexed, and has no write path in
-this change; it is reserved for the English display name.
+with a non-empty check. It is nullable, not indexed, and is written by Company
+SSO alongside `account`; a `null` value preserves any existing English name, so
+local and Google logins cannot clear it.
 
 Adding `name_en` changed migration 027's checksum. The migration is still
 unreleased, so no deployed environment should have applied the earlier form.

@@ -258,6 +258,7 @@ function companySsoClaims(partial: { subject: string; empId: string; name?: stri
       subject: partial.subject,
       emp_id: partial.empId,
       account: `account-${partial.empId}`,
+      name_en: `English ${partial.empId}`,
       name: partial.name ?? `SSO User ${partial.subject.slice(0, 8)}`,
       org_code: "RD",
     },

@@ -64,18 +64,19 @@ export class MariaDbUserRepository implements UserRepository {
     return rows[0] ? mapUser(rows[0]) : null;
   }
 
-  async insert(identity: UserIdentity, account: string | null = null): Promise<void> {
-    await this.connection.query("INSERT INTO users (id, emp_id, account, name, org_code) VALUES (?, ?, ?, ?, ?)", [
-      identity.id,
-      identity.emp_id,
-      account,
-      identity.name,
-      identity.org_code,
-    ]);
+  async insert(identity: UserIdentity, account: string | null = null, nameEn: string | null = null): Promise<void> {
+    await this.connection.query(
+      "INSERT INTO users (id, emp_id, account, name_en, name, org_code) VALUES (?, ?, ?, ?, ?, ?)",
+      [identity.id, identity.emp_id, account, nameEn, identity.name, identity.org_code],
+    );
   }
 
   async updateAccount(id: string, account: string): Promise<void> {
     await this.connection.query("UPDATE users SET account = ? WHERE id = ?", [account, id]);
+  }
+
+  async updateNameEn(id: string, nameEn: string): Promise<void> {
+    await this.connection.query("UPDATE users SET name_en = ? WHERE id = ?", [nameEn, id]);
   }
 
   async updateProfile(id: string, profile: { name: string; org_code: string }): Promise<void> {

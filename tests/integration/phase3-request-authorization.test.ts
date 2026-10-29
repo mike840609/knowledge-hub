@@ -41,7 +41,7 @@ beforeEach(async () => {
   vi.stubEnv("KM_COMPANY_SSO_PROVIDER", "review-company");
   vi.stubEnv("KM_COMPANY_SSO_TEAM_CREATE_GROUPS", "creators");
   vi.stubEnv("KM_COMPANY_SSO_ROLLOUT_USER_IDS", "");
-  session = { subject: "owner-subject", emp_id: "REVIEW-OWNER", account: "owner-account", name: "Owner", org_code: "RD", externalGroupIds: ["creators"] };
+  session = { subject: "owner-subject", emp_id: "REVIEW-OWNER", account: "owner-account", name_en: "Owner English", name: "Owner", org_code: "RD", externalGroupIds: ["creators"] };
   services = composition.buildApplicationServices(pool, { companySessionReader: reader });
   vi.spyOn(composition, "applicationServices").mockReturnValue(services);
   reader.readSession.mockClear();
@@ -62,7 +62,7 @@ async function team(role: "EDITOR" | "ADMIN" | "VIEWER" = "EDITOR") {
   const workspace = await lifecycle.createTeamWorkspace(owner, {
     name: "Group Team", groupMappings: [{ externalGroupId: "writers", role }],
   });
-  session = { subject: "group-subject", emp_id: "REVIEW-GROUP", account: "group-account", name: "Group User", org_code: "OTHER", externalGroupIds: ["writers"] };
+  session = { subject: "group-subject", emp_id: "REVIEW-GROUP", account: "group-account", name_en: "Group English", name: "Group User", org_code: "OTHER", externalGroupIds: ["writers"] };
   return { workspace, owner, lifecycle, governance };
 }
 
@@ -88,13 +88,13 @@ async function finish(snapshotId: string) {
 }
 
 describe("Phase 3 real request adapters with a trusted test session reader", () => {
-  it("persists the trusted company account through the request bootstrap", async () => {
+  it("persists the trusted company account and English name through the request bootstrap", async () => {
     const { caller } = await services.establishTrustedCaller();
-    const [row] = await pool.query<{ account: string | null }[]>(
-      "SELECT account FROM users WHERE id = ?",
+    const [row] = await pool.query<{ account: string | null; name_en: string | null }[]>(
+      "SELECT account, name_en FROM users WHERE id = ?",
       [caller.identity.id],
     );
-    expect(row.account).toBe("owner-account");
+    expect(row).toMatchObject({ account: "owner-account", name_en: "Owner English" });
   });
 
   it("keeps the last successful sync visible beyond twenty newer failed attempts", async () => {
@@ -268,11 +268,11 @@ describe("Phase 3 real request adapters with a trusted test session reader", () 
     expect(await getWorkspaceShellModel(personalWorkspace.id)).toMatchObject({ identityName: "Local", workspace: { name: "My Space" } });
     expect((await createThroughRoute(personalWorkspace.id)).status).toBe(201);
     expect(await pool.query("SELECT id FROM workspaces WHERE personal_owner_user_id = ?", [id])).toHaveLength(1);
-    const [localUser] = await pool.query<{ account: string | null }[]>(
-      "SELECT account FROM users WHERE id = ?",
+    const [localUser] = await pool.query<{ account: string | null; name_en: string | null }[]>(
+      "SELECT account, name_en FROM users WHERE id = ?",
       [id],
     );
-    expect(localUser.account).toBeNull();
+    expect(localUser).toMatchObject({ account: null, name_en: null });
     expect(reader.readSession).not.toHaveBeenCalled();
   });
 

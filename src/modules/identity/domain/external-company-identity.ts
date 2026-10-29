@@ -5,13 +5,15 @@
  * `subject` is opaque: persistence and lookup use exact UTF-8 bytes with no
  * trim / lowercase / Unicode normalization. `account` is the human-readable
  * company account name, stored as profile data (never a link key) and `null`
- * for providers without a company account.
+ * for providers without a company account. `name_en` is the optional English
+ * display name, also stored as profile data.
  */
 export type ExternalCompanyIdentity = {
   provider: string;
   subject: string;
   emp_id: string;
   account: string | null;
+  name_en: string | null;
   name: string;
   org_code: string;
 };

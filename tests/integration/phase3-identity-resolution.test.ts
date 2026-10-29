@@ -59,8 +59,9 @@ function claims(
   name = "SSO User",
   org = "RD",
   account: string | null = `acct-${empId}`,
+  nameEn: string | null = null,
 ): ExternalCompanyIdentity {
-  return { provider, subject, emp_id: empId, account, name, org_code: org };
+  return { provider, subject, emp_id: empId, account, name_en: nameEn, name, org_code: org };
 }
 
 async function countUsersByEmp(empId: string): Promise<number> {
@@ -236,6 +237,64 @@ describe("Hub runtime identity resolution", () => {
 
     await expect(
       resolver.resolve(claims(provider, subject, empId, "Long Account", "RD", "a".repeat(129))),
+    ).rejects.toBeInstanceOf(IdentityError);
+
+    expect(await countUsersByEmp(empId)).toBe(0);
+    expect(await countLinks(provider, subject)).toBe(0);
+  });
+
+  it("stores the trusted English name when creating a company user", async () => {
+    const tag = uuidv7();
+    const empId = `EMP-EN-CREATE-${tag}`;
+    const resolved = await resolver.resolve(
+      claims("company-sso", `subject-en-create-${tag}`, empId, "Account User", "RD", `acct-${empId}`, "John Smith"),
+    );
+
+    const [row] = await pool.query<{ name_en: string | null }[]>("SELECT name_en FROM users WHERE id = ?", [resolved.id]);
+    expect(row.name_en).toBe("John Smith");
+  });
+
+  it("refreshes the English name on an existing link without changing the Hub user", async () => {
+    const tag = uuidv7();
+    const provider = "company-sso";
+    const subject = `subject-en-refresh-${tag}`;
+    const empId = `EMP-EN-REFRESH-${tag}`;
+    const hubUserId = await seedUser(empId, "Account User");
+    await seedLink(provider, subject, hubUserId);
+    await pool.query("UPDATE users SET name_en = ? WHERE id = ?", ["Before English", hubUserId]);
+
+    const resolved = await resolver.resolve(
+      claims(provider, subject, empId, "Account User", "RD", `acct-${empId}`, "After English"),
+    );
+
+    expect(resolved.id).toBe(hubUserId);
+    const [row] = await pool.query<{ name_en: string | null }[]>("SELECT name_en FROM users WHERE id = ?", [hubUserId]);
+    expect(row.name_en).toBe("After English");
+  });
+
+  it("does not clear an existing English name when the external identity has none", async () => {
+    const tag = uuidv7();
+    const provider = "company-sso";
+    const subject = `subject-en-null-${tag}`;
+    const empId = `EMP-EN-NULL-${tag}`;
+    const hubUserId = await seedUser(empId, "Account User");
+    await seedLink(provider, subject, hubUserId);
+    await pool.query("UPDATE users SET name_en = ? WHERE id = ?", ["Existing English", hubUserId]);
+
+    await resolver.resolve(claims(provider, subject, empId, "Account User", "RD", `acct-${empId}`, null));
+
+    const [row] = await pool.query<{ name_en: string | null }[]>("SELECT name_en FROM users WHERE id = ?", [hubUserId]);
+    expect(row.name_en).toBe("Existing English");
+  });
+
+  it("rejects an overlong English name before writing a user or link", async () => {
+    const tag = uuidv7();
+    const provider = "company-sso";
+    const subject = `subject-en-long-${tag}`;
+    const empId = `EMP-EN-LONG-${tag}`;
+
+    await expect(
+      resolver.resolve(claims(provider, subject, empId, "Long English", "RD", `acct-${empId}`, "a".repeat(513))),
     ).rejects.toBeInstanceOf(IdentityError);
 
     expect(await countUsersByEmp(empId)).toBe(0);

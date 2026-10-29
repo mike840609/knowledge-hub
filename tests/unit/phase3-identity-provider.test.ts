@@ -50,6 +50,7 @@ function trackingReader(session: {
   subject: string;
   emp_id: string;
   account: string;
+  name_en?: string | null;
   name: string;
   org_code: string;
   externalGroupIds: readonly string[];
@@ -58,7 +59,7 @@ function trackingReader(session: {
     calls: 0,
     async readSession() {
       reader.calls += 1;
-      return { ...session, externalGroupIds: [...session.externalGroupIds] };
+      return { ...session, name_en: session.name_en ?? null, externalGroupIds: [...session.externalGroupIds] };
     },
   };
   return reader;
@@ -73,6 +74,7 @@ describe("Local identity provider claims", () => {
       subject: "local-id-1",
       emp_id: "LOCAL-0001",
       account: null,
+      name_en: null,
       name: "Local User",
       org_code: "LOCAL",
     });
@@ -115,6 +117,7 @@ describe("Company SSO identity provider claims", () => {
       subject: "  Sub-Ject_01  ",
       emp_id: "E1001",
       account: "acct-1001",
+      name_en: null,
       name: "SSO User",
       org_code: "RD",
     });
@@ -197,6 +200,55 @@ describe("Company SSO identity provider claims", () => {
       emp_id: "E1008",
       account: "a".repeat(129),
       name: "Long Account",
+      org_code: "RD",
+      externalGroupIds: [],
+    });
+    await expect(
+      new CompanySsoIdentityProvider(reader, { provider: "company-sso", teamCreateGroupIds: [] }).getCurrentClaims(),
+    ).rejects.toBeInstanceOf(AuthUnavailableError);
+  });
+
+  it("maps the optional English name", async () => {
+    const reader = trackingReader({
+      subject: "sub-en",
+      emp_id: "E1009",
+      account: "acct-1009",
+      name_en: "John Smith",
+      name: "SSO User",
+      org_code: "RD",
+      externalGroupIds: [],
+    });
+    const claims = await new CompanySsoIdentityProvider(reader, {
+      provider: "company-sso",
+      teamCreateGroupIds: [],
+    }).getCurrentClaims();
+    expect(claims.externalIdentity.name_en).toBe("John Smith");
+  });
+
+  it("allows a null English name", async () => {
+    const reader = trackingReader({
+      subject: "sub-en-null",
+      emp_id: "E1010",
+      account: "acct-1010",
+      name_en: null,
+      name: "SSO User",
+      org_code: "RD",
+      externalGroupIds: [],
+    });
+    const claims = await new CompanySsoIdentityProvider(reader, {
+      provider: "company-sso",
+      teamCreateGroupIds: [],
+    }).getCurrentClaims();
+    expect(claims.externalIdentity.name_en).toBeNull();
+  });
+
+  it("fails closed when the English name exceeds the stored column limit", async () => {
+    const reader = trackingReader({
+      subject: "sub-long-en",
+      emp_id: "E1011",
+      account: "acct-1011",
+      name_en: "a".repeat(513),
+      name: "Long English Name",
       org_code: "RD",
       externalGroupIds: [],
     });

@@ -101,21 +101,37 @@ function identity(empId: string): UserIdentity {
 }
 
 describe("MariaDbUserRepository account writes", () => {
-  it("inserts an account and leaves it NULL when omitted", async () => {
+  it("inserts an account and English name and leaves them NULL when omitted", async () => {
     const users = new MariaDbUserRepository(pool);
     const withAccount = identity(`ACC-WITH-${uuidv7()}`);
     const withoutAccount = identity(`ACC-WITHOUT-${uuidv7()}`);
     const account = `alice-${uuidv7()}`;
 
-    await users.insert(withAccount, account);
+    await users.insert(withAccount, account, "John Smith");
     await users.insert(withoutAccount);
 
-    const rows = await pool.query<{ id: string; account: string | null }[]>(
-      "SELECT id, account FROM users WHERE id IN (?, ?)",
+    const rows = await pool.query<{ id: string; account: string | null; name_en: string | null }[]>(
+      "SELECT id, account, name_en FROM users WHERE id IN (?, ?)",
       [withAccount.id, withoutAccount.id],
     );
-    expect(rows.find((row) => row.id === withAccount.id)?.account).toBe(account);
-    expect(rows.find((row) => row.id === withoutAccount.id)?.account).toBeNull();
+    expect(rows.find((row) => row.id === withAccount.id)).toMatchObject({ account, name_en: "John Smith" });
+    expect(rows.find((row) => row.id === withoutAccount.id)).toMatchObject({ account: null, name_en: null });
+  });
+
+  it("updates only the English name and never clears it through upsert or profile sync", async () => {
+    const users = new MariaDbUserRepository(pool);
+    const user = identity(`ACC-EN-${uuidv7()}`);
+
+    await users.insert(user, `acct-${uuidv7()}`, "Before English");
+    await users.updateNameEn(user.id, "After English");
+    await users.upsertIdentity({ ...user, name: "Renamed" });
+    await users.updateProfile(user.id, { name: "Renamed Again", org_code: "OPS" });
+
+    const [row] = await pool.query<{ name_en: string }[]>(
+      "SELECT name_en FROM users WHERE id = ?",
+      [user.id],
+    );
+    expect(row.name_en).toBe("After English");
   });
 
   it("updates only the account and never clears it through upsert or profile sync", async () => {
