@@ -38,8 +38,8 @@ export type TeamWorkspaceView = {
   actions: WorkspaceActions; grantOptions: WorkspaceGrantOptions;
 };
 export type WorkspaceAccessView = { workspace: WorkspaceNavigationItem; effectiveCapabilities: readonly WorkspaceCapability[]; actions: WorkspaceActions };
-export type HubUserLookup = { id: string; name: string; empId: string };
-export type MemberAdminView = { user: HubUserLookup; access: UserAccessInspection; assignableRoles: readonly WorkspaceRole[]; canRemoveDirectAccess: boolean };
+export type HubUserLookup = { id: string; name: string; empId: string; nameEn: string | null };
+export type MemberAdminView = { user: Omit<HubUserLookup, "nameEn">; access: UserAccessInspection; assignableRoles: readonly WorkspaceRole[]; canRemoveDirectAccess: boolean };
 export type GroupAdminView = { externalGroupId: string; role: "ADMIN" | "EDITOR" | "VIEWER"; assignableRoles: readonly ("ADMIN" | "EDITOR" | "VIEWER")[]; canRemove: boolean };
 export type AuditItem = { id: string; actorName: string | null; eventType: string; targetType: string; targetId: string | null; summary: string; createdAt: string; before?: Readonly<Record<string, unknown>>; after?: Readonly<Record<string, unknown>> };
 export type AuditPage = { items: readonly AuditItem[]; nextCursor: string | null };
@@ -103,7 +103,7 @@ export class WorkspaceAdminService {
     if (!caller.identity.id || caller.personalWorkspaceOnly) throw new InsufficientWorkspaceCapabilityError();
     const normalized = query.trim();
     if (!normalized) return [];
-    return this.unitOfWork.run(async repositories => (await repositories.users.searchExisting(normalized.slice(0, 200), limit)).map(user => ({ id: user.id, name: user.name, empId: user.emp_id })));
+    return this.unitOfWork.run(async repositories => (await repositories.users.searchExisting(normalized.slice(0, 200), limit)).map(user => ({ id: user.id, name: user.name, empId: user.emp_id, nameEn: user.nameEn })));
   }
   async listMembers(caller: CallerContext, workspaceId: string): Promise<MemberAdminView[]> {
     return this.unitOfWork.run(async repositories => {
