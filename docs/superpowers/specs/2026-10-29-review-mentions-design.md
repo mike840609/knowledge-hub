@@ -160,10 +160,10 @@ One query, two doors (agreed 2026-10-29):
   MENTION entries are not cursor-paged; at most 100 newest are merged into the
   first Activity page, and the `(createdAt, id)` cursor keeps paging owner
   events alone.
-- Read: the activity route's `mark-read` action gains a `{ commentId }` form
-  for a MENTION entry (today `POST /api/review-notifications/mark-read` takes
-  `documentId`/`threadId` and is not the place); `mark-all-read` also marks
-  all of the caller's mentions; arriving on the thread
+- Read: a MENTION entry's id is `mention:<commentId>`, marked through the
+  activity route's existing `mark-read` action (`markEventRead`, which already
+  dispatches `follow:<threadId>`); `mark-all-read` also marks all of the
+  caller's mentions; arriving on the thread
   (`POST /api/share-review/threads/:threadId/seen`) also marks the caller's
   mentions in that thread read. All touch only the caller's own rows.
 - Inbox split view (#299): a MENTION entry opens like a FOLLOW entry
