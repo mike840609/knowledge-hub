@@ -448,7 +448,7 @@ export class DocumentReviewService {
     if(!mentions.ids.length) return null;
     if((await r.users.findByIds(mentions.ids)).length!==mentions.ids.length) fail("INVALID_REQUEST","Mention only people who have signed in here.");
     if(originShareLinkId!==null) return originShareLinkId;
-    const link=mentions.linkId===null?undefined:(await r.shareLinks.listByDocument(s.document.id)).find(l=>l.id.toLowerCase()===mentions.linkId && l.documentId===s.document.id);
+    const link=mentions.linkId===null?undefined:(await r.shareLinks.listByDocument(s.document.id)).find(l=>l.id.toLowerCase()===mentions.linkId);
     if(!link || !await this.linkValid(r,link)) fail("INVALID_REQUEST","Mention someone through a live share link of this document.");
     return link.id;
   }

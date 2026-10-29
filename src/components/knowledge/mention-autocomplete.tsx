@@ -15,6 +15,7 @@ type MentionLink = { id: string; label: string | null };
 
 const DEBOUNCE_MS = 150;
 export const NO_LINK_HINT = "Create a share link first to mention someone";
+const NO_MATCH_HINT = "No one found.";
 
 /** The `@word` being typed just before the caret, when its `@` starts a word. */
 export function mentionTrigger(text: string, caret: number): { start: number; query: string } | null {
@@ -115,7 +116,8 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
   useEffect(() => { if (triggerStart === undefined) setDismissed(undefined); }, [triggerStart]);
 
   const candidates = searchable && found?.query === query ? found.candidates : [];
-  const hint = !open ? undefined : noLink ? NO_LINK_HINT : failure;
+  const answeredEmpty = searchable && found?.query === query && found.candidates.length === 0;
+  const hint = !open ? undefined : noLink ? NO_LINK_HINT : failure ?? (answeredEmpty ? NO_MATCH_HINT : undefined);
   const listed = candidates.length > 0;
   const optionId = (index: number) => `${listId}-option-${index}`;
 

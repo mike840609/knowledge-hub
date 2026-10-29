@@ -39,7 +39,7 @@ export type TeamWorkspaceView = {
 };
 export type WorkspaceAccessView = { workspace: WorkspaceNavigationItem; effectiveCapabilities: readonly WorkspaceCapability[]; actions: WorkspaceActions };
 export type HubUserLookup = { id: string; name: string; empId: string; nameEn: string | null };
-export type MemberAdminView = { user: Omit<HubUserLookup, "nameEn">; access: UserAccessInspection; assignableRoles: readonly WorkspaceRole[]; canRemoveDirectAccess: boolean };
+export type MemberAdminView = { user: { id: string; name: string; empId: string }; access: UserAccessInspection; assignableRoles: readonly WorkspaceRole[]; canRemoveDirectAccess: boolean };
 export type GroupAdminView = { externalGroupId: string; role: "ADMIN" | "EDITOR" | "VIEWER"; assignableRoles: readonly ("ADMIN" | "EDITOR" | "VIEWER")[]; canRemove: boolean };
 export type AuditItem = { id: string; actorName: string | null; eventType: string; targetType: string; targetId: string | null; summary: string; createdAt: string; before?: Readonly<Record<string, unknown>>; after?: Readonly<Record<string, unknown>> };
 export type AuditPage = { items: readonly AuditItem[]; nextCursor: string | null };

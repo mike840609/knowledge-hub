@@ -131,12 +131,16 @@ test("Esc closes the list and leaves the form open", async () => {
   expect(cancelled).toHaveBeenCalledTimes(1);
 });
 
-test("Esc with nothing shown is the form's, as before", async () => {
+test("Esc closes the \"No one found\" note first, then is the form's, as before", async () => {
   stubFetch({ candidates: [] });
   const cancelled = vi.fn();
   const textarea = render({ token: "tok" }, [], { onCancel: cancelled, cancelOnEscape: true });
   await type(textarea, "@zz");
-  expect(listbox()).toBeNull();
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 200)); });
+  expect(host.textContent).toContain("No one found.");
+  key(textarea, "Escape");
+  expect(cancelled).not.toHaveBeenCalled();
+  expect(host.textContent).not.toContain("No one found.");
   key(textarea, "Escape");
   expect(cancelled).toHaveBeenCalledTimes(1);
 });
@@ -298,4 +302,13 @@ test("without a mention scope, @ does nothing", async () => {
   expect(requests).toEqual([]);
   await submit();
   expect(sent).toEqual([{ body: "@ming", mentions: [], linkId: undefined }]);
+});
+
+test("a search that finds no one says so", async () => {
+  stubFetch({ candidates: [] });
+  const textarea = render({ token: "tok" });
+  await type(textarea, "@zzz");
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 200)); });
+  expect(host.textContent).toContain("No one found.");
+  expect(options()).toHaveLength(0);
 });
