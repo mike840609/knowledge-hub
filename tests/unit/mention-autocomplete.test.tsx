@@ -227,7 +227,7 @@ test("owner with no live link: @ says to create one and offers nobody", async ()
   expect(requests).toEqual(["/api/documents/doc-1/share-links"]);
 });
 
-test("owner who creates a link after seeing the hint is offered people on the next @", async () => {
+test("owner's links are read on each new @: a created link is offered, a revoked one is not", async () => {
   let links: Link[] = [];
   stubFetch({ links: () => links });
   const textarea = render({ documentId: "doc-1" });
@@ -240,10 +240,13 @@ test("owner who creates a link after seeing the hint is offered people on the ne
   expect(host.textContent).not.toContain(NO_LINK_HINT);
   expect(options()).toHaveLength(2);
   expect(requests.filter(url => url.includes("/share-links"))).toHaveLength(2);
-  // Once a live link is known, a further @ does not ask again.
+  // The link is revoked while the composer is open: the next @ asks again and no longer offers it.
+  links = [{ id: "link-a", label: "Team", active: false }];
   await type(textarea, "");
   await type(textarea, "@m");
-  expect(requests.filter(url => url.includes("/share-links"))).toHaveLength(2);
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 200)); });
+  expect(requests.filter(url => url.includes("/share-links"))).toHaveLength(3);
+  expect(host.textContent).toContain(NO_LINK_HINT);
 });
 
 test("owner with two live links chooses one under Share via, and it is sent", async () => {

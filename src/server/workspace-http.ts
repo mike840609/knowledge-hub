@@ -20,7 +20,10 @@ export async function requestFields(request: Request, fields: readonly string[])
   let body: unknown;
   try { body = await request.json(); } catch { throw new DomainError("INVALID_REQUEST", "Provide a valid JSON object."); }
   if (!body || typeof body !== "object" || Array.isArray(body)) throw new DomainError("INVALID_REQUEST", "Provide a JSON object.");
-  const record = body as Record<string, unknown>;
+  return stringFields(body as Record<string, unknown>, fields);
+}
+/** The named fields of an already-read body, each required to be a string. */
+export function stringFields(record: Record<string, unknown>, fields: readonly string[]): Record<string, string> {
   const result: Record<string, string> = {};
   for (const field of fields) { if (typeof record[field] !== "string") throw new DomainError("INVALID_REQUEST", `Provide ${field} as a string.`); result[field] = record[field]; }
   return result;

@@ -182,12 +182,12 @@ describe("MariaDbUserRepository.searchExisting", () => {
     }
   });
 
-  it("still matches name and emp_id", async () => {
+  it("matches name and emp_id, emp_id case-insensitively", async () => {
     const users = new MariaDbUserRepository(pool);
     const user = { id: uuidv7(), emp_id: "E5678", name: "林大華", org_code: "RD" };
     await users.insert(user, null, "Dahua Lin");
 
-    for (const query of ["大華", "E567"]) {
+    for (const query of ["大華", "E567", "e567"]) {
       expect((await users.searchExisting(query, 10)).some(row => row.id === user.id)).toBe(true);
     }
   });

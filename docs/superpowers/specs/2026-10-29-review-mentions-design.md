@@ -77,9 +77,10 @@ mismatch is cosmetic, never an access question.)*
 
 One query, two doors (agreed 2026-10-29):
 
-- **Shared query.** `users.searchExisting` additionally matches `name_en`,
-  case-insensitively (the column is `utf8mb4_bin`, so compare lower-cased),
-  and returns it. `HubUserLookup` gains `nameEn: string | null`. The Workspace
+- **Shared query.** `users.searchExisting` additionally matches `name_en`
+  and returns it. All three columns are `utf8mb4_bin`, so each is compared
+  lower-cased: `e12` finds `E1234` *(name and emp_id were case-sensitive
+  until the review of PR #306; the member picker changes with it)*. `HubUserLookup` gains `nameEn: string | null`. The Workspace
   member picker behind `GET /api/users` benefits too; its gate is unchanged
   (trusted caller, refused when `personalWorkspaceOnly`).
 - **Mention door.** `/api/users` cannot serve mentions: in the default
@@ -150,8 +151,9 @@ One query, two doors (agreed 2026-10-29):
   links; one → used silently; several → a small "Share via" select before
   Post; none → the `@` list shows "Create a share link first to mention
   someone" and picks nothing. *(Deviation recorded at implementation,
-  2026-10-29)* The composer re-reads the links on each new `@` while none is
-  live, not once, so the hint clears after the owner creates a link.
+  2026-10-29)* The composer re-reads the links on each new `@`, not once, so
+  the hint clears after the owner creates a link and a revoked or expired
+  link is not offered again (review of PR #306).
 
 ### The Inbox entry
 

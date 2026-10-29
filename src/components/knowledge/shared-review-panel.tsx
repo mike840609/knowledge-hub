@@ -55,23 +55,26 @@ export function SharedReviewPanel({ token, revisionId, markdown, signInHref, bra
   }, [result, inline, token]);
   // `?thread=` (an Inbox entry) opens the discussions on that one, once, where it is listed; an unknown id does nothing.
   const deepLinked = useRef(false);
+  const [arrivedThreadId, setArrivedThreadId] = useState<string>();
   useEffect(() => {
     if (deepLinked.current || !result) return;
     deepLinked.current = true;
     const thread = result.threads.find(candidate => candidate.id === new URLSearchParams(window.location.search).get("thread"));
     if (!thread) return;
-    setFilter("ALL"); setActiveThreadId(thread.id); setOpen(true);
+    setFilter("ALL"); setActiveThreadId(thread.id); setArrivedThreadId(thread.id); setOpen(true);
     const anchor = revisionChanged ? undefined : thread.currentAnchor.anchor;
     const root = document.querySelector<HTMLElement>("[data-review-document]");
     if (anchor && root) requestAnimationFrame(() => requestAnimationFrame(() => focusReviewAnchor(root, markdown, anchor)));
   }, [result, revisionChanged, markdown]);
-  // Looking at a discussion one follows marks its replies seen. A failure retries once, then waits for the next look.
+  // Looking at a discussion one follows, or one the Inbox brought the reader to (a mention need not be
+  // followed), marks it seen. A failure retries once, then waits for the next look.
   const following = result?.threads.find(thread => thread.id === activeThreadId)?.following;
+  const seeing = following || (!!activeThreadId && activeThreadId === arrivedThreadId);
   useEffect(() => {
-    if (!activeThreadId || !following) return;
+    if (!activeThreadId || !seeing) return;
     const send = () => reviewRequest(`/api/share-review/threads/${activeThreadId}/seen`, { token });
     void send().catch(() => send()).then(() => window.dispatchEvent(new Event("kh:notification-changed")), () => undefined);
-  }, [activeThreadId, following, token]);
+  }, [activeThreadId, seeing, token]);
   useReviewHighlights(markdown, revisionChanged ? undefined : result?.threads, activeThreadId);
   const selection = useReviewSelection(readingRef, markdown, `${token}:${revisionId}`);
   // A newer reading, held back while it would move the cards: the reader chooses when to see it.

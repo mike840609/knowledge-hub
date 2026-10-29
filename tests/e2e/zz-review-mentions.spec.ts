@@ -99,3 +99,26 @@ test("an owner with no live share link is told to create one before mentioning",
   await expect(page.getByText("Create a share link first to mention someone", { exact: true })).toBeVisible();
   await expect(page.getByRole("listbox", { name: "People to mention" })).toHaveCount(0);
 });
+
+// Review of PR #306: a mention is read by arriving on its thread, whether or not the person still follows it.
+test("a mentioned person who stopped following clears the mention by opening its thread", async ({ page, request }) => {
+  const doc = await createReviewDocument(request);
+  const token = doc.links[0].path.split("/").pop()!;
+  const viewer = phase3Origin("viewer"), mentioned = phase3Origin("groupAdmin");
+  expect((await request.post(`${mentioned}/api/review-notifications/activity`, { headers: { Origin: mentioned }, data: { action: "mark-all-read" } })).ok()).toBe(true);
+  const { candidates } = await (await request.get(`${viewer}/api/review-mentions/candidates?query=groupAdmin&token=${token}`, { headers: { Origin: viewer } })).json();
+  const body = "Unfollowed but still @Phase3 groupAdmin";
+  const created = await request.post(`${viewer}/api/share-review/threads`, { headers: { Origin: viewer }, data: { token, expectedRevisionId: doc.revisionId, anchor: ANCHOR, body, idempotencyKey: crypto.randomUUID(), mentions: [candidates[0].id] } });
+  expect(created.status()).toBe(201);
+  const query = await (await request.post(`${viewer}/api/share-review/threads/query`, { headers: { Origin: viewer }, data: { token } })).json();
+  const threadId: string = query.threads.find((thread: { comments: Array<{ body: string }> }) => thread.comments[0].body === body).id;
+  expect((await request.post(`${mentioned}/api/review-follows/${threadId}/unfollow`, { headers: { Origin: mentioned } })).ok()).toBe(true);
+  const unread = async () => (await (await request.get(`${mentioned}/api/review-notifications/unread`, { headers: { Origin: mentioned } })).json())
+    .notifications.filter((notice: { threadId: string }) => notice.threadId === threadId);
+  expect(await unread()).toEqual([expect.objectContaining({ kind: "MENTION" })]);
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${mentioned}/s/${token}?thread=${threadId}`);
+  await expect(page.locator(`[data-review-thread="${threadId}"]`)).toHaveAttribute("data-active", "");
+  await expect.poll(unread).toEqual([]);
+});

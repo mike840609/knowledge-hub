@@ -69,9 +69,8 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
   const [picks, setPicks] = useState<MentionPick[]>([]);
   const [links, setLinks] = useState<MentionLink[]>();
   const [linkId, setLinkId] = useState<string>();
-  // A request in flight, and whether the last answer had a live link: one with none is asked again on the next `@`.
+  // A request in flight; the links are asked again on each new `@`, since one may have been created, revoked or expired.
   const linksLoading = useRef(false);
-  const linksFound = useRef(false);
   const owner = scope && "documentId" in scope ? scope.documentId : undefined;
   const token = scope && "token" in scope ? scope.token : undefined;
 
@@ -82,15 +81,13 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
   const searchable = open && query.length > 0 && (!owner || (links?.length ?? 0) > 0);
 
   const triggerStart = trigger?.start;
-  // The owner mentions through a live link of the document. Its links are read when the list opens,
-  // and read again on each new `@` until one is live: the owner may have just created it.
+  // The owner mentions through a live link of the document. Its links are read on each new `@`.
   useEffect(() => {
-    if (!open || !owner || linksLoading.current || linksFound.current) return;
+    if (!open || !owner || linksLoading.current) return;
     linksLoading.current = true;
     reviewRequest<{ links: Array<MentionLink & { active: boolean }> }>(`/api/documents/${encodeURIComponent(owner)}/share-links`)
       .then(result => {
         const live = result.links.filter(link => link.active).map(({ id, label }) => ({ id, label }));
-        linksFound.current = live.length > 0;
         setLinks(live); setFailure(undefined);
       })
       .catch(error => setFailure(error instanceof Error ? error.message : "Could not load share links."))
