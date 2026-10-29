@@ -18,6 +18,8 @@ export async function POST(request: Request, context: ShareLinksRouteContext) {
 export async function GET(_request: Request, context: ShareLinksRouteContext) {
   return workspaceHttp(async (services, caller) => {
     const { documentId } = await context.params;
-    return { links: await services.shares.list(caller, documentId), reviewReadAvailable: services.reviewReadAvailable, reviewWritesEnabled: reviewWritesEnabled() };
+    // Listed first: it refuses anyone but the owner, so `viaFolders` is never computed for a stranger.
+    const links = await services.shares.list(caller, documentId);
+    return { links, viaFolders: await services.shares.foldersSharingDocument(caller, documentId), reviewReadAvailable: services.reviewReadAvailable, reviewWritesEnabled: reviewWritesEnabled() };
   });
 }

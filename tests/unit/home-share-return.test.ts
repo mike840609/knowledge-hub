@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { beforeEach, expect, it, vi } from "vitest";
 const fixture = vi.hoisted(() => ({ authenticate: vi.fn(), navigation: vi.fn() }));
 vi.mock("@/server/composition", () => ({ applicationServices: () => ({ establishTrustedCaller: fixture.authenticate, workspaceAdmin: { navigation: fixture.navigation } }) }));
@@ -24,4 +25,20 @@ it("does not continue if authentication fails", async () => {
 
 it.each([undefined, "https://evil.test", "//evil.test", "/\\evil.test", "/s/../open", "/s/%2e%2e/open", "/s/token/open?returnTo=https://evil.test", "/w/other/home", "/s/token/", "/s/token/other", "/s/token?x=1", "/s//evil.test", "/s/", ["/s/token/open", "//evil.test"]])("falls back to the ordinary home for invalid continuation %j", async returnTo => {
   await expect(HomePage({ searchParams: Promise.resolve({ returnTo }) })).rejects.toThrow("redirect:/w/personal/home");
+});
+
+const documentId = "0192f3a4-5b6c-7d8e-9f01-23456789abcd";
+
+it.each([`/s/share-token?d=${documentId}`, `/s/share-token/open?d=${documentId}`])("continues to a document of a shared folder: %s", async returnTo => {
+  await expect(HomePage({ searchParams: Promise.resolve({ returnTo }) })).rejects.toThrow(`redirect:${returnTo}`);
+});
+
+it.each(["/s/share-token?d=x", `/s/share-token?d=${documentId}&e=1`, `/s/share-token/d/${documentId}`, `/s/share-token?d=${documentId}#x`])("does not continue to a malformed folder document %j", async returnTo => {
+  await expect(HomePage({ searchParams: Promise.resolve({ returnTo }) })).rejects.toThrow("redirect:/w/personal/home");
+});
+
+it("checks its continuation with the one shared-return rule, not a copy of it", () => {
+  const source = readFileSync("src/app/page.tsx", "utf8");
+  expect(source).toMatch(/isSharedReturn\(returnTo\)/);
+  expect(source).not.toMatch(/\/\^\\\/s\\\//);
 });

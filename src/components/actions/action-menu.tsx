@@ -28,12 +28,18 @@ import { rowMenuSections, type Action } from "./action-registry";
 export const SHARE_REQUEST_EVENT = "kh:request-share";
 
 /**
- * Ask the share-link dialog (ShareLinkDialogHost, mounted by the knowledge
- * layout) to open for a document. The one way every surface asks, so the
- * event's shape lives in one place.
+ * What the share-link dialog can be opened for: a document, or a folder of My Space. A folder's `name`
+ * only titles the dialog; the server decides what the link opens.
  */
-export function requestShare(documentId: string): void {
-  window.dispatchEvent(new CustomEvent(SHARE_REQUEST_EVENT, { detail: { documentId } }));
+export type ShareTarget = { documentId: string } | { folderNodeId: string; name?: string };
+
+/**
+ * Ask the share-link dialog (ShareLinkDialogHost, mounted by the knowledge
+ * layout) to open for a document or a folder. The one way every surface asks,
+ * so the event's shape lives in one place.
+ */
+export function requestShare(target: ShareTarget): void {
+  window.dispatchEvent(new CustomEvent(SHARE_REQUEST_EVENT, { detail: target }));
 }
 
 /**
@@ -107,7 +113,7 @@ export function useActionRunner({ onToggleFavorite }: ActionHandlers) {
             case "document.open-share":
               // The dialog lives with the knowledge layout; any surface asks
               // for it the same way it asks for details.
-              requestShare(effect.documentId);
+              requestShare({ documentId: effect.documentId });
               return;
             case "document.archive":
               void mutations.archiveDocument({ documentId: effect.documentId, sourceId: effect.sourceId, title: effect.label ?? "Untitled document" });
@@ -130,6 +136,9 @@ export function useActionRunner({ onToggleFavorite }: ActionHandlers) {
           switch (effect.command) {
             case "folder.rename":
               requestFolderName({ mode: "rename", nodeId: effect.nodeId, name: effect.label });
+              return;
+            case "folder.share":
+              requestShare({ folderNodeId: effect.nodeId, name: effect.label });
               return;
             case "folder.archive":
               void mutations.archiveFolder({ nodeId: effect.nodeId, name: effect.label });

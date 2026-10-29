@@ -319,7 +319,7 @@ export function PeekPane({
             <Tooltip label="Share link…">
               <button
                 type="button"
-                onClick={() => peek && requestShare(peek.documentId)}
+                onClick={() => peek && requestShare({ documentId: peek.documentId })}
                 aria-label="Share link…"
                 className={buttonClasses({ variant: "ghost", icon: true })}
               >

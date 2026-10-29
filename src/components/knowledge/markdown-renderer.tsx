@@ -34,8 +34,9 @@ const readerRemarkPlugins = [remarkCallouts, remarkHtmlSubset];
  * its kin drawn as callouts, and a small subset of HTML drawn as what it means.
  *
  * Not for the composer, which is a client component and must not carry the highlighter: it uses
- * `MarkdownBase`. `links` is as there — a shared page passes none.
+ * `MarkdownBase`. `links` and `unresolvedAsText` are as there — a document link's shared page
+ * passes no links, a folder page only those that land inside the folder.
  */
-export function MarkdownRenderer({ markdown, links, afterTitle }: { markdown: string; links?: RenderedLinks; afterTitle?: ReactNode }) {
-  return <MarkdownBase markdown={markdown} links={links} remarkPlugins={readerRemarkPlugins} rehypePlugins={codeHighlightPlugins} pre={ReadingPre} afterTitle={afterTitle} />;
+export function MarkdownRenderer({ markdown, links, afterTitle, unresolvedAsText }: { markdown: string; links?: RenderedLinks; afterTitle?: ReactNode; unresolvedAsText?: boolean }) {
+  return <MarkdownBase markdown={markdown} links={links} unresolvedAsText={unresolvedAsText} remarkPlugins={readerRemarkPlugins} rehypePlugins={codeHighlightPlugins} pre={ReadingPre} afterTitle={afterTitle} />;
 }

@@ -38,7 +38,7 @@ export function DocumentContextBar({ workspaceId, className = "" }: { workspaceI
   const runAction = useActionRunner({ onToggleFavorite: () => toggleFavorite() });
   const hidden = new Set<ActionId>(["document.favorite", "document.open-side-peek", "document.open-new-tab"]);
   const contextual = active
-    ? actionsFor("row", { workspaceId, workspaceType: access.workspace.type, can: access.actions, confirmed, target: { ...state.target, favorite } })
+    ? actionsFor("row", { workspaceId, workspaceType: access.workspace.type, isPersonalOwner: access.isPersonalOwner, can: access.actions, confirmed, target: { ...state.target, favorite } })
     : [];
   const share = contextual.find((action) => action.id === "document.share");
   const actions = contextual.filter((action) => !hidden.has(action.id));
@@ -48,7 +48,7 @@ export function DocumentContextBar({ workspaceId, className = "" }: { workspaceI
       <span className="min-w-0 flex-1 truncate text-body font-semibold text-kh-text" title={active ? state.title : undefined}>
         {active ? state.title : ""}
       </span>
-      {share && active ? <Tooltip label="Share link"><button type="button" aria-label="Share link…" onClick={() => requestShare(state.target.documentId)} className={buttonClasses({ variant: "ghost", icon: true, className: "hidden sm:inline-flex" })}><ActionIcon name="share" className="h-4 w-4" /></button></Tooltip> : null}
+      {share && active ? <Tooltip label="Share link"><button type="button" aria-label="Share link…" onClick={() => requestShare({ documentId: state.target.documentId })} className={buttonClasses({ variant: "ghost", icon: true, className: "hidden sm:inline-flex" })}><ActionIcon name="share" className="h-4 w-4" /></button></Tooltip> : null}
       {active ? <Tooltip label={favorite ? "Remove from favorites" : "Add to favorites"}>
         <button type="button" aria-label={favorite ? "Remove from favorites" : "Add to favorites"} aria-pressed={favorite} onClick={toggleFavorite}
           className={buttonClasses({ variant: "ghost", icon: true, className: favorite ? "text-kh-selected-text" : "" })}>

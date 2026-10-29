@@ -15,7 +15,7 @@ import { startActions } from "@/components/knowledge/sidebar-get-started";
 export function WorkspaceContentActions({ workspaceId }: { workspaceId: string }) {
   const { access, confirmed } = useWorkspaceAuthorization();
   if (!confirmed || access.workspace.id !== workspaceId) return null;
-  const actions = startActions({ workspaceId, workspaceType: access.workspace.type, can: access.actions, confirmed });
+  const actions = startActions({ workspaceId, workspaceType: access.workspace.type, isPersonalOwner: access.isPersonalOwner, can: access.actions, confirmed });
   return <>
     {actions.map((action, index) =>
       action.effect.kind === "navigate" ? (

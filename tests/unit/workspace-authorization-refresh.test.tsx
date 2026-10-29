@@ -17,6 +17,7 @@ vi.mock("next/navigation", () => ({
 
 const initialAccess = {
   workspace: { id: "workspace", name: "Workspace", type: "PERSONAL", lifecycleState: "ACTIVE" },
+  isPersonalOwner: true,
   effectiveCapabilities: ["source.manage"],
   actions: {
     canImport: true,

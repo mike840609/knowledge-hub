@@ -87,7 +87,12 @@ pass.
   re-verify policy regardless of what the UI allowed. A UI selector is not an
   access check.
   A **document share link** is an owner-issued random UUIDv4, expiring,
-  revocable grant with three narrow paths: anonymous current-document read via
+  revocable grant on a document **or a My Space folder**. A folder link grants
+  read of the documents currently under that folder, re-derived on every
+  request; the URL's document id (`?d=`) is navigation only, and an id not under
+  the folder answers as a dead link does
+  (`docs/superpowers/specs/2026-10-29-folder-share-link-design.md`). The grant
+  has three narrow paths: anonymous current-document read via
   `/s/:token` and `DocumentShareService.readShared`, and review-record access
   via `/api/share-review/*`: query reads require a live token only; writes additionally require a trusted caller;
   and recipient-owned saved-share access via `/api/saved-shares/*` and the
@@ -112,9 +117,12 @@ pass.
   Review access never grants Workspace membership, search, tree, history,
   MCP, Markdown edits or revision writes. Review responses include only
   validated current-revision selected-text fragments; hidden bodies and
-  outdated quotes are excluded. Exactly two entries answer without a caller:
+  outdated quotes are excluded. Exactly two entries serve content without a caller:
   `readShared`, which serves the document, and `DocumentReviewService.queryForLink`,
-  which serves the visible discussion and those fragments. Every other entry,
+  which serves the visible discussion and those fragments. A third,
+  `readSharedTarget`, answers without one but serves no content: it judges the
+  link for `/s/:token/open` and names only the document id to open, before
+  sign-in is asked for (so a dead link is a plain 404). Every other entry,
   and every write, requires one; `tests/unit/share-link-single-exception.test.ts`
   enforces it.
 - **`org_code` does not decide access.** It answers which company org a user
@@ -136,8 +144,9 @@ pass.
   Every code path that inserts a revision must replace the document's edges in
   the same transaction (`repositories.links.replaceForDocument`;
   `tests/unit/link-index-write-points.test.ts` fails if one does not). A link
-  never resolves across Workspaces, and a shared page (`/s/:token`) is given no
-  resolutions at all.
+  never resolves across Workspaces, and a shared document page (`/s/:token`) is
+  given no resolutions at all; a shared folder page is given only those whose
+  target is a document under that folder.
 - **The rendered editor must write a wikilink back as it read it.** It holds
   `[[x]]` as a `wiki_link` node; as text it would be written `\[\[x]]`, which is
   no link, and a document opened and saved there would lose its edges

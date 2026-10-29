@@ -161,7 +161,7 @@ export function applicationServices() {
  * which throws when Company SSO has no session reader, and the reader of a
  * share link has no identity at all. Only the unit of work is needed.
  */
-export function shareReadService(): Pick<DocumentShareService, "readShared"> {
+export function shareReadService(): Pick<DocumentShareService, "readShared" | "readSharedTarget"> {
   return new DocumentShareService(new MariaDbUnitOfWork(getDatabasePool()), new RandomShareTokenIssuer());
 }
 
