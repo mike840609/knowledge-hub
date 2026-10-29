@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type Dispatch, type ReactNode, type RefObject, type SetStateAction } from "react";
 import { ChevronDown, ChevronRight, FileText, Folder, FolderTree } from "lucide-react";
 import type { SharedTreeNode } from "@/modules/knowledge/application/document-share-service";
 import { sharedFolderHref } from "@/lib/share-paths";
@@ -21,21 +21,52 @@ function foldersAbove(nodes: readonly SharedTreeNode[], documentId: string | nul
   return path;
 }
 
+type Disclosure = { navId: string; buttonRef: RefObject<HTMLButtonElement | null>; open: boolean; setOpen: Dispatch<SetStateAction<boolean>> };
+const DisclosureContext = createContext<Disclosure | null>(null);
+
+function useDisclosure(): Disclosure {
+  const disclosure = useContext(DisclosureContext);
+  if (!disclosure) throw new Error("A shared folder's tree and its button belong inside SharedFolderTreeScope.");
+  return disclosure;
+}
+
+/**
+ * What the tree and its phone button share. It sits above the review panel, which is drawn afresh
+ * for each document, so the button can live in that panel's bar while the tree itself (the folders a
+ * reader opened, and where they scrolled it) is never drawn again as the reader moves.
+ */
+export function SharedFolderTreeScope({ children }: { children: ReactNode }) {
+  const navId = useId();
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const value = useMemo(() => ({ navId, buttonRef, open, setOpen }), [navId, open]);
+  return <DisclosureContext.Provider value={value}>{children}</DisclosureContext.Provider>;
+}
+
+/** Below `sm`, the bar's button that shows the tree over the page. */
+export function SharedFolderTreeButton() {
+  const { navId, buttonRef, open, setOpen } = useDisclosure();
+  return (
+    <button ref={buttonRef} type="button" aria-expanded={open} aria-controls={navId} onClick={() => setOpen((current) => !current)} className={buttonClasses({ variant: "ghost", icon: true, className: "-ms-2 sm:hidden" })}>
+      <FolderTree className="size-4" aria-hidden="true" />
+      <span className="sr-only">Folder contents</span>
+    </button>
+  );
+}
+
 /**
  * A shared folder's tree (folder share spec §4): a rail pinned at the window's left under the bar,
- * or, below `sm`, a button in the bar that shows the same list over the page. One list either way,
+ * or, below `sm`, a list over the page shown by `SharedFolderTreeButton`. One list either way,
  * so the folders a reader opened stay open whichever they see.
  *
  * Every document is a link to the folder page's `?d=`; nothing is prefetched, since a prefetch would
  * read the document through the link and count a view nobody took. The folders on the read
- * document's path start open, the others closed, and a document reached another way (an in-folder
- * link) opens its path without closing what the reader opened.
+ * document's path start open, the others closed, and a document reached another way (a tree click,
+ * an in-folder link) opens its path without closing what the reader opened.
  */
 export function SharedFolderTree({ token, nodes, currentDocumentId, folderName }: { token: string; nodes: SharedTreeNode[]; currentDocumentId: string | null; folderName: string }) {
-  const navId = useId();
-  const buttonRef = useRef<HTMLButtonElement>(null);
+  const { navId, buttonRef, open, setOpen } = useDisclosure();
   const navRef = useRef<HTMLElement>(null);
-  const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(() => new Set(foldersAbove(nodes, currentDocumentId)));
   const [shownFor, setShownFor] = useState(currentDocumentId);
   if (shownFor !== currentDocumentId) {
@@ -70,31 +101,25 @@ export function SharedFolderTree({ token, nodes, currentDocumentId, folderName }
       document.removeEventListener("pointerdown", away);
       document.removeEventListener("keydown", escape);
     };
-  }, [open]);
+  }, [open, setOpen, buttonRef]);
   const toggle = (id: string) => setExpanded((current) => {
     const next = new Set(current);
     if (!next.delete(id)) next.add(id);
     return next;
   });
   return (
-    <>
-      <button ref={buttonRef} type="button" aria-expanded={open} aria-controls={navId} onClick={() => setOpen((current) => !current)} className={buttonClasses({ variant: "ghost", icon: true, className: "-ms-2 sm:hidden" })}>
-        <FolderTree className="size-4" aria-hidden="true" />
-        <span className="sr-only">Folder contents</span>
-      </button>
-      <nav
-        ref={navRef}
-        id={navId}
-        aria-label={folderName}
-        className={`kh-shared-folder-tree fixed inset-x-0 top-14 z-30 max-h-[70vh] overflow-y-auto border-b border-kh-border bg-kh-bg p-3 shadow-popover sm:bottom-0 sm:right-auto sm:max-h-none sm:w-[var(--kh-tree-rail)] sm:border-b-0 sm:border-r sm:bg-kh-bg-explorer sm:shadow-none ${open ? "" : "max-sm:hidden"}`}
-      >
-        <p className="flex kh-rail-row min-w-0 items-center gap-2 px-2 kh-rail-text font-semibold text-kh-text">
-          <Folder size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />
-          <span className="truncate">{folderName}</span>
-        </p>
-        <Branch parentId={null} tree={children} expanded={expanded} toggle={toggle} token={token} currentDocumentId={currentDocumentId} onNavigate={() => setOpen(false)} />
-      </nav>
-    </>
+    <nav
+      ref={navRef}
+      id={navId}
+      aria-label={folderName}
+      className={`kh-shared-folder-tree fixed inset-x-0 top-14 z-30 max-h-[70vh] overflow-y-auto border-b border-kh-border bg-kh-bg p-3 shadow-popover sm:bottom-0 sm:right-auto sm:max-h-none sm:w-[var(--kh-tree-rail)] sm:border-b-0 sm:border-r sm:bg-kh-bg-explorer sm:shadow-none ${open ? "" : "max-sm:hidden"}`}
+    >
+      <p className="flex kh-rail-row min-w-0 items-center gap-2 px-2 kh-rail-text font-semibold text-kh-text">
+        <Folder size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />
+        <span className="truncate">{folderName}</span>
+      </p>
+      <Branch parentId={null} tree={children} expanded={expanded} toggle={toggle} token={token} currentDocumentId={currentDocumentId} onNavigate={() => setOpen(false)} />
+    </nav>
   );
 }
 

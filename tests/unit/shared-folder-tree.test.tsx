@@ -8,7 +8,7 @@ vi.mock("next/link", () => ({
     return <a href={href} {...props}>{children}</a>;
   },
 }));
-import { SharedFolderTree } from "@/components/knowledge/shared-folder-tree";
+import { SharedFolderTree, SharedFolderTreeButton, SharedFolderTreeScope } from "@/components/knowledge/shared-folder-tree";
 import type { SharedTreeNode } from "@/modules/knowledge/application/document-share-service";
 
 /**
@@ -39,7 +39,9 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-const show = (currentDocumentId: string | null) => act(async () => root.render(<SharedFolderTree token="tok" nodes={nodes} currentDocumentId={currentDocumentId} folderName="Onboarding" />));
+/** As the page draws it: the button in the bar, the tree beside it, one scope over both. */
+const page = (tree: SharedTreeNode[], currentDocumentId: string | null) => <SharedFolderTreeScope><SharedFolderTreeButton /><SharedFolderTree token="tok" nodes={tree} currentDocumentId={currentDocumentId} folderName="Onboarding" /></SharedFolderTreeScope>;
+const show = (currentDocumentId: string | null) => act(async () => root.render(page(nodes, currentDocumentId)));
 const folder = (name: string) => [...container.querySelectorAll<HTMLButtonElement>("nav button[aria-expanded]")].find(button => button.textContent?.trim() === name)!;
 /** What a link is called aloud: its text without the icon beside it. */
 const spoken = (element: Element) => { const copy = element.cloneNode(true) as Element; copy.querySelectorAll("[aria-hidden]").forEach(hidden => hidden.remove()); return copy.textContent?.trim(); };
@@ -89,7 +91,7 @@ describe("SharedFolderTree", () => {
   });
 
   it("lists nothing but a note when the folder is empty", async () => {
-    await act(async () => root.render(<SharedFolderTree token="tok" nodes={[]} currentDocumentId={null} folderName="Onboarding" />));
+    await act(async () => root.render(page([], null)));
     expect(container.querySelector("nav")!.textContent).toContain("Empty folder");
   });
 });
