@@ -184,7 +184,7 @@ test.describe("folder share link", () => {
     const documentDialog = page.getByRole("dialog", { name: "Share link" });
     const also = documentDialog.getByRole("list", { name: "Also shared through folders" });
     await expect(also).toContainText("Also visible through the shared folder", ROUND_TRIP);
-    await also.getByRole("button", { name: names.folder, exact: true }).click();
+    await also.getByRole("button", { name: `Open share links for folder ${names.folder}`, exact: true }).click();
     await expect(page.getByRole("dialog", { name: `Share folder ${names.folder}` })).toBeVisible(ROUND_TRIP);
     await page.keyboard.press("Escape");
 

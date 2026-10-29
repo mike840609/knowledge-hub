@@ -115,6 +115,8 @@ describe("the share dialog", () => {
     await open({ documentId: "d1" });
     expect(dialogText()).toContain("Also visible through the shared folder Handbook");
     const button = Array.from(document.body.querySelectorAll("button")).find((candidate) => candidate.textContent === "Handbook")!;
+    // Tabbed to on its own, it says what it does and that Handbook is a folder, not only the name.
+    expect(button.getAttribute("aria-label")).toBe("Open share links for folder Handbook");
     await act(async () => { button.click(); });
     await flush();
     expect(fetchStub).toHaveBeenCalledWith("/api/tree-nodes/n1/share-links", expect.anything());
