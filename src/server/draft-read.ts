@@ -1,9 +1,10 @@
 import { applicationServices } from "./composition";
 import { getWorkspaceShellModel } from "./knowledge-read";
 import { isHiddenReadFailure } from "./read-errors";
+import { DomainError } from "@/shared/domain/errors";
 
 export type DraftRecoveryModel = {
-  draft: { key: string; title: string; markdown: string; updatedAt: string } | null;
+  draft: { key: string; title: string; markdown: string; updatedAt: string; metadata: Record<string, unknown>; metadataMayDiffer: boolean } | null;
   document: {
     documentId: string;
     sourceId: string;
@@ -39,12 +40,27 @@ export async function getDraftRecoveryModel(
     const value = item.value;
     const title = value?.title;
     const markdown = value?.markdown;
-    const draft = typeof title === "string" && typeof markdown === "string"
-      ? { key: item.key, title, markdown, updatedAt: item.updatedAt }
-      : null;
-
     const document = await services.queries.getDocument(caller, documentId, { includeArchived: true });
     if (document.workspaceId !== workspaceId || document.sourceId !== sourceId) return null;
+    const baseRevisionId = typeof value?.baseRevisionId === "string" ? value.baseRevisionId : null;
+    let metadata = document.currentRevision.metadata ?? {};
+    let metadataMayDiffer = baseRevisionId === null;
+    if (baseRevisionId && baseRevisionId !== document.currentRevision.id) {
+      const revisions = await services.queries.listRevisionSummaries(caller, documentId, { includeArchived: true });
+      const base = revisions.find(revision => revision.id === baseRevisionId);
+      if (!base) metadataMayDiffer = true;
+      else {
+        try {
+          metadata = (await services.queries.getRevision(caller, documentId, base.revisionNo, { includeArchived: true })).metadata;
+        } catch (error) {
+          if (!(error instanceof DomainError) || error.code !== "REVISION_NOT_FOUND") throw error;
+          metadataMayDiffer = true;
+        }
+      }
+    }
+    const draft = typeof title === "string" && typeof markdown === "string"
+      ? { key: item.key, title, markdown, updatedAt: item.updatedAt, metadata, metadataMayDiffer }
+      : null;
     const source = await services.queries.getSource(caller, sourceId, { includeArchived: true });
     const tree = await services.queries.listTree(caller, sourceId, { includeArchived: true });
     const shell = await getWorkspaceShellModel(workspaceId);

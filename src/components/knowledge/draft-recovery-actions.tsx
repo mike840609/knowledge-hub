@@ -8,13 +8,15 @@ import { useToast } from "@/components/ui/toast";
 import { governanceFailure, governanceRequest } from "@/components/workspaces/governance-error";
 import { organizeFailure } from "@/components/knowledge/organize-messages";
 import { downloadMarkdown } from "@/lib/download-markdown";
+import { buildRecoveryMarkdown } from "@/lib/recovery-markdown";
 
-export function DraftRecoveryActions({ workspaceId, sourceId, documentId, title, markdown, canRestore }: {
+export function DraftRecoveryActions({ workspaceId, sourceId, documentId, title, markdown, metadata = {}, canRestore }: {
   workspaceId: string;
   sourceId: string;
   documentId: string;
   title: string;
   markdown: string;
+  metadata?: Record<string, unknown>;
   canRestore: boolean;
 }) {
   const router = useRouter();
@@ -51,7 +53,10 @@ export function DraftRecoveryActions({ workspaceId, sourceId, documentId, title,
           {restoring ? "Restoring…" : "Restore document"}
         </Button>
       )}
-      <Button variant="ghost" onClick={() => downloadMarkdown(title, markdown)}>
+      <Button variant="ghost" onClick={async () => {
+        const output = await buildRecoveryMarkdown({ title, markdown, metadata });
+        downloadMarkdown(output.title, output.markdown, { recovery: output.recovery });
+      }}>
         <Download size={14} aria-hidden="true" />
         Download draft
       </Button>

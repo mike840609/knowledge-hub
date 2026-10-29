@@ -2,6 +2,7 @@ import { describe, beforeEach, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { PersonalHome, isNewNoteKey } from "@/components/knowledge/personal-home";
 const shortcuts = vi.hoisted(() => ({ value: { favorites: [] as string[], recent: [] as string[] } as { favorites: string[]; recent: string[]; openedAt?: Record<string, string> } }));
+const authorization = vi.hoisted(() => ({ canWrite: true, lifecycleState: "ACTIVE" }));
 vi.mock("@/components/knowledge/use-document-shortcuts", () => ({
   useDocumentShortcuts: () => ({ shortcuts: shortcuts.value, update: () => {} }),
   documentShortcutKey: (a: string, b: string) => `${a}:${b}`,
@@ -9,7 +10,7 @@ vi.mock("@/components/knowledge/use-document-shortcuts", () => ({
 vi.mock("@/components/shell/use-workspace-authorization", () => ({
   useWorkspaceAuthorization: () => ({
     confirmed: true,
-    access: { actions: { canImport: true } },
+    access: { actions: { canImport: true, canWrite: authorization.canWrite }, workspace: { lifecycleState: authorization.lifecycleState } },
   }),
 }));
 vi.mock("@/components/actions/action-menu", () => ({
@@ -24,7 +25,7 @@ vi.mock("@/components/ui/toast", () => ({ useToast: () => () => {} }));
 vi.mock("@/components/knowledge/share-link-dialog", () => ({
   ShareLinkDialogHost: () => null,
 }));
-beforeEach(() => { shortcuts.value = { favorites: [], recent: [] }; });
+beforeEach(() => { shortcuts.value = { favorites: [], recent: [] }; authorization.canWrite = true; authorization.lifecycleState = "ACTIVE"; });
 
 const doc = (id: string, over = {}) => ({ sourceId: "src", documentId: id, title: `Doc ${id}`, ownership: "HUB_MANAGED" as const, status: "ACTIVE" as const, sourceStatus: "ACTIVE" as const, updatedAt: "2026-10-09T00:00:00.000Z", ...over });
 
@@ -82,6 +83,17 @@ it("links an archived document's draft to recovery, not the editor", () => {
   expect(drafts).toContain('href="/w/ws/knowledge/drafts/src/a"');
   expect(drafts).toContain("Original document archived");
   expect(drafts).not.toContain("/edit");
+});
+
+it("links read-only active drafts to recovery", () => {
+  authorization.canWrite = false;
+  const html = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[doc("a")]} drafts={[{ key: "draft:a", title: "Doc a", sourceId: "src", updatedAt: "2026-10-02T00:00:00.000Z" }]} />);
+  expect(html).toContain('href="/w/ws/knowledge/drafts/src/a"');
+});
+
+it("links source-managed drafts to recovery even when the workspace is writable", () => {
+  const html = renderToStaticMarkup(<PersonalHome workspaceId="ws" documents={[doc("a", { ownership: "SOURCE_MANAGED" })]} drafts={[{ key: "draft:a", title: "Doc a", sourceId: "src", updatedAt: "2026-10-02T00:00:00.000Z" }]} />);
+  expect(html).toContain('href="/w/ws/knowledge/drafts/src/a"');
 });
 
 it("still offers the getting-started guide when every document is archived", () => {

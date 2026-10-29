@@ -5,6 +5,7 @@ import type { KnowledgeMetadata } from "@/modules/knowledge/domain/content";
 import { APPEND_POSITION, MAX_FOLDER_NAME_LENGTH, normalizeFolderName } from "@/modules/knowledge/domain/tree-rules";
 import { isUuid } from "@/shared/ids/uuidv7";
 import { MAX_MARKDOWN_BYTES, markdownBytes } from "@/lib/markdown-limits";
+import { isRecoveryFilename } from "@/lib/recovered-title";
 
 export const MAX_TITLE_LENGTH = 512;
 export { MAX_FOLDER_NAME_LENGTH };
@@ -148,21 +149,25 @@ export function parseCreateDocumentInput(body: unknown): { title: string; markdo
   const hasTitle = record.title !== undefined;
   const hasFilename = record.filename !== undefined;
   if (hasTitle === hasFilename) invalid("Provide exactly one of title or filename.");
-  const markdown = readMarkdown(record);
+  const filename = hasFilename ? readString(record, "filename") : null;
+  const recovery = filename !== null && isRecoveryFilename(filename);
+  const markdown = recovery ? readString(record, "markdown") : readMarkdown(record);
+  // Recovery files include frontmatter and a title marker in addition to the saved body.
+  if (recovery && markdownBytes(markdown) > MAX_MARKDOWN_BYTES * 8) invalid("Markdown is too large.");
   if (hasTitle) return { title: checkedTitle(readString(record, "title")), markdown, metadata: {}, parentId };
 
   // Upload path: the same frontmatter → H1 → filename precedence folder import uses,
   // and the same frontmatter-stripped body / frontmatter-as-metadata storage
   // (spec §6.2) — matching finalize-folder-import.ts so the same .md file
   // produces the same stored content whether it arrives by import or upload.
-  const filename = readString(record, "filename");
   try {
     const hash = sourceFileHash(new TextEncoder().encode(markdown));
     const parsed = parseGenericMarkdownText({
-      sourcePath: filename,
+      sourcePath: filename!,
       text: markdown,
       sourceFileHash: hash,
     });
+    if (recovery && markdownBytes(parsed.markdown) > MAX_MARKDOWN_BYTES) invalid("Markdown is too large.");
     return { title: checkedTitle(parsed.resolvedTitle), markdown: parsed.markdown, metadata: parsed.metadata, parentId };
   } catch (error) {
     if (error instanceof SourceImportError) {
@@ -174,14 +179,17 @@ export function parseCreateDocumentInput(body: unknown): { title: string; markdo
 
 export function parseUpdateDocumentInput(body: unknown): {
   autosave?: boolean;
+  updateMetadataTitle?: boolean;
   title: string;
   markdown: string;
   expectedCurrentRevisionId: string;
 } {
   const record = readObject(body);
   if (record.autosave !== undefined && typeof record.autosave !== "boolean") invalid("Provide autosave as a boolean.");
+  if (record.updateMetadataTitle !== undefined && typeof record.updateMetadataTitle !== "boolean") invalid("Provide updateMetadataTitle as a boolean.");
   return {
     ...(record.autosave === true ? { autosave: true } : {}),
+    ...(record.updateMetadataTitle === true ? { updateMetadataTitle: true } : {}),
     title: checkedTitle(readString(record, "title")),
     markdown: readMarkdown(record),
     expectedCurrentRevisionId: readString(record, "expectedCurrentRevisionId"),

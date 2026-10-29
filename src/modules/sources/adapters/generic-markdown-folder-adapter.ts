@@ -12,6 +12,8 @@ import { fingerprintReconciliationContent } from "@/modules/sources/domain/recon
 import type { ParsedMarkdownEntry } from "@/modules/sources/domain/import-snapshot";
 import type { ImportDiagnostic } from "@/modules/sources/domain/import-diagnostic";
 import { resolveImportTitle } from "@/modules/sources/domain/import-title";
+import { readRecoveredTitle, isRecoveryFilename } from "@/lib/recovered-title";
+import { resolveAuthoredTitle } from "@/lib/authored-title";
 
 import { splitMarkdownSourceIdentity } from "@/modules/sources/domain/markdown-source-identity";
 
@@ -147,20 +149,25 @@ export function parseGenericMarkdownText(input: {
   unreadableFrontmatter?: UnreadableFrontmatter;
 }): ParsedMarkdownEntry {
   const parsedFrontmatter = splitFrontmatter(input.text, input.sourcePath, input.unreadableFrontmatter ?? "reject");
+  const recovered = isRecoveryFilename(input.sourcePath)
+    ? readRecoveredTitle(parsedFrontmatter.body)
+    : { markdown: parsedFrontmatter.body, title: null };
   const { externalId, metadata } = splitMarkdownSourceIdentity(parsedFrontmatter.metadata);
-  const body = parsedFrontmatter.body;
+  const body = recovered.markdown;
   const title = resolveImportTitle({
     sourcePath: input.sourcePath,
     frontmatterTitle: metadata.title,
     firstH1: firstH1(body),
   });
-  const revision = fingerprintRevisionContent({ title: title.title, markdown: body, metadata });
+  const authored = recovered.title === null ? null : resolveAuthoredTitle({ metadataTitle: metadata.title, markdown: body, typedTitle: recovered.title });
+  const revision = fingerprintRevisionContent({ title: authored?.title ?? title.title, markdown: body, metadata });
 
   return {
     sourcePath: input.sourcePath,
     externalId,
     resolvedTitle: revision.normalized.title,
-    titleSource: title.source,
+    // Recovery preserves an independent title, represented by the existing filename-derived kind.
+    titleSource: authored?.source === "TYPED" ? "FILENAME" : authored?.source === "METADATA" ? "FRONTMATTER" : authored?.source === "H1" ? "H1" : title.source,
     markdown: revision.normalized.markdown,
     metadata: revision.normalized.metadata,
     revisionContentHash: revision.contentHash,

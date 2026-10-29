@@ -5,6 +5,7 @@ import { useEffect, useId, useMemo, useState } from "react";
 import { Dialog } from "@base-ui-components/react/dialog";
 import { Folder } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { moveDestinations } from "@/lib/knowledge-navigation";
 import type { KnowledgeTreeItem, SourceView } from "@/modules/knowledge/application/knowledge-query-service";
 import { organizeFailure } from "./organize-messages";
@@ -43,11 +44,13 @@ function MoveDialog({ request, collections, onClose, loading, failed, onRetry }:
   const mutations = useTreeMutations();
   const errorId = useId();
   const [selected, setSelected] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
   useEffect(() => {
     setSelected(null);
+    setQuery("");
     setProblem(null);
     setBusy(false);
   }, [request]);
@@ -61,11 +64,43 @@ function MoveDialog({ request, collections, onClose, loading, failed, onRetry }:
         ? candidate.type === "document" && candidate.documentId === request.node.documentId
         : candidate.id === request.node.nodeId,
     );
-    return tree && item ? { item, destinations: moveDestinations(tree, item.id) } : null;
+    if (!tree || !item) return null;
+    const byId = new Map(tree.map(node => [node.id, node]));
+    const allowed = new Set(moveDestinations(tree, item.id).map(destination => destination.id));
+    const paths = moveDestinations(tree, "").map(destination => {
+      const path = [destination.label];
+      let parent = byId.get(destination.id)?.parentId;
+      while (parent) {
+        const node = byId.get(parent);
+        if (!node) break;
+        path.unshift(node.label);
+        parent = node.parentId;
+      }
+      return { ...destination, path: path.join(" / ") };
+    });
+    const counts = new Map<string, number>();
+    for (const destination of paths) counts.set(destination.path, (counts.get(destination.path) ?? 0) + 1);
+    const seen = new Map<string, number>();
+    const numbered = paths.map(destination => {
+      const count = counts.get(destination.path)!;
+      const index = (seen.get(destination.path) ?? 0) + 1;
+      seen.set(destination.path, index);
+      return { ...destination, displayPath: count > 1 ? `${destination.path} (${index} of ${count})` : destination.path === "Top level" ? "Folder: Top level" : destination.path };
+    });
+    const displayCounts = new Map<string, number>();
+    for (const destination of numbered) displayCounts.set(destination.displayPath, (displayCounts.get(destination.displayPath) ?? 0) + 1);
+    const destinations = numbered.filter(destination => allowed.has(destination.id)).map(destination => ({
+      ...destination,
+      displayPath: displayCounts.get(destination.displayPath)! > 1 ? `${destination.displayPath} · ${destination.id}` : destination.displayPath,
+    }));
+    return { item, destinations };
   }, [request, collections]);
 
   const kind = request?.node.type === "folder" ? "folder" : "document";
   const label = request?.label ?? "";
+  const needle = query.trim().toLocaleLowerCase();
+  const showTop = "top level".includes(needle);
+  const visibleDestinations = found?.destinations.filter(destination => destination.path.toLocaleLowerCase().includes(needle)) ?? [];
 
   async function submit() {
     if (!request || !found || selected === null || busy) return;
@@ -88,15 +123,16 @@ function MoveDialog({ request, collections, onClose, loading, failed, onRetry }:
     } else setProblem(result.message);
   }
 
-  const option = (id: string, name: string, depth: number, disabled: boolean) => (
+  const option = (id: string, name: string, depth: number, disabled: boolean, path = name) => (
     <label
       key={id}
       className="relative flex min-h-8 cursor-pointer items-center gap-2 rounded-md pr-2 text-body hover:bg-kh-bg-hover has-[:checked]:bg-kh-bg-selected has-[:checked]:font-medium has-[:checked]:text-kh-selected-text has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-kh-focus has-[:disabled]:cursor-default has-[:disabled]:text-kh-text-muted has-[:disabled]:hover:bg-transparent"
-      style={{ paddingLeft: `${0.5 + depth}rem` }}
+      style={{ paddingLeft: `${0.5 + Math.min(depth, 3)}rem` }}
     >
       <input
         type="radio"
         name="destination"
+        aria-label={path}
         value={id}
         className="sr-only"
         disabled={disabled || busy}
@@ -107,7 +143,7 @@ function MoveDialog({ request, collections, onClose, loading, failed, onRetry }:
         }}
       />
       <Folder size={14} className="shrink-0 text-kh-text-muted" aria-hidden="true" />
-      <span className="min-w-0 flex-1 truncate">{name}</span>
+      <span className="min-w-0 flex-1"><span className="block break-words">{name}</span>{path !== name ? <span aria-hidden="true" className="block break-words text-caption font-normal text-kh-text-muted">{path}</span> : null}</span>
       {disabled ? <span className="shrink-0 text-caption font-normal text-kh-text-muted">Current</span> : null}
     </label>
   );
@@ -134,6 +170,11 @@ function MoveDialog({ request, collections, onClose, loading, failed, onRetry }:
                   void submit();
                 }}
               >
+                <Input type="search" aria-label="Find a folder" placeholder="Find a folder" value={query} disabled={busy} onChange={event => {
+                  setQuery(event.target.value);
+                  setSelected(null);
+                  setProblem(null);
+                }} className="mb-3" />
                 <fieldset
                   className="max-h-72 min-w-0 space-y-0.5 overflow-y-auto rounded-md border border-kh-border p-1"
                   // A radio does not submit the form on Enter in every browser; a reader who has arrowed to
@@ -145,9 +186,11 @@ function MoveDialog({ request, collections, onClose, loading, failed, onRetry }:
                   }}
                 >
                   <legend className="sr-only">Destination</legend>
-                  {option(TOP, "Top level", 0, found.item.parentId === null)}
-                  {found.destinations.map((destination) => option(destination.id, destination.label, destination.depth + 1, destination.id === found.item.parentId))}
+                  {showTop ? option(TOP, "Top level", 0, found.item.parentId === null) : null}
+                  {visibleDestinations.map(destination => option(destination.id, destination.label, destination.depth + 1, destination.id === found.item.parentId, destination.displayPath))}
+                  {needle && !showTop && visibleDestinations.length === 0 ? <p role="status" className="px-2 py-2 text-body-sm text-kh-text-muted">No folders match.</p> : null}
                 </fieldset>
+                {visibleDestinations.some(destination => destination.displayPath !== destination.path && destination.displayPath !== "Folder: Top level") ? <p className="mt-2 text-caption text-kh-text-muted">Matching paths are numbered in tree order.</p> : null}
                 {problem ? (
                   <p id={errorId} role="alert" className="mt-2 text-body text-kh-danger">
                     {problem}

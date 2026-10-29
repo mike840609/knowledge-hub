@@ -49,10 +49,25 @@ describe("PATCH /api/documents/[documentId] (spec §6.1, §6.3)", () => {
 
   it("preserves the existing metadata instead of clearing it", async () => {
     const createRevision = createRevisionMock({ revisionId: "rev-2", revisionNo: 2, changed: true });
-    vi.mocked(applicationServices).mockReturnValue(fakeServices(createRevision, { owner: "hr" }));
+    vi.mocked(applicationServices).mockReturnValue(fakeServices(createRevision, { owner: "hr", title: "Original" }));
 
     await PATCH(request({ title: "T", markdown: "M", expectedCurrentRevisionId: "rev-1" }), context);
 
+    expect(createRevision.mock.calls[0]![1]).toMatchObject({ metadata: { owner: "hr", title: "Original" } });
+  });
+
+  it("renames the metadata title without changing other metadata when explicitly requested", async () => {
+    const createRevision = createRevisionMock({ revisionId: "rev-2", revisionNo: 2, changed: true });
+    vi.mocked(applicationServices).mockReturnValue(fakeServices(createRevision, { title: "Old title", owner: "hr" }));
+    const response = await PATCH(request({ title: "New title", markdown: "Body", expectedCurrentRevisionId: "rev-1", updateMetadataTitle: true }), context);
+    expect(response.status).toBe(200);
+    expect(createRevision.mock.calls[0]![1]).toMatchObject({ title: "New title", metadata: { title: "New title", owner: "hr" } });
+  });
+
+  it("does not add a metadata title when none existed", async () => {
+    const createRevision = createRevisionMock({ revisionId: "rev-2", revisionNo: 2, changed: true });
+    vi.mocked(applicationServices).mockReturnValue(fakeServices(createRevision, { owner: "hr" }));
+    await PATCH(request({ title: "New title", markdown: "Body", expectedCurrentRevisionId: "rev-1", updateMetadataTitle: true }), context);
     expect(createRevision.mock.calls[0]![1]).toMatchObject({ metadata: { owner: "hr" } });
   });
 

@@ -194,7 +194,7 @@ export function PersonalHome({ workspaceId, documents, drafts, reminders = [], n
 
   function draftHref(item: DraftItem): string {
     if (!item.doc) return `/w/${workspaceId}/knowledge/new`;
-    if (item.doc.status === "ACTIVE" && item.doc.sourceStatus === "ACTIVE") {
+    if (item.doc.status === "ACTIVE" && item.doc.sourceStatus === "ACTIVE" && item.doc.ownership === "HUB_MANAGED" && confirmed && access.actions.canWrite && access.workspace.lifecycleState !== "ARCHIVED") {
       return `/w/${workspaceId}/knowledge/${item.doc.sourceId}/${item.doc.documentId}`;
     }
     return `/w/${workspaceId}/knowledge/drafts/${item.doc.sourceId}/${item.doc.documentId}`;

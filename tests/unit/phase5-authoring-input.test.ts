@@ -25,6 +25,19 @@ function thrownBy(run: () => unknown): unknown {
 }
 
 describe("parseCreateDocumentInput (spec §6.1, §6.2, §6.4)", () => {
+  it("accepts a recovery file whose body is at the limit even with a title marker and metadata", () => {
+    const body = "x".repeat(MAX_MARKDOWN_BYTES);
+    const markdown = '---\nowner: team\n---\n<!-- knowledge-hub-recovery-title:v1:%22Project%20%2F%20Notes%22 -->\n' + body;
+    const parsed = parseCreateDocumentInput({ filename: "Project _ Notes.kh-recovery.md", markdown });
+    expect(parsed.title).toBe("Project / Notes");
+    expect(parsed.markdown).toBe(body);
+    expect(parsed.metadata).toEqual({ owner: "team" });
+  });
+
+  it("still rejects a recovered body larger than the limit", () => {
+    const markdown = '<!-- knowledge-hub-recovery-title:v1:%22A%22 -->\n' + "x".repeat(MAX_MARKDOWN_BYTES + 1);
+    expect(() => parseCreateDocumentInput({ filename: "A.kh-recovery.md", markdown })).toThrow(/too large/i);
+  });
   it("accepts an explicit title", () => {
     expect(parseCreateDocumentInput({ title: "Runbook", markdown: "# Hi" }))
       .toEqual({ title: "Runbook", markdown: "# Hi", metadata: {}, parentId: null });
