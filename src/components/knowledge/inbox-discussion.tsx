@@ -11,7 +11,7 @@ import { governanceRequest } from "@/components/workspaces/governance-error";
 import { MARKDOWN_ARTICLE } from "./markdown-article";
 import { MarkdownRenderer } from "./markdown-renderer";
 import { markdownOpensWithHeading } from "@/lib/markdown-title";
-import { notificationHref, notificationTitle } from "./notification-href";
+import { isLinkEntry, notificationHref, notificationTitle } from "./notification-href";
 import { OwnerReviewPanel } from "./owner-review-panel";
 import { renderedLinksFrom } from "./rendered-links";
 import { ReviewThreadList, reviewRequest } from "./review-thread-list";
@@ -26,7 +26,7 @@ type Entry = ShareCommentNotificationView;
  */
 export function InboxDiscussion({ entry }: { entry: Entry }) {
   const href = notificationHref(entry);
-  const follow = entry.kind === "FOLLOW";
+  const follow = isLinkEntry(entry.kind);
   // The reader's 48px path line: what this is on the left, the way to the full page on the right.
   return <section aria-label="Selected discussion" className="flex h-full min-h-0 min-w-0 flex-col">
     <header className="flex h-12 shrink-0 items-center justify-between gap-3 px-6">

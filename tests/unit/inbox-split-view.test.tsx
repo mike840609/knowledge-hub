@@ -279,3 +279,46 @@ it("a mark that failed is asked again by choosing the entry again", async () => 
   expect(row("a").textContent).toContain("Read");
   expect(host.querySelector('[role="alert"]')).toBeNull();
 });
+
+const mention = (id: string, over: Partial<ShareCommentNotificationView> = {}) =>
+  entry(`mention:${id}`, { kind: "MENTION", workspaceId: "", documentId: "", sourceId: "", token: "tok", linkAvailable: true, ...over });
+
+it("a mention is labelled, links through its token without prefetch, and shows no reply count", async () => {
+  notifications = [mention("c1", { threadId: "thread-m", authorName: "Ann", excerpt: "see this" })];
+  await mount();
+  const link = row("mention:c1");
+  expect(link.getAttribute("href")).toBe("/s/tok?thread=thread-m");
+  expect(link.textContent).toContain("Mentioned you");
+  expect(link.textContent).toContain("Ann: see this");
+  expect(link.textContent).not.toContain("new replies");
+});
+
+it("a mention opens through the link's token and settles by its own id", async () => {
+  notifications = [mention("c1", { threadId: "thread-m" }), entry("o", { threadId: "thread-m" })];
+  threads["token:tok"] = [thread("thread-m")];
+  await mount();
+  await click(row("mention:c1"));
+  expect(pane()?.textContent).toContain("body of thread-m");
+  expect(calls.filter(call => call.url === "/api/share-review/threads/query").map(call => call.body)).toEqual([{ token: "tok" }]);
+  expect(calls.some(call => call.url.startsWith("/api/documents/"))).toBe(false);
+  expect(marks()).toEqual(["mention:c1"]);
+});
+
+it("a dead mention shows the dead-entry copy and no link", async () => {
+  notifications = [mention("c2", { linkAvailable: false, token: undefined, documentTitle: "", authorName: undefined, excerpt: "", threadId: "" })];
+  await mount();
+  await click(row("mention:c2"));
+  expect(pane()?.textContent).toContain("This link is no longer available.");
+  expect(pane()?.textContent).toContain("A shared discussion");
+  expect(pane()?.querySelector("a")).toBeNull();
+});
+
+it("the owner panel's unread hook ignores mentions", async () => {
+  const { useShareCommentUnread } = await import("@/components/knowledge/share-comment-notifications");
+  unreadNotices = [{ kind: "MENTION", documentId: "doc-x", threadId: "t1" }, { kind: "OWNER", documentId: "doc-x", threadId: "t2" }];
+  let seen: string[] = [];
+  const Probe = () => { seen = [...useShareCommentUnread("doc-x").unreadThreadIds]; return null; };
+  await act(async () => root.render(<Probe />));
+  await act(async () => {});
+  expect(seen).toEqual(["t2"]);
+});
