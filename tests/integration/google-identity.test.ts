@@ -30,5 +30,25 @@ describe("resolveGoogleIdentity", () => {
 
     const link = await unitOfWork.run((repositories) => repositories.identityLinks.findByProviderSubject("google", subject));
     expect(link?.hubUserId).toBe(first.id);
+
+    const [created] = await pool.query<{ account: string | null }[]>(
+      "SELECT account FROM users WHERE id = ?",
+      [first.id],
+    );
+    expect(created.account).toBeNull();
+
+    // A later Google profile update must not write or clear an account.
+    const existingAccount = `google-existing-${subject}`;
+    await pool.query("UPDATE users SET account = ? WHERE id = ?", [existingAccount, first.id]);
+    const third = await resolveGoogleIdentity(
+      { subject, name: "Third Name", email: "first@example.com" },
+      unitOfWork,
+    );
+    expect(third.id).toBe(first.id);
+    const [afterUpdate] = await pool.query<{ account: string | null }[]>(
+      "SELECT account FROM users WHERE id = ?",
+      [first.id],
+    );
+    expect(afterUpdate.account).toBe(existingAccount);
   });
 });

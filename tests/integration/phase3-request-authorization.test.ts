@@ -268,6 +268,11 @@ describe("Phase 3 real request adapters with a trusted test session reader", () 
     expect(await getWorkspaceShellModel(personalWorkspace.id)).toMatchObject({ identityName: "Local", workspace: { name: "My Space" } });
     expect((await createThroughRoute(personalWorkspace.id)).status).toBe(201);
     expect(await pool.query("SELECT id FROM workspaces WHERE personal_owner_user_id = ?", [id])).toHaveLength(1);
+    const [localUser] = await pool.query<{ account: string | null }[]>(
+      "SELECT account FROM users WHERE id = ?",
+      [id],
+    );
+    expect(localUser.account).toBeNull();
     expect(reader.readSession).not.toHaveBeenCalled();
   });
 
