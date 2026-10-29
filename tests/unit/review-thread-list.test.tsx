@@ -189,3 +189,29 @@ test("an unread discussion says so inside its first author line, so reading it m
   expect(Array.from(first.children).map(child => child.tagName)).toEqual(Array.from(second.children).map(child => child.tagName));
   expect(second.textContent).not.toContain("Unread");
 });
+
+test("a reply offers @ where the list is given a scope, and passes on who was picked", async () => {
+  sessionStorage.clear();
+  const ming = { id: "11111111-1111-4111-8111-111111111111", name: "陳小明", nameEn: null, empId: "E1" };
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ candidates: [ming] }), { headers: { "content-type": "application/json" } })));
+  const replies: unknown[][] = [];
+  renderList([thread("t1", [0], "Para zero.")], { reply: async (...args: unknown[]) => { replies.push(args); }, mentionScope: { token: "tok" } } as never);
+  act(() => { buttons("Reply")[0].click(); });
+  const textarea = host.querySelector("textarea")!;
+  expect(textarea.getAttribute("role")).toBe("combobox");
+  type(textarea, "@m");
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 200)); });
+  act(() => { textarea.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })); });
+  await act(async () => { host.querySelector("form")!.requestSubmit(); });
+  expect(replies).toEqual([["t1", "@陳小明 ", expect.any(String), [ming.id], undefined]]);
+});
+
+test("editing a comment never offers @", async () => {
+  const own = { ...thread("t1", [0], "Para zero."), comments: [{ ...thread("t1", [0], "Para zero.").comments[0], own: true }] };
+  renderList([own], { activeThreadId: "t1", mentionScope: { token: "tok" }, author: { edit: async () => {}, remove: async () => {} } } as never);
+  await act(async () => { host.querySelector<HTMLElement>('[aria-label="Comment options"]')!.click(); });
+  await act(async () => { Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find(item => item.textContent === "Edit")!.click(); });
+  const field = host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Edit comment"]')!;
+  expect(field).not.toBeNull();
+  expect(field.hasAttribute("role")).toBe(false);
+});

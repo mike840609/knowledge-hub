@@ -14,6 +14,7 @@ import { compareReviewPassages, useReviewRailLayout, type RailCard } from "./rev
 import { matchesShortcut } from "@/lib/shortcut-keys";
 import { linkify } from "@/lib/linkify";
 import { readStored, removeStored, writeStored } from "@/components/shell/use-persisted-state";
+import { useMentionAutocomplete, type MentionScope } from "./mention-autocomplete";
 
 /** Sends what is written, as it saves a document in the composer. Enter alone stays a line of the comment. */
 const SUBMIT_SHORTCUT = "Meta+Enter Control+Enter";
@@ -36,7 +37,7 @@ export async function reviewRequest<T>(url: string, body?: unknown): Promise<T> 
  */
 export const reviewDraftKey = (kind: "reply" | "new", id: string) => `kh:review-draft:${kind}:${id}`;
 
-export function ReviewReplyForm({ onSubmit, label = "Reply", openRequest = 0, initial = "", submitLabel = label, onCancel, submitDisabled = false, cancelOnEscape = false, draftKey }: { onSubmit: (body: string, key: string) => Promise<void>; label?: string; /** Changes when the card's own Reply was pressed: open the form. */ openRequest?: number; /** An edit starts from what the comment says. */ initial?: string; submitLabel?: string; onCancel?: () => void; submitDisabled?: boolean; cancelOnEscape?: boolean; /** Keeps the unsent text (`reviewDraftKey`). */ draftKey?: string }) {
+export function ReviewReplyForm({ onSubmit, label = "Reply", openRequest = 0, initial = "", submitLabel = label, onCancel, submitDisabled = false, cancelOnEscape = false, draftKey, mentionScope }: { /** `mentions`: who the sent text names, picked from the `@` list; `mentionLinkId`: the owner's link they are reached through. */ onSubmit: (body: string, key: string, mentions: string[], mentionLinkId?: string) => Promise<void>; label?: string; /** Changes when the card's own Reply was pressed: open the form. */ openRequest?: number; /** An edit starts from what the comment says. */ initial?: string; submitLabel?: string; onCancel?: () => void; submitDisabled?: boolean; cancelOnEscape?: boolean; /** Keeps the unsent text (`reviewDraftKey`). */ draftKey?: string; /** Offers the `@` list; absent for an edit, which never adds a mention. */ mentionScope?: MentionScope }) {
   const [body, setBody] = useState(() => (draftKey && readStored("session", draftKey)) || initial);
   // A reply someone had started is open again, as they left it.
   const [expanded, setExpanded] = useState(() => label !== "Reply" || !!(draftKey && readStored("session", draftKey)));
@@ -46,6 +47,7 @@ export function ReviewReplyForm({ onSubmit, label = "Reply", openRequest = 0, in
     if (value.trim() && value !== initial) writeStored("session", draftKey, value); else removeStored("session", draftKey);
   };
   const discard = () => { if (draftKey) removeStored("session", draftKey); };
+  const mention = useMentionAutocomplete(mentionScope, body, keep);
   useEffect(() => { if (openRequest > 0) setExpanded(true); }, [openRequest]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -62,12 +64,14 @@ export function ReviewReplyForm({ onSubmit, label = "Reply", openRequest = 0, in
     event.preventDefault(); if (busy || submitDisabled || !body.trim()) return;
     if (!request.current || request.current.body !== body) request.current = { body, key: crypto.randomUUID() };
     setBusy(true); setError(undefined);
-    try { await onSubmit(body, request.current.key); setBody(""); discard(); request.current = null; if (label === "Reply") setExpanded(false); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not save comment."); } finally { setBusy(false); }
+    const { mentions, mentionLinkId } = mention.collect(body);
+    try { await onSubmit(body, request.current.key, mentions, mentionLinkId); setBody(""); discard(); mention.reset(); request.current = null; if (label === "Reply") setExpanded(false); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not save comment."); } finally { setBusy(false); }
   }}>
-    <Textarea aria-label={label} placeholder={label === "Reply" ? "Reply…" : "Add a comment…"} rows={2} autoFocus className="!min-h-20 resize-y" value={body} disabled={busy} onChange={event => keep(event.target.value)} required maxLength={6000} />
+    <div className="relative"><Textarea {...mention.field} aria-label={label} placeholder={label === "Reply" ? "Reply…" : "Add a comment…"} rows={2} autoFocus className="!min-h-20 resize-y" value={body} disabled={busy} onChange={event => { keep(event.target.value); mention.track(); }} required maxLength={6000} />{mention.list}</div>
     {[...body].length >= 2700 && <p className="text-caption text-kh-text-muted">{[...body].length}/3,000</p>}
     {error && <p role="alert" className="text-body-sm">{error}</p>}
-    <div className="flex justify-end gap-1">{(label === "Reply" || onCancel) && <Button type="button" variant="ghost" disabled={busy} onClick={() => { discard(); setBody(initial); if (onCancel) onCancel(); else setExpanded(false); }}>Cancel</Button>}<Tooltip label={submitLabel} shortcut={SUBMIT_SHORTCUT}><Button type="submit" aria-keyshortcuts={SUBMIT_SHORTCUT} disabled={busy || submitDisabled || !body.trim() || [...body].length > 3000}>{busy ? "Saving…" : submitLabel}</Button></Tooltip></div>
+    {mention.linkChoice}
+    <div className="flex justify-end gap-1">{(label === "Reply" || onCancel) && <Button type="button" variant="ghost" disabled={busy} onClick={() => { discard(); setBody(initial); mention.reset(); if (onCancel) onCancel(); else setExpanded(false); }}>Cancel</Button>}<Tooltip label={submitLabel} shortcut={SUBMIT_SHORTCUT}><Button type="submit" aria-keyshortcuts={SUBMIT_SHORTCUT} disabled={busy || submitDisabled || !body.trim() || [...body].length > 3000}>{busy ? "Saving…" : submitLabel}</Button></Tooltip></div>
   </form>;
 }
 
@@ -114,10 +118,10 @@ export function ReviewNextButtons({ threads, activeThreadId, onActivate, filter,
   </div>;
 }
 
-export function ReviewThreadList({ threads, writesEnabled, reply, moderate, author, canResolve = true, focusAnchor, railMarkdown, activeThreadId, onActivate, filter: controlled, onFilterChange, draft, signInHref, unreadThreadIds, follow }: {
+export function ReviewThreadList({ threads, writesEnabled, reply, moderate, author, canResolve = true, focusAnchor, railMarkdown, activeThreadId, onActivate, filter: controlled, onFilterChange, draft, signInHref, unreadThreadIds, follow, mentionScope }: {
   threads: (ReviewThreadView | OwnerReviewThreadView)[];
   writesEnabled: boolean;
-  reply: (threadId: string, body: string, key: string) => Promise<void>;
+  reply: (threadId: string, body: string, key: string, mentions: string[], mentionLinkId?: string) => Promise<void>;
   focusAnchor?: (anchor: NonNullable<ReviewThreadView["currentAnchor"]["anchor"]>) => void;
   canResolve?: boolean;
   moderate?: (threadId: string, action: "resolution" | "visibility", value: string, commentId?: string) => Promise<void>;
@@ -137,6 +141,8 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
   unreadThreadIds?: ReadonlySet<string>;
   /** A signed-in reader's following; offered on a discussion that says whether it is followed. */
   follow?: (threadId: string, following: boolean) => Promise<void>;
+  /** Offers the `@` list in replies (never in edits). */
+  mentionScope?: MentionScope;
 }) {
   // Which previews cut their remark short: only those have more to show when opened.
   const [clamped, setClamped] = useState<Record<string, boolean>>({});
@@ -249,7 +255,7 @@ export function ReviewThreadList({ threads, writesEnabled, reply, moderate, auth
           event.stopPropagation(); setBusy(true); setError(undefined);
           try { await follow(thread.id, !thread.following); } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not update following."); } finally { setBusy(false); }
         }}>{thread.following ? <BellOff className="size-4" aria-hidden="true" /> : <Bell className="size-4" aria-hidden="true" />}{thread.following ? "Unfollow" : "Follow replies"}</Button></div>}
-        {canReply && <div hidden={compact}><ReviewReplyForm draftKey={reviewDraftKey("reply", thread.id)} openRequest={replyRequest?.threadId === thread.id ? replyRequest.nonce : 0} onSubmit={(body, key) => reply(thread.id, body, key)} /></div>}
+        {canReply && <div hidden={compact}><ReviewReplyForm draftKey={reviewDraftKey("reply", thread.id)} openRequest={replyRequest?.threadId === thread.id ? replyRequest.nonce : 0} mentionScope={mentionScope} onSubmit={(body, key, mentions, mentionLinkId) => reply(thread.id, body, key, mentions, mentionLinkId)} /></div>}
       </section>;
       });
       const first = group.threads[0];

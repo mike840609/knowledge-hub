@@ -181,13 +181,15 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
     if (!inline) { returnPassage.current = restore; changeOpen(false); }
     else requestAnimationFrame(restore);
   };
-  const composer = selection.chosen && <ReviewComposer anchor={selection.chosen} onCancel={cancelComment} cancelOnEscape={!!prepared}
+  // The owner mentions through one of the document's live links, which the `@` list loads when it first opens.
+  const mentionScope = readOnly ? undefined : { documentId };
+  const composer = selection.chosen && <ReviewComposer anchor={selection.chosen} onCancel={cancelComment} cancelOnEscape={!!prepared} mentionScope={mentionScope}
     pending={savingDocument} saveError={saveError}
     onRetrySave={prepared ? () => { void savePrepared(prepared, ++requestVersion.current); } : undefined}
-    onSubmit={async (body, idempotencyKey) => {
+    onSubmit={async (body, idempotencyKey, mentions, mentionLinkId) => {
       const revision = prepared ? commentRevision : revisionId;
       if (!revision || savingDocument || saveError) throw new Error("Wait for the document to finish saving before commenting.");
-      const created = await reviewRequest<{ id: string }>(base, { expectedRevisionId: revision, anchor: selection.chosen, body, idempotencyKey });
+      const created = await reviewRequest<{ id: string }>(base, { expectedRevisionId: revision, anchor: selection.chosen, body, idempotencyKey, ...(mentions.length ? { mentions, mentionLinkId } : {}) });
       selection.clear(); setPrepared(undefined); setCommentRevision(undefined);
       setFilter(current => current === "RESOLVED" ? "OPEN" : current); setActiveThreadId(created.id); await load();
     }} />;
@@ -246,7 +248,7 @@ export function OwnerReviewPanel({ documentId, markdown, revisionId, readOnly = 
           {result && <div className="mt-3"><ReviewThreadList draft={draft} filter={filter} onFilterChange={setFilter} railMarkdown={prepared?.markdown ?? (revisionChanged || contentPending ? undefined : markdown)} activeThreadId={activeThreadId} onActivate={setActiveThreadId} unreadThreadIds={unreadThreadIds}
             focusAnchor={revisionChanged || contentPending ? undefined : anchor => { const root = document.querySelector<HTMLElement>("[data-review-document]"); if (root) focusReviewAnchor(root, markdown, anchor); }}
             threads={result.threads} writesEnabled={result.writesEnabled && !readOnly} canResolve={!readOnly}
-            reply={async (threadId, body, idempotencyKey) => { await reviewRequest(`${base}/${threadId}/replies`, { body, idempotencyKey }); if (unreadThreadIds.has(threadId)) void markRead(threadId); await load(); }}
+            mentionScope={mentionScope} reply={async (threadId, body, idempotencyKey, mentions, mentionLinkId) => { await reviewRequest(`${base}/${threadId}/replies`, { body, idempotencyKey, ...(mentions.length ? { mentions, mentionLinkId } : {}) }); if (unreadThreadIds.has(threadId)) void markRead(threadId); await load(); }}
             author={{
               edit: async (threadId, commentId, body) => { await reviewRequest(`${base}/${threadId}/comments/${commentId}/body`, { body }); await load(); },
               remove: async (threadId, commentId) => { await reviewRequest(`${base}/${threadId}/comments/${commentId}/deletion`, {}); await load(); },

@@ -120,8 +120,10 @@ export function SharedReviewPanel({ token, revisionId, markdown, signInHref, bra
     if (anchor && readStored("session", draftKey)?.trim()) { selection.choose(anchor); setRestored(true); setOpen(true); }
     else discardDraft();
   }, [result, canComment, anchorKey, draftKey, selection, discardDraft]);
-  const composer = selection.chosen && <ReviewComposer anchor={selection.chosen} draftKey={draftKey} restored={restored} onCancel={() => { discardDraft(); selection.clear(); }} onSubmit={async (body, idempotencyKey) => {
-    const created = await reviewRequest<{ id: string }>("/api/share-review/threads", { token, expectedRevisionId: revisionId, anchor: selection.chosen, body, idempotencyKey });
+  // Only a signed-in reader who may write is offered `@`: the candidate route refuses anyone else.
+  const mentionScope = result?.writesEnabled && !anonymous ? { token } : undefined;
+  const composer = selection.chosen && <ReviewComposer anchor={selection.chosen} draftKey={draftKey} restored={restored} mentionScope={mentionScope} onCancel={() => { discardDraft(); selection.clear(); }} onSubmit={async (body, idempotencyKey, mentions) => {
+    const created = await reviewRequest<{ id: string }>("/api/share-review/threads", { token, expectedRevisionId: revisionId, anchor: selection.chosen, body, idempotencyKey, ...(mentions.length ? { mentions } : {}) });
     discardDraft(); selection.clear(); setFilter(current => current === "RESOLVED" ? "OPEN" : current); setActiveThreadId(created.id); await load();
   }} />;
   // Beside its passage where the discussions are a rail; at the top of the drawer, which covers the passage, where they are not.
@@ -178,7 +180,7 @@ export function SharedReviewPanel({ token, revisionId, markdown, signInHref, bra
       </div>
       {!draft && composer}
       {result && <ReviewThreadList draft={draft} filter={filter} onFilterChange={setFilter} railMarkdown={revisionChanged ? undefined : markdown} activeThreadId={activeThreadId} onActivate={setActiveThreadId} focusAnchor={revisionChanged ? undefined : anchor => { const root = document.querySelector<HTMLElement>("[data-review-document]"); if (root) focusReviewAnchor(root, markdown, anchor); }} threads={result.threads} writesEnabled={result.writesEnabled} signInHref={anonymous ? signInHref : undefined}
-        follow={anonymous ? undefined : async (threadId, next) => { await reviewRequest(`/api/share-review/threads/${threadId}/follow`, { token, following: next }); await load(); }} reply={async (threadId, body, idempotencyKey) => { await reviewRequest(`/api/share-review/threads/${threadId}/replies`, { token, body, idempotencyKey }); await load(); }}
+        follow={anonymous ? undefined : async (threadId, next) => { await reviewRequest(`/api/share-review/threads/${threadId}/follow`, { token, following: next }); await load(); }} mentionScope={mentionScope} reply={async (threadId, body, idempotencyKey, mentions) => { await reviewRequest(`/api/share-review/threads/${threadId}/replies`, { token, body, idempotencyKey, ...(mentions.length ? { mentions } : {}) }); await load(); }}
         author={result.callerUserId === null ? undefined : {
           edit: async (threadId, commentId, body) => { await reviewRequest(`/api/share-review/threads/${threadId}/comments/${commentId}/body`, { token, body }); await load(); },
           remove: async (threadId, commentId) => { await reviewRequest(`/api/share-review/threads/${threadId}/comments/${commentId}/deletion`, { token }); await load(); },
