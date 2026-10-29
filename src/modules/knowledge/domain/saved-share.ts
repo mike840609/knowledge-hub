@@ -7,7 +7,7 @@ export type SavedShareQuery = { q: string; status: "all" | "available" | "unavai
 /** Validity inputs and public metadata captured by one consistent read. */
 export type SavedShareSnapshot = {
   link: DocumentShareLink;
-  validity: { documentStatus: "ACTIVE" | "ARCHIVED"; sourceStatus: "ACTIVE" | "ARCHIVED"; workspaceLifecycle: "ACTIVE" | "ARCHIVED" | null; creatorDirectRole: WorkspaceRole | null | undefined };
+  validity: { documentStatus: "ACTIVE" | "ARCHIVED"; sourceStatus: "ACTIVE" | "ARCHIVED"; workspaceLifecycle: "ACTIVE" | "ARCHIVED" | null; workspaceOwnerUserId: string | null; creatorDirectRole: WorkspaceRole | null | undefined };
   title: string | null; sharedByName: string | null;
 };
 export type SavedShareRecord = { id: string; userId: string; shareLinkId: string; savedTitle: string; savedSharedByName: string; savedExpiresAt: Date; savedAt: Date; updatedAt: Date; removedAt: Date | null };

@@ -19,8 +19,8 @@ export function useInboxUnread(enabled: boolean): number {
   const refresh = useCallback(async () => {
     if (!enabled) return;
     try {
-      const data = await reviewRequest<{ notifications: readonly unknown[] }>("/api/review-notifications/unread");
-      setCount(data.notifications.length);
+      const data = await reviewRequest<{ count: number }>("/api/review-notifications/unread-count");
+      setCount(data.count);
     } catch {
       // The Hub remains usable when review notifications are temporarily unavailable.
     }

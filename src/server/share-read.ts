@@ -11,9 +11,14 @@ import { shareReadService } from "./composition";
  * Cached per request because the page and its metadata both ask, and each
  * read counts a view.
  */
-export const getSharedDocument = cache(async (token: string): Promise<SharedDocumentView | null> => {
+export const getSharedDocument = cache((token: string) => read(token, true));
+
+/** Whether the link opens now, without counting a view: `/s/:token/open` reads nothing, it passes through. */
+export const isSharedDocumentAvailable = async (token: string): Promise<boolean> => (await read(token, false)) !== null;
+
+async function read(token: string, recordView: boolean): Promise<SharedDocumentView | null> {
   try {
-    return await shareReadService().readShared(token);
+    return await shareReadService().readShared(token, { recordView });
   } catch (error) {
     // The reader sees one state for every failure (spec §6.3), but a database
     // outage or a document without a current revision is not "link not
@@ -23,4 +28,4 @@ export const getSharedDocument = cache(async (token: string): Promise<SharedDocu
     }
     return null;
   }
-});
+}

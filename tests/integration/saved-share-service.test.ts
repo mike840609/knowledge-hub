@@ -126,3 +126,21 @@ it("never snapshots a private title published between validation and metadata ca
  const list=await reader.saved.list(reader.caller,reader.workspace.id,{});expect(list.items[0]).toMatchObject({title:"Saved %_! guide",status:"unavailable",path:null});
  expect((await reader.saved.list(reader.caller,reader.workspace.id,{q:"Private after revoke"})).items).toHaveLength(0);
 });
+it("every reader of a link judges it alike: a link whose creator no longer owns the My Space opens nowhere", async () => {
+  const owner = await fixture(), reader = await fixture(), other = await fixture();
+  await reader.saved.save(reader.caller, owner.token);
+  // A creator who is still a member, but not the owner: only the ownership rule refuses this link.
+  await pool.query("INSERT INTO workspace_memberships (workspace_id,user_id,role,membership_source,created_by,created_at,updated_at) VALUES (?,?,'VIEWER','DIRECT',NULL,?,?)", [owner.workspace.id, reader.caller.identity.id, owner.now, owner.now]);
+  await pool.query("UPDATE document_share_links SET created_by=? WHERE id=?", [reader.caller.identity.id, owner.link.id]);
+  await expect(owner.shares.readShared(owner.token)).rejects.toMatchObject({ code: "SHARE_LINK_NOT_FOUND" });
+  await expect(other.saved.save(other.caller, owner.token)).rejects.toMatchObject({ code: "SHARE_LINK_NOT_FOUND" });
+  const [item] = (await reader.saved.list(reader.caller, reader.workspace.id, {})).items;
+  expect(item).toMatchObject({ status: "unavailable", path: null });
+});
+it("a pass-through check judges the link without counting a view", async () => {
+  const owner = await fixture();
+  await expect(owner.shares.readShared(owner.token, { recordView: false })).resolves.toMatchObject({ title: "Saved %_! guide" });
+  expect((await owner.shares.list(owner.caller, owner.documentId))[0].totalViews).toBe(0);
+  await owner.shares.readShared(owner.token);
+  expect((await owner.shares.list(owner.caller, owner.documentId))[0].totalViews).toBe(1);
+});

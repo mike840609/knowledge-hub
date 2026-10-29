@@ -1,19 +1,25 @@
 import type { SavedShareRepository } from "@/modules/knowledge/ports/saved-share-repository";
 import type { SavedShareQuery, SavedShareRecord, SavedShareView, SavedShareSnapshot } from "@/modules/knowledge/domain/saved-share";
 import { toLikePattern } from "@/modules/knowledge/domain/search-query";
-import { shareLinkPath } from "@/modules/knowledge/domain/document-share-link";
+import { SHARE_CREATOR_READ_ROLES, shareLinkPath } from "@/modules/knowledge/domain/document-share-link";
 import type { DbRow, QueryConnection } from "./shared";
 import { asDate, asNullableDate } from "./shared";
 function record(row: DbRow): SavedShareRecord {
   return { id: String(row.id), userId: String(row.user_id), shareLinkId: String(row.share_link_id), savedTitle: String(row.saved_title), savedSharedByName: String(row.saved_shared_by_name), savedExpiresAt: asDate(row.saved_expires_at), savedAt: asDate(row.saved_at), updatedAt: asDate(row.updated_at), removedAt: asNullableDate(row.removed_at) };
 }
+// evaluateShareLinkValidity, restated in SQL for the list; its role set comes from the same constant.
+const READ_ROLES = SHARE_CREATOR_READ_ROLES.map((role) => {
+  // Interpolated into SQL: a role is a fixed enum word, and anything else must fail loudly here.
+  if (!/^[A-Z_]+$/.test(role)) throw new Error(`Unexpected workspace role: ${role}`);
+  return `'${role}'`;
+}).join(",");
 export class MariaDbSavedShareRepository implements SavedShareRepository {
   constructor(private readonly connection: QueryConnection) {}
   async findSnapshotByToken(token: string): Promise<SavedShareSnapshot | null> {
     // READ COMMITTED supplies one consistent view for this statement. All grant
     // inputs and captured metadata must come from that view, not later reads.
     const rows = await this.connection.query<DbRow[]>(`SELECT l.*,d.status AS document_status,s.status AS source_status,
-      w.lifecycle_state AS workspace_lifecycle,m.user_id AS creator_membership,m.role AS creator_role,
+      w.lifecycle_state AS workspace_lifecycle,w.personal_owner_user_id AS workspace_owner,m.user_id AS creator_membership,m.role AS creator_role,
       r.title,u.name AS creator_name
       FROM document_share_links l JOIN knowledge_documents d ON d.id=l.document_id
       JOIN knowledge_sources s ON s.id=d.source_id JOIN workspaces w ON w.id=s.workspace_id
@@ -23,7 +29,7 @@ export class MariaDbSavedShareRepository implements SavedShareRepository {
     const row=rows[0];if(!row)return null;
     return {
       link:{id:String(row.id),documentId:String(row.document_id),token:String(row.token),label:row.label===null?null:String(row.label),createdBy:String(row.created_by),createdAt:asDate(row.created_at),expiresAt:asDate(row.expires_at),revokedBy:row.revoked_by===null?null:String(row.revoked_by),revokedAt:asNullableDate(row.revoked_at)},
-      validity:{documentStatus:String(row.document_status) as SavedShareSnapshot["validity"]["documentStatus"],sourceStatus:String(row.source_status) as SavedShareSnapshot["validity"]["sourceStatus"],workspaceLifecycle:row.workspace_lifecycle===null?null:String(row.workspace_lifecycle) as SavedShareSnapshot["validity"]["workspaceLifecycle"],creatorDirectRole:row.creator_membership===null?undefined:row.creator_role===null?null:String(row.creator_role) as SavedShareSnapshot["validity"]["creatorDirectRole"]},
+      validity:{documentStatus:String(row.document_status) as SavedShareSnapshot["validity"]["documentStatus"],sourceStatus:String(row.source_status) as SavedShareSnapshot["validity"]["sourceStatus"],workspaceOwnerUserId:row.workspace_owner===null?null:String(row.workspace_owner),workspaceLifecycle:row.workspace_lifecycle===null?null:String(row.workspace_lifecycle) as SavedShareSnapshot["validity"]["workspaceLifecycle"],creatorDirectRole:row.creator_membership===null?undefined:row.creator_role===null?null:String(row.creator_role) as SavedShareSnapshot["validity"]["creatorDirectRole"]},
       title:row.title===null?null:String(row.title),sharedByName:row.creator_name===null?null:String(row.creator_name),
     };
   }
@@ -62,8 +68,8 @@ export class MariaDbSavedShareRepository implements SavedShareRepository {
         FROM saved_document_shares b JOIN (
           SELECT l.*,r.title,r.created_at AS revision_at,u.name AS creator_name,
             (l.revoked_at IS NULL AND l.expires_at>? AND d.status='ACTIVE' AND s.status='ACTIVE'
-             AND w.lifecycle_state='ACTIVE' AND m.user_id IS NOT NULL
-             AND (m.role IS NULL OR m.role IN ('OWNER','ADMIN','EDITOR','VIEWER')) AND r.id IS NOT NULL AND u.id IS NOT NULL) AS available
+             AND w.lifecycle_state='ACTIVE' AND w.personal_owner_user_id=l.created_by AND m.user_id IS NOT NULL
+             AND (m.role IS NULL OR m.role IN (${READ_ROLES})) AND r.id IS NOT NULL AND u.id IS NOT NULL) AS available
           FROM document_share_links l LEFT JOIN knowledge_documents d ON d.id=l.document_id
           LEFT JOIN knowledge_revisions r ON r.id=d.current_revision_id
           LEFT JOIN knowledge_sources s ON s.id=d.source_id LEFT JOIN workspaces w ON w.id=s.workspace_id

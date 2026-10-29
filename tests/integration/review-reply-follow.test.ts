@@ -231,3 +231,24 @@ describe("Shares → Discussions: every discussion the reader follows", () => {
     expect((await f.service.listActivityForOwner(f.reader)).notifications.filter(n => n.kind === "FOLLOW")).toEqual([]);
   });
 });
+
+describe("the Inbox badge counts a reader's followed discussions as the Inbox lists them", () => {
+  it("counts an answered discussion until it is seen, and nothing for an unanswered one or a dead link", async () => {
+    const f = await fixture();
+    const badge = async () => (await f.service.countUnreadForOwner(f.reader)).count;
+    const listed = async () => (await f.service.listUnreadForOwner(f.reader)).notifications.length;
+    const thread = await f.start();
+    expect([await badge(), await listed()]).toEqual([0, 0]);
+    await f.ownerReply(thread.id);
+    await f.ownerReply(thread.id, "And more");
+    // One entry per discussion, however many replies it holds.
+    expect([await badge(), await listed()]).toEqual([1, 1]);
+    await f.service.markSeenForLink(f.reader, { token: f.token, threadId: thread.id });
+    f.time.tick();
+    expect([await badge(), await listed()]).toEqual([0, 0]);
+    await f.ownerReply(thread.id, "Later");
+    expect([await badge(), await listed()]).toEqual([1, 1]);
+    await f.shares.revoke(f.owner, f.link.id);
+    expect([await badge(), await listed()]).toEqual([0, 0]);
+  });
+});

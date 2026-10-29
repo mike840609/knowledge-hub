@@ -159,9 +159,10 @@ export class DocumentShareService {
   /**
    * The single caller-less content read (spec §6.1). Every failure is the
    * same ShareLinkNotFoundError so no response distinguishes a link that
-   * once worked from one that never existed.
+   * once worked from one that never existed. `recordView: false` judges the
+   * link without counting a read, for a page that only passes through it.
    */
-  async readShared(token: string): Promise<SharedDocumentView> {
+  async readShared(token: string, { recordView = true }: { recordView?: boolean } = {}): Promise<SharedDocumentView> {
     if (!isShareToken(token)) throw new ShareLinkNotFoundError();
     const now = this.clock();
     const { linkId, view } = await this.unitOfWork.run(async (repositories) => {
@@ -179,6 +180,7 @@ export class DocumentShareService {
         documentStatus: document.status,
         sourceStatus: source.status,
         workspaceLifecycle: workspace.lifecycleState,
+        workspaceOwnerUserId: workspace.personalOwnerUserId,
         creatorDirectRole: membership ? membership.role ?? null : undefined,
         now,
       });
@@ -192,6 +194,7 @@ export class DocumentShareService {
         view: { revisionId: revision.id, title: revision.title, markdown: revision.markdown, pageIcon: document.pageIcon ?? null, sharedByName: creator.name, updatedAt: revision.createdAt, expiresAt: link.expiresAt },
       };
     });
+    if (!recordView) return view;
     try {
       // Separate transaction: the count is a statistic, not an audit record,
       // so failing to write it must not stop the reader (spec A5).

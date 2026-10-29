@@ -60,6 +60,14 @@ export class DocumentReviewService {
       ]),
     }));
   }
+  /** The Inbox badge: as many as `listUnreadForOwner` lists, without loading a body, title or author. */
+  async countUnreadForOwner(caller: CallerContext): Promise<{ count: number }> {
+    return this.uow.run(async r => {
+      const owner = (await r.shareCommentEvents.listUnreadCountsByRecipient(caller.identity.id)).reduce((sum, row) => sum + row.unreadCount, 0);
+      const follows = (await this.followedThreads(r, caller.identity.id)).filter(({ summary }) => !("unavailable" in summary) && !!summary.latestReply && summary.unread > 0).length;
+      return { count: owner + follows };
+    });
+  }
   /** Lightweight counts for My shares. No comment bodies or full revisions are loaded. */
   async listUnreadShareCountsForOwner(caller: CallerContext) {
     return this.uow.run(r => r.shareCommentEvents.listUnreadCountsByRecipient(caller.identity.id));
@@ -211,7 +219,7 @@ export class DocumentReviewService {
   }
   private async opens(r: KnowledgeRepositories, scope: Awaited<ReturnType<DocumentReviewService["scope"]>>, link: DocumentShareLink): Promise<boolean> {
     const membership = await r.workspaceMemberships.find(scope.workspace.id, link.createdBy);
-    return scope.workspace.personalOwnerUserId === link.createdBy && evaluateShareLinkValidity({ link, documentStatus: scope.document.status, sourceStatus: scope.source.status, workspaceLifecycle: scope.workspace.lifecycleState, creatorDirectRole: membership ? membership.role ?? null : undefined, now: this.clock() }).valid;
+    return evaluateShareLinkValidity({ link, documentStatus: scope.document.status, sourceStatus: scope.source.status, workspaceLifecycle: scope.workspace.lifecycleState, workspaceOwnerUserId: scope.workspace.personalOwnerUserId, creatorDirectRole: membership ? membership.role ?? null : undefined, now: this.clock() }).valid;
   }
   /** Marks this document's events read. Owner scope first: a non-owner reaches nothing. */
   async markDocumentRead(caller:CallerContext,documentId:string) {
@@ -266,7 +274,8 @@ export class DocumentReviewService {
     if(typeof token!=="string" || !isShareToken(token)) throw new ShareLinkNotFoundError();
     const found=await r.shareLinks.findByToken(token);
     const link=found&&lock?await r.shareLinks.lockById(found.id):found;
-    if(!link || link.token!==token) throw new ShareLinkNotFoundError();
+    // The UUID column matches and returns lower case whatever case the URL carried, as readShared accepts it.
+    if(!link || link.token!==token.toLowerCase()) throw new ShareLinkNotFoundError();
     const scope=await this.scope(r,link.documentId,lock);
     if(!await this.opens(r,scope,link)) throw new ShareLinkNotFoundError();
     return {...scope,link};
@@ -315,13 +324,18 @@ export class DocumentReviewService {
     if (revision.history?.state === "WORKING") await r.revisions.markCheckpoint(revision.id,"COMMENT");
     await r.reviewThreads.insert(thread);
     await r.reviewComments.insert(firstComment); await this.charge(r,caller.identity.id,s.document.id);
-    if(originShareLinkId!==null) await r.shareCommentEvents.insert({id:uuidv7(),workspaceId:s.workspace.id,documentId:s.document.id,threadId:thread.id,commentId:firstComment.id,originShareLinkId,createdByUserId:caller.identity.id,mentionedUserId:null,createdAt:now,readAt:null});
+    await this.notifyOwner(r,caller,s,originShareLinkId,firstComment);
     await this.followOnWrite(r,caller,s,originShareLinkId,thread.id);
     return (await views()).find(t=>t.id===thread.id)!;
   }
   async replyForLink(caller:CallerContext,input:ReplyReviewInput) { return this.uow.run(async r=> {const s=await this.linkScope(r,input.token); return this.reply(r,caller,s,s.link.id,input);}); }
   async replyForOwner(caller:CallerContext,input:{documentId:string;threadId:string;body:string;idempotencyKey:string}) {return this.uow.run(async r=>{const s=await this.ownerScope(r,caller,input.documentId);return this.reply(r,caller,s,null,input);});}
   private comment(threadId:string,userId:string,body:string,key:string,requestHash:string):ReviewComment {return {id:uuidv7(),threadId,authorUserId:userId,body,idempotencyKey:key,requestHash,createdAt:this.clock(),editedAt:null,deletedAt:null,visibility:"VISIBLE",hiddenBy:null,hiddenAt:null,hiddenReason:null};}
+  /** A comment written through a link is news to the owner, unless the owner wrote it (share-comment-notify spec). */
+  private async notifyOwner(r:KnowledgeRepositories,caller:CallerContext,s:Awaited<ReturnType<DocumentReviewService["scope"]>>,originShareLinkId:string|null,comment:ReviewComment) {
+    if(originShareLinkId===null || s.workspace.personalOwnerUserId===caller.identity.id) return;
+    await r.shareCommentEvents.insert({id:uuidv7(),workspaceId:s.workspace.id,documentId:s.document.id,threadId:comment.threadId,commentId:comment.id,originShareLinkId,createdByUserId:caller.identity.id,mentionedUserId:null,createdAt:comment.createdAt,readAt:null});
+  }
   /** Writing in a discussion through a link follows it, or follows it again (spec 2026-10-22 § Following). The owner is told by their own events. */
   private async followOnWrite(r:KnowledgeRepositories,caller:CallerContext,s:Awaited<ReturnType<DocumentReviewService["scope"]>>,originShareLinkId:string|null,threadId:string) {
     if(originShareLinkId!==null && s.workspace.personalOwnerUserId!==caller.identity.id) await r.reviewFollows.follow({threadId,userId:caller.identity.id,shareLinkId:originShareLinkId,at:this.clock()});
@@ -337,7 +351,7 @@ export class DocumentReviewService {
     if(await r.reviewComments.countByThread(thread.id)>REVIEW_LIMITS.replies) fail("CAPACITY_EXCEEDED","The discussion reply limit was reached.");
     await this.quota(r,caller.identity.id,s.document.id);
     const comment=this.comment(thread.id,caller.identity.id,body,key,requestHash);await r.reviewComments.insert(comment);await this.charge(r,caller.identity.id,s.document.id);
-    if(originShareLinkId!==null) await r.shareCommentEvents.insert({id:uuidv7(),workspaceId:s.workspace.id,documentId:s.document.id,threadId:thread.id,commentId:comment.id,originShareLinkId,createdByUserId:caller.identity.id,mentionedUserId:null,createdAt:this.clock(),readAt:null});
+    await this.notifyOwner(r,caller,s,originShareLinkId,comment);
     await this.followOnWrite(r,caller,s,originShareLinkId,thread.id);
     return projectReviewComment(comment,caller.identity.id);
   }

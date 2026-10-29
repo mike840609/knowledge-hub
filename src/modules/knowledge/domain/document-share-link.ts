@@ -82,10 +82,12 @@ type LifecycleStatus = "ACTIVE" | "ARCHIVED";
 
 /** Everything validity depends on, already loaded. Never includes the viewer. */
 export type ShareLinkValidityInput = {
-  link: Pick<DocumentShareLink, "revokedAt" | "expiresAt">;
+  link: Pick<DocumentShareLink, "revokedAt" | "expiresAt" | "createdBy">;
   documentStatus: LifecycleStatus;
   sourceStatus: LifecycleStatus;
   workspaceLifecycle: LifecycleStatus | null | undefined;
+  /** The owning workspace's `personal_owner_user_id`: a link stands only while its creator owns that My Space. */
+  workspaceOwnerUserId: string | null | undefined;
   /**
    * The creator's DIRECT role on the owning workspace: `undefined` means no
    * row. Group grants cannot be evaluated here — they live in the creator's
@@ -101,7 +103,12 @@ export type ShareLinkInvalidReason =
   | "DOCUMENT_ARCHIVED"
   | "SOURCE_ARCHIVED"
   | "WORKSPACE_ARCHIVED"
+  | "CREATOR_NOT_OWNER"
   | "CREATOR_LOST_ACCESS";
+
+/** The direct roles whose bundle includes `document.read`, for checks written in SQL. */
+export const SHARE_CREATOR_READ_ROLES = (Object.keys(ROLE_WORKSPACE_CAPABILITIES) as WorkspaceRole[])
+  .filter((role) => ROLE_WORKSPACE_CAPABILITIES[role].includes("document.read"));
 
 function directRoleCanRead(role: WorkspaceRole | null | undefined): boolean {
   if (role === undefined) return false;
@@ -120,6 +127,7 @@ export function evaluateShareLinkValidity(
   if (input.documentStatus !== "ACTIVE") return { valid: false, reason: "DOCUMENT_ARCHIVED" };
   if (input.sourceStatus !== "ACTIVE") return { valid: false, reason: "SOURCE_ARCHIVED" };
   if (input.workspaceLifecycle !== "ACTIVE") return { valid: false, reason: "WORKSPACE_ARCHIVED" };
+  if (input.workspaceOwnerUserId !== input.link.createdBy) return { valid: false, reason: "CREATOR_NOT_OWNER" };
   if (!directRoleCanRead(input.creatorDirectRole)) return { valid: false, reason: "CREATOR_LOST_ACCESS" };
   return { valid: true };
 }

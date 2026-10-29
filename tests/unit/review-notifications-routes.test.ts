@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ services: vi.fn() }));
 vi.mock("@/server/composition", () => ({ applicationServices: mocks.services }));
 import { GET as unread } from "@/app/api/review-notifications/unread/route";
+import { GET as unreadCount } from "@/app/api/review-notifications/unread-count/route";
 import { POST as markRead } from "@/app/api/review-notifications/mark-read/route";
 import { GET as activity, POST as activityAction } from "@/app/api/review-notifications/activity/route";
 import { GET as shareCounts } from "@/app/api/review-notifications/share-counts/route";
@@ -15,6 +16,7 @@ function authed(notifications: unknown[] = []) {
     establishTrustedCaller: async () => ({ caller: { identity: { id: "owner-1" } } }),
     reviews: {
       listUnreadForOwner: async () => ({ notifications }),
+      countUnreadForOwner: async () => ({ count: notifications.length }),
       markDocumentRead: async () => {},
       markEventRead, markAllActivityRead, listActivityForOwner, listUnreadShareCountsForOwner,
     },
@@ -27,6 +29,18 @@ describe("review notification routes", () => {
     const response = await unread(new Request("http://127.0.0.1:3000/api/review-notifications/unread"));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ notifications: [{ id: "e1" }] });
+  });
+  it("GET unread-count returns a number and no notification", async () => {
+    authed([{ id: "e1", body: "PRIVATE" }]);
+    const response = await unreadCount(new Request("http://127.0.0.1:3000/api/review-notifications/unread-count"));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(await response.json()).toEqual({ count: 1 });
+  });
+  it("GET unread-count refuses a signed-out caller", async () => {
+    mocks.services.mockReturnValue({ establishTrustedCaller: async () => { const { AuthRequiredError } = await import("@/modules/identity/domain/identity-session-errors"); throw new AuthRequiredError(); } });
+    const response = await unreadCount(new Request("http://127.0.0.1:3000/api/review-notifications/unread-count"));
+    expect(response.status).toBe(401);
   });
   it("POST mark-read rejects a missing documentId", async () => {
     authed();

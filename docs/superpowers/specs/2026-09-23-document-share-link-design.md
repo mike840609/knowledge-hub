@@ -152,6 +152,7 @@ All conditions must hold. Any failure is uniformly unavailable:
 5. Source is `ACTIVE`.
 6. Workspace lifecycle is `ACTIVE`.
 7. **Issuer still has document read access**, re-evaluated using their **direct membership**. For PERSONAL, the `OWNER / SYSTEM_PERSONAL` row must still exist.
+8. *(2026-10-29)* **The issuer still owns the My Space** (`personal_owner_user_id = created_by`). Creation already required it; validity now states it too, so the page, the review APIs, Save share and the Saved shares list judge a link by one rule (`evaluateShareLinkValidity`; the list's SQL takes its role set from `SHARE_CREATOR_READ_ROLES`). Before this, only the review APIs checked it.
 
 For anonymous `readShared`, reader identity is **not** a condition: do not call `establishTrustedCaller` or read SSO session. Review APIs additionally require a trusted caller on every request, without relaxing any link validity condition.
 
@@ -192,6 +193,8 @@ GET /s/:token (server component, outside /w/ layout)
        ├─ Read link, document, source, workspace, issuer direct membership
        ├─ Apply §5.2 pure predicate
        ├─ Increment view count (§7.2), separate transaction; log failure only (A5)
+       │    (2026-10-29: not for `/s/:token/open`, which judges the link with
+       │    `recordView: false` and passes through; the page itself was the read)
        └─ Return { title, markdown, revisionId, sharedByName, updatedAt, expiresAt }
   → Any error → uniform page (§6.3), HTTP 404
 ```
