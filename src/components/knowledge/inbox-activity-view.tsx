@@ -9,7 +9,7 @@ import { Timestamp } from "@/components/ui/timestamp";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/components/ui/tabs";
 import { reviewRequest } from "./review-thread-list";
 import type { ShareCommentNotificationView } from "@/modules/knowledge/domain/share-comment-event";
-import { notificationHref, notificationLine, notificationTitle } from "./notification-href";
+import { isLinkEntry, notificationHref, notificationLabel, notificationLine, notificationTitle } from "./notification-href";
 import { NotificationListSkeleton } from "./knowledge-skeletons";
 import { InboxDiscussion } from "./inbox-discussion";
 
@@ -84,7 +84,7 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
     const key = entry?.id ?? "*";
     if (marking.current.has(key)) return;
     marking.current.add(key);
-    const thread = discussion && entry?.kind !== "FOLLOW";
+    const thread = discussion && entry && !isLinkEntry(entry.kind);
     setBusy(true);
     setError(null);
     try {
@@ -92,7 +92,7 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
         thread ? { documentId: entry!.documentId, threadId: entry!.threadId }
         : entry ? { action: "mark-read", eventId: entry.id } : { action: "mark-all-read" });
       const now = new Date();
-      const settles = (item: ShareCommentNotificationView) => !entry || item.id === entry.id || (thread && item.kind !== "FOLLOW" && item.threadId === entry.threadId);
+      const settles = (item: ShareCommentNotificationView) => !entry || item.id === entry.id || (thread && !isLinkEntry(item.kind) && item.threadId === entry.threadId);
       setItems(previous => previous.map(item => !item.readAt && settles(item) ? { ...item, readAt: now } : item));
       window.dispatchEvent(new Event("kh:notification-changed"));
     } catch (cause) {
@@ -155,7 +155,7 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
               <span className="mt-1 flex flex-wrap items-center gap-2 text-caption text-kh-text-muted">
                 <Timestamp value={String(item.createdAt)} variant="relative" />
                 {item.readAt === null ? <span className="font-medium text-kh-text">Unread</span> : <span>Read</span>}
-                <span>{item.kind === "FOLLOW" ? "Discussion you follow" : item.threadStatus === "OPEN" ? "Open discussion" : "Resolved"}</span>
+                <span>{notificationLabel(item)}</span>
               </span>
             </>;
             const current = selected?.id === item.id;
@@ -164,7 +164,7 @@ export function InboxActivityView({ workspaceId }: { workspaceId: string }) {
             return <li key={item.id} className={`flex items-start gap-3 py-3 ${current ? "-mx-2 rounded-md bg-kh-bg-selected px-2" : ""}`}>
             <span aria-hidden="true" className={`mt-2 h-2 w-2 shrink-0 rounded-full ${item.readAt === null ? "bg-kh-primary" : "bg-transparent"}`} />
             {href
-              ? <Link className={row} href={href} prefetch={item.kind === "FOLLOW" ? false : undefined} data-inbox-entry={item.id} aria-current={current ? "true" : undefined} onClick={openRow(item)}>{content}</Link>
+              ? <Link className={row} href={href} prefetch={isLinkEntry(item.kind) ? false : undefined} data-inbox-entry={item.id} aria-current={current ? "true" : undefined} onClick={openRow(item)}>{content}</Link>
               : split ? <button type="button" className={row} data-inbox-entry={item.id} aria-current={current ? "true" : undefined} onClick={() => select(item)}>{content}</button>
               : <div className="min-w-0 flex-1 px-1 py-1">{content}</div>}
             {item.readAt === null && <Button variant="ghost" size="sm" disabled={busy} onClick={() => void mark(item)}>Mark read</Button>}

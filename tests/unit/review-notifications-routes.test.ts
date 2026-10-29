@@ -80,6 +80,9 @@ describe("review notification routes", () => {
     }));
     expect((await submit({ action: "mark-read", eventId: "e1", recipientUserId: "someone-else" })).status).toBe(200);
     expect(mocks.markEventRead).toHaveBeenCalledWith(expect.objectContaining({ identity: { id: "owner-1" } }), "e1");
+    const mention = "mention:0193a7c4-5b6d-7e8f-9a0b-1c2d3e4f5a6b";
+    expect((await submit({ action: "mark-read", eventId: mention })).status).toBe(200);
+    expect(mocks.markEventRead).toHaveBeenCalledWith(expect.objectContaining({ identity: { id: "owner-1" } }), mention);
     expect((await submit({ action: "mark-all-read" })).status).toBe(200);
     expect(mocks.markAllActivityRead).toHaveBeenCalledTimes(1);
     expect((await submit({ action: "delete", eventId: "e1" })).status).toBe(400);

@@ -14,8 +14,9 @@ export type ShareCommentNotificationView = {
    * follows, one entry per discussion; it carries no Workspace id, only the link's token while that
    * link opens (`linkAvailable`) — with the document id too when it is a folder link, whose page
    * needs it (`?d=`) — and `replyCount` replies not yet seen. A dead link's entry names neither.
+   * MENTION: one comment naming the caller, carried like FOLLOW.
    */
-  kind?: "OWNER" | "FOLLOW"; token?: string; replyCount?: number; linkAvailable?: boolean;
+  kind?: "OWNER" | "FOLLOW" | "MENTION"; token?: string; replyCount?: number; linkAvailable?: boolean;
 };
 export const EXCERPT_LIMIT = 80;
 export function projectShareCommentNotification(input: {

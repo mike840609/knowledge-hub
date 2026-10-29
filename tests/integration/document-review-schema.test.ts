@@ -25,3 +25,16 @@ it("a comment's edit and its author's retraction are nullable times beside the b
  const rows=await pool.query("SELECT COLUMN_NAME,IS_NULLABLE,COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='document_review_comments' AND COLUMN_NAME IN ('edited_at','deleted_at','body') ORDER BY COLUMN_NAME");
  expect(rows).toMatchObject([{COLUMN_NAME:"body",IS_NULLABLE:"NO"},{COLUMN_NAME:"deleted_at",IS_NULLABLE:"YES",COLUMN_TYPE:"datetime(6)"},{COLUMN_NAME:"edited_at",IS_NULLABLE:"YES",COLUMN_TYPE:"datetime(6)"}]);
 });
+it("mentions are keyed by comment and user, indexed for the inbox, and restrict deletes",async()=>{
+ const keys=await pool.query("SELECT INDEX_NAME,GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) AS columns_csv FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='review_comment_mentions' GROUP BY INDEX_NAME");
+ expect(keys).toEqual(expect.arrayContaining([
+ expect.objectContaining({INDEX_NAME:"PRIMARY",columns_csv:"comment_id,mentioned_user_id"}),
+ expect.objectContaining({INDEX_NAME:"ix_mention_inbox",columns_csv:"mentioned_user_id,read_at,created_at"}),
+ ]));
+ const fks=await pool.query("SELECT REFERENCED_TABLE_NAME,DELETE_RULE FROM information_schema.REFERENTIAL_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='review_comment_mentions' ORDER BY REFERENCED_TABLE_NAME");
+ expect(fks).toEqual([
+ {REFERENCED_TABLE_NAME:"document_review_comments",DELETE_RULE:"RESTRICT"},
+ {REFERENCED_TABLE_NAME:"document_share_links",DELETE_RULE:"RESTRICT"},
+ {REFERENCED_TABLE_NAME:"users",DELETE_RULE:"RESTRICT"},
+ ]);
+});

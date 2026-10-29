@@ -6,7 +6,7 @@ import { disposeIsolatedDatabase, provisionIsolatedDatabase } from "../db/test-d
 
 function runVitest(): Promise<number> {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ["node_modules/vitest/vitest.mjs", "run", "--config", "vitest.integration.config.ts"], { stdio: "inherit", env: process.env });
+    const child = spawn(process.execPath, ["node_modules/vitest/vitest.mjs", "run", "--config", "vitest.integration.config.ts", ...process.argv.slice(2)], { stdio: "inherit", env: process.env });
     child.on("error", reject);
     child.on("exit", (code, signal) => resolve(code ?? (signal ? 1 : 0)));
   });

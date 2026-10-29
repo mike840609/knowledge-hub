@@ -114,6 +114,16 @@ pass.
   without a live link (`POST /api/review-follows/:threadId/unfollow`): it reads
   nothing and answers alike for any id
   (`docs/superpowers/specs/2026-10-23-followed-discussions-tab-design.md`).
+  A **mention** hands a link's reference to one named, signed-in Hub user's Inbox:
+  the writer passes on the link they already hold or own, recorded instead of
+  pasted. It reads only through `/s/:token` like any holder, is judged per
+  request against the link's validity, never extends its lifetime, and grants no
+  Workspace membership, search, tree, history, MCP, Markdown edits or revision
+  writes. Its candidate search (`/api/review-mentions/candidates`) answers
+  signed-in callers only, never anonymously; it asks for a live token or
+  document ownership, but that is not a narrower gate on the directory, since
+  every signed-in user owns documents (accepted 2026-10-29)
+  (`docs/superpowers/specs/2026-10-29-review-mentions-design.md`).
   Review access never grants Workspace membership, search, tree, history,
   MCP, Markdown edits or revision writes. Review responses include only
   validated current-revision selected-text fragments; hidden bodies and

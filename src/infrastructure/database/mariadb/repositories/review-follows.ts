@@ -10,6 +10,12 @@ export class MariaDbReviewFollowsRepository implements ReviewFollowRepository {
       [threadId, userId, shareLinkId, at, at, at],
     );
   }
+  async followForMention({ threadId, userId, shareLinkId, at, currentLinkValid }: Parameters<ReviewFollowRepository["followForMention"]>[0]): Promise<void> {
+    const rows = await this.connection.query<DbRow[]>("SELECT share_link_id, following FROM review_thread_follows WHERE thread_id=? AND user_id=? FOR UPDATE", [threadId, userId]);
+    if (rows.length === 0 || Number(rows[0].following) !== 1) return this.follow({ threadId, userId, shareLinkId, at });
+    if (await currentLinkValid(String(rows[0].share_link_id))) return;
+    await this.connection.query("UPDATE review_thread_follows SET share_link_id=?, updated_at=? WHERE thread_id=? AND user_id=?", [shareLinkId, at, threadId, userId]);
+  }
   async unfollow(threadId: string, userId: string, at: Date): Promise<void> {
     await this.connection.query("UPDATE review_thread_follows SET following=0, updated_at=? WHERE thread_id=? AND user_id=?", [at, threadId, userId]);
   }
