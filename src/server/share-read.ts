@@ -17,6 +17,12 @@ export const getShared = cache((token: string, documentId?: string) => read(toke
 /** Whether the link opens now, without counting a view: `/s/:token/open` reads nothing, it passes through. */
 export const isSharedAvailable = async (token: string, documentId?: string): Promise<boolean> => (await read(token, documentId, false)) !== null;
 
+/** A folder link's landing document (the first in tree order), without counting a view; null for an empty folder, a document link, or a link that does not open. */
+export async function sharedLandingDocumentId(token: string): Promise<string | null> {
+  const view = await read(token, undefined, false);
+  return view?.kind === "FOLDER" ? view.document?.documentId ?? null : null;
+}
+
 async function read(token: string, documentId: string | undefined, recordView: boolean): Promise<SharedView | null> {
   try {
     return await shareReadService().readShared(token, { documentId, recordView });

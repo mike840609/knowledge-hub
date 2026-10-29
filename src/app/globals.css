@@ -765,6 +765,20 @@ input[type="search"]::-webkit-search-cancel-button:hover {
   .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) .kh-share-outline-rail { display: none; }
   .kh-share-page:has(.kh-review-document[data-review-inline][data-review-open]) .kh-share-outline > .kh-outline-inline { display: block; }
 }
+/* A shared folder page (folder share spec §4): the folder's tree is a rail pinned under the bar at
+   the window's left, and everything else centres in the room beside it. The outline hangs off the
+   column's left edge only where that room holds column and outline both (256 + 860 + 2 x 224 =
+   1564px, 98rem), else it is the disclosure above the title. Below `sm` the tree is behind a button
+   in the bar and the page is the shared document page it always was. */
+.kh-share-folder { --kh-tree-rail: 16rem; }
+@media (min-width: 640px) {
+  .kh-share-folder-body { padding-inline-start: var(--kh-tree-rail); }
+  .kh-share-folder { --kh-outline-room: calc((100vw - var(--kh-tree-rail) - theme("maxWidth.reading")) / 2); }
+}
+@media (min-width: 82rem) and (max-width: 97.99rem) {
+  .kh-share-folder .kh-share-outline-rail { display: none; }
+  .kh-share-folder .kh-share-outline > .kh-outline-inline { display: block; }
+}
 /* A heading jumped to lands below the pinned bar (57px), with 15px above it, not under the bar.
    72px is also inside the outline's 96px reading line, so the entry clicked is the one highlighted (spec §3). */
 .kh-share-page article[data-review-document] :is(h1, h2, h3, h4, h5, h6) { scroll-margin-top: 4.5rem; }

@@ -95,10 +95,19 @@ describe("the share link is the single caller-less content path", () => {
       .filter((file) => /link-graph-read|knowledge-link-service|rendered-links|applicationServices\(\)\.links|\.links\.(getDocumentLinks|getWorkspaceGraph|getLocalGraph)/.test(readFileSync(file, "utf8")))
       .map((file) => file);
     expect(offenders).toEqual([]);
+    // A document link's page draws its reading column with no resolutions at all.
     const page = readFileSync(path.join("src", "app", "s", "[token]", "page.tsx"), "utf8");
-    // `afterTitle` places the byline; it resolves nothing.
-    expect(page).toMatch(/<MarkdownRenderer\s+markdown=\{shared\.markdown\}(\s+afterTitle=\{[^}]*\})?\s*\/>/);
-    expect(page).not.toMatch(/<MarkdownRenderer[^>]*\blinks=/);
+    expect(page).toMatch(/<SharedReading\s+document=\{shared\}\s*\/>/);
+    expect(page).not.toMatch(/\blinks=/);
+    // The one exception (folder share spec §5): a folder page is given the links the caller-less
+    // read already kept — those whose target is reachable through the same link — and nothing else.
+    const passing = files.filter((file) => /\blinks=/.test(readFileSync(file, "utf8")));
+    expect(passing).toEqual([path.join("src", "app", "s", "[token]", "shared-folder-page.tsx")]);
+    const folderPage = readFileSync(passing[0], "utf8");
+    expect(folderPage.match(/\blinks=\{[^}]*\}/g)).toEqual(["links={sharedFolderLinks(token, document.links)}"]);
+    // And the reading column reads whatever it is not given as text, never as a link that is missing.
+    const reading = readFileSync(path.join("src", "components", "knowledge", "shared-reading.tsx"), "utf8");
+    expect(reading).toMatch(/<MarkdownRenderer\s+markdown=\{document\.markdown\}\s+links=\{links\}\s+unresolvedAsText\b/);
   });
 
   it("only the /s/:token projection reaches the caller-less entry", () => {
