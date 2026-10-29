@@ -198,7 +198,7 @@ test("a reply offers @ where the list is given a scope, and passes on who was pi
   renderList([thread("t1", [0], "Para zero.")], { reply: async (...args: unknown[]) => { replies.push(args); }, mentionScope: { token: "tok" } } as never);
   act(() => { buttons("Reply")[0].click(); });
   const textarea = host.querySelector("textarea")!;
-  expect(textarea.getAttribute("role")).toBe("combobox");
+  expect(textarea.getAttribute("aria-autocomplete")).toBe("list");
   type(textarea, "@m");
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 200)); });
   act(() => { textarea.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })); });
@@ -213,5 +213,5 @@ test("editing a comment never offers @", async () => {
   await act(async () => { Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find(item => item.textContent === "Edit")!.click(); });
   const field = host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Edit comment"]')!;
   expect(field).not.toBeNull();
-  expect(field.hasAttribute("role")).toBe(false);
+  expect(field.hasAttribute("aria-autocomplete")).toBe(false);
 });

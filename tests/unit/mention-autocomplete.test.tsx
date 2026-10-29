@@ -70,15 +70,17 @@ const listbox = () => host.querySelector<HTMLElement>('[role="listbox"]');
 const options = () => Array.from(host.querySelectorAll<HTMLElement>('[role="option"]'));
 const submit = async () => { await act(async () => { host.querySelector("form")!.requestSubmit(); }); };
 
-test("@ at a word start lists who can be mentioned, as a combobox", async () => {
+test("@ at a word start lists who can be mentioned, and the field points at the list", async () => {
   stubFetch();
   const textarea = render({ token: "tok" });
   await type(textarea, "Hi @ming");
   expect(listbox()).not.toBeNull();
   expect(requests).toEqual(["/api/review-mentions/candidates?query=ming&token=tok"]);
   expect(options().map(option => option.textContent)).toEqual(["陳小明Ming Chen · E1234", "林美E5678"]);
-  expect(textarea.getAttribute("role")).toBe("combobox");
-  expect(textarea.getAttribute("aria-expanded")).toBe("true");
+  // Still a native textbox: existing callers find it by that role (Ruling 12).
+  expect(textarea.hasAttribute("role")).toBe(false);
+  expect(textarea.hasAttribute("aria-expanded")).toBe(false);
+  expect(textarea.getAttribute("aria-autocomplete")).toBe("list");
   expect(textarea.getAttribute("aria-controls")).toBe(listbox()!.id);
   expect(textarea.getAttribute("aria-activedescendant")).toBe(options()[0].id);
 });
@@ -95,7 +97,8 @@ test("arrow keys move the row in force; Enter inserts the name and sends its id"
   expect(textarea.value).toBe("Hi @陳小明 ");
   expect(textarea.selectionStart).toBe("Hi @陳小明 ".length);
   expect(listbox()).toBeNull();
-  expect(textarea.getAttribute("aria-expanded")).toBe("false");
+  expect(textarea.hasAttribute("aria-controls")).toBe(false);
+  expect(textarea.hasAttribute("aria-activedescendant")).toBe(false);
   await submit();
   expect(sent).toEqual([{ body: "Hi @陳小明 ", mentions: [MING.id], linkId: undefined }]);
 });
@@ -245,7 +248,7 @@ test("without a mention scope, @ does nothing", async () => {
   const textarea = render(undefined, sent);
   await type(textarea, "@ming");
   expect(listbox()).toBeNull();
-  expect(textarea.hasAttribute("role")).toBe(false);
+  expect(textarea.hasAttribute("aria-autocomplete")).toBe(false);
   expect(requests).toEqual([]);
   await submit();
   expect(sent).toEqual([{ body: "@ming", mentions: [], linkId: undefined }]);

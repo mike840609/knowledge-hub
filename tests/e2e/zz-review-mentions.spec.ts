@@ -25,7 +25,7 @@ test("a reader mentions someone new on the shared page; the mention and the next
   await openReviewDiscussions(page);
   await selectPassage(page);
   await page.getByRole("button", { name: "Comment on selection" }).click();
-  const composer = page.getByRole("combobox", { name: "Add comment" });
+  const composer = page.getByRole("textbox", { name: "Add comment" });
   await composer.click();
   await composer.pressSequentially("Please look @groupAd");
   const options = page.getByRole("listbox", { name: "People to mention" }).getByRole("option");
@@ -69,7 +69,7 @@ test("a reader mentions someone new on the shared page; the mention and the next
   await page.goto(doc.href);
   await openReviewDiscussions(page);
   await page.getByRole("button", { name: "Reply", exact: true }).click();
-  await page.getByRole("combobox", { name: "Reply", exact: true }).fill("Owner answer");
+  await page.getByRole("textbox", { name: "Reply", exact: true }).fill("Owner answer");
   await page.getByRole("button", { name: "Reply", exact: true }).click();
   await expect(page.getByText("Owner answer", { exact: true }).filter({ visible: true }).first()).toBeVisible();
   await expect.poll(unread).toEqual([expect.objectContaining({ kind: "FOLLOW", excerpt: "Owner answer", authorName: "Phase3 reviewOwner", linkAvailable: true })]);
@@ -93,7 +93,7 @@ test("an owner with no live share link is told to create one before mentioning",
   await page.goto(doc.href);
   await openReviewDiscussions(page);
   await page.getByRole("button", { name: "Reply", exact: true }).click();
-  const composer = page.getByRole("combobox", { name: "Reply", exact: true });
+  const composer = page.getByRole("textbox", { name: "Reply", exact: true });
   await composer.click();
   await composer.pressSequentially("Asking @Phase3");
   await expect(page.getByText("Create a share link first to mention someone", { exact: true })).toBeVisible();

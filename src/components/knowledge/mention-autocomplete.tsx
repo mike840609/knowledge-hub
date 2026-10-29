@@ -28,7 +28,7 @@ export function mentionedIds(body: string, picks: readonly MentionPick[]): strin
 }
 
 /**
- * The `@` list for a composer's field. `field` goes on the textarea (it becomes the combobox) and `track` in its `onChange`,
+ * The `@` list for a composer's field. `field` goes on the textarea (a native textbox that points at the list: `aria-autocomplete`, `aria-controls`, `aria-activedescendant`) and `track` in its `onChange`,
  * `list` under it, `linkChoice` before the form's buttons. `collect` says who the text mentions,
  * and for the owner through which live link; `reset` forgets the picks once the comment is sent.
  */
@@ -131,7 +131,7 @@ export function useMentionAutocomplete(scope: MentionScope | undefined, body: st
   const field = {
     ref, onKeyDown, onSelect: track, onKeyUp: track, onClick: track,
     ...(scope && {
-      role: "combobox" as const, "aria-autocomplete": "list" as const, "aria-expanded": listed,
+      "aria-autocomplete": "list" as const,
       "aria-controls": listed ? listId : undefined,
       "aria-activedescendant": listed ? optionId(Math.min(active, candidates.length - 1)) : undefined,
     }),
