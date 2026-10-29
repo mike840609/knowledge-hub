@@ -25,6 +25,7 @@ import { useToast } from "@/components/ui/toast";
 import { GovernanceError, governanceFailure, governanceRequest, type GovernanceFailure } from "@/components/workspaces/governance-error";
 import { writeLinkToClipboard } from "@/components/actions/action-menu";
 import { navigateListRows } from "@/lib/list-row-navigation";
+import { announceShareLinksChanged } from "./shared-folders";
 import type { ManagedShareLink, ShareManagementQuery, ShareManagementStatus } from "@/modules/knowledge/domain/share-management";
 const labels: Record<ShareManagementStatus, string> = { active: "Active", expired: "Expired", revoked: "Revoked", unavailable: "Unavailable" };
 type UnreadShareCount = { documentId: string; shareLinkId: string | null; unreadCount: number; latestThreadId: string };
@@ -91,6 +92,8 @@ export function ShareManagementView({ workspaceId, model, filterError, hasDocume
     try {
       await governanceRequest<null>(`/api/share-links/${id}/revoke`, "POST");
       setRevoked(current => new Set([...current, id])); setConfirming(null);
+      // The tree marks a folder with an open link; this one may no longer be.
+      announceShareLinksChanged();
       toast({ message: `Link revoked. Anyone holding it can no longer open the ${revokedKind}.` }); router.refresh();
     } catch (failure) { setError(governanceFailure(failure)); }
     finally { pending.current = false; setBusy(null); }

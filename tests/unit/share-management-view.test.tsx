@@ -130,3 +130,19 @@ it("names a folder row's controls as the folder's, so a document and a folder of
     expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("for folder Handbook?");
   } finally { await act(async () => root.unmount()); host.remove(); }
 });
+
+it("tells the tree's shared-folder marker when a link is revoked here", async () => {
+  vi.stubGlobal("fetch", async (_url: unknown, options?: RequestInit) => options?.method === "POST" ? new Response(null, { status: 204 }) : Response.json({ counts: [] }));
+  const announced = vi.fn();
+  window.addEventListener("kh:share-links-changed", announced);
+  const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+  const click = async (name: string) => { await act(async () => [...document.querySelectorAll<HTMLElement>("button,[role=menuitem]")].find(b => (b.getAttribute("aria-label") ?? b.textContent) === name)!.click()); };
+  try {
+    await act(async () => root.render(<ShareManagementView workspaceId="ws" model={{ items: [folderItem], query: { q: "", status: "all", page: 1 }, hasNext: false }} />));
+    await click("Share actions for folder Handbook · Onboarding");
+    await click("Revoke");
+    expect(announced).not.toHaveBeenCalled();
+    await click("Confirm revoke");
+    expect(announced).toHaveBeenCalledTimes(1);
+  } finally { window.removeEventListener("kh:share-links-changed", announced); await act(async () => root.unmount()); host.remove(); }
+});
