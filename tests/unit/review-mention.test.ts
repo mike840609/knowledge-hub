@@ -22,6 +22,11 @@ describe("normalizeMentions", () => {
     expect(normalizeMentions([writerId, a, ownerId], ctx)).toEqual([a]);
     expect(normalizeMentions([writerId, ownerId], ctx)).toEqual([]);
   });
+  it("treats upper-case ids as the same user", () => {
+    const a = uuidv7();
+    expect(normalizeMentions([a, a.toUpperCase()], ctx)).toEqual([a]);
+    expect(normalizeMentions([writerId.toUpperCase(), ownerId.toUpperCase(), a.toUpperCase()], ctx)).toEqual([a]);
+  });
   it("has no owner to drop when ownerId is null", () => {
     const a = uuidv7();
     expect(normalizeMentions([a, writerId], { writerId, ownerId: null })).toEqual([a]);

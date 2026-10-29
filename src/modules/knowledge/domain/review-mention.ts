@@ -11,10 +11,12 @@ export const MENTION_PREFIX = "mention:";
 export function normalizeMentions(raw: unknown, ctx: { writerId: string; ownerId: string | null }): string[] {
   if (raw === undefined) return [];
   if (!Array.isArray(raw)) throw new DomainError("INVALID_REQUEST", "Mentions must be a list of user ids.");
+  const skip = new Set([ctx.writerId.toLowerCase(), ctx.ownerId?.toLowerCase()]);
   const ids = new Set<string>();
   for (const item of raw) {
     if (typeof item !== "string" || !isUuid(item)) throw new DomainError("INVALID_REQUEST", "Each mention must be a user id.");
-    if (item !== ctx.writerId && item !== ctx.ownerId) ids.add(item);
+    const id = item.toLowerCase();
+    if (!skip.has(id)) ids.add(id);
   }
   if (ids.size > MENTION_LIMIT) throw new DomainError("INVALID_REQUEST", `Mention at most ${MENTION_LIMIT} people in one comment.`);
   return [...ids];
