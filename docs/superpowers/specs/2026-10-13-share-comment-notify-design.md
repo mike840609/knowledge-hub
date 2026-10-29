@@ -52,6 +52,15 @@ the list, lands on the thread, and the badge clears.
   unread events (document id/title snapshot, author name, 80-char body
   excerpt, thread anchor status via the existing `relocate` semantics);
   it takes no user id parameter.
+  *(2026-10-29)* The Inbox badge reads `GET /api/review-notifications/unread-count`
+  instead, `{ count }` only: the same entries counted (owner events by the
+  `share-counts` query, plus followed discussions with unread replies),
+  without loading a body, title or author on every page change; the Inbox
+  popover's closed trigger uses it too and reads the list only when opened.
+  The count has no 100-row cap, so above 100 unread the badge may exceed what
+  `/unread` lists. An event is
+  inserted only when the writer is not the document's owner: the owner
+  writing on `/s/:token` through their own link is not news to them either.
 
 **Authorization (no new anonymous entry).** The share-link single exception
 stands: exactly `readShared` and `queryForLink` answer without a caller.

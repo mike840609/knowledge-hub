@@ -4,6 +4,7 @@ import {
   evaluateShareLinkValidity,
   isShareToken,
   shareLinkExpiry,
+  SHARE_CREATOR_READ_ROLES,
   type ShareLinkCreationInput,
   type ShareLinkValidityInput,
 } from "@/modules/knowledge/domain/document-share-link";
@@ -13,10 +14,11 @@ const later = new Date("2026-10-01T00:00:00Z");
 
 function validity(overrides: Partial<ShareLinkValidityInput> = {}): ShareLinkValidityInput {
   return {
-    link: { revokedAt: null, expiresAt: later },
+    link: { revokedAt: null, expiresAt: later, createdBy: "owner" },
     documentStatus: "ACTIVE",
     sourceStatus: "ACTIVE",
     workspaceLifecycle: "ACTIVE",
+    workspaceOwnerUserId: "owner",
     creatorDirectRole: "OWNER",
     now,
     ...overrides,
@@ -29,14 +31,20 @@ describe("evaluateShareLinkValidity (share-link spec §5.2)", () => {
   });
 
   it.each([
-    ["REVOKED", { link: { revokedAt: now, expiresAt: later } }],
-    ["EXPIRED", { link: { revokedAt: null, expiresAt: now } }],
+    ["REVOKED", { link: { revokedAt: now, expiresAt: later, createdBy: "owner" } }],
+    ["EXPIRED", { link: { revokedAt: null, expiresAt: now, createdBy: "owner" } }],
     ["DOCUMENT_ARCHIVED", { documentStatus: "ARCHIVED" }],
     ["SOURCE_ARCHIVED", { sourceStatus: "ARCHIVED" }],
     ["WORKSPACE_ARCHIVED", { workspaceLifecycle: "ARCHIVED" }],
+    ["CREATOR_NOT_OWNER", { workspaceOwnerUserId: "someone-else" }],
+    ["CREATOR_NOT_OWNER", { workspaceOwnerUserId: null }],
     ["CREATOR_LOST_ACCESS", { creatorDirectRole: undefined }],
   ] as const)("fails with %s when only that condition fails", (reason, overrides) => {
     expect(evaluateShareLinkValidity(validity(overrides as Partial<ShareLinkValidityInput>))).toEqual({ valid: false, reason });
+  });
+
+  it("names exactly the roles that may read, for the SQL copy of this rule", () => {
+    expect([...SHARE_CREATOR_READ_ROLES].sort()).toEqual(["ADMIN", "EDITOR", "OWNER", "VIEWER"]);
   });
 
   it("treats a legacy membership row with no role as still able to read", () => {

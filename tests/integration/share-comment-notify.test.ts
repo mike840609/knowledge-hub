@@ -120,3 +120,39 @@ describe("share-comment notify: link-origin comments notify the owner",()=>{
   expect(await f.unread()).toHaveLength(0);
  });
 });
+describe("the owner is not news to themselves, and the badge counts what the Inbox lists",()=>{
+ it("the owner writing through their own link inserts nothing",async()=>{
+  const f=await fixture();
+  const t=await f.service.createForLink(f.caller,{token:f.token,expectedRevisionId:f.revisionId,anchor:f.anchor,body:"mine",idempotencyKey:randomUUID()});
+  await f.service.replyForLink(f.caller,{token:f.token,threadId:t.id,body:"mine again",idempotencyKey:randomUUID()});
+  expect(await f.unread()).toHaveLength(0);
+  expect(await f.service.listUnreadShareCountsForOwner(f.caller)).toEqual([]);
+  expect(await f.service.countUnreadForOwner(f.caller)).toEqual({count:0});
+  await f.service.replyForLink(f.viewer,{token:f.token,threadId:t.id,body:"theirs",idempotencyKey:randomUUID()});
+  expect(await f.unread()).toHaveLength(1);
+ });
+ it("countUnreadForOwner follows listUnreadForOwner through writes, reads and hiding",async()=>{
+  const f=await fixture();
+  const same=async(count:number)=>{expect((await f.service.listUnreadForOwner(f.caller)).notifications).toHaveLength(count);expect(await f.service.countUnreadForOwner(f.caller)).toEqual({count});};
+  await same(0);
+  const t=await f.service.createForLink(f.viewer,{token:f.token,expectedRevisionId:f.revisionId,anchor:f.anchor,body:"one",idempotencyKey:randomUUID()});
+  const reply=await f.service.replyForLink(f.viewer,{token:f.token,threadId:t.id,body:"two",idempotencyKey:randomUUID()});
+  await same(2);
+  await f.service.deleteForLink(f.viewer,{token:f.token,threadId:t.id,commentId:reply.id});
+  await same(1);
+  await f.service.setVisibility(f.caller,{documentId:f.documentId,threadId:t.id,visibility:"HIDDEN",reason:"spam"});
+  await same(0);
+  await f.service.setVisibility(f.caller,{documentId:f.documentId,threadId:t.id,visibility:"VISIBLE"});
+  await same(1);
+  await f.service.markAllActivityRead(f.caller);
+  await same(0);
+ });
+ it("a token in upper case reaches the discussion, as it reaches the page",async()=>{
+  const f=await fixture();
+  const upper=f.token.toUpperCase();
+  expect(upper).not.toBe(f.token);
+  const t=await f.service.createForLink(f.viewer,{token:upper,expectedRevisionId:f.revisionId,anchor:f.anchor,body:"loud",idempotencyKey:randomUUID()});
+  expect((await f.service.queryForLink(null,upper)).threads.map(x=>x.id)).toEqual([t.id]);
+  await expect(f.shares.readShared(upper)).resolves.toMatchObject({title:"Review"});
+ });
+});

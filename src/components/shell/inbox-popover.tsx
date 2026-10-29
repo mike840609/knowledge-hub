@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { Popover } from "@base-ui-components/react/popover";
 import { CheckCheck, Inbox, MessageSquareText, X } from "lucide-react";
@@ -11,13 +10,15 @@ import { reviewRequest } from "@/components/knowledge/review-thread-list";
 import type { ShareCommentNotificationView } from "@/modules/knowledge/domain/share-comment-event";
 import { notificationHref, notificationLine, notificationTitle } from "@/components/knowledge/notification-href";
 import { NotificationListSkeleton } from "@/components/knowledge/knowledge-skeletons";
+import { useInboxUnread } from "./use-inbox-unread";
 
 type ActivityResult = { notifications: ShareCommentNotificationView[]; nextCursor: { createdAt: string; id: string } | null };
 type Tab = "unread" | "all";
 
 /** Compact entry point: the complete activity history stays available at /inbox. */
 export function InboxPopover({ workspaceId, placement = "header" }: { workspaceId: string; placement?: "header" | "compact" | "mobile" }) {
-  const pathname = usePathname();
+  // Closed, the trigger needs a number only; the list is read when the popover opens.
+  const unreadCount = useInboxUnread(true);
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("unread");
   const [unread, setUnread] = useState<ShareCommentNotificationView[]>([]);
@@ -36,14 +37,10 @@ export function InboxPopover({ workspaceId, placement = "header" }: { workspaceI
   }, []);
 
   useEffect(() => {
-    void refreshUnread();
+    if (!open) return;
     window.addEventListener("kh:notification-changed", refreshUnread);
-    window.addEventListener("focus", refreshUnread);
-    return () => {
-      window.removeEventListener("kh:notification-changed", refreshUnread);
-      window.removeEventListener("focus", refreshUnread);
-    };
-  }, [pathname, refreshUnread]);
+    return () => window.removeEventListener("kh:notification-changed", refreshUnread);
+  }, [open, refreshUnread]);
 
   useEffect(() => {
     if (!open) return;
@@ -80,12 +77,12 @@ export function InboxPopover({ workspaceId, placement = "header" }: { workspaceI
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger
-        aria-label={unread.length ? `Inbox, ${unread.length} unread comments` : "Inbox"}
+        aria-label={unreadCount ? `Inbox, ${unreadCount} unread comments` : "Inbox"}
         className={buttonClasses({ variant: "ghost", icon: true, size: placement === "header" ? "sm" : "md", className: "relative shrink-0" })}
         title="Inbox"
       >
         <Inbox className="h-4 w-4" aria-hidden="true" />
-        {unread.length > 0 ? <span className="absolute right-0 top-0 h-2 w-2 rounded-full border border-kh-bg-sunken bg-kh-primary" aria-hidden="true" /> : null}
+        {unreadCount > 0 ? <span className="absolute right-0 top-0 h-2 w-2 rounded-full border border-kh-bg-sunken bg-kh-primary" aria-hidden="true" /> : null}
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Positioner
